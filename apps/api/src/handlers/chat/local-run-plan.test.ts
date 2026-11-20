@@ -28,6 +28,7 @@ import {
   chatRunTargetOf,
   sameChatRunTarget,
   storedChatRunTarget,
+  turnRunTarget,
 } from "@/api/lib/chat/run-target";
 import type { PublicStreamChunk } from "@/api/lib/chat/tanstack-chat-runtime";
 import type {
@@ -205,6 +206,7 @@ const start = async (options: Parameters<typeof resolve>[0] = {}) => {
     instructions: "",
     resume: undefined,
     abortSignal: new AbortController().signal,
+    handOverSignal: new AbortController().signal,
   })) {
     chunks.push(chunk);
   }
@@ -571,6 +573,34 @@ describe("a thread's stored run target", () => {
     ] satisfies ChatRunTarget[]) {
       expect(sameChatRunTarget(LOCAL, other)).toBe(false);
       expect(sameChatRunTarget(other, LOCAL)).toBe(false);
+    }
+  });
+
+  test("a turn runs where its send names, else where its thread runs", () => {
+    const targets = [{ kind: "cloud" }, LOCAL] satisfies ChatRunTarget[];
+    for (const thread of targets) {
+      for (const requested of targets) {
+        for (const agentSandboxRequested of [false, true]) {
+          expect(
+            turnRunTarget({ agentSandboxRequested, requested, thread }),
+          ).toEqual(requested);
+        }
+      }
+      expect(
+        turnRunTarget({
+          agentSandboxRequested: false,
+          requested: undefined,
+          thread,
+        }),
+      ).toEqual(thread);
+      // The agent sandbox is a place of its own, never the thread's computer.
+      expect(
+        turnRunTarget({
+          agentSandboxRequested: true,
+          requested: undefined,
+          thread,
+        }),
+      ).toEqual({ kind: "cloud" });
     }
   });
 

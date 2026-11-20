@@ -1,13 +1,11 @@
 import { useQuery } from "@tanstack/react-query";
 
-import { RESOURCE_TYPE } from "@stll/api-contract";
 import { memberHasPermissions } from "@stll/permissions";
 import type { PermissionInput } from "@stll/permissions";
 
 import { activeMemberOptions, roleOptions } from "@/lib/auth-queries";
 import { queryView } from "@/lib/query-view.logic";
 import { useQueryViewError } from "@/lib/use-query-view";
-import { resourceQueryOptions } from "@/lib/workspace-realtime";
 
 /**
  * Returns whether the active member's role grants the requested
@@ -16,14 +14,7 @@ import { resourceQueryOptions } from "@/lib/workspace-realtime";
  * the role cache hydrates.
  */
 export const usePermissions = (permissions: PermissionInput): boolean => {
-  const roleView = queryView(
-    useQuery(
-      resourceQueryOptions(roleOptions, {
-        resources: [RESOURCE_TYPE.USER, RESOURCE_TYPE.ORGANIZATION],
-        scope: { type: "organization" },
-      }),
-    ),
-  );
+  const roleView = queryView(useQuery(roleOptions));
   useQueryViewError(roleView, "usePermissions:query");
 
   const needsMemberGrant =
@@ -36,10 +27,7 @@ export const usePermissions = (permissions: PermissionInput): boolean => {
     });
   const memberView = queryView(
     useQuery({
-      ...resourceQueryOptions(activeMemberOptions, {
-        resources: [RESOURCE_TYPE.USER, RESOURCE_TYPE.ORGANIZATION],
-        scope: { type: "organization" },
-      }),
+      ...activeMemberOptions,
       enabled: needsMemberGrant,
     }),
   );

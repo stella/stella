@@ -193,7 +193,11 @@ exports[`every registered source has a reviewable exclusion census 1`] = `
       "reason": "publisher_noise",
     },
   ],
+  "cz-gfr": [],
+  "cz-mf": [],
+  "cz-mv-psmv": [],
   "cz-ns": [],
+  "cz-ns-sbirka": [],
   "cz-nss": [
     {
       "field": "pravnivetaan",

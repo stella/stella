@@ -7,26 +7,27 @@ import { compareByLocale } from "@stll/collation";
 import { Button } from "@stll/ui/button";
 import { Rows2Icon, Rows3Icon, XIcon } from "@stll/ui/icons";
 import { SegmentedIconToggle } from "@stll/ui/segmented-icon-toggle";
-import { Skeleton } from "@stll/ui/skeleton";
-import { cn } from "@stll/ui/utils";
 
 import type {
   KnowledgeActions,
   KnowledgeSource,
 } from "@/features/knowledge/views/knowledge-seam";
 import { KnowledgeStatusMessage } from "@/features/knowledge/views/knowledge-status-message";
-import { TEMPLATE_ROW_SPACING } from "@/features/knowledge/views/templates/templates-seam";
+import {
+  TEMPLATE_LIST_LAYOUT,
+  TEMPLATE_TOOLBAR_CLASS,
+  TemplateListPending,
+} from "@/features/knowledge/views/templates/template-list-shape";
+import type { TemplateListLayout } from "@/features/knowledge/views/templates/template-list-shape";
 import type {
   KnowledgeTemplate,
   TemplateDensity,
   TemplateTagFilter,
 } from "@/features/knowledge/views/templates/templates-seam";
-import { useHydrated } from "@/hooks/use-hydrated";
 import { useFormatter } from "@/i18n/formatting-context";
 import { useI18nStore } from "@/i18n/i18n-store";
-import { deviceStorage } from "@/lib/account/browser-storage";
+import { usePresentationPrefs } from "@/lib/account/presentation-prefs/provider";
 import { optionalArray } from "@/lib/arrays";
-import { TOOLBAR_ROW_MIN_HEIGHT } from "@/lib/consts";
 
 /** The per-row context a route needs to render one row of the list. */
 type TemplateRowContext = {
@@ -62,26 +63,6 @@ type TemplateListViewProps = {
 // carries its own MIME type, not files) — should light up the list.
 const isFileDrag = (e: DragEvent) => e.dataTransfer.types.includes("Files");
 
-const DENSITY_STORAGE_KEY = "stella.templates.density";
-
-/** Compact by default, for fast scanning. */
-const DEFAULT_TEMPLATE_DENSITY: TemplateDensity = "compact";
-
-/** Persisted list density. */
-const readTemplateDensity = (): TemplateDensity =>
-  deviceStorage("local").getItem(DENSITY_STORAGE_KEY) === "comfortable"
-    ? "comfortable"
-    : DEFAULT_TEMPLATE_DENSITY;
-
-const writeTemplateDensity = (density: TemplateDensity): void => {
-  deviceStorage("local").setItem(DENSITY_STORAGE_KEY, density);
-};
-
-const TEMPLATE_TOOLBAR_CLASS = cn(
-  "flex flex-wrap items-center justify-between gap-2 border-b px-4 py-2 md:py-0",
-  TOOLBAR_ROW_MIN_HEIGHT,
-);
-
 const TemplateListView = ({
   source,
   actions,
@@ -99,13 +80,15 @@ const TemplateListView = ({
   const lang = useI18nStore((s) => s.lang);
   const [tagFilter, setTagFilter] = useState<string | null>(null);
   const [isDragOver, setIsDragOver] = useState(false);
-  const [density, setDensity] = useState<TemplateDensity>(readTemplateDensity);
+  const {
+    prefs: { templateDensity: density },
+    setPrefs,
+  } = usePresentationPrefs();
   const { templates, selectedCategoryId } = source;
   const { dropFile } = actions;
 
   const changeDensity = (next: TemplateDensity) => {
-    setDensity(next);
-    writeTemplateDensity(next);
+    setPrefs(() => ({ templateDensity: next }));
   };
 
   const handleDragOver = (e: DragEvent) => {
@@ -268,106 +251,13 @@ const DensityToggle = ({ density, onChange }: DensityToggleProps) => {
   );
 };
 
-const TEMPLATE_SIDEBAR_KEYS = ["a", "b", "c", "d", "e"];
-const TEMPLATE_ROW_KEYS = ["a", "b", "c", "d", "e", "f"];
-
-/**
- * Which chrome a loaded list renders: the member library's category sidebar,
- * mobile filter row and toolbar, or the public catalogue's bare list.
- */
-export const TEMPLATE_LIST_LAYOUT = {
-  library: "library",
-  catalogue: "catalogue",
-} as const;
-type TemplateListLayout =
-  (typeof TEMPLATE_LIST_LAYOUT)[keyof typeof TEMPLATE_LIST_LAYOUT];
-
-// Mirrors the TemplateListView layout (w-48 category sidebar + bordered list
-// pane with count/new-template toolbar and divided rows) so the page keeps its
-// shape while templates load; only the values fade in. The server renders it
-// while the session is unknown, so the stored density applies only after
-// hydration: the server and the hydrating browser both draw the default.
-export const TemplateListSkeleton = ({
-  layout,
-}: {
-  layout: TemplateListLayout;
-}) => {
-  const hydrated = useHydrated();
-  const density = hydrated ? readTemplateDensity() : DEFAULT_TEMPLATE_DENSITY;
-  const hasLibraryChrome = layout === TEMPLATE_LIST_LAYOUT.library;
-  const t = useTranslations();
-  return (
-    <div
-      aria-hidden="true"
-      className="flex min-h-0 flex-1 flex-col md:flex-row"
-    >
-      {hasLibraryChrome && (
-        <div className="hidden w-48 shrink-0 flex-col md:flex">
-          <nav className="flex-1 space-y-1 p-2">
-            <Skeleton className="h-7 w-full rounded-md" />
-            <div className="my-1 border-t" />
-            {TEMPLATE_SIDEBAR_KEYS.map((key) => (
-              <Skeleton className="h-7 w-2/3 rounded-md" key={key} />
-            ))}
-          </nav>
-        </div>
-      )}
-
-      <div className="flex min-h-0 flex-1 flex-col md:border-s">
-        <div className={TEMPLATE_TOOLBAR_CLASS}>
-          <div className="flex min-w-0 items-center gap-2">
-            <h2 className="text-foreground text-sm font-semibold">
-              {t("knowledge.sections.templates.title")}
-            </h2>
-            <Skeleton className="h-4 w-4" />
-          </div>
-          <div className="flex shrink-0 items-center gap-2">
-            <Skeleton className="h-8 w-16 rounded-md" />
-            {hasLibraryChrome && <Skeleton className="h-8 w-32 rounded-md" />}
-          </div>
-        </div>
-
-        {hasLibraryChrome && (
-          <div className="border-b px-3 py-2 md:hidden">
-            <div className="flex gap-1 pb-0.5">
-              <Skeleton className="h-8 w-32" />
-            </div>
-          </div>
-        )}
-        <ul className="flex-1 divide-y overflow-y-auto">
-          {TEMPLATE_ROW_KEYS.map((key) => (
-            <li
-              className={cn("flex gap-3 px-4", TEMPLATE_ROW_SPACING[density])}
-              key={key}
-            >
-              <Skeleton className="size-9 shrink-0 rounded-lg" />
-              <div
-                className={cn(
-                  "flex min-w-0 flex-1 gap-2",
-                  density === "compact" ? "items-baseline" : "flex-col gap-1",
-                )}
-              >
-                <Skeleton
-                  className={cn(
-                    "w-48 max-w-full",
-                    density === "compact" ? "h-5" : "h-6",
-                  )}
-                />
-                {/* The category, and in comfortable rows the guidance line:
-                    catalogue rows carry neither, so they never render it. */}
-                {hasLibraryChrome && (
-                  <Skeleton className="h-4 w-32 max-w-full" />
-                )}
-                {density === "comfortable" && (
-                  <Skeleton className="h-4 w-40 max-w-full" />
-                )}
-              </div>
-            </li>
-          ))}
-        </ul>
-      </div>
-    </div>
-  );
+// The list's pending phase at the reader's density: the presentation cookie
+// gives it, so the server and the hydrating browser agree.
+const TemplateListSkeleton = ({ layout }: { layout: TemplateListLayout }) => {
+  const {
+    prefs: { templateDensity: density },
+  } = usePresentationPrefs();
+  return <TemplateListPending density={density} layout={layout} />;
 };
 
 /**

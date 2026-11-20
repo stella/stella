@@ -846,13 +846,6 @@
     "holder": "stella_ingestion"
   },
   {
-    "file": "apps/api/src/handlers/case-law/ingestion/pipeline/decision-row-update.ts",
-    "fingerprint": "60da0167e1e8232dbf418d1f799ee1496e32daf142bcd7c577eb70d889b160ae",
-    "count": 1,
-    "reason": "Pass the relation explicitly to the stored-payload owner in the existing ingestion row lock query; acquisition mode, target and count are unchanged.",
-    "holder": "stella_ingestion"
-  },
-  {
     "file": "apps/api/src/handlers/case-law/ingestion/source-totals.ts",
     "fingerprint": "055cac1fb1cc155061a279e3f761531eebf27628de03fdaa0f77b143b0b24766",
     "count": 1,
@@ -2743,7 +2736,7 @@
   {
     "file": "apps/api/src/lib/legal-search/corpus-index-generation-store.ts",
     "fingerprint": "f1478ef9e6ed075774fe03a6eccdf93090599ce271bf7b1450ea87bdc523bb70",
-    "count": 2,
+    "count": 1,
     "reason": "builder-for in apps/api/src/lib/legal-search/corpus-index-generation-store.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner.",
     "holder": "stella_ingestion"
   },
@@ -2777,6 +2770,13 @@
   },
   {
     "file": "apps/api/src/lib/legal-search/corpus-index-projection-bootstrap.ts",
+    "fingerprint": "407e4d501ce68a61e6bf3f0ac68790ebd670d562be8c84c7a05e00f799315756",
+    "count": 1,
+    "reason": "The legislation bootstrap page reads the same rows in the same order; its source row lock is key share instead of share, so it no longer waits on plain updates of a source row.",
+    "holder": "stella_ingestion"
+  },
+  {
+    "file": "apps/api/src/lib/legal-search/corpus-index-projection-bootstrap.ts",
     "fingerprint": "481a28265925f09abab434e08f025ca514464412db224685a0adc44dc44b49ca",
     "count": 1,
     "reason": "builder-for in apps/api/src/lib/legal-search/corpus-index-projection-bootstrap.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner.",
@@ -2784,23 +2784,16 @@
   },
   {
     "file": "apps/api/src/lib/legal-search/corpus-index-projection-bootstrap.ts",
-    "fingerprint": "8e1a540ef8067fc290af7147295d63cce2d7e8d13bc54e3b8f77c0da715a8c33",
-    "count": 1,
-    "reason": "builder-for in apps/api/src/lib/legal-search/corpus-index-projection-bootstrap.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner.",
-    "holder": "stella_ingestion"
-  },
-  {
-    "file": "apps/api/src/lib/legal-search/corpus-index-projection-bootstrap.ts",
-    "fingerprint": "a8fdcbb49ebf048380f683cbc48c7f10d964f34bea0853cfbd6ee5b1e732860e",
-    "count": 1,
-    "reason": "Existing case-law bootstrap page transaction; the page now also reads vacated jurisdictions and provision keys inside it, which changes its source fingerprint without changing the acquisition, its order or the count.",
-    "holder": "stella_ingestion"
-  },
-  {
-    "file": "apps/api/src/lib/legal-search/corpus-index-projection-bootstrap.ts",
     "fingerprint": "b924e87fe6905459305c9094d680008f46d1631564c38d0e511352c19c262d8e",
     "count": 1,
     "reason": "builder-for in apps/api/src/lib/legal-search/corpus-index-projection-bootstrap.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner.",
+    "holder": "stella_ingestion"
+  },
+  {
+    "file": "apps/api/src/lib/legal-search/corpus-index-projection-bootstrap.ts",
+    "fingerprint": "e7063e7452fcafa11f8d75a08ac9463b97a9198583e4da12a9baa9ac0213f261",
+    "count": 1,
+    "reason": "The case-law bootstrap page reads the same rows in the same order; its source row lock is key share instead of share, so it no longer waits on plain updates of a source row.",
     "holder": "stella_ingestion"
   },
   {
@@ -3981,36 +3974,6 @@
   {
     "file": "apps/api/src/scripts/corpus-generation.ts",
     "fingerprint": "7cebb16ec97e3f1fc48b0a551e001db65f0ea404f6989fa2326a41f26208a18a",
-    "count": 1,
-    "reason": "offline corpus script; predates the owner; migrate in a later slice"
-  },
-  {
-    "file": "apps/api/src/scripts/corpus-generation.ts",
-    "fingerprint": "8b716c07aebbf7cbf8daf28e3f08ef84ec5cc7699bd326da1faec1a4e86c36f4",
-    "count": 1,
-    "reason": "offline corpus script; predates the owner; migrate in a later slice"
-  },
-  {
-    "file": "apps/api/src/scripts/corpus-generation.ts",
-    "fingerprint": "9d902dfa7f0db759a46fc9e5fb93f46ed29d2eaf65b9d66223aad65c4293f1e0",
-    "count": 1,
-    "reason": "offline corpus script; predates the owner; migrate in a later slice"
-  },
-  {
-    "file": "apps/api/src/scripts/corpus-generation.ts",
-    "fingerprint": "afcada2c96cb9cc82cc09ee88a3a175823518243aea85a16ae3e55d3138ae7e3",
-    "count": 1,
-    "reason": "offline corpus script; predates the owner; migrate in a later slice"
-  },
-  {
-    "file": "apps/api/src/scripts/corpus-generation.ts",
-    "fingerprint": "e87f3cf7b320fd8049a37b17f19611e315735b4e609894b536e04f2fc17e1ac6",
-    "count": 1,
-    "reason": "offline corpus script; predates the owner; migrate in a later slice"
-  },
-  {
-    "file": "apps/api/src/scripts/corpus-generation.ts",
-    "fingerprint": "f5000330083e1d1a65682bee7eed29ea1f39ba1f0abcd413cb1c792d6992d5dc",
     "count": 1,
     "reason": "offline corpus script; predates the owner; migrate in a later slice"
   },

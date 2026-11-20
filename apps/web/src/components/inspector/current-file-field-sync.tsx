@@ -127,6 +127,7 @@ export const CurrentFileFieldSync = ({
       fileName: latestFileContent.fileName,
       label: latestFileContent.fileName,
       mimeType: latestFileContent.mimeType,
+      encrypted: latestFileContent.encrypted,
       pdfFileId: latestFileContent.pdfFileId,
       propertyId: latestFileFieldForProperty.propertyId,
     });

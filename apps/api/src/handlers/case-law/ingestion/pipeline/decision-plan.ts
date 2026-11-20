@@ -46,6 +46,7 @@ import type {
 } from "@/api/handlers/case-law/ingestion/pipeline/corpus-mirror";
 import { decisionDocketColumns } from "@/api/handlers/case-law/ingestion/pipeline/decision-docket-columns";
 import type { ExistingDecision } from "@/api/handlers/case-law/ingestion/pipeline/decision-identity";
+import { planDecisionReviews } from "@/api/handlers/case-law/ingestion/pipeline/decision-reviews";
 import type { CaseLawCorpusDependencies } from "@/api/handlers/case-law/ingestion/pipeline/dependencies";
 import { nssPublisherColumns } from "@/api/handlers/case-law/ingestion/pipeline/nss-publisher-columns";
 import { RECONCILE_CONTENTION } from "@/api/handlers/case-law/ingestion/pipeline/types";
@@ -53,14 +54,12 @@ import type { RuleCache } from "@/api/handlers/case-law/polarity/rule-engine";
 import type { SafeId } from "@/api/lib/branded-types";
 import { toPlainTextMetadataObject } from "@/api/lib/case-law/plain-text";
 import { fitsSearchCandidateRow } from "@/api/lib/case-law/search-candidate-row-bound-sql";
-import {
-  corpusCarriesDocument,
-  payloadCarriesDocument,
-} from "@/api/lib/case-law/stored-payload";
+import { corpusCarriesDocument } from "@/api/lib/case-law/stored-payload";
 import {
   UNPERSISTABLE_DECISION_FIELDS,
   UnpersistableDecisionFieldError,
 } from "@/api/lib/errors/tagged-errors";
+import { payloadCarriesDocument } from "@/api/lib/legal-search/corpus-content-hash";
 import {
   corpusMirrorColumns,
   corpusPayloadDisposition,
@@ -618,7 +617,11 @@ const preparedCitationMetadata = (
 };
 
 /** The decision's identifiers, and the rows that store them. */
-const plannedIdentifiers = (
+/**
+ * The identifier rows a decision is written with, each keyed by the function
+ * every reader normalizes a reference with.
+ */
+export const plannedIdentifiers = (
   result: IngestionResult,
   caseNumberType: ReturnType<typeof parsePrimaryReferenceType>,
 ) => {
@@ -842,6 +845,11 @@ export const planDecisionWrite = async ({
   }
   return Result.ok({
     citations: plannedCitations.value,
+    reviews: planDecisionReviews({
+      country: result.country,
+      sections,
+      metadata: result.metadata,
+    }),
     caseNumberType,
     docketColumns,
     preparedMetadata,

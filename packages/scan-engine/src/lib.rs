@@ -813,7 +813,7 @@ fn rgba_to_gray(width: u32, height: u32, pixels: &[u8]) -> Result<GrayImage, Unr
         return Err(UnrecognizedReason::InvalidPixelBuffer);
     }
     let mut gray = Vec::with_capacity(pixel_count);
-    for pixel in pixels.chunks_exact(4) {
+    for pixel in pixels.as_chunks::<4>().0 {
         let alpha = f32::from(pixel[3]) / 255.0;
         let luminance = 0.2126 * f32::from(pixel[0])
             + 0.7152 * f32::from(pixel[1])

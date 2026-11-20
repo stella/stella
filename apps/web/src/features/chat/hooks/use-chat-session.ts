@@ -35,7 +35,6 @@ import {
   type ChatMemberSendAction,
   chatSendIntent,
   type ChatThreadSendState,
-  type ChatTurnSteering,
 } from "@stll/api-contract/chat-send-intent";
 import type { ChatToolGrantScope } from "@stll/api-contract/chat-tool-grants";
 import { sleep } from "@stll/concurrency/sleep";
@@ -257,11 +256,6 @@ type UseChatSessionOptions = {
   getEditApplyMode?: (() => ChatEditApplyMode) | undefined;
   getContextMatterIds?: (() => readonly string[]) | undefined;
   getSendMode?: (() => ChatSendMode) | undefined;
-  /**
-   * Whether the thread's turns take a message mid-turn (`chatTurnSteering`);
-   * a surface without it has turns that never do, so its sends queue.
-   */
-  getTurnSteering?: (() => ChatTurnSteering) | undefined;
   /** Cursor for the first older page, seeded from the thread fetch. */
   initialOlderCursor: string | null;
   /**
@@ -387,7 +381,6 @@ export const useChatSession = ({
   getContextMatterIds,
   getEditApplyMode,
   getSendMode,
-  getTurnSteering,
   initialOlderCursor,
   onError,
   playbookPane,
@@ -442,6 +435,7 @@ export const useChatSession = ({
     stop: stopState,
     turnAbandoned,
     computerWait,
+    turnSteering,
     turnSentAt,
     turnsStarted,
   } = snapshot;
@@ -909,10 +903,13 @@ export const useChatSession = ({
 
   /** What the thread is doing now, as the send routing reads it. */
   const threadSendState = useCallback((): ChatThreadSendState => {
-    const steering = getTurnSteering?.() ?? CHAT_TURN_STEERING.notSteerable;
     // A wait is read first: a card can show while the request that brought
     // it still ends, and a steer then has to decline it to reach the turn.
-    const { localRunQuestion, messages: shown } = chat.getSnapshot();
+    const {
+      localRunQuestion,
+      messages: shown,
+      turnSteering: steering,
+    } = chat.getSnapshot();
     if (
       openMemberWaitKeys({
         localRunQuestion,
@@ -930,7 +927,7 @@ export const useChatSession = ({
     return current.items.length > 0 && current.hold === null
       ? { type: "working", steering: CHAT_TURN_STEERING.notSteerable }
       : { type: "idle" };
-  }, [chat, getTurnSteering, readQueue, turnRuns]);
+  }, [chat, readQueue, turnRuns]);
 
   /** Put a message the server did not take back into the composer. Falls
    *  back to a notice when this surface shows no composer of the thread. */
@@ -2562,6 +2559,8 @@ export const useChatSession = ({
     stopPending: stopState.status === "pending",
     turnAbandoned,
     computerWait,
+    /** Whether the running turn takes a message mid-turn, as the server says. */
+    turnSteering,
     turnSentAt,
     turnsStarted,
     alwaysApprovedTools,

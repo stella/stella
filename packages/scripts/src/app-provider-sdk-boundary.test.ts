@@ -1,7 +1,8 @@
-import { Glob } from "bun";
 import { describe, expect, test } from "bun:test";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
+
+import { workspaceSources } from "./workspace-source-files.ts";
 
 /**
  * TanStack AI boundary enforcement: live app code must not reintroduce legacy
@@ -16,15 +17,15 @@ import path from "node:path";
 describe("TanStack AI is the only live app provider SDK boundary", () => {
   test("app source has no direct legacy provider SDK imports", async () => {
     const repoRoot = path.resolve(import.meta.dir, "../../..");
-    const glob = new Glob("apps/{api,web}/{src,scripts}/**/*.{ts,tsx}");
+    const appSource = /^apps\/(?:api|web)\/(?:src|scripts)\/.*\.(?:ts|tsx)$/su;
     const forbiddenImport =
       /\bfrom\s+["'](?:@ai-sdk\/[^"']+|ai|ai\/[^"']+|@openrouter\/ai-sdk-provider)["']/u;
     const offenders: string[] = [];
 
-    for await (const relative of glob.scan({
-      cwd: repoRoot,
-      onlyFiles: true,
-    })) {
+    for (const relative of workspaceSources(repoRoot)) {
+      if (!appSource.test(relative)) {
+        continue;
+      }
       const contents = await readFile(
         path.resolve(repoRoot, relative),
         "utf-8",

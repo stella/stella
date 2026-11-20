@@ -83,15 +83,21 @@ export const CHAT_TURN_LOG_IS_LIVE = {
  * rolling deploy old and new API tasks serve side by side, and a task that
  * cannot read the status would accept a second turn on the thread or fail
  * on the row. So every task must read the status (`readers`) and adopt it
- * (`adopters`) one release before any task writes it. A release is named by
- * the repository `VERSION` it was cut at (`handlers/chat/turns/adopt.ts` is
- * the adopter). `turn-status-rollout.test.ts` refuses a writer (a `hand-over`
- * transition outside the state planner) until `VERSION` shows both cut.
+ * (`adopters`) one release before any task writes it (`writers`). A release
+ * is named by the repository `VERSION` it was cut at
+ * (`handlers/chat/turns/adopt.ts` is the adopter, `releaseChatTurnOnTx` the
+ * writer). `turn-status-rollout.test.ts` refuses a writer (a `hand-over`
+ * transition outside the state planner) until `VERSION` shows the readers and
+ * adopters cut, and a writers' release that does not follow theirs. The
+ * writer also stays behind `FEATURE_CHAT_TURN_HANDOVER`, off by default, for
+ * a deployment that upgrades across releases.
  */
 export const CHAT_TURN_HANDED_OVER_ROLLOUT: {
   readers: string;
   adopters: string | null;
+  writers: string | null;
 } = {
   readers: "0.9.84",
   adopters: "0.9.84",
+  writers: "0.9.85",
 };

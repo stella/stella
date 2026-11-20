@@ -136,7 +136,12 @@ export const isOnboardingSnapshot = (
 export const NEVER_REQUESTED = {
   mac: ["screenRecording", "camera", "keystrokes", "fullDiskAccess"],
   other: ["screenRecording", "camera", "keystrokes"],
-  windows: ["screenRecording", "camera", "keystrokes", "administrator"],
+  windows: [
+    "screenRecording",
+    "camera",
+    "keystrokesWithoutHoldKey",
+    "administrator",
+  ],
 } as const;
 
 export type NeverRequested =

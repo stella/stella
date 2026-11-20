@@ -1,5 +1,7 @@
 import * as v from "valibot";
 
+import { DATA_BOX_FILE_FORMAT } from "@stll/api-contract/legal-file-formats";
+
 import type { SafeId } from "@/api/lib/branded-types";
 
 const fileExtensionMap: Record<string, string> = {
@@ -26,7 +28,9 @@ const fileExtensionMap: Record<string, string> = {
   "application/xml": "xml",
   "message/rfc822": "eml",
   "application/vnd.ms-outlook": "msg",
-  "application/vnd.software602.filler.form-xml-zip": "zfo",
+  // Storage suffixes are persisted. Recognizing a new viewer format must not
+  // change the keys used to retrieve previously uploaded files.
+  [DATA_BOX_FILE_FORMAT.mimeType]: "zfo",
   "application/rtf": "rtf",
 };
 

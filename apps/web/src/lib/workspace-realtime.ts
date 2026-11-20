@@ -19,8 +19,12 @@ import {
   type WorkspaceRealtimeEvent,
 } from "@stll/api-contract";
 
+import {
+  captureSessionQueryOwner,
+  hasCurrentAuthQueryOwner,
+  isObservedSessionQueryOwner,
+} from "@/lib/account/auth-query-owner";
 import { getAnalytics } from "@/lib/analytics/provider";
-import { sessionOptions } from "@/lib/auth-query-options";
 import { detached } from "@/lib/detached";
 import {
   fileContentByFieldQueryRoot,
@@ -60,8 +64,20 @@ import {
   workspaceJustificationsQueryRoot,
   workspaceWorkflowQueryRoot,
 } from "@/lib/workspaces/queries/workspace.logic";
+import { getRealtimeRefreshScheduler } from "@/lib/workspaces/realtime-refresh";
+import {
+  canInvalidateResourceQuery,
+  canRefreshResourceQuery,
+  isIdentityOwnedResourceQuery,
+  resourceRefreshIdentity,
+} from "@/lib/workspaces/resource-query-identity";
+import type {
+  ResourceQueryOwner,
+  ResourceQueryScopeIdentity,
+  ResourceRefreshContext,
+} from "@/lib/workspaces/resource-query-identity";
 
-type ResourceQueryScopeIdentity =
+type ResourceChangeScopeIdentity =
   { type: "workspace"; workspaceId: string } | { type: "organization" };
 
 type ResourceReads =
@@ -203,6 +219,28 @@ export const RESOURCE_MUTATION_CONTRACTS = {
     ],
     resources: [RESOURCE_TYPE.INVOICE],
   },
+  revokeInvoiceSend: {
+    writes: [
+      {
+        type: "handler-route",
+        method: "POST",
+        route: "/invoices/:workspaceId/:invoiceId/sends/:sendId/revoke",
+      },
+    ],
+    resources: [RESOURCE_TYPE.INVOICE],
+  },
+  // A public invoice link's file: the server records the access and the
+  // first view on the invoice's send, which no member session caches.
+  openInvoiceLinkFile: {
+    writes: [
+      {
+        type: "handler-route",
+        method: "POST",
+        route: "/public/invoice-links/download",
+      },
+    ],
+    resources: [RESOURCE_TYPE.INVOICE],
+  },
   updateTask: {
     writes: [
       {
@@ -215,6 +253,17 @@ export const RESOURCE_MUTATION_CONTRACTS = {
     // Any change to a task, its status included. A task is an entity: its own
     // queries and every entity collection, the matter's tasks and its
     // overview included, refresh.
+    changedEntity: "entityId",
+  },
+  moveEntity: {
+    writes: [
+      {
+        type: "handler-route",
+        method: "PATCH",
+        route: "/entities/:workspaceId/move",
+      },
+    ],
+    resources: [RESOURCE_TYPE.ENTITY],
     changedEntity: "entityId",
   },
   renameEntity: {
@@ -454,7 +503,25 @@ export const RESOURCE_MUTATION_CONTRACTS = {
 } as const;
 
 type ResourceMutationName = keyof typeof RESOURCE_MUTATION_CONTRACTS;
-type PrimaryResourceMutationName = Exclude<ResourceMutationName, "updateUser">;
+
+/**
+ * Writes a public page makes with a link token instead of a member session:
+ * every route they post to is a public one.
+ */
+type PublicTokenResourceMutationName = {
+  [
+    TMutation in ResourceMutationName
+  ]: (typeof RESOURCE_MUTATION_CONTRACTS)[TMutation]["writes"][number] extends {
+    route: `/public/${string}`;
+  }
+    ? TMutation
+    : never;
+}[ResourceMutationName];
+
+type PrimaryResourceMutationName = Exclude<
+  ResourceMutationName,
+  "updateUser" | PublicTokenResourceMutationName
+>;
 
 /**
  * The variable naming the one entity a contract changes, if it names one.
@@ -497,6 +564,8 @@ type OrganizationProjectionMutationScope = {
   userId: string | null;
 };
 
+type PublicTokenMutationScope = { type: "public-token" };
+
 type ResourceMutationScope =
   | { type: "organization" }
   | { type: "workspace"; workspaceId: string; changedEntityId?: string };
@@ -505,10 +574,12 @@ const invalidateAfterResourceMutation = async ({
   mutation,
   queryClient,
   scope,
+  owner,
 }: {
   mutation: ResourceMutationName;
   queryClient: QueryClient;
   scope: ResourceMutationScope;
+  owner: ResourceQueryOwner;
 }) => {
   const resources = RESOURCE_MUTATION_CONTRACTS[mutation].resources;
   const invalidations: ResourceQueryInvalidation[] =
@@ -517,9 +588,11 @@ const invalidateAfterResourceMutation = async ({
       resources,
       scope,
       mutation,
-    }).map(({ queryKey }): ResourceQueryInvalidation => ({
+      owner,
+    }).map(({ queryKey, ...context }): ResourceQueryInvalidation => ({
       queryKey,
-      match: "prefix",
+      ...context,
+      match: context.match ?? "prefix",
     }));
   if (scope.type === "workspace") {
     for (const resource of resources) {
@@ -607,6 +680,20 @@ export function resourceMutation<TData, TVariables>(
     scope: OrganizationProjectionMutationScope;
   },
 ): (variables: TVariables) => Promise<TData>;
+/**
+ * A write a public page makes with a link token. No member session owns the
+ * page's cache, so nothing a session reads is invalidated; the page's own
+ * token read stays as it was, since reading it again is itself an access.
+ */
+export function resourceMutation<
+  TMutation extends PublicTokenResourceMutationName,
+  TVariables,
+  TData,
+>(
+  options: ResourceMutationOptions<TMutation, TVariables, TData> & {
+    scope: PublicTokenMutationScope;
+  },
+): (variables: TVariables) => Promise<TData>;
 export function resourceMutation<TVariables, TData, TRest extends unknown[]>({
   mutation,
   queryClient,
@@ -616,16 +703,21 @@ export function resourceMutation<TVariables, TData, TRest extends unknown[]>({
   scope?:
     | { type: "workspace" }
     | { type: "organization" }
-    | OrganizationProjectionMutationScope;
+    | OrganizationProjectionMutationScope
+    | PublicTokenMutationScope;
 }): (variables: TVariables, ...rest: TRest) => Promise<TData> {
   return async (variables: TVariables, ...rest: TRest) => {
+    if (scope?.type === "public-token") {
+      return await mutationFn(variables, ...rest);
+    }
+    const owner = captureSessionQueryOwner(queryClient);
     const data = await mutationFn(variables, ...rest);
     if (scope?.type === "organization-projection") {
-      const session = queryClient.getQueryData(sessionOptions.queryKey);
       if (
         scope.organizationId !== null &&
-        session?.user.id === scope.userId &&
-        session.session.activeOrganizationId === scope.organizationId
+        owner?.userId === scope.userId &&
+        owner.organizationId === scope.organizationId &&
+        isObservedSessionQueryOwner(queryClient, owner)
       ) {
         await invalidateResourceQueries(
           queryClient,
@@ -633,6 +725,7 @@ export function resourceMutation<TVariables, TData, TRest extends unknown[]>({
             queryClient,
             organizationId: scope.organizationId,
             resources: RESOURCE_MUTATION_CONTRACTS[mutation].resources,
+            owner,
           }),
         );
       }
@@ -645,6 +738,7 @@ export function resourceMutation<TVariables, TData, TRest extends unknown[]>({
         scope?.type === "organization"
           ? scope
           : workspaceMutationScope(mutation, variables),
+      owner,
     });
     return data;
   };
@@ -692,10 +786,10 @@ export const WORKSPACE_REALTIME_QUERY_ACTION = {
 } as const;
 
 export type WorkspaceRealtimeQueryAction =
-  | {
+  | ({
       type: typeof WORKSPACE_REALTIME_QUERY_ACTION.INVALIDATE;
       queryKey: QueryKey;
-    }
+    } & ResourceRefreshContext)
   | {
       type: typeof WORKSPACE_REALTIME_QUERY_ACTION.REMOVE_PREFIX;
       queryKey: QueryKey;
@@ -894,7 +988,7 @@ const getResourceQueryScopeKeys = (
 type ResourceQueryInvalidation = {
   queryKey: QueryKey;
   match: "prefix" | "exact" | "entity-collections";
-};
+} & Omit<ResourceRefreshContext, "match">;
 
 /**
  * One known entity changed: its own queries and every entity collection
@@ -992,23 +1086,31 @@ const getResourceSetUpdatedQueryActions = (
 export const coalesceWorkspaceQueryActions = (
   actions: WorkspaceRealtimeQueryAction[],
 ): WorkspaceRealtimeQueryAction[] => {
-  const seen = new Set<string>();
+  const seen = new Map<object, Set<string>>();
   const unique: WorkspaceRealtimeQueryAction[] = [];
   for (const action of actions) {
+    const identity = resourceRefreshIdentity(
+      action.type === "invalidate" ? action : {},
+    );
+    const keys = seen.get(identity) ?? new Set<string>();
     const key = `${action.type}:${hashKey(action.queryKey)}`;
-    if (seen.has(key)) {
+    if (keys.has(key)) {
       continue;
     }
-    seen.add(key);
+    keys.add(key);
+    seen.set(identity, keys);
     unique.push(action);
   }
   return unique.filter(
     (action) =>
       action.type !== WORKSPACE_REALTIME_QUERY_ACTION.INVALIDATE ||
+      action.match === "exact" ||
       !unique.some(
         (other) =>
           other !== action &&
           other.type === WORKSPACE_REALTIME_QUERY_ACTION.INVALIDATE &&
+          other.match !== "exact" &&
+          resourceRefreshIdentity(action) === resourceRefreshIdentity(other) &&
           partialMatchKey(action.queryKey, other.queryKey),
       ),
   );
@@ -1017,10 +1119,11 @@ export const coalesceWorkspaceQueryActions = (
 type RegisteredResourceQueryActionsOptions = {
   queryClient: QueryClient;
   resources: readonly ResourceType[];
-  scope: ResourceQueryScopeIdentity;
+  scope: ResourceChangeScopeIdentity;
   /** This client's committed write, when the change is one; a realtime
    *  event names none. */
   mutation?: ResourceMutationName;
+  owner?: ResourceQueryOwner;
 };
 
 const registeredResourceQueryActions = ({
@@ -1028,11 +1131,16 @@ const registeredResourceQueryActions = ({
   resources,
   scope,
   mutation,
-}: RegisteredResourceQueryActionsOptions): WorkspaceRealtimeQueryAction[] =>
+  owner,
+}: RegisteredResourceQueryActionsOptions): Extract<
+  WorkspaceRealtimeQueryAction,
+  { type: "invalidate" }
+>[] =>
   queryClient
     .getQueryCache()
     .findAll({
-      predicate: ({ meta }) => {
+      predicate: (query) => {
+        const { meta } = query;
         const reads = meta?.resourceReads;
         if (
           !reads ||
@@ -1044,18 +1152,35 @@ const registeredResourceQueryActions = ({
           return false;
         }
         return (
-          (scope.type === "organization" &&
-            reads.scope.type === "organization") ||
+          (isObservedSessionQueryOwner(queryClient, owner) &&
+            ((reads.scope.type === "organization" &&
+              reads.scope.organizationId === owner.organizationId) ||
+              (reads.scope.type === "user" &&
+                reads.scope.userId === owner.userId) ||
+              (reads.scope.type === "current-session" &&
+                hasCurrentAuthQueryOwner(queryClient, query)))) ||
           (scope.type === "workspace" &&
-            (reads.scope.type === "organization" ||
-              scope.workspaceId === reads.scope.workspaceId))
+            (reads.scope.type === "workspace"
+              ? scope.workspaceId === reads.scope.workspaceId
+              : reads.scope.type === "workspace-set" &&
+                reads.scope.workspaceIds.includes(scope.workspaceId)))
         );
       },
     })
-    .map(({ queryKey }) => ({
-      type: WORKSPACE_REALTIME_QUERY_ACTION.INVALIDATE,
-      queryKey,
-    }));
+    .map((query) =>
+      isIdentityOwnedResourceQuery(query)
+        ? {
+            type: WORKSPACE_REALTIME_QUERY_ACTION.INVALIDATE,
+            queryKey: query.queryKey,
+            match: "exact",
+            query,
+            owner,
+          }
+        : {
+            type: WORKSPACE_REALTIME_QUERY_ACTION.INVALIDATE,
+            queryKey: query.queryKey,
+          },
+    );
 
 /** Secondary dependencies name their owning organization independently of a
  * query's workspace. They never inherit the legacy organization-wide match. */
@@ -1063,41 +1188,64 @@ export const organizationResourceQueryActions = ({
   queryClient,
   organizationId,
   resources,
+  owner,
 }: {
   queryClient: QueryClient;
   organizationId: string;
   resources: readonly ResourceType[];
-}): { queryKey: QueryKey; match: "exact" }[] =>
+  owner?: ResourceQueryOwner;
+}): ({ queryKey: QueryKey; match: "exact" } & ResourceRefreshContext)[] =>
   queryClient
     .getQueryCache()
     .findAll({
-      predicate: ({ meta }) => {
+      predicate: (query) => {
+        const { meta } = query;
         const reads = meta?.resourceReads;
         if (!reads || "type" in reads) {
           return false;
         }
         const organization = reads.organizationReads;
         return (
-          organization?.organizationId === organizationId &&
-          organization.resources.some((resource) =>
-            resources.includes(resource),
-          )
+          isObservedSessionQueryOwner(queryClient, owner) &&
+          owner.organizationId === organizationId &&
+          ((organization?.organizationId === organizationId &&
+            organization.resources.some((resource) =>
+              resources.includes(resource),
+            )) ||
+            (((reads.scope.type === "organization" &&
+              reads.scope.organizationId === organizationId) ||
+              (reads.scope.type === "user" &&
+                reads.scope.userId === owner.userId) ||
+              (reads.scope.type === "current-session" &&
+                hasCurrentAuthQueryOwner(queryClient, query))) &&
+              reads.resources.some((resource) => resources.includes(resource))))
         );
       },
     })
-    .map(({ queryKey }) => ({ queryKey, match: "exact" }));
+    .map((query) => ({
+      queryKey: query.queryKey,
+      match: "exact",
+      query,
+      owner,
+    }));
 
 const deduplicateInvalidations = (
   invalidations: readonly ResourceQueryInvalidation[],
 ): ResourceQueryInvalidation[] => {
-  const seen = new Set<string>();
+  const seen = new Map<object, Set<string>>();
   const unique: ResourceQueryInvalidation[] = [];
   for (const invalidation of invalidations) {
+    const identity = resourceRefreshIdentity({
+      ...invalidation,
+      match: invalidation.match === "exact" ? "exact" : undefined,
+    });
+    const keys = seen.get(identity) ?? new Set<string>();
     const key = `${invalidation.match}:${hashKey(invalidation.queryKey)}`;
-    if (seen.has(key)) {
+    if (keys.has(key)) {
       continue;
     }
-    seen.add(key);
+    keys.add(key);
+    seen.set(identity, keys);
     unique.push(invalidation);
   }
   return unique;
@@ -1131,11 +1279,16 @@ const invalidateResourceQueries = async (
   const invalidated = await Result.tryPromise(
     async () =>
       await Promise.all(
-        invalidations.map(async ({ queryKey, match }) => {
+        invalidations.map(async ({ queryKey, match, ...context }) => {
           await queryClient.invalidateQueries({
             queryKey,
             exact: match === "exact",
-            predicate: (query) => invalidationReaches(match, query.queryKey),
+            predicate: (query) =>
+              invalidationReaches(match, query.queryKey) &&
+              canInvalidateResourceQuery(queryClient, query, {
+                ...context,
+                match: match === "exact" ? "exact" : undefined,
+              }),
             refetchType: "none",
           });
         }),
@@ -1151,15 +1304,41 @@ const invalidateResourceQueries = async (
       context: { type: "detached", operation: "resource-query.invalidate" },
     });
   }
+  // Exact identified readers have one final authority/Query gate, including
+  // healthy cancel-and-refetch and deferred recovery. Legacy bulk is unchanged.
+  const identified = invalidations.filter(
+    (action) =>
+      action.match === "exact" &&
+      action.query !== undefined &&
+      isIdentityOwnedResourceQuery(action.query),
+  );
+  const legacy = invalidations.filter((action) => !identified.includes(action));
+  const scheduler = getRealtimeRefreshScheduler(queryClient);
+  detached(
+    Promise.all(
+      identified.map(
+        async ({ queryKey, ...context }) =>
+          await scheduler.invalidateImmediately(queryKey, {
+            ...context,
+            match: "exact",
+          }),
+      ),
+    ),
+    "resource-query.identified-refresh",
+  );
   // Refetch failure must not turn a committed write into a rejected mutation.
   detached(
     queryClient.refetchQueries({
       type: "active",
       predicate: (query) =>
-        invalidations.some(
-          ({ queryKey, match }) =>
+        legacy.some(
+          ({ queryKey, match, ...context }) =>
             matchQuery({ queryKey, exact: match === "exact" }, query) &&
-            invalidationReaches(match, query.queryKey),
+            invalidationReaches(match, query.queryKey) &&
+            canRefreshResourceQuery(queryClient, query, {
+              ...context,
+              match: match === "exact" ? "exact" : undefined,
+            }),
         ),
     }),
     "resource-query.refresh",
@@ -1175,11 +1354,13 @@ const invalidateResourceQueries = async (
 type WorkspaceQueryActionsScope = {
   workspaceId: string;
   queryClient: QueryClient;
+  owner?: ResourceQueryOwner;
 };
 
 export const getWorkspaceReconnectQueryActions = ({
   workspaceId,
   queryClient,
+  owner,
 }: WorkspaceQueryActionsScope): WorkspaceRealtimeQueryAction[] => {
   const actions: WorkspaceRealtimeQueryAction[] = [];
   for (const scope of Object.values(RESOURCE_QUERY_SCOPE)) {
@@ -1195,9 +1376,14 @@ export const getWorkspaceReconnectQueryActions = ({
       queryClient,
       resources: Object.values(RESOURCE_TYPE),
       scope: { type: "workspace", workspaceId },
+      owner,
     }),
   );
-  return coalesceWorkspaceQueryActions(actions);
+  return coalesceWorkspaceQueryActions(
+    actions.map((action) =>
+      action.type === "invalidate" ? { ...action, owner } : action,
+    ),
+  );
 };
 
 /**
@@ -1250,7 +1436,7 @@ const getResourceEventQueryActions = (
 
 export const getWorkspaceRealtimeQueryActions = (
   event: WorkspaceRealtimeEvent,
-  { workspaceId, queryClient }: WorkspaceQueryActionsScope,
+  { workspaceId, queryClient, owner }: WorkspaceQueryActionsScope,
 ): WorkspaceRealtimeQueryAction[] => {
   const actions = getResourceEventQueryActions(event, workspaceId);
   const resources: ResourceType[] = [];
@@ -1272,12 +1458,17 @@ export const getWorkspaceRealtimeQueryActions = (
       event satisfies never;
       return panic(`Unhandled event: ${String(event)}`);
   }
-  return coalesceWorkspaceQueryActions([
-    ...actions,
-    ...registeredResourceQueryActions({
-      queryClient,
-      resources,
-      scope: { type: "workspace", workspaceId },
-    }),
-  ]);
+  return coalesceWorkspaceQueryActions(
+    [
+      ...actions,
+      ...registeredResourceQueryActions({
+        queryClient,
+        resources,
+        scope: { type: "workspace", workspaceId },
+        owner,
+      }),
+    ].map((action) =>
+      action.type === "invalidate" ? { ...action, owner } : action,
+    ),
+  );
 };

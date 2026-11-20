@@ -36,11 +36,11 @@ import { RESOURCE_TYPE } from "@stll/api-contract";
 import { resourceQueryOptions } from "@/lib/workspace-realtime";
 export const fileOptions = (props: { id: string }) => resourceQueryOptions(
   queryOptions({ queryKey: ["file", props.id], queryFn: async () => props.id }),
-  { resources: [RESOURCE_TYPE.ENTITY], scope: { type: "organization" } },
+  { resources: [RESOURCE_TYPE.ENTITY], scope: { type: "organization", organizationId } },
 );
 export const textFileOptions = (props: { id: string }) => resourceQueryOptions(
   queryOptions({ queryKey: ["text-file", props.id], queryFn: async () => props.id }),
-  { resources: [RESOURCE_TYPE.ENTITY], scope: { type: "organization" } },
+  { resources: [RESOURCE_TYPE.ENTITY], scope: { type: "organization", organizationId } },
 );
 `,
   },
@@ -53,7 +53,7 @@ export const fileMetadataQueryOptions = (props: { id: string }) => resourceQuery
   { queryKey: ["file-metadata", props.id], queryFn: async () => props.id },
   { resources: [RESOURCE_TYPE.ENTITY], scope: props.workspaceId
     ? { type: "workspace", workspaceId: props.workspaceId }
-    : { type: "organization" } },
+    : { type: "organization", organizationId: props.organizationId } },
 );
 export const fileMetadataOptions = fileMetadataQueryOptions;
 `,
@@ -78,7 +78,7 @@ export const saveWorkspace = () => useMutation({ mutationFn: resourceMutation({
 }) });
 export const workspacesQuery = () => resourceQueryOptions(
   queryOptions({ queryKey: ["workspaces"], queryFn: async () => [] }),
-  { resources: [RESOURCE_TYPE.WORKSPACE], scope: { type: "organization" } },
+  { resources: [RESOURCE_TYPE.WORKSPACE], scope: { type: "organization", organizationId } },
 );
 export const fileQuery = () => useQuery(fileOptions({ id: "file" }));
 export const textFileQuery = () => useQuery(textFileOptions({ id: "text" }));
@@ -294,7 +294,7 @@ import { RESOURCE_TYPE } from "@stll/api-contract";
 import { resourceQueryOptions } from "@/lib/workspace-realtime";
 export const read = () => ${receiver}.${method}(resourceQueryOptions(
   { queryKey: ["reader"], queryFn: async () => [] },
-  { resources: [RESOURCE_TYPE.ENTITY], scope: { type: "organization" } },
+  { resources: [RESOURCE_TYPE.ENTITY], scope: { type: "organization", organizationId } },
 ));`,
         },
       ];
@@ -314,7 +314,7 @@ test("resource-independent readers require an explicit closed declaration", () =
     { text: '{ type: "unknown" }', valid: false },
     { text: '{ type: "independent", resources: [] }', valid: false },
     {
-      text: '{ resources: [], scope: { type: "organization" } }',
+      text: '{ resources: [], scope: { type: "organization", organizationId } }',
       valid: false,
     },
   ]) {
@@ -461,7 +461,7 @@ import { resourceQueryOptions } from "@/lib/workspace-realtime";
 ${wrapper}
 const tagged = resourceQueryOptions(
   { queryKey: ["tagged"], queryFn: async () => [] },
-  { resources: [RESOURCE_TYPE.ENTITY], scope: { type: "organization" } },
+  { resources: [RESOURCE_TYPE.ENTITY], scope: { type: "organization", organizationId } },
 );
 export const wrappedRead = () => useWrappedQuery(tagged);
 `,
@@ -500,7 +500,7 @@ const useWrappedQuery = (options: unknown) => {
 };
 const tagged = resourceQueryOptions(
   { queryKey: ["tagged"], queryFn: async () => [] },
-  { resources: [RESOURCE_TYPE.ENTITY], scope: { type: "organization" } },
+  { resources: [RESOURCE_TYPE.ENTITY], scope: { type: "organization", organizationId } },
 );
 export const wrappedRead = () => useWrappedQuery(tagged);
 `,
@@ -535,7 +535,7 @@ const useBothQueries = (options: unknown) => {
 };
 const tagged = resourceQueryOptions(
   { queryKey: ["tagged"], queryFn: async () => [] },
-  { resources: [RESOURCE_TYPE.ENTITY], scope: { type: "organization" } },
+  { resources: [RESOURCE_TYPE.ENTITY], scope: { type: "organization", organizationId } },
 );
 export const wrappedRead = () => useBothQueries(tagged);
 `,
@@ -558,7 +558,7 @@ import { RESOURCE_TYPE } from "@stll/api-contract";
 import { resourceQueryOptions } from "@/lib/workspace-realtime";
 export const invalidQuery = () => useQuery(resourceQueryOptions(
   queryOptions({ queryKey: ["invalid"], queryFn: async () => [] }),
-  { resources: [RESOURCE_TYPE.MISSING], scope: { type: "organization" } },
+  { resources: [RESOURCE_TYPE.MISSING], scope: { type: "organization", organizationId } },
 ));
 `,
     },
@@ -878,7 +878,7 @@ import { RESOURCE_TYPE } from "@stll/api-contract";
 import { resourceQueryOptions } from "@/lib/workspace-realtime";
 const options = resourceQueryOptions(
   queryOptions({ queryKey: ["entities"], queryFn: async () => [] }),
-  { resources: [RESOURCE_TYPE.ENTITY], scope: { type: "organization" } },
+  { resources: [RESOURCE_TYPE.ENTITY], scope: { type: "organization", organizationId } },
 );
 const alias = options;
 ${mutation}
@@ -907,7 +907,7 @@ export const readEntities = () => useQuery(alias);
 });
 
 test("tagged reader spreads allow only explicit non-computed overrides", () => {
-  const fixture = (overrides: string) => [
+  const fixture = (overrides: string, declarations = "") => [
     ...validSources.slice(0, 2),
     {
       file: "apps/web/src/features.ts",
@@ -917,8 +917,9 @@ import { RESOURCE_TYPE } from "@stll/api-contract";
 import { resourceQueryOptions } from "@/lib/workspace-realtime";
 const options = resourceQueryOptions(
   queryOptions({ queryKey: ["entities"], queryFn: async () => [] }),
-  { resources: [RESOURCE_TYPE.ENTITY], scope: { type: "organization" } },
+  { resources: [RESOURCE_TYPE.ENTITY], scope: { type: "organization", organizationId } },
 );
+${declarations}
 export const readEntities = () => useQuery({ ...options, ${overrides} });
 `,
     },
@@ -935,6 +936,47 @@ export const readEntities = () => useQuery({ ...options, ${overrides} });
     expect(findings.some(({ id }) => id.endsWith(":reader"))).toBe(true);
   }
   expect(violations(fixture("enabled: false"))).toEqual([]);
+  expect(
+    violations(
+      fixture(`enabled: config !== null,
+    ...(config !== null && JSON.stringify(providers) === JSON.stringify(storedProviders)
+      ? { initialData: { defaultModels: projectDefaultRoleModels(config.defaultModels) } }
+      : {})`),
+    ),
+  ).toEqual([]);
+  expect(
+    violations(
+      fixture(
+        "...{ ...(ready ? { initialData: [], ...{ enabled: true } } : {}) }",
+      ),
+    ),
+  ).toEqual([]);
+  for (const overrides of [
+    "...(ready ? { meta: {} } : { initialData: [] })",
+    "...(ready ? { initialData: [] } : { queryFn: async () => [] })",
+    "...(ready ? { queryKey: ['other'] } : {})",
+    "...(ready ? { ['enabled']: true } : {})",
+    "...(ready ? { initialData: [] } : opaque)",
+    "...{ ...(ready ? { initialData: [] } : opaque) }",
+    "...(ready ? { initialData: [], ...opaque } : {})",
+  ]) {
+    expect(
+      violations(fixture(overrides)).some(({ id }) => id.endsWith(":reader")),
+    ).toBe(true);
+  }
+  for (const declarations of [
+    "const overrides = { initialData: [] };",
+    "const overrides = { initialData: [] }; opaqueMutator(overrides);",
+    "let overrides = { initialData: [] };",
+    "const overrides = { initialData: [] }; overrides.meta = {};",
+    "const overrides = other; const other = overrides;",
+  ]) {
+    expect(
+      violations(fixture("...overrides", declarations)).some(
+        ({ id }) => id.includes(":readEntities:") && id.endsWith(":reader"),
+      ),
+    ).toBe(true);
+  }
 });
 
 test("tagged mutation spreads use the same closed override rule", () => {
@@ -1063,7 +1105,7 @@ test("a parameter factory shadows its function expression's tagged return", () =
           useQuery(options());
           return resourceQueryOptions(
             {queryKey: ["owned"], queryFn: async () => []},
-            {resources: [RESOURCE_TYPE.ENTITY], scope: {type: "organization"}},
+            {resources: [RESOURCE_TYPE.ENTITY], scope: {type: "organization", organizationId}},
           );
         };`,
     },
@@ -1144,9 +1186,9 @@ test("secondary organization dependencies require an explicit owner and valid re
       text:
         source.file === "apps/web/src/features.ts"
           ? source.text.replace(
-              '{ resources: [RESOURCE_TYPE.WORKSPACE], scope: { type: "organization" } }',
+              '{ resources: [RESOURCE_TYPE.WORKSPACE], scope: { type: "organization", organizationId } }',
               () =>
-                `{ resources: [RESOURCE_TYPE.WORKSPACE], scope: { type: "organization" }, organizationReads: ${organizationReads} }`,
+                `{ resources: [RESOURCE_TYPE.WORKSPACE], scope: { type: "organization", organizationId }, organizationReads: ${organizationReads} }`,
             )
           : source.text,
     }));
@@ -1544,4 +1586,310 @@ export const useTaskConsumer = () => useTaskStatusAction("workspace");`,
   expect(entry.wrapperOf.length).toBeGreaterThan(0);
   expect(entry.ownWrites).toEqual([]);
   expect(inspectMutationQueryInvalidation(census, sources)).toEqual([]);
+});
+
+test("workspace-set reader scopes require their exact identity without becoming mutation scopes", () => {
+  const readerSources = (scope: string) => [
+    ...validSources.slice(0, 2),
+    {
+      file: "apps/web/src/batch-reader.ts",
+      text: `
+      import { queryOptions } from "@tanstack/react-query";
+      import { RESOURCE_TYPE } from "@stll/api-contract";
+      import { resourceQueryOptions } from "@/lib/workspace-realtime";
+      export const batchOptions = (workspaceIds: readonly string[]) => resourceQueryOptions(
+        queryOptions({ queryKey: ["batch", workspaceIds], queryFn: async () => [] }),
+        { resources: [RESOURCE_TYPE.WORKSPACE], scope: ${scope} },
+      );
+    `,
+    },
+  ];
+  expect(
+    violations(readerSources('{ type: "workspace-set", workspaceIds }')),
+  ).toEqual([]);
+  expect(
+    violations(
+      readerSources('{ type: "workspace-set", workspaceIds: ["workspace"] }'),
+    ),
+  ).toEqual([]);
+  for (const scope of [
+    '{ type: "workspace-set" }',
+    '{ type: "workspace-set", workspaceId: "workspace" }',
+    '{ type: "workspace-set", workspaceIds, organizationId: "organization" }',
+    '{ type: "unknown", workspaceIds }',
+  ]) {
+    expect(
+      violations(readerSources(scope)).some(
+        ({ disposition }) => disposition === "invalid-declaration",
+      ),
+    ).toBe(true);
+  }
+  const mutationSources = [
+    ...validSources.slice(0, 2),
+    {
+      file: "apps/web/src/batch-mutation.ts",
+      text: `
+      import { useMutation } from "@tanstack/react-query";
+      import { resourceMutation } from "@/lib/workspace-realtime";
+      import { api } from "@/lib/api";
+      export const rename = () => useMutation({ mutationFn: resourceMutation({
+        mutation: "renameEntity", queryClient,
+        scope: { type: "workspace-set", workspaceIds: ["workspace"] },
+        mutationFn: async ({ workspaceId, entityId }) => api.entities({ workspaceId }).rename.patch({ entityId }),
+      }) });
+    `,
+    },
+  ];
+  expect(
+    violations(mutationSources).some(({ reason }) =>
+      reason.includes("scope must name a closed primary scope"),
+    ),
+  ).toBe(true);
+});
+
+test("public token mutations write only public routes and invalidate no session", () => {
+  const sourcesFor = ({
+    mutation,
+    scope,
+    request,
+  }: {
+    mutation: string;
+    scope: string | null;
+    request: string;
+  }) => [
+    validSources[0] ?? panic("Missing resource type fixture"),
+    {
+      file: "apps/web/src/lib/workspace-realtime.ts",
+      text: `
+import { RESOURCE_TYPE } from "@stll/api-contract";
+export const resourceMutation = (options: { mutationFn: () => unknown }) => options.mutationFn;
+export const resourceQueryOptions = (options: unknown) => options;
+export const RESOURCE_MUTATION_CONTRACTS = {
+  renameEntity: {
+    writes: [{ method: "PATCH", route: "/entities/:workspaceId/rename" }],
+    resources: [RESOURCE_TYPE.ENTITY],
+  },
+  openLinkFile: {
+    writes: [{ method: "POST", route: "/public/links/download" }],
+    resources: [RESOURCE_TYPE.ENTITY],
+  },
+} as const;
+`,
+    },
+    {
+      file: "apps/web/src/link-page.ts",
+      text: `
+import { useMutation } from "@tanstack/react-query";
+import { resourceMutation } from "@/lib/workspace-realtime";
+import { api, apiClient } from "@/lib/api";
+export const openFile = () => useMutation({ mutationFn: resourceMutation({
+  mutation: "${mutation}",
+  queryClient,${scope === null ? "" : `\n  scope: ${scope},`}
+  mutationFn: async ({ token }: { token: string }) => ${request},
+}) });
+`,
+    },
+  ];
+  const publicRequest = "apiClient.public.links.download.post({ token })";
+  expect(
+    violations(
+      sourcesFor({
+        mutation: "openLinkFile",
+        scope: '{ type: "public-token" }',
+        request: publicRequest,
+      }),
+    ),
+  ).toEqual([]);
+  const reasons = (sources: typeof validSources) =>
+    violations(sources).map(({ reason }) => reason);
+  expect(
+    reasons(
+      sourcesFor({
+        mutation: "openLinkFile",
+        scope: null,
+        request: publicRequest,
+      }),
+    ),
+  ).toEqual([
+    "A contract whose writes are public routes must use the public token scope.",
+  ]);
+  expect(
+    reasons(
+      sourcesFor({
+        mutation: "renameEntity",
+        scope: '{ type: "public-token" }',
+        request:
+          'api.entities({ workspaceId: "123" }).rename.patch({ entityId: token })',
+      }),
+    ),
+  ).toEqual([
+    "A public token resourceMutation must name a contract whose writes are all public routes.",
+  ]);
+  assertInvalidCannotBeBaselined(
+    violations(
+      sourcesFor({
+        mutation: "openLinkFile",
+        scope: '{ type: "public-token", token: "secret" }',
+        request: publicRequest,
+      }),
+    ),
+  );
+});
+
+test("identity-owned readers require their exact declared identity domain", () => {
+  const sourcesFor = (scope: string) =>
+    validSources.map((source) => ({
+      ...source,
+      text:
+        source.file === "apps/web/src/features.ts"
+          ? source.text.replace(
+              'scope: { type: "organization", organizationId }',
+              () => `scope: ${scope}`,
+            )
+          : source.text,
+    }));
+  for (const scope of [
+    '{ type: "organization", organizationId }',
+    '{ type: "organization", organizationId, userId }',
+    '{ type: "user", userId }',
+    '{ type: "current-session" }',
+  ]) {
+    expect(violations(sourcesFor(scope))).toEqual([]);
+  }
+  for (const scope of [
+    '{ type: "organization" }',
+    '{ type: "organization", organizationId: null }',
+    '{ type: "organization", organizationId: "" }',
+    '{ type: "organization", organizationId, userId: undefined }',
+    '{ type: "user" }',
+    '{ type: "user", userId: 1 }',
+    '{ type: "current-session", organizationId }',
+  ]) {
+    assertInvalidCannotBeBaselined(violations(sourcesFor(scope)));
+  }
+});
+
+const importedAuthReaderSources = ({
+  owner = "export const",
+  metadata = '{ resources: [RESOURCE_TYPE.ENTITY], scope: { type: "current-session" } }',
+  ownerAfter = "",
+  consumerBefore = "",
+  consumer = "useQuery(roleOptions); useQuery({ ...activeMemberOptions, enabled: false });",
+}: {
+  owner?: string;
+  metadata?: string;
+  ownerAfter?: string;
+  consumerBefore?: string;
+  consumer?: string;
+} = {}) => [
+  ...validSources.slice(0, 2),
+  {
+    file: "apps/web/src/lib/auth-queries.ts",
+    text: `
+import { queryOptions } from "@tanstack/react-query";
+import { RESOURCE_TYPE } from "@stll/api-contract";
+import { resourceQueryOptions } from "@/lib/workspace-realtime";
+${owner} roleOptions = resourceQueryOptions(queryOptions({
+  queryKey: ["role"], queryFn: async () => "member",
+}), ${metadata});
+export const activeMemberOptions = resourceQueryOptions(queryOptions({
+  queryKey: ["active-organization-member"], queryFn: async () => ({ billingAccess: true }),
+}), { resources: [RESOURCE_TYPE.ENTITY], scope: { type: "current-session" } });
+${ownerAfter}
+`,
+  },
+  {
+    file: "apps/web/src/features.ts",
+    text: `
+import { useQuery } from "@tanstack/react-query";
+import { roleOptions, activeMemberOptions } from "@/lib/auth-queries";
+${consumerBefore}
+export const read = () => { ${consumer} };
+`,
+  },
+];
+
+test("primitive readers use actual immutable imported authentication options", () => {
+  expect(violations(importedAuthReaderSources())).toEqual([]);
+  expect(
+    violations(
+      importedAuthReaderSources({
+        consumer:
+          "const options = roleOptions; useQuery({ ...options, enabled: false });",
+      }),
+    ),
+  ).toEqual([]);
+});
+
+test("imported option ownership rejects mutation, shadowing and effective overrides", () => {
+  for (const options of [
+    { owner: "export let" },
+    { ownerAfter: "roleOptions.queryFn = async () => 'changed';" },
+    {
+      ownerAfter:
+        "const alias = roleOptions; Object.assign(alias, { meta: {} });",
+    },
+    { consumerBefore: "roleOptions.queryFn = async () => 'changed';" },
+    { consumerBefore: "const alias = roleOptions; delete alias.meta;" },
+    { consumer: "const roleOptions = {}; useQuery(roleOptions);" },
+    { consumer: "((roleOptions) => useQuery(roleOptions))({});" },
+    {
+      consumer: "useQuery({ ...roleOptions, queryFn: async () => 'changed' });",
+    },
+    { consumer: "useQuery({ ...roleOptions, meta: {} });" },
+    { metadata: '{ resources: [], scope: { type: "current-session" } }' },
+    {
+      metadata:
+        '{ resources: [RESOURCE_TYPE.ENTITY], scope: { type: "organization" } }',
+    },
+  ]) {
+    expect({
+      options,
+      covered: violations(importedAuthReaderSources(options)).length === 0,
+    }).toEqual({ options, covered: false });
+  }
+});
+
+test("a separate importer cannot mutate options credited to another reader", () => {
+  const sources = [
+    ...importedAuthReaderSources(),
+    {
+      file: "apps/web/src/other.ts",
+      text: `import { roleOptions as options } from "@/lib/auth-queries";
+        const alias = options; Object.assign(alias, { queryFn: async () => "changed" });`,
+    },
+  ];
+  expect(violations(sources).length).toBeGreaterThan(0);
+});
+
+test("cyclic exported option constants cannot earn reader ownership", () => {
+  const sources = importedAuthReaderSources().map((source) =>
+    source.file === "apps/web/src/lib/auth-queries.ts"
+      ? {
+          ...source,
+          text: "export const roleOptions = activeMemberOptions; export const activeMemberOptions = roleOptions;",
+        }
+      : source,
+  );
+  expect(violations(sources).length).toBeGreaterThan(0);
+});
+
+test("reader identity domains do not extend mutation scope declarations", () => {
+  for (const scope of [
+    '{ type: "user", userId }',
+    '{ type: "current-session" }',
+    '{ type: "organization", organizationId }',
+  ]) {
+    const sources = validSources.map((source) => ({
+      ...source,
+      text:
+        source.file === "apps/web/src/features.ts"
+          ? source.text.replace(
+              "  queryClient,\n  mutationFn:",
+              () => `  queryClient,\n  scope: ${scope},\n  mutationFn:`,
+            )
+          : source.text,
+    }));
+    assertInvalidCannotBeBaselined(violations(sources));
+  }
 });

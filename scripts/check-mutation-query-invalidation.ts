@@ -10,6 +10,7 @@ import { BASELINE_PATHS } from "./baseline-paths";
 import {
   generateMutationQueryCensus,
   type MutationQueryCensus,
+  revisionTree,
 } from "./mutation-query-census.ts";
 
 const ROOT = path.resolve(import.meta.dir, "..");
@@ -49,6 +50,7 @@ const READER_SPREAD_OVERRIDES = new Set([
   "staleTime",
   "gcTime",
   "placeholderData",
+  "initialData",
   "refetchInterval",
   "refetchIntervalInBackground",
   "refetchOnMount",
@@ -534,12 +536,54 @@ const isScopeObject = (object: ts.ObjectLiteralExpression): boolean => {
     return false;
   }
   if (value.text === "organization") {
-    return true;
+    const fields = ["type", "organizationId"];
+    if (objectProperty(object, "userId")) {
+      fields.push("userId");
+    }
+    return (
+      hasExactProperties(object, fields) &&
+      fields
+        .slice(1)
+        .every((field) => isReaderIdentity(objectProperty(object, field)))
+    );
+  }
+  if (value.text === "user") {
+    return (
+      hasExactProperties(object, ["type", "userId"]) &&
+      isReaderIdentity(objectProperty(object, "userId"))
+    );
+  }
+  if (value.text === "current-session") {
+    return hasExactProperties(object, ["type"]);
+  }
+  if (value.text === "workspace-set") {
+    return (
+      hasExactProperties(object, ["type", "workspaceIds"]) &&
+      objectProperty(object, "workspaceIds") !== undefined
+    );
   }
   return (
     value.text === "workspace" &&
     hasExactProperty(object, "workspaceId") &&
     objectProperty(object, "workspaceId") !== undefined
+  );
+};
+
+const isReaderIdentity = (expression: ts.Expression | undefined): boolean => {
+  if (expression === undefined) {
+    return false;
+  }
+  const value = unwrap(expression);
+  return (
+    !ts.isNumericLiteral(value) &&
+    !ts.isBigIntLiteral(value) &&
+    ![
+      ts.SyntaxKind.NullKeyword,
+      ts.SyntaxKind.TrueKeyword,
+      ts.SyntaxKind.FalseKeyword,
+    ].includes(value.kind) &&
+    !(ts.isIdentifier(value) && value.text === "undefined") &&
+    (!ts.isStringLiteral(value) || value.text.length > 0)
   );
 };
 
@@ -596,6 +640,13 @@ const isValidHelperConfig = (
   if (!config) {
     return false;
   }
+  const metadata = unwrap(config);
+  if (ts.isConditionalExpression(metadata)) {
+    return (
+      isValidHelperConfig(module, metadata.whenTrue, names) &&
+      isValidHelperConfig(module, metadata.whenFalse, names)
+    );
+  }
   const type = objectProperty(config, "type");
   if (type) {
     const value = unwrap(type);
@@ -627,6 +678,16 @@ const isValidHelperConfig = (
 };
 
 type MutationContract = { resources: string[]; writes: string[] };
+
+const PUBLIC_TOKEN_SCOPE = "public-token";
+const PUBLIC_ROUTE_PREFIX = "/public/";
+
+/** Whether every write of a contract is a public route a link token opens. */
+const isPublicTokenContract = ({ writes }: MutationContract) =>
+  writes.length > 0 &&
+  writes.every(
+    (write) => write.split(" ").at(1)?.startsWith(PUBLIC_ROUTE_PREFIX) === true,
+  );
 
 const parseMutationContract = (
   module: ModuleIndex,
@@ -757,6 +818,30 @@ type MutationContractErrorArgs = {
   contracts: ReadonlyMap<string, MutationContract>;
 };
 
+/** Which closed scope a resourceMutation names; a missing scope is a workspace write. */
+const scopeKind = (scope: ts.Expression | undefined) => {
+  if (scope === undefined) {
+    return "workspace";
+  }
+  const type = objectProperty(scope, "type");
+  const scopeType = type && unwrap(type);
+  if (!scopeType || !ts.isStringLiteral(scopeType)) {
+    return "invalid";
+  }
+  if (
+    ["workspace", "organization", PUBLIC_TOKEN_SCOPE].includes(
+      scopeType.text,
+    ) &&
+    hasExactProperties(scope, ["type"])
+  ) {
+    return scopeType.text;
+  }
+  return scopeType.text === "organization-projection" &&
+    hasExactProperties(scope, ["type", "userId", "organizationId"])
+    ? scopeType.text
+    : "invalid";
+};
+
 const mutationContractError = ({
   call,
   mutationFn,
@@ -778,24 +863,11 @@ const mutationContractError = ({
   ) {
     return "resourceMutation options must contain mutation, queryClient, mutationFn, and optionally scope.";
   }
-  const scope = objectProperty(options, "scope");
-  if (scope !== undefined) {
-    const type = objectProperty(scope, "type");
-    const scopeType = type && unwrap(type);
-    const primary =
-      scopeType &&
-      ts.isStringLiteral(scopeType) &&
-      ["workspace", "organization"].includes(scopeType.text) &&
-      hasExactProperties(scope, ["type"]);
-    const projection =
-      scopeType &&
-      ts.isStringLiteral(scopeType) &&
-      scopeType.text === "organization-projection" &&
-      hasExactProperties(scope, ["type", "userId", "organizationId"]);
-    if (!primary && !projection) {
-      return "resourceMutation scope must name a closed primary scope or explicit organization projection identity.";
-    }
+  const scope = scopeKind(objectProperty(options, "scope"));
+  if (scope === "invalid") {
+    return "resourceMutation scope must name a closed primary scope, an explicit organization projection identity, or a public token.";
   }
+  const publicToken = scope === PUBLIC_TOKEN_SCOPE;
   const mutation = objectProperty(options, "mutation");
   if (!mutation) {
     return "resourceMutation mutation key must be a string literal.";
@@ -807,6 +879,13 @@ const mutationContractError = ({
   const contract = contracts.get(mutationValue.text);
   if (!contract) {
     return `resourceMutation names unknown contract ${mutationValue.text}.`;
+  }
+  // A public token write reaches only public routes, and a write to a public
+  // route carries no member session to scope its invalidation.
+  if (publicToken !== isPublicTokenContract(contract)) {
+    return publicToken
+      ? "A public token resourceMutation must name a contract whose writes are all public routes."
+      : "A contract whose writes are public routes must use the public token scope.";
   }
   const normalizedHelperCall = call.getText().replace(/\s+/gu, " ").trim();
   const normalizedMutationFn = mutationFn
@@ -986,6 +1065,26 @@ type TaggedSpreadValidationArgs = {
   seen?: Set<Binding>;
 };
 
+/** Prove every override key without granting credit for an untagged source. */
+const isReaderOverrideSpread = (expression: ts.Expression): boolean => {
+  const value = unwrap(expression);
+  if (ts.isConditionalExpression(value)) {
+    return [value.whenTrue, value.whenFalse].every(isReaderOverrideSpread);
+  }
+  return (
+    ts.isObjectLiteralExpression(value) &&
+    value.properties.every((property) => {
+      if (ts.isSpreadAssignment(property)) {
+        return isReaderOverrideSpread(property.expression);
+      }
+      return (
+        !ts.isComputedPropertyName(property.name) &&
+        READER_SPREAD_OVERRIDES.has(propertyName(property.name) ?? "")
+      );
+    })
+  );
+};
+
 const validateTaggedSpreadOverrides = ({
   module,
   expression,
@@ -1020,6 +1119,12 @@ const validateTaggedSpreadOverrides = ({
   for (const property of value.properties) {
     if (ts.isSpreadAssignment(property)) {
       if (tagged) {
+        if (
+          allowedOverrides === READER_SPREAD_OVERRIDES &&
+          isReaderOverrideSpread(property.expression)
+        ) {
+          continue;
+        }
         return "invalid";
       }
       const nested = validateTaggedSpreadOverrides({
@@ -1975,6 +2080,98 @@ const wrapperForwardsReaderOptions = ({
   return readerForwards.length > 0 ? readerForwards.every(Boolean) : undefined;
 };
 
+/** Imports are immutable bindings, but their option objects must remain unchanged. */
+const importedReaderOptionsMutation = (
+  module: ModuleIndex,
+  name: string,
+): boolean => {
+  const binding: Binding = { name, scope: module.source, mutable: false };
+  return hasBindingPropertyMutation(
+    { ...module, bindings: [...module.bindings, binding] },
+    binding,
+  );
+};
+
+const importedReaderOptions = ({
+  module,
+  identifier,
+  reference,
+  modules,
+}: {
+  module: ModuleIndex;
+  identifier: ts.Identifier;
+  reference: ts.Node;
+  modules: ReadonlyMap<string, ModuleIndex>;
+}):
+  | { module: ModuleIndex; expression: ts.Expression; reference: ts.Node }
+  | undefined => {
+  if (localBinding(module, identifier.text, reference)) {
+    return undefined;
+  }
+  const imported = module.imports.get(identifier.text);
+  if (!imported) {
+    return undefined;
+  }
+  const owner = importedModule(module, imported.module, modules);
+  if (!owner) {
+    return undefined;
+  }
+  const statement = owner.source.statements.find(
+    (item) =>
+      ts.isVariableStatement(item) &&
+      ts
+        .getModifiers(item)
+        ?.some((modifier) => modifier.kind === ts.SyntaxKind.ExportKeyword) &&
+      item.declarationList.declarations.some(
+        (declaration) =>
+          ts.isIdentifier(declaration.name) &&
+          declaration.name.text === imported.imported,
+      ),
+  );
+  if (!statement || !ts.isVariableStatement(statement)) {
+    return undefined;
+  }
+  const declaration = statement.declarationList.declarations.find(
+    (item) =>
+      ts.isIdentifier(item.name) && item.name.text === imported.imported,
+  );
+  if (!declaration || !ts.isIdentifier(declaration.name)) {
+    return undefined;
+  }
+  const resolved = unchangedOptionsBinding({
+    module: owner,
+    identifier: declaration.name,
+    reference: declaration,
+  });
+  // Only an actual canonical construction earns imported-constant ownership.
+  // Re-exports and opaque initializer factories remain unresolved.
+  const initializer = resolved && unwrap(resolved.expression);
+  if (
+    !resolved ||
+    !initializer ||
+    !ts.isCallExpression(initializer) ||
+    !canonicalCall(owner, initializer, READER_HELPER)
+  ) {
+    return undefined;
+  }
+  for (const consumer of modules.values()) {
+    for (const [name, candidate] of consumer.imports) {
+      if (
+        candidate.imported === imported.imported &&
+        importedModule(consumer, candidate.module, modules) === owner &&
+        importedReaderOptionsMutation(consumer, name)
+      ) {
+        return undefined;
+      }
+    }
+  }
+  return {
+    module: owner,
+    expression: resolved.expression,
+    reference: resolved.reference,
+  };
+};
+
 const isTaggedReaderValue = ({
   module,
   expression,
@@ -1991,7 +2188,25 @@ const isTaggedReaderValue = ({
       reference,
     });
     if (!resolved) {
-      return false;
+      const imported = importedReaderOptions({
+        module,
+        identifier: value,
+        reference,
+        modules,
+      });
+      if (!imported) {
+        return false;
+      }
+      const key = `${imported.module.file}:imported-options:${imported.reference.pos}`;
+      return (
+        !seen.has(key) &&
+        isTaggedReaderValue({
+          ...imported,
+          names,
+          modules,
+          seen: new Set(seen).add(key),
+        })
+      );
     }
     const key = `${module.file}:options:${resolved.reference.pos}:${value.text}`;
     if (seen.has(key)) {
@@ -2160,7 +2375,17 @@ const createReaderStates = ({
           seen: new Set(),
         });
     } else {
-      tagged = wrappedReaderCall(module, call, names);
+      tagged =
+        wrappedReaderCall(module, call, names) ||
+        (options !== undefined &&
+          isTaggedReaderValue({
+            module,
+            expression: options,
+            reference: call,
+            names,
+            modules: indexed,
+            seen: new Set(),
+          }));
     }
     return { entry, module, call, tagged };
   });
@@ -2201,6 +2426,15 @@ const namesUnknownContract = (
   config: ts.Expression | undefined,
   contracts: ReadonlySet<string>,
 ): boolean => {
+  if (config !== undefined) {
+    const value = unwrap(config);
+    if (ts.isConditionalExpression(value)) {
+      return (
+        namesUnknownContract(value.whenTrue, contracts) ||
+        namesUnknownContract(value.whenFalse, contracts)
+      );
+    }
+  }
   const kept = config === undefined ? undefined : keptCurrentByNames(config);
   return kept?.some((name) => !contracts.has(name)) === true;
 };
@@ -2398,6 +2632,81 @@ export const inspectMutationQueryInvalidation = (
   return findings.toSorted((left, right) => compareCodeUnit(left.id, right.id));
 };
 
+/**
+ * What a finding's hook reads or writes, independent of the module and the
+ * function it sits in: a reader by its primitive and query key (the key's
+ * factory, else its static prefix, else its expression) and the routes it
+ * reads; a mutation by its hook and the routes it writes. Code moved to
+ * another module or renamed keeps this identity.
+ */
+export type HookIdentities = ReadonlyMap<string, string>;
+
+const routeList = (routes: readonly { method: string; route: string }[]) =>
+  [...new Set(routes.map(({ method, route }) => `${method} ${route}`))]
+    .toSorted(compareCodeUnit)
+    .join(",");
+
+export const hookIdentities = (census: MutationQueryCensus): HookIdentities => {
+  const identities = new Map<string, string>();
+  for (const entry of census.mutations) {
+    identities.set(
+      `${entry.id}:mutation`,
+      ["mutation", entry.callee, routeList(entry.writes)].join("\u0000"),
+    );
+  }
+  for (const entry of census.readers) {
+    const key =
+      entry.key === null
+        ? ""
+        : (entry.key.factory ??
+          (entry.key.staticPrefix.length > 0
+            ? JSON.stringify(entry.key.staticPrefix)
+            : entry.key.expression));
+    identities.set(
+      `${entry.id}:reader`,
+      ["reader", entry.callee, key, routeList(entry.routes)].join("\u0000"),
+    );
+  }
+  return identities;
+};
+
+/**
+ * Recorded entries that are a committed entry moved elsewhere: the committed
+ * entry is gone from the recording, the new one keeps its reason and its
+ * hook identity (as the base revision's census saw the old one and the
+ * current census sees the new one), and each committed entry accounts for one
+ * moved entry. Moving code is not new debt, so these do not count as growth;
+ * any other new entry still does.
+ */
+const movedEntries = (
+  recorded: Record<string, string>,
+  committed: Record<string, string>,
+  identities: { current: HookIdentities; committed: HookIdentities },
+): Set<string> => {
+  const movedAway = new Map<string, string[]>();
+  for (const [id, reason] of Object.entries(committed)) {
+    const identity = identities.committed.get(id);
+    if (id in recorded || identity === undefined) {
+      continue;
+    }
+    const key = `${identity}\u0000${reason}`;
+    movedAway.set(key, [...(movedAway.get(key) ?? []), id]);
+  }
+  const moved = new Set<string>();
+  for (const [id, reason] of Object.entries(recorded)) {
+    const identity = identities.current.get(id);
+    if (id in committed || identity === undefined) {
+      continue;
+    }
+    const sources = movedAway.get(`${identity}\u0000${reason}`);
+    if (sources !== undefined && sources.length > 0) {
+      sources.pop();
+      moved.add(id);
+    }
+  }
+  return moved;
+};
+
 const reasonFor = (finding: Finding) => finding.reason;
 const git = (args: readonly string[]) => {
   const result = Bun.spawnSync(["git", ...args], { cwd: ROOT });
@@ -2423,11 +2732,15 @@ export const checkBaseline = ({
   recorded,
   committed,
   write,
+  identities,
 }: {
   observed: readonly Finding[];
   recorded: Record<string, string>;
   committed: Record<string, string> | null;
   write: boolean;
+  /** Hook identities now and at the base revision; without them nothing moves. */
+  identities?:
+    { current: HookIdentities; committed: HookIdentities } | undefined;
 }) => {
   const invalidDeclarations = observed.filter(
     ({ disposition }) => disposition === "invalid-declaration",
@@ -2461,10 +2774,16 @@ export const checkBaseline = ({
   const byId = new Map(observed.map((finding) => [finding.id, finding]));
   const additions = [...byId.keys()].filter((id) => !(id in recorded));
   const stale = Object.keys(recorded).filter((id) => !byId.has(id));
+  const moved =
+    committed === null || identities === undefined
+      ? new Set<string>()
+      : movedEntries(recorded, committed, identities);
   const growth =
     committed === null
       ? []
-      : Object.keys(recorded).filter((id) => !(id in committed));
+      : Object.keys(recorded).filter(
+          (id) => !(id in committed) && !moved.has(id),
+        );
   const reworded =
     committed === null
       ? []
@@ -2545,11 +2864,26 @@ const main = () => {
     )
   ).trim();
   const committed = committedBaseline(baseRevision);
+  // Only a recording that names entries the base lacks can hold a move; the
+  // base revision's census, which names the old entries' hooks, is built
+  // only then.
+  const committedEntries = committed?.entries;
+  const identities =
+    committedEntries !== undefined &&
+    Object.keys(baseline.entries).some((id) => !(id in committedEntries))
+      ? {
+          current: hookIdentities(census),
+          committed: hookIdentities(
+            generateMutationQueryCensus(ROOT, revisionTree(ROOT, baseRevision)),
+          ),
+        }
+      : undefined;
   const result = checkBaseline({
     observed,
     recorded: baseline.entries,
     committed: committed?.entries ?? null,
     write: process.argv.includes("--write"),
+    identities,
   });
   const errors = [
     ...result.errors,

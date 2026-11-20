@@ -1,6 +1,7 @@
 import { Result } from "better-result";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
+import { noDecisionReviewFound } from "@stll/api-contract/case-law-reviews";
 import { createTestState } from "@stll/test-state";
 
 import type { ScopedDb } from "@/api/db/safe-db";
@@ -520,6 +521,7 @@ describe("runRegistryReadTool", () => {
       const kept: TurnAppRead[] = [];
       const answer = {
         doctrineAvailability: "unavailable",
+        appealReviews: noDecisionReviewFound(),
         decisionId: DOCUMENT_UUID,
         direction: "cites",
         nextCursor: null,

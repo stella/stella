@@ -55,6 +55,7 @@ impl ManagedPolicy {
         DesktopFeature::ActivityTimeline => self.activity_disabled,
         DesktopFeature::Dictation
         | DesktopFeature::DictationCloud
+        | DesktopFeature::DictationRetainingModels
         | DesktopFeature::LocalAgents => false,
       })
       .collect()

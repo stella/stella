@@ -1953,11 +1953,7 @@ impl SessionManager {
         self.persist_sessions().await;
         self.emit_state_change();
 
-        if changed_during_upload {
-          return false;
-        }
-
-        true
+        !changed_during_upload
       }
       CheckpointResult::TakenOver(message) => {
         self.mark_session_taken_over(session_id, &message).await;

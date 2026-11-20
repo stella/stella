@@ -1,6 +1,10 @@
-import { Temporal } from "@stll/time";
+import { parsePlainDate, Temporal } from "@stll/time";
 
 const DAYS_PER_WEEK = 7;
+
+/** Today in the person's own zone, YYYY-MM-DD; it also bounds the week's activity. */
+export const todayIn = (timezoneId: string) =>
+  Temporal.Now.plainDateISO(timezoneId).toString();
 
 export type Week = {
   /** Monday of the week, YYYY-MM-DD. */
@@ -28,3 +32,6 @@ export const weekOf = (date: string): Week => {
 /** The same weekday `weeks` weeks away, so moving keeps the opened day. */
 export const shiftWeeks = (date: string, weeks: number) =>
   Temporal.PlainDate.from(date).add({ weeks }).toString();
+
+export const plainWeekDate = (date: unknown): string | undefined =>
+  typeof date === "string" && parsePlainDate(date) !== null ? date : undefined;

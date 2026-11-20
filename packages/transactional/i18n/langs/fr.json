@@ -7,6 +7,19 @@
     "ignore": "Si vous n'attendiez pas cette invitation, vous pouvez ignorer cet e-mail.",
     "subject": "Vous êtes invité à rejoindre {organizationName}"
   },
+  "invoiceLink": {
+    "action": "{documentType, select, credit_note {Voir l'avoir} advance {Voir la facture d'acompte} other {Voir la facture}}",
+    "amountDue": "Montant dû : {amount}",
+    "body": "{firmName} vous a envoyé {documentType, select, credit_note {un avoir} advance {une facture d'acompte} other {une facture}}. Ouvrez le lien pour voir le détail et télécharger le PDF.",
+    "dueDate": "Date d'échéance : {date}",
+    "expires": "Le lien est valable jusqu'au {date}.",
+    "heading": "{documentType, select, credit_note {Avoir} advance {Facture d'acompte} other {Facture}} {invoiceNumber}",
+    "ignore": "stella a remis cet e-mail au nom de {firmName}. Si vous ne l'attendiez pas, vous pouvez l'ignorer.",
+    "messageFrom": "Message de {firmName}",
+    "preview": "{firmName} vous a envoyé {documentType, select, credit_note {l'avoir} advance {la facture d'acompte} other {la facture}} {invoiceNumber}",
+    "reply": "Répondez à cet e-mail pour contacter {firmName}.",
+    "subject": "{documentType, select, credit_note {Avoir} advance {Facture d'acompte} other {Facture}} {invoiceNumber} de {firmName}"
+  },
   "newDeviceLogin": {
     "action": "Vérifier les sessions",
     "body": "Votre compte a été connecté depuis un nouvel appareil ou emplacement.",

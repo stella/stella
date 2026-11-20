@@ -1,13 +1,5 @@
 import { Result } from "better-result";
-import {
-  afterEach,
-  beforeEach,
-  describe,
-  expect,
-  mock,
-  spyOn,
-  test,
-} from "bun:test";
+import { afterEach, beforeEach, describe, expect, mock, spyOn } from "bun:test";
 
 import {
   CHAT_TURN_ID_HEADER,
@@ -15,6 +7,7 @@ import {
 } from "@stll/api-contract";
 import type { ChatLocalRunTarget } from "@stll/api-contract/chat-run-target";
 import { sleep as ownerSleep } from "@stll/concurrency/sleep";
+import { requestTest as test } from "@stll/start-runtime/test-request";
 
 import { isChatTurnGenerating } from "@/components/chat/chat-user-actions";
 import {
@@ -386,6 +379,47 @@ describe("the composer's Stop", () => {
     server.cancels[1]?.answer.resolve(settled(TURN_A, "cancelled"));
     await tick();
     expect(server.chats[0]?.aborted()).toBe(true);
+    expect(page.reloads).toBe(1);
+    expect(await sent).toEqual(Result.ok(undefined));
+  });
+
+  test("asks again when the answer to Stop is lost, and stops that same turn", async () => {
+    const server = installServer([TURN_A]);
+    const serverFetch = globalThis.fetch;
+    let lost = 0;
+    globalThis.fetch = Object.assign(
+      async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = new URL(input instanceof Request ? input.url : input);
+        if (CANCEL_PATH.test(url.pathname) && lost < 2) {
+          lost += 1;
+          server.log.push("cancel (lost)");
+          throw new TypeError("Failed to fetch");
+        }
+        return await serverFetch(input, init);
+      },
+      { preconnect: previousFetch.preconnect },
+    );
+    const page = openPage();
+    const sent = send(page, "018f0000-0000-7000-8000-000000000003");
+    await tick();
+
+    page.runtime.stop();
+    await server.cancelsReceived(1);
+    // Still shown stopping, never failed, while the answer is asked again.
+    expect(page.runtime.getSnapshot().stop).toEqual({
+      status: "pending",
+      turnId: TURN_A,
+    });
+    server.cancels[0]?.answer.resolve(settled(TURN_A, "cancelled"));
+    await tick();
+
+    expect(server.log).toEqual([
+      `chat ${TURN_A}`,
+      "cancel (lost)",
+      "cancel (lost)",
+      `cancel ${TURN_A}`,
+      `abort ${TURN_A}`,
+    ]);
     expect(page.reloads).toBe(1);
     expect(await sent).toEqual(Result.ok(undefined));
   });

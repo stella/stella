@@ -28,6 +28,7 @@ import {
 } from "@/lib/auth-queries";
 import { detached } from "@/lib/detached";
 import { toAuthClientError } from "@/lib/errors/auth";
+import { transformUnknownError } from "@/lib/errors/client";
 import { notifyUserError, notifyUserProblem } from "@/lib/errors/user-toast";
 import {
   getOauthHashFragment,
@@ -51,6 +52,8 @@ import { ConsentSuccess } from "@/routes/-consent-success";
 
 export const Route = createFileRoute("/consent")({
   staticData: { appFrame: APP_FRAME_SCOPE.none },
+  // Signed OAuth state arrives in the URL fragment, which HTTP omits.
+  ssr: false,
   beforeLoad: async ({ context, location }) => {
     const authContext = await loadAuthContext(context.queryClient);
     const bridgedQuery = getSignedOauthQueryFromHash(location.hash);
@@ -177,27 +180,26 @@ function ConsentPage() {
     setSubmission({ status: "pending" });
     // The grant binds to the session's active organization when consent is
     // given, so switching here is what decides where the app will work.
-    const outcome = await Result.tryPromise(
-      async () => await authClient.organization.setActive({ organizationId }),
+    const selected = await Result.tryPromise({
+      try: async () =>
+        await authClient.organization.setActive({ organizationId }),
+      catch: transformUnknownError,
+    });
+    // A failed request may still have committed. Always confirm the session.
+    const refreshed = await Result.tryPromise({
+      try: async () => await refreshAuthQueries(queryClient),
+      catch: transformUnknownError,
+    });
+    const outcome = refreshed.andThen(() =>
+      selected.andThen(({ error }) =>
+        error ? Result.err(toAuthClientError(error)) : Result.ok(undefined),
+      ),
     );
-    // On failure the request may still have reached the server, so re-read
-    // the session: the page must show the organization Allow would bind to.
     if (outcome.isErr()) {
-      await refreshAuthQueries(queryClient);
       setSubmission({ status: "error" });
       notifyUserError(outcome.error, t("consent.error"));
       return;
     }
-    if (outcome.value.error) {
-      await refreshAuthQueries(queryClient);
-      setSubmission({ status: "error" });
-      notifyUserError(
-        toAuthClientError(outcome.value.error),
-        t("consent.error"),
-      );
-      return;
-    }
-    await refreshAuthQueries(queryClient);
     setSubmission({ status: "idle" });
   };
 

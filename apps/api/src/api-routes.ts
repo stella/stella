@@ -66,6 +66,7 @@ import { flowRunsRoute } from "@/api/handlers/flows/run-route";
 import { folioCollabRoute } from "@/api/handlers/folio-collab/routes";
 import { healthRoute } from "@/api/handlers/health/routes";
 import { hostedUsageWebhookRoute } from "@/api/handlers/hosted-usage-webhook/routes";
+import { invoiceLinksRoute } from "@/api/handlers/invoice-links/routes";
 import { invoicesRoute } from "@/api/handlers/invoices/routes";
 import { legalReaderRoute } from "@/api/handlers/legal-reader/routes";
 import { legalResolveRoute } from "@/api/handlers/legal-resolve/routes";
@@ -84,6 +85,7 @@ import { numberSeriesRoute } from "@/api/handlers/number-series/routes";
 import { operatorRoute } from "@/api/handlers/operator/routes";
 import { organizationSettingsRoute } from "@/api/handlers/organization-settings/routes";
 import { organizationsRoute } from "@/api/handlers/organizations/routes";
+import { outboundActionsRoute } from "@/api/handlers/outbound-actions/routes";
 import { playbooksRoute } from "@/api/handlers/playbooks/routes";
 import { playbookRunsRoute } from "@/api/handlers/playbooks/run-route";
 import { propertiesRoute } from "@/api/handlers/properties/routes";
@@ -202,6 +204,7 @@ export const apiRoutes = mount([
   visualSandboxRoute,
   aiAutocompleteRoute,
   feedbackPublicRoute,
+  invoiceLinksRoute,
   memoriesRoute,
   notificationsRoute,
   timeApprovalQueueRoute,
@@ -259,6 +262,7 @@ export const apiRoutes = mount([
       externalPreviewRoute,
       mcpConnectorsRoute,
       sharepointRoute,
+      outboundActionsRoute,
       catalogueRoute,
       organizationSettingsRoute,
       organizationsRoute,

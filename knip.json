@@ -80,8 +80,8 @@
         "src/lib/ocr-searchable-pdf-worker.ts!",
         // Spike renderer process and its memory watchdog thread, started by
         // path from the session.
-        "src/handlers/invoices/pdf/typst/worker.ts",
-        "src/handlers/invoices/pdf/typst/watchdog.ts",
+        "src/lib/billing/invoice-pdf/typst/worker.ts",
+        "src/lib/billing/invoice-pdf/typst/watchdog.ts",
         "scripts/*.ts",
         // Locale content is consumed only by development seed entrypoints.
         "scripts/seed-content/*.ts",
@@ -98,7 +98,9 @@
         // Passed to Bun by the API test command builder.
         "src/tests/publisher-gate-preload.ts",
         "src/**/*.test.ts",
-        "scripts/**/*.test.ts"
+        "src/**/*.test.tsx",
+        "scripts/**/*.test.ts",
+        "evals/**/*.test.ts"
       ]
     },
     "apps/web": {

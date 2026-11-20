@@ -254,6 +254,12 @@ export const DIFF_SCOPED_STEPS = {
   "ci.yml:ci-checks-policy#SHA-256 migration ledger": fullTree(
     "Scans the whole ledger; the base only keeps it from growing.",
   ),
+  "ci.yml:ci-checks-policy#Startup bundle ledger": fullTree(
+    "Reads the whole ledger; the base only keeps it from gaining an exception.",
+  ),
+  "ci.yml:ci-checks-policy#Workspace test gating ledger": fullTree(
+    "Scans every workspace test file; the base only keeps the list from growing.",
+  ),
   "ci.yml:ci-checks-policy#Custom lint rule coverage": fullTree(
     "Checks every custom rule; the base is not read.",
   ),
@@ -316,6 +322,9 @@ export const DIFF_SCOPED_STEPS = {
   ),
   "ci.yml:ci-checks-rest#Check migration identity against the base branch":
     diffComplete("Concerns the migrations the change adds or removes."),
+  "ci.yml:ci-checks-rest#Action commit pins": diffComplete(
+    "Concerns only action pins new against the base; an unchanged pin was verified when it was added.",
+  ),
   "ci.yml:ci-checks-rest#Bridge-version guard": expands(
     "Watches the bridge files and every crate module the bridge calls, read from bridge.rs.",
   ),

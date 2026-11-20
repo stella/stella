@@ -55,15 +55,26 @@ const PLAYBOOK_STARTERS = "/playbook-starters";
 /** Knowledge pages a visitor may open when public Knowledge is enabled. */
 const KNOWLEDGE_PAGE_PATHS = [
   "/knowledge",
-  "/knowledge/templates",
   "/knowledge/templates/catalogue",
-  "/knowledge/playbooks",
-  "/knowledge/tools",
+  "/knowledge/playbooks/catalogue",
+  "/knowledge/tools/catalogue",
   "/knowledge/tools/contribute",
 ] as const;
 
-/** Knowledge pages that need an account. */
+/** Of those, the pages built with the shared public head. */
+const PUBLIC_HEAD_PAGE_PATHS: ReadonlySet<string> = new Set([
+  "/knowledge/templates/catalogue",
+  "/knowledge/playbooks/catalogue",
+  "/knowledge/tools/catalogue",
+  "/knowledge/tools/contribute",
+]);
+
+/** Knowledge pages that need an account: a visitor is turned away (to the
+ *  section's catalogue, or the landing). */
 const SIGNED_IN_PAGE_PATHS = [
+  "/knowledge/templates",
+  "/knowledge/playbooks",
+  "/knowledge/tools",
   "/knowledge/clauses",
   "/knowledge/styles",
 ] as const;
@@ -463,7 +474,7 @@ export const buildTargets = ({
   const pages: Target[] = KNOWLEDGE_PAGE_PATHS.map((path) => ({
     path,
     responseClass: RESPONSE_CLASS.page,
-    robots: enabled && path === "/knowledge/tools/contribute",
+    robots: enabled && PUBLIC_HEAD_PAGE_PATHS.has(path),
   }));
   if (toolEntry) {
     pages.push({

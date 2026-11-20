@@ -219,6 +219,8 @@ const readTurn = async ({
     readRun: async () =>
       await Promise.resolve(Result.ok({ runId, state: "finished" })),
     recordChatReadSeq: async () => await Promise.resolve(Result.ok(undefined)),
+    readChatTurnSteering: async () =>
+      await Promise.resolve(Result.ok("not_steerable")),
     interruptRun: async () =>
       await Promise.resolve(Result.ok({ type: "queued" })),
   });
@@ -252,6 +254,7 @@ const readTurn = async ({
     instructions: "",
     resume: undefined,
     abortSignal: new AbortController().signal,
+    handOverSignal: new AbortController().signal,
   })) {
     read.push(chunk);
   }

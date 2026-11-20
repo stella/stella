@@ -136,6 +136,9 @@ export type WorkspaceFrameProps = {
       topBar: ComponentProps<typeof WorkspaceShell>["topBar"];
       /** Omitted when the host has nothing for the inline-end edge. */
       endDock?: ReactElement | undefined;
+      skipToContentLabel?: ComponentProps<
+        typeof WorkspaceShell
+      >["skipToContentLabel"];
     }
 );
 
@@ -173,6 +176,7 @@ export const WorkspaceFrame = (props: WorkspaceFrameProps) => {
       <WorkspaceShell
         endDock={props.endDock}
         navigation={props.navigation}
+        skipToContentLabel={props.skipToContentLabel}
         topBar={props.topBar}
       >
         {props.children}

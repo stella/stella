@@ -98,6 +98,7 @@ import {
   reserveCorpusProjectionRoutePageTx,
   startCorpusProjectionOfflineRequestChunkTx,
 } from "@/api/lib/legal-search/corpus-index-projection-store";
+import { logger } from "@/api/lib/observability/logger";
 import type { IngestionTransactionRunner } from "@/api/lib/replay-safe-ingestion";
 
 /**
@@ -325,8 +326,11 @@ export type CorpusProjectionOfflineAdmission = <Value>(
 
 export type CorpusProjectionOfflineBuildOptions<Family extends CorpusFamily> = {
   runInTransaction: ProjectionTransactionRunner;
-  /** Census client of an engine endpoint that reads the route's index. */
-  client: Pick<CorpusIndexClient, "aggregate">;
+  /**
+   * Census client of an engine endpoint that reads the route's index; it also
+   * counts the route's published splits once the run ends.
+   */
+  client: Pick<CorpusIndexClient, "aggregate" | "readPublishedSplitCounts">;
   family: Family;
   generation: string;
   indexId: string;
@@ -391,6 +395,12 @@ export type CorpusProjectionOfflineBuildProgress = {
     handedBack: number;
   };
   started: number;
+  /**
+   * Built revisions whose decision's terms were cut to a prefix because the
+   * whole did not fit the opening passage. Expected to stay 0: no stored
+   * decision comes near the ceiling, so any count is a decision to look at.
+   */
+  decisionTermsPartial: number;
   shards: {
     delivered: number;
     ingested: number;
@@ -479,6 +489,40 @@ export type CorpusProjectionOfflineBuildOutcome = {
     | "rate_too_slow"
     | "infrastructure_failed";
   progress: CorpusProjectionOfflineBuildProgress;
+  /** The route's published splits when the run ended: the build's receipt. */
+  publishedSplits: CorpusProjectionOfflineSplitReceipt;
+};
+
+/**
+ * How many splits the route's index publishes once a run ends, read from the
+ * metastore. Merges never cross the node id an indexer ran under, and each
+ * build slot writes under its own, so this is what a run leaves the searchers
+ * to open. `not_read` when the run never held the route.
+ */
+type CorpusProjectionOfflineSplitReceipt =
+  | { read: "counted"; count: number }
+  | { read: "failed"; message: string }
+  | { read: "not_read" };
+
+/** Bounds the receipt's metastore read; the run's work is already recorded. */
+const SPLIT_RECEIPT_TIMEOUT_MS = 30_000;
+
+const readSplitReceipt = async (
+  client: Pick<CorpusIndexClient, "readPublishedSplitCounts">,
+  indexId: string,
+): Promise<CorpusProjectionOfflineSplitReceipt> => {
+  const read = await client.readPublishedSplitCounts({
+    includes: (candidate) => candidate === indexId,
+    observer: "unobserved",
+    signal: AbortSignal.timeout(SPLIT_RECEIPT_TIMEOUT_MS),
+  });
+  if (Result.isError(read)) {
+    return { read: "failed", message: read.error.message };
+  }
+  const counted = read.value.find((entry) => entry.indexId === indexId);
+  return counted === undefined
+    ? { read: "failed", message: `index ${indexId} is not listed` }
+    : { read: "counted", count: counted.publishedSplits };
 };
 
 /** The advisory lock key of a route's offline build. */
@@ -604,6 +648,7 @@ const emptyProgress = (
     handedBack: 0,
   },
   started: 0,
+  decisionTermsPartial: 0,
   shards: {
     delivered: 0,
     ingested: 0,
@@ -1637,6 +1682,14 @@ class OfflineRouteBuild<Family extends CorpusFamily> {
         );
         continue;
       }
+      if (built.value.decisionTerms === "prefix") {
+        this.#progress.decisionTermsPartial += 1;
+        logger.error("corpus_projection.decision_terms_partial", {
+          entity: material.lease.entityId,
+          generation: material.lease.generation,
+          indexId: material.lease.indexId,
+        });
+      }
       // The file holds the block as one line per document.
       const block = `${built.value.parts.join("\n")}\n`;
       const bytes = Buffer.byteLength(block, "utf-8");
@@ -2274,7 +2327,11 @@ export const buildCorpusProjectionRouteOffline = async <
   const progress = emptyProgress(resumeAfter, plan.shardByteCap);
   const hold = await lock.tryAcquire(lockKeyOf(family, generation, indexId));
   if (hold === null) {
-    return { status: "lock_held", progress };
+    return {
+      status: "lock_held",
+      progress,
+      publishedSplits: { read: "not_read" },
+    };
   }
   try {
     const status = await new OfflineRouteBuild(
@@ -2283,7 +2340,10 @@ export const buildCorpusProjectionRouteOffline = async <
       hold,
       progress,
     ).run();
-    return { status, progress };
+    // Read under the route lock, so no later run of this route can publish
+    // splits between this run's end and its receipt.
+    const publishedSplits = await readSplitReceipt(options.client, indexId);
+    return { status, progress, publishedSplits };
   } finally {
     await hold.release();
   }

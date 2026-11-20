@@ -1,6 +1,6 @@
 import { useLayoutEffect, useRef, useState } from "react";
 
-import { Animated, Image, Pressable, View } from "react-native";
+import { Animated, Image, View } from "react-native";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
@@ -211,13 +211,13 @@ const ScanPageRow = ({
       <View
         className={`border-border h-full flex-row items-center gap-3 border-b ${dragged ? "bg-card" : "bg-background"}`}
       >
-        <Pressable
+        <Button
           accessibilityLabel={t("removePage", { number })}
-          accessibilityRole="button"
-          className="size-11 items-center justify-center"
           onPress={() => {
             onArm(armed ? null : page.key);
           }}
+          size="icon"
+          variant="ghost"
         >
           <View
             className="bg-destructive size-6 items-center justify-center rounded-full"
@@ -225,7 +225,7 @@ const ScanPageRow = ({
           >
             <MinusIcon color={UI_COLORS.light.background} size={16} />
           </View>
-        </Pressable>
+        </Button>
         <View
           accessibilityActions={actions.map(({ label, name }) => ({
             label,
@@ -272,16 +272,16 @@ const ScanPageRow = ({
           </Button>
         ) : (
           <>
-            <Pressable
+            <Button
               accessibilityLabel={t("rotatePage", { number })}
-              accessibilityRole="button"
-              className="size-11 items-center justify-center rounded-lg active:opacity-60"
               onPress={() => {
                 onRotate(page.key);
               }}
+              size="icon"
+              variant="ghost"
             >
               <RotateCwIcon color={ui.foreground} size={20} />
-            </Pressable>
+            </Button>
             <View
               accessibilityLabel={t("movePage", { number })}
               className="size-11 items-center justify-center"

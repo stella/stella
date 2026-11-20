@@ -622,6 +622,13 @@ describe.skipIf(!runEngineTests)(
         offsetMs += PLAN.leaseMs + PLAN.endedAfterMs;
         const second = await runBuild(indexId, [], delivered, markerOf);
         expect(second.status).toBe("drained");
+        // The receipt reads the real metastore: the route publishes splits.
+        expect(second.publishedSplits).toMatchObject({ read: "counted" });
+        expect(
+          second.publishedSplits.read === "counted"
+            ? second.publishedSplits.count
+            : 0,
+        ).toBeGreaterThan(0);
         const intents = await readIntents(entityIds);
         for (const [serial, entityId] of entityIds.entries()) {
           const applied = intents.filter(

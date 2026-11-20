@@ -1,6 +1,6 @@
 import {
   CHAT_FILE_TYPE_CONFIG,
-  isChatFileMimeType,
+  chatFileMimeType,
 } from "@stll/api-contract/chat-file-types";
 import type { ChatFileMimeType } from "@stll/api-contract/chat-file-types";
 import { CHAT_LOCAL_RUN_ANONYMIZED_REFUSAL_CODE } from "@stll/api-contract/chat-run-target";
@@ -52,26 +52,6 @@ export type ChatAttachment = {
 export type SentFile = {
   readonly name: string;
   readonly mimeType: string;
-};
-
-/**
- * The chat type of a picked file: the type the picker named when chat takes
- * it, else the one its extension names. Undefined when chat takes neither.
- */
-export const chatFileMimeType = (
-  name: string,
-  mimeType: string | null | undefined,
-): ChatFileMimeType | undefined => {
-  if (mimeType !== null && mimeType !== undefined) {
-    const declared = mimeType.split(";")[0]?.trim().toLowerCase() ?? "";
-    if (isChatFileMimeType(declared)) {
-      return declared;
-    }
-  }
-  const lower = name.toLowerCase();
-  return CHAT_FILE_TYPE_CONFIG.find(({ extensions }) =>
-    extensions.some((extension) => lower.endsWith(extension)),
-  )?.mimeType;
 };
 
 /**
@@ -245,6 +225,28 @@ export const sendsAnonymized = ({
   /** The thread has sent anonymized text before. */
   readonly threadAnonymized: boolean;
 }): boolean => mode === "as-thread" && threadAnonymized;
+
+/**
+ * Whether a turn can take the draft mid-turn: a steer carries text only, so
+ * a draft with files waits in the queue instead.
+ */
+export const steersDraft = (draft: ChatDraft): boolean =>
+  draft.files.length === 0;
+
+/**
+ * How a draft sent while a turn waits on the member goes: declining what the
+ * turn waits for and steering it with the draft, where the send routing
+ * offers that and the draft is one a turn takes; otherwise the ordinary send,
+ * which the server queues behind the wait.
+ */
+export const waitSendRoute = ({
+  declineOffered,
+  draft,
+}: {
+  readonly declineOffered: boolean;
+  readonly draft: ChatDraft;
+}): "decline-and-steer" | "send" =>
+  declineOffered && steersDraft(draft) ? "decline-and-steer" : "send";
 
 export const sendRefusal = (
   error: ApiError,

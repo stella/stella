@@ -15,6 +15,7 @@ import {
   SHORT_DATE,
 } from "@/components/billing/format-plain-date";
 import { reviewAmount } from "@/features/time-review/time-approvals.logic";
+import { TimeReviewRowLayout } from "@/features/time-review/time-review-row.pending";
 import type { TimeReview } from "@/features/time-review/use-time-review";
 import { useFormatter } from "@/i18n/formatting-context";
 import { formatMinutes } from "@/lib/workspaces/format-duration";
@@ -84,16 +85,49 @@ export const TimeReviewRow = ({
   const error = review.errors[row.id];
 
   return (
-    <li className="rounded-md border p-3">
-      <div className="flex items-start gap-3">
-        {stage === "submitted" && (
+    <TimeReviewRowLayout
+      actions={
+        <>
+          <Input
+            aria-label={t("billing.approval.returnComment")}
+            className="max-w-72"
+            onChange={(event) => setComment(event.target.value)}
+            placeholder={t("billing.approval.returnComment")}
+            value={comment}
+          />
+          <Button
+            disabled={comment.trim() === ""}
+            loading={busy}
+            onClick={() => review.returnToDraft([row], comment)}
+            size="sm"
+            variant="outline"
+          >
+            {t("billing.revertToDraft")}
+          </Button>
+        </>
+      }
+      approval={
+        stage === "submitted" && (
+          <Button
+            loading={busy}
+            onClick={() => review.approve([row])}
+            size="sm"
+          >
+            {t("billing.approve")}
+          </Button>
+        )
+      }
+      checkbox={
+        stage === "submitted" && (
           <Checkbox
             aria-label={t("billing.approval.selectEntry")}
             checked={review.isChecked(row.id)}
             onCheckedChange={(value) => review.setChecked(row.id, value)}
           />
-        )}
-        <div className="min-w-0 flex-1">
+        )
+      }
+      details={
+        <>
           <div className="flex flex-wrap gap-x-4 text-sm tabular-nums">
             {show.timekeeper && <strong>{row.timekeeperName}</strong>}
             {show.date && (
@@ -120,35 +154,8 @@ export const TimeReviewRow = ({
               {error}
             </p>
           )}
-        </div>
-        {stage === "submitted" && (
-          <Button
-            loading={busy}
-            onClick={() => review.approve([row])}
-            size="sm"
-          >
-            {t("billing.approve")}
-          </Button>
-        )}
-      </div>
-      <div className="mt-2 flex flex-wrap items-center justify-end gap-2">
-        <Input
-          aria-label={t("billing.approval.returnComment")}
-          className="max-w-72"
-          onChange={(event) => setComment(event.target.value)}
-          placeholder={t("billing.approval.returnComment")}
-          value={comment}
-        />
-        <Button
-          disabled={comment.trim() === ""}
-          loading={busy}
-          onClick={() => review.returnToDraft([row], comment)}
-          size="sm"
-          variant="outline"
-        >
-          {t("billing.revertToDraft")}
-        </Button>
-      </div>
-    </li>
+        </>
+      }
+    />
   );
 };

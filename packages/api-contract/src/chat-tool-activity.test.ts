@@ -1,10 +1,10 @@
 import { describe, expect, test } from "bun:test";
 
 import { CHAT_LOCAL_RUN_QUESTION_TOOL } from "./chat-local-run-question";
+import { CHAT_STEP_LEDGER_KEY, type ChatStepLedger } from "./chat-step-ledger";
 import {
   CHAT_TOOL_LABELS,
   chatToolLabel,
-  countProcessWork,
   getChatToolActivityCategory,
   groupProcessParts,
   isAnswerCardChatToolName,
@@ -12,6 +12,8 @@ import {
   isProcessPart,
   isUserInputChatToolName,
   isVisibleProcessStep,
+  narratedIntentIndex,
+  summarizeProcessRun,
   UNKNOWN_CHAT_TOOL_LABEL,
 } from "./chat-tool-activity";
 import type { ChatActivityPart } from "./chat-tool-activity";
@@ -149,23 +151,190 @@ describe("runs of steps", () => {
       ),
     ).toEqual([false, true, false, false, true, true, true]);
   });
+});
 
-  test("count what landed by kind, leaving out failures, waits and running calls", () => {
+const SUCCEEDED = { success: true } as const;
+
+const codeStep = (
+  calls: readonly { tool: string; outcome: "ok" | "error" }[],
+  output: Record<string, unknown> = SUCCEEDED,
+): ChatActivityPart => ({
+  type: "tool-call",
+  name: "execute_typescript",
+  state: "complete",
+  input: { typescriptCode: "return 1;" },
+  output: {
+    ...output,
+    [CHAT_STEP_LEDGER_KEY]: {
+      calls: calls.map(({ tool, outcome }) => ({
+        tool,
+        queries: [],
+        filters: [],
+        outcome,
+        found: [],
+        foundOmitted: 0,
+      })),
+      callsOmitted: 0,
+    } satisfies ChatStepLedger,
+  },
+});
+
+const summary = (parts: readonly ChatActivityPart[], stepCount = 9) =>
+  summarizeProcessRun(parts, { stepCount }).map(
+    ({ phrase, count }) => `${phrase}:${String(count)}`,
+  );
+
+describe("a settled run's summary", () => {
+  test("names legal research from the ledger, with every lookup that went through", () => {
     expect(
-      countProcessWork([
+      summary([
+        call("discover_tools", "complete", { tools: [] }),
+        codeStep([{ tool: "search_case_law", outcome: "ok" }]),
+        codeStep([
+          { tool: "search_legislation", outcome: "ok" },
+          { tool: "read_statute_provisions", outcome: "ok" },
+          { tool: "search_case_law", outcome: "error" },
+        ]),
+      ]),
+    ).toEqual(["searchedLegislationAndCaseLaw:1", "lookups:3"]);
+  });
+
+  test("keeps a ledger's reads when its script failed afterwards", () => {
+    expect(
+      summary([
+        codeStep(
+          [
+            { tool: "search_case_law", outcome: "ok" },
+            { tool: "search_case_law", outcome: "error" },
+          ],
+          {
+            success: false,
+            error: { message: "Court filter matched no court" },
+          },
+        ),
+      ]),
+    ).toEqual(["searchedCaseLaw:1"]);
+  });
+
+  test("reads a step stored before ledgers from its script, only when it succeeded", () => {
+    const legacy = (output: unknown): ChatActivityPart => ({
+      type: "tool-call",
+      name: "execute_typescript",
+      state: "complete",
+      input: {
+        typescriptCode:
+          'await external_search_legislation({ query: "o. s. ř." }); await external_read_statute({ eli: "x" });',
+      },
+      output,
+    });
+    expect(summary([legacy({ success: true })])).toEqual([
+      "searchedLegislation:1",
+      "lookups:2",
+    ]);
+    expect(summary([legacy({ success: false })], 1)).toEqual(["steps:1"]);
+  });
+
+  test("names matter work, the open document, the web and registers in a fixed order, at most two", () => {
+    expect(
+      summary([
+        codeStep([
+          { tool: "list_matters", outcome: "ok" },
+          { tool: "read_document", outcome: "ok" },
+        ]),
+        call("web_search", "complete", { results: [] }),
+      ]),
+    ).toEqual(["readDocuments:1", "searchedMatters:1", "lookups:3"]);
+    expect(
+      summary([
+        call("read_document", "complete", { text: "11.3" }),
+        call("find_text", "complete", { matches: [] }),
+      ]),
+    ).toEqual(["readDocument:1", "lookups:2"]);
+    expect(
+      summary([call("business_registry_lookup", "complete", { company: {} })]),
+    ).toEqual(["checkedRegisters:1"]);
+  });
+
+  test("counts reads with no area of their own as sources", () => {
+    expect(
+      summary([
+        call("mcp__registry__lookup_company", "complete", { ok: true }),
+        call("list_templates", "complete", { templates: [] }),
+      ]),
+    ).toEqual(["sourcesChecked:2"]);
+  });
+
+  test("adds edits and saves, and leaves out failures, waits and running calls", () => {
+    expect(
+      summary([
         { type: "thinking", content: "Which register?" },
         call("read_document", "complete", { text: "11.3" }),
         call("read_section", "complete", { error: "Renumbered" }),
         call("web_search", "input-complete"),
         call("suggest_changes", "complete", { success: true }),
-        call("execute_typescript", "complete", { isError: true }),
+        call("save_task", "complete", { id: "t" }),
         call("ask-user", "complete", { answers: [] }),
       ]),
-    ).toEqual(
-      new Map([
-        ["research", 1],
-        ["artifact", 1],
+    ).toEqual(["readDocument:1", "documentEdits:1", "changesSaved:1"]);
+  });
+
+  test("falls back to the step count when the run read and changed nothing", () => {
+    expect(
+      summary(
+        [
+          { type: "thinking", content: "Plan" },
+          call("load-skill", "complete", { name: "nda" }),
+          call("command_execution", "complete", { exitCode: 0 }),
+          codeStep([]),
+        ],
+        3,
+      ),
+    ).toEqual(["steps:3"]);
+  });
+});
+
+describe("a message's narrated intent", () => {
+  const plan: ChatActivityPart = {
+    type: "text",
+    content:
+      "Dohledám znění § 240 o. s. ř. a judikaturu Nejvyššího soudu k počátku běhu lhůty.",
+  };
+  const step = codeStep([{ tool: "search_case_law", outcome: "ok" }]);
+  const answer: ChatActivityPart = {
+    type: "text",
+    content: "Lhůta běží od doručení.",
+  };
+
+  test("is the plan written before the first step, after reasoning only", () => {
+    expect(narratedIntentIndex([plan, step, answer])).toBe(0);
+    expect(
+      narratedIntentIndex([
+        { type: "thinking", content: "" },
+        { type: "text", content: "  " },
+        plan,
+        { type: "thinking", content: "Which court?" },
+        step,
+        answer,
       ]),
-    );
+    ).toBe(2);
+  });
+
+  test("is none for an answer without steps, or text still waiting for one", () => {
+    expect(narratedIntentIndex([answer])).toBeNull();
+    expect(narratedIntentIndex([plan])).toBeNull();
+    expect(
+      narratedIntentIndex([plan, call("ask-user", "input-complete")]),
+    ).toBeNull();
+  });
+
+  test("is none for text written after a step, or text shaped like an answer", () => {
+    expect(narratedIntentIndex([step, plan, step, answer])).toBeNull();
+    for (const content of [
+      "## Postup\n\nNejprve dohledám § 240 o. s. ř.",
+      "Postup:\n- § 240 o. s. ř.\n- judikatura",
+      "Dohledám ".repeat(60),
+    ]) {
+      expect(narratedIntentIndex([{ type: "text", content }, step])).toBeNull();
+    }
   });
 });

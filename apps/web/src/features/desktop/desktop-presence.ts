@@ -54,10 +54,17 @@ export const desktopPresenceOptions = (key: DesktopPresenceKey) =>
       refetchOnWindowFocus: "always",
       retry: false,
     }),
-    {
-      resources: [RESOURCE_TYPE.USER],
-      scope: { type: "organization" },
-    },
+    key.userId === SIGNED_OUT_QUERY_OWNER ||
+      key.organizationId === SIGNED_OUT_QUERY_OWNER
+      ? { type: "independent" }
+      : {
+          resources: [RESOURCE_TYPE.USER],
+          scope: {
+            type: "organization",
+            organizationId: key.organizationId,
+            userId: key.userId,
+          },
+        },
   );
 
 const ASSUMED_PRESENCE = {

@@ -22,6 +22,7 @@ const version = (overrides: Partial<FoundVersion> = {}): FoundVersion => ({
   windowDisposition: "effective",
   windowDispositionBasis: null,
   status: "found",
+  governingText: [],
   nextTextCursor: null,
   text: "Current wording",
   truncated: false,

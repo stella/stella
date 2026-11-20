@@ -1,4 +1,5 @@
 import { afterAll, describe, expect, test } from "bun:test";
+import { fileURLToPath } from "node:url";
 
 import { apiApp } from "@/api/server";
 import { serveForTest } from "@/api/tests/helpers/test-server";
@@ -28,7 +29,7 @@ const embeddableHandlerProblems = (
 const handlerSources = async (): Promise<Map<string, string>> => {
   const sources = new Map<string, string>();
   const glob = new Bun.Glob("**/*.ts");
-  for await (const path of glob.scan({ cwd: HANDLER_ROOT.pathname })) {
+  for await (const path of glob.scan({ cwd: fileURLToPath(HANDLER_ROOT) })) {
     if (path.endsWith(".test.ts")) {
       continue;
     }

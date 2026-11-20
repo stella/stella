@@ -1,12 +1,12 @@
 import { createFileRoute } from "@tanstack/react-router";
 
-import { useWorkspaceChatMentionRegistration } from "@/features/chat/hooks/use-workspace-chat-mention-registration";
 import { chatThreadOptions } from "@/features/chat/queries";
 import { toChatThreadId } from "@/lib/chat-thread-ref";
 import { loadRouteResource } from "@/lib/errors/route-resource";
 import { ensureRouteQueryData } from "@/lib/react-query";
 import { routePresentation } from "@/routes/-route-presentation";
-import { ChatThreadPage } from "@/routes/_protected.chat/-components/chat-thread-page";
+import { WorkspaceChatThreadPage } from "@/routes/_protected.chat/-components/chat-thread.page";
+import { ChatThreadPending } from "@/routes/_protected.chat/-components/chat-thread.pending";
 
 export const Route = createFileRoute(
   "/_protected/chat/workspaces/$workspaceId/$threadId",
@@ -14,10 +14,11 @@ export const Route = createFileRoute(
   staticData: {
     presentation: routePresentation({ type: "entity", entity: "chat" }),
   },
-  component: WorkspaceThreadRoute,
-  // See sibling route at `/_protected/chat/$threadId` — delay the
-  // pending splash so consecutive thread navigations don't flash
-  // a logo loader between two cached chats.
+  component: WorkspaceChatThreadPage,
+  pendingComponent: ChatThreadPending,
+  // See the sibling route at `/_protected/chat/$threadId`: hold the pending
+  // view back so consecutive thread navigations do not flash it between
+  // two cached chats.
   pendingMs: 1000,
   loader: async ({ context, params }) => {
     // Prime the pure thread-data query the page suspends on; see the
@@ -46,20 +47,3 @@ export const Route = createFileRoute(
     });
   },
 });
-
-function WorkspaceThreadRoute() {
-  const { threadId, workspaceId } = Route.useParams({
-    select: (params) => ({
-      threadId: toChatThreadId(params.threadId),
-      workspaceId: params.workspaceId,
-    }),
-  });
-  useWorkspaceChatMentionRegistration(workspaceId);
-
-  return (
-    <ChatThreadPage
-      threadRef={{ scope: "workspace", threadId, workspaceId }}
-      workspaceId={workspaceId}
-    />
-  );
-}

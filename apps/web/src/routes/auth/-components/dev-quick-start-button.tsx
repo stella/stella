@@ -299,10 +299,28 @@ export const DevQuickStartButton = ({ redirectTo }: { redirectTo: string }) => {
   };
 
   const handleQuickStart = async () => {
-    await devQuickStartRuntime.runSingleFlight({
-      stage: DEV_QUICK_START_STAGE.authenticate,
-      run: runQuickStart,
-    });
+    const result = await Result.tryPromise(
+      async () =>
+        await devQuickStartRuntime.runSingleFlight({
+          stage: DEV_QUICK_START_STAGE.authenticate,
+          run: runQuickStart,
+        }),
+    );
+    if (result.isErr()) {
+      analytics.captureError(result.error, {
+        fingerprintKey: "DevQuickStartButton.refresh:failure",
+        scope: {
+          type: "handler",
+          handlerId: "DevQuickStartButton.refresh:failure",
+        },
+      });
+      notifyUserError(result.error, DEV_QUICK_START_COPY.errorTitle, {
+        description: userErrorFromThrown(
+          result.error,
+          DEV_QUICK_START_COPY.errorFallback,
+        ),
+      });
+    }
   };
 
   return (

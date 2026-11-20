@@ -33,10 +33,13 @@ export const EXCLUSIVE_SHARED_TABLE_DDL_TEST_PATHS: ReadonlySet<string> =
     "src/lib/email/correspondence/concurrent-filing.postgres.test.ts",
     "src/lib/email/correspondence/source-race.postgres.test.ts",
     "src/lib/hosted-usage-provider/replay.postgres.test.ts",
+    "src/lib/legal-search/corpus-index-generation-retire.postgres.test.ts",
+    "src/lib/legal-search/corpus-index-route-proof-runner.postgres.test.ts",
     "src/lib/lists/sanctions/monitoring-concurrency.postgres.test.ts",
     "src/lib/lists/sanctions/monitoring-migrations.postgres.test.ts",
     "src/lib/lists/sanctions/monitoring-roles.postgres.test.ts",
     "src/lib/scheduler/tasks/registration-retention.postgres.test.ts",
+    "src/scripts/corpus-generation.postgres.test.ts",
     "src/scripts/eu-completion-tick.postgres.test.ts",
     "src/tests/query-perf/scheduled-run.postgres.test.ts",
   ]);
@@ -217,8 +220,12 @@ const CLUSTER_CATALOG_CACHE_TESTS = new Set([
   "src/tests/query-perf/scheduled-run.postgres.test.ts",
 ]);
 
+// Backend-local WAL counters exclude other sessions' bytes, but database clones
+// force cluster checkpoints and full-page images in the measuring backend.
+const BACKEND_WAL_MEASUREMENT = /\bpg_stat_get_backend_wal\s*\(/iu;
+
 /**
- * Migration roles, visibility proofs and single-sample block measurements
+ * Migration roles, visibility proofs and block/WAL measurements
  * require every other cluster worker to finish.
  */
 export const clusterExclusivePostgresTests = (
@@ -229,6 +236,7 @@ export const clusterExclusivePostgresTests = (
     if (
       CLUSTER_VISIBILITY_TESTS.has(testPath) ||
       CLUSTER_CATALOG_CACHE_TESTS.has(testPath) ||
+      BACKEND_WAL_MEASUREMENT.test(source) ||
       runtimeImports
         .scanImports(source)
         .some(({ path: specifier }) =>

@@ -99,7 +99,7 @@ export const attachedTemplateScanner: Scanner = {
       catch: (cause) => cause,
     });
     if (Result.isError(loaded)) {
-      return [];
+      return [{ ...RELATIONSHIPS_INSPECTION_FAILED, failure: loaded.error }];
     }
     const zip = loaded.value;
 

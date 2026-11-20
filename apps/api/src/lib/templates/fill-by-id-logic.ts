@@ -12,6 +12,7 @@ import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbou
 import type { SafeId } from "@/api/lib/branded-types";
 import type { ClauseBody } from "@/api/lib/clauses/types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { scanErrorForHandler } from "@/api/lib/file-scan/scan-upload-handler";
 import { convertToPdf } from "@/api/lib/files/gotenberg";
 import { DOCX_EXT_RE, sanitizeFilename } from "@/api/lib/sanitize-filename";
 import type { SecureDocumentResponseOptions } from "@/api/lib/secure-document-response";
@@ -161,12 +162,20 @@ export const fillByIdLogic = async function* ({
       buffer: new Uint8Array(result.file.bytes),
       fileName: baseName,
     });
-    if (scannedOutput === null) {
+    if (Result.isError(scannedOutput)) {
+      return Result.err(
+        scanErrorForHandler(
+          scannedOutput.error,
+          "Retry the template PDF export.",
+        ),
+      );
+    }
+    if (scannedOutput.value === null) {
       return Result.err(
         new HandlerError({ status: 422, message: "Template output invalid" }),
       );
     }
-    const pdfResult = await convertToPdf(scannedOutput);
+    const pdfResult = await convertToPdf(scannedOutput.value);
     if (Result.isError(pdfResult)) {
       return Result.err(
         new HandlerError({

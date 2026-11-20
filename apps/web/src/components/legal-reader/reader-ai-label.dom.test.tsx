@@ -211,16 +211,16 @@ describe("the AI mark at each place the reader marks generated text", () => {
     expect(marks).toHaveLength(1);
     const [mark] = marks;
     // On the section's row, never inside its toggle: a control within a
-    // `<summary>` is nested interactive content.
-    expect(mark?.closest("summary")).toBeNull();
-    const details = mark
+    // disclosure trigger would be nested interactive content.
+    expect(mark?.closest('[data-slot="collapsible-trigger"]')).toBeNull();
+    const section = mark
       ?.closest('[data-slot="headnote-block"]')
-      ?.querySelector("details");
-    expect(details?.textContent).toContain(MODEL_HOLDING);
+      ?.querySelector('[data-slot="collapsible"]');
+    expect(section?.textContent).toContain(MODEL_HOLDING);
     // Announced before the text it describes, not after the whole section.
     expect(
       mark !== undefined &&
-        details?.previousElementSibling?.contains(mark) === true,
+        section?.previousElementSibling?.contains(mark) === true,
     ).toBe(true);
 
     await act(async () => {
@@ -230,7 +230,11 @@ describe("the AI mark at each place the reader marks generated text", () => {
     });
     expect(await screen.findByText(disclosure)).toBeDefined();
     // Asking what the mark means does not fold the section open.
-    expect(details?.open).toBe(false);
+    expect(
+      section
+        ?.querySelector('[data-slot="collapsible-trigger"]')
+        ?.getAttribute("aria-expanded"),
+    ).toBe("false");
   });
 
   test("each layer in the margin carries the mark under its own name", async () => {

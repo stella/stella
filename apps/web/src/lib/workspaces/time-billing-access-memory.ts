@@ -1,6 +1,10 @@
 import * as v from "valibot";
 
-import { userStorageKey } from "@/lib/account/user-scoped-storage";
+import {
+  lastTabStorageOwner,
+  storageOwner,
+  userStorageKey,
+} from "@/lib/account/user-scoped-storage";
 import { getAnalytics } from "@/lib/analytics/provider";
 import {
   definePersistedState,
@@ -53,3 +57,27 @@ export const rememberTimeBillingAccess = (
 
 export const rememberedTimeBillingAccess = (organizationId: string): boolean =>
   readPersistedState(timeBillingAccessState, { organizationId }).enabled;
+
+/**
+ * The same hint for the frame drawn before the session is read (a reload's
+ * first paint): the answer this browser kept for the member this tab last
+ * belonged to, whichever organization it was for, read without dropping it.
+ * It shapes only that paint; the sidebar reads the active organization's,
+ * for the member the session names.
+ */
+const timeBillingAccessHintState = {
+  ...timeBillingAccessState,
+  key: () =>
+    userStorageKey(
+      TIME_BILLING_ACCESS_STORAGE_BASE,
+      lastTabStorageOwner() ?? storageOwner(),
+    ),
+  scopeCheck: (value: { organizationId: string; enabled: boolean }) => ({
+    keep: true as const,
+    value,
+  }),
+};
+
+export const rememberedTimeBillingAccessHint = (): boolean =>
+  readPersistedState(timeBillingAccessHintState, { organizationId: "" })
+    .enabled;

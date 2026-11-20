@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useRef, useState } from "react";
+import { lazy, Suspense, useRef, useState } from "react";
 
 import { getRouteApi } from "@tanstack/react-router";
 import { Result } from "better-result";
@@ -14,7 +14,6 @@ import {
   memberKnowledgeSource,
 } from "@/features/knowledge/member/member-knowledge";
 import { KnowledgeStatusMessage } from "@/features/knowledge/views/knowledge-status-message";
-import { PlaybooksPageSkeleton } from "@/features/knowledge/views/playbooks/playbooks-page-view";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { detached } from "@/lib/detached";
 import { toAPIError } from "@/lib/errors/api";
@@ -22,6 +21,7 @@ import { userErrorFromThrown, userErrorMessage } from "@/lib/errors/user-safe";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import type { PlaybookListItem } from "@/lib/knowledge/playbook-types";
 import { PlaybookList } from "@/routes/knowledge/-components/playbook-list";
+import { PlaybooksPending } from "@/routes/knowledge/-member/playbooks.pending";
 
 const LazyPlaybookEditor = lazy(async () => {
   const module =
@@ -95,7 +95,7 @@ export function MemberPlaybooksPage({
   const currentNextCursor =
     nextCursor === undefined ? initialNextCursor : nextCursor;
 
-  const handleLoadMore = useCallback(async () => {
+  const handleLoadMore = async () => {
     const cursor = currentNextCursor;
     if (!cursor) {
       return;
@@ -161,9 +161,9 @@ export function MemberPlaybooksPage({
 
     setExtraPlaybooks((prev) => [...prev, ...data.items]);
     setNextCursor(data.nextCursor);
-  }, [currentNextCursor, t, playbookActions]);
+  };
 
-  const handleRefresh = useCallback(() => {
+  const handleRefresh = () => {
     // Abort any in-flight page load so its result cannot append a stale page
     // back into the list we are about to reset. handleLoadMore's abort branch
     // intentionally leaves loadingMore set, so clear it here.
@@ -173,12 +173,12 @@ export function MemberPlaybooksPage({
     setExtraPlaybooks([]);
     setNextCursor(undefined);
     playbookActions.invalidatePlaybooks();
-  }, [playbookActions]);
+  };
 
-  const handleBackToList = useCallback(() => {
+  const handleBackToList = () => {
     setView({ kind: "list" });
     handleRefresh();
-  }, [handleRefresh]);
+  };
 
   if (view.kind === "editor") {
     return (
@@ -198,7 +198,7 @@ export function MemberPlaybooksPage({
   }
 
   if (isLoading) {
-    return <PlaybooksPageSkeleton />;
+    return <PlaybooksPending />;
   }
 
   if (isError) {

@@ -19,6 +19,7 @@ import {
   readBrTjdftSearch,
 } from "@/api/handlers/case-law/ingestion/adapters/br-tjdft";
 import { buildBrTstDecision } from "@/api/handlers/case-law/ingestion/adapters/br-tst";
+import { buildCzNsSbirkaDecision } from "@/api/handlers/case-law/ingestion/adapters/cz-ns-sbirka";
 import { parseCzUohsDocumentPdf as uncheckedParseCzUohsDocumentPdf } from "@/api/handlers/case-law/ingestion/adapters/cz-uohs";
 import {
   buildPlDecision,
@@ -454,6 +455,21 @@ const readBrTjdft: EvidenceReader = async (fixture) => {
     : panic(`${fixture}: the TJDFT record parsed to no document`);
 };
 
+/** A recorded collection detail page, built as the crawl builds it. */
+const readCzNsSbirka: EvidenceReader = async (fixture) => {
+  const postId =
+    /cz-ns-sbirka-(?<postId>\d+)\.html\.gz$/u.exec(fixture)?.groups?.[
+      "postId"
+    ] ?? panic(`${fixture}: not a collection detail recording`);
+  const decision = buildCzNsSbirkaDecision({
+    postId,
+    detailHtml: await textOf(fixture),
+  });
+  return decision !== null && isDocumentAst(decision.documentAst)
+    ? [{ id: fixture, ast: decision.documentAst }]
+    : panic(`${fixture}: the collection entry parsed to no document`);
+};
+
 /** Every source's reader, or `null` where its declaration names no recording. */
 export const PROCESSED_FIELD_EVIDENCE_READERS = {
   "cz-regional": readCzRegional,
@@ -461,6 +477,7 @@ export const PROCESSED_FIELD_EVIDENCE_READERS = {
   "cz-nss": readCzNss,
   "cz-us": readCzUs,
   "cz-uohs": readCzUohs,
+  "cz-ns-sbirka": readCzNsSbirka,
   "br-tst": readBrTst,
   "sk-courts": null,
   "sk-us": readSkUs,

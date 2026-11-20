@@ -9,7 +9,7 @@ export type ReplayWriterOwner = {
 export const REPLAY_WRITER_REGISTRY = [
   {
     file: "apps/api/src/db/root.ts",
-    line: 761,
+    line: 787,
     kind: "pending",
   },
   {
@@ -54,17 +54,17 @@ export const REPLAY_WRITER_REGISTRY = [
   },
   {
     file: "apps/api/src/handlers/case-law/erasure.ts",
-    line: 443,
+    line: 444,
     kind: "pending",
   },
   {
     file: "apps/api/src/handlers/case-law/erasure.ts",
-    line: 752,
+    line: 757,
     kind: "pending",
   },
   {
     file: "apps/api/src/handlers/case-law/erasure.ts",
-    line: 762,
+    line: 767,
     kind: "pending",
   },
   {
@@ -188,48 +188,33 @@ export const REPLAY_WRITER_REGISTRY = [
     kind: "pending",
   },
   {
-    file: "apps/api/src/handlers/case-law/ingestion/pipeline/decision-existing.ts",
-    line: 207,
-    kind: "pending",
-  },
-  {
-    file: "apps/api/src/handlers/case-law/ingestion/pipeline/decision-existing.ts",
-    line: 263,
+    file: "apps/api/src/handlers/case-law/ingestion/pipeline/decision-identity.ts",
+    line: 711,
     kind: "pending",
   },
   {
     file: "apps/api/src/handlers/case-law/ingestion/pipeline/decision-identity.ts",
-    line: 659,
-    kind: "pending",
-  },
-  {
-    file: "apps/api/src/handlers/case-law/ingestion/pipeline/decision-identity.ts",
-    line: 917,
+    line: 982,
     kind: "pending",
   },
   {
     file: "apps/api/src/handlers/case-law/ingestion/pipeline/decision-row-context.ts",
-    line: 188,
+    line: 197,
     kind: "pending",
   },
   {
     file: "apps/api/src/handlers/case-law/ingestion/pipeline/decision-row-update.ts",
-    line: 488,
+    line: 523,
     kind: "pending",
   },
   {
     file: "apps/api/src/handlers/case-law/ingestion/pipeline/decision-row.ts",
-    line: 375,
+    line: 400,
     kind: "pending",
   },
   {
     file: "apps/api/src/handlers/case-law/ingestion/pipeline/decision-row.ts",
-    line: 441,
-    kind: "pending",
-  },
-  {
-    file: "apps/api/src/handlers/case-law/ingestion/pipeline/decision-row.ts",
-    line: 459,
+    line: 466,
     kind: "pending",
   },
   {
@@ -255,6 +240,15 @@ export const REPLAY_WRITER_REGISTRY = [
     file: "apps/api/src/handlers/case-law/polarity/rule-engine.ts",
     line: 422,
     kind: "pending",
+  },
+  {
+    file: "apps/api/src/lib/billing/invoice-send-revocation.ts",
+    line: 58,
+    kind: "transition",
+    invariant: {
+      file: "apps/api/src/handlers/invoice-links/invoice-links.integration.test.ts",
+      test: "a revoked link opens nothing, and revoking keeps the first revocation",
+    },
   },
   {
     file: "apps/api/src/lib/case-law/provision-state-backfill/backfill.ts",
@@ -293,47 +287,47 @@ export const REPLAY_WRITER_REGISTRY = [
   },
   {
     file: "apps/api/src/lib/db/transitions.ts",
-    line: 373,
+    line: 377,
     kind: "pending",
   },
   {
     file: "apps/api/src/lib/db/transitions.ts",
-    line: 407,
+    line: 411,
     kind: "pending",
   },
   {
     file: "apps/api/src/lib/db/transitions.ts",
-    line: 557,
+    line: 561,
     kind: "pending",
   },
   {
     file: "apps/api/src/lib/db/transitions.ts",
-    line: 648,
+    line: 652,
     kind: "pending",
   },
   {
     file: "apps/api/src/lib/db/transitions.ts",
-    line: 1221,
+    line: 1283,
     kind: "pending",
   },
   {
     file: "apps/api/src/lib/db/transitions.ts",
-    line: 1763,
+    line: 1855,
     kind: "pending",
   },
   {
     file: "apps/api/src/lib/db/transitions.ts",
-    line: 1837,
+    line: 1929,
     kind: "pending",
   },
   {
     file: "apps/api/src/lib/db/transitions.ts",
-    line: 1874,
+    line: 1966,
     kind: "pending",
   },
   {
     file: "apps/api/src/lib/db/transitions.ts",
-    line: 1922,
+    line: 2014,
     kind: "pending",
   },
   {
@@ -376,22 +370,26 @@ export const REPLAY_WRITER_REGISTRY = [
   },
   {
     file: "apps/api/src/lib/legal-search/corpus-index-generation-store.ts",
-    line: 202,
+    line: 304,
     kind: "pending",
   },
   {
     file: "apps/api/src/lib/legal-search/corpus-index-generation-store.ts",
-    line: 331,
+    line: 313,
     kind: "pending",
   },
   {
     file: "apps/api/src/lib/legal-search/corpus-index-generation-store.ts",
-    line: 340,
+    line: 380,
     kind: "pending",
   },
   {
     file: "apps/api/src/lib/legal-search/corpus-index-generation-store.ts",
-    line: 407,
-    kind: "pending",
+    line: 490,
+    kind: "transition",
+    invariant: {
+      file: "apps/api/src/lib/legal-search/corpus-index-generation-retire.db.test.ts",
+      test: "retire moves a building generation to retired with its receipt, and from that commit no writer projects it",
+    },
   },
 ] as const satisfies readonly ReplayWriterOwner[];

@@ -15,6 +15,7 @@ import {
   resolveAppleSignIn,
 } from "@/api/env-apple-sign-in";
 import { envBaseServerSchema, featureFlagSchema } from "@/api/env-base-schema";
+import { softLawFullTextPermittedSourcesSchema } from "@/api/env-soft-law";
 import {
   AUTH_CLIENT_ADDRESS_HEADER,
   ORIGIN_VERIFY_HEADER,
@@ -207,6 +208,29 @@ export const envApiServerSchema = {
   MISTRAL_API_KEY: v.optional(v.string()),
   GOOGLE_AI_API_KEY_EU: v.optional(v.string()),
   GOOGLE_AI_API_KEY_CH: v.optional(v.string()),
+  /**
+   * ElevenLabs key for stella AI transcription straight to ElevenLabs
+   * (Scribe). Requests ask for zero retention unless
+   * ELEVENLABS_ZERO_RETENTION is "0".
+   */
+  ELEVENLABS_API_KEY: v.optional(v.string()),
+  /**
+   * The ElevenLabs environment the key belongs to: "default" and "us" serve
+   * organizations in the US region, "eu" (the EU data residency
+   * environment) those in the EU region. Organizations elsewhere see the
+   * model as outside their region.
+   */
+  ELEVENLABS_ENVIRONMENT: v.optional(
+    v.picklist(["default", "us", "eu"]),
+    "default",
+  ),
+  /**
+   * "1" when the key's account has ElevenLabs zero retention, so every
+   * request asks for it. "0" offers Scribe v3 only to desktops that warn
+   * the member that ElevenLabs keeps the audio and transcript, never as a
+   * default and never on the web.
+   */
+  ELEVENLABS_ZERO_RETENTION: v.optional(v.picklist(["0", "1"]), "1"),
   /**
    * Force orgs to supply their own AI key (BYOK) even if the
    * instance has provisioned provider keys. Useful for shared
@@ -554,6 +578,12 @@ export const envApiServerSchema = {
   FEATURE_PUBLIC_LAW: featureFlagSchema,
   FEATURE_ACTION_ADMISSION: featureFlagSchema,
   FEATURE_MCP_READ_FENCE: featureFlagSchema,
+  /**
+   * A stopping API task releases each local chat turn it reads to another
+   * task instead of ending it. Turn on only once every task adopts released
+   * turns.
+   */
+  FEATURE_CHAT_TURN_HANDOVER: featureFlagSchema,
   MCP_READ_WINDOW_MS: v.optional(
     v.pipe(
       v.string(),
@@ -769,6 +799,7 @@ export const envApiServerSchema = {
     ),
   ),
   FEATURE_TIME_BILLING: featureFlagSchema,
+  FEATURE_INVOICE_LINKS: featureFlagSchema,
   FEATURE_GENERATED_VIEWS: featureFlagSchema,
   /** Dark-launch tenant-scoped AI memory until product and performance review. */
   FEATURE_AI_MEMORY: featureFlagSchema,
@@ -932,6 +963,7 @@ export const envApiServerSchema = {
   ),
 
   AGENT_CLIENT_STORAGE_V1_ENABLED: featureFlagSchema,
+  SOFT_LAW_SYNC_ENABLED: featureFlagSchema,
 
   /** Enables agent-sandbox chat runs when true. */
   AGENT_SANDBOX_RUNS_ENABLED: featureFlagSchema,
@@ -942,6 +974,9 @@ export const envApiServerSchema = {
    * and the package falls back to its own `content/` mount.
    */
   TEMPLATE_PACKS_CONTENT_DIR: v.optional(v.string()),
+
+  /** See `env-soft-law.ts`; read there so ingestion scripts need no API environment. */
+  SOFT_LAW_FULL_TEXT_PERMITTED_SOURCES: softLawFullTextPermittedSourcesSchema,
 
   /**
    * Agent-sandbox engine config. The schema keeps these optional
@@ -1129,13 +1164,13 @@ const managedProviderCheckInvariantViolation = ({
   }
   // The free floor runs on the fast tier's own credential and never on the
   // standard one, so a managed free tier without it would refuse every
-  // request; refuse the configuration at boot instead. Without AI_PROVIDER the
-  // deployment may still resolve to OpenRouter from its standard credential.
-  const openRouterMayServe =
-    AI_PROVIDER === "openrouter" ||
-    (AI_PROVIDER === undefined && standardCredential);
+  // request; refuse the configuration at boot instead. A standard credential
+  // serves OpenRouter whatever AI_PROVIDER says: without AI_PROVIDER the
+  // deployment resolves to it, and transcription offers its models under any
+  // provider.
+  const openRouterMayServe = AI_PROVIDER === "openrouter" || standardCredential;
   if (FEATURE_FREE_TIER && openRouterMayServe && !fastCredential) {
-    return "FEATURE_FREE_TIER with AI_PROVIDER=openrouter requires OPENROUTER_FAST_TIER_API_KEY or complete fast-tier OpenRouter WIF configuration.";
+    return "FEATURE_FREE_TIER with a managed OpenRouter credential requires OPENROUTER_FAST_TIER_API_KEY or complete fast-tier OpenRouter WIF configuration.";
   }
   if (FEATURE_MANAGED_PROVIDER_CHECKS) {
     if (AI_PROVIDER !== "openrouter") {

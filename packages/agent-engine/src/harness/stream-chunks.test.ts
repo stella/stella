@@ -554,6 +554,10 @@ describe("local harness chunks", () => {
         type: "retry_stalled",
         message: "The harness kept retrying the provider without progress.",
       },
+      request_unanswered: {
+        type: "request_unanswered",
+        message: "The model provider did not answer for too long.",
+      },
       tools_unavailable: {
         type: "tools_unavailable",
         message: "The harness could not connect to the stella MCP server.",

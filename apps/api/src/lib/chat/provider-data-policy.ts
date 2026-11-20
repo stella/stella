@@ -195,6 +195,109 @@ export const fetchManagedOpenRouterTranscription = async (
   return await fetchWithTimeout(target, { ...init, redirect: "error" });
 };
 
+const ELEVENLABS_DEFAULT_ORIGIN = "https://api.elevenlabs.io";
+const ELEVENLABS_US_ORIGIN = "https://api.us.elevenlabs.io";
+const ELEVENLABS_EU_ORIGIN = "https://api.eu.residency.elevenlabs.io";
+const ELEVENLABS_TRANSCRIPTION_ORIGINS = [
+  ELEVENLABS_DEFAULT_ORIGIN,
+  ELEVENLABS_US_ORIGIN,
+  ELEVENLABS_EU_ORIGIN,
+] as const;
+
+/** The ElevenLabs environments a deployment key can belong to. */
+export type ElevenLabsEnvironment = "default" | "us" | "eu";
+
+// A key works only on its own environment's origin.
+const ELEVENLABS_ORIGINS = {
+  default: ELEVENLABS_DEFAULT_ORIGIN,
+  us: ELEVENLABS_US_ORIGIN,
+  eu: ELEVENLABS_EU_ORIGIN,
+} as const satisfies Record<
+  ElevenLabsEnvironment,
+  (typeof ELEVENLABS_TRANSCRIPTION_ORIGINS)[number]
+>;
+
+/**
+ * Where ElevenLabs transcription goes. With zero retention ElevenLabs keeps
+ * neither the audio nor the transcript beyond the request; an account
+ * without it cannot ask for it.
+ */
+export const elevenLabsTranscriptionUrl = (
+  environment: ElevenLabsEnvironment,
+  zeroRetention: boolean,
+) =>
+  `${ELEVENLABS_ORIGINS[environment]}/v1/speech-to-text${zeroRetention ? "?enable_logging=false" : ""}`;
+
+const ELEVENLABS_TRANSCRIPTION_URLS: ReadonlySet<string> = new Set(
+  (["default", "us", "eu"] as const).flatMap((environment) => [
+    elevenLabsTranscriptionUrl(environment, true),
+    elevenLabsTranscriptionUrl(environment, false),
+  ]),
+);
+
+/** Audio goes only to the transcription URL of a known ElevenLabs
+ *  environment, and redirects are refused. */
+export const fetchElevenLabsTranscription = async (
+  input: string | URL,
+  init: FetchWithTimeoutInit,
+) => {
+  const target = restrictOutboundUrl({
+    rawUrl: String(input),
+    hostPolicy: {
+      type: "exact-origin",
+      origins: ELEVENLABS_TRANSCRIPTION_ORIGINS,
+    },
+    pathPrefixes: ["/v1/speech-to-text"],
+  });
+  if (target === null || !ELEVENLABS_TRANSCRIPTION_URLS.has(target.href)) {
+    return panic("Transcription target is outside the provider policy.");
+  }
+  return await fetchWithTimeout(target, { ...init, redirect: "error" });
+};
+
+const ELEVENLABS_TRANSCRIPTS_PATH = "/v1/speech-to-text/transcripts/";
+// The ids ElevenLabs issues; anything else could escape the path.
+const ELEVENLABS_TRANSCRIPT_ID = /^[A-Za-z0-9_-]{1,128}$/u;
+
+/** Where ElevenLabs deletes a transcript it kept, or `null` for an id it
+ *  would not issue. */
+export const elevenLabsTranscriptUrl = (
+  environment: ElevenLabsEnvironment,
+  transcriptionId: string,
+) =>
+  ELEVENLABS_TRANSCRIPT_ID.test(transcriptionId)
+    ? `${ELEVENLABS_ORIGINS[environment]}${ELEVENLABS_TRANSCRIPTS_PATH}${transcriptionId}`
+    : null;
+
+/** A kept transcript is deleted only at the transcript URL of a known
+ *  ElevenLabs environment, and redirects are refused. */
+export const deleteElevenLabsTranscript = async (
+  input: string | URL,
+  init: FetchWithTimeoutInit,
+) => {
+  const target = restrictOutboundUrl({
+    rawUrl: String(input),
+    hostPolicy: {
+      type: "exact-origin",
+      origins: ELEVENLABS_TRANSCRIPTION_ORIGINS,
+    },
+    pathPrefixes: [ELEVENLABS_TRANSCRIPTS_PATH],
+  });
+  if (
+    target?.search !== "" ||
+    !ELEVENLABS_TRANSCRIPT_ID.test(
+      target.pathname.slice(ELEVENLABS_TRANSCRIPTS_PATH.length),
+    )
+  ) {
+    return panic("Transcript deletion target is outside the provider policy.");
+  }
+  return await fetchWithTimeout(target, {
+    ...init,
+    method: "DELETE",
+    redirect: "error",
+  });
+};
+
 export const isManagedProviderAvailable = (
   provider: ManagedProvider,
   dataClass: AIDataClass,

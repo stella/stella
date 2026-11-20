@@ -142,6 +142,65 @@ describe("statute reader blocks", () => {
     }
   });
 
+  test("lettered notes an amendment inserted are footnotes too", () => {
+    const bodyText =
+      "(1) Řízení o dávce nemocenského pojištění80b) a úrazového pojištění80c) upravuje zvláštní zákon.";
+    const noteText = "80b) Zákon č. 187/2006 Sb., o nemocenském pojištění.";
+    const blocks: Block[] = [
+      {
+        anchorId: "par_1-odst_1",
+        id: "body",
+        inlines: inlineText(bodyText),
+        plainText: bodyText,
+        type: "paragraph",
+      },
+      {
+        anchorId: "ppc_80",
+        id: "note-80",
+        inlines: inlineText("80) § 71a zákona č. 358/1992 Sb."),
+        plainText: "80) § 71a zákona č. 358/1992 Sb.",
+        type: "paragraph",
+      },
+      {
+        anchorId: "ppc_80b",
+        id: "note-80b",
+        inlines: inlineText(noteText),
+        plainText: noteText,
+        type: "paragraph",
+      },
+    ];
+
+    const prepared = prepareStatuteReader({
+      blocks,
+      statuteTitle: "99/1963 Sb., občanský soudní řád",
+    }).blocks;
+    const body = prepared.at(0);
+    const note = prepared.at(2);
+
+    expect(body?.type).toBe("paragraph");
+    if (body?.type === "paragraph") {
+      expect(body.inlines).toContainEqual({
+        children: [{ text: "80b)", type: "text" }],
+        href: "#ppc_80b",
+        type: "link",
+      });
+      // The document carries no note 80c, so its marker stays text.
+      expect(
+        body.inlines.some(
+          (inline) => inline.type === "link" && inline.href === "#ppc_80c",
+        ),
+      ).toBe(false);
+    }
+    expect(note?.type).toBe("paragraph");
+    if (note?.type === "paragraph") {
+      expect(note.note).toEqual({
+        label: "80b",
+        noteId: "ppc_80b",
+        type: "footnote",
+      });
+    }
+  });
+
   test("unmatched parenthesized numbers remain ordinary text", () => {
     const text = "Body2) but the source has no matching note.";
     const prepared = prepareStatuteReader({

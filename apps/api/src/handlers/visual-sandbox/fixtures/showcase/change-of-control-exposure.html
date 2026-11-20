@@ -5,7 +5,7 @@
       flex-wrap: wrap;
       align-items: baseline;
       column-gap: 12px;
-      margin-block: 0 12px;
+      margin-block: 0 8px;
     "
   >
     <h1 id="title" style="font-size: 20px; margin: 0"></h1>
@@ -16,9 +16,9 @@
     style="
       display: flex;
       flex-wrap: wrap;
-      gap: 24px;
-      margin-block: 0 10px;
-      padding-block: 10px;
+      gap: 16px;
+      margin-block: 0 8px;
+      padding-block: 8px;
       border-width: 1px 0;
       border-style: solid;
       border-color: var(--border);
@@ -27,7 +27,7 @@
   <div
     id="split"
     role="img"
-    style="display: flex; gap: 2px; height: 8px; margin-block: 0 10px"
+    style="display: flex; gap: 2px; height: 6px; margin-block: 0 8px"
   ></div>
   <table id="matrix" class="stella-table" style="font-size: 13px">
     <thead>
@@ -100,13 +100,12 @@
       const amount = element(
         "dd",
         money.format(value),
-        "margin:2px 0 0;font-size:22px;font-weight:600;font-variant-numeric:tabular-nums",
+        "margin:0;font-size:20px;line-height:1.3;font-weight:600;font-variant-numeric:tabular-nums",
       );
       const detail = element(
         "dd",
         labels.statDetail
           .replace("{counterparties}", count.format(rows.length))
-          .replace("{documents}", count.format(total(rows, "documents")))
           .replace(
             "{share}",
             share.format(allValue === 0 ? 0 : value / allValue),
@@ -125,7 +124,9 @@
       );
     }
 
-    const compact = "padding-block:5px";
+    // One line per counterparty at a chat column's width: cells never wrap,
+    // and the position is the row's dot, named by the totals above.
+    const compact = "padding:3px 8px;white-space:nowrap";
     for (const [index, column] of labels.columns.entries()) {
       const cell = element(
         "th",
@@ -145,28 +146,28 @@
     );
     for (const row of ordered) {
       const line = document.createElement("tr");
-      const marker = element(
+      const marker = dot(row.position);
+      marker.setAttribute("role", "img");
+      marker.setAttribute("aria-label", labels.positions[row.position]);
+      marker.setAttribute("title", labels.positions[row.position]);
+      const named = element(
         "span",
         undefined,
-        "display:inline-flex;align-items:center;gap:6px",
+        "display:inline-flex;align-items:center;gap:8px;font-weight:500",
       );
-      marker.append(
-        dot(row.position),
-        element("span", labels.positions[row.position]),
-      );
-      const position = element("td", undefined, compact);
-      position.append(marker);
+      named.append(marker, element("span", row.name));
+      const counterparty = element("td", undefined, compact);
+      counterparty.append(named);
       const badge = element("span", row.risk);
       badge.className = "stella-badge";
       const risk = element("td", undefined, compact);
       risk.append(badge);
       line.append(
-        element("td", row.name, `${compact};font-weight:500`),
+        counterparty,
         element("td", row.agreement, compact),
         element("td", count.format(row.documents), `${compact};text-align:end`),
         element("td", money.format(row.value), `${compact};text-align:end`),
         risk,
-        position,
       );
       document.getElementById("matrix-body").append(line);
     }

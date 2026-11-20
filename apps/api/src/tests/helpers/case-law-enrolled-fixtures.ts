@@ -1,3 +1,4 @@
+// parser-output-unchanged: the cz-ns-sbirka adapter entry is new; existing adapters read only their own keys, so their parsed output is unchanged.
 // parser-output-unchanged: the TST adapter entry is new; existing adapters read only their own keys, so their parsed output is unchanged.
 import { panic, Result } from "better-result";
 /**
@@ -65,6 +66,7 @@ import {
 import { courtListenerConformanceFixture } from "@/api/handlers/case-law/ingestion/adapters/courtlistener/conformance-fixture";
 import { COURTLISTENER_IMPORT_KEY } from "@/api/handlers/case-law/ingestion/adapters/courtlistener/map";
 import { buildCzNsDecision } from "@/api/handlers/case-law/ingestion/adapters/cz-ns";
+import { readCzNsSbirkaEntry } from "@/api/handlers/case-law/ingestion/adapters/cz-ns-sbirka";
 import { buildCzNssDecision as uncheckedBuildCzNssDecision } from "@/api/handlers/case-law/ingestion/adapters/cz-nss";
 import {
   buildCzRegionalDecision,
@@ -3191,6 +3193,122 @@ export const czUohsFixture = (): EnrolledAdapterFixture => ({
   },
 });
 
+// ── CZ NS collection (Sbírka) fixture ───────────────────
+
+const CZ_NS_SBIRKA_FIXTURES = new URL(
+  "../../handlers/case-law/ingestion/adapters/__fixtures__/",
+  import.meta.url,
+);
+
+/**
+ * The recorded detail pages, by post id: a Supreme Court decision the court's
+ * database also holds (5819), a pre-1993 decision in Czech (10001) and one in
+ * Slovak (9586), a stanovisko (19679), an entry whose table states only its
+ * keywords and provisions (13914), one whose heading and row disagree on the
+ * date (4320), and two stating the rows only some entries carry: the
+ * decisions an entry bears on (15158) and a constitutional complaint (18598).
+ */
+export const CZ_NS_SBIRKA_RECORDINGS = [
+  "5819",
+  "10001",
+  "9586",
+  "19679",
+  "13914",
+  "4320",
+  "15158",
+  "18598",
+] as const;
+
+export type CzNsSbirkaRecording = (typeof CZ_NS_SBIRKA_RECORDINGS)[number];
+
+/** One recorded detail page, as the publisher served it. */
+export const czNsSbirkaRecordedPage = (postId: CzNsSbirkaRecording): string =>
+  new TextDecoder().decode(
+    Bun.gunzipSync(
+      readFileSync(
+        new URL(`cz-ns-sbirka-${postId}.html.gz`, CZ_NS_SBIRKA_FIXTURES),
+      ),
+    ),
+  );
+
+/**
+ * A 2021 Supreme Court judgment, R 13/2022, read as the crawl and the
+ * reconciliation read an entry: a publisher read builds it, so a failed or
+ * refused read fails the build. Its page states every row the collection
+ * labels, the annotation, the decisions it bears on and the constitutional
+ * complaint included; the values below are the page's, as the entry stores
+ * them.
+ */
+export const czNsSbirkaFixture = (): EnrolledAdapterFixture => ({
+  rawFieldValues: {
+    "Číslo rozhodnutí": "13",
+    Rok: 2022,
+    Sešit: "2",
+    Druh: "Rozhodnutí ve věcech občanskoprávních, obchodních a správních",
+    Heslo: [
+      "Náhradní pozemek",
+      "Stavební řízení",
+      "Vlastnictví",
+      "Zmírnění křivd (restituce)",
+    ],
+    Předpisy: [
+      "§ 1114 o. z.",
+      "§ 11a odst. 1 zákona č. 229/1991 Sb.",
+      "§ 161 odst. 3 o. s. ř.",
+      "§ 82 odst. 3 zákona č. 183/2006 Sb.",
+    ],
+    "Dotčená rozhodnutí": [
+      "Rozsudek Nejvyššího soudu ze dne 11. 12. 2013, sp. zn. 31 Cdo 2060/2010, uveřejněný pod číslem 19/2014 Sbírky soudních rozhodnutí a stanovisek, část občanskoprávní a obchodní",
+      "Zhodnocení Nejvyššího soudu SSR ze dne 27. 6. 1972, sp. zn. Cpj 57/71, uveřejněný pod číslem 65/72 Sbírky soudních rozhodnutí a stanovisek, část občanskoprávní a obchodní",
+      "Usnesení Nejvyššího soudu ze dne 28. 4. 2016, sp. zn. 21 Cdo 2669/2015",
+      "Rozsudek Nejvyššího soudu ze dne 26. 4. 2017, sp. zn. 22 Cdo 586/2017",
+      "Rozsudek Nejvyššího soudu ze dne 20. 4. 2016, sp. zn. 22 Cdo 75/2016",
+      "Usnesení Nejvyššího soudu ze dne 22. 1. 2019, sp. zn. 28 Cdo 4144/2018",
+      "Usnesení Nejvyššího soudu ze dne 31. 3. 2020, sp. zn. 28 Cdo 809/2020",
+      "Usnesení Nejvyššího soudu ze dne 6. 2. 2018, sp. zn. 28 Cdo 4161/2017",
+      "Rozsudek Nejvyššího soudu ze dne 27. 8. 2018, sp. zn. 28 Cdo 4166/2017",
+      "Rozsudek Nejvyššího soudu ze dne 9. 6. 2009, sp. zn. 28 Cdo 1404/2009",
+      "Rozsudek Nejvyššího správního soudu ze dne 16. 12. 2008, sp. zn. 2 As 62/2008",
+      "Nález Ústavního soudu ze dne 2. 2. 2000, sp. zn. I. ÚS 22/99, N 14/17 SbNU 103",
+      "Nález Ústavního soudu ze dne 29. 8. 2000, sp. zn. I. ÚS 653/99, N 123/19 SbNU 155",
+      "Nález Ústavního soudu ze dne 5. 1. 2021, sp. zn. III. ÚS 3804/19",
+      "Usnesení Ústavního soudu ze dne 16. 12. 1998, sp. zn. II. ÚS 458/98, U 75/12 SbNU 549",
+    ],
+    "Ústavní stížnost":
+      "Rozhodnutí bylo dne 23. 7. 2021 napadeno ústavní stížností; řízení je vedeno pod sp. zn. III. ÚS 1995/21; řízení bylo dne 9. 11. 2021 pro zpětvzetí ústavní stížnosti zastaveno.",
+  },
+  buildDecision: async () =>
+    await withTestFetch(
+      asFetchMock(
+        async () =>
+          await Promise.resolve(
+            new Response(czNsSbirkaRecordedPage("18598"), {
+              headers: { "Content-Type": "text/html; charset=UTF-8" },
+            }),
+          ),
+      ),
+      async () => {
+        const result = await readCzNsSbirkaEntry("18598", null, undefined);
+        if (Result.isError(result)) {
+          return await Promise.reject(result.error);
+        }
+        const read = result.value;
+        switch (read.type) {
+          case "built":
+          case "build-failed":
+            return read.decision;
+          case "unread":
+            return await unreadBuild(ADAPTER_KEYS.CZ_NS_SBIRKA, read.read);
+          case "unkeyable":
+            return panic("the cz-ns-sbirka fixture built nothing");
+          default:
+            read satisfies never;
+            return panic("Unhandled cz-ns-sbirka fixture build");
+        }
+      },
+    ),
+});
+
 export const ukFclFixture = (
   documentUrl = new URL(
     "../../handlers/case-law/ingestion/parsers/__fixtures__/uk-fcl.xml",
@@ -3347,6 +3465,7 @@ export const CASE_LAW_CONFORMANCE_FIXTURES = {
   [ADAPTER_KEYS.CZ_US]: czUsFixture,
   [ADAPTER_KEYS.CZ_REGIONAL]: czRegionalFixture,
   [ADAPTER_KEYS.CZ_UOHS]: czUohsFixture,
+  [ADAPTER_KEYS.CZ_NS_SBIRKA]: czNsSbirkaFixture,
   [ADAPTER_KEYS.BR_TST]: brTstFixture,
   [ADAPTER_KEYS.SK_COURTS]: skCourtsFixture,
   [ADAPTER_KEYS.SK_US]: skUsFixture,

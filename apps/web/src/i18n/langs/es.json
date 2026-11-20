@@ -930,12 +930,14 @@
       },
       "linkedExpenses": "Gastos vinculados",
       "linkedTimeEntries": "Registros de tiempo vinculados",
+      "markSent": "Marcar como enviada",
       "noEntries": "No hay registros vinculados a esta factura",
       "noInvoices": "Aún no hay facturas",
       "paidAt": "Pagada el",
       "payments": {
         "amountTooHigh": "El importe supera el pendiente de {amount}.",
         "confirmVoid": "El pago queda registrado como anulado y deja de computarse en esta factura.",
+        "credited": "Abonada",
         "empty": "Aún no hay pagos registrados",
         "method": "Forma de pago",
         "methods": {
@@ -948,6 +950,8 @@
         "paidOn": "Fecha de pago",
         "partiallyPaid": "Pagada parcialmente",
         "record": "Registrar pago",
+        "refundAmount": "Reembolso pendiente {amount}",
+        "refundDue": "Reembolso pendiente",
         "summary": "Pagado {paid}, pendiente {outstanding}",
         "title": "Pagos",
         "void": "Anular pago",
@@ -955,6 +959,42 @@
       },
       "removeEntries": "Eliminar registros",
       "send": "Enviar",
+      "sendByEmail": "Enviar por correo",
+      "sending": {
+        "failed": "No se pudo enviar la factura",
+        "historyEmpty": "Esta factura aún no se ha enviado por correo.",
+        "historyTitle": "Enviada por correo",
+        "linkInfo": "Los destinatarios reciben un enlace seguro para ver y descargar la factura. No se adjunta nada al correo.",
+        "linkStatus": {
+          "active": "Enlace activo",
+          "expired": "Enlace caducado",
+          "failed": "No entregada",
+          "pending": "Enviando",
+          "revoked": "Enlace revocado"
+        },
+        "loadFailed": "No se pudo cargar el historial de envíos.",
+        "message": "Mensaje (opcional)",
+        "messagePlaceholder": "Una nota breve para los destinatarios",
+        "messageTooLong": "El mensaje puede tener como máximo {max, number} caracteres.",
+        "notDelivered": "No entregada a {addresses}",
+        "notOpened": "Aún no abierta",
+        "opened": "Abierta el {date}",
+        "recipients": "Destinatarios",
+        "recipientsHint": "Una dirección por línea o separadas por comas, como máximo {max, number}.",
+        "recipientsInvalid": "Revise las direcciones de correo.",
+        "recipientsRequired": "Añada al menos una dirección de correo.",
+        "recipientsTooMany": "Envíe a {max, number} direcciones como máximo a la vez.",
+        "replyTo": "Las respuestas llegan a {address}.",
+        "revoke": "Revocar enlace",
+        "revokeConfirm": "Los destinatarios ya no podrán abrir la factura con este enlace. Vuelva a enviar la factura para darles uno nuevo.",
+        "revokeTitle": "¿Revocar este enlace?",
+        "revoked": "Se revocó el enlace",
+        "sendAgain": "Enviar de nuevo",
+        "sent": "Factura enviada",
+        "sentBy": "{date}, enviada por {name}",
+        "sentPartial": "Factura enviada, pero no se pudo entregar a estas direcciones: {addresses}",
+        "title": "Enviar factura {number}"
+      },
       "statuses": {
         "draft": "Borrador",
         "finalized": "Finalizada",
@@ -1070,6 +1110,7 @@
       "legalName": "Nombre legal",
       "registerEntry": "Inscripción registral",
       "registrationId": "Número de registro",
+      "replyEmail": "Correo para respuestas",
       "setDefault": "Establecer como predeterminado",
       "title": "Perfiles de vendedor",
       "vatPayerHelp": "Las facturas de este vendedor cobran IVA. Desactívelo para una persona registrada que tiene número de IVA pero no es sujeto pasivo.",
@@ -1192,6 +1233,13 @@
       "treatment": "Tratamiento posterior"
     },
     "analyzing": "Analizando...",
+    "browse": {
+      "courtDescription": "{court} ({country}): resoluciones en la base jurídica pública de stella, por año y mes.",
+      "courts": "Tribunales",
+      "days": "Días",
+      "jurisdictionDescription": "{country}: resoluciones judiciales en la base jurídica pública de stella, por tribunal, año y mes.",
+      "periodDescription": "{court} ({country}), {period}: resoluciones en la base jurídica pública de stella."
+    },
     "chat": {
       "prompts": {
         "facts": {
@@ -1453,6 +1501,10 @@
       "title": "La búsqueda no está disponible temporalmente"
     },
     "searchWarnings": {
+      "collectionCitationUnresolved": {
+        "hint": "Busque por el número de expediente o el ECLI de la resolución, si lo conoce.",
+        "message": "No se ha encontrado ninguna resolución que corresponda exactamente a esta referencia de repertorio."
+      },
       "noHits": {
         "hint": "Pruebe con menos palabras o con otras: los términos que usaría una resolución, no la frase con la que se formula una pregunta.",
         "message": "Nada coincide con las palabras que exigió esta búsqueda."
@@ -1462,6 +1514,7 @@
         "message": "Nada coincide con los filtros aplicados."
       },
       "partialMatch": "Coincidencia parcial",
+      "partialMatchMissing": "Palabras ausentes: {terms}",
       "partialMatches": "Coincidencias parciales para: <bdi>{query}</bdi>",
       "resultsFor": "Resultados de: <bdi>{query}</bdi>",
       "searchEveryWord": "Buscar todas las palabras"
@@ -1481,6 +1534,23 @@
     },
     "viewer": {
       "abstract": "Resumen",
+      "appealReviews": {
+        "conflict": "La información sobre la revisión es incompleta o contradictoria. Es necesario verificar el resultado.",
+        "corpusOnly": "No se encontró en el corpus disponible ninguna resolución que revise esta resolución. Esto no demuestra que no exista un recurso.",
+        "noneFound": "No se encontró una resolución revisora",
+        "overturned": "Revocada o modificada",
+        "partly": "Revocada parcialmente",
+        "reviewedBy": "Resoluciones revisoras",
+        "reviews": "Resoluciones revisadas",
+        "sourceHistory": "Historial procesal",
+        "sourceMetadata": "Metadatos del editor",
+        "sourceOpening": "Párrafo inicial",
+        "title": "Revisión por recurso",
+        "truncated": "Solo se muestra parte del historial de revisión.",
+        "underReview": "En revisión",
+        "unknown": "Resultado desconocido",
+        "upheld": "Se mantiene"
+      },
       "appliedVersionNotStated": "Versión aplicada no indicada",
       "appliedVersionNotStatedCompact": "Versión no indicada",
       "appliedVersionStatedAmendment": "Redacción modificada por <reference>{amendment}</reference>",
@@ -1662,12 +1732,25 @@
       "unorderedList": "Lista con viñetas",
       "wholeBlockRequired": "Seleccione un párrafo o una lista completos para cambiar su estilo."
     },
+    "answerNotFinished": "stella no pudo terminar esta respuesta.",
     "answerQuote": {
       "showInDecision": "Ver en la resolución",
       "unverified": "Cita no verificada",
       "unverifiedHint": "Las resoluciones citadas no contienen este texto palabra por palabra",
       "verified": "Cita verificada",
       "verifiedHint": "Palabra por palabra en {source}"
+    },
+    "answerTable": {
+      "copy": "Copiar tabla",
+      "copyAs": "Copiar como {format}",
+      "download": "Descargar tabla",
+      "downloadAs": "Descargar como {format}",
+      "fullscreen": "Abrir a pantalla completa",
+      "fullscreenTitle": "Tabla a pantalla completa",
+      "singleLine": "Una sola línea",
+      "size": "{rows, plural, one {# fila} many {# filas} other {# filas}} · {columns, plural, one {# columna} many {# columnas} other {# columnas}}",
+      "textMode": "Texto de las celdas",
+      "wrap": "Ajustar texto"
     },
     "applyMode": {
       "description": "Word registra quién hizo cada cambio. Recordaremos tu elección.",
@@ -1732,7 +1815,7 @@
       "connected": "Extensión conectada",
       "description": "stella puede abrir y leer sitios web en otra pestaña cuando se lo pidas.",
       "install": "Instalar extensión",
-      "installDescription": "La extensión de stella permite abrir y leer sitios web en otra pestaña cuando se lo pidas. Se instala desde Chrome Web Store.",
+      "installDescription": "La extensión de stella permite abrir y leer sitios web en otra pestaña cuando se lo pidas. Se instala desde Chrome Web Store. ¿Ya la tienes? Recarga esta pestaña.",
       "reload": "Recargar esta pestaña",
       "reloadDescription": "Tu extensión de stella es más reciente que esta pestaña. Recarga la pestaña para seguir usándola.",
       "updating": "Actualización de la extensión pendiente",
@@ -1892,23 +1975,24 @@
     "loadEarlierMessagesError": "No se pudieron cargar los mensajes anteriores",
     "loadingEarlierMessages": "Cargando mensajes anteriores…",
     "localFilesUndo": {
-      "action": "Deshacer cambios en archivos",
       "computer": {
         "failed": "La acción de deshacer no terminó en tu ordenador. Es posible que algunos archivos ya hayan cambiado, así que revisa la carpeta del chat.",
         "folderBusy": "Una ejecución en tu ordenador está usando esta carpeta. Inténtalo de nuevo cuando termine.",
         "noCheckpoint": "Tu ordenador no tiene una copia guardada de los archivos de antes de este paso, así que no se deshizo nada.",
-        "notNewest": "Tu ordenador tiene cambios más recientes en esta carpeta, así que no se deshizo nada."
+        "updateForEarlier": "Actualiza stella desktop para deshacer cambios de mensajes anteriores."
       },
-      "confirm": "Deshacer cambios",
-      "confirmDescription": "Los archivos que este paso cambió en su carpeta de tu ordenador vuelven a como estaban antes del paso. Solo se deshacen los cambios de este paso; los de pasos anteriores se mantienen.",
-      "confirmTitle": "¿Deshacer los cambios en archivos de este paso?",
+      "conversationRestarts": "El agente empieza de nuevo a partir del texto de este chat, porque la respuesta anterior a este mensaje no terminó.",
       "expired": "Tu ordenador no respondió a tiempo. Inténtalo de nuevo.",
+      "option": "Deshacer también los cambios en archivos desde este mensaje",
+      "optionHint": "También se deshacen los cambios que hiciste tú en la carpeta.",
       "pending": "Deshaciendo cambios en archivos de tu ordenador",
       "refused": {
+        "alreadyUndone": "Estos cambios en archivos ya se deshicieron.",
         "desktopOffline": "Tu ordenador está sin conexión. Abre la aplicación de escritorio de stella e inténtalo de nuevo.",
         "desktopUpdateRequired": "La aplicación de escritorio de stella de tu ordenador es demasiado antigua para deshacer cambios. Actualízala e inténtalo de nuevo.",
-        "noCheckpoint": "Este paso no tiene una copia guardada de los archivos a la que volver.",
-        "notNewest": "Solo se pueden deshacer los cambios en archivos del paso más reciente.",
+        "folderShared": "Otro chat ha trabajado en esta carpeta desde este mensaje.",
+        "noSavedCopy": "Tu ordenador no guardó una copia de la carpeta de antes de este mensaje: era demasiado grande o lenta de guardar, o la sustituyeron copias más recientes.",
+        "severalFolders": "Los mensajes posteriores se ejecutaron en otro ordenador o en otra carpeta.",
         "threadBusy": "Este chat todavía está trabajando. Inténtalo de nuevo cuando termine."
       },
       "restored": "Cambios en archivos deshechos"
@@ -1937,6 +2021,8 @@
       "folderStateUnreadable": "No se puede leer",
       "limitReminderNotify": "Avísame cuando se restablezca",
       "limitReminderScheduled": "Te avisaremos a partir del {time}.",
+      "limitResumeContinue": "Continuar automáticamente cuando se restablezca",
+      "limitResumeScheduled": "Continuará automáticamente a partir del {time}.",
       "permissionAboveLimit": "Tu organización no lo permite",
       "permissionAskDescription": "Edita por su cuenta los archivos de la carpeta del chat; pregunta antes de cualquier otra cosa.",
       "permissionAutoDescription": "Hace por su cuenta lo que considera seguro; pregunta por el resto.",
@@ -2058,6 +2144,7 @@
     },
     "newChat": "Nuevo chat",
     "newChatInSidePanel": "El chat nuevo está disponible en el panel lateral",
+    "nextSteps": "Próximos pasos",
     "noPromptPresetOnly": "Sin mensaje, solo preajuste",
     "noThreads": "Aún no hay conversaciones",
     "officeCitationUnavailable": "Esta cita ya no está disponible.",
@@ -2075,9 +2162,17 @@
     },
     "placeholder": "Escriba su pregunta aquí, / para habilidades, @ para añadir contexto",
     "processSummary": {
-      "analyses": "{count, plural, one {# análisis} other {# análisis} many {# análisis}}",
       "changesSaved": "{count, plural, one {# cambio guardado} other {# cambios guardados} many {# cambios guardados}}",
+      "checkedRegisters": "Registros públicos consultados",
       "documentEdits": "{count, plural, one {# edición del documento} other {# ediciones del documento} many {# ediciones del documento}}",
+      "readDocument": "Documento leído",
+      "readDocuments": "Documentos leídos",
+      "searchedCaseLaw": "Jurisprudencia consultada",
+      "searchedChats": "Historial del chat consultado",
+      "searchedLegislation": "Legislación consultada",
+      "searchedLegislationAndCaseLaw": "Legislación y jurisprudencia consultadas",
+      "searchedMatters": "Asuntos revisados",
+      "searchedWeb": "Web consultada",
       "sourcesChecked": "{count, plural, one {# fuente consultada} other {# fuentes consultadas} many {# fuentes consultadas}}"
     },
     "promptImprovementStrategies": {
@@ -2164,7 +2259,7 @@
       "chipLabel": "Se ejecuta en: {place}",
       "cloud": "Nube",
       "cloudDescription": "Se ejecuta en la nube. Funciona desde cualquier sitio.",
-      "harnessModels": "Modelos de {harness}",
+      "hintAntigravity": "Instala Antigravity 1.5 o posterior e inicia sesión en él",
       "hintCheck": "Revísalo en stella desktop",
       "hintInstall": "Instálalo desde stella desktop",
       "hintOffline": "Abre stella desktop en tu ordenador",
@@ -2174,8 +2269,9 @@
       "localFolderSelection": "Tu ordenador · {harness} · {folder}",
       "localPlace": "Tu ordenador, {harness}",
       "localSelection": "Tu ordenador · {harness}",
-      "modelDefault": "Predeterminado (recomendado)",
       "placeState": "{place}. {state}",
+      "startedInCloud": "Este chat nuevo se ha iniciado en la nube porque {harness} no está disponible en tu ordenador ({state})",
+      "startedInCloudCheckFailed": "Este chat nuevo se ha iniciado en la nube porque no se ha podido comprobar tu ordenador",
       "stepsCheck": "Abriendo stella desktop. Si no se abre, ábrelo en tu ordenador y revisa {harness} en Configuración › General › Suscripciones de IA.",
       "stepsInstall": "Abriendo stella desktop. Si no se abre, ábrelo en tu ordenador y, en Configuración › General, elige Instalar para {harness}.",
       "stepsSignInClaudeCode": "Abriendo stella desktop para iniciar sesión. Si no se abre, ábrelo y elige Configuración › General › Iniciar sesión con Claude.",
@@ -2242,13 +2338,26 @@
       "title": "Tu mensaje queda en cola hasta que el agente termine",
       "turnNotRunning": "El agente no está trabajando ahora."
     },
+    "stepDigest": {
+      "decisionsFound": "{found, plural, one {# resolución encontrada} many {# resoluciones encontradas} other {# resoluciones encontradas}}",
+      "decisionsFoundUsed": "{found, plural, one {# resolución encontrada} many {# resoluciones encontradas} other {# resoluciones encontradas}}, {used, plural, one {# usada en la respuesta} many {# usadas en la respuesta} other {# usadas en la respuesta}}",
+      "filterAsOf": "A {date}",
+      "legislationFound": "{count, plural, one {# norma o disposición} many {# normas y disposiciones} other {# normas y disposiciones}}",
+      "lookupDidNotGoThrough": "Esta búsqueda no se completó.",
+      "moreFound": "{count, plural, one {# más sin mostrar} many {# más sin mostrar} other {# más sin mostrar}}",
+      "moreLookups": "{count, plural, one {# consulta más sin mostrar} many {# consultas más sin mostrar} other {# consultas más sin mostrar}}",
+      "notRecorded": "Este paso se ejecutó antes de que stella registrara lo que consulta cada paso.",
+      "nothingFound": "Sin resultados.",
+      "technicalDetails": "Detalles técnicos",
+      "usedInAnswer": "Usada en la respuesta",
+      "versionFrom": "Versión desde {date}"
+    },
     "stopFailed": "No se pudo detener la respuesta. Inténtalo de nuevo.",
     "stopResponse": "Detener",
     "stopped": "Detenido",
     "stopping": "Deteniendo…",
     "suggestTitle": "Sugerir un título",
     "suggestTitleUnavailableAnonymized": "Las sugerencias de título no están disponibles para conversaciones anonimizadas.",
-    "suggestedFollowupsLabel": "Sugerencias de preguntas de seguimiento",
     "suggestingTitle": "Sugiriendo un título…",
     "suggestionSeverity": {
       "style": "Estilo",
@@ -2259,7 +2368,11 @@
       "accepted": "Aplicado",
       "rejected": "Rechazado"
     },
-    "tabToAsk": "→ para preguntar: \"{prompt}\"",
+    "switcher": {
+      "allChats": "Todos los chats",
+      "searchPlaceholder": "Buscar un chat…",
+      "trigger": "Cambiar de chat"
+    },
     "tableChart": {
       "bar": "Barras",
       "kind": "Tipo de gráfico",
@@ -2306,10 +2419,10 @@
       "delete_reader_annotation": "Eliminar resaltado o comentario",
       "delete_task": "Eliminar tarea",
       "delete_time_entry": "Eliminar registro de tiempo",
-      "describe-stella-api": "Preparando búsqueda de datos",
-      "describe-stella-function": "Preparando búsqueda de datos",
+      "describe-stella-api": "Eligiendo dónde buscar",
+      "describe-stella-function": "Eligiendo dónde buscar",
       "describe_template": "Leyendo campos de la plantilla",
-      "discover_tools": "Preparando búsqueda de datos",
+      "discover_tools": "Eligiendo dónde buscar",
       "docxEditMore": "{count, plural, one {# edición más} many {# ediciones más} other {# ediciones más}}",
       "docxEditSummary": "{count, plural, one {# edición propuesta} many {# ediciones propuestas} other {# ediciones propuestas}}",
       "execute-typescript": "Leyendo datos del asunto",
@@ -2350,6 +2463,7 @@
       "save_document": "Guardar documento",
       "save_matter": "Guardar asunto",
       "save_playbook": "Guardar playbook",
+      "save_skill_package": "Guardar habilidad",
       "save_task": "Guardar tarea",
       "save_template": "Guardar plantilla",
       "save_time_entry": "Guardar registro de tiempo",
@@ -2378,6 +2492,7 @@
       "use-browser": "Usando tu navegador",
       "use_connector_secret": "Usando la credencial del conector",
       "user_message": "Enviado mientras el agente trabajaba",
+      "validate_skill_package": "Comprobar habilidad",
       "web_search": "Buscando en la web"
     },
     "toolCall": {
@@ -2385,11 +2500,10 @@
       "browserPressKey": "Pulsar la tecla {key} en «{target}» en {url}",
       "browserSelect": "Seleccionar «{option}» en «{target}» en {url}",
       "browserType": "Introducir texto en «{target}» en {url}",
-      "characterCount": "{count, plural, one {# carácter} many {# caracteres} other {# caracteres}}",
       "commandExited": "{command} (código de salida {code})",
       "consoleLogs": "Salida de consola",
       "exactCall": "Llamada exacta",
-      "failed": "Este paso falló; stella lo resolverá de otra manera.",
+      "failed": "Este paso falló.",
       "field": "Campo",
       "input": "Entrada",
       "interrupted": "Interrumpido antes de finalizar",
@@ -2406,11 +2520,17 @@
         "notStored": "No se guardó nada de este paso",
         "runBudgetReached": "No se guardó: esta ejecución ya había guardado todo lo que puede guardar una ejecución"
       },
+      "lookupCount": "{count, plural, one {# consulta} many {# consultas} other {# consultas}}",
       "output": "Salida",
       "patternInPath": "{pattern} en {path}",
       "proposedPlan": "Proponiendo un plan",
       "readFile": "Leyendo un archivo",
+      "readingLegislation": "Leyendo la legislación",
+      "retried": "Reintentado",
+      "retriedDetail": "Este paso no salió bien, así que stella lo intentó de otra manera.",
       "searchFiles": "Buscando en archivos",
+      "searchingCaseLaw": "Buscando en la jurisprudencia",
+      "searchingLegislationAndCaseLaw": "Buscando en la legislación y la jurisprudencia",
       "signInToContinue": "Inicia sesión para continuar",
       "sourceCode": "Código fuente",
       "statusWaiting": "En espera",
@@ -2676,6 +2796,7 @@
     "done": "Hecho",
     "doubleClickToRename": "Haz doble clic para renombrar",
     "download": "Descargar",
+    "downloadOriginal": "Descargar el original",
     "dragAndDrop": {
       "cancelled": "{count, plural, one {Movimiento cancelado. {itemName} no se movió.} other {Movimiento cancelado. {itemName} no se movieron.} many {Movimiento cancelado. {itemName} no se movieron.}}",
       "droppedOn": "{count, plural, one {Se soltó {itemName} sobre {destinationName}.} other {Se soltaron {itemName} sobre {destinationName}.} many {Se soltaron {itemName} sobre {destinationName}.}}",
@@ -2821,6 +2942,7 @@
     "playbooks": "Playbooks",
     "preparing": "Preparando…",
     "preview": "Vista previa",
+    "previewTruncated": "El texto completo no está disponible en esta vista previa.",
     "previous": "Anterior",
     "previousMatch": "Coincidencia anterior",
     "print": "Imprimir",
@@ -2835,6 +2957,7 @@
     "refresh": "Actualizar",
     "regenerate": "Regenerar",
     "reload": "Recargar",
+    "reloadDiscardChanges": "Al volver a cargar, se descartarán tus cambios sin guardar.",
     "removalComplete": "Eliminación completada",
     "remove": "Eliminar",
     "removeMember": "Eliminar miembro",
@@ -2877,6 +3000,7 @@
     "showMore": "Mostrar más",
     "showSecretValue": "Mostrar valor secreto",
     "signOut": "Cerrar sesión",
+    "skipToContent": "Saltar al contenido",
     "somethingWentWrong": "Algo salió mal. Inténtalo de nuevo o recarga la página si vuelve a ocurrir.",
     "sort": "Ordenar",
     "source": "Fuente",
@@ -3261,6 +3385,8 @@
       "contact": "Contacto: {name}",
       "deliveredAt": "Entregado en el buzón",
       "delivery": "Entrega",
+      "deliveryEvents": "Historial de entrega",
+      "deliveryReceipt": "Acuse de recibo",
       "directionUnknown": "Dirección desconocida",
       "messageId": "ID del mensaje",
       "moreContacts": "Hay más contactos asociados a este buzón de datos.",
@@ -3273,6 +3399,8 @@
       "sent": "Enviado",
       "statedInFile": "Mensaje de buzón de datos (según el archivo)",
       "toHands": "A la atención de {name}",
+      "unlinkedFiles": "Para abrir los archivos adjuntos que aparecen sin enlace, descargue el archivo ZFO original.",
+      "unreadable": "No se ha podido leer este archivo como mensaje del buzón de datos ni como acuse de recibo.",
       "uploaded": "Mensaje de buzón de datos subido"
     },
     "deliveredBy": "Entregado por <address>{sender}</address>",
@@ -3976,6 +4104,12 @@
     "versionCreatedTitle": "Versión creada",
     "viewOnly": "Solo lectura"
   },
+  "guidance": {
+    "notCaseLaw": "Orientación emitida por un organismo regulador. No es una resolución judicial.",
+    "openAtPublisher": "Abrir en el sitio del editor",
+    "source": "Fuente: {attribution}",
+    "textUnavailable": "El texto de este documento no está disponible aquí. Consúltelo en el sitio del editor."
+  },
   "guides": {
     "action": {
       "replay": "Volver a empezar",
@@ -4509,6 +4643,33 @@
     "swapViews": "Intercambiar la vista principal y el panel lateral",
     "title": "Panel de inspección"
   },
+  "invoiceLink": {
+    "credited": "Esta factura se ha abonado en su totalidad; no hay importe pendiente.",
+    "downloadEInvoice": {
+      "isdoc": "Descargar ISDOC",
+      "peppol_sk": "Descargar factura electrónica (Peppol)",
+      "ubl": "Descargar factura electrónica (UBL)"
+    },
+    "downloadFailed": "No se pudo descargar el archivo",
+    "failure": {
+      "busy": {
+        "body": "Espere un minuto y vuelva a abrir el enlace.",
+        "title": "Demasiados intentos"
+      },
+      "error": {
+        "body": "Inténtelo más tarde. Si sigue fallando, pida al remitente que vuelva a enviar la factura.",
+        "title": "No se pudo abrir la factura"
+      },
+      "unavailable": {
+        "body": "Puede haber caducado o haber sido revocado. Pida un enlace nuevo al remitente.",
+        "title": "Este enlace ya no está disponible"
+      }
+    },
+    "overpaid": "Ha pagado {amount} más de lo debido; el remitente le debe ese importe.",
+    "paid": "Esta factura está pagada.",
+    "paymentQr": "Código QR de pago",
+    "validUntil": "Este enlace es válido hasta el {date}."
+  },
   "knowledge": {
     "agentSkills": {
       "availabilityClient": "Un cliente",
@@ -4549,7 +4710,7 @@
       "discoveredSkills": "{count, plural, one {# habilidad encontrada} other {# habilidades encontradas} many {# habilidades encontradas}}",
       "discoveryEmpty": "No se encontraron habilidades en este repositorio o carpeta.",
       "discoverySkippedInvalid": "{count, plural, one {Se omitió # habilidad no válida} other {Se omitieron # habilidades no válidas} many {Se omitieron # habilidades no válidas}}",
-      "dropPack": "Suelte un .zip o SKILL.md para importar la habilidad",
+      "dropPack": "Suelte un .zip/.skill o SKILL.md para importar la habilidad",
       "editSkill": "Editar habilidad",
       "enableSkill": "Activar habilidad",
       "fileExists": "Ya existe un archivo con esta ruta",
@@ -4564,7 +4725,7 @@
       "importSkill": "Importar desde URL",
       "importTitle": "Importar habilidad",
       "importedSkills": "{count, plural, one {Se importó # habilidad} other {Se importaron # habilidades} many {Se importaron # habilidades}}",
-      "invalidPath": "La ruta solo puede usar letras minúsculas, dígitos, puntos, guiones o guiones bajos",
+      "invalidPath": "Usa una ruta relativa. Los nombres de archivos y carpetas no pueden ser . ni .., empezar ni terminar con un espacio, terminar en punto ni contener \\ : * ? \" |, corchetes angulares ni caracteres de control.",
       "invocationAuto": "Automáticamente",
       "invocationAutoHelp": "La IA puede usar esta habilidad por su cuenta cuando encaje con la solicitud.",
       "invocationManual": "Solo cuando se invoque",
@@ -4606,8 +4767,8 @@
           "name": "Resumir un documento"
         }
       },
-      "uploadHelp": "Usa un archivo SKILL.md o una carpeta .zip que contenga SKILL.md y recursos opcionales de solo lectura.",
-      "uploadPack": "Subir .zip o SKILL.md",
+      "uploadHelp": "Usa un archivo SKILL.md o una carpeta .zip/.skill que contenga SKILL.md y recursos opcionales de solo lectura.",
+      "uploadPack": "Subir .zip/.skill o SKILL.md",
       "urlPlaceholder": "https://github.com/org/repo/tree/main/ruta/a/la/habilidad",
       "version": "Versión: {version}"
     },
@@ -5639,6 +5800,9 @@
       "chatNotificationsDescription": "Recibe una notificación de este navegador cuando una respuesta del chat termine mientras stella está en segundo plano.",
       "chatNotificationsToggle": "Avisarme cuando una respuesta esté lista o necesite mi intervención",
       "chatNotificationsUnsupported": "Este navegador no admite notificaciones.",
+      "chatTechnicalDetails": "Detalles técnicos en el chat",
+      "chatTechnicalDetailsDescription": "Cada paso del chat muestra qué consultó y qué encontró. Si lo activas, también verás el código y los resultados sin procesar.",
+      "chatTechnicalDetailsToggle": "Mostrar detalles técnicos en el chat",
       "confirmDelete": "Confirmar eliminación de cuenta",
       "dangerZone": "Zona de peligro",
       "dangerZoneDescription": "Eliminar permanentemente el acceso a su cuenta y los datos privados de la cuenta.",
@@ -5931,6 +6095,7 @@
         "number_series": "serie de numeración",
         "organization_access_state": "estado de acceso a la organización",
         "organization_settings": "configuración de la organización",
+        "outbound_action": "acción saliente",
         "pdf_signing_session": "sesión para firma en PDF",
         "personal_api_key": "clave de API personal",
         "playbook": "playbook",
@@ -6145,6 +6310,14 @@
     "reconnectRequired": "Inicio de sesión caducado",
     "title": "SharePoint y OneDrive"
   },
+  "signedFile": {
+    "layer": "Capa de firmas {number, number}",
+    "noReadableContent": "No hay contenido legible para la vista previa.",
+    "pdfUnavailable": "La vista previa del PDF no está disponible.",
+    "unknownSigner": "Firmante desconocido",
+    "unreadable": "No se ha podido leer el archivo firmado.",
+    "unverified": "Las firmas no se han verificado."
+  },
   "skillHistory": {
     "acceptStale": "Aceptar y sobrescribir cambios más recientes",
     "backToCurrent": "Volver a la versión actual",
@@ -6213,6 +6386,7 @@
     "compareUnstructured": "Una de las versiones solo está disponible como texto plano, por lo que no se pueden comparar.",
     "compareVersionMissing": "La versión con la que comparar no figura en el historial de esta norma.",
     "compareWholeAct": "Comparar la norma completa",
+    "compareWithPreviousWording": "Comparar con la redacción anterior",
     "compareWithVersion": "Comparar con {version}",
     "currentWording": "Redacción actual",
     "description": "Base de datos pública de normas consolidadas, indexables por norma y versión.",
@@ -6226,6 +6400,7 @@
       "withdrawn": "El editor ya no lo publica"
     },
     "inForceSince": "En vigor desde el {date}",
+    "inForceSinceAtLeast": "En vigor al menos desde el {date}",
     "ineligibleVersion": "{range} ({label})",
     "leadingDecision": "Sentencia de referencia",
     "leadingDecisionsExplanation": "La primera mención en cada resolución, ordenada por autoridad de cita: citas recibidas ponderadas y ajustadas según la jerarquía del tribunal, el sentido de la cita y su antigüedad.",
@@ -6236,6 +6411,7 @@
     "outlineJumpPlaceholder": "§ 10 o un título",
     "pendingChanges": "Próximas modificaciones",
     "pendingChangesIncomplete": "Es posible que los datos del editor no incluyan todas las próximas modificaciones.",
+    "provisionAbsentVersions": "{count, plural, one {No figura en esta versión de la ley} many {No figura en estas # versiones de la ley} other {No figura en estas # versiones de la ley}}",
     "provisionAskContextPrompt": "\n\nPasajes que aplican la disposición en las resoluciones de mayor autoridad:\n{passages}\n\nUsa las herramientas de jurisprudencia para leer íntegramente cualquiera de estas resoluciones o para encontrar otras que citen la disposición.",
     "provisionAskSummarize": "Resumir cómo aplican los tribunales este precepto",
     "provisionAskSummarizePrompt": "Resume cómo aplican los tribunales {subject}, citando las resoluciones en las que te bases.",
@@ -6246,7 +6422,14 @@
     "provisionPartTextUnavailable": "El texto de {provisionLabel} no está disponible",
     "provisionPromptSubject": "{provision} de {statute} ({eli}), en la redacción vigente desde el {date}",
     "provisionPromptSubjectUndated": "{provision} de {statute} ({eli})",
+    "provisionRunAlsoFrom": "también desde el {date}",
+    "provisionRunShowVersions": "Mostrar las versiones de la ley de {range}",
+    "provisionRunUnchanged": "{count, plural, one {sin cambios en # versión de la ley} many {sin cambios en # versiones de la ley} other {sin cambios en # versiones de la ley}}",
     "provisionTextUnavailable": "Texto no disponible para esta versión",
+    "provisionVersionsAll": "Todas las versiones de la ley",
+    "provisionWordingAdded": "Nuevo precepto",
+    "provisionWordingChanged": "Modificado",
+    "provisionWordingEarliest": "Versión más antigua disponible",
     "publisherWindowInconsistent": "No se puede determinar la versión vigente en esta fecha: los datos del editor son incoherentes.",
     "resolvedAlias": "Reconocido como {label}",
     "searchLabel": "Buscar en la legislación",
@@ -6275,6 +6458,10 @@
     "versionChangesRemoved": "{count, plural, one {# disposición suprimida} other {# disposiciones suprimidas} many {# disposiciones suprimidas}}",
     "versionChangesWords": "{inserted, plural, one {# palabra añadida} other {# palabras añadidas} many {# palabras añadidas}}, {deleted, plural, one {# palabra suprimida} other {# palabras suprimidas} many {# palabras suprimidas}}",
     "wordingVersionUnknown": "No se conoce la fecha de la versión de la redacción"
+  },
+  "structuredDocument": {
+    "noReadableContent": "No hay texto legible para la vista previa.",
+    "textOnly": "Vista previa de texto sin diseño de página ni imágenes."
   },
   "styleSets": {
     "create": "Crear",
@@ -7789,7 +7976,6 @@
         "endDate": "Fecha de fin",
         "month": "Mes",
         "quarter": "Trimestre",
-        "showTable": "Mostrar tabla",
         "startDate": "Fecha de inicio",
         "week": "Semana"
       },

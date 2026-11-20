@@ -8,9 +8,11 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
-const verifier = new URL("verify-release-candidate-tree.mjs", import.meta.url)
-  .pathname;
+const verifier = fileURLToPath(
+  new URL("verify-release-candidate-tree.mjs", import.meta.url),
+);
 
 const stderrText = (result: ReturnType<typeof Bun.spawnSync>): string =>
   result.stderr?.toString() ?? "";
@@ -184,7 +186,7 @@ test("a changelog-only correction after a failed RC keeps the release proof and 
       const receipt = Bun.spawnSync(
         [
           "bash",
-          new URL("release-rc-number.sh", import.meta.url).pathname,
+          fileURLToPath(new URL("release-rc-number.sh", import.meta.url)),
           "1.2.4",
           git(directory, "rev-parse", "HEAD"),
         ],

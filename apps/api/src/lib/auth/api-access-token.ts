@@ -51,10 +51,29 @@ import { McpAuthenticationError } from "@/api/mcp/errors";
  * (sign-in methods, keys, connections, deletion) never belong here: a lost
  * phone must not be able to keep itself connected.
  */
+/** An app of stella's own that a route can be bound to. */
+export type ApiTokenClient = "mobile";
+
 export const API_OAUTH_ROUTES = {
   "POST /v1/dictation/transcribe": {
     scope: "stella:chat",
     handler: "apps/api/src/handlers/dictation/transcribe.ts",
+  },
+  // The phone app's dictation: the models its picker offers, labelled where
+  // they leave the region or keep the audio, and the cleanup of a dictated
+  // transcript. Each sends only the request's own text to a model and
+  // stores nothing; they are app plumbing, not agent capabilities.
+  "GET /v1/dictation/models": {
+    scope: "stella:chat",
+    handler: "apps/api/src/handlers/dictation/models.ts",
+    uncataloged: "native_tool_ui",
+    client: "mobile",
+  },
+  "POST /v1/dictation/cleanup": {
+    scope: "stella:chat",
+    handler: "apps/api/src/handlers/dictation/member-cleanup.ts",
+    uncataloged: "native_tool_ui",
+    client: "mobile",
   },
   // The Outlook add-in's email helpers: a summary of the open email and a
   // reply draft. Each sends only the email text in its body to the model and
@@ -227,6 +246,28 @@ export const API_OAUTH_ROUTES = {
     exportName: "readFileEndpoint",
     uncataloged: "upload_mechanics",
   },
+  "GET /v1/files/:workspaceId/asic/:fieldId": {
+    scope: "stella:read",
+    handler: "apps/api/src/handlers/files/asic.ts",
+    uncataloged: "upload_mechanics",
+  },
+  "GET /v1/files/:workspaceId/cades/:fieldId": {
+    scope: "stella:read",
+    handler: "apps/api/src/handlers/files/cades.ts",
+    exportName: "cadesPreviewEndpoint",
+    uncataloged: "upload_mechanics",
+  },
+  "GET /v1/files/:workspaceId/cades/:fieldId/content": {
+    scope: "stella:read",
+    handler: "apps/api/src/handlers/files/cades.ts",
+    exportName: "cadesContentEndpoint",
+    uncataloged: "upload_mechanics",
+  },
+  "GET /v1/files/:workspaceId/data-box/:fieldId": {
+    scope: "stella:read",
+    handler: "apps/api/src/handlers/files/data-box.ts",
+    uncataloged: "upload_mechanics",
+  },
   "POST /v1/entities/:workspaceId/upload-version": {
     scope: "stella:documents_write",
     handler: "apps/api/src/handlers/entities/versions/upload.ts",
@@ -336,6 +377,26 @@ export const API_OAUTH_ROUTES = {
     handler: "apps/api/src/handlers/chat/turns/steer.ts",
     uncataloged: "realtime_stream",
   },
+  // Editing a chat from one of the person's own messages: what the edit does
+  // on their computer, and the undo of the file changes made there since,
+  // which the edit may ask first. Both open only the caller's own message.
+  // Only the phone app's token opens them: the Outlook add-in also holds the
+  // chat scope, and putting a folder on the member's computer back is not
+  // part of what it does.
+  "GET /v1/chat/threads/:threadId/messages/:messageId/local-files/undo": {
+    scope: "stella:chat",
+    handler: "apps/api/src/handlers/chat/messages/local-files-undo.ts",
+    exportName: "readLocalFilesUndo",
+    uncataloged: "chat_thread_ui",
+    client: "mobile",
+  },
+  "POST /v1/chat/threads/:threadId/messages/:messageId/local-files/undo": {
+    scope: "stella:chat",
+    handler: "apps/api/src/handlers/chat/messages/local-files-undo.ts",
+    exportName: "undoLocalFiles",
+    uncataloged: "chat_thread_ui",
+    client: "mobile",
+  },
   // Which chats are working or waiting on the person, for the chats list.
   "GET /v1/chat/runs/active": {
     scope: "stella:chat",
@@ -440,6 +501,11 @@ export const API_OAUTH_ROUTES = {
     /** The named export serving the route, when it is not the default. */
     exportName?: string;
     /**
+     * The one app whose token opens the route, for a route another app
+     * holding the same scope has no business with. Absent: any of them.
+     */
+    client?: ApiTokenClient;
+    /**
      * Why the handler has no capability: its `mcp.internal` reason, or
      * `plumbing` for a `defineEndpoint.member` endpoint (`lib/endpoints.ts`),
      * which has no handler config to carry one.
@@ -459,6 +525,12 @@ export const API_OAUTH_ROUTES = {
 
 const ROUTE_SCOPES: ReadonlyMap<string, ApiOAuthResourceScope> = new Map(
   Object.entries(API_OAUTH_ROUTES).map(([key, { scope }]) => [key, scope]),
+);
+
+const ROUTE_CLIENTS: ReadonlyMap<string, ApiTokenClient> = new Map(
+  Object.entries(API_OAUTH_ROUTES).flatMap(([key, entry]) =>
+    "client" in entry ? [[key, entry.client] as const] : [],
+  ),
 );
 
 export class ApiAccessTokenError extends TaggedError("ApiAccessTokenError")<{
@@ -607,27 +679,36 @@ export const authenticateApiAccessToken = async (
 
 export type ApiRouteAdmission =
   | { readonly admitted: true }
-  | { readonly admitted: false; readonly reason: "route" | "scope" };
+  | { readonly admitted: false; readonly reason: "route" | "scope" | "client" };
 
 /**
- * Whether an API token may open this route: the route must be listed and the
- * token must carry the scope it requires. Anything unlisted is refused, which
- * is what keeps the token's reach equal to this table.
+ * Whether an API token may open this route: the route must be listed, the
+ * token must carry the scope it requires, and a route bound to one app opens
+ * only for that app's token (`client`; absent, the token is no app's that a
+ * route is bound to). Anything unlisted is refused, which is what keeps the
+ * token's reach equal to this table.
  */
 export const admitApiAccessTokenRoute = ({
+  client,
   method,
   route,
   scopes,
 }: {
+  /** The app the token was issued to, when it is one a route is bound to. */
+  readonly client?: ApiTokenClient | undefined;
   readonly method: string;
   /** Absent when no route matched, which no token opens. */
   readonly route: string | undefined;
   readonly scopes: readonly string[];
 }): ApiRouteAdmission => {
-  const required =
-    route === undefined ? undefined : ROUTE_SCOPES.get(`${method} ${route}`);
+  const key = `${method} ${route ?? ""}`;
+  const required = route === undefined ? undefined : ROUTE_SCOPES.get(key);
   if (required === undefined) {
     return { admitted: false, reason: "route" };
+  }
+  const only = ROUTE_CLIENTS.get(key);
+  if (only !== undefined && client !== only) {
+    return { admitted: false, reason: "client" };
   }
   return scopes.includes(required)
     ? { admitted: true }

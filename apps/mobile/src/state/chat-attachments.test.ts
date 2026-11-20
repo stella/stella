@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
+import { chatFileMimeType } from "@stll/api-contract/chat-file-types";
 import { CHAT_LOCAL_RUN_ANONYMIZED_REFUSAL_CODE } from "@stll/api-contract/chat-run-target";
 
 import { ApiRequestError } from "./api-request";
@@ -11,13 +12,18 @@ import {
   base64Bytes,
   CHAT_FILE_MAX_BYTES,
   CHAT_FILES_PER_MESSAGE,
-  chatFileMimeType,
   readAttachment,
   readyFiles,
   sendRefusal,
   sendsAnonymized,
+  steersDraft,
+  waitSendRoute,
 } from "./chat-attachments";
-import type { ChatAttachment, SendRefusal } from "./chat-attachments";
+import type {
+  ChatAttachment,
+  ChatDraft,
+  SendRefusal,
+} from "./chat-attachments";
 
 const DOCX =
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
@@ -263,5 +269,34 @@ describe("sending a refused draft as written", () => {
     expect(
       sendsAnonymized({ mode: "as-thread", threadAnonymized: false }),
     ).toBe(false);
+  });
+});
+
+describe("a draft sent while a turn waits on the member", () => {
+  const text: ChatDraft = { text: "Use the 2024 lease.", files: [] };
+  const withFile: ChatDraft = {
+    text: "Use this lease.",
+    files: [
+      {
+        name: "Lease.pdf",
+        mimeType: "application/pdf",
+        dataUrl: "data:application/pdf;base64,QUI=",
+      },
+    ],
+  };
+
+  test("steers the turn with text only", () => {
+    expect(steersDraft(text)).toBe(true);
+    expect(steersDraft(withFile)).toBe(false);
+  });
+
+  test("declines and steers with text, and sends a draft with files to the queue", () => {
+    expect(waitSendRoute({ declineOffered: true, draft: text })).toBe(
+      "decline-and-steer",
+    );
+    expect(waitSendRoute({ declineOffered: true, draft: withFile })).toBe(
+      "send",
+    );
+    expect(waitSendRoute({ declineOffered: false, draft: text })).toBe("send");
   });
 });

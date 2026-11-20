@@ -81,12 +81,12 @@ import type {
   executeRegistryLookup,
 } from "@/api/lib/business-registries/dispatch";
 import type { runSanctionsCheck } from "@/api/lib/business-registries/sanctions-check";
+import type { readDecisionReviews } from "@/api/lib/case-law/decision-reviews";
 import type { readPreferredLanguageVersionIds } from "@/api/lib/case-law/language-alternates";
 import type {
   readCaseLawProvisionScope,
   readProvisionWorkLinked,
 } from "@/api/lib/case-law/provision-filter";
-import type { CaseLawSearchGuidanceMode } from "@/api/lib/case-law/search-guidance-mode";
 import type { readWithdrawnCopyProjection } from "@/api/lib/case-law/withdrawn-copy-read";
 import type { loadLatestApprovedVersion } from "@/api/lib/document-review/approved-playbook-versions";
 import type { createPlaybookTableRuns } from "@/api/lib/document-review/table-run-create";
@@ -96,6 +96,7 @@ import {
   readUnavailable,
 } from "@/api/lib/errors/read-outcome";
 import type { FeatureAccessSnapshot } from "@/api/lib/feature-access/policy";
+import type { LEGAL_FILE_READERS } from "@/api/lib/files/read-legal-file";
 import type { CorpusIndexQueryVariant } from "@/api/lib/legal-search/corpus-query-variant-policy";
 import type { readVersionBlocks } from "@/api/lib/legal-search/legislation-version-blocks";
 import type {
@@ -229,7 +230,6 @@ export type McpRequestContext = {
       scope: Parameters<typeof readProvisionWorkLinked>[1],
     ) => ReturnType<typeof readProvisionWorkLinked>;
     corpusIndexQueryVariant?: CorpusIndexQueryVariant;
-    caseLawSearchGuidance?: CaseLawSearchGuidanceMode;
     /** Every court spelling one corpus country holds, for reading a court filter. */
     readCaseLawCourtNames?: (country: string) => Promise<readonly string[]>;
     readAdmittedCaseLawCourtPage?: (request: {
@@ -241,6 +241,7 @@ export type McpRequestContext = {
     readGatedDecisionCitationDigest?: typeof readGatedDecisionCitationDigest;
     admitLawRead?: typeof admitLawRead;
     resolveDecision?: typeof resolveDecision;
+    readDecisionReviews?: typeof readDecisionReviews;
     resolveLawCitation?: typeof resolveLawCitation;
     readGatedDecisionWithDocument?: typeof readGatedDecisionWithDocument;
     readPreferredLanguageVersionIds?: typeof readPreferredLanguageVersionIds;
@@ -258,6 +259,8 @@ export type McpRequestContext = {
     readLegislationProvisionVersions?: typeof readLegislationProvisionVersions;
     readVersionBlocks?: typeof readVersionBlocks;
     resolveAnnotationTarget?: typeof resolveAnnotationTarget;
+    /** Replaces the registered legal file readers, which open stored bytes in a worker. */
+    legalFileReaders?: typeof LEGAL_FILE_READERS;
     readWorkspaceHandler?: typeof readWorkspaceHandler;
     readOverviewHandler?: typeof readOverviewHandler;
     readWorkspaceContactsHandler?: typeof readWorkspaceContactsHandler;

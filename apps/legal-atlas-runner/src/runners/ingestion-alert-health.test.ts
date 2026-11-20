@@ -2,13 +2,15 @@ import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
 import {
+  CYCLE_OUTCOME,
+  INGESTION_PAUSE_REASON,
   INGESTION_STOP_DISPOSITION,
   INGESTION_STOP_KIND,
   type IngestionStopKind,
 } from "@stll/legal-atlas/ingestion-cycle";
 import { assertProperty } from "@stll/property-testing";
 
-import { CYCLE_OUTCOME, type CycleResult } from "./cycle-progress";
+import type { CycleResult } from "./cycle-progress";
 import { createIngestionAlertHealth } from "./ingestion-alert-health";
 
 const failure = (stopKind: IngestionStopKind): CycleResult => ({
@@ -76,6 +78,33 @@ describe("ingestion paging disposition", () => {
       });
     });
   }
+
+  test("allowance pauses clear failure episodes without claiming completion", () => {
+    const health = harness();
+    for (let cycle = 0; cycle < 5; cycle++) {
+      health.step("source", failure(INGESTION_STOP_KIND.ADAPTER_ERROR));
+    }
+    expect(health.snapshot().stalledAdapterCount).toBe(1);
+    for (let cycle = 0; cycle < 10; cycle++) {
+      const step = health.step("source", {
+        outcome: CYCLE_OUTCOME.PAUSED,
+        pauseReason: INGESTION_PAUSE_REASON.DECISION_ALLOWANCE_EXHAUSTED,
+        inserted: 1,
+        skipped: 0,
+        pagesProcessed: 0,
+        cursorAdvanced: false,
+      });
+      expect(step.disposition).toBe("resumable");
+      expect(step.stopKind).toBeNull();
+      expect(step.stall.capture).toBe(false);
+      expect(step.stall.sustained).toBeNull();
+    }
+    expect(health.snapshot()).toMatchObject({
+      stalledAdapterCount: 0,
+      stalledAdapterTotalCount: 0,
+      sourceUnavailableCount: 0,
+    });
+  });
 
   test("elapsed threshold ages an outage even between cycles and progress clears it", () => {
     const health = harness();

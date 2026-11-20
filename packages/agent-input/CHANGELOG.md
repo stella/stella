@@ -1,5 +1,12 @@
 # @stll/agent-input
 
+## 0.4.5
+
+### Patch Changes
+
+- Updated dependencies [[`2bd32fc`](https://github.com/stella/stella/commit/2bd32fc25f460bde72f255886a4008de8ac18b70)]:
+  - @stll/template-conditions@0.7.0
+
 ## 0.4.4
 
 ### Patch Changes

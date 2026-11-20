@@ -16,6 +16,13 @@ type VisualLoader = {
 };
 
 const visualLoaders = {
+  "appeal-reviews": {
+    load: async () => {
+      const { AppealReviewsPlayground } =
+        await import("./-components/appeal-reviews-playground");
+      return { default: AppealReviewsPlayground };
+    },
+  },
   "mcp-reconnect": {
     load: async () => {
       const { McpReconnectPlayground } =
@@ -142,6 +149,20 @@ const visualLoaders = {
       return { default: ChatStatusPlayground };
     },
   },
+  "chat-citation-chips": {
+    load: async () => {
+      const [{ ChatCitationsPlayground }, { CHAT_CITATION_CHIPS_CASSETTE }] =
+        await Promise.all([
+          import("./-components/chat-citations-playground"),
+          import("./-components/chat-citation-chips-cassette"),
+        ]);
+      return {
+        default: () => (
+          <ChatCitationsPlayground cassette={CHAT_CITATION_CHIPS_CASSETTE} />
+        ),
+      };
+    },
+  },
   "chat-citations": {
     load: async () => {
       const { ChatCitationsPlayground } =
@@ -173,6 +194,27 @@ const visualLoaders = {
       return {
         default: () => (
           <ChatCitationsPlayground cassette={CHAT_ANSWER_FOOTER_CASSETTE} />
+        ),
+      };
+    },
+  },
+  "chat-matter-reads": {
+    load: async () => {
+      const { ChatMatterReadsPlayground } =
+        await import("./-components/chat-matter-reads-playground");
+      return { default: ChatMatterReadsPlayground };
+    },
+  },
+  "chat-answer-typography": {
+    load: async () => {
+      const [{ ChatCitationsPlayground }, { CHAT_ANSWER_TYPOGRAPHY_CASSETTE }] =
+        await Promise.all([
+          import("./-components/chat-citations-playground"),
+          import("./-components/chat-answer-typography-cassette"),
+        ]);
+      return {
+        default: () => (
+          <ChatCitationsPlayground cassette={CHAT_ANSWER_TYPOGRAPHY_CASSETTE} />
         ),
       };
     },

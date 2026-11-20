@@ -10,6 +10,7 @@ import {
   type PublicLegislationCountry,
 } from "@stll/api-contract/legislation-publication";
 import {
+  type CaseLawSearchPaginationOutcome,
   SEARCH_PAGINATION_COMPLETE,
   SEARCH_PAGINATION_TRUNCATED_EXCLUSION_BUDGET,
   type SearchPaginationOutcome,
@@ -144,7 +145,8 @@ const caseLawDecisionHeading = ({
 type CorpusPage = {
   results: McpCompatSearchResult[];
   cursors: Record<string, string | null>;
-  paginationOutcome: SearchPaginationOutcome;
+  /** Case law may stop on unread partial matches; its cursor reruns them. */
+  paginationOutcome: CaseLawSearchPaginationOutcome;
 };
 
 type CorpusPageOutcome =

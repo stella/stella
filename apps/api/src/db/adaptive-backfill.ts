@@ -17,7 +17,7 @@ type BackfillPage<Item, Cursor> = {
   cursor: Cursor;
   done: boolean;
 };
-type AdaptiveBackfillOptions<Transaction, Item, Cursor> = {
+export type AdaptiveBackfillOptions<Transaction, Item, Cursor> = {
   runInTransaction: IngestionTransactionRunner<Transaction>;
   /** Lock the owning checkpoint row before reading it. */
   readCheckpoint: (tx: Transaction) => Promise<BackfillCheckpoint<Cursor>>;

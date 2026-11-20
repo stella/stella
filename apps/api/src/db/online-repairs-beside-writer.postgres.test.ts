@@ -13,7 +13,9 @@ import {
   judgeWriterGap,
   writerGapReport,
 } from "../../../../scripts/migration-rehearsal-writer-gap";
+import { CASE_LAW_FILING_YEAR_FUNCTION_SIGNATURE } from "../lib/case-law/coverage-index";
 import { withGatedTestClients } from "../tests/gated-test-database";
+import { FUNCTION_DEPENDENT_INDEX_REINDEXES } from "./function-dependent-index-reindex";
 import { createUngatedTableGateForTests } from "./online-ddl";
 import type {
   OnlineMigrationConnection,
@@ -63,6 +65,8 @@ const SITEMAP_ENROLLMENT = "case-law-sitemap-packing-enrollment";
 const VAT_ID = "CZ12345678";
 /** An offline revision committed with the fault its record stores. */
 const OFFLINE_COMMITTED_INTENT_INSERT = `INSERT INTO corpus_index_projection_intents (id, family, generation, entity_id, epoch, fingerprint, index_id, status, append_started_at, append_committed_at, append_publish_barrier_at, append_delivery, append_request_id, append_request_revision_count, expected_document_count, append_fault) VALUES ('${ID}', 'case_law', 'case_law_v1', '${ID_2}', 1, repeat('a', 64), 'i', 'append_committed', now(), now(), now(), 'offline_indexer', '${ID_3}', 1, 1, 'none')`;
+/** A projection state blocked under the failure kind the replaced check admits. */
+const BLOCKED_PROJECTION_STATE_INSERT = `INSERT INTO corpus_index_projection_states (family, generation, entity_id, desired_action, desired_epoch, desired_fingerprint, desired_index_id, work_status, failure_attempts, last_failure_kind, last_failure_message) VALUES ('case_law', 'case_law_v1', '${ID_2}', 'upsert', 1, repeat('a', 64), 'i', 'blocked', 1, 'document_language_undeclared', 'fixture')`;
 /** A citation-form rule already holding its typed kind and neutral polarity. */
 const POLARITY_FORM_RULE_INSERT = `INSERT INTO case_law_polarity_rules (id, pattern, polarity, language, kind) VALUES ('${ID}', 'fixture', 'neutral', 'cs', 'form')`;
 /** A citation carrying every classifier provenance column at a valid value. */
@@ -363,7 +367,40 @@ const skillBindingNoRowSeed = (constraint: string): NoRowSeed => ({
   },
 });
 
+/**
+ * A filing-year index rebuild changes no row: one decision gives every
+ * dependent index an entry to rebuild beside the snapshot. The migrated
+ * scratch database has already run the rebuild, so the seed clears its
+ * checkpoint to leave it pending.
+ */
+const filingYearReindexSeed = (checkpoint: string): NoRowSeed => ({
+  kind: "no-row-work",
+  tables: ["case_law_decisions"],
+  snapshot: async (client) =>
+    await snapshotRows(client, ["case_law_decisions"]),
+  seed: async (client) => {
+    await client.unsafe(
+      `INSERT INTO case_law_sources (id, adapter_key, name) VALUES ('${ID}', 'cz-regional', 'Source')`,
+    );
+    await client.unsafe(
+      `INSERT INTO case_law_decisions (id, source_id, case_number, court, country, language) VALUES ('${ID_2}', '${ID}', '21 Cdo 1234/2019', 'Court', 'CZE', 'cs')`,
+    );
+    await client.unsafe(
+      "DELETE FROM public.database_backfill_states WHERE name = $1",
+      [checkpoint],
+    );
+  },
+});
+
+const FILING_YEAR_REINDEX_SEEDS = Object.fromEntries(
+  FUNCTION_DEPENDENT_INDEX_REINDEXES.filter(
+    ({ functionSignature }) =>
+      functionSignature === CASE_LAW_FILING_YEAR_FUNCTION_SIGNATURE,
+  ).map(({ name }) => [name, filingYearReindexSeed(name)]),
+);
+
 const SEEDS = {
+  ...FILING_YEAR_REINDEX_SEEDS,
   "chat-content-v3": {
     kind: "row-work",
     assertPending: async (client, id) => {
@@ -472,6 +509,62 @@ const SEEDS = {
     },
     writerLock: { id: ID, table: "corpus_index_projection_intents" },
   },
+  "corpus-projection-delete-tasks": {
+    kind: "row-work",
+    assertPending: async (client, id) => {
+      const rows = await client<{ repaired: boolean }[]>`
+        SELECT EXISTS (
+          SELECT 1
+          FROM corpus_index_projection_delete_tasks task
+          JOIN corpus_index_projection_intents revision
+            ON revision.family = task.family
+           AND revision.generation = task.generation
+           AND revision.index_id = task.index_id
+           AND revision.delete_opstamp = task.delete_opstamp
+          WHERE revision.id = ${id}
+        ) AS repaired`;
+      expect(
+        rows.at(0)?.repaired,
+        "corpus-projection-delete-tasks",
+      ).toBeFalse();
+    },
+    assertRepaired: async (client, id) => {
+      const rows = await client<{ repaired: boolean }[]>`
+        SELECT EXISTS (
+          SELECT 1
+          FROM corpus_index_projection_delete_tasks task
+          JOIN corpus_index_projection_intents revision
+            ON revision.family = task.family
+           AND revision.generation = task.generation
+           AND revision.index_id = task.index_id
+           AND revision.delete_opstamp = task.delete_opstamp
+          WHERE revision.id = ${id}
+            AND task.task_created_at = revision.delete_task_created_at
+            AND task.cleanup_started_at = revision.cleanup_started_at
+        ) AS repaired`;
+      expect(rows.at(0)?.repaired, "corpus-projection-delete-tasks").toBeTrue();
+    },
+    seed: async (client) => {
+      // Receipts recorded before the queue's triggers existed: the triggers
+      // pause while the rows are written, so no task row exists yet.
+      await withoutFixtureGuards(
+        client,
+        ["corpus_index_generations", "corpus_index_projection_intents"],
+        async () => {
+          await client.unsafe(
+            "INSERT INTO corpus_index_generations (family, generation, cluster, manifest_digest, status) VALUES ('case_law', 'case_law_v1', 'q09', repeat('c', 64), 'serving')",
+          );
+          await client.unsafe(
+            `INSERT INTO corpus_index_projection_intents (id, family, generation, entity_id, epoch, fingerprint, index_id, status, append_started_at, append_publish_barrier_at, cleanup_not_before, cleanup_started_at, delete_opstamp, delete_task_created_at) VALUES ('${ID}', 'case_law', 'case_law_v1', '${ID_2}', 1, repeat('a', 64), 'i', 'cleanup_committed', now(), now(), now(), now(), 1, now())`,
+          );
+          await client.unsafe(
+            `INSERT INTO corpus_index_projection_intents (id, family, generation, entity_id, epoch, fingerprint, index_id, status, append_started_at, append_publish_barrier_at, cleanup_not_before, cleanup_started_at, delete_opstamp, delete_task_created_at) VALUES ('${ID_3}', 'case_law', 'case_law_v1', '${ID_2}', 2, repeat('b', 64), 'i2', 'cleanup_committed', now(), now(), now(), now(), 2, now())`,
+          );
+        },
+      );
+    },
+    writerLock: { id: ID, table: "corpus_index_projection_intents" },
+  },
   corpus_index_projection_intents_append_fault_values: noRowSeed(
     "corpus_index_projection_intents",
     "corpus_index_projection_intents_append_fault_values",
@@ -481,6 +574,11 @@ const SEEDS = {
     "corpus_index_projection_intents",
     "corpus_index_projection_intents_append_fault_shape",
     OFFLINE_COMMITTED_INTENT_INSERT,
+  ),
+  corpus_index_projection_states_failure_kind_values: noRowSeed(
+    "corpus_index_projection_states",
+    "corpus_index_projection_states_failure_kind_values",
+    BLOCKED_PROJECTION_STATE_INSERT,
   ),
   "entity-feature-row-gates": {
     kind: "row-work",
@@ -863,6 +961,11 @@ const SEEDS = {
     "user_email_undeliverable_check",
     `INSERT INTO "user" (id, name, email, email_undeliverable_address, email_undeliverable_reason, email_undeliverable_at) VALUES ('user', 'User', 'user@example.invalid', 'user@example.invalid', 'hard_bounce', now())`,
   ),
+  user_locale_supported_check: noRowSeed(
+    "user",
+    "user_locale_supported_check",
+    `INSERT INTO "user" (id, name, email, locale) VALUES ('user', 'User', 'user@example.invalid', 'cs')`,
+  ),
   time_entries_internal_shape_check: noRowSeed(
     "time_entries",
     "time_entries_internal_shape_check",
@@ -1077,6 +1180,11 @@ const SEEDS = {
     "chat_turns",
     "chat_turns_interaction_values_check",
     `INSERT INTO chat_turns (id, organization_id, user_id, thread_id, user_message_id, status, assistant_message_id, interaction_type, interaction_tool_call_id) VALUES ('${ID}', 'org', 'user', '${ID_2}', '${ID_3}', 'awaiting-user', '${ENTITY_ID}', 'approval', 'call')`,
+  ),
+  chat_limit_reminders_on_reset_check: noRowSeed(
+    "chat_limit_reminders",
+    "chat_limit_reminders_on_reset_check",
+    `INSERT INTO chat_limit_reminders (thread_id, turn_id, organization_id, user_id, remind_at, on_reset) VALUES ('${ID}', '${ID_2}', 'org', 'user', now(), 'continue')`,
   ),
   chat_turns_status_values_check: noRowSeed(
     "chat_turns",

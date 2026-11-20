@@ -2,9 +2,11 @@ import { expect, test } from "bun:test";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
-const subject = new URL("release-finalize-eligibility.sh", import.meta.url)
-  .pathname;
+const subject = fileURLToPath(
+  new URL("release-finalize-eligibility.sh", import.meta.url),
+);
 const REPOSITORY = "stella/stella";
 
 type Run = {

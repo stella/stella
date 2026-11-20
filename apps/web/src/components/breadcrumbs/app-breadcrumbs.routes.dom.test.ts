@@ -5,6 +5,7 @@ import { afterAll, expect, test } from "bun:test";
 
 import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
+import { defaultPresentationPrefs } from "@/lib/account/presentation-prefs/preferences";
 import { createAnalyticsValue } from "@/lib/analytics/provider";
 import { createRouteErrorLifecycleController } from "@/lib/analytics/route-error-lifecycle";
 import { createAppQueryClient } from "@/lib/react-query";
@@ -31,6 +32,7 @@ const router = createRouter({
   routeTree,
   context: {
     analyticsValue,
+    presentationPrefs: defaultPresentationPrefs,
     queryClient: createAppQueryClient(),
     routeErrorLifecycle: createRouteErrorLifecycleController(
       analyticsValue.analytics,
@@ -83,6 +85,22 @@ test.each([
   },
   {
     pathname: "/knowledge/tools/entry",
+    decisions: [
+      {
+        type: "label",
+        labelKey: "navigation.knowledge",
+        to: "/knowledge",
+      },
+      {
+        type: "label",
+        labelKey: "knowledge.sections.tools.title",
+        to: "/knowledge/tools/catalogue",
+      },
+      { type: "knowledge-detail", detail: "tool" },
+    ],
+  },
+  {
+    pathname: "/knowledge/tools/skills/11111111-1111-4111-8111-111111111111",
     decisions: [
       {
         type: "label",

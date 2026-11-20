@@ -1,4 +1,11 @@
 import { describe, expect, test } from "bun:test";
+import type { InferOutput } from "valibot";
+
+import type { asicPreviewSchema } from "@stll/api-contract/asic";
+import {
+  DATA_BOX_DOCUMENT_KIND,
+  DATA_BOX_MESSAGE_MIME_TYPE,
+} from "@stll/api-contract/data-box";
 
 import type { Fetch } from "@/connection/http";
 import {
@@ -12,6 +19,7 @@ import {
   fileUrlPath,
   isOffline,
   readDocumentFile,
+  readOriginalDocumentFile,
   versionsPath,
   viewerFor,
 } from "./document-file";
@@ -66,7 +74,7 @@ const history = (
   versions: {
     id: string;
     versionNumber?: number;
-    file: { fieldId: string } | null;
+    file: { fieldId: string; fileName?: string; mimeType?: string } | null;
   }[],
 ) => ({
   entityId: "entity-1",
@@ -78,10 +86,10 @@ const history = (
       version.file === null
         ? null
         : {
-            ...version.file,
             propertyId: "property-1",
             fileName: "Smlouva.docx",
             mimeType: DOCX,
+            ...version.file,
             sizeBytes: 1200,
           },
   })),
@@ -223,6 +231,217 @@ describe("reading a document's file", () => {
       "/v1/files/matter-1/url/field-1?purpose=download",
     );
   });
+
+  const legalFileVersion = (fileName: string, mimeType: string) =>
+    history("version-1", [
+      { id: "version-1", file: { fieldId: "field?1", fileName, mimeType } },
+    ]);
+
+  test.each([
+    [
+      "Doručenka.ZFO",
+      "application/octet-stream",
+      DATA_BOX_DOCUMENT_KIND.receipt,
+    ],
+    [
+      "Datová zpráva",
+      DATA_BOX_MESSAGE_MIME_TYPE,
+      DATA_BOX_DOCUMENT_KIND.message,
+    ],
+  ] as const)(
+    "opens %s through the audited data-box preview",
+    async (fileName, mimeType, kind) => {
+      const text = "Datová schránka: 1234567\n\n  Přijato: 15:20";
+      const { fetch, calls } = server((path) =>
+        Response.json(
+          path.endsWith("/versions")
+            ? legalFileVersion(fileName, mimeType)
+            : { kind, text },
+        ),
+      );
+      const file = (await read(fetch)).unwrap();
+      expect(file.viewer === "dataBox" && file.preview.unwrap()).toEqual({
+        kind,
+        text,
+      });
+      expect(file.fileName).toBe(fileName);
+      expect(calls).toEqual([
+        "/v1/entities/matter-1/entity/entity-1/versions",
+        "/v1/files/matter-1/data-box/field%3F1",
+      ]);
+    },
+  );
+
+  test.each([
+    {
+      fileName: "Verbale.pdf",
+      mimeType: "application/pdf",
+      text: "Il testo del verbale",
+    },
+    {
+      fileName: "Allegato.bin",
+      mimeType: "application/octet-stream",
+      text: "",
+    },
+  ])(
+    "keeps $mimeType signed-file metadata without requesting the original",
+    async (embedded) => {
+      const fileName = `${embedded.fileName}.P7M`;
+      const preview = {
+        ...embedded,
+        layers: [
+          {
+            id: "layer-0",
+            signers: [
+              { id: "layer-0.signer-0", name: "Anna Rossi" },
+              { id: "layer-0.signer-1", name: null },
+            ],
+          },
+        ],
+      };
+      const { fetch, calls } = server((path) =>
+        Response.json(
+          path.endsWith("/versions")
+            ? legalFileVersion(fileName, "application/octet-stream")
+            : preview,
+        ),
+      );
+      const file = (await read(fetch)).unwrap();
+      expect(file.viewer === "cades" && file.preview.unwrap()).toEqual(preview);
+      expect(file.fileName).toBe(fileName);
+      expect(calls).toEqual([
+        "/v1/entities/matter-1/entity/entity-1/versions",
+        "/v1/files/matter-1/cades/field%3F1",
+      ]);
+    },
+  );
+
+  test.each([".ASICE", ".sce", ".bdoc", ".asics", ".scs"])(
+    "reads an ASiC archive with the %s extension through the preview",
+    async (extension) => {
+      const fileName = `appendices${extension}`;
+      const preview = {
+        members: [
+          {
+            fileName: "submission.pdf",
+            status: "readable",
+            text: "The enclosed submission",
+          },
+          { fileName: "attachment.bin", status: "unavailable", text: "" },
+          {
+            fileName: "notes.txt",
+            status: "truncated",
+            text: "The first page",
+          },
+        ],
+      } satisfies InferOutput<typeof asicPreviewSchema>;
+      const { fetch, calls } = server((path) =>
+        Response.json(
+          path.endsWith("/versions")
+            ? legalFileVersion(fileName, "application/octet-stream")
+            : preview,
+        ),
+      );
+      const file = (await read(fetch)).unwrap();
+      expect(file.viewer === "asic" && file.preview.unwrap()).toEqual(preview);
+      expect(file.fileName).toBe(fileName);
+      expect(calls).toEqual([
+        "/v1/entities/matter-1/entity/entity-1/versions",
+        "/v1/files/matter-1/asic/field%3F1",
+      ]);
+    },
+  );
+
+  test.each([".UDF", ".ofd"])(
+    "reads a %s file through the shared text preview",
+    async (extension) => {
+      const fileName = `submission${extension}`;
+      const preview = { text: "İlk sayfa\n法院文件", truncated: true };
+      const { fetch, calls } = server((path) =>
+        Response.json(
+          path.endsWith("/versions")
+            ? legalFileVersion(fileName, "application/octet-stream")
+            : preview,
+        ),
+      );
+      const file = (await read(fetch)).unwrap();
+      expect(
+        file.viewer === "structured-document" && file.preview.unwrap(),
+      ).toEqual(preview);
+      expect(file.fileName).toBe(fileName);
+      expect(calls).toEqual([
+        "/v1/entities/matter-1/entity/entity-1/versions",
+        "/v1/files/matter-1/structured-document/field%3F1",
+      ]);
+    },
+  );
+
+  test.each([
+    {
+      viewer: "asic",
+      fileName: "Detached.asice",
+      mimeType: "application/vnd.etsi.asic-e+zip",
+    },
+    {
+      viewer: "structured-document",
+      fileName: "Submission.udf",
+      mimeType: "application/octet-stream",
+    },
+    {
+      viewer: "structured-document",
+      fileName: "Submission.ofd",
+      mimeType: "application/octet-stream",
+    },
+    {
+      viewer: "dataBox",
+      fileName: "Doručenka.zfo",
+      mimeType: DATA_BOX_MESSAGE_MIME_TYPE,
+    },
+    {
+      viewer: "cades",
+      fileName: "Detached.p7m",
+      mimeType: "application/pkcs7-mime",
+    },
+  ])(
+    "keeps the original available when a $viewer preview is refused",
+    async ({ viewer, fileName, mimeType }) => {
+      const { fetch, calls } = server((path) => {
+        if (path.endsWith("/versions")) {
+          return Response.json(legalFileVersion(fileName, mimeType));
+        }
+        if (path.endsWith("purpose=download")) {
+          return Response.json(delivered(mimeType, { fileName }));
+        }
+        return Response.json(
+          { message: "Unreadable", code: "preview_unavailable" },
+          { status: 422 },
+        );
+      });
+      const file = (await read(fetch)).unwrap();
+      expect(
+        file.viewer === viewer &&
+          file.preview.status === "error" &&
+          file.preview.error,
+      ).toMatchObject({
+        status: 422,
+        code: "preview_unavailable",
+      });
+      expect(calls).toHaveLength(2);
+      const original = await readOriginalDocumentFile({
+        fetch,
+        source: sourceFor(fetch),
+        workspaceId: "matter-1",
+        fieldId: "field?1",
+      });
+      expect(original.unwrap()).toMatchObject({
+        fileName,
+        presignedUrl: "https://storage.example.com/file-1?signature=abc",
+      });
+      expect(calls.at(-1)).toBe(
+        "/v1/files/matter-1/url/field%3F1?purpose=download",
+      );
+    },
+  );
 
   test("sends a password-protected file to Quick Look", async () => {
     const { fetch } = server((path) =>

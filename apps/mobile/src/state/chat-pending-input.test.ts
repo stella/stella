@@ -23,6 +23,7 @@ import { readChatThread } from "./chat-messages";
 import {
   allowedWithGrant,
   continuationOf,
+  declinedForSteer,
   grantableApproval,
   isSamePendingInput,
   pendingInputKey,
@@ -224,6 +225,23 @@ describe("a turn waiting for an approval", () => {
     // The envelope's copies agree, or the server refuses it.
     expect(body.data).toEqual(body.forwardedProps);
     expect(body.forwardedProps["resume"]).toEqual(body.resume);
+  });
+
+  test("is declined, every approval of it, for a message steered into a turn on the computer", () => {
+    const cloud = answerable(pendingOfPage(exchange(deny, 0)));
+    expect(cloud.type).toBe("steps");
+    // A cloud turn takes no message mid-turn, so nothing is declined for one.
+    expect(declinedForSteer(cloud)).toBeNull();
+    const onComputer = {
+      ...cloud,
+      owner: { type: "harness", runTarget: LOCAL_TARGET },
+    } satisfies PendingInput;
+    expect(declinedForSteer(onComputer)).toEqual({
+      type: "steps",
+      allowed: { "approval_call-1": false },
+      asked: {},
+      documents: {},
+    });
   });
 
   test("is allowed with the continuation the web sends", () => {
@@ -865,6 +883,13 @@ describe("a turn a coding agent paused on its question", () => {
       interruptId: QUESTION_REQUEST_ID,
       questions: [governingLaw, passphrase],
     });
+  });
+
+  test("is never dismissed for a message sent while it waits", () => {
+    const pending = answerable(
+      pendingInputOf({ message: pausedOnQuestion, runTarget: LOCAL_TARGET }),
+    );
+    expect(declinedForSteer(pending)).toBeNull();
   });
 
   test("is left to the web app where the thread names no computer to answer through", () => {

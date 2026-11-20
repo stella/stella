@@ -1,16 +1,16 @@
 /**
- * crates.io pins in a Cargo.lock and their publish times, shared by the
- * lockfile release-age check (scripts/check-lockfile-release-ages.ts) and the
- * quarantine-respecting update (scripts/cargo-update.ts).
+ * crates.io pins in a Cargo.lock and their publish times, for the lockfile
+ * release-age check (scripts/check-lockfile-release-ages.ts).
  *
- * Stable Cargo has no release-age gate: `cargo update` takes a version
- * published seconds ago. (`registry.global-min-publish-age` exists only behind
- * the unstable `-Zmin-publish-age`; stable cargo ignores it with a warning.)
- * Resolution only rewrites Cargo.lock and runs no crate code (build scripts
- * and proc macros run at build time), so checking the lock between resolve and
- * build is as strong as a resolve-time quarantine. Crates are held to the root
- * bunfig.toml's `minimumReleaseAge`; a temporary `minimumReleaseAgeExcludes`
- * entry named `cargo:<crate>` exempts one crate.
+ * Cargo 1.100+ holds back versions younger than the root .cargo/config.toml's
+ * `global-min-publish-age` while it resolves. This check is the backstop for a
+ * lock resolved by an older Cargo, outside the repository, or with
+ * `CARGO_RESOLVER_INCOMPATIBLE_PUBLISH_AGE=allow`. Resolution only rewrites
+ * Cargo.lock and runs no crate code (build scripts and proc macros run at
+ * build time), so checking the lock between resolve and build is as strong as
+ * a resolve-time quarantine. Crates are held to the root bunfig.toml's
+ * `minimumReleaseAge`; a temporary `minimumReleaseAgeExcludes` entry named
+ * `cargo:<crate>` exempts one crate.
  * npm names cannot contain a colon, so Bun never matches such an entry.
  */
 
@@ -23,8 +23,6 @@ const USER_AGENT =
   "stella-lockfile-release-age-check (https://github.com/stella/stella)";
 const CARGO_EXCLUDE_PREFIX = "cargo:";
 const SEMVER = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/u;
-/** Upper bound on version-list pages for one crate (100 versions each). */
-const MAX_VERSION_PAGES = 50;
 
 export type CratePin = { name: string; version: string };
 
@@ -115,19 +113,11 @@ type Failure = { kind: "failed"; message: string; retryable: boolean };
 export type PublishTimeLookup =
   { kind: "published"; publishedAt: Date } | Failure;
 
-export type CrateVersion = {
-  publishedAt: Date;
-  version: string;
-  yanked: boolean;
-};
+type CrateVersion = { publishedAt: Date; version: string };
 
-type VersionList = { kind: "loaded"; versions: CrateVersion[] } | Failure;
-
-export type CratesIoClient = {
+type CratesIoClient = {
   /** Publish time of one version: `GET /crates/<name>/<version>`. */
   publishTime: (pin: CratePin) => Promise<PublishTimeLookup>;
-  /** Every published version, newest semver first. */
-  versions: (name: string) => Promise<VersionList>;
 };
 
 type Fetch = (url: string, init: RequestInit) => Promise<Response>;
@@ -136,13 +126,11 @@ const readVersion = (value: unknown): CrateVersion | undefined => {
   if (!isRecord(value)) {
     return undefined;
   }
-  const { created_at: createdAt, num, yanked } = value;
+  const { created_at: createdAt, num } = value;
   const publishedMs =
     typeof createdAt === "string" ? Date.parse(createdAt) : Number.NaN;
-  return typeof num === "string" &&
-    typeof yanked === "boolean" &&
-    !Number.isNaN(publishedMs)
-    ? { publishedAt: new Date(publishedMs), version: num, yanked }
+  return typeof num === "string" && !Number.isNaN(publishedMs)
+    ? { publishedAt: new Date(publishedMs), version: num }
     : undefined;
 };
 
@@ -227,7 +215,6 @@ export const createCratesIoClient = ({
     `${CRATES_IO_API}/crates/${encodeURIComponent(name)}`;
 
   const publishTimes = new Map<string, Promise<PublishTimeLookup>>();
-  const versionLists = new Map<string, Promise<VersionList>>();
 
   const loadPublishTime = async ({
     name,
@@ -251,53 +238,6 @@ export const createCratesIoClient = ({
       : { kind: "published", publishedAt: parsed.publishedAt };
   };
 
-  const loadVersions = async (name: string): Promise<VersionList> => {
-    const versions: CrateVersion[] = [];
-    let query: string | undefined = "?per_page=100&sort=semver";
-    for (let page = 0; query !== undefined; page++) {
-      if (page === MAX_VERSION_PAGES) {
-        return {
-          kind: "failed",
-          message: `crates.io lists more than ${String(MAX_VERSION_PAGES * 100)} versions of ${name}`,
-          retryable: false,
-        };
-      }
-      const result = await get(`${crateUrl(name)}/versions${query}`);
-      if (result.kind === "failed") {
-        return result;
-      }
-      const body = isRecord(result.body) ? result.body : {};
-      const list = body["versions"];
-      const meta = body["meta"];
-      if (!Array.isArray(list) || !isRecord(meta)) {
-        return {
-          kind: "failed",
-          message: `crates.io answered an unreadable version list for ${name}`,
-          retryable: false,
-        };
-      }
-      for (const item of list) {
-        const parsed = readVersion(item);
-        if (parsed === undefined) {
-          return {
-            kind: "failed",
-            message: `crates.io answered an unreadable version of ${name}`,
-            retryable: false,
-          };
-        }
-        versions.push(parsed);
-      }
-      const next = meta["next_page"];
-      query = typeof next === "string" && next !== "" ? next : undefined;
-    }
-    return {
-      kind: "loaded",
-      versions: versions.toSorted((a, b) =>
-        Bun.semver.order(b.version, a.version),
-      ),
-    };
-  };
-
   return {
     publishTime: async (pin) => {
       const key = `${pin.name}@${pin.version}`;
@@ -307,14 +247,6 @@ export const createCratesIoClient = ({
         publishTimes.set(key, lookup);
       }
       return lookup;
-    },
-    versions: async (name) => {
-      let list = versionLists.get(name);
-      if (list === undefined) {
-        list = loadVersions(name);
-        versionLists.set(name, list);
-      }
-      return list;
     },
   };
 };

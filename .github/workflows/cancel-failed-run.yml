@@ -1,0 +1,120 @@
+name: Cancel failed run
+
+# A CI Checks job whose own step failed asks for this run instead of
+# cancelling its run itself: a run cancelled while that job is still running
+# marks the job cancelled, which hides the failure. This waits for the job to
+# end, so it keeps its failure conclusion, then cancels the rest of the run to
+# free its runners. The script is pinned to scripts/ci-cancellation-contract.ts.
+on:
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: The CI Checks run to cancel
+        required: true
+        type: string
+      run_attempt:
+        description: The attempt of that run whose job failed
+        required: true
+        type: string
+      job_id:
+        description: The failed job of that run to wait for
+        required: true
+        type: string
+
+permissions: {}
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  cancel:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      actions: write
+    steps:
+      - name: Cancel the run once the failed job ends
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        env:
+          RUN_ID: ${{ inputs.run_id }}
+          RUN_ATTEMPT: ${{ inputs.run_attempt }}
+          JOB_ID: ${{ inputs.job_id }}
+        with:
+          retries: 0
+          script: |
+            const runId = Number(process.env.RUN_ID);
+            const runAttempt = Number(process.env.RUN_ATTEMPT);
+            const jobId = Number(process.env.JOB_ID);
+            const positive = /^[1-9][0-9]*$/;
+            if (!positive.test(process.env.RUN_ID || "") || !positive.test(process.env.RUN_ATTEMPT || "")
+              || !positive.test(process.env.JOB_ID || "")
+              || !Number.isSafeInteger(runId) || !Number.isSafeInteger(runAttempt) || !Number.isSafeInteger(jobId)) {
+              core.setFailed("run_id, run_attempt and job_id must be positive integers.");
+              return;
+            }
+            const { data: run } = await github.rest.actions.getWorkflowRun({ ...context.repo, run_id: runId });
+            if (run.path !== ".github/workflows/ci.yml") {
+              core.setFailed(`Run ${runId} is not a CI Checks run.`);
+              return;
+            }
+            const deadline = Date.now() + 120000;
+            let job;
+            for (;;) {
+              const remaining = deadline - Date.now();
+              if (remaining <= 0) {
+                break;
+              }
+              try {
+                ({ data: job } = await github.rest.actions.getJobForWorkflowRun({
+                  ...context.repo,
+                  job_id: jobId,
+                  request: { timeout: remaining },
+                }));
+              } catch (error) {
+                const status = error && typeof error.status === "number" ? error.status : undefined;
+                if (status !== undefined && status < 500 && status !== 429) {
+                  core.setFailed(`Job ${jobId} could not be read (${status}); run ${runId} is left running.`);
+                  return;
+                }
+                core.info(`Job ${jobId} lookup failed transiently (${status ?? (error && error.message)}); retrying.`);
+              }
+              if (job !== undefined) {
+                if (job.run_id !== runId || job.run_attempt !== runAttempt) {
+                  core.setFailed(`Job ${jobId} is not part of run ${runId} attempt ${runAttempt}.`);
+                  return;
+                }
+                if (job.status === "completed") {
+                  break;
+                }
+              }
+              const wait = Math.min(2000, deadline - Date.now());
+              if (wait <= 0) {
+                break;
+              }
+              await new Promise((resolve) => setTimeout(resolve, wait));
+            }
+            if (job === undefined) {
+              core.setFailed(`Job ${jobId} could not be read before the deadline; run ${runId} is left running.`);
+              return;
+            }
+            const failed = job.status === "completed"
+              ? job.conclusion === "failure"
+              : (job.steps || []).some((step) => step.conclusion === "failure");
+            if (!failed) {
+              core.setFailed(`${job.name} did not fail (${job.status}, ${job.conclusion}); run ${runId} is left running.`);
+              return;
+            }
+            const { data: current } = await github.rest.actions.getWorkflowRun({ ...context.repo, run_id: runId });
+            if (current.run_attempt !== runAttempt) {
+              core.notice(`Run ${runId} is on attempt ${current.run_attempt}, not ${runAttempt}; it is left running.`);
+              return;
+            }
+            if (current.status === "completed") {
+              core.notice(`Run ${runId} has already ended.`);
+              return;
+            }
+            await github.rest.actions.cancelWorkflowRun({ ...context.repo, run_id: runId });
+            core.notice(`Cancelled run ${runId} after ${job.name} failed: ${job.html_url}`);
+            await core.summary.addRaw(`Cancelled run ${runId} after ${job.name} failed: ${job.html_url}\n`).write();

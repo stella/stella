@@ -1,4 +1,7 @@
 {
+  "common": {
+    "previewTruncated": "Le texte intégral n’est pas disponible dans cet aperçu."
+  },
   "tabs": {
     "chat": "Conversation",
     "close": "Fermer",
@@ -85,6 +88,7 @@
     "documentClose": "Fermer",
     "approvalBrowserNote": "Une fois autorisée, l’action s’exécute dans votre navigateur sur votre ordinateur, via l’extension stella.",
     "grantFailed": "L’autorisation n’a pas pu être enregistrée. Réessayez.",
+    "limitReminderFailed": "La modification n’a pas pu être enregistrée. Réessayez.",
     "elsewhereBrowser": "Cette étape s’exécute dans votre navigateur sur votre ordinateur, via l’extension stella. Ouvrez cette conversation dans stella sur celui-ci pour la terminer.",
     "elsewhereSecret": "Cette étape nécessite une clé. Par sécurité, les clés s’ajoutent dans stella sur votre ordinateur, pas dans l’app.",
     "elsewhereConnector": "Cette étape connecte une app. Par sécurité, les apps se connectent dans stella sur votre ordinateur, pas dans l’app.",
@@ -142,10 +146,10 @@
       "delete_reader_annotation": "Supprimer le surlignage ou le commentaire",
       "delete_task": "Supprimer la tâche",
       "delete_time_entry": "Supprimer l’entrée de temps",
-      "describe-stella-api": "Préparation de la recherche de données",
-      "describe-stella-function": "Préparation de la recherche de données",
+      "describe-stella-api": "Choix des sources à consulter",
+      "describe-stella-function": "Choix des sources à consulter",
       "describe_template": "Lecture des champs du modèle",
-      "discover_tools": "Préparation de la recherche de données",
+      "discover_tools": "Choix des sources à consulter",
       "execute-typescript": "Lecture des données du dossier",
       "execute_typescript": "Lecture des données du dossier",
       "expand-chat-history": "Lecture de l’historique des conversations",
@@ -185,6 +189,7 @@
       "save_document": "Enregistrer le document",
       "save_matter": "Enregistrer le dossier",
       "save_playbook": "Enregistrer le playbook",
+      "save_skill_package": "Enregistrer la compétence",
       "save_task": "Enregistrer la tâche",
       "save_template": "Enregistrer le modèle",
       "save_time_entry": "Enregistrer l’entrée de temps",
@@ -207,7 +212,13 @@
       "update_reader_annotation": "Modifier le surlignage ou le commentaire",
       "use-browser": "Utilisation de votre navigateur",
       "use_connector_secret": "Utilisation de l’identifiant du connecteur",
+      "validate_skill_package": "Vérifier la compétence",
       "web_search": "Recherche web"
+    },
+    "toolResearch": {
+      "caseLaw": "Recherche dans la jurisprudence",
+      "legislation": "Lecture de la législation",
+      "legislationAndCaseLaw": "Recherche dans la législation et la jurisprudence"
     },
     "localRun": {
       "title": {
@@ -251,15 +262,30 @@
       "sessionNotResumed": "L’agent de code de votre ordinateur n’a pas pu reprendre là où il s’était arrêté : il a donc poursuivi à partir des messages de cette conversation.",
       "steered": "Envoyé pendant que l’agent travaillait",
       "ranOnModel": "Exécuté avec {model}",
-      "desktopSettingsSteps": "Dans stella desktop sur votre ordinateur, ouvrez Paramètres › Général › Abonnements IA."
+      "desktopSettingsSteps": "Dans stella desktop sur votre ordinateur, ouvrez Paramètres › Général › Abonnements IA.",
+      "errorLimitResetsAt": "L’agent de code de votre ordinateur a atteint sa limite d’utilisation. Vous pourrez réessayer à partir du {time}.",
+      "limitReminderNotify": "Me prévenir une fois réinitialisée",
+      "limitReminderScheduled": "Nous vous préviendrons à partir du {time}.",
+      "limitResumeContinue": "Continuer automatiquement une fois réinitialisée",
+      "limitResumeScheduled": "Reprendra automatiquement à partir du {time}.",
+      "limitReminderCancel": "Annuler"
     },
     "processSummary": {
       "sourcesChecked": "{count, plural, one {# source vérifiée} other {# sources vérifiées} many {# sources vérifiées}}",
       "documentEdits": "{count, plural, one {# modification du document} other {# modifications du document} many {# modifications du document}}",
       "changesSaved": "{count, plural, one {# modification enregistrée} other {# modifications enregistrées} many {# modifications enregistrées}}",
-      "analyses": "{count, plural, one {# analyse} other {# analyses} many {# analyses}}"
+      "searchedLegislation": "Législation consultée",
+      "searchedCaseLaw": "Jurisprudence consultée",
+      "searchedLegislationAndCaseLaw": "Législation et jurisprudence consultées",
+      "readDocument": "Document lu",
+      "readDocuments": "Documents lus",
+      "searchedMatters": "Dossiers parcourus",
+      "checkedRegisters": "Registres publics vérifiés",
+      "searchedWeb": "Web consulté",
+      "searchedChats": "Historique des conversations consulté"
     },
     "stepCount": "{count, plural, one {# étape} other {# étapes} many {# étapes}}",
+    "lookupCount": "{count, plural, one {# requête} many {# requêtes} other {# requêtes}}",
     "reasoning": "Raisonnement",
     "historyTrimmed": "Les messages précédents n'ont pas pu être résumés : cette réponse ne tient compte que de la partie la plus récente de la conversation.",
     "failure": {
@@ -324,6 +350,39 @@
         "send-refused": "File d’attente en pause : le premier message n’a pas pu être envoyé. Modifiez-le ou retirez-le, puis reprenez.",
         "usage-limit": "File d’attente en pause : votre limite d’utilisation est atteinte. Reprenez une fois qu’elle sera réinitialisée.",
         "computer-away": "En attente de votre ordinateur : les messages en file d’attente partent dès qu’il se connecte."
+      }
+    },
+    "edit": {
+      "action": "Modifier",
+      "title": "Modifier le message",
+      "input": "Message modifié",
+      "notice": "L’envoi remplace ce message et tous les messages qui le suivent.",
+      "cancel": "Annuler",
+      "refused": "Impossible de modifier ce message. La conversation affiche maintenant ce qui est enregistré ; réessayez lorsqu’aucune réponse n’est en cours.",
+      "refusedHistoryChanged": "La conversation a changé pendant l’envoi de la modification. Elle affiche maintenant ce qui est enregistré ; renvoyez la modification.",
+      "refusedTargetMissing": "Ce message ne figure plus dans la conversation et ne peut donc pas être modifié.",
+      "localFiles": {
+        "computer": {
+          "failed": "L’annulation ne s’est pas terminée sur votre ordinateur. Certains fichiers ont peut-être déjà été modifiés ; vérifiez le dossier de la conversation.",
+          "folderBusy": "Une exécution sur votre ordinateur utilise ce dossier. Réessayez quand elle sera terminée.",
+          "noCheckpoint": "Votre ordinateur n’a pas de copie enregistrée des fichiers d’avant cette étape ; rien n’a été annulé.",
+          "updateForEarlier": "Mettez à jour stella desktop pour annuler les modifications de messages antérieurs."
+        },
+        "conversationRestarts": "L’agent repart du texte de cette conversation, car la réponse précédant ce message n’est pas allée à son terme.",
+        "expired": "Votre ordinateur n’a pas répondu à temps. Réessayez.",
+        "option": "Annuler aussi les modifications de fichiers depuis ce message",
+        "optionHint": "Les modifications que vous avez faites vous-même dans le dossier sont aussi annulées.",
+        "pending": "Annulation des modifications de fichiers sur votre ordinateur",
+        "refused": {
+          "alreadyUndone": "Ces modifications de fichiers ont déjà été annulées.",
+          "desktopOffline": "Votre ordinateur est hors ligne. Ouvrez l’application de bureau stella et réessayez.",
+          "desktopUpdateRequired": "L’application de bureau stella de votre ordinateur est trop ancienne pour annuler des modifications. Mettez-la à jour et réessayez.",
+          "folderShared": "Une autre conversation a travaillé dans ce dossier depuis ce message.",
+          "noSavedCopy": "Votre ordinateur n’a gardé aucune copie du dossier d’avant ce message : il était trop volumineux ou trop lent à enregistrer, ou des copies plus récentes l’ont remplacée.",
+          "severalFolders": "Des messages ultérieurs ont été traités sur un autre ordinateur ou dans un autre dossier.",
+          "threadBusy": "Une réponse est encore en cours dans cette conversation. Réessayez quand elle sera terminée."
+        },
+        "restored": "Modifications de fichiers annulées"
       }
     }
   },
@@ -484,6 +543,7 @@
     "title": "Document",
     "failedTitle": "Ce document n’a pas pu être ouvert",
     "failure": {
+      "dataBoxUnreadable": "Ce fichier n’a pu être lu ni comme message de boîte de données ni comme accusé de réception.",
       "offline": "Vous êtes hors ligne. Connectez-vous à Internet et réessayez.",
       "noFile": "Ce document n’a pas encore de fichier.",
       "failed": "Une erreur s’est produite à l’ouverture. Réessayez dans un instant.",
@@ -491,6 +551,7 @@
       "android": "Les documents ne peuvent pas encore être ouverts dans l’app Android."
     },
     "retry": "Réessayer",
+    "openOriginal": "Ouvrir l’original",
     "preview": "Ouvrir l’aperçu",
     "previewDescription": "Ce fichier s’ouvre dans l’aperçu du système.",
     "unrendered": "Ce document ne peut pas être affiché ici, mais l’aperçu du système pourra peut-être l’ouvrir.",
@@ -548,7 +609,28 @@
     "signOutFailed": "La déconnexion n’a pas pu aboutir. Réessayez.",
     "lockScreenTitle": "Écran verrouillé",
     "timerDetails": "Détails du minuteur",
-    "timerDetailsHint": "Quand un minuteur change sur un autre appareil, le service de notifications d'Apple affiche sa description et son dossier sur l'écran verrouillé. Désactivé, seul le temps s'affiche jusqu'à ce que vous ouvriez l'app."
+    "timerDetailsHint": "Quand un minuteur change sur un autre appareil, le service de notifications d'Apple affiche sa description et son dossier sur l'écran verrouillé. Désactivé, seul le temps s'affiche jusqu'à ce que vous ouvriez l'app.",
+    "dictationTitle": "Dictée",
+    "dictationModelDefault": "Par défaut",
+    "dictationModelDefaultNamed": "Par défaut ({model})",
+    "dictationModelOutsideRegion": "Hors de votre région",
+    "dictationModelRetainsData": "Conserve votre audio",
+    "dictationModelRetainsWarning": "Ce modèle fonctionne avec un compte sans conservation nulle des données. {provider} stocke l’audio et la transcription de tout ce que vous dictez selon ses propres conditions, hors du contrôle de stella. N’y dictez aucune information confidentielle ni aucune donnée client.",
+    "dictationModelHint": "Le modèle qui transforme votre dictée en texte. stella ne conserve pas l’audio.",
+    "dictationModelsUnavailable": "Les modèles n’ont pas pu être chargés. La dictée utilise le modèle choisi, ou celui par défaut si le serveur ne le propose plus.",
+    "dictationCleanup": "Corriger avec l’IA",
+    "dictationCleanupHint": "Corrige les erreurs de reconnaissance et la mise en forme dictée, comme « nouvelle ligne ». Seul le texte, pas l’audio, passe par stella vers le fournisseur d’IA de votre organisation ; stella ne le conserve pas."
+  },
+  "signedFile": {
+    "layer": "Couche de signatures {number, number}",
+    "noReadableContent": "Aucun contenu lisible ne peut être prévisualisé.",
+    "unknownSigner": "Signataire inconnu",
+    "unreadable": "Impossible de lire le fichier signé.",
+    "unverified": "Les signatures n’ont pas été vérifiées."
+  },
+  "structuredDocument": {
+    "noReadableContent": "Aucun texte lisible ne peut être affiché dans l’aperçu.",
+    "textOnly": "Aperçu du texte sans mise en page ni images."
   },
   "header": {
     "search": "Rechercher"

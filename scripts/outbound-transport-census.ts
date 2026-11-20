@@ -321,7 +321,7 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
     path: "apps/api/src/lib/chat/provider-data-policy.ts",
     class: "third-party",
     reason:
-      "Sends provider checks and completions to configured OpenRouter endpoints.",
+      "Sends provider checks, completions and transcriptions to configured OpenRouter and ElevenLabs endpoints.",
     transports: ["module:@stll/fetch"],
   },
   {
@@ -1079,6 +1079,13 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
     class: "package-owned-client",
     reason:
       "Standalone CLI stamps its client identity on API requests through the shared fetch owner.",
+    transports: ["global:fetch"],
+  },
+  {
+    path: "packages/cli/src/commands/update.ts",
+    class: "package-owned-client",
+    reason:
+      "Standalone CLI downloads verified release assets through a bounded injectable transport.",
     transports: ["global:fetch"],
   },
   {

@@ -1,4 +1,4 @@
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import {
   afterAll,
   afterEach,
@@ -131,7 +131,7 @@ describe.skipIf(!enabled)("Office evidence storage boundaries", () => {
           }
           hold.release();
         }
-        expect(await loading).toBeNull();
+        expect(Result.unwrap(await loading)).toBeNull();
         expect(await evidence()).toEqual([]);
         expect(
           analytics.exceptions().map(({ properties }) => properties),
@@ -168,12 +168,12 @@ describe.skipIf(!enabled)("Office evidence storage boundaries", () => {
     store.put(envBase.S3_BUCKET, fixture.key, bytes, XLSX_MIME_TYPE);
     const analytics = installRecordingAnalytics();
     try {
-      const first = await loadOfficeEvidence(fixture);
+      const first = Result.unwrap(await loadOfficeEvidence(fixture));
       expect(first?.format).toBe("xlsx");
       expect(first?.blocks.map(({ text }) => text).join("\n")).toContain(
         "Acme s.r.o.",
       );
-      expect(await loadOfficeEvidence(fixture)).toEqual(first);
+      expect(Result.unwrap(await loadOfficeEvidence(fixture))).toEqual(first);
       const rows = await evidence();
       expect(rows).toHaveLength(1);
       expect(rows.at(0)).toMatchObject({
