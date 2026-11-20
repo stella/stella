@@ -418,7 +418,7 @@ describe("publisher amendment snapshots", () => {
   );
 
   test("partial and stale channel snapshots cannot retract prior omitted links", async () => {
-    const write = (input: LegislationAmendmentSnapshot) =>
+    const write = async (input: LegislationAmendmentSnapshot) =>
       sync(sanitizeLegislationAmendments(input).unwrap());
     await write({
       channel: "bulk",
@@ -505,7 +505,7 @@ describe("publisher amendment snapshots", () => {
   });
 
   test("complete channel retraction retains disputed provenance until all channels retract", async () => {
-    const write = (
+    const write = async (
       channel: string,
       day: number,
       relations: LegislationAmendmentRelation[],

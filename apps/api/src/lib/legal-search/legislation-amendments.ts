@@ -531,7 +531,7 @@ const amendmentRowFromContributions = (
     compareCodeUnit(left.channel, right.channel),
   );
   const active = ordered.find((item) => item.status === "present");
-  if (active === undefined || active.status !== "present") {
+  if (active?.status !== "present") {
     return panic("Retained amendment has no active contribution");
   }
   const relation = active.relation;
