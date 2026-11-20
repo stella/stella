@@ -14,14 +14,7 @@ import {
 import { Button } from "@stll/ui/button";
 import { PlusIcon, Trash2Icon } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
-import {
-  List,
-  ListGroup,
-  ListGroupDescription,
-  ListGroupHeader,
-  ListGroupTitle,
-  ListItem,
-} from "@stll/ui/list";
+import { ListItem } from "@stll/ui/list";
 import {
   Select,
   SelectItem,
@@ -45,6 +38,11 @@ import type {
 import { SecretInput } from "@/components/secret-input";
 import { providerSetupGuidance } from "@/lib/errors/provider-setup-guidance";
 
+import {
+  AI_PROVIDER_ROW_LINE_CLASS,
+  AIProviderRowsFrame,
+} from "./ai-provider-rows.pending";
+
 export const AIProviderRows = ({
   providers,
   disabled,
@@ -55,67 +53,57 @@ export const AIProviderRows = ({
 }: AIProviderRowsProps) => {
   const t = useTranslations("organization.aiConfig");
   return (
-    <ListGroup>
-      <ListGroupHeader>
-        <div className="grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-0.5">
-          <ListGroupTitle>{t("providersPanel")}</ListGroupTitle>
-          <Button
-            variant="ghost"
-            size="sm"
-            disabled={disabled || getNextAvailableProvider(providers) === null}
-            onClick={() => {
-              const provider = getNextAvailableProvider(providers);
-              if (provider) {
-                onChange([
-                  ...providers,
-                  createProviderCredentialDraft(provider),
-                ]);
-              }
-            }}
-          >
-            <PlusIcon />
-            {t("addProvider")}
-          </Button>
-          <ListGroupDescription className="col-start-1">
-            {t("providersDescription")}
-          </ListGroupDescription>
-        </div>
-      </ListGroupHeader>
-      <List>
-        {providers.map((draft) => (
-          <AIProviderRow
-            key={draft.provider}
-            draft={draft}
-            disabled={disabled}
-            setupErrorCode={setupErrorCode}
-            removalImpact={
-              storedProviders.filter((provider) => provider.apiKeyMasked)
-                .length === 1
-                ? "configuration"
-                : "provider"
+    <AIProviderRowsFrame
+      addAction={
+        <Button
+          variant="ghost"
+          size="sm"
+          disabled={disabled || getNextAvailableProvider(providers) === null}
+          onClick={() => {
+            const provider = getNextAvailableProvider(providers);
+            if (provider) {
+              onChange([...providers, createProviderCredentialDraft(provider)]);
             }
-            dirty={hasProviderCredentialChanges({
-              draft,
-              stored: storedProviders.find(
-                (saved) => saved.provider === draft.provider,
+          }}
+        >
+          <PlusIcon />
+          {t("addProvider")}
+        </Button>
+      }
+    >
+      {providers.map((draft) => (
+        <AIProviderRow
+          key={draft.provider}
+          draft={draft}
+          disabled={disabled}
+          setupErrorCode={setupErrorCode}
+          removalImpact={
+            storedProviders.filter((provider) => provider.apiKeyMasked)
+              .length === 1
+              ? "configuration"
+              : "provider"
+          }
+          dirty={hasProviderCredentialChanges({
+            draft,
+            stored: storedProviders.find(
+              (saved) => saved.provider === draft.provider,
+            ),
+          })}
+          options={getAvailableProviderKeys({
+            currentProvider: draft.provider,
+            providers,
+          })}
+          onChange={(next) =>
+            onChange(
+              providers.map((candidate) =>
+                candidate.provider === draft.provider ? next : candidate,
               ),
-            })}
-            options={getAvailableProviderKeys({
-              currentProvider: draft.provider,
-              providers,
-            })}
-            onChange={(next) =>
-              onChange(
-                providers.map((candidate) =>
-                  candidate.provider === draft.provider ? next : candidate,
-                ),
-              )
-            }
-            onRemove={onRemove}
-          />
-        ))}
-      </List>
-    </ListGroup>
+            )
+          }
+          onRemove={onRemove}
+        />
+      ))}
+    </AIProviderRowsFrame>
   );
 };
 
@@ -177,7 +165,7 @@ function AIProviderRow({
   };
   return (
     <ListItem className="flex-col items-stretch">
-      <div className="flex min-w-0 flex-wrap items-center gap-2">
+      <div className={AI_PROVIDER_ROW_LINE_CLASS}>
         {editable ? (
           <Select
             value={draft.provider}

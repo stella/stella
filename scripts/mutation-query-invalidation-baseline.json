@@ -1084,7 +1084,7 @@
     "apps/web/src/routes/_protected.settings/-account.profile.page.tsx:ProfilePageBody:useQuery:reader": "Existing query reader pending migration to resourceQueryOptions resource metadata.",
     "apps/web/src/routes/_protected.settings/-account.profile.page.tsx:ProfilePageBody:useSuspenseQuery:reader": "Existing query reader pending migration to resourceQueryOptions resource metadata.",
     "apps/web/src/routes/_protected.settings/account.profile.tsx:Route/loader:ensureRouteQueryData:reader": "Existing query reader pending migration to resourceQueryOptions resource metadata.",
-    "apps/web/src/routes/_protected.settings/organization.ai.tsx:AIConfigPage/timeBillingEnabled:useTimeBillingPreviewEnabled:reader": "Existing query reader pending migration to resourceQueryOptions resource metadata.",
+    "apps/web/src/routes/_protected.settings/-organization.ai.page.tsx:AIConfigPage/timeBillingEnabled:useTimeBillingPreviewEnabled:reader": "Existing query reader pending migration to resourceQueryOptions resource metadata.",
     "apps/web/src/routes/_protected.settings/organization.ai.tsx:Route/loader:prefetchRouteQuery:reader": "Existing query reader pending migration to resourceQueryOptions resource metadata.",
     "apps/web/src/routes/_protected.settings/organization.audit-logs.tsx:Route/loader/fetchPage:prefetchRouteQuery:reader": "Existing query reader pending migration to resourceQueryOptions resource metadata.",
     "apps/web/src/routes/_protected.settings/organization.billing.tsx:Route/beforeLoad:isTimeBillingPreviewEnabled:reader": "Existing query reader pending migration to resourceQueryOptions resource metadata.",
