@@ -25,32 +25,52 @@ export type RedactionTombstoneScenario = {
 const SOURCE_ID = toSafeId<"caseLawSource">(
   "01890000-00d3-7000-8000-000000000000",
 );
-const PAGE_END = toSafeId<"caseLawDecision">(
-  "01890000-00d4-7000-8000-000000000050",
-);
-const CONTROL_ID = toSafeId<"caseLawDecision">(
-  "01890000-00d5-7000-8000-000000000001",
-);
+const COHORT_CODES = {
+  repair: 0,
+  "inline-raw": 1,
+  settled: 2,
+} as const satisfies Record<RedactionTombstoneScenario["cohort"], number>;
+const CONTROL_CASE_NUMBER = "Live control";
+
+/**
+ * Each population gets decision ids of its own. A measured run leaves desired
+ * projection states behind that only a retired generation may purge, so a
+ * population reusing the previous one's ids would start from its states.
+ */
+const populationIds = ({ rows, cohort }: RedactionTombstoneScenario) => {
+  const thousands = rows / 1000;
+  if (!Number.isInteger(thousands) || thousands < 1 || thousands > 0xff) {
+    return panic(
+      "Redaction measurement rows must be whole thousands up to 255,000",
+    );
+  }
+  const group = (0x80_00 + COHORT_CODES[cohort] * 0x1_00 + thousands)
+    .toString(16)
+    .padStart(4, "0");
+  return {
+    decisionPrefix: `01890000-00d4-7000-${group}-`,
+    controlId: toSafeId<"caseLawDecision">(
+      `01890000-00d5-7000-${group}-000000000001`,
+    ),
+    pageEnd: toSafeId<"caseLawDecision">(
+      `01890000-00d4-7000-${group}-000000000050`,
+    ),
+  };
+};
 const CONSTRAINT = "case_law_decisions_redacted_payload_erased";
 const LEASE = "query-perf-redaction";
 
 /** Restore historical rows only in the disposable measurement database. */
 export const seedRedactionTombstoneScenario = async (
   database: GatedTestDb,
-  { rows, cohort }: RedactionTombstoneScenario,
+  scenario: RedactionTombstoneScenario,
 ) => {
+  const { rows, cohort } = scenario;
+  const { decisionPrefix, controlId, pageEnd } = populationIds(scenario);
   await database.execute(
     sql`DELETE FROM scheduler_jobs WHERE id LIKE 'query-perf-redaction-background:%'`,
   );
   await database.execute(sql`DELETE FROM case_law_corpus_upload_intents WHERE decision_id IN
-    (SELECT id FROM case_law_decisions WHERE source_id = ${SOURCE_ID})`);
-  // Neither table references the decision, so deleting the source below
-  // leaves a measured run's desired states and signal changes behind; the
-  // next population reuses the same decision ids and would update them.
-  await database.execute(sql`DELETE FROM corpus_index_projection_states
-    WHERE family = 'case_law' AND entity_id IN
-      (SELECT id FROM case_law_decisions WHERE source_id = ${SOURCE_ID})`);
-  await database.execute(sql`DELETE FROM case_law_ranking_signal_changes WHERE decision_id IN
     (SELECT id FROM case_law_decisions WHERE source_id = ${SOURCE_ID})`);
   await database.execute(
     sql`DELETE FROM case_law_sources WHERE id = ${SOURCE_ID}`,
@@ -81,7 +101,7 @@ export const seedRedactionTombstoneScenario = async (
     await tx.execute(sql`INSERT INTO case_law_decisions
       (id, source_id, case_number, docket_family_key, country, court, language, fulltext, source_raw,
        text_s3_key, normalized_s3_key, ast_s3_key, redacted_at)
-      SELECT ('01890000-00d4-7000-8000-' || lpad(n::text, 12, '0'))::uuid,
+      SELECT (${decisionPrefix} || lpad(n::text, 12, '0'))::uuid,
         ${SOURCE_ID}::uuid, 'Measurement ' || n, NULL, 'CZE', 'Measurement court', 'cs',
         CASE WHEN n <= 50 AND ${cohort} = 'repair' THEN 'Rozhodnutí o náhradě nákladů.' ELSE NULL END,
         CASE WHEN n <= 50 AND ${cohort} <> 'settled' THEN
@@ -94,21 +114,21 @@ export const seedRedactionTombstoneScenario = async (
       FROM generate_series(1, ${rows}::integer) n`);
     await tx.execute(sql`INSERT INTO case_law_decisions
       (id, source_id, case_number, docket_family_key, country, court, language, fulltext, source_raw)
-      VALUES (${CONTROL_ID}, ${SOURCE_ID}, 'Live control', NULL, 'CZE', 'Measurement court', 'cs', 'Live text', 'Live publisher payload')`);
+      VALUES (${controlId}, ${SOURCE_ID}, ${CONTROL_CASE_NUMBER}, NULL, 'CZE', 'Measurement court', 'cs', 'Live text', 'Live publisher payload')`);
     await tx.execute(sql`INSERT INTO case_law_search_documents (decision_id, searchable_text)
       SELECT id, 'Searchable fixture text' FROM case_law_decisions WHERE source_id = ${SOURCE_ID}`);
     await tx.execute(sql`INSERT INTO case_law_corpus_upload_intents
       (id, decision_id, text_s3_key, normalized_s3_key, ast_s3_key, lease_expires_at, status, next_cleanup_at)
       SELECT ('01890000-00d6-7000-8000-' || lpad(n::text, 12, '0'))::uuid,
-        ('01890000-00d4-7000-8000-' || lpad(n::text, 12, '0'))::uuid,
+        (${decisionPrefix} || lpad(n::text, 12, '0'))::uuid,
         'fixture/reserved/text/' || n, 'fixture/reserved/sections/' || n, 'fixture/reserved/ast/' || n,
         '2026-01-01'::timestamptz, CASE WHEN ${cohort} = 'repair' THEN 'active' ELSE 'cleanup' END, CASE WHEN ${cohort} = 'repair' THEN NULL ELSE '2026-01-01'::timestamptz END FROM generate_series(1, ${rows}::integer) n`);
     await tx.execute(sql`INSERT INTO case_law_index_jobs (id, decision_id, operation, status, created_at)
       SELECT ('01890000-00d7-7000-8000-' || right(id::text, 12))::uuid, id, 'redact', 'succeeded', '2026-01-01'::timestamptz
-      FROM case_law_decisions WHERE source_id = ${SOURCE_ID} AND id <> ${CONTROL_ID}`);
+      FROM case_law_decisions WHERE source_id = ${SOURCE_ID} AND id <> ${controlId}`);
     await tx.execute(sql`INSERT INTO case_law_index_jobs (id, decision_id, operation, status, created_at)
       SELECT ('01890000-00d8-7000-8000-' || right(id::text, 12))::uuid, id, 'redact', 'succeeded', '2026-01-02'::timestamptz
-      FROM case_law_decisions WHERE source_id = ${SOURCE_ID} AND id <= ${PAGE_END}`);
+      FROM case_law_decisions WHERE source_id = ${SOURCE_ID} AND id <= ${pageEnd}`);
     await tx.execute(
       sql`ALTER TABLE case_law_decisions ADD CONSTRAINT case_law_decisions_redacted_payload_erased ${sql.raw(definition)} NOT VALID`,
     );
@@ -146,7 +166,8 @@ export const seedRedactionTombstoneScenario = async (
         },
       });
   });
-  // Every population starts from the same unprocessed state.
+  // Every population starts unprocessed: no desired state or signal change of
+  // an earlier run may name its decisions.
   const leftovers = v.parse(
     v.object({ states: v.number(), signals: v.number() }),
     executedRows(
@@ -186,39 +207,64 @@ export const redactionTombstonePageCompleted = async (
         .from(schedulerJobs)
         .where(eq(schedulerJobs.id, REDACTION_TOMBSTONE_BACKFILL_JOB_ID))
     ).at(0) ?? panic("Missing measured redaction job");
+  // The seeded population names its own ids: the control row by its case
+  // number, and the page as the first fifty audited decisions.
+  const controlId =
+    (
+      await database
+        .select({ id: caseLawDecisions.id })
+        .from(caseLawDecisions)
+        .where(
+          sql`${caseLawDecisions.sourceId} = ${SOURCE_ID} AND ${caseLawDecisions.caseNumber} = ${CONTROL_CASE_NUMBER}`,
+        )
+        .limit(1)
+    ).at(0)?.id ?? panic("Missing redaction measurement control");
+  const pageEnd =
+    (
+      await database
+        .select({ id: caseLawDecisions.id })
+        .from(caseLawDecisions)
+        .where(
+          sql`${caseLawDecisions.sourceId} = ${SOURCE_ID} AND ${caseLawDecisions.id} <> ${controlId}`,
+        )
+        .orderBy(caseLawDecisions.id)
+        .limit(1)
+        .offset(49)
+    ).at(0)?.id ?? panic("Missing redaction measurement page");
   const repaired = await database.$count(
     caseLawDecisions,
-    sql`${caseLawDecisions.sourceId} = ${SOURCE_ID} AND ${caseLawDecisions.id} <= ${PAGE_END} AND ${caseLawDecisions.redactedAt} = '2026-01-02'::timestamptz`,
+    sql`${caseLawDecisions.sourceId} = ${SOURCE_ID} AND ${caseLawDecisions.id} <= ${pageEnd} AND ${caseLawDecisions.redactedAt} = '2026-01-02'::timestamptz`,
   );
   const pointers = await database.$count(
     caseLawCorpusUploadIntents,
-    sql`${caseLawCorpusUploadIntents.decisionId} <= ${PAGE_END} AND ${caseLawCorpusUploadIntents.textS3Key} LIKE 'fixture/text/%' AND ${caseLawCorpusUploadIntents.status} = 'cleanup'`,
+    sql`${caseLawCorpusUploadIntents.decisionId} <= ${pageEnd} AND ${caseLawCorpusUploadIntents.textS3Key} LIKE 'fixture/text/%' AND ${caseLawCorpusUploadIntents.status} = 'cleanup'`,
   );
   const activeReservations = await database.$count(
     caseLawCorpusUploadIntents,
     sql`${caseLawCorpusUploadIntents.status} = 'active' AND ${caseLawCorpusUploadIntents.decisionId} IN
-    (SELECT id FROM case_law_decisions WHERE source_id = ${SOURCE_ID} AND id <= ${PAGE_END})`,
+    (SELECT id FROM case_law_decisions WHERE source_id = ${SOURCE_ID} AND id <= ${pageEnd})`,
   );
   return (
     activeReservations === 0 &&
     pointers === repaired &&
-    job.payload?.["cursor"] === PAGE_END &&
+    job.payload?.["cursor"] === pageEnd &&
     executedRows(
       await database.execute(sql`SELECT 1 FROM case_law_decisions
-      WHERE source_id = ${SOURCE_ID} AND id <= ${PAGE_END}
+      WHERE source_id = ${SOURCE_ID} AND id <= ${pageEnd}
         AND (redacted_at IS NULL OR source_raw IS NOT NULL OR fulltext IS NOT NULL OR text_s3_key IS NOT NULL OR normalized_s3_key IS NOT NULL OR ast_s3_key IS NOT NULL)`),
     ).length === 0 &&
     (await database.$count(
       caseLawSearchDocuments,
-      sql`${caseLawSearchDocuments.decisionId} <= ${PAGE_END}`,
+      sql`${caseLawSearchDocuments.decisionId} IN
+      (SELECT id FROM case_law_decisions WHERE source_id = ${SOURCE_ID} AND id <= ${pageEnd})`,
     )) === 0 &&
     (await database.$count(
       caseLawDecisions,
-      sql`${caseLawDecisions.id} = ${CONTROL_ID} AND ${caseLawDecisions.sourceRaw} = 'Live publisher payload'`,
+      sql`${caseLawDecisions.id} = ${controlId} AND ${caseLawDecisions.sourceRaw} = 'Live publisher payload'`,
     )) === 1 &&
     (await database.$count(
       caseLawSearchDocuments,
-      eq(caseLawSearchDocuments.decisionId, CONTROL_ID),
+      eq(caseLawSearchDocuments.decisionId, controlId),
     )) === 1
   );
 };

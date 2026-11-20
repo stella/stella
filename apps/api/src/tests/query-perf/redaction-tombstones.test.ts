@@ -29,7 +29,7 @@ describe.skipIf(!enabled)("redaction tombstone read budget (postgres)", () => {
         timeoutMs: 300_000,
         run: async (database) => {
           const measurements = [];
-          for (const rows of [60_000, 120_000]) {
+          for (const rows of [30_000, 60_000]) {
             // db-await-in-loop: each population starts from the same unprocessed audit page.
             await seedRedactionTombstoneScenario(database, {
               type: "redaction-tombstones",

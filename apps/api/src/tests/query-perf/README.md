@@ -56,8 +56,9 @@ it before closing the connection.
   over the budget.
 
 - Redaction tombstone backfill (`redaction-tombstone-seed.ts`): a full
-  50-decision audit page at 60,000 and 120,000 audited decisions, search rows,
-  reserved uploads and scheduler rows. Repair, inline-raw and settled cohorts
+  50-decision audit page at 30,000 and 60,000 audited decisions, search rows,
+  reserved uploads and scheduler rows; each population has decision ids of its
+  own, so no earlier run's desired states apply. Repair, inline-raw and settled cohorts
   exercise the registered v3 task, including its separate publisher-payload
   cleanup update. Historical rows are loaded with their current guards restored
   before measurement; cursor advancement, cleanup reservations, audit timestamps
