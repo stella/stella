@@ -2461,6 +2461,9 @@ export const createAuth = (
           },
           // Aborting here, before Better Auth sets any cookie, issues neither
           // a session token nor a cached session snapshot for the session.
+          // Better Auth runs create.after hooks once the transaction that
+          // wrote the row commits, so the owner connection sees the account
+          // an SSO callback created with the session in that transaction.
           after: async (session, ctx) => {
             const ended = await endSessionWithoutLinkedAccount({
               requirement: await sessionLinkedAccountRequirement(ctx),
