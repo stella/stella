@@ -17,7 +17,12 @@ type Job = {
   html_url: string;
   status?: string;
   runner_name?: string;
-  steps?: { number: number; name: string; conclusion: string }[];
+  steps?: {
+    number: number;
+    name: string;
+    conclusion: string;
+    status?: string;
+  }[];
 };
 
 const pages: Job[][] = [

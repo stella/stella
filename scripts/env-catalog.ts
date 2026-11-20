@@ -1812,6 +1812,9 @@ export const TOOLING_ENV_KEYS = new Set([
   "HEAVY_ONLY",
   // The dispatched cancel-after-job run: the failed job it waits for.
   "JOB_ID",
+  // Merge-group cancel step: its own job.status, so a job that failed itself
+  // hands off its cancellation before the jobs API lists the failed step.
+  "JOB_STATUS",
   // Scheduled journey checks: endpoint overrides, bounded request/retry timing,
   // and the clock and busy windows file the coverage check reads (fixtures pin them).
   "JOURNEY_BUSY_WINDOWS_FILE",
