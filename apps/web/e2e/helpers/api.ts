@@ -98,6 +98,23 @@ export const apiPut = async <T = unknown>(
   return (await response.json()) as T;
 };
 
+export const apiPost = async <T = unknown>(
+  request: APIRequestContext,
+  path: string,
+  body: Json,
+): Promise<T> => {
+  const response = await request.post(url(path), {
+    data: body,
+    timeout: API_REQUEST_TIMEOUT_MS,
+  });
+  if (!response.ok()) {
+    throw new Error(
+      `POST ${path} -> ${String(response.status())}: ${await response.text()}`,
+    );
+  }
+  return (await response.json()) as T;
+};
+
 export const apiDelete = async (
   request: APIRequestContext,
   path: string,

@@ -3,9 +3,10 @@ import { expect, test } from "bun:test";
 const source = await Bun.file(
   new URL("view-switcher.tsx", import.meta.url),
 ).text();
-// The strip and its tabs live in the face module, which the switcher renders.
+// The strip and its tabs live in the light strip module, which the switcher
+// renders through the face module.
 const faceSource = await Bun.file(
-  new URL("view-switcher-face.tsx", import.meta.url),
+  new URL("view-strip.tsx", import.meta.url),
 ).text();
 const manifest: {
   peerDependencies: Record<string, string>;

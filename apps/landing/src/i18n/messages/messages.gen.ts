@@ -780,6 +780,7 @@ type Messages = {
       };
     };
     "ui": {
+      "browseLaw": "Browse the public legal database";
       "capabilities": "Capabilities";
       "exploreMore": "Explore more";
       "faq": "FAQ";

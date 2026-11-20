@@ -247,6 +247,11 @@ export type HarnessFailure =
    * longer than a turn may wait; the turn ends instead of waiting on.
    */
   | { type: "retry_stalled"; message: string }
+  /**
+   * The turn waited on a model request with nothing from the harness for
+   * longer than a turn may wait: the request is not being answered.
+   */
+  | { type: "request_unanswered"; message: string }
   /** The harness could not reach stella's MCP server, so it has none of
    *  stella's tools; the turn does not run without them. */
   | { type: "tools_unavailable"; message: string };
@@ -309,5 +314,6 @@ export const HARNESS_FAILURE_OUTCOME = {
   protocol_violation: "failed",
   sandbox_unavailable: "failed",
   retry_stalled: "failed",
+  request_unanswered: "failed",
   tools_unavailable: "failed",
 } as const satisfies Record<HarnessFailure["type"], DesktopRunnerRunOutcome>;

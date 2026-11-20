@@ -23,7 +23,7 @@ import { cn } from "@stll/ui/utils";
 
 import Tooltip from "@/components/tooltip";
 import { UserIdentityAvatar } from "@/components/user-avatar";
-import { TEMPLATE_ROW_SPACING } from "@/features/knowledge/views/templates/templates-seam";
+import { TEMPLATE_ROW_SPACING } from "@/features/knowledge/views/templates/template-list-shape";
 import type {
   KnowledgeTemplate,
   TemplateDensity,

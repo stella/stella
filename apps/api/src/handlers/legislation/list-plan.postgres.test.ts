@@ -276,7 +276,7 @@ describe.skipIf(!enabled)(
                         legislationDocuments.versionValidFrom,
                         sql`DATE '2010-01-01' + ${VERSIONS - 1}::integer`,
                       ),
-                      actYearCondition(Number(year)),
+                      actYearCondition(Number(year), fixture.country),
                     ),
                   )
                   .limit(PAGE_SIZE + 1);

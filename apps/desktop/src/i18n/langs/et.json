@@ -36,7 +36,11 @@
     "sessionOpeningInOffice": "Avamine Office'is",
     "sessionSavingDraft": "Mustandi salvestamine",
     "reconnectAccount": "Ühenda stella webiga uuesti…",
-    "transcribeRecording": "Transkribeeri salvestis…"
+    "transcribeRecording": "Transkribeeri salvestis…",
+    "dictation": "Dikteerimine",
+    "dictationHint": "Dikteerimiseks hoidke all {key}",
+    "dictationSettings": "Dikteerimise seaded…",
+    "dictationTurnOn": "Lülita dikteerimine sisse…"
   },
   "notification": {
     "checkpointDelayedBody": "{fileName}: muudatused jäävad kohalikuks ja proovitakse automaatselt uuesti",
@@ -697,7 +701,8 @@
       "focusUnconfirmed": "stella ei suutnud kinnitada, milline rakendus on fookuses, seega midagi ei sisestatud. Proovige uuesti.",
       "shortcutHeld": "Vabastage otsetee klahvid, et teksti saaks sisestada. Midagi ei sisestatud; proovige uuesti.",
       "passwordField": "Fookuses on paroolivali, seega dikteeritut ei säilitatud ega sisestatud.",
-      "cloudTranscription": "stella AI ei suutnud seda dikteerimist teisendada ja kõnemudelit pole selles arvutis. Proovige uuesti või valige „Teisenda kasutades“ all „Seda arvutit“ ja laadige mudel alla."
+      "cloudTranscription": "stella AI ei suutnud seda dikteerimist teisendada ja kõnemudelit pole selles arvutis. Proovige uuesti või valige „Teisenda kasutades“ all „Seda arvutit“ ja laadige mudel alla.",
+      "nothingHeard": "stella ei kuulnud kõnet. Kontrollige heliseadetes sisendseadet."
     },
     "failureKeptInHistory": "Tekst on lõikelaua ajaloos.",
     "transcribeRecording": {
@@ -705,6 +710,38 @@
       "description": "Muudab kuni 4 tunni pikkuse diktofonifaili, häälmärkme või koosoleku salvestise tekstiks.",
       "open": "Ava",
       "failed": "Akent ei õnnestunud avada. Proovige uuesti."
+    },
+    "notice": {
+      "title": "stella ei kuule teie mikrofoni",
+      "allowBody": "Lubage juurdepääs mikrofonile ja proovige uuesti.",
+      "checkBodyMac": "Kontrollige mikrofoni juurdepääsu süsteemiseadetes ja proovige uuesti.",
+      "checkBodyPc": "Kontrollige mikrofoni juurdepääsu Windowsi sätetes ja proovige uuesti.",
+      "allow": "Luba mikrofon",
+      "openSettingsMac": "Ava süsteemiseaded",
+      "openSettingsPc": "Ava sätted",
+      "dismiss": "Sulge",
+      "nothingTitle": "stella ei kuulnud kõnet",
+      "nothingBody": "Rääkige klahvi all hoides või valige heliseadetes muu sisend.",
+      "inputDevice": "Sisend: {device}",
+      "openSoundMac": "Ava heliseaded",
+      "openSoundPc": "Ava heliseaded",
+      "missingTitle": "{missing} pole ühendatud",
+      "missingBody": "Dikteerimine kasutab selle asemel seadet {device}.",
+      "chooseMicrophone": "Vali mikrofon…"
+    },
+    "microphone": {
+      "title": "Mikrofon",
+      "hint": "Bluetooth-peakomplektid vajavad mikrofonile lülitumiseks hetke ja salvestavad madalama kvaliteediga. Sisseehitatud mikrofon on tavaliselt selgem.",
+      "systemDefault": "Süsteemi vaikimisi",
+      "systemDefaultNamed": "Süsteemi vaikimisi ({name})",
+      "bluetoothDevice": "{name} · Bluetooth",
+      "notConnected": "{name} (pole ühendatud)",
+      "test": "Testi mikrofoni",
+      "stopTest": "Peata",
+      "level": "Sisendi tase",
+      "hearing": "Kuuleme teid.",
+      "noSound": "Seadmest {device} ei tule heli.",
+      "checkAccess": "Kontrolli mikrofoni juurdepääsu"
     },
     "preview": {
       "label": "Seni dikteeritud tekst",
@@ -809,8 +846,8 @@
     "permissionsTitlePc": "Seadistage see arvuti",
     "permissionsBody": "Iga õigus on teie valik. Saate neid hiljem seadetes muuta.",
     "neverRequested": "Ei küsita kunagi:",
-    "tryTitle": "Proovige kohe",
-    "tryBody": "Kopeerige mis tahes tekst ja vajutage siis {shortcut}.",
+    "tryTitle": "Proovige lõikelaua ajalugu",
+    "tryBody": "Kopeerige mis tahes tekst ja vajutage {shortcut}, et avada lõikelaua ajalugu.",
     "tryWaiting": "Ootan otseteed",
     "tryKeepGoing": "Jätkake…",
     "tryExtraModifier": "See on {pressed}. Kasutage otseteed {shortcut}.",
@@ -832,18 +869,60 @@
     "introduceActivityTitle": "Uus: tegevuste ajajoon",
     "introduceActivityBody": "Tegevused on nüüd teie kontol saadaval. Midagi ei salvestata enne, kui käivitate selle tegevuste aknas.",
     "openActivity": "Ava tegevused",
-    "dictationModel": "Kõnemudel ({size} MB) laaditakse alla üks kord ja see töötab selles arvutis.",
-    "dictationTurnOn": "Lülita sisse ja laadi alla",
     "dictationDownloadContinues": "Võite jätkata. Allalaadimine jätkub taustal.",
-    "dictationReady": "Dikteerimine on sees ja valmis.",
-    "dictationTryLabel": "Dikteerige siia",
-    "dictationTryPlaceholder": "Klõpsake siia, hoidke all {shortcut} ja öelge üks lause.",
-    "dictationListening": "Kuulan…",
-    "dictationTranscribing": "Kirjutan üles, mida ütlesite…",
     "dictationMicrophone": "Nii kuuleb stella teid, kuni hoiate kiirklahvi all.",
     "dictationAccessibility": "Nii kirjutab stella öeldu rakendusse, mida praegu kasutate.",
     "dictationFailed": "stella desktop ei saanud dikteerimist sisse lülitada. Proovige uuesti.",
     "introduceDictationTitle": "Uus: dikteerimine",
+    "dictationSetup": {
+      "progress": "Samm {current}/{total}",
+      "skipRest": "Jäta ülejäänu vahele",
+      "screens": {
+        "microphone": "Mikrofon",
+        "transcription": "Transkribeerimine",
+        "app": "Parandus",
+        "context": "Kontekst",
+        "words": "Sõnad"
+      },
+      "microphone": {
+        "title": "Laske stellal end kuulda",
+        "body": "Hoidke all {shortcut} ja rääkige, tekst ilmub sinna, kuhu kirjutate. Kõigepealt lubage mikrofon, et stella teid kuuleks.",
+        "bodyMac": "Hoidke all {shortcut} ja rääkige, tekst ilmub sinna, kuhu kirjutate. Kõigepealt lubage mikrofon, et stella teid kuuleks, ja Juurdepääsetavus, et ta saaks teksti sisestada.",
+        "choose": "Dikteerimise mikrofon"
+      },
+      "transcription": {
+        "title": "Kus teie kõnet transkribeerida?",
+        "body": "Saate seda hiljem seadetes muuta.",
+        "titleLocal": "Teie kõnet transkribeeritakse selles arvutis",
+        "bodyLocal": "Kõnemudel töötab siin, nii et dikteerimine töötab ka võrguühenduseta.",
+        "localTitle": "Selles arvutis",
+        "localBody": "Töötab võrguühenduseta. Teie heli ei lahku kunagi sellest arvutist.",
+        "localModel": "Vajab kõnemudelit ({size} MB), mis laaditakse alla üks kord.",
+        "cloudTitle": "stella AI",
+        "cloudBody": "Midagi pole vaja alla laadida. Teie heli saadetakse stellale ja stella tehisintellekti teenusepakkuja kaudu valitud mudeli pakkujale. stella seda ei salvesta."
+      },
+      "app": {
+        "title": "Rakendusele sobiv tekst",
+        "body": "Tehisintellekti parandus oskab kirjutada rakenduse jaoks, kuhu dikteerite: e-kiri kõlab nagu e-kiri ja vestlussõnum nagu vestlussõnum.",
+        "sentAppKind": "Talle öeldakse rakenduse liik, näiteks e-post, vestlus või dokument, mitte rakenduse nimi.",
+        "notStored": "stella ei salvesta sellest midagi.",
+        "off": "Ilma paranduseta sisestatakse tekst nii, nagu see transkribeeriti, ja midagi ei lähe tehisintellekti parandusse."
+      },
+      "context": {
+        "title": "Rohkem konteksti parandusele",
+        "body": "Valikuline ja välja lülitatud, kuni selle sisse lülitate. Loetakse ainult dikteerimise alustamisel ja läheb ainult tehisintellekti parandusse. stella ei salvesta sellest midagi."
+      },
+      "words": {
+        "title": "Õpetage stellale oma sõnu",
+        "body": "Lisage nimed ja terminid, mida stella peaks kirjutama teie moodi, näiteks teie büroo, teie kliendid või teise keele terminid. Teie loend on alguses tühi.",
+        "examplesLabel": "Ideed:",
+        "examples": {
+          "firm": "Teie büroo nimi",
+          "client": "Kliendi nimi",
+          "term": "Termin, mida kasutate"
+        }
+      }
+    },
     "guideWaiting": "Lülitage ülal loendis sisse stella desktop, et lubada juurdepääsetavus.",
     "guideAllowed": "stella desktop on lubatud",
     "never": {

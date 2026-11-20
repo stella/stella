@@ -472,6 +472,8 @@ type ConnectFailure = {
     | "start_rejected"
     | "sandbox_unavailable";
   message: string;
+  /** The CLI did not answer a startup request in time: a slow start. */
+  timedOut?: true;
 };
 
 type ConnectOptions = {
@@ -554,7 +556,13 @@ const connect = async ({
   }
   return Result.err(
     Result.isError(initialized)
-      ? { reason: "harness_unavailable", message: initialized.error.message }
+      ? {
+          reason: "harness_unavailable",
+          message: initialized.error.message,
+          ...(initialized.error.reason === "timed_out"
+            ? { timedOut: true as const }
+            : {}),
+        }
       : {
           reason: "protocol_violation",
           message: "The harness answered initialize with an unexpected shape.",
@@ -797,7 +805,16 @@ type OpenedSession = {
 };
 type OpenFailure =
   | { type: "connect"; failure: ConnectFailure }
-  | { type: "start"; error: HarnessStartError };
+  | { type: "start"; error: HarnessStartError; timedOut?: true };
+
+/**
+ * The CLI was started but missed a startup deadline: a first launch after an
+ * update, or a busy computer. Worth one more start; a refusal is not.
+ */
+const startTimedOut = (failure: OpenFailure) =>
+  failure.type === "connect"
+    ? failure.failure.timedOut === true
+    : failure.timedOut === true;
 
 /** A turn's session on `cli`, which hands it the process's messages. */
 const turnSession = (
@@ -855,10 +872,15 @@ const openSession = async (
   session.attach(client);
   const fail = async (
     error: HarnessStartError,
+    timedOut = false,
   ): Promise<Result<OpenedSession, OpenFailure>> => {
     session.abandon();
     await client.kill();
-    return Result.err({ type: "start", error });
+    return Result.err({
+      type: "start",
+      error,
+      ...(timedOut ? { timedOut: true as const } : {}),
+    });
   };
   if (authOf(init).type === "signed_out") {
     return fail(
@@ -899,6 +921,7 @@ const openSession = async (
         reason: "start_rejected",
         message: "The harness could not connect to the stella MCP server.",
       }),
+      Result.isError(registered) && registered.error.reason === "timed_out",
     );
   }
   return Result.ok({ session, client, cli });
@@ -907,7 +930,10 @@ const openSession = async (
 const startError = (failure: OpenFailure): HarnessStartError =>
   failure.type === "start"
     ? failure.error
-    : new HarnessStartError(failure.failure);
+    : new HarnessStartError({
+        reason: failure.failure.reason,
+        message: failure.failure.message,
+      });
 
 /**
  * The session a new process opens for `request`, and what the turn reports
@@ -956,6 +982,12 @@ const openTurn = async (
   });
   let { target, continuation } = openingOf(input.continuation, fresh);
   let opened = await openSession(options, input, target, skills);
+  // One more start after a slow one, on the same continuation: a session the
+  // first start was opening gets ids of its own again.
+  if (Result.isError(opened) && startTimedOut(opened.error)) {
+    ({ target, continuation } = openingOf(input.continuation, fresh));
+    opened = await openSession(options, input, target, skills);
+  }
   if (
     Result.isError(opened) &&
     target.type !== "fresh" &&

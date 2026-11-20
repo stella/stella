@@ -1,3 +1,4 @@
+// parser-output-unchanged: adds an explicit exact-document recovery capability; standing crawl and stored replay outputs are unchanged.
 // parser-output-unchanged: source-fields-cz: Inventory-only target changes leave parsed decisions unchanged.
 // parser-output-unchanged: [cz-ns] replay reads identity from the stored listing row where the envelope keeps one; every row that replayed before builds the same decision.
 // parser-output-unchanged: [cz-ns] the legacy identity fields decide which row a document writes to; the parsed output is unchanged.
@@ -61,6 +62,7 @@ import {
   encodeSourceRawEnvelope,
   excludedSourceSurface,
   PUBLISHER_REQUEST,
+  readStoredRawListing,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
   SOURCE_TOTAL_PROBE_FAILURE,
   sourceTotalProbeFailed,
@@ -577,6 +579,21 @@ const parseDetailPage = (html: string): Record<string, string | undefined> => ({
   fulltext: extractFulltext(html),
 });
 
+/** A labelled docket is identity evidence even when inline markup changes. */
+const statedDetailDocket = (html: string): string | undefined => {
+  for (const match of html.matchAll(/<tr\b[^>]*>(?<row>[\s\S]*?)<\/tr>/giu)) {
+    const cells = [
+      ...(match.groups?.["row"] ?? "").matchAll(CZ_NS_CELL_RE),
+    ].map((cell) => stripHtml(cell.groups?.["cell"] ?? "").trim());
+    for (const [index, label] of cells.entries()) {
+      if (label === "Spisová značka:") {
+        return cells.at(index + 1);
+      }
+    }
+  }
+  return undefined;
+};
+
 /** One decision as the publisher lists it, whichever listing named it. */
 export type CzNsListingRow = {
   /** Domino universal id: the last path segment of the document's own URL. */
@@ -817,6 +834,7 @@ const buildCzNsDecisionFromPages = ({
 export const buildCzNsDecision = async (
   row: CzNsListingRow,
   signal?: AbortSignal,
+  requestOrder: "parallel" | "sequential" = "parallel",
 ): Promise<CzNsBuildResult> => {
   const fields = czNsIdentityFields(row);
   if (fields === null) {
@@ -827,27 +845,37 @@ export const buildCzNsDecision = async (
   const webUrl = `${BASE_URL}/WebSearch/${unid}?openDocument`;
   const printUrl = `${BASE_URL}/WebPrint/${unid}?openDocument`;
 
-  // Detail and print pages in parallel; the pair is one document's worth of
-  // work.
-  const [detail, print] = await Promise.all([
-    readPublisherText(webUrl, {
+  const readDetail = async () =>
+    await readPublisherText(webUrl, {
       fetchStage: "document",
       adapterKey: ADAPTER_KEYS.CZ_NS,
       signal,
       headers: COMMON_HEADERS,
       timeoutMs: ADAPTER_TIMEOUT.REQUEST,
       refusalScope: "document",
-    }),
-    readPublisherText(printUrl, {
+    });
+  const readPrint = async () =>
+    await readPublisherText(printUrl, {
       fetchStage: "document",
       adapterKey: ADAPTER_KEYS.CZ_NS,
       signal,
       headers: COMMON_HEADERS,
       timeoutMs: ADAPTER_TIMEOUT.REQUEST,
-      // The AST's source: a refusal withholds the document, not a part.
       refusalScope: "document",
-    }),
-  ]);
+    });
+  // Recovery serializes the pair; the standing crawl retains its read order.
+  const [detail, print] =
+    requestOrder === "sequential"
+      ? await (async () => {
+          const selectedDetail = await readDetail();
+          return [
+            selectedDetail,
+            selectedDetail.type === "present"
+              ? await readPrint()
+              : selectedDetail,
+          ] as const;
+        })()
+      : await Promise.all([readDetail(), readPrint()]);
 
   switch (detail.type) {
     case "present":
@@ -1763,6 +1791,47 @@ const recaptureCzNsStoredRaw = ({
 
 export const czNsAdapter = defineSourceAdapter({
   documentStage: "inline",
+  buildStoredDocument: async ({ stored, signal }) => {
+    const read = readStoredRawListing({
+      stored,
+      part: CZ_NS_RAW_PART.LISTING,
+      identityOf: (listing) =>
+        typeof listing["unid"] === "string" ? listing["unid"] : undefined,
+    });
+    if (read.type === "rejected") {
+      return { type: "incomplete-locator", detail: read.detail };
+    }
+    if (
+      !isCzNsListingRow(read.listing) ||
+      !listsStoredDocket(read.listing, stored)
+    ) {
+      return {
+        type: "incomplete-locator",
+        detail:
+          "Stored NS listing does not name the complete selected identity",
+      };
+    }
+    const outcome = await buildCzNsDecision(read.listing, signal, "sequential");
+    if (outcome.type === "built" && outcome.decision.sourceRaw !== undefined) {
+      const fresh = decodeSourceRawEnvelope(outcome.decision.sourceRaw);
+      const detail = fresh?.[CZ_NS_RAW_PART.DETAIL];
+      const stated =
+        detail === undefined ? undefined : statedDetailDocket(detail);
+      if (
+        stated !== undefined &&
+        !caseNumbersOf(read.listing).includes(stated)
+      ) {
+        return {
+          type: "incomplete-locator",
+          detail:
+            "Fresh NS detail states a different docket from the selected listing",
+        };
+      }
+    }
+    return outcome.type === "detail-unavailable"
+      ? { type: "detail-unavailable" }
+      : outcome;
+  },
   key: ADAPTER_KEYS.CZ_NS,
   sourceSurfaces: CZ_NS_SOURCE_SURFACES,
   sourceFields: {

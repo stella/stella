@@ -60,3 +60,14 @@ export const QueryViewFeedback = <TData, TError>({
     </div>
   );
 };
+
+/**
+ * A read's feedback once it has settled: nothing while it is on its way,
+ * where the region's own pending view (placeholder rows, a page's pending
+ * phase) already stands in for what it fills, then a failure as
+ * `QueryViewFeedback` shows it.
+ */
+export const SettledQueryViewFeedback = <TData, TError>({
+  view,
+}: QueryViewFeedbackProps<TData, TError>) =>
+  view.type === "pending" ? null : <QueryViewFeedback view={view} />;

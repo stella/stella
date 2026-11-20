@@ -212,6 +212,11 @@
       "validate_skill_package": "Készség ellenőrzése",
       "web_search": "Keresés az interneten"
     },
+    "toolResearch": {
+      "caseLaw": "Keresés az ítélkezési gyakorlatban",
+      "legislation": "Jogszabályok olvasása",
+      "legislationAndCaseLaw": "Keresés a jogszabályokban és az ítélkezési gyakorlatban"
+    },
     "localRun": {
       "title": {
         "sign_in": "A folytatáshoz jelentkezzen be",

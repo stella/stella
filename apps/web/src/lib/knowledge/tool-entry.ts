@@ -1,8 +1,9 @@
 /**
- * `/knowledge/tools/$entry` names either an organization's skill or a tool in
- * the published catalogue. The two never share a name: skill ids are UUIDs,
- * catalogue slugs are lowercase kebab-case and the catalogue refuses a
- * UUID-shaped one.
+ * `/knowledge/tools/$entry` names a tool in the published catalogue; an
+ * organization's skill lives at `/knowledge/tools/skills/$skillId`, and a
+ * skill id at the first address (where skills once lived) is sent there. The
+ * two never share a name: skill ids are UUIDs, catalogue slugs are lowercase
+ * kebab-case and the catalogue refuses a UUID-shaped one.
  */
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu;

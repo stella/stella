@@ -110,6 +110,11 @@ export const COLLECTION_PART_COLUMN_GRANTS_BY_RELATION = {
   },
 } as const satisfies PublicLawColumnGrantsByRelation;
 
+/** Permit genuine source observation time before the reader starts selecting it. */
+export const COLLECTION_OBSERVATION_COLUMN_GRANTS_BY_RELATION = {
+  case_law_published_decisions: { source_observed_at: "permitted" },
+} as const satisfies PublicLawColumnGrantsByRelation;
+
 /**
  * Expansion release: tolerate these future public census grants without
  * requiring the relation or reading it. Deploy this declaration before the
@@ -470,6 +475,7 @@ export const PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION = {
   [CASE_LAW_DECISION_VIEWS[0]]: {
     ...CASE_LAW_DECISION_VIEW_COLUMN_GRANTS,
     ...COLLECTION_BODY_COLUMN_GRANTS_BY_RELATION.case_law_published_decisions,
+    ...COLLECTION_OBSERVATION_COLUMN_GRANTS_BY_RELATION.case_law_published_decisions,
   },
   [CASE_LAW_DECISION_VIEWS[1]]: CASE_LAW_DECISION_VIEW_COLUMN_GRANTS,
   case_law_collection_bodies: {

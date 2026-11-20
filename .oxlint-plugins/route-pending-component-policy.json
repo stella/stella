@@ -2,6 +2,7 @@
   "$comment": "What a route's pending half (*.pending.tsx) may import, besides other *.pending modules, *.logic modules and type-only imports. Pending halves ship in the entry chunk, so each entry here must stay small and context-free; __tests__/route-pending-component-closure.test.ts walks every entry's import closure and fails on closureBanned.",
   "pendingSafeModules": [
     "react",
+    "@stll/ui/calendar-primitives",
     "@stll/ui/composer-tokens",
     "@stll/ui/control-face",
     "@stll/ui/directional-icon",
@@ -9,6 +10,7 @@
     "@stll/ui/icons",
     "@stll/ui/input-otp-face",
     "@stll/ui/landing-shell",
+    "@stll/ui/layout-tokens",
     "@stll/ui/list-shell",
     "@stll/ui/matter-icon",
     "@stll/ui/scroll-area",
@@ -18,10 +20,20 @@
     "@stll/ui/stella-wordmark",
     "@stll/ui/table-shell",
     "@stll/ui/utils",
+    "@stll/ui/view-toolbar-shell",
+    "@stll/workspace-ui/view-strip",
     "@/components/auth/inbox-quick-jump-face",
     "@/components/auth/otp-panel-text",
+    "@/components/pending-cache",
     "@/components/pending-text",
-    "@/routes/_protected.chat/-components/chat-reading-column"
+    "@/components/workspaces/table/workspace-grid",
+    "@/components/workspaces/table/workspace-table/skeleton-rows",
+    "@/features/knowledge/views/playbooks/playbooks-page-shape",
+    "@/features/knowledge/views/templates/template-list-shape",
+    "@/lib/workspaces/types",
+    "@/routes/_protected.chat/-components/chat-reading-column",
+    "@/routes/knowledge/-tools/tools-page-shape",
+    "@/stores/config-store"
   ],
   "$namedImportsComment": "Single exports a pending half may import from a module that is otherwise not pending-safe. The router's URL hooks are there at every pending level, and only with `strict: false` (the rule checks the call).",
   "pendingSafeNamedImports": {

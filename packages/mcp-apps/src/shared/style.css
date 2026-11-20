@@ -34,6 +34,7 @@
 @source "../../../ui/src/components/button.tsx";
 @source "../../../ui/src/components/checkbox.tsx";
 @source "../../../ui/src/components/composer-tokens.ts";
+@source "../../../ui/src/components/control-face.tsx";
 @source "../../../ui/src/components/court-badge.tsx";
 @source "../../../ui/src/components/court-filter.tsx";
 @source "../../../ui/src/components/date-picker-popover.logic.ts";
@@ -70,6 +71,7 @@
 @source "../../../ui/src/components/time-field.tsx";
 @source "../../../ui/src/components/tooltip-trigger-helper.tsx";
 @source "../../../ui/src/components/tooltip.tsx";
+@source "../../../ui/src/components/truncated-text-face.tsx";
 @source "../../../ui/src/components/truncated-text.tsx";
 @source "../../../ui/src/hooks/use-contained-handler.ts";
 @source "../../../ui/src/hooks/use-content-dir.ts";

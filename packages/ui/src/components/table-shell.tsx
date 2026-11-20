@@ -1,13 +1,17 @@
 import type * as React from "react";
 
+import { ArrowDownIcon, ArrowUpIcon } from "../icons";
 import { cn } from "../lib/utils";
+import { buttonFaceClassName } from "./control-face";
 import { Skeleton } from "./skeleton";
 import {
+  PROSE_CELL_CLASS,
   resolveTableAlign,
   TABLE_ALIGN_CLASS,
   TableCellFace,
 } from "./table-cell";
 import type { TableAlign, TableTone } from "./table-cell";
+import { TRUNCATED_TEXT_LINES_CLASS } from "./truncated-text-face";
 
 /**
  * How far cells pad their content from the column edges.
@@ -36,16 +40,31 @@ type TableScroll = "self" | "parent";
  * do not highlight because nothing in them is a row-wide target. A row
  * header (`<TableHead scope="row">`) in a compact body reads as the row's
  * first cell rather than as a column heading.
+ *
+ * `prose` is a table of sentences read across columns (an AI answer's
+ * comparison, a clause review): ruled columns and rows, cells padded and set
+ * at reading leading from their top, a quiet header in normal weight, and a
+ * first column wide enough to hold a few words per line. Its cells wrap or
+ * stay on one line as `cellText` says.
  */
-type TableDensity = "default" | "compact";
+type TableDensity = "default" | "compact" | "prose";
+
+/**
+ * How a `prose` table sets long cell text: `wrap` breaks it over lines,
+ * `single-line` keeps every cell on one line and leaves the table wider than
+ * its box for the scroller around it.
+ */
+type TableCellText = "wrap" | "single-line";
 
 type TableProps = React.ComponentProps<"table"> & {
+  cellText?: TableCellText;
   density?: TableDensity;
   inset?: TableInset;
   scroll?: TableScroll;
 };
 
 const Table = ({
+  cellText = "wrap",
   className,
   density = "default",
   inset = "default",
@@ -56,8 +75,12 @@ const Table = ({
     <table
       className={cn(
         "w-full caption-bottom text-sm in-data-[slot=frame]:border-separate in-data-[slot=frame]:border-spacing-0",
+        // Separate borders: a sticky header keeps only the borders its own
+        // cells draw.
+        density === "prose" && "border-separate border-spacing-0",
         className,
       )}
+      data-cell-text={cellText}
       data-density={density}
       data-inset={inset}
       data-slot="table"
@@ -98,9 +121,13 @@ const TableHeader = ({
 }: TableHeaderProps) => (
   <thead
     className={cn(
-      "[&_tr]:border-b in-data-[slot=frame]:**:[th]:h-9 in-data-[slot=frame]:*:[tr]:border-none in-data-[slot=frame]:*:[tr]:hover:bg-transparent",
+      "[&_tr]:border-b in-data-[slot=frame]:**:[th]:h-9 in-data-[density=prose]:*:[tr]:hover:bg-transparent in-data-[slot=frame]:*:[tr]:border-none in-data-[slot=frame]:*:[tr]:hover:bg-transparent",
       surface === "muted" && "bg-muted/50",
       sticky && "bg-muted/80 sticky top-0 z-10 backdrop-blur",
+      // A prose header is opaque: wrapped rows scrolling under it would
+      // otherwise read through the band.
+      sticky &&
+        "in-data-[density=prose]:bg-card in-data-[density=prose]:backdrop-blur-none",
       className,
     )}
     data-slot="table-header"
@@ -170,6 +197,8 @@ const TableHead = ({
       "text-muted-foreground h-10 px-2.5 align-middle leading-none font-medium whitespace-nowrap in-data-[inset=card]:px-4 has-[[role=checkbox]]:w-px has-[[role=checkbox]]:pe-0",
       "in-data-[density=compact]:h-auto in-data-[density=compact]:px-0 in-data-[density=compact]:py-1 in-data-[density=compact]:pe-3 in-data-[density=compact]:text-xs",
       "in-data-[density=compact]:[tbody_&]:py-1.5 in-data-[density=compact]:[tbody_&]:text-sm in-data-[density=compact]:[tbody_&]:leading-6 in-data-[density=compact]:[tbody_&]:font-normal in-data-[density=compact]:[tbody_&]:whitespace-normal in-data-[density=compact]:[tbody_&]:text-inherit",
+      PROSE_CELL_CLASS,
+      "in-data-[density=prose]:[thead_&]:bg-muted in-data-[density=prose]:font-normal",
       TABLE_ALIGN_CLASS[resolveTableAlign(align, numeric) ?? "start"],
       numeric && "tabular-nums",
       className,
@@ -191,6 +220,105 @@ const TableCaption = ({
     data-slot="table-caption"
     {...props}
   />
+);
+
+type SortDirection = "asc" | "desc" | null;
+
+/** A sortable head's `aria-sort` for its direction. */
+const ariaSortOf = (
+  direction: SortDirection,
+): "ascending" | "descending" | "none" => {
+  if (direction === "asc") {
+    return "ascending";
+  }
+  if (direction === "desc") {
+    return "descending";
+  }
+  return "none";
+};
+
+/** The arrow after a sorted head's label; nothing for an unsorted one. */
+const SortDirectionIcon = ({ direction }: { direction: SortDirection }) => {
+  if (direction === "asc") {
+    return <ArrowUpIcon className="size-3" />;
+  }
+  if (direction === "desc") {
+    return <ArrowDownIcon className="size-3" />;
+  }
+  return null;
+};
+
+/** A head's label and the control after it, on one line. */
+const HEAD_CONTENT_CLASS = "inline-flex items-center gap-1";
+
+/** The arrow's slot, held open so a label never moves as the sort flips. */
+const SORT_ICON_SLOT_CLASS = "inline-flex w-3 shrink-0 justify-center";
+
+/**
+ * A sortable head's button: a quiet button whose inline padding equals the
+ * head's, pulled back by a negative margin so the label lines up with the
+ * cells and the button never reaches past the table's edge. In an
+ * end-aligned (numeric) column the arrow sits before the label.
+ */
+const sortableHeadButtonClassName = (endAligned: boolean): string =>
+  cn(
+    "min-w-0 gap-1 px-2.5",
+    endAligned ? "-me-2.5 flex-row-reverse" : "-ms-2.5",
+  );
+
+/** A head's label before its page has loaded: the cut line it sits on. */
+const TableHeadLabel = ({ children }: { children: React.ReactNode }) => (
+  <span className={TRUNCATED_TEXT_LINES_CLASS[1]} data-slot="truncated-text">
+    {children}
+  </span>
+);
+
+type SortableHeadFaceProps = Omit<TableHeadProps, "children" | "onClick"> & {
+  children: React.ReactNode;
+  sortDirection?: SortDirection;
+  /** Drawn next to the label, where the head's trailing control goes. */
+  trailing?: React.ReactNode;
+};
+
+/**
+ * A sortable head before its page has loaded: the label in the sort button's
+ * face and the arrow in its slot, with no behaviour.
+ */
+const SortableHeadFace = ({
+  align,
+  children,
+  numeric = false,
+  sortDirection = null,
+  trailing,
+  ...props
+}: SortableHeadFaceProps) => (
+  <TableHead
+    align={align}
+    aria-sort={ariaSortOf(sortDirection)}
+    numeric={numeric}
+    {...props}
+    // After the spread: a wider props object could carry a handler through
+    // it, and a face is not something to click.
+    onClick={undefined}
+  >
+    <span className={HEAD_CONTENT_CLASS}>
+      <span
+        aria-hidden="true"
+        className={cn(
+          buttonFaceClassName({ size: "default", variant: "muted" }),
+          sortableHeadButtonClassName(
+            resolveTableAlign(align, numeric) === "end",
+          ),
+        )}
+      >
+        <TableHeadLabel>{children}</TableHeadLabel>
+        <span className={SORT_ICON_SLOT_CLASS}>
+          <SortDirectionIcon direction={sortDirection} />
+        </span>
+      </span>
+      {trailing}
+    </span>
+  </TableHead>
 );
 
 type TableSkeletonColumn = {
@@ -238,6 +366,10 @@ const TableSkeletonRows = ({
   ));
 
 export {
+  HEAD_CONTENT_CLASS,
+  SORT_ICON_SLOT_CLASS,
+  SortableHeadFace,
+  SortDirectionIcon,
   Table,
   TableBody,
   TableCaption,
@@ -245,11 +377,16 @@ export {
   TableFooter,
   TableHead,
   TableHeader,
+  TableHeadLabel,
   TableRow,
   TableSkeletonRows,
+  ariaSortOf,
+  sortableHeadButtonClassName,
 };
 export type {
+  SortDirection,
   TableAlign,
+  TableCellText,
   TableDensity,
   TableHeadProps,
   TableHeaderProps,

@@ -9,6 +9,10 @@ import { containedEventHandler } from "../hooks/use-contained-handler";
 import { cn } from "../lib/utils";
 import { Popover, PopoverPopup } from "./popover";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "./tooltip";
+import {
+  TRUNCATED_TEXT_LINES_CLASS,
+  type TruncatedTextLines,
+} from "./truncated-text-face";
 
 /**
  * Text that ends in an ellipsis when it does not fit, and shows the whole of
@@ -125,13 +129,6 @@ const TruncatedText = ({
 
 type TruncatedTextSurface = "tooltip" | "popover";
 
-/**
- * How many lines the text may take before it is cut; `"none"` lets it take
- * as many as it needs, for text that is cut only in some states (collapsed,
- * compact) and shown whole in the others.
- */
-type TruncatedTextLines = 1 | 2 | 3 | 4 | 5 | 6 | 8 | "none";
-
 type TruncatedTextProps = useRender.ComponentProps<"span"> & {
   /**
    * Whether cut text shows its whole self on hover, focus or tap. Pass false
@@ -168,22 +165,6 @@ function recordPointerType(event: React.PointerEvent<HTMLElement>): void {
 function forgetPointerType(event: React.FocusEvent<HTMLElement>): void {
   LAST_POINTER_TYPE.delete(event.currentTarget);
 }
-
-/**
- * `max-w-full` caps the text at its container even where the container does
- * not stretch it (a flex column with `items-start`, an inline-block): without
- * it a nowrap line sizes to its whole text and runs past the container.
- */
-const TRUNCATED_TEXT_LINES_CLASS = {
-  1: "block min-w-0 max-w-full truncate",
-  2: "line-clamp-2 min-w-0 max-w-full wrap-anywhere",
-  3: "line-clamp-3 min-w-0 max-w-full wrap-anywhere",
-  4: "line-clamp-4 min-w-0 max-w-full wrap-anywhere",
-  5: "line-clamp-5 min-w-0 max-w-full wrap-anywhere",
-  6: "line-clamp-6 min-w-0 max-w-full wrap-anywhere",
-  8: "line-clamp-8 min-w-0 max-w-full wrap-anywhere",
-  none: "min-w-0 max-w-full",
-} as const satisfies Record<TruncatedTextLines, string>;
 
 /** Whether the element's text is cut by its box, in either direction. */
 function isTextOverflowing(

@@ -11,6 +11,7 @@ import {
   publicLawPageSearchValue,
   publicLawPageSize,
 } from "@/components/public-law-table/public-law-route-pagination.logic";
+import { publicCaseLawHubPathFor } from "@/features/case-law/browse-hub-path";
 import {
   createCaseLawIndexPath,
   decisionDateRange,
@@ -347,6 +348,7 @@ export const Route = createFileRoute("/law/cases/")({
     const path = createCaseLawIndexPath(search);
 
     return createPublicLawHead({
+      canonicalPath: publicCaseLawHubPathFor(match.search.country),
       description,
       jsonLd: createLegalCollectionJsonLd({
         t,

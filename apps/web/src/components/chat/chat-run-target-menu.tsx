@@ -26,6 +26,7 @@ import { TruncatedText } from "@stll/ui/truncated-text";
 import {
   CHAT_LOCAL_HARNESS_NAMES,
   CHAT_OWN_FOLDER_VALUE,
+  type ChatCloudStart,
   type ChatLocalFolderOption,
   chatLocalFolderOptions,
   type ChatLocalHarnessOption,
@@ -145,6 +146,29 @@ export const useLocalRunTargetStateLabel = () => {
       default:
         state satisfies never;
         return panic("Unknown local run target state");
+    }
+  };
+};
+
+/**
+ * Why a new chat started in the cloud although the member last chose their
+ * computer, as the where chip says it.
+ */
+export const useCloudStartLabel = () => {
+  const t = useTranslations();
+  const stateLabel = useLocalRunTargetStateLabel();
+  return ({ harness, why }: ChatCloudStart): string => {
+    switch (why.type) {
+      case "unavailable":
+        return t("chat.runOn.startedInCloud", {
+          harness: CHAT_LOCAL_HARNESS_NAMES[harness],
+          state: stateLabel(why.state) ?? t("chat.localRun.stateUnavailable"),
+        });
+      case "check_failed":
+        return t("chat.runOn.startedInCloudCheckFailed");
+      default:
+        why satisfies never;
+        return panic("Unknown cloud start");
     }
   };
 };
@@ -351,6 +375,8 @@ type ChatRunTargetMenuProps = {
   enabled: boolean;
   selected: ChatRunTarget;
   onSelect: (target: ChatRunTarget) => void;
+  /** Why a new chat started in the cloud, said first; `null` otherwise. */
+  startedInCloud: ChatCloudStart | null;
 };
 
 /**
@@ -365,9 +391,11 @@ export const ChatRunTargetMenu = ({
   enabled,
   selected,
   onSelect,
+  startedInCloud,
 }: ChatRunTargetMenuProps) => {
   const t = useTranslations();
   const hint = useHarnessHint();
+  const cloudStartLabel = useCloudStartLabel();
   const runnersView = queryView(
     useQuery({
       ...localRunnersOptions(activeOrganizationId),
@@ -392,6 +420,14 @@ export const ChatRunTargetMenu = ({
 
   return (
     <>
+      {startedInCloud !== null && (
+        <>
+          <p className="text-muted-foreground px-2 py-1.5 text-xs text-pretty">
+            {cloudStartLabel(startedInCloud)}
+          </p>
+          <MenuSeparator />
+        </>
+      )}
       <MenuRadioGroup value={runOnPlaceValue(selected)}>
         {/* Picking a place or an agent is the choice the menu exists for,
             so it closes; a permission pick keeps it open for another. */}

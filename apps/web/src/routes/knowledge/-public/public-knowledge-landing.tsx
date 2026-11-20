@@ -51,7 +51,7 @@ export const PublicKnowledgeLanding = ({
           : t(`knowledge.sections.${section.key}.description`),
     };
     if (section.publicAccess === "catalogue") {
-      cards.push({ ...content, to: section.to });
+      cards.push({ ...content, to: section.catalogueTo });
     } else if (section.publicAccess === "account" && requestSignIn !== null) {
       cards.push({
         ...content,

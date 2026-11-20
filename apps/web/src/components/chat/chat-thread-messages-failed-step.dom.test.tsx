@@ -106,15 +106,23 @@ test("a failed step the turn answered past reads as retried, not as broken", asy
 
   await view.findByText(messages.chat.toolCall.retried);
   expect(view.queryByText(messages.chat.toolCall.failed)).toBeNull();
+  expect(view.queryByText(messages.chat.answerNotFinished)).toBeNull();
   expect(view.container.innerHTML.includes("bg-destructive")).toBe(false);
   queryClient.clear();
 });
 
-test("a failed step that ended the turn without an answer reads as failed", async () => {
+test("a turn that ended at a failed step says so once, under its calm steps", async () => {
   const { queryClient, view } = renderTurn([FAILED_READ]);
 
-  await view.findByText(messages.chat.toolCall.failed);
+  // One muted line beside Retry says the answer did not finish; the step
+  // names its failure through its mark alone, in the step colours.
+  const line = await view.findByText(messages.chat.answerNotFinished);
+  expect(line.className.includes("text-muted-foreground")).toBe(true);
+  expect(
+    view.getByRole("img", { name: messages.chat.toolCall.failed }),
+  ).toBeDefined();
+  expect(view.queryByText(messages.chat.toolCall.failed)).toBeNull();
   expect(view.queryByText(messages.chat.toolCall.retried)).toBeNull();
-  expect(view.container.innerHTML.includes("bg-destructive")).toBe(true);
+  expect(view.container.innerHTML.includes("bg-destructive")).toBe(false);
   queryClient.clear();
 });

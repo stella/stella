@@ -11,8 +11,6 @@
   "apps/web/src/routes/_protected.contacts/-contacts.pending.tsx",
   "apps/web/src/routes/_protected.settings/-organization.members.pending.tsx",
   "apps/web/src/routes/_protected.settings/organization/-components/members-invitations.pending.tsx",
-  "apps/web/src/routes/_protected.workspaces/$workspaceId/-$viewId.route.pending.tsx",
-  "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/correspondence-view.pending.tsx",
   "apps/web/src/routes/law/$country/statutes/-index.pending.tsx",
   "apps/web/src/routes/law/-law-coverage/coverage.pending.tsx",
   "apps/web/src/routes/law/cases/-case-law-index.pending.tsx"
