@@ -187,8 +187,9 @@ import {
   createToolCallTiming,
 } from "@/components/chat/tool-call-timing.logic";
 import {
-  getToolCallTitleKey,
-  type ToolCallTitleKey,
+  getToolCallTitle,
+  type ToolCallTitle,
+  toolCallTitleText,
 } from "@/components/chat/tool-call-title.logic";
 import { uiResourceRenderer } from "@/components/chat/ui-resource-renderer";
 import { useSteadyValue } from "@/components/chat/use-steady-value";
@@ -410,7 +411,7 @@ const ActiveTurnStatus = memo(
             : {
                 state: "streaming",
                 phase: turnPhaseFromParts(assistant.parts, (call) =>
-                  t(getToolCallTitleKey(call)),
+                  toolCallTitleText(getToolCallTitle(call), (key) => t(key)),
                 ),
                 timing: assistant.metadata?.turnTiming,
                 sentAt: turnSentAt,
@@ -2401,20 +2402,25 @@ const isVisibleProcessEntry = (entry: AssistantPartRenderEntry): boolean => {
   }
 };
 
-type ProcessStepTitleKey = ToolCallTitleKey | "chat.reasoning";
+type ProcessStepTitle = ToolCallTitle | { type: "key"; key: "chat.reasoning" };
 
-const getProcessStepTitleKey = (
+const REASONING_STEP_TITLE = {
+  type: "key",
+  key: "chat.reasoning",
+} as const satisfies ProcessStepTitle;
+
+const getProcessStepTitle = (
   entry: AssistantPartRenderEntry,
-): ProcessStepTitleKey | null => {
+): ProcessStepTitle | null => {
   if (entry.type !== "standard") {
     return null;
   }
   const { part } = entry;
   if (part.type === "thinking") {
-    return "chat.reasoning";
+    return REASONING_STEP_TITLE;
   }
   if (part.type === "tool-call") {
-    return getToolCallTitleKey({
+    return getToolCallTitle({
       input: "input" in part ? part.input : undefined,
       name: part.name,
       output: part.output,
@@ -2906,9 +2912,9 @@ const AssistantMessageParts = (props: AssistantMessagePartsProps) => {
             isLive={isLiveGroup}
             turnStatus={turnStatus}
             key={`${message.id}-process-${group.startIndex}`}
-            liveStepKey={
+            liveStep={
               isLiveGroup && lastVisibleEntry
-                ? getProcessStepTitleKey(lastVisibleEntry)
+                ? getProcessStepTitle(lastVisibleEntry)
                 : null
             }
             // Read over every entry: completed web searches and fetches
@@ -2991,7 +2997,7 @@ type AssistantProcessGroupProps = {
   /** The run is still receiving parts at the end of a streaming message. */
   isLive: boolean;
   /** Title of the run's current step while it is still streaming. */
-  liveStepKey: ProcessStepTitleKey | null;
+  liveStep: ProcessStepTitle | null;
   turnStatus: "running" | "finished";
   /** What the run accomplished, in its settled summary's phrases. */
   summary: readonly ProcessSummaryPiece[];
@@ -3004,7 +3010,7 @@ const AssistantProcessGroup = ({
   defaultOpen,
   intent,
   isLive,
-  liveStepKey,
+  liveStep,
   summary,
   turnStatus,
 }: AssistantProcessGroupProps) => {
@@ -3038,14 +3044,16 @@ const AssistantProcessGroup = ({
   // A run that appears mid-stream fades in where the thinking indicator was;
   // one that renders settled (a reload) simply is there.
   const [appearedLive] = useState(isLive);
+  // Translated first: the steady value compares labels, not title objects.
+  const liveStepLabel =
+    liveStep === null ? null : toolCallTitleText(liveStep, (key) => t(key));
   // Quick steps would otherwise swap the label several times a second.
-  const shownStepKey = useSteadyValue(liveStepKey, LIVE_STEP_MIN_DWELL_MS);
+  const shownStepLabel = useSteadyValue(liveStepLabel, LIVE_STEP_MIN_DWELL_MS);
   // Live, the run's line is the turn's status line: the current step and
   // the clock, once. Settled, it says what the run did, in plain words
   // ("Searched legislation and case law · 5 lookups").
   const liveLine = isLive ? turnLiveStatus : null;
-  const label =
-    shownStepKey === null ? processSummaryText(summary, t) : t(shownStepKey);
+  const label = shownStepLabel ?? processSummaryText(summary, t);
   return (
     <div
       data-slot="chat-step-list"
@@ -3068,7 +3076,7 @@ const AssistantProcessGroup = ({
                   reading === null ? null : formatChatElapsed(format, reading)
                 }
                 label={label}
-                pending={shownStepKey !== null}
+                pending={shownStepLabel !== null}
               />
             )}
             <DirectionalIcon
