@@ -117,7 +117,7 @@ describe("parseViewerLocation", () => {
 
   test("never yields a place name with control characters or over 100 characters", () => {
     assertProperty(
-      "viewer-location place names are bounded and printable",
+      "never yields a place name with control characters or over 100 characters",
       fc.property(
         fc.string({ unit: "binary", maxLength: 160 }),
         fc.string({ unit: "binary", maxLength: 160 }),
