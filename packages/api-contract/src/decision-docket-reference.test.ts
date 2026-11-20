@@ -1412,6 +1412,7 @@ test("zero-senate aliases are scoped and retain sheet/year safeguards", () => {
       { exactIdentityRead: "complete" },
     ).status,
   ).toBe("incomplete_identifier");
+  return undefined;
 });
 
 test("zero-senate policy is bounded by the grammar's numeric components", () => {

@@ -938,8 +938,7 @@ export const resolveDecisionIdentity = <THit extends DecisionHitIdentity>(
           grammar: DECISION_DOCKET_GRAMMARS[identifier.jurisdiction],
         });
         return (
-          stored !== null &&
-          stored.selector.kind === "none" &&
+          stored?.selector.kind === "none" &&
           stored.family.canonical ===
             decisionIdentifierComparisonKey(
               identifier.family,
