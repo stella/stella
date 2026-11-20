@@ -133,7 +133,7 @@ const acceptFailureContext = (
  * `measure.<key>`. Closed like the context keys, and a value is a
  * non-negative safe integer, so a measure can carry a count and never text.
  */
-export const FAILURE_MEASURE_KEYS = [
+const FAILURE_MEASURE_KEYS = [
   "astBlockIdentity",
   "astBlockRole",
   "astBlockType",

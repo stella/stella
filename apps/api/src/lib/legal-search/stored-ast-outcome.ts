@@ -57,7 +57,7 @@ export type StoredAstOutcome =
 export type StoredAstDegradationKind = PersistedAstDegradation["kind"];
 
 /** Total over the degradation kinds, so a kind added is a type error here. */
-export type StoredAstDegradationCounts = Readonly<
+type StoredAstDegradationCounts = Readonly<
   Record<StoredAstDegradationKind, number>
 >;
 
@@ -70,7 +70,7 @@ const everyKind = <const TKinds extends readonly StoredAstDegradationKind[]>(
 ): TKinds => kinds;
 
 /** The kinds in a stable order, for counters that iterate them. */
-export const STORED_AST_DEGRADATION_KINDS = everyKind([
+const STORED_AST_DEGRADATION_KINDS = everyKind([
   "block-type",
   "block-role",
   "inline-type",
