@@ -117,7 +117,12 @@ export const AnswerLinkForm = ({
           )}
         </form.Field>
         <div className="flex gap-2">
-          <Button type="submit" size="sm" disabled={disabled}>
+          <Button
+            type="submit"
+            size="sm"
+            disabled={disabled}
+            disabledReason={t("chat.answerEdit.waitForAnswer")}
+          >
             {t("common.confirm")}
           </Button>
           {existingUrl !== undefined && (
@@ -126,6 +131,11 @@ export const AnswerLinkForm = ({
               size="sm"
               variant="ghost"
               disabled={disabled || removal.status === "unavailable"}
+              disabledReason={
+                removal.status === "unavailable"
+                  ? t(removal.reason)
+                  : t("chat.answerEdit.waitForAnswer")
+              }
               aria-describedby={
                 removal.status === "unavailable" ? removalReasonId : undefined
               }
