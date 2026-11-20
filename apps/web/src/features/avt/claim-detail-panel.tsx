@@ -309,6 +309,11 @@ export const ClaimDetailPanel = ({
             {isScoredState(verdict.state) && (
               <OverrideControl
                 disabled={isEscalated || !canReview}
+                disabledReason={t(
+                  isEscalated
+                    ? "avt.review.escalated"
+                    : "avt.review.permissionRequired",
+                )}
                 onOverride={(overrideState, reason) =>
                   onReviewEvent({
                     kind: "override",
@@ -324,6 +329,11 @@ export const ClaimDetailPanel = ({
             {verdict.state === "notverifiable" && (
               <ReopenControl
                 disabled={review?.reopened === true || !canReview}
+                disabledReason={t(
+                  review?.reopened === true
+                    ? "avt.review.alreadyReopened"
+                    : "avt.review.permissionRequired",
+                )}
                 onReopen={(reason) => onReviewEvent({ kind: "reopen", reason })}
               />
             )}
@@ -453,6 +463,7 @@ type OverrideControlProps = {
   toolState: ScoredState;
   override: ClaimOverrideState | null;
   disabled: boolean;
+  disabledReason: string;
   onOverride: (state: ClaimOverrideState | null, reason: string) => void;
 };
 
@@ -465,6 +476,7 @@ const OverrideControl = ({
   toolState,
   override,
   disabled,
+  disabledReason,
   onOverride,
 }: OverrideControlProps) => {
   const t = useTranslations();
@@ -485,6 +497,7 @@ const OverrideControl = ({
       {picked !== null && (
         <ReasonField
           disabled={disabled}
+          disabledReason={disabledReason}
           label={
             picked === toolState
               ? t("avt.reason.withdrawOverride")
@@ -538,11 +551,16 @@ const OverrideSelect = ({ value, disabled, onPick }: OverrideSelectProps) => {
 
 type ReopenControlProps = {
   disabled: boolean;
+  disabledReason: string;
   onReopen: (reason: string) => void;
 };
 
 /** Reclassifying a set-aside claim as checkable, with the reviewer's reason. */
-const ReopenControl = ({ disabled, onReopen }: ReopenControlProps) => {
+const ReopenControl = ({
+  disabled,
+  disabledReason,
+  onReopen,
+}: ReopenControlProps) => {
   const t = useTranslations();
   const [asking, setAsking] = React.useState(false);
   return (
@@ -555,6 +573,7 @@ const ReopenControl = ({ disabled, onReopen }: ReopenControlProps) => {
       {asking ? (
         <ReasonField
           disabled={disabled}
+          disabledReason={disabledReason}
           label={t("avt.reason.reopen")}
           onCancel={() => setAsking(false)}
           onSubmit={(reason) => {
@@ -564,7 +583,12 @@ const ReopenControl = ({ disabled, onReopen }: ReopenControlProps) => {
           submitLabel={t("avt.claimDetail.notVerifiable.reopen")}
         />
       ) : (
-        <Button disabled={disabled} onClick={() => setAsking(true)} size="sm">
+        <Button
+          disabled={disabled}
+          disabledReason={disabledReason}
+          onClick={() => setAsking(true)}
+          size="sm"
+        >
           <SearchIcon />
           {t("avt.claimDetail.notVerifiable.reopen")}
         </Button>
@@ -601,7 +625,11 @@ const ReviewActions = ({
   onStatus,
 }: ReviewActionsProps) => {
   const { review } = claim;
+  const t = useTranslations();
   const decisionDisabled = escalated || !canReview;
+  const decisionDisabledReason = decisionDisabled
+    ? t(escalated ? "avt.review.escalated" : "avt.review.permissionRequired")
+    : undefined;
   const folded = gap && decisionState(review) === "pending";
   return (
     <>
@@ -634,6 +662,7 @@ const ReviewActions = ({
         <DecisionRow
           acceptLabel={acceptLabel}
           disabled={decisionDisabled}
+          disabledReason={decisionDisabledReason}
           emphasis={gap ? "quiet" : "primary"}
           needsEvidenceControl={!gap}
           onStatus={onStatus}
@@ -682,6 +711,7 @@ type DecisionRowProps = {
   review: ClaimReview | null;
   acceptLabel: string;
   disabled: boolean;
+  disabledReason?: string | undefined;
   emphasis: ReviewDecisionEmphasis;
   /** Off where a gap's next steps offer it. */
   needsEvidenceControl: boolean;
@@ -695,6 +725,7 @@ const DecisionRow = ({
   review,
   acceptLabel,
   disabled,
+  disabledReason,
   emphasis,
   needsEvidenceControl,
   onStatus,
@@ -707,7 +738,7 @@ const DecisionRow = ({
       <DecisionStatus review={review} />
       <ReviewDecisionActions
         acceptLabel={acceptLabel}
-        disabled={disabled}
+        disabledReason={disabledReason}
         emphasis={emphasis}
         onAccept={() => onStatus("reviewed")}
         onReject={() => onStatus("disputed")}
@@ -720,6 +751,7 @@ const DecisionRow = ({
         <Button
           aria-pressed={needsEvidence}
           disabled={disabled}
+          disabledReason={disabledReason}
           onClick={() => onStatus(needsEvidence ? null : "needs-evidence")}
           size="sm"
           variant={needsEvidence ? "secondary" : "ghost"}
@@ -809,6 +841,7 @@ const NoteSection = ({ review, disabled, onSave }: NoteSectionProps) => {
         <div className="flex gap-1.5">
           <Button
             disabled={disabled}
+            disabledReason={t("avt.review.permissionRequired")}
             onClick={() => {
               onSave(draft.trim());
               setDraft(null);
@@ -831,6 +864,7 @@ const NoteSection = ({ review, disabled, onSave }: NoteSectionProps) => {
       // primary action.
       <Button
         disabled={disabled}
+        disabledReason={t("avt.review.permissionRequired")}
         onClick={() => setDraft("")}
         size="sm"
         variant="ghost"
@@ -860,6 +894,7 @@ const NoteSection = ({ review, disabled, onSave }: NoteSectionProps) => {
       </p>
       <Button
         disabled={disabled}
+        disabledReason={t("avt.review.permissionRequired")}
         onClick={() => setDraft(note)}
         size="sm"
         variant="ghost"
@@ -1331,6 +1366,7 @@ const RecordConflictBlock = ({
             )}
             <Button
               disabled={disabled}
+              disabledReason={t("avt.review.permissionRequired")}
               onClick={() =>
                 setPending({
                   control: record.factEntityId,
@@ -1366,6 +1402,7 @@ const RecordConflictBlock = ({
         </h4>
         <Button
           disabled={disabled}
+          disabledReason={t("avt.review.permissionRequired")}
           onClick={() =>
             setPending({
               control: "escalation",
