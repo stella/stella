@@ -291,7 +291,9 @@ test("streaming prevents opening an edit from the selection toolbar", async () =
   const action = view.getByRole("button", { name: "Request edits" });
   expect(action.hasAttribute("disabled")).toBe(true);
   expect(
-    view.getByRole("button", { name: "Bold" }).getAttribute("aria-disabled"),
+    view
+      .getByRole("button", { name: messages.chat.answerEdit.formatKind })
+      .getAttribute("aria-disabled"),
   ).toBe("true");
   expect(
     view
@@ -299,7 +301,10 @@ test("streaming prevents opening an edit from the selection toolbar", async () =
       .hasAttribute("disabled"),
   ).toBe(false);
   fireEvent.click(action);
-  fireEvent.click(view.getByRole("button", { name: "Bold" }));
+  fireEvent.click(
+    view.getByRole("button", { name: messages.chat.answerEdit.formatKind }),
+  );
+  expect(view.queryByRole("button", { name: "Bold" })).toBeNull();
   expect(view.queryByRole("textbox")).toBeNull();
   expect(view.queryByRole("dialog")).toBeNull();
 });
@@ -317,7 +322,9 @@ test("an unresolved user-input turn disables editing while new-chat selection re
   const edit = view.getByRole("button", { name: messages.chat.answerEdit.ask });
   expect(edit.hasAttribute("disabled")).toBe(true);
   expect(
-    view.getByRole("button", { name: "Bold" }).getAttribute("aria-disabled"),
+    view
+      .getByRole("button", { name: messages.chat.answerEdit.formatKind })
+      .getAttribute("aria-disabled"),
   ).toBe("true");
   expect(
     view
@@ -325,7 +332,10 @@ test("an unresolved user-input turn disables editing while new-chat selection re
       .hasAttribute("disabled"),
   ).toBe(false);
   fireEvent.click(edit);
-  fireEvent.click(view.getByRole("button", { name: "Bold" }));
+  fireEvent.click(
+    view.getByRole("button", { name: messages.chat.answerEdit.formatKind }),
+  );
+  expect(view.queryByRole("button", { name: "Bold" })).toBeNull();
   expect(view.queryByRole("textbox")).toBeNull();
   expect(view.queryByRole("dialog")).toBeNull();
 });
@@ -333,6 +343,11 @@ test("an unresolved user-input turn disables editing while new-chat selection re
 test("formatting remains available to members without AI and opens a link instruction form", async () => {
   const view = await mountSelection({ ai: false });
   expect(view.queryByRole("button", { name: "Request edits" })).toBeNull();
+  // Formatting folds behind one button so the bar leads with ask, quote, copy.
+  expect(view.queryByRole("button", { name: "Bold" })).toBeNull();
+  fireEvent.click(
+    view.getByRole("button", { name: messages.chat.answerEdit.formatKind }),
+  );
   expect(
     view.getByRole("button", { name: "Bold" }).hasAttribute("disabled"),
   ).toBe(false);
