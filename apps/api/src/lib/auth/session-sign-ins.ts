@@ -213,7 +213,13 @@ export const createSessionSignInStore = ({
         tx,
         spec: SESSION_SIGN_IN_REVIEW_TRANSITIONS,
         where: ownSignIn({ userId, sessionId }, now()),
-        options: REVIEW_MOVE[review],
+        options: {
+          ...REVIEW_MOVE[review],
+          set: {
+            reviewedAt:
+              review === SESSION_SIGN_IN_REVIEW.confirmed ? now() : null,
+          },
+        },
         recordTransitionAuditEvent: async (auditTx) => {
           const event = {
             type: REVIEW_AUDIT_EVENT[review],

@@ -10,8 +10,10 @@ CREATE TABLE "session_sign_ins" (
   "latitude" numeric(3, 1),
   "longitude" numeric(4, 1),
   "review" text DEFAULT 'not_required' NOT NULL,
+  "reviewed_at" timestamp with time zone,
   "created_at" timestamp with time zone DEFAULT now() NOT NULL,
   CONSTRAINT "session_sign_ins_review_check" CHECK ("session_sign_ins"."review" IN ('not_required', 'pending', 'confirmed')),
+  CONSTRAINT "session_sign_ins_state_fields_check" CHECK (("review" = 'not_required' AND "reviewed_at" IS NULL) OR ("review" = 'pending' AND "reviewed_at" IS NULL) OR ("review" = 'confirmed' AND "reviewed_at" IS NOT NULL) OR ("review" NOT IN ('not_required', 'pending', 'confirmed'))),
   CONSTRAINT "session_sign_ins_location_check" CHECK (("session_sign_ins"."location_kind" = 'unknown' AND "session_sign_ins"."country_code" IS NULL AND "session_sign_ins"."region" IS NULL AND "session_sign_ins"."city" IS NULL AND "session_sign_ins"."latitude" IS NULL AND "session_sign_ins"."longitude" IS NULL) OR ("session_sign_ins"."location_kind" = 'known' AND "session_sign_ins"."country_code" ~ '^[A-Z]{2}$' AND ("session_sign_ins"."latitude" IS NULL) = ("session_sign_ins"."longitude" IS NULL)))
 );--> statement-breakpoint
 ALTER TABLE "session_sign_ins" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint

@@ -4,18 +4,19 @@
 
 One line per column: `table.column  builder  flags  file:line  first sentence of its comment`.
 
-## session_sign_ins · `sessionSignIns` · session-sign-ins.ts:31 · rls
+## session_sign_ins · `sessionSignIns` · session-sign-ins.ts:32 · rls
 
 What a session's sign-in looked like and whether its account holder has recognised it.
 
 ```text
-session_sign_ins.session_id     text         pk,fk,not null    session-sign-ins.ts:34
-session_sign_ins.location_kind  text         not null          session-sign-ins.ts:38  Whether the edge reported a location; `unknown` leaves the rest null.
-session_sign_ins.country_code   text         null              session-sign-ins.ts:41
-session_sign_ins.region         text         null              session-sign-ins.ts:42
-session_sign_ins.city           text         null              session-sign-ins.ts:43
-session_sign_ins.latitude       numeric      null              session-sign-ins.ts:44
-session_sign_ins.longitude      numeric      null              session-sign-ins.ts:45
-session_sign_ins.review         text         default,not null  session-sign-ins.ts:47  Whether the sign-in waits for its account holder to recognise it.
-session_sign_ins.created_at     timestamptz  default,not null  session-sign-ins.ts:50
+session_sign_ins.session_id     text         pk,fk,not null    session-sign-ins.ts:35
+session_sign_ins.location_kind  text         not null          session-sign-ins.ts:39  Whether the edge reported a location; `unknown` leaves the rest null.
+session_sign_ins.country_code   text         null              session-sign-ins.ts:42
+session_sign_ins.region         text         null              session-sign-ins.ts:43
+session_sign_ins.city           text         null              session-sign-ins.ts:44
+session_sign_ins.latitude       numeric      null              session-sign-ins.ts:45
+session_sign_ins.longitude      numeric      null              session-sign-ins.ts:46
+session_sign_ins.review         text         default,not null  session-sign-ins.ts:48  Whether the sign-in waits for its account holder to recognise it.
+session_sign_ins.reviewed_at    timestamptz  null              session-sign-ins.ts:52  When the account holder confirmed the sign-in; set only while confirmed.
+session_sign_ins.created_at     timestamptz  default,not null  session-sign-ins.ts:53
 ```

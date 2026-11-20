@@ -85,6 +85,14 @@ const auditEvents = async (userId: SafeId<"user">) =>
       .orderBy(accountAuditLogs.id);
   });
 
+const reviewedAt = async (sessionId: string) =>
+  (
+    await testDb
+      .select({ reviewedAt: sessionSignIns.reviewedAt })
+      .from(sessionSignIns)
+      .where(eq(sessionSignIns.sessionId, sessionId))
+  ).at(0)?.reviewedAt;
+
 const request = () =>
   new Request("https://api.example.test/api/auth/session-sign-ins/review", {
     method: "POST",
@@ -211,6 +219,7 @@ describe("sign-in review", () => {
       review: SESSION_SIGN_IN_REVIEW.confirmed,
       request: request(),
     });
+    const confirmedAt = await reviewedAt(sessionId);
     // A repeated confirmation changes nothing and records nothing.
     await store.decide({
       userId,
@@ -227,6 +236,9 @@ describe("sign-in review", () => {
 
     expect(confirmed.unwrap()).toBe(SESSION_SIGN_IN_REVIEW.confirmed);
     expect(undone.unwrap()).toBe(SESSION_SIGN_IN_REVIEW.pending);
+    // A confirmed sign-in carries when it was confirmed; undoing clears it.
+    expect(confirmedAt).toEqual(NOW);
+    expect(await reviewedAt(sessionId)).toBeNull();
     expect(await auditEvents(userId)).toEqual([
       { type: "account.sign_in.review_requested", resourceId: sessionId },
       { type: "account.sign_in.confirmed", resourceId: sessionId },

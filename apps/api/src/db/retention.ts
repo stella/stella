@@ -276,6 +276,10 @@ export const TABLE_RETENTION = {
   session: {
     boundedBy: "Account lifecycle, session expiry, and session revocation.",
   },
+  session_sign_ins: {
+    boundedBy:
+      "One row per session, cascade-deleted with the session it describes.",
+  },
   account: { boundedBy: "Cascade-deleted with its account owner." },
   two_factor: {
     boundedBy: "Account-owned configuration deleted with its owner.",

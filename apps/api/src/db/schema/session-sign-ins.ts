@@ -11,6 +11,8 @@ import { session } from "@/api/db/auth-schema";
 import { timestamptz } from "@/api/db/columns";
 import { denyStellaAccessPolicies } from "@/api/db/rls";
 
+import { stateFieldsCheck } from "../state-fields";
+
 export const SESSION_SIGN_IN_LOCATION_KINDS = ["known", "unknown"] as const;
 
 const sqlValues = (values: readonly string[]) =>
@@ -47,6 +49,8 @@ export const sessionSignIns = pgTable(
     review: text("review", { enum: SESSION_SIGN_IN_REVIEW_STATUSES })
       .notNull()
       .default(SESSION_SIGN_IN_REVIEW.notRequired),
+    /** When the account holder confirmed the sign-in; set only while confirmed. */
+    reviewedAt: timestamptz("reviewed_at"),
     createdAt: timestamptz("created_at").notNull().defaultNow(),
   },
   (table) => [
@@ -54,6 +58,15 @@ export const sessionSignIns = pgTable(
       "session_sign_ins_review_check",
       sql`${table.review} IN (${sqlValues(SESSION_SIGN_IN_REVIEW_STATUSES)})`,
     ),
+    stateFieldsCheck({
+      name: "session_sign_ins_state_fields_check",
+      state: table.review,
+      rules: {
+        not_required: { absent: [table.reviewedAt] },
+        pending: { absent: [table.reviewedAt] },
+        confirmed: { required: [table.reviewedAt] },
+      },
+    }),
     // A known location names its country; an unknown one carries nothing.
     check(
       "session_sign_ins_location_check",
