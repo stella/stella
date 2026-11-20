@@ -37,10 +37,11 @@ export const createSilentPublisher = ({ timeoutMs }: { timeoutMs: number }) => {
       permit: options.permit,
       url: transportUrl,
       addresses: [{ address: "127.0.0.1", family: 4 }],
-      maxBytes: options.maxBytes,
+      ...(options.transfer === undefined
+        ? { maxBytes: options.maxBytes, timeoutMs }
+        : { transfer: options.transfer }),
       headers: options.headers,
       signal: options.signal,
-      timeoutMs,
     });
   };
   return {

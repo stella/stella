@@ -1193,7 +1193,16 @@ const sharepointConnectionCheck = sql`(
   ${organizationCheck} AND ${userCheck}
 )`;
 
+const sharepointConnectionsOwner = sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.sharepoint_connections'::regclass)`;
+const sharepointOAuthStateOwner = sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.sharepoint_oauth_state'::regclass)`;
+
 export const sharepointConnectionPolicies = () => [
+  p.pgPolicy("sharepoint_connections_owner", {
+    for: "all",
+    to: "public",
+    using: sharepointConnectionsOwner,
+    withCheck: sharepointConnectionsOwner,
+  }),
   p.pgPolicy("sharepoint_connection_select", {
     for: "select",
     to: stella,
@@ -1217,6 +1226,12 @@ export const sharepointConnectionPolicies = () => [
 ];
 
 export const sharepointOAuthStatePolicies = () => [
+  p.pgPolicy("sharepoint_oauth_state_owner", {
+    for: "all",
+    to: "public",
+    using: sharepointOAuthStateOwner,
+    withCheck: sharepointOAuthStateOwner,
+  }),
   p.pgPolicy("sharepoint_oauth_state_select", {
     for: "select",
     to: stella,
@@ -1228,9 +1243,11 @@ export const sharepointOAuthStatePolicies = () => [
     withCheck: sharepointConnectionCheck,
   }),
   p.pgPolicy("sharepoint_oauth_state_update", {
+    as: "restrictive",
     for: "update",
     to: stella,
-    using: sharepointConnectionCheck,
+    using: sql`false`,
+    withCheck: sql`false`,
   }),
   p.pgPolicy("sharepoint_oauth_state_delete", {
     for: "delete",

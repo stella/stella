@@ -41,7 +41,7 @@ let migratedPolicyExpression: string;
 
 const migrationPath = nodePath.resolve(
   import.meta.dir,
-  "../../../drizzle/20261120110000_report_export_cleanup_intents/migration.sql",
+  "../../../drizzle/20261120160000_report_export_cleanup_intents/migration.sql",
 );
 
 const insertPolicy = getTableConfig(bufferObjectCleanupIntents).policies.find(

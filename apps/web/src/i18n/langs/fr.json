@@ -2403,6 +2403,8 @@
       "boe_search_legislation": "Recherche dans le BOE",
       "borme_get_summary": "Sommaire quotidien BORME",
       "business_registry_lookup": "Recherche dans le registre des entreprises",
+      "calendar_free_busy": "Vérifier les disponibilités du calendrier",
+      "calendar_list_events": "Lire les événements du calendrier",
       "command_execution": "Exécution d’une commande",
       "compare_versions": "Comparaison des versions",
       "configure_template_fields": "Configurer les champs du modèle",
@@ -5462,6 +5464,7 @@
       "title": "Instructions de l’organisation",
       "tooLong": "Les instructions doivent contenir au maximum {maxLength} caractères."
     },
+    "createdSwitchPrompt": "L’organisation <bdi>{name}</bdi> a été créée. Passez-y pour la configurer et inviter des membres.",
     "creationEvaluationLimitReached": "Vous avez utilisé les {limit} périodes d’essai d’organisation. Supprimer une organisation ne rétablit pas de période d’essai. Utilisez une organisation existante ou contactez l’assistance pour obtenir un accès payant.",
     "creationInvalidName": "Saisissez un nom d’organisation valide ({maxLength} caractères maximum).",
     "creationNotAllowed": "Ce compte ne peut pas créer d’organisations.",
@@ -6139,7 +6142,7 @@
         "title": "Brouillons de facturation par IA"
       },
       "dataBoxes": {
-        "description": "Un message envoyé depuis l’une de ces boîtes est classé comme sortant, un message qui leur est adressé comme entrant. Chaque modification recalcule le sens des messages déjà classés dans les dossiers auxquels vous avez accès.",
+        "description": "Les messages envoyés depuis ces boîtes sont classés comme sortants, ceux qui leur sont adressés comme entrants. Les modifications s’appliquent aussi aux messages déjà classés.",
         "invalid": "Un identifiant de boîte de données compte sept lettres ou chiffres.",
         "remove": "Retirer la boîte de données {address}",
         "title": "Boîtes de données de l’organisation"
@@ -6172,6 +6175,7 @@
         "title": "Extraction de mémoire",
         "toggleLabel": "Suggérer des souvenirs à partir de l'historique des conversations en arrière-plan"
       },
+      "organizationIdHint": "Identifiant permanent qui ne change jamais. Utilisez-le pour contacter l’assistance ou configurer des intégrations.",
       "pastInvitations": "Invitations passées",
       "pendingInvitations": "Invitations en attente",
       "practiceJurisdictions": "Juridictions",
@@ -6185,11 +6189,12 @@
       "renameTitle": "Renommer l’organisation",
       "renameTypeToConfirm": "Saisissez le nouveau nom pour confirmer : {name}",
       "slug": {
-        "change": "Modifier l’identifiant",
-        "conflict": "Cet identifiant est déjà utilisé par une autre organisation.",
-        "description": "Choisissez un nouvel identifiant ou générez-en un aléatoire. L’ancien identifiant ne fonctionnera plus.",
-        "opaque": "Générer un identifiant aléatoire",
-        "title": "Identifiant de l’organisation"
+        "change": "Modifier le nom court",
+        "conflict": "Ce nom court est déjà utilisé par une autre organisation.",
+        "description": "Choisissez un nouveau nom court ou générez-en un aléatoire. L’ancien nom court ne fonctionnera plus.",
+        "hint": "Un nom court unique pour cette organisation, distinct de son nom d’affichage.",
+        "opaque": "Générer un nom court aléatoire",
+        "title": "Nom court de l’organisation"
       },
       "timePolicy": {
         "description": "Définissez les arrondis du temps, les délais de modification et les verrouillages mensuels.",

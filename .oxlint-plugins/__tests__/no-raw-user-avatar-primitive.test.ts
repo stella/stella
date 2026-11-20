@@ -37,7 +37,7 @@ test("accepts organization identity in its explicit exception", async () => {
     await lintSingleRule(
       "no-raw-user-avatar-primitive",
       'import { Avatar } from "@stll/ui/avatar";',
-      { sourcePath: "apps/web/src/routes/auth/organization.tsx" },
+      { sourcePath: "apps/web/src/routes/auth/-organization.page.tsx" },
     ),
   ).toEqual([]);
 });

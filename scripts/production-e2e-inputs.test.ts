@@ -15,6 +15,7 @@ import { repoRelativePath } from "@stll/portable-path";
 import {
   productionE2eChanged,
   productionE2eInputs,
+  productionWebSource,
 } from "./production-e2e-inputs.mjs";
 
 const productionConfig = path.resolve(
@@ -58,6 +59,31 @@ test("changed paths resolve from the repository root outside its working directo
     expect(productionE2eChanged(["README.md"])).toBe(false);
   } finally {
     process.chdir(originalWorkingDirectory);
+  }
+});
+
+test("shipped web source changes the production suite; tests, stories and docs do not", () => {
+  for (const file of [
+    "apps/web/src/components/breadcrumbs/chat-switcher.tsx",
+    "apps/web/src/routes/_protected.chat/-components/chat-history-link.tsx",
+    "apps/web/src/lib/react-query.ts",
+    "apps/web/src/i18n/langs/en.json",
+    "apps/web/src/fonts.css",
+  ]) {
+    expect(productionWebSource(file), file).toBe(true);
+    expect(productionE2eChanged(["README.md", file]), file).toBe(true);
+  }
+  for (const file of [
+    "apps/web/src/components/breadcrumbs/chat-breadcrumb.dom.test.tsx",
+    "apps/web/src/lib/react-query.test.ts",
+    "apps/web/src/components/button.stories.tsx",
+    "apps/web/src/i18n/TERMINOLOGY.md",
+    "apps/web/package.json",
+    "apps/web/srcs/page.tsx",
+    "apps/landing/src/page.tsx",
+  ]) {
+    expect(productionWebSource(file), file).toBe(false);
+    expect(productionE2eChanged([file]), file).toBe(false);
   }
 });
 

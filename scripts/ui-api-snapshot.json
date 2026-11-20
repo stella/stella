@@ -1110,6 +1110,7 @@
     ],
     "./destructive-confirm-dialog": ["DestructiveConfirmDialog"],
     "./details-grid": ["DetailsGrid", "DetailsItem"],
+    "./details-list-face": ["DetailsListFace", "DetailsListItemFace"],
     "./dialog": [
       "DIALOG_MOBILE_LAYOUT",
       "DIALOG_SIZE_CLASS_NAMES",
@@ -1727,6 +1728,7 @@
     "./number-input": ["NumberInput"],
     "./option-color": ["emptyColor", "optionColors", "resolveOptionColor"],
     "./outcome-screen": ["OutcomeScreen"],
+    "./outcome-screen-face": ["OutcomeScreenFace"],
     "./outline-rail": [
       "OUTLINE_CONTROL_MIN_SIZE",
       "OUTLINE_EMPHASIS",
@@ -2156,6 +2158,7 @@
     ],
     "DateRangeFilter.size": ["compact", "touch"],
     "DateRangeFilter.variant": ["field", "inline"],
+    "DetailsGrid.density": ["compact", "default"],
     "DetailsGrid.labelWidth": ["auto", "lg", "md", "sm"],
     "DetailsGrid.orientation": ["auto", "horizontal", "vertical"],
     "DetailsGrid.variant": ["list", "sheet"],

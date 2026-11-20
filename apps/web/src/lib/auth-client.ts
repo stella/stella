@@ -196,7 +196,9 @@ const createStellaAuthClient = (redirectMode: "automatic" | "manual") =>
           return useI18nStore.getState().lang;
         },
       },
-      onRequest: withOauthQueryFromHash,
+      ...(redirectMode === "automatic"
+        ? { onRequest: withOauthQueryFromHash }
+        : {}),
       onError: (context) => {
         if (notifyStepUp(context.error)) {
           return;
@@ -217,10 +219,19 @@ const createStellaAuthClient = (redirectMode: "automatic" | "manual") =>
 
 export const authClient = createStellaAuthClient("automatic");
 
-/** Consent owns the completion view and navigation; the SDK's redirect hook must not race it. */
-export const submitOAuthConsent = async (accept: boolean) => {
+/**
+ * Consent owns navigation and sends the signed request that was displayed
+ * when the user made their decision.
+ */
+export const submitOAuthConsent = async (
+  accept: boolean,
+  oauthQuery: string | null,
+) => {
   const consentClient = createStellaAuthClient("manual");
-  return await consentClient.oauth2.consent({ accept });
+  return await consentClient.oauth2.consent({
+    accept,
+    ...(oauthQuery === null ? {} : { oauth_query: oauthQuery }),
+  });
 };
 
 export const listAuthSessions = async () => {

@@ -207,13 +207,7 @@
     {
       "id": "export",
       "en": "Export",
-      "note": "Czech product UI uses ordinary save language; avoid the technical loanword Exportovat. The skill package export is the exception: it hands a skill to other tools as a .zip or .skill archive, and its menu names that as an export, the term those tools use for the same action.",
-      "keyExempt": [
-        "knowledge.agentSkills.exportAsSkill",
-        "knowledge.agentSkills.exportAsZip",
-        "knowledge.agentSkills.exportFailed",
-        "knowledge.agentSkills.exportSkill"
-      ],
+      "note": "Czech product UI uses ordinary save language; avoid the technical loanword Exportovat.",
       "forbidden": {
         "cs": ["Exportovat"]
       },

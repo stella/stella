@@ -2403,6 +2403,8 @@
       "boe_search_legislation": "BOE-Gesetzessuche",
       "borme_get_summary": "BORME-Tageszusammenfassung",
       "business_registry_lookup": "Handelsregister durchsuchen",
+      "calendar_free_busy": "Verfügbarkeit im Kalender prüfen",
+      "calendar_list_events": "Kalendertermine lesen",
       "command_execution": "Befehl wird ausgeführt",
       "compare_versions": "Versionen vergleichen",
       "configure_template_fields": "Vorlagenfelder konfigurieren",
@@ -5462,6 +5464,7 @@
       "title": "Organisationsanweisungen",
       "tooLong": "Die Anweisungen dürfen höchstens {maxLength} Zeichen enthalten."
     },
+    "createdSwitchPrompt": "Die Organisation <bdi>{name}</bdi> wurde erstellt. Wechseln Sie zu ihr, um sie einzurichten und Mitglieder einzuladen.",
     "creationEvaluationLimitReached": "Sie haben alle {limit} Testzeiträume für Organisationen genutzt. Durch das Löschen einer Organisation wird kein Testzeitraum wieder verfügbar. Nutzen Sie eine bestehende Organisation oder wenden Sie sich für einen kostenpflichtigen Zugang an den Support.",
     "creationInvalidName": "Geben Sie einen gültigen Organisationsnamen ein (höchstens {maxLength} Zeichen).",
     "creationNotAllowed": "Mit diesem Konto können keine Organisationen erstellt werden.",
@@ -6139,7 +6142,7 @@
         "title": "KI-Abrechnungsentwürfe"
       },
       "dataBoxes": {
-        "description": "Eine von einer dieser Databoxen gesendete Nachricht wird als ausgehend abgelegt, eine an sie gesendete als eingehend. Jede Änderung leitet die Richtung bereits abgelegter Nachrichten in den Akten, auf die Sie zugreifen können, neu ab.",
+        "description": "Nachrichten, die von diesen Databoxen gesendet werden, werden als ausgehend abgelegt, Nachrichten an sie als eingehend. Änderungen gelten auch für bereits abgelegte Nachrichten.",
         "invalid": "Eine Databox-ID besteht aus sieben Buchstaben oder Ziffern.",
         "remove": "Databox {address} entfernen",
         "title": "Databoxen der Organisation"
@@ -6172,6 +6175,7 @@
         "title": "Gedächtnis-Extraktion",
         "toggleLabel": "Im Hintergrund Erinnerungen aus dem Chatverlauf vorschlagen"
       },
+      "organizationIdHint": "Dauerhafte ID, die sich nie ändert. Verwenden Sie sie für Supportanfragen und beim Einrichten von Integrationen.",
       "pastInvitations": "Frühere Einladungen",
       "pendingInvitations": "Ausstehende Einladungen",
       "practiceJurisdictions": "Jurisdiktionen",
@@ -6185,11 +6189,12 @@
       "renameTitle": "Organisation umbenennen",
       "renameTypeToConfirm": "Geben Sie zur Bestätigung den neuen Namen ein: {name}",
       "slug": {
-        "change": "Kennung ändern",
-        "conflict": "Diese Kennung wird bereits von einer anderen Organisation verwendet.",
-        "description": "Wählen Sie eine neue Kennung oder lassen Sie eine zufällige erstellen. Die bisherige Kennung funktioniert danach nicht mehr.",
-        "opaque": "Zufällige Kennung erstellen",
-        "title": "Organisationskennung"
+        "change": "Kurznamen ändern",
+        "conflict": "Dieser Kurzname wird bereits von einer anderen Organisation verwendet.",
+        "description": "Wählen Sie einen neuen Kurznamen oder lassen Sie einen zufälligen erstellen. Der bisherige Kurzname funktioniert danach nicht mehr.",
+        "hint": "Ein eindeutiger Kurzname für diese Organisation, unabhängig von ihrem Anzeigenamen.",
+        "opaque": "Zufälligen Kurznamen erstellen",
+        "title": "Kurzname der Organisation"
       },
       "timePolicy": {
         "description": "Legen Sie Zeitrundung, Bearbeitungsfristen und Monatssperren fest.",

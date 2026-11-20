@@ -88,6 +88,7 @@ import {
 } from "./scenario-membership";
 import { readScalingScenarios } from "./scenarios";
 import { sharepointBrowseScalingScenarios } from "./sharepoint-browse";
+import { sharepointCapabilitiesScalingScenario } from "./sharepoint-capabilities";
 import { skillExportScalingScenarios } from "./skill-export";
 import {
   softLawReadScalingScenario,
@@ -166,6 +167,7 @@ const measuredApiScenarios = [
   memberCandidatesScalingScenario,
   mobileUpdateScalingScenario,
   ...invoicePaymentScalingScenarios,
+  sharepointCapabilitiesScalingScenario,
   ...invoiceSendScalingScenarios,
   ...outboundActionScalingScenarios,
   ...legalHoldScalingScenarios,
