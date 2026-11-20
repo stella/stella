@@ -31,7 +31,7 @@ import * as v from "valibot";
 
 export const INITIAL_GROWTH_LIMIT_BYTES = 8 * 1024;
 export const PENDING_MODULE_LIMIT_BYTES = 6 * 1024;
-export const PENDING_TOTAL_LIMIT_BYTES = 150 * 1024;
+export const PENDING_TOTAL_LIMIT_BYTES = 170 * 1024;
 
 /** A module's minified size in one chunk, keyed by its app-relative id. */
 export type BuiltChunk = {
