@@ -5,6 +5,7 @@ import { ButtonFace } from "@stll/ui/control-face";
 import { PendingText } from "@/components/pending-text";
 import { framePendingView } from "@/routes/-pending-view.logic";
 import { SettingsPageHeader } from "@/routes/_protected.settings/-components/settings-page-header";
+import { SettingsPagePending } from "@/routes/_protected.settings/-components/settings-shell/settings-shell.pending";
 
 import {
   BillingSettingsFrame,
@@ -59,26 +60,28 @@ export const VatRatesCardShell = ({
 );
 
 export const VatRateSettingsPending = framePendingView(() => (
-  <VatRateSettingsShell>
-    <VatRatesCardShell
-      actions={
-        <>
-          <ButtonFace size="default" variant="outline">
-            <PendingText id="billing.vatRates.addSlovakia" />
-          </ButtonFace>
-          <ButtonFace size="default" variant="outline">
-            <PendingText id="billing.vatRates.addCzechia" />
-          </ButtonFace>
-          <ButtonFace size="default" variant="default">
-            <PendingText id="billing.vatRates.add" />
-          </ButtonFace>
-        </>
-      }
-    >
-      <BillingSettingsTable
-        columns={VAT_RATE_COLUMNS}
-        rows={{ type: "pending", rowClassName: "max-sm:h-30" }}
-      />
-    </VatRatesCardShell>
-  </VatRateSettingsShell>
+  <SettingsPagePending>
+    <VatRateSettingsShell>
+      <VatRatesCardShell
+        actions={
+          <>
+            <ButtonFace size="default" variant="outline">
+              <PendingText id="billing.vatRates.addSlovakia" />
+            </ButtonFace>
+            <ButtonFace size="default" variant="outline">
+              <PendingText id="billing.vatRates.addCzechia" />
+            </ButtonFace>
+            <ButtonFace size="default" variant="default">
+              <PendingText id="billing.vatRates.add" />
+            </ButtonFace>
+          </>
+        }
+      >
+        <BillingSettingsTable
+          columns={VAT_RATE_COLUMNS}
+          rows={{ type: "pending", rowClassName: "max-sm:h-30" }}
+        />
+      </VatRatesCardShell>
+    </VatRateSettingsShell>
+  </SettingsPagePending>
 ));

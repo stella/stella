@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import { PendingText } from "@/components/pending-text";
 import { framePendingView } from "@/routes/-pending-view.logic";
 import { SettingsPageHeader } from "@/routes/_protected.settings/-components/settings-page-header";
+import { SettingsPagePending } from "@/routes/_protected.settings/-components/settings-shell/settings-shell.pending";
 import { DocumentTypesCardPending } from "@/routes/_protected.settings/organization/-components/organization/document-types-card.pending";
 
 export function DocumentTypesShell({ children }: { children: ReactNode }) {
@@ -28,7 +29,9 @@ export function DocumentTypesShell({ children }: { children: ReactNode }) {
 }
 
 export const DocumentTypesPending = framePendingView(() => (
-  <DocumentTypesShell>
-    <DocumentTypesCardPending />
-  </DocumentTypesShell>
+  <SettingsPagePending>
+    <DocumentTypesShell>
+      <DocumentTypesCardPending />
+    </DocumentTypesShell>
+  </SettingsPagePending>
 ));

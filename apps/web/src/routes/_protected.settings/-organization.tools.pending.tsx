@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import { PendingText } from "@/components/pending-text";
 import { framePendingView } from "@/routes/-pending-view.logic";
 import { SettingsPageHeader } from "@/routes/_protected.settings/-components/settings-page-header";
+import { SettingsPagePending } from "@/routes/_protected.settings/-components/settings-shell/settings-shell.pending";
 import {
   NativeToolsRowsPending,
   NativeToolsSearchFace,
@@ -31,8 +32,10 @@ export function ToolsShell({ children }: { children: ReactNode }) {
 }
 
 export const ToolsPending = framePendingView(() => (
-  <ToolsShell>
-    <NativeToolsSearchFace />
-    <NativeToolsRowsPending />
-  </ToolsShell>
+  <SettingsPagePending>
+    <ToolsShell>
+      <NativeToolsSearchFace />
+      <NativeToolsRowsPending />
+    </ToolsShell>
+  </SettingsPagePending>
 ));

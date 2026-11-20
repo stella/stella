@@ -22,6 +22,7 @@ import { InviteMemberTriggerFace } from "@/components/organization/invite-member
 import { PendingText } from "@/components/pending-text";
 import { framePendingView } from "@/routes/-pending-view.logic";
 import { SettingsPageHeader } from "@/routes/_protected.settings/-components/settings-page-header";
+import { SettingsPagePending } from "@/routes/_protected.settings/-components/settings-shell/settings-shell.pending";
 import { PendingInvitations } from "@/routes/_protected.settings/organization/-components/members-invitations.pending";
 
 export type SortKey = "name" | "role" | "joined";
@@ -207,24 +208,26 @@ export const MembersPending = framePendingView(() => {
     select: (search) => (typeof search.q === "string" ? search.q : undefined),
   });
   return (
-    <MembersShell
-      busy
-      invitations={<PendingInvitations />}
-      toolbar={
-        <MembersToolbarFace
-          invite={<InviteMemberTriggerFace />}
-          search={
-            <InputFace icon={<SearchIcon />}>
-              {q ?? <PendingText id="common.search" barClassName="w-14" />}
-            </InputFace>
-          }
+    <SettingsPagePending>
+      <MembersShell
+        busy
+        invitations={<PendingInvitations />}
+        toolbar={
+          <MembersToolbarFace
+            invite={<InviteMemberTriggerFace />}
+            search={
+              <InputFace icon={<SearchIcon />}>
+                {q ?? <PendingText id="common.search" barClassName="w-14" />}
+              </InputFace>
+            }
+          />
+        }
+      >
+        <TableSkeletonRows
+          columns={MEMBER_SKELETON_COLUMNS}
+          count={MEMBERS_SKELETON_ROW_COUNT}
         />
-      }
-    >
-      <TableSkeletonRows
-        columns={MEMBER_SKELETON_COLUMNS}
-        count={MEMBERS_SKELETON_ROW_COUNT}
-      />
-    </MembersShell>
+      </MembersShell>
+    </SettingsPagePending>
   );
 });

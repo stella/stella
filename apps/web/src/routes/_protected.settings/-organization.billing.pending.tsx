@@ -5,6 +5,7 @@ import { ButtonFace } from "@stll/ui/control-face";
 import { PendingText } from "@/components/pending-text";
 import { framePendingView } from "@/routes/-pending-view.logic";
 import { SettingsPageHeader } from "@/routes/_protected.settings/-components/settings-page-header";
+import { SettingsPagePending } from "@/routes/_protected.settings/-components/settings-shell/settings-shell.pending";
 
 import {
   BillingSettingsFrame,
@@ -46,18 +47,20 @@ export const SellerProfilesCardShell = ({
 );
 
 export const BillingSettingsPending = framePendingView(() => (
-  <BillingSettingsShell>
-    <SellerProfilesCardShell
-      action={
-        <ButtonFace size="default" variant="default">
-          <PendingText id="billing.sellerProfiles.add" />
-        </ButtonFace>
-      }
-    >
-      <BillingSettingsTable
-        columns={SELLER_PROFILE_COLUMNS}
-        rows={{ type: "pending" }}
-      />
-    </SellerProfilesCardShell>
-  </BillingSettingsShell>
+  <SettingsPagePending>
+    <BillingSettingsShell>
+      <SellerProfilesCardShell
+        action={
+          <ButtonFace size="default" variant="default">
+            <PendingText id="billing.sellerProfiles.add" />
+          </ButtonFace>
+        }
+      >
+        <BillingSettingsTable
+          columns={SELLER_PROFILE_COLUMNS}
+          rows={{ type: "pending" }}
+        />
+      </SellerProfilesCardShell>
+    </BillingSettingsShell>
+  </SettingsPagePending>
 ));

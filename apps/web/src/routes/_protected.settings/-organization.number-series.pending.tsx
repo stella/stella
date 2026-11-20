@@ -6,6 +6,7 @@ import { CalendarIcon } from "@stll/ui/icons";
 import { PendingText } from "@/components/pending-text";
 import { framePendingView } from "@/routes/-pending-view.logic";
 import { SettingsPageHeader } from "@/routes/_protected.settings/-components/settings-page-header";
+import { SettingsPagePending } from "@/routes/_protected.settings/-components/settings-shell/settings-shell.pending";
 
 import {
   BillingSettingsFrame,
@@ -67,32 +68,34 @@ export const NumberSeriesCardShell = ({
 );
 
 export const NumberSeriesSettingsPending = framePendingView(() => (
-  <NumberSeriesSettingsShell>
-    <NumberSeriesCardShell
-      action={
-        <ButtonFace size="default" variant="default">
-          <PendingText id="billing.numberSeries.add" />
-        </ButtonFace>
-      }
-      dateField={
-        <>
-          <span className="text-foreground text-base/4.5 font-medium sm:text-sm/4">
-            <PendingText id="billing.numberSeries.issueDate" />
-          </span>
-          <span
-            aria-hidden="true"
-            className="flex min-h-7 items-center gap-1.5 rounded-md px-1.5 text-sm opacity-64"
-          >
-            <CalendarIcon className="size-3.5 shrink-0" />
-            <FaceLabelPending className="w-20" />
-          </span>
-        </>
-      }
-    >
-      <BillingSettingsTable
-        columns={NUMBER_SERIES_COLUMNS}
-        rows={{ type: "pending" }}
-      />
-    </NumberSeriesCardShell>
-  </NumberSeriesSettingsShell>
+  <SettingsPagePending>
+    <NumberSeriesSettingsShell>
+      <NumberSeriesCardShell
+        action={
+          <ButtonFace size="default" variant="default">
+            <PendingText id="billing.numberSeries.add" />
+          </ButtonFace>
+        }
+        dateField={
+          <>
+            <span className="text-foreground text-base/4.5 font-medium sm:text-sm/4">
+              <PendingText id="billing.numberSeries.issueDate" />
+            </span>
+            <span
+              aria-hidden="true"
+              className="flex min-h-7 items-center gap-1.5 rounded-md px-1.5 text-sm opacity-64"
+            >
+              <CalendarIcon className="size-3.5 shrink-0" />
+              <FaceLabelPending className="w-20" />
+            </span>
+          </>
+        }
+      >
+        <BillingSettingsTable
+          columns={NUMBER_SERIES_COLUMNS}
+          rows={{ type: "pending" }}
+        />
+      </NumberSeriesCardShell>
+    </NumberSeriesSettingsShell>
+  </SettingsPagePending>
 ));

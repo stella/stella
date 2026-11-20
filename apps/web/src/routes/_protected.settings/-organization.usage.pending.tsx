@@ -7,6 +7,7 @@ import { PendingText } from "@/components/pending-text";
 import { env } from "@/env";
 import { framePendingView } from "@/routes/-pending-view.logic";
 import { SettingsPageHeader } from "@/routes/_protected.settings/-components/settings-page-header";
+import { SettingsPagePending } from "@/routes/_protected.settings/-components/settings-shell/settings-shell.pending";
 import { UsagePlansPending } from "@/routes/_protected.settings/organization/-components/organization/usage-plans-card.pending";
 
 export function UsageShell({
@@ -98,8 +99,10 @@ export function EntitlementPending() {
 
 export const UsagePending = framePendingView(() =>
   env.VITE_FEATURE_USAGE ? (
-    <UsageShell plans={<UsagePlansPending />}>
-      <EntitlementPending />
-    </UsageShell>
+    <SettingsPagePending>
+      <UsageShell plans={<UsagePlansPending />}>
+        <EntitlementPending />
+      </UsageShell>
+    </SettingsPagePending>
   ) : null,
 );

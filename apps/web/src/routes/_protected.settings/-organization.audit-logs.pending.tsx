@@ -17,6 +17,7 @@ import { cn } from "@stll/ui/utils";
 import { PendingText } from "@/components/pending-text";
 import { framePendingView } from "@/routes/-pending-view.logic";
 import { SettingsPageHeader } from "@/routes/_protected.settings/-components/settings-page-header";
+import { SettingsPagePending } from "@/routes/_protected.settings/-components/settings-shell/settings-shell.pending";
 
 export const AUDIT_LOG_COLUMNS = [
   {
@@ -203,24 +204,26 @@ export const AuditLogShell = ({
 );
 
 export const AuditLogsPending = framePendingView(() => (
-  <AuditLogShell
-    busy
-    exportAction={
-      <ButtonFace size="default" variant="outline">
-        <PendingText id="settings.organization.auditLogsExport" />
-      </ButtonFace>
-    }
-    filters={<AuditLogFilterFaces />}
-    next={
-      <ButtonFace size="default" variant="outline">
-        <PendingText id="common.next" />
-      </ButtonFace>
-    }
-    previous={
-      <ButtonFace size="default" variant="outline">
-        <PendingText id="common.previous" />
-      </ButtonFace>
-    }
-    rows={<AuditLogSkeletonRows />}
-  />
+  <SettingsPagePending>
+    <AuditLogShell
+      busy
+      exportAction={
+        <ButtonFace size="default" variant="outline">
+          <PendingText id="settings.organization.auditLogsExport" />
+        </ButtonFace>
+      }
+      filters={<AuditLogFilterFaces />}
+      next={
+        <ButtonFace size="default" variant="outline">
+          <PendingText id="common.next" />
+        </ButtonFace>
+      }
+      previous={
+        <ButtonFace size="default" variant="outline">
+          <PendingText id="common.previous" />
+        </ButtonFace>
+      }
+      rows={<AuditLogSkeletonRows />}
+    />
+  </SettingsPagePending>
 ));
