@@ -479,6 +479,9 @@ const CompanyLookupConfig = ({
         <Button
           className="self-start"
           disabled={formats.length >= LOOKUP_FORMATS_MAX}
+          disabledReason={t("templates.lookupFormatLimit", {
+            max: LOOKUP_FORMATS_MAX,
+          })}
           onClick={addFormat}
           size="sm"
           type="button"
