@@ -373,7 +373,9 @@ pub async fn install_update(
   app: tauri::AppHandle,
   state: State<'_, AppState>,
 ) -> Result<crate::updater::SettingsCheck, String> {
-  let active_edit_sessions = state.lock().await.has_active_edit_sessions();
+  let sessions = state.inner().as_ref();
+  let active_edit_sessions =
+    move || async move { sessions.lock().await.has_active_edit_sessions() };
   crate::updater::settings_outcome(
     crate::updater::run_check(&app, active_edit_sessions).await,
   )
