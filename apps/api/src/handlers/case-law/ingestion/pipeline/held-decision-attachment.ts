@@ -1201,18 +1201,17 @@ export const stageOwnCollectionPart = async ({
     });
     return Result.ok({ type: "unavailable" });
   }
-  return stored.map((key) =>
-    key === undefined
-      ? panic("A supplied own collection body needs its immutable key")
-      : {
-          type: "stored",
-          part: {
-            documentPart,
-            metadata: metadata.value,
-            body: { key, sha256: sha256Hex(encodedBody) },
-          },
-        },
-  );
+  const key =
+    stored.value ??
+    panic("A supplied own collection body needs its immutable key");
+  return Result.ok({
+    type: "stored",
+    part: {
+      documentPart,
+      metadata: metadata.value,
+      body: { key, sha256: sha256Hex(encodedBody) },
+    },
+  });
 };
 
 /** A new canonical row and its self-part become visible in the same transaction. */

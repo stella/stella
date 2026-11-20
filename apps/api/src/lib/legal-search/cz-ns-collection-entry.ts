@@ -165,7 +165,10 @@ export const czNsCollectionDocumentPart = ({
   reportEdition,
   legalSentence,
   keywords,
-}: StoredCzNsCollectionEntry) => {
+}: Pick<
+  StoredCzNsCollectionEntry,
+  "reportEdition" | "legalSentence" | "keywords"
+>) => {
   const fields = { legalSentence, keywords: [...keywords] };
   switch (reportEdition?.extent) {
     case "section":
