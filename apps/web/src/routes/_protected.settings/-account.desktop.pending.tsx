@@ -34,7 +34,7 @@ const DesktopFeature = ({
   icon: Icon,
   title,
 }: DesktopFeatureProps) => (
-  <section className="flex items-start gap-3 rounded-xl p-1">
+  <section className="flex items-start gap-3">
     <span className="bg-muted text-muted-foreground grid size-9 shrink-0 place-items-center rounded-xl">
       <Icon aria-hidden="true" className="size-4" />
     </span>
