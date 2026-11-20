@@ -290,9 +290,9 @@ test("a window that could not load offers to try again", async ({ page }) => {
 
 test("stella AI takes no file until its model is read", async ({ page }) => {
   await open(page, "light", { modelFails: true });
-  await expect(
-    page.getByText(en.transcribe.destination.modelFailed),
-  ).toBeVisible();
+  await expect(page.getByRole("alert")).toHaveText(
+    en.transcribe.destination.modelFailed,
+  );
   await expect(
     page.getByRole("button", { name: en.transcribe.drop.choose }),
   ).toBeDisabled();

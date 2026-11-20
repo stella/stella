@@ -682,16 +682,18 @@ const installNativeBoundary = async ({
     },
   });
   const messages = language === "ar" ? arMessages : enMessages;
-  const deletionOnlyNotice = page.getByText(
-    {
-      keyMissing: messages.activity.deletionOnly,
-      unreadable: messages.activity.unreadableEraseNotice,
-      available: messages.activity.errorRead,
-      pending: messages.activity.errorRead,
-      unavailable: messages.activity.errorRead,
-      incompatible: messages.activity.incompatibleActivity,
-    }[snapshot.deletionStatus],
-  );
+  const deletionOnlyNotice = page
+    .getByText(
+      {
+        keyMissing: messages.activity.deletionOnly,
+        unreadable: messages.activity.unreadableEraseNotice,
+        available: messages.activity.errorRead,
+        pending: messages.activity.errorRead,
+        unavailable: messages.activity.errorRead,
+        incompatible: messages.activity.incompatibleActivity,
+      }[snapshot.deletionStatus],
+    )
+    .filter({ visible: true });
   if (view === "settings") {
     await page.setViewportSize(DESKTOP_WINDOW_SIZES.settings);
     await page.goto("/#activity");
@@ -1159,9 +1161,9 @@ test("pending drafts protect every deletion in the activity settings", async ({
     captureMode(page, "Example Editor", "captureModeNothing"),
   ).toBeDisabled();
   await expect(
-    page.getByText(enMessages.activity.pendingActivityProtected, {
-      exact: true,
-    }),
+    page
+      .getByText(enMessages.activity.pendingActivityProtected, { exact: true })
+      .filter({ visible: true }),
   ).toBeVisible();
   for (const command of [
     "activity_delete_day",
@@ -1254,7 +1256,9 @@ test("unreadable saved activity explains why deletion is unavailable", async ({
     },
   });
   await expect(
-    page.getByText(enMessages.activity.errorRead, { exact: true }),
+    page
+      .getByText(enMessages.activity.errorRead, { exact: true })
+      .filter({ visible: true }),
   ).toBeVisible();
   await expect(
     page.getByRole("button", {
@@ -1779,9 +1783,9 @@ test("healthy current activity shows incompatible history guidance and protects 
       otherAccountHistoryDays: 3,
     },
   });
-  await expect(
-    page.getByText(enMessages.activity.incompatibleActivity, { exact: true }),
-  ).toBeVisible();
+  await expect(page.getByRole("alert")).toHaveText(
+    enMessages.activity.incompatibleActivity,
+  );
   for (const name of [
     enMessages.activity.deleteDay,
     enMessages.activity.deleteAll,
@@ -1823,9 +1827,9 @@ test("an open erase dialog disappears safely when saved history becomes incompat
     { ...SNAPSHOT, deletionStatus: "incompatible" },
   );
   await expect(page.getByRole("dialog")).toHaveCount(0);
-  await expect(
-    page.getByText(enMessages.activity.incompatibleActivity, { exact: true }),
-  ).toBeVisible();
+  await expect(page.getByRole("alert")).toHaveText(
+    enMessages.activity.incompatibleActivity,
+  );
   expect(pageErrors).toEqual([]);
   expect(await tauriInvocations(page)).not.toContainEqual(
     expect.objectContaining({ command: "activity_delete_day" }),
