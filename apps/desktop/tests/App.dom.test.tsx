@@ -184,8 +184,8 @@ const installBackend = (order: ResponseOrder) => {
 };
 
 const rowFor = (container: HTMLElement, key: PreferenceKey) =>
-  [...container.querySelectorAll("label")].find((element) =>
-    element.textContent.includes(PREFERENCE_LABELS[key]),
+  [...container.querySelectorAll('[data-slot="settings-row"]')].find(
+    (element) => element.textContent.includes(PREFERENCE_LABELS[key]),
   ) ?? panic(`No notification row for ${key}`);
 
 // The labelled native input takes the click; the visible checkbox reports state.
