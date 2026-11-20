@@ -592,10 +592,13 @@ describe("answering a call inside a suspended browsing run", () => {
 
   /** The turn paused on the child's approval, stored, and the request that
    *  answers it. */
-  const answering = async () => {
+  const answering = async (
+    shape: (parts: UIMessage["parts"]) => UIMessage["parts"] = (parts) => parts,
+  ) => {
     const scenario = browseScenario();
     const first = await scenario.run({ runId: "run-1" });
-    const live = scenario.answer();
+    const paused = scenario.answer();
+    const live = { ...paused, parts: shape(paused.parts) };
     const parts = live.parts.map(persistedPart);
     const id = toSafeId<"chatMessage">(live.id);
     const persisted = toPersistableChatMessage({
@@ -648,6 +651,81 @@ describe("answering a call inside a suspended browsing run", () => {
       approval: { approved: true },
       state: "approval-responded",
     });
+  });
+
+  test("gives each of two suspended runs the answer its own interrupt carries", async () => {
+    // Two browsing runs the main model started in one step, each paused on
+    // its own approval.
+    const secondRun = (parts: UIMessage["parts"]): UIMessage["parts"] => {
+      const subagent = parts.find((part) => part.type === "subagent");
+      const runId =
+        subagent?.type === "subagent"
+          ? subagent.subagent.id
+          : panic("The turn holds no run");
+      const copy: unknown = JSON.parse(
+        JSON.stringify(parts)
+          .replaceAll(OPEN_CALL, () => `${OPEN_CALL}-2`)
+          .replaceAll(BROWSE_CALL, () => `${BROWSE_CALL}-2`)
+          .replaceAll(runId, () => `${runId}-2`),
+      );
+      return [...parts, ...asTestRaw<UIMessage["parts"]>(copy)];
+    };
+    const { approval, validate } = await answering(secondRun);
+    const second = `approval_${OPEN_CALL}-2`;
+    expect(approval.id).not.toBe(second);
+    const accepted = await validate([
+      {
+        interruptId: approval.id,
+        payload: { approved: true },
+        status: "resolved",
+      },
+      { interruptId: second, payload: { approved: false }, status: "resolved" },
+    ]);
+    if (Result.isError(accepted)) {
+      return panic(accepted.error.message);
+    }
+    const calls = accepted.value.message.parts.flatMap((part) =>
+      part.type === "subagent"
+        ? part.subagent.messages.flatMap((message) => message.parts)
+        : [],
+    );
+    expect(
+      calls.find((call) => "id" in call && call.id === OPEN_CALL),
+    ).toMatchObject({
+      approval: { approved: true },
+      state: "approval-responded",
+    });
+    expect(
+      calls.find((call) => "id" in call && call.id === `${OPEN_CALL}-2`),
+    ).toMatchObject({
+      approval: { approved: false },
+      state: "approval-responded",
+    });
+    // An answer for only one of them, or one answer given twice, answers
+    // neither.
+    for (const answer of [
+      [
+        {
+          interruptId: approval.id,
+          payload: { approved: true },
+          status: "resolved",
+        },
+      ],
+      [
+        {
+          interruptId: approval.id,
+          payload: { approved: true },
+          status: "resolved",
+        },
+        {
+          interruptId: approval.id,
+          payload: { approved: false },
+          status: "resolved",
+        },
+      ],
+    ] satisfies RunAgentResumeItem[][]) {
+      expect(Result.isError(await validate(answer))).toBe(true);
+    }
   });
 
   test("refuses an answer that is not the awaited one", async () => {
