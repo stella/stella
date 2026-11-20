@@ -155,7 +155,7 @@ describe("generated npm release event policies", () => {
 });
 
 describe("generated npm publishing dependency graph", () => {
-  test("privileged jobs only delegate to the pinned workflow and summary has no release authority", () => {
+  test("npm publishers delegate to the pinned workflow and native assets retain separate release authority", () => {
     const workflow = v.parse(
       v.looseObject({
         jobs: v.record(
@@ -173,7 +173,19 @@ describe("generated npm publishing dependency graph", () => {
       Bun.YAML.parse(workflowSource()),
     );
     let publishers = 0;
-    for (const job of Object.values(workflow.jobs)) {
+    for (const [name, job] of Object.entries(workflow.jobs)) {
+      if (name === "cli-native-upload") {
+        expect(job.permissions).toEqual({
+          actions: "read",
+          contents: "write",
+          "id-token": "write",
+          attestations: "write",
+        });
+        expect(job.uses).toBeUndefined();
+        expect(job.steps).toBeArray();
+        expect(job["runs-on"]).toBe("ubuntu-24.04");
+        continue;
+      }
       const hasReleaseSecret = JSON.stringify(job).includes(
         "secrets.STELLA_RELEASE_APP",
       );
@@ -186,6 +198,10 @@ describe("generated npm publishing dependency graph", () => {
       expect(job["runs-on"]).toBeUndefined();
     }
     expect(publishers).toBe(ALL_PACKAGE_ORDER.length);
+    expect(workflow.jobs["cli-native-build"]?.permissions).toEqual({
+      contents: "read",
+    });
+    expect(workflow.jobs["cli-native-sign"]?.permissions).toEqual({});
     const summary = workflow.jobs["release-summary"];
     expect(summary?.permissions).toEqual({ contents: "read" });
     expect(summary?.environment).toBeUndefined();

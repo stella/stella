@@ -16,6 +16,7 @@ import {
   CHAT_TURN_ID_HEADER,
   CHAT_TURN_INTENT,
 } from "@stll/api-contract";
+import type { ChatLocalFilesUndoRead } from "@stll/api-contract/chat-local-files-undo";
 import { sleep } from "@stll/concurrency/sleep";
 import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
@@ -262,6 +263,21 @@ const createServer = ({
       url.pathname === `/v1/chat/threads/${THREAD_ID}/queue`
     ) {
       return Response.json({ hold: null, items: [] });
+    }
+    // The edit form reads what an edit does on the member's computer: these
+    // turns ran in the cloud and touched no folder.
+    if (
+      url.origin === API_ORIGIN &&
+      method === "GET" &&
+      /^\/v1\/chat\/threads\/[^/]+\/messages\/[^/]+\/local-files\/undo$/u.test(
+        url.pathname,
+      )
+    ) {
+      return Response.json({
+        files: { type: "none" },
+        conversation: { type: "continues" },
+        undo: null,
+      } satisfies ChatLocalFilesUndoRead);
     }
     unexpected.push(`${method} ${url.pathname}`);
     return Response.json({ message: "Not served" }, { status: 404 });

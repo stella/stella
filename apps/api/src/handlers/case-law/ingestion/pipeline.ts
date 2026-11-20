@@ -4,7 +4,10 @@ import { sanitizeErrorAttributesForOutput } from "@stll/errors";
 import type { DocumentStageObserver } from "@stll/legal-atlas/document-fetch-diagnostics";
 import {
   CYCLE_HALT_REASON,
+  CYCLE_OUTCOME,
+  INGESTION_PAUSE_REASON,
   INGESTION_STOP_KIND,
+  type IngestionCycleTermination,
   type IngestionPipelineResult,
   type IngestionStopKind,
 } from "@stll/legal-atlas/ingestion-cycle";
@@ -24,7 +27,6 @@ import {
 import type {
   DecisionBatchHalt,
   FailureLedgerWrite,
-  IngestionFailureRow,
 } from "@/api/handlers/case-law/ingestion/pipeline/batch";
 import {
   admitPageDecisions,
@@ -33,6 +35,11 @@ import {
 } from "@/api/handlers/case-law/ingestion/pipeline/batch-types";
 import { CASE_LAW_CORPUS_DEPENDENCIES } from "@/api/handlers/case-law/ingestion/pipeline/dependencies";
 import type { CaseLawCorpusDependencies } from "@/api/handlers/case-law/ingestion/pipeline/dependencies";
+import {
+  captureFailureEvidence,
+  ingestionFailureRecordIdentity,
+} from "@/api/handlers/case-law/ingestion/pipeline/failure-evidence";
+import type { IngestionFailureRow } from "@/api/handlers/case-law/ingestion/pipeline/failure-evidence-persistence";
 import {
   PROCESS_DECISION_RETRY_REASON,
   PROCESS_DECISION_STATUS,
@@ -145,16 +152,19 @@ const databaseTimeoutHaltReason = (error: TimeoutError): string =>
   `Database timeout; cursor held for retry: ${error.message.slice(0, 200)}`;
 
 /**
- * What a failure-ledger write means for the cursor. A timeout or a transient
- * database condition holds it and the page is read again. A rejection
- * repeats on a replay of the same rows, so it is reported and the page moves
- * on.
+ * Only a durable, replayable failure permits the cursor to pass its item.
+ * Missing identity or input, and every failed ledger write, hold the page.
  */
 const failureLedgerHaltReason = (write: FailureLedgerWrite): string | null => {
   switch (write.type) {
     case "written":
-    case "rejected":
       return null;
+    case "unreplayable":
+      return "Failure record has no replayable identity or input; cursor held for retry";
+    case "ownership-unavailable":
+      return "Failure record ownership unavailable; cursor held for retry";
+    case "rejected":
+      return "Failure record was not written; cursor held for retry";
     case "timeout":
       return databaseTimeoutHaltReason(write.error);
     case "transient":
@@ -189,6 +199,8 @@ const batchHaltReason = (
       return RETRY_HALT_REASON[stop.reason];
     case "timeout":
       return databaseTimeoutHaltReason(stop.error);
+    case "transient":
+      return `Transient failure; cursor held for retry: [${stop.tag}] ${stop.message.slice(0, 200)}`;
     case "insert-limit":
       // Halting (instead of breaking quietly) keeps the cursor at this page
       // so the unprocessed remainder is not skipped.
@@ -207,14 +219,13 @@ const batchHaltReason = (
 };
 
 const batchStopKind = (
-  stop: DecisionBatchHalt,
-): IngestionStopKind | undefined => {
+  stop: Exclude<DecisionBatchHalt, { type: "insert-limit" }>,
+): IngestionStopKind => {
   switch (stop.type) {
     case "retryable":
     case "timeout":
+    case "transient":
       return INGESTION_STOP_KIND.INTERNAL_ERROR;
-    case "insert-limit":
-      return undefined;
     case "failure-streak":
       return stop.stopKind;
     case "aborted":
@@ -222,6 +233,59 @@ const batchStopKind = (
     default:
       stop satisfies never;
       return panic(`Unhandled batch stop: ${String(stop)}`);
+  }
+};
+
+type FailedCycleTermination = Extract<
+  IngestionCycleTermination,
+  { stopKind: IngestionStopKind }
+>;
+
+const failedCycleTermination = (
+  stopKind: IngestionStopKind,
+): FailedCycleTermination => ({
+  outcome:
+    stopKind === INGESTION_STOP_KIND.DEADLINE
+      ? CYCLE_OUTCOME.TIMEOUT
+      : CYCLE_OUTCOME.FAILED,
+  stopKind,
+});
+
+type LogCycleTerminationOptions = {
+  termination: Exclude<
+    IngestionCycleTermination,
+    { outcome: typeof CYCLE_OUTCOME.COMPLETED }
+  >;
+  attributes: {
+    adapterKey: string;
+    cursor: string;
+    reason: string;
+    inserted: number;
+    skipped: number;
+  };
+};
+
+const logCycleTermination = ({
+  termination,
+  attributes,
+}: LogCycleTerminationOptions): void => {
+  switch (termination.outcome) {
+    case CYCLE_OUTCOME.PAUSED:
+      logger.info("case_law.ingestion.adapter_paused", {
+        ...attributes,
+        pauseReason: termination.pauseReason,
+      });
+      return;
+    case CYCLE_OUTCOME.FAILED:
+    case CYCLE_OUTCOME.TIMEOUT:
+      STOP_LOGGER[termination.stopKind]("case_law.ingestion.adapter_halted", {
+        ...attributes,
+        stopKind: termination.stopKind,
+      });
+      return;
+    default:
+      termination satisfies never;
+      panic("Unhandled ingestion termination");
   }
 };
 
@@ -235,6 +299,19 @@ const pageItemCount = ({
   unreadItems,
 }: SyncPage): number =>
   decisions.length + (supplements?.length ?? 0) + (unreadItems?.length ?? 0);
+
+/** An aggregate count cannot certify records the adapter omitted. */
+const unsettledBuildFailureCount = ({
+  decisions,
+  itemBuildFailures,
+}: SyncPage): number =>
+  Math.max(
+    0,
+    (itemBuildFailures?.count ?? 0) -
+      decisions.filter(
+        ({ plainTextOutcome }) => plainTextOutcome.type === "item_build_failed",
+      ).length,
+  );
 
 /** One when the publisher answered a request for the page, else zero. */
 const publisherAnsweredCount = ({ publisherRequest }: SyncPage): number =>
@@ -303,7 +380,10 @@ const runScopedIngestionPipeline = async ({
    */
   let consecutiveFailures = 0;
   let haltReason: string | null = null;
-  let stopKind: IngestionStopKind | undefined;
+  let termination: Exclude<
+    IngestionCycleTermination,
+    { outcome: typeof CYCLE_OUTCOME.COMPLETED }
+  > = failedCycleTermination(INGESTION_STOP_KIND.INTERNAL_ERROR);
   let checkpointObservationOrder = source.checkpointObservationOrder;
   /**
    * Compiled polarity rules for this cycle. One read per language the cycle
@@ -530,7 +610,7 @@ const runScopedIngestionPipeline = async ({
         deadline?.signal.aborted ||
         (await acquireBatchAdmission?.()) === "paused"
       ) {
-        stopKind = INGESTION_STOP_KIND.DEADLINE;
+        termination = failedCycleTermination(INGESTION_STOP_KIND.DEADLINE);
         return CYCLE_HALT_REASON.TIMEOUT;
       }
       if (batch.admission === DECISION_ADMISSION.OVERSIZED_RECORD) {
@@ -577,10 +657,30 @@ const runScopedIngestionPipeline = async ({
           : batchHaltReason(applied.halt, maxDecisions)) ??
         failureLedgerHaltReason(applied.failureLedger);
       if (batchHalt !== null) {
-        stopKind =
+        if (applied.halt?.type === "insert-limit") {
+          if (
+            applied.failureLedger.type === "written" &&
+            applied.corpusWriteFailures === 0
+          ) {
+            termination = {
+              outcome: CYCLE_OUTCOME.PAUSED,
+              pauseReason: INGESTION_PAUSE_REASON.DECISION_ALLOWANCE_EXHAUSTED,
+            };
+            return batchHalt;
+          }
+          termination = failedCycleTermination(
+            INGESTION_STOP_KIND.INTERNAL_ERROR,
+          );
+          return (
+            failureLedgerHaltReason(applied.failureLedger) ??
+            "Decision allowance reached before all processed inputs were durable"
+          );
+        }
+        termination = failedCycleTermination(
           applied.halt === null
             ? INGESTION_STOP_KIND.INTERNAL_ERROR
-            : batchStopKind(applied.halt);
+            : batchStopKind(applied.halt),
+        );
         return batchHalt;
       }
     }
@@ -596,9 +696,11 @@ const runScopedIngestionPipeline = async ({
   const placePageSupplements = async ({
     supplements,
     halted,
+    observation,
   }: {
     supplements: SyncPage["supplements"];
     halted: string | null;
+    observation: { order: bigint; observedAt: Date };
   }): Promise<string | null> => {
     if (halted !== null || supplements === undefined) {
       return halted;
@@ -656,6 +758,10 @@ const runScopedIngestionPipeline = async ({
           await flushIngestionFailures(failures);
           return databaseTimeoutHaltReason(error);
         }
+        const captured = captureFailureEvidence({
+          record: { type: "supplement", supplement },
+          observation,
+        });
         failures.push({
           sourceId: source.id,
           caseNumber: document.caseNumber,
@@ -663,6 +769,11 @@ const runScopedIngestionPipeline = async ({
           errorType: errorTag(error).slice(0, 128),
           errorMessage: wrappedErrorDetail(error).slice(0, 2048),
           cursor,
+          ...ingestionFailureRecordIdentity({
+            sourceDocumentId: document.sourceDocumentId,
+            replayEvidence: Result.isOk(captured) ? captured.value : undefined,
+          }),
+          ...(Result.isOk(captured) ? { replayEvidence: captured.value } : {}),
         });
         continue;
       }
@@ -718,7 +829,9 @@ const runScopedIngestionPipeline = async ({
         streaks: plan.streaks,
       });
       if (!written) {
-        stopKind = INGESTION_STOP_KIND.INTERNAL_ERROR;
+        termination = failedCycleTermination(
+          INGESTION_STOP_KIND.INTERNAL_ERROR,
+        );
         return "Source ingestion lease was lost; cursor held for retry";
       }
       unavailableStreaks = plan.streaks;
@@ -733,7 +846,9 @@ const runScopedIngestionPipeline = async ({
       }
       return null;
     }
-    stopKind = INGESTION_STOP_KIND.SOURCE_UNREACHABLE;
+    termination = failedCycleTermination(
+      INGESTION_STOP_KIND.SOURCE_UNREACHABLE,
+    );
     return `${plan.holding} listed item(s) unavailable for fewer than ${UNAVAILABLE_CYCLES_BEFORE_MARKING} consecutive cycles; cursor held for retry`;
   };
 
@@ -760,9 +875,15 @@ const runScopedIngestionPipeline = async ({
     const placed = await placePageSupplements({
       supplements: page.supplements,
       halted,
+      observation,
     });
     if (placed !== null || s3UploadFailures > s3FailuresBefore) {
       return placed;
+    }
+    const unsettled = unsettledBuildFailureCount(page);
+    if (unsettled > 0) {
+      termination = failedCycleTermination(INGESTION_STOP_KIND.ADAPTER_ERROR);
+      return `${unsettled} adapter item build failure(s) lack replayable per-item outcomes; cursor held for retry`;
     }
     return await settlePageUnreadItems({
       unreadItems: page.unreadItems,
@@ -774,7 +895,7 @@ const runScopedIngestionPipeline = async ({
     const observedPage = await fetchNextObservedPage();
     if (observedPage.type === "halt") {
       haltReason = observedPage.reason;
-      stopKind = observedPage.stopKind;
+      termination = failedCycleTermination(observedPage.stopKind);
       break;
     }
 
@@ -792,7 +913,7 @@ const runScopedIngestionPipeline = async ({
     const pageSlot = await acquirePageSlot(page);
     if (pageSlot === PAGE_SLOT.CYCLE_ENDED) {
       haltReason = CYCLE_HALT_REASON.TIMEOUT;
-      stopKind = INGESTION_STOP_KIND.DEADLINE;
+      termination = failedCycleTermination(INGESTION_STOP_KIND.DEADLINE);
       break;
     }
     const pageT0 = performance.now();
@@ -829,15 +950,16 @@ const runScopedIngestionPipeline = async ({
         halted: haltReason !== null,
       });
 
-      if (haltReason) {
-        stopKind ??= INGESTION_STOP_KIND.INTERNAL_ERROR;
-        STOP_LOGGER[stopKind]("case_law.ingestion.adapter_halted", {
-          adapterKey: adapter.key,
-          cursor: cursor ?? "",
-          reason: haltReason,
-          stopKind,
-          inserted,
-          skipped,
+      if (haltReason !== null) {
+        logCycleTermination({
+          termination,
+          attributes: {
+            adapterKey: adapter.key,
+            cursor: cursor ?? "",
+            reason: haltReason,
+            inserted,
+            skipped,
+          },
         });
         break;
       }
@@ -901,15 +1023,21 @@ const runScopedIngestionPipeline = async ({
       }),
   });
 
-  return {
+  const counts = {
     inserted,
     skipped,
     searchVectorFailures,
     s3UploadFailures,
     pagesProcessed,
     nextCursor: cursor,
+  };
+  if (haltReason === null) {
+    return { ...counts, outcome: CYCLE_OUTCOME.COMPLETED, haltReason: null };
+  }
+  return {
+    ...counts,
+    ...termination,
     haltReason,
-    ...(stopKind === undefined ? {} : { stopKind }),
   };
 };
 

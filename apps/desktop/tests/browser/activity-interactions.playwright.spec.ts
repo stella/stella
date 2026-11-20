@@ -696,7 +696,7 @@ const installNativeBoundary = async ({
     await page.setViewportSize(DESKTOP_WINDOW_SIZES.settings);
     await page.goto("/#activity");
     if (!activityEnabled) {
-      await expect(page.getByRole("tabpanel")).toBeVisible();
+      await expect(page.locator("[data-slot=settings-page]")).toBeVisible();
       return;
     }
     await expect(
@@ -1316,7 +1316,7 @@ test("the activity window opens its settings in the Settings window", async ({
   });
 });
 
-test("the Activity tab is absent while the activity feature is off", async ({
+test("the Activity page is absent while the activity feature is off", async ({
   page,
 }) => {
   await installNativeBoundary({
@@ -1324,11 +1324,18 @@ test("the Activity tab is absent while the activity feature is off", async ({
     view: "settings",
     activityEnabled: false,
   });
+  const pages = page.getByRole("navigation");
   await expect(
-    page.getByRole("tab", { name: enMessages.settings.general, exact: true }),
-  ).toHaveAttribute("aria-selected", "true");
+    pages.getByRole("button", {
+      name: enMessages.settings.pages.general,
+      exact: true,
+    }),
+  ).toHaveAttribute("aria-current", "page");
   await expect(
-    page.getByRole("tab", { name: enMessages.activity.title, exact: true }),
+    pages.getByRole("button", {
+      name: enMessages.settings.pages.activity,
+      exact: true,
+    }),
   ).toHaveCount(0);
   await expect(
     page.getByRole("heading", {
@@ -1345,13 +1352,16 @@ test("the Activity tab is absent while the activity feature is off", async ({
   );
 });
 
-test("the Activity tab reads settings, never the day timeline", async ({
+test("the Activity page reads settings, never the day timeline", async ({
   page,
 }) => {
   await installNativeBoundary({ page, view: "settings" });
   await expect(
-    page.getByRole("tab", { name: enMessages.activity.title, exact: true }),
-  ).toHaveAttribute("aria-selected", "true");
+    page.getByRole("navigation").getByRole("button", {
+      name: enMessages.settings.pages.activity,
+      exact: true,
+    }),
+  ).toHaveAttribute("aria-current", "page");
   const commands = (await tauriInvocations(page)).map(({ command }) => command);
   expect(commands).toContain("activity_get_settings");
   expect(commands).not.toContain("activity_get_day");
@@ -2431,7 +2441,7 @@ for (const language of ["en", "ar"] as const) {
     page,
   }, testInfo) => {
     const messages = language === "ar" ? arMessages : enMessages;
-    await page.setViewportSize({ width: 820, height: 950 });
+    await page.setViewportSize({ width: 560, height: 950 });
     await installNativeBoundary({
       page,
       snapshot: { ...SNAPSHOT, recordingStatus: "off" },
@@ -2452,15 +2462,56 @@ for (const language of ["en", "ar"] as const) {
       path: testInfo.outputPath(`welcome-${language}.png`),
       fullPage: true,
     });
-    await page
-      .getByText(messages.activity.welcomeLearnMore, { exact: true })
-      .click();
+    const disclosure = page.getByRole("button", {
+      name: messages.activity.welcomeLearnMore,
+      exact: true,
+    });
+    await expect(disclosure).toHaveAttribute("aria-expanded", "false");
+    await disclosure.focus();
+    await disclosure.press("Enter");
+    await expect(disclosure).toBeFocused();
+    await expect(disclosure).toHaveAttribute("aria-expanded", "true");
+    const details = page.getByText(messages.activity.welcomeDetails, {
+      exact: true,
+    });
+    await expect(details).toBeVisible();
+    const card = page
+      .getByRole("heading", { name: messages.activity.welcomeTitle })
+      .locator("..");
+    await expect
+      .poll(
+        async () =>
+          await details.evaluate((element) => {
+            const section = element.closest("section");
+            const content = element.getBoundingClientRect();
+            const bounds = section?.getBoundingClientRect();
+            return (
+              bounds !== undefined &&
+              content.left >= bounds.left &&
+              content.right <= bounds.right &&
+              content.bottom <= bounds.bottom &&
+              element.scrollWidth <= element.clientWidth
+            );
+          }),
+      )
+      .toBe(true);
     await expect(
-      page.getByText(messages.activity.welcomeDetails, { exact: true }),
+      card.getByRole("button", { name: messages.activity.welcomeStart }),
     ).toBeVisible();
-    expect(await tauriInvocations(page)).not.toContainEqual(
-      expect.objectContaining({ command: "activity_set_recording_status" }),
-    );
+    await disclosure.press("Space");
+    await expect(disclosure).toBeFocused();
+    await expect(disclosure).toHaveAttribute("aria-expanded", "false");
+    await expect(details).toBeHidden();
+    await disclosure.click();
+    await expect(details).toBeVisible();
+    for (const command of [
+      "activity_set_recording_status",
+      "activity_set_capture_details",
+    ]) {
+      expect(await tauriInvocations(page)).not.toContainEqual(
+        expect.objectContaining({ command }),
+      );
+    }
   });
 }
 

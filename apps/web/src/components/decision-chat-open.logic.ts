@@ -1,4 +1,7 @@
-import { INSPECTOR_PANE_INTENT } from "@/components/inspector/inspector-store-types";
+import {
+  INSPECTOR_FOCUS_INTENT,
+  INSPECTOR_PANE_INTENT,
+} from "@/components/inspector/inspector-store-types";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { decisionChatKey } from "@/features/chat/legal-document-chat-key";
 import type { ChatThreadId } from "@/lib/chat-thread-ref";
@@ -23,7 +26,11 @@ export const openDecisionConversation = ({
   const store = useInspectorTabsStore.getState();
   const activeLegalKey = decisionChatKey(decisionId);
   if (threadId === null) {
-    store.openChat({ activeLegalKey, pane: INSPECTOR_PANE_INTENT.keep });
+    store.openChat({
+      activeLegalKey,
+      pane: INSPECTOR_PANE_INTENT.keep,
+      focus: INSPECTOR_FOCUS_INTENT.claim,
+    });
     return;
   }
   // A tab this decision already has becomes the conversation, rather than a
@@ -43,5 +50,6 @@ export const openDecisionConversation = ({
     id: threadId,
     pane: INSPECTOR_PANE_INTENT.keep,
     started: true,
+    focus: INSPECTOR_FOCUS_INTENT.claim,
   });
 };

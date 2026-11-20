@@ -123,6 +123,7 @@ import { configuredAppleSignIn } from "@/api/lib/auth/apple-sign-in-env";
 import { authCookiePolicy } from "@/api/lib/auth/auth-cookie-name";
 import {
   AUTH_API_PATH,
+  getAgentRedirectUri,
   getAuthEndpointUrl,
   getAuthIssuerUrl,
   OAUTH_UI_CONSENT_PATH,
@@ -276,6 +277,7 @@ import { readCurrentLiveSseSessions } from "@/api/lib/auth/sse-session-liveness-
 import { withoutTrustedDeviceBypass } from "@/api/lib/auth/two-factor-trusted-device";
 import { unlinkAccountWithConfirmation } from "@/api/lib/auth/unlink-account-runtime";
 import { AUTH_USER_ADDITIONAL_FIELDS } from "@/api/lib/auth/user-additional-fields";
+import { validateUserLocale } from "@/api/lib/auth/user-locale";
 import { createUserProjectionUpdateHook } from "@/api/lib/auth/user-projection-updates";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -341,6 +343,7 @@ import {
   getDefaultClientResourceIdentifiers,
   getOwnNativeClientResources,
   isApiResourceClient,
+  isMobileAppClient,
 } from "@/api/lib/oauth-resource-policy";
 import { bridgeOauthUiInteraction } from "@/api/lib/oauth-ui-fragment";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
@@ -2422,6 +2425,7 @@ export const createAuth = (
                 path: ctx?.path,
               });
               yield* validateTimezoneId(user["timezoneId"]);
+              yield* validateUserLocale(user["locale"]);
               // Email-OTP and some social providers leave `name` blank.
               // The `notNull` schema constraint allows empty strings, which
               // surfaces as a blank "Author" everywhere the user is shown.
@@ -2455,9 +2459,9 @@ export const createAuth = (
         },
         update: {
           before: async (user, ctx) => {
-            const data = validateTimezoneId(user["timezoneId"]).andThen(() =>
-              normalizeUserPreferences(ensureDisplayName(user)),
-            );
+            const data = validateTimezoneId(user["timezoneId"])
+              .andThen(() => validateUserLocale(user["locale"]))
+              .andThen(() => normalizeUserPreferences(ensureDisplayName(user)));
             if (Result.isError(data)) {
               throw data.error;
             }
@@ -2667,6 +2671,11 @@ export const createAuth = (
           // a missed migration and add an owner-DB write to auth startup.
           resourceSeedMode: "none",
           enforcePerClientResources: true,
+          // The agent clients' code sink is read server-side and never
+          // navigated to. A local or test issuer serves it over loopback
+          // `http:`, which the provider refuses for web clients unless this
+          // accepts it; deployed issuers are https and never reach here.
+          allowInsecureRedirectUri: (url) => url.href === getAgentRedirectUri(),
           clientRegistrationDefaultResources:
             getDefaultClientResourceIdentifiers(),
           clientRegistrationAllowedResources:
@@ -3875,6 +3884,7 @@ const resolveAccessTokenIdentity = async ({
     return { ok: false, statusCode: 401 };
   }
   const admission = admitApiAccessTokenRoute({
+    client: isMobileAppClient(tokenSession.clientId) ? "mobile" : undefined,
     method: request.method,
     route,
     scopes: tokenSession.scopes,

@@ -48,7 +48,8 @@
     "approve": "Jóváhagyás",
     "codeLabel": "Adja meg az ügynöke által megjelenített kódot",
     "codePlaceholder": "XXXX-XXXX",
-    "connectedDescription": "Mostantól olvashat és kereshet a stella-munkaterületén. A folytatáshoz térjen vissza az ügynökéhez.",
+    "connectedAccess": "Olvasás és keresés",
+    "connectedDescription": "A folytatáshoz térjen vissza az ügynökéhez.",
     "connectedTitle": "Az ügynöke csatlakozott",
     "description": "Egy AI-ügynök az Ön nevében hozzáférést kér a stella munkaterületéhez. Csak akkor hagyja jóvá, ha Ön kezdeményezte.",
     "error": "Valami hiba történt. Kérjük, próbálja újra.",
@@ -929,12 +930,14 @@
       },
       "linkedExpenses": "Kapcsolt kiadások",
       "linkedTimeEntries": "Kapcsolt időbejegyzések",
+      "markSent": "Megjelölés elküldöttként",
       "noEntries": "Nincs ehhez a számlához kapcsolt tétel",
       "noInvoices": "Még nincsenek számlák",
       "paidAt": "Fizetve",
       "payments": {
         "amountTooHigh": "Az összeg meghaladja a(z) {amount} hátralékot.",
         "confirmVoid": "A kifizetés sztornózottként nyilvántartásban marad, és többé nem számít bele ennek a számlának a kiegyenlítésébe.",
+        "credited": "Jóváírva",
         "empty": "Még nincs rögzített kifizetés",
         "method": "Fizetési mód",
         "methods": {
@@ -947,6 +950,8 @@
         "paidOn": "Fizetés dátuma",
         "partiallyPaid": "Részben kifizetve",
         "record": "Kifizetés rögzítése",
+        "refundAmount": "Visszatérítendő {amount}",
+        "refundDue": "Visszatérítendő",
         "summary": "Kifizetve {paid}, hátralék {outstanding}",
         "title": "Kifizetések",
         "void": "Kifizetés sztornózása",
@@ -954,6 +959,42 @@
       },
       "removeEntries": "Tételek eltávolítása",
       "send": "Küldés",
+      "sendByEmail": "Küldés e-mailben",
+      "sending": {
+        "failed": "A számlát nem sikerült elküldeni",
+        "historyEmpty": "Ezt a számlát még nem küldték el e-mailben.",
+        "historyTitle": "E-mailben elküldve",
+        "linkInfo": "A címzettek biztonságos linket kapnak a számla megtekintéséhez és letöltéséhez. Az e-mailhez semmi nincs csatolva.",
+        "linkStatus": {
+          "active": "A link aktív",
+          "expired": "A link lejárt",
+          "failed": "Nem kézbesítve",
+          "pending": "Küldés folyamatban",
+          "revoked": "A link visszavonva"
+        },
+        "loadFailed": "A küldési előzményeket nem sikerült betölteni.",
+        "message": "Üzenet (nem kötelező)",
+        "messagePlaceholder": "Rövid megjegyzés a címzetteknek",
+        "messageTooLong": "Az üzenet legfeljebb {max, number} karakter lehet.",
+        "notDelivered": "Nem kézbesítve: {addresses}",
+        "notOpened": "Még nincs megnyitva",
+        "opened": "Megnyitva: {date}",
+        "recipients": "Címzettek",
+        "recipientsHint": "Soronként egy cím vagy vesszővel elválasztva, legfeljebb {max, number}.",
+        "recipientsInvalid": "Ellenőrizze az e-mail-címeket.",
+        "recipientsRequired": "Adjon meg legalább egy e-mail-címet.",
+        "recipientsTooMany": "Egyszerre legfeljebb {max, number} címre küldhet.",
+        "replyTo": "A válaszok ide érkeznek: {address}.",
+        "revoke": "Link visszavonása",
+        "revokeConfirm": "A címzettek ezzel a linkkel már nem nyithatják meg a számlát. Küldje el újra a számlát, hogy új linket kapjanak.",
+        "revokeTitle": "Visszavonja ezt a linket?",
+        "revoked": "A linket visszavonta",
+        "sendAgain": "Újraküldés",
+        "sent": "Számla elküldve",
+        "sentBy": "{date}, küldő: {name}",
+        "sentPartial": "Számla elküldve, de ezekre a címekre nem sikerült kézbesíteni: {addresses}",
+        "title": "{number} számla küldése"
+      },
       "statuses": {
         "draft": "Tervezet",
         "finalized": "Véglegesített",
@@ -1069,6 +1110,7 @@
       "legalName": "Hivatalos név",
       "registerEntry": "Cégjegyzékbejegyzés",
       "registrationId": "Nyilvántartási szám",
+      "replyEmail": "E-mail-cím válaszokhoz",
       "setDefault": "Beállítás alapértelmezettként",
       "title": "Eladói profilok",
       "vatPayerHelp": "Az eladó számlái áfát számítanak fel. Kapcsolja ki olyan nyilvántartott személynél, akinek van áfaazonosítója, de nem áfaalany.",
@@ -1191,6 +1233,13 @@
       "treatment": "Későbbi megítélés"
     },
     "analyzing": "Elemzés folyamatban...",
+    "browse": {
+      "courtDescription": "{court} ({country}): határozatok a stella nyilvános jogi adatbázisában, év és hónap szerint.",
+      "courts": "Bíróságok",
+      "days": "Napok",
+      "jurisdictionDescription": "{country}: bírósági határozatok a stella nyilvános jogi adatbázisában, bíróság, év és hónap szerint.",
+      "periodDescription": "{court} ({country}), {period}: határozatok a stella nyilvános jogi adatbázisában."
+    },
     "chat": {
       "prompts": {
         "facts": {
@@ -1452,6 +1501,10 @@
       "title": "A keresés átmenetileg nem érhető el"
     },
     "searchWarnings": {
+      "collectionCitationUnresolved": {
+        "hint": "Ha ismert, keressen a határozat ügyszáma vagy ECLI-azonosítója alapján.",
+        "message": "Nem található a gyűjteményi hivatkozásnak pontosan megfelelő határozat."
+      },
       "noHits": {
         "hint": "Próbáljon kevesebb vagy más szót: azokat a kifejezéseket, amelyeket egy határozat használna, nem a kérdés mondatát.",
         "message": "Semmi nem felel meg a keresés által megkívánt szavaknak."
@@ -1461,6 +1514,7 @@
         "message": "Semmi nem felel meg a beállított szűrőknek."
       },
       "partialMatch": "Részleges találat",
+      "partialMatchMissing": "Hiányzó szavak: {terms}",
       "partialMatches": "Részleges találatok erre: <bdi>{query}</bdi>",
       "resultsFor": "Találatok erre: <bdi>{query}</bdi>",
       "searchEveryWord": "Minden szó keresése"
@@ -1480,6 +1534,23 @@
     },
     "viewer": {
       "abstract": "Kivonat",
+      "appealReviews": {
+        "conflict": "A felülvizsgálatra vonatkozó adatok hiányosak vagy ellentmondásosak. A felülvizsgálat eredményét ellenőrizni kell.",
+        "corpusOnly": "A rendelkezésre álló korpuszban nem található ezt a határozatot felülvizsgáló határozat. Ez nem bizonyítja, hogy nem nyújtottak be jogorvoslatot.",
+        "noneFound": "Nem található felülvizsgáló határozat",
+        "overturned": "Hatályon kívül helyezve vagy megváltoztatva",
+        "partly": "Részben hatályon kívül helyezve",
+        "reviewedBy": "Felülvizsgáló határozatok",
+        "reviews": "Felülvizsgált határozatok",
+        "sourceHistory": "Eljárási előzmények",
+        "sourceMetadata": "Kiadói metaadatok",
+        "sourceOpening": "Bevezető bekezdés",
+        "title": "Jogorvoslati felülvizsgálat",
+        "truncated": "A felülvizsgálati előzményeknek csak egy része látható.",
+        "underReview": "Felülvizsgálat alatt",
+        "unknown": "Ismeretlen eredmény",
+        "upheld": "Hatályban maradt"
+      },
       "appliedVersionNotStated": "Az alkalmazott változat nincs megadva",
       "appliedVersionNotStatedCompact": "A változat nincs megadva",
       "appliedVersionStatedAmendment": "A <reference>{amendment}</reference> szerinti módosított szöveg",
@@ -1661,12 +1732,25 @@
       "unorderedList": "Felsorolás",
       "wholeBlockRequired": "A stílus módosításához jelöljön ki egy teljes bekezdést vagy listát."
     },
+    "answerNotFinished": "A stella nem tudta befejezni ezt a választ.",
     "answerQuote": {
       "showInDecision": "Megjelenítés a határozatban",
       "unverified": "Az idézet nem ellenőrizhető",
       "unverifiedHint": "A hivatkozott határozatok nem tartalmazzák szó szerint ezt a szöveget",
       "verified": "Ellenőrzött idézet",
       "verifiedHint": "Szó szerint: {source}"
+    },
+    "answerTable": {
+      "copy": "Táblázat másolása",
+      "copyAs": "Másolás {format} formátumban",
+      "download": "Táblázat letöltése",
+      "downloadAs": "Letöltés {format} formátumban",
+      "fullscreen": "Megnyitás teljes képernyőn",
+      "fullscreenTitle": "Táblázat teljes képernyőn",
+      "singleLine": "Egy sorban",
+      "size": "{rows, plural, one {# sor} other {# sor}} · {columns, plural, one {# oszlop} other {# oszlop}}",
+      "textMode": "Cellaszöveg",
+      "wrap": "Szöveg tördelése"
     },
     "applyMode": {
       "description": "A Word rögzíti, ki végezte az egyes módosításokat. Megjegyezzük a választását.",
@@ -1731,7 +1815,7 @@
       "connected": "Bővítmény csatlakoztatva",
       "description": "A stella kérésére külön lapon nyithat meg és olvashat el weboldalakat.",
       "install": "Bővítmény telepítése",
-      "installDescription": "A stella bővítménnyel a stella kérésére külön lapon nyithat meg és olvashat el weboldalakat. A Chrome Webáruházból telepítheti.",
+      "installDescription": "A stella bővítménnyel a stella kérésére külön lapon nyithat meg és olvashat el weboldalakat. A Chrome Webáruházból telepítheti. Már telepítette? Töltse újra ezt a lapot.",
       "reload": "Lap újratöltése",
       "reloadDescription": "A stella bővítménye újabb, mint ez a lap. Töltse újra a lapot, hogy továbbra is használhassa.",
       "updating": "A bővítmény frissítésre vár",
@@ -1891,23 +1975,24 @@
     "loadEarlierMessagesError": "A korábbi üzenetek betöltése sikertelen",
     "loadingEarlierMessages": "Korábbi üzenetek betöltése…",
     "localFilesUndo": {
-      "action": "Fájlmódosítások visszavonása",
       "computer": {
         "failed": "A visszavonás nem fejeződött be a számítógépén. Előfordulhat, hogy néhány fájl már megváltozott, ezért ellenőrizze a csevegés mappáját.",
         "folderBusy": "Egy futás használja ezt a mappát a számítógépén. Próbálja újra, ha befejeződött.",
         "noCheckpoint": "A számítógépén nincs mentett másolat a fájlokról a lépés előtti állapotból, így semmi sem vonódott vissza.",
-        "notNewest": "A számítógépén újabb módosítások vannak ebben a mappában, így semmi sem vonódott vissza."
+        "updateForEarlier": "Frissítse a stella desktopot a korábbi üzenetek módosításainak visszavonásához."
       },
-      "confirm": "Módosítások visszavonása",
-      "confirmDescription": "Azok a fájlok, amelyeket ez a lépés a mappájában módosított a számítógépén, visszakerülnek a lépés előtti állapotukba. Csak ennek a lépésnek a módosításai vonódnak vissza; a korábbi lépések módosításai megmaradnak.",
-      "confirmTitle": "Visszavonja ennek a lépésnek a fájlmódosításait?",
+      "conversationRestarts": "Az ügynök a csevegés szövegéből kezdi újra, mert az üzenet előtti válasz nem fejeződött be.",
       "expired": "A számítógépe nem válaszolt időben. Próbálja újra.",
+      "option": "Az üzenet óta történt fájlmódosítások visszavonása is",
+      "optionHint": "Ez a mappában Ön által végzett módosításokat is visszavonja.",
       "pending": "Fájlmódosítások visszavonása a számítógépén",
       "refused": {
+        "alreadyUndone": "Ezeket a fájlmódosításokat már visszavonták.",
         "desktopOffline": "A számítógépe offline. Nyissa meg a stella asztali alkalmazást, és próbálja újra.",
         "desktopUpdateRequired": "A számítógépén lévő stella asztali alkalmazás túl régi a módosítások visszavonásához. Frissítse, és próbálja újra.",
-        "noCheckpoint": "Ehhez a lépéshez nincs mentett másolat a fájlokról, amelyhez vissza lehetne térni.",
-        "notNewest": "Csak a legújabb lépés fájlmódosításai vonhatók vissza.",
+        "folderShared": "Az üzenet óta egy másik csevegés is dolgozott ebben a mappában.",
+        "noSavedCopy": "A számítógépe nem őrzött meg másolatot a mappáról az üzenet előtti állapotból: túl nagy volt, túl lassan mentődött, vagy újabb másolatok váltották fel.",
+        "severalFolders": "A későbbi üzenetek másik számítógépen vagy másik mappában futottak.",
         "threadBusy": "Ez a csevegés még dolgozik. Próbálja újra, ha befejezte."
       },
       "restored": "Fájlmódosítások visszavonva"
@@ -1936,6 +2021,8 @@
       "folderStateUnreadable": "Nem olvasható",
       "limitReminderNotify": "Értesítsen, amikor visszaáll",
       "limitReminderScheduled": "{time} után értesítjük.",
+      "limitResumeContinue": "Automatikus folytatás, amikor visszaáll",
+      "limitResumeScheduled": "{time} után automatikusan folytatódik.",
       "permissionAboveLimit": "A szervezete nem engedélyezi",
       "permissionAskDescription": "A csevegés mappájában lévő fájlokat magától szerkeszti; minden más előtt rákérdez.",
       "permissionAutoDescription": "Amit biztonságosnak ítél, magától elvégzi; a többire rákérdez.",
@@ -2057,6 +2144,7 @@
     },
     "newChat": "Új csevegés",
     "newChatInSidePanel": "Az új csevegés elérhető az oldalsó panelen",
+    "nextSteps": "Következő lépések",
     "noPromptPresetOnly": "Nincs üzenet, csak előbeállítás",
     "noThreads": "Még nincsenek beszélgetések",
     "officeCitationUnavailable": "Ez a hivatkozás már nem érhető el.",
@@ -2074,9 +2162,17 @@
     },
     "placeholder": "Írja ide a kérdését, / a készségekhez, @ kontextus hozzáadásához",
     "processSummary": {
-      "analyses": "{count, plural, one {# elemzés} other {# elemzés}}",
       "changesSaved": "{count, plural, one {# mentett módosítás} other {# mentett módosítás}}",
+      "checkedRegisters": "Nyilvános nyilvántartások ellenőrizve",
       "documentEdits": "{count, plural, one {# dokumentummódosítás} other {# dokumentummódosítás}}",
+      "readDocument": "Dokumentum elolvasva",
+      "readDocuments": "Dokumentumok elolvasva",
+      "searchedCaseLaw": "Ítélkezési gyakorlat átnézve",
+      "searchedChats": "Csevegési előzmények átnézve",
+      "searchedLegislation": "Jogszabályok átnézve",
+      "searchedLegislationAndCaseLaw": "Jogszabályok és ítélkezési gyakorlat átnézve",
+      "searchedMatters": "Ügyek átnézve",
+      "searchedWeb": "Internet átkeresve",
       "sourcesChecked": "{count, plural, one {# ellenőrzött forrás} other {# ellenőrzött forrás}}"
     },
     "promptImprovementStrategies": {
@@ -2121,6 +2217,7 @@
     "queuePrompt": "Küldés, amikor az ügynök végzett",
     "queuedAttachmentCount": "{count, plural, one {# melléklet} other {# melléklet}}",
     "queuedNotice": "Sorba állítva – a jelenlegi válasz befejeztével küldjük el",
+    "ranOnModel": "Ezen a modellen futott: {model}",
     "reasoning": "Érvelés",
     "reasoningTokens": "{count, plural, one {# érvelési token} other {# érvelési token}}",
     "recapLoading": "A beszélgetés összefoglalása…",
@@ -2162,7 +2259,7 @@
       "chipLabel": "Futás helye: {place}",
       "cloud": "Felhő",
       "cloudDescription": "A felhőben fut. Bárhonnan elérhető.",
-      "harnessModels": "{harness}-modellek",
+      "hintAntigravity": "Telepítse az Antigravity 1.5-ös vagy újabb verzióját, majd jelentkezzen be benne",
       "hintCheck": "Ellenőrizze a stella desktopban",
       "hintInstall": "Telepítse a stella desktopból",
       "hintOffline": "Nyissa meg a stella desktopot a számítógépén",
@@ -2172,8 +2269,9 @@
       "localFolderSelection": "Az Ön számítógépe · {harness} · {folder}",
       "localPlace": "Az Ön számítógépe, {harness}",
       "localSelection": "Az Ön számítógépe · {harness}",
-      "modelDefault": "Alapértelmezett (ajánlott)",
       "placeState": "{place}. {state}",
+      "startedInCloud": "Ez az új csevegés a felhőben indult, mert a(z) {harness} nem érhető el a számítógépén ({state})",
+      "startedInCloudCheckFailed": "Ez az új csevegés a felhőben indult, mert nem sikerült ellenőrizni a számítógépét",
       "stepsCheck": "A stella desktop megnyílik. Ha nem nyílik meg, nyissa meg a számítógépén, és a Beállítások › Általános › AI-előfizetések részen ellenőrizze ezt az ügynököt: {harness}.",
       "stepsInstall": "A stella desktop megnyílik. Ha nem nyílik meg, nyissa meg a számítógépén, és a Beállítások › Általános részen válassza a Telepítés gombot ennél az ügynöknél: {harness}.",
       "stepsSignInClaudeCode": "A stella desktop megnyílik a bejelentkezéshez. Ha nem nyílik meg, nyissa meg, és válassza a Beállítások › Általános › Bejelentkezés Claude-dal lehetőséget.",
@@ -2240,13 +2338,26 @@
       "title": "Az üzenete a sorban vár, amíg az ügynök végez",
       "turnNotRunning": "Az ügynök jelenleg nem dolgozik."
     },
+    "stepDigest": {
+      "decisionsFound": "{found, plural, one {# határozat található} other {# határozat található}}",
+      "decisionsFoundUsed": "{found, plural, one {# határozat található} other {# határozat található}}, {used, plural, one {# szerepel a válaszban} other {# szerepel a válaszban}}",
+      "filterAsOf": "{date} állapot szerint",
+      "legislationFound": "{count, plural, one {# jogszabály vagy rendelkezés} other {# jogszabály és rendelkezés}}",
+      "lookupDidNotGoThrough": "Ez a keresés nem sikerült.",
+      "moreFound": "{count, plural, one {további # nem látható} other {további # nem látható}}",
+      "moreLookups": "{count, plural, one {További # lekérdezés nem látható} other {További # lekérdezés nem látható}}",
+      "notRecorded": "Ez a lépés még azelőtt futott, hogy a stella rögzítette volna, mit keres az egyes lépés.",
+      "nothingFound": "Nincs találat.",
+      "technicalDetails": "Technikai részletek",
+      "usedInAnswer": "Szerepel a válaszban",
+      "versionFrom": "{date} óta hatályos szöveg"
+    },
     "stopFailed": "Nem sikerült leállítani a választ. Próbálja újra.",
     "stopResponse": "Leállítás",
     "stopped": "Leállítva",
     "stopping": "Leállítás…",
     "suggestTitle": "Cím javaslata",
     "suggestTitleUnavailableAnonymized": "Anonimizált beszélgetésekhez nem érhető el címjavaslat.",
-    "suggestedFollowupsLabel": "Javasolt követő kérdések",
     "suggestingTitle": "Cím javaslása…",
     "suggestionSeverity": {
       "style": "Stílus",
@@ -2257,7 +2368,11 @@
       "accepted": "Alkalmazva",
       "rejected": "Elutasítva"
     },
-    "tabToAsk": "→ a kérdezéshez: „{prompt}“",
+    "switcher": {
+      "allChats": "Összes csevegés",
+      "searchPlaceholder": "Csevegés keresése…",
+      "trigger": "Csevegés váltása"
+    },
     "tableChart": {
       "bar": "Oszlop",
       "kind": "Diagram típusa",
@@ -2306,10 +2421,10 @@
       "delete_reader_annotation": "Kiemelés vagy megjegyzés törlése",
       "delete_task": "Feladat törlése",
       "delete_time_entry": "Időbejegyzés törlése",
-      "describe-stella-api": "Adatlekérés előkészítése",
-      "describe-stella-function": "Adatlekérés előkészítése",
+      "describe-stella-api": "Források kiválasztása",
+      "describe-stella-function": "Források kiválasztása",
       "describe_template": "Sablonmezők olvasása",
-      "discover_tools": "Adatlekérés előkészítése",
+      "discover_tools": "Források kiválasztása",
       "docxEditMore": "{count, plural, one {# további módosítás} other {# további módosítás}}",
       "docxEditSummary": "{count, plural, one {# javasolt módosítás} other {# javasolt módosítás}}",
       "execute-typescript": "Ügyadatok olvasása",
@@ -2350,6 +2465,7 @@
       "save_document": "Dokumentum mentése",
       "save_matter": "Ügy mentése",
       "save_playbook": "Playbook mentése",
+      "save_skill_package": "Készség mentése",
       "save_task": "Feladat mentése",
       "save_template": "Sablon mentése",
       "save_time_entry": "Időbejegyzés mentése",
@@ -2378,6 +2494,7 @@
       "use-browser": "A böngésző használata",
       "use_connector_secret": "A csatlakozó hitelesítő adatának használata",
       "user_message": "Az ügynök munkája közben elküldve",
+      "validate_skill_package": "Készség ellenőrzése",
       "web_search": "Keresés az interneten"
     },
     "toolCall": {
@@ -2385,11 +2502,10 @@
       "browserPressKey": "{key} billentyű lenyomása itt: „{target}” ({url})",
       "browserSelect": "„{option}” kiválasztása itt: „{target}” ({url})",
       "browserType": "Szöveg beírása ide: „{target}” ({url})",
-      "characterCount": "{count, plural, one {# karakter} other {# karakter}}",
       "commandExited": "{command} (kilépési kód: {code})",
       "consoleLogs": "Konzolkimenet",
       "exactCall": "Pontos hívás",
-      "failed": "Ez a lépés nem sikerült; a stella másképp oldja meg.",
+      "failed": "Ez a lépés nem sikerült.",
       "field": "Mező",
       "input": "Bemenet",
       "interrupted": "Befejezés előtt megszakadt",
@@ -2406,11 +2522,17 @@
         "notStored": "Ebből a lépésből semmi sem lett mentve",
         "runBudgetReached": "Nincs mentve: ez a futtatás már annyit mentett, amennyit egy futtatás menthet"
       },
+      "lookupCount": "{count, plural, one {# lekérdezés} other {# lekérdezés}}",
       "output": "Kimenet",
       "patternInPath": "{pattern} itt: {path}",
       "proposedPlan": "Terv javaslata",
       "readFile": "Fájl olvasása",
+      "readingLegislation": "Jogszabályok olvasása",
+      "retried": "Újrapróbálva",
+      "retriedDetail": "Ez a lépés nem sikerült, ezért a stella másképp próbálta meg.",
       "searchFiles": "Keresés a fájlokban",
+      "searchingCaseLaw": "Keresés az ítélkezési gyakorlatban",
+      "searchingLegislationAndCaseLaw": "Keresés a jogszabályokban és az ítélkezési gyakorlatban",
       "signInToContinue": "A folytatáshoz jelentkezzen be",
       "sourceCode": "Forráskód",
       "statusWaiting": "Várakozik",
@@ -2564,6 +2686,7 @@
   },
   "common": {
     "accept": "Elfogadás",
+    "access": "Hozzáférés",
     "action": "Művelet",
     "actions": "Műveletek",
     "active": "Aktív",
@@ -2675,6 +2798,7 @@
     "done": "Kész",
     "doubleClickToRename": "Kattintson duplán az átnevezéshez",
     "download": "Letöltés",
+    "downloadOriginal": "Eredeti fájl letöltése",
     "dragAndDrop": {
       "cancelled": "{count, plural, one {Az áthelyezés megszakadt. A(z) {itemName} nem lett áthelyezve.} other {Az áthelyezés megszakadt. A(z) {itemName} nem lett áthelyezve.}}",
       "droppedOn": "{count, plural, one {A(z) {itemName} a(z) {destinationName} elemre lett ejtve.} other {A(z) {itemName} a(z) {destinationName} elemre lett ejtve.}}",
@@ -2815,10 +2939,12 @@
     "outOfDate": "Elavult",
     "page": "{page}. oldal",
     "paymentRetryNotice": "Fizetési probléma. A hozzáférés megtartásához frissítse a fizetési módját eddig: {date}.",
+    "permissionCount": "{count, plural, one {# jogosultság} other {# jogosultság}}",
     "pin": "Rögzítés",
     "playbooks": "Playbookok",
     "preparing": "Előkészítés…",
     "preview": "Előnézet",
+    "previewTruncated": "A teljes szöveg nem érhető el ebben az előnézetben.",
     "previous": "Előző",
     "previousMatch": "Előző találat",
     "print": "Nyomtatás",
@@ -2833,6 +2959,7 @@
     "refresh": "Frissítés",
     "regenerate": "Újragenerálás",
     "reload": "Újratöltés",
+    "reloadDiscardChanges": "Az újratöltéskor elvesznek a nem mentett módosításai.",
     "removalComplete": "Eltávolítás befejezve",
     "remove": "Eltávolítás",
     "removeMember": "Tag eltávolítása",
@@ -2875,6 +3002,7 @@
     "showMore": "Több megjelenítése",
     "showSecretValue": "Titkos érték megjelenítése",
     "signOut": "Kijelentkezés",
+    "skipToContent": "Ugrás a tartalomhoz",
     "somethingWentWrong": "Hiba történt. Próbálja újra, vagy ha ismét előfordul, töltse be újra az oldalt.",
     "sort": "Rendezés",
     "source": "Forrás",
@@ -3259,6 +3387,8 @@
       "contact": "Kapcsolat: {name}",
       "deliveredAt": "Kézbesítve a fiókba",
       "delivery": "Kézbesítés",
+      "deliveryEvents": "Kézbesítési események",
+      "deliveryReceipt": "Kézbesítési igazolás",
       "directionUnknown": "Ismeretlen irány",
       "messageId": "Üzenetazonosító",
       "moreContacts": "További kapcsolattartók tartoznak ehhez az adatfiókhoz.",
@@ -3271,6 +3401,8 @@
       "sent": "Elküldve",
       "statedInFile": "Adatfiók-üzenet (a fájl szerint)",
       "toHands": "{name} kezéhez",
+      "unlinkedFiles": "A hivatkozás nélkül megjelenő mellékletek megnyitásához töltse le az eredeti ZFO-fájlt.",
+      "unreadable": "A fájl sem adatfiók-üzenetként, sem kézbesítési igazolásként nem olvasható.",
       "uploaded": "Feltöltött adatfiók-üzenet"
     },
     "deliveredBy": "Kézbesítette: <address>{sender}</address>",
@@ -3467,6 +3599,7 @@
       "legalHoldActive": "A törlés le van tiltva, mert ezeket az adatokat meg kell őrizni.",
       "legalSourceEntityLimitReached": "Ez az ügy elérte az elemek korlátját, ezért a dokumentum nem hozható létre.",
       "legalSourceFilePropertyMissing": "Ebből az ügyből hiányzik egy fájltulajdonság, ezért a dokumentum nem hozható létre.",
+      "localRunAnonymizedRefusal": "A számítógépén futó kódoló ügynök a dokumentumait eredeti formájukban olvassa, ezért a neki szóló üzenet nem anonimizálható. Küldje el anonimizálás nélkül.",
       "matterContactCapacityExceeded": "Ez az ügy több kapcsolatot tartalmaz, mint amennyi megjeleníthető. A többi kapcsolat megjelenítéséhez szüntesse meg néhány látható kapcsolat ügyhöz rendelését.",
       "matterContactCapacityReached": "Ez az ügy elérte a kapcsolatok számának felső határát. Új kapcsolat hozzáadása előtt szüntesse meg az egyik kapcsolat ügyhöz rendelését.",
       "mcpAuthorizationApprovalRequired": "A csatlakozás előtt egy rendszergazdának jóvá kell hagynia ezt a csatlakozót.",
@@ -3972,6 +4105,12 @@
     "versionCreatedDescription": "A(z) {versionNumber}. verzió létrejött. Mindenki folytathatja a szerkesztést.",
     "versionCreatedTitle": "Verzió létrehozva",
     "viewOnly": "Csak megtekintés"
+  },
+  "guidance": {
+    "notCaseLaw": "Szabályozó hatóság által kiadott iránymutatás. Ez nem bírósági határozat.",
+    "openAtPublisher": "Megnyitás a kiadónál",
+    "source": "Forrás: {attribution}",
+    "textUnavailable": "A dokumentum szövege itt nem érhető el. Olvassa el a kiadónál."
   },
   "guides": {
     "action": {
@@ -4506,6 +4645,33 @@
     "swapViews": "A fő nézet és az oldalsó panel felcserélése",
     "title": "Ellenőrző panel"
   },
+  "invoiceLink": {
+    "credited": "Ezt a számlát teljes egészében jóváírták; nincs fizetendő összeg.",
+    "downloadEInvoice": {
+      "isdoc": "ISDOC letöltése",
+      "peppol_sk": "E-számla letöltése (Peppol)",
+      "ubl": "E-számla letöltése (UBL)"
+    },
+    "downloadFailed": "A fájlt nem sikerült letölteni",
+    "failure": {
+      "busy": {
+        "body": "Várjon egy percet, majd nyissa meg újra a linket.",
+        "title": "Túl sok próbálkozás"
+      },
+      "error": {
+        "body": "Próbálja újra később. Ha továbbra sem sikerül, kérje meg a feladót, hogy küldje el újra a számlát.",
+        "title": "A számlát nem sikerült megnyitni"
+      },
+      "unavailable": {
+        "body": "Lehet, hogy lejárt vagy visszavonták. Kérjen új linket a feladótól.",
+        "title": "Ez a link már nem érhető el"
+      }
+    },
+    "overpaid": "{amount} összeggel többet fizetett az esedékesnél; a feladó ennyivel tartozik Önnek.",
+    "paid": "Ez a számla ki van fizetve.",
+    "paymentQr": "Fizetési QR-kód",
+    "validUntil": "Ez a link eddig érvényes: {date}."
+  },
   "knowledge": {
     "agentSkills": {
       "availabilityClient": "Egy ügyfél",
@@ -4546,7 +4712,7 @@
       "discoveredSkills": "{count, plural, one {# készség található} other {# készség található}}",
       "discoveryEmpty": "Ebben a tárolóban vagy mappában nem található készség.",
       "discoverySkippedInvalid": "{count, plural, one {# érvénytelen készség kihagyva} other {# érvénytelen készség kihagyva}}",
-      "dropPack": "Húzzon ide egy .zip vagy SKILL.md fájlt a készség importálásához",
+      "dropPack": "Húzzon ide egy .zip/.skill vagy SKILL.md fájlt a készség importálásához",
       "editSkill": "Készség szerkesztése",
       "enableSkill": "Készség bekapcsolása",
       "fileExists": "Ezen az útvonalon már létezik fájl",
@@ -4561,7 +4727,7 @@
       "importSkill": "Importálás URL-ből",
       "importTitle": "Készség importálása",
       "importedSkills": "{count, plural, one {# készség importálva} other {# készség importálva}}",
-      "invalidPath": "Az útvonal csak kisbetűket, számjegyeket, pontokat, kötőjeleket vagy alulvonásokat tartalmazhat",
+      "invalidPath": "Relatív útvonalat használjon. A fájl- és mappanevek nem lehetnek . vagy .., nem kezdődhetnek és nem végződhetnek szóközzel, nem végződhetnek ponttal, és nem tartalmazhatnak \\ : * ? \" | karaktert, csúcsos zárójelet vagy vezérlőkaraktert.",
       "invocationAuto": "Automatikusan",
       "invocationAutoHelp": "Az AI magától is használhatja ezt a készséget, ha illik a kéréshez.",
       "invocationManual": "Csak kérésre",
@@ -4603,8 +4769,8 @@
           "name": "Dokumentum összefoglalása"
         }
       },
-      "uploadHelp": "Használjon SKILL.md fájlt vagy olyan .zip mappát, amely SKILL.md fájlt és opcionális csak olvasható erőforrásokat tartalmaz.",
-      "uploadPack": ".zip vagy SKILL.md feltöltése",
+      "uploadHelp": "Használjon SKILL.md fájlt vagy olyan .zip/.skill mappát, amely SKILL.md fájlt és opcionális csak olvasható erőforrásokat tartalmaz.",
+      "uploadPack": ".zip/.skill vagy SKILL.md feltöltése",
       "urlPlaceholder": "https://github.com/org/repo/tree/main/utvonal/keszseghez",
       "version": "Verzió: {version}"
     },
@@ -4639,7 +4805,7 @@
       "bearerTokenDescription": "Ez a szerver Bearer tokent használ. A csatlakozás befejezéséhez illessze be a szolgáltatótól kapott tokent.",
       "callbackConnectedDescription": "Az eszközei készen állnak a csevegésben.",
       "callbackConnectedTitle": "Integráció csatlakoztatva",
-      "callbackFailedDescription": "Térjen vissza a stellába, és csatlakoztassa újra.",
+      "callbackFailedDescription": "A bejelentkezés nem fejeződött be, így semmi sem csatlakozott.",
       "callbackFailedTitle": "Az integráció nincs csatlakoztatva",
       "connectedToast": "MCP csatlakoztatva",
       "connectedWithLastUsed": "Csatlakoztatva · legutóbbi használat: {time}",
@@ -4658,6 +4824,7 @@
       "needsReauth": "Újracsatlakozás szükséges",
       "off": "Ki",
       "on": "Be",
+      "openTools": "Eszközök megnyitása",
       "otherTitle": "További integrációk",
       "probe": "Ellenőrzés",
       "recommendedFor": "Ajánlott: {jurisdictions}",
@@ -5635,6 +5802,9 @@
       "chatNotificationsDescription": "Értesítést kap ettől a böngészőtől, amikor egy csevegési válasz elkészül, miközben a stella a háttérben fut.",
       "chatNotificationsToggle": "Értesítsen, ha egy válasz elkészült, vagy a közreműködésemre vár",
       "chatNotificationsUnsupported": "Ez a böngésző nem támogatja az értesítéseket.",
+      "chatTechnicalDetails": "Technikai részletek a csevegésben",
+      "chatTechnicalDetailsDescription": "A csevegés minden lépése megmutatja, mit keresett és mit talált. Bekapcsolva a mögötte lévő kódot és a nyers eredményeket is látja.",
+      "chatTechnicalDetailsToggle": "Technikai részletek megjelenítése a csevegésben",
       "confirmDelete": "Fiók törlésének megerősítése",
       "dangerZone": "Veszélyes zóna",
       "dangerZoneDescription": "Fiókhozzáférése és a fiók privát adatainak végleges törlése.",
@@ -5793,7 +5963,6 @@
       "mcpTitle": "MCP-szerver",
       "mcpUrlLabel": "Szerver URL-je",
       "noMatches": "Egy kapcsolat sem felel meg ennek: „{query}”",
-      "permissionCount": "{count, plural, one {# jogosultság} other {# jogosultság}}",
       "privateCredentialOnly": "Csak privát hitelesítő adat",
       "searchPlaceholder": "Kapcsolatok keresése",
       "title": "Kapcsolatok",
@@ -5819,7 +5988,6 @@
         "title": "Anonimizálás"
       },
       "auditLogs": "Tevékenységnapló",
-      "auditLogsActionAccess": "Hozzáférés",
       "auditLogsActionCreate": "Létrehozás",
       "auditLogsActionDelete": "Törlés",
       "auditLogsActionDownload": "Letöltés",
@@ -5929,6 +6097,7 @@
         "number_series": "számsorozat",
         "organization_access_state": "szervezeti hozzáférés állapota",
         "organization_settings": "szervezeti beállítások",
+        "outbound_action": "kimenő művelet",
         "pdf_signing_session": "PDF-aláírási munkamenet",
         "personal_api_key": "személyes API-kulcs",
         "playbook": "playbook",
@@ -6143,6 +6312,14 @@
     "reconnectRequired": "A bejelentkezés lejárt",
     "title": "SharePoint és OneDrive"
   },
+  "signedFile": {
+    "layer": "{number, number}. aláírási réteg",
+    "noReadableContent": "Nincs megjeleníthető olvasható tartalom.",
+    "pdfUnavailable": "A PDF előnézete nem érhető el.",
+    "unknownSigner": "Ismeretlen aláíró",
+    "unreadable": "Az aláírt fájl nem olvasható.",
+    "unverified": "Az aláírásokat nem ellenőriztük."
+  },
   "skillHistory": {
     "acceptStale": "Elfogadás és az újabb módosítások felülírása",
     "backToCurrent": "Vissza az aktuális változatra",
@@ -6211,6 +6388,7 @@
     "compareUnstructured": "Az egyik változat csak egyszerű szövegként érhető el, ezért a kettő nem hasonlítható össze.",
     "compareVersionMissing": "Az összehasonlítandó változat nem szerepel a jogszabály történetében.",
     "compareWholeAct": "A teljes jogszabály összehasonlítása",
+    "compareWithPreviousWording": "Összehasonlítás az előző szövegváltozattal",
     "compareWithVersion": "Összehasonlítás ezzel: {version}",
     "currentWording": "Jelenlegi szöveg",
     "description": "Egységes szerkezetű jogszabályok nyilvános adatbázisa, jogszabály és változat szerint indexelhető.",
@@ -6224,6 +6402,7 @@
       "withdrawn": "A kiadó már nem közli"
     },
     "inForceSince": "Hatályos {date} óta",
+    "inForceSinceAtLeast": "Hatályos legkésőbb {date} óta",
     "ineligibleVersion": "{range} ({label})",
     "leadingDecision": "Irányadó határozat",
     "leadingDecisionsExplanation": "Az első említés minden határozatban, hivatkozási tekintély szerint rangsorolva: súlyozott bejövő hivatkozások, a bíróság rangjához, a hivatkozás előjeléhez és korához igazítva.",
@@ -6234,6 +6413,7 @@
     "outlineJumpPlaceholder": "§ 10 vagy cím",
     "pendingChanges": "Közelgő módosítások",
     "pendingChangesIncomplete": "Előfordulhat, hogy a közzétevő adatai nem tartalmazzák az összes közelgő módosítást.",
+    "provisionAbsentVersions": "{count, plural, one {Nem szerepel a törvény e szövegváltozatában} other {Nem szerepel a törvény e # szövegváltozatában}}",
     "provisionAskContextPrompt": "\n\nA rendelkezést alkalmazó részletek a legnagyobb súlyú határozatokból:\n{passages}\n\nAz ítélkezési gyakorlat eszközeivel bármelyik határozatot teljes terjedelmében elolvashatod, vagy további, a rendelkezésre hivatkozó határozatokat kereshetsz.",
     "provisionAskSummarize": "Foglald össze, hogyan alkalmazzák a bíróságok ezt a rendelkezést",
     "provisionAskSummarizePrompt": "Foglald össze, hogyan alkalmazzák a bíróságok a következőt: {subject}, és hivatkozz a felhasznált határozatokra.",
@@ -6244,7 +6424,14 @@
     "provisionPartTextUnavailable": "A(z) {provisionLabel} szövege nem érhető el",
     "provisionPromptSubject": "{statute} ({eli}) {provision}, a {date} napjától hatályos szöveg szerint",
     "provisionPromptSubjectUndated": "{statute} ({eli}) {provision}",
+    "provisionRunAlsoFrom": "ettől is: {date}",
+    "provisionRunShowVersions": "A törvény szövegváltozatainak megjelenítése, időszak: {range}",
+    "provisionRunUnchanged": "{count, plural, one {változatlan a törvény # szövegváltozatában} other {változatlan a törvény # szövegváltozatában}}",
     "provisionTextUnavailable": "Ehhez a változathoz nem érhető el szöveg",
+    "provisionVersionsAll": "A törvény összes szövegváltozata",
+    "provisionWordingAdded": "Új rendelkezés",
+    "provisionWordingChanged": "Módosítva",
+    "provisionWordingEarliest": "Legkorábbi elérhető szövegváltozat",
     "publisherWindowInconsistent": "Erre a napra nem állapítható meg hatályos szöveg: a kiadó adatai ellentmondásosak.",
     "resolvedAlias": "Felismerve: {label}",
     "searchLabel": "Keresés a jogszabályok között",
@@ -6273,6 +6460,10 @@
     "versionChangesRemoved": "{count, plural, one {# elhagyott rendelkezés} other {# elhagyott rendelkezés}}",
     "versionChangesWords": "{inserted, plural, one {# beszúrt szó} other {# beszúrt szó}}, {deleted, plural, one {# törölt szó} other {# törölt szó}}",
     "wordingVersionUnknown": "A szövegváltozat dátuma nem érhető el"
+  },
+  "structuredDocument": {
+    "noReadableContent": "Nincs megjeleníthető szöveg az előnézethez.",
+    "textOnly": "Szöveges előnézet az oldalelrendezés és a képek nélkül."
   },
   "styleSets": {
     "create": "Létrehozás",
@@ -7780,7 +7971,6 @@
         "endDate": "Befejező dátum",
         "month": "Hónap",
         "quarter": "Negyedév",
-        "showTable": "Táblázat megjelenítése",
         "startDate": "Kezdő dátum",
         "week": "Hét"
       },

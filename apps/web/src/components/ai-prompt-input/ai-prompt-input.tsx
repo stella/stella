@@ -134,6 +134,7 @@ export const AIPromptInput = ({
     activeOrganizationId,
     userId,
   );
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- load-bearing, without this memo boundary the React Compiler does not cache this value
   const slashShortcutRows = useMemo(
     () =>
       commandShortcutRowsFromSkillPages(skillPages?.pages, unavailableSkillIds),
@@ -150,6 +151,7 @@ export const AIPromptInput = ({
     isFetchingNextSkillPage,
     isNextSkillPageError,
   ]);
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- load-bearing, without this memo boundary the React Compiler does not cache this value
   const slashItems = useMemo<SlashItem[]>(
     () =>
       buildChatSlashItems({

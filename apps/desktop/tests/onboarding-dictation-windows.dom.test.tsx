@@ -1,5 +1,5 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
-import { afterAll, afterEach, test } from "bun:test";
+import { afterAll, afterEach, expect, test } from "bun:test";
 
 import { nextMacrotask } from "@stll/concurrency/event-loop";
 
@@ -36,9 +36,9 @@ afterAll(async () => {
   await GlobalRegistrator.unregister();
 });
 
-test("the dictation step names the Windows shortcut", async () => {
+test("the dictation step names the Windows shortcut and asks only for the microphone", async () => {
   installNativeSide(nativeSide());
-  const { findByText } = render(
+  const { findByText, queryByText } = render(
     <DesktopIntlProvider language="en" messages={defaultMessages}>
       <OnboardingApp />
     </DesktopIntlProvider>,
@@ -48,9 +48,13 @@ test("the dictation step names the Windows shortcut", async () => {
   });
 
   await findByText(
-    defaultMessages.dictation.description.replace(
+    defaultMessages.onboarding.dictationSetup.microphone.body.replace(
       "{shortcut}",
       "Ctrl+Alt+Space",
     ),
   );
+  await findByText(defaultMessages.onboarding.dictationMicrophone);
+  expect(
+    queryByText(defaultMessages.onboarding.dictationAccessibility),
+  ).toBeNull();
 });

@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useRef, useState } from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
@@ -1203,7 +1203,7 @@ export const FieldFace = ({
   // `@`-mention source for the AI-instruction inputs: every other field's
   // path/label, so an author can reference a sibling field. The mention node
   // serializes back to `{{path}}` in the stored `aiPrompt` string.
-  const fieldMention = useMemo(() => {
+  const fieldMention = (() => {
     const mentionFields: { id: string; label: string }[] = [];
     for (const f of fields) {
       if (f.path !== field.path) {
@@ -1211,17 +1211,17 @@ export const FieldFace = ({
       }
     }
     return createTemplateFieldMention(mentionFields);
-  }, [fields, field.path]);
+  })();
   const [recipeDialogOpen, setRecipeDialogOpen] = useState(false);
   const viewportRef = useRef<HTMLDivElement | null>(null);
   // Restore the captured scroll position when the remounted viewport mounts.
-  const setViewport = useCallback((el: HTMLDivElement | null) => {
+  const setViewport = (el: HTMLDivElement | null) => {
     viewportRef.current = el;
     if (el !== null && pendingFieldFaceScrollTop !== null) {
       el.scrollTop = pendingFieldFaceScrollTop;
       pendingFieldFaceScrollTop = null;
     }
-  }, []);
+  };
 
   // Clear the in-document preview when the face leaves or switches fields
   // (cancelling any pending lookup preview so it cannot re-set it).

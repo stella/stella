@@ -56,6 +56,10 @@ export const menuCommitBenches = {
 
 // Browser tests share the fixture census without importing the app graph.
 export const visualRegistry = {
+  "appeal-reviews": {
+    label: "Synthetic appeal review evidence",
+    layout: "plain",
+  },
   "mcp-reconnect": { label: "MCP reconnect notice", layout: "plain" },
   "task-metadata": { label: "Task metadata alignment", layout: "plain" },
   "overview-stat-cards": {
@@ -67,8 +71,9 @@ export const visualRegistry = {
     label: "Connector sign-in confirmation",
     layout: "plain",
   },
-  "table-chart": { label: "Chat table chart", layout: "plain" },
+  "table-chart": { label: "Answer tables", layout: "plain" },
   "oauth-consent": { label: "OAuth consent", layout: "plain" },
+  "outcome-screen": { label: "Outcome screens", layout: "plain" },
   "page-crop": { label: "PDF page crop", layout: "plain" },
   "upload-rejections": { label: "Upload rejection reasons", layout: "plain" },
   "chat-long-paste": { label: "Chat long paste", layout: "plain" },
@@ -77,6 +82,7 @@ export const visualRegistry = {
     layout: "plain",
   },
   "chat-status": { label: "Chat status motion", layout: "plain" },
+  "chat-citation-chips": { label: "Chat citation chips", layout: "plain" },
   "button-label": { label: "Button labels", layout: "plain" },
   "menu-commits": { label: "Menu commits", layout: "plain" },
   "chat-continuation-error": {
@@ -89,8 +95,13 @@ export const visualRegistry = {
     layout: "plain",
   },
   "chat-answer-footer": { label: "Chat answer footer", layout: "plain" },
+  "chat-matter-reads": { label: "Chat matter reads", layout: "plain" },
+  "chat-answer-typography": {
+    label: "Chat answer typography",
+    layout: "plain",
+  },
   "chat-link-icons": { label: "Chat link icons", layout: "plain" },
-  "chat-follow-ups": { label: "Chat follow-up chips", layout: "plain" },
+  "chat-follow-ups": { label: "Chat follow-ups", layout: "plain" },
   "ask-user": { label: "Ask-user questions", layout: "plain" },
   "case-law-text-availability": {
     label: "Case-law text availability",

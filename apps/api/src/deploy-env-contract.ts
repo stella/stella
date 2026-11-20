@@ -83,7 +83,7 @@ export const DEPLOY_ENV_CONTRACT: readonly DeployEnvEntry[] = [
     tasks: ALL_TASKS,
     kind: "secrets",
     reason:
-      "Boot refuses FEATURE_FREE_TIER with AI_PROVIDER=openrouter without a fast-tier credential.",
+      "Boot refuses FEATURE_FREE_TIER with a managed OpenRouter credential without a fast-tier one.",
   },
   {
     name: "DATABASE_URL",

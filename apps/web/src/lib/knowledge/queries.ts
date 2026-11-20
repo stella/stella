@@ -762,7 +762,7 @@ export const playbookDetailOptions = (
     }),
     {
       resources: [RESOURCE_TYPE.PLAYBOOK],
-      scope: { type: "organization" },
+      scope: { type: "organization", organizationId },
     },
   );
 
@@ -851,7 +851,7 @@ export const skillsOptions = (organizationId: string, userId: string) =>
     }),
     {
       resources: [RESOURCE_TYPE.AGENT_SKILL],
-      scope: { type: "organization" },
+      scope: { type: "organization", organizationId, userId },
     },
   );
 
@@ -888,16 +888,26 @@ export const skillDetailOptions = (
   userId: string,
   skillId: string,
 ) =>
-  queryOptions({
-    queryKey: knowledgeKeys.skills.detail(organizationId, userId, skillId),
-    queryFn: async ({ signal }) => {
-      const response = await api
-        .skills({ skillId: toSafeId<"agentSkill">(skillId) })
-        .get({ fetch: { signal } });
-      return unwrapApiResponse(response);
+  resourceQueryOptions(
+    queryOptions({
+      queryKey: knowledgeKeys.skills.detail(organizationId, userId, skillId),
+      queryFn: async ({ signal }) => {
+        const response = await api
+          .skills({ skillId: toSafeId<"agentSkill">(skillId) })
+          .get({ fetch: { signal } });
+        return unwrapApiResponse(response);
+      },
+      staleTime: STALE_TIME.FIVE.MINUTES,
+    }),
+    {
+      // The detail carries the skill and its files.
+      resources: [
+        RESOURCE_TYPE.AGENT_SKILL,
+        RESOURCE_TYPE.AGENT_SKILL_RESOURCE,
+      ],
+      scope: { type: "organization", organizationId, userId },
     },
-    staleTime: STALE_TIME.FIVE.MINUTES,
-  });
+  );
 
 // Revision history of a skill's instruction body, newest first and without
 // bodies. Bounded server-side (one row per body change), so a plain list is
@@ -1029,7 +1039,7 @@ export const mcpConnectorsOptions = (organizationId: string) =>
     }),
     {
       resources: [RESOURCE_TYPE.MCP_CONNECTOR],
-      scope: { type: "organization" },
+      scope: { type: "organization", organizationId },
     },
   );
 

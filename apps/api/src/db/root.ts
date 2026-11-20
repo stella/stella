@@ -39,6 +39,10 @@ import {
 import type { AuditRecorder } from "@/api/lib/db/audit-recording";
 import { runTransactionsInCallerContext } from "@/api/lib/db/caller-async-context";
 import {
+  discardChatLimitResumeOnTx,
+  readDueChatLimitResumesOnTx,
+} from "@/api/lib/db/chat-limit-reminder-system";
+import {
   holdQueueOfUnavailableMemberOnTx,
   readDueQueueHeadOnTx,
   sweepThreadsWithDueQueueOnTx,
@@ -269,6 +273,28 @@ export const holdChatQueueOfUnavailableMember = async (
   await withAggregateTransaction(
     rootDb,
     async (tx) => await holdQueueOfUnavailableMemberOnTx({ ...options, tx }),
+  );
+
+/**
+ * The limit resumer reads across organizations which requests to continue a
+ * chat after a usage limit are due and whose they are, before that member is
+ * proved again, and drops one whose member can no longer act. Ids, owners
+ * and times only; the resumed turn, or the notification instead, is written
+ * on the member's own connection.
+ */
+export const readDueChatLimitResumes = async (
+  options: Omit<Parameters<typeof readDueChatLimitResumesOnTx>[0], "tx">,
+) =>
+  await withAggregateTransaction(
+    rootDb,
+    async (tx) => await readDueChatLimitResumesOnTx({ ...options, tx }),
+  );
+export const discardChatLimitResume = async (
+  options: Omit<Parameters<typeof discardChatLimitResumeOnTx>[0], "tx">,
+) =>
+  await withAggregateTransaction(
+    rootDb,
+    async (tx) => await discardChatLimitResumeOnTx({ ...options, tx }),
   );
 
 /**

@@ -40,8 +40,14 @@ export const QueryViewFeedback = <TData, TError>({
       return panic("Unhandled query feedback state");
   }
   return (
-    <div role="alert" className="flex items-center gap-2">
-      <span className="text-destructive text-sm">
+    // Wraps and shrinks, whatever the container sets: a narrow or
+    // single-line column (the sidebar) holds this too, and a row that cannot
+    // shrink widens or overflows whatever contains it.
+    <div
+      role="alert"
+      className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 whitespace-normal"
+    >
+      <span className="text-destructive min-w-0 text-sm">
         {t("common.somethingWentWrong")}
       </span>
       <Button
@@ -54,3 +60,14 @@ export const QueryViewFeedback = <TData, TError>({
     </div>
   );
 };
+
+/**
+ * A read's feedback once it has settled: nothing while it is on its way,
+ * where the region's own pending view (placeholder rows, a page's pending
+ * phase) already stands in for what it fills, then a failure as
+ * `QueryViewFeedback` shows it.
+ */
+export const SettledQueryViewFeedback = <TData, TError>({
+  view,
+}: QueryViewFeedbackProps<TData, TError>) =>
+  view.type === "pending" ? null : <QueryViewFeedback view={view} />;

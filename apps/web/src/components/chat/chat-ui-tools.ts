@@ -373,6 +373,7 @@ const REGISTRY_WRITE_SUMMARY_TOOL_NAMES = {
   run_playbook: true,
   save_clause: true,
   save_playbook: true,
+  save_skill_package: true,
   save_contact: true,
   save_document: true,
   save_matter: true,

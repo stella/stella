@@ -1,12 +1,13 @@
 import { panic, Result } from "better-result";
 import { afterEach, describe, expect, test } from "bun:test";
-import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
 import { createDetached } from "@stll/errors";
 import { waitForExternalState } from "@stll/property-testing/external-state";
 
+import { readFakeHarnessLog } from "../../scripts/fake-harness-peer";
 import { PROTOCOL_LOG_OFF } from "../protocol-log";
 import { startHarnessProcess } from "./harness-process";
 
@@ -56,18 +57,14 @@ const fakeLog = () => {
   const root = mkdtempSync(path.join(tmpdir(), "stella-process-tree-"));
   const log = path.join(root, "fake.log");
   const spawned = () =>
-    (existsSync(log) ? readFileSync(log, "utf-8") : "")
-      .split("\n")
-      .filter((line) => line !== "")
-      .map((line): unknown => JSON.parse(line))
-      .flatMap((entry) =>
-        typeof entry === "object" &&
-        entry !== null &&
-        "spawned" in entry &&
-        typeof entry.spawned === "number"
-          ? [entry.spawned]
-          : [],
-      );
+    readFakeHarnessLog(log).flatMap((entry) =>
+      typeof entry === "object" &&
+      entry !== null &&
+      "spawned" in entry &&
+      typeof entry.spawned === "number"
+        ? [entry.spawned]
+        : [],
+    );
   cleanups.push(() => {
     // Whatever a failed test left behind; each is a process this test made.
     for (const pid of spawned()) {
@@ -160,10 +157,7 @@ describe.skipIf(process.platform === "win32")(
       said.releaseLock();
       const pids = spawned();
       expect(pids.filter(runs)).toEqual(pids);
-      const [cli] = readFileSync(log, "utf-8")
-        .split("\n")
-        .slice(0, 1)
-        .map((line): unknown => JSON.parse(line));
+      const [cli] = readFakeHarnessLog(log);
       const cliPid =
         typeof cli === "object" &&
         cli !== null &&

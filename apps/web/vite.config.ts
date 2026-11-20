@@ -518,6 +518,19 @@ export default defineConfig(({ mode, command }) => {
             if (id.includes("node_modules/@stll/anonymize-data/")) {
               return "vendor-anonymize-data";
             }
+            if (
+              id.includes("node_modules/@stll/docx-core/dist/zip/archive.js") ||
+              id.includes("node_modules/@stll/docx-core/dist/archive-")
+            ) {
+              // The zip entry only re-exports its archive module. Split
+              // apart, with no eager importer holding the archive, the
+              // bundler emits the entry as an empty chunk that the lazy
+              // `import("@stll/docx-core/zip")` still loads, and the
+              // runtime build contract rejects it. One chunk for both keeps
+              // the reader whole; it loads with the shell (about 6 KiB
+              // gzip), where it was before the inbox views left startup.
+              return "docx-zip";
+            }
             // The browser uses some WASM packages directly (for example the
             // outline and key-term matchers). Let those stay with their lazy
             // callers: `wasm-vendor` is reserved for the anonymization worker

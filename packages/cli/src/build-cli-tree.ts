@@ -29,6 +29,8 @@ import { determineCommandExitCode } from "./cli-exit-code.js";
 import { authRoute } from "./commands/auth.js";
 import { buildBatchCommand } from "./commands/batch.js";
 import { compatibilityRoute } from "./commands/compatibility.js";
+import { doctorCommand } from "./commands/doctor.js";
+import { updateCommand } from "./commands/update.js";
 import { uploadCommand } from "./commands/upload.js";
 import type { Context } from "./context.js";
 import { expandSchemaDefs } from "./expand-schema-defs.js";
@@ -608,13 +610,6 @@ const HELP_FORMATTING = {
 } as const;
 
 const buildRootRoute = (tree: RouteNode): RouteMap<Context> => {
-  const updateCommand = buildCommand<Record<never, never>, [], Context>({
-    docs: { brief: "Print the command for installing the latest CLI" },
-    func(this: Context): void {
-      this.process.stdout.write("npm i -g @stll/cli@latest\n");
-    },
-    parameters: { flags: buildServerFlag() },
-  });
   const toolsListCommand = buildCommand<
     { readonly server: string | undefined },
     [],
@@ -648,8 +643,9 @@ const buildRootRoute = (tree: RouteNode): RouteMap<Context> => {
       auth: authRoute,
       batch: buildBatchCommand(tree),
       compatibility: compatibilityRoute,
-      upload: uploadCommand,
+      doctor: doctorCommand,
       update: updateCommand,
+      upload: uploadCommand,
       tools: toolsRoute,
       reference: buildResourceRoutes(generatedResourceTree),
       ...buildGeneratedRoutes(tree),

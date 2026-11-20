@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import nodePath from "node:path";
+import { fileURLToPath } from "node:url";
 
 import {
   apiSourceRoot,
@@ -18,7 +19,7 @@ const baseEnv = {
 } as const;
 const moduleUrl = new URL("env-file-derivative-worker.ts", import.meta.url)
   .href;
-const repoRoot = new URL("../../..", import.meta.url).pathname;
+const repoRoot = fileURLToPath(new URL("../../..", import.meta.url));
 
 const validate = (env: Record<string, string | undefined> = baseEnv) =>
   Bun.spawnSync({

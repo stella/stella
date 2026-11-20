@@ -51,11 +51,17 @@ export const organizationSettingsOptions = ({
   organizationId,
   userId,
 }: OrganizationSettingsCaller) =>
-  queryOptions({
-    queryKey: organizationSettingsKeys.byCaller({ organizationId, userId }),
-    queryFn: fetchOrganizationSettings,
-    staleTime: ROUTE_QUERY_STALE_TIME_MS,
-  });
+  resourceQueryOptions(
+    queryOptions({
+      queryKey: organizationSettingsKeys.byCaller({ organizationId, userId }),
+      queryFn: fetchOrganizationSettings,
+      staleTime: ROUTE_QUERY_STALE_TIME_MS,
+    }),
+    {
+      resources: [RESOURCE_TYPE.ORGANIZATION],
+      scope: { type: "organization", organizationId, userId },
+    },
+  );
 
 export const optionalOrganizationSettingsOptions = ({
   organizationId,
@@ -67,8 +73,10 @@ export const optionalOrganizationSettingsOptions = ({
       queryFn: organizationId === null ? skipToken : fetchOrganizationSettings,
       staleTime: ROUTE_QUERY_STALE_TIME_MS,
     }),
-    {
-      resources: [RESOURCE_TYPE.ORGANIZATION],
-      scope: { type: "organization" },
-    },
+    organizationId === null
+      ? { type: "independent" }
+      : {
+          resources: [RESOURCE_TYPE.ORGANIZATION],
+          scope: { type: "organization", organizationId, userId },
+        },
   );

@@ -41,7 +41,7 @@ let migratedPolicyExpression: string;
 
 const migrationPath = nodePath.resolve(
   import.meta.dir,
-  "../../../drizzle/20261020000300_chat_cleanup_intent_organization_keys/migration.sql",
+  "../../../drizzle/20261120070300_agent_skill_original_cleanup_intent_keys/migration.sql",
 );
 
 const insertPolicy = getTableConfig(bufferObjectCleanupIntents).policies.find(

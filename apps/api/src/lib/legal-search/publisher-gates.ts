@@ -1,3 +1,5 @@
+// parser-output-unchanged: the Finanční správa and Ministry of the Interior gate entries are new; existing adapters read only their own keys, so their parsed output is unchanged.
+// parser-output-unchanged: the cz-ns-sbirka adapter entry is new; existing adapters read only their own keys, so their parsed output is unchanged.
 // parser-output-unchanged: the br-tjdft adapter entry is new; existing adapters read only their own keys, so their parsed output is unchanged.
 // parser-output-unchanged: the TST adapter entry is new; existing adapters read only their own keys, so their parsed output is unchanged.
 // parser-output-unchanged: the ÚOHS adapter entry is new; existing adapters read only their own keys, so their parsed output is unchanged.
@@ -65,6 +67,25 @@ export const PUBLISHER_GATES = {
    * A full walk is about 120 requests.
    */
   "suip-cz": { publisher: "SÚIP", intervalMs: 5000, hosts: ["suip.gov.cz"] },
+  /**
+   * financnisprava.gov.cz states no limit; robots.txt disallows only search,
+   * view-mode switches and form folders. A full walk of both pokyn series is
+   * about 45 year pages and 450 documents; a 2 s gap keeps it near 16 minutes.
+   */
+  "financnisprava-cz": {
+    publisher: "Finanční správa",
+    intervalMs: 2000,
+    hosts: ["financnisprava.gov.cz"],
+  },
+  /**
+   * mv.gov.cz states no limit and its robots.txt disallows nothing. A listing
+   * walk is one page; with full texts, one request per závěr.
+   */
+  "mv-cz": {
+    publisher: "Ministerstvo vnitra",
+    intervalMs: 5000,
+    hosts: ["mv.gov.cz"],
+  },
   "bfdi-de": {
     publisher: "BfDI",
     intervalMs: 30_000,
@@ -158,6 +179,17 @@ export const PUBLISHER_GATES = {
     publisher: "Nejvyšší soud",
     intervalMs: POLITE_INTERVAL_MS,
     hosts: ["rozhodnuti.nsoud.cz"],
+  },
+  /**
+   * The court's collection site, a separate server from its database. It
+   * states no limit; one request a second is the pace a reader browsing the
+   * archive keeps, and a full walk of about ten thousand entries is under
+   * three hours.
+   */
+  "nsoud-sbirka-cz": {
+    publisher: "Nejvyšší soud",
+    intervalMs: 1000,
+    hosts: ["sbirka.nsoud.cz"],
   },
   /** NSS search portal and the court's original-document registry. */
   "nssoud-cz": {

@@ -3,6 +3,7 @@ import { panic } from "better-result";
 
 import { PROFESSIONAL_USE_STATUS } from "@stll/api-contract/professional-use";
 
+import { useHydrated } from "@/hooks/use-hydrated";
 import { professionalUseOptions, sessionOptions } from "@/lib/auth-queries";
 import type { AuthenticatedUser } from "@/lib/authenticated-user-context";
 
@@ -33,6 +34,7 @@ export type ClientAuthStatus =
 export const useClientAuthStatus = ({
   enabled = true,
 }: { enabled?: boolean } = {}): ClientAuthStatus => {
+  const hydrated = useHydrated();
   const {
     data: sessionData,
     isError,
@@ -55,7 +57,9 @@ export const useClientAuthStatus = ({
         ];
   const professionalUse = useQueries({ queries: professionalUseQueries }).at(0);
 
-  if (isPending) {
+  // The public server shell has no identity cache. Keep its initial browser
+  // render identical even when client boot has already fetched the session.
+  if (!hydrated || isPending) {
     return {
       status: "checking",
       isAuthenticated: false,

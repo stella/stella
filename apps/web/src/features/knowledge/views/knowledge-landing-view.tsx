@@ -6,6 +6,7 @@ import { useTranslations } from "use-intl";
 import { Button } from "@stll/ui/button";
 import { cn } from "@stll/ui/utils";
 
+import type { KnowledgeCataloguePath } from "@/lib/knowledge/knowledge-catalogues";
 import { knowledgeSections } from "@/lib/knowledge/navigation";
 import type { KnowledgeSection } from "@/lib/knowledge/navigation";
 
@@ -21,7 +22,10 @@ type LandingCardContent = {
 /** A Knowledge section card: a link to the section, or a button when the
  *  section needs something first. */
 export type KnowledgeLandingCard = LandingCardContent &
-  ({ to: KnowledgeSection["to"] } | { onOpen: () => void });
+  (
+    | { to: KnowledgeSection["to"] | KnowledgeCataloguePath }
+    | { onOpen: () => void }
+  );
 
 type KnowledgeLandingViewProps = {
   cards: readonly KnowledgeLandingCard[];

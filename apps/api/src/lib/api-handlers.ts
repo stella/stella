@@ -63,6 +63,7 @@ import { hasVisibleMoney } from "@/api/lib/billing/money-response";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { CapabilityTransport } from "@/api/lib/capability-transport";
 import { workspaceSegmentSchema } from "@/api/lib/custom-schema";
+import { databaseConstraintRefusal } from "@/api/lib/db/constraint-refusals";
 import { resourcesAreVisible } from "@/api/lib/entities/resource-access";
 import type { ActionAdmissionError } from "@/api/lib/errors/action-admission-error";
 import { resolveHandlerError } from "@/api/lib/errors/handler-error-resolution";
@@ -309,6 +310,9 @@ type McpCapabilityReason =
  * - `compound_consent`: operations that require multiple independent OAuth
  *   consent families; these stay first-party-only until the generic capability
  *   path can enforce conjunctive scopes.
+ * - `human_confirmation`: the user's own confirmation of an action an agent
+ *   prepared (for example sending an email they reviewed); an agent must never
+ *   be able to confirm for them.
  * - `organization_export`: starting or downloading a whole-organization data
  *   export; a person performs it in the app, never an agent, because it hands
  *   over the firm's privileged material in one action.
@@ -342,6 +346,7 @@ type McpInternalReason =
   | "native_tool_ui"
   | "billing_ui"
   | "compound_consent"
+  | "human_confirmation"
   | "native_device"
   | "organization_export"
   | "agent_autonomy_ceiling";
@@ -1080,6 +1085,9 @@ const runSafeHandlerInDeliveryScope = async <
     const handlerError =
       requestAbortRefusal(ctx.request.signal, error) ??
       publicReadTimeoutError(error) ??
+      // Before the typed status: a writer that wrapped the refused write in
+      // its own 500 still answers the limit the database kept.
+      databaseConstraintRefusal(error) ??
       resolveHandlerError(error, env.ACTION_LIMIT_CONTACT_URL);
     if (handlerError !== null) {
       const statusCode = handlerError.status;
@@ -1161,6 +1169,9 @@ const runSafeHandlerInDeliveryScope = async <
     const handlerError =
       requestAbortRefusal(ctx.request.signal, error) ??
       publicReadTimeoutError(error) ??
+      // Before the typed status: a writer that wrapped the refused write in
+      // its own 500 still answers the limit the database kept.
+      databaseConstraintRefusal(error) ??
       resolveHandlerError(error, env.ACTION_LIMIT_CONTACT_URL);
     if (handlerError !== null) {
       applyRetryAfterHeader(ctx, handlerError.retryAfterMs);

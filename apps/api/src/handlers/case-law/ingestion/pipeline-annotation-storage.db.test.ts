@@ -140,6 +140,10 @@ test.each(["SVK", "CZE"])(
             input: plainTextIngestionResult({
               ...input(documentId),
               country,
+              court:
+                country === "CZE"
+                  ? "Nejvyšší soud"
+                  : "Najvyšší súd Slovenskej republiky",
               courtId: undefined,
               citationScopes: [
                 {

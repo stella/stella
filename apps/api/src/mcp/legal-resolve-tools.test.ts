@@ -2,6 +2,7 @@ import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
+import { noDecisionReviewFound } from "@stll/api-contract/case-law-reviews";
 import { legalResolveResponseSchema } from "@stll/api-contract/legal-resolve";
 import type { LegalResolveResponse } from "@stll/api-contract/legal-resolve";
 
@@ -65,6 +66,15 @@ type DecisionIdentity = Omit<
 
 const identity = {
   kind: "decision",
+  appealReviews: {
+    status: "none_found" as const,
+    basis: "available_corpus" as const,
+    reason: "no_link_in_corpus" as const,
+    reviewedBy: [],
+    reviews: [],
+    reviewedByTruncated: false,
+    reviewsTruncated: false,
+  },
   decisionId: "00000000-0000-4000-8000-0000000d0041",
   identifier: "ECLI:CZ:NS:2026:1.CDO.1.2026.1",
   country: "CZE",
@@ -487,6 +497,10 @@ describe("resolve_case_law_decision keeps its court promise", () => {
               dependencies: {
                 lookup: async () => [...rows],
                 read: async () => null,
+                readReviews: async ({ decisionIds }) =>
+                  new Map(
+                    decisionIds.map((id) => [id, noDecisionReviewFound()]),
+                  ),
               },
             }),
         }),

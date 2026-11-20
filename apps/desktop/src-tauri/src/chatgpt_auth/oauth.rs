@@ -23,6 +23,8 @@ use ring::rand::{SecureRandom, SystemRandom};
 use sha2::{Digest, Sha256};
 use tokio::sync::oneshot;
 
+use crate::outcome_page::OutcomeScheme;
+
 /// The first-time registration entrypoint; never saved or used to exchange.
 pub(crate) const DYNAMIC_CLIENT_ID: &str = "dynamic_agent_client";
 /// The app's name, sent as `agent_name_hint` and Codex's `clientInfo.name`.
@@ -231,10 +233,18 @@ pub(crate) fn is_issued_client_id(value: &str) -> bool {
 }
 
 /// What the browser's callback page says once the attempt settles.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum CallbackPage {
-  Connected,
+  Connected(ConnectedAccount),
   NotConnected,
+}
+
+/// What the page can say about the account just connected: only what its
+/// verified ID token already named.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub(crate) struct ConnectedAccount {
+  pub email: Option<String>,
+  pub plan: Option<String>,
 }
 
 /// One URL handed to the waiting attempt, from the listener or a paste.
@@ -264,6 +274,7 @@ impl CallbackListener {
     slot: CallbackSlot,
     expected_state: String,
     page_wait: Duration,
+    scheme: OutcomeScheme,
   ) -> std::io::Result<Self> {
     let listener = tokio::net::TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).await?;
     let port = listener.local_addr()?.port();
@@ -272,6 +283,7 @@ impl CallbackListener {
       port,
       expected_state,
       page_wait,
+      scheme,
     });
     let router = Router::new()
       .route(CALLBACK_PATH, get(callback))
@@ -335,6 +347,8 @@ struct ListenerState {
   port: u16,
   expected_state: String,
   page_wait: Duration,
+  /// The app's colour scheme when the sign-in started.
+  scheme: OutcomeScheme,
 }
 
 async fn callback(
@@ -347,13 +361,17 @@ async fn callback(
   if parse_callback(&url, &redirect_uri(state.port), &state.expected_state).is_err() {
     return (
       StatusCode::BAD_REQUEST,
-      page_html(CallbackPage::NotConnected),
+      page_html(&CallbackPage::NotConnected, state.scheme),
     )
       .into_response();
   }
   let taken = state.slot.lock().ok().and_then(|mut slot| slot.take());
   let Some(waiting) = taken else {
-    return (StatusCode::GONE, page_html(CallbackPage::NotConnected)).into_response();
+    return (
+      StatusCode::GONE,
+      page_html(&CallbackPage::NotConnected, state.scheme),
+    )
+      .into_response();
   };
   let (page, outcome) = oneshot::channel();
   if waiting
@@ -363,7 +381,11 @@ async fn callback(
     })
     .is_err()
   {
-    return (StatusCode::GONE, page_html(CallbackPage::NotConnected)).into_response();
+    return (
+      StatusCode::GONE,
+      page_html(&CallbackPage::NotConnected, state.scheme),
+    )
+      .into_response();
   }
   let shown = tokio::time::timeout(state.page_wait, outcome)
     .await
@@ -371,41 +393,94 @@ async fn callback(
     .and_then(Result::ok)
     .unwrap_or(CallbackPage::NotConnected);
   let status = match shown {
-    CallbackPage::Connected => StatusCode::OK,
+    CallbackPage::Connected(_) => StatusCode::OK,
     CallbackPage::NotConnected => StatusCode::BAD_REQUEST,
   };
-  (status, page_html(shown)).into_response()
+  (status, page_html(&shown, state.scheme)).into_response()
+}
+
+/// A plan as the ID token names it (`plus`), as people read it (`Plus`).
+fn plan_label(plan: &str) -> String {
+  let mut chars = plan.chars();
+  chars.next().map_or_else(String::new, |first| {
+    first.to_uppercase().chain(chars).collect()
+  })
 }
 
 /// The outcome page (`OutcomeScreen`, see `crate::outcome_page`) in the
-/// app's language.
-fn callback_page(page: CallbackPage) -> String {
-  use crate::outcome_page::{OutcomeText, OutcomeTone, render};
-  let (tone, title, description) = match page {
-    CallbackPage::Connected => (
+/// app's language and colour scheme.
+fn callback_page(page: &CallbackPage, scheme: OutcomeScheme) -> String {
+  use crate::outcome_page::{
+    OutcomeDetail, OutcomeMark, OutcomeMarkKind, OutcomePage, OutcomeTone, render,
+  };
+  let t = crate::i18n::t;
+  let (tone, title, description, account) = match page {
+    CallbackPage::Connected(account) => (
       OutcomeTone::Success,
-      crate::i18n::t("agentSubscriptions.callbackConnectedTitle"),
-      crate::i18n::t("agentSubscriptions.callbackConnectedBody"),
+      t("agentSubscriptions.callbackConnectedTitle"),
+      t("agentSubscriptions.callbackConnectedBody"),
+      Some(account),
     ),
     CallbackPage::NotConnected => (
       OutcomeTone::Error,
-      crate::i18n::t("agentSubscriptions.callbackNotConnectedTitle"),
-      crate::i18n::t("agentSubscriptions.callbackNotConnectedBody"),
+      t("agentSubscriptions.callbackNotConnectedTitle"),
+      t("agentSubscriptions.callbackNotConnectedBody"),
+      None,
     ),
   };
-  render(
-    tone,
-    crate::i18n::active_locale(),
-    &OutcomeText {
-      title,
-      description,
-      note: crate::i18n::t("agentSubscriptions.callbackCloseTab"),
+  let plan = account
+    .and_then(|account| account.plan.as_deref())
+    .map(plan_label);
+  let details: Vec<OutcomeDetail<'_>> = [
+    (
+      t("agentSubscriptions.callbackAccount"),
+      account.and_then(|account| account.email.as_deref()),
+    ),
+    (t("agentSubscriptions.callbackPlan"), plan.as_deref()),
+  ]
+  .into_iter()
+  .filter_map(|(label, value)| {
+    value
+      .filter(|value| !value.is_empty())
+      .map(|value| OutcomeDetail { label, value })
+  })
+  .collect();
+  // A failure names the way back as the app shows it: the page, the section
+  // and the button's own labels.
+  let retry = [
+    OutcomeMark {
+      name: "section",
+      value: t("settings.pages.agents"),
+      kind: OutcomeMarkKind::Control,
     },
-  )
+    OutcomeMark {
+      name: "group",
+      value: t("agentSubscriptions.title"),
+      kind: OutcomeMarkKind::Control,
+    },
+    OutcomeMark {
+      name: "button",
+      value: t("agentSubscriptions.continueWithChatGpt"),
+      kind: OutcomeMarkKind::ButtonLabel,
+    },
+  ];
+  render(&OutcomePage {
+    tone,
+    locale: crate::i18n::active_locale(),
+    dir: crate::i18n::text_direction(),
+    scheme,
+    title,
+    description,
+    marks: if account.is_some() { &[] } else { &retry },
+    details: &details,
+    // Only once connected is nothing left to do in the tab; a failure's way
+    // on is in the app, which the description names.
+    note: account.map(|_| t("agentSubscriptions.callbackCloseTab")),
+  })
 }
 
-fn page_html(page: CallbackPage) -> impl IntoResponse {
-  let html = callback_page(page);
+fn page_html(page: &CallbackPage, scheme: OutcomeScheme) -> impl IntoResponse {
+  let html = callback_page(page, scheme);
   (
     [
       (header::CONTENT_TYPE, "text/html; charset=utf-8"),
@@ -413,7 +488,8 @@ fn page_html(page: CallbackPage) -> impl IntoResponse {
       (header::REFERRER_POLICY, "no-referrer"),
       (
         header::CONTENT_SECURITY_POLICY,
-        "default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; frame-ancestors 'none'",
+        // `img-src data:` admits the inline favicon and nothing else.
+        "default-src 'none'; style-src 'unsafe-inline'; img-src data:; base-uri 'none'; frame-ancestors 'none'",
       ),
       (header::X_CONTENT_TYPE_OPTIONS, "nosniff"),
     ],
@@ -430,9 +506,13 @@ mod tests {
   #[test]
   fn callback_pages_are_the_filled_outcome_screen() {
     crate::i18n::init_en();
+    let account = ConnectedAccount {
+      email: Some("person@example.com".into()),
+      plan: Some("plus".into()),
+    };
     for (page, tone, title_key) in [
       (
-        CallbackPage::Connected,
+        CallbackPage::Connected(account),
         "success",
         "agentSubscriptions.callbackConnectedTitle",
       ),
@@ -442,25 +522,87 @@ mod tests {
         "agentSubscriptions.callbackNotConnectedTitle",
       ),
     ] {
-      let html = callback_page(page);
+      let html = callback_page(&page, OutcomeScheme::Dark);
       let title = ammonia::clean_text(crate::i18n::t(title_key));
       assert_ne!(
         crate::i18n::t(title_key),
         title_key,
         "{title_key} is missing"
       );
-      assert!(html.contains(&format!("<title>{title}</title>")));
+      assert!(html.contains(&format!("<title>{title} | stella</title>")));
       assert!(html.contains(&format!(">{title}</h1>")));
       assert!(html.contains(&format!("data-tone=\"{tone}\"")));
+      assert!(html.contains("data-theme=\"dark\""));
       assert!(!html.contains("{{"), "a slot was left unfilled");
     }
     for key in [
       "agentSubscriptions.callbackConnectedBody",
       "agentSubscriptions.callbackNotConnectedBody",
+      "agentSubscriptions.callbackAccount",
+      "agentSubscriptions.callbackPlan",
       "agentSubscriptions.callbackCloseTab",
     ] {
       assert!(crate::i18n::locales_missing(key).is_empty(), "{key}");
     }
+  }
+
+  #[test]
+  fn the_failure_page_names_the_apps_controls_in_every_language() {
+    for locale in crate::i18n::shipped_locales() {
+      let body =
+        crate::i18n::message_in(locale, "agentSubscriptions.callbackNotConnectedBody")
+          .unwrap_or_default();
+      for placeholder in ["{section}", "{group}", "{button}"] {
+        assert_eq!(
+          body.matches(placeholder).count(),
+          1,
+          "{locale}: {placeholder}"
+        );
+      }
+      assert_eq!(
+        body.matches('{').count(),
+        3,
+        "{locale}: an unknown placeholder"
+      );
+    }
+    crate::i18n::init_en();
+    let html = callback_page(&CallbackPage::NotConnected, OutcomeScheme::System);
+    assert_eq!(html.matches("data-slot=\"outcome-control\"").count(), 2);
+    assert_eq!(
+      html.matches("data-slot=\"outcome-button-label\"").count(),
+      1
+    );
+    for label in [
+      "AI&#32;and&#32;agents",
+      "AI&#32;subscriptions",
+      "Continue&#32;with&#32;ChatGPT",
+    ] {
+      assert!(html.contains(&format!(">{label}</bdi>")), "{label}");
+    }
+  }
+
+  #[test]
+  fn the_connected_page_lists_only_what_the_token_named() {
+    crate::i18n::init_en();
+    let full = callback_page(
+      &CallbackPage::Connected(ConnectedAccount {
+        email: Some("person@example.com".into()),
+        plan: Some("plus".into()),
+      }),
+      OutcomeScheme::System,
+    );
+    assert_eq!(full.matches("data-slot=\"outcome-detail\"").count(), 2);
+    assert!(full.contains(&ammonia::clean_text("person@example.com")));
+    assert!(full.contains(">Plus</bdi>"));
+    let bare = callback_page(
+      &CallbackPage::Connected(ConnectedAccount::default()),
+      OutcomeScheme::System,
+    );
+    assert!(!bare.contains("outcome-details"));
+    assert!(
+      !callback_page(&CallbackPage::NotConnected, OutcomeScheme::System)
+        .contains("outcome-details")
+    );
   }
 
   #[test]
@@ -679,10 +821,14 @@ mod tests {
     let slot: CallbackSlot = Arc::new(Mutex::new(None));
     let (deliver, delivered) = oneshot::channel();
     *slot.lock().unwrap() = Some(deliver);
-    let listener =
-      CallbackListener::bind(Arc::clone(&slot), "s".into(), Duration::from_secs(5))
-        .await
-        .unwrap();
+    let listener = CallbackListener::bind(
+      Arc::clone(&slot),
+      "s".into(),
+      Duration::from_secs(5),
+      OutcomeScheme::System,
+    )
+    .await
+    .unwrap();
     let port = listener.port();
     let base = format!("http://127.0.0.1:{port}");
     let client = crate::http_client::DesktopHttpClient::new(
@@ -725,7 +871,7 @@ mod tests {
     received
       .page
       .unwrap()
-      .send(CallbackPage::Connected)
+      .send(CallbackPage::Connected(ConnectedAccount::default()))
       .unwrap();
     let response = first.await.unwrap();
     assert_eq!(response.status(), StatusCode::OK);

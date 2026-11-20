@@ -225,13 +225,6 @@
   },
   {
     "file": "apps/api/src/handlers/case-law/ingestion/adapters/pl-courts.ts",
-    "function": "module/fetchDetail",
-    "kind": "total-timeout-body",
-    "count": 1,
-    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
-  },
-  {
-    "file": "apps/api/src/handlers/case-law/ingestion/adapters/pl-courts.ts",
     "function": "module/getTotalCount",
     "kind": "numeric-timeout",
     "count": 1,
@@ -239,22 +232,8 @@
   },
   {
     "file": "apps/api/src/handlers/case-law/ingestion/adapters/pl-courts.ts",
-    "function": "module/getTotalCount",
-    "kind": "total-timeout-body",
-    "count": 1,
-    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
-  },
-  {
-    "file": "apps/api/src/handlers/case-law/ingestion/adapters/pl-courts.ts",
     "function": "module/listPlCourtsDayPage",
     "kind": "numeric-timeout",
-    "count": 1,
-    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
-  },
-  {
-    "file": "apps/api/src/handlers/case-law/ingestion/adapters/pl-courts.ts",
-    "function": "module/listPlCourtsDayPage",
-    "kind": "total-timeout-body",
     "count": 1,
     "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
@@ -1505,27 +1484,6 @@
     "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
-    "file": "apps/api/src/lib/web-search/tavily.ts",
-    "function": "module/createTavilyProvider",
-    "kind": "numeric-timeout",
-    "count": 1,
-    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
-  },
-  {
-    "file": "apps/api/src/lib/web-search/tavily.ts",
-    "function": "module/createTavilyProvider",
-    "kind": "total-timeout-body",
-    "count": 1,
-    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
-  },
-  {
-    "file": "apps/api/src/lib/web-search/tavily.ts",
-    "function": "module/validateTavilyKey",
-    "kind": "numeric-timeout",
-    "count": 1,
-    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
-  },
-  {
     "file": "apps/api/src/lib/work-obligations/legacy-work-obligation.ts",
     "function": "module/ensureLegacyWorkObligation",
     "kind": "constant-limit",
@@ -1886,13 +1844,6 @@
     "file": "apps/web/src/features/knowledge/public/tools/tool-contribute-page.tsx",
     "function": "module/AddSkillForm/resolveLatestCommit",
     "kind": "total-timeout-body",
-    "count": 1,
-    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
-  },
-  {
-    "file": "apps/web/src/lib/auth-client.ts",
-    "function": "module/customFetchImpl",
-    "kind": "numeric-timeout",
     "count": 1,
     "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },

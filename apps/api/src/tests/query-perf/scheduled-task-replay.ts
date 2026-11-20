@@ -112,7 +112,7 @@ export const measureScheduledTaskReplay = async ({
     database: db,
     run: async (tx) => {
       recording = true;
-      await task(
+      const outcome = await task(
         asTestRaw<SchedulerTaskContext>({
           db: {
             transaction: async <T>(run: (savepoint: typeof tx) => Promise<T>) =>
@@ -125,6 +125,10 @@ export const measureScheduledTaskReplay = async ({
         }),
       );
       recording = false;
+      // A run that reports failure did not do the work being measured.
+      if (outcome !== undefined && Result.isError(outcome)) {
+        panic(`${label} measurement run failed`, outcome.error);
+      }
     },
   });
   const statements = captured.filter(({ text }) => {

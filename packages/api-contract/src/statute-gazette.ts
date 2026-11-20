@@ -1,7 +1,7 @@
 // parser-output-unchanged: shared reporter suffix preserves the existing citation grammar
 import type {
   StatuteDefaultCollection,
-  StatuteQueryCountry,
+  StatuteGazetteCountry,
 } from "./statute-query-capability";
 
 /** Suffixes that identify case-law reporters sharing the Czech Sb. prefix. */
@@ -42,7 +42,7 @@ export const STATUTE_GAZETTES = {
   },
 } as const satisfies {
   // A country's default collection must be one it publishes.
-  [Country in StatuteQueryCountry]: Record<
+  [Country in StatuteGazetteCountry]: Record<
     StatuteDefaultCollection<Country>,
     StatuteGazetteSpellings
   > &

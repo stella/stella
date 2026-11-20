@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { fileURLToPath } from "node:url";
 
 import {
   isObjectLiteralProperty,
@@ -43,7 +44,7 @@ describe("period identity coverage", () => {
     const declarations: string[] = [];
     const authorizedFiniteCallers: string[] = [];
     for (const file of new Bun.Glob("**/*.ts").scanSync({
-      cwd: srcRoot.pathname,
+      cwd: fileURLToPath(srcRoot),
     })) {
       if (file.includes(".test.") || file.startsWith("tests/")) {
         continue;
@@ -180,6 +181,7 @@ describe("period identity coverage", () => {
       "handlers/clauses/rewrite.ts",
       "handlers/clauses/versions/summarize.ts",
       "handlers/contacts/extract-procuracao.ts",
+      "handlers/dictation/member-cleanup.ts",
       "handlers/dictation/transcribe.ts",
       "handlers/document-reviews/create-run.ts",
       "handlers/document-reviews/propose-positions.ts",

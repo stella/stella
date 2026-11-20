@@ -33,7 +33,6 @@ const OWNERS = [
   "apps/web/src/routes/_protected.settings/organization/-components/organization/number-series-seller-picker.tsx",
   "apps/web/src/routes/_protected.settings/organization/-components/organization/seller-profile-refusal.tsx",
   "apps/web/src/routes/_protected.settings/organization/-components/organization/vat-rate-display.tsx",
-  "apps/web/src/routes/_protected.settings/account.beta.tsx",
   "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/overview-time-read.tsx",
   "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/report-export-history.tsx",
   "apps/web/src/routes/knowledge/-components/skill-editor.tsx",

@@ -10,6 +10,10 @@ import { ScrollArea } from "@stll/ui/scroll-area";
 import { cn } from "@stll/ui/utils";
 
 import {
+  CONVERSATION_CLASS,
+  CONVERSATION_CONTENT_CLASS,
+} from "@/components/ai-elements/conversation.pending";
+import {
   StickToBottomContext,
   useMaybeStickToBottomContext,
   useStickToBottom,
@@ -35,11 +39,7 @@ export const Conversation = ({
   children,
   ...props
 }: ConversationProps) => (
-  <div
-    className={cn("relative flex-1 overflow-y-hidden", className)}
-    role="log"
-    {...props}
-  >
+  <div className={cn(CONVERSATION_CLASS, className)} role="log" {...props}>
     {children}
   </div>
 );
@@ -64,11 +64,11 @@ export const ConversationContent = ({
     // tracking is unaffected. On a surface that isolates the transcript's
     // own stacking context (the main /chat page, so sticky headers and the
     // scroll button can't leak above the fade/composer — see
-    // `chat-thread-page.tsx`), this scrollbar stays trapped inside that
+    // `chat-thread.page.tsx`), this scrollbar stays trapped inside that
     // context exactly like the native one did: no behavior change there.
     <ScrollArea scrollbarClassName="z-[60]" viewportRef={scrollRef}>
       <div
-        className={cn("flex flex-col gap-8 p-3", className)}
+        className={cn(CONVERSATION_CONTENT_CLASS, className)}
         {...props}
         ref={contentRef}
       >

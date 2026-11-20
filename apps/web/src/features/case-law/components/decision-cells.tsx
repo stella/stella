@@ -33,6 +33,7 @@ import {
   SEARCH_HIT_MARK,
   TextMark,
 } from "@stll/ui/text-mark";
+import { Tooltip, TooltipPopup, TooltipTrigger } from "@stll/ui/tooltip";
 import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
@@ -71,6 +72,8 @@ const EMPTY_VALUE = "—";
 export type Decision = {
   /** Search match semantics; absent on browse rows. */
   match?: DecisionSearchMatch;
+  /** The query words a search hit's decision lacks; absent on browse rows. */
+  missingTerms?: readonly string[];
   /** Search hits report text separately from publisher summaries. */
   textAvailability?: DecisionTextAvailability;
   id: string;
@@ -194,11 +197,28 @@ export const CaseNumberCell = ({
             availability={decision.textAvailability}
           />
         )}
-        {decision.match === "some_terms" && (
-          <span className="text-muted-foreground text-xs">
-            {t("caseLaw.searchWarnings.partialMatch")}
-          </span>
-        )}
+        {decision.match === "some_terms" &&
+          (decision.missingTerms === undefined ||
+          decision.missingTerms.length === 0 ? (
+            <span className="text-muted-foreground text-xs">
+              {t("caseLaw.searchWarnings.partialMatch")}
+            </span>
+          ) : (
+            // Which words the decision lacks, exactly: the search checked
+            // each one against the whole decision.
+            <Tooltip>
+              <TooltipTrigger
+                render={<span className="text-muted-foreground text-xs" />}
+              >
+                {t("caseLaw.searchWarnings.partialMatch")}
+              </TooltipTrigger>
+              <TooltipPopup>
+                {t("caseLaw.searchWarnings.partialMatchMissing", {
+                  terms: format.list([...decision.missingTerms]),
+                })}
+              </TooltipPopup>
+            </Tooltip>
+          ))}
         {multilingual && displayLanguage !== null && (
           <DecisionLanguageMenu
             alternates={languageAlternates}

@@ -64,8 +64,12 @@ import {
 } from "../helpers/smoke-route-defs";
 import { createBrowserErrorCollector } from "../helpers/test";
 import { listTimeBillingRoutes } from "../helpers/time-billing-routes";
+import { measureLoadingGeometry } from "../helpers/time-loading-geometry";
 import { declareVisualSandboxSmoke } from "../helpers/visual-sandbox-smoke";
-import { PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS } from "../helpers/wait-budgets";
+import {
+  PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS,
+  PLAYWRIGHT_EXPECT_TIMEOUT_60_SECONDS_MS,
+} from "../helpers/wait-budgets";
 import {
   createTestWorkspace,
   deleteTestWorkspace,
@@ -475,6 +479,85 @@ const declareRouteSmokeGroup = ({
 const baselineMode = process.env["E2E_NETWORK_BASELINE"];
 declareVisualSandboxSmoke();
 declarePublicKnowledgeSmoke({ mode: "disabled" });
+
+test("records loading landmarks in English and Czech", async ({
+  baseURL,
+  browser,
+}, testInfo) => {
+  // timeout: Each locale needs a cold and hydrated document for four routes and held updates on three.
+  testInfo.setTimeout(PLAYWRIGHT_EXPECT_TIMEOUT_60_SECONDS_MS);
+  const measurement = await measureLoadingGeometry({
+    browser,
+    baseURL: baseURL ?? "http://localhost:3000",
+    storageState: STORAGE_STATE,
+  });
+  const admin = measurement.evidence.filter(({ route }) =>
+    route.startsWith("/settings/organization/"),
+  );
+  const time = measurement.evidence.filter(({ route }) =>
+    route.startsWith("/time"),
+  );
+  for (const [file, evidence] of [
+    ["time-loading-geometry.json", time],
+    ["admin-loading-geometry.json", admin],
+  ] as const) {
+    await testInfo.attach(file, {
+      body: JSON.stringify(
+        { viewport: measurement.viewport, evidence },
+        null,
+        2,
+      ),
+      contentType: "application/json",
+    });
+  }
+  for (const sample of admin) {
+    for (const [landmark, loaded] of Object.entries(sample.loaded)) {
+      expect(
+        loaded,
+        `${sample.locale} ${sample.route} ${landmark}`,
+      ).not.toBeNull();
+      const origin = { top: loaded?.top, left: loaded?.left };
+      expect
+        .soft(
+          sample.server[landmark],
+          `${sample.locale} ${sample.route} cold ${landmark}`,
+        )
+        .toMatchObject(origin);
+      if ("pending" in sample) {
+        expect
+          .soft(
+            sample.pending[landmark],
+            `${sample.locale} ${sample.route} pending ${landmark}`,
+          )
+          .toMatchObject(origin);
+        expect
+          .soft(
+            sample.stepped?.[landmark],
+            `${sample.locale} ${sample.route} settled ${landmark}`,
+          )
+          .toMatchObject(origin);
+      }
+    }
+  }
+});
+
+test("records inbox and contact loading landmarks in English and Czech", async ({
+  baseURL,
+  browser,
+}, testInfo) => {
+  // timeout: Each locale needs a cold and hydrated document for three routes.
+  testInfo.setTimeout(PLAYWRIGHT_EXPECT_TIMEOUT_60_SECONDS_MS);
+  const measurement = await measureLoadingGeometry({
+    browser,
+    baseURL: baseURL ?? "http://localhost:3000",
+    storageState: STORAGE_STATE,
+    set: "contacts",
+  });
+  await testInfo.attach("contacts-loading-geometry.json", {
+    body: JSON.stringify(measurement, null, 2),
+    contentType: "application/json",
+  });
+});
 
 test("route coverage matches the authenticated route tree", async () => {
   await expectAuthenticatedRouteCoverage(SMOKE_ROUTE_DEFS);

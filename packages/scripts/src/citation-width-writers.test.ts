@@ -95,18 +95,6 @@ const declarations: Record<string, Declaration> = {
     disposition: "copy",
     reason: "copies synthetic rehearsal decision key and short docket",
   },
-  "src/handlers/case-law/ingestion/pipeline/decision-existing.ts:advancePartialObservationWatermark:orm-set-caseLawDecisions:1":
-    {
-      disposition: "copy",
-      reason:
-        "metadata or document payload update; no citation identity assignment",
-    },
-  "src/handlers/case-law/ingestion/pipeline/decision-existing.ts:advanceUnchangedObservationWatermark:orm-set-caseLawDecisions:1":
-    {
-      disposition: "copy",
-      reason:
-        "metadata or document payload update; no citation identity assignment",
-    },
   "src/handlers/case-law/ingestion/pipeline/corpus-mirror.ts:settleCaseLawCorpusMirrorTx:orm-set-caseLawDecisions:1":
     {
       disposition: "copy",

@@ -466,6 +466,19 @@ impl HarnessInstallation {
     Ok(())
   }
 
+  /// A Stella-owned directory for an agent the member installed themselves,
+  /// beside the managed ones' configuration directories.
+  pub fn member_agent_dir(&self, id: &str) -> Result<PathBuf, HarnessError> {
+    let dir = self.0.config_root.join(id);
+    crate::local_store::create_private_dir(&dir).map_err(
+      crate::logging::replaced_logged(
+        "member agent directory was not created",
+        HarnessError::Storage,
+      ),
+    )?;
+    Ok(dir)
+  }
+
   /// The active release's executable, held in place until the lease drops.
   /// An incomplete active release rolls the pointer back to the previous one.
   pub fn acquire(&self, harness: ManagedHarness) -> Result<HarnessLease, HarnessError> {

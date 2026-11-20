@@ -8,7 +8,7 @@
  * statute tables cannot drift from each other.
  */
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import type { ReactNode } from "react";
 
 import { useTranslations } from "use-intl";
@@ -16,6 +16,7 @@ import { useTranslations } from "use-intl";
 import { queryHighlightTokens } from "@stll/decision-reader/query-marks";
 
 import { PublicLawTable } from "@/components/public-law-table/public-law-table";
+import type { PublicLawTableLayoutUpdate } from "@/components/public-law-table/public-law-table-layout.logic";
 import type { TableFindHighlight } from "@/components/workspaces/table/find-highlight";
 import type { DecisionRowData } from "@/components/workspaces/table/types";
 import type { Decision } from "@/features/case-law/components/decision-cells";
@@ -78,7 +79,9 @@ type DecisionTableProps = {
   /** See `PublicLawTable`. */
   isRefreshing?: boolean | undefined;
   layout: DecisionTableLayout;
-  onLayoutChange: (layout: DecisionTableLayout) => void;
+  onLayoutChange: (
+    update: PublicLawTableLayoutUpdate<DecisionTableLayout>,
+  ) => void;
   onSelectedIdsChange: (decisionIds: string[]) => void;
   /**
    * The query the rows answer, which is not always the one the URL asks
@@ -118,15 +121,11 @@ export const DecisionTable = ({
     referenceKind,
   });
   const sorting = decisionTableSorting(dateOrder);
-  const rows = useMemo(
-    () =>
-      decisions.map((decision): DecisionRowData => ({
-        kind: "decision",
-        decision,
-        children: [],
-      })),
-    [decisions],
-  );
+  const rows = decisions.map((decision): DecisionRowData => ({
+    kind: "decision",
+    decision,
+    children: [],
+  }));
   const selection = {
     actions: <QuestionColumnSelectionBar surface={questions} />,
     clearLabel: t("common.clearSelection"),
@@ -159,20 +158,17 @@ export const DecisionTable = ({
     ReadonlySet<string>
   >(NO_EXPANDED_HEADNOTES);
 
-  const renderScope = useMemo(
-    () => ({
-      contentMode: layout.contentMode,
-      expandedHeadnoteIds,
-      onToggleHeadnote: (decisionId: string) => {
-        setExpandedHeadnoteIds((current) =>
-          withHeadnoteToggled(current, decisionId),
-        );
-      },
-      queryTokens: queryHighlightTokens(query),
-      searchQuery: query,
-    }),
-    [expandedHeadnoteIds, layout.contentMode, query],
-  );
+  const renderScope = {
+    contentMode: layout.contentMode,
+    expandedHeadnoteIds,
+    onToggleHeadnote: (decisionId: string) => {
+      setExpandedHeadnoteIds((current) =>
+        withHeadnoteToggled(current, decisionId),
+      );
+    },
+    queryTokens: queryHighlightTokens(query),
+    searchQuery: query,
+  };
 
   return (
     <DecisionRenderScope value={renderScope}>

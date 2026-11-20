@@ -1,5 +1,19 @@
 # @stll/ai-catalog
 
+## 0.15.0
+
+### Minor Changes
+
+- [#8829](https://github.com/stella/stella/pull/8829) [`f2d9c52`](https://github.com/stella/stella/commit/f2d9c5236e757123bc254e2783d60414c6b7db91) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Offer GPT-6.2 Astra and GPT-6.2 Sol. The offered model id types and option lists change with them, so code that matches them exhaustively has to handle the new ids.
+
+## 0.14.0
+
+### Minor Changes
+
+- [#8697](https://github.com/stella/stella/pull/8697) [`3505436`](https://github.com/stella/stella/commit/3505436363a468d70e34faa5d8511a31e6cb80a9) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Transcription models name their route (OpenRouter, or straight to ElevenLabs under the provider's model id), add Scribe v3, and `transcriptionEndpointFor` and `defaultTranscriptionModelId` take what the deployment serves.
+
+- [#8679](https://github.com/stella/stella/pull/8679) [`e5dacf4`](https://github.com/stella/stella/commit/e5dacf41a6d171397eb8b81fcd69385d41767005) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Transcription models now list availability on the global endpoint and a provider name, with refreshed prices, US availability and new zero-retention models; `transcriptionEndpointFor` picks the endpoint that serves a model for an organization.
+
 ## 0.13.0
 
 ### Minor Changes

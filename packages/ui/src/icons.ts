@@ -68,6 +68,11 @@ export { CopyIcon as DuplicateIcon } from "lucide-react";
 // mobile composer's round button shows it while there is nothing to send.
 export { MicIcon as DictateIcon } from "lucide-react";
 
+// A suggested next question under an answer: an arrow turning down from the
+// answer into what comes after it. Draw it through DirectionalIcon so it
+// turns the other way under RTL.
+export { CornerDownRightIcon as FollowUpIcon } from "lucide-react";
+
 // Opening a document's pages to reorder, rotate, crop or delete them: a stack
 // of pages with no pen, so it never reads as signing the document.
 export { FileStackIcon as EditPagesIcon } from "lucide-react";
@@ -110,12 +115,13 @@ export const MoveToSideIcon: LucideIcon = /* @__PURE__ */ createLucideIcon(
 
 // Published glyphs remain available to package consumers even when no
 // repository component imports them.
-export { CircleOffIcon, DollarSignIcon, ScissorsIcon } from "lucide-react";
+export { DollarSignIcon, ScissorsIcon } from "lucide-react";
 
 // --- Plain re-exports ------------------------------------------------------
 // @generated-start by scripts/codemod-icons.ts: edit by importing a lucide name and rerunning it
 export type { LucideIcon } from "lucide-react";
 export {
+  AccessibilityIcon,
   ActivityIcon,
   AlarmClockIcon,
   AlertCircleIcon,
@@ -146,6 +152,11 @@ export {
   CableIcon,
   CalendarClockIcon,
   CalendarIcon,
+  ChartColumnIcon,
+  ChartLineIcon,
+  ChartNoAxesColumnIcon,
+  ChartPieIcon,
+  ChartScatterIcon,
   CheckCheckIcon,
   CheckCircle2Icon,
   CheckIcon,
@@ -160,6 +171,7 @@ export {
   CircleDotIcon,
   CircleHelpIcon,
   CircleIcon,
+  CircleOffIcon,
   CircleUserRoundIcon,
   ClipboardCheckIcon,
   ClipboardCopyIcon,

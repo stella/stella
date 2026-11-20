@@ -6,6 +6,7 @@ GlobalRegistrator.register({ url: "http://localhost/" });
 const { act, cleanup, fireEvent, render, waitFor, within } =
   await import("@testing-library/react");
 const { clearMocks, mockIPC } = await import("@tauri-apps/api/mocks");
+const { emit } = await import("@tauri-apps/api/event");
 const { DesktopIntlProvider, defaultMessages } = await import("../src/i18n");
 const { DictationSetting } = await import("../src/mainview/DictationSetting");
 
@@ -23,6 +24,7 @@ const ENABLED_SNAPSHOT = {
   cleanup: true,
   cloudAvailable: false,
   cloudModel: null,
+  customWords: [],
   destination: "local",
   enabled: true,
   keepsInHistory: true,
@@ -36,6 +38,9 @@ const ENABLED_SNAPSHOT = {
   textBeforeCursorAvailable: true,
   failure: null,
   failureKeptInHistory: false,
+  holdKey: "combination",
+  holdKeys: ["combination"],
+  holdKeyWaiting: false,
   keys: { code: "Space", modifiers: ["control", "alt"] },
   model: { status: "ready" },
   modelBytes: 740_363_168,
@@ -49,16 +54,16 @@ const renderSetting = async (
   onCommand: (command: string, payload: unknown) => unknown = () => undefined,
 ) => {
   mockIPC((command, payload) => {
+    const answered = onCommand(command, payload);
+    // A test may answer the snapshot read itself, to change it between reads.
     if (command === "dictation_get_snapshot") {
-      return snapshot;
+      return answered ?? snapshot;
     }
-    return onCommand(command, payload);
+    return answered;
   });
   const view = render(
     <DesktopIntlProvider language="en" messages={defaultMessages}>
-      <DictationSetting
-        renderGroup={(content) => <section>{content}</section>}
-      />
+      <DictationSetting />
     </DesktopIntlProvider>,
   );
   await act(async () => {
@@ -67,21 +72,72 @@ const renderSetting = async (
   return view;
 };
 
-test.each([
-  ["without the feature", { available: false }],
-  ["from a native side that has no answer", undefined],
-  ["from a native side that sends something else", { status: "unknown" }],
-])("shows no group at all %s", async (_case, snapshot) => {
-  const { container } = await renderSetting(snapshot);
+test("shows nothing at all without the feature", async () => {
+  const { container } = await renderSetting({ available: false });
 
-  expect(container.querySelector("section")).toBeNull();
+  expect(container.innerHTML).toBe("");
 });
 
-test("shows the setting to an enrolled account", async () => {
-  const { getByText } = await renderSetting(ENABLED_SNAPSHOT);
+test.each([
+  ["has no answer", undefined],
+  ["sends something else", { status: "unknown" }],
+])(
+  "a native side that %s is reported with a way to read again",
+  async (_case, answer) => {
+    let reply: unknown = answer;
+    const { findByRole, getByRole } = await renderSetting(
+      undefined,
+      (command) => (command === "dictation_get_snapshot" ? reply : undefined),
+    );
+    expect((await findByRole("alert")).textContent).toBe(
+      defaultMessages.settings.errorReadState,
+    );
 
-  expect(getByText(defaultMessages.dictation.title)).toBeTruthy();
-  expect(getByText(defaultMessages.dictation.modelAttribution)).toBeTruthy();
+    reply = ENABLED_SNAPSHOT;
+    await act(async () => {
+      fireEvent.click(
+        getByRole("button", { name: defaultMessages.settings.tryAgain }),
+      );
+    });
+
+    expect(
+      await findByRole("switch", { name: defaultMessages.dictation.title }),
+    ).toBeTruthy();
+  },
+);
+
+test("shows the page to an enrolled account, with the switch in its header", async () => {
+  const { getByRole } = await renderSetting(ENABLED_SNAPSHOT);
+
+  const heading = getByRole("heading", {
+    level: 1,
+    name: defaultMessages.dictation.title,
+  });
+  expect(
+    within(heading.closest("header") ?? document.body)
+      .getByRole("switch", { name: defaultMessages.dictation.title })
+      .getAttribute("aria-checked"),
+  ).toBe("true");
+  // The header names the key to hold as a key cap.
+  expect(
+    heading.closest("header")?.querySelector("kbd")?.textContent,
+  ).toContain("Space");
+});
+
+test("the speech model's licence stays one focus away", async () => {
+  const { getByRole, findByText } = await renderSetting(ENABLED_SNAPSHOT);
+
+  const title = getByRole("button", {
+    name: defaultMessages.dictation.speechModel,
+  });
+  await act(async () => {
+    title.focus();
+    fireEvent.focus(title);
+  });
+
+  expect(
+    await findByText(defaultMessages.dictation.modelAttribution),
+  ).toBeTruthy();
 });
 
 test("offers the model download until it is installed", async () => {
@@ -90,7 +146,9 @@ test("offers the model download until it is installed", async () => {
     model: { status: "missing" },
   });
 
-  expect(getByRole("button").textContent).toContain("740");
+  expect(getByRole("button", { name: /Download/u }).textContent).toContain(
+    "740",
+  );
 });
 
 test("reports a failed dictation", async () => {
@@ -120,13 +178,18 @@ test("offers AI cleanup, on by default, with a truthful description", async () =
   expect(description.textContent).not.toContain("stella AI");
 });
 
-test("the dictation description says speech stays on this computer and leaves cleanup to its own row", async () => {
+test("the transcription row says speech stays on this computer and leaves cleanup to its own row", async () => {
   const { container } = await renderSetting(ENABLED_SNAPSHOT);
 
-  const description = container.querySelector("#dictation-description");
+  const description = container.querySelector(
+    "#dictation-destination-description",
+  );
   expect(description?.textContent).toContain("transcribed on this computer");
   expect(description?.textContent).toContain("is not stored");
   expect(description?.textContent).not.toContain("AI provider");
+  expect(
+    container.querySelector("#dictation-description")?.textContent,
+  ).not.toContain("AI provider");
   // Where the text goes is said once, on the switch that sends it.
   expect(
     container.querySelector("#dictation-cleanup-description")?.textContent,
@@ -249,15 +312,37 @@ test("offers the context switches under cleanup, off by default, with what they 
   expect(textCopy).toContain("1,000 characters");
 });
 
-test("hides the context switches while cleanup is off", async () => {
-  const { queryByRole } = await renderSetting({
-    ...ENABLED_SNAPSHOT,
-    cleanup: false,
-  });
+test("the context switches stay under cleanup, disabled while it is off", async () => {
+  const commands: string[] = [];
+  const { getByRole } = await renderSetting(
+    { ...ENABLED_SNAPSHOT, cleanup: false },
+    (command) => {
+      commands.push(command);
+      return undefined;
+    },
+  );
   const { windowTitle, textBeforeCursor } = defaultMessages.dictation.context;
 
-  expect(queryByRole("switch", { name: windowTitle.title })).toBeNull();
-  expect(queryByRole("switch", { name: textBeforeCursor.title })).toBeNull();
+  for (const title of [windowTitle.title, textBeforeCursor.title]) {
+    const toggle = getByRole("switch", { name: title });
+    expect(toggle.dataset["disabled"] !== undefined).toBe(true);
+    fireEvent.click(toggle);
+    expect(toggle.getAttribute("aria-checked")).toBe("false");
+    expect(
+      toggle.closest<HTMLElement>("[data-slot=settings-row]")?.dataset[
+        "disabled"
+      ],
+    ).toBe("");
+  }
+  expect(
+    commands.filter((command) => command.startsWith("dictation_set")),
+  ).toEqual([]);
+  // Cleanup itself stays switchable.
+  expect(
+    getByRole("switch", {
+      name: defaultMessages.dictation.cleanup.title,
+    }).dataset["disabled"],
+  ).toBeUndefined();
 });
 
 test("offers no text-before-cursor switch where this computer cannot read it", async () => {
@@ -441,19 +526,24 @@ test("this computer keeps the local description and the model download", async (
       command === "dictation_get_cloud_models" ? CLOUD_MODELS : undefined,
   );
   const { getByRole, getByText, queryByRole } = view;
-  const destinations = await openSelect(
-    view,
-    defaultMessages.dictation.destination.title,
-  );
+  const { local: thisComputer } = defaultMessages.dictation.destination;
+  const destinations = getByRole("group", {
+    name: defaultMessages.dictation.destination.title,
+  });
+  expect(
+    within(destinations)
+      .getByRole("button", {
+        name: thisComputer,
+      })
+      .getAttribute("aria-pressed"),
+  ).toBe("true");
   // Once the region's models arrive, stella AI can be chosen.
   await waitFor(() => {
     expect(
-      within(destinations)
-        .getByRole("option", {
-          name: defaultMessages.dictation.destination.cloud,
-        })
-        .getAttribute("aria-disabled"),
-    ).not.toBe("true");
+      within(destinations).getByRole("button", {
+        name: defaultMessages.dictation.destination.cloud,
+      }).dataset["disabled"],
+    ).toBeUndefined();
   });
 
   expect(queryByRole("note")).toBeNull();
@@ -461,9 +551,47 @@ test("this computer keeps the local description and the model download", async (
   expect(getByText(defaultMessages.dictation.cleanup.description)).toBeTruthy();
 });
 
-test("without the stella AI decision no destination is offered and no models are asked for", async () => {
+test("choosing stella AI asks the native side to transcribe there", async () => {
+  const calls: unknown[] = [];
+  const view = await renderSetting(
+    { ...ENABLED_SNAPSHOT, cloudAvailable: true, model: { status: "missing" } },
+    (command, payload) => {
+      if (command === "dictation_get_cloud_models") {
+        return CLOUD_MODELS;
+      }
+      if (command === "dictation_set_destination") {
+        calls.push(payload);
+        return {
+          ...ENABLED_SNAPSHOT,
+          cloudAvailable: true,
+          destination: "cloud",
+        };
+      }
+      return undefined;
+    },
+  );
+  const cloud = view.getByRole("button", {
+    name: defaultMessages.dictation.destination.cloud,
+  });
+  await waitFor(() => {
+    expect(cloud.dataset["disabled"] !== undefined).toBe(false);
+  });
+
+  await act(async () => {
+    fireEvent.click(cloud);
+  });
+
+  await waitFor(() => {
+    expect(calls).toEqual([{ destination: "cloud" }]);
+  });
+  await waitFor(() => {
+    expect(cloud.getAttribute("aria-pressed")).toBe("true");
+  });
+});
+
+test("without the stella AI decision only this computer is named and no models are asked for", async () => {
   const commands: string[] = [];
-  const { queryByText } = await renderSetting(
+  const { getByText, queryByRole } = await renderSetting(
     { ...ENABLED_SNAPSHOT, model: { status: "missing" } },
     (command) => {
       commands.push(command);
@@ -473,7 +601,14 @@ test("without the stella AI decision no destination is offered and no models are
     },
   );
 
-  expect(queryByText(defaultMessages.dictation.destination.title)).toBeNull();
+  expect(
+    getByText(defaultMessages.dictation.destination.localDescription),
+  ).toBeTruthy();
+  expect(
+    queryByRole("button", {
+      name: defaultMessages.dictation.destination.cloud,
+    }),
+  ).toBeNull();
   expect(commands).not.toContain("dictation_get_cloud_models");
 });
 
@@ -553,10 +688,15 @@ test("a model outside the organization's region is named with its provider and s
   const { destination } = defaultMessages.dictation;
   await waitFor(() => {
     expect(
-      view.getByText(`Chirp 3 · Google · ${destination.outsideRegion}`),
-    ).toBeTruthy();
+      view.getByRole("combobox", { name: destination.model }).textContent,
+    ).toBe("Chirp 3");
   });
-  expect(view.getByText(destination.outsideRegionNote)).toBeTruthy();
+  const tags = view.container.querySelector(
+    "#dictation-cloud-model-description",
+  );
+  expect(tags?.textContent).toContain("Google");
+  expect(tags?.textContent).toContain(destination.outsideRegion);
+  expect(view.queryByRole("alert")).toBeNull();
 
   const models = await openSelect(view, destination.model);
   expect(
@@ -564,8 +704,84 @@ test("a model outside the organization's region is named with its provider and s
   ).toBeTruthy();
 });
 
+test("a model whose provider keeps the audio is labeled and warned about when chosen", async () => {
+  const view = await renderSetting(
+    {
+      ...ENABLED_SNAPSHOT,
+      cloudAvailable: true,
+      cloudModel: "elevenlabs-direct/scribe-v3",
+      destination: "cloud",
+    },
+    (command) =>
+      command === "dictation_get_cloud_models"
+        ? {
+            ...CLOUD_MODELS,
+            models: [
+              ...CLOUD_MODELS.models,
+              {
+                displayName: "Scribe v3",
+                id: "elevenlabs-direct/scribe-v3",
+                outsideRegion: false,
+                provider: "ElevenLabs",
+                retainsData: true,
+              },
+            ],
+          }
+        : undefined,
+  );
+  const { destination } = defaultMessages.dictation;
+  await waitFor(() => {
+    expect(
+      view.getByRole("combobox", { name: destination.model }).textContent,
+    ).toBe("Scribe v3");
+  });
+  expect(
+    view.container.querySelector("#dictation-cloud-model-description")
+      ?.textContent,
+  ).toContain(destination.retainsData);
+  const warning = view.getByRole("alert");
+  expect(warning.textContent).toContain(
+    destination.retainsDataTitle.replace("{provider}", "ElevenLabs"),
+  );
+  expect(warning.textContent).toContain(
+    destination.retainsDataWarning.replace("{provider}", "ElevenLabs"),
+  );
+});
+
+test("a model whose provider keeps the audio is never shown as the fallback", async () => {
+  const view = await renderSetting(
+    {
+      ...ENABLED_SNAPSHOT,
+      cloudAvailable: true,
+      cloudModel: null,
+      destination: "cloud",
+    },
+    (command) =>
+      command === "dictation_get_cloud_models"
+        ? {
+            defaultModelId: null,
+            models: [
+              {
+                displayName: "Scribe v3",
+                id: "elevenlabs-direct/scribe-v3",
+                outsideRegion: false,
+                provider: "ElevenLabs",
+                retainsData: true,
+              },
+            ],
+            unavailable: null,
+          }
+        : undefined,
+  );
+  const { destination } = defaultMessages.dictation;
+  await waitFor(() => {
+    expect(view.getByText(destination.chooseModel)).toBeTruthy();
+  });
+  expect(view.queryByRole("alert")).toBeNull();
+});
+
 test("a model in the region adds no note", async () => {
-  const { getByText, queryByText } = await renderSetting(
+  const { getByText, queryByRole, queryByText } = await renderSetting(
     { ...ENABLED_SNAPSHOT, cloudAvailable: true, destination: "cloud" },
     (command) =>
       command === "dictation_get_cloud_models" ? CLOUD_MODELS : undefined,
@@ -574,8 +790,12 @@ test("a model in the region adds no note", async () => {
     expect(getByText("Voxtral Mini Transcribe")).toBeTruthy();
   });
   expect(
-    queryByText(defaultMessages.dictation.destination.outsideRegionNote),
+    queryByText(defaultMessages.dictation.destination.outsideRegion),
   ).toBeNull();
+  expect(
+    queryByText(defaultMessages.dictation.destination.retainsData),
+  ).toBeNull();
+  expect(queryByRole("alert")).toBeNull();
 });
 
 test("a downloaded speech model can be removed, also while stella AI transcribes", async () => {
@@ -623,4 +843,282 @@ test("the model cannot be removed while a dictation runs", async () => {
       name: defaultMessages.dictation.removeModel,
     }).hasAttribute("disabled"),
   ).toBe(true);
+});
+
+test("the retention warning shows only while the chosen model keeps the audio", async () => {
+  const models = {
+    ...CLOUD_MODELS,
+    models: [
+      ...CLOUD_MODELS.models,
+      {
+        displayName: "Scribe v3",
+        id: "elevenlabs-direct/scribe-v3",
+        outsideRegion: false,
+        provider: "ElevenLabs",
+        retainsData: true,
+      },
+    ],
+  };
+  const snapshot = {
+    ...ENABLED_SNAPSHOT,
+    cloudAvailable: true,
+    cloudModel: "elevenlabs-direct/scribe-v3",
+    destination: "cloud",
+  };
+  const view = await renderSetting(snapshot, (command) => {
+    if (command === "dictation_get_cloud_models") {
+      return models;
+    }
+    if (command === "dictation_set_cloud_model") {
+      return { ...snapshot, cloudModel: "mistralai/voxtral-mini-transcribe" };
+    }
+    return undefined;
+  });
+  const { destination } = defaultMessages.dictation;
+  await waitFor(() => {
+    expect(view.getByRole("alert").textContent).toContain(
+      destination.retainsDataTitle.replace("{provider}", "ElevenLabs"),
+    );
+  });
+
+  const listbox = await openSelect(view, destination.model);
+  const other = within(listbox).getByRole("option", {
+    name: "Voxtral Mini Transcribe",
+  });
+  await act(async () => {
+    fireEvent.pointerDown(other, { pointerType: "mouse" });
+    fireEvent.click(other);
+  });
+
+  await waitFor(() => {
+    expect(view.queryByRole("alert")).toBeNull();
+  });
+});
+
+const HOLD_KEY_SNAPSHOT = {
+  ...ENABLED_SNAPSHOT,
+  holdKey: "fn",
+  holdKeys: ["fn", "rightOption", "combination"],
+};
+
+test("the header names the key to hold", async () => {
+  const { container } = await renderSetting(HOLD_KEY_SNAPSHOT);
+
+  expect(
+    container.querySelector("#dictation-description kbd")?.textContent,
+  ).toBe("fn");
+});
+
+test("the speaker picks another key from what this computer offers", async () => {
+  const picked: unknown[] = [];
+  const view = await renderSetting(HOLD_KEY_SNAPSHOT, (command, payload) => {
+    if (command === "dictation_set_hold_key") {
+      picked.push(payload);
+      return { ...HOLD_KEY_SNAPSHOT, holdKey: "rightOption" };
+    }
+    return undefined;
+  });
+
+  expect(
+    view.getByRole("heading", {
+      name: defaultMessages.dictation.groups.shortcut,
+    }),
+  ).toBeTruthy();
+  const listbox = await openSelect(
+    view,
+    defaultMessages.dictation.holdKey.title,
+  );
+  const options = within(listbox).getAllByRole("option");
+  expect(options).toHaveLength(3);
+  const right = within(listbox).getByRole("option", { name: /^Right /u });
+  await act(async () => {
+    fireEvent.pointerDown(right, { pointerType: "mouse" });
+    fireEvent.click(right);
+  });
+
+  await waitFor(() => {
+    expect(picked).toEqual([{ holdKey: "rightOption" }]);
+  });
+});
+
+test("a read that started before a new key was picked does not bring the old key back", async () => {
+  let reads = 0;
+  let answerLateRead: (() => void) | undefined;
+  mockIPC(
+    async (command) => {
+      if (command === "dictation_get_snapshot") {
+        reads += 1;
+        if (reads === 2) {
+          await new Promise<void>((resolve) => {
+            answerLateRead = resolve;
+          });
+        }
+        return HOLD_KEY_SNAPSHOT;
+      }
+      if (command === "dictation_set_hold_key") {
+        return { ...HOLD_KEY_SNAPSHOT, holdKey: "rightOption" };
+      }
+      return undefined;
+    },
+    { shouldMockEvents: true },
+  );
+  const view = render(
+    <DesktopIntlProvider language="en" messages={defaultMessages}>
+      <DictationSetting />
+    </DesktopIntlProvider>,
+  );
+  const trigger = await view.findByRole("combobox", {
+    name: defaultMessages.dictation.holdKey.title,
+  });
+  expect(trigger.textContent).not.toMatch(/^Right /u);
+
+  // A read starts with fn still chosen and answers only after the change.
+  await act(async () => {
+    await emit("dictation-changed");
+  });
+  await waitFor(() => {
+    expect(answerLateRead).toBeDefined();
+  });
+  const listbox = await openSelect(
+    view,
+    defaultMessages.dictation.holdKey.title,
+  );
+  const right = within(listbox).getByRole("option", { name: /^Right /u });
+  await act(async () => {
+    fireEvent.pointerDown(right, { pointerType: "mouse" });
+    fireEvent.click(right);
+  });
+  await waitFor(() => {
+    expect(trigger.textContent).toMatch(/^Right /u);
+  });
+
+  await act(async () => {
+    answerLateRead?.();
+    await Promise.resolve();
+  });
+
+  expect(trigger.textContent).toMatch(/^Right /u);
+});
+
+test("a computer that offers one key shows no choice", async () => {
+  const { queryByText } = await renderSetting(ENABLED_SNAPSHOT);
+
+  expect(queryByText(defaultMessages.dictation.holdKey.title)).toBeNull();
+  // The group stays for the microphone choice.
+  expect(queryByText(defaultMessages.dictation.groups.shortcut)).not.toBeNull();
+});
+
+test("a key that cannot be heard yet says so", async () => {
+  const { getByText } = await renderSetting({
+    ...HOLD_KEY_SNAPSHOT,
+    holdKeyWaiting: true,
+  });
+
+  const messages = [
+    defaultMessages.dictation.holdKey.waiting,
+    defaultMessages.dictation.holdKey.unavailable,
+  ].map((message) => message.replace("{shortcut}", "fn"));
+  expect(getByText((text) => messages.includes(text))).toBeTruthy();
+});
+
+test("a dictation refused in a password field says nothing was recorded", async () => {
+  const { getByText } = await renderSetting({
+    ...ENABLED_SNAPSHOT,
+    failure: "passwordField",
+  });
+
+  expect(
+    getByText(defaultMessages.dictation.failure.passwordField),
+  ).toBeTruthy();
+});
+
+const customWords = defaultMessages.dictation.customWords;
+
+const sentWords = (payload: unknown): string[] =>
+  typeof payload === "object" &&
+  payload !== null &&
+  "words" in payload &&
+  Array.isArray(payload.words)
+    ? payload.words.filter((word): word is string => typeof word === "string")
+    : [];
+
+test("custom words are added and removed through the native side, which answers with the stored list", async () => {
+  const calls: unknown[] = [];
+  const { findByRole, getByRole } = await renderSetting(
+    ENABLED_SNAPSHOT,
+    (command, payload) => {
+      if (command !== "dictation_set_custom_words") {
+        return undefined;
+      }
+      calls.push(payload);
+      return { ...ENABLED_SNAPSHOT, customWords: sentWords(payload) };
+    },
+  );
+  const input = getByRole("textbox", { name: customWords.input });
+
+  fireEvent.change(input, { target: { value: "  custom terms list " } });
+  await act(async () => {
+    fireEvent.click(getByRole("button", { name: customWords.add }));
+  });
+
+  const remove = await findByRole("button", {
+    name: customWords.remove.replace("{word}", "custom terms list"),
+  });
+  expect(calls).toEqual([{ words: ["custom terms list"] }]);
+  expect(input instanceof HTMLInputElement && input.value).toBe("");
+  expect(input.getAttribute("maxlength")).toBe("100");
+
+  await act(async () => {
+    fireEvent.click(remove);
+  });
+
+  expect(calls.at(-1)).toEqual({ words: [] });
+});
+
+test("a custom word already listed, whatever its case, is not sent again", async () => {
+  const calls: unknown[] = [];
+  const { findByRole, getByRole } = await renderSetting(
+    { ...ENABLED_SNAPSHOT, customWords: ["Libeňská"] },
+    (command, payload) => {
+      if (command === "dictation_set_custom_words") {
+        calls.push(payload);
+      }
+      return undefined;
+    },
+  );
+
+  fireEvent.change(getByRole("textbox", { name: customWords.input }), {
+    target: { value: "libeňská" },
+  });
+  await act(async () => {
+    fireEvent.click(getByRole("button", { name: customWords.add }));
+  });
+
+  expect((await findByRole("alert")).textContent).toBe(customWords.duplicate);
+  expect(calls).toEqual([]);
+});
+
+test("a full list of custom words takes no more", async () => {
+  const full = Array.from({ length: 100 }, (_unused, index) => `w${index}`);
+  const { getByRole } = await renderSetting({
+    ...ENABLED_SNAPSHOT,
+    customWords: full,
+  });
+
+  fireEvent.change(getByRole("textbox", { name: customWords.input }), {
+    target: { value: "one more" },
+  });
+
+  expect(
+    getByRole("button", { name: customWords.add }).hasAttribute("disabled"),
+  ).toBe(true);
+});
+
+test("custom words are offered only while stella AI transcribes or cleanup runs", async () => {
+  const { queryByText } = await renderSetting({
+    ...ENABLED_SNAPSHOT,
+    cleanup: false,
+  });
+
+  expect(queryByText(customWords.title)).toBeNull();
 });

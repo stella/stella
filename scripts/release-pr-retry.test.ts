@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 const withMergedRelease = (
   check: (
@@ -71,7 +72,9 @@ esac
       return Bun.spawnSync(
         [
           "bash",
-          new URL("verify-release-tree-proof.sh", import.meta.url).pathname,
+          fileURLToPath(
+            new URL("verify-release-tree-proof.sh", import.meta.url),
+          ),
           ...(options.strict ? ["--allow-pr-head"] : []),
           "stella/stella",
           sha,

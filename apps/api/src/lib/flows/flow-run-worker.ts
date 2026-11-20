@@ -98,6 +98,50 @@ const executeAdmittedFlowStep = async ({
   });
 };
 
+type FailedFlowStepJob = Pick<Job<FlowStepJobData>, "data" | "attemptsMade"> & {
+  opts: Pick<Job<FlowStepJobData>["opts"], "attempts">;
+};
+
+/** Record the failed attempt now; the worker detaches final settlement only when retries end. */
+export const prepareFlowStepFailure = ({
+  job,
+  error,
+  dependencies,
+}: {
+  job: FailedFlowStepJob | undefined;
+  error: Error;
+  dependencies: Parameters<typeof failFlowRunFromWorker>[2];
+}): (() => Promise<void>) | undefined => {
+  if (!job) {
+    return undefined;
+  }
+  logger.error("flow.step_failed", {
+    runId: job.data.runId,
+    stepIndex: String(job.data.stepIndex),
+    attemptsMade: String(job.attemptsMade),
+    "error.type": errorTag(error),
+  });
+
+  // Failed also fires for transient attempts. Keep the run eligible for its retry.
+  const totalAttempts = job.opts.attempts ?? 1;
+  if (job.attemptsMade < totalAttempts) {
+    return undefined;
+  }
+  return async () => {
+    await failFlowRunFromWorker(job.data, error, dependencies).catch(
+      (finalizeError: unknown) => {
+        captureError(
+          finalizeError,
+          handlerErrorContext("flows.initFlowRunWorker.finalizeError", {
+            runId: job.data.runId,
+            stepIndex: String(job.data.stepIndex),
+          }),
+        );
+      },
+    );
+  };
+};
+
 /**
  * Initialize the BullMQ worker for flow runs. Call once at API startup
  * (mirrors `initWorkflowWorker`). The worker owns a dedicated blocking Redis
@@ -142,39 +186,14 @@ export const initFlowRunWorker = ({ db }: BullMqWorkerContext) => {
   );
 
   worker.on("failed", (job, error) => {
-    if (!job) {
-      return;
-    }
-    logger.error("flow.step_failed", {
-      runId: job.data.runId,
-      stepIndex: String(job.data.stepIndex),
-      attemptsMade: String(job.attemptsMade),
-      "error.type": errorTag(error),
+    const finalize = prepareFlowStepFailure({
+      job,
+      error,
+      dependencies: { database: db },
     });
-
-    // With retries enabled the failed event also fires for a transient first
-    // attempt; only flip the run to `failed` once BullMQ has exhausted its
-    // attempts, otherwise a retry would run against an already-failed run.
-    const totalAttempts = job.opts.attempts ?? 1;
-    if (job.attemptsMade < totalAttempts) {
-      return;
+    if (finalize !== undefined) {
+      detached(finalize, "flow-run-worker.fail-flow-run-from-worker");
     }
-
-    detached(
-      async () =>
-        failFlowRunFromWorker(job.data, error, { database: db }).catch(
-          (finalizeError: unknown) => {
-            captureError(
-              finalizeError,
-              handlerErrorContext("flows.initFlowRunWorker.finalizeError", {
-                runId: job.data.runId,
-                stepIndex: String(job.data.stepIndex),
-              }),
-            );
-          },
-        ),
-      "flow-run-worker.fail-flow-run-from-worker",
-    );
   });
 
   worker.on("error", createQueueWorkerErrorLogger("flow.worker_error"));

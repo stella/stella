@@ -7,12 +7,14 @@ import { Temporal } from "@stll/time";
 import type { Transaction } from "@/api/db/root";
 import { corpusIndexProjectionStates } from "@/api/db/schema";
 import { PayloadBudgetError } from "@/api/lib/compression";
+import type { ChunkBudgetError } from "@/api/lib/corpus-index/chunking";
 import { settleBoth } from "@/api/lib/corpus-index/core";
 import {
   MAX_TRANSPORT_WRAPPER_DEPTH,
   TRANSPORT_WRAPPERS,
 } from "@/api/lib/errors/handler-error-resolution";
 import type { StoredCorpusValidationError } from "@/api/lib/errors/tagged-errors";
+import { corpusIndexDecisionTerms } from "@/api/lib/legal-search/corpus-index-manifest";
 import {
   buildCorpusProjectionDocuments,
   legislationV2NeedsPassages,
@@ -45,6 +47,7 @@ import {
   readCorpusAtAuthoritativePointer,
   readCorpusForRecovery,
 } from "@/api/lib/legal-search/corpus-storage";
+import { CaseLawDocumentLanguageUndeclaredError } from "@/api/lib/legal-search/morphology/corpus-language";
 import { logger } from "@/api/lib/observability/logger";
 import type { IngestionTransactionRunner } from "@/api/lib/replay-safe-ingestion";
 import { S3ObjectBudgetError } from "@/api/lib/s3";
@@ -413,7 +416,10 @@ type LoadedCorpusProjectionPayload = InferOk<
 >;
 
 export type CorpusProjectionRevisionBuildFailure = {
-  kind: "payload_unavailable" | "revision_too_large";
+  kind:
+    | "payload_unavailable"
+    | "revision_too_large"
+    | "document_language_undeclared";
   message: string;
 };
 
@@ -471,7 +477,11 @@ export const corpusProjectionRevisionBuildFailure = (
           message: failure.message,
         },
       };
+    // Neither shrinks nor changes language on a retry. A corrected row, or a
+    // declaration of the language (which changes the decision's fingerprint,
+    // see the descriptor), makes it eligible again.
     case "revision_too_large":
+    case "document_language_undeclared":
       return {
         lease,
         failure: {
@@ -496,9 +506,55 @@ export type CorpusProjectionRevisionBlock = {
   material: CorpusProjectionMaterial;
   documentCount: number;
   parts: readonly [string, ...string[]];
+  /**
+   * How the decision's terms were written, on a generation that maps them:
+   * `prefix` when they did not fit the opening passage and were cut, which
+   * the executor counts and reports, because a reader then learns the
+   * decision's words from its passages rather than from the decision field.
+   */
+  decisionTerms: CorpusProjectionDecisionTermsWritten;
+};
+
+type CorpusProjectionDecisionTermsWritten = "not_mapped" | "whole" | "prefix";
+
+/** Read off the documents as the engine receives them: the opening carries the mark. */
+const decisionTermsWritten = (
+  material: CorpusProjectionMaterial,
+  documents: readonly Record<string, unknown>[],
+): CorpusProjectionDecisionTermsWritten => {
+  const field =
+    material.family === "case_law"
+      ? corpusIndexDecisionTerms(material.manifest)
+      : null;
+  if (field === null) {
+    return "not_mapped";
+  }
+  return documents.some((document) => document[field.partialField] === true)
+    ? "prefix"
+    : "whole";
 };
 
 /** A revision's documents, serialized once and checked against the ceilings. */
+/**
+ * The failure a revision whose documents could not be built records. A
+ * decision in a language its jurisdiction does not declare names itself, its
+ * jurisdiction and its language, so the blocked state says which row to
+ * correct or which declaration to extend.
+ */
+const revisionBuildErrorFailure = (
+  material: CorpusProjectionMaterial,
+  error: ChunkBudgetError | CaseLawDocumentLanguageUndeclaredError,
+): CorpusProjectionRevisionBuildFailure =>
+  CaseLawDocumentLanguageUndeclaredError.is(error)
+    ? {
+        kind: "document_language_undeclared",
+        message: `case-law decision ${material.input.documentId} of ${error.jurisdiction} is written in "${error.language}", a language its jurisdiction does not declare`,
+      }
+    : {
+        kind: "revision_too_large",
+        message: "projection payload exceeds the structural build ceiling",
+      };
+
 const buildCorpusProjectionRevisionBlock = (
   material: CorpusProjectionMaterial,
   payload: LoadedCorpusProjectionPayload,
@@ -530,10 +586,7 @@ const buildCorpusProjectionRevisionBlock = (
     }
   })();
   if (built.isErr()) {
-    return Result.err({
-      kind: "revision_too_large",
-      message: "projection payload exceeds the structural build ceiling",
-    });
+    return Result.err(revisionBuildErrorFailure(material, built.error));
   }
   const entry = {
     revision: material.lease.intentId,
@@ -557,6 +610,7 @@ const buildCorpusProjectionRevisionBlock = (
     material,
     documentCount: entry.documents.length,
     parts: [first, ...rest],
+    decisionTerms: decisionTermsWritten(material, entry.documents),
   });
 };
 

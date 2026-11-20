@@ -167,6 +167,10 @@ export const SCHEDULER_TASK_AUTHORITY = {
     "chat-secret-retention.ts",
     "Clears expired encrypted chat payloads while retaining request receipts.",
   ),
+  "chat.sweepCommandReceipts": platform(
+    "chat-command-receipt-retention.ts",
+    "Retention sweep of chat command receipts; reads ids and times only.",
+  ),
   "chat.sweepRunLogs": platform(
     "chat-run-log-retention.ts",
     "Retention sweep of closed run logs.",
@@ -178,6 +182,10 @@ export const SCHEDULER_TASK_AUTHORITY = {
   "desktopEditSessions.expire": platform(
     "desktop-edit-session-expiry.ts",
     "Expires sessions past their token lifetime, recorded as a service.",
+  ),
+  "dictation.deleteKeptTranscripts": platform(
+    "kept-transcript-deletion.ts",
+    "Deletes transcripts a transcription provider kept; reads provider ids only.",
   ),
   "documentProcessing.dispatchOcr": platform(
     "document-processing-ocr.ts",
@@ -299,6 +307,10 @@ export const SCHEDULER_TASK_AUTHORITY = {
     "sanctions-monitoring.ts",
     "Processes organization-scoped contact screening marks without a member run.",
   ),
+  "softLaw.sync": platform(
+    "soft-law-sync.ts",
+    "Syncs public regulator guidance from served sources.",
+  ),
   "sanctions.refreshSources": platform(
     "sanctions-refresh.ts",
     "Refreshes public sanctions lists.",
@@ -333,6 +345,10 @@ export const SCHEDULER_TASK_AUTHORITY = {
   "styleSets.reconcilePackageCleanups": platform(
     "style-set-package-cleanup-reconcile.ts",
     "Hands pending package cleanups to their queue.",
+  ),
+  "agentSkills.cleanOriginalObjects": platform(
+    "agent-skill-original-cleanup.ts",
+    "Erases stored originals of deleted or replaced skill files.",
   ),
   "templates.cleanDeletionObjects": platform(
     "template-deletion-cleanup.ts",

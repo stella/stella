@@ -97,7 +97,7 @@
         "position": "root/0/1/0/2",
         "relation": "case_law_decisions",
         "nodeType": "Index Scan",
-        "index": "case_law_decisions_republished_ruling_idx"
+        "index": "case_law_decisions_docket_family_key_idx"
       }
     ]
   },
@@ -365,6 +365,28 @@
         "relation": "case_law_decisions",
         "nodeType": "Index Only Scan",
         "index": "case_law_decisions_language_group_published_idx"
+      }
+    ]
+  },
+  "case-law.search-servable-candidate-revisions": {
+    "scans": [
+      {
+        "position": "root/0/1/0/0/1",
+        "relation": "case_law_decisions",
+        "nodeType": "Index Only Scan",
+        "index": "case_law_decisions_search_candidate_published_idx"
+      },
+      {
+        "position": "root/0/1/0/0/1/0/1",
+        "relation": "corpus_index_projection_states",
+        "nodeType": "Index Scan",
+        "index": "corpus_index_projection_states_pkey"
+      },
+      {
+        "position": "root/0/1/0/0/2",
+        "relation": "corpus_index_projection_states",
+        "nodeType": "Index Scan",
+        "index": "corpus_index_projection_states_pkey"
       }
     ]
   },
@@ -1051,13 +1073,13 @@
         "index": "corpus_index_projection_intents_identity_uidx"
       },
       {
-        "position": "root/4/0/1/0/0",
+        "position": "root/4/0/1/0",
         "relation": "corpus_index_projection_states",
         "nodeType": "Index Scan",
         "index": "corpus_index_projection_states_pkey"
       },
       {
-        "position": "root/4/1/0/0/0",
+        "position": "root/4/1/0/0",
         "relation": "corpus_index_projection_intents",
         "nodeType": "Index Scan",
         "index": "corpus_index_projection_intents_identity_uidx"
@@ -1068,6 +1090,38 @@
     "scans": [
       {
         "position": "root/0/0",
+        "relation": "corpus_index_projection_states",
+        "nodeType": "Index Scan",
+        "index": "corpus_index_projection_states_pkey"
+      },
+      {
+        "position": "root/1/1/0",
+        "relation": "corpus_index_projection_states",
+        "nodeType": "Index Only Scan",
+        "index": "corpus_index_projection_states_pkey"
+      }
+    ]
+  },
+  "corpus-index.flip-page-recount": {
+    "scans": [
+      {
+        "position": "root/1/0/0",
+        "relation": "corpus_index_projection_states",
+        "nodeType": "Index Only Scan",
+        "index": "corpus_index_projection_states_pkey"
+      }
+    ]
+  },
+  "corpus-index.flip-behind-cursor": {
+    "scans": [
+      {
+        "position": "root/0/0/0/1",
+        "relation": "corpus_index_projection_states",
+        "nodeType": "Index Only Scan",
+        "index": "corpus_index_projection_states_pkey"
+      },
+      {
+        "position": "root/1/0/1/0",
         "relation": "corpus_index_projection_states",
         "nodeType": "Index Scan",
         "index": "corpus_index_projection_states_pkey"

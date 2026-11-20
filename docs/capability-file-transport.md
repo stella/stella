@@ -65,6 +65,7 @@ alternative transport.
 | `clauses.import`               | x        |     | partial: `clauses.create` (one clause per call, no CSV bulk)           |
 | `clauses.export`               |          | x   | partial: `clauses.list` + `clauses.get` (no single export file)        |
 | `skills.resources.upload`      | x        |     | partial: `skills.resources.create` (text only, no binary resource)     |
+| `skills.export`                |          | x   | partial: `skills.get` (JSON, not an installable package)               |
 | `style-sets.create`            | x        |     | partial: `style-sets.from-editor.create` (settings, not a DOCX)        |
 | `style-sets.replace`           | x        |     | partial: `style-sets.from-editor.update` (settings, not a DOCX)        |
 | `templates.from-styles.create` | x        |     | partial: style set from editor, then `templates.from-style-set.create` |
@@ -233,8 +234,10 @@ rate-limit policy entry, not removing the default.
 ## Suppression accounting
 
 `suppressed` must mean "cannot work over a file transport", not "nobody has done
-the work yet". A ratchet metric (`capability-file-transport-suppressed`) freezes
-the count so a newly suppressed capability cannot appear without a reviewed
-baseline bump. The metric counts a capability, not a flag, and excludes an
-optional file input — so exposing a fileless mode is a real burn-down, and
-re-suppressing one shows up as a regression.
+the work yet". An exact-id ledger
+(`apps/api/capability-file-transport-ledger.json`, checked by
+`apps/api/scripts/capability-file-transport-guard.ts` over the catalog derived
+in memory) lists every suppressed capability, so a newly suppressed capability
+cannot appear without a reviewed ledger line. It lists a capability, not a
+flag, and excludes an optional file input — so exposing a fileless mode is a
+real burn-down that deletes its line, and re-suppressing one fails the guard.

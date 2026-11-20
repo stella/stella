@@ -497,6 +497,33 @@ export const STEM_FIELD_OF = {
   [PUBLISHER_SUMMARY_FIELD]: "headnote_stem",
 } as const;
 
+/**
+ * The index field carrying a whole decision's terms on its opening passage, so
+ * one engine query can rank decisions rather than passages: BM25 over the
+ * decision, with its length as the field norm.
+ *
+ * Total over languages. A decision whose language has a stemmer carries the
+ * stems of its passages' tokens, in order; one without (or with no recorded
+ * language) carries its surface tokens, which the field's folding tokenizer
+ * lowercases and folds like `text`. Named for what it holds in both cases:
+ * terms, not stems. Which of the two a decision holds follows from its
+ * `language`, the same key its projection fingerprint already folds in.
+ *
+ * Written to the opening passage only and never a default search field, for
+ * the reason `title` and the headnote are: a field repeated across passages
+ * would let one decision answer once per passage.
+ */
+export const DECISION_TERMS_FIELD = "decision_terms";
+
+/**
+ * Set on the opening passage of a decision whose terms did not fit the engine's
+ * document ceiling and were written as a prefix cut at a term boundary. Its
+ * passages still carry every word in `text` and `text_stem`, so only the
+ * decision-level ranking reads less than the whole decision, and an exact
+ * term query on this field counts every such decision.
+ */
+export const DECISION_TERMS_PARTIAL_FIELD = "decision_terms_partial";
+
 const FAMILY_FIELDS: Record<CorpusFamily, CorpusIndexFieldMapping[]> = {
   case_law: [
     // The docket, exactly as the court wrote it. Raw-tokenized, so it answers

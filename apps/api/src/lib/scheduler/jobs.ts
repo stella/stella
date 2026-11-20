@@ -4,14 +4,20 @@ import { and, eq, gt, notInArray, or, sql } from "drizzle-orm";
 import { DAY_IN_MS } from "@stll/time";
 
 import { rootDb } from "@/api/db/root";
+import type { Transaction } from "@/api/db/root";
 import type { SchedulerPayload, SchedulerSchedule } from "@/api/db/schema";
 import { schedulerJobs } from "@/api/db/schema";
 import { env } from "@/api/env";
 import { envBase } from "@/api/env-base";
 import { CASE_LAW_COVERAGE_REFRESH_INTERVAL_MS } from "@/api/lib/case-law/coverage-refresh-interval";
 import { SOURCE_ARRIVALS_REFRESH_INTERVAL_MS } from "@/api/lib/case-law/source-arrivals-window";
+import type { AggregateIdentities } from "@/api/lib/db/aggregate-lock-entries/identities.gen";
 import type { ScheduledJobReads } from "@/api/lib/db/read-budgets";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
+import {
+  elevenLabsKeepsTranscripts,
+  readElevenLabsDeployment,
+} from "@/api/lib/dictation/elevenlabs-deployment";
 import { resolveEmailEvents } from "@/api/lib/email/deliverability-config";
 import { resolveInboundMailReceiving } from "@/api/lib/email/inbound/receiving-config";
 import { isFeatureDeployed } from "@/api/lib/feature-access/deployment";
@@ -26,6 +32,7 @@ import {
   SCHEDULER_BACKFILL_IDS,
   SCHEDULER_REPAIR_BACKFILL_IDS,
 } from "@/api/lib/scheduler/backfill-config";
+import { reconcileFlowSchedule } from "@/api/lib/scheduler/reconcile-flow-schedule";
 import {
   REGISTERED_SCHEDULER_TASK_NAMES,
   type RegisteredSchedulerTaskName,
@@ -33,6 +40,7 @@ import {
 import { computeNextRunAt } from "@/api/lib/scheduler/schedule";
 import { SWEEP_ACTION_COSTS_TASK } from "@/api/lib/scheduler/tasks/action-cost-retention";
 import { BACKFILL_AGENT_CLIENT_STORAGE_TASK } from "@/api/lib/scheduler/tasks/agent-client-storage-backfill";
+import { CLEAN_AGENT_SKILL_ORIGINAL_OBJECTS_TASK } from "@/api/lib/scheduler/tasks/agent-skill-original-cleanup";
 import { BACKFILL_HEARTBEAT_TASK } from "@/api/lib/scheduler/tasks/backfill-heartbeat";
 import { RECONCILE_BILINGUAL_RUNS_TASK } from "@/api/lib/scheduler/tasks/bilingual-run-reconcile";
 import { RECONCILE_BUFFER_INTENTS_TASK } from "@/api/lib/scheduler/tasks/buffer-intent-reconciliation";
@@ -53,6 +61,7 @@ import { BACKFILL_CASE_LAW_REDACTION_TOMBSTONES_TASK } from "@/api/lib/scheduler
 import { REFRESH_CASE_LAW_SITEMAP_SHARDS_TASK } from "@/api/lib/scheduler/tasks/case-law-sitemap-shard-refresh";
 import { FOLD_CASE_LAW_SITEMAP_TOUCHES_TASK } from "@/api/lib/scheduler/tasks/case-law-sitemap-touch-fold";
 import { REFRESH_CASE_LAW_SOURCE_ARRIVALS_TASK } from "@/api/lib/scheduler/tasks/case-law-source-arrivals-refresh";
+import { SWEEP_CHAT_COMMAND_RECEIPTS_TASK } from "@/api/lib/scheduler/tasks/chat-command-receipt-retention";
 import { SEND_CHAT_LIMIT_REMINDERS_TASK } from "@/api/lib/scheduler/tasks/chat-limit-reminders";
 import { SWEEP_CHAT_RUN_LOGS_TASK } from "@/api/lib/scheduler/tasks/chat-run-log-retention";
 import { PURGE_CHAT_SECRETS_TASK } from "@/api/lib/scheduler/tasks/chat-secret-retention";
@@ -74,6 +83,7 @@ import { ERASE_HOSTED_CUSTOMERS_TASK } from "@/api/lib/scheduler/tasks/hosted-cu
 import { REDACT_HOSTED_USAGE_WEBHOOK_EVENTS_TASK } from "@/api/lib/scheduler/tasks/hosted-usage-webhook-retention";
 import { RECEIVE_INBOUND_MAIL_TASK } from "@/api/lib/scheduler/tasks/inbound-mail-receive";
 import { INFO_SOUD_SYNC_TRACKED_CASES_TASK } from "@/api/lib/scheduler/tasks/infosoud";
+import { DELETE_KEPT_TRANSCRIPTS_TASK } from "@/api/lib/scheduler/tasks/kept-transcript-deletion";
 import { BACKFILL_LEGISLATION_EXPRESSION_IDS_TASK } from "@/api/lib/scheduler/tasks/legislation-expression-id-backfill";
 import { REFRESH_LEGISLATION_FACETS_TASK } from "@/api/lib/scheduler/tasks/legislation-facet-refresh";
 import { RECONCILE_LIST_VERIFICATION_RUNS_TASK } from "@/api/lib/scheduler/tasks/list-verification-run-reconcile";
@@ -92,6 +102,7 @@ import { AUDIT_SCHEDULER_PAUSES_TASK } from "@/api/lib/scheduler/tasks/scheduler
 import { REPAIR_CHAT_SEARCH_INDEX_TASK } from "@/api/lib/scheduler/tasks/search-chat-index";
 import { REPAIR_SEARCH_PROJECTIONS_TASK } from "@/api/lib/scheduler/tasks/search-projection-repair";
 import { REPAIR_SEARCH_SEMANTIC_TIMESTAMPS_TASK } from "@/api/lib/scheduler/tasks/search-semantic-timestamps";
+import { SYNC_SOFT_LAW_TASK } from "@/api/lib/scheduler/tasks/soft-law-sync";
 import { REFRESH_STATUTE_SITEMAP_SHARDS_TASK } from "@/api/lib/scheduler/tasks/statute-sitemap-shard-refresh";
 import { RECONCILE_STYLE_SET_PACKAGE_CLEANUPS_TASK } from "@/api/lib/scheduler/tasks/style-set-package-cleanup-reconcile";
 import { PURGE_SYSTEM_AUDIT_RUNS_TASK } from "@/api/lib/scheduler/tasks/system-audit-retention";
@@ -171,7 +182,7 @@ export const ensureSchedulerJob = async (
 
 export const upsertSchedulerJob = async (
   definition: SchedulerJobDefinition,
-  db: SchedulerDb,
+  db: Pick<Transaction, "select" | "insert">,
 ): Promise<void> => {
   const {
     description,
@@ -221,10 +232,14 @@ export const upsertSchedulerJob = async (
     });
 };
 
-/** Drop one job's row, the counterpart of `ensureSchedulerJob`. */
-export const removeSchedulerJob = async (id: string): Promise<void> => {
-  await rootDb.delete(schedulerJobs).where(eq(schedulerJobs.id, id));
-};
+/** Reconcile one committed definition without exposing the scheduler connection. */
+export const reconcileCommittedFlowSchedule = async (
+  identity: AggregateIdentities["definition"],
+): Promise<void> =>
+  await reconcileFlowSchedule(identity, {
+    database: rootDb,
+    upsert: upsertSchedulerJob,
+  });
 
 const ensureOneShotSchedulerJob = async ({
   description,
@@ -742,6 +757,16 @@ export const DECLARED_SCHEDULER_JOBS = [
     enabled: env.HOSTED_USAGE_PROVIDER === "polar",
   },
   {
+    description:
+      "Delete transcripts ElevenLabs kept for dictation without zero retention",
+    id: "dictation.deleteKeptTranscripts.minute",
+    mode: "recurring",
+    schedule: { type: "interval", everyMs: 60 * 1000 },
+    task: DELETE_KEPT_TRANSCRIPTS_TASK,
+    reads: { budget: "scheduled.dictation.deleteKeptTranscripts" },
+    enabled: elevenLabsKeepsTranscripts(readElevenLabsDeployment()),
+  },
+  {
     description: "Delete expired action cost observations",
     id: "actions.sweepCosts.minute",
     mode: "recurring",
@@ -751,6 +776,14 @@ export const DECLARED_SCHEDULER_JOBS = [
     enabled:
       isDeploymentFeatureEnabled("FEATURE_ACTION_COST_RECORDS") &&
       env.ACTION_COST_RETENTION_DAYS !== undefined,
+  },
+  {
+    description: "Delete chat command receipts past their retention",
+    id: "chat.sweepCommandReceipts.tenMinute",
+    mode: "recurring",
+    schedule: { type: "interval", everyMs: 10 * 60 * 1000 },
+    task: SWEEP_CHAT_COMMAND_RECEIPTS_TASK,
+    reads: { budget: "scheduled.chat.sweepCommandReceipts" },
   },
   {
     description: "Delete expired closed chat run logs",
@@ -830,6 +863,14 @@ export const DECLARED_SCHEDULER_JOBS = [
     reads: "unmeasured",
   },
   {
+    description: "Erase skill file originals recorded by committed deletions",
+    id: "agentSkills.cleanOriginalObjects.oneMinute",
+    mode: "recurring",
+    schedule: { type: "interval", everyMs: 60 * 1000 },
+    task: CLEAN_AGENT_SKILL_ORIGINAL_OBJECTS_TASK,
+    reads: { budget: "scheduled.agentSkills.cleanOriginalObjects" },
+  },
+  {
     description:
       "Repair entity search timestamps and persisted preview passages",
     id: "search.repairSemanticTimestamps.v2",
@@ -866,6 +907,15 @@ export const DECLARED_SCHEDULER_JOBS = [
     schedule: { type: "interval", everyMs: 60_000 },
     task: DRAIN_SANCTIONS_MONITORING_TASK,
     reads: "unmeasured",
+  },
+  {
+    description: "Sync regulator guidance from served sources",
+    enabled: env.SOFT_LAW_SYNC_ENABLED,
+    id: "softLaw.sync.daily",
+    mode: "recurring",
+    schedule: { type: "interval", everyMs: DAY_IN_MS },
+    task: SYNC_SOFT_LAW_TASK,
+    reads: { budget: "scheduled.softLaw.sync" },
   },
   {
     description: "Refresh global reference lists",

@@ -10,9 +10,9 @@ import {
 } from "@/lib/react-query";
 import { workspacesNavigationOptions } from "@/lib/workspaces/queries";
 import { routePresentation } from "@/routes/-route-presentation";
-import { ChatHistoryPage } from "@/routes/_protected.chat/-components/chat-history-page";
 import { chatHistorySearchSchema } from "@/routes/_protected.chat/-components/chat-history.logic";
-import type { ChatHistorySearch } from "@/routes/_protected.chat/-components/chat-history.logic";
+import { ChatHistoryRoutePage } from "@/routes/_protected.chat/-components/chat-history.page";
+import { ChatHistoryPending } from "@/routes/_protected.chat/-components/chat-history.pending";
 
 export const Route = createFileRoute("/_protected/chat/history")({
   staticData: {
@@ -62,21 +62,6 @@ export const Route = createFileRoute("/_protected/chat/history")({
   head: () => ({
     meta: [{ title: pageTitle("common.history") }],
   }),
-  component: ChatHistoryRoute,
+  component: ChatHistoryRoutePage,
+  pendingComponent: ChatHistoryPending,
 });
-
-function ChatHistoryRoute() {
-  const q = Route.useSearch({ select: (search) => search.q });
-  const matter = Route.useSearch({ select: (search) => search.matter });
-  const navigate = Route.useNavigate();
-
-  const onSearchChange = (search: ChatHistorySearch) => {
-    // Refining a filter replaces the entry, so Back leaves the page instead
-    // of replaying every keystroke.
-    detached(navigate({ search, replace: true }), "chat-history.search");
-  };
-
-  return (
-    <ChatHistoryPage onSearchChange={onSearchChange} search={{ matter, q }} />
-  );
-}

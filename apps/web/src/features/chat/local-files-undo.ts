@@ -3,77 +3,83 @@ import { panic } from "better-result";
 import * as v from "valibot";
 
 import {
-  type ChatLocalFilesUndo,
   chatLocalFilesUndoAnswerSchema,
   type ChatLocalFilesUndoRead,
-  type ChatLocalFilesUndoRefusal,
 } from "@stll/api-contract/chat-local-files-undo";
 
 import { chatKeys } from "@/features/chat/chat-query-contract";
-import { localFilesUndoPollMs } from "@/features/chat/local-files-undo.logic";
+import {
+  localFilesUndoPollMs,
+  type LocalFilesUndoRequested,
+} from "@/features/chat/local-files-undo.logic";
 import { readClientClockMs } from "@/hooks/client-clock";
 import { api } from "@/lib/api";
 import { unwrapApiResponse } from "@/lib/errors/api";
 import { toSafeId } from "@/lib/safe-id";
+import { resourceQueryOptions } from "@/lib/workspace-realtime";
 
-export type LocalFilesUndoTurn = {
+/** The member's sent message whose later file changes an edit may undo. */
+export type LocalFilesUndoMessage = {
   activeOrganizationId: string;
   userId: string;
   threadId: string;
-  turnId: string;
+  messageId: string;
 };
 
 const undoRoute = ({
   threadId,
-  turnId,
-}: Pick<LocalFilesUndoTurn, "threadId" | "turnId">) =>
+  messageId,
+}: Pick<LocalFilesUndoMessage, "threadId" | "messageId">) =>
   api.chat
     .threads({ threadId: toSafeId<"chatThread">(threadId) })
-    .turns({ turnId: toSafeId<"chatTurn">(turnId) })["local-files"].undo;
+    .messages({ messageId: toSafeId<"chatMessage">(messageId) })["local-files"]
+    .undo;
 
 /**
- * Where the undo of a turn's file changes stands. While the cached undo may
- * still be answered, the read is asked again with a pause that grows with how
- * long the page has followed it (since `followedSince`, epoch ms) until it
- * settles. A failed read keeps the cached undo, so it is followed on.
+ * What editing the chat from the message does on the member's computer, and
+ * the undo of its file changes. While the undo may still be answered, or a
+ * turn of the thread still runs, the read is asked again with a pause that
+ * grows with how long the form has followed it (since `followedSince`, epoch
+ * ms). `follow: false` while the form follows the undo itself, as it sends.
  */
 export const localFilesUndoOptions = (
-  { activeOrganizationId, userId, threadId, turnId }: LocalFilesUndoTurn,
-  followedSince: number,
+  { activeOrganizationId, userId, threadId, messageId }: LocalFilesUndoMessage,
+  { followedSince, follow }: { followedSince: number; follow: boolean },
 ) =>
-  queryOptions({
-    queryKey: chatKeys.localFilesUndo(
-      activeOrganizationId,
-      userId,
-      threadId,
-      turnId,
-    ),
-    queryFn: async ({ signal }): Promise<ChatLocalFilesUndoRead> =>
-      unwrapApiResponse(
-        await undoRoute({ threadId, turnId }).get({ fetch: { signal } }),
+  resourceQueryOptions(
+    queryOptions({
+      queryKey: chatKeys.localFilesUndo(
+        activeOrganizationId,
+        userId,
+        threadId,
+        messageId,
       ),
-    refetchInterval: (query) =>
-      localFilesUndoPollMs({
-        read: query.state.data,
-        pendingForMs: readClientClockMs() - followedSince,
-      }),
-  });
-
-/** How a request to undo was answered: taken with its undo, or refused with the reason. */
-export type LocalFilesUndoRequested =
-  | { type: "accepted"; undo: ChatLocalFilesUndo }
-  | { type: "refused"; reason: ChatLocalFilesUndoRefusal };
+      queryFn: async ({ signal }): Promise<ChatLocalFilesUndoRead> =>
+        unwrapApiResponse(
+          await undoRoute({ threadId, messageId }).get({ fetch: { signal } }),
+        ),
+      refetchInterval: (query) =>
+        follow &&
+        localFilesUndoPollMs({
+          read: query.state.data,
+          pendingForMs: readClientClockMs() - followedSince,
+        }),
+    }),
+    // Read when an edit form opens and followed by its own poll; no
+    // resource event names an undo.
+    { type: "independent" },
+  );
 
 const REFUSED_STATUS = 409;
 
 /**
- * Ask the turn's computer to undo the turn's file changes. A refusal (409)
- * is an answer, not a failure: its reason is shown on the turn.
+ * Ask the computer to undo the file changes made since the message. A
+ * refusal (409) is an answer, not a failure: the edit form shows its reason.
  */
 export const requestLocalFilesUndo = async (
-  turn: LocalFilesUndoTurn,
+  message: LocalFilesUndoMessage,
 ): Promise<LocalFilesUndoRequested> => {
-  const response = await undoRoute(turn).post();
+  const response = await undoRoute(message).post();
   if (response.error?.status === REFUSED_STATUS) {
     const answer = v.safeParse(
       chatLocalFilesUndoAnswerSchema,

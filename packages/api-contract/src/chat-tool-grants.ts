@@ -52,6 +52,9 @@ const MANUAL_CHAT_TOOL_GRANT_POLICY = {
   remember: CHAT_TOOL_GRANT_POLICY_KIND.grantable,
   reply_comment: CHAT_TOOL_GRANT_POLICY_KIND.grantable,
   resolve_comment: CHAT_TOOL_GRANT_POLICY_KIND.grantable,
+  // A large package is saved over many calls; a grant spares a prompt per
+  // batch. A new skill is saved disabled either way.
+  save_skill_package: CHAT_TOOL_GRANT_POLICY_KIND.grantable,
   "search-all-past-chats": CHAT_TOOL_GRANT_POLICY_KIND.grantable,
   use_connector_secret: CHAT_TOOL_GRANT_POLICY_KIND.approveOnce,
   // Only the server-executed apply variant ever requests approval; it writes

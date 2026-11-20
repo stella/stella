@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { fileURLToPath } from "node:url";
 
 import type { Block, HeadingBlock } from "@stll/legal-ast/document-ast";
 
@@ -272,7 +273,7 @@ describe("anchor jump", () => {
 
   test("a followed address lands a block on the line a jump does", async () => {
     const css = await Bun.file(
-      new URL("reader.css", import.meta.url).pathname,
+      fileURLToPath(new URL("reader.css", import.meta.url)),
     ).text();
 
     expect(css).toContain(

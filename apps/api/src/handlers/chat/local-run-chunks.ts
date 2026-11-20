@@ -42,6 +42,7 @@ import {
   CHAT_LOCAL_RUN_FILES_METADATA_KEY,
   CHAT_LOCAL_RUN_FILES_NOT_SHARED_METADATA_KEY,
   CHAT_LOCAL_RUN_LIMIT_METADATA_KEY,
+  CHAT_LOCAL_RUN_MODEL_METADATA_KEY,
   CHAT_LOCAL_RUN_QUESTION_TOOL,
   CHAT_LOCAL_RUN_STEER_EVENT,
   CHAT_LOCAL_RUN_STEER_TOOL,
@@ -51,10 +52,17 @@ import {
   type ChatLocalRunHarness,
   type ChatLocalRunLimit,
   chatLocalRunLimitSchema,
+  chatLocalRunModelSchema,
   chatLocalRunSteerCallId,
   type ChatLocalRunSteerEvent,
   type ChatLocalRunSteerInput,
 } from "@stll/api-contract/chat-run-target";
+import {
+  CHAT_TURN_STEERING,
+  CHAT_TURN_STEERING_EVENT,
+  type ChatTurnSteering,
+  type ChatTurnSteeringEvent,
+} from "@stll/api-contract/chat-send-intent";
 import {
   DESKTOP_RUNNER_APPROVAL_DECISIONS,
   DESKTOP_RUNNER_APPROVAL_KINDS,
@@ -146,6 +154,7 @@ type LocalRunControl = Pick<
   | "readRun"
   | "readRunInputText"
   | "readRunOutputFile"
+  | "readChatTurnSteering"
   | "recordChatReadSeq"
   | "startRun"
 >;
@@ -219,7 +228,24 @@ type LocalRunStreamInput = {
    * (`ChatTurnRunBound`).
    */
   abortSignal: AbortSignal;
+  /**
+   * The turn's release to another task (`ChatTurnRun.handOver`): the read
+   * stops after the event it is on, records where, and ends with
+   * `CHAT_TURN_RELEASED_EVENT`; the run on the computer goes on.
+   */
+  handOverSignal: AbortSignal;
 };
+
+/**
+ * The server-only end of a read released to another task: the processor
+ * stores the answer so far for the adopter instead of settling the turn, and
+ * the chunk reaches no log and no viewer.
+ */
+const CHAT_TURN_RELEASED_EVENT = "stella.chat-turn.released";
+
+/** Whether `chunk` ends a read released to another task. */
+export const isChatTurnReleasedChunk = (chunk: StreamChunk): boolean =>
+  chunk.type === EventType.CUSTOM && chunk.name === CHAT_TURN_RELEASED_EVENT;
 
 /** A chat turn bound to a computer: started on a new turn, continued on a resume. */
 export type LocalChatRun = {
@@ -469,25 +495,35 @@ const MESSAGE_METADATA_EVENTS: ReadonlySet<string> = new Set([
 ]);
 
 /**
- * A finished run's context report as the chat reads it: under its one key
- * only when it is a valid report. A desktop is not trusted, so anything else
- * under the key is dropped.
+ * A finished run's reports (its context, the models it asked for and ran on)
+ * as the chat reads them: each under its key only when it is valid. A desktop
+ * is not trusted, so anything else under those keys is dropped.
  */
-const withCheckedContext = (
+const withCheckedReports = (
   chunk: Extract<PublicStreamChunk, { type: EventType.RUN_FINISHED }>,
 ) => {
-  if (chunk.metadata?.[CHAT_LOCAL_RUN_CONTEXT_METADATA_KEY] !== undefined) {
-    const { [CHAT_LOCAL_RUN_CONTEXT_METADATA_KEY]: reported, ...metadata } =
-      chunk.metadata;
-    const parsed = v.safeParse(chatLocalRunContextSchema, reported);
-    return {
-      ...chunk,
-      metadata: parsed.success
-        ? { ...metadata, [CHAT_LOCAL_RUN_CONTEXT_METADATA_KEY]: parsed.output }
-        : metadata,
-    };
+  if (chunk.metadata === undefined) {
+    return chunk;
   }
-  return chunk;
+  const {
+    [CHAT_LOCAL_RUN_CONTEXT_METADATA_KEY]: reportedContext,
+    [CHAT_LOCAL_RUN_MODEL_METADATA_KEY]: reportedModel,
+    ...metadata
+  } = chunk.metadata;
+  const context = v.safeParse(chatLocalRunContextSchema, reportedContext);
+  const model = v.safeParse(chatLocalRunModelSchema, reportedModel);
+  return {
+    ...chunk,
+    metadata: {
+      ...metadata,
+      ...(context.success
+        ? { [CHAT_LOCAL_RUN_CONTEXT_METADATA_KEY]: context.output }
+        : {}),
+      ...(model.success
+        ? { [CHAT_LOCAL_RUN_MODEL_METADATA_KEY]: model.output }
+        : {}),
+    },
+  };
 };
 
 /**
@@ -812,7 +848,7 @@ const asChatChunk = (
   }
   if (chunk.type === EventType.RUN_FINISHED) {
     return {
-      ...withCheckedContext(chunk),
+      ...withCheckedReports(chunk),
       runId: chatRunId,
       threadId,
       ...(chunk.outcome?.type === "interrupt"
@@ -1320,6 +1356,8 @@ const createRunReports = (
 type ReadRunOptions = {
   context: LocalRunContext;
   runnerRunId: string;
+  /** The chat turn reading the run, whose steering the read tells. */
+  chatTurnId: SafeId<"chatTurn">;
   afterSeq: number;
   /**
    * The calls the run opened through `afterSeq` (`openedCalls`); the read
@@ -1328,6 +1366,7 @@ type ReadRunOptions = {
   toolCalls: LocalRunToolCalls;
   chatRunId: string;
   abortSignal: AbortSignal;
+  handOverSignal: AbortSignal;
   /**
    * When the turn was sent, for a run just started: the chat shows it waits
    * for the computer to pick the run up until it did. `null` when reading on
@@ -1357,12 +1396,15 @@ const interruptRun = async (context: LocalRunContext, runnerRunId: string) => {
 
 /**
  * Whether a cut of the turn, by its kind, stops the computer's turn. After
- * each of them nobody reads the run any more, so each does.
+ * each of them but a lost owner nobody reads the run any more. A lost owner
+ * is a task whose turn another task adopted, or the reaper ended: the
+ * adopter reads the run on, and the run of a turn that ended is cancelled
+ * from the rows (`readRunsOfEndedChatTurns`).
  */
 const LOCAL_RUN_CUT_STOPS_COMPUTER: Readonly<Record<ChatTurnRunCut, boolean>> =
   {
     "member-stop": true,
-    "owner-lost": true,
+    "owner-lost": false,
     "production-failed": true,
     "admission-lost": true,
     other: true,
@@ -1842,13 +1884,160 @@ const readStartOf = (
         told: null,
       };
 
+/**
+ * What ends a read's wait for the computer. A hand-over asked for while the
+ * read may not release yet (a call's input half read, the run's end still
+ * to come) wakes nothing, or the wait would return at once on every pass:
+ * the read waits at its poll pace until it may.
+ */
+const waitWakers = (abortSignal: AbortSignal, handOverSignal: AbortSignal) =>
+  handOverSignal.aborted
+    ? abortSignal
+    : AbortSignal.any([abortSignal, handOverSignal]);
+
+/**
+ * When a read may release its turn to another task: asked to, with no call
+ * input half read (an adopted read's processor folds a call's input only
+ * from the call's start; the input's end follows its start at once), no
+ * harness question between its input and what follows it, and not between
+ * the harness's finish and the run's own end, which an adopted read would
+ * not repeat. A question's interrupt (or, for one answered by the next
+ * message, its result) follows its input at once; the turn awaits the
+ * member on the interrupt, so this read settles it then.
+ */
+const releaseGate = (handOverSignal: AbortSignal) => {
+  const holding = new Set<string>();
+  const questions = new Set<string>();
+  return {
+    observe: (chunk: StreamChunk) => {
+      if (chunk.type === EventType.TOOL_CALL_START) {
+        holding.add(chunk.toolCallId);
+        if (chunk.toolCallName === CHAT_LOCAL_RUN_QUESTION_TOOL) {
+          questions.add(chunk.toolCallId);
+        }
+      }
+      if (
+        (chunk.type === EventType.TOOL_CALL_END &&
+          !questions.has(chunk.toolCallId)) ||
+        chunk.type === EventType.TOOL_CALL_RESULT
+      ) {
+        holding.delete(chunk.toolCallId);
+      }
+    },
+    open: (finished: boolean) =>
+      handOverSignal.aborted && !finished && holding.size === 0,
+  };
+};
+
+/**
+ * End a read whose turn goes to another task, after the last event it read
+ * and its run start: its position is recorded, the run goes on unheld, and
+ * the read's last chunk says it was released. A position that cannot be
+ * recorded fails the read as any store failure does.
+ */
+async function* releasedRead({
+  pause,
+  position,
+  releaseRun,
+  rewrite,
+  start,
+  stopRun,
+}: {
+  pause: () => ReturnType<LocalRunContext["control"]["recordChatReadSeq"]>;
+  position: number;
+  releaseRun: () => void;
+  rewrite: RewriteContext;
+  start: () => Generator<PublicStreamChunk>;
+  stopRun: () => Promise<void>;
+}): AsyncGenerator<PublicStreamChunk> {
+  yield* start();
+  const recorded = await pause();
+  if (recorded.isErr()) {
+    await stopRun();
+    yield* storeUnavailable(recorded.error, rewrite);
+    return;
+  }
+  releaseRun();
+  yield {
+    type: EventType.CUSTOM,
+    name: CHAT_TURN_RELEASED_EVENT,
+    value: { readSeq: position },
+    timestamp: nowMs(),
+  };
+}
+
+const TURN_STEERING_SINK = failureSink({
+  event: "chat.local_run_turn_steering_read_failed",
+  expected: [],
+});
+
+/**
+ * Whether the turn takes a message mid-turn, from its run's harness. A failed
+ * read tells `not_steerable`: a message then waits for the turn's end, and
+ * nothing it shows is declined.
+ */
+const turnSteeringOf = async (
+  context: LocalRunContext,
+  chatTurnId: SafeId<"chatTurn">,
+): Promise<ChatTurnSteering> => {
+  const read = await context.control.readChatTurnSteering({
+    owner: context.owner,
+    chat: { threadId: context.chatThreadId, turnId: chatTurnId },
+  });
+  if (Result.isError(read)) {
+    observeFailure(read.error, { sink: TURN_STEERING_SINK });
+    return CHAT_TURN_STEERING.notSteerable;
+  }
+  return read.value;
+};
+
+/**
+ * The chat run's start, told at most once by a read, and not at all by one
+ * whose run start the log already holds (`readStartOf`). The turn's steering
+ * is told with it, so every reader of the run (a rejoin replays the log)
+ * knows where Enter sends a message.
+ */
+const runStartOnce = ({
+  chatRunId,
+  started,
+  steering,
+  threadId,
+}: {
+  chatRunId: string;
+  started: boolean;
+  steering: ChatTurnSteering;
+  threadId: SafeId<"chatThread">;
+}) => {
+  let told = started;
+  return function* (): Generator<PublicStreamChunk> {
+    if (told) {
+      return;
+    }
+    told = true;
+    yield {
+      type: EventType.RUN_STARTED,
+      runId: chatRunId,
+      threadId,
+      timestamp: nowMs(),
+    };
+    yield {
+      type: EventType.CUSTOM,
+      name: CHAT_TURN_STEERING_EVENT,
+      value: { steering } satisfies ChatTurnSteeringEvent,
+      timestamp: nowMs(),
+    };
+  };
+};
+
 async function* readRunChunks({
   context,
   runnerRunId,
+  chatTurnId,
   afterSeq,
   toolCalls,
   chatRunId,
   abortSignal,
+  handOverSignal,
   deliveringSince,
   adopted,
 }: ReadRunOptions): AsyncGenerator<PublicStreamChunk> {
@@ -1856,20 +2045,15 @@ async function* readRunChunks({
   const rewrite = rewriteOf(context, runnerRunId, chatRunId);
   let position = afterSeq;
   const initial = readStartOf(context, rewrite, adopted);
-  let { started, finished } = initial;
+  let { finished } = initial;
   /** The harness's own run error, held for the outcome `run.finished` names. */
   let { harnessError } = initial;
-  const start = function* (): Generator<PublicStreamChunk> {
-    if (!started) {
-      started = true;
-      yield {
-        type: EventType.RUN_STARTED,
-        runId: chatRunId,
-        threadId: context.chatThreadId,
-        timestamp: nowMs(),
-      };
-    }
-  };
+  const start = runStartOnce({
+    chatRunId,
+    started: initial.started,
+    steering: await turnSteeringOf(context, chatTurnId),
+    threadId: context.chatThreadId,
+  });
   const computer = computerStatusChunks(start, initial.told);
   const { runApps, runReports } = initial;
   const fail = function* (
@@ -1889,6 +2073,9 @@ async function* readRunChunks({
   const held = holdRun(context, runnerRunId, abortSignal);
   const stopRun = held.stop;
   const releaseRun = held.release;
+  const gate = releaseGate(handOverSignal);
+  const release = () =>
+    releasedRead({ pause, position, releaseRun, rewrite, start, stopRun });
   const onCut = () => {
     detached(held.endForCut, "local-run-chunks.interrupt");
   };
@@ -1901,6 +2088,10 @@ async function* readRunChunks({
     for (;;) {
       if (abortSignal.aborted) {
         await held.endForCut();
+        return;
+      }
+      if (gate.open(finished)) {
+        yield* release();
         return;
       }
       const page = await control.readEvents({
@@ -1922,6 +2113,10 @@ async function* readRunChunks({
         yield* computer({ status: "connected" });
       }
       for (const item of page.value.items) {
+        if (gate.open(finished)) {
+          yield* release();
+          return;
+        }
         position = item.seq;
         const message = storedRunMessage(item.message);
         switch (message.type) {
@@ -1959,6 +2154,7 @@ async function* readRunChunks({
               continue;
             }
             yield* start();
+            gate.observe(chunk);
             if (chunk.type !== EventType.RUN_FINISHED) {
               yield* runApps.carry(chunk);
               continue;
@@ -2032,7 +2228,7 @@ async function* readRunChunks({
           yield* computer(step.computer);
           await listener.wait({
             timeoutMs: context.pollMs ?? DEFAULT_POLL_MS,
-            signal: abortSignal,
+            signal: waitWakers(abortSignal, handOverSignal),
           });
           continue;
         default:
@@ -2216,11 +2412,13 @@ async function* startLocalRun({
   }
   yield* readRunChunks({
     context,
+    chatTurnId: input.chatTurnId,
     runnerRunId: outcome.runId,
     afterSeq: 0,
     toolCalls: new Map(),
     chatRunId: input.chatRunId,
     abortSignal: input.abortSignal,
+    handOverSignal: input.handOverSignal,
     deliveringSince: sentAt,
   });
 }
@@ -2430,11 +2628,13 @@ async function* resumeLocalRun({
   }
   yield* readRunChunks({
     context,
+    chatTurnId: input.chatTurnId,
     runnerRunId: run.runId,
     afterSeq: run.chatReadSeq,
     toolCalls: calls.value,
     chatRunId: input.chatRunId,
     abortSignal: input.abortSignal,
+    handOverSignal: input.handOverSignal,
     deliveringSince: null,
   });
 }
@@ -2486,11 +2686,13 @@ async function* adoptLocalRun({
   }
   yield* readRunChunks({
     context,
+    chatTurnId: input.chatTurnId,
     runnerRunId: run.runId,
     afterSeq: run.chatReadSeq,
     toolCalls: read.value.toolCalls,
     chatRunId: input.chatRunId,
     abortSignal: input.abortSignal,
+    handOverSignal: input.handOverSignal,
     deliveringSince: null,
     adopted: read.value,
   });

@@ -6,6 +6,8 @@ use tauri::{
 
 use crate::PreferencesTab;
 use crate::activity::{ActivityRecordingStatus, TrayActivitySnapshot};
+use crate::dictation::TrayDictation;
+use crate::dictation_hold_key::KeyNames;
 use crate::i18n::{active_locale, t, t_fmt, t_plural};
 use crate::types::{AppSnapshot, SessionSnapshot};
 
@@ -20,6 +22,9 @@ const OPEN_PREFERENCES_ACTION: &str = "open-preferences";
 const RECONNECT_ACCOUNT_ACTION: &str = "reconnect-account";
 const OPEN_CLIPBOARD_ACTION: &str = "open-clipboard";
 const OPEN_ACTIVITY_ACTION: &str = "open-activity";
+const OPEN_TRANSCRIBE_ACTION: &str = "open-transcribe";
+const OPEN_DICTATION_SETTINGS_ACTION: &str = "open-dictation-settings";
+const DICTATION_HINT_ITEM: &str = "dictation-hint";
 const PAUSE_ACTIVITY_ACTION: &str = "activity-pause";
 const RESUME_ACTIVITY_ACTION: &str = "activity-resume";
 const ACTIVITY_STATUS_ITEM: &str = "activity-status";
@@ -82,6 +87,34 @@ fn activity_action(
     }
     ActivityRecordingStatus::Off => None,
   }
+}
+
+/// The tray's Dictation submenu, decided apart from the native menu.
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum DictationMenu {
+  /// Switched off: one item, opening the page where it is turned on.
+  Off,
+  /// On: a line naming the key to hold, then its settings.
+  On { hint: String },
+}
+
+/// `None` wherever the Settings window shows no Dictation page.
+fn dictation_menu(
+  state: Option<TrayDictation>,
+  names: KeyNames,
+  locale: &str,
+) -> Option<DictationMenu> {
+  let state = state?;
+  if !state.enabled {
+    return Some(DictationMenu::Off);
+  }
+  let language = locale.split('-').next().unwrap_or(locale);
+  let key = state.hold_key.label(names, language, |key| {
+    t_fmt("dictation.holdKey.right", &[("key", key)])
+  });
+  Some(DictationMenu::On {
+    hint: t_fmt("tray.dictationHint", &[("key", &key)]),
+  })
 }
 
 fn recording_icon(recording: bool) -> image::ImageResult<tauri::image::Image<'static>> {
@@ -391,14 +424,23 @@ fn build_tray_menu_with_activity(
         .build(app)?,
     );
   }
+  let dictation = dictation_menu(
+    crate::dictation::tray_state(app),
+    KeyNames::CURRENT,
+    active_locale(),
+  );
+  if let Some(dictation) = &dictation {
+    builder = builder.item(&build_dictation_menu(app, dictation)?);
+  }
+  let first_group = clipboard_enabled || dictation.is_some();
   let activity_enabled = crate::activity::is_enabled(app);
   if activity_enabled {
-    if clipboard_enabled {
+    if first_group {
       builder = builder.separator();
     }
     builder = builder.item(&build_activity_menu(app, activity)?);
   }
-  if clipboard_enabled || activity_enabled {
+  if first_group || activity_enabled {
     builder = builder.separator();
   }
 
@@ -521,6 +563,46 @@ fn build_tray_menu_with_activity(
   builder.build()
 }
 
+fn build_dictation_menu(
+  app: &AppHandle,
+  dictation: &DictationMenu,
+) -> tauri::Result<Submenu<Wry>> {
+  let menu = SubmenuBuilder::new(app, t("tray.dictation"));
+  // The Transcribe window has the same gate as dictation itself.
+  let transcribe =
+    MenuItemBuilder::with_id(OPEN_TRANSCRIBE_ACTION, t("tray.transcribeRecording"))
+      .build(app)?;
+  match dictation {
+    // Transcribing a recording does not need dictation switched on.
+    DictationMenu::Off => menu
+      .item(
+        &MenuItemBuilder::with_id(
+          OPEN_DICTATION_SETTINGS_ACTION,
+          t("tray.dictationTurnOn"),
+        )
+        .build(app)?,
+      )
+      .separator()
+      .item(&transcribe),
+    DictationMenu::On { hint } => menu
+      .item(
+        &MenuItemBuilder::with_id(DICTATION_HINT_ITEM, hint)
+          .enabled(false)
+          .build(app)?,
+      )
+      .separator()
+      .item(&transcribe)
+      .item(
+        &MenuItemBuilder::with_id(
+          OPEN_DICTATION_SETTINGS_ACTION,
+          t("tray.dictationSettings"),
+        )
+        .build(app)?,
+      ),
+  }
+  .build()
+}
+
 fn build_activity_menu(
   app: &AppHandle,
   activity: Option<&TrayActivitySnapshot>,
@@ -577,6 +659,12 @@ pub fn handle_menu_action(action: &str) -> MenuAction {
   if action == OPEN_ACTIVITY_ACTION {
     return MenuAction::OpenActivity;
   }
+  if action == OPEN_TRANSCRIBE_ACTION {
+    return MenuAction::OpenTranscribe;
+  }
+  if action == OPEN_DICTATION_SETTINGS_ACTION {
+    return MenuAction::OpenPreferences(PreferencesTab::Dictation);
+  }
   if action == PAUSE_ACTIVITY_ACTION {
     return MenuAction::SetActivityRecording(ActivityRecordingStatus::Paused);
   }
@@ -623,6 +711,7 @@ pub enum MenuAction {
   OpenPreferences(PreferencesTab),
   OpenClipboard,
   OpenActivity,
+  OpenTranscribe,
   SetActivityRecording(ActivityRecordingStatus),
   CheckForUpdates,
   OpenEditRoot,
@@ -638,6 +727,7 @@ pub enum MenuAction {
 #[cfg(test)]
 mod tests {
   use super::*;
+  use crate::dictation_hold_key::HoldChoice;
   use crate::types::{
     DesktopEditFileType, DesktopNotificationPreferences, DesktopUpdateSnapshot,
     SessionStatus,
@@ -717,6 +807,81 @@ mod tests {
           .iter()
           .all(|pixel| pixel[3] == 0 || pixel[..3] == [0, 0, 0]),
         "visible template pixels must be monochrome black"
+      );
+    }
+  }
+
+  #[test]
+  fn dictation_is_in_the_tray_only_where_settings_has_its_page() {
+    init_i18n();
+    assert_eq!(dictation_menu(None, KeyNames::Mac, "en"), None);
+  }
+
+  #[test]
+  fn dictation_switched_off_offers_only_turning_it_on() {
+    init_i18n();
+    let off = TrayDictation {
+      enabled: false,
+      hold_key: HoldChoice::Fn,
+    };
+    assert_eq!(
+      dictation_menu(Some(off), KeyNames::Mac, "en"),
+      Some(DictationMenu::Off)
+    );
+  }
+
+  #[test]
+  fn the_dictation_hint_names_the_configured_key() {
+    init_i18n();
+    let on = |hold_key| TrayDictation {
+      enabled: true,
+      hold_key,
+    };
+    let hint = |state, names| match dictation_menu(Some(state), names, "en") {
+      Some(DictationMenu::On { hint }) => hint,
+      other => panic!("expected the on menu, got {other:?}"),
+    };
+    assert_eq!(
+      hint(on(HoldChoice::Fn), KeyNames::Mac),
+      "Hold fn to dictate"
+    );
+    assert_eq!(
+      hint(on(HoldChoice::RightOption), KeyNames::Mac),
+      "Hold Right ⌥ to dictate"
+    );
+    assert_eq!(
+      hint(on(HoldChoice::Combination), KeyNames::Windows),
+      "Hold Ctrl+Alt+Space to dictate"
+    );
+  }
+
+  #[test]
+  fn the_dictation_submenu_opens_the_transcribe_window() {
+    assert!(matches!(
+      handle_menu_action(OPEN_TRANSCRIBE_ACTION),
+      MenuAction::OpenTranscribe
+    ));
+  }
+
+  #[test]
+  fn both_dictation_items_open_its_settings_page() {
+    assert!(matches!(
+      handle_menu_action(OPEN_DICTATION_SETTINGS_ACTION),
+      MenuAction::OpenPreferences(PreferencesTab::Dictation)
+    ));
+  }
+
+  #[test]
+  fn dictation_entries_have_translations_in_every_locale() {
+    for key in [
+      "tray.dictation",
+      "tray.dictationHint",
+      "tray.dictationSettings",
+      "tray.dictationTurnOn",
+    ] {
+      assert!(
+        crate::i18n::locales_missing(key).is_empty(),
+        "missing {key}"
       );
     }
   }

@@ -1,4 +1,3 @@
-import type { UIEvent } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { panic } from "better-result";
@@ -6,6 +5,7 @@ import { useDebouncedCallback } from "use-debounce";
 
 import type { ChatAnonPair } from "@stll/anonymize-chat";
 import { Button } from "@stll/ui/button";
+import { HighlightedTextarea } from "@stll/ui/highlighted-textarea";
 import { Label } from "@stll/ui/label";
 
 import { runAnonymizeDemo } from "../anonymize-demo-worker-client";
@@ -310,16 +310,10 @@ const highlightsFor = (engine: EngineState, text: string): Highlights => {
   return { source: "pending", pairs: NO_PAIRS };
 };
 
-// Shared metrics so the backdrop's highlighted text lines up with the
-// transparent textarea's real characters on top of it.
-const textLayerClassName =
-  "m-0 h-full w-full resize-none overflow-auto p-4 font-sans text-sm leading-relaxed whitespace-pre-wrap [overflow-wrap:anywhere]";
-
 export const AnonymizeLiveDemo = () => {
   const [text, setText] = useState(INITIAL_TEXT);
   const [engine, setEngine] = useState<EngineState>({ status: "warming" });
   const latestRequestRef = useRef(0);
-  const backdropRef = useRef<HTMLDivElement>(null);
 
   const run = (value: string) => {
     latestRequestRef.current += 1;
@@ -373,60 +367,47 @@ export const AnonymizeLiveDemo = () => {
     run(text);
   };
 
-  const syncBackdropScroll = (event: UIEvent<HTMLTextAreaElement>) => {
-    if (backdropRef.current) {
-      backdropRef.current.scrollTop = event.currentTarget.scrollTop;
-      backdropRef.current.scrollLeft = event.currentTarget.scrollLeft;
-    }
-  };
-
   return (
     <div
       className="flex h-full w-full flex-col overflow-hidden"
       style={{ background: "var(--background)" }}
     >
-      <div className="relative min-h-0 flex-1">
-        <div
-          ref={backdropRef}
-          aria-hidden="true"
-          className={`${textLayerClassName} pointer-events-none absolute inset-0 overflow-hidden`}
-          style={{ color: "var(--foreground)" }}
-        >
-          {segments.map((segment) =>
-            segment.bucket === undefined ? (
-              <span key={`${segment.sourceStart}-${segment.sourceEnd}`}>
-                {segment.text}
-              </span>
-            ) : (
-              <span
-                key={`${segment.sourceStart}-${segment.sourceEnd}`}
-                className="entity-span rounded-[0.2em]"
-                style={{
-                  backgroundColor: `color-mix(in srgb, ${BUCKET_STYLE[segment.bucket].fg} 20%, transparent)`,
-                  color: BUCKET_STYLE[segment.bucket].fg,
-                  boxDecorationBreak: "clone",
-                  WebkitBoxDecorationBreak: "clone",
-                }}
-              >
-                {segment.text}
-              </span>
-            ),
-          )}
-        </div>
-        <Label className="sr-only" htmlFor="anon-demo-textarea">
-          Try the anonymization engine: edit this paragraph
-        </Label>
-        <textarea
-          id="anon-demo-textarea"
-          className={`${textLayerClassName} absolute inset-0 border-0 bg-transparent text-transparent caret-[var(--foreground)] outline-none [-webkit-text-fill-color:transparent]`}
-          value={text}
-          spellCheck={false}
-          autoCapitalize="off"
-          autoCorrect="off"
-          onChange={(event) => setText(event.target.value)}
-          onScroll={syncBackdropScroll}
-        />
-      </div>
+      <Label className="sr-only" htmlFor="anon-demo-textarea">
+        Try the anonymization engine: edit this paragraph
+      </Label>
+      <HighlightedTextarea
+        className="flex-1"
+        id="anon-demo-textarea"
+        value={text}
+        spellCheck={false}
+        autoCapitalize="off"
+        autoCorrect="off"
+        onChange={(event) => setText(event.target.value)}
+        highlightedContent={
+          <>
+            {segments.map((segment) =>
+              segment.bucket === undefined ? (
+                <span key={`${segment.sourceStart}-${segment.sourceEnd}`}>
+                  {segment.text}
+                </span>
+              ) : (
+                <span
+                  key={`${segment.sourceStart}-${segment.sourceEnd}`}
+                  className="entity-span rounded-[0.2em]"
+                  style={{
+                    backgroundColor: `color-mix(in srgb, ${BUCKET_STYLE[segment.bucket].fg} 20%, transparent)`,
+                    color: BUCKET_STYLE[segment.bucket].fg,
+                    boxDecorationBreak: "clone",
+                    WebkitBoxDecorationBreak: "clone",
+                  }}
+                >
+                  {segment.text}
+                </span>
+              ),
+            )}
+          </>
+        }
+      />
       <div
         className="flex shrink-0 flex-wrap items-center justify-between gap-x-4 gap-y-1 border-t px-4 py-2 text-xs"
         style={{

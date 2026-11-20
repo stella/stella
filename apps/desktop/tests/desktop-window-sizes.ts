@@ -49,3 +49,19 @@ export const DESKTOP_WINDOW_SIZES = {
     "SETTINGS_WINDOW_HEIGHT",
   ),
 } as const satisfies Record<string, DesktopWindowSize>;
+
+/** The narrowest the settings window can be made. */
+export const SETTINGS_WINDOW_MIN_WIDTH = nativeConstant(
+  nativeSource("lib.rs"),
+  "SETTINGS_WINDOW_MIN_WIDTH",
+);
+
+/**
+ * The dictation notice panel: narrower than the design system's pointer
+ * breakpoint, as the Accessibility guide is, so it is not listed above.
+ */
+export const DICTATION_NOTICE_SIZE = nativeSize(
+  "dictation_notice.rs",
+  "WIDTH",
+  "HEIGHT",
+);

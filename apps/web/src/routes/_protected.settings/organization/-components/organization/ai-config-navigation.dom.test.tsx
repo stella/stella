@@ -286,6 +286,7 @@ const { AuthenticatedUserProvider } =
   await import("@/lib/authenticated-user-context");
 const { AIConfigForm } = await import("./ai-config-card");
 const { hasUnsavedWork } = await import("@/hooks/use-unsaved-work");
+const { sessionOptions } = await import("@/lib/auth-query-options");
 const clients: InstanceType<typeof QueryClient>[] = [];
 afterEach(() => {
   cleanup();
@@ -340,6 +341,7 @@ const mount = async (
     defaultOptions: { queries: { retry: false } },
   });
   clients.push(client);
+  await client.query(sessionOptions);
   const SettingsRoute = () => {
     const [currentReadState, setReadState] = useState(readState);
     const formReadState =

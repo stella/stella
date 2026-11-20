@@ -1,5 +1,6 @@
 import { panic, Result } from "better-result";
 
+import type { Block, DocumentAst } from "@stll/legal-ast/document-ast";
 import { section51StatuteAst } from "@stll/legal-ast/fixtures/cz-262-2006-section-51";
 import {
   currentStatuteViewerFixture,
@@ -52,9 +53,141 @@ const STATUTES = [
   { year: 2006, number: 262, title: "Zákoník práce", slug: "zakonik-prace" },
 ] as const;
 
+/**
+ * A synthetic act consolidated many times, so a reader can see how one
+ * provision lived through the act's versions: § 1 never changes, § 2 changes
+ * once (and is reprinted once with other spacing), § 3 is inserted part way,
+ * and § 4 changes only in a consolidation that is not yet in force. Every
+ * wording is invented for the fixture.
+ */
+export const SYNTHETIC_PROCEDURE_ACT = {
+  year: 2024,
+  number: 998,
+  title: "998/2024 Sb., Synthetic procedure act",
+  slug: "998-2024-sb-synthetic-procedure-act",
+} as const;
+
+/** Each consolidation's first day, oldest first; the last is not in force yet. */
+export const SYNTHETIC_PROCEDURE_ACT_VERSIONS = [
+  "2019-01-01",
+  "2020-07-01",
+  "2021-01-01",
+  "2022-01-01",
+  "2023-07-01",
+  "2024-01-01",
+  "2025-01-01",
+  "2026-01-01",
+  "2099-09-01",
+] as const;
+
+const PROCEDURE_SECTION_2 = {
+  before: "(1) Soud rozhodne o návrhu do třiceti dnů od jeho doručení.",
+  after: "(1) Soud rozhodne o návrhu do šedesáti dnů od jeho doručení.",
+} as const;
+
+const provisionBlocks = (
+  section: number,
+  paragraphs: readonly string[],
+): Block[] => [
+  {
+    type: "heading",
+    id: `par_${String(section)}`,
+    anchorId: `par_${String(section)}`,
+    level: 2,
+    plainText: `§ ${String(section)}`,
+    inlines: [{ type: "text", text: `§ ${String(section)}` }],
+  },
+  ...paragraphs.map((text, index): Block => ({
+    type: "paragraph",
+    id: `par_${String(section)}-odst_${String(index + 1)}`,
+    anchorId: `par_${String(section)}-odst_${String(index + 1)}`,
+    plainText: text,
+    inlines: [{ type: "text", text }],
+  })),
+];
+
+const syntheticProcedureAst = (validFrom: string): DocumentAst => {
+  const section2 =
+    validFrom < "2022-01-01"
+      ? PROCEDURE_SECTION_2.before
+      : PROCEDURE_SECTION_2.after;
+  return {
+    version: 1,
+    source: {
+      system: "agent-fixtures",
+      documentId: "",
+      webUrl: "",
+      printUrl: "",
+    },
+    metadata: {
+      caseNumber: null,
+      ecli: null,
+      court: null,
+      decisionDate: null,
+      decisionType: null,
+      keywords: [],
+      statutes: [],
+    },
+    blocks: [
+      ...provisionBlocks(1, [
+        "Tento zákon upravuje postup soudu a účastníků v syntetickém řízení.",
+      ]),
+      ...provisionBlocks(2, [
+        // The 2024 consolidation reprints the same words with a doubled
+        // space: spacing alone is not a change of the provision.
+        validFrom === "2024-01-01"
+          ? section2.replace("návrhu do", "návrhu  do")
+          : section2,
+        "(2) Lhůtu podle odstavce 1 lze jednou prodloužit.",
+      ]),
+      ...(validFrom < "2023-07-01"
+        ? []
+        : provisionBlocks(3, ["(1) Účastník může podat návrh elektronicky."])),
+      ...provisionBlocks(4, [
+        validFrom < "2099-09-01"
+          ? "Rozhodnutí se doručuje do vlastních rukou."
+          : "Rozhodnutí se doručuje do datové schránky.",
+      ]),
+    ],
+  };
+};
+
+const syntheticProcedureRows = () =>
+  SYNTHETIC_PROCEDURE_ACT_VERSIONS.map((versionValidFrom, index) => {
+    const { year, number, title, slug } = SYNTHETIC_PROCEDURE_ACT;
+    const documentAst = syntheticProcedureAst(versionValidFrom);
+    const inForce = versionValidFrom === "2026-01-01";
+    const future = index === SYNTHETIC_PROCEDURE_ACT_VERSIONS.length - 1;
+    return {
+      id: seededStatuteVersionId({ year, number, versionValidFrom }),
+      sourceId: SOURCE_ID,
+      eli: seededStatuteEli({ year, number }),
+      title,
+      slug,
+      country: "CZE",
+      language: "cs",
+      documentType: "act",
+      status: inForce || future ? "current" : "historical",
+      effectiveDate: SYNTHETIC_PROCEDURE_ACT_VERSIONS[0],
+      versionValidFrom,
+      // Stored windows end on the day the next consolidation opens.
+      versionValidTo: SYNTHETIC_PROCEDURE_ACT_VERSIONS[index + 1] ?? null,
+      publisherExpressionId: `agent:${String(year)}-${String(number)}-${versionValidFrom}`,
+      expressionKind: "consolidation" as const,
+      windowDisposition: "effective" as const,
+      windowDispositionBasis: null,
+      fulltext: documentAst.blocks
+        .map(({ plainText }) => plainText)
+        .join("\n\n"),
+      documentAst,
+      createdAt: new Date("2026-01-01T00:00:00.000Z"),
+      updatedAt: new Date("2026-01-01T00:00:00.000Z"),
+    };
+  });
+
 /** Seed Czech acts with synthetic viewer wording and one public AST excerpt. */
 export const seedLegislation = async (scopedDb: ScopedDb) => {
-  const rows = STATUTES.flatMap(({ year, number, title, slug }) =>
+  const viewerRows = STATUTES.flatMap(({ year, number, title, slug }) =>
     [historicalStatuteViewerFixture, currentStatuteViewerFixture].map(
       (fixture) => {
         const isSection51Statute = slug === "zakonik-prace";
@@ -104,6 +237,7 @@ export const seedLegislation = async (scopedDb: ScopedDb) => {
       },
     ),
   );
+  const rows = [...viewerRows, ...syntheticProcedureRows()];
 
   await scopedDb(async (tx) => {
     await tx

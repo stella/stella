@@ -21,9 +21,11 @@ import {
 import {
   CHAT_LOCAL_RUN_CONTEXT_METADATA_KEY,
   CHAT_LOCAL_RUN_LIMIT_METADATA_KEY,
+  CHAT_LOCAL_RUN_MODEL_METADATA_KEY,
   CHAT_LOCAL_RUN_QUESTION_TOOL,
   type ChatLocalRunContext,
   type ChatLocalRunLimit,
+  type ChatLocalRunModel,
 } from "@stll/api-contract/chat-run-target";
 import {
   DESKTOP_RUNNER_INPUT_EVENT,
@@ -87,6 +89,7 @@ const FAILURE_CODE = {
   protocol_violation: "harness.protocol_violation",
   sandbox_unavailable: "harness.sandbox_unavailable",
   retry_stalled: "harness.retry_stalled",
+  request_unanswered: "harness.request_unanswered",
   tools_unavailable: "harness.tools_unavailable",
 } as const satisfies Record<HarnessFailure["type"], string>;
 
@@ -321,13 +324,22 @@ class ChunkMapper {
       Extract<StreamChunk, { type: EventType.RUN_FINISHED }>["outcome"]
     >;
   }): AdapterYieldChunk {
+    const { metadata, ...rest } = fields;
     return {
       type: EventType.RUN_FINISHED,
       runId: this.segmentRunId(),
       threadId: this.context.threadId,
       model: this.model,
       timestamp: this.context.now(),
-      ...fields,
+      ...rest,
+      // The answer says when a reroute ran it on another model than asked.
+      metadata: {
+        ...metadata,
+        [CHAT_LOCAL_RUN_MODEL_METADATA_KEY]: {
+          requested: this.context.model,
+          ran: this.model,
+        } satisfies ChatLocalRunModel,
+      },
     };
   }
 

@@ -1,7 +1,9 @@
 import { describe, expect, test } from "bun:test";
 
 import {
+  accountDisplay,
   accountPresentation,
+  accountStatusTone,
   serverHost,
 } from "../src/mainview/account-presentation";
 import type { LinkedAccountSnapshot } from "../src/shared/rpc";
@@ -24,8 +26,8 @@ describe("desktop account presentation", () => {
         server: SERVER,
       }),
     ).toEqual({
-      actionKey: "disconnectAccount",
-      actionVariant: "outline",
+      actionKey: "disconnect",
+      actionVariant: "ghost",
       descriptionKey: null,
       host: "my.stll.app",
       status: "linked",
@@ -79,6 +81,38 @@ describe("desktop account presentation", () => {
       status: "unavailable",
       statusKey: "notAvailableYet",
     });
+  });
+
+  test("a linked account shows its name and initials, or its email without a name", () => {
+    const connected = {
+      status: "connected",
+      identity: { userId: "user_fixture", organizationId: "org_fixture" },
+      account: LINKED_ACCOUNT,
+      expiresAt: "2026-09-19T20:00:00Z",
+      server: SERVER,
+    } as const;
+    expect(accountDisplay(connected)).toMatchObject({
+      email: "user@example.com",
+      initials: "EU",
+      name: "Example User",
+    });
+    expect(
+      accountDisplay({
+        ...connected,
+        account: { ...LINKED_ACCOUNT, name: "  " },
+      }),
+    ).toMatchObject({ initials: "US", name: "user@example.com" });
+    expect(
+      accountDisplay({ status: "disconnected", server: SERVER }),
+    ).toMatchObject({ email: null, initials: null, name: null });
+  });
+
+  test("the status dot says nothing until the account is read", () => {
+    expect(accountStatusTone("linked")).toBe("success");
+    expect(accountStatusTone("attention")).toBe("warning");
+    expect(accountStatusTone("not-linked")).toBe("neutral");
+    expect(accountStatusTone("unavailable")).toBe("neutral");
+    expect(accountStatusTone("loading")).toBeNull();
   });
 
   test("the server reads as the host a person recognises", () => {

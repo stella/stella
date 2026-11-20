@@ -1,3 +1,5 @@
+// parser-output-unchanged: the Finanční správa and Ministry of the Interior gate reservations are new; existing gates and parsed output are unchanged.
+// parser-output-unchanged: the cz-ns-sbirka adapter entry is new; existing adapters read only their own keys, so their parsed output is unchanged.
 // parser-output-unchanged: the TJDFT gate reservation is new; existing gates and parsed output are unchanged.
 // parser-output-unchanged: the TST gate reservation is new; existing gates and parsed output are unchanged.
 // parser-output-unchanged: gate reservation timeouts carry a static label per gate; parsed response output is unchanged.
@@ -54,9 +56,12 @@ const PUBLISHER_GATE_TIMEOUT_LABEL = {
   "bfdi-de": "bfdi-de publisher gate reservation",
   "fcl-uk": "fcl-uk publisher gate reservation",
   "tjdft-jus-br": "tjdft-jus-br publisher gate reservation",
+  "nsoud-sbirka-cz": "nsoud-sbirka-cz publisher gate reservation",
   "tst-jus-br": "tst-jus-br publisher gate reservation",
   "suip-cz": "suip-cz publisher gate reservation",
   "uoou-sk": "uoou-sk publisher gate reservation",
+  "financnisprava-cz": "financnisprava-cz publisher gate reservation",
+  "mv-cz": "mv-cz publisher gate reservation",
 } as const satisfies Record<PublisherGateId, string>;
 
 const TRY_RESERVE_SLOT_SCRIPT = `

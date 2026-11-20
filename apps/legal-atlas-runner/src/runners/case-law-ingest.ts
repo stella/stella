@@ -27,6 +27,7 @@ import {
   type DocumentStageObservation,
 } from "@stll/legal-atlas/document-fetch-diagnostics";
 import { observeDocumentStageSafely } from "@stll/legal-atlas/document-stage-observer";
+import { CYCLE_OUTCOME } from "@stll/legal-atlas/ingestion-cycle";
 import { Temporal } from "@stll/time";
 
 import { caseLawIngestionEvents, SOURCE_TOTAL_ORIGIN } from "@/api/db/schema";
@@ -111,7 +112,6 @@ import {
   type CadenceStreaks,
   CYCLE_CADENCE,
   CYCLE_CADENCE_DELAY_MS,
-  CYCLE_OUTCOME,
   type CycleCadence,
   cycleMadeProgress,
   type CycleResult,
@@ -741,15 +741,13 @@ const runOneCycle = async (
   const durationMs = Math.round(performance.now() - t0);
   const cursorAfter = result !== null ? result.nextCursor : cursorBefore;
 
-  // DB status column only supports "completed" | "failed";
-  // timeouts are recorded as "completed" (progress was made).
-  const dbStatus = outcome === CYCLE_OUTCOME.FAILED ? "failed" : "completed";
-
   try {
     await ingestionDb(async (tx) => {
       await tx.insert(caseLawIngestionEvents).values({
         sourceId: source.id,
-        status: dbStatus,
+        status: outcome,
+        pauseReason:
+          cycle.outcome === CYCLE_OUTCOME.PAUSED ? cycle.pauseReason : null,
         inserted: result?.inserted ?? 0,
         skipped: result?.skipped ?? 0,
         searchVectorFailures: result?.searchVectorFailures ?? 0,
@@ -771,6 +769,11 @@ const runOneCycle = async (
         `Skipped: ${result?.skipped ?? 0}, ` +
         `Pages: ${result?.pagesProcessed ?? 0}, ` +
         `Duration: ${durationMs}ms`,
+    );
+  } else if (cycle.outcome === CYCLE_OUTCOME.PAUSED) {
+    logInfo(
+      `[${adapterKey}] Paused: ${cycle.pauseReason} ` +
+        `(inserted: ${cycle.inserted}, pages: ${cycle.pagesProcessed})`,
     );
   } else if (outcome === CYCLE_OUTCOME.TIMEOUT) {
     logInfo(
@@ -1026,7 +1029,10 @@ export const runCaseLawIngest = async (
     if (attempt.type === "lease_busy" || attempt.type === "drained") {
       return 0;
     }
-    return attempt.cycle.outcome === CYCLE_OUTCOME.COMPLETED ? 0 : 1;
+    return attempt.cycle.outcome === CYCLE_OUTCOME.COMPLETED ||
+      attempt.cycle.outcome === CYCLE_OUTCOME.PAUSED
+      ? 0
+      : 1;
   }
 
   if (SOURCES.length === 0) {

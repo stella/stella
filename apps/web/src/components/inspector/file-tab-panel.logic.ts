@@ -3,15 +3,9 @@ import {
   type FileFacet as Facet,
   type FileTab,
 } from "@/components/inspector/inspector-store-types";
-import {
-  DOCX_MIME,
-  getNativeOfficeViewerFormat,
-  isEmailFile,
-  isMarkdownFile,
-  isPlainTextFile,
-  PDF_MIME,
-} from "@/lib/consts";
 import { getDesktopEditFileType } from "@/lib/desktop-edit-formats";
+import { hasFullScreenViewer } from "@/lib/file-open.logic";
+import { nativeFilePreviewKind } from "@/lib/files/preview-kind";
 
 // Sidepeek shows every facet, including Preview (the file viewer
 // itself). Fullscreen drops Preview entirely — the main view IS
@@ -46,31 +40,6 @@ export const shouldRunFileAnonymizationPipeline = ({
   isMounted &&
   !isNativeDocxDisplay;
 
-export type FileTabNativePreviewKind =
-  "email" | "markdown" | "office" | "pdf" | "text";
-
-export const getFileTabNativePreviewKind = ({
-  fileName,
-  mimeType,
-}: {
-  fileName: string;
-  mimeType?: string | undefined;
-}): FileTabNativePreviewKind => {
-  if (isEmailFile({ fileName, mimeType })) {
-    return "email";
-  }
-  if (isMarkdownFile({ fileName, mimeType })) {
-    return "markdown";
-  }
-  if (getNativeOfficeViewerFormat(mimeType) !== null) {
-    return "office";
-  }
-  if (isPlainTextFile({ fileName, mimeType })) {
-    return "text";
-  }
-  return "pdf";
-};
-
 type GetFileTabDisplayStateOptions = {
   activeId: string | null;
   minimized: boolean;
@@ -85,11 +54,8 @@ export const getFileTabDisplayState = ({
   tab,
 }: GetFileTabDisplayStateOptions) => {
   const isActive = tab.id === activeId;
-  const nativePreviewKind = getFileTabNativePreviewKind({
-    fileName: tab.fileName,
-    mimeType: tab.mimeType,
-  });
-  const isNativeDocxDisplay = tab.mimeType === DOCX_MIME;
+  const nativePreviewKind = nativeFilePreviewKind(tab);
+  const isNativeDocxDisplay = nativePreviewKind === "docx";
   const isEmailDisplay = nativePreviewKind === "email";
   const storedScaleOffset = scaleOffsets.get(tab.id);
   const scaleOffset = storedScaleOffset ?? 0;
@@ -99,22 +65,23 @@ export const getFileTabDisplayState = ({
       mimeType: tab.mimeType,
     }),
     isActive,
+    nativePreviewKind,
     isEmailDisplay,
     isEmailViewerActive: isEmailDisplay && isActive && !minimized,
     isMarkdownDisplay: nativePreviewKind === "markdown",
     isNativeDocxDisplay,
-    isOfficeDisplay: nativePreviewKind === "office",
-    isPdfDisplay: tab.mimeType === PDF_MIME,
+    isOfficeDisplay:
+      nativePreviewKind === "pptx" || nativePreviewKind === "xlsx",
+    isPdfDisplay: nativePreviewKind === "pdf",
     isPlainTextDisplay: nativePreviewKind === "text",
     requiresPdfMeasurement:
-      !isNativeDocxDisplay &&
-      nativePreviewKind !== "office" &&
-      nativePreviewKind !== "text",
+      nativePreviewKind === null || nativePreviewKind === "pdf",
     needsPropertyResolution:
       isNativeDocxDisplay && tab.propertyId === undefined,
-    needsConversionStatus:
-      nativePreviewKind === "pdf" && tab.mimeType !== PDF_MIME,
-    officeViewerFormat: getNativeOfficeViewerFormat(tab.mimeType),
+    needsConversionStatus: nativePreviewKind === null,
+    canOpenFullView:
+      hasFullScreenViewer(nativePreviewKind) ||
+      (nativePreviewKind === null && tab.pdfFileId !== null),
     renderId: tab.renderId ?? tab.id,
     scaleOffset,
   };

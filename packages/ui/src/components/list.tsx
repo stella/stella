@@ -9,67 +9,27 @@ import type { VariantProps } from "class-variance-authority";
 
 import { cn } from "../lib/utils";
 import { AnimatedCount } from "./animated-count";
+import {
+  List,
+  LIST_ITEM_ROW_CLASS,
+  ListGroup,
+  ListGroupDescription,
+  ListGroupHeader,
+  ListGroupHeading,
+  ListGroupTitle,
+} from "./list-shell";
 import { TruncatedText } from "./truncated-text";
 import type { TruncatedTextLines } from "./truncated-text";
 
-/**
+/*
  * Grouped list: a titled section holding one surface of hairline-divided
  * rows. Use it for settings and inventories of named things (connections,
  * sessions, members, keys) where each row is icon + name + one quiet line +
  * trailing status or action. Rows never scroll sideways: the content column
  * truncates and the trailing column keeps its width, so actions stay on
- * screen at any viewport.
+ * screen at any viewport. The group, its header, title and description and
+ * the surface live in ./list-shell.tsx, beside the rows' loading placeholder.
  */
-const ListGroup = ({
-  className,
-  ...props
-}: React.ComponentProps<"section">) => (
-  <section
-    className={cn("flex flex-col gap-2.5", className)}
-    data-slot="list-group"
-    {...props}
-  />
-);
-
-const ListGroupHeader = ({
-  className,
-  ...props
-}: React.ComponentProps<"header">) => (
-  <header
-    className={cn("flex items-end gap-4 px-1", className)}
-    data-slot="list-group-header"
-    {...props}
-  />
-);
-
-/** Title and description stack; takes the space the header action leaves. */
-const ListGroupHeading = ({
-  className,
-  ...props
-}: React.ComponentProps<"div">) => (
-  <div
-    className={cn("flex min-w-0 flex-1 flex-col gap-0.5", className)}
-    data-slot="list-group-heading"
-    {...props}
-  />
-);
-
-const ListGroupTitle = ({
-  className,
-  children,
-  ...props
-}: React.ComponentProps<"h2">) => (
-  <h2
-    className={cn(
-      "text-foreground text-sm font-medium text-balance",
-      className,
-    )}
-    data-slot="list-group-title"
-    {...props}
-  >
-    {children}
-  </h2>
-);
 
 /**
  * Quiet item count after the title; shows matches while a search filters,
@@ -90,17 +50,6 @@ const ListGroupCount = ({
   </span>
 );
 
-const ListGroupDescription = ({
-  className,
-  ...props
-}: React.ComponentProps<"p">) => (
-  <p
-    className={cn("text-muted-foreground text-xs text-pretty", className)}
-    data-slot="list-group-description"
-    {...props}
-  />
-);
-
 /** Quiet trailing affordance on the header row (a link or ghost button). */
 const ListGroupAction = ({
   className,
@@ -109,18 +58,6 @@ const ListGroupAction = ({
   <div
     className={cn("flex shrink-0 items-center gap-1", className)}
     data-slot="list-group-action"
-    {...props}
-  />
-);
-
-/** The surface. Depth comes from a ring plus a soft shadow, not a frame. */
-const List = ({ className, ...props }: React.ComponentProps<"ul">) => (
-  <ul
-    className={cn(
-      "bg-background ring-border divide-border flex flex-col divide-y overflow-hidden rounded-xl shadow-xs/5 ring-1",
-      className,
-    )}
-    data-slot="list"
     {...props}
   />
 );
@@ -138,7 +75,7 @@ const ListItem = ({
 }: useRender.ComponentProps<"div">) => {
   const defaultProps = {
     className: cn(
-      "flex min-h-14 w-full items-center gap-3 px-4 py-2.5 text-start",
+      LIST_ITEM_ROW_CLASS,
       render !== undefined &&
         "hover:bg-muted/50 focus-visible:bg-muted/50 focus-visible:ring-ring cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-inset",
       className,

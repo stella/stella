@@ -100,7 +100,8 @@ const activeSkillContext: ActiveChatSkillContext = {
   id: skillId,
   origin: "authored",
   binding: UNBOUND,
-  requiredTools: [],
+  // Declares the skill-gated tools, so the canary sends every chat tool.
+  requiredTools: ["validate_skill_package", "save_skill_package"],
   resources: [{ path: "references/canary.md" }],
   source: "installed",
   toolName: "provider-schema-canary",

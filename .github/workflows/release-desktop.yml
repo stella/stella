@@ -52,13 +52,15 @@ jobs:
     # A workflow_run trigger is accepted only from this repository's own
     # release workflow, started by a tag push or a manual dispatch. The tag
     # comes from that run's release manifest, never its head branch (a
-    # dispatched run reports main). Signing builds restore no caches.
+    # dispatched run reports main). Signing builds restore no caches. A
+    # release run whose jobs were all skipped carries no receipt and is ignored.
     if: >-
       (github.event_name == 'workflow_dispatch'
       && github.ref == 'refs/heads/main')
       || (github.event.workflow_run.head_repository.full_name == github.repository
       && github.event.workflow_run.path == '.github/workflows/release.yml'
-      && contains(fromJSON('["push", "workflow_dispatch"]'), github.event.workflow_run.event))
+      && contains(fromJSON('["push", "workflow_dispatch"]'), github.event.workflow_run.event)
+      && github.event.workflow_run.conclusion != 'skipped')
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:
@@ -337,7 +339,7 @@ jobs:
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
         with:
-          toolchain: 1.99.1
+          toolchain: 1.100.0
           targets: ${{ matrix.rust_targets }}
 
       # The locked crates for every target download once, retried as a unit;

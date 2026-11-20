@@ -19,14 +19,18 @@ import {
   CORPUS_INDEX_MANIFESTS,
   corpusIndexManifestDigest,
 } from "@/api/lib/legal-search/corpus-index-manifest";
+import { CorpusIndexGenerationUnknownError } from "@/api/lib/legal-search/corpus-index-projected-generations";
 import {
   advanceCorpusProjectionDesiredStateTx,
   ensureCorpusProjectionDesiredStateTx,
   lockActiveCorpusProjectionSourceByIdTx,
   reconcileCorpusProjectionDesiredStateTx,
   synchronizeLockedCaseLawProjectionBatchTx,
+  synchronizeLockedCorpusProjectionDesiredStateTx,
+  synchronizeRetiredCaseLawProjectionDesiredStateTx,
 } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
 import { advanceCorpusProjectionErasuresTx } from "@/api/lib/legal-search/corpus-index-projection-erasure-store";
+import { installCorpusProjectionCanonicalEpochGuard } from "@/api/tests/helpers/corpus-projection-canonical-epoch-guard";
 import { CORPUS_PROJECTION_SEEDING_GUARD_OFF_SETTING } from "@/api/tests/helpers/corpus-projection-seeding-guard";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
@@ -51,6 +55,7 @@ let db: ReturnType<typeof drizzle>;
 
 beforeAll(async () => {
   client = await createTestPglite();
+  await installCorpusProjectionCanonicalEpochGuard(client);
   db = drizzle({
     client,
     logger: {
@@ -219,6 +224,39 @@ test("one canonical mutation advances every active family generation once", asyn
     },
   ]);
   expect(after.at(0)?.fingerprint).not.toBe(before.at(0)?.fingerprint);
+});
+
+test("a desired state written at any epoch but the canonical one is refused by the suite's guard", async () => {
+  // Every writer in this suite (and in the bootstrap, desired-epoch and
+  // ranking-signal suites) runs under the write-time guard; this shows the
+  // guard bites, so its silence there means something.
+  const subject = {
+    family: "case_law",
+    entityId: CASE_LAW_DECISION_ID,
+  } as const;
+  await db.transaction(
+    async (tx) =>
+      await ensureCorpusProjectionDesiredStateTx(
+        asTestRaw<Transaction>(tx),
+        subject,
+        "case_law_v5",
+      ),
+  );
+  const ahead = async () =>
+    await db
+      .update(corpusIndexProjectionStates)
+      .set({
+        desiredEpoch: sql`${corpusIndexProjectionStates.desiredEpoch} + 1`,
+      })
+      .where(eq(corpusIndexProjectionStates.entityId, CASE_LAW_DECISION_ID));
+  const refusal = await ahead().then(
+    () => null,
+    (error: unknown) => error,
+  );
+  // The driver wraps the database error; the guard's message is its cause.
+  expect(String(refusal instanceof Error ? refusal.cause : refusal)).toContain(
+    "is not the canonical projection epoch",
+  );
 });
 
 test("every active generation's desired epoch is a reading of the one canonical projection epoch", async () => {
@@ -737,4 +775,199 @@ test("projection repair statements stay constant from two to twenty decisions", 
   const large = await count(decisions.map(({ id }) => id));
   expect(small).toBeGreaterThan(0);
   expect(large).toBe(small);
+});
+
+/** A generation a newer release registered: this process has no manifest for it. */
+const UNKNOWN_GENERATION = "case_law_v99";
+
+const registerUnknownGeneration = async (
+  executor: Pick<Transaction, "insert">,
+  status: "building" | "serving" | "retiring" | "retired",
+) => {
+  await executor.insert(corpusIndexGenerations).values({
+    family: "case_law",
+    generation: UNKNOWN_GENERATION,
+    cluster: "q09",
+    manifestDigest: "f".repeat(64),
+    status,
+  });
+};
+
+const caseLawProjection = async () => ({
+  decisions: await db
+    .select()
+    .from(caseLawDecisions)
+    .orderBy(caseLawDecisions.id),
+  states: await db
+    .select()
+    .from(corpusIndexProjectionStates)
+    .orderBy(
+      corpusIndexProjectionStates.generation,
+      corpusIndexProjectionStates.entityId,
+    ),
+});
+
+const refusalOf = async (work: (tx: Transaction) => Promise<unknown>) =>
+  await db
+    .transaction(async (raw) => await work(asTestRaw<Transaction>(raw)))
+    .then(
+      () => null,
+      (error: unknown) => error,
+    );
+
+const seedKnownGeneration = async () =>
+  await db.transaction(
+    async (tx) =>
+      await ensureCorpusProjectionDesiredStateTx(
+        asTestRaw<Transaction>(tx),
+        { family: "case_law", entityId: CASE_LAW_DECISION_ID },
+        "case_law_v5",
+      ),
+  );
+
+const changeCourt = async (tx: Transaction) => {
+  await tx
+    .update(caseLawDecisions)
+    .set({ court: "Ústavní soud" })
+    .where(eq(caseLawDecisions.id, CASE_LAW_DECISION_ID));
+};
+
+const caseLawLock = async (tx: Transaction) =>
+  (await lockActiveCorpusProjectionSourceByIdTx(tx, {
+    family: "case_law",
+    sourceId: CASE_LAW_SOURCE_ID,
+  })) ?? panic("expected an active projection lock");
+
+const SUBJECT = { family: "case_law", entityId: CASE_LAW_DECISION_ID } as const;
+
+// Every writer that resolves the set of generations a canonical change owes a
+// projection. Each one meets the unknown generation after the source lock, so
+// the refusal shown is the writer's own, not the lock's (in production a
+// registration cannot land in between: it fences the source table).
+const SET_WRITERS = {
+  advance: async (tx: Transaction, appear: () => Promise<void>) => {
+    await changeCourt(tx);
+    await appear();
+    await advanceCorpusProjectionDesiredStateTx(tx, SUBJECT);
+  },
+  reconcile: async (tx: Transaction, appear: () => Promise<void>) => {
+    await changeCourt(tx);
+    await appear();
+    await reconcileCorpusProjectionDesiredStateTx(tx, SUBJECT);
+  },
+  "synchronize after a canonical write": async (
+    tx: Transaction,
+    appear: () => Promise<void>,
+  ) => {
+    const lock = await caseLawLock(tx);
+    await changeCourt(tx);
+    await appear();
+    await synchronizeLockedCorpusProjectionDesiredStateTx(tx, {
+      lock,
+      subject: SUBJECT,
+    });
+  },
+  "retire a decision": async (tx: Transaction, appear: () => Promise<void>) => {
+    const lock = await caseLawLock(tx);
+    await appear();
+    await synchronizeRetiredCaseLawProjectionDesiredStateTx(tx, {
+      lock,
+      subject: SUBJECT,
+    });
+  },
+  "batch repair": async (tx: Transaction, appear: () => Promise<void>) => {
+    const lock = await caseLawLock(tx);
+    await changeCourt(tx);
+    await appear();
+    await synchronizeLockedCaseLawProjectionBatchTx(tx, {
+      lock,
+      sourceId: CASE_LAW_SOURCE_ID,
+      decisionIds: [CASE_LAW_DECISION_ID],
+    });
+  },
+  "source lock": async (tx: Transaction, appear: () => Promise<void>) => {
+    await appear();
+    await lockActiveCorpusProjectionSourceByIdTx(tx, {
+      family: "case_law",
+      sourceId: CASE_LAW_SOURCE_ID,
+    });
+    await changeCourt(tx);
+  },
+} as const satisfies Record<
+  string,
+  (tx: Transaction, appear: () => Promise<void>) => Promise<void>
+>;
+
+test.each(
+  Object.entries(SET_WRITERS).flatMap(([writer, write]) =>
+    (["building", "serving", "retiring"] as const).map(
+      (status) => [writer, status, write] as const,
+    ),
+  ),
+)(
+  "%s refuses a %s generation this release has no manifest for, and nothing of its transaction commits",
+  async (_writer, status, write) => {
+    await seedKnownGeneration();
+    const before = await caseLawProjection();
+
+    const refusal = await refusalOf(
+      async (tx) =>
+        await write(
+          tx,
+          async () => await registerUnknownGeneration(tx, status),
+        ),
+    );
+
+    expect(refusal).toBeInstanceOf(CorpusIndexGenerationUnknownError);
+    expect(refusal).toMatchObject({
+      family: "case_law",
+      unknown: [{ generation: UNKNOWN_GENERATION, status }],
+    });
+    // Neither the canonical change nor any generation's state: a subset
+    // projection never commits.
+    expect(await caseLawProjection()).toEqual(before);
+  },
+);
+
+test("a registry generation the process does not know refuses the canonical write even when it is the only active one", async () => {
+  // Before, the known set was empty, so the writer found "nothing to
+  // project" and the canonical row went in with no state anywhere.
+  await db
+    .update(corpusIndexGenerations)
+    .set({ status: "retired" })
+    .where(eq(corpusIndexGenerations.generation, "case_law_v5"));
+  await db.transaction(
+    async (raw) =>
+      await registerUnknownGeneration(asTestRaw<Transaction>(raw), "building"),
+  );
+  const before = await caseLawProjection();
+
+  const refusal = await refusalOf(async (tx) => {
+    const lock = await lockActiveCorpusProjectionSourceByIdTx(tx, {
+      family: "case_law",
+      sourceId: CASE_LAW_SOURCE_ID,
+    });
+    if (lock === null) {
+      await changeCourt(tx);
+    }
+  });
+
+  expect(refusal).toBeInstanceOf(CorpusIndexGenerationUnknownError);
+  expect(await caseLawProjection()).toEqual(before);
+});
+
+test("a retired generation the process does not know is owed nothing and does not stop a writer", async () => {
+  await seedKnownGeneration();
+  await db.transaction(
+    async (raw) =>
+      await registerUnknownGeneration(asTestRaw<Transaction>(raw), "retired"),
+  );
+
+  const advanced = await db.transaction(async (raw) => {
+    const tx = asTestRaw<Transaction>(raw);
+    await changeCourt(tx);
+    return await advanceCorpusProjectionDesiredStateTx(tx, SUBJECT);
+  });
+
+  expect(advanced).toEqual({ epoch: 2n, generationCount: 1 });
 });

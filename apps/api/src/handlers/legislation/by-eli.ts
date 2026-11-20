@@ -23,7 +23,10 @@ import {
   legislationVersionRef,
   versionSortKey,
 } from "@/api/lib/legal-search/legislation-validity-window";
-import { selectInconsistentWindowVersions } from "@/api/lib/legal-search/legislation-window-gap";
+import {
+  selectInconsistentWindowVersions,
+  selectPromulgatedOnlyVersion,
+} from "@/api/lib/legal-search/legislation-window-gap";
 import { legislationWorkIdentifierCondition } from "@/api/lib/legal-search/legislation-work-identifiers";
 import type {
   LegislationReadDb,
@@ -46,9 +49,14 @@ type ReadStatuteByEliQuery = v.InferOutput<typeof readStatuteByEliQuerySchema>;
  * misspelled an ELI needs to hear that it does not, and a caller whose date
  * falls where the publisher's own dates contradict each other needs to hear
  * that, with the versions responsible, rather than that nothing covers it.
+ *
+ * `promulgated-only` answers a Work that holds no version of an applicable
+ * kind with its text as promulgated: a text to read, never the text in force,
+ * so a caller decides whether it may answer with it.
  */
 export type StatuteExpressionResolution =
   | { type: "expression"; id: SafeId<"legislationDocument"> }
+  | { type: "promulgated-only"; id: SafeId<"legislationDocument"> }
   | { type: "unknown-work" }
   | { type: "uncovered-date" }
   | {
@@ -80,6 +88,10 @@ export const publisherWindowInconsistentBody = (
  * the listing's current-version anti-join applies. Language is part of the
  * Work key, so it is ordered on rather than left to the planner when the
  * caller does not name one.
+ *
+ * A Work holding no version of an applicable kind answers `promulgated-only`
+ * with its text as promulgated on any date that text's window covers; a date
+ * before it stays uncovered.
  *
  * Exported because the HTTP read and the agent-facing statute tools address
  * statutes the same way: one implementation decides what an ELI plus a date
@@ -120,7 +132,9 @@ export const resolveStatuteWorkVersion = async (
   query: { eli: string; language?: string | undefined },
   legislationDb: LegislationReadDb,
   surface: PublicCountrySurface,
-): Promise<StatuteExpressionResolution> =>
+): Promise<
+  Extract<StatuteExpressionResolution, { type: "expression" | "unknown-work" }>
+> =>
   await legislationDb(async (tx) => {
     const conditions = await workConditionsFor({ tx, query, surface });
     const [version] = await tx
@@ -184,6 +198,14 @@ export const resolveStatuteExpression = async (
         type: LEGISLATION_PUBLISHER_WINDOW_INCONSISTENT,
         versions: inconsistent,
       } as const;
+    }
+
+    const promulgated = await selectPromulgatedOnlyVersion(tx, {
+      conditions: workConditions,
+      asOf,
+    });
+    if (promulgated !== null) {
+      return { type: "promulgated-only", id: promulgated } as const;
     }
 
     // Separating "no such work" from "no window covers that date" is the

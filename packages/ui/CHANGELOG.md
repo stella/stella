@@ -1,5 +1,61 @@
 # @stll/ui
 
+## 0.75.0
+
+### Minor Changes
+
+- [#5749](https://github.com/stella/stella/pull/5749) [`9083d12`](https://github.com/stella/stella/commit/9083d12e2b853c009066c81117fea294e3b548dc) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Move inspector width persistence to the host application. Supply `initialWidth` for the server snapshot and `onWidthChange` to persist completed resizes; the hook no longer accepts `storageKey` or reads browser storage. Remove the browser-storage width helpers.
+
+  Expose `@stll/ui/pane-width` for width constants and calculations without importing inspector components.
+
+- [#8891](https://github.com/stella/stella/pull/8891) [`9e0fd52`](https://github.com/stella/stella/commit/9e0fd526ef113a0ccf90546b8ef92ea5fff36318) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `TooltipPopup` takes an `anchor`, so a wide trigger can place its popup beside the part it explains. `List` draws its hairline between rows wrapped in `EntityActions` too.
+
+- [#7420](https://github.com/stella/stella/pull/7420) [`0dad4da`](https://github.com/stella/stella/commit/0dad4da417b4a99c6141363e2c05a757a314fb72) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add React Native renderers beside the web components a phone needs: `Button`, `Text` (new, a role-based text primitive on both platforms), `Loader`, `Input`, `Textarea`, `Switch`, `Sheet`, `Separator`, `MatterIcon` and `StellaWordmarkLatin`. Each export resolves to its native renderer under the `react-native` condition and to the web renderer everywhere else, and both read one shared contract (`<component>.shared.ts`: props, variant tokens, sizes). React Native, uniwind, react-native-svg and lucide-react-native are optional peer dependencies that only the native renderers import.
+
+  `@stll/ui/components/stella-mark` now resolves to a native `StellaMark` under the `react-native` condition as well; the web export is unchanged.
+
+- [#8846](https://github.com/stella/stella/pull/8846) [`e8aa798`](https://github.com/stella/stella/commit/e8aa7988f19952963102e45c4a95af1005045437) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `WorkspaceShell` takes an optional `skipToContentLabel`. When set, the shell renders a visually hidden skip link as its first tab stop that moves focus to the main region. `WorkspaceFrame` passes it through in the `host-responsive` composition.
+
+### Patch Changes
+
+- [#8618](https://github.com/stella/stella/pull/8618) [`e229034`](https://github.com/stella/stella/commit/e22903462cf3734c29b0a97f2f48dc3023e758c8) Thanks [@dependabot](https://github.com/apps/dependabot)! - Ship with the refreshed catalog dependencies: lucide-react 1.71.0 for `@stll/ui` and use-intl 4.14.10 for `@stll/workspace-ui`.
+
+- [#8870](https://github.com/stella/stella/pull/8870) [`54d4095`](https://github.com/stella/stella/commit/54d409572d79298687864e424ed8dd555ea075e2) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `@stll/ui/icons` exports `AccessibilityIcon`.
+
+- [#8893](https://github.com/stella/stella/pull/8893) [`7c534ed`](https://github.com/stella/stella/commit/7c534ed29c09e58efc43fcb3d985941eb52e12b6) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `TableChart` draws the bars of several series side by side in one group per category, labelling each category once.
+
+## 0.74.0
+
+### Minor Changes
+
+- [#8710](https://github.com/stella/stella/pull/8710) [`d8eea73`](https://github.com/stella/stella/commit/d8eea7352a0a6cdeac6498e6231a17818e8cd2d2) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add a composer appearance to Textarea that shares the large composer editor typography and geometry without field chrome.
+
+- [#8720](https://github.com/stella/stella/pull/8720) [`f6d0e9c`](https://github.com/stella/stella/commit/f6d0e9c9d9966961d52a3d8038a253193632ef2b) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add HighlightedTextarea with shared highlighted text layers and native editing, synchronized scrolling, and inherited direction.
+
+  Preserve Field label, value, disabled-state and ref ownership in Textarea and HighlightedTextarea. Keep highlighted scroll layers aligned through trailing blank lines and reserved scrollbar gutters, with a visible keyboard focus indicator.
+
+- [#8662](https://github.com/stella/stella/pull/8662) [`b1ce389`](https://github.com/stella/stella/commit/b1ce389d73729179bd174166e78499310331479e) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add `OutcomeScreen` (`@stll/ui/outcome-screen`), the one screen a finished flow shows. The CLI's browser sign-in page is now rendered from it.
+
+- [#8706](https://github.com/stella/stella/pull/8706) [`6359411`](https://github.com/stella/stella/commit/6359411768fbe352d04d63ead41386de9e70137b) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `OutcomeScreen` lists what a flow connected (`details`) and can offer a command to run (`command`). The CLI's browser sign-in page names the signed-in account and organization, and a failed sign-in shows `stella auth login` to try again.
+
+- [#8736](https://github.com/stella/stella/pull/8736) [`b9120cd`](https://github.com/stella/stella/commit/b9120cd4f32b6019e3e1db42309ac50960badf2f) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add a controlled cell appearance to Checkbox that owns row-label reveal, first-line alignment, and the full selection hit area while preserving the default appearance.
+
+  Expose the shared table first-line layout contract through the table entry point so row content and selection controls derive alignment from one definition.
+
+### Patch Changes
+
+- [#8742](https://github.com/stella/stella/pull/8742) [`178d3f9`](https://github.com/stella/stella/commit/178d3f9f9007de5933b40fd76f8bbaaf65ad089f) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Let open Collapsible content, hanging controls, and focus rings extend beyond the panel. Use an opacity-only opening reveal with immediate layout changes and closing, preserving hidden-until-found and reduced-motion behavior.
+
+## 0.73.0
+
+### Minor Changes
+
+- [#8654](https://github.com/stella/stella/pull/8654) [`501e484`](https://github.com/stella/stella/commit/501e48459f95e38d4594eff47b6daf2040380582) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add `MoveToSideIcon`, the side panel with a chevron pointing into it, for sending a view into the side panel, so it no longer draws the same glyph as the panel that shows or hides the side panel.
+
+- [#8672](https://github.com/stella/stella/pull/8672) [`64d8cfd`](https://github.com/stella/stella/commit/64d8cfd04b20823f8f8ceabb9dbd0d79bf76ee66) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add caption appearance to menu and popover triggers and an inspector-row button size with the pane's fixed row rhythm. Caption controls retain their compact visible box while providing a coarse-pointer touch target.
+
+- [#8608](https://github.com/stella/stella/pull/8608) [`c6f510f`](https://github.com/stella/stella/commit/c6f510fb3b4fe3ebcb8a3c761d623dd13cc53c63) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add the composer Button variant and fixed 28px icon-round size to both web and native renderers so chat, search, and assistant surfaces select the shared primary action through Button props.
+
 ## 0.72.0
 
 ### Minor Changes

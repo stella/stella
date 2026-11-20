@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
+import { noDecisionReviewFound } from "@stll/api-contract/case-law-reviews";
+
 import type { OpenDecision } from "../shared/generated/contracts";
 import { createGraphController } from "./controller";
 import type { CitationPage } from "./parse";
@@ -22,6 +24,7 @@ const page = ({
 } = {}) =>
   ({
     doctrineAvailability: "unavailable",
+    appealReviews: noDecisionReviewFound(),
     decisionId,
     direction,
     nextCursor,

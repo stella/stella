@@ -30,11 +30,10 @@
 import { panic } from "better-result";
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
-import { pathToFileURL } from "node:url";
 
 import { compareCodeUnit } from "@stll/collation";
 
-import { readCapabilityCatalog } from "../../../packages/cli/src/capability-catalog-data";
+import { buildCapabilityCatalog } from "./export-capability-catalog";
 import { deriveCapabilityId } from "./lib/capability-catalog";
 import type {
   Finding,
@@ -59,7 +58,6 @@ import {
 } from "./lib/enumerate-safe-handlers";
 
 const BASELINE_FILE = "apps/api/deployment-feature-routes-baseline.json";
-const CATALOG_DIRECTORY = "packages/cli/capabilities";
 
 /**
  * Path prefixes that serve an always-on surface: no deployment flag may gate
@@ -71,6 +69,34 @@ const ALWAYS_ON_ROUTE_PREFIXES: ReadonlyMap<string, string> = new Map([
   [
     "/v1/sharepoint/capabilities",
     "Revoking delegated capabilities remains available when the deployment feature is off; enabling requires the feature inside the handler",
+  ],
+  [
+    "/v1/invoices/:workspaceId/:invoiceId/sends",
+    "cleanup of live invoice links must work after the firm leaves time billing; invoice:update required",
+  ],
+  [
+    "/v1/outbound-actions",
+    "Authenticated confirmation of a user's prepared outbound actions is available on every deployment",
+  ],
+  [
+    "/v1/saved-searches",
+    "The caller's private saved searches support search on every deployment",
+  ],
+  [
+    "/v1/files/:workspaceId/structured-document",
+    "Court document previews use matter file read permissions on every deployment",
+  ],
+  [
+    "/v1/files/:workspaceId/asic",
+    "ASiC previews use matter file read permissions on every deployment",
+  ],
+  [
+    "/v1/files/:workspaceId/cades",
+    "Signed document previews use the matter file read permission on every deployment",
+  ],
+  [
+    "/v1/files/:workspaceId/data-box",
+    "Data-box previews use the matter file read permission on every deployment",
   ],
   [
     "/v1/organization-settings/correspondence/data-boxes",
@@ -97,8 +123,20 @@ const ALWAYS_ON_ROUTE_PREFIXES: ReadonlyMap<string, string> = new Map([
     "Storing a reviewed skill draft is a private skill create under the skill create permission on every deployment",
   ],
   [
+    "/v1/skills/:skillId/export",
+    "Downloading a skill the caller may read as an Agent Skills archive is available on every deployment",
+  ],
+  [
     "/v1/dictation/transcribe",
     "Authenticated dictation is available on every deployment and enforces its dictation kill switch, provider availability and usage admission",
+  ],
+  [
+    "/v1/dictation/models",
+    "Authenticated dictation lists the region's transcription models on every deployment, and a model whose provider keeps the audio only to a member whose feature decision grants it",
+  ],
+  [
+    "/v1/dictation/cleanup",
+    "Authenticated dictation cleanup is available on every deployment and enforces its dictation kill switch, model availability and usage admission",
   ],
   [
     "/v1/organizations/audit-export",
@@ -126,7 +164,7 @@ const ALWAYS_ON_ROUTE_PREFIXES: ReadonlyMap<string, string> = new Map([
   ],
   [
     "/v1/desktop/matters",
-    "Desktop billing routes enforce authenticated activity and billing feature decisions on every deployment",
+    "Desktop matter search enforces the caller's activity or dictation feature decision and matter access on every deployment",
   ],
   [
     "/v1/chat/runs/active",
@@ -149,8 +187,8 @@ const ALWAYS_ON_ROUTE_PREFIXES: ReadonlyMap<string, string> = new Map([
     "The chat computer list is mounted on every deployment and answers hidden unless the member's local-agents feature decision is enabled",
   ],
   [
-    "/v1/chat/threads/:threadId/turns/:turnId/local-files",
-    "Undoing a turn's file changes is mounted on every deployment; there is something to undo only once the member's local-agents feature let the turn's run start",
+    "/v1/chat/threads/:threadId/messages/:messageId/local-files",
+    "Undoing the file changes made since a message is mounted on every deployment; there is something to undo only once the member's local-agents feature let a run of the chat start",
   ],
   [
     "/v1/chat/threads/:threadId/background-tasks",
@@ -179,6 +217,10 @@ const ALWAYS_ON_ROUTE_PREFIXES: ReadonlyMap<string, string> = new Map([
   [
     "/v1/desktop/time-entries",
     "Desktop billing routes enforce authenticated activity and billing feature decisions on every deployment",
+  ],
+  [
+    "/public/invoice-links",
+    "Invoice links have no member to enrol; their token verifier requires FEATURE_INVOICE_LINKS and time billing, answering disabled deployments like dead links",
   ],
   [
     "/v1/contacts",
@@ -232,6 +274,10 @@ const ALWAYS_ON_ROUTE_PREFIXES: ReadonlyMap<string, string> = new Map([
   [
     "/v1/desktop/dictation/transcribe",
     "Desktop dictation transcription enforces the caller's cloud dictation feature decision, its dictation kill switch, provider availability and usage admission on every deployment",
+  ],
+  [
+    "/v1/desktop/dictation/transcripts",
+    "Filing a transcribed recording enforces the caller's dictation feature decision, matter access and document create permission on every deployment",
   ],
   [
     "/v1/files/:workspaceId/marked",
@@ -305,11 +351,11 @@ const readRecord = (file: string): SourceRecord => ({
   source: readFileSync(path.join(REPO_ROOT, file), "utf-8"),
 });
 
-const readCatalogFeatures = (): Map<string, string | undefined> => {
+const readCatalogFeatures = async (): Promise<
+  Map<string, string | undefined>
+> => {
   const features = new Map<string, string | undefined>();
-  const entries = readCapabilityCatalog(
-    pathToFileURL(`${path.join(REPO_ROOT, CATALOG_DIRECTORY)}/`),
-  );
+  const entries = await buildCapabilityCatalog();
   for (const entry of entries) {
     if (!isRecord(entry) || typeof entry["id"] !== "string") {
       return panic("deployment-feature-guard: malformed catalog entry");
@@ -374,7 +420,7 @@ export const loadRealInput = async (): Promise<ScanInput> => {
   const allFiles = new Set(scanFiles(["apps/api/src/**/*.{ts,tsx}"]));
   const withFlagText = (files: readonly string[]) =>
     files.map(readRecord).filter(({ source }) => source.includes("FEATURE_"));
-  const catalogFeatures = readCatalogFeatures();
+  const catalogFeatures = await readCatalogFeatures();
   return {
     ownerSource: readRecord(DEPLOYMENT_FEATURE_OWNER_FILE).source,
     readerFiles: withFlagText([...allFiles]),

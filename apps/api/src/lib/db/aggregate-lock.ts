@@ -48,6 +48,7 @@ import {
   contacts,
   corpusIndexGenerations,
   corpusIndexGenerationSeedingPasses,
+  corpusIndexProjectionDeleteTasks,
   corpusIndexProjectionIntents,
   corpusIndexProjectionStates,
   documentReviewRuns,
@@ -57,6 +58,7 @@ import {
   folioCollabRooms,
   invoiceLines,
   invoices,
+  invoiceSends,
   legalHolds,
   legislationDocuments,
   organizationDataExports,
@@ -743,6 +745,41 @@ const byIdWithin = (
   scopeColumns: [scopeColumn],
   scopeValues: [scopeValue],
 });
+type ByIdWithinPrincipalOptions = {
+  table: string;
+  id: string;
+  organizationId: string;
+  userId: string;
+};
+const byIdWithinPrincipal = ({
+  table,
+  id,
+  organizationId,
+  userId,
+}: ByIdWithinPrincipalOptions): RowResource => ({
+  table,
+  columns: ["id"],
+  values: [id],
+  scopeColumns: ["organization_id", "user_id"],
+  scopeValues: [organizationId, userId],
+});
+type PrincipalRowOptions = Extract<
+  RowIdentityOptions,
+  { aggregate: "chatThread" | "readerAnswer" | "outboundAction" }
+>;
+const principalRowResource = (options: PrincipalRowOptions): RowResource => {
+  const tables = {
+    chatThread: "chat_threads",
+    readerAnswer: "legal_reader_answers",
+    outboundAction: "outbound_actions",
+  } as const;
+  return byIdWithinPrincipal({
+    table: tables[options.aggregate],
+    id: options.id.id,
+    organizationId: options.id.organizationId,
+    userId: options.id.userId,
+  });
+};
 // A root row found by its own key, with no owning scope to check.
 const byUnscopedKey = (
   table: string,
@@ -784,7 +821,8 @@ type AuxiliaryRowIdentityOptions = Extract<
       | "desktopMembership"
       | "memory"
       | "searchProjectionRepair"
-      | "searchHistory";
+      | "searchHistory"
+      | "savedSearch";
   }
 >;
 
@@ -792,6 +830,14 @@ const auxiliaryRowResource = (
   options: AuxiliaryRowIdentityOptions,
 ): RowResource => {
   switch (options.aggregate) {
+    case "savedSearch":
+      return {
+        table: "saved_searches",
+        columns: ["id"],
+        values: [options.id.id],
+        scopeColumns: ["organization_id", "user_id"],
+        scopeValues: [options.id.organizationId, options.id.userId],
+      };
     case "correspondence":
       return byIdWithin(
         "correspondence",
@@ -888,6 +934,7 @@ const rowResource = (options: RowIdentityOptions): RowResource => {
     case "desktopMembership":
     case "memory":
     case "searchProjectionRepair":
+    case "savedSearch":
     case "searchHistory":
       return auxiliaryRowResource(options);
     case "desktopCredential":
@@ -994,21 +1041,9 @@ const rowResource = (options: RowIdentityOptions): RowResource => {
         options.id.organizationId,
       );
     case "chatThread":
-      return {
-        table: "chat_threads",
-        columns: ["id"],
-        values: [options.id.id],
-        scopeColumns: ["organization_id", "user_id"],
-        scopeValues: [options.id.organizationId, options.id.userId],
-      };
     case "readerAnswer":
-      return {
-        table: "legal_reader_answers",
-        columns: ["id"],
-        values: [options.id.id],
-        scopeColumns: ["organization_id", "user_id"],
-        scopeValues: [options.id.organizationId, options.id.userId],
-      };
+    case "outboundAction":
+      return principalRowResource(options);
     case "readerAnswerMessage":
       return byIdWithin(
         "legal_reader_answer_messages",
@@ -1408,13 +1443,23 @@ const hashedId = ({
   second: sql`hashtext(${id})`,
   order: [aggregate, id],
 });
+/** The second key and lock order of an aggregate one organization identifies. */
+const organizationKeyed = ({
+  aggregate,
+  id,
+}: {
+  aggregate: AggregateName;
+  id: { organizationId: string };
+}) => ({
+  second: sql`hashtext(${id.organizationId})`,
+  order: [aggregate, id.organizationId],
+});
 const advisoryResource = (options: AdvisoryIdentityOptions) => {
   switch (options.aggregate) {
     case "organizationObjectIntent":
       return {
         first: sql`${ORGANIZATION_OBJECT_INTENT_LOCK_NAMESPACE}::integer`,
-        second: sql`hashtext(${options.id})`,
-        order: [options.aggregate, options.id],
+        ...hashedId(options),
       };
     case "legislationAmendmentWork":
       return {
@@ -1438,8 +1483,7 @@ const advisoryResource = (options: AdvisoryIdentityOptions) => {
     case "chatStoredContentEgress":
       return {
         first: sql`${CHAT_STORED_CONTENT_EGRESS_LOCK_NAMESPACE}::integer`,
-        second: sql`hashtext(${options.id})`,
-        order: [options.aggregate, options.id],
+        ...hashedId(options),
       };
     case "desktopBatch":
       return {
@@ -1455,8 +1499,7 @@ const advisoryResource = (options: AdvisoryIdentityOptions) => {
     case "organizationDataBoxes":
       return {
         first: sql`hashtext('data-box-direction')`,
-        second: sql`hashtext(${options.id.organizationId})`,
-        order: [options.aggregate, options.id.organizationId],
+        ...organizationKeyed(options),
       };
     case "sampleCase":
       return {
@@ -1473,14 +1516,17 @@ const advisoryResource = (options: AdvisoryIdentityOptions) => {
     case "automatedFlowRunCap":
       return {
         first: sql`${0x0f_10_cc_a9}::integer`,
-        second: sql`hashtext(${options.id})`,
-        order: [options.aggregate, options.id],
+        ...hashedId(options),
+      };
+    case "invoiceSendCapacity":
+      return {
+        first: sql`hashtext('invoice-send-capacity')`,
+        ...organizationKeyed(options),
       };
     case "contactCapacity":
       return {
         first: sql`hashtext('contact_capacity')`,
-        second: sql`hashtext(${options.id.organizationId})`,
-        order: [options.aggregate, options.id.organizationId],
+        ...organizationKeyed(options),
       };
     case "chatToolGrants":
       return {
@@ -1495,8 +1541,7 @@ const advisoryResource = (options: AdvisoryIdentityOptions) => {
     case "billingDraftSettings":
       return {
         first: sql`${BILLING_DRAFT_SETTINGS_LOCK_NAMESPACE}::integer`,
-        second: sql`hashtext(${options.id.organizationId})`,
-        order: [options.aggregate, options.id.organizationId],
+        ...organizationKeyed(options),
       };
     case "desktopRunnerCapacity":
       return {
@@ -1511,8 +1556,7 @@ const advisoryResource = (options: AdvisoryIdentityOptions) => {
     case "fileComparisonCapacity":
       return {
         first: sql`${0x0f_10_cc_b2}::integer`,
-        second: sql`hashtext(${options.id.organizationId})`,
-        order: [options.aggregate, options.id.organizationId],
+        ...organizationKeyed(options),
       };
     case "billingCodeCapacity":
       return {
@@ -2669,6 +2713,37 @@ export const lockCaseLawDecisionRows = async ({
   `);
 };
 
+type CaseLawDecisionSnapshotOptions = {
+  tx: Pick<Transaction, "select">;
+  /** The base table, passed in so this owner names no case-law relation itself. */
+  decisions: typeof caseLawDecisions;
+  decisionId: SafeId<"caseLawDecision">;
+  /** The storage slice supplies its document-presence policy without a dependency cycle. */
+  holdsDocument: SQL<boolean>;
+};
+
+/** Lock and read a decision's pre-refresh identity and payload state together. */
+export const lockCaseLawDecisionSnapshot = async ({
+  tx,
+  decisions,
+  decisionId,
+  holdsDocument,
+}: CaseLawDecisionSnapshotOptions) =>
+  await tx
+    .select({
+      citationKey: decisions.citationKey,
+      country: decisions.country,
+      court: decisions.court,
+      docketFamilyKey: decisions.docketFamilyKey,
+      language: decisions.language,
+      decisionDate: decisions.decisionDate,
+      holdsDocument,
+      metadata: decisions.metadata,
+    })
+    .from(decisions)
+    .where(eq(decisions.id, decisionId))
+    .for("update")
+    .limit(1);
 /** Hold every summary endpoint in one ordered batch before checking revisions. */
 export const lockLegislationVersionRows = async (
   tx: Transaction,
@@ -3054,6 +3129,35 @@ export const lockInvoiceInStatus = async (
   return invoice;
 };
 
+type LockInvoiceSendDeliveryOptions = {
+  invoiceId: SafeId<"invoice">;
+  organizationId: SafeId<"organization">;
+  sendId: SafeId<"invoiceSend">;
+};
+
+/** Lock the child only after its invoice and complete matter set are held. */
+export const lockInvoiceSendDelivery = async (
+  tx: Transaction,
+  { invoiceId, organizationId, sendId }: LockInvoiceSendDeliveryOptions,
+) => {
+  const rows = await tx
+    .select({
+      deliveryStatus: invoiceSends.deliveryStatus,
+      revokedAt: invoiceSends.revokedAt,
+    })
+    .from(invoiceSends)
+    .where(
+      and(
+        eq(invoiceSends.id, sendId),
+        eq(invoiceSends.invoiceId, invoiceId),
+        eq(invoiceSends.organizationId, organizationId),
+      ),
+    )
+    .limit(1)
+    .for("update");
+  return rows.at(0);
+};
+
 /** Caller holds the timer-owner and complete matter advisory set. */
 export const lockBillingTimeEntrySources = async (
   tx: Pick<PgAsyncDatabase<PgQueryResultHKT>, "select">,
@@ -3097,6 +3201,7 @@ export const lockOriginalInvoice = async (
       documentType: invoices.documentType,
       currency: invoices.currency,
       totalAmount: invoices.totalAmount,
+      sentAt: invoices.sentAt,
     })
     .from(invoices)
     .where(
@@ -4320,6 +4425,87 @@ export const lockCorpusProjectionStatesByEntity = async (
     )
     .orderBy(asc(corpusIndexProjectionStates.entityId))
     .limit(entityIds.length)
+    .for("update");
+
+type CorpusProjectionDeleteTaskRoute = {
+  family: CorpusFamily;
+  generation: string;
+  indexId: string;
+};
+
+const corpusProjectionDeleteTaskRoute = ({
+  family,
+  generation,
+  indexId,
+}: CorpusProjectionDeleteTaskRoute) =>
+  and(
+    eq(corpusIndexProjectionDeleteTasks.family, family),
+    eq(corpusIndexProjectionDeleteTasks.generation, generation),
+    eq(corpusIndexProjectionDeleteTasks.indexId, indexId),
+  );
+
+/**
+ * Planned settlement tasks of one index whose lease is still free, in queue
+ * order, at most `limit`, skipping any another transaction holds: the
+ * settlement claim read its plan without locks, and never waits for a task.
+ */
+export const lockFreeCorpusProjectionDeleteTasks = async (
+  tx: Transaction,
+  {
+    deleteOpstamps,
+    limit,
+    ...route
+  }: CorpusProjectionDeleteTaskRoute & {
+    deleteOpstamps: readonly bigint[];
+    limit: number;
+  },
+) =>
+  await tx
+    .select({
+      deleteOpstamp: corpusIndexProjectionDeleteTasks.deleteOpstamp,
+      taskCreatedAt: corpusIndexProjectionDeleteTasks.taskCreatedAt,
+    })
+    .from(corpusIndexProjectionDeleteTasks)
+    .where(
+      and(
+        corpusProjectionDeleteTaskRoute(route),
+        inArray(corpusIndexProjectionDeleteTasks.deleteOpstamp, [
+          ...deleteOpstamps,
+        ]),
+        or(
+          isNull(corpusIndexProjectionDeleteTasks.leaseExpiresAt),
+          sql`${corpusIndexProjectionDeleteTasks.leaseExpiresAt} <= clock_timestamp()`,
+        ),
+      ),
+    )
+    .orderBy(
+      asc(corpusIndexProjectionDeleteTasks.cleanupStartedAt),
+      asc(corpusIndexProjectionDeleteTasks.deleteOpstamp),
+    )
+    .limit(limit)
+    .for("update", { skipLocked: true });
+
+/**
+ * One settlement task, waiting for a transaction that holds it: a turn that
+ * settled or reissued its revisions decides under this lock whether the task
+ * is drained, so a receipt committing meanwhile is seen.
+ */
+export const lockCorpusProjectionDeleteTask = async (
+  tx: Transaction,
+  {
+    deleteOpstamp,
+    ...route
+  }: CorpusProjectionDeleteTaskRoute & { deleteOpstamp: bigint },
+) =>
+  await tx
+    .select({ deleteOpstamp: corpusIndexProjectionDeleteTasks.deleteOpstamp })
+    .from(corpusIndexProjectionDeleteTasks)
+    .where(
+      and(
+        corpusProjectionDeleteTaskRoute(route),
+        eq(corpusIndexProjectionDeleteTasks.deleteOpstamp, deleteOpstamp),
+      ),
+    )
     .for("update");
 
 /**

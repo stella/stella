@@ -42,9 +42,14 @@ const ClipboardEditorWindow = lazy(
 );
 const ActivityApp = lazy(async () => import("../activity/ActivityApp"));
 const OnboardingApp = lazy(async () => import("../onboarding/OnboardingApp"));
+const TranscribeApp = lazy(async () => import("../transcribe/TranscribeApp"));
 
 const AccessibilityGuideApp = lazy(
   async () => import("../onboarding/AccessibilityGuideApp"),
+);
+const DictationNoticeApp = lazy(async () => import("./DictationNoticeApp"));
+const DictationPreviewApp = lazy(
+  async () => import("../dictation/DictationPreviewApp"),
 );
 
 const isReactRoot = (value: unknown): value is ReactRoot =>
@@ -143,10 +148,28 @@ const Root = () => {
         <AccessibilityGuideApp />
       </Suspense>
     );
+  } else if (windowLabel === "dictation-notice") {
+    content = (
+      <Suspense fallback={null}>
+        <DictationNoticeApp />
+      </Suspense>
+    );
+  } else if (windowLabel === "dictation-preview") {
+    content = (
+      <Suspense fallback={null}>
+        <DictationPreviewApp />
+      </Suspense>
+    );
   } else if (windowLabel === "onboarding") {
     content = (
       <Suspense fallback={<main className="bg-background min-h-dvh" />}>
         <OnboardingApp />
+      </Suspense>
+    );
+  } else if (windowLabel === "transcribe") {
+    content = (
+      <Suspense fallback={<main className="bg-background min-h-dvh" />}>
+        <TranscribeApp />
       </Suspense>
     );
   } else if (windowLabel === "clipboard-editor") {

@@ -1,12 +1,12 @@
 import { statuteActLabel } from "./statute-act-number";
-import type { StatuteQueryCountry } from "./statute-query-capability";
+import type { StatuteGazetteCountry } from "./statute-query-capability";
 
 /** Citation words belong to the act's language, independently of the UI locale. */
 const CITATION_STYLE = {
   cze: { numberPrefix: "č.", subjectSeparator: ", " },
   svk: { numberPrefix: "č.", subjectSeparator: " " },
 } as const satisfies Record<
-  StatuteQueryCountry,
+  StatuteGazetteCountry,
   { numberPrefix: string; subjectSeparator: string }
 >;
 

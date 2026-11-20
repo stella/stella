@@ -16,6 +16,15 @@ import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment
 
 GlobalRegistrator.register({ url: "http://localhost:3000/law" });
 
+// The provider's module graph reaches DOM-aware UI code, so it loads after
+// the DOM is registered, like the reader components below.
+const { defaultPresentationPrefs } =
+  await import("@/lib/account/presentation-prefs/preferences");
+const { PresentationPrefsProvider } =
+  await import("@/lib/account/presentation-prefs/provider");
+const { createTestPresentationPrefsSync } =
+  await import("@/lib/account/presentation-prefs/sync.test-fixtures");
+
 /**
  * A card whose wording the decision's list did not carry reads it itself.
  * Reads wait for `answerReads` so a test can let the card draw its
@@ -435,7 +444,12 @@ const renderReaders = async () => {
     <IntlProvider locale="en" messages={messages} timeZone="UTC">
       <FormattingProvider locale="en" timeZone="UTC">
         <QueryClientProvider client={client}>
-          <RouterProvider router={router} />
+          <PresentationPrefsProvider
+            initialPrefs={defaultPresentationPrefs}
+            sync={createTestPresentationPrefsSync()}
+          >
+            <RouterProvider router={router} />
+          </PresentationPrefsProvider>
         </QueryClientProvider>
       </FormattingProvider>
     </IntlProvider>,
@@ -480,7 +494,10 @@ const TOGGLE_SELECTOR = "[aria-expanded], [aria-pressed], summary";
 type ToggleKind = "disclosure" | "peek" | "pressed";
 
 const toggleKind = (toggle: HTMLElement): ToggleKind => {
-  if (toggle.tagName === "SUMMARY") {
+  if (
+    toggle.tagName === "SUMMARY" ||
+    toggle.dataset["slot"] === "collapsible-trigger"
+  ) {
     return "disclosure";
   }
   return toggle.hasAttribute("aria-pressed") ? "pressed" : "peek";
@@ -595,6 +612,59 @@ const pageToggles = () => [
 ];
 
 describe("in-reader toggles keep the reader's place", () => {
+  test("apparatus chrome stays out of copied and anchored source text, and navigation reveals its target", async () => {
+    const { cleanSelectionText } =
+      await import("@/components/legal-reader/annotations/reader-copy-text.logic");
+    const { selectionAnchorsFrom } =
+      await import("@/components/legal-reader/annotations/selection-anchor");
+    const { revealEnclosingDisclosures } =
+      await import("@/lib/platform/reveal-disclosures");
+    await renderReaders();
+    const { section } = readerParts("page");
+    const disclosure =
+      section.querySelector<HTMLElement>(".reader-apparatus") ??
+      panic("Missing apparatus disclosure");
+    const target =
+      disclosure.querySelector<HTMLElement>(
+        '[data-anchor="anchor-publisher"]',
+      ) ?? panic("Missing anchored publisher passage");
+    const trigger =
+      disclosure.querySelector<HTMLElement>(
+        '[data-slot="collapsible-trigger"]',
+      ) ?? panic("Missing apparatus toggle");
+    expect(target.closest('[hidden="until-found"]')).not.toBeNull();
+    await act(async () => {
+      revealEnclosingDisclosures(target);
+    });
+    expect(target.closest("[hidden]")).toBeNull();
+    expect(trigger.getAttribute("aria-expanded")).toBe("true");
+    const range = section.ownerDocument.createRange();
+    range.selectNodeContents(disclosure);
+    expect(cleanSelectionText(range)).not.toContain(
+      messages.caseLaw.reader.headMatter,
+    );
+    expect(cleanSelectionText(range)).toContain(
+      "Zveřejněno v databázi soudních rozhodnutí.",
+    );
+    const selection =
+      section.ownerDocument.getSelection() ?? panic("No selection owner");
+    try {
+      selection.removeAllRanges();
+      selection.addRange(range);
+      expect(selectionAnchorsFrom(selection, section)).toEqual([
+        expect.objectContaining({
+          blockAnchorId: "anchor-publisher",
+          quote: "Zveřejněno v databázi soudních rozhodnutí.",
+        }),
+      ]);
+    } finally {
+      selection.removeAllRanges();
+    }
+    await activate(trigger);
+    expect(trigger.getAttribute("aria-expanded")).toBe("false");
+    expect(target.isConnected).toBe(true);
+  });
+
   test("the layout moves a passage when content is inserted above it", async () => {
     // Guards the fixture: without this, a position assertion could pass
     // because nothing in the layout ever moves.
@@ -613,8 +683,9 @@ describe("in-reader toggles keep the reader's place", () => {
   test("the reader renders every kind of toggle the assertions cover", async () => {
     await renderReaders();
     expect(
-      readerParts("page").section.querySelector(".reader-apparatus > summary")
-        ?.textContent,
+      readerParts("page").section.querySelector(
+        '.reader-apparatus [data-slot="collapsible-trigger"]',
+      )?.textContent,
     ).toBe(messages.caseLaw.reader.headMatter);
     const kinds = new Set(pageToggles().map(toggleKind));
     expect([...kinds].toSorted()).toEqual(["disclosure", "peek", "pressed"]);

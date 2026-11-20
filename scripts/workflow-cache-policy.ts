@@ -19,20 +19,20 @@ const triggers = (on: unknown): string[] => {
 
 // Release and deploy jobs restore caches from the default branch's scope.
 // pull_request runs save only to their own pull request's scope, but
-// pull_request_target and workflow_run runs save to the default branch's
-// scope: a fork can influence the first, and the second runs release and
-// signing jobs. So none of their jobs may save to or restore from any cache,
-// and a reusable workflow they call must be one reviewed for that.
-const DEFAULT_SCOPE_EVENTS = ["pull_request_target", "workflow_run"];
+// workflow_run runs save to the default branch's scope: a fork pull request
+// can trigger them, and they run release and signing jobs. So none of their
+// jobs may save to or restore from any cache, and a reusable workflow they
+// call must be one reviewed for that.
+const DEFAULT_SCOPE_EVENTS = ["workflow_run"];
 const REVIEWED_REUSABLE_WORKFLOWS: Record<string, string> = {
-  "stella/.github/.github/workflows/pr-lint.yml@0cc2def60afb3e0fac0df9f541baf926f77889fa":
-    "title, label, size and assignee actions only; no cache",
-  "stella/.github/.github/workflows/npm-independent-release.yml@0cc2def60afb3e0fac0df9f541baf926f77889fa":
+  "stella/.github/.github/workflows/npm-independent-release.yml@ba1d8b5e67dd5b252f6d3edd0c9fa047c5d386fc":
     "checkout, artifact download, setup-node without a cache input, hardened publish action from the pinned release-tooling checkout; no cache",
 };
 const DESKTOP_WINDOWS_BUILD_CACHE_USE =
   "baptiste0928/cargo-install caches installed Rust binaries";
 const REVIEWED_LOCAL_ACTIONS: Record<string, string> = {
+  "./.github/actions/provenance":
+    "subject validation and pinned attestation actions only; no cache",
   "./.github/actions/desktop-windows-build": DESKTOP_WINDOWS_BUILD_CACHE_USE,
   "./.github/actions/ci-install":
     "exact scoped store restore; save only after a successful frozen install on main",

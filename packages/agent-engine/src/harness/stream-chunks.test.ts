@@ -17,6 +17,7 @@ import { AI_FAILURE_CODES } from "@stll/api-contract/ai-errors";
 import {
   CHAT_LOCAL_RUN_CONTEXT_METADATA_KEY,
   CHAT_LOCAL_RUN_LIMIT_METADATA_KEY,
+  CHAT_LOCAL_RUN_MODEL_METADATA_KEY,
   chatLocalRunContextSchema,
   chatLocalRunLimitSchema,
 } from "@stll/api-contract/chat-run-target";
@@ -553,6 +554,10 @@ describe("local harness chunks", () => {
         type: "retry_stalled",
         message: "The harness kept retrying the provider without progress.",
       },
+      request_unanswered: {
+        type: "request_unanswered",
+        message: "The model provider did not answer for too long.",
+      },
       tools_unavailable: {
         type: "tools_unavailable",
         message: "The harness could not connect to the stella MCP server.",
@@ -832,6 +837,12 @@ describe("chunk stream invariants", () => {
             ) {
               expect(named.success).toBe(true);
               terminalNamed += 1;
+            }
+            // A finish, a pause's included, tells the answer both models.
+            if (chunk.type === EventType.RUN_FINISHED) {
+              expect(
+                chunk.metadata?.[CHAT_LOCAL_RUN_MODEL_METADATA_KEY],
+              ).toEqual({ requested: MODEL, ran: ranOn });
             }
           }
           expect(terminalNamed).toBeGreaterThan(0);

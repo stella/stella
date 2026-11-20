@@ -32,6 +32,9 @@ import type {
   WorkspaceTable as WorkspaceTableType,
 } from "@/components/workspaces/table/types";
 import {
+  WORKSPACE_TABLE_FRAME_CLASS,
+  WORKSPACE_TABLE_GRID_CLASS,
+  WORKSPACE_TABLE_SCROLL_CLASS,
   WORKSPACE_TABLE_SCROLL_SLOT,
   WorkspaceGridFillerCell,
   WorkspaceGridRow,
@@ -598,8 +601,7 @@ export const WorkspaceTable = <TRow extends TableRowData = TableTreeNode>({
   return (
     <div
       className={cn(
-        "relative",
-        !inlineFlow && "h-full flex-1",
+        inlineFlow ? "relative" : WORKSPACE_TABLE_FRAME_CLASS,
         showsEmptyState && "flex flex-col",
         addPropertyColumn && ADD_PROPERTY_RAIL_ACTIVE_CLASS_NAME,
       )}
@@ -608,7 +610,7 @@ export const WorkspaceTable = <TRow extends TableRowData = TableTreeNode>({
         className={cn(
           showsEmptyState && "shrink-0 overflow-hidden",
           !showsEmptyState &&
-            (inlineFlow ? "w-full" : "scrollbar-subtle h-full overflow-auto"),
+            (inlineFlow ? "w-full" : WORKSPACE_TABLE_SCROLL_CLASS),
         )}
         data-slot={WORKSPACE_TABLE_SCROLL_SLOT}
         ref={tableWrapperRef}
@@ -618,7 +620,7 @@ export const WorkspaceTable = <TRow extends TableRowData = TableTreeNode>({
           aria-colcount={columnMetadata.columnCount}
           aria-rowcount={rowModel.rows.length}
           className={cn(
-            "relative flex flex-col text-sm",
+            WORKSPACE_TABLE_GRID_CLASS,
             !inlineFlow && !showsEmptyState && "min-h-full",
           )}
           role="grid"
@@ -630,6 +632,7 @@ export const WorkspaceTable = <TRow extends TableRowData = TableTreeNode>({
               stickyColumnHeader && "sticky top-0",
             )}
             ref={headerRowsRef}
+            role="rowgroup"
           >
             {table.getHeaderGroups().map((headerGroup) => (
               <WorkspaceGridRow key={headerGroup.id}>
@@ -667,7 +670,11 @@ export const WorkspaceTable = <TRow extends TableRowData = TableTreeNode>({
               </WorkspaceGridRow>
             ))}
           </div>
-          <div className="flex flex-1 flex-col" ref={rowsContainerRef}>
+          <div
+            className="flex flex-1 flex-col"
+            ref={rowsContainerRef}
+            role="rowgroup"
+          >
             {paddingTop > 0 && (
               <WorkspaceGridRow className="pointer-events-none">
                 <WorkspaceGridFillerCell

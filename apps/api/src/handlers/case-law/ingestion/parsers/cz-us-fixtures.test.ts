@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { readdir } from "node:fs/promises";
+import { fileURLToPath } from "node:url";
 import * as v from "valibot";
 
 import { load } from "@stll/html";
@@ -29,7 +30,7 @@ const SNAPSHOT = new URL(
 const snapshotSchema = v.record(v.string(), v.string());
 
 const fixtureNames = async (): Promise<string[]> =>
-  (await readdir(FIXTURES.pathname))
+  (await readdir(fileURLToPath(FIXTURES)))
     .filter((name) => /^cz-us-.*\.html\.gz$/u.test(name))
     .toSorted();
 

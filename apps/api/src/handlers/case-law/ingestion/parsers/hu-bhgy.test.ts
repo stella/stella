@@ -687,6 +687,35 @@ describe("the decision's kind", () => {
     );
   });
 
+  test("a back-vowel possessive in the title block names the kind too", () => {
+    expect(
+      huDecisionTypeFrom(["A KÚRIA", "Önkormányzati Tanácsának", "határozata"]),
+    ).toBe("határozat");
+    expect(huDecisionTypeFrom(["A Kúria", "jogegységi határozata"])).toBe(
+      "jogegységi határozat",
+    );
+    expect(huDecisionTypeFrom(["A Kúria", "kollégiumi állásfoglalása"])).toBe(
+      "kollégiumi állásfoglalás",
+    );
+  });
+
+  test("a self-government panel's ruling is typed end to end", () => {
+    const parsed = parse([
+      { text: "A KÚRIA", centered: true },
+      { text: "Önkormányzati Tanácsának", centered: true },
+      { text: "határozata", centered: true },
+      { text: "Az ügy száma: Köf.5.027/2026/4." },
+      { text: "A tanács tagjai: Dr. Példa Anna a tanács elnöke" },
+      { text: "Rendelkező rész" },
+      {
+        text: "A Kúria Önkormányzati Tanácsa a rendelet rendelkezését megsemmisíti.",
+      },
+      { text: "Indokolás" },
+      { text: "[1] Az indítványozó a rendelet vizsgálatát kérte." },
+    ]);
+    expect(parsed.decisionType).toBe("határozat");
+  });
+
   test("a title naming no kind states none", () => {
     expect(
       huDecisionTypeFrom(["Az ügy száma: Gfv.30091/2025/4"]),

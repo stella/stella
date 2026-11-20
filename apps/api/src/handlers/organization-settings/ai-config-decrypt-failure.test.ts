@@ -1,5 +1,6 @@
 import { Result } from "better-result";
 import { describe, expect, spyOn, test } from "bun:test";
+import { fileURLToPath } from "node:url";
 
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
@@ -194,7 +195,7 @@ describe("AI config handlers with an undecryptable stored config", () => {
                 developmentJsonlEntries: jsonlRecords,
                 trustedDevelopmentStack: [
                   "HandlerError: Stored AI configuration could not be read",
-                  `    at storedAIConfigUnreadableError (${new URL("../../lib/ai-config-response.ts", import.meta.url).pathname}:[line]:[column])`,
+                  `    at storedAIConfigUnreadableError (${fileURLToPath(new URL("../../lib/ai-config-response.ts", import.meta.url))}:[line]:[column])`,
                   `    at <anonymous> (${import.meta.dir}/${reader}-ai-config.ts:[line]:[column])`,
                 ].join("\n"),
                 groupIdentifies: analytics.groupIdentifies,

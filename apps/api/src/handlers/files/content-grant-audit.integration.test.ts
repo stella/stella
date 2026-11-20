@@ -1,5 +1,5 @@
 import { PDF } from "@libpdf/core";
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import {
   afterAll,
   afterEach,
@@ -11,14 +11,25 @@ import {
 } from "bun:test";
 import { eq, inArray } from "drizzle-orm";
 
+import { PREVIEW_UNAVAILABLE_ERROR_CODE } from "@stll/api-contract";
+import { DATA_BOX_MESSAGE_MIME_TYPE } from "@stll/api-contract/data-box";
 import { EML_MIME_TYPE } from "@stll/api-contract/email-mime-types";
+import {
+  ASIC_E_FILE_FORMAT,
+  ASIC_S_FILE_FORMAT,
+  CADES_FILE_FORMAT,
+} from "@stll/api-contract/legal-file-formats";
+import { STRUCTURED_DOCUMENT_FORMATS } from "@stll/api-contract/structured-document-formats";
 import { ZipArchive } from "@stll/docx-core/zip";
 import { rejectionOf } from "@stll/property-testing/rejection";
+import { sha256Hex } from "@stll/sha256/bun";
 
 import { session } from "@/api/db/auth-schema";
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import {
   auditLogs,
+  correspondence,
+  correspondenceAttachments,
   entities,
   entityVersions,
   fields,
@@ -30,6 +41,11 @@ import {
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
 import { env } from "@/api/env";
 import { envBase } from "@/api/env-base";
+import asicPreviewEndpoint from "@/api/handlers/files/asic";
+import {
+  cadesContentEndpoint,
+  cadesPreviewEndpoint,
+} from "@/api/handlers/files/cades";
 import { readDocumentProperties } from "@/api/handlers/files/document-properties";
 import emailAttachmentEndpoint from "@/api/handlers/files/email-attachment";
 import {
@@ -39,6 +55,7 @@ import {
 } from "@/api/handlers/files/get";
 import { readMarkedDownload } from "@/api/handlers/files/marked-download";
 import { readScrubbedDownload } from "@/api/handlers/files/scrubbed-download";
+import structuredDocumentEndpoint from "@/api/handlers/files/structured-document";
 import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { HttpStatusResponse } from "@/api/http/status";
 import type { AuditRecorder } from "@/api/lib/audit-log";
@@ -46,9 +63,15 @@ import { createAuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";
 import { DESKTOP_EDIT_FILE_TYPE_CONFIG } from "@/api/lib/desktop-edit-file-types";
+import { dataBoxPayloadIdentity } from "@/api/lib/email/correspondence/data-box/payload-hash";
+import { parseDataBoxMessage } from "@/api/lib/email/correspondence/data-box/zfo";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { DOCUMENT_ARCHIVE_MAX_BYTES } from "@/api/lib/files/archive-preview-protocol";
 import { createEmailAttachmentDescriptor } from "@/api/lib/files/email-attachment-token";
+import { loadLegalFileSource } from "@/api/lib/files/legal-file-source";
+import { readDataBoxFile } from "@/api/lib/files/read-data-box-file";
 import { readFileHandler } from "@/api/lib/files/read-file";
+import { LEGAL_FILE_READERS } from "@/api/lib/files/read-legal-file";
 import { createFileKey } from "@/api/lib/files/utils";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import {
@@ -62,9 +85,22 @@ import {
 import { readSyntheticSessionAuthority } from "@/api/lib/synthetic-principal/session-authority";
 import { createSyntheticSessionStore } from "@/api/lib/synthetic-principal/store";
 import { DOCX_MIME_TYPE, PDF_MIME_TYPE } from "@/api/mime-types";
+import { makeAsicFixture } from "@/api/tests/fixtures/asic";
+import { wrapP7m } from "@/api/tests/fixtures/p7m";
+import { FIXTURE_MESSAGE, zfoFile } from "@/api/tests/fixtures/zfo";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
-import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
+import { withTestFetch } from "@/api/tests/helpers/test-fetch";
+import { asFetchMock, asTestRaw } from "@/api/tests/helpers/test-tool-set";
+import { asicPreviewScalingScenario } from "@/api/tests/read-scaling/asic-preview";
+import {
+  cadesContentScalingScenario,
+  cadesPreviewScalingScenario,
+} from "@/api/tests/read-scaling/cades-preview";
+import { dataBoxPreviewScalingScenario } from "@/api/tests/read-scaling/data-box-preview";
+import { readScalingViolations } from "@/api/tests/read-scaling/measurement";
+import { structuredDocumentScalingScenario } from "@/api/tests/read-scaling/structured-document";
 import {
   getRlsFixture,
   releaseRlsFixture,
@@ -93,6 +129,10 @@ beforeAll(async () => {
 
 afterAll(async () => {
   if (seededEntityIds.length > 0) {
+    await testDb
+      .update(entities)
+      .set({ currentVersionId: null })
+      .where(inArray(entities.id, seededEntityIds));
     await testDb
       .delete(fields)
       .where(
@@ -135,6 +175,8 @@ type StoredFile = {
   fileName: string;
   mimeType: string;
   pdfFileId: string | null;
+  sha256Hex?: string;
+  sizeBytes?: number;
 };
 
 type SeededFile = {
@@ -146,7 +188,13 @@ type SeededFile = {
 
 /** A document with one stored file in matter A1 (or B1 for `side: "b"`). */
 const seedFile = async (
-  { fileName, mimeType, pdfFileId }: StoredFile,
+  {
+    fileName,
+    mimeType,
+    pdfFileId,
+    sha256Hex: storedHash = "b".repeat(64),
+    sizeBytes = 2048,
+  }: StoredFile,
   side: "a" | "b" = "a",
 ): Promise<SeededFile> => {
   const workspaceId = side === "a" ? ids.wsA1 : ids.wsB1;
@@ -172,9 +220,9 @@ const seedFile = async (
       id: fileId,
       fileName,
       mimeType,
-      sizeBytes: 2048,
+      sizeBytes,
       encrypted: false,
-      sha256Hex: "b".repeat(64),
+      sha256Hex: storedHash,
       pdfFileId,
     },
   });
@@ -814,6 +862,683 @@ const seedStored = async (stored: StoredFile, bytes: Uint8Array) => {
   return seeded;
 };
 
+const seedDataBox = async () =>
+  await seedStored(
+    {
+      fileName: "zprava.ZFO",
+      mimeType: DATA_BOX_MESSAGE_MIME_TYPE,
+      pdfFileId: null,
+    },
+    await zfoFile(),
+  );
+
+const seedCades = async (bytes?: Uint8Array) =>
+  await seedStored(
+    {
+      fileName: "contratto.PDF.P7M",
+      mimeType: CADES_FILE_FORMAT.mimeType,
+      pdfFileId: null,
+    },
+    await wrapP7m(bytes ?? (await pdfBytes())),
+  );
+
+const legalFileContext = (
+  fieldId: SafeId<"field">,
+  scopedDb: ScopedDb,
+  audit = recorderA(),
+) =>
+  createTestHandlerContext<Parameters<typeof cadesPreviewEndpoint.handler>[0]>({
+    workspaceId: ids.wsA1,
+    session: { activeOrganizationId: ids.orgA },
+    user: { id: ids.userA1 },
+    audit,
+    scopedDb,
+    safeDb: createSafeDb(testDb, [ids.wsA1], ids.orgA, ids.userA1),
+    params: { workspaceId: ids.wsA1, fieldId },
+  });
+
+const seedAsic = async () =>
+  await seedStored(
+    { fileName: "toimik.BDOC", mimeType: "application/zip", pdfFileId: null },
+    await makeAsicFixture({
+      mimeType: ASIC_E_FILE_FORMAT.mimeType,
+      members: [{ fileName: "lisa.txt", bytes: "Töölepingu lisa" }],
+      signature: "xades",
+    }),
+  );
+
+const UYAP_FIXTURE_TEXT = "İçtihat özeti";
+const structuredFixtures = {
+  uyap: {
+    text: UYAP_FIXTURE_TEXT,
+    bytes: async () => {
+      const archive = new ZipArchive();
+      archive.set(
+        "content.xml",
+        `<template format_id="1.8"><content><![CDATA[${UYAP_FIXTURE_TEXT}]]></content><elements><paragraph><content startOffset="0" length="${UYAP_FIXTURE_TEXT.length}"/></paragraph></elements></template>`,
+      );
+      return await archive.generate({ compression: "store" });
+    },
+  },
+  ofd: {
+    text: "你好呀，OFD Reader&Writer！",
+    bytes: async () =>
+      await Bun.file(
+        new URL(
+          "../../lib/files/fixtures/ofdrw/helloworld.ofd",
+          import.meta.url,
+        ),
+      ).bytes(),
+  },
+};
+
+describe.each(STRUCTURED_DOCUMENT_FORMATS)(
+  "$label text delivery",
+  ({ kind, label, auditFormat, extensions: [extension] }) => {
+    // A generic ZIP MIME models an older upload recognized by its stored extension.
+    const stored = {
+      fileName: `record${extension.toUpperCase()}`,
+      mimeType: "application/zip",
+      pdfFileId: null,
+    };
+    const fixture = structuredFixtures[kind];
+    const seed = async () => await seedStored(stored, await fixture.bytes());
+
+    test("Files and the agent receive the same stored text and each read is audited", async () => {
+      const { fieldId, entityId, entityVersionId } = await seed();
+      await testDb
+        .update(entities)
+        .set({ currentVersionId: entityVersionId })
+        .where(eq(entities.id, entityId));
+
+      const preview = await structuredDocumentEndpoint.handler(
+        legalFileContext(fieldId, scopedDbA()),
+      );
+      expect(preview).toEqual({ text: fixture.text, truncated: false });
+      await expectOneContentRow(entityId, {
+        action: "access",
+        metadata: { fieldId, format: auditFormat, disposition: "inline" },
+      });
+      const agent = await LEGAL_FILE_READERS[kind]({
+        fieldId,
+        scopedDb: scopedDbA(),
+        workspaceId: ids.wsA1,
+        organizationId: ids.orgA,
+        recordAuditEvent: recorderA(),
+        purpose: "agent",
+      });
+      expect(agent.unwrap()).toEqual({
+        text: fixture.text,
+        attachments: [],
+      });
+      const rows = await auditRowsFor(entityId);
+      expect(rows).toHaveLength(2);
+      expect(rows.at(1)).toEqual(rows.at(0));
+    });
+
+    test("preview and agent reads cannot access another matter", async () => {
+      const { fieldId, entityId } = await seedFile(stored, "b");
+      expectStatus(
+        await structuredDocumentEndpoint.handler(
+          legalFileContext(fieldId, scopedDbA()),
+        ),
+        404,
+      );
+      const agent = await LEGAL_FILE_READERS[kind]({
+        fieldId,
+        scopedDb: scopedDbA(),
+        workspaceId: ids.wsA1,
+        organizationId: ids.orgA,
+        recordAuditEvent: recorderA(),
+        purpose: "agent",
+      });
+      expect(agent.isErr() && agent.error.status).toBe(404);
+      expect(await auditRowsFor(entityId)).toEqual([]);
+    });
+
+    test("returns no text when its audit record fails", async () => {
+      const { fieldId, entityId } = await seed();
+      let auditAttempted = false;
+      const rejectAudit: AuditRecorder = async (tx, event) => {
+        auditAttempted = true;
+        return await failingRecorder(tx, event);
+      };
+      expectStatus(
+        await structuredDocumentEndpoint.handler(
+          legalFileContext(fieldId, scopedDbA(), rejectAudit),
+        ),
+        500,
+      );
+      expect(auditAttempted).toBe(true);
+      expect(await auditRowsFor(entityId)).toEqual([]);
+    });
+
+    test("discards parsed text when the source version is withdrawn", async () => {
+      const { fieldId, entityId, entityVersionId } = await seed();
+      expectStatus(
+        await structuredDocumentEndpoint.handler(
+          legalFileContext(fieldId, withdrawnAfterLookup(entityVersionId)),
+        ),
+        404,
+      );
+      expect(await auditRowsFor(entityId)).toEqual([]);
+    });
+
+    test(`${label} query cost stays bounded as the matter grows`, async () => {
+      const { fieldId } = await seed();
+      const context = legalFileContext(fieldId, scopedDbA());
+      const measureWithAddedDocuments = async (count: number) => {
+        const unrelated = Array.from({ length: count }, () => ({
+          id: createSafeId<"entity">(),
+          workspaceId: ids.wsA1,
+          kind: "document" as const,
+          name: "Docket entry",
+        }));
+        seededEntityIds.push(...unrelated.map(({ id }) => id));
+        await testDb.insert(entities).values(unrelated);
+        return await structuredDocumentScalingScenario.measure(context);
+      };
+
+      const small = await measureWithAddedDocuments(10);
+      const large = await measureWithAddedDocuments(190);
+      expect(small.statements).toBeGreaterThan(0);
+      expect(small.rows).toBe(1);
+      expect(readScalingViolations({ small, large })).toEqual([]);
+    });
+  },
+);
+
+describe("archive preview byte limits", () => {
+  const oversized = DOCUMENT_ARCHIVE_MAX_BYTES + 1;
+  const previews = [
+    { format: ASIC_E_FILE_FORMAT, endpoint: asicPreviewEndpoint },
+    { format: ASIC_S_FILE_FORMAT, endpoint: asicPreviewEndpoint },
+    ...STRUCTURED_DOCUMENT_FORMATS.map((format) => ({
+      format,
+      endpoint: structuredDocumentEndpoint,
+    })),
+  ];
+
+  const expectArchiveLimit = (response: unknown) =>
+    expect(response).toMatchObject({
+      code: 422,
+      response: { code: PREVIEW_UNAVAILABLE_ERROR_CODE },
+    });
+
+  test.each(previews)(
+    "$format.label rejects an oversized stored size without contacting S3",
+    async ({ format, endpoint }) => {
+      const { fieldId, entityId } = await seedFile({
+        fileName: `record${format.extensions[0]}`,
+        mimeType: "application/zip",
+        pdfFileId: null,
+        sizeBytes: oversized,
+      });
+
+      expectArchiveLimit(
+        await endpoint.handler(legalFileContext(fieldId, scopedDbA())),
+      );
+      expect(fake.requests).toEqual([]);
+      expect(await auditRowsFor(entityId)).toEqual([]);
+    },
+  );
+
+  test.each(previews)(
+    "$format.label checks the object size even when the stored size is stale",
+    async ({ format, endpoint }) => {
+      const { fieldId, entityId } = await seedFile({
+        fileName: `record${format.extensions[0]}`,
+        mimeType: "application/zip",
+        pdfFileId: null,
+        sizeBytes: 2048,
+      });
+      let pulls = 0;
+      let cancelled = false;
+      const body = new ReadableStream<Uint8Array>(
+        {
+          pull(controller) {
+            pulls += 1;
+            controller.close();
+          },
+          cancel() {
+            cancelled = true;
+          },
+        },
+        { highWaterMark: 0 },
+      );
+      const response = await withTestFetch(
+        asFetchMock(
+          async () =>
+            new Response(body, {
+              headers: { "content-length": String(oversized) },
+            }),
+        ),
+        async () =>
+          await endpoint.handler(legalFileContext(fieldId, scopedDbA())),
+      );
+      expectArchiveLimit(response);
+      expect(pulls).toBe(0);
+      expect(cancelled).toBe(true);
+      expect(await auditRowsFor(entityId)).toEqual([]);
+    },
+  );
+
+  test("an archive stream cannot exceed its understated object size limit", async () => {
+    const { fieldId, entityId } = await seedFile({
+      fileName: "record.ofd",
+      mimeType: "application/zip",
+      pdfFileId: null,
+    });
+    const chunk = new Uint8Array(1024 * 1024);
+    let transferred = 0;
+    let cancelled = false;
+    const body = new ReadableStream<Uint8Array>(
+      {
+        pull(controller) {
+          transferred += chunk.byteLength;
+          controller.enqueue(chunk);
+        },
+        cancel() {
+          cancelled = true;
+        },
+      },
+      { highWaterMark: 0 },
+    );
+    const response = await withTestFetch(
+      asFetchMock(
+        async () =>
+          new Response(body, { headers: { "content-length": "2048" } }),
+      ),
+      async () =>
+        await structuredDocumentEndpoint.handler(
+          legalFileContext(fieldId, scopedDbA()),
+        ),
+    );
+    expectArchiveLimit(response);
+    expect(transferred).toBe(DOCUMENT_ARCHIVE_MAX_BYTES + chunk.byteLength);
+    expect(cancelled).toBe(true);
+    expect(await auditRowsFor(entityId)).toEqual([]);
+  });
+
+  test("propagates unrelated storage failures", async () => {
+    const mimeType = "application/zip";
+    const { fieldId, fileId } = await seedFile({
+      fileName: "record.ofd",
+      mimeType,
+      pdfFileId: null,
+    });
+    fake.failNext({
+      method: "GET",
+      status: 403,
+      code: "AccessDenied",
+      key: fileKeyFor(fileId, mimeType),
+    });
+
+    const failure = await rejectionOf(
+      loadLegalFileSource(
+        {
+          fieldId,
+          scopedDb: scopedDbA(),
+          workspaceId: ids.wsA1,
+          organizationId: ids.orgA,
+          recordAuditEvent: recorderA(),
+        },
+        ["ofd"],
+      ),
+    );
+    expect(failure).toMatchObject({
+      _tag: "S3ObjectReadError",
+      status: 403,
+      code: "AccessDenied",
+    });
+  });
+});
+
+describe("ASiC file delivery", () => {
+  test("an existing generic ZIP upload exposes the same named document in Files and AI", async () => {
+    const { fieldId, entityId, entityVersionId } = await seedAsic();
+    await testDb
+      .update(entities)
+      .set({ currentVersionId: entityVersionId })
+      .where(eq(entities.id, entityId));
+    const view = await asicPreviewEndpoint.handler(
+      legalFileContext(fieldId, scopedDbA()),
+    );
+    expect(view).toMatchObject({
+      members: [
+        { fileName: "lisa.txt", text: "Töölepingu lisa", status: "readable" },
+      ],
+    });
+    await expectOneContentRow(entityId, {
+      action: "access",
+      metadata: { fieldId, format: "asic-e" },
+    });
+    const read = await LEGAL_FILE_READERS.asicE({
+      fieldId,
+      scopedDb: scopedDbA(),
+      workspaceId: ids.wsA1,
+      organizationId: ids.orgA,
+      recordAuditEvent: recorderA(),
+      purpose: "agent",
+    });
+    const { text } = read.unwrap();
+    expect(text).toContain("lisa.txt");
+    expect(text).toContain("Töölepingu lisa");
+    expect(text).toContain("unverified");
+  });
+  test("refuses an ASiC field in another matter", async () => {
+    const { fieldId } = await seedFile(
+      {
+        fileName: "record.asics",
+        mimeType: "application/zip",
+        pdfFileId: null,
+      },
+      "b",
+    );
+    expect(
+      answeredStatus(
+        await asicPreviewEndpoint.handler(
+          legalFileContext(fieldId, scopedDbA()),
+        ),
+      ),
+    ).toBe(404);
+  });
+});
+
+describe("CAdES file delivery", () => {
+  test("serves the exact embedded PDF, scoped and audited", async () => {
+    const bytes = await pdfBytes();
+    const file = await seedCades(bytes);
+    const response = await cadesContentEndpoint.handler(
+      legalFileContext(file.fieldId, scopedDbA()),
+    );
+    if (!(response instanceof Response)) {
+      panic("Expected a PDF response");
+    }
+    expect(response.headers.get("content-type")).toBe(PDF_MIME_TYPE);
+    expect(response.headers.get("cache-control")).toBe("private, no-store");
+    expect(response.headers.get("x-content-type-options")).toBe("nosniff");
+    expect(new Uint8Array(await response.arrayBuffer())).toEqual(
+      new Uint8Array(bytes),
+    );
+    await expectOneContentRow(file.entityId, {
+      action: "access",
+      metadata: { format: "cades", fieldId: file.fieldId },
+    });
+  });
+
+  test("reads a stored generic-MIME signed file for the agent", async () => {
+    const content = "Clausola terza";
+    const { fieldId, entityId, entityVersionId } = await seedStored(
+      {
+        fileName: "contratto.txt.p7m",
+        mimeType: "application/octet-stream",
+        pdfFileId: null,
+      },
+      await wrapP7m(new TextEncoder().encode(content)),
+    );
+    await testDb
+      .update(entities)
+      .set({ currentVersionId: entityVersionId })
+      .where(eq(entities.id, entityId));
+    const read = await LEGAL_FILE_READERS.cades({
+      fieldId,
+      scopedDb: scopedDbA(),
+      workspaceId: ids.wsA1,
+      organizationId: ids.orgA,
+      recordAuditEvent: recorderA(),
+      purpose: "agent",
+    });
+    expect(read.unwrap().text).toContain(content);
+    expect(read.unwrap().text).toContain("unverified");
+  });
+
+  test("both endpoints refuse files from another matter", async () => {
+    const { fieldId } = await seedFile(
+      {
+        fileName: "contratto.p7m",
+        mimeType: CADES_FILE_FORMAT.mimeType,
+        pdfFileId: null,
+      },
+      "b",
+    );
+    const context = legalFileContext(fieldId, scopedDbA());
+    expect(answeredStatus(await cadesContentEndpoint.handler(context))).toBe(
+      404,
+    );
+    expect(answeredStatus(await cadesPreviewEndpoint.handler(context))).toBe(
+      404,
+    );
+  });
+
+  test.each([
+    { scenario: cadesContentScalingScenario, seed: seedCades },
+    { scenario: cadesPreviewScalingScenario, seed: seedCades },
+    { scenario: asicPreviewScalingScenario, seed: seedAsic },
+  ])(
+    "$scenario.name cost stays bounded as a matter grows",
+    async ({ scenario: { measure }, seed }) => {
+      const { fieldId } = await seed();
+      const context = legalFileContext(fieldId, scopedDbA());
+      const small = await measure(context);
+      const unrelated = Array.from({ length: 80 }, () => ({
+        id: createSafeId<"entity">(),
+        name: "Docket entry",
+        kind: "document" as const,
+        workspaceId: ids.wsA1,
+      }));
+      seededEntityIds.push(...unrelated.map(({ id }) => id));
+      await testDb.insert(entities).values(unrelated);
+      const large = await measure(context);
+      expect(small.statements).toBeGreaterThan(0);
+      expect(small.rows).toBe(1);
+      expect(readScalingViolations({ small, large })).toEqual([]);
+    },
+  );
+});
+
+const readDataBox = async (fieldId: SafeId<"field">, scopedDb: ScopedDb) =>
+  await readDataBoxFile({
+    fieldId,
+    scopedDb,
+    workspaceId: ids.wsA1,
+    organizationId: ids.orgA,
+    recordAuditEvent: recorderA(),
+  });
+
+describe("data-box file preview", () => {
+  test("opens an unfiled source by field and audits the read", async () => {
+    const file = await seedDataBox();
+    const response = (await readDataBox(file.fieldId, scopedDbA())).unwrap();
+    expect(response).toMatchObject({
+      kind: "message",
+      annotation: FIXTURE_MESSAGE.annotation,
+      files: FIXTURE_MESSAGE.files.map(({ name }) => ({
+        fileName: name,
+        entityId: null,
+      })),
+      envelope: {
+        messageId: FIXTURE_MESSAGE.messageId,
+        seal: { status: "unverified" },
+      },
+    });
+    expect(response.text).toContain(FIXTURE_MESSAGE.annotation);
+    await expectOneContentRow(file.entityId, {
+      action: "access",
+      metadata: { fieldId: file.fieldId, format: "data-box" },
+    });
+  });
+
+  test("links a filed attachment only while its current file matches the embedded bytes", async () => {
+    const bytes = await zfoFile();
+    const message = parseDataBoxMessage(bytes).unwrap();
+    const identity = dataBoxPayloadIdentity(message);
+    const attachment = message.files.at(0);
+    expect(attachment).toBeDefined();
+    if (!attachment) {
+      return;
+    }
+    const source = await seedStored(
+      {
+        fileName: "zprava.zfo",
+        mimeType: DATA_BOX_MESSAGE_MIME_TYPE,
+        pdfFileId: null,
+      },
+      bytes,
+    );
+    const filed = await seedFile({
+      fileName: attachment.fileName,
+      mimeType: attachment.mimeType,
+      pdfFileId: null,
+      sha256Hex: sha256Hex(attachment.bytes),
+    });
+    const correspondenceId = createSafeId<"correspondence">();
+    try {
+      await testDb
+        .update(entities)
+        .set({ currentVersionId: filed.entityVersionId })
+        .where(eq(entities.id, filed.entityId));
+      // Inserting an uploaded correspondence registers its source via the
+      // same trigger used when the upload is filed.
+      await testDb.insert(correspondence).values({
+        id: correspondenceId,
+        organizationId: ids.orgA,
+        workspaceId: ids.wsA1,
+        channel: "data_box",
+        dataBox: message.envelope,
+        direction: null,
+        source: "upload",
+        sourceEntityId: source.entityId,
+        originalSignature: { status: "unverified" },
+        messageId: message.envelope.messageId,
+        contentHash: identity.contentHash,
+        dedupKey: correspondenceId.replaceAll("-", "").repeat(2),
+        from: { address: message.envelope.sender.boxId, name: null },
+        to: [{ address: message.envelope.recipient.boxId, name: null }],
+        cc: [],
+        subject: message.annotation,
+        receivedAt: new Date("2026-10-14T07:12:33.120Z"),
+        references: [],
+        bodyText: "",
+      });
+      await testDb.insert(correspondenceAttachments).values({
+        organizationId: ids.orgA,
+        workspaceId: ids.wsA1,
+        correspondenceId,
+        entityId: filed.entityId,
+        ordinal: 0,
+        filename: attachment.fileName,
+        mediaType: attachment.mimeType,
+        byteSize: attachment.bytes.byteLength,
+        scanVerdict: "clean",
+      });
+
+      const opened = (await readDataBox(source.fieldId, scopedDbA())).unwrap();
+      expect(opened).toMatchObject({
+        kind: "message",
+        files: message.files.map(({ fileName }, index) => ({
+          fileName,
+          entityId: index === 0 ? filed.entityId : null,
+        })),
+      });
+
+      const editedVersionId = createSafeId<"entityVersion">();
+      const editedBytes = await pdfBytes();
+      const editedHash = sha256Hex(editedBytes);
+      expect(editedHash).not.toBe(sha256Hex(attachment.bytes));
+      await testDb.insert(entityVersions).values({
+        id: editedVersionId,
+        workspaceId: ids.wsA1,
+        entityId: filed.entityId,
+        versionNumber: 2,
+      });
+      await testDb.insert(fields).values({
+        id: createSafeId<"field">(),
+        workspaceId: ids.wsA1,
+        propertyId: ids.filePropertyA1,
+        entityVersionId: editedVersionId,
+        content: {
+          version: 1,
+          type: "file",
+          id: Bun.randomUUIDv7(),
+          fileName: attachment.fileName,
+          mimeType: attachment.mimeType,
+          sizeBytes: editedBytes.byteLength,
+          encrypted: false,
+          sha256Hex: editedHash,
+          pdfFileId: null,
+        },
+      });
+      await testDb
+        .update(entities)
+        .set({ currentVersionId: editedVersionId })
+        .where(eq(entities.id, filed.entityId));
+
+      const edited = (await readDataBox(source.fieldId, scopedDbA())).unwrap();
+      expect(edited).toMatchObject({
+        kind: "message",
+        files: message.files.map(({ fileName }) => ({
+          fileName,
+          entityId: null,
+        })),
+      });
+    } finally {
+      await testDb
+        .update(entities)
+        .set({ currentVersionId: null })
+        .where(eq(entities.id, filed.entityId));
+      await testDb
+        .delete(correspondence)
+        .where(eq(correspondence.id, correspondenceId));
+    }
+  });
+
+  test("a file in another matter cannot be previewed", async () => {
+    const file = await seedFile(
+      {
+        fileName: "jiná.zfo",
+        mimeType: DATA_BOX_MESSAGE_MIME_TYPE,
+        pdfFileId: null,
+      },
+      "b",
+    );
+    const result = await readDataBox(file.fieldId, scopedDbA());
+    expect(result.isErr() ? result.error.status : null).toBe(404);
+  });
+
+  test("preview query cost stays bounded as the matter grows", async () => {
+    const file = await seedDataBox();
+    const measure = async (added: number) => {
+      const newRows = Array.from({ length: added }, () => ({
+        id: createSafeId<"entity">(),
+        name: "Docket entry",
+        kind: "document" as const,
+        workspaceId: ids.wsA1,
+      }));
+      seededEntityIds.push(...newRows.map(({ id }) => id));
+      await testDb.insert(entities).values(newRows);
+      return await dataBoxPreviewScalingScenario.measure(
+        createTestHandlerContext<
+          Parameters<typeof dataBoxPreviewScalingScenario.definition.handler>[0]
+        >({
+          workspaceId: ids.wsA1,
+          session: { activeOrganizationId: ids.orgA },
+          user: { id: ids.userA1 },
+          audit: recorderA(),
+          scopedDb: scopedDbA(),
+          safeDb: createSafeDb(testDb, [ids.wsA1], ids.orgA, ids.userA1),
+          params: { workspaceId: ids.wsA1, fieldId: file.fieldId },
+        }),
+      );
+    };
+    const small = await measure(10);
+    const large = await measure(190);
+    expect(small.statements).toBeGreaterThan(0);
+    expect(small.rows).toBe(FIXTURE_MESSAGE.files.length);
+    expect(readScalingViolations({ small, large })).toEqual([]);
+  });
+});
+
 const seedStampableDocx = async () => {
   const seeded = await seedStored(
     { fileName: "smlouva.docx", mimeType: DOCX_MIME_TYPE, pdfFileId: null },
@@ -857,6 +1582,38 @@ const answeredStatus = (answer: unknown): number => {
 };
 
 const STREAMED_PATHS: readonly StreamedPath[] = [
+  {
+    name: "an ASiC inventory",
+    seed: seedAsic,
+    read: async ({ fieldId }, scopedDb) =>
+      answeredStatus(
+        await asicPreviewEndpoint.handler(legalFileContext(fieldId, scopedDb)),
+      ),
+  },
+  {
+    name: "a signed document preview",
+    seed: seedCades,
+    read: async ({ fieldId }, scopedDb) =>
+      answeredStatus(
+        await cadesPreviewEndpoint.handler(legalFileContext(fieldId, scopedDb)),
+      ),
+  },
+  {
+    name: "a signed document's PDF",
+    seed: seedCades,
+    read: async ({ fieldId }, scopedDb) =>
+      answeredStatus(
+        await cadesContentEndpoint.handler(legalFileContext(fieldId, scopedDb)),
+      ),
+  },
+  {
+    name: "a data-box preview",
+    seed: seedDataBox,
+    read: async ({ fieldId }, scopedDb) => {
+      const result = await readDataBox(fieldId, scopedDb);
+      return result.isErr() ? result.error.status : 200;
+    },
+  },
   {
     name: "an email preview",
     seed: seedEmail,

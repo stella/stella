@@ -9,6 +9,7 @@ import { blocksNestedUnder } from "./provision-preview.js";
 import {
   anchorWithin,
   E_SBIRKA_ANCHORS,
+  MAGYAR_KOZLONY_ANCHORS,
   SLOV_LEX_ANCHORS,
 } from "./statute-anchor-scheme.js";
 import type { StatuteAnchorScheme } from "./statute-anchor-scheme.js";
@@ -81,6 +82,23 @@ const GRAMMARS = [
     separator: ".",
     // Every item opens one more level, up to the deepest indent drawn.
     expectedDepth: (kinds) => Math.min(kinds.length, 4),
+  },
+  {
+    name: "Magyar Közlöny",
+    scheme: MAGYAR_KOZLONY_ANCHORS,
+    section: "sz",
+    subsection: "bek",
+    owned: ["szoveg_1", "table_1"],
+    kinds: [
+      { kind: "pont", value: fc.oneof(letter, number) },
+      { kind: "alpont", value: fc.constantFrom("aa", "ab", "ba", "bb") },
+    ],
+    segment: (kind, value) => `${kind}_${value}`,
+    separator: "-",
+    // A point in a point sits two levels in, and so does one a section or
+    // subsection opens directly.
+    expectedDepth: (kinds) =>
+      Math.min(kinds.length + (kinds.at(0) === "alpont" ? 1 : 0), 4),
   },
 ] as const satisfies readonly GrammarCase[];
 

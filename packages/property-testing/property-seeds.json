@@ -196,6 +196,14 @@
       "date": "2026-10-05"
     }
   ],
+  "packages/api-contract/src/decision-docket-reference.test.ts::Czech zero senate is absent": [
+    {
+      "seed": 20260901,
+      "path": "0:0:0:0:0",
+      "note": "Regression coverage",
+      "date": "2026-11-20"
+    }
+  ],
   "packages/legal-atlas/src/provision-citation-resolve.property.test.ts::names a listed short title's act in every head form and enclosure": [
     {
       "seed": 20260901,
