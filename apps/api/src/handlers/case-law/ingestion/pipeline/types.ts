@@ -156,6 +156,8 @@ export type ProcessDecisionAttemptOptions = {
   heldDecisionAttachment: HeldDecisionAttachment<string> | null;
   retention: SourceRetention;
   input: IngestionResult;
+  /** An exact caller-provided failure identity, independent of host identity. */
+  recordIdentity?: string | undefined;
   judges: CaseLawJudgeDependencies;
   sourceId: SafeId<"caseLawSource">;
   scopedDb: ScopedDb;

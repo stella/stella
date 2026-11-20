@@ -2360,6 +2360,11 @@
       "accepted": "Rakendatud",
       "rejected": "Tagasi lükatud"
     },
+    "switcher": {
+      "allChats": "Kõik vestlused",
+      "searchPlaceholder": "Leia vestlus…",
+      "trigger": "Vaheta vestlust"
+    },
     "tableChart": {
       "bar": "Tulpdiagramm",
       "kind": "Diagrammi tüüp",

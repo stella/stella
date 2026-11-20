@@ -2360,6 +2360,11 @@
       "accepted": "Zastosowano",
       "rejected": "Odrzucono"
     },
+    "switcher": {
+      "allChats": "Wszystkie czaty",
+      "searchPlaceholder": "Znajdź czat…",
+      "trigger": "Przełącz czat"
+    },
     "tableChart": {
       "bar": "Słupkowy",
       "kind": "Typ wykresu",

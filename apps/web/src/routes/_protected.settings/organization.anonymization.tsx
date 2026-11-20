@@ -3,7 +3,7 @@ import { useTranslations } from "use-intl";
 
 import { pageTitle } from "@/lib/page-title";
 import { routePresentation } from "@/routes/-route-presentation";
-import { SettingsPageHeader } from "@/routes/_protected.settings/-components/settings-page-header";
+import { SettingsPageHeader } from "@/routes/_protected.settings/-components/settings-page-header.pending";
 import { AnonymizationDenyListCard } from "@/routes/_protected.settings/organization/-components/organization/anonymization-deny-list-card";
 
 export const Route = createFileRoute(

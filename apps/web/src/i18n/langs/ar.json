@@ -2360,6 +2360,11 @@
       "accepted": "مُطبَّق",
       "rejected": "مرفوض"
     },
+    "switcher": {
+      "allChats": "كل الدردشات",
+      "searchPlaceholder": "ابحث عن دردشة…",
+      "trigger": "تبديل الدردشة"
+    },
     "tableChart": {
       "bar": "أعمدة",
       "kind": "نوع الرسم البياني",

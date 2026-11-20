@@ -166,6 +166,9 @@ export const ENUM_COLUMN_ROLES = {
   case_law_research_answers: {
     failure_reason: ATTRIBUTE,
   },
+  case_law_ingestion_failure_evidence: {
+    identity_kind: ATTRIBUTE,
+  },
   case_law_sources: {
     ingestion_lease_purpose: ATTRIBUTE,
   },

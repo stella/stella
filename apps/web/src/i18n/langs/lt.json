@@ -2360,6 +2360,11 @@
       "accepted": "Pritaikyta",
       "rejected": "Atmesta"
     },
+    "switcher": {
+      "allChats": "Visi pokalbiai",
+      "searchPlaceholder": "Rasti pokalbį…",
+      "trigger": "Pakeisti pokalbį"
+    },
     "tableChart": {
       "bar": "Stulpelinė",
       "kind": "Diagramos tipas",

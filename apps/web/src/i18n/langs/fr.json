@@ -2360,6 +2360,11 @@
       "accepted": "Appliqué",
       "rejected": "Rejeté"
     },
+    "switcher": {
+      "allChats": "Toutes les conversations",
+      "searchPlaceholder": "Rechercher une conversation…",
+      "trigger": "Changer de conversation"
+    },
     "tableChart": {
       "bar": "Barres",
       "kind": "Type de graphique",

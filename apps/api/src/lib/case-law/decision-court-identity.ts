@@ -86,6 +86,14 @@ export class DecisionCourtIdentityError extends TaggedError(
   }
 }
 
+/** An attaching record cannot create a host until its court is recognized. */
+export class DecisionCourtUnrecognizedError extends TaggedError(
+  "court_unrecognized",
+)<{
+  message: string;
+  cause: DecisionCourtIdentityError;
+}> {}
+
 type DecisionCourtIdentityInput = {
   country: string;
   court: string;

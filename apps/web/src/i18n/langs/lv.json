@@ -2360,6 +2360,11 @@
       "accepted": "Lietots",
       "rejected": "Noraidīts"
     },
+    "switcher": {
+      "allChats": "Visas tērzēšanas",
+      "searchPlaceholder": "Atrast tērzēšanu…",
+      "trigger": "Mainīt tērzēšanu"
+    },
     "tableChart": {
       "bar": "Stabiņu",
       "kind": "Diagrammas veids",
