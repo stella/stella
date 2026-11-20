@@ -262,6 +262,7 @@ export const testDesktopDictationGate = ({
       answer: () => {
         throw new HandlerError({
           status: 502,
+          code: "internal_error",
           message: `provider echoed ${transcript}`,
         });
       },
