@@ -23,7 +23,7 @@ const listPage = async (
   unwrapApiResponse(
     await api["organization-settings"]["dictation-vocabulary"].get({
       query: {
-        limit: String(PAGE_SIZE),
+        limit: PAGE_SIZE,
         ...(search.length === 0 ? {} : { search }),
         ...(cursor === undefined ? {} : { cursor }),
       },

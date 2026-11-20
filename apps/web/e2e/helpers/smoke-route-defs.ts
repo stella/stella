@@ -115,6 +115,12 @@ export const SMOKE_ROUTE_DEFS: readonly SmokeRouteDef[] = [
       to: "/settings/organization/anonymization",
     },
   }),
+  staticRoute("/admin/dictation", {
+    expectation: {
+      kind: "redirectsTo",
+      to: "/settings/organization/dictation",
+    },
+  }),
   staticRoute("/admin/audit-logs", {
     expectation: {
       kind: "redirectsTo",

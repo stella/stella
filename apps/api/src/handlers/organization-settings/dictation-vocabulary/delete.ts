@@ -9,6 +9,7 @@ import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { resourceIdSchema, uniqueItems } from "@/api/lib/custom-schema";
+import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 
 import { countOrganizationTerms } from "./terms";
 
@@ -69,5 +70,11 @@ const deleteDictationVocabulary = createSafeRootHandler(
     return Result.ok(outcome);
   },
 );
+
+declareAggregateMutation(deleteDictationVocabulary, {
+  type: "independent",
+  reason:
+    "Deletes the organization's own dictation words by id in one statement; the capacity lock bounds only adds, and no matter or document aggregate changes.",
+});
 
 export default deleteDictationVocabulary;

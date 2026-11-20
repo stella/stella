@@ -249,6 +249,8 @@ const LEGAL_HOLD_ORGANIZATION_LOCK_NAMESPACE = 19_054;
 const BILLING_DRAFT_SETTINGS_LOCK_NAMESPACE = 0x0f_10_cc_b6;
 // The corpus projection offline request aggregate's namespace.
 const OFFLINE_REQUEST = 0x0f_10_cc_b7;
+// The dictation words capacity aggregate's namespace.
+const DICT_NS = 0x0f_10_cc_b8;
 
 const chatOwnerStoredContentEgressKey = ({
   organizationId,
@@ -1454,14 +1456,6 @@ const organizationKeyed = ({
   second: sql`hashtext(${id.organizationId})`,
   order: [aggregate, id.organizationId],
 });
-/** An organization's capacity lock under a fixed, literal namespace name. */
-const organizationCapacity = (
-  name: string,
-  options: { aggregate: AggregateName; id: { organizationId: string } },
-) => ({
-  first: sql`hashtext(${sql.raw(`'${name}'`)})`,
-  ...organizationKeyed(options),
-});
 const advisoryResource = (options: AdvisoryIdentityOptions) => {
   switch (options.aggregate) {
     case "organizationObjectIntent":
@@ -1537,7 +1531,7 @@ const advisoryResource = (options: AdvisoryIdentityOptions) => {
         ...organizationKeyed(options),
       };
     case "dictationVocabularyCapacity":
-      return organizationCapacity("dictation-vocabulary-capacity", options);
+      return { first: sql`${DICT_NS}::integer`, ...organizationKeyed(options) };
     case "chatToolGrants":
       return {
         first: sql`hashtext('chat.tool-grants')`,

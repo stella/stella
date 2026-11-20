@@ -21,9 +21,40 @@ import {
   encodePaginationCursor,
   isUuidPaginationCursorPart,
 } from "@/api/lib/pagination";
+import type {
+  UnbackedProjectionKeys,
+  UnprojectedColumns,
+} from "@/api/lib/projection-totality";
 import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 
 import { countOrganizationTerms } from "./terms";
+
+type TermRow = typeof dictationVocabularyTerms.$inferSelect;
+
+const TERM_COLUMNS = {
+  id: dictationVocabularyTerms.id,
+  term: dictationVocabularyTerms.term,
+  termKey: dictationVocabularyTerms.termKey,
+  createdAt: dictationVocabularyTerms.createdAt,
+};
+
+const UNPROJECTED_TERM_COLUMNS = [
+  "organizationId", // The active organization scopes the list.
+  "createdBy", // Attribution stays in the audit trail.
+] as const satisfies readonly (keyof TermRow)[];
+
+type MissingTermColumn = UnprojectedColumns<
+  TermRow,
+  typeof TERM_COLUMNS,
+  (typeof UNPROJECTED_TERM_COLUMNS)[number]
+>;
+type UnexpectedTermColumn = UnbackedProjectionKeys<
+  TermRow,
+  typeof TERM_COLUMNS,
+  (typeof UNPROJECTED_TERM_COLUMNS)[number]
+>;
+true satisfies MissingTermColumn extends never ? true : never;
+true satisfies UnexpectedTermColumn extends never ? true : never;
 
 const PAGE_SIZE_DEFAULT = 100;
 const PAGE_SIZE_MAX = 200;
@@ -103,12 +134,7 @@ const listDictationVocabulary = createSafeRootHandler(
           organizationId,
         );
         const rows = await tx
-          .select({
-            id: dictationVocabularyTerms.id,
-            term: dictationVocabularyTerms.term,
-            key: dictationVocabularyTerms.termKey,
-            createdAt: dictationVocabularyTerms.createdAt,
-          })
+          .select(TERM_COLUMNS)
           .from(dictationVocabularyTerms)
           .where(
             and(
@@ -140,7 +166,7 @@ const listDictationVocabulary = createSafeRootHandler(
     const page = createCursorPage({
       rows: listed.rows,
       limit,
-      cursorForItem: ({ key, id }) => encodePaginationCursor([key, id]),
+      cursorForItem: ({ termKey, id }) => encodePaginationCursor([termKey, id]),
     });
     return Result.ok({
       items: page.items.map(({ id, term, createdAt }) => ({

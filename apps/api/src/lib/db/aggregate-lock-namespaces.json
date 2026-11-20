@@ -12,7 +12,7 @@
   "definitionCap": "0x0f10ccab::integer",
   "desktopBatch": "0x0f10ccac::integer",
   "desktopRunnerCapacity": "hashtext('desktop-runner-capacity')",
-  "dictationVocabularyCapacity": "hashtext('dictation-vocabulary-capacity')",
+  "dictationVocabularyCapacity": "0x0f10ccb8::integer",
   "expenseCapacity": "hashtext('expense-capacity')",
   "fileComparisonCapacity": "0x0f10ccb2::integer",
   "invoiceSendCapacity": "hashtext('invoice-send-capacity')",
