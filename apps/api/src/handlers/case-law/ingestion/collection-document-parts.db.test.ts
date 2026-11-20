@@ -547,7 +547,8 @@ test("approved aliases route repeated parts but changed identity preserves the h
     canonicalDecisionId: canonicalId,
   });
   await f.ingest(input);
-  expect((await f.parts()).at(0)?.hostDecisionId).toBe(canonicalId);
+  // Identical replay retains the original immutable snapshot owner; the approved alias resolves it.
+  expect((await f.parts()).at(0)?.hostDecisionId).toBe(original.id);
   const parts = await f.parts();
   const canonical = await db
     .select()
