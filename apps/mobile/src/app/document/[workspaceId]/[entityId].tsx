@@ -575,17 +575,13 @@ const LegalFilePreview = ({
     const requestFailure = isOffline(error)
       ? "failure.offline"
       : "failure.failed";
-    const unreadableMessage = (() => {
-      switch (viewer) {
-        case "dataBox":
-          return t("failure.dataBoxUnreadable");
-        case "structured-document":
-          return structuredDocument("noReadableContent");
-        case "asic":
-        case "cades":
-          return signedFile("unreadable");
-      }
-    })();
+    const unreadableMessages = {
+      dataBox: t("failure.dataBoxUnreadable"),
+      "structured-document": structuredDocument("noReadableContent"),
+      asic: signedFile("unreadable"),
+      cades: signedFile("unreadable"),
+    } satisfies Record<typeof viewer, string>;
+    const unreadableMessage = unreadableMessages[viewer];
     return (
       <EmptyCard
         description={unreadable ? unreadableMessage : t(requestFailure)}
