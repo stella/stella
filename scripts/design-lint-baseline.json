@@ -457,8 +457,7 @@
   },
   "no-unbounded-response-body/no-unbounded-response-body": {
     "apps/api/src/handlers/case-law/ingestion/adapters/cz-us.ts": 6,
-    "apps/api/src/handlers/case-law/ingestion/adapters/eu-ecj.ts": 3,
-    "apps/api/src/lib/files/gotenberg.ts": 1
+    "apps/api/src/handlers/case-law/ingestion/adapters/eu-ecj.ts": 3
   },
   "no-computed-key-record-assignment/no-computed-key-record-assignment": {
     "apps/api/scripts/ai-provider-canary-chat-toolsets.ts": 1,
@@ -781,7 +780,7 @@
     "apps/api/src/handlers/workspaces/members/remove.ts": 2,
     "apps/api/src/handlers/workspaces/unarchive.ts": 1,
     "apps/api/src/handlers/workspaces/update.ts": 1,
-    "apps/api/src/lib/account-deletion-effect-store.ts": 6,
+    "apps/api/src/lib/account-deletion-effect-store.ts": 5,
     "apps/api/src/lib/account-deletion-steps.ts": 3,
     "apps/api/src/lib/agent-auth.ts": 3,
     "apps/api/src/lib/auth-artifacts.ts": 1,
@@ -849,7 +848,6 @@
     "apps/api/src/lib/work-obligations/settle-work-obligation.ts": 1,
     "apps/api/src/lib/workflow/materialize-playbook-run.ts": 1,
     "apps/api/src/lib/workspace-deletion.ts": 1,
-    "apps/api/src/mcp/file-comparison-run.ts": 1,
     "apps/api/src/mcp/template-persistence.ts": 1,
     "apps/api/src/scripts/backfill-citation-keys.ts": 1,
     "apps/api/src/scripts/backfill-corpus-storage.ts": 1,

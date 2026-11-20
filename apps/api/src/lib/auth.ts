@@ -308,7 +308,6 @@ import {
   liveSessionPredicate,
 } from "@/api/lib/db/session-liveness";
 import { getDemoAccountOtpOverride } from "@/api/lib/demo-account-otp";
-import { detectedCountryFromRequestContext } from "@/api/lib/detected-country";
 import { DEV_INSPECTOR_ORIGINS, frontendOrigins } from "@/api/lib/dev-origins";
 import { stashDevOtp } from "@/api/lib/dev-otp-store";
 import { ensureDefaultDocumentTypes } from "@/api/lib/document-types/defaults";
@@ -2440,11 +2439,20 @@ export const createAuth = (
             if (Result.isError(data)) {
               throw data.error;
             }
-            const detectedCountry = detectedCountryFromRequestContext(ctx);
+            // Suggests practice jurisdictions during onboarding; recorded only
+            // when the request proved it came through CloudFront.
+            const viewerLocation = readViewerLocation({
+              headers: ctx?.request?.headers ?? ctx?.headers,
+              clientAddress: sealedRequestClientAddress(),
+            });
             return await Promise.resolve({
-              data: detectedCountry
-                ? { ...data.value, detectedCountry }
-                : data.value,
+              data:
+                viewerLocation.type === "known"
+                  ? {
+                      ...data.value,
+                      detectedCountry: viewerLocation.countryCode,
+                    }
+                  : data.value,
             });
           },
           // Creating the account where the professional-use statement is
@@ -3001,7 +3009,7 @@ export const createAuth = (
                   device,
                   ipAddress,
                   location: readViewerLocation({
-                    request: ctx.request,
+                    headers: ctx.request?.headers,
                     clientAddress: sealedRequestClientAddress(),
                   }),
                   time: formattedTime,

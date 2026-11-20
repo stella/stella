@@ -833,7 +833,7 @@ mechanics, and similar), not gaps in coverage.
 | account_lifecycle | 6 |
 | agent_autonomy_ceiling | 1 |
 | assistant_chat | 28 |
-| auth_plumbing | 44 |
+| auth_plumbing | 45 |
 | billing_ui | 1 |
 | chat_thread_ui | 31 |
 | compound_consent | 1 |
@@ -852,5 +852,5 @@ mechanics, and similar), not gaps in coverage.
 | search_ui | 22 |
 | session_token_exchange | 23 |
 | ui_navigation_state | 14 |
-| upload_mechanics | 29 |
+| upload_mechanics | 30 |
 | url_preview | 2 |

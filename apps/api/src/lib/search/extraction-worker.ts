@@ -351,6 +351,8 @@ const extractDataBoxText = async ({
         bytes: file.bytes,
         fileName: sanitizeFilename(file.fileName),
         declaredMimeType: mimeType,
+        // This worker runs outside the API's work pools, under its spawn timeout.
+        admission: "subprocess",
       });
       if (scanned.isErr()) {
         return Result.err(scanned.error);

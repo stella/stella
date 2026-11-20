@@ -1,5 +1,7 @@
 import { Result } from "better-result";
 import { beforeEach, expect, mock, test } from "bun:test";
+import type { SQL } from "drizzle-orm";
+import { PgDialect } from "drizzle-orm/pg-core";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
 
@@ -9,6 +11,7 @@ import { BUFFER_OBJECT_CLEANUP_INTENT_STATUS } from "@/api/db/schema";
 import { toSafeId } from "@/api/lib/branded-types";
 import { OrganizationFileUsageError } from "@/api/lib/files/organization-file-usage";
 import { isRecord } from "@/api/lib/type-guards";
+import { aggregateExecutionRows } from "@/api/tests/fixtures/aggregate-lock-order";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 const s3DeleteMock = mock(
@@ -96,6 +99,37 @@ beforeEach(() => {
   s3DeleteMock.mockResolvedValue(undefined);
 });
 
+const legacyFenceLocks: string[] = [];
+beforeEach(() => {
+  legacyFenceLocks.length = 0;
+});
+
+/** Advisory lock statements return the physical key the lock owner checks. */
+const advisoryLockRows = (statement: SQL) => {
+  const query = new PgDialect().sqlToQuery(statement);
+  // The previous build's one-key fence, still taken during a rolling deploy:
+  // it rides in the registered lock's statement, evaluated after that lock.
+  if (query.params.includes(`buffer-object:${organizationId}`)) {
+    const legacy =
+      /(pg_advisory_xact_lock(?:_shared)?)\(hashtext\(\$\d+\)\) AS alongside/u.exec(
+        query.sql,
+      );
+    const afterRegistered =
+      query.sql.includes("AS key1") &&
+      query.sql.indexOf("AS acquired") < query.sql.indexOf("AS alongside");
+    legacyFenceLocks.push(
+      legacy?.[1] !== undefined && afterRegistered
+        ? `${legacy[1]} after the registered lock`
+        : query.sql,
+    );
+    return aggregateExecutionRows(statement);
+  }
+  if (query.sql.includes("AS key1")) {
+    return aggregateExecutionRows(statement);
+  }
+  return null;
+};
+
 test("share-locks an active workspace before reserving a writer intent", async () => {
   const locks: unknown[] = [];
   const tx = asTestRaw<Transaction>({
@@ -146,12 +180,18 @@ test("rejects a writer reservation after workspace deletion seals", async () => 
 });
 
 test("reserves multi-workspace ownership under one ordered lock", async () => {
-  let advisoryLocks = 0;
-  const locks: unknown[] = [];
+  let lockQueries = 0;
+  const matterLocks: unknown[] = [];
   const insertedRows: unknown[] = [];
   const tx = asTestRaw<Transaction>({
-    execute: async () => {
-      advisoryLocks += 1;
+    execute: async (statement: SQL) => {
+      const advisory = advisoryLockRows(statement);
+      if (advisory !== null) {
+        return advisory;
+      }
+
+      lockQueries += 1;
+      return [{ id: workspaceId }, { id: otherWorkspaceId }];
     },
     insert: () => ({
       values: async (rows: unknown[]) => {
@@ -161,16 +201,10 @@ test("reserves multi-workspace ownership under one ordered lock", async () => {
     select: () => ({
       from: () => ({
         where: () => ({
-          limit: () => ({
-            for: async (strength: unknown) => {
-              locks.push(strength);
-              return [{ id: organizationId }];
-            },
-          }),
           orderBy: () => ({
             limit: () => ({
               for: async (strength: unknown) => {
-                locks.push(strength);
+                matterLocks.push(strength);
                 return [
                   { id: workspaceId, status: "active" },
                   { id: otherWorkspaceId, status: "active" },
@@ -200,8 +234,13 @@ test("reserves multi-workspace ownership under one ordered lock", async () => {
   if (Result.isError(result)) {
     throw result.error;
   }
-  expect(advisoryLocks).toBe(1);
-  expect(locks).toEqual(["share"]);
+  // The organization fence is advisory and the matters are share-locked in
+  // one ordered read.
+  expect(lockQueries).toBe(0);
+  expect(legacyFenceLocks).toEqual([
+    "pg_advisory_xact_lock_shared after the registered lock",
+  ]);
+  expect(matterLocks).toEqual(["share"]);
   expect(insertedRows).toEqual([
     expect.objectContaining({ workspaceId }),
     expect.objectContaining({ workspaceId: otherWorkspaceId }),
@@ -214,8 +253,13 @@ test("reserves several objects in one transaction, each under every owner", asyn
   let workspaceReads = 0;
   const inserts: unknown[][] = [];
   const tx = asTestRaw<Transaction>({
-    execute: async () => {
+    execute: async (statement: SQL) => {
+      const advisory = advisoryLockRows(statement);
+      if (advisory === null) {
+        throw new Error("Unexpected statement while reserving intents");
+      }
       advisoryLocks += 1;
+      return advisory;
     },
     insert: () => ({
       values: async (rows: unknown[]) => {
@@ -262,12 +306,16 @@ test("reserves several objects in one transaction, each under every owner", asyn
   if (Result.isError(result)) {
     throw result.error;
   }
-  // One transaction, one lock, one check and one insert for both objects.
+  // One transaction, one organization fence statement (the registered lock
+  // and the previous build's key), one check and one insert for both objects.
   expect({ transactions, advisoryLocks, workspaceReads }).toEqual({
     transactions: 1,
     advisoryLocks: 1,
     workspaceReads: 1,
   });
+  expect(legacyFenceLocks).toEqual([
+    "pg_advisory_xact_lock_shared after the registered lock",
+  ]);
   expect(inserts).toHaveLength(1);
   const rows = inserts[0] ?? [];
   expect(rows).toEqual([
@@ -292,11 +340,16 @@ test("reserves several objects in one transaction, each under every owner", asyn
 });
 
 test("reserves organization-scoped ownership without inventing a matter", async () => {
-  let advisoryLocks = 0;
+  let lockQueries = 0;
   const insertedRows: unknown[] = [];
   const tx = asTestRaw<Transaction>({
-    execute: async () => {
-      advisoryLocks += 1;
+    execute: async (statement: SQL) => {
+      const advisory = advisoryLockRows(statement);
+      if (advisory !== null) {
+        return advisory;
+      }
+      lockQueries += 1;
+      return [{ id: organizationId }];
     },
     insert: () => ({
       values: async (rows: unknown[]) => {
@@ -320,16 +373,25 @@ test("reserves organization-scoped ownership without inventing a matter", async 
   });
 
   expect(result.status).toBe("ok");
-  expect(advisoryLocks).toBe(1);
+  // Organization-scoped ownership takes only the advisory fence.
+  expect(lockQueries).toBe(0);
   expect(insertedRows).toEqual([
     expect.objectContaining({ workspaceId: null }),
   ]);
 });
 
 test("reserves chat ownership for archived scope while deletion stays fenced", async () => {
+  let lockQueries = 0;
   const insertedRows: unknown[] = [];
   const tx = asTestRaw<Transaction>({
-    execute: async () => undefined,
+    execute: async (statement: SQL) => {
+      const advisory = advisoryLockRows(statement);
+      if (advisory !== null) {
+        return advisory;
+      }
+      lockQueries += 1;
+      return [{ id: workspaceId }];
+    },
     insert: () => ({
       values: async (rows: unknown[]) => {
         insertedRows.push(...rows);

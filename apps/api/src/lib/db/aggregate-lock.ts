@@ -62,6 +62,7 @@ import {
   legalHolds,
   legislationDocuments,
   organizationDataExports,
+  organizationFileUsage,
   organizationSettings,
   pdfSigningSessions,
   pendingUploads,
@@ -817,6 +818,7 @@ type AuxiliaryRowIdentityOptions = Extract<
   {
     aggregate:
       | "accountDeletionRequest"
+      | "contact"
       | "organizationSettings"
       | "sharepointConnection"
       | "correspondence"
@@ -855,6 +857,13 @@ const auxiliaryRowResource = (
         scopeColumns: [],
         scopeValues: [],
       };
+    case "contact":
+      return byIdWithin(
+        "contacts",
+        options.id.id,
+        "organization_id",
+        options.id.organizationId,
+      );
     case "organizationSettings":
       return byUnscopedKey(
         "organization_settings",
@@ -930,6 +939,7 @@ const rowResource = (options: RowIdentityOptions): RowResource => {
         options.id.userId,
       );
     case "accountDeletionRequest":
+    case "contact":
     case "organizationSettings":
     case "sharepointConnection":
     case "correspondence":
@@ -1762,9 +1772,22 @@ const physicalAdvisoryKey = (row: unknown): string => {
 /** Blocking acquisitions ascend; explicit nonblocking requests retain the high-water on success. */
 export const withAggregateLock = async (
   options: AggregateLockOptions,
+): Promise<AggregateLockResult> => await acquireAggregateLock(options);
+
+/**
+ * `alongside` is one further blocking transaction-scoped advisory lock this
+ * module owns, evaluated in the same statement right after the aggregate's
+ * own lock, so a pair that is always taken together costs one round trip.
+ */
+const acquireAggregateLock = async (
+  options: AggregateLockOptions,
+  alongside?: SQL,
 ): Promise<AggregateLockResult> => {
   const { tx, aggregate } = options;
   const wait = options.wait ?? "block";
+  if (alongside !== undefined && wait !== "block") {
+    return panic("A companion advisory lock only blocks");
+  }
   const history = lockHistory(tx);
   assertAggregateLevelAvailable(history);
   if (!isRowLockOptions(options)) {
@@ -1806,6 +1829,9 @@ export const withAggregateLock = async (
     ) {
       history.aliases.set(logicalKey, key);
       retainReservation(history, lock);
+      if (alongside !== undefined) {
+        await tx.execute(sql`SELECT ${alongside}`);
+      }
       return { status: "locked" };
     }
     if (
@@ -1840,7 +1866,9 @@ export const withAggregateLock = async (
     history.status = "acquiring";
     const rows = executedRows(
       await tx.execute(
-        sql`SELECT ${resource.first} AS key1, ${resource.second} AS key2, ${statements[mode][wait]} AS acquired`,
+        alongside === undefined
+          ? sql`SELECT ${resource.first} AS key1, ${resource.second} AS key2, ${statements[mode][wait]} AS acquired`
+          : sql`SELECT ${resource.first} AS key1, ${resource.second} AS key2, ${statements[mode][wait]} AS acquired, ${alongside} AS alongside`,
       ),
     );
     const row = rows.at(0);
@@ -1859,6 +1887,9 @@ export const withAggregateLock = async (
     }
     completeAcquisition(history);
     return acquired ? { status: "locked" } : busy(aggregate);
+  }
+  if (alongside !== undefined) {
+    return panic("A companion advisory lock accompanies an advisory aggregate");
   }
   const mode = options.mode;
   const lock = rowLock(options, mode);
@@ -3346,6 +3377,43 @@ export const lockMemberAccessRow = async ({
       .for(mode)
   ).at(0);
 
+type OrganizationFileCounterLockOptions = {
+  tx: Pick<Transaction, "select">;
+  organizationIds: readonly SafeId<"organization">[];
+};
+
+/**
+ * Lock file accounting counters before their organization rows.
+ *
+ * Rolling-deploy fence: the previous release serializes every file byte and
+ * object transition on these counter rows alone (FOR UPDATE, then a foreign
+ * key share of the organization), so the organization row lock does not
+ * exclude it. Taking the counters first, in that release's order, keeps both
+ * releases on one queue without a lock cycle. Retire this once no deployed
+ * build predates organization-row file accounting. Callers insert missing
+ * counter rows first where they need one; absent rows are not returned.
+ */
+export const lockOrganizationFileCounters = async ({
+  tx,
+  organizationIds,
+}: OrganizationFileCounterLockOptions) => {
+  const ids = [...new Set(organizationIds)];
+  if (ids.length === 0) {
+    return [];
+  }
+  return await tx
+    .select({
+      organizationId: organizationFileUsage.organizationId,
+      committedBytes: organizationFileUsage.committedBytes,
+      reservedBytes: organizationFileUsage.reservedBytes,
+    })
+    .from(organizationFileUsage)
+    .where(inArray(organizationFileUsage.organizationId, ids))
+    .orderBy(asc(organizationFileUsage.organizationId))
+    .limit(ids.length)
+    .for("update");
+};
+
 /**
  * Holds off organization settings writes until the transaction ends: a first
  * settings row's foreign key needs a key-share lock on the organization row,
@@ -3536,6 +3604,46 @@ export const lockTimerMatterAccessRows = async ({
       return scope;
     default:
       return panic("Invalid timer matter lock scope");
+  }
+};
+
+/**
+ * The one-key organization object-intent lock that builds before the
+ * registered fence take alone. Holders of the registered fence take it next,
+ * in the same mode, so writers and teardown from either build exclude each
+ * other during a rolling deploy. Retire it once no running API build predates
+ * the registered fence.
+ */
+const legacyOrganizationObjectIntentLock = (
+  organizationId: SafeId<"organization">,
+  mode: AdvisoryLockMode,
+): SQL => {
+  const key = organizationObjectIntentLockKey(organizationId);
+  return mode === "shared"
+    ? sql`pg_advisory_xact_lock_shared(hashtext(${key}))`
+    : sql`pg_advisory_xact_lock(hashtext(${key}))`;
+};
+
+/**
+ * Take the organization's object-intent fence: the registered aggregate lock,
+ * then the previous build's one-key lock in the same mode, in one statement.
+ */
+export const lockOrganizationObjectIntentFence = async (
+  tx: ExecuteTransaction,
+  organizationId: SafeId<"organization">,
+  mode: AdvisoryLockMode,
+): Promise<void> => {
+  const result = await acquireAggregateLock(
+    {
+      aggregate: "organizationObjectIntent",
+      id: organizationId,
+      mode,
+      tx,
+    },
+    legacyOrganizationObjectIntentLock(organizationId, mode),
+  );
+  if (result.status !== "locked") {
+    return panic("Organization object-intent fence was not acquired");
   }
 };
 
@@ -3997,7 +4105,7 @@ export const lockLegalHoldOrganizations = async ({
  * reserving storage; a lifecycle (matter or organization teardown) takes it
  * exclusively.
  */
-export const organizationObjectIntentLockKey = (
+const organizationObjectIntentLockKey = (
   organizationId: SafeId<"organization">,
 ): string => `buffer-object:${organizationId}`;
 
@@ -4023,9 +4131,7 @@ export const lockOrganizationObjectIntentsForLifecycle = async (
   if (lifecycleLockedOrganizations.get(tx)?.has(organizationId) === true) {
     return;
   }
-  await tx.execute(
-    sql`SELECT pg_advisory_xact_lock(hashtext(${organizationObjectIntentLockKey(organizationId)}))`,
-  );
+  await lockOrganizationObjectIntentFence(tx, organizationId, "exclusive");
   noteLifecycleLock(tx, organizationId);
 };
 

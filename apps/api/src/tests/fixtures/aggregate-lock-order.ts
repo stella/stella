@@ -230,6 +230,11 @@ export const aggregateFences = () => {
       id: { id: createSafeId<"aiMemory">(), organizationId },
       mode: "update",
     },
+    contact: {
+      aggregate: "contact",
+      id: { id: createSafeId<"contact">(), organizationId },
+      mode: "key share",
+    },
     searchProjectionRepair: {
       aggregate: "searchProjectionRepair",
       id: {

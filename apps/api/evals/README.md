@@ -218,3 +218,19 @@ scorer runs each answer through the server's own acceptance (an answer that
 adds content is refused) and compares the rendered text with the case's
 expectation. The scorer unit tests use synthetic answers and prove scoring
 only; model quality stays NOT COVERED until exercised against a live model.
+
+## Recording cleanup
+
+`recording-cleanup.ts` sends the production recording cleanup prompt (one part
+of a recording's transcript in, Markdown and instructions out) to the models
+given with `--models` and prints each answer, what the server's acceptance
+check makes of it, and the sample's expected answer. It scores nothing; a
+person reads the output. The committed samples in
+`fixtures/recording-cleanup-samples.json` are synthetic. Real transcripts stay
+in a local file outside the repository, in the same shape, passed with
+`--samples`. From `apps/api`:
+
+```sh
+bun run eval:recording-cleanup -- --models claude-opus-5-5
+bun run eval:recording-cleanup -- --models claude-opus-5-5 --samples /absolute/path/private-samples.json --json /absolute/path/out.json
+```
