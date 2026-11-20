@@ -63,7 +63,6 @@ mod dictation_words;
 #[cfg(dictation)]
 mod dictation_worker;
 mod document_sessions;
-mod docx_writer;
 #[cfg(test)]
 mod e2e;
 mod feature_access;

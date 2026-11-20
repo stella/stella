@@ -189,6 +189,9 @@
     "packages/decision-reader": {
       "entry": ["src/**/*.test.{ts,tsx}"]
     },
+    "packages/docx-authoring": {
+      "entry": ["src/**/*.test.ts"]
+    },
     "packages/html": {
       "entry": ["src/load.ts", "src/**/*.test.ts"]
     },

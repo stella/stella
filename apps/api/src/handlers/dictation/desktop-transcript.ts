@@ -17,6 +17,10 @@ import {
   MAX_DESKTOP_DICTATION_TRANSCRIPT_AUDIO_BYTES,
 } from "@stll/api-contract/desktop-dictation-transcription";
 import type { DesktopFeatureId } from "@stll/api-contract/desktop-feature-access";
+import {
+  cleanedTranscriptDocx,
+  transcriptDocx,
+} from "@stll/docx-authoring/transcript";
 import { classifyFailure } from "@stll/errors";
 
 import { safeDbFromScoped } from "@/api/db/safe-db";
@@ -34,7 +38,6 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { authorizeDesktopAccount } from "@/api/lib/business-registries/desktop/auth";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
-import { markdownToStellaDocx } from "@/api/lib/docx-authoring/from-markdown";
 import {
   authorizeDocumentWriteAccess,
   documentWriteRefusalHandlerError,
@@ -56,10 +59,7 @@ import { sanitizeFilenamePreservingExtension } from "@/api/lib/sanitize-filename
 import { reservePresignedUpload } from "@/api/lib/uploads/reserve-presigned-upload";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
-import {
-  cleanedTranscriptDocx,
-  createTranscriptFolder,
-} from "./transcript-folder";
+import { createTranscriptFolder } from "./transcript-folder";
 
 // Filing a transcript belongs with dictation on the desktop: it is what the
 // member transcribed there, on this computer or with stella AI.
@@ -93,50 +93,6 @@ const desktopDictationTranscriptBodySchema = v.strictObject({
 type TranscriptBody = v.InferOutput<
   typeof desktopDictationTranscriptBodySchema
 >;
-
-/** `m:ss`, or `h:mm:ss` from an hour on, as the desktop shows it. */
-export const transcriptTimestamp = (ms: number): string => {
-  const totalSeconds = Math.max(0, Math.floor(ms / 1000));
-  const hours = Math.floor(totalSeconds / 3600);
-  const minutes = Math.floor((totalSeconds % 3600) / 60);
-  const seconds = totalSeconds % 60;
-  const twoDigits = (value: number) => String(value).padStart(2, "0");
-  return hours > 0
-    ? `${hours}:${twoDigits(minutes)}:${twoDigits(seconds)}`
-    : `${minutes}:${twoDigits(seconds)}`;
-};
-
-/**
- * Spoken words as literal Markdown text, escaped the way the document
- * renderer reads escapes back: emphasis, code, link and strike markers
- * always, an underscore outside a word, and an angle bracket that would
- * open a tag. The text stays on one line.
- */
-export const markdownText = (text: string): string =>
-  text
-    .replaceAll(/\s+/gu, " ")
-    .trim()
-    .replaceAll(/[\\`*[\]~]/gu, "\\$&")
-    .replaceAll(/(?<![\p{L}\p{N}])_|_(?![\p{L}\p{N}])/gu, "\\_")
-    .replaceAll(/<(?=\/?[A-Za-z])/gu, "\\<");
-
-/**
- * The transcript as Markdown in stella's house style: the title, then each
- * paragraph led by the time it starts at in the recording.
- */
-export const transcriptMarkdown = ({
-  title,
-  paragraphs,
-}: Pick<TranscriptBody, "title" | "paragraphs">): string =>
-  [
-    `# ${markdownText(title)}`,
-    ...paragraphs
-      .map(({ startMs, text }) => ({ startMs, text: markdownText(text) }))
-      .filter(({ text }) => text.length > 0)
-      .map(
-        ({ startMs, text }) => `**${transcriptTimestamp(startMs)}** ${text}`,
-      ),
-  ].join("\n\n");
 
 const authorizeTranscriptSave = async (
   request: Request,
@@ -184,11 +140,11 @@ const documentLayoutError = (message: string) => (cause: unknown) =>
     "tagged_failure",
   );
 
-const transcriptDocx = async (
+const renderedTranscript = async (
   body: Pick<TranscriptBody, "title" | "paragraphs">,
 ): Promise<Result<ArrayBuffer, HandlerError>> =>
   Result.mapError(
-    await markdownToStellaDocx(transcriptMarkdown(body)),
+    await transcriptDocx(body),
     documentLayoutError("The transcript could not be laid out as a document"),
   );
 
@@ -372,7 +328,7 @@ export const createDesktopDictationTranscriptEndpoint = ({
             parentId,
           }).then((result) => Result.mapError(result, toHandlerError));
 
-        const transcript = yield* Result.await(transcriptDocx(body));
+        const transcript = yield* Result.await(renderedTranscript(body));
         const { folder } = body;
         if (folder === undefined) {
           const created = yield* Result.await(

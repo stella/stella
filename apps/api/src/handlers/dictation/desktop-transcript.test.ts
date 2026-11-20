@@ -26,11 +26,7 @@ import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 import {
   createDesktopDictationTranscriptAudioEndpoint,
   createDesktopDictationTranscriptEndpoint,
-  markdownText,
-  transcriptMarkdown,
-  transcriptTimestamp,
 } from "./desktop-transcript";
-import { cleanedTranscriptDocx } from "./transcript-folder";
 
 const testState = createTestState({ file: import.meta.path, config: env });
 
@@ -269,29 +265,6 @@ test("a transcript without paragraphs, with unknown fields or past four hours is
   }
 });
 
-test("the document leads each paragraph with its time and keeps spoken words literal", () => {
-  expect(transcriptTimestamp(0)).toBe("0:00");
-  expect(transcriptTimestamp(102_000)).toBe("1:42");
-  expect(transcriptTimestamp(3_725_000)).toBe("1:02:05");
-  expect(markdownText("a *b* [c] `d` ~e~ \\f")).toBe(
-    "a \\*b\\* \\[c\\] \\`d\\` \\~e\\~ \\\\f",
-  );
-  expect(markdownText("snake_case stays, _this_ is escaped")).toBe(
-    "snake_case stays, \\_this\\_ is escaped",
-  );
-  expect(markdownText("a <b> tag\nand\ttabs")).toBe("a \\<b> tag and tabs");
-  expect(
-    transcriptMarkdown({
-      title: "Memo",
-      paragraphs: [
-        { startMs: 0, text: "First." },
-        { startMs: 5000, text: "   " },
-        { startMs: 65_000, text: "Second." },
-      ],
-    }),
-  ).toBe("# Memo\n\n**0:00** First.\n\n**1:05** Second.");
-});
-
 test("a folder named after the recording holds the transcript, the cleaned-up text and the recording's upload", async () => {
   const body = {
     ...BODY,
@@ -386,49 +359,6 @@ test("an older desktop files the transcript alone at the matter's root, and clea
     expect(createEntity).not.toHaveBeenCalled();
     expect(createFolder).not.toHaveBeenCalled();
   }
-});
-
-test("the cleaned-up text becomes Word headings, emphasis and lists under a grey note of the instructions", async () => {
-  const bytes = Result.unwrap(
-    await cleanedTranscriptDocx({
-      markdown: [
-        "# Odpověď",
-        "## Shrnutí",
-        "### Detail",
-        "Dobrý den, **děkuji** za *zprávu*.",
-        "- první\n- druhý",
-        "1. jedna\n2. dvě",
-      ].join("\n\n"),
-      instructions: ["Udělej z toho e-mail.", "Formálně."],
-      instructionsLabel: "Pokyny k diktátu:",
-    }),
-  );
-  const documentXml = await xmlPart(bytes, "word/document.xml");
-  for (const style of ["Heading1", "Heading2", "Heading3"]) {
-    expect(documentXml).toContain(`w:val="${style}"`);
-  }
-  expect(documentXml).toContain("<w:b/>");
-  expect(documentXml).toContain("<w:i/>");
-  expect(documentXml).toContain("<w:numPr>");
-  expect(documentXml).not.toContain("**");
-  expect(documentXml).not.toContain("- první");
-  // The note comes first, in grey italics, each instruction on its own line.
-  const note = documentXml.indexOf("Pokyny k diktátu:");
-  expect(note).toBeGreaterThan(-1);
-  expect(note).toBeLessThan(documentXml.indexOf("Odpověď"));
-  expect(documentXml).toContain('w:color w:val="737373"');
-  expect(documentXml).toContain("Formálně.");
-
-  const plain = Result.unwrap(
-    await cleanedTranscriptDocx({
-      markdown: "Text.",
-      instructions: [],
-      instructionsLabel: "Pokyny k diktátu:",
-    }),
-  );
-  expect(await xmlPart(plain, "word/document.xml")).not.toContain(
-    "Pokyny k diktátu:",
-  );
 });
 
 test("the desktop finalizes the recording it uploaded into the folder", async () => {

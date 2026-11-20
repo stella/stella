@@ -10,6 +10,7 @@ import {
 
 import { RESOURCE_TYPE, resourceRef } from "@stll/api-contract";
 import { NOTIFICATION_KIND } from "@stll/api-contract/notifications";
+import { markdownToStellaDocx } from "@stll/docx-authoring/markdown";
 import { todayFor } from "@stll/time";
 
 import type { rootDb, Transaction } from "@/api/db/root";
@@ -44,7 +45,6 @@ import {
   loadCurrentExtractedContents,
   loadCurrentExtractedSources,
 } from "@/api/lib/document-content-provenance";
-import { markdownToStellaDocx } from "@/api/lib/docx-authoring/from-markdown";
 import { createEntityFromBuffer } from "@/api/lib/entities/create-from-buffer";
 import { lockWorkspacesForEntityCap } from "@/api/lib/entity-cap-lock";
 import { TASK_STATUS } from "@/api/lib/entity-constants";

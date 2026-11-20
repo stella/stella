@@ -1,7 +1,8 @@
 //! Saving a transcribed recording as Word documents: on this computer
 //! through the native save dialog, or in a matter as a folder named after
 //! the recording that holds the transcript, the cleaned-up text and the
-//! original recording.
+//! original recording. The window builds a local document with the same
+//! stella styles the API uses; this writes the bytes it is given.
 //!
 //! The recording is the file the window holds, never a path the webview
 //! names. It is read twice, never whole: once for its checksum, once while
@@ -25,7 +26,6 @@ use tokio::io::AsyncReadExt;
 
 use crate::{
   dictation_cloud,
-  docx_writer::{self, Block},
   http_client::{DesktopHttpClient, HttpClientOptions},
   transcribe_recording::{
     TRANSCRIBE_WINDOW_LABEL, chosen_recording, extension, file_name, require_available,
@@ -119,65 +119,6 @@ fn title(text: &str) -> String {
   text.trim().chars().take(MAX_TITLE_CHARS).collect()
 }
 
-#[derive(Debug, Clone, Copy, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
-pub enum DocxKind {
-  /// The transcript with the time each paragraph starts.
-  Raw,
-  /// The cleaned-up text from its Markdown.
-  Cleaned,
-}
-
-#[derive(Debug, Clone, Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct SaveDocxRequest {
-  kind: DocxKind,
-  title: String,
-  /// The name the save dialog suggests; the title when absent.
-  file_name: Option<String>,
-  #[serde(default)]
-  paragraphs: Vec<Paragraph>,
-  markdown: Option<String>,
-  #[serde(default)]
-  instructions: Vec<String>,
-  /// The label above the instructions, in the member's language.
-  instructions_label: Option<String>,
-}
-
-/// The document a local save writes, once the request holds what its kind
-/// needs within bounds.
-fn docx_blocks(request: &SaveDocxRequest) -> Result<Vec<Block>, String> {
-  bounded_name(&request.title, MAX_TITLE_CHARS, "title")?;
-  match request.kind {
-    DocxKind::Raw => {
-      valid_paragraphs(&request.paragraphs)?;
-      Ok(docx_writer::transcript_blocks(
-        &title(&request.title),
-        request
-          .paragraphs
-          .iter()
-          .map(|paragraph| (paragraph.start_ms, paragraph.text.as_str())),
-      ))
-    }
-    DocxKind::Cleaned => {
-      let cleaned = Cleaned {
-        markdown: request.markdown.clone().unwrap_or_default(),
-        instructions: request.instructions.clone(),
-      };
-      valid_cleaned(&cleaned)?;
-      let label = request.instructions_label.as_deref().unwrap_or_default();
-      if !cleaned.instructions.is_empty() {
-        bounded_name(label, MAX_LABEL_CHARS, "instructions label")?;
-      }
-      Ok(docx_writer::cleaned_blocks(
-        &cleaned.markdown,
-        &cleaned.instructions,
-        label,
-      ))
-    }
-  }
-}
-
 /// A `.docx` file name from what the window suggested, without path
 /// separators or characters file systems refuse.
 fn docx_file_name(suggested: &str) -> String {
@@ -203,18 +144,76 @@ fn docx_file_name(suggested: &str) -> String {
   }
 }
 
-/// Saves the transcript or the cleaned-up text as a Word document where
-/// the user picks; `false` when they cancel.
+/// The largest Word document a local save writes: a four-hour transcript
+/// is a few megabytes.
+const MAX_DOCX_BYTES: usize = 32 * 1024 * 1024;
+/// The header the window names the suggested file in, percent-encoded.
+const DOCX_FILE_NAME_HEADER: &str = "x-stella-file-name";
+
+/// `%XX` sequences as the bytes they encode, read as UTF-8; anything else
+/// as written.
+fn percent_decoded(text: &str) -> String {
+  let bytes = text.as_bytes();
+  let mut decoded = Vec::with_capacity(bytes.len());
+  let mut index = 0;
+  while let Some(&byte) = bytes.get(index) {
+    let hex = bytes
+      .get(index + 1..index + 3)
+      .and_then(|pair| std::str::from_utf8(pair).ok())
+      .and_then(|pair| u8::from_str_radix(pair, 16).ok());
+    match (byte, hex) {
+      (b'%', Some(value)) => {
+        decoded.push(value);
+        index += 3;
+      }
+      _ => {
+        decoded.push(byte);
+        index += 1;
+      }
+    }
+  }
+  String::from_utf8_lossy(&decoded).into_owned()
+}
+
+/// The document's bytes and the name to suggest for it, once the body is a
+/// Word document within bounds. The window builds the document; this only
+/// writes it.
+fn docx_save_input(
+  body: &tauri::ipc::InvokeBody,
+  file_name: Option<&str>,
+) -> Result<(Vec<u8>, String), String> {
+  let tauri::ipc::InvokeBody::Raw(bytes) = body else {
+    return Err("the document must be sent as bytes".to_string());
+  };
+  if bytes.is_empty() || bytes.len() > MAX_DOCX_BYTES {
+    return Err("the document is empty or too large to save".to_string());
+  }
+  // Every .docx is a ZIP archive.
+  if !bytes.starts_with(b"PK\x03\x04") {
+    return Err("the document is not a Word document".to_string());
+  }
+  let suggested = percent_decoded(file_name.unwrap_or_default());
+  Ok((bytes.clone(), docx_file_name(&suggested)))
+}
+
+/// Saves the Word document the window built, the transcript or its
+/// cleaned-up text, where the user picks; `false` when they cancel. The
+/// bytes are the request body and the suggested name its
+/// `x-stella-file-name` header.
 #[tauri::command]
 pub async fn transcribe_save_docx(
   app: AppHandle,
   window: Window,
-  request: SaveDocxRequest,
+  request: tauri::ipc::Request<'_>,
 ) -> Result<bool, String> {
   require_window(&window)?;
-  let bytes = docx_writer::docx(&docx_blocks(&request)?)?;
-  let suggested =
-    docx_file_name(request.file_name.as_deref().unwrap_or(&request.title));
+  let (bytes, suggested) = docx_save_input(
+    request.body(),
+    request
+      .headers()
+      .get(DOCX_FILE_NAME_HEADER)
+      .and_then(|value| value.to_str().ok()),
+  )?;
   let (picked, answer) = tokio::sync::oneshot::channel();
   let mut dialog = app
     .dialog()
@@ -741,13 +740,6 @@ mod tests {
 
   use super::*;
 
-  fn paragraph(text: &str) -> Paragraph {
-    Paragraph {
-      start_ms: 0,
-      text: text.to_string(),
-    }
-  }
-
   fn folder_request() -> SaveFolderRequest {
     serde_json::from_value(serde_json::json!({
       "matterId": "0198c5e2-7c1f-7a6e-9a3b-2f4d5e6f7a8b",
@@ -893,44 +885,30 @@ mod tests {
   }
 
   #[test]
-  fn a_local_save_builds_the_kind_of_document_it_names() {
-    let raw: SaveDocxRequest = serde_json::from_value(serde_json::json!({
-      "kind": "raw", "title": "Memo", "paragraphs": [{ "startMs": 61000, "text": "First." }]
-    }))
+  fn a_local_save_writes_only_a_bounded_word_document_and_decodes_its_name() {
+    let docx = b"PK\x03\x04rest".to_vec();
+    let (bytes, name) = docx_save_input(
+      &tauri::ipc::InvokeBody::Raw(docx.clone()),
+      Some("Dikt%C3%A1t%20%E2%80%93%20p%C5%99epis.docx"),
+    )
     .unwrap();
-    let blocks = docx_blocks(&raw).unwrap();
-    assert_eq!(blocks.len(), 2);
-    let cleaned: SaveDocxRequest = serde_json::from_value(serde_json::json!({
-      "kind": "cleaned", "title": "Memo", "markdown": "# Reply\n\n- one",
-      "instructions": ["Formal."], "instructionsLabel": "Instructions:"
-    }))
-    .unwrap();
-    assert!(matches!(
-      docx_blocks(&cleaned).unwrap().first(),
-      Some(Block::Note { .. })
-    ));
-    let unlabeled = SaveDocxRequest {
-      instructions_label: None,
-      ..cleaned.clone()
-    };
-    assert!(docx_blocks(&unlabeled).is_err());
-    let empty = SaveDocxRequest {
-      markdown: None,
-      ..cleaned
-    };
-    assert!(docx_blocks(&empty).is_err());
-    let no_paragraphs = SaveDocxRequest {
-      paragraphs: vec![],
-      ..raw
-    };
-    assert!(docx_blocks(&no_paragraphs).is_err());
-    assert!(
-      docx_blocks(&SaveDocxRequest {
-        paragraphs: vec![paragraph(&"x".repeat(MAX_PARAGRAPH_CHARS + 1))],
-        ..no_paragraphs
-      })
-      .is_err()
+    assert_eq!(bytes, docx);
+    assert_eq!(name, "Diktát – přepis.docx");
+    assert_eq!(
+      docx_save_input(&tauri::ipc::InvokeBody::Raw(docx.clone()), None)
+        .unwrap()
+        .1,
+      "Transcript.docx"
     );
+    for refused in [
+      tauri::ipc::InvokeBody::Raw(Vec::new()),
+      tauri::ipc::InvokeBody::Raw(b"plain text".to_vec()),
+      tauri::ipc::InvokeBody::Raw(vec![b'P'; MAX_DOCX_BYTES + 1]),
+      tauri::ipc::InvokeBody::Json(serde_json::json!({ "path": "/etc/passwd" })),
+    ] {
+      assert!(docx_save_input(&refused, Some("a.docx")).is_err());
+    }
+    assert_eq!(percent_decoded("100%25 %zz%4"), "100% %zz%4");
   }
 
   #[test]

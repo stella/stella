@@ -1,11 +1,11 @@
 import { panic, TaggedError } from "better-result";
 
-import type { Document } from "@stll/folio-core";
 import {
   createDocx,
   createEmptyDocument,
   createStellaStyleDocumentPreset,
-} from "@stll/folio-core/server";
+  type Document,
+} from "@stll/folio-core";
 
 /** A DOCX could not be composed, serialised, or edited. */
 export class DocxAuthoringError extends TaggedError("DocxAuthoringError")<{
