@@ -18,14 +18,13 @@ import {
   BUTTON_DISPOSITION,
   resolveButtonDisposition,
 } from "../lib/button-disposition";
-import { MENU_ROW_CLASS_NAME } from "../lib/menu-row";
 import { rendersNothing } from "../lib/renders-nothing";
 import { cn } from "../lib/utils";
 import {
   BUTTON_BASE_CLASS,
   BUTTON_DEFAULT_SIZE,
-  BUTTON_FACE_SIZE_CLASS_NAMES,
   BUTTON_LAYOUT_CLASS_NAMES,
+  BUTTON_SIZE_CLASS_NAMES,
   BUTTON_VARIANT_CLASS_NAMES,
 } from "./button-classes";
 import {
@@ -60,14 +59,6 @@ const buttonAccessibleDisabledClass = "cursor-not-allowed opacity-64";
  */
 const buttonPressClass =
   "motion-safe:transition-transform motion-safe:duration-150 ease-out motion-safe:active:scale-[0.98]";
-
-const BUTTON_SIZE_CLASS_NAMES = {
-  ...BUTTON_FACE_SIZE_CLASS_NAMES,
-  // One row of a menu list. The metric is shared with `CommandItem`; the
-  // rest undoes the base button's centred content and its icon inset, so
-  // a button row and a command row read as the same box.
-  row: `${MENU_ROW_CLASS_NAME} [&_svg]:mx-0`,
-} as const satisfies Record<ButtonSize, string>;
 
 const buttonVariants = cva(BUTTON_BASE_CLASS, {
   // An inline button is a word in a sentence: a hover fill behind it would
@@ -283,6 +274,15 @@ const implicitTooltip = (
 type ButtonProps = Omit<ButtonContract, "children" | "disabled"> & {
   layout?: keyof typeof BUTTON_LAYOUT_CLASS_NAMES;
   tooltip?: ReactNode;
+  /**
+   * Why the button cannot act right now, in the reader's terms ("Type a
+   * message to send it."). While `disabled`, it is the button's tooltip, in
+   * place of `tooltip`, and the button stays hoverable and focusable
+   * (`aria-disabled`) with activation blocked, so whoever reaches for it
+   * learns what to do. The `disabled-control-needs-reason` rule asks for it
+   * on every disabled Button.
+   */
+  disabledReason?: ReactNode;
   focusRing?: ButtonFocusRing | undefined;
   /** `variant="plain"` only: the outline its focus ring follows. */
   shape?: ButtonPlainShape | undefined;
@@ -299,6 +299,7 @@ function Button({
   icon,
   children,
   disabled,
+  disabledReason,
   tooltip,
   selected,
   focusRing = "outside",
@@ -315,7 +316,9 @@ function Button({
   // Same value `renderTooltipTrigger` mounts below, so the disposition and the
   // popup cannot disagree about whether this button has a tooltip.
   const tooltipContent =
-    tooltip ?? implicitTooltip(size, props["aria-label"] ?? props.title);
+    disabled === true && disabledReason !== undefined
+      ? disabledReason
+      : (tooltip ?? implicitTooltip(size, props["aria-label"] ?? props.title));
   const disposition = resolveButtonDisposition({
     disabled,
     loading,

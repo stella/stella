@@ -165,7 +165,7 @@
     "invitation": {
       "declined": "Invitation declined",
       "declinedDescription": "You did not join this organization.",
-      "description": "You've been invited to join {organizationName} by {inviterEmail} as {role}.",
+      "description": "You've been invited to join {organizationName} by {inviterEmail}{role, select, owner { as an owner} admin { as an admin} member { as a member} intern { as an intern} external { as an external collaborator} other {}}.",
       "goToWorkspaces": "Go to matters",
       "title": "Organization invitation",
       "verifyEmailHint": "To verify {email}, sign out, then sign in with a one-time code sent to that address.",
@@ -1795,7 +1795,6 @@
       "searchAllPastChatsQuestion": "Search all your chats?",
       "uploadedDocumentPlaceholder": "(uploaded document)"
     },
-    "askAnything": "Ask anything",
     "askUser": {
       "custom": "Write your own",
       "edit": "Edit answers",
@@ -1953,6 +1952,7 @@
     "historyTrimmed": "Earlier messages could not be summarized, so this answer only took the most recent part of the conversation into account.",
     "improvePrompt": "Improve prompt",
     "improvePromptDraftChanged": "Draft changed, so the improvement wasn't applied.",
+    "improvePromptEmpty": "Type a prompt to improve it.",
     "improvePromptPlainTextOnly": "Prompt improvement is available for plain text only.",
     "improvePromptUnavailableAnonymized": "Prompt improvement is unavailable in anonymized mode.",
     "improvingPrompt": "Improving prompt…",
@@ -2312,6 +2312,7 @@
     "sendErrorToolsUnsupported": "This model cannot use tools, so it cannot answer questions about your matter. Switch to a model that supports tools.",
     "sendErrorTurnTooLarge": "This reply grew too large to deliver in full. Send a new message to continue.",
     "sendPrompt": "Send message",
+    "sendPromptEmpty": "Type a message to send it.",
     "sendQueuedMessageNow": "Send now",
     "sendWithoutAnonymization": "Send without anonymization",
     "signInToChat": "Sign in to chat about this document",
@@ -2356,6 +2357,10 @@
     "stopResponse": "Stop",
     "stopped": "Stopped",
     "stopping": "Stopping…",
+    "subagentRun": {
+      "browseWeb": "Browsing the web",
+      "generic": "Working on a subtask"
+    },
     "suggestTitle": "Suggest a title",
     "suggestTitleUnavailableAnonymized": "Title suggestions are unavailable for anonymized conversations.",
     "suggestingTitle": "Suggesting a title…",
@@ -5397,6 +5402,7 @@
       "defaultModel": "Default: {model}",
       "defaultModelOption": "Default",
       "defaultRationale": {
+        "browse": "For working on websites in the browser.",
         "chat": "For conversation and everyday questions.",
         "fast": "For short, routine tasks.",
         "pdf": "For reading and analysing PDF documents.",
@@ -5410,6 +5416,11 @@
       "googleKeyRestricted": "Check this key’s API, IP address and referrer restrictions in Google Cloud. Allow the required API and your server’s requests, then retry.",
       "keepSavedKey": "Keep saved key",
       "keyFormatHint": "This key has an unusual format for {provider}. Save to check it with the provider.",
+      "keyNeed": {
+        "builtIn": "Optional. Without a key of your own, AI in this organization runs on models provided by stella.",
+        "keyRequired": "AI in this organization needs a provider key. Add one to turn AI on.",
+        "ownKeys": "AI in this organization runs on the keys below."
+      },
       "modelForRole": "{role} model",
       "modelIdPlaceholder": "Search models",
       "modelsDescription": "Choose a provider and one offered multimodal model for each AI category.",
@@ -5417,6 +5428,7 @@
       "newApiKey": "New API key",
       "newApiKeyDescription": "This will replace the saved key when you save changes.",
       "noModelResults": "No matching offered models",
+      "noProviders": "No provider keys added.",
       "openaiInsufficientQuota": "Check your OpenAI project budget and API billing. Add credits or raise the applicable limit, then retry.",
       "openaiProjectOrganizationMismatch": "Use an API key from the intended OpenAI project and organization. Check their access settings, then retry.",
       "openrouterNoCredits": "Add credits in OpenRouter billing, then retry.",
@@ -5439,6 +5451,8 @@
       "providerForRole": "{role} provider",
       "providerKeyInvalid": "{provider} rejected the key. Double-check it before saving.",
       "providerKeyInvalidShort": "Invalid",
+      "providerModes": "Used for: {modes}",
+      "providerModesNone": "Not used for any mode. Assign it to a mode under Advanced.",
       "providerSetupConsole": "Open provider settings",
       "providersDescription": "Add the provider credentials you want stella to use.",
       "providersPanel": "Providers",
@@ -5448,6 +5462,7 @@
       "replaceKey": "Replace key",
       "roleUnavailable": "{provider} does not support this role.",
       "roles": {
+        "browse": "Browsing",
         "chat": "Chat",
         "fast": "Fast",
         "pdf": "PDF",
@@ -5510,7 +5525,7 @@
     "members": {
       "billingAccess": "Billing visibility",
       "changeRole": "Change role",
-      "confirmRoleChangeDescription": "{email}'s role will change from {oldRole} to {newRole}.",
+      "confirmRoleChangeDescription": "{email}'s role will change from {oldRole, select, owner {owner} admin {admin} member {member} intern {intern} external {external collaborator} other {}} to {newRole, select, owner {owner} admin {admin} member {member} intern {intern} external {external collaborator} other {}}.",
       "confirmRoleChangeTitle": "Change role",
       "joined": "Joined",
       "noMembersFound": "No members found",
@@ -5983,7 +5998,7 @@
     "organization": {
       "activeMembers": "Active members",
       "ai": "AI configuration",
-      "aiDescription": "Connect your own AI provider keys.",
+      "aiDescription": "Choose how AI works in this organization.",
       "anonymization": {
         "addPlaceholder": "Term to always mask (e.g. team name)",
         "deleteAction": "Delete term",
@@ -7238,6 +7253,7 @@
         "title": "Remove Word template links?",
         "unknownLocation": "Template location: an address stella cannot verify"
       },
+      "checkingFiles": "Checking files…",
       "desktopEdit": {
         "accountRequiredTitle": "Connect stella desktop to your account",
         "action": "Edit in desktop",
@@ -7281,6 +7297,14 @@
       "downloadPdf": "Download as PDF",
       "downloadSearchablePdf": "Searchable PDF",
       "downloadWithComments": "Download with comments",
+      "duplicateUpload": {
+        "description": "{count, plural, one {# file is identical to a document this matter already holds.} other {# files are identical to documents this matter already holds.}} Choose what to do with each.",
+        "matchedDocument": "Identical to <bdi>{documentName}</bdi>",
+        "skip": "Skip this file",
+        "skipAll": "Skip duplicates",
+        "title": "Already in this matter",
+        "uploadAnyway": "Upload anyway"
+      },
       "emptyFile": "The file is empty.",
       "fileTooLarge": "The file is larger than {limit, number} MB.",
       "includeReferenceNumber": "Include reference number",

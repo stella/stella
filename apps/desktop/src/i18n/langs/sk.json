@@ -624,6 +624,10 @@
       "cleanup": "Úprava",
       "thisComputer": "Na tomto počítači"
     },
+    "sounds": {
+      "title": "Zvuky",
+      "description": "Prehrať krátky tichý zvuk, keď nahrávanie začne a keď skončí."
+    },
     "cleanup": {
       "title": "Upraviť pomocou AI",
       "description": "Opraví chyby rozpoznávania a vyslovené formátovanie, napríklad „nový riadok“ alebo „tučne“, a prispôsobí text aplikácii, napríklad e-mailu. Cez stellu sa poskytovateľovi AI vašej organizácie odošle len text, nie zvuk; stella ho neukladá.",
@@ -666,7 +670,7 @@
     "customWords": {
       "group": "Vlastné slová",
       "title": "Slová a mená, ktoré má stella písať správne",
-      "description": "Napríklad mená klientov alebo anglické výrazy, ktoré používate v slovenčine. Ukladajú sa v tomto počítači pre tento účet a odosielajú sa len s diktátom, na prevod cez stella AI a na úpravu pomocou AI. Model reči v tomto počítači ich nepoužíva.",
+      "description": "Napríklad mená klientov alebo anglické výrazy, ktoré používate v slovenčine. Ukladajú sa v tomto počítači pre tento účet a odosielajú sa len s diktátom, na prevod cez stella AI a na úpravu pomocou AI. Keď prepisuje model reči v tomto počítači a úprava pomocou AI je vypnutá, stella opraví ich pravopis priamo v tomto počítači.",
       "count": "{count, number} z {limit, number}",
       "input": "Pridať slovo alebo meno",
       "add": "Pridať",
@@ -1096,7 +1100,7 @@
       "cloudDescriptionModel": "Zvuk sa na prepis odošle do stella AI a poskytovateľovi modelu {model}. stella ho neukladá.",
       "localMissing": "Ak chcete prepisovať v tomto počítači, stiahnite si v Nastaveniach v časti Diktovanie rečový model.",
       "localMissingCloud": "Stiahnite si v Nastaveniach v časti Diktovanie rečový model alebo prepisujte pomocou stella AI.",
-      "retainsData": "{provider} uchováva zvuk aj prepis všetkého, čo tomuto modelu pošlete. Neprepisujte s ním dôverné nahrávky ani nahrávky klientov, alebo v Nastaveniach v časti Diktovanie vyberte iný model.",
+      "retainsData": "Vezmite, prosím, na vedomie podmienky spracovania spoločnosti {provider}.",
       "modelFailed": "Model stella AI sa nepodarilo načítať, takže stella AI teraz nemôže prepisovať. Skúste to znova alebo prepisujte na tomto počítači."
     },
     "matter": {
@@ -1145,7 +1149,8 @@
       "saveFailed": "Prepis sa nepodarilo skopírovať ani uložiť. Skúste to znova.",
       "noSpeech": "V nahrávke sa nenašla žiadna reč.",
       "fileName": "{title} – prepis.txt",
-      "documentTitle": "{title} – prepis"
+      "documentTitle": "{title} – prepis",
+      "transcriptTitle": "Prepis"
     },
     "progress": {
       "running": "Prepisuje sa {done, number} z {total, number} min",
@@ -1154,6 +1159,28 @@
       "stopped": "Zastavené po {done, number} min. Doterajší text zostáva.",
       "done": "Prepísané: {total, number} min.",
       "another": "Prepísať ďalšiu nahrávku"
+    },
+    "cleaned": {
+      "title": "Upravený text",
+      "running": "Upravujem…",
+      "waiting": "Každá časť sa upraví hneď, ako je prepísaná.",
+      "instructionsTitle": "Pokyny v diktáte · nie sú súčasťou textu",
+      "instructionsLabel": "Pokyny:",
+      "partFailed": "Túto časť sa nepodarilo upraviť, preto je zobrazená tak, ako bola prepísaná.",
+      "failedCount": "{count, plural, one {# časť neupravená} few {# časti neupravené} other {# častí neupravených}}",
+      "saveMarkdown": "Formátovaný text (.md)",
+      "saveText": "Obyčajný text (.txt)",
+      "fileNameMarkdown": "{title} upravený text.md",
+      "fileNameText": "{title} upravený text.txt",
+      "offerTitle": "Upraviť prepis pomocou AI",
+      "offerDescription": "Táto nahrávka bola prepísaná na tomto počítači a úprava pomocou AI je v Nastaveniach vypnutá. Úprava pošle text, nikdy zvuk, AI modelu vašej organizácie.",
+      "offerStart": "Upraviť"
+    },
+    "copyMenu": {
+      "label": "Možnosti kopírovania",
+      "formatted": "S formátovaním",
+      "plain": "Ako obyčajný text",
+      "hint": "S formátovaním sa do Wordu alebo Outlooku vložia nadpisy, tučné písmo aj zoznamy. Kopírovanie si vašu voľbu zapamätá."
     }
   }
 }

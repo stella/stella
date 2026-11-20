@@ -624,6 +624,10 @@
       "cleanup": "Correction",
       "thisComputer": "Sur cet ordinateur"
     },
+    "sounds": {
+      "title": "Sons",
+      "description": "Émettre un son bref et discret au début et à la fin de l’enregistrement."
+    },
     "cleanup": {
       "title": "Corriger avec l’IA",
       "description": "Corrige les erreurs de reconnaissance et la mise en forme dictée, comme « nouvelle ligne » ou « gras », et adapte le texte à l’application, comme un e-mail. Seul le texte, et non l’audio, est envoyé via stella au fournisseur d’IA de votre organisation ; stella ne le conserve pas.",
@@ -666,7 +670,7 @@
     "customWords": {
       "group": "Mots personnalisés",
       "title": "Mots et noms que stella doit écrire correctement",
-      "description": "Par exemple des noms de clients, ou des termes anglais que vous employez en parlant une autre langue. Ils sont conservés sur cet ordinateur pour ce compte et envoyés uniquement avec votre dictée, à la transcription par stella AI et à la correction par IA. Le modèle vocal de cet ordinateur ne les utilise pas.",
+      "description": "Par exemple des noms de clients, ou des termes anglais que vous employez en parlant une autre langue. Ils sont conservés sur cet ordinateur pour ce compte et envoyés uniquement avec votre dictée, à la transcription par stella AI et à la correction par IA. Lorsque le modèle vocal de cet ordinateur transcrit et que la correction par IA est désactivée, stella corrige leur orthographe sur cet ordinateur.",
       "count": "{count, number} sur {limit, number}",
       "input": "Ajouter un mot ou un nom",
       "add": "Ajouter",
@@ -1096,7 +1100,7 @@
       "cloudDescriptionModel": "Le son est envoyé à stella et au fournisseur de {model} pour être transcrit. stella ne le conserve pas.",
       "localMissing": "Téléchargez le modèle vocal dans Paramètres, sous Dictée, pour transcrire sur cet ordinateur.",
       "localMissingCloud": "Téléchargez le modèle vocal dans Paramètres, sous Dictée, ou transcrivez avec stella AI.",
-      "retainsData": "{provider} conserve le son et la transcription de tout ce qui est envoyé à ce modèle. Ne transcrivez pas avec lui d’enregistrements confidentiels ou de clients, ou choisissez un autre modèle dans Paramètres, sous Dictée.",
+      "retainsData": "Veuillez prendre connaissance des conditions de traitement de {provider}.",
       "modelFailed": "Le modèle de stella AI n’a pas pu être lu : stella AI ne peut pas transcrire pour le moment. Réessayez ou transcrivez sur cet ordinateur."
     },
     "matter": {
@@ -1145,7 +1149,8 @@
       "saveFailed": "Impossible de copier ou d’enregistrer la transcription. Réessayez.",
       "noSpeech": "Aucune parole n’a été trouvée dans cet enregistrement.",
       "fileName": "{title} - transcription.txt",
-      "documentTitle": "{title} - transcription"
+      "documentTitle": "{title} - transcription",
+      "transcriptTitle": "Transcription"
     },
     "progress": {
       "running": "Transcription : {done, number} sur {total, number} min",
@@ -1154,6 +1159,28 @@
       "stopped": "Arrêté après {done, number} min. Le texte obtenu jusqu’ici est conservé.",
       "done": "{total, number} min transcrites.",
       "another": "Transcrire un autre enregistrement"
+    },
+    "cleaned": {
+      "title": "Texte nettoyé",
+      "running": "Nettoyage…",
+      "waiting": "Chaque partie est nettoyée dès qu’elle est transcrite.",
+      "instructionsTitle": "Consignes dans la dictée · hors du texte",
+      "instructionsLabel": "Consignes :",
+      "partFailed": "Cette partie n’a pas pu être nettoyée ; elle est affichée telle que transcrite.",
+      "failedCount": "{count, plural, one {# partie non nettoyée} other {# parties non nettoyées}}",
+      "saveMarkdown": "Texte formaté (.md)",
+      "saveText": "Texte brut (.txt)",
+      "fileNameMarkdown": "{title} nettoyé.md",
+      "fileNameText": "{title} nettoyé.txt",
+      "offerTitle": "Nettoyer la transcription avec l’IA",
+      "offerDescription": "Cet enregistrement a été transcrit sur cet ordinateur et le nettoyage par IA est désactivé dans les paramètres. Le nettoyage envoie le texte, jamais l’audio, au modèle d’IA de votre organisation.",
+      "offerStart": "Nettoyer"
+    },
+    "copyMenu": {
+      "label": "Options de copie",
+      "formatted": "Avec la mise en forme",
+      "plain": "En texte brut",
+      "hint": "Avec la mise en forme, les titres, le gras et les listes se collent dans Word ou Outlook. Votre choix est mémorisé."
     }
   }
 }

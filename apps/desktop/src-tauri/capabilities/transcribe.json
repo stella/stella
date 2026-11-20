@@ -17,6 +17,8 @@
     "allow-transcribe-start",
     "allow-transcribe-stop",
     "allow-transcribe-copy-text",
+    "allow-transcribe-copy-rich",
+    "allow-transcribe-clean-up",
     "allow-transcribe-save-text",
     "allow-transcribe-search-matters",
     "allow-transcribe-save-to-matter",

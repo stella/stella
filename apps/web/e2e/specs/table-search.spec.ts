@@ -302,8 +302,15 @@ test.describe("find in table", () => {
 
     // Both views into history, ending on the first, so the switch below is a
     // back navigation.
+    //
+    // A switch changes the URL at once and keeps the outgoing view mounted
+    // until the target's loader settles. The selected tab is drawn by the
+    // view on screen, so it is what says a switch has landed; a press made
+    // before then reaches the outgoing view's bar, which the switch removes.
     await secondTab.click();
+    await expect(secondTab).toHaveAttribute("aria-selected", "true");
     await tableTab.click();
+    await expect(tableTab).toHaveAttribute("aria-selected", "true");
 
     const matchingRow = page.getByRole("button", {
       exact: true,
@@ -325,9 +332,13 @@ test.describe("find in table", () => {
     // assertions below already describe: the test cannot fail spuriously, it
     // can only stop exercising the race.
     await page.goBack({ waitUntil: "commit" });
+    await expect(secondTab).toHaveAttribute("aria-selected", "true");
     await expect(findInput).toBeHidden();
 
     await page.goForward({ waitUntil: "commit" });
+    await expect(tableTab).toHaveAttribute("aria-selected", "true", {
+      timeout: PLAYWRIGHT_EXPECT_TIMEOUT_15_SECONDS_MS,
+    });
     await expect(
       page.getByRole("button", { exact: true, name: "alpha" }),
     ).toBeVisible({ timeout: PLAYWRIGHT_EXPECT_TIMEOUT_15_SECONDS_MS });
@@ -351,6 +362,9 @@ test.describe("find in table", () => {
     await expect(allColumnsRow).toBeVisible();
 
     await page.goBack({ waitUntil: "commit" });
+    await expect(secondTab).toHaveAttribute("aria-selected", "true");
+    // The view switched to never took the term.
+    await expect(otherRow).toBeVisible();
     await page.keyboard.press("ControlOrMeta+f");
     await expect(page.getByRole("searchbox")).toBeFocused();
     await expect(columnsToggle).toHaveAttribute("aria-expanded", "false");

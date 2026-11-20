@@ -2,6 +2,7 @@ import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
+import { MODEL_OVERRIDE_GROUPS } from "@stll/ai-catalog";
 import { CHAT_TOOL_DECLINED_ERROR } from "@stll/api-contract/chat";
 
 import type { ApiRouteKey } from "@/api/http/api-route-types";
@@ -210,12 +211,9 @@ describe("buildSmokeAIConfigBody", () => {
   test("puts the one smoke model on every role of the keyed provider", () => {
     const body = buildSmokeAIConfigBody("key");
     expect(body.providers).toEqual([{ provider: "openai", apiKey: "key" }]);
-    expect(Object.keys(body.overrideModels).toSorted()).toEqual([
-      "chat",
-      "fast",
-      "pdf",
-      "reasoning",
-    ]);
+    expect(Object.keys(body.overrideModels).toSorted()).toEqual(
+      MODEL_OVERRIDE_GROUPS.toSorted(),
+    );
     for (const selection of Object.values(body.overrideModels)) {
       expect(selection).toEqual({
         provider: "openai",

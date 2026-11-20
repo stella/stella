@@ -774,6 +774,14 @@ export const DOC_SOURCE_EXCLUSIONS = PROBED_WITHOUT_LLMS_TXT.map(
       }) satisfies NoLlmsTxtExclusion,
   ),
   {
+    checkedAt: "2026-11-20T00:00:00.000Z",
+    dependency: "world-atlas",
+    explanation:
+      "https://raw.githubusercontent.com/topojson/world-atlas/HEAD/llms.txt and https://www.naturalearthdata.com/llms.txt return 404. The package ships data only (Natural Earth TopoJSON); use the README at https://github.com/topojson/world-atlas and the TopoJSON specification at https://github.com/topojson/topojson-specification directly.",
+    expiresAt: "2026-12-20T00:00:00.000Z",
+    reason: "no-llms-txt",
+  },
+  {
     checkedAt: "2026-10-24T00:00:00.000Z",
     dependency: "@noble/hashes",
     explanation:

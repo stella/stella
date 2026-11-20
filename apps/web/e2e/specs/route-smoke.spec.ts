@@ -52,6 +52,7 @@ import {
 } from "../helpers/network";
 import { deleteTestOrganization } from "../helpers/organization";
 import { declarePublicKnowledgeSmoke } from "../helpers/public-knowledge-smoke";
+import { measurePublicLawGeometry } from "../helpers/public-law-loading-geometry";
 import {
   createRenderRecorder,
   readRenderCensus,
@@ -730,6 +731,22 @@ test("records loading landmarks in English and Czech", async ({
   }
 });
 
+for (const locale of ["en", "cs"] as const) {
+  test(`public law loading landmarks hold in ${locale}`, async ({
+    baseURL,
+    browser,
+  }, testInfo) => {
+    // timeout: Three no-JavaScript documents, browser entries, and held navigations.
+    testInfo.setTimeout(PLAYWRIGHT_EXPECT_TIMEOUT_60_SECONDS_MS);
+    await measurePublicLawGeometry({
+      baseURL: baseURL ?? "http://localhost:3000",
+      browser,
+      locale,
+      testInfo,
+    });
+  });
+}
+
 test("records inbox and contact loading landmarks in English and Czech", async ({
   baseURL,
   browser,
@@ -766,6 +783,56 @@ test("records inbox and contact loading landmarks in English and Czech", async (
         .toMatchObject({ top: loaded?.top, left: loaded?.left });
     }
   }
+});
+
+test("records Knowledge skill loading landmarks in English and Czech", async ({
+  baseURL,
+  browser,
+}, testInfo) => {
+  // timeout: Each locale needs a cold and hydrated document.
+  testInfo.setTimeout(PLAYWRIGHT_EXPECT_TIMEOUT_60_SECONDS_MS);
+  const measurement = await measureLoadingGeometry({
+    browser,
+    baseURL: baseURL ?? "http://localhost:3000",
+    storageState: STORAGE_STATE,
+    set: "knowledge-skill",
+  });
+  await testInfo.attach("knowledge-skill-loading-geometry.json", {
+    body: JSON.stringify(measurement, null, 2),
+    contentType: "application/json",
+  });
+  for (const sample of measurement.evidence) {
+    for (const [landmark, loaded] of Object.entries(sample.loaded)) {
+      expect(
+        loaded,
+        `${sample.locale} ${sample.route} ${landmark}`,
+      ).not.toBeNull();
+      expect
+        .soft(
+          sample.server[landmark],
+          `${sample.locale} ${sample.route} cold ${landmark}`,
+        )
+        .toMatchObject({ top: loaded?.top, left: loaded?.left });
+    }
+  }
+});
+
+test("records Knowledge loading landmarks in English and Czech", async ({
+  baseURL,
+  browser,
+}, testInfo) => {
+  // timeout: Each locale needs a cold and hydrated document for three routes.
+  testInfo.setTimeout(PLAYWRIGHT_EXPECT_TIMEOUT_60_SECONDS_MS);
+  const measurement = await measureLoadingGeometry({
+    browser,
+    baseURL: baseURL ?? "http://localhost:3000",
+    storageState: STORAGE_STATE,
+    set: "knowledge",
+  });
+  await testInfo.attach("knowledge-loading-geometry.json", {
+    body: JSON.stringify(measurement, null, 2),
+    contentType: "application/json",
+  });
 });
 
 test("route coverage matches the authenticated route tree", async () => {

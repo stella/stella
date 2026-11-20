@@ -24,22 +24,22 @@
  * insolvency courts' own decisions. A document of an appellate event that
  * is not a high court's decision is skipped.
  *
- * Personal data. The register's documents are not anonymised. A document is
- * anonymised (`cz-isir-anonymization.ts`) before anything about it is built,
- * and only that text is stored, as the raw payload and as the document; the
- * PDF itself is never stored. A document that cannot be anonymised with
- * confidence is not stored at all. The feed's person and address records are
- * never read (`cz-isir-feed.ts`). What the row keeps beyond the anonymised
- * text identifies the decision: court, docket, date, kind, and the register's
- * own coordinates of the document (court code, file mark, section, number).
+ * Text. A decision is stored as the register publishes it: the text read
+ * from its PDF, without the register's signature stamp and running headers,
+ * is the raw payload and the document; the PDF itself is never stored. The
+ * feed's person and address records are never read (`cz-isir-feed.ts`).
+ * What the row keeps beyond the text identifies the decision: court, docket,
+ * date, kind, and the register's own coordinates of the document (court
+ * code, file mark, section, number).
  *
  * Removal. The register makes a debtor's data inaccessible after the period
  * § 425 insolvenčního zákona sets (five years after the proceeding ended,
  * three after a discharge), and its service description asks recipients of
  * the feed not to pass on what it struck off. This source mirrors that:
  *
- * - a document the register no longer serves is never stored: its read
- *   answers 404, and the action is skipped;
+ * - a document the register states gone (410) is never stored, and the
+ *   action is skipped; a 404, which the register also answers for its own
+ *   errors, is asked for again;
  * - a decision of a proceeding the same page strikes off is skipped;
  * - a stored decision whose document the register stops serving is removed
  *   by the publisher-removal sweep, whose probe for this source asks the
@@ -67,15 +67,9 @@ import { panic, Result } from "better-result";
 import * as v from "valibot";
 
 import { parseIntegerToken } from "@stll/agent-input/numeric-token";
-import { createPipeline } from "@stll/anonymize";
 import { Temporal } from "@stll/time";
 
 import { splitCaseReference } from "@/api/handlers/case-law/case-number";
-import {
-  createCzIsirAnonymizer,
-  type CzIsirAnonymizationFailure,
-  type CzIsirAnonymizer,
-} from "@/api/handlers/case-law/ingestion/adapters/cz-isir-anonymization";
 import {
   CZ_ISIR_ACTION_SKIP,
   CZ_ISIR_DECISION_SCOPE,
@@ -189,7 +183,7 @@ const MAX_CYCLE_MS = 60 * 60_000;
 const RAW_PART = {
   /** The action, reduced to the fields `CzIsirAction` keeps. */
   ACTION: "action",
-  /** The document's paragraphs, anonymised. */
+  /** The document's paragraphs, as read from its PDF. */
   TEXT: "text",
 } as const;
 
@@ -356,8 +350,6 @@ export const CZ_ISIR_UNBUILT = {
   NO_TEXT_LAYER: "no-text-layer",
   /** Not a PDF the reader can open. */
   UNREADABLE: "unreadable",
-  /** The anonymisation could not vouch for the text; nothing is stored. */
-  ANONYMISATION: "anonymisation",
   /** An appellate event whose document is not a high court's decision. */
   NOT_APPELLATE: "not-appellate",
   /** The text states no docket, kind or date this source can key (a damaged text layer). */
@@ -372,7 +364,7 @@ export type CzIsirDecisionRead =
   | {
       type: "unbuilt";
       reason: CzIsirUnbuilt;
-      detail?: CzIsirAnonymizationFailure | CzIsirParseFailure | undefined;
+      detail?: CzIsirParseFailure | undefined;
     }
   /** The document could not be read now; it is asked for again. */
   | { type: "unread"; outcome: UnreadOutcome };
@@ -497,7 +489,7 @@ const withoutRegisterFurniture = (lines: readonly PdfLine[]): PdfLine[] => {
   return kept;
 };
 
-/** A document's paragraphs, before anonymisation; never stored. */
+/** A document's paragraphs as read from its PDF. */
 export const readCzIsirDocumentParagraphs = async (
   bytes: Uint8Array,
 ): Promise<
@@ -528,7 +520,7 @@ export const readCzIsirDocumentParagraphs = async (
       .replaceAll(/\s+/gu, " ")
       .trim();
   // The court's footnotes are its text too: they follow the body, each
-  // opened by its number, and are anonymised with it.
+  // opened by its number.
   const paragraphs = [
     ...assemblePdfParagraphs(withoutRegisterFurniture(read.value.body)).map(
       (runs) => ({
@@ -586,7 +578,7 @@ const paragraphsSchema = v.array(
 );
 
 /**
- * One decision from its action and its anonymised paragraphs: what a crawl
+ * One decision from its action and its paragraphs: what a crawl
  * builds and what a replay rebuilds from the stored payload alone.
  */
 export const buildCzIsirDecision = ({
@@ -726,20 +718,15 @@ export const czIsirListingOnlyDecision = (
   };
 };
 
-const anonymizer = createCzIsirAnonymizer(
-  async () => await createPipeline({ language: LANGUAGE }),
-);
-
 type ReadDecisionOptions = {
   action: CzIsirAction;
   documentId: string;
   cursor: string | null;
   signal: AbortSignal | undefined;
-  anonymize?: CzIsirAnonymizer | undefined;
 };
 
 /**
- * Read, anonymise and build one decision. A document that could not be read
+ * Read and build one decision. A document that could not be read
  * is `unread`, so the page keeps what it built and the pipeline asks for the
  * document again; only a refusal of the whole source stops the page.
  */
@@ -748,7 +735,6 @@ export const readCzIsirDecision = async ({
   documentId,
   cursor,
   signal,
-  anonymize,
 }: ReadDecisionOptions): Promise<
   Result<CzIsirDecisionRead, AdapterFetchError>
 > => {
@@ -804,17 +790,8 @@ export const readCzIsirDecision = async ({
   if (Result.isError(paragraphs)) {
     return Result.ok({ type: "unbuilt", reason: paragraphs.error });
   }
-  const pipeline = anonymize ?? (await anonymizer.load());
-  const anonymised = pipeline.anonymize(paragraphs.value);
-  if (Result.isError(anonymised)) {
-    return Result.ok({
-      type: "unbuilt",
-      reason: CZ_ISIR_UNBUILT.ANONYMISATION,
-      detail: anonymised.error.reason,
-    });
-  }
   return Result.ok(
-    buildCzIsirDecision({ action, paragraphs: anonymised.value }),
+    buildCzIsirDecision({ action, paragraphs: paragraphs.value }),
   );
 };
 
@@ -824,14 +801,12 @@ type CrawlOptions = {
   cursorText: string | null;
   config: Record<string, unknown>;
   signal: AbortSignal | undefined;
-  anonymize?: CzIsirAnonymizer | undefined;
 };
 
 const crawlPage = async ({
   cursorText,
   config: rawConfig,
   signal,
-  anonymize,
 }: CrawlOptions): Promise<Result<SyncPage, AdapterFetchError>> => {
   const config = parseConfig(rawConfig, cursorText);
   if (Result.isError(config)) {
@@ -877,7 +852,6 @@ const crawlPage = async ({
       documentId: selected.documentId,
       cursor: cursorText,
       signal,
-      anonymize,
     });
     if (Result.isError(read)) {
       return Result.err(read.error);
@@ -927,12 +901,10 @@ export const czIsirFetchPage = async (
   cursor: string | null,
   config: Record<string, unknown>,
   signal?: AbortSignal,
-  anonymize?: CzIsirAnonymizer,
 ) =>
   (
     await Result.tryPromise({
-      try: async () =>
-        await crawlPage({ cursorText: cursor, config, signal, anonymize }),
+      try: async () => await crawlPage({ cursorText: cursor, config, signal }),
       catch: adapterCatch(KEY, cursor),
     })
   ).andThen((page) => page);
@@ -1100,7 +1072,7 @@ const reparseStoredRaw = (
     return {
       type: "rejected",
       rejection: STORED_RAW_REPARSE_REJECTION.NO_DOCUMENT,
-      detail: "the stored payload holds no anonymised text",
+      detail: "the stored payload holds no decision text",
     };
   }
   const built = buildCzIsirDecision({ action, paragraphs: paragraphs.output });

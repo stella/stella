@@ -135,6 +135,7 @@ const storedScopeState = async ({
   const row = await storedScopeRow(decisionId, scopedDb);
   const ast = row?.astS3Key
     ? await readCorpusAst(row.astS3Key, {
+        report: { documentId: decisionId },
         ...corpus.readBytes,
         ...(signal === undefined ? {} : { signal }),
         ...(s3Policy === undefined ? {} : { s3Policy }),

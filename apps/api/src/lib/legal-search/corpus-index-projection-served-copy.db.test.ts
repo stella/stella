@@ -71,7 +71,11 @@ const SOURCE_ID = toSafeId<"legislationSource">(
   "0198e331-e578-7000-8000-0000000009f1",
 );
 const ENTITIES_PER_RUN = 3;
-const PAYLOAD = { text: "A published act.", ast: null } as const;
+const PAYLOAD = {
+  text: "A published act.",
+  ast: null,
+  storedAst: { type: "absent" },
+} as const;
 /** Long after any delete task a run issues: settlement may count survivors. */
 const SETTLEMENT_NOW = Temporal.Instant.from("2100-01-01T00:00:00Z");
 

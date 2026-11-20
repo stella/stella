@@ -13,7 +13,7 @@ const MODEL_REQUESTS_WITHOUT_CHAT_CONTENT = [
   "apps/api/src/handlers/case-law/polarity/llm-classifier.ts",
   "apps/api/src/handlers/clauses/rewrite.ts",
   "apps/api/src/handlers/contacts/extract-procuracao.ts",
-  "apps/api/src/handlers/dictation/cleanup.ts",
+  "apps/api/src/handlers/dictation/model-endpoint.ts",
   "apps/api/src/handlers/document-reviews/reference-positions.ts",
   "apps/api/src/handlers/entities/placements/suggest.ts",
   "apps/api/src/handlers/playbooks/derive-ask.ts",
@@ -89,6 +89,11 @@ export default {
         path: "apps/api/src/handlers/chat/subagent-runner.ts",
         reason:
           "A subagent's brief, messages and tools pass through the parent turn's boundary.",
+      },
+      {
+        path: "apps/api/src/handlers/chat/browse-web-agent.ts",
+        reason:
+          "The browsing child's task, its suspended run's messages and its tool pass through the parent turn's boundary.",
       },
       {
         path: "apps/api/src/handlers/chat/compaction.ts",

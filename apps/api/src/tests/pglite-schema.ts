@@ -1798,6 +1798,63 @@ export const installPgliteTimeEntryTimerSignals = async (
   }
 };
 
+/** Install the trigger that fills reconciliation columns for every writer. */
+export const installPgliteFileObjectReconciliationFill = async (
+  db: PgliteSchemaDb,
+) => {
+  const statements = readMigrationStatements(
+    nodePath.join(
+      DRIZZLE_DIR,
+      "20261120170300_file_reservation_reconciliation_state",
+      "migration.sql",
+    ),
+  ).filter((statement) => {
+    const source = executableSql(statement);
+    return (
+      source.startsWith(
+        'CREATE OR REPLACE FUNCTION "organization_file_objects_fill_reconciliation"',
+      ) ||
+      source.startsWith(
+        'CREATE TRIGGER "organization_file_objects_fill_reconciliation"',
+      )
+    );
+  });
+  if (statements.length !== 2) {
+    panic("File object reconciliation fill migration statements are missing");
+  }
+  for (const statement of statements) {
+    await db.execute(sql.raw(statement));
+  }
+};
+
+/** Install the trigger that turns a legacy payload clear into a redaction. */
+export const installPgliteCaseLawLegacyRedactionFence = async (
+  db: PgliteSchemaDb,
+) => {
+  // The current function body, attached by the trigger its first migration
+  // created.
+  const statementsFrom = (migration: string, prefix: string) =>
+    readMigrationStatements(
+      nodePath.join(DRIZZLE_DIR, migration, "migration.sql"),
+    ).filter((statement) => executableSql(statement).startsWith(prefix));
+  const statements = [
+    ...statementsFrom(
+      "20261120190700_case_law_redacted_inline_raw",
+      "CREATE OR REPLACE FUNCTION fence_legacy_case_law_redaction()",
+    ),
+    ...statementsFrom(
+      "20260731220000_case_law_redaction_fence",
+      "CREATE TRIGGER case_law_decisions_legacy_redaction_fence",
+    ),
+  ];
+  if (statements.length !== 2) {
+    panic("Case-law legacy redaction fence migration statements are missing");
+  }
+  for (const statement of statements) {
+    await db.execute(sql.raw(statement));
+  }
+};
+
 /** Install the trigger that derives a playbook's document type key from scope. */
 export const installPglitePlaybookDocumentTypeKey = async (
   db: PgliteSchemaDb,

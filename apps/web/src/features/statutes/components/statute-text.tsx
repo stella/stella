@@ -29,6 +29,11 @@ import { LEGAL_TEXT_CLASS_NAME } from "@stll/ui/prose";
 import { cn } from "@stll/ui/utils";
 
 import { useInspectorView } from "@/components/inspector/use-inspector-view";
+import { READER_BODY_STYLE } from "@/components/legal-reader/reader-text.pending";
+import {
+  STATUTE_MASTHEAD_CLASS_NAMES,
+  STATUTE_TEXT_CLASS_NAME,
+} from "@/features/statutes/components/statute-text.pending";
 import { createProvisionViewTab } from "@/features/statutes/provision-inspector.logic";
 import type { StatuteMasthead as StatuteMastheadData } from "@/features/statutes/statute-reader-blocks";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
@@ -55,10 +60,11 @@ type StatuteTextProps = {
   fulltext: string | null;
   language: string;
   /**
-   * The rendered block the reader was sent to. It keeps a marker, and the
-   * text lands on it once it is shown.
+   * The rendered blocks the reader was sent to: a citation can name several
+   * subdivisions (`odst. 1 a 2`). Each keeps a marker, and the text lands on
+   * the first once it is shown.
    */
-  landingAnchorId?: string | undefined;
+  landingAnchorIds?: readonly string[] | undefined;
   masthead: StatuteMastheadData | null;
   provisionCitationCounts: ReadonlyMap<string, number>;
   /** The publisher's scheme its anchors nest provision lists in. */
@@ -68,12 +74,6 @@ type StatuteTextProps = {
   versionCount: number;
   versionValidFrom: string | null;
 };
-
-const READER_STYLE = {
-  fontFamily: "var(--reader-body-font)",
-  fontSize: "var(--reader-body-size)",
-  lineHeight: "var(--reader-body-line-height)",
-} as const;
 
 /**
  * The blocks the statute reader draws marks in: the parsed provisions, or
@@ -93,6 +93,7 @@ export const statuteAnnotationBlocks = (
 // The statutes reader carries no in-page find bar yet, so every block renders
 // with an empty highlight set.
 const NO_RANGES = {};
+const NO_LANDING: readonly string[] = [];
 const NO_ACTIVE_MATCH = -1;
 
 /**
@@ -106,27 +107,18 @@ export const StatuteMasthead = ({
 }: {
   masthead: StatuteMastheadData;
 }) => (
-  <header
-    className="group relative mb-12 scroll-mt-[var(--reader-anchor-offset)] text-center"
-    id={masthead.anchorId}
-  >
-    <p className="mb-4 text-[1.55rem] leading-tight font-bold">
-      {masthead.citation}
-    </p>
-    <p className="text-[1.35rem] leading-tight font-bold tracking-wide">
+  <header className={STATUTE_MASTHEAD_CLASS_NAMES.root} id={masthead.anchorId}>
+    <p className={STATUTE_MASTHEAD_CLASS_NAMES.citation}>{masthead.citation}</p>
+    <p className={STATUTE_MASTHEAD_CLASS_NAMES.instrument}>
       {masthead.instrument}
     </p>
     {masthead.issuer !== null && (
-      <p className="mt-2 text-[1.25rem] leading-snug font-semibold">
-        {masthead.issuer}
-      </p>
+      <p className={STATUTE_MASTHEAD_CLASS_NAMES.issuer}>{masthead.issuer}</p>
     )}
     {masthead.date !== null && (
-      <p className="mt-3 text-[1.05rem] leading-relaxed">{masthead.date}</p>
+      <p className={STATUTE_MASTHEAD_CLASS_NAMES.date}>{masthead.date}</p>
     )}
-    <h1 className="mt-2 text-[1.15rem] leading-relaxed font-semibold text-balance">
-      {masthead.title}
-    </h1>
+    <h1 className={STATUTE_MASTHEAD_CLASS_NAMES.title}>{masthead.title}</h1>
   </header>
 );
 
@@ -141,7 +133,7 @@ export const StatuteText = ({
   citationWork,
   documentId,
   fulltext,
-  landingAnchorId,
+  landingAnchorIds = NO_LANDING,
   language,
   masthead,
   provisionCitationCounts,
@@ -156,14 +148,15 @@ export const StatuteText = ({
 
   // The same arrival the decision reader makes: straight onto the block, held
   // there while the page around it settles.
+  const [scrollAnchorId] = landingAnchorIds;
   useExternalSyncEffect(() => {
     const article = articleRef.current;
-    if (article === null || landingAnchorId === undefined) {
+    if (article === null || scrollAnchorId === undefined) {
       return undefined;
     }
-    const target = readerBlockByAnchor(article, landingAnchorId);
+    const target = readerBlockByAnchor(article, scrollAnchorId);
     return target === null ? undefined : holdLanding({ article, target });
-  }, [landingAnchorId]);
+  }, [scrollAnchorId]);
 
   if (blocks.length > 0) {
     const anchorsByPieceId = buildAnnotationAnchors(
@@ -172,13 +165,10 @@ export const StatuteText = ({
     );
     return (
       <article
-        className={cn(
-          LEGAL_TEXT_CLASS_NAME,
-          "reader-statute text-card-foreground text-start",
-        )}
+        className={cn(LEGAL_TEXT_CLASS_NAME, STATUTE_TEXT_CLASS_NAME)}
         lang={language}
         ref={articleRef}
-        style={READER_STYLE}
+        style={READER_BODY_STYLE}
       >
         {masthead !== null && <StatuteMasthead masthead={masthead} />}
         {blocks.map((block) => {
@@ -212,7 +202,7 @@ export const StatuteText = ({
               anchorsByPieceId={anchorsByPieceId}
               block={block}
               key={block.id}
-              landing={block.anchorId === landingAnchorId}
+              landing={landingAnchorIds.includes(block.anchorId)}
               provisionAccessory={detailsAction}
               rangesByPieceId={NO_RANGES}
               statuteAnchors={statuteAnchors}
@@ -226,12 +216,9 @@ export const StatuteText = ({
   if (fulltext) {
     return (
       <article
-        className={cn(
-          LEGAL_TEXT_CLASS_NAME,
-          "reader-statute text-card-foreground text-start",
-        )}
+        className={cn(LEGAL_TEXT_CLASS_NAME, STATUTE_TEXT_CLASS_NAME)}
         lang={language}
-        style={READER_STYLE}
+        style={READER_BODY_STYLE}
       >
         <h1 className="mb-10 text-center text-xl font-semibold text-balance">
           {statuteTitle}

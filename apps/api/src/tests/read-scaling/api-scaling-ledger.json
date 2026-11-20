@@ -1927,6 +1927,10 @@
       "reason": "Returns transient typed text for one bounded transcript and stores nothing; model admission owns usage accounting. A provider-backed scaling fixture for that admission lifecycle is pending."
     },
     {
+      "id": "POST /v1/desktop/dictation/recording-cleanup",
+      "reason": "Returns transient formatted text for one bounded part of a recording transcript and stores nothing; model admission owns usage accounting. A provider-backed scaling fixture for that admission lifecycle is pending."
+    },
+    {
       "id": "POST /v1/desktop/dictation/transcribe",
       "reason": "Transcribes one bounded transient audio chunk and stores only usage and audit events; model admission owns usage accounting. A provider-backed scaling fixture for that admission lifecycle is pending."
     },

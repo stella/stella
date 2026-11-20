@@ -245,10 +245,6 @@ import {
 } from "@/api/lib/auth/session-lifetime";
 import { createDatabaseSessionLifetimeStore } from "@/api/lib/auth/session-lifetime-store";
 import {
-  liveSessionAdapterWhere,
-  liveSessionPredicate,
-} from "@/api/lib/auth/session-liveness";
-import {
   isSecondFactorAuthSessionPath,
   isSessionCreatingAuthPath,
 } from "@/api/lib/auth/session-path-classification";
@@ -279,6 +275,7 @@ import { unlinkAccountWithConfirmation } from "@/api/lib/auth/unlink-account-run
 import { AUTH_USER_ADDITIONAL_FIELDS } from "@/api/lib/auth/user-additional-fields";
 import { validateUserLocale } from "@/api/lib/auth/user-locale";
 import { createUserProjectionUpdateHook } from "@/api/lib/auth/user-projection-updates";
+import { readViewerLocation } from "@/api/lib/auth/viewer-location";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
@@ -306,8 +303,11 @@ import {
   resolveWorkspaceMemberAuthority,
 } from "@/api/lib/db/member-authority";
 import { readBounded } from "@/api/lib/db/read-bounded";
+import {
+  liveSessionAdapterWhere,
+  liveSessionPredicate,
+} from "@/api/lib/db/session-liveness";
 import { getDemoAccountOtpOverride } from "@/api/lib/demo-account-otp";
-import { detectedCountryFromRequestContext } from "@/api/lib/detected-country";
 import { DEV_INSPECTOR_ORIGINS, frontendOrigins } from "@/api/lib/dev-origins";
 import { stashDevOtp } from "@/api/lib/dev-otp-store";
 import { ensureDefaultDocumentTypes } from "@/api/lib/document-types/defaults";
@@ -353,6 +353,7 @@ import { observeFailure } from "@/api/lib/observability/observe-failure";
 import {
   enrichRequestContext,
   getRequestContext,
+  sealedRequestClientAddress,
 } from "@/api/lib/observability/request-context";
 import { observedStatus } from "@/api/lib/observability/server-error-answer";
 import { createOrganizationLifecycleHooks } from "@/api/lib/organization-lifecycle-hooks";
@@ -2438,11 +2439,20 @@ export const createAuth = (
             if (Result.isError(data)) {
               throw data.error;
             }
-            const detectedCountry = detectedCountryFromRequestContext(ctx);
+            // Suggests practice jurisdictions during onboarding; recorded only
+            // when the request proved it came through CloudFront.
+            const viewerLocation = readViewerLocation({
+              headers: ctx?.request?.headers ?? ctx?.headers,
+              clientAddress: sealedRequestClientAddress(),
+            });
             return await Promise.resolve({
-              data: detectedCountry
-                ? { ...data.value, detectedCountry }
-                : data.value,
+              data:
+                viewerLocation.type === "known"
+                  ? {
+                      ...data.value,
+                      detectedCountry: viewerLocation.countryCode,
+                    }
+                  : data.value,
             });
           },
           // Creating the account where the professional-use statement is
@@ -2998,6 +3008,10 @@ export const createAuth = (
                   email,
                   device,
                   ipAddress,
+                  location: readViewerLocation({
+                    headers: ctx.request?.headers,
+                    clientAddress: sealedRequestClientAddress(),
+                  }),
                   time: formattedTime,
                   sessionsUrl: `${env.FRONTEND_URL}${ACTIVE_SESSIONS_FRONTEND_PATH}`,
                   lang,
