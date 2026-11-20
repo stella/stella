@@ -50,7 +50,7 @@ import type { SkippedImportFile } from "./import-skill-dialog.logic";
 
 const MAX_SELECTED_SKILLS = 20;
 /** What the file chooser offers: a skill pack or a bare markdown skill. */
-const SKILL_PACK_ACCEPT = ".zip,.md,application/zip,text/markdown";
+const SKILL_PACK_ACCEPT = ".zip,.skill,.md,application/zip,text/markdown";
 const FIRST_STRONG_ISOLATE = String.fromCodePoint(8296);
 const POP_DIRECTIONAL_ISOLATE = String.fromCodePoint(8297);
 const isolateBidi = (value: string): string =>
