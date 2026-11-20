@@ -33,7 +33,7 @@ const StatuteMastheadPending = () => (
       <FaceLabelPending className="w-24" />
     </div>
     <div className={STATUTE_MASTHEAD_CLASS_NAMES.title}>
-      <FaceLabelPending className="w-2/3" />
+      <FaceLabelPending className="w-72" />
     </div>
   </header>
 );

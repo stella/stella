@@ -31,7 +31,9 @@ const READER_PARAGRAPHS_PENDING = [
  * box at the text's own size and line height, a paragraph's gap apart. The
  * lines are `div`s: a bar is a block, and the HTML parser closes a paragraph
  * at a block, so the server's paint would no longer be the tree the client
- * hydrates.
+ * hydrates. Each line is a column flex box, so the bar's line box is
+ * stretched to the paper's width and a fractional bar width is a fraction of
+ * the line, not of a shrink-wrapped, empty box.
  */
 export const ReaderParagraphsPending = () => (
   <div
@@ -42,7 +44,10 @@ export const ReaderParagraphsPending = () => (
     {READER_PARAGRAPHS_PENDING.map((paragraph) => (
       <div key={paragraph.key}>
         {paragraph.lines.map((width, line) => (
-          <div className="flex" key={`${paragraph.key}${String(line)}`}>
+          <div
+            className="flex flex-col"
+            key={`${paragraph.key}${String(line)}`}
+          >
             <FaceLabelPending className={width} />
           </div>
         ))}
