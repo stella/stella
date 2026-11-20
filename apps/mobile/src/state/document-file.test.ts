@@ -287,7 +287,15 @@ describe("reading a document's file", () => {
       const fileName = `${embedded.fileName}.P7M`;
       const preview = {
         ...embedded,
-        layers: [{ signers: [{ name: "Anna Rossi" }, { name: null }] }],
+        layers: [
+          {
+            id: "layer-0",
+            signers: [
+              { id: "layer-0.signer-0", name: "Anna Rossi" },
+              { id: "layer-0.signer-1", name: null },
+            ],
+          },
+        ],
       };
       const { fetch, calls } = server((path) =>
         Response.json(

@@ -74,17 +74,17 @@ export const CadesFileViewer = ({
             <DownloadIcon />
             {t("common.downloadOriginal")}
           </Button>
-          {data.layers.map(({ signers }, index) => (
-            // oxlint-disable-next-line react/no-array-index-key -- The immutable envelope layers are identified by their nesting order.
-            <section className="space-y-1 text-sm" key={index}>
+          {data.layers.map(({ id, signers }, index) => (
+            <section className="space-y-1 text-sm" key={id}>
               <h3 className="font-medium">
                 {t("signedFile.layer", { number: index + 1 })}
               </h3>
               <ul className="list-inside list-disc">
-                {signers.map(({ name }, ordinal) => (
-                  // oxlint-disable-next-line react/no-array-index-key -- The immutable signer list can contain duplicate or missing names.
-                  <li className="wrap-break-word" key={ordinal}>
-                    <BidiText>{name ?? t("signedFile.unknownSigner")}</BidiText>
+                {signers.map((signer) => (
+                  <li className="wrap-break-word" key={signer.id}>
+                    <BidiText>
+                      {signer.name ?? t("signedFile.unknownSigner")}
+                    </BidiText>
                   </li>
                 ))}
               </ul>
