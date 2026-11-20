@@ -312,6 +312,7 @@ export const TAGGED_FAILURE_REASON = {
   InfoSoudSyncIncomplete: "tagged_failure",
   IngestDocumentTooLargeError: "tagged_failure",
   IngestedAstRejectedError: "tagged_failure",
+  IngestionFailureEvidenceError: "tagged_failure",
   IngestionStallError: "tagged_failure",
   InvalidCompactUuidError: "tagged_failure",
   InvalidLegalSearchCursorError: "tagged_failure",
@@ -586,6 +587,7 @@ export const TAGGED_FAILURE_REASON = {
   publisher_request_aborted: "tagged_failure",
   publisher_target_refused: "tagged_failure",
   robots_disallowed: "tagged_failure",
+  court_unrecognized: "tagged_failure",
   robots_unavailable: "tagged_failure",
 } as const satisfies Record<FailureTag, FailureReason>;
 
