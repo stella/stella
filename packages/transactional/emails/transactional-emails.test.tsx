@@ -121,8 +121,8 @@ describe("link/CTA emails carry the correct href", () => {
     const sessionsUrl = "https://app.stella.test/account/sessions";
     const html = renderHtml(
       <NewDeviceLogin.Email
-        device="Chrome on macOS"
-        ipAddress="203.0.113.42"
+        device={{ type: "browserOnOs", browser: "Chrome", os: "macOS" }}
+        ipAddress={{ type: "known", address: "203.0.113.42" }}
         lang="en"
         location={{ type: "unknown" }}
         sessionsUrl={sessionsUrl}
@@ -173,15 +173,16 @@ describe("every supported locale renders without missing-interpolation errors", 
 
       const deviceHtml = renderHtml(
         <NewDeviceLogin.Email
-          device="Chrome on macOS"
-          ipAddress="203.0.113.42"
+          device={{ type: "browserOnOs", browser: "Chrome", os: "macOS" }}
+          ipAddress={{ type: "known", address: "203.0.113.42" }}
           lang={lang}
           location={PRAGUE_WITH_MAP}
           sessionsUrl="https://app.stella.test/account/sessions"
           time="Mar 6, 2026, 2:30 PM UTC"
         />,
       );
-      expect(deviceHtml).toContain("Chrome on macOS");
+      expect(deviceHtml).toContain("Chrome");
+      expect(deviceHtml).toContain("macOS");
 
       // The subject helpers hit a second, separately-namespaced key path.
       expect(otpSubject(lang).length).toBeGreaterThan(0);
@@ -193,6 +194,44 @@ describe("every supported locale renders without missing-interpolation errors", 
       expectNoIntlErrors();
     }
   });
+
+  const DEVICES: readonly {
+    device: NewDeviceLogin.SignInDevice;
+    names: readonly string[];
+  }[] = [
+    {
+      device: { type: "browserOnOs", browser: "Chrome", os: "macOS" },
+      names: ["Chrome", "macOS"],
+    },
+    { device: { type: "browser", browser: "Chrome" }, names: ["Chrome"] },
+    { device: { type: "os", os: "macOS" }, names: ["macOS"] },
+    { device: { type: "unknown" }, names: [] },
+  ];
+
+  test.each(LOCALES.filter((lang) => lang !== "en"))(
+    "%s words the device and a missing address in its own language",
+    (lang) => {
+      for (const { device, names } of DEVICES) {
+        const { text } = renderEmail(
+          <NewDeviceLogin.Email
+            device={device}
+            ipAddress={{ type: "unknown" }}
+            lang={lang}
+            location={{ type: "unknown" }}
+            sessionsUrl="https://app.stella.test/account/sessions"
+            time="Mar 6, 2026, 2:30 PM UTC"
+          />,
+        );
+        // Browser and OS names are proper nouns and print as parsed; the
+        // words around them are the locale's.
+        for (const name of names) {
+          expect(text).toContain(name);
+        }
+        expect(text).not.toMatch(/\bUnknown\b|\bon macOS\b/u);
+      }
+      expectNoIntlErrors();
+    },
+  );
 
   test("Arabic renders right-to-left and Latin locales left-to-right", () => {
     const arabic = renderHtml(
@@ -226,8 +265,8 @@ describe("user-supplied strings are HTML-escaped in the rendered output", () => 
   test("new-device-login escapes the device string", () => {
     const html = renderHtml(
       <NewDeviceLogin.Email
-        device={INJECTION}
-        ipAddress="203.0.113.42"
+        device={{ type: "browserOnOs", browser: INJECTION, os: INJECTION }}
+        ipAddress={{ type: "known", address: "203.0.113.42" }}
         lang="en"
         location={{
           type: "known",
@@ -274,8 +313,8 @@ describe("new-device-login location", () => {
   ) =>
     renderEmail(
       <NewDeviceLogin.Email
-        device="Firefox on Linux"
-        ipAddress="198.51.100.7"
+        device={{ type: "browserOnOs", browser: "Firefox", os: "Linux" }}
+        ipAddress={{ type: "known", address: "198.51.100.7" }}
         lang={lang}
         location={location}
         sessionsUrl="https://app.stella.test/account/sessions"
@@ -309,8 +348,6 @@ describe("new-device-login location", () => {
 
       The location is estimated from the IP address and may be inaccurate.
 
-      Map data: Natural Earth
-
       Review sessions https://app.stella.test/account/sessions
 
       ----------------------------------------
@@ -332,7 +369,6 @@ describe("new-device-login location", () => {
     expect(text).toContain(
       "The location is estimated from the IP address and may be inaccurate.",
     );
-    expect(text).not.toContain("Natural Earth");
     expectNoIntlErrors();
   });
 

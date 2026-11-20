@@ -356,6 +356,7 @@ export const TAGGED_FAILURE_REASON = {
   LocalRunOutputRefused: "request_invalid",
   LocalRunSteerUnknown: "request_invalid",
   LocalizedAppError: "tagged_failure",
+  LocationMapCountryUnresolvedError: "tagged_failure",
   LoopbackCallbackError: "tagged_failure",
   LoopbackTimeoutError: "tagged_failure",
   MailAuthenticationError: "tagged_failure",

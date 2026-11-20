@@ -340,6 +340,7 @@ export const FAILURE_TAGS = [
   "LocalRunOutputRefused",
   "LocalRunSteerUnknown",
   "LocalizedAppError",
+  "LocationMapCountryUnresolvedError",
   "LoopbackCallbackError",
   "LoopbackTimeoutError",
   "MailAuthenticationError",

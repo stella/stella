@@ -24,19 +24,24 @@
     "action": "Revisar sessões",
     "body": "Sua conta recebeu um acesso de um novo dispositivo ou local.",
     "device": "Dispositivo",
+    "deviceName": {
+      "browserOnOs": "{browser} no {os}",
+      "unknown": "Dispositivo desconhecido"
+    },
     "heading": "Novo acesso detectado",
     "ignore": "Se foi você, nenhuma ação é necessária. Se não reconhece esta atividade, revise suas sessões ativas e revogue as que não reconhecer.",
     "ipAddress": "Endereço IP",
+    "ipAddressUnknown": "Desconhecido",
     "location": "Local aproximado",
     "locationNote": "O local é estimado com base no endereço IP e pode não ser exato.",
     "mapAlt": "Mapa com o local aproximado do acesso: {location}",
-    "mapCredit": "Dados do mapa: Natural Earth",
     "place": {
       "cityCountry": "{city}, {country}",
       "cityRegionCountry": "{city}, {region}, {country}",
       "regionCountry": "{region}, {country}"
     },
     "preview": "Novo acesso de {device}",
+    "previewUnknownDevice": "Novo acesso de um dispositivo desconhecido",
     "subject": "Novo acesso à sua conta stella",
     "time": "Horário"
   },
