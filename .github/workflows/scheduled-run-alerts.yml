@@ -104,6 +104,7 @@ jobs:
           path: .gh-retry
           persist-credentials: false
           sparse-checkout: |
+            package.json
             scripts/gh-retry.sh
             scripts/main-heavy-alert-kind.mjs
           sparse-checkout-cone-mode: false
@@ -226,6 +227,16 @@ jobs:
             *) echo "send=true" >> "$GITHUB_OUTPUT" ;;
           esac
 
+      - name: Setup Bun for the failure classification
+        continue-on-error: true
+        if: >-
+          github.event_name == 'workflow_run'
+          && github.event.workflow_run.path == '.github/workflows/main-heavy.yml'
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        timeout-minutes: 2
+        with:
+          bun-version-file: .gh-retry/package.json
+
       - name: Classify main-heavy infrastructure failures
         id: classification
         continue-on-error: true
@@ -240,7 +251,7 @@ jobs:
         run: |
           kind=$(bash "$GH_RETRY_SCRIPT" api --paginate --slurp \
             "repos/$GITHUB_REPOSITORY/commits/$HEAD_SHA/statuses?per_page=100" |
-            node .gh-retry/scripts/main-heavy-alert-kind.mjs "$RUN_URL" "$RUN_ID")
+            bun .gh-retry/scripts/main-heavy-alert-kind.mjs "$RUN_URL" "$RUN_ID")
           echo "kind=$kind" >> "$GITHUB_OUTPUT"
 
       - name: Send failure alert
