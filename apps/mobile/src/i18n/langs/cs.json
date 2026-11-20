@@ -612,6 +612,7 @@
   "signedFile": {
     "layer": "Vrstva podpisů {number, number}",
     "noReadableContent": "Pro náhled není k dispozici žádný čitelný obsah.",
+    "previewTruncated": "Úplný text není v tomto náhledu dostupný.",
     "unknownSigner": "Neznámý podepisující",
     "unreadable": "Podepsaný soubor se nepodařilo přečíst.",
     "unverified": "Podpisy nebyly ověřeny."

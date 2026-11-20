@@ -158,6 +158,8 @@
     "./desktop-rpc": "./src/desktop-rpc.gen.ts",
     "./document-translation": "./src/document-translation.ts",
     "./legal-file-formats": "./src/legal-file-formats.ts",
+    "./asic": "./src/asic.ts",
+    "./asic-file-formats": "./src/asic-file-formats.ts",
     "./cades": "./src/cades.ts",
     "./data-box": "./src/data-box.ts",
     "./email-mime-types": "./src/email-mime-types.ts",

@@ -155,7 +155,7 @@ export const readDataBoxFile = async (
     organizationId,
     purpose = "preview",
   } = options;
-  const loaded = await loadLegalFileSource(options, "dataBox");
+  const loaded = await loadLegalFileSource(options, ["dataBox"]);
   if (loaded.isErr()) {
     return Result.err(loaded.error);
   }

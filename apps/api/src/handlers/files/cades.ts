@@ -4,7 +4,7 @@ import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { resourceIdSchema, workspaceParams } from "@/api/lib/custom-schema";
 import { readCadesPdf, readCadesPreview } from "@/api/lib/files/cades-preview";
-import { readCadesFile } from "@/api/lib/files/read-cades-file";
+import { readLegalFilePreview } from "@/api/lib/files/read-legal-file-preview";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 import { secureDocumentResponse } from "@/api/lib/secure-document-response";
 
@@ -30,7 +30,7 @@ export const cadesPreviewEndpoint = createSafeHandler(
     const result = yield* Result.await(
       Result.tryPromise(
         async () =>
-          await readCadesFile(
+          await readLegalFilePreview(
             {
               fieldId,
               scopedDb,
@@ -38,6 +38,7 @@ export const cadesPreviewEndpoint = createSafeHandler(
               organizationId: session.activeOrganizationId,
               recordAuditEvent,
             },
+            ["cades"],
             readCadesPreview,
           ),
       ),
@@ -58,7 +59,7 @@ export const cadesContentEndpoint = createSafeHandler(
     const result = yield* Result.await(
       Result.tryPromise(
         async () =>
-          await readCadesFile(
+          await readLegalFilePreview(
             {
               fieldId,
               scopedDb,
@@ -66,6 +67,7 @@ export const cadesContentEndpoint = createSafeHandler(
               organizationId: session.activeOrganizationId,
               recordAuditEvent,
             },
+            ["cades"],
             readCadesPdf,
           ),
       ),

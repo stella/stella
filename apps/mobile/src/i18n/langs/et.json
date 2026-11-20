@@ -612,6 +612,7 @@
   "signedFile": {
     "layer": "Allkirjakiht {number, number}",
     "noReadableContent": "Eelvaateks pole loetavat sisu saadaval.",
+    "previewTruncated": "Täistekst ei ole selles eelvaates saadaval.",
     "unknownSigner": "Tundmatu allkirjastaja",
     "unreadable": "Allkirjastatud faili ei õnnestunud lugeda.",
     "unverified": "Allkirju ei ole kontrollitud."

@@ -13,7 +13,10 @@ import { eq, inArray } from "drizzle-orm";
 
 import { DATA_BOX_MESSAGE_MIME_TYPE } from "@stll/api-contract/data-box";
 import { EML_MIME_TYPE } from "@stll/api-contract/email-mime-types";
-import { CADES_FILE_FORMAT } from "@stll/api-contract/legal-file-formats";
+import {
+  ASIC_E_FILE_FORMAT,
+  CADES_FILE_FORMAT,
+} from "@stll/api-contract/legal-file-formats";
 import { ZipArchive } from "@stll/docx-core/zip";
 import { rejectionOf } from "@stll/property-testing/rejection";
 import { sha256Hex } from "@stll/sha256/bun";
@@ -35,6 +38,7 @@ import {
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
 import { env } from "@/api/env";
 import { envBase } from "@/api/env-base";
+import asicPreviewEndpoint from "@/api/handlers/files/asic";
 import {
   cadesContentEndpoint,
   cadesPreviewEndpoint,
@@ -75,12 +79,14 @@ import {
 import { readSyntheticSessionAuthority } from "@/api/lib/synthetic-principal/session-authority";
 import { createSyntheticSessionStore } from "@/api/lib/synthetic-principal/store";
 import { DOCX_MIME_TYPE, PDF_MIME_TYPE } from "@/api/mime-types";
+import { makeAsicFixture } from "@/api/tests/fixtures/asic";
 import { wrapP7m } from "@/api/tests/fixtures/p7m";
 import { FIXTURE_MESSAGE, zfoFile } from "@/api/tests/fixtures/zfo";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
 import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+import { asicPreviewScalingScenario } from "@/api/tests/read-scaling/asic-preview";
 import {
   cadesContentScalingScenario,
   cadesPreviewScalingScenario,
@@ -866,7 +872,7 @@ const seedCades = async (bytes?: Uint8Array) =>
     await wrapP7m(bytes ?? (await pdfBytes())),
   );
 
-const cadesContext = (fieldId: SafeId<"field">, scopedDb: ScopedDb) =>
+const legalFileContext = (fieldId: SafeId<"field">, scopedDb: ScopedDb) =>
   createTestHandlerContext<Parameters<typeof cadesPreviewEndpoint.handler>[0]>({
     workspaceId: ids.wsA1,
     session: { activeOrganizationId: ids.orgA },
@@ -877,12 +883,73 @@ const cadesContext = (fieldId: SafeId<"field">, scopedDb: ScopedDb) =>
     params: { workspaceId: ids.wsA1, fieldId },
   });
 
+const seedAsic = async () =>
+  await seedStored(
+    { fileName: "toimik.BDOC", mimeType: "application/zip", pdfFileId: null },
+    await makeAsicFixture({
+      mimeType: ASIC_E_FILE_FORMAT.mimeType,
+      members: [{ fileName: "lisa.txt", bytes: "Töölepingu lisa" }],
+      signature: "xades",
+    }),
+  );
+
+describe("ASiC file delivery", () => {
+  test("an existing generic ZIP upload exposes the same named document in Files and AI", async () => {
+    const { fieldId, entityId, entityVersionId } = await seedAsic();
+    await testDb
+      .update(entities)
+      .set({ currentVersionId: entityVersionId })
+      .where(eq(entities.id, entityId));
+    const view = await asicPreviewEndpoint.handler(
+      legalFileContext(fieldId, scopedDbA()),
+    );
+    expect(view).toMatchObject({
+      members: [
+        { fileName: "lisa.txt", text: "Töölepingu lisa", status: "readable" },
+      ],
+    });
+    await expectOneContentRow(entityId, {
+      action: "access",
+      metadata: { fieldId, format: "asic-e" },
+    });
+    const read = await LEGAL_FILE_READERS.asicE({
+      fieldId,
+      scopedDb: scopedDbA(),
+      workspaceId: ids.wsA1,
+      organizationId: ids.orgA,
+      recordAuditEvent: recorderA(),
+      purpose: "agent",
+    });
+    const { text } = read.unwrap();
+    expect(text).toContain("lisa.txt");
+    expect(text).toContain("Töölepingu lisa");
+    expect(text).toContain("unverified");
+  });
+  test("refuses an ASiC field in another matter", async () => {
+    const { fieldId } = await seedFile(
+      {
+        fileName: "record.asics",
+        mimeType: "application/zip",
+        pdfFileId: null,
+      },
+      "b",
+    );
+    expect(
+      answeredStatus(
+        await asicPreviewEndpoint.handler(
+          legalFileContext(fieldId, scopedDbA()),
+        ),
+      ),
+    ).toBe(404);
+  });
+});
+
 describe("CAdES file delivery", () => {
   test("serves the exact embedded PDF, scoped and audited", async () => {
     const bytes = await pdfBytes();
     const file = await seedCades(bytes);
     const response = await cadesContentEndpoint.handler(
-      cadesContext(file.fieldId, scopedDbA()),
+      legalFileContext(file.fieldId, scopedDbA()),
     );
     if (!(response instanceof Response)) {
       panic("Expected a PDF response");
@@ -934,7 +1001,7 @@ describe("CAdES file delivery", () => {
       },
       "b",
     );
-    const context = cadesContext(fieldId, scopedDbA());
+    const context = legalFileContext(fieldId, scopedDbA());
     expect(answeredStatus(await cadesContentEndpoint.handler(context))).toBe(
       404,
     );
@@ -943,11 +1010,15 @@ describe("CAdES file delivery", () => {
     );
   });
 
-  test.each([cadesContentScalingScenario, cadesPreviewScalingScenario])(
-    "$name cost stays bounded as a matter grows",
-    async ({ measure }) => {
-      const { fieldId } = await seedCades();
-      const context = cadesContext(fieldId, scopedDbA());
+  test.each([
+    { scenario: cadesContentScalingScenario, seed: seedCades },
+    { scenario: cadesPreviewScalingScenario, seed: seedCades },
+    { scenario: asicPreviewScalingScenario, seed: seedAsic },
+  ])(
+    "$scenario.name cost stays bounded as a matter grows",
+    async ({ scenario: { measure }, seed }) => {
+      const { fieldId } = await seed();
+      const context = legalFileContext(fieldId, scopedDbA());
       const small = await measure(context);
       const unrelated = Array.from({ length: 80 }, () => ({
         id: createSafeId<"entity">(),
@@ -1211,11 +1282,19 @@ const answeredStatus = (answer: unknown): number => {
 
 const STREAMED_PATHS: readonly StreamedPath[] = [
   {
+    name: "an ASiC inventory",
+    seed: seedAsic,
+    read: async ({ fieldId }, scopedDb) =>
+      answeredStatus(
+        await asicPreviewEndpoint.handler(legalFileContext(fieldId, scopedDb)),
+      ),
+  },
+  {
     name: "a signed document preview",
     seed: seedCades,
     read: async ({ fieldId }, scopedDb) =>
       answeredStatus(
-        await cadesPreviewEndpoint.handler(cadesContext(fieldId, scopedDb)),
+        await cadesPreviewEndpoint.handler(legalFileContext(fieldId, scopedDb)),
       ),
   },
   {
@@ -1223,7 +1302,7 @@ const STREAMED_PATHS: readonly StreamedPath[] = [
     seed: seedCades,
     read: async ({ fieldId }, scopedDb) =>
       answeredStatus(
-        await cadesContentEndpoint.handler(cadesContext(fieldId, scopedDb)),
+        await cadesContentEndpoint.handler(legalFileContext(fieldId, scopedDb)),
       ),
   },
   {
