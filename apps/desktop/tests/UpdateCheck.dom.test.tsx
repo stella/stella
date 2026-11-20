@@ -156,7 +156,7 @@ test("an install held for open documents says when it will happen", async () => 
 
   expect(
     await view.findByText(
-      "Version 0.9.87 will install once you finish editing open documents.",
+      "Version 0.9.87 waits while documents are open for editing. When you finish, check again to install it, or it installs at the next automatic check.",
     ),
   ).toBeDefined();
 });

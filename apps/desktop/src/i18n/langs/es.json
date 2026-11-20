@@ -242,7 +242,7 @@
       "available": "La versión {version} está disponible.",
       "install": "Instalar y reiniciar",
       "installing": "Instalando la versión {version}. stella desktop se reiniciará al terminar.",
-      "deferred": "La versión {version} se instalará cuando termine de editar los documentos abiertos.",
+      "deferred": "La versión {version} espera mientras se editan documentos abiertos. Cuando termine, vuelva a buscar actualizaciones para instalarla, o se instalará en la próxima comprobación automática.",
       "checkFailed": "stella desktop no pudo buscar actualizaciones.",
       "installFailed": "stella desktop no pudo instalar la actualización.",
       "support": "¿Algo no funciona bien? Escriba a nuestro soporte: <email>{address}</email>"
