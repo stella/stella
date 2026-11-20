@@ -12,7 +12,7 @@ import {
   prefetchNonCriticalInfiniteQuery,
 } from "@/lib/react-query";
 import { routePresentation } from "@/routes/-route-presentation";
-import { SettingsPageHeader } from "@/routes/_protected.settings/-components/settings-page-header";
+import { SettingsPageHeader } from "@/routes/_protected.settings/-components/settings-page-header.pending";
 import { VatRatesCard } from "@/routes/_protected.settings/organization/-components/organization/vat-rates-card";
 
 export const Route = createFileRoute(
