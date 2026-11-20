@@ -49,7 +49,6 @@ import type {
   DocumentRecoverySnapshot,
   RecoveryTarget,
 } from "../shared/rpc";
-import { StellaAppIcon } from "../shared/StellaAppIcon";
 import { DESKTOP_PLATFORM } from "../shared/use-clipboard-shortcut";
 import { WindowDragRegion } from "../shared/WindowDragRegion";
 import {
@@ -84,6 +83,7 @@ import type { SettingsPage } from "./settings-pages";
 import { SettingsSidebar } from "./SettingsSidebar";
 import { ShortcutSetting } from "./ShortcutSetting";
 import { SigningDriverSection } from "./SigningDriverSection";
+import { AppVersionRow } from "./UpdateCheck";
 
 const DEFAULT_NOTIFICATION_PREFERENCES = {
   documentReady: true,
@@ -756,11 +756,10 @@ const AboutPane = ({
     <>
       <SettingsPageHeader title={t("pages.about")} />
       <SettingsGroup>
-        <SettingsRow
-          description={versionLabel}
-          id="about-app"
-          media={<StellaAppIcon className="size-8 rounded-lg" />}
-          title={t("stellaDesktop")}
+        <AppVersionRow
+          onEmailSupport={onEmailSupport}
+          supportEmail={SUPPORT_EMAIL}
+          versionLabel={versionLabel}
         />
         {linkedAccount ? (
           <SettingsRow id="about-last-verified" title={t("lastVerified")}>
@@ -778,7 +777,7 @@ const AboutPane = ({
       </SettingsGroup>
 
       <SettingsGroup title={t("support")}>
-        <SettingsRow id="about-support-email" title="hello@stll.app">
+        <SettingsRow id="about-support-email" title={SUPPORT_EMAIL}>
           <Button onClick={onEmailSupport} variant="outline">
             {t("email")}
           </Button>
@@ -803,6 +802,9 @@ const AboutPane = ({
     </>
   );
 };
+
+/** The address `email_support` writes to (`session_manager::SUPPORT_EMAIL`). */
+const SUPPORT_EMAIL = "hello@stll.app";
 
 type ActivityAvailability = "loading" | "enabled" | "disabled";
 

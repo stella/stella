@@ -237,6 +237,16 @@
     "startOnLoginDescription": "Käivita stella desktop automaatselt sisselogimisel.",
     "stellaDesktop": "stella desktop",
     "support": "Tugi",
+    "updates": {
+      "upToDate": "stella desktop on ajakohane.",
+      "available": "Saadaval on versioon {version}.",
+      "install": "Installi ja taaskäivita",
+      "installing": "Installitakse versiooni {version}. Seejärel taaskäivitub stella desktop.",
+      "deferred": "Versioon {version} ootab, kuni avatud dokumente muudetakse. Kui olete lõpetanud, kontrollige uuesti, et see installida, muidu installitakse see järgmisel automaatsel kontrollil.",
+      "checkFailed": "stella desktop ei saanud värskendusi kontrollida.",
+      "installFailed": "stella desktop ei saanud värskendust installida.",
+      "support": "Midagi on valesti? Kirjutage meie toele: <email>{address}</email>"
+    },
     "title": "Seaded",
     "pages": {
       "general": "Üldine",

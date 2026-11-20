@@ -237,6 +237,16 @@
     "startOnLoginDescription": "Automatiškai paleisti stella desktop prisijungiant.",
     "stellaDesktop": "stella desktop",
     "support": "Palaikymas",
+    "updates": {
+      "upToDate": "stella desktop yra naujausios versijos.",
+      "available": "Galima versija {version}.",
+      "install": "Įdiegti ir paleisti iš naujo",
+      "installing": "Diegiama versija {version}. Baigus stella desktop pasileis iš naujo.",
+      "deferred": "Versija {version} laukia, kol redaguojami atidaryti dokumentai. Baigę patikrinkite dar kartą, kad ją įdiegtumėte, kitaip ji bus įdiegta per kitą automatinį patikrinimą.",
+      "checkFailed": "stella desktop nepavyko patikrinti naujinimų.",
+      "installFailed": "stella desktop nepavyko įdiegti naujinimo.",
+      "support": "Kažkas ne taip? Parašykite mūsų palaikymo komandai: <email>{address}</email>"
+    },
     "title": "Nustatymai",
     "pages": {
       "general": "Bendra",

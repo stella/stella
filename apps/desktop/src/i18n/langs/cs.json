@@ -237,6 +237,16 @@
     "startOnLoginDescription": "Spustit stella desktop automaticky při přihlášení.",
     "stellaDesktop": "stella desktop",
     "support": "Podpora",
+    "updates": {
+      "upToDate": "stella desktop je aktuální.",
+      "available": "Je k dispozici verze {version}.",
+      "install": "Nainstalovat a restartovat",
+      "installing": "Instaluje se verze {version}. Po dokončení se stella desktop restartuje.",
+      "deferred": "Verze {version} čeká, dokud upravujete otevřené dokumenty. Až skončíte, zkontrolujte aktualizace znovu a nainstalujte ji, jinak se nainstaluje při příští automatické kontrole.",
+      "checkFailed": "stella desktop nemohl zkontrolovat aktualizace.",
+      "installFailed": "stella desktop nemohl nainstalovat aktualizaci.",
+      "support": "Něco nefunguje? Napište naší podpoře: <email>{address}</email>"
+    },
     "title": "Nastavení",
     "pages": {
       "general": "Obecné",

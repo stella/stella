@@ -237,6 +237,16 @@
     "startOnLoginDescription": "تشغيل stella desktop تلقائياً عند تسجيل دخولك.",
     "stellaDesktop": "stella desktop",
     "support": "الدعم",
+    "updates": {
+      "upToDate": "stella desktop محدَّث.",
+      "available": "الإصدار {version} متاح.",
+      "install": "التثبيت وإعادة التشغيل",
+      "installing": "جارٍ تثبيت الإصدار {version}. سيُعاد تشغيل stella desktop عند الانتهاء.",
+      "deferred": "ينتظر الإصدار {version} ما دامت المستندات المفتوحة قيد التحرير. عند الانتهاء، تحقّق مجددًا لتثبيته، وإلا فسيُثبَّت عند التحقق التلقائي التالي.",
+      "checkFailed": "تعذّر على stella desktop التحقق من التحديثات.",
+      "installFailed": "تعذّر على stella desktop تثبيت التحديث.",
+      "support": "هل هناك خطب ما؟ راسل فريق الدعم لدينا: <email>{address}</email>"
+    },
     "title": "الإعدادات",
     "pages": {
       "general": "عام",

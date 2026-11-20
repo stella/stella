@@ -237,6 +237,16 @@
     "startOnLoginDescription": "Launch stella desktop automatically when you log in.",
     "stellaDesktop": "stella desktop",
     "support": "Support",
+    "updates": {
+      "upToDate": "stella desktop is up to date.",
+      "available": "Version {version} is available.",
+      "install": "Install and restart",
+      "installing": "Installing version {version}. stella desktop restarts when it is done.",
+      "deferred": "Version {version} waits while documents are open for editing. When you finish, check again to install it, or it installs at the next automatic check.",
+      "checkFailed": "stella desktop could not check for updates.",
+      "installFailed": "stella desktop could not install the update.",
+      "support": "Something feels wrong? Email our support: <email>{address}</email>"
+    },
     "title": "Settings",
     "pages": {
       "general": "General",
