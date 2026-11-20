@@ -141,9 +141,16 @@ const pdfText = async (text: string): Promise<string> => {
 /** Replace `count` words, evenly spread, with one that occurs nowhere else. */
 const editWords = (text: string, count: number): string => {
   const parts = text.split(/(\s+)/u);
-  const step = Math.floor(parts.length / count);
+  const words = parts.flatMap((part, index) =>
+    part.trim() === "" ? [] : [index],
+  );
+  const step = Math.floor(words.length / count);
+  const targets = new Set(
+    words.filter((_, word) => word % step === 0).slice(0, count),
+  );
+  expect(targets.size).toBe(count);
   return parts
-    .map((part, index) => (index % step === 1 ? "amended" : part))
+    .map((part, index) => (targets.has(index) ? "amended" : part))
     .join("");
 };
 
