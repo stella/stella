@@ -1,0 +1,5 @@
+{
+  "kind": "support",
+  "qualifier": "Builds and tests affected landing pages at every CI depth, subject to trust and the pull-request heavy gate.",
+  "reviewedDigest": "36eea8012248c85a6cf4496af20ba741616ee49225a212ccf33bb5520355c7b2"
+}
