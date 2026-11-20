@@ -41,6 +41,7 @@ import {
 } from "@/api/tests/pglite-test-db";
 
 const openSourceId = createSafeId<"caseLawSource">();
+const zeroSenateSourceId = createSafeId<"caseLawSource">();
 const closedSourceId = createSafeId<"caseLawSource">();
 const displayOnlySourceId = createSafeId<"caseLawSource">();
 const displayOnlyId = createSafeId<"caseLawDecision">();
@@ -143,6 +144,10 @@ beforeAll(
 
     await db.insert(caseLawSources).values([
       caseLawSourceRow({ adapterKey: "open", id: openSourceId, name: "open" }),
+      caseLawSourceRow({
+        adapterKey: ADAPTER_KEYS.CZ_NSS,
+        id: zeroSenateSourceId,
+      }),
       caseLawSourceRow({
         adapterKey: ADAPTER_KEYS.EU_ECJ,
         id: euSourceId,
@@ -990,6 +995,118 @@ test(
     expect(
       result.candidates.map((candidate) => candidate.decisionId),
     ).toContain(id);
+  },
+  DB_TEST_TIMEOUT_MS,
+);
+
+const zeroSenatePrefixes = ["0", "000000", "00 00"] as const;
+const zeroSenateSeparators = [" ", ""] as const;
+
+// timeout: bounded embedded Postgres fixtures exercise indexed legacy identity paths.
+test.each(
+  (["citation-key", "identifier", "family-key"] as const).flatMap(
+    (mode, index) =>
+      zeroSenatePrefixes.flatMap((zeroPrefix, prefixIndex) =>
+        zeroSenateSeparators.flatMap((separator, separatorIndex) => [
+          {
+            mode,
+            ordinal:
+              42 +
+              (index * zeroSenatePrefixes.length + prefixIndex) *
+                zeroSenateSeparators.length +
+              separatorIndex,
+            storedZero: true,
+            zeroPrefix,
+            separator,
+          },
+          {
+            mode,
+            ordinal:
+              42 +
+              (index * zeroSenatePrefixes.length + prefixIndex) *
+                zeroSenateSeparators.length +
+              separatorIndex,
+            storedZero: false,
+            zeroPrefix,
+            separator,
+          },
+        ]),
+      ),
+  ),
+)(
+  "Czech zero senate reads legacy $mode identities in both directions ($storedZero/$zeroPrefix/$separator)",
+  async ({ mode, ordinal, storedZero, zeroPrefix, separator }) => {
+    const base = `Ts ${ordinal}/2003`;
+    const stored = storedZero ? `${zeroPrefix}${separator}${base}` : base;
+    const query = storedZero ? base : `${zeroPrefix}${separator}${base}`;
+    const printed = mode === "family-key" ? `${stored} - 46` : stored;
+    const db = drizzle({ client });
+    const sourceId = storedZero ? zeroSenateSourceId : openSourceId;
+    const id = createSafeId<"caseLawDecision">();
+    const positiveId = createSafeId<"caseLawDecision">();
+    await db.insert(caseLawDecisions).values([
+      {
+        id,
+        sourceId,
+        sourceDocumentId: `legacy-${mode}-${storedZero ? "zero" : "bare"}-${ordinal}`,
+        country: "CZE",
+        court: "Nejvyšší soud",
+        language: "cs",
+        caseNumber: printed,
+        citationKey: mode === "identifier" ? null : citationKeyOf(printed),
+        docketFamilyKey:
+          mode === "family-key"
+            ? `${storedZero ? zeroPrefix.replaceAll(" ", "") : ""}ts${ordinal}/2003`
+            : null,
+      },
+      {
+        id: positiveId,
+        sourceId: openSourceId,
+        sourceDocumentId: `positive-${mode}-${storedZero ? "zero" : "bare"}-${ordinal}`,
+        country: "CZE",
+        court: "Nejvyšší soud",
+        language: "cs",
+        caseNumber: `1 ${base}`,
+        citationKey: citationKeyOf(`1 ${base}`),
+        docketFamilyKey: `1ts${ordinal}/2003`,
+      },
+    ]);
+    if (mode === "identifier") {
+      await db.insert(caseLawDecisionIdentifiers).values(
+        identifierRow({
+          decisionId: id,
+          type: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+          value: stored,
+        }),
+      );
+    }
+    const rows = await lookupDecisionsByIdentity({
+      caseLawDb,
+      country: "CZE",
+      locator: docketLocator(query),
+    });
+    expect(rows.map((row) => row.id)).toContain(id);
+    expect(rows.map((row) => row.id)).not.toContain(positiveId);
+    const anotherYear = await lookupDecisionsByIdentity({
+      caseLawDb,
+      country: "CZE",
+      locator: docketLocator(query.replace("2003", "2004")),
+    });
+    expect(anotherYear.map((row) => row.id)).not.toContain(id);
+    if (mode === "family-key") {
+      const selected = await lookupDecisionsByIdentity({
+        caseLawDb,
+        country: "CZE",
+        locator: {
+          kind: "docket",
+          value: `${query}-46`,
+          family: query,
+          selector: { kind: "sheet", value: "46" },
+        },
+      });
+      expect(selected.map((row) => row.id)).toContain(id);
+      expect(selected.map((row) => row.id)).not.toContain(positiveId);
+    }
   },
   DB_TEST_TIMEOUT_MS,
 );

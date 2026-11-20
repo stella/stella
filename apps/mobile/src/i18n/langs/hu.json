@@ -271,9 +271,18 @@
       "sourcesChecked": "{count, plural, one {# ellenőrzött forrás} other {# ellenőrzött forrás}}",
       "documentEdits": "{count, plural, one {# dokumentummódosítás} other {# dokumentummódosítás}}",
       "changesSaved": "{count, plural, one {# mentett módosítás} other {# mentett módosítás}}",
-      "analyses": "{count, plural, one {# elemzés} other {# elemzés}}"
+      "searchedLegislation": "Jogszabályok átnézve",
+      "searchedCaseLaw": "Ítélkezési gyakorlat átnézve",
+      "searchedLegislationAndCaseLaw": "Jogszabályok és ítélkezési gyakorlat átnézve",
+      "readDocument": "Dokumentum elolvasva",
+      "readDocuments": "Dokumentumok elolvasva",
+      "searchedMatters": "Ügyek átnézve",
+      "checkedRegisters": "Nyilvános nyilvántartások ellenőrizve",
+      "searchedWeb": "Internet átkeresve",
+      "searchedChats": "Csevegési előzmények átnézve"
     },
     "stepCount": "{count, plural, one {# lépés} other {# lépés}}",
+    "lookupCount": "{count, plural, one {# lekérdezés} other {# lekérdezés}}",
     "reasoning": "Érvelés",
     "historyTrimmed": "A korábbi üzeneteket nem sikerült összefoglalni, ezért ez a válasz csak a beszélgetés legutóbbi részét veszi figyelembe.",
     "failure": {
@@ -612,6 +621,7 @@
   "signedFile": {
     "layer": "{number, number}. aláírási réteg",
     "noReadableContent": "Nincs megjeleníthető olvasható tartalom.",
+    "previewTruncated": "A teljes szöveg nem érhető el ebben az előnézetben.",
     "unknownSigner": "Ismeretlen aláíró",
     "unreadable": "Az aláírt fájl nem olvasható.",
     "unverified": "Az aláírásokat nem ellenőriztük."

@@ -41,6 +41,7 @@ export const TAGGED_FAILURE_REASON = {
   AppleSignInConfigError: "tagged_failure",
   ArtefactProvenanceDecodeError: "tagged_failure",
   ArtefactSourceLimitError: "tagged_failure",
+  AsicParseError: "request_invalid",
   AuthorizedWorkspaceReadError: "tagged_failure",
   BackfillFailedError: "tagged_failure",
   BackfillHeldError: "tagged_failure",

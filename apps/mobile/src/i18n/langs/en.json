@@ -271,9 +271,18 @@
       "sourcesChecked": "{count, plural, one {# source checked} other {# sources checked}}",
       "documentEdits": "{count, plural, one {# document edit} other {# document edits}}",
       "changesSaved": "{count, plural, one {# change saved} other {# changes saved}}",
-      "analyses": "{count, plural, one {# analysis} other {# analyses}}"
+      "searchedLegislation": "Searched legislation",
+      "searchedCaseLaw": "Searched case law",
+      "searchedLegislationAndCaseLaw": "Searched legislation and case law",
+      "readDocument": "Read the document",
+      "readDocuments": "Read documents",
+      "searchedMatters": "Looked through matters",
+      "checkedRegisters": "Checked public registers",
+      "searchedWeb": "Searched the web",
+      "searchedChats": "Searched chat history"
     },
     "stepCount": "{count, plural, one {# step} other {# steps}}",
+    "lookupCount": "{count, plural, one {# lookup} other {# lookups}}",
     "reasoning": "Reasoning trace",
     "historyTrimmed": "Earlier messages could not be summarized, so this answer only took the most recent part of the conversation into account.",
     "failure": {
@@ -612,6 +621,7 @@
   "signedFile": {
     "layer": "Signature layer {number, number}",
     "noReadableContent": "No readable content is available for preview.",
+    "previewTruncated": "The full text is unavailable in this preview.",
     "unknownSigner": "Unknown signer",
     "unreadable": "The signed file could not be read.",
     "unverified": "The signatures have not been verified."

@@ -158,6 +158,7 @@ const EMPTY_BENCHMARK_OPTIONS: readonly ChatModelBenchmarkOption[] = [];
 const HARNESS_PROVIDER = {
   codex: "openai",
   "claude-code": "anthropic",
+  antigravity: "google",
 } as const satisfies Record<ChatLocalRunHarness, ProviderValue>;
 
 type ModelTradeoff = ChatModelBenchmarkOption["tradeoff"];

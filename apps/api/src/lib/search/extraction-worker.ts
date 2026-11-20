@@ -46,6 +46,13 @@ import type {
   FileScanRejectedError,
 } from "@/api/lib/file-scan/scan-upload";
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
+import type { AsicParseError } from "@/api/lib/files/asic-container";
+import { asicDocumentText } from "@/api/lib/files/asic-document-text";
+import {
+  ASIC_PREVIEW_WORKER_EXIT,
+  ASIC_PREVIEW_WORKER_MODE,
+} from "@/api/lib/files/asic-preview-protocol";
+import { extractAsicPreview } from "@/api/lib/files/asic-preview-worker";
 import { cadesDocumentText } from "@/api/lib/files/cades-document-text";
 import {
   CADES_WORKER_EXIT,
@@ -305,12 +312,14 @@ const extractAttachmentPlaintext = async ({
 
 type LegalTextReadOptions = {
   fileBytes: Uint8Array;
+  mimeType: string;
   maxChars: number;
   nestingDepth: number;
   includeContainerAttachments: boolean;
 };
 
 type LegalTextReadError =
+  | AsicParseError
   | FileScanFailedError
   | FileScanRejectedError
   | P7mParseError
@@ -375,14 +384,35 @@ const extractCadesText = async ({
     return Result.err(scanned.error);
   }
   const { file, layers } = scanned.value;
-  const content = await extractCadesPayloadText(file, maxChars);
+  const content = await extractEmbeddedPayloadText(file, maxChars);
   if (content.isErr()) {
     return content;
   }
   return Result.ok(cadesDocumentText({ layers, text: content.value ?? "" }));
 };
 
+const extractAsicText = async ({
+  fileBytes,
+  mimeType,
+  maxChars,
+}: LegalTextReadOptions): Promise<
+  Result<string | null, LegalTextReadError | EmailParseError>
+> => {
+  const preview = await extractAsicPreview({
+    fileBytes,
+    expectedMimeType: mimeType,
+    maxChars,
+    readText: extractEmbeddedPayloadText,
+  });
+  if (preview.isErr()) {
+    return Result.err(preview.error);
+  }
+  return Result.ok(asicDocumentText(preview.value));
+};
+
 const LEGAL_TEXT_READERS = {
+  asicE: extractAsicText,
+  asicS: extractAsicText,
   cades: extractCadesText,
   dataBox: extractDataBoxText,
 } satisfies Record<
@@ -442,6 +472,7 @@ const extract = async ({
     if (legal) {
       const legalText = await LEGAL_TEXT_READERS[legal.kind]({
         fileBytes,
+        mimeType: legal.mimeType,
         maxChars,
         nestingDepth,
         includeContainerAttachments,
@@ -521,17 +552,28 @@ const readMaxCharsArgument = (value: string | undefined): number => {
   return parsed;
 };
 
-const extractCadesPayloadText = async (file: ScannedFile, maxChars: number) => {
-  const content = await Result.tryPromise(
-    async () =>
-      await extract({
-        fileBytes: new Uint8Array(file.bytes),
-        mimeType: file.mimeType,
-        maxChars,
-      }),
-  );
+const extractEmbeddedPayloadText = async (
+  file: ScannedFile,
+  maxChars: number,
+) => {
+  // Embedded data is dispatched only to leaf readers, even if an archive
+  // member is itself a signed container or a message.
+  const bytes = new Uint8Array(file.bytes);
+  const mimeType = normalizeMimeType(file.mimeType);
+  const content = await Result.tryPromise(async () => {
+    if (mimeType === PDF_MIME_TYPE) {
+      return await extractPdfMarkdown(bytes);
+    }
+    if (mimeType === DOCX_MIME_TYPE || isOfficeDocumentMimeType(mimeType)) {
+      return await extractOfficeDocumentMarkdown(bytes);
+    }
+    if (isDirectTextMimeType(mimeType)) {
+      return extractDirectText(bytes, mimeType);
+    }
+    return null;
+  });
   if (content.isOk()) {
-    return content.value;
+    return Result.ok(content.value?.slice(0, maxChars) || null);
   }
 
   const error = content.error.cause;
@@ -543,8 +585,8 @@ const extractCadesPayloadText = async (file: ScannedFile, maxChars: number) => {
       case "needsOcr":
       case "resourceLimit":
       case "unsupported":
-        // Signer metadata remains readable when the embedded document has no
-        // extractable text. Only converter-declared outcomes can take this path.
+        // Keep the container metadata readable when an embedded document has
+        // no text. Only converter-declared outcomes can take this path.
         return Result.ok(null);
       default:
         break;
@@ -587,7 +629,7 @@ const writeCadesPreview = async ({
     return Result.ok(0);
   }
 
-  const content = await extractCadesPayloadText(file, maxChars);
+  const content = await extractEmbeddedPayloadText(file, maxChars);
   if (content.isErr()) {
     return content;
   }
@@ -598,6 +640,30 @@ const writeCadesPreview = async ({
     text: content.value ?? "",
   } satisfies v.InferOutput<typeof cadesPreviewSchema>;
   await writeWorkerStdout(JSON.stringify(preview));
+  return Result.ok(0);
+};
+
+const writeAsicPreview = async (options: {
+  fileBytes: Uint8Array;
+  expectedMimeType: string;
+  maxChars: number;
+}) => {
+  const preview = await extractAsicPreview({
+    ...options,
+    readText: extractEmbeddedPayloadText,
+  });
+  if (preview.isErr()) {
+    switch (preview.error._tag) {
+      case "AsicParseError":
+        return Result.ok(ASIC_PREVIEW_WORKER_EXIT.unreadable);
+      case "FileScanRejectedError":
+        return Result.ok(ASIC_PREVIEW_WORKER_EXIT.rejected);
+      case "FileScanFailedError":
+      case "UnhandledException":
+        return Result.err(preview.error);
+    }
+  }
+  await writeWorkerStdout(JSON.stringify(preview.value));
   return Result.ok(0);
 };
 
@@ -628,6 +694,17 @@ try {
       mode: mimeType,
       fileBytes,
       fileName: process.argv[4] ?? "",
+      maxChars,
+    });
+    if (preview.isErr()) {
+      exitWithWorkerError(preview.error);
+    }
+    process.exit(preview.value);
+  }
+  if (mimeType === ASIC_PREVIEW_WORKER_MODE) {
+    const preview = await writeAsicPreview({
+      fileBytes,
+      expectedMimeType: process.argv[4] ?? "",
       maxChars,
     });
     if (preview.isErr()) {

@@ -132,11 +132,11 @@ const DOCUMENT_FORMATS: readonly FormatEntry[] = [
     extensions: [".webp"],
   },
   ...LEGAL_FILE_FORMATS.map(
-    ({ kind, label, mimeType, mimeAliases, extension }) => ({
+    ({ kind, label, mimeType, mimeAliases, extensions }) => ({
       kind,
       label,
       mimeTypes: [mimeType, ...mimeAliases],
-      extensions: [extension],
+      extensions,
     }),
   ),
   {

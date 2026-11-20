@@ -34,16 +34,16 @@ import {
 } from "@stll/api-contract/chat-run-target";
 import {
   chatToolLabel,
-  countProcessWork,
   groupProcessParts,
   isFailedToolOutput,
   isProcessPart,
   isVisibleProcessStep,
+  summarizeProcessRun,
 } from "@stll/api-contract/chat-tool-activity";
 import type {
   ChatActivityPart,
   ChatToolLabel,
-  ProcessSummaryKind,
+  ProcessSummaryPiece,
 } from "@stll/api-contract/chat-tool-activity";
 
 /**
@@ -104,8 +104,8 @@ export type AnswerBlock =
       /** The run's place in the message, stable while it streams. */
       readonly key: string;
       readonly steps: readonly AnswerStep[];
-      /** What the run got done, by kind, for its settled summary. */
-      readonly work: ReadonlyMap<ProcessSummaryKind, number>;
+      /** What the run got done, in its settled summary's phrases. */
+      readonly summary: readonly ProcessSummaryPiece[];
     }
   | {
       /**
@@ -392,7 +392,9 @@ export const answerBlocks = (parts: readonly AnswerPart[]): AnswerBlock[] => {
           type: "steps",
           key: String(group.startIndex + stretch.start),
           steps,
-          work: countProcessWork(stretch.items),
+          summary: summarizeProcessRun(stretch.items, {
+            stepCount: steps.length,
+          }),
         });
       }
     }

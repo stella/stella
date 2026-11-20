@@ -2162,9 +2162,17 @@
     },
     "placeholder": "Digite sua pergunta aqui, / para habilidades, @ para adicionar contexto",
     "processSummary": {
-      "analyses": "{count, plural, one {# análise} other {# análises} many {# análises}}",
       "changesSaved": "{count, plural, one {# alteração salva} other {# alterações salvas} many {# alterações salvas}}",
+      "checkedRegisters": "Registros públicos consultados",
       "documentEdits": "{count, plural, one {# edição do documento} other {# edições do documento} many {# edições do documento}}",
+      "readDocument": "Documento lido",
+      "readDocuments": "Documentos lidos",
+      "searchedCaseLaw": "Jurisprudência pesquisada",
+      "searchedChats": "Histórico do chat pesquisado",
+      "searchedLegislation": "Legislação pesquisada",
+      "searchedLegislationAndCaseLaw": "Legislação e jurisprudência pesquisadas",
+      "searchedMatters": "Casos revisados",
+      "searchedWeb": "Web pesquisada",
       "sourcesChecked": "{count, plural, one {# fonte consultada} other {# fontes consultadas} many {# fontes consultadas}}"
     },
     "promptImprovementStrategies": {
@@ -2251,6 +2259,7 @@
       "chipLabel": "Executa em: {place}",
       "cloud": "Nuvem",
       "cloudDescription": "Roda na nuvem. Funciona de qualquer lugar.",
+      "hintAntigravity": "Instale o Antigravity 1.5 ou posterior e entre nele",
       "hintCheck": "Verifique-o no stella desktop",
       "hintInstall": "Instale pelo stella desktop",
       "hintOffline": "Abra o stella desktop no seu computador",
@@ -4700,7 +4709,7 @@
       "discoveredSkills": "{count, plural, one {# habilidade encontrada} other {# habilidades encontradas} many {# habilidades encontradas}}",
       "discoveryEmpty": "Nenhuma habilidade foi encontrada neste repositório ou pasta.",
       "discoverySkippedInvalid": "{count, plural, one {# habilidade inválida foi ignorada} other {# habilidades inválidas foram ignoradas} many {# habilidades inválidas foram ignoradas}}",
-      "dropPack": "Solte um .zip ou SKILL.md para importar a habilidade",
+      "dropPack": "Solte um .zip/.skill ou SKILL.md para importar a habilidade",
       "editSkill": "Editar habilidade",
       "enableSkill": "Ativar habilidade",
       "fileExists": "Já existe um arquivo com este caminho",
@@ -4757,8 +4766,8 @@
           "name": "Resumir um documento"
         }
       },
-      "uploadHelp": "Use um arquivo SKILL.md ou uma pasta .zip contendo SKILL.md e recursos opcionais somente leitura.",
-      "uploadPack": "Enviar .zip ou SKILL.md",
+      "uploadHelp": "Use um arquivo SKILL.md ou uma pasta .zip/.skill contendo SKILL.md e recursos opcionais somente leitura.",
+      "uploadPack": "Enviar .zip/.skill ou SKILL.md",
       "urlPlaceholder": "https://github.com/org/repo/tree/main/caminho/para/habilidade",
       "version": "Versão: {version}"
     },
@@ -6304,6 +6313,7 @@
     "layer": "Camada de assinaturas {number, number}",
     "noReadableContent": "Não há conteúdo legível para exibir na prévia.",
     "pdfUnavailable": "A prévia do PDF não está disponível.",
+    "previewTruncated": "O texto completo não está disponível nesta prévia.",
     "unknownSigner": "Signatário desconhecido",
     "unreadable": "Não foi possível ler o arquivo assinado.",
     "unverified": "As assinaturas não foram verificadas."

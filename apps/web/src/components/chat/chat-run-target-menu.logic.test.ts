@@ -63,7 +63,9 @@ describe("the Run on choices", () => {
   test("every harness a turn can run on is listed, by its product name", () => {
     const options = chatLocalHarnessOptions({
       status: "enabled",
-      runners: [runner([READY_CODEX])],
+      runners: [
+        runner([READY_CODEX, { id: "antigravity", state: "not_installed" }]),
+      ],
       maxApprovals: NO_LIMIT,
     });
     expect(options?.map(({ harness }) => harness)).toEqual([
@@ -74,16 +76,17 @@ describe("the Run on choices", () => {
     );
   });
 
-  test("without a connected computer every harness reads as offline", () => {
+  test("without a connected computer every harness stella desktop installs reads as offline", () => {
     for (const runners of [[], [runner([READY_CODEX], false)]]) {
       const options = chatLocalHarnessOptions({
         status: "enabled",
         runners,
         maxApprovals: NO_LIMIT,
       });
-      expect(options?.map(({ state }) => state)).toEqual(
-        CHAT_LOCAL_RUN_HARNESSES.map(() => "offline"),
-      );
+      expect(options).toEqual([
+        { harness: "codex", state: "offline" },
+        { harness: "claude-code", state: "offline" },
+      ]);
     }
   });
 
@@ -125,6 +128,27 @@ describe("the Run on choices", () => {
       resetsAt: "2026-11-03T12:00:00.000Z",
     });
     expect(stateOf(options, "claude-code")).toBe("not_installed");
+  });
+
+  test("an agent the member installs is listed only where a computer reports it", () => {
+    const options = chatLocalHarnessOptions({
+      status: "enabled",
+      runners: [
+        runner([
+          { id: "codex", state: "unavailable", reason: "harness_failed" },
+          { id: "antigravity", state: "needs_login", version: "1.5.0" },
+        ]),
+      ],
+      maxApprovals: NO_LIMIT,
+    });
+    expect(stateOf(options, "antigravity")).toBe("needs_login");
+    expect(
+      chatLocalHarnessOptions({
+        status: "enabled",
+        runners: [runner([{ id: "codex", state: "not_installed" }])],
+        maxApprovals: NO_LIMIT,
+      })?.map(({ harness }) => harness),
+    ).toEqual(["codex", "claude-code"]);
   });
 
   test("a harness its computer could not check reads as unavailable, never as unsupported", () => {

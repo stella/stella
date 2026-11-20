@@ -130,7 +130,7 @@ const ListItemSkeleton = ({
       {media && <Skeleton className="size-8 shrink-0 rounded-lg" />}
       <div className="flex min-w-0 flex-1 flex-col gap-0.5">
         <span className="flex h-5 items-center">
-          <Skeleton
+          <InlineSkeleton
             className={cn(
               "h-3.5 max-w-full",
               LIST_ITEM_TITLE_WIDTHS[index % LIST_ITEM_TITLE_WIDTHS.length],
@@ -139,7 +139,7 @@ const ListItemSkeleton = ({
         </span>
         {description && (
           <span className="flex h-4 items-center">
-            <Skeleton
+            <InlineSkeleton
               className={cn(
                 "h-3 max-w-full",
                 LIST_ITEM_DESCRIPTION_WIDTHS[
@@ -152,7 +152,7 @@ const ListItemSkeleton = ({
       </div>
       {trailing === "text" && (
         <span className="flex h-4 shrink-0 items-center">
-          <Skeleton className="h-3 w-12" />
+          <InlineSkeleton className="h-3 w-12" />
         </span>
       )}
     </div>

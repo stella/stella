@@ -1,9 +1,14 @@
 import { Result } from "better-result";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
-import { agentSkillResources, agentSkills } from "@/api/db/schema";
+import {
+  AGENT_SKILL_COMMAND_PATTERN,
+  agentSkillResources,
+  agentSkills,
+  RESERVED_AGENT_SKILL_COMMANDS,
+} from "@/api/db/schema";
 import type { AgentSkillOrigin, AgentSkillScope } from "@/api/db/schema";
 import { UNBOUND } from "@/api/lib/agent-skills/binding";
 import type { SkillBinding } from "@/api/lib/agent-skills/binding";
@@ -29,6 +34,7 @@ import type {
   ParsedSkillPackage,
   UrlReplayIdentity,
 } from "@/api/lib/skills/skill-package";
+import { includes } from "@/api/lib/type-guards";
 
 // Advisory-lock namespaces are process-global. Dedicated first keys keep the
 // install caps independent from unrelated org/user locks elsewhere in the API.
@@ -51,6 +57,14 @@ type InstallSkillProps = InstallSkillSource & {
   // existing upload/import callers keep installing enabled skills.
   enabled?: boolean;
   memberRole: AuthorizedMemberRole;
+  /**
+   * What a slug the scope already holds does. `copy` installs the skill
+   * beside it under the next free suffixed slug (`review-2`), keeping its
+   * name and touching nothing that exists; `refuse` (the default) answers
+   * a name conflict. An import copies: a person importing a package never
+   * loses it to a name.
+   */
+  onSlugTaken?: "copy" | "refuse";
   onInstalled?: (
     tx: Transaction,
     skill: { id: SafeId<"agentSkill"> },
@@ -211,23 +225,58 @@ const urlReplayIdentityOf = (
 ): UrlReplayIdentity | undefined =>
   source.origin === "url" ? source.parsed.urlReplayIdentity : undefined;
 
+/** Longest slug a skill row stores. */
+const SKILL_SLUG_MAX_CHARS = 64;
+
+/**
+ * Slugs a copy may take, in order: the slug itself, then `slug-2`,
+ * `slug-3`, ... with the base cut short so each stays a valid slug. One past
+ * the per-user cap: a scope cannot hold more copies than that.
+ */
+const skillSlugCandidates = (slug: string): string[] => [
+  slug,
+  ...Array.from({ length: LIMITS.agentSkillsPerUser }, (_, index) => {
+    const suffix = `-${String(index + 2)}`;
+    // A slug never holds two hyphens in a row, so a cut leaves at most one
+    // trailing.
+    const base = slug
+      .slice(0, SKILL_SLUG_MAX_CHARS - suffix.length)
+      .replace(/-$/u, "");
+    return `${base}${suffix}`;
+  }),
+];
+
+/** A command a package carries, or null when it is not one a skill may use. */
+const importedCommand = (command: string | null | undefined): string | null =>
+  typeof command === "string" &&
+  AGENT_SKILL_COMMAND_PATTERN.test(command) &&
+  !includes(RESERVED_AGENT_SKILL_COMMANDS, command)
+    ? command
+    : null;
+
 export const installSkill = async (props: InstallSkillProps) => {
   const {
     binding = UNBOUND,
     enabled = true,
     memberRole,
     onInstalled,
+    onSlugTaken = "refuse",
     origin,
     parsed,
     recordAuditEvent,
     safeDb,
     scope,
     session,
-    slug,
+    slug: requestedSlug,
     user,
   } = props;
+  // A stella package restores the slug, display name and command it was
+  // exported with; any other source names the skill after SKILL.md.
+  const slug = requestedSlug ?? parsed.identity?.slug;
+  const name = parsed.identity?.displayName ?? parsed.name;
   const urlReplayIdentity = urlReplayIdentityOf(props);
-  const contentHash = hashSkillPackageContent(parsed);
+  // The hash covers the row as stored, under the name it is stored with.
+  const contentHash = hashSkillPackageContent({ ...parsed, name });
   const authorization = authorizeSkillInstallScope({
     boundToMatter: binding.boundWorkspaceId !== null,
     memberRole,
@@ -340,13 +389,38 @@ export const installSkill = async (props: InstallSkillProps) => {
             }
           }
 
+          const scopeRows = and(
+            eq(agentSkills.organizationId, session.activeOrganizationId),
+            eq(agentSkills.scope, scope),
+            scope === "private" ? eq(agentSkills.userId, user.id) : undefined,
+          );
+          const storedSlug = await freeSlug({
+            onSlugTaken,
+            scopeRows,
+            slug: slug ?? parsed.name,
+            tx: innerTx,
+          });
+          if (storedSlug === null) {
+            return { type: "conflict" };
+          }
+          const command = importedCommand(parsed.identity?.command);
+          // A command another skill of the scope holds stays with that
+          // skill; the import keeps everything else.
+          const commandTaken =
+            command !== null &&
+            (await innerTx.$count(
+              agentSkills,
+              and(scopeRows, eq(agentSkills.command, command)),
+            )) > 0;
+
           const insert = innerTx.insert(agentSkills).values({
             organizationId: session.activeOrganizationId,
             userId: user.id,
             scope,
             origin,
-            slug: slug ?? parsed.name,
-            name: parsed.name,
+            slug: storedSlug,
+            name,
+            command: commandTaken ? null : command,
             description: parsed.description,
             version: parsed.version,
             license: parsed.license,
@@ -400,7 +474,7 @@ export const installSkill = async (props: InstallSkillProps) => {
                   origin,
                   resourceCount: parsed.resources.length,
                   scope,
-                  slug: slug ?? parsed.name,
+                  slug: storedSlug,
                 },
               },
             },
@@ -476,6 +550,38 @@ export const installSkill = async (props: InstallSkillProps) => {
   }
 
   return Result.ok({ id: insertResult.value.id });
+};
+
+/**
+ * The slug a new skill is stored under: the one asked for when the scope
+ * does not hold it, else under `copy` the first free suffixed one, else
+ * null (a conflict). The caller holds the scope's install lock.
+ */
+const freeSlug = async ({
+  onSlugTaken,
+  scopeRows,
+  slug,
+  tx,
+}: {
+  onSlugTaken: "copy" | "refuse";
+  scopeRows: ReturnType<typeof and>;
+  slug: string;
+  tx: Transaction;
+}): Promise<string | null> => {
+  if (onSlugTaken === "refuse") {
+    // The insert's unique index answers a taken slug as a conflict.
+    return slug;
+  }
+  const candidates = skillSlugCandidates(slug);
+  const taken = new Set(
+    (
+      await tx
+        .select({ slug: agentSkills.slug })
+        .from(agentSkills)
+        .where(and(scopeRows, inArray(agentSkills.slug, candidates)))
+    ).map((row) => row.slug),
+  );
+  return candidates.find((candidate) => !taken.has(candidate)) ?? null;
 };
 
 export const isUnchangedUrlSkill = ({

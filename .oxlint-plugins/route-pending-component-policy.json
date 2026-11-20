@@ -7,6 +7,7 @@
     "@stll/ui/control-face",
     "@stll/ui/details-list-face",
     "@stll/ui/directional-icon",
+    "@stll/ui/field-trigger",
     "@stll/ui/frame",
     "@stll/ui/icons",
     "@stll/ui/input-otp-face",
@@ -32,8 +33,8 @@
     "@stll/workspace-ui/view-strip",
     "@/components/auth/inbox-quick-jump-face",
     "@/components/auth/otp-panel-text",
-    "@/components/pending-cache",
     "@/components/docx/docx-loading-shell",
+    "@/components/pending-cache",
     "@/components/pending-text",
     "@/components/workspaces/table/workspace-grid",
     "@/components/workspaces/table/workspace-table/skeleton-rows",
@@ -48,6 +49,7 @@
   "$namedImportsComment": "Single exports a pending half may import from a module that is otherwise not pending-safe. The router's URL hooks are there at every pending level, and only with `strict: false` (the rule checks the call).",
   "pendingSafeNamedImports": {
     "@tanstack/react-router": ["useParams", "useSearch"],
+    "@/env": ["env"],
     "@/lib/redirect": ["isAcceptInvitationRedirect", "normalizeRedirectTo"],
     "@/routes/dev/-visual-metadata": ["resolveVisualName", "visualRegistry"],
     "@/lib/chrome-header-actions": ["ChromeHeaderActions"]
