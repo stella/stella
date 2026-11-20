@@ -6,6 +6,7 @@ import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 
 import type { Transaction } from "@/api/db/root";
 import {
+  caseLawDecisionAliases,
   caseLawDecisionFallbackIdentities,
   caseLawDecisionJudges,
   caseLawDecisions,
@@ -1062,3 +1063,35 @@ export type DecisionIdentity = Awaited<
 
 /** The stored row identity resolution matched, as it read it. */
 export type ExistingDecision = NonNullable<DecisionIdentity["existing"]>;
+
+/** Release only provisional claims with no physical or approved canonical owner. */
+export const clearUnbackedSourceIdentitiesTx = async (
+  tx: Transaction,
+  {
+    sourceId,
+    sourceDocumentIds,
+  }: {
+    sourceId: SafeId<"caseLawSource">;
+    sourceDocumentIds: readonly string[];
+  },
+): Promise<void> => {
+  if (sourceDocumentIds.length === 0) {
+    return;
+  }
+  // audit: skip — provisional publisher-identity reconciliation; public data
+  await tx.delete(caseLawDecisionSourceIdentities).where(
+    and(
+      eq(caseLawDecisionSourceIdentities.sourceId, sourceId),
+      inArray(caseLawDecisionSourceIdentities.sourceDocumentId, [
+        ...sourceDocumentIds,
+      ]),
+      sql`NOT EXISTS (SELECT 1 FROM ${caseLawDecisions}
+      WHERE ${caseLawDecisions.id} = ${canonicalDecisionIdSql(caseLawDecisionSourceIdentities.decisionId)}
+        OR ${caseLawDecisions.id} = ${caseLawDecisionSourceIdentities.decisionId}
+        OR (${caseLawDecisions.sourceId} = ${caseLawDecisionSourceIdentities.sourceId}
+          AND ${caseLawDecisions.sourceDocumentId} = ${caseLawDecisionSourceIdentities.sourceDocumentId}))`,
+      sql`NOT EXISTS (SELECT 1 FROM ${caseLawDecisionAliases}
+        WHERE ${caseLawDecisionAliases.retiredDecisionId} = ${caseLawDecisionSourceIdentities.decisionId})`,
+    ),
+  );
+};
