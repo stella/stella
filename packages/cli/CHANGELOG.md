@@ -1,5 +1,25 @@
 # @stll/cli
 
+## 8.0.0
+
+### Major Changes
+
+- [#6826](https://github.com/stella/stella/pull/6826) [`8dfc22c`](https://github.com/stella/stella/commit/8dfc22cc04040f5267aa53e6031b47a8d4f3db9f) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Require the current rate-table currency when creating or updating a rate entry, and reject stale currency units after a concurrent table conversion.
+
+### Minor Changes
+
+- [#9019](https://github.com/stella/stella/pull/9019) [`5cc9c9f`](https://github.com/stella/stella/commit/5cc9c9f2fe3f2a772216c7fe0b35a93c8006bdff) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Capability commands take `--save <path>` (`-o`): when the result carries a `downloadUrl`, the CLI fetches it and writes the file to that path, for example `stella capability skills export --skill-id <id> --format skill -o review.skill`.
+
+### Patch Changes
+
+- [#8948](https://github.com/stella/stella/pull/8948) [`846c016`](https://github.com/stella/stella/commit/846c016a47690b5c6c88db2f78881aa68758668a) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Read the member filenames and available text of ASiC-E, ASiC-S, and Estonian BDOC containers through document content commands.
+
+- [#8943](https://github.com/stella/stella/pull/8943) [`036acf9`](https://github.com/stella/stella/commit/036acf965aae01184cee165c28dd8d7c0a4443b9) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Read the embedded text and unverified signers of P7M files through document content commands.
+
+- [#8966](https://github.com/stella/stella/pull/8966) [`6d0d7f7`](https://github.com/stella/stella/commit/6d0d7f79e8792da0ef60232ce75cf98b6ee204b0) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Read the text of Turkish UYAP documents and Chinese OFD pages through document content commands.
+
+- [#8979](https://github.com/stella/stella/pull/8979) [`8c60d46`](https://github.com/stella/stella/commit/8c60d46473c75811d6cb608b17f0d7c3e34b10d2) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `skills.resources.upload` keeps the uploaded bytes of a DOCX, a PDF or a file with no text beside the stored text, and refusals carry `skill_resource_path_invalid` and `skill_resource_text_unreadable`.
+
 ## 7.2.0
 
 ### Minor Changes

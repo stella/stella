@@ -1,5 +1,18 @@
 # @stll/workspace-ui
 
+## 0.21.0
+
+### Minor Changes
+
+- [#9017](https://github.com/stella/stella/pull/9017) [`25a0c38`](https://github.com/stella/stella/commit/25a0c386561c724d1c7cc0100c7a0a08c2e39b24) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Expose the width every kanban board column takes (`KANBAN_COLUMN_WIDTH_CLASS`) from `@stll/ui/kanban-column-header-shell`, so a loading view can lay its column headers out where the board will. `WorkspaceViewSwitcherFace` takes an optional `renderName` for a tab name the caller draws itself.
+
+- [#9005](https://github.com/stella/stella/pull/9005) [`47c898e`](https://github.com/stella/stella/commit/47c898e35450bb16260efaef0bf1144cd59a355d) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add loading faces for a select trigger and a segmented icon toggle to `@stll/ui/control-face`, and for the view filter button and chip to `@stll/ui/view-toolbar-shell`, each built from the same classes as the control it stands in for. Add `@stll/workspace-ui/sorts-face`, the sort chips' loading face.
+
+### Patch Changes
+
+- Updated dependencies [[`ebe8ae8`](https://github.com/stella/stella/commit/ebe8ae88a7847490bc6d40153ab3a80a97cebc4e), [`be836e0`](https://github.com/stella/stella/commit/be836e098b22eb7fc70661f150c0dfc11c6a3220), [`e7a4e0c`](https://github.com/stella/stella/commit/e7a4e0c73395c7481f051aefb03a2306bbf1f5ef), [`10a2406`](https://github.com/stella/stella/commit/10a2406e96662f08eb556a0155676732d511cdfc), [`37117f6`](https://github.com/stella/stella/commit/37117f6e007640ac3eeff769935081020d49ad74), [`c3b4e95`](https://github.com/stella/stella/commit/c3b4e95a62d63062c0013dc3d8c8fbb79c6d3cbf), [`25a0c38`](https://github.com/stella/stella/commit/25a0c386561c724d1c7cc0100c7a0a08c2e39b24), [`47c898e`](https://github.com/stella/stella/commit/47c898e35450bb16260efaef0bf1144cd59a355d), [`4a564f6`](https://github.com/stella/stella/commit/4a564f686b8ee215910fcfa46860fb2e1f06086b), [`846c016`](https://github.com/stella/stella/commit/846c016a47690b5c6c88db2f78881aa68758668a), [`036acf9`](https://github.com/stella/stella/commit/036acf965aae01184cee165c28dd8d7c0a4443b9), [`6d0d7f7`](https://github.com/stella/stella/commit/6d0d7f79e8792da0ef60232ce75cf98b6ee204b0), [`47c898e`](https://github.com/stella/stella/commit/47c898e35450bb16260efaef0bf1144cd59a355d)]:
+  - @stll/ui@0.77.0
+
 ## 0.20.0
 
 ### Minor Changes
