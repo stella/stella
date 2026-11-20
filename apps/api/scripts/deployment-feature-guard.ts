@@ -67,10 +67,6 @@ const BASELINE_FILE = "apps/api/deployment-feature-routes-baseline.json";
  */
 const ALWAYS_ON_ROUTE_PREFIXES: ReadonlyMap<string, string> = new Map([
   [
-    "/v1/sharepoint/capabilities",
-    "Revoking delegated capabilities remains available when the deployment feature is off; enabling requires the feature inside the handler",
-  ],
-  [
     "/v1/invoices/:workspaceId/:invoiceId/sends",
     "cleanup of live invoice links must work after the firm leaves time billing; invoice:update required",
   ],

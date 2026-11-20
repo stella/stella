@@ -31,14 +31,26 @@ const config = {
   body: requestBody,
 } satisfies HandlerConfig;
 
-// This endpoint changes individual capability policy. The deployed
-// /enablement endpoint remains the whole-organization kill operation.
+// This endpoint changes individual capability policy and exists only where
+// the deployment offers SharePoint. The /enablement endpoint remains the
+// whole-organization kill operation on every deployment.
 export const createSetSharepointCapabilities = (
   deploymentEnabled: typeof isDeploymentFeatureEnabled = isDeploymentFeatureEnabled,
 ) =>
   createSafeRootHandler(
     config,
     async function* ({ body, safeDb, session, recordAuditEvent }) {
+      // The route is also gated; the handler fails closed wherever it mounts.
+      if (!deploymentEnabled("FEATURE_SHAREPOINT")) {
+        return Result.err(
+          new HandlerError({
+            status: 404,
+            code: "not_found",
+            message: "Not found",
+          }),
+        );
+      }
+
       const organizationId = session.activeOrganizationId;
       if (body.capabilities.length === 0) {
         const purge = await disableAndPurgeSharepointForOrg({
@@ -49,16 +61,6 @@ export const createSetSharepointCapabilities = (
           return Result.err(purge.error);
         }
         return Result.ok({ capabilities: [] });
-      }
-
-      if (!deploymentEnabled("FEATURE_SHAREPOINT")) {
-        return Result.err(
-          new HandlerError({
-            status: 404,
-            code: "not_found",
-            message: "Not found",
-          }),
-        );
       }
 
       const filesReadEnabled = body.capabilities.includes("files.read");

@@ -16,17 +16,18 @@ export const sharepointRoute = mount(
     routes({
       "/oauth/callback": { GET: sharepointOAuthCallback },
       "/enablement": { PUT: setSharepointEnablement },
-      "/capabilities": { PUT: setSharepointCapabilities },
       "/connect": { POST: connectSharepoint },
       "/connection": {
         GET: sharepointConnectionStatus,
         DELETE: disconnectSharepoint,
       },
     }),
-    // Browsing and import answer as an absent route while the deployment flag is off;
-    // each handler still checks the organization's opt-in.
+    // Capability policy, browsing and import answer as an absent route while
+    // the deployment flag is off; each handler still checks the organization's
+    // opt-in. `/enablement` stays the always-available whole-org kill.
     routes(
       {
+        "/capabilities": { PUT: setSharepointCapabilities },
         "/sites": { GET: listSharepointSites },
         "/drives": { GET: listSharepointDrives },
         "/drives/:driveId/items/:itemId/children": {
