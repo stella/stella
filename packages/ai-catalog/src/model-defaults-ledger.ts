@@ -22,6 +22,7 @@ export const MODEL_OVERRIDE_GROUPS = [
   "chat",
   "reasoning",
   "pdf",
+  "browse",
 ] as const;
 export type ModelOverrideGroup = (typeof MODEL_OVERRIDE_GROUPS)[number];
 
@@ -35,12 +36,31 @@ export const MODEL_TASK_OVERRIDE_GROUP = {
   "short-text": "fast",
 } as const satisfies Record<ModelTask, ModelOverrideGroup>;
 
+/**
+ * The one place a role (an override group an admin picks a model for) names
+ * the task whose defaults and capability checks it inherits. A role that does
+ * not own that task, like `browse`, has no default of its own: while the admin
+ * has not picked a model for it, it runs on the owning role's model.
+ */
 export const MODEL_OVERRIDE_GROUP_TASK = {
   fast: "short-text",
   chat: "chat",
   reasoning: "reasoning",
   pdf: "pdf",
+  browse: "short-text",
 } as const satisfies Record<ModelOverrideGroup, ModelTask>;
+
+/**
+ * The role whose choice an unset role follows, or null for a role that owns
+ * its task. Derived from the two maps above, so it cannot drift: `browse`
+ * inherits `short-text`, which `fast` owns.
+ */
+export const inheritedOverrideGroup = (
+  group: ModelOverrideGroup,
+): ModelOverrideGroup | null => {
+  const owner = MODEL_TASK_OVERRIDE_GROUP[MODEL_OVERRIDE_GROUP_TASK[group]];
+  return owner === group ? null : owner;
+};
 
 /** A reasoning request is capability-clamped before it reaches the provider. */
 export type ModelMode =
@@ -138,13 +158,13 @@ const PROVIDER_DEFAULT_EMIT_MODE = {
   type: "provider-default",
   temperaturePolicy: "emit",
 } as const satisfies ModelMode;
-const GOOGLE_FLASH_NONE_MODE = {
+const GOOGLE_LOW_THINKING_MODE = {
   type: "google-thinking",
   requestedEffort: "none",
   thinkingLevel: "LOW",
   temperaturePolicy: "omit",
 } as const satisfies ModelMode;
-const GOOGLE_FLASH_HIGH_MODE = {
+const GOOGLE_HIGH_THINKING_MODE = {
   type: "google-thinking",
   requestedEffort: "high",
   thinkingLevel: "HIGH",
@@ -155,21 +175,22 @@ const UNMEASURED_SEED_QUALITY = {
   measurement: { status: "unmeasured" },
 } as const satisfies ModelDefaultQuality;
 
-const DEFAULT_RATIONALE_BY_GROUP = {
+export const DEFAULT_RATIONALE_BY_GROUP = {
   fast: { rationaleKey: "organization.aiConfig.defaultRationale.fast" },
   chat: { rationaleKey: "organization.aiConfig.defaultRationale.chat" },
   reasoning: {
     rationaleKey: "organization.aiConfig.defaultRationale.reasoning",
   },
   pdf: { rationaleKey: "organization.aiConfig.defaultRationale.pdf" },
+  browse: { rationaleKey: "organization.aiConfig.defaultRationale.browse" },
 } as const satisfies Record<ModelOverrideGroup, ModelDefaultRationale>;
 
 const CHAT_DEFAULTS = {
   google: {
     kind: "candidate",
     candidate: {
-      modelId: "gemini-3.8-flash",
-      mode: GOOGLE_FLASH_NONE_MODE,
+      modelId: "gemini-4-hydrogen",
+      mode: GOOGLE_LOW_THINKING_MODE,
     },
     quality: UNMEASURED_SEED_QUALITY,
     rationale: DEFAULT_RATIONALE_BY_GROUP.chat,
@@ -177,7 +198,7 @@ const CHAT_DEFAULTS = {
   openrouter: {
     kind: "candidate",
     candidate: {
-      modelId: "openai/gpt-6-sol",
+      modelId: "openai/gpt-6.2-sol",
       mode: PROVIDER_DEFAULT_OMIT_MODE,
     },
     quality: UNMEASURED_SEED_QUALITY,
@@ -186,7 +207,7 @@ const CHAT_DEFAULTS = {
   openai: {
     kind: "candidate",
     candidate: {
-      modelId: "gpt-6-sol",
+      modelId: "gpt-6.2-sol",
       mode: PROVIDER_DEFAULT_OMIT_MODE,
     },
     quality: UNMEASURED_SEED_QUALITY,
@@ -252,8 +273,8 @@ const REASONING_DEFAULTS = {
   google: {
     kind: "candidate",
     candidate: {
-      modelId: "gemini-3.8-flash",
-      mode: GOOGLE_FLASH_HIGH_MODE,
+      modelId: "gemini-4-neon",
+      mode: GOOGLE_HIGH_THINKING_MODE,
     },
     quality: UNMEASURED_SEED_QUALITY,
     rationale: DEFAULT_RATIONALE_BY_GROUP.reasoning,
@@ -261,7 +282,7 @@ const REASONING_DEFAULTS = {
   openrouter: {
     kind: "candidate",
     candidate: {
-      modelId: "openai/gpt-6-sol",
+      modelId: "openai/gpt-6.2-sol",
       mode: {
         type: "reasoning-effort",
         effort: "high",
@@ -274,7 +295,7 @@ const REASONING_DEFAULTS = {
   openai: {
     kind: "candidate",
     candidate: {
-      modelId: "gpt-6-sol",
+      modelId: "gpt-6.2-sol",
       mode: {
         type: "reasoning-effort",
         effort: "medium",
@@ -348,8 +369,8 @@ const PDF_DEFAULTS = {
   google: {
     kind: "candidate",
     candidate: {
-      modelId: "gemini-3.8-flash",
-      mode: GOOGLE_FLASH_NONE_MODE,
+      modelId: "gemini-4-hydrogen",
+      mode: GOOGLE_LOW_THINKING_MODE,
     },
     quality: UNMEASURED_SEED_QUALITY,
     rationale: DEFAULT_RATIONALE_BY_GROUP.pdf,
@@ -357,7 +378,7 @@ const PDF_DEFAULTS = {
   openrouter: {
     kind: "candidate",
     candidate: {
-      modelId: "openai/gpt-6-sol",
+      modelId: "openai/gpt-6.2-sol",
       mode: PROVIDER_DEFAULT_OMIT_MODE,
     },
     quality: UNMEASURED_SEED_QUALITY,
@@ -366,7 +387,7 @@ const PDF_DEFAULTS = {
   openai: {
     kind: "candidate",
     candidate: {
-      modelId: "gpt-6-sol",
+      modelId: "gpt-6.2-sol",
       mode: PROVIDER_DEFAULT_OMIT_MODE,
     },
     quality: UNMEASURED_SEED_QUALITY,
@@ -424,8 +445,8 @@ const FAST_DEFAULTS = {
   google: {
     kind: "candidate",
     candidate: {
-      modelId: "gemini-3.8-flash",
-      mode: GOOGLE_FLASH_NONE_MODE,
+      modelId: "gemini-4-hydrogen",
+      mode: GOOGLE_LOW_THINKING_MODE,
     },
     quality: UNMEASURED_SEED_QUALITY,
     rationale: DEFAULT_RATIONALE_BY_GROUP.fast,
@@ -580,6 +601,12 @@ export const resolveDefaultOverrideModels = <TProvider extends AIProvider>(
     pdf: defaultSelection(
       resolveDefaultModel({
         task: MODEL_OVERRIDE_GROUP_TASK.pdf,
+        orgProviders,
+      }),
+    ),
+    browse: defaultSelection(
+      resolveDefaultModel({
+        task: MODEL_OVERRIDE_GROUP_TASK.browse,
         orgProviders,
       }),
     ),

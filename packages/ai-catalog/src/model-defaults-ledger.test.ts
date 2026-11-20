@@ -3,14 +3,19 @@ import { describe, expect, test } from "bun:test";
 import {
   AI_PROVIDERS,
   type AIProvider,
+  BYOK_DEFAULT_MODELS,
   type ReasoningEffort,
   resolveReasoningEffort,
 } from "./index";
 import {
+  inheritedOverrideGroup,
   MODEL_DEFAULTS_LEDGER,
+  MODEL_OVERRIDE_GROUP_TASK,
+  MODEL_OVERRIDE_GROUPS,
   MODEL_TASK_OVERRIDE_GROUP,
   MODEL_TASKS,
   type ModelMode,
+  type ModelOverrideGroup,
   type ModelTask,
   resolveDefaultModel,
 } from "./model-defaults-ledger";
@@ -200,6 +205,58 @@ const FAST_REPLACEMENTS = {
   openrouter: "anthropic/claude-haiku-5.5",
 } as const;
 
+describe("roles without defaults of their own", () => {
+  test("every role owns its task's defaults or follows the role that does", () => {
+    for (const group of MODEL_OVERRIDE_GROUPS) {
+      const inherited = inheritedOverrideGroup(group);
+      if (inherited === null) {
+        expect<ModelOverrideGroup>(
+          MODEL_TASK_OVERRIDE_GROUP[MODEL_OVERRIDE_GROUP_TASK[group]],
+        ).toBe(group);
+        continue;
+      }
+      // One hop: the followed role owns its task's defaults.
+      expect(inheritedOverrideGroup(inherited)).toBeNull();
+    }
+    expect(inheritedOverrideGroup("browse")).toBe("fast");
+  });
+
+  test("browsing shows each provider's fast default with its own explanation", () => {
+    for (const [provider, roles] of Object.entries(BYOK_DEFAULT_MODELS)) {
+      expect({ provider, browse: roles.browse }).toEqual({
+        provider,
+        browse: {
+          kind: "default",
+          modelId: roles.fast.modelId,
+          rationaleKey: "organization.aiConfig.defaultRationale.browse",
+        },
+      });
+    }
+  });
+});
+
+// Newer generations adopted after the migration. Modes stay as migrated.
+const GENERATION_UPGRADES: Partial<
+  Record<(typeof AI_PROVIDERS)[number], Partial<Record<LegacyRole, string>>>
+> = {
+  google: {
+    fast: "gemini-4-hydrogen",
+    chat: "gemini-4-hydrogen",
+    reasoning: "gemini-4-neon",
+    pdf: "gemini-4-hydrogen",
+  },
+  openrouter: {
+    chat: "openai/gpt-6.2-sol",
+    reasoning: "openai/gpt-6.2-sol",
+    pdf: "openai/gpt-6.2-sol",
+  },
+  openai: {
+    chat: "gpt-6.2-sol",
+    reasoning: "gpt-6.2-sol",
+    pdf: "gpt-6.2-sol",
+  },
+};
+
 describe("task default migration", () => {
   test("covers every provider and task with one documented document exception", () => {
     expect(Object.keys(MODEL_DEFAULTS_LEDGER).toSorted()).toEqual(
@@ -226,7 +283,7 @@ describe("task default migration", () => {
     expect(unsupported).toEqual(["pdf/mistral"]);
   });
 
-  test("preserves the full old model and mode matrix except the three Haiku fast routes", () => {
+  test("preserves the full old model and mode matrix except the three Haiku fast routes and adopted generations", () => {
     for (const task of MODEL_TASKS) {
       const role = SEED_ROLE_BY_TASK[task];
       for (const provider of AI_PROVIDERS) {
@@ -252,8 +309,23 @@ describe("task default migration", () => {
           );
           continue;
         }
-        expect(entry.candidate.modelId === oldModel).toBe(true);
+        const modelId: string = entry.candidate.modelId;
+        expect(modelId).toBe(GENERATION_UPGRADES[provider]?.[role] ?? oldModel);
         expect(entry.candidate.mode).toEqual(LEGACY_MODES[provider][role]);
+      }
+    }
+  });
+
+  test("explains every default with the rationale of the role that shows it", () => {
+    for (const task of MODEL_TASKS) {
+      for (const provider of AI_PROVIDERS) {
+        const entry = MODEL_DEFAULTS_LEDGER[task][provider];
+        if (entry.kind === "unsupported") {
+          continue;
+        }
+        expect(entry.rationale.rationaleKey).toBe(
+          `organization.aiConfig.defaultRationale.${MODEL_TASK_OVERRIDE_GROUP[task]}`,
+        );
       }
     }
   });

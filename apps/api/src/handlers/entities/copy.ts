@@ -45,6 +45,11 @@ import {
   enqueueImageThumbnailOrMarkFailed,
   enqueuePdfDerivativeOrMarkFailed,
 } from "@/api/lib/file-derivative-queue";
+import {
+  abortCopyPublicationTransaction,
+  lockCopyPublicationIntentsInTransaction,
+  retirePublishedCopyIntentsInTransaction,
+} from "@/api/lib/files/copy-organization-files";
 import type { deleteOrganizationFilesWithSignal } from "@/api/lib/files/delete-organization-file";
 import {
   extractFieldFileRefs,
@@ -92,6 +97,7 @@ type CopyToWorkspaceHandlerProps = {
 };
 
 export type CopyToWorkspaceDependencies = CopyEntitiesDependencies & {
+  copyFileObjects: typeof copyFileObjects;
   deleteCopiedObjects?: typeof deleteOrganizationFilesWithSignal;
   enqueueDocumentProcessingRun: typeof enqueueDocumentProcessingRun;
   enqueueImageThumbnailOrMarkFailed: typeof enqueueImageThumbnailOrMarkFailed;
@@ -101,6 +107,7 @@ export type CopyToWorkspaceDependencies = CopyEntitiesDependencies & {
 };
 
 const defaultCopyToWorkspaceDependencies = {
+  copyFileObjects,
   enqueueDocumentProcessingRun,
   enqueueEntitySearchRepairs,
   enqueueImageThumbnailOrMarkFailed,
@@ -548,7 +555,7 @@ const copyToWorkspaceHandler = async function* ({
 
   // S3 copy phase: copy all files before DB transaction
   const copiedS3Keys: string[] = [];
-  const fileMappings = await copyFileObjects({
+  const fileMappings = await dependencies.copyFileObjects({
     sources: fileCopySources,
     organizationId,
     targetWorkspaceId,
@@ -582,6 +589,18 @@ const copyToWorkspaceHandler = async function* ({
   // to ensure atomicity — either both succeed or neither does.
   const sourceEntityIds = sourceEntities.map((e) => e.id);
   const txResultResult = await safeDb(async (tx) => {
+    const copyCleanupIntentIds = fileMappings.value.flatMap(
+      ({ cleanupIntentIds }) => cleanupIntentIds,
+    );
+    abortCopyPublicationTransaction(
+      await lockCopyPublicationIntentsInTransaction({
+        intentIds: copyCleanupIntentIds,
+        organizationId,
+        tx,
+        workspaceIds: [targetWorkspaceId],
+        workspaceMode: "update",
+      }),
+    );
     if (deleteSource) {
       const hold = await requireNoHold({
         tx,
@@ -616,6 +635,14 @@ const copyToWorkspaceHandler = async function* ({
     if (Result.isError(copyResult)) {
       return copyResult;
     }
+    abortCopyPublicationTransaction(
+      await retirePublishedCopyIntentsInTransaction({
+        intentIds: copyCleanupIntentIds,
+        organizationId,
+        tx,
+        workspaceIds: [targetWorkspaceId],
+      }),
+    );
 
     // For move operations, delete source entities in the same transaction.
     if (deleteSource) {

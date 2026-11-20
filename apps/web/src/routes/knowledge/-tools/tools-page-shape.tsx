@@ -1,8 +1,15 @@
 import type { ReactNode } from "react";
 
+import { ButtonFace, FaceLabelPending, InputFace } from "@stll/ui/control-face";
+import { ChevronDownIcon, GlobeIcon, PlusIcon } from "@stll/ui/icons";
 import { Skeleton } from "@stll/ui/skeleton";
+import {
+  ResponsiveActionToolbar,
+  ResponsiveActionToolbarItem,
+} from "@stll/workspace-ui/responsive-action-toolbar";
 
 import { PendingText } from "@/components/pending-text";
+import { TOOLS_CATALOGUE_KIND_LABEL_KEYS } from "@/features/knowledge/views/tools/tools-catalogue-kinds.logic";
 
 // The Tools page's shape: light presentational pieces only (a pending-safe
 // module, see .oxlint-plugins/route-pending-component-policy.json), so the
@@ -33,23 +40,54 @@ export const ToolsPageShell = ({ children }: { children: ReactNode }) => (
   </div>
 );
 
-const CATALOGUE_FILTER_KEYS = ["all", "skill", "mcp"];
 const CATALOGUE_ROW_KEYS = ["a", "b", "c", "d", "e", "f"];
 
 // Mirrors the catalogue view body (toolbar row, filter pills, then a stack of
 // bordered entry cards) so the page's chrome stays put and only the catalogue
-// values stream in.
-export const ToolsCatalogueSkeleton = () => (
+// values stream in. The add action is there where the member's role may add
+// tools of their own.
+export const ToolsCatalogueSkeleton = ({
+  addAction = false,
+}: {
+  addAction?: boolean | undefined;
+}) => (
   <div className="flex flex-col gap-6">
-    <div className="flex items-center gap-2">
-      <Skeleton className="h-9 flex-1 rounded-md" />
-      <Skeleton className="h-9 w-24 rounded-md" />
-      <Skeleton className="h-9 w-28 rounded-md" />
-    </div>
+    <ResponsiveActionToolbar>
+      <ResponsiveActionToolbarItem slot="primary">
+        <InputFace className="min-h-11 sm:min-h-0" fieldClassName="max-sm:h-11">
+          <PendingText
+            barClassName="w-40"
+            id="onboarding.catalogueSearchPlaceholder"
+          />
+        </InputFace>
+      </ResponsiveActionToolbarItem>
+      <ResponsiveActionToolbarItem slot="secondary">
+        <ButtonFace
+          className="h-11 w-full justify-start sm:h-8 sm:w-auto"
+          size="default"
+          variant="outline"
+        >
+          <GlobeIcon className="size-3.5" />
+          <FaceLabelPending className="w-10" />
+          <ChevronDownIcon className="size-3.5" />
+        </ButtonFace>
+      </ResponsiveActionToolbarItem>
+      {addAction && (
+        <ResponsiveActionToolbarItem slot="action">
+          <ButtonFace className="h-11 sm:h-8" size="default" variant="default">
+            <PlusIcon className="size-3.5" />
+            <PendingText barClassName="w-20" id="catalogue.addCustom" />
+            <ChevronDownIcon className="size-3.5" />
+          </ButtonFace>
+        </ResponsiveActionToolbarItem>
+      )}
+    </ResponsiveActionToolbar>
 
     <div className="flex items-center gap-1.5">
-      {CATALOGUE_FILTER_KEYS.map((key) => (
-        <Skeleton className="h-6 w-14 rounded-md" key={key} />
+      {Object.values(TOOLS_CATALOGUE_KIND_LABEL_KEYS).map((label) => (
+        <ButtonFace key={label} size="xs" variant="muted">
+          <PendingText barClassName="w-10" id={label} />
+        </ButtonFace>
       ))}
     </div>
 

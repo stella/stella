@@ -5,11 +5,14 @@ import {
   type BuiltChunk,
   checkInitialBudget,
   coldLoadHops,
+  convertedRouteCount,
   evaluateStartup,
   INITIAL_GROWTH_LIMIT_BYTES,
   initialGzipBytes,
   PENDING_MODULE_LIMIT_BYTES,
-  PENDING_TOTAL_LIMIT_BYTES,
+  PENDING_ROUTE_ALLOWANCE_BYTES,
+  PENDING_SLACK_BYTES,
+  type PendingBudget,
   pendingLayer,
   type StartupGraph,
   type StartupLedger,
@@ -50,6 +53,13 @@ const graphOf = (
 
 const EMPTY_LEDGER: StartupLedger = { startupPageCode: [], coldLoadHops: [] };
 
+/** A build with no pending views, measured against a total of zero. */
+const NO_PENDING: PendingBudget = {
+  committed: 0,
+  base: null,
+  convertedRoutes: null,
+};
+
 describe("initial JS ratchet", () => {
   test("sums the gzip of the initial chunks only", () => {
     const graph = graphOf(
@@ -85,13 +95,13 @@ describe("initial JS ratchet", () => {
   test("an over-budget build fails the run; a shrunk one only notices", () => {
     const over = evaluateStartup(
       graphOf([chunk("index-a.js", {}, { gzipBytes: 20_000 })]),
-      10_000,
+      { initial: 10_000, pending: NO_PENDING },
       EMPTY_LEDGER,
       "rebaseline",
     );
     const shrunk = evaluateStartup(
       graphOf([chunk("index-a.js", {}, { gzipBytes: 1000 })]),
-      10_000,
+      { initial: 10_000, pending: NO_PENDING },
       EMPTY_LEDGER,
       "rebaseline",
     );
@@ -120,24 +130,13 @@ describe("pending layer", () => {
     expect(layer.totalBytes).toBe(2 * PENDING_MODULE_LIMIT_BYTES + 1);
   });
 
-  test("caps the sum of the pending views", () => {
-    const views = (count: number): Record<string, number> =>
-      Object.fromEntries(
-        Array.from({ length: count }, (_, i) => [
-          `src/routes/r${i}.pending.tsx`,
-          6000,
-        ]),
-      );
-    const atCap = Math.floor(PENDING_TOTAL_LIMIT_BYTES / 6000);
+  test("counts the routes a change took off the exceptions list", () => {
+    const base = ["routes/a.tsx", "routes/b.tsx", "routes/c.tsx"];
 
-    expect(
-      pendingLayer(graphOf([chunk("vendor-a.js", views(atCap))])).overTotal,
-    ).toBe(false);
-    expect(
-      pendingLayer(graphOf([chunk("vendor-a.js", views(atCap + 1))])).overTotal,
-    ).toBe(true);
+    expect(convertedRouteCount(base, ["routes/c.tsx"])).toBe(2);
+    // A route the change adds back, or one the base never listed, earns nothing.
+    expect(convertedRouteCount(base, [...base, "routes/d.tsx"])).toBe(0);
   });
-
   test("a pending view in a lazy chunk costs the startup nothing", () => {
     const graph = graphOf(
       [chunk("vendor-a.js", { "src/shell.tsx": 1000 })],
@@ -559,7 +558,12 @@ describe("shrink-only ledger", () => {
         ],
       },
     );
-    const result = evaluateStartup(second, 0, ledger, "rebaseline");
+    const result = evaluateStartup(
+      second,
+      { initial: 0, pending: NO_PENDING },
+      ledger,
+      "rebaseline",
+    );
 
     expect(result.hops.listed.map((hop) => hop.module)).toEqual([
       "src/routes/cases/-cases-page.tsx",
@@ -581,8 +585,18 @@ describe("shrink-only ledger", () => {
   });
 
   test("a listed offender passes and a new one fails", () => {
-    const listed = evaluateStartup(offending, 0, ledger, "rebaseline");
-    const unlisted = evaluateStartup(offending, 0, EMPTY_LEDGER, "rebaseline");
+    const listed = evaluateStartup(
+      offending,
+      { initial: 0, pending: NO_PENDING },
+      ledger,
+      "rebaseline",
+    );
+    const unlisted = evaluateStartup(
+      offending,
+      { initial: 0, pending: NO_PENDING },
+      EMPTY_LEDGER,
+      "rebaseline",
+    );
 
     expect(listed.failures).toEqual([]);
     expect(listed.pageCode.listed.map((o) => o.module)).toEqual([
@@ -596,7 +610,12 @@ describe("shrink-only ledger", () => {
 
   test("a listed offender that stopped offending fails until its line is deleted", () => {
     const fixed = graphOf([chunk("vendor-a.js", { "src/shell.tsx": 900 })]);
-    const result = evaluateStartup(fixed, 0, ledger, "rebaseline");
+    const result = evaluateStartup(
+      fixed,
+      { initial: 0, pending: NO_PENDING },
+      ledger,
+      "rebaseline",
+    );
 
     expect(result.failures.map((f) => f.message)).toEqual([
       expect.stringContaining(
@@ -640,7 +659,12 @@ describe("shrink-only ledger", () => {
 
   test("the job summary shows the totals and each offender", () => {
     const summary = startupSummary(
-      evaluateStartup(offending, 0, EMPTY_LEDGER, "rebaseline"),
+      evaluateStartup(
+        offending,
+        { initial: 0, pending: NO_PENDING },
+        EMPTY_LEDGER,
+        "rebaseline",
+      ),
     );
 
     expect(summary).toContain(
@@ -652,5 +676,142 @@ describe("shrink-only ledger", () => {
     expect(summary).toContain(
       "| `/cases` loads `src/routes/cases/-cases-page.tsx` | cold-load hop | 58.6 KiB | new |",
     );
+  });
+});
+
+describe("pending layer ratchet", () => {
+  // Real exception lists: the base branch's, and the change's after it
+  // converted `converted` of them.
+  const BASE_EXCEPTIONS = [
+    "apps/web/src/routes/knowledge/clauses.tsx",
+    "apps/web/src/routes/knowledge/index.tsx",
+    "apps/web/src/routes/knowledge/route.tsx",
+    "apps/web/src/routes/knowledge/styles.tsx",
+    "apps/web/src/routes/knowledge/workflows.tsx",
+  ];
+  const BASE_TOTAL = 200_000;
+
+  /** A startup build whose pending views add up to `total` bytes. */
+  const buildWith = (total: number): StartupGraph =>
+    graphOf([
+      chunk("vendor-a.js", {
+        "src/routes/a.pending.tsx": PENDING_MODULE_LIMIT_BYTES,
+        "src/shell.pending.tsx": total - PENDING_MODULE_LIMIT_BYTES,
+        "src/shell.tsx": 90_000,
+      }),
+    ]);
+
+  const evaluate = (total: number, converted: number, committed = total) =>
+    evaluateStartup(
+      buildWith(total),
+      {
+        initial: 0,
+        pending: {
+          committed,
+          base: BASE_TOTAL,
+          convertedRoutes: convertedRouteCount(
+            BASE_EXCEPTIONS,
+            BASE_EXCEPTIONS.slice(converted),
+          ),
+        },
+      },
+      EMPTY_LEDGER,
+      "rebaseline",
+    );
+
+  const pendingFailures = (result: ReturnType<typeof evaluateStartup>) =>
+    result.failures.filter((f) => f.title.startsWith("Pending layer"));
+
+  test("a change that converts N routes may add N times the route allowance and the slack", () => {
+    const allowed =
+      BASE_TOTAL + 3 * PENDING_ROUTE_ALLOWANCE_BYTES + PENDING_SLACK_BYTES;
+    const result = evaluate(allowed, 3);
+
+    expect(result.pendingBudget.convertedRoutes).toBe(3);
+    expect(result.pendingBudget.limit).toBe(allowed);
+    expect(pendingFailures(result)).toEqual([]);
+  });
+
+  test("growth past the allowance fails and names it", () => {
+    const limit =
+      BASE_TOTAL + 2 * PENDING_ROUTE_ALLOWANCE_BYTES + PENDING_SLACK_BYTES;
+    const result = evaluate(limit + 1, 2, BASE_TOTAL);
+
+    expect(pendingFailures(result)).toEqual([
+      {
+        title: "Pending layer grew past its allowance",
+        message: expect.stringContaining(
+          "may add 5.0 KiB (2 routes removed from the pending-component exceptions × 2.0 KiB + 1.0 KiB)",
+        ),
+      },
+    ]);
+  });
+
+  test("growth with no route converted gets the slack only", () => {
+    expect(
+      pendingFailures(evaluate(BASE_TOTAL + PENDING_SLACK_BYTES, 0)),
+    ).toEqual([]);
+    expect(
+      pendingFailures(
+        evaluate(BASE_TOTAL + PENDING_SLACK_BYTES + 1, 0, BASE_TOTAL),
+      ).map((f) => f.title),
+    ).toEqual(["Pending layer grew past its allowance"]);
+  });
+
+  test("a pure shrink passes and asks for the lower total", () => {
+    const result = evaluate(BASE_TOTAL - 10_000, 0, BASE_TOTAL);
+
+    expect(result.pendingBudget.status).toBe("shrunk");
+    expect(pendingFailures(result)).toEqual([]);
+    expect(result.notices).toEqual([
+      expect.stringContaining("shrank to 185.5 KiB"),
+    ]);
+  });
+
+  test("growth within the allowance the tree does not record fails until it is committed", () => {
+    const grown = BASE_TOTAL + PENDING_ROUTE_ALLOWANCE_BYTES;
+    const result = evaluate(grown, 1, BASE_TOTAL);
+
+    expect(pendingFailures(result).map((f) => f.title)).toEqual([
+      "Pending layer total not recorded",
+    ]);
+  });
+
+  test("a total the change commits above its base is a re-anchor it has to justify", () => {
+    const reanchored = BASE_TOTAL + 50_000;
+    const result = evaluate(reanchored, 0, reanchored);
+
+    expect(pendingFailures(result)).toEqual([]);
+    expect(result.pendingBudget.reanchored).toBe(true);
+    expect(result.notices).toEqual([expect.stringContaining("re-anchored")]);
+    expect(startupSummary(result)).toContain(
+      "| 245.1 KiB (re-anchored from 195.3 KiB), ",
+    );
+  });
+
+  test("with no base to read, growth counts from the tree's total with the slack only", () => {
+    const missingBase = (total: number) =>
+      evaluateStartup(
+        buildWith(total),
+        {
+          initial: 0,
+          pending: {
+            committed: BASE_TOTAL,
+            base: null,
+            convertedRoutes: null,
+          },
+        },
+        EMPTY_LEDGER,
+        "rebaseline",
+      );
+
+    expect(missingBase(BASE_TOTAL + 900).pendingBudget).toMatchObject({
+      anchor: BASE_TOTAL,
+      allowance: PENDING_SLACK_BYTES,
+      status: "ok",
+    });
+    expect(
+      pendingFailures(missingBase(BASE_TOTAL + 5000)).map((f) => f.title),
+    ).toEqual(["Pending layer grew past its allowance"]);
   });
 });

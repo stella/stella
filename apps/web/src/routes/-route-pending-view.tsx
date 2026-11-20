@@ -3,7 +3,7 @@ import type { ComponentType, ReactElement } from "react";
 import { Navigate, useRouter, useRouterState } from "@tanstack/react-router";
 import type { AnyRoute, RouteComponent } from "@tanstack/react-router";
 
-import { DefaultPendingComponent } from "@/components/route-components";
+import { DefaultPendingComponent } from "@/components/default-pending";
 import { APP_FRAME_SCOPE } from "@/routes/-app-frame-scope";
 import type { AppFrameScope } from "@/routes/-app-frame-scope";
 import { isFramePendingView } from "@/routes/-pending-view.logic";

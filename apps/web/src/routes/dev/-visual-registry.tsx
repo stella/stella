@@ -115,6 +115,13 @@ const visualLoaders = {
       return { default: ButtonLabelPlayground };
     },
   },
+  "sortable-head": {
+    load: async () => {
+      const { SortableHeadPlayground } =
+        await import("./-components/sortable-head-playground");
+      return { default: SortableHeadPlayground };
+    },
+  },
   "menu-commits": {
     load: async () => {
       const { MenuCommitsPlayground } =

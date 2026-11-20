@@ -54,6 +54,7 @@ export const FAILURE_CONTEXT_KEYS = [
   "modelId",
   "operation",
   "organizationId",
+  "outcome",
   "parameterStoreReason",
   "phase",
   "queue",
@@ -67,6 +68,7 @@ export const FAILURE_CONTEXT_KEYS = [
   "tool",
   "userFileId",
   "versionId",
+  "vocabulary",
   "workspaceId",
 ];
 

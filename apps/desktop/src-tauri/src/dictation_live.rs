@@ -417,9 +417,16 @@ mod tests {
   /// The audio that is worth the first request.
   const FIRST_UPLOAD: usize = FIRST_UPLOAD_MILLIS / 1_000 * SECOND;
 
+  /// A tone loud enough to count as speech.
+  fn tone(length: usize) -> Vec<f32> {
+    (0..length)
+      .map(|index| 0.3 * ((index as f32) * 0.05).sin())
+      .collect()
+  }
+
   /// Speech of `length` samples whose first sample names it.
   fn speech(name: usize, length: usize) -> Vec<f32> {
-    let mut samples = vec![0.3; length];
+    let mut samples = tone(length);
     samples[0] = name as f32 / 100.0;
     samples
   }
@@ -1027,7 +1034,7 @@ mod tests {
     let transcription =
       Transcription::new(Lengths::default(), Destination::Local, true);
     let mut live = Live::start(transcription, 48_000, Arc::default()).unwrap();
-    live.send(vec![0.3; 48_000]);
+    live.send(tone(48_000));
     let (ended, lengths) = live.finish().unwrap();
     assert_eq!(ended, Ended::Text(String::new()));
     assert_eq!(lengths.0, vec![SECOND]);

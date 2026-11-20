@@ -90,6 +90,7 @@ export const SETTINGS_DICTATION = {
   shareTextBeforeCursor: false,
   shareWindowTitle: false,
   shortcutTaken: false,
+  sounds: true,
   textBeforeCursorAvailable: true,
 } as const satisfies DictationSettingSnapshot;
 

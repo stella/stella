@@ -360,6 +360,9 @@ export const ENUM_COLUMN_ROLES = {
     entity_feature_gate: ATTRIBUTE,
     severity: ATTRIBUTE,
   },
+  email_delivery_failures: {
+    reason: ATTRIBUTE,
+  },
   entities: {
     agenda_kind: ATTRIBUTE,
     agenda_source: ATTRIBUTE,

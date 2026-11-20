@@ -38,9 +38,10 @@ pub(crate) const TRANSCRIBE_WINDOW_LABEL: &str = "transcribe";
 const FILE_EVENT: &str = "transcribe-file";
 const PIECE_EVENT: &str = "transcribe-piece";
 const FINISHED_EVENT: &str = "transcribe-finished";
-/// Pieces stella AI transcribes at once; order is kept whatever finishes
-/// first.
-const CLOUD_PIECES_AT_ONCE: usize = 3;
+/// Pieces sent to stella AI at once. Every request holds the one account
+/// lease while it runs, so more would only queue behind each other, and a
+/// live dictation started meanwhile would wait behind all of them.
+const CLOUD_PIECES_AT_ONCE: usize = 1;
 /// Pieces decoded ahead of the transcription, so it never waits on the disk.
 const PIECES_AHEAD: usize = 4;
 /// One piece's upload and transcription; a piece is under a minute.

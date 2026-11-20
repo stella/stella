@@ -624,6 +624,10 @@
       "cleanup": "Poprawianie",
       "thisComputer": "Na tym komputerze"
     },
+    "sounds": {
+      "title": "Dźwięki",
+      "description": "Odtwarzaj krótki, cichy dźwięk, gdy nagrywanie się zaczyna i gdy się kończy."
+    },
     "cleanup": {
       "title": "Popraw za pomocą AI",
       "description": "Poprawia błędy rozpoznawania i podyktowane formatowanie, na przykład „nowa linia” lub „pogrubienie”, oraz dopasowuje tekst do aplikacji, na przykład poczty e-mail. Za pośrednictwem stelli do dostawcy AI Twojej organizacji trafia tylko tekst, nie dźwięk; stella go nie zapisuje.",
@@ -666,7 +670,7 @@
     "customWords": {
       "group": "Własne słowa",
       "title": "Słowa i nazwy, które stella ma pisać poprawnie",
-      "description": "Na przykład nazwiska klientów lub angielskie terminy, których używasz, mówiąc w innym języku. Są przechowywane na tym komputerze dla tego konta i wysyłane tylko z dyktowaniem, do przetwarzania przez stella AI i do poprawiania za pomocą AI. Model mowy na tym komputerze ich nie używa.",
+      "description": "Na przykład nazwiska klientów lub angielskie terminy, których używasz, mówiąc w innym języku. Są przechowywane na tym komputerze dla tego konta i wysyłane tylko z dyktowaniem, do przetwarzania przez stella AI i do poprawiania za pomocą AI. Gdy przetwarza model mowy na tym komputerze, a poprawianie za pomocą AI jest wyłączone, stella poprawia ich pisownię na tym komputerze.",
       "count": "{count, number} z {limit, number}",
       "input": "Dodaj słowo lub nazwę",
       "add": "Dodaj",
@@ -1096,7 +1100,7 @@
       "cloudDescriptionModel": "Dźwięk jest wysyłany do transkrypcji do stella i do dostawcy modelu {model}. stella go nie przechowuje.",
       "localMissing": "Aby transkrybować na tym komputerze, pobierz model mowy w Ustawieniach, w sekcji Dyktowanie.",
       "localMissingCloud": "Pobierz model mowy w Ustawieniach, w sekcji Dyktowanie, albo transkrybuj za pomocą stella AI.",
-      "retainsData": "{provider} przechowuje dźwięk i transkrypcję wszystkiego, co trafia do tego modelu. Nie transkrybuj nim poufnych nagrań ani nagrań klientów albo wybierz inny model w Ustawieniach, w sekcji Dyktowanie.",
+      "retainsData": "Zapoznaj się z warunkami przetwarzania danych przez {provider}.",
       "modelFailed": "Nie udało się odczytać modelu stella AI, więc stella AI nie może teraz transkrybować. Spróbuj ponownie lub transkrybuj na tym komputerze."
     },
     "matter": {
