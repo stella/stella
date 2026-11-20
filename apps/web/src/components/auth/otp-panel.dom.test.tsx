@@ -14,7 +14,7 @@ const originalFetch = globalThis.fetch;
 globalThis.fetch = Object.assign(async () => Response.json(null), {
   preconnect: () => undefined,
 });
-const { cleanup, render, within, fireEvent } =
+const { cleanup, render, within, fireEvent, waitFor } =
   await import("@testing-library/react");
 const { IntlProvider } = await import("use-intl");
 const messages = (await import("@/i18n/langs/en.json")).default;
@@ -334,7 +334,9 @@ test("the panel explains its own code mail's bounce, and a code sent again start
     expect(resent).toHaveLength(1);
     expect(resent[0]).toMatch(/^[\w-]{43}$/u);
     expect(resent[0]).not.toBe(opening);
-    expect(polled.at(-1)).toEqual({ attempt: resent[0] });
+    await waitFor(() => {
+      expect(polled.at(-1)).toEqual({ attempt: resent[0] });
+    });
   } finally {
     client.clear();
     globalThis.fetch = originalFetch;
