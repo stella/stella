@@ -10,6 +10,9 @@ import { createBrowserErrorCollector } from "./test";
 const VIEWPORT = { width: 1440, height: 900 };
 const CASES_PATH = "/law/cases?country=cze";
 const COVERAGE_PATH = "/law/coverage";
+const COVERAGE_HERO = "[data-slot=law-coverage-hero]";
+// Suspense can keep the outgoing page hidden alongside the visible coverage shell.
+const COVERAGE_MAIN = `main:has(${COVERAGE_HERO}):not(:has(main))`;
 const SEARCH = "main [role=search]";
 const TABLE = "[data-slot=public-law-table-frame]";
 const RESULTS_LANDMARKS = {
@@ -68,13 +71,13 @@ const SURFACES: readonly Surface[] = [
     entryPath: CASES_PATH,
     apiPath: "/v1/case/coverage",
     pending: "[data-slot=law-coverage-pending]",
-    ready: "[data-slot=law-coverage-hero]",
+    ready: COVERAGE_HERO,
     landmarks: {
-      heading: "main h1",
-      hero: "[data-slot=law-coverage-hero]",
-      navigation: "main nav",
-      table: "main table",
-      firstRow: "main tbody tr",
+      heading: `header:has(+ ${COVERAGE_HERO}) h1`,
+      hero: COVERAGE_HERO,
+      navigation: `${COVERAGE_MAIN} nav`,
+      table: `${COVERAGE_MAIN} table`,
+      firstRow: `${COVERAGE_MAIN} tbody tr`,
     },
     exception: {
       type: "data-dependent-coverage-height",
