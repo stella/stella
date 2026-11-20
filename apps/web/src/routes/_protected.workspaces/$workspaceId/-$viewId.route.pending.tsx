@@ -1,25 +1,26 @@
-import type { ReactNode } from "react";
+import { createContext, use } from "react";
+import type { ReactNode, Ref } from "react";
 
-import { useQueryClient } from "@tanstack/react-query";
-import { useParams } from "@tanstack/react-router";
-import { useTranslations } from "use-intl";
+import { useParams, useSearch } from "@tanstack/react-router";
 
+import { FaceLabelPending } from "@stll/ui/control-face";
 import { PlusIcon } from "@stll/ui/icons";
-import { Skeleton } from "@stll/ui/skeleton";
+import { TOOLBAR_ROW_HEIGHT } from "@stll/ui/layout-tokens";
 import { cn } from "@stll/ui/utils";
-import { ViewChromeBar, ViewToolbarChrome } from "@stll/ui/view-toolbar";
-import { WorkspaceViewSwitcherFace } from "@stll/workspace-ui/view-switcher-face";
+import { ViewChromeBar, ViewToolbarChrome } from "@stll/ui/view-toolbar-shell";
+import { WorkspaceViewSwitcherFace } from "@stll/workspace-ui/view-strip";
 
-import { getLangDir, useI18nStore } from "@/i18n/i18n-store";
-import { useMaybeAuthenticatedUser } from "@/lib/authenticated-user-context";
-import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
-import type { ViewLayout, WorkspaceView } from "@/lib/types";
-import { CorrespondenceViewSkeleton } from "@/routes/_protected.workspaces/$workspaceId/-components/correspondence-view.pending";
+import { usePendingCache } from "@/components/pending-cache";
+import type { WorkspaceView } from "@/lib/types";
+import { framePendingView } from "@/routes/-pending-view.logic";
+import { ViewBodyPending } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-body.pending";
 import {
   cachedViewChrome,
   hasViewToolbar,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-chrome.logic";
-import { VIEW_LAYOUT_ICONS } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-layout-icons";
+import type { CachedViewChrome } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-chrome.logic";
+import { VIEW_LAYOUT_ICONS } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-layout-icons.logic";
+import { ViewToolbarFace } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-toolbar.pending";
 
 /**
  * The view tabs row. Loaded views and the route-pending state render the same
@@ -43,191 +44,174 @@ export const ViewChromeRowFace = ({
   </ViewChromeBar>
 );
 
+type ViewShellFaceProps = {
+  /** The tabs row over the body. */
+  chrome: ReactNode;
+  /** The view's body: the layout, or what stands in for it. */
+  children: ReactNode;
+  paneRef?: Ref<HTMLDivElement> | undefined;
+  /** The guide anchors the page puts on the body and on its scroll area. */
+  bodyAnchor?: string | undefined;
+  scrollAnchor?: string | undefined;
+};
+
+/**
+ * The matter view's one layout, drawn by both phases: the tabs row, then the
+ * body in its scroll area. The page fills it with the switcher, the toolbar
+ * and the layout; the pending phase with their faces and the layout's own
+ * pending body.
+ */
+export const ViewShellFace = ({
+  bodyAnchor,
+  children,
+  chrome,
+  paneRef,
+  scrollAnchor,
+}: ViewShellFaceProps) => (
+  <div className="flex min-h-0 flex-1 flex-col" ref={paneRef}>
+    {chrome}
+    <div
+      className="flex min-h-0 flex-1 flex-col"
+      data-guide-anchor={bodyAnchor}
+    >
+      <div className="flex-1 overflow-auto" data-guide-anchor={scrollAnchor}>
+        {children}
+      </div>
+    </div>
+  </div>
+);
+
+// Whether the loaded view's tabs row already stands above: the page marks
+// its body so a pending view drawn there (the body route's) draws only the
+// body, and anywhere else (the cold-load frame, the matter layout's pending
+// view) the whole view.
+const ViewBodySlotContext = createContext(false);
+
+/** Marks the loaded view's body, where a pending view draws only its body. */
+export const ViewBodySlot = ({ children }: { children: ReactNode }) => (
+  <ViewBodySlotContext value>{children}</ViewBodySlotContext>
+);
+
 /** A view's tab icon, the same in the switcher and its face. */
 const ViewLayoutTabIcon = ({ view }: { view: WorkspaceView }) => {
   const Icon = VIEW_LAYOUT_ICONS[view.layout.type];
   return <Icon className="size-3.5 shrink-0" />;
 };
 
-const ViewToolbarSkeleton = () => (
-  <ViewToolbarChrome>
-    <Skeleton className="size-7 shrink-0 rounded-md" />
-    <Skeleton className="size-7 shrink-0 rounded-md" />
-    <Skeleton className="h-7 w-24 shrink-0 rounded-md" />
+/** The toolbar while its controls load: their faces, for the cached view. */
+const ViewToolbarPending = ({ view }: { view: WorkspaceView }) => (
+  <ViewToolbarChrome aria-hidden="true">
+    <ViewToolbarFace view={view} />
   </ViewToolbarChrome>
 );
 
-const PENDING_TABLE_ROWS = 12;
-const PENDING_TABLE_CELLS = [
-  { key: "name", width: "w-48" },
-  { key: "c2", width: "w-28" },
-  { key: "c3", width: "w-20" },
-  { key: "c4", width: "w-32" },
-  { key: "c5", width: "w-24" },
+/** Two tab names' worth of bars, for a matter whose views are not cached. */
+const TAB_NAMES_PENDING = [
+  { key: "a", width: "w-20" },
+  { key: "b", width: "w-16" },
 ] as const;
-const PENDING_KANBAN_COLUMNS = 4;
-const PENDING_KANBAN_CARDS = 3;
-const PENDING_OVERVIEW_CARDS = 4;
-
-/** Fixed positions in a placeholder list that never reorders. */
-const pendingSlots = (count: number) =>
-  Array.from({ length: count }, (_, slot) => `slot-${slot}`);
-
-const PendingTableBody = () => (
-  <div className="flex flex-col">
-    <div className="flex items-center gap-4 border-b px-3 py-2">
-      <Skeleton className="size-4 rounded-sm" />
-      {PENDING_TABLE_CELLS.map((cell) => (
-        <Skeleton className={cn("h-3", cell.width)} key={cell.key} />
-      ))}
-    </div>
-    {pendingSlots(PENDING_TABLE_ROWS).map((rowKey) => (
-      <div
-        className="flex items-center gap-4 border-b px-3 py-2.5"
-        key={rowKey}
-      >
-        <Skeleton className="size-4 rounded-sm" />
-        {PENDING_TABLE_CELLS.map((cell) => (
-          <Skeleton className={cn("h-4", cell.width)} key={cell.key} />
-        ))}
-      </div>
-    ))}
-  </div>
-);
-
-const PendingKanbanBody = () => (
-  <div className="flex gap-3 p-3">
-    {pendingSlots(PENDING_KANBAN_COLUMNS).map((columnKey) => (
-      <div className="flex w-72 shrink-0 flex-col gap-2" key={columnKey}>
-        <Skeleton className="h-5 w-32" />
-        {pendingSlots(PENDING_KANBAN_CARDS).map((cardKey) => (
-          <Skeleton className="h-20 w-full rounded-lg" key={cardKey} />
-        ))}
-      </div>
-    ))}
-  </div>
-);
-
-const PendingOverviewBody = () => (
-  <div className="grid gap-4 p-4 md:grid-cols-2 lg:grid-cols-4">
-    {pendingSlots(PENDING_OVERVIEW_CARDS).map((cardKey) => (
-      <Skeleton className="h-28 rounded-xl" key={cardKey} />
-    ))}
-  </div>
-);
-
-const ViewBodySkeleton = ({
-  layoutType,
-}: {
-  layoutType: ViewLayout["type"] | undefined;
-}) => {
-  if (layoutType === "kanban") {
-    return <PendingKanbanBody />;
-  }
-  if (layoutType === "overview") {
-    return <PendingOverviewBody />;
-  }
-  if (layoutType === "correspondence") {
-    return <CorrespondenceViewSkeleton />;
-  }
-  // table / filesystem / calendar / unknown all fall back to the row list.
-  return <PendingTableBody />;
-};
 
 /**
- * The matter's tabs as the cache already knows them, drawn without the
- * switcher's menus, renaming or reordering.
+ * The tabs row before the route's data: the matter's tabs as the cache
+ * already holds them, drawn without the switcher's menus, renaming or
+ * reordering, or bars where the tab names go when the matter was not opened
+ * before. Its toolbar shows only for a view the cache says has one.
  */
-const ViewSwitcherFace = ({
-  activeViewId,
-  canCreateView,
-  hasViewActions,
-  views,
-}: {
-  activeViewId: string;
-  canCreateView: boolean;
-  hasViewActions: boolean;
-  views: readonly WorkspaceView[];
-}) => {
-  const t = useTranslations();
-  const direction = useI18nStore((state) => getLangDir(state.lang));
-  return (
-    <WorkspaceViewSwitcherFace
-      activeViewId={activeViewId}
-      addControl={
-        canCreateView ? (
-          <span
-            aria-hidden="true"
-            className="text-muted-foreground inline-flex size-7 items-center justify-center sm:size-6"
-          >
-            <PlusIcon className="size-4 sm:size-3.5" />
-          </span>
-        ) : null
-      }
-      ariaLabel={t("workspaces.views.switcherLabel")}
-      direction={direction}
-      renderIcon={(view) => <ViewLayoutTabIcon view={view} />}
-      reserveActionSpace={hasViewActions}
-      views={views}
-    />
-  );
-};
-
-/**
- * Route-pending shell for the matter data-grid: the view chrome row plus a
- * layout-aware body skeleton (rows / kanban columns / overview cards), read
- * from the cached view so opening a matter shows its structure, not the logo.
- */
-export function ViewPending() {
-  const { workspaceId, viewId } = useParams({
-    strict: false,
-    select: (params) => ({
-      workspaceId: params.workspaceId,
-      viewId: params.viewId,
-    }),
-  });
-  const queryClient = useQueryClient();
-  const user = useMaybeAuthenticatedUser();
-  const chrome =
-    workspaceId === undefined || viewId === undefined
-      ? null
-      : cachedViewChrome(queryClient, { workspaceId, viewId, user });
-
-  return (
-    <>
-      {chrome ? (
-        <ViewChromeRowFace
-          switcher={
-            <ViewSwitcherFace
-              activeViewId={chrome.activeView.id}
-              canCreateView={chrome.canCreateView}
-              hasViewActions={chrome.hasViewActions}
-              views={chrome.views}
-            />
-          }
-          toolbar={
-            hasViewToolbar(chrome.activeView) ? <ViewToolbarSkeleton /> : null
-          }
-        />
-      ) : (
-        <ViewChromeBar>
+const ViewChromePending = ({ chrome }: { chrome: CachedViewChrome | null }) => {
+  if (chrome === null) {
+    return (
+      <ViewChromeRowFace
+        switcher={
           <div
+            aria-hidden="true"
             className={cn(
-              "flex min-w-0 flex-1 items-center gap-1.5 px-3",
+              "flex min-w-0 flex-1 items-center gap-4 px-4",
               TOOLBAR_ROW_HEIGHT,
             )}
           >
-            <Skeleton className="h-7 w-24 rounded-md" />
-            <Skeleton className="h-7 w-20 rounded-md" />
+            {TAB_NAMES_PENDING.map((tab) => (
+              <FaceLabelPending className={tab.width} key={tab.key} />
+            ))}
           </div>
-          <ViewToolbarSkeleton />
-        </ViewChromeBar>
-      )}
-      <div className="flex min-h-0 flex-1 flex-col">
-        <div className="flex-1 overflow-auto">
-          <ViewBodySkeleton layoutType={chrome?.activeView.layout.type} />
-        </div>
-      </div>
-    </>
+        }
+        toolbar={null}
+      />
+    );
+  }
+  return (
+    <div aria-hidden="true" className="contents">
+      <ViewChromeRowFace
+        switcher={
+          <WorkspaceViewSwitcherFace
+            activeViewId={chrome.activeView.id}
+            addControl={
+              chrome.canCreateView ? (
+                <span className="text-muted-foreground inline-flex size-7 items-center justify-center sm:size-6">
+                  <PlusIcon className="size-4 sm:size-3.5" />
+                </span>
+              ) : null
+            }
+            ariaLabel=""
+            renderIcon={(view) => <ViewLayoutTabIcon view={view} />}
+            reserveActionSpace={chrome.hasViewActions}
+            views={chrome.views}
+          />
+        }
+        toolbar={
+          hasViewToolbar(chrome.activeView) ? (
+            <ViewToolbarPending view={chrome.activeView} />
+          ) : null
+        }
+      />
+    </div>
   );
-}
+};
+
+/**
+ * The matter view in its pending phase: the tabs row and the layout's own
+ * pending body, both read from what the cache holds (a matter opened before,
+ * views the matter layout prefetched), never a layout guessed. Inside the
+ * loaded view's body it draws the body alone. On the way to a document under
+ * the view, the view's chrome stays away, as the loaded page keeps it away.
+ */
+const ViewPagePendingView = () => {
+  const { viewId, workspaceId } = useParams({
+    strict: false,
+    select: (params) => ({
+      viewId: params.viewId,
+      workspaceId: params.workspaceId,
+    }),
+  });
+  const onDocument = useSearch({
+    strict: false,
+    select: (search) => search.entity !== undefined,
+  });
+  const inBody = use(ViewBodySlotContext);
+  const cache = usePendingCache();
+  // On the matter's own address, which goes on to its first view, no view
+  // is named yet: the first one the cache holds is the one it goes to.
+  const chrome =
+    cache === null || workspaceId === undefined
+      ? null
+      : cachedViewChrome(cache, { workspaceId, viewId: viewId ?? "" });
+  const body = (
+    <ViewBodyPending
+      cache={cache}
+      view={chrome?.activeView}
+      workspaceId={workspaceId}
+    />
+  );
+  if (inBody) {
+    return body;
+  }
+  if (onDocument) {
+    return <div className="flex min-h-0 flex-1 flex-col" />;
+  }
+  return (
+    <ViewShellFace chrome={<ViewChromePending chrome={chrome} />}>
+      {body}
+    </ViewShellFace>
+  );
+};
+
+export const ViewPending = framePendingView(ViewPagePendingView);

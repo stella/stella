@@ -43,7 +43,7 @@ import {
   readDocumentFile,
   readOriginalDocumentFile,
 } from "@/state/document-file";
-import type { DocumentFile } from "@/state/document-file";
+import type { DocumentFile, LegalDocumentFile } from "@/state/document-file";
 import { useAppColors } from "@/theme";
 
 type Failure = "offline" | "noFile" | "failed" | "unsupported" | "android";
@@ -52,12 +52,12 @@ type Phase =
   | { readonly status: "opening" }
   | { readonly status: "failed"; readonly failure: Failure }
   | {
-      readonly status: "dataBox";
-      readonly file: Extract<DocumentFile, { viewer: "dataBox" }>;
+      readonly status: "legalPreview";
+      readonly file: LegalDocumentFile;
     }
   | {
       readonly status: "open";
-      readonly file: Exclude<DocumentFile, { viewer: "dataBox" }>;
+      readonly file: Exclude<DocumentFile, LegalDocumentFile>;
       readonly opened: OpenedFile;
       /** The viewer could not draw it; Quick Look may still show it. */
       readonly unrendered: boolean;
@@ -83,8 +83,13 @@ const openDocument = async ({
       failure: isOffline(file.error) ? "offline" : "failed",
     };
   }
-  if (file.value.viewer === "dataBox") {
-    return { status: "dataBox", file: file.value };
+  if (
+    file.value.viewer === "asic" ||
+    file.value.viewer === "cades" ||
+    file.value.viewer === "dataBox" ||
+    file.value.viewer === "structured-document"
+  ) {
+    return { status: "legalPreview", file: file.value };
   }
   if (!canOpenFiles()) {
     // An older iPhone build gains the viewer by updating; Android has none.
@@ -245,7 +250,7 @@ const OpenedDocument = ({
       : null;
 
   const title =
-    phase.status === "open" || phase.status === "dataBox"
+    phase.status === "open" || phase.status === "legalPreview"
       ? phase.file.fileName
       : (name ?? t("title"));
 
@@ -271,9 +276,9 @@ const OpenedDocument = ({
         </View>
       );
     }
-    if (phase.status === "dataBox") {
+    if (phase.status === "legalPreview") {
       return (
-        <DataBoxPreview
+        <LegalFilePreview
           file={phase.file}
           key={phase.file.fieldId}
           onRetry={onRetry}
@@ -413,20 +418,24 @@ const OpenedDocument = ({
   );
 };
 
-const DataBoxPreview = ({
-  file: { fieldId, preview },
+const LegalFilePreview = ({
+  file,
   onRetry,
   showPreview,
   source,
   workspaceId,
 }: {
-  file: Extract<DocumentFile, { viewer: "dataBox" }>;
+  file: LegalDocumentFile;
   onRetry: () => void;
   showPreview: (file: OpenedFile) => Promise<void>;
   source: AccessTokenSource;
   workspaceId: string;
 }) => {
   const t = useTranslations("document");
+  const common = useTranslations("common");
+  const signedFile = useTranslations("signedFile");
+  const structuredDocument = useTranslations("structuredDocument");
+  const { fieldId, preview, viewer } = file;
   const [openingOriginal, setOpeningOriginal] = useState(false);
   const originalInFlight = useRef(false);
   const mounted = useRef(true);
@@ -490,7 +499,71 @@ const DataBoxPreview = ({
   };
 
   const previewBody = (() => {
-    if (Result.isOk(preview)) {
+    if (viewer === "cades" && Result.isOk(preview)) {
+      const { fileName, layers, text } = preview.value;
+      return (
+        <>
+          <Text accessibilityRole="header" selectable variant="headline">
+            {fileName}
+          </Text>
+          <Text variant="caption">{signedFile("unverified")}</Text>
+          {layers.map(({ id, signers }, index) => (
+            <View key={id}>
+              <Text accessibilityRole="header" variant="label">
+                {signedFile("layer", { number: index + 1 })}
+              </Text>
+              {signers.map((signer) => (
+                <Text key={signer.id} selectable>
+                  {signer.name ?? signedFile("unknownSigner")}
+                </Text>
+              ))}
+            </View>
+          ))}
+          {text.trim() ? (
+            <Text selectable>{text}</Text>
+          ) : (
+            <Text variant="caption">{signedFile("noReadableContent")}</Text>
+          )}
+        </>
+      );
+    }
+    if (preview.status === "ok") {
+      if (viewer === "asic") {
+        return (
+          <>
+            <Text variant="caption">{signedFile("unverified")}</Text>
+            {preview.value.members.map(({ fileName, status, text }) => (
+              <View key={fileName}>
+                <Text accessibilityRole="header" selectable variant="label">
+                  {fileName}
+                </Text>
+                {status !== "unavailable" && text.trim() ? (
+                  <Text selectable>{text}</Text>
+                ) : null}
+                {status === "truncated" && (
+                  <Text variant="caption">{common("previewTruncated")}</Text>
+                )}
+                {status === "unavailable" && (
+                  <Text variant="caption">
+                    {signedFile("noReadableContent")}
+                  </Text>
+                )}
+              </View>
+            ))}
+          </>
+        );
+      }
+      if (viewer === "structured-document") {
+        return (
+          <>
+            <Text variant="caption">{structuredDocument("textOnly")}</Text>
+            <Text selectable>{preview.value.text}</Text>
+            {preview.value.truncated && (
+              <Text variant="caption">{common("previewTruncated")}</Text>
+            )}
+          </>
+        );
+      }
       return <Text selectable>{preview.value.text}</Text>;
     }
     const { error } = preview;
@@ -500,11 +573,16 @@ const DataBoxPreview = ({
     const requestFailure = isOffline(error)
       ? "failure.offline"
       : "failure.failed";
+    const unreadableMessages = {
+      dataBox: t("failure.dataBoxUnreadable"),
+      "structured-document": structuredDocument("noReadableContent"),
+      asic: signedFile("unreadable"),
+      cades: signedFile("unreadable"),
+    } satisfies Record<typeof viewer, string>;
+    const unreadableMessage = unreadableMessages[viewer];
     return (
       <EmptyCard
-        description={t(
-          unreadable ? "failure.dataBoxUnreadable" : requestFailure,
-        )}
+        description={unreadable ? unreadableMessage : t(requestFailure)}
         title={t("failedTitle")}
       >
         {unreadable ? null : (

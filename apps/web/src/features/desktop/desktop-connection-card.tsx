@@ -5,7 +5,6 @@ import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
-import { Frame, FramePanel } from "@stll/ui/frame";
 import {
   CircleCheckIcon,
   ExternalLinkIcon,
@@ -22,6 +21,10 @@ import {
   offersDesktopSetup,
 } from "@/features/desktop/desktop-connection-card.logic";
 import type { DesktopCardState } from "@/features/desktop/desktop-connection-card.logic";
+import {
+  DESKTOP_CARD_TILE_CLASS,
+  DesktopConnectionCardFrame,
+} from "@/features/desktop/desktop-connection-card.pending";
 import { DesktopConnectionStatus } from "@/features/desktop/desktop-connection-status";
 import type { DesktopLinkApproval } from "@/features/desktop/desktop-connection-store.logic";
 import { desktopPresenceOptions } from "@/features/desktop/desktop-presence";
@@ -123,94 +126,89 @@ export const DesktopConnectionCard = () => {
     user.preferredName?.trim() || user.name?.trim() || user.email;
 
   return (
-    <Frame>
-      <FramePanel>
-        <div className="flex flex-col gap-4 p-1 sm:flex-row sm:items-center">
-          <span
-            className={cn(
-              "grid size-11 shrink-0 place-items-center rounded-2xl",
-              copy.tone === "ok" && "bg-success/10 text-success-foreground",
-              copy.tone === "attention" &&
-                "bg-warning/10 text-warning-foreground",
-              copy.tone === "neutral" && "bg-primary/10 text-primary",
-              copy.tone === "muted" && "bg-muted text-muted-foreground",
-            )}
-          >
-            <copy.icon aria-hidden="true" className="size-5" />
-          </span>
-          <div className="min-w-0 flex-1">
-            <h2 className="text-base font-semibold text-balance">
-              {t(copy.titleKey)}
-            </h2>
-            <p className="text-muted-foreground mt-1 text-sm text-pretty">
-              {t.rich(copy.detailKey, {
-                bdi: (chunks) => <bdi dir="ltr">{chunks}</bdi>,
-                host,
-                identity,
-                version:
-                  card.type === "connected" || card.type === "outdated"
-                    ? card.version
-                    : "",
-              })}
-            </p>
-          </div>
-          <div className="flex shrink-0 flex-wrap items-center gap-2">
-            {card.type === "verifying" ? (
-              <Button loading variant="outline">
-                <ExternalLinkIcon />
-                {t("settings.account.desktopOpenApp")}
-              </Button>
-            ) : null}
-            {card.type === "opening" ? (
-              <Button
-                onClick={() => {
-                  openDesktopUrl(card.desktopUrl);
-                }}
-                variant="outline"
-              >
-                <ExternalLinkIcon />
-                {t("settings.account.desktopOpenApp")}
-              </Button>
-            ) : null}
-            {card.type === "approve" ? (
-              <Button
-                loading={connection.status === "connecting"}
-                onClick={onConnect}
-                size="lg"
-              >
-                <LinkIcon />
-                {t("common.approve")}
-              </Button>
-            ) : null}
-            {offersDesktopSetup(card) ? (
-              <Button
-                loading={connection.status === "connecting"}
-                onClick={onConnect}
-                variant="outline"
-              >
-                {t("settings.account.desktopConnectInstalled")}
-              </Button>
-            ) : null}
-          </div>
+    <DesktopConnectionCardFrame
+      actions={
+        <>
+          {card.type === "verifying" ? (
+            <Button loading variant="outline">
+              <ExternalLinkIcon />
+              {t("settings.account.desktopOpenApp")}
+            </Button>
+          ) : null}
+          {card.type === "opening" ? (
+            <Button
+              onClick={() => {
+                openDesktopUrl(card.desktopUrl);
+              }}
+              variant="outline"
+            >
+              <ExternalLinkIcon />
+              {t("settings.account.desktopOpenApp")}
+            </Button>
+          ) : null}
+          {card.type === "approve" ? (
+            <Button
+              loading={connection.status === "connecting"}
+              onClick={onConnect}
+              size="lg"
+            >
+              <LinkIcon />
+              {t("common.approve")}
+            </Button>
+          ) : null}
+          {offersDesktopSetup(card) ? (
+            <Button
+              loading={connection.status === "connecting"}
+              onClick={onConnect}
+              variant="outline"
+            >
+              {t("settings.account.desktopConnectInstalled")}
+            </Button>
+          ) : null}
+        </>
+      }
+      detail={t.rich(copy.detailKey, {
+        bdi: (chunks) => <bdi dir="ltr">{chunks}</bdi>,
+        host,
+        identity,
+        version:
+          card.type === "connected" || card.type === "outdated"
+            ? card.version
+            : "",
+      })}
+      tile={
+        <span
+          className={cn(
+            DESKTOP_CARD_TILE_CLASS,
+            copy.tone === "ok" && "bg-success/10 text-success-foreground",
+            copy.tone === "attention" &&
+              "bg-warning/10 text-warning-foreground",
+            copy.tone === "neutral" && "bg-primary/10 text-primary",
+            copy.tone === "muted" && "bg-muted text-muted-foreground",
+          )}
+        >
+          <copy.icon aria-hidden="true" className="size-5" />
+        </span>
+      }
+      title={t(copy.titleKey)}
+    >
+      {offersDesktopSetup(card) ? (
+        <div className="mt-4 border-t pt-4">
+          <DesktopDownloadButtons platform={platform} />
         </div>
-        {offersDesktopSetup(card) ? (
-          <div className="mt-4 border-t pt-4">
-            <DesktopDownloadButtons platform={platform} />
-          </div>
-        ) : null}
-        {connection.status === "error" ||
-        connection.status === "update-required" ||
-        connection.status === "refused" ? (
-          <div className="mt-3">
-            <DesktopConnectionStatus
-              onRetry={onConnect}
-              onSwitchAccount={switchAccount}
-              state={connection}
-            />
-          </div>
-        ) : null}
-      </FramePanel>
-    </Frame>
+      ) : null}
+      {connection.status === "error" ||
+      connection.status === "update-required" ||
+      connection.status === "refused" ? (
+        <div className="mt-3">
+          <DesktopConnectionStatus
+            onRetry={onConnect}
+            onSwitchAccount={switchAccount}
+            state={connection}
+          />
+        </div>
+      ) : null}
+    </DesktopConnectionCardFrame>
   );
 };
 

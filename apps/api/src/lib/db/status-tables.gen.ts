@@ -319,6 +319,7 @@ export const ENUM_COLUMNS = {
   case_law_decision_reviews: ["evidence_classification", "outcome", "source"],
   case_law_decisions: ["case_number_type"],
   case_law_held_decision_attachments: ["match_basis"],
+  case_law_ingestion_failure_evidence: ["identity_kind"],
   case_law_polarity_rules: ["kind"],
   case_law_population_counts: ["kind"],
   case_law_population_deltas: ["kind"],

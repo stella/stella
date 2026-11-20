@@ -1233,6 +1233,13 @@
       "treatment": "Pozdější judikatura"
     },
     "analyzing": "Analyzuji...",
+    "browse": {
+      "courtDescription": "{court} ({country}): rozhodnutí ve veřejné právní databázi stelly podle roku a měsíce.",
+      "courts": "Soudy",
+      "days": "Dny",
+      "jurisdictionDescription": "{country}: soudní rozhodnutí ve veřejné právní databázi stelly podle soudu, roku a měsíce.",
+      "periodDescription": "{court} ({country}), {period}: rozhodnutí ve veřejné právní databázi stelly."
+    },
     "chat": {
       "prompts": {
         "facts": {
@@ -1725,12 +1732,25 @@
       "unorderedList": "Seznam s odrážkami",
       "wholeBlockRequired": "Pro změnu stylu vyberte celý odstavec nebo seznam."
     },
+    "answerNotFinished": "stella tuto odpověď nedokončila.",
     "answerQuote": {
       "showInDecision": "Zobrazit v rozhodnutí",
       "unverified": "Citaci se nepodařilo ověřit",
       "unverifiedHint": "Citovaná rozhodnutí tento text doslovně neobsahují",
       "verified": "Ověřená citace",
       "verifiedHint": "Doslovně v {source}"
+    },
+    "answerTable": {
+      "copy": "Kopírovat tabulku",
+      "copyAs": "Kopírovat jako {format}",
+      "download": "Stáhnout tabulku",
+      "downloadAs": "Stáhnout jako {format}",
+      "fullscreen": "Otevřít na celou obrazovku",
+      "fullscreenTitle": "Tabulka na celou obrazovku",
+      "singleLine": "Na jeden řádek",
+      "size": "{rows, plural, one {# řádek} few {# řádky} many {# řádku} other {# řádků}} · {columns, plural, one {# sloupec} few {# sloupce} many {# sloupce} other {# sloupců}}",
+      "textMode": "Text buněk",
+      "wrap": "Zalamovat text"
     },
     "applyMode": {
       "description": "Word ukládá, kdo provedl každou změnu. Vaši volbu si zapamatujeme.",
@@ -2142,9 +2162,17 @@
     },
     "placeholder": "Zde napište svůj dotaz, / pro dovednosti, @ pro přidání kontextu",
     "processSummary": {
-      "analyses": "{count, plural, one {# analýza} few {# analýzy} other {# analýz} many {# analýzy}}",
       "changesSaved": "{count, plural, one {# uložená změna} few {# uložené změny} other {# uložených změn} many {# uložené změny}}",
+      "checkedRegisters": "Ověřeny veřejné rejstříky",
       "documentEdits": "{count, plural, one {# úprava dokumentu} few {# úpravy dokumentu} other {# úprav dokumentu} many {# úpravy dokumentu}}",
+      "readDocument": "Přečten dokument",
+      "readDocuments": "Přečteny dokumenty",
+      "searchedCaseLaw": "Prohledána judikatura",
+      "searchedChats": "Prohledána historie chatu",
+      "searchedLegislation": "Prohledány předpisy",
+      "searchedLegislationAndCaseLaw": "Prohledány předpisy a judikatura",
+      "searchedMatters": "Prohledány spisy",
+      "searchedWeb": "Prohledán web",
       "sourcesChecked": "{count, plural, one {# prověřený zdroj} few {# prověřené zdroje} other {# prověřených zdrojů} many {# prověřeného zdroje}}"
     },
     "promptImprovementStrategies": {
@@ -2231,6 +2259,7 @@
       "chipLabel": "Kde běží: {place}",
       "cloud": "Cloud",
       "cloudDescription": "Běží v cloudu. Funguje odkudkoli.",
+      "hintAntigravity": "Nainstalujte Antigravity 1.5 nebo novější a přihlaste se v něm",
       "hintCheck": "Zkontrolujte ho ve stella desktop",
       "hintInstall": "Nainstalujte ho ve stella desktop",
       "hintOffline": "Otevřete stella desktop ve svém počítači",
@@ -2241,6 +2270,8 @@
       "localPlace": "Váš počítač, {harness}",
       "localSelection": "Váš počítač · {harness}",
       "placeState": "{place}. {state}",
+      "startedInCloud": "Nový chat se spustil v cloudu, protože {harness} na vašem počítači není k dispozici ({state})",
+      "startedInCloudCheckFailed": "Nový chat se spustil v cloudu, protože se nepodařilo zkontrolovat váš počítač",
       "stepsCheck": "Otevírá se stella desktop. Pokud se neotevře, otevřete ho ve svém počítači a zkontrolujte agenta {harness} v Nastavení › Obecné › Předplatné AI.",
       "stepsInstall": "Otevírá se stella desktop. Pokud se neotevře, otevřete ho ve svém počítači a v Nastavení › Obecné zvolte u agenta {harness} Nainstalovat.",
       "stepsSignInClaudeCode": "Otevírá se stella desktop k přihlášení. Pokud se neotevře, otevřete ho a zvolte Nastavení › Obecné › Přihlásit se přes Claude.",
@@ -2307,6 +2338,20 @@
       "title": "Zpráva čeká ve frontě, dokud agent neskončí",
       "turnNotRunning": "Agent právě nepracuje."
     },
+    "stepDigest": {
+      "decisionsFound": "{found, plural, one {# rozhodnutí nalezeno} few {# rozhodnutí nalezena} many {# rozhodnutí nalezeno} other {# rozhodnutí nalezeno}}",
+      "decisionsFoundUsed": "{found, plural, one {# rozhodnutí nalezeno} few {# rozhodnutí nalezena} many {# rozhodnutí nalezeno} other {# rozhodnutí nalezeno}}, {used, plural, one {# použito v odpovědi} few {# použita v odpovědi} many {# použito v odpovědi} other {# použito v odpovědi}}",
+      "filterAsOf": "Ke dni {date}",
+      "legislationFound": "{count, plural, one {# předpis nebo ustanovení} few {# předpisy a ustanovení} many {# předpisu a ustanovení} other {# předpisů a ustanovení}}",
+      "lookupDidNotGoThrough": "Toto hledání neprošlo.",
+      "moreFound": "{count, plural, one {a # další} few {a # další} many {a # dalšího} other {a # dalších}}",
+      "moreLookups": "{count, plural, one {# další dotaz se nezobrazuje} few {# další dotazy se nezobrazují} many {# dalšího dotazu se nezobrazuje} other {# dalších dotazů se nezobrazuje}}",
+      "notRecorded": "Tento krok proběhl dříve, než stella začala zaznamenávat, co který krok hledá.",
+      "nothingFound": "Nic neodpovídá.",
+      "technicalDetails": "Technické detaily",
+      "usedInAnswer": "Použito v odpovědi",
+      "versionFrom": "Znění od {date}"
+    },
     "stopFailed": "Odpověď se nepodařilo zastavit. Zkuste to znovu.",
     "stopResponse": "Zastavit",
     "stopped": "Zastaveno",
@@ -2322,6 +2367,11 @@
     "suggestionStatus": {
       "accepted": "Použito",
       "rejected": "Odmítnuto"
+    },
+    "switcher": {
+      "allChats": "Všechny chaty",
+      "searchPlaceholder": "Najít chat…",
+      "trigger": "Přepnout chat"
     },
     "tableChart": {
       "bar": "Sloupcový",
@@ -2892,6 +2942,7 @@
     "playbooks": "Playbooky",
     "preparing": "Připravuje se…",
     "preview": "Náhled",
+    "previewTruncated": "Úplný text není v tomto náhledu dostupný.",
     "previous": "Předchozí",
     "previousMatch": "Předchozí výskyt",
     "print": "Tisknout",
@@ -4659,7 +4710,7 @@
       "discoveredSkills": "{count, plural, one {Nalezena # dovednost} few {Nalezeny # dovednosti} other {Nalezeno # dovedností} many {Nalezeno # dovednosti}}",
       "discoveryEmpty": "V tomto repozitáři ani složce nebyly nalezeny žádné dovednosti.",
       "discoverySkippedInvalid": "{count, plural, one {# neplatná dovednost byla přeskočena} few {# neplatné dovednosti byly přeskočeny} other {# neplatných dovedností bylo přeskočeno} many {# neplatné dovednosti bylo přeskočeno}}",
-      "dropPack": "Přetáhněte sem .zip nebo SKILL.md a dovednost se naimportuje",
+      "dropPack": "Přetáhněte sem .zip/.skill nebo SKILL.md a dovednost se naimportuje",
       "editSkill": "Upravit dovednost",
       "enableSkill": "Zapnout dovednost",
       "fileExists": "Soubor s touto cestou již existuje",
@@ -4716,8 +4767,8 @@
           "name": "Shrnout dokument"
         }
       },
-      "uploadHelp": "Použijte soubor SKILL.md nebo složku .zip obsahující SKILL.md a volitelné zdroje jen pro čtení.",
-      "uploadPack": "Nahrát .zip nebo SKILL.md",
+      "uploadHelp": "Použijte soubor SKILL.md nebo složku .zip/.skill obsahující SKILL.md a volitelné zdroje jen pro čtení.",
+      "uploadPack": "Nahrát .zip/.skill nebo SKILL.md",
       "urlPlaceholder": "https://github.com/org/repo/tree/main/cesta/k/dovednosti",
       "version": "Verze: {version}"
     },
@@ -5749,6 +5800,9 @@
       "chatNotificationsDescription": "Dostanete oznámení z tohoto prohlížeče, když se odpověď v chatu dokončí, zatímco je stella na pozadí.",
       "chatNotificationsToggle": "Upozornit mě, když je odpověď hotová nebo potřebuje můj vstup",
       "chatNotificationsUnsupported": "Tento prohlížeč oznámení nepodporuje.",
+      "chatTechnicalDetails": "Technické detaily v chatu",
+      "chatTechnicalDetailsDescription": "Každý krok v chatu ukazuje, co hledal a co našel. Po zapnutí uvidíte i kód a nezpracované výsledky za ním.",
+      "chatTechnicalDetailsToggle": "Zobrazovat technické detaily v chatu",
       "confirmDelete": "Potvrdit smazání účtu",
       "dangerZone": "Nebezpečná zóna",
       "dangerZoneDescription": "Trvale smazat přístup k účtu a soukromá data účtu.",
@@ -6256,6 +6310,14 @@
     "reconnectRequired": "Přihlášení vypršelo",
     "title": "SharePoint a OneDrive"
   },
+  "signedFile": {
+    "layer": "Vrstva podpisů {number, number}",
+    "noReadableContent": "Pro náhled není k dispozici žádný čitelný obsah.",
+    "pdfUnavailable": "Náhled PDF není k dispozici.",
+    "unknownSigner": "Neznámý podepisující",
+    "unreadable": "Podepsaný soubor se nepodařilo přečíst.",
+    "unverified": "Podpisy nebyly ověřeny."
+  },
   "skillHistory": {
     "acceptStale": "Přijmout a přepsat novější úpravy",
     "backToCurrent": "Zpět na aktuální znění",
@@ -6396,6 +6458,10 @@
     "versionChangesRemoved": "{count, plural, one {# vypuštěné ustanovení} few {# vypuštěná ustanovení} many {# vypuštěného ustanovení} other {# vypuštěných ustanovení}}",
     "versionChangesWords": "{inserted, plural, one {# vložené slovo} few {# vložená slova} many {# vloženého slova} other {# vložených slov}}, {deleted, plural, one {# vypuštěné slovo} few {# vypuštěná slova} many {# vypuštěného slova} other {# vypuštěných slov}}",
     "wordingVersionUnknown": "Datum verze znění není k dispozici"
+  },
+  "structuredDocument": {
+    "noReadableContent": "Pro náhled není k dispozici čitelný text.",
+    "textOnly": "Textový náhled bez rozvržení stránky a obrázků."
   },
   "styleSets": {
     "create": "Vytvořit",
@@ -7903,7 +7969,6 @@
         "endDate": "Datum ukončení",
         "month": "Měsíc",
         "quarter": "Čtvrtletí",
-        "showTable": "Zobrazit tabulku",
         "startDate": "Datum zahájení",
         "week": "Týden"
       },

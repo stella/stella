@@ -1,6 +1,9 @@
 import { describe, expect, test } from "bun:test";
 
-import { PUBLIC_LEGISLATION_COUNTRIES } from "@stll/api-contract/legislation-publication";
+import {
+  isPublicLegislationCountry,
+  PUBLIC_LEGISLATION_COUNTRIES,
+} from "@stll/api-contract/legislation-publication";
 
 import {
   createStatuteLinkTarget,
@@ -53,12 +56,13 @@ test("public statute routes follow the shared jurisdiction admission list", () =
     .map((country) => country.toUpperCase());
   // Every admitted jurisdiction is browsed unless it is declared pending.
   const pending: readonly string[] = STATUTE_BROWSER_PENDING_COUNTRIES;
-  expect(browsed).toEqual(
+  // The picker keeps its own order; the set is what admission decides.
+  expect(browsed.toSorted()).toEqual(
     PUBLIC_LEGISLATION_COUNTRIES.filter(
       (country) => !pending.includes(country),
-    ),
+    ).toSorted(),
   );
-  expect(isPublicStatuteCountry("hun")).toBe(false);
+  expect(isPublicStatuteCountry("hun")).toBe(isPublicLegislationCountry("HUN"));
   expect(isPublicStatuteCountry("svk")).toBe(true);
   expect(isPublicStatuteCountry("pol")).toBe(false);
   expect(isPublicStatuteCountry("xaa")).toBe(false);

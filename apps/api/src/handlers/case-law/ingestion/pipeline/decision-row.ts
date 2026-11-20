@@ -1,5 +1,5 @@
 import { panic, Result } from "better-result";
-import { and, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
+import { and, eq, inArray, isNotNull } from "drizzle-orm";
 
 import { createCaseLawDecisionSlug } from "@stll/api-contract/case-law-decision-route";
 
@@ -18,6 +18,7 @@ import {
 import { runCitationGraphTransaction } from "@/api/handlers/case-law/citation-graph-transaction";
 import type { CitationGraphTransaction } from "@/api/handlers/case-law/citation-graph-transaction";
 import { settleReopenedCitations } from "@/api/handlers/case-law/citation-resolution";
+import { refreshHostDecisionIdentifiersTx } from "@/api/handlers/case-law/decision-identifier-claims-persistence";
 import {
   CASE_LAW_DECISION_SLUG_ALLOCATION_ATTEMPTS,
   createCaseLawDecisionSlugCandidate,
@@ -38,6 +39,10 @@ import {
   lostRowWriteStatus,
   readDocumentlessPayloadStateTx,
 } from "@/api/handlers/case-law/ingestion/pipeline/decision-row-update";
+import {
+  matchHostDecisionsTx,
+  persistOwnCollectionPartTx,
+} from "@/api/handlers/case-law/ingestion/pipeline/held-decision-attachment";
 import { DECISION_ROW_WRITE_STATUS } from "@/api/handlers/case-law/ingestion/pipeline/types";
 import type { DecisionRowWriteStatus } from "@/api/handlers/case-law/ingestion/pipeline/types";
 import {
@@ -49,6 +54,7 @@ import {
 } from "@/api/handlers/case-law/ingestion/supplement-composition";
 import type { SafeId } from "@/api/lib/branded-types";
 import { canonicalDecisionIdSql } from "@/api/lib/case-law/decision-alias";
+import { DECISION_IDENTIFIER_CLAIM } from "@/api/lib/case-law/decision-identifier-claims";
 import { runDecisionWriteExtension } from "@/api/lib/case-law/decision-write-extension";
 import {
   decisionFallbackState,
@@ -313,7 +319,7 @@ const lockFallbackWinnerTx = async (
   }
   const winner = await findFallbackDecisionTx(tx, write);
   // A re-parse writes its own row, whose identity the new document may move.
-  if (write.inputProvenance.type === "stored" && winner === undefined) {
+  if (write.inputProvenance.type !== "observation" && winner === undefined) {
     return { type: "settled", existing };
   }
   if (
@@ -351,6 +357,17 @@ const writeDecisionRow = async (
       return DECISION_ROW_WRITE_STATUS.IDENTITY_MOVED;
     }
     const { existing } = fallbackWinner;
+    if (existing === undefined && write.heldDecisionCheck !== undefined) {
+      // The graph admission precedes every canonical row insert. Recheck
+      // after admission so concurrent publisher posts cannot both create a row.
+      const candidate = await matchHostDecisionsTx(tx, {
+        ...write.heldDecisionCheck,
+        sourceId,
+      });
+      if (candidate.type !== "none") {
+        return DECISION_ROW_WRITE_STATUS.IDENTITY_MOVED;
+      }
+    }
     // audit: skip — background case-law ingestion pipeline; public case-law data, not user actions
     const projectionLock = await lockActiveCorpusProjectionSourceByIdTx(tx, {
       family: "case_law",
@@ -409,7 +426,7 @@ const writeDecisionRow = async (
           payloadFenced:
             storedPayloadUnchanged ||
             replacedBlockAnchors !== null ||
-            inputProvenance.type === "stored",
+            inputProvenance.type !== "observation",
         });
       }
 
@@ -454,34 +471,10 @@ const writeDecisionRow = async (
       }
 
       if (!preservesExistingDetail) {
-        // Observed identifiers are re-derived; declared aliases stay, and an
-        // observed identifier equal to one is already held by it.
-        await tx
-          .delete(caseLawDecisionIdentifiers)
-          .where(
-            and(
-              eq(caseLawDecisionIdentifiers.decisionId, existing.id),
-              isNull(caseLawDecisionIdentifiers.declaredAt),
-            ),
-          );
-        await tx
-          .insert(caseLawDecisionIdentifiers)
-          .values(
-            write.plan.identifierRows.map((identifier) => ({
-              decisionId: existing.id,
-              ...identifier,
-            })),
-          )
-          // A declared alias the observation also derives takes the
-          // observed spelling and stays declared.
-          .onConflictDoUpdate({
-            target: [
-              caseLawDecisionIdentifiers.decisionId,
-              caseLawDecisionIdentifiers.type,
-              caseLawDecisionIdentifiers.normalizedValue,
-            ],
-            set: { value: sql`excluded.value` },
-          });
+        await refreshHostDecisionIdentifiersTx(tx, {
+          decisionId: existing.id,
+          identifiers: write.plan.identifierRows,
+        });
         await writeDecisionJudges(tx, write, existing.id);
       }
 
@@ -494,7 +487,7 @@ const writeDecisionRow = async (
       });
     }
 
-    if (inputProvenance.type === "stored") {
+    if (inputProvenance.type !== "observation") {
       // A reparse must never recreate a removed decision under a new identity.
       return DECISION_ROW_WRITE_STATUS.STALE_PAYLOAD;
     }
@@ -524,8 +517,10 @@ const writeDecisionRow = async (
       write.plan.identifierRows.map((identifier) => ({
         decisionId: insertedId,
         ...identifier,
+        independentClaims: [DECISION_IDENTIFIER_CLAIM.HOST],
       })),
     );
+    await persistOwnCollectionPartTx(tx, write, scopedDb);
     return await finishInsertedRowTx(tx, write, insertedId, projectionLock);
   });
 

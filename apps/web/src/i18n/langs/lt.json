@@ -1233,6 +1233,13 @@
       "treatment": "Vėlesnis vertinimas"
     },
     "analyzing": "Analizuojama...",
+    "browse": {
+      "courtDescription": "{court} ({country}): sprendimai viešoje stella teisės duomenų bazėje pagal metus ir mėnesį.",
+      "courts": "Teismai",
+      "days": "Dienos",
+      "jurisdictionDescription": "{country}: teismų sprendimai viešoje stella teisės duomenų bazėje pagal teismą, metus ir mėnesį.",
+      "periodDescription": "{court} ({country}), {period}: sprendimai viešoje stella teisės duomenų bazėje."
+    },
     "chat": {
       "prompts": {
         "facts": {
@@ -1725,12 +1732,25 @@
       "unorderedList": "Ženklintas sąrašas",
       "wholeBlockRequired": "Norėdami pakeisti stilių, pažymėkite visą pastraipą arba sąrašą."
     },
+    "answerNotFinished": "stella negalėjo užbaigti šio atsakymo.",
     "answerQuote": {
       "showInDecision": "Rodyti sprendime",
       "unverified": "Citatos patikrinti nepavyko",
       "unverifiedHint": "Cituojamuose sprendimuose šio teksto pažodžiui nėra",
       "verified": "Patikrinta citata",
       "verifiedHint": "Pažodžiui: {source}"
+    },
+    "answerTable": {
+      "copy": "Kopijuoti lentelę",
+      "copyAs": "Kopijuoti kaip {format}",
+      "download": "Atsisiųsti lentelę",
+      "downloadAs": "Atsisiųsti kaip {format}",
+      "fullscreen": "Atidaryti visame ekrane",
+      "fullscreenTitle": "Lentelė visame ekrane",
+      "singleLine": "Vienoje eilutėje",
+      "size": "{rows, plural, one {# eilutė} few {# eilutės} many {# eilutės} other {# eilučių}} · {columns, plural, one {# stulpelis} few {# stulpeliai} many {# stulpelio} other {# stulpelių}}",
+      "textMode": "Langelių tekstas",
+      "wrap": "Laužyti tekstą"
     },
     "applyMode": {
       "description": "Word įrašo, kas atliko kiekvieną pakeitimą. Įsiminsime jūsų pasirinkimą.",
@@ -2142,9 +2162,17 @@
     },
     "placeholder": "Čia įveskite klausimą, / įgūdžiams, @ kontekstui pridėti",
     "processSummary": {
-      "analyses": "{count, plural, one {# analizė} few {# analizės} many {# analizės} other {# analizių}}",
       "changesSaved": "{count, plural, one {# išsaugotas pakeitimas} few {# išsaugoti pakeitimai} many {# išsaugoto pakeitimo} other {# išsaugotų pakeitimų}}",
+      "checkedRegisters": "Patikrinti viešieji registrai",
       "documentEdits": "{count, plural, one {# dokumento pakeitimas} few {# dokumento pakeitimai} many {# dokumento pakeitimo} other {# dokumento pakeitimų}}",
+      "readDocument": "Perskaitytas dokumentas",
+      "readDocuments": "Perskaityti dokumentai",
+      "searchedCaseLaw": "Peržiūrėta teismų praktika",
+      "searchedChats": "Peržiūrėta pokalbio istorija",
+      "searchedLegislation": "Peržiūrėti teisės aktai",
+      "searchedLegislationAndCaseLaw": "Peržiūrėti teisės aktai ir teismų praktika",
+      "searchedMatters": "Peržiūrėtos bylos",
+      "searchedWeb": "Ieškota internete",
       "sourcesChecked": "{count, plural, one {# patikrintas šaltinis} few {# patikrinti šaltiniai} many {# patikrinto šaltinio} other {# patikrintų šaltinių}}"
     },
     "promptImprovementStrategies": {
@@ -2231,6 +2259,7 @@
       "chipLabel": "Kur veikia: {place}",
       "cloud": "Debesis",
       "cloudDescription": "Veikia debesyje. Pasiekiama iš bet kur.",
+      "hintAntigravity": "Įdiekite Antigravity 1.5 ar naujesnę versiją ir prisijunkite joje",
       "hintCheck": "Patikrinkite jį per stella desktop",
       "hintInstall": "Įdiekite jį per stella desktop",
       "hintOffline": "Atidarykite stella desktop savo kompiuteryje",
@@ -2241,6 +2270,8 @@
       "localPlace": "Jūsų kompiuteris, {harness}",
       "localSelection": "Jūsų kompiuteris · {harness}",
       "placeState": "{place}. {state}",
+      "startedInCloud": "Šis naujas pokalbis pradėtas debesyje, nes {harness} jūsų kompiuteryje nepasiekiamas ({state})",
+      "startedInCloudCheckFailed": "Šis naujas pokalbis pradėtas debesyje, nes nepavyko patikrinti jūsų kompiuterio",
       "stepsCheck": "Atidaroma stella desktop. Jei programa neatsidaro, atidarykite ją savo kompiuteryje ir patikrinkite agentą {harness} skiltyje Nustatymai › Bendra › DI prenumeratos.",
       "stepsInstall": "Atidaroma stella desktop. Jei programa neatsidaro, atidarykite ją savo kompiuteryje ir skiltyje Nustatymai › Bendra prie agento {harness} pasirinkite Įdiegti.",
       "stepsSignInClaudeCode": "Atidaroma stella desktop prisijungimui. Jei programa neatsidaro, atidarykite ją ir pasirinkite Nustatymai › Bendra › Prisijungti su Claude.",
@@ -2307,6 +2338,20 @@
       "title": "Jūsų žinutė laukia eilėje, kol agentas baigs",
       "turnNotRunning": "Agentas šiuo metu nedirba."
     },
+    "stepDigest": {
+      "decisionsFound": "{found, plural, one {Rastas # sprendimas} few {Rasti # sprendimai} many {Rasta # sprendimo} other {Rasta # sprendimų}}",
+      "decisionsFoundUsed": "{found, plural, one {Rastas # sprendimas} few {Rasti # sprendimai} many {Rasta # sprendimo} other {Rasta # sprendimų}}, {used, plural, one {# panaudotas atsakyme} few {# panaudoti atsakyme} many {# panaudota atsakyme} other {# panaudota atsakyme}}",
+      "filterAsOf": "{date} būklė",
+      "legislationFound": "{count, plural, one {# teisės aktas ar nuostata} few {# teisės aktai ir nuostatos} many {# teisės akto ir nuostatos} other {# teisės aktų ir nuostatų}}",
+      "lookupDidNotGoThrough": "Ši paieška nepavyko.",
+      "moreFound": "{count, plural, one {dar # nerodomas} few {dar # nerodomi} many {dar # nerodoma} other {dar # nerodoma}}",
+      "moreLookups": "{count, plural, one {Dar # užklausa nerodoma} few {Dar # užklausos nerodomos} many {Dar # užklausos nerodoma} other {Dar # užklausų nerodoma}}",
+      "notRecorded": "Šis žingsnis atliktas anksčiau, nei stella pradėjo įrašyti, ko ieško kiekvienas žingsnis.",
+      "nothingFound": "Nieko nerasta.",
+      "technicalDetails": "Techninė informacija",
+      "usedInAnswer": "Panaudota atsakyme",
+      "versionFrom": "Redakcija nuo {date}"
+    },
     "stopFailed": "Nepavyko sustabdyti atsakymo. Bandykite dar kartą.",
     "stopResponse": "Stabdyti",
     "stopped": "Sustabdyta",
@@ -2322,6 +2367,11 @@
     "suggestionStatus": {
       "accepted": "Pritaikyta",
       "rejected": "Atmesta"
+    },
+    "switcher": {
+      "allChats": "Visi pokalbiai",
+      "searchPlaceholder": "Rasti pokalbį…",
+      "trigger": "Pakeisti pokalbį"
     },
     "tableChart": {
       "bar": "Stulpelinė",
@@ -2892,6 +2942,7 @@
     "playbooks": "Peržiūros vadovai",
     "preparing": "Ruošiama…",
     "preview": "Peržiūra",
+    "previewTruncated": "Visas tekstas šioje peržiūroje nepasiekiamas.",
     "previous": "Ankstesnis",
     "previousMatch": "Ankstesnis atitikmuo",
     "print": "Spausdinti",
@@ -4659,7 +4710,7 @@
       "discoveredSkills": "{count, plural, one {Rastas # įgūdis} few {Rasti # įgūdžiai} other {Rasta # įgūdžių} many {Rasta # įgūdžių}}",
       "discoveryEmpty": "Šioje saugykloje ar aplanke įgūdžių nerasta.",
       "discoverySkippedInvalid": "{count, plural, one {Praleistas # netinkamas įgūdis} few {Praleisti # netinkami įgūdžiai} other {Praleista # netinkamų įgūdžių} many {Praleista # netinkamų įgūdžių}}",
-      "dropPack": "Vilkite .zip arba SKILL.md failą, kad importuotumėte įgūdį",
+      "dropPack": "Vilkite .zip/.skill arba SKILL.md failą, kad importuotumėte įgūdį",
       "editSkill": "Redaguoti įgūdį",
       "enableSkill": "Įjungti įgūdį",
       "fileExists": "Failas šiuo keliu jau yra",
@@ -4716,8 +4767,8 @@
           "name": "Apibendrinti dokumentą"
         }
       },
-      "uploadHelp": "Naudokite SKILL.md failą arba .zip aplanką su SKILL.md ir pasirinktiniais tik skaitymui skirtais ištekliais.",
-      "uploadPack": "Įkelti .zip arba SKILL.md",
+      "uploadHelp": "Naudokite SKILL.md failą arba .zip/.skill aplanką su SKILL.md ir pasirinktiniais tik skaitymui skirtais ištekliais.",
+      "uploadPack": "Įkelti .zip/.skill arba SKILL.md",
       "urlPlaceholder": "https://github.com/org/repo/tree/main/kelias/iki/igudzio",
       "version": "Versija: {version}"
     },
@@ -5749,6 +5800,9 @@
       "chatNotificationsDescription": "Gaukite pranešimą iš šios naršyklės, kai pokalbio atsakymas baigiamas, kol stella veikia fone.",
       "chatNotificationsToggle": "Pranešti, kai atsakymas paruoštas arba laukia mano veiksmo",
       "chatNotificationsUnsupported": "Ši naršyklė nepalaiko pranešimų.",
+      "chatTechnicalDetails": "Techninė informacija pokalbyje",
+      "chatTechnicalDetailsDescription": "Kiekvienas pokalbio žingsnis rodo, ko ieškojo ir ką rado. Įjungę matysite ir už jo esantį kodą bei neapdorotus rezultatus.",
+      "chatTechnicalDetailsToggle": "Rodyti techninę informaciją pokalbyje",
       "confirmDelete": "Patvirtinti paskyros ištrynimą",
       "dangerZone": "Pavojinga zona",
       "dangerZoneDescription": "Visam laikui ištrinti paskyros prieigą ir privačius paskyros duomenis.",
@@ -6256,6 +6310,14 @@
     "reconnectRequired": "Prisijungimas nebegalioja",
     "title": "SharePoint ir OneDrive"
   },
+  "signedFile": {
+    "layer": "Parašų sluoksnis {number, number}",
+    "noReadableContent": "Nėra skaitomo turinio, kurį būtų galima peržiūrėti.",
+    "pdfUnavailable": "PDF peržiūra nepasiekiama.",
+    "unknownSigner": "Nežinomas pasirašęs asmuo",
+    "unreadable": "Nepavyko perskaityti pasirašyto failo.",
+    "unverified": "Parašai nepatikrinti."
+  },
   "skillHistory": {
     "acceptStale": "Priimti ir perrašyti naujesnius pakeitimus",
     "backToCurrent": "Grįžti į dabartinę versiją",
@@ -6396,6 +6458,10 @@
     "versionChangesRemoved": "{count, plural, one {# išbraukta nuostata} few {# išbrauktos nuostatos} many {# išbrauktos nuostatos} other {# išbrauktų nuostatų}}",
     "versionChangesWords": "{inserted, plural, one {# įterptas žodis} few {# įterpti žodžiai} many {# įterpto žodžio} other {# įterptų žodžių}}, {deleted, plural, one {# išbrauktas žodis} few {# išbraukti žodžiai} many {# išbraukto žodžio} other {# išbrauktų žodžių}}",
     "wordingVersionUnknown": "Redakcijos versijos data nežinoma"
+  },
+  "structuredDocument": {
+    "noReadableContent": "Peržiūrai tinkamo teksto nėra.",
+    "textOnly": "Teksto peržiūra be puslapio maketo ir vaizdų."
   },
   "styleSets": {
     "create": "Kurti",
@@ -7903,7 +7969,6 @@
         "endDate": "Pabaigos data",
         "month": "Mėnuo",
         "quarter": "Ketvirtis",
-        "showTable": "Rodyti lentelę",
         "startDate": "Pradžios data",
         "week": "Savaitė"
       },

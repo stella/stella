@@ -1457,6 +1457,22 @@ export const bufferObjectCleanupIntents = p.pgTable(
       AND pg_catalog.split_part(${table.objectKey}, '/', 4) ~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}[.](docx|pdf)$'
       AND pg_catalog.array_length(pg_catalog.string_to_array(${table.objectKey}, '/'), 1) = 4
     )`;
+    // Skill file writers reserve only fresh original keys that no stored
+    // file names yet, so an intent can never claim (and later erase) another
+    // file's bytes.
+    const skillOriginalWriteAccess = sql`(
+      ${table.chatThreadId} IS NULL
+      AND ${table.workspaceId} IS NULL
+      AND pg_catalog.split_part(${table.objectKey}, '/', 1) = ${table.organizationId}
+      AND pg_catalog.split_part(${table.objectKey}, '/', 2) = 'agent-skills'
+      AND pg_catalog.split_part(${table.objectKey}, '/', 3) = 'originals'
+      AND pg_catalog.split_part(${table.objectKey}, '/', 4) ~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+      AND pg_catalog.array_length(pg_catalog.string_to_array(${table.objectKey}, '/'), 1) = 4
+      AND NOT EXISTS (
+        SELECT 1 FROM agent_skill_resources r
+        WHERE r.original_s3_key = ${table.objectKey}
+      )
+    )`;
 
     return [
       p
@@ -1483,7 +1499,7 @@ export const bufferObjectCleanupIntents = p.pgTable(
       p.pgPolicy("buffer_object_cleanup_insert", {
         for: "insert",
         to: stella,
-        withCheck: sql`${organizationCheck} AND ${writerSettlementAccess} AND (${ownerScopeAccess} OR ${templateWriteAccess} OR ${templateCreationAccess} OR ${reportExportWriteAccess})`,
+        withCheck: sql`${organizationCheck} AND ${writerSettlementAccess} AND (${ownerScopeAccess} OR ${templateWriteAccess} OR ${templateCreationAccess} OR ${reportExportWriteAccess} OR ${skillOriginalWriteAccess})`,
       }),
       p.pgPolicy("buffer_object_cleanup_select", {
         for: "select",

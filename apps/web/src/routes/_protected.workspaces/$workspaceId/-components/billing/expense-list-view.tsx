@@ -22,6 +22,8 @@ import { expensesOptions } from "@/lib/workspaces/queries/expenses";
 import { ExpenseRow } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/expense-row";
 import { useMatterNameMap } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/matter-name-map";
 
+import { ExpenseListFrame } from "./expense-row.pending";
+
 type ExpenseListViewProps = {
   workspaceId: string;
   dateFrom: string;
@@ -143,25 +145,19 @@ export const ExpenseListView = ({
   };
 
   return (
-    <div className="flex flex-col gap-3">
-      {/* Summary bar */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          {totalsByCurrency.map(({ currency, amount }) => (
-            <span className="text-sm font-medium tabular-nums" key={currency}>
-              {`${t("billing.total")}: ${formatCurrencyAmount(
-                amount,
-                currency,
-              )}`}
-            </span>
-          ))}
-        </div>
+    <ExpenseListFrame
+      totals={totalsByCurrency.map(({ currency, amount }) => (
+        <span className="text-sm font-medium tabular-nums" key={currency}>
+          {`${t("billing.total")}: ${formatCurrencyAmount(amount, currency)}`}
+        </span>
+      ))}
+      actions={
         <Button onClick={() => setFormOpen(true)} size="sm" variant="outline">
           <PlusIcon className="size-4" />
           {t("billing.addEntry")}
         </Button>
-      </div>
-
+      }
+    >
       {/* Expenses list */}
       {expenses.length > 0 ? (
         <div className="flex flex-col gap-1.5">
@@ -247,6 +243,6 @@ export const ExpenseListView = ({
           </div>
         </DialogPopup>
       </Dialog>
-    </div>
+    </ExpenseListFrame>
   );
 };

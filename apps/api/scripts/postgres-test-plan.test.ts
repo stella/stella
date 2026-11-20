@@ -275,3 +275,33 @@ test("the scheduled-run block measurement runs after all cluster workers finish"
     ),
   ).toEqual(new Set([testPath]));
 });
+
+test.each([
+  "SELECT pg_stat_get_backend_wal(pg_backend_pid())",
+  "SELECT pg_catalog.PG_STAT_GET_BACKEND_WAL \n (pg_backend_pid())",
+])(
+  "backend WAL measurement %s waits for every cluster worker",
+  (measurement) => {
+    const testPath = "src/tests/another-wal-measurement.postgres.test.ts";
+    expect(
+      clusterExclusivePostgresTests(new Map([[testPath, measurement]])),
+    ).toEqual(new Set([testPath]));
+  },
+);
+
+test("the replay WAL invariant is discovered and cluster exclusive", async () => {
+  const testPath = "src/lib/case-law/replay-write.postgres.test.ts";
+  const apiRoot = path.resolve(import.meta.dir, "..");
+  const runner = packageJson.ciGateTestRunners["test:postgres"];
+  expect(
+    await discoverGatedTestFiles({
+      apiRoot,
+      gate: runner.gate,
+      testFileGlob: runner.testFileGlob,
+    }),
+  ).toContain(testPath);
+  const source = await Bun.file(path.join(apiRoot, testPath)).text();
+  expect(clusterExclusivePostgresTests(new Map([[testPath, source]]))).toEqual(
+    new Set([testPath]),
+  );
+});

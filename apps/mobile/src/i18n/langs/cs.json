@@ -1,4 +1,7 @@
 {
+  "common": {
+    "previewTruncated": "Úplný text není v tomto náhledu dostupný."
+  },
   "tabs": {
     "chat": "Chat",
     "close": "Zavřít",
@@ -212,6 +215,11 @@
       "validate_skill_package": "Zkontrolovat dovednost",
       "web_search": "Vyhledávání na webu"
     },
+    "toolResearch": {
+      "caseLaw": "Hledám v judikatuře",
+      "legislation": "Čtu předpisy",
+      "legislationAndCaseLaw": "Hledám v předpisech a judikatuře"
+    },
     "localRun": {
       "title": {
         "sign_in": "Pro pokračování se přihlaste",
@@ -266,9 +274,18 @@
       "sourcesChecked": "{count, plural, one {# prověřený zdroj} few {# prověřené zdroje} other {# prověřených zdrojů} many {# prověřeného zdroje}}",
       "documentEdits": "{count, plural, one {# úprava dokumentu} few {# úpravy dokumentu} other {# úprav dokumentu} many {# úpravy dokumentu}}",
       "changesSaved": "{count, plural, one {# uložená změna} few {# uložené změny} other {# uložených změn} many {# uložené změny}}",
-      "analyses": "{count, plural, one {# analýza} few {# analýzy} other {# analýz} many {# analýzy}}"
+      "searchedLegislation": "Prohledány předpisy",
+      "searchedCaseLaw": "Prohledána judikatura",
+      "searchedLegislationAndCaseLaw": "Prohledány předpisy a judikatura",
+      "readDocument": "Přečten dokument",
+      "readDocuments": "Přečteny dokumenty",
+      "searchedMatters": "Prohledány spisy",
+      "checkedRegisters": "Ověřeny veřejné rejstříky",
+      "searchedWeb": "Prohledán web",
+      "searchedChats": "Prohledána historie chatu"
     },
     "stepCount": "{count, plural, one {# krok} few {# kroky} many {# kroku} other {# kroků}}",
+    "lookupCount": "{count, plural, one {# dotaz} few {# dotazy} many {# dotazu} other {# dotazů}}",
     "reasoning": "Uvažování",
     "historyTrimmed": "Starší zprávy se nepodařilo shrnout, a tak tato odpověď vychází jen z poslední části konverzace.",
     "failure": {
@@ -603,6 +620,17 @@
     "dictationModelsUnavailable": "Modely se nepodařilo načíst. Diktování použije model, který jste vybrali, nebo výchozí, pokud ho server už nenabízí.",
     "dictationCleanup": "Upravit pomocí AI",
     "dictationCleanupHint": "Opraví chyby rozpoznávání a vyslovené formátování, například „nový řádek“. Jen text, ne zvuk, jde přes stella k poskytovateli AI vaší organizace; stella ho neukládá."
+  },
+  "signedFile": {
+    "layer": "Vrstva podpisů {number, number}",
+    "noReadableContent": "Pro náhled není k dispozici žádný čitelný obsah.",
+    "unknownSigner": "Neznámý podepisující",
+    "unreadable": "Podepsaný soubor se nepodařilo přečíst.",
+    "unverified": "Podpisy nebyly ověřeny."
+  },
+  "structuredDocument": {
+    "noReadableContent": "Pro náhled není k dispozici čitelný text.",
+    "textOnly": "Textový náhled bez rozvržení stránky a obrázků."
   },
   "header": {
     "search": "Hledat"

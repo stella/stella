@@ -168,6 +168,11 @@ const PARAM_EXEMPTIONS = [
       "Tool entries are static slugs with a dedicated not-found presentation on this leaf route.",
   },
   {
+    path: "/knowledge/tools_/skills/$skillId",
+    reason:
+      "The route refuses anything but a UUID; the skill editor owns the state of a skill the organization does not have.",
+  },
+  {
     path: "/law/$country/cases/$court/$language/$slug",
     reason:
       "Public-law parameters are canonical external slugs handled by the public decision loader.",
@@ -181,6 +186,16 @@ const PARAM_EXEMPTIONS = [
     path: "/law/$country/statutes/$slug/v/$version",
     reason:
       "Public statute slugs and versions are canonical external identifiers.",
+  },
+  {
+    path: "/law/$country/",
+    reason:
+      "The country code is a public-law namespace rather than a resource id.",
+  },
+  {
+    path: "/law/$country/courts/$",
+    reason:
+      "Court, period and page segments are canonical public-law paths; the hub loader answers notFound for anything else.",
   },
   {
     path: "/law/$country/statutes/",

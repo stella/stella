@@ -271,6 +271,8 @@ type CaseLawDocumentStems = {
   languages: readonly [MorphologyLanguage, ...MorphologyLanguage[]];
   /** The headnote's stem field. */
   headnoteField: string;
+  /** Each passage's own stem field, beside its surface `text`. */
+  textField: string;
 };
 
 export type CaseLawCorpusQueryFields = {
@@ -373,12 +375,12 @@ const caseLawReadDocumentStemLanguages = ({
 
 const caseLawDocumentStems = (
   languages: readonly MorphologyLanguage[],
-  headnoteField: string,
+  { headnoteField, textField }: { headnoteField: string; textField: string },
 ): CaseLawDocumentStems | null => {
   const [first, ...rest] = languages;
   return first === undefined
     ? null
-    : { languages: [first, ...rest], headnoteField };
+    : { languages: [first, ...rest], headnoteField, textField };
 };
 
 export const caseLawCorpusQueryFields = ({
@@ -412,7 +414,10 @@ export const caseLawCorpusQueryFields = ({
               jurisdiction,
               language,
             }),
-            stemFields.publisherSummary,
+            {
+              headnoteField: stemFields.publisherSummary,
+              textField: stemFields.text,
+            },
           ),
     stemming:
       stemFields === null || stemLanguage === null

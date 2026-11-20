@@ -4,7 +4,10 @@ import { not, sql } from "drizzle-orm";
 import { caseLawSources } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
-import type { CaseLawPublicReadTransaction } from "@/api/lib/case-law-public-read-db";
+import type {
+  CaseLawPublicReadDb,
+  CaseLawPublicReadTransaction,
+} from "@/api/lib/case-law-public-read-db";
 import { redistributableCaseLawSource } from "@/api/lib/case-law/redistribution";
 import {
   definePublicLawSharedQuery,
@@ -53,10 +56,12 @@ export const readNonRedistributableCaseLawSourceIdsQuery =
     },
   );
 
-export const readNonRedistributableCaseLawSourceIds = async () =>
+export const readNonRedistributableCaseLawSourceIds = async (
+  caseLawDb: CaseLawPublicReadDb = caseLawPublicReadDb,
+) =>
   await Result.tryPromise({
     try: async () =>
-      await caseLawPublicReadDb(readNonRedistributableCaseLawSourceIdsQuery),
+      await caseLawDb(readNonRedistributableCaseLawSourceIdsQuery),
     catch: (cause) => sourceRegistryError(cause),
   });
 

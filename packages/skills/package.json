@@ -18,6 +18,10 @@
       "types": "./src/format.ts",
       "import": "./src/format.ts"
     },
+    "./package": {
+      "types": "./src/package.ts",
+      "import": "./src/package.ts"
+    },
     "./frontmatter": {
       "types": "./src/frontmatter.ts",
       "import": "./src/frontmatter.ts"

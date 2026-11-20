@@ -36,6 +36,7 @@ import {
   recordParsedGenerationTx,
 } from "@/api/handlers/case-law/ingestion/pipeline/decision-row-context";
 import type { DecisionRowWrite } from "@/api/handlers/case-law/ingestion/pipeline/decision-row-context";
+import { decisionRecoveryRowFingerprint } from "@/api/handlers/case-law/ingestion/pipeline/recovery-fence";
 import {
   observationStillOwns,
   storedObservationPrecedes,
@@ -44,9 +45,14 @@ import { DECISION_ROW_WRITE_STATUS } from "@/api/handlers/case-law/ingestion/pip
 import type { DecisionRowWriteStatus } from "@/api/handlers/case-law/ingestion/pipeline/types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { writeDecisionAnchorRedirectsTx } from "@/api/lib/case-law/decision-anchor-redirects";
+import {
+  DECISION_IDENTIFIER_CLAIM,
+  type DecisionIdentifierClaim,
+} from "@/api/lib/case-law/decision-identifier-claims";
 import { preserveStoredTextAfterParseFailure } from "@/api/lib/case-law/decision-text";
 import { runDecisionWriteExtension } from "@/api/lib/case-law/decision-write-extension";
 import { decisionFallbackState } from "@/api/lib/case-law/fallback-decision-identity";
+import { publishedCaseLawDecisionFor } from "@/api/lib/case-law/published-decisions-sql";
 import { rowHoldsDocumentFor } from "@/api/lib/case-law/stored-payload";
 import { lockCaseLawDecisionSnapshot } from "@/api/lib/db/aggregate-lock";
 import { corpusContentHash } from "@/api/lib/legal-search/corpus-content-hash";
@@ -73,6 +79,8 @@ const replacedDecisionState = async (
     type: IdentifierType;
     normalizedValue: string;
     value: string;
+    declaredAt: Date | null;
+    independentClaims: DecisionIdentifierClaim[];
   }[];
 } | null> => {
   const rows = await lockCaseLawDecisionSnapshot({
@@ -91,6 +99,7 @@ const replacedDecisionState = async (
       normalizedValue: caseLawDecisionIdentifiers.normalizedValue,
       value: caseLawDecisionIdentifiers.value,
       declaredAt: caseLawDecisionIdentifiers.declaredAt,
+      independentClaims: caseLawDecisionIdentifiers.independentClaims,
     })
     .from(caseLawDecisionIdentifiers)
     .where(eq(caseLawDecisionIdentifiers.decisionId, id));
@@ -103,7 +112,12 @@ const replacedDecisionState = async (
  * alias it does not derive is kept by the write and is no change of it.
  */
 const observedIdentifiers = <
-  T extends { type: string; normalizedValue: string; declaredAt?: Date | null },
+  T extends {
+    type: string;
+    normalizedValue: string;
+    declaredAt: Date | null;
+    independentClaims: DecisionIdentifierClaim[];
+  },
 >(
   stored: readonly T[],
   incoming: DecisionWritePlan["identifierRows"],
@@ -115,8 +129,11 @@ const observedIdentifiers = <
   );
   return stored.filter(
     (identifier) =>
-      identifier.declaredAt === null ||
-      identifier.declaredAt === undefined ||
+      identifier.independentClaims.includes(DECISION_IDENTIFIER_CLAIM.HOST) ||
+      (identifier.declaredAt === null &&
+        identifier.independentClaims.includes(
+          DECISION_IDENTIFIER_CLAIM.UNVERIFIED,
+        )) ||
       derived.has(`${identifier.type}\u0000${identifier.normalizedValue}`),
   );
 };
@@ -172,7 +189,8 @@ const resolutionIdentityChanged = (
     identifiers: {
       type: IdentifierType;
       normalizedValue: string;
-      declaredAt?: Date | null;
+      declaredAt: Date | null;
+      independentClaims: DecisionIdentifierClaim[];
     }[];
   },
 ): boolean => {
@@ -212,7 +230,8 @@ const identifiersRewritten = (
       type: string;
       normalizedValue: string;
       value: string;
-      declaredAt?: Date | null;
+      declaredAt: Date | null;
+      independentClaims: DecisionIdentifierClaim[];
     }[];
   } | null,
 ): boolean => {
@@ -455,6 +474,25 @@ export const describeRowUpdateTx = async (
             isNull(caseLawDecisions.parserVersion),
             lte(caseLawDecisions.parserVersion, result.parserVersion ?? 0),
           ),
+        )
+      : undefined,
+    write.inputProvenance.type === "recovery"
+      ? and(
+          eq(caseLawDecisions.id, write.inputProvenance.fence.decisionId),
+          publishedCaseLawDecisionFor(caseLawDecisions),
+          eq(caseLawDecisions.sourceId, write.sourceId),
+          eq(
+            caseLawDecisions.sourceDocumentId,
+            write.inputProvenance.fence.sourceDocumentId,
+          ),
+          sql`${caseLawDecisions.sourceObservationOrder} IS NOT DISTINCT FROM ${write.inputProvenance.fence.sourceObservationOrder}`,
+          eq(
+            caseLawDecisions.sourceHashVersion,
+            write.inputProvenance.fence.sourceHashVersion,
+          ),
+          sql`${decisionRecoveryRowFingerprint()} = ${write.inputProvenance.fence.rowFingerprint}`,
+          sql`${caseLawDecisions.sourceHash} IS NOT DISTINCT FROM ${write.inputProvenance.fence.sourceHash}`,
+          sql`${caseLawDecisions.sourceRawS3Key} IS NOT DISTINCT FROM ${write.inputProvenance.fence.sourceRawS3Key}`,
         )
       : undefined,
     storedObservationPrecedes({ order: observationOrder }),

@@ -1233,6 +1233,13 @@
       "treatment": "Tratamiento posterior"
     },
     "analyzing": "Analizando...",
+    "browse": {
+      "courtDescription": "{court} ({country}): resoluciones en la base jurídica pública de stella, por año y mes.",
+      "courts": "Tribunales",
+      "days": "Días",
+      "jurisdictionDescription": "{country}: resoluciones judiciales en la base jurídica pública de stella, por tribunal, año y mes.",
+      "periodDescription": "{court} ({country}), {period}: resoluciones en la base jurídica pública de stella."
+    },
     "chat": {
       "prompts": {
         "facts": {
@@ -1725,12 +1732,25 @@
       "unorderedList": "Lista con viñetas",
       "wholeBlockRequired": "Seleccione un párrafo o una lista completos para cambiar su estilo."
     },
+    "answerNotFinished": "stella no pudo terminar esta respuesta.",
     "answerQuote": {
       "showInDecision": "Ver en la resolución",
       "unverified": "Cita no verificada",
       "unverifiedHint": "Las resoluciones citadas no contienen este texto palabra por palabra",
       "verified": "Cita verificada",
       "verifiedHint": "Palabra por palabra en {source}"
+    },
+    "answerTable": {
+      "copy": "Copiar tabla",
+      "copyAs": "Copiar como {format}",
+      "download": "Descargar tabla",
+      "downloadAs": "Descargar como {format}",
+      "fullscreen": "Abrir a pantalla completa",
+      "fullscreenTitle": "Tabla a pantalla completa",
+      "singleLine": "Una sola línea",
+      "size": "{rows, plural, one {# fila} many {# filas} other {# filas}} · {columns, plural, one {# columna} many {# columnas} other {# columnas}}",
+      "textMode": "Texto de las celdas",
+      "wrap": "Ajustar texto"
     },
     "applyMode": {
       "description": "Word registra quién hizo cada cambio. Recordaremos tu elección.",
@@ -2142,9 +2162,17 @@
     },
     "placeholder": "Escriba su pregunta aquí, / para habilidades, @ para añadir contexto",
     "processSummary": {
-      "analyses": "{count, plural, one {# análisis} other {# análisis} many {# análisis}}",
       "changesSaved": "{count, plural, one {# cambio guardado} other {# cambios guardados} many {# cambios guardados}}",
+      "checkedRegisters": "Registros públicos consultados",
       "documentEdits": "{count, plural, one {# edición del documento} other {# ediciones del documento} many {# ediciones del documento}}",
+      "readDocument": "Documento leído",
+      "readDocuments": "Documentos leídos",
+      "searchedCaseLaw": "Jurisprudencia consultada",
+      "searchedChats": "Historial del chat consultado",
+      "searchedLegislation": "Legislación consultada",
+      "searchedLegislationAndCaseLaw": "Legislación y jurisprudencia consultadas",
+      "searchedMatters": "Asuntos revisados",
+      "searchedWeb": "Web consultada",
       "sourcesChecked": "{count, plural, one {# fuente consultada} other {# fuentes consultadas} many {# fuentes consultadas}}"
     },
     "promptImprovementStrategies": {
@@ -2231,6 +2259,7 @@
       "chipLabel": "Se ejecuta en: {place}",
       "cloud": "Nube",
       "cloudDescription": "Se ejecuta en la nube. Funciona desde cualquier sitio.",
+      "hintAntigravity": "Instala Antigravity 1.5 o posterior e inicia sesión en él",
       "hintCheck": "Revísalo en stella desktop",
       "hintInstall": "Instálalo desde stella desktop",
       "hintOffline": "Abre stella desktop en tu ordenador",
@@ -2241,6 +2270,8 @@
       "localPlace": "Tu ordenador, {harness}",
       "localSelection": "Tu ordenador · {harness}",
       "placeState": "{place}. {state}",
+      "startedInCloud": "Este chat nuevo se ha iniciado en la nube porque {harness} no está disponible en tu ordenador ({state})",
+      "startedInCloudCheckFailed": "Este chat nuevo se ha iniciado en la nube porque no se ha podido comprobar tu ordenador",
       "stepsCheck": "Abriendo stella desktop. Si no se abre, ábrelo en tu ordenador y revisa {harness} en Configuración › General › Suscripciones de IA.",
       "stepsInstall": "Abriendo stella desktop. Si no se abre, ábrelo en tu ordenador y, en Configuración › General, elige Instalar para {harness}.",
       "stepsSignInClaudeCode": "Abriendo stella desktop para iniciar sesión. Si no se abre, ábrelo y elige Configuración › General › Iniciar sesión con Claude.",
@@ -2307,6 +2338,20 @@
       "title": "Tu mensaje queda en cola hasta que el agente termine",
       "turnNotRunning": "El agente no está trabajando ahora."
     },
+    "stepDigest": {
+      "decisionsFound": "{found, plural, one {# resolución encontrada} many {# resoluciones encontradas} other {# resoluciones encontradas}}",
+      "decisionsFoundUsed": "{found, plural, one {# resolución encontrada} many {# resoluciones encontradas} other {# resoluciones encontradas}}, {used, plural, one {# usada en la respuesta} many {# usadas en la respuesta} other {# usadas en la respuesta}}",
+      "filterAsOf": "A {date}",
+      "legislationFound": "{count, plural, one {# norma o disposición} many {# normas y disposiciones} other {# normas y disposiciones}}",
+      "lookupDidNotGoThrough": "Esta búsqueda no se completó.",
+      "moreFound": "{count, plural, one {# más sin mostrar} many {# más sin mostrar} other {# más sin mostrar}}",
+      "moreLookups": "{count, plural, one {# consulta más sin mostrar} many {# consultas más sin mostrar} other {# consultas más sin mostrar}}",
+      "notRecorded": "Este paso se ejecutó antes de que stella registrara lo que consulta cada paso.",
+      "nothingFound": "Sin resultados.",
+      "technicalDetails": "Detalles técnicos",
+      "usedInAnswer": "Usada en la respuesta",
+      "versionFrom": "Versión desde {date}"
+    },
     "stopFailed": "No se pudo detener la respuesta. Inténtalo de nuevo.",
     "stopResponse": "Detener",
     "stopped": "Detenido",
@@ -2322,6 +2367,11 @@
     "suggestionStatus": {
       "accepted": "Aplicado",
       "rejected": "Rechazado"
+    },
+    "switcher": {
+      "allChats": "Todos los chats",
+      "searchPlaceholder": "Buscar un chat…",
+      "trigger": "Cambiar de chat"
     },
     "tableChart": {
       "bar": "Barras",
@@ -2892,6 +2942,7 @@
     "playbooks": "Playbooks",
     "preparing": "Preparando…",
     "preview": "Vista previa",
+    "previewTruncated": "El texto completo no está disponible en esta vista previa.",
     "previous": "Anterior",
     "previousMatch": "Coincidencia anterior",
     "print": "Imprimir",
@@ -4659,7 +4710,7 @@
       "discoveredSkills": "{count, plural, one {# habilidad encontrada} other {# habilidades encontradas} many {# habilidades encontradas}}",
       "discoveryEmpty": "No se encontraron habilidades en este repositorio o carpeta.",
       "discoverySkippedInvalid": "{count, plural, one {Se omitió # habilidad no válida} other {Se omitieron # habilidades no válidas} many {Se omitieron # habilidades no válidas}}",
-      "dropPack": "Suelte un .zip o SKILL.md para importar la habilidad",
+      "dropPack": "Suelte un .zip/.skill o SKILL.md para importar la habilidad",
       "editSkill": "Editar habilidad",
       "enableSkill": "Activar habilidad",
       "fileExists": "Ya existe un archivo con esta ruta",
@@ -4716,8 +4767,8 @@
           "name": "Resumir un documento"
         }
       },
-      "uploadHelp": "Usa un archivo SKILL.md o una carpeta .zip que contenga SKILL.md y recursos opcionales de solo lectura.",
-      "uploadPack": "Subir .zip o SKILL.md",
+      "uploadHelp": "Usa un archivo SKILL.md o una carpeta .zip/.skill que contenga SKILL.md y recursos opcionales de solo lectura.",
+      "uploadPack": "Subir .zip/.skill o SKILL.md",
       "urlPlaceholder": "https://github.com/org/repo/tree/main/ruta/a/la/habilidad",
       "version": "Versión: {version}"
     },
@@ -5749,6 +5800,9 @@
       "chatNotificationsDescription": "Recibe una notificación de este navegador cuando una respuesta del chat termine mientras stella está en segundo plano.",
       "chatNotificationsToggle": "Avisarme cuando una respuesta esté lista o necesite mi intervención",
       "chatNotificationsUnsupported": "Este navegador no admite notificaciones.",
+      "chatTechnicalDetails": "Detalles técnicos en el chat",
+      "chatTechnicalDetailsDescription": "Cada paso del chat muestra qué consultó y qué encontró. Si lo activas, también verás el código y los resultados sin procesar.",
+      "chatTechnicalDetailsToggle": "Mostrar detalles técnicos en el chat",
       "confirmDelete": "Confirmar eliminación de cuenta",
       "dangerZone": "Zona de peligro",
       "dangerZoneDescription": "Eliminar permanentemente el acceso a su cuenta y los datos privados de la cuenta.",
@@ -6256,6 +6310,14 @@
     "reconnectRequired": "Inicio de sesión caducado",
     "title": "SharePoint y OneDrive"
   },
+  "signedFile": {
+    "layer": "Capa de firmas {number, number}",
+    "noReadableContent": "No hay contenido legible para la vista previa.",
+    "pdfUnavailable": "La vista previa del PDF no está disponible.",
+    "unknownSigner": "Firmante desconocido",
+    "unreadable": "No se ha podido leer el archivo firmado.",
+    "unverified": "Las firmas no se han verificado."
+  },
   "skillHistory": {
     "acceptStale": "Aceptar y sobrescribir cambios más recientes",
     "backToCurrent": "Volver a la versión actual",
@@ -6396,6 +6458,10 @@
     "versionChangesRemoved": "{count, plural, one {# disposición suprimida} other {# disposiciones suprimidas} many {# disposiciones suprimidas}}",
     "versionChangesWords": "{inserted, plural, one {# palabra añadida} other {# palabras añadidas} many {# palabras añadidas}}, {deleted, plural, one {# palabra suprimida} other {# palabras suprimidas} many {# palabras suprimidas}}",
     "wordingVersionUnknown": "No se conoce la fecha de la versión de la redacción"
+  },
+  "structuredDocument": {
+    "noReadableContent": "No hay texto legible para la vista previa.",
+    "textOnly": "Vista previa de texto sin diseño de página ni imágenes."
   },
   "styleSets": {
     "create": "Crear",
@@ -7903,7 +7969,6 @@
         "endDate": "Fecha de fin",
         "month": "Mes",
         "quarter": "Trimestre",
-        "showTable": "Mostrar tabla",
         "startDate": "Fecha de inicio",
         "week": "Semana"
       },

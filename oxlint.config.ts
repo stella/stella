@@ -1890,7 +1890,9 @@ const config = defineConfig({
       {
         routeFiles: [
           "apps/web/src/routes/knowledge/tools.tsx",
+          "apps/web/src/routes/knowledge/-member/tools.page.tsx",
           "apps/web/src/routes/knowledge/-member/member-tools-page.tsx",
+          "apps/web/src/routes/knowledge/-components/catalogue/tool-detail-inspector-registration.tsx",
         ],
       },
     ],
@@ -2896,6 +2898,12 @@ const config = defineConfig({
             allowedFiles: [
               {
                 path: "packages/ui/src/components/select.tsx",
+                reason:
+                  "Base UI's Select.Value renders the chosen label itself; the open list shows it in full.",
+                utilities: ["truncate"],
+              },
+              {
+                path: "packages/ui/src/components/select-classes.ts",
                 reason:
                   "Base UI's Select.Value renders the chosen label itself; the open list shows it in full.",
                 utilities: ["truncate"],

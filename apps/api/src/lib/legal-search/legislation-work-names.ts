@@ -788,6 +788,7 @@ export const readNamedLegislationWorks = async (
               const actCondition = actNumberCondition({
                 number: `${reference.number}/${reference.year}`,
                 collection: reference.collection ?? undefined,
+                country: reference.country,
               });
               if (actCondition === null) {
                 return panic(

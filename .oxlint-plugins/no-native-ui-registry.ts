@@ -259,6 +259,11 @@ export const NO_NATIVE_UI_REGISTRY = {
   "input-otp-face": noNative("presentational one-time code group and slots"),
   inspector: noNative("the inspector panel layout"),
   kanban: noNative("a board layout"),
+  "kanban-card-shell": noNative("a board card's frame"),
+  "kanban-column-header-shell": noNative(
+    "a board column header's row, without its cut text",
+  ),
+  "kanban-grouping": noNative("how a board resolves its columns"),
   kbd: noNative(
     "key caps; a rule for raw <kbd> follows once the existing key hints " +
       "render through Kbd, so it lands without a backlog",
@@ -402,6 +407,10 @@ export const NO_NATIVE_UI_REGISTRY = {
     ],
   }),
   "table-chart": noNative("a chart drawn from table data"),
+  "table-shell": owned(
+    nativeRuleId("table"),
+    "native table markup is reported by the table rule",
+  ),
   tabs: native("Tabs from @stll/ui/tabs", {
     roles: ["tablist", "tab", "tabpanel"],
   }),
@@ -454,6 +463,9 @@ export const NO_NATIVE_UI_REGISTRY = {
     nativeRuleId("tooltip"),
     "a title on truncated text is reported by the tooltip rule",
   ),
+  "truncated-text-face": noNative(
+    "cut text's box without its hint, for loading views",
+  ),
   "typed-character": notComponent("keystroke classification"),
   "use-contained-handler": notComponent("a React hook"),
   "use-content-dir": notComponent("a React hook"),
@@ -464,6 +476,9 @@ export const NO_NATIVE_UI_REGISTRY = {
   utils: notComponent("class name helpers"),
   "view-toolbar": noNative(
     "a view's filter row; ARIA toolbars have no general @stll/ui primitive",
+  ),
+  "view-toolbar-shell": noNative(
+    "the view chrome's rows without their controls, for loading views",
   ),
   week: notComponent("week arithmetic"),
   "workspace-shell": noNative("the workspace page layout"),
@@ -638,6 +653,9 @@ export const NO_NATIVE_UI_REACT_NATIVE = {
     "the web's docked inspector; a phone shows details on their own screen",
   ),
   kanban: webOnly("a phone has no room for a board"),
+  "kanban-card-shell": webOnly("a phone has no room for a board"),
+  "kanban-column-header-shell": webOnly("a phone has no room for a board"),
+  "kanban-grouping": webOnly("a phone has no room for a board"),
   kbd: webOnly("a phone has no keyboard shortcuts to show"),
   label: webOnly(
     "React Native has no label element; Text names the control above it",
@@ -714,6 +732,7 @@ export const NO_NATIVE_UI_REACT_NATIVE = {
   switch: renderer("Switch from @stll/ui/switch", ["Switch"]),
   table: webOnly("a phone lists records in rows, not a table"),
   "table-chart": webOnly("the app draws no charts"),
+  "table-shell": webOnly("a phone lists records in rows, not a table"),
   tabs: webOnly("a phone switches sections with the platform's tab bar"),
   text: renderer("Text from @stll/ui/text", ["Text"]),
   "text-mark": webOnly("the app highlights no text"),
@@ -737,8 +756,14 @@ export const NO_NATIVE_UI_REACT_NATIVE = {
   "truncated-text": webOnly(
     "reveals the full text in a hover tooltip; a phone has no hover and caps lines with Text's numberOfLines",
   ),
+  "truncated-text-face": webOnly(
+    "the web's cut-text box for loading views; a phone caps lines with Text's numberOfLines",
+  ),
   "view-toolbar": webOnly(
     "the web's view filter row; the app filters from the header",
+  ),
+  "view-toolbar-shell": webOnly(
+    "the web view chrome's rows for loading views; the app filters from the header",
   ),
   "workspace-shell": webOnly(
     "the web's page layout; screens lay out with the platform's navigation",

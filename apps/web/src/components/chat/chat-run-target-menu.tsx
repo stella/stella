@@ -9,6 +9,8 @@ import {
   CHAT_RUN_TARGET_KIND,
   type ChatLocalRunHarness,
   type ChatRunTarget,
+  type DesktopSetUpHarness,
+  isDesktopSetUpHarness,
 } from "@stll/api-contract/chat-run-target";
 import { desktopAgentSettingsUrl } from "@stll/api-contract/desktop-account-link";
 import { DESKTOP_RUNNER_LINKED_FOLDER_STATE } from "@stll/api-contract/desktop-runner";
@@ -26,6 +28,7 @@ import { TruncatedText } from "@stll/ui/truncated-text";
 import {
   CHAT_LOCAL_HARNESS_NAMES,
   CHAT_OWN_FOLDER_VALUE,
+  type ChatCloudStart,
   type ChatLocalFolderOption,
   chatLocalFolderOptions,
   type ChatLocalHarnessOption,
@@ -88,6 +91,7 @@ const UNAVAILABLE_PERMISSION_KEY = {
 const FIXED_PERMISSION_KEY = {
   codex: "chat.localRun.permissionSandboxed",
   "claude-code": "chat.localRun.permissionAskDescription",
+  antigravity: "chat.localRun.permissionAskDescription",
 } as const satisfies Record<ChatLocalRunHarness, TranslationKey>;
 
 /**
@@ -150,6 +154,29 @@ export const useLocalRunTargetStateLabel = () => {
 };
 
 /**
+ * Why a new chat started in the cloud although the member last chose their
+ * computer, as the where chip says it.
+ */
+export const useCloudStartLabel = () => {
+  const t = useTranslations();
+  const stateLabel = useLocalRunTargetStateLabel();
+  return ({ harness, why }: ChatCloudStart): string => {
+    switch (why.type) {
+      case "unavailable":
+        return t("chat.runOn.startedInCloud", {
+          harness: CHAT_LOCAL_HARNESS_NAMES[harness],
+          state: stateLabel(why.state) ?? t("chat.localRun.stateUnavailable"),
+        });
+      case "check_failed":
+        return t("chat.runOn.startedInCloudCheckFailed");
+      default:
+        why satisfies never;
+        return panic("Unknown cloud start");
+    }
+  };
+};
+
+/**
  * What a member does about a harness that cannot take a turn now, said in
  * its row of the where chip; a usage limit says when it lifts instead.
  */
@@ -161,10 +188,18 @@ const UNAVAILABLE_HINT_KEY = {
   offline: "chat.runOn.hintOffline",
 } as const satisfies Record<UnavailableState, TranslationKey>;
 
+/**
+ * Agents the member installs and signs in to themselves, outside stella
+ * desktop: what to do about one that cannot take a turn yet.
+ */
+const MEMBER_SETUP_HINT_KEY =
+  "chat.runOn.hintAntigravity" satisfies TranslationKey;
+
 export const useHarnessHint = () => {
   const t = useTranslations();
   const stateLabel = useHarnessStateLabel();
   return (option: ChatLocalHarnessOption): string | null => {
+    const memberSetup = !isDesktopSetUpHarness(option.harness);
     switch (option.state) {
       case "ready":
         return null;
@@ -174,6 +209,9 @@ export const useHarnessHint = () => {
       case "not_installed":
       case "unsupported":
       case "unavailable":
+        return memberSetup
+          ? t(MEMBER_SETUP_HINT_KEY)
+          : t(UNAVAILABLE_HINT_KEY[option.state]);
       case "offline":
         return t(UNAVAILABLE_HINT_KEY[option.state]);
       default:
@@ -270,7 +308,7 @@ const OfflineHarnessItem = ({
 
 /** A harness the member sets up at its card in stella desktop's Settings. */
 type DesktopSetupOption = {
-  harness: ChatLocalRunHarness;
+  harness: DesktopSetUpHarness;
   state: Exclude<UnavailableState, "offline">;
 };
 
@@ -278,7 +316,7 @@ type DesktopSetupOption = {
 const SIGN_IN_STEPS_KEY = {
   codex: "chat.runOn.stepsSignInCodex",
   "claude-code": "chat.runOn.stepsSignInClaudeCode",
-} as const satisfies Record<ChatLocalRunHarness, TranslationKey>;
+} as const satisfies Record<DesktopSetUpHarness, TranslationKey>;
 
 /**
  * The way to the harness's card by hand, said once the link to it was
@@ -351,6 +389,8 @@ type ChatRunTargetMenuProps = {
   enabled: boolean;
   selected: ChatRunTarget;
   onSelect: (target: ChatRunTarget) => void;
+  /** Why a new chat started in the cloud, said first; `null` otherwise. */
+  startedInCloud: ChatCloudStart | null;
 };
 
 /**
@@ -365,9 +405,11 @@ export const ChatRunTargetMenu = ({
   enabled,
   selected,
   onSelect,
+  startedInCloud,
 }: ChatRunTargetMenuProps) => {
   const t = useTranslations();
   const hint = useHarnessHint();
+  const cloudStartLabel = useCloudStartLabel();
   const runnersView = queryView(
     useQuery({
       ...localRunnersOptions(activeOrganizationId),
@@ -392,6 +434,14 @@ export const ChatRunTargetMenu = ({
 
   return (
     <>
+      {startedInCloud !== null && (
+        <>
+          <p className="text-muted-foreground px-2 py-1.5 text-xs text-pretty">
+            {cloudStartLabel(startedInCloud)}
+          </p>
+          <MenuSeparator />
+        </>
+      )}
       <MenuRadioGroup value={runOnPlaceValue(selected)}>
         {/* Picking a place or an agent is the choice the menu exists for,
             so it closes; a permission pick keeps it open for another. */}
@@ -434,12 +484,21 @@ export const ChatRunTargetMenu = ({
             );
           }
           if (option.state !== "ready") {
+            const { harness } = option;
+            if (!isDesktopSetUpHarness(harness)) {
+              // Set up outside stella desktop: there is nothing to open.
+              return (
+                <MenuItem disabled key={harness}>
+                  <PlaceLabel description={hint(option) ?? ""} title={name} />
+                </MenuItem>
+              );
+            }
             return (
               <DesktopSetupHarnessItem
                 hint={hint(option) ?? ""}
                 key={option.harness}
                 name={name}
-                option={{ harness: option.harness, state: option.state }}
+                option={{ harness, state: option.state }}
               />
             );
           }

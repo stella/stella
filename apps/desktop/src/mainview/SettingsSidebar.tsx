@@ -134,7 +134,9 @@ const SidebarIdentity = ({
   const tone = accountStatusTone(display.presentation.status);
 
   return (
-    <div className="flex min-w-0 items-center gap-2.5 px-2 py-1.5">
+    // No end padding: the status line gets the room to name the usual host
+    // whole, and the avatar stays in line with the page icons below.
+    <div className="flex min-w-0 items-center gap-2 py-1.5 ps-2">
       <Avatar className="size-8 border">
         <AvatarFallback className="text-xs">
           {display.initials ?? <StellaMark className="size-4" />}
@@ -145,18 +147,32 @@ const SidebarIdentity = ({
           {display.name ?? t("stellaDesktop")}
         </TruncatedText>
         {tone === null ? null : (
-          // A long host wraps to a second line and is cut there, so the
-          // pages below keep their room; General shows it whole.
-          <ListItemStatus className="min-w-0 whitespace-normal" tone={tone}>
-            <TruncatedText lines={2}>
-              {t(display.presentation.statusKey)}
+          // One row: a host too long for the sidebar is cut first, and the
+          // status only when it alone does not fit. General shows the host
+          // whole.
+          <ListItemStatus
+            className="flex w-full min-w-0"
+            data-slot="sidebar-account-status"
+            tone={tone}
+          >
+            <span className="flex min-w-0 flex-1 overflow-hidden">
+              <TruncatedText className="shrink-0">
+                {t(display.presentation.statusKey)}
+              </TruncatedText>
               {display.presentation.host ? (
-                <>
-                  {" · "}
-                  <bdi dir="ltr">{display.presentation.host}</bdi>
-                </>
+                <span className="flex min-w-0 overflow-hidden">
+                  <span aria-hidden="true" className="shrink-0 whitespace-pre">
+                    {" · "}
+                  </span>
+                  <TruncatedText
+                    data-slot="sidebar-account-host"
+                    render={<bdi dir="ltr" />}
+                  >
+                    {display.presentation.host}
+                  </TruncatedText>
+                </span>
               ) : null}
-            </TruncatedText>
+            </span>
           </ListItemStatus>
         )}
       </div>

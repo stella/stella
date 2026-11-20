@@ -1233,6 +1233,13 @@
       "treatment": "Traitement ultérieur"
     },
     "analyzing": "Analyse en cours...",
+    "browse": {
+      "courtDescription": "{court} ({country}) : décisions dans la base juridique publique de stella, par année et par mois.",
+      "courts": "Juridictions",
+      "days": "Jours",
+      "jurisdictionDescription": "{country} : décisions de justice dans la base juridique publique de stella, par juridiction, année et mois.",
+      "periodDescription": "{court} ({country}), {period} : décisions dans la base juridique publique de stella."
+    },
     "chat": {
       "prompts": {
         "facts": {
@@ -1725,12 +1732,25 @@
       "unorderedList": "Liste à puces",
       "wholeBlockRequired": "Sélectionnez un paragraphe ou une liste entière pour changer son style."
     },
+    "answerNotFinished": "stella n’a pas pu terminer cette réponse.",
     "answerQuote": {
       "showInDecision": "Afficher dans la décision",
       "unverified": "Citation non vérifiée",
       "unverifiedHint": "Les décisions citées ne contiennent pas ce texte mot pour mot",
       "verified": "Citation vérifiée",
       "verifiedHint": "Mot pour mot dans {source}"
+    },
+    "answerTable": {
+      "copy": "Copier le tableau",
+      "copyAs": "Copier en {format}",
+      "download": "Télécharger le tableau",
+      "downloadAs": "Télécharger en {format}",
+      "fullscreen": "Ouvrir en plein écran",
+      "fullscreenTitle": "Tableau en plein écran",
+      "singleLine": "Sur une ligne",
+      "size": "{rows, plural, one {# ligne} many {# lignes} other {# lignes}} · {columns, plural, one {# colonne} many {# colonnes} other {# colonnes}}",
+      "textMode": "Texte des cellules",
+      "wrap": "Renvoyer à la ligne"
     },
     "applyMode": {
       "description": "Word enregistre l’auteur de chaque modification. Nous mémoriserons votre choix.",
@@ -2142,9 +2162,17 @@
     },
     "placeholder": "Saisissez votre question ici, / pour les compétences, @ pour ajouter du contexte",
     "processSummary": {
-      "analyses": "{count, plural, one {# analyse} other {# analyses} many {# analyses}}",
       "changesSaved": "{count, plural, one {# modification enregistrée} other {# modifications enregistrées} many {# modifications enregistrées}}",
+      "checkedRegisters": "Registres publics vérifiés",
       "documentEdits": "{count, plural, one {# modification du document} other {# modifications du document} many {# modifications du document}}",
+      "readDocument": "Document lu",
+      "readDocuments": "Documents lus",
+      "searchedCaseLaw": "Jurisprudence consultée",
+      "searchedChats": "Historique des conversations consulté",
+      "searchedLegislation": "Législation consultée",
+      "searchedLegislationAndCaseLaw": "Législation et jurisprudence consultées",
+      "searchedMatters": "Dossiers parcourus",
+      "searchedWeb": "Web consulté",
       "sourcesChecked": "{count, plural, one {# source vérifiée} other {# sources vérifiées} many {# sources vérifiées}}"
     },
     "promptImprovementStrategies": {
@@ -2231,6 +2259,7 @@
       "chipLabel": "Exécution : {place}",
       "cloud": "Cloud",
       "cloudDescription": "S’exécute dans le cloud. Fonctionne partout.",
+      "hintAntigravity": "Installez Antigravity 1.5 ou une version ultérieure, puis connectez-vous depuis celui-ci",
       "hintCheck": "Vérifiez-le dans stella desktop",
       "hintInstall": "Installez-le depuis stella desktop",
       "hintOffline": "Ouvrez stella desktop sur votre ordinateur",
@@ -2241,6 +2270,8 @@
       "localPlace": "Votre ordinateur, {harness}",
       "localSelection": "Votre ordinateur · {harness}",
       "placeState": "{place}. {state}",
+      "startedInCloud": "Cette nouvelle conversation a démarré dans le cloud, car {harness} n’est pas disponible sur votre ordinateur ({state})",
+      "startedInCloudCheckFailed": "Cette nouvelle conversation a démarré dans le cloud, car votre ordinateur n’a pas pu être vérifié",
       "stepsCheck": "Ouverture de stella desktop. S’il ne s’ouvre pas, ouvrez-le sur votre ordinateur et vérifiez {harness} dans Paramètres › Général › Abonnements IA.",
       "stepsInstall": "Ouverture de stella desktop. S’il ne s’ouvre pas, ouvrez-le sur votre ordinateur et, dans Paramètres › Général, choisissez Installer pour {harness}.",
       "stepsSignInClaudeCode": "Ouverture de stella desktop pour vous connecter. S’il ne s’ouvre pas, ouvrez-le et choisissez Paramètres › Général › Se connecter avec Claude.",
@@ -2307,6 +2338,20 @@
       "title": "Votre message attend que l’agent ait terminé",
       "turnNotRunning": "L’agent ne travaille pas en ce moment."
     },
+    "stepDigest": {
+      "decisionsFound": "{found, plural, one {# décision trouvée} many {# décisions trouvées} other {# décisions trouvées}}",
+      "decisionsFoundUsed": "{found, plural, one {# décision trouvée} many {# décisions trouvées} other {# décisions trouvées}}, {used, plural, one {# utilisée dans la réponse} many {# utilisées dans la réponse} other {# utilisées dans la réponse}}",
+      "filterAsOf": "Au {date}",
+      "legislationFound": "{count, plural, one {# texte ou disposition} many {# textes et dispositions} other {# textes et dispositions}}",
+      "lookupDidNotGoThrough": "Cette recherche n’a pas abouti.",
+      "moreFound": "{count, plural, one {# de plus non affiché} many {# de plus non affichés} other {# de plus non affichés}}",
+      "moreLookups": "{count, plural, one {# requête de plus non affichée} many {# requêtes de plus non affichées} other {# requêtes de plus non affichées}}",
+      "notRecorded": "Cette étape a eu lieu avant que stella n’enregistre ce que chaque étape consulte.",
+      "nothingFound": "Aucun résultat.",
+      "technicalDetails": "Détails techniques",
+      "usedInAnswer": "Utilisée dans la réponse",
+      "versionFrom": "Version en vigueur depuis le {date}"
+    },
     "stopFailed": "Impossible d'arrêter la réponse. Réessayez.",
     "stopResponse": "Arrêter",
     "stopped": "Arrêté",
@@ -2322,6 +2367,11 @@
     "suggestionStatus": {
       "accepted": "Appliqué",
       "rejected": "Rejeté"
+    },
+    "switcher": {
+      "allChats": "Toutes les conversations",
+      "searchPlaceholder": "Rechercher une conversation…",
+      "trigger": "Changer de conversation"
     },
     "tableChart": {
       "bar": "Barres",
@@ -2892,6 +2942,7 @@
     "playbooks": "Playbooks",
     "preparing": "Préparation…",
     "preview": "Aperçu",
+    "previewTruncated": "Le texte intégral n’est pas disponible dans cet aperçu.",
     "previous": "Précédent",
     "previousMatch": "Occurrence précédente",
     "print": "Imprimer",
@@ -4659,7 +4710,7 @@
       "discoveredSkills": "{count, plural, one {# compétence trouvée} other {# compétences trouvées} many {# compétences trouvées}}",
       "discoveryEmpty": "Aucune compétence n’a été trouvée dans ce dépôt ou ce dossier.",
       "discoverySkippedInvalid": "{count, plural, one {# compétence non valide a été ignorée} other {# compétences non valides ont été ignorées} many {# compétences non valides ont été ignorées}}",
-      "dropPack": "Déposez un .zip ou SKILL.md pour importer la compétence",
+      "dropPack": "Déposez un .zip/.skill ou SKILL.md pour importer la compétence",
       "editSkill": "Modifier la compétence",
       "enableSkill": "Activer la compétence",
       "fileExists": "Un fichier avec ce chemin existe déjà",
@@ -4716,8 +4767,8 @@
           "name": "Résumer un document"
         }
       },
-      "uploadHelp": "Utilisez un fichier SKILL.md ou un dossier .zip contenant SKILL.md et des ressources facultatives en lecture seule.",
-      "uploadPack": "Importer un .zip ou SKILL.md",
+      "uploadHelp": "Utilisez un fichier SKILL.md ou un dossier .zip/.skill contenant SKILL.md et des ressources facultatives en lecture seule.",
+      "uploadPack": "Importer un .zip/.skill ou SKILL.md",
       "urlPlaceholder": "https://github.com/org/repo/tree/main/chemin/vers/competence",
       "version": "Version : {version}"
     },
@@ -5749,6 +5800,9 @@
       "chatNotificationsDescription": "Recevez une notification de ce navigateur lorsqu’une réponse dans une conversation se termine pendant que stella est en arrière-plan.",
       "chatNotificationsToggle": "M’avertir quand une réponse est prête ou attend mon intervention",
       "chatNotificationsUnsupported": "Ce navigateur ne prend pas en charge les notifications.",
+      "chatTechnicalDetails": "Détails techniques dans les conversations",
+      "chatTechnicalDetailsDescription": "Chaque étape d’une conversation indique ce qu’elle a consulté et ce qu’elle a trouvé. Activez cette option pour voir aussi le code et les résultats bruts.",
+      "chatTechnicalDetailsToggle": "Afficher les détails techniques dans les conversations",
       "confirmDelete": "Confirmer la suppression du compte",
       "dangerZone": "Zone de danger",
       "dangerZoneDescription": "Supprimer définitivement votre accès au compte et les données privées du compte.",
@@ -6256,6 +6310,14 @@
     "reconnectRequired": "Connexion expirée",
     "title": "SharePoint et OneDrive"
   },
+  "signedFile": {
+    "layer": "Couche de signatures {number, number}",
+    "noReadableContent": "Aucun contenu lisible ne peut être prévisualisé.",
+    "pdfUnavailable": "L’aperçu PDF est indisponible.",
+    "unknownSigner": "Signataire inconnu",
+    "unreadable": "Impossible de lire le fichier signé.",
+    "unverified": "Les signatures n’ont pas été vérifiées."
+  },
   "skillHistory": {
     "acceptStale": "Accepter et écraser les modifications récentes",
     "backToCurrent": "Revenir à la version actuelle",
@@ -6396,6 +6458,10 @@
     "versionChangesRemoved": "{count, plural, one {# disposition supprimée} other {# dispositions supprimées} many {# dispositions supprimées}}",
     "versionChangesWords": "{inserted, plural, one {# mot inséré} other {# mots insérés} many {# mots insérés}}, {deleted, plural, one {# mot supprimé} other {# mots supprimés} many {# mots supprimés}}",
     "wordingVersionUnknown": "Date de la version de la rédaction indisponible"
+  },
+  "structuredDocument": {
+    "noReadableContent": "Aucun texte lisible ne peut être affiché dans l’aperçu.",
+    "textOnly": "Aperçu du texte sans mise en page ni images."
   },
   "styleSets": {
     "create": "Créer",
@@ -7903,7 +7969,6 @@
         "endDate": "Date de fin",
         "month": "Mois",
         "quarter": "Trimestre",
-        "showTable": "Afficher le tableau",
         "startDate": "Date de début",
         "week": "Semaine"
       },

@@ -21,7 +21,7 @@ import { crc32 as zlibCrc32, deflateRaw } from "node:zlib";
 
 import { Temporal } from "@stll/time";
 
-import { archivePathKey } from "@/api/handlers/data-exports/archive-path-key";
+import { archivePathKey } from "@/api/lib/files/archive-path-key";
 
 export const ZIP_COMPRESSION = {
   STORE: "store",

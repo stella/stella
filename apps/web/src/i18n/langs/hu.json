@@ -1233,6 +1233,13 @@
       "treatment": "Későbbi megítélés"
     },
     "analyzing": "Elemzés folyamatban...",
+    "browse": {
+      "courtDescription": "{court} ({country}): határozatok a stella nyilvános jogi adatbázisában, év és hónap szerint.",
+      "courts": "Bíróságok",
+      "days": "Napok",
+      "jurisdictionDescription": "{country}: bírósági határozatok a stella nyilvános jogi adatbázisában, bíróság, év és hónap szerint.",
+      "periodDescription": "{court} ({country}), {period}: határozatok a stella nyilvános jogi adatbázisában."
+    },
     "chat": {
       "prompts": {
         "facts": {
@@ -1725,12 +1732,25 @@
       "unorderedList": "Felsorolás",
       "wholeBlockRequired": "A stílus módosításához jelöljön ki egy teljes bekezdést vagy listát."
     },
+    "answerNotFinished": "A stella nem tudta befejezni ezt a választ.",
     "answerQuote": {
       "showInDecision": "Megjelenítés a határozatban",
       "unverified": "Az idézet nem ellenőrizhető",
       "unverifiedHint": "A hivatkozott határozatok nem tartalmazzák szó szerint ezt a szöveget",
       "verified": "Ellenőrzött idézet",
       "verifiedHint": "Szó szerint: {source}"
+    },
+    "answerTable": {
+      "copy": "Táblázat másolása",
+      "copyAs": "Másolás {format} formátumban",
+      "download": "Táblázat letöltése",
+      "downloadAs": "Letöltés {format} formátumban",
+      "fullscreen": "Megnyitás teljes képernyőn",
+      "fullscreenTitle": "Táblázat teljes képernyőn",
+      "singleLine": "Egy sorban",
+      "size": "{rows, plural, one {# sor} other {# sor}} · {columns, plural, one {# oszlop} other {# oszlop}}",
+      "textMode": "Cellaszöveg",
+      "wrap": "Szöveg tördelése"
     },
     "applyMode": {
       "description": "A Word rögzíti, ki végezte az egyes módosításokat. Megjegyezzük a választását.",
@@ -2142,9 +2162,17 @@
     },
     "placeholder": "Írja ide a kérdését, / a készségekhez, @ kontextus hozzáadásához",
     "processSummary": {
-      "analyses": "{count, plural, one {# elemzés} other {# elemzés}}",
       "changesSaved": "{count, plural, one {# mentett módosítás} other {# mentett módosítás}}",
+      "checkedRegisters": "Nyilvános nyilvántartások ellenőrizve",
       "documentEdits": "{count, plural, one {# dokumentummódosítás} other {# dokumentummódosítás}}",
+      "readDocument": "Dokumentum elolvasva",
+      "readDocuments": "Dokumentumok elolvasva",
+      "searchedCaseLaw": "Ítélkezési gyakorlat átnézve",
+      "searchedChats": "Csevegési előzmények átnézve",
+      "searchedLegislation": "Jogszabályok átnézve",
+      "searchedLegislationAndCaseLaw": "Jogszabályok és ítélkezési gyakorlat átnézve",
+      "searchedMatters": "Ügyek átnézve",
+      "searchedWeb": "Internet átkeresve",
       "sourcesChecked": "{count, plural, one {# ellenőrzött forrás} other {# ellenőrzött forrás}}"
     },
     "promptImprovementStrategies": {
@@ -2231,6 +2259,7 @@
       "chipLabel": "Futás helye: {place}",
       "cloud": "Felhő",
       "cloudDescription": "A felhőben fut. Bárhonnan elérhető.",
+      "hintAntigravity": "Telepítse az Antigravity 1.5-ös vagy újabb verzióját, majd jelentkezzen be benne",
       "hintCheck": "Ellenőrizze a stella desktopban",
       "hintInstall": "Telepítse a stella desktopból",
       "hintOffline": "Nyissa meg a stella desktopot a számítógépén",
@@ -2241,6 +2270,8 @@
       "localPlace": "Az Ön számítógépe, {harness}",
       "localSelection": "Az Ön számítógépe · {harness}",
       "placeState": "{place}. {state}",
+      "startedInCloud": "Ez az új csevegés a felhőben indult, mert a(z) {harness} nem érhető el a számítógépén ({state})",
+      "startedInCloudCheckFailed": "Ez az új csevegés a felhőben indult, mert nem sikerült ellenőrizni a számítógépét",
       "stepsCheck": "A stella desktop megnyílik. Ha nem nyílik meg, nyissa meg a számítógépén, és a Beállítások › Általános › AI-előfizetések részen ellenőrizze ezt az ügynököt: {harness}.",
       "stepsInstall": "A stella desktop megnyílik. Ha nem nyílik meg, nyissa meg a számítógépén, és a Beállítások › Általános részen válassza a Telepítés gombot ennél az ügynöknél: {harness}.",
       "stepsSignInClaudeCode": "A stella desktop megnyílik a bejelentkezéshez. Ha nem nyílik meg, nyissa meg, és válassza a Beállítások › Általános › Bejelentkezés Claude-dal lehetőséget.",
@@ -2307,6 +2338,20 @@
       "title": "Az üzenete a sorban vár, amíg az ügynök végez",
       "turnNotRunning": "Az ügynök jelenleg nem dolgozik."
     },
+    "stepDigest": {
+      "decisionsFound": "{found, plural, one {# határozat található} other {# határozat található}}",
+      "decisionsFoundUsed": "{found, plural, one {# határozat található} other {# határozat található}}, {used, plural, one {# szerepel a válaszban} other {# szerepel a válaszban}}",
+      "filterAsOf": "{date} állapot szerint",
+      "legislationFound": "{count, plural, one {# jogszabály vagy rendelkezés} other {# jogszabály és rendelkezés}}",
+      "lookupDidNotGoThrough": "Ez a keresés nem sikerült.",
+      "moreFound": "{count, plural, one {további # nem látható} other {további # nem látható}}",
+      "moreLookups": "{count, plural, one {További # lekérdezés nem látható} other {További # lekérdezés nem látható}}",
+      "notRecorded": "Ez a lépés még azelőtt futott, hogy a stella rögzítette volna, mit keres az egyes lépés.",
+      "nothingFound": "Nincs találat.",
+      "technicalDetails": "Technikai részletek",
+      "usedInAnswer": "Szerepel a válaszban",
+      "versionFrom": "{date} óta hatályos szöveg"
+    },
     "stopFailed": "Nem sikerült leállítani a választ. Próbálja újra.",
     "stopResponse": "Leállítás",
     "stopped": "Leállítva",
@@ -2322,6 +2367,11 @@
     "suggestionStatus": {
       "accepted": "Alkalmazva",
       "rejected": "Elutasítva"
+    },
+    "switcher": {
+      "allChats": "Összes csevegés",
+      "searchPlaceholder": "Csevegés keresése…",
+      "trigger": "Csevegés váltása"
     },
     "tableChart": {
       "bar": "Oszlop",
@@ -2892,6 +2942,7 @@
     "playbooks": "Playbookok",
     "preparing": "Előkészítés…",
     "preview": "Előnézet",
+    "previewTruncated": "A teljes szöveg nem érhető el ebben az előnézetben.",
     "previous": "Előző",
     "previousMatch": "Előző találat",
     "print": "Nyomtatás",
@@ -4659,7 +4710,7 @@
       "discoveredSkills": "{count, plural, one {# készség található} other {# készség található}}",
       "discoveryEmpty": "Ebben a tárolóban vagy mappában nem található készség.",
       "discoverySkippedInvalid": "{count, plural, one {# érvénytelen készség kihagyva} other {# érvénytelen készség kihagyva}}",
-      "dropPack": "Húzzon ide egy .zip vagy SKILL.md fájlt a készség importálásához",
+      "dropPack": "Húzzon ide egy .zip/.skill vagy SKILL.md fájlt a készség importálásához",
       "editSkill": "Készség szerkesztése",
       "enableSkill": "Készség bekapcsolása",
       "fileExists": "Ezen az útvonalon már létezik fájl",
@@ -4716,8 +4767,8 @@
           "name": "Dokumentum összefoglalása"
         }
       },
-      "uploadHelp": "Használjon SKILL.md fájlt vagy olyan .zip mappát, amely SKILL.md fájlt és opcionális csak olvasható erőforrásokat tartalmaz.",
-      "uploadPack": ".zip vagy SKILL.md feltöltése",
+      "uploadHelp": "Használjon SKILL.md fájlt vagy olyan .zip/.skill mappát, amely SKILL.md fájlt és opcionális csak olvasható erőforrásokat tartalmaz.",
+      "uploadPack": ".zip/.skill vagy SKILL.md feltöltése",
       "urlPlaceholder": "https://github.com/org/repo/tree/main/utvonal/keszseghez",
       "version": "Verzió: {version}"
     },
@@ -5749,6 +5800,9 @@
       "chatNotificationsDescription": "Értesítést kap ettől a böngészőtől, amikor egy csevegési válasz elkészül, miközben a stella a háttérben fut.",
       "chatNotificationsToggle": "Értesítsen, ha egy válasz elkészült, vagy a közreműködésemre vár",
       "chatNotificationsUnsupported": "Ez a böngésző nem támogatja az értesítéseket.",
+      "chatTechnicalDetails": "Technikai részletek a csevegésben",
+      "chatTechnicalDetailsDescription": "A csevegés minden lépése megmutatja, mit keresett és mit talált. Bekapcsolva a mögötte lévő kódot és a nyers eredményeket is látja.",
+      "chatTechnicalDetailsToggle": "Technikai részletek megjelenítése a csevegésben",
       "confirmDelete": "Fiók törlésének megerősítése",
       "dangerZone": "Veszélyes zóna",
       "dangerZoneDescription": "Fiókhozzáférése és a fiók privát adatainak végleges törlése.",
@@ -6256,6 +6310,14 @@
     "reconnectRequired": "A bejelentkezés lejárt",
     "title": "SharePoint és OneDrive"
   },
+  "signedFile": {
+    "layer": "{number, number}. aláírási réteg",
+    "noReadableContent": "Nincs megjeleníthető olvasható tartalom.",
+    "pdfUnavailable": "A PDF előnézete nem érhető el.",
+    "unknownSigner": "Ismeretlen aláíró",
+    "unreadable": "Az aláírt fájl nem olvasható.",
+    "unverified": "Az aláírásokat nem ellenőriztük."
+  },
   "skillHistory": {
     "acceptStale": "Elfogadás és az újabb módosítások felülírása",
     "backToCurrent": "Vissza az aktuális változatra",
@@ -6396,6 +6458,10 @@
     "versionChangesRemoved": "{count, plural, one {# elhagyott rendelkezés} other {# elhagyott rendelkezés}}",
     "versionChangesWords": "{inserted, plural, one {# beszúrt szó} other {# beszúrt szó}}, {deleted, plural, one {# törölt szó} other {# törölt szó}}",
     "wordingVersionUnknown": "A szövegváltozat dátuma nem érhető el"
+  },
+  "structuredDocument": {
+    "noReadableContent": "Nincs megjeleníthető szöveg az előnézethez.",
+    "textOnly": "Szöveges előnézet az oldalelrendezés és a képek nélkül."
   },
   "styleSets": {
     "create": "Létrehozás",
@@ -7903,7 +7969,6 @@
         "endDate": "Befejező dátum",
         "month": "Hónap",
         "quarter": "Negyedév",
-        "showTable": "Táblázat megjelenítése",
         "startDate": "Kezdő dátum",
         "week": "Hét"
       },

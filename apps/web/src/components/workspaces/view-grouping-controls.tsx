@@ -1,12 +1,7 @@
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
-import {
-  Columns3Icon,
-  Rows3Icon,
-  Settings2Icon,
-  SparklesIcon,
-} from "@stll/ui/icons";
+import { Columns3Icon, Rows3Icon, SparklesIcon } from "@stll/ui/icons";
 import { Popover, PopoverPopup, PopoverTrigger } from "@stll/ui/popover";
 import {
   Select,
@@ -23,10 +18,15 @@ import {
 } from "@/components/workspaces/entity-utils";
 import { isGroupableProperty } from "@/components/workspaces/kanban/kanban-view.logic";
 import { resolveDocumentTypeClassifier } from "@/components/workspaces/table/group-columns";
+import {
+  GROUP_BY_NONE_VALUE,
+  groupByChoiceLabelKey,
+  GroupByControlRow,
+  KANBAN_SETTINGS_BUTTON,
+  KanbanSettingsTriggerContent,
+} from "@/components/workspaces/view-grouping-controls.pending";
 import type { WorkspaceProperty } from "@/lib/types";
 import { isPlaybookVerdictProperty } from "@/lib/workspaces/playbook-verdicts";
-
-const GROUP_BY_NONE_VALUE = "_none";
 
 type AdditionalViewGroup = { id: string; label: string };
 const EMPTY_ADDITIONAL_GROUPS: readonly AdditionalViewGroup[] = [];
@@ -100,20 +100,9 @@ export const GroupByControl = ({
       : resolveKanbanGroupBy(groupByPropertyId ?? "", properties);
 
   const resolvedLabel = (() => {
-    if (resolvedId === GROUP_BY_NONE_VALUE) {
-      return t("common.none");
-    }
-    if (resolvedId === getInternalPropertyId("kind")) {
-      return t("common.kind");
-    }
-    if (resolvedId === getInternalPropertyId("status")) {
-      return t("tasks.status");
-    }
-    if (resolvedId === getInternalPropertyId("created-by")) {
-      return t("common.author");
-    }
-    if (resolvedId === getInternalPropertyId("assignee")) {
-      return t("common.assignee");
+    const choiceLabelKey = groupByChoiceLabelKey(resolvedId);
+    if (choiceLabelKey !== null) {
+      return t(choiceLabelKey);
     }
     return (
       additionalGroups.find((group) => group.id === resolvedId)?.label ??
@@ -123,12 +112,9 @@ export const GroupByControl = ({
   })();
 
   return (
-    <span className="flex shrink-0 items-center gap-1 text-xs whitespace-nowrap">
-      {showLabel && (
-        <span className="text-muted-foreground hidden shrink-0 sm:inline">
-          {label ?? t("workspaces.views.groupBy")}
-        </span>
-      )}
+    <GroupByControlRow
+      label={showLabel ? (label ?? t("workspaces.views.groupBy")) : null}
+    >
       <Select
         onValueChange={(v) => {
           if (v === null) {
@@ -208,7 +194,7 @@ export const GroupByControl = ({
           )}
         </SelectPopup>
       </Select>
-    </span>
+    </GroupByControlRow>
   );
 };
 
@@ -248,14 +234,13 @@ export const KanbanGroupingSettings = ({
         render={
           <Button
             aria-label={t("workspaces.views.viewSettings")}
-            size="xs"
+            size={KANBAN_SETTINGS_BUTTON.size}
             type="button"
-            variant="outline"
+            variant={KANBAN_SETTINGS_BUTTON.variant}
           />
         }
       >
-        <Settings2Icon className="size-3.5" />
-        <span className="hidden sm:inline">{t("common.settings")}</span>
+        <KanbanSettingsTriggerContent label={t("common.settings")} />
       </PopoverTrigger>
       <PopoverPopup align="end" className="w-80" padding="sm" side="bottom">
         <div className="px-2 py-1.5 text-sm font-medium">

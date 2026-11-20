@@ -346,6 +346,10 @@ export const SCHEDULER_TASK_AUTHORITY = {
     "style-set-package-cleanup-reconcile.ts",
     "Hands pending replacement cleanups to their queue and consumes deletion tombstones.",
   ),
+  "agentSkills.cleanOriginalObjects": platform(
+    "agent-skill-original-cleanup.ts",
+    "Erases stored originals of deleted or replaced skill files.",
+  ),
   "templates.cleanDeletionObjects": platform(
     "template-deletion-cleanup.ts",
     "Removes stored objects of deleted templates.",

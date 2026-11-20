@@ -7,10 +7,16 @@ import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
 import {
+  getCodeToolSource,
+  isCodeToolName,
+  summarizeCodeToolSource,
+} from "@stll/api-contract/chat-code-step";
+import {
   isLocalRunInterruptedOutput,
   localRunStepFailed,
   localRunToolView,
 } from "@stll/api-contract/chat-local-run-steps";
+import { withoutChatStepLedger } from "@stll/api-contract/chat-step-ledger";
 import { Temporal } from "@stll/time";
 import { Button } from "@stll/ui/button";
 import {
@@ -35,21 +41,28 @@ import {
 } from "@/components/chat/chat-ui-tools";
 import { LocalRunStepOutputDetails } from "@/components/chat/local-run-step-output";
 import { useLocalRunSubtitleText } from "@/components/chat/local-run-subtitle";
+import type { ChatAnswerCitations } from "@/components/chat/source-chips.logic";
 import { skillMdName } from "@/components/chat/tool-approval-summary";
 import { ToolCallCodeBlock } from "@/components/chat/tool-call-code-block";
+import {
+  STEP_DIGEST_NOT_RECORDED_KEY,
+  ToolCallStepDigest,
+} from "@/components/chat/tool-call-step-digest";
+import {
+  type ChatStepRefTargets,
+  NO_STEP_REF_TARGETS,
+  type StepDigest,
+  stepDigestOf,
+} from "@/components/chat/tool-call-step-digest.logic";
 import {
   advanceToolCallTiming,
   createToolCallTiming,
 } from "@/components/chat/tool-call-timing.logic";
-import {
-  getCodeToolSource,
-  getToolCallTitleKey,
-  isCodeToolName,
-  summarizeCodeToolSource,
-} from "@/components/chat/tool-call-title.logic";
+import { getToolCallTitleKey } from "@/components/chat/tool-call-title.logic";
 import { UnrestoredFieldsNotice } from "@/components/chat/unrestored-fields-notice";
 import {
   BUILT_IN_SKILL_ORIGIN,
+  INSPECTOR_FOCUS_INTENT,
   parseSkillResourceSource,
   type SkillResourceSource,
 } from "@/components/inspector/inspector-store-types";
@@ -58,6 +71,7 @@ import { findInstalledSkillDisplayName } from "@/components/inspector/skill-disp
 import Tooltip from "@/components/tooltip";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useFormatter } from "@/i18n/formatting-context";
+import { usePresentationPrefs } from "@/lib/account/presentation-prefs/provider";
 import type { AuthenticatedUser } from "@/lib/authenticated-user-context";
 import { useMaybeAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { mcpConnectorsOptions, skillsOptions } from "@/lib/knowledge/queries";
@@ -66,6 +80,13 @@ import { useQueryViewError } from "@/lib/use-query-view";
 
 /** A stella or connector tool's call, or a coding agent's own step. */
 type ToolPart = ChatToolCallPart | HarnessChatToolCallPart;
+
+/** A card rendered outside an answer (a fixture, an approval) cites nothing. */
+const NO_ANSWER_CITATIONS: ChatAnswerCitations = {
+  appOrigins: new Set(),
+  decisionIds: new Set(),
+  hrefKeys: new Set(),
+};
 
 const getToolInput = (part: ToolPart): unknown => {
   if (!("input" in part)) {
@@ -446,15 +467,19 @@ export type StepFailureOutcome = "recovered" | "terminal";
 const ToolCallCardComponent = ({
   action,
   activeOrganizationId,
+  answerCitations,
   durationMs,
   failureOutcome,
   turnStatus = "finished",
   part,
   showDetails,
+  stepRefTargets = NO_STEP_REF_TARGETS,
   threadId,
 }: {
   action?: ToolCallAction | undefined;
   activeOrganizationId: string;
+  /** What the answer of this step's message cites, for "used in the answer". */
+  answerCitations?: ChatAnswerCitations | undefined;
   /** Known elapsed time, used by persisted callers and visual fixtures. */
   durationMs?: number;
   /** What a failure of this step means for its turn. */
@@ -463,6 +488,11 @@ const ToolCallCardComponent = ({
   part: ToolPart;
   /** Open rich tool details initially in development surfaces. */
   showDetails?: boolean;
+  /**
+   * The ref bindings of this step's stored message, where the matter items
+   * it found open; none while the turn has not been stored.
+   */
+  stepRefTargets?: ChatStepRefTargets | undefined;
   /** The thread the call belongs to; a local run's step reads its content by it. */
   threadId?: string | undefined;
 }) => {
@@ -471,6 +501,8 @@ const ToolCallCardComponent = ({
   const format = useFormatter();
   const queryClient = useQueryClient();
   const user = useMaybeAuthenticatedUser();
+  const showTechnicalDetails =
+    usePresentationPrefs().prefs.chatTechnicalDetails;
   const name = part.name;
   const mcpToolInfo = getMcpToolInfo(name);
   const catalogDataQuery = useQuery({
@@ -506,7 +538,13 @@ const ToolCallCardComponent = ({
   const label =
     catalogEntry?.brand ??
     (localRunTitleKind === null
-      ? t(getToolCallTitleKey({ input: getToolInput(part), name }))
+      ? t(
+          getToolCallTitleKey({
+            input: getToolInput(part),
+            name,
+            output: part.output,
+          }),
+        )
       : t(LOCAL_RUN_TITLE_KEYS[localRunTitleKind]));
   const subtitle =
     localRunTool === null
@@ -549,12 +587,10 @@ const ToolCallCardComponent = ({
   const output: unknown = part.output;
   const hasOutput = output !== undefined;
   // Raw tool errors are written for the model (they drive its retry policy),
-  // not for people: render a short human line instead and keep the raw text
-  // behind a collapsed disclosure for debugging. A tool-call rewritten to the
-  // terminal "error" state at hydration (its stream died mid call, so it
-  // never produced an `output.error`) still reads as failed via a generic
-  // interrupted label.
-  const rawErrorDetails = getToolOutputError(part.output);
+  // not for people: the status mark names the failure and the raw text stays
+  // in the technical details. A tool-call rewritten to the terminal "error"
+  // state at hydration (its stream died mid call, so it never produced an
+  // `output.error`) still reads as failed via a generic interrupted label.
   const failureLabelKey = toolFailureLabelKey({
     name,
     output: part.output,
@@ -584,18 +620,22 @@ const ToolCallCardComponent = ({
   const statusLabel = isLoading ? undefined : settledStatusLabel;
   const toolInput = getToolInput(part);
   const codeToolSource = getCodeToolSource({ input: toolInput, name });
-  const showCodeToolOutput = isCodeToolName(name) && hasOutput;
   const showMcpExactCall = mcpToolInfo !== null && toolInput !== undefined;
   const skillResourceOutput =
     isSkillResourceOutputToolName(name) && hasOutput
       ? getSkillResourceOutput(part)
       : undefined;
-  const canExpand =
-    showMcpExactCall ||
-    codeToolSource !== undefined ||
-    showCodeToolOutput ||
-    toolInput !== undefined ||
-    hasOutput;
+  const { canExpand, digest, technicalDetails } = toolCallDetailsView({
+    answerCitations,
+    failed: hasError,
+    hasRecoveredNote: failure === "recovered",
+    isLocalRun: localRunTool !== null,
+    part: { input: toolInput, name, output },
+    refTargets: stepRefTargets,
+    showMcpExactCall,
+    showTechnicalDetails,
+    technical: codeToolSource !== undefined || toolInput !== undefined,
+  });
   const headerOpensSkillResource = skillResourceOutput !== undefined;
   const headerInteractive = headerOpensSkillResource || canExpand;
   // A finished step is part of the rail; only one still running, waiting or
@@ -605,7 +645,7 @@ const ToolCallCardComponent = ({
   return (
     <div
       className={cn(
-        "relative max-w-xl border-s text-sm leading-5",
+        "relative border-s text-sm leading-5",
         showsMark ? "border-s-transparent" : "border-border/60",
       )}
     >
@@ -621,13 +661,7 @@ const ToolCallCardComponent = ({
       <Tooltip
         content={failureNote}
         render={
-          <div
-            className={cn(
-              "group/tool-step hover:bg-muted/35 focus-within:bg-muted/35 flex max-w-full items-center rounded-md",
-              failure === "terminal" &&
-                "bg-destructive/10 text-destructive hover:bg-destructive/15",
-            )}
-          />
+          <div className="group/tool-step hover:bg-muted/35 focus-within:bg-muted/35 flex max-w-full items-center rounded-md" />
         }
       >
         {/* The row owns the hover tint; a plain button paints none of its
@@ -658,6 +692,7 @@ const ToolCallCardComponent = ({
                 ...(skillResourceOutput.target
                   ? { target: skillResourceOutput.target }
                   : {}),
+                focus: INSPECTOR_FOCUS_INTENT.claim,
               });
               return;
             }
@@ -719,16 +754,12 @@ const ToolCallCardComponent = ({
         <ToolCallDetails
           activeOrganizationId={activeOrganizationId}
           codeToolSource={codeToolSource}
+          digest={digest}
           note={failure === "recovered" ? failureNote : undefined}
           part={part}
           showMcpExactCall={showMcpExactCall}
+          showTechnicalDetails={technicalDetails}
           threadId={threadId}
-        />
-      )}
-      {failure === "terminal" && errorMessage && (
-        <ToolCallFailureDetails
-          errorMessage={errorMessage}
-          rawErrorDetails={rawErrorDetails}
         />
       )}
       <UnrestoredFieldsNotice output={output} />
@@ -739,6 +770,58 @@ const ToolCallCardComponent = ({
 // A response can stream many tool calls, and each new chunk re-renders the
 // message's part list: a card whose call did not change skips that render.
 export const ToolCallCard = memo(ToolCallCardComponent);
+
+/**
+ * What an opened step shows. A person reads what it looked up and found;
+ * its call and raw result show only with the technical details setting on.
+ * A coding agent's step opens onto what its computer stored instead.
+ */
+const toolCallDetailsView = ({
+  answerCitations,
+  failed,
+  hasRecoveredNote,
+  isLocalRun,
+  part,
+  refTargets,
+  showMcpExactCall,
+  showTechnicalDetails,
+  technical,
+}: {
+  answerCitations: ChatAnswerCitations | undefined;
+  failed: boolean;
+  hasRecoveredNote: boolean;
+  isLocalRun: boolean;
+  part: { input: unknown; name: string; output: unknown };
+  refTargets: ChatStepRefTargets;
+  showMcpExactCall: boolean;
+  showTechnicalDetails: boolean;
+  /** Whether the call carries a script or an input to show. */
+  technical: boolean;
+}) => {
+  const hasOutput = part.output !== undefined;
+  const isCodeStep = isCodeToolName(part.name) && hasOutput;
+  const digest = isLocalRun
+    ? null
+    : stepDigestOf({
+        citations: answerCitations ?? NO_ANSWER_CITATIONS,
+        failed,
+        part,
+        refTargets,
+      });
+  const technicalDetails =
+    showTechnicalDetails && (showMcpExactCall || technical || hasOutput);
+  return {
+    // A code step with no ledger still opens, to say it kept none.
+    canExpand:
+      digest !== null ||
+      isCodeStep ||
+      isLocalRun ||
+      hasRecoveredNote ||
+      technicalDetails,
+    digest,
+    technicalDetails,
+  };
+};
 
 /** The header's label and elapsed time. The colour is set here, since the
  *  header button paints none of its own and the row owns the hover tint. */
@@ -759,29 +842,18 @@ const ToolCallHeaderLabel = ({
   subtitle: ReturnType<typeof getToolSubtitle>;
 }) => {
   const t = useTranslations();
-  const terminal = failure === "terminal";
+  // A failed step keeps the step colours; its status mark alone says it
+  // failed, and the answer's footer says the turn did not finish.
   return (
-    <span
-      className={cn(
-        "flex min-h-8 min-w-0 flex-1 items-center gap-2 ps-3 pe-2 text-sm leading-5 font-normal pointer-coarse:min-h-11",
-        terminal && "text-destructive",
-      )}
-    >
+    <span className="flex min-h-8 min-w-0 flex-1 items-center gap-2 ps-3 pe-2 text-sm leading-5 font-normal pointer-coarse:min-h-11">
       <TruncatedText
         render={<span className={cn(isLoading && CHAT_PENDING_TEXT_CLASS)} />}
       >
-        <span
-          className={cn(
-            !terminal &&
-              "text-foreground-label group-hover/tool-step:text-foreground",
-          )}
-        >
+        <span className="text-foreground-label group-hover/tool-step:text-foreground">
           {label}
         </span>
         {subtitle && (
-          <span className={cn("ms-1.5", !terminal && "text-muted-foreground")}>
-            {subtitle}
-          </span>
+          <span className="text-muted-foreground ms-1.5">{subtitle}</span>
         )}
       </TruncatedText>
       {statusLabel !== undefined && (
@@ -812,22 +884,90 @@ const RecoveredStepDot = () => (
   </span>
 );
 
-/** What a step was given and returned, behind the row's disclosure. */
+/** What a step looked up and found, behind the row's disclosure; its code
+ *  and raw result only with the technical details setting on. */
 const ToolCallDetails = ({
   activeOrganizationId,
   codeToolSource,
+  digest,
   note,
   part,
   showMcpExactCall,
+  showTechnicalDetails,
   threadId,
 }: {
   activeOrganizationId: string;
   codeToolSource: string | undefined;
-  /** A plain line about the step, above its raw call and result. */
+  digest: StepDigest | null;
+  /** A plain line about the step, above what it found. */
   note: string | undefined;
   part: ToolPart;
   showMcpExactCall: boolean;
+  showTechnicalDetails: boolean;
   threadId: string | undefined;
+}) => {
+  const t = useTranslations();
+  const [technicalOpen, setTechnicalOpen] = useState(false);
+  return (
+    <div className="space-y-2 ps-3 pt-1 pb-2">
+      {note !== undefined && (
+        <p className="text-muted-foreground text-2xs leading-relaxed">{note}</p>
+      )}
+      {digest === null ? (
+        isCodeToolName(part.name) &&
+        part.output !== undefined && (
+          <p className="text-muted-foreground text-2xs leading-relaxed">
+            {t(STEP_DIGEST_NOT_RECORDED_KEY)}
+          </p>
+        )
+      ) : (
+        <ToolCallStepDigest digest={digest} />
+      )}
+      <LocalRunStepOutputDetails
+        activeOrganizationId={activeOrganizationId}
+        part={part}
+        threadId={threadId}
+      />
+      {showTechnicalDetails && (
+        <Collapsible onOpenChange={setTechnicalOpen} open={technicalOpen}>
+          <CollapsibleTrigger render={<Button size="xs" variant="muted" />}>
+            <DirectionalIcon
+              className={cn(
+                "size-3.5 shrink-0 transition-transform duration-150",
+                technicalOpen && "rotate-90",
+              )}
+              flip={!technicalOpen}
+              icon={ChevronRightIcon}
+            />
+            {t("chat.stepDigest.technicalDetails")}
+          </CollapsibleTrigger>
+          <CollapsiblePanel>
+            {/* Mounted only while open: a script and its raw result can be
+                long, and a closed section has nothing to show. */}
+            {technicalOpen && (
+              <ToolCallTechnicalDetails
+                codeToolSource={codeToolSource}
+                part={part}
+                showMcpExactCall={showMcpExactCall}
+              />
+            )}
+          </CollapsiblePanel>
+        </Collapsible>
+      )}
+    </div>
+  );
+};
+
+/** A step's call and raw result as the tool saw them, for people who build
+ *  with stella. */
+const ToolCallTechnicalDetails = ({
+  codeToolSource,
+  part,
+  showMcpExactCall,
+}: {
+  codeToolSource: string | undefined;
+  part: ToolPart;
+  showMcpExactCall: boolean;
 }) => {
   const t = useTranslations();
   const toolInput = getToolInput(part);
@@ -835,10 +975,7 @@ const ToolCallDetails = ({
   const codeToolLogs =
     isCodeToolName(part.name) && hasOutput ? getCodeToolLogs(part) : [];
   return (
-    <div className="space-y-1 ps-3 pt-1 pb-2">
-      {note !== undefined && (
-        <p className="text-muted-foreground text-2xs leading-relaxed">{note}</p>
-      )}
+    <div className="space-y-1 pt-1">
       {showMcpExactCall && (
         <ToolCallCodeBlock
           code={JSON.stringify({ input: toolInput, tool: part.name }, null, 2)}
@@ -876,17 +1013,12 @@ const ToolCallDetails = ({
       )}
       {hasOutput && (
         <ToolCallCodeBlock
-          code={JSON.stringify(part.output, null, 2)}
+          code={JSON.stringify(withoutChatStepLedger(part.output), null, 2)}
           label={t("chat.toolCall.output")}
           language="json"
           tone="result"
         />
       )}
-      <LocalRunStepOutputDetails
-        activeOrganizationId={activeOrganizationId}
-        part={part}
-        threadId={threadId}
-      />
     </div>
   );
 };
@@ -928,43 +1060,38 @@ const ToolCallExpandToggle = ({
   );
 };
 
-/** The short human failure line, with the raw tool error (written for the
- *  model, not for people) behind a collapsed disclosure for debugging. */
-export const ToolCallFailureDetails = ({
-  errorMessage,
+/** A failed call's raw error, written for the model rather than for people,
+ *  behind a collapsed disclosure, and only with the technical details
+ *  setting on. A person reads the step's status mark and the answer's
+ *  footer; no per-step failure line repeats them. */
+export const ToolCallRawError = ({
   rawErrorDetails,
 }: {
-  errorMessage: string;
   rawErrorDetails: string | undefined;
 }) => {
   const t = useTranslations();
   const [detailsOpen, setDetailsOpen] = useState(false);
+  const showRawError = usePresentationPrefs().prefs.chatTechnicalDetails;
+  if (!showRawError || rawErrorDetails === undefined) {
+    return null;
+  }
   return (
-    <div className="max-w-xl py-1 ps-3">
-      <p className="text-destructive text-2xs leading-relaxed">
-        {errorMessage}
-      </p>
-      {rawErrorDetails !== undefined && (
-        <div className="text-2xs">
-          <Collapsible onOpenChange={setDetailsOpen} open={detailsOpen}>
-            <CollapsibleTrigger render={<Button variant="plain" />}>
-              <span className="text-muted-foreground hover:text-foreground">
-                {detailsOpen
-                  ? t("common.hideDetails")
-                  : t("common.showDetails")}
-              </span>
-            </CollapsibleTrigger>
-            <CollapsiblePanel>
-              <ToolCallCodeBlock
-                code={rawErrorDetails}
-                label={t("chat.toolCall.output")}
-                language="text"
-                tone="result"
-              />
-            </CollapsiblePanel>
-          </Collapsible>
-        </div>
-      )}
+    <div className="text-2xs py-1 ps-3">
+      <Collapsible onOpenChange={setDetailsOpen} open={detailsOpen}>
+        <CollapsibleTrigger render={<Button variant="plain" />}>
+          <span className="text-muted-foreground hover:text-foreground">
+            {detailsOpen ? t("common.hideDetails") : t("common.showDetails")}
+          </span>
+        </CollapsibleTrigger>
+        <CollapsiblePanel>
+          <ToolCallCodeBlock
+            code={rawErrorDetails}
+            label={t("chat.toolCall.output")}
+            language="text"
+            tone="result"
+          />
+        </CollapsiblePanel>
+      </Collapsible>
     </div>
   );
 };

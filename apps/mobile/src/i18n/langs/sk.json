@@ -1,4 +1,7 @@
 {
+  "common": {
+    "previewTruncated": "Úplný text nie je v tomto náhľade k dispozícii."
+  },
   "tabs": {
     "chat": "Chat",
     "close": "Zavrieť",
@@ -212,6 +215,11 @@
       "validate_skill_package": "Skontrolovať zručnosť",
       "web_search": "Vyhľadávanie na webe"
     },
+    "toolResearch": {
+      "caseLaw": "Hľadám v judikatúre",
+      "legislation": "Čítam predpisy",
+      "legislationAndCaseLaw": "Hľadám v predpisoch a judikatúre"
+    },
     "localRun": {
       "title": {
         "sign_in": "Na pokračovanie sa prihláste",
@@ -266,9 +274,18 @@
       "sourcesChecked": "{count, plural, one {# preverený zdroj} few {# preverené zdroje} other {# preverených zdrojov} many {# prevereného zdroja}}",
       "documentEdits": "{count, plural, one {# úprava dokumentu} few {# úpravy dokumentu} other {# úprav dokumentu} many {# úpravy dokumentu}}",
       "changesSaved": "{count, plural, one {# uložená zmena} few {# uložené zmeny} other {# uložených zmien} many {# uloženej zmeny}}",
-      "analyses": "{count, plural, one {# analýza} few {# analýzy} other {# analýz} many {# analýzy}}"
+      "searchedLegislation": "Prehľadané predpisy",
+      "searchedCaseLaw": "Prehľadaná judikatúra",
+      "searchedLegislationAndCaseLaw": "Prehľadané predpisy a judikatúra",
+      "readDocument": "Prečítaný dokument",
+      "readDocuments": "Prečítané dokumenty",
+      "searchedMatters": "Prehľadané spisy",
+      "checkedRegisters": "Overené verejné registre",
+      "searchedWeb": "Prehľadaný web",
+      "searchedChats": "Prehľadaná história chatu"
     },
     "stepCount": "{count, plural, one {# krok} few {# kroky} many {# kroku} other {# krokov}}",
+    "lookupCount": "{count, plural, one {# dopyt} few {# dopyty} many {# dopytu} other {# dopytov}}",
     "reasoning": "Uvažovanie",
     "historyTrimmed": "Staršie správy sa nepodarilo zhrnúť, preto táto odpoveď vychádza len z poslednej časti konverzácie.",
     "failure": {
@@ -603,6 +620,17 @@
     "dictationModelsUnavailable": "Modely sa nepodarilo načítať. Diktovanie použije model, ktorý ste vybrali, alebo predvolený, ak ho server už neponúka.",
     "dictationCleanup": "Upraviť pomocou AI",
     "dictationCleanupHint": "Opraví chyby rozpoznávania a vyslovené formátovanie, napríklad „nový riadok“. Len text, nie zvuk, ide cez stella k poskytovateľovi AI vašej organizácie; stella ho neukladá."
+  },
+  "signedFile": {
+    "layer": "Vrstva podpisov {number, number}",
+    "noReadableContent": "Na náhľad nie je k dispozícii žiadny čitateľný obsah.",
+    "unknownSigner": "Neznámy podpisovateľ",
+    "unreadable": "Podpísaný súbor sa nepodarilo prečítať.",
+    "unverified": "Podpisy neboli overené."
+  },
+  "structuredDocument": {
+    "noReadableContent": "Na náhľad nie je k dispozícii čitateľný text.",
+    "textOnly": "Textový náhľad bez rozloženia strany a obrázkov."
   },
   "header": {
     "search": "Hľadať"

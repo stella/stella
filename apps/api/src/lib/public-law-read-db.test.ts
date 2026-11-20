@@ -9,6 +9,8 @@ import {
 } from "@/api/lib/public-law-read-db";
 import {
   COLLECTION_BODY_COLUMN_GRANTS_BY_RELATION,
+  COLLECTION_OBSERVATION_COLUMN_GRANTS_BY_RELATION,
+  COLLECTION_PART_COLUMN_GRANTS_BY_RELATION,
   PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION,
   publicLawColumnPairs,
 } from "@/api/lib/public-law-relations";
@@ -28,6 +30,39 @@ const VALID_PERMISSIONS = {
 } as const satisfies PublicLawDatabaseRolePermissions;
 
 describe("external public-law database boundary", () => {
+  test("permits every typed collection-part column without exposing attachment metadata", () => {
+    const future = publicLawColumnPairs(
+      COLLECTION_PART_COLUMN_GRANTS_BY_RELATION,
+    );
+    const allowed = publicLawColumnPairs(PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION);
+    expect(future.length).toBeGreaterThan(0);
+    for (const pair of future) {
+      expect(pair.grant).toBe("permitted");
+      expect(allowed).toContainEqual(pair);
+    }
+    expect(
+      PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION.case_law_collection_bodies,
+    ).not.toHaveProperty("metadata");
+    expect(PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION).not.toHaveProperty(
+      "case_law_held_decision_attachments",
+    );
+  });
+
+  test("permits observed source time only on the published decision projection", () => {
+    const future = publicLawColumnPairs(
+      COLLECTION_OBSERVATION_COLUMN_GRANTS_BY_RELATION,
+    );
+    const allowed = publicLawColumnPairs(PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION);
+    expect(future.length).toBeGreaterThan(0);
+    for (const pair of future) {
+      expect(pair.grant).toBe("permitted");
+      expect(allowed).toContainEqual(pair);
+    }
+    expect(
+      PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION.case_law_unredacted_decisions,
+    ).not.toHaveProperty("source_observed_at");
+  });
+
   test("tolerates future collection-body grants without requiring or widening attachment access", () => {
     const future = publicLawColumnPairs(
       COLLECTION_BODY_COLUMN_GRANTS_BY_RELATION,

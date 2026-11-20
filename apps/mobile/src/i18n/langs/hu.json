@@ -1,4 +1,7 @@
 {
+  "common": {
+    "previewTruncated": "A teljes szöveg nem érhető el ebben az előnézetben."
+  },
   "tabs": {
     "chat": "Csevegés",
     "close": "Bezárás",
@@ -212,6 +215,11 @@
       "validate_skill_package": "Készség ellenőrzése",
       "web_search": "Keresés az interneten"
     },
+    "toolResearch": {
+      "caseLaw": "Keresés az ítélkezési gyakorlatban",
+      "legislation": "Jogszabályok olvasása",
+      "legislationAndCaseLaw": "Keresés a jogszabályokban és az ítélkezési gyakorlatban"
+    },
     "localRun": {
       "title": {
         "sign_in": "A folytatáshoz jelentkezzen be",
@@ -266,9 +274,18 @@
       "sourcesChecked": "{count, plural, one {# ellenőrzött forrás} other {# ellenőrzött forrás}}",
       "documentEdits": "{count, plural, one {# dokumentummódosítás} other {# dokumentummódosítás}}",
       "changesSaved": "{count, plural, one {# mentett módosítás} other {# mentett módosítás}}",
-      "analyses": "{count, plural, one {# elemzés} other {# elemzés}}"
+      "searchedLegislation": "Jogszabályok átnézve",
+      "searchedCaseLaw": "Ítélkezési gyakorlat átnézve",
+      "searchedLegislationAndCaseLaw": "Jogszabályok és ítélkezési gyakorlat átnézve",
+      "readDocument": "Dokumentum elolvasva",
+      "readDocuments": "Dokumentumok elolvasva",
+      "searchedMatters": "Ügyek átnézve",
+      "checkedRegisters": "Nyilvános nyilvántartások ellenőrizve",
+      "searchedWeb": "Internet átkeresve",
+      "searchedChats": "Csevegési előzmények átnézve"
     },
     "stepCount": "{count, plural, one {# lépés} other {# lépés}}",
+    "lookupCount": "{count, plural, one {# lekérdezés} other {# lekérdezés}}",
     "reasoning": "Érvelés",
     "historyTrimmed": "A korábbi üzeneteket nem sikerült összefoglalni, ezért ez a válasz csak a beszélgetés legutóbbi részét veszi figyelembe.",
     "failure": {
@@ -603,6 +620,17 @@
     "dictationModelsUnavailable": "A modelleket nem sikerült betölteni. A diktálás a választott modellt használja, vagy az alapértelmezettet, ha a szerver már nem kínálja.",
     "dictationCleanup": "Javítás AI-jal",
     "dictationCleanupHint": "Kijavítja a felismerési hibákat és a kimondott formázást, például „új sor”. Csak a szöveg, nem a hang megy a stellán keresztül a szervezeted AI-szolgáltatójához; a stella nem tárolja."
+  },
+  "signedFile": {
+    "layer": "{number, number}. aláírási réteg",
+    "noReadableContent": "Nincs megjeleníthető olvasható tartalom.",
+    "unknownSigner": "Ismeretlen aláíró",
+    "unreadable": "Az aláírt fájl nem olvasható.",
+    "unverified": "Az aláírásokat nem ellenőriztük."
+  },
+  "structuredDocument": {
+    "noReadableContent": "Nincs megjeleníthető szöveg az előnézethez.",
+    "textOnly": "Szöveges előnézet az oldalelrendezés és a képek nélkül."
   },
   "header": {
     "search": "Keresés"

@@ -1233,6 +1233,13 @@
       "treatment": "المعالجة اللاحقة"
     },
     "analyzing": "جارٍ التحليل...",
+    "browse": {
+      "courtDescription": "{court} ({country}): أحكام في قاعدة stella القانونية العامة، حسب السنة والشهر.",
+      "courts": "المحاكم",
+      "days": "الأيام",
+      "jurisdictionDescription": "{country}: أحكام قضائية في قاعدة stella القانونية العامة، حسب المحكمة والسنة والشهر.",
+      "periodDescription": "{court} ({country})، {period}: أحكام في قاعدة stella القانونية العامة."
+    },
     "chat": {
       "prompts": {
         "facts": {
@@ -1725,12 +1732,25 @@
       "unorderedList": "قائمة نقطية",
       "wholeBlockRequired": "حدد فقرة أو قائمة بالكامل لتغيير نمطها."
     },
+    "answerNotFinished": "لم تتمكن stella من إكمال هذه الإجابة.",
     "answerQuote": {
       "showInDecision": "عرض في القرار",
       "unverified": "تعذّر التحقق من الاقتباس",
       "unverifiedHint": "لا تتضمن القرارات المستشهد بها هذا النص حرفيًا",
       "verified": "اقتباس موثَّق",
       "verifiedHint": "حرفيًا في {source}"
+    },
+    "answerTable": {
+      "copy": "نسخ الجدول",
+      "copyAs": "نسخ بتنسيق {format}",
+      "download": "تنزيل الجدول",
+      "downloadAs": "تنزيل بتنسيق {format}",
+      "fullscreen": "فتح بملء الشاشة",
+      "fullscreenTitle": "الجدول بملء الشاشة",
+      "singleLine": "سطر واحد",
+      "size": "{rows, plural, zero {لا صفوف} one {صف واحد} two {صفان} few {# صفوف} many {# صفًا} other {# صف}} · {columns, plural, zero {لا أعمدة} one {عمود واحد} two {عمودان} few {# أعمدة} many {# عمودًا} other {# عمود}}",
+      "textMode": "نص الخلايا",
+      "wrap": "التفاف النص"
     },
     "applyMode": {
       "description": "يُخزّن Word مَن أجرى كل تغيير. وسنتذكّر اختيارك.",
@@ -2142,9 +2162,17 @@
     },
     "placeholder": "اكتب سؤالك هنا، / للمهارات، @ لإضافة سياق",
     "processSummary": {
-      "analyses": "{count, plural, zero {# تحليلات} one {تحليل واحد} two {تحليلان} few {# تحليلات} many {# تحليلًا} other {# تحليل}}",
       "changesSaved": "{count, plural, zero {# تغييرات محفوظة} one {تغيير واحد محفوظ} two {تغييران محفوظان} few {# تغييرات محفوظة} many {# تغييرًا محفوظًا} other {# تغيير محفوظ}}",
+      "checkedRegisters": "تم التحقق من السجلات العامة",
       "documentEdits": "{count, plural, zero {# تعديلات على المستند} one {تعديل واحد على المستند} two {تعديلان على المستند} few {# تعديلات على المستند} many {# تعديلًا على المستند} other {# تعديل على المستند}}",
+      "readDocument": "تمت قراءة المستند",
+      "readDocuments": "تمت قراءة المستندات",
+      "searchedCaseLaw": "تم البحث في الاجتهاد القضائي",
+      "searchedChats": "تم البحث في سجلّ الدردشة",
+      "searchedLegislation": "تم البحث في التشريعات",
+      "searchedLegislationAndCaseLaw": "تم البحث في التشريعات والاجتهاد القضائي",
+      "searchedMatters": "تمت مراجعة الملفات القانونية",
+      "searchedWeb": "تم البحث على الويب",
       "sourcesChecked": "{count, plural, zero {# مصادر تمت مراجعتها} one {مصدر واحد تمت مراجعته} two {مصدران تمت مراجعتهما} few {# مصادر تمت مراجعتها} many {# مصدرًا تمت مراجعته} other {# مصدر تمت مراجعته}}"
     },
     "promptImprovementStrategies": {
@@ -2231,6 +2259,7 @@
       "chipLabel": "مكان التشغيل: {place}",
       "cloud": "السحابة",
       "cloudDescription": "يعمل في السحابة. متاح من أي مكان.",
+      "hintAntigravity": "ثبّت Antigravity 1.5 أو أحدث، ثم سجّل الدخول منه",
       "hintCheck": "تحقّق منه في stella desktop",
       "hintInstall": "ثبّته من stella desktop",
       "hintOffline": "افتح stella desktop على حاسوبك",
@@ -2241,6 +2270,8 @@
       "localPlace": "حاسوبك، {harness}",
       "localSelection": "حاسوبك · {harness}",
       "placeState": "{place}. {state}",
+      "startedInCloud": "بدأت هذه الدردشة الجديدة في السحابة لأن {harness} غير متاح على حاسوبك ({state})",
+      "startedInCloudCheckFailed": "بدأت هذه الدردشة الجديدة في السحابة لأنه تعذّر التحقق من حاسوبك",
       "stepsCheck": "جارٍ فتح stella desktop. إن لم يُفتح، فافتحه على حاسوبك وتحقّق من {harness} في الإعدادات › عام › اشتراكات الذكاء الاصطناعي.",
       "stepsInstall": "جارٍ فتح stella desktop. إن لم يُفتح، فافتحه على حاسوبك، ثم اختر في الإعدادات › عام زر تثبيت بجوار {harness}.",
       "stepsSignInClaudeCode": "جارٍ فتح stella desktop لتسجيل الدخول. إن لم يُفتح، فافتحه واختر الإعدادات › عام › تسجيل الدخول باستخدام Claude.",
@@ -2307,6 +2338,20 @@
       "title": "رسالتك في قائمة الانتظار حتى ينتهي الوكيل",
       "turnNotRunning": "الوكيل لا يعمل الآن."
     },
+    "stepDigest": {
+      "decisionsFound": "{found, plural, zero {لم يُعثر على أي قرار} one {عُثر على قرار واحد} two {عُثر على قرارين} few {عُثر على # قرارات} many {عُثر على # قرارًا} other {عُثر على # قرار}}",
+      "decisionsFoundUsed": "{found, plural, zero {لم يُعثر على أي قرار} one {عُثر على قرار واحد} two {عُثر على قرارين} few {عُثر على # قرارات} many {عُثر على # قرارًا} other {عُثر على # قرار}}، {used, plural, zero {لم يُستخدم أي منها في الإجابة} one {استُخدم واحد في الإجابة} two {استُخدم اثنان في الإجابة} few {استُخدم # في الإجابة} many {استُخدم # في الإجابة} other {استُخدم # في الإجابة}}",
+      "filterAsOf": "حتى تاريخ {date}",
+      "legislationFound": "{count, plural, zero {# تشريع أو حكم} one {تشريع أو حكم واحد} two {تشريعان أو حكمان} few {# تشريعات وأحكام} many {# تشريعًا وحكمًا} other {# تشريع وحكم}}",
+      "lookupDidNotGoThrough": "لم يكتمل هذا البحث.",
+      "moreFound": "{count, plural, zero {لا يوجد المزيد} one {واحد آخر غير معروض} two {اثنان آخران غير معروضين} few {# أخرى غير معروضة} many {# أخرى غير معروضة} other {# أخرى غير معروضة}}",
+      "moreLookups": "{count, plural, zero {لا توجد استعلامات أخرى} one {استعلام آخر غير معروض} two {استعلامان آخران غير معروضين} few {# استعلامات أخرى غير معروضة} many {# استعلامًا آخر غير معروض} other {# استعلام آخر غير معروض}}",
+      "notRecorded": "نُفذت هذه الخطوة قبل أن تبدأ stella بتسجيل ما تبحث عنه كل خطوة.",
+      "nothingFound": "لا توجد نتائج مطابقة.",
+      "technicalDetails": "التفاصيل التقنية",
+      "usedInAnswer": "مستخدم في الإجابة",
+      "versionFrom": "الصيغة السارية منذ {date}"
+    },
     "stopFailed": "تعذّر إيقاف الإجابة. حاول مرة أخرى.",
     "stopResponse": "إيقاف",
     "stopped": "متوقف",
@@ -2322,6 +2367,11 @@
     "suggestionStatus": {
       "accepted": "مُطبَّق",
       "rejected": "مرفوض"
+    },
+    "switcher": {
+      "allChats": "كل الدردشات",
+      "searchPlaceholder": "ابحث عن دردشة…",
+      "trigger": "تبديل الدردشة"
     },
     "tableChart": {
       "bar": "أعمدة",
@@ -2892,6 +2942,7 @@
     "playbooks": "أدلّة المراجعة",
     "preparing": "جارٍ التحضير…",
     "preview": "معاينة",
+    "previewTruncated": "النص الكامل غير متاح في هذه المعاينة.",
     "previous": "السابق",
     "previousMatch": "النتيجة السابقة",
     "print": "طباعة",
@@ -4659,7 +4710,7 @@
       "discoveredSkills": "{count, plural, zero {لم يُعثر على أي مهارات} one {تم العثور على مهارة واحدة} two {تم العثور على مهارتين} few {تم العثور على # مهارات} many {تم العثور على # مهارة} other {تم العثور على # مهارة}}",
       "discoveryEmpty": "لم يُعثر على أي مهارات في هذا المستودع أو المجلد.",
       "discoverySkippedInvalid": "{count, plural, zero {لم يتم تخطي أي مهارات غير صالحة} one {تم تخطي مهارة واحدة غير صالحة} two {تم تخطي مهارتين غير صالحتين} few {تم تخطي # مهارات غير صالحة} many {تم تخطي # مهارة غير صالحة} other {تم تخطي # مهارة غير صالحة}}",
-      "dropPack": "أفلِت ملف .zip أو SKILL.md هنا لاستيراد المهارة",
+      "dropPack": "أفلِت ملف .zip/.skill أو SKILL.md هنا لاستيراد المهارة",
       "editSkill": "تعديل المهارة",
       "enableSkill": "تفعيل المهارة",
       "fileExists": "يوجد ملف بهذا المسار بالفعل",
@@ -4716,8 +4767,8 @@
           "name": "تلخيص مستند"
         }
       },
-      "uploadHelp": "استخدم ملف SKILL.md أو مجلد .zip يتضمن SKILL.md وموارد اختيارية للقراءة فقط.",
-      "uploadPack": "رفع ملف .zip أو SKILL.md",
+      "uploadHelp": "استخدم ملف SKILL.md أو مجلد .zip/.skill يتضمن SKILL.md وموارد اختيارية للقراءة فقط.",
+      "uploadPack": "رفع ملف .zip/.skill أو SKILL.md",
       "urlPlaceholder": "https://github.com/org/repo/tree/main/path/to/skill",
       "version": "الإصدار: {version}"
     },
@@ -5749,6 +5800,9 @@
       "chatNotificationsDescription": "تلقَّ إشعارًا من هذا المتصفح عند اكتمال رد في الدردشة بينما تعمل stella في الخلفية.",
       "chatNotificationsToggle": "أعلمني عندما يكون الرد جاهزًا أو يحتاج إلى مدخلاتي",
       "chatNotificationsUnsupported": "لا يدعم هذا المتصفح الإشعارات.",
+      "chatTechnicalDetails": "التفاصيل التقنية في الدردشة",
+      "chatTechnicalDetailsDescription": "تعرض كل خطوة في الدردشة ما بحثت عنه وما وجدته. فعّل هذا الخيار لترى أيضًا الشيفرة والنتائج الخام وراءها.",
+      "chatTechnicalDetailsToggle": "إظهار التفاصيل التقنية في الدردشة",
       "confirmDelete": "تأكيد حذف الحساب",
       "dangerZone": "منطقة الخطر",
       "dangerZoneDescription": "احذف الوصول إلى حسابك وبيانات الحساب الخاصة نهائيًا.",
@@ -6256,6 +6310,14 @@
     "reconnectRequired": "انتهت صلاحية تسجيل الدخول",
     "title": "SharePoint وOneDrive"
   },
+  "signedFile": {
+    "layer": "طبقة التوقيعات {number, number}",
+    "noReadableContent": "لا يتوفر محتوى قابل للقراءة للمعاينة.",
+    "pdfUnavailable": "معاينة ملف PDF غير متاحة.",
+    "unknownSigner": "موقّع مجهول",
+    "unreadable": "تعذّرت قراءة الملف الموقّع.",
+    "unverified": "لم يُتحقق من التوقيعات."
+  },
   "skillHistory": {
     "acceptStale": "قبول واستبدال التعديلات الأحدث",
     "backToCurrent": "العودة إلى النسخة الحالية",
@@ -6396,6 +6458,10 @@
     "versionChangesRemoved": "{count, plural, zero {لا مواد محذوفة} one {مادة واحدة محذوفة} two {مادتان محذوفتان} few {# مواد محذوفة} many {# مادةً محذوفة} other {# مادة محذوفة}}",
     "versionChangesWords": "{inserted, plural, zero {لا كلمات مضافة} one {كلمة واحدة مضافة} two {كلمتان مضافتان} few {# كلمات مضافة} many {# كلمةً مضافة} other {# كلمة مضافة}}، {deleted, plural, zero {لا كلمات محذوفة} one {كلمة واحدة محذوفة} two {كلمتان محذوفتان} few {# كلمات محذوفة} many {# كلمةً محذوفة} other {# كلمة محذوفة}}",
     "wordingVersionUnknown": "تاريخ نسخة الصياغة غير متاح"
+  },
+  "structuredDocument": {
+    "noReadableContent": "لا يتوفر نص قابل للقراءة للمعاينة.",
+    "textOnly": "معاينة نصية من دون تنسيق الصفحة أو الصور."
   },
   "styleSets": {
     "create": "إنشاء",
@@ -7903,7 +7969,6 @@
         "endDate": "تاريخ الانتهاء",
         "month": "الشهر",
         "quarter": "الربع",
-        "showTable": "عرض الجدول",
         "startDate": "تاريخ البدء",
         "week": "الأسبوع"
       },

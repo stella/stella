@@ -42,6 +42,8 @@ describe("documentFormat", () => {
       ["scan.PNG", "image"],
       ["message.eml", "email"],
       ["datová zpráva.ZFO", "dataBox"],
+      ["contratto.pdf.P7M.P7M", "cades"],
+      ["firma.p7s", "file"],
       ["readme.md", "markdown"],
       ["notes.txt", "text"],
       ["archive.zip", "file"],

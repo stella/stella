@@ -504,6 +504,10 @@ describe("policy coverage", () => {
 
   // Tables exempt from RLS
   const EXEMPT = new Set([
+    // Skill original erasure queue: owner-only forced RLS with a deny-all
+    // request-role policy; an owner-run trigger writes it and the scheduler
+    // drains it, so tenant CRUD policies do not apply.
+    "agent_skill_original_cleanup_requests",
     "invitation", // auth table, no RLS
     "member", // auth table, no RLS
     // The anonymization catalog tables carry a nullable workspace_id

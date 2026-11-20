@@ -12,6 +12,10 @@ import {
   backfillAgentClientStorage,
 } from "@/api/lib/scheduler/tasks/agent-client-storage-backfill";
 import {
+  CLEAN_AGENT_SKILL_ORIGINAL_OBJECTS_TASK,
+  cleanAgentSkillOriginalObjects,
+} from "@/api/lib/scheduler/tasks/agent-skill-original-cleanup";
+import {
   BACKFILL_HEARTBEAT_TASK,
   emitBackfillHeartbeats,
 } from "@/api/lib/scheduler/tasks/backfill-heartbeat";
@@ -350,6 +354,7 @@ const SCHEDULER_TASKS = {
   // Ungated: its time-billing sample data admits itself on the feature.
   [RESET_REVIEW_ORGANIZATION_TASK]: resetReviewOrganizationTask,
   [CLEAN_TEMPLATE_DELETION_OBJECTS_TASK]: cleanTemplateDeletionObjects,
+  [CLEAN_AGENT_SKILL_ORIGINAL_OBJECTS_TASK]: cleanAgentSkillOriginalObjects,
   [REPAIR_FILE_DERIVATIVES_TASK]: repairFileDerivatives,
   [RECONCILE_FLOW_RUN_ORPHANS_TASK]: reconcileFlowRunOrphans,
   [RECONCILE_DOCUMENT_REVIEW_RUNS_TASK]: reconcileDocumentReviewRuns,

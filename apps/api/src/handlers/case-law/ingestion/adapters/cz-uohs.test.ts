@@ -228,6 +228,8 @@ describe("ÚOHS JSON-LD", () => {
       }
       const bodyText = body.map(({ plainText }) => plainText).join("\n");
       expect(bodyText).not.toContain("1/12 třída Kpt. Jaroše");
+      // The footer counting the pages ("… soutěže 2/12") is one running line.
+      expect(bodyText).not.toMatch(/hospodářské soutěže \d+\/\d+/u);
       expect(bodyText).not.toContain(
         "Ve správním spise se nachází pod položkou",
       );
@@ -507,6 +509,23 @@ describe("ÚOHS JSON-LD", () => {
     // in the text rather than guess which note it belongs to.
     expect(bodyText).toContain("and continues at the next page top.");
     expect(bodyText).toContain("Small body text after the body resumes.");
+  });
+
+  test("joins a paragraph the page's counted footer broke", async () => {
+    const bytes = new Uint8Array(
+      await Bun.file(
+        new URL("__fixtures__/cz-uohs-2026-R0137.pdf", import.meta.url),
+      ).arrayBuffer(),
+    );
+    const ast = await parseCzUohsDocumentPdf(bytes, {
+      caseNumber: "ÚOHS-R0137/2026/VZ",
+      sourceUrl: "cz-uohs-2026-R0137.pdf",
+    });
+    // Page 2 opens mid-sentence ("Mgr. Martinou | Slaninovou") under page
+    // 1's footer; no paragraph ends where the page did.
+    expect(
+      ast.blocks.filter(({ plainText }) => plainText.endsWith("Mgr. Martinou")),
+    ).toEqual([]);
   });
 
   test("a document without numbered paragraphs gets no paragraph numbers", async () => {

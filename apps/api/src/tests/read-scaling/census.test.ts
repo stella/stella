@@ -15,6 +15,15 @@ import {
 } from "../../../../../scripts/ledger-membership.ts";
 import { accountExportDownloadScalingScenario } from "./account-exports";
 import apiLedger from "./api-scaling-ledger.json";
+import { asicPreviewScalingScenario } from "./asic-preview";
+import {
+  cadesContentScalingScenario,
+  cadesPreviewScalingScenario,
+} from "./cades-preview";
+import {
+  browseCalendarScalingScenario,
+  browseCourtsScalingScenario,
+} from "./case-law-browse-hubs";
 import { chatActiveRunsScalingScenario } from "./chat-active-runs";
 import { chatBackgroundTasksScalingScenario } from "./chat-background-tasks";
 import { browserSiteGrantsScalingScenario } from "./chat-browser-site-grants";
@@ -79,10 +88,12 @@ import {
 } from "./scenario-membership";
 import { readScalingScenarios } from "./scenarios";
 import { sharepointBrowseScalingScenarios } from "./sharepoint-browse";
+import { skillExportScalingScenario } from "./skill-export";
 import {
   softLawReadScalingScenario,
   softLawSearchScalingScenario,
 } from "./soft-law";
+import { structuredDocumentScalingScenario } from "./structured-document";
 import {
   apiScalingSurface,
   mcpScalingSurface,
@@ -114,6 +125,8 @@ const measuredApiScenarios = [
   fileContentScalingScenario,
   decisionAnchorRedirectsScalingScenario,
   decisionFilterValidationScalingScenario,
+  browseCalendarScalingScenario,
+  browseCourtsScalingScenario,
   accountExportDownloadScalingScenario,
   desktopRunnerUpgradeScalingScenario,
   chatLocalRunnersScalingScenario,
@@ -135,6 +148,10 @@ const measuredApiScenarios = [
   ...verificationGraphScalingScenarios,
   ...verificationChronologyScalingScenarios,
   ...graphToolsScalingScenarios,
+  asicPreviewScalingScenario,
+  structuredDocumentScalingScenario,
+  cadesContentScalingScenario,
+  cadesPreviewScalingScenario,
   dataBoxPreviewScalingScenario,
   ...dataBoxSettingsScalingScenarios,
   suggestionRangeScalingScenario,
@@ -160,6 +177,7 @@ const measuredApiScenarios = [
   softLawSearchScalingScenario,
   softLawReadScalingScenario,
   ...sharepointBrowseScalingScenarios,
+  skillExportScalingScenario,
 ];
 const measuredApiReads = apiApp.routes
   .filter(({ definition }) =>

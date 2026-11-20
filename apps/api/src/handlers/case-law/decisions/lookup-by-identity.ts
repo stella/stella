@@ -25,15 +25,21 @@
  */
 
 import { panic } from "better-result";
-import { and, eq, inArray, isNotNull, or, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNotNull, or, sql } from "drizzle-orm";
 import { unionAll } from "drizzle-orm/pg-core";
 
 import {
+  decisionDocketFamilySpellings,
   type DecisionDocketSelector,
   decisionDocketTailSpellings,
   docketFamilyKeyOf,
+  docketFamilyKeysToRead,
 } from "@stll/api-contract/decision-docket-reference";
-import type { DecisionIdentifierIntent } from "@stll/api-contract/decision-query-intent";
+import {
+  DECISION_IDENTITY_READ,
+  type DecisionIdentifierIntent,
+  type DecisionIdentityRead,
+} from "@stll/api-contract/decision-query-intent";
 import { czechReporterLookupSpellings } from "@stll/api-contract/decision-reporter-grammar";
 import {
   DECISION_IDENTIFIER_TYPES,
@@ -128,21 +134,23 @@ export const decisionIdentityLocatorOf = (
  * and, when the reference printed a sheet, the full file number a legacy row
  * or a parallel identifier still holds. Each is keyed as the stored column is.
  */
-const docketSpellingsOf = ({
-  family,
-  selector,
-}: Pick<
-  Extract<DecisionIdentityLocator, { kind: "docket" }>,
-  "family" | "selector"
->): string[] => [
-  family,
-  ...decisionDocketTailSpellings(family),
-  // Tight and spaced, as legacy rows and parallel identifiers print it; the
-  // stored key is whatever the ingest key function makes of each.
-  ...(selector.kind === "sheet"
-    ? [`${family}-${selector.value}`, `${family} - ${selector.value}`]
-    : []),
-];
+const docketSpellingsOf = (
+  {
+    family,
+    selector,
+  }: Pick<
+    Extract<DecisionIdentityLocator, { kind: "docket" }>,
+    "family" | "selector"
+  >,
+  jurisdiction: string | undefined,
+): string[] =>
+  decisionDocketFamilySpellings(family, jurisdiction).flatMap((spelling) => [
+    spelling,
+    ...decisionDocketTailSpellings(spelling),
+    ...(selector.kind === "sheet"
+      ? [`${spelling}-${selector.value}`, `${spelling} - ${selector.value}`]
+      : []),
+  ]);
 
 /**
  * The `citation_key` values a docket's file is read under: each stored
@@ -153,9 +161,10 @@ export const docketFamilyCitationKeys = (
     Extract<DecisionIdentityLocator, { kind: "docket" }>,
     "family" | "selector"
   >,
+  jurisdiction?: string,
 ): string[] => [
   ...new Set(
-    docketSpellingsOf(locator)
+    docketSpellingsOf(locator, jurisdiction)
       .map((spelling) => bareCitationKey(spelling))
       .filter((key) => key.length > 0),
   ),
@@ -204,6 +213,8 @@ export type DecisionIdentityRow = {
   ecli: string | null;
   id: SafeId<"caseLawDecision">;
   identifiers: readonly { type: DecisionIdentifierType; value: string }[];
+  /** Completeness of the exact typed identifier-key scan, before family expansion. */
+  exactIdentityRead?: DecisionIdentityRead;
   /** The reference as the court published it, sheet included, if recorded. */
   publishedCaseNumber?: string | null;
   /** The sheet the court published the decision on, if recorded. */
@@ -312,10 +323,11 @@ type OwnColumnKeys =
 
 const ownColumnKeysOf = (
   locator: DecisionIdentityLocator,
+  country: string | undefined,
 ): OwnColumnKeys | null => {
   switch (locator.kind) {
     case "docket": {
-      const [first, ...rest] = docketFamilyCitationKeys(locator);
+      const [first, ...rest] = docketFamilyCitationKeys(locator, country);
       return first === undefined
         ? null
         : { column: "citation-key", keys: [first, ...rest] };
@@ -344,7 +356,7 @@ const identifierLookupSpellings = (
   country: string | undefined,
 ) => {
   if (locator.kind === "docket") {
-    return docketSpellingsOf(locator);
+    return docketSpellingsOf(locator, country);
   }
   if (locator.kind === "reporter" && country === "CZE") {
     return czechReporterLookupSpellings(locator.value);
@@ -374,7 +386,7 @@ export const decisionIdentityReadKeys = ({
     ),
     values: identifierLookupSpellings(locator, country),
   }),
-  ownColumn: ownColumnKeysOf(locator),
+  ownColumn: ownColumnKeysOf(locator, country),
 });
 
 const ownColumnCondition = (own: OwnColumnKeys | null) => {
@@ -461,7 +473,14 @@ export const decisionIdsNamedBy = ({
   const family = tx
     .select({ id: publishedCaseLawDecisions.id })
     .from(publishedCaseLawDecisions)
-    .where(and(eq(publishedCaseLawDecisions.docketFamilyKey, familyKey)));
+    .where(
+      inArray(
+        publishedCaseLawDecisions.docketFamilyKey,
+        locator.kind === "docket" && country !== undefined
+          ? docketFamilyKeysToRead(locator.family, country)
+          : [familyKey],
+      ),
+    );
   return unionAll(own, published, family);
 };
 
@@ -582,9 +601,25 @@ export const lookupDecisionsByIdentity = async ({
 }: LookupDecisionsByIdentityOptions): Promise<DecisionIdentityRow[]> => {
   const rows = await caseLawDb(async (tx) => {
     const familyKey = docketFamilyKeyToRead({ country, locator });
-    const decisions = await tx
+    const exactDocketIds =
+      locator.kind === "docket" && locator.selector.kind === "none"
+        ? identifierRowDecisionIds({
+            tx,
+            rows: identifierRowKeysOf({
+              jurisdiction: country,
+              types: [DECISION_IDENTIFIER_TYPES.CASE_NUMBER],
+              values: decisionDocketFamilySpellings(locator.value, country),
+            }),
+          })
+        : null;
+    const exactDocketIdentity =
+      exactDocketIds === null
+        ? sql<boolean>`false`
+        : sql<boolean>`${inArray(publishedCaseLawDecisions.id, exactDocketIds)}`;
+    const scannedDecisions = await tx
       .select({
         caseNumber: publishedCaseLawDecisions.caseNumber,
+        exactDocketIdentity,
         caseNumberType: publishedCaseLawDecisions.caseNumberType,
         country: publishedCaseLawDecisions.country,
         court: publishedCaseLawDecisions.court,
@@ -630,11 +665,20 @@ export const lookupDecisionsByIdentity = async ({
       // between come back in the same order twice, and in the order the choice
       // is actually made in.
       .orderBy(
+        ...(exactDocketIds === null ? [] : [desc(exactDocketIdentity)]),
         publishedCaseLawDecisions.court,
         publishedCaseLawDecisions.decisionDate,
         publishedCaseLawDecisions.id,
       )
-      .limit(IDENTITY_CANDIDATE_SCAN_MAX);
+      .limit(IDENTITY_CANDIDATE_SCAN_MAX + 1);
+    // Exact holders sort first. A family-only row proves their scan is complete.
+    const exactIdentityRead =
+      scannedDecisions.length <= IDENTITY_CANDIDATE_SCAN_MAX ||
+      (exactDocketIds !== null &&
+        scannedDecisions.some((decision) => !decision.exactDocketIdentity))
+        ? DECISION_IDENTITY_READ.COMPLETE
+        : DECISION_IDENTITY_READ.TRUNCATED;
+    const decisions = scannedDecisions.slice(0, IDENTITY_CANDIDATE_SCAN_MAX);
 
     if (decisions.length === 0) {
       return [];
@@ -683,9 +727,11 @@ export const lookupDecisionsByIdentity = async ({
         languageGroupKey,
         courtId,
         authenticLanguage: _authenticLanguage,
+        exactDocketIdentity: _exactDocketIdentity,
         ...decision
       }): DecisionIdentityRow =>
         Object.assign(decision, {
+          exactIdentityRead,
           courtAbbreviation: courtPresentation(registry, {
             ...decision,
             courtId,

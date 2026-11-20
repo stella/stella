@@ -1,9 +1,10 @@
 -- requires: 20261020000300_chat_cleanup_intent_organization_keys
+-- requires: 20261120070300_agent_skill_original_cleanup_intent_keys
 SET lock_timeout = '1s';
 --> statement-breakpoint
 SET statement_timeout = '5s';
 --> statement-breakpoint
--- stella-migration-safety: reviewed alter-policy - adds one branch for an authenticated writer's exact tenant-scoped report export key in an authorized workspace; every chat, matter and template predicate remains unchanged.
+-- stella-migration-safety: reviewed alter-policy - adds one branch for an authenticated writer's exact tenant-scoped report export key in an authorized workspace; every chat, matter, template and agent-skill original predicate remains unchanged.
 ALTER POLICY "buffer_object_cleanup_insert"
 ON "buffer_object_cleanup_intents"
 WITH CHECK (
@@ -128,6 +129,24 @@ WITH CHECK (
         pg_catalog.string_to_array(object_key, '/'),
         1
       ) = 4
+    )
+    OR (
+      chat_thread_id IS NULL
+      AND workspace_id IS NULL
+      AND pg_catalog.split_part(object_key, '/', 1) = organization_id
+      AND pg_catalog.split_part(object_key, '/', 2) = 'agent-skills'
+      AND pg_catalog.split_part(object_key, '/', 3) = 'originals'
+      AND pg_catalog.split_part(object_key, '/', 4) ~
+        '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+      AND pg_catalog.array_length(
+        pg_catalog.string_to_array(object_key, '/'),
+        1
+      ) = 4
+      AND NOT EXISTS (
+        SELECT 1
+        FROM agent_skill_resources r
+        WHERE r.original_s3_key = "buffer_object_cleanup_intents".object_key
+      )
     )
   )
 );

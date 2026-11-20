@@ -292,12 +292,13 @@ describe("drawing an answer from its events", () => {
       createdAt: "2026-10-20T10:00:00.000Z",
       text: "Checking the register\n\nTwo found.",
       blocks: [
-        { type: "text", key: "0", markdown: "Checking the register" },
+        // Written before the step, it reads as the run's plan.
+        { type: "intent", key: "0", text: "Checking the register" },
         {
           type: "steps",
           key: "1",
           steps: [{ type: "tool", label: "list_templates", status: "done" }],
-          work: new Map([["research", 1]]),
+          summary: [{ phrase: "sourcesChecked", count: 1 }],
         },
         { type: "text", key: "2", markdown: "Two found." },
       ],
@@ -319,7 +320,7 @@ describe("drawing an answer from its events", () => {
       type: "steps",
       key: "1",
       steps: [{ type: "tool", label: "list_templates", status: "running" }],
-      work: new Map(),
+      summary: [{ phrase: "steps", count: 1 }],
     });
     const failed = applyChatEvent(started, {
       type: "TOOL_CALL_RESULT",
@@ -330,7 +331,7 @@ describe("drawing an answer from its events", () => {
       type: "steps",
       key: "1",
       steps: [{ type: "tool", label: "list_templates", status: "failed" }],
-      work: new Map(),
+      summary: [{ phrase: "steps", count: 1 }],
     });
     // A local agent's step that failed or was cancelled says so in the
     // result's state, not its content; the stored message keeps it errored.
@@ -347,7 +348,7 @@ describe("drawing an answer from its events", () => {
         type: "steps",
         key: "1",
         steps: [{ type: "tool", label: "list_templates", status: "failed" }],
-        work: new Map(),
+        summary: [{ phrase: "steps", count: 1 }],
       });
     }
   });
@@ -478,7 +479,7 @@ describe("drawing an answer from its events", () => {
           },
           { type: "tool", label: "list_templates", status: "running" },
         ],
-        work: new Map([["computation", 1]]),
+        summary: [{ phrase: "steps", count: 2 }],
       },
     ]);
   });

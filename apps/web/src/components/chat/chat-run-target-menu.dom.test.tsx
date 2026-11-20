@@ -1,12 +1,13 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, mock, spyOn, test } from "bun:test";
 
-import type {
-  ChatLocalHarnessReadiness,
-  ChatLocalRunHarness,
-  ChatLocalRunReadiness,
-  ChatLocalRunTarget,
-  ChatRunTarget,
+import {
+  CHAT_LOCAL_RUN_HARNESSES,
+  type ChatLocalHarnessReadiness,
+  type ChatLocalRunHarness,
+  type ChatLocalRunReadiness,
+  type ChatLocalRunTarget,
+  type ChatRunTarget,
 } from "@stll/api-contract/chat-run-target";
 import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
@@ -121,6 +122,7 @@ const renderMenu = (
                   chosen.push(next);
                 }}
                 selected={target}
+                startedInCloud={null}
               />
             </MenuPopup>
           </Menu>
@@ -166,6 +168,7 @@ const renderModels = (selected: ChatLocalRunTarget) => {
                     select: (next) => {
                       chosen.push(next);
                     },
+                    startedInCloud: null,
                   },
                 }}
                 open
@@ -458,15 +461,15 @@ const setupReport = (
 
 /** READINESS with each harness reported in its state of `states`. */
 const withHarnessStates = (
-  states: Record<ChatLocalRunHarness, SetupState>,
+  states: Partial<Record<ChatLocalRunHarness, SetupState>>,
 ): ChatLocalRunReadiness => ({
   ...READINESS,
   runners: READINESS.runners.map((runner) => ({
     ...runner,
-    harnesses: [
-      setupReport("codex", states.codex),
-      setupReport("claude-code", states["claude-code"]),
-    ],
+    harnesses: CHAT_LOCAL_RUN_HARNESSES.flatMap((id) => {
+      const state = states[id];
+      return state === undefined ? [] : [setupReport(id, state)];
+    }),
   })),
 });
 
@@ -549,3 +552,21 @@ test.each([
     expect(chosen).toEqual([]);
   },
 );
+
+test("an agent the member sets up themselves says how, and opens nothing", async () => {
+  const open = spyOn(desktopBridge, "openDesktopUrl").mockImplementation(
+    () => undefined,
+  );
+  const { view, chosen } = renderMenu(
+    { kind: "cloud" },
+    withHarnessStates({ codex: "needs_login", antigravity: "needs_login" }),
+  );
+  const antigravity = await harnessRow(view, "Antigravity");
+  expect(antigravity.getAttribute("aria-disabled")).toBe("true");
+  expect(antigravity.textContent).toContain(
+    messages.chat.runOn.hintAntigravity,
+  );
+  fireEvent.click(antigravity);
+  expect(open).not.toHaveBeenCalled();
+  expect(chosen).toEqual([]);
+});
