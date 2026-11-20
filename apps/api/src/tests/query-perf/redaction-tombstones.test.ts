@@ -75,7 +75,7 @@ describe.skipIf(!enabled)("redaction tombstone read budget (postgres)", () => {
           }
           const [size, double] = measurements;
           if (size === undefined || double === undefined) {
-            return panic("Missing redaction measurements");
+            panic("Missing redaction measurements");
           }
           expect(scaleViolations({ size, double })).toEqual([]);
         },

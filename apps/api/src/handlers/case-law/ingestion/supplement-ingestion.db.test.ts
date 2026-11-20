@@ -1572,7 +1572,7 @@ describe("the reasons' stored payload", () => {
     expect(item.id).toBe(priorRetryId);
     expect(item.attempts).toBe(priorAttempts + 1);
     if (item.payload.type !== "pending" || item.payload.operation !== "erase") {
-      return panic("The accepted erasure must retain its evidence");
+      panic("The accepted erasure must retain its evidence");
     }
     let withdrawals = 0;
     const resume = async () =>
