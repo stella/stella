@@ -9,6 +9,7 @@ type TooltipTriggerOptions = {
   trigger: React.ReactElement;
   tooltip: React.ReactNode;
   keepTriggerMounted?: boolean;
+  popupDescriptionId?: string | undefined;
 };
 
 /**
@@ -20,6 +21,7 @@ const renderTooltipTrigger = ({
   trigger,
   tooltip,
   keepTriggerMounted = false,
+  popupDescriptionId,
 }: TooltipTriggerOptions) => {
   const hasContent = hasTooltipContent(tooltip);
   // Entering a disabled state must leave the focused DOM button in place.
@@ -30,7 +32,11 @@ const renderTooltipTrigger = ({
   return (
     <Tooltip disabled={!hasContent}>
       <TooltipTrigger render={trigger} />
-      {hasContent && <TooltipPopup>{tooltip}</TooltipPopup>}
+      {hasContent && (
+        <TooltipPopup descriptionId={popupDescriptionId}>
+          {tooltip}
+        </TooltipPopup>
+      )}
     </Tooltip>
   );
 };

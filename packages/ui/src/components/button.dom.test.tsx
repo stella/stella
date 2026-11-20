@@ -113,3 +113,72 @@ test("focus stays on a button as its disabled reason appears and clears", () => 
     expect(button.getAttribute("aria-disabled")).toBe(disabled ? "true" : null);
   }
 });
+
+test("a disabled reason composes with descriptions without remounting the button", () => {
+  const action = (
+    disabled: boolean,
+    rich: boolean,
+    renderHelp = "render-help",
+  ) => (
+    <>
+      <span id="button-help">This changes your account.</span>
+      <span id="render-help">Only on this device.</span>
+      <span id="different-help">Use the managed account.</span>
+      <Button
+        aria-describedby="button-help"
+        disabled={disabled}
+        disabledReason={
+          rich ? (
+            <span id="formatted-reason">
+              Wait for <strong>verification</strong>
+            </span>
+          ) : (
+            "Saving changes."
+          )
+        }
+        render={<button type="button" aria-describedby={renderHelp} />}
+      >
+        Save
+      </Button>
+    </>
+  );
+  const view = render(action(false, false));
+  const button = view.getByRole("button", { name: "Save" });
+  button.focus();
+
+  view.rerender(action(true, false));
+  expect(
+    view.getByRole("button", {
+      name: "Save",
+      description:
+        "This changes your account. Only on this device. Saving changes.",
+    }),
+  ).toBe(button);
+  expect(document.activeElement).toBe(button);
+
+  view.rerender(action(true, true));
+  expect(
+    view.getByRole("button", {
+      name: "Save",
+      description:
+        "This changes your account. Only on this device. Wait for verification",
+    }),
+  ).toBe(button);
+  expect(document.querySelectorAll("#formatted-reason")).toHaveLength(1);
+  expect(document.activeElement).toBe(button);
+
+  view.rerender(action(true, true, "different-help"));
+  expect(
+    view.getByRole("button", {
+      name: "Save",
+      description:
+        "This changes your account. Use the managed account. Wait for verification",
+    }),
+  ).toBe(button);
+  expect(document.activeElement).toBe(button);
+
+  view.rerender(action(false, true, "different-help"));
+  expect(button.getAttribute("aria-describedby")).toBe("different-help");
+  expect(document.querySelector("#formatted-reason")).toBeNull();
+  expect(document.activeElement).toBe(button);
+});

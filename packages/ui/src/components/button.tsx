@@ -5,6 +5,8 @@ import {
   Fragment,
   isValidElement,
   type ReactNode,
+  useCallback,
+  useId,
 } from "react";
 
 import { mergeProps } from "@base-ui/react/merge-props";
@@ -19,6 +21,7 @@ import {
   resolveButtonDisposition,
 } from "../lib/button-disposition";
 import { rendersNothing } from "../lib/renders-nothing";
+import { hasTooltipContent } from "../lib/tooltip-content";
 import { cn } from "../lib/utils";
 import {
   BUTTON_BASE_CLASS,
@@ -289,7 +292,62 @@ type ButtonProps = Omit<ButtonContract, "children" | "disabled"> & {
   "data-accessible-disabled"?: "";
 } & useRender.ComponentProps<"button">;
 
-function Button(buttonProps: ButtonProps) {
+type ButtonDescriptionOptions = {
+  disabled: ButtonProps["disabled"];
+  disabledReason: ButtonProps["disabledReason"];
+  describedBy: ButtonProps["aria-describedby"];
+  render: ButtonProps["render"];
+};
+
+const useButtonDescription = ({
+  disabled,
+  disabledReason,
+  describedBy,
+  render,
+}: ButtonDescriptionOptions) => {
+  const id = useId();
+  const hasReason = disabled === true && hasTooltipContent(disabledReason);
+  const plainReason =
+    typeof disabledReason === "string" || typeof disabledReason === "number";
+  // Base UI merges an explicit render element's attributes last. Read the
+  // final DOM attribute so both descriptions survive that merge.
+  const ref = useCallback(
+    (button: HTMLElement | null) => {
+      if (!button || !hasReason || render === undefined) {
+        return;
+      }
+      const previous = button.getAttribute("aria-describedby");
+      const merged = [
+        ...new Set(
+          `${describedBy ?? ""} ${previous ?? ""} ${id}`.trim().split(/\s+/u),
+        ),
+      ].join(" ");
+      button.setAttribute("aria-describedby", merged);
+      return () => {
+        if (button.getAttribute("aria-describedby") !== merged) {
+          return;
+        }
+        if (previous === null) {
+          button.removeAttribute("aria-describedby");
+        } else {
+          button.setAttribute("aria-describedby", previous);
+        }
+      };
+    },
+    [describedBy, hasReason, id, render],
+  );
+  return {
+    ref: hasReason && render !== undefined ? ref : null,
+    describedBy:
+      hasReason && render === undefined
+        ? [describedBy, id].filter(Boolean).join(" ")
+        : describedBy,
+    popupId: hasReason && !plainReason ? id : undefined,
+    text: hasReason && plainReason ? { id, value: disabledReason } : undefined,
+  };
+};
+
+const Button = (buttonProps: ButtonProps) => {
   const {
     className,
     variant: variantProp,
@@ -320,6 +378,12 @@ function Button(buttonProps: ButtonProps) {
     disabled === true && disabledReason !== undefined
       ? disabledReason
       : (tooltip ?? implicitTooltip(size, props["aria-label"] ?? props.title));
+  const description = useButtonDescription({
+    disabled,
+    disabledReason,
+    describedBy: props["aria-describedby"],
+    render,
+  });
   const disposition = resolveButtonDisposition({
     disabled,
     loading,
@@ -329,6 +393,10 @@ function Button(buttonProps: ButtonProps) {
     disposition === BUTTON_DISPOSITION.accessibleDisabled;
   const isActivationPreservingDisabled = accessibleDisabled !== undefined;
 
+  const buttonPropsWithDescription = {
+    ...props,
+    "aria-describedby": description.describedBy,
+  };
   const defaultProps = {
     children: buttonContent({
       icon,
@@ -368,24 +436,36 @@ function Button(buttonProps: ButtonProps) {
   // button would still click, still submit its form, and still fire onKeyDown.
   const button = useRender({
     defaultTagName: "button",
+    ref: description.ref,
     props: isAccessibleDisabled
-      ? mergeProps<"button">(defaultProps, props, {
+      ? mergeProps<"button">(defaultProps, buttonPropsWithDescription, {
           onClick: blockDisabledActivation,
           onKeyDown: blockDisabledKeyActivation,
           onKeyUp: blockDisabledKeyActivation,
           onMouseDown: blockDisabledActivation,
           onPointerDown: blockDisabledActivation,
         })
-      : mergeProps<"button">(defaultProps, props),
+      : mergeProps<"button">(defaultProps, buttonPropsWithDescription),
     render,
   });
 
-  return renderTooltipTrigger({
+  const trigger = renderTooltipTrigger({
     tooltip: tooltipContent,
     trigger: button,
     keepTriggerMounted: Object.hasOwn(buttonProps, "disabledReason"),
+    popupDescriptionId: description.popupId,
   });
-}
+  return (
+    <>
+      {trigger}
+      {description.text && (
+        <span hidden id={description.text.id}>
+          {description.text.value}
+        </span>
+      )}
+    </>
+  );
+};
 
 /**
  * What the button shows. Loading never changes its width: with an `icon`,

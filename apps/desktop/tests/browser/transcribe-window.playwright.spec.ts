@@ -244,6 +244,9 @@ test("the empty transcript explains why its copy and save menus cannot open", as
     await expect(triggers).toHaveCount(2);
     for (const trigger of await triggers.all()) {
       await expect(trigger).toBeDisabled();
+      await expect(trigger).toHaveAccessibleDescription(
+        t.progress.transcribing,
+      );
       await trigger.focus();
       await expect(trigger).toBeFocused();
       await trigger.hover();
