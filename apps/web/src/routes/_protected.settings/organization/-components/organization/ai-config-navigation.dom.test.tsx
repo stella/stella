@@ -483,10 +483,13 @@ const settingsSectionQueries = (title: string) => {
   const heading =
     screen.queryByRole("heading", { name: title }) ??
     screen.getByRole("checkbox", { name: title });
+  // A settings section's heading sits in its header, above the surface its
+  // controls are on, so the section is the group around both.
   const section =
     heading.tagName === "H3"
       ? heading.parentElement?.parentElement
       : (heading.closest('[data-slot="settings-row"]') ??
+        heading.closest('[data-slot="list-group"]') ??
         heading.parentElement);
   if (!section) {
     panic("Settings section must contain its heading");
