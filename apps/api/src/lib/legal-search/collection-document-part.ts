@@ -1,5 +1,5 @@
 // parser-output-unchanged: Collection part validation and immutable payload encoding retain source extraction and document AST contents.
-import { Result, TaggedError } from "better-result";
+import { panic, Result, TaggedError } from "better-result";
 import * as v from "valibot";
 
 import { documentAstSchema, hasUsableAst } from "@stll/legal-ast/document-ast";
@@ -119,6 +119,9 @@ export const validateCollectionDocumentPart = (
         );
       }
       return Result.ok(parsed.output);
+    default:
+      parsed.output satisfies never;
+      return panic("Unhandled collection document extent");
   }
 };
 

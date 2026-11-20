@@ -97,8 +97,8 @@ test("erasure clears collection bodies and identity evidence and replays without
     sourceHash: "fixture-observation",
   });
   const scopedDb = createIngestionRoleScopedDb(db);
-  const erase = () =>
-    scopedDb(async (tx) => {
+  const erase = async () =>
+    await scopedDb(async (tx) => {
       await lockCaseLawDecisionRows({ tx, decisionIds: [decisionId] });
       await parkAttachmentsOfErasedDecisionTx(tx, decisionId);
     });
