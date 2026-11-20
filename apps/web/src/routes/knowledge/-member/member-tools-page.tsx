@@ -102,7 +102,13 @@ export function MemberToolsPage({
   return (
     <ScrollArea axis="vertical" className="flex-1">
       <ToolsPageShell>
-        <Suspense fallback={<ToolsCatalogueSkeleton />}>
+        <Suspense
+          fallback={
+            <ToolsCatalogueSkeleton
+              addAction={canCreateSkills || canManageCustomTools}
+            />
+          }
+        >
           <LazyCatalogueBrowser
             canCreateSkills={canCreateSkills}
             canManageCustomTools={canManageCustomTools}

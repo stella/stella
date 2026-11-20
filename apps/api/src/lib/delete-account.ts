@@ -25,6 +25,7 @@ import {
   deletePersonalBillingRates,
   deletePersonalRecords,
   deletePersonalWorkspaceViewTemplatesAndAgentSkills,
+  deletePrivateLegalReaderAnswers,
   deletePushDevices,
   deleteSearchHistory,
   deleteUserFiles,
@@ -376,6 +377,7 @@ export const verifyAndDeleteUser = async (
             currentUserId,
             retainedWorkspaceIds,
           });
+          await deletePrivateLegalReaderAnswers(tx, currentUserId);
           await deletePersonalAiMemories({
             tx,
             currentUserId,

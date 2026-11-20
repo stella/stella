@@ -1,7 +1,10 @@
 import { panic } from "better-result";
 import { crc32, deflateSync } from "node:zlib";
 
+import type { CountryCode } from "@stll/country-codes";
+
 import { brand } from "../emails/_shared";
+import { COUNTRY_FEATURES, type FeatureSelector } from "./country-features";
 
 /**
  * A small regional map with a dot on one point, rendered to PNG bytes for an
@@ -15,6 +18,21 @@ import { brand } from "../emails/_shared";
 
 export type GeoPoint = { latitude: number; longitude: number };
 
+/** The point to mark and the country the edge placed it in. */
+export type MapPlace = { point: GeoPoint; countryCode: CountryCode };
+
+/**
+ * What the map did with the country. `unresolved` means the country table
+ * names a feature the base map lacks: a defect for the caller to report, while
+ * the map still renders, unshaded.
+ */
+export type CountryHighlight =
+  | { type: "shaded" }
+  | { type: "notDrawnAtThisScale" }
+  | { type: "unresolved"; countryCode: CountryCode };
+
+export type LocationMap = { png: Uint8Array; highlight: CountryHighlight };
+
 /** CSS pixels the email lays the map out at; the image carries twice as many. */
 export const LOCATION_MAP_DISPLAY_SIZE = { width: 472, height: 236 } as const;
 
@@ -26,12 +44,15 @@ export const LOCATION_MAP_CONTENT_TYPE = "image/png";
  */
 const PALETTE_COLORS = 32;
 
-export const renderLocationMap = async (point: GeoPoint): Promise<Uint8Array> =>
-  await new Bun.Image(
-    encodePng(rasterizeLocationMap(point, await getBaseMap())),
-  )
+export const renderLocationMap = async (
+  place: MapPlace,
+): Promise<LocationMap> => {
+  const { raster, highlight } = rasterizeLocationMap(place, await getBaseMap());
+  const png = await new Bun.Image(encodePng(raster))
     .png({ palette: true, colors: PALETTE_COLORS, compressionLevel: 9 })
     .bytes();
+  return { png, highlight };
+};
 
 const PIXEL_RATIO = 2;
 const WIDTH = LOCATION_MAP_DISPLAY_SIZE.width * PIXEL_RATIO;
@@ -79,26 +100,34 @@ type Polygon = {
   north: number;
 };
 
-type BaseMap = { countries: Polygon[][] };
+/** One Natural Earth feature; `id` is its ISO 3166-1 numeric code, if any. */
+type BaseMapCountry = { id: string | null; name: string; polygons: Polygon[] };
+
+type BaseMap = { countries: BaseMapCountry[] };
 
 export type Raster = { width: number; height: number; rgb: Uint8Array };
 
+type RasterizedLocationMap = { raster: Raster; highlight: CountryHighlight };
+
 /**
- * The pixels of the map centred on `point`. Exported so tests can read pixel
- * colours without decoding the PNG.
+ * The pixels of the map centred on the place's point, with its country
+ * shaded. Exported so tests can read pixel colours without decoding the PNG.
  */
 export const rasterizeLocationMap = (
-  point: GeoPoint,
+  { point, countryCode }: MapPlace,
   baseMap: BaseMap,
-): Raster => {
+): RasterizedLocationMap => {
   const view = createView(point);
   const subWidth = WIDTH * SUPERSAMPLE;
   const subHeight = HEIGHT * SUPERSAMPLE;
-  // 0 is water; country i is drawn as i + 1.
+  // 0 is water; feature i is drawn as i + 1.
   const ids = new Uint16Array(subWidth * subHeight);
-  const home = homeCountryIndex(point, baseMap);
+  const home = homeFeatures(countryCode, baseMap);
+  const homeIds = new Set(
+    home.type === "shaded" ? home.indexes.map((index) => index + 1) : [],
+  );
 
-  for (const [index, polygons] of baseMap.countries.entries()) {
+  for (const [index, { polygons }] of baseMap.countries.entries()) {
     for (const polygon of polygons) {
       for (const offset of view.longitudeOffsets(polygon)) {
         fillPolygon({
@@ -124,7 +153,7 @@ export const rasterizeLocationMap = (
           const index = row + sx;
           const color = subsampleColor({
             id: ids[index] ?? 0,
-            homeId: home + 1,
+            homeIds,
             onBorder: border[index] === 1,
           });
           r += color[0];
@@ -140,23 +169,86 @@ export const rasterizeLocationMap = (
   }
 
   drawDot(rgb);
-  return { width: WIDTH, height: HEIGHT, rgb };
+  return {
+    raster: { width: WIDTH, height: HEIGHT, rgb },
+    highlight: highlightOf(home, countryCode),
+  };
+};
+
+type HomeFeatures =
+  | { type: "shaded"; indexes: number[] }
+  | { type: "notDrawnAtThisScale" }
+  | { type: "unresolved" };
+
+const highlightOf = (
+  home: HomeFeatures,
+  countryCode: CountryCode,
+): CountryHighlight => {
+  switch (home.type) {
+    case "shaded":
+      return { type: "shaded" };
+    case "notDrawnAtThisScale":
+      return { type: "notDrawnAtThisScale" };
+    case "unresolved":
+      return { type: "unresolved", countryCode };
+    default:
+      home satisfies never;
+      return panic("Unknown home feature state");
+  }
+};
+
+/** The base map features that draw the country, by its table entry. */
+const homeFeatures = (
+  countryCode: CountryCode,
+  { countries }: BaseMap,
+): HomeFeatures => {
+  const entry = COUNTRY_FEATURES[countryCode];
+  if (entry.type === "notDrawn") {
+    return { type: "notDrawnAtThisScale" };
+  }
+  const indexes: number[] = [];
+  for (const selector of entry.features) {
+    const matches = countries.flatMap((country, index) =>
+      selectsFeature(selector, country) ? [index] : [],
+    );
+    if (matches.length === 0) {
+      return { type: "unresolved" };
+    }
+    indexes.push(...matches);
+  }
+  return { type: "shaded", indexes };
+};
+
+/** Whether a table selector names this base map feature. */
+export const selectsFeature = (
+  selector: FeatureSelector,
+  { id, name }: Pick<BaseMapCountry, "id" | "name">,
+): boolean => {
+  switch (selector.by) {
+    case "isoNumeric":
+      return id === selector.id;
+    case "name":
+      return id === null && name === selector.name;
+    default:
+      selector satisfies never;
+      return panic("Unknown feature selector");
+  }
 };
 
 type SubsampleColorOptions = {
   id: number;
-  homeId: number;
+  homeIds: ReadonlySet<number>;
   onBorder: boolean;
 };
 
-const subsampleColor = ({ id, homeId, onBorder }: SubsampleColorOptions) => {
+const subsampleColor = ({ id, homeIds, onBorder }: SubsampleColorOptions) => {
   if (onBorder) {
     return MAP_COLORS.border;
   }
   if (id === 0) {
     return MAP_COLORS.water;
   }
-  return id === homeId ? MAP_COLORS.home : MAP_COLORS.land;
+  return homeIds.has(id) ? MAP_COLORS.home : MAP_COLORS.land;
 };
 
 type View = {
@@ -353,51 +445,6 @@ const blend = (rgb: Uint8Array, offset: number, color: Rgb, alpha: number) => {
   }
 };
 
-/** Index of the country whose polygons contain the point, or -1 (at sea). */
-const homeCountryIndex = (
-  { latitude, longitude }: GeoPoint,
-  { countries }: BaseMap,
-): number =>
-  countries.findIndex((polygons) =>
-    polygons.some((polygon) =>
-      [-360, 0, 360].some((offset) =>
-        containsPoint(polygon, longitude - offset, latitude),
-      ),
-    ),
-  );
-
-const containsPoint = (
-  polygon: Polygon,
-  longitude: number,
-  latitude: number,
-): boolean => {
-  if (
-    longitude < polygon.west ||
-    longitude > polygon.east ||
-    latitude < polygon.south ||
-    latitude > polygon.north
-  ) {
-    return false;
-  }
-  let inside = false;
-  for (const ring of polygon.rings) {
-    const count = ring.length / 2;
-    for (let i = 0, j = count - 1; i < count; j = i++) {
-      const xi = ring[i * 2] ?? 0;
-      const yi = ring[i * 2 + 1] ?? 0;
-      const xj = ring[j * 2] ?? 0;
-      const yj = ring[j * 2 + 1] ?? 0;
-      if (
-        yi > latitude !== yj > latitude &&
-        longitude < ((xj - xi) * (latitude - yi)) / (yj - yi) + xi
-      ) {
-        inside = !inside;
-      }
-    }
-  }
-  return inside;
-};
-
 let baseMapPromise: Promise<BaseMap> | undefined;
 
 /** Decoded once, on the first map rendered, then kept. */
@@ -411,7 +458,15 @@ export const getBaseMap = async (): Promise<BaseMap> => {
 type Topology = {
   transform: { scale: number[]; translate: number[] };
   arcs: number[][][];
-  objects: { countries: { geometries: { arcs: unknown }[] } };
+  objects: {
+    countries: {
+      geometries: {
+        id?: string;
+        arcs: unknown;
+        properties: { name: string };
+      }[];
+    };
+  };
 };
 
 /**
@@ -485,8 +540,12 @@ const decodeTopology = ({
   };
 
   return {
-    countries: objects.countries.geometries.map(({ arcs: geometryArcs }) =>
-      polygonArcs(geometryArcs).map(polygon),
+    countries: objects.countries.geometries.map(
+      ({ id, arcs: geometryArcs, properties: { name } }) => ({
+        id: id ?? null,
+        name,
+        polygons: polygonArcs(geometryArcs).map(polygon),
+      }),
     ),
   };
 };

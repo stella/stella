@@ -334,7 +334,7 @@ describe("persisted corpus JSON validation", () => {
     expect(block?.type === "paragraph" ? block.role : null).toBe("unknown");
   });
 
-  test("serves a stored AST around a block kind this reader cannot render", () => {
+  test("serves a stored AST with a block kind this reader cannot render as an unread paragraph", () => {
     const parsed = parsePersistedCorpusAst({
       version: 1,
       blocks: [
@@ -350,13 +350,23 @@ describe("persisted corpus JSON validation", () => {
       ],
     });
     expect(parsed).not.toBeNull();
-    // The unrenderable block is gone; the paragraph beside it keeps every
-    // character the unknown inline carried.
-    expect(parsed?.blocks.map((block) => block.id)).toEqual(["p1"]);
-    expect(parsed?.blocks.at(0)?.plainText).toBe("NS");
+    // The block the reader has no shape for keeps its text and identity; the
+    // paragraph beside it keeps every character the unknown inline carried.
+    expect(
+      parsed !== null && "blocks" in parsed
+        ? parsed.blocks.map((block) => [
+            block.id,
+            block.type === "paragraph" ? (block.storedType ?? null) : null,
+            block.plainText,
+          ])
+        : null,
+    ).toEqual([
+      ["s1", "sidebar", "aside"],
+      ["p1", null, "NS"],
+    ]);
   });
 
-  test("a read of late head matter logs the row and captures no exception", () => {
+  test("a read of late head matter is one degraded record and captures no exception", () => {
     const analytics = installRecordingAnalytics();
     const logs = installRecordingLogger();
     try {
@@ -380,14 +390,17 @@ describe("persisted corpus JSON validation", () => {
       expect(analytics.exceptions()).toEqual([]);
       expect(
         logs.records.filter(
-          ({ message }) =>
-            message === "case_law.decision.stored_ast_head_matter_order",
+          ({ message }) => message === "case_law.stored_ast_degraded",
         ),
       ).toMatchObject([
         {
+          severityText: "WARN",
           attributes: {
             documentId: "decision-stored-before-order-rule",
-            lateBlockCount: 1,
+            outcome: "degraded",
+            "measure.astHeadMatterOrder": 1,
+            "failure.grade": "anticipated",
+            "failure.reason": "stored_ast_degraded",
           },
         },
       ]);
@@ -397,15 +410,37 @@ describe("persisted corpus JSON validation", () => {
     }
   });
 
-  test("a read of undeclared vocabulary is still captured", () => {
+  test("a read of undeclared vocabulary is a graded record, not a captured exception", () => {
     const analytics = installRecordingAnalytics();
+    const logs = installRecordingLogger();
     try {
       parsePersistedCorpusAst({
         version: 1,
         blocks: [{ id: "s1", anchorId: "s-1", type: "sidebar", body: "aside" }],
       });
-      expect(analytics.exceptions()).toHaveLength(1);
+      expect(analytics.exceptions()).toEqual([]);
+      const [record, ...rest] = logs.records.filter(
+        ({ message }) => message === "case_law.stored_ast_degraded",
+      );
+      expect(rest).toEqual([]);
+      expect(record?.attributes).toMatchObject({
+        outcome: "degraded",
+        vocabulary: "block-type:sidebar",
+        "measure.astBlockType": 1,
+        "error.class": "StoredAstDegradedError",
+      });
+      // A frame of this build, so the shadow aggregate never reads it as
+      // a degraded fingerprint.
+      expect(record?.attributes?.["error.frame"]).toEqual(
+        expect.stringContaining("stored-ast-outcome.ts:"),
+      );
+      expect(record?.attributes).not.toHaveProperty(
+        "error.fingerprint_degraded",
+      );
+      // The stored text never leaves in the record.
+      expect(JSON.stringify(record)).not.toContain("aside");
     } finally {
+      logs.restore();
       analytics.restore();
     }
   });

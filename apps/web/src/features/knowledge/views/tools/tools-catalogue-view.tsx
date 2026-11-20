@@ -22,16 +22,17 @@ import {
 import { Popover, PopoverPopup, PopoverTrigger } from "@stll/ui/popover";
 import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
+import {
+  ResponsiveActionToolbar,
+  ResponsiveActionToolbarItem,
+} from "@stll/workspace-ui/responsive-action-toolbar";
 
 import {
   nativeToolDescriptionKey,
   nativeToolLabelKey,
 } from "@/components/catalogue/native-tool-label";
 import { McpIcon } from "@/components/mcp-icon";
-import {
-  ResponsiveActionToolbar,
-  ResponsiveActionToolbarItem,
-} from "@/components/responsive-action-toolbar";
+import { TOOLS_CATALOGUE_KIND_LABEL_KEYS } from "@/features/knowledge/views/tools/tools-catalogue-kinds.logic";
 import { filterToolsCatalogueEntries } from "@/features/knowledge/views/tools/tools-catalogue-search.logic";
 import type {
   KnowledgeTool,
@@ -45,11 +46,10 @@ const FILTERS = ["all", "skill", "mcp"] as const;
 
 export type ToolsCatalogueKind = (typeof FILTERS)[number];
 
-const KIND_LABEL_KEY = {
-  all: "common.all",
-  skill: "catalogue.filter.skills",
-  mcp: "catalogue.filter.mcps",
-} as const satisfies Record<ToolsCatalogueKind, TranslationKey>;
+const KIND_LABEL_KEY = TOOLS_CATALOGUE_KIND_LABEL_KEYS satisfies Record<
+  ToolsCatalogueKind,
+  TranslationKey
+>;
 
 type ToolsCatalogueViewProps<TTool extends KnowledgeTool> = {
   source: ToolsSource<TTool>;

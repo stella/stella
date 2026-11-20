@@ -1,21 +1,37 @@
 import { describe, expect, test } from "bun:test";
 
 import {
-  type GeoPoint,
   getBaseMap,
   LOCATION_MAP_DISPLAY_SIZE,
   MAP_COLORS,
+  type MapPlace,
   type Raster,
   rasterizeLocationMap,
   renderLocationMap,
 } from "./location-map";
 
-const PRAGUE = { latitude: 50.1, longitude: 14.4 } as const;
-const MASERU = { latitude: -29.3, longitude: 27.5 } as const;
-const MID_ATLANTIC = { latitude: 30, longitude: -40 } as const;
+const PRAGUE = {
+  point: { latitude: 50.1, longitude: 14.4 },
+  countryCode: "CZ",
+} as const satisfies MapPlace;
+const MASERU = {
+  point: { latitude: -29.3, longitude: 27.5 },
+  countryCode: "LS",
+} as const satisfies MapPlace;
+// Where the edge places New York City; at 1:50m the point is in the harbour,
+// inside no country's polygon.
+const NEW_YORK = {
+  point: { latitude: 40.7, longitude: -74 },
+  countryCode: "US",
+} as const satisfies MapPlace;
+// Tuvalu is too small to appear at 1:50m.
+const FUNAFUTI = {
+  point: { latitude: -8.5, longitude: 179.2 },
+  countryCode: "TV",
+} as const satisfies MapPlace;
 
-const rasterize = async (point: GeoPoint) =>
-  rasterizeLocationMap(point, await getBaseMap());
+const rasterize = async (place: MapPlace) =>
+  rasterizeLocationMap(place, await getBaseMap());
 
 /** The pixel at an offset, in image pixels, from the map's centre. */
 const pixelFromCenter = (
@@ -43,7 +59,7 @@ const countPixels = ({ rgb }: Raster, color: readonly number[]) => {
 
 describe("location map", () => {
   test("encodes a PNG at twice the display size, small enough to attach", async () => {
-    const png = await renderLocationMap(PRAGUE);
+    const { png } = await renderLocationMap(PRAGUE);
 
     const metadata = await new Bun.Image(png).metadata();
     expect(metadata).toEqual({
@@ -54,15 +70,16 @@ describe("location map", () => {
     expect(png.length).toBeLessThan(24_000);
   });
 
-  test("the same point renders the same bytes", async () => {
+  test("the same place renders the same bytes", async () => {
     expect(await renderLocationMap(PRAGUE)).toEqual(
       await renderLocationMap(PRAGUE),
     );
   });
 
   test("the dot marks the centre and the country around it is set apart", async () => {
-    const raster = await rasterize(PRAGUE);
+    const { raster, highlight } = await rasterize(PRAGUE);
 
+    expect(highlight).toEqual({ type: "shaded" });
     expect(pixelFromCenter(raster, 0, 0)).toEqual([...MAP_COLORS.dot]);
     // Moravia, east of the dot, is in the same country.
     expect(pixelFromCenter(raster, 100, 20)).toEqual([...MAP_COLORS.home]);
@@ -73,7 +90,7 @@ describe("location map", () => {
   });
 
   test("an enclave's surrounding country keeps its hole", async () => {
-    const raster = await rasterize(MASERU);
+    const { raster } = await rasterize(MASERU);
 
     expect(pixelFromCenter(raster, 0, 0)).toEqual([...MAP_COLORS.dot]);
     // South Africa surrounds Lesotho but is not where the dot is.
@@ -81,19 +98,42 @@ describe("location map", () => {
     expect(countPixels(raster, MAP_COLORS.home)).toBeGreaterThan(1000);
   });
 
-  test("a point at sea highlights no country", async () => {
-    const raster = await rasterize(MID_ATLANTIC);
+  test("a coastal point that falls in the water still shades its country", async () => {
+    const { raster, highlight } = await rasterize(NEW_YORK);
 
+    expect(highlight).toEqual({ type: "shaded" });
+    expect(pixelFromCenter(raster, 0, 0)).toEqual([...MAP_COLORS.dot]);
+    // Pennsylvania, west of the dot.
+    expect(pixelFromCenter(raster, -250, 0)).toEqual([...MAP_COLORS.home]);
+    // The Atlantic, south-east.
+    expect(pixelFromCenter(raster, 300, 200)).toEqual([...MAP_COLORS.water]);
+  });
+
+  test("a country too small for the scale shades nothing", async () => {
+    const { raster, highlight } = await rasterize(FUNAFUTI);
+
+    expect(highlight).toEqual({ type: "notDrawnAtThisScale" });
     expect(countPixels(raster, MAP_COLORS.home)).toBe(0);
-    expect(pixelFromCenter(raster, -400, -200)).toEqual([...MAP_COLORS.water]);
+  });
+
+  test("a country the base map lacks is reported and left unshaded", async () => {
+    const { countries } = await getBaseMap();
+    const { raster, highlight } = rasterizeLocationMap(PRAGUE, {
+      countries: countries.filter(({ id }) => id !== "203"),
+    });
+
+    expect(highlight).toEqual({ type: "unresolved", countryCode: "CZ" });
+    expect(countPixels(raster, MAP_COLORS.home)).toBe(0);
   });
 
   test("islands cut by the antimeridian stay whole, with no edge across the map", async () => {
     // Fiji's islands straddle 180°; a ring left split there would join its
     // two halves with an edge spanning the whole view.
-    const { width, height, rgb } = await rasterize({
-      latitude: -16.6,
-      longitude: 179.9,
+    const {
+      raster: { width, height, rgb },
+    } = await rasterize({
+      point: { latitude: -16.6, longitude: 179.9 },
+      countryCode: "FJ",
     });
     const flatFills = [MAP_COLORS.water, MAP_COLORS.land, MAP_COLORS.home];
     let mostEdgePixelsInARow = 0;
@@ -117,16 +157,22 @@ describe("location map", () => {
   });
 
   test.each([
-    { latitude: -17.8, longitude: 178.4 },
-    { latitude: 65.5, longitude: -172 },
-    { latitude: -41.3, longitude: 174.8 },
-  ])(
+    { latitude: -17.8, longitude: 178.4, countryCode: "FJ" },
+    { latitude: 65.5, longitude: -172, countryCode: "RU" },
+    { latitude: -41.3, longitude: 174.8, countryCode: "NZ" },
+  ] as const)(
     "a view across the antimeridian is the same a whole turn away: %p",
-    async ({ latitude, longitude }) => {
-      const raster = await rasterize({ latitude, longitude });
-      const turned = await rasterize({
-        latitude,
-        longitude: longitude > 0 ? longitude - 360 : longitude + 360,
+    async ({ latitude, longitude, countryCode }) => {
+      const { raster } = await rasterize({
+        point: { latitude, longitude },
+        countryCode,
+      });
+      const { raster: turned } = await rasterize({
+        point: {
+          latitude,
+          longitude: longitude > 0 ? longitude - 360 : longitude + 360,
+        },
+        countryCode,
       });
 
       expect(
