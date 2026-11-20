@@ -25,6 +25,7 @@ import {
   DefaultNotFoundComponent,
 } from "@/components/route-components";
 import { RouteProviderScopeBoundary } from "@/components/route-provider-scope/route-provider-scope";
+import { StrayFileDropGuard } from "@/components/stray-file-drop-guard";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { ClientDocumentPresentationBoot } from "@/i18n/client-document-presentation-boot";
 import { loadDocumentPresentation } from "@/i18n/document-presentation";
@@ -281,6 +282,7 @@ function RootApp() {
         <AppFrameHost>
           <Outlet />
         </AppFrameHost>
+        <StrayFileDropGuard />
         {DevRoot ? (
           <ClientOnly>
             <Suspense fallback={null}>
