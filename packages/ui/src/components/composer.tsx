@@ -111,7 +111,7 @@ export const ComposerStatusRow = ({
   return (
     <div className={cn(COMPOSER_STATUS_ROW_CLASS, className)}>
       {start}
-      {end !== undefined && <div className="ms-auto">{end}</div>}
+      {end !== undefined && <div className="ms-auto min-w-0">{end}</div>}
     </div>
   );
 };

@@ -44,6 +44,13 @@ import {
 import { useDesktopLaunch } from "@/features/chat/use-desktop-launch";
 import { queryView } from "@/lib/query-view.logic";
 
+/**
+ * A button never shrinks by default, so a chip's truncating label could not
+ * take effect and a narrow status row overflowed its column instead. The
+ * chip's icon keeps its size (the button exempts its svg from shrinking).
+ */
+const STATUS_ROW_CHIP_SHRINK_CLASS = "min-w-0 shrink";
+
 type ChatModelSelectorProps = {
   disabled?: boolean;
   models: ComposerModelsMenuProps;
@@ -214,6 +221,10 @@ const ChatRunOnChip = ({
         render={
           <Button
             aria-label={name}
+            // The chip gives way before the row overflows: it shrinks to its
+            // truncated label, and in a narrow status row (a side pane) to its
+            // icon alone. The aria-label and tooltip still name the place.
+            className={STATUS_ROW_CHIP_SHRINK_CLASS}
             data-composer-chip="run-on"
             // Until the stored choice is known, nothing can be picked on it.
             disabled={disabled}
@@ -224,7 +235,10 @@ const ChatRunOnChip = ({
         tooltip={name}
       >
         {view.icon}
-        <TruncatedText className="max-w-44" render={<BidiText as="span" />}>
+        <TruncatedText
+          className="max-w-44 @max-xl/composer-status:hidden"
+          render={<BidiText as="span" />}
+        >
           {view.label}
         </TruncatedText>
       </MenuTrigger>
@@ -288,6 +302,7 @@ export const ChatModelSelector = ({
             <Button
               aria-label={trigger.label}
               className={cn(
+                STATUS_ROW_CHIP_SHRINK_CLASS,
                 trigger.chosen
                   ? "bg-accent text-accent-foreground hover:text-accent-foreground gap-1.5"
                   : "text-muted-foreground hover:text-foreground gap-1.5",

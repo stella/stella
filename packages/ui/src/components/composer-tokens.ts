@@ -101,10 +101,15 @@ export const COMPOSER_PICKER_TRIGGER_CLASS =
  * The slim status row under a composer box (`ComposerStatusRow`), with a
  * middle slot: three columns whose sides share the remaining width, so the
  * middle stays centred. A loading view draws the row from the same class.
+ *
+ * Both rows are the `composer-status` container: the same row renders under
+ * the wide main chat and in a narrow side pane, so a control that compacts
+ * itself queries the row's width (`@max-xl/composer-status:`), not the
+ * viewport's.
  */
 export const COMPOSER_STATUS_ROW_CENTERED_CLASS =
-  "text-muted-foreground @container mt-1.5 grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 px-1 text-xs";
+  "text-muted-foreground @container/composer-status mt-1.5 grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 px-1 text-xs";
 
 /** The status row without a middle slot: a start cluster and an end slot. */
 export const COMPOSER_STATUS_ROW_CLASS =
-  "text-muted-foreground mt-1.5 flex items-center justify-between gap-2 px-1 text-xs";
+  "text-muted-foreground @container/composer-status mt-1.5 flex items-center justify-between gap-2 px-1 text-xs";
