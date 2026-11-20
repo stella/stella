@@ -610,7 +610,10 @@ mod tests {
     let bytes = docx(&transcript_blocks("Memo", [(0, "First.")])).unwrap();
     assert_eq!(&bytes[..2], b"PK");
     let archive = zip::ZipArchive::new(Cursor::new(bytes.as_slice())).unwrap();
-    let mut names = archive.file_names().collect::<Vec<_>>();
+    let mut names = archive
+      .file_names()
+      .map(|name| name.unwrap().into_owned())
+      .collect::<Vec<_>>();
     names.sort_unstable();
     assert_eq!(
       names,
