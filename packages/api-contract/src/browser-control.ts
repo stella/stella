@@ -758,6 +758,9 @@ export const browserControlResultPage = (
       };
     case "superseded":
       return { title: result.output.page.title, url: result.output.page.url };
+    // A search within a page read that page.
+    case "found":
+      return { title: result.output.found.title, url: result.output.found.url };
     case "error":
       return null;
     default:
