@@ -36,18 +36,27 @@ export const heldDecisionEcliIdentity = (
   if (value === undefined) {
     return null;
   }
-  const intent = parseDecisionQuery(value);
-  if (
-    intent.type !== "identifier" ||
-    intent.kind !== "ecli" ||
-    !isWholeEntryIdentifier(intent)
-  ) {
+  const spellings = ecliPublisherSpellings(country, value.trim());
+  // A publisher can print accents in a docket register whose ECLI uses ASCII.
+  let canonicalEcli: string | undefined;
+  for (const spelling of spellings) {
+    const intent = parseDecisionQuery(spelling);
+    if (
+      intent.type === "identifier" &&
+      intent.kind === "ecli" &&
+      isWholeEntryIdentifier(intent)
+    ) {
+      canonicalEcli = intent.value;
+      break;
+    }
+  }
+  if (canonicalEcli === undefined) {
     return null;
   }
   const primaryValues = [
     ...new Set([
-      value.trim(),
-      ...ecliPublisherSpellings(country, intent.value),
+      ...spellings,
+      ...ecliPublisherSpellings(country, canonicalEcli),
     ]),
   ];
   const keys = [
