@@ -5023,14 +5023,11 @@ jobs:
       - name: Startup gate base
         timeout-minutes: 5
         env:
-          BASE: ${{ needs.ci-plan.outputs.target_base_sha }}
+          BASE_SHA: ${{ needs.ci-plan.outputs.target_base_sha }}
         run: bash scripts/startup-gate-base.sh
 
       - name: Startup bundle gates
-        # Blocking: the initial chunks' gzip against the committed budget, the
-        # eager pending views, page code in the initial chunks, and pages a
-        # route loads outside its preloads (scripts/bundle-startup-gates.ts).
-        # Reads the build and its hidden sourcemaps; writes the job summary.
+        # Blocking: the startup graph's gates (scripts/bundle-startup-gates.ts).
         run: |
           bun scripts/bundle-baseline.ts --self-test
           bun --preload ./scripts/offline-network-preload.ts scripts/bundle-baseline.ts --check --base-dir "$STARTUP_GATE_BASE_DIR"

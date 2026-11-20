@@ -7,10 +7,10 @@
 # a file the base lacks is left out. With no base commit the directory stays
 # empty, and the gate measures from the tree's own total.
 #
-#   BASE=<commit> bash scripts/startup-gate-base.sh
+#   BASE_SHA=<commit> bash scripts/startup-gate-base.sh
 set -euo pipefail
 
-base="${BASE:-}"
+base="${BASE_SHA:-}"
 dir="${RUNNER_TEMP:-/tmp}/startup-gate-base"
 mkdir -p "$dir"
 if [[ -n "$base" && ! "$base" =~ ^0+$ ]]; then
