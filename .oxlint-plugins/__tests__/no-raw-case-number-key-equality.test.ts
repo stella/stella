@@ -41,9 +41,12 @@ test("rejects every spelling of a key column on either side", async () => {
     "sql`WHERE ${value} = ANY (${t.normalizedValue})`;",
     "ne(row.citationKey, other);",
     "notInArray(row.normalizedValue, keys);",
+    "sql`SELECT id, citation_key = ${key} AS matches FROM decisions`;",
+    "sql`WHERE coalesce(${fallback}, ${t.citationKey} = ${key})`;",
+    "sql`UPDATE c SET court = coalesce(a, b) WHERE x, citation_key = ${key}`;",
   ].join("\n");
   expect(await lintSingleRule(RULE, source)).toEqual([
-    1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
+    1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13,
   ]);
 });
 
@@ -56,6 +59,8 @@ test("accepts the owner's fragments, writes and other columns", async () => {
     "sql`UPDATE c SET citation_key = ${key}, normalized_identifier_value = ${value}`;",
     "sql`SET identifier_type = projected.type,\n normalized_identifier_value = projected.normalized_value`;",
     "sql`ON CONFLICT (decision_id) DO UPDATE SET citation_key = EXCLUDED.citation_key`;",
+    "sql`UPDATE c SET court = coalesce(${a}, ${b}), citation_key = ${key}`;",
+    "sql`UPDATE c SET ${t.court} = ${court},\n  ${t.normalizedValue} = ${value}`;",
     "sql`UPDATE ${t} SET ${t.citationKey} = ${key}`;",
     "sql`UPDATE ${t} SET ${t.court} = ${court}, ${t.citationKey} = ${key}`;",
     "sql`WHERE ${t.citationKey} IS NOT NULL AND ${t.citationKey} <> ''`;",

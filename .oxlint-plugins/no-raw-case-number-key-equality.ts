@@ -54,9 +54,48 @@ const TRAILING_EQUALITY = new RegExp(
 // An operand: a column, bare, qualified or quoted; the group is its name.
 const RIGHT_OPERAND =
   /^\s*(?:ANY\s*\(\s*)?(?:"?[A-Za-z_][\w$]*"?\s*\.\s*)?"?(?<name>[A-Za-z_][\w$]*)/iu;
-// What precedes the target of an assignment: `SET` or the comma ending the
-// previous assignment.
-const ASSIGNMENT_LEAD = /(?:\bSET|,)\s*$/iu;
+const SET_KEYWORD = /\bSET\b/giu;
+// A word that ends an UPDATE's assignment list or starts an expression, so a
+// comma after it separates arguments or select items, not assignments.
+const SET_LIST_END =
+  /\b(?:WHERE|FROM|RETURNING|SELECT|ON|AND|OR|WHEN|THEN|ELSE|VALUES|USING|JOIN)\b/iu;
+// What an interpolated expression reads as when its text is joined.
+const EXPRESSION_PLACEHOLDER = " _ ";
+
+/**
+ * Whether `lead`, the text before an assignment's target, ends where a target
+ * begins: right after `SET`, or after a comma that separates two assignments
+ * of the same `SET` list (outside any parentheses, with no clause between).
+ */
+const isAssignmentLead = (lead: string): boolean => {
+  const trimmed = lead.trimEnd();
+  const sets = [...trimmed.matchAll(SET_KEYWORD)];
+  const last = sets.at(-1);
+  if (last === undefined) {
+    return false;
+  }
+  const listStart = last.index + last[0].length;
+  if (listStart === trimmed.length) {
+    return true;
+  }
+  if (!trimmed.endsWith(",")) {
+    return false;
+  }
+  let depth = 0;
+  let topLevel = "";
+  for (const char of trimmed.slice(listStart, -1)) {
+    if (char === "(" || char === ")") {
+      depth += char === "(" ? 1 : -1;
+      if (depth < 0) {
+        return false;
+      }
+      topLevel += " ";
+    } else if (depth === 0) {
+      topLevel += char;
+    }
+  }
+  return depth === 0 && !SET_LIST_END.test(topLevel);
+};
 
 const quasiTexts = (template: AstNode): string[] =>
   Array.isArray(template.quasis)
@@ -147,11 +186,23 @@ const leftOperandOf = (text: string): Operand | null => {
   };
 };
 
+/**
+ * The template's text before quasi `count`, each interpolated expression read
+ * as a placeholder operand, ending where quasi `count` begins.
+ */
+const textsBefore = (texts: readonly string[], count: number): string =>
+  count <= 0
+    ? ""
+    : `${texts.slice(0, count).join(EXPRESSION_PLACEHOLDER)}${EXPRESSION_PLACEHOLDER}`;
+
 const isKeyColumn = (name: string | undefined): boolean =>
   KEY_COLUMN.test(name ?? "");
 
-/** Whether `text` compares a key column, an assignment aside. */
-const textComparesKey = (text: string): boolean => {
+/**
+ * Whether `text` compares a key column, an assignment aside. `context` is the
+ * statement text before it, which says whether a comma leads an assignment.
+ */
+const textComparesKey = (text: string, context = ""): boolean => {
   for (const operator of text.matchAll(OPERATOR)) {
     const before = text.slice(0, operator.index);
     const after = text.slice(operator.index + operator[0].length);
@@ -165,7 +216,7 @@ const textComparesKey = (text: string): boolean => {
     const isAssignment =
       operator[0] === "=" &&
       left !== null &&
-      ASSIGNMENT_LEAD.test(before.slice(0, left.index));
+      isAssignmentLead(context + before.slice(0, left.index));
     if (!isAssignment) {
       return true;
     }
@@ -187,6 +238,9 @@ const namesKeyProperty = (node: unknown): boolean => {
  */
 const templateComparesKeyProperty = (template: AstNode): boolean => {
   const texts = quasiTexts(template);
+  // The text before expression `index`: every quasi up to its own.
+  const contextOf = (index: number): string =>
+    index < 0 ? "" : texts.slice(0, index + 1).join(EXPRESSION_PLACEHOLDER);
   const expressions = Array.isArray(template.expressions)
     ? template.expressions
     : [];
@@ -206,14 +260,15 @@ const templateComparesKeyProperty = (template: AstNode): boolean => {
       const target = before.slice(0, trailing.index);
       const lead =
         target.trim().length === 0
-          ? (texts[index - 1] ?? "")
-          : target.slice(0, leftOperandOf(target)?.index ?? 0);
-      return !ASSIGNMENT_LEAD.test(lead);
+          ? contextOf(index - 1)
+          : textsBefore(texts, index) +
+            target.slice(0, leftOperandOf(target)?.index ?? 0);
+      return !isAssignmentLead(lead);
     }
     const leading = LEADING_EQUALITY.exec(after);
     return (
       leading !== null &&
-      (leading[0].trim() !== "=" || !ASSIGNMENT_LEAD.test(before))
+      (leading[0].trim() !== "=" || !isAssignmentLead(contextOf(index)))
     );
   });
 };
@@ -242,7 +297,9 @@ export default eslintCompatPlugin({
               return;
             }
             if (
-              quasiTexts(template).some(textComparesKey) ||
+              quasiTexts(template).some((text, index, texts) =>
+                textComparesKey(text, textsBefore(texts, index)),
+              ) ||
               templateComparesKeyProperty(template)
             ) {
               context.report({ node, messageId: "raw" });
