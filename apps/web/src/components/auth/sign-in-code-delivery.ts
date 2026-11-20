@@ -12,6 +12,7 @@ import { Temporal } from "@stll/time";
 import { authClient } from "@/lib/auth-client";
 import { toAuthClientError } from "@/lib/errors/auth";
 import { readQueryResult } from "@/lib/errors/query-result";
+import { resourceQueryOptions } from "@/lib/workspace-realtime";
 
 const SIGN_IN_CODE_DELIVERY_POLL_MS = 10_000;
 /** The server forgets an attempt shortly after its code expires. */
@@ -54,22 +55,26 @@ type SignInCodeDeliveryOptions = {
 
 /**
  * Asks, every few seconds while the code can still be used, whether the
- * code mail this attempt sent bounced. Stops once it did.
+ * code mail this attempt sent bounced. Stops once it did. No write of this
+ * client changes the answer: only the provider's bounce report does.
  */
 export const signInCodeDeliveryOptions = ({
   attempt,
   pollUntil,
 }: SignInCodeDeliveryOptions) =>
-  queryOptions({
-    queryKey: ["auth", "sign-in-code-delivery", attempt] as const,
-    queryFn:
-      attempt === undefined
-        ? skipToken
-        : async ({ signal }) => await readSignInCodeDelivery(attempt, signal),
-    refetchInterval: (query) =>
-      query.state.data?.status === "failed" ||
-      Temporal.Now.instant().epochMilliseconds >= pollUntil
-        ? false
-        : SIGN_IN_CODE_DELIVERY_POLL_MS,
-    retry: false,
-  });
+  resourceQueryOptions(
+    queryOptions({
+      queryKey: ["auth", "sign-in-code-delivery", attempt] as const,
+      queryFn:
+        attempt === undefined
+          ? skipToken
+          : async ({ signal }) => await readSignInCodeDelivery(attempt, signal),
+      refetchInterval: (query) =>
+        query.state.data?.status === "failed" ||
+        Temporal.Now.instant().epochMilliseconds >= pollUntil
+          ? false
+          : SIGN_IN_CODE_DELIVERY_POLL_MS,
+      retry: false,
+    }),
+    { type: "independent" },
+  );
