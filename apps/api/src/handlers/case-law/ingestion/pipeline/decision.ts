@@ -570,8 +570,8 @@ const runDecisionAttempt = async (
     scopedDb,
     retention,
     corpus,
-    corpusBatch,
-    signal,
+    ...(corpusBatch === undefined ? {} : { corpusBatch }),
+    ...(signal === undefined ? {} : { signal }),
     write,
     observation,
   });

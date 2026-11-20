@@ -33,6 +33,9 @@ type HeldDecisionCandidateResolution<TCandidate> =
       status: "ambiguous";
       candidates: TCandidate[];
       completeness: "complete" | "overflow";
+      basis:
+        | typeof HELD_DECISION_MATCH_BASIS.ECLI
+        | typeof HELD_DECISION_MATCH_BASIS.COURT_DOCKET_DATE;
     };
 
 const distinctCandidates = <TCandidate extends HeldDecisionCandidate>(
@@ -49,7 +52,15 @@ const resolvePaths = <TCandidate extends HeldDecisionCandidate>({
   courtDocketDate,
 }: CandidatePaths<TCandidate>): HeldDecisionCandidateResolution<TCandidate> => {
   if (ecli.type === "overflow" || courtDocketDate.type === "overflow") {
-    return { status: "ambiguous", candidates: [], completeness: "overflow" };
+    return {
+      status: "ambiguous",
+      candidates: [],
+      completeness: "overflow",
+      basis:
+        ecli.type === "overflow"
+          ? HELD_DECISION_MATCH_BASIS.ECLI
+          : HELD_DECISION_MATCH_BASIS.COURT_DOCKET_DATE,
+    };
   }
   const ecliRows = distinctCandidates(ecli.rows);
   const tupleRows = distinctCandidates(courtDocketDate.rows);
@@ -68,6 +79,10 @@ const resolvePaths = <TCandidate extends HeldDecisionCandidate>({
     };
   }
   const candidates = distinctCandidates([...ecliRows, ...tupleRows]);
+  const basis =
+    ecliRows.length > 0
+      ? HELD_DECISION_MATCH_BASIS.ECLI
+      : HELD_DECISION_MATCH_BASIS.COURT_DOCKET_DATE;
   const [first, second] = candidates;
   if (first === undefined) {
     return { status: "absent" };
@@ -77,14 +92,12 @@ const resolvePaths = <TCandidate extends HeldDecisionCandidate>({
       status: "ambiguous",
       candidates,
       completeness: "complete",
+      basis,
     };
   }
   return {
     status: "matched",
-    basis:
-      tupleRows.length > 0
-        ? HELD_DECISION_MATCH_BASIS.COURT_DOCKET_DATE
-        : HELD_DECISION_MATCH_BASIS.ECLI,
+    basis,
     candidate: first,
   };
 };

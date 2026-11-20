@@ -56,6 +56,7 @@ import {
 } from "@/api/lib/case-law/held-decision-candidate-query";
 import { replayWrite } from "@/api/lib/case-law/replay-write";
 import { lockCaseLawDecisionRows } from "@/api/lib/db/aggregate-lock";
+import { type BoundedReadResult, readBounded } from "@/api/lib/db/read-bounded";
 import {
   UNPERSISTABLE_DECISION_FIELDS,
   UnpersistableDecisionFieldError,
@@ -304,7 +305,7 @@ export const matchHostDecisionsTx = async (
       return {
         type: "review",
         review: HELD_DECISION_REVIEW.SEVERAL_HELD,
-        basis: HELD_DECISION_MATCH_BASIS.COURT_DOCKET_DATE,
+        basis: matched.basis,
         evidence: { status: "ambiguous", completeness: matched.completeness },
         candidateDecisionIds: matched.candidates.map(({ id }) => id),
       };
@@ -361,17 +362,14 @@ const readPublisherOwnersTx = async (
     sourceId,
     observation: { exactSourceIdentityCandidates },
   }: Pick<AttachToHeldDecisionOptions, "sourceId" | "observation">,
-): Promise<HostDecision[]> => {
-  const reserved = await tx
-    .selectDistinct(HOST_COLUMNS)
-    .from(caseLawDecisionSourceIdentities)
-    .innerJoin(
-      caseLawDecisions,
-      eq(
-        caseLawDecisions.id,
-        canonicalDecisionIdSql(caseLawDecisionSourceIdentities.decisionId),
+): Promise<BoundedReadResult<HostDecision>> => {
+  const canonicalIds = tx
+    .select({
+      id: canonicalDecisionIdSql(caseLawDecisionSourceIdentities.decisionId).as(
+        "id",
       ),
-    )
+    })
+    .from(caseLawDecisionSourceIdentities)
     .where(
       and(
         eq(caseLawDecisionSourceIdentities.sourceId, sourceId),
@@ -381,30 +379,28 @@ const readPublisherOwnersTx = async (
         ),
       ),
     )
-    .limit(2);
-  const physical = await tx
-    .select({ id: caseLawDecisions.id })
-    .from(caseLawDecisions)
-    .where(
-      and(
-        eq(caseLawDecisions.sourceId, sourceId),
-        inArray(
-          caseLawDecisions.sourceDocumentId,
-          exactSourceIdentityCandidates,
+    .union(
+      tx
+        .select({ id: canonicalDecisionIdSql(caseLawDecisions.id).as("id") })
+        .from(caseLawDecisions)
+        .where(
+          and(
+            eq(caseLawDecisions.sourceId, sourceId),
+            inArray(
+              caseLawDecisions.sourceDocumentId,
+              exactSourceIdentityCandidates,
+            ),
+          ),
         ),
-      ),
     );
-  const owners = new Map(reserved.map((owner) => [owner.id, owner]));
-  for (const row of physical) {
-    const owner = await readHostTx(tx, row.id);
-    if (owner !== undefined) {
-      owners.set(owner.id, owner);
-    }
-    if (owners.size > 1) {
-      break;
-    }
-  }
-  return [...owners.values()];
+  return await readBounded(
+    tx
+      .selectDistinct(HOST_COLUMNS)
+      .from(caseLawDecisions)
+      .where(inArray(caseLawDecisions.id, canonicalIds))
+      .orderBy(caseLawDecisions.id),
+    1,
+  );
 };
 
 const attachmentKey = (
@@ -627,7 +623,7 @@ const settleAttachmentConflictTx = async (
     match,
   }: {
     options: PlanAttachmentOptions;
-    owners: readonly HostDecision[];
+    owners: BoundedReadResult<HostDecision>;
     stored: StoredAttachment | undefined;
     match: HostMatch;
   },
@@ -647,9 +643,11 @@ const settleAttachmentConflictTx = async (
       step: settled(await parkWithdrawnTx(tx, stored, previousHost)),
     };
   }
-  const ownershipConflict = owners.some(
-    (owner) => match.type !== "one" || match.host.id !== owner.id,
-  );
+  const ownershipConflict =
+    owners.type === "overflow" ||
+    owners.rows.some(
+      (owner) => match.type !== "one" || match.host.id !== owner.id,
+    );
   const associationConflict =
     previousHost !== undefined &&
     (match.type !== "one" || match.host.id !== previousHost.id);
@@ -706,8 +704,8 @@ const planAttachmentTx = async (
   );
   const owners = await readPublisherOwnersTx(tx, options);
   const own =
-    owners.length === 1 && owners.at(0)?.sourceId === sourceId
-      ? owners.at(0)
+    owners.type === "complete" && owners.rows.at(0)?.sourceId === sourceId
+      ? owners.rows.at(0)
       : undefined;
   const stored = await readAttachmentTx(tx, sourceId, sourceDocumentId);
   if (stored !== undefined && stored.hostWithdrawnAt !== null) {

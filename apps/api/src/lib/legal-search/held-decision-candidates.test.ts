@@ -62,7 +62,7 @@ test("canonical aliases and repeated delivery converge on one candidate", () => 
       }),
     ).toEqual({
       status: "matched",
-      basis: "court-docket-date",
+      basis: "ecli",
       candidate: { id: "canonical" },
     });
   }
@@ -85,7 +85,12 @@ test("overflow or several owners never authorizes a new row", () => {
       hosts: { ecli: { type: "overflow", cap: 8 }, courtDocketDate: read() },
       collections: none,
     }),
-  ).toEqual({ status: "ambiguous", candidates: [], completeness: "overflow" });
+  ).toEqual({
+    status: "ambiguous",
+    candidates: [],
+    completeness: "overflow",
+    basis: "ecli",
+  });
   expect(
     resolveHeldDecisionCandidates({
       hosts: none,
@@ -95,6 +100,7 @@ test("overflow or several owners never authorizes a new row", () => {
     status: "ambiguous",
     candidates: [{ id: "two" }, { id: "one" }],
     completeness: "complete",
+    basis: "court-docket-date",
   });
 });
 test("only absence on both paths and publisher classes permits an own row", () => {
