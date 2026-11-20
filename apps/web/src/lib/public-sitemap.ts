@@ -3,8 +3,15 @@ import { TaggedError } from "better-result";
 import { ClientOperationError } from "@/lib/errors/client";
 import { ssrCacheClassHeaders } from "@/route-response-policy";
 
+/**
+ * A cached sitemap may also be served for a day after its origin starts
+ * failing, the same staleness `stale-while-revalidate` already accepts: a
+ * crawler that meets an unreadable file is shown the last good copy rather
+ * than an error. A failure itself is answered fresh and never cached, so the
+ * copy is replaced as soon as the file reads again.
+ */
 const SITEMAP_CACHE_CONTROL =
-  "public, max-age=3600, s-maxage=21600, stale-while-revalidate=86400";
+  "public, max-age=3600, s-maxage=21600, stale-while-revalidate=86400, stale-if-error=86400";
 const SITEMAP_XML_MAX_BYTES = 50 * 1024 * 1024;
 
 export const TOOLS_SITEMAP_PATH = "/sitemaps/tools.xml";

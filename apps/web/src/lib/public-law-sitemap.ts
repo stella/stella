@@ -10,6 +10,7 @@ import {
   PUBLIC_ROBOTS_DENIED_USER_AGENTS,
   ROBOTS_DISALLOWED_PATHS,
 } from "@stll/api-contract/public-crawl-rules";
+import { SITEMAP_FILE_FETCH_TIMEOUT_MS } from "@stll/api-contract/public-sitemap-budget";
 import { STATUTE_QUERY_CAPABILITIES } from "@stll/api-contract/statute-query-capability";
 
 import { env } from "@/env";
@@ -207,7 +208,7 @@ const createCaseLawShardPath = ({
 
 export const fetchPublicSitemapShards = async ({
   fetchImpl = fetch,
-  signal = AbortSignal.timeout(10_000),
+  signal = AbortSignal.timeout(SITEMAP_FILE_FETCH_TIMEOUT_MS),
 }: FetchSitemapShardsOptions = {}): Promise<SitemapShard[]> => {
   const response = await fetchImpl(apiUrl("/case/sitemap/shards"), { signal });
   if (!response.ok) {
@@ -242,7 +243,7 @@ export const fetchPublicSitemapShards = async ({
 export const fetchPublicSitemapDecisions = async ({
   fetchImpl = fetch,
   shard,
-  signal = AbortSignal.timeout(10_000),
+  signal = AbortSignal.timeout(SITEMAP_FILE_FETCH_TIMEOUT_MS),
 }: FetchSitemapDecisionsOptions): Promise<SitemapDecision[]> => {
   const url = new URL(apiUrl("/case/sitemap/decisions/shard"));
   url.searchParams.set("country", shard.country);

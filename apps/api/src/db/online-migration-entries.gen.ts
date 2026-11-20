@@ -179,6 +179,7 @@ export { default as repairs_case_law_identifier_retry_constraint_validation } fr
 export { default as repairs_case_law_parsed_source_validation } from "./online-migration-entries/repairs-case-law-parsed-source-validation";
 export { default as repairs_case_law_population_repair } from "./online-migration-entries/repairs-case-law-population-repair";
 export { default as repairs_case_law_sitemap_packing_enrollment } from "./online-migration-entries/repairs-case-law-sitemap-packing-enrollment";
+export { default as repairs_case_law_sitemap_range_enrollment } from "./online-migration-entries/repairs-case-law-sitemap-range-enrollment";
 export { default as repairs_case_law_source_config_object_repair } from "./online-migration-entries/repairs-case-law-source-config-object-repair";
 export { default as repairs_chat_content_v3_repair } from "./online-migration-entries/repairs-chat-content-v3-repair";
 export { default as repairs_chat_limit_reminder_on_reset_constraint_validations } from "./online-migration-entries/repairs-chat-limit-reminder-on-reset-constraint-validations";
