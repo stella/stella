@@ -624,6 +624,10 @@
       "cleanup": "Correction",
       "thisComputer": "Sur cet ordinateur"
     },
+    "sounds": {
+      "title": "Sons",
+      "description": "Émettre un son bref et discret au début et à la fin de l’enregistrement."
+    },
     "cleanup": {
       "title": "Corriger avec l’IA",
       "description": "Corrige les erreurs de reconnaissance et la mise en forme dictée, comme « nouvelle ligne » ou « gras », et adapte le texte à l’application, comme un e-mail. Seul le texte, et non l’audio, est envoyé via stella au fournisseur d’IA de votre organisation ; stella ne le conserve pas.",

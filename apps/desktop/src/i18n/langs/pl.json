@@ -624,6 +624,10 @@
       "cleanup": "Poprawianie",
       "thisComputer": "Na tym komputerze"
     },
+    "sounds": {
+      "title": "Dźwięki",
+      "description": "Odtwarzaj krótki, cichy dźwięk, gdy nagrywanie się zaczyna i gdy się kończy."
+    },
     "cleanup": {
       "title": "Popraw za pomocą AI",
       "description": "Poprawia błędy rozpoznawania i podyktowane formatowanie, na przykład „nowa linia” lub „pogrubienie”, oraz dopasowuje tekst do aplikacji, na przykład poczty e-mail. Za pośrednictwem stelli do dostawcy AI Twojej organizacji trafia tylko tekst, nie dźwięk; stella go nie zapisuje.",

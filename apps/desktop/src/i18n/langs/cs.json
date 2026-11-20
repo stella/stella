@@ -624,6 +624,10 @@
       "cleanup": "Úprava",
       "thisComputer": "Na tomto počítači"
     },
+    "sounds": {
+      "title": "Zvuky",
+      "description": "Přehrát krátký tichý zvuk, když nahrávání začne a když skončí."
+    },
     "cleanup": {
       "title": "Upravit pomocí AI",
       "description": "Opraví chyby rozpoznávání a vyslovené formátování, například „nový řádek“ nebo „tučně“, a přizpůsobí text aplikaci, například e-mailu. Přes stellu se poskytovateli AI vaší organizace odešle jen text, ne zvuk; stella ho neukládá.",

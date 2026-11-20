@@ -624,6 +624,10 @@
       "cleanup": "Überarbeitung",
       "thisComputer": "Auf diesem Computer"
     },
+    "sounds": {
+      "title": "Töne",
+      "description": "Einen kurzen, leisen Ton abspielen, wenn die Aufnahme beginnt und wenn sie endet."
+    },
     "cleanup": {
       "title": "Mit KI überarbeiten",
       "description": "Korrigiert Erkennungsfehler und gesprochene Formatierungen wie „neue Zeile“ oder „fett“ und passt den Text an die App an, etwa an E-Mail. Nur der Text, nicht der Ton, wird über stella an den KI-Anbieter Ihrer Organisation gesendet; stella speichert ihn nicht.",

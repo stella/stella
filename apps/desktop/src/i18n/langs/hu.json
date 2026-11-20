@@ -624,6 +624,10 @@
       "cleanup": "Javítás",
       "thisComputer": "Ezen a számítógépen"
     },
+    "sounds": {
+      "title": "Hangok",
+      "description": "Rövid, halk hang lejátszása, amikor a felvétel elindul, és amikor véget ér."
+    },
     "cleanup": {
       "title": "Javítás AI-jal",
       "description": "Kijavítja a felismerési hibákat és a kimondott formázást, például „új sor” vagy „félkövér”, és az alkalmazáshoz igazítja a szöveget, például e-mailhez. Csak a szöveg – nem a hang – kerül a stellán keresztül a szervezete AI-szolgáltatójához; a stella nem tárolja.",

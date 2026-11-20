@@ -35,6 +35,7 @@ const ENABLED_SNAPSHOT = {
   },
   shareWindowTitle: false,
   shareTextBeforeCursor: false,
+  sounds: true,
   textBeforeCursorAvailable: true,
   failure: null,
   failureKeptInHistory: false,
@@ -389,6 +390,31 @@ test.each([
     expect(calls).toEqual([{ enabled: true }]);
   },
 );
+
+test("turning the sounds off asks the native side and shows its answer", async () => {
+  const calls: unknown[] = [];
+  const { getByRole } = await renderSetting(
+    ENABLED_SNAPSHOT,
+    (called, payload) => {
+      if (called !== "dictation_set_sounds") {
+        return undefined;
+      }
+      calls.push(payload);
+      return { ...ENABLED_SNAPSHOT, sounds: false };
+    },
+  );
+  const toggle = getByRole("switch", {
+    name: defaultMessages.dictation.sounds.title,
+  });
+  expect(toggle.getAttribute("aria-checked")).toBe("true");
+
+  fireEvent.click(toggle);
+
+  await waitFor(() => {
+    expect(toggle.getAttribute("aria-checked")).toBe("false");
+  });
+  expect(calls).toEqual([{ enabled: false }]);
+});
 
 test("an unread focus is not reported as switching apps", () => {
   expect(defaultMessages.dictation.failure.focusUnconfirmed).not.toBe(

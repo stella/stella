@@ -31,12 +31,13 @@ use crate::{
   dictation_context::{self, CleanupContext},
   dictation_focus::{self, FocusTarget, Insertion},
   dictation_format::{AppClass, Segment},
-  dictation_hold_key::HoldChoice,
+  dictation_hold_key::{HoldChoice, MINIMUM_HOLD},
   dictation_input,
   dictation_live::{Ended, Live, Transcribe, Transcription},
   dictation_microphone::{self, Choice, InputDevice},
   dictation_pauses::Segmenter,
   dictation_preview,
+  dictation_sounds::{self, Cue},
   dictation_trace::{self, Cleanup, GlobeKey, Line, Outcome, Trace},
   dictation_worker::{self, Response},
 };
@@ -79,6 +80,22 @@ struct Active {
   trace: Trace,
   /// How often the panel checks for a password field between results.
   password_watch: dictation_preview::PasswordWatch,
+  /// Whether the start sound played, so the stop sound plays too.
+  sounded: bool,
+}
+
+impl Active {
+  /// Sounds the start once the hold is long enough to be a dictation, not
+  /// a tap, when the speaker wants sounds.
+  fn sound_start(&mut self, app: &AppHandle) {
+    if !self.sounded
+      && self.trace.since_press() >= MINIMUM_HOLD
+      && dictation::sounds_enabled(app)
+    {
+      self.sounded = true;
+      dictation_sounds::play(Cue::Start);
+    }
+  }
 }
 
 /// What a dictation that did not fail came to.
@@ -132,6 +149,7 @@ fn run(app: &AppHandle, commands: &Receiver<Command>) {
                 context,
                 trace,
                 password_watch: dictation_preview::PasswordWatch::default(),
+                sounded: false,
               });
             }
             Err(failure) => {
@@ -148,6 +166,7 @@ fn run(app: &AppHandle, commands: &Receiver<Command>) {
       Ok(Command::Press) => {
         if let Some(active) = active.as_mut() {
           active.capture.listen();
+          active.sound_start(app);
         }
       }
       Ok(Command::Cancel) => {
@@ -162,6 +181,7 @@ fn run(app: &AppHandle, commands: &Receiver<Command>) {
           focus,
           context,
           mut trace,
+          sounded,
           ..
         }) = active.take()
         {
@@ -169,6 +189,9 @@ fn run(app: &AppHandle, commands: &Receiver<Command>) {
           trace.release();
           dictation_preview::release(app);
           thread::sleep(release_tail(trace.held()));
+          if sounded {
+            dictation_sounds::play(Cue::Stop);
+          }
           let device = capture.recorder.device.clone();
           let mut moved = None;
           let outcome = match finish(
@@ -195,6 +218,7 @@ fn run(app: &AppHandle, commands: &Receiver<Command>) {
       Err(RecvTimeoutError::Timeout) => match active.as_mut() {
         Some(active) => {
           active.capture.listen();
+          active.sound_start(app);
           // Between transcription results too: a password field that takes
           // focus while the panel shows hides it at once.
           if active.password_watch.due(dictation_preview::showing(app))

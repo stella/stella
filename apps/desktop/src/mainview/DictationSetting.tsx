@@ -84,6 +84,8 @@ export type DictationSnapshot = {
   language: DictationLanguage;
   /** Whether cleanup also gets the focused window's title. */
   shareWindowTitle: boolean;
+  /** Whether a short sound marks the start and the end of listening. */
+  sounds: boolean;
   /** Whether cleanup also gets the text before the cursor. */
   shareTextBeforeCursor: boolean;
   /** Whether this computer can read the text before the cursor; without it
@@ -435,6 +437,12 @@ const DictationPage = ({
               focused={focus === "microphone"}
               onFocused={onFocusShown}
             />
+            <DictationSoundsRow
+              checked={snapshot.sounds}
+              onChange={(sounds) => {
+                void change("dictation_set_sounds", { enabled: sounds });
+              }}
+            />
           </SettingsGroup>
           <SettingsGroup title={t("groups.transcription")}>
             {snapshot.cloudAvailable ? (
@@ -656,6 +664,32 @@ const DictationHoldKeyRow = ({
           ))}
         </SelectPopup>
       </Select>
+    </SettingsRow>
+  );
+};
+
+/** Whether a short sound marks the start and the end of recording. */
+const DictationSoundsRow = ({
+  checked,
+  onChange,
+}: {
+  checked: boolean;
+  onChange: (enabled: boolean) => void;
+}) => {
+  const t = useTranslations("dictation.sounds");
+  const ids = settingsRowIds("dictation-sounds");
+  return (
+    <SettingsRow
+      description={t("description")}
+      id="dictation-sounds"
+      title={t("title")}
+    >
+      <Switch
+        aria-describedby={ids.description}
+        aria-labelledby={ids.label}
+        checked={checked}
+        onCheckedChange={onChange}
+      />
     </SettingsRow>
   );
 };
