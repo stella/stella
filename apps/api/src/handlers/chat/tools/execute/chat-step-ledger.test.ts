@@ -8,6 +8,7 @@ import {
 } from "@stll/api-contract/chat-step-ledger";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
+import { toSafeId } from "@/api/lib/branded-types";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 
 import {
@@ -17,9 +18,9 @@ import {
   stepCallSink,
 } from "./chat-step-ledger";
 
-const MATTER_ID = "0dc54d0c-10d7-501d-897e-e801dbd0998c";
+const MATTER_ID = toSafeId<"workspace">("0dc54d0c-10d7-501d-897e-e801dbd0998c");
 const FOREIGN_MATTER_ID = "7a1f0f7e-2c3b-5d4e-8f90-112233445566";
-const DOCUMENT_ID = "11111111-1111-5111-8111-111111111111";
+const DOCUMENT_ID = toSafeId<"entity">("11111111-1111-5111-8111-111111111111");
 const FOREIGN_DOCUMENT_ID = "22222222-2222-5222-8222-222222222222";
 
 // A search_case_law hit as the registry answers it after egress: the
