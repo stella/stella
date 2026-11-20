@@ -8,6 +8,7 @@ import { cn } from "@stll/ui/utils";
 
 import { usePendingCache } from "@/components/pending-cache";
 import { PendingText } from "@/components/pending-text";
+import { ActionFace } from "@/features/knowledge/views/knowledge-list.pending";
 import { cachedRoleGrants } from "@/lib/organization/cached-permissions.logic";
 import { framePendingView } from "@/routes/-pending-view.logic";
 
@@ -94,14 +95,18 @@ export const StyleSetsPending = framePendingView(() => {
       actions={
         canCreate && (
           <div className="flex items-center gap-2">
-            <ButtonFace size="sm" variant="outline">
-              <UploadIcon />
-              <PendingText barClassName="w-12" id="styleSets.import" />
-            </ButtonFace>
-            <ButtonFace size="sm" variant="default">
-              <PlusIcon />
-              <PendingText barClassName="w-16" id="styleSets.create" />
-            </ButtonFace>
+            <ActionFace
+              icon={<UploadIcon />}
+              label="styleSets.import"
+              variant="outline"
+              width="w-12"
+            />
+            <ActionFace
+              icon={<PlusIcon />}
+              label="styleSets.create"
+              variant="default"
+              width="w-16"
+            />
           </div>
         )
       }

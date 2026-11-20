@@ -1,11 +1,18 @@
 import type { ReactNode } from "react";
 
-import { ButtonFace, SwitchFace } from "@stll/ui/control-face";
+import {
+  ButtonFace,
+  FaceLabelPending,
+  SwitchFace,
+} from "@stll/ui/control-face";
 import { PlusIcon, RotateCcwIcon, WorkflowIcon } from "@stll/ui/icons";
-import { InlineSkeleton } from "@stll/ui/skeleton";
-import { cn } from "@stll/ui/utils";
 
-import { PendingText } from "@/components/pending-text";
+import {
+  ActionFace,
+  KnowledgeRowBody,
+  KnowledgeRowsPending,
+  RowTitlePending,
+} from "@/features/knowledge/views/knowledge-list.pending";
 
 /*
  * The workflows list's shape (./flow-list.tsx): its column, toolbar and
@@ -33,51 +40,17 @@ export const FlowRowBody = ({
   meta: ReactNode;
   title: ReactNode;
 }) => (
-  <span className="flex min-w-0 flex-1 items-center gap-3">
-    <span className="bg-muted flex size-9 shrink-0 items-center justify-center rounded-lg">
-      <WorkflowIcon className="text-muted-foreground size-4" />
-    </span>
-    <span className="flex min-w-0 flex-1 flex-col">
-      {title}
-      <span className="text-muted-foreground mt-0.5 flex items-center gap-2 text-xs">
-        {meta}
-      </span>
-    </span>
-  </span>
-);
-
-const ROW_KEYS = ["a", "b", "c", "d", "e"];
-const TITLE_WIDTHS = ["w-48", "w-40", "w-56", "w-36", "w-44"];
-
-/** Workflow rows while the list loads: each line a bar at its height, the
- *  trigger badge's box, and the switch off. */
-const FlowRowsPending = () => (
-  <ul aria-hidden="true" className="divide-y">
-    {ROW_KEYS.map((key, index) => (
-      <li className={FLOW_ROW_CLASS} key={key}>
-        <FlowRowBody
-          meta={
-            // The trigger badge's box (`FlowTriggerBadge`), its label a bar.
-            <span className="inline-flex items-center rounded-md border px-2 py-0.5">
-              <InlineSkeleton className="my-0.5 h-3 w-14" />
-            </span>
-          }
-          title={
-            <span className="flex h-5 items-center text-sm">
-              <InlineSkeleton
-                className={cn("h-3.5 max-w-full", TITLE_WIDTHS[index])}
-              />
-            </span>
-          }
-        />
-        <SwitchFace />
-      </li>
-    ))}
-  </ul>
+  <KnowledgeRowBody
+    icon={WorkflowIcon}
+    meta={meta}
+    metaClassName="mt-0.5 flex items-center gap-2"
+    title={title}
+  />
 );
 
 /** The workflows page before its list arrives: the toolbar a member's role
- *  gets, and placeholder rows. */
+ *  gets, and placeholder rows (each line a bar at its height, the trigger
+ *  badge's box, and the switch off). */
 export const FlowListPending = ({ canCreate }: { canCreate: boolean }) => (
   <div className={FLOW_LIST_CLASS}>
     <FlowListToolbar>
@@ -85,16 +58,33 @@ export const FlowListPending = ({ canCreate }: { canCreate: boolean }) => (
         <RotateCcwIcon />
       </ButtonFace>
       {canCreate && (
-        <ButtonFace size="sm" variant="default">
-          <PlusIcon />
-          <span className="hidden sm:inline">
-            <PendingText barClassName="w-20" id="flows.createFlow" />
-          </span>
-        </ButtonFace>
+        <ActionFace
+          icon={<PlusIcon />}
+          label="flows.createFlow"
+          labelFromSm
+          variant="default"
+          width="w-20"
+        />
       )}
     </FlowListToolbar>
     <div className="flex-1 overflow-hidden">
-      <FlowRowsPending />
+      <KnowledgeRowsPending
+        count={5}
+        row={(index) => (
+          <li className={FLOW_ROW_CLASS} key={index}>
+            <FlowRowBody
+              meta={
+                // The trigger badge's box (`FlowTriggerBadge`).
+                <span className="inline-flex rounded-md border px-2 py-0.5">
+                  <FaceLabelPending className="w-14" />
+                </span>
+              }
+              title={<RowTitlePending index={index} />}
+            />
+            <SwitchFace />
+          </li>
+        )}
+      />
     </div>
   </div>
 );

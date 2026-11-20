@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 
-import { ButtonFace, FaceLabelPending, InputFace } from "@stll/ui/control-face";
+import { FaceLabelPending, InputFace } from "@stll/ui/control-face";
 import {
   DownloadIcon,
   PlusIcon,
@@ -18,6 +18,12 @@ import {
   CategoryMobileFilterBarPending,
   CategorySidebarPending,
 } from "@/features/knowledge/views/category-sidebar.pending";
+import {
+  ActionFace,
+  KnowledgeRowBody,
+  KnowledgeRowsPending,
+  RowTitlePending,
+} from "@/features/knowledge/views/knowledge-list.pending";
 
 /*
  * The clause library's shape (./clause-list.tsx): the category sidebar, the
@@ -79,25 +85,16 @@ export const ClauseRowBody = ({
   title: ReactNode;
   trailing: ReactNode;
 }) => (
-  <span
-    className={cn(
-      "flex w-full items-center gap-3 px-4 py-3 text-start",
-      className,
-    )}
-  >
-    <span className="bg-muted flex size-9 shrink-0 items-center justify-center rounded-lg">
-      <TextQuoteIcon className="text-muted-foreground size-4" />
-    </span>
-    <span className="flex min-w-0 flex-1 flex-col">
-      {title}
-      <span className="text-muted-foreground text-xs">{meta}</span>
-    </span>
-    <span className="text-muted-foreground shrink-0 text-xs">{trailing}</span>
-  </span>
+  <KnowledgeRowBody
+    className={cn("w-full px-4 py-3 text-start", className)}
+    icon={TextQuoteIcon}
+    meta={meta}
+    title={title}
+    trailing={
+      <span className="text-muted-foreground shrink-0 text-xs">{trailing}</span>
+    }
+  />
 );
-
-const ROW_KEYS = ["a", "b", "c", "d", "e", "f", "g", "h"];
-const TITLE_WIDTHS = ["w-48", "w-40", "w-56", "w-36"];
 
 /** The clause library while it loads: the bar's search field and the
  *  actions the member's role gets, and placeholder rows. */
@@ -108,26 +105,29 @@ export const ClauseListPending = ({ canCreate }: { canCreate: boolean }) => {
       actions={
         <>
           {canCreate && (
-            <ButtonFace size="sm" variant="outline">
-              <UploadIcon />
-              <span className="hidden sm:inline">
-                <PendingText barClassName="w-12" id="common.import" />
-              </span>
-            </ButtonFace>
+            <ActionFace
+              icon={<UploadIcon />}
+              label="common.import"
+              labelFromSm
+              variant="outline"
+              width="w-12"
+            />
           )}
-          <ButtonFace size="sm" variant="outline">
-            <DownloadIcon />
-            <span className="hidden sm:inline">
-              <PendingText barClassName="w-12" id="clauses.export" />
-            </span>
-          </ButtonFace>
+          <ActionFace
+            icon={<DownloadIcon />}
+            label="clauses.export"
+            labelFromSm
+            variant="outline"
+            width="w-12"
+          />
           {canCreate && (
-            <ButtonFace size="sm" variant="default">
-              <PlusIcon />
-              <span className="hidden sm:inline">
-                <PendingText barClassName="w-20" id="clauses.createClause" />
-              </span>
-            </ButtonFace>
+            <ActionFace
+              icon={<PlusIcon />}
+              label="clauses.createClause"
+              labelFromSm
+              variant="default"
+              width="w-20"
+            />
           )}
         </>
       }
@@ -156,27 +156,18 @@ export const ClauseListPending = ({ canCreate }: { canCreate: boolean }) => {
       }
     >
       <div className="flex-1 overflow-hidden" data-slot="clause-list-body">
-        <ul
-          aria-hidden="true"
-          className="divide-y"
-          data-slot="clause-rows-pending"
-        >
-          {ROW_KEYS.map((key, index) => (
-            <li key={key}>
+        <KnowledgeRowsPending
+          count={8}
+          row={(index) => (
+            <li key={index}>
               <ClauseRowBody
                 meta={<FaceLabelPending className="w-32" />}
-                title={
-                  <span className="text-sm">
-                    <FaceLabelPending
-                      className={cn(TITLE_WIDTHS[index % TITLE_WIDTHS.length])}
-                    />
-                  </span>
-                }
+                title={<RowTitlePending index={index} />}
                 trailing={<FaceLabelPending className="w-8" />}
               />
             </li>
-          ))}
-        </ul>
+          )}
+        />
       </div>
     </ClauseListShell>
   );

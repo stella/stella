@@ -145,7 +145,7 @@ const KNOWLEDGE_SURFACES = [
   {
     type: "steady",
     path: "/knowledge/clauses",
-    busy: "[data-slot=clause-rows-pending]",
+    busy: "[data-slot=knowledge-rows-pending]",
     landmarks: {
       heading: "[data-slot=clause-list-toolbar]",
       sidebar: "nav",
