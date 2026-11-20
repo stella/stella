@@ -297,6 +297,28 @@ const RESTRICTED_IMPORT_RULES = {
       owners: [],
     },
   ],
+  // Settings and admin pages are composed from one set of pieces (sections
+  // of rows on one list surface) so they cannot drift back into ad-hoc cards
+  // or inventory tables. The scope (the settings and admin route trees) is
+  // set by the rule's override in oxlint.config.ts. A table people read
+  // across columns stays, with a reasoned suppression on its import.
+  "settings-layout-primitives": [
+    {
+      messageId: "settingsLayoutPrimitives",
+      message:
+        "Compose settings and admin pages from '@stll/ui/settings' " +
+        "(SettingsSection, SettingsRow, SettingsPanel), not '{{name}}'. " +
+        "Keep a table only where people compare values across columns, " +
+        "and say so in a suppression on its import.",
+      modules: ["@stll/ui/frame", "@stll/ui/table", "@stll/ui/table-shell"],
+      restriction: {
+        type: "module",
+        typeOnlyImports: TYPE_ONLY_IMPORTS.allowed,
+        dynamicImports: DYNAMIC_IMPORTS.restricted,
+      },
+      owners: [],
+    },
+  ],
   // nanoid is a removed dependency: IDs come from Bun.randomUUIDv7() and
   // custom alphabets from crypto.getRandomValues().
   "no-nanoid": [

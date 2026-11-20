@@ -1,0 +1,5 @@
+{
+  "metric": "lint-suppression-directives",
+  "delta": 8,
+  "reason": "settings-layout-primitives rejects table imports in the settings and admin route trees; the tables people read across columns stay, one directive per import with its reason: the audit log (page and loading view), a change's before and after values, the members table sorted by name, role and joining date (page and loading view), invitations' role, status and dates beside it (component and loading view), and the billing tables' rates, validity dates and number patterns."
+}
