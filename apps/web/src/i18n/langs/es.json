@@ -5410,6 +5410,11 @@
       "googleKeyRestricted": "Revisa las restricciones de API, direcciones IP y sitios de referencia de esta clave en Google Cloud. Permite la API necesaria y las solicitudes de tu servidor y vuelve a intentarlo.",
       "keepSavedKey": "Conservar clave guardada",
       "keyFormatHint": "Esta clave tiene un formato inusual para {provider}. Guárdala para comprobarla con el proveedor.",
+      "keyNeed": {
+        "builtIn": "Opcional. Sin una clave propia, la IA de esta organización usa modelos proporcionados por stella.",
+        "keyRequired": "La IA de esta organización necesita una clave de proveedor. Añade una para activarla.",
+        "ownKeys": "La IA de esta organización usa las claves de abajo."
+      },
       "modelForRole": "Modelo para {role}",
       "modelIdPlaceholder": "Buscar modelos",
       "modelsDescription": "Elige un proveedor y un modelo multimodal ofrecido para cada categoría de IA.",
@@ -5417,6 +5422,7 @@
       "newApiKey": "Nueva clave API",
       "newApiKeyDescription": "Sustituirá la clave guardada al guardar los cambios.",
       "noModelResults": "No hay modelos ofrecidos que coincidan",
+      "noProviders": "Aún no hay claves de proveedores.",
       "openaiInsufficientQuota": "Revisa el presupuesto de tu proyecto de OpenAI y la facturación de la API. Añade saldo o aumenta el límite correspondiente y vuelve a intentarlo.",
       "openaiProjectOrganizationMismatch": "Usa una clave de API del proyecto y la organización de OpenAI que corresponden. Revisa sus ajustes de acceso y vuelve a intentarlo.",
       "openrouterNoCredits": "Añade saldo en la sección de facturación de OpenRouter y vuelve a intentarlo.",
@@ -5439,6 +5445,8 @@
       "providerForRole": "Proveedor para {role}",
       "providerKeyInvalid": "{provider} rechazó la clave. Compruébela antes de guardar.",
       "providerKeyInvalidShort": "No válida",
+      "providerModes": "Se usa para: {modes}",
+      "providerModesNone": "No se usa en ningún modo. Asígnala a un modo en Avanzado.",
       "providerSetupConsole": "Abrir los ajustes del proveedor",
       "providersDescription": "Añade las credenciales de los proveedores que quieres que use stella.",
       "providersPanel": "Proveedores",
@@ -5536,6 +5544,13 @@
     "startOverDescription": "Es posible que la solicitud original ya haya creado una organización. Revisa tus organizaciones antes de empezar de nuevo; una nueva solicitud podría crear otra organización.",
     "startOverTitle": "¿Iniciar una nueva solicitud de creación?",
     "switchOrganization": "Cambiar de organización"
+  },
+  "organizationSetup": {
+    "aiAction": "Configurar IA",
+    "aiOptional": "Las claves propias de proveedores de IA son opcionales: sin ellas, la IA usa modelos proporcionados por stella.",
+    "aiRequired": "La IA de esta organización necesita una clave de proveedor antes de que nadie pueda usarla.",
+    "invite": "Invita a tus colegas para que trabajen aquí contigo.",
+    "title": "Configura tu nueva organización"
   },
   "publicTools": {
     "addSkill": "Añadir una habilidad",
@@ -5976,7 +5991,7 @@
     "organization": {
       "activeMembers": "Miembros activos",
       "ai": "Configuración de IA",
-      "aiDescription": "Conecta tus propias claves de proveedores de IA.",
+      "aiDescription": "Elige cómo funciona la IA en esta organización.",
       "anonymization": {
         "addPlaceholder": "Término que siempre se enmascarará (p. ej. nombre del equipo)",
         "deleteAction": "Eliminar término",

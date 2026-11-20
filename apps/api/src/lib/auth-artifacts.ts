@@ -27,12 +27,12 @@ import {
   workspaces,
 } from "@/api/db/schema";
 import type { ApiKeyConfigId } from "@/api/lib/api-key-plugin-configs";
-import { liveSessionPredicate } from "@/api/lib/auth/session-liveness";
 import type { SafeId } from "@/api/lib/branded-types";
 import { DESKTOP_REGISTRY_KEY_CONFIG } from "@/api/lib/business-registries/desktop/config";
 import { desktopRegistryKeyOrganizationScope } from "@/api/lib/business-registries/desktop/scope";
 import { lockAccountRow, shareAccountRow } from "@/api/lib/db/account-row";
 import { withAggregateLock } from "@/api/lib/db/aggregate-lock";
+import { liveSessionPredicate } from "@/api/lib/db/session-liveness";
 import { releaseRevokedRunners } from "@/api/lib/desktop-runner/store";
 import { MACHINE_API_KEY_CONFIG_ID } from "@/api/lib/machine-api-key-config";
 import { machineApiKeyOrganizationScope } from "@/api/lib/machine-api-key-scope";
