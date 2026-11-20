@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import type { ReactElement } from "react";
 
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, test } from "bun:test";
@@ -53,7 +53,7 @@ const subjectFilter: ConditionNode = {
   value: "lease",
 };
 
-const tableView: WorkspaceView<"table"> = {
+const tableView: WorkspaceView = {
   version: 1,
   id: "view-table",
   name: "Documents",
@@ -71,7 +71,7 @@ const tableView: WorkspaceView<"table"> = {
   },
 };
 
-const boardView: WorkspaceView<"kanban"> = {
+const boardView: WorkspaceView = {
   version: 1,
   id: "view-board",
   name: "Board",
@@ -113,7 +113,7 @@ const warmClient = () => {
 };
 
 /** `children` on a matter route under the member layout, with the app's intl. */
-const renderInApp = async (children: ReactNode) => {
+const renderInApp = async (children: ReactElement) => {
   const rootRoute = router.createRootRoute({ component: router.Outlet });
   const memberRoute = router.createRoute({
     getParentRoute: () => rootRoute,
@@ -195,16 +195,21 @@ const toolbarOf = (container: Element, slot: string) => {
   return toolbar;
 };
 
+const requestUrl = (input: Parameters<typeof fetch>[0]): string => {
+  if (typeof input === "string") {
+    return input;
+  }
+  return input instanceof URL ? input.href : input.url;
+};
+
 const FOCUSABLE = "button, input, a, select, textarea, [tabindex]";
 
-// What the loaded table toolbar adds after its always-present controls, for
-// a member with AI: the playbook runner (behind that access) and "New
-// column" (behind the matter's column count).
-const TABLE_GATED_TAIL = 2;
-
+// The face draws every control the loaded toolbar shows for a member with AI
+// under the matter's column limit, the playbook runner and "New column"
+// included, so nothing is left to arrive after it.
 const CASES: readonly { gatedTail: number; view: WorkspaceView }[] = [
   { view: boardView, gatedTail: 0 },
-  { view: tableView, gatedTail: TABLE_GATED_TAIL },
+  { view: tableView, gatedTail: 0 },
 ];
 
 for (const { gatedTail, view } of CASES) {
@@ -235,7 +240,7 @@ for (const { gatedTail, view } of CASES) {
     const networkFetch = globalThis.fetch;
     globalThis.fetch = Object.assign(
       async (...args: Parameters<typeof fetch>) =>
-        String(args[0]).endsWith("/api/auth/get-session")
+        requestUrl(args[0]).endsWith("/api/auth/get-session")
           ? Response.json(null)
           : networkFetch(...args),
       { preconnect: networkFetch.preconnect },

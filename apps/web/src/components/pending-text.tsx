@@ -178,6 +178,7 @@ type PendingTextMessageKey =
   | "workspaces.overview.totalDocuments"
   | "workspaces.overview.totalItems"
   | "workspaces.parties.client"
+  | "workspaces.properties.newColumn"
   | "workspaces.team"
   | "workspaces.views.calendar.addDates"
   | "workspaces.views.calendar.createdAt"

@@ -4,7 +4,7 @@ import { useParams, useSearch } from "@tanstack/react-router";
 
 import { cn } from "@stll/ui/utils";
 
-import { DocxLoadingShell } from "@/components/docx/docx-loading-shell";
+import { DocxLoadingSheetPending } from "@/components/docx/docx-loading-shell";
 import {
   PdfLoadingShell,
   PdfToolbarFace,
@@ -109,7 +109,7 @@ const DocumentPagePendingView = () => {
       <div className={DOCUMENT_SHEET_SLOT_CLASS}>
         {sheet.type === "unknown" ? null : (
           <div className={DOCUMENT_DROP_ZONE_CLASS}>
-            <DocxLoadingShell />
+            <DocxLoadingSheetPending />
           </div>
         )}
       </div>

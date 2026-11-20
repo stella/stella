@@ -11,6 +11,8 @@ import {
   CalendarIcon,
   DownloadIcon,
   EyeIcon,
+  PlayIcon,
+  PlusIcon,
   Rows3Icon,
   SearchIcon,
   WrapTextIcon,
@@ -335,6 +337,22 @@ const LayoutControlsFace = ({ layout }: { layout: ViewLayout }) => {
           >
             <DownloadIcon className={TABLE_EXPORT_ICON_CLASS} />
           </ButtonFace>
+          {/* The playbook runner and "New column" stand at the end for a
+           * member with AI under the matter's column limit, which is nearly
+           * every member; the toolbar is aligned to its end, so leaving them
+           * out would move every control before them when they arrive. */}
+          <ButtonFace size="icon-xs" variant="ghost">
+            <PlayIcon className="size-3.5" />
+          </ButtonFace>
+          <ButtonFace size="xs" variant="muted">
+            <PlusIcon className="size-3" />
+            <span className="hidden sm:inline">
+              <PendingText
+                barClassName="w-16"
+                id="workspaces.properties.newColumn"
+              />
+            </span>
+          </ButtonFace>
         </>
       );
     case "overview":
@@ -342,6 +360,9 @@ const LayoutControlsFace = ({ layout }: { layout: ViewLayout }) => {
     case "correspondence":
       return null;
   }
+  // Every layout is a case above (the exhaustiveness rule holds the list);
+  // this return only gives the function one shape for every path.
+  return null;
 };
 
 /**
