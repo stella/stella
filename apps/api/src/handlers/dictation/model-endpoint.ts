@@ -9,11 +9,11 @@ import type { SafeDb } from "@/api/db/safe-db";
 import { consumeDictationLimit } from "@/api/handlers/dictation/limits";
 import { resolveCaching } from "@/api/lib/ai-config";
 import { loadOrgAISettings } from "@/api/lib/ai-config-loader";
-import type { OrgAISettings } from "@/api/lib/ai-config-loader";
-import {
-  ORG_AI_CONFIG_STATUS,
-  type OrgAIConfigStatus,
-} from "@/api/lib/ai-config-loader-core";
+import type {
+  OrgAISettings,
+  OrgSettingsForAuth,
+} from "@/api/lib/ai-config-loader";
+import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import { storedAIConfigUnreadableError } from "@/api/lib/ai-config-response";
 import { aiHandlerError } from "@/api/lib/ai-error";
 import {
@@ -337,9 +337,9 @@ export const runDesktopDictationModelAction = async function* <
   );
 };
 
-/** What a signed-in member's cleanup reads from its root handler context. */
-type MemberDictationContext = OrgAISettings & {
-  orgAIConfigStatus: OrgAIConfigStatus;
+/** What a signed-in member's cleanup reads from its root handler context:
+ *  the organization's AI settings, unreadable ones included. */
+type MemberDictationContext = OrgSettingsForAuth & {
   safeDb: SafeDb;
   session: { activeOrganizationId: SafeId<"organization"> };
   user: { id: SafeId<"user"> };
@@ -357,18 +357,7 @@ type MemberDictationContext = OrgAISettings & {
 export const runMemberDictationModelAction = async function* <
   TResult extends NonNullable<unknown>,
 >({
-  ctx: {
-    actionSignal,
-    managedAIResidency,
-    modelAdmission,
-    orgAIConfig,
-    orgAIConfigStatus,
-    promptCachingEnabled,
-    request,
-    safeDb,
-    session,
-    user,
-  },
+  ctx,
   limit = consumeDictationLimit,
   run,
 }: {
@@ -376,23 +365,24 @@ export const runMemberDictationModelAction = async function* <
   limit?: typeof consumeDictationLimit | undefined;
   run: (admitted: AdmittedDictationContext) => SafeHandlerGenerator<TResult>;
 }): SafeHandlerGenerator<TResult> {
-  if (orgAIConfigStatus === ORG_AI_CONFIG_STATUS.unreadable) {
+  if (ctx.orgAIConfigStatus === ORG_AI_CONFIG_STATUS.unreadable) {
     return Result.err(storedAIConfigUnreadableError());
   }
-  const organizationId = session.activeOrganizationId;
-  yield* Result.await(
-    limit({ organizationId, userId: user.id, operation: "cleanup" }),
-  );
+  const organizationId = ctx.session.activeOrganizationId;
+  const userId = ctx.user.id;
+  yield* Result.await(limit({ organizationId, userId, operation: "cleanup" }));
   return yield* run({
     caller: {
       organizationId,
-      userId: user.id,
-      safeDb,
-      orgAIConfig,
-      managedAIResidency,
-      promptCachingEnabled,
+      userId,
+      safeDb: ctx.safeDb,
+      orgAIConfig: ctx.orgAIConfig,
+      managedAIResidency: ctx.managedAIResidency,
+      promptCachingEnabled: ctx.promptCachingEnabled,
     },
-    modelAdmission: configuredModelAdmission({ modelAdmission }),
-    actionSignal: actionSignal ?? request.signal,
+    modelAdmission: configuredModelAdmission({
+      modelAdmission: ctx.modelAdmission,
+    }),
+    actionSignal: ctx.actionSignal ?? ctx.request.signal,
   });
 };
