@@ -1861,6 +1861,12 @@
   },
   {
     "file": "apps/api/src/lib/auth.ts",
+    "fingerprint": "7df306809a7a175c21518c91d74c93d9b682c9ae94811599316e7aee7be41e22",
+    "count": 1,
+    "reason": "The provider write transaction also reads the organization's SSO decision for the token's session after the credential fence; it takes no new lock and the single in-transaction create is unchanged."
+  },
+  {
+    "file": "apps/api/src/lib/auth.ts",
     "fingerprint": "9a14b7509d10db09c76c4d2f8a82e9da70a9f37fc308a150e1503736badc561c",
     "count": 1,
     "reason": "for key share in apps/api/src/lib/auth.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner.",
@@ -1871,12 +1877,6 @@
     "fingerprint": "af292a4848b1eee87119c9cf70e1cb6110bb553c917485b12bb3f3c0af9ed6f2",
     "count": 1,
     "reason": "transaction-boundary in apps/api/src/lib/auth.ts: Existing root transaction runner on rootDb; opens the owning database transaction for this module."
-  },
-  {
-    "file": "apps/api/src/lib/auth.ts",
-    "fingerprint": "d68156f694d31a8cc9e479924e72740eb410534a18d42d4be1b0a662525c9eb8",
-    "count": 1,
-    "reason": "The provider write transaction now also holds the account credential fence before inserting an OAuth token; the authorization-code client lock and the single in-transaction create are unchanged."
   },
   {
     "file": "apps/api/src/lib/auth/registration-adapter.ts",

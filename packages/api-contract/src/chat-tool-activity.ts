@@ -9,7 +9,11 @@
 import { panic } from "better-result";
 
 import { ASK_USER_TOOL_NAME, CREATE_DOCUMENT_TOOL_NAME } from "./chat";
-import { codeStepReads, type ScriptReadArea } from "./chat-code-step";
+import {
+  codeStepReads,
+  type ScriptReadArea,
+  stellaToolReadArea,
+} from "./chat-code-step";
 import { CONNECT_CONNECTOR_TOOL_NAME } from "./chat-connector";
 import { CHAT_LOCAL_RUN_QUESTION_TOOL } from "./chat-local-run-question";
 import { REQUEST_SECRET_TOOL_NAME } from "./chat-secret";
@@ -305,11 +309,14 @@ const EXTERNAL_MUTATION_OPERATION_PATTERN =
 const EXTERNAL_RESEARCH_OPERATION_PATTERN =
   /(?:^|[_-])(?:fetch|find|get|list|lookup|query|read|search)(?:$|[_-])/u;
 
-/** An external MCP tool (`mcp__<connector>__<tool>`), read from its verb. */
-const externalChatToolActivityCategory = (
-  toolName: string,
+/**
+ * A tool the chat has no entry for, read from the verb of its own name: an
+ * external MCP tool (`mcp__<connector>__<tool>`), or a stella registry tool
+ * a coding agent on the member's computer calls directly.
+ */
+const operationActivityCategory = (
+  sourceToolName: string,
 ): ChatToolActivityCategory => {
-  const sourceToolName = toolName.split("__").slice(2).join("__");
   if (EXTERNAL_ARTIFACT_OPERATION_PATTERN.test(sourceToolName)) {
     return "artifact";
   }
@@ -330,9 +337,16 @@ export const getChatToolActivityCategory = (
     return CHAT_TOOL_DISPLAY[toolName].category;
   }
   if (toolName.startsWith("mcp__")) {
-    return externalChatToolActivityCategory(toolName);
+    return operationActivityCategory(toolName.split("__").slice(2).join("__"));
   }
-  return "computation";
+  const area = stellaToolReadArea(toolName);
+  if (area === undefined) {
+    return "computation";
+  }
+  // A stella read of law, the workspace or a register is research whatever
+  // its verb (`resolve_law_citation` resolves nothing in the workspace); any
+  // other registry tool reads from its verb.
+  return area === "other" ? operationActivityCategory(toolName) : "research";
 };
 
 const USER_INPUT_CHAT_TOOL_NAMES = {
@@ -570,8 +584,9 @@ const researchReadArea = (toolName: string): ProcessReadArea => {
   if (isOwnKey(RESEARCH_TOOL_READ_AREA, toolName)) {
     return RESEARCH_TOOL_READ_AREA[toolName];
   }
-  // An external connector's read is a source of its own.
-  return "other";
+  // A stella read a coding agent called directly reaches its tool's area; an
+  // external connector's read is a source of its own.
+  return stellaToolReadArea(toolName) ?? "other";
 };
 
 /**

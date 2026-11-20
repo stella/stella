@@ -27,6 +27,7 @@ import {
   MCP_READER_UI_APP_DIRECTORIES,
   MCP_SHARED_UI_MODULE_FILES,
 } from "./lib/mcp-reader-ui-guard";
+import { resolveMetafilePath } from "./lib/metafile-path";
 import { namespaceMembers } from "./lib/namespace-members";
 import { precompiledMessagesPlugin } from "./lib/precompiled-messages";
 import { STYLE_SOURCES_COMMAND, unscannedStyleSources } from "./style-sources";
@@ -288,7 +289,7 @@ const readModuleGraph = (metafile: Bun.BuildMetafile): ModuleGraph => {
   }
   const inputs = new Set(
     Object.keys(metafile.inputs).map((file) =>
-      canonicalFile(path.resolve(file)),
+      canonicalFile(resolveMetafilePath(file)),
     ),
   );
   // Bun names a metafile path from the working directory, and an import
@@ -296,8 +297,8 @@ const readModuleGraph = (metafile: Bun.BuildMetafile): ModuleGraph => {
   // missing from the inputs; it still has a file.
   const resolveImport = (importer: string, target: string) => {
     const candidates = [
-      path.resolve(target),
-      path.resolve(path.dirname(importer), target),
+      resolveMetafilePath(target),
+      resolveMetafilePath(target, path.dirname(importer)),
     ].map(canonicalFile);
     return (
       candidates.find((file) => inputs.has(file)) ??
@@ -308,7 +309,7 @@ const readModuleGraph = (metafile: Bun.BuildMetafile): ModuleGraph => {
   return {
     imports: new Map(
       Object.entries(metafile.inputs).map(([key, { imports }]) => {
-        const importer = path.resolve(key);
+        const importer = resolveMetafilePath(key);
         return [
           canonicalFile(importer),
           imports
@@ -331,7 +332,7 @@ const readModuleGraph = (metafile: Bun.BuildMetafile): ModuleGraph => {
           ([file, { bytesInOutput }]) =>
             bytesInOutput > 0 && !isStylesheet(file),
         )
-        .map(([file]) => canonicalFile(path.resolve(file))),
+        .map(([file]) => canonicalFile(resolveMetafilePath(file))),
     ),
   };
 };
@@ -447,7 +448,10 @@ const analyseMcpApp = async (directory: McpAppDirectory) => {
   // packages; a module it misses would render without its utilities.
   const unscanned = unscannedStyleSources(
     Object.keys(metafile.inputs).map((file) =>
-      repoRelativePath(canonicalRepoRoot, canonicalFile(path.resolve(file))),
+      repoRelativePath(
+        canonicalRepoRoot,
+        canonicalFile(resolveMetafilePath(file)),
+      ),
     ),
     styleSource,
   );
@@ -457,7 +461,9 @@ const analyseMcpApp = async (directory: McpAppDirectory) => {
     );
   }
   const apiInputs = Object.keys(metafile.inputs).filter((file) =>
-    repoRelativePath(repoRoot, path.resolve(file)).startsWith("apps/api/"),
+    repoRelativePath(repoRoot, resolveMetafilePath(file)).startsWith(
+      "apps/api/",
+    ),
   );
   if (apiInputs.length > 0) {
     panic(`MCP app ${app} reaches API source: ${apiInputs.join(", ")}`);
@@ -468,7 +474,7 @@ const analyseMcpApp = async (directory: McpAppDirectory) => {
   );
   if (readerDirectory !== undefined) {
     const inputs = Object.keys(metafile.inputs)
-      .map((file) => repoRelativePath(repoRoot, path.resolve(file)))
+      .map((file) => repoRelativePath(repoRoot, resolveMetafilePath(file)))
       .filter((file) => /^(?:apps|packages)\//u.test(file))
       .toSorted();
     const loadModule = async (file: string) => ({

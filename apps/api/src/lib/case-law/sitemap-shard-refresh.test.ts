@@ -35,23 +35,20 @@ import type {
 } from "@/api/lib/case-law-public-read-db";
 import { publishedCaseLawDecisionFor } from "@/api/lib/case-law/published-decisions-sql";
 import { redistributableCaseLawSource } from "@/api/lib/case-law/redistribution";
+import { SITEMAP_RANGE_ROWS } from "@/api/lib/case-law/sitemap-shard-budget";
 import {
   invalidateCaseLawSitemapShardsTx,
   refreshCaseLawSitemapShards,
-  shouldSplitSitemapMonth,
-  SITEMAP_SHARD_SPLIT_THRESHOLD,
-  SITEMAP_SHARD_URL_HEADROOM,
   SITEMAP_WHOLE_COUNTRY,
   sitemapMonthCountSql,
   sitemapPendingMonthsSql,
   sitemapRefreshBudget,
 } from "@/api/lib/case-law/sitemap-shard-refresh";
 import {
-  decisionBucketSqlFor,
   decisionMonthSqlFor,
   decisionYearSqlFor,
   SITEMAP_ALL_BUCKET,
-  SITEMAP_MULTILINGUAL_URL_WEIGHT,
+  sitemapRangeBucket,
 } from "@/api/lib/case-law/sitemap-shard-sql";
 import {
   foldCaseLawSitemapTouches,
@@ -75,12 +72,6 @@ import {
   scanOccurrences,
 } from "@/api/tests/query-plans/plan-walker";
 
-test("single-month shards retain URL headroom at the packing boundary", () => {
-  expect(SITEMAP_SHARD_URL_HEADROOM).toBeGreaterThan(0);
-  expect(shouldSplitSitemapMonth(SITEMAP_SHARD_SPLIT_THRESHOLD)).toBe(false);
-  expect(shouldSplitSitemapMonth(SITEMAP_SHARD_SPLIT_THRESHOLD + 1)).toBe(true);
-});
-
 /** Same budget as the schema push: an embedded Postgres is not fast. */
 const DB_TEST_TIMEOUT_MS = 120_000;
 
@@ -89,8 +80,9 @@ type RefreshDb = Parameters<typeof refreshCaseLawSitemapShards>[0];
 const openSourceId = createSafeId<"caseLawSource">();
 const closedSourceId = createSafeId<"caseLawSource">();
 const removableId = createSafeId<"caseLawDecision">();
-/** A natural month larger than the preceding 5,000-URL ceiling. */
+/** A natural month several ranges long. */
 const BULK_MONTH_DECISIONS = 6000;
+const BULK_MONTH_RANGES = Math.ceil(BULK_MONTH_DECISIONS / SITEMAP_RANGE_ROWS);
 const NEWEST_UPDATE = new Date("2024-07-02T09:30:00.000Z");
 const EXTRA_UNDATED_DECISIONS = 30;
 const LISTING_ONLY_METADATA = {
@@ -203,6 +195,10 @@ type Shard = {
   bucket: string;
   total: number;
   lastModifiedMs: number;
+  rangeStartDate: string | null;
+  rangeStartId: string | null;
+  rangeEndDate: string | null;
+  rangeEndId: string | null;
 };
 
 const byShardKey = (a: Shard, b: Shard) =>
@@ -220,73 +216,134 @@ const snapshot = async (): Promise<Shard[]> =>
     }))
     .toSorted(byShardKey);
 
-const bucketCountSchema = (raw: unknown) => {
+const publishedRowSchema = (raw: unknown) => {
   if (
     !isRecord(raw) ||
+    typeof raw["id"] !== "string" ||
     typeof raw["country"] !== "string" ||
     typeof raw["year"] !== "string" ||
     typeof raw["month"] !== "string" ||
-    typeof raw["bucket"] !== "string" ||
-    typeof raw["total"] !== "number" ||
+    typeof raw["key_date"] !== "string" ||
+    (raw["language_group_key"] !== null &&
+      typeof raw["language_group_key"] !== "string") ||
+    typeof raw["redistributable"] !== "boolean" ||
     typeof raw["last_modified_ms"] !== "number"
   ) {
-    return panic("Unexpected recount row");
+    return panic("Unexpected published decision row");
   }
   return {
+    id: raw["id"],
     country: raw["country"],
     year: raw["year"],
     month: raw["month"],
-    bucket: raw["bucket"],
-    total: raw["total"],
+    keyDate: raw["key_date"],
+    languageGroupKey: raw["language_group_key"],
+    redistributable: raw["redistributable"],
     lastModifiedMs: raw["last_modified_ms"],
   };
 };
 
 /**
  * The shard table a full recount of the whole corpus writes, computed here
- * in one grouped read and split by month total, independently of the change
- * log and of the refresh's month-at-a-time path.
+ * from every published decision read plainly and cut in TypeScript,
+ * independently of the change log, of the refresh's month-at-a-time path and
+ * of its SQL: a month's published decisions in date-index order (date, then
+ * id), cut every `SITEMAP_RANGE_ROWS`; each listed decision (redistributable,
+ * the lowest id of its language group) counted in its range.
  */
 const fullRecount = async (): Promise<Shard[]> => {
-  const buckets = executedRows(
+  const rows = executedRows(
     await db.execute(sql`
       SELECT
+        ${caseLawDecisions.id}::text AS id,
         ${caseLawDecisions.country} AS country,
         ${decisionYearSqlFor(caseLawDecisions)} AS year,
         ${decisionMonthSqlFor(caseLawDecisions)} AS month,
-        ${decisionBucketSqlFor(caseLawDecisions)} AS bucket,
-        count(*)::int AS total,
-        floor(extract(epoch FROM max(${caseLawDecisions.updatedAt})) * 1000)::float8 AS last_modified_ms
+        coalesce(${caseLawDecisions.decisionDate}, '-infinity'::date)::text AS key_date,
+        ${caseLawDecisions.languageGroupKey} AS language_group_key,
+        ${redistributableCaseLawSource} AS redistributable,
+        floor(extract(epoch FROM ${caseLawDecisions.updatedAt}) * 1000)::float8 AS last_modified_ms
       FROM ${caseLawDecisions}
       INNER JOIN ${caseLawSources} ON ${caseLawSources.id} = ${caseLawDecisions.sourceId}
       WHERE ${publishedCaseLawDecisionFor(caseLawDecisions)}
-        AND ${redistributableCaseLawSource}
-      GROUP BY 1, 2, 3, 4
     `),
-  ).map(bucketCountSchema);
+  ).map(publishedRowSchema);
+  // The representative of a language group: its lowest listed id.
+  const representatives = new Map<string, string>();
+  for (const row of rows) {
+    if (!row.redistributable || row.languageGroupKey === null) {
+      continue;
+    }
+    const group = `${row.country}|${row.languageGroupKey}`;
+    const held = representatives.get(group);
+    if (held === undefined || compareCodeUnit(row.id, held) < 0) {
+      representatives.set(group, row.id);
+    }
+  }
+  const listed = (row: (typeof rows)[number]) =>
+    row.redistributable &&
+    (row.languageGroupKey === null ||
+      representatives.get(`${row.country}|${row.languageGroupKey}`) === row.id);
   const months = Map.groupBy(
-    buckets,
+    rows,
     ({ country, year, month }) => `${country}|${year}|${month}`,
   );
   return [...months.values()]
-    .flatMap((monthBuckets): Shard[] => {
-      const total = monthBuckets.reduce((sum, row) => sum + row.total, 0);
-      if (total > SITEMAP_SHARD_SPLIT_THRESHOLD) {
-        return monthBuckets;
-      }
-      const first = monthBuckets[0] ?? panic("A month has no buckets");
-      return [
-        {
-          ...first,
-          bucket: SITEMAP_ALL_BUCKET,
-          total,
+    .flatMap((monthRows): Shard[] => {
+      // `-infinity` is one undated month on its own, so the text order of
+      // the dates is the date order here.
+      const ordered = monthRows.toSorted(
+        (a, b) =>
+          compareCodeUnit(a.keyDate, b.keyDate) || compareCodeUnit(a.id, b.id),
+      );
+      const split = ordered.length > SITEMAP_RANGE_ROWS;
+      const keyAt = (position: number) => ordered.at(position);
+      const ranges = Map.groupBy(
+        ordered.flatMap((row, position) =>
+          listed(row)
+            ? [{ row, range: Math.floor(position / SITEMAP_RANGE_ROWS) }]
+            : [],
+        ),
+        ({ range }) => range,
+      );
+      return [...ranges.entries()].map(([range, members]): Shard => {
+        const first = members[0]?.row ?? panic("A range has no decision");
+        const start =
+          range === 0 ? undefined : keyAt(range * SITEMAP_RANGE_ROWS);
+        const end = keyAt((range + 1) * SITEMAP_RANGE_ROWS);
+        return {
+          country: first.country,
+          year: first.year,
+          month: first.month,
+          bucket: split ? sitemapRangeBucket(range) : SITEMAP_ALL_BUCKET,
+          total: members.length,
           lastModifiedMs: Math.max(
-            ...monthBuckets.map((row) => row.lastModifiedMs),
+            ...members.map(({ row }) => row.lastModifiedMs),
           ),
-        },
-      ];
+          rangeStartDate: split ? (start?.keyDate ?? null) : null,
+          rangeStartId: split ? (start?.id ?? null) : null,
+          rangeEndDate: split ? (end?.keyDate ?? null) : null,
+          rangeEndId: split ? (end?.id ?? null) : null,
+        };
+      });
     })
     .toSorted(byShardKey);
+};
+
+/** Every decision id a crawler reads from the listed files of one month. */
+const servedMonth = async (year: string, month: string) => {
+  const served: string[] = [];
+  for (const shard of (await listedShards()).filter(
+    (listed) => listed.year === year && listed.month === month,
+  )) {
+    // db-await-in-loop: one shard read per listed file, as a crawler would fetch them
+    const page = await listSitemapShardDecisionsHandler(shard, caseLawDb);
+    if (!("items" in page)) {
+      return panic("Expected a listed file to be readable.");
+    }
+    served.push(...page.items.map(({ id }) => id));
+  }
+  return served;
 };
 
 /** One run, and how many log rows it left for the next. */
@@ -410,9 +467,10 @@ test(
 test(
   "a refresh lists each published, redistributable month of a public country once",
   async () => {
-    // Each natural month stays whole below the protocol ceiling. XAA is counted, not listed.
+    // A month within one range stays whole; the bulk month is cut into
+    // ranges. XAA is counted, not listed.
     const { outcome } = await refreshUntilDone(refreshDb);
-    expect(outcome).toMatchObject({ shards: 4 });
+    expect(outcome).toMatchObject({ shards: 3 + BULK_MONTH_RANGES });
     expect(await loggedMonths()).toEqual([]);
     expect(await snapshot()).toEqual(await fullRecount());
 
@@ -420,35 +478,45 @@ test(
     const unsplit = shards.filter((shard) => shard.bucket === "all");
     expect(
       unsplit.map(({ country, year, month }) => `${country}/${year}/${month}`),
-    ).toEqual(["cze/undated/00", "cze/2024/06", "cze/2021/01", "cze/2020/03"]);
+    ).toEqual(["cze/undated/00", "cze/2021/01", "cze/2020/03"]);
     expect(unsplit.every((shard) => shard.lastmod !== null)).toBe(true);
   },
   propertyTestTimeout(DB_TEST_TIMEOUT_MS), // timeout: an embedded Postgres runs each statement and the schema push in WASM
 );
 
 test(
-  "a natural month larger than the preceding cap serves every decision once",
+  "a month several ranges long serves every decision once, from its own range",
   async () => {
-    const buckets = (await listedShards()).filter(
+    const ranges = (await listedShards()).filter(
       (shard) => shard.year === "2024" && shard.month === "06",
     );
-    expect(buckets).toHaveLength(1);
-    expect(buckets.at(0)?.bucket).toBe(SITEMAP_ALL_BUCKET);
-    expect(buckets.map((shard) => shard.lastmod)).toContain(
-      NEWEST_UPDATE.toISOString().slice(0, 10),
+    expect(ranges.map(({ bucket }) => bucket)).toEqual(
+      Array.from({ length: BULK_MONTH_RANGES }, (_, position) =>
+        sitemapRangeBucket(position),
+      ),
     );
-    const served = new Set<string>();
-    for (const shard of buckets) {
-      // db-await-in-loop: one shard read per listed bucket, as a crawler would fetch them
-      const page = await listSitemapShardDecisionsHandler(shard, caseLawDb);
-      if (!("items" in page)) {
-        panic("Expected a listed bucket to be readable.");
-      }
-      for (const item of page.items) {
-        served.add(item.id);
-      }
-    }
-    expect(served.size).toBe(BULK_MONTH_DECISIONS);
+    // Each range is dated by its own decisions: only the range holding the
+    // newest one carries its date.
+    expect(
+      ranges.filter(
+        ({ lastmod }) => lastmod === NEWEST_UPDATE.toISOString().slice(0, 10),
+      ),
+    ).toHaveLength(1);
+    const served = await servedMonth("2024", "06");
+    expect(served).toHaveLength(BULK_MONTH_DECISIONS);
+    expect(new Set(served).size).toBe(BULK_MONTH_DECISIONS);
+    // The whole month is not a file of its own once it is cut.
+    expect(
+      await listSitemapShardDecisionsHandler(
+        {
+          country: "cze",
+          year: "2024",
+          month: "06",
+          bucket: SITEMAP_ALL_BUCKET,
+        },
+        caseLawDb,
+      ),
+    ).toMatchObject({ code: 404 });
   },
   propertyTestTimeout(DB_TEST_TIMEOUT_MS), // timeout: an embedded Postgres runs each statement and the schema push in WASM
 );
@@ -476,12 +544,9 @@ test(
     const juneRows = (await snapshot()).filter(
       (shard) => shard.year === "2024" && shard.month === "06",
     );
-    expect(juneRows).toEqual([
-      expect.objectContaining({
-        bucket: SITEMAP_ALL_BUCKET,
-        total: BULK_MONTH_DECISIONS - 200,
-      }),
-    ]);
+    expect(juneRows.reduce((sum, { total }) => sum + total, 0)).toBe(
+      BULK_MONTH_DECISIONS - 200,
+    );
 
     await db
       .update(caseLawDecisions)
@@ -492,7 +557,7 @@ test(
       (await snapshot()).filter(
         (shard) => shard.year === "2024" && shard.month === "06",
       ).length,
-    ).toBe(1);
+    ).toBe(BULK_MONTH_RANGES);
   },
   propertyTestTimeout(DB_TEST_TIMEOUT_MS), // timeout: an embedded Postgres runs each statement and the schema push in WASM
 );
@@ -1376,9 +1441,9 @@ test(
   propertyTestTimeout(DB_TEST_TIMEOUT_MS), // timeout: an embedded Postgres plans the statement in WASM
 );
 
-// timeout: one refresh plus all 128 bucket reads of two months run on the in-process PGlite engine.
+// timeout: one refresh plus the reads of every listed file run on the in-process PGlite engine.
 test(
-  "language versions occupy one document across sitemap months and buckets",
+  "language versions occupy one document across sitemap months and ranges",
   async () => {
     const ids = Array.from({ length: 7 }, () =>
       createSafeId<"caseLawDecision">(),
@@ -1483,28 +1548,19 @@ test(
         .from(caseLawSitemapShards)
         .where(eq(caseLawSitemapShards.year, "2016"));
       expect(counts).toEqual([{ total: 2 }]);
-      const served: string[] = [];
-      // Every hashed bucket is read, including those that only a translation
-      // would occupy. Deduplicating after bucketing cannot pass this guard.
-      for (const month of ["01", "02"]) {
-        for (let bucket = 0; bucket < 64; bucket += 1) {
-          // db-await-in-loop: exercise the crawler's full bucket partition
-          const page = await listSitemapShardDecisionsHandler(
-            {
-              country: "cze",
-              year: "2016",
-              month,
-              bucket: String(bucket).padStart(2, "0"),
-            },
-            caseLawDb,
-          );
-          if (!("items" in page)) {
-            panic("Expected a readable sitemap bucket");
-          }
-          served.push(...page.items.map(({ id }) => id));
-        }
-      }
+      // Every listed file is read, and the month only a translation would
+      // occupy is not listed. Deduplicating after cutting cannot pass this.
+      const served = [
+        ...(await servedMonth("2016", "01")),
+        ...(await servedMonth("2016", "02")),
+      ];
       expect(served.toSorted()).toEqual([judgment, opinion].toSorted());
+      expect(
+        await listSitemapShardDecisionsHandler(
+          { country: "cze", year: "2016", month: "02", bucket: "all" },
+          caseLawDb,
+        ),
+      ).toMatchObject({ code: 404 });
       await db
         .delete(caseLawDecisions)
         .where(eq(caseLawDecisions.id, judgment));
@@ -1787,80 +1843,40 @@ test(
   propertyTestTimeout(DB_TEST_TIMEOUT_MS * 3), // timeout: 25 generated write sequences, each refreshed and recounted on an embedded Postgres
 );
 
-// timeout: seeds language alternates and reads their weighted protocol boundary in embedded PostgreSQL.
+// timeout: seeds language alternates past one range and reads every range in embedded PostgreSQL.
 test(
-  "language alternates retain shard headroom while monolingual group keys stay cheap",
+  "language versions count toward the cut as decisions read, and each listed one keeps its alternates",
   async () => {
-    const multilingualLimit = Math.floor(
-      SITEMAP_SHARD_SPLIT_THRESHOLD / SITEMAP_MULTILINGUAL_URL_WEIGHT,
-    );
-    const seedGroups = async (start: number, end: number) => {
-      await db.execute(sql`
-        INSERT INTO case_law_decisions
-          (id, source_id, case_number, court, country, language, language_group_key, decision_date, updated_at)
-        SELECT md5('sitemap-weighted-' || i::text || language)::uuid, ${openSourceId}::uuid,
-          'sitemap-weighted-' || i::text || '-' || language, 'Fixture court', 'CZE', language,
-          'sitemap-weighted-' || i::text, '2025-01-15'::date, '2025-02-01'::timestamptz
-        FROM generate_series(${start}::int, ${end}::int) AS i CROSS JOIN (VALUES ('cs'), ('en')) AS languages(language)
-      `);
-    };
-    await seedGroups(1, multilingualLimit);
-    const query = {
-      country: "cze",
-      year: "2025",
-      month: "01",
-      bucket: SITEMAP_ALL_BUCKET,
-    };
-    await refreshUntilDone(refreshDb);
-    expect(
-      (await listedShards()).filter(
-        ({ year, month }) => year === "2025" && month === "01",
-      ),
-    ).toMatchObject([{ bucket: SITEMAP_ALL_BUCKET }]);
-    const full = await listSitemapShardDecisionsHandler(query, caseLawDb);
-    if (!("items" in full)) {
-      panic("Expected the weighted ceiling to remain readable");
-    }
-    expect(full.items).toHaveLength(multilingualLimit);
-    expect(
-      full.items.every(
-        ({ languageAlternates }) => languageAlternates.length === 2,
-      ),
-    ).toBe(true);
-    await seedGroups(multilingualLimit + 1, 5001);
-    const oversized = await listSitemapShardDecisionsHandler(query, caseLawDb);
-    expect("items" in oversized).toBe(false);
-    expect(oversized).toMatchObject({ code: 500 });
-    await refreshUntilDone(refreshDb);
-    const split = (await listedShards()).filter(
-      ({ year, month }) => year === "2025" && month === "01",
-    );
-    expect(split).toHaveLength(64);
-    expect(split.every(({ bucket }) => bucket !== SITEMAP_ALL_BUCKET)).toBe(
-      true,
-    );
+    // Two language versions per document: the month holds more decisions
+    // than one range, though it lists fewer documents than that.
+    const documents = Math.ceil((SITEMAP_RANGE_ROWS + 100) / 2);
     await db.execute(sql`
-      UPDATE case_law_decisions SET language = 'cs'
-      WHERE case_number LIKE 'sitemap-weighted-%' AND language = 'en'
+      INSERT INTO case_law_decisions
+        (id, source_id, case_number, court, country, language, language_group_key, decision_date, updated_at)
+      SELECT md5('sitemap-weighted-' || i::text || language)::uuid, ${openSourceId}::uuid,
+        'sitemap-weighted-' || i::text || '-' || language, 'Fixture court', 'CZE', language,
+        'sitemap-weighted-' || i::text, '2025-01-15'::date, '2025-02-01'::timestamptz
+      FROM generate_series(1, ${documents}::int) AS i CROSS JOIN (VALUES ('cs'), ('en')) AS languages(language)
     `);
     await refreshUntilDone(refreshDb);
-    expect(
-      (await listedShards()).filter(
-        ({ year, month }) => year === "2025" && month === "01",
-      ),
-    ).toMatchObject([{ bucket: SITEMAP_ALL_BUCKET }]);
-    const monolingual = await listSitemapShardDecisionsHandler(
-      query,
-      caseLawDb,
+    expect(await snapshot()).toEqual(await fullRecount());
+    const ranges = (await listedShards()).filter(
+      ({ year, month }) => year === "2025" && month === "01",
     );
-    if (!("items" in monolingual)) {
-      panic("Expected language-only changes to release the hreflang budget");
+    expect(ranges.map(({ bucket }) => bucket)).toEqual(["0000", "0001"]);
+    const items: { id: string; languageAlternates: readonly unknown[] }[] = [];
+    for (const shard of ranges) {
+      // db-await-in-loop: one shard read per listed file, as a crawler would fetch them
+      const page = await listSitemapShardDecisionsHandler(shard, caseLawDb);
+      if (!("items" in page)) {
+        panic("Expected every range of the multilingual month to be readable");
+      }
+      items.push(...page.items);
     }
-    expect(monolingual.items).toHaveLength(5001);
+    expect(new Set(items.map(({ id }) => id)).size).toBe(documents);
+    expect(items).toHaveLength(documents);
     expect(
-      monolingual.items.every(
-        ({ languageAlternates }) => languageAlternates.length === 0,
-      ),
+      items.every(({ languageAlternates }) => languageAlternates.length === 2),
     ).toBe(true);
   },
   propertyTestTimeout(DB_TEST_TIMEOUT_MS),

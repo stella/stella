@@ -578,13 +578,12 @@ function RouteComponentInner({
     activeVersionFile ?? fieldFileQuery.data?.file ?? null;
   const activeFileContent =
     activeFileField?.content.type === "file" ? activeFileField.content : null;
-  const activeMimeType =
-    activeFileContent?.mimeType ?? resolvedVersionFile?.mimeType;
+  const activeFile = activeFileContent ?? resolvedVersionFile;
+  const activeMimeType = activeFile?.mimeType;
   const isPDFPageOrganizerOpen =
     pdfMode === "organize" && activeMimeType === PDF_MIME;
   const activePdfFileId = activeFileContent?.pdfFileId ?? null;
-  const activeFileLabel =
-    activeFileContent?.fileName ?? resolvedVersionFile?.fileName ?? fieldId;
+  const activeFileLabel = activeFile?.fileName ?? fieldId;
   const isDocxFile = activeMimeType === DOCX_MIME;
   // Signing from the page editor outlives it: saving first replaces the
   // version, which remounts the editor, and the signing must go on.
@@ -795,6 +794,7 @@ function RouteComponentInner({
                 />
               }
               fieldId={fieldId}
+              file={activeFile}
               onEditPages={
                 activeMimeType === PDF_MIME
                   ? () => setIsPDFPageOrganizerOpen(true)
@@ -899,6 +899,7 @@ function RouteComponentInner({
                       />
                     }
                     fieldId={fieldId}
+                    file={activeFile}
                     variant="inline"
                     workspaceId={workspaceId}
                   />
@@ -1133,8 +1134,8 @@ const ReadOnlyDocxDocumentViewer = ({
   const editorRef = useRef<DocxEditorRef>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const { containerRef: fitZoomRef, fitZoom: targetZoom } = useDocxFitZoom({
+    fit: { type: "editor" },
     scaleOffset,
-    maxAutoZoom: 0.85,
   });
   // Stable ref callback so React doesn't detach/re-attach the fit-zoom
   // ResizeObserver every render.

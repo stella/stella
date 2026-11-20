@@ -1,5 +1,13 @@
 # @stll/ai-catalog
 
+## 0.17.0
+
+### Minor Changes
+
+- [#9029](https://github.com/stella/stella/pull/9029) [`68c1187`](https://github.com/stella/stella/commit/68c118754f48886030189fc90429f3a224f7c499) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add a `browse` override group. It has no defaults of its own: `MODEL_OVERRIDE_GROUP_TASK` maps it to `short-text`, and `inheritedOverrideGroup` names the group it follows while unset (`fast`). `ModelOverrideGroup` gains a member, so code that matches it exhaustively has to handle it; `ModelTask` is unchanged.
+
+- [#9036](https://github.com/stella/stella/pull/9036) [`9977457`](https://github.com/stella/stella/commit/99774576b74999d1c440ca26f3345a6975c54dd0) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Default to the newest model generations: Gemini 4 Hydrogen for Google chat, fast and PDF tasks, Gemini 4 Neon for Google reasoning, and GPT-6.2 Sol for OpenAI and OpenRouter chat, reasoning and PDF tasks. Gemini 4 Hydrogen replaces Gemini 3.8 Flash in the recommended chat models. The default and recommended model id literal types change with them.
+
 ## 0.16.0
 
 ### Minor Changes

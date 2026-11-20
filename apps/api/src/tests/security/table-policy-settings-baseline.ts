@@ -174,6 +174,7 @@ export const TABLE_POLICY_SETTINGS_BASELINE: readonly string[] = [
   "session",
   "signal_events",
   "signals",
+  "sso_provider",
   "style_sets",
   "task_assignees",
   "template_categories",

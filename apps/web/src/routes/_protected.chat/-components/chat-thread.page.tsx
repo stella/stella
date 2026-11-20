@@ -957,6 +957,10 @@ export const ChatThreadPage = ({
               // height, so transcript clearance and the scroll button's
               // offset track the change automatically.
               composerBlockRef={observeComposerBlock}
+              fileDrop={{
+                onDragOver: controller.handleDragOver,
+                onDrop: controller.handleDrop,
+              }}
               aboveComposer={
                 <>
                   {env.VITE_FEATURE_USAGE && <UsageFallbackNotice />}

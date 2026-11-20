@@ -6,14 +6,23 @@
 # and nothing about how it behaves on a corpus-sized one. This script starts
 # from the schema the promoted release actually serves (its published API
 # image applies it), fills the registered high-volume tables with
-# scale-shaped rows, then runs this checkout's migrate entrypoint, schema
-# migrations and online phase alike, under a wall-clock budget. It runs the
-# entrypoint a second time to prove the upgrade is a fixed point, and checks
-# that the migrated schema matches schema.ts. It then boots the promoted
-# release's own image against the upgraded database: production keeps serving
-# that release, and replaces its tasks, until the candidate rolls out, and a
-# promotion that fails after its migrations leaves it serving indefinitely, so
-# a release's migrations must leave the previous release able to start.
+# scale-shaped rows, then follows a deploy's order under a wall-clock budget:
+#
+#   1. `migrate --online=finalized`: this checkout's schema migrations and
+#      the finalized online entries, the work a deploy does before its
+#      rollout.
+#   2. The promoted release's own image boots against that database:
+#      production keeps serving that release, and replaces its tasks, until
+#      the candidate rolls out, and a promotion that fails after its
+#      migrations leaves it serving indefinitely, so what a deploy runs
+#      before its rollout must leave the previous release able to start.
+#   3. The pending online drain (`db:drain-pending-online`): the pending
+#      online entries, which a deploy builds only after its rollout, when no
+#      task of the previous release is left to start.
+#
+# It then runs the full migrate entrypoint to prove the deploy and its drain
+# left a fixed point with every registered online repair checked, checks that
+# the migrated schema matches schema.ts, and boots this checkout.
 #
 # Inputs (environment):
 #   DATABASE_URL                       an EMPTY database (refused otherwise);
@@ -28,13 +37,15 @@
 #   REHEARSAL_DECISIONS                decisions to seed; the other tables
 #                                      are fixed multiples (see
 #                                      apps/api/src/scripts/seed-migration-rehearsal-plan.ts)
-#   REHEARSAL_MIGRATE_BUDGET_SECONDS   default 900
+#   REHEARSAL_MIGRATE_BUDGET_SECONDS   default 900; the deploy's migrate and
+#                                      its drain share one budget, the full
+#                                      rerun has another
 #   REHEARSAL_WRITER_GAP_BUDGET_SECONDS
 #                                      longest a contending writer session
 #                                      may go without a commit during the
-#                                      upgrade and rerun; default 60
+#                                      upgrade, drain and rerun; default 60
 #
-# The upgrade and the rerun run against a writer that keeps short
+# The upgrade, the drain and the rerun run against a writer that keeps short
 # transactions open on the corpus tables, the way production's ingestion and
 # projection workers do: DDL that needs ACCESS EXCLUSIVE on those tables has
 # to win a gap between writer transactions, and a single short lock wait does
@@ -43,12 +54,13 @@
 # that keeps corpus writers out for minutes stalls production's workers for
 # minutes even when it finishes within its own budget. Exits non-zero when
 # the database is not empty, the base schema cannot be applied, the seed
-# fails, the upgrade fails or outruns its budget, corpus writers were kept
-# out for longer than the writer gap budget, the rerun changes the applied migrations, a CHECK constraint's validity, or the
-# rows an online repair rewrites, the schema drifts from schema.ts, or the
-# promoted release does not reach readiness against the upgraded database (the
-# error names its refusing startup check and the migrations this checkout
-# applied).
+# fails, the upgrade or the drain fails or outruns the budget they share, the
+# promoted release does not reach readiness against the database the deploy's
+# migrate produced (the error names its refusing startup check and the
+# migrations this checkout applied), corpus writers were kept out for longer
+# than the writer gap budget, the rerun changes the applied migrations, a
+# CHECK constraint's validity, or the rows an online repair rewrites, or the
+# schema drifts from schema.ts.
 #
 # The base image is pulled only when it is not already present, so a caller
 # that pulled it with credentials this script never sees (CI does, before it
@@ -284,10 +296,10 @@ done
 grep -q "contending: locks held" "$contender_log" \
   || fail "The contending writer did not report holding its locks within 60s."
 
-log "Upgrading to this checkout (budget ${budget}s)"
+log "Upgrading to this checkout as a deploy does, with migrate --online=finalized (budget ${budget}s)"
 window_started_ms="$(now_ms)"
 upgrade_started="$(date +%s)"
-if ! (cd "$repo_root/apps/api" && timeout --foreground "$budget" bun run src/db/migrate.ts --rehearsal-online-repair-report "$repair_report"); then
+if ! (cd "$repo_root/apps/api" && timeout --foreground "$budget" bun run src/db/migrate.ts --online=finalized); then
   upgrade_seconds=$(( $(date +%s) - upgrade_started ))
   if (( upgrade_seconds >= budget )); then
     fail "The upgrade did not finish within ${budget}s on a scale-shaped database."
@@ -296,20 +308,51 @@ if ! (cd "$repo_root/apps/api" && timeout --foreground "$budget" bun run src/db/
 fi
 upgrade_seconds=$(( $(date +%s) - upgrade_started ))
 
-log "Checking the actual online repair census and attempts"
-(cd "$repo_root/apps/api" && bun run src/scripts/assert-online-migration-rehearsal.ts "$repair_report")
+explain_served_refusal() {
+  local explanation
+  explanation="$(bun "$repo_root/scripts/migration-rehearsal-startup-refusal.ts" "$1" "$ledger_before" "$ledger_after")" \
+    || explanation="its log could not be classified (see above)"
+  fail "The promoted release ${base_ref} cannot boot against the database this checkout's upgrade produced: ${explanation}. Production keeps serving ${base_ref} until this release rolls out, so what a deploy runs before its rollout (schema migrations and finalized online entries) must stay compatible with ${base_ref}'s startup checks: expand in this release, contract in a later one or in a pending online entry."
+}
 
-log "Rerunning the upgrade: a completed upgrade must be a fixed point"
+# Before the drain: a deploy builds pending online entries only after its
+# rollout, so the promoted release never starts against them.
+log "Booting the promoted release ${base_ref} against the upgraded database"
+bun "$repo_root/scripts/migration-rehearsal-db.ts" ledger >"$ledger_after"
+boot_until_ready "$base_image" "$served_container" explain_served_refusal
+assert_contender_alive "before the pending online drain, so the drain would run without contention."
+
+# The deploy's migrate and its drain together are the upgrade, so the drain
+# gets what the migrate left of the upgrade's budget.
+drain_budget=$(( budget - upgrade_seconds ))
+if (( drain_budget <= 0 )); then
+  fail "The upgrade left none of its ${budget}s budget for the pending online drain."
+fi
+log "Draining the pending online entries as a deploy does after its rollout (remaining budget ${drain_budget}s)"
+drain_started="$(date +%s)"
+if ! (cd "$repo_root/apps/api" && timeout --foreground "$drain_budget" bun run src/scripts/drain-pending-online-units.ts); then
+  drain_seconds=$(( $(date +%s) - drain_started ))
+  if (( drain_seconds >= drain_budget )); then
+    fail "The pending online drain did not finish within the ${drain_budget}s the upgrade left of its ${budget}s budget on a scale-shaped database."
+  fi
+  fail "The pending online drain failed on a scale-shaped database after ${drain_seconds}s."
+fi
+drain_seconds=$(( $(date +%s) - drain_started ))
+
+log "Rerunning the upgrade in full: the deploy and its drain must leave a fixed point"
 state_before="$(bun "$repo_root/scripts/migration-rehearsal-db.ts" digest)"
 rerun_started="$(date +%s)"
-(cd "$repo_root/apps/api" && timeout --foreground "$budget" bun run src/db/migrate.ts) \
-  || fail "Rerunning the migrate entrypoint on an upgraded database failed."
+(cd "$repo_root/apps/api" && timeout --foreground "$budget" bun run src/db/migrate.ts --rehearsal-online-repair-report "$repair_report") \
+  || fail "Rerunning the full migrate entrypoint on an upgraded and drained database failed."
 rerun_seconds=$(( $(date +%s) - rerun_started ))
 state_after="$(bun "$repo_root/scripts/migration-rehearsal-db.ts" digest)"
 if [[ "$state_before" != "$state_after" ]]; then
   printf 'before: %s\nafter:  %s\n' "$state_before" "$state_after"
-  fail "Rerunning the migrate entrypoint changed the database: the upgrade is not a fixed point."
+  fail "Rerunning the full migrate entrypoint changed the database: the deploy's migrate and its drain did not leave a fixed point."
 fi
+
+log "Checking the actual online repair census and attempts"
+(cd "$repo_root/apps/api" && bun run src/scripts/assert-online-migration-rehearsal.ts "$repair_report")
 assert_contender_alive "during the upgrade, so part of it ran without contention."
 window_ended_ms="$(now_ms)"
 stop_contender
@@ -326,17 +369,6 @@ if ! grep -q "No changes detected" <<<"$parity_output"; then
   fail "The upgraded schema does not match schema.ts."
 fi
 
-explain_served_refusal() {
-  local explanation
-  explanation="$(bun "$repo_root/scripts/migration-rehearsal-startup-refusal.ts" "$1" "$ledger_before" "$ledger_after")" \
-    || explanation="its log could not be classified (see above)"
-  fail "The promoted release ${base_ref} cannot boot against the database this checkout's upgrade produced: ${explanation}. Production keeps serving ${base_ref} until this release rolls out, so its migrations must stay compatible with ${base_ref}'s startup checks: expand in this release, contract in a later one."
-}
-
-log "Booting the promoted release ${base_ref} against the upgraded database"
-bun "$repo_root/scripts/migration-rehearsal-db.ts" ledger >"$ledger_after"
-boot_until_ready "$base_image" "$served_container" explain_served_refusal
-
 log "Booting this checkout after migration proofs and writer completion"
 boot_until_ready "$checkout_image" "$checkout_container"
 
@@ -347,9 +379,10 @@ boot_until_ready "$checkout_image" "$checkout_container"
   echo "| --- | --- |"
   echo "| Base release | \`${base_ref}\` (${base_source}) |"
   echo "| Seed | ${seed_seconds}s |"
-  echo "| Upgrade | ${upgrade_seconds}s of ${budget}s, against a contending writer |"
-  echo "| Rerun | ${rerun_seconds}s, state unchanged |"
+  echo "| Upgrade (\`migrate --online=finalized\`) | ${upgrade_seconds}s of ${budget}s, against a contending writer |"
+  echo "| \`${base_ref}\` after the upgrade, before the drain | ready |"
+  echo "| Pending online drain | ${drain_seconds}s of the remaining ${drain_budget}s, against a contending writer |"
+  echo "| Full rerun | ${rerun_seconds}s, state unchanged |"
   echo "| Writer max gap | ${writer_gap} |"
   echo "| Schema parity | no changes detected |"
-  echo "| \`${base_ref}\` after the upgrade | ready |"
 } | tee -a "$summary"

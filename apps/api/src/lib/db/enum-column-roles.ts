@@ -599,6 +599,10 @@ export const ENUM_COLUMN_ROLES = {
   organization_data_exports: {
     version_scope: ATTRIBUTE,
   },
+  // Either requirement may follow the other at any time.
+  organization_sso_policy: {
+    requirement: ATTRIBUTE,
+  },
   organization_settings: {
     ai_billing_drafts_mode: ATTRIBUTE,
     document_processing_mode: ATTRIBUTE,

@@ -27,6 +27,7 @@ import {
   brandPersistedUserId,
 } from "@/api/lib/safe-id-boundaries";
 import { signInHuman } from "@/api/tests/helpers/human-session";
+import { CREDENTIAL_AUTHENTICATION } from "@/api/tests/helpers/member-authorization";
 import {
   initAgentAuthTestDb,
   releaseAgentAuthTestDb,
@@ -503,7 +504,12 @@ test("a re-invited member returns without credentials, matters or approvals", as
 
   // The authorization layer grants the rejoined member no matter access.
   const authorization = await resolveMemberAuthorization(
-    { organizationId, userId: leaverId, workspaceId },
+    {
+      authentication: CREDENTIAL_AUTHENTICATION,
+      organizationId,
+      userId: leaverId,
+      workspaceId,
+    },
     db,
   );
   expect(authorization).toMatchObject({ role: "member", workspace: null });

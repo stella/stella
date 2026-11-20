@@ -30,6 +30,7 @@ import {
   oauthRefreshToken,
   organization,
   session,
+  ssoProvider,
   twoFactor,
 } from "@/api/db/auth-schema";
 import { WORKSPACE_ACCESS_MODE } from "@/api/db/rls";
@@ -257,6 +258,7 @@ const REVOKE_AUTH_CREDENTIALS_TABLES = [
   twoFactor,
   invitation,
   apikey,
+  ssoProvider,
 ] as const satisfies readonly PgTable[];
 
 /**
@@ -288,6 +290,13 @@ export const revokeAuthCredentialsAndInvitations = async ({
   // Delete invitations sent by the user, and also invitations sent to the user's email
   await tx.delete(invitation).where(eq(invitation.inviterId, currentUserId));
   await tx.delete(invitation).where(eq(invitation.email, email));
+  // An organization's SSO provider outlives the person who registered it;
+  // only the attribution is cleared.
+  // audit: skip - verifyAndDeleteUser records the parent account-deletion request in this transaction.
+  await tx
+    .update(ssoProvider)
+    .set({ userId: null })
+    .where(eq(ssoProvider.userId, currentUserId));
 };
 
 const REVOKE_OAUTH_TOKENS_TABLES = [

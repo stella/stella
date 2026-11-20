@@ -17,6 +17,8 @@ pub fn show(app: &AppHandle) {
     tracing::info!("transcribe window refused: dictation is not available");
     return;
   }
+  // Expired transcripts go before the window lists any.
+  crate::transcribe_history::window_opened(app);
   #[cfg(target_os = "macos")]
   crate::logging::best_effort(app.show(), "app could not be shown");
   if let Some(window) = app.get_webview_window(TRANSCRIBE_WINDOW_LABEL) {
