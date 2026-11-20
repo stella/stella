@@ -108,6 +108,11 @@ const AISetupLine = ({
 };
 
 const aiSetupMessage = (availability: OrganizationAIAvailability) => {
+  // Once the organization has its own keys, availability no longer says
+  // whether AI would work without them, and the step is done.
+  if (availability.orgConfigured) {
+    return null;
+  }
   if (availability.available) {
     return "organizationSetup.aiOptional" as const;
   }

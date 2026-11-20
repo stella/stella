@@ -155,6 +155,16 @@ test("someone who may not configure AI is not sent to its settings", async () =>
   expect(screen.queryByRole("link", { name: copy.aiAction })).toBeNull();
 });
 
+test("once the organization has its own keys, the AI step is gone", async () => {
+  markOrganizationSetupPending(NEW_ORGANIZATION);
+  await mount({
+    availability: { ...aiAvailableResponse(), orgConfigured: true },
+  });
+  expect(await screen.findByText(copy.title)).toBeDefined();
+  expect(screen.queryByText(copy.aiOptional)).toBeNull();
+  expect(screen.queryByRole("link", { name: copy.aiAction })).toBeNull();
+});
+
 test("closing the prompt keeps it closed for that organization", async () => {
   markOrganizationSetupPending(NEW_ORGANIZATION);
   markOrganizationSetupPending(OTHER_ORGANIZATION);
