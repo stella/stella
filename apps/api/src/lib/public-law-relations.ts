@@ -177,21 +177,6 @@ export const CITATION_POLARITY_EVIDENCE_COLUMN_GRANTS_BY_RELATION = {
   },
 } as const satisfies PublicLawColumnGrantsByRelation;
 
-/**
- * Expansion release: tolerate the sitemap shard range grants before the
- * follow-up migration adds the range columns, grants them and its readers
- * require them. Deploy this declaration first.
- */
-export const CASE_LAW_SITEMAP_RANGE_COLUMN_GRANTS_BY_RELATION = {
-  case_law_sitemap_shards: {
-    total: "permitted",
-    range_start_date: "permitted",
-    range_start_id: "permitted",
-    range_end_date: "permitted",
-    range_end_id: "permitted",
-  },
-} as const satisfies PublicLawColumnGrantsByRelation;
-
 const PROVISION_LINK_STATUS_GRANT = "permitted";
 
 /** Columns the provision link status capability requires after its grants land. */
@@ -568,7 +553,6 @@ export const PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION = {
   // The shards the public sitemap index lists. A file's read looks up its
   // range and refuses one whose count outgrew what a read may serve.
   case_law_sitemap_shards: {
-    ...CASE_LAW_SITEMAP_RANGE_COLUMN_GRANTS_BY_RELATION.case_law_sitemap_shards,
     country: "required",
     year: "required",
     month: "required",
