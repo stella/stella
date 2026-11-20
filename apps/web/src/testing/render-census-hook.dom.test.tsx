@@ -44,8 +44,12 @@ const BUILDS = {
   production: "cjs/react-dom-client.production.js",
   development: "cjs/react-dom-client.development.js",
 } as const;
-const loadClient = (file: string): ReactDomClient =>
-  requireFromReactDom(path.join(reactDomRoot, file));
+const loadClient = (file: string): ReactDomClient => {
+  const client: ReactDomClient = requireFromReactDom(
+    path.join(reactDomRoot, file),
+  );
+  return client;
+};
 const clients = Object.entries(BUILDS).map(
   ([build, file]) => [build, loadClient(file)] as const,
 );
