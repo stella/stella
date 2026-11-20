@@ -12,7 +12,6 @@ import type {
   WorkspaceFieldContent,
 } from "@stll/workspace-ui/types";
 
-import { PDF_MIME_TYPE } from "@/consts";
 import type {
   BoundingBox,
   ConditionNode,
@@ -22,13 +21,7 @@ import type {
   ViewLayoutType,
   WorkspacePropertyWire,
 } from "@/lib/api-contract";
-import {
-  DOCX_MIME,
-  getNativeOfficeViewerFormat,
-  isEmailFile,
-  isMarkdownFile,
-  isPlainTextFile,
-} from "@/lib/consts";
+import { nativeFilePreviewKind } from "@/lib/files/preview-kind";
 import type { FileRouteTypes } from "@/routeTree.gen";
 
 export type { WorkspaceFieldContent };
@@ -54,37 +47,7 @@ export const isFileDisplayable = (file: {
   fileName?: string | null | undefined;
   pdfFileId: string | null;
   encrypted: boolean;
-}) => {
-  if (file.mimeType === PDF_MIME_TYPE) {
-    return true;
-  }
-
-  if (file.pdfFileId !== null) {
-    return true;
-  }
-
-  // OOXML files are rendered natively in-browser.
-  if (
-    file.mimeType === DOCX_MIME ||
-    getNativeOfficeViewerFormat(file.mimeType) !== null
-  ) {
-    return true;
-  }
-
-  if (!file.encrypted && isEmailFile(file)) {
-    return true;
-  }
-
-  if (!file.encrypted && isMarkdownFile(file)) {
-    return true;
-  }
-
-  if (!file.encrypted && isPlainTextFile(file)) {
-    return true;
-  }
-
-  return false;
-};
+}) => file.pdfFileId !== null || nativeFilePreviewKind(file) !== null;
 
 export type PropertyDependency = {
   dependsOnPropertyId: PropertyId;

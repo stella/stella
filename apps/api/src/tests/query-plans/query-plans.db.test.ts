@@ -425,7 +425,9 @@ test(
     );
     const indexes = unionScans.map(({ index }) => index);
     expect(indexes).toContain("case_law_decisions_ecli_upper_idx");
-    expect(indexes).toContain("case_law_decision_identifiers_lookup_idx");
+    // Identifier values are compared by their match key, which the identifier
+    // rows' match-key index serves.
+    expect(indexes).toContain("case_law_decision_identifiers_match_key_idx");
     assertPlan(
       accessPathViolations(
         unionScans,

@@ -51,8 +51,26 @@ export const createSMTPTransport = (
   });
 
   return {
-    async send({ from, to, subject, html, text }) {
-      await transporter.sendMail({ from, to, subject, html, text });
+    async send({ from, to, subject, html, text, replyTo, inlineImages }) {
+      await transporter.sendMail({
+        from,
+        to,
+        subject,
+        html,
+        text,
+        ...(replyTo === undefined ? {} : { replyTo }),
+        ...(inlineImages === undefined
+          ? {}
+          : {
+              attachments: inlineImages.map((image) => ({
+                cid: image.contentId,
+                filename: image.filename,
+                contentType: image.contentType,
+                contentDisposition: "inline" as const,
+                content: Buffer.from(image.content),
+              })),
+            }),
+      });
     },
   };
 };

@@ -120,6 +120,7 @@ type AiGradingDeps = {
   promptCachingEnabled: boolean;
   serviceTier: AIRequestServiceTier;
   usageMetering: AIUsageMetering;
+  authorizeModelDispatch?: (() => Promise<void>) | undefined;
   /** External model-dispatch boundaries; supplied by focused tests. */
   gradeTierMatches?: typeof gradeTierMatches | undefined;
   gradeReferencePositions?: typeof gradeReferencePositions | undefined;
@@ -354,6 +355,9 @@ const gradeTierMatchPositions = async ({
       break;
     }
 
+    if (deps.authorizeModelDispatch !== undefined) {
+      await deps.authorizeModelDispatch();
+    }
     const graded = await gradeTierMatchesForReview({
       items: batch.map(({ position, askValue, passages }) => ({
         key: position.sourceId,
@@ -510,6 +514,9 @@ const gradeReferenceStandards = async ({
     concurrency: REFERENCE_GRADE_CONCURRENCY,
     abortSignal: deps.abortSignal,
     onBatch: async (batch) => {
+      if (deps.authorizeModelDispatch !== undefined) {
+        await deps.authorizeModelDispatch();
+      }
       const outcome = await gradeReferencePositionsForReview({
         positions: batch.map((pair) => pair.reference),
         target,

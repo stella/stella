@@ -50,6 +50,8 @@ import type {
   FlowRunStepRun,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/flows/flow-run-types";
 
+import { RunDetailBody, RunDetailSkeleton } from "./run-detail.pending";
+
 type RunDetailProps = {
   workspaceId: string;
   runId: string;
@@ -64,11 +66,7 @@ export const RunDetail = ({ workspaceId, runId, onBack }: RunDetailProps) => {
   const query = useQuery(flowRunDetailOptions(workspaceId, runId));
 
   if (query.isPending) {
-    return (
-      <div className="flex flex-1 items-center justify-center p-8">
-        <p className="text-muted-foreground text-sm">{t("common.loading")}</p>
-      </div>
-    );
+    return <RunDetailSkeleton back={<BackButton onBack={onBack} />} />;
   }
 
   // The API client's response type for this endpoint can also resolve to a raw
@@ -162,7 +160,7 @@ const RunDetailContent = ({
   };
 
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-col gap-4 p-6">
+    <RunDetailBody>
       <div className="flex items-center justify-between gap-2">
         <BackButton onBack={onBack} />
         {isActive && canRun && (
@@ -239,7 +237,7 @@ const RunDetailContent = ({
           />
         ))}
       </ol>
-    </div>
+    </RunDetailBody>
   );
 };
 

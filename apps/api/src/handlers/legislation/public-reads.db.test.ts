@@ -45,6 +45,8 @@ import { listStatuteVersionsHandler } from "@/api/handlers/legislation/versions"
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { PAGINATION_CURSOR_MAX_CHARS } from "@/api/lib/custom-schema";
+import { EMPTY_AST } from "@/api/lib/legal-search/document-types";
+import type { EmptyAst } from "@/api/lib/legal-search/document-types";
 import { refreshLegislationFacetCounts } from "@/api/lib/legal-search/legislation-facet-refresh";
 import type {
   LegislationReadDb,
@@ -156,7 +158,7 @@ type DocumentSeed = {
   country?: string;
   language?: string;
   metadata?: Record<string, unknown>;
-  documentAst?: DocumentAst;
+  documentAst?: DocumentAst | EmptyAst;
   fulltext?: string;
   versionValidFrom: string | null;
   versionValidTo: string | null;
@@ -261,6 +263,26 @@ const HISTORY_WINDOWS = [
   { validFrom: "2017-01-01", validTo: "2019-12-31" },
   { validFrom: "2020-01-01", validTo: null },
 ] as const;
+
+/**
+ * A Work whose provision keeps its words through a reprint that changed only
+ * the spacing, with one consolidation whose structure cannot be read in
+ * between, oldest first as `HISTORY_WINDOWS` orders them.
+ */
+const WORDING_WORK_ELI = "CZ/2002/1";
+const WORDING_WORK_TEXTS = [
+  "The seller shall deliver within thirty days.",
+  // A no-break space and a doubled space: the same words, typeset anew.
+  "The seller shall\u00a0deliver  within thirty days.",
+  null,
+  "The seller shall deliver within thirty days.",
+] as const;
+const WORDING_WORK = HISTORY_WINDOWS.map(({ validFrom, validTo }, index) => ({
+  id: createSafeId<"legislationDocument">(),
+  validFrom,
+  validTo,
+  wording: WORDING_WORK_TEXTS[index] ?? null,
+}));
 
 /**
  * Every pattern of which of a Work's four consecutive versions carry the
@@ -630,6 +652,20 @@ beforeAll(
         ),
       ),
     );
+    await historyOwner.insert(legislationDocuments).values(
+      WORDING_WORK.map(({ id, validFrom, validTo, wording }) =>
+        seedDocument({
+          id,
+          sourceId: openSourceId,
+          eli: WORDING_WORK_ELI,
+          title: `History walk ${WORDING_WORK_ELI}`,
+          // A source without a parser stores no structure at all.
+          documentAst: wording === null ? EMPTY_AST : statuteAst(wording),
+          versionValidFrom: validFrom,
+          versionValidTo: validTo,
+        }),
+      ),
+    );
     historyDb = readDb(historyOwner);
   },
   { timeout: propertyTestTimeout(30_000) },
@@ -753,15 +789,50 @@ const expectPage = (result: unknown): StatutePage => {
   return result as StatutePage;
 };
 
-type ProvisionHistoryPage = {
-  items: {
-    allowsDerivedAi: boolean;
-    documentId: string;
-    versionValidFrom: string | null;
-    versionValidTo: string | null;
-    text: string;
-  }[];
-  nextCursor: string | null;
+type ProvisionHistoryPage = Extract<
+  Awaited<ReturnType<typeof readProvisionHistoryHandler>>,
+  { items: unknown[] }
+>;
+
+const foundText = (item: ProvisionHistoryPage["items"][number]) =>
+  item.status === "found" ? item.text : null;
+
+/** What each item of a walk says about its wording, page after page. */
+const walkWordingChanges = async ({
+  anchor,
+  documentId,
+  limit,
+  db,
+}: {
+  anchor: string;
+  documentId: SafeId<"legislationDocument">;
+  limit: number;
+  db: LegislationReadDb;
+}) => {
+  const seen: [string, string][] = [];
+  let cursor: string | null = null;
+  let requests = 0;
+  do {
+    requests += 1;
+    const page: ProvisionHistoryPage = expectHistoryPage(
+      // db-await-in-loop: a cursor walk, each page names the next
+      await readProvisionHistoryHandler({
+        documentId,
+        anchor,
+        query: { limit, ...(cursor === null ? {} : { cursor }) },
+        legislationDb: db,
+        surface: "pages",
+      }),
+    );
+    seen.push(
+      ...page.items.map((item): [string, string] => [
+        item.documentId,
+        item.status === "found" ? item.wordingChange : item.status,
+      ]),
+    );
+    cursor = page.nextCursor;
+  } while (cursor !== null && requests <= 20);
+  return { cursor, seen };
 };
 
 const expectHistoryPage = (result: unknown): ProvisionHistoryPage => {
@@ -1983,7 +2054,7 @@ describe("provision history", () => {
       civilCodeSuperseded,
     ]);
     // The neighbouring section is a sibling heading, so it ends the provision.
-    expect(page.items.map((item) => item.text)).toEqual([
+    expect(page.items.map(foundText)).toEqual([
       `${SECTION_SIGN} 2079\nThe seller shall deliver within fourteen days.`,
       `${SECTION_SIGN} 2079\nThe seller shall deliver within thirty days.`,
       `${SECTION_SIGN} 2079\nThe seller shall deliver within thirty days.`,
@@ -2110,6 +2181,72 @@ describe("provision history", () => {
     ]);
   });
 
+  test("marks where the provision's wording changed and where the act was only consolidated again", async () => {
+    const { seen } = await walkWordingChanges({
+      anchor: DELIVERY_ANCHOR,
+      documentId: civilCodeCurrent,
+      limit: LIMITS.legislationProvisionHistoryPageSizeMax,
+      db: legislationDb,
+    });
+
+    expect(seen).toEqual([
+      [civilCodeCurrent, "changed"],
+      [civilCodeOpenOlder, "unchanged"],
+      [civilCodeSuperseded, "earliest"],
+    ]);
+  });
+
+  // The neighbouring section keeps its words in all four consolidations, the
+  // one that repeals the delivery rule included, on every page size.
+  test.each([1, 2, 3, 4, LIMITS.legislationProvisionHistoryPageSizeMax])(
+    "reads a provision no consolidation rewrote as unchanged through every version (limit %i)",
+    async (limit) => {
+      expect(
+        await walkWordingChanges({
+          anchor: "sec-2080",
+          documentId: civilCodeCurrent,
+          limit,
+          db: legislationDb,
+        }),
+      ).toEqual({
+        cursor: null,
+        seen: [
+          [civilCodeFuture, "unchanged"],
+          [civilCodeCurrent, "unchanged"],
+          [civilCodeOpenOlder, "unchanged"],
+          [civilCodeSuperseded, "earliest"],
+        ],
+      });
+    },
+  );
+
+  test.each([1, 2, 3, 4])(
+    "claims nothing across a version it cannot read and ignores a reprint's spacing (limit %i)",
+    async (limit) => {
+      const idAt = (index: number) =>
+        WORDING_WORK[index]?.id ?? panic("wording fixture has four versions");
+
+      expect(
+        await walkWordingChanges({
+          anchor: DELIVERY_ANCHOR,
+          documentId: idAt(3),
+          limit,
+          db: historyDb,
+        }),
+      ).toEqual({
+        cursor: null,
+        seen: [
+          // The wording equals the oldest one, yet the version between them
+          // cannot be read, so nothing says it held all along.
+          [idAt(3), "unknown"],
+          [idAt(2), "unavailable"],
+          [idAt(1), "unchanged"],
+          [idAt(0), "earliest"],
+        ],
+      });
+    },
+  );
+
   // A walk that returned the provision must end in an ordinary last page,
   // whichever page the versions without the anchor land on. Not found is an
   // answer only a first page that holds every version can give; a Work no
@@ -2163,6 +2300,31 @@ describe("provision history", () => {
           cursor: null,
           seen: carrying,
         });
+
+        // Each version words the provision its own way, so a carrying
+        // version after another one changed it, one after a gap added it,
+        // and the oldest starts the record, whichever page it lands on.
+        const expected = versions
+          .flatMap(({ carries, id }, index): [string, string][] => {
+            if (!carries) {
+              return [];
+            }
+            const older = versions[index - 1];
+            if (older === undefined) {
+              return [[id, "earliest"]];
+            }
+            return [[id, older.carries ? "changed" : "added"]];
+          })
+          .toReversed();
+        expect(
+          // db-await-in-loop: one walk per page size under test
+          await walkWordingChanges({
+            anchor: DELIVERY_ANCHOR,
+            documentId: newest.id,
+            limit,
+            db: historyDb,
+          }),
+        ).toEqual({ cursor: null, seen: expected });
       }
     },
   );

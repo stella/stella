@@ -103,6 +103,16 @@ export const DOCUMENT_RAW_CAPTURE = {
     parts: ["detail"],
     objectPrefixes: [],
   },
+  [ADAPTER_KEYS.CZ_NS_SBIRKA]: {
+    type: "inline",
+    parts: ["detail"],
+    objectPrefixes: [],
+  },
+  [ADAPTER_KEYS.CZ_ISIR]: {
+    type: "inline",
+    parts: ["text"],
+    objectPrefixes: [],
+  },
   [ADAPTER_KEYS.BR_TST]: {
     type: "inline",
     parts: ["listing"],

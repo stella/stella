@@ -1,8 +1,7 @@
 import { startTransition, useEffect, useRef, useState } from "react";
-import type { ReactNode } from "react";
 
 import { invoke } from "@tauri-apps/api/core";
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { useFormatter, useLocale, useTranslations } from "use-intl";
 
 import { displayLanguageName } from "@stll/locales";
@@ -19,14 +18,12 @@ import {
   ComboboxList,
   ComboboxPopup,
 } from "@stll/ui/combobox";
-import { FramePanel } from "@stll/ui/frame";
+import { BanIcon } from "@stll/ui/icons";
 import { Label } from "@stll/ui/label";
+import { ListItemStatus } from "@stll/ui/list";
 import { ScrollArea } from "@stll/ui/scroll-area";
-import { Separator } from "@stll/ui/separator";
 import { StellaMark } from "@stll/ui/stella-mark";
 import { Switch } from "@stll/ui/switch";
-import { Tabs, TabsList, TabsPanel, TabsTab } from "@stll/ui/tabs";
-import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import { ACTIVITY_CHANGED_EVENT } from "../activity/activity-types";
@@ -40,18 +37,20 @@ import {
   SUPPORTED_LANGUAGES,
 } from "../i18n";
 import type { SupportedLanguage } from "../i18n";
+import { NEVER_REQUESTED } from "../onboarding/onboarding-types";
 import { accountExpiryDelay } from "../shared/account-expiry";
 import { subscribeDesktopEvent } from "../shared/desktop-events";
+import { PERMISSIONS } from "../shared/permissions";
 import { isAppSnapshot } from "../shared/rpc";
 import type {
   AppSnapshot,
   DesktopNotificationPreferences,
   DesktopUpdateSnapshot,
   DocumentRecoverySnapshot,
-  LinkedAccountSnapshot,
   RecoveryTarget,
 } from "../shared/rpc";
 import { StellaAppIcon } from "../shared/StellaAppIcon";
+import { DESKTOP_PLATFORM } from "../shared/use-clipboard-shortcut";
 import { WindowDragRegion } from "../shared/WindowDragRegion";
 import {
   DESKTOP_TELEMETRY_ERROR_CODES,
@@ -59,15 +58,30 @@ import {
   DESKTOP_TELEMETRY_WINDOWS,
   reportDesktopError,
 } from "../telemetry/desktop-telemetry";
-import { accountPresentation } from "./account-presentation";
+import { accountDisplay, accountStatusTone } from "./account-presentation";
 import type { DesktopAccountState } from "./account-presentation";
 import { AgentSubscriptionsSection } from "./AgentSubscriptionsSection";
 import type { AgentSettingsFocus } from "./AgentSubscriptionsSection";
 import { commandErrorMessage } from "./command-error";
-import { DictationSetting } from "./DictationSetting";
+import { DictationSetting, useDictationAvailability } from "./DictationSetting";
+import { KeepAwakeSection } from "./KeepAwakeSection";
 import { LocalLinkedFoldersSection } from "./LocalLinkedFoldersSection";
 import { LocalSkillFoldersSection } from "./LocalSkillFoldersSection";
 import { PermissionsSection } from "./PermissionsSection";
+import {
+  SettingsGroup,
+  SettingsPageHeader,
+  SettingsRow,
+  settingsRowIds,
+  SettingsSectionGroup,
+} from "./settings-layout";
+import {
+  isAgentSettingsFocus,
+  isSettingsPage,
+  SETTINGS_PAGES,
+} from "./settings-pages";
+import type { SettingsPage } from "./settings-pages";
+import { SettingsSidebar } from "./SettingsSidebar";
 import { ShortcutSetting } from "./ShortcutSetting";
 import { SigningDriverSection } from "./SigningDriverSection";
 
@@ -90,26 +104,6 @@ const DEFAULT_UPDATE_SNAPSHOT = {
   updateReady: false,
 } satisfies DesktopUpdateSnapshot;
 
-const PREFERENCES_TABS = [
-  "general",
-  "activity",
-  "notifications",
-  "about",
-] as const;
-
-type PreferencesTab = (typeof PREFERENCES_TABS)[number];
-
-/**
- * Where on General a `stella://settings/agents` link scrolls to: the coding
- * agents' group or one agent's card. Native code sends only these ids
- * (`AgentSettingsFocus` in `src-tauri/src/lib.rs`).
- */
-const AGENT_SETTINGS_FOCUS = [
-  "agents",
-  "codex",
-  "claude-code",
-] as const satisfies readonly AgentSettingsFocus[];
-
 type NotificationPreferenceKey = keyof DesktopNotificationPreferences;
 
 const NOTIFICATION_PREFERENCE_KEYS = [
@@ -127,12 +121,6 @@ true satisfies MissingNotificationPreferenceKey extends never ? true : never;
 
 const isMacDesktop = navigator.userAgent.includes("Mac");
 
-const isPreferencesTab = (value: string | null): value is PreferencesTab =>
-  value !== null && (PREFERENCES_TABS as readonly string[]).includes(value);
-
-const isAgentSettingsFocus = (value: unknown): value is AgentSettingsFocus =>
-  AGENT_SETTINGS_FOCUS.some((focus) => focus === value);
-
 const reportSubscriptionFailure = () => {
   reportDesktopError({
     code: DESKTOP_TELEMETRY_ERROR_CODES.eventSubscriptionFailed,
@@ -141,44 +129,15 @@ const reportSubscriptionFailure = () => {
   });
 };
 
-const getInitialTab = (): PreferencesTab => {
-  const tab = window.location.hash.replace(/^#/u, "");
-  return isPreferencesTab(tab) ? tab : "general";
+const getInitialPage = (): SettingsPage => {
+  const page = window.location.hash.replace(/^#/u, "");
+  return isSettingsPage(page) ? page : "general";
 };
 
-const getAccountInitials = (linkedAccount: LinkedAccountSnapshot) => {
-  if (linkedAccount.name?.trim()) {
-    return linkedAccount.name
-      .split(" ")
-      .map((part) => part[0])
-      .join("")
-      .slice(0, 2)
-      .toUpperCase();
-  }
-
-  return linkedAccount.email.slice(0, 2).toUpperCase();
-};
-
-type SettingRowProps = {
-  helper?: string;
-  label: string;
-  value: ReactNode;
-};
-
-const SettingRow = ({ helper, label, value }: SettingRowProps) => (
-  <div className="flex items-start justify-between gap-4 px-4 py-3">
-    <div className="min-w-0 flex-1">
-      <p className="text-sm font-medium">{label}</p>
-      {helper ? (
-        <p className="text-muted-foreground mt-1 text-sm leading-relaxed">
-          {helper}
-        </p>
-      ) : null}
-    </div>
-    <p className="text-muted-foreground max-w-40 text-end text-sm leading-relaxed">
-      {value}
-    </p>
-  </div>
+/** The permissions the Permissions page lists; open at login is an app
+ *  setting on General. */
+const PERMISSIONS_PAGE_ROWS = PERMISSIONS.filter(
+  (permission) => permission !== "openAtLogin",
 );
 
 type NotificationRowProps = {
@@ -224,25 +183,6 @@ const NotificationRow = ({
   );
 };
 
-const PanelGroup = ({
-  children,
-  title,
-}: {
-  children: React.ReactNode;
-  title?: string;
-}) => (
-  <section className="space-y-2">
-    {title ? (
-      <h2 className="text-muted-foreground text-2xs px-1 font-medium tracking-[0.08em] uppercase">
-        {title}
-      </h2>
-    ) : null}
-    <div className="bg-background overflow-hidden rounded-xl border">
-      {children}
-    </div>
-  </section>
-);
-
 const DocumentRecovery = ({
   recovery,
   onRefresh,
@@ -272,7 +212,7 @@ const DocumentRecovery = ({
     return null;
   }
   return (
-    <PanelGroup title={t("recoveryTitle")}>
+    <SettingsSectionGroup title={t("recoveryTitle")}>
       <div className="space-y-3 px-4 py-3 text-sm">
         {recovery.edits.length ? (
           <>
@@ -335,7 +275,7 @@ const DocumentRecovery = ({
           </p>
         ) : null}
       </div>
-    </PanelGroup>
+    </SettingsSectionGroup>
   );
 };
 
@@ -403,201 +343,69 @@ const TelemetryPreferenceControl = ({ onRetry }: { onRetry: () => void }) => {
     setPreference({ status: "ready", enabled: result.value });
   };
 
+  const ids = settingsRowIds("desktop-telemetry");
   return (
-    <div className="px-4 py-3">
-      <div className="flex items-start justify-between gap-4">
-        <div className="min-w-0 flex-1">
-          <Label className="text-sm font-medium" htmlFor="desktop-telemetry">
-            {t("sendCrashReports")}
-          </Label>
-          <p
-            className="text-muted-foreground mt-1 text-sm leading-relaxed"
-            id="desktop-telemetry-description"
-          >
-            {t("sendCrashReportsDescription")}
-          </p>
-        </div>
-        <Switch
-          aria-describedby="desktop-telemetry-description"
-          checked={
-            preference.status === "ready" || preference.status === "saving"
-              ? preference.enabled
-              : false
-          }
-          disabled={preference.status !== "ready"}
-          id="desktop-telemetry"
-          onCheckedChange={(enabled) => {
-            void savePreference(enabled);
-          }}
-        />
-      </div>
-      {error ? (
-        <div className="mt-2 flex items-center justify-between gap-4">
-          <p className="text-destructive text-sm" role="alert">
-            {t(error === "read" ? "errorReadTelemetry" : "errorSaveTelemetry")}
-          </p>
-          {error === "read" ? (
-            <Button onClick={onRetry} variant="outline">
-              {t("tryAgain")}
-            </Button>
-          ) : null}
-        </div>
-      ) : null}
-    </div>
+    <SettingsRow
+      description={t("sendCrashReportsDescription")}
+      footer={
+        error ? (
+          <div className="flex items-center justify-between gap-4">
+            <p className="text-destructive-foreground text-xs" role="alert">
+              {t(
+                error === "read" ? "errorReadTelemetry" : "errorSaveTelemetry",
+              )}
+            </p>
+            {error === "read" ? (
+              <Button onClick={onRetry} variant="outline">
+                {t("tryAgain")}
+              </Button>
+            ) : null}
+          </div>
+        ) : null
+      }
+      id="desktop-telemetry"
+      title={t("sendCrashReports")}
+    >
+      <Switch
+        aria-describedby={ids.description}
+        aria-labelledby={ids.label}
+        checked={
+          preference.status === "ready" || preference.status === "saving"
+            ? preference.enabled
+            : false
+        }
+        disabled={preference.status !== "ready"}
+        id="desktop-telemetry"
+        onCheckedChange={(enabled) => {
+          void savePreference(enabled);
+        }}
+      />
+    </SettingsRow>
   );
 };
 
 const GeneralPane = ({
   language,
   accountState,
-  agentSettingsFocus,
-  onAgentSettingsShown,
   onLanguageChange,
   onAccountAction,
 }: {
   language: SupportedLanguage;
   accountState: DesktopAccountState;
-  agentSettingsFocus: AgentSettingsFocus | null;
-  onAgentSettingsShown: () => void;
   onLanguageChange: (language: SupportedLanguage) => void;
   onAccountAction: () => void;
 }) => {
-  const format = useFormatter();
   const t = useTranslations("settings");
-  const tSubscriptions = useTranslations("agentSubscriptions");
-  const tLocalSkills = useTranslations("localSkills");
-  const tSigningDriver = useTranslations("signingDriver");
-  const tLinkedFolders = useTranslations("localLinkedFolders");
-  const presentation = accountPresentation(accountState);
-  const linkedAccount =
-    accountState.status === "connected" ? accountState.account : null;
+  const languageIds = settingsRowIds("desktop-language-row");
 
   return (
-    <div className="space-y-4">
-      <PanelGroup>
-        <div className="flex items-center gap-3 px-4 py-4">
-          <Avatar className="size-10 border">
-            <AvatarFallback>
-              {linkedAccount ? (
-                getAccountInitials(linkedAccount)
-              ) : (
-                <StellaMark className="size-5" />
-              )}
-            </AvatarFallback>
-          </Avatar>
-          <div className="min-w-0 flex-1">
-            <TruncatedText className="text-sm font-medium" render={<p />}>
-              {linkedAccount?.name?.trim() ||
-                linkedAccount?.email ||
-                t("stellaDesktop")}
-            </TruncatedText>
-          </div>
-          <span
-            className={cn(
-              "text-2xs inline-flex shrink-0 rounded-full border px-2 py-0.5 font-medium",
-              presentation.status === "linked" &&
-                "border-success/20 bg-success/10 text-success-foreground",
-              presentation.status === "attention" &&
-                "border-warning/20 bg-warning/10 text-warning-foreground",
-              presentation.status !== "linked" &&
-                presentation.status !== "attention" &&
-                "bg-muted text-muted-foreground border-border",
-            )}
-          >
-            {t(presentation.statusKey)}
-          </span>
-        </div>
-        <p className="text-muted-foreground px-4 pb-4 text-sm leading-relaxed wrap-break-word">
-          {linkedAccount?.email ??
-            (presentation.descriptionKey
-              ? t(presentation.descriptionKey, {
-                  host: presentation.host ?? "",
-                })
-              : t("desktopBenefit"))}
-        </p>
-        {presentation.host ? (
-          <>
-            <Separator />
-            <SettingRow
-              label={t("serverLabel")}
-              value={<bdi dir="ltr">{presentation.host}</bdi>}
-            />
-          </>
-        ) : null}
-        {linkedAccount ? (
-          <>
-            <Separator />
-            <SettingRow
-              label={t("lastVerified")}
-              value={
-                linkedAccount.verifiedAt
-                  ? format.dateTime(
-                      Temporal.Instant.from(linkedAccount.verifiedAt)
-                        .epochMilliseconds,
-                      {
-                        dateStyle: "medium",
-                        timeStyle: "short",
-                      },
-                    )
-                  : t("notAvailableYet")
-              }
-            />
-          </>
-        ) : null}
-        <Separator />
-        <div className="flex items-center justify-end gap-4 px-4 py-3">
-          <Button
-            disabled={presentation.status === "loading"}
-            onClick={onAccountAction}
-            variant={presentation.actionVariant}
-          >
-            {t(presentation.actionKey, { host: presentation.host ?? "" })}
-          </Button>
-        </div>
-        <Separator />
-        <TelemetryToggle />
-      </PanelGroup>
-      <PanelGroup>
-        <ShortcutSetting />
-      </PanelGroup>
-      <DictationSetting
-        renderGroup={(content) => <PanelGroup>{content}</PanelGroup>}
-      />
-      <AgentSubscriptionsSection
-        focus={agentSettingsFocus}
-        onFocusShown={onAgentSettingsShown}
-        renderGroup={(content) => (
-          <PanelGroup title={tSubscriptions("title")}>{content}</PanelGroup>
-        )}
-      />
-      <LocalSkillFoldersSection
-        renderGroup={(content) => (
-          <PanelGroup title={tLocalSkills("title")}>{content}</PanelGroup>
-        )}
-      />
-      <SigningDriverSection
-        renderGroup={(content) => (
-          <PanelGroup title={tSigningDriver("title")}>{content}</PanelGroup>
-        )}
-      />
-      <LocalLinkedFoldersSection
-        renderGroup={(content) => (
-          <PanelGroup title={tLinkedFolders("title")}>{content}</PanelGroup>
-        )}
-      />
-      <PanelGroup title={t("permissions")}>
-        <PermissionsSection window={DESKTOP_TELEMETRY_WINDOWS.main} />
-      </PanelGroup>
-      <PanelGroup>
-        <div className="flex items-center justify-between gap-4 px-4 py-3">
-          <div className="min-w-0 flex-1">
-            <Label className="text-sm font-medium" htmlFor="desktop-language">
-              {t("language")}
-            </Label>
-            <p className="text-muted-foreground mt-1 text-sm leading-relaxed">
-              {t("languageDescription")}
-            </p>
-          </div>
+    <>
+      <SettingsPageHeader title={t("pages.general")} />
+      <SettingsGroup title={t("account")}>
+        <AccountRow accountState={accountState} onAction={onAccountAction} />
+      </SettingsGroup>
+      <SettingsGroup title={t("app")}>
+        <SettingsRow id="desktop-language-row" title={t("language")}>
           <Combobox<SupportedLanguage>
             autoHighlight
             items={SUPPORTED_LANGUAGES}
@@ -612,6 +420,7 @@ const GeneralPane = ({
             value={language}
           >
             <ComboboxInput
+              aria-labelledby={languageIds.label}
               className="w-40"
               id="desktop-language"
               showTrigger={false}
@@ -630,12 +439,82 @@ const GeneralPane = ({
               <ComboboxEmpty>{t("noLanguagesFound")}</ComboboxEmpty>
             </ComboboxPopup>
           </Combobox>
-        </div>
-      </PanelGroup>
-      <PanelGroup>
+        </SettingsRow>
+        {/* Start on login is the app's own permission row, without its
+            tile among the other app settings. */}
+        <li className="block empty:hidden">
+          <PermissionsSection
+            media="none"
+            only={["openAtLogin"]}
+            window={DESKTOP_TELEMETRY_WINDOWS.main}
+          />
+        </li>
         <SetupGuideSetting />
-      </PanelGroup>
-    </div>
+      </SettingsGroup>
+      <SettingsGroup title={t("privacy")}>
+        <TelemetryToggle />
+      </SettingsGroup>
+    </>
+  );
+};
+
+/** The linked account in one row: who, on which server, how the link is
+ *  doing, and the one action that changes it. */
+const AccountRow = ({
+  accountState,
+  onAction,
+}: {
+  accountState: DesktopAccountState;
+  onAction: () => void;
+}) => {
+  const t = useTranslations("settings");
+  const display = accountDisplay(accountState);
+  const { presentation } = display;
+  const tone = accountStatusTone(presentation.status);
+  const host = presentation.host ?? "";
+  const description = (() => {
+    if (display.email !== null) {
+      return (
+        <>
+          <BidiText>{display.email}</BidiText>
+          {presentation.host ? (
+            <>
+              {" · "}
+              <bdi dir="ltr">{presentation.host}</bdi>
+            </>
+          ) : null}
+        </>
+      );
+    }
+    return presentation.descriptionKey
+      ? t(presentation.descriptionKey, { host })
+      : t("desktopBenefit");
+  })();
+
+  return (
+    <SettingsRow
+      description={description}
+      id="desktop-account"
+      media={
+        <Avatar className="size-8 border">
+          <AvatarFallback className="text-xs">
+            {display.initials ?? <StellaMark className="size-4" />}
+          </AvatarFallback>
+        </Avatar>
+      }
+      title={display.name ?? t("stellaDesktop")}
+    >
+      {tone === null ? null : (
+        <ListItemStatus tone={tone}>{t(presentation.statusKey)}</ListItemStatus>
+      )}
+      <Button
+        disabled={presentation.status === "loading"}
+        onClick={onAction}
+        variant={presentation.actionVariant}
+      >
+        {t(presentation.actionKey, { host })}
+      </Button>
+    </SettingsRow>
   );
 };
 
@@ -657,18 +536,18 @@ const SetupGuideSetting = () => {
     setFailed(Result.isError(result));
   };
   return (
-    <div className="flex items-center justify-between gap-4 px-4 py-3">
-      <div className="min-w-0 flex-1">
-        <p className="text-sm font-medium">{t("setupGuide")}</p>
-        <p className="text-muted-foreground mt-1 text-sm leading-relaxed">
-          {t("setupGuideDescription")}
-        </p>
-        {failed ? (
-          <p className="text-destructive-foreground mt-1 text-sm" role="alert">
+    <SettingsRow
+      description={t("setupGuideDescription")}
+      footer={
+        failed ? (
+          <p className="text-destructive-foreground text-xs" role="alert">
             {t("errorSetupGuide")}
           </p>
-        ) : null}
-      </div>
+        ) : null
+      }
+      id="setup-guide"
+      title={t("setupGuide")}
+    >
       <Button
         onClick={() => {
           void restart();
@@ -677,7 +556,99 @@ const SetupGuideSetting = () => {
       >
         {t("setupGuideAction")}
       </Button>
-    </div>
+    </SettingsRow>
+  );
+};
+
+/**
+ * Sections drawn by their own components, which each render nothing where
+ * this account or computer does not offer them. With none shown, one line
+ * says so; it waits a moment so a section still reading does not flash it.
+ */
+const SettingsSections = ({ children }: React.PropsWithChildren) => {
+  const t = useTranslations("settings");
+  return (
+    <>
+      <div className="peer flex flex-col gap-6 empty:hidden">{children}</div>
+      <p className="text-muted-foreground hidden px-1 text-sm opacity-100 transition-opacity delay-500 duration-200 peer-empty:block starting:opacity-0">
+        {t("pageEmpty")}
+      </p>
+    </>
+  );
+};
+
+const ClipboardPane = () => {
+  const t = useTranslations("settings");
+  return (
+    <>
+      <SettingsPageHeader title={t("pages.clipboard")} />
+      <SettingsSectionGroup>
+        <ShortcutSetting />
+      </SettingsSectionGroup>
+    </>
+  );
+};
+
+const AgentsPane = ({
+  agentSettingsFocus,
+  onAgentSettingsShown,
+}: {
+  agentSettingsFocus: AgentSettingsFocus | null;
+  onAgentSettingsShown: () => void;
+}) => {
+  const t = useTranslations("settings");
+  const tSubscriptions = useTranslations("agentSubscriptions");
+  const tLocalSkills = useTranslations("localSkills");
+  const tLinkedFolders = useTranslations("localLinkedFolders");
+  return (
+    <>
+      <SettingsPageHeader title={t("pages.agents")} />
+      <SettingsSections>
+        <AgentSubscriptionsSection
+          focus={agentSettingsFocus}
+          onFocusShown={onAgentSettingsShown}
+          renderGroup={(content) => (
+            <SettingsSectionGroup title={tSubscriptions("title")}>
+              {content}
+            </SettingsSectionGroup>
+          )}
+        />
+        <LocalSkillFoldersSection
+          renderGroup={(content) => (
+            <SettingsSectionGroup title={tLocalSkills("title")}>
+              {content}
+            </SettingsSectionGroup>
+          )}
+        />
+        <LocalLinkedFoldersSection
+          renderGroup={(content) => (
+            <SettingsSectionGroup title={tLinkedFolders("title")}>
+              {content}
+            </SettingsSectionGroup>
+          )}
+        />
+        <KeepAwakeSection />
+      </SettingsSections>
+    </>
+  );
+};
+
+const SigningPane = () => {
+  const t = useTranslations("settings");
+  const tSigningDriver = useTranslations("signingDriver");
+  return (
+    <>
+      <SettingsPageHeader title={t("pages.signing")} />
+      <SettingsSections>
+        <SigningDriverSection
+          renderGroup={(content) => (
+            <SettingsSectionGroup title={tSigningDriver("title")}>
+              {content}
+            </SettingsSectionGroup>
+          )}
+        />
+      </SettingsSections>
+    </>
   );
 };
 
@@ -704,11 +675,11 @@ const NotificationsPane = ({
   });
 
   return (
-    <div className="space-y-4">
-      <PanelGroup>
-        {items.map((item, index) => (
-          <div key={item.key}>
-            {index > 0 ? <Separator /> : null}
+    <>
+      <SettingsPageHeader title={t("pages.notifications")} />
+      <SettingsGroup>
+        {items.map((item) => (
+          <li key={item.key}>
             <NotificationRow
               checked={notificationPreferences[item.key]}
               description={item.description}
@@ -719,49 +690,100 @@ const NotificationsPane = ({
               }}
               preferenceKey={item.key}
             />
-          </div>
+          </li>
         ))}
-      </PanelGroup>
-    </div>
+      </SettingsGroup>
+    </>
+  );
+};
+
+/** What the app may ask of this computer, and what it never asks for. */
+const PermissionsPane = () => {
+  const t = useTranslations("settings");
+  const tOnboarding = useTranslations("onboarding");
+  return (
+    <>
+      <SettingsPageHeader
+        description={t("permissionsDescription")}
+        title={t("pages.permissions")}
+      />
+      <SettingsSectionGroup>
+        <PermissionsSection
+          only={PERMISSIONS_PAGE_ROWS}
+          window={DESKTOP_TELEMETRY_WINDOWS.main}
+        />
+      </SettingsSectionGroup>
+      <SettingsGroup title={t("neverRequested")}>
+        <li className="flex flex-wrap gap-x-4 gap-y-1.5 px-4 py-3">
+          {NEVER_REQUESTED[DESKTOP_PLATFORM].map((claim) => (
+            <span
+              className="text-muted-foreground inline-flex items-center gap-1.5 text-xs"
+              key={claim}
+            >
+              <BanIcon aria-hidden="true" className="size-3.5 shrink-0" />
+              {tOnboarding(`never.${claim}`)}
+            </span>
+          ))}
+        </li>
+      </SettingsGroup>
+    </>
   );
 };
 
 const AboutPane = ({
+  accountState,
   onCopyDiagnostics,
   onEmailSupport,
   onRevealSupportRoot,
   update,
 }: {
+  accountState: DesktopAccountState;
   onCopyDiagnostics: () => void;
   onEmailSupport: () => void;
   onRevealSupportRoot: () => void;
   update: DesktopUpdateSnapshot;
 }) => {
+  const format = useFormatter();
   const t = useTranslations("settings");
 
   const versionLabel =
     update.currentVersion ??
     (import.meta.env.DEV ? t("developmentBuild") : t("previewBuild"));
+  const linkedAccount =
+    accountState.status === "connected" ? accountState.account : null;
 
   return (
-    <div className="space-y-4">
-      <PanelGroup>
-        <div className="flex flex-col items-center px-4 pt-6 pb-2">
-          <StellaAppIcon className="size-16 rounded-2xl" />
-          <p className="mt-3 text-sm font-semibold">{t("stellaDesktop")}</p>
-          <p className="text-muted-foreground mt-0.5 text-xs">{versionLabel}</p>
-        </div>
-      </PanelGroup>
+    <>
+      <SettingsPageHeader title={t("pages.about")} />
+      <SettingsGroup>
+        <SettingsRow
+          description={versionLabel}
+          id="about-app"
+          media={<StellaAppIcon className="size-8 rounded-lg" />}
+          title={t("stellaDesktop")}
+        />
+        {linkedAccount ? (
+          <SettingsRow id="about-last-verified" title={t("lastVerified")}>
+            <span className="text-muted-foreground text-sm tabular-nums">
+              {linkedAccount.verifiedAt
+                ? format.dateTime(
+                    Temporal.Instant.from(linkedAccount.verifiedAt)
+                      .epochMilliseconds,
+                    { dateStyle: "medium", timeStyle: "short" },
+                  )
+                : t("notAvailableYet")}
+            </span>
+          </SettingsRow>
+        ) : null}
+      </SettingsGroup>
 
-      <PanelGroup title={t("support")}>
-        <div className="flex items-center justify-between gap-3 px-4 py-3">
-          <p className="text-sm">hello@stll.app</p>
+      <SettingsGroup title={t("support")}>
+        <SettingsRow id="about-support-email" title="hello@stll.app">
           <Button onClick={onEmailSupport} variant="outline">
             {t("email")}
           </Button>
-        </div>
-        <Separator />
-        <div className="flex items-center gap-2 px-4 py-3">
+        </SettingsRow>
+        <li className="flex items-center gap-2 px-4 py-3">
           <Button
             className="flex-1"
             onClick={onCopyDiagnostics}
@@ -776,9 +798,9 @@ const AboutPane = ({
           >
             {t("revealAppData")}
           </Button>
-        </div>
-      </PanelGroup>
-    </div>
+        </li>
+      </SettingsGroup>
+    </>
   );
 };
 
@@ -855,42 +877,78 @@ const App = () => {
   const accountGeneration = useRef(0);
   const snapshotGeneration = useRef(0);
   const snapshotRefresh = useRef<() => void>(() => undefined);
-  const [activeTab, setActiveTab] = useState<PreferencesTab>(getInitialTab);
+  const [activePage, setActivePage] = useState<SettingsPage>(getInitialPage);
   const [agentSettingsFocus, setAgentSettingsFocus] =
     useState<AgentSettingsFocus | null>(null);
+  const [dictationFocus, setDictationFocus] = useState<"microphone" | null>(
+    null,
+  );
   const activityAvailability = useActivityAvailability();
-  // A requested Activity tab stays shown while availability loads, so opening
-  // it does not flash General first; it falls back only once activity is off.
-  const showActivityTab =
-    activityAvailability === "enabled" ||
-    (activityAvailability === "loading" && activeTab === "activity");
-  const shownTab =
-    activeTab === "activity" && !showActivityTab ? "general" : activeTab;
+  const dictationAvailability = useDictationAvailability();
+  // A requested page that depends on the account stays shown while its
+  // availability loads, so opening it does not flash General first; it falls
+  // back only once the feature is off.
+  const offers = (page: SettingsPage) => {
+    switch (page) {
+      case "activity":
+        return (
+          activityAvailability === "enabled" ||
+          (activityAvailability === "loading" && activePage === "activity")
+        );
+      case "dictation":
+        return (
+          dictationAvailability === "available" ||
+          (dictationAvailability === "loading" && activePage === "dictation")
+        );
+      // The signing driver is a macOS setting; elsewhere the native side
+      // refuses it.
+      case "signing":
+        return DESKTOP_PLATFORM === "mac";
+      case "general":
+      case "clipboard":
+      case "agents":
+      case "notifications":
+      case "permissions":
+      case "about":
+        return true;
+      default:
+        page satisfies never;
+        return panic("Unknown settings page");
+    }
+  };
+  const pages = SETTINGS_PAGES.filter(offers);
+  const shownPage = pages.includes(activePage) ? activePage : "general";
 
   useEffect(() => {
     const url = new URL(window.location.href);
-    url.hash = activeTab;
+    url.hash = activePage;
     window.history.replaceState(
       null,
       "",
       `${url.pathname}${url.search}${url.hash}`,
     );
-  }, [activeTab]);
+  }, [activePage]);
 
-  // Listen for tab activation from Rust backend
+  // The native side opens a page (tray, deep links, setup); a link to the
+  // coding agents also names where on their page to scroll.
   useEffect(
     () =>
       subscribeDesktopEvent<{ tab: string; focus?: unknown }>({
         event: "activate-tab",
         handler: (event) => {
-          const { tab: nextTab, focus } = event.payload;
-          if (!isPreferencesTab(nextTab)) {
+          const { tab: nextPage, focus } = event.payload;
+          if (!isSettingsPage(nextPage)) {
             return;
           }
-          setActiveTab(nextTab);
-          if (nextTab === "general" && isAgentSettingsFocus(focus)) {
-            setAgentSettingsFocus(focus);
-          }
+          setActivePage(nextPage);
+          // A focus belongs to the link that sent it; any other opening
+          // drops one still waiting for its card.
+          setAgentSettingsFocus(
+            nextPage === "agents" && isAgentSettingsFocus(focus) ? focus : null,
+          );
+          setDictationFocus(
+            nextPage === "dictation" && focus === "microphone" ? focus : null,
+          );
         },
         onError: reportSubscriptionFailure,
       }),
@@ -1139,153 +1197,160 @@ const App = () => {
 
   const language = isSupportedLanguage(locale) ? locale : "en";
 
+  const handleAccountAction = () => {
+    if (accountState.status === "unavailable") {
+      setAccountState({ status: "loading" });
+      accountRefresh.current();
+      return;
+    }
+    if (accountState.status === "connected") {
+      void invoke("account_disconnect")
+        .then(() => {
+          setAccountState({
+            status: "disconnected",
+            server: accountState.server,
+          });
+          setError(null);
+          return;
+        })
+        .catch((disconnectError: unknown) => {
+          setError(
+            commandErrorMessage(disconnectError, t("errorDisconnectAccount")),
+          );
+        });
+      return;
+    }
+    void handleOpenStellaWeb();
+  };
+
+  const page = (() => {
+    switch (shownPage) {
+      case "general":
+        return (
+          <>
+            <GeneralPane
+              accountState={accountState}
+              language={language}
+              onAccountAction={handleAccountAction}
+              onLanguageChange={(nextLanguage) => {
+                void handleLanguageChange(nextLanguage);
+              }}
+            />
+            {state ? (
+              <DocumentRecovery
+                recovery={state.documentRecovery}
+                onRefresh={() => snapshotRefresh.current()}
+              />
+            ) : null}
+          </>
+        );
+      case "dictation":
+        return (
+          <DictationSetting
+            focus={dictationFocus}
+            onFocusShown={() => {
+              setDictationFocus(null);
+            }}
+          />
+        );
+      case "clipboard":
+        return <ClipboardPane />;
+      case "agents":
+        return (
+          <AgentsPane
+            agentSettingsFocus={agentSettingsFocus}
+            onAgentSettingsShown={() => {
+              setAgentSettingsFocus(null);
+            }}
+          />
+        );
+      case "signing":
+        return <SigningPane />;
+      case "activity":
+        return (
+          <>
+            <SettingsPageHeader title={tActivity("title")} />
+            {/* Activity reads nothing until its access is confirmed. */}
+            {activityAvailability === "enabled" ? (
+              <ActivitySettingsPane />
+            ) : (
+              <ActivitySettingsSkeleton />
+            )}
+          </>
+        );
+      case "notifications":
+        return (
+          <NotificationsPane
+            notificationPreferences={notificationPreferences}
+            onPreferenceChange={(preferenceKey, checked) => {
+              void handlePreferenceChange(preferenceKey, checked);
+            }}
+            ready={state !== null}
+          />
+        );
+      case "permissions":
+        return <PermissionsPane />;
+      case "about":
+        return (
+          <AboutPane
+            accountState={accountState}
+            onCopyDiagnostics={() => {
+              void handleCopyDiagnostics();
+            }}
+            onEmailSupport={() => {
+              void handleEmailSupport();
+            }}
+            onRevealSupportRoot={() => {
+              void handleRevealSupportRoot();
+            }}
+            update={update}
+          />
+        );
+      default:
+        shownPage satisfies never;
+        return panic("Unknown settings page");
+    }
+  })();
+
   return (
-    <main className="bg-background text-foreground min-h-dvh">
+    <main className="bg-background text-foreground flex h-dvh overflow-hidden">
       <WindowDragRegion />
+      <SettingsSidebar
+        accountState={accountState}
+        current={shownPage}
+        onSelect={(nextPage) => {
+          setActivePage(nextPage);
+          // Choosing a page by hand is never the link's visit.
+          setAgentSettingsFocus(null);
+        }}
+        pages={pages}
+        topInset={isMacDesktop ? "titleBar" : "none"}
+      />
+      {/* The page scrolls inside a frame kept clear of the window's edges
+          and of the strip the window is dragged by. */}
       <div
         className={cn(
-          "mx-auto flex h-dvh max-w-[44rem] flex-col px-4 pb-4",
+          "flex min-w-0 flex-1 flex-col pb-4",
           isMacDesktop ? "pt-9" : "pt-4",
         )}
       >
-        <header className="pb-2">
-          <h1 className="text-xl font-semibold">{t("title")}</h1>
-        </header>
-
-        <Tabs
-          className="min-h-0 flex-1 gap-2"
-          onValueChange={(value: unknown) => {
-            const nextTab = typeof value === "string" ? value : null;
-            if (isPreferencesTab(nextTab)) {
-              setActiveTab(nextTab);
-            }
-          }}
-          value={shownTab}
-        >
-          <div className="px-1">
-            <TabsList variant="underline">
-              <TabsTab className="h-8 px-2 text-sm" value="general">
-                {t("general")}
-              </TabsTab>
-              {showActivityTab ? (
-                <TabsTab className="h-8 px-2 text-sm" value="activity">
-                  {tActivity("title")}
-                </TabsTab>
-              ) : null}
-              <TabsTab className="h-8 px-2 text-sm" value="notifications">
-                {t("notifications")}
-              </TabsTab>
-              <TabsTab className="h-8 px-2 text-sm" value="about">
-                {t("about")}
-              </TabsTab>
-            </TabsList>
-          </div>
-
-          {error ? (
-            <div className="border-destructive/20 bg-destructive/10 text-destructive-foreground mx-1 rounded-lg border px-3 py-2 text-sm">
-              {error}
-            </div>
-          ) : null}
-
-          <FramePanel className="min-h-0 flex-1 overflow-hidden p-0">
-            <TabsPanel className="h-full min-h-0" value="general">
-              <ScrollArea className="h-full">
-                <div className="space-y-4 p-4">
-                  <GeneralPane
-                    accountState={accountState}
-                    agentSettingsFocus={agentSettingsFocus}
-                    onAgentSettingsShown={() => {
-                      setAgentSettingsFocus(null);
-                    }}
-                    language={language}
-                    onAccountAction={() => {
-                      if (accountState.status === "unavailable") {
-                        setAccountState({ status: "loading" });
-                        accountRefresh.current();
-                        return;
-                      }
-                      if (accountState.status === "connected") {
-                        void invoke("account_disconnect")
-                          .then(() => {
-                            setAccountState({
-                              status: "disconnected",
-                              server: accountState.server,
-                            });
-                            setError(null);
-                            return;
-                          })
-                          .catch((disconnectError: unknown) => {
-                            setError(
-                              commandErrorMessage(
-                                disconnectError,
-                                t("errorDisconnectAccount"),
-                              ),
-                            );
-                          });
-                        return;
-                      }
-                      void handleOpenStellaWeb();
-                    }}
-                    onLanguageChange={(nextLanguage) => {
-                      void handleLanguageChange(nextLanguage);
-                    }}
-                  />
-                  {state ? (
-                    <DocumentRecovery
-                      recovery={state.documentRecovery}
-                      onRefresh={() => snapshotRefresh.current()}
-                    />
-                  ) : null}
-                </div>
-              </ScrollArea>
-            </TabsPanel>
-            {showActivityTab ? (
-              <TabsPanel className="h-full min-h-0" value="activity">
-                <ScrollArea className="h-full">
-                  <div className="p-4">
-                    {/* Activity reads nothing until its access is confirmed. */}
-                    {activityAvailability === "enabled" ? (
-                      <ActivitySettingsPane />
-                    ) : (
-                      <ActivitySettingsSkeleton />
-                    )}
-                  </div>
-                </ScrollArea>
-              </TabsPanel>
+        <ScrollArea className="min-h-0 flex-1" key={shownPage}>
+          <div
+            className="mx-auto flex max-w-[40rem] flex-col gap-6 px-6 pt-2 pb-4"
+            data-page={shownPage}
+            data-slot="settings-page"
+          >
+            {error ? (
+              <div
+                className="border-destructive/20 bg-destructive/10 text-destructive-foreground rounded-lg border px-3 py-2 text-sm"
+                role="alert"
+              >
+                {error}
+              </div>
             ) : null}
-            <TabsPanel className="h-full min-h-0" value="notifications">
-              <ScrollArea className="h-full">
-                <div className="space-y-4 p-4">
-                  <NotificationsPane
-                    notificationPreferences={notificationPreferences}
-                    onPreferenceChange={(preferenceKey, checked) => {
-                      void handlePreferenceChange(preferenceKey, checked);
-                    }}
-                    ready={state !== null}
-                  />
-                </div>
-              </ScrollArea>
-            </TabsPanel>
-            <TabsPanel className="h-full min-h-0" value="about">
-              <ScrollArea className="h-full">
-                <div className="space-y-4 p-4">
-                  <AboutPane
-                    onCopyDiagnostics={() => {
-                      void handleCopyDiagnostics();
-                    }}
-                    onEmailSupport={() => {
-                      void handleEmailSupport();
-                    }}
-                    onRevealSupportRoot={() => {
-                      void handleRevealSupportRoot();
-                    }}
-                    update={update}
-                  />
-                </div>
-              </ScrollArea>
-            </TabsPanel>
-          </FramePanel>
-        </Tabs>
+            {page}
+          </div>
+        </ScrollArea>
       </div>
     </main>
   );

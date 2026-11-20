@@ -15,6 +15,7 @@ import {
   sentEntry,
   steeringAfterPageRead,
   toChatEntry,
+  withLatestPage,
 } from "./chat-messages";
 import type { ChatEntry } from "./chat-messages";
 
@@ -99,10 +100,9 @@ describe("what a thread shows of a stored message", () => {
             { type: "tool", label: "discover_tools", status: "done" },
             { type: "tool", label: "execute_typescript", status: "done" },
           ],
-          work: new Map([
-            ["research", 1],
-            ["computation", 1],
-          ]),
+          // Finding a tool's signature and a script that read nothing are
+          // no lookups: the run counts its steps.
+          summary: [{ phrase: "steps", count: 3 }],
         },
         { type: "text", key: "5", markdown: "First.\n\nSecond." },
       ],
@@ -134,39 +134,35 @@ describe("what a thread shows of a stored message", () => {
         type: "steps",
         key: "0",
         steps: [{ type: "tool", label: "web_search", status: "done" }],
-        work: new Map([["research", 1]]),
+        summary: [{ phrase: "searchedWeb", count: 1 }],
       },
       { type: "text", key: "1", markdown: "Found it." },
     ]);
   });
 
   test("names the files the person attached, and shows a message of files alone", () => {
+    const parts = [
+      {
+        type: "document",
+        source: {
+          type: "url",
+          value: "userfile://f1",
+          mimeType: "application/pdf",
+        },
+        metadata: { filename: "Lease.pdf" },
+      },
+      {
+        type: "image",
+        source: {
+          type: "url",
+          value: "userfile://f2",
+          mimeType: "image/png",
+        },
+        metadata: { filename: "Stamp.png" },
+      },
+    ];
     expect(
-      toChatEntry({
-        id: "m2",
-        role: "user",
-        createdAt: CREATED_AT,
-        parts: [
-          {
-            type: "document",
-            source: {
-              type: "url",
-              value: "userfile://f1",
-              mimeType: "application/pdf",
-            },
-            metadata: { filename: "Lease.pdf" },
-          },
-          {
-            type: "image",
-            source: {
-              type: "url",
-              value: "userfile://f2",
-              mimeType: "image/png",
-            },
-            metadata: { filename: "Stamp.png" },
-          },
-        ],
-      }),
+      toChatEntry({ id: "m2", role: "user", createdAt: CREATED_AT, parts }),
     ).toEqual({
       id: "m2",
       role: "user",
@@ -179,7 +175,20 @@ describe("what a thread shows of a stored message", () => {
       ],
       drafts: [],
       contextNotice: null,
+      // Kept as stored, so an edit sends the files back as they are.
+      parts,
     });
+  });
+
+  test("keeps no parts on an answer, which cannot be edited", () => {
+    expect(
+      toChatEntry({
+        id: "a2",
+        role: "assistant",
+        createdAt: CREATED_AT,
+        parts: [{ type: "text", content: "Done." }],
+      })?.parts,
+    ).toBeUndefined();
   });
 
   test("draws a message sent from here with its files' names, not their bytes", () => {
@@ -394,6 +403,43 @@ describe("reading a thread", () => {
     expect(messagesQuery({ before: "c", matterId: undefined })).toBe(
       "?before=c",
     );
+  });
+
+  test("a re-read latest page drops what the server no longer holds", () => {
+    const entry = (id: string): ChatEntry => ({
+      id,
+      role: "user",
+      createdAt: CREATED_AT,
+      text: id,
+      blocks: [],
+      files: [],
+      drafts: [],
+      contextNotice: null,
+    });
+    const ids = ({
+      entries,
+      standalone,
+    }: ReturnType<typeof withLatestPage>) => ({
+      ids: entries.map(({ id }) => id),
+      standalone,
+    });
+    // Another device edited u2: a2 and u3 left the thread.
+    expect(
+      ids(
+        withLatestPage(
+          ["u0", "a0", "u1", "a1", "u2", "a2", "u3"].map(entry),
+          ["u1", "a1", "u2", "a4"].map(entry),
+        ),
+      ),
+    ).toEqual({ ids: ["u0", "a0", "u1", "a1", "u2", "a4"], standalone: false });
+    // Nothing loaded is known to come before the page: it stands alone.
+    expect(
+      ids(withLatestPage(["u1", "a1", "u2"].map(entry), [entry("u9")])),
+    ).toEqual({ ids: ["u9"], standalone: true });
+    expect(ids(withLatestPage([entry("u1")], []))).toEqual({
+      ids: [],
+      standalone: true,
+    });
   });
 
   test("an older page goes in front, without a message twice", () => {

@@ -4,17 +4,26 @@ import { normalizeCountry } from "@stll/agent-input";
 import { parseIntegerToken } from "@stll/agent-input/numeric-token";
 import type { LegalResolveResponse } from "@stll/api-contract/legal-resolve";
 import {
+  type HungarianActDesignation,
+  hungarianDesignationWorkEli,
+  readHungarianActCitations,
+  readHungarianLawParts,
+  readHungarianProvision,
+} from "@stll/api-contract/magyar-kozlony-designation";
+import {
   isPublicCountry,
   PUBLIC_COUNTRY_CAPABILITIES,
   type PublicCountry,
 } from "@stll/api-contract/public-country-capability";
+import { legalDayTimeZone } from "@stll/api-contract/public-country-legal-day";
+import { STATUTE_ANCHOR_SCHEMES } from "@stll/api-contract/statute-anchor-schemes";
 import {
   statuteGazetteAbbreviation,
   statuteGazetteEliCollection,
 } from "@stll/api-contract/statute-gazette";
 import {
   STATUTE_QUERY_CAPABILITIES,
-  type StatuteQueryCountry,
+  type StatuteGazetteCountry,
 } from "@stll/api-contract/statute-query-capability";
 import { readStatuteQueryReferences } from "@stll/api-contract/statute-query-intent";
 import { statuteAnchorKindPrefix } from "@stll/legal-ast/statute-anchor-scheme";
@@ -52,8 +61,7 @@ import { observeFailure } from "@/api/lib/observability/observe-failure";
 
 type LawProfile = {
   citation: JurisdictionProfile;
-  queryCountry: StatuteQueryCountry;
-  timeZone: string;
+  queryCountry: StatuteGazetteCountry;
   gazette: (typeof PROVISION_CITATION_GRAMMARS)[JurisdictionProfile["jurisdiction"]]["gazette"];
 };
 
@@ -61,13 +69,11 @@ const LAW_PROFILES = {
   CZE: {
     citation: CZ_PROFILE,
     queryCountry: "cze",
-    timeZone: "Europe/Prague",
     gazette: PROVISION_CITATION_GRAMMARS.CZE.gazette,
   },
   SVK: {
     citation: SK_PROFILE,
     queryCountry: "svk",
-    timeZone: "Europe/Bratislava",
     gazette: PROVISION_CITATION_GRAMMARS.SVK.gazette,
   },
 } as const satisfies Record<JurisdictionProfile["jurisdiction"], LawProfile>;
@@ -368,8 +374,32 @@ const readStructuredAct = (
   );
 };
 
+/**
+ * How one jurisdiction's citations name an act and a provision in it. The
+ * resolver around it (expression, provision preview, force dates) is the
+ * same for every country; only reading the citation differs.
+ */
+type LawGrammar = {
+  country: PublicCountry;
+  readCitedAct: (options: {
+    citation: string;
+    citedOn: string;
+    readNamedWorks: ReadNamedWorks;
+  }) => Promise<CitedActRead>;
+  readStructuredAct: (input: LawResolveInput) => StructuredActRead;
+  citedProvisions: (section: string) => readonly CitedProvision[];
+};
+
+/** Czech and Slovak law: gazette numbers, the citation profile's titles. */
+const gazetteLawGrammar = (profile: LawProfile): LawGrammar => ({
+  country: profile.citation.jurisdiction,
+  readCitedAct: async (options) => await readCitedAct({ ...options, profile }),
+  readStructuredAct: (input) => readStructuredAct(input, profile),
+  citedProvisions: (section) => citedProvisions(section, profile.citation),
+});
+
 const createLawResolver =
-  (profile: LawProfile) =>
+  (grammar: LawGrammar) =>
   async (
     input: LawResolveInput,
     {
@@ -382,22 +412,20 @@ const createLawResolver =
           async (tx) =>
             await readNamedLegislationWorks(tx, {
               query: name,
-              country: profile.citation.jurisdiction,
+              country: grammar.country,
             }),
         ),
-      reportUnresolvedAct = () =>
-        reportUnresolvedActCitation(profile.citation.jurisdiction),
-      today = () => todayFor(profile.timeZone).toString(),
+      reportUnresolvedAct = () => reportUnresolvedActCitation(grammar.country),
+      today = () => todayFor(legalDayTimeZone(grammar.country)).toString(),
     }: LawDependencies = {},
   ): Promise<LegalResolveResponse> => {
     const act =
       input.citation === undefined
-        ? readStructuredAct(input, profile)
-        : await readCitedAct({
+        ? grammar.readStructuredAct(input)
+        : await grammar.readCitedAct({
             citation: input.citation,
             citedOn: input.asOf ?? today(),
             readNamedWorks,
-            profile,
           });
     let eli: string;
     switch (act.type) {
@@ -422,7 +450,7 @@ const createLawResolver =
     if (input.section === undefined) {
       return { status: "incomplete_identifier", missing: ["section"] };
     }
-    const provisions = citedProvisions(input.section, profile.citation);
+    const provisions = grammar.citedProvisions(input.section);
     if (provisions.length === 0) {
       return { status: "not_found", reason: "unknown_section" };
     }
@@ -482,7 +510,7 @@ const createLawResolver =
         kind: "provision",
         documentId: expression.id,
         eli,
-        country: profile.citation.jurisdiction,
+        country: grammar.country,
         title: document.title,
         section: found.section,
         readerUrl:
@@ -497,8 +525,73 @@ const createLawResolver =
     };
   };
 
-export const resolveCzechLaw = createLawResolver(LAW_PROFILES.CZE);
-export const resolveSlovakLaw = createLawResolver(LAW_PROFILES.SVK);
+const STRUCTURED_LAW_HINT =
+  "A structured identity names a law: collection törvény, its year and number. Pass any other act as a citation with the day it was signed.";
+
+const UNDATED_DECREE_HINT =
+  "Name the act with the day it was signed, as the gazette prints it: 123/2020. (IV. 30.) Korm. rendelet.";
+
+/** The Work one Hungarian citation names; several, or none, name no Work. */
+const readHungarianAct = (
+  acts: readonly HungarianActDesignation[],
+): CitedActRead => {
+  const [act, ...others] = acts;
+  if (act === undefined || others.length > 0) {
+    return { type: "unknown" };
+  }
+  const eli = hungarianDesignationWorkEli(act);
+  if (eli === null) {
+    return act.kind === "numbered" && act.signed === null
+      ? { type: "unknown", hint: UNDATED_DECREE_HINT }
+      : { type: "unknown" };
+  }
+  return { type: "work", eli };
+};
+
+/**
+ * Hungarian law: the Magyar Közlöny designation of an act (`2013. évi V.
+ * törvény`, `123/2020. (IV. 30.) Korm. rendelet`) or a code's abbreviation
+ * read for the citing date (`Ptk.`), and a section (`6:519. §`, `25/G. §`)
+ * or article (`IV. cikk`) in the gazette's anchors.
+ */
+const HUNGARIAN_LAW_GRAMMAR: LawGrammar = {
+  country: "HUN",
+  readCitedAct: async ({ citation, citedOn }) =>
+    await Promise.resolve(
+      readHungarianAct(readHungarianActCitations(citation, citedOn)),
+    ),
+  readStructuredAct: ({ collection, year, number }) => {
+    if (
+      collection === undefined ||
+      year === undefined ||
+      number === undefined
+    ) {
+      return {
+        type: "incomplete",
+        missing: Object.entries({ collection, year, number }).flatMap(
+          ([key, value]) => (value === undefined ? [key] : []),
+        ),
+      };
+    }
+    const law = readHungarianLawParts({ kind: collection, year, number });
+    return law === null
+      ? { type: "unknown", hint: STRUCTURED_LAW_HINT }
+      : readHungarianAct([law]);
+  },
+  citedProvisions: (section) =>
+    readHungarianProvision(section).map(({ unit, designator }) => ({
+      anchor: `${statuteAnchorKindPrefix(STATUTE_ANCHOR_SCHEMES.HUN, unit)}${designator}`,
+      section: `${designator}. ${unit === "section" ? "§" : "cikk"}`,
+    })),
+};
+
+export const resolveCzechLaw = createLawResolver(
+  gazetteLawGrammar(LAW_PROFILES.CZE),
+);
+export const resolveSlovakLaw = createLawResolver(
+  gazetteLawGrammar(LAW_PROFILES.SVK),
+);
+export const resolveHungarianLaw = createLawResolver(HUNGARIAN_LAW_GRAMMAR);
 
 const unavailable: LawResolver = async () =>
   await Promise.resolve({ status: "country_unavailable" });
@@ -509,7 +602,7 @@ const LAW_RESOLVERS = {
   CZE: resolveCzechLaw,
   EU: unavailable,
   GBR: unavailable,
-  HUN: unavailable,
+  HUN: resolveHungarianLaw,
   POL: unavailable,
   SVK: resolveSlovakLaw,
   USA: unavailable,

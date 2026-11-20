@@ -15,6 +15,15 @@ import {
 } from "../../../../../scripts/ledger-membership.ts";
 import { accountExportDownloadScalingScenario } from "./account-exports";
 import apiLedger from "./api-scaling-ledger.json";
+import { asicPreviewScalingScenario } from "./asic-preview";
+import {
+  cadesContentScalingScenario,
+  cadesPreviewScalingScenario,
+} from "./cades-preview";
+import {
+  browseCalendarScalingScenario,
+  browseCourtsScalingScenario,
+} from "./case-law-browse-hubs";
 import { chatActiveRunsScalingScenario } from "./chat-active-runs";
 import { chatBackgroundTasksScalingScenario } from "./chat-background-tasks";
 import { browserSiteGrantsScalingScenario } from "./chat-browser-site-grants";
@@ -35,6 +44,7 @@ import {
   conflictCheckListScalingScenario,
   conflictCheckReadScalingScenario,
 } from "./conflict-checks";
+import { dataBoxPreviewScalingScenario } from "./data-box-preview";
 import { dataBoxSettingsScalingScenarios } from "./data-box-settings";
 import { dataExportReadScalingScenarios } from "./data-exports";
 import { decisionAnchorRedirectsScalingScenario } from "./decision-anchor-redirects";
@@ -43,14 +53,17 @@ import { decisionSummaryScalingScenario } from "./decision-summary";
 import { desktopRunnerUpgradeScalingScenario } from "./desktop-runner-upgrade";
 import {
   desktopDictationModelsScalingScenario,
+  dictationModelsScalingScenario,
   dictationScalingScenario,
 } from "./dictation";
 import {
   documentAnnotationScalingScenarios,
   markedPdfDownloadScalingScenario,
 } from "./document-annotations";
+import { fileContentScalingScenario } from "./file-content";
 import { graphToolsScalingScenarios } from "./graph-tools";
 import { invoicePaymentScalingScenarios } from "./invoice-payments";
+import { invoiceSendScalingScenarios } from "./invoice-sends";
 import { legalHoldScalingScenarios } from "./legal-holds";
 import { legislationMatterLinkScalingScenarios } from "./legislation-matter-links";
 import { exactIconScalingScenario } from "./link-icons";
@@ -66,6 +79,7 @@ import { myOpenTasksScalingScenario } from "./my-open-tasks";
 import { organizationAuditExportScalingScenario } from "./organization-audit-export";
 import { organizationCreateScalingScenario } from "./organization-create";
 import { organizationSlugScalingScenario } from "./organization-slug";
+import { outboundActionScalingScenarios } from "./outbound-actions";
 import { outlookClientMetadataScalingScenario } from "./outlook-client-metadata";
 import { savedSearchReadScalingScenario } from "./saved-searches";
 import {
@@ -74,10 +88,13 @@ import {
 } from "./scenario-membership";
 import { readScalingScenarios } from "./scenarios";
 import { sharepointBrowseScalingScenarios } from "./sharepoint-browse";
+import { sharepointCapabilitiesScalingScenario } from "./sharepoint-capabilities";
+import { skillExportScalingScenarios } from "./skill-export";
 import {
   softLawReadScalingScenario,
   softLawSearchScalingScenario,
 } from "./soft-law";
+import { structuredDocumentScalingScenario } from "./structured-document";
 import {
   apiScalingSurface,
   mcpScalingSurface,
@@ -98,6 +115,7 @@ const repoRoot = path.resolve(import.meta.dir, "../../../../..");
 const measuredApiScenarios = [
   savedSearchReadScalingScenario,
   ...dataExportReadScalingScenarios,
+  ...skillExportScalingScenarios,
   organizationCreateScalingScenario,
   matterVocabularyScalingScenario,
   verifyQuoteApiScalingScenario,
@@ -106,8 +124,11 @@ const measuredApiScenarios = [
   memberBillingScalingScenario,
   exactIconScalingScenario,
   decisionSummaryScalingScenario,
+  fileContentScalingScenario,
   decisionAnchorRedirectsScalingScenario,
   decisionFilterValidationScalingScenario,
+  browseCalendarScalingScenario,
+  browseCourtsScalingScenario,
   accountExportDownloadScalingScenario,
   desktopRunnerUpgradeScalingScenario,
   chatLocalRunnersScalingScenario,
@@ -129,6 +150,11 @@ const measuredApiScenarios = [
   ...verificationGraphScalingScenarios,
   ...verificationChronologyScalingScenarios,
   ...graphToolsScalingScenarios,
+  asicPreviewScalingScenario,
+  structuredDocumentScalingScenario,
+  cadesContentScalingScenario,
+  cadesPreviewScalingScenario,
+  dataBoxPreviewScalingScenario,
   ...dataBoxSettingsScalingScenarios,
   suggestionRangeScalingScenario,
   timeEntryReportScalingScenario,
@@ -141,10 +167,14 @@ const measuredApiScenarios = [
   memberCandidatesScalingScenario,
   mobileUpdateScalingScenario,
   ...invoicePaymentScalingScenarios,
+  sharepointCapabilitiesScalingScenario,
+  ...invoiceSendScalingScenarios,
+  ...outboundActionScalingScenarios,
   ...legalHoldScalingScenarios,
   ...legislationMatterLinkScalingScenarios,
   dictationScalingScenario,
   desktopDictationModelsScalingScenario,
+  dictationModelsScalingScenario,
   organizationSlugScalingScenario,
   organizationAuditExportScalingScenario,
   softLawSearchScalingScenario,

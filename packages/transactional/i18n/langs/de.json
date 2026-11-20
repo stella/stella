@@ -7,14 +7,41 @@
     "ignore": "Wenn Sie diese Einladung nicht erwartet haben, können Sie diese E-Mail ignorieren.",
     "subject": "Sie wurden eingeladen, {organizationName} beizutreten"
   },
+  "invoiceLink": {
+    "action": "{documentType, select, credit_note {Gutschrift ansehen} advance {Vorschussrechnung ansehen} other {Rechnung ansehen}}",
+    "amountDue": "Offener Betrag: {amount}",
+    "body": "{firmName} hat Ihnen {documentType, select, credit_note {eine Gutschrift} advance {eine Vorschussrechnung} other {eine Rechnung}} gesendet. Öffnen Sie den Link, um die Details zu sehen und das PDF herunterzuladen.",
+    "dueDate": "Fällig am: {date}",
+    "expires": "Der Link ist bis {date} gültig.",
+    "heading": "{documentType, select, credit_note {Gutschrift} advance {Vorschussrechnung} other {Rechnung}} {invoiceNumber}",
+    "ignore": "stella hat diese E-Mail im Auftrag von {firmName} zugestellt. Wenn Sie sie nicht erwartet haben, können Sie sie ignorieren.",
+    "messageFrom": "Nachricht von {firmName}",
+    "preview": "{firmName} hat Ihnen {documentType, select, credit_note {die Gutschrift} advance {die Vorschussrechnung} other {die Rechnung}} {invoiceNumber} gesendet",
+    "reply": "Antworten Sie auf diese E-Mail, um {firmName} zu kontaktieren.",
+    "subject": "{documentType, select, credit_note {Gutschrift} advance {Vorschussrechnung} other {Rechnung}} {invoiceNumber} von {firmName}"
+  },
   "newDeviceLogin": {
     "action": "Sitzungen überprüfen",
     "body": "Ihr Konto wurde von einem neuen Gerät oder Standort aus angemeldet.",
     "device": "Gerät",
+    "deviceName": {
+      "browserOnOs": "{browser} unter {os}",
+      "unknown": "Unbekanntes Gerät"
+    },
     "heading": "Neue Anmeldung erkannt",
     "ignore": "Wenn Sie das waren, ist keine Aktion erforderlich. Wenn Sie diese Aktivität nicht erkennen, überprüfen Sie Ihre aktiven Sitzungen und widerrufen Sie alle, die Sie nicht erkennen.",
     "ipAddress": "IP-Adresse",
+    "ipAddressUnknown": "Unbekannt",
+    "location": "Ungefährer Standort",
+    "locationNote": "Der Standort wird anhand der IP-Adresse geschätzt und kann ungenau sein.",
+    "mapAlt": "Karte mit dem ungefähren Standort der Anmeldung: {location}",
+    "place": {
+      "cityCountry": "{city}, {country}",
+      "cityRegionCountry": "{city}, {region}, {country}",
+      "regionCountry": "{region}, {country}"
+    },
     "preview": "Neue Anmeldung von {device}",
+    "previewUnknownDevice": "Neue Anmeldung von einem unbekannten Gerät",
     "subject": "Neue Anmeldung bei Ihrem stella-Konto",
     "time": "Zeit"
   },

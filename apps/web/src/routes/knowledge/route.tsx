@@ -1,6 +1,5 @@
 import { createFileRoute, Outlet } from "@tanstack/react-router";
 
-import { DefaultPendingComponent } from "@/components/route-components";
 import { isPublicKnowledgeEnabled } from "@/lib/knowledge/public-knowledge-launch";
 import { pageTitle } from "@/lib/page-title";
 import {
@@ -11,6 +10,7 @@ import {
   loadProtectedContext,
   prefetchProtectedShell,
 } from "@/routes/-protected-guard";
+import { LeafPendingView } from "@/routes/-route-pending-view";
 import { routePresentation } from "@/routes/-route-presentation";
 
 // Knowledge sits beside the signed-in routes rather than under them, so it can
@@ -45,7 +45,9 @@ export const Route = createFileRoute("/knowledge")({
     meta: [{ title: pageTitle("navigation.knowledge") }],
   }),
   component: KnowledgeLayout,
-  pendingComponent: DefaultPendingComponent,
+  // A layout: while the protected shell loads, the section's own pending
+  // view stands in the Knowledge frame, not a generic block.
+  pendingComponent: LeafPendingView,
 });
 
 function KnowledgeLayout() {

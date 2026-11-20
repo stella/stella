@@ -54,14 +54,12 @@ import type { RuleCache } from "@/api/handlers/case-law/polarity/rule-engine";
 import type { SafeId } from "@/api/lib/branded-types";
 import { toPlainTextMetadataObject } from "@/api/lib/case-law/plain-text";
 import { fitsSearchCandidateRow } from "@/api/lib/case-law/search-candidate-row-bound-sql";
-import {
-  corpusCarriesDocument,
-  payloadCarriesDocument,
-} from "@/api/lib/case-law/stored-payload";
+import { corpusCarriesDocument } from "@/api/lib/case-law/stored-payload";
 import {
   UNPERSISTABLE_DECISION_FIELDS,
   UnpersistableDecisionFieldError,
 } from "@/api/lib/errors/tagged-errors";
+import { payloadCarriesDocument } from "@/api/lib/legal-search/corpus-content-hash";
 import {
   corpusMirrorColumns,
   corpusPayloadDisposition,
@@ -137,6 +135,7 @@ const storedScopeState = async ({
   const row = await storedScopeRow(decisionId, scopedDb);
   const ast = row?.astS3Key
     ? await readCorpusAst(row.astS3Key, {
+        report: { documentId: decisionId },
         ...corpus.readBytes,
         ...(signal === undefined ? {} : { signal }),
         ...(s3Policy === undefined ? {} : { s3Policy }),
@@ -619,7 +618,11 @@ const preparedCitationMetadata = (
 };
 
 /** The decision's identifiers, and the rows that store them. */
-const plannedIdentifiers = (
+/**
+ * The identifier rows a decision is written with, each keyed by the function
+ * every reader normalizes a reference with.
+ */
+export const plannedIdentifiers = (
   result: IngestionResult,
   caseNumberType: ReturnType<typeof parsePrimaryReferenceType>,
 ) => {

@@ -1,6 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
-import { useTranslations } from "use-intl";
 
 import { caseLawCoverageOptions } from "@/features/case-law/queries/decisions";
 import { getTranslator } from "@/i18n/i18n-store";
@@ -12,10 +10,8 @@ import {
   createPublicLawHead,
 } from "@/lib/public-law-seo";
 import { fetchRouteQuery } from "@/lib/react-query";
-import {
-  CaseLawCoveragePage,
-  CaseLawCoveragePending,
-} from "@/routes/law/-law-coverage/coverage-page";
+import { CaseLawCoverage } from "@/routes/law/-law-coverage/coverage.page";
+import { CaseLawCoveragePending } from "@/routes/law/-law-coverage/coverage.pending";
 
 const COVERAGE_PATH = "/law/coverage";
 
@@ -54,23 +50,3 @@ export const Route = createFileRoute("/law/coverage")({
   component: CaseLawCoverage,
   pendingComponent: CaseLawCoveragePending,
 });
-
-function CaseLawCoverage() {
-  const t = useTranslations();
-  const { data, isError } = useQuery(caseLawCoverageOptions());
-
-  // Figures already on hand outrank a failed refetch: the query keeps its
-  // data when a background read fails, and a page that had the numbers must
-  // not swap them for "unavailable" because a later read did not answer.
-  if (data !== undefined) {
-    return <CaseLawCoveragePage coverage={data} />;
-  }
-  if (isError) {
-    return (
-      <CaseLawCoveragePage
-        coverage={{ message: t("caseLaw.coverage.unavailable") }}
-      />
-    );
-  }
-  return <CaseLawCoveragePending />;
-}

@@ -12,7 +12,10 @@ import { CalendarIcon } from "@stll/ui/icons";
 import { stellaToast } from "@stll/ui/toast";
 
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
-import { QueryViewFeedback } from "@/components/query-view-feedback";
+import {
+  QueryViewFeedback,
+  SettledQueryViewFeedback,
+} from "@/components/query-view-feedback";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { useFormattingLocale } from "@/i18n/formatting-context";
@@ -38,6 +41,13 @@ import {
   calendarTasksKeys,
   calendarTasksOptions,
 } from "@/lib/workspaces/queries/calendar-tasks";
+import {
+  CALENDAR_MONTH_LABEL_ROW_CLASS,
+  CALENDAR_MONTH_SCROLL_CLASS,
+  CALENDAR_MONTH_WEEK_CLASS,
+  CALENDAR_VIEW_CLASS,
+  CALENDAR_WEEK_ROW_CLASS,
+} from "@/routes/_protected.workspaces/$workspaceId/-components/calendar/calendar-view.pending";
 import { EmptyState } from "@/routes/_protected.workspaces/$workspaceId/-components/empty-state";
 
 import { CalendarDayCell } from "./calendar-day-cell";
@@ -612,10 +622,9 @@ export const CalendarView = ({ view, workspaceId }: CalendarViewProps) => {
     );
   }
 
-  if (
-    calendarTasksView.type === "pending" ||
-    calendarTasksView.type === "error"
-  ) {
+  // While the period's entries load, the calendar is already the calendar:
+  // its header, weekdays and days stand, and the entries land in their days.
+  if (calendarTasksView.type === "error") {
     return <QueryViewFeedback view={calendarTasksView} />;
   }
 
@@ -637,8 +646,11 @@ export const CalendarView = ({ view, workspaceId }: CalendarViewProps) => {
   })();
 
   return (
-    <div className="flex h-full min-w-0 flex-col">
-      <QueryViewFeedback view={calendarTasksView} />
+    <div
+      aria-busy={calendarTasksView.type === "pending"}
+      className={CALENDAR_VIEW_CLASS}
+    >
+      <SettledQueryViewFeedback view={calendarTasksView} />
       <CalendarHeader
         headerLabel={headerLabel}
         month={month}
@@ -683,11 +695,11 @@ export const CalendarView = ({ view, workspaceId }: CalendarViewProps) => {
               />
 
               <div
-                className="relative flex-1 overflow-y-auto overscroll-contain"
+                className={CALENDAR_MONTH_SCROLL_CLASS}
                 onScroll={handleMonthScroll}
                 ref={monthScrollRef}
               >
-                <div className="bg-background/95 supports-[backdrop-filter]:bg-background/80 sticky top-0 z-20 border-b px-4 py-1.5 backdrop-blur">
+                <div className={CALENDAR_MONTH_LABEL_ROW_CLASS}>
                   <Button
                     onClick={() => scrollToMonth(viewDate)}
                     size="inline"
@@ -721,7 +733,7 @@ export const CalendarView = ({ view, workspaceId }: CalendarViewProps) => {
                         </div>
                       </div>
                     ))}
-                    <div className="grid min-h-[calc((100%_-_1.75rem)/6)] grid-cols-7">
+                    <div className={CALENDAR_MONTH_WEEK_CLASS}>
                       {week.days.map((day) => (
                         <CalendarDayCell
                           day={day}
@@ -756,7 +768,7 @@ export const CalendarView = ({ view, workspaceId }: CalendarViewProps) => {
               weekend={weekend}
             />
 
-            <div className="grid flex-1 grid-cols-7 grid-rows-1">
+            <div className={CALENDAR_WEEK_ROW_CLASS}>
               {days.map((day) => (
                 <CalendarDayCell
                   day={day}

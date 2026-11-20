@@ -49,6 +49,7 @@ import { UserIdentity, UserIdentityAvatar } from "@/components/user-avatar";
 import { useChromeQuery } from "@/hooks/use-chrome-query";
 import { useInvalidateSession } from "@/hooks/use-invalidate-session";
 import { useSignOut } from "@/hooks/use-sign-out";
+import { setLang } from "@/i18n/client-document-locale";
 import {
   LANG_ENDONYMS,
   supportedLanguages,
@@ -62,6 +63,7 @@ import { detached } from "@/lib/detached";
 import { toAuthClientError } from "@/lib/errors/auth";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { getDisplayName } from "@/lib/get-display-name";
+import { roleTranslationKeys } from "@/lib/organization/consts";
 import {
   getOrganizationCreationOwner,
   organizationCreationView,
@@ -104,7 +106,6 @@ export const SidebarUserMenu = ({ user }: SidebarUserMenuProps) => {
   const isCollapsed = sidebarLayout === "rail";
   const { theme, setTheme, palette, setPalette } = useTheme();
   const lang = useI18nStore((s) => s.lang);
-  const setLang = useI18nStore((s) => s.setLang);
   const roleQuery = useChromeQuery(roleOptions);
   const roleView = queryView(roleQuery);
   useQueryViewError(roleView, "SidebarUserMenu:query");
@@ -147,7 +148,7 @@ export const SidebarUserMenu = ({ user }: SidebarUserMenuProps) => {
                       </TruncatedText>
                       {role && (
                         <span className="bg-muted text-muted-foreground text-3xs inline-flex shrink-0 items-center rounded-md px-1.5 py-0.5 font-medium select-none">
-                          {t(`organization.roles.${role}`)}
+                          {t(roleTranslationKeys[role].labelKey)}
                         </span>
                       )}
                     </div>
@@ -175,7 +176,7 @@ export const SidebarUserMenu = ({ user }: SidebarUserMenuProps) => {
                     </TruncatedText>
                     {role && (
                       <span className="bg-muted text-muted-foreground text-3xs inline-flex shrink-0 items-center rounded-md px-1.5 py-0.5 font-medium select-none">
-                        {t(`organization.roles.${role}`)}
+                        {t(roleTranslationKeys[role].labelKey)}
                       </span>
                     )}
                   </div>
@@ -270,7 +271,10 @@ export const SidebarUserMenu = ({ user }: SidebarUserMenuProps) => {
                   <MenuRadioItem
                     key={langCode}
                     onClick={() =>
-                      detached(setLang(langCode), "sidebar-user-menu.set-lang")
+                      detached(
+                        setLang(queryClient, langCode),
+                        "sidebar-user-menu.set-lang",
+                      )
                     }
                     value={langCode}
                   >
@@ -435,7 +439,7 @@ const OrganizationRoleBadge = ({ role }: { role: Role | undefined }) => {
 
   return (
     <span className="bg-muted text-muted-foreground text-2xs inline-flex shrink-0 items-center rounded-md px-1.5 py-0.5 font-medium select-none">
-      {t(`organization.roles.${role}`)}
+      {t(roleTranslationKeys[role].labelKey)}
     </span>
   );
 };

@@ -48,11 +48,21 @@ mod dictation_context;
 mod dictation_engine;
 mod dictation_focus;
 mod dictation_format;
+mod dictation_hold_key;
 #[cfg(dictation)]
 mod dictation_input;
 mod dictation_language;
 mod dictation_live;
+mod dictation_microphone;
+mod dictation_models;
+mod dictation_notice;
 mod dictation_pauses;
+mod dictation_preview;
+#[cfg(dictation)]
+mod dictation_sounds;
+mod dictation_spelling;
+mod dictation_trace;
+mod dictation_words;
 #[cfg(dictation)]
 mod dictation_worker;
 mod document_sessions;
@@ -72,6 +82,7 @@ mod harness_sidecar;
 mod http_client;
 mod i18n;
 mod idle_time;
+mod keep_awake;
 mod keychain;
 mod local_linked_folder_commands;
 mod local_linked_folders;
@@ -89,6 +100,7 @@ mod permissions;
 mod pkcs11_module_setting;
 mod pkcs11_signing;
 mod presence;
+mod recording_cleanup;
 mod registry;
 mod relaunch;
 mod runner_protocol;
@@ -99,6 +111,8 @@ mod sse;
 mod test_child_processes;
 mod time_entry_commands;
 mod time_entry_submit;
+mod transcribe_recording;
+mod transcribe_window;
 mod tray;
 mod types;
 mod updater;
@@ -229,6 +243,10 @@ pub fn run() {
     .manage(clipboard_window::ClipboardEditorSessions::default())
     .manage(clipboard_window::ClipboardStartupTrace::default())
     .manage(dictation::DictationState::load())
+    .manage(transcribe_recording::TranscribeState::default())
+    .manage(dictation_notice::DictationNotice::default())
+    .manage(dictation_microphone::MicrophoneTest::default())
+    .manage(dictation_preview::PreviewState::new())
     .manage::<clipboard_shortcut::ClipboardShortcutState>(std::sync::Mutex::new(
       clipboard_shortcut::ClipboardShortcut::load(),
     ))
@@ -307,6 +325,7 @@ pub fn run() {
         app.manage(installation);
       }
       harness_commands::manage(&handle);
+      dictation_notice::listen_for_clicks(&handle);
       chatgpt_auth_commands::manage(&handle);
       claude_code_auth_commands::manage(&handle);
       activity::start(handle.clone(), Arc::clone(&activity_manager));
@@ -333,7 +352,9 @@ pub fn run() {
                 onboarding::feature_enabled(app, feature);
               }
             }
-            feature_gate::DesktopFeature::DictationCloud => {
+            // Either decision changes which models the server lists.
+            feature_gate::DesktopFeature::DictationCloud
+            | feature_gate::DesktopFeature::DictationRetainingModels => {
               dictation::apply_cloud_gate(app);
             }
             feature_gate::DesktopFeature::LocalAgents => {
@@ -405,6 +426,9 @@ pub fn run() {
               }
               tray::MenuAction::OpenActivity => {
                 activity_window::show(&handle);
+              }
+              tray::MenuAction::OpenTranscribe => {
+                transcribe_window::show(&handle);
               }
               tray::MenuAction::SetActivityRecording(status) => {
                 if activity::set_recording_from_tray(&handle, status).is_err() {
@@ -536,6 +560,7 @@ pub fn run() {
 
       presence::start(handle.clone());
       desktop_runner::watch_state(&handle);
+      keep_awake::watch_power_source();
 
       // Check for updates in the background after launch settles.
       updater::schedule_startup_check(handle.clone(), Arc::clone(&manager));
@@ -608,6 +633,7 @@ pub fn run() {
         }
       }
       tauri::RunEvent::Exit => {
+        keep_awake::global().release_for_exit();
         activity::flush_on_exit(app);
         desktop_crash::clean_exit(app);
         #[cfg(target_os = "macos")]
@@ -625,38 +651,48 @@ pub fn run() {
 
 /// The settings window's size. The browser harness reads these lines and
 /// renders the window at this size (`tests/desktop-window-sizes.ts`).
-const SETTINGS_WINDOW_WIDTH: f64 = 600.0;
+const SETTINGS_WINDOW_WIDTH: f64 = 760.0;
 const SETTINGS_WINDOW_HEIGHT: f64 = 620.0;
 /// The smallest the settings window can be resized to.
-const SETTINGS_WINDOW_MIN_WIDTH: f64 = 480.0;
+const SETTINGS_WINDOW_MIN_WIDTH: f64 = 640.0;
 const SETTINGS_WINDOW_MIN_HEIGHT: f64 = 460.0;
 pub(crate) const SETTINGS_WINDOW_LABEL: &str = "main";
 
-/// A Settings window tab native code opens; the ids are `PREFERENCES_TABS`
-/// in `src/mainview/App.tsx`.
+/// A Settings window page native code opens; the ids are `SETTINGS_PAGES`
+/// in `src/mainview/settings-pages.ts`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum PreferencesTab {
   General,
+  Dictation,
+  Agents,
   Activity,
   About,
 }
 
 impl PreferencesTab {
   #[cfg(test)]
-  const ALL: [Self; 3] = [Self::General, Self::Activity, Self::About];
+  const ALL: [Self; 5] = [
+    Self::General,
+    Self::Dictation,
+    Self::Agents,
+    Self::Activity,
+    Self::About,
+  ];
 
   const fn id(self) -> &'static str {
     match self {
       Self::General => "general",
+      Self::Dictation => "dictation",
+      Self::Agents => "agents",
       Self::Activity => "activity",
       Self::About => "about",
     }
   }
 }
 
-/// Where on General the Settings window scrolls to for the coding agents:
-/// their whole group, or one agent's card. The ids are `AGENT_SETTINGS_FOCUS`
-/// in `src/mainview/App.tsx`.
+/// Where on the AI and agents page the Settings window scrolls to for the
+/// coding agents: their whole group, or one agent's card. The ids are
+/// `AGENT_SETTINGS_FOCUS` in `src/mainview/settings-pages.ts`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum AgentSettingsFocus {
   All,
@@ -683,8 +719,10 @@ impl AgentSettingsFocus {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum SettingsView {
   Tab(PreferencesTab),
-  /// General, scrolled to the coding agents' sign-ins and installs.
+  /// AI and agents, scrolled to the coding agents' sign-ins and installs.
   Agents(AgentSettingsFocus),
+  /// Dictation, focused on the microphone it records from.
+  Microphone,
 }
 
 impl SettingsView {
@@ -693,8 +731,12 @@ impl SettingsView {
     match self {
       Self::Tab(tab) => serde_json::json!({ "tab": tab.id() }),
       Self::Agents(focus) => serde_json::json!({
-        "tab": PreferencesTab::General.id(),
+        "tab": PreferencesTab::Agents.id(),
         "focus": focus.id(),
+      }),
+      Self::Microphone => serde_json::json!({
+        "tab": PreferencesTab::Dictation.id(),
+        "focus": "microphone",
       }),
     }
   }
@@ -769,12 +811,12 @@ pub(crate) fn show_settings(handle: &tauri::AppHandle, view: SettingsView) {
 mod preferences_tab_tests {
   use super::{AgentSettingsFocus, PreferencesTab};
 
-  /// The ids in one `const NAME = [...]` array literal of `App.tsx`.
+  /// The ids in one `const NAME = [...]` array literal of `settings-pages.ts`.
   fn declared(name: &str) -> &'static str {
-    let source = include_str!("../../src/mainview/App.tsx");
+    let source = include_str!("../../src/mainview/settings-pages.ts");
     let (_, declaration) = source
       .split_once(&format!("const {name} = ["))
-      .expect("App.tsx declares the array");
+      .expect("settings-pages.ts declares the array");
     declaration
       .split_once(']')
       .expect("the array is one array literal")
@@ -794,12 +836,12 @@ mod preferences_tab_tests {
   }
 
   #[test]
-  fn native_tabs_are_tabs_the_settings_window_declares() {
-    let declaration = declared("PREFERENCES_TABS");
+  fn native_pages_are_pages_the_settings_window_declares() {
+    let declaration = declared("SETTINGS_PAGES");
     for tab in PreferencesTab::ALL {
       assert!(
         declaration.contains(&format!("\"{}\"", tab.id())),
-        "{} is not a Settings window tab",
+        "{} is not a Settings window page",
         tab.id()
       );
     }

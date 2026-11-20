@@ -1,0 +1,5 @@
+{
+  "metric": "audit-skip-directives",
+  "delta": 1,
+  "reason": "Removing a register record its publisher no longer serves deletes its attachment row in the ingestion role's background sweep; like the other attachment writes in that module it is public case-law bookkeeping with no member actor, so it carries the same skip directive."
+}

@@ -7,13 +7,13 @@ import { panic } from "better-result";
 import { compareCodeUnit } from "@stll/collation";
 import { normalizeUnicode } from "@stll/text-normalize";
 
-import { archivePathKey } from "@/api/handlers/data-exports/archive-path-key";
 import { ZIP_COMPRESSION } from "@/api/handlers/data-exports/zip-writer";
 import type { ZipCompression } from "@/api/handlers/data-exports/zip-writer";
 import {
   DATA_EXPORT_ARCHIVE_PATH_MAX_BYTES,
   DATA_EXPORT_ARCHIVE_SEGMENT_MAX_BYTES,
 } from "@/api/lib/data-export/manifest-values";
+import { archivePathKey } from "@/api/lib/files/archive-path-key";
 import { utf8ByteLength } from "@/api/lib/json-schema/utf8-byte-length";
 import { sanitizeFilenamePreservingExtension } from "@/api/lib/sanitize-filename";
 

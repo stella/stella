@@ -1948,11 +1948,25 @@ describe("PR production E2E scope", () => {
     }
   });
 
+  test("runs for web source the production build ships", () => {
+    for (const file of [
+      "apps/web/src/routes/index.tsx",
+      "apps/web/src/components/breadcrumbs/chat-switcher.tsx",
+      "packages/ui/src/button.tsx",
+      "packages/locales/src/en.ts",
+    ]) {
+      expect(detects("pr-core", [file]), file).toBe("true");
+    }
+  });
+
   test("does not widen PR shards for runtime or orchestration changes", () => {
     for (const file of [
       "apps/api/src/handlers/tasks/get.ts",
-      "apps/web/src/routes/index.tsx",
-      "packages/ui/src/button.tsx",
+      "apps/web/src/routes/index.test.tsx",
+      "apps/web/src/i18n/TERMINOLOGY.md",
+      "packages/ui/src/button.test.tsx",
+      "packages/ui/README.md",
+      "packages/playwright-tools/src/index.ts",
       "README.md",
       "apps/web/e2e/new.spec.ts",
       "apps/web/e2e/collab/room.spec.ts",

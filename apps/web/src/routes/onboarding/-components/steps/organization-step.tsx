@@ -15,6 +15,11 @@ import { usePulse } from "@/hooks/use-pulse";
 import { detached } from "@/lib/detached";
 import { schemaFormOptions, toFormErrors } from "@/lib/schema";
 
+import {
+  OrganizationStepFooter,
+  OrganizationStepHeading,
+} from "./organization-step.pending";
+
 type OrganizationStepProps = {
   defaultName: string;
   onNext: (data: { name: string }) => void;
@@ -63,12 +68,10 @@ export const OrganizationStep = ({
 
   return (
     <>
-      <h1 className="text-foreground text-3xl font-light tracking-tight">
-        {t("onboarding.orgTitle")}
-      </h1>
-      <p className="text-muted-foreground mt-2 text-sm">
-        {t("onboarding.orgSubtitle")}
-      </p>
+      <OrganizationStepHeading
+        title={t("onboarding.orgTitle")}
+        description={t("onboarding.orgSubtitle")}
+      />
       <Form
         className="mt-8 flex flex-1 flex-col"
         errors={formErrors}
@@ -102,7 +105,7 @@ export const OrganizationStep = ({
             </Field>
           )}
         </form.Field>
-        <div className="mt-auto flex items-center justify-end pt-8">
+        <OrganizationStepFooter>
           <Button
             aria-disabled={!currentName.trim() || undefined}
             className={cn(
@@ -119,7 +122,7 @@ export const OrganizationStep = ({
               ? t("common.next")
               : t("onboarding.enterTeamName")}
           </Button>
-        </div>
+        </OrganizationStepFooter>
       </Form>
     </>
   );

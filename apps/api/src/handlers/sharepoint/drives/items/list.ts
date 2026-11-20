@@ -45,12 +45,22 @@ const config = {
 // signed-in person's delegated grant. Not recursive.
 const listSharepointDriveItemsHandler = createSafeRootHandler(
   config,
-  async function* ({ params, query, safeDb, session, user }) {
+  async function* ({
+    params,
+    query,
+    safeDb,
+    session,
+    user,
+    request,
+    recordAuditEvent,
+  }) {
     const page = yield* Result.await(
       withSharepointGraph({
         organizationId: session.activeOrganizationId,
         userId: user.id,
         safeDb,
+        recordAuditEvent,
+        signal: request.signal,
         call: async (accessToken) =>
           await listSharepointChildren({
             accessToken,

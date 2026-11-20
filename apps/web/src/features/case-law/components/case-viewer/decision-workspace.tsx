@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "react";
+import { useRef, useState } from "react";
 
 import { useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
@@ -50,11 +50,8 @@ import { OrphanedAnnotationsNotice } from "@/components/legal-reader/annotations
 import type { ReaderAnnotationTarget } from "@/components/legal-reader/annotations/reader-annotation-target";
 import type { SelectionAnchor } from "@/components/legal-reader/annotations/selection-anchor";
 import { LegalReaderAIChat } from "@/components/legal-reader/legal-reader-ai-chat";
-import {
-  LEGAL_READER_CONTENT_CLEARANCE_CLASS_NAME,
-  LEGAL_READER_LAYOUT_CLASS_NAME,
-  LegalReaderControls,
-} from "@/components/legal-reader/legal-reader-controls";
+import { LegalReaderControls } from "@/components/legal-reader/legal-reader-controls";
+import { ReaderScrollViewport } from "@/components/legal-reader/legal-reader-controls.pending";
 import { MarginNotes } from "@/components/legal-reader/margin-notes";
 import type {
   AnalysisMarginItem,
@@ -78,7 +75,7 @@ import {
   EXAMPLE_NOTES,
   exampleNoteAnchors,
 } from "@/features/case-law/components/case-viewer/analysis/example-notes.logic";
-import { useAnalysisReaderOutline } from "@/features/case-law/components/case-viewer/analysis/reader-breadcrumb";
+import { analysisReaderOutline } from "@/features/case-law/components/case-viewer/analysis/reader-breadcrumb";
 import {
   buildSectionMap,
   flattenAnalysisHeadings,
@@ -101,6 +98,14 @@ import {
   resolveVisitorOffer,
 } from "@/features/case-law/components/case-viewer/decision-workspace.logic";
 import type { NotesFilter } from "@/features/case-law/components/case-viewer/decision-workspace.logic";
+import {
+  DECISION_NOTES_COLUMN_CLASS_NAME,
+  DECISION_NOTES_COLUMN_DEFAULT_WIDTH,
+  DECISION_PAPER_CLASS_NAME,
+  DECISION_READER_GRID_CLASS_NAME,
+  DECISION_READER_GRID_TEMPLATE,
+  DECISION_READER_LAYOUT_CLASS_NAME,
+} from "@/features/case-law/components/case-viewer/decision-workspace.pending";
 import {
   MarginCitationFilterBar,
   useMarginCitationFilter,
@@ -743,10 +748,12 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
   const ensureAIAvailable =
     props.aiMode === "enabled" ? props.ensureAIAvailable : null;
 
-  const [panelWidth, setPanelWidth] = useState(220);
+  const [panelWidth, setPanelWidth] = useState(
+    DECISION_NOTES_COLUMN_DEFAULT_WIDTH,
+  );
   // The same per-browser size the inspector's readers step, so a size chosen
   // in either place holds in both.
-  const textScale = useWebReaderTextScale("decision");
+  const textScale = useWebReaderTextScale();
   const isDragging = useRef(false);
   // The text links every cited decision the first outgoing page resolves;
   // the panel below pages further, the links stop at what is already read.
@@ -781,7 +788,7 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
       sourceAllowsDerivedAi: decision.source.allowsDerivedAi,
       mode: props.aiMode,
     });
-  const generate = useCallback(async () => {
+  const generate = async () => {
     if (!ensureAIAvailable) {
       return;
     }
@@ -792,14 +799,14 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
     }
 
     generateDecisionAnalysis();
-  }, [ensureAIAvailable, generateDecisionAnalysis]);
+  };
 
   const { hasAnalysis, isAnalyzing, analysisTree, completeAnalysis } =
     decisionAnalysisView(analysisState);
 
   // Contents places the sections as they stream in, beside the document's
   // own headings; with AI notes filtered out it is the headings alone.
-  const analysisContents = useAnalysisReaderOutline(
+  const analysisContents = analysisReaderOutline(
     showAiNotes && hasAnalysis ? analysisTree : null,
   );
 
@@ -1053,10 +1060,7 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
           docked composer start past it; below `lg` the grid is one column
           and the margin is zero. */}
       <div
-        className={cn(
-          LEGAL_READER_LAYOUT_CLASS_NAME,
-          "relative min-h-0 flex-1 lg:[--reader-margin-width:var(--reader-aside-width)]",
-        )}
+        className={DECISION_READER_LAYOUT_CLASS_NAME}
         style={{ "--reader-aside-width": `${panelWidth}px` }}
       >
         <LegalReaderControls
@@ -1148,10 +1152,7 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
                 scrollContainerRef={mainRef}
               />
             )}
-            <div
-              className="reader-scroll h-full overflow-y-auto"
-              ref={attachViewport}
-            >
+            <ReaderScrollViewport ref={attachViewport}>
               <ReaderStatusNotices
                 answerFailures={answers.failureNotices}
                 foreignDecisionError={foreignDecisionError}
@@ -1159,12 +1160,11 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
                 paragraphLanding={paragraphLanding}
               />
               <div
-                className="grid max-lg:!grid-cols-[1fr]"
+                className={DECISION_READER_GRID_CLASS_NAME}
                 {...textScale.rootProps}
                 style={{
                   ...textScale.rootProps.style,
-                  gridTemplateColumns:
-                    "var(--reader-aside-width) minmax(0, 1fr)",
+                  gridTemplateColumns: DECISION_READER_GRID_TEMPLATE,
                 }}
               >
                 {/* Before a visitor has an account, the notes column is the
@@ -1175,7 +1175,7 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
                 <aside
                   data-reader-notes-column=""
                   className={cn(
-                    "relative flex flex-col max-lg:hidden",
+                    DECISION_NOTES_COLUMN_CLASS_NAME,
                     visitorOffer !== undefined && "cursor-pointer",
                   )}
                   onClick={
@@ -1288,10 +1288,7 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
 
                 {/* oxlint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-noninteractive-element-interactions -- a click in a paragraph focuses it for the margin; the keyboard path is the paragraph's permalink, whose Enter click bubbles here */}
                 <main
-                  className={cn(
-                    "reader-paper min-w-0 pb-8",
-                    LEGAL_READER_CONTENT_CLEARANCE_CLASS_NAME,
-                  )}
+                  className={DECISION_PAPER_CLASS_NAME}
                   onClick={containedEventHandler((event) =>
                     marginCitations.focusParagraphAt(event.target),
                   )}
@@ -1354,7 +1351,7 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
                   />
                 </main>
               </div>
-            </div>
+            </ReaderScrollViewport>
           </LegalReaderAIChat>
         </div>
         <AnnotationToolbar

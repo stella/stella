@@ -22,6 +22,8 @@ export const HTTP_REQUEST_BODY_MAX_BYTES = 128 * 1024 * 1024;
  */
 export const DEFAULT_VARCHAR_MAX_LENGTH = 256;
 
+export const AGENT_CLAIM_CODE_MAX_LENGTH = 32;
+
 /**
  * Max time entries one approval request may name. The approver's selection is
  * sent in batches of at most this many entries.

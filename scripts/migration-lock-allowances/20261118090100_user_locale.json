@@ -1,0 +1,4 @@
+{
+  "add-column": "The nullable column has no default, so adding it changes only the catalog and rewrites no user rows; lock acquisition is bounded by 1s and the statement by 5s.",
+  "add-constraint": "The locale CHECK is added NOT VALID without scanning existing users and protects new writes immediately; its gated online validation follows schema commit, with 1s lock and 5s statement bounds here."
+}

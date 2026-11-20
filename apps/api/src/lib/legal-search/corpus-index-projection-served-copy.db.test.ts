@@ -46,6 +46,7 @@ import { advanceCorpusProjectionErasuresTx } from "@/api/lib/legal-search/corpus
 import { executeCorpusProjectionAppendCycle } from "@/api/lib/legal-search/corpus-index-projection-executor";
 import { executeCorpusProjectionProofCycle } from "@/api/lib/legal-search/corpus-index-projection-prover";
 import { EFFECTIVE_CONSOLIDATION } from "@/api/lib/legal-search/legislation-expression-classification";
+import { corpusProjectionMigrationDdl } from "@/api/tests/helpers/corpus-projection-migration-ddl";
 import { optOutOfCorpusProjectionSeedingGuard } from "@/api/tests/helpers/corpus-projection-seeding-guard";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
@@ -70,8 +71,11 @@ const SOURCE_ID = toSafeId<"legislationSource">(
   "0198e331-e578-7000-8000-0000000009f1",
 );
 const ENTITIES_PER_RUN = 3;
-const PAYLOAD = { text: "A published act.", ast: null } as const;
-const DRIZZLE_DIR = new URL("../../../drizzle/", import.meta.url);
+const PAYLOAD = {
+  text: "A published act.",
+  ast: null,
+  storedAst: { type: "absent" },
+} as const;
 /** Long after any delete task a run issues: settlement may count survivors. */
 const SETTLEMENT_NOW = Temporal.Instant.from("2100-01-01T00:00:00Z");
 
@@ -86,25 +90,9 @@ class SimulatedCrash extends TaggedError("SimulatedCrash")<{
 
 /** Install the projection guards and triggers the migrations define. */
 const installProjectionMigrationDdl = async (): Promise<void> => {
-  const migrations = [
-    ...new Bun.Glob("*corpus*projection*/migration.sql").scanSync(
-      Bun.fileURLToPath(DRIZZLE_DIR),
-    ),
-  ]
-    .filter((migration) => !migration.includes("projection_revision"))
-    .toSorted();
-  for (const migration of migrations) {
-    const text = await Bun.file(new URL(migration, DRIZZLE_DIR)).text();
-    for (const statement of text.split("--> statement-breakpoint")) {
-      const ddl = statement.trim();
-      if (
-        /(?:^|\n)\s*CREATE (?:OR REPLACE )?FUNCTION\b/u.test(ddl) ||
-        /(?:^|\n)\s*CREATE TRIGGER\b/u.test(ddl)
-      ) {
-        // db-await-in-loop: DDL applies in migration order
-        await db.execute(sql.raw(ddl));
-      }
-    }
+  for (const ddl of await corpusProjectionMigrationDdl()) {
+    // db-await-in-loop: DDL applies in migration order
+    await db.execute(sql.raw(ddl));
   }
 };
 

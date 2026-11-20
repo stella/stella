@@ -3,8 +3,6 @@ import {
   Fragment,
   lazy,
   Suspense,
-  useCallback,
-  useMemo,
   useRef,
   useState,
   useSyncExternalStore,
@@ -168,7 +166,7 @@ import { formatHotkeyForPlatform, NAV_KEY } from "@/lib/hotkeys";
 import { inboxCountOptions } from "@/lib/inbox/queries";
 import { knowledgeSections } from "@/lib/knowledge/navigation";
 import { isPublicKnowledgeEnabled } from "@/lib/knowledge/public-knowledge-launch";
-import { publicToolsBasePath } from "@/lib/knowledge/public-tools-path";
+import { publicToolsCataloguePath } from "@/lib/knowledge/public-tools-path";
 import { localISODate } from "@/lib/local-iso-date";
 import type { fetchWorkspaceNavigationPage } from "@/lib/memory-api";
 import { useMatterNumberingEnabled } from "@/lib/organization/use-matter-numbering";
@@ -309,11 +307,11 @@ export const AppSidebar = ({ surface }: AppSidebarProps) => {
     SEARCH_DIALOG_STATES.idle,
   );
   useFindModalBoundary(searchState === SEARCH_DIALOG_STATES.open);
-  const setSearchOpen = useCallback((open: boolean) => {
+  const setSearchOpen = (open: boolean) => {
     setSearchState(
       open ? SEARCH_DIALOG_STATES.open : SEARCH_DIALOG_STATES.closed,
     );
-  }, []);
+  };
   const guideDrawerAttentionSequence = useGuideDrawerStore(
     (store) => store.attentionSequence,
   );
@@ -457,7 +455,7 @@ export const AppSidebar = ({ surface }: AppSidebarProps) => {
     handleCreateWorkspace();
   });
 
-  const pinned = useMemo(() => {
+  const pinned = (() => {
     if (!workspaces) {
       return [];
     }
@@ -467,7 +465,7 @@ export const AppSidebar = ({ surface }: AppSidebarProps) => {
     return pinnedOrder
       .map((id) => wsMap.get(id))
       .filter((ws) => ws !== undefined);
-  }, [workspaces, pinnedOrder]);
+  })();
 
   const recents = workspaces
     ? selectRecentWorkspaces({
@@ -651,7 +649,7 @@ export const AppSidebar = ({ surface }: AppSidebarProps) => {
     tools: {
       action: () => {
         detached(
-          navigate({ to: publicToolsBasePath() }),
+          navigate({ to: publicToolsCataloguePath() }),
           "app-sidebar.navigate",
         );
       },
@@ -1260,15 +1258,12 @@ export const MatterItem = ({
   });
   const activityQueryHash = hashKey(activityQueryKey);
   const activityIsInvalidated = useSyncExternalStore(
-    useCallback(
-      (onStoreChange: () => void) =>
-        queryClient.getQueryCache().subscribe((event) => {
-          if (event.query.queryHash === activityQueryHash) {
-            onStoreChange();
-          }
-        }),
-      [activityQueryHash, queryClient],
-    ),
+    (onStoreChange: () => void) =>
+      queryClient.getQueryCache().subscribe((event) => {
+        if (event.query.queryHash === activityQueryHash) {
+          onStoreChange();
+        }
+      }),
     () => queryClient.getQueryState(activityQueryKey)?.isInvalidated ?? false,
     () => false,
   );
@@ -1563,7 +1558,7 @@ export const MatterItem = ({
                 <Tooltip
                   content={formatFullTimestamp(ws.lastActivityAt)}
                   render={
-                    <span className="text-muted-foreground text-3xs flex min-w-0 leading-tight opacity-60 transition-opacity duration-200 group-hover/sidebar-menu-button:opacity-100" />
+                    <span className="text-muted-foreground text-3xs flex min-w-0 leading-tight" />
                   }
                 >
                   <TruncatedText render={<BidiText />}>
@@ -1572,9 +1567,7 @@ export const MatterItem = ({
                       : t("workspaces.parties.personalLabel")}
                   </TruncatedText>
                   {relTime ? (
-                    <span className="shrink-0 whitespace-pre">
-                      {` · ${relTime}`}
-                    </span>
+                    <span className="shrink-0 whitespace-pre">{` · ${relTime}`}</span>
                   ) : null}
                 </Tooltip>
                 <span className="ms-auto">

@@ -25,19 +25,27 @@
  */
 
 import { panic } from "better-result";
-import { and, eq, inArray, isNotNull, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNotNull, or, sql } from "drizzle-orm";
 import { unionAll } from "drizzle-orm/pg-core";
 
 import {
+  decisionDocketFamilySpellings,
   type DecisionDocketSelector,
   decisionDocketTailSpellings,
   docketFamilyKeyOf,
+  docketFamilyKeysToRead,
 } from "@stll/api-contract/decision-docket-reference";
-import type { DecisionIdentifierIntent } from "@stll/api-contract/decision-query-intent";
+import {
+  DECISION_IDENTITY_READ,
+  type DecisionIdentifierIntent,
+  type DecisionIdentityRead,
+} from "@stll/api-contract/decision-query-intent";
+import { czechReporterLookupSpellings } from "@stll/api-contract/decision-reporter-grammar";
 import {
   DECISION_IDENTIFIER_TYPES,
   type DecisionIdentifierType,
   type DecisionPrimaryReferenceType,
+  normalizeStructuredDecisionIdentifier,
 } from "@stll/legal-ast/decision-identifier";
 
 import {
@@ -54,6 +62,7 @@ import type {
   CaseLawPublicReadDb,
   CaseLawPublicReadTransaction,
 } from "@/api/lib/case-law-public-read-db";
+import { caseNumberKeyAmongSql } from "@/api/lib/case-law/case-number-match-key";
 import {
   courtPresentation,
   readCourtRegistry,
@@ -92,7 +101,8 @@ export type DecisionIdentityLocator =
     }
   | { kind: "ecli"; value: string }
   | { kind: "reporter"; value: string }
-  | { kind: "neutral"; value: string };
+  | { kind: "neutral"; value: string }
+  | { kind: "reference"; value: string };
 
 /** The locator an entry's identifier is read by. */
 export const decisionIdentityLocatorOf = (
@@ -109,6 +119,7 @@ export const decisionIdentityLocatorOf = (
     case "ecli":
     case "neutral":
     case "reporter":
+    case "reference":
       return { kind: identifier.kind, value: identifier.value };
     default: {
       identifier satisfies never;
@@ -124,21 +135,23 @@ export const decisionIdentityLocatorOf = (
  * and, when the reference printed a sheet, the full file number a legacy row
  * or a parallel identifier still holds. Each is keyed as the stored column is.
  */
-const docketSpellingsOf = ({
-  family,
-  selector,
-}: Pick<
-  Extract<DecisionIdentityLocator, { kind: "docket" }>,
-  "family" | "selector"
->): string[] => [
-  family,
-  ...decisionDocketTailSpellings(family),
-  // Tight and spaced, as legacy rows and parallel identifiers print it; the
-  // stored key is whatever the ingest key function makes of each.
-  ...(selector.kind === "sheet"
-    ? [`${family}-${selector.value}`, `${family} - ${selector.value}`]
-    : []),
-];
+const docketSpellingsOf = (
+  {
+    family,
+    selector,
+  }: Pick<
+    Extract<DecisionIdentityLocator, { kind: "docket" }>,
+    "family" | "selector"
+  >,
+  jurisdiction: string | undefined,
+): string[] =>
+  decisionDocketFamilySpellings(family, jurisdiction).flatMap((spelling) => [
+    spelling,
+    ...decisionDocketTailSpellings(spelling),
+    ...(selector.kind === "sheet"
+      ? [`${spelling}-${selector.value}`, `${spelling} - ${selector.value}`]
+      : []),
+  ]);
 
 /**
  * The `citation_key` values a docket's file is read under: each stored
@@ -149,23 +162,30 @@ export const docketFamilyCitationKeys = (
     Extract<DecisionIdentityLocator, { kind: "docket" }>,
     "family" | "selector"
   >,
+  jurisdiction?: string,
 ): string[] => [
   ...new Set(
-    docketSpellingsOf(locator)
+    docketSpellingsOf(locator, jurisdiction)
       .map((spelling) => bareCitationKey(spelling))
       .filter((key) => key.length > 0),
   ),
 ];
 
-/** The identifier rows each kind of reference is stored under. */
-const IDENTIFIER_TYPE_OF_LOCATOR_KIND = {
-  docket: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
-  ecli: DECISION_IDENTIFIER_TYPES.ECLI,
-  neutral: DECISION_IDENTIFIER_TYPES.NEUTRAL_CITATION,
-  reporter: DECISION_IDENTIFIER_TYPES.REPORTER_CITATION,
+/**
+ * Each stored identifier's specialized lookup. An unclaimed displayed value
+ * is read as a reference across every stored kind; a recognized citation is
+ * restricted to its own kind, so a docket cannot impersonate a reporter.
+ */
+const LOCATOR_KIND_OF_IDENTIFIER_TYPE = {
+  [DECISION_IDENTIFIER_TYPES.CASE_NUMBER]: "docket",
+  [DECISION_IDENTIFIER_TYPES.ECLI]: "ecli",
+  [DECISION_IDENTIFIER_TYPES.NEUTRAL_CITATION]: "neutral",
+  [DECISION_IDENTIFIER_TYPES.REPORTER_CITATION]: "reporter",
+  [DECISION_IDENTIFIER_TYPES.AUTHORITY_DECISION_NUMBER]: "reference",
+  [DECISION_IDENTIFIER_TYPES.COMMISSION_CASE_NUMBER]: "reference",
 } as const satisfies Record<
-  DecisionIdentityLocator["kind"],
-  DecisionIdentifierType
+  DecisionIdentifierType,
+  DecisionIdentityLocator["kind"]
 >;
 
 /**
@@ -187,11 +207,15 @@ export type DecisionIdentityRow = {
    * can hold several, which a list of candidates has to tell apart.
    */
   decisionType: string | null;
+  /** The publisher's designation of the deciding senate or chamber. */
+  senate?: string | null;
   /** Bounded publisher headnote or classification, where recorded. */
   subjectSummary?: string | null;
   ecli: string | null;
   id: SafeId<"caseLawDecision">;
   identifiers: readonly { type: DecisionIdentifierType; value: string }[];
+  /** Completeness of the exact typed identifier-key scan, before family expansion. */
+  exactIdentityRead?: DecisionIdentityRead;
   /** The reference as the court published it, sheet included, if recorded. */
   publishedCaseNumber?: string | null;
   /** The sheet the court published the decision on, if recorded. */
@@ -218,14 +242,38 @@ type LookupDecisionsByIdentityOptions = {
  */
 const IDENTITY_CANDIDATE_SCAN_MAX = LIMITS.caseLawSearchPageSizeMax;
 
-type IdentifierRowMatchOptions = {
+/**
+ * The `(type, normalized_value)` pairs a reference is read under in the
+ * identifier rows: each spelling keyed by the function ingestion writes that
+ * type's column with.
+ */
+const identifierRowKeysOf = ({
+  jurisdiction,
+  types,
+  values,
+}: {
   /** Whose key the column holds: the jurisdiction the reference is read in. */
   jurisdiction: string | undefined;
-  tx: Pick<CaseLawPublicReadTransaction, "select">;
-  type: DecisionIdentifierType;
+  types: readonly DecisionIdentifierType[];
   /** As the reference spells them; normalized here for the column. */
   values: readonly string[];
-};
+}) =>
+  types.map((type) => ({
+    type,
+    keys: [
+      ...new Set(
+        values.flatMap((value) => [
+          normalizeDecisionIdentifierValueIn(jurisdiction, type, value),
+          // Old Czech reporter rows predate the canonical writer. Remove
+          // these aliases only after their stored keys have been migrated.
+          ...(jurisdiction === "CZE" &&
+          type === DECISION_IDENTIFIER_TYPES.REPORTER_CITATION
+            ? [normalizeStructuredDecisionIdentifier({ type, value })]
+            : []),
+        ]),
+      ),
+    ],
+  }));
 
 /**
  * The decision ids a publisher-supplied identifier row points at, normalized
@@ -235,29 +283,33 @@ type IdentifierRowMatchOptions = {
  * whole table.
  */
 const identifierRowDecisionIds = ({
-  jurisdiction,
+  rows,
   tx,
-  type,
-  values,
-}: IdentifierRowMatchOptions) => {
-  const keys = [
-    ...new Set(
-      values.map((value) =>
-        normalizeDecisionIdentifierValueIn(jurisdiction, type, value),
-      ),
-    ),
-  ];
-  const [onlyKey] = keys;
+}: {
+  rows: ReturnType<typeof identifierRowKeysOf>;
+  tx: Pick<CaseLawPublicReadTransaction, "select">;
+}) => {
+  // A stored key matches in either year form: `caseNumberMatchKey`.
+  const conditions = rows.map(({ type, keys }) => {
+    const [firstKey, ...otherKeys] = keys;
+    return and(
+      eq(caseLawDecisionIdentifiers.type, type),
+      firstKey === undefined
+        ? sql`false`
+        : caseNumberKeyAmongSql(caseLawDecisionIdentifiers.normalizedValue, [
+            firstKey,
+            ...otherKeys,
+          ]),
+    );
+  });
+  const [onlyCondition] = conditions;
   return tx
     .select({ id: caseLawDecisionIdentifiers.decisionId })
     .from(caseLawDecisionIdentifiers)
     .where(
-      and(
-        eq(caseLawDecisionIdentifiers.type, type),
-        keys.length === 1 && onlyKey !== undefined
-          ? eq(caseLawDecisionIdentifiers.normalizedValue, onlyKey)
-          : inArray(caseLawDecisionIdentifiers.normalizedValue, keys),
-      ),
+      conditions.length === 1 && onlyCondition !== undefined
+        ? onlyCondition
+        : or(...conditions),
     );
 };
 
@@ -270,27 +322,96 @@ const identifierRowDecisionIds = ({
  * key, which `bareCitationKey` already normalizes: the same function that
  * writes the column.
  */
-const ownColumnCondition = (locator: DecisionIdentityLocator) => {
+type OwnColumnKeys =
+  | { column: "citation-key"; keys: readonly [string, ...string[]] }
+  | { column: "ecli-folded"; keys: readonly [string] };
+
+const ownColumnKeysOf = (
+  locator: DecisionIdentityLocator,
+  country: string | undefined,
+): OwnColumnKeys | null => {
   switch (locator.kind) {
-    case "docket":
-      return inArray(
-        publishedCaseLawDecisions.citationKey,
-        docketFamilyCitationKeys(locator),
-      );
+    case "docket": {
+      const [first, ...rest] = docketFamilyCitationKeys(locator, country);
+      return first === undefined
+        ? null
+        : { column: "citation-key", keys: [first, ...rest] };
+    }
     case "ecli":
-      return and(
-        isNotNull(publishedCaseLawDecisions.ecli),
-        eq(
-          sql`upper(${publishedCaseLawDecisions.ecli})`,
-          locator.value.toUpperCase(),
-        ),
-      );
+      return { column: "ecli-folded", keys: [locator.value.toUpperCase()] };
+    case "reference": {
+      // A decision's citation key is its displayed docket under the key
+      // function that writes the column, read as a docket's spellings are;
+      // a reference with none is held only in the identifier rows.
+      const key = bareCitationKey(locator.value);
+      return key.length === 0 ? null : { column: "citation-key", keys: [key] };
+    }
     case "neutral":
     case "reporter":
       return null;
     default: {
       locator satisfies never;
       return panic(`Unhandled decision locator: ${String(locator)}`);
+    }
+  }
+};
+
+const identifierLookupSpellings = (
+  locator: DecisionIdentityLocator,
+  country: string | undefined,
+) => {
+  if (locator.kind === "docket") {
+    return docketSpellingsOf(locator, country);
+  }
+  if (locator.kind === "reporter" && country === "CZE") {
+    return czechReporterLookupSpellings(locator.value);
+  }
+  return [locator.value];
+};
+
+/**
+ * Every stored key a reference is read under: the identifier rows' keys per
+ * type and the decision's own column. What `decisionIdsNamedBy` turns into
+ * SQL, exposed so a test can hold the reader's keys to the ones ingestion
+ * writes for the same decision.
+ */
+export const decisionIdentityReadKeys = ({
+  country,
+  locator,
+}: {
+  country: string | undefined;
+  locator: DecisionIdentityLocator;
+}) => ({
+  identifierRows: identifierRowKeysOf({
+    jurisdiction: country,
+    types: Object.values(DECISION_IDENTIFIER_TYPES).filter(
+      (type) =>
+        locator.kind === "reference" ||
+        LOCATOR_KIND_OF_IDENTIFIER_TYPE[type] === locator.kind,
+    ),
+    values: identifierLookupSpellings(locator, country),
+  }),
+  ownColumn: ownColumnKeysOf(locator, country),
+});
+
+const ownColumnCondition = (own: OwnColumnKeys | null) => {
+  if (own === null) {
+    return null;
+  }
+  switch (own.column) {
+    case "citation-key":
+      return caseNumberKeyAmongSql(
+        publishedCaseLawDecisions.citationKey,
+        own.keys,
+      );
+    case "ecli-folded":
+      return and(
+        isNotNull(publishedCaseLawDecisions.ecli),
+        eq(sql`upper(${publishedCaseLawDecisions.ecli})`, own.keys[0]),
+      );
+    default: {
+      own satisfies never;
+      return panic(`Unhandled own column: ${String(own)}`);
     }
   }
 };
@@ -341,14 +462,12 @@ export const decisionIdsNamedBy = ({
   locator: DecisionIdentityLocator;
   tx: Pick<CaseLawPublicReadTransaction, "select">;
 }) => {
+  const keys = decisionIdentityReadKeys({ country, locator });
   const published = identifierRowDecisionIds({
-    jurisdiction: country,
+    rows: keys.identifierRows,
     tx,
-    type: IDENTIFIER_TYPE_OF_LOCATOR_KIND[locator.kind],
-    values:
-      locator.kind === "docket" ? docketSpellingsOf(locator) : [locator.value],
   });
-  const ownCondition = ownColumnCondition(locator);
+  const ownCondition = ownColumnCondition(keys.ownColumn);
   if (ownCondition === null) {
     return published;
   }
@@ -362,7 +481,14 @@ export const decisionIdsNamedBy = ({
   const family = tx
     .select({ id: publishedCaseLawDecisions.id })
     .from(publishedCaseLawDecisions)
-    .where(and(eq(publishedCaseLawDecisions.docketFamilyKey, familyKey)));
+    .where(
+      inArray(
+        publishedCaseLawDecisions.docketFamilyKey,
+        locator.kind === "docket" && country !== undefined
+          ? docketFamilyKeysToRead(locator.family, country)
+          : [familyKey],
+      ),
+    );
   return unionAll(own, published, family);
 };
 
@@ -483,15 +609,34 @@ export const lookupDecisionsByIdentity = async ({
 }: LookupDecisionsByIdentityOptions): Promise<DecisionIdentityRow[]> => {
   const rows = await caseLawDb(async (tx) => {
     const familyKey = docketFamilyKeyToRead({ country, locator });
-    const decisions = await tx
+    const exactDocketIds =
+      locator.kind === "docket" && locator.selector.kind === "none"
+        ? identifierRowDecisionIds({
+            tx,
+            rows: identifierRowKeysOf({
+              jurisdiction: country,
+              types: [DECISION_IDENTIFIER_TYPES.CASE_NUMBER],
+              values: decisionDocketFamilySpellings(locator.value, country),
+            }),
+          })
+        : null;
+    const exactDocketIdentity =
+      exactDocketIds === null
+        ? sql<boolean>`false`
+        : sql<boolean>`${inArray(publishedCaseLawDecisions.id, exactDocketIds)}`;
+    const scannedDecisions = await tx
       .select({
         caseNumber: publishedCaseLawDecisions.caseNumber,
+        exactDocketIdentity,
         caseNumberType: publishedCaseLawDecisions.caseNumberType,
         country: publishedCaseLawDecisions.country,
         court: publishedCaseLawDecisions.court,
         courtId: publishedCaseLawDecisions.courtId,
         decisionDate: publishedCaseLawDecisions.decisionDate,
         decisionType: publishedCaseLawDecisions.decisionType,
+        senate: sql<
+          string | null
+        >`${publishedCaseLawDecisions.metadata} ->> 'senate'`,
         // The publisher's classification text goes to the model, so a
         // source that allows showing its text but not AI use returns none.
         subjectSummary: sql<
@@ -528,11 +673,20 @@ export const lookupDecisionsByIdentity = async ({
       // between come back in the same order twice, and in the order the choice
       // is actually made in.
       .orderBy(
+        ...(exactDocketIds === null ? [] : [desc(exactDocketIdentity)]),
         publishedCaseLawDecisions.court,
         publishedCaseLawDecisions.decisionDate,
         publishedCaseLawDecisions.id,
       )
-      .limit(IDENTITY_CANDIDATE_SCAN_MAX);
+      .limit(IDENTITY_CANDIDATE_SCAN_MAX + 1);
+    // Exact holders sort first. A family-only row proves their scan is complete.
+    const exactIdentityRead =
+      scannedDecisions.length <= IDENTITY_CANDIDATE_SCAN_MAX ||
+      (exactDocketIds !== null &&
+        scannedDecisions.some((decision) => !decision.exactDocketIdentity))
+        ? DECISION_IDENTITY_READ.COMPLETE
+        : DECISION_IDENTITY_READ.TRUNCATED;
+    const decisions = scannedDecisions.slice(0, IDENTITY_CANDIDATE_SCAN_MAX);
 
     if (decisions.length === 0) {
       return [];
@@ -581,9 +735,11 @@ export const lookupDecisionsByIdentity = async ({
         languageGroupKey,
         courtId,
         authenticLanguage: _authenticLanguage,
+        exactDocketIdentity: _exactDocketIdentity,
         ...decision
       }): DecisionIdentityRow =>
         Object.assign(decision, {
+          exactIdentityRead,
           courtAbbreviation: courtPresentation(registry, {
             ...decision,
             courtId,

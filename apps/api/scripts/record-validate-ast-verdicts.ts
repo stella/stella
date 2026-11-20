@@ -1,4 +1,5 @@
 import { mock } from "bun:test";
+import { fileURLToPath } from "node:url";
 
 await mock.module("@/api/lib/observability/logger", () => ({
   logger: {
@@ -31,4 +32,4 @@ const output = new URL(
   import.meta.url,
 );
 await Bun.write(output, `${JSON.stringify(verdicts, undefined, 2)}\n`);
-console.log(`wrote ${verdicts.length} verdicts to ${output.pathname}`);
+console.log(`wrote ${verdicts.length} verdicts to ${fileURLToPath(output)}`);

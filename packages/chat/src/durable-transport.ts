@@ -101,6 +101,19 @@ type TerminalChatResponseOptions = {
   onReconnectChange: (reconnecting: boolean) => void;
 };
 
+/**
+ * A stream that only ends run `runId`: what a client reads when the turn's
+ * live stream is not the place to follow it, and the stored thread is.
+ */
+export const finishedChatRunResponse = (
+  runId: string,
+  resume?: TerminalChatResponseOptions["resume"],
+): Response =>
+  new Response(
+    `data: ${JSON.stringify({ type: "RUN_FINISHED", runId, ...(resume?.pendingInterrupts !== undefined ? { outcome: { type: "interrupt", interrupts: resume.pendingInterrupts } } : {}) })}\n\n`,
+    { headers: { "Content-Type": "text/event-stream" } },
+  );
+
 const terminalChatResponse = ({
   runId,
   resume,
@@ -109,10 +122,7 @@ const terminalChatResponse = ({
 }: TerminalChatResponseOptions): Response => {
   onTranscript();
   onReconnectChange(false);
-  return new Response(
-    `data: ${JSON.stringify({ type: "RUN_FINISHED", runId, ...(resume?.pendingInterrupts !== undefined ? { outcome: { type: "interrupt", interrupts: resume.pendingInterrupts } } : {}) })}\n\n`,
-    { headers: { "Content-Type": "text/event-stream" } },
-  );
+  return finishedChatRunResponse(runId, resume);
 };
 
 type ChatResumePersistenceOptions<TMessages extends UIMessage[]> = Pick<

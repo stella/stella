@@ -71,6 +71,70 @@ const legalResolveDocumentSchema = v.variant("kind", [
   }),
 ]);
 
+/** A run of calendar years, both ends inclusive. */
+const yearRangeSchema = v.strictObject({ from: v.number(), to: v.number() });
+
+/**
+ * What one source's reconciled listing says about a decision resolve did not
+ * find, over the years the identifier allows it to carry (its filing or ECLI
+ * year through the current year; every year the source holds when the
+ * identifier names none).
+ *
+ * - `not_published`: every one of those years is in the publisher listing
+ *   stella reconciled against its corpus, complete. The publisher does not
+ *   list the decision, so scanning its site finds nothing more.
+ * - `incomplete`: some of those years are reconciled with decisions stella is
+ *   known to miss (`gapYears`), or are not reconciled (`unreconciledYears`);
+ *   the publisher may hold it there and only there.
+ * - `not_reconciled`: the source's listing is not reconciled at all.
+ */
+const decisionAbsenceSourceVerdictSchema = v.variant("verdict", [
+  v.strictObject({
+    verdict: v.literal("not_published"),
+    source: v.string(),
+    sourceName: v.string(),
+    years: yearRangeSchema,
+  }),
+  v.strictObject({
+    verdict: v.literal("incomplete"),
+    source: v.string(),
+    sourceName: v.string(),
+    years: yearRangeSchema,
+    gapYears: v.array(
+      v.strictObject({ year: v.number(), missing: v.number() }),
+    ),
+    unreconciledYears: v.array(yearRangeSchema),
+  }),
+  v.strictObject({
+    verdict: v.literal("not_reconciled"),
+    source: v.string(),
+    sourceName: v.string(),
+    reason: v.string(),
+  }),
+]);
+
+/**
+ * Why a decision is absent, as far as the reconciled publisher listings can
+ * tell: one verdict per source that could hold the identifier (narrowed by
+ * the court it names, or its docket register), as of the coverage snapshot.
+ * `unavailable` when the snapshot could not be read.
+ */
+const decisionAbsenceCoverageSchema = v.variant("status", [
+  v.strictObject({
+    status: v.literal("read"),
+    asOf: v.string(),
+    sources: v.array(decisionAbsenceSourceVerdictSchema),
+  }),
+  v.strictObject({ status: v.literal("unavailable") }),
+]);
+
+export type DecisionAbsenceCoverage = v.InferOutput<
+  typeof decisionAbsenceCoverageSchema
+>;
+export type DecisionAbsenceSourceVerdict = v.InferOutput<
+  typeof decisionAbsenceSourceVerdictSchema
+>;
+
 /** The shared wire result for statute and decision identity resolution. */
 export const legalResolveResponseSchema = v.variant("status", [
   v.strictObject({
@@ -89,10 +153,21 @@ export const legalResolveResponseSchema = v.variant("status", [
       "court_unrecognized",
     ]),
     otherCourtCandidates: otherCourtCandidatesSchema,
+    /** Set on a decision's `no_exact_identity`. */
+    coverage: v.optional(decisionAbsenceCoverageSchema),
   }),
   v.strictObject({
     status: v.literal("ambiguous"),
     candidates: v.array(legalResolveCandidateSchema),
+    /** More candidates exist than this bounded response can enumerate. */
+    candidateSet: v.optional(
+      v.pipe(
+        v.literal("truncated"),
+        v.description(
+          "More candidates exist. Refine the identifier with a court, ECLI or full published reference.",
+        ),
+      ),
+    ),
     otherCourtCandidates: otherCourtCandidatesSchema,
   }),
   v.strictObject({

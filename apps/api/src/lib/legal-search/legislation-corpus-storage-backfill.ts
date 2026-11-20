@@ -157,3 +157,32 @@ export const backfillLegislationCorpusStorageRow = async ({
     ? { type: "failed", error: attempted.error }
     : attempted.value;
 };
+
+/** Where a resumed run may safely start: after `after`, and never past a failed document. */
+export type LegislationCorpusStorageResume<Id> = {
+  after: Id | null;
+  /** Set once a document failed: the cursor stays before it for the rest of the run. */
+  held: boolean;
+};
+
+/**
+ * Moves the resume cursor over one page (ids ascending). It advances to the
+ * last id before the run's first failed document and then stays there, so
+ * `--after` from the printed cursor retries every document that failed.
+ */
+export const advanceLegislationCorpusStorageResume = <Id>(
+  resume: LegislationCorpusStorageResume<Id>,
+  page: readonly { id: Id; failed: boolean }[],
+): LegislationCorpusStorageResume<Id> => {
+  if (resume.held) {
+    return resume;
+  }
+  let after = resume.after;
+  for (const row of page) {
+    if (row.failed) {
+      return { after, held: true };
+    }
+    after = row.id;
+  }
+  return { after, held: false };
+};

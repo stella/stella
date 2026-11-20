@@ -3,10 +3,15 @@
 import { Field as FieldPrimitive } from "@base-ui/react/field";
 
 import { cn } from "../lib/utils";
+import {
+  FIELD_CLASS_NAME,
+  FIELD_DESCRIPTION_CLASS_NAME,
+} from "./field-classes";
+import { LABEL_VARIANT_CLASS_NAME } from "./label-classes";
 
 const Field = ({ className, ...props }: FieldPrimitive.Root.Props) => (
   <FieldPrimitive.Root
-    className={cn("flex flex-col items-start gap-2", className)}
+    className={cn(FIELD_CLASS_NAME, className)}
     data-slot="field"
     {...props}
   />
@@ -14,10 +19,7 @@ const Field = ({ className, ...props }: FieldPrimitive.Root.Props) => (
 
 const FieldLabel = ({ className, ...props }: FieldPrimitive.Label.Props) => (
   <FieldPrimitive.Label
-    className={cn(
-      "text-foreground inline-flex items-center gap-2 text-base/4.5 font-medium sm:text-sm/4",
-      className,
-    )}
+    className={cn(LABEL_VARIANT_CLASS_NAME.default, className)}
     data-slot="field-label"
     {...props}
   />
@@ -36,7 +38,7 @@ const FieldDescription = ({
   ...props
 }: FieldPrimitive.Description.Props) => (
   <FieldPrimitive.Description
-    className={cn("text-muted-foreground text-xs", className)}
+    className={cn(FIELD_DESCRIPTION_CLASS_NAME, className)}
     data-slot="field-description"
     {...props}
   />

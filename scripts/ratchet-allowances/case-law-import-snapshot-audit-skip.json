@@ -1,0 +1,5 @@
+{
+  "metric": "audit-skip-directives",
+  "delta": 1,
+  "reason": "Recording the publisher snapshot a completed bulk import read is public-corpus bookkeeping on case_law_sources, written by the ingestion worker; it carries no tenant data and has no user actor to audit."
+}

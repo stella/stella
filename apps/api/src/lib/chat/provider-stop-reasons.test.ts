@@ -212,6 +212,26 @@ describe("a provider stop reason", () => {
     }
   });
 
+  test("a Google policy block filters the answer and a request or account defect fails it", async () => {
+    const endings: Record<string, string> = {};
+    for (const reason of [
+      GeminiFinishReason.MODEL_ARMOR,
+      GeminiFinishReason.ESCALATION,
+      GeminiFinishReason.MISSING_THOUGHT_SIGNATURE,
+      GeminiFinishReason.PUP_LIMITED_DISABLED,
+    ]) {
+      endings[reason] = endingOf(
+        await decide("google", [started, delta, finishedWith(reason)]),
+      );
+    }
+    expect(endings).toEqual({
+      MODEL_ARMOR: "finished:content_filter",
+      ESCALATION: "finished:content_filter",
+      MISSING_THOUGHT_SIGNATURE: "error:unknown",
+      PUP_LIMITED_DISABLED: "error:unknown",
+    });
+  });
+
   test.each(["max_messages", "steered"])(
     "an OpenAI %s response remains unfinished after visible text",
     async (reason) => {

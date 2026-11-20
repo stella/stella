@@ -8,7 +8,7 @@
  * not compile until it draws.
  */
 
-import { createContext, use, useMemo } from "react";
+import { createContext, use } from "react";
 
 import type { SortingState } from "@tanstack/react-table";
 import { panic } from "better-result";
@@ -16,18 +16,7 @@ import { useTranslations } from "use-intl";
 
 import { NO_QUERY_MARK_TOKENS } from "@stll/decision-reader/query-marks";
 import type { QueryMarkTokens } from "@stll/decision-reader/query-marks";
-import {
-  CalendarIcon,
-  FileDigitIcon,
-  FileTextIcon,
-  GlobeIcon,
-  HashIcon,
-  LandmarkIcon,
-  LanguagesIcon,
-  QuoteIcon,
-  ShapesIcon,
-  TagIcon,
-} from "@stll/ui/icons";
+import { TagIcon } from "@stll/ui/icons";
 import type { LucideIcon } from "@stll/ui/icons";
 import type { ColumnSortKind } from "@stll/workspace-ui/column-sort";
 
@@ -43,6 +32,7 @@ import type {
 } from "@/components/workspaces/table/types";
 import type { TableSortingLayout } from "@/components/workspaces/table/use-table-state";
 import type { Decision } from "@/features/case-law/components/decision-cells";
+import { DECISION_COLUMN_ICONS } from "@/features/case-law/components/decision-table.pending";
 import { renderDecisionCell } from "@/features/case-law/decision-columns";
 import {
   DECISION_COLUMN_LABEL_KEYS,
@@ -75,19 +65,6 @@ import type {
   AvailableQuestionColumns,
   QuestionColumnSurface,
 } from "@/features/case-law/research/question-columns.logic";
-
-/** The icon each decision column wears in its header menu and the chooser. */
-export const DECISION_COLUMN_ICONS = {
-  caseNumber: FileDigitIcon,
-  summary: FileTextIcon,
-  court: LandmarkIcon,
-  country: GlobeIcon,
-  date: CalendarIcon,
-  type: ShapesIcon,
-  headnote: QuoteIcon,
-  citedBy: HashIcon,
-  language: LanguagesIcon,
-} as const satisfies Record<DecisionColumnId, LucideIcon>;
 
 /**
  * The decision field a column stands for. Not what the cell draws — that is
@@ -246,26 +223,22 @@ export const useDecisionTableSchema = ({
   // drops it.
   const withQuestionSurface = questions.type !== "hidden";
 
-  return useMemo(
-    () =>
-      decisionTableSchema({
-        extraColumns,
-        labels: {
-          caseNumber: t(decisionColumnLabelKey("caseNumber", referenceKind)),
-          summary: t(DECISION_COLUMN_LABEL_KEYS.summary),
-          court: t(DECISION_COLUMN_LABEL_KEYS.court),
-          country: t(DECISION_COLUMN_LABEL_KEYS.country),
-          date: t(DECISION_COLUMN_LABEL_KEYS.date),
-          type: t(DECISION_COLUMN_LABEL_KEYS.type),
-          headnote: t(DECISION_COLUMN_LABEL_KEYS.headnote),
-          citedBy: t(DECISION_COLUMN_LABEL_KEYS.citedBy),
-          language: t(DECISION_COLUMN_LABEL_KEYS.language),
-        },
-        questionColumns,
-        withQuestionSurface,
-      }),
-    [extraColumns, questionColumns, referenceKind, t, withQuestionSurface],
-  );
+  return decisionTableSchema({
+    extraColumns,
+    labels: {
+      caseNumber: t(decisionColumnLabelKey("caseNumber", referenceKind)),
+      summary: t(DECISION_COLUMN_LABEL_KEYS.summary),
+      court: t(DECISION_COLUMN_LABEL_KEYS.court),
+      country: t(DECISION_COLUMN_LABEL_KEYS.country),
+      date: t(DECISION_COLUMN_LABEL_KEYS.date),
+      type: t(DECISION_COLUMN_LABEL_KEYS.type),
+      headnote: t(DECISION_COLUMN_LABEL_KEYS.headnote),
+      citedBy: t(DECISION_COLUMN_LABEL_KEYS.citedBy),
+      language: t(DECISION_COLUMN_LABEL_KEYS.language),
+    },
+    questionColumns,
+    withQuestionSurface,
+  });
 };
 
 /**
@@ -292,12 +265,8 @@ export const useDecisionTableColumns = ({
   });
   const available = questions.type === "available" ? questions : null;
 
-  return useMemo(
-    () =>
-      schema.columns.map((column) =>
-        toDecisionColumnDef({ column, ordering, questions: available }),
-      ),
-    [available, ordering, schema.columns],
+  return schema.columns.map((column) =>
+    toDecisionColumnDef({ column, ordering, questions: available }),
   );
 };
 

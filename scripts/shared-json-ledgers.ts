@@ -4,6 +4,8 @@ export const SHARED_LEDGER_PATHS = [
   ".oxlint-plugins/no-hand-rolled-concurrency-exceptions.json",
   ".oxlint-plugins/no-native-ui-exceptions.json",
   ".oxlint-plugins/require-audit-on-mutation-ledger.json",
+  ".oxlint-plugins/route-pending-component-exceptions.json",
+  ".oxlint-plugins/route-pending-component-unmarked.json",
   ".oxlint-plugins/ui-usage-ledger.json",
   "apps/api/capability-file-transport-ledger.json",
   "apps/api/src/lib/files/windowed-read-exceptions.json",
@@ -15,6 +17,7 @@ export const SHARED_LEDGER_PATHS = [
   "apps/api/src/tests/security/public-response-text-bounds.allowlist.json",
   "packages/property-testing/property-seeds.json",
   "scripts/app-boundary-exceptions.json",
+  "scripts/bundle-startup-ledger.json",
   "scripts/calendar-day-ledger.json",
   "scripts/contract-domain-ledger.json",
   "scripts/dead-columns.allowlist.json",
@@ -28,6 +31,7 @@ export const SHARED_LEDGER_PATHS = [
   "scripts/swallowed-item-error-ledger.json",
   "scripts/test-source-write-exceptions.json",
   "scripts/test-timing-ledger.json",
+  "scripts/ungated-workspace-tests-ledger.json",
 ] as const;
 
 export const ORDER_MEANINGFUL_JSON = {

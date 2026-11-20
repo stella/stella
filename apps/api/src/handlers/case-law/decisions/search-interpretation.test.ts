@@ -279,26 +279,39 @@ describe("searchAnswer", () => {
     ).toContain("partial_matches_appended");
   });
 
+  test("a score-ordered page reports its partial matches as ranked, not appended", () => {
+    const body = request();
+    const interpretation = interpret(body);
+    const codes = searchAnswer({
+      body,
+      interpretation,
+      hitCount: 2,
+      partialHitCount: 1,
+      countsResultSet: true,
+      hitOrder: "score",
+    }).warnings.map(({ code }) => code);
+    expect(codes).toContain("partial_matches_ranked");
+    expect(codes).not.toContain("partial_matches_appended");
+  });
+
   test("an empty page whose partial matches went unread does not say nothing matched", () => {
     const body = request();
     const interpretation = interpret(body);
-    const answer = (relaxedTopUp: "read" | "skipped") =>
+    const answer = (partialMatches: "finished" | "skipped") =>
       searchAnswer({
         body,
         interpretation,
         hitCount: 0,
         countsResultSet: true,
-        relaxedTopUp,
+        partialMatches,
       });
 
-    expect(answer("read").warnings.map(({ code }) => code)).toContain(
+    expect(answer("finished").warnings.map(({ code }) => code)).toContain(
       "no_hits",
     );
-    expect(answer("read").relaxedTopUp).toBeUndefined();
     expect(answer("skipped").warnings.map(({ code }) => code)).not.toContain(
       "no_hits",
     );
-    expect(answer("skipped").relaxedTopUp).toBe("skipped");
   });
 });
 

@@ -113,6 +113,9 @@ export const ENUM_COLUMN_ROLES = {
   case_law_decisions: {
     case_number_type: ATTRIBUTE,
   },
+  case_law_held_decision_attachments: {
+    match_basis: ATTRIBUTE,
+  },
   case_law_polarity_rules: {
     kind: ATTRIBUTE,
   },
@@ -162,6 +165,9 @@ export const ENUM_COLUMN_ROLES = {
   },
   case_law_research_answers: {
     failure_reason: ATTRIBUTE,
+  },
+  case_law_ingestion_failure_evidence: {
+    identity_kind: ATTRIBUTE,
   },
   case_law_sources: {
     ingestion_lease_purpose: ATTRIBUTE,
@@ -238,6 +244,9 @@ export const ENUM_COLUMN_ROLES = {
     family: ATTRIBUTE,
   },
   corpus_index_jurisdiction_serving: {
+    family: ATTRIBUTE,
+  },
+  corpus_index_projection_delete_tasks: {
     family: ATTRIBUTE,
   },
   corpus_index_projection_intents: {
@@ -351,6 +360,9 @@ export const ENUM_COLUMN_ROLES = {
     entity_feature_gate: ATTRIBUTE,
     severity: ATTRIBUTE,
   },
+  email_delivery_failures: {
+    reason: ATTRIBUTE,
+  },
   entities: {
     agenda_kind: ATTRIBUTE,
     agenda_source: ATTRIBUTE,
@@ -423,6 +435,9 @@ export const ENUM_COLUMN_ROLES = {
     method: ATTRIBUTE,
     origin: ATTRIBUTE,
   },
+  invoice_sends: {
+    language: ATTRIBUTE,
+  },
   invoices: {
     billing_mode: ATTRIBUTE,
     document_type: ATTRIBUTE,
@@ -430,6 +445,9 @@ export const ENUM_COLUMN_ROLES = {
   },
   justifications: {
     entity_feature_gate: ATTRIBUTE,
+  },
+  kept_transcript_deletions: {
+    environment: ATTRIBUTE,
   },
   legal_graph_edges: {
     confidence: ATTRIBUTE,
@@ -715,6 +733,7 @@ export const ENUM_COLUMN_ROLES = {
     result: LIFECYCLE,
   },
   user: {
+    locale: ATTRIBUTE,
     reader_answer_language: ATTRIBUTE,
   },
   user_professional_use_acceptances: {

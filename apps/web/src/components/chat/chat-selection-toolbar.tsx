@@ -1,10 +1,11 @@
-import { useCallback, useState } from "react";
+import { useState } from "react";
 import type { RefObject } from "react";
 
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
-import { AiActionIcon } from "@stll/ui/icons";
+import { DirectionalIcon } from "@stll/ui/directional-icon";
+import { AiActionIcon, ChevronLeftIcon, TextIcon } from "@stll/ui/icons";
 
 import { useChatEditorManager } from "@/components/chat-editor-provider";
 import {
@@ -110,6 +111,10 @@ export const ChatSelectionToolbar = ({
   const [selected, setSelected] = useState<Selected | null>(null);
   const [editing, setEditing] = useState<AnswerEditing | null>(null);
   const [editError, setEditError] = useState(false);
+  // Formatting folds behind one button: the bar leads with what a reader does
+  // with an answer (ask, quote, copy), and stays short enough not to cover
+  // the text around the selection.
+  const [formatOpen, setFormatOpen] = useState(false);
   // Where the bar stood when its words went to a new chat: the confirmation
   // stays there, where the reader is looking, after the selection is gone.
   const [confirmAt, setConfirmAt] = useState<SelectionToolbarAnchor | null>(
@@ -126,11 +131,11 @@ export const ChatSelectionToolbar = ({
     rootRef,
   });
 
-  const refreshEditedAnswer = useCallback(async () => {
+  const refreshEditedAnswer = async () => {
     if (editing !== null) {
       await onAnswerEdited?.(editing.anchor.messageId);
     }
-  }, [editing, onAnswerEdited]);
+  };
 
   const readSelection = useLatestCallback(
     (ownerDoc: Document, pointer?: { x: number; y: number }) => {
@@ -181,6 +186,7 @@ export const ChatSelectionToolbar = ({
         });
       }
       setEditError(false);
+      setFormatOpen(false);
       setSelected({ ...anchor, quote, edit });
     },
   );
@@ -302,6 +308,7 @@ export const ChatSelectionToolbar = ({
   return (
     <>
       <SelectionToolbar
+        anchorExtent={selected.extent}
         anchorRect={selected.rect}
         boundaryRect={selected.bounds}
         ariaLabel={t("chat.selection.toolbarLabel")}
@@ -311,70 +318,101 @@ export const ChatSelectionToolbar = ({
         {/* Wraps rather than run off a narrow screen; on a phone the
             actions go icon-only and keep their labels as accessible names. */}
         <div className="flex flex-wrap items-center gap-1">
-          {selected.edit.status !== "unavailable" && (
-            <AnswerFormattingControls
-              disabled={editsDisabled}
-              onSelect={(entry) => {
-                if (selected.edit.status !== "available") {
-                  setEditError(true);
-                  return;
-                }
-                setEditing({
-                  type: "format",
-                  anchor: selected.edit.anchor,
-                  selection: selected.edit.selection,
-                  entry,
-                  rect: selected.rect,
-                  bounds: selected.bounds,
-                });
-                doc?.getSelection()?.removeAllRanges();
-              }}
-            />
-          )}
-          {selected.edit.status !== "unavailable" &&
-            answerRewriteAvailability === "available" && (
-              <CapabilityAction action={{ capability: "ai" }} surface="control">
-                {(capabilityProps) => (
+          {formatOpen && selected.edit.status !== "unavailable" ? (
+            <>
+              <Button
+                aria-label={t("common.back")}
+                onClick={() => setFormatOpen(false)}
+                onMouseDown={(event) => event.preventDefault()}
+                size="icon-sm"
+                variant="ghost"
+              >
+                <DirectionalIcon icon={ChevronLeftIcon} />
+              </Button>
+              <AnswerFormattingControls
+                disabled={editsDisabled}
+                onSelect={(entry) => {
+                  if (selected.edit.status !== "available") {
+                    setEditError(true);
+                    return;
+                  }
+                  setEditing({
+                    type: "format",
+                    anchor: selected.edit.anchor,
+                    selection: selected.edit.selection,
+                    entry,
+                    rect: selected.rect,
+                    bounds: selected.bounds,
+                  });
+                  doc?.getSelection()?.removeAllRanges();
+                }}
+              />
+            </>
+          ) : (
+            <>
+              <ChatSelectionActions
+                actions={actions}
+                askInNewChat={askInNewChat}
+                quoteInReply={quoteInReply}
+                copy={selectionCopy}
+                copyText={selected.quote}
+              />
+              {selected.edit.status !== "unavailable" && (
+                <>
+                  <span aria-hidden className="bg-border mx-0.5 h-4 w-px" />
+                  {answerRewriteAvailability === "available" && (
+                    <CapabilityAction
+                      action={{ capability: "ai" }}
+                      surface="control"
+                    >
+                      {(capabilityProps) => (
+                        <Button
+                          onMouseDown={(event) => event.preventDefault()}
+                          onClick={() => {
+                            if (selected.edit.status !== "available") {
+                              setEditError(true);
+                              return;
+                            }
+                            setEditing({
+                              type: "ai",
+                              anchor: selected.edit.anchor,
+                              bounds: selected.bounds,
+                              rect: selected.rect,
+                            });
+                            doc?.getSelection()?.removeAllRanges();
+                          }}
+                          size="sm"
+                          variant="ghost"
+                          disabled={editsDisabled}
+                          {...capabilityProps}
+                        >
+                          <AiActionIcon className="size-3.5" />
+                          <span className={ACTION_LABEL_CLASS}>
+                            {t("chat.answerEdit.ask")}
+                          </span>
+                        </Button>
+                      )}
+                    </CapabilityAction>
+                  )}
                   <Button
-                    onMouseDown={(event) => event.preventDefault()}
-                    onClick={() => {
-                      if (selected.edit.status !== "available") {
-                        setEditError(true);
-                        return;
-                      }
-                      setEditing({
-                        type: "ai",
-                        anchor: selected.edit.anchor,
-                        bounds: selected.bounds,
-                        rect: selected.rect,
-                      });
-                      doc?.getSelection()?.removeAllRanges();
-                    }}
-                    size="sm"
-                    variant="ghost"
+                    aria-label={t("chat.answerEdit.formatKind")}
                     disabled={editsDisabled}
-                    {...capabilityProps}
+                    onClick={() => setFormatOpen(true)}
+                    onMouseDown={(event) => event.preventDefault()}
+                    size="icon-sm"
+                    variant="ghost"
                   >
-                    <AiActionIcon className="size-3.5" />
-                    <span className={ACTION_LABEL_CLASS}>
-                      {t("chat.answerEdit.ask")}
-                    </span>
+                    <TextIcon />
                   </Button>
-                )}
-              </CapabilityAction>
-            )}
+                </>
+              )}
+            </>
+          )}
           {editError && (
             <p className="w-full px-2 py-1" role="alert">
               {t("chat.answerEdit.invalidSelection")}
             </p>
           )}
-          <ChatSelectionActions
-            actions={actions}
-            askInNewChat={askInNewChat}
-            quoteInReply={quoteInReply}
-            copy={selectionCopy}
-            copyText={selected.quote}
-          />
         </div>
       </SelectionToolbar>
       {announcer}

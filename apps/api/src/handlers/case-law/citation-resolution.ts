@@ -126,11 +126,17 @@ import {
   type CitationResolutionRule,
   type CitationResolutionStatus,
   countsByRule,
+  effectiveCitationIdentifierTypeSql,
+  effectiveCitationIdentifierValueSql,
   MERITS_DECISION_TYPES,
   PROCEDURAL_DECISION_TYPES,
   unsettledCitationSql,
 } from "@/api/handlers/case-law/citation-resolution-status";
 import type { SafeId } from "@/api/lib/branded-types";
+import {
+  caseNumberKeyAmongSql,
+  caseNumberKeysMatchSql,
+} from "@/api/lib/case-law/case-number-match-key";
 import { languageGroupWorkKeySql } from "@/api/lib/case-law/decision-work";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import {
@@ -305,7 +311,7 @@ const SHEET_READING_SQL = {
   stated: (value, { sheetNumber, familyKey }, holder) => sql`(
         btrim(${value}) ~ ${String.raw`^[0-9]{1,${String(DECISION_STATED_SHEET_MAX_DIGITS)}}$`}
     AND ${numeralSql(sql`btrim(${value})`)} = ${numeralSql(sheetNumber)}
-    AND ${holder}.citation_key = ${familyKey}
+    AND ${caseNumberKeysMatchSql(sql`${holder}.citation_key`, familyKey)}
     AND ${holder}.docket_family_key IS NOT NULL
   )`,
 } as const satisfies Record<
@@ -552,7 +558,13 @@ const citationMatchingHoldersSql = ({
       JOIN ${caseLawDecisions} ${holder}
         ON ${holder}.id = identifier.decision_id
      WHERE identifier.type = coalesce(${identifierType}, 'case-number')
-       AND identifier.normalized_value = coalesce(${normalizedIdentifierValue}, ${citationKey})
+       AND ${caseNumberKeysMatchSql(
+         sql.raw("identifier.normalized_value"),
+         effectiveCitationIdentifierValueSql(
+           normalizedIdentifierValue,
+           citationKey,
+         ),
+       )}
        AND ${jurisdictionPredicate}
        AND ${holder}.id <> ${citingDecisionId}
        AND (
@@ -574,7 +586,7 @@ const citationMatchingHoldersSql = ({
            })} AS work_key
       FROM ${caseLawDecisions} ${holder}
      WHERE (${identifierType} IS NULL OR ${identifierType} = 'case-number')
-       AND ${holder}.citation_key = ${citationKey}
+       AND ${caseNumberKeysMatchSql(sql`${holder}.citation_key`, citationKey)}
        AND ${jurisdictionPredicate}
        AND ${holder}.id <> ${citingDecisionId}
        AND (
@@ -587,7 +599,10 @@ const citationMatchingHoldersSql = ({
          FROM ${caseLawDecisionIdentifiers} existing_identifier
          WHERE existing_identifier.decision_id = ${holder}.id
            AND existing_identifier.type = 'case-number'
-           AND existing_identifier.normalized_value = ${citationKey}
+           AND ${caseNumberKeysMatchSql(
+             sql.raw("existing_identifier.normalized_value"),
+             citationKey,
+           )}
        )
   ) candidate
   -- Language manifestations are one judgment, not competing decisions.
@@ -1373,7 +1388,7 @@ export const reopenCitationsForDecisionKey = async (
              resolution_rule_id = NULL
         FROM ${caseLawDecisions} citing
        WHERE citing.id = c.citing_decision_id
-         AND c.citation_key = ${citationKey}
+         AND ${caseNumberKeyAmongSql(sql.raw("c.citation_key"), [citationKey])}
          AND ${citationReopenableByKeySql(sql.raw("c.resolution_status"))}
          AND ${affects}
       RETURNING c.id
@@ -1387,7 +1402,7 @@ export const reopenCitationsForDecisionKey = async (
        WHERE citing.id = c.citing_decision_id
          AND cited.id = c.cited_decision_id
          AND cited.id <> ${decisionId}::uuid
-         AND cited.citation_key = ${citationKey}
+         AND ${caseNumberKeyAmongSql(sql.raw("cited.citation_key"), [citationKey])}
          AND c.resolution_status = ${CITATION_RESOLUTION_STATUS.RESOLVED}
          AND ${affects}
       RETURNING c.id
@@ -1456,11 +1471,16 @@ export const reopenCitationsForDecisionIdentifiers = async (
          AND EXISTS (
            SELECT 1
            FROM arriving
-           WHERE arriving.type = coalesce(citation.identifier_type, 'case-number')
-             AND arriving.normalized_value = coalesce(
-               citation.normalized_identifier_value,
-               citation.citation_key
-             )
+           WHERE arriving.type = ${effectiveCitationIdentifierTypeSql(
+             sql.raw("citation.identifier_type"),
+           )}
+             AND ${caseNumberKeysMatchSql(
+               sql.raw("arriving.normalized_value"),
+               effectiveCitationIdentifierValueSql(
+                 sql.raw("citation.normalized_identifier_value"),
+                 sql.raw("citation.citation_key"),
+               ),
+             )}
          )
          AND ${citationReopenableByKeySql(sql.raw("citation.resolution_status"))}
          AND citing.country IN ${reachedFrom}
@@ -1485,7 +1505,10 @@ export const reopenCitationsForDecisionIdentifiers = async (
            FROM arriving
            JOIN ${caseLawDecisionIdentifiers} cited_identifier
              ON cited_identifier.type = arriving.type
-            AND cited_identifier.normalized_value = arriving.normalized_value
+            AND ${caseNumberKeysMatchSql(
+              sql.raw("cited_identifier.normalized_value"),
+              sql.raw("arriving.normalized_value"),
+            )}
            WHERE cited_identifier.decision_id = cited.id
          )
          AND citation.resolution_status = ${CITATION_RESOLUTION_STATUS.RESOLVED}
@@ -1528,13 +1551,11 @@ export const reopenCitationsForKeys = async (
   tx: CitationGraphTransaction,
   citationKeys: readonly string[],
 ): Promise<ReopenedCitations> => {
-  if (citationKeys.length === 0) {
+  const [firstKey, ...otherKeys] = citationKeys;
+  if (firstKey === undefined) {
     return NOTHING_REOPENED;
   }
-  const keys = sql`ARRAY[${sql.join(
-    citationKeys.map((key) => sql`${key}`),
-    sql`, `,
-  )}]::varchar[]`;
+  const keys = [firstKey, ...otherKeys] as const;
   // Disjoint arms again: `revived` reads the negative outcomes, `contested`
   // reads `resolved`, and no row can match both.
   // audit: skip — derived citation graph, not a user action
@@ -1543,7 +1564,7 @@ export const reopenCitationsForKeys = async (
       UPDATE ${caseLawCitations} c
          SET resolution_status = ${CITATION_RESOLUTION_STATUS.PENDING},
              resolution_rule_id = NULL
-       WHERE c.citation_key = ANY (${keys})
+       WHERE ${caseNumberKeyAmongSql(sql.raw("c.citation_key"), keys)}
          AND ${citationReopenableByKeySql(sql.raw("c.resolution_status"))}
       RETURNING c.id
     ),
@@ -1554,7 +1575,7 @@ export const reopenCitationsForKeys = async (
              resolution_rule_id = NULL
         FROM ${caseLawDecisions} cited
        WHERE cited.id = c.cited_decision_id
-         AND cited.citation_key = ANY (${keys})
+         AND ${caseNumberKeyAmongSql(sql.raw("cited.citation_key"), keys)}
          AND c.resolution_status = ${CITATION_RESOLUTION_STATUS.RESOLVED}
       RETURNING c.id
     )

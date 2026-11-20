@@ -1,14 +1,8 @@
-import { useImperativeHandle, useState } from "react";
+import { use, useImperativeHandle, useState } from "react";
 import type { Ref } from "react";
 
 import { GlassView, isLiquidGlassAvailable } from "expo-glass-effect";
-import {
-  Platform,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  View,
-} from "react-native";
+import { Platform, ScrollView, StyleSheet, View } from "react-native";
 import { useTranslations } from "use-intl";
 
 import type { ChatLocalRunSteerRefusal } from "@stll/api-contract/chat-run-target";
@@ -20,6 +14,8 @@ import { Textarea } from "@stll/ui/textarea";
 
 import { ChatAttachmentChip } from "@/components/chat-attachment-chip";
 import { ComposerAttachMenu } from "@/components/composer-attach-menu";
+import { dictationClock } from "@/components/dictate-button";
+import { ThreadMatter } from "@/components/thread-matter";
 import { useChatAttachments } from "@/components/use-chat-attachments";
 import type { AttachmentNotice } from "@/components/use-chat-attachments";
 import { useDictation } from "@/components/use-dictation";
@@ -48,7 +44,8 @@ import type {
   DraftSendMode,
   SendRefusal,
 } from "@/state/chat-attachments";
-import { appendDictation, DICTATION_MAX_SECONDS } from "@/state/dictation";
+import { appendDictation } from "@/state/dictation";
+import { DICTATION_TOTAL_MAX_MS } from "@/state/dictation-chunks";
 import { sizeInUnits } from "@/state/scan-pages";
 import { useUiColors } from "@/theme";
 
@@ -134,9 +131,12 @@ export const ChatComposer = ({
     },
     shareId,
   });
-  const dictation = useDictation((text) => {
-    setDraft((typed) => appendDictation(typed, text));
-  });
+  const dictation = useDictation(
+    (text) => {
+      setDraft((typed) => appendDictation(typed, text));
+    },
+    { matterId: use(ThreadMatter) },
+  );
   const message = draft.trim();
   const notice = useNoticeText({
     notice: files.notice,
@@ -328,8 +328,8 @@ export const ChatComposer = ({
               >
                 {dictation.phase === "recording"
                   ? t("dictationListening", {
-                      elapsed: clock(dictation.elapsedMs),
-                      limit: clock(DICTATION_MAX_SECONDS * 1000),
+                      elapsed: dictationClock(dictation.elapsedMs),
+                      limit: dictationClock(DICTATION_TOTAL_MAX_MS),
                     })
                   : t("dictationTranscribing")}
               </Text>
@@ -361,9 +361,11 @@ export const ChatComposer = ({
 };
 
 // A one-line text cell is 42pt tall (24pt line, 9pt above and below); the
-// 36pt round controls sit centred on it.
-const ROUND =
-  "mb-[3px] size-9 shrink-0 items-center justify-center rounded-full";
+// 36pt round controls sit centred on it. A plain button keeps a 2pt
+// transparent border around its content, so its box is 40pt to hold the
+// 36pt circle.
+const ROUND_BOX = "mb-px size-10 shrink-0";
+const ROUND = "size-9 items-center justify-center rounded-full";
 
 type RoundButtonProps = {
   readonly enabled: boolean;
@@ -396,16 +398,17 @@ const RoundButton = ({
     color = ui.foreground;
   }
   return (
-    <Pressable
+    <Button
       accessibilityLabel={label}
-      accessibilityRole="button"
-      accessibilityState={{ disabled: !enabled }}
-      className={`${ROUND} ${filled ? "bg-foreground" : "bg-secondary"}`}
+      className={ROUND_BOX}
       disabled={!enabled}
       onPress={onPress}
+      variant="plain"
     >
-      <Icon color={color} size={iconSize} />
-    </Pressable>
+      <View className={`${ROUND} ${filled ? "bg-foreground" : "bg-secondary"}`}>
+        <Icon color={color} size={iconSize} />
+      </View>
+    </Button>
   );
 };
 
@@ -515,12 +518,6 @@ const DraftChip = ({
       status={CHIP_STATUS[status]}
     />
   );
-};
-
-/** Minutes and seconds, as a recorder counts: 0:07, 1:00. */
-const clock = (milliseconds: number): string => {
-  const seconds = Math.floor(milliseconds / 1000);
-  return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
 };
 
 const CHIP_STATUS = {

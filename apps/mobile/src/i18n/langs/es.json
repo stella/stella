@@ -1,4 +1,7 @@
 {
+  "common": {
+    "previewTruncated": "El texto completo no está disponible en esta vista previa."
+  },
   "tabs": {
     "chat": "Chat",
     "close": "Cerrar",
@@ -127,6 +130,8 @@
       "boe_search_legislation": "Búsqueda en BOE",
       "borme_get_summary": "Sumario BORME",
       "business_registry_lookup": "Buscando en el registro de empresas",
+      "calendar_free_busy": "Consultar disponibilidad en el calendario",
+      "calendar_list_events": "Leer eventos del calendario",
       "command_execution": "Ejecutando un comando",
       "compare_versions": "Comparando versiones",
       "configure_template_fields": "Configurar campos de la plantilla",
@@ -143,10 +148,10 @@
       "delete_reader_annotation": "Eliminar resaltado o comentario",
       "delete_task": "Eliminar tarea",
       "delete_time_entry": "Eliminar registro de tiempo",
-      "describe-stella-api": "Preparando búsqueda de datos",
-      "describe-stella-function": "Preparando búsqueda de datos",
+      "describe-stella-api": "Eligiendo dónde buscar",
+      "describe-stella-function": "Eligiendo dónde buscar",
       "describe_template": "Leyendo campos de la plantilla",
-      "discover_tools": "Preparando búsqueda de datos",
+      "discover_tools": "Eligiendo dónde buscar",
       "execute-typescript": "Leyendo datos del asunto",
       "execute_typescript": "Leyendo datos del asunto",
       "expand-chat-history": "Leyendo el historial del chat",
@@ -186,6 +191,7 @@
       "save_document": "Guardar documento",
       "save_matter": "Guardar asunto",
       "save_playbook": "Guardar playbook",
+      "save_skill_package": "Guardar habilidad",
       "save_task": "Guardar tarea",
       "save_template": "Guardar plantilla",
       "save_time_entry": "Guardar registro de tiempo",
@@ -208,7 +214,13 @@
       "update_reader_annotation": "Editar resaltado o comentario",
       "use-browser": "Usando tu navegador",
       "use_connector_secret": "Usando la credencial del conector",
+      "validate_skill_package": "Comprobar habilidad",
       "web_search": "Buscando en la web"
+    },
+    "toolResearch": {
+      "caseLaw": "Buscando en la jurisprudencia",
+      "legislation": "Leyendo la legislación",
+      "legislationAndCaseLaw": "Buscando en la legislación y la jurisprudencia"
     },
     "localRun": {
       "title": {
@@ -264,9 +276,18 @@
       "sourcesChecked": "{count, plural, one {# fuente consultada} other {# fuentes consultadas} many {# fuentes consultadas}}",
       "documentEdits": "{count, plural, one {# edición del documento} other {# ediciones del documento} many {# ediciones del documento}}",
       "changesSaved": "{count, plural, one {# cambio guardado} other {# cambios guardados} many {# cambios guardados}}",
-      "analyses": "{count, plural, one {# análisis} other {# análisis} many {# análisis}}"
+      "searchedLegislation": "Legislación consultada",
+      "searchedCaseLaw": "Jurisprudencia consultada",
+      "searchedLegislationAndCaseLaw": "Legislación y jurisprudencia consultadas",
+      "readDocument": "Documento leído",
+      "readDocuments": "Documentos leídos",
+      "searchedMatters": "Asuntos revisados",
+      "checkedRegisters": "Registros públicos consultados",
+      "searchedWeb": "Web consultada",
+      "searchedChats": "Historial del chat consultado"
     },
     "stepCount": "{count, plural, one {# paso} other {# pasos} many {# pasos}}",
+    "lookupCount": "{count, plural, one {# consulta} many {# consultas} other {# consultas}}",
     "reasoning": "Razonamiento",
     "historyTrimmed": "No se pudieron resumir los mensajes anteriores, así que esta respuesta solo tiene en cuenta la parte más reciente de la conversación.",
     "failure": {
@@ -331,6 +352,39 @@
         "send-refused": "Cola en pausa: no se pudo enviar el primer mensaje. Edítalo o quítalo y luego reanuda.",
         "usage-limit": "Cola en pausa: has alcanzado tu límite de uso. Reanúdala cuando se restablezca.",
         "computer-away": "Esperando a tu ordenador: los mensajes en cola se envían en cuanto se conecte."
+      }
+    },
+    "edit": {
+      "action": "Editar",
+      "title": "Editar mensaje",
+      "input": "Mensaje editado",
+      "notice": "Al enviarlo, se reemplazan este mensaje y todos los mensajes posteriores.",
+      "cancel": "Cancelar",
+      "refused": "No se pudo editar el mensaje. El chat muestra ahora lo que está guardado; inténtelo de nuevo cuando no haya ninguna respuesta en curso.",
+      "refusedHistoryChanged": "El chat cambió mientras se enviaba la edición. Ahora muestra lo que está guardado; envíe la edición de nuevo.",
+      "refusedTargetMissing": "Este mensaje ya no está en el chat, así que no se puede editar.",
+      "localFiles": {
+        "computer": {
+          "failed": "La acción de deshacer no terminó en tu ordenador. Es posible que algunos archivos ya hayan cambiado, así que revisa la carpeta del chat.",
+          "folderBusy": "Una ejecución en tu ordenador está usando esta carpeta. Inténtalo de nuevo cuando termine.",
+          "noCheckpoint": "Tu ordenador no tiene una copia guardada de los archivos de antes de este paso, así que no se deshizo nada.",
+          "updateForEarlier": "Actualiza stella desktop para deshacer cambios de mensajes anteriores."
+        },
+        "conversationRestarts": "El agente empieza de nuevo a partir del texto de este chat, porque la respuesta anterior a este mensaje no terminó.",
+        "expired": "Tu ordenador no respondió a tiempo. Inténtalo de nuevo.",
+        "option": "Deshacer también los cambios en archivos desde este mensaje",
+        "optionHint": "También se deshacen los cambios que hiciste tú en la carpeta.",
+        "pending": "Deshaciendo cambios en archivos de tu ordenador",
+        "refused": {
+          "alreadyUndone": "Estos cambios en archivos ya se deshicieron.",
+          "desktopOffline": "Tu ordenador está sin conexión. Abre la aplicación de escritorio de stella e inténtalo de nuevo.",
+          "desktopUpdateRequired": "La aplicación de escritorio de stella de tu ordenador es demasiado antigua para deshacer cambios. Actualízala e inténtalo de nuevo.",
+          "folderShared": "Otro chat ha trabajado en esta carpeta desde este mensaje.",
+          "noSavedCopy": "Tu ordenador no guardó una copia de la carpeta de antes de este mensaje: era demasiado grande o lenta de guardar, o la sustituyeron copias más recientes.",
+          "severalFolders": "Los mensajes posteriores se ejecutaron en otro ordenador o en otra carpeta.",
+          "threadBusy": "Este chat todavía está trabajando. Inténtalo de nuevo cuando termine."
+        },
+        "restored": "Cambios en archivos deshechos"
       }
     }
   },
@@ -491,6 +545,7 @@
     "title": "Documento",
     "failedTitle": "No se pudo abrir este documento",
     "failure": {
+      "dataBoxUnreadable": "No se ha podido leer este archivo como mensaje del buzón de datos ni como acuse de recibo.",
       "offline": "No tiene conexión. Conéctese a internet y vuelva a intentarlo.",
       "noFile": "Este documento aún no tiene archivo.",
       "failed": "Algo salió mal al abrirlo. Vuelva a intentarlo en un momento.",
@@ -498,6 +553,7 @@
       "android": "Los documentos aún no se pueden abrir en la app para Android."
     },
     "retry": "Reintentar",
+    "openOriginal": "Abrir original",
     "preview": "Abrir vista previa",
     "previewDescription": "Este archivo se abre en la vista previa del sistema.",
     "unrendered": "Este documento no se puede mostrar aquí, pero la vista previa del sistema quizá pueda abrirlo.",
@@ -555,7 +611,28 @@
     "signOutFailed": "No se pudo completar el cierre de sesión. Inténtalo de nuevo.",
     "lockScreenTitle": "Pantalla bloqueada",
     "timerDetails": "Detalles del temporizador",
-    "timerDetailsHint": "Cuando un temporizador cambia en otro dispositivo, el servicio de notificaciones de Apple lleva su descripción y su asunto a la pantalla bloqueada. Desactivado, solo muestra el tiempo hasta que abras la app."
+    "timerDetailsHint": "Cuando un temporizador cambia en otro dispositivo, el servicio de notificaciones de Apple lleva su descripción y su asunto a la pantalla bloqueada. Desactivado, solo muestra el tiempo hasta que abras la app.",
+    "dictationTitle": "Dictado",
+    "dictationModelDefault": "Predeterminado",
+    "dictationModelDefaultNamed": "Predeterminado ({model})",
+    "dictationModelOutsideRegion": "Fuera de tu región",
+    "dictationModelRetainsData": "Conserva tu audio",
+    "dictationModelRetainsWarning": "Este modelo funciona con una cuenta sin retención cero de datos. {provider} guarda el audio y la transcripción de todo lo que dictas según sus propias condiciones, fuera del control de stella. No dictes con él información confidencial ni datos de clientes.",
+    "dictationModelHint": "El modelo que convierte lo que dictas en texto. stella no guarda el audio.",
+    "dictationModelsUnavailable": "No se pudieron cargar los modelos. El dictado usa el modelo que elegiste, o el predeterminado si el servidor ya no lo ofrece.",
+    "dictationCleanup": "Corregir con IA",
+    "dictationCleanupHint": "Corrige errores de reconocimiento y el formato dictado, como «nueva línea». Solo el texto, no el audio, pasa por stella al proveedor de IA de tu organización; stella no lo guarda."
+  },
+  "signedFile": {
+    "layer": "Capa de firmas {number, number}",
+    "noReadableContent": "No hay contenido legible para la vista previa.",
+    "unknownSigner": "Firmante desconocido",
+    "unreadable": "No se ha podido leer el archivo firmado.",
+    "unverified": "Las firmas no se han verificado."
+  },
+  "structuredDocument": {
+    "noReadableContent": "No hay texto legible para la vista previa.",
+    "textOnly": "Vista previa de texto sin diseño de página ni imágenes."
   },
   "header": {
     "search": "Buscar"

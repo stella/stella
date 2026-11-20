@@ -11,15 +11,14 @@
         "confirm": "Consent to confirm",
         "notice": "Notice only"
       },
-      "statDetail": "{counterparties} counterparties · {documents} documents · {share} of value",
+      "statDetail": "{counterparties} counterparties · {share} of value",
       "splitLabel": "Share of contract value by change-of-control position",
       "columns": [
         "Counterparty",
         "Agreement",
         "Documents",
         "Contract value",
-        "Risk",
-        "Change of control"
+        "Risk"
       ]
     }
   }

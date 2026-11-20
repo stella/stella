@@ -47,8 +47,7 @@
                 "type": "string"
               }
             },
-            "required": ["id", "title", "url"],
-            "additionalProperties": false
+            "required": ["id", "title", "url"]
           }
         },
         "nextCursor": {
@@ -58,20 +57,22 @@
           "type": "object",
           "properties": {
             "type": {
-              "enum": ["complete", "truncated"],
+              "examples": ["complete", "truncated"],
               "type": "string"
             },
             "reason": {
-              "enum": ["exclusion_budget", "time_budget"],
+              "examples": [
+                "exclusion_budget",
+                "time_budget",
+                "partial_matches_budget"
+              ],
               "type": "string"
             }
           },
-          "required": ["type"],
-          "additionalProperties": false
+          "required": ["type"]
         }
       },
-      "required": ["results"],
-      "additionalProperties": false
+      "required": ["results"]
     },
     "annotations": {
       "title": "Search",
@@ -133,21 +134,21 @@
           "type": "object",
           "properties": {
             "kind": {
-              "enum": ["document", "decision", "statute"],
+              "examples": ["document", "decision", "statute"],
               "type": "string"
             },
             "charCount": {
               "type": "number"
             },
             "source": {
-              "enum": ["stella"],
+              "examples": ["stella"],
               "type": "string"
             },
             "truncated": {
               "type": "boolean"
             },
             "anonymized": {
-              "enum": [true],
+              "examples": [true],
               "type": "boolean"
             },
             "anonymizedEntityCount": {
@@ -157,12 +158,10 @@
               "type": "string"
             }
           },
-          "required": ["kind", "charCount", "source", "truncated"],
-          "additionalProperties": false
+          "required": ["kind", "charCount", "source", "truncated"]
         }
       },
-      "required": ["id", "title", "text", "url", "nextCursor", "metadata"],
-      "additionalProperties": false
+      "required": ["id", "title", "text", "url", "nextCursor", "metadata"]
     },
     "annotations": {
       "title": "Fetch",
@@ -247,8 +246,7 @@
               "status",
               "lastActivityAt",
               "createdAt"
-            ],
-            "additionalProperties": false
+            ]
           }
         },
         "nextCursor": {
@@ -279,8 +277,7 @@
               "type": ["string", "null"]
             }
           },
-          "required": ["id", "name", "reference", "status", "clientName"],
-          "additionalProperties": false
+          "required": ["id", "name", "reference", "status", "clientName"]
         },
         "overview": {
           "type": "object",
@@ -307,8 +304,7 @@
             "documentCount",
             "taskCount",
             "recentEntities"
-          ],
-          "additionalProperties": false
+          ]
         },
         "contacts": {
           "type": "array",
@@ -337,8 +333,7 @@
               "displayName",
               "role",
               "type"
-            ],
-            "additionalProperties": false
+            ]
           }
         },
         "members": {
@@ -353,12 +348,10 @@
                 "type": "string"
               }
             },
-            "required": ["userId", "name"],
-            "additionalProperties": false
+            "required": ["userId", "name"]
           }
         }
-      },
-      "additionalProperties": false
+      }
     },
     "annotations": {
       "title": "List matters",
@@ -431,7 +424,7 @@
                 "type": "string"
               },
               "kind": {
-                "enum": ["document", "folder", "task", "message", "link"],
+                "examples": ["document", "folder", "task", "message", "link"],
                 "type": "string"
               },
               "headline": {
@@ -445,13 +438,11 @@
               "name",
               "kind",
               "headline"
-            ],
-            "additionalProperties": false
+            ]
           }
         }
       },
-      "required": ["totalCount", "nextCursor", "hits"],
-      "additionalProperties": false
+      "required": ["totalCount", "nextCursor", "hits"]
     },
     "annotations": {
       "title": "Search across matters",
@@ -468,7 +459,7 @@
       "feature": "FEATURE_PUBLIC_LAW"
     },
     "name": "search_case_law",
-    "description": "Search case law. `queries` merges phrasings; matchedQueries names each hit's phrasings. `limit` is split evenly. Facets are opt-in, first phrasing, page one. total needs facets and one phrasing; not_counted means unknown, never zero. strict requires every word; otherwise function words are optional. Relevance pages may add some_terms hits after all_terms hits. searches[] reports queryUsed/warnings; a phrasing out of time shows time_budget and nextCursor reruns it. source_id uses facets.source values. Under load it may answer status \"running\": not a failure. After retryAfterMs, repeat the call with continuation_token; \"partial\" is never the full answer. Reader: `url`; publisher: `source_url`.",
+    "description": "Search case law. `queries` merges phrasings; matchedQueries names each hit's phrasings. `limit` is split evenly. Facets are opt-in, first phrasing, page one. total needs facets and one phrasing; not_counted means unknown, never zero. strict needs every word, not necessarily adjacent (quote a phrase for that); otherwise function words are optional and some_terms hits may appear; terms names each hit's words. searches[] has queryUsed/warnings; on time_budget or partial_matches_budget nextCursor reruns it. source_id uses facets.source values. Under load it may answer status \"running\": not a failure. After retryAfterMs, repeat the call with continuation_token; \"partial\" is never the full answer. Reader: `url`; publisher: `source_url`.",
     "inputSchema": {
       "type": "object",
       "required": ["country"],
@@ -666,19 +657,19 @@
       "type": "object",
       "properties": {
         "code": {
-          "enum": ["public_country_unavailable"],
+          "examples": ["public_country_unavailable"],
           "type": "string"
         },
         "status": {
-          "enum": ["unavailable", "running"],
+          "examples": ["unavailable", "running"],
           "type": "string"
         },
         "domain": {
-          "enum": ["caseLaw", "legislation"],
+          "examples": ["caseLaw", "legislation"],
           "type": "string"
         },
         "country": {
-          "enum": [
+          "examples": [
             "AUT",
             "BRA",
             "CZE",
@@ -692,7 +683,7 @@
           "type": "string"
         },
         "reason": {
-          "enum": [
+          "examples": [
             "identity_public",
             "pages_public",
             "pending_public",
@@ -707,7 +698,7 @@
           "type": "string"
         },
         "headnotes": {
-          "enum": ["included", "omitted"],
+          "examples": ["included", "omitted"],
           "type": "string"
         },
         "facets": {
@@ -760,8 +751,7 @@
             "decisionType",
             "source",
             "language"
-          ],
-          "additionalProperties": false
+          ]
         },
         "nextCursor": {
           "type": ["string", "null"]
@@ -770,16 +760,19 @@
           "type": "object",
           "properties": {
             "type": {
-              "enum": ["complete", "truncated"],
+              "examples": ["complete", "truncated"],
               "type": "string"
             },
             "reason": {
-              "enum": ["exclusion_budget", "time_budget"],
+              "examples": [
+                "exclusion_budget",
+                "time_budget",
+                "partial_matches_budget"
+              ],
               "type": "string"
             }
           },
-          "required": ["type"],
-          "additionalProperties": false
+          "required": ["type"]
         },
         "searches": {
           "type": "array",
@@ -796,6 +789,10 @@
                 "type": "object",
                 "additionalProperties": true
               },
+              "termDecisionCounts": {
+                "type": "object",
+                "additionalProperties": true
+              },
               "warnings": {
                 "type": "array",
                 "items": {
@@ -804,8 +801,7 @@
                 }
               }
             },
-            "required": ["query", "queryUsed", "warnings"],
-            "additionalProperties": false
+            "required": ["query", "queryUsed", "warnings"]
           }
         },
         "results": {
@@ -852,7 +848,7 @@
               "decisionTypeKind": {
                 "anyOf": [
                   {
-                    "enum": [
+                    "examples": [
                       "judgment",
                       "order",
                       "finding",
@@ -903,12 +899,16 @@
                 "type": "number"
               },
               "textAvailability": {
-                "enum": ["available", "metadata_only"],
+                "examples": ["available", "metadata_only"],
                 "type": "string"
               },
               "match": {
-                "enum": ["all_terms", "some_terms"],
+                "examples": ["all_terms", "some_terms"],
                 "type": "string"
+              },
+              "terms": {
+                "type": "object",
+                "additionalProperties": true
               },
               "snippet": {
                 "type": ["string", "null"]
@@ -959,17 +959,17 @@
               "matchingPassages",
               "textAvailability",
               "match",
+              "terms",
               "keywords",
               "headnote"
-            ],
-            "additionalProperties": false
+            ]
           }
         },
         "total": {
           "type": "object",
           "properties": {
             "type": {
-              "enum": ["exact", "estimate", "not_counted"],
+              "examples": ["exact", "estimate", "not_counted"],
               "type": "string"
             },
             "count": {
@@ -981,8 +981,7 @@
               "type": "string"
             }
           },
-          "required": ["type"],
-          "additionalProperties": false
+          "required": ["type"]
         },
         "nextStep": {
           "type": "string"
@@ -994,7 +993,7 @@
           "type": "number"
         },
         "phase": {
-          "enum": ["queued", "running", "not_started"],
+          "examples": ["queued", "running", "not_started"],
           "type": "string"
         },
         "partial": {
@@ -1020,11 +1019,9 @@
               }
             }
           },
-          "required": ["finishedQueries", "pendingQueries", "decisions"],
-          "additionalProperties": false
+          "required": ["finishedQueries", "pendingQueries", "decisions"]
         }
-      },
-      "additionalProperties": false
+      }
     },
     "annotations": {
       "title": "Search case law",
@@ -1078,19 +1075,19 @@
       "type": "object",
       "properties": {
         "code": {
-          "enum": ["public_country_unavailable"],
+          "examples": ["public_country_unavailable"],
           "type": "string"
         },
         "status": {
-          "enum": ["unavailable"],
+          "examples": ["unavailable"],
           "type": "string"
         },
         "domain": {
-          "enum": ["caseLaw", "legislation"],
+          "examples": ["caseLaw", "legislation"],
           "type": "string"
         },
         "country": {
-          "enum": [
+          "examples": [
             "AUT",
             "BRA",
             "CZE",
@@ -1104,7 +1101,7 @@
           "type": "string"
         },
         "reason": {
-          "enum": [
+          "examples": [
             "identity_public",
             "pages_public",
             "pending_public",
@@ -1125,15 +1122,14 @@
           "type": "object",
           "properties": {
             "status": {
-              "enum": ["current", "refresh_pending"],
+              "examples": ["current", "refresh_pending"],
               "type": "string"
             },
             "ageSeconds": {
               "type": "number"
             }
           },
-          "required": ["status", "ageSeconds"],
-          "additionalProperties": false
+          "required": ["status", "ageSeconds"]
         },
         "countries": {
           "type": "array",
@@ -1144,11 +1140,11 @@
                 "type": "string"
               },
               "availability": {
-                "enum": ["searchable", "in-preparation"],
+                "examples": ["searchable", "in-preparation"],
                 "type": "string"
               },
               "censusVerdict": {
-                "enum": ["complete", "incomplete", "unmeasured"],
+                "examples": ["complete", "incomplete", "unmeasured"],
                 "type": "string"
               },
               "decisions": {
@@ -1184,12 +1180,10 @@
               "decisionYearTo",
               "sources",
               "courts"
-            ],
-            "additionalProperties": false
+            ]
           }
         }
-      },
-      "additionalProperties": false
+      }
     },
     "annotations": {
       "title": "Read case-law coverage",
@@ -1229,6 +1223,21 @@
     "outputSchema": {
       "type": "object",
       "properties": {
+        "attachments": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "position": {
+                "type": "number"
+              },
+              "entityId": {
+                "type": "string"
+              }
+            },
+            "required": ["position", "entityId"]
+          }
+        },
         "charCount": {
           "type": "number"
         },
@@ -1236,7 +1245,7 @@
           "type": "string"
         },
         "kind": {
-          "enum": ["document", "folder", "task", "message", "link"],
+          "examples": ["document", "folder", "task", "message", "link"],
           "type": "string"
         },
         "name": {
@@ -1264,8 +1273,7 @@
         "truncated",
         "nextCursor",
         "workspaceId"
-      ],
-      "additionalProperties": false
+      ]
     },
     "annotations": {
       "title": "Read content across matters",
@@ -1389,17 +1397,15 @@
                 "type": "string"
               },
               "status": {
-                "enum": ["found", "not_found", "pending", "read_failed"],
+                "examples": ["found", "not_found", "pending", "read_failed"],
                 "type": "string"
               }
             },
-            "required": ["decisionId", "status"],
-            "additionalProperties": false
+            "required": ["decisionId", "status"]
           }
         }
       },
-      "required": ["items"],
-      "additionalProperties": false
+      "required": ["items"]
     },
     "annotations": {
       "title": "Read case-law decision",
@@ -1485,7 +1491,7 @@
           "type": "object",
           "properties": {
             "status": {
-              "enum": [
+              "examples": [
                 "none_found",
                 "upheld",
                 "overturned",
@@ -1496,11 +1502,11 @@
               "type": "string"
             },
             "reason": {
-              "enum": ["no_link_in_corpus"],
+              "examples": ["no_link_in_corpus"],
               "type": "string"
             },
             "basis": {
-              "enum": ["available_corpus"],
+              "examples": ["available_corpus"],
               "type": "string"
             },
             "reviewedBy": {
@@ -1533,19 +1539,18 @@
             "reviews",
             "reviewedByTruncated",
             "reviewsTruncated"
-          ],
-          "additionalProperties": false
+          ]
         },
         "doctrineAvailability": {
-          "enum": ["available", "unavailable"],
+          "examples": ["available", "unavailable"],
           "type": "string"
         },
         "doctrine": {
-          "enum": ["distinguishes", "limits"],
+          "examples": ["distinguishes", "limits"],
           "type": "string"
         },
         "polarity": {
-          "enum": [
+          "examples": [
             "negative",
             "neutral",
             "positive",
@@ -1565,7 +1570,7 @@
           "type": "string"
         },
         "direction": {
-          "enum": ["cites", "cited_by"],
+          "examples": ["cites", "cited_by"],
           "type": "string"
         },
         "nextCursor": {
@@ -1585,7 +1590,7 @@
               "textIncompleteReason": {
                 "anyOf": [
                   {
-                    "enum": [
+                    "examples": [
                       "absent_ast",
                       "gate_failed",
                       "text_changed",
@@ -1601,7 +1606,7 @@
               "evidenceIncompleteReason": {
                 "anyOf": [
                   {
-                    "enum": ["missing_privileges", "missing_evidence"],
+                    "examples": ["missing_privileges", "missing_evidence"],
                     "type": "string"
                   },
                   {
@@ -1612,7 +1617,7 @@
               "textWithheldReason": {
                 "anyOf": [
                   {
-                    "enum": ["source_licence"],
+                    "examples": ["source_licence"],
                     "type": "string"
                   },
                   {
@@ -1621,7 +1626,7 @@
                 ]
               },
               "polarity": {
-                "enum": [
+                "examples": [
                   "negative",
                   "neutral",
                   "positive",
@@ -1634,7 +1639,12 @@
               "doctrine": {
                 "anyOf": [
                   {
-                    "enum": ["distinguishes", "limits", "not_stated", "unread"],
+                    "examples": [
+                      "distinguishes",
+                      "limits",
+                      "not_stated",
+                      "unread"
+                    ],
                     "type": "string"
                   },
                   {
@@ -1649,7 +1659,7 @@
               "citedPart": {
                 "anyOf": [
                   {
-                    "enum": [
+                    "examples": [
                       "majority",
                       "dissent",
                       "concurrence",
@@ -1692,8 +1702,7 @@
               "decision",
               "extractionWarnings",
               "passage"
-            ],
-            "additionalProperties": false
+            ]
           }
         }
       },
@@ -1704,8 +1713,7 @@
         "direction",
         "nextCursor",
         "citations"
-      ],
-      "additionalProperties": false
+      ]
     },
     "annotations": {
       "title": "Read case-law citations",
@@ -1749,8 +1757,7 @@
               "type": "string"
             }
           },
-          "required": ["source", "id"],
-          "additionalProperties": false
+          "required": ["source", "id"]
         },
         "type": {
           "type": "string"
@@ -1785,8 +1792,7 @@
                 "type": "string"
               }
             },
-            "required": ["type", "address", "isPrimary"],
-            "additionalProperties": false
+            "required": ["type", "address", "isPrimary"]
           }
         },
         "phones": {
@@ -1807,15 +1813,14 @@
                 "type": "string"
               }
             },
-            "required": ["type", "number", "isPrimary"],
-            "additionalProperties": false
+            "required": ["type", "number", "isPrimary"]
           }
         },
         "dateOfBirth": {
           "type": ["object", "null"],
           "properties": {
             "precision": {
-              "enum": ["year", "month", "day"],
+              "examples": ["year", "month", "day"],
               "type": "string"
             },
             "year": {
@@ -1828,8 +1833,7 @@
               "type": "number"
             }
           },
-          "required": ["precision", "year"],
-          "additionalProperties": false
+          "required": ["precision", "year"]
         },
         "nationalityCodes": {
           "type": "array",
@@ -1850,8 +1854,7 @@
         "phones",
         "dateOfBirth",
         "nationalityCodes"
-      ],
-      "additionalProperties": false
+      ]
     },
     "annotations": {
       "title": "Read contact",
@@ -2171,32 +2174,29 @@
                     "type": "boolean"
                   }
                 },
-                "required": ["countryCode", "isPrimary"],
-                "additionalProperties": false
+                "required": ["countryCode", "isPrimary"]
               }
             }
           },
-          "required": ["practiceJurisdictions"],
-          "additionalProperties": false
+          "required": ["practiceJurisdictions"]
         },
         {
           "type": "object",
           "properties": {
             "applied": {
-              "enum": [true],
+              "examples": [true],
               "type": "boolean"
             },
             "resultOmitted": {
-              "enum": [true],
+              "examples": [true],
               "type": "boolean"
             },
             "reason": {
-              "enum": ["result_too_large"],
+              "examples": ["result_too_large"],
               "type": "string"
             }
           },
-          "required": ["applied", "resultOmitted", "reason"],
-          "additionalProperties": false
+          "required": ["applied", "resultOmitted", "reason"]
         }
       ],
       "type": "object"
@@ -2240,11 +2240,11 @@
       "type": "object",
       "properties": {
         "status": {
-          "enum": ["exact", "cannot_verify", "fuzzy", "not_found"],
+          "examples": ["exact", "cannot_verify", "fuzzy", "not_found"],
           "type": "string"
         },
         "verified": {
-          "enum": [true, false],
+          "examples": [true, false],
           "type": "boolean"
         },
         "decisionId": {
@@ -2252,7 +2252,7 @@
           "maxLength": 64
         },
         "textSource": {
-          "enum": ["ast", "fulltext"],
+          "examples": ["ast", "fulltext"],
           "type": "string"
         },
         "segments": {
@@ -2276,7 +2276,7 @@
           ]
         },
         "textState": {
-          "enum": ["pending", "unavailable", "withheld", "failed", "empty"],
+          "examples": ["pending", "unavailable", "withheld", "failed", "empty"],
           "type": "string"
         },
         "hint": {
@@ -2324,7 +2324,7 @@
       "type": "object",
       "properties": {
         "status": {
-          "enum": ["available", "withheld", "unavailable"],
+          "examples": ["available", "withheld", "unavailable"],
           "type": "string"
         },
         "metadata": {
@@ -2345,14 +2345,18 @@
               "type": "string"
             },
             "caseNumberType": {
-              "enum": ["case-number", "neutral-citation", "reporter-citation"],
+              "examples": [
+                "case-number",
+                "neutral-citation",
+                "reporter-citation"
+              ],
               "type": "string"
             },
             "courtAbbreviation": {
               "type": ["string", "null"]
             },
             "courtTier": {
-              "enum": ["constitutional", "supreme", "regional", "other"],
+              "examples": ["constitutional", "supreme", "regional", "other"],
               "type": "string"
             },
             "language": {
@@ -2387,8 +2391,7 @@
             "date",
             "ecli",
             "url"
-          ],
-          "additionalProperties": false
+          ]
         },
         "outline": {
           "type": "array",
@@ -2405,8 +2408,7 @@
                 "type": "number"
               }
             },
-            "required": ["anchorId", "title", "level"],
-            "additionalProperties": false
+            "required": ["anchorId", "title", "level"]
           }
         },
         "window": {
@@ -2424,8 +2426,7 @@
                 "type": "string"
               }
             },
-            "required": ["anchorId", "number", "text"],
-            "additionalProperties": false
+            "required": ["anchorId", "number", "text"]
           }
         },
         "truncated": {
@@ -2435,19 +2436,17 @@
           "type": "object",
           "properties": {
             "code": {
-              "enum": ["source_licence"],
+              "examples": ["source_licence"],
               "type": "string"
             },
             "message": {
               "type": "string"
             }
           },
-          "required": ["code", "message"],
-          "additionalProperties": false
+          "required": ["code", "message"]
         }
       },
-      "required": ["status", "metadata"],
-      "additionalProperties": false
+      "required": ["status", "metadata"]
     },
     "annotations": {
       "readOnlyHint": true,
@@ -2504,14 +2503,18 @@
               "type": "string"
             },
             "caseNumberType": {
-              "enum": ["case-number", "neutral-citation", "reporter-citation"],
+              "examples": [
+                "case-number",
+                "neutral-citation",
+                "reporter-citation"
+              ],
               "type": "string"
             },
             "courtAbbreviation": {
               "type": ["string", "null"]
             },
             "courtTier": {
-              "enum": ["constitutional", "supreme", "regional", "other"],
+              "examples": ["constitutional", "supreme", "regional", "other"],
               "type": "string"
             },
             "language": {
@@ -2546,18 +2549,17 @@
             "date",
             "ecli",
             "url"
-          ],
-          "additionalProperties": false
+          ]
         },
         "content": {
           "type": "object",
           "properties": {
             "status": {
-              "enum": ["available", "withheld", "unavailable"],
+              "examples": ["available", "withheld", "unavailable"],
               "type": "string"
             },
             "phase": {
-              "enum": ["blocks", "citations", "provisions"],
+              "examples": ["blocks", "citations", "provisions"],
               "type": "string"
             },
             "items": {
@@ -2596,36 +2598,33 @@
               "type": ["string", "null"]
             },
             "limit": {
-              "enum": [60000],
+              "examples": [60000],
               "type": "number"
             },
             "withheldReason": {
               "type": "object",
               "properties": {
                 "code": {
-                  "enum": ["source_licence"],
+                  "examples": ["source_licence"],
                   "type": "string"
                 },
                 "message": {
                   "type": "string"
                 }
               },
-              "required": ["code", "message"],
-              "additionalProperties": false
+              "required": ["code", "message"]
             }
           },
-          "required": ["status"],
-          "additionalProperties": false
+          "required": ["status"]
         }
       },
       "required": ["metadata", "content"],
-      "additionalProperties": false,
       "$defs": {
         "0": {
           "type": "object",
           "properties": {
             "type": {
-              "enum": [
+              "examples": [
                 "text",
                 "bold",
                 "italic",
@@ -2643,7 +2642,7 @@
               "type": "string"
             },
             "anonymized": {
-              "enum": [true],
+              "examples": [true],
               "type": "boolean"
             },
             "children": {
@@ -2663,7 +2662,7 @@
               "type": "object",
               "properties": {
                 "status": {
-                  "enum": ["identified", "unresolved", "legislation"],
+                  "examples": ["identified", "unresolved", "legislation"],
                   "type": "string"
                 },
                 "identifiers": {
@@ -2682,7 +2681,7 @@
                   "maxItems": 32
                 },
                 "reason": {
-                  "enum": [
+                  "examples": [
                     "missing-antecedent",
                     "ambiguous-antecedent",
                     "ambiguous-reporter",
@@ -2693,7 +2692,7 @@
                   "type": "string"
                 },
                 "series": {
-                  "enum": [
+                  "examples": [
                     "eu-regulation",
                     "eu-directive",
                     "eu-decision",
@@ -2715,8 +2714,7 @@
                   "additionalProperties": true
                 }
               },
-              "required": ["status"],
-              "additionalProperties": false
+              "required": ["status"]
             },
             "pin": {
               "type": "object",
@@ -2746,8 +2744,7 @@
                   "additionalProperties": true
                 }
               },
-              "required": ["raw", "parts"],
-              "additionalProperties": false
+              "required": ["raw", "parts"]
             },
             "label": {
               "type": "string"
@@ -2841,8 +2838,7 @@
                 "type": "string"
               }
             },
-            "required": ["anchorId", "level", "text"],
-            "additionalProperties": false
+            "required": ["anchorId", "level", "text"]
           }
         },
         "heading": {
@@ -2861,8 +2857,7 @@
               "type": "string"
             }
           },
-          "required": ["id", "anchorId", "level", "text"],
-          "additionalProperties": false
+          "required": ["id", "anchorId", "level", "text"]
         },
         "blocks": {
           "type": "array",
@@ -2879,8 +2874,7 @@
                 "type": "string"
               }
             },
-            "required": ["id", "anchorId", "text"],
-            "additionalProperties": false
+            "required": ["id", "anchorId", "text"]
           }
         }
       },
@@ -2894,8 +2888,7 @@
         "headings",
         "heading",
         "blocks"
-      ],
-      "additionalProperties": false
+      ]
     },
     "annotations": {
       "readOnlyHint": true,
@@ -2961,7 +2954,7 @@
             "type": "object",
             "properties": {
               "tierLabel": {
-                "enum": ["constitutional", "supreme", "regional", "other"],
+                "examples": ["constitutional", "supreme", "regional", "other"],
                 "type": "string"
               },
               "courts": {
@@ -2972,16 +2965,14 @@
                 }
               }
             },
-            "required": ["tierLabel", "courts"],
-            "additionalProperties": false
+            "required": ["tierLabel", "courts"]
           }
         },
         "nextCursor": {
           "type": ["string", "null"]
         }
       },
-      "required": ["country", "courts", "nextCursor"],
-      "additionalProperties": false
+      "required": ["country", "courts", "nextCursor"]
     },
     "annotations": {
       "title": "List case-law courts",
@@ -3108,19 +3099,19 @@
       "type": "object",
       "properties": {
         "code": {
-          "enum": ["public_country_unavailable"],
+          "examples": ["public_country_unavailable"],
           "type": "string"
         },
         "status": {
-          "enum": ["unavailable", "running"],
+          "examples": ["unavailable", "running"],
           "type": "string"
         },
         "domain": {
-          "enum": ["caseLaw", "legislation"],
+          "examples": ["caseLaw", "legislation"],
           "type": "string"
         },
         "country": {
-          "enum": [
+          "examples": [
             "AUT",
             "BRA",
             "CZE",
@@ -3134,7 +3125,7 @@
           "type": "string"
         },
         "reason": {
-          "enum": [
+          "examples": [
             "identity_public",
             "pages_public",
             "pending_public",
@@ -3155,16 +3146,19 @@
           "type": "object",
           "properties": {
             "type": {
-              "enum": ["complete", "truncated"],
+              "examples": ["complete", "truncated"],
               "type": "string"
             },
             "reason": {
-              "enum": ["exclusion_budget", "time_budget"],
+              "examples": [
+                "exclusion_budget",
+                "time_budget",
+                "partial_matches_budget"
+              ],
               "type": "string"
             }
           },
-          "required": ["type"],
-          "additionalProperties": false
+          "required": ["type"]
         },
         "results": {
           "type": "array",
@@ -3237,15 +3231,14 @@
               "snippet",
               "status",
               "title"
-            ],
-            "additionalProperties": false
+            ]
           }
         },
         "total": {
           "type": "object",
           "properties": {
             "type": {
-              "enum": ["exact", "estimate", "not_counted"],
+              "examples": ["exact", "estimate", "not_counted"],
               "type": "string"
             },
             "count": {
@@ -3257,8 +3250,7 @@
               "type": "string"
             }
           },
-          "required": ["type"],
-          "additionalProperties": false
+          "required": ["type"]
         },
         "continuationToken": {
           "type": "string"
@@ -3267,14 +3259,13 @@
           "type": "number"
         },
         "phase": {
-          "enum": ["queued", "running", "not_started"],
+          "examples": ["queued", "running", "not_started"],
           "type": "string"
         },
         "partial": {
           "type": "null"
         }
-      },
-      "additionalProperties": false
+      }
     },
     "annotations": {
       "title": "Search legislation",
@@ -3399,11 +3390,11 @@
               "type": ["string", "null"]
             },
             "expressionKind": {
-              "enum": ["consolidation", "promulgated", "unversioned"],
+              "examples": ["consolidation", "promulgated", "unversioned"],
               "type": "string"
             },
             "windowDisposition": {
-              "enum": [
+              "examples": [
                 "effective",
                 "never-in-force",
                 "invalid-window",
@@ -3414,7 +3405,7 @@
             "windowDispositionBasis": {
               "anyOf": [
                 {
-                  "enum": [
+                  "examples": [
                     "publisher-flag",
                     "replaced-same-day",
                     "zero-length-window",
@@ -3463,12 +3454,10 @@
             "windowDisposition",
             "windowDispositionBasis",
             "pendingChanges"
-          ],
-          "additionalProperties": false
+          ]
         }
       },
-      "required": ["nextCursor", "statute"],
-      "additionalProperties": false
+      "required": ["nextCursor", "statute"]
     },
     "annotations": {
       "title": "Read statute",
@@ -3485,7 +3474,7 @@
       "feature": "FEATURE_PUBLIC_LAW"
     },
     "name": "read_statute_provisions",
-    "description": "Read statute provisions: items[] entries are { eli, anchor } with optional as_of and language, or document_id from read_provision_history for an exact consolidation. document_id and as_of are mutually exclusive. Use publisher anchors from read_statute's outline (par_1729, par_1729-odst_1). Entries return in input order: found carries text; invalid, not_found, uncovered_date (no applicable consolidation, including inconsistent publisher dates), provision_not_found and text_withheld (AI use barred) carry messages. Continue long text with nextTextCursor as text_cursor on the same entry until null. url opens the stella reader when served, otherwise the publisher; source_url is the publisher source.",
+    "description": "Read statute provisions: items[] entries are { eli, anchor } with optional as_of and language, or document_id from read_provision_history for an exact consolidation. document_id and as_of are mutually exclusive. Use publisher anchors from read_statute's outline (par_1729, par_1729-odst_1). Entries return in input order: found carries text and governingText (enclosing units' lead-in and closing wording; governingTextTruncated if cut); invalid, not_found, uncovered_date (no applicable consolidation, including inconsistent publisher dates), provision_not_found and text_withheld (AI use barred) carry messages. Continue long text with nextTextCursor as text_cursor on the same entry until null. url opens the stella reader when served, otherwise the publisher; source_url is the publisher source.",
     "inputSchema": {
       "type": "object",
       "required": ["items"],
@@ -3510,7 +3499,7 @@
                 "type": "string",
                 "minLength": 1,
                 "maxLength": 256,
-                "description": "Publisher provision anchor; confirm it in read_statute's outline for the chosen consolidation. Czech e-Sbírka commonly uses par_<section>, -odst_<paragraph>, and -pism_<letter> (par_1729, par_1729-odst_1, par_1729-odst_2-pism_a). Subdivision anchors narrow the answer to that subdivision. Other publishers may use different schemes."
+                "description": "Publisher provision anchor; confirm it in read_statute's outline for the chosen consolidation. Czech e-Sbírka commonly uses par_<section>, -odst_<paragraph>, and -pism_<letter> (par_1729, par_1729-odst_1, par_1729-odst_2-pism_a). Subdivision anchors narrow the answer to that subdivision. An annex also reads by number (priloha_3). Other publishers may use different schemes."
               },
               "as_of": {
                 "type": "string",
@@ -3575,7 +3564,7 @@
                 "type": "string"
               },
               "status": {
-                "enum": [
+                "examples": [
                   "found",
                   "not_found",
                   "uncovered_date",
@@ -3588,6 +3577,17 @@
               "text": {
                 "type": "string"
               },
+              "governingText": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              },
+              "governingTextTruncated": {
+                "examples": [true],
+                "type": "boolean"
+              },
               "nextTextCursor": {
                 "type": ["string", "null"]
               },
@@ -3599,6 +3599,39 @@
               },
               "versionValidTo": {
                 "type": ["string", "null"]
+              },
+              "expressionKind": {
+                "examples": ["consolidation", "promulgated", "unversioned"],
+                "type": "string"
+              },
+              "windowDisposition": {
+                "examples": [
+                  "effective",
+                  "never-in-force",
+                  "invalid-window",
+                  "withdrawn"
+                ],
+                "type": "string"
+              },
+              "windowDispositionBasis": {
+                "anyOf": [
+                  {
+                    "examples": [
+                      "publisher-flag",
+                      "replaced-same-day",
+                      "zero-length-window",
+                      "reversed",
+                      "missing-start",
+                      "publisher-unlisted",
+                      "listed-not-stored",
+                      "deferred-promulgated"
+                    ],
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
               },
               "message": {
                 "type": "string"
@@ -3614,13 +3647,11 @@
                 }
               }
             },
-            "required": ["status"],
-            "additionalProperties": false
+            "required": ["status"]
           }
         }
       },
-      "required": ["items"],
-      "additionalProperties": false
+      "required": ["items"]
     },
     "annotations": {
       "title": "Read statute provisions",
@@ -3637,7 +3668,7 @@
       "feature": "FEATURE_PUBLIC_LAW"
     },
     "name": "read_provision_history",
-    "description": "Read one provision's wording in each consolidation of the work, newest validity window first, so two wordings can be compared without downloading whole statutes. Takes the work's `eli` and an `anchor` from read_statute's outline. A consolidation that does not carry the anchor is left out of `items`. Pass the returned nextCursor back as cursor for older versions. Long wording returns nextTextCursor on its item; pass it back as text_cursor with the same eli, anchor, and version-page cursor until it is null. Use `url` for the stella reader when served, otherwise the publisher; `source_url` is the publisher source.",
+    "description": "Read one provision's wording in each consolidation of the work, newest validity window first, so two wordings can be compared without downloading whole statutes. Takes the work's `eli` and an `anchor` from read_statute's outline. A consolidation that does not carry the anchor is left out of `items`. Pass the returned nextCursor back as cursor for older versions. Long wording returns nextTextCursor on its item; pass it back as text_cursor with the same eli, anchor, and version-page cursor until it is null. Items carry governingText as read_statute_provisions does. Use `url` for the stella reader when served, otherwise the publisher; `source_url` is the publisher source.",
     "inputSchema": {
       "type": "object",
       "required": ["eli", "anchor"],
@@ -3656,7 +3687,7 @@
           "type": "string",
           "minLength": 1,
           "maxLength": 256,
-          "description": "Publisher provision anchor; confirm it in read_statute's outline for the chosen consolidation. Czech e-Sbírka commonly uses par_<section>, -odst_<paragraph>, and -pism_<letter> (par_1729, par_1729-odst_1, par_1729-odst_2-pism_a). Subdivision anchors narrow the answer to that subdivision. Other publishers may use different schemes."
+          "description": "Publisher provision anchor; confirm it in read_statute's outline for the chosen consolidation. Czech e-Sbírka commonly uses par_<section>, -odst_<paragraph>, and -pism_<letter> (par_1729, par_1729-odst_1, par_1729-odst_2-pism_a). Subdivision anchors narrow the answer to that subdivision. An annex also reads by number (priloha_3). Other publishers may use different schemes."
         },
         "language": {
           "type": "string",
@@ -3724,11 +3755,11 @@
                 "type": ["string", "null"]
               },
               "expressionKind": {
-                "enum": ["consolidation", "promulgated", "unversioned"],
+                "examples": ["consolidation", "promulgated", "unversioned"],
                 "type": "string"
               },
               "windowDisposition": {
-                "enum": [
+                "examples": [
                   "effective",
                   "never-in-force",
                   "invalid-window",
@@ -3739,7 +3770,7 @@
               "windowDispositionBasis": {
                 "anyOf": [
                   {
-                    "enum": [
+                    "examples": [
                       "publisher-flag",
                       "replaced-same-day",
                       "zero-length-window",
@@ -3757,11 +3788,22 @@
                 ]
               },
               "status": {
-                "enum": ["found", "text_withheld"],
+                "examples": ["found", "text_withheld"],
                 "type": "string"
               },
               "text": {
                 "type": "string"
+              },
+              "governingText": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              },
+              "governingTextTruncated": {
+                "examples": [true],
+                "type": "boolean"
               },
               "nextTextCursor": {
                 "type": ["string", "null"]
@@ -3783,16 +3825,14 @@
               "windowDisposition",
               "windowDispositionBasis",
               "status"
-            ],
-            "additionalProperties": false
+            ]
           }
         },
         "nextCursor": {
           "type": ["string", "null"]
         }
       },
-      "required": ["anchor", "eli", "items", "nextCursor"],
-      "additionalProperties": false
+      "required": ["anchor", "eli", "items", "nextCursor"]
     },
     "annotations": {
       "title": "Read provision history",
@@ -3809,7 +3849,7 @@
       "feature": "FEATURE_PUBLIC_LAW"
     },
     "name": "search_guidance",
-    "description": "Search regulator guidance (soft law): methodologies, opinions, guidelines, recommendations, FAQs and similar documents issued by data-protection and labour regulators. Results are guidance, never court decisions: for case law use search_case_law. Each result carries documentClass, issuer, kind, reference, issuedOn, validity, source_url and the attribution to show with it. Filter by authority, jurisdiction, kind, date_from and date_to. A source served as metadata only is matched on its title and has a null snippet. Totals are not counted; page with cursor. Read a hit with read_guidance.",
+    "description": "Search regulator guidance (soft law): methodologies, opinions, guidelines, recommendations and FAQs from data-protection, labour, tax and administrative authorities, e.g. Czech GFŘ and MF pokyny or MV závěry on administrative procedure. Results are guidance, never court decisions: for case law use search_case_law. Each result carries documentClass, issuer, kind, reference, issuedOn, validity, source_url and the attribution to show with it. Filter by authority, jurisdiction, kind, date_from and date_to. A source served as metadata only is matched on its title and has a null snippet. Totals are not counted; page with cursor. Read a hit with read_guidance.",
     "inputSchema": {
       "type": "object",
       "required": ["query"],
@@ -3825,7 +3865,7 @@
           "type": "string",
           "minLength": 1,
           "maxLength": 64,
-          "description": "Issuing authority, as returned in issuer.authority (for example eu-edpb). Omit it to search without this filter; a placeholder such as \"all\" or \"-\" reads as no filter.",
+          "description": "Issuing authority, as returned in issuer.authority (for example eu-edpb or cz-gfr). Omit it to search without this filter; a placeholder such as \"all\" or \"-\" reads as no filter.",
           "x-stella-agent-input": {
             "kind": "filter"
           }
@@ -3908,7 +3948,7 @@
                 "type": "string"
               },
               "documentClass": {
-                "enum": ["regulator_guidance"],
+                "examples": ["regulator_guidance"],
                 "type": "string"
               },
               "notice": {
@@ -3919,7 +3959,7 @@
                 "additionalProperties": true
               },
               "kind": {
-                "enum": [
+                "examples": [
                   "methodology",
                   "recommendation",
                   "opinion",
@@ -3960,7 +4000,7 @@
                 "additionalProperties": true
               },
               "access": {
-                "enum": ["text", "metadata"],
+                "examples": ["text", "metadata"],
                 "type": "string"
               },
               "snippet": {
@@ -3983,13 +4023,11 @@
               "attribution",
               "access",
               "snippet"
-            ],
-            "additionalProperties": false
+            ]
           }
         }
       },
-      "required": ["nextCursor", "results"],
-      "additionalProperties": false
+      "required": ["nextCursor", "results"]
     },
     "annotations": {
       "title": "Search regulator guidance",
@@ -4005,7 +4043,7 @@
       "feature": "FEATURE_PUBLIC_LAW"
     },
     "name": "read_guidance",
-    "description": "Read one regulator guidance document by document_id. It is guidance, not a court decision. Returns the issuer, kind, reference, issue date, validity as the publisher states it, source_url, the attribution and any conditions to show with it, and its text. When you summarize this text, show attribution.text and any attribution.summaryDisclaimer with the summary. textState says why text is null: withheld_by_source_setting or not_extracted; use source_url then. Pass nextCursor back as cursor to read more.",
+    "description": "Read one regulator guidance document (data-protection, labour, tax or administrative) by document_id. It is guidance, not a court decision. Returns the issuer, kind, reference, issue date, validity as the publisher states it, source_url, the attribution and any conditions to show with it, and its text. When you summarize this text, show attribution.text and any attribution.summaryDisclaimer with the summary. textState says why text is null: withheld_by_source_setting or not_extracted; use source_url then. Pass nextCursor back as cursor to read more.",
     "inputSchema": {
       "type": "object",
       "required": ["document_id"],
@@ -4037,7 +4075,7 @@
               "type": "string"
             },
             "documentClass": {
-              "enum": ["regulator_guidance"],
+              "examples": ["regulator_guidance"],
               "type": "string"
             },
             "notice": {
@@ -4056,11 +4094,10 @@
                   "type": "string"
                 }
               },
-              "required": ["authority", "name", "jurisdiction"],
-              "additionalProperties": false
+              "required": ["authority", "name", "jurisdiction"]
             },
             "kind": {
-              "enum": [
+              "examples": [
                 "methodology",
                 "recommendation",
                 "opinion",
@@ -4096,8 +4133,7 @@
                   "type": "string"
                 }
               },
-              "required": ["state", "basis"],
-              "additionalProperties": false
+              "required": ["state", "basis"]
             },
             "language": {
               "type": ["string", "null"]
@@ -4129,15 +4165,14 @@
                 "termsUrl",
                 "conditions",
                 "summaryDisclaimer"
-              ],
-              "additionalProperties": false
+              ]
             },
             "access": {
-              "enum": ["text", "metadata"],
+              "examples": ["text", "metadata"],
               "type": "string"
             },
             "textState": {
-              "enum": [
+              "examples": [
                 "available",
                 "withheld_by_source_setting",
                 "not_extracted"
@@ -4169,12 +4204,10 @@
             "textState",
             "text",
             "truncated"
-          ],
-          "additionalProperties": false
+          ]
         }
       },
-      "required": ["nextCursor", "guidance"],
-      "additionalProperties": false
+      "required": ["nextCursor", "guidance"]
     },
     "annotations": {
       "title": "Read regulator guidance",
@@ -4220,7 +4253,7 @@
       "type": "object",
       "properties": {
         "status": {
-          "enum": [
+          "examples": [
             "resolved",
             "not_found",
             "ambiguous",
@@ -4233,7 +4266,7 @@
           "type": "object",
           "properties": {
             "kind": {
-              "enum": ["decision", "provision"],
+              "examples": ["decision", "provision"],
               "type": "string"
             },
             "decisionId": {
@@ -4274,25 +4307,24 @@
               "type": "object",
               "properties": {
                 "status": {
-                  "enum": ["readable", "withheld", "unavailable"],
+                  "examples": ["readable", "withheld", "unavailable"],
                   "type": "string"
                 },
                 "charCount": {
                   "type": "number"
                 },
                 "reason": {
-                  "enum": ["licence"],
+                  "examples": ["licence"],
                   "type": "string"
                 }
               },
-              "required": ["status"],
-              "additionalProperties": false
+              "required": ["status"]
             },
             "appealReviews": {
               "type": "object",
               "properties": {
                 "status": {
-                  "enum": [
+                  "examples": [
                     "none_found",
                     "upheld",
                     "overturned",
@@ -4303,11 +4335,11 @@
                   "type": "string"
                 },
                 "reason": {
-                  "enum": ["no_link_in_corpus"],
+                  "examples": ["no_link_in_corpus"],
                   "type": "string"
                 },
                 "basis": {
-                  "enum": ["available_corpus"],
+                  "examples": ["available_corpus"],
                   "type": "string"
                 },
                 "reviewedBy": {
@@ -4340,8 +4372,7 @@
                 "reviews",
                 "reviewedByTruncated",
                 "reviewsTruncated"
-              ],
-              "additionalProperties": false
+              ]
             },
             "documentId": {
               "type": "string"
@@ -4365,11 +4396,10 @@
                   "type": ["string", "null"]
                 }
               },
-              "required": ["from", "to"],
-              "additionalProperties": false
+              "required": ["from", "to"]
             },
             "versionStatus": {
-              "enum": ["current", "outdated"],
+              "examples": ["current", "outdated"],
               "type": "string"
             },
             "blocks": {
@@ -4377,8 +4407,7 @@
               "items": {}
             }
           },
-          "required": ["kind", "country", "readerUrl"],
-          "additionalProperties": false
+          "required": ["kind", "country", "readerUrl"]
         },
         "otherCourtCandidates": {
           "type": "array",
@@ -4419,15 +4448,14 @@
               "decisionDate",
               "decisionType",
               "subjectSummary"
-            ],
-            "additionalProperties": false
+            ]
           }
         },
         "hint": {
           "type": "string"
         },
         "reason": {
-          "enum": [
+          "examples": [
             "unknown_document",
             "unknown_section",
             "no_exact_identity",
@@ -4435,6 +4463,26 @@
             "court_unrecognized"
           ],
           "type": "string"
+        },
+        "coverage": {
+          "type": "object",
+          "properties": {
+            "status": {
+              "examples": ["read", "unavailable"],
+              "type": "string"
+            },
+            "asOf": {
+              "type": "string"
+            },
+            "sources": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": true
+              }
+            }
+          },
+          "required": ["status"]
         },
         "candidates": {
           "type": "array",
@@ -4454,9 +4502,13 @@
                 "type": "string"
               }
             },
-            "required": ["decisionId", "identifier", "label", "readerUrl"],
-            "additionalProperties": false
+            "required": ["decisionId", "identifier", "label", "readerUrl"]
           }
+        },
+        "candidateSet": {
+          "examples": ["truncated"],
+          "description": "More candidates exist. Refine the identifier with a court, ECLI or full published reference.",
+          "type": "string"
         },
         "missing": {
           "type": "array",
@@ -4465,8 +4517,7 @@
           }
         }
       },
-      "required": ["status"],
-      "additionalProperties": false
+      "required": ["status"]
     },
     "annotations": {
       "title": "Resolve a case-law citation",
@@ -4574,7 +4625,7 @@
       "type": "object",
       "properties": {
         "status": {
-          "enum": [
+          "examples": [
             "resolved",
             "not_found",
             "ambiguous",
@@ -4587,7 +4638,7 @@
           "type": "object",
           "properties": {
             "kind": {
-              "enum": ["decision", "provision"],
+              "examples": ["decision", "provision"],
               "type": "string"
             },
             "decisionId": {
@@ -4628,25 +4679,24 @@
               "type": "object",
               "properties": {
                 "status": {
-                  "enum": ["readable", "withheld", "unavailable"],
+                  "examples": ["readable", "withheld", "unavailable"],
                   "type": "string"
                 },
                 "charCount": {
                   "type": "number"
                 },
                 "reason": {
-                  "enum": ["licence"],
+                  "examples": ["licence"],
                   "type": "string"
                 }
               },
-              "required": ["status"],
-              "additionalProperties": false
+              "required": ["status"]
             },
             "appealReviews": {
               "type": "object",
               "properties": {
                 "status": {
-                  "enum": [
+                  "examples": [
                     "none_found",
                     "upheld",
                     "overturned",
@@ -4657,11 +4707,11 @@
                   "type": "string"
                 },
                 "reason": {
-                  "enum": ["no_link_in_corpus"],
+                  "examples": ["no_link_in_corpus"],
                   "type": "string"
                 },
                 "basis": {
-                  "enum": ["available_corpus"],
+                  "examples": ["available_corpus"],
                   "type": "string"
                 },
                 "reviewedBy": {
@@ -4694,8 +4744,7 @@
                 "reviews",
                 "reviewedByTruncated",
                 "reviewsTruncated"
-              ],
-              "additionalProperties": false
+              ]
             },
             "documentId": {
               "type": "string"
@@ -4719,11 +4768,10 @@
                   "type": ["string", "null"]
                 }
               },
-              "required": ["from", "to"],
-              "additionalProperties": false
+              "required": ["from", "to"]
             },
             "versionStatus": {
-              "enum": ["current", "outdated"],
+              "examples": ["current", "outdated"],
               "type": "string"
             },
             "blocks": {
@@ -4731,8 +4779,7 @@
               "items": {}
             }
           },
-          "required": ["kind", "country", "readerUrl"],
-          "additionalProperties": false
+          "required": ["kind", "country", "readerUrl"]
         },
         "otherCourtCandidates": {
           "type": "array",
@@ -4773,15 +4820,14 @@
               "decisionDate",
               "decisionType",
               "subjectSummary"
-            ],
-            "additionalProperties": false
+            ]
           }
         },
         "hint": {
           "type": "string"
         },
         "reason": {
-          "enum": [
+          "examples": [
             "unknown_document",
             "unknown_section",
             "no_exact_identity",
@@ -4789,6 +4835,26 @@
             "court_unrecognized"
           ],
           "type": "string"
+        },
+        "coverage": {
+          "type": "object",
+          "properties": {
+            "status": {
+              "examples": ["read", "unavailable"],
+              "type": "string"
+            },
+            "asOf": {
+              "type": "string"
+            },
+            "sources": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": true
+              }
+            }
+          },
+          "required": ["status"]
         },
         "candidates": {
           "type": "array",
@@ -4808,9 +4874,13 @@
                 "type": "string"
               }
             },
-            "required": ["decisionId", "identifier", "label", "readerUrl"],
-            "additionalProperties": false
+            "required": ["decisionId", "identifier", "label", "readerUrl"]
           }
+        },
+        "candidateSet": {
+          "examples": ["truncated"],
+          "description": "More candidates exist. Refine the identifier with a court, ECLI or full published reference.",
+          "type": "string"
         },
         "missing": {
           "type": "array",
@@ -4819,8 +4889,7 @@
           }
         }
       },
-      "required": ["status"],
-      "additionalProperties": false
+      "required": ["status"]
     },
     "annotations": {
       "title": "Resolve a statute provision",
@@ -4903,8 +4972,7 @@
               "tags",
               "whenToUse",
               "whenNotToUse"
-            ],
-            "additionalProperties": false
+            ]
           }
         },
         "nextCursor": {
@@ -4964,8 +5032,7 @@
               "input_type",
               "required",
               "source"
-            ],
-            "additionalProperties": false
+            ]
           }
         },
         "conditions": {
@@ -4977,7 +5044,7 @@
                 "type": "string"
               },
               "kind": {
-                "enum": ["asked", "rule", "ai"],
+                "examples": ["asked", "rule", "ai"],
                 "type": "string"
               },
               "condition": {
@@ -4987,8 +5054,7 @@
                 "type": "string"
               }
             },
-            "required": ["path", "kind"],
-            "additionalProperties": false
+            "required": ["path", "kind"]
           }
         },
         "computed": {
@@ -5003,8 +5069,7 @@
                 "type": "string"
               }
             },
-            "required": ["path", "formula"],
-            "additionalProperties": false
+            "required": ["path", "formula"]
           }
         },
         "arrays": {
@@ -5028,8 +5093,7 @@
                 }
               }
             },
-            "required": ["path", "itemFieldPaths", "itemAliases"],
-            "additionalProperties": false
+            "required": ["path", "itemFieldPaths", "itemAliases"]
           }
         },
         "warnings": {
@@ -5038,7 +5102,7 @@
             "type": "object",
             "properties": {
               "code": {
-                "enum": [
+                "examples": [
                   "unaliased_item_path",
                   "row_block_across_rows",
                   "split_marker",
@@ -5064,8 +5128,7 @@
                 "type": "string"
               }
             },
-            "required": ["code", "message", "hint"],
-            "additionalProperties": false
+            "required": ["code", "message", "hint"]
           }
         },
         "configure": {
@@ -5082,11 +5145,9 @@
               }
             }
           },
-          "required": ["template_id", "fields"],
-          "additionalProperties": false
+          "required": ["template_id", "fields"]
         }
-      },
-      "additionalProperties": false
+      }
     },
     "annotations": {
       "title": "List templates",
@@ -5141,7 +5202,7 @@
           "type": "object",
           "properties": {
             "completionStatus": {
-              "enum": ["complete", "partial"],
+              "examples": ["complete", "partial"],
               "type": "string"
             },
             "templateName": {
@@ -5177,7 +5238,7 @@
                 "type": "object",
                 "properties": {
                   "code": {
-                    "enum": [
+                    "examples": [
                       "CLAUSE_LEGACY_DIRECTIVES",
                       "CLAUSE_OVERRIDE_NOT_RENDERED"
                     ],
@@ -5215,8 +5276,7 @@
                   "version",
                   "message",
                   "issues"
-                ],
-                "additionalProperties": false
+                ]
               }
             },
             "structureErrors": {
@@ -5239,8 +5299,7 @@
                     "additionalProperties": true
                   }
                 },
-                "required": ["directive", "message", "paragraphIndex"],
-                "additionalProperties": false
+                "required": ["directive", "message", "paragraphIndex"]
               }
             },
             "aiFieldErrors": {
@@ -5258,8 +5317,7 @@
                     "type": "string"
                   }
                 },
-                "required": ["field", "reason", "message"],
-                "additionalProperties": false
+                "required": ["field", "reason", "message"]
               }
             },
             "decisions": {
@@ -5274,21 +5332,21 @@
                     "type": "string"
                   },
                   "state": {
-                    "enum": ["decided", "undecided"],
+                    "examples": ["decided", "undecided"],
                     "type": "string"
                   },
                   "value": {
                     "type": "boolean"
                   },
                   "decided_by": {
-                    "enum": ["decision_model", "generative_model", "user"],
+                    "examples": ["decision_model", "generative_model", "user"],
                     "type": "string"
                   },
                   "probability": {
                     "type": "number"
                   },
                   "reason": {
-                    "enum": [
+                    "examples": [
                       "no_decision_model",
                       "below_floor",
                       "failed",
@@ -5297,8 +5355,7 @@
                     "type": "string"
                   }
                 },
-                "required": ["path", "label", "state"],
-                "additionalProperties": false
+                "required": ["path", "label", "state"]
               }
             },
             "paragraphs": {
@@ -5322,27 +5379,25 @@
             "structureErrors",
             "aiFieldErrors",
             "decisions"
-          ],
-          "additionalProperties": false
+          ]
         },
         {
           "type": "object",
           "properties": {
             "applied": {
-              "enum": [true],
+              "examples": [true],
               "type": "boolean"
             },
             "resultOmitted": {
-              "enum": [true],
+              "examples": [true],
               "type": "boolean"
             },
             "reason": {
-              "enum": ["result_too_large"],
+              "examples": ["result_too_large"],
               "type": "string"
             }
           },
-          "required": ["applied", "resultOmitted", "reason"],
-          "additionalProperties": false
+          "required": ["applied", "resultOmitted", "reason"]
         }
       ],
       "type": "object"
@@ -5474,7 +5529,7 @@
           "type": "object",
           "properties": {
             "action": {
-              "enum": ["create_document", "create_version"],
+              "examples": ["create_document", "create_version"],
               "type": "string"
             },
             "entityId": {
@@ -5499,7 +5554,7 @@
               }
             },
             "completionStatus": {
-              "enum": ["complete", "partial"],
+              "examples": ["complete", "partial"],
               "type": "string"
             },
             "clauseWarnings": {
@@ -5508,7 +5563,7 @@
                 "type": "object",
                 "properties": {
                   "code": {
-                    "enum": [
+                    "examples": [
                       "CLAUSE_LEGACY_DIRECTIVES",
                       "CLAUSE_OVERRIDE_NOT_RENDERED"
                     ],
@@ -5546,8 +5601,7 @@
                   "version",
                   "message",
                   "issues"
-                ],
-                "additionalProperties": false
+                ]
               }
             },
             "aiFieldErrors": {
@@ -5565,8 +5619,7 @@
                     "type": "string"
                   }
                 },
-                "required": ["field", "reason", "message"],
-                "additionalProperties": false
+                "required": ["field", "reason", "message"]
               }
             },
             "undecidedConditions": {
@@ -5581,11 +5634,11 @@
                     "type": "string"
                   },
                   "state": {
-                    "enum": ["undecided"],
+                    "examples": ["undecided"],
                     "type": "string"
                   },
                   "reason": {
-                    "enum": [
+                    "examples": [
                       "no_decision_model",
                       "below_floor",
                       "failed",
@@ -5594,8 +5647,7 @@
                     "type": "string"
                   }
                 },
-                "required": ["path", "label", "state", "reason"],
-                "additionalProperties": false
+                "required": ["path", "label", "state", "reason"]
               }
             },
             "structureErrors": {
@@ -5618,8 +5670,7 @@
                     "additionalProperties": true
                   }
                 },
-                "required": ["directive", "message", "paragraphIndex"],
-                "additionalProperties": false
+                "required": ["directive", "message", "paragraphIndex"]
               }
             },
             "unrestoredFields": {
@@ -5639,27 +5690,25 @@
             "fileName",
             "unmatchedPlaceholders",
             "unusedValues"
-          ],
-          "additionalProperties": false
+          ]
         },
         {
           "type": "object",
           "properties": {
             "applied": {
-              "enum": [true],
+              "examples": [true],
               "type": "boolean"
             },
             "resultOmitted": {
-              "enum": [true],
+              "examples": [true],
               "type": "boolean"
             },
             "reason": {
-              "enum": ["result_too_large"],
+              "examples": ["result_too_large"],
               "type": "string"
             }
           },
-          "required": ["applied", "resultOmitted", "reason"],
-          "additionalProperties": false
+          "required": ["applied", "resultOmitted", "reason"]
         }
       ],
       "type": "object"
@@ -5793,8 +5842,7 @@
                   "input_type",
                   "required",
                   "source"
-                ],
-                "additionalProperties": false
+                ]
               }
             },
             "conditions": {
@@ -5806,7 +5854,7 @@
                     "type": "string"
                   },
                   "kind": {
-                    "enum": ["asked", "rule", "ai"],
+                    "examples": ["asked", "rule", "ai"],
                     "type": "string"
                   },
                   "condition": {
@@ -5816,8 +5864,7 @@
                     "type": "string"
                   }
                 },
-                "required": ["path", "kind"],
-                "additionalProperties": false
+                "required": ["path", "kind"]
               }
             },
             "computed": {
@@ -5832,8 +5879,7 @@
                     "type": "string"
                   }
                 },
-                "required": ["path", "formula"],
-                "additionalProperties": false
+                "required": ["path", "formula"]
               }
             },
             "arrays": {
@@ -5857,8 +5903,7 @@
                     }
                   }
                 },
-                "required": ["path", "itemFieldPaths", "itemAliases"],
-                "additionalProperties": false
+                "required": ["path", "itemFieldPaths", "itemAliases"]
               }
             },
             "warnings": {
@@ -5867,7 +5912,7 @@
                 "type": "object",
                 "properties": {
                   "code": {
-                    "enum": [
+                    "examples": [
                       "unaliased_item_path",
                       "row_block_across_rows",
                       "split_marker",
@@ -5893,8 +5938,7 @@
                     "type": "string"
                   }
                 },
-                "required": ["code", "message", "hint"],
-                "additionalProperties": false
+                "required": ["code", "message", "hint"]
               }
             },
             "configure": {
@@ -5911,8 +5955,7 @@
                   }
                 }
               },
-              "required": ["template_id", "fields"],
-              "additionalProperties": false
+              "required": ["template_id", "fields"]
             }
           },
           "required": [
@@ -5925,27 +5968,25 @@
             "arrays",
             "warnings",
             "configure"
-          ],
-          "additionalProperties": false
+          ]
         },
         {
           "type": "object",
           "properties": {
             "applied": {
-              "enum": [true],
+              "examples": [true],
               "type": "boolean"
             },
             "resultOmitted": {
-              "enum": [true],
+              "examples": [true],
               "type": "boolean"
             },
             "reason": {
-              "enum": ["result_too_large"],
+              "examples": ["result_too_large"],
               "type": "string"
             }
           },
-          "required": ["applied", "resultOmitted", "reason"],
-          "additionalProperties": false
+          "required": ["applied", "resultOmitted", "reason"]
         }
       ],
       "type": "object"
@@ -6388,8 +6429,7 @@
                   "input_type",
                   "required",
                   "source"
-                ],
-                "additionalProperties": false
+                ]
               }
             },
             "conditions": {
@@ -6401,7 +6441,7 @@
                     "type": "string"
                   },
                   "kind": {
-                    "enum": ["asked", "rule", "ai"],
+                    "examples": ["asked", "rule", "ai"],
                     "type": "string"
                   },
                   "condition": {
@@ -6411,8 +6451,7 @@
                     "type": "string"
                   }
                 },
-                "required": ["path", "kind"],
-                "additionalProperties": false
+                "required": ["path", "kind"]
               }
             },
             "computed": {
@@ -6427,8 +6466,7 @@
                     "type": "string"
                   }
                 },
-                "required": ["path", "formula"],
-                "additionalProperties": false
+                "required": ["path", "formula"]
               }
             },
             "arrays": {
@@ -6452,8 +6490,7 @@
                     }
                   }
                 },
-                "required": ["path", "itemFieldPaths", "itemAliases"],
-                "additionalProperties": false
+                "required": ["path", "itemFieldPaths", "itemAliases"]
               }
             },
             "warnings": {
@@ -6462,7 +6499,7 @@
                 "type": "object",
                 "properties": {
                   "code": {
-                    "enum": [
+                    "examples": [
                       "unaliased_item_path",
                       "row_block_across_rows",
                       "split_marker",
@@ -6488,8 +6525,7 @@
                     "type": "string"
                   }
                 },
-                "required": ["code", "message", "hint"],
-                "additionalProperties": false
+                "required": ["code", "message", "hint"]
               }
             },
             "configure": {
@@ -6506,8 +6542,7 @@
                   }
                 }
               },
-              "required": ["template_id", "fields"],
-              "additionalProperties": false
+              "required": ["template_id", "fields"]
             },
             "issues": {
               "type": "array",
@@ -6527,8 +6562,7 @@
                     "type": "string"
                   }
                 },
-                "required": ["path", "index", "message", "hint"],
-                "additionalProperties": false
+                "required": ["path", "index", "message", "hint"]
               }
             }
           },
@@ -6541,27 +6575,25 @@
             "warnings",
             "configure",
             "issues"
-          ],
-          "additionalProperties": false
+          ]
         },
         {
           "type": "object",
           "properties": {
             "applied": {
-              "enum": [true],
+              "examples": [true],
               "type": "boolean"
             },
             "resultOmitted": {
-              "enum": [true],
+              "examples": [true],
               "type": "boolean"
             },
             "reason": {
-              "enum": ["result_too_large"],
+              "examples": ["result_too_large"],
               "type": "string"
             }
           },
-          "required": ["applied", "resultOmitted", "reason"],
-          "additionalProperties": false
+          "required": ["applied", "resultOmitted", "reason"]
         }
       ],
       "type": "object"
@@ -6608,16 +6640,15 @@
           "type": "object",
           "properties": {
             "state": {
-              "enum": ["incomplete"],
+              "examples": ["incomplete"],
               "type": "string"
             },
             "reason": {
-              "enum": ["clause-limit", "text-limit"],
+              "examples": ["clause-limit", "text-limit"],
               "type": "string"
             }
           },
-          "required": ["state", "reason"],
-          "additionalProperties": false
+          "required": ["state", "reason"]
         },
         "conditions": {
           "type": "array",
@@ -6631,21 +6662,21 @@
                 "type": "string"
               },
               "state": {
-                "enum": ["decided", "undecided"],
+                "examples": ["decided", "undecided"],
                 "type": "string"
               },
               "value": {
                 "type": "boolean"
               },
               "decided_by": {
-                "enum": ["decision_model", "generative_model", "user"],
+                "examples": ["decision_model", "generative_model", "user"],
                 "type": "string"
               },
               "probability": {
                 "type": "number"
               },
               "reason": {
-                "enum": [
+                "examples": [
                   "no_decision_model",
                   "below_floor",
                   "failed",
@@ -6654,16 +6685,14 @@
                 "type": "string"
               }
             },
-            "required": ["path", "label", "state"],
-            "additionalProperties": false
+            "required": ["path", "label", "state"]
           }
         },
         "model": {
           "type": ["string", "null"]
         }
       },
-      "required": ["conditions", "model"],
-      "additionalProperties": false
+      "required": ["conditions", "model"]
     },
     "annotations": {
       "title": "Preview template conditions",
@@ -6739,16 +6768,14 @@
                 "type": ["string", "null"]
               }
             },
-            "required": ["id", "name", "kind", "parentId"],
-            "additionalProperties": false
+            "required": ["id", "name", "kind", "parentId"]
           }
         },
         "nextCursor": {
           "type": ["string", "null"]
         }
       },
-      "required": ["documents", "nextCursor"],
-      "additionalProperties": false
+      "required": ["documents", "nextCursor"]
     },
     "annotations": {
       "title": "List documents",
@@ -6824,15 +6851,14 @@
                 "additionalProperties": true
               }
             },
-            "required": ["id", "propertyId", "content"],
-            "additionalProperties": false
+            "required": ["id", "propertyId", "content"]
           }
         },
         "contentState": {
           "type": "object",
           "properties": {
             "status": {
-              "enum": [
+              "examples": [
                 "not_applicable",
                 "ready",
                 "pending",
@@ -6843,7 +6869,7 @@
               "type": "string"
             },
             "source": {
-              "enum": ["direct_docx", "extracted_text"],
+              "examples": ["direct_docx", "extracted_text"],
               "type": "string"
             },
             "sourceVersionId": {
@@ -6853,7 +6879,7 @@
               "type": "string"
             },
             "processingKind": {
-              "enum": ["document-processing"],
+              "examples": ["document-processing"],
               "type": "string"
             },
             "runId": {
@@ -6870,49 +6896,47 @@
               "type": "object",
               "properties": {
                 "type": {
-                  "enum": ["action", "escalation"],
+                  "examples": ["action", "escalation"],
                   "type": "string"
                 },
                 "tool": {
-                  "enum": ["write_capability"],
+                  "examples": ["write_capability"],
                   "type": "string"
                 },
                 "arguments": {},
                 "requiredScope": {
-                  "enum": ["stella:matters_write"],
+                  "examples": ["stella:matters_write"],
                   "type": "string"
                 },
                 "requiredPermission": {
-                  "enum": ["entity:update"],
+                  "examples": ["entity:update"],
                   "type": "string"
                 },
                 "instruction": {
                   "type": "string"
                 }
               },
-              "required": ["type"],
-              "additionalProperties": false
+              "required": ["type"]
             },
             "errorCode": {
-              "enum": ["document_processing_failed"],
+              "examples": ["document_processing_failed"],
               "type": "string"
             },
             "retryable": {
-              "enum": [true],
+              "examples": [true],
               "type": "boolean"
             },
             "reason": {
               "type": "string"
             }
           },
-          "required": ["status"],
-          "additionalProperties": false
+          "required": ["status"]
         },
         "searchIndexState": {
           "type": "object",
           "properties": {
             "status": {
-              "enum": [
+              "examples": [
                 "not_applicable",
                 "ready",
                 "pending",
@@ -6931,19 +6955,18 @@
               "type": "string"
             },
             "errorCode": {
-              "enum": ["search_index_failed"],
+              "examples": ["search_index_failed"],
               "type": "string"
             },
             "retryable": {
-              "enum": [true],
+              "examples": [true],
               "type": "boolean"
             },
             "reason": {
               "type": "string"
             }
           },
-          "required": ["status"],
-          "additionalProperties": false
+          "required": ["status"]
         },
         "versions": {
           "type": "array",
@@ -6976,8 +6999,7 @@
               "label",
               "description",
               "createdAt"
-            ],
-            "additionalProperties": false
+            ]
           }
         },
         "versionsNextCursor": {
@@ -7020,8 +7042,7 @@
             "description",
             "createdAt",
             "fields"
-          ],
-          "additionalProperties": false
+          ]
         },
         "diff": {
           "type": "object",
@@ -7040,12 +7061,10 @@
               }
             }
           },
-          "required": ["baseVersionId", "targetVersionId", "segments"],
-          "additionalProperties": false
+          "required": ["baseVersionId", "targetVersionId", "segments"]
         }
       },
-      "required": ["entityId", "name"],
-      "additionalProperties": false
+      "required": ["entityId", "name"]
     },
     "annotations": {
       "title": "Read document",
@@ -7138,30 +7157,28 @@
               "type": "string"
             },
             "updated": {
-              "enum": [true],
+              "examples": [true],
               "type": "boolean"
             }
-          },
-          "additionalProperties": false
+          }
         },
         {
           "type": "object",
           "properties": {
             "applied": {
-              "enum": [true],
+              "examples": [true],
               "type": "boolean"
             },
             "resultOmitted": {
-              "enum": [true],
+              "examples": [true],
               "type": "boolean"
             },
             "reason": {
-              "enum": ["result_too_large"],
+              "examples": ["result_too_large"],
               "type": "string"
             }
           },
-          "required": ["applied", "resultOmitted", "reason"],
-          "additionalProperties": false
+          "required": ["applied", "resultOmitted", "reason"]
         }
       ],
       "type": "object"
@@ -7228,7 +7245,7 @@
               "type": "object",
               "properties": {
                 "type": {
-                  "enum": ["entity_version"],
+                  "examples": ["entity_version"],
                   "type": "string"
                 },
                 "entityId": {
@@ -7254,31 +7271,28 @@
                 "versionNumber",
                 "fileId",
                 "fileName"
-              ],
-              "additionalProperties": false
+              ]
             }
           },
-          "required": ["finalizedResult"],
-          "additionalProperties": false
+          "required": ["finalizedResult"]
         },
         {
           "type": "object",
           "properties": {
             "applied": {
-              "enum": [true],
+              "examples": [true],
               "type": "boolean"
             },
             "resultOmitted": {
-              "enum": [true],
+              "examples": [true],
               "type": "boolean"
             },
             "reason": {
-              "enum": ["result_too_large"],
+              "examples": ["result_too_large"],
               "type": "string"
             }
           },
-          "required": ["applied", "resultOmitted", "reason"],
-          "additionalProperties": false
+          "required": ["applied", "resultOmitted", "reason"]
         }
       ],
       "type": "object"
@@ -7326,27 +7340,25 @@
               "type": "string"
             }
           },
-          "required": ["entityId", "workspaceId", "nextStep"],
-          "additionalProperties": false
+          "required": ["entityId", "workspaceId", "nextStep"]
         },
         {
           "type": "object",
           "properties": {
             "applied": {
-              "enum": [true],
+              "examples": [true],
               "type": "boolean"
             },
             "resultOmitted": {
-              "enum": [true],
+              "examples": [true],
               "type": "boolean"
             },
             "reason": {
-              "enum": ["result_too_large"],
+              "examples": ["result_too_large"],
               "type": "string"
             }
           },
-          "required": ["applied", "resultOmitted", "reason"],
-          "additionalProperties": false
+          "required": ["applied", "resultOmitted", "reason"]
         }
       ],
       "type": "object"
@@ -7514,7 +7526,7 @@
                 "type": "object",
                 "properties": {
                   "status": {
-                    "enum": [
+                    "examples": [
                       "created",
                       "downloadable",
                       "previewed",
@@ -7586,32 +7598,29 @@
                     }
                   }
                 },
-                "required": ["status"],
-                "additionalProperties": false
+                "required": ["status"]
               }
             }
           },
-          "required": ["results"],
-          "additionalProperties": false
+          "required": ["results"]
         },
         {
           "type": "object",
           "properties": {
             "applied": {
-              "enum": [true],
+              "examples": [true],
               "type": "boolean"
             },
             "resultOmitted": {
-              "enum": [true],
+              "examples": [true],
               "type": "boolean"
             },
             "reason": {
-              "enum": ["result_too_large"],
+              "examples": ["result_too_large"],
               "type": "string"
             }
           },
-          "required": ["applied", "resultOmitted", "reason"],
-          "additionalProperties": false
+          "required": ["applied", "resultOmitted", "reason"]
         }
       ],
       "type": "object"
@@ -7710,8 +7719,7 @@
                   "type": "string"
                 }
               },
-              "required": ["uploadId", "url", "headers", "expiresAt"],
-              "additionalProperties": false
+              "required": ["uploadId", "url", "headers", "expiresAt"]
             },
             "target": {
               "type": "object",
@@ -7732,21 +7740,20 @@
                   "type": "string"
                 }
               },
-              "required": ["uploadId", "url", "headers", "expiresAt"],
-              "additionalProperties": false
+              "required": ["uploadId", "url", "headers", "expiresAt"]
             },
             "next": {
               "type": "object",
               "properties": {
                 "tool": {
-                  "enum": ["compare_documents"],
+                  "examples": ["compare_documents"],
                   "type": "string"
                 },
                 "source": {
                   "type": "object",
                   "properties": {
                     "type": {
-                      "enum": ["uploads"],
+                      "examples": ["uploads"],
                       "type": "string"
                     },
                     "base_upload_id": {
@@ -7756,35 +7763,31 @@
                       "type": "string"
                     }
                   },
-                  "required": ["type", "base_upload_id", "target_upload_id"],
-                  "additionalProperties": false
+                  "required": ["type", "base_upload_id", "target_upload_id"]
                 }
               },
-              "required": ["tool", "source"],
-              "additionalProperties": false
+              "required": ["tool", "source"]
             }
           },
-          "required": ["base", "target", "next"],
-          "additionalProperties": false
+          "required": ["base", "target", "next"]
         },
         {
           "type": "object",
           "properties": {
             "applied": {
-              "enum": [true],
+              "examples": [true],
               "type": "boolean"
             },
             "resultOmitted": {
-              "enum": [true],
+              "examples": [true],
               "type": "boolean"
             },
             "reason": {
-              "enum": ["result_too_large"],
+              "examples": ["result_too_large"],
               "type": "string"
             }
           },
-          "required": ["applied", "resultOmitted", "reason"],
-          "additionalProperties": false
+          "required": ["applied", "resultOmitted", "reason"]
         }
       ],
       "type": "object"
@@ -7865,8 +7868,7 @@
                   "type": "number"
                 }
               },
-              "required": ["uploadId", "name", "size"],
-              "additionalProperties": false
+              "required": ["uploadId", "name", "size"]
             },
             "target": {
               "type": "object",
@@ -7881,21 +7883,20 @@
                   "type": "number"
                 }
               },
-              "required": ["uploadId", "name", "size"],
-              "additionalProperties": false
+              "required": ["uploadId", "name", "size"]
             },
             "next": {
               "type": "object",
               "properties": {
                 "tool": {
-                  "enum": ["compare_documents"],
+                  "examples": ["compare_documents"],
                   "type": "string"
                 },
                 "source": {
                   "type": "object",
                   "properties": {
                     "type": {
-                      "enum": ["uploads"],
+                      "examples": ["uploads"],
                       "type": "string"
                     },
                     "base_upload_id": {
@@ -7905,35 +7906,31 @@
                       "type": "string"
                     }
                   },
-                  "required": ["type", "base_upload_id", "target_upload_id"],
-                  "additionalProperties": false
+                  "required": ["type", "base_upload_id", "target_upload_id"]
                 }
               },
-              "required": ["tool", "source"],
-              "additionalProperties": false
+              "required": ["tool", "source"]
             }
           },
-          "required": ["base", "target", "next"],
-          "additionalProperties": false
+          "required": ["base", "target", "next"]
         },
         {
           "type": "object",
           "properties": {
             "applied": {
-              "enum": [true],
+              "examples": [true],
               "type": "boolean"
             },
             "resultOmitted": {
-              "enum": [true],
+              "examples": [true],
               "type": "boolean"
             },
             "reason": {
-              "enum": ["result_too_large"],
+              "examples": ["result_too_large"],
               "type": "string"
             }
           },
-          "required": ["applied", "resultOmitted", "reason"],
-          "additionalProperties": false
+          "required": ["applied", "resultOmitted", "reason"]
         }
       ],
       "type": "object"
@@ -7969,27 +7966,25 @@
               "type": "string"
             }
           },
-          "required": ["nextStep"],
-          "additionalProperties": false
+          "required": ["nextStep"]
         },
         {
           "type": "object",
           "properties": {
             "applied": {
-              "enum": [true],
+              "examples": [true],
               "type": "boolean"
             },
             "resultOmitted": {
-              "enum": [true],
+              "examples": [true],
               "type": "boolean"
             },
             "reason": {
-              "enum": ["result_too_large"],
+              "examples": ["result_too_large"],
               "type": "string"
             }
           },
-          "required": ["applied", "resultOmitted", "reason"],
-          "additionalProperties": false
+          "required": ["applied", "resultOmitted", "reason"]
         }
       ],
       "type": "object"
@@ -8036,31 +8031,29 @@
           "type": "object",
           "properties": {
             "deleted": {
-              "enum": [true],
+              "examples": [true],
               "type": "boolean"
             }
           },
-          "required": ["deleted"],
-          "additionalProperties": false
+          "required": ["deleted"]
         },
         {
           "type": "object",
           "properties": {
             "applied": {
-              "enum": [true],
+              "examples": [true],
               "type": "boolean"
             },
             "resultOmitted": {
-              "enum": [true],
+              "examples": [true],
               "type": "boolean"
             },
             "reason": {
-              "enum": ["result_too_large"],
+              "examples": ["result_too_large"],
               "type": "string"
             }
           },
-          "required": ["applied", "resultOmitted", "reason"],
-          "additionalProperties": false
+          "required": ["applied", "resultOmitted", "reason"]
         }
       ],
       "type": "object"
@@ -8130,20 +8123,18 @@
                 "type": "string"
               },
               "writeMethod": {
-                "enum": ["set_field_value", "unsupported"],
+                "examples": ["set_field_value", "unsupported"],
                 "type": "string"
               }
             },
-            "required": ["id", "name", "valueType", "status", "writeMethod"],
-            "additionalProperties": false
+            "required": ["id", "name", "valueType", "status", "writeMethod"]
           }
         },
         "nextCursor": {
           "type": ["string", "null"]
         }
       },
-      "required": ["properties", "nextCursor"],
-      "additionalProperties": false
+      "required": ["properties", "nextCursor"]
     },
     "annotations": {
       "title": "List properties",
@@ -8305,27 +8296,25 @@
         {
           "type": "object",
           "properties": {},
-          "required": [],
-          "additionalProperties": false
+          "required": []
         },
         {
           "type": "object",
           "properties": {
             "applied": {
-              "enum": [true],
+              "examples": [true],
               "type": "boolean"
             },
             "resultOmitted": {
-              "enum": [true],
+              "examples": [true],
               "type": "boolean"
             },
             "reason": {
-              "enum": ["result_too_large"],
+              "examples": ["result_too_large"],
               "type": "string"
             }
           },
-          "required": ["applied", "resultOmitted", "reason"],
-          "additionalProperties": false
+          "required": ["applied", "resultOmitted", "reason"]
         }
       ],
       "type": "object"
@@ -8400,31 +8389,29 @@
               "type": "string"
             },
             "updated": {
-              "enum": [true],
+              "examples": [true],
               "type": "boolean"
             }
           },
-          "required": ["matterId"],
-          "additionalProperties": false
+          "required": ["matterId"]
         },
         {
           "type": "object",
           "properties": {
             "applied": {
-              "enum": [true],
+              "examples": [true],
               "type": "boolean"
             },
             "resultOmitted": {
-              "enum": [true],
+              "examples": [true],
               "type": "boolean"
             },
             "reason": {
-              "enum": ["result_too_large"],
+              "examples": ["result_too_large"],
               "type": "string"
             }
           },
-          "required": ["applied", "resultOmitted", "reason"],
-          "additionalProperties": false
+          "required": ["applied", "resultOmitted", "reason"]
         }
       ],
       "type": "object"
@@ -8466,31 +8453,29 @@
           "type": "object",
           "properties": {
             "deleted": {
-              "enum": [true],
+              "examples": [true],
               "type": "boolean"
             }
           },
-          "required": ["deleted"],
-          "additionalProperties": false
+          "required": ["deleted"]
         },
         {
           "type": "object",
           "properties": {
             "applied": {
-              "enum": [true],
+              "examples": [true],
               "type": "boolean"
             },
             "resultOmitted": {
-              "enum": [true],
+              "examples": [true],
               "type": "boolean"
             },
             "reason": {
-              "enum": ["result_too_large"],
+              "examples": ["result_too_large"],
               "type": "string"
             }
           },
-          "required": ["applied", "resultOmitted", "reason"],
-          "additionalProperties": false
+          "required": ["applied", "resultOmitted", "reason"]
         }
       ],
       "type": "object"
@@ -8613,8 +8598,7 @@
               "color",
               "createdAt",
               "clientMatterCount"
-            ],
-            "additionalProperties": false
+            ]
           }
         },
         "limit": {
@@ -8624,8 +8608,7 @@
           "type": ["string", "null"]
         }
       },
-      "required": ["items", "limit", "nextCursor"],
-      "additionalProperties": false
+      "required": ["items", "limit", "nextCursor"]
     },
     "annotations": {
       "title": "List contacts",
@@ -8928,7 +8911,7 @@
               "type": "null"
             }
           ],
-          "description": "Registration number"
+          "description": "Business register number"
         },
         "tax_id": {
           "anyOf": [
@@ -8940,7 +8923,7 @@
               "type": "null"
             }
           ],
-          "description": "Tax identifier"
+          "description": "Business tax number"
         },
         "vat_id": {
           "anyOf": [
@@ -8952,7 +8935,7 @@
               "type": "null"
             }
           ],
-          "description": "VAT identifier"
+          "description": "VAT number"
         },
         "vat_payer": {
           "anyOf": [
@@ -9332,27 +9315,25 @@
               "type": "string"
             }
           },
-          "required": ["contactId"],
-          "additionalProperties": false
+          "required": ["contactId"]
         },
         {
           "type": "object",
           "properties": {
             "applied": {
-              "enum": [true],
+              "examples": [true],
               "type": "boolean"
             },
             "resultOmitted": {
-              "enum": [true],
+              "examples": [true],
               "type": "boolean"
             },
             "reason": {
-              "enum": ["result_too_large"],
+              "examples": ["result_too_large"],
               "type": "string"
             }
           },
-          "required": ["applied", "resultOmitted", "reason"],
-          "additionalProperties": false
+          "required": ["applied", "resultOmitted", "reason"]
         }
       ],
       "type": "object"
@@ -9394,31 +9375,29 @@
           "type": "object",
           "properties": {
             "deleted": {
-              "enum": [true],
+              "examples": [true],
               "type": "boolean"
             }
           },
-          "required": ["deleted"],
-          "additionalProperties": false
+          "required": ["deleted"]
         },
         {
           "type": "object",
           "properties": {
             "applied": {
-              "enum": [true],
+              "examples": [true],
               "type": "boolean"
             },
             "resultOmitted": {
-              "enum": [true],
+              "examples": [true],
               "type": "boolean"
             },
             "reason": {
-              "enum": ["result_too_large"],
+              "examples": ["result_too_large"],
               "type": "string"
             }
           },
-          "required": ["applied", "resultOmitted", "reason"],
-          "additionalProperties": false
+          "required": ["applied", "resultOmitted", "reason"]
         }
       ],
       "type": "object"
@@ -9478,7 +9457,7 @@
       "type": "object",
       "properties": {
         "type": {
-          "enum": [
+          "examples": [
             "lookup",
             "search",
             "name-search-not-found",
@@ -9524,8 +9503,7 @@
             "legalForm",
             "address",
             "registryUrl"
-          ],
-          "additionalProperties": false
+          ]
         },
         "hits": {
           "type": "array",
@@ -9564,8 +9542,7 @@
               "legalForm",
               "address",
               "registryUrl"
-            ],
-            "additionalProperties": false
+            ]
           }
         },
         "candidates": {
@@ -9577,24 +9554,22 @@
                 "type": "string"
               },
               "reason": {
-                "enum": ["no-official-record", "name-mismatch"],
+                "examples": ["no-official-record", "name-mismatch"],
                 "type": "string"
               },
               "officialName": {
                 "type": "string"
               }
             },
-            "required": ["id", "reason"],
-            "additionalProperties": false
+            "required": ["id", "reason"]
           }
         },
         "reason": {
-          "enum": ["web-search-unavailable"],
+          "examples": ["web-search-unavailable"],
           "type": "string"
         }
       },
-      "required": ["type", "registry"],
-      "additionalProperties": false
+      "required": ["type", "registry"]
     },
     "annotations": {
       "title": "Look up business registry",
@@ -9873,7 +9848,7 @@
       "type": "object",
       "properties": {
         "status": {
-          "enum": [
+          "examples": [
             "clear",
             "found",
             "not-registered",
@@ -9885,7 +9860,7 @@
           "type": "string"
         },
         "kind": {
-          "enum": ["cz-insolvency", "cz-vat-reliability", "sanctions"],
+          "examples": ["cz-insolvency", "cz-vat-reliability", "sanctions"],
           "type": "string"
         },
         "source": {
@@ -9901,14 +9876,13 @@
               "type": "string"
             }
           },
-          "required": ["name", "authority", "url"],
-          "additionalProperties": false
+          "required": ["name", "authority", "url"]
         },
         "subject": {
           "type": "object",
           "properties": {
             "type": {
-              "enum": ["company-id", "tax-id", "person", "organization"],
+              "examples": ["company-id", "tax-id", "person", "organization"],
               "type": "string"
             },
             "value": {
@@ -9951,12 +9925,11 @@
               }
             },
             "country": {
-              "enum": ["CZ", "SK"],
+              "examples": ["CZ", "SK"],
               "type": "string"
             }
           },
-          "required": ["type"],
-          "additionalProperties": false
+          "required": ["type"]
         },
         "checkedAt": {
           "type": "string"
@@ -9968,7 +9941,7 @@
           "type": ["object", "null"],
           "properties": {
             "subjectType": {
-              "enum": [
+              "examples": [
                 "vat-payer",
                 "identified-person",
                 "vat-group",
@@ -9999,8 +9972,7 @@
             "address",
             "taxOfficeCode",
             "publishedAccounts"
-          ],
-          "additionalProperties": false
+          ]
         },
         "findings": {
           "type": "array",
@@ -10014,14 +9986,14 @@
                 "type": ["string", "null"]
               },
               "phase": {
-                "enum": ["ongoing", "ended", "unverified"],
+                "examples": ["ongoing", "ended", "unverified"],
                 "type": "string"
               },
               "stateCode": {
                 "type": ["string", "null"]
               },
               "matchedBy": {
-                "enum": ["company-id", "name-and-birth-date"],
+                "examples": ["company-id", "name-and-birth-date"],
                 "type": "string"
               },
               "debtor": {
@@ -10038,21 +10010,20 @@
                 "type": ["string", "null"]
               },
               "type": {
-                "enum": ["unreliable-vat-payer", "unreliable-person"],
+                "examples": ["unreliable-vat-payer", "unreliable-person"],
                 "type": "string"
               },
               "publishedOn": {
                 "type": ["string", "null"]
               }
-            },
-            "additionalProperties": false
+            }
           }
         },
         "totalMatches": {
           "type": "number"
         },
         "reason": {
-          "enum": [
+          "examples": [
             "timeout",
             "network",
             "http-error",
@@ -10071,7 +10042,7 @@
         "supportedSubjectTypes": {
           "type": "array",
           "items": {
-            "enum": ["company-id", "tax-id", "person"],
+            "examples": ["company-id", "tax-id", "person"],
             "type": "string"
           }
         },
@@ -10084,18 +10055,26 @@
             "type": "object",
             "properties": {
               "source": {
-                "enum": ["eu", "un", "cz", "us-sdn", "us-non-sdn", "uk", "ch"],
+                "examples": [
+                  "eu",
+                  "un",
+                  "cz",
+                  "us-sdn",
+                  "us-non-sdn",
+                  "uk",
+                  "ch"
+                ],
                 "type": "string"
               },
               "issuer": {
                 "type": "string"
               },
               "classification": {
-                "enum": ["binding", "informational"],
+                "examples": ["binding", "informational"],
                 "type": "string"
               },
               "status": {
-                "enum": [
+                "examples": [
                   "clear",
                   "possible-match",
                   "unavailable",
@@ -10106,7 +10085,7 @@
               "reason": {
                 "anyOf": [
                   {
-                    "enum": [
+                    "examples": [
                       "not-loaded",
                       "access-denied",
                       "stale",
@@ -10161,13 +10140,11 @@
               "totalMatches",
               "truncated",
               "possibleMatches"
-            ],
-            "additionalProperties": false
+            ]
           }
         }
       },
-      "required": ["status", "kind", "subject"],
-      "additionalProperties": false
+      "required": ["status", "kind", "subject"]
     },
     "annotations": {
       "title": "Check counterparty",
@@ -10295,8 +10272,7 @@
               "matterId",
               "matterName",
               "matterReference"
-            ],
-            "additionalProperties": false
+            ]
           }
         },
         "nextCursor": {
@@ -10363,11 +10339,9 @@
             "agendaKind",
             "assignees",
             "links"
-          ],
-          "additionalProperties": false
+          ]
         }
-      },
-      "additionalProperties": false
+      }
     },
     "annotations": {
       "title": "List tasks",
@@ -10492,31 +10466,29 @@
               "type": "string"
             },
             "updated": {
-              "enum": [true],
+              "examples": [true],
               "type": "boolean"
             }
           },
-          "required": ["taskId"],
-          "additionalProperties": false
+          "required": ["taskId"]
         },
         {
           "type": "object",
           "properties": {
             "applied": {
-              "enum": [true],
+              "examples": [true],
               "type": "boolean"
             },
             "resultOmitted": {
-              "enum": [true],
+              "examples": [true],
               "type": "boolean"
             },
             "reason": {
-              "enum": ["result_too_large"],
+              "examples": ["result_too_large"],
               "type": "string"
             }
           },
-          "required": ["applied", "resultOmitted", "reason"],
-          "additionalProperties": false
+          "required": ["applied", "resultOmitted", "reason"]
         }
       ],
       "type": "object"
@@ -10558,31 +10530,29 @@
           "type": "object",
           "properties": {
             "deleted": {
-              "enum": [true],
+              "examples": [true],
               "type": "boolean"
             }
           },
-          "required": ["deleted"],
-          "additionalProperties": false
+          "required": ["deleted"]
         },
         {
           "type": "object",
           "properties": {
             "applied": {
-              "enum": [true],
+              "examples": [true],
               "type": "boolean"
             },
             "resultOmitted": {
-              "enum": [true],
+              "examples": [true],
               "type": "boolean"
             },
             "reason": {
-              "enum": ["result_too_large"],
+              "examples": ["result_too_large"],
               "type": "string"
             }
           },
-          "required": ["applied", "resultOmitted", "reason"],
-          "additionalProperties": false
+          "required": ["applied", "resultOmitted", "reason"]
         }
       ],
       "type": "object"
@@ -10648,30 +10618,28 @@
               "type": "string"
             },
             "unlinked": {
-              "enum": [true],
+              "examples": [true],
               "type": "boolean"
             }
-          },
-          "additionalProperties": false
+          }
         },
         {
           "type": "object",
           "properties": {
             "applied": {
-              "enum": [true],
+              "examples": [true],
               "type": "boolean"
             },
             "resultOmitted": {
-              "enum": [true],
+              "examples": [true],
               "type": "boolean"
             },
             "reason": {
-              "enum": ["result_too_large"],
+              "examples": ["result_too_large"],
               "type": "string"
             }
           },
-          "required": ["applied", "resultOmitted", "reason"],
-          "additionalProperties": false
+          "required": ["applied", "resultOmitted", "reason"]
         }
       ],
       "type": "object"
@@ -10782,8 +10750,7 @@
               "currentVersion",
               "createdAt",
               "updatedAt"
-            ],
-            "additionalProperties": false
+            ]
           }
         },
         "categories": {
@@ -10821,8 +10788,7 @@
               "sortOrder",
               "createdAt",
               "updatedAt"
-            ],
-            "additionalProperties": false
+            ]
           }
         },
         "nextCursor": {
@@ -10897,8 +10863,7 @@
             "updatedAt",
             "variants",
             "versions"
-          ],
-          "additionalProperties": false
+          ]
         },
         "version": {
           "type": "object",
@@ -10920,11 +10885,9 @@
               "type": "string"
             }
           },
-          "required": ["id", "version", "body", "createdAt"],
-          "additionalProperties": false
+          "required": ["id", "version", "body", "createdAt"]
         }
-      },
-      "additionalProperties": false
+      }
     },
     "annotations": {
       "title": "List clauses",
@@ -11132,27 +11095,25 @@
               "type": "string"
             }
           },
-          "required": ["clauseId"],
-          "additionalProperties": false
+          "required": ["clauseId"]
         },
         {
           "type": "object",
           "properties": {
             "applied": {
-              "enum": [true],
+              "examples": [true],
               "type": "boolean"
             },
             "resultOmitted": {
-              "enum": [true],
+              "examples": [true],
               "type": "boolean"
             },
             "reason": {
-              "enum": ["result_too_large"],
+              "examples": ["result_too_large"],
               "type": "string"
             }
           },
-          "required": ["applied", "resultOmitted", "reason"],
-          "additionalProperties": false
+          "required": ["applied", "resultOmitted", "reason"]
         }
       ],
       "type": "object"
@@ -11194,31 +11155,29 @@
           "type": "object",
           "properties": {
             "deleted": {
-              "enum": [true],
+              "examples": [true],
               "type": "boolean"
             }
           },
-          "required": ["deleted"],
-          "additionalProperties": false
+          "required": ["deleted"]
         },
         {
           "type": "object",
           "properties": {
             "applied": {
-              "enum": [true],
+              "examples": [true],
               "type": "boolean"
             },
             "resultOmitted": {
-              "enum": [true],
+              "examples": [true],
               "type": "boolean"
             },
             "reason": {
-              "enum": ["result_too_large"],
+              "examples": ["result_too_large"],
               "type": "string"
             }
           },
-          "required": ["applied", "resultOmitted", "reason"],
-          "additionalProperties": false
+          "required": ["applied", "resultOmitted", "reason"]
         }
       ],
       "type": "object"
@@ -11302,8 +11261,7 @@
               "status",
               "createdAt",
               "updatedAt"
-            ],
-            "additionalProperties": false
+            ]
           }
         },
         "nextCursor": {
@@ -11329,7 +11287,7 @@
               "type": "object",
               "properties": {
                 "version": {
-                  "enum": [3],
+                  "examples": [3],
                   "type": "number"
                 },
                 "items": {
@@ -11340,8 +11298,7 @@
                   }
                 }
               },
-              "required": ["version", "items"],
-              "additionalProperties": false
+              "required": ["version", "items"]
             },
             "status": {
               "type": "string"
@@ -11366,11 +11323,9 @@
             "approvedAt",
             "createdAt",
             "updatedAt"
-          ],
-          "additionalProperties": false
+          ]
         }
-      },
-      "additionalProperties": false
+      }
     },
     "annotations": {
       "title": "List playbooks",
@@ -11698,12 +11653,11 @@
                     "type": "string"
                   },
                   "change": {
-                    "enum": ["added", "changed"],
+                    "examples": ["added", "changed"],
                     "type": "string"
                   }
                 },
-                "required": ["sourceId", "issue", "change"],
-                "additionalProperties": false
+                "required": ["sourceId", "issue", "change"]
               }
             },
             "removed": {
@@ -11715,8 +11669,7 @@
                     "type": "string"
                   }
                 },
-                "required": ["sourceId"],
-                "additionalProperties": false
+                "required": ["sourceId"]
               }
             },
             "issues": {
@@ -11737,8 +11690,7 @@
                     "type": "string"
                   }
                 },
-                "required": ["code", "path", "message", "hint"],
-                "additionalProperties": false
+                "required": ["code", "path", "message", "hint"]
               }
             }
           },
@@ -11749,27 +11701,25 @@
             "positions",
             "removed",
             "issues"
-          ],
-          "additionalProperties": false
+          ]
         },
         {
           "type": "object",
           "properties": {
             "applied": {
-              "enum": [true],
+              "examples": [true],
               "type": "boolean"
             },
             "resultOmitted": {
-              "enum": [true],
+              "examples": [true],
               "type": "boolean"
             },
             "reason": {
-              "enum": ["result_too_large"],
+              "examples": ["result_too_large"],
               "type": "string"
             }
           },
-          "required": ["applied", "resultOmitted", "reason"],
-          "additionalProperties": false
+          "required": ["applied", "resultOmitted", "reason"]
         }
       ],
       "type": "object"
@@ -11815,27 +11765,25 @@
               "type": "number"
             }
           },
-          "required": ["runPropertyCount"],
-          "additionalProperties": false
+          "required": ["runPropertyCount"]
         },
         {
           "type": "object",
           "properties": {
             "applied": {
-              "enum": [true],
+              "examples": [true],
               "type": "boolean"
             },
             "resultOmitted": {
-              "enum": [true],
+              "examples": [true],
               "type": "boolean"
             },
             "reason": {
-              "enum": ["result_too_large"],
+              "examples": ["result_too_large"],
               "type": "string"
             }
           },
-          "required": ["applied", "resultOmitted", "reason"],
-          "additionalProperties": false
+          "required": ["applied", "resultOmitted", "reason"]
         }
       ],
       "type": "object"
@@ -11901,13 +11849,13 @@
                 "type": "string"
               },
               "kind": {
-                "enum": ["highlight", "comment"],
+                "examples": ["highlight", "comment"],
                 "type": "string"
               },
               "color": {
                 "anyOf": [
                   {
-                    "enum": ["yellow", "green", "sky", "violet", "red"],
+                    "examples": ["yellow", "green", "sky", "violet", "red"],
                     "type": "string"
                   },
                   {
@@ -11918,7 +11866,7 @@
               "style": {
                 "anyOf": [
                   {
-                    "enum": [
+                    "examples": [
                       "highlight",
                       "underline",
                       "squiggly",
@@ -11935,7 +11883,7 @@
                 "type": ["string", "null"]
               },
               "visibility": {
-                "enum": ["private", "shared"],
+                "examples": ["private", "shared"],
                 "type": "string"
               },
               "mine": {
@@ -11966,16 +11914,14 @@
               "authorName",
               "createdAt",
               "passages"
-            ],
-            "additionalProperties": false
+            ]
           }
         },
         "nextCursor": {
           "type": ["string", "null"]
         }
       },
-      "required": ["annotations", "nextCursor"],
-      "additionalProperties": false
+      "required": ["annotations", "nextCursor"]
     },
     "annotations": {
       "title": "List reader annotations",
@@ -12108,32 +12054,29 @@
                     "type": "string"
                   }
                 },
-                "required": ["anchor", "quote"],
-                "additionalProperties": false
+                "required": ["anchor", "quote"]
               }
             }
           },
-          "required": ["annotationId", "passages"],
-          "additionalProperties": false
+          "required": ["annotationId", "passages"]
         },
         {
           "type": "object",
           "properties": {
             "applied": {
-              "enum": [true],
+              "examples": [true],
               "type": "boolean"
             },
             "resultOmitted": {
-              "enum": [true],
+              "examples": [true],
               "type": "boolean"
             },
             "reason": {
-              "enum": ["result_too_large"],
+              "examples": ["result_too_large"],
               "type": "string"
             }
           },
-          "required": ["applied", "resultOmitted", "reason"],
-          "additionalProperties": false
+          "required": ["applied", "resultOmitted", "reason"]
         }
       ],
       "type": "object"
@@ -12249,31 +12192,29 @@
               "type": "string"
             },
             "updated": {
-              "enum": [true],
+              "examples": [true],
               "type": "boolean"
             }
           },
-          "required": ["annotationId", "updated"],
-          "additionalProperties": false
+          "required": ["annotationId", "updated"]
         },
         {
           "type": "object",
           "properties": {
             "applied": {
-              "enum": [true],
+              "examples": [true],
               "type": "boolean"
             },
             "resultOmitted": {
-              "enum": [true],
+              "examples": [true],
               "type": "boolean"
             },
             "reason": {
-              "enum": ["result_too_large"],
+              "examples": ["result_too_large"],
               "type": "string"
             }
           },
-          "required": ["applied", "resultOmitted", "reason"],
-          "additionalProperties": false
+          "required": ["applied", "resultOmitted", "reason"]
         }
       ],
       "type": "object"
@@ -12315,31 +12256,29 @@
           "type": "object",
           "properties": {
             "deleted": {
-              "enum": [true],
+              "examples": [true],
               "type": "boolean"
             }
           },
-          "required": ["deleted"],
-          "additionalProperties": false
+          "required": ["deleted"]
         },
         {
           "type": "object",
           "properties": {
             "applied": {
-              "enum": [true],
+              "examples": [true],
               "type": "boolean"
             },
             "resultOmitted": {
-              "enum": [true],
+              "examples": [true],
               "type": "boolean"
             },
             "reason": {
-              "enum": ["result_too_large"],
+              "examples": ["result_too_large"],
               "type": "string"
             }
           },
-          "required": ["applied", "resultOmitted", "reason"],
-          "additionalProperties": false
+          "required": ["applied", "resultOmitted", "reason"]
         }
       ],
       "type": "object"
@@ -12435,7 +12374,7 @@
       "type": "object",
       "properties": {
         "visibility": {
-          "enum": ["all_entries", "own_entries"],
+          "examples": ["all_entries", "own_entries"],
           "type": "string"
         },
         "entries": {
@@ -12447,7 +12386,7 @@
                 "type": "string"
               },
               "activityGroup": {
-                "enum": ["client", "internal"],
+                "examples": ["client", "internal"],
                 "type": "string"
               },
               "entityId": {
@@ -12515,8 +12454,7 @@
               "noCharge",
               "status",
               "userName"
-            ],
-            "additionalProperties": false
+            ]
           }
         },
         "nextCursor": {
@@ -12529,7 +12467,7 @@
               "type": "string"
             },
             "activityGroup": {
-              "enum": ["client", "internal"],
+              "examples": ["client", "internal"],
               "type": "string"
             },
             "entityId": {
@@ -12601,12 +12539,10 @@
             "status",
             "userName",
             "workspaceId"
-          ],
-          "additionalProperties": false
+          ]
         }
       },
-      "required": ["visibility"],
-      "additionalProperties": false
+      "required": ["visibility"]
     },
     "annotations": {
       "title": "List time entries",
@@ -12743,31 +12679,29 @@
               "type": "string"
             },
             "updated": {
-              "enum": [true],
+              "examples": [true],
               "type": "boolean"
             }
           },
-          "required": ["timeEntryId"],
-          "additionalProperties": false
+          "required": ["timeEntryId"]
         },
         {
           "type": "object",
           "properties": {
             "applied": {
-              "enum": [true],
+              "examples": [true],
               "type": "boolean"
             },
             "resultOmitted": {
-              "enum": [true],
+              "examples": [true],
               "type": "boolean"
             },
             "reason": {
-              "enum": ["result_too_large"],
+              "examples": ["result_too_large"],
               "type": "string"
             }
           },
-          "required": ["applied", "resultOmitted", "reason"],
-          "additionalProperties": false
+          "required": ["applied", "resultOmitted", "reason"]
         }
       ],
       "type": "object"
@@ -12814,27 +12748,25 @@
               "type": "boolean"
             }
           },
-          "required": ["deleted"],
-          "additionalProperties": false
+          "required": ["deleted"]
         },
         {
           "type": "object",
           "properties": {
             "applied": {
-              "enum": [true],
+              "examples": [true],
               "type": "boolean"
             },
             "resultOmitted": {
-              "enum": [true],
+              "examples": [true],
               "type": "boolean"
             },
             "reason": {
-              "enum": ["result_too_large"],
+              "examples": ["result_too_large"],
               "type": "string"
             }
           },
-          "required": ["applied", "resultOmitted", "reason"],
-          "additionalProperties": false
+          "required": ["applied", "resultOmitted", "reason"]
         }
       ],
       "type": "object"
@@ -12894,8 +12826,7 @@
           "type": ["string", "null"]
         }
       },
-      "required": ["hourlyRate", "currency"],
-      "additionalProperties": false
+      "required": ["hourlyRate", "currency"]
     },
     "annotations": {
       "title": "Resolve billing rate",
@@ -12969,7 +12900,7 @@
                 "type": ["string", "null"]
               },
               "documentType": {
-                "enum": ["invoice", "advance", "credit_note"],
+                "examples": ["invoice", "advance", "credit_note"],
                 "type": "string"
               },
               "originalInvoiceId": {
@@ -12998,6 +12929,10 @@
               },
               "outstandingAmount": {
                 "type": "number"
+              },
+              "settlement": {
+                "type": "object",
+                "additionalProperties": true
               }
             },
             "required": [
@@ -13014,9 +12949,9 @@
               "currency",
               "totalAmount",
               "paidAmount",
-              "outstandingAmount"
-            ],
-            "additionalProperties": false
+              "outstandingAmount",
+              "settlement"
+            ]
           }
         },
         "nextCursor": {
@@ -13038,7 +12973,7 @@
               "type": ["string", "null"]
             },
             "documentType": {
-              "enum": ["invoice", "advance", "credit_note"],
+              "examples": ["invoice", "advance", "credit_note"],
               "type": "string"
             },
             "originalInvoiceId": {
@@ -13070,6 +13005,19 @@
             },
             "outstandingAmount": {
               "type": "number"
+            },
+            "settlement": {
+              "type": "object",
+              "properties": {
+                "kind": {
+                  "examples": ["open", "paid", "credited", "overpaid"],
+                  "type": "string"
+                },
+                "refundAmount": {
+                  "type": "number"
+                }
+              },
+              "required": ["kind"]
             },
             "notes": {
               "type": ["string", "null"]
@@ -13156,8 +13104,7 @@
                 "vatAmountMinor",
                 "grossAmountMinor",
                 "vatBreakdown"
-              ],
-              "additionalProperties": false
+              ]
             }
           },
           "required": [
@@ -13176,6 +13123,7 @@
             "totalAmount",
             "paidAmount",
             "outstandingAmount",
+            "settlement",
             "notes",
             "sellerProfileId",
             "buyerName",
@@ -13193,11 +13141,9 @@
             "expenses",
             "lines",
             "totals"
-          ],
-          "additionalProperties": false
+          ]
         }
-      },
-      "additionalProperties": false
+      }
     },
     "annotations": {
       "title": "List invoices",
@@ -13256,8 +13202,7 @@
             "currentPeriodStart",
             "currentPeriodEnd",
             "cancelAtPeriodEnd"
-          ],
-          "additionalProperties": false
+          ]
         },
         "policy": {
           "type": "object",
@@ -13275,15 +13220,13 @@
               "type": "number"
             }
           },
-          "required": ["id", "key", "displayName", "monthlyUsageUnitsPerSeat"],
-          "additionalProperties": false
+          "required": ["id", "key", "displayName", "monthlyUsageUnitsPerSeat"]
         },
         "remainingUsageUnits": {
           "type": "number"
         }
       },
-      "required": ["entitlement"],
-      "additionalProperties": false
+      "required": ["entitlement"]
     },
     "annotations": {
       "title": "Get usage",
@@ -13414,8 +13357,7 @@
               "type": ["string", "null"]
             }
           },
-          "required": ["lawId", "metadata", "analysis", "fullText", "eli"],
-          "additionalProperties": false
+          "required": ["lawId", "metadata", "analysis", "fullText", "eli"]
         },
         "structure": {},
         "data": {
@@ -13479,8 +13421,7 @@
                 "type": "string"
               }
             },
-            "required": ["identificador", "url"],
-            "additionalProperties": false
+            "required": ["identificador", "url"]
           }
         },
         "status": {
@@ -13493,11 +13434,9 @@
               "type": "string"
             }
           },
-          "required": [],
-          "additionalProperties": false
+          "required": []
         }
-      },
-      "additionalProperties": false
+      }
     },
     "annotations": {
       "title": "Search BOE legislation",
@@ -13612,7 +13551,7 @@
               },
               "changes": {},
               "changesStatus": {
-                "enum": [
+                "examples": [
                   "visible",
                   "feature_unavailable",
                   "unrecognized_resource"
@@ -13631,8 +13570,7 @@
               "resource",
               "changes",
               "changesStatus"
-            ],
-            "additionalProperties": false
+            ]
           }
         },
         "limit": {
@@ -13642,8 +13580,7 @@
           "type": ["string", "null"]
         }
       },
-      "required": ["items", "limit", "nextCursor"],
-      "additionalProperties": false
+      "required": ["items", "limit", "nextCursor"]
     },
     "annotations": {
       "title": "List audit log",
@@ -13685,27 +13622,25 @@
               "type": "string"
             }
           },
-          "required": ["memberId"],
-          "additionalProperties": false
+          "required": ["memberId"]
         },
         {
           "type": "object",
           "properties": {
             "applied": {
-              "enum": [true],
+              "examples": [true],
               "type": "boolean"
             },
             "resultOmitted": {
-              "enum": [true],
+              "examples": [true],
               "type": "boolean"
             },
             "reason": {
-              "enum": ["result_too_large"],
+              "examples": ["result_too_large"],
               "type": "string"
             }
           },
-          "required": ["applied", "resultOmitted", "reason"],
-          "additionalProperties": false
+          "required": ["applied", "resultOmitted", "reason"]
         }
       ],
       "type": "object"
@@ -13757,34 +13692,32 @@
           "type": "object",
           "properties": {
             "removed": {
-              "enum": [true],
+              "examples": [true],
               "type": "boolean"
             },
             "id": {
               "type": "string"
             }
           },
-          "required": ["removed", "id"],
-          "additionalProperties": false
+          "required": ["removed", "id"]
         },
         {
           "type": "object",
           "properties": {
             "applied": {
-              "enum": [true],
+              "examples": [true],
               "type": "boolean"
             },
             "resultOmitted": {
-              "enum": [true],
+              "examples": [true],
               "type": "boolean"
             },
             "reason": {
-              "enum": ["result_too_large"],
+              "examples": ["result_too_large"],
               "type": "string"
             }
           },
-          "required": ["applied", "resultOmitted", "reason"],
-          "additionalProperties": false
+          "required": ["applied", "resultOmitted", "reason"]
         }
       ],
       "type": "object"
@@ -13885,7 +13818,7 @@
               "type": "string"
             },
             "managedAIResidency": {
-              "enum": ["eu", "us"],
+              "examples": ["eu", "us"],
               "type": "string"
             },
             "matterNumberPattern": {
@@ -13922,27 +13855,25 @@
               "type": ["string", "null"]
             }
           },
-          "required": [],
-          "additionalProperties": false
+          "required": []
         },
         {
           "type": "object",
           "properties": {
             "applied": {
-              "enum": [true],
+              "examples": [true],
               "type": "boolean"
             },
             "resultOmitted": {
-              "enum": [true],
+              "examples": [true],
               "type": "boolean"
             },
             "reason": {
-              "enum": ["result_too_large"],
+              "examples": ["result_too_large"],
               "type": "string"
             }
           },
-          "required": ["applied", "resultOmitted", "reason"],
-          "additionalProperties": false
+          "required": ["applied", "resultOmitted", "reason"]
         }
       ],
       "type": "object"
@@ -14005,45 +13936,42 @@
               "type": "string"
             },
             "role": {
-              "enum": ["owner"],
+              "examples": ["owner"],
               "type": "string"
             },
             "nextCall": {
               "type": "object",
               "properties": {
                 "command": {
-                  "enum": ["stella auth login"],
+                  "examples": ["stella auth login"],
                   "type": "string"
                 },
                 "instruction": {
                   "type": "string"
                 }
               },
-              "required": ["command", "instruction"],
-              "additionalProperties": false
+              "required": ["command", "instruction"]
             }
           },
-          "required": ["organizationId", "name", "slug", "role", "nextCall"],
-          "additionalProperties": false
+          "required": ["organizationId", "name", "slug", "role", "nextCall"]
         },
         {
           "type": "object",
           "properties": {
             "applied": {
-              "enum": [true],
+              "examples": [true],
               "type": "boolean"
             },
             "resultOmitted": {
-              "enum": [true],
+              "examples": [true],
               "type": "boolean"
             },
             "reason": {
-              "enum": ["result_too_large"],
+              "examples": ["result_too_large"],
               "type": "string"
             }
           },
-          "required": ["applied", "resultOmitted", "reason"],
-          "additionalProperties": false
+          "required": ["applied", "resultOmitted", "reason"]
         }
       ],
       "type": "object"
@@ -14161,11 +14089,11 @@
           "type": "object",
           "properties": {
             "kind": {
-              "enum": ["bug", "idea", "missing_capability", "docs"],
+              "examples": ["bug", "idea", "missing_capability", "docs"],
               "type": "string"
             },
             "area": {
-              "enum": [
+              "examples": [
                 "matters",
                 "documents",
                 "templates",
@@ -14201,7 +14129,7 @@
               "type": "object",
               "properties": {
                 "client": {
-                  "enum": ["mcp", "cli", "web", "desktop", "other"],
+                  "examples": ["mcp", "cli", "web", "desktop", "other"],
                   "type": "string"
                 },
                 "client_version": {
@@ -14217,12 +14145,10 @@
                   "type": "string"
                 }
               },
-              "required": [],
-              "additionalProperties": false
+              "required": []
             }
           },
-          "required": ["kind", "area", "title", "what_happened"],
-          "additionalProperties": false
+          "required": ["kind", "area", "title", "what_happened"]
         },
         "approval_token": {
           "type": "string"
@@ -14246,8 +14172,7 @@
         "redactions",
         "redacted_fields",
         "next_step"
-      ],
-      "additionalProperties": false
+      ]
     },
     "annotations": {
       "title": "Prepare feedback",
@@ -14384,23 +14309,22 @@
                 "type": "object",
                 "properties": {
                   "channel": {
-                    "enum": ["email", "github"],
+                    "examples": ["email", "github"],
                     "type": "string"
                   },
                   "status": {
-                    "enum": ["delivered", "failed"],
+                    "examples": ["delivered", "failed"],
                     "type": "string"
                   },
                   "url": {
                     "type": "string"
                   }
                 },
-                "required": ["channel", "status"],
-                "additionalProperties": false
+                "required": ["channel", "status"]
               }
             },
             "stored": {
-              "enum": [true],
+              "examples": [true],
               "type": "boolean"
             },
             "warning": {
@@ -14417,27 +14341,25 @@
             "deliveries",
             "stored",
             "next_step"
-          ],
-          "additionalProperties": false
+          ]
         },
         {
           "type": "object",
           "properties": {
             "applied": {
-              "enum": [true],
+              "examples": [true],
               "type": "boolean"
             },
             "resultOmitted": {
-              "enum": [true],
+              "examples": [true],
               "type": "boolean"
             },
             "reason": {
-              "enum": ["result_too_large"],
+              "examples": ["result_too_large"],
               "type": "string"
             }
           },
-          "required": ["applied", "resultOmitted", "reason"],
-          "additionalProperties": false
+          "required": ["applied", "resultOmitted", "reason"]
         }
       ],
       "type": "object"
@@ -14514,18 +14436,18 @@
                 "type": ["string", "null"]
               },
               "access": {
-                "enum": ["read", "write"],
+                "examples": ["read", "write"],
                 "type": "string"
               },
               "destructive": {
                 "type": "boolean"
               },
               "confirmation": {
-                "enum": ["required", "not-required"],
+                "examples": ["required", "not-required"],
                 "type": "string"
               },
               "handlerKind": {
-                "enum": ["workspace", "root", "session", "token", "public"],
+                "examples": ["workspace", "root", "session", "token", "public"],
                 "type": "string"
               },
               "transport": {
@@ -14553,8 +14475,7 @@
               "transport",
               "scope",
               "additionalScopes"
-            ],
-            "additionalProperties": false
+            ]
           }
         },
         "nextCursor": {
@@ -14564,8 +14485,7 @@
           "type": "integer"
         }
       },
-      "required": ["items", "nextCursor", "limit"],
-      "additionalProperties": false
+      "required": ["items", "nextCursor", "limit"]
     },
     "annotations": {
       "title": "List capabilities",
@@ -14607,18 +14527,18 @@
           "type": "string"
         },
         "access": {
-          "enum": ["read", "write"],
+          "examples": ["read", "write"],
           "type": "string"
         },
         "destructive": {
           "type": "boolean"
         },
         "confirmation": {
-          "enum": ["required", "not-required"],
+          "examples": ["required", "not-required"],
           "type": "string"
         },
         "handlerKind": {
-          "enum": ["workspace", "root", "session", "token", "public"],
+          "examples": ["workspace", "root", "session", "token", "public"],
           "type": "string"
         },
         "scope": {
@@ -14634,7 +14554,7 @@
           "type": "object",
           "properties": {
             "type": {
-              "enum": ["json", "file-input", "file-response", "file-both"],
+              "examples": ["json", "file-input", "file-response", "file-both"],
               "type": "string"
             },
             "invocable": {
@@ -14670,8 +14590,7 @@
             "fileMediaTypes",
             "responseMediaTypes",
             "alternative"
-          ],
-          "additionalProperties": false
+          ]
         },
         "allowsArchivedWorkspace": {
           "type": "boolean"
@@ -14691,7 +14610,7 @@
           "type": "object",
           "properties": {
             "type": {
-              "enum": ["tool", "covered", "capability"],
+              "examples": ["tool", "covered", "capability"],
               "type": "string"
             },
             "name": {
@@ -14704,8 +14623,7 @@
               "type": "string"
             }
           },
-          "required": ["type"],
-          "additionalProperties": false
+          "required": ["type"]
         },
         "inputSchema": {}
       },
@@ -14725,8 +14643,7 @@
         "permissions",
         "disposition",
         "inputSchema"
-      ],
-      "additionalProperties": false
+      ]
     },
     "annotations": {
       "title": "Describe capability",
@@ -14787,8 +14704,7 @@
       "properties": {
         "result": {}
       },
-      "required": ["result"],
-      "additionalProperties": false
+      "required": ["result"]
     },
     "annotations": {
       "title": "Read capability",
@@ -14856,27 +14772,25 @@
           "properties": {
             "result": {}
           },
-          "required": ["result"],
-          "additionalProperties": false
+          "required": ["result"]
         },
         {
           "type": "object",
           "properties": {
             "applied": {
-              "enum": [true],
+              "examples": [true],
               "type": "boolean"
             },
             "resultOmitted": {
-              "enum": [true],
+              "examples": [true],
               "type": "boolean"
             },
             "reason": {
-              "enum": ["result_too_large"],
+              "examples": ["result_too_large"],
               "type": "string"
             }
           },
-          "required": ["applied", "resultOmitted", "reason"],
-          "additionalProperties": false
+          "required": ["applied", "resultOmitted", "reason"]
         }
       ],
       "type": "object"
@@ -14918,27 +14832,25 @@
               "type": "string"
             }
           },
-          "required": ["url"],
-          "additionalProperties": false
+          "required": ["url"]
         },
         {
           "type": "object",
           "properties": {
             "applied": {
-              "enum": [true],
+              "examples": [true],
               "type": "boolean"
             },
             "resultOmitted": {
-              "enum": [true],
+              "examples": [true],
               "type": "boolean"
             },
             "reason": {
-              "enum": ["result_too_large"],
+              "examples": ["result_too_large"],
               "type": "string"
             }
           },
-          "required": ["applied", "resultOmitted", "reason"],
-          "additionalProperties": false
+          "required": ["applied", "resultOmitted", "reason"]
         }
       ],
       "type": "object"

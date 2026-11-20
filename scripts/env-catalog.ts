@@ -93,6 +93,7 @@ const INTERNAL_SERVER_KEYS = new Set([
   "DATA_INVARIANT_CASE_LAW_CANARIES",
   "DATA_INVARIANT_CASE_LAW_DAILY_BANDS",
   "AGENT_CLIENT_STORAGE_V1_ENABLED",
+  "SOFT_LAW_SYNC_ENABLED",
   "AGENT_SANDBOX_DOCKER_NETWORK",
   "AGENT_SANDBOX_DOCKER_SOCKET",
   "AGENT_SANDBOX_HARNESS_BASE_URL",
@@ -126,6 +127,7 @@ const INTERNAL_SERVER_KEYS = new Set([
   "CASE_LAW_REPLAY_ENABLED",
   "CASE_LAW_REPLAY_KILL_SWITCH",
   "CASE_LAW_REPLAY_DISABLED_SOURCES",
+  "SOFT_LAW_FULL_TEXT_PERMITTED_SOURCES",
   "KILL_SWITCHES",
   "PUBLIC_LAW_DATABASE_POOL_MAX",
   "PUBLIC_CORPUS_RESERVED_CONNECTIONS",
@@ -167,12 +169,14 @@ const INTERNAL_SERVER_KEYS = new Set([
   "FEATURE_ACTION_ADMISSION",
   "FEATURE_AGENT_ID_JAG",
   "FEATURE_AI_MEMORY",
+  "FEATURE_CHAT_TURN_HANDOVER",
   "FEATURE_CONFLICT_CHECK",
   "FEATURE_FILE_USAGE_LIMITS",
   "FEATURE_FREE_TIER",
   "FEATURE_GOVERNED_WORKFLOW",
   "FEATURE_GENERATED_VIEWS",
   "FEATURE_INBOX_DOCUMENT_SCOUTS",
+  "FEATURE_INVOICE_LINKS",
   "FEATURE_LEGAL_LISTS",
   "FEATURE_MANAGED_PROVIDER_CHECKS",
   "FEATURE_MCP_READ_FENCE",
@@ -377,6 +381,8 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
     "Stop background case-law replay at the next batch boundary. Defaults to false.",
   CASE_LAW_REPLAY_DISABLED_SOURCES:
     "Comma-separated adapter keys excluded from background case-law replay.",
+  SOFT_LAW_FULL_TEXT_PERMITTED_SOURCES:
+    "Comma-separated regulator guidance sources whose publisher has permitted full-text reuse; each must be a source served as a listing pending that permission.",
   KILL_SWITCHES:
     'Operator kill-switch overrides: a JSON object of switch id to "on" or "off", such as {"chat":"off"}. A switched-off feature refuses new work with a typed "turned off" refusal; restarting the running build applies a change. Switch ids live in apps/api/src/lib/kill-switches/registry.ts; an unknown id or state refuses startup.',
   UNUSED_CLIENT_RETENTION_DAYS:
@@ -389,6 +395,8 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
     "Retention in days for completed provider event details; unset disables redaction.",
   AGENT_CLIENT_STORAGE_V1_ENABLED:
     "Enable the shared agent client storage format.",
+  SOFT_LAW_SYNC_ENABLED:
+    "Enable the daily regulator guidance sync for sources with a serving decision.",
   ACTION_LIMIT_CONTACT_URL:
     "Public http(s) contact link shown when an action is paused or not enabled.",
   AGENT_SANDBOX_DOCKER_NETWORK:
@@ -523,10 +531,14 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
     "S3 bucket the SES receipt rule stores raw messages in, in S3_REGION.",
   INBOUND_MAIL_KEY_PREFIX:
     "Object key prefix of the SES receipt rule's S3 action, for example mail/.",
+  FEATURE_CHAT_TURN_HANDOVER:
+    "Release each local chat turn to another API task when this one stops, instead of ending it. Defaults off; enable only once every task runs a release that adopts released turns.",
   FEATURE_AI_MEMORY:
     "Enable tenant-scoped AI memory APIs, prompt retrieval, tools, and workers.",
   FEATURE_INBOX_DOCUMENT_SCOUTS:
     "Enable model-backed inbox producers that read processed documents and review runs.",
+  FEATURE_INVOICE_LINKS:
+    "Kill switch for sending and opening invoice links. Off by default, including local development; also requires the organization invoice-links invitation grant and time-billing access. History and revocation use normal invoice access.",
   FEATURE_GOVERNED_WORKFLOW:
     "Enable governed work obligations and task workflow semantics.",
   FEATURE_LEGAL_LISTS:
@@ -534,7 +546,7 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
   API_FEATURE_ACCESS_GRANTS_SSM_PARAMETER_NAME:
     "Parameter Store name holding API_FEATURE_ACCESS_GRANTS. When set, the API checks the parameter version every minute and reloads the grants only when it changed; unset keeps the grants read at startup.",
   API_FEATURE_ACCESS_GRANTS:
-    "Operator-owned JSON object keyed by registered feature id. Member grants specify type, organizationId, and email; organization grants specify type and organizationId. Both require current membership and verified email. Unknown feature ids reject startup; empty grants hide invitation features.",
+    "Operator-owned JSON object keyed by registered feature id. Member grants specify type, organizationId, and email; organization grants specify type and organizationId. Authenticated decisions require current membership and verified email. Invoice-links accepts only organization grants and requires its deployment flag; public recipients use the invoice organization decision. Unknown feature ids are dropped with an error count; empty grants hide invitation features.",
   FEATURE_ORG_ACCESS_STATE:
     "Enforce the per-organization access state before a model call falls back to the instance provider.",
   FEATURE_FREE_TIER:
@@ -818,6 +830,7 @@ export const ENV_CREDENTIAL_CLASSIFICATION = {
   ACTION_REQUEST_MAX_BYTES: ENV_CREDENTIAL_KIND.notCredential,
   ACTION_RESPONSE_MAX_BYTES: ENV_CREDENTIAL_KIND.notCredential,
   AGENT_CLIENT_STORAGE_V1_ENABLED: ENV_CREDENTIAL_KIND.notCredential,
+  SOFT_LAW_SYNC_ENABLED: ENV_CREDENTIAL_KIND.notCredential,
   AGENT_REGISTRATION_DAILY_LIMIT: ENV_CREDENTIAL_KIND.notCredential,
   AGENT_SANDBOX_DOCKER_NETWORK: ENV_CREDENTIAL_KIND.notCredential,
   AGENT_SANDBOX_DOCKER_SOCKET: ENV_CREDENTIAL_KIND.notCredential,
@@ -908,6 +921,7 @@ export const ENV_CREDENTIAL_CLASSIFICATION = {
   API_FEATURE_ACCESS_GRANTS_SSM_PARAMETER_NAME:
     ENV_CREDENTIAL_KIND.notCredential,
   FEATURE_ACTION_ADMISSION: ENV_CREDENTIAL_KIND.notCredential,
+  FEATURE_CHAT_TURN_HANDOVER: ENV_CREDENTIAL_KIND.notCredential,
   FEATURE_ACTION_COST_RECORDS: ENV_CREDENTIAL_KIND.notCredential,
   FEATURE_AGENT_ID_JAG: ENV_CREDENTIAL_KIND.notCredential,
   FEATURE_AI_MEMORY: ENV_CREDENTIAL_KIND.notCredential,
@@ -918,6 +932,7 @@ export const ENV_CREDENTIAL_CLASSIFICATION = {
   FEATURE_GOVERNED_WORKFLOW: ENV_CREDENTIAL_KIND.notCredential,
   FEATURE_GENERATED_VIEWS: ENV_CREDENTIAL_KIND.notCredential,
   FEATURE_INBOX_DOCUMENT_SCOUTS: ENV_CREDENTIAL_KIND.notCredential,
+  FEATURE_INVOICE_LINKS: ENV_CREDENTIAL_KIND.notCredential,
   FEATURE_LEGAL_LISTS: ENV_CREDENTIAL_KIND.notCredential,
   FEATURE_MANAGED_PROVIDER_CHECKS: ENV_CREDENTIAL_KIND.notCredential,
   FEATURE_MCP_READ_FENCE: ENV_CREDENTIAL_KIND.notCredential,
@@ -1068,6 +1083,7 @@ export const ENV_CREDENTIAL_CLASSIFICATION = {
   SMTP_PASSWORD: ENV_CREDENTIAL_KIND.credential,
   SMTP_PORT: ENV_CREDENTIAL_KIND.notCredential,
   SMTP_USERNAME: ENV_CREDENTIAL_KIND.notCredential,
+  SOFT_LAW_FULL_TEXT_PERMITTED_SOURCES: ENV_CREDENTIAL_KIND.notCredential,
   STELLA_ANNOUNCEMENT_OPERATOR_USER_IDS: ENV_CREDENTIAL_KIND.notCredential,
   STELLA_API_PORT: ENV_CREDENTIAL_KIND.notCredential,
   STELLA_API_URL: ENV_CREDENTIAL_KIND.notCredential,
@@ -1409,6 +1425,7 @@ export const MANUAL_SCHEMA_KEYS = new Set([
   "HOME",
   "MAX_CONCURRENT_ADAPTER_CYCLES",
   "MAX_CONCURRENT_DB_WRITES",
+  "PROD",
   "RECONCILIATION_FETCH_DELAY_MS",
   "SK_DOCUMENT_BACKFILL_ENABLED",
   "SK_DOCUMENT_FETCH_DELAY_MS",
@@ -1536,6 +1553,8 @@ export const TOOLING_ENV_KEYS = new Set([
   "APPLE_SIGNING_IDENTITY",
   // The ignored SoftHSM2 test of the PKCS #11 helper names the module to load.
   "SOFTHSM2_MODULE",
+  // The desktop transcribe-window browser test saves its screenshots here when set.
+  "TRANSCRIBE_SCREENSHOTS",
   "MOBILE_BUILD_NUMBER",
   "MOBILE_PROFILE_UUID",
   "MOBILE_WIDGETS_PROFILE_UUID",
@@ -1549,6 +1568,10 @@ export const TOOLING_ENV_KEYS = new Set([
   "FAKE_SKILL_PATH",
   // The pause between a paced fake Codex scenario's outputs.
   "FAKE_CODEX_PACE_MS",
+  // The run folder and an unreadable folder the fake ACP agent names in the
+  // paths of its tool calls and permission requests.
+  "FAKE_ACP_WORKSPACE",
+  "FAKE_ACP_UNREADABLE",
   // The local stack's stand-in computer (`agent:up -- --local-runner`) logs
   // at the level this filter names.
   "RUST_LOG",
@@ -1764,6 +1787,10 @@ export const TOOLING_ENV_KEYS = new Set([
   "E2E_LANDING_URL",
   "E2E_NETWORK_BASELINE",
   "E2E_OUTPUT_DIR",
+  // Nightly route-scale workflow: also walk the small and large matters.
+  "E2E_ROUTE_SCALE",
+  // Playwright coordinator token persists isolated route worlds across worker replacement.
+  "E2E_ROUTE_SMOKE_RUN_ID",
   "E2E_SOAK_REPLAY",
   "E2E_SOAK_SEED",
   "E2E_SOAK_STEPS",
@@ -1783,6 +1810,8 @@ export const TOOLING_ENV_KEYS = new Set([
   "SERVED_MCP_API_PORT",
   "HEAD_SHA",
   "HEAVY_ONLY",
+  // The dispatched cancel-after-job run: the failed job it waits for.
+  "JOB_ID",
   // Scheduled journey checks: endpoint overrides, bounded request/retry timing,
   // and the clock and busy windows file the coverage check reads (fixtures pin them).
   "JOURNEY_BUSY_WINDOWS_FILE",
@@ -1924,6 +1953,8 @@ export const TOOLING_ENV_KEYS = new Set([
   "RETRY_PASSTHROUGH_EXIT_CODES",
   // Credential used only by the restricted account canary.
   "REVIEW_ACCOUNT_PASSWORD",
+  // The dispatched cancel-after-job run: the run attempt whose job failed.
+  "RUN_ATTEMPT",
   "RUN_ID",
   // Nightly issue reporter: workflow run linked from the failure issue.
   "RUN_URL",

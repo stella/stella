@@ -2,8 +2,11 @@ import { afterAll, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
-const script = new URL("main-pr-depth-green-base.sh", import.meta.url).pathname;
+const script = fileURLToPath(
+  new URL("main-pr-depth-green-base.sh", import.meta.url),
+);
 const REPOSITORY = "example/repository";
 const RUNS = `https://github.com/${REPOSITORY}/actions/runs/`;
 const roots: string[] = [];

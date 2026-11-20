@@ -1,5 +1,40 @@
 # @stll/workspace-ui
 
+## 0.20.0
+
+### Minor Changes
+
+- [#8963](https://github.com/stella/stella/pull/8963) [`c2cddf2`](https://github.com/stella/stella/commit/c2cddf2c635ac648c258913fc9c51d2d4fa9d225) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Light modules for loading views drawn before the page mounts. `@stll/ui/truncated-text-face` holds `TruncatedTextFace` and the line classes `TruncatedText` is built from, with no tooltip or popover. `@stll/ui/view-toolbar-shell` holds `ViewChromeBar` and `ViewToolbarChrome`, which `@stll/ui/view-toolbar` re-exports. `@stll/workspace-ui/view-strip` holds the view strip, its tab face and `WorkspaceViewSwitcherFace`, whose tab names are now faces with no hint; `@stll/workspace-ui/view-switcher-face` re-exports them beside `WorkspaceViewTabName`. A strip's `direction` is optional and follows the document when left out.
+
+- [#8894](https://github.com/stella/stella/pull/8894) [`a6c1f0f`](https://github.com/stella/stella/commit/a6c1f0fb49c74499b19c1e2d8c9e7fbe210a3517) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add `@stll/workspace-ui/view-switcher-face`: `WorkspaceViewSwitcherFace` draws the saved-view strip without its behaviour, for a loading view, and `WorkspaceViewStrip` and `WorkspaceViewTabFace` are the row and tab both switchers share.
+
+### Patch Changes
+
+- [#8880](https://github.com/stella/stella/pull/8880) [`1f4ee37`](https://github.com/stella/stella/commit/1f4ee37011a600e45f2c4b4204ac25688e5a372f) Thanks [@dependabot](https://github.com/apps/dependabot)! - Update `tldts` to `7.5.2`.
+  Update `lucide-react` to `1.72.0`.
+  Update `use-intl` to `4.15.1`.
+- Updated dependencies [[`86022ca`](https://github.com/stella/stella/commit/86022ca85d6a2d92a262628f29d720d5a0e1eb03), [`f8831e4`](https://github.com/stella/stella/commit/f8831e47629b27bdcaf4041f19b8196b6d30dab5), [`3d7121a`](https://github.com/stella/stella/commit/3d7121a5dfe6b34b74729dea7157b33f0a5d171a), [`1f4ee37`](https://github.com/stella/stella/commit/1f4ee37011a600e45f2c4b4204ac25688e5a372f), [`b261ece`](https://github.com/stella/stella/commit/b261ece00959cc1349dec67471de4b46e2009fec), [`6709183`](https://github.com/stella/stella/commit/67091834bf8af1291247c7be3f5540d311167ead), [`1f24eba`](https://github.com/stella/stella/commit/1f24eba240c916800932ff33c288521f32b539e3), [`e82f6b6`](https://github.com/stella/stella/commit/e82f6b6a289f2a9e6d01f60b5f7cacb29ce57d1c), [`c2cddf2`](https://github.com/stella/stella/commit/c2cddf2c635ac648c258913fc9c51d2d4fa9d225), [`f6360bf`](https://github.com/stella/stella/commit/f6360bff82e3a13fcaa16dc85db2097f1300c9c9), [`efaf23f`](https://github.com/stella/stella/commit/efaf23fe907e7596cc676851985b4a90f9882e57), [`c2cddf2`](https://github.com/stella/stella/commit/c2cddf2c635ac648c258913fc9c51d2d4fa9d225)]:
+  - @stll/ui@0.76.0
+
+## 0.19.0
+
+### Minor Changes
+
+- [#8846](https://github.com/stella/stella/pull/8846) [`e8aa798`](https://github.com/stella/stella/commit/e8aa7988f19952963102e45c4a95af1005045437) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `WorkspaceShell` takes an optional `skipToContentLabel`. When set, the shell renders a visually hidden skip link as its first tab stop that moves focus to the main region. `WorkspaceFrame` passes it through in the `host-responsive` composition.
+
+### Patch Changes
+
+- [#8618](https://github.com/stella/stella/pull/8618) [`e229034`](https://github.com/stella/stella/commit/e22903462cf3734c29b0a97f2f48dc3023e758c8) Thanks [@dependabot](https://github.com/apps/dependabot)! - Ship with the refreshed catalog dependencies: lucide-react 1.71.0 for `@stll/ui` and use-intl 4.14.10 for `@stll/workspace-ui`.
+- Updated dependencies [[`9083d12`](https://github.com/stella/stella/commit/9083d12e2b853c009066c81117fea294e3b548dc), [`9e0fd52`](https://github.com/stella/stella/commit/9e0fd526ef113a0ccf90546b8ef92ea5fff36318), [`e229034`](https://github.com/stella/stella/commit/e22903462cf3734c29b0a97f2f48dc3023e758c8), [`54d4095`](https://github.com/stella/stella/commit/54d409572d79298687864e424ed8dd555ea075e2), [`0dad4da`](https://github.com/stella/stella/commit/0dad4da417b4a99c6141363e2c05a757a314fb72), [`7c534ed`](https://github.com/stella/stella/commit/7c534ed29c09e58efc43fcb3d985941eb52e12b6), [`e8aa798`](https://github.com/stella/stella/commit/e8aa7988f19952963102e45c4a95af1005045437)]:
+  - @stll/ui@0.75.0
+
+## 0.18.4
+
+### Patch Changes
+
+- Updated dependencies [[`178d3f9`](https://github.com/stella/stella/commit/178d3f9f9007de5933b40fd76f8bbaaf65ad089f), [`d8eea73`](https://github.com/stella/stella/commit/d8eea7352a0a6cdeac6498e6231a17818e8cd2d2), [`f6d0e9c`](https://github.com/stella/stella/commit/f6d0e9c9d9966961d52a3d8038a253193632ef2b), [`b1ce389`](https://github.com/stella/stella/commit/b1ce389d73729179bd174166e78499310331479e), [`6359411`](https://github.com/stella/stella/commit/6359411768fbe352d04d63ead41386de9e70137b), [`b9120cd`](https://github.com/stella/stella/commit/b9120cd4f32b6019e3e1db42309ac50960badf2f)]:
+  - @stll/ui@0.74.0
+
 ## 0.18.3
 
 ### Patch Changes

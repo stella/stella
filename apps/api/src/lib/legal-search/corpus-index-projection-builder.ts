@@ -20,6 +20,8 @@ import {
 import type { CorpusDocumentPayload } from "@/api/lib/corpus-index/core";
 import { CASE_LAW_RANKING_SIGNAL_FIELDS } from "@/api/lib/legal-search/case-law-ranking-signals";
 import {
+  type DECISION_TERMS_FIELD,
+  type DECISION_TERMS_PARTIAL_FIELD,
   type PROJECTION_GENERATION_FIELD,
   PROVISION_KEYS_FIELD,
   UNDATED_DECISION_TIMESTAMP,
@@ -30,11 +32,14 @@ import {
   requireCourtPartitionIdentity,
 } from "@/api/lib/legal-search/corpus-index-group-contract";
 import {
+  type CorpusIndexDecisionTerms,
+  corpusIndexDecisionTerms,
   corpusIndexGenerationField,
   type CorpusIndexManifest,
   type CorpusIndexPublisherFields,
   corpusIndexPublisherFields,
   corpusIndexRankingSignals,
+  type CorpusIndexStemFields,
   corpusIndexStemFields,
 } from "@/api/lib/legal-search/corpus-index-manifest";
 import {
@@ -46,7 +51,12 @@ import {
   CORPUS_PROJECTION_APPEND_MAX_REVISION_BYTES,
   CORPUS_PROJECTION_APPEND_MAX_SINGLE_REVISION_BYTES,
 } from "@/api/lib/legal-search/corpus-index-projection-engine";
-import { documentMorphologyLanguage } from "@/api/lib/legal-search/morphology/corpus-language";
+import { corpusTokens } from "@/api/lib/legal-search/corpus-tokens";
+import {
+  type CaseLawDocumentLanguageUndeclaredError,
+  caseLawDocumentStemLanguage,
+} from "@/api/lib/legal-search/morphology/corpus-language";
+import type { MorphologyLanguage } from "@/api/lib/legal-search/morphology/stem";
 import { stemCorpusText } from "@/api/lib/legal-search/morphology/stem-text";
 import { LIMITS } from "@/api/lib/limits";
 
@@ -80,6 +90,8 @@ type CaseLawProjectionDocument = SharedProjectionDocument & {
   keywords?: string;
   text_stem?: string;
   headnote_stem?: string;
+  [DECISION_TERMS_FIELD]?: string;
+  [DECISION_TERMS_PARTIAL_FIELD]?: true;
 } & RankingSignalFields;
 
 /** What a generation carrying ranking signals writes on every passage. */
@@ -275,12 +287,197 @@ const rankingSignalFields = (
   };
 };
 
-export const buildCaseLawProjectionDocuments = ({
+/**
+ * How a decision's terms were written, for a generation that maps them:
+ * whole, or as a prefix cut at a term boundary because the whole would not
+ * fit the engine's document ceiling (`document`) or the revision's (`revision`).
+ * `form` says whether they are stems or surface tokens. Bytes are the UTF-8
+ * bytes of the space-joined terms.
+ */
+type CaseLawDecisionTermsOutcome =
+  | { kind: "not_mapped" }
+  | { kind: "whole"; form: DecisionTermsForm; bytes: number }
+  | { kind: "opening_over_ceiling"; form: DecisionTermsForm; bytes: number }
+  | {
+      kind: "prefix";
+      form: DecisionTermsForm;
+      bytes: number;
+      writtenBytes: number;
+      ceiling: "document" | "revision";
+    };
+
+type DecisionTermsForm = "stems" | "surface";
+
+export type CaseLawProjection = {
+  documents: CaseLawProjectionDocument[];
+  decisionTerms: CaseLawDecisionTermsOutcome;
+};
+
+const serializedLineBytes = (document: CaseLawProjectionDocument): number =>
+  Buffer.byteLength(JSON.stringify(document), "utf-8");
+
+/**
+ * The longest prefix of `terms`, cut at a term boundary, whose JSON string
+ * content fits `budget` bytes. Measured per term as the engine receives it
+ * (escaped, UTF-8), so the cut holds for any character a term may carry.
+ */
+const termsPrefixWithin = (terms: string, budget: number): string => {
+  let used = 0;
+  let end = 0;
+  for (const term of terms.split(" ")) {
+    const termBytes =
+      Buffer.byteLength(JSON.stringify(term), "utf-8") - 2 + (end > 0 ? 1 : 0);
+    if (used + termBytes > budget) {
+      break;
+    }
+    used += termBytes;
+    end += (end > 0 ? 1 : 0) + term.length;
+  }
+  return terms.slice(0, end);
+};
+
+/**
+ * The opening passage with the decision's terms on it, whole when they fit
+ * both ceilings the append planner enforces (one document, one revision), and
+ * otherwise as the longest prefix that does, marked partial. Never a refusal:
+ * a decision too long for the field keeps every word in its passages, and
+ * keeps the rest of its generation, rather than dropping out of it.
+ */
+const withDecisionTerms = (
+  documents: CaseLawProjectionDocument[],
+  field: CorpusIndexDecisionTerms,
+  terms: string,
+  form: DecisionTermsForm,
+): CaseLawProjection => {
+  const [opening, ...rest] = documents;
+  const bytes = Buffer.byteLength(terms, "utf-8");
+  if (opening === undefined || terms === "") {
+    return { documents, decisionTerms: { kind: "whole", form, bytes } };
+  }
+  const restBytes = rest.reduce(
+    (total, document) => total + serializedLineBytes(document) + 1,
+    0,
+  );
+  const fits = (document: CaseLawProjectionDocument): boolean => {
+    const line = serializedLineBytes(document);
+    return (
+      line <= CORPUS_PROJECTION_APPEND_MAX_SINGLE_REVISION_BYTES &&
+      restBytes + line + 1 <= CORPUS_PROJECTION_APPEND_MAX_REVISION_BYTES
+    );
+  };
+  const whole = { ...opening, [field.field]: terms };
+  if (fits(whole)) {
+    return {
+      documents: [whole, ...rest],
+      decisionTerms: { kind: "whole", form, bytes },
+    };
+  }
+  // An opening passage over a ceiling before any terms are added cannot be
+  // helped by a prefix. Its documents go out as they are, and the append
+  // planner refuses the revision as too large, as for every generation, which
+  // blocks this revision alone.
+  if (!fits({ ...opening, [field.partialField]: true as const })) {
+    return {
+      documents,
+      decisionTerms: { kind: "opening_over_ceiling", form, bytes },
+    };
+  }
+  const marked = {
+    ...opening,
+    [field.field]: "",
+    [field.partialField]: true as const,
+  };
+  const markedBytes = serializedLineBytes(marked);
+  const documentRoom =
+    CORPUS_PROJECTION_APPEND_MAX_SINGLE_REVISION_BYTES - markedBytes;
+  const revisionRoom =
+    CORPUS_PROJECTION_APPEND_MAX_REVISION_BYTES - restBytes - markedBytes - 1;
+  const prefix = termsPrefixWithin(
+    terms,
+    Math.max(0, Math.min(documentRoom, revisionRoom)),
+  );
+  const partial =
+    prefix === ""
+      ? { ...opening, [field.partialField]: true as const }
+      : { ...marked, [field.field]: prefix };
+  if (!fits(partial)) {
+    return panic("Decision terms prefix exceeds the ceiling it was cut to");
+  }
+  return {
+    documents: [partial, ...rest],
+    decisionTerms: {
+      kind: "prefix",
+      form,
+      bytes,
+      writtenBytes: Buffer.byteLength(prefix, "utf-8"),
+      ceiling: documentRoom <= revisionRoom ? "document" : "revision",
+    },
+  };
+};
+
+/**
+ * Collects each passage's terms, in order: its stems where the language has a
+ * stemmer, its surface tokens otherwise. Passages do not overlap, so their
+ * terms joined are the decision's. A generation that maps no field for them
+ * collects nothing.
+ */
+const decisionTermsCollector = (field: CorpusIndexDecisionTerms | null) => {
+  const passageTerms: string[] = [];
+  return {
+    add: (text: string, textStem: string | null): void => {
+      if (field !== null) {
+        passageTerms.push(textStem ?? corpusTokens(text).join(" "));
+      }
+    },
+    finish: (
+      documents: CaseLawProjectionDocument[],
+      stemmed: boolean,
+    ): CaseLawProjection =>
+      field === null
+        ? { documents, decisionTerms: { kind: "not_mapped" } }
+        : withDecisionTerms(
+            documents,
+            field,
+            passageTerms.filter((terms) => terms !== "").join(" "),
+            stemmed ? "stems" : "surface",
+          ),
+  };
+};
+
+/**
+ * The stem fields a decision writes and the language it stems them under, or
+ * null where the generation maps none or the language has no stemmer.
+ *
+ * Stems come from the decision's own language, not its jurisdiction: an
+ * index group spans several countries and the European index holds 24
+ * languages. The language must be one its jurisdiction declares, because the
+ * read side asks each jurisdiction's documents in those languages only. The
+ * public builder refuses one it does not declare with the typed error the
+ * revision build blocks under its own failure kind, before building, so here
+ * it is a caller's defect. A language with no stemmer writes no stem fields
+ * at all, rather than a copy of the surface text under a stem name.
+ */
+const caseLawProjectionStemming = (
+  manifest: BuildCaseLawOptions["manifest"],
+  input: BuildCaseLawOptions["input"],
+): { fields: CorpusIndexStemFields; language: MorphologyLanguage } | null => {
+  const declared = caseLawDocumentStemLanguage(input);
+  if (declared.isErr()) {
+    return panic(declared.error.message, declared.error);
+  }
+  const fields = corpusIndexStemFields(manifest);
+  return fields === null || declared.value === null
+    ? null
+    : { fields, language: declared.value };
+};
+
+/** A case-law decision's documents and how its terms were written. */
+export const buildCaseLawProjection = ({
   manifest,
   input,
   payload,
   revision,
-}: BuildCaseLawOptions): CaseLawProjectionDocument[] => {
+}: BuildCaseLawOptions): CaseLawProjection => {
   if (
     input.decisionDate !== null &&
     !CASE_LAW_DECISION_DATE_PATTERN.test(input.decisionDate)
@@ -310,16 +507,7 @@ export const buildCaseLawProjectionDocuments = ({
     documentAst: ast,
     metadata: input.metadata,
   });
-  // Stems come from the decision's own language, not its jurisdiction: an
-  // index group spans several countries and a court may publish in more than
-  // one language. A language with no stemmer writes no stem fields at all,
-  // rather than a copy of the surface text under a stem name.
-  const stemFields = corpusIndexStemFields(manifest);
-  const stemLanguage = documentMorphologyLanguage(input.language);
-  const stemmed =
-    stemFields === null || stemLanguage === null
-      ? null
-      : { fields: stemFields, language: stemLanguage };
+  const stemmed = caseLawProjectionStemming(manifest, input);
   const summaryStem =
     stemmed === null || publisher.summary === null
       ? null
@@ -330,12 +518,16 @@ export const buildCaseLawProjectionDocuments = ({
     manifest.engine.indexConfig.doc_mapping.field_mappings.some(
       ({ name }) => name === "chunk_id",
     );
+  const decisionTerms = decisionTermsCollector(
+    corpusIndexDecisionTerms(manifest),
+  );
   const documents: CaseLawProjectionDocument[] = [];
   for (const chunk of chunks) {
     // Source-supplied plain text and fallback text can bypass inline projection.
     const text = normalizeNumericIndices(chunk.text);
     const textStem =
       stemmed === null ? null : stemCorpusText(text, stemmed.language);
+    decisionTerms.add(text, textStem);
     documents.push({
       ...shared,
       ...signals,
@@ -372,8 +564,12 @@ export const buildCaseLawProjectionDocuments = ({
       ...(chunk.anchorId === null ? {} : { anchor_id: chunk.anchorId }),
     });
   }
-  return documents;
+  return decisionTerms.finish(documents, stemmed !== null);
 };
+
+export const buildCaseLawProjectionDocuments = (
+  options: BuildCaseLawOptions,
+): CaseLawProjectionDocument[] => buildCaseLawProjection(options).documents;
 
 type BuildLegislationV2Options = ProjectionBuildBase & {
   input: LegislationV2ProjectionInput;
@@ -513,9 +709,16 @@ export const buildLegislationV2ProjectionDocuments = ({
 
 export const buildCorpusProjectionDocuments = (
   options: BuildCorpusProjectionDocumentsOptions,
-): Result<Record<string, unknown>[], ChunkBudgetError> => {
+): Result<
+  Record<string, unknown>[],
+  ChunkBudgetError | CaseLawDocumentLanguageUndeclaredError
+> => {
   switch (options.family) {
-    case "case_law":
+    case "case_law": {
+      const language = caseLawDocumentStemLanguage(options.input);
+      if (language.isErr()) {
+        return Result.err(language.error);
+      }
       return Result.try({
         try: () =>
           buildCaseLawProjectionDocuments({
@@ -531,6 +734,7 @@ export const buildCorpusProjectionDocuments = (
           return panic("Case-law projection builder failed unexpectedly");
         },
       });
+    }
     case "legislation":
       return buildLegislationV2ProjectionDocuments({
         input: options.input,

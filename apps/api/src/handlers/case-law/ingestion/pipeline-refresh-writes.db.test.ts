@@ -586,6 +586,7 @@ test("a stale equal fingerprint advances its version once without rewriting", as
             metadataUrlSchema: undefined,
             sourceFingerprintVersion: 1,
             statedEcliIdentity: STATED_ECLI_IDENTITY.NONE,
+            heldDecisionAttachment: null,
             retention: sourceRetentionForAdapter("refresh-writes-fixture"),
           }),
       )
@@ -632,6 +633,7 @@ test("a stale equal hash without stored raw follows the changed path", async () 
           metadataUrlSchema: undefined,
           sourceFingerprintVersion: 1,
           statedEcliIdentity: STATED_ECLI_IDENTITY.NONE,
+          heldDecisionAttachment: null,
           retention: sourceRetentionForAdapter("refresh-writes-fixture"),
         }),
     )
@@ -671,6 +673,7 @@ test("a stale unequal fingerprint follows the changed path", async () => {
           metadataUrlSchema: undefined,
           sourceFingerprintVersion: 1,
           statedEcliIdentity: STATED_ECLI_IDENTITY.NONE,
+          heldDecisionAttachment: null,
           retention: sourceRetentionForAdapter("refresh-writes-fixture"),
         }),
     )
@@ -710,6 +713,7 @@ test("an unavailable stale stored source follows the changed path", async () => 
           metadataUrlSchema: undefined,
           sourceFingerprintVersion: 1,
           statedEcliIdentity: STATED_ECLI_IDENTITY.NONE,
+          heldDecisionAttachment: null,
           retention: sourceRetentionForAdapter("refresh-writes-fixture"),
         }),
     )
@@ -752,6 +756,7 @@ test("a forced refresh does not read a stale stored source", async () => {
           metadataUrlSchema: undefined,
           sourceFingerprintVersion: 1,
           statedEcliIdentity: STATED_ECLI_IDENTITY.NONE,
+          heldDecisionAttachment: null,
           retention: sourceRetentionForAdapter("refresh-writes-fixture"),
         }),
     )
@@ -791,6 +796,7 @@ test("unchanged fixture bytes recompute a stale fingerprint without rewriting", 
           metadataUrlSchema: undefined,
           sourceFingerprintVersion: 1,
           statedEcliIdentity: STATED_ECLI_IDENTITY.NONE,
+          heldDecisionAttachment: null,
           retention: sourceRetentionForAdapter("refresh-writes-fixture"),
         }),
     )
@@ -918,7 +924,7 @@ test("a payload replaced between the read and the write is planned again", async
   expect(transferred.length).toBeGreaterThan(packsBefore);
 });
 
-test("a directory jurisdiction's decision is written with its court id, and every other without one", async () => {
+test("a directory jurisdiction's decision is written with the court id it states, and a printed-name one with the id its court reads as", async () => {
   const usa = (rawHash: string): IngestionResult =>
     plainTextIngestionResult({
       ...withDocument("No. 19-1392", rawHash),
@@ -941,7 +947,7 @@ test("a directory jurisdiction's decision is written with its court id, and ever
   await ingest(usa("page-v1"), canonical);
   await ingest(withDocument("30 Cdo 900/2024", "page-v1"), canonical);
   expect(await courtIdOf("No. 19-1392")).toEqual(["scotus"]);
-  expect(await courtIdOf("30 Cdo 900/2024")).toEqual([null]);
+  expect(await courtIdOf("30 Cdo 900/2024")).toEqual(["NS"]);
   const usaRow = await storedRow("No. 19-1392");
   const czechRow = await storedRow("30 Cdo 900/2024");
   expect(await citationHeaders(usaRow.id)).toHaveLength(0);

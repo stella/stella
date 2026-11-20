@@ -1,0 +1,202 @@
+1. A blocked prompt (promptFeedback with no candidate) finishes as
+   content_filter instead of ending with no terminal event.
+2. A stream with no finish reason ends in a RUN_ERROR (code
+   incomplete-stream) instead of no terminal event, and the chat stream's
+   RUN_ERROR carries the latest usageMetadata the stream reported.
+   Upstream PR to be opened for 1-2; remove when released.
+3. The terminal event carries the candidate's finishReason as
+   metadata.providerStopReason, so the service decides every finish reason from
+   the SDK's union (apps/api/src/lib/chat/provider-stop-reasons.ts) instead
+   of reading an unhandled one as "stop". Remove when upstream exposes the
+   raw reason.
+
+4. structuredOutput preserves the original SDK exception (including status and
+   cause) instead of rebuilding a plain Error from its message. Remove when
+   upstream preserves the exception.
+5. Register gemini-4-neon, gemini-4-hydrogen and gemini-4-carbon with the
+   metadata of their sibling Gemini 4 Argon, so the adapter knows their input
+   modalities, and give Gemini 4 (Argon included) low to high reasoning.
+   Remove when upstream lists these models.
+
+
+diff --git a/dist/esm/adapters/text.js b/dist/esm/adapters/text.js
+index ea13923..021e375 100644
+--- a/dist/esm/adapters/text.js
++++ b/dist/esm/adapters/text.js
+@@ -430,7 +430,7 @@ var GeminiTextAdapter = class extends BaseTextAdapter {
+ 				error,
+ 				source: "gemini.structuredOutput"
+ 			});
+-			throw Object.assign(new Error(error instanceof Error ? error.message : "An unknown error occurred during structured output generation."), usage && { usage });
++			throw Object.assign(error instanceof Error ? error : new Error("An unknown error occurred during structured output generation.", { cause: error }), usage && { usage });
+ 		}
+ 	}
+ 	/**
+@@ -614,6 +614,20 @@ var GeminiTextAdapter = class extends BaseTextAdapter {
+ 					parentRunId: options.parentRunId
+ 				};
+ 			}
++			// A blocked prompt returns no candidate at all, only the block reason:
++			// the response ends here, as a filter stop.
++			if (chunk.promptFeedback?.blockReason && !chunk.candidates?.length) {
++				yield {
++					type: EventType.RUN_FINISHED,
++					runId,
++					threadId,
++					model,
++					timestamp: Date.now(),
++					finishReason: "content_filter",
++					...chunk.usageMetadata && { usage: buildGeminiUsage(chunk.usageMetadata) }
++				};
++				return;
++			}
+ 			if (chunk.candidates?.[0]?.groundingMetadata) groundingMetadata = chunk.candidates[0].groundingMetadata;
+ 			if (chunk.candidates?.[0]?.content?.parts) {
+ 				const parts = chunk.candidates[0].content.parts;
+@@ -793,6 +807,7 @@ var GeminiTextAdapter = class extends BaseTextAdapter {
+ 						timestamp: Date.now(),
+ 						message: "The response was cut off because the maximum token limit was reached.",
+ 						code: "max_tokens",
++						metadata: { providerStopReason: finishReason },
+ 						error: {
+ 							message: "The response was cut off because the maximum token limit was reached.",
+ 							code: "max_tokens"
+@@ -805,7 +820,7 @@ var GeminiTextAdapter = class extends BaseTextAdapter {
+ 				seen.reported = true;
+ 				yield {
+ 					type: EventType.RUN_FINISHED,
+-					metadata: { tanstack: {
++					metadata: { providerStopReason: finishReason, tanstack: {
+ 						...responseId && { responseId },
+ 						...reportedModel && { model: reportedModel }
+ 					} },
+@@ -819,6 +834,20 @@ var GeminiTextAdapter = class extends BaseTextAdapter {
+ 			}
+ 		}
+ 		yield* emitGroundingToolCall();
++		if (hasEmittedRunStarted && !sawFinishReason && !blockReason && !options.request?.signal?.aborted) {
++			const message = "The provider stream ended before a finish reason.";
++			const usage = buildGeminiUsage(seen.usageMetadata);
++			yield {
++				type: EventType.RUN_ERROR,
++				runId,
++				model,
++				timestamp: Date.now(),
++				message,
++				code: "incomplete-stream",
++				...usage && { usage },
++				error: { message, code: "incomplete-stream" }
++			};
++		}
+ 		if (blockReason && !sawFinishReason) {
+ 			const message = `Gemini blocked the prompt (blockReason=${blockReason}).`;
+ 			const usage = buildGeminiUsage(seen.usageMetadata);
+diff --git a/dist/esm/model-meta.d.ts b/dist/esm/model-meta.d.ts
+index 1bc57e5..9637499 100644
+--- a/dist/esm/model-meta.d.ts
++++ b/dist/esm/model-meta.d.ts
+@@ -347,6 +347,15 @@ declare const GEMINI_3_5_FLASH_LITE: {
+         readonly budget: false;
+     };
+ };
++declare const GEMINI_4_NEON: Omit<typeof GEMINI_4_ARGON, "name"> & {
++    readonly name: "gemini-4-neon";
++};
++declare const GEMINI_4_HYDROGEN: Omit<typeof GEMINI_4_ARGON, "name"> & {
++    readonly name: "gemini-4-hydrogen";
++};
++declare const GEMINI_4_CARBON: Omit<typeof GEMINI_4_ARGON, "name"> & {
++    readonly name: "gemini-4-carbon";
++};
+ declare const GEMINI_4_ARGON: {
+     readonly name: "gemini-4-argon";
+     readonly max_input_tokens: 1048576;
+@@ -367,7 +376,7 @@ declare const GEMINI_4_ARGON: {
+         };
+     };
+ };
+-export declare const GEMINI_MODELS: readonly ["gemini-4-argon", "gemini-3.8-flash", "gemini-3.7-flash", "gemini-3.6-flash", "gemini-3.5-flash", "gemini-3.5-flash-lite", "gemini-3.1-pro-preview", "gemini-3-flash-preview", "gemini-3.1-flash-lite", "gemini-3.1-flash-lite-preview", "gemini-2.5-pro", "gemini-2.5-flash", "gemini-2.5-flash-lite"];
++export declare const GEMINI_MODELS: readonly ["gemini-4-neon", "gemini-4-hydrogen", "gemini-4-carbon", "gemini-4-argon", "gemini-3.8-flash", "gemini-3.7-flash", "gemini-3.6-flash", "gemini-3.5-flash", "gemini-3.5-flash-lite", "gemini-3.1-pro-preview", "gemini-3-flash-preview", "gemini-3.1-flash-lite", "gemini-3.1-flash-lite-preview", "gemini-2.5-pro", "gemini-2.5-flash", "gemini-2.5-flash-lite"];
+ /**
+  * Gemini models that support combining `tools` + `responseSchema` in a
+  * single streaming `generateContent` call (per issue #605). Per the
+@@ -441,6 +450,9 @@ export type GeminiChatModelProviderOptionsByName = {
+     [GEMINI_2_5_FLASH.name]: GeminiToolConfigOptions & GeminiSafetyOptions & GeminiCommonConfigOptions & GeminiCachedContentOptions & GeminiStructuredOutputOptions;
+     [GEMINI_2_5_FLASH_LITE.name]: GeminiToolConfigOptions & GeminiSafetyOptions & GeminiCommonConfigOptions & GeminiCachedContentOptions & GeminiStructuredOutputOptions;
+     [GEMINI_4_ARGON.name]: GeminiToolConfigOptions & GeminiSafetyOptions & GeminiCommonConfigOptions & GeminiCachedContentOptions & GeminiStructuredOutputOptions;
++    [GEMINI_4_CARBON.name]: GeminiToolConfigOptions & GeminiSafetyOptions & GeminiCommonConfigOptions & GeminiCachedContentOptions & GeminiStructuredOutputOptions;
++    [GEMINI_4_HYDROGEN.name]: GeminiToolConfigOptions & GeminiSafetyOptions & GeminiCommonConfigOptions & GeminiCachedContentOptions & GeminiStructuredOutputOptions;
++    [GEMINI_4_NEON.name]: GeminiToolConfigOptions & GeminiSafetyOptions & GeminiCommonConfigOptions & GeminiCachedContentOptions & GeminiStructuredOutputOptions;
+ };
+ /**
+  * Type-only map from chat model name to its supported tool capabilities.
+@@ -460,6 +472,9 @@ export type GeminiChatModelToolCapabilitiesByName = {
+     [GEMINI_2_5_FLASH.name]: typeof GEMINI_2_5_FLASH.supports.tools;
+     [GEMINI_2_5_FLASH_LITE.name]: typeof GEMINI_2_5_FLASH_LITE.supports.tools;
+     [GEMINI_4_ARGON.name]: typeof GEMINI_4_ARGON.supports.tools;
++    [GEMINI_4_CARBON.name]: typeof GEMINI_4_CARBON.supports.tools;
++    [GEMINI_4_HYDROGEN.name]: typeof GEMINI_4_HYDROGEN.supports.tools;
++    [GEMINI_4_NEON.name]: typeof GEMINI_4_NEON.supports.tools;
+ };
+ /**
+  * Type-only map from chat model name to its supported input modalities.
+@@ -488,6 +503,9 @@ export type GeminiModelInputModalitiesByName = {
+     [GEMINI_2_5_FLASH_LITE.name]: typeof GEMINI_2_5_FLASH_LITE.supports.input;
+     [GEMINI_2_5_FLASH.name]: typeof GEMINI_2_5_FLASH.supports.input;
+     [GEMINI_4_ARGON.name]: typeof GEMINI_4_ARGON.supports.input;
++    [GEMINI_4_CARBON.name]: typeof GEMINI_4_CARBON.supports.input;
++    [GEMINI_4_HYDROGEN.name]: typeof GEMINI_4_HYDROGEN.supports.input;
++    [GEMINI_4_NEON.name]: typeof GEMINI_4_NEON.supports.input;
+ };
+ /**
+  * Runtime map from chat model name to its supported input modalities, for the
+diff --git a/dist/esm/model-meta.js b/dist/esm/model-meta.js
+index db3e847..50aba00 100644
+--- a/dist/esm/model-meta.js
++++ b/dist/esm/model-meta.js
+@@ -811,8 +811,23 @@ var GEMINI_4_ARGON = {
+ 		output: { normal: 10 }
+ 	}
+ };
++var GEMINI_4_NEON = {
++	...GEMINI_4_ARGON,
++	name: "gemini-4-neon"
++};
++var GEMINI_4_HYDROGEN = {
++	...GEMINI_4_ARGON,
++	name: "gemini-4-hydrogen"
++};
++var GEMINI_4_CARBON = {
++	...GEMINI_4_ARGON,
++	name: "gemini-4-carbon"
++};
+ var GEMINI_MODELS = [
+ 	GEMINI_4_ARGON.name,
++	GEMINI_4_CARBON.name,
++	GEMINI_4_HYDROGEN.name,
++	GEMINI_4_NEON.name,
+ 	GEMINI_3_8_FLASH.name,
+ 	GEMINI_3_7_FLASH.name,
+ 	GEMINI_3_6_FLASH.name,
+@@ -942,13 +957,20 @@ var GEMINI_MODEL_INPUT_MODALITIES = {
+ 	[GEMINI_2_5_PRO.name]: GEMINI_2_5_PRO.supports.input,
+ 	[GEMINI_2_5_FLASH_LITE.name]: GEMINI_2_5_FLASH_LITE.supports.input,
+ 	[GEMINI_2_5_FLASH.name]: GEMINI_2_5_FLASH.supports.input,
+-	[GEMINI_4_ARGON.name]: GEMINI_4_ARGON.supports.input
++	[GEMINI_4_ARGON.name]: GEMINI_4_ARGON.supports.input,
++	[GEMINI_4_CARBON.name]: GEMINI_4_CARBON.supports.input,
++	[GEMINI_4_HYDROGEN.name]: GEMINI_4_HYDROGEN.supports.input,
++	[GEMINI_4_NEON.name]: GEMINI_4_NEON.supports.input
+ };
+ /**
+ * Runtime map from chat model name to its reasoning data, for the text adapter.
+ * An unknown name gives `undefined`: the adapter sends no reasoning field.
+ */
+ var GEMINI_MODEL_REASONING = {
++	[GEMINI_4_ARGON.name]: EFFORT_LOW_TO_HIGH,
++	[GEMINI_4_CARBON.name]: EFFORT_LOW_TO_HIGH,
++	[GEMINI_4_NEON.name]: EFFORT_LOW_TO_HIGH,
++	[GEMINI_4_HYDROGEN.name]: EFFORT_LOW_TO_HIGH,
+ 	[GEMINI_3_8_FLASH.name]: GEMINI_3_8_FLASH.reasoning,
+ 	[GEMINI_3_7_FLASH.name]: GEMINI_3_7_FLASH.reasoning,
+ 	[GEMINI_3_6_FLASH.name]: GEMINI_3_6_FLASH.reasoning,

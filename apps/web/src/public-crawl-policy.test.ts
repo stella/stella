@@ -7,6 +7,7 @@ import {
   PUBLIC_CASE_LAW_PAGE_COUNTRIES,
   toCaseLawCountryParam,
 } from "@/features/case-law/case-law-jurisdiction";
+import { toolsCataloguePathOf } from "@/lib/knowledge/public-tools-catalogue-path";
 import type { FileRouteTypes } from "@/routeTree.gen";
 
 import {
@@ -47,7 +48,10 @@ describe("public crawl policy", () => {
       crawlRoutes.length,
     );
     for (const { path, scope } of crawlRoutes) {
-      if (scope === "catalogue" && path !== options.toolsBasePath) {
+      if (
+        scope === "catalogue" &&
+        path !== toolsCataloguePathOf(options.toolsBasePath)
+      ) {
         continue;
       }
       expect(isPublicCrawlPath(path, options)).toBe(true);
@@ -98,7 +102,7 @@ describe("public crawl policy", () => {
         path.startsWith(toolsBasePath),
       );
       expect(rules).toEqual([
-        { path: toolsBasePath, scope: "exact" },
+        { path: toolsCataloguePathOf(toolsBasePath), scope: "exact" },
         { path: `${toolsBasePath}/contribute`, scope: "exact" },
         ...loadCatalogue().map(
           ({ slug }) =>
@@ -112,6 +116,21 @@ describe("public crawl policy", () => {
         expect(isPublicCrawlPath(path, enabled)).toBe(true);
         expect(isPublicCrawlPath(`${path}/download`, enabled)).toBe(false);
       }
+    }
+  });
+
+  test("keeps an organization's own Knowledge pages out of the crawl", () => {
+    expect(isPublicCrawlPath("/knowledge/tools/catalogue", options)).toBe(true);
+    expect(isPublicCrawlPath("/knowledge/playbooks/catalogue", options)).toBe(
+      true,
+    );
+    for (const memberPath of [
+      "/knowledge/tools",
+      "/knowledge/templates",
+      "/knowledge/playbooks",
+      "/knowledge/tools/skills/11111111-1111-4111-8111-111111111111",
+    ]) {
+      expect(isPublicCrawlPath(memberPath, options)).toBe(false);
     }
   });
 
@@ -133,7 +152,7 @@ describe("public crawl policy", () => {
           for (const entry of crawlRoutes) {
             if (
               entry.scope === "catalogue" &&
-              entry.path !== options.toolsBasePath
+              entry.path !== toolsCataloguePathOf(options.toolsBasePath)
             ) {
               continue;
             }

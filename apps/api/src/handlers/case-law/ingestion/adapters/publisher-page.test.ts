@@ -6,7 +6,11 @@ import { ingestionStopKindOf } from "@/api/lib/errors/tagged-errors";
 import { failureSink, gradeFailure } from "@/api/lib/observability/failure";
 import { readEvidence } from "@/api/lib/observability/failure-evidence";
 
-import { PublisherPageError, validatePublisherPage } from "./publisher-page";
+import {
+  PublisherPageError,
+  readBotChallenge,
+  validatePublisherPage,
+} from "./publisher-page";
 
 const context = { adapterKey: "cz-regional", cursor: "2026-01-01:0" };
 
@@ -290,4 +294,104 @@ test("inherited publisher failures preserve their finite rejection reason", () =
       failureReason,
     });
   }
+});
+
+/**
+ * The block page an Imperva-fronted publisher served an automated client, as
+ * served apart from its incident identifiers and the client address.
+ */
+const IMPERVA_BLOCK_PAGE =
+  '<html style="height:100%"><head><META NAME="ROBOTS" CONTENT="NOINDEX, NOFOLLOW">' +
+  '<meta name="format-detection" content="telephone=no"><meta name="viewport" content="initial-scale=1.0">' +
+  '<meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">' +
+  '<script type="text/javascript" src="/_Incapsula_Resource?SWJIYLWA=0"></script></head>' +
+  '<body style="margin:0px;height:100%"><iframe id="main-iframe" src="/_Incapsula_Resource?CWUDNSAI=23&incident_id=0-0&edet=15" ' +
+  'frameborder=0 width="100%" height="100%" marginheight="0px" marginwidth="0px">' +
+  "Request unsuccessful. Incapsula incident ID: 0-0</iframe></body></html>";
+
+describe("a bot-management challenge in place of the publisher", () => {
+  test("is the publisher refusing, where JSON was asked for", () => {
+    const result = validatePublisherPage({
+      ...context,
+      body: IMPERVA_BLOCK_PAGE,
+      headers: new Headers({ "content-type": "text/html" }),
+      expectation: { kind: "json" },
+    });
+
+    // Read by its content type alone it was an unreachable source.
+    expect(result.isErr() && result.error).toMatchObject({
+      reason: "interstitial",
+      stopKind: "publisher_refusal",
+    });
+  });
+
+  test("is never a page, where HTML was asked for", () => {
+    // It has visible text, so nothing else here would tell it from a page.
+    const result = validatePublisherPage({
+      ...context,
+      body: IMPERVA_BLOCK_PAGE,
+      headers: new Headers({ "content-type": "text/html" }),
+      expectation: { kind: "html" },
+    });
+
+    expect(result.isErr() && result.error).toMatchObject({
+      reason: "interstitial",
+      stopKind: "publisher_refusal",
+    });
+  });
+
+  test.each([
+    ["cloudflare", new Headers({ "cf-mitigated": "challenge" })],
+    ["aws-waf", new Headers({ "x-amzn-waf-action": "captcha" })],
+  ] as const)("%s says so in a header", (vendor, headers) => {
+    expect(
+      readBotChallenge("<html><body>Just a moment</body></html>", headers),
+    ).toBe(vendor);
+    expect(
+      validatePublisherPage({
+        ...context,
+        body: "{}",
+        headers,
+        expectation: { kind: "json" },
+      }).isErr(),
+    ).toBe(true);
+  });
+
+  test.each([
+    ["imperva", IMPERVA_BLOCK_PAGE],
+    [
+      "cloudflare",
+      '<script src="/cdn-cgi/challenge-platform/h/b/orchestrate/chl_page/v1"></script>',
+    ],
+    ["aws-waf", "<script>AwsWafIntegration.checkForceRefresh()</script>"],
+    [
+      "datadome",
+      '<iframe src="https://geo.captcha-delivery.com/captcha/"></iframe>',
+    ],
+  ] as const)("%s is known by its challenge page", (vendor, body) => {
+    expect(readBotChallenge(body)).toBe(vendor);
+  });
+
+  test("a published page that quotes a marker is still the publisher's", () => {
+    const page = `<html><body><p>${"Text of the decision. ".repeat(4000)}</p><p>_Incapsula_Resource</p></body></html>`;
+
+    expect(readBotChallenge(page)).toBeNull();
+    expect(
+      validatePublisherPage({
+        ...context,
+        body: page,
+        expectation: { kind: "html" },
+      }).isOk(),
+    ).toBe(true);
+  });
+
+  test("the publisher's own answers carry no challenge", () => {
+    expect(readBotChallenge('{"data":[{"data":[]}]}')).toBeNull();
+    expect(
+      readBotChallenge(
+        "<html><body>ok</body></html>",
+        new Headers({ "x-iinfo": "0-0-0 0NNN RT(0 0)" }),
+      ),
+    ).toBeNull();
+  });
 });

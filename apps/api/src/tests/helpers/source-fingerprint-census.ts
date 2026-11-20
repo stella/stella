@@ -29,7 +29,9 @@ import {
   atRisFixture,
   brTjdftFixture,
   brTstAcordaoFixture,
+  czIsirFixture,
   czNsFixture,
+  czNsSbirkaFixture,
   czNssFixture,
   czRegionalFixture,
   czUohsFixture,
@@ -110,6 +112,8 @@ export const SOURCE_FINGERPRINT_DRIVERS = {
     { name: "ruling", fixture: plUokikRulingFixture },
   ],
   [ADAPTER_KEYS.BR_TJDFT]: one(brTjdftFixture),
+  [ADAPTER_KEYS.CZ_NS_SBIRKA]: one(czNsSbirkaFixture),
+  [ADAPTER_KEYS.CZ_ISIR]: one(czIsirFixture),
 } as const satisfies Record<
   SourceRegistrationKey,
   readonly FingerprintDriver[]

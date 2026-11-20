@@ -1,10 +1,10 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useTranslations } from "use-intl";
 
 import { pageTitle } from "@/lib/page-title";
 import { routePresentation } from "@/routes/-route-presentation";
-import { SettingsPageHeader } from "@/routes/_protected.settings/-components/settings-page-header";
-import { MatterNumberingCard } from "@/routes/_protected.settings/organization/-components/organization/matter-numbering-card";
+
+import { MatterNumberingPage } from "./-organization.matter-numbering.page";
+import { MatterNumberingPending } from "./-organization.matter-numbering.pending";
 
 export const Route = createFileRoute(
   "/_protected/settings/organization/matter-numbering",
@@ -20,18 +20,5 @@ export const Route = createFileRoute(
     meta: [{ title: pageTitle("settings.organization.matterNumbering") }],
   }),
   component: MatterNumberingPage,
+  pendingComponent: MatterNumberingPending,
 });
-
-function MatterNumberingPage() {
-  const t = useTranslations();
-
-  return (
-    <>
-      <SettingsPageHeader
-        description={t("settings.organization.matterNumberingDescription")}
-        title={t("settings.organization.matterNumbering")}
-      />
-      <MatterNumberingCard />
-    </>
-  );
-}

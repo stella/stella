@@ -3,7 +3,11 @@ import type * as v from "valibot";
 
 import { COURT_TIER_LABELS } from "@stll/api-contract/case-law-court-tiers";
 import { DECISION_TYPE_KINDS } from "@stll/api-contract/case-law-decision-types";
-import { CASE_LAW_SEARCH_WARNING_CODES } from "@stll/api-contract/search";
+import {
+  CASE_LAW_SEARCH_WARNING_CODES,
+  caseLawPageOutcome,
+  type CaseLawPagePhases,
+} from "@stll/api-contract/search";
 import { DECISION_IDENTIFIER_MAX_COUNT } from "@stll/legal-ast/decision-identifier";
 
 import type { DecisionHeadnoteMaxChars } from "@/api/lib/case-law/decision-headnote";
@@ -73,6 +77,11 @@ const projectIdentifiers = ([
     })),
 ];
 
+const projectTerms = (terms: readonly string[]): string[] =>
+  terms
+    .slice(0, LIMITS.caseLawSearchTermsMax)
+    .map((term) => truncateTextBytes(term, bytes.queryUsed));
+
 const projectHit = (hit: SearchHit, headnoteMaxChars: number): SearchHit => ({
   decisionId: truncateTextBytes(hit.decisionId, bytes.id),
   caseNumber: truncateTextBytes(hit.caseNumber, bytes.caseNumber),
@@ -116,6 +125,8 @@ const projectHit = (hit: SearchHit, headnoteMaxChars: number): SearchHit => ({
   citationAuthority: hit.citationAuthority,
   matchingPassages: hit.matchingPassages,
   match: hit.match,
+  matchedTerms: projectTerms(hit.matchedTerms),
+  missingTerms: projectTerms(hit.missingTerms),
   createdAt: truncateTextBytes(hit.createdAt, bytes.date),
 });
 
@@ -127,8 +138,18 @@ const projectBucket = (bucket: FacetBucket) => ({
 });
 
 // Both backends pass their entire successful envelope through this boundary.
+/**
+ * A search answer before projection: everything the response carries except
+ * its pagination outcome, which is derived here from every phase the search
+ * ran. No producer states `complete` itself; a page is complete only when
+ * `caseLawPageOutcome` says every phase let it be.
+ */
+export type CaseLawSearchAnswer = Omit<SearchResponse, "paginationOutcome"> & {
+  phases: CaseLawPagePhases;
+};
+
 export const projectCaseLawSearchResponse = (
-  response: SearchResponse,
+  response: CaseLawSearchAnswer,
   headnoteMaxChars: DecisionHeadnoteMaxChars = LIMITS.caseLawHeadnoteMaxChars,
 ): SearchResponse => ({
   hits: response.hits
@@ -170,15 +191,26 @@ export const projectCaseLawSearchResponse = (
             .map(projectBucket),
         },
   total: response.total,
+  hitOrder: response.hitOrder,
   relaxedHitCount: response.relaxedHitCount,
-  ...(response.relaxedTopUp === undefined
-    ? {}
-    : { relaxedTopUp: response.relaxedTopUp }),
+  termDecisionCounts:
+    response.termDecisionCounts === null
+      ? null
+      : {
+          allTerms: response.termDecisionCounts.allTerms,
+          terms: response.termDecisionCounts.terms
+            .slice(0, LIMITS.caseLawSearchTermCountsMax)
+            .map(({ term, count }) => ({
+              term: truncateTextBytes(term, bytes.queryUsed),
+              count,
+            })),
+          countType: response.termDecisionCounts.countType,
+        },
   nextCursor: nullableText(
     response.nextCursor,
     CORPUS_SEARCH_CURSOR_WITH_GROUPS_MAX_LENGTH,
   ),
-  paginationOutcome: response.paginationOutcome,
+  paginationOutcome: caseLawPageOutcome(response.phases),
   pageReach: response.pageReach,
   queryUsed: truncateTextBytes(response.queryUsed, bytes.queryUsed),
   warnings: response.warnings

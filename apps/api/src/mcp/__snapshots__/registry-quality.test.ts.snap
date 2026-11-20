@@ -190,7 +190,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
       "openWorldHint": "Search case law is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Search case law. \`queries\` merges phrasings; matchedQueries names each hit's phrasings. \`limit\` is split evenly. Facets are opt-in, first phrasing, page one. total needs facets and one phrasing; not_counted means unknown, never zero. strict requires every word; otherwise function words are optional. Relevance pages may add some_terms hits after all_terms hits. searches[] reports queryUsed/warnings; a phrasing out of time shows time_budget and nextCursor reruns it. source_id uses facets.source values. Under load it may answer status \\"running\\": not a failure. After retryAfterMs, repeat the call with continuation_token; \\"partial\\" is never the full answer. Reader: \`url\`; publisher: \`source_url\`.",
+    "description": "Search case law. \`queries\` merges phrasings; matchedQueries names each hit's phrasings. \`limit\` is split evenly. Facets are opt-in, first phrasing, page one. total needs facets and one phrasing; not_counted means unknown, never zero. strict needs every word, not necessarily adjacent (quote a phrase for that); otherwise function words are optional and some_terms hits may appear; terms names each hit's words. searches[] has queryUsed/warnings; on time_budget or partial_matches_budget nextCursor reruns it. source_id uses facets.source values. Under load it may answer status \\"running\\": not a failure. After retryAfterMs, repeat the call with continuation_token; \\"partial\\" is never the full answer. Reader: \`url\`; publisher: \`source_url\`.",
     "annotations": {
       "title": "Search case law",
       "destructiveHint": false,
@@ -1454,7 +1454,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
       "openWorldHint": "Read statute provisions is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Read statute provisions: items[] entries are { eli, anchor } with optional as_of and language, or document_id from read_provision_history for an exact consolidation. document_id and as_of are mutually exclusive. Use publisher anchors from read_statute's outline (par_1729, par_1729-odst_1). Entries return in input order: found carries text; invalid, not_found, uncovered_date (no applicable consolidation, including inconsistent publisher dates), provision_not_found and text_withheld (AI use barred) carry messages. Continue long text with nextTextCursor as text_cursor on the same entry until null. url opens the stella reader when served, otherwise the publisher; source_url is the publisher source.",
+    "description": "Read statute provisions: items[] entries are { eli, anchor } with optional as_of and language, or document_id from read_provision_history for an exact consolidation. document_id and as_of are mutually exclusive. Use publisher anchors from read_statute's outline (par_1729, par_1729-odst_1). Entries return in input order: found carries text and governingText (enclosing units' lead-in and closing wording; governingTextTruncated if cut); invalid, not_found, uncovered_date (no applicable consolidation, including inconsistent publisher dates), provision_not_found and text_withheld (AI use barred) carry messages. Continue long text with nextTextCursor as text_cursor on the same entry until null. url opens the stella reader when served, otherwise the publisher; source_url is the publisher source.",
     "annotations": {
       "title": "Read statute provisions",
       "destructiveHint": false,
@@ -1487,7 +1487,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
                 "type": "string",
                 "minLength": 1,
                 "maxLength": 256,
-                "description": "Publisher provision anchor; confirm it in read_statute's outline for the chosen consolidation. Czech e-Sbírka commonly uses par_<section>, -odst_<paragraph>, and -pism_<letter> (par_1729, par_1729-odst_1, par_1729-odst_2-pism_a). Subdivision anchors narrow the answer to that subdivision. Other publishers may use different schemes."
+                "description": "Publisher provision anchor; confirm it in read_statute's outline for the chosen consolidation. Czech e-Sbírka commonly uses par_<section>, -odst_<paragraph>, and -pism_<letter> (par_1729, par_1729-odst_1, par_1729-odst_2-pism_a). Subdivision anchors narrow the answer to that subdivision. An annex also reads by number (priloha_3). Other publishers may use different schemes."
               },
               "as_of": {
                 "type": "string",
@@ -1536,7 +1536,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
       "openWorldHint": "Read provision history is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Read one provision's wording in each consolidation of the work, newest validity window first, so two wordings can be compared without downloading whole statutes. Takes the work's \`eli\` and an \`anchor\` from read_statute's outline. A consolidation that does not carry the anchor is left out of \`items\`. Pass the returned nextCursor back as cursor for older versions. Long wording returns nextTextCursor on its item; pass it back as text_cursor with the same eli, anchor, and version-page cursor until it is null. Use \`url\` for the stella reader when served, otherwise the publisher; \`source_url\` is the publisher source.",
+    "description": "Read one provision's wording in each consolidation of the work, newest validity window first, so two wordings can be compared without downloading whole statutes. Takes the work's \`eli\` and an \`anchor\` from read_statute's outline. A consolidation that does not carry the anchor is left out of \`items\`. Pass the returned nextCursor back as cursor for older versions. Long wording returns nextTextCursor on its item; pass it back as text_cursor with the same eli, anchor, and version-page cursor until it is null. Items carry governingText as read_statute_provisions does. Use \`url\` for the stella reader when served, otherwise the publisher; \`source_url\` is the publisher source.",
     "annotations": {
       "title": "Read provision history",
       "destructiveHint": false,
@@ -1564,7 +1564,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
           "type": "string",
           "minLength": 1,
           "maxLength": 256,
-          "description": "Publisher provision anchor; confirm it in read_statute's outline for the chosen consolidation. Czech e-Sbírka commonly uses par_<section>, -odst_<paragraph>, and -pism_<letter> (par_1729, par_1729-odst_1, par_1729-odst_2-pism_a). Subdivision anchors narrow the answer to that subdivision. Other publishers may use different schemes."
+          "description": "Publisher provision anchor; confirm it in read_statute's outline for the chosen consolidation. Czech e-Sbírka commonly uses par_<section>, -odst_<paragraph>, and -pism_<letter> (par_1729, par_1729-odst_1, par_1729-odst_2-pism_a). Subdivision anchors narrow the answer to that subdivision. An annex also reads by number (priloha_3). Other publishers may use different schemes."
         },
         "language": {
           "type": "string",
@@ -1607,7 +1607,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
       "openWorldHint": "Search regulator guidance is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Search regulator guidance (soft law): methodologies, opinions, guidelines, recommendations, FAQs and similar documents issued by data-protection and labour regulators. Results are guidance, never court decisions: for case law use search_case_law. Each result carries documentClass, issuer, kind, reference, issuedOn, validity, source_url and the attribution to show with it. Filter by authority, jurisdiction, kind, date_from and date_to. A source served as metadata only is matched on its title and has a null snippet. Totals are not counted; page with cursor. Read a hit with read_guidance.",
+    "description": "Search regulator guidance (soft law): methodologies, opinions, guidelines, recommendations and FAQs from data-protection, labour, tax and administrative authorities, e.g. Czech GFŘ and MF pokyny or MV závěry on administrative procedure. Results are guidance, never court decisions: for case law use search_case_law. Each result carries documentClass, issuer, kind, reference, issuedOn, validity, source_url and the attribution to show with it. Filter by authority, jurisdiction, kind, date_from and date_to. A source served as metadata only is matched on its title and has a null snippet. Totals are not counted; page with cursor. Read a hit with read_guidance.",
     "annotations": {
       "title": "Search regulator guidance",
       "destructiveHint": false,
@@ -1631,7 +1631,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
           "type": "string",
           "minLength": 1,
           "maxLength": 64,
-          "description": "Issuing authority, as returned in issuer.authority (for example eu-edpb). Omit it to search without this filter; a placeholder such as \\"all\\" or \\"-\\" reads as no filter.",
+          "description": "Issuing authority, as returned in issuer.authority (for example eu-edpb or cz-gfr). Omit it to search without this filter; a placeholder such as \\"all\\" or \\"-\\" reads as no filter.",
           "x-stella-agent-input": {
             "kind": "filter"
           }
@@ -1710,7 +1710,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
       "openWorldHint": "Read regulator guidance is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Read one regulator guidance document by document_id. It is guidance, not a court decision. Returns the issuer, kind, reference, issue date, validity as the publisher states it, source_url, the attribution and any conditions to show with it, and its text. When you summarize this text, show attribution.text and any attribution.summaryDisclaimer with the summary. textState says why text is null: withheld_by_source_setting or not_extracted; use source_url then. Pass nextCursor back as cursor to read more.",
+    "description": "Read one regulator guidance document (data-protection, labour, tax or administrative) by document_id. It is guidance, not a court decision. Returns the issuer, kind, reference, issue date, validity as the publisher states it, source_url, the attribution and any conditions to show with it, and its text. When you summarize this text, show attribution.text and any attribution.summaryDisclaimer with the summary. textState says why text is null: withheld_by_source_setting or not_extracted; use source_url then. Pass nextCursor back as cursor to read more.",
     "annotations": {
       "title": "Read regulator guidance",
       "destructiveHint": false,
@@ -4084,7 +4084,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
               "type": "null"
             }
           ],
-          "description": "Registration number"
+          "description": "Business register number"
         },
         "tax_id": {
           "anyOf": [
@@ -4096,7 +4096,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
               "type": "null"
             }
           ],
-          "description": "Tax identifier"
+          "description": "Business tax number"
         },
         "vat_id": {
           "anyOf": [
@@ -4108,7 +4108,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
               "type": "null"
             }
           ],
-          "description": "VAT identifier"
+          "description": "VAT number"
         },
         "vat_payer": {
           "anyOf": [
@@ -7797,7 +7797,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
       "openWorldHint": "Search case law is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Search case law. \`queries\` merges phrasings; matchedQueries names each hit's phrasings. \`limit\` is split evenly. Facets are opt-in, first phrasing, page one. total needs facets and one phrasing; not_counted means unknown, never zero. strict requires every word; otherwise function words are optional. Relevance pages may add some_terms hits after all_terms hits. searches[] reports queryUsed/warnings; a phrasing out of time shows time_budget and nextCursor reruns it. source_id uses facets.source values. Under load it may answer status \\"running\\": not a failure. After retryAfterMs, repeat the call with continuation_token; \\"partial\\" is never the full answer. Reader: \`url\`; publisher: \`source_url\`.",
+    "description": "Search case law. \`queries\` merges phrasings; matchedQueries names each hit's phrasings. \`limit\` is split evenly. Facets are opt-in, first phrasing, page one. total needs facets and one phrasing; not_counted means unknown, never zero. strict needs every word, not necessarily adjacent (quote a phrase for that); otherwise function words are optional and some_terms hits may appear; terms names each hit's words. searches[] has queryUsed/warnings; on time_budget or partial_matches_budget nextCursor reruns it. source_id uses facets.source values. Under load it may answer status \\"running\\": not a failure. After retryAfterMs, repeat the call with continuation_token; \\"partial\\" is never the full answer. Reader: \`url\`; publisher: \`source_url\`.",
     "annotations": {
       "title": "Search case law",
       "destructiveHint": false,
@@ -9061,7 +9061,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
       "openWorldHint": "Read statute provisions is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Read statute provisions: items[] entries are { eli, anchor } with optional as_of and language, or document_id from read_provision_history for an exact consolidation. document_id and as_of are mutually exclusive. Use publisher anchors from read_statute's outline (par_1729, par_1729-odst_1). Entries return in input order: found carries text; invalid, not_found, uncovered_date (no applicable consolidation, including inconsistent publisher dates), provision_not_found and text_withheld (AI use barred) carry messages. Continue long text with nextTextCursor as text_cursor on the same entry until null. url opens the stella reader when served, otherwise the publisher; source_url is the publisher source.",
+    "description": "Read statute provisions: items[] entries are { eli, anchor } with optional as_of and language, or document_id from read_provision_history for an exact consolidation. document_id and as_of are mutually exclusive. Use publisher anchors from read_statute's outline (par_1729, par_1729-odst_1). Entries return in input order: found carries text and governingText (enclosing units' lead-in and closing wording; governingTextTruncated if cut); invalid, not_found, uncovered_date (no applicable consolidation, including inconsistent publisher dates), provision_not_found and text_withheld (AI use barred) carry messages. Continue long text with nextTextCursor as text_cursor on the same entry until null. url opens the stella reader when served, otherwise the publisher; source_url is the publisher source.",
     "annotations": {
       "title": "Read statute provisions",
       "destructiveHint": false,
@@ -9094,7 +9094,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
                 "type": "string",
                 "minLength": 1,
                 "maxLength": 256,
-                "description": "Publisher provision anchor; confirm it in read_statute's outline for the chosen consolidation. Czech e-Sbírka commonly uses par_<section>, -odst_<paragraph>, and -pism_<letter> (par_1729, par_1729-odst_1, par_1729-odst_2-pism_a). Subdivision anchors narrow the answer to that subdivision. Other publishers may use different schemes."
+                "description": "Publisher provision anchor; confirm it in read_statute's outline for the chosen consolidation. Czech e-Sbírka commonly uses par_<section>, -odst_<paragraph>, and -pism_<letter> (par_1729, par_1729-odst_1, par_1729-odst_2-pism_a). Subdivision anchors narrow the answer to that subdivision. An annex also reads by number (priloha_3). Other publishers may use different schemes."
               },
               "as_of": {
                 "type": "string",
@@ -9143,7 +9143,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
       "openWorldHint": "Read provision history is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Read one provision's wording in each consolidation of the work, newest validity window first, so two wordings can be compared without downloading whole statutes. Takes the work's \`eli\` and an \`anchor\` from read_statute's outline. A consolidation that does not carry the anchor is left out of \`items\`. Pass the returned nextCursor back as cursor for older versions. Long wording returns nextTextCursor on its item; pass it back as text_cursor with the same eli, anchor, and version-page cursor until it is null. Use \`url\` for the stella reader when served, otherwise the publisher; \`source_url\` is the publisher source.",
+    "description": "Read one provision's wording in each consolidation of the work, newest validity window first, so two wordings can be compared without downloading whole statutes. Takes the work's \`eli\` and an \`anchor\` from read_statute's outline. A consolidation that does not carry the anchor is left out of \`items\`. Pass the returned nextCursor back as cursor for older versions. Long wording returns nextTextCursor on its item; pass it back as text_cursor with the same eli, anchor, and version-page cursor until it is null. Items carry governingText as read_statute_provisions does. Use \`url\` for the stella reader when served, otherwise the publisher; \`source_url\` is the publisher source.",
     "annotations": {
       "title": "Read provision history",
       "destructiveHint": false,
@@ -9171,7 +9171,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
           "type": "string",
           "minLength": 1,
           "maxLength": 256,
-          "description": "Publisher provision anchor; confirm it in read_statute's outline for the chosen consolidation. Czech e-Sbírka commonly uses par_<section>, -odst_<paragraph>, and -pism_<letter> (par_1729, par_1729-odst_1, par_1729-odst_2-pism_a). Subdivision anchors narrow the answer to that subdivision. Other publishers may use different schemes."
+          "description": "Publisher provision anchor; confirm it in read_statute's outline for the chosen consolidation. Czech e-Sbírka commonly uses par_<section>, -odst_<paragraph>, and -pism_<letter> (par_1729, par_1729-odst_1, par_1729-odst_2-pism_a). Subdivision anchors narrow the answer to that subdivision. An annex also reads by number (priloha_3). Other publishers may use different schemes."
         },
         "language": {
           "type": "string",
@@ -9214,7 +9214,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
       "openWorldHint": "Search regulator guidance is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Search regulator guidance (soft law): methodologies, opinions, guidelines, recommendations, FAQs and similar documents issued by data-protection and labour regulators. Results are guidance, never court decisions: for case law use search_case_law. Each result carries documentClass, issuer, kind, reference, issuedOn, validity, source_url and the attribution to show with it. Filter by authority, jurisdiction, kind, date_from and date_to. A source served as metadata only is matched on its title and has a null snippet. Totals are not counted; page with cursor. Read a hit with read_guidance.",
+    "description": "Search regulator guidance (soft law): methodologies, opinions, guidelines, recommendations and FAQs from data-protection, labour, tax and administrative authorities, e.g. Czech GFŘ and MF pokyny or MV závěry on administrative procedure. Results are guidance, never court decisions: for case law use search_case_law. Each result carries documentClass, issuer, kind, reference, issuedOn, validity, source_url and the attribution to show with it. Filter by authority, jurisdiction, kind, date_from and date_to. A source served as metadata only is matched on its title and has a null snippet. Totals are not counted; page with cursor. Read a hit with read_guidance.",
     "annotations": {
       "title": "Search regulator guidance",
       "destructiveHint": false,
@@ -9238,7 +9238,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
           "type": "string",
           "minLength": 1,
           "maxLength": 64,
-          "description": "Issuing authority, as returned in issuer.authority (for example eu-edpb). Omit it to search without this filter; a placeholder such as \\"all\\" or \\"-\\" reads as no filter.",
+          "description": "Issuing authority, as returned in issuer.authority (for example eu-edpb or cz-gfr). Omit it to search without this filter; a placeholder such as \\"all\\" or \\"-\\" reads as no filter.",
           "x-stella-agent-input": {
             "kind": "filter"
           }
@@ -9317,7 +9317,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
       "openWorldHint": "Read regulator guidance is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Read one regulator guidance document by document_id. It is guidance, not a court decision. Returns the issuer, kind, reference, issue date, validity as the publisher states it, source_url, the attribution and any conditions to show with it, and its text. When you summarize this text, show attribution.text and any attribution.summaryDisclaimer with the summary. textState says why text is null: withheld_by_source_setting or not_extracted; use source_url then. Pass nextCursor back as cursor to read more.",
+    "description": "Read one regulator guidance document (data-protection, labour, tax or administrative) by document_id. It is guidance, not a court decision. Returns the issuer, kind, reference, issue date, validity as the publisher states it, source_url, the attribution and any conditions to show with it, and its text. When you summarize this text, show attribution.text and any attribution.summaryDisclaimer with the summary. textState says why text is null: withheld_by_source_setting or not_extracted; use source_url then. Pass nextCursor back as cursor to read more.",
     "annotations": {
       "title": "Read regulator guidance",
       "destructiveHint": false,
@@ -11691,7 +11691,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
               "type": "null"
             }
           ],
-          "description": "Registration number"
+          "description": "Business register number"
         },
         "tax_id": {
           "anyOf": [
@@ -11703,7 +11703,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
               "type": "null"
             }
           ],
-          "description": "Tax identifier"
+          "description": "Business tax number"
         },
         "vat_id": {
           "anyOf": [
@@ -11715,7 +11715,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
               "type": "null"
             }
           ],
-          "description": "VAT identifier"
+          "description": "VAT number"
         },
         "vat_payer": {
           "anyOf": [
@@ -16140,7 +16140,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
       "openWorldHint": "Search case law is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Search case law. \`queries\` merges phrasings; matchedQueries names each hit's phrasings. \`limit\` is split evenly. Facets are opt-in, first phrasing, page one. total needs facets and one phrasing; not_counted means unknown, never zero. strict requires every word; otherwise function words are optional. Relevance pages may add some_terms hits after all_terms hits. searches[] reports queryUsed/warnings; a phrasing out of time shows time_budget and nextCursor reruns it. source_id uses facets.source values. Under load it may answer status \\"running\\": not a failure. After retryAfterMs, repeat the call with continuation_token; \\"partial\\" is never the full answer. Reader: \`url\`; publisher: \`source_url\`.",
+    "description": "Search case law. \`queries\` merges phrasings; matchedQueries names each hit's phrasings. \`limit\` is split evenly. Facets are opt-in, first phrasing, page one. total needs facets and one phrasing; not_counted means unknown, never zero. strict needs every word, not necessarily adjacent (quote a phrase for that); otherwise function words are optional and some_terms hits may appear; terms names each hit's words. searches[] has queryUsed/warnings; on time_budget or partial_matches_budget nextCursor reruns it. source_id uses facets.source values. Under load it may answer status \\"running\\": not a failure. After retryAfterMs, repeat the call with continuation_token; \\"partial\\" is never the full answer. Reader: \`url\`; publisher: \`source_url\`.",
     "annotations": {
       "title": "Search case law",
       "destructiveHint": false,
@@ -17094,7 +17094,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
       "openWorldHint": "Read statute provisions is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Read statute provisions: items[] entries are { eli, anchor } with optional as_of and language, or document_id from read_provision_history for an exact consolidation. document_id and as_of are mutually exclusive. Use publisher anchors from read_statute's outline (par_1729, par_1729-odst_1). Entries return in input order: found carries text; invalid, not_found, uncovered_date (no applicable consolidation, including inconsistent publisher dates), provision_not_found and text_withheld (AI use barred) carry messages. Continue long text with nextTextCursor as text_cursor on the same entry until null. url opens the stella reader when served, otherwise the publisher; source_url is the publisher source.",
+    "description": "Read statute provisions: items[] entries are { eli, anchor } with optional as_of and language, or document_id from read_provision_history for an exact consolidation. document_id and as_of are mutually exclusive. Use publisher anchors from read_statute's outline (par_1729, par_1729-odst_1). Entries return in input order: found carries text and governingText (enclosing units' lead-in and closing wording; governingTextTruncated if cut); invalid, not_found, uncovered_date (no applicable consolidation, including inconsistent publisher dates), provision_not_found and text_withheld (AI use barred) carry messages. Continue long text with nextTextCursor as text_cursor on the same entry until null. url opens the stella reader when served, otherwise the publisher; source_url is the publisher source.",
     "annotations": {
       "title": "Read statute provisions",
       "destructiveHint": false,
@@ -17127,7 +17127,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
                 "type": "string",
                 "minLength": 1,
                 "maxLength": 256,
-                "description": "Publisher provision anchor; confirm it in read_statute's outline for the chosen consolidation. Czech e-Sbírka commonly uses par_<section>, -odst_<paragraph>, and -pism_<letter> (par_1729, par_1729-odst_1, par_1729-odst_2-pism_a). Subdivision anchors narrow the answer to that subdivision. Other publishers may use different schemes."
+                "description": "Publisher provision anchor; confirm it in read_statute's outline for the chosen consolidation. Czech e-Sbírka commonly uses par_<section>, -odst_<paragraph>, and -pism_<letter> (par_1729, par_1729-odst_1, par_1729-odst_2-pism_a). Subdivision anchors narrow the answer to that subdivision. An annex also reads by number (priloha_3). Other publishers may use different schemes."
               },
               "as_of": {
                 "type": "string",
@@ -17176,7 +17176,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
       "openWorldHint": "Read provision history is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Read one provision's wording in each consolidation of the work, newest validity window first, so two wordings can be compared without downloading whole statutes. Takes the work's \`eli\` and an \`anchor\` from read_statute's outline. A consolidation that does not carry the anchor is left out of \`items\`. Pass the returned nextCursor back as cursor for older versions. Long wording returns nextTextCursor on its item; pass it back as text_cursor with the same eli, anchor, and version-page cursor until it is null. Use \`url\` for the stella reader when served, otherwise the publisher; \`source_url\` is the publisher source.",
+    "description": "Read one provision's wording in each consolidation of the work, newest validity window first, so two wordings can be compared without downloading whole statutes. Takes the work's \`eli\` and an \`anchor\` from read_statute's outline. A consolidation that does not carry the anchor is left out of \`items\`. Pass the returned nextCursor back as cursor for older versions. Long wording returns nextTextCursor on its item; pass it back as text_cursor with the same eli, anchor, and version-page cursor until it is null. Items carry governingText as read_statute_provisions does. Use \`url\` for the stella reader when served, otherwise the publisher; \`source_url\` is the publisher source.",
     "annotations": {
       "title": "Read provision history",
       "destructiveHint": false,
@@ -17204,7 +17204,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
           "type": "string",
           "minLength": 1,
           "maxLength": 256,
-          "description": "Publisher provision anchor; confirm it in read_statute's outline for the chosen consolidation. Czech e-Sbírka commonly uses par_<section>, -odst_<paragraph>, and -pism_<letter> (par_1729, par_1729-odst_1, par_1729-odst_2-pism_a). Subdivision anchors narrow the answer to that subdivision. Other publishers may use different schemes."
+          "description": "Publisher provision anchor; confirm it in read_statute's outline for the chosen consolidation. Czech e-Sbírka commonly uses par_<section>, -odst_<paragraph>, and -pism_<letter> (par_1729, par_1729-odst_1, par_1729-odst_2-pism_a). Subdivision anchors narrow the answer to that subdivision. An annex also reads by number (priloha_3). Other publishers may use different schemes."
         },
         "language": {
           "type": "string",
@@ -17247,7 +17247,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
       "openWorldHint": "Search regulator guidance is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Search regulator guidance (soft law): methodologies, opinions, guidelines, recommendations, FAQs and similar documents issued by data-protection and labour regulators. Results are guidance, never court decisions: for case law use search_case_law. Each result carries documentClass, issuer, kind, reference, issuedOn, validity, source_url and the attribution to show with it. Filter by authority, jurisdiction, kind, date_from and date_to. A source served as metadata only is matched on its title and has a null snippet. Totals are not counted; page with cursor. Read a hit with read_guidance.",
+    "description": "Search regulator guidance (soft law): methodologies, opinions, guidelines, recommendations and FAQs from data-protection, labour, tax and administrative authorities, e.g. Czech GFŘ and MF pokyny or MV závěry on administrative procedure. Results are guidance, never court decisions: for case law use search_case_law. Each result carries documentClass, issuer, kind, reference, issuedOn, validity, source_url and the attribution to show with it. Filter by authority, jurisdiction, kind, date_from and date_to. A source served as metadata only is matched on its title and has a null snippet. Totals are not counted; page with cursor. Read a hit with read_guidance.",
     "annotations": {
       "title": "Search regulator guidance",
       "destructiveHint": false,
@@ -17271,7 +17271,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
           "type": "string",
           "minLength": 1,
           "maxLength": 64,
-          "description": "Issuing authority, as returned in issuer.authority (for example eu-edpb). Omit it to search without this filter; a placeholder such as \\"all\\" or \\"-\\" reads as no filter.",
+          "description": "Issuing authority, as returned in issuer.authority (for example eu-edpb or cz-gfr). Omit it to search without this filter; a placeholder such as \\"all\\" or \\"-\\" reads as no filter.",
           "x-stella-agent-input": {
             "kind": "filter"
           }
@@ -17350,7 +17350,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
       "openWorldHint": "Read regulator guidance is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Read one regulator guidance document by document_id. It is guidance, not a court decision. Returns the issuer, kind, reference, issue date, validity as the publisher states it, source_url, the attribution and any conditions to show with it, and its text. When you summarize this text, show attribution.text and any attribution.summaryDisclaimer with the summary. textState says why text is null: withheld_by_source_setting or not_extracted; use source_url then. Pass nextCursor back as cursor to read more.",
+    "description": "Read one regulator guidance document (data-protection, labour, tax or administrative) by document_id. It is guidance, not a court decision. Returns the issuer, kind, reference, issue date, validity as the publisher states it, source_url, the attribution and any conditions to show with it, and its text. When you summarize this text, show attribution.text and any attribution.summaryDisclaimer with the summary. textState says why text is null: withheld_by_source_setting or not_extracted; use source_url then. Pass nextCursor back as cursor to read more.",
     "annotations": {
       "title": "Read regulator guidance",
       "destructiveHint": false,
@@ -18511,7 +18511,7 @@ exports[`MCP registry quality (law surface) tool surface snapshot (name, scope, 
       "openWorldHint": "Search case law is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Search case law. \`queries\` merges phrasings; matchedQueries names each hit's phrasings. \`limit\` is split evenly. Facets are opt-in, first phrasing, page one. total needs facets and one phrasing; not_counted means unknown, never zero. strict requires every word; otherwise function words are optional. Relevance pages may add some_terms hits after all_terms hits. searches[] reports queryUsed/warnings; a phrasing out of time shows time_budget and nextCursor reruns it. source_id uses facets.source values. Under load it may answer status \\"running\\": not a failure. After retryAfterMs, repeat the call with continuation_token; \\"partial\\" is never the full answer. Reader: \`url\`; publisher: \`source_url\`.",
+    "description": "Search case law. \`queries\` merges phrasings; matchedQueries names each hit's phrasings. \`limit\` is split evenly. Facets are opt-in, first phrasing, page one. total needs facets and one phrasing; not_counted means unknown, never zero. strict needs every word, not necessarily adjacent (quote a phrase for that); otherwise function words are optional and some_terms hits may appear; terms names each hit's words. searches[] has queryUsed/warnings; on time_budget or partial_matches_budget nextCursor reruns it. source_id uses facets.source values. Under load it may answer status \\"running\\": not a failure. After retryAfterMs, repeat the call with continuation_token; \\"partial\\" is never the full answer. Reader: \`url\`; publisher: \`source_url\`.",
     "annotations": {
       "title": "Search case law",
       "destructiveHint": false,
@@ -19397,7 +19397,7 @@ exports[`MCP registry quality (law surface) tool surface snapshot (name, scope, 
       "openWorldHint": "Read statute provisions is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Read statute provisions: items[] entries are { eli, anchor } with optional as_of and language, or document_id from read_provision_history for an exact consolidation. document_id and as_of are mutually exclusive. Use publisher anchors from read_statute's outline (par_1729, par_1729-odst_1). Entries return in input order: found carries text; invalid, not_found, uncovered_date (no applicable consolidation, including inconsistent publisher dates), provision_not_found and text_withheld (AI use barred) carry messages. Continue long text with nextTextCursor as text_cursor on the same entry until null. url opens the stella reader when served, otherwise the publisher; source_url is the publisher source.",
+    "description": "Read statute provisions: items[] entries are { eli, anchor } with optional as_of and language, or document_id from read_provision_history for an exact consolidation. document_id and as_of are mutually exclusive. Use publisher anchors from read_statute's outline (par_1729, par_1729-odst_1). Entries return in input order: found carries text and governingText (enclosing units' lead-in and closing wording; governingTextTruncated if cut); invalid, not_found, uncovered_date (no applicable consolidation, including inconsistent publisher dates), provision_not_found and text_withheld (AI use barred) carry messages. Continue long text with nextTextCursor as text_cursor on the same entry until null. url opens the stella reader when served, otherwise the publisher; source_url is the publisher source.",
     "annotations": {
       "title": "Read statute provisions",
       "destructiveHint": false,
@@ -19430,7 +19430,7 @@ exports[`MCP registry quality (law surface) tool surface snapshot (name, scope, 
                 "type": "string",
                 "minLength": 1,
                 "maxLength": 256,
-                "description": "Publisher provision anchor; confirm it in read_statute's outline for the chosen consolidation. Czech e-Sbírka commonly uses par_<section>, -odst_<paragraph>, and -pism_<letter> (par_1729, par_1729-odst_1, par_1729-odst_2-pism_a). Subdivision anchors narrow the answer to that subdivision. Other publishers may use different schemes."
+                "description": "Publisher provision anchor; confirm it in read_statute's outline for the chosen consolidation. Czech e-Sbírka commonly uses par_<section>, -odst_<paragraph>, and -pism_<letter> (par_1729, par_1729-odst_1, par_1729-odst_2-pism_a). Subdivision anchors narrow the answer to that subdivision. An annex also reads by number (priloha_3). Other publishers may use different schemes."
               },
               "as_of": {
                 "type": "string",
@@ -19479,7 +19479,7 @@ exports[`MCP registry quality (law surface) tool surface snapshot (name, scope, 
       "openWorldHint": "Read provision history is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Read one provision's wording in each consolidation of the work, newest validity window first, so two wordings can be compared without downloading whole statutes. Takes the work's \`eli\` and an \`anchor\` from read_statute's outline. A consolidation that does not carry the anchor is left out of \`items\`. Pass the returned nextCursor back as cursor for older versions. Long wording returns nextTextCursor on its item; pass it back as text_cursor with the same eli, anchor, and version-page cursor until it is null. Use \`url\` for the stella reader when served, otherwise the publisher; \`source_url\` is the publisher source.",
+    "description": "Read one provision's wording in each consolidation of the work, newest validity window first, so two wordings can be compared without downloading whole statutes. Takes the work's \`eli\` and an \`anchor\` from read_statute's outline. A consolidation that does not carry the anchor is left out of \`items\`. Pass the returned nextCursor back as cursor for older versions. Long wording returns nextTextCursor on its item; pass it back as text_cursor with the same eli, anchor, and version-page cursor until it is null. Items carry governingText as read_statute_provisions does. Use \`url\` for the stella reader when served, otherwise the publisher; \`source_url\` is the publisher source.",
     "annotations": {
       "title": "Read provision history",
       "destructiveHint": false,
@@ -19507,7 +19507,7 @@ exports[`MCP registry quality (law surface) tool surface snapshot (name, scope, 
           "type": "string",
           "minLength": 1,
           "maxLength": 256,
-          "description": "Publisher provision anchor; confirm it in read_statute's outline for the chosen consolidation. Czech e-Sbírka commonly uses par_<section>, -odst_<paragraph>, and -pism_<letter> (par_1729, par_1729-odst_1, par_1729-odst_2-pism_a). Subdivision anchors narrow the answer to that subdivision. Other publishers may use different schemes."
+          "description": "Publisher provision anchor; confirm it in read_statute's outline for the chosen consolidation. Czech e-Sbírka commonly uses par_<section>, -odst_<paragraph>, and -pism_<letter> (par_1729, par_1729-odst_1, par_1729-odst_2-pism_a). Subdivision anchors narrow the answer to that subdivision. An annex also reads by number (priloha_3). Other publishers may use different schemes."
         },
         "language": {
           "type": "string",
@@ -19550,7 +19550,7 @@ exports[`MCP registry quality (law surface) tool surface snapshot (name, scope, 
       "openWorldHint": "Search regulator guidance is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Search regulator guidance (soft law): methodologies, opinions, guidelines, recommendations, FAQs and similar documents issued by data-protection and labour regulators. Results are guidance, never court decisions: for case law use search_case_law. Each result carries documentClass, issuer, kind, reference, issuedOn, validity, source_url and the attribution to show with it. Filter by authority, jurisdiction, kind, date_from and date_to. A source served as metadata only is matched on its title and has a null snippet. Totals are not counted; page with cursor. Read a hit with read_guidance.",
+    "description": "Search regulator guidance (soft law): methodologies, opinions, guidelines, recommendations and FAQs from data-protection, labour, tax and administrative authorities, e.g. Czech GFŘ and MF pokyny or MV závěry on administrative procedure. Results are guidance, never court decisions: for case law use search_case_law. Each result carries documentClass, issuer, kind, reference, issuedOn, validity, source_url and the attribution to show with it. Filter by authority, jurisdiction, kind, date_from and date_to. A source served as metadata only is matched on its title and has a null snippet. Totals are not counted; page with cursor. Read a hit with read_guidance.",
     "annotations": {
       "title": "Search regulator guidance",
       "destructiveHint": false,
@@ -19574,7 +19574,7 @@ exports[`MCP registry quality (law surface) tool surface snapshot (name, scope, 
           "type": "string",
           "minLength": 1,
           "maxLength": 64,
-          "description": "Issuing authority, as returned in issuer.authority (for example eu-edpb). Omit it to search without this filter; a placeholder such as \\"all\\" or \\"-\\" reads as no filter.",
+          "description": "Issuing authority, as returned in issuer.authority (for example eu-edpb or cz-gfr). Omit it to search without this filter; a placeholder such as \\"all\\" or \\"-\\" reads as no filter.",
           "x-stella-agent-input": {
             "kind": "filter"
           }
@@ -19653,7 +19653,7 @@ exports[`MCP registry quality (law surface) tool surface snapshot (name, scope, 
       "openWorldHint": "Read regulator guidance is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Read one regulator guidance document by document_id. It is guidance, not a court decision. Returns the issuer, kind, reference, issue date, validity as the publisher states it, source_url, the attribution and any conditions to show with it, and its text. When you summarize this text, show attribution.text and any attribution.summaryDisclaimer with the summary. textState says why text is null: withheld_by_source_setting or not_extracted; use source_url then. Pass nextCursor back as cursor to read more.",
+    "description": "Read one regulator guidance document (data-protection, labour, tax or administrative) by document_id. It is guidance, not a court decision. Returns the issuer, kind, reference, issue date, validity as the publisher states it, source_url, the attribution and any conditions to show with it, and its text. When you summarize this text, show attribution.text and any attribution.summaryDisclaimer with the summary. textState says why text is null: withheld_by_source_setting or not_extracted; use source_url then. Pass nextCursor back as cursor to read more.",
     "annotations": {
       "title": "Read regulator guidance",
       "destructiveHint": false,

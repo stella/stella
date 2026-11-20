@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import type { RefObject } from "react";
 
 import { useQueryClient } from "@tanstack/react-query";
@@ -129,7 +129,7 @@ export const useCollaborationVersionPublisher = ({
     setIsPublishingCollaborationVersion,
   ] = useState(false);
 
-  const publishCollaborationVersion = useCallback(async () => {
+  const publishCollaborationVersion = async () => {
     if (
       collaborationSession === null ||
       collaborationStatus !== "synced" ||
@@ -253,20 +253,11 @@ export const useCollaborationVersionPublisher = ({
       type: "success",
     });
     return true;
-  }, [
-    collaborationSession,
-    collaborationStatus,
-    format,
-    hasSessionChangesRef,
-    isPublishingCollaborationVersion,
-    queryClient,
-    t,
-    workspaceId,
-  ]);
+  };
 
-  const discardPendingPublication = useCallback(() => {
+  const discardPendingPublication = () => {
     pendingCollaborationPublicationRef.current = null;
-  }, []);
+  };
 
   return {
     canPublishCollaborationVersion:

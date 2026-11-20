@@ -1,0 +1,26 @@
+{
+  "id": "route-pending-component",
+  "rules": [
+    "route-pending-component/page-module-shell",
+    "route-pending-component/pending-module-imports",
+    "route-pending-component/route-pending-component"
+  ],
+  "type": "changed-lines",
+  "expiresAt": "2026-11-25T00:00:00.000Z",
+  "check": [
+    "bun",
+    "--bun",
+    "oxlint",
+    "-c",
+    "oxlint.config.ts",
+    "--allow",
+    "all",
+    "--deny",
+    "route-pending-component/page-module-shell",
+    "--deny",
+    "route-pending-component/pending-module-imports",
+    "--deny",
+    "route-pending-component/route-pending-component",
+    "apps/web/src"
+  ]
+}

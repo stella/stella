@@ -1,5 +1,83 @@
 # @stll/ui
 
+## 0.76.0
+
+### Minor Changes
+
+- [#8956](https://github.com/stella/stella/pull/8956) [`86022ca`](https://github.com/stella/stella/commit/86022ca85d6a2d92a262628f29d720d5a0e1eb03) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add an inline skeleton for use inside text and controls. Support shared layout and size options on button and input faces, and expose the shared one-time-code group and slot face through `@stll/ui/input-otp-face`.
+
+- [#8930](https://github.com/stella/stella/pull/8930) [`f8831e4`](https://github.com/stella/stella/commit/f8831e47629b27bdcaf4041f19b8196b6d30dab5) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `@stll/ui/control-face` draws the faces of controls for a loading view, from the classes the real controls are built from: `ButtonFace` (and `buttonFaceClassName` for a face a caller restyles), `InputFace`, `SplitButtonFace` and `FaceLabelPending`, a bar where a control's label waits on data. The button's size and variant classes move to `button-classes.ts`, which `Button` builds its variants from, and the split button's part classes are shared the same way. `@stll/ui/list-shell` holds the grouped list's group, header, title and surface with no popup, so a pending view can import it; `@stll/ui/list` re-exports them. It adds `ListItemSkeleton`, a row's placeholder at `ListItem` geometry, and `ListGroupTitlePending`. The composer tokens add `COMPOSER_STATUS_ROW_CENTERED_CLASS` and `COMPOSER_STATUS_ROW_CLASS`, which `ComposerStatusRow` renders from.
+
+- [#8905](https://github.com/stella/stella/pull/8905) [`3d7121a`](https://github.com/stella/stella/commit/3d7121a5dfe6b34b74729dea7157b33f0a5d171a) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `CourtBadge` and `DocumentIdentityBadge` take `size="prose"` for a badge inside running text: it uses the text's own face with tabular numbers instead of the monospaced face badges keep in columns.
+
+- [#8906](https://github.com/stella/stella/pull/8906) [`b261ece`](https://github.com/stella/stella/commit/b261ece00959cc1349dec67471de4b46e2009fec) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `@stll/ui/icons` adds `FollowUpIcon`, the arrow that leads a suggested next question under an answer.
+
+- [#8869](https://github.com/stella/stella/pull/8869) [`6709183`](https://github.com/stella/stella/commit/67091834bf8af1291247c7be3f5540d311167ead) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `@stll/ui/landing-shell` holds the landing's layout and sections without the row text, so a pending view can import it cheaply; `@stll/ui/landing` re-exports it. It adds pending pieces on the landing's own geometry: `LandingRowsPending` (placeholder rows on a `LandingItemText` row's lines, optionally announced as a busy region), `LandingSectionHeadingPending` and `LandingBoxPending` (the hero box, built from the composer tokens).
+
+- [#8958](https://github.com/stella/stella/pull/8958) [`1f24eba`](https://github.com/stella/stella/commit/1f24eba240c916800932ff33c288521f32b539e3) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add `@stll/ui/table-shell` for rendering table headers, cells, and skeleton rows before interactive controls mount. The existing table entry point continues to expose sortable headers and truncated cells.
+
+- [#8960](https://github.com/stella/stella/pull/8960) [`e82f6b6`](https://github.com/stella/stella/commit/e82f6b6a289f2a9e6d01f60b5f7cacb29ce57d1c) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `@stll/ui/control-face` adds the faces a settings form's loading view needs: `FieldTriggerFace` (a select's or a field combobox's trigger), `CheckboxFace`, `SwitchFace`, `TabsFace` (a `default` tab strip) and `LabelFace` (a field's caption). Each is drawn from the classes its control renders, which move into `label-classes.ts`, `toggle-classes.ts` and `tabs-classes.ts`; `Label`, `Checkbox`, `Switch` and `Tabs` build from the same strings byte for byte. `ListGroupTitlePending` draws its bar with `InlineSkeleton`, so it may sit inside a heading or paragraph. `FrameTitle` takes `tone="destructive"` for a danger zone's title. `@stll/ui/list-shell` now holds `ListGroupDescription`, which `@stll/ui/list` re-exports.
+
+- [#8963](https://github.com/stella/stella/pull/8963) [`c2cddf2`](https://github.com/stella/stella/commit/c2cddf2c635ac648c258913fc9c51d2d4fa9d225) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `@stll/ui/table-shell` adds a sortable head's face for a loading view: `SortableHeadFace` (the label in the sort button's face and the arrow in its slot, with no behaviour), `TableHeadLabel`, `SortDirectionIcon`, `ariaSortOf`, `sortableHeadButtonClassName`, `HEAD_CONTENT_CLASS` and `SORT_ICON_SLOT_CLASS`. `SortableHead` in `@stll/ui/table` is built from the same pieces, so both phases share one set of classes. `InputFace` takes a `fieldClassName` for the line its placeholder sits on.
+
+- [#8934](https://github.com/stella/stella/pull/8934) [`f6360bf`](https://github.com/stella/stella/commit/f6360bff82e3a13fcaa16dc85db2097f1300c9c9) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add a ZFO document mark for Czech data-box files.
+
+- [#8892](https://github.com/stella/stella/pull/8892) [`efaf23f`](https://github.com/stella/stella/commit/efaf23fe907e7596cc676851985b4a90f9882e57) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `Table` takes a `prose` density for tables of sentences read across columns (ruled columns and rows, padded cells set from the top, a quiet header in normal weight, an opaque sticky header) and a `cellText` prop (`wrap` or `single-line`) for how its cells set long text. `@stll/ui/icons` exports `ChartColumnIcon`, `ChartLineIcon`, `ChartNoAxesColumnIcon`, `ChartPieIcon` and `ChartScatterIcon`.
+
+- [#8963](https://github.com/stella/stella/pull/8963) [`c2cddf2`](https://github.com/stella/stella/commit/c2cddf2c635ac648c258913fc9c51d2d4fa9d225) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Light modules for loading views drawn before the page mounts. `@stll/ui/truncated-text-face` holds `TruncatedTextFace` and the line classes `TruncatedText` is built from, with no tooltip or popover. `@stll/ui/view-toolbar-shell` holds `ViewChromeBar` and `ViewToolbarChrome`, which `@stll/ui/view-toolbar` re-exports. `@stll/workspace-ui/view-strip` holds the view strip, its tab face and `WorkspaceViewSwitcherFace`, whose tab names are now faces with no hint; `@stll/workspace-ui/view-switcher-face` re-exports them beside `WorkspaceViewTabName`. A strip's `direction` is optional and follows the document when left out.
+
+### Patch Changes
+
+- [#8880](https://github.com/stella/stella/pull/8880) [`1f4ee37`](https://github.com/stella/stella/commit/1f4ee37011a600e45f2c4b4204ac25688e5a372f) Thanks [@dependabot](https://github.com/apps/dependabot)! - Update `tldts` to `7.5.2`.
+  Update `lucide-react` to `1.72.0`.
+  Update `use-intl` to `4.15.1`.
+
+## 0.75.0
+
+### Minor Changes
+
+- [#5749](https://github.com/stella/stella/pull/5749) [`9083d12`](https://github.com/stella/stella/commit/9083d12e2b853c009066c81117fea294e3b548dc) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Move inspector width persistence to the host application. Supply `initialWidth` for the server snapshot and `onWidthChange` to persist completed resizes; the hook no longer accepts `storageKey` or reads browser storage. Remove the browser-storage width helpers.
+
+  Expose `@stll/ui/pane-width` for width constants and calculations without importing inspector components.
+
+- [#8891](https://github.com/stella/stella/pull/8891) [`9e0fd52`](https://github.com/stella/stella/commit/9e0fd526ef113a0ccf90546b8ef92ea5fff36318) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `TooltipPopup` takes an `anchor`, so a wide trigger can place its popup beside the part it explains. `List` draws its hairline between rows wrapped in `EntityActions` too.
+
+- [#7420](https://github.com/stella/stella/pull/7420) [`0dad4da`](https://github.com/stella/stella/commit/0dad4da417b4a99c6141363e2c05a757a314fb72) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add React Native renderers beside the web components a phone needs: `Button`, `Text` (new, a role-based text primitive on both platforms), `Loader`, `Input`, `Textarea`, `Switch`, `Sheet`, `Separator`, `MatterIcon` and `StellaWordmarkLatin`. Each export resolves to its native renderer under the `react-native` condition and to the web renderer everywhere else, and both read one shared contract (`<component>.shared.ts`: props, variant tokens, sizes). React Native, uniwind, react-native-svg and lucide-react-native are optional peer dependencies that only the native renderers import.
+
+  `@stll/ui/components/stella-mark` now resolves to a native `StellaMark` under the `react-native` condition as well; the web export is unchanged.
+
+- [#8846](https://github.com/stella/stella/pull/8846) [`e8aa798`](https://github.com/stella/stella/commit/e8aa7988f19952963102e45c4a95af1005045437) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `WorkspaceShell` takes an optional `skipToContentLabel`. When set, the shell renders a visually hidden skip link as its first tab stop that moves focus to the main region. `WorkspaceFrame` passes it through in the `host-responsive` composition.
+
+### Patch Changes
+
+- [#8618](https://github.com/stella/stella/pull/8618) [`e229034`](https://github.com/stella/stella/commit/e22903462cf3734c29b0a97f2f48dc3023e758c8) Thanks [@dependabot](https://github.com/apps/dependabot)! - Ship with the refreshed catalog dependencies: lucide-react 1.71.0 for `@stll/ui` and use-intl 4.14.10 for `@stll/workspace-ui`.
+
+- [#8870](https://github.com/stella/stella/pull/8870) [`54d4095`](https://github.com/stella/stella/commit/54d409572d79298687864e424ed8dd555ea075e2) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `@stll/ui/icons` exports `AccessibilityIcon`.
+
+- [#8893](https://github.com/stella/stella/pull/8893) [`7c534ed`](https://github.com/stella/stella/commit/7c534ed29c09e58efc43fcb3d985941eb52e12b6) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `TableChart` draws the bars of several series side by side in one group per category, labelling each category once.
+
+## 0.74.0
+
+### Minor Changes
+
+- [#8710](https://github.com/stella/stella/pull/8710) [`d8eea73`](https://github.com/stella/stella/commit/d8eea7352a0a6cdeac6498e6231a17818e8cd2d2) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add a composer appearance to Textarea that shares the large composer editor typography and geometry without field chrome.
+
+- [#8720](https://github.com/stella/stella/pull/8720) [`f6d0e9c`](https://github.com/stella/stella/commit/f6d0e9c9d9966961d52a3d8038a253193632ef2b) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add HighlightedTextarea with shared highlighted text layers and native editing, synchronized scrolling, and inherited direction.
+
+  Preserve Field label, value, disabled-state and ref ownership in Textarea and HighlightedTextarea. Keep highlighted scroll layers aligned through trailing blank lines and reserved scrollbar gutters, with a visible keyboard focus indicator.
+
+- [#8662](https://github.com/stella/stella/pull/8662) [`b1ce389`](https://github.com/stella/stella/commit/b1ce389d73729179bd174166e78499310331479e) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add `OutcomeScreen` (`@stll/ui/outcome-screen`), the one screen a finished flow shows. The CLI's browser sign-in page is now rendered from it.
+
+- [#8706](https://github.com/stella/stella/pull/8706) [`6359411`](https://github.com/stella/stella/commit/6359411768fbe352d04d63ead41386de9e70137b) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `OutcomeScreen` lists what a flow connected (`details`) and can offer a command to run (`command`). The CLI's browser sign-in page names the signed-in account and organization, and a failed sign-in shows `stella auth login` to try again.
+
+- [#8736](https://github.com/stella/stella/pull/8736) [`b9120cd`](https://github.com/stella/stella/commit/b9120cd4f32b6019e3e1db42309ac50960badf2f) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add a controlled cell appearance to Checkbox that owns row-label reveal, first-line alignment, and the full selection hit area while preserving the default appearance.
+
+  Expose the shared table first-line layout contract through the table entry point so row content and selection controls derive alignment from one definition.
+
+### Patch Changes
+
+- [#8742](https://github.com/stella/stella/pull/8742) [`178d3f9`](https://github.com/stella/stella/commit/178d3f9f9007de5933b40fd76f8bbaaf65ad089f) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Let open Collapsible content, hanging controls, and focus rings extend beyond the panel. Use an opacity-only opening reveal with immediate layout changes and closing, preserving hidden-until-found and reduced-motion behavior.
+
 ## 0.73.0
 
 ### Minor Changes

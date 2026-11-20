@@ -43,6 +43,8 @@ import {
   PROVISION_KEYS_FIELD,
 } from "@/api/lib/legal-search/corpus-index-config";
 import {
+  CASE_LAW_OPENING_PARTITION_COUNT,
+  CASE_LAW_OPENING_PARTITION_KEY,
   corpusIndexConfigWithId,
   corpusIndexContractDigest,
   corpusIndexIdFromManifest,
@@ -182,9 +184,20 @@ const courtPartitionIndexConfig = (base: UnindexedConfig): UnindexedConfig => {
   ) {
     return panic("Base configuration already maps the court partition field");
   }
+  // A base that already partitions (opening passages in splits of their own)
+  // keeps that split: the court partition is composed with it, multiplying
+  // the partitions.
+  const opening = basePartition(mapping.partition_key);
+  const partitionKey =
+    opening.key === null
+      ? COURT_PARTITION_FIELD
+      : `${COURT_PARTITION_FIELD},${opening.key}`;
   // The engine coalesces partitions past this bound, which would silently
   // mix buckets back together.
-  if ((mapping.max_num_partitions ?? 0) <= US_COURT_PARTITION_COUNT) {
+  if (
+    (mapping.max_num_partitions ?? 0) <=
+    US_COURT_PARTITION_COUNT * opening.count
+  ) {
     return panic("Court partition count exceeds the engine partition bound");
   }
   const config = structuredClone(base);
@@ -202,9 +215,24 @@ const courtPartitionIndexConfig = (base: UnindexedConfig): UnindexedConfig => {
         ),
         COURT_PARTITION_FIELD,
       ],
-      partition_key: COURT_PARTITION_FIELD,
+      partition_key: partitionKey,
     },
   };
+};
+
+/** The base's own partition key and how many partitions it makes. */
+const basePartition = (
+  key: string | null | undefined,
+): { key: string | null; count: number } => {
+  switch (key) {
+    case undefined:
+    case null:
+      return { key: null, count: 1 };
+    case CASE_LAW_OPENING_PARTITION_KEY:
+      return { key, count: CASE_LAW_OPENING_PARTITION_COUNT };
+    default:
+      return panic(`Court partition contract cannot compose with ${key}`);
+  }
 };
 
 const provisionKeysField = (): FieldMapping => ({

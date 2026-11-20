@@ -1,4 +1,4 @@
-import { useCallback, useSyncExternalStore } from "react";
+import { useSyncExternalStore } from "react";
 
 export const SERVER_I18N_TIME_ZONE = "UTC";
 
@@ -24,14 +24,11 @@ export const resolveAppTimeZone = (): string => {
 export const useHydrationSafeTimeZone = (
   synchronizeFormatter: (timeZone: string) => void,
 ): string => {
-  const subscribe = useCallback(
-    (onStoreChange: () => void) =>
-      subscribeToTimeZone(() => {
-        synchronizeFormatter(resolveAppTimeZone());
-        onStoreChange();
-      }),
-    [synchronizeFormatter],
-  );
+  const subscribe = (onStoreChange: () => void) =>
+    subscribeToTimeZone(() => {
+      synchronizeFormatter(resolveAppTimeZone());
+      onStoreChange();
+    });
   return useSyncExternalStore(
     subscribe,
     resolveAppTimeZone,

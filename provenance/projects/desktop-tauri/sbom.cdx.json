@@ -4793,7 +4793,7 @@
       "version": "0.5.0"
     },
     {
-      "bom-ref": "pkg:cargo/csscolorparser@0.9.0",
+      "bom-ref": "pkg:cargo/csscolorparser@0.9.1",
       "evidence": {
         "identity": [
           {
@@ -4814,7 +4814,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "75c9db70df93ea049adaa5ef1a727079ada6ccb33d4b358f262923aef4fcac8c"
+          "content": "b3c89b58e3eb25afa9d30ccc8ab8ca2b9b1d3158659b061af1d58ec9bd57feab"
         }
       ],
       "licenses": [
@@ -4836,12 +4836,12 @@
           "value": "Cargo.lock"
         }
       ],
-      "purl": "pkg:cargo/csscolorparser@0.9.0",
+      "purl": "pkg:cargo/csscolorparser@0.9.1",
       "tags": [
         "parse"
       ],
       "type": "library",
-      "version": "0.9.0"
+      "version": "0.9.1"
     },
     {
       "bom-ref": "pkg:cargo/cssparser@0.37.0",
@@ -7008,6 +7008,49 @@
       "purl": "pkg:cargo/event-listener-strategy@0.5.4",
       "type": "library",
       "version": "0.5.4"
+    },
+    {
+      "bom-ref": "pkg:cargo/extended@0.1.0",
+      "evidence": {
+        "identity": [
+          {
+            "concludedValue": "Cargo.lock",
+            "confidence": 0.6,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 0.6,
+                "technique": "manifest-analysis",
+                "value": "Cargo.lock"
+              }
+            ]
+          }
+        ]
+      },
+      "group": "",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "af9673d8203fcb076b19dfd17e38b3d4ae9f44959416ea532ce72415a6020365"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "name": "extended",
+      "properties": [
+        {
+          "name": "SrcFile",
+          "value": "Cargo.lock"
+        }
+      ],
+      "purl": "pkg:cargo/extended@0.1.0",
+      "type": "library",
+      "version": "0.1.0"
     },
     {
       "bom-ref": "pkg:cargo/fastrand@2.5.0",
@@ -16784,6 +16827,54 @@
       "version": "0.2.0"
     },
     {
+      "bom-ref": "pkg:cargo/opus-decoder@0.1.1",
+      "evidence": {
+        "identity": [
+          {
+            "concludedValue": "Cargo.lock",
+            "confidence": 0.6,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 0.6,
+                "technique": "manifest-analysis",
+                "value": "Cargo.lock"
+              }
+            ]
+          }
+        ]
+      },
+      "group": "",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "15ae32c275dabb0cd2c863460bf349e9abc3568ba2abf0f9eb7b7d2edeeed07e"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "Apache-2.0"
+          }
+        },
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "name": "opus-decoder",
+      "properties": [
+        {
+          "name": "SrcFile",
+          "value": "Cargo.lock"
+        }
+      ],
+      "purl": "pkg:cargo/opus-decoder@0.1.1",
+      "type": "library",
+      "version": "0.1.1"
+    },
+    {
       "bom-ref": "pkg:cargo/ordered-multimap@0.7.3",
       "evidence": {
         "identity": [
@@ -19648,6 +19739,54 @@
       "purl": "pkg:cargo/regex-automata@0.4.18",
       "type": "library",
       "version": "0.4.18"
+    },
+    {
+      "bom-ref": "pkg:cargo/regex-lite@0.1.9",
+      "evidence": {
+        "identity": [
+          {
+            "concludedValue": "Cargo.lock",
+            "confidence": 0.6,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 0.6,
+                "technique": "manifest-analysis",
+                "value": "Cargo.lock"
+              }
+            ]
+          }
+        ]
+      },
+      "group": "",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "cab834c73d247e67f4fae452806d17d3c7501756d98c8808d7c9c7aa7d18f973"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "Apache-2.0"
+          }
+        },
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "name": "regex-lite",
+      "properties": [
+        {
+          "name": "SrcFile",
+          "value": "Cargo.lock"
+        }
+      ],
+      "purl": "pkg:cargo/regex-lite@0.1.9",
+      "type": "library",
+      "version": "0.1.9"
     },
     {
       "bom-ref": "pkg:cargo/regex-syntax@0.8.11",
@@ -22938,6 +23077,36 @@
       "version": "0.0.1"
     },
     {
+      "bom-ref": "pkg:cargo/stella-desktop-recording@0.0.1",
+      "evidence": {
+        "identity": [
+          {
+            "concludedValue": "Cargo.lock",
+            "confidence": 0.6,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 0.6,
+                "technique": "manifest-analysis",
+                "value": "Cargo.lock"
+              }
+            ]
+          }
+        ]
+      },
+      "group": "",
+      "name": "stella-desktop-recording",
+      "properties": [
+        {
+          "name": "SrcFile",
+          "value": "Cargo.lock"
+        }
+      ],
+      "purl": "pkg:cargo/stella-desktop-recording@0.0.1",
+      "type": "library",
+      "version": "0.0.1"
+    },
+    {
       "bom-ref": "pkg:cargo/stella-desktop-signing-core@0.0.1",
       "evidence": {
         "identity": [
@@ -23352,6 +23521,694 @@
       "purl": "pkg:cargo/swift-rs@1.0.9",
       "type": "library",
       "version": "1.0.9"
+    },
+    {
+      "bom-ref": "pkg:cargo/symphonia@0.6.1",
+      "evidence": {
+        "identity": [
+          {
+            "concludedValue": "Cargo.lock",
+            "confidence": 0.6,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 0.6,
+                "technique": "manifest-analysis",
+                "value": "Cargo.lock"
+              }
+            ]
+          }
+        ]
+      },
+      "group": "",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "a7edef6a96b696d4e0cab5ee9ebb7ca155ed95f30a6b45bbb8b97d2727f02424"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "MPL-2.0"
+          }
+        }
+      ],
+      "name": "symphonia",
+      "properties": [
+        {
+          "name": "SrcFile",
+          "value": "Cargo.lock"
+        }
+      ],
+      "purl": "pkg:cargo/symphonia@0.6.1",
+      "type": "library",
+      "version": "0.6.1"
+    },
+    {
+      "bom-ref": "pkg:cargo/symphonia-bundle-flac@0.6.1",
+      "evidence": {
+        "identity": [
+          {
+            "concludedValue": "Cargo.lock",
+            "confidence": 0.6,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 0.6,
+                "technique": "manifest-analysis",
+                "value": "Cargo.lock"
+              }
+            ]
+          }
+        ]
+      },
+      "group": "",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "6405d5c34ff6f8f7ca08a4101efe66d21e180f7322ef9359900a0e55698a7892"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "MPL-2.0"
+          }
+        }
+      ],
+      "name": "symphonia-bundle-flac",
+      "properties": [
+        {
+          "name": "SrcFile",
+          "value": "Cargo.lock"
+        }
+      ],
+      "purl": "pkg:cargo/symphonia-bundle-flac@0.6.1",
+      "type": "library",
+      "version": "0.6.1"
+    },
+    {
+      "bom-ref": "pkg:cargo/symphonia-bundle-mp3@0.6.1",
+      "evidence": {
+        "identity": [
+          {
+            "concludedValue": "Cargo.lock",
+            "confidence": 0.6,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 0.6,
+                "technique": "manifest-analysis",
+                "value": "Cargo.lock"
+              }
+            ]
+          }
+        ]
+      },
+      "group": "",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "98ea5ffc8716bff677dfb3b01b420c7b758de901a72b8c330bf2040ab74b4add"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "MPL-2.0"
+          }
+        }
+      ],
+      "name": "symphonia-bundle-mp3",
+      "properties": [
+        {
+          "name": "SrcFile",
+          "value": "Cargo.lock"
+        }
+      ],
+      "purl": "pkg:cargo/symphonia-bundle-mp3@0.6.1",
+      "type": "library",
+      "version": "0.6.1"
+    },
+    {
+      "bom-ref": "pkg:cargo/symphonia-codec-aac@0.6.1",
+      "evidence": {
+        "identity": [
+          {
+            "concludedValue": "Cargo.lock",
+            "confidence": 0.6,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 0.6,
+                "technique": "manifest-analysis",
+                "value": "Cargo.lock"
+              }
+            ]
+          }
+        ]
+      },
+      "group": "",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "f5bf8e39552d34a3c4c98333370e62f48c92456d2e814f273b5c3ad7c4a5f45c"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "MPL-2.0"
+          }
+        }
+      ],
+      "name": "symphonia-codec-aac",
+      "properties": [
+        {
+          "name": "SrcFile",
+          "value": "Cargo.lock"
+        }
+      ],
+      "purl": "pkg:cargo/symphonia-codec-aac@0.6.1",
+      "type": "library",
+      "version": "0.6.1"
+    },
+    {
+      "bom-ref": "pkg:cargo/symphonia-codec-adpcm@0.6.1",
+      "evidence": {
+        "identity": [
+          {
+            "concludedValue": "Cargo.lock",
+            "confidence": 0.6,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 0.6,
+                "technique": "manifest-analysis",
+                "value": "Cargo.lock"
+              }
+            ]
+          }
+        ]
+      },
+      "group": "",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "445932ecb0c59362fde9c082dd63a75380650c5077fdb8b80b8cac850442a74c"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "MPL-2.0"
+          }
+        }
+      ],
+      "name": "symphonia-codec-adpcm",
+      "properties": [
+        {
+          "name": "SrcFile",
+          "value": "Cargo.lock"
+        }
+      ],
+      "purl": "pkg:cargo/symphonia-codec-adpcm@0.6.1",
+      "type": "library",
+      "version": "0.6.1"
+    },
+    {
+      "bom-ref": "pkg:cargo/symphonia-codec-alac@0.6.1",
+      "evidence": {
+        "identity": [
+          {
+            "concludedValue": "Cargo.lock",
+            "confidence": 0.6,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 0.6,
+                "technique": "manifest-analysis",
+                "value": "Cargo.lock"
+              }
+            ]
+          }
+        ]
+      },
+      "group": "",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "920a78f96f3cf62932d0c497959c0cc2100ef36b03c7ca1417b260f432a482d8"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "MPL-2.0"
+          }
+        }
+      ],
+      "name": "symphonia-codec-alac",
+      "properties": [
+        {
+          "name": "SrcFile",
+          "value": "Cargo.lock"
+        }
+      ],
+      "purl": "pkg:cargo/symphonia-codec-alac@0.6.1",
+      "type": "library",
+      "version": "0.6.1"
+    },
+    {
+      "bom-ref": "pkg:cargo/symphonia-codec-pcm@0.6.1",
+      "evidence": {
+        "identity": [
+          {
+            "concludedValue": "Cargo.lock",
+            "confidence": 0.6,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 0.6,
+                "technique": "manifest-analysis",
+                "value": "Cargo.lock"
+              }
+            ]
+          }
+        ]
+      },
+      "group": "",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "e04ba75686acbe43542fdd374571195f0530c0b7785ca25cc6840e9c6c4b6eea"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "MPL-2.0"
+          }
+        }
+      ],
+      "name": "symphonia-codec-pcm",
+      "properties": [
+        {
+          "name": "SrcFile",
+          "value": "Cargo.lock"
+        }
+      ],
+      "purl": "pkg:cargo/symphonia-codec-pcm@0.6.1",
+      "type": "library",
+      "version": "0.6.1"
+    },
+    {
+      "bom-ref": "pkg:cargo/symphonia-codec-vorbis@0.6.1",
+      "evidence": {
+        "identity": [
+          {
+            "concludedValue": "Cargo.lock",
+            "confidence": 0.6,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 0.6,
+                "technique": "manifest-analysis",
+                "value": "Cargo.lock"
+              }
+            ]
+          }
+        ]
+      },
+      "group": "",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "73d90b4fcf796137cc683c538282804ff9629f8ad9dbfd881fcbba331ac4e986"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "MPL-2.0"
+          }
+        }
+      ],
+      "name": "symphonia-codec-vorbis",
+      "properties": [
+        {
+          "name": "SrcFile",
+          "value": "Cargo.lock"
+        }
+      ],
+      "purl": "pkg:cargo/symphonia-codec-vorbis@0.6.1",
+      "type": "library",
+      "version": "0.6.1"
+    },
+    {
+      "bom-ref": "pkg:cargo/symphonia-common@0.6.1",
+      "evidence": {
+        "identity": [
+          {
+            "concludedValue": "Cargo.lock",
+            "confidence": 0.6,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 0.6,
+                "technique": "manifest-analysis",
+                "value": "Cargo.lock"
+              }
+            ]
+          }
+        ]
+      },
+      "group": "",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "2acc3fcc18ec9b8cdd48614e259c4cf0d27b71d41e5d9b120b42c5adab12d7c4"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "MPL-2.0"
+          }
+        }
+      ],
+      "name": "symphonia-common",
+      "properties": [
+        {
+          "name": "SrcFile",
+          "value": "Cargo.lock"
+        }
+      ],
+      "purl": "pkg:cargo/symphonia-common@0.6.1",
+      "type": "library",
+      "version": "0.6.1"
+    },
+    {
+      "bom-ref": "pkg:cargo/symphonia-core@0.6.1",
+      "evidence": {
+        "identity": [
+          {
+            "concludedValue": "Cargo.lock",
+            "confidence": 0.6,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 0.6,
+                "technique": "manifest-analysis",
+                "value": "Cargo.lock"
+              }
+            ]
+          }
+        ]
+      },
+      "group": "",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "01c412864d599d4750d0c3d684d7e093ec05e5309681ef5252cc1096a437f6e0"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "MPL-2.0"
+          }
+        }
+      ],
+      "name": "symphonia-core",
+      "properties": [
+        {
+          "name": "SrcFile",
+          "value": "Cargo.lock"
+        }
+      ],
+      "purl": "pkg:cargo/symphonia-core@0.6.1",
+      "type": "library",
+      "version": "0.6.1"
+    },
+    {
+      "bom-ref": "pkg:cargo/symphonia-format-caf@0.6.1",
+      "evidence": {
+        "identity": [
+          {
+            "concludedValue": "Cargo.lock",
+            "confidence": 0.6,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 0.6,
+                "technique": "manifest-analysis",
+                "value": "Cargo.lock"
+              }
+            ]
+          }
+        ]
+      },
+      "group": "",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "ab64327ee1920531c5bf86cf7e9cd1a599d57013ddc30691da62683cefc65191"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "MPL-2.0"
+          }
+        }
+      ],
+      "name": "symphonia-format-caf",
+      "properties": [
+        {
+          "name": "SrcFile",
+          "value": "Cargo.lock"
+        }
+      ],
+      "purl": "pkg:cargo/symphonia-format-caf@0.6.1",
+      "type": "library",
+      "version": "0.6.1"
+    },
+    {
+      "bom-ref": "pkg:cargo/symphonia-format-isomp4@0.6.1",
+      "evidence": {
+        "identity": [
+          {
+            "concludedValue": "Cargo.lock",
+            "confidence": 0.6,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 0.6,
+                "technique": "manifest-analysis",
+                "value": "Cargo.lock"
+              }
+            ]
+          }
+        ]
+      },
+      "group": "",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "0e681a70e1870d34e02abf1dbc51e4267c3f1827801474e8870be8c689fc4dc3"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "MPL-2.0"
+          }
+        }
+      ],
+      "name": "symphonia-format-isomp4",
+      "properties": [
+        {
+          "name": "SrcFile",
+          "value": "Cargo.lock"
+        }
+      ],
+      "purl": "pkg:cargo/symphonia-format-isomp4@0.6.1",
+      "type": "library",
+      "version": "0.6.1"
+    },
+    {
+      "bom-ref": "pkg:cargo/symphonia-format-mkv@0.6.1",
+      "evidence": {
+        "identity": [
+          {
+            "concludedValue": "Cargo.lock",
+            "confidence": 0.6,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 0.6,
+                "technique": "manifest-analysis",
+                "value": "Cargo.lock"
+              }
+            ]
+          }
+        ]
+      },
+      "group": "",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "d015c5c0558864665894b3f4cbd95e10abb01b9c868e751c72670f326a56360e"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "MPL-2.0"
+          }
+        }
+      ],
+      "name": "symphonia-format-mkv",
+      "properties": [
+        {
+          "name": "SrcFile",
+          "value": "Cargo.lock"
+        }
+      ],
+      "purl": "pkg:cargo/symphonia-format-mkv@0.6.1",
+      "type": "library",
+      "version": "0.6.1"
+    },
+    {
+      "bom-ref": "pkg:cargo/symphonia-format-ogg@0.6.1",
+      "evidence": {
+        "identity": [
+          {
+            "concludedValue": "Cargo.lock",
+            "confidence": 0.6,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 0.6,
+                "technique": "manifest-analysis",
+                "value": "Cargo.lock"
+              }
+            ]
+          }
+        ]
+      },
+      "group": "",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "0b5495e7f7e3c7035328d82b6d6e377eef289bb0c4105bdeb557fc93a833f994"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "MPL-2.0"
+          }
+        }
+      ],
+      "name": "symphonia-format-ogg",
+      "properties": [
+        {
+          "name": "SrcFile",
+          "value": "Cargo.lock"
+        }
+      ],
+      "purl": "pkg:cargo/symphonia-format-ogg@0.6.1",
+      "type": "library",
+      "version": "0.6.1"
+    },
+    {
+      "bom-ref": "pkg:cargo/symphonia-format-riff@0.6.1",
+      "evidence": {
+        "identity": [
+          {
+            "concludedValue": "Cargo.lock",
+            "confidence": 0.6,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 0.6,
+                "technique": "manifest-analysis",
+                "value": "Cargo.lock"
+              }
+            ]
+          }
+        ]
+      },
+      "group": "",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "1ff70929083a8c1a5f6cd7c904b6071c7914ad04739b510c2f7239dfc9b7dabe"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "MPL-2.0"
+          }
+        }
+      ],
+      "name": "symphonia-format-riff",
+      "properties": [
+        {
+          "name": "SrcFile",
+          "value": "Cargo.lock"
+        }
+      ],
+      "purl": "pkg:cargo/symphonia-format-riff@0.6.1",
+      "type": "library",
+      "version": "0.6.1"
+    },
+    {
+      "bom-ref": "pkg:cargo/symphonia-metadata@0.6.1",
+      "evidence": {
+        "identity": [
+          {
+            "concludedValue": "Cargo.lock",
+            "confidence": 0.6,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 0.6,
+                "technique": "manifest-analysis",
+                "value": "Cargo.lock"
+              }
+            ]
+          }
+        ]
+      },
+      "group": "",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "83713a97705d77bdef7cdbc0768fd6e5a54e4cd7e48d60a806ae85639e2c87c6"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "MPL-2.0"
+          }
+        }
+      ],
+      "name": "symphonia-metadata",
+      "properties": [
+        {
+          "name": "SrcFile",
+          "value": "Cargo.lock"
+        }
+      ],
+      "purl": "pkg:cargo/symphonia-metadata@0.6.1",
+      "type": "library",
+      "version": "0.6.1"
     },
     {
       "bom-ref": "pkg:cargo/syn@1.0.109",
@@ -26694,7 +27551,7 @@
       "version": "0.3.23"
     },
     {
-      "bom-ref": "pkg:cargo/transcribe-cpp@0.4.1",
+      "bom-ref": "pkg:cargo/transcribe-cpp@0.4.2",
       "evidence": {
         "identity": [
           {
@@ -26715,7 +27572,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "8bab65d30f5a4c3ea0ab6f38236823389f3914b0605bbc0073a4ec88018c0714"
+          "content": "6cf6687b4c73890aea4515632afb1586d48998f22f38e02e3cfbcd7d1543cd4a"
         }
       ],
       "licenses": [
@@ -26732,12 +27589,12 @@
           "value": "Cargo.lock"
         }
       ],
-      "purl": "pkg:cargo/transcribe-cpp@0.4.1",
+      "purl": "pkg:cargo/transcribe-cpp@0.4.2",
       "type": "library",
-      "version": "0.4.1"
+      "version": "0.4.2"
     },
     {
-      "bom-ref": "pkg:cargo/transcribe-cpp-sys@0.4.1",
+      "bom-ref": "pkg:cargo/transcribe-cpp-sys@0.4.2",
       "evidence": {
         "identity": [
           {
@@ -26758,7 +27615,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "23a837974fdb873998a59a21ad2bf5a4b7bbf721c20d03d2a3ab8c221726a444"
+          "content": "32f94fb1e9a3033101bbd500d02993cfc95e315f24417038fd42f1fd80e1059a"
         }
       ],
       "licenses": [
@@ -26775,9 +27632,9 @@
           "value": "Cargo.lock"
         }
       ],
-      "purl": "pkg:cargo/transcribe-cpp-sys@0.4.1",
+      "purl": "pkg:cargo/transcribe-cpp-sys@0.4.2",
       "type": "library",
-      "version": "0.4.1"
+      "version": "0.4.2"
     },
     {
       "bom-ref": "pkg:cargo/tray-icon@0.25.1",
@@ -33556,7 +34413,7 @@
       "version": "0.11.7"
     },
     {
-      "bom-ref": "pkg:cargo/zip@9.5.0",
+      "bom-ref": "pkg:cargo/zip@9.5.1",
       "evidence": {
         "identity": [
           {
@@ -33577,7 +34434,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "0700e6c427aff64acdbf02e85fbfd946c2ee12319d1af013092f3a2178914ff8"
+          "content": "e3476fd497ac8af5b1ec7b51acab7bef380f7e8dd8e0487595bafd839417a302"
         }
       ],
       "licenses": [
@@ -33594,9 +34451,9 @@
           "value": "Cargo.lock"
         }
       ],
-      "purl": "pkg:cargo/zip@9.5.0",
+      "purl": "pkg:cargo/zip@9.5.1",
       "type": "library",
-      "version": "9.5.0"
+      "version": "9.5.1"
     },
     {
       "bom-ref": "pkg:cargo/zlib-rs@0.6.8",
@@ -34710,7 +35567,7 @@
         "pkg:cargo/serde@1.0.229",
         "pkg:cargo/uncased@0.9.10"
       ],
-      "ref": "pkg:cargo/csscolorparser@0.9.0"
+      "ref": "pkg:cargo/csscolorparser@0.9.1"
     },
     {
       "dependsOn": [
@@ -35009,6 +35866,10 @@
         "pkg:cargo/pin-project-lite@0.2.17"
       ],
       "ref": "pkg:cargo/event-listener-strategy@0.5.4"
+    },
+    {
+      "dependsOn": [],
+      "ref": "pkg:cargo/extended@0.1.0"
     },
     {
       "dependsOn": [],
@@ -36527,6 +37388,12 @@
     },
     {
       "dependsOn": [
+        "pkg:cargo/thiserror@2.0.21"
+      ],
+      "ref": "pkg:cargo/opus-decoder@0.1.1"
+    },
+    {
+      "dependsOn": [
         "pkg:cargo/dlv-list@0.5.2",
         "pkg:cargo/hashbrown@0.14.5"
       ],
@@ -36920,6 +37787,10 @@
         "pkg:cargo/regex-syntax@0.8.11"
       ],
       "ref": "pkg:cargo/regex-automata@0.4.18"
+    },
+    {
+      "dependsOn": [],
+      "ref": "pkg:cargo/regex-lite@0.1.9"
     },
     {
       "dependsOn": [],
@@ -37455,7 +38326,7 @@
         "pkg:cargo/clipboard-rs@0.3.5",
         "pkg:cargo/clipboard-win@5.4.3",
         "pkg:cargo/cpal@0.18.2",
-        "pkg:cargo/csscolorparser@0.9.0",
+        "pkg:cargo/csscolorparser@0.9.1",
         "pkg:cargo/dhat@0.3.3",
         "pkg:cargo/dirs@7.0.0",
         "pkg:cargo/flate2@1.1.11",
@@ -37483,6 +38354,7 @@
         "pkg:cargo/stella-desktop-macos-signing@0.0.1",
         "pkg:cargo/stella-desktop-macos@0.0.1",
         "pkg:cargo/stella-desktop-pkcs11@0.0.1",
+        "pkg:cargo/stella-desktop-recording@0.0.1",
         "pkg:cargo/stella-desktop-signing-core@0.0.1",
         "pkg:cargo/stella-desktop-windows-signing@0.0.1",
         "pkg:cargo/sys-locale@0.3.2",
@@ -37504,7 +38376,7 @@
         "pkg:cargo/tower@0.5.3",
         "pkg:cargo/tracing-subscriber@0.3.23",
         "pkg:cargo/tracing@0.1.44",
-        "pkg:cargo/transcribe-cpp@0.4.1",
+        "pkg:cargo/transcribe-cpp@0.4.2",
         "pkg:cargo/ts-rs@12.0.1",
         "pkg:cargo/uuid@1.29.2",
         "pkg:cargo/windows-icons@0.4.0",
@@ -37513,7 +38385,7 @@
         "pkg:cargo/winsafe@0.0.29",
         "pkg:cargo/zbus-secret-service-keyring-store@1.0.1",
         "pkg:cargo/zeroize@1.9.1",
-        "pkg:cargo/zip@9.5.0"
+        "pkg:cargo/zip@9.5.1"
       ],
       "ref": "pkg:cargo/stella-desktop@0.0.1"
     },
@@ -37523,6 +38395,7 @@
         "pkg:cargo/core-foundation@0.10.1",
         "pkg:cargo/libc@0.2.191",
         "pkg:cargo/objc2-app-kit@0.3.2",
+        "pkg:cargo/objc2-avf-audio@0.3.2",
         "pkg:cargo/objc2-core-foundation@0.3.2",
         "pkg:cargo/objc2-core-graphics@0.3.2",
         "pkg:cargo/objc2-foundation@0.3.2",
@@ -37532,7 +38405,8 @@
         "pkg:cargo/objc2@0.6.5",
         "pkg:cargo/tauri@2.12.5",
         "pkg:cargo/tokio@1.54.1",
-        "pkg:cargo/windows-sys@0.61.2"
+        "pkg:cargo/windows-sys@0.61.2",
+        "pkg:cargo/windows@0.62.2"
       ],
       "ref": "pkg:cargo/stella-desktop-macos@0.0.1"
     },
@@ -37555,6 +38429,13 @@
         "pkg:cargo/zeroize@1.9.1"
       ],
       "ref": "pkg:cargo/stella-desktop-pkcs11@0.0.1"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/opus-decoder@0.1.1",
+        "pkg:cargo/symphonia@0.6.1"
+      ],
+      "ref": "pkg:cargo/stella-desktop-recording@0.0.1"
     },
     {
       "dependsOn": [
@@ -37619,6 +38500,155 @@
         "pkg:cargo/serde_json@1.0.154"
       ],
       "ref": "pkg:cargo/swift-rs@1.0.9"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/lazy_static@1.5.1",
+        "pkg:cargo/symphonia-bundle-flac@0.6.1",
+        "pkg:cargo/symphonia-bundle-mp3@0.6.1",
+        "pkg:cargo/symphonia-codec-aac@0.6.1",
+        "pkg:cargo/symphonia-codec-adpcm@0.6.1",
+        "pkg:cargo/symphonia-codec-alac@0.6.1",
+        "pkg:cargo/symphonia-codec-pcm@0.6.1",
+        "pkg:cargo/symphonia-codec-vorbis@0.6.1",
+        "pkg:cargo/symphonia-core@0.6.1",
+        "pkg:cargo/symphonia-format-caf@0.6.1",
+        "pkg:cargo/symphonia-format-isomp4@0.6.1",
+        "pkg:cargo/symphonia-format-mkv@0.6.1",
+        "pkg:cargo/symphonia-format-ogg@0.6.1",
+        "pkg:cargo/symphonia-format-riff@0.6.1",
+        "pkg:cargo/symphonia-metadata@0.6.1"
+      ],
+      "ref": "pkg:cargo/symphonia@0.6.1"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/log@0.4.35",
+        "pkg:cargo/symphonia-common@0.6.1",
+        "pkg:cargo/symphonia-core@0.6.1",
+        "pkg:cargo/symphonia-metadata@0.6.1"
+      ],
+      "ref": "pkg:cargo/symphonia-bundle-flac@0.6.1"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/lazy_static@1.5.1",
+        "pkg:cargo/log@0.4.35",
+        "pkg:cargo/symphonia-core@0.6.1"
+      ],
+      "ref": "pkg:cargo/symphonia-bundle-mp3@0.6.1"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/lazy_static@1.5.1",
+        "pkg:cargo/log@0.4.35",
+        "pkg:cargo/symphonia-common@0.6.1",
+        "pkg:cargo/symphonia-core@0.6.1"
+      ],
+      "ref": "pkg:cargo/symphonia-codec-aac@0.6.1"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/log@0.4.35",
+        "pkg:cargo/symphonia-core@0.6.1"
+      ],
+      "ref": "pkg:cargo/symphonia-codec-adpcm@0.6.1"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/log@0.4.35",
+        "pkg:cargo/symphonia-common@0.6.1",
+        "pkg:cargo/symphonia-core@0.6.1"
+      ],
+      "ref": "pkg:cargo/symphonia-codec-alac@0.6.1"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/log@0.4.35",
+        "pkg:cargo/symphonia-core@0.6.1"
+      ],
+      "ref": "pkg:cargo/symphonia-codec-pcm@0.6.1"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/log@0.4.35",
+        "pkg:cargo/symphonia-common@0.6.1",
+        "pkg:cargo/symphonia-core@0.6.1"
+      ],
+      "ref": "pkg:cargo/symphonia-codec-vorbis@0.6.1"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/log@0.4.35",
+        "pkg:cargo/symphonia-core@0.6.1",
+        "pkg:cargo/symphonia-metadata@0.6.1"
+      ],
+      "ref": "pkg:cargo/symphonia-common@0.6.1"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/bitflags@2.13.2",
+        "pkg:cargo/bytemuck@1.25.2",
+        "pkg:cargo/lazy_static@1.5.1",
+        "pkg:cargo/log@0.4.35",
+        "pkg:cargo/num-complex@0.4.6",
+        "pkg:cargo/smallvec@1.16.5"
+      ],
+      "ref": "pkg:cargo/symphonia-core@0.6.1"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/log@0.4.35",
+        "pkg:cargo/symphonia-common@0.6.1",
+        "pkg:cargo/symphonia-core@0.6.1"
+      ],
+      "ref": "pkg:cargo/symphonia-format-caf@0.6.1"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/log@0.4.35",
+        "pkg:cargo/symphonia-common@0.6.1",
+        "pkg:cargo/symphonia-core@0.6.1",
+        "pkg:cargo/symphonia-metadata@0.6.1"
+      ],
+      "ref": "pkg:cargo/symphonia-format-isomp4@0.6.1"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/lazy_static@1.5.1",
+        "pkg:cargo/log@0.4.35",
+        "pkg:cargo/symphonia-common@0.6.1",
+        "pkg:cargo/symphonia-core@0.6.1"
+      ],
+      "ref": "pkg:cargo/symphonia-format-mkv@0.6.1"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/log@0.4.35",
+        "pkg:cargo/symphonia-common@0.6.1",
+        "pkg:cargo/symphonia-core@0.6.1",
+        "pkg:cargo/symphonia-metadata@0.6.1"
+      ],
+      "ref": "pkg:cargo/symphonia-format-ogg@0.6.1"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/extended@0.1.0",
+        "pkg:cargo/log@0.4.35",
+        "pkg:cargo/symphonia-core@0.6.1",
+        "pkg:cargo/symphonia-metadata@0.6.1"
+      ],
+      "ref": "pkg:cargo/symphonia-format-riff@0.6.1"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/lazy_static@1.5.1",
+        "pkg:cargo/log@0.4.35",
+        "pkg:cargo/regex-lite@0.1.9",
+        "pkg:cargo/smallvec@1.16.5",
+        "pkg:cargo/symphonia-core@0.6.1"
+      ],
+      "ref": "pkg:cargo/symphonia-metadata@0.6.1"
     },
     {
       "dependsOn": [
@@ -38020,7 +39050,7 @@
         "pkg:cargo/tokio@1.54.1",
         "pkg:cargo/url@2.5.8",
         "pkg:cargo/windows-sys@0.61.2",
-        "pkg:cargo/zip@9.5.0"
+        "pkg:cargo/zip@9.5.1"
       ],
       "ref": "pkg:cargo/tauri-plugin-updater@2.14.1"
     },
@@ -38391,16 +39421,16 @@
       "dependsOn": [
         "pkg:cargo/log@0.4.35",
         "pkg:cargo/thiserror@2.0.21",
-        "pkg:cargo/transcribe-cpp-sys@0.4.1"
+        "pkg:cargo/transcribe-cpp-sys@0.4.2"
       ],
-      "ref": "pkg:cargo/transcribe-cpp@0.4.1"
+      "ref": "pkg:cargo/transcribe-cpp@0.4.2"
     },
     {
       "dependsOn": [
         "pkg:cargo/cmake@0.1.58",
         "pkg:cargo/serde_json@1.0.154"
       ],
-      "ref": "pkg:cargo/transcribe-cpp-sys@0.4.1"
+      "ref": "pkg:cargo/transcribe-cpp-sys@0.4.2"
     },
     {
       "dependsOn": [
@@ -39281,7 +40311,7 @@
         "pkg:cargo/windows-sys@0.61.2",
         "pkg:cargo/zeroize@1.9.1"
       ],
-      "ref": "pkg:cargo/zip@9.5.0"
+      "ref": "pkg:cargo/zip@9.5.1"
     },
     {
       "dependsOn": [],
@@ -39382,6 +40412,22 @@
           ],
           "name": "stella-desktop-signing-core",
           "purl": "pkg:cargo/stella-desktop-signing-core@0.0.1",
+          "type": "library",
+          "version": "0.0.1"
+        },
+        {
+          "bom-ref": "pkg:cargo/stella-desktop-recording@0.0.1",
+          "group": "",
+          "licenses": [
+            {
+              "license": {
+                "id": "Apache-2.0",
+                "url": "https://opensource.org/licenses/Apache-2.0"
+              }
+            }
+          ],
+          "name": "stella-desktop-recording",
+          "purl": "pkg:cargo/stella-desktop-recording@0.0.1",
           "type": "library",
           "version": "0.0.1"
         },

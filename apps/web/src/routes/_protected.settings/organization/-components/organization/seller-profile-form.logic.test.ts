@@ -8,6 +8,7 @@ import { sellerProfileFormSchema } from "./seller-profile-form.logic";
 const schema = sellerProfileFormSchema({
   required: "Required",
   invalidField: "Invalid field",
+  invalidEmail: "Invalid email",
   invalidIban: "Invalid IBAN",
   invalidBic: "Invalid BIC",
   invalidCurrency: "Invalid currency",
@@ -23,6 +24,7 @@ const empty = {
   city: "",
   postalCode: "",
   country: "",
+  email: "",
   iban: "",
   bic: "",
   accountNumber: "",
@@ -135,5 +137,16 @@ describe("seller profile VAT payer", () => {
     expect(
       v.parse(schema, { ...empty, vatPayer: false, vatId: "CZ12345678" }),
     ).toMatchObject({ vatPayer: false, vatId: "CZ12345678" });
+  });
+
+  test("keeps a trimmed reply-to email and refuses one that is not an address", () => {
+    expect(
+      v.parse(schema, { ...empty, email: "  billing@example.test " }),
+    ).toMatchObject({ email: "billing@example.test" });
+    const invalid = v.safeParse(schema, { ...empty, email: "not an address" });
+    expect(invalid.success).toBe(false);
+    expect(invalid.issues?.map((issue) => issue.message)).toContain(
+      "Invalid email",
+    );
   });
 });

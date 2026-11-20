@@ -5,21 +5,22 @@ import { moneyExportSchema } from "@stll/api-contract/billing-money";
 import { withBillingRead } from "@stll/permissions";
 import { Temporal } from "@stll/time";
 
-import {
-  buildInvoiceExportFile,
-  INVOICE_EXPORT_FORMATS,
-} from "@/api/handlers/invoices/export-file";
-import {
-  loadInvoiceExport,
-  MAX_EXPORT_INVOICES,
-  toExportRecords,
-} from "@/api/handlers/invoices/export-records";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { auditedPresignDownload } from "@/api/lib/audited-download";
 import { ownerSyntheticSessionAuthorityReader } from "@/api/lib/auth";
+import {
+  buildInvoiceExportFile,
+  INVOICE_EXPORT_FORMATS,
+} from "@/api/lib/billing/invoice-export-file";
+import {
+  loadInvoiceExport,
+  MAX_EXPORT_INVOICES,
+  toExportRecords,
+} from "@/api/lib/billing/invoice-export-records";
 import { resourceIdSchema, workspaceParams } from "@/api/lib/custom-schema";
 import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
+import { holdMemberAccessOnTx } from "@/api/lib/db/member-access-hold";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { extractLangFromRequest } from "@/api/lib/locale";
 import { noResourceSetUpdates } from "@/api/lib/resource-set-realtime";
@@ -77,8 +78,8 @@ export const createInvoicesExport = (writeObject = writeS3ObjectWithRetry) =>
       safeDb,
       workspaceId,
       session,
-      body,
       user,
+      body,
       request,
       recordAuditEvent,
     }) {
@@ -141,28 +142,47 @@ export const createInvoicesExport = (writeObject = writeS3ObjectWithRetry) =>
         }),
       );
       const downloadUrl = yield* Result.await(
-        safeDb(
-          async (tx) =>
-            await auditedPresignDownload({
-              readSessionAuthority: ownerSyntheticSessionAuthorityReader,
-              tx,
-              recordAuditEvent,
-              resourceType: single
-                ? AUDIT_RESOURCE_TYPE.INVOICE
-                : AUDIT_RESOURCE_TYPE.WORKSPACE,
-              resourceId: single ? single.id : workspaceId,
-              userId: user.id,
-              source: callerDownloadSource(session),
-              s3Key: key,
-              s3Keyspace: "exports",
-              expiresInSeconds: EXPORT_URL_TTL_SECONDS,
-              fileName,
-              organizationId,
-              workspaceId,
-              metadata: { format: body.format, invoiceCount: records.length },
-            }),
-        ),
+        safeDb(async (tx) => {
+          const access = await holdMemberAccessOnTx(tx, {
+            organizationId,
+            userId: user.id,
+            workspaceIds: [workspaceId],
+          });
+          if (
+            access.type !== "held" ||
+            !access.workspaceIds.includes(workspaceId)
+          ) {
+            return null;
+          }
+          return await auditedPresignDownload({
+            readSessionAuthority: ownerSyntheticSessionAuthorityReader,
+            tx,
+            recordAuditEvent,
+            resourceType: single
+              ? AUDIT_RESOURCE_TYPE.INVOICE
+              : AUDIT_RESOURCE_TYPE.WORKSPACE,
+            resourceId: single ? single.id : workspaceId,
+            userId: user.id,
+            source: callerDownloadSource(session),
+            s3Key: key,
+            s3Keyspace: "exports",
+            expiresInSeconds: EXPORT_URL_TTL_SECONDS,
+            fileName,
+            organizationId,
+            workspaceId,
+            metadata: { format: body.format, invoiceCount: records.length },
+          });
+        }),
       );
+      if (downloadUrl === null) {
+        return Result.err(
+          new HandlerError({
+            status: 404,
+            code: "not_found",
+            message: "Invoice not found",
+          }),
+        );
+      }
       return Result.ok({
         downloadUrl,
         fileName,

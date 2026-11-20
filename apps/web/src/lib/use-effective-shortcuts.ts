@@ -1,4 +1,4 @@
-import { useCallback, useSyncExternalStore } from "react";
+import { useSyncExternalStore } from "react";
 
 import type { HotkeyChord } from "@tanstack/react-hotkeys";
 import { hashKey, useQueryClient } from "@tanstack/react-query";
@@ -26,21 +26,15 @@ const SESSION_QUERY_HASH = hashKey(rootKeys.session);
  */
 export const useShortcutOverrides = (): ShortcutOverrides => {
   const queryClient = useQueryClient();
-  const subscribe = useCallback(
-    (onChange: () => void) =>
-      queryClient.getQueryCache().subscribe((event) => {
-        if (event.query.queryHash === SESSION_QUERY_HASH) {
-          onChange();
-        }
-      }),
-    [queryClient],
-  );
-  const getSnapshot = useCallback(
-    () =>
-      queryClient.getQueryData(sessionOptions.queryKey)?.user.userShortcuts ??
-      null,
-    [queryClient],
-  );
+  const subscribe = (onChange: () => void) =>
+    queryClient.getQueryCache().subscribe((event) => {
+      if (event.query.queryHash === SESSION_QUERY_HASH) {
+        onChange();
+      }
+    });
+  const getSnapshot = () =>
+    queryClient.getQueryData(sessionOptions.queryKey)?.user.userShortcuts ??
+    null;
   const raw = useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
   return parseUserShortcuts(raw);
 };

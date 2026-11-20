@@ -120,6 +120,7 @@ export type ExtractAskContentsArgs = {
   promptCachingEnabled: boolean;
   serviceTier: AIRequestServiceTier;
   usageMetering?: AIUsageMetering | undefined;
+  authorizeModelDispatch?: (() => Promise<void>) | undefined;
   /** External file and model boundaries; supplied by focused tests. */
   fetchAndPrepareFiles?: typeof fetchAndPrepareFiles | undefined;
   generateWorkflowData?: typeof generateWorkflowData | undefined;
@@ -248,6 +249,7 @@ export const extractAskContents = async ({
   promptCachingEnabled,
   serviceTier,
   usageMetering,
+  authorizeModelDispatch,
   fetchAndPrepareFiles: prepareFiles = fetchAndPrepareFiles,
   generateWorkflowData: generate = generateWorkflowData,
 }: ExtractAskContentsArgs): Promise<
@@ -317,6 +319,7 @@ export const extractAskContents = async ({
       asked.push({ sourceId: ask.sourceId, property });
     }
 
+    await authorizeModelDispatch?.();
     const generation = yield* Result.await(
       generate({
         files: preparedFiles,

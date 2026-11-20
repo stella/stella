@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updatedAt": "2026-11-03T00:00:00Z",
+  "updatedAt": "2026-11-19T00:00:00Z",
   "compatibility": [
     {
       "harness": "codex",
@@ -21,6 +21,16 @@
       "ranges": [
         { "range": ">=2.1.309", "status": "supported" },
         { "range": "<2.1.309", "status": "unsupported" }
+      ]
+    },
+    {
+      "harness": "antigravity",
+      "desktopRange": ">=0.0.1",
+      "recommendedVersion": "1.5.0",
+      "recommendedRange": ">=1.5.0",
+      "ranges": [
+        { "range": ">=1.5.0", "status": "supported" },
+        { "range": "<1.5.0", "status": "unsupported" }
       ]
     }
   ]

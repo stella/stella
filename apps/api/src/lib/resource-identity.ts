@@ -118,6 +118,7 @@ export const RESOURCE_IDENTITY_DISPOSITION = {
   fileChatThread: { type: "non_resource", reason: "association" },
   templateChatThread: { type: "non_resource", reason: "association" },
   templateDeletionCleanupRequest: { type: "non_resource", reason: "job" },
+  agentSkillOriginalCleanupRequest: { type: "non_resource", reason: "job" },
   templateLookupFormat: { type: "non_resource", reason: "subresource" },
   clause: { type: "resource", resourceType: RESOURCE_TYPE.CLAUSE },
   clauseCategory: {
@@ -218,6 +219,7 @@ export const RESOURCE_IDENTITY_DISPOSITION = {
   infoSoudTrackedCase: { type: "non_resource", reason: "workflow" },
   invoice: { type: "resource", resourceType: RESOURCE_TYPE.INVOICE },
   invoiceLine: { type: "non_resource", reason: "subresource" },
+  invoiceSend: { type: "non_resource", reason: "subresource" },
   invoicePayment: { type: "non_resource", reason: "subresource" },
   justification: { type: "non_resource", reason: "subresource" },
   legislationDocument: {
@@ -275,6 +277,7 @@ export const RESOURCE_IDENTITY_DISPOSITION = {
     resourceType: RESOURCE_TYPE.ORGANIZATION,
   },
   organizationSettings: { type: "non_resource", reason: "singleton" },
+  outboundAction: { type: "non_resource", reason: "workflow" },
   fileComparisonUpload: { type: "non_resource", reason: "workflow" },
   pdfSigningSession: { type: "non_resource", reason: "session" },
   pendingUpload: { type: "non_resource", reason: "workflow" },

@@ -11,9 +11,10 @@ import type {
 } from "@stll/api-contract/time-entry-report";
 import { Temporal } from "@stll/time";
 
-import type { ReportSearch } from "./report-search";
+import type { ReportSearch } from "./report-search.logic";
 
-export type ReportPeriod = (typeof TIME_ENTRY_REPORT_PERIODS)[number];
+export const REPORT_PERIODS = TIME_ENTRY_REPORT_PERIODS;
+export type ReportPeriod = (typeof REPORT_PERIODS)[number];
 export type ReportRange = { from: string; to: string };
 type ReportGrid = ReportRange & {
   groupBy: TimeEntryReportGroupBy;
@@ -92,7 +93,7 @@ export const reportRange = (
 };
 
 export const isReportPeriod = (value: unknown): value is ReportPeriod =>
-  TIME_ENTRY_REPORT_PERIODS.some((period) => period === value);
+  REPORT_PERIODS.some((period) => period === value);
 
 export const shiftReportRange = (
   range: ReportRange,

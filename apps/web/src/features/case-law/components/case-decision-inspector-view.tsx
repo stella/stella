@@ -29,11 +29,11 @@ import { AnnotationToolbar } from "@/components/legal-reader/annotations/annotat
 import { GuestAnnotationPrompt } from "@/components/legal-reader/annotations/guest-annotation-prompt";
 import { OrphanedAnnotationsNotice } from "@/components/legal-reader/annotations/orphaned-annotations-notice";
 import { LegalReaderAIChat } from "@/components/legal-reader/legal-reader-ai-chat";
+import { LegalReaderControls } from "@/components/legal-reader/legal-reader-controls";
 import {
   LEGAL_READER_CONTENT_CLEARANCE_CLASS_NAME,
   LEGAL_READER_LAYOUT_CLASS_NAME,
-  LegalReaderControls,
-} from "@/components/legal-reader/legal-reader-controls";
+} from "@/components/legal-reader/legal-reader-controls.pending";
 import { MarginNotes } from "@/components/legal-reader/margin-notes";
 import type { MarginItem } from "@/components/legal-reader/margin-notes";
 import { OpenOriginalButton } from "@/components/legal-reader/open-original-button";
@@ -41,7 +41,7 @@ import { useReaderElement } from "@/components/legal-reader/use-reader-element";
 import { useWebReaderTextScale as useReaderTextScale } from "@/components/legal-reader/use-web-reader-text-scale";
 import { WebDecisionReader as DecisionText } from "@/components/legal-reader/web-decision-reader";
 import { decisionInspectorAnnotationTarget } from "@/features/case-law/components/case-decision-inspector-view.logic";
-import { useAnalysisReaderOutline } from "@/features/case-law/components/case-viewer/analysis/reader-breadcrumb";
+import { analysisReaderOutline } from "@/features/case-law/components/case-viewer/analysis/reader-breadcrumb";
 import { useLazyDecisionAnalysis } from "@/features/case-law/components/case-viewer/analysis/use-lazy-decision-analysis";
 import { DecisionCitationBox } from "@/features/case-law/components/case-viewer/decision-citation-box";
 import { DecisionFacts } from "@/features/case-law/components/case-viewer/decision-facts";
@@ -88,7 +88,7 @@ export const CaseDecisionInspectorView = ({
 }: InspectorViewRenderProps<CaseDecisionViewPayload>) => {
   const t = useTranslations();
   const { payload } = tab;
-  const textScale = useReaderTextScale("decision");
+  const textScale = useReaderTextScale();
   const decisionId = toSafeId<"caseLawDecision">(payload.decisionId);
   const { citationAnchors, unresolvedCitationAnchors } =
     useDecisionCitationAnchors(decisionId);
@@ -122,7 +122,7 @@ export const CaseDecisionInspectorView = ({
         return panic("Unhandled analysis state");
     }
   })();
-  const analysisContents = useAnalysisReaderOutline(analysisTree);
+  const analysisContents = analysisReaderOutline(analysisTree);
   // No text is shown before the decision loads, so the default is moot then.
   const caseNumberType =
     decision?.caseNumberType ?? DECISION_IDENTIFIER_TYPES.CASE_NUMBER;

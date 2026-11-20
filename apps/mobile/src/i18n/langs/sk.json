@@ -1,4 +1,7 @@
 {
+  "common": {
+    "previewTruncated": "Úplný text nie je v tomto náhľade k dispozícii."
+  },
   "tabs": {
     "chat": "Chat",
     "close": "Zavrieť",
@@ -127,6 +130,8 @@
       "boe_search_legislation": "Vyhľadávanie v BOE",
       "borme_get_summary": "Denný súhrn BORME",
       "business_registry_lookup": "Vyhľadávanie v obchodnom registri",
+      "calendar_free_busy": "Zistenie dostupnosti v kalendári",
+      "calendar_list_events": "Čítanie udalostí kalendára",
       "command_execution": "Spúšťanie príkazu",
       "compare_versions": "Porovnávanie verzií",
       "configure_template_fields": "Nastaviť polia vzoru",
@@ -143,10 +148,10 @@
       "delete_reader_annotation": "Vymazať zvýraznenie alebo komentár",
       "delete_task": "Odstrániť úlohu",
       "delete_time_entry": "Vymazať časový záznam",
-      "describe-stella-api": "Pripravujem vyhľadanie dát",
-      "describe-stella-function": "Pripravujem vyhľadanie dát",
+      "describe-stella-api": "Vyberám, kde hľadať",
+      "describe-stella-function": "Vyberám, kde hľadať",
       "describe_template": "Čítanie polí vzoru",
-      "discover_tools": "Pripravujem vyhľadanie dát",
+      "discover_tools": "Vyberám, kde hľadať",
       "execute-typescript": "Čítam dáta spisu",
       "execute_typescript": "Čítam dáta spisu",
       "expand-chat-history": "Čítanie histórie chatu",
@@ -186,6 +191,7 @@
       "save_document": "Uložiť dokument",
       "save_matter": "Uložiť spis",
       "save_playbook": "Uložiť playbook",
+      "save_skill_package": "Uložiť zručnosť",
       "save_task": "Uložiť úlohu",
       "save_template": "Uložiť vzor",
       "save_time_entry": "Uložiť časový záznam",
@@ -208,7 +214,13 @@
       "update_reader_annotation": "Upraviť zvýraznenie alebo komentár",
       "use-browser": "Používanie vášho prehliadača",
       "use_connector_secret": "Použitie prístupového údaja konektora",
+      "validate_skill_package": "Skontrolovať zručnosť",
       "web_search": "Vyhľadávanie na webe"
+    },
+    "toolResearch": {
+      "caseLaw": "Hľadám v judikatúre",
+      "legislation": "Čítam predpisy",
+      "legislationAndCaseLaw": "Hľadám v predpisoch a judikatúre"
     },
     "localRun": {
       "title": {
@@ -264,9 +276,18 @@
       "sourcesChecked": "{count, plural, one {# preverený zdroj} few {# preverené zdroje} other {# preverených zdrojov} many {# prevereného zdroja}}",
       "documentEdits": "{count, plural, one {# úprava dokumentu} few {# úpravy dokumentu} other {# úprav dokumentu} many {# úpravy dokumentu}}",
       "changesSaved": "{count, plural, one {# uložená zmena} few {# uložené zmeny} other {# uložených zmien} many {# uloženej zmeny}}",
-      "analyses": "{count, plural, one {# analýza} few {# analýzy} other {# analýz} many {# analýzy}}"
+      "searchedLegislation": "Prehľadané predpisy",
+      "searchedCaseLaw": "Prehľadaná judikatúra",
+      "searchedLegislationAndCaseLaw": "Prehľadané predpisy a judikatúra",
+      "readDocument": "Prečítaný dokument",
+      "readDocuments": "Prečítané dokumenty",
+      "searchedMatters": "Prehľadané spisy",
+      "checkedRegisters": "Overené verejné registre",
+      "searchedWeb": "Prehľadaný web",
+      "searchedChats": "Prehľadaná história chatu"
     },
     "stepCount": "{count, plural, one {# krok} few {# kroky} many {# kroku} other {# krokov}}",
+    "lookupCount": "{count, plural, one {# dopyt} few {# dopyty} many {# dopytu} other {# dopytov}}",
     "reasoning": "Uvažovanie",
     "historyTrimmed": "Staršie správy sa nepodarilo zhrnúť, preto táto odpoveď vychádza len z poslednej časti konverzácie.",
     "failure": {
@@ -331,6 +352,39 @@
         "send-refused": "Front je pozastavený: prvú správu sa nepodarilo odoslať. Upravte ju alebo ju odstráňte a potom pokračujte.",
         "usage-limit": "Front je pozastavený: dosiahli ste limit využitia. Pokračujte, keď sa obnoví.",
         "computer-away": "Čaká sa na váš počítač: správy vo fronte sa odošlú, keď sa pripojí."
+      }
+    },
+    "edit": {
+      "action": "Upraviť",
+      "title": "Upraviť správu",
+      "input": "Upravená správa",
+      "notice": "Odoslaním nahradíte túto správu aj všetky správy po nej.",
+      "cancel": "Zrušiť",
+      "refused": "Správu sa nepodarilo upraviť. Chat teraz ukazuje uložený stav, skúste to znova, keď nebeží žiadna odpoveď.",
+      "refusedHistoryChanged": "Chat sa počas odosielania úpravy zmenil. Teraz ukazuje uložený stav, odošlite úpravu znova.",
+      "refusedTargetMissing": "Táto správa už v chate nie je, preto ju nemožno upraviť.",
+      "localFiles": {
+        "computer": {
+          "failed": "Vrátenie zmien sa vo vašom počítači nedokončilo. Niektoré súbory už mohli byť zmenené, preto skontrolujte priečinok chatu.",
+          "folderBusy": "Tento priečinok vo vašom počítači práve používa iný beh. Skúste to znova, keď skončí.",
+          "noCheckpoint": "Váš počítač nemá uloženú kópiu súborov spred tohto kroku, takže sa nič nevrátilo.",
+          "updateForEarlier": "Aktualizujte stella desktop, aby ste mohli vracať zmeny zo skorších správ."
+        },
+        "conversationRestarts": "Agent začne odznova z textu tohto chatu, pretože odpoveď pred touto správou sa nedokončila.",
+        "expired": "Váš počítač neodpovedal včas. Skúste to znova.",
+        "option": "Vrátiť aj zmeny súborov od tejto správy",
+        "optionHint": "Vrátia sa aj zmeny, ktoré ste v priečinku urobili sami.",
+        "pending": "Vracanie zmien súborov vo vašom počítači",
+        "refused": {
+          "alreadyUndone": "Tieto zmeny súborov už boli vrátené.",
+          "desktopOffline": "Váš počítač je offline. Otvorte desktopovú aplikáciu stella a skúste to znova.",
+          "desktopUpdateRequired": "Desktopová aplikácia stella vo vašom počítači je príliš stará na vrátenie zmien. Aktualizujte ju a skúste to znova.",
+          "folderShared": "V tomto priečinku od tejto správy pracoval iný chat.",
+          "noSavedCopy": "Váš počítač neuchoval kópiu priečinka spred tejto správy: bol príliš veľký alebo sa ukladal príliš pomaly, alebo ju nahradili novšie kópie.",
+          "severalFolders": "Neskoršie správy bežali na inom počítači alebo v inom priečinku.",
+          "threadBusy": "Tento chat ešte pracuje. Skúste to znova, keď skončí."
+        },
+        "restored": "Zmeny súborov vrátené"
       }
     }
   },
@@ -491,6 +545,7 @@
     "title": "Dokument",
     "failedTitle": "Dokument sa nedá otvoriť",
     "failure": {
+      "dataBoxUnreadable": "Súbor sa nepodarilo prečítať ako dátovú správu ani ako doručenku.",
       "offline": "Ste offline. Pripojte sa na internet a skúste to znova.",
       "noFile": "Tento dokument zatiaľ nemá súbor.",
       "failed": "Pri otváraní sa niečo pokazilo. Skúste to o chvíľu znova.",
@@ -498,6 +553,7 @@
       "android": "V aplikácii pre Android zatiaľ dokumenty nemožno otvoriť."
     },
     "retry": "Skúsiť znova",
+    "openOriginal": "Otvoriť originál",
     "preview": "Otvoriť náhľad",
     "previewDescription": "Tento súbor sa otvorí v systémovom náhľade.",
     "unrendered": "Tento dokument sa tu nedá zobraziť, systémový náhľad ho však možno otvorí.",
@@ -555,7 +611,28 @@
     "signOutFailed": "Odhlásenie sa nepodarilo dokončiť. Skúste to znova.",
     "lockScreenTitle": "Zamknutá obrazovka",
     "timerDetails": "Podrobnosti časovača",
-    "timerDetailsHint": "Keď sa časovač zmení na inom zariadení, doručí jeho popis a spis na zamknutú obrazovku služba oznámení Apple. Po vypnutí sa zobrazí len čas, kým aplikáciu neotvoríte."
+    "timerDetailsHint": "Keď sa časovač zmení na inom zariadení, doručí jeho popis a spis na zamknutú obrazovku služba oznámení Apple. Po vypnutí sa zobrazí len čas, kým aplikáciu neotvoríte.",
+    "dictationTitle": "Diktovanie",
+    "dictationModelDefault": "Predvolený",
+    "dictationModelDefaultNamed": "Predvolený ({model})",
+    "dictationModelOutsideRegion": "Mimo vášho regiónu",
+    "dictationModelRetainsData": "Uchováva váš zvuk",
+    "dictationModelRetainsWarning": "Tento model beží na účte bez nulového uchovávania údajov. {provider} ukladá zvuk aj prepis všetkého, čo nadiktujete, podľa vlastných podmienok a mimo kontroly stella. Nediktujte s ním dôverné ani klientske informácie.",
+    "dictationModelHint": "Model, ktorý z diktátu urobí text. stella zvuk neukladá.",
+    "dictationModelsUnavailable": "Modely sa nepodarilo načítať. Diktovanie použije model, ktorý ste vybrali, alebo predvolený, ak ho server už neponúka.",
+    "dictationCleanup": "Upraviť pomocou AI",
+    "dictationCleanupHint": "Opraví chyby rozpoznávania a vyslovené formátovanie, napríklad „nový riadok“. Len text, nie zvuk, ide cez stella k poskytovateľovi AI vašej organizácie; stella ho neukladá."
+  },
+  "signedFile": {
+    "layer": "Vrstva podpisov {number, number}",
+    "noReadableContent": "Na náhľad nie je k dispozícii žiadny čitateľný obsah.",
+    "unknownSigner": "Neznámy podpisovateľ",
+    "unreadable": "Podpísaný súbor sa nepodarilo prečítať.",
+    "unverified": "Podpisy neboli overené."
+  },
+  "structuredDocument": {
+    "noReadableContent": "Na náhľad nie je k dispozícii čitateľný text.",
+    "textOnly": "Textový náhľad bez rozloženia strany a obrázkov."
   },
   "header": {
     "search": "Hľadať"

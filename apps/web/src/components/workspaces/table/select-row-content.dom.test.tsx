@@ -3,11 +3,14 @@ import type React from "react";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import type { RowSelectionState } from "@tanstack/react-table";
 import { afterAll, afterEach, describe, expect, test } from "bun:test";
+import { fileURLToPath } from "node:url";
 
 import {
   TEXT_ABSENCE_REASON,
   TEXT_FIELD_TYPE,
 } from "@stll/api-contract/case-law-text-field";
+import { TABLE_CONTENT_MODES } from "@stll/api-contract/public-law-table";
+import type { TableContentMode } from "@stll/api-contract/public-law-table";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
@@ -17,8 +20,6 @@ import type {
   DecisionRowData,
   TableTreeNode,
 } from "@/components/workspaces/table/types";
-import { TABLE_CONTENT_MODES } from "@/lib/workspaces/table-store.logic";
-import type { TableContentMode } from "@/lib/workspaces/table-store.logic";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/law" });
 
@@ -76,7 +77,7 @@ afterAll(async () => {
 // the selection/row boundary rather than relying on a maintained fixture list.
 const selectionHosts: string[] = [];
 for await (const path of new Bun.Glob("**/*.tsx").scan({
-  cwd: new URL("../../../", import.meta.url).pathname,
+  cwd: fileURLToPath(new URL("../../../", import.meta.url)),
 })) {
   if (path.endsWith(".test.tsx")) {
     continue;

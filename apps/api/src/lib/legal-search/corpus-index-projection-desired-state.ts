@@ -23,18 +23,18 @@ import {
 } from "@/api/lib/db/aggregate-lock";
 import { transitionBatch } from "@/api/lib/db/transitions";
 import type { CaseLawRankingSignals } from "@/api/lib/legal-search/case-law-ranking-signals";
-import {
-  CORPUS_INDEX_ACTIVE_GENERATION_STATUSES,
-  isActiveCorpusIndexGenerationStatus,
-} from "@/api/lib/legal-search/corpus-generation-contract";
+import { CORPUS_INDEX_ACTIVE_GENERATION_STATUSES } from "@/api/lib/legal-search/corpus-generation-contract";
 import { requireRegisteredCorpusIndexManifest } from "@/api/lib/legal-search/corpus-index-generation-store";
 import { readCaseLawJurisdictionVacatedTx } from "@/api/lib/legal-search/corpus-index-jurisdiction-serving-store";
 import {
-  CORPUS_INDEX_MANIFESTS,
   type CorpusIndexManifest,
   corpusIndexManifestCoversJurisdiction,
   requireCorpusIndexManifest,
 } from "@/api/lib/legal-search/corpus-index-manifest";
+import {
+  type ProjectedCorpusIndexGeneration,
+  readProjectedCorpusIndexGenerationsTx,
+} from "@/api/lib/legal-search/corpus-index-projected-generations";
 import {
   type CaseLawProjectionInput,
   type CorpusIndexProjectionDescriptor,
@@ -56,15 +56,6 @@ import { partialObservationFromMetadata } from "@/api/lib/legal-search/ingestion
 import type { LegislationExpressionClassification } from "@/api/lib/legal-search/legislation-expression-classification";
 import { OBSERVATION_DETAIL } from "@/api/lib/legal-search/partial-observation-sql";
 import { sqlCaseFragment } from "@/api/lib/sql-case-expression";
-
-const CORPUS_INDEX_MANIFEST_COUNT = Object.keys(CORPUS_INDEX_MANIFESTS).length;
-
-const projectionGenerationsForFamily = (
-  family: CorpusIndexProjectionSubject["family"],
-): string[] =>
-  Object.values(CORPUS_INDEX_MANIFESTS).flatMap((manifest) =>
-    manifest.family === family ? [manifest.generation] : [],
-  );
 
 export type CorpusIndexProjectionSubject =
   | {
@@ -373,29 +364,19 @@ const lockCorpusProjectionSourceByIdTx = async (
   }
 };
 
+/**
+ * Whether the family has a generation that takes content. Read through the
+ * projected-generation owner, so a process that does not know one of the
+ * registry's generations is refused here, before its caller writes the
+ * canonical row, rather than told there is nothing to project.
+ */
 const hasActiveCorpusProjectionTx = async (
   tx: Transaction,
   family: CorpusIndexProjectionSubject["family"],
 ): Promise<boolean> =>
-  (
-    await tx
-      .select({ generation: corpusIndexGenerations.generation })
-      .from(corpusIndexGenerations)
-      .where(
-        and(
-          eq(corpusIndexGenerations.family, family),
-          inArray(
-            corpusIndexGenerations.generation,
-            projectionGenerationsForFamily(family),
-          ),
-          inArray(
-            corpusIndexGenerations.status,
-            CORPUS_INDEX_ACTIVE_GENERATION_STATUSES,
-          ),
-        ),
-      )
-      .limit(1)
-  ).length > 0;
+  (await readProjectedCorpusIndexGenerationsTx(tx, family)).some(
+    ({ accepts }) => accepts === "content",
+  );
 
 /**
  * Share-lock source policy before checking activation. Registration takes a
@@ -632,54 +613,23 @@ const setCanonicalProjectionEpoch = async (
   }
 };
 
-type RegisteredManifest = {
-  generation: string;
-  manifest: CorpusIndexManifest;
-  /** Whether the generation may still be given content, or only relieved of it. */
-  accepts: "content" | "erase-only";
-};
-
 /**
  * Every generation a canonical mutation has to reach, with what it may be told.
  *
  * A building or serving generation takes the whole descriptor. A retiring one
  * is past taking new content, but its index still holds whatever it was given
  * until that index is deleted, so an erasure has to reach it as well; sending
- * it an upsert instead would re-add the text this mutation is removing.
+ * it an upsert instead would re-add the text this mutation is removing. The
+ * set comes from the registry, and a generation this process has no manifest
+ * for refuses the mutation (`CorpusIndexGenerationUnknownError`) instead of
+ * being left out of it.
  */
 const projectionManifests = async (
   tx: Transaction,
   family: CorpusIndexProjectionSubject["family"],
-): Promise<RegisteredManifest[]> => {
+): Promise<ProjectedCorpusIndexGeneration[]> => {
   await lockCorpusIndexProjectionWriterTx(tx);
-  const rows = await tx
-    .select()
-    .from(corpusIndexGenerations)
-    .where(
-      and(
-        eq(corpusIndexGenerations.family, family),
-        inArray(
-          corpusIndexGenerations.generation,
-          projectionGenerationsForFamily(family),
-        ),
-        inArray(corpusIndexGenerations.status, [
-          ...CORPUS_INDEX_ACTIVE_GENERATION_STATUSES,
-          "retiring",
-        ]),
-      ),
-    )
-    .orderBy(asc(corpusIndexGenerations.generation))
-    .limit(CORPUS_INDEX_MANIFEST_COUNT + 1);
-  if (rows.length > CORPUS_INDEX_MANIFEST_COUNT) {
-    return panic(`Active corpus generation registry exceeds its manifest set`);
-  }
-  return rows.map((row) => ({
-    generation: row.generation,
-    manifest: requireRegisteredCorpusIndexManifest(row),
-    accepts: isActiveCorpusIndexGenerationStatus(row.status)
-      ? "content"
-      : "erase-only",
-  }));
+  return await readProjectedCorpusIndexGenerationsTx(tx, family);
 };
 
 type GenerationProjection = {
@@ -702,7 +652,7 @@ type GenerationProjection = {
 const projectionsFor = async (
   tx: Transaction,
   subject: CorpusIndexProjectionSubject,
-  manifests: readonly RegisteredManifest[],
+  manifests: readonly ProjectedCorpusIndexGeneration[],
   input: Parameters<typeof deriveCorpusIndexProjectionDescriptor>[1],
 ): Promise<GenerationProjection[]> => {
   const uncovered = manifests.filter(
@@ -735,7 +685,7 @@ const projectionsFor = async (
 };
 
 const projectionsFromSnapshot = (
-  manifests: readonly RegisteredManifest[],
+  manifests: readonly ProjectedCorpusIndexGeneration[],
   input: CorpusIndexProjectionInput,
   projected: ReadonlySet<string>,
 ): GenerationProjection[] =>

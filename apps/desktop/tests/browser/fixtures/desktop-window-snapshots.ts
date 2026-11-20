@@ -1,11 +1,14 @@
 import type { ActivitySettingsSnapshot } from "../../../src/activity/activity-types";
+import type { DictationSnapshot as DictationSettingSnapshot } from "../../../src/mainview/DictationSetting";
 import type { DictationSnapshot } from "../../../src/onboarding/use-dictation";
+import type { SigningDriverStatus } from "../../../src/mainview/signing-driver-status";
 import type { PermissionsSnapshot } from "../../../src/shared/permissions";
 import type {
   AppSnapshot,
   DesktopAccountSnapshot,
 } from "../../../src/shared/rpc";
 import type { ClipboardShortcutSnapshot } from "../../../src/shared/shortcut-keys";
+import type { MicrophonesSnapshot } from "../../../src/mainview/dictation-microphone";
 
 /**
  * What the native side answers the settings and setup windows in the
@@ -41,15 +44,83 @@ export const SETUP_PERMISSIONS = {
 export const DICTATION_READY = {
   available: true,
   cleanup: true,
+  cloudAvailable: true,
+  cloudModel: null,
+  customWords: [],
   destination: "local",
   enabled: true,
   failure: null,
+  holdKey: "combination",
   keys: { code: "Space", modifiers: ["control", "alt"] },
   model: { status: "ready" },
   modelBytes: 740_363_168,
   phase: "idle",
+  shareTextBeforeCursor: false,
+  shareWindowTitle: false,
   shortcutTaken: false,
+  textBeforeCursorAvailable: true,
 } as const satisfies DictationSnapshot;
+
+/** Dictation in Settings at its tallest: stella AI with a model whose
+ *  provider keeps the audio, cleanup with both context switches, custom
+ *  words, and the speech model still on this computer. */
+export const SETTINGS_DICTATION = {
+  available: true,
+  cleanup: true,
+  cloudAvailable: true,
+  cloudModel: "elevenlabs-direct/scribe-v3",
+  customWords: ["Libeňská", "custom terms list", "22 Cdo 120/2026"],
+  destination: "cloud",
+  enabled: true,
+  failure: null,
+  failureKeptInHistory: false,
+  holdKey: "fn",
+  holdKeys: ["fn", "rightOption", "rightCommand", "combination"],
+  holdKeyWaiting: false,
+  keepsInHistory: true,
+  keys: { code: "Space", modifiers: ["control", "alt"] },
+  language: {
+    choice: "auto",
+    inferred: ["cs", "en"],
+    supported: ["cs", "en", "sk"],
+  },
+  model: { status: "ready" },
+  modelBytes: 740_363_168,
+  phase: "idle",
+  shareTextBeforeCursor: false,
+  shareWindowTitle: false,
+  shortcutTaken: false,
+  sounds: true,
+  textBeforeCursorAvailable: true,
+} as const satisfies DictationSettingSnapshot;
+
+/** The region's stella AI transcription models. */
+export const CLOUD_MODELS = {
+  defaultModelId: "mistralai/voxtral-mini-transcribe",
+  models: [
+    {
+      displayName: "Voxtral Mini Transcribe",
+      id: "mistralai/voxtral-mini-transcribe",
+      outsideRegion: false,
+      provider: "Mistral AI",
+      retainsData: false,
+    },
+    {
+      displayName: "Scribe v3",
+      id: "elevenlabs-direct/scribe-v3",
+      outsideRegion: true,
+      provider: "ElevenLabs",
+      retainsData: true,
+    },
+  ],
+  unavailable: null,
+};
+
+/** A chosen smart card driver, as the macOS signing setting reports it. */
+export const SIGNING_DRIVER = {
+  path: "/Library/Frameworks/eToken.framework/Versions/A/libeToken.dylib",
+  problem: null,
+} as const satisfies SigningDriverStatus;
 
 export const ACCOUNT = {
   account: {
@@ -120,3 +191,18 @@ export const ACTIVITY_SETTINGS = {
   ],
   sourceAppVisuals: [],
 } satisfies ActivitySettingsSnapshot;
+
+/** The microphones Settings lists: the built-in one and a Bluetooth headset. */
+export const MICROPHONES: MicrophonesSnapshot = {
+  chosen: null,
+  chosenMissing: null,
+  defaultName: "AirPods Pro 3",
+  devices: [
+    {
+      bluetooth: false,
+      id: "coreaudio:BuiltInMicrophoneDevice",
+      name: "Built-in Microphone",
+    },
+    { bluetooth: true, id: "coreaudio:AA-BB-CC:input", name: "AirPods Pro 3" },
+  ],
+};

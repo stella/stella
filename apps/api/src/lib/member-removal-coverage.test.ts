@@ -6,6 +6,7 @@ import type { PgColumn } from "drizzle-orm/pg-core";
 import * as agentSchema from "@/api/db/agent-auth-schema";
 import * as authSchema from "@/api/db/auth-schema";
 import * as schema from "@/api/db/schema";
+import { RETAINED_USER_ATTRIBUTION_COLUMNS } from "@/api/tests/helpers/user-attribution-retention";
 
 import {
   ORGANIZATION_MEMBER_CLEANUP_COLUMNS,
@@ -81,6 +82,13 @@ const JSON_COLUMNS_WITHOUT_MEMBER_REFERENCES = [
   "case_law_decisions.extraction_warnings",
   "case_law_decisions.analysis",
   "case_law_decisions.metadata",
+  // A publisher's typed metadata of a public decision and the identifiers it
+  // declares on it; no member ids.
+  "case_law_held_decision_attachments.declared_identifiers",
+  // Publisher sections and the public decision identifiers used to match them.
+  "case_law_held_decision_attachments.document_part",
+  "case_law_held_decision_attachments.match_evidence",
+  "case_law_held_decision_attachments.metadata",
   "case_law_judges.external_refs",
   // Corpus population buckets: kind/value pairs derived from public decisions.
   "case_law_population_projections.buckets",
@@ -260,6 +268,8 @@ const JSON_COLUMNS_WITHOUT_MEMBER_REFERENCES = [
 
 /** Member references both removal paths keep, and why. */
 const RETAINED_MEMBER_COLUMNS = {
+  "outbound_actions.user_id":
+    "Pending actions are removed; claimed and terminal delivery history remains attributable, with current membership and thread access gating reads.",
   "oauth_grant_revocations.user_id":
     "A revocation only refuses tokens issued before it and is pruned after the access-token lifetime.",
   "desktop_time_entry_batches.user_id":
@@ -282,16 +292,15 @@ const RETAINED_MEMBER_COLUMNS = {
     "Decision attribution on the firm's compliance record; it grants no membership or review authority.",
   "sanctions_screening_events.reviewer_id":
     "Screening decision history; attribution grants no membership or review authority.",
-  "audit_logs.user_id": "Audit performer history.",
   "feature_enrolments.user_id":
     "The person's own feature opt-in; access also requires current membership, and the row cascades with the user and organization.",
   "audit_logs.trigger_user_id": "Audit trigger history.",
   "audit_logs.approved_by_user_id": "Audit approval history.",
   "buffer_object_cleanup_intents.writer_user_id":
     "Storage erasure receipt; retained for cleanup.",
+  "invoice_sends.sent_by_user_id":
+    "Invoice delivery history; links remain valid after account deletion.",
   "time_entries.approved_by_user_id": "Billing approval history.",
-  "invoice_payments.recorded_by": "Billing payment attribution history.",
-  "invoice_payments.voided_by": "Billing payment reversal attribution history.",
   "time_entries.returned_by_user_id": "Billing return history.",
   "usage_allocations.seat_scope_user_id":
     "Accounting scope; active seat assignment is membership-bound.",
@@ -765,7 +774,12 @@ const organizationPath: RemovalPath = {
   cleanup: new Set(
     ORGANIZATION_MEMBER_CLEANUP_COLUMNS.map(([column]) => columnKey(column)),
   ),
-  retained: new Map(Object.entries(RETAINED_MEMBER_COLUMNS)),
+  retained: new Map([
+    ...Object.entries(RETAINED_MEMBER_COLUMNS),
+    ...RETAINED_USER_ATTRIBUTION_COLUMNS.map(
+      ({ column, reason }) => [columnKey(column), reason] as const,
+    ),
+  ]),
 };
 const matterPath: RemovalPath = {
   name: "matter",
@@ -774,6 +788,9 @@ const matterPath: RemovalPath = {
   ),
   retained: new Map([
     ...Object.entries(RETAINED_MEMBER_COLUMNS),
+    ...RETAINED_USER_ATTRIBUTION_COLUMNS.map(
+      ({ column, reason }) => [columnKey(column), reason] as const,
+    ),
     ...Object.entries(MATTER_REMOVAL_RETAINED_COLUMNS),
   ]),
 };
@@ -868,6 +885,9 @@ describe("member removal schema coverage", () => {
             ...matterPath,
             retained: new Map([
               ...Object.entries(RETAINED_MEMBER_COLUMNS),
+              ...RETAINED_USER_ATTRIBUTION_COLUMNS.map(
+                ({ column, reason }) => [columnKey(column), reason] as const,
+              ),
               ...matterOnly,
             ]),
           },

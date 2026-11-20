@@ -1,5 +1,12 @@
 {
   "ci-checks-rest": {
+    "Action commit pins": [
+      ".github/workflows/**",
+      ".github/actions/**",
+      ".github/ci-checks/**",
+      "scripts/check-action-commit-pins.ts",
+      "scripts/check-action-commit-pins.test.ts"
+    ],
     "Resolve static check receipts": ["**"],
     "Run repository checks": ["**"],
     "Record static check receipts": ["**"],
@@ -22,6 +29,7 @@
     "Tauri package alignment": ["@stll/desktop"],
     "Tauri counterpart autofix tests": ["@stll/desktop", "scripts/**"],
     "Lockfile release-age guard": ["**"],
+    "Check script test declarations": ["**"],
     "Restore generated sources": ["**"],
     "Download generated sources": ["**"],
     "API test timeout guard": [
@@ -133,7 +141,7 @@
       "apps/web/src/components/ai-suggestions/docx-suggestion-persistence.ts",
       "apps/web/src/components/docx/use-docx-block-scroll.ts",
       "apps/web/src/components/inspector/inspector-command-slice.ts",
-      "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.document.tsx",
+      "apps/web/src/routes/_protected.workspaces/$workspaceId/-$viewId.document.page.tsx",
       "packages/anonymize-chat/src/index.ts",
       "packages/business-registries/src/index.ts",
       "packages/legal-atlas/src/runners/registry.ts",
@@ -158,6 +166,7 @@
     "Release queue history guard": ["**"],
     "Release CLI coupling guard": ["**"],
     "CLI contract changeset guard": ["**"],
+    "MCP released surface compatibility": ["**"],
     "SQL performance suppression summary": ["**"],
     "Release marketing provenance warning": ["**"],
     "Rust format": ["apps/desktop/src-tauri/**"],
@@ -426,6 +435,14 @@
       "scripts/check-workflow-shells*.ts",
       "scripts/workflow-steps.ts"
     ],
+    "Patched dependencies apply": [
+      "package.json",
+      "bun.lock",
+      "patches/**",
+      "scripts/bun-lock-text.ts",
+      "scripts/check-patched-dependencies*.ts",
+      "scripts/unpatched-dependency-copies.json"
+    ],
     "Test release-channel script": ["VERSION"],
     "Test web container platform boundary": [
       "apps/web/Dockerfile",
@@ -494,7 +511,10 @@
       ".github/**",
       "scripts/**"
     ],
-    "Test cancellation evidence": ["scripts/ci-cancellation-contract*"],
+    "Test cancellation evidence": [
+      "scripts/ci-cancellation-contract*",
+      ".github/workflows/cancel-failed-run.yml"
+    ],
     "Test thin merge queue contracts": [
       "scripts/thin-queue*",
       "scripts/main-heavy-plan.ts",
@@ -716,6 +736,11 @@
       "@stll/sha256",
       "scripts/**"
     ],
+    "Check grant release order against the production release": [
+      "@stll/api",
+      "scripts/check-grant-release-order.ts",
+      "scripts/check-grant-release-order.test.ts"
+    ],
     "Test dead-columns reference matching": [
       "@stll/api",
       "scripts/**",
@@ -826,12 +851,14 @@
       "scripts/check-ci-job-names.ts"
     ],
     "CI network step retries and timeouts": ["**"],
+    "Workspace test gating ledger": ["**"],
     "Sparse checkout script dependencies": [
       ".github/workflows/**",
       ".github/actions/**",
       "scripts/**"
     ],
     "SHA-256 migration ledger": ["**"],
+    "Startup bundle ledger": ["**"],
     "Custom lint rule coverage": ["**"],
     "Custom lint test timeout policy": ["**"],
     "Guard rollout scope tests": ["**"],

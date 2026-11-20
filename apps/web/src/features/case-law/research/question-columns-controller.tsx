@@ -22,7 +22,6 @@ import {
   AlertDialogTitle,
 } from "@stll/ui/alert-dialog";
 import { Button } from "@stll/ui/button";
-import { Skeleton } from "@stll/ui/skeleton";
 import { stellaToast } from "@stll/ui/toast";
 
 import { AiColumnSelectionAction } from "@/components/workspaces/ai-column-run-controls";
@@ -37,6 +36,7 @@ import {
   questionColumnsOptions,
   runAnswers,
 } from "@/features/case-law/research/queries";
+import { QuestionColumnControlsPending } from "@/features/case-law/research/question-column-controls.pending";
 import {
   answerKey,
   NO_QUESTION_ANSWERS,
@@ -505,11 +505,7 @@ export const QuestionColumnControls = ({
 
   switch (surface.type) {
     case "pending":
-      return (
-        <div role="status" aria-label={t("common.loading")}>
-          <Skeleton className="h-7 w-32" />
-        </div>
-      );
+      return <QuestionColumnControlsPending label={t("common.loading")} />;
     case "error":
       return <QuestionReadError retry={surface.retry} />;
     case "hidden":

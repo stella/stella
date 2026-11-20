@@ -25,12 +25,14 @@ const triggers = (on: unknown): string[] => {
 // call must be one reviewed for that.
 const DEFAULT_SCOPE_EVENTS = ["workflow_run"];
 const REVIEWED_REUSABLE_WORKFLOWS: Record<string, string> = {
-  "stella/.github/.github/workflows/npm-independent-release.yml@0cc2def60afb3e0fac0df9f541baf926f77889fa":
+  "stella/.github/.github/workflows/npm-independent-release.yml@2664e46f02aea7164ba71bcdd485a686166993a4":
     "checkout, artifact download, setup-node without a cache input, hardened publish action from the pinned release-tooling checkout; no cache",
 };
 const DESKTOP_WINDOWS_BUILD_CACHE_USE =
   "baptiste0928/cargo-install caches installed Rust binaries";
 const REVIEWED_LOCAL_ACTIONS: Record<string, string> = {
+  "./.github/actions/provenance":
+    "subject validation and pinned attestation actions only; no cache",
   "./.github/actions/desktop-windows-build": DESKTOP_WINDOWS_BUILD_CACHE_USE,
   "./.github/actions/ci-install":
     "exact scoped store restore; save only after a successful frozen install on main",

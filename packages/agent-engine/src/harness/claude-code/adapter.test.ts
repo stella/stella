@@ -46,6 +46,7 @@ import {
   type FakeScenarioName,
 } from "../../../scripts/fake-claude-code-cli";
 import type { FakeScenario as FakeCodexScenario } from "../../../scripts/fake-codex-app-server";
+import { readFakeHarnessLog } from "../../../scripts/fake-harness-peer";
 import {
   FAKE_STELLA_ANSWER,
   FAKE_STELLA_SERVER,
@@ -158,10 +159,7 @@ const harnessFor = (
     platform,
   });
   const entries = () =>
-    readFileSync(logPath, "utf-8")
-      .split("\n")
-      .filter((line) => line !== "")
-      .map((line) => v.parse(LogEntrySchema, JSON.parse(line)));
+    readFakeHarnessLog(logPath).map((entry) => v.parse(LogEntrySchema, entry));
   /** Messages the fake CLI received, in order. */
   const received = () =>
     entries().flatMap(({ received: message }) =>
@@ -1163,6 +1161,75 @@ describe("Claude Code adapter over stream-json stdio", () => {
     expect(terminal(events)?.type).toBe("turn.completed");
   });
 
+  test("a steer the CLI holds past its result is answered in the same turn, once", async () => {
+    const inputId = crypto.randomUUID();
+    const { events } = await run("steer_held_past_result", {
+      onEvent: async (event, turn) => {
+        if (event.type === "tool.started") {
+          await turn.steer({ inputId, text: "Also check the annex." });
+        }
+      },
+    });
+    expect(events.filter(({ type }) => type === "input.settled")).toEqual([
+      { type: "input.settled", inputId, status: "accepted" },
+    ]);
+    // Both answers belong to the turn, and it ends once, on the last result.
+    expect(
+      events.flatMap((event) =>
+        event.type === "text.completed" ? [event.text] : [],
+      ),
+    ).toEqual(["Only the notes are here.", "The annex is not here."]);
+    expect(events.filter(({ type }) => type === "turn.completed")).toHaveLength(
+      1,
+    );
+    const completed = terminal(events);
+    expect(
+      completed?.type === "turn.completed" && completed.usage,
+    ).toMatchObject({ outputTokens: 60 });
+    // The command's step is not taken for an unsupported one.
+    expect(toolCompletions(events)).toHaveLength(1);
+  });
+
+  test("a steer dropped while the CLI answers another held one does not end the turn", async () => {
+    const [read, dropped] = [crypto.randomUUID(), crypto.randomUUID()];
+    const { events } = await run("steers_read_and_dropped_past_result", {
+      onEvent: async (event, turn) => {
+        if (event.type === "tool.started") {
+          await turn.steer({ inputId: read, text: "Also check the annex." });
+          await turn.steer({ inputId: dropped, text: "And the appendix." });
+        }
+      },
+    });
+    expect(events.filter(({ type }) => type === "input.settled")).toEqual([
+      { type: "input.settled", inputId: read, status: "accepted" },
+      { type: "input.settled", inputId: dropped, status: "rejected" },
+    ]);
+    expect(events).toContainEqual(
+      expect.objectContaining({
+        type: "text.completed",
+        text: "The annex is not here.",
+      }),
+    );
+    expect(events.filter(({ type }) => type === "turn.completed")).toHaveLength(
+      1,
+    );
+  });
+
+  test("a steer the CLI drops after its result is settled rejected, and the turn ends", async () => {
+    const inputId = crypto.randomUUID();
+    const { events } = await run("steer_dropped_past_result", {
+      onEvent: async (event, turn) => {
+        if (event.type === "tool.started") {
+          await turn.steer({ inputId, text: "Also check the annex." });
+        }
+      },
+    });
+    expect(events.slice(-2)).toEqual([
+      { type: "input.settled", inputId, status: "rejected" },
+      expect.objectContaining({ type: "turn.completed" }),
+    ]);
+  });
+
   test("a steer the turn's result arrives before is settled rejected ahead of the turn's end", async () => {
     const inputId = crypto.randomUUID();
     const { events } = await run("steer_too_late", {
@@ -1362,6 +1429,43 @@ describe("Claude Code adapter over stream-json stdio", () => {
       "start_rejected",
     );
     expect(harness.received().map(({ type }) => type)).not.toContain("user");
+    // A refusal is an answer: the CLI is not started again.
+    expect(harness.startups()).toHaveLength(1);
+  });
+
+  test("a start too slow for its deadline is tried once more, and the turn runs", async () => {
+    for (const scenario of ["slow_first_start", "slow_first_mcp"] as const) {
+      const harness = harnessFor(scenario, { requestTimeoutMs: 2000 });
+      const started = await harness.adapter.startTurn(
+        turnInput(harness.workspaceDir),
+      );
+      if (Result.isError(started)) {
+        throw started.error;
+      }
+      const events: HarnessEvent[] = [];
+      for await (const event of started.value.events) {
+        events.push(event);
+      }
+      await started.value.dispose();
+      expect(terminal(events)?.type).toBe("turn.completed");
+      expect(harness.startups()).toHaveLength(2);
+      // Only the second launch was given the prompt.
+      expect(
+        harness.received().filter(({ type }) => type === "user"),
+      ).toHaveLength(1);
+    }
+  });
+
+  test("a start that misses its deadline twice fails the turn", async () => {
+    const harness = harnessFor("unresponsive", { requestTimeoutMs: 300 });
+    const started = await harness.adapter.startTurn(
+      turnInput(harness.workspaceDir),
+    );
+    expect(Result.isError(started) && started.error).toMatchObject({
+      reason: "harness_unavailable",
+      message: "The harness did not answer initialize in time.",
+    });
+    expect(harness.startups()).toHaveLength(2);
   });
 
   test("auth and usage-limit failures map to their typed states", async () => {
@@ -1490,7 +1594,12 @@ describe("Claude Code adapter over stream-json stdio", () => {
       const ready = await harnessFor(scenario).adapter.probe();
       expect(Result.isOk(ready) && ready.value.usageLimit).toBeNull();
     }
-    for (const scenario of ["probe_signed_out", "api_key"] as const) {
+    for (const scenario of [
+      "probe_signed_out",
+      "api_key",
+      "probe_api_key_with_subscription",
+      "probe_empty_account",
+    ] as const) {
       const harness = harnessFor(scenario);
       const probed = await harness.adapter.probe();
       expect(Result.isOk(probed) && probed.value).toMatchObject({
@@ -1500,6 +1609,15 @@ describe("Claude Code adapter over stream-json stdio", () => {
       });
       expect(harness.controlRequests("get_usage")).toEqual([]);
     }
+  });
+
+  test("a probe counts a subscription sign-in an earlier release names in tokenSource", async () => {
+    const probed = await harnessFor("probe_token_source").adapter.probe();
+    expect(Result.isOk(probed) && probed.value.auth).toEqual({
+      type: "signed_in",
+      method: "claude.ai",
+      plan: "max",
+    });
   });
 
   test("a CLI that never answers initialize is ended by the request deadline", async () => {
@@ -2593,6 +2711,70 @@ describe("Claude Code background commands after a turn", () => {
     expect(
       controlRequests("set_permission_mode").map(({ request }) => request),
     ).toEqual([{ subtype: "set_permission_mode", mode: "acceptEdits" }]);
+  });
+
+  test("a next turn at another model and effort switches the kept process to them", async () => {
+    const { adapter, workspaceDir, startups, turn, controlRequests } =
+      await completedTurn("background_command_switched");
+    const live = await turn.release();
+    if (live === null) {
+      throw new Error("The turn did not keep its process.");
+    }
+    const next = await adapter.startTurn(
+      turnInput(workspaceDir, {
+        model: "opus",
+        reasoningEffort: "high",
+        continuation: { type: "live", session: live },
+      }),
+    );
+    if (Result.isError(next)) {
+      throw next.error;
+    }
+    const events: HarnessEvent[] = [];
+    for await (const event of next.value.events) {
+      events.push(event);
+    }
+    expect(terminal(events)).toMatchObject({ type: "turn.completed" });
+    // The server it holds was not ended for the switch.
+    expect(startups()).toHaveLength(1);
+    expect(controlRequests("stop_task")).toEqual([]);
+    expect(controlRequests("set_model").map(({ request }) => request)).toEqual([
+      { subtype: "set_model", model: "opus" },
+    ]);
+    expect(
+      controlRequests("apply_flag_settings").map(({ request }) => request),
+    ).toEqual([
+      { subtype: "apply_flag_settings", settings: { effortLevel: "high" } },
+    ]);
+  });
+
+  test("a switch the CLI refuses resumes the session in a new process", async () => {
+    const { adapter, workspaceDir, startups, turn } = await completedTurn(
+      "background_command_switch_refused",
+    );
+    const live = await turn.release();
+    if (live === null) {
+      throw new Error("The turn did not keep its process.");
+    }
+    const next = await adapter.startTurn(
+      turnInput(workspaceDir, {
+        reasoningEffort: "high",
+        continuation: { type: "live", session: live },
+      }),
+    );
+    if (Result.isError(next)) {
+      throw next.error;
+    }
+    const events: HarnessEvent[] = [];
+    for await (const event of next.value.events) {
+      events.push(event);
+    }
+    await next.value.dispose();
+    expect(terminal(events)).toMatchObject({ type: "turn.completed" });
+    const [, resumed] = startups();
+    const args = resumed?.args ?? [];
+    expect(args[args.indexOf("--resume") + 1]).toBe(live.sessionId);
+    expect(args[args.indexOf("--effort") + 1]).toBe("high");
   });
 
   test("a sub-agent is stopped at the turn's end and a turn the CLI opens itself is interrupted", async () => {

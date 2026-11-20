@@ -29,3 +29,7 @@ export type FlowListItem = FlowListData["items"][number];
 
 // The save payload mirrors the create/update body contract.
 export type FlowDefinitionBody = Parameters<typeof api.flows.post>[0];
+
+export type FlowDefinitionUpdateBody = Parameters<
+  ReturnType<typeof api.flows>["put"]
+>[0];

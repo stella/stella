@@ -10,8 +10,9 @@ import {
   type DecisionIdentifierIntent,
   exactDecisionMatches,
   parseDecisionQuery,
+  storedDecisionReferenceIntent,
 } from "./decision-query-intent";
-import { decisionReporterGrammarForJurisdiction } from "./us-reporter-citation";
+import { decisionReporterGrammarForJurisdiction } from "./decision-reporter-grammar";
 
 /** Dockets as the corpus's courts print them, one per grammar. */
 const canonicalDockets = [
@@ -344,6 +345,22 @@ describe("the hits that are the named decision", () => {
       ),
       {},
     );
+  });
+
+  test("a stored reference keeps the decision the lookup read in the other year form", () => {
+    const reference = storedDecisionReferenceIntent("NAD 224/14");
+    expect(
+      exactDecisionMatches(reference, [
+        hit("NAD 224/2014"),
+        hit("NAD 224/2015"),
+        hit("NAD 224/15"),
+      ]),
+    ).toEqual([hit("NAD 224/2014")]);
+    expect(
+      exactDecisionMatches(storedDecisionReferenceIntent("NAD 224/2014"), [
+        hit("nad 224 / 14"),
+      ]),
+    ).toEqual([hit("nad 224 / 14")]);
   });
 
   test("structural separators keep otherwise similar dockets distinct", () => {

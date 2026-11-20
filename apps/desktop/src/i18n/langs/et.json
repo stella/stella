@@ -35,7 +35,12 @@
     "sessionNeedsAttention": "Vajab tähelepanu",
     "sessionOpeningInOffice": "Avamine Office'is",
     "sessionSavingDraft": "Mustandi salvestamine",
-    "reconnectAccount": "Ühenda stella webiga uuesti…"
+    "reconnectAccount": "Ühenda stella webiga uuesti…",
+    "transcribeRecording": "Transkribeeri salvestis…",
+    "dictation": "Dikteerimine",
+    "dictationHint": "Dikteerimiseks hoidke all {key}",
+    "dictationSettings": "Dikteerimise seaded…",
+    "dictationTurnOn": "Lülita dikteerimine sisse…"
   },
   "notification": {
     "checkpointDelayedBody": "{fileName}: muudatused jäävad kohalikuks ja proovitakse automaatselt uuesti",
@@ -181,15 +186,14 @@
     "handoffExpired": "Dokumendilink aegus enne, kui stella desktop ühendati. Alustage uuesti stellast."
   },
   "settings": {
-    "about": "Teave",
-    "accountLinked": "Konto lingitud",
+    "accountLinked": "Lingitud",
+    "disconnect": "Katkesta ühendus",
     "connectionExpired": "Ühendus on aegunud",
     "reconnectToStella": "Ühenda uuesti stella webiga",
     "connectionExpiredDescription": "Ühendus on aegunud. Ühenda uuesti stella webiga.",
     "connectToStella": "Ühenda stella webiga",
     "connectToStellaDescription": "Siduge see arvuti oma praeguse stella kontoga ilma dokumenti avamata.",
     "desktopBenefit": "Office’i failid ja kohalik lõikelaua ajalugu",
-    "disconnectAccount": "Katkestage konto ühendus",
     "errorDisconnectAccount": "stella desktop ei saanud teie konto ühendust katkestada.",
     "errorReadAccount": "stella desktop ei saanud teie konto ühendust kontrollida.",
     "stellaWebAccount": "stella veebikonto",
@@ -209,10 +213,8 @@
     "sendCrashReportsDescription": "Tehnilised vead, ajamõõtmised ja krahhide kokkuvõtted; ei sisalda dokumente, lõikelaua sisu ega tegevusandmeid.",
     "errorReadTelemetry": "Aruannete saatmise eelistust ei saanud lugeda. Proovige uuesti.",
     "errorSaveTelemetry": "Aruannete saatmise eelistust ei saanud salvestada. Proovige uuesti.",
-    "general": "Üldine",
     "lastVerified": "Viimati kontrollitud",
     "language": "Keel",
-    "languageDescription": "Valige töölauarakenduse keel.",
     "setupGuide": "Seadistusjuhend",
     "setupGuideDescription": "Läbige seadistus uuesti: mida rakendus teeb, õigused ja lõikelaua otsetee.",
     "setupGuideAction": "Käivita seadistus uuesti",
@@ -236,13 +238,26 @@
     "stellaDesktop": "stella desktop",
     "support": "Tugi",
     "title": "Seaded",
-    "serverLabel": "Server",
+    "pages": {
+      "general": "Üldine",
+      "dictation": "Dikteerimine",
+      "clipboard": "Lõikelaud",
+      "agents": "AI ja agendid",
+      "signing": "Allkirjastamine",
+      "activity": "Tegevus",
+      "notifications": "Teavitused",
+      "permissions": "Õigused",
+      "about": "Teave"
+    },
+    "account": "Konto",
+    "app": "Rakendus",
+    "privacy": "Privaatsus",
+    "pageEmpty": "Selles arvutis pole siin midagi seadistada.",
     "connectToHost": "Ühenda: {host}",
     "connectToHostDescription": "Avab brauseris {host}, kus saate selle arvuti kinnitada.",
     "reconnectNeeded": "Vaja uuesti ühendada",
     "reconnect": "Ühenda uuesti",
     "reconnectHostDescription": "Ühendus serveriga {host} tuleb uuendada. Kinnitage see arvuti brauseris uuesti.",
-    "permissions": "Õigused",
     "permissionNotificationsDescription": "Annab teada, kui dokument on valmis või sünkroonimine vajab tähelepanu.",
     "permissionAccessibility": "Juurdepääsetavus",
     "permissionAccessibilityDescription": "Lubab tegevuste ajajoonel salvestada akende pealkirju.",
@@ -251,7 +266,9 @@
     "permissionAllowed": "Lubatud",
     "permissionAllow": "Luba",
     "permissionOpenSettings": "Ava seaded",
-    "permissionDenied": "Süsteemi seadetes välja lülitatud.",
+    "permissionTurnedOff": "Välja lülitatud",
+    "permissionsDescription": "Igaüks neist on teie valik ja avab ühe asja.",
+    "neverRequested": "Ei küsita kunagi",
     "permissionManaged": "Haldab teie organisatsioon",
     "errorUpdateAutostart": "stella desktop ei saanud sisselogimisel käivitamist uuendada.",
     "errorPermissions": "stella desktop ei saanud seda õigust lugeda ega muuta.",
@@ -600,6 +617,17 @@
     "title": "Dikteerimine",
     "description": "Hoidke all klahve {shortcut} ja rääkige. Tekst ilmub rakendusse, mida kasutate. Kõne muudetakse tekstiks selles arvutis ja seda ei salvestata.",
     "descriptionCloud": "Hoidke all klahvi {shortcut} ja rääkige. Tekst ilmub rakendusse, mida kasutate. Kõne teisendab stella AI ja stella seda ei salvesta.",
+    "lede": "Hoidke all klahve <key>{shortcut}</key> ja rääkige. Tekst ilmub sinna, kuhu kirjutate.",
+    "groups": {
+      "shortcut": "Kiirklahv",
+      "transcription": "Transkribeerimine",
+      "cleanup": "Parandamine",
+      "thisComputer": "Selles arvutis"
+    },
+    "sounds": {
+      "title": "Helid",
+      "description": "Esita lühike vaikne heli, kui salvestamine algab ja kui see lõpeb."
+    },
     "cleanup": {
       "title": "Paranda tehisintellektiga",
       "description": "Parandab tuvastusvead ja dikteeritud vormingu, näiteks „uus rida“ või „paks“, ning sobitab teksti rakendusega, näiteks e-postiga. stella kaudu saadetakse teie organisatsiooni tehisintellekti teenusepakkujale ainult tekst, mitte heli; stella seda ei salvesta.",
@@ -607,11 +635,11 @@
     },
     "context": {
       "windowTitle": {
-        "title": "Jaga akna pealkirja tehisintellekti parandusega",
+        "title": "Jaga akna pealkirja",
         "description": "Aitab eristada lepingut memost. Akna pealkirjad võivad sisaldada klientide või asjade nimesid."
       },
       "textBeforeCursor": {
-        "title": "Jaga kursorieelset teksti tehisintellekti parandusega",
+        "title": "Jaga kursorieelset teksti",
         "description": "Kuni {limit, number} märki dokumendist, milles olete, et dikteeritu sobiks kirjutatavaga."
       }
     },
@@ -620,6 +648,7 @@
       "title": "Teisenda kasutades",
       "local": "Seda arvutit",
       "cloud": "stella AI",
+      "localDescription": "Kõne muudetakse tekstiks selles arvutis ja seda ei salvestata.",
       "cloudDescription": "Heli lahkub sellest arvutist: see saadetakse teisendamiseks stellale ja stella tehisintellekti teenusepakkuja kaudu valitud mudeli pakkujale. stella seda ei salvesta.",
       "unavailableRegion": "stella AI ei paku teie organisatsiooni piirkonnas veel kõne teisendamist.",
       "unavailableProvider": "Teie organisatsiooni tehisintellekti teenusepakkuja ei paku kõne teisendamist.",
@@ -627,19 +656,31 @@
       "model": "Teisendusmudel",
       "chooseModel": "Valige mudel",
       "outsideRegion": "Väljaspool teie piirkonda",
-      "outsideRegionNote": "See mudel töötleb heli väljaspool teie organisatsiooni piirkonda.",
       "retainsData": "Säilitab teie heli",
       "retainsDataTitle": "{provider} säilitab, mida dikteerite",
       "retainsDataWarning": "See mudel töötab kontol, millel puudub andmete nullsäilitus. {provider} talletab kõige dikteeritu heli ja transkriptsiooni oma tingimustel, väljaspool stella kontrolli. Ärge dikteerige sellega konfidentsiaalset teavet ega kliendiandmeid."
     },
     "language": {
       "title": "Dikteerimise keel",
-      "description": "Automaatne kasutab selle arvuti kuva- ja klaviatuurikeeli.",
+      "description": "Automaatne kasutab selle arvuti kuva- ja klaviatuurikeeli. Kui neid on mitu, tuntakse iga sõna ära selles keeles, milles te selle ütlete.",
       "automatic": "Automaatne",
       "automaticWith": "Automaatne ({languages})",
       "noResults": "Keeli ei leitud"
     },
+    "customWords": {
+      "group": "Omad sõnad",
+      "title": "Sõnad ja nimed, mida stella peab õigesti kirjutama",
+      "description": "Näiteks klientide nimed või ingliskeelsed terminid, mida kasutate teises keeles rääkides. Need hoitakse selles arvutis selle konto jaoks ja saadetakse ainult koos dikteerimisega: stella AI abil teisendamiseks ja tehisintellektiga parandamiseks. Kui teisendab selle arvuti kõnemudel ja tehisintellektiga parandamine on välja lülitatud, parandab stella nende õigekirja selles arvutis.",
+      "count": "{count, number} / {limit, number}",
+      "input": "Lisa sõna või nimi",
+      "add": "Lisa",
+      "remove": "Eemalda {word}",
+      "duplicate": "See sõna on juba loendis.",
+      "full": "Loendisse mahub kuni {limit, number} sõna. Uue lisamiseks eemaldage mõni.",
+      "failed": "Loendit ei õnnestunud salvestada. Proovige uuesti."
+    },
     "modelNeeded": "Kõnemudel töötab selles arvutis.",
+    "speechModel": "Kõnemudel",
     "modelInstalled": "Kõnemudel ({size} MB) on selles arvutis.",
     "removeModel": "Eemalda",
     "removeFailed": "Kõnemudelit ei õnnestunud eemaldada. Proovige uuesti.",
@@ -648,6 +689,13 @@
     "downloadFailed": "Kõnemudelit ei saanud alla laadida.",
     "modelAttribution": "Speech model: Parakeet Ultra by Moondream, based on NVIDIA Parakeet TDT 0.6B v3, converted to GGUF by handy-computer. CC BY 4.0.",
     "shortcutTaken": "{shortcut} on teise rakenduse kasutuses.",
+    "holdKey": {
+      "title": "Allhoitav klahv",
+      "description": "Hoidke ainult seda all, et dikteerida. Lühike vajutus või seda kasutav otsetee ei tee midagi.",
+      "right": "Parem {key}",
+      "waiting": "stella märkab klahvi {shortcut}, kui tal on hõlbustusfunktsioonide juurdepääs.",
+      "unavailable": "stella ei saa selles arvutis klahvi {shortcut} jälgida. Valige teine klahv."
+    },
     "failure": {
       "accessibility": "Lubage hõlbustusfunktsioonide juurdepääs, et stella saaks teistesse rakendustesse kirjutada.",
       "microphone": "stella ei kuule teie mikrofoni. Kontrollige mikrofoni juurdepääsu süsteemiseadetes.",
@@ -656,9 +704,54 @@
       "focusChanged": "Lülitusite enne teksti valmimist teise rakendusse, seega midagi ei sisestatud. Proovige uuesti.",
       "focusUnconfirmed": "stella ei suutnud kinnitada, milline rakendus on fookuses, seega midagi ei sisestatud. Proovige uuesti.",
       "shortcutHeld": "Vabastage otsetee klahvid, et teksti saaks sisestada. Midagi ei sisestatud; proovige uuesti.",
-      "cloudTranscription": "stella AI ei suutnud seda dikteerimist teisendada ja kõnemudelit pole selles arvutis. Proovige uuesti või valige „Teisenda kasutades“ all „Seda arvutit“ ja laadige mudel alla."
+      "passwordField": "Fookuses on paroolivali, seega dikteeritut ei säilitatud ega sisestatud.",
+      "cloudTranscription": "stella AI ei suutnud seda dikteerimist teisendada ja kõnemudelit pole selles arvutis. Proovige uuesti või valige „Teisenda kasutades“ all „Seda arvutit“ ja laadige mudel alla.",
+      "nothingHeard": "stella ei kuulnud kõnet. Kontrollige heliseadetes sisendseadet."
     },
-    "failureKeptInHistory": "Tekst on lõikelaua ajaloos."
+    "failureKeptInHistory": "Tekst on lõikelaua ajaloos.",
+    "transcribeRecording": {
+      "title": "Salvestise transkribeerimine",
+      "description": "Muudab kuni 4 tunni pikkuse diktofonifaili, häälmärkme või koosoleku salvestise tekstiks.",
+      "open": "Ava",
+      "failed": "Akent ei õnnestunud avada. Proovige uuesti."
+    },
+    "notice": {
+      "title": "stella ei kuule teie mikrofoni",
+      "allowBody": "Lubage juurdepääs mikrofonile ja proovige uuesti.",
+      "checkBodyMac": "Kontrollige mikrofoni juurdepääsu süsteemiseadetes ja proovige uuesti.",
+      "checkBodyPc": "Kontrollige mikrofoni juurdepääsu Windowsi sätetes ja proovige uuesti.",
+      "allow": "Luba mikrofon",
+      "openSettingsMac": "Ava süsteemiseaded",
+      "openSettingsPc": "Ava sätted",
+      "dismiss": "Sulge",
+      "nothingTitle": "stella ei kuulnud kõnet",
+      "nothingBody": "Rääkige klahvi all hoides või valige heliseadetes muu sisend.",
+      "inputDevice": "Sisend: {device}",
+      "openSoundMac": "Ava heliseaded",
+      "openSoundPc": "Ava heliseaded",
+      "missingTitle": "{missing} pole ühendatud",
+      "missingBody": "Dikteerimine kasutab selle asemel seadet {device}.",
+      "chooseMicrophone": "Vali mikrofon…"
+    },
+    "microphone": {
+      "title": "Mikrofon",
+      "hint": "Bluetooth-peakomplektid vajavad mikrofonile lülitumiseks hetke ja salvestavad madalama kvaliteediga. Sisseehitatud mikrofon on tavaliselt selgem.",
+      "systemDefault": "Süsteemi vaikimisi",
+      "systemDefaultNamed": "Süsteemi vaikimisi ({name})",
+      "bluetoothDevice": "{name} · Bluetooth",
+      "notConnected": "{name} (pole ühendatud)",
+      "test": "Testi mikrofoni",
+      "stopTest": "Peata",
+      "level": "Sisendi tase",
+      "hearing": "Kuuleme teid.",
+      "noSound": "Seadmest {device} ei tule heli.",
+      "checkAccess": "Kontrolli mikrofoni juurdepääsu"
+    },
+    "preview": {
+      "label": "Seni dikteeritud tekst",
+      "listening": "Kuulan…",
+      "finishing": "Lõpetan…"
+    }
   },
   "shortcut": {
     "title": "Lõikelaua otsetee",
@@ -757,8 +850,8 @@
     "permissionsTitlePc": "Seadistage see arvuti",
     "permissionsBody": "Iga õigus on teie valik. Saate neid hiljem seadetes muuta.",
     "neverRequested": "Ei küsita kunagi:",
-    "tryTitle": "Proovige kohe",
-    "tryBody": "Kopeerige mis tahes tekst ja vajutage siis {shortcut}.",
+    "tryTitle": "Proovige lõikelaua ajalugu",
+    "tryBody": "Kopeerige mis tahes tekst ja vajutage {shortcut}, et avada lõikelaua ajalugu.",
     "tryWaiting": "Ootan otseteed",
     "tryKeepGoing": "Jätkake…",
     "tryExtraModifier": "See on {pressed}. Kasutage otseteed {shortcut}.",
@@ -780,24 +873,67 @@
     "introduceActivityTitle": "Uus: tegevuste ajajoon",
     "introduceActivityBody": "Tegevused on nüüd teie kontol saadaval. Midagi ei salvestata enne, kui käivitate selle tegevuste aknas.",
     "openActivity": "Ava tegevused",
-    "dictationModel": "Kõnemudel ({size} MB) laaditakse alla üks kord ja see töötab selles arvutis.",
-    "dictationTurnOn": "Lülita sisse ja laadi alla",
     "dictationDownloadContinues": "Võite jätkata. Allalaadimine jätkub taustal.",
-    "dictationReady": "Dikteerimine on sees ja valmis.",
-    "dictationTryLabel": "Dikteerige siia",
-    "dictationTryPlaceholder": "Klõpsake siia, hoidke all {shortcut} ja öelge üks lause.",
-    "dictationListening": "Kuulan…",
-    "dictationTranscribing": "Kirjutan üles, mida ütlesite…",
     "dictationMicrophone": "Nii kuuleb stella teid, kuni hoiate kiirklahvi all.",
     "dictationAccessibility": "Nii kirjutab stella öeldu rakendusse, mida praegu kasutate.",
     "dictationFailed": "stella desktop ei saanud dikteerimist sisse lülitada. Proovige uuesti.",
     "introduceDictationTitle": "Uus: dikteerimine",
+    "dictationSetup": {
+      "progress": "Samm {current}/{total}",
+      "skipRest": "Jäta ülejäänu vahele",
+      "screens": {
+        "microphone": "Mikrofon",
+        "transcription": "Transkribeerimine",
+        "app": "Parandus",
+        "context": "Kontekst",
+        "words": "Sõnad"
+      },
+      "microphone": {
+        "title": "Laske stellal end kuulda",
+        "body": "Hoidke all {shortcut} ja rääkige, tekst ilmub sinna, kuhu kirjutate. Kõigepealt lubage mikrofon, et stella teid kuuleks.",
+        "bodyMac": "Hoidke all {shortcut} ja rääkige, tekst ilmub sinna, kuhu kirjutate. Kõigepealt lubage mikrofon, et stella teid kuuleks, ja Juurdepääsetavus, et ta saaks teksti sisestada.",
+        "choose": "Dikteerimise mikrofon"
+      },
+      "transcription": {
+        "title": "Kus teie kõnet transkribeerida?",
+        "body": "Saate seda hiljem seadetes muuta.",
+        "titleLocal": "Teie kõnet transkribeeritakse selles arvutis",
+        "bodyLocal": "Kõnemudel töötab siin, nii et dikteerimine töötab ka võrguühenduseta.",
+        "localTitle": "Selles arvutis",
+        "localBody": "Töötab võrguühenduseta. Teie heli ei lahku kunagi sellest arvutist.",
+        "localModel": "Vajab kõnemudelit ({size} MB), mis laaditakse alla üks kord.",
+        "cloudTitle": "stella AI",
+        "cloudBody": "Midagi pole vaja alla laadida. Teie heli saadetakse stellale ja stella tehisintellekti teenusepakkuja kaudu valitud mudeli pakkujale. stella seda ei salvesta."
+      },
+      "app": {
+        "title": "Rakendusele sobiv tekst",
+        "body": "Tehisintellekti parandus oskab kirjutada rakenduse jaoks, kuhu dikteerite: e-kiri kõlab nagu e-kiri ja vestlussõnum nagu vestlussõnum.",
+        "sentAppKind": "Talle öeldakse rakenduse liik, näiteks e-post, vestlus või dokument, mitte rakenduse nimi.",
+        "notStored": "stella ei salvesta sellest midagi.",
+        "off": "Ilma paranduseta sisestatakse tekst nii, nagu see transkribeeriti, ja midagi ei lähe tehisintellekti parandusse."
+      },
+      "context": {
+        "title": "Rohkem konteksti parandusele",
+        "body": "Valikuline ja välja lülitatud, kuni selle sisse lülitate. Loetakse ainult dikteerimise alustamisel ja läheb ainult tehisintellekti parandusse. stella ei salvesta sellest midagi."
+      },
+      "words": {
+        "title": "Õpetage stellale oma sõnu",
+        "body": "Lisage nimed ja terminid, mida stella peaks kirjutama teie moodi, näiteks teie büroo, teie kliendid või teise keele terminid. Teie loend on alguses tühi.",
+        "examplesLabel": "Ideed:",
+        "examples": {
+          "firm": "Teie büroo nimi",
+          "client": "Kliendi nimi",
+          "term": "Termin, mida kasutate"
+        }
+      }
+    },
     "guideWaiting": "Lülitage ülal loendis sisse stella desktop, et lubada juurdepääsetavus.",
     "guideAllowed": "stella desktop on lubatud",
     "never": {
       "screenRecording": "Ekraanisalvestus",
       "camera": "Kaamera",
       "keystrokes": "Klahvivajutused",
+      "keystrokesWithoutHoldKey": "Klahvivajutused, kui te ei vali allhoitavat klahvi",
       "fullDiskAccess": "Täielik kettale juurdepääs",
       "administrator": "Administraatori õigused"
     }
@@ -934,6 +1070,117 @@
       "network_folder": "See kaust asub võrguketta jagatud alal. Linkige kaust selle arvuti enda kettalt.",
       "protected": "Selles kaustas on stella enda andmed või oskuste kaust, seega ei saa agent selles töötada.",
       "unreadable": "Seda kausta ei õnnestunud lugeda."
+    }
+  },
+  "keepAwake": {
+    "title": "Hoia ärkvel",
+    "enabled": "Hoia see arvuti ärkvel, kui agendid töötavad",
+    "description": "Kuni selles arvutis töötab agent, ei lähe arvuti jõudeoleku tõttu unerežiimi ja pikad tööd jätkuvad. Ekraan võib endiselt välja lülituda. Mac-sülearvuti läheb kaane sulgemisel siiski unerežiimi.",
+    "onBattery": "Ka akutoitel",
+    "onBatteryDescription": "Kui see on välja lülitatud, läheb arvuti akutoitel tavapäraselt unerežiimi, isegi kui agent töötab.",
+    "errorSave": "Seda seadet ei õnnestunud salvestada. Proovige uuesti."
+  },
+  "transcribe": {
+    "title": "Salvestise transkribeerimine",
+    "retry": "Proovi uuesti",
+    "drop": {
+      "title": "Lohistage salvestis siia",
+      "release": "Laske lahti, et transkribeerida",
+      "description": "Diktofonifailid, häälmärkmed, häälsõnumid, koosolekute salvestised või video heli.",
+      "choose": "Vali fail",
+      "formats": "WAV, MP3, M4A, AAC, FLAC, Ogg, Opus, AIFF, WMA, AMR ning MP4- või MOV-video. Kuni 4 tundi.",
+      "formatsMac": "WAV, MP3, M4A, AAC, FLAC, Ogg, Opus, AIFF, AMR ning MP4- või MOV-video. Kuni 4 tundi."
+    },
+    "destination": {
+      "title": "Transkribeeri kasutades",
+      "thisComputer": "See arvuti",
+      "cloud": "stella AI",
+      "localDescription": "Salvestis jääb sellesse arvutisse.",
+      "cloudDescription": "Heli saadetakse transkribeerimiseks stellale ja dikteerimise seadetes valitud mudeli pakkujale. stella seda ei salvesta.",
+      "cloudDescriptionModel": "Heli saadetakse transkribeerimiseks stellale ja mudeli {model} pakkujale. stella seda ei salvesta.",
+      "localMissing": "Selles arvutis transkribeerimiseks laadige seadetes jaotises Dikteerimine alla kõnemudel.",
+      "localMissingCloud": "Laadige seadetes jaotises Dikteerimine alla kõnemudel või transkribeerige stella AI abil.",
+      "retainsData": "Palun arvestage {provider} töötlemistingimustega.",
+      "modelFailed": "stella AI mudelit ei õnnestunud lugeda, seega ei saa stella AI praegu transkribeerida. Proovige uuesti või transkribeerige selles arvutis."
+    },
+    "matter": {
+      "title": "Toimik",
+      "description": "Selle nimed ja asjanumbrid kirjutatakse õigesti ning teksti saab sinna salvestada.",
+      "none": "Puudub",
+      "search": "Otsi toimikuid",
+      "clearSearch": "Tühjenda otsing",
+      "searching": "Otsimine…",
+      "noMatters": "Toimikuid ei leitud",
+      "failed": "Toimikuid ei õnnestunud laadida. Proovige uuesti."
+    },
+    "note": "Philipsi või Olympuse diktofonide DSS- ja DS2-failid salvestage esmalt SpeechExecis või ODMS-is WAV-vormingusse.",
+    "refused": {
+      "unsupported": "stella ei saa faili {name} lugeda. Valige salvestis mõnes ülaltoodud vormingus.",
+      "tooLong": "{name} on pikem kui 4 tundi. Jagage see esmalt lühemateks salvestisteks.",
+      "unreadable": "Faili {name} ei õnnestunud lugeda. See võib olla kahjustatud; eksportige see uuesti ja proovige veel kord."
+    },
+    "kept": {
+      "ready": "{name} on valmis. Kontrollige ülalt, kuidas see transkribeeritakse, ja alustage siis.",
+      "start": "Alusta transkribeerimist"
+    },
+    "failure": {
+      "start": "Transkribeerimist ei õnnestunud alustada. Proovige uuesti.",
+      "load": "Seda akent ei õnnestunud laadida. Proovige uuesti.",
+      "modelMissing": "Kõnemudelit pole selles arvutis. Laadige see seadetes jaotises Dikteerimine alla.",
+      "thisComputer": "Selle arvuti kõnemudel ei suutnud osa salvestisest transkribeerida. Seni saadud tekst jääb alles.",
+      "cloud": "stella AI ei suutnud osa salvestisest transkribeerida. Seni saadud tekst jääb alles; proovige hiljem uuesti.",
+      "unreadable": "Salvestist ei õnnestunud lõpuni lugeda. Seni saadud tekst jääb alles.",
+      "tooLong": "Salvestis on pikem kui 4 tundi. Seni saadud tekst jääb alles."
+    },
+    "result": {
+      "minutes": "{minutes, number} min",
+      "thisComputer": "See arvuti",
+      "cloud": "stella AI, {model}",
+      "matter": "toimik {name}",
+      "copy": "Kopeeri",
+      "copied": "Kopeeritud",
+      "saveAs": "Salvesta kui",
+      "saveWithTimestamps": "Tekst ajatemplitega (.txt)",
+      "saveWithoutTimestamps": "Tekst ajatempliteta (.txt)",
+      "saveToMatter": "Salvesta toimikusse",
+      "savingToMatter": "Salvestamine…",
+      "savedToMatter": "Salvestatud toimikusse {matter} nimega {fileName}.",
+      "saveToMatterFailed": "Transkriptsiooni ei õnnestunud toimikusse salvestada. Proovige uuesti.",
+      "saveFailed": "Transkriptsiooni ei õnnestunud kopeerida ega salvestada. Proovige uuesti.",
+      "noSpeech": "Selles salvestises kõnet ei leitud.",
+      "fileName": "{title} – transkriptsioon.txt",
+      "documentTitle": "{title} – transkriptsioon",
+      "transcriptTitle": "Transkriptsioon"
+    },
+    "progress": {
+      "running": "Transkribeerimine: {done, number} / {total, number} min",
+      "runningUnknown": "Transkribeerimine: seni {done, number} min",
+      "stop": "Peata",
+      "stopped": "Peatatud {done, number} min järel. Seni saadud tekst jääb alles.",
+      "done": "Transkribeeritud {total, number} min.",
+      "another": "Transkribeeri järgmine salvestis"
+    },
+    "cleaned": {
+      "title": "Puhastatud tekst",
+      "running": "Puhastan…",
+      "waiting": "Iga osa puhastatakse kohe, kui see on transkribeeritud.",
+      "instructionsTitle": "Juhised dikteeringus · ei kuulu teksti",
+      "instructionsLabel": "Juhised:",
+      "partFailed": "Seda osa ei õnnestunud puhastada, seega kuvatakse see transkribeeritud kujul.",
+      "failedCount": "{count, plural, one {# osa puhastamata} other {# osa puhastamata}}",
+      "saveMarkdown": "Vormindatud tekst (.md)",
+      "saveText": "Lihttekst (.txt)",
+      "fileNameMarkdown": "{title} puhastatud.md",
+      "fileNameText": "{title} puhastatud.txt",
+      "offerTitle": "Puhasta transkriptsioon tehisintellektiga",
+      "offerDescription": "See salvestis transkribeeriti selles arvutis ja tehisintellekti puhastus on seadetes välja lülitatud. Puhastamine saadab teie organisatsiooni tehisintellekti mudelile teksti, mitte kunagi heli.",
+      "offerStart": "Puhasta"
+    },
+    "copyMenu": {
+      "label": "Kopeerimise valikud",
+      "formatted": "Vormindusega",
+      "plain": "Lihttekstina",
+      "hint": "Vormindusega kleebitakse Wordi või Outlooki ka pealkirjad, paks kiri ja loendid. Teie valik jäetakse meelde."
     }
   }
 }

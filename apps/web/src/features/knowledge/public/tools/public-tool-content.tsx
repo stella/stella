@@ -10,6 +10,7 @@ import {
 import { sanitizeHref } from "@stll/decision-reader/sanitize-href";
 import { Button } from "@stll/ui/button";
 
+import { MarkdownSectionPending } from "@/features/knowledge/public/tools/markdown-page.pending";
 import {
   buildMcpConfigSnippet,
   githubSkillTreeUrl,
@@ -101,7 +102,7 @@ export const ToolContent = ({
 
   if (markdown !== null) {
     return (
-      <Suspense fallback={<ContentLoading />}>
+      <Suspense fallback={<MarkdownSectionPending />}>
         <ToolMarkdown markdown={markdown} />
       </Suspense>
     );
@@ -177,16 +178,5 @@ const McpConfig = ({ entry }: { entry: LoadedEntryByKind<"mcp"> }) => {
         )}
       </div>
     </section>
-  );
-};
-
-// Fills the screen so the details below stay out of view until the
-// documentation arrives; shown above it, they would jump away on arrival.
-const ContentLoading = () => {
-  const t = useTranslations();
-  return (
-    <p className="text-muted-foreground min-h-dvh text-sm">
-      {t("publicTools.content")}
-    </p>
   );
 };
