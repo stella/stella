@@ -36,6 +36,7 @@ import {
   CORPUS_INDEX_MANIFESTS,
   corpusIndexManifestDigest,
 } from "@/api/lib/legal-search/corpus-index-manifest";
+import { corpusMorphologyLanguage } from "@/api/lib/legal-search/morphology/corpus-language";
 import { caseLawSourceRow } from "@/api/tests/helpers/case-law-source-row";
 
 import { PLAN_GUARD_TABLES } from "../../db/plan-guard-tables";
@@ -160,7 +161,17 @@ export const seedQueryPlanData = async (
         ...seededPrimaryReference(n),
         country,
       });
-      return sql`(${n}::integer, ${country}::varchar, ${columns.caseNumber}::varchar,
+      // Pairs of decisions alternate between the jurisdiction's own language
+      // and the English translation its apex courts publish beside it.
+      const language =
+        Math.floor((n + 1) / 2) % 2 === 0
+          ? (corpusMorphologyLanguage(country) ??
+            panic(
+              `The seeded jurisdiction has no primary language: ${country}`,
+            ))
+          : "en";
+      return sql`(${n}::integer, ${country}::varchar, ${language}::varchar,
+        ${columns.caseNumber}::varchar,
         ${columns.caseNumberType}::varchar, ${columns.citationKey}::varchar,
         ${columns.docketFamilyKey}::varchar)`;
     },
@@ -179,7 +190,7 @@ export const seedQueryPlanData = async (
       reference.docket_family_key,
       'Query Plan Court ' || (n % 40)::text,
       reference.country,
-      CASE ((n + 1) / 2) % 2 WHEN 0 THEN 'cs' ELSE 'en' END,
+      reference.language,
       CASE WHEN n % 7 = 0 THEN NULL
         ELSE 'ECLI:EU:C:2024:' || (n % 120)::text END,
       CASE WHEN n % 5 = 0 THEN NULL
@@ -190,7 +201,7 @@ export const seedQueryPlanData = async (
       TIMESTAMPTZ '2024-01-01 00:00:00+00' + n * INTERVAL '1 minute',
       TIMESTAMPTZ '2024-01-01 00:00:00+00' + n * INTERVAL '1 minute'
     FROM (VALUES ${sql.join(decisionReferences, sql`, `)}) AS reference(
-      n, country, case_number, case_number_type, citation_key,
+      n, country, language, case_number, case_number_type, citation_key,
       docket_family_key
     )
   `);

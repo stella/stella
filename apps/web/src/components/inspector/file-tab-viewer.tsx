@@ -1,8 +1,9 @@
-import { lazy, memo, Suspense } from "react";
+import { type ComponentType, lazy, memo, Suspense } from "react";
 
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
+import type { LegalFileFormatKind } from "@stll/api-contract/legal-file-formats";
 import { cn } from "@stll/ui/utils";
 
 import { FileChatWarmup } from "@/components/ai-suggestions/file-chat-warmup";
@@ -37,17 +38,48 @@ import {
   PeekSuspenseFallback,
 } from "@/components/pdf/peek/peek-pdf-viewer";
 import { QuerySuspenseBoundary } from "@/components/query-suspense-boundary";
-import { RecoverableViewerBoundary } from "@/components/viewer/recoverable-viewer-boundary";
+import {
+  RecoverableViewerBoundary,
+  type ViewerSurface,
+} from "@/components/viewer/recoverable-viewer-boundary";
+import type { TranslationKey } from "@/i18n/types";
 import { PDF_MIME, TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { detached } from "@/lib/detached";
 import { isPreviewUnavailableError } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import type { PDFColorMode } from "@/lib/pdf/pdf-color-mode";
 
+const CadesFileViewer = lazy(async () => {
+  const m = await import("@/components/inspector/cades-file-viewer");
+  return { default: m.CadesFileViewer };
+});
+
 const DataBoxFileViewer = lazy(async () => {
   const m = await import("@/features/correspondence/data-box-file-viewer");
   return { default: m.DataBoxFileViewer };
 });
+
+type LegalFileViewer = {
+  Viewer: ComponentType<{ onDownload: () => void; tab: FileTab }>;
+  unreadable: TranslationKey;
+  download: TranslationKey;
+  surface: ViewerSurface;
+};
+
+const legalFileViewers = {
+  cades: {
+    Viewer: CadesFileViewer,
+    unreadable: "signedFile.unreadable",
+    download: "common.downloadOriginal",
+    surface: "inspector-cades",
+  },
+  dataBox: {
+    Viewer: DataBoxFileViewer,
+    unreadable: "correspondence.dataBox.unreadable",
+    download: "common.download",
+    surface: "inspector-data-box",
+  },
+} as const satisfies Record<LegalFileFormatKind, LegalFileViewer>;
 
 const OfficeFileViewer = lazy(async () => {
   const m = await import("@/components/office/office-file-viewer");
@@ -170,26 +202,31 @@ const FileTabViewerComponent = ({
 
   const fileViewer = (() => {
     switch (nativePreviewKind) {
-      case "dataBox":
+      case "cades":
+      case "dataBox": {
+        const { Viewer, unreadable, download, surface } =
+          legalFileViewers[nativePreviewKind];
         return (
           <RecoverableViewerBoundary
             finalFallback={(error) =>
               isPreviewUnavailableError(error) ? (
                 <FilePreviewUnavailable
-                  message={t("correspondence.dataBox.unreadable")}
+                  downloadLabel={t(download)}
+                  message={t(unreadable)}
                   onDownload={handleDownload}
                 />
               ) : undefined
             }
             key={tab.id}
             onDownload={handleDownload}
-            surface="inspector-data-box"
+            surface={surface}
           >
             <Suspense fallback={<PeekSuspenseFallback />}>
-              <DataBoxFileViewer onDownload={handleDownload} tab={tab} />
+              <Viewer onDownload={handleDownload} tab={tab} />
             </Suspense>
           </RecoverableViewerBoundary>
         );
+      }
       case "email":
         if (entity.shouldSurfaceEmailResolutionError) {
           return (

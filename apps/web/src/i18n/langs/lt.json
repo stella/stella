@@ -6300,6 +6300,14 @@
     "reconnectRequired": "Prisijungimas nebegalioja",
     "title": "SharePoint ir OneDrive"
   },
+  "signedFile": {
+    "layer": "Parašų sluoksnis {number, number}",
+    "noReadableContent": "Nėra skaitomo turinio, kurį būtų galima peržiūrėti.",
+    "pdfUnavailable": "PDF peržiūra nepasiekiama.",
+    "unknownSigner": "Nežinomas pasirašęs asmuo",
+    "unreadable": "Nepavyko perskaityti pasirašyto failo.",
+    "unverified": "Parašai nepatikrinti."
+  },
   "skillHistory": {
     "acceptStale": "Priimti ir perrašyti naujesnius pakeitimus",
     "backToCurrent": "Grįžti į dabartinę versiją",

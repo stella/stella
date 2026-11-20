@@ -79,6 +79,10 @@ const ALWAYS_ON_ROUTE_PREFIXES: ReadonlyMap<string, string> = new Map([
     "The caller's private saved searches support search on every deployment",
   ],
   [
+    "/v1/files/:workspaceId/cades",
+    "Signed document previews use the matter file read permission on every deployment",
+  ],
+  [
     "/v1/files/:workspaceId/data-box",
     "Data-box previews use the matter file read permission on every deployment",
   ],
