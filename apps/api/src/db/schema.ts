@@ -44,6 +44,7 @@ export * from "./schema/lists-verification";
 export * from "./schema/model-run-caps";
 export * from "./schema/lists-graph";
 export * from "./schema/office-evidence";
+export * from "./schema/near-duplicates";
 export * from "./schema/pdf-signing";
 export * from "./schema/flows";
 export * from "./schema/mcp";

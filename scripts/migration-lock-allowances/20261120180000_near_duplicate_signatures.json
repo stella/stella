@@ -1,0 +1,5 @@
+{
+  "add-foreign-key": "Both MinHash tables are new and empty, so their foreign keys validate no existing rows. The referenced entity_versions, entities, workspaces and organization tables take a bounded SHARE ROW EXCLUSIVE lock under the 1s lock_timeout and 5s statement_timeout.",
+  "row-level-security": "Row security is enabled and forced on the two new empty tables before application code can write them.",
+  "create-policy": "Policies are catalog-only additions to the two new empty tables and run under the migration's one-second lock timeout."
+}
