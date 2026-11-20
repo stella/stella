@@ -10,8 +10,12 @@ import {
 } from "./settings";
 import { Switch } from "./switch";
 
-const idsIn = (markup: string): Set<string> =>
-  new Set(Array.from(markup.matchAll(/ id="([^"]+)"/gu), (match) => match[1]));
+const idsIn = (markup: string) =>
+  new Set(
+    Array.from(markup.matchAll(/ id="(?<id>[^"]+)"/gu), (match) =>
+      String(match.groups?.["id"]),
+    ),
+  );
 
 describe("SettingsSection", () => {
   test("is named by its title", () => {
