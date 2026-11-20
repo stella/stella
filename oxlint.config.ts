@@ -2132,6 +2132,7 @@ const config = defineConfig({
     // The package's plugins load through local re-exports; the modules say why.
     "./scripts/oxlint-presets/stella-lowercase-plugin.mjs",
     "./.oxlint-plugins/no-raw-cache-control.ts",
+    "./.oxlint-plugins/no-raw-cloudfront-viewer-header.ts",
     "./.oxlint-plugins/confine-sql-close.ts",
     "./.oxlint-plugins/confine-online-ddl.ts",
     "./.oxlint-plugins/raw-hash-from-source-fingerprint.ts",
@@ -7157,6 +7158,25 @@ const config = defineConfig({
       ],
       rules: {
         "no-raw-cache-control/no-raw-cache-control": "error",
+      },
+    },
+    {
+      // CloudFront viewer headers are read only behind the origin proof, by
+      // the modules the rule names as owners.
+      files: [
+        "apps/*/src/**/*.{ts,tsx}",
+        "packages/*/src/**/*.{ts,tsx}",
+        ".oxlint-plugins/__fixtures__/no-raw-cloudfront-viewer-header.fixture.ts",
+      ],
+      excludeFiles: [
+        "**/*.test.ts",
+        "**/*.test.tsx",
+        "apps/api/src/tests/**/*.ts",
+        "**/__tests__/**",
+      ],
+      rules: {
+        "no-raw-cloudfront-viewer-header/no-raw-cloudfront-viewer-header":
+          "error",
       },
     },
     {
