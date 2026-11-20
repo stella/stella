@@ -3,14 +3,30 @@ import fc from "fast-check";
 
 import { assertProperty } from "@stll/property-testing";
 
-import {
-  parseViewerLocation,
-  readViewerLocation,
-  VIEWER_LOCATION_HEADERS,
-} from "@/api/lib/auth/viewer-location";
+import { readViewerLocation } from "@/api/lib/auth/viewer-location";
 import { CLIENT_ADDRESS_SOURCE, type ClientAddress } from "@/api/lib/client-ip";
 
 const CLOUDFRONT_ADDRESS_HEADER = "cloudfront-viewer-address";
+
+// The names CloudFront documents; the module under test keeps its own copy
+// private so that it stays their only reader.
+const VIEWER_LOCATION_HEADERS = {
+  country: "cloudfront-viewer-country",
+  region: "cloudfront-viewer-country-region-name",
+  city: "cloudfront-viewer-city",
+  latitude: "cloudfront-viewer-latitude",
+  longitude: "cloudfront-viewer-longitude",
+} as const;
+
+const readThroughCloudFront = (headers: Headers) =>
+  readViewerLocation({
+    headers,
+    clientAddress: {
+      address: "198.51.100.7",
+      source: CLIENT_ADDRESS_SOURCE.edgeHeader,
+    },
+    edgeHeader: CLOUDFRONT_ADDRESS_HEADER,
+  });
 
 const PRAGUE_HEADERS = {
   [VIEWER_LOCATION_HEADERS.country]: "CZ",
@@ -20,9 +36,9 @@ const PRAGUE_HEADERS = {
   [VIEWER_LOCATION_HEADERS.longitude]: "14.42076",
 };
 
-describe("parseViewerLocation", () => {
+describe("reading the headers CloudFront sends", () => {
   test("reads every field the edge sends", () => {
-    expect(parseViewerLocation(new Headers(PRAGUE_HEADERS))).toEqual({
+    expect(readThroughCloudFront(new Headers(PRAGUE_HEADERS))).toEqual({
       type: "known",
       countryCode: "CZ",
       region: "Hlavni mesto Praha",
@@ -32,7 +48,7 @@ describe("parseViewerLocation", () => {
   });
 
   test("decodes the percent-encoded non-ASCII characters CloudFront sends", () => {
-    const location = parseViewerLocation(
+    const location = readThroughCloudFront(
       new Headers({
         ...PRAGUE_HEADERS,
         [VIEWER_LOCATION_HEADERS.country]: "CH",
@@ -51,13 +67,13 @@ describe("parseViewerLocation", () => {
       if (country !== undefined) {
         headers.set(VIEWER_LOCATION_HEADERS.country, country);
       }
-      expect(parseViewerLocation(headers)).toEqual({ type: "unknown" });
+      expect(readThroughCloudFront(headers)).toEqual({ type: "unknown" });
     },
   );
 
   test("normalizes the country code's case", () => {
     expect(
-      parseViewerLocation(
+      readThroughCloudFront(
         new Headers({ [VIEWER_LOCATION_HEADERS.country]: "sk" }),
       ),
     ).toEqual({
@@ -88,7 +104,7 @@ describe("parseViewerLocation", () => {
         headers.set(name, value);
       }
     }
-    expect(parseViewerLocation(headers)).toMatchObject({
+    expect(readThroughCloudFront(headers)).toMatchObject({
       type: "known",
       city: "Prague",
       coordinates: null,
@@ -102,7 +118,7 @@ describe("parseViewerLocation", () => {
     ["an implausibly long name", "a".repeat(101)],
   ])("drops a city with %s", (_, city) => {
     expect(
-      parseViewerLocation(
+      readThroughCloudFront(
         new Headers({
           ...PRAGUE_HEADERS,
           [VIEWER_LOCATION_HEADERS.city]: city,
@@ -128,7 +144,7 @@ describe("parseViewerLocation", () => {
           // Header values are ByteStrings; percent-encode as the edge does.
           headers.set(VIEWER_LOCATION_HEADERS.city, encodeURIComponent(city));
           headers.set(VIEWER_LOCATION_HEADERS.region, encodeURI(region));
-          const location = parseViewerLocation(headers);
+          const location = readThroughCloudFront(headers);
           if (location.type !== "known") {
             return false;
           }
@@ -155,7 +171,7 @@ describe("readViewerLocation", () => {
   test("trusts the headers on a request the CloudFront address came from", () => {
     expect(
       readViewerLocation({
-        request,
+        headers: request.headers,
         clientAddress: address(CLIENT_ADDRESS_SOURCE.edgeHeader),
         edgeHeader: CLOUDFRONT_ADDRESS_HEADER,
       }),
@@ -183,15 +199,19 @@ describe("readViewerLocation", () => {
     "ignores the same headers when the address came from %s",
     (_, clientAddress, edgeHeader) => {
       expect(
-        readViewerLocation({ request, clientAddress, edgeHeader }),
+        readViewerLocation({
+          headers: request.headers,
+          clientAddress,
+          edgeHeader,
+        }),
       ).toEqual({ type: "unknown" });
     },
   );
 
-  test("is unknown without a request", () => {
+  test("is unknown without headers", () => {
     expect(
       readViewerLocation({
-        request: undefined,
+        headers: undefined,
         clientAddress: address(CLIENT_ADDRESS_SOURCE.edgeHeader),
         edgeHeader: CLOUDFRONT_ADDRESS_HEADER,
       }),
