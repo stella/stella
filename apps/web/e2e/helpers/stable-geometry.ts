@@ -199,3 +199,28 @@ export const expectGeometry = (
     toleranceCssPx,
   );
 };
+
+export const captureLandmarks = async (
+  page: Page,
+  landmarks: Readonly<Record<string, string>>,
+) =>
+  await page.evaluate(
+    (selectors) =>
+      Object.fromEntries(
+        Object.entries(selectors).map(([name, selector]) => {
+          const box = document.querySelector(selector)?.getBoundingClientRect();
+          return [
+            name,
+            box === undefined
+              ? null
+              : {
+                  top: box.top,
+                  left: box.left,
+                  width: box.width,
+                  height: box.height,
+                },
+          ];
+        }),
+      ),
+    landmarks,
+  );
