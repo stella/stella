@@ -494,6 +494,20 @@ const structuredCitationKey = (value: string): string =>
     .toLocaleLowerCase("und")
     .replace(/[\p{P}\p{Z}\s]+/gu, "");
 
+/**
+ * A stored reference as the exact filter compares it: its trailing year read
+ * in either printed form (`caseNumberMatchKey`), as the lookup read its rows,
+ * before punctuation is folded away with the slash the year follows.
+ */
+const storedReferenceMatchKey = (value: string): string =>
+  structuredCitationKey(
+    caseNumberMatchKey(
+      normalizeUnicode(value, "NFKC")
+        .toLocaleLowerCase("und")
+        .replace(/[\p{Z}\s]+/gu, ""),
+    ),
+  );
+
 type TypedReferenceKind = Extract<
   DecisionIdentifierKind,
   "neutral" | "reporter"
@@ -572,8 +586,8 @@ export const exactDecisionMatches = <THit extends DecisionHitIdentity>(
       // A docket is keyed by the grammar that read it, its year in either
       // printed form (`caseNumberMatchKey`), as the lookup read its rows; an
       // ECLI belongs to no docket grammar, so it is compared unscoped. A
-      // stored reference is compared with case, spacing and punctuation
-      // folded, at least as loosely as every per-type key its lookup read
+      // stored reference is compared with its year read the same way and
+      // case, spacing and punctuation folded, at least as loosely as every per-type key its lookup read
       // rows by, so a row the lookup found for an equivalent spelling is
       // never dropped here.
       const grammar =
@@ -582,7 +596,7 @@ export const exactDecisionMatches = <THit extends DecisionHitIdentity>(
           : undefined;
       const keyOf = (value: string): string =>
         identifier.kind === "reference"
-          ? structuredCitationKey(value)
+          ? storedReferenceMatchKey(value)
           : caseNumberMatchKey(decisionIdentifierComparisonKey(value, grammar));
       const wanted = keyOf(identifier.value);
       return hits.filter(
