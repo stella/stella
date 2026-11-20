@@ -6,7 +6,6 @@ SET LOCAL statement_timeout = '5s';--> statement-breakpoint
 -- with the entity version, so deleting a document deletes its signature.
 CREATE TABLE "entity_version_minhash_signatures" (
 	"entity_feature_gate" text DEFAULT 'pending' NOT NULL,
-	"entity_feature_workspace_ids" uuid[] DEFAULT '{}'::uuid[] NOT NULL,
 	"entity_version_id" uuid PRIMARY KEY,
 	"organization_id" varchar(128) NOT NULL,
 	"workspace_id" uuid NOT NULL,
@@ -120,7 +119,6 @@ END AND organization_id =
 ));--> statement-breakpoint
 CREATE TABLE "entity_version_minhash_bands" (
 	"entity_feature_gate" text DEFAULT 'pending' NOT NULL,
-	"entity_feature_workspace_ids" uuid[] DEFAULT '{}'::uuid[] NOT NULL,
 	"entity_version_id" uuid NOT NULL,
 	"organization_id" varchar(128) NOT NULL,
 	"workspace_id" uuid NOT NULL,

@@ -5,7 +5,6 @@ import { SIGNATURE_LENGTH } from "@/api/lib/uploads/near-duplicates/minhash";
 import {
   entityFeatureGateChecks,
   entityFeatureGateColumns,
-  entityFeatureWorkspaceGateColumns,
 } from "../entity-feature-gate-columns";
 import {
   bytea,
@@ -43,7 +42,6 @@ export const entityVersionMinhashSignatures = p.pgTable(
   "entity_version_minhash_signatures",
   {
     ...entityFeatureGateColumns(),
-    ...entityFeatureWorkspaceGateColumns(),
     entityVersionId:
       safeUuid<"entityVersion">("entity_version_id").primaryKey(),
     organizationId: safeOrganizationId("organization_id").notNull(),
@@ -122,7 +120,6 @@ export const entityVersionMinhashBands = p.pgTable(
   "entity_version_minhash_bands",
   {
     ...entityFeatureGateColumns(),
-    ...entityFeatureWorkspaceGateColumns(),
     entityVersionId: safeUuid<"entityVersion">("entity_version_id").notNull(),
     organizationId: safeOrganizationId("organization_id").notNull(),
     workspaceId: safeWorkspaceId("workspace_id").notNull(),
