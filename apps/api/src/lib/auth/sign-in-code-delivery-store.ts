@@ -22,14 +22,15 @@ export const SIGN_IN_CODE_DELIVERY_TTL_SECONDS =
 
 const COMMAND_TIMEOUT_MS = 500;
 
-// The message key's attempt and its remaining lifetime, read together so the
-// failure expires when the send record does.
+// The message key's attempt and its absolute expiry on the server clock,
+// read together so the failure expires exactly when the send record does,
+// however late its write lands.
 const READ_SENDER = `
 local attempt = redis.call("GET", KEYS[1])
 if not attempt then
   return false
 end
-return { attempt, redis.call("PTTL", KEYS[1]) }
+return { attempt, redis.call("PEXPIRETIME", KEYS[1]) }
 `;
 
 export type SignInCodeDeliveryStore = {
@@ -124,16 +125,18 @@ export const createSignInCodeDeliveryStore = ({
       if (!isSenderReply(sender)) {
         return;
       }
-      const [attemptKey, remainingMs] = sender;
-      if (remainingMs <= 0) {
+      const [attemptKey, expiresAtMs] = sender;
+      // A key without an expiry (-1) never comes from rememberSend.
+      if (expiresAtMs <= 0) {
         return;
       }
+      // An expiry already past when the write lands sets no key at all.
       await send(
         "SET",
         coordinationSetArguments({
           key: failureKey(attemptKey),
           value: reason,
-          ttl: { unit: "milliseconds", value: remainingMs },
+          ttl: { unit: "epoch-milliseconds", value: expiresAtMs },
         }),
       );
     },

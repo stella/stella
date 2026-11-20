@@ -229,9 +229,12 @@ describe("sign-in code delivery store", () => {
     ]);
   });
 
-  test("a failure expires with the send it belongs to", async () => {
+  test("a failure expires exactly when the send it belongs to does", async () => {
+    // The send record's absolute expiry, however long the write takes after
+    // the read: a relative lifetime would outlast the send by that delay.
+    const sendExpiresAt = 1_800_000_000_000;
     const { store, calls } = fakeValkey(
-      new Map([["EVAL", ["attempt-hash", 4200]]]),
+      new Map([["EVAL", ["attempt-hash", sendExpiresAt]]]),
     );
     await store.markFailed({
       providerMessageId: "provider-message",
@@ -242,8 +245,8 @@ describe("sign-in code delivery store", () => {
       "SET",
       "sign-in-code-delivery:{attempt-hash}:failure",
       "mailbox_missing",
-      "PX",
-      "4200",
+      "PXAT",
+      String(sendExpiresAt),
     ]);
   });
 
