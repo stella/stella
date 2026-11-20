@@ -270,7 +270,7 @@
     "apps/web/src/components/chat/tool-call-code-block.tsx": 1,
     "apps/web/src/components/company-registry-preview.tsx": 1,
     "apps/web/src/components/conditions/formula-editor.tsx": 2,
-    "apps/web/src/components/docx/docx-loading-shell.tsx": 1,
+    "apps/web/src/components/docx/docx-loading-sheet.tsx": 1,
     "apps/web/src/components/docx/evidence-references.tsx": 1,
     "apps/web/src/components/entity-views/entity-view-body.pending.tsx": 2,
     "apps/web/src/components/entity-views/table.tsx": 1,

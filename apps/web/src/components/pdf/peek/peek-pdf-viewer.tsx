@@ -494,11 +494,11 @@ const PeekDocxViewer = ({
   const searchHighlightFrameRef = useRef<number | null>(null);
   const searchResultCacheRef = useRef<DocxSearchResultCache | null>(null);
   const { containerRef: fitZoomRef, fitZoom: targetZoom } = useDocxFitZoom({
+    fit:
+      fitMode === "page"
+        ? { type: "width", fitWidth: DOCX_PAGE_FIT_WIDTH, maxAutoZoom: 1 }
+        : { type: "width" },
     scaleOffset,
-    ...(fitMode === "page" && {
-      fitWidth: DOCX_PAGE_FIT_WIDTH,
-      maxAutoZoom: 1,
-    }),
   });
   // Stable ref callback so React doesn't detach/re-attach the fit-zoom
   // ResizeObserver every render.
