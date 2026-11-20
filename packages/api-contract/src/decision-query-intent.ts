@@ -1,5 +1,6 @@
 import { panic } from "better-result";
 
+import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 import { normalizeUnicode } from "@stll/text-normalize";
 
 import {
@@ -638,6 +639,13 @@ export const exactDecisionMatches = <THit extends DecisionHitIdentity>(
  * decisions of one file can be issued on one day, so nothing here ever
  * prefers a candidate by its date or its court.
  */
+export const DECISION_IDENTITY_READ = {
+  COMPLETE: "complete",
+  TRUNCATED: "truncated",
+} as const;
+export type DecisionIdentityRead =
+  (typeof DECISION_IDENTITY_READ)[keyof typeof DECISION_IDENTITY_READ];
+
 export type DecisionIdentityResolution<THit> =
   | { readonly status: "none" }
   | {
@@ -648,7 +656,7 @@ export type DecisionIdentityResolution<THit> =
   | {
       readonly status: "ambiguous";
       readonly candidates: readonly THit[];
-      readonly reason: "several" | "selector_unmatched";
+      readonly reason: "several" | "selector_unmatched" | "candidate_limit";
     }
   | {
       readonly status: "incomplete_identifier";
@@ -886,6 +894,8 @@ const resolvedAmong = <THit>(
  * selector, and to nothing arbitrary when none is.
  */
 type ResolveDecisionIdentityOptions = ExactDecisionMatchesOptions & {
+  /** Whether the lookup reached every holder of the exact stored identifier key. */
+  readonly exactIdentityRead?: DecisionIdentityRead | undefined;
   /**
    * The sheet sources a selector is read from; every one when absent. A
    * reader that adjudicates sheets from only some of them (the citation
@@ -900,6 +910,13 @@ export const resolveDecisionIdentity = <THit extends DecisionHitIdentity>(
   options: ResolveDecisionIdentityOptions = {},
 ): DecisionIdentityResolution<THit> => {
   const family = exactDecisionMatches(identifier, hits, options);
+  if (options.exactIdentityRead === DECISION_IDENTITY_READ.TRUNCATED) {
+    return {
+      status: "ambiguous",
+      candidates: family,
+      reason: "candidate_limit",
+    };
+  }
   if (identifier.kind !== "docket") {
     return resolvedAmong(family, "identifier");
   }
@@ -909,6 +926,19 @@ export const resolveDecisionIdentity = <THit extends DecisionHitIdentity>(
   }
   if (selector.kind === "none") {
     const [only, ...rest] = family;
+    if (
+      only !== undefined &&
+      rest.length === 0 &&
+      options.exactIdentityRead === DECISION_IDENTITY_READ.COMPLETE &&
+      only.identifiers?.some(
+        ({ type, value }) =>
+          type === DECISION_IDENTIFIER_TYPES.CASE_NUMBER &&
+          structuredCitationKey(value) ===
+            structuredCitationKey(identifier.value),
+      ) === true
+    ) {
+      return { status: "unique", decision: only, basis: "identifier" };
+    }
     // Where a sibling can be stored under its sheet, the read may not have
     // reached it: one decision found is not one decision in the file.
     if (
