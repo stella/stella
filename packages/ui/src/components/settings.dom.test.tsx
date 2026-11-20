@@ -53,11 +53,18 @@ describe("a label row", () => {
       );
       const control = view.getByRole(role, { name: "Daily digest" });
 
+      // Each call also carries Base UI's event details, a live DOM event; compare
+      // only the values, since diffing the event never finishes.
       fireEvent.click(control);
-      expect(onCheckedChange.mock.calls).toEqual([[true]]);
+      expect(onCheckedChange.mock.calls.map(([checked]) => checked)).toEqual([
+        true,
+      ]);
 
       fireEvent.click(view.getByText("Send a summary every morning"));
-      expect(onCheckedChange.mock.calls).toEqual([[true], [false]]);
+      expect(onCheckedChange.mock.calls.map(([checked]) => checked)).toEqual([
+        true,
+        false,
+      ]);
     });
   }
 });
