@@ -1,11 +1,4 @@
 [
-  "apps/web/src/routes/_protected.admin/route.tsx",
-  "apps/web/src/routes/_protected.settings/organization.ai.tsx",
-  "apps/web/src/routes/_protected.settings/organization.anonymization.tsx",
-  "apps/web/src/routes/_protected.settings/organization.general.tsx",
-  "apps/web/src/routes/_protected.settings/organization.matter-numbering.tsx",
-  "apps/web/src/routes/_protected.settings/organization.time-policy.tsx",
-  "apps/web/src/routes/_protected.settings/organization.tsx",
   "apps/web/src/routes/invoice-link.tsx",
   "apps/web/src/routes/knowledge/clauses.tsx",
   "apps/web/src/routes/knowledge/company-formats.$registry.$companyId.tsx",

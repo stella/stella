@@ -371,6 +371,8 @@ it, and add it here in the same change that adds it to `packages/ui`.
 - `DropdownMenuItem`, `MenuItem` `variant`: `default`, `destructive`
 - `DropdownMenuRadioItem`, `MenuRadioItem` `indicator`: `check`, `none`
 - `DropdownMenuTrigger`, `MenuTrigger`, `PopoverTrigger` `appearance`: `caption`, `default`
+- `FieldFace` `density`: `default`, `snug`
+- `FieldFace` `layout`: `inline`, `stack`
 - `Form` `density`: `compact`, `default`, `snug`
 - `Form` `layout`: `inline`, `stack`
 - `FrameTitle` `tone`: `default`, `destructive`
