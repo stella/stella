@@ -2650,7 +2650,7 @@ export const createAuth = (
                   return;
                 default:
                   newAccountOtpAction satisfies never;
-                  return panic(
+                  panic(
                     `Unhandled new account otp action: ${String(newAccountOtpAction)}`,
                   );
               }
