@@ -30,6 +30,7 @@ import {
   type HarnessExit,
   HarnessTurnLifecycle,
   respondError,
+  settlesWithin,
 } from "../turn-lifecycle";
 import type { AcpAnswer, AcpClient, AcpHandlers } from "./client";
 import {
@@ -207,6 +208,8 @@ export class AcpTurnSession {
    * once the agent said its version.
    */
   private steering = false;
+  /** The answer of the last prompt sent; settled before any was sent. */
+  private promptAnswer: Promise<unknown> = Promise.resolve();
   /** The prompt whose answer ends the turn: the last one sent. */
   private latestPrompt = 0;
   /** What every answered prompt of the turn used, steered ones included. */
@@ -271,6 +274,7 @@ export class AcpTurnSession {
 
   /** A prompt was sent; the last one's answer ends the turn. */
   prompted(answer: Promise<AcpAnswer>) {
+    this.promptAnswer = answer;
     this.latestPrompt += 1;
     const prompt = this.latestPrompt;
     this.options.detached(
@@ -329,15 +333,14 @@ export class AcpTurnSession {
         this.steerWith(input);
       },
       interrupt: async () => {
-        // ACP's cancel is a notification: nothing answers it but the prompt,
-        // whose answer the lifecycle waits for.
-        // oxlint-disable-next-line typescript/promise-function-async -- sync notify, returns a resolved promise
-        await this.lifecycle.interrupt((client) => {
+        await this.lifecycle.interrupt(async (client) => {
           this.cancelPermissions();
           if (this.sessionId !== null) {
             client.notify("session/cancel", { sessionId: this.sessionId });
           }
-          return Promise.resolve(true);
+          // ACP's cancel is a notification: the prompt's answer confirms it.
+          await settlesWithin(this.promptAnswer, this.lifecycle.gracePeriodMs);
+          return true;
         });
       },
     });
