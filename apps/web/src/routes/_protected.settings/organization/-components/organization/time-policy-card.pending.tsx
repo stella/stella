@@ -29,7 +29,7 @@ export const TimePolicyCardFrame = ({ children }: { children: ReactNode }) => (
 );
 
 /** The locked month row: the month and year pickers, then the clear button. */
-export const TIME_POLICY_MONTH_ROW_CLASS = "flex items-center gap-2";
+export const TIME_POLICY_MONTH_ROW_CLASS = "flex flex-wrap items-center gap-2";
 
 /** A field in its pending phase: caption, the control's face, help line. */
 const TimePolicyFieldPending = ({

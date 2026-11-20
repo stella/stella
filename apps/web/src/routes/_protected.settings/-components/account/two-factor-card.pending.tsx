@@ -31,7 +31,7 @@ export const TwoFactorCardFrame = ({
       title="settings.account.twoFactor.title"
     >
       <SettingsPanel>
-        <div className="flex items-center justify-between gap-4">
+        <div className="flex flex-wrap items-center justify-between gap-4">
           {status}
           <div className="flex gap-2">{actions}</div>
         </div>
