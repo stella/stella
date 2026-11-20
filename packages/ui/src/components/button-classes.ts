@@ -4,14 +4,15 @@
 // pending view and the button that replaces it share one box.
 
 import { TOOLBAR_ROW_HEIGHT } from "../inspector/layout-tokens";
+import { MENU_ROW_CLASS_NAME } from "../lib/menu-row";
 import {
   BUTTON_VARIANT_TOKENS,
   type ButtonSize,
   type ButtonTokenVariant,
 } from "./button.shared";
 
-/** Every size but a menu row, which only a real button takes. */
-export type ButtonFaceSize = Exclude<ButtonSize, "row">;
+/** Every size a button's face draws: all of the button's own. */
+export type ButtonFaceSize = ButtonSize;
 
 /** The box every sized button shares: layout, border, type, focus ring. */
 export const BUTTON_BASE_CLASS =
@@ -70,7 +71,21 @@ export const BUTTON_FACE_SIZE_CLASS_NAMES = {
   touch: "min-h-[44px] min-w-[44px] px-[calc(--spacing(3.5)-1px)]",
   xl: "h-11 px-[calc(--spacing(4)-1px)] text-lg sm:h-10 sm:text-base [&_svg:not([class*='size-'])]:size-5 sm:[&_svg:not([class*='size-'])]:size-4.5",
   xs: "h-7 gap-1 rounded-md px-[calc(--spacing(2)-1px)] text-sm before:rounded-[calc(var(--radius-md)-1px)] sm:h-6 sm:text-xs [&_svg:not([class*='size-'])]:size-4 sm:[&_svg:not([class*='size-'])]:size-3.5",
-} as const satisfies Record<ButtonFaceSize, string>;
+} as const satisfies Record<Exclude<ButtonSize, "row">, string>;
+
+/**
+ * One row of a menu list. The metric is shared with `CommandItem`; the rest
+ * undoes the base button's centred content and its icon inset, so a button
+ * row and a command row read as the same box.
+ */
+const BUTTON_ROW_SIZE_CLASS = `${MENU_ROW_CLASS_NAME} [&_svg]:mx-0`;
+
+/** Every size's metrics, the menu row's included: the button's and its
+ *  face's. */
+export const BUTTON_SIZE_CLASS_NAMES = {
+  ...BUTTON_FACE_SIZE_CLASS_NAMES,
+  row: BUTTON_ROW_SIZE_CLASS,
+} as const satisfies Record<ButtonSize, string>;
 
 // Every shared variant: its shared colours, then the web's states. A
 // selected button (`data-pressed`) shows its own treatment, and hover never

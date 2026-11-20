@@ -112,11 +112,24 @@ const readInboxLastView = (persisted: unknown): InboxLastView | null => {
     : null;
 };
 
+/**
+ * The Knowledge sections a member's landing last showed in this browser, in
+ * the landing's order: which cards the role and the deployment open. A cold
+ * load, which has not read the role yet, draws its loading cards from this,
+ * so the grid it paints is the one the member left, never a guess.
+ */
+const readKnowledgeLanding = (persisted: unknown): string[] | null =>
+  isStringArray(persisted) ? persisted : null;
+
 type ConfigState = {
   matters: MattersConfig;
   inbox: InboxLastView | null;
+  knowledgeLanding: string[] | null;
   /** Keeps the inbox view just drawn, for the next cold load's body. */
   rememberInboxView: (view: InboxLastView) => void;
+  /** Keeps the Knowledge landing's sections just drawn, for the next cold
+   *  load's cards. */
+  rememberKnowledgeLanding: (sections: string[]) => void;
   updateMatters: (patch: Partial<MattersConfig>) => void;
   setMattersFilter: <K extends keyof MattersFilters>(
     key: K,
@@ -171,6 +184,7 @@ const readPersistedMatters = (persisted: unknown): MattersConfig => {
 export const toPersistedConfigState = (state: ConfigState) => ({
   matters: readPersistedMatters(state.matters),
   inbox: readInboxLastView(state.inbox),
+  knowledgeLanding: readKnowledgeLanding(state.knowledgeLanding),
 });
 
 export const migratePersistedConfigState = (persisted: unknown) => ({
@@ -178,6 +192,9 @@ export const migratePersistedConfigState = (persisted: unknown) => ({
     isRecord(persisted) ? persisted["matters"] : null,
   ),
   inbox: readInboxLastView(isRecord(persisted) ? persisted["inbox"] : null),
+  knowledgeLanding: readKnowledgeLanding(
+    isRecord(persisted) ? persisted["knowledgeLanding"] : null,
+  ),
 });
 
 export const useConfigStore = create<ConfigState>()(
@@ -185,9 +202,14 @@ export const useConfigStore = create<ConfigState>()(
     (set) => ({
       matters: DEFAULT_MATTERS,
       inbox: null,
+      knowledgeLanding: null,
 
       rememberInboxView: (view) => {
         set({ inbox: view });
+      },
+
+      rememberKnowledgeLanding: (sections) => {
+        set({ knowledgeLanding: sections });
       },
 
       updateMatters: (patch) => {
@@ -252,10 +274,12 @@ export const useConfigStore = create<ConfigState>()(
       migrate: migratePersistedConfigState,
       partialize: toPersistedConfigState,
       merge: (persisted, current) => {
-        const { inbox, matters } = migratePersistedConfigState(persisted);
+        const { inbox, knowledgeLanding, matters } =
+          migratePersistedConfigState(persisted);
         return {
           ...current,
           inbox,
+          knowledgeLanding,
           matters,
         };
       },

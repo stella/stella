@@ -2,11 +2,27 @@
 // pending-safe module, see .oxlint-plugins/route-pending-component-policy.json),
 // so the pending views draw them before any provider mounts.
 
+import {
+  ButtonFace,
+  FaceLabelPending,
+  SegmentedIconToggleFace,
+} from "@stll/ui/control-face";
+import { PlusIcon, Rows2Icon, Rows3Icon } from "@stll/ui/icons";
 import { Skeleton } from "@stll/ui/skeleton";
 import { cn } from "@stll/ui/utils";
 
 import { PendingText } from "@/components/pending-text";
+import {
+  CategoryMobileFilterBarPending,
+  CategorySidebarPending,
+} from "@/features/knowledge/views/category-sidebar.pending";
 import type { TemplateDensity } from "@/features/knowledge/views/templates/templates-seam";
+
+/** The density toggle's two options, in its order. */
+export const TEMPLATE_DENSITY_OPTIONS = [
+  { value: "compact", icon: Rows3Icon },
+  { value: "comfortable", icon: Rows2Icon },
+] as const satisfies readonly { value: TemplateDensity }[];
 
 /** A template row's padding and alignment, per density. */
 export const TEMPLATE_ROW_SPACING = {
@@ -30,18 +46,23 @@ export const TEMPLATE_LIST_LAYOUT = {
 export type TemplateListLayout =
   (typeof TEMPLATE_LIST_LAYOUT)[keyof typeof TEMPLATE_LIST_LAYOUT];
 
-const TEMPLATE_SIDEBAR_KEYS = ["a", "b", "c", "d", "e"];
+const ALL_TEMPLATES_LABEL = (
+  <PendingText barClassName="w-24" id="templates.allTemplates" />
+);
 const TEMPLATE_ROW_KEYS = ["a", "b", "c", "d", "e", "f"];
 
-// Mirrors the template list (w-48 category sidebar + bordered list pane with
-// count/new-template toolbar and divided rows) so the page keeps its shape
-// while templates load; only the values fade in. The caller passes the
-// density: the loaded list's reads the presentation preference, a route's
-// pending view (drawn before any provider) the default.
+// Mirrors the template list (the category sidebar, the list pane with its
+// count, density and new-template toolbar, and divided rows) so the page
+// keeps its shape while templates load; only the values fade in. The caller
+// passes the density: the loaded list's reads the presentation preference, a
+// route's pending view (drawn before any provider) the default.
 export const TemplateListPending = ({
+  canCreate = false,
   density = "compact",
   layout,
 }: {
+  /** The library's create actions are the member's to take. */
+  canCreate?: boolean | undefined;
   density?: TemplateDensity | undefined;
   layout: TemplateListLayout;
 }) => {
@@ -52,14 +73,12 @@ export const TemplateListPending = ({
       className="flex min-h-0 flex-1 flex-col md:flex-row"
     >
       {hasLibraryChrome && (
-        <div className="hidden w-48 shrink-0 flex-col md:flex">
-          <nav className="flex-1 space-y-1 p-2">
-            <Skeleton className="h-7 w-full rounded-md" />
-            <div className="my-1 border-t" />
-            {TEMPLATE_SIDEBAR_KEYS.map((key) => (
-              <Skeleton className="h-7 w-2/3 rounded-md" key={key} />
-            ))}
-          </nav>
+        <div className="hidden md:contents">
+          <CategorySidebarPending
+            allLabel={ALL_TEMPLATES_LABEL}
+            canCreate={canCreate}
+            selection="all"
+          />
         </div>
       )}
 
@@ -72,20 +91,30 @@ export const TemplateListPending = ({
                 id="knowledge.sections.templates.title"
               />
             </h2>
-            <Skeleton className="h-4 w-4" />
+            <span className="text-muted-foreground text-sm tabular-nums">
+              <FaceLabelPending className="w-4" />
+            </span>
           </div>
           <div className="flex shrink-0 items-center gap-2">
-            <Skeleton className="h-8 w-16 rounded-md" />
-            {hasLibraryChrome && <Skeleton className="h-8 w-32 rounded-md" />}
+            <SegmentedIconToggleFace
+              options={TEMPLATE_DENSITY_OPTIONS}
+              value={density}
+            />
+            {hasLibraryChrome && canCreate && (
+              <ButtonFace size="sm" variant="default">
+                <PlusIcon />
+                <PendingText barClassName="w-20" id="templates.newTemplate" />
+              </ButtonFace>
+            )}
           </div>
         </div>
 
         {hasLibraryChrome && (
-          <div className="border-b px-3 py-2 md:hidden">
-            <div className="flex gap-1 pb-0.5">
-              <Skeleton className="h-8 w-32" />
-            </div>
-          </div>
+          <CategoryMobileFilterBarPending
+            allLabel={ALL_TEMPLATES_LABEL}
+            canCreate={canCreate}
+            selection="all"
+          />
         )}
         {/* A placeholder of the list's geometry: nothing in it scrolls. */}
         <ul className="flex-1 divide-y overflow-hidden">

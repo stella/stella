@@ -127,6 +127,43 @@ const contactSurfaces = (contactId: string): readonly LoadingSurface[] => [
   },
 ];
 
+/**
+ * The Knowledge sections, recorded as evidence beside the others: the
+ * landing, whose cold paint leaves its cards to the sections this browser
+ * last saw, the clause library and the house styles.
+ */
+const KNOWLEDGE_SURFACES = [
+  {
+    type: "steady",
+    path: "/knowledge",
+    busy: "[data-slot=knowledge-section-card-pending]",
+    landmarks: {
+      heading: "[data-slot=knowledge-landing]",
+      firstCard: "[data-slot=knowledge-landing] > div > *",
+    },
+  },
+  {
+    type: "steady",
+    path: "/knowledge/clauses",
+    busy: "[data-slot=clause-rows-pending]",
+    landmarks: {
+      heading: "[data-slot=clause-list-toolbar]",
+      sidebar: "nav",
+      body: "[data-slot=clause-list-body]",
+    },
+  },
+  {
+    type: "steady",
+    path: "/knowledge/styles",
+    busy: "[data-slot=style-set-list] > li[aria-hidden=true]",
+    landmarks: {
+      heading: "h1",
+      header: "div:has(> div > h1)",
+      firstRow: "[data-slot=style-set-list] > li",
+    },
+  },
+] as const satisfies readonly LoadingSurface[];
+
 const captureLandmarks = async (
   page: Page,
   landmarks: Readonly<Record<string, string>>,
@@ -156,8 +193,9 @@ type MeasureLoadingGeometryOptions = {
   browser: Browser;
   baseURL: string;
   storageState: string;
-  /** Which surfaces to measure: time and admin, or inbox and contacts. */
-  set?: "time-admin" | "contacts" | undefined;
+  /** Which surfaces to measure: time and admin, inbox and contacts, or
+   *  the Knowledge sections. */
+  set?: "time-admin" | "contacts" | "knowledge" | undefined;
 };
 
 export const measureLoadingGeometry = async ({
@@ -198,7 +236,12 @@ export const measureLoadingGeometry = async ({
             }),
           )
         : null;
-    const surfaces = contact === null ? SURFACES : contactSurfaces(contact.id);
+    let surfaces: readonly LoadingSurface[] = SURFACES;
+    if (contact !== null) {
+      surfaces = contactSurfaces(contact.id);
+    } else if (set === "knowledge") {
+      surfaces = KNOWLEDGE_SURFACES;
+    }
     const evidence = [];
     try {
       for (const { locale, browserLocale, messages } of LANGUAGES) {

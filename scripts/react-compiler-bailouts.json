@@ -276,7 +276,7 @@
       "(BuildHIR::lowerStatement) Handle TryStatement with a finalizer ('finally') clause"
     ]
   },
-  "apps/web/src/routes/knowledge/clauses.tsx::RouteComponent": {
+  "apps/web/src/routes/knowledge/-member/clauses.page.tsx::RouteComponent": {
     "memos": 5,
     "reasons": [
       "`try`/`finally` without `catch` is not supported by React Compiler"

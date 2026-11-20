@@ -9,6 +9,7 @@ import {
   BUTTON_BASE_CLASS,
   BUTTON_FACE_SIZE_CLASS_NAMES,
   BUTTON_LAYOUT_CLASS_NAMES,
+  BUTTON_SIZE_CLASS_NAMES,
   BUTTON_VARIANT_CLASS_NAMES,
   type ButtonFaceSize,
 } from "./button-classes";
@@ -83,7 +84,7 @@ export const buttonFaceClassName = ({
 }): string =>
   cn(
     BUTTON_BASE_CLASS,
-    BUTTON_FACE_SIZE_CLASS_NAMES[size],
+    BUTTON_SIZE_CLASS_NAMES[size],
     BUTTON_VARIANT_CLASS_NAMES[variant],
     size === "inline" && variant === "link" && "underline",
     FACE_UNAVAILABLE_CLASS,
