@@ -131,7 +131,7 @@ const WHITESPACE = /\p{White_Space}+/u;
 
 /** Letters and digits (Rust `char::is_alphanumeric`), the part of a text
  *  cleanup must keep. */
-const contentLength = (text: string): number =>
+export const dictationContentLength = (text: string): number =>
   codePointCount(text.replaceAll(NON_CONTENT_CHARACTERS, ""));
 
 /** A phrase as the words a transcript is matched on. */
@@ -283,7 +283,10 @@ const implausibility = (
   if (texts.length === 0 && (dictated > 0 || segments.length === 0)) {
     return "no-text";
   }
-  const kept = texts.reduce((total, text) => total + contentLength(text), 0);
+  const kept = texts.reduce(
+    (total, text) => total + dictationContentLength(text),
+    0,
+  );
   if (kept * 100 < (dictated - discardable) * minAnswerTextPercent) {
     return "too-short";
   }

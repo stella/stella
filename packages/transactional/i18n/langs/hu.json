@@ -24,19 +24,24 @@
     "action": "Munkamenetek áttekintése",
     "body": "Fiókjába új eszközről vagy helyről jelentkeztek be.",
     "device": "Eszköz",
+    "deviceName": {
+      "browserOnOs": "{browser}, {os} rendszeren",
+      "unknown": "Ismeretlen eszköz"
+    },
     "heading": "Új bejelentkezés észlelve",
     "ignore": "Ha Ön volt az, nincs teendő. Ha nem ismeri fel ezt a tevékenységet, tekintse át aktív munkameneteit, és vonja vissza azokat, amelyeket nem ismer fel.",
     "ipAddress": "IP-cím",
+    "ipAddressUnknown": "Ismeretlen",
     "location": "Hozzávetőleges hely",
     "locationNote": "A helyet az IP-cím alapján becsüljük, ezért pontatlan lehet.",
     "mapAlt": "Térkép a bejelentkezés hozzávetőleges helyével: {location}",
-    "mapCredit": "Térképadatok: Natural Earth",
     "place": {
       "cityCountry": "{city}, {country}",
       "cityRegionCountry": "{city}, {region}, {country}",
       "regionCountry": "{region}, {country}"
     },
     "preview": "Új bejelentkezés innen: {device}",
+    "previewUnknownDevice": "Új bejelentkezés ismeretlen eszközről",
     "subject": "Új bejelentkezés a stella fiókjába",
     "time": "Időpont"
   },

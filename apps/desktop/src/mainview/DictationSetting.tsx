@@ -84,6 +84,8 @@ export type DictationSnapshot = {
   language: DictationLanguage;
   /** Whether cleanup also gets the focused window's title. */
   shareWindowTitle: boolean;
+  /** Whether a short sound marks the start and the end of listening. */
+  sounds: boolean;
   /** Whether cleanup also gets the text before the cursor. */
   shareTextBeforeCursor: boolean;
   /** Whether this computer can read the text before the cursor; without it
@@ -127,11 +129,6 @@ const languageHasEffect = (snapshot: DictationSnapshot): boolean =>
   snapshot.cleanup ||
   snapshot.destination === "cloud" ||
   (snapshot.model.status === "ready" && snapshot.language.supported.length > 0);
-
-/** Custom words reach stella AI transcription and AI cleanup only; with
- *  neither they change nothing, so they are hidden. */
-const customWordsHaveEffect = (snapshot: DictationSnapshot): boolean =>
-  snapshot.cleanup || snapshot.destination === "cloud";
 
 /** Orders the snapshots the native side answers with. Each read or change
  *  takes a ticket as it starts; an answer is shown only when no answer to a
@@ -418,6 +415,7 @@ const DictationPage = ({
         // Keyed by the failure, so a new one reads its action afresh.
         <DictationInputFix key={snapshot.failure} />
       )}
+      <TranscribeRecordingGroup />
       {snapshot.enabled && (
         <>
           <SettingsGroup title={t("groups.shortcut")}>
@@ -434,6 +432,12 @@ const DictationPage = ({
             <DictationMicrophoneRow
               focused={focus === "microphone"}
               onFocused={onFocusShown}
+            />
+            <DictationSoundsRow
+              checked={snapshot.sounds}
+              onChange={(sounds) => {
+                void change("dictation_set_sounds", { enabled: sounds });
+              }}
             />
           </SettingsGroup>
           <SettingsGroup title={t("groups.transcription")}>
@@ -520,12 +524,12 @@ const DictationPage = ({
               />
             )}
           </SettingsGroup>
-          {customWordsHaveEffect(snapshot) && (
-            <DictationCustomWords
-              onChange={setCustomWords}
-              words={snapshot.customWords}
-            />
-          )}
+          {/* stella AI and cleanup take the words; without either, the
+              text from the speech model here is spelled with them. */}
+          <DictationCustomWords
+            onChange={setCustomWords}
+            words={snapshot.customWords}
+          />
           {/* With stella AI the model is not needed, but a downloaded one
               can still be removed. */}
           {(snapshot.destination === "local" ||
@@ -552,7 +556,6 @@ const DictationPage = ({
           )}
         </>
       )}
-      <TranscribeRecordingGroup />
     </div>
   );
 };
@@ -656,6 +659,32 @@ const DictationHoldKeyRow = ({
           ))}
         </SelectPopup>
       </Select>
+    </SettingsRow>
+  );
+};
+
+/** Whether a short sound marks the start and the end of recording. */
+const DictationSoundsRow = ({
+  checked,
+  onChange,
+}: {
+  checked: boolean;
+  onChange: (enabled: boolean) => void;
+}) => {
+  const t = useTranslations("dictation.sounds");
+  const ids = settingsRowIds("dictation-sounds");
+  return (
+    <SettingsRow
+      description={t("description")}
+      id="dictation-sounds"
+      title={t("title")}
+    >
+      <Switch
+        aria-describedby={ids.description}
+        aria-labelledby={ids.label}
+        checked={checked}
+        onCheckedChange={onChange}
+      />
     </SettingsRow>
   );
 };

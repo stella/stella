@@ -1,3 +1,5 @@
+import { panic } from "better-result";
+
 import type { CountryCode } from "@stll/country-codes";
 
 import { Body } from "../components/body";
@@ -33,9 +35,23 @@ export type SignInLocation =
       map: { contentId: string } | null;
     };
 
+/**
+ * The signing-in device as its user agent names it. Browser and OS names are
+ * proper nouns and print as parsed; the email words the rest in its language.
+ */
+export type SignInDevice =
+  | { type: "browserOnOs"; browser: string; os: string }
+  | { type: "browser"; browser: string }
+  | { type: "os"; os: string }
+  | { type: "unknown" };
+
+/** The address the sign-in came from; `unknown` when the runtime gave none. */
+export type SignInAddress =
+  { type: "known"; address: string } | { type: "unknown" };
+
 type Props = {
-  device: string;
-  ipAddress: string;
+  device: SignInDevice;
+  ipAddress: SignInAddress;
   location: SignInLocation;
   time: string;
   sessionsUrl: string;
@@ -52,11 +68,16 @@ export const Email = ({
 }: Props) => {
   const t = getTranslator(lang);
   const place = location.type === "known" ? placeName(location, lang) : null;
+  const deviceName = describeDevice(device, lang);
 
   return (
     <Html lang={lang} dir={getEmailDirection(lang)}>
       <Head />
-      <Preview>{t("newDeviceLogin.preview", { device })}</Preview>
+      <Preview>
+        {device.type === "unknown"
+          ? t("newDeviceLogin.previewUnknownDevice")
+          : t("newDeviceLogin.preview", { device: deviceName })}
+      </Preview>
       <Body style={sharedStyles.body}>
         <Container style={sharedStyles.container}>
           <Wordmark />
@@ -66,10 +87,13 @@ export const Email = ({
           <Text style={sharedStyles.text}>{t("newDeviceLogin.body")}</Text>
           <Section style={styles.detailsSection}>
             <Text style={styles.detailRow}>
-              <strong>{t("newDeviceLogin.device")}:</strong> {device}
+              <strong>{t("newDeviceLogin.device")}:</strong> {deviceName}
             </Text>
             <Text style={styles.detailRow}>
-              <strong>{t("newDeviceLogin.ipAddress")}:</strong> {ipAddress}
+              <strong>{t("newDeviceLogin.ipAddress")}:</strong>{" "}
+              {ipAddress.type === "known"
+                ? ipAddress.address
+                : t("newDeviceLogin.ipAddressUnknown")}
             </Text>
             {place === null ? null : (
               <Text style={styles.detailRow}>
@@ -101,7 +125,10 @@ type KnownLocation = Extract<SignInLocation, { type: "known" }>;
 
 type LocationNotesProps = { location: KnownLocation; lang: SupportedLang };
 
-/** The map, when there is one, and what the location rests on. */
+/**
+ * The map, when there is one, and what the location rests on. The base map is
+ * public domain and needs no credit line.
+ */
 const LocationNotes = ({ location, lang }: LocationNotesProps) => {
   const t = getTranslator(lang);
   return (
@@ -118,11 +145,28 @@ const LocationNotes = ({ location, lang }: LocationNotesProps) => {
         />
       )}
       <Text style={styles.caption}>{t("newDeviceLogin.locationNote")}</Text>
-      {location.map === null ? null : (
-        <Text style={styles.caption}>{t("newDeviceLogin.mapCredit")}</Text>
-      )}
     </>
   );
+};
+
+const describeDevice = (device: SignInDevice, lang: SupportedLang): string => {
+  const t = getTranslator(lang);
+  switch (device.type) {
+    case "browserOnOs":
+      return t("newDeviceLogin.deviceName.browserOnOs", {
+        browser: device.browser,
+        os: device.os,
+      });
+    case "browser":
+      return device.browser;
+    case "os":
+      return device.os;
+    case "unknown":
+      return t("newDeviceLogin.deviceName.unknown");
+    default:
+      device satisfies never;
+      return panic("Unknown sign-in device kind");
+  }
 };
 
 /**

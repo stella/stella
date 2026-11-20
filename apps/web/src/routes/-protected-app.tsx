@@ -3,7 +3,6 @@ import type { MouseEvent, ReactNode } from "react";
 
 import { useHotkey } from "@tanstack/react-hotkeys";
 import { useMatch } from "@tanstack/react-router";
-import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
@@ -43,6 +42,7 @@ import { DocxEditorHost } from "@/components/docx/docx-editor-host";
 import { DragAndDropLiveRegion } from "@/components/drag-and-drop-live-region";
 import { resolveInspectorDockVisibility } from "@/components/inspector/inspector-dock-visibility";
 import { INSPECTOR_FOCUS_INTENT } from "@/components/inspector/inspector-store-types";
+import { getInspectorTabWorkspaceId } from "@/components/inspector/inspector-tab-workspace";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import type { InspectorTab } from "@/components/inspector/inspector-tabs-store";
 import { newChatMatterScope } from "@/components/inspector/new-chat-scope";
@@ -91,6 +91,7 @@ import {
 } from "@/lib/workspaces/queries";
 import { shouldForceSidebarCollapsed } from "@/routes/-inspector-pane-width";
 import { ChatMenuContent } from "@/routes/-protected-app/-components/chat-menu-content";
+import { ExactDuplicateUploadDialog } from "@/routes/-protected-app/-components/exact-duplicate-upload-dialog";
 import { PaymentRetryBanner } from "@/routes/-protected-app/-components/payment-retry-banner";
 import {
   createSessionActivity,
@@ -293,6 +294,7 @@ export const ProtectedAppFrame = ({
                     <WorkspaceInspectorSidePanel
                       reservePane={reserveInspectorPane}
                       routeMatterChromeStyle={routeMatterChromeStyle}
+                      routeMatterColor={activeMatterColor}
                     />
                   }
                   navigation={{
@@ -317,6 +319,7 @@ export const ProtectedAppFrame = ({
                 <MakeSkillReviewDialog />
                 <AttachedTemplateUploadDialog />
                 <DocumentReferenceUploadDialog />
+                <ExactDuplicateUploadDialog />
                 <ShortcutEchoHud />
                 <KeyboardShortcutsDialog />
               </ChatEditorProvider>
@@ -565,32 +568,6 @@ const resolveInspectorWorkspaceId = ({
   return undefined;
 };
 
-const getInspectorTabWorkspaceId = (
-  tab: InspectorTab | undefined,
-): string | undefined => {
-  if (tab === undefined) {
-    return undefined;
-  }
-
-  switch (tab.type) {
-    case "pdf":
-    case "matter":
-    case "task":
-      return tab.workspaceId;
-    case "chat":
-      return tab.workspaceId ?? tab.contextMatterIds.at(0);
-    case "external":
-      return tab.workspaceId ?? undefined;
-    case "skill-resource":
-    case "view":
-      return undefined;
-    default: {
-      tab satisfies never;
-      return panic(`Unhandled tab: ${String(tab)}`);
-    }
-  }
-};
-
 /**
  * Workspace inspector pane — file viewers + chat tabs. Mounted at
  * the protected layout level (next to `TemplateAssistantSidePanel`)
@@ -604,9 +581,11 @@ const getInspectorTabWorkspaceId = (
 function WorkspaceInspectorSidePanel({
   reservePane,
   routeMatterChromeStyle,
+  routeMatterColor,
 }: {
   reservePane: boolean;
   routeMatterChromeStyle: MatterChromeStyle;
+  routeMatterColor: string | null;
 }) {
   const t = useTranslations();
   const { isMobile } = useSidebar();
@@ -717,7 +696,10 @@ function WorkspaceInspectorSidePanel({
             <SheetTitle>{t("inspector.title")}</SheetTitle>
           </SheetHeader>
           <Suspense fallback={<MobileInspectorFallback />}>
-            <LazyInspectorPanel workspaceId={activeWorkspaceId} />
+            <LazyInspectorPanel
+              routeMatterColor={routeMatterColor}
+              workspaceId={activeWorkspaceId}
+            />
           </Suspense>
         </SheetPopup>
       </Sheet>
@@ -736,7 +718,10 @@ function WorkspaceInspectorSidePanel({
       onResetWidth={resetWidth}
     >
       <Suspense fallback={<InspectorRailFallback />}>
-        <LazyInspectorPanel workspaceId={activeWorkspaceId} />
+        <LazyInspectorPanel
+          routeMatterColor={routeMatterColor}
+          workspaceId={activeWorkspaceId}
+        />
       </Suspense>
     </InspectorDock>
   );

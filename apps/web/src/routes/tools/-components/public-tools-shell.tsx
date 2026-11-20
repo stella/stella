@@ -1,3 +1,5 @@
+import type { ReactElement } from "react";
+
 import { Link, useRouterState } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
@@ -7,8 +9,10 @@ import { TruncatedText } from "@stll/ui/truncated-text";
 import { PublicWorkspaceShell } from "@/components/public-workspace-shell";
 import { SidebarTrigger, useSidebar } from "@/components/sidebar";
 
-export function PublicToolsShell() {
-  return <PublicWorkspaceShell topBar={<PublicToolsTopBar />} />;
+export function PublicToolsShell({ content }: { content: ReactElement }) {
+  return (
+    <PublicWorkspaceShell content={content} topBar={<PublicToolsTopBar />} />
+  );
 }
 
 /**
