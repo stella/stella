@@ -1,5 +1,6 @@
 import { Result } from "better-result";
 import { existsSync, readdirSync, rmSync } from "node:fs";
+import { homedir } from "node:os";
 import path from "node:path";
 
 import type { AcpAgentDefinition } from "./definition";
@@ -86,6 +87,7 @@ export const ANTIGRAVITY: AcpAgentDefinition = {
   // A model request that lost its thinking block's signature fails every
   // later request of the saved session too.
   brokenSession: (message) => LOST_THINKING_SIGNATURE.test(message),
+  minimumVersion: null,
   // A probe's session would otherwise stay in the member's history.
   discardSession: (configDir, sessionId) => {
     const state = path.join(configDir, "antigravity-acp");
@@ -99,3 +101,83 @@ export const ANTIGRAVITY: AcpAgentDefinition = {
     }
   },
 };
+
+/** The Antigravity CLI serves ACP (`agy acp`) from this release. */
+const CLI_ACP_VERSION = "1.5.0";
+
+/** How long `agy --version` may take. */
+const CLI_VERSION_TIMEOUT_MS = 5000;
+
+const VERSION_WORD = /\b\d{1,9}\.\d{1,9}\.\d{1,9}\b/u;
+
+/** The CLI's version as `--version` prints it, without starting the agent. */
+const cliVersion = async (executable: string): Promise<string | null> => {
+  // Throws, and so rejects, when the executable cannot be run at all.
+  const child = Bun.spawn([executable, "--version"], {
+    stdin: "ignore",
+    stdout: "pipe",
+    stderr: "ignore",
+    timeout: CLI_VERSION_TIMEOUT_MS,
+  });
+  const [output, exitCode] = await Promise.all([
+    new Response(child.stdout).text(),
+    child.exited,
+  ]);
+  return exitCode === 0 ? (VERSION_WORD.exec(output)?.[0] ?? null) : null;
+};
+
+/** Where the member's own Antigravity CLI keeps its sign-in. */
+export const antigravityCliTokenPath = (
+  environment: Readonly<Record<string, string | undefined>>,
+) =>
+  path.join(
+    environment["GEMINI_HOME"] ??
+      path.join(
+        environment["HOME"] ?? environment["USERPROFILE"] ?? homedir(),
+        ".gemini",
+      ),
+    "antigravity-cli",
+    "antigravity-oauth-token",
+  );
+
+/**
+ * The Antigravity CLI the member installed (`agy`), which serves ACP as
+ * `agy acp` from 1.5.0. It is the member's own: it runs with their own
+ * Antigravity home and sign-in, which they make in the CLI itself; stella
+ * keeps only its own state (the probe's answer) in its state directory.
+ */
+export const ANTIGRAVITY_CLI: AcpAgentDefinition = {
+  ...ANTIGRAVITY,
+  args: () => ["acp"],
+  environment: () => ({}),
+  // The member's own Antigravity home stays theirs.
+  removedEnvironment: GOOGLE_ENVIRONMENT.filter(
+    (name) => name !== "GEMINI_HOME",
+  ),
+  storedSignIn: {
+    methodId: ANTIGRAVITY_SIGN_IN_METHOD,
+    signedIn: (_configDir, environment) =>
+      existsSync(antigravityCliTokenPath(environment)),
+  },
+  ownTempDir: false,
+  // Where the CLI keeps a session is its own; a probe's stays there.
+  discardSession: null,
+  minimumVersion: { version: CLI_ACP_VERSION, read: cliVersion },
+};
+
+/** The CLI's executable names; the release's server is any other. */
+const CLI_NAMES: ReadonlySet<string> = new Set(["agy", "antigravity"]);
+
+/** The definition for an Antigravity executable: the CLI or the server. */
+export const antigravityDefinition = (
+  executable: string,
+): AcpAgentDefinition =>
+  CLI_NAMES.has(
+    // Either separator: a Windows path is read on every platform.
+    path.win32
+      .basename(executable)
+      .replace(/\.(?:exe|cmd|bat)$/iu, "")
+      .toLowerCase(),
+  )
+    ? ANTIGRAVITY_CLI
+    : ANTIGRAVITY;

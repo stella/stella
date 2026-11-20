@@ -22,7 +22,6 @@ import {
   getKanbanGroups,
   resolveKanbanGroupOptions,
 } from "@stll/ui/kanban";
-import { Skeleton } from "@stll/ui/skeleton";
 import { cn } from "@stll/ui/utils";
 
 import { QueryViewFeedback } from "@/components/query-view-feedback";
@@ -31,6 +30,7 @@ import {
   toTableEntities,
 } from "@/components/workspaces/entity-utils";
 import { useSyncJustificationChunks } from "@/components/workspaces/hooks/use-sync-justifications";
+import { UNCATEGORIZED_GROUP_LABEL_ID } from "@/components/workspaces/kanban/kanban-group-labels.logic";
 import {
   isGroupableProperty,
   resolveWorkspaceKanbanGrouping,
@@ -53,12 +53,10 @@ import type {
 import { useEntityTableFind } from "@/components/workspaces/table/use-entity-table-find";
 import {
   WorkspaceGridCell,
-  WorkspaceGridHead,
   WorkspaceGridRow,
 } from "@/components/workspaces/table/workspace-grid";
 import { getOrderedColumns } from "@/components/workspaces/table/workspace-grid-order";
 import { AddPropertyRailSpacer } from "@/components/workspaces/table/workspace-table/end-fillers";
-import { HeaderEndFillerCell } from "@/components/workspaces/table/workspace-table/header-cells";
 import {
   TABLE_ROW_ESTIMATE_PX,
   type WorkspaceGridStyle,
@@ -70,7 +68,6 @@ import {
   getWorkspaceGridTemplateColumns,
   tableEndFillerCellStyle,
 } from "@/components/workspaces/table/workspace-table/internals-helpers";
-import { WorkspaceTableSkeletonRows } from "@/components/workspaces/table/workspace-table/skeleton-rows";
 import { WorkspaceTable } from "@/components/workspaces/table/workspace-table/workspace-table";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { detached } from "@/lib/detached";
@@ -88,7 +85,12 @@ import { GroupScopeProvider } from "@/routes/_protected.workspaces/$workspaceId/
 import {
   getGroupSkeletonLayout,
   GROUP_TABLE_PAGE_SIZE,
+  groupKeyFor,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/table/grouped-table-layout.logic";
+import {
+  GROUPED_TABLE_CLASS,
+  GroupSkeletonFace,
+} from "@/routes/_protected.workspaces/$workspaceId/-components/table/grouped-table-layout.pending";
 import { useTableColumns } from "@/routes/_protected.workspaces/$workspaceId/-components/table/table-columns";
 import { includesListItems } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-kind-filters";
 import { useSyncSelectedEntities } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-sync-selected-entities";
@@ -118,12 +120,6 @@ const isGroupedTableExcludedKind = (kind: EntityKind): boolean =>
 const GROUPED_TABLE_EXCLUDED_KINDS = ENTITY_KINDS.filter(
   isGroupedTableExcludedKind,
 );
-
-// Stable key for a group. The null (uncategorized) bucket and real string values
-// live in disjoint namespaces so an option literally named "uncategorized"
-// can't collide with the null bucket.
-const groupKeyFor = (value: string | null): string =>
-  value === null ? "uncategorized" : `value:${value}`;
 
 const getEagerGroupValues = (
   groups: KanbanGroup[],
@@ -336,7 +332,7 @@ export const GroupedTableLayout = ({
   // Cells whose value is no longer a current option fold into the uncategorized
   // group server-side (the row/count queries treat "no current-option value" as
   // uncategorized), so the sections are just the option groups plus uncategorized.
-  const groups = getKanbanGroups(options, t("common.uncategorized"));
+  const groups = getKanbanGroups(options, t(UNCATEGORIZED_GROUP_LABEL_ID));
   const eagerGroupValues = countsLoaded
     ? getEagerGroupValues(groups, countByValue)
     : null;
@@ -375,7 +371,7 @@ export const GroupedTableLayout = ({
         {groupCountsView.type !== "pending" && (
           <QueryViewFeedback view={groupCountsView} />
         )}
-        <div className="flex w-max min-w-full flex-col" ref={scrollRef}>
+        <div className={GROUPED_TABLE_CLASS} ref={scrollRef}>
           {groups.map((group) => (
             <GroupSection
               columns={columns}
@@ -508,27 +504,11 @@ const GroupSkeleton = ({
     getGroupSkeletonLayout(totalRows);
 
   return (
-    <div style={gridStyle}>
-      <WorkspaceGridRow className="pointer-events-none">
-        {renderColumns.map((column) => (
-          <WorkspaceGridHead
-            className="flex items-center px-2"
-            key={column.id}
-            role="presentation"
-          >
-            <Skeleton className="h-3.5 w-2/5" />
-          </WorkspaceGridHead>
-        ))}
-        <HeaderEndFillerCell
-          addPropertyColumn={addPropertyColumn}
-          renderColumns={renderColumns}
-        />
-      </WorkspaceGridRow>
-      <WorkspaceTableSkeletonRows
-        addPropertyColumn={addPropertyColumn}
-        renderColumns={renderColumns}
-        rowCount={skeletonRowCount}
-      />
+    <GroupSkeletonFace
+      grid={{ addPropertyColumn, renderColumns }}
+      rowCount={skeletonRowCount}
+      style={gridStyle}
+    >
       {fillerRowCount > 0 && (
         <WorkspaceGridRow
           className="pointer-events-none"
@@ -560,7 +540,7 @@ const GroupSkeleton = ({
           )}
         </WorkspaceGridRow>
       )}
-    </div>
+    </GroupSkeletonFace>
   );
 };
 

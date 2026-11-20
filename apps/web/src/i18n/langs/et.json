@@ -2162,9 +2162,17 @@
     },
     "placeholder": "Kirjutage oma küsimus siia, / oskuste jaoks, @ konteksti lisamiseks",
     "processSummary": {
-      "analyses": "{count, plural, one {# analüüs} other {# analüüsi}}",
       "changesSaved": "{count, plural, one {# salvestatud muudatus} other {# salvestatud muudatust}}",
+      "checkedRegisters": "Avalikud registrid kontrollitud",
       "documentEdits": "{count, plural, one {# dokumendi muudatus} other {# dokumendi muudatust}}",
+      "readDocument": "Dokument loetud",
+      "readDocuments": "Dokumendid loetud",
+      "searchedCaseLaw": "Kohtupraktikast otsitud",
+      "searchedChats": "Vestlusajaloost otsitud",
+      "searchedLegislation": "Õigusaktidest otsitud",
+      "searchedLegislationAndCaseLaw": "Õigusaktidest ja kohtupraktikast otsitud",
+      "searchedMatters": "Toimikud läbi vaadatud",
+      "searchedWeb": "Veebist otsitud",
       "sourcesChecked": "{count, plural, one {# kontrollitud allikas} other {# kontrollitud allikat}}"
     },
     "promptImprovementStrategies": {
@@ -2251,6 +2259,7 @@
       "chipLabel": "Töötab: {place}",
       "cloud": "Pilv",
       "cloudDescription": "Töötab pilves. Kasutatav kõikjalt.",
+      "hintAntigravity": "Paigaldage Antigravity 1.5 või uuem ja logige selles sisse",
       "hintCheck": "Kontrolli seda stella desktopis",
       "hintInstall": "Paigalda see stella desktopist",
       "hintOffline": "Ava oma arvutis stella desktop",
@@ -4701,7 +4710,7 @@
       "discoveredSkills": "{count, plural, one {Leiti # oskus} other {Leiti # oskust}}",
       "discoveryEmpty": "Sellest hoidlast või kaustast ei leitud ühtegi oskust.",
       "discoverySkippedInvalid": "{count, plural, one {# vigane oskus jäeti vahele} other {# vigast oskust jäeti vahele}}",
-      "dropPack": "Lohistage siia .zip või SKILL.md, et oskus importida",
+      "dropPack": "Lohistage siia .zip/.skill või SKILL.md, et oskus importida",
       "editSkill": "Muuda oskust",
       "enableSkill": "Luba oskus",
       "fileExists": "Selle teega fail on juba olemas",
@@ -4758,8 +4767,8 @@
           "name": "Tee dokumendist kokkuvõte"
         }
       },
-      "uploadHelp": "Kasuta SKILL.md-faili või .zip-kausta, mis sisaldab faili SKILL.md ja valikulisi kirjutuskaitstud ressursse.",
-      "uploadPack": "Laadi üles .zip või SKILL.md",
+      "uploadHelp": "Kasuta SKILL.md-faili või .zip/.skill-kausta, mis sisaldab faili SKILL.md ja valikulisi kirjutuskaitstud ressursse.",
+      "uploadPack": "Laadi üles .zip/.skill või SKILL.md",
       "urlPlaceholder": "https://github.com/org/repo/tree/main/tee/oskuseni",
       "version": "Versioon: {version}"
     },

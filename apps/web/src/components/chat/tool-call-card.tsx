@@ -49,6 +49,8 @@ import {
   ToolCallStepDigest,
 } from "@/components/chat/tool-call-step-digest";
 import {
+  type ChatStepRefTargets,
+  NO_STEP_REF_TARGETS,
   type StepDigest,
   stepDigestOf,
 } from "@/components/chat/tool-call-step-digest.logic";
@@ -471,6 +473,7 @@ const ToolCallCardComponent = ({
   turnStatus = "finished",
   part,
   showDetails,
+  stepRefTargets = NO_STEP_REF_TARGETS,
   threadId,
 }: {
   action?: ToolCallAction | undefined;
@@ -485,6 +488,11 @@ const ToolCallCardComponent = ({
   part: ToolPart;
   /** Open rich tool details initially in development surfaces. */
   showDetails?: boolean;
+  /**
+   * The ref bindings of this step's stored message, where the matter items
+   * it found open; none while the turn has not been stored.
+   */
+  stepRefTargets?: ChatStepRefTargets | undefined;
   /** The thread the call belongs to; a local run's step reads its content by it. */
   threadId?: string | undefined;
 }) => {
@@ -623,6 +631,7 @@ const ToolCallCardComponent = ({
     hasRecoveredNote: failure === "recovered",
     isLocalRun: localRunTool !== null,
     part: { input: toolInput, name, output },
+    refTargets: stepRefTargets,
     showMcpExactCall,
     showTechnicalDetails,
     technical: codeToolSource !== undefined || toolInput !== undefined,
@@ -773,6 +782,7 @@ const toolCallDetailsView = ({
   hasRecoveredNote,
   isLocalRun,
   part,
+  refTargets,
   showMcpExactCall,
   showTechnicalDetails,
   technical,
@@ -782,6 +792,7 @@ const toolCallDetailsView = ({
   hasRecoveredNote: boolean;
   isLocalRun: boolean;
   part: { input: unknown; name: string; output: unknown };
+  refTargets: ChatStepRefTargets;
   showMcpExactCall: boolean;
   showTechnicalDetails: boolean;
   /** Whether the call carries a script or an input to show. */
@@ -795,6 +806,7 @@ const toolCallDetailsView = ({
         citations: answerCitations ?? NO_ANSWER_CITATIONS,
         failed,
         part,
+        refTargets,
       });
   const technicalDetails =
     showTechnicalDetails && (showMcpExactCall || technical || hasOutput);

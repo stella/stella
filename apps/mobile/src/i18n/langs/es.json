@@ -274,9 +274,18 @@
       "sourcesChecked": "{count, plural, one {# fuente consultada} other {# fuentes consultadas} many {# fuentes consultadas}}",
       "documentEdits": "{count, plural, one {# edición del documento} other {# ediciones del documento} many {# ediciones del documento}}",
       "changesSaved": "{count, plural, one {# cambio guardado} other {# cambios guardados} many {# cambios guardados}}",
-      "analyses": "{count, plural, one {# análisis} other {# análisis} many {# análisis}}"
+      "searchedLegislation": "Legislación consultada",
+      "searchedCaseLaw": "Jurisprudencia consultada",
+      "searchedLegislationAndCaseLaw": "Legislación y jurisprudencia consultadas",
+      "readDocument": "Documento leído",
+      "readDocuments": "Documentos leídos",
+      "searchedMatters": "Asuntos revisados",
+      "checkedRegisters": "Registros públicos consultados",
+      "searchedWeb": "Web consultada",
+      "searchedChats": "Historial del chat consultado"
     },
     "stepCount": "{count, plural, one {# paso} other {# pasos} many {# pasos}}",
+    "lookupCount": "{count, plural, one {# consulta} many {# consultas} other {# consultas}}",
     "reasoning": "Razonamiento",
     "historyTrimmed": "No se pudieron resumir los mensajes anteriores, así que esta respuesta solo tiene en cuenta la parte más reciente de la conversación.",
     "failure": {

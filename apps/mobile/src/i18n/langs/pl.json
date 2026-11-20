@@ -274,9 +274,18 @@
       "sourcesChecked": "{count, plural, one {# sprawdzone źródło} few {# sprawdzone źródła} many {# sprawdzonych źródeł} other {# sprawdzonego źródła}}",
       "documentEdits": "{count, plural, one {# edycja dokumentu} few {# edycje dokumentu} many {# edycji dokumentu} other {# edycji dokumentu}}",
       "changesSaved": "{count, plural, one {# zapisana zmiana} few {# zapisane zmiany} many {# zapisanych zmian} other {# zapisanej zmiany}}",
-      "analyses": "{count, plural, one {# analiza} few {# analizy} many {# analiz} other {# analizy}}"
+      "searchedLegislation": "Przeszukano przepisy",
+      "searchedCaseLaw": "Przeszukano orzecznictwo",
+      "searchedLegislationAndCaseLaw": "Przeszukano przepisy i orzecznictwo",
+      "readDocument": "Odczytano dokument",
+      "readDocuments": "Odczytano dokumenty",
+      "searchedMatters": "Przejrzano sprawy",
+      "checkedRegisters": "Sprawdzono rejestry publiczne",
+      "searchedWeb": "Przeszukano sieć",
+      "searchedChats": "Przeszukano historię czatu"
     },
     "stepCount": "{count, plural, one {# krok} few {# kroki} many {# kroków} other {# kroku}}",
+    "lookupCount": "{count, plural, one {# zapytanie} few {# zapytania} many {# zapytań} other {# zapytania}}",
     "reasoning": "Rozumowanie",
     "historyTrimmed": "Nie udało się podsumować wcześniejszych wiadomości, dlatego ta odpowiedź uwzględnia tylko najnowszą część rozmowy.",
     "failure": {

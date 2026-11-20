@@ -274,9 +274,18 @@
       "sourcesChecked": "{count, plural, one {# patikrintas šaltinis} few {# patikrinti šaltiniai} many {# patikrinto šaltinio} other {# patikrintų šaltinių}}",
       "documentEdits": "{count, plural, one {# dokumento pakeitimas} few {# dokumento pakeitimai} many {# dokumento pakeitimo} other {# dokumento pakeitimų}}",
       "changesSaved": "{count, plural, one {# išsaugotas pakeitimas} few {# išsaugoti pakeitimai} many {# išsaugoto pakeitimo} other {# išsaugotų pakeitimų}}",
-      "analyses": "{count, plural, one {# analizė} few {# analizės} many {# analizės} other {# analizių}}"
+      "searchedLegislation": "Peržiūrėti teisės aktai",
+      "searchedCaseLaw": "Peržiūrėta teismų praktika",
+      "searchedLegislationAndCaseLaw": "Peržiūrėti teisės aktai ir teismų praktika",
+      "readDocument": "Perskaitytas dokumentas",
+      "readDocuments": "Perskaityti dokumentai",
+      "searchedMatters": "Peržiūrėtos bylos",
+      "checkedRegisters": "Patikrinti viešieji registrai",
+      "searchedWeb": "Ieškota internete",
+      "searchedChats": "Peržiūrėta pokalbio istorija"
     },
     "stepCount": "{count, plural, one {# žingsnis} few {# žingsniai} other {# žingsnių} many {# žingsnių}}",
+    "lookupCount": "{count, plural, one {# užklausa} few {# užklausos} many {# užklausos} other {# užklausų}}",
     "reasoning": "Mąstymas",
     "historyTrimmed": "Ankstesnių žinučių nepavyko apibendrinti, todėl šiame atsakyme atsižvelgta tik į naujausią pokalbio dalį.",
     "failure": {
