@@ -314,28 +314,11 @@ const renderedHtml = async (source: string, options: RenderOptions = {}) => {
   return html;
 };
 
-// Closed table controls receive fresh trigger ids on each React mount.
-const TABLE_TRIGGER =
-  '[data-slot="answer-table-header"] button[id^="base-ui-"]';
-
 const renderedTree = async (source: string, options: RenderOptions = {}) => {
   const view = await mountAnswer(source, options);
   const tree = document.importNode(view.root, true);
   await view.unmount();
   return tree;
-};
-
-// Align only the detached reference tree's trigger ids with the live answer.
-const matchesRenderedTree = (actual: HTMLElement, reference: HTMLElement) => {
-  const triggers = actual.querySelectorAll(TABLE_TRIGGER);
-  const referenceTriggers = reference.querySelectorAll(TABLE_TRIGGER);
-  if (triggers.length !== referenceTriggers.length) {
-    return false;
-  }
-  for (const [index, trigger] of referenceTriggers.entries()) {
-    trigger.id = triggers.item(index).id;
-  }
-  return actual.isEqualNode(reference);
 };
 
 const SAFE_HREF = /^(?:https?:|mailto:|tel:|#|\/(?![\\/]))/iu;
@@ -417,9 +400,7 @@ const unscopedNames = (root: Element): string[] =>
   [...root.querySelectorAll("[id], [name]")].flatMap((node) =>
     ["id", "name"].flatMap((attribute) => {
       const value = node.getAttribute(attribute);
-      return value === null ||
-        value.startsWith(ANSWER_ID_PREFIX) ||
-        (attribute === "id" && node.matches(TABLE_TRIGGER))
+      return value === null || value.startsWith(ANSWER_ID_PREFIX)
         ? []
         : [`${attribute}=${value}`];
     }),
@@ -465,16 +446,16 @@ const settlesToWholeAnswer = (options: RenderOptions) =>
         });
       }
       // DOM equality ignores the order React added attributes in earlier frames.
-      expect(
-        matchesRenderedTree(view.root, await renderedTree(answer, streaming)),
-      ).toBe(true);
+      expect(view.root.isEqualNode(await renderedTree(answer, streaming))).toBe(
+        true,
+      );
       // The chat settles a finished turn by switching to source offsets;
       // the settled frame is the one a reload of the thread shows.
       const settled = { ...options, sourceOffsets: true };
       await view.update(answer, settled);
-      expect(
-        matchesRenderedTree(view.root, await renderedTree(answer, settled)),
-      ).toBe(true);
+      expect(view.root.isEqualNode(await renderedTree(answer, settled))).toBe(
+        true,
+      );
       expect(activeContent(view.root)).toEqual([]);
       expect(unscopedNames(view.root)).toEqual([]);
       expect(brokenFragments(view.root)).toEqual([]);
@@ -482,9 +463,9 @@ const settlesToWholeAnswer = (options: RenderOptions) =>
       // mounted answer must pick up the new plugin set, not keep the old.
       const restored = { ...settled, rehypePlugins: LATE_RESTORATION };
       await view.update(answer, restored);
-      expect(
-        matchesRenderedTree(view.root, await renderedTree(answer, restored)),
-      ).toBe(true);
+      expect(view.root.isEqualNode(await renderedTree(answer, restored))).toBe(
+        true,
+      );
       await view.unmount();
     },
   );
@@ -510,12 +491,10 @@ describe("streamed chat answers", () => {
     await assertProperty(
       "an unmatched restoration leaves the whole answer unchanged",
       fc.asyncProperty(chatAnswerArbitrary, async (answer) => {
-        expect(
-          matchesRenderedTree(
-            await renderedTree(answer, { rehypePlugins: ANON_PLUGINS }),
-            await renderedTree(answer),
-          ),
-        ).toBe(true);
+        const anonymized = await renderedTree(answer, {
+          rehypePlugins: ANON_PLUGINS,
+        });
+        expect(anonymized.isEqualNode(await renderedTree(answer))).toBe(true);
       }),
       { numRuns: 30 },
     );

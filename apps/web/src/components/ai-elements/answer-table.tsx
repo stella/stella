@@ -43,7 +43,11 @@ import {
   answerTableText,
   type AnswerTableTextFormat,
 } from "@/components/ai-elements/answer-table.logic";
-import { AnswerTreeIds } from "@/components/ai-elements/message-response-link-ids";
+import {
+  AnswerTreeIds,
+  useAnswerTreeIdPrefix,
+} from "@/components/ai-elements/message-response-link-ids";
+import { answerTableOrdinal } from "@/components/chat/rehype-number-answer-links";
 import {
   CopyControlFeedback,
   useCopyControl,
@@ -82,6 +86,31 @@ export type AnswerTableProps = MarkdownTableProps & {
 };
 
 /**
+ * The base of the fixed ids a table's header controls take, or undefined
+ * where they generate their own. React's generated ids count every mount on
+ * the page, so a streamed answer and the same answer rendered whole would
+ * name the controls differently, outside the answer's namespace. The base
+ * comes from the table's place instead: the tree it was parsed in and its
+ * number among that tree's tables, as answer links take theirs.
+ */
+export const useAnswerTableIdBase = (
+  node: Element | undefined,
+): string | undefined => {
+  const prefix = useAnswerTreeIdPrefix();
+  const ordinal = answerTableOrdinal(node);
+  return prefix === undefined || ordinal === undefined
+    ? undefined
+    : `${prefix}-table-${ordinal}`;
+};
+
+/** One control's id under a base, when there is one. */
+export const answerTableControlId = (
+  base: string | undefined,
+  control: string,
+): string | undefined =>
+  base === undefined ? undefined : `${base}-${control}`;
+
+/**
  * Every markdown table in an answer: one card with one header strip that
  * holds the table's size and all of its actions, then the table. Cells wrap
  * by default; single-line mode keeps each cell on one line and scrolls the
@@ -108,6 +137,7 @@ export const AnswerTable = ({
     shape === null ? null : t("chat.answerTable.size", { ...shape });
   const showsView = view !== undefined && view !== null;
   const streaming = useLatestCallback(() => isAnimating);
+  const idBase = useAnswerTableIdBase(node);
 
   return (
     <div
@@ -119,6 +149,7 @@ export const AnswerTable = ({
       <AnswerTableHeader
         actions={actions}
         disabled={isAnimating}
+        idBase={idBase}
         label={label}
         mode={showsView ? null : mode}
         onFullscreen={() => setFullscreen(true)}
@@ -251,6 +282,11 @@ type AnswerTableHeaderProps = {
   actions?: ReactNode;
   /** While the answer streams the table is incomplete, so nothing acts on it. */
   disabled: boolean;
+  /**
+   * The base of the controls' fixed ids (`useAnswerTableIdBase`); absent in
+   * the full-screen view, whose controls must not repeat the inline ones.
+   */
+  idBase?: string | undefined;
   label: string | null;
   /** The text mode control, or `null` while something else shows. */
   mode: AnswerTableTextMode | null;
@@ -262,6 +298,7 @@ type AnswerTableHeaderProps = {
 const AnswerTableHeader = ({
   actions,
   disabled,
+  idBase,
   label,
   mode,
   onFullscreen,
@@ -292,6 +329,7 @@ const AnswerTableHeader = ({
           <SegmentedIconToggle
             onChange={setMode}
             options={TEXT_MODE_OPTIONS.map((option) => ({
+              id: answerTableControlId(idBase, `mode-${option.mode}`),
               value: option.mode,
               icon: option.icon,
               label: t(option.labelKey),
@@ -303,6 +341,7 @@ const AnswerTableHeader = ({
         <Menu>
           <MenuTrigger
             disabled={disabled}
+            id={answerTableControlId(idBase, "copy")}
             render={
               <Button
                 aria-label={copyLabel}
@@ -345,6 +384,7 @@ const AnswerTableHeader = ({
         <Menu>
           <MenuTrigger
             disabled={disabled}
+            id={answerTableControlId(idBase, "download")}
             render={
               <Button
                 aria-label={t("chat.answerTable.download")}
@@ -381,6 +421,7 @@ const AnswerTableHeader = ({
             density="toolbar"
             disabled={disabled}
             icon={<Maximize2Icon aria-hidden="true" />}
+            id={answerTableControlId(idBase, "fullscreen")}
             label={t("chat.answerTable.fullscreen")}
             onClick={onFullscreen}
           />

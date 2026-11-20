@@ -29,7 +29,11 @@ import { SegmentedIconToggle } from "@stll/ui/segmented-icon-toggle";
 import { TableChart } from "@stll/ui/table-chart";
 import { Toggle } from "@stll/ui/toggle";
 
-import { AnswerTable } from "@/components/ai-elements/answer-table";
+import {
+  AnswerTable,
+  answerTableControlId,
+  useAnswerTableIdBase,
+} from "@/components/ai-elements/answer-table";
 import type { MarkdownTableProps } from "@/components/ai-elements/answer-table";
 import {
   chartTableFromNode,
@@ -115,6 +119,7 @@ const ChartableAnswerTable = ({
   const locale = useFormattingLocale();
   const queryClient = useQueryClient();
   const { isAnimating } = useContext(StreamdownContext);
+  const idBase = useAnswerTableIdBase(props.node);
   // A presentation belongs to the content it was chosen for: a streamed
   // change starts over from the table instead of applying an old plan.
   const contentKey = JSON.stringify([cacheScope, table]);
@@ -217,6 +222,7 @@ const ChartableAnswerTable = ({
         <>
           <Toggle
             aria-label={toggleLabel}
+            id={answerTableControlId(idBase, "chart")}
             disabled={isAnimating || loading}
             onPressedChange={(pressed) => {
               if (!pressed) {
@@ -249,6 +255,7 @@ const ChartableAnswerTable = ({
                 options={TABLE_CHART_KINDS.filter((kind) =>
                   isTableChartPlanUsable({ ...chart, kind }, table),
                 ).map((kind) => ({
+                  id: answerTableControlId(idBase, `chart-${kind}`),
                   value: kind,
                   icon: KIND_OPTIONS[kind].icon,
                   label: t(KIND_OPTIONS[kind].labelKey),
