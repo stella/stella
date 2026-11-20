@@ -20,6 +20,7 @@ import {
   resolveDesktopSupportFloor,
 } from "./check-desktop-support-floor";
 import {
+  assertHeadOnMainHistory,
   type CutGateRunner,
   cutMaintenanceRelease,
   IncompleteReleaseListingError,
@@ -716,3 +717,72 @@ for (const pulls of [
     expect(proof.gatesRun).toEqual([]);
   });
 }
+
+describe("the cut commit must be on main's first-parent history", () => {
+  /**
+   * main: base -> older -> merge (second parent: side); a local commit off
+   * the tip never reached main. origin/main is the merge.
+   */
+  const mainHistory = () => {
+    const root = mkdtempSync(nodePath.join(tmpdir(), "stella-cut-main-"));
+    roots.push(root);
+    const git = (...args: string[]) => {
+      const result = Bun.spawnSync(["git", ...args], {
+        cwd: root,
+        stderr: "pipe",
+        stdout: "pipe",
+      });
+      expect(result.exitCode, result.stderr.toString()).toBe(0);
+      return result.stdout.toString().trim();
+    };
+    const commit = (message: string) => {
+      write(root, "VERSION", `${message}\n`);
+      git("add", "VERSION");
+      git("commit", "-qm", message);
+      return git("rev-parse", "HEAD");
+    };
+    git("init", "-q", "-b", "main");
+    git("config", "user.name", "Release Test");
+    git("config", "user.email", "release-test@example.com");
+    git("config", "commit.gpgsign", "false");
+    commit("base");
+    const older = commit("older");
+    git("switch", "-q", "-c", "side");
+    const side = commit("side");
+    git("switch", "-q", "main");
+    commit("main");
+    git("merge", "-q", "--no-ff", "-X", "ours", "-m", "merge", "side");
+    const tip = git("rev-parse", "HEAD");
+    git("update-ref", "refs/remotes/origin/main", tip);
+    git("switch", "-q", "-c", "local");
+    const local = commit("local");
+    const cutAt = (sha: string) => {
+      git("checkout", "-q", "--detach", sha);
+      return () => {
+        assertHeadOnMainHistory(root);
+      };
+    };
+    return { cutAt, local, older, side, tip };
+  };
+
+  test("cuts at main's tip", () => {
+    const { cutAt, tip } = mainHistory();
+    expect(cutAt(tip)).not.toThrow();
+  });
+
+  test("cuts at an older first-parent main commit after main moved on", () => {
+    const { cutAt, older } = mainHistory();
+    expect(cutAt(older)).not.toThrow();
+  });
+
+  test("refuses a commit main does not contain", () => {
+    const { cutAt, local } = mainHistory();
+    expect(cutAt(local)).toThrow(MaintenanceReleaseError);
+    expect(cutAt(local)).toThrow("Cut releases from a commit on main");
+  });
+
+  test("refuses a commit main reaches only through a merge's second parent", () => {
+    const { cutAt, side } = mainHistory();
+    expect(cutAt(side)).toThrow("Cut releases from a commit on main");
+  });
+});

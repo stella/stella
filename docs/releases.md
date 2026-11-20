@@ -148,18 +148,23 @@ A release is proved on the release branch before production changes. Its RC and
 final tags point at the same commit; the final release promotes the images built
 by the RC run.
 
-1. Start with a clean checkout of `main`, green CI, and reviewed migrations.
-   Run `bun run marketing:stale`; `bun run marketing:reshoot` re-records stale
-   captures (see `apps/landing/public/media/products/README.md`).
+1. Start with a clean checkout of a commit on `main`, green CI, and reviewed
+   migrations. Run `bun run marketing:stale`; `bun run marketing:reshoot`
+   re-records stale captures (see
+   `apps/landing/public/media/products/README.md`).
 2. Run `bun run release:maintenance`. It derives the next patch version from
    the newest final `vX.Y.Z` tag, applies pending changesets, writes `VERSION`
    and `docs/changelog/vX.Y.Z.md`, moves the desktop support floor (see
    [Desktop Support](#desktop-support)), creates one release commit on
    `release/vX.Y.Z`, and opens `chore: release vX.Y.Z` into `main`. An earlier
-   open release pull request blocks another cut. The command runs the existing
-   pre-cut heavy, dependency-audit, npm-publish-lag, deploy-env-contract and
-   desktop-support-floor gates before writing. The heavy gate passes when
-   `main/heavy` and `main/pr-depth` are green on the base commit. When neither
+   open release pull request blocks another cut. The cut runs on any commit on
+   the fetched `main`'s first-parent history, not only its tip: check out the
+   newest one with green `main/heavy` and `main/pr-depth`, and later merges
+   wait for the next release. Any other commit is refused. The command runs
+   the existing pre-cut heavy, dependency-audit, npm-publish-lag,
+   deploy-env-contract and desktop-support-floor gates before writing. The
+   heavy gate passes when `main/heavy` and `main/pr-depth` are green on the
+   base commit. When neither
    has failed there, it also accepts the proof the release health check applies
    to `main` commits that carry no release-candidate tag: a merge-group receipt
    that `scripts/check-release-receipt-coverage.sh` reports as covering them.
