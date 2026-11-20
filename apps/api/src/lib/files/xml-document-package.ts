@@ -34,6 +34,15 @@ const MAX_XML_PARTS = 2048;
 const MAX_XML_NODES = 150_000;
 const MAX_XML_DEPTH = 96;
 
+// Feed the parser in slices so a failure recorded by a callback stops the read
+// within one slice instead of after the whole part.
+const XML_WRITE_CHUNK_CHARS = 64 * 1024;
+const LEGACY_XML_ENCODINGS = ["gb18030", "windows-1254"] as const;
+const DECLARED_ENCODING = /\bencoding\s*=\s*["']([\w.:-]{1,40})["']/u;
+
+const unreadableXml = () =>
+  documentPackageError("The document contains unreadable XML");
+
 // The declaration is ASCII-compatible for both legacy encodings. Honor only
 // explicit declarations; malformed UTF-8 must never silently change alphabets.
 const xmlEncoding = (bytes: Uint8Array) => {
@@ -44,85 +53,126 @@ const xmlEncoding = (bytes: Uint8Array) => {
     return "utf-16be";
   }
   const prefix = Buffer.from(bytes.subarray(0, 512)).toString("latin1");
-  const declared =
-    /^<\?xml\s+[^?]*?\bencoding\s*=\s*["'](gb18030|windows-1254)["']/iu
-      .exec(prefix)?.[1]
-      ?.toLowerCase();
-  return declared ?? "utf-8";
+  if (!/^<\?xml\s/u.test(prefix)) {
+    return "utf-8";
+  }
+  // The declaration ends at its first `?`, which only `?>` may contain.
+  const declarationEnd = prefix.indexOf("?", 5);
+  const declaration = prefix.slice(
+    5,
+    declarationEnd === -1 ? undefined : declarationEnd,
+  );
+  const declared = DECLARED_ENCODING.exec(declaration)?.[1]?.toLowerCase();
+  return (
+    LEGACY_XML_ENCODINGS.find((encoding) => encoding === declared) ?? "utf-8"
+  );
 };
 
-const parseXmlPart = (bytes: Uint8Array, consumeNode: () => void) =>
-  Result.try({
-    try: () => {
-      const encoding = xmlEncoding(bytes);
-      const xml = new TextDecoder(encoding, { fatal: true }).decode(bytes);
-      const parser = new SaxesParser({ xmlns: true });
-      const stack: DocumentXmlNode[] = [];
-      let root: DocumentXmlNode | undefined;
-      parser.on("doctype", () => {
-        throw documentPackageError(
-          "Document type declarations are unsupported",
-        );
-      });
-      parser.on("xmldecl", ({ encoding: declared }) => {
-        if (
-          declared &&
-          declared.toLowerCase() !== encoding &&
-          !(
-            encoding.startsWith("utf-16") && declared.toLowerCase() === "utf-16"
-          )
-        ) {
-          throw documentPackageError("Unsupported document encoding");
-        }
-      });
-      parser.on("attribute", consumeNode);
-      parser.on("opentag", (tag) => {
-        consumeNode();
-        if (stack.length >= MAX_XML_DEPTH) {
-          throw limitError();
-        }
-        const node: DocumentXmlNode = {
-          localName: tag.local,
-          namespaceURI: tag.uri,
-          attributes: new Map(
-            Object.values(tag.attributes).map(({ name, value }) => [
-              name,
-              value,
-            ]),
-          ),
-          children: [],
-          text: "",
-        };
-        const parent = stack.at(-1);
-        if (parent) {
-          parent.children.push(node);
-        } else {
-          root = node;
-        }
-        stack.push(node);
-      });
-      const append = (value: string) => {
-        const node = stack.at(-1);
-        if (node) {
-          node.text += value;
-        }
-      };
-      parser.on("text", append);
-      parser.on("cdata", append);
-      parser.on("closetag", () => {
-        stack.pop();
-      });
-      parser.write(xml).close();
-      if (!root) {
-        throw documentPackageError("Missing document root");
-      }
-      return root;
-    },
-    catch: (error) =>
-      error instanceof DocumentPackageError
-        ? error
-        : documentPackageError("The document contains unreadable XML"),
+type XmlNodeBudget = { remaining: number };
+
+const parseXmlPart = (
+  bytes: Uint8Array,
+  budget: XmlNodeBudget,
+): Result<DocumentXmlNode, DocumentPackageError> => {
+  const encoding = xmlEncoding(bytes);
+  const decoded = Result.try(() =>
+    new TextDecoder(encoding, { fatal: true }).decode(bytes),
+  );
+  if (decoded.isErr()) {
+    return Result.err(unreadableXml());
+  }
+  const xml = decoded.value;
+  const parser = new SaxesParser({ xmlns: true });
+  const stack: DocumentXmlNode[] = [];
+  // Written by the parser's callbacks. The first failure ends the read.
+  const read: {
+    failure: DocumentPackageError | null;
+    root: DocumentXmlNode | null;
+  } = { failure: null, root: null };
+  const fail = (failure: DocumentPackageError) => {
+    read.failure ??= failure;
+  };
+  const consumeNode = () => {
+    budget.remaining -= 1;
+    if (budget.remaining < 0) {
+      fail(limitError());
+    }
+  };
+  parser.on("error", () => {
+    fail(unreadableXml());
   });
+  parser.on("doctype", () => {
+    fail(documentPackageError("Document type declarations are unsupported"));
+  });
+  parser.on("xmldecl", ({ encoding: declared }) => {
+    if (
+      declared &&
+      declared.toLowerCase() !== encoding &&
+      !(encoding.startsWith("utf-16") && declared.toLowerCase() === "utf-16")
+    ) {
+      fail(documentPackageError("Unsupported document encoding"));
+    }
+  });
+  parser.on("attribute", consumeNode);
+  parser.on("opentag", (tag) => {
+    consumeNode();
+    if (stack.length >= MAX_XML_DEPTH) {
+      fail(limitError());
+    }
+    if (read.failure) {
+      return;
+    }
+    const node: DocumentXmlNode = {
+      localName: tag.local,
+      namespaceURI: tag.uri,
+      attributes: new Map(
+        Object.values(tag.attributes).map(({ name, value }) => [name, value]),
+      ),
+      children: [],
+      text: "",
+    };
+    const parent = stack.at(-1);
+    if (parent) {
+      parent.children.push(node);
+    } else {
+      read.root = node;
+    }
+    stack.push(node);
+  });
+  const append = (value: string) => {
+    const node = stack.at(-1);
+    if (node && !read.failure) {
+      node.text += value;
+    }
+  };
+  parser.on("text", append);
+  parser.on("cdata", append);
+  parser.on("closetag", () => {
+    stack.pop();
+  });
+  const written = Result.try(() => {
+    for (
+      let offset = 0;
+      offset < xml.length && !read.failure;
+      offset += XML_WRITE_CHUNK_CHARS
+    ) {
+      parser.write(xml.slice(offset, offset + XML_WRITE_CHUNK_CHARS));
+    }
+    if (!read.failure) {
+      parser.close();
+    }
+  });
+  if (written.isErr()) {
+    return Result.err(unreadableXml());
+  }
+  if (read.failure) {
+    return Result.err(read.failure);
+  }
+  if (!read.root) {
+    return Result.err(documentPackageError("Missing document root"));
+  }
+  return Result.ok(read.root);
+};
 
 export const openXmlDocumentPackage = async (
   bytes: Uint8Array,
@@ -133,12 +183,7 @@ export const openXmlDocumentPackage = async (
   }
   let remainingBytes = MAX_XML_TOTAL_BYTES;
   let remainingParts = MAX_XML_PARTS;
-  let remainingNodes = MAX_XML_NODES;
-  const consumeNode = () => {
-    if (--remainingNodes < 0) {
-      throw limitError();
-    }
-  };
+  const nodes: XmlNodeBudget = { remaining: MAX_XML_NODES };
   const readXml: DocumentXmlReader = (path) => {
     const entry = archive.value.get(path);
     if (!entry || path.endsWith("/")) {
@@ -157,7 +202,7 @@ export const openXmlDocumentPackage = async (
     const data = readArchiveEntry(entry);
     return data.isErr()
       ? Result.err(data.error)
-      : parseXmlPart(data.value, consumeNode);
+      : parseXmlPart(data.value, nodes);
   };
   return Result.ok(readXml);
 };
