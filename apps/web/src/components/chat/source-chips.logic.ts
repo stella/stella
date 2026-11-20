@@ -859,12 +859,18 @@ const answerLinkTexts = (
   parts: ChatMessage["parts"],
   appOrigins: ReadonlySet<string>,
 ): ReadonlyMap<string, readonly string[]> => {
-  const texts = new Map<string, string[]>();
-  for (const markdown of chatAnswerMarkdownDocuments({ parts })) {
-    for (const [, text = "", href = ""] of markdown.matchAll(MARKDOWN_LINK)) {
-      const key = citationUrlKey(href, appOrigins);
-      texts.set(key, [...(texts.get(key) ?? []), text.trim()]);
-    }
+  const links = chatAnswerMarkdownDocuments({ parts }).flatMap((markdown) =>
+    [...markdown.matchAll(MARKDOWN_LINK)].map(([, text = "", href = ""]) => ({
+      key: citationUrlKey(href, appOrigins),
+      text: text.trim(),
+    })),
+  );
+  const texts = new Map<string, readonly string[]>();
+  for (const [key, written] of Map.groupBy(links, (link) => link.key)) {
+    texts.set(
+      key,
+      written.map((link) => link.text),
+    );
   }
   return texts;
 };
@@ -887,7 +893,12 @@ const actNameInAnswer = (
     const urls = [entry.source.url, entry.source.sourceUrl].flatMap((url) =>
       url === undefined ? [] : [citationUrlKey(url, appOrigins)],
     );
-    for (const text of urls.flatMap((url) => texts.get(url) ?? [])) {
+    // A source the answer never links has no words to read a name from.
+    const written = urls.flatMap((url) => {
+      const linked = texts.get(url);
+      return linked === undefined ? [] : linked;
+    });
+    for (const text of written) {
       const prefix = PROVISION_PREFIX.exec(text)?.[0];
       const name = prefix === undefined ? "" : text.slice(prefix.length).trim();
       if (
