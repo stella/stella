@@ -2,6 +2,8 @@ import { Result } from "better-result";
 import { expect, test } from "bun:test";
 import type { SQL } from "drizzle-orm";
 
+import { Temporal } from "@stll/time";
+
 import { toSafeId } from "@/api/lib/branded-types";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { aggregateExecutionRows } from "@/api/tests/fixtures/aggregate-lock-order";
@@ -87,7 +89,8 @@ test("concurrent creates serialize the workspace cap decision with the insert", 
         recordAuditEvent,
         body: {
           matterId,
-          dateIncurred: "2026-01-15",
+          // Within the accepted age window whenever the test runs.
+          dateIncurred: Temporal.Now.plainDateISO("UTC").toString(),
           timezoneId: "UTC",
           amount: 1,
           currency: "USD",
