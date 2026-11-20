@@ -447,6 +447,7 @@ const CaptureModeList = ({
       <div>
         <Button
           disabled={deletionDisabled}
+          disabledReason={t(BLOCKED_DELETION_NOTICE[settings.deletionStatus])}
           onClick={onDeleteDay}
           variant="outline"
         >
@@ -561,6 +562,7 @@ const HistoryDeletion = ({
           disabled={
             deletionDisabled && settings.deletionStatus !== "unreadable"
           }
+          disabledReason={t(BLOCKED_DELETION_NOTICE[settings.deletionStatus])}
           onClick={onDeleteAll}
           variant="destructive"
         >
@@ -578,13 +580,13 @@ const HistoryDeletion = ({
 type OtherAccountHistoryProps = {
   days: number;
   onDelete: () => void;
-  deletionDisabled: boolean;
+  disabledReason: string | undefined;
 };
 
 const OtherAccountHistory = ({
   days,
   onDelete,
-  deletionDisabled,
+  disabledReason,
 }: OtherAccountHistoryProps) => {
   const t = useTranslations("activity");
   if (days === 0) {
@@ -595,7 +597,12 @@ const OtherAccountHistory = ({
       <p className="text-muted-foreground text-xs">
         {t("otherAccountHistory", { days })}
       </p>
-      <Button disabled={deletionDisabled} onClick={onDelete} variant="outline">
+      <Button
+        disabled={disabledReason !== undefined}
+        disabledReason={disabledReason}
+        onClick={onDelete}
+        variant="outline"
+      >
         {t("deleteOtherAccountHistory")}
       </Button>
     </div>
@@ -955,10 +962,12 @@ export const ActivitySettingsPane = () => {
   const otherAccountHistory = (
     <OtherAccountHistory
       days={settings.otherAccountHistoryDays}
-      deletionDisabled={
+      disabledReason={
         deletionDisabled &&
         settings.deletionStatus !== "keyMissing" &&
         settings.deletionStatus !== "unreadable"
+          ? t(BLOCKED_DELETION_NOTICE[settings.deletionStatus])
+          : undefined
       }
       onDelete={() =>
         setDialog({
