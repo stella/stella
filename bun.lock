@@ -1889,6 +1889,7 @@
     "@tanstack/ai-gemini@1.2.2": "patches/@tanstack%2Fai-gemini@1.2.2.patch",
     "@tanstack/ai-anthropic@1.1.1": "patches/@tanstack%2Fai-anthropic@1.1.1.patch",
     "@better-auth/cimd@1.7.25": "patches/@better-auth%2Fcimd@1.7.25.patch",
+    "@tanstack/ai-openai@1.1.1": "patches/@tanstack%2Fai-openai@1.1.1.patch",
   },
   "overrides": {
     "@atlaskit/pragmatic-drag-and-drop": "4.0.0",

@@ -235,6 +235,28 @@ describe("roles without defaults of their own", () => {
   });
 });
 
+// Newer generations adopted after the migration. Modes stay as migrated.
+const GENERATION_UPGRADES: Partial<
+  Record<(typeof AI_PROVIDERS)[number], Partial<Record<LegacyRole, string>>>
+> = {
+  google: {
+    fast: "gemini-4-hydrogen",
+    chat: "gemini-4-hydrogen",
+    reasoning: "gemini-4-neon",
+    pdf: "gemini-4-hydrogen",
+  },
+  openrouter: {
+    chat: "openai/gpt-6.2-sol",
+    reasoning: "openai/gpt-6.2-sol",
+    pdf: "openai/gpt-6.2-sol",
+  },
+  openai: {
+    chat: "gpt-6.2-sol",
+    reasoning: "gpt-6.2-sol",
+    pdf: "gpt-6.2-sol",
+  },
+};
+
 describe("task default migration", () => {
   test("covers every provider and task with one documented document exception", () => {
     expect(Object.keys(MODEL_DEFAULTS_LEDGER).toSorted()).toEqual(
@@ -261,7 +283,7 @@ describe("task default migration", () => {
     expect(unsupported).toEqual(["pdf/mistral"]);
   });
 
-  test("preserves the full old model and mode matrix except the three Haiku fast routes", () => {
+  test("preserves the full old model and mode matrix except the three Haiku fast routes and adopted generations", () => {
     for (const task of MODEL_TASKS) {
       const role = SEED_ROLE_BY_TASK[task];
       for (const provider of AI_PROVIDERS) {
@@ -287,7 +309,8 @@ describe("task default migration", () => {
           );
           continue;
         }
-        expect(entry.candidate.modelId === oldModel).toBe(true);
+        const modelId: string = entry.candidate.modelId;
+        expect(modelId).toBe(GENERATION_UPGRADES[provider]?.[role] ?? oldModel);
         expect(entry.candidate.mode).toEqual(LEGACY_MODES[provider][role]);
       }
     }
