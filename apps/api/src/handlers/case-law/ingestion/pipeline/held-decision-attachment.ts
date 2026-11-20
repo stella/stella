@@ -1,12 +1,14 @@
 import { panic, Result } from "better-result";
-import { and, eq, inArray, ne, sql } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import * as v from "valibot";
 
+import { docketFamilyKeysToRead } from "@stll/api-contract/decision-docket-reference";
 import { compareCodeUnit } from "@stll/collation";
 import {
   DECISION_IDENTIFIER_MAX_COUNT,
   DECISION_IDENTIFIER_TYPES,
 } from "@stll/legal-ast/decision-identifier";
+import { sha256Hex } from "@stll/sha256/bun";
 
 import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
@@ -15,7 +17,6 @@ import {
   caseLawDecisions,
   caseLawDecisionSourceIdentities,
   caseLawHeldDecisionAttachments,
-  caseLawSources,
 } from "@/api/db/schema";
 import {
   type CitationGraphTransaction,
@@ -27,9 +28,16 @@ import {
 } from "@/api/handlers/case-law/decision-identifier-claims-persistence";
 import { normalizeDecisionIdentifierIn } from "@/api/handlers/case-law/ingestion/citation-extractor";
 import {
+  clearUnbackedSourceIdentitiesTx,
   lockSourceIdentitiesTx,
   type ObservedDecision,
 } from "@/api/handlers/case-law/ingestion/pipeline/decision-identity";
+import type { DecisionRowWrite } from "@/api/handlers/case-law/ingestion/pipeline/decision-row-context";
+import {
+  clearIngestionFailureEvidenceTx,
+  type IngestionFailureEvidenceError,
+  parkIngestionFailureTx,
+} from "@/api/handlers/case-law/ingestion/pipeline/failure-evidence-persistence";
 import {
   PROCESS_DECISION_RETRY_REASON,
   PROCESS_DECISION_STATUS,
@@ -42,9 +50,11 @@ import {
 } from "@/api/handlers/case-law/ingestion/pipeline/types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { canonicalDecisionIdSql } from "@/api/lib/case-law/decision-alias";
-import { ecliPublisherSpellings } from "@/api/lib/case-law/ecli-spellings";
+import {
+  heldDecisionEcliIdentity,
+  readHeldDecisionCandidates,
+} from "@/api/lib/case-law/held-decision-candidate-query";
 import { replayWrite } from "@/api/lib/case-law/replay-write";
-import { republishedRulingCourtPredicate } from "@/api/lib/case-law/ruling-identity-match";
 import { lockCaseLawDecisionRows } from "@/api/lib/db/aggregate-lock";
 import { type BoundedReadResult, readBounded } from "@/api/lib/db/read-bounded";
 import {
@@ -52,18 +62,29 @@ import {
   UnpersistableDecisionFieldError,
 } from "@/api/lib/errors/tagged-errors";
 import {
+  COLLECTION_DOCUMENT_BODY_CONTENT_TYPE,
+  type CollectionDocumentPart,
+  encodeCollectionDocumentBody,
+  validateCollectionDocumentPart,
+} from "@/api/lib/legal-search/collection-document-part";
+import { payloadCarriesDocument } from "@/api/lib/legal-search/corpus-content-hash";
+import {
   lockActiveCorpusProjectionSourceByIdTx,
   synchronizeLockedCorpusProjectionDesiredStateTx,
 } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
+import { HELD_DECISION_ATTACHMENTS } from "@/api/lib/legal-search/held-decision-attachment";
 import type { HeldDecisionAttachment } from "@/api/lib/legal-search/held-decision-attachment";
 import {
   HELD_DECISION_AMBIGUOUS_CANDIDATES_MAX,
   HELD_DECISION_MATCH_BASIS,
   HELD_DECISION_REVIEW,
+  type HeldDecisionAttachingBasis,
   type HeldDecisionDeclaredIdentifier,
   type HeldDecisionMatchBasis,
+  type HeldDecisionMatchEvidence,
   type HeldDecisionReview,
 } from "@/api/lib/legal-search/held-decision-attachment-values";
+import { resolveHeldDecisionCandidates } from "@/api/lib/legal-search/held-decision-candidates";
 import type { RawSourceWriteWindow } from "@/api/lib/legal-search/raw-source-storage";
 import { failureSink } from "@/api/lib/observability/failure";
 import { logger } from "@/api/lib/observability/logger";
@@ -109,6 +130,7 @@ type HeldDecisionAttachmentDisposition =
   | {
       type: "review";
       review: HeldDecisionReview;
+      evidence?: Exclude<HeldDecisionMatchEvidence, { status: "matched" }>;
       basis: HeldDecisionMatchBasis;
       candidateDecisionIds: SafeId<"caseLawDecision">[];
     }
@@ -130,17 +152,13 @@ type HostDecision = {
   id: SafeId<"caseLawDecision">;
   sourceId: SafeId<"caseLawSource">;
   redactedAt: Date | null;
+  ecli: string | null;
 };
 
 type HostMatch =
   | { type: "none" }
-  | { type: "one"; basis: HeldDecisionMatchBasis; host: HostDecision }
-  | {
-      type: "review";
-      review: HeldDecisionReview;
-      basis: HeldDecisionMatchBasis;
-      candidateDecisionIds: SafeId<"caseLawDecision">[];
-    };
+  | { type: "one"; basis: HeldDecisionAttachingBasis; host: HostDecision }
+  | Extract<HeldDecisionAttachmentDisposition, { type: "review" }>;
 
 export type AttachToHeldDecisionOptions = {
   declaration: HeldDecisionAttachment<string>;
@@ -156,6 +174,8 @@ export type AttachToHeldDecisionOptions = {
   rawWindow: RawSourceWriteWindow;
   signal?: AbortSignal;
   s3Policy?: S3CredentialRefreshOptions;
+  /** Boundary for storing immutable payloads under the selected host owner. */
+  rawPayloadWriter?: typeof writeOwnedRawPayload;
 };
 
 const COMPLETE: ProcessResult = {
@@ -169,18 +189,11 @@ const settled = (
   step: AttemptStep = COMPLETE,
 ): HeldDecisionAttachmentStep => ({ type: "settled", step, disposition });
 
-const hostSourceIdsSql = (
-  declaration: HeldDecisionAttachment<string>,
-  sourceId: SafeId<"caseLawSource">,
-) =>
-  sql`(SELECT ${caseLawSources.id} FROM ${caseLawSources}
-    WHERE ${inArray(caseLawSources.adapterKey, [...declaration.hostAdapterKeys])}
-      AND ${ne(caseLawSources.id, sourceId)})`;
-
 const HOST_COLUMNS = {
   id: caseLawDecisions.id,
   sourceId: caseLawDecisions.sourceId,
   redactedAt: caseLawDecisions.redactedAt,
+  ecli: caseLawDecisions.ecli,
 };
 
 /**
@@ -189,7 +202,7 @@ const HOST_COLUMNS = {
  * decision date. A redacted host still matches: the takedown covers the
  * record too, which is the caller's to settle.
  */
-const matchHostDecisionsTx = async (
+export const matchHostDecisionsTx = async (
   tx: Transaction,
   {
     declaration,
@@ -200,129 +213,121 @@ const matchHostDecisionsTx = async (
     "declaration" | "observation" | "sourceId"
   >,
 ): Promise<HostMatch> => {
-  const hostSources = hostSourceIdsSql(declaration, sourceId);
-  const answer = (
-    basis: HeldDecisionMatchBasis,
-    read: BoundedReadResult<HostDecision>,
-  ): HostMatch => {
-    if (read.type === "overflow") {
-      // More matches than an operator is listed: still several, and none is
-      // chosen.
+  const ecliIdentity = heldDecisionEcliIdentity(
+    observed.country,
+    observed.ecli,
+  );
+  const docketKeys = docketFamilyKeysToRead(
+    observed.caseNumber,
+    observed.country,
+  );
+  const queryOptions = {
+    country: observed.country,
+    court: observed.court,
+    courtId: observed.courtId,
+    sourceId,
+    collectionAdapterKeys: Object.keys(HELD_DECISION_ATTACHMENTS),
+  };
+  const readPaths = async (role: "host" | "collection") => ({
+    ecli:
+      ecliIdentity === null
+        ? { type: "complete" as const, rows: [] }
+        : await readHeldDecisionCandidates(tx, {
+            ...queryOptions,
+            role,
+            path: {
+              basis: "ecli",
+              keys: ecliIdentity.keys,
+              primaryValues: ecliIdentity.primaryValues,
+            },
+          }),
+    courtDocketDate:
+      persistedDecisionDate === null ||
+      persistedDecisionDate === undefined ||
+      observed.caseNumber.length === 0
+        ? { type: "complete" as const, rows: [] }
+        : await readHeldDecisionCandidates(tx, {
+            ...queryOptions,
+            role,
+            path: {
+              basis: "court-docket-date",
+              decisionDate: persistedDecisionDate,
+              docketKeys,
+              caseNumber: observed.caseNumber,
+            },
+          }),
+  });
+  const hosts = await readPaths("host");
+  const collections = await readPaths("collection");
+  const matched = resolveHeldDecisionCandidates({ hosts, collections });
+  switch (matched.status) {
+    case "matched":
+      if (
+        matched.candidate.sourceId !== sourceId &&
+        !declaration.hostAdapterKeys.includes(matched.candidate.adapterKey)
+      ) {
+        return {
+          type: "review",
+          review: HELD_DECISION_REVIEW.SOURCE_POLICY,
+          basis: HELD_DECISION_MATCH_BASIS.SOURCE_POLICY,
+          candidateDecisionIds: [matched.candidate.id],
+          evidence: {
+            status: "outside-policy",
+            adapterKey: matched.candidate.adapterKey,
+          },
+        };
+      }
+      return { type: "one", basis: matched.basis, host: matched.candidate };
+    case "conflict":
       return {
         type: "review",
         review: HELD_DECISION_REVIEW.SEVERAL_HELD,
-        basis,
-        candidateDecisionIds: [],
-      };
-    }
-    const hosts = read.rows;
-    const [first, second] = hosts;
-    if (first === undefined) {
-      return { type: "none" };
-    }
-    return second === undefined
-      ? { type: "one", basis, host: first }
-      : {
-          type: "review",
-          review: HELD_DECISION_REVIEW.SEVERAL_HELD,
-          basis,
-          candidateDecisionIds: hosts.map(({ id }) => id),
-        };
-  };
-  // Every spelling of the stated ECLI another publisher of the decision
-  // may hold it under, each read as the identifier index stores it.
-  const ecliKeys =
-    observed.ecli === undefined
-      ? []
-      : [
+        basis: HELD_DECISION_MATCH_BASIS.ECLI,
+        evidence: {
+          status: "conflict",
+          ecliCandidateIds: matched.ecliCandidates.map(({ id }) => id),
+          courtDocketDateCandidateIds: matched.courtDocketDateCandidates.map(
+            ({ id }) => id,
+          ),
+        },
+        candidateDecisionIds: [
           ...new Set(
-            ecliPublisherSpellings(observed.country, observed.ecli).map(
-              (value) =>
-                normalizeDecisionIdentifierIn(observed.country, {
-                  type: DECISION_IDENTIFIER_TYPES.ECLI,
-                  value,
-                }),
-            ),
+            [
+              ...matched.ecliCandidates,
+              ...matched.courtDocketDateCandidates,
+            ].map(({ id }) => id),
           ),
-        ].filter((key) => key.length > 0);
-  if (ecliKeys.length > 0) {
-    const byEcli = await readBounded(
-      tx
-        .selectDistinct(HOST_COLUMNS)
-        .from(caseLawDecisionIdentifiers)
-        .innerJoin(
-          caseLawDecisions,
-          eq(caseLawDecisions.id, caseLawDecisionIdentifiers.decisionId),
-        )
-        .where(
-          and(
-            eq(caseLawDecisionIdentifiers.type, DECISION_IDENTIFIER_TYPES.ECLI),
-            inArray(caseLawDecisionIdentifiers.normalizedValue, ecliKeys),
-            sql`${caseLawDecisions.sourceId} IN ${hostSources}`,
-          ),
-        )
-        .orderBy(caseLawDecisions.id),
-      HELD_DECISION_AMBIGUOUS_CANDIDATES_MAX,
-    );
-    if (byEcli.type === "overflow" || byEcli.rows.length > 0) {
-      return answer(HELD_DECISION_MATCH_BASIS.ECLI, byEcli);
-    }
+        ].slice(0, HELD_DECISION_AMBIGUOUS_CANDIDATES_MAX),
+      };
+    case "ambiguous":
+      return {
+        type: "review",
+        review: HELD_DECISION_REVIEW.SEVERAL_HELD,
+        basis: matched.basis,
+        evidence: { status: "ambiguous", completeness: matched.completeness },
+        candidateDecisionIds: matched.candidates.map(({ id }) => id),
+      };
+    case "absent":
+      break;
+    default:
+      matched satisfies never;
+      return panic("Unhandled held candidate resolution");
   }
-  if (observed.caseNumber.length === 0) {
+  if (
+    observed.caseNumber.length === 0 ||
+    declaration.docketHeldUnderOtherDate === "own-row"
+  ) {
     return { type: "none" };
   }
-  const atCourtAndDocket = and(
-    eq(caseLawDecisions.caseNumber, observed.caseNumber),
-    eq(caseLawDecisions.country, observed.country),
-    sql`${caseLawDecisions.sourceId} IN ${hostSources}`,
-    republishedRulingCourtPredicate(
-      {
-        // Typed, so the comparison's bare `IS NOT NULL` reads a text.
-        court: sql`${observed.court}::text`,
-        courtId:
-          observed.courtId === undefined
-            ? null
-            : sql`${observed.courtId}::text`,
-      },
-      {
-        court: caseLawDecisions.court,
-        courtId: caseLawDecisions.courtId,
-      },
-    ),
-  );
-  const decisionDate = persistedDecisionDate ?? undefined;
-  if (decisionDate !== undefined) {
-    const byDocket = await readBounded(
-      tx
-        .select(HOST_COLUMNS)
-        .from(caseLawDecisions)
-        .where(
-          and(
-            atCourtAndDocket,
-            eq(caseLawDecisions.decisionDate, decisionDate),
-          ),
-        )
-        .orderBy(caseLawDecisions.id),
-      HELD_DECISION_AMBIGUOUS_CANDIDATES_MAX,
-    );
-    if (byDocket.type === "overflow" || byDocket.rows.length > 0) {
-      return answer(HELD_DECISION_MATCH_BASIS.COURT_DOCKET_DATE, byDocket);
-    }
-  }
-  if (declaration.docketHeldUnderOtherDate === "own-row") {
-    return { type: "none" };
-  }
-  // The court and docket are held, under another date (or the record states
-  // none): a further decision of the same file, or the same decision dated
-  // differently by one publisher. A reader decides; nothing is written.
-  const otherDates = await readBounded(
-    tx
-      .select(HOST_COLUMNS)
-      .from(caseLawDecisions)
-      .where(atCourtAndDocket)
-      .orderBy(caseLawDecisions.id),
-    HELD_DECISION_AMBIGUOUS_CANDIDATES_MAX,
-  );
+  const otherDates = await readHeldDecisionCandidates(tx, {
+    ...queryOptions,
+    role: "host",
+    path: {
+      basis: "court-docket-other-date",
+      docketKeys,
+      caseNumber: observed.caseNumber,
+    },
+  });
   if (otherDates.type === "complete" && otherDates.rows.length === 0) {
     return { type: "none" };
   }
@@ -348,16 +353,20 @@ const readHostTx = async (
       .limit(1)
   ).at(0);
 
-/** Whether the record already has a decision row of its own. */
-const holdsOwnRowTx = async (
+/** Canonicalize every proven publisher binding before deciding whether a new row is safe. */
+const readPublisherOwnersTx = async (
   tx: Transaction,
   {
     sourceId,
     observation: { exactSourceIdentityCandidates },
   }: Pick<AttachToHeldDecisionOptions, "sourceId" | "observation">,
-): Promise<boolean> => {
-  const reserved = await tx
-    .select({ id: caseLawDecisionSourceIdentities.decisionId })
+): Promise<BoundedReadResult<HostDecision>> => {
+  const canonicalIds = tx
+    .select({
+      id: canonicalDecisionIdSql(caseLawDecisionSourceIdentities.decisionId).as(
+        "id",
+      ),
+    })
     .from(caseLawDecisionSourceIdentities)
     .where(
       and(
@@ -368,24 +377,28 @@ const holdsOwnRowTx = async (
         ),
       ),
     )
-    .limit(1);
-  if (reserved.length > 0) {
-    return true;
-  }
-  const stored = await tx
-    .select({ id: caseLawDecisions.id })
-    .from(caseLawDecisions)
-    .where(
-      and(
-        eq(caseLawDecisions.sourceId, sourceId),
-        inArray(
-          caseLawDecisions.sourceDocumentId,
-          exactSourceIdentityCandidates,
+    .union(
+      tx
+        .select({ id: canonicalDecisionIdSql(caseLawDecisions.id).as("id") })
+        .from(caseLawDecisions)
+        .where(
+          and(
+            eq(caseLawDecisions.sourceId, sourceId),
+            inArray(
+              caseLawDecisions.sourceDocumentId,
+              exactSourceIdentityCandidates,
+            ),
+          ),
         ),
-      ),
-    )
-    .limit(1);
-  return stored.length > 0;
+    );
+  return await readBounded(
+    tx
+      .selectDistinct(HOST_COLUMNS)
+      .from(caseLawDecisions)
+      .where(inArray(caseLawDecisions.id, canonicalIds))
+      .orderBy(caseLawDecisions.id),
+    1,
+  );
 };
 
 const attachmentKey = (
@@ -442,6 +455,9 @@ const parkWithdrawnTx = async (
       metadata: null,
       sourceRawS3Key: null,
       sourceRawContentType: null,
+      documentPart: null,
+      documentBodyS3Key: null,
+      documentBodySha256: null,
     },
     {
       modifiedAt: {
@@ -469,11 +485,13 @@ const parkWithdrawnTx = async (
 
 /** What the first transaction decided for the record. */
 type AttachmentPlan =
+  | { type: "refused"; error: IngestionFailureEvidenceError }
   | { type: "settled"; step: HeldDecisionAttachmentStep }
   | {
       type: "attach";
+      writeRoute: "own-row" | "attachment";
       host: HostDecision;
-      basis: HeldDecisionMatchBasis;
+      basis: HeldDecisionAttachingBasis;
       stored: StoredAttachment | undefined;
     };
 
@@ -538,6 +556,126 @@ const identifierKey = ({
 type PlanAttachmentOptions = AttachToHeldDecisionOptions & {
   sourceDocumentId: string;
   metadata: Readonly<Record<string, unknown>>;
+  documentPart: CollectionDocumentPart | null;
+};
+
+const conflictingCandidateIds = (
+  match: HostMatch,
+): SafeId<"caseLawDecision">[] => {
+  switch (match.type) {
+    case "none":
+      return [];
+    case "one":
+      return [match.host.id];
+    case "review":
+      return match.candidateDecisionIds;
+    default:
+      match satisfies never;
+      return panic("Unhandled held host match");
+  }
+};
+
+const attachmentParkReason = (match: HostMatch, ownershipConflict: boolean) => {
+  if (ownershipConflict) {
+    return {
+      errorType: "held-identity-conflict",
+      errorMessage:
+        "Publisher ownership requires reconciliation with a canonical host",
+    };
+  }
+  if (match.type === "review") {
+    switch (match.evidence?.status) {
+      case "ambiguous":
+        return {
+          errorType: "held-ambiguous",
+          errorMessage:
+            "Publisher identity names several possible held decisions",
+        };
+      case "outside-policy":
+        return {
+          errorType: "held-source-policy",
+          errorMessage:
+            "The matched publisher is outside this collection's attachment policy",
+        };
+      case "conflict":
+      case undefined:
+        break;
+      default:
+        match.evidence satisfies never;
+        return panic("Unhandled held identity evidence");
+    }
+  }
+  return {
+    errorType: "held-identity-conflict",
+    errorMessage:
+      "Publisher identity does not name one consistent held decision",
+  };
+};
+
+const settleAttachmentConflictTx = async (
+  tx: Transaction,
+  {
+    options,
+    owners,
+    stored,
+    match,
+  }: {
+    options: PlanAttachmentOptions;
+    owners: BoundedReadResult<HostDecision>;
+    stored: StoredAttachment | undefined;
+    match: HostMatch;
+  },
+): Promise<AttachmentPlan | null> => {
+  const { sourceId, observation, observationOrder, observedAt } = options;
+  const previousHostId = stored?.hostDecisionId ?? null;
+  const previousHost =
+    previousHostId === null ? undefined : await readHostTx(tx, previousHostId);
+  if (
+    stored !== undefined &&
+    stored.hostDecisionId !== null &&
+    (previousHost === undefined || previousHost.redactedAt !== null)
+  ) {
+    return {
+      type: "settled",
+      step: settled(await parkWithdrawnTx(tx, stored, previousHost)),
+    };
+  }
+  const ownershipConflict =
+    owners.type === "overflow" ||
+    owners.rows.some(
+      (owner) => match.type !== "one" || match.host.id !== owner.id,
+    );
+  const associationConflict =
+    previousHost !== undefined &&
+    (match.type !== "one" || match.host.id !== previousHost.id);
+  if (ownershipConflict || associationConflict || match.type === "review") {
+    await clearUnbackedSourceIdentitiesTx(tx, {
+      sourceId,
+      sourceDocumentIds: observation.exactSourceIdentityCandidates,
+    });
+    const parked = await parkIngestionFailureTx(tx, {
+      sourceId,
+      input: observation.observed,
+      observation: { order: observationOrder, observedAt },
+      ...attachmentParkReason(match, ownershipConflict),
+    });
+    if (Result.isError(parked)) {
+      return { type: "refused", error: parked.error };
+    }
+    // A conflicting re-observation never replaces an existing verified binding.
+    if (ownershipConflict || associationConflict) {
+      return {
+        type: "settled",
+        step: settled({
+          type: "review",
+          review: HELD_DECISION_REVIEW.SEVERAL_HELD,
+          basis: HELD_DECISION_MATCH_BASIS.COURT_DOCKET_DATE,
+          candidateDecisionIds: conflictingCandidateIds(match),
+        }),
+      };
+    }
+  }
+  return null;
 };
 
 /**
@@ -561,43 +699,41 @@ const planAttachmentTx = async (
     sourceId,
     observation.sourceIdentityCandidates,
   );
-  // A record that has a row of its own stays one: it never flips onto a
-  // host a later observation could name.
-  if (await holdsOwnRowTx(tx, options)) {
-    return { type: "settled", step: { type: "own-row" } };
-  }
+  const owners = await readPublisherOwnersTx(tx, options);
+  const own =
+    owners.type === "complete" && owners.rows.at(0)?.sourceId === sourceId
+      ? owners.rows.at(0)
+      : undefined;
   const stored = await readAttachmentTx(tx, sourceId, sourceDocumentId);
   if (stored !== undefined && stored.hostWithdrawnAt !== null) {
-    const { hostDecisionId } = stored;
     return {
       type: "settled",
       step: settled(
-        hostDecisionId === null ? null : { type: "withdrawn", hostDecisionId },
+        stored.hostDecisionId === null
+          ? null
+          : { type: "withdrawn", hostDecisionId: stored.hostDecisionId },
       ),
     };
   }
   if (stored !== undefined && stored.observationOrder >= observationOrder) {
-    return { type: "settled", step: settled({ type: "stale" }) };
-  }
-  if (stored !== undefined && stored.hostDecisionId !== null) {
-    const { hostDecisionId } = stored;
-    const host = await readHostTx(tx, hostDecisionId);
-    if (host === undefined || host.redactedAt !== null) {
-      return {
-        type: "settled",
-        step: settled(await parkWithdrawnTx(tx, stored, host)),
-      };
-    }
-    // The host stays the one first matched: a changed record refreshes its
-    // attachment and never moves to another decision.
     return {
-      type: "attach",
-      host,
-      basis: stored.matchBasis,
-      stored,
+      type: "settled",
+      step:
+        own !== undefined && stored.hostDecisionId === own.id
+          ? { type: "own-row" }
+          : settled({ type: "stale" }),
     };
   }
   const match = await matchHostDecisionsTx(tx, options);
+  const conflict = await settleAttachmentConflictTx(tx, {
+    options,
+    owners,
+    stored,
+    match,
+  });
+  if (conflict !== null) {
+    return conflict;
+  }
   switch (match.type) {
     case "none": {
       if (stored !== undefined) {
@@ -613,6 +749,10 @@ const planAttachmentTx = async (
     case "review": {
       const parked = {
         matchBasis: match.basis,
+        matchEvidence: match.evidence ?? null,
+        documentPart: null,
+        documentBodyS3Key: null,
+        documentBodySha256: null,
         hostDecisionId: null,
         hostWithdrawnAt: null,
         candidateDecisionIds: match.candidateDecisionIds,
@@ -711,7 +851,13 @@ const planAttachmentTx = async (
           step: settled({ type: "withdrawn", hostDecisionId: match.host.id }),
         };
       }
-      return { type: "attach", host: match.host, basis: match.basis, stored };
+      return {
+        type: "attach",
+        writeRoute: own?.id === match.host.id ? "own-row" : "attachment",
+        host: match.host,
+        basis: match.basis,
+        stored,
+      };
     }
     default:
       match satisfies never;
@@ -721,10 +867,11 @@ const planAttachmentTx = async (
 
 type WriteAttachmentOptions = PlanAttachmentOptions & {
   host: HostDecision;
-  basis: HeldDecisionMatchBasis;
+  basis: HeldDecisionAttachingBasis;
   /** The attachment state the plan read; a different one is contention. */
   planned: StoredAttachment | undefined;
   raw: { key: string | null; contentType: string | null };
+  body: { key: string; sha256: string } | null;
   declared: HeldDecisionDeclaredIdentifier[];
 };
 
@@ -740,11 +887,44 @@ type AttachmentWrite =
  * and parks it, and one that took it before leaves this write nothing to
  * attach to.
  */
+const heldEcliDiscrepancy = (
+  basis: HeldDecisionAttachingBasis,
+  observation: ObservedDecision,
+  host: HostDecision,
+) =>
+  basis === HELD_DECISION_MATCH_BASIS.COURT_DOCKET_DATE &&
+  observation.observed.ecli !== undefined &&
+  host.ecli !== null &&
+  normalizeDecisionIdentifierIn(observation.observed.country, {
+    type: DECISION_IDENTIFIER_TYPES.ECLI,
+    value: observation.observed.ecli,
+  }) !==
+    normalizeDecisionIdentifierIn(observation.observed.country, {
+      type: DECISION_IDENTIFIER_TYPES.ECLI,
+      value: host.ecli,
+    })
+    ? { sourceValue: observation.observed.ecli, hostValue: host.ecli }
+    : null;
+
+const attachmentMatchesPlan = ({
+  current,
+  planned,
+}: {
+  current: StoredAttachment | undefined;
+  planned: StoredAttachment | undefined;
+}) =>
+  current?.observationOrder === planned?.observationOrder &&
+  current?.hostDecisionId === planned?.hostDecisionId &&
+  current?.sourceHash === planned?.sourceHash &&
+  current?.documentBodySha256 === planned?.documentBodySha256 &&
+  (current?.hostWithdrawnAt ?? null) === null;
+
 const writeAttachmentTx = async (
   tx: CitationGraphTransaction<Transaction>,
   {
     sourceId,
     sourceDocumentId,
+    declaration: optionsDeclaration,
     observation,
     observationOrder,
     observedAt,
@@ -753,6 +933,8 @@ const writeAttachmentTx = async (
     basis,
     planned,
     raw,
+    body,
+    documentPart,
     declared,
   }: WriteAttachmentOptions,
 ): Promise<AttachmentWrite> => {
@@ -761,6 +943,19 @@ const writeAttachmentTx = async (
     sourceId,
     observation.sourceIdentityCandidates,
   );
+  const matched = await matchHostDecisionsTx(tx, {
+    declaration: optionsDeclaration,
+    observation,
+    sourceId,
+  });
+  if (
+    matched.type !== "one" ||
+    matched.host.id !== host.id ||
+    matched.host.sourceId !== host.sourceId ||
+    matched.host.ecli !== host.ecli
+  ) {
+    return { type: "contention" };
+  }
   // Source lock before the row lock, the order every decision writer and
   // the erasure take them in.
   const projectionLock = await lockActiveCorpusProjectionSourceByIdTx(tx, {
@@ -779,9 +974,7 @@ const writeAttachmentTx = async (
   if (
     liveHost === undefined ||
     liveHost.redactedAt !== null ||
-    current?.observationOrder !== planned?.observationOrder ||
-    current?.hostDecisionId !== planned?.hostDecisionId ||
-    (current !== undefined && current.hostWithdrawnAt !== null)
+    !attachmentMatchesPlan({ current, planned })
   ) {
     return { type: "contention" };
   }
@@ -815,6 +1008,14 @@ const writeAttachmentTx = async (
     hostWithdrawnAt: null,
     candidateDecisionIds: [],
     metadata: { ...metadata },
+    documentPart,
+    documentBodyS3Key: body?.key ?? null,
+    documentBodySha256: body?.sha256 ?? null,
+    matchEvidence: {
+      status: "matched",
+      basis,
+      ecliDiscrepancy: heldEcliDiscrepancy(basis, observation, host),
+    } as const,
     declaredIdentifiers: declared,
     sourceUrl: observation.observed.sourceUrl ?? null,
     sourceHash: observation.observed.rawHash,
@@ -858,7 +1059,313 @@ const writeAttachmentTx = async (
       subject: { family: "case_law", entityId: host.id },
     });
   }
+  await clearUnbackedSourceIdentitiesTx(tx, {
+    sourceId,
+    sourceDocumentIds: observation.exactSourceIdentityCandidates,
+  });
+  await clearIngestionFailureEvidenceTx(tx, { sourceId, sourceDocumentId });
   return { type: "written" };
+};
+
+const prepareDocumentPart = (
+  declaration: HeldDecisionAttachment<string>,
+  observed: ObservedDecision["observed"],
+) => {
+  const parsedPart =
+    declaration.documentPartSchema === undefined
+      ? null
+      : v.safeParse(
+          declaration.documentPartSchema,
+          observed.metadata[declaration.metadataKey],
+        );
+  if (parsedPart !== null && !parsedPart.success) {
+    return Result.err(
+      new UnpersistableDecisionFieldError({
+        message: "Collection document part does not match its source schema",
+        field: UNPERSISTABLE_DECISION_FIELDS.HELD_DECISION_ATTACHMENT,
+      }),
+    );
+  }
+  const documentPart = parsedPart?.output ?? null;
+  const payload = {
+    text: observed.fulltext ?? null,
+    sections: observed.sections ?? null,
+    ast: observed.documentAst,
+  };
+  if (documentPart !== null) {
+    const checked = validateCollectionDocumentPart(documentPart, payload);
+    if (Result.isError(checked)) {
+      return Result.err(
+        new UnpersistableDecisionFieldError({
+          message: checked.error.message,
+          field: UNPERSISTABLE_DECISION_FIELDS.HELD_DECISION_ATTACHMENT,
+        }),
+      );
+    }
+  }
+  const encodedBody =
+    documentPart === null
+      ? Result.ok(null)
+      : encodeCollectionDocumentBody(payload);
+  if (Result.isError(encodedBody)) {
+    return Result.err(
+      new UnpersistableDecisionFieldError({
+        message: encodedBody.error.message,
+        field: UNPERSISTABLE_DECISION_FIELDS.HELD_DECISION_ATTACHMENT,
+      }),
+    );
+  }
+  return Result.ok({ documentPart, encodedBody: encodedBody.value });
+};
+
+export type OwnCollectionPart = {
+  metadata: Readonly<Record<string, unknown>>;
+  documentPart: CollectionDocumentPart;
+  body: { key: string; sha256: string };
+};
+
+type OwnCollectionPartStage =
+  | { type: "not-declared" }
+  | { type: "stored"; part: OwnCollectionPart }
+  | { type: "unavailable" };
+
+type StageOwnCollectionPartOptions = Pick<
+  AttachToHeldDecisionOptions,
+  | "declaration"
+  | "observation"
+  | "sourceId"
+  | "signal"
+  | "s3Policy"
+  | "rawPayloadWriter"
+> & {
+  decisionId: SafeId<"caseLawDecision">;
+  rawWindow: RawSourceWriteWindow;
+  onWriteStart: () => void;
+};
+
+/** Upload before insertion; the row transaction will retain the only durable reference. */
+export const stageOwnCollectionPart = async ({
+  declaration,
+  observation: { observed },
+  sourceId,
+  decisionId,
+  rawWindow,
+  onWriteStart,
+  signal,
+  s3Policy,
+  rawPayloadWriter = writeOwnedRawPayload,
+}: StageOwnCollectionPartOptions): Promise<
+  Result<OwnCollectionPartStage, UnpersistableDecisionFieldError>
+> => {
+  const prepared = prepareDocumentPart(declaration, observed);
+  if (Result.isError(prepared)) {
+    return prepared;
+  }
+  const { documentPart, encodedBody } = prepared.value;
+  if (documentPart === null || encodedBody === null) {
+    return Result.ok({ type: "not-declared" });
+  }
+  const metadata = readTypedMetadata(declaration, observed);
+  if (Result.isError(metadata)) {
+    return metadata;
+  }
+  const attempted = await Result.tryPromise({
+    try: async () =>
+      await rawPayloadWriter({
+        result: {
+          ...observed,
+          sourceRawBytes: encodedBody,
+          sourceRawObjects: undefined,
+        },
+        sourceId,
+        ownerId: decisionId,
+        contentType: COLLECTION_DOCUMENT_BODY_CONTENT_TYPE,
+        storedKey: null,
+        storedContentType: null,
+        window: rawWindow,
+        onWriteStart,
+        ...(signal === undefined ? {} : { signal }),
+        ...(s3Policy === undefined ? {} : { s3Policy }),
+      }),
+    catch: (cause) => cause,
+  });
+  const stored = attempted.andThen((result) => result);
+  if (Result.isError(stored)) {
+    signal?.throwIfAborted();
+    observeFailure(stored.error, {
+      sink: heldDecisionRawWriteFailed,
+      ctx: { source: sourceId, decisionId, step: "stageOwnCollectionPart" },
+    });
+    return Result.ok({ type: "unavailable" });
+  }
+  const key =
+    stored.value ??
+    panic("A supplied own collection body needs its immutable key");
+  return Result.ok({
+    type: "stored",
+    part: {
+      documentPart,
+      metadata: metadata.value,
+      body: { key, sha256: sha256Hex(encodedBody) },
+    },
+  });
+};
+
+/** A new canonical row and its self-part become visible in the same transaction. */
+export const persistOwnCollectionPartTx = async (
+  tx: CitationGraphTransaction<Transaction>,
+  write: DecisionRowWrite,
+  scopedDb: ScopedDb,
+): Promise<void> => {
+  const part = write.ownCollectionPart;
+  if (part === undefined) {
+    return;
+  }
+  const check =
+    write.heldDecisionCheck ??
+    panic("A self-part needs its source attachment declaration");
+  const sourceDocumentId =
+    check.observation.observed.sourceDocumentId ??
+    panic("A self-part needs its publisher post identity");
+  const planned = await readAttachmentTx(tx, write.sourceId, sourceDocumentId);
+  const written = await writeAttachmentTx(tx, {
+    declaration: check.declaration,
+    observation: check.observation,
+    sourceId: write.sourceId,
+    scopedDb,
+    observedAt: write.observedAt,
+    observationOrder: write.observationOrder,
+    rawWindow: write.rawWrites.window,
+    sourceDocumentId,
+    metadata: part.metadata,
+    documentPart: part.documentPart,
+    body: part.body,
+    host: {
+      id: write.decisionId,
+      sourceId: write.sourceId,
+      redactedAt: null,
+      ecli: write.result.ecli ?? null,
+    },
+    basis:
+      write.persistedDecisionDate === null ||
+      write.persistedDecisionDate === undefined
+        ? HELD_DECISION_MATCH_BASIS.ECLI
+        : HELD_DECISION_MATCH_BASIS.COURT_DOCKET_DATE,
+    planned,
+    raw: {
+      key: write.rawArtifact.sourceRawS3Key,
+      contentType: write.rawArtifact.sourceRawContentType,
+    },
+    declared: declaredIdentifiersOf(
+      check.declaration,
+      check.observation.observed,
+    ),
+  });
+  if (written.type !== "written") {
+    panic("A newly inserted self-part must settle under its insertion fence");
+  }
+};
+
+type WriteAttachmentPayloadsOptions = {
+  options: AttachToHeldDecisionOptions;
+  host: HostDecision;
+  stored: StoredAttachment | undefined;
+  encodedBody: Uint8Array | null;
+  contentType: string;
+};
+
+const writeAttachmentPayloads = async ({
+  options,
+  host,
+  stored,
+  encodedBody,
+  contentType,
+}: WriteAttachmentPayloadsOptions) => {
+  const {
+    observation: { observed },
+    signal,
+    s3Policy,
+    rawPayloadWriter = writeOwnedRawPayload,
+  } = options;
+  const attempted = await Result.tryPromise({
+    try: async () => {
+      const raw = await rawPayloadWriter({
+        ...(signal === undefined ? {} : { signal }),
+        ...(s3Policy === undefined ? {} : { s3Policy }),
+        result: observed,
+        sourceId: host.sourceId,
+        ownerId: host.id,
+        contentType,
+        storedKey: stored?.sourceRawS3Key ?? null,
+        storedContentType: stored?.sourceRawContentType ?? null,
+        window: options.rawWindow,
+      });
+      if (Result.isError(raw)) {
+        return raw;
+      }
+      if (encodedBody === null) {
+        return Result.ok({ rawKey: raw.value, body: null });
+      }
+      const storedBodyKey = stored?.documentBodyS3Key ?? null;
+      const body = await rawPayloadWriter({
+        ...(signal === undefined ? {} : { signal }),
+        ...(s3Policy === undefined ? {} : { s3Policy }),
+        result: {
+          ...observed,
+          sourceRawBytes: encodedBody,
+          sourceRawObjects: undefined,
+        },
+        sourceId: host.sourceId,
+        ownerId: host.id,
+        contentType: COLLECTION_DOCUMENT_BODY_CONTENT_TYPE,
+        storedKey: storedBodyKey,
+        storedContentType:
+          storedBodyKey === null ? null : COLLECTION_DOCUMENT_BODY_CONTENT_TYPE,
+        window: options.rawWindow,
+      });
+      return body.map((key) => ({
+        rawKey: raw.value,
+        body:
+          key === undefined
+            ? panic("A supplied collection body must have its immutable key")
+            : { key, sha256: sha256Hex(encodedBody) },
+      }));
+    },
+    catch: (cause) => cause,
+  });
+  return attempted.andThen((result) => result);
+};
+
+const attachmentPublisherIdentity = (
+  observation: ObservedDecision,
+): Result<string, UnpersistableDecisionFieldError> => {
+  const { observed } = observation;
+  const sourceDocumentId = observed.sourceDocumentId;
+  if (sourceDocumentId === undefined || sourceDocumentId.length === 0) {
+    return Result.err(
+      new UnpersistableDecisionFieldError({
+        message:
+          "A collection post requires its stable publisher document identity",
+        field: UNPERSISTABLE_DECISION_FIELDS.HELD_DECISION_ATTACHMENT,
+      }),
+    );
+  }
+  const hasTuple =
+    observed.caseNumber.length > 0 &&
+    observation.persistedDecisionDate !== null &&
+    observation.persistedDecisionDate !== undefined;
+  const hasEcli =
+    heldDecisionEcliIdentity(observed.country, observed.ecli) !== null;
+  if (!hasTuple && !hasEcli) {
+    return Result.err(
+      new UnpersistableDecisionFieldError({
+        message:
+          "A collection post needs a decision date or ECLI to establish its ruling identity",
+        field: UNPERSISTABLE_DECISION_FIELDS.HELD_DECISION_ATTACHMENT,
+      }),
+    );
+  }
+  return Result.ok(sourceDocumentId);
 };
 
 /**
@@ -871,65 +1378,90 @@ const writeAttachmentTx = async (
 export const attachToHeldDecision = async (
   options: AttachToHeldDecisionOptions,
 ): Promise<
-  Result<HeldDecisionAttachmentStep, UnpersistableDecisionFieldError>
+  Result<
+    HeldDecisionAttachmentStep,
+    UnpersistableDecisionFieldError | IngestionFailureEvidenceError
+  >
 > => {
-  const { declaration, observation, sourceId, scopedDb, signal, s3Policy } =
-    options;
+  const { declaration, observation, sourceId, scopedDb, signal } = options;
   const { observed } = observation;
-  const sourceDocumentId = observed.sourceDocumentId;
-  if (sourceDocumentId === undefined || sourceDocumentId.length === 0) {
-    // Nothing to key an attachment by: the record's own identity path
-    // decides it, as for any other source.
-    return Result.ok({ type: "own-row" });
+  const publisherIdentity = attachmentPublisherIdentity(observation);
+  if (Result.isError(publisherIdentity)) {
+    return publisherIdentity;
   }
+  const sourceDocumentId = publisherIdentity.value;
   const metadata = readTypedMetadata(declaration, observed);
   if (Result.isError(metadata)) {
     return metadata;
   }
+  const preparedPart = prepareDocumentPart(declaration, observed);
+  if (Result.isError(preparedPart)) {
+    return preparedPart;
+  }
+  const { documentPart, encodedBody } = preparedPart.value;
   const planOptions: PlanAttachmentOptions = {
     ...options,
     sourceDocumentId,
     metadata: metadata.value,
+    documentPart,
   };
-  const plan = await scopedDb(
+  const plan = await runCitationGraphTransaction(
+    scopedDb,
     async (tx) => await planAttachmentTx(tx, planOptions),
   );
+  if (plan.type === "refused") {
+    return Result.err(plan.error);
+  }
   if (plan.type === "settled") {
     return Result.ok(plan.step);
   }
-  const { host, basis, stored } = plan;
+  const { host, basis, stored, writeRoute } = plan;
+  if (
+    stored?.documentBodyS3Key !== undefined &&
+    stored.documentBodyS3Key !== null &&
+    !payloadCarriesDocument({
+      text: observed.fulltext ?? null,
+      sections: observed.sections ?? null,
+      ast: observed.documentAst,
+    })
+  ) {
+    return Result.err(
+      new UnpersistableDecisionFieldError({
+        message:
+          "A textless collection observation cannot replace its retained document snapshot",
+        field: UNPERSISTABLE_DECISION_FIELDS.HELD_DECISION_ATTACHMENT,
+      }),
+    );
+  }
   const declared = declaredIdentifiersOf(declaration, observed);
   if (
     stored !== undefined &&
     stored.sourceHash === observed.rawHash &&
+    JSON.stringify(sortDeep(stored.documentPart)) ===
+      JSON.stringify(sortDeep(documentPart)) &&
+    stored.documentBodySha256 ===
+      (encodedBody === null ? null : sha256Hex(encodedBody)) &&
     JSON.stringify(sortDeep(stored.declaredIdentifiers)) ===
       JSON.stringify(sortDeep(declared)) &&
     JSON.stringify(sortDeep(stored.metadata)) ===
       JSON.stringify(sortDeep(metadata.value))
   ) {
-    return Result.ok(settled({ type: "unchanged", hostDecisionId: host.id }));
+    return Result.ok(
+      writeRoute === "own-row"
+        ? { type: "own-row" }
+        : settled({ type: "unchanged", hostDecisionId: host.id }),
+    );
   }
 
   signal?.throwIfAborted();
   const contentType = observed.sourceRawContentType ?? "text/plain";
-  const rawWrite = await Result.tryPromise({
-    try: async () =>
-      await writeOwnedRawPayload({
-        ...(signal === undefined ? {} : { signal }),
-        ...(s3Policy === undefined ? {} : { s3Policy }),
-        result: observed,
-        // The record is a copy of the host decision: its payload lives under
-        // the host's prefix, so erasing the decision erases every copy.
-        sourceId: host.sourceId,
-        ownerId: host.id,
-        contentType,
-        storedKey: stored?.sourceRawS3Key ?? null,
-        storedContentType: stored?.sourceRawContentType ?? null,
-        window: options.rawWindow,
-      }),
-    catch: (cause) => cause,
+  const raw = await writeAttachmentPayloads({
+    options,
+    host,
+    stored,
+    encodedBody,
+    contentType,
   });
-  const raw = rawWrite.andThen((written) => written);
   if (Result.isError(raw)) {
     signal?.throwIfAborted();
     // Retryable: the record is not held yet, so the cursor holds it.
@@ -949,7 +1481,7 @@ export const attachToHeldDecision = async (
       }),
     );
   }
-  const rawKey = raw.value ?? null;
+  const rawKey = raw.value.rawKey ?? null;
 
   signal?.throwIfAborted();
   const written = await runCitationGraphTransaction(
@@ -964,6 +1496,7 @@ export const attachToHeldDecision = async (
           key: rawKey,
           contentType: rawKey === null ? null : contentType,
         },
+        body: raw.value.body,
         declared,
       }),
   );
@@ -990,6 +1523,8 @@ export const attachToHeldDecision = async (
     basis,
   });
   return Result.ok(
-    settled({ type: "attached", hostDecisionId: host.id, basis }),
+    writeRoute === "own-row"
+      ? { type: "own-row" }
+      : settled({ type: "attached", hostDecisionId: host.id, basis }),
   );
 };

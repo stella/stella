@@ -2323,7 +2323,7 @@
       }
     },
     "sourceChips": {
-      "alsoConsulted": "Également consultés ({count, number})"
+      "moreConsulted": "{count, plural, one {+# autre consultée} many {+# autres consultées} other {+# autres consultées}}"
     },
     "sourcePlaceholder": "Discuter de {title}",
     "sourcePlaceholderAction": "Discuter de",
@@ -2942,6 +2942,7 @@
     "playbooks": "Playbooks",
     "preparing": "Préparation…",
     "preview": "Aperçu",
+    "previewTruncated": "Le texte intégral n’est pas disponible dans cet aperçu.",
     "previous": "Précédent",
     "previousMatch": "Occurrence précédente",
     "print": "Imprimer",
@@ -6313,7 +6314,6 @@
     "layer": "Couche de signatures {number, number}",
     "noReadableContent": "Aucun contenu lisible ne peut être prévisualisé.",
     "pdfUnavailable": "L’aperçu PDF est indisponible.",
-    "previewTruncated": "Le texte intégral n’est pas disponible dans cet aperçu.",
     "unknownSigner": "Signataire inconnu",
     "unreadable": "Impossible de lire le fichier signé.",
     "unverified": "Les signatures n’ont pas été vérifiées."
@@ -6458,6 +6458,10 @@
     "versionChangesRemoved": "{count, plural, one {# disposition supprimée} other {# dispositions supprimées} many {# dispositions supprimées}}",
     "versionChangesWords": "{inserted, plural, one {# mot inséré} other {# mots insérés} many {# mots insérés}}, {deleted, plural, one {# mot supprimé} other {# mots supprimés} many {# mots supprimés}}",
     "wordingVersionUnknown": "Date de la version de la rédaction indisponible"
+  },
+  "structuredDocument": {
+    "noReadableContent": "Aucun texte lisible ne peut être affiché dans l’aperçu.",
+    "textOnly": "Aperçu du texte sans mise en page ni images."
   },
   "styleSets": {
     "create": "Créer",

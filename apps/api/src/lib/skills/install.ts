@@ -1,5 +1,7 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { and, eq, inArray, sql } from "drizzle-orm";
+
+import { sha256Hex } from "@stll/sha256/bun";
 
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
@@ -16,6 +18,14 @@ import {
   hashSkillPackageContent,
   skillContentHashAfter,
 } from "@/api/lib/agent-skills/content-hash";
+import {
+  abandonSkillResourceOriginals,
+  binarySkillResourceText,
+  originalColumns,
+  publishSkillResourceOriginals,
+  storeSkillResourceOriginals,
+} from "@/api/lib/agent-skills/resource-originals";
+import type { SkillResourceOriginalFile } from "@/api/lib/agent-skills/resource-originals";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -29,6 +39,7 @@ import { LIMITS } from "@/api/lib/limits";
 import { hasManagementPermission } from "@/api/lib/permission-authorization";
 import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
 import { PG_ERROR } from "@/api/lib/pg-error";
+import type { writeS3ObjectWithRetry } from "@/api/lib/s3";
 import type {
   FetchedSkillPackage,
   ParsedSkillPackage,
@@ -38,6 +49,8 @@ import { includes } from "@/api/lib/type-guards";
 
 // Advisory-lock namespaces are process-global. Dedicated first keys keep the
 // install caps independent from unrelated org/user locks elsewhere in the API.
+const UTF8_ENCODER = new TextEncoder();
+
 const SKILL_TEAM_CAP_LOCK_NAMESPACE = 0x53_4b_54_4d;
 const SKILL_USER_CAP_LOCK_NAMESPACE = 0x53_4b_55_53;
 
@@ -48,6 +61,12 @@ type InstallSkillSource =
   | { origin: Exclude<AgentSkillOrigin, "url">; parsed: ParsedSkillPackage };
 
 type InstallSkillProps = InstallSkillSource & {
+  /**
+   * Files the package keeps as their bytes. Their originals are written to
+   * object storage before the install transaction and handed to their rows
+   * inside it; an install that stores no row for them abandons them.
+   */
+  binaryFiles?: readonly SkillResourceOriginalFile[];
   /**
    * The matter or client the new skill is bound to, already authorized by
    * the caller (`authorizeSkillBinding`). Absent installs an unbound skill.
@@ -78,6 +97,8 @@ type InstallSkillProps = InstallSkillSource & {
   // blueprints) pass a unique slug to avoid (org, scope, slug) collisions.
   slug?: string;
   user: { id: SafeId<"user"> };
+  /** Injected by tests; production writes originals to object storage. */
+  writeObject?: typeof writeS3ObjectWithRetry;
 };
 
 export const SKILL_INSTALL_ERROR_CODE = {
@@ -256,6 +277,7 @@ const importedCommand = (command: string | null | undefined): string | null =>
 
 export const installSkill = async (props: InstallSkillProps) => {
   const {
+    binaryFiles = [],
     binding = UNBOUND,
     enabled = true,
     memberRole,
@@ -269,14 +291,33 @@ export const installSkill = async (props: InstallSkillProps) => {
     session,
     slug: requestedSlug,
     user,
+    writeObject,
   } = props;
   // A stella package restores the slug, display name and command it was
   // exported with; any other source names the skill after SKILL.md.
   const slug = requestedSlug ?? parsed.identity?.slug;
   const name = parsed.identity?.displayName ?? parsed.name;
   const urlReplayIdentity = urlReplayIdentityOf(props);
+  // A binary file is stored with a note saying what it is, as its text.
+  const binaryRows = binaryFiles.map((file) => {
+    const content = binarySkillResourceText({
+      mediaType: file.mediaType,
+      path: file.path,
+      sizeBytes: file.bytes.byteLength,
+    });
+    return {
+      content,
+      originalSha256: sha256Hex(file.bytes),
+      path: file.path,
+      sizeBytes: UTF8_ENCODER.encode(content).byteLength,
+    };
+  });
   // The hash covers the row as stored, under the name it is stored with.
-  const contentHash = hashSkillPackageContent({ ...parsed, name });
+  const contentHash = hashSkillPackageContent({
+    ...parsed,
+    name,
+    resources: [...parsed.resources, ...binaryRows],
+  });
   const authorization = authorizeSkillInstallScope({
     boundToMatter: binding.boundWorkspaceId !== null,
     memberRole,
@@ -284,6 +325,16 @@ export const installSkill = async (props: InstallSkillProps) => {
   });
   if (Result.isError(authorization)) {
     return Result.err(authorization.error);
+  }
+
+  const stored = await storeSkillResourceOriginals({
+    files: binaryFiles,
+    organizationId: session.activeOrganizationId,
+    safeDb,
+    ...(writeObject === undefined ? {} : { writeObject }),
+  });
+  if (Result.isError(stored)) {
+    return Result.err(stored.error);
   }
 
   const insertResult = await safeDb(
@@ -450,14 +501,29 @@ export const installSkill = async (props: InstallSkillProps) => {
             return { type: "insert-failed" };
           }
 
-          if (parsed.resources.length > 0) {
+          await publishSkillResourceOriginals(innerTx, stored.value);
+          const resourceRows = [
+            ...parsed.resources.map(({ content, path, sizeBytes }) => ({
+              content,
+              path,
+              sizeBytes,
+            })),
+            ...binaryRows.map(({ content, path, sizeBytes }) => ({
+              content,
+              path,
+              sizeBytes,
+              ...originalColumns(
+                stored.value.originals.get(path) ??
+                  panic("Every binary file was stored before its row"),
+              ),
+            })),
+          ];
+          if (resourceRows.length > 0) {
             await innerTx.insert(agentSkillResources).values(
-              parsed.resources.map((resource) => ({
+              resourceRows.map((resource) => ({
                 organizationId: session.activeOrganizationId,
                 skillId: row.id,
-                path: resource.path,
-                content: resource.content,
-                sizeBytes: resource.sizeBytes,
+                ...resource,
               })),
             );
           }
@@ -472,7 +538,7 @@ export const installSkill = async (props: InstallSkillProps) => {
                 new: {
                   contentHash,
                   origin,
-                  resourceCount: parsed.resources.length,
+                  resourceCount: parsed.resources.length + binaryRows.length,
                   scope,
                   slug: storedSlug,
                 },
@@ -485,6 +551,11 @@ export const installSkill = async (props: InstallSkillProps) => {
         },
       ),
   );
+
+  if (Result.isError(insertResult) || insertResult.value.type !== "installed") {
+    // No row names the originals: recovery erases them.
+    await abandonSkillResourceOriginals({ safeDb, stored: stored.value });
+  }
 
   if (Result.isError(insertResult)) {
     if (

@@ -12,6 +12,7 @@ import {
   isProcessPart,
   isUserInputChatToolName,
   isVisibleProcessStep,
+  narratedIntentIndex,
   summarizeProcessRun,
   UNKNOWN_CHAT_TOOL_LABEL,
 } from "./chat-tool-activity";
@@ -289,5 +290,51 @@ describe("a settled run's summary", () => {
         3,
       ),
     ).toEqual(["steps:3"]);
+  });
+});
+
+describe("a message's narrated intent", () => {
+  const plan: ChatActivityPart = {
+    type: "text",
+    content:
+      "Dohledám znění § 240 o. s. ř. a judikaturu Nejvyššího soudu k počátku běhu lhůty.",
+  };
+  const step = codeStep([{ tool: "search_case_law", outcome: "ok" }]);
+  const answer: ChatActivityPart = {
+    type: "text",
+    content: "Lhůta běží od doručení.",
+  };
+
+  test("is the plan written before the first step, after reasoning only", () => {
+    expect(narratedIntentIndex([plan, step, answer])).toBe(0);
+    expect(
+      narratedIntentIndex([
+        { type: "thinking", content: "" },
+        { type: "text", content: "  " },
+        plan,
+        { type: "thinking", content: "Which court?" },
+        step,
+        answer,
+      ]),
+    ).toBe(2);
+  });
+
+  test("is none for an answer without steps, or text still waiting for one", () => {
+    expect(narratedIntentIndex([answer])).toBeNull();
+    expect(narratedIntentIndex([plan])).toBeNull();
+    expect(
+      narratedIntentIndex([plan, call("ask-user", "input-complete")]),
+    ).toBeNull();
+  });
+
+  test("is none for text written after a step, or text shaped like an answer", () => {
+    expect(narratedIntentIndex([step, plan, step, answer])).toBeNull();
+    for (const content of [
+      "## Postup\n\nNejprve dohledám § 240 o. s. ř.",
+      "Postup:\n- § 240 o. s. ř.\n- judikatura",
+      "Dohledám ".repeat(60),
+    ]) {
+      expect(narratedIntentIndex([{ type: "text", content }, step])).toBeNull();
+    }
   });
 });

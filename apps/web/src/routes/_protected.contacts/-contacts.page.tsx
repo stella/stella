@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { ReactNode } from "react";
+import type { ComponentProps, ReactNode } from "react";
 
 import { useForm, useSelector } from "@tanstack/react-form";
 import {
@@ -22,6 +22,7 @@ import { useTranslations } from "use-intl";
 import * as v from "valibot";
 
 import { CONTACT_TYPES, type ContactType } from "@stll/api-contract";
+import { SEARCH_QUERY_MAX_LENGTH } from "@stll/api-contract/limits";
 import { Button } from "@stll/ui/button";
 import { Checkbox } from "@stll/ui/checkbox";
 import { DestructiveConfirmDialog } from "@stll/ui/destructive-confirm-dialog";
@@ -47,6 +48,7 @@ import {
 } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
 import { Menu, MenuItem, MenuPopup, MenuTrigger } from "@stll/ui/menu";
+import { SearchField } from "@stll/ui/search-field";
 import { TableCell, TableRow } from "@stll/ui/table";
 import { stellaToast } from "@stll/ui/toast";
 import { TruncatedText } from "@stll/ui/truncated-text";
@@ -87,14 +89,15 @@ import {
 } from "@/routes/_protected.contacts/-procuracao-extraction";
 
 import {
+  CONTACT_FILTERS,
   contactColumns,
-  ContactFilterButtons,
-  ContactsSearchField,
+  contactFilterButton,
+  CONTACTS_TOOLBAR_BUTTON_SIZE,
   ContactsShell,
   ContactsSkeletonRows,
   ContactsTableFrame,
   ContactsToolbar,
-  ContactsToolbarButton,
+  ContactsToolbarButtonContent,
 } from "./-contacts.pending";
 import type {
   ContactColumn,
@@ -103,6 +106,77 @@ import type {
 } from "./-contacts.pending";
 
 const ARES_NATIVE_TOOL_SLUG = "ares";
+
+/** The contacts search, in the box its pending face reserves. */
+const ContactsSearchField = ({
+  value,
+  onValueChange,
+}: {
+  value: string;
+  onValueChange: (value: string) => void;
+}) => {
+  const t = useTranslations();
+  return (
+    <SearchField
+      aria-label={t("contacts.search")}
+      clearLabel={t("common.clearSearch")}
+      // The width the pending face reserves.
+      groupClassName="sm:max-w-sm"
+      maxLength={SEARCH_QUERY_MAX_LENGTH}
+      onValueChange={onValueChange}
+      placeholder={t("contacts.search")}
+      value={value}
+    />
+  );
+};
+
+/** The type filters, as their pending faces draw them. */
+const ContactFilterButtons = ({
+  filter,
+  onFilterChange,
+}: {
+  filter: ContactFilter;
+  onFilterChange: (filter: ContactFilter) => void;
+}) => {
+  const t = useTranslations();
+  return CONTACT_FILTERS.map(({ filter: option, labelKey }) => {
+    const active = filter === option;
+    const button = contactFilterButton(active);
+    return (
+      <Button
+        aria-pressed={active}
+        key={option}
+        onClick={() => onFilterChange(option)}
+        size={button.size}
+        variant={button.variant}
+      >
+        {t(labelKey)}
+      </Button>
+    );
+  });
+};
+
+/** A toolbar action: its icon, with the label beside it from `sm` up. */
+const ContactsToolbarButton = ({
+  icon,
+  label,
+  ...props
+}: {
+  icon: ReactNode;
+  label: string;
+} & Omit<
+  ComponentProps<typeof Button>,
+  "aria-label" | "children" | "size" | "title"
+>) => (
+  <Button
+    {...props}
+    aria-label={label}
+    size={CONTACTS_TOOLBAR_BUTTON_SIZE}
+    title={label}
+  >
+    <ContactsToolbarButtonContent icon={icon} label={label} />
+  </Button>
+);
 
 const EMPTY_CONTACTS: ContactItem[] = [];
 

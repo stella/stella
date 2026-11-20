@@ -265,6 +265,9 @@ export const WORKSPACE_STORAGE_DISPOSITION = {
 >;
 
 export const WORKSPACE_STORAGE_REFERENCE_DISPOSITION = {
+  // A skill file's original: its row's delete trigger queues the object in
+  // agent_skill_original_cleanup_requests whatever removed the row.
+  "agent_skill_resources.original_s3_key": "cleanup-request",
   "buffer_object_cleanup_intents.object_key": "recovery-tombstone",
   // Names a `user_files` row, whose own key is cleaned up; the step's row
   // cascades when that row goes.

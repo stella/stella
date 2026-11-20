@@ -86,6 +86,19 @@ export const AnswerSteps = ({
   );
 };
 
+/**
+ * The plan the model wrote before its first step, as the web shows it:
+ * quiet prose above the steps, no box, at most three lines.
+ */
+export const AnswerIntent = ({ text }: { text: string }) => {
+  const colors = useAppColors();
+  return (
+    <Text numberOfLines={3} style={[styles.intent, { color: colors.muted }]}>
+      {text}
+    </Text>
+  );
+};
+
 /** The words a subagent's status reads in; a finished one says nothing. */
 const SUBAGENT_STATUS_KEYS = {
   needs_approval: "localRun.status.needs_approval",
@@ -306,6 +319,10 @@ const styles = StyleSheet.create({
   detail: {
     fontSize: 13,
     lineHeight: 18,
+  },
+  intent: {
+    fontSize: 14,
+    lineHeight: 20,
   },
   run: {
     alignItems: "flex-start",

@@ -21,11 +21,13 @@ import type {
   SourceRawArtifact,
 } from "@/api/handlers/case-law/ingestion/pipeline/decision-raw";
 import type { CaseLawJudgeDependencies } from "@/api/handlers/case-law/ingestion/pipeline/dependencies";
+import type { OwnCollectionPart } from "@/api/handlers/case-law/ingestion/pipeline/held-decision-attachment";
 import type { DecisionInputProvenance } from "@/api/handlers/case-law/ingestion/pipeline/types";
 import type { StoredSupplement } from "@/api/handlers/case-law/ingestion/supplement-composition";
 import type { SafeId } from "@/api/lib/branded-types";
 import { synchronizeLockedCorpusProjectionDesiredStateTx } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
 import type { ActiveCorpusProjectionSourceLock } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
+import type { HeldDecisionAttachment } from "@/api/lib/legal-search/held-decision-attachment";
 import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import { logger } from "@/api/lib/observability/logger";
 import type { S3CredentialRefreshOptions } from "@/api/lib/s3/credential-guard";
@@ -35,6 +37,13 @@ export type DecisionRowWrite = Omit<DecisionIdentity, "decisionId"> &
   Pick<ObservedDecision, "persistedDecisionDate" | "storageIdentity"> & {
     signal?: AbortSignal;
     s3Policy?: S3CredentialRefreshOptions;
+    ownCollectionPart?: OwnCollectionPart | undefined;
+    heldDecisionCheck?:
+      | {
+          declaration: HeldDecisionAttachment<string>;
+          observation: ObservedDecision;
+        }
+      | undefined;
     sourceId: SafeId<"caseLawSource">;
     decisionId: SafeId<"caseLawDecision">;
     /** The observation composed with the supplements its document takes in. */

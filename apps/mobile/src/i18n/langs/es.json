@@ -1,4 +1,7 @@
 {
+  "common": {
+    "previewTruncated": "El texto completo no está disponible en esta vista previa."
+  },
   "tabs": {
     "chat": "Chat",
     "close": "Cerrar",
@@ -621,10 +624,13 @@
   "signedFile": {
     "layer": "Capa de firmas {number, number}",
     "noReadableContent": "No hay contenido legible para la vista previa.",
-    "previewTruncated": "El texto completo no está disponible en esta vista previa.",
     "unknownSigner": "Firmante desconocido",
     "unreadable": "No se ha podido leer el archivo firmado.",
     "unverified": "Las firmas no se han verificado."
+  },
+  "structuredDocument": {
+    "noReadableContent": "No hay texto legible para la vista previa.",
+    "textOnly": "Vista previa de texto sin diseño de página ni imágenes."
   },
   "header": {
     "search": "Buscar"

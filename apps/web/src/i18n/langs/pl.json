@@ -2323,7 +2323,7 @@
       }
     },
     "sourceChips": {
-      "alsoConsulted": "Również sprawdzono ({count, number})"
+      "moreConsulted": "{count, plural, one {+# inne sprawdzone} few {+# inne sprawdzone} many {+# innych sprawdzonych} other {+# innych sprawdzonych}}"
     },
     "sourcePlaceholder": "Czat o {title}",
     "sourcePlaceholderAction": "Czat o",
@@ -2942,6 +2942,7 @@
     "playbooks": "Playbooki",
     "preparing": "Przygotowywanie…",
     "preview": "Podgląd",
+    "previewTruncated": "Pełny tekst nie jest dostępny w tym podglądzie.",
     "previous": "Poprzedni",
     "previousMatch": "Poprzednie wystąpienie",
     "print": "Drukuj",
@@ -6313,7 +6314,6 @@
     "layer": "Warstwa podpisów {number, number}",
     "noReadableContent": "Brak czytelnej zawartości do wyświetlenia w podglądzie.",
     "pdfUnavailable": "Podgląd pliku PDF jest niedostępny.",
-    "previewTruncated": "Pełny tekst nie jest dostępny w tym podglądzie.",
     "unknownSigner": "Nieznany podpisujący",
     "unreadable": "Nie udało się odczytać podpisanego pliku.",
     "unverified": "Podpisy nie zostały zweryfikowane."
@@ -6458,6 +6458,10 @@
     "versionChangesRemoved": "{count, plural, one {# skreślony przepis} few {# skreślone przepisy} many {# skreślonych przepisów} other {# skreślonego przepisu}}",
     "versionChangesWords": "{inserted, plural, one {# dodane słowo} few {# dodane słowa} many {# dodanych słów} other {# dodanego słowa}}, {deleted, plural, one {# skreślone słowo} few {# skreślone słowa} many {# skreślonych słów} other {# skreślonego słowa}}",
     "wordingVersionUnknown": "Data wersji brzmienia jest niedostępna"
+  },
+  "structuredDocument": {
+    "noReadableContent": "Brak czytelnego tekstu do wyświetlenia w podglądzie.",
+    "textOnly": "Podgląd tekstu bez układu strony i obrazów."
   },
   "styleSets": {
     "create": "Utwórz",

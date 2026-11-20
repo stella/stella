@@ -11,13 +11,13 @@ import {
   buildDocTypeGateLabels,
   resolveDocumentTypeClassifier,
 } from "@/components/workspaces/table/group-columns";
+import type { PendingTableGrid } from "@/components/workspaces/table/pending-grid.logic";
 import { getWorkspaceGridTemplateColumns } from "@/components/workspaces/table/workspace-table/internals-helpers";
 import type { GridColumnGeometry } from "@/components/workspaces/table/workspace-table/internals-helpers";
 import { SKELETON_ROW_KEYS } from "@/components/workspaces/table/workspace-table/skeleton-rows.logic";
 import type { WorkspaceProperty, WorkspaceView } from "@/lib/types";
 import type { StoredColumnSizing } from "@/lib/workspaces/stored-column-sizing.logic";
 import { pendingTableGrid } from "@/routes/_protected.workspaces/$workspaceId/-components/table/pending-table-columns.logic";
-import type { PendingTableGrid } from "@/routes/_protected.workspaces/$workspaceId/-components/table/pending-table-columns.logic";
 
 export const GROUP_TABLE_PAGE_SIZE = 200;
 const DEFAULT_GROUP_SKELETON_ROW_COUNT = 3;

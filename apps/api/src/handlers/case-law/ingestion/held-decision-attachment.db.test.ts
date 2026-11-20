@@ -5,7 +5,7 @@
  * decision as usual, and the declaring source's record either attaches to it,
  * becomes a decision of its own, or is parked.
  */
-import { describe, expect, test } from "bun:test";
+import { afterEach, describe, expect, test } from "bun:test";
 import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import * as v from "valibot";
 
@@ -171,14 +171,17 @@ if (!databaseUrl || !runPostgresTests) {
       await db.transaction(async (tx) => await callback(tx));
     const createdSourceIds: SafeId<"caseLawSource">[] = [];
 
-    cleanUp(async () => {
+    const cleanUpSources = async () => {
       for (const sourceId of createdSourceIds) {
         await db
           .delete(caseLawDecisions)
           .where(eq(caseLawDecisions.sourceId, sourceId));
         await db.delete(caseLawSources).where(eq(caseLawSources.id, sourceId));
       }
-    });
+      createdSourceIds.length = 0;
+    };
+    afterEach(cleanUpSources);
+    cleanUp(cleanUpSources);
 
     const createSource = async (label: string) => {
       const adapterKey = `held-${label}-${Bun.randomUUIDv7()}`;

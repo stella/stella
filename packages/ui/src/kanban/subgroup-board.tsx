@@ -8,13 +8,7 @@ import { createBandPeekController } from "./band-peek";
 import type { BandPeekController } from "./band-peek";
 import { KanbanColumnBandHeader } from "./column-band-header";
 import type { KanbanBandToggleActivation } from "./column-band-header";
-import {
-  KANBAN_COLLAPSED_BAND_WIDTH_CLASS,
-  KANBAN_COLUMN_GAP_PX,
-  KANBAN_COLUMN_WIDTH_CLASS,
-  KANBAN_COLUMN_WIDTH_PX,
-  resolveKanbanColumnBands,
-} from "./column-bands";
+import { resolveKanbanColumnBands } from "./column-bands";
 import type { KanbanColumnBandSpan } from "./column-bands";
 import { KANBAN_CARD_DRAG_MIME } from "./drag-interactions";
 import type { KanbanColumnBand, KanbanGroup } from "./grouping";
@@ -22,6 +16,10 @@ import {
   KANBAN_CHROME_ROW_HEIGHT,
   KANBAN_CHROME_ROW_HEIGHT_PX,
   KANBAN_CHROME_TOGGLE_COARSE_TARGET_CLASS,
+  KANBAN_COLLAPSED_BAND_WIDTH_CLASS,
+  KANBAN_COLUMN_GAP_PX,
+  KANBAN_COLUMN_WIDTH_CLASS,
+  KANBAN_COLUMN_WIDTH_PX,
 } from "./layout-tokens";
 import type {
   KanbanBoardCell,
