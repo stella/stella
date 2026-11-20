@@ -279,6 +279,9 @@ const POST_BOOTSTRAP_DENY_STELLA_TABLES = new Set([
   "action_cost_calls",
   // Provider erasure intents belong to the scheduler, never request roles.
   "hosted_customer_erasures",
+  // Skill original erasure queue: an owner-run trigger records keys and the
+  // scheduler erases them; request roles never see it.
+  "agent_skill_original_cleanup_requests",
   // Kept provider transcript ids: the dictation door records them on the
   // owner connection and the scheduler deletes them; request roles never.
   "kept_transcript_deletions",

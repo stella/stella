@@ -148,6 +148,10 @@ export const TABLE_RETENTION = {
   document_types: {
     boundedBy: "Organization-owned document configuration and deletion.",
   },
+  agent_skill_original_cleanup_requests: {
+    boundedBy:
+      "Durable erasure queue of skill file originals; agentSkills.cleanOriginalObjects deletes each row once its objects are erased.",
+  },
   entity_deletion_cleanup_requests: {
     boundedBy: "Durable deletion queue drained by entity deletion cleanup.",
   },

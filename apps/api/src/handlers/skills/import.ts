@@ -188,6 +188,7 @@ const importSkillsFromUrls = createSafeRootHandler(
       }
 
       const result = await installSkill({
+        binaryFiles: parsed.value.binaryFiles,
         memberRole,
         onSlugTaken: "copy",
         origin: "url",

@@ -410,7 +410,7 @@ Follow the checklist.`,
     ).toBe(true);
   });
 
-  test("imports a zip around files it cannot keep and lists each one with the reason", async () => {
+  test("imports a zip keeping its binary files as bytes and listing what lies outside the skill", async () => {
     const zip = new ZipArchive();
     zip.set(
       "skill/SKILL.md",
@@ -445,10 +445,14 @@ Use \`assets/logo.png\` and the references.`,
     ]);
     expect(
       result.value.skippedFiles.toSorted((a, b) => (a.path < b.path ? -1 : 1)),
+    ).toEqual([{ path: "README.md", reason: "outside-skill-folder" }]);
+    expect(
+      result.value.binaryFiles
+        .map(({ mediaType, path }) => ({ mediaType, path }))
+        .toSorted((a, b) => (a.path < b.path ? -1 : 1)),
     ).toEqual([
-      { path: "README.md", reason: "outside-skill-folder" },
-      { path: "skill/assets/logo.png", reason: "unsupported-extension" },
-      { path: "skill/references/latin1.txt", reason: "not-utf8-text" },
+      { mediaType: "image/png", path: "assets/logo.png" },
+      { mediaType: "text/plain", path: "references/latin1.txt" },
     ]);
   });
 
