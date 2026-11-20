@@ -624,6 +624,13 @@ export const evaluateStartup = (
   };
 };
 
+// A re-anchored limit is the committed total plus the slack, not the base's
+// anchor plus the route allowance, so the row names the limit the gate used.
+const pendingLimitText = (budget: PendingBudgetResult): string =>
+  budget.reanchored
+    ? `${kib(budget.limit)} (re-anchored from ${kib(budget.anchor)})`
+    : `${kib(budget.anchor)} + ${kib(budget.allowance)} (${budget.convertedRoutes} route(s) converted)`;
+
 const pendingInputCommitted = (budget: PendingBudget): number =>
   budget.committed;
 
@@ -637,7 +644,7 @@ export const startupSummary = (evaluation: StartupEvaluation): string => {
     "| Gate | Measured | Limit | Result |",
     "| --- | ---: | ---: | --- |",
     `| Initial JS (gzip) | ${kib(initial.measured)} | ${kib(initial.budget)} + ${kib(INITIAL_GROWTH_LIMIT_BYTES)} | ${result(initial.status !== "over")} |`,
-    `| Pending layer (minified) | ${kib(pending.totalBytes)} in ${pending.modules.length} module(s) | ${kib(pendingBudget.anchor)} + ${kib(pendingBudget.allowance)} (${pendingBudget.convertedRoutes} route(s) converted), ${kib(PENDING_MODULE_LIMIT_BYTES)} each | ${result(pending.oversized.length === 0 && pendingBudget.status !== "over" && pendingBudget.status !== "unrecorded")} |`,
+    `| Pending layer (minified) | ${kib(pending.totalBytes)} in ${pending.modules.length} module(s) | ${pendingLimitText(pendingBudget)}, ${kib(PENDING_MODULE_LIMIT_BYTES)} each | ${result(pending.oversized.length === 0 && pendingBudget.status !== "over" && pendingBudget.status !== "unrecorded")} |`,
     `| Page code at startup | ${pageCode.unlisted.length} new, ${pageCode.listed.length} listed | 0 new | ${result(pageCode.unlisted.length === 0 && pageCode.stale.length === 0)} |`,
     `| Cold-load hops | ${hops.unlisted.length} new, ${hops.listed.length} listed | 0 new | ${result(hops.unlisted.length === 0 && hops.stale.length === 0)} |`,
     "",
