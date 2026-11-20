@@ -143,3 +143,16 @@ test("source-specific part descriptors still satisfy canonical metadata bounds",
     ).toBe(true);
   }
 });
+
+test("source extensions cannot bypass the canonical descriptor projection", () => {
+  const sourcePart = {
+    ...section,
+    publisherBody: "Extra source body".repeat(1024),
+  };
+  const canonical = validateCollectionDocumentPart(
+    sourcePart,
+    payload,
+  ).unwrap();
+  expect(canonical).toEqual(section);
+  expect(canonical).not.toHaveProperty("publisherBody");
+});

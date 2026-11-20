@@ -21,7 +21,7 @@ export const COLLECTION_DOCUMENT_EXTENT = {
 } as const;
 export const COLLECTION_DOCUMENT_BODY_CONTENT_TYPE =
   "application/vnd.stella.collection-document-body+json";
-export const COLLECTION_DOCUMENT_BODY_MAX_BYTES =
+const COLLECTION_DOCUMENT_BODY_MAX_BYTES =
   LIMITS.corpusPayloadMaxDecompressedBytes;
 
 const ordinal = v.pipe(
@@ -78,14 +78,14 @@ const collectionDocumentBodySchema = v.object({
   ast: v.nullable(v.union([documentAstSchema, emptyAstSchema])),
 });
 
-export class CollectionDocumentPartInvalid extends TaggedError(
+class CollectionDocumentPartInvalid extends TaggedError(
   "CollectionDocumentPartInvalid",
 )<{ message: string }> {}
 
 export const validateCollectionDocumentPart = (
   part: CollectionDocumentPart,
   payload: CorpusPayload,
-) => {
+): Result<CollectionDocumentPart, CollectionDocumentPartInvalid> => {
   const parsed = v.safeParse(collectionDocumentPartSchema, part);
   if (!parsed.success) {
     return Result.err(
@@ -95,12 +95,12 @@ export const validateCollectionDocumentPart = (
       }),
     );
   }
-  switch (part.extent) {
+  switch (parsed.output.extent) {
     case COLLECTION_DOCUMENT_EXTENT.UNCLASSIFIED:
-      return Result.ok(part);
+      return Result.ok(parsed.output);
     case COLLECTION_DOCUMENT_EXTENT.COMPLETE:
       return payloadCarriesDocument(payload)
-        ? Result.ok(part)
+        ? Result.ok(parsed.output)
         : Result.err(
             new CollectionDocumentPartInvalid({
               message:
@@ -110,8 +110,8 @@ export const validateCollectionDocumentPart = (
     case COLLECTION_DOCUMENT_EXTENT.SECTION:
       if (
         !hasUsableAst(payload.ast) ||
-        part.firstBlock >= part.afterLastBlock ||
-        part.afterLastBlock > payload.ast.blocks.length
+        parsed.output.firstBlock >= parsed.output.afterLastBlock ||
+        parsed.output.afterLastBlock > payload.ast.blocks.length
       ) {
         return Result.err(
           new CollectionDocumentPartInvalid({
@@ -120,7 +120,7 @@ export const validateCollectionDocumentPart = (
           }),
         );
       }
-      return Result.ok(part);
+      return Result.ok(parsed.output);
   }
 };
 

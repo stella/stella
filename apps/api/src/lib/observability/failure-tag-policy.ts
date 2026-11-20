@@ -129,6 +129,7 @@ export const TAGGED_FAILURE_REASON = {
   ConcurrentModificationError: "tagged_failure",
   ConfigurationError: "tagged_failure",
   ConversionInputError: "tagged_failure",
+  CollectionDocumentPartInvalid: "tagged_failure",
   CorpusAstCensusPayloadError: "tagged_failure",
   CorpusGenerationCensusDriftError: "tagged_failure",
   CorpusGenerationCensusUnreadableError: "tagged_failure",
