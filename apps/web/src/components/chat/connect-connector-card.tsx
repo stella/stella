@@ -139,7 +139,12 @@ const ContinuationRetry = ({
         {t("chat.requestSecret.continuationError")}
       </p>
       <div className="flex flex-wrap justify-end gap-2">
-        <Button disabled={isContinuing} onClick={onRetry} type="button">
+        <Button
+          disabled={isContinuing}
+          disabledReason={t("chat.connectConnector.continuing")}
+          onClick={onRetry}
+          type="button"
+        >
           {isContinuing ? (
             <Loader className="size-4" variant="decorative" />
           ) : null}
@@ -197,6 +202,27 @@ type ConnectActionsProps = {
   onDecline: () => void;
 };
 
+type ConnectorBusyReasonOptions = {
+  phase: ConnectPhase["type"];
+  t: (
+    key:
+      | "common.connecting"
+      | "common.verifying"
+      | "chat.connectConnector.continuing",
+  ) => string;
+};
+
+const connectorBusyReason = ({ phase, t }: ConnectorBusyReasonOptions) => {
+  switch (phase) {
+    case "connecting":
+      return t("common.connecting");
+    case "confirming":
+      return t("common.verifying");
+    default:
+      return t("chat.connectConnector.continuing");
+  }
+};
+
 const ConnectActions = ({
   connectorSlug,
   isBusy,
@@ -212,10 +238,12 @@ const ConnectActions = ({
     isAwaitingSignIn ||
     (phase.type === "failed" && phase.reason === "not-connected");
   const isWorking = phase.type === "connecting" || phase.type === "confirming";
+  const busyReason = connectorBusyReason({ phase: phase.type, t });
   return (
     <div className="flex flex-wrap justify-end gap-2">
       <Button
         disabled={isBusy}
+        disabledReason={busyReason}
         onClick={onDecline}
         type="button"
         variant="ghost"
@@ -239,6 +267,7 @@ const ConnectActions = ({
       {canCheck ? (
         <Button
           disabled={isBusy}
+          disabledReason={busyReason}
           onClick={onCheck}
           type="button"
           variant="outline"
@@ -247,7 +276,12 @@ const ConnectActions = ({
         </Button>
       ) : null}
       {isAwaitingSignIn ? null : (
-        <Button disabled={isBusy} onClick={onConnect} type="button">
+        <Button
+          disabled={isBusy}
+          disabledReason={busyReason}
+          onClick={onConnect}
+          type="button"
+        >
           {isWorking ? (
             <Loader className="size-4" variant="decorative" />
           ) : null}

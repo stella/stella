@@ -89,6 +89,29 @@ type ChatSelectionToolbarProps = {
   answerRewriteAvailability: "available" | "anonymized" | "unknown";
 };
 
+type AnswerRewriteDisabledReasonOptions = {
+  answerRewriteAvailability: ChatSelectionToolbarProps["answerRewriteAvailability"];
+  t: (
+    key:
+      | "chat.answerEdit.rewriteUnavailableAnonymized"
+      | "common.loading"
+      | "chat.answerEdit.waitForAnswer",
+  ) => string;
+};
+
+const answerRewriteDisabledReason = ({
+  answerRewriteAvailability,
+  t,
+}: AnswerRewriteDisabledReasonOptions) => {
+  if (answerRewriteAvailability === "anonymized") {
+    return t("chat.answerEdit.rewriteUnavailableAnonymized");
+  }
+  if (answerRewriteAvailability === "unknown") {
+    return t("common.loading");
+  }
+  return t("chat.answerEdit.waitForAnswer");
+};
+
 /**
  * Floats over words selected in a chat message: ask about them in a new chat
  * in the inspector (the primary action), quote them into this chat's reply,
@@ -227,6 +250,10 @@ export const ChatSelectionToolbar = ({
               disabled={
                 editsDisabled || answerRewriteAvailability !== "available"
               }
+              disabledReason={answerRewriteDisabledReason({
+                answerRewriteAvailability,
+                t,
+              })}
               onCancel={() => {
                 setEditing(null);
                 setSelected(null);
@@ -384,6 +411,7 @@ export const ChatSelectionToolbar = ({
                           size="sm"
                           variant="ghost"
                           disabled={editsDisabled}
+                          disabledReason={t("chat.answerEdit.waitForAnswer")}
                           {...capabilityProps}
                         >
                           <AiActionIcon className="size-3.5" />
@@ -397,6 +425,7 @@ export const ChatSelectionToolbar = ({
                   <Button
                     aria-label={t("chat.answerEdit.formatKind")}
                     disabled={editsDisabled}
+                    disabledReason={t("chat.answerEdit.waitForAnswer")}
                     onClick={() => setFormatOpen(true)}
                     onMouseDown={(event) => event.preventDefault()}
                     size="icon-sm"

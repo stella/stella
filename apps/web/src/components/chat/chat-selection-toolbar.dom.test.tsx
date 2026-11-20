@@ -289,7 +289,7 @@ test("a Copy that settles after the selection changed does not confirm", async (
 test("streaming prevents opening an edit from the selection toolbar", async () => {
   const view = await mountSelection({ isGenerating: true });
   const action = view.getByRole("button", { name: "Request edits" });
-  expect(action.hasAttribute("disabled")).toBe(true);
+  expect(action.getAttribute("aria-disabled")).toBe("true");
   expect(
     view
       .getByRole("button", { name: messages.chat.answerEdit.formatKind })
@@ -320,7 +320,7 @@ test("an anonymized conversation exposes no answer rewrite", async () => {
 test("an unresolved user-input turn disables editing while new-chat selection remains available", async () => {
   const view = await mountSelection({ awaitingUser: true });
   const edit = view.getByRole("button", { name: messages.chat.answerEdit.ask });
-  expect(edit.hasAttribute("disabled")).toBe(true);
+  expect(edit.getAttribute("aria-disabled")).toBe("true");
   expect(
     view
       .getByRole("button", { name: messages.chat.answerEdit.formatKind })
