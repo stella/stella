@@ -9,7 +9,7 @@ import { compareByLocale } from "@stll/collation";
 import { Button } from "@stll/ui/button";
 import { EllipsisVerticalIcon } from "@stll/ui/icons";
 import { Menu, MenuItem, MenuPopup, MenuTrigger } from "@stll/ui/menu";
-import { SortableHead, TableCell, TableRow } from "@stll/ui/table";
+import { SortableHead } from "@stll/ui/table";
 import { stellaToast } from "@stll/ui/toast";
 
 import Tooltip from "@/components/tooltip";
@@ -31,6 +31,7 @@ import { filterOrganizationLists } from "@/routes/_protected.settings/organizati
 
 import {
   INITIAL_MEMBERS_SORT,
+  MembersEmptyRow,
   MembersShell,
   MembersTableRow,
 } from "./-organization.members.pending";
@@ -194,11 +195,9 @@ export const MembersPage = () => {
         );
       })}
       {filteredMembers.length === 0 && (
-        <TableRow>
-          <TableCell className="text-muted-foreground text-center" colSpan={4}>
-            {t("organization.members.noMembersFound")}
-          </TableCell>
-        </TableRow>
+        <MembersEmptyRow>
+          {t("organization.members.noMembersFound")}
+        </MembersEmptyRow>
       )}
     </MembersShell>
   );
