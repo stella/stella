@@ -270,6 +270,79 @@ test("excluded inputs may change during generation while sources may not", async
   }
 });
 
+test("git-ignored build output written during generation is not a source", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "generated-cache-git-"));
+  const git = (...args: string[]) => {
+    const result = Bun.spawnSync(["git", ...args], {
+      cwd: root,
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    if (result.exitCode !== 0) {
+      panic(`git ${args.join(" ")} failed: ${result.stderr.toString()}`);
+    }
+  };
+  const run = async (generate: () => Promise<void>) =>
+    withGeneratedOutputCache({
+      root,
+      name: "fixture",
+      environment: "test",
+      inputs: ["packages/**"],
+      outputs: ["generated/*.txt"],
+      generate,
+    });
+  const writeOutput = async () => {
+    await mkdir(path.join(root, "generated"), { recursive: true });
+    await writeFile(path.join(root, "generated/value.txt"), "value");
+  };
+  try {
+    git("init", "--quiet");
+    await mkdir(path.join(root, "packages/a/src"), { recursive: true });
+    await mkdir(path.join(root, "packages/engine/target/debug"), {
+      recursive: true,
+    });
+    await writeFile(path.join(root, "packages/a/src/index.ts"), "source");
+    await writeFile(
+      path.join(root, "packages/engine/.gitignore"),
+      "/target/\n",
+    );
+    await writeFile(
+      path.join(root, "packages/engine/target/debug/stale.o"),
+      "before",
+    );
+    // A concurrent compile rewrites and adds ignored build output while the
+    // generator runs, as a Rust test does in its target directory.
+    await run(async () => {
+      await writeFile(
+        path.join(root, "packages/engine/target/debug/stale.o"),
+        "after",
+      );
+      await writeFile(
+        path.join(root, "packages/engine/target/debug/new.o"),
+        "built",
+      );
+      await writeOutput();
+    });
+    expect(
+      await readFile(path.join(root, "generated/value.txt"), "utf-8"),
+    ).toBe("value");
+    // A source that is not ignored still refuses the result when it changes.
+    await writeFile(path.join(root, "packages/a/src/index.ts"), "changed");
+    const rejected = await rejectionOf(
+      run(async () => {
+        await writeFile(path.join(root, "packages/a/src/index.ts"), "again");
+        await writeOutput();
+      }),
+    );
+    expect(rejected).toMatchObject({ message: "Generation failed: fixture" });
+    expect(Bun.inspect(rejected)).toContain(
+      "Generator fixture changed its source inputs",
+    );
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test("atomic siblings inherit only their generated destination's exclusion", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "generated-cache-atomic-"));
   const source = path.join(root, "packages/source.ts");

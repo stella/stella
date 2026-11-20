@@ -1,5 +1,6 @@
 import { panic, Result } from "better-result";
 import {
+  existsSync,
   lstatSync,
   mkdirSync,
   readdirSync,
@@ -24,6 +25,34 @@ const cacheManifestSchema = v.record(
 const GENERATED_OUTPUT_CACHE_IDENTITY_LIMIT = 2;
 const ATOMIC_GENERATED_FILE_TEMP_SUFFIX =
   /\.[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\.tmp$/u;
+
+// Git-ignored files are build output and local state, never sources. Other
+// tasks write them while a generator runs (a Rust test compiling into its
+// target directory, for one), so hashing them would race those writers and
+// refuse a clean generation. A checkout answers from its ignore rules; a
+// source archive without one has only the caller's explicit exclusions.
+const gitIgnoredFiles = (
+  root: string,
+  name: string,
+  files: readonly string[],
+): ReadonlySet<string> => {
+  if (files.length === 0 || !existsSync(path.join(root, ".git"))) {
+    return new Set();
+  }
+  const checked = Bun.spawnSync(["git", "check-ignore", "-z", "--stdin"], {
+    cwd: root,
+    stdin: Buffer.from(files.join("\0")),
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  // check-ignore exits 1 when no path is ignored.
+  if (checked.exitCode !== 0 && checked.exitCode !== 1) {
+    panic(
+      `git check-ignore failed for generator ${name}: ${checked.stderr.toString()}`,
+    );
+  }
+  return new Set(checked.stdout.toString().split("\0").filter(Boolean));
+};
 
 type GeneratedOutputCacheOptions = {
   root: string;
@@ -62,7 +91,12 @@ export const withGeneratedOutputCache = async ({
     hash.update(
       JSON.stringify([Bun.version, environment, name, inputs, outputs]),
     );
-    for (const file of scan(included)) {
+    const candidates = scan(included);
+    const ignored = gitIgnoredFiles(root, name, candidates);
+    for (const file of candidates) {
+      if (ignored.has(file)) {
+        continue;
+      }
       // Atomic generated-file writers use UUID-named siblings. A sibling of
       // an excluded output is no more a source than its final destination.
       const destination = file.replace(ATOMIC_GENERATED_FILE_TEMP_SUFFIX, "");
