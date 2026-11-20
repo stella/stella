@@ -331,11 +331,7 @@ export const LocalRunQuestionCard = ({
               <div className="flex items-center gap-2">
                 <Button
                   disabled={!canSubmit}
-                  disabledReason={
-                    sent === null
-                      ? t("chat.askUser.answerRequired")
-                      : t("common.sending")
-                  }
+                  disabledReason={t("chat.askUser.answerRequired")}
                   size="xs"
                   type="submit"
                 >

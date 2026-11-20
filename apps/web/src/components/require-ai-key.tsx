@@ -285,6 +285,9 @@ export const useAISendBlockReason = () => {
       return t("chat.sendErrorProviderUnavailable");
     case "configurationRequired":
       return t(aiUnavailableMessageKey(state.availability));
+    default:
+      state satisfies never;
+      return panic("Unhandled AI send availability state");
   }
 };
 

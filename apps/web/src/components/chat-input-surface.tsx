@@ -169,11 +169,12 @@ const chatComposerDisabledReasons = ({
   aiSendBlockReason,
   t,
 }: ChatComposerDisabledReasonsOptions) => {
-  const improveReason = inputDisabled
-    ? t("chat.composer.waitForChat")
-    : isBlank
-      ? t("chat.improvePromptEmpty")
-      : undefined;
+  let improveReason: string | undefined;
+  if (inputDisabled) {
+    improveReason = t("chat.composer.waitForChat");
+  } else if (isBlank) {
+    improveReason = t("chat.improvePromptEmpty");
+  }
   if (sendDisabled && aiSendBlockReason !== undefined) {
     return {
       sendDisabledReason: aiSendBlockReason,

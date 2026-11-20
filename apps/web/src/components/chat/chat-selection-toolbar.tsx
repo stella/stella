@@ -221,6 +221,10 @@ export const ChatSelectionToolbar = ({
   const announcer = <SidePanelChatAnnouncer status={sidePanelChat.status} />;
 
   if (editing !== null) {
+    const cancelEditing = () => {
+      setEditing(null);
+      setSelected(null);
+    };
     return (
       <>
         <SelectionToolbar
@@ -236,10 +240,7 @@ export const ChatSelectionToolbar = ({
               anchor={editing.anchor}
               threadId={source.threadRef.threadId}
               disabled={editsDisabled}
-              onCancel={() => {
-                setEditing(null);
-                setSelected(null);
-              }}
+              onCancel={cancelEditing}
               onAnswerEdited={refreshEditedAnswer}
             />
           ) : (
@@ -254,10 +255,7 @@ export const ChatSelectionToolbar = ({
                 answerRewriteAvailability,
                 t,
               })}
-              onCancel={() => {
-                setEditing(null);
-                setSelected(null);
-              }}
+              onCancel={cancelEditing}
               onAnswerEdited={refreshEditedAnswer}
             />
           )}

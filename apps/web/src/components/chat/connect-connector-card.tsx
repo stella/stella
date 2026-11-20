@@ -218,8 +218,14 @@ const connectorBusyReason = ({ phase, t }: ConnectorBusyReasonOptions) => {
       return t("common.connecting");
     case "confirming":
       return t("common.verifying");
-    default:
+    case "failed":
+    case "idle":
+    case "token-required":
+    case "waiting":
       return t("chat.connectConnector.continuing");
+    default:
+      phase satisfies never;
+      return panic("Unhandled connector busy phase");
   }
 };
 
