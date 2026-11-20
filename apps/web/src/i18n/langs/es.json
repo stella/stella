@@ -4715,7 +4715,7 @@
       "exportAsSkill": "Exportar como .skill",
       "exportAsZip": "Exportar como .zip",
       "exportFailed": "No se pudo exportar la habilidad",
-      "exportSkill": "Exportar",
+      "exportSkill": "Exportar habilidad",
       "fileExists": "Ya existe un archivo con esta ruta",
       "howItRuns": "Cómo se ejecuta",
       "importFailureFetch": "No se pudo cargar la fuente de la habilidad.",

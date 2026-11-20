@@ -119,9 +119,10 @@ export const createSkillExport = (
             ),
           catch: (cause) =>
             new HandlerError({
-              status: 502,
-              code: "internal_error",
-              message: "The skill package could not be stored.",
+              status: 503,
+              code: "upstream_unavailable",
+              message:
+                "The skill package could not be stored. Retry the export.",
               cause,
             }),
         }),

@@ -105,7 +105,7 @@ type SkillExportFixture = Awaited<ReturnType<typeof seedSkillExportScaling>>;
 
 export const skillExportScalingScenarios = [
   {
-    name: "skill package export grant",
+    name: "skill archive export",
     definition: exportSkill,
     expectedRows: 1,
     // The archive grows with the files and is stored, never returned: the

@@ -23,6 +23,7 @@ import { readSkillResourceOriginals } from "@/api/lib/agent-skills/resource-orig
 import type { SkillResourceOriginal } from "@/api/lib/agent-skills/resource-originals";
 import { renderSkillFile } from "@/api/lib/agent-skills/skill-file";
 import type { SafeId } from "@/api/lib/branded-types";
+import { readBounded } from "@/api/lib/db/read-bounded";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { readTenantS3ArrayBuffer } from "@/api/lib/s3-presign";
@@ -49,6 +50,14 @@ const exportedResourcePath = (
   const replaced = `${path.slice(0, dot)}.md`;
   return taken.has(replaced) ? `${path}.md` : replaced;
 };
+
+/** A skill with more files or bytes than one package carries. */
+const skillTooLargeToExport = () =>
+  new HandlerError({
+    code: SKILL_EXPORT_TOO_LARGE_CODE,
+    status: 413,
+    message: "Skill is too large to export as one package",
+  });
 
 /**
  * A skill as read for export: everything but the originals' bytes, which
@@ -118,16 +127,23 @@ export const loadSkillPackageSource = async (
       }),
     );
   }
-  const rows = await tx
-    .select({
-      content: agentSkillResources.content,
-      path: agentSkillResources.path,
-    })
-    .from(agentSkillResources)
-    .where(eq(agentSkillResources.skillId, skillId))
-    .orderBy(asc(agentSkillResources.path))
-    // One row past the cap: a package must never drop a file silently.
-    .limit(LIMITS.agentSkillResourcesPerSkill + 1);
+  // Bounded by the per-skill file cap; a package must never drop a file
+  // silently, so a skill past it is refused below.
+  const read = await readBounded(
+    tx
+      .select({
+        content: agentSkillResources.content,
+        path: agentSkillResources.path,
+      })
+      .from(agentSkillResources)
+      .where(eq(agentSkillResources.skillId, skillId))
+      .orderBy(asc(agentSkillResources.path)),
+    LIMITS.agentSkillResourcesPerSkill,
+  );
+  if (read.type === "overflow") {
+    return Result.err(skillTooLargeToExport());
+  }
+  const { rows } = read;
   const originals = await readSkillResourceOriginals(tx, skillId);
   const packageBytes = rows.reduce(
     (total, { content, path }) =>
@@ -138,17 +154,8 @@ export const loadSkillPackageSource = async (
   );
   // Writes are held to the package size now; a skill saved before that
   // could hold more than one package carries.
-  if (
-    rows.length > LIMITS.agentSkillResourcesPerSkill ||
-    packageBytes > SKILL_PACKAGE_LIMITS.packageFilesMaxBytes
-  ) {
-    return Result.err(
-      new HandlerError({
-        code: SKILL_EXPORT_TOO_LARGE_CODE,
-        status: 413,
-        message: "Skill is too large to export as one package",
-      }),
-    );
+  if (packageBytes > SKILL_PACKAGE_LIMITS.packageFilesMaxBytes) {
+    return Result.err(skillTooLargeToExport());
   }
   const taken = new Set(rows.map(({ path }) => path));
   const resources: SkillArchiveEntry[] = [];
@@ -231,9 +238,9 @@ export const withSkillOriginals = async ({
     if (Result.isError(read)) {
       return Result.err(
         new HandlerError({
-          status: 502,
-          code: "internal_error",
-          message: "A file of the skill could not be read.",
+          status: 503,
+          code: "upstream_unavailable",
+          message: "A file of the skill could not be read. Retry the export.",
           cause: read.error,
         }),
       );

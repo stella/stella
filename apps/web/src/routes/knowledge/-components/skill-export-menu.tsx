@@ -1,4 +1,5 @@
-import { useMutation } from "@tanstack/react-query";
+import { useState } from "react";
+
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
@@ -7,9 +8,9 @@ import { Loader } from "@stll/ui/loader";
 import { Menu, MenuItem, MenuPopup, MenuTrigger } from "@stll/ui/menu";
 
 import type { TranslationKey } from "@/i18n/types";
-import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
-import { unwrapApiResponse } from "@/lib/errors/api";
+import { detached } from "@/lib/detached";
+import { toAPIError } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { toSafeId } from "@/lib/safe-id";
 
@@ -23,6 +24,35 @@ const EXPORT_FORMATS = [
   ["skill", "knowledge.agentSkills.exportAsSkill"],
 ] as const satisfies readonly (readonly [SkillExportFormat, TranslationKey])[];
 
+/**
+ * Ask for a package and hand its short-lived link to the browser, which
+ * downloads it as an attachment under the package's file name. Nothing a
+ * view shows changes, so no cache is touched.
+ */
+const exportSkillPackage = async ({
+  failedMessage,
+  format,
+  skillId,
+}: {
+  failedMessage: string;
+  format: SkillExportFormat;
+  skillId: string;
+}): Promise<void> => {
+  const response = await api
+    .skills({ skillId: toSafeId<"agentSkill">(skillId) })
+    .export.get({ query: { format } });
+  if (response.error) {
+    notifyUserError(toAPIError(response.error), failedMessage);
+    return;
+  }
+  const link = document.createElement("a");
+  link.href = response.data.downloadUrl;
+  link.rel = "noopener";
+  document.body.append(link);
+  link.click();
+  link.remove();
+};
+
 type SkillExportMenuProps = {
   skillId: string;
 };
@@ -33,57 +63,49 @@ type SkillExportMenuProps = {
  */
 export const SkillExportMenu = ({ skillId }: SkillExportMenuProps) => {
   const t = useTranslations();
-  const analytics = useAnalytics();
-  const exportPackage = useMutation({
-    mutationFn: async (format: SkillExportFormat) => {
-      const response = await api
-        .skills({ skillId: toSafeId<"agentSkill">(skillId) })
-        .export.get({ query: { format } });
-      // The presigned URL answers as an attachment under its file name.
-      const { downloadUrl } = unwrapApiResponse(response);
-      const link = document.createElement("a");
-      link.href = downloadUrl;
-      link.rel = "noopener";
-      document.body.append(link);
-      link.click();
-      link.remove();
-    },
-    onError: (error, format) => {
-      analytics.captureError(error, {
-        fingerprintKey: "SkillExportMenu:failure",
-        scope: { type: "handler", handlerId: `skill-export.${format}` },
-      });
-      notifyUserError(error, t("knowledge.agentSkills.exportFailed"));
-    },
-  });
+  const [pending, setPending] = useState(false);
+  const label = t("knowledge.agentSkills.exportSkill");
+
+  const start = (format: SkillExportFormat) => {
+    setPending(true);
+    detached(
+      exportSkillPackage({
+        failedMessage: t("knowledge.agentSkills.exportFailed"),
+        format,
+        skillId,
+      }).finally(() => setPending(false)),
+      "skill-editor.export-package",
+    );
+  };
 
   return (
     <Menu>
       <MenuTrigger
         render={
           <Button
-            aria-busy={exportPackage.isPending}
-            aria-label={t("knowledge.agentSkills.exportSkill")}
-            disabled={exportPackage.isPending}
+            aria-busy={pending}
+            aria-label={label}
+            disabled={pending}
             size="icon-sm"
+            title={label}
             variant="ghost"
           />
         }
       >
-        {exportPackage.isPending ? (
-          <Loader label={t("knowledge.agentSkills.exportSkill")} size="sm" />
+        {pending ? (
+          <Loader label={label} size="sm" />
         ) : (
           <DownloadIcon className="size-4" />
         )}
       </MenuTrigger>
       <MenuPopup>
-        {EXPORT_FORMATS.map(([format, label]) => (
+        {EXPORT_FORMATS.map(([format, itemLabel]) => (
           <MenuItem
-            disabled={exportPackage.isPending}
+            disabled={pending}
             key={format}
-            onClick={() => exportPackage.mutate(format)}
+            onClick={() => start(format)}
           >
-            {t(label)}
+            {t(itemLabel)}
           </MenuItem>
         ))}
       </MenuPopup>

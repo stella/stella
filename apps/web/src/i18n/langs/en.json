@@ -4715,7 +4715,7 @@
       "exportAsSkill": "Export as .skill",
       "exportAsZip": "Export as .zip",
       "exportFailed": "Couldn't export the skill",
-      "exportSkill": "Export",
+      "exportSkill": "Export skill",
       "fileExists": "A file with this path already exists",
       "howItRuns": "How it runs",
       "importFailureFetch": "The skill source could not be loaded.",

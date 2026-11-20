@@ -3895,7 +3895,7 @@
   "knowledge.agentSkills.exportAsSkill": "Export as .skill",
   "knowledge.agentSkills.exportAsZip": "Export as .zip",
   "knowledge.agentSkills.exportFailed": "Couldn't export the skill",
-  "knowledge.agentSkills.exportSkill": "Export",
+  "knowledge.agentSkills.exportSkill": "Export skill",
   "knowledge.agentSkills.fileExists": "A file with this path already exists",
   "knowledge.agentSkills.howItRuns": "How it runs",
   "knowledge.agentSkills.importFailureFetch": "The skill source could not be loaded.",

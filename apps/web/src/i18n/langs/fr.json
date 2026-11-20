@@ -4715,7 +4715,7 @@
       "exportAsSkill": "Exporter en .skill",
       "exportAsZip": "Exporter en .zip",
       "exportFailed": "Impossible d'exporter la compétence",
-      "exportSkill": "Exporter",
+      "exportSkill": "Exporter la compétence",
       "fileExists": "Un fichier avec ce chemin existe déjà",
       "howItRuns": "Mode d’exécution",
       "importFailureFetch": "La source de la compétence n’a pas pu être chargée.",

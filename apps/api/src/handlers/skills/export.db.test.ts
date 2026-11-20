@@ -124,6 +124,23 @@ const seedSkill = async ({
   return { id, slug };
 };
 
+/**
+ * `length` ASCII characters from a fixed pseudo-random sequence over
+ * base64 letters: deterministic, and too varied for DEFLATE to shrink much.
+ */
+const incompressibleText = (length: number): string => {
+  const alphabet =
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+  const codes = new Uint8Array(length);
+  // Park-Miller minimal standard generator: plain arithmetic, fixed seed.
+  let state = 20_261_120;
+  for (let index = 0; index < length; index += 1) {
+    state = (state * 48_271) % 2_147_483_647;
+    codes[index] = alphabet.codePointAt(state % alphabet.length) ?? 65;
+  }
+  return new TextDecoder().decode(codes);
+};
+
 type CapturedWrite = { data: Uint8Array; key: string };
 
 /** Object storage standing in for the bucket: key to bytes. */
@@ -413,6 +430,9 @@ describe("skill export", () => {
     const chunk = SKILL_PACKAGE_LIMITS.resourceMaxChars;
     const total = SKILL_PACKAGE_LIMITS.packageFilesMaxBytes;
     // The checklist SKILL.md names stays; ASCII parts fill the rest exactly.
+    // The parts hold text that does not compress, so the archive stays
+    // within the import's compression-ratio bound as a real package does.
+    const text = incompressibleText(chunk);
     const [checklist] = DEFAULT_RESOURCES;
     if (checklist === undefined) {
       throw new TypeError("expected the checklist resource");
@@ -421,7 +441,7 @@ describe("skill export", () => {
     const parts = total - checklist.content.length;
     for (let offset = 0; offset < parts; offset += chunk) {
       resources.push({
-        content: "a".repeat(Math.min(chunk, parts - offset)),
+        content: text.slice(0, Math.min(chunk, parts - offset)),
         path: `references/part-${String(resources.length).padStart(2, "0")}.md`,
       });
     }
