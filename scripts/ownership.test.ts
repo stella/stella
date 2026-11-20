@@ -180,6 +180,7 @@ test("independent row additions merge cleanly and pass the production check", ()
       'export const tableName = "metadata";\n',
     );
     write("apps/api/src/lib/db/transitions.ts", "export {};\n");
+    write("apps/api/src/lib/db/file-object-transitions.ts", "export {};\n");
     write(".gitignore", "node_modules\n");
     symlinkSync(
       path.join(repoRoot, "node_modules"),

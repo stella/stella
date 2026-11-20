@@ -12,6 +12,7 @@ import {
   BROWSER_EXTENSION_MESSAGE_SOURCE,
   type BrowserControlCommand,
   type BrowserControlResult,
+  browserControlResultPage,
   browserDocumentAddress,
   browserDownloadStagedPath,
   formatElementReference,
@@ -406,6 +407,38 @@ describe("browser control result contract", () => {
       status: "superseded",
     });
     expect(JSON.stringify(projected).length).toBeLessThan(1000);
+  });
+
+  test("names the page a read, a find or its projection read, as the extension reported it", () => {
+    const found = {
+      found: {
+        contentTrust: BROWSER_CONTROL_CONTENT_TRUST.untrustedWebContent,
+        headings: [{ cursor: CURSOR, level: 2, text: "Fees" }],
+        tabId: 7,
+        title: "Example",
+        type: "headings",
+        url: "https://example.com/fees",
+      },
+      protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
+      status: "found",
+    } satisfies BrowserControlResult;
+    const page = { title: "Example", url: "https://example.com/fees" };
+    expect(browserControlResultPage(found)).toEqual(page);
+    expect(
+      browserControlResultPage(supersedeBrowserControlResult(found)),
+    ).toEqual(page);
+    expect(
+      browserControlResultPage({
+        code: BROWSER_CONTROL_ERROR_CODE.timedOut,
+        message: "The page did not answer.",
+        protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
+        status: "error",
+      }),
+    ).toBeNull();
+    // A URL the model wrote is not an output the extension reported.
+    expect(
+      browserControlResultPage({ url: "https://example.com/" }),
+    ).toBeNull();
   });
 
   test("accepts find results bounded like a page", () => {

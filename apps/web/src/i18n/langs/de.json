@@ -165,7 +165,7 @@
     "invitation": {
       "declined": "Einladung abgelehnt",
       "declinedDescription": "Sie sind dieser Organisation nicht beigetreten.",
-      "description": "Sie wurden von {inviterEmail} als {role} zu {organizationName} eingeladen.",
+      "description": "Sie wurden von {inviterEmail}{role, select, owner { als Eigentümer} admin { als Administrator} member { als Mitglied} intern { als Praktikant} external { als externer Mitarbeiter} other {}} zu {organizationName} eingeladen.",
       "goToWorkspaces": "Zu Akten",
       "title": "Einladung zur Organisation",
       "verifyEmailHint": "Um {email} zu bestätigen, melden Sie sich ab und mit einem Einmalcode an, den wir an diese Adresse senden.",
@@ -1795,7 +1795,6 @@
       "searchAllPastChatsQuestion": "Alle Ihre Chats durchsuchen?",
       "uploadedDocumentPlaceholder": "(hochgeladenes Dokument)"
     },
-    "askAnything": "Beliebige Frage stellen",
     "askUser": {
       "custom": "Eigene Antwort",
       "edit": "Antworten bearbeiten",
@@ -1953,6 +1952,7 @@
     "historyTrimmed": "Ältere Nachrichten konnten nicht zusammengefasst werden. Diese Antwort berücksichtigt daher nur den jüngsten Teil der Unterhaltung.",
     "improvePrompt": "Prompt verbessern",
     "improvePromptDraftChanged": "Der Entwurf wurde geändert, daher wurde die Verbesserung nicht übernommen.",
+    "improvePromptEmpty": "Geben Sie einen Prompt ein, um ihn zu verbessern.",
     "improvePromptPlainTextOnly": "Prompts können nur als Klartext verbessert werden.",
     "improvePromptUnavailableAnonymized": "Im anonymisierten Modus können Prompts nicht verbessert werden.",
     "improvingPrompt": "Prompt wird verbessert…",
@@ -2162,9 +2162,17 @@
     },
     "placeholder": "Geben Sie hier Ihre Frage ein, / für Skills, @ für Kontext",
     "processSummary": {
-      "analyses": "{count, plural, one {# Analyse} other {# Analysen}}",
       "changesSaved": "{count, plural, one {# Änderung gespeichert} other {# Änderungen gespeichert}}",
+      "checkedRegisters": "Öffentliche Register geprüft",
       "documentEdits": "{count, plural, one {# Dokumentänderung} other {# Dokumentänderungen}}",
+      "readDocument": "Dokument gelesen",
+      "readDocuments": "Dokumente gelesen",
+      "searchedCaseLaw": "Rechtsprechung durchsucht",
+      "searchedChats": "Chatverlauf durchsucht",
+      "searchedLegislation": "Rechtsvorschriften durchsucht",
+      "searchedLegislationAndCaseLaw": "Rechtsvorschriften und Rechtsprechung durchsucht",
+      "searchedMatters": "Akten durchgesehen",
+      "searchedWeb": "Web durchsucht",
       "sourcesChecked": "{count, plural, one {# Quelle geprüft} other {# Quellen geprüft}}"
     },
     "promptImprovementStrategies": {
@@ -2251,6 +2259,7 @@
       "chipLabel": "Läuft auf: {place}",
       "cloud": "Cloud",
       "cloudDescription": "Läuft in der Cloud. Funktioniert überall.",
+      "hintAntigravity": "Installieren Sie Antigravity 1.5 oder neuer und melden Sie sich dort an",
       "hintCheck": "Prüfen Sie es in stella desktop",
       "hintInstall": "Installieren Sie es in stella desktop",
       "hintOffline": "Öffnen Sie stella desktop auf Ihrem Computer",
@@ -2303,6 +2312,7 @@
     "sendErrorToolsUnsupported": "Dieses Modell kann keine Tools verwenden und daher keine Fragen zu Ihrer Akte beantworten. Wechseln Sie zu einem Modell, das Tools unterstützt.",
     "sendErrorTurnTooLarge": "Diese Antwort ist zu umfangreich geworden, um vollständig übermittelt zu werden. Senden Sie eine neue Nachricht, um fortzufahren.",
     "sendPrompt": "Nachricht senden",
+    "sendPromptEmpty": "Geben Sie eine Nachricht ein, um sie zu senden.",
     "sendQueuedMessageNow": "Jetzt senden",
     "sendWithoutAnonymization": "Ohne Anonymisierung senden",
     "signInToChat": "Melden Sie sich an, um über dieses Dokument zu chatten",
@@ -2314,7 +2324,7 @@
       }
     },
     "sourceChips": {
-      "alsoConsulted": "Ebenfalls konsultiert ({count, number})"
+      "moreConsulted": "+{count, number} weitere geprüft"
     },
     "sourcePlaceholder": "Chat über {title}",
     "sourcePlaceholderAction": "Chat über",
@@ -2347,6 +2357,10 @@
     "stopResponse": "Stoppen",
     "stopped": "Gestoppt",
     "stopping": "Wird angehalten…",
+    "subagentRun": {
+      "browseWeb": "Websites werden besucht",
+      "generic": "Teilaufgabe wird bearbeitet"
+    },
     "suggestTitle": "Titel vorschlagen",
     "suggestTitleUnavailableAnonymized": "Für anonymisierte Konversationen sind keine Titelvorschläge verfügbar.",
     "suggestingTitle": "Titel wird vorgeschlagen…",
@@ -2394,6 +2408,8 @@
       "boe_search_legislation": "BOE-Gesetzessuche",
       "borme_get_summary": "BORME-Tageszusammenfassung",
       "business_registry_lookup": "Handelsregister durchsuchen",
+      "calendar_free_busy": "Verfügbarkeit im Kalender prüfen",
+      "calendar_list_events": "Kalendertermine lesen",
       "command_execution": "Befehl wird ausgeführt",
       "compare_versions": "Versionen vergleichen",
       "configure_template_fields": "Vorlagenfelder konfigurieren",
@@ -2933,6 +2949,7 @@
     "playbooks": "Playbooks",
     "preparing": "Wird vorbereitet…",
     "preview": "Vorschau",
+    "previewTruncated": "Der vollständige Text ist in dieser Vorschau nicht verfügbar.",
     "previous": "Zurück",
     "previousMatch": "Vorheriger Treffer",
     "print": "Drucken",
@@ -4700,9 +4717,13 @@
       "discoveredSkills": "{count, plural, one {# Skill gefunden} other {# Skills gefunden}}",
       "discoveryEmpty": "In diesem Repository oder Ordner wurden keine Skills gefunden.",
       "discoverySkippedInvalid": "{count, plural, one {# ungültiger Skill wurde übersprungen} other {# ungültige Skills wurden übersprungen}}",
-      "dropPack": ".zip oder SKILL.md hier ablegen, um den Skill zu importieren",
+      "dropPack": ".zip/.skill oder SKILL.md hier ablegen, um den Skill zu importieren",
       "editSkill": "Skill bearbeiten",
       "enableSkill": "Skill aktivieren",
+      "exportAsSkill": "Als .skill exportieren",
+      "exportAsZip": "Als .zip exportieren",
+      "exportFailed": "Der Skill konnte nicht exportiert werden",
+      "exportSkill": "Skill exportieren",
       "fileExists": "Eine Datei mit diesem Pfad existiert bereits",
       "howItRuns": "Ausführung",
       "importFailureFetch": "Die Skill-Quelle konnte nicht geladen werden.",
@@ -4757,8 +4778,8 @@
           "name": "Dokument zusammenfassen"
         }
       },
-      "uploadHelp": "Verwenden Sie eine SKILL.md-Datei oder einen .zip-Ordner mit SKILL.md und optionalen schreibgeschützten Ressourcen.",
-      "uploadPack": ".zip oder SKILL.md hochladen",
+      "uploadHelp": "Verwenden Sie eine SKILL.md-Datei oder einen .zip/.skill-Ordner mit SKILL.md und optionalen schreibgeschützten Ressourcen.",
+      "uploadPack": ".zip/.skill oder SKILL.md hochladen",
       "urlPlaceholder": "https://github.com/org/repo/tree/main/pfad/zum/skill",
       "version": "Version: {version}"
     },
@@ -5381,6 +5402,7 @@
       "defaultModel": "Standard: {model}",
       "defaultModelOption": "Standard",
       "defaultRationale": {
+        "browse": "Für die Arbeit auf Websites im Browser.",
         "chat": "Für Gespräche und alltägliche Fragen.",
         "fast": "Für kurze Routineaufgaben.",
         "pdf": "Zum Lesen und Analysieren von PDF-Dokumenten.",
@@ -5394,6 +5416,11 @@
       "googleKeyRestricted": "Prüfen Sie die API-, IP-Adress- und Referrer-Einschränkungen dieses Schlüssels in Google Cloud. Lassen Sie die benötigte API und Anfragen Ihres Servers zu und versuchen Sie es erneut.",
       "keepSavedKey": "Gespeicherten Schlüssel behalten",
       "keyFormatHint": "Dieser Schlüssel hat ein ungewöhnliches Format für {provider}. Speichern Sie ihn, um ihn beim Anbieter zu prüfen.",
+      "keyNeed": {
+        "builtIn": "Optional. Ohne eigenen Schlüssel nutzt die KI in dieser Organisation von stella bereitgestellte Modelle.",
+        "keyRequired": "Die KI in dieser Organisation braucht einen Anbieter-Schlüssel. Fügen Sie einen hinzu, um die KI einzuschalten.",
+        "ownKeys": "Die KI in dieser Organisation nutzt die Schlüssel unten."
+      },
       "modelForRole": "Modell für {role}",
       "modelIdPlaceholder": "Modelle suchen",
       "modelsDescription": "Wählen Sie für jede KI-Kategorie einen Anbieter und ein angebotenes multimodales Modell.",
@@ -5401,6 +5428,7 @@
       "newApiKey": "Neuer API-Schlüssel",
       "newApiKeyDescription": "Er ersetzt den gespeicherten Schlüssel beim Speichern.",
       "noModelResults": "Keine passenden angebotenen Modelle",
+      "noProviders": "Noch keine Anbieter-Schlüssel hinzugefügt.",
       "openaiInsufficientQuota": "Prüfen Sie das Budget Ihres OpenAI-Projekts und die API-Abrechnung. Laden Sie Guthaben auf oder erhöhen Sie das betreffende Limit und versuchen Sie es erneut.",
       "openaiProjectOrganizationMismatch": "Verwenden Sie einen API-Schlüssel aus dem vorgesehenen OpenAI-Projekt und der vorgesehenen Organisation. Prüfen Sie deren Zugriffseinstellungen und versuchen Sie es erneut.",
       "openrouterNoCredits": "Laden Sie in der OpenRouter-Abrechnung Guthaben auf und versuchen Sie es erneut.",
@@ -5423,6 +5451,8 @@
       "providerForRole": "Provider für {role}",
       "providerKeyInvalid": "{provider} hat den Schlüssel abgelehnt. Bitte überprüfen Sie ihn.",
       "providerKeyInvalidShort": "Ungültig",
+      "providerModes": "Verwendet für: {modes}",
+      "providerModesNone": "Für keinen Modus verwendet. Weisen Sie ihn unter Erweitert einem Modus zu.",
       "providerSetupConsole": "Anbietereinstellungen öffnen",
       "providersDescription": "Fügen Sie die Provider-Zugangsdaten hinzu, die stella verwenden soll.",
       "providersPanel": "Provider",
@@ -5432,6 +5462,7 @@
       "replaceKey": "Schlüssel ersetzen",
       "roleUnavailable": "{provider} unterstützt diese Rolle nicht.",
       "roles": {
+        "browse": "Browsen",
         "chat": "Chat",
         "fast": "Schnell",
         "pdf": "PDF",
@@ -5448,6 +5479,7 @@
       "title": "Organisationsanweisungen",
       "tooLong": "Die Anweisungen dürfen höchstens {maxLength} Zeichen enthalten."
     },
+    "createdSwitchPrompt": "Die Organisation <bdi>{name}</bdi> wurde erstellt. Wechseln Sie zu ihr, um sie einzurichten und Mitglieder einzuladen.",
     "creationEvaluationLimitReached": "Sie haben alle {limit} Testzeiträume für Organisationen genutzt. Durch das Löschen einer Organisation wird kein Testzeitraum wieder verfügbar. Nutzen Sie eine bestehende Organisation oder wenden Sie sich für einen kostenpflichtigen Zugang an den Support.",
     "creationInvalidName": "Geben Sie einen gültigen Organisationsnamen ein (höchstens {maxLength} Zeichen).",
     "creationNotAllowed": "Mit diesem Konto können keine Organisationen erstellt werden.",
@@ -5493,7 +5525,7 @@
     "members": {
       "billingAccess": "Zugriff auf Abrechnungsdaten",
       "changeRole": "Rolle ändern",
-      "confirmRoleChangeDescription": "Die Rolle von {email} wird von {oldRole} zu {newRole} geändert.",
+      "confirmRoleChangeDescription": "Die Rolle von {email} wird {oldRole, select, owner {von Eigentümer} admin {von Administrator} member {von Mitglied} intern {von Praktikant} external {von externem Mitarbeiter} other {}} {newRole, select, owner {auf Eigentümer} admin {auf Administrator} member {auf Mitglied} intern {auf Praktikant} external {auf externen Mitarbeiter} other {}} geändert.",
       "confirmRoleChangeTitle": "Rolle ändern",
       "joined": "Beigetreten",
       "noMembersFound": "Keine Mitglieder gefunden",
@@ -5519,6 +5551,13 @@
     "startOverDescription": "Die ursprüngliche Anfrage hat möglicherweise bereits eine Organisation erstellt. Prüfen Sie Ihre Organisationen, bevor Sie neu beginnen; eine neue Anfrage könnte eine weitere Organisation erstellen.",
     "startOverTitle": "Eine neue Erstellungsanfrage starten?",
     "switchOrganization": "Organisation wechseln"
+  },
+  "organizationSetup": {
+    "aiAction": "KI einrichten",
+    "aiOptional": "Eigene Schlüssel für KI-Anbieter sind optional: Ohne sie nutzt die KI von stella bereitgestellte Modelle.",
+    "aiRequired": "Die KI in dieser Organisation braucht einen Anbieter-Schlüssel, bevor jemand sie nutzen kann.",
+    "invite": "Laden Sie Kolleginnen und Kollegen ein, damit sie hier mit Ihnen arbeiten können.",
+    "title": "Neue Organisation einrichten"
   },
   "publicTools": {
     "addSkill": "Skill hinzufügen",
@@ -5959,7 +5998,7 @@
     "organization": {
       "activeMembers": "Aktive Mitglieder",
       "ai": "KI-Konfiguration",
-      "aiDescription": "Verbinden Sie Ihre eigenen API-Schlüssel für KI-Anbieter.",
+      "aiDescription": "Legen Sie fest, wie KI in dieser Organisation arbeitet.",
       "anonymization": {
         "addPlaceholder": "Immer zu maskierender Begriff (z. B. Teamname)",
         "deleteAction": "Begriff löschen",
@@ -6125,7 +6164,7 @@
         "title": "KI-Abrechnungsentwürfe"
       },
       "dataBoxes": {
-        "description": "Eine von einer dieser Databoxen gesendete Nachricht wird als ausgehend abgelegt, eine an sie gesendete als eingehend. Jede Änderung leitet die Richtung bereits abgelegter Nachrichten in den Akten, auf die Sie zugreifen können, neu ab.",
+        "description": "Nachrichten, die von diesen Databoxen gesendet werden, werden als ausgehend abgelegt, Nachrichten an sie als eingehend. Änderungen gelten auch für bereits abgelegte Nachrichten.",
         "invalid": "Eine Databox-ID besteht aus sieben Buchstaben oder Ziffern.",
         "remove": "Databox {address} entfernen",
         "title": "Databoxen der Organisation"
@@ -6158,6 +6197,7 @@
         "title": "Gedächtnis-Extraktion",
         "toggleLabel": "Im Hintergrund Erinnerungen aus dem Chatverlauf vorschlagen"
       },
+      "organizationIdHint": "Dauerhafte ID, die sich nie ändert. Verwenden Sie sie für Supportanfragen und beim Einrichten von Integrationen.",
       "pastInvitations": "Frühere Einladungen",
       "pendingInvitations": "Ausstehende Einladungen",
       "practiceJurisdictions": "Jurisdiktionen",
@@ -6171,11 +6211,12 @@
       "renameTitle": "Organisation umbenennen",
       "renameTypeToConfirm": "Geben Sie zur Bestätigung den neuen Namen ein: {name}",
       "slug": {
-        "change": "Kennung ändern",
-        "conflict": "Diese Kennung wird bereits von einer anderen Organisation verwendet.",
-        "description": "Wählen Sie eine neue Kennung oder lassen Sie eine zufällige erstellen. Die bisherige Kennung funktioniert danach nicht mehr.",
-        "opaque": "Zufällige Kennung erstellen",
-        "title": "Organisationskennung"
+        "change": "Kurznamen ändern",
+        "conflict": "Dieser Kurzname wird bereits von einer anderen Organisation verwendet.",
+        "description": "Wählen Sie einen neuen Kurznamen oder lassen Sie einen zufälligen erstellen. Der bisherige Kurzname funktioniert danach nicht mehr.",
+        "hint": "Ein eindeutiger Kurzname für diese Organisation, unabhängig von ihrem Anzeigenamen.",
+        "opaque": "Zufälligen Kurznamen erstellen",
+        "title": "Kurzname der Organisation"
       },
       "timePolicy": {
         "description": "Legen Sie Zeitrundung, Bearbeitungsfristen und Monatssperren fest.",
@@ -6299,6 +6340,14 @@
     },
     "reconnectRequired": "Anmeldung abgelaufen",
     "title": "SharePoint und OneDrive"
+  },
+  "signedFile": {
+    "layer": "Signaturebene {number, number}",
+    "noReadableContent": "Für die Vorschau sind keine lesbaren Inhalte verfügbar.",
+    "pdfUnavailable": "Die PDF-Vorschau ist nicht verfügbar.",
+    "unknownSigner": "Unbekannte unterzeichnende Person",
+    "unreadable": "Die signierte Datei konnte nicht gelesen werden.",
+    "unverified": "Die Signaturen wurden nicht geprüft."
   },
   "skillHistory": {
     "acceptStale": "Annehmen und neuere Änderungen überschreiben",
@@ -6440,6 +6489,10 @@
     "versionChangesRemoved": "{count, plural, one {# Vorschrift gestrichen} other {# Vorschriften gestrichen}}",
     "versionChangesWords": "{inserted, plural, one {# Wort eingefügt} other {# Wörter eingefügt}}, {deleted, plural, one {# Wort gestrichen} other {# Wörter gestrichen}}",
     "wordingVersionUnknown": "Datum der Wortlautversion nicht verfügbar"
+  },
+  "structuredDocument": {
+    "noReadableContent": "Für die Vorschau ist kein lesbarer Text verfügbar.",
+    "textOnly": "Textvorschau ohne Seitenlayout und Bilder."
   },
   "styleSets": {
     "create": "Erstellen",
@@ -7200,6 +7253,7 @@
         "title": "Word-Vorlagenverknüpfungen entfernen?",
         "unknownLocation": "Vorlagenspeicherort: eine Adresse, die stella nicht prüfen kann"
       },
+      "checkingFiles": "Dateien werden geprüft…",
       "desktopEdit": {
         "accountRequiredTitle": "Verbinden Sie stella desktop mit Ihrem Konto",
         "action": "Im Desktop bearbeiten",
@@ -7243,6 +7297,14 @@
       "downloadPdf": "Als PDF herunterladen",
       "downloadSearchablePdf": "Durchsuchbare PDF",
       "downloadWithComments": "Mit Kommentaren herunterladen",
+      "duplicateUpload": {
+        "description": "{count, plural, one {# Datei ist mit einem Dokument identisch, das diese Akte bereits enthält.} other {# Dateien sind mit Dokumenten identisch, die diese Akte bereits enthält.}} Wählen Sie für jede Datei aus, was geschehen soll.",
+        "matchedDocument": "Identisch mit <bdi>{documentName}</bdi>",
+        "skip": "Diese Datei überspringen",
+        "skipAll": "Duplikate überspringen",
+        "title": "Bereits in dieser Akte vorhanden",
+        "uploadAnyway": "Trotzdem hochladen"
+      },
       "emptyFile": "Die Datei ist leer.",
       "fileTooLarge": "Die Datei ist größer als {limit, number} MB.",
       "includeReferenceNumber": "Aktenzeichen einfügen",

@@ -4,6 +4,7 @@ import listSharepointDriveItems from "@/api/handlers/sharepoint/drives/items/lis
 import listSharepointDrives from "@/api/handlers/sharepoint/drives/list";
 import importSharepointFiles from "@/api/handlers/sharepoint/imports/create";
 import sharepointOAuthCallback from "@/api/handlers/sharepoint/oauth-callback";
+import setSharepointCapabilities from "@/api/handlers/sharepoint/set-capabilities";
 import setSharepointEnablement from "@/api/handlers/sharepoint/set-enablement";
 import listSharepointSites from "@/api/handlers/sharepoint/sites/list";
 import sharepointConnectionStatus from "@/api/handlers/sharepoint/status";
@@ -21,10 +22,12 @@ export const sharepointRoute = mount(
         DELETE: disconnectSharepoint,
       },
     }),
-    // Browsing and import answer as an absent route while the deployment flag is off;
-    // each handler still checks the organization's opt-in.
+    // Capability policy, browsing and import answer as an absent route while
+    // the deployment flag is off; each handler still checks the organization's
+    // opt-in. `/enablement` stays the always-available whole-org kill.
     routes(
       {
+        "/capabilities": { PUT: setSharepointCapabilities },
         "/sites": { GET: listSharepointSites },
         "/drives": { GET: listSharepointDrives },
         "/drives/:driveId/items/:itemId/children": {

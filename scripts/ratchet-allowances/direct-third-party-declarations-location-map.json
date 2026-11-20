@@ -1,0 +1,5 @@
+{
+  "metric": "direct-third-party-declarations",
+  "delta": 2,
+  "reason": "@stll/transactional renders the sign-in location map: world-atlas supplies the Natural Earth country outlines it draws (data only, no code), and the catalog's better-result supplies panic for the decoder's impossible topology states, as in the other workspace packages."
+}

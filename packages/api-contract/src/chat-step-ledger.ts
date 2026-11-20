@@ -1,5 +1,8 @@
 import * as v from "valibot";
 
+import { chatRefTokenSchema } from "./chat-ref-token";
+import { isSafeIdValue } from "./safe-id";
+
 /**
  * What a chat step looked up and what came back, recorded by the server for
  * the person reading the step, never for the model.
@@ -90,17 +93,19 @@ const chatStepRefSchema = v.variant("type", [
     url: nullableText,
     sourceUrl: nullableText,
   }),
-  // A matter item is named by its title alone. Tool results never carry a
-  // tenant id (the model reads chat refs; the provider history redacts any
-  // matter id), and the ledger rides on a tool result, so it carries none
-  // either.
+  // A matter item is named by its title and by the chat ref the model reads
+  // it by, never by an id: the ledger rides on a tool result, and a tool
+  // result carries no tenant id. The stored message binds each ref it holds
+  // (`readChatStepRefTargets`), which is where the item opens.
   v.strictObject({
     type: v.literal("document"),
+    ref: chatRefTokenSchema("entity"),
     title: boundedText,
     kind: nullableText,
   }),
   v.strictObject({
     type: v.literal("matter"),
+    ref: chatRefTokenSchema("matter"),
     title: boundedText,
   }),
 ]);
@@ -170,6 +175,74 @@ export const withoutChatStepLedger = (output: unknown): unknown => {
   }
   const { [CHAT_STEP_LEDGER_KEY]: _ledger, ...rest } = output;
   return rest;
+};
+
+/** Where a matter item of a step opens: the item its chat ref is bound to. */
+export type ChatStepRefTarget =
+  | { type: "document"; entityId: string; matterId: string }
+  | { type: "matter"; matterId: string };
+
+const boundResource = <TType extends "entity" | "workspace">(type: TType) =>
+  v.object({
+    type: v.literal(type),
+    id: v.pipe(v.string(), v.check(isSafeIdValue)),
+  });
+
+/** The two ref bindings a step names; any other binding is skipped. */
+const refBindingSchema = v.variant("kind", [
+  v.object({
+    kind: v.literal("entity"),
+    ref: chatRefTokenSchema("entity"),
+    entity: boundResource("entity"),
+    workspace: boundResource("workspace"),
+  }),
+  v.object({
+    kind: v.literal("matter"),
+    ref: chatRefTokenSchema("matter"),
+    workspace: boundResource("workspace"),
+  }),
+]);
+
+const refContextSchema = v.object({
+  version: v.literal(2),
+  refs: v.array(v.unknown()),
+});
+
+/**
+ * Where each matter item a message's steps name opens, by its chat ref: the
+ * binding the stored message keeps for every ref it holds
+ * (`metadata.refContext`, written by the API's ref registry when the turn is
+ * stored). A ref the message does not bind opens nowhere, and a binding is
+ * only a pointer: whether the viewer may still open its item is that item's
+ * own authorized read to decide. Stored metadata is untrusted at the page,
+ * so it is parsed, never cast.
+ */
+export const readChatStepRefTargets = (
+  refContext: unknown,
+): ReadonlyMap<string, ChatStepRefTarget> => {
+  const context = v.safeParse(refContextSchema, refContext);
+  const targets = new Map<string, ChatStepRefTarget>();
+  if (!context.success) {
+    return targets;
+  }
+  for (const entry of context.output.refs) {
+    const binding = v.safeParse(refBindingSchema, entry);
+    if (!binding.success) {
+      continue;
+    }
+    const { output } = binding;
+    targets.set(
+      output.ref,
+      output.kind === "entity"
+        ? {
+            type: "document",
+            entityId: output.entity.id,
+            matterId: output.workspace.id,
+          }
+        : { type: "matter", matterId: output.workspace.id },
+    );
+  }
+  return targets;
 };
 
 /** The key's JSON spelling, for a cheap check before parsing tool content. */

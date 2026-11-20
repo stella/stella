@@ -203,12 +203,6 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
     transports: ["module:@stll/fetch"],
   },
   {
-    path: "apps/api/src/handlers/sharepoint/graph-oauth.ts",
-    class: "third-party",
-    reason: "Exchanges credentials with Microsoft identity endpoints.",
-    transports: ["module:@stll/fetch"],
-  },
-  {
     path: "apps/api/src/handlers/soft-law/publisher-access.ts",
     class: "third-party",
     reason: "Sends publisher requests through the soft-law access policy.",
@@ -971,7 +965,7 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
     transports: ["module:@stll/fetch"],
   },
   {
-    path: "apps/web/src/routes/agent-claim.tsx",
+    path: "apps/web/src/routes/-agent-claim.page.tsx",
     class: "operator-configured-infrastructure",
     reason: "Confirms agent identity claims through the configured API.",
     transports: ["module:@stll/fetch"],
@@ -1094,6 +1088,13 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
     reason:
       "Standalone CLI owns MCP transport and observes response evidence and action-admission refusals.",
     transports: ["module:@modelcontextprotocol/client"],
+  },
+  {
+    path: "packages/cli/src/save-download.ts",
+    class: "package-owned-client",
+    reason:
+      "Standalone CLI saves a server-issued download URL to the path the caller named, under its download deadline.",
+    transports: ["global:fetch"],
   },
   {
     path: "packages/cli/src/upload-document.ts",
@@ -1226,6 +1227,10 @@ export const OUTBOUND_PERMIT_GRANT_OWNERS = [
     reason: "Native chat tool boundary for registry requests.",
   },
   {
+    path: "apps/api/src/handlers/chat/tools/calendar-tools.ts",
+    reason: "Native chat tool boundary for delegated calendar reads.",
+  },
+  {
     path: "apps/api/src/handlers/chat/tools/counterparty-check-tools.ts",
     reason: "Native chat tool boundary for counterparty checks.",
   },
@@ -1327,6 +1332,16 @@ export const OUTBOUND_PERMIT_GRANT_OWNERS = [
   {
     path: "apps/api/src/handlers/organization-settings/update-ai-config.ts",
     reason: "Issues request authority for provider configuration validation.",
+  },
+  {
+    path: "apps/api/src/handlers/sharepoint/oauth-callback.ts",
+    reason:
+      "Direct OAuth callback boundary for token exchange and account lookup.",
+  },
+  {
+    path: "apps/api/src/handlers/sharepoint/session.ts",
+    reason:
+      "Direct route boundary for delegated Microsoft file reads and imports.",
   },
   {
     path: "apps/api/src/handlers/reports/report-export-queue.ts",

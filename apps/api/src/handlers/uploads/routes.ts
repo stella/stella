@@ -16,8 +16,8 @@ import { createRedisRateLimit } from "@/api/lib/rate-limit/redis-context";
  *        → { uploadId, url, expiresAt, headers }
  *
  *   POST /uploads/:workspaceId/entity-create/preflight
- *        body: { entityCount, propertyId?, parentId? }
- *        → { ok: true }
+ *        body: { entityCount, propertyId?, parentId?, sha256Hexes? }
+ *        → { ok: true, duplicates } // documents here with the same bytes
  *
  *   POST /uploads/:workspaceId/entity-create/tree
  *        body: { propertyId?, parentId?, directories, files }

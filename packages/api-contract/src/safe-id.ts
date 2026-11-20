@@ -81,6 +81,7 @@ export type SafeIdType =
   | "fileChatThread"
   | "templateChatThread"
   | "templateDeletionCleanupRequest"
+  | "agentSkillOriginalCleanupRequest"
   | "clause"
   | "clauseCategory"
   | "clauseVariant"

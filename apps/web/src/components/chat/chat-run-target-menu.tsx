@@ -9,6 +9,8 @@ import {
   CHAT_RUN_TARGET_KIND,
   type ChatLocalRunHarness,
   type ChatRunTarget,
+  type DesktopSetUpHarness,
+  isDesktopSetUpHarness,
 } from "@stll/api-contract/chat-run-target";
 import { desktopAgentSettingsUrl } from "@stll/api-contract/desktop-account-link";
 import { DESKTOP_RUNNER_LINKED_FOLDER_STATE } from "@stll/api-contract/desktop-runner";
@@ -89,6 +91,7 @@ const UNAVAILABLE_PERMISSION_KEY = {
 const FIXED_PERMISSION_KEY = {
   codex: "chat.localRun.permissionSandboxed",
   "claude-code": "chat.localRun.permissionAskDescription",
+  antigravity: "chat.localRun.permissionAskDescription",
 } as const satisfies Record<ChatLocalRunHarness, TranslationKey>;
 
 /**
@@ -185,10 +188,18 @@ const UNAVAILABLE_HINT_KEY = {
   offline: "chat.runOn.hintOffline",
 } as const satisfies Record<UnavailableState, TranslationKey>;
 
+/**
+ * Agents the member installs and signs in to themselves, outside stella
+ * desktop: what to do about one that cannot take a turn yet.
+ */
+const MEMBER_SETUP_HINT_KEY =
+  "chat.runOn.hintAntigravity" satisfies TranslationKey;
+
 export const useHarnessHint = () => {
   const t = useTranslations();
   const stateLabel = useHarnessStateLabel();
   return (option: ChatLocalHarnessOption): string | null => {
+    const memberSetup = !isDesktopSetUpHarness(option.harness);
     switch (option.state) {
       case "ready":
         return null;
@@ -198,6 +209,9 @@ export const useHarnessHint = () => {
       case "not_installed":
       case "unsupported":
       case "unavailable":
+        return memberSetup
+          ? t(MEMBER_SETUP_HINT_KEY)
+          : t(UNAVAILABLE_HINT_KEY[option.state]);
       case "offline":
         return t(UNAVAILABLE_HINT_KEY[option.state]);
       default:
@@ -294,7 +308,7 @@ const OfflineHarnessItem = ({
 
 /** A harness the member sets up at its card in stella desktop's Settings. */
 type DesktopSetupOption = {
-  harness: ChatLocalRunHarness;
+  harness: DesktopSetUpHarness;
   state: Exclude<UnavailableState, "offline">;
 };
 
@@ -302,7 +316,7 @@ type DesktopSetupOption = {
 const SIGN_IN_STEPS_KEY = {
   codex: "chat.runOn.stepsSignInCodex",
   "claude-code": "chat.runOn.stepsSignInClaudeCode",
-} as const satisfies Record<ChatLocalRunHarness, TranslationKey>;
+} as const satisfies Record<DesktopSetUpHarness, TranslationKey>;
 
 /**
  * The way to the harness's card by hand, said once the link to it was
@@ -470,12 +484,21 @@ export const ChatRunTargetMenu = ({
             );
           }
           if (option.state !== "ready") {
+            const { harness } = option;
+            if (!isDesktopSetUpHarness(harness)) {
+              // Set up outside stella desktop: there is nothing to open.
+              return (
+                <MenuItem disabled key={harness}>
+                  <PlaceLabel description={hint(option) ?? ""} title={name} />
+                </MenuItem>
+              );
+            }
             return (
               <DesktopSetupHarnessItem
                 hint={hint(option) ?? ""}
                 key={option.harness}
                 name={name}
-                option={{ harness: option.harness, state: option.state }}
+                option={{ harness, state: option.state }}
               />
             );
           }

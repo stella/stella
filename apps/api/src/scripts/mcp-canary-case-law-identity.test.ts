@@ -211,4 +211,90 @@ describe("the case-law identity canary", () => {
   test("a country whose search is closed has nothing to sample", async () => {
     expect((await outcomeFor(exact, "AUT"))?.status).toBe("not_applicable");
   });
+
+  test("a search still running is followed by its continuation token", async () => {
+    const correct = deployment(exact);
+    const followed: Record<string, unknown>[] = [];
+    const outcome = (
+      await sampleCaseLawIdentities(async (name, args) => {
+        const court = args["court"];
+        if (name !== "search_case_law" || typeof court !== "string") {
+          return await correct(name, args);
+        }
+        if (args["continuation_token"] === undefined) {
+          return {
+            type: "ok",
+            payload: {
+              status: "running",
+              continuationToken: `token-${court}`,
+              retryAfterMs: 0,
+            },
+          };
+        }
+        followed.push(args);
+        return await correct(name, args);
+      })
+    ).find((entry) => entry.country === "CZE")?.outcome;
+    expect(outcome?.status).toBe("passed");
+    expect(new Set(followed.map((args) => args["continuation_token"]))).toEqual(
+      new Set([`token-${CONSTITUTIONAL}`, `token-${SUPREME}`]),
+    );
+  });
+
+  test("a search that never finishes fails instead of reading as unreadable", async () => {
+    const correct = deployment(exact);
+    const outcome = (
+      await sampleCaseLawIdentities(async (name, args) =>
+        name === "search_case_law" && args["court"] === SUPREME
+          ? {
+              type: "ok",
+              payload: {
+                status: "running",
+                continuationToken: "token",
+                retryAfterMs: 0,
+              },
+            }
+          : await correct(name, args),
+      )
+    ).find((entry) => entry.country === "CZE")?.outcome;
+    expect(outcome?.status).toBe("failed");
+    expect(outcome?.detail).toContain(`${SUPREME}: search still running after`);
+  });
+
+  test("the last follow-up's wait is not spent once the budget is gone", async () => {
+    const correct = deployment(exact);
+    const waits: number[] = [];
+    const outcome = (
+      await sampleCaseLawIdentities(
+        async (name, args) => {
+          if (
+            name !== "search_case_law" ||
+            args["country"] !== "CZE" ||
+            args["court"] !== SUPREME
+          ) {
+            return await correct(name, args);
+          }
+          // Each token counts the follow-ups so far; the answer to the
+          // tenth, the last the budget allows, asks for its own wait.
+          const token = args["continuation_token"];
+          const followUps = typeof token === "string" ? Number(token) : 0;
+          return {
+            type: "ok",
+            payload: {
+              status: "running",
+              continuationToken: String(followUps + 1),
+              retryAfterMs: followUps === 10 ? 5000 : 1,
+            },
+          };
+        },
+        {
+          wait: async (milliseconds) => {
+            waits.push(milliseconds);
+          },
+        },
+      )
+    ).find((entry) => entry.country === "CZE")?.outcome;
+    expect(outcome?.detail).toContain(`${SUPREME}: search still running after`);
+    expect(waits).toEqual(Array.from({ length: 10 }, () => 1));
+  });
 });

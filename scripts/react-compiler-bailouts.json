@@ -202,14 +202,14 @@
       "Logical assignment operators (||=, &&=, ??=) are not yet supported"
     ]
   },
-  "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.document.tsx::RouteComponentInner": {
+  "apps/web/src/routes/_protected.workspaces/$workspaceId/-$viewId.document.page.tsx::RouteComponentInner": {
     "memos": 2,
     "reasons": [
       "Cannot access refs during render",
       "Logical assignment operators (||=, &&=, ??=) are not yet supported"
     ]
   },
-  "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.document.tsx::VersionDropZone": {
+  "apps/web/src/routes/_protected.workspaces/$workspaceId/-$viewId.document.page.tsx::VersionDropZone": {
     "memos": 0,
     "reasons": [
       "`try`/`finally` without `catch` is not supported by React Compiler"
@@ -253,7 +253,7 @@
       "(BuildHIR::lowerStatement) Handle TryStatement with a finalizer ('finally') clause"
     ]
   },
-  "apps/web/src/routes/auth/organization.tsx::OrganizationList": {
+  "apps/web/src/routes/auth/-organization.page.tsx::OrganizationList": {
     "memos": 0,
     "reasons": ["Cannot access refs during render"]
   },
@@ -276,7 +276,7 @@
       "(BuildHIR::lowerStatement) Handle TryStatement with a finalizer ('finally') clause"
     ]
   },
-  "apps/web/src/routes/knowledge/clauses.tsx::RouteComponent": {
+  "apps/web/src/routes/knowledge/-member/clauses.page.tsx::RouteComponent": {
     "memos": 5,
     "reasons": [
       "`try`/`finally` without `catch` is not supported by React Compiler"

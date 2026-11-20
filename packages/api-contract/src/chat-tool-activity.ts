@@ -3,10 +3,13 @@
  * them (the web app and the phone). A tool call is internal plumbing; what a
  * person sees is a translated label for it ("Reading workspace data", not
  * `execute_typescript`) and, for a settled run of steps, what the run got
- * done ("3 sources checked · 2 analyses"). Each app translates the labels
- * through its own catalogue under the label's name.
+ * done ("Searched legislation and case law · 5 lookups"). Each app
+ * translates the labels through its own catalogue under the label's name.
  */
+import { panic } from "better-result";
+
 import { ASK_USER_TOOL_NAME, CREATE_DOCUMENT_TOOL_NAME } from "./chat";
+import { codeStepReads, type ScriptReadArea } from "./chat-code-step";
 import { CONNECT_CONNECTOR_TOOL_NAME } from "./chat-connector";
 import { CHAT_LOCAL_RUN_QUESTION_TOOL } from "./chat-local-run-question";
 import { REQUEST_SECRET_TOOL_NAME } from "./chat-secret";
@@ -24,6 +27,8 @@ type ChatToolDisplay = {
 
 /** Every tool the chat registers today. */
 const BUILT_IN_CHAT_TOOL_DISPLAY = {
+  calendar_list_events: { category: "research", label: "calendar_list_events" },
+  calendar_free_busy: { category: "research", label: "calendar_free_busy" },
   show_visual: { category: "artifact", label: "show_visual" },
   show_app: { category: "artifact", label: "show_app" },
   add_comment: { category: "mutation", label: "add_comment" },
@@ -361,6 +366,7 @@ export type ChatActivityPart = {
   readonly type: string;
   readonly name?: unknown;
   readonly state?: unknown;
+  readonly input?: unknown;
   readonly output?: unknown;
   readonly content?: unknown;
 };
@@ -428,48 +434,236 @@ export const isVisibleProcessStep = (
   );
 };
 
-/** The kinds of work the model does itself; a person answers the rest. */
-export type ProcessSummaryKind = Exclude<
-  ChatToolActivityCategory,
-  "user-input"
+/**
+ * Where a read reaches, as a run's summary names it: a code step's reads
+ * (`ScriptReadArea`), the document open beside the chat, the web, or past
+ * chats. `null` is plumbing a summary does not count, such as loading a
+ * skill or fetching a tool's signature.
+ */
+type ProcessReadArea = ScriptReadArea | "openDocument" | "web" | "chats" | null;
+
+/** A tool this module knows whose calls are of `category`. */
+type ChatToolNameOfCategory<TCategory extends ChatToolActivityCategory> = {
+  [
+    Name in KnownChatToolName
+  ]: (typeof CHAT_TOOL_DISPLAY)[Name]["category"] extends TCategory
+    ? Name
+    : never;
+}[KnownChatToolName];
+
+/**
+ * Where each research tool's call reaches. Total over the research tools,
+ * so a new one decides how a run's summary names it before it typechecks.
+ */
+const RESEARCH_TOOL_READ_AREA = {
+  ares_lookup_company: "registers",
+  ares_search_companies: "registers",
+  boe_find_related_laws: "legislation",
+  boe_get_law: "legislation",
+  boe_get_law_block: "legislation",
+  boe_get_law_structure: "legislation",
+  boe_search_legislation: "legislation",
+  borme_get_summary: "registers",
+  business_registry_lookup: "registers",
+  // The caller's own Outlook calendar is neither legal research nor a document.
+  calendar_free_busy: "other",
+  calendar_list_events: "other",
+  compare_versions: "openDocument",
+  counterparty_check: "registers",
+  "describe-stella-api": null,
+  "describe-stella-function": null,
+  describe_template: "other",
+  discover_tools: null,
+  "expand-chat-history": "chats",
+  fetch_url: "web",
+  find_text: "openDocument",
+  get_document_outline: "openDocument",
+  infosoud_lookup_case: "registers",
+  list_connectable_connectors: null,
+  list_stories: "openDocument",
+  list_templates: "other",
+  "load-skill": null,
+  local_browser: "web",
+  "read-contact": "matters",
+  "read-content-across-matters": "documents",
+  read_contact: "matters",
+  read_content_across_matters: "documents",
+  "read-skill-resource": null,
+  read_changes: "openDocument",
+  read_comments: "openDocument",
+  read_document: "openDocument",
+  read_section: "openDocument",
+  read_story: "openDocument",
+  review_folder_consistency: "documents",
+  "search-across-matters": "documents",
+  "search-all-past-chats": "chats",
+  "search-chat-history": "chats",
+  "search-past-chats": "chats",
+  show_in_document: null,
+  "use-browser": "web",
+  web_search: "web",
+} as const satisfies Record<
+  ChatToolNameOfCategory<"research">,
+  ProcessReadArea
 >;
 
 /**
- * The kinds a settled run's summary counts, in the order they read ("3
- * sources checked · 1 document edit · 2 changes saved · 5 analyses").
+ * The phrases a settled run's summary is made of, each translated by the
+ * app under its name: what the run looked through (at most two of these),
+ * how many lookups that took, what it changed, and, when it did none of
+ * that, how many steps it took.
  */
-export const PROCESS_SUMMARY_KINDS = [
-  "research",
-  "artifact",
-  "mutation",
-  "computation",
-] as const satisfies readonly ProcessSummaryKind[];
+export const PROCESS_SUMMARY_PHRASES = [
+  "searchedLegislation",
+  "searchedCaseLaw",
+  "searchedLegislationAndCaseLaw",
+  "readDocument",
+  "readDocuments",
+  "searchedMatters",
+  "checkedRegisters",
+  "searchedWeb",
+  "searchedChats",
+  "sourcesChecked",
+  "lookups",
+  "documentEdits",
+  "changesSaved",
+  "steps",
+] as const;
+export type ProcessSummaryPhrase = (typeof PROCESS_SUMMARY_PHRASES)[number];
+
+/** One phrase of a summary with the count its plural reads. */
+export type ProcessSummaryPiece = {
+  readonly phrase: ProcessSummaryPhrase;
+  readonly count: number;
+};
+
+/** The area phrases, in the order a summary names them. */
+const AREA_PHRASES = [
+  ["openDocument", "readDocument"],
+  ["documents", "readDocuments"],
+  ["matters", "searchedMatters"],
+  ["registers", "checkedRegisters"],
+  ["web", "searchedWeb"],
+  ["chats", "searchedChats"],
+] as const satisfies readonly (readonly [
+  Exclude<ProcessReadArea, "caseLaw" | "legislation" | "other" | null>,
+  ProcessSummaryPhrase,
+])[];
+
+const MAX_SUMMARY_AREAS = 2;
+/** One lookup is said by the area alone ("Searched the web"). */
+const MIN_COUNTED_LOOKUPS = 2;
+
+const legalPhrase = (
+  areas: ReadonlySet<ProcessReadArea>,
+): ProcessSummaryPhrase | null => {
+  if (areas.has("legislation") && areas.has("caseLaw")) {
+    return "searchedLegislationAndCaseLaw";
+  }
+  if (areas.has("legislation")) {
+    return "searchedLegislation";
+  }
+  return areas.has("caseLaw") ? "searchedCaseLaw" : null;
+};
+
+const researchReadArea = (toolName: string): ProcessReadArea => {
+  if (isOwnKey(RESEARCH_TOOL_READ_AREA, toolName)) {
+    return RESEARCH_TOOL_READ_AREA[toolName];
+  }
+  // An external connector's read is a source of its own.
+  return "other";
+};
 
 /**
- * What a run of process steps accomplished, counted by kind: completed tool
- * calls that succeeded. A failed call is left out on purpose; the model
- * works around it, so it is not news to the reader. Steps that wait on a
- * person are not work the model did. Kinds with nothing to count are absent.
+ * What a settled run of steps did, in the phrases its summary reads ("Searched
+ * legislation and case law · 5 lookups · 1 document edit"): where its reads
+ * reached, how many lookups they took, and what it changed. Only completed
+ * calls that succeeded count; a failed call is left out on purpose, since
+ * the model works around it, and a code step counts each read its ledger
+ * says went through. Steps that wait on a person are not work the model
+ * did. A run that did none of this (reasoning alone, a coding agent's own
+ * steps) reads as its `stepCount`.
  */
-export const countProcessWork = (
+export const summarizeProcessRun = (
   parts: readonly ChatActivityPart[],
-): ReadonlyMap<ProcessSummaryKind, number> => {
-  const counts = new Map<ProcessSummaryKind, number>();
+  { stepCount }: { readonly stepCount: number },
+): readonly ProcessSummaryPiece[] => {
+  const areas = new Set<ProcessReadArea>();
+  let lookups = 0;
+  let documentEdits = 0;
+  let changesSaved = 0;
   for (const part of parts) {
-    if (
-      part.type !== "tool-call" ||
-      typeof part.name !== "string" ||
-      part.state !== "complete" ||
-      isFailedToolOutput(part.output)
-    ) {
+    if (part.type !== "tool-call" || typeof part.name !== "string") {
+      continue;
+    }
+    const succeeded =
+      part.state === "complete" && !isFailedToolOutput(part.output);
+    const code = codeStepReads({
+      input: part.input,
+      name: part.name,
+      output: part.output,
+      succeeded,
+    });
+    if (code !== undefined) {
+      for (const area of code.areas) {
+        areas.add(area);
+      }
+      lookups += code.lookups;
+      continue;
+    }
+    if (!succeeded) {
       continue;
     }
     const category = getChatToolActivityCategory(part.name);
-    if (category !== "user-input") {
-      counts.set(category, (counts.get(category) ?? 0) + 1);
+    switch (category) {
+      case "research": {
+        const area = researchReadArea(part.name);
+        if (area !== null) {
+          areas.add(area);
+          lookups += 1;
+        }
+        break;
+      }
+      case "artifact":
+        documentEdits += 1;
+        break;
+      case "mutation":
+        changesSaved += 1;
+        break;
+      case "computation":
+      case "user-input":
+        break;
+      default:
+        category satisfies never;
+        return panic("Unhandled tool category", { category });
     }
   }
-  return counts;
+  const named = [
+    legalPhrase(areas),
+    ...AREA_PHRASES.flatMap(([area, phrase]) =>
+      areas.has(area) ? [phrase] : [],
+    ),
+  ]
+    .filter((phrase) => phrase !== null)
+    .slice(0, MAX_SUMMARY_AREAS);
+  const pieces: ProcessSummaryPiece[] = named.map((phrase) => ({
+    phrase,
+    count: 1,
+  }));
+  // Reads with no area of their own (an external connector's, a template's)
+  // are counted as sources when nothing else names the run.
+  if (named.length === 0 && lookups > 0) {
+    pieces.push({ phrase: "sourcesChecked", count: lookups });
+  } else if (named.length > 0 && lookups >= MIN_COUNTED_LOOKUPS) {
+    pieces.push({ phrase: "lookups", count: lookups });
+  }
+  if (documentEdits > 0) {
+    pieces.push({ phrase: "documentEdits", count: documentEdits });
+  }
+  if (changesSaved > 0) {
+    pieces.push({ phrase: "changesSaved", count: changesSaved });
+  }
+  return pieces.length > 0 ? pieces : [{ phrase: "steps", count: stepCount }];
 };
 
 export type ProcessGroup<TItem> =
@@ -503,4 +697,60 @@ export const groupProcessParts = <TItem>(
     groups.push({ kind: "process", startIndex: index, items: [item] });
   }
   return groups;
+};
+
+/**
+ * The longest text still read as the plan above a turn's steps; longer text
+ * before the first step is the answer's own.
+ */
+const NARRATED_INTENT_MAX_LENGTH = 400;
+// A paragraph break, heading, list item, quote or table row: the shape of
+// an answer, not of the sentence or two the chat prompt asks for.
+const ANSWER_SHAPE_PATTERN =
+  /\n[ \t]*\n|^[ \t]*(?:#|[-*+>|][ \t]|\d+[.)][ \t])/mu;
+
+const writtenText = (part: ChatActivityPart): string | null =>
+  part.type === "text" &&
+  typeof part.content === "string" &&
+  part.content.trim() !== ""
+    ? part.content.trim()
+    : null;
+
+/**
+ * Which part of a message is its narrated intent: the short plan the model
+ * writes in the user's language before its first step ("Dohledám znění
+ * § 240 o. s. ř. a judikaturu Nejvyššího soudu k počátku běhu lhůty."),
+ * shown as quiet prose above the steps rather than as the answer. It is the
+ * message's first written text, with only reasoning before it and a step
+ * after it (reasoning between them aside), and it reads as a sentence or
+ * two, not as an answer. Null when the message has none: a turn answered
+ * without steps, a model that wrote no plan, or a text still streaming with
+ * no step after it yet (it becomes the intent once one follows). A surface
+ * groups it with the run of steps it introduces.
+ */
+export const narratedIntentIndex = (
+  parts: readonly ChatActivityPart[],
+): number | null => {
+  const index = parts.findIndex((part) => writtenText(part) !== null);
+  const text = index === -1 ? null : writtenText(parts[index] ?? { type: "" });
+  if (
+    text === null ||
+    text.length > NARRATED_INTENT_MAX_LENGTH ||
+    ANSWER_SHAPE_PATTERN.test(text) ||
+    // Before it only reasoning, or a text a stream opened with no word yet.
+    !parts
+      .slice(0, index)
+      .every((part) => part.type === "thinking" || part.type === "text")
+  ) {
+    return null;
+  }
+  const next = parts
+    .slice(index + 1)
+    .find(
+      (part) =>
+        part.type !== "thinking" &&
+        part.type !== "tool-result" &&
+        !(part.type === "text" && writtenText(part) === null),
+    );
+  return next?.type === "tool-call" && isProcessPart(next) ? index : null;
 };

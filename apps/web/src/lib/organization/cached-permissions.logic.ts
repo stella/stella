@@ -7,6 +7,10 @@ import type { PermissionInput } from "@stll/permissions";
 
 import { newestCachedData } from "@/components/pending-cache-reads.logic";
 import { rootKeys } from "@/lib/account/auth-query-keys.logic";
+import { callerFeatureEnabled } from "@/lib/organization/feature-access/access.logic";
+import { CALLER_FEATURE } from "@/lib/organization/feature-access/surfaces";
+import type { OrganizationSettings } from "@/queries/organization-settings";
+import { organizationSettingsKeys } from "@/queries/organization-settings-keys.logic";
 
 const isRoleName = (value: unknown): value is OrganizationRoleName =>
   ORGANIZATION_ROLE_NAMES.some((name) => name === value);
@@ -33,5 +37,71 @@ export const cachedRoleGrants = (
   return (
     isRoleName(role) &&
     memberHasPermissions({ role, billingAccess: false, permissions })
+  );
+};
+
+// The cached session's caller (its member and active organization), read
+// structurally: the session read is the auth client's, which a loading view
+// does not load.
+const cachedSessionCaller = (
+  queryClient: QueryClient,
+): { organizationId: string; userId: string } | undefined => {
+  const session: unknown = newestCachedData(
+    queryClient,
+    queryClient.getQueriesData({
+      exact: true,
+      queryKey: rootKeys.session,
+    }),
+  );
+  if (
+    typeof session !== "object" ||
+    session === null ||
+    !("user" in session) ||
+    !("session" in session)
+  ) {
+    return undefined;
+  }
+  const { session: current, user } = session;
+  const userId: unknown =
+    typeof user === "object" && user !== null && "id" in user
+      ? user.id
+      : undefined;
+  const organizationId: unknown =
+    typeof current === "object" &&
+    current !== null &&
+    "activeOrganizationId" in current
+      ? current.activeOrganizationId
+      : undefined;
+  return typeof userId === "string" && typeof organizationId === "string"
+    ? { organizationId, userId }
+    : undefined;
+};
+
+/**
+ * Whether the active organization's settings, as the cache already holds them
+ * for the signed-in member, admit a caller feature (named as
+ * `CALLER_FEATURE` names it), for a loading view that draws a feature's
+ * section without subscribing to the settings read. Another organization's
+ * cached settings never count. Fails closed like `useCallerFeatureEnabled`:
+ * no cached session, settings not in the cache, or settings whose last read
+ * failed admit nothing.
+ */
+export const cachedCallerFeatureEnabled = (
+  queryClient: QueryClient,
+  feature: keyof typeof CALLER_FEATURE,
+): boolean => {
+  const caller = cachedSessionCaller(queryClient);
+  if (caller === undefined) {
+    return false;
+  }
+  return callerFeatureEnabled(
+    newestCachedData(
+      queryClient,
+      queryClient.getQueriesData<OrganizationSettings>({
+        exact: true,
+        queryKey: organizationSettingsKeys.byCaller(caller),
+      }),
+    ),
+    CALLER_FEATURE[feature],
   );
 };

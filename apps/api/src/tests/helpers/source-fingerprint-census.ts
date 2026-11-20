@@ -29,6 +29,7 @@ import {
   atRisFixture,
   brTjdftFixture,
   brTstAcordaoFixture,
+  czIsirFixture,
   czNsFixture,
   czNsSbirkaFixture,
   czNssFixture,
@@ -112,6 +113,7 @@ export const SOURCE_FINGERPRINT_DRIVERS = {
   ],
   [ADAPTER_KEYS.BR_TJDFT]: one(brTjdftFixture),
   [ADAPTER_KEYS.CZ_NS_SBIRKA]: one(czNsSbirkaFixture),
+  [ADAPTER_KEYS.CZ_ISIR]: one(czIsirFixture),
 } as const satisfies Record<
   SourceRegistrationKey,
   readonly FingerprintDriver[]

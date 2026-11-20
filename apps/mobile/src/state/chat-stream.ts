@@ -3,6 +3,7 @@ import * as v from "valibot";
 
 import { CHAT_TURN_ID_HEADER, CHAT_TURN_INTENT } from "@stll/api-contract";
 import type { AIErrorKind } from "@stll/api-contract/ai-errors";
+import { isCodeToolName } from "@stll/api-contract/chat-code-step";
 import {
   CHAT_COMMAND_CONFIRMATION_MS,
   CHAT_COMMAND_ID_HEADER,
@@ -203,9 +204,11 @@ type StreamedPart =
       readonly name: string;
       readonly state: "input-streaming" | "complete" | "error";
       /**
-       * What a step a coding agent took on the person's computer was
-       * given: its arguments as they arrive, then, once whole, read as the
-       * input a stored call keeps. No other call's arguments are kept.
+       * What a step a coding agent took on the person's computer, or a
+       * code step, was given: its arguments as they arrive, then, once
+       * whole, read as the input a stored call keeps, so the live step is
+       * titled and summed up as the stored one (a code step's script names
+       * its reads). No other call's arguments are kept.
        */
       readonly args?: string;
       readonly input?: unknown;
@@ -355,7 +358,7 @@ export const applyChatEvent = (
         parts: answer.parts.map((part): StreamedPart =>
           part.type === "tool-call" &&
           part.id === event.toolCallId &&
-          isChatLocalRunToolName(part.name)
+          (isChatLocalRunToolName(part.name) || isCodeToolName(part.name))
             ? { ...part, args: `${part.args ?? ""}${event.delta}` }
             : part,
         ),

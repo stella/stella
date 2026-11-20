@@ -12,6 +12,10 @@ import {
   backfillAgentClientStorage,
 } from "@/api/lib/scheduler/tasks/agent-client-storage-backfill";
 import {
+  CLEAN_AGENT_SKILL_ORIGINAL_OBJECTS_TASK,
+  cleanAgentSkillOriginalObjects,
+} from "@/api/lib/scheduler/tasks/agent-skill-original-cleanup";
+import {
   BACKFILL_HEARTBEAT_TASK,
   emitBackfillHeartbeats,
 } from "@/api/lib/scheduler/tasks/backfill-heartbeat";
@@ -53,7 +57,9 @@ import {
   backfillCaseLawProvisionState,
 } from "@/api/lib/scheduler/tasks/case-law-provision-state-backfill";
 import {
+  RECONCILE_CLAIMED_ERASURES_TASK,
   RECONCILE_PUBLISHER_REMOVALS_TASK,
+  reconcileClaimedErasuresTask,
   reconcilePublisherRemovalsTask,
 } from "@/api/lib/scheduler/tasks/case-law-publisher-removals";
 import {
@@ -117,7 +123,7 @@ import {
 } from "@/api/lib/scheduler/tasks/data-invariants";
 import {
   EXPIRE_DESKTOP_EDIT_SESSIONS_TASK,
-  expireDesktopEditSessions,
+  expireDesktopEditSessionsTask,
 } from "@/api/lib/scheduler/tasks/desktop-edit-session-expiry";
 import {
   RECOVER_DOCUMENT_DEADLINE_SCOUTS_TASK,
@@ -284,6 +290,7 @@ const SCHEDULER_TASKS = {
   [ERASE_HOSTED_CUSTOMERS_TASK]: eraseHostedCustomers,
   [DELETE_KEPT_TRANSCRIPTS_TASK]: deleteKeptTranscripts,
   [SWEEP_REQUEST_RECEIPTS_TASK]: sweepRequestReceipts,
+  [RECONCILE_CLAIMED_ERASURES_TASK]: reconcileClaimedErasuresTask,
   [RECONCILE_PUBLISHER_REMOVALS_TASK]: reconcilePublisherRemovalsTask,
   [AUDIT_SCHEDULER_PAUSES_TASK]: auditSchedulerPauses,
   [REDACT_HOSTED_USAGE_WEBHOOK_EVENTS_TASK]: redactHostedUsageWebhookEvents,
@@ -299,7 +306,7 @@ const SCHEDULER_TASKS = {
   [RECEIVE_INBOUND_MAIL_TASK]: receiveInboundMail,
   [REFRESH_SANCTIONS_SOURCES_TASK]: refreshSanctionsSourcesTask,
   [SEND_CHAT_LIMIT_REMINDERS_TASK]: sendChatLimitReminders,
-  [EXPIRE_DESKTOP_EDIT_SESSIONS_TASK]: expireDesktopEditSessions,
+  [EXPIRE_DESKTOP_EDIT_SESSIONS_TASK]: expireDesktopEditSessionsTask,
   [DISPATCH_DOCUMENT_OCR_TASK]: dispatchDocumentOcr,
   [DISPATCH_NATIVE_EXTRACTION_TASK]: dispatchNativeExtraction,
   [FLOW_RUN_TASK]: runScheduledFlow,
@@ -350,6 +357,7 @@ const SCHEDULER_TASKS = {
   // Ungated: its time-billing sample data admits itself on the feature.
   [RESET_REVIEW_ORGANIZATION_TASK]: resetReviewOrganizationTask,
   [CLEAN_TEMPLATE_DELETION_OBJECTS_TASK]: cleanTemplateDeletionObjects,
+  [CLEAN_AGENT_SKILL_ORIGINAL_OBJECTS_TASK]: cleanAgentSkillOriginalObjects,
   [REPAIR_FILE_DERIVATIVES_TASK]: repairFileDerivatives,
   [RECONCILE_FLOW_RUN_ORPHANS_TASK]: reconcileFlowRunOrphans,
   [RECONCILE_DOCUMENT_REVIEW_RUNS_TASK]: reconcileDocumentReviewRuns,

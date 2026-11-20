@@ -14,7 +14,11 @@ import * as v from "valibot";
 
 import { compareCodeUnit } from "@stll/collation";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
-import { INGESTION_STOP_KIND } from "@stll/legal-atlas/ingestion-cycle";
+import {
+  CYCLE_OUTCOME,
+  INGESTION_PAUSE_REASON,
+  INGESTION_STOP_KIND,
+} from "@stll/legal-atlas/ingestion-cycle";
 import { assertProperty, propertyTestTimeout } from "@stll/property-testing";
 
 import { authRelationsPart } from "@/api/db/auth-schema";
@@ -420,7 +424,6 @@ test("an unrecognized attaching court parks the source post and exact replay inp
         corpus: landingTransfer().corpus,
         polarityRules: new Map(),
         context: { adapterKey: "synthetic-collection", cursor: "page-1" },
-        failureStreak: 0,
       },
       async () => syntheticAttachingContract(),
     );
@@ -433,7 +436,6 @@ test("an unrecognized attaching court parks the source post and exact replay inp
   const applied = await apply();
   expect(applied.failureLedger).toEqual({ type: "written" });
   expect(applied.halt).toBeNull();
-  expect(applied.failureStreak).toBe(0);
   expect(applied.settlements).toHaveLength(decisions.length);
   expect((await apply()).failureLedger).toEqual({ type: "written" });
   expect(
@@ -922,6 +924,87 @@ describe("crawl cancellation", () => {
       }
     },
   );
+
+  test("a mid-page decision allowance pauses durably and resumes the same page", async () => {
+    const sourceId = await crawlSource();
+    const sourceLease = await leaseFor(sourceId);
+    const decisions = records(3);
+    czNsAdapter.fetchPage = async () =>
+      Result.ok({
+        decisions,
+        nextCursor: "next-page",
+        publisherRequest: PUBLISHER_REQUEST.ANSWERED,
+      });
+    try {
+      const paused = await runIngestionPipeline({
+        source: sourceLease.source,
+        sourceLease,
+        scopedDb,
+        corpus: landingTransfer().corpus,
+        maxDecisions: 1,
+        maxPages: 1,
+        acquireStoredTotalAdmission: async () => "held",
+      });
+      expect(paused.outcome).toBe(CYCLE_OUTCOME.PAUSED);
+      expect(paused.pauseReason).toBe(
+        INGESTION_PAUSE_REASON.DECISION_ALLOWANCE_EXHAUSTED,
+      );
+      expect(paused.stopKind).toBeUndefined();
+      expect(paused.inserted).toBe(1);
+      expect(paused.pagesProcessed).toBe(0);
+      expect(paused.nextCursor).toBe(sourceLease.source.syncCursor);
+      expect(await sourceCursor(sourceId)).toBe(sourceLease.source.syncCursor);
+      expect(await ledgerRows(sourceId)).toEqual([]);
+      const resumed = await runIngestionPipeline({
+        source: sourceLease.source,
+        sourceLease,
+        scopedDb,
+        corpus: landingTransfer().corpus,
+        maxPages: 1,
+        acquireStoredTotalAdmission: async () => "held",
+      });
+      expect(resumed.outcome).toBe(CYCLE_OUTCOME.COMPLETED);
+      expect(await sourceCursor(sourceId)).toBe("next-page");
+      expect(
+        await db
+          .select()
+          .from(caseLawDecisions)
+          .where(eq(caseLawDecisions.sourceId, sourceId)),
+      ).toHaveLength(3);
+    } finally {
+      await sourceLease.release();
+    }
+  });
+
+  test("a decision allowance cannot mask a failed corpus write", async () => {
+    const sourceId = await crawlSource();
+    const sourceLease = await leaseFor(sourceId);
+    czNsAdapter.fetchPage = async () =>
+      Result.ok({
+        decisions: records(3),
+        nextCursor: "next-page",
+        publisherRequest: PUBLISHER_REQUEST.ANSWERED,
+      });
+    try {
+      const result = await runIngestionPipeline({
+        source: sourceLease.source,
+        sourceLease,
+        scopedDb,
+        corpus: failingTransfer(),
+        maxDecisions: 1,
+        maxPages: 1,
+        acquireStoredTotalAdmission: async () => "held",
+      });
+      expect(result.outcome).toBe(CYCLE_OUTCOME.FAILED);
+      expect(result.stopKind).toBe(INGESTION_STOP_KIND.INTERNAL_ERROR);
+      expect(result.pauseReason).toBeUndefined();
+      expect(result.s3UploadFailures).toBeGreaterThan(0);
+      expect(result.nextCursor).toBe(sourceLease.source.syncCursor);
+      expect(await sourceCursor(sourceId)).toBe(sourceLease.source.syncCursor);
+    } finally {
+      await sourceLease.release();
+    }
+  });
 
   test("an admission pause holds the page without recording failures", async () => {
     const sourceId = await crawlSource();
@@ -1553,6 +1636,32 @@ describe("source-rejected batch records", () => {
     }
   });
 
+  test("live decision failures derive one bounded ledger identity across replays", async () => {
+    const sourceId = await recordSource();
+    const decision = rejectedRecord(92);
+    const first = prepareCaseLawIngestionBatch({ decisions: [decision] });
+    const replay = prepareCaseLawIngestionBatch({ decisions: [decision] });
+    if (Result.isError(first) || Result.isError(replay)) {
+      throw new TypeError("fixture batch refused");
+    }
+    const { corpus } = landingTransfer();
+    for (const batch of [first.value, replay.value]) {
+      const applied = await applyPrepared({ sourceId, batch, corpus });
+      expect(Result.isError(applied) ? applied.error.reason : null).toBe(
+        CASE_LAW_BATCH_FAILURE.RECORD_REJECTED,
+      );
+    }
+
+    // The replay lands on the first run's row: one ledger row, keyed by the
+    // captured input's hash because the publisher id is over its bound.
+    const rows = await db
+      .select({ recordIdentity: caseLawIngestionFailures.recordIdentity })
+      .from(caseLawIngestionFailures)
+      .where(eq(caseLawIngestionFailures.sourceId, sourceId));
+    expect(rows).toHaveLength(1);
+    expect(rows.at(0)?.recordIdentity).toMatch(/^input:[0-9a-f]{64}$/u);
+  });
+
   test("unwritten failures outrank rejected records, with no decision identity", async () => {
     const sourceId = await recordSource();
     const batch = prepareCaseLawIngestionBatch({
@@ -1613,7 +1722,7 @@ describe("source-rejected batch records", () => {
     expect(await decisionRows(sourceId)).toHaveLength(1);
   });
 
-  test("ten consecutive source rejections stop before later records", async () => {
+  test("consecutive source rejections do not prevent later records", async () => {
     const sourceId = await recordSource();
     const batch = prepareCaseLawIngestionBatch({
       records: [
@@ -1630,10 +1739,10 @@ describe("source-rejected batch records", () => {
       corpus: landingTransfer().corpus,
     });
     if (Result.isOk(applied)) {
-      throw new Error("expected a failure streak");
+      throw new Error("expected recorded source rejections");
     }
-    expect(applied.error.reason).toBe(CASE_LAW_BATCH_FAILURE.FAILURE_STREAK);
-    expect(applied.error.unsettled).toBe(11);
+    expect(applied.error.reason).toBe(CASE_LAW_BATCH_FAILURE.RECORD_REJECTED);
+    expect(applied.error.unsettled).toBe(10);
     expect(applied.error.records.map(({ index }) => index)).toEqual(
       Array.from({ length: 10 }, (_, index) => index),
     );
@@ -1641,7 +1750,7 @@ describe("source-rejected batch records", () => {
       Array.from({ length: 10 }, () => CASE_LAW_BATCH_FAILURE.RECORD_REJECTED),
     );
     expect(await ledgerRows(sourceId)).toHaveLength(10);
-    expect(await decisionRows(sourceId)).toEqual([]);
+    expect(await decisionRows(sourceId)).toEqual(settledRows(1));
   });
 });
 
@@ -1871,7 +1980,7 @@ describe("the batch bounds", () => {
 });
 
 describe("why a batch is not certified", () => {
-  test("a streak of rejections whose ledger rows are not written names the ledger", async () => {
+  test("rejections whose ledger rows are not written name the ledger", async () => {
     const decisions = Array.from({ length: 10 }, (_, n) =>
       rejectedRecord(90 + n),
     );
@@ -1895,7 +2004,7 @@ describe("why a batch is not certified", () => {
     );
     expect(await ledgerRows(recordsSourceId)).toEqual([]);
 
-    // The crawl keeps its own precedence: the streak names the halt.
+    // A transient ledger write failure still holds the cursor for retry.
     const crawlSourceId = await crawlSource();
     const held = await withUnwritableLedger(
       async () =>
@@ -1903,7 +2012,7 @@ describe("why a batch is not certified", () => {
     );
     expect(held).toEqual({
       type: "held",
-      detail: expect.stringMatching(/^10 consecutive failures;/u),
+      detail: "10 failure record(s) not written; cursor held for retry",
     });
     expect(await sourceCursor(crawlSourceId)).toBeNull();
   });
@@ -1960,7 +2069,7 @@ describe("why a batch is not certified", () => {
     expect(await decisionRows(crawlSourceId)).toEqual(settledRows(2));
   });
 
-  test("records a rejection streak did not reach are not called rejected", async () => {
+  test("rejection runs still reach later valid records", async () => {
     const sourceId = await recordSource();
     const decisions = [
       ...Array.from({ length: 10 }, (_, n) => rejectedRecord(70 + n)),
@@ -1977,10 +2086,10 @@ describe("why a batch is not certified", () => {
     if (Result.isOk(applied)) {
       throw new Error("expected no receipt");
     }
-    expect(applied.error.reason).toBe(CASE_LAW_BATCH_FAILURE.FAILURE_STREAK);
-    expect(applied.error.unsettled).toBe(12);
+    expect(applied.error.reason).toBe(CASE_LAW_BATCH_FAILURE.RECORD_REJECTED);
+    expect(applied.error.unsettled).toBe(10);
     expect(await ledgerRows(sourceId)).toHaveLength(10);
-    expect(await decisionRows(sourceId)).toEqual([]);
+    expect(await decisionRows(sourceId)).toEqual(settledRows(2));
 
     // A streak that ends on the last record leaves nothing unreached.
     const rejectedOnlySourceId = await recordSource();

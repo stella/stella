@@ -1,5 +1,11 @@
 # @stll/scan-engine
 
+## 0.1.6
+
+### Patch Changes
+
+- [#8908](https://github.com/stella/stella/pull/8908) [`7a9487d`](https://github.com/stella/stella/commit/7a9487d88c780e79e5ff838e954deb27ca501283) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Rebuild the WebAssembly engine with Rust 1.100.0.
+
 ## 0.1.5
 
 ### Patch Changes

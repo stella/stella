@@ -1041,12 +1041,16 @@
       "ButtonFace",
       "CheckboxFace",
       "FaceLabelPending",
+      "FieldDescriptionFace",
+      "FieldFace",
       "FieldTriggerFace",
       "InputFace",
       "LabelFace",
       "SPLIT_BUTTON_PRIMARY_CLASS",
       "SPLIT_BUTTON_ROOT_CLASS",
       "SPLIT_BUTTON_TRIGGER_CLASS",
+      "SegmentedIconToggleFace",
+      "SelectTriggerFace",
       "SplitButtonChevron",
       "SplitButtonFace",
       "SwitchFace",
@@ -1106,6 +1110,7 @@
     ],
     "./destructive-confirm-dialog": ["DestructiveConfirmDialog"],
     "./details-grid": ["DetailsGrid", "DetailsItem"],
+    "./details-list-face": ["DetailsListFace", "DetailsListItemFace"],
     "./dialog": [
       "DIALOG_MOBILE_LAYOUT",
       "DIALOG_SIZE_CLASS_NAMES",
@@ -1573,6 +1578,22 @@
       "useKanbanSortable",
       "useKanbanSortableSensors"
     ],
+    "./kanban-card-shell": ["KanbanCardShell"],
+    "./kanban-column-header-shell": [
+      "KANBAN_COLUMN_NAME_CLASS",
+      "KANBAN_COLUMN_WIDTH_CLASS",
+      "KanbanColumnHeaderShell",
+      "KanbanColumnNameFace",
+      "KanbanColumnTitleSlot"
+    ],
+    "./kanban-grouping": [
+      "getKanbanGroupingPropertyId",
+      "getKanbanGroups",
+      "isKanbanGroupingRenderable",
+      "resolveKanbanGroupOptions",
+      "resolveKanbanGrouping",
+      "selectKanbanRows"
+    ],
     "./kbd": ["Kbd", "formatKeys", "kbdPlatformOf", "useKbdPlatform"],
     "./label": ["Label"],
     "./landing": [
@@ -1707,6 +1728,7 @@
     "./number-input": ["NumberInput"],
     "./option-color": ["emptyColor", "optionColors", "resolveOptionColor"],
     "./outcome-screen": ["OutcomeScreen"],
+    "./outcome-screen-face": ["OutcomeScreenFace"],
     "./outline-rail": [
       "OUTLINE_CONTROL_MIN_SIZE",
       "OUTLINE_EMPHASIS",
@@ -1974,7 +1996,12 @@
       "ViewFilterChip",
       "ViewToolbarChrome"
     ],
-    "./view-toolbar-shell": ["ViewChromeBar", "ViewToolbarChrome"],
+    "./view-toolbar-shell": [
+      "ViewChromeBar",
+      "ViewFilterButtonFace",
+      "ViewFilterChipFace",
+      "ViewToolbarChrome"
+    ],
     "./week": ["getFirstWeekday", "getLocaleWeekInfo", "getWeekendDays"],
     "./workspace-shell": ["WorkspaceEndRail", "WorkspaceShell"]
   },
@@ -2081,6 +2108,7 @@
       "inline",
       "inspector-row",
       "lg",
+      "row",
       "sm",
       "touch",
       "xl",
@@ -2131,6 +2159,7 @@
     ],
     "DateRangeFilter.size": ["compact", "touch"],
     "DateRangeFilter.variant": ["field", "inline"],
+    "DetailsGrid.density": ["compact", "default"],
     "DetailsGrid.labelWidth": ["auto", "lg", "md", "sm"],
     "DetailsGrid.orientation": ["auto", "horizontal", "vertical"],
     "DetailsGrid.variant": ["list", "sheet"],
@@ -2180,15 +2209,20 @@
     ],
     "DocumentIdentityBadge.size": ["default", "inline", "prose"],
     "DocumentMark.kind": [
+      "asicE",
+      "asicS",
+      "cades",
       "csv",
       "dataBox",
       "excel",
       "markdown",
+      "ofd",
       "openDocumentSheet",
       "openDocumentText",
       "pdf",
       "powerpoint",
       "rtf",
+      "uyap",
       "word"
     ],
     "DropdownMenuCheckboxItem.variant": ["default", "switch"],
@@ -2197,6 +2231,8 @@
     "DropdownMenuTrigger.appearance": ["caption", "default"],
     "EntityActionsButton.align": ["center", "end", "start"],
     "EntityActionsButton.side": ["bottom", "left", "right", "top"],
+    "FieldFace.density": ["default", "snug"],
+    "FieldFace.layout": ["inline", "stack"],
     "Form.density": ["compact", "default", "snug"],
     "Form.layout": ["inline", "stack"],
     "FrameTitle.tone": ["default", "destructive"],
@@ -2291,6 +2327,7 @@
     "RunStateMark.state": ["needs-you", "working"],
     "ScrollArea.axis": ["both", "vertical"],
     "SegmentedIconToggle.size": ["compact", "touch"],
+    "SegmentedIconToggleFace.size": ["compact", "touch"],
     "SelectTrigger.align": ["center", "start"],
     "SheetContent.side": [
       "block-end",

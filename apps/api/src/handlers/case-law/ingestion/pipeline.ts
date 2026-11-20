@@ -4,7 +4,10 @@ import { sanitizeErrorAttributesForOutput } from "@stll/errors";
 import type { DocumentStageObserver } from "@stll/legal-atlas/document-fetch-diagnostics";
 import {
   CYCLE_HALT_REASON,
+  CYCLE_OUTCOME,
+  INGESTION_PAUSE_REASON,
   INGESTION_STOP_KIND,
+  type IngestionCycleTermination,
   type IngestionPipelineResult,
   type IngestionStopKind,
 } from "@stll/legal-atlas/ingestion-cycle";
@@ -18,7 +21,6 @@ import {
 import { getAdapter } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry";
 import {
   applyDecisionBatch,
-  MAX_CONSECUTIVE_FAILURES,
   recordIngestionFailures,
 } from "@/api/handlers/case-law/ingestion/pipeline/batch";
 import type {
@@ -202,11 +204,6 @@ const batchHaltReason = (
       // Halting (instead of breaking quietly) keeps the cursor at this page
       // so the unprocessed remainder is not skipped.
       return `Decision cap (${String(maxDecisions)}) reached`;
-    case "failure-streak":
-      return (
-        `${MAX_CONSECUTIVE_FAILURES} consecutive failures; ` +
-        `last: [${stop.tag}] ${stop.message.slice(0, 200)}`
-      );
     case "aborted":
       return CYCLE_HALT_REASON.TIMEOUT;
     default:
@@ -216,22 +213,71 @@ const batchHaltReason = (
 };
 
 const batchStopKind = (
-  stop: DecisionBatchHalt,
-): IngestionStopKind | undefined => {
+  stop: Exclude<DecisionBatchHalt, { type: "insert-limit" }>,
+): IngestionStopKind => {
   switch (stop.type) {
     case "retryable":
     case "timeout":
     case "transient":
       return INGESTION_STOP_KIND.INTERNAL_ERROR;
-    case "insert-limit":
-      return undefined;
-    case "failure-streak":
-      return stop.stopKind;
     case "aborted":
       return INGESTION_STOP_KIND.DEADLINE;
     default:
       stop satisfies never;
       return panic(`Unhandled batch stop: ${String(stop)}`);
+  }
+};
+
+type FailedCycleTermination = Extract<
+  IngestionCycleTermination,
+  { stopKind: IngestionStopKind }
+>;
+
+const failedCycleTermination = (
+  stopKind: IngestionStopKind,
+): FailedCycleTermination => ({
+  outcome:
+    stopKind === INGESTION_STOP_KIND.DEADLINE
+      ? CYCLE_OUTCOME.TIMEOUT
+      : CYCLE_OUTCOME.FAILED,
+  stopKind,
+});
+
+type LogCycleTerminationOptions = {
+  termination: Exclude<
+    IngestionCycleTermination,
+    { outcome: typeof CYCLE_OUTCOME.COMPLETED }
+  >;
+  attributes: {
+    adapterKey: string;
+    cursor: string;
+    reason: string;
+    inserted: number;
+    skipped: number;
+  };
+};
+
+const logCycleTermination = ({
+  termination,
+  attributes,
+}: LogCycleTerminationOptions): void => {
+  switch (termination.outcome) {
+    case CYCLE_OUTCOME.PAUSED:
+      logger.info("case_law.ingestion.adapter_paused", {
+        ...attributes,
+        pauseReason: termination.pauseReason,
+      });
+      return;
+    case CYCLE_OUTCOME.FAILED:
+    case CYCLE_OUTCOME.TIMEOUT:
+      STOP_LOGGER[termination.stopKind]("case_law.ingestion.adapter_halted", {
+        ...attributes,
+        stopKind: termination.stopKind,
+      });
+      return;
+    default:
+      termination satisfies never;
+      panic("Unhandled ingestion termination");
   }
 };
 
@@ -319,14 +365,11 @@ const runScopedIngestionPipeline = async ({
   let publisherAnsweredPages = 0;
   /** Track recent cursors to detect parking (stagnation or ping-pong). */
   const recentCursors = new Set<string | null>();
-  /**
-   * Consecutive decision-level failures. Reset on each success.
-   * If this reaches the batch threshold, the adapter is halted for
-   * this cycle to avoid hammering a broken court API.
-   */
-  let consecutiveFailures = 0;
   let haltReason: string | null = null;
-  let stopKind: IngestionStopKind | undefined;
+  let termination: Exclude<
+    IngestionCycleTermination,
+    { outcome: typeof CYCLE_OUTCOME.COMPLETED }
+  > = failedCycleTermination(INGESTION_STOP_KIND.INTERNAL_ERROR);
   let checkpointObservationOrder = source.checkpointObservationOrder;
   /**
    * Compiled polarity rules for this cycle. One read per language the cycle
@@ -553,7 +596,7 @@ const runScopedIngestionPipeline = async ({
         deadline?.signal.aborted ||
         (await acquireBatchAdmission?.()) === "paused"
       ) {
-        stopKind = INGESTION_STOP_KIND.DEADLINE;
+        termination = failedCycleTermination(INGESTION_STOP_KIND.DEADLINE);
         return CYCLE_HALT_REASON.TIMEOUT;
       }
       if (batch.admission === DECISION_ADMISSION.OVERSIZED_RECORD) {
@@ -581,7 +624,6 @@ const runScopedIngestionPipeline = async ({
           corpus,
           polarityRules,
           context: { adapterKey: adapter.key, cursor },
-          failureStreak: consecutiveFailures,
           signal: deadline?.signal,
           insertLimit:
             maxDecisions === undefined ? undefined : maxDecisions - inserted,
@@ -592,7 +634,6 @@ const runScopedIngestionPipeline = async ({
       skipped += applied.skipped;
       searchVectorFailures += applied.searchVectorFailures;
       s3UploadFailures += applied.corpusWriteFailures;
-      consecutiveFailures = applied.failureStreak;
       // A reason the batch stopped for wins over the ledger write's own.
       const batchHalt =
         (applied.halt === null
@@ -600,10 +641,30 @@ const runScopedIngestionPipeline = async ({
           : batchHaltReason(applied.halt, maxDecisions)) ??
         failureLedgerHaltReason(applied.failureLedger);
       if (batchHalt !== null) {
-        stopKind =
+        if (applied.halt?.type === "insert-limit") {
+          if (
+            applied.failureLedger.type === "written" &&
+            applied.corpusWriteFailures === 0
+          ) {
+            termination = {
+              outcome: CYCLE_OUTCOME.PAUSED,
+              pauseReason: INGESTION_PAUSE_REASON.DECISION_ALLOWANCE_EXHAUSTED,
+            };
+            return batchHalt;
+          }
+          termination = failedCycleTermination(
+            INGESTION_STOP_KIND.INTERNAL_ERROR,
+          );
+          return (
+            failureLedgerHaltReason(applied.failureLedger) ??
+            "Decision allowance reached before all processed inputs were durable"
+          );
+        }
+        termination = failedCycleTermination(
           applied.halt === null
             ? INGESTION_STOP_KIND.INTERNAL_ERROR
-            : batchStopKind(applied.halt);
+            : batchStopKind(applied.halt),
+        );
         return batchHalt;
       }
     }
@@ -752,7 +813,9 @@ const runScopedIngestionPipeline = async ({
         streaks: plan.streaks,
       });
       if (!written) {
-        stopKind = INGESTION_STOP_KIND.INTERNAL_ERROR;
+        termination = failedCycleTermination(
+          INGESTION_STOP_KIND.INTERNAL_ERROR,
+        );
         return "Source ingestion lease was lost; cursor held for retry";
       }
       unavailableStreaks = plan.streaks;
@@ -767,7 +830,9 @@ const runScopedIngestionPipeline = async ({
       }
       return null;
     }
-    stopKind = INGESTION_STOP_KIND.SOURCE_UNREACHABLE;
+    termination = failedCycleTermination(
+      INGESTION_STOP_KIND.SOURCE_UNREACHABLE,
+    );
     return `${plan.holding} listed item(s) unavailable for fewer than ${UNAVAILABLE_CYCLES_BEFORE_MARKING} consecutive cycles; cursor held for retry`;
   };
 
@@ -801,7 +866,7 @@ const runScopedIngestionPipeline = async ({
     }
     const unsettled = unsettledBuildFailureCount(page);
     if (unsettled > 0) {
-      stopKind = INGESTION_STOP_KIND.ADAPTER_ERROR;
+      termination = failedCycleTermination(INGESTION_STOP_KIND.ADAPTER_ERROR);
       return `${unsettled} adapter item build failure(s) lack replayable per-item outcomes; cursor held for retry`;
     }
     return await settlePageUnreadItems({
@@ -814,7 +879,7 @@ const runScopedIngestionPipeline = async ({
     const observedPage = await fetchNextObservedPage();
     if (observedPage.type === "halt") {
       haltReason = observedPage.reason;
-      stopKind = observedPage.stopKind;
+      termination = failedCycleTermination(observedPage.stopKind);
       break;
     }
 
@@ -832,7 +897,7 @@ const runScopedIngestionPipeline = async ({
     const pageSlot = await acquirePageSlot(page);
     if (pageSlot === PAGE_SLOT.CYCLE_ENDED) {
       haltReason = CYCLE_HALT_REASON.TIMEOUT;
-      stopKind = INGESTION_STOP_KIND.DEADLINE;
+      termination = failedCycleTermination(INGESTION_STOP_KIND.DEADLINE);
       break;
     }
     const pageT0 = performance.now();
@@ -869,15 +934,16 @@ const runScopedIngestionPipeline = async ({
         halted: haltReason !== null,
       });
 
-      if (haltReason) {
-        stopKind ??= INGESTION_STOP_KIND.INTERNAL_ERROR;
-        STOP_LOGGER[stopKind]("case_law.ingestion.adapter_halted", {
-          adapterKey: adapter.key,
-          cursor: cursor ?? "",
-          reason: haltReason,
-          stopKind,
-          inserted,
-          skipped,
+      if (haltReason !== null) {
+        logCycleTermination({
+          termination,
+          attributes: {
+            adapterKey: adapter.key,
+            cursor: cursor ?? "",
+            reason: haltReason,
+            inserted,
+            skipped,
+          },
         });
         break;
       }
@@ -941,15 +1007,21 @@ const runScopedIngestionPipeline = async ({
       }),
   });
 
-  return {
+  const counts = {
     inserted,
     skipped,
     searchVectorFailures,
     s3UploadFailures,
     pagesProcessed,
     nextCursor: cursor,
+  };
+  if (haltReason === null) {
+    return { ...counts, outcome: CYCLE_OUTCOME.COMPLETED, haltReason: null };
+  }
+  return {
+    ...counts,
+    ...termination,
     haltReason,
-    ...(stopKind === undefined ? {} : { stopKind }),
   };
 };
 

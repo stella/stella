@@ -40,6 +40,7 @@ import {
 import { computeNextRunAt } from "@/api/lib/scheduler/schedule";
 import { SWEEP_ACTION_COSTS_TASK } from "@/api/lib/scheduler/tasks/action-cost-retention";
 import { BACKFILL_AGENT_CLIENT_STORAGE_TASK } from "@/api/lib/scheduler/tasks/agent-client-storage-backfill";
+import { CLEAN_AGENT_SKILL_ORIGINAL_OBJECTS_TASK } from "@/api/lib/scheduler/tasks/agent-skill-original-cleanup";
 import { BACKFILL_HEARTBEAT_TASK } from "@/api/lib/scheduler/tasks/backfill-heartbeat";
 import { RECONCILE_BILINGUAL_RUNS_TASK } from "@/api/lib/scheduler/tasks/bilingual-run-reconcile";
 import { RECONCILE_BUFFER_INTENTS_TASK } from "@/api/lib/scheduler/tasks/buffer-intent-reconciliation";
@@ -51,12 +52,16 @@ import { BACKFILL_CASE_LAW_PARSED_INPUT_STATE_TASK } from "@/api/lib/scheduler/t
 import { FOLD_CASE_LAW_POPULATION_COUNTS_TASK } from "@/api/lib/scheduler/tasks/case-law-population-fold";
 import { SEED_CASE_LAW_POPULATION_COUNTS_TASK } from "@/api/lib/scheduler/tasks/case-law-population-seed";
 import { BACKFILL_CASE_LAW_PROVISION_STATE_TASK } from "@/api/lib/scheduler/tasks/case-law-provision-state-backfill";
+import { RECONCILE_CLAIMED_ERASURES_TASK } from "@/api/lib/scheduler/tasks/case-law-publisher-removals";
 import {
   CENSUS_CASE_LAW_RAW_OBJECTS_TASK,
   RECONCILE_CASE_LAW_RAW_ROWS_TASK,
   RECONCILE_CASE_LAW_RAW_SWEEPS_TASK,
 } from "@/api/lib/scheduler/tasks/case-law-raw-storage";
-import { BACKFILL_CASE_LAW_REDACTION_TOMBSTONES_TASK } from "@/api/lib/scheduler/tasks/case-law-redaction-tombstone-backfill";
+import {
+  BACKFILL_CASE_LAW_REDACTION_TOMBSTONES_TASK,
+  REDACTION_TOMBSTONE_BACKFILL_JOB_ID,
+} from "@/api/lib/scheduler/tasks/case-law-redaction-tombstone-backfill";
 import { REFRESH_CASE_LAW_SITEMAP_SHARDS_TASK } from "@/api/lib/scheduler/tasks/case-law-sitemap-shard-refresh";
 import { FOLD_CASE_LAW_SITEMAP_TOUCHES_TASK } from "@/api/lib/scheduler/tasks/case-law-sitemap-touch-fold";
 import { REFRESH_CASE_LAW_SOURCE_ARRIVALS_TASK } from "@/api/lib/scheduler/tasks/case-law-source-arrivals-refresh";
@@ -535,6 +540,16 @@ export const DECLARED_SCHEDULER_JOBS = [
     reads: "unmeasured",
   },
   {
+    description: "Complete accepted case-law erasures",
+    id: SCHEDULER_BACKFILL_IDS.claimedErasures,
+    mode: "recurring",
+    payloadUpdate: "preserve",
+    payload: { cursor: null },
+    schedule: { type: "interval", everyMs: 60 * 1000 },
+    task: RECONCILE_CLAIMED_ERASURES_TASK,
+    reads: "load-governed",
+  },
+  {
     description: "Delete raw objects of erased or never-written decisions",
     id: "caseLaw.reconcileRawSweeps.minutely",
     mode: "recurring",
@@ -573,11 +588,11 @@ export const DECLARED_SCHEDULER_JOBS = [
   {
     description:
       "Backfill durable case-law redaction tombstones and search cleanup",
-    id: "caseLaw.backfillRedactionTombstones.v2",
+    id: REDACTION_TOMBSTONE_BACKFILL_JOB_ID,
     mode: "oneShot",
     schedule: { type: "interval", everyMs: 60 * 1000 },
     task: BACKFILL_CASE_LAW_REDACTION_TOMBSTONES_TASK,
-    reads: "unmeasured",
+    reads: { budget: "scheduled.caseLaw.redactionTombstones.v3" },
   },
   {
     description: "Move stored agent client values to the shared envelope",
@@ -846,7 +861,8 @@ export const DECLARED_SCHEDULER_JOBS = [
     reads: { budget: "scheduled.dataExports.maintain" },
   },
   {
-    description: "Delete style set packages a replacement left behind",
+    description:
+      "Delete packages recorded by style set replacements and deletions",
     id: "styleSets.reconcilePackageCleanups.fiveMinute",
     mode: "recurring",
     schedule: { type: "interval", everyMs: 5 * 60 * 1000 },
@@ -860,6 +876,14 @@ export const DECLARED_SCHEDULER_JOBS = [
     schedule: { type: "interval", everyMs: 60 * 1000 },
     task: CLEAN_TEMPLATE_DELETION_OBJECTS_TASK,
     reads: "unmeasured",
+  },
+  {
+    description: "Erase skill file originals recorded by committed deletions",
+    id: "agentSkills.cleanOriginalObjects.oneMinute",
+    mode: "recurring",
+    schedule: { type: "interval", everyMs: 60 * 1000 },
+    task: CLEAN_AGENT_SKILL_ORIGINAL_OBJECTS_TASK,
+    reads: { budget: "scheduled.agentSkills.cleanOriginalObjects" },
   },
   {
     description:

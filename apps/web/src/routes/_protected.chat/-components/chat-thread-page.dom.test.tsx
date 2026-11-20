@@ -10,6 +10,7 @@ import {
   aiAvailableResponse,
   aiUnavailableResponse,
 } from "@/__fixtures__/ai-availability";
+import { isDisabledControl } from "@/__fixtures__/disabled-control";
 import type { WebApiRoutes } from "@/lib/api";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/chat" });
@@ -408,9 +409,9 @@ const openThreadPage = async (client: InstanceType<typeof QueryClient>) => {
 const send = async (ui: ReturnType<typeof testing.render>, count: number) => {
   await testing.waitFor(() =>
     expect(
-      ui
-        .getByRole("button", { name: messages.chat.sendPrompt })
-        .hasAttribute("disabled"),
+      isDisabledControl(
+        ui.getByRole("button", { name: messages.chat.sendPrompt }),
+      ),
     ).toBe(false),
   );
   await testing.act(async () => {
@@ -503,7 +504,7 @@ test("unavailable AI blocks sending and preserves the draft until availability r
   expect(textbox.textContent).toBe(prompt);
 
   const sendButton = ui.getByRole("button", { name: messages.chat.sendPrompt });
-  expect(sendButton.hasAttribute("disabled")).toBe(true);
+  expect(isDisabledControl(sendButton)).toBe(true);
   expect(textbox.getAttribute("contenteditable")).toBe("true");
   await testing.act(async () => {
     testing.fireEvent.click(sendButton);

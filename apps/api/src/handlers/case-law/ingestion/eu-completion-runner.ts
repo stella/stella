@@ -981,8 +981,11 @@ const hydrateCompletionStatements = async ({
           documentId: row.id,
           read: async () =>
             row.astS3Key !== null
-              ? await readCorpusAst(row.astS3Key, readOptions)
-              : parsePersistedCorpusAst(row.documentAst),
+              ? await readCorpusAst(row.astS3Key, {
+                  ...readOptions,
+                  report: { documentId: row.id },
+                })
+              : parsePersistedCorpusAst(row.documentAst, row.id),
         }),
     );
     if (ast.isErr() && signal.aborted) {

@@ -44,7 +44,12 @@ import {
 import { DECISION_ROW_WRITE_STATUS } from "@/api/handlers/case-law/ingestion/pipeline/types";
 import type { DecisionRowWriteStatus } from "@/api/handlers/case-law/ingestion/pipeline/types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { caseNumberKeysMatch } from "@/api/lib/case-law/case-number-match-key";
 import { writeDecisionAnchorRedirectsTx } from "@/api/lib/case-law/decision-anchor-redirects";
+import {
+  DECISION_IDENTIFIER_CLAIM,
+  type DecisionIdentifierClaim,
+} from "@/api/lib/case-law/decision-identifier-claims";
 import { preserveStoredTextAfterParseFailure } from "@/api/lib/case-law/decision-text";
 import { runDecisionWriteExtension } from "@/api/lib/case-law/decision-write-extension";
 import { decisionFallbackState } from "@/api/lib/case-law/fallback-decision-identity";
@@ -75,6 +80,8 @@ const replacedDecisionState = async (
     type: IdentifierType;
     normalizedValue: string;
     value: string;
+    declaredAt: Date | null;
+    independentClaims: DecisionIdentifierClaim[];
   }[];
 } | null> => {
   const rows = await lockCaseLawDecisionSnapshot({
@@ -93,6 +100,7 @@ const replacedDecisionState = async (
       normalizedValue: caseLawDecisionIdentifiers.normalizedValue,
       value: caseLawDecisionIdentifiers.value,
       declaredAt: caseLawDecisionIdentifiers.declaredAt,
+      independentClaims: caseLawDecisionIdentifiers.independentClaims,
     })
     .from(caseLawDecisionIdentifiers)
     .where(eq(caseLawDecisionIdentifiers.decisionId, id));
@@ -105,7 +113,12 @@ const replacedDecisionState = async (
  * alias it does not derive is kept by the write and is no change of it.
  */
 const observedIdentifiers = <
-  T extends { type: string; normalizedValue: string; declaredAt?: Date | null },
+  T extends {
+    type: string;
+    normalizedValue: string;
+    declaredAt: Date | null;
+    independentClaims: DecisionIdentifierClaim[];
+  },
 >(
   stored: readonly T[],
   incoming: DecisionWritePlan["identifierRows"],
@@ -117,8 +130,11 @@ const observedIdentifiers = <
   );
   return stored.filter(
     (identifier) =>
-      identifier.declaredAt === null ||
-      identifier.declaredAt === undefined ||
+      identifier.independentClaims.includes(DECISION_IDENTIFIER_CLAIM.HOST) ||
+      (identifier.declaredAt === null &&
+        identifier.independentClaims.includes(
+          DECISION_IDENTIFIER_CLAIM.UNVERIFIED,
+        )) ||
       derived.has(`${identifier.type}\u0000${identifier.normalizedValue}`),
   );
 };
@@ -174,7 +190,8 @@ const resolutionIdentityChanged = (
     identifiers: {
       type: IdentifierType;
       normalizedValue: string;
-      declaredAt?: Date | null;
+      declaredAt: Date | null;
+      independentClaims: DecisionIdentifierClaim[];
     }[];
   },
 ): boolean => {
@@ -214,7 +231,8 @@ const identifiersRewritten = (
       type: string;
       normalizedValue: string;
       value: string;
-      declaredAt?: Date | null;
+      declaredAt: Date | null;
+      independentClaims: DecisionIdentifierClaim[];
     }[];
   } | null,
 ): boolean => {
@@ -575,6 +593,7 @@ const reopenMovedIdentityTx = async (
       (key) => key !== null,
     ),
   );
+  // One per identity: two year forms of a docket reopen the same citations.
   const affectedIdentifiers = [
     ...replacedState.identifiers,
     ...identifierRows,
@@ -583,7 +602,10 @@ const reopenMovedIdentityTx = async (
       all.findIndex(
         (candidate) =>
           candidate.type === identifier.type &&
-          candidate.normalizedValue === identifier.normalizedValue,
+          caseNumberKeysMatch(
+            candidate.normalizedValue,
+            identifier.normalizedValue,
+          ),
       ) === index,
   );
   const announced = await announceDecisionIdentifiers(

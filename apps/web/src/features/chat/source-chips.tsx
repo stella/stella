@@ -15,6 +15,7 @@ import {
 } from "@stll/ui/collapsible";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
 import { ChevronRightIcon } from "@stll/ui/icons";
+import { Popover, PopoverPopup, PopoverTrigger } from "@stll/ui/popover";
 import { Separator } from "@stll/ui/separator";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "@stll/ui/tooltip";
 import { TruncatedText } from "@stll/ui/truncated-text";
@@ -27,8 +28,12 @@ import { LegalCitationLink } from "@/components/chat/legal-citation-link";
 import type {
   ExternalSourceEntry,
   SourceChipEntry,
+  SourceGroup,
 } from "@/components/chat/source-chips.logic";
-import { collectSourceChipEntries } from "@/components/chat/source-chips.logic";
+import {
+  collectSourceChipEntries,
+  groupSourceEntries,
+} from "@/components/chat/source-chips.logic";
 import { ReferenceIcon } from "@/components/references/reference-chip";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useFormatter } from "@/i18n/formatting-context";
@@ -58,10 +63,17 @@ export const SourceChips = ({
   const registerSources = useExternalSourceStore(
     (state) => state.registerSources,
   );
-  const t = useTranslations("chat.sourceChips");
+  const t = useTranslations("chat");
   const [consultedOpen, setConsultedOpen] = useState(false);
   const cited = entries.filter((entry) => entry.relation === "cited");
   const consulted = entries.filter((entry) => entry.relation === "consulted");
+  // What the answer cites, by court and by act; documents and web pages
+  // keep a chip each.
+  const { groups, rest } = groupSourceEntries({
+    appOrigins: chatAppOrigins(),
+    entries: cited,
+    parts,
+  });
 
   useExternalSyncEffect(() => {
     registerSources(uniqueExternalSources);
@@ -71,53 +83,55 @@ export const SourceChips = ({
     return null;
   }
 
-  // Laid out by the answer's footer row: the cited sources and the
-  // disclosure's trigger sit in that row after Copy and Retry, wrapping only
-  // when they run out of room; the disclosed sources take a full row below.
+  // One quiet row, laid out by the answer's footer row after Copy and Retry:
+  // "Sources", what the answer cites grouped by court and act, then what it
+  // consulted besides, folded; the consulted sources open across the full
+  // width below.
   return (
     <div className="contents" data-chat-answer-citations>
-      {cited.length > 0 && (
-        <>
-          <Separator
-            className="self-stretch"
-            data-chat-answer-citations-divider
-            orientation="vertical"
-          />
-          <SourceEntryList
-            entries={cited}
-            messageId={messageId}
-            workspaceId={workspaceId}
-          />
-        </>
-      )}
+      <div className="flex min-w-0 items-center gap-2">
+        <Separator
+          className="self-stretch"
+          data-chat-answer-citations-divider
+          orientation="vertical"
+        />
+        <span className="text-muted-foreground shrink-0 text-xs">
+          {t("sources")}
+        </span>
+      </div>
+      {groups.map((group) => (
+        <SourceGroupChip
+          group={group}
+          key={group.key}
+          messageId={messageId}
+          workspaceId={workspaceId}
+        />
+      ))}
+      <SourceEntryList
+        entries={rest}
+        messageId={messageId}
+        workspaceId={workspaceId}
+      />
       {consulted.length > 0 && (
         <Collapsible
           className="contents"
           onOpenChange={setConsultedOpen}
           open={consultedOpen}
         >
-          {/* Without cited sources the divider travels with the trigger, so
-              it never ends a wrapped line. */}
-          <div className="flex items-center gap-2">
-            {cited.length === 0 && (
-              <Separator
-                className="self-stretch"
-                data-chat-answer-citations-divider
-                orientation="vertical"
-              />
-            )}
-            <CollapsibleTrigger render={<Button size="xs" variant="muted" />}>
-              <DirectionalIcon
-                className={cn(
-                  "size-3.5 shrink-0 transition-transform",
-                  consultedOpen && "rotate-90",
-                )}
-                flip={!consultedOpen}
-                icon={ChevronRightIcon}
-              />
-              {t("alsoConsulted", { count: consulted.length })}
-            </CollapsibleTrigger>
-          </div>
+          <CollapsibleTrigger
+            data-chat-answer-consulted-trigger
+            render={<Button size="xs" variant="muted" />}
+          >
+            {t("sourceChips.moreConsulted", { count: consulted.length })}
+            <DirectionalIcon
+              className={cn(
+                "size-3.5 shrink-0 transition-transform",
+                consultedOpen && "rotate-90",
+              )}
+              flip={!consultedOpen}
+              icon={ChevronRightIcon}
+            />
+          </CollapsibleTrigger>
           <CollapsiblePanel className="w-full">
             <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
               <SourceEntryList
@@ -130,6 +144,45 @@ export const SourceChips = ({
         </Collapsible>
       )}
     </div>
+  );
+};
+
+/**
+ * One court's decisions or one act's provisions as a chip with their count
+ * ("Nejvyšší soud 4"), opening onto the same source rows the tray lists,
+ * each of which opens its source as before.
+ */
+const SourceGroupChip = ({
+  group,
+  messageId,
+  workspaceId,
+}: {
+  group: SourceGroup;
+  messageId: string;
+  workspaceId: string | undefined;
+}) => {
+  const format = useFormatter();
+  return (
+    <Popover>
+      <PopoverTrigger
+        data-chat-answer-source-group
+        render={<Button size="xs" variant="muted" />}
+      >
+        <BidiText as="span">{group.label}</BidiText>
+        <span className="text-muted-foreground tabular-nums">
+          {format.number(group.entries.length)}
+        </span>
+      </PopoverTrigger>
+      <PopoverPopup align="start" padding="sm" side="top">
+        <div className="flex max-w-sm min-w-0 flex-col items-start gap-1 text-xs">
+          <SourceEntryList
+            entries={[...group.entries]}
+            messageId={`${messageId}-${group.key}`}
+            workspaceId={workspaceId}
+          />
+        </div>
+      </PopoverPopup>
+    </Popover>
   );
 };
 

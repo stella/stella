@@ -165,7 +165,7 @@
     "invitation": {
       "declined": "Pozvánka odmietnutá",
       "declinedDescription": "K tejto organizácii ste sa nepripojili.",
-      "description": "{inviterEmail} vás pozval/a do organizácie {organizationName} ako {role}.",
+      "description": "{inviterEmail} vás pozval/a do organizácie {organizationName}{role, select, owner { ako vlastníka} admin { ako administrátora} member { ako člena} intern { ako stážistu} external { ako externého spolupracovníka} other {}}.",
       "goToWorkspaces": "Prejsť na spisy",
       "title": "Pozvánka do organizácie",
       "verifyEmailHint": "Ak chcete overiť adresu {email}, odhláste sa a prihláste sa jednorazovým kódom, ktorý na ňu odošleme.",
@@ -1795,7 +1795,6 @@
       "searchAllPastChatsQuestion": "Prehľadať všetky vaše chaty?",
       "uploadedDocumentPlaceholder": "(nahraný dokument)"
     },
-    "askAnything": "Opýtajte sa na čokoľvek",
     "askUser": {
       "custom": "Napísať vlastnú",
       "edit": "Upraviť odpovede",
@@ -1953,6 +1952,7 @@
     "historyTrimmed": "Staršie správy sa nepodarilo zhrnúť, preto táto odpoveď vychádza len z poslednej časti konverzácie.",
     "improvePrompt": "Vylepšiť zadanie",
     "improvePromptDraftChanged": "Zadanie sa zmenilo, preto vylepšenie nebolo použité.",
+    "improvePromptEmpty": "Napíšte zadanie, ktoré chcete vylepšiť.",
     "improvePromptPlainTextOnly": "Vylepšenie zadania je dostupné iba pre obyčajný text.",
     "improvePromptUnavailableAnonymized": "Vylepšenie zadania nie je dostupné v anonymizovanom režime.",
     "improvingPrompt": "Vylepšujem zadanie…",
@@ -2162,9 +2162,17 @@
     },
     "placeholder": "Sem napíšte svoju otázku, / pre zručnosti, @ na pridanie kontextu",
     "processSummary": {
-      "analyses": "{count, plural, one {# analýza} few {# analýzy} other {# analýz} many {# analýzy}}",
       "changesSaved": "{count, plural, one {# uložená zmena} few {# uložené zmeny} other {# uložených zmien} many {# uloženej zmeny}}",
+      "checkedRegisters": "Overené verejné registre",
       "documentEdits": "{count, plural, one {# úprava dokumentu} few {# úpravy dokumentu} other {# úprav dokumentu} many {# úpravy dokumentu}}",
+      "readDocument": "Prečítaný dokument",
+      "readDocuments": "Prečítané dokumenty",
+      "searchedCaseLaw": "Prehľadaná judikatúra",
+      "searchedChats": "Prehľadaná história chatu",
+      "searchedLegislation": "Prehľadané predpisy",
+      "searchedLegislationAndCaseLaw": "Prehľadané predpisy a judikatúra",
+      "searchedMatters": "Prehľadané spisy",
+      "searchedWeb": "Prehľadaný web",
       "sourcesChecked": "{count, plural, one {# preverený zdroj} few {# preverené zdroje} other {# preverených zdrojov} many {# prevereného zdroja}}"
     },
     "promptImprovementStrategies": {
@@ -2251,6 +2259,7 @@
       "chipLabel": "Kde beží: {place}",
       "cloud": "Cloud",
       "cloudDescription": "Beží v cloude. Funguje odkiaľkoľvek.",
+      "hintAntigravity": "Nainštalujte Antigravity 1.5 alebo novšie a prihláste sa v ňom",
       "hintCheck": "Skontrolujte ho v stella desktop",
       "hintInstall": "Nainštalujte ho v stella desktop",
       "hintOffline": "Otvorte stella desktop vo svojom počítači",
@@ -2303,6 +2312,7 @@
     "sendErrorToolsUnsupported": "Tento model nevie používať nástroje, takže nemôže odpovedať na otázky k vášmu spisu. Prepnite na model, ktorý nástroje podporuje.",
     "sendErrorTurnTooLarge": "Táto odpoveď je príliš veľká na to, aby sa dala doručiť celá. Pokračujte novou správou.",
     "sendPrompt": "Odoslať správu",
+    "sendPromptEmpty": "Napíšte správu, ktorú chcete odoslať.",
     "sendQueuedMessageNow": "Odoslať hneď",
     "sendWithoutAnonymization": "Odoslať bez anonymizácie",
     "signInToChat": "Prihláste sa a chatujte o tomto dokumente",
@@ -2314,7 +2324,7 @@
       }
     },
     "sourceChips": {
-      "alsoConsulted": "Tiež konzultované ({count, number})"
+      "moreConsulted": "{count, plural, one {+# ďalší preverený} few {+# ďalšie preverené} many {+# ďalšieho prevereného} other {+# ďalších preverených}}"
     },
     "sourcePlaceholder": "Chatovať o {title}",
     "sourcePlaceholderAction": "Chatovať o",
@@ -2347,6 +2357,10 @@
     "stopResponse": "Zastaviť",
     "stopped": "Zastavené",
     "stopping": "Zastavujem…",
+    "subagentRun": {
+      "browseWeb": "Prehliadanie webu",
+      "generic": "Práca na čiastkovej úlohe"
+    },
     "suggestTitle": "Navrhnúť názov",
     "suggestTitleUnavailableAnonymized": "Návrhy názvu nie sú dostupné pre anonymizované konverzácie.",
     "suggestingTitle": "Navrhujem názov…",
@@ -2394,6 +2408,8 @@
       "boe_search_legislation": "Vyhľadávanie v BOE",
       "borme_get_summary": "Denný súhrn BORME",
       "business_registry_lookup": "Vyhľadávanie v obchodnom registri",
+      "calendar_free_busy": "Zistenie dostupnosti v kalendári",
+      "calendar_list_events": "Čítanie udalostí kalendára",
       "command_execution": "Spúšťanie príkazu",
       "compare_versions": "Porovnávanie verzií",
       "configure_template_fields": "Nastaviť polia vzoru",
@@ -2933,6 +2949,7 @@
     "playbooks": "Playbooky",
     "preparing": "Pripravuje sa…",
     "preview": "Náhľad",
+    "previewTruncated": "Úplný text nie je v tomto náhľade k dispozícii.",
     "previous": "Predchádzajúci",
     "previousMatch": "Predchádzajúci výskyt",
     "print": "Tlačiť",
@@ -4700,9 +4717,13 @@
       "discoveredSkills": "{count, plural, one {Nájdená # zručnosť} few {Nájdené # zručnosti} other {Nájdených # zručností} many {Nájdené # zručnosti}}",
       "discoveryEmpty": "V tomto repozitári ani priečinku sa nenašli žiadne zručnosti.",
       "discoverySkippedInvalid": "{count, plural, one {# neplatná zručnosť bola preskočená} few {# neplatné zručnosti boli preskočené} other {# neplatných zručností bolo preskočených} many {# neplatnej zručnosti bolo preskočené}}",
-      "dropPack": "Presuňte sem .zip alebo SKILL.md a zručnosť sa naimportuje",
+      "dropPack": "Presuňte sem .zip/.skill alebo SKILL.md a zručnosť sa naimportuje",
       "editSkill": "Upraviť zručnosť",
       "enableSkill": "Zapnúť zručnosť",
+      "exportAsSkill": "Exportovať ako .skill",
+      "exportAsZip": "Exportovať ako .zip",
+      "exportFailed": "Zručnosť sa nepodarilo exportovať",
+      "exportSkill": "Exportovať zručnosť",
       "fileExists": "Súbor s touto cestou už existuje",
       "howItRuns": "Ako sa spúšťa",
       "importFailureFetch": "Zdroj zručnosti sa nepodarilo načítať.",
@@ -4757,8 +4778,8 @@
           "name": "Zhrnúť dokument"
         }
       },
-      "uploadHelp": "Použite súbor SKILL.md alebo priečinok .zip obsahujúci SKILL.md a voliteľné zdroje iba na čítanie.",
-      "uploadPack": "Nahrať .zip alebo SKILL.md",
+      "uploadHelp": "Použite súbor SKILL.md alebo priečinok .zip/.skill obsahujúci SKILL.md a voliteľné zdroje iba na čítanie.",
+      "uploadPack": "Nahrať .zip/.skill alebo SKILL.md",
       "urlPlaceholder": "https://github.com/org/repo/tree/main/cesta/k/zrucnosti",
       "version": "Verzia: {version}"
     },
@@ -5381,6 +5402,7 @@
       "defaultModel": "Predvolené: {model}",
       "defaultModelOption": "Predvolené",
       "defaultRationale": {
+        "browse": "Na prácu s webovými stránkami v prehliadači.",
         "chat": "Na konverzáciu a bežné otázky.",
         "fast": "Na krátke, rutinné úlohy.",
         "pdf": "Na čítanie a analýzu dokumentov PDF.",
@@ -5394,6 +5416,11 @@
       "googleKeyRestricted": "V Google Cloud skontrolujte obmedzenia kľúča podľa API, IP adries a odkazujúcich webov. Povoľte potrebné API a požiadavky svojho servera a skúste to znova.",
       "keepSavedKey": "Ponechať uložený kľúč",
       "keyFormatHint": "Tento kľúč má pre {provider} nezvyčajný formát. Uložením ho overíte u poskytovateľa.",
+      "keyNeed": {
+        "builtIn": "Nepovinné. Bez vlastného kľúča beží AI v tejto organizácii na modeloch, ktoré poskytuje stella.",
+        "keyRequired": "AI v tejto organizácii potrebuje kľúč poskytovateľa. Pridajte ho a AI sa zapne.",
+        "ownKeys": "AI v tejto organizácii beží na kľúčoch nižšie."
+      },
       "modelForRole": "Model pre rolu {role}",
       "modelIdPlaceholder": "Hľadať modely",
       "modelsDescription": "Pre každú kategóriu AI vyberte poskytovateľa a jeden ponúkaný multimodálny model.",
@@ -5401,6 +5428,7 @@
       "newApiKey": "Nový API kľúč",
       "newApiKeyDescription": "Po uložení zmien nahradí uložený kľúč.",
       "noModelResults": "Žiadne zodpovedajúce ponúkané modely",
+      "noProviders": "Zatiaľ nie sú pridané žiadne kľúče poskytovateľov.",
       "openaiInsufficientQuota": "Skontrolujte rozpočet projektu OpenAI a fakturáciu API. Doplňte kredit alebo zvýšte príslušný limit a skúste to znova.",
       "openaiProjectOrganizationMismatch": "Použite API kľúč z požadovaného projektu a organizácie OpenAI. Skontrolujte ich nastavenia prístupu a skúste to znova.",
       "openrouterNoCredits": "Doplňte kredit vo fakturácii OpenRouter a skúste to znova.",
@@ -5423,6 +5451,8 @@
       "providerForRole": "Poskytovateľ pre {role}",
       "providerKeyInvalid": "{provider} odmietol kľúč. Skontrolujte ho pred uložením.",
       "providerKeyInvalidShort": "Neplatný",
+      "providerModes": "Používa sa pre: {modes}",
+      "providerModesNone": "Nepoužíva sa pre žiadny mód. Priraďte ho módu v časti Rozšírené.",
       "providerSetupConsole": "Otvoriť nastavenia poskytovateľa",
       "providersDescription": "Pridajte prihlasovacie údaje poskytovateľov, ktoré má stella používať.",
       "providersPanel": "Poskytovatelia",
@@ -5432,6 +5462,7 @@
       "replaceKey": "Nahradiť kľúč",
       "roleUnavailable": "{provider} túto rolu nepodporuje.",
       "roles": {
+        "browse": "Prehliadanie webu",
         "chat": "Chat",
         "fast": "Rýchly",
         "pdf": "PDF",
@@ -5448,6 +5479,7 @@
       "title": "Pokyny organizácie",
       "tooLong": "Pokyny môžu obsahovať najviac {maxLength} znakov."
     },
+    "createdSwitchPrompt": "Organizácia <bdi>{name}</bdi> bola vytvorená. Prepnite sa do nej, aby ste ju mohli nastaviť a pozvať členov.",
     "creationEvaluationLimitReached": "Využili ste všetky {limit} skúšobné obdobia organizácií. Odstránením organizácie sa skúšobné obdobie neobnoví. Použite existujúcu organizáciu alebo kontaktujte podporu a dohodnite si platený prístup.",
     "creationInvalidName": "Zadajte platný názov organizácie (najviac {maxLength} znakov).",
     "creationNotAllowed": "Tento účet nemôže vytvárať organizácie.",
@@ -5493,7 +5525,7 @@
     "members": {
       "billingAccess": "Prístup k fakturačným údajom",
       "changeRole": "Zmeniť rolu",
-      "confirmRoleChangeDescription": "Rola používateľa {email} sa zmení z {oldRole} na {newRole}.",
+      "confirmRoleChangeDescription": "Rola používateľa {email} sa zmení {oldRole, select, owner {z vlastníka} admin {z administrátora} member {z člena} intern {zo stážistu} external {z externého spolupracovníka} other {}} {newRole, select, owner {na vlastníka} admin {na administrátora} member {na člena} intern {na stážistu} external {na externého spolupracovníka} other {}}.",
       "confirmRoleChangeTitle": "Zmeniť rolu",
       "joined": "Pripojil/a sa",
       "noMembersFound": "Neboli nájdení žiadni členovia",
@@ -5519,6 +5551,13 @@
     "startOverDescription": "Pôvodná požiadavka už mohla organizáciu vytvoriť. Skôr než začnete odznova, skontrolujte svoje organizácie; nová požiadavka by mohla vytvoriť ďalšiu organizáciu.",
     "startOverTitle": "Začať novú požiadavku na vytvorenie?",
     "switchOrganization": "Prepnúť organizáciu"
+  },
+  "organizationSetup": {
+    "aiAction": "Nastaviť AI",
+    "aiOptional": "Vlastné kľúče poskytovateľov AI sú nepovinné: bez nich beží AI na modeloch, ktoré poskytuje stella.",
+    "aiRequired": "AI v tejto organizácii potrebuje kľúč poskytovateľa, inak ju nikto nemôže používať.",
+    "invite": "Pozvite kolegov, aby tu mohli pracovať s vami.",
+    "title": "Nastavte novú organizáciu"
   },
   "publicTools": {
     "addSkill": "Pridať zručnosť",
@@ -5959,7 +5998,7 @@
     "organization": {
       "activeMembers": "Aktívni členovia",
       "ai": "Konfigurácia AI",
-      "aiDescription": "Pripojte vlastné kľúče poskytovateľov AI.",
+      "aiDescription": "Nastavte, ako v tejto organizácii funguje AI.",
       "anonymization": {
         "addPlaceholder": "Pojem, ktorý sa má vždy maskovať (napr. názov tímu)",
         "deleteAction": "Zmazať pojem",
@@ -6125,7 +6164,7 @@
         "title": "AI návrhy výkazov práce"
       },
       "dataBoxes": {
-        "description": "Dátová správa odoslaná z niektorej z týchto schránok sa založí ako odchádzajúca, správa do nich ako prichádzajúca. Každá zmena znovu odvodí smer správ už založených v spisoch, ku ktorým máte prístup.",
+        "description": "Správy odoslané z týchto schránok sa zakladajú ako odchádzajúce, správy do nich ako prichádzajúce. Zmeny sa prejavia aj pri už založených správach.",
         "invalid": "ID dátovej schránky má sedem písmen alebo číslic.",
         "remove": "Odobrať dátovú schránku {address}",
         "title": "Dátové schránky organizácie"
@@ -6158,6 +6197,7 @@
         "title": "Extrakcia pamäte",
         "toggleLabel": "Navrhovať záznamy do pamäte z histórie chatov na pozadí"
       },
+      "organizationIdHint": "Trvalé ID, ktoré sa nikdy nemení. Použite ho pri kontakte s podporou alebo pri nastavovaní integrácií.",
       "pastInvitations": "Predchádzajúce pozvánky",
       "pendingInvitations": "Čakajúce pozvánky",
       "practiceJurisdictions": "Jurisdikcie",
@@ -6171,11 +6211,12 @@
       "renameTitle": "Premenovať organizáciu",
       "renameTypeToConfirm": "Pre potvrdenie napíšte nový názov: {name}",
       "slug": {
-        "change": "Zmeniť identifikátor",
-        "conflict": "Tento identifikátor už používa iná organizácia.",
-        "description": "Zvoľte nový identifikátor alebo vygenerujte náhodný. Pôvodný identifikátor prestane fungovať.",
-        "opaque": "Vygenerovať náhodný identifikátor",
-        "title": "Identifikátor organizácie"
+        "change": "Zmeniť krátky názov",
+        "conflict": "Tento krátky názov už používa iná organizácia.",
+        "description": "Zvoľte nový krátky názov alebo vygenerujte náhodný. Pôvodný krátky názov prestane fungovať.",
+        "hint": "Jedinečný krátky názov organizácie, nezávislý od jej zobrazovaného názvu.",
+        "opaque": "Vygenerovať náhodný krátky názov",
+        "title": "Krátky názov organizácie"
       },
       "timePolicy": {
         "description": "Nastavte zaokrúhľovanie času, obmedzenia úprav a uzamykanie mesiacov.",
@@ -6299,6 +6340,14 @@
     },
     "reconnectRequired": "Prihlásenie vypršalo",
     "title": "SharePoint a OneDrive"
+  },
+  "signedFile": {
+    "layer": "Vrstva podpisov {number, number}",
+    "noReadableContent": "Na náhľad nie je k dispozícii žiadny čitateľný obsah.",
+    "pdfUnavailable": "Náhľad PDF nie je k dispozícii.",
+    "unknownSigner": "Neznámy podpisovateľ",
+    "unreadable": "Podpísaný súbor sa nepodarilo prečítať.",
+    "unverified": "Podpisy neboli overené."
   },
   "skillHistory": {
     "acceptStale": "Prijať a prepísať novšie úpravy",
@@ -6440,6 +6489,10 @@
     "versionChangesRemoved": "{count, plural, one {# vypustené ustanovenie} few {# vypustené ustanovenia} many {# vypusteného ustanovenia} other {# vypustených ustanovení}}",
     "versionChangesWords": "{inserted, plural, one {# vložené slovo} few {# vložené slová} many {# vloženého slova} other {# vložených slov}}, {deleted, plural, one {# vypustené slovo} few {# vypustené slová} many {# vypusteného slova} other {# vypustených slov}}",
     "wordingVersionUnknown": "Dátum verzie znenia nie je k dispozícii"
+  },
+  "structuredDocument": {
+    "noReadableContent": "Na náhľad nie je k dispozícii čitateľný text.",
+    "textOnly": "Textový náhľad bez rozloženia strany a obrázkov."
   },
   "styleSets": {
     "create": "Vytvoriť",
@@ -7200,6 +7253,7 @@
         "title": "Odstrániť odkazy na vzory Wordu?",
         "unknownLocation": "Umiestnenie vzoru: adresa, ktorú stella nedokáže overiť"
       },
+      "checkingFiles": "Kontrola súborov…",
       "desktopEdit": {
         "accountRequiredTitle": "Pripojte stella desktop k svojmu účtu",
         "action": "Upraviť v desktopovej aplikácii",
@@ -7243,6 +7297,14 @@
       "downloadPdf": "Stiahnuť ako PDF",
       "downloadSearchablePdf": "Prehľadávateľné PDF",
       "downloadWithComments": "Stiahnuť s komentármi",
+      "duplicateUpload": {
+        "description": "{count, plural, one {# súbor je totožný s dokumentom, ktorý tento spis už obsahuje.} few {# súbory sú totožné s dokumentmi, ktoré tento spis už obsahuje.} many {# súboru je totožných s dokumentmi, ktoré tento spis už obsahuje.} other {# súborov je totožných s dokumentmi, ktoré tento spis už obsahuje.}} Vyberte, čo s každým z nich urobiť.",
+        "matchedDocument": "Totožné s dokumentom <bdi>{documentName}</bdi>",
+        "skip": "Preskočiť tento súbor",
+        "skipAll": "Preskočiť duplicity",
+        "title": "Už v spise",
+        "uploadAnyway": "Napriek tomu nahrať"
+      },
       "emptyFile": "Súbor je prázdny.",
       "fileTooLarge": "Súbor je väčší ako {limit, number} MB.",
       "includeReferenceNumber": "Pridať referenčné číslo",

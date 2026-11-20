@@ -28,6 +28,7 @@ import {
   wsOrganizationPolicies,
 } from "./common";
 import { workspaces } from "./contacts";
+import { entities } from "./entities";
 
 const quoted = (values: readonly string[]) =>
   sql.join(
@@ -60,8 +61,8 @@ export const bilingualTranslationRuns = p.pgTable(
     workspaceId: safeWorkspaceId("workspace_id")
       .notNull()
       .references(() => workspaces.id, { onDelete: "cascade" }),
-    // Plain identifiers: a deleted document must not take its run history with
-    // it, so these deliberately carry no foreign key.
+    // Version and field ids preserve the historical input while the entity FK
+    // makes permanent document deletion erase every copied source/target row.
     entityId: safeUuid<"entity">("entity_id").notNull(),
     fileFieldId: safeUuid<"field">("file_field_id").notNull(),
     entityVersionId: safeUuid<"entityVersion">("entity_version_id").notNull(),
@@ -125,12 +126,25 @@ export const bilingualTranslationRuns = p.pgTable(
     ),
     p
       .foreignKey({
+        columns: [table.entityId, table.workspaceId],
+        foreignColumns: [entities.id, entities.workspaceId],
+        name: "bilingual_translation_runs_entity_workspace_fk",
+      })
+      .onDelete("cascade"),
+    p
+      .foreignKey({
         columns: [table.workspaceId, table.organizationId],
         foreignColumns: [workspaces.id, workspaces.organizationId],
         name: "bilingual_translation_runs_workspace_organization_fk",
       })
       .onDelete("cascade"),
-    ...wsOrganizationPolicies("bilingual_translation_runs", { columns: table }),
+    // The source key carries cascade only: run visibility follows the workspace.
+    ...wsOrganizationPolicies("bilingual_translation_runs", {
+      columns: table,
+      references: new Map([
+        [table.entityId, { target: "entities", kind: "context" }],
+      ]),
+    }),
   ],
 );
 

@@ -1,4 +1,7 @@
 {
+  "common": {
+    "previewTruncated": "Der vollständige Text ist in dieser Vorschau nicht verfügbar."
+  },
   "tabs": {
     "chat": "Chat",
     "close": "Schließen",
@@ -127,6 +130,8 @@
       "boe_search_legislation": "BOE-Gesetzessuche",
       "borme_get_summary": "BORME-Tageszusammenfassung",
       "business_registry_lookup": "Handelsregister durchsuchen",
+      "calendar_free_busy": "Verfügbarkeit im Kalender prüfen",
+      "calendar_list_events": "Kalendertermine lesen",
       "command_execution": "Befehl wird ausgeführt",
       "compare_versions": "Versionen vergleichen",
       "configure_template_fields": "Vorlagenfelder konfigurieren",
@@ -271,9 +276,18 @@
       "sourcesChecked": "{count, plural, one {# Quelle geprüft} other {# Quellen geprüft}}",
       "documentEdits": "{count, plural, one {# Dokumentänderung} other {# Dokumentänderungen}}",
       "changesSaved": "{count, plural, one {# Änderung gespeichert} other {# Änderungen gespeichert}}",
-      "analyses": "{count, plural, one {# Analyse} other {# Analysen}}"
+      "searchedLegislation": "Rechtsvorschriften durchsucht",
+      "searchedCaseLaw": "Rechtsprechung durchsucht",
+      "searchedLegislationAndCaseLaw": "Rechtsvorschriften und Rechtsprechung durchsucht",
+      "readDocument": "Dokument gelesen",
+      "readDocuments": "Dokumente gelesen",
+      "searchedMatters": "Akten durchgesehen",
+      "checkedRegisters": "Öffentliche Register geprüft",
+      "searchedWeb": "Web durchsucht",
+      "searchedChats": "Chatverlauf durchsucht"
     },
     "stepCount": "{count, plural, one {# Schritt} other {# Schritte}}",
+    "lookupCount": "{count, plural, one {# Abfrage} other {# Abfragen}}",
     "reasoning": "Argumentation",
     "historyTrimmed": "Ältere Nachrichten konnten nicht zusammengefasst werden. Diese Antwort berücksichtigt daher nur den jüngsten Teil der Unterhaltung.",
     "failure": {
@@ -608,6 +622,17 @@
     "dictationModelsUnavailable": "Die Modelle konnten nicht geladen werden. Diktieren nutzt das gewählte Modell oder das Standardmodell, wenn der Server das gewählte nicht mehr anbietet.",
     "dictationCleanup": "Mit KI überarbeiten",
     "dictationCleanupHint": "Behebt Erkennungsfehler und gesprochene Formatierung wie „neue Zeile“. Nur der Text, nicht das Audio, geht über stella an den KI-Anbieter deiner Organisation; stella speichert ihn nicht."
+  },
+  "signedFile": {
+    "layer": "Signaturebene {number, number}",
+    "noReadableContent": "Für die Vorschau sind keine lesbaren Inhalte verfügbar.",
+    "unknownSigner": "Unbekannte unterzeichnende Person",
+    "unreadable": "Die signierte Datei konnte nicht gelesen werden.",
+    "unverified": "Die Signaturen wurden nicht geprüft."
+  },
+  "structuredDocument": {
+    "noReadableContent": "Für die Vorschau ist kein lesbarer Text verfügbar.",
+    "textOnly": "Textvorschau ohne Seitenlayout und Bilder."
   },
   "header": {
     "search": "Suchen"

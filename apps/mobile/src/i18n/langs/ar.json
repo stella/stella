@@ -1,4 +1,7 @@
 {
+  "common": {
+    "previewTruncated": "النص الكامل غير متاح في هذه المعاينة."
+  },
   "tabs": {
     "chat": "الدردشة",
     "close": "إغلاق",
@@ -127,6 +130,8 @@
       "boe_search_legislation": "البحث في تشريعات BOE",
       "borme_get_summary": "ملخّص BORME اليومي",
       "business_registry_lookup": "البحث في السجل التجاري",
+      "calendar_free_busy": "التحقق من التوفر في التقويم",
+      "calendar_list_events": "قراءة أحداث التقويم",
       "command_execution": "تشغيل أمر",
       "compare_versions": "مقارنة الإصدارات",
       "configure_template_fields": "ضبط حقول القالب",
@@ -271,9 +276,18 @@
       "sourcesChecked": "{count, plural, zero {# مصادر تمت مراجعتها} one {مصدر واحد تمت مراجعته} two {مصدران تمت مراجعتهما} few {# مصادر تمت مراجعتها} many {# مصدرًا تمت مراجعته} other {# مصدر تمت مراجعته}}",
       "documentEdits": "{count, plural, zero {# تعديلات على المستند} one {تعديل واحد على المستند} two {تعديلان على المستند} few {# تعديلات على المستند} many {# تعديلًا على المستند} other {# تعديل على المستند}}",
       "changesSaved": "{count, plural, zero {# تغييرات محفوظة} one {تغيير واحد محفوظ} two {تغييران محفوظان} few {# تغييرات محفوظة} many {# تغييرًا محفوظًا} other {# تغيير محفوظ}}",
-      "analyses": "{count, plural, zero {# تحليلات} one {تحليل واحد} two {تحليلان} few {# تحليلات} many {# تحليلًا} other {# تحليل}}"
+      "searchedLegislation": "تم البحث في التشريعات",
+      "searchedCaseLaw": "تم البحث في الاجتهاد القضائي",
+      "searchedLegislationAndCaseLaw": "تم البحث في التشريعات والاجتهاد القضائي",
+      "readDocument": "تمت قراءة المستند",
+      "readDocuments": "تمت قراءة المستندات",
+      "searchedMatters": "تمت مراجعة الملفات القانونية",
+      "checkedRegisters": "تم التحقق من السجلات العامة",
+      "searchedWeb": "تم البحث على الويب",
+      "searchedChats": "تم البحث في سجلّ الدردشة"
     },
     "stepCount": "{count, plural, zero {# خطوة} one {# خطوة} two {# خطوتان} few {# خطوات} many {# خطوة} other {# خطوة}}",
+    "lookupCount": "{count, plural, zero {# استعلام} one {استعلام واحد} two {استعلامان} few {# استعلامات} many {# استعلامًا} other {# استعلام}}",
     "reasoning": "استدلال",
     "historyTrimmed": "تعذّر تلخيص الرسائل السابقة، لذا تراعي هذه الإجابة الجزء الأحدث من المحادثة فقط.",
     "failure": {
@@ -608,6 +622,17 @@
     "dictationModelsUnavailable": "تعذّر تحميل النماذج. يستخدم الإملاء النموذج الذي اخترته، أو النموذج الافتراضي إذا لم يعد الخادم يوفّره.",
     "dictationCleanup": "التنقيح بالذكاء الاصطناعي",
     "dictationCleanupHint": "يصحّح أخطاء التعرّف والتنسيق المنطوق مثل «سطر جديد». يمر النص فقط، لا الصوت، عبر stella إلى مزوّد الذكاء الاصطناعي لدى مؤسستك؛ ولا تخزّنه stella."
+  },
+  "signedFile": {
+    "layer": "طبقة التوقيعات {number, number}",
+    "noReadableContent": "لا يتوفر محتوى قابل للقراءة للمعاينة.",
+    "unknownSigner": "موقّع مجهول",
+    "unreadable": "تعذّرت قراءة الملف الموقّع.",
+    "unverified": "لم يُتحقق من التوقيعات."
+  },
+  "structuredDocument": {
+    "noReadableContent": "لا يتوفر نص قابل للقراءة للمعاينة.",
+    "textOnly": "معاينة نصية من دون تنسيق الصفحة أو الصور."
   },
   "header": {
     "search": "بحث"

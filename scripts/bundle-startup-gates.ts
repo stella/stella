@@ -9,7 +9,15 @@
 //   1. Initial JS ratchet: the gzip of the initial chunks stays within
 //      INITIAL_GROWTH_LIMIT_BYTES of the committed budget.
 //   2. Pending layer: `*.pending.tsx` loading views are eager by design, so
-//      each stays small and so does their sum.
+//      each stays within PENDING_MODULE_LIMIT_BYTES. Their sum is a ratchet
+//      tied to route coverage: against the `pending` total the base branch
+//      commits, a change may add PENDING_ROUTE_ALLOWANCE_BYTES for each route
+//      it removes from the pending-component exceptions list
+//      (.oxlint-plugins/route-pending-component-exceptions.json), plus
+//      PENDING_SLACK_BYTES. A change that commits a higher `pending` than
+//      its base re-anchors the total, which, as for `initial`, its pull
+//      request has to justify. The initial JS ratchet (gate 1) counts the
+//      pending layer too and stays binding.
 //   3. No page code at startup: no page module, no `?tsr-shared=1` module and
 //      no route-file code that only the route's `component` reaches in the
 //      initial chunks (see STARTUP_KINDS).
@@ -31,7 +39,10 @@ import * as v from "valibot";
 
 export const INITIAL_GROWTH_LIMIT_BYTES = 8 * 1024;
 export const PENDING_MODULE_LIMIT_BYTES = 6 * 1024;
-export const PENDING_TOTAL_LIMIT_BYTES = 150 * 1024;
+/** What converting one route to its own loading view may add. */
+export const PENDING_ROUTE_ALLOWANCE_BYTES = 2 * 1024;
+/** Growth any change may add to the pending layer, routes or not. */
+export const PENDING_SLACK_BYTES = 1024;
 
 /** A module's minified size in one chunk, keyed by its app-relative id. */
 export type BuiltChunk = {
@@ -160,7 +171,6 @@ export type PendingLayer = {
   modules: readonly { module: string; bytes: number }[];
   totalBytes: number;
   oversized: readonly { module: string; bytes: number }[];
-  overTotal: boolean;
 };
 
 export const pendingLayer = (graph: StartupGraph): PendingLayer => {
@@ -175,8 +185,85 @@ export const pendingLayer = (graph: StartupGraph): PendingLayer => {
     oversized: modules.filter(
       (entry) => entry.bytes > PENDING_MODULE_LIMIT_BYTES,
     ),
-    overTotal: totalBytes > PENDING_TOTAL_LIMIT_BYTES,
   };
+};
+
+/** What the pending total is measured against. */
+export type PendingBudget = {
+  /** The `pending` total the checked tree commits. */
+  committed: number;
+  /** The `pending` total the base branch commits; null when it has none. */
+  base: number | null;
+  /**
+   * Routes the change removed from the pending-component exceptions list
+   * against the base branch; null when the base list could not be read.
+   */
+  convertedRoutes: number | null;
+};
+
+export type PendingBudgetResult = {
+  /** over: past the limit. unrecorded: grown within it, but the tree does not
+   *  commit the new total yet. shrunk: well below the committed total. */
+  status: "ok" | "over" | "unrecorded" | "shrunk";
+  measured: number;
+  /** The total the growth is measured from: the base's, else the tree's. */
+  anchor: number;
+  /** What the converted routes and the slack allow on top of the anchor. */
+  allowance: number;
+  convertedRoutes: number;
+  limit: number;
+  /** The tree commits a total past what its base and its allowance give: a
+   *  deliberate re-anchor, which its pull request justifies. */
+  reanchored: boolean;
+};
+
+/** The growth `convertedRoutes` routes and the slack allow. */
+export const pendingAllowanceBytes = (convertedRoutes: number): number =>
+  PENDING_ROUTE_ALLOWANCE_BYTES * convertedRoutes + PENDING_SLACK_BYTES;
+
+/** Routes in the base list that the checked list no longer names. */
+export const convertedRouteCount = (
+  baseExceptions: readonly string[],
+  exceptions: readonly string[],
+): number => {
+  const current = new Set(exceptions);
+  return new Set(baseExceptions.filter((route) => !current.has(route))).size;
+};
+
+export const checkPendingBudget = (
+  measured: number,
+  budget: PendingBudget,
+): PendingBudgetResult => {
+  const convertedRoutes = budget.convertedRoutes ?? 0;
+  const allowance = pendingAllowanceBytes(convertedRoutes);
+  const anchor = budget.base ?? budget.committed;
+  // A change records the total it measures. Recording more than its base and
+  // allowance give is the re-anchor a pull request justifies, as for
+  // `initial`; recording less is always allowed and changes nothing here,
+  // since growth counts from the base.
+  const reanchored =
+    budget.base !== null && budget.committed > anchor + allowance;
+  const limit = reanchored
+    ? budget.committed + PENDING_SLACK_BYTES
+    : anchor + allowance;
+  const result = {
+    measured,
+    anchor,
+    allowance,
+    convertedRoutes,
+    limit,
+    reanchored,
+  };
+  if (measured > limit) {
+    return { status: "over", ...result };
+  }
+  if (measured > budget.committed + PENDING_SLACK_BYTES) {
+    return { status: "unrecorded", ...result };
+  }
+  if (measured < budget.committed - PENDING_SLACK_BYTES) {
+    return { status: "shrunk", ...result };
+  }
+  return { status: "ok", ...result };
 };
 
 // --- Gate 3: no page code at startup ---------------------------------------------
@@ -421,6 +508,7 @@ export type GateFailure = { title: string; message: string };
 export type StartupEvaluation = {
   initial: InitialBudgetResult;
   pending: PendingLayer;
+  pendingBudget: PendingBudgetResult;
   pageCode: LedgerVerdict<StartupOffender>;
   hops: LedgerVerdict<ColdLoadHop>;
   failures: readonly GateFailure[];
@@ -435,9 +523,16 @@ const LEDGER_HINT =
   "Delete its line from scripts/bundle-startup-ledger.json: the ledger only shrinks.";
 
 /** Runs all four gates; a run passes when `failures` is empty. */
+/** What the startup totals are measured against. */
+export type StartupBudget = {
+  /** The committed gzip budget of the initial chunks. */
+  initial: number;
+  pending: PendingBudget;
+};
+
 export const evaluateStartup = (
   graph: StartupGraph,
-  budget: number,
+  { initial: budget, pending: pendingBudgetInput }: StartupBudget,
   ledger: StartupLedger,
   writeHint: string,
 ): StartupEvaluation => {
@@ -463,11 +558,31 @@ export const evaluateStartup = (
       message: `${entry.module} puts ${kib(entry.bytes)} minified into the initial chunks; a pending view may use ${kib(PENDING_MODULE_LIMIT_BYTES)}. Keep it to the page's skeleton and import nothing from its page.`,
     });
   }
-  if (pending.overTotal) {
+  const pendingBudget = checkPendingBudget(
+    pending.totalBytes,
+    pendingBudgetInput,
+  );
+  const routes = (count: number) => `${count} route${count === 1 ? "" : "s"}`;
+  const allowanceText = `${kib(pendingBudget.allowance)} (${routes(pendingBudget.convertedRoutes)} removed from the pending-component exceptions × ${kib(PENDING_ROUTE_ALLOWANCE_BYTES)} + ${kib(PENDING_SLACK_BYTES)})`;
+  if (pendingBudget.status === "over") {
     failures.push({
-      title: "Pending layer too large",
-      message: `The pending views put ${kib(pending.totalBytes)} minified into the initial chunks, over the ${kib(PENDING_TOTAL_LIMIT_BYTES)} total.`,
+      title: "Pending layer grew past its allowance",
+      message: `The pending views put ${kib(pendingBudget.measured)} minified into the initial chunks, ${kib(pendingBudget.measured - pendingBudget.anchor)} over the ${kib(pendingBudget.anchor)} the base commits; this change may add ${allowanceText}. Trim the loading views, or re-anchor \`pending\` with \`${writeHint}\` and state why, as for \`initial\`.`,
     });
+  } else if (pendingBudget.status === "unrecorded") {
+    failures.push({
+      title: "Pending layer total not recorded",
+      message: `The pending views put ${kib(pendingBudget.measured)} minified into the initial chunks, within this change's allowance of ${allowanceText}, but \`pending\` still records ${kib(pendingInputCommitted(pendingBudgetInput))}. Run \`${writeHint}\` and commit it, so the next change is measured from here.`,
+    });
+  } else if (pendingBudget.status === "shrunk") {
+    notices.push(
+      `The pending views shrank to ${kib(pendingBudget.measured)} minified from the committed ${kib(pendingInputCommitted(pendingBudgetInput))}. Run \`${writeHint}\` and commit the lower total.`,
+    );
+  }
+  if (pendingBudget.reanchored) {
+    notices.push(
+      `\`pending\` is re-anchored to ${kib(pendingInputCommitted(pendingBudgetInput))} from the base's ${kib(pendingBudget.anchor)}: state in the pull request why every cold visit should pay for it, as for \`initial\`.`,
+    );
   }
 
   const pageCode = reconcileStartupPageCode(startupPageCode(graph), ledger);
@@ -498,12 +613,30 @@ export const evaluateStartup = (
     });
   }
 
-  return { initial, pending, pageCode, hops, failures, notices };
+  return {
+    initial,
+    pending,
+    pendingBudget,
+    pageCode,
+    hops,
+    failures,
+    notices,
+  };
 };
+
+// A re-anchored limit is the committed total plus the slack, not the base's
+// anchor plus the route allowance, so the row names the limit the gate used.
+const pendingLimitText = (budget: PendingBudgetResult): string =>
+  budget.reanchored
+    ? `${kib(budget.limit)} (re-anchored from ${kib(budget.anchor)})`
+    : `${kib(budget.anchor)} + ${kib(budget.allowance)} (${budget.convertedRoutes} route(s) converted)`;
+
+const pendingInputCommitted = (budget: PendingBudget): number =>
+  budget.committed;
 
 /** The job summary: one row per gate, then every offender. */
 export const startupSummary = (evaluation: StartupEvaluation): string => {
-  const { initial, pending, pageCode, hops } = evaluation;
+  const { initial, pending, pendingBudget, pageCode, hops } = evaluation;
   const result = (ok: boolean): string => (ok ? "pass" : "**fail**");
   const lines = [
     "### Startup bundle gates",
@@ -511,7 +644,7 @@ export const startupSummary = (evaluation: StartupEvaluation): string => {
     "| Gate | Measured | Limit | Result |",
     "| --- | ---: | ---: | --- |",
     `| Initial JS (gzip) | ${kib(initial.measured)} | ${kib(initial.budget)} + ${kib(INITIAL_GROWTH_LIMIT_BYTES)} | ${result(initial.status !== "over")} |`,
-    `| Pending layer (minified) | ${kib(pending.totalBytes)} in ${pending.modules.length} module(s) | ${kib(PENDING_TOTAL_LIMIT_BYTES)}, ${kib(PENDING_MODULE_LIMIT_BYTES)} each | ${result(pending.oversized.length === 0 && !pending.overTotal)} |`,
+    `| Pending layer (minified) | ${kib(pending.totalBytes)} in ${pending.modules.length} module(s) | ${pendingLimitText(pendingBudget)}, ${kib(PENDING_MODULE_LIMIT_BYTES)} each | ${result(pending.oversized.length === 0 && pendingBudget.status !== "over" && pendingBudget.status !== "unrecorded")} |`,
     `| Page code at startup | ${pageCode.unlisted.length} new, ${pageCode.listed.length} listed | 0 new | ${result(pageCode.unlisted.length === 0 && pageCode.stale.length === 0)} |`,
     `| Cold-load hops | ${hops.unlisted.length} new, ${hops.listed.length} listed | 0 new | ${result(hops.unlisted.length === 0 && hops.stale.length === 0)} |`,
     "",

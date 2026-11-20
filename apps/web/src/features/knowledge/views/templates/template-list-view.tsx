@@ -5,7 +5,7 @@ import { useTranslations } from "use-intl";
 
 import { compareByLocale } from "@stll/collation";
 import { Button } from "@stll/ui/button";
-import { Rows2Icon, Rows3Icon, XIcon } from "@stll/ui/icons";
+import { XIcon } from "@stll/ui/icons";
 import { SegmentedIconToggle } from "@stll/ui/segmented-icon-toggle";
 
 import type {
@@ -14,6 +14,7 @@ import type {
 } from "@/features/knowledge/views/knowledge-seam";
 import { KnowledgeStatusMessage } from "@/features/knowledge/views/knowledge-status-message";
 import {
+  TEMPLATE_DENSITY_OPTIONS,
   TEMPLATE_LIST_LAYOUT,
   TEMPLATE_TOOLBAR_CLASS,
   TemplateListPending,
@@ -227,6 +228,11 @@ const TemplateListView = ({
   );
 };
 
+const DENSITY_LABEL_KEYS = {
+  compact: "common.compact",
+  comfortable: "common.comfortable",
+} as const satisfies Record<TemplateDensity, string>;
+
 type DensityToggleProps = {
   density: TemplateDensity;
   onChange: (density: TemplateDensity) => void;
@@ -238,14 +244,10 @@ const DensityToggle = ({ density, onChange }: DensityToggleProps) => {
   return (
     <SegmentedIconToggle
       onChange={onChange}
-      options={[
-        { value: "compact", icon: Rows3Icon, label: t("common.compact") },
-        {
-          value: "comfortable",
-          icon: Rows2Icon,
-          label: t("common.comfortable"),
-        },
-      ]}
+      options={TEMPLATE_DENSITY_OPTIONS.map((option) => ({
+        ...option,
+        label: t(DENSITY_LABEL_KEYS[option.value]),
+      }))}
       value={density}
     />
   );
@@ -253,11 +255,23 @@ const DensityToggle = ({ density, onChange }: DensityToggleProps) => {
 
 // The list's pending phase at the reader's density: the presentation cookie
 // gives it, so the server and the hydrating browser agree.
-const TemplateListSkeleton = ({ layout }: { layout: TemplateListLayout }) => {
+const TemplateListSkeleton = ({
+  canCreate,
+  layout,
+}: {
+  canCreate: boolean;
+  layout: TemplateListLayout;
+}) => {
   const {
     prefs: { templateDensity: density },
   } = usePresentationPrefs();
-  return <TemplateListPending density={density} layout={layout} />;
+  return (
+    <TemplateListPending
+      canCreate={canCreate}
+      density={density}
+      layout={layout}
+    />
+  );
 };
 
 /**
@@ -270,6 +284,9 @@ export const TemplateLibraryView = (props: TemplateListViewProps) => {
   if (props.source.status === "loading") {
     return (
       <TemplateListSkeleton
+        // The library's toolbar is its create action, there when the member
+        // may create.
+        canCreate={Boolean(props.toolbar)}
         layout={
           props.sidebar === undefined
             ? TEMPLATE_LIST_LAYOUT.catalogue

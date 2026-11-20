@@ -165,7 +165,7 @@
     "invitation": {
       "declined": "Convite recusado",
       "declinedDescription": "Você não entrou nesta organização.",
-      "description": "Você foi convidado para participar do {organizationName} por {inviterEmail} como {role}.",
+      "description": "Você foi convidado para participar do {organizationName} por {inviterEmail}{role, select, owner { como proprietário} admin { como administrador} member { como membro} intern { como estagiário} external { como colaborador externo} other {}}.",
       "goToWorkspaces": "Ir para casos",
       "title": "Convite da organização",
       "verifyEmailHint": "Para verificar {email}, saia e faça login com um código único enviado para esse endereço.",
@@ -1795,7 +1795,6 @@
       "searchAllPastChatsQuestion": "Pesquisar em todos os seus chats?",
       "uploadedDocumentPlaceholder": "(documento enviado)"
     },
-    "askAnything": "Pergunte qualquer coisa",
     "askUser": {
       "custom": "Escreva o seu próprio",
       "edit": "Editar respostas",
@@ -1953,6 +1952,7 @@
     "historyTrimmed": "Não foi possível resumir as mensagens anteriores, então esta resposta considera apenas a parte mais recente da conversa.",
     "improvePrompt": "Melhorar prompt",
     "improvePromptDraftChanged": "O rascunho mudou, então a melhoria não foi aplicada.",
+    "improvePromptEmpty": "Digite um prompt para melhorá-lo.",
     "improvePromptPlainTextOnly": "A melhoria de prompts está disponível apenas para texto simples.",
     "improvePromptUnavailableAnonymized": "A melhoria de prompts não está disponível no modo anonimizado.",
     "improvingPrompt": "Melhorando prompt…",
@@ -2162,9 +2162,17 @@
     },
     "placeholder": "Digite sua pergunta aqui, / para habilidades, @ para adicionar contexto",
     "processSummary": {
-      "analyses": "{count, plural, one {# análise} other {# análises} many {# análises}}",
       "changesSaved": "{count, plural, one {# alteração salva} other {# alterações salvas} many {# alterações salvas}}",
+      "checkedRegisters": "Registros públicos consultados",
       "documentEdits": "{count, plural, one {# edição do documento} other {# edições do documento} many {# edições do documento}}",
+      "readDocument": "Documento lido",
+      "readDocuments": "Documentos lidos",
+      "searchedCaseLaw": "Jurisprudência pesquisada",
+      "searchedChats": "Histórico do chat pesquisado",
+      "searchedLegislation": "Legislação pesquisada",
+      "searchedLegislationAndCaseLaw": "Legislação e jurisprudência pesquisadas",
+      "searchedMatters": "Casos revisados",
+      "searchedWeb": "Web pesquisada",
       "sourcesChecked": "{count, plural, one {# fonte consultada} other {# fontes consultadas} many {# fontes consultadas}}"
     },
     "promptImprovementStrategies": {
@@ -2251,6 +2259,7 @@
       "chipLabel": "Executa em: {place}",
       "cloud": "Nuvem",
       "cloudDescription": "Roda na nuvem. Funciona de qualquer lugar.",
+      "hintAntigravity": "Instale o Antigravity 1.5 ou posterior e entre nele",
       "hintCheck": "Verifique-o no stella desktop",
       "hintInstall": "Instale pelo stella desktop",
       "hintOffline": "Abra o stella desktop no seu computador",
@@ -2303,6 +2312,7 @@
     "sendErrorToolsUnsupported": "Este modelo não pode usar ferramentas, então não consegue responder a perguntas sobre o seu caso. Mude para um modelo que aceite ferramentas.",
     "sendErrorTurnTooLarge": "Esta resposta ficou grande demais para ser entregue por completo. Envie uma nova mensagem para continuar.",
     "sendPrompt": "Enviar mensagem",
+    "sendPromptEmpty": "Digite uma mensagem para enviá-la.",
     "sendQueuedMessageNow": "Enviar agora",
     "sendWithoutAnonymization": "Enviar sem anonimização",
     "signInToChat": "Entre para conversar sobre este documento",
@@ -2314,7 +2324,7 @@
       }
     },
     "sourceChips": {
-      "alsoConsulted": "Também consultadas ({count, number})"
+      "moreConsulted": "{count, plural, one {+# outra consultada} many {+# outras consultadas} other {+# outras consultadas}}"
     },
     "sourcePlaceholder": "Conversar sobre {title}",
     "sourcePlaceholderAction": "Conversar sobre",
@@ -2347,6 +2357,10 @@
     "stopResponse": "Parar",
     "stopped": "Interrompido",
     "stopping": "Parando…",
+    "subagentRun": {
+      "browseWeb": "Navegando na web",
+      "generic": "Trabalhando em uma subtarefa"
+    },
     "suggestTitle": "Sugerir um título",
     "suggestTitleUnavailableAnonymized": "Sugestões de título não estão disponíveis para conversas anonimizadas.",
     "suggestingTitle": "Sugerindo um título…",
@@ -2394,6 +2408,8 @@
       "boe_search_legislation": "Busca no BOE",
       "borme_get_summary": "Resumo diário BORME",
       "business_registry_lookup": "Buscando no registro de empresas",
+      "calendar_free_busy": "Verificar disponibilidade no calendário",
+      "calendar_list_events": "Ler eventos do calendário",
       "command_execution": "Executando um comando",
       "compare_versions": "Comparando versões",
       "configure_template_fields": "Configurar campos do modelo",
@@ -2933,6 +2949,7 @@
     "playbooks": "Playbooks",
     "preparing": "Preparando…",
     "preview": "Visualização",
+    "previewTruncated": "O texto completo não está disponível nesta prévia.",
     "previous": "Anterior",
     "previousMatch": "Ocorrência anterior",
     "print": "Imprimir",
@@ -4700,9 +4717,13 @@
       "discoveredSkills": "{count, plural, one {# habilidade encontrada} other {# habilidades encontradas} many {# habilidades encontradas}}",
       "discoveryEmpty": "Nenhuma habilidade foi encontrada neste repositório ou pasta.",
       "discoverySkippedInvalid": "{count, plural, one {# habilidade inválida foi ignorada} other {# habilidades inválidas foram ignoradas} many {# habilidades inválidas foram ignoradas}}",
-      "dropPack": "Solte um .zip ou SKILL.md para importar a habilidade",
+      "dropPack": "Solte um .zip/.skill ou SKILL.md para importar a habilidade",
       "editSkill": "Editar habilidade",
       "enableSkill": "Ativar habilidade",
+      "exportAsSkill": "Exportar como .skill",
+      "exportAsZip": "Exportar como .zip",
+      "exportFailed": "Não foi possível exportar a habilidade",
+      "exportSkill": "Exportar habilidade",
       "fileExists": "Já existe um arquivo com este caminho",
       "howItRuns": "Como funciona",
       "importFailureFetch": "Não foi possível carregar a origem da habilidade.",
@@ -4757,8 +4778,8 @@
           "name": "Resumir um documento"
         }
       },
-      "uploadHelp": "Use um arquivo SKILL.md ou uma pasta .zip contendo SKILL.md e recursos opcionais somente leitura.",
-      "uploadPack": "Enviar .zip ou SKILL.md",
+      "uploadHelp": "Use um arquivo SKILL.md ou uma pasta .zip/.skill contendo SKILL.md e recursos opcionais somente leitura.",
+      "uploadPack": "Enviar .zip/.skill ou SKILL.md",
       "urlPlaceholder": "https://github.com/org/repo/tree/main/caminho/para/habilidade",
       "version": "Versão: {version}"
     },
@@ -5381,6 +5402,7 @@
       "defaultModel": "Padrão: {model}",
       "defaultModelOption": "Padrão",
       "defaultRationale": {
+        "browse": "Para trabalhar em sites no navegador.",
         "chat": "Para conversas e perguntas do dia a dia.",
         "fast": "Para tarefas curtas e rotineiras.",
         "pdf": "Para ler e analisar documentos PDF.",
@@ -5394,6 +5416,11 @@
       "googleKeyRestricted": "Confira as restrições de API, endereços IP e sites de referência desta chave no Google Cloud. Permita a API necessária e as solicitações do seu servidor e tente novamente.",
       "keepSavedKey": "Manter chave salva",
       "keyFormatHint": "Esta chave tem um formato incomum para {provider}. Salve para verificá-la com o provedor.",
+      "keyNeed": {
+        "builtIn": "Opcional. Sem uma chave própria, a IA desta organização usa modelos fornecidos pela stella.",
+        "keyRequired": "A IA desta organização precisa de uma chave de provedor. Adicione uma para ativar a IA.",
+        "ownKeys": "A IA desta organização usa as chaves abaixo."
+      },
       "modelForRole": "Modelo {role}",
       "modelIdPlaceholder": "Pesquisar modelos",
       "modelsDescription": "Escolha um fornecedor e um modelo multimodal oferecido para cada categoria de IA.",
@@ -5401,6 +5428,7 @@
       "newApiKey": "Nova chave de API",
       "newApiKeyDescription": "Isso substituirá a chave salva quando você salvar as alterações.",
       "noModelResults": "Nenhum modelo oferecido correspondente",
+      "noProviders": "Nenhuma chave de provedor adicionada.",
       "openaiInsufficientQuota": "Confira o orçamento do seu projeto da OpenAI e o faturamento da API. Adicione créditos ou aumente o limite correspondente e tente novamente.",
       "openaiProjectOrganizationMismatch": "Use uma chave de API do projeto e da organização da OpenAI desejados. Confira as configurações de acesso e tente novamente.",
       "openrouterNoCredits": "Adicione créditos na seção de faturamento do OpenRouter e tente novamente.",
@@ -5423,6 +5451,8 @@
       "providerForRole": "Provedor {role}",
       "providerKeyInvalid": "{provider} rejeitou a chave. Verifique novamente antes de salvar.",
       "providerKeyInvalidShort": "Inválido",
+      "providerModes": "Usada para: {modes}",
+      "providerModesNone": "Não é usada em nenhum modo. Atribua-a a um modo em Avançado.",
       "providerSetupConsole": "Abrir as configurações do provedor",
       "providersDescription": "Adicione as credenciais do provedor que você deseja que stella use.",
       "providersPanel": "Provedores",
@@ -5432,6 +5462,7 @@
       "replaceKey": "Substituir chave",
       "roleUnavailable": "{provider} não oferece suporte a esta função.",
       "roles": {
+        "browse": "Navegação",
         "chat": "Chat",
         "fast": "Rápido",
         "pdf": "PDF",
@@ -5448,6 +5479,7 @@
       "title": "Instruções da organização",
       "tooLong": "As instruções devem ter no máximo {maxLength} caracteres."
     },
+    "createdSwitchPrompt": "A organização <bdi>{name}</bdi> foi criada. Mude para ela para configurá-la e convidar membros.",
     "creationEvaluationLimitReached": "Você já utilizou todos os {limit} períodos de avaliação de organizações. Excluir uma organização não restaura um período de avaliação. Use uma organização existente ou entre em contato com o suporte para obter acesso pago.",
     "creationInvalidName": "Digite um nome de organização válido (até {maxLength} caracteres).",
     "creationNotAllowed": "Esta conta não pode criar organizações.",
@@ -5493,7 +5525,7 @@
     "members": {
       "billingAccess": "Acesso aos dados de faturamento",
       "changeRole": "Mudar função",
-      "confirmRoleChangeDescription": "A função de {email} mudará de {oldRole} para {newRole}.",
+      "confirmRoleChangeDescription": "A função de {email} mudará {oldRole, select, owner {de proprietário} admin {de administrador} member {de membro} intern {de estagiário} external {de colaborador externo} other {}} {newRole, select, owner {para proprietário} admin {para administrador} member {para membro} intern {para estagiário} external {para colaborador externo} other {}}.",
       "confirmRoleChangeTitle": "Mudar função",
       "joined": "Ingressou",
       "noMembersFound": "Nenhum membro encontrado",
@@ -5519,6 +5551,13 @@
     "startOverDescription": "A solicitação original pode já ter criado uma organização. Confira suas organizações antes de recomeçar; uma nova solicitação pode criar outra organização.",
     "startOverTitle": "Iniciar uma nova solicitação de criação?",
     "switchOrganization": "Mudar de organização"
+  },
+  "organizationSetup": {
+    "aiAction": "Configurar IA",
+    "aiOptional": "Chaves próprias de provedores de IA são opcionais: sem elas, a IA usa modelos fornecidos pela stella.",
+    "aiRequired": "A IA desta organização precisa de uma chave de provedor antes que alguém possa usá-la.",
+    "invite": "Convide colegas para trabalharem aqui com você.",
+    "title": "Configure sua nova organização"
   },
   "publicTools": {
     "addSkill": "Adicionar uma habilidade",
@@ -5959,7 +5998,7 @@
     "organization": {
       "activeMembers": "Membros ativos",
       "ai": "Configuração de IA",
-      "aiDescription": "Conecte suas próprias chaves de provedores de IA.",
+      "aiDescription": "Escolha como a IA funciona nesta organização.",
       "anonymization": {
         "addPlaceholder": "Termo a ser sempre mascarado (ex.: nome da equipe)",
         "deleteAction": "Excluir termo",
@@ -6125,7 +6164,7 @@
         "title": "Rascunhos de faturamento com IA"
       },
       "dataBoxes": {
-        "description": "Uma mensagem enviada de uma destas caixas é arquivada como enviada; uma enviada para elas, como recebida. Cada alteração recalcula a direção das mensagens já arquivadas nos casos a que você tem acesso.",
+        "description": "As mensagens enviadas destas caixas são arquivadas como enviadas; as enviadas para elas, como recebidas. As alterações também valem para mensagens já arquivadas.",
         "invalid": "Um ID de caixa de dados tem sete letras ou dígitos.",
         "remove": "Remover a caixa de dados {address}",
         "title": "Caixas de dados da organização"
@@ -6158,6 +6197,7 @@
         "title": "Extração de memória",
         "toggleLabel": "Sugerir memórias do histórico de chat em segundo plano"
       },
+      "organizationIdHint": "ID permanente que nunca muda. Use-o ao entrar em contato com o suporte ou ao configurar integrações.",
       "pastInvitations": "Convites anteriores",
       "pendingInvitations": "Convites pendentes",
       "practiceJurisdictions": "Jurisdições",
@@ -6171,11 +6211,12 @@
       "renameTitle": "Renomear organização",
       "renameTypeToConfirm": "Digite o novo nome para confirmar: {name}",
       "slug": {
-        "change": "Alterar identificador",
-        "conflict": "Este identificador já está sendo usado por outra organização.",
-        "description": "Escolha um novo identificador ou gere um aleatório. O identificador anterior deixará de funcionar.",
-        "opaque": "Gerar um identificador aleatório",
-        "title": "Identificador da organização"
+        "change": "Alterar nome curto",
+        "conflict": "Este nome curto já está sendo usado por outra organização.",
+        "description": "Escolha um novo nome curto ou gere um aleatório. O nome curto anterior deixará de funcionar.",
+        "hint": "Um nome curto exclusivo para esta organização, diferente do nome exibido.",
+        "opaque": "Gerar um nome curto aleatório",
+        "title": "Nome curto da organização"
       },
       "timePolicy": {
         "description": "Defina o arredondamento do tempo, os limites de edição e os bloqueios mensais.",
@@ -6299,6 +6340,14 @@
     },
     "reconnectRequired": "Login expirado",
     "title": "SharePoint e OneDrive"
+  },
+  "signedFile": {
+    "layer": "Camada de assinaturas {number, number}",
+    "noReadableContent": "Não há conteúdo legível para exibir na prévia.",
+    "pdfUnavailable": "A prévia do PDF não está disponível.",
+    "unknownSigner": "Signatário desconhecido",
+    "unreadable": "Não foi possível ler o arquivo assinado.",
+    "unverified": "As assinaturas não foram verificadas."
   },
   "skillHistory": {
     "acceptStale": "Aceitar e sobrescrever edições mais recentes",
@@ -6440,6 +6489,10 @@
     "versionChangesRemoved": "{count, plural, one {# dispositivo suprimido} other {# dispositivos suprimidos} many {# dispositivos suprimidos}}",
     "versionChangesWords": "{inserted, plural, one {# palavra incluída} other {# palavras incluídas} many {# palavras incluídas}}, {deleted, plural, one {# palavra suprimida} other {# palavras suprimidas} many {# palavras suprimidas}}",
     "wordingVersionUnknown": "Data da versão da redação indisponível"
+  },
+  "structuredDocument": {
+    "noReadableContent": "Não há texto legível para exibir na prévia.",
+    "textOnly": "Prévia do texto sem o layout da página nem as imagens."
   },
   "styleSets": {
     "create": "Criar",
@@ -7200,6 +7253,7 @@
         "title": "Remover links para modelos do Word?",
         "unknownLocation": "Local do modelo: um endereço que a stella não consegue verificar"
       },
+      "checkingFiles": "Verificando arquivos…",
       "desktopEdit": {
         "accountRequiredTitle": "Conecte o stella desktop à sua conta",
         "action": "Editar no desktop",
@@ -7243,6 +7297,14 @@
       "downloadPdf": "Baixar como PDF",
       "downloadSearchablePdf": "PDF pesquisável",
       "downloadWithComments": "Baixar com comentários",
+      "duplicateUpload": {
+        "description": "{count, plural, one {# arquivo é idêntico a um documento que este caso já contém.} other {# arquivos são idênticos a documentos que este caso já contém.} many {# arquivos são idênticos a documentos que este caso já contém.}} Escolha o que fazer com cada um.",
+        "matchedDocument": "Idêntico a <bdi>{documentName}</bdi>",
+        "skip": "Ignorar este arquivo",
+        "skipAll": "Ignorar duplicados",
+        "title": "Já está neste caso",
+        "uploadAnyway": "Enviar mesmo assim"
+      },
       "emptyFile": "O arquivo está vazio.",
       "fileTooLarge": "O arquivo é maior que {limit, number} MB.",
       "includeReferenceNumber": "Incluir número de referência",

@@ -256,9 +256,12 @@ export const CreateOrganizationDialog = ({
                   />
                 </Field>
                 {view.organization !== null && (
-                  <BidiText as="p" direction="ltr">
-                    {view.organization.slug}
-                  </BidiText>
+                  <p className="text-muted-foreground text-sm" role="status">
+                    {t.rich("organization.createdSwitchPrompt", {
+                      bdi: (chunks) => <BidiText>{chunks}</BidiText>,
+                      name: view.organization.name,
+                    })}
+                  </p>
                 )}
                 {view.message !== null && (
                   <RecoverableErrorStatus

@@ -36,6 +36,10 @@ export const parkAttachmentsOfErasedDecisionTx = async (
     {
       hostWithdrawnAt: sql`coalesce(${caseLawHeldDecisionAttachments.hostWithdrawnAt}, now())`,
       metadata: null,
+      documentPart: null,
+      documentBodyS3Key: null,
+      documentBodySha256: null,
+      matchEvidence: null,
       sourceRawS3Key: null,
       sourceRawContentType: null,
     },

@@ -20,7 +20,13 @@ import type {
   KnowledgeActions,
   KnowledgeSource,
 } from "@/features/knowledge/views/knowledge-seam";
-import { PlaybooksPageFrame } from "@/features/knowledge/views/playbooks/playbooks-page-shape";
+import {
+  PlaybooksLibraryHeading,
+  PlaybooksPageFrame,
+  PlaybooksPageHeader,
+  PlaybooksSectionHeading,
+  PlaybookStarterCardsPending,
+} from "@/features/knowledge/views/playbooks/playbooks-page-shape";
 import type {
   KnowledgePlaybook,
   KnowledgePlaybookStarter,
@@ -40,7 +46,6 @@ type PlaybooksPageViewProps = {
 };
 
 const RECENT_SKELETON_KEYS = ["recent-a", "recent-b", "recent-c"];
-const STARTER_SKELETON_KEYS = ["nda", "dpa", "msa", "saas"];
 
 export const PlaybooksPageView = ({
   source,
@@ -54,17 +59,11 @@ export const PlaybooksPageView = ({
   return (
     <div className="min-h-0 flex-1 overflow-y-auto">
       <PlaybooksPageFrame>
-        <header className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
-          <div>
-            <h1 className="text-2xl font-semibold tracking-tight">
-              {t("common.playbooks")}
-            </h1>
-            <p className="text-muted-foreground mt-1 max-w-2xl text-sm">
-              {t("knowledge.playbooks.homeDescription")}
-            </p>
-          </div>
-          {toolbar}
-        </header>
+        <PlaybooksPageHeader
+          description={t("knowledge.playbooks.homeDescription")}
+          title={t("common.playbooks")}
+          toolbar={toolbar}
+        />
 
         {actions.startFrom && (
           <section aria-labelledby="recommended-playbooks-heading">
@@ -119,24 +118,23 @@ export const PlaybooksPageView = ({
 
         {library && (
           <section aria-labelledby="all-playbooks-heading">
-            <div className="mb-3 flex min-h-11 items-center justify-between gap-3">
-              <h2
-                className="text-base font-semibold"
-                id="all-playbooks-heading"
-              >
-                {t("knowledge.playbooks.all")}
-              </h2>
-              <Button
-                aria-label={t("common.refresh")}
-                className="size-11"
-                onClick={actions.refresh}
-                size="icon"
-                title={t("common.refresh")}
-                variant="ghost"
-              >
-                <RotateCcwIcon />
-              </Button>
-            </div>
+            <PlaybooksLibraryHeading
+              id="all-playbooks-heading"
+              refresh={
+                <Button
+                  aria-label={t("common.refresh")}
+                  className="size-11"
+                  onClick={actions.refresh}
+                  size="icon"
+                  title={t("common.refresh")}
+                  variant="ghost"
+                >
+                  <RotateCcwIcon />
+                </Button>
+              }
+            >
+              {t("knowledge.playbooks.all")}
+            </PlaybooksLibraryHeading>
 
             {library.playbooks.length === 0 && !library.isFetchingNextPage ? (
               <div className="rounded-xl border border-dashed px-5 py-8">
@@ -184,11 +182,7 @@ type SectionHeadingProps = {
 };
 
 const SectionHeading = ({ id, title }: SectionHeadingProps) => (
-  <div className="mb-3">
-    <h2 className="text-base font-semibold" id={id}>
-      {title}
-    </h2>
-  </div>
+  <PlaybooksSectionHeading id={id}>{title}</PlaybooksSectionHeading>
 );
 
 // The card is drawn by the content of a plain Button: it lights while the
@@ -269,13 +263,7 @@ const PlaybookStarterCards = ({
   const t = useTranslations();
 
   if (starters.status === "loading") {
-    return (
-      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-        {STARTER_SKELETON_KEYS.map((key) => (
-          <Skeleton className="h-44 rounded-xl" key={key} />
-        ))}
-      </div>
-    );
+    return <PlaybookStarterCardsPending />;
   }
 
   if (starters.status === "error") {

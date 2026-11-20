@@ -117,7 +117,7 @@ export const BetaPageShell = ({
 );
 
 const BetaPendingView = () => (
-  <SettingsPagePending>
+  <SettingsPagePending area="account">
     <BetaPageShell
       inbox={<BetaFeaturePanelPending feature="inbox" />}
       selfServe={<SelfServeFeaturePanelsPending />}

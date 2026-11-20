@@ -246,6 +246,23 @@ export const API_OAUTH_ROUTES = {
     exportName: "readFileEndpoint",
     uncataloged: "upload_mechanics",
   },
+  "GET /v1/files/:workspaceId/asic/:fieldId": {
+    scope: "stella:read",
+    handler: "apps/api/src/handlers/files/asic.ts",
+    uncataloged: "upload_mechanics",
+  },
+  "GET /v1/files/:workspaceId/cades/:fieldId": {
+    scope: "stella:read",
+    handler: "apps/api/src/handlers/files/cades.ts",
+    exportName: "cadesPreviewEndpoint",
+    uncataloged: "upload_mechanics",
+  },
+  "GET /v1/files/:workspaceId/cades/:fieldId/content": {
+    scope: "stella:read",
+    handler: "apps/api/src/handlers/files/cades.ts",
+    exportName: "cadesContentEndpoint",
+    uncataloged: "upload_mechanics",
+  },
   "GET /v1/files/:workspaceId/data-box/:fieldId": {
     scope: "stella:read",
     handler: "apps/api/src/handlers/files/data-box.ts",

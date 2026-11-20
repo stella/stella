@@ -1,0 +1,6 @@
+{
+  "add-column": "The four nullable original columns on agent_skill_resources carry no default, so each ADD COLUMN is a catalog-only change without a table rewrite; each ACCESS EXCLUSIVE acquisition is bounded by the 1s lock_timeout, and a lost lock wait rolls the migration back for the runner's lock-retry ladder to apply again.",
+  "create-index": "The due-time index is built on the erasure queue created empty in the same migration, before any trigger writes it, under 1s lock_timeout.",
+  "row-level-security": "ENABLE and FORCE RLS apply to the erasure queue created empty in the same migration, before any trigger writes it, under 1s lock_timeout and 5s statement_timeout.",
+  "create-policy": "The owner and request-role policies apply to the erasure queue created empty in the same migration, before any trigger writes it, under 1s lock_timeout."
+}

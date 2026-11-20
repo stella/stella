@@ -1,6 +1,6 @@
 {
   "name": "@stll/chat",
-  "version": "0.6.1",
+  "version": "0.6.2",
   "description": "Typed React chat composer, message stream, model selector, and transport runtime primitives.",
   "keywords": [
     "ai",
@@ -62,7 +62,7 @@
     "@types/hast": "^3.0.5",
     "better-result": "catalog:",
     "linkify-it": "6.1.0",
-    "tldts": "7.5.2",
+    "tldts": "7.5.3",
     "valibot": "catalog:",
     "zod": "^4.6.6"
   },
