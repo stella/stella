@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import { summarizeCodeToolSource } from "@stll/api-contract/chat-code-step";
 import { CHAT_LOCAL_RUN_TOOL_NAMES } from "@stll/api-contract/chat-local-run-tool";
+import { CHAT_LOCAL_RUN_STEER_TOOL } from "@stll/api-contract/chat-run-target";
 import {
   CHAT_STEP_LEDGER_KEY,
   type ChatStepLedger,
@@ -199,5 +200,12 @@ describe("a coding agent's direct calls say what they did", () => {
     expect(
       getToolCallTitle(directCall(CHAT_LOCAL_RUN_TOOL_NAMES.nativeTool)),
     ).toEqual(UNKNOWN_TITLE);
+  });
+
+  test("a steered message keeps its own title", () => {
+    expect(getToolCallTitle(directCall(CHAT_LOCAL_RUN_STEER_TOOL))).toEqual({
+      type: "key",
+      key: getChatToolTitleKey(CHAT_LOCAL_RUN_STEER_TOOL),
+    });
   });
 });

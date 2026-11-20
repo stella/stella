@@ -3,13 +3,12 @@ import {
   type CodeToolResearch,
 } from "@stll/api-contract/chat-code-step";
 import { CHAT_LOCAL_RUN_TOOL_NAMES } from "@stll/api-contract/chat-local-run-tool";
-import {
-  chatToolLabel,
-  UNKNOWN_CHAT_TOOL_LABEL,
-} from "@stll/api-contract/chat-tool-activity";
 import { humanizeIdentifier } from "@stll/api-contract/chat-tool-input-rows";
 
-import { getChatToolTitleKey } from "@/components/chat/chat-ui-tools";
+import {
+  getChatToolTitleKey,
+  UNKNOWN_CHAT_TOOL_TITLE_KEY,
+} from "@/components/chat/chat-ui-tools";
 import type { TranslationKey } from "@/i18n/types";
 
 const CODE_TOOL_RESEARCH_TITLE_KEYS = {
@@ -56,11 +55,12 @@ const ownToolName = (name: string): string =>
 
 export const getToolCallTitle = (call: ToolCall): ToolCallTitle => {
   const key = getToolCallTitleKey(call);
-  // A coding agent's own step keeps the generic title: its row names the
-  // harness tool beneath it (`localRunToolView`).
+  // Only the generic title gives way to the tool's name; any title the chat
+  // keeps (a catalogue tool, research, a steered message) stands. A coding
+  // agent's own step keeps the generic title: its row names the harness tool
+  // beneath it (`localRunToolView`).
   if (
-    chatToolLabel(call.name) !== UNKNOWN_CHAT_TOOL_LABEL ||
-    key !== getChatToolTitleKey(call.name) ||
+    key !== UNKNOWN_CHAT_TOOL_TITLE_KEY ||
     call.name === CHAT_LOCAL_RUN_TOOL_NAMES.nativeTool
   ) {
     return { type: "key", key };
