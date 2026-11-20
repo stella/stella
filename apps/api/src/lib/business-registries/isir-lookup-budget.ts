@@ -25,7 +25,7 @@ import { coordinationKey } from "@/api/lib/redis-keys";
 import { isLocalDevOpen } from "@/api/runtime-mode";
 
 /** The least gap between two lookup requests: 30 a minute at most. */
-export const ISIR_LOOKUP_INTERVAL_MS = 2000;
+const ISIR_LOOKUP_INTERVAL_MS = 2000;
 
 /** The lookup requests a day may spend beside the corpus walk. */
 export const ISIR_LOOKUP_DAILY_REQUESTS = 600;

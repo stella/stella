@@ -89,7 +89,7 @@ export const CZ_ISIR_DOCUMENT_REFERENCE = {
   MALFORMED: "malformed",
 } as const;
 
-export type CzIsirDocumentReference =
+type CzIsirDocumentReference =
   (typeof CZ_ISIR_DOCUMENT_REFERENCE)[keyof typeof CZ_ISIR_DOCUMENT_REFERENCE];
 
 /**

@@ -28,7 +28,7 @@ import type { CollectionDocumentPart } from "./collection-document-part";
  * What tells two orders of one docket on one day apart: the sheet within the
  * file (`-24`), or the file position a high court's docket names (`B-24`).
  */
-export type HeldDecisionOrderMark = {
+type HeldDecisionOrderMark = {
   readonly sheetNumber: string | null;
   readonly filePosition: string | null;
 };

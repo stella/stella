@@ -86,7 +86,6 @@ import {
 } from "@/api/lib/legal-search/held-decision-attachment-values";
 import { resolveHeldDecisionCandidates } from "@/api/lib/legal-search/held-decision-candidates";
 import type { RawSourceWriteWindow } from "@/api/lib/legal-search/raw-source-storage";
-import { eraseDecisionReconciliationPayloadsTx } from "@/api/lib/legal-search/reconciliation-store";
 import { failureSink } from "@/api/lib/observability/failure";
 import { logger } from "@/api/lib/observability/logger";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
@@ -1548,8 +1547,8 @@ export type HeldAttachmentRemoval =
 /**
  * Remove a record its publisher no longer serves from the decision it
  * enriches: the attachment row goes, its declared identifiers leave the host
- * unless another claim still holds them, and its listed payloads go with it.
- * The caller deletes the returned raw object once this has committed. A later
+ * unless another claim still holds them. The caller erases its listed
+ * payloads and deletes the returned raw object once this has committed. A later
  * observation, should the publisher serve the record again, attaches it anew.
  */
 export const removeHeldAttachmentAtPublisher = async ({
@@ -1607,9 +1606,6 @@ export const removeHeldAttachmentAtPublisher = async ({
         });
       }
     }
-    await eraseDecisionReconciliationPayloadsTx(tx, [
-      { sourceId, sourceDocumentId },
-    ]);
     await clearIngestionFailureEvidenceTx(tx, { sourceId, sourceDocumentId });
     return { type: "removed", sourceRawS3Key: stored.sourceRawS3Key };
   });

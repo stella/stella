@@ -1,0 +1,6 @@
+{
+  "metric": "no-db-await-in-loop-suppressions",
+  "file": "apps/api/src/handlers/case-law/ingestion/removal-reconciliation.ts",
+  "delta": 4,
+  "reason": "The attachment phase of the removal sweep is one bounded step per loop turn, like the decision phase beside it: each step probes one attachment and commits the advanced cursor under the source's compare-and-set before the next, so the awaits are sequential by design and capped by the sweep's request and time budgets."
+}

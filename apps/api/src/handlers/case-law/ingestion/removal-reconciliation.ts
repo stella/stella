@@ -34,6 +34,7 @@ import {
   AdapterFetchError,
   DatabaseError,
 } from "@/api/lib/errors/tagged-errors";
+import { eraseDecisionReconciliationPayloadsTx } from "@/api/lib/legal-search/reconciliation-store";
 import {
   REMOVAL_SUPERSEDED_REASON,
   supersededRemovalEvidence,
@@ -608,6 +609,14 @@ const probeHeldAttachment = async ({
     sourceId,
     sourceDocumentId,
   });
+  if (removed.type === "removed") {
+    await scopedDb(
+      async (tx) =>
+        await eraseDecisionReconciliationPayloadsTx(tx, [
+          { sourceId, sourceDocumentId },
+        ]),
+    );
+  }
   if (removed.type === "removed" && removed.sourceRawS3Key !== null) {
     const deleted = await Result.tryPromise(async () => {
       await deleteRaw(removed.sourceRawS3Key ?? "", signal);
