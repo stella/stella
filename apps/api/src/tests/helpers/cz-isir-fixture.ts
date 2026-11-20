@@ -19,6 +19,8 @@ import {
 import type { CzIsirAnonymizer } from "@/api/handlers/case-law/ingestion/adapters/cz-isir-anonymization";
 import { CZ_ISIR_FEED_URL } from "@/api/handlers/case-law/ingestion/adapters/cz-isir-feed";
 import type { CzIsirParagraph } from "@/api/handlers/case-law/ingestion/parsers/cz-isir";
+import { planUnreadItems } from "@/api/handlers/case-law/ingestion/pipeline/unread-items";
+import { UNAVAILABLE_CYCLES_BEFORE_MARKING } from "@/api/lib/errors/read-outcome";
 import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import { withTestFetch } from "@/api/tests/helpers/test-fetch";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
@@ -205,9 +207,23 @@ export const buildCzIsirFixtureDecision = async (): Promise<IngestionResult> =>
       if (Result.isError(page)) {
         return await Promise.reject(page.error);
       }
+      const decision = page.value.decisions.find(
+        ({ sourceDocumentId }) => sourceDocumentId === "65350048",
+      );
+      if (decision !== undefined) {
+        return decision;
+      }
+      // What the pipeline stores for an unread document once its bound is
+      // spent: the listing-only row with the typed outcome.
+      const item =
+        page.value.unreadItems?.find(
+          ({ listing }) => listing.sourceDocumentId === "65350048",
+        ) ?? panic("the cz-isir fixture built no decision");
       return (
-        page.value.decisions.at(0) ??
-        panic("the cz-isir fixture built no decision")
+        planUnreadItems([item], {
+          [item.listing.sourceDocumentId]:
+            UNAVAILABLE_CYCLES_BEFORE_MARKING - 1,
+        }).terminal.at(0) ?? panic("the cz-isir unread item stored nothing")
       );
     },
   );
