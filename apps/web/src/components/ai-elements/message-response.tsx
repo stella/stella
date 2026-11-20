@@ -49,6 +49,11 @@ const ANSWER_TYPOGRAPHY_CLASS_NAME = cn(
   // A streamed block sits in its direction wrapper (`AnswerBlock`), and a
   // heading's margin collapses through it: trim the first and last the same.
   "[&>div[dir]:first-child>:first-child]:mt-0 [&>div[dir]:last-child>:last-child]:mb-0",
+  // The block gap goes on the wrapped block, not the wrapper, at the same
+  // zero specificity `space-y-*` has: a heading's own smaller margin below
+  // then wins as it does in a settled answer, instead of collapsing into a
+  // 12px wrapper margin.
+  "[&>div[dir]]:mb-0 [:where(&>div[dir]:not(:last-child)>:last-child)]:mb-3",
   // 12px between blocks. Margins collapse, so a heading's own space above
   // replaces the gap rather than adding to it.
   "space-y-3",
