@@ -10,8 +10,11 @@
 //
 // --check blocks on the startup gates (scripts/bundle-startup-gates.ts): the
 // gzip of the initial chunks against the committed `initial` budget, the size
-// of the eager pending views, page code in the initial chunks, and pages a
-// route loads outside its manifest preloads. Worker-only groups appearing in
+// of the eager pending views against the `pending` total the base branch
+// commits (with `--base-dir <dir>` holding the base's copies of the baseline
+// and of the pending-component exceptions list, which says how many routes
+// the change converted), page code in the initial chunks, and pages a route
+// loads outside its manifest preloads. Worker-only groups appearing in
 // the main bundle block too, because their budget is exactly zero. The
 // duplicate-content guard (--check-duplicates) is a separate, blocking check:
 // a chunk that carries the same large block twice is a build defect, not
@@ -24,8 +27,8 @@
 //
 // Modes:
 //   bun scripts/bundle-baseline.ts                    report groups + gzip sizes
-//   bun scripts/bundle-baseline.ts --write-baseline    regenerate the groups and the initial budget
-//   bun --preload ./scripts/offline-network-preload.ts scripts/bundle-baseline.ts --check
+//   bun scripts/bundle-baseline.ts --write-baseline    regenerate the groups, `initial` and `pending`
+//   bun --preload ./scripts/offline-network-preload.ts scripts/bundle-baseline.ts --check [--base-dir <dir>]
 //                                                     startup gates + worker-only groups (blocking)
 //   bun scripts/bundle-baseline.ts --check-duplicates  duplicate-content guard (blocking)
 //   bun scripts/bundle-baseline.ts --self-test         prove the comparison logic fires
@@ -48,8 +51,11 @@ import { MCP_APPS } from "../packages/mcp-apps/src/manifest";
 import { BASELINE_PATHS } from "./baseline-paths";
 import { readStartupGraph } from "./bundle-startup-build";
 import {
+  convertedRouteCount,
   evaluateStartup,
   initialGzipBytes,
+  type PendingBudget,
+  pendingLayer,
   StartupLedgerSchema,
   startupSummary,
 } from "./bundle-startup-gates";
@@ -65,6 +71,9 @@ const ASSETS_REL = `${DIST_REL}/client/assets`;
 const ASSETS_DIR = path.resolve(REPO_ROOT, ASSETS_REL);
 const LEDGER_REL = "scripts/bundle-startup-ledger.json";
 const LEDGER_PATH = path.resolve(REPO_ROOT, LEDGER_REL);
+const PENDING_EXCEPTIONS_REL =
+  ".oxlint-plugins/route-pending-component-exceptions.json";
+const PENDING_EXCEPTIONS_PATH = path.resolve(REPO_ROOT, PENDING_EXCEPTIONS_REL);
 const SCAN_ENGINE_WASM = path.resolve(
   REPO_ROOT,
   "packages/scan-engine/generated/scan_engine_bg.wasm",
@@ -302,6 +311,67 @@ const readInitialBudget = (): number | undefined =>
     readBaselineJson(),
   ).initial;
 
+const PendingTotalSchema = v.object({
+  pending: v.optional(v.pipe(v.number(), v.integer())),
+});
+const ExceptionListSchema = v.array(v.string());
+
+const readPendingTotal = (): number | undefined =>
+  v.parse(PendingTotalSchema, readBaselineJson()).pending;
+
+/**
+ * A file as the base branch holds it, from the directory the caller wrote the
+ * base's copies into at their repository paths (`git show <base>:<path>`; the
+ * check runs offline, so it spawns no git itself). Null when the base did not
+ * hold the file, as scripts/ledger-membership.ts reads a missing base ledger.
+ */
+const readBaseFile = (baseDir: string, rel: string): string | null => {
+  const file = path.resolve(baseDir, rel);
+  return existsSync(file) ? readFileSync(file, "utf-8") : null;
+};
+
+/** The pending budget: the tree's `pending`, and, with the base's files,
+ *  the base's `pending` and how many routes left the exceptions list since. */
+const readPendingBudget = (
+  committed: number,
+  baseDir: string | undefined,
+): PendingBudget => {
+  if (baseDir === undefined) {
+    return { committed, base: null, convertedRoutes: null };
+  }
+  const baseline = readBaseFile(baseDir, BASELINE_REL);
+  const baseExceptions = readBaseFile(baseDir, PENDING_EXCEPTIONS_REL);
+  const exceptions = v.parse(
+    ExceptionListSchema,
+    JSON.parse(readFileSync(PENDING_EXCEPTIONS_PATH, "utf-8")),
+  );
+  return {
+    committed,
+    base:
+      baseline === null
+        ? null
+        : (v.parse(PendingTotalSchema, JSON.parse(baseline)).pending ?? null),
+    convertedRoutes:
+      baseExceptions === null
+        ? null
+        : convertedRouteCount(
+            v.parse(ExceptionListSchema, JSON.parse(baseExceptions)),
+            exceptions,
+          ),
+  };
+};
+
+const baseDirArgument = (): string | undefined => {
+  const index = process.argv.indexOf("--base-dir");
+  if (index === -1) {
+    return undefined;
+  }
+  const dir = process.argv[index + 1];
+  return dir === undefined || dir === "" || dir.startsWith("--")
+    ? panic("--base-dir requires a directory")
+    : dir;
+};
+
 // Copies every GROUP_KEYS value onto emptySizes' (alphabetical) literal, so
 // the written file's key set and order come from the one compiler-guarded
 // copy. A second spelled-out literal here once silently dropped keys the
@@ -314,13 +384,18 @@ const sortedSizes = (sizes: Sizes): Sizes => {
   return sorted;
 };
 
-const writeBaseline = (sizes: Sizes, initial: number): void => {
+const writeBaseline = (
+  sizes: Sizes,
+  initial: number,
+  pending: number,
+): void => {
   const mcpApps = readMcpAppsBudgets();
   writeFileSync(
     BASELINE_PATH,
     `${JSON.stringify(
       {
         initial,
+        pending,
         ...sortedSizes(sizes),
         ...(mcpApps === undefined ? {} : { mcpApps }),
       },
@@ -424,9 +499,11 @@ const runWrite = (): number => {
     return 1;
   }
   const initial = initialGzipBytes(startup.graph);
-  writeBaseline(measured.sizes, initial);
+  const pending = pendingLayer(startup.graph).totalBytes;
+  writeBaseline(measured.sizes, initial, pending);
   console.log(`Wrote bundle baseline to ${BASELINE_REL}:`);
   console.log(`  ${"initial".padEnd(20)} ${kib(initial).padStart(12)}`);
+  console.log(`  ${"pending".padEnd(20)} ${kib(pending).padStart(12)}`);
   for (const key of GROUP_KEYS) {
     console.log(`  ${key.padEnd(20)} ${kib(measured.sizes[key]).padStart(12)}`);
   }
@@ -446,6 +523,13 @@ const runCheck = (): number => {
     );
     return 1;
   }
+  const pending = readPendingTotal();
+  if (pending === undefined) {
+    console.error(
+      `${BASELINE_REL} has no pending total. Seed it with \`${WRITE_HINT}\` and commit it.`,
+    );
+    return 1;
+  }
   const startup = readStartupGraph(DIST_DIR);
   if (!startup.ok) {
     console.error(startup.error);
@@ -456,7 +540,12 @@ const runCheck = (): number => {
     JSON.parse(readFileSync(LEDGER_PATH, "utf-8")),
   );
   const workerOnly = checkWorkerOnlyGroups(measured.sizes, console.log);
-  const evaluation = evaluateStartup(startup.graph, budget, ledger, WRITE_HINT);
+  const evaluation = evaluateStartup(
+    startup.graph,
+    { initial: budget, pending: readPendingBudget(pending, baseDirArgument()) },
+    ledger,
+    WRITE_HINT,
+  );
   const summary = startupSummary(evaluation);
   console.log(summary);
   const summaryPath = process.env["GITHUB_STEP_SUMMARY"];
@@ -464,7 +553,7 @@ const runCheck = (): number => {
     appendFileSync(summaryPath, summary);
   }
   for (const notice of evaluation.notices) {
-    console.log(`::notice title=Initial JS shrank::${notice}`);
+    console.log(`::notice title=Startup bundle::${notice}`);
   }
   for (const { title, message } of evaluation.failures) {
     console.log(`::error title=${title}::${message}`);
