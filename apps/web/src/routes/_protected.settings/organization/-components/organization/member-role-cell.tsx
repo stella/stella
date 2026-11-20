@@ -43,7 +43,7 @@ export const RoleCell = ({
   if (!editable) {
     return (
       <span className="text-foreground">
-        {t(`organization.roles.${memberRole}`)}
+        {t(roleTranslationKeys[memberRole].labelKey)}
       </span>
     );
   }
@@ -73,7 +73,9 @@ export const RoleCell = ({
         value={memberRole}
       >
         <SelectTrigger className="min-w-32" size="sm">
-          <SelectValue>{t(`organization.roles.${memberRole}`)}</SelectValue>
+          <SelectValue>
+            {t(roleTranslationKeys[memberRole].labelKey)}
+          </SelectValue>
         </SelectTrigger>
         <SelectPopup alignItemWithTrigger={false} className="min-w-72">
           {roleData.map((item) => (
@@ -93,11 +95,15 @@ export const RoleCell = ({
         cancelLabel={t("common.cancel")}
         confirmation={memberEmail}
         confirmLabel={t("organization.members.changeRole")}
-        description={t("organization.members.confirmRoleChangeDescription", {
-          email: memberEmail,
-          oldRole: t(`organization.roles.${memberRole}`),
-          newRole: pendingRole ? t(`organization.roles.${pendingRole}`) : "",
-        })}
+        description={
+          pendingRole === null
+            ? ""
+            : t("organization.members.confirmRoleChangeDescription", {
+                email: memberEmail,
+                oldRole: memberRole,
+                newRole: pendingRole,
+              })
+        }
         inputLabel={t("organization.members.typeEmailToConfirm", {
           email: memberEmail,
         })}

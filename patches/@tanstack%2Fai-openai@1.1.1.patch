@@ -1,0 +1,189 @@
+Register gpt-6.2-sol and gpt-6.2-astra with the metadata of their siblings
+(GPT-6.1 Sol, GPT-6 Astra; Astra at its own list price); upstream lists the
+same modalities, limits and reasoning efforts. Without them the adapter treats
+GPT-6.2 as a non-reasoning model: it keeps sampling parameters and drops the
+encrypted reasoning include and the requested effort. Remove when upstream
+lists GPT-6.2.
+
+diff --git a/dist/esm/model-meta.d.ts b/dist/esm/model-meta.d.ts
+index 5fd0fd4..dc2ba43 100644
+--- a/dist/esm/model-meta.d.ts
++++ b/dist/esm/model-meta.d.ts
+@@ -1251,6 +1251,9 @@ declare const GPT_5_6_TERRA_PRO: {
+         readonly budget: false;
+     };
+ };
++declare const GPT_6_2_ASTRA: Omit<typeof GPT_6_ASTRA, "name"> & {
++    readonly name: "gpt-6.2-astra";
++};
+ declare const GPT_6_ASTRA: {
+     readonly name: "gpt-6-astra";
+     readonly context_window: 1050000;
+@@ -1453,6 +1456,9 @@ declare const GPT_6_SOL_PRO: {
+         readonly budget: false;
+     };
+ };
++declare const GPT_6_2_SOL: Omit<typeof GPT_6_1_SOL, "name"> & {
++    readonly name: "gpt-6.2-sol";
++};
+ declare const GPT_6_1_SOL: {
+     readonly name: "gpt-6.1-sol";
+     readonly context_window: 1050000;
+@@ -1557,7 +1563,7 @@ declare const GPT_6_1_TERRA_PRO: {
+         };
+     };
+ };
+-export declare const OPENAI_CHAT_MODELS: readonly ["gpt-6.1-terra", "gpt-6.1-terra-pro", "gpt-6.1-sol", "gpt-6.1-sol-pro", "gpt-6-luna", "gpt-6-luna-pro", "gpt-6-sol", "gpt-6-sol-pro", "gpt-6-astra", "gpt-6-astra-pro", "gpt-5.6-luna-pro", "gpt-5.6-sol-pro", "gpt-5.6-terra-pro", "gpt-5.2", "gpt-5.2-pro", "gpt-5.2-chat-latest", "gpt-5.1", "gpt-5.1-codex", "gpt-5", "gpt-5-mini", "gpt-5-nano", "gpt-5-pro", "gpt-5-codex", "o3", "o3-pro", "o3-mini", "o4-mini", "o3-deep-research", "o4-mini-deep-research", "gpt-4.1", "gpt-4.1-mini", "gpt-4.1-nano", "gpt-4", "gpt-4-turbo", "gpt-4o", "gpt-4o-mini", "gpt-3.5-turbo", "gpt-audio", "gpt-audio-mini", "gpt-5.1-chat-latest", "gpt-5-chat-latest", "gpt-5.1-codex-mini", "gpt-4o-search-preview", "gpt-4o-mini-search-preview", "o1", "o1-pro", "gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna", "gpt-5.5", "gpt-5.5-pro", "gpt-5.4-mini", "gpt-5.4-nano", "gpt-5.4-image-2", "gpt-chat-latest"];
++export declare const OPENAI_CHAT_MODELS: readonly ["gpt-6.1-terra", "gpt-6.1-terra-pro", "gpt-6.2-sol", "gpt-6.1-sol", "gpt-6.1-sol-pro", "gpt-6-luna", "gpt-6-luna-pro", "gpt-6-sol", "gpt-6-sol-pro", "gpt-6.2-astra", "gpt-6-astra", "gpt-6-astra-pro", "gpt-5.6-luna-pro", "gpt-5.6-sol-pro", "gpt-5.6-terra-pro", "gpt-5.2", "gpt-5.2-pro", "gpt-5.2-chat-latest", "gpt-5.1", "gpt-5.1-codex", "gpt-5", "gpt-5-mini", "gpt-5-nano", "gpt-5-pro", "gpt-5-codex", "o3", "o3-pro", "o3-mini", "o4-mini", "o3-deep-research", "o4-mini-deep-research", "gpt-4.1", "gpt-4.1-mini", "gpt-4.1-nano", "gpt-4", "gpt-4-turbo", "gpt-4o", "gpt-4o-mini", "gpt-3.5-turbo", "gpt-audio", "gpt-audio-mini", "gpt-5.1-chat-latest", "gpt-5-chat-latest", "gpt-5.1-codex-mini", "gpt-4o-search-preview", "gpt-4o-mini-search-preview", "o1", "o1-pro", "gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna", "gpt-5.5", "gpt-5.5-pro", "gpt-5.4-mini", "gpt-5.4-nano", "gpt-5.4-image-2", "gpt-chat-latest"];
+ export type OpenAIChatModel = (typeof OPENAI_CHAT_MODELS)[number];
+ /**
+  * Whether a model rejects the `temperature` / `top_p` sampling knobs.
+@@ -1664,12 +1670,14 @@ export type OpenAIChatModelProviderOptionsByName = {
+     [GPT_5_6_SOL_PRO.name]: OpenAIBaseOptions & OpenAIStructuredOutputOptions & OpenAIToolsOptions & OpenAIStreamingOptions & OpenAIMetadataOptions;
+     [GPT_5_6_TERRA_PRO.name]: OpenAIBaseOptions & OpenAIStructuredOutputOptions & OpenAIToolsOptions & OpenAIStreamingOptions & OpenAIMetadataOptions;
+     [GPT_6_ASTRA.name]: OpenAIBaseOptions & OpenAIStructuredOutputOptions & OpenAIToolsOptions & OpenAIStreamingOptions & OpenAIMetadataOptions;
++    [GPT_6_2_ASTRA.name]: OpenAIBaseOptions & OpenAIStructuredOutputOptions & OpenAIToolsOptions & OpenAIStreamingOptions & OpenAIMetadataOptions;
+     [GPT_6_ASTRA_PRO.name]: OpenAIBaseOptions & OpenAIStructuredOutputOptions & OpenAIToolsOptions & OpenAIStreamingOptions & OpenAIMetadataOptions;
+     [GPT_6_LUNA.name]: OpenAIBaseOptions & OpenAIStructuredOutputOptions & OpenAIToolsOptions & OpenAIStreamingOptions & OpenAIMetadataOptions;
+     [GPT_6_LUNA_PRO.name]: OpenAIBaseOptions & OpenAIStructuredOutputOptions & OpenAIToolsOptions & OpenAIStreamingOptions & OpenAIMetadataOptions;
+     [GPT_6_SOL.name]: OpenAIBaseOptions & OpenAIStructuredOutputOptions & OpenAIToolsOptions & OpenAIStreamingOptions & OpenAIMetadataOptions;
+     [GPT_6_SOL_PRO.name]: OpenAIBaseOptions & OpenAIStructuredOutputOptions & OpenAIToolsOptions & OpenAIStreamingOptions & OpenAIMetadataOptions;
+     [GPT_6_1_SOL.name]: OpenAIBaseOptions & OpenAIStructuredOutputOptions & OpenAIToolsOptions & OpenAIStreamingOptions & OpenAIMetadataOptions;
++    [GPT_6_2_SOL.name]: OpenAIBaseOptions & OpenAIStructuredOutputOptions & OpenAIToolsOptions & OpenAIStreamingOptions & OpenAIMetadataOptions;
+     [GPT_6_1_SOL_PRO.name]: OpenAIBaseOptions & OpenAIStructuredOutputOptions & OpenAIToolsOptions & OpenAIStreamingOptions & OpenAIMetadataOptions;
+     [GPT_6_1_TERRA.name]: OpenAIBaseOptions & OpenAIStructuredOutputOptions & OpenAIToolsOptions & OpenAIStreamingOptions & OpenAIMetadataOptions;
+     [GPT_6_1_TERRA_PRO.name]: OpenAIBaseOptions & OpenAIStructuredOutputOptions & OpenAIToolsOptions & OpenAIStreamingOptions & OpenAIMetadataOptions;
+@@ -1723,12 +1731,14 @@ export type OpenAIChatModelToolCapabilitiesByName = {
+     [GPT_5_5_PRO.name]: typeof GPT_5_5_PRO.supports.tools;
+     [GPT_CHAT_LATEST.name]: typeof GPT_CHAT_LATEST.supports.tools;
+     [GPT_6_ASTRA.name]: typeof GPT_6_ASTRA.supports.tools;
++    [GPT_6_2_ASTRA.name]: typeof GPT_6_2_ASTRA.supports.tools;
+     [GPT_6_ASTRA_PRO.name]: typeof GPT_6_ASTRA_PRO.supports.tools;
+     [GPT_6_LUNA.name]: typeof GPT_6_LUNA.supports.tools;
+     [GPT_6_LUNA_PRO.name]: typeof GPT_6_LUNA_PRO.supports.tools;
+     [GPT_6_SOL.name]: typeof GPT_6_SOL.supports.tools;
+     [GPT_6_SOL_PRO.name]: typeof GPT_6_SOL_PRO.supports.tools;
+     [GPT_6_1_SOL.name]: typeof GPT_6_1_SOL.supports.tools;
++    [GPT_6_2_SOL.name]: typeof GPT_6_2_SOL.supports.tools;
+     [GPT_6_1_SOL_PRO.name]: typeof GPT_6_1_SOL_PRO.supports.tools;
+     [GPT_6_1_TERRA.name]: typeof GPT_6_1_TERRA.supports.tools;
+     [GPT_6_1_TERRA_PRO.name]: typeof GPT_6_1_TERRA_PRO.supports.tools;
+@@ -1788,12 +1798,14 @@ export type OpenAIModelInputModalitiesByName = {
+     [GPT_5_6_SOL_PRO.name]: typeof GPT_5_6_SOL_PRO.supports.input;
+     [GPT_5_6_TERRA_PRO.name]: typeof GPT_5_6_TERRA_PRO.supports.input;
+     [GPT_6_ASTRA.name]: typeof GPT_6_ASTRA.supports.input;
++    [GPT_6_2_ASTRA.name]: typeof GPT_6_2_ASTRA.supports.input;
+     [GPT_6_ASTRA_PRO.name]: typeof GPT_6_ASTRA_PRO.supports.input;
+     [GPT_6_LUNA.name]: typeof GPT_6_LUNA.supports.input;
+     [GPT_6_LUNA_PRO.name]: typeof GPT_6_LUNA_PRO.supports.input;
+     [GPT_6_SOL.name]: typeof GPT_6_SOL.supports.input;
+     [GPT_6_SOL_PRO.name]: typeof GPT_6_SOL_PRO.supports.input;
+     [GPT_6_1_SOL.name]: typeof GPT_6_1_SOL.supports.input;
++    [GPT_6_2_SOL.name]: typeof GPT_6_2_SOL.supports.input;
+     [GPT_6_1_SOL_PRO.name]: typeof GPT_6_1_SOL_PRO.supports.input;
+     [GPT_6_1_TERRA.name]: typeof GPT_6_1_TERRA.supports.input;
+     [GPT_6_1_TERRA_PRO.name]: typeof GPT_6_1_TERRA_PRO.supports.input;
+@@ -2075,6 +2087,16 @@ declare const OPENAI_REASONING: {
+         };
+         readonly budget: false;
+     };
++    "gpt-6.2-astra": {
++        readonly levels: {
++            readonly low: "low";
++            readonly medium: "medium";
++            readonly high: "high";
++            readonly xhigh: "xhigh";
++            readonly max: "max";
++        };
++        readonly budget: false;
++    };
+     "gpt-6-astra-pro": {
+         readonly levels: {
+             readonly low: "low";
+@@ -2139,6 +2161,16 @@ declare const OPENAI_REASONING: {
+         };
+         readonly budget: false;
+     };
++    "gpt-6.2-sol": {
++        readonly levels: {
++            readonly low: "low";
++            readonly medium: "medium";
++            readonly high: "high";
++            readonly xhigh: "xhigh";
++            readonly max: "max";
++        };
++        readonly budget: false;
++    };
+     "gpt-6.1-sol-pro": {
+         readonly levels: {
+             readonly low: "low";
+diff --git a/dist/esm/model-meta.js b/dist/esm/model-meta.js
+index ca3c825..4bf0e56 100644
+--- a/dist/esm/model-meta.js
++++ b/dist/esm/model-meta.js
+@@ -2098,16 +2098,27 @@ var GPT_6_1_TERRA_PRO = {
+ 		output: { normal: 5 }
+ 	}
+ };
++var GPT_6_2_SOL = {
++	...GPT_6_1_SOL,
++	name: "gpt-6.2-sol"
++};
++var GPT_6_2_ASTRA = {
++	...GPT_6_ASTRA,
++	name: "gpt-6.2-astra",
++	pricing: { input: { normal: 8, cached: .4 }, output: { normal: 40 } }
++};
+ var OPENAI_CHAT_MODELS = [
+ 	GPT_6_1_TERRA.name,
+ 	GPT_6_1_TERRA_PRO.name,
+ 	GPT_6_1_SOL.name,
++	GPT_6_2_SOL.name,
+ 	GPT_6_1_SOL_PRO.name,
+ 	GPT_6_LUNA.name,
+ 	GPT_6_LUNA_PRO.name,
+ 	GPT_6_SOL.name,
+ 	GPT_6_SOL_PRO.name,
+ 	GPT_6_ASTRA.name,
++	GPT_6_2_ASTRA.name,
+ 	GPT_6_ASTRA_PRO.name,
+ 	GPT_5_6_LUNA_PRO.name,
+ 	GPT_5_6_SOL_PRO.name,
+@@ -2265,12 +2276,14 @@ var OPENAI_MODEL_INPUT_MODALITIES = {
+ 	[GPT_5_6_SOL_PRO.name]: GPT_5_6_SOL_PRO.supports.input,
+ 	[GPT_5_6_TERRA_PRO.name]: GPT_5_6_TERRA_PRO.supports.input,
+ 	[GPT_6_ASTRA.name]: GPT_6_ASTRA.supports.input,
++	[GPT_6_2_ASTRA.name]: GPT_6_2_ASTRA.supports.input,
+ 	[GPT_6_ASTRA_PRO.name]: GPT_6_ASTRA_PRO.supports.input,
+ 	[GPT_6_LUNA.name]: GPT_6_LUNA.supports.input,
+ 	[GPT_6_LUNA_PRO.name]: GPT_6_LUNA_PRO.supports.input,
+ 	[GPT_6_SOL.name]: GPT_6_SOL.supports.input,
+ 	[GPT_6_SOL_PRO.name]: GPT_6_SOL_PRO.supports.input,
+ 	[GPT_6_1_SOL.name]: GPT_6_1_SOL.supports.input,
++	[GPT_6_2_SOL.name]: GPT_6_2_SOL.supports.input,
+ 	[GPT_6_1_SOL_PRO.name]: GPT_6_1_SOL_PRO.supports.input,
+ 	[GPT_6_1_TERRA.name]: GPT_6_1_TERRA.supports.input,
+ 	[GPT_6_1_TERRA_PRO.name]: GPT_6_1_TERRA_PRO.supports.input
+@@ -2310,12 +2323,14 @@ var OPENAI_MODEL_REASONING = {
+ 	[GPT_5_6_SOL_PRO.name]: GPT_5_6_SOL_PRO.reasoning,
+ 	[GPT_5_6_TERRA_PRO.name]: GPT_5_6_TERRA_PRO.reasoning,
+ 	[GPT_6_ASTRA.name]: GPT_6_ASTRA.reasoning,
++	[GPT_6_2_ASTRA.name]: GPT_6_2_ASTRA.reasoning,
+ 	[GPT_6_ASTRA_PRO.name]: GPT_6_ASTRA_PRO.reasoning,
+ 	[GPT_6_LUNA.name]: GPT_6_LUNA.reasoning,
+ 	[GPT_6_LUNA_PRO.name]: GPT_6_LUNA_PRO.reasoning,
+ 	[GPT_6_SOL.name]: GPT_6_SOL.reasoning,
+ 	[GPT_6_SOL_PRO.name]: GPT_6_SOL_PRO.reasoning,
+ 	[GPT_6_1_SOL.name]: GPT_6_1_SOL.reasoning,
++	[GPT_6_2_SOL.name]: GPT_6_2_SOL.reasoning,
+ 	[GPT_6_1_SOL_PRO.name]: GPT_6_1_SOL_PRO.reasoning
+ };
+ /**
+@@ -2330,6 +2345,7 @@ var OPENAI_MODEL_MID_CONVERSATION_CHANNELS = {
+ 	[GPT_5_6_SOL.name]: GPT_5_6_SOL.supports.mid_conversation_channels,
+ 	[GPT_5_6_TERRA.name]: GPT_5_6_TERRA.supports.mid_conversation_channels,
+ 	[GPT_6_ASTRA.name]: GPT_6_ASTRA.supports.mid_conversation_channels,
++	[GPT_6_2_ASTRA.name]: GPT_6_2_ASTRA.supports.mid_conversation_channels,
+ 	[GPT_6_LUNA.name]: GPT_6_LUNA.supports.mid_conversation_channels,
+ 	[GPT_6_SOL.name]: GPT_6_SOL.supports.mid_conversation_channels
+ };

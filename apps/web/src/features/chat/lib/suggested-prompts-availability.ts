@@ -3,6 +3,7 @@ import { panic } from "better-result";
 import { isUserInputChatToolName } from "@stll/api-contract/chat-tool-activity";
 import type { UserInputChatToolName } from "@stll/api-contract/chat-tool-activity";
 
+import { withSubagentRunParts } from "@/components/chat/chat-subagent-parts.logic";
 import type { ChatMessage, ChatPart } from "@/components/chat/chat-ui-tools";
 import { resolveChatAssistantTurnOutcome } from "@/components/chat/chat-ui-tools";
 
@@ -77,8 +78,9 @@ export const resolveSuggestedPromptsTurnOwner = ({
   if (lastMessage?.role !== "assistant") {
     return "composer";
   }
+  // A question a sub-agent run asks owns the turn like a top-level one.
   const owners = new Set(
-    lastMessage.parts.flatMap((part) => {
+    withSubagentRunParts(lastMessage.parts).flatMap((part) => {
       if (
         part.type !== "tool-call" ||
         !ASK_USER_STATE_OWNS_TURN[part.state] ||

@@ -1,5 +1,9 @@
 import { Result } from "better-result";
 
+import type {
+  SignInAddress,
+  SignInDevice,
+} from "@stll/transactional/emails/new-device-login";
 import { type ParsedUserAgent, parseUserAgent } from "@stll/user-agent";
 
 import { isNewDeviceNoticeAuthPath } from "@/api/lib/auth/session-path-classification";
@@ -27,8 +31,8 @@ type PreviousSession = {
 
 type NewDeviceNotice = {
   email: string;
-  device: string;
-  ipAddress: string;
+  device: SignInDevice;
+  ipAddress: SignInAddress;
   createdAt: Date;
 };
 
@@ -52,6 +56,16 @@ type SendNewDeviceNoticeOptions = {
 // A device is its browser and OS; a user agent naming neither is no device.
 const deviceKey = ({ browser, os }: ParsedUserAgent): string | null =>
   browser === null && os === null ? null : `${browser ?? ""}|${os ?? ""}`;
+
+const signInDevice = ({ browser, os }: ParsedUserAgent): SignInDevice => {
+  if (browser !== null && os !== null) {
+    return { type: "browserOnOs", browser, os };
+  }
+  if (browser !== null) {
+    return { type: "browser", browser };
+  }
+  return os === null ? { type: "unknown" } : { type: "os", os };
+};
 
 export const sendNewDeviceNotice = async ({
   path,
@@ -111,14 +125,13 @@ export const sendNewDeviceNotice = async ({
         return;
       }
 
-      const device =
-        currentDevice.browser && currentDevice.os
-          ? `${currentDevice.browser} on ${currentDevice.os}`
-          : (currentDevice.browser ?? currentDevice.os ?? "Unknown");
       dependencies.sendNotice({
         email: user.email,
-        device,
-        ipAddress: session.ipAddress ?? "Unknown",
+        device: signInDevice(currentDevice),
+        ipAddress:
+          typeof currentIpAddress === "string" && currentIpAddress !== ""
+            ? { type: "known", address: currentIpAddress }
+            : { type: "unknown" },
         createdAt: session.createdAt,
       });
     },

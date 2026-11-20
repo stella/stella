@@ -4,7 +4,8 @@ import { getTranslator } from "@/i18n/i18n-store";
 import { isPublicKnowledgeCrawlAllowed } from "@/lib/knowledge/public-knowledge-launch";
 import { pageTitle } from "@/lib/page-title";
 import { createPublicHead } from "@/lib/public-seo";
-import { PublicTemplatesCatalogue } from "@/routes/knowledge/-public/public-templates-catalogue";
+import { TemplatesCataloguePage } from "@/routes/knowledge/-public/templates-catalogue.page";
+import { TemplatesCataloguePending } from "@/routes/knowledge/-public/templates-catalogue.pending";
 
 export const Route = createFileRoute("/knowledge/templates_/catalogue/")({
   head: () =>
@@ -15,5 +16,6 @@ export const Route = createFileRoute("/knowledge/templates_/catalogue/")({
       title: pageTitle("knowledge.sections.templates.title"),
       type: "website",
     }),
-  component: PublicTemplatesCatalogue,
+  component: TemplatesCataloguePage,
+  pendingComponent: TemplatesCataloguePending,
 });

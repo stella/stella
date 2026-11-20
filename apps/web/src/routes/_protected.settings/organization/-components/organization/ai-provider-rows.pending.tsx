@@ -34,11 +34,14 @@ export const AI_PROVIDER_ROW_LINE_CLASS =
 export const AIProviderRowsFrame = ({
   addAction,
   children,
+  description,
 }: {
   /** The add provider button, or its face. */
   addAction: ReactNode;
   /** The provider rows. */
   children: ReactNode;
+  /** Whether the organization needs a key, or the generic line. */
+  description: ReactNode;
 }) => (
   <ListGroup>
     <ListGroupHeader>
@@ -51,10 +54,7 @@ export const AIProviderRowsFrame = ({
         </ListGroupTitle>
         {addAction}
         <ListGroupDescription className="col-start-1">
-          <PendingText
-            barClassName="w-72 max-w-full"
-            id="organization.aiConfig.providersDescription"
-          />
+          {description}
         </ListGroupDescription>
       </div>
     </ListGroupHeader>
@@ -65,6 +65,12 @@ export const AIProviderRowsFrame = ({
 /** The providers group while the stored configuration is read. */
 export const AIProviderRowsPending = () => (
   <AIProviderRowsFrame
+    description={
+      <PendingText
+        barClassName="w-72 max-w-full"
+        id="organization.aiConfig.providersDescription"
+      />
+    }
     addAction={
       <ButtonFace size="sm" variant="ghost">
         <PlusIcon />

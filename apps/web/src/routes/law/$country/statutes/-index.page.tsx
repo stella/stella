@@ -11,7 +11,6 @@ import { useDebouncedCallback } from "use-debounce";
 import { useTranslations } from "use-intl";
 
 import { createStatuteRouteParams } from "@stll/api-contract/statute-route";
-import { ScrollArea } from "@stll/ui/scroll-area";
 
 import type { FacetSourceBucket } from "@/components/public-law-table/public-law-facets.logic";
 import {
@@ -85,11 +84,7 @@ import {
 } from "@/routes/law/-components/public-law-list-failure";
 import { createStatuteListFilters } from "@/routes/law/-statutes-index.logic";
 
-import {
-  StatuteListHeading,
-  StatuteListLayout,
-  StatutesIndexTitle,
-} from "./-index.pending";
+import { StatuteFullTextLayout, StatuteListLayout } from "./-index.pending";
 
 // The statutes list page, the route's component. It renders the shell its
 // pending view renders (`-index.pending.tsx`), with the live controls in the
@@ -198,50 +193,59 @@ function PublicStatuteFullText({ query }: { query: string }) {
   const hits =
     data === undefined ? [] : data.pages.flatMap((page) => page.items);
   return (
-    <main className="flex min-h-0 flex-1 flex-col gap-4 p-4">
-      {hydrated && dataView.type !== "pending" && (
-        <PublicLawQueryFeedback view={dataView} />
-      )}
-      <StatutesIndexTitle />
-      <StatuteSearch
-        country={country}
-        maxLength={STATUTE_MAX_QUERY_LENGTH}
-        query={input}
-        onQueryChange={(value) => {
-          setInput(value);
-          setRequestedQuery(value.trim());
-          writeQuery(value);
-        }}
-        onSubmit={() => writeQuery.flush()}
-      />
-      <PublicLawFilterPopover
-        activeFilterCount={search.type === undefined ? 0 : 1}
-      >
-        <FacetSection
-          buckets={facets?.documentType ?? NO_TYPES}
-          heading={t("common.type")}
-          name="type"
-          onSelect={selectType}
-          selectedValue={search.type}
+    <StatuteFullTextLayout
+      title={t("statutes.title")}
+      feedback={
+        hydrated &&
+        dataView.type !== "pending" && (
+          <PublicLawQueryFeedback view={dataView} />
+        )
+      }
+      search={
+        <StatuteSearch
+          country={country}
+          maxLength={STATUTE_MAX_QUERY_LENGTH}
+          query={input}
+          onQueryChange={(value) => {
+            setInput(value);
+            setRequestedQuery(value.trim());
+            writeQuery(value);
+          }}
+          onSubmit={() => writeQuery.flush()}
         />
-      </PublicLawFilterPopover>
-      <PublicLawFilterChips
-        chips={
-          search.type === undefined
-            ? []
-            : [
-                {
-                  id: "filter:type",
-                  kind: t("common.type"),
-                  value: search.type,
-                  onRemove: () => selectType(undefined),
-                },
-              ]
-        }
-        onClearAll={() => selectType(undefined)}
-      />
-      <ScrollArea className="min-h-0 flex-1">
-        {dataView.type !== "error" && (
+      }
+      filters={
+        <PublicLawFilterPopover
+          activeFilterCount={search.type === undefined ? 0 : 1}
+        >
+          <FacetSection
+            buckets={facets?.documentType ?? NO_TYPES}
+            heading={t("common.type")}
+            name="type"
+            onSelect={selectType}
+            selectedValue={search.type}
+          />
+        </PublicLawFilterPopover>
+      }
+      chips={
+        <PublicLawFilterChips
+          chips={
+            search.type === undefined
+              ? []
+              : [
+                  {
+                    id: "filter:type",
+                    kind: t("common.type"),
+                    value: search.type,
+                    onRemove: () => selectType(undefined),
+                  },
+                ]
+          }
+          onClearAll={() => selectType(undefined)}
+        />
+      }
+      results={
+        dataView.type !== "error" && (
           <PublicLawResultsBoundary
             searchKey={`${country}:${query}`}
             resetOn={data}
@@ -279,11 +283,35 @@ function PublicStatuteFullText({ query }: { query: string }) {
               }}
             />
           </PublicLawResultsBoundary>
-        )}
-      </ScrollArea>
-    </main>
+        )
+      }
+    />
   );
 }
+
+/** The page and the alias the entry resolved to, held during a refresh. */
+const StatuteListHeading = ({
+  alias,
+  isRefreshing,
+  page,
+}: {
+  alias: string | null;
+  isRefreshing: boolean;
+  page: number;
+}) => {
+  const t = useTranslations();
+  return (
+    <p
+      aria-busy={isRefreshing}
+      className="flex flex-wrap items-baseline gap-x-3 text-xs tabular-nums transition-opacity duration-200 aria-busy:opacity-56"
+    >
+      <span>{t("common.page", { page: String(page) })}</span>
+      {alias !== null && (
+        <span>{t("statutes.resolvedAlias", { label: alias })}</span>
+      )}
+    </p>
+  );
+};
 
 type StatuteListFilterChipsOptions = {
   search: StatutesIndexSearch;
@@ -606,6 +634,7 @@ function PublicStatuteList() {
 
   return (
     <StatuteListLayout
+      title={t("statutes.title")}
       chips={
         <PublicLawFilterChips
           chips={chips}

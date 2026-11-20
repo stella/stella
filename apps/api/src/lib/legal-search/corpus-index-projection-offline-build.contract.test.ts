@@ -500,6 +500,7 @@ const runBuild = async (
         return Result.ok({
           text: `Art. 1. Tento zákon upravuje ${marker(serial)} a jeho použití.`,
           ast: null,
+          storedAst: { type: "absent" },
         });
       },
     },

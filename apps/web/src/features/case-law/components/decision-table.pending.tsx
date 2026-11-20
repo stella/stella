@@ -1,5 +1,3 @@
-import { useTranslations } from "use-intl";
-
 import {
   CalendarIcon,
   FileDigitIcon,
@@ -14,12 +12,13 @@ import {
 import type { LucideIcon } from "@stll/ui/icons";
 import { Skeleton } from "@stll/ui/skeleton";
 
+import { PendingText } from "@/components/pending-text";
 import {
   PublicLawTableHeaderFace,
   PublicLawTableSkeleton,
 } from "@/components/public-law-table/public-law-table.pending";
 import type { PublicLawSkeletonColumn } from "@/components/public-law-table/public-law-table.pending";
-import { SELECT_COLUMN_SIZE } from "@/components/workspaces/table/table-schema";
+import { SELECT_COLUMN_SIZE } from "@/components/workspaces/table/workspace-grid";
 import {
   DECISION_COLUMN_IDS,
   DECISION_COLUMN_LABEL_KEYS,
@@ -58,14 +57,13 @@ export const DecisionTableSkeleton = ({
 }: {
   expectedRowCount?: number | undefined;
 }) => {
-  const t = useTranslations();
   const columns: PublicLawSkeletonColumn[] = [
     {
       id: "select",
       header: (
-        <span className="flex h-full items-center justify-center">
+        <div className="flex h-full items-center justify-center">
           <Skeleton className="size-4 rounded-sm" />
-        </span>
+        </div>
       ),
       size: SELECT_COLUMN_SIZE,
     },
@@ -76,7 +74,12 @@ export const DecisionTableSkeleton = ({
         header: (
           <PublicLawTableHeaderFace
             icon={<Icon className="size-3.5" />}
-            label={t(DECISION_COLUMN_LABEL_KEYS[column])}
+            label={
+              <PendingText
+                barClassName="w-16 max-w-full"
+                id={DECISION_COLUMN_LABEL_KEYS[column]}
+              />
+            }
           />
         ),
         size: DECISION_COLUMN_MODEL[column].size,

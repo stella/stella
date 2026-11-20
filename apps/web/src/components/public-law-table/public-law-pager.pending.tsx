@@ -1,11 +1,13 @@
 import type { ReactNode } from "react";
 
-import { useTranslations } from "use-intl";
-
-import { Button } from "@stll/ui/button";
+import {
+  ButtonFace,
+  FaceLabelPending,
+  SelectTriggerFace,
+} from "@stll/ui/control-face";
 import { ChevronLeftIcon, ChevronRightIcon } from "@stll/ui/icons";
-import { Label } from "@stll/ui/label";
-import { Skeleton } from "@stll/ui/skeleton";
+
+import { PendingText } from "@/components/pending-text";
 
 // The pager's frame and its loading face. A route's pending view draws the
 // face; the page's pager is the same frame with live links, so the row under
@@ -17,33 +19,32 @@ import { Skeleton } from "@stll/ui/skeleton";
  * other.
  */
 export const PublicLawPagerFrame = ({
+  label,
   position,
   steps,
 }: {
+  label?: string | undefined;
   position: ReactNode;
   steps: ReactNode;
-}) => {
-  const t = useTranslations();
-
-  return (
-    <nav
-      aria-label={t("caseLaw.pagination.label")}
-      className="flex flex-wrap items-center justify-between gap-2"
-    >
-      <div className="flex flex-wrap items-center gap-1">{steps}</div>
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-        {position}
-      </div>
-    </nav>
-  );
-};
+}) => (
+  <nav
+    aria-label={label}
+    className="flex flex-wrap items-center justify-between gap-2"
+    data-slot="public-law-pager"
+  >
+    <div className="flex flex-wrap items-center gap-1">{steps}</div>
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+      {position}
+    </div>
+  </nav>
+);
 
 /** Previous or next as it reads: the word with its arrow on the outer side. */
 export const PublicLawPagerStepLabel = ({
   label,
   placement,
 }: {
-  label: string;
+  label: ReactNode;
   placement: "previous" | "next";
 }) =>
   placement === "previous" ? (
@@ -61,18 +62,7 @@ export const PublicLawPagerStepLabel = ({
     </>
   );
 
-/** A step with nowhere to go, drawn anyway so the row holds still. */
-export const PublicLawPagerStepDisabled = ({
-  label,
-  placement,
-}: {
-  label: string;
-  placement: "previous" | "next";
-}) => (
-  <Button className="h-7 min-h-0" disabled size="sm" variant="ghost">
-    <PublicLawPagerStepLabel label={label} placement={placement} />
-  </Button>
-);
+const PUBLIC_LAW_PAGER_STEP_CLASS_NAME = "h-7 min-h-0";
 
 /** The page the reader is on, marked rather than linked. */
 export const PublicLawCurrentPage = ({ children }: { children: ReactNode }) => (
@@ -84,53 +74,48 @@ export const PublicLawCurrentPage = ({ children }: { children: ReactNode }) => (
   </span>
 );
 
-/** "Per page", around the control that sets it. */
-export const PublicLawPageSizeLabel = ({
-  children,
-  waiting = false,
-}: {
-  children: ReactNode;
-  /** No control to name yet: the caption stands beside its placeholder. */
-  waiting?: boolean | undefined;
-}) => {
-  const t = useTranslations();
+const PUBLIC_LAW_PAGE_SIZE_TRIGGER_CLASS_NAME = "h-7 min-h-0 w-auto min-w-16";
 
-  return (
-    <Label {...(waiting ? { render: <div /> } : {})} variant="muted">
-      {t("caseLaw.pagination.perPage")}
-      {children}
-    </Label>
-  );
-};
-
-/**
- * The pager before its page is there. Which page this is and how many rows a
- * page holds live in the address, which only the page reads: those two
- * shimmer, and the steps wait, disabled, where they will be.
- */
-export const PublicLawPagerPending = () => {
-  const t = useTranslations();
-
-  return (
-    <PublicLawPagerFrame
-      position={
-        <PublicLawPageSizeLabel waiting>
-          <Skeleton className="h-7 w-16 rounded-md" />
-        </PublicLawPageSizeLabel>
-      }
-      steps={
-        <>
-          <PublicLawPagerStepDisabled
-            label={t("common.previous")}
+/** The pager reserves the current page and the page-size control. */
+export const PublicLawPagerPending = () => (
+  <PublicLawPagerFrame
+    position={
+      <div className="text-muted-foreground inline-flex items-center gap-2 text-xs/4 font-medium">
+        <PendingText barClassName="w-12" id="caseLaw.pagination.perPage" />
+        <SelectTriggerFace
+          className={PUBLIC_LAW_PAGE_SIZE_TRIGGER_CLASS_NAME}
+          size="sm"
+        >
+          <FaceLabelPending className="w-4" />
+        </SelectTriggerFace>
+      </div>
+    }
+    steps={
+      <>
+        <ButtonFace
+          className={PUBLIC_LAW_PAGER_STEP_CLASS_NAME}
+          size="sm"
+          variant="ghost"
+        >
+          <PublicLawPagerStepLabel
+            label={<PendingText barClassName="w-12" id="common.previous" />}
             placement="previous"
           />
-          <Skeleton className="h-7 w-7 rounded-md" />
-          <PublicLawPagerStepDisabled
-            label={t("common.next")}
+        </ButtonFace>
+        <PublicLawCurrentPage>
+          <FaceLabelPending className="w-2" />
+        </PublicLawCurrentPage>
+        <ButtonFace
+          className={PUBLIC_LAW_PAGER_STEP_CLASS_NAME}
+          size="sm"
+          variant="ghost"
+        >
+          <PublicLawPagerStepLabel
+            label={<PendingText barClassName="w-8" id="common.next" />}
             placement="next"
           />
-        </>
-      }
-    />
-  );
-};
+        </ButtonFace>
+      </>
+    }
+  />
+);

@@ -51,13 +51,16 @@ const selectE2eSpecPlan = (
 ): E2eSpecSelection => {
   const specs = listE2eSpecs(root);
   // Missing inputs and graph uncertainty cannot prove a shard is unaffected.
-  // Shipped web source reaches the specs through the built app, outside
-  // their import graphs.
-  if (
+  // Shipped web source, the app's own or a bundled workspace package's,
+  // reaches the specs through the built app, outside their import graphs.
+  const shipped = Result.try(() =>
     changedFiles.some(
-      (file) => !existsSync(path.join(root, file)) || productionWebSource(file),
-    )
-  ) {
+      (file) =>
+        !existsSync(path.join(root, file)) ||
+        productionWebSource(file, path.resolve(root)),
+    ),
+  );
+  if (shipped.isErr() || shipped.value) {
     return { status: "all" };
   }
   const runnerInputs = Result.try(() => e2eRunnerInputs(root));

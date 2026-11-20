@@ -227,6 +227,10 @@ const ALWAYS_ON_ROUTE_PREFIXES: ReadonlyMap<string, string> = new Map([
     "Personal search history is available on every deployment",
   ],
   [
+    "/v1/file-content",
+    "Redeems a short-lived file grant that a gated or ungated file route issued; the grant carries the issuing decision",
+  ],
+  [
     "/v1/me/data-exports",
     "A personal data export is available to every account on every deployment",
   ],
@@ -266,6 +270,10 @@ const ALWAYS_ON_ROUTE_PREFIXES: ReadonlyMap<string, string> = new Map([
   [
     "/v1/desktop/dictation/models",
     "Desktop dictation lists the region's transcription models only for a caller whose cloud dictation feature decision is enabled, on every deployment",
+  ],
+  [
+    "/v1/desktop/dictation/recording-cleanup",
+    "Desktop recording cleanup enforces the caller's dictation feature decision, its dictation kill switch, model availability and usage admission on every deployment",
   ],
   [
     "/v1/desktop/dictation/transcribe",
