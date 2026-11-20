@@ -31,6 +31,7 @@ export const _b = () => (
 );
 
 // --- Allowed ---
+// expect-clean: disabled-control-needs-reason/disabled-control-needs-reason
 export const _c = () => (
   <Button disabled={isEmpty} disabledReason={t("typeFirst")}>
     {t("send")}
