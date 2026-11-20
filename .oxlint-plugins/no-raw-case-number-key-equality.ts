@@ -52,8 +52,6 @@ const TRAILING_EQUALITY = new RegExp(
   "iu",
 );
 // An operand: a column, bare, qualified or quoted; the group is its name.
-const LEFT_OPERAND =
-  /(?:"?[A-Za-z_][\w$]*"?\s*\.\s*)?"?(?<name>[A-Za-z_][\w$]*)"?\s*$/u;
 const RIGHT_OPERAND =
   /^\s*(?:ANY\s*\(\s*)?(?:"?[A-Za-z_][\w$]*"?\s*\.\s*)?"?(?<name>[A-Za-z_][\w$]*)/iu;
 // What precedes the target of an assignment: `SET` or the comma ending the
@@ -77,16 +75,91 @@ const quasiTexts = (template: AstNode): string[] =>
       })
     : [];
 
-const isKeyColumn = (match: RegExpExecArray | null): boolean =>
-  KEY_COLUMN.test(match?.groups?.["name"] ?? "");
+type Operand = { index: number; name: string };
+
+const isWordChar = (char: string | undefined): boolean =>
+  char !== undefined && /[\w$]/u.test(char);
+const isNameStart = (char: string | undefined): boolean =>
+  char !== undefined && /[A-Za-z_]/u.test(char);
+const isSpace = (char: string | undefined): boolean =>
+  char !== undefined && /\s/u.test(char);
+
+/**
+ * The identifier ending at `end`, optionally quoted (`"name"`), and where it
+ * starts. Its start is the earliest name start in the run of word characters
+ * before `end`.
+ */
+const identifierEndingAt = (
+  text: string,
+  end: number,
+): { start: number; name: string } | null => {
+  let cursor = end;
+  if (text[cursor - 1] === '"') {
+    cursor -= 1;
+  }
+  const runEnd = cursor;
+  while (isWordChar(text[cursor - 1])) {
+    cursor -= 1;
+  }
+  let nameStart = cursor;
+  while (nameStart < runEnd && !isNameStart(text[nameStart])) {
+    nameStart += 1;
+  }
+  if (nameStart === runEnd) {
+    return null;
+  }
+  const start =
+    nameStart === cursor && text[nameStart - 1] === '"'
+      ? nameStart - 1
+      : nameStart;
+  return { start, name: text.slice(nameStart, runEnd) };
+};
+
+/**
+ * The operand a text ends with: a column, bare, qualified (`t.name`) or
+ * quoted, before any trailing whitespace. Scanned from the end, so each
+ * character is read once whatever the text holds.
+ */
+const leftOperandOf = (text: string): Operand | null => {
+  let end = text.length;
+  while (isSpace(text[end - 1])) {
+    end -= 1;
+  }
+  const column = identifierEndingAt(text, end);
+  if (column === null) {
+    return null;
+  }
+  let cursor = column.start;
+  while (isSpace(text[cursor - 1])) {
+    cursor -= 1;
+  }
+  if (text[cursor - 1] !== ".") {
+    return { index: column.start, name: column.name };
+  }
+  cursor -= 1;
+  while (isSpace(text[cursor - 1])) {
+    cursor -= 1;
+  }
+  const qualifier = identifierEndingAt(text, cursor);
+  return {
+    index: qualifier?.start ?? column.start,
+    name: column.name,
+  };
+};
+
+const isKeyColumn = (name: string | undefined): boolean =>
+  KEY_COLUMN.test(name ?? "");
 
 /** Whether `text` compares a key column, an assignment aside. */
 const textComparesKey = (text: string): boolean => {
   for (const operator of text.matchAll(OPERATOR)) {
     const before = text.slice(0, operator.index);
     const after = text.slice(operator.index + operator[0].length);
-    const left = LEFT_OPERAND.exec(before);
-    if (!isKeyColumn(left) && !isKeyColumn(RIGHT_OPERAND.exec(after))) {
+    const left = leftOperandOf(before);
+    if (
+      !isKeyColumn(left?.name) &&
+      !isKeyColumn(RIGHT_OPERAND.exec(after)?.groups?.name)
+    ) {
       continue;
     }
     const isAssignment =
@@ -134,7 +207,7 @@ const templateComparesKeyProperty = (template: AstNode): boolean => {
       const lead =
         target.trim().length === 0
           ? (texts[index - 1] ?? "")
-          : target.slice(0, LEFT_OPERAND.exec(target)?.index ?? 0);
+          : target.slice(0, leftOperandOf(target)?.index ?? 0);
       return !ASSIGNMENT_LEAD.test(lead);
     }
     const leading = LEADING_EQUALITY.exec(after);
@@ -158,7 +231,7 @@ export default eslintCompatPlugin({
       },
       createOnce(context) {
         return {
-          Literal(node: ESTree.Literal) {
+          Literal(node) {
             if (typeof node.value === "string" && textComparesKey(node.value)) {
               context.report({ node, messageId: "raw" });
             }
