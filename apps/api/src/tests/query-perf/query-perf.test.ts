@@ -765,7 +765,12 @@ describe.skipIf(!enabled)("read budgets on PostgreSQL", () => {
               await seedRequestReceiptScenario(db, scenario);
               break;
             case "redaction-tombstones":
-              await seedRedactionTombstoneScenario(db, scenario);
+              // A phase of its own: the reseed, not the measured page,
+              // decides how much of the profile deadline this scenario spends.
+              await deadline.run(
+                `seed ${describeScheduledScenario(scenario)}`,
+                async () => await seedRedactionTombstoneScenario(db, scenario),
+              );
               break;
             default:
               scenario satisfies never;
