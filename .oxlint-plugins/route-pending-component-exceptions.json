@@ -1,9 +1,5 @@
 [
   "apps/web/src/routes/_protected.admin/route.tsx",
-  "apps/web/src/routes/_protected.contacts/$contactId.tsx",
-  "apps/web/src/routes/_protected.contacts/import.tsx",
-  "apps/web/src/routes/_protected.contacts/route.tsx",
-  "apps/web/src/routes/_protected.inbox/index.tsx",
   "apps/web/src/routes/_protected.settings/organization.ai.tsx",
   "apps/web/src/routes/_protected.settings/organization.anonymization.tsx",
   "apps/web/src/routes/_protected.settings/organization.general.tsx",
@@ -11,7 +7,6 @@
   "apps/web/src/routes/_protected.settings/organization.time-policy.tsx",
   "apps/web/src/routes/_protected.settings/organization.tsx",
   "apps/web/src/routes/_protected.verify.$code.tsx",
-  "apps/web/src/routes/_protected.workspaces/$workspaceId/correspondence/$correspondenceId.tsx",
   "apps/web/src/routes/agent-claim.tsx",
   "apps/web/src/routes/auth/organization.tsx",
   "apps/web/src/routes/consent.tsx",
