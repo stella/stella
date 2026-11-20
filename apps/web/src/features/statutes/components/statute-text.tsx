@@ -29,6 +29,11 @@ import { LEGAL_TEXT_CLASS_NAME } from "@stll/ui/prose";
 import { cn } from "@stll/ui/utils";
 
 import { useInspectorView } from "@/components/inspector/use-inspector-view";
+import { READER_BODY_STYLE } from "@/components/legal-reader/reader-text.pending";
+import {
+  STATUTE_MASTHEAD_CLASS_NAMES,
+  STATUTE_TEXT_CLASS_NAME,
+} from "@/features/statutes/components/statute-text.pending";
 import { createProvisionViewTab } from "@/features/statutes/provision-inspector.logic";
 import type { StatuteMasthead as StatuteMastheadData } from "@/features/statutes/statute-reader-blocks";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
@@ -69,12 +74,6 @@ type StatuteTextProps = {
   versionValidFrom: string | null;
 };
 
-const READER_STYLE = {
-  fontFamily: "var(--reader-body-font)",
-  fontSize: "var(--reader-body-size)",
-  lineHeight: "var(--reader-body-line-height)",
-} as const;
-
 /**
  * The blocks the statute reader draws marks in: the parsed provisions, or
  * the plain text's paragraphs when the version has none. The marks are
@@ -106,27 +105,18 @@ export const StatuteMasthead = ({
 }: {
   masthead: StatuteMastheadData;
 }) => (
-  <header
-    className="group relative mb-12 scroll-mt-[var(--reader-anchor-offset)] text-center"
-    id={masthead.anchorId}
-  >
-    <p className="mb-4 text-[1.55rem] leading-tight font-bold">
-      {masthead.citation}
-    </p>
-    <p className="text-[1.35rem] leading-tight font-bold tracking-wide">
+  <header className={STATUTE_MASTHEAD_CLASS_NAMES.root} id={masthead.anchorId}>
+    <p className={STATUTE_MASTHEAD_CLASS_NAMES.citation}>{masthead.citation}</p>
+    <p className={STATUTE_MASTHEAD_CLASS_NAMES.instrument}>
       {masthead.instrument}
     </p>
     {masthead.issuer !== null && (
-      <p className="mt-2 text-[1.25rem] leading-snug font-semibold">
-        {masthead.issuer}
-      </p>
+      <p className={STATUTE_MASTHEAD_CLASS_NAMES.issuer}>{masthead.issuer}</p>
     )}
     {masthead.date !== null && (
-      <p className="mt-3 text-[1.05rem] leading-relaxed">{masthead.date}</p>
+      <p className={STATUTE_MASTHEAD_CLASS_NAMES.date}>{masthead.date}</p>
     )}
-    <h1 className="mt-2 text-[1.15rem] leading-relaxed font-semibold text-balance">
-      {masthead.title}
-    </h1>
+    <h1 className={STATUTE_MASTHEAD_CLASS_NAMES.title}>{masthead.title}</h1>
   </header>
 );
 
@@ -172,13 +162,10 @@ export const StatuteText = ({
     );
     return (
       <article
-        className={cn(
-          LEGAL_TEXT_CLASS_NAME,
-          "reader-statute text-card-foreground text-start",
-        )}
+        className={cn(LEGAL_TEXT_CLASS_NAME, STATUTE_TEXT_CLASS_NAME)}
         lang={language}
         ref={articleRef}
-        style={READER_STYLE}
+        style={READER_BODY_STYLE}
       >
         {masthead !== null && <StatuteMasthead masthead={masthead} />}
         {blocks.map((block) => {
@@ -226,12 +213,9 @@ export const StatuteText = ({
   if (fulltext) {
     return (
       <article
-        className={cn(
-          LEGAL_TEXT_CLASS_NAME,
-          "reader-statute text-card-foreground text-start",
-        )}
+        className={cn(LEGAL_TEXT_CLASS_NAME, STATUTE_TEXT_CLASS_NAME)}
         lang={language}
-        style={READER_STYLE}
+        style={READER_BODY_STYLE}
       >
         <h1 className="mb-10 text-center text-xl font-semibold text-balance">
           {statuteTitle}
