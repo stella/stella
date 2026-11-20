@@ -1,14 +1,9 @@
 [
   "apps/web/src/routes/invoice-link.tsx",
-  "apps/web/src/routes/knowledge/clauses.tsx",
   "apps/web/src/routes/knowledge/company-formats.$registry.$companyId.tsx",
-  "apps/web/src/routes/knowledge/index.tsx",
-  "apps/web/src/routes/knowledge/route.tsx",
-  "apps/web/src/routes/knowledge/styles.tsx",
   "apps/web/src/routes/knowledge/templates_.catalogue.$packId.$templateId.tsx",
   "apps/web/src/routes/knowledge/templates_.catalogue.index.tsx",
   "apps/web/src/routes/knowledge/templates_.catalogue.tsx",
   "apps/web/src/routes/knowledge/tools_.contribute.tsx",
-  "apps/web/src/routes/knowledge/workflows.tsx",
   "apps/web/src/routes/sharepoint.oauth-callback.tsx"
 ]

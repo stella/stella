@@ -785,6 +785,24 @@ test("records inbox and contact loading landmarks in English and Czech", async (
   }
 });
 
+test("records Knowledge loading landmarks in English and Czech", async ({
+  baseURL,
+  browser,
+}, testInfo) => {
+  // timeout: Each locale needs a cold and hydrated document for three routes.
+  testInfo.setTimeout(PLAYWRIGHT_EXPECT_TIMEOUT_60_SECONDS_MS);
+  const measurement = await measureLoadingGeometry({
+    browser,
+    baseURL: baseURL ?? "http://localhost:3000",
+    storageState: STORAGE_STATE,
+    set: "knowledge",
+  });
+  await testInfo.attach("knowledge-loading-geometry.json", {
+    body: JSON.stringify(measurement, null, 2),
+    contentType: "application/json",
+  });
+});
+
 test("route coverage matches the authenticated route tree", async () => {
   await expectAuthenticatedRouteCoverage(SMOKE_ROUTE_DEFS);
   expect(
