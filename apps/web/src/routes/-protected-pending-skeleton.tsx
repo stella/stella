@@ -17,6 +17,7 @@ import {
   SIDE_RAIL_ICON_BUTTON_SIZE,
   SIDE_RAIL_WIDTH,
 } from "@stll/ui/inspector";
+import { inspectorPaneWidthCss } from "@stll/ui/pane-width";
 import { Skeleton } from "@stll/ui/skeleton";
 import { StellaWordmarkLatin } from "@stll/ui/stella-wordmark";
 import { TruncatedText } from "@stll/ui/truncated-text";
@@ -29,6 +30,7 @@ import {
 } from "@/components/inspector/inspector-storage-keys";
 import type { InspectorStorageScope } from "@/components/inspector/inspector-storage-keys";
 import { ProtectedPendingInspectorScopeContext } from "@/components/inspector/protected-pending-inspector-scope";
+import type { RouteInspectorEntry } from "@/components/inspector/route-inspector-entry";
 import { useIntlMounted } from "@/components/pending-text";
 import {
   SIDEBAR_WIDTH_ICON_PX,
@@ -98,10 +100,13 @@ const PINNED_ROW_KEYS = ["a", "b", "c"] as const;
 export function ProtectedPendingSkeleton({
   body,
   content,
+  inspectorOnEntry,
   inspectorScope,
 }: {
   body?: RouteComponent | undefined;
   content?: ReactElement | undefined;
+  /** What the leaf route's page does with the inspector when it mounts. */
+  inspectorOnEntry?: RouteInspectorEntry | undefined;
   inspectorScope?: InspectorStorageScope;
 }) {
   if (inspectorScope !== undefined) {
@@ -109,6 +114,7 @@ export function ProtectedPendingSkeleton({
       <ProtectedPendingSkeletonContent
         body={body}
         content={content}
+        inspectorOnEntry={inspectorOnEntry}
         inspectorScope={inspectorScope}
       />
     );
@@ -119,6 +125,7 @@ export function ProtectedPendingSkeleton({
         <ProtectedPendingSkeletonContent
           body={body}
           content={content}
+          inspectorOnEntry={inspectorOnEntry}
           inspectorScope={contextScope}
         />
       )}
@@ -187,22 +194,27 @@ function NavItemText({
 function ProtectedPendingSkeletonContent({
   body,
   content,
+  inspectorOnEntry,
   inspectorScope,
 }: {
   body: RouteComponent | undefined;
   content: ReactElement | undefined;
+  inspectorOnEntry: RouteInspectorEntry | undefined;
   inspectorScope: InspectorStorageScope | undefined;
 }) {
   const intlMounted = useIntlMounted();
   const { prefs } = usePresentationPrefs();
   const navItems = usePendingNavItems(inspectorScope, prefs.timeBillingHint);
   const viewportWidth = useViewportWidth();
-  // The restore policy the authenticated frame applies, on the stored tabs:
+  // A page that opens its own tab on entry has the pane open once it is
+  // there, which the server's paint knows from the address alone. Otherwise
+  // the restore policy the authenticated frame applies, on the stored tabs:
   // the member's tab registry loads with that frame, and the store writes
   // only tabs it would restore.
   const paneRequested =
-    inspectorScope !== undefined &&
-    isPersistedInspectorPaneOpen(inspectorScope, countStoredInspectorTabs);
+    inspectorOnEntry === "opens-page-tab" ||
+    (inspectorScope !== undefined &&
+      isPersistedInspectorPaneOpen(inspectorScope, countStoredInspectorTabs));
   const sidebarOpen =
     prefs.sidebarOpen &&
     !shouldForceSidebarCollapsed({
@@ -210,13 +222,20 @@ function ProtectedPendingSkeletonContent({
       inspectorPaneOpen: paneRequested,
       viewportWidth,
     });
-  const paneWidth = paneRequested
-    ? resolveInspectorPaneWidth({
-        desiredWidth: prefs.inspectorWidth,
-        sidebarWidth: sidebarOpen ? SIDEBAR_WIDTH_PX : SIDEBAR_WIDTH_ICON_PX,
-        viewportWidth,
-      })
-    : undefined;
+  const paneSize = {
+    desiredWidth: prefs.inspectorWidth,
+    sidebarWidth: sidebarOpen ? SIDEBAR_WIDTH_PX : SIDEBAR_WIDTH_ICON_PX,
+  };
+  // Before the viewport is known (the server's paint and its hydration) the
+  // pane takes the same clamp in CSS, so it is the measured width at once.
+  const paneWidth = (() => {
+    if (!paneRequested) {
+      return undefined;
+    }
+    return viewportWidth > 0
+      ? resolveInspectorPaneWidth({ ...paneSize, viewportWidth })
+      : inspectorPaneWidthCss(paneSize);
+  })();
   return (
     <div
       aria-hidden={content === undefined ? "true" : undefined}
