@@ -300,15 +300,15 @@ mod tests {
   #[test]
   fn the_organization_name_is_seeded_once_and_stays_removed() {
     let (root, files) = seed_files();
-    seed_once(&files, " Fixture Legal ", LIMITS).unwrap();
-    assert_eq!(stored(&files), list(&["Fixture Legal"]));
+    seed_once(&files, " Acme Law ", LIMITS).unwrap();
+    assert_eq!(stored(&files), list(&["Acme Law"]));
 
     // The speaker removes it; seeding again leaves it out.
     files
       .words
       .write(&serde_json::to_string(&list(&["NDA"])).unwrap())
       .unwrap();
-    seed_once(&files, "Fixture Legal", LIMITS).unwrap();
+    seed_once(&files, "Acme Law", LIMITS).unwrap();
     assert_eq!(stored(&files), list(&["NDA"]));
     std::fs::remove_dir_all(root).unwrap();
   }
@@ -318,10 +318,10 @@ mod tests {
     let (root, files) = seed_files();
     files
       .words
-      .write(&serde_json::to_string(&list(&["NDA", "fixture legal"])).unwrap())
+      .write(&serde_json::to_string(&list(&["NDA", "acme law"])).unwrap())
       .unwrap();
-    seed_once(&files, "Fixture Legal", LIMITS).unwrap();
-    assert_eq!(stored(&files), list(&["NDA", "fixture legal"]));
+    seed_once(&files, "Acme Law", LIMITS).unwrap();
+    assert_eq!(stored(&files), list(&["NDA", "acme law"]));
     std::fs::remove_dir_all(root).unwrap();
 
     assert_eq!(
