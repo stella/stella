@@ -12,7 +12,7 @@ export default {
       definitionBody:
         "ON public.file_comparison_uploads USING btree (organization_id, user_id)",
       isUnique: false,
-      introducedBy: "20261119213300_file_comparison_claims",
+      introducedBy: "20261120110200_file_comparison_claims",
       name: "file_comparison_uploads_org_user_idx",
       tableName: "file_comparison_uploads",
     },
