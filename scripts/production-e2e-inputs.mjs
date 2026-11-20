@@ -227,7 +227,11 @@ export const productionWebPackages = (root = REPOSITORY_ROOT) => {
     const manifest = readManifest(root, directory);
     packages.set(name, {
       directory,
-      exports: stringValues([manifest.exports, manifest.main, manifest.module])
+      exports: stringValues([
+        manifest["exports"],
+        manifest["main"],
+        manifest["module"],
+      ])
         .filter((target) => target.startsWith("./"))
         .map((target) => path.posix.normalize(target)),
     });
