@@ -71,10 +71,10 @@ export const seedRedactionTombstoneScenario = async (
     await tx.execute(sql`INSERT INTO case_law_sources (id, adapter_key, name, enabled)
       VALUES (${SOURCE_ID}, 'query-perf-redaction', 'Redaction measurement', false)`);
     await tx.execute(sql`INSERT INTO case_law_decisions
-      (id, source_id, case_number, country, court, language, fulltext, source_raw,
+      (id, source_id, case_number, docket_family_key, country, court, language, fulltext, source_raw,
        text_s3_key, normalized_s3_key, ast_s3_key, redacted_at)
       SELECT ('01890000-00d4-7000-8000-' || lpad(n::text, 12, '0'))::uuid,
-        ${SOURCE_ID}::uuid, 'Measurement ' || n, 'CZE', 'Measurement court', 'cs',
+        ${SOURCE_ID}::uuid, 'Measurement ' || n, NULL, 'CZE', 'Measurement court', 'cs',
         CASE WHEN n <= 100 AND ${cohort} = 'repair' THEN 'Rozhodnutí o náhradě nákladů.' ELSE NULL END,
         CASE WHEN n <= 100 AND ${cohort} <> 'settled' THEN
           (SELECT string_agg(md5(n::text || ':' || part::text), '') FROM generate_series(1, 128) part)
@@ -85,8 +85,8 @@ export const seedRedactionTombstoneScenario = async (
         CASE WHEN ${cohort} = 'repair' THEN NULL ELSE '2026-01-01'::timestamptz END
       FROM generate_series(1, ${rows}::integer) n`);
     await tx.execute(sql`INSERT INTO case_law_decisions
-      (id, source_id, case_number, country, court, language, fulltext, source_raw)
-      VALUES (${CONTROL_ID}, ${SOURCE_ID}, 'Live control', 'CZE', 'Measurement court', 'cs', 'Live text', 'Live publisher payload')`);
+      (id, source_id, case_number, docket_family_key, country, court, language, fulltext, source_raw)
+      VALUES (${CONTROL_ID}, ${SOURCE_ID}, 'Live control', NULL, 'CZE', 'Measurement court', 'cs', 'Live text', 'Live publisher payload')`);
     await tx.execute(sql`INSERT INTO case_law_search_documents (decision_id, searchable_text)
       SELECT id, 'Searchable fixture text' FROM case_law_decisions WHERE source_id = ${SOURCE_ID}`);
     await tx.execute(sql`INSERT INTO case_law_corpus_upload_intents
