@@ -193,9 +193,10 @@ export const cleanedMarkdown = (
 export type CleanupPart = { from: number; to: number; text: string };
 
 /** The first part is small, so cleaned text appears soon; later ones are
- *  larger, so the model sees more context per request. */
+ *  larger, so the model sees more context per request, yet small enough to
+ *  be answered well within the minute the edge in front of the API waits. */
 export const FIRST_PART_CHARACTERS = 1500;
-export const PART_CHARACTERS = 6000;
+export const PART_CHARACTERS = 3000;
 
 const characters = (text: string): number => [...text].length;
 
