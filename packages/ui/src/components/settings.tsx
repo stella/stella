@@ -149,6 +149,7 @@ const SettingsRow = (props: SettingsRowProps) => {
       <span
         className="text-foreground text-sm font-medium text-pretty wrap-break-word"
         data-slot="settings-row-title"
+        dir="auto"
         id={ids?.label}
       >
         {title}
@@ -157,6 +158,7 @@ const SettingsRow = (props: SettingsRowProps) => {
         <span
           className="text-muted-foreground text-xs text-pretty wrap-break-word"
           data-slot="settings-row-description"
+          dir="auto"
           id={ids?.description}
         >
           {description}
