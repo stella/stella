@@ -2359,6 +2359,11 @@
       "accepted": "Angewendet",
       "rejected": "Abgelehnt"
     },
+    "switcher": {
+      "allChats": "Alle Chats",
+      "searchPlaceholder": "Chat suchen…",
+      "trigger": "Chat wechseln"
+    },
     "tableChart": {
       "bar": "Balken",
       "kind": "Diagrammtyp",
@@ -6294,6 +6299,14 @@
     },
     "reconnectRequired": "Anmeldung abgelaufen",
     "title": "SharePoint und OneDrive"
+  },
+  "signedFile": {
+    "layer": "Signaturebene {number, number}",
+    "noReadableContent": "Für die Vorschau sind keine lesbaren Inhalte verfügbar.",
+    "pdfUnavailable": "Die PDF-Vorschau ist nicht verfügbar.",
+    "unknownSigner": "Unbekannte unterzeichnende Person",
+    "unreadable": "Die signierte Datei konnte nicht gelesen werden.",
+    "unverified": "Die Signaturen wurden nicht geprüft."
   },
   "skillHistory": {
     "acceptStale": "Annehmen und neuere Änderungen überschreiben",

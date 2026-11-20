@@ -2359,6 +2359,11 @@
       "accepted": "Aplicado",
       "rejected": "Rechazado"
     },
+    "switcher": {
+      "allChats": "Todos los chats",
+      "searchPlaceholder": "Buscar un chat…",
+      "trigger": "Cambiar de chat"
+    },
     "tableChart": {
       "bar": "Barras",
       "kind": "Tipo de gráfico",
@@ -6294,6 +6299,14 @@
     },
     "reconnectRequired": "Inicio de sesión caducado",
     "title": "SharePoint y OneDrive"
+  },
+  "signedFile": {
+    "layer": "Capa de firmas {number, number}",
+    "noReadableContent": "No hay contenido legible para la vista previa.",
+    "pdfUnavailable": "La vista previa del PDF no está disponible.",
+    "unknownSigner": "Firmante desconocido",
+    "unreadable": "No se ha podido leer el archivo firmado.",
+    "unverified": "Las firmas no se han verificado."
   },
   "skillHistory": {
     "acceptStale": "Aceptar y sobrescribir cambios más recientes",

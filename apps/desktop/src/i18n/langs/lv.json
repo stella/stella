@@ -869,18 +869,60 @@
     "introduceActivityTitle": "Jaunums: aktivitāšu laika josla",
     "introduceActivityBody": "Aktivitāte tagad ir pieejama jūsu kontā. Nekas netiek ierakstīts, līdz to palaižat aktivitāšu logā.",
     "openActivity": "Atvērt aktivitāti",
-    "dictationModel": "Runas modelis ({size} MB) tiek lejupielādēts vienreiz un darbojas šajā datorā.",
-    "dictationTurnOn": "Ieslēgt un lejupielādēt",
     "dictationDownloadContinues": "Varat turpināt. Lejupielāde turpinās fonā.",
-    "dictationReady": "Diktēšana ir ieslēgta un gatava.",
-    "dictationTryLabel": "Diktējiet šeit",
-    "dictationTryPlaceholder": "Noklikšķiniet šeit, turiet {shortcut} un pasakiet teikumu.",
-    "dictationListening": "Klausos…",
-    "dictationTranscribing": "Pierakstu teikto…",
     "dictationMicrophone": "Tā stella jūs dzird, kamēr turat īsinājumtaustiņu.",
     "dictationAccessibility": "Tā stella ieraksta teikto lietotnē, kuru pašlaik izmantojat.",
     "dictationFailed": "stella desktop neizdevās ieslēgt diktēšanu. Mēģiniet vēlreiz.",
     "introduceDictationTitle": "Jaunums: diktēšana",
+    "dictationSetup": {
+      "progress": "{current}. darbība no {total}",
+      "skipRest": "Izlaist pārējo",
+      "screens": {
+        "microphone": "Mikrofons",
+        "transcription": "Transkripcija",
+        "app": "Labošana",
+        "context": "Konteksts",
+        "words": "Vārdi"
+      },
+      "microphone": {
+        "title": "Ļaujiet stella jūs dzirdēt",
+        "body": "Turiet {shortcut} un runājiet, un teksts parādīsies tur, kur rakstāt. Vispirms atļaujiet mikrofonu, lai stella jūs dzirdētu.",
+        "bodyMac": "Turiet {shortcut} un runājiet, un teksts parādīsies tur, kur rakstāt. Vispirms atļaujiet mikrofonu, lai stella jūs dzirdētu, un Pieejamību, lai tā varētu ierakstīt tekstu.",
+        "choose": "Mikrofons diktēšanai"
+      },
+      "transcription": {
+        "title": "Kur transkribēt jūsu runu?",
+        "body": "To varēsiet vēlāk mainīt iestatījumos.",
+        "titleLocal": "Jūsu runa tiek transkribēta šajā datorā",
+        "bodyLocal": "Runas modelis darbojas šeit, tāpēc diktēšana darbojas arī bezsaistē.",
+        "localTitle": "Šajā datorā",
+        "localBody": "Darbojas bezsaistē. Jūsu audio nekad neatstāj šo datoru.",
+        "localModel": "Nepieciešams runas modelis ({size} MB), ko lejupielādē vienreiz.",
+        "cloudTitle": "stella AI",
+        "cloudBody": "Nekas nav jālejupielādē. Jūsu audio tiek nosūtīts stella un ar stella MI pakalpojumu sniedzēja starpniecību izvēlētā modeļa sniedzējam. stella to neglabā."
+      },
+      "app": {
+        "title": "Lietotnei piemērots teksts",
+        "body": "Labošana ar MI var rakstīt lietotnei, kurā diktējat: e-pasts izklausās pēc e-pasta, bet tērzēšanas ziņa pēc tērzēšanas ziņas.",
+        "sentAppKind": "Tai tiek pateikts lietotnes veids, piemēram, e-pasts, tērzēšana vai dokuments, nevis lietotnes nosaukums.",
+        "notStored": "stella neko no tā neglabā.",
+        "off": "Bez labošanas teksts tiek ierakstīts tā, kā tas tika transkribēts, un nekas netiek nosūtīts labošanai ar MI."
+      },
+      "context": {
+        "title": "Vairāk konteksta labošanai",
+        "body": "Neobligāti un izslēgts, līdz to ieslēdzat. Tiek nolasīts tikai, sākot diktēšanu, un nonāk tikai labošanai ar MI. stella neko no tā neglabā."
+      },
+      "words": {
+        "title": "Iemāciet stella savus vārdus",
+        "body": "Pievienojiet vārdus un terminus, kas stella jāraksta tā, kā jūs, piemēram, jūsu biroja, klientu nosaukumus vai citas valodas terminus. Saraksts sākumā ir tukšs.",
+        "examplesLabel": "Idejas:",
+        "examples": {
+          "firm": "Jūsu biroja nosaukums",
+          "client": "Klienta vārds",
+          "term": "Termins, ko lietojat"
+        }
+      }
+    },
     "guideWaiting": "Ieslēdziet stella desktop sarakstā augstāk, lai atļautu pieejamību.",
     "guideAllowed": "stella desktop ir atļauts",
     "never": {

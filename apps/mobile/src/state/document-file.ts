@@ -1,6 +1,7 @@
 import { panic, Result, TaggedError } from "better-result";
 import * as v from "valibot";
 
+import { cadesPreviewSchema } from "@stll/api-contract/cades";
 import { DATA_BOX_DOCUMENT_KINDS } from "@stll/api-contract/data-box";
 import { legalFileFormat } from "@stll/api-contract/document-format";
 
@@ -108,7 +109,16 @@ type DataBoxDocumentFile = {
   >;
 };
 
-export type DocumentFile = NativeDocumentFile | DataBoxDocumentFile;
+type CadesDocumentFile = {
+  readonly viewer: "cades";
+  readonly fileName: string;
+  readonly fieldId: string;
+  readonly preview: Result<v.InferOutput<typeof cadesPreviewSchema>, ApiError>;
+};
+
+export type LegalDocumentFile = DataBoxDocumentFile | CadesDocumentFile;
+
+export type DocumentFile = NativeDocumentFile | LegalDocumentFile;
 
 export const readOriginalDocumentFile = async ({
   fetch,
@@ -206,6 +216,15 @@ export const readDocumentFile = async ({
     const { fieldId, fileName, mimeType } = file;
     const kind = legalFileFormat(mimeType, fileName)?.kind;
     switch (kind) {
+      case "cades": {
+        const preview = await requestApi({
+          fetch,
+          source,
+          path: `/v1/files/${encodeURIComponent(workspaceId)}/cades/${encodeURIComponent(fieldId)}`,
+          schema: cadesPreviewSchema,
+        });
+        return Result.ok({ viewer: kind, fileName, fieldId, preview });
+      }
       case "dataBox": {
         const preview = await requestApi({
           fetch,

@@ -869,18 +869,60 @@
     "introduceActivityTitle": "New: activity timeline",
     "introduceActivityBody": "Activity is now available for your account. Nothing is recorded until you start it in the activity window.",
     "openActivity": "Open activity",
-    "dictationModel": "The speech model ({size} MB) is downloaded once and runs on this computer.",
-    "dictationTurnOn": "Turn on and download",
     "dictationDownloadContinues": "You can continue. The download goes on in the background.",
-    "dictationReady": "Dictation is on and ready.",
-    "dictationTryLabel": "Dictate here",
-    "dictationTryPlaceholder": "Click here, hold {shortcut} and say a sentence.",
-    "dictationListening": "Listening…",
-    "dictationTranscribing": "Writing down what you said…",
     "dictationMicrophone": "Lets stella hear you while you hold the shortcut.",
     "dictationAccessibility": "Lets stella type what you said into the app you are using.",
     "dictationFailed": "stella desktop could not turn on dictation. Try again.",
     "introduceDictationTitle": "New: dictation",
+    "dictationSetup": {
+      "progress": "Step {current} of {total}",
+      "skipRest": "Skip the rest",
+      "screens": {
+        "microphone": "Microphone",
+        "transcription": "Transcription",
+        "app": "Cleanup",
+        "context": "Context",
+        "words": "Words"
+      },
+      "microphone": {
+        "title": "Let stella hear you",
+        "body": "Hold {shortcut} and speak, and the text appears where you are typing. First, allow the microphone so stella can hear you.",
+        "bodyMac": "Hold {shortcut} and speak, and the text appears where you are typing. First, allow the microphone so stella can hear you, and Accessibility so it can type the text.",
+        "choose": "Microphone to dictate with"
+      },
+      "transcription": {
+        "title": "Where should your speech be transcribed?",
+        "body": "You can change this later in Settings.",
+        "titleLocal": "Your speech is transcribed on this computer",
+        "bodyLocal": "The speech model runs here, so dictation also works offline.",
+        "localTitle": "On this computer",
+        "localBody": "Works offline. Your audio never leaves this computer.",
+        "localModel": "Needs the speech model ({size} MB), downloaded once.",
+        "cloudTitle": "stella AI",
+        "cloudBody": "Nothing to download. Your audio is sent to stella and, through stella’s AI provider, to the provider of the model you choose. stella does not store it."
+      },
+      "app": {
+        "title": "Fit the text to the app",
+        "body": "AI cleanup can write for the app you dictate into, so an email reads like an email and a chat message like a chat message.",
+        "sentAppKind": "It is told the kind of app, such as email, chat or document, not the app’s name.",
+        "notStored": "stella stores none of it.",
+        "off": "With cleanup off, the text is typed as it was transcribed and nothing goes to AI cleanup."
+      },
+      "context": {
+        "title": "Give cleanup more context",
+        "body": "Optional, and off until you turn it on. It is read only when you start a dictation and goes only to AI cleanup. stella stores none of it."
+      },
+      "words": {
+        "title": "Teach stella your words",
+        "body": "Add names and terms stella should spell your way, such as your firm, your clients or terms in another language. Your list starts empty.",
+        "examplesLabel": "Ideas:",
+        "examples": {
+          "firm": "Your firm’s name",
+          "client": "A client’s name",
+          "term": "A term you use"
+        }
+      }
+    },
     "guideWaiting": "Turn on stella desktop in the list above to allow Accessibility.",
     "guideAllowed": "stella desktop is allowed",
     "never": {
