@@ -128,6 +128,9 @@ export const AuthorNameRequiredDialog = ({
           </DialogClose>
           <Button
             disabled={trimmedName.length === 0 || isPending}
+            disabledReason={
+              isPending ? t("common.saving") : t("chat.enterAuthorName")
+            }
             loading={isPending}
             onClick={() => mutate()}
           >
