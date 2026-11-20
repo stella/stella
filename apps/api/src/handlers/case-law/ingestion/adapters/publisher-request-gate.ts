@@ -202,7 +202,7 @@ const loadRedisClient = async () => {
 
 let deployedStore:
   ReturnType<typeof RedisClientModule.createAdmissionRedis> | undefined;
-const deployedGateClient = async () => {
+export const deployedPublisherGateClient = async () => {
   const { createAdmissionRedis } = await loadRedisClient();
   deployedStore ??= createAdmissionRedis();
   const connection = await deployedStore.ready();
@@ -270,7 +270,7 @@ const defaultDependencies = (
       if (isLocalDevOpen()) {
         return localRedis;
       }
-      return await deployedGateClient();
+      return await deployedPublisherGateClient();
     },
     sleep: abortableSleep,
   };

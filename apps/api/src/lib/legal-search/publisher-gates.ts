@@ -194,8 +194,9 @@ export const PUBLISHER_GATES = {
   /**
    * The insolvency register's public web service and its document servlet.
    * Its operating terms let the Ministry block a user sending more than
-   * 3,000 requests a day or 50 a minute; forty seconds apart is 2,160 a day,
-   * which leaves room for the register lookups other features make.
+   * 3,000 requests a day or 50 a minute; forty seconds apart is 2,160 a day.
+   * Register lookups spend the rest through their own budget
+   * (`lib/business-registries/isir-lookup-budget.ts`).
    */
   "isir-justice-cz": {
     publisher: "Ministerstvo spravedlnosti",
