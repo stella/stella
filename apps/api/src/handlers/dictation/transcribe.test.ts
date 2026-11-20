@@ -1134,7 +1134,12 @@ describe("organization dictation words", () => {
   test("a model that applies vocabulary gets the speaker's words, then the organization's", async () => {
     const f = fixture();
     const result = await executeDictation(
-      { ...f.context, body: { ...f.context.body, modelId: WHISPER } },
+      {
+        ...f.context,
+        // Whisper on OpenRouter is served in the US region only.
+        managedAIResidency: "us",
+        body: { ...f.context.body, modelId: WHISPER },
+      },
       f.dependencies,
     );
     expect(result.isOk()).toBe(true);
@@ -1164,7 +1169,12 @@ describe("organization dictation words", () => {
   test("words that cannot be read leave the chunk with the speaker's own", async () => {
     const f = fixture();
     const result = await executeDictation(
-      { ...f.context, body: { ...f.context.body, modelId: WHISPER } },
+      {
+        ...f.context,
+        // Whisper on OpenRouter is served in the US region only.
+        managedAIResidency: "us",
+        body: { ...f.context.body, modelId: WHISPER },
+      },
       {
         ...f.dependencies,
         organizationVocabulary: async () =>
