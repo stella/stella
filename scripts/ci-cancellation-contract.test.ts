@@ -16,6 +16,7 @@ type Job = {
   name: string;
   html_url: string;
   status?: string;
+  conclusion?: string;
   runner_name?: string;
   steps?: {
     number: number;
