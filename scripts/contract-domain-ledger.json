@@ -1548,10 +1548,6 @@
     "reason": "Existing ZOOM_OPTIONS domain; contract ownership pending migration."
   },
   {
-    "id": "apps/web/src/routes/_protected.workspaces/$workspaceId/correspondence/-correspondence-detail.page.tsx::CorrespondenceDetailPage::domain:[\"spf\",\"dkim\",\"dmarc\"]::1",
-    "reason": "Existing CorrespondenceDetailPage domain; contract ownership pending migration."
-  },
-  {
     "id": "apps/web/src/routes/agent-claim.tsx::AgentClaimPage::maxLength:32::1",
     "reason": "Existing AgentClaimPage UI validation or presentation bound; contract migration pending."
   },

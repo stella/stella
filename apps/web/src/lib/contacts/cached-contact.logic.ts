@@ -65,7 +65,7 @@ export const cachedContactSummary = (
   contactId: string,
 ): CachedContactSummary | null => {
   let listed: CachedContactSummary | null = null;
-  for (const [queryKey, data] of queryClient.getQueriesData<unknown>({
+  for (const [queryKey, data] of queryClient.getQueriesData({
     queryKey: contactsQueryRoot(),
   })) {
     // A read whose last fetch failed counts as absent, as it does for the

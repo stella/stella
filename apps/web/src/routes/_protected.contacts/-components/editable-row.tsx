@@ -7,7 +7,6 @@ import { Button } from "@stll/ui/button";
 import { InlineRenameInput } from "@stll/ui/inline-rename";
 import { TruncatedText } from "@stll/ui/truncated-text";
 
-import { DETAIL_ROW_LABEL_CLASS } from "@/components/detail-section.pending";
 import { useInlineRename } from "@/hooks/use-inline-rename";
 import { useFormattingLocale } from "@/i18n/formatting-context";
 import { useUpdateContact } from "@/lib/contacts/mutations";
@@ -15,6 +14,7 @@ import type { ContactUpdate } from "@/lib/contacts/mutations";
 import { contactOptions } from "@/lib/contacts/queries";
 import { detached } from "@/lib/detached";
 import { notifyUserProblem } from "@/lib/errors/user-toast";
+import { DETAIL_ROW_LABEL_CLASS } from "@/routes/_protected.contacts/-components/detail-section.pending";
 import {
   buildContactRatePayload,
   buildNumericContactPayload,

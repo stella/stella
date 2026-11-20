@@ -6,7 +6,7 @@ import type {
 import type { StoredColumnSizing } from "@/lib/workspaces/stored-column-sizing.logic";
 
 /** A table column before its column model exists: its id and widths. */
-export type PendingGridColumn = {
+type PendingGridColumn = {
   id: string;
   size: number;
   minSize: number;

@@ -58,6 +58,7 @@ import {
 } from "@/i18n/formatting-context";
 import type { TranslationKey } from "@/i18n/types";
 import { api } from "@/lib/api";
+import { invokeAppOnlyWrite } from "@/lib/capabilities/capability-request";
 import { contactsKeys } from "@/lib/contacts/queries";
 import { detached } from "@/lib/detached";
 import { unwrapApiResponse } from "@/lib/errors/api";
@@ -214,10 +215,12 @@ export function ContactImportStudio() {
     }
 
     setBusy("inspecting");
-    const result = await Result.tryPromise(async () => {
-      const response = await api.contacts.import.inspect.post({ file });
-      return unwrapApiResponse(response);
-    });
+    const result = await Result.tryPromise(
+      async () =>
+        await invokeAppOnlyWrite("contacts.import.inspect", async () =>
+          unwrapApiResponse(await api.contacts.import.inspect.post({ file })),
+        ),
+    );
     setBusy("idle");
 
     if (Result.isError(result)) {
@@ -251,13 +254,17 @@ export function ContactImportStudio() {
       return;
     }
     setBusy("previewing");
-    const result = await Result.tryPromise(async () => {
-      const response = await api.contacts.import.preview.post({
-        file: state.file,
-        mapping: JSON.stringify(state.mapping),
-      });
-      return unwrapApiResponse(response);
-    });
+    const result = await Result.tryPromise(
+      async () =>
+        await invokeAppOnlyWrite("contacts.import.preview", async () =>
+          unwrapApiResponse(
+            await api.contacts.import.preview.post({
+              file: state.file,
+              mapping: JSON.stringify(state.mapping),
+            }),
+          ),
+        ),
+    );
     setBusy("idle");
 
     if (Result.isError(result)) {

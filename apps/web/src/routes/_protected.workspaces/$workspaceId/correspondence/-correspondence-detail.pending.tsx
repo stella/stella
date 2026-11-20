@@ -101,11 +101,7 @@ export const DetailField = ({
 
 /** A labelled value before the read: its label's words, or a bar for a label
  *  the message decides, and a bar for the value. */
-export const DetailFieldSkeleton = ({
-  label,
-}: {
-  label: PendingTextKey | null;
-}) => (
+const DetailFieldSkeleton = ({ label }: { label: PendingTextKey | null }) => (
   <DetailField
     label={
       label === null ? (

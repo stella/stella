@@ -2,6 +2,7 @@ import { useQuery, useSuspenseQuery } from "@tanstack/react-query";
 import { getRouteApi, Link } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
+import type { CorrespondenceAuthentication } from "@stll/api-contract/correspondence";
 import { Button } from "@stll/ui/button";
 import { TruncatedText } from "@stll/ui/truncated-text";
 
@@ -42,6 +43,12 @@ import {
 const routeApi = getRouteApi(
   "/_protected/workspaces/$workspaceId/correspondence/$correspondenceId",
 );
+
+/** The delivery checks a delivered message shows, in the order they read. */
+const AUTHENTICATION_CHECKS: readonly Exclude<
+  keyof CorrespondenceAuthentication,
+  "alignedIdentifier"
+>[] = ["spf", "dkim", "dmarc"];
 
 /** A filed message: how it came in, its envelope, its body and who filed it. */
 export function CorrespondenceDetailPage() {
@@ -98,7 +105,7 @@ export function CorrespondenceDetailPage() {
           </h2>
           <CorrespondenceProvenance record={record} />
           <span className="flex flex-wrap gap-x-3 gap-y-1 text-xs">
-            {(["spf", "dkim", "dmarc"] as const).map((check) => (
+            {AUTHENTICATION_CHECKS.map((check) => (
               <bdi dir="ltr" key={check}>
                 {check.toUpperCase()}:{" "}
                 {t(

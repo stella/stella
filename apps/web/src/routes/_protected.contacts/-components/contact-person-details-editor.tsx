@@ -5,11 +5,11 @@ import { useTranslations } from "use-intl";
 import { Button } from "@stll/ui/button";
 import { stellaToast } from "@stll/ui/toast";
 
-import { DetailSection } from "@/components/detail-section.pending";
 import { useMountEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { useUpdateContact } from "@/lib/contacts/mutations";
 import { notifyUserProblem } from "@/lib/errors/user-toast";
+import { DetailSection } from "@/routes/_protected.contacts/-components/detail-section.pending";
 import { PersonDetailsFields } from "@/routes/_protected.contacts/-components/person-details-fields";
 import {
   birthDateDraft,

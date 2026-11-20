@@ -158,7 +158,7 @@ const TAB_NAMES_PENDING = [
 ] as const;
 
 /** The views as the cache holds them: the strip's tabs and the active one. */
-export type EntityViewsChrome = {
+type EntityViewsChrome = {
   views: readonly WorkspaceView[];
   activeView: WorkspaceView;
   canCreateView: boolean;
@@ -169,7 +169,7 @@ export type EntityViewsChrome = {
  * toolbar's faces for the cached views, or bars where the tab names go and no
  * toolbar when the views are not cached.
  */
-export const EntityViewsChromePending = ({
+const EntityViewsChromePending = ({
   chrome,
 }: {
   chrome: EntityViewsChrome | null;

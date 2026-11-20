@@ -8,11 +8,6 @@ import { ButtonFace, FaceLabelPending } from "@stll/ui/control-face";
 import { BuildingIcon, PlusIcon, UserIcon } from "@stll/ui/icons";
 import { Skeleton } from "@stll/ui/skeleton";
 
-import {
-  DetailSectionSkeleton,
-  labelledDetailRows,
-  unnamedDetailRows,
-} from "@/components/detail-section.pending";
 import { usePendingCache } from "@/components/pending-cache";
 import { PendingText } from "@/components/pending-text";
 import type { PendingTextKey } from "@/components/pending-text";
@@ -20,6 +15,11 @@ import { cachedContactSummary } from "@/lib/contacts/cached-contact.logic";
 import type { CachedContactSummary } from "@/lib/contacts/cached-contact.logic";
 import { cachedRoleGrants } from "@/lib/organization/cached-permissions.logic";
 import { framePendingView } from "@/routes/-pending-view.logic";
+import {
+  DetailSectionSkeleton,
+  labelledDetailRows,
+  unnamedDetailRows,
+} from "@/routes/_protected.contacts/-components/detail-section.pending";
 
 /** A contact page's sections, by what they hold. */
 export type ContactDetailSection =

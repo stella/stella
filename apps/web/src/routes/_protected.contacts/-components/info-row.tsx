@@ -1,4 +1,4 @@
-import { DetailRow } from "@/components/detail-section.pending";
+import { DetailRow } from "@/routes/_protected.contacts/-components/detail-section.pending";
 
 // Read-only row for non-editable fields
 export const InfoRow = ({ label, value }: { label: string; value: string }) => (

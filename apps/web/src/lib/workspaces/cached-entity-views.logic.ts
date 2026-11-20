@@ -4,7 +4,7 @@ import type { WorkspaceView } from "@/lib/types";
 import { entityViewLayoutsRoot } from "@/lib/workspaces/queries/entity-view-layouts-key.logic";
 
 /** The inbox's saved views as an earlier read left them, and whose they are. */
-export type CachedEntityViews = {
+type CachedEntityViews = {
   organizationId: string;
   views: readonly WorkspaceView[];
 };

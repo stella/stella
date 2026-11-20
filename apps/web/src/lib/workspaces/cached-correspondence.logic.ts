@@ -52,7 +52,7 @@ export const cachedCorrespondenceSummary = (
   }: { correspondenceId: string; workspaceId: string },
 ): CachedCorrespondenceSummary | null => {
   let listed: CachedCorrespondenceSummary | null = null;
-  for (const [queryKey, data] of queryClient.getQueriesData<unknown>({
+  for (const [queryKey, data] of queryClient.getQueriesData({
     queryKey: correspondenceQueryRoot(workspaceId),
   })) {
     // A read whose last fetch failed counts as absent, as it does for the

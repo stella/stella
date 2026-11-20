@@ -8,13 +8,13 @@ import { Form } from "@stll/ui/form";
 import { PlusIcon, Trash2Icon } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
 
-import { DetailSection } from "@/components/detail-section.pending";
 import { normalizeOptionalArray } from "@/lib/arrays";
 import { detached } from "@/lib/detached";
 import { notifyUserProblem } from "@/lib/errors/user-toast";
 import { createUuid } from "@/lib/uuid";
 import { useContactPatch } from "@/routes/_protected.contacts/-components/contact-caches";
 import { getContactMetadata } from "@/routes/_protected.contacts/-components/contact-metadata";
+import { DetailSection } from "@/routes/_protected.contacts/-components/detail-section.pending";
 import type {
   ContactCustomField,
   ContactData,

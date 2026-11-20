@@ -11,8 +11,8 @@ import { DestructiveConfirmDialog } from "@stll/ui/destructive-confirm-dialog";
 import { MatterIcon } from "@stll/ui/matter-icon";
 import { stellaToast } from "@stll/ui/toast";
 
-import { DetailRows, DetailSection } from "@/components/detail-section.pending";
 import { MatterRefLink } from "@/components/matter-ref-link";
+import { usePendingTextLabel } from "@/components/pending-text";
 import { RouteDocumentTitle } from "@/components/route-document-title";
 import { usePermissions } from "@/hooks/use-permissions";
 import { useFormatter } from "@/i18n/formatting-context";
@@ -27,6 +27,10 @@ import { ContactCustomFieldsEditor } from "@/routes/_protected.contacts/-compone
 import { ContactNotesEditor } from "@/routes/_protected.contacts/-components/contact-notes-editor";
 import { ContactOwnersEditor } from "@/routes/_protected.contacts/-components/contact-owners-editor";
 import { ContactPersonDetailsEditor } from "@/routes/_protected.contacts/-components/contact-person-details-editor";
+import {
+  DetailRows,
+  DetailSection,
+} from "@/routes/_protected.contacts/-components/detail-section.pending";
 import { EditableRow } from "@/routes/_protected.contacts/-components/editable-row";
 import { InfoRow } from "@/routes/_protected.contacts/-components/info-row";
 import { PartyMatterRow } from "@/routes/_protected.contacts/-components/party-matter-row";
@@ -54,6 +58,8 @@ const protectedRouteApi = getRouteApi("/_protected");
 
 const IdentitySection = ({ contact }: { contact: ContactData }) => {
   const t = useTranslations();
+  // The row labels are the pending view's, named the way it names them.
+  const label = usePendingTextLabel();
   return (
     <DetailSection title={t(CONTACT_TYPE_LABEL_KEYS[contact.type])}>
       <DetailRows>
@@ -62,7 +68,7 @@ const IdentitySection = ({ contact }: { contact: ContactData }) => {
             contact={contact}
             field={field}
             key={field}
-            label={t(labelKey)}
+            label={label(labelKey)}
             value={contact[field]}
           />
         ))}

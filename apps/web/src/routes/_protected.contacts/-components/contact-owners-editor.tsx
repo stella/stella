@@ -3,11 +3,6 @@ import { getRouteApi } from "@tanstack/react-router";
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
-import {
-  DetailRow,
-  DetailRows,
-  DetailSection,
-} from "@/components/detail-section.pending";
 import { MEMBER_CHOICE, MemberCombobox } from "@/components/member-combobox";
 import type { MemberOption } from "@/components/member-combobox";
 import { SettledQueryViewFeedback } from "@/components/query-view-feedback";
@@ -15,6 +10,11 @@ import { useUpdateContact } from "@/lib/contacts/mutations";
 import { organizationOptions } from "@/lib/organization/queries";
 import { queryView } from "@/lib/query-view.logic";
 import { toSafeId } from "@/lib/safe-id";
+import {
+  DetailRow,
+  DetailRows,
+  DetailSection,
+} from "@/routes/_protected.contacts/-components/detail-section.pending";
 import type { ContactData } from "@/routes/_protected.contacts/-components/types";
 
 const protectedRouteApi = getRouteApi("/_protected");
