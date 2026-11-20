@@ -46,6 +46,9 @@ export const ClaimStaleness = ({
     listId,
     claimId: claim.id,
   });
+  const permissionReason = disabled
+    ? t("avt.review.permissionRequired")
+    : undefined;
   const withOthers = recheckRun.state === "with-others";
   const reasons = claim.staleness;
   if (reasons === null || reasons.length === 0) {
@@ -53,9 +56,8 @@ export const ClaimStaleness = ({
   }
   return (
     <ReviewOutOfDateNotice
-      actionDisabled={disabled || withOthers}
       actionDisabledReason={
-        withOthers ? t("avt.staleness.recheckLocked") : undefined
+        withOthers ? t("avt.staleness.recheckLocked") : permissionReason
       }
       actionLabel={t("avt.gap.recheck")}
       actionPending={recheckRun.state === "alone" || singlePending}
