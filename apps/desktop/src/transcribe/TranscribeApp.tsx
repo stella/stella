@@ -511,6 +511,22 @@ const ChooseScreen = ({
     };
   }, []);
   const usable = usableFor({ snapshot, destination, model });
+  const destinationDisabledReason = (() => {
+    if (usable) {
+      return undefined;
+    }
+    if (destination === "local") {
+      return snapshot.cloudAvailable
+        ? t("destination.localMissingCloud")
+        : t("destination.localMissing");
+    }
+    if (!snapshot.cloudAvailable) {
+      return t("destination.useLocal");
+    }
+    return model.status === "failed"
+      ? t("destination.modelFailed")
+      : t("destination.loadingModel");
+  })();
   const choose = async () => {
     setChoosing(true);
     setChooseFailed(false);
@@ -542,6 +558,11 @@ const ChooseScreen = ({
           </p>
           <Button
             disabled={!usable || choosing}
+            disabledReason={
+              choosing
+                ? t("waitingForFileSelection")
+                : destinationDisabledReason
+            }
             onClick={() => {
               void choose();
             }}
@@ -567,6 +588,7 @@ const ChooseScreen = ({
               </p>
               <Button
                 disabled={!usable}
+                disabledReason={destinationDisabledReason}
                 onClick={() => {
                   onStartKept(kept);
                 }}
@@ -733,6 +755,18 @@ const ResultScreen = ({
   }
   const running = outcome === null;
   const hasText = paragraphs.length > 0;
+  const saveDisabledReason = (() => {
+    if (running) {
+      return t("progress.transcribing");
+    }
+    if (saving.status === "saving") {
+      return t("result.savingToMatter");
+    }
+    if (saving.status === "saved") {
+      return t("result.alreadySaved");
+    }
+    return hasText ? undefined : t("result.noSpeech");
+  })();
   const title = recordingTitle(session.file.name);
   const meta = [
     session.file.durationMs === null
@@ -837,12 +871,8 @@ const ResultScreen = ({
         </div>
         {session.matter === null ? null : (
           <Button
-            disabled={
-              !hasText ||
-              running ||
-              saving.status === "saving" ||
-              saving.status === "saved"
-            }
+            disabled={saveDisabledReason !== undefined}
+            disabledReason={saveDisabledReason}
             onClick={() => {
               void saveToMatter();
             }}
@@ -1059,6 +1089,7 @@ const StatusRow = ({
         </div>
         <Button
           disabled={stopping}
+          disabledReason={t("progress.stopping")}
           onClick={() => {
             setStopping(true);
             void invoke("transcribe_stop", { job }).catch(() => {
