@@ -41,10 +41,7 @@ import { usePresentationPrefs } from "@/lib/account/presentation-prefs/provider"
 import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { isPublicKnowledgeEnabled } from "@/lib/knowledge/public-knowledge-launch";
 import { isPublicLawEnabled } from "@/lib/public-law-launch";
-import {
-  rememberedTimeBillingAccess,
-  rememberedTimeBillingAccessHint,
-} from "@/lib/workspaces/time-billing-access-memory";
+import { rememberedTimeBillingAccess } from "@/lib/workspaces/time-billing-access-memory";
 
 type PrimaryNavItem = ReturnType<typeof getWorkspacePrimaryNavItems>[number];
 
@@ -55,24 +52,26 @@ const neverChanges = () => () => undefined;
  * list and the same inputs, so the nav keeps its length when the sidebar
  * replaces the frame. What the build decides (case law, Knowledge, the inbox
  * when the deployment ships it) is read as it is: the server and the client
- * read the same build, so even the server's paint has those entries. What
- * this browser keeps is read once the page can read it, never during
- * hydration (the server has no browser storage): the inbox preview switch,
- * and the member's last time billing answer, which the sidebar also shows
- * until the server answers again (for the member's organization once the
- * frame knows it, before that whichever one this browser kept).
+ * read the same build, so even the server's paint has those entries. The
+ * member's last time billing answer, which the sidebar also shows until the
+ * server answers again, comes from the presentation cookie while the frame
+ * does not know the member (the server's paint and its hydration read the
+ * same cookie), and from the member's organization's answer once it does.
+ * The inbox preview switch lives in browser storage only, so it is read once
+ * the page can read it, never during hydration.
  */
 const usePendingNavItems = (
   inspectorScope: InspectorStorageScope | undefined,
+  timeBillingHint: boolean,
 ): readonly PrimaryNavItem[] => {
   const includeInbox = usePublicShellInboxEntryEnabled();
   const includeTimesheets = useSyncExternalStore(
     neverChanges,
     () =>
       inspectorScope === undefined
-        ? rememberedTimeBillingAccessHint()
+        ? timeBillingHint
         : rememberedTimeBillingAccess(inspectorScope.organizationId),
-    () => false,
+    () => timeBillingHint,
   );
   return getWorkspacePrimaryNavItems({
     includeInbox,
@@ -195,8 +194,8 @@ function ProtectedPendingSkeletonContent({
   inspectorScope: InspectorStorageScope | undefined;
 }) {
   const intlMounted = useIntlMounted();
-  const navItems = usePendingNavItems(inspectorScope);
   const { prefs } = usePresentationPrefs();
+  const navItems = usePendingNavItems(inspectorScope, prefs.timeBillingHint);
   const viewportWidth = useViewportWidth();
   // The restore policy the authenticated frame applies, on the stored tabs:
   // the member's tab registry loads with that frame, and the store writes

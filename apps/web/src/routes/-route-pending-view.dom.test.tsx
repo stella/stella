@@ -23,6 +23,10 @@ const { ProtectedPendingSkeleton } =
   await import("@/routes/-protected-pending-skeleton");
 const { rememberTimeBillingAccess } =
   await import("@/lib/workspaces/time-billing-access-memory");
+const { initializeBrowserPresentationPrefs, PresentationPrefsProvider } =
+  await import("@/lib/account/presentation-prefs/provider");
+const { createTestPresentationPrefsSync } =
+  await import("@/lib/account/presentation-prefs/sync.test-fixtures");
 const { isPublicLawEnabled } = await import("@/lib/public-law-launch");
 
 afterEach(() => {
@@ -219,15 +223,25 @@ test("a frameless redirect into the app shows its target in the member frame", a
 
 const ORGANIZATION_ID = "00000000-0000-7000-8000-00000000abcd";
 
+// The presentation cookie as this browser holds it: what the skeleton reads,
+// and where remembering an answer writes.
+const prefsSync = createTestPresentationPrefsSync();
+initializeBrowserPresentationPrefs(prefsSync.getSnapshot(), prefsSync);
+
 const pendingNavIds = (scope?: { userId: string; organizationId: string }) => {
   const view = testing.render(
-    <IntlProvider locale="en" messages={messages} timeZone="UTC">
-      {scope === undefined ? (
-        <ProtectedPendingSkeleton />
-      ) : (
-        <ProtectedPendingSkeleton inspectorScope={scope} />
-      )}
-    </IntlProvider>,
+    <PresentationPrefsProvider
+      initialPrefs={prefsSync.getSnapshot()}
+      sync={prefsSync}
+    >
+      <IntlProvider locale="en" messages={messages} timeZone="UTC">
+        {scope === undefined ? (
+          <ProtectedPendingSkeleton />
+        ) : (
+          <ProtectedPendingSkeleton inspectorScope={scope} />
+        )}
+      </IntlProvider>
+    </PresentationPrefsProvider>,
   );
   const ids = [
     ...view.container.querySelectorAll<HTMLElement>("[data-nav-item]"),
@@ -242,16 +256,25 @@ test("the frame's nav has the entries the build gives the sidebar", () => {
   expect(ids.includes("caseLaw")).toBe(isPublicLawEnabled());
 });
 
-test("the frame's nav keeps the timesheets entry this browser last had", () => {
+test("the frame's nav keeps the timesheets entry this browser last had", async () => {
   const scope = { userId: "user-1", organizationId: ORGANIZATION_ID };
-  rememberTimeBillingAccess(ORGANIZATION_ID, false);
+  // The cookie write is detached; it lands in the browser's prefs.
+  const remember = async (enabled: boolean) => {
+    rememberTimeBillingAccess(ORGANIZATION_ID, enabled);
+    await testing.waitFor(() => {
+      expect(prefsSync.getSnapshot().timeBillingHint).toBe(enabled);
+    });
+  };
+  await remember(false);
   expect(pendingNavIds(scope)).not.toContain("timesheets");
   expect(pendingNavIds()).not.toContain("timesheets");
-  rememberTimeBillingAccess(ORGANIZATION_ID, true);
+  await remember(true);
   expect(pendingNavIds(scope)).toContain("timesheets");
-  // Before the frame knows the member's organization, the answer kept for
-  // the member stands in, and reading it keeps it.
+  // Before the frame knows the member's organization (the server's paint and
+  // its hydration), the answer kept in the presentation cookie stands in.
+  expect(prefsSync.getSnapshot().timeBillingHint).toBe(true);
   expect(pendingNavIds()).toContain("timesheets");
   expect(pendingNavIds(scope)).toContain("timesheets");
-  rememberTimeBillingAccess(ORGANIZATION_ID, false);
+  await remember(false);
+  expect(pendingNavIds()).not.toContain("timesheets");
 });
