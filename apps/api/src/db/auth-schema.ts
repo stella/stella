@@ -21,6 +21,7 @@ import {
   authUserPolicies,
   denyStellaAccessPolicies,
 } from "@/api/db/rls";
+import { admitSsoOidcConfig } from "@/api/lib/auth/sso-provider-config";
 import { ACCOUNT_EMAIL_UNDELIVERABLE_REASONS } from "@/api/lib/email/deliverability-contract";
 import {
   SYNTHETIC_PRINCIPAL,
@@ -224,6 +225,13 @@ export const account = pgTable(
     updatedAt: timestamptz("updated_at")
       .$onUpdate(() => /* @__PURE__ */ new Date())
       .notNull(),
+    /**
+     * For an SSO identity, the `sso_provider` row (one provider generation:
+     * its issuer and organization never change) that created it; null for
+     * every other account. A provider id reused by a later row does not
+     * reach identities an earlier row created.
+     */
+    ssoProviderId: text("sso_provider_id"),
   },
   (table) => [
     index("account_userId_idx").on(table.userId),
@@ -434,9 +442,10 @@ export const ssoProvider = pgTable(
      */
     domain: text("domain").notNull(),
     /** The plugin's OIDC configuration JSON, client secret included, sealed. */
-    oidcConfig: sealedText("stella:sealed-text:v1:sso_provider.oidc_config")(
-      "oidc_config",
-    ),
+    oidcConfig: sealedText(
+      "stella:sealed-text:v1:sso_provider.oidc_config",
+      admitSsoOidcConfig,
+    )("oidc_config"),
     /** SAML configuration; always null until SAML sign-in is offered. */
     samlConfig: text("saml_config"),
     /** The account that registered the provider, as the plugin records it. */

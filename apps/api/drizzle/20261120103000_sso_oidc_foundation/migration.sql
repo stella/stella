@@ -5,6 +5,9 @@ SET statement_timeout = '5s';--> statement-breakpoint
 -- nullable without a default, so adding it rewrites no row; every existing
 -- session reads as one no SSO provider created.
 ALTER TABLE "session" ADD COLUMN "sso_provider_id" text;--> statement-breakpoint
+-- The provider row that created an SSO identity; null for every account that
+-- exists today, none of which an SSO provider created.
+ALTER TABLE "account" ADD COLUMN "sso_provider_id" text;--> statement-breakpoint
 
 CREATE TABLE "sso_provider" (
   "id" text PRIMARY KEY NOT NULL,
@@ -23,6 +26,28 @@ CREATE TABLE "sso_provider" (
 CREATE UNIQUE INDEX "sso_provider_provider_id_uidx" ON "sso_provider" ("provider_id");--> statement-breakpoint
 CREATE INDEX "sso_provider_organization_id_idx" ON "sso_provider" ("organization_id");--> statement-breakpoint
 CREATE INDEX "sso_provider_user_id_idx" ON "sso_provider" ("user_id");--> statement-breakpoint
+
+-- A provider row is one provider generation: sessions and identities bind to
+-- its id, so its id, provider id, issuer and organization never change.
+-- Replacing a provider means a new row.
+CREATE FUNCTION "guard_sso_provider_identity"()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  IF NEW."id" IS DISTINCT FROM OLD."id"
+     OR NEW."provider_id" IS DISTINCT FROM OLD."provider_id"
+     OR NEW."issuer" IS DISTINCT FROM OLD."issuer"
+     OR NEW."organization_id" IS DISTINCT FROM OLD."organization_id" THEN
+    RAISE EXCEPTION 'sso provider identity is immutable'
+      USING ERRCODE = 'check_violation';
+  END IF;
+  RETURN NEW;
+END;
+$$;--> statement-breakpoint
+CREATE TRIGGER "sso_provider_identity_guard"
+  BEFORE UPDATE ON "sso_provider"
+  FOR EACH ROW EXECUTE FUNCTION "guard_sso_provider_identity"();--> statement-breakpoint
 
 CREATE TABLE "organization_sso_policy" (
   "organization_id" text PRIMARY KEY NOT NULL REFERENCES "organization"("id") ON DELETE CASCADE,

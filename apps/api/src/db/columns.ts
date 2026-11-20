@@ -14,20 +14,26 @@ import { openText, sealText } from "@/api/lib/content-encryption";
  * Drizzle seals the value and every read opens it, so the database never
  * receives the plaintext and no reader can skip the envelope. A value that
  * cannot be sealed or opened fails the statement; select this column only
- * where the secret is needed.
+ * where the secret is needed. `admit` checks the plaintext on both sides:
+ * a value it refuses is neither stored nor handed to a reader.
  */
-export const sealedText = (scope: SealedTextScope) =>
+export const sealedText = (
+  scope: SealedTextScope,
+  admit: (plaintext: string) => Result<string, Error> = Result.ok,
+) =>
   customType<{ data: string; driverData: string }>({
     dataType: () => "text",
     toDriver: (value) => {
-      const sealed = sealText(scope, value);
+      const sealed = admit(value).andThen((admitted) =>
+        sealText(scope, admitted),
+      );
       if (Result.isError(sealed)) {
         throw sealed.error;
       }
       return sealed.value;
     },
     fromDriver: (value) => {
-      const opened = openText(scope, value);
+      const opened = openText(scope, value).andThen(admit);
       if (Result.isError(opened)) {
         throw opened.error;
       }

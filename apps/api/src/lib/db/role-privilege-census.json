@@ -138,6 +138,8 @@
     "function:public.guard_legislation_source_identity_mode():EXECUTE:GRANTOR:census_admin:GRANTABLE:false",
     "function:public.guard_retired_corpus_index_generation():EXECUTE:EFFECTIVE",
     "function:public.guard_retired_corpus_index_generation():EXECUTE:GRANTOR:census_admin:GRANTABLE:false",
+    "function:public.guard_sso_provider_identity():EXECUTE:EFFECTIVE",
+    "function:public.guard_sso_provider_identity():EXECUTE:GRANTOR:census_admin:GRANTABLE:false",
     "function:public.hold_legacy_case_law_source_checkpoint():EXECUTE:EFFECTIVE",
     "function:public.hold_legacy_case_law_source_checkpoint():EXECUTE:GRANTOR:census_admin:GRANTABLE:false",
     "function:public.increment_case_law_statute_citation_count():EXECUTE:EFFECTIVE",

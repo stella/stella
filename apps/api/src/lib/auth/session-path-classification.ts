@@ -186,8 +186,10 @@ const AUTH_SESSION_PATH_PREFIXES: readonly {
 }[] = [
   { prefix: "/callback/", classification: SECOND_FACTOR },
   {
-    // The organization's identity provider authenticates the sign-in; its
-    // own factors stand in for this app's second factor.
+    // Rule, chosen deliberately: an SSO sign-in never asks for this app's
+    // second factor, even for an account that enrolled one. The
+    // organization's identity provider owns MFA for its members. Changing
+    // this is a product decision, not a fix; the SSO callback test pins it.
     prefix: "/sso/callback/",
     classification: noSecondFactor("organization identity provider sign-in"),
   },

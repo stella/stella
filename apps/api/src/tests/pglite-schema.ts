@@ -765,6 +765,33 @@ export const installPgliteOrganizationDeleteOwnerGuard = async (
   });
 };
 
+const SSO_OIDC_FOUNDATION_MIGRATION_PATH = nodePath.join(
+  DRIZZLE_DIR,
+  "20261120103000_sso_oidc_foundation",
+  "migration.sql",
+);
+
+/** Install the SSO provider identity guard omitted by declarative schema push. */
+export const installPgliteSsoProviderIdentityGuard = async (
+  db: PgliteSchemaDb,
+): Promise<void> => {
+  const statements = readMigrationStatements(
+    SSO_OIDC_FOUNDATION_MIGRATION_PATH,
+  ).filter((statement) => {
+    const executable = executableSql(statement);
+    return (
+      executable.startsWith('CREATE FUNCTION "guard_sso_provider_identity"') ||
+      executable.startsWith('CREATE TRIGGER "sso_provider_identity_guard"')
+    );
+  });
+  if (statements.length !== 2) {
+    panic("The SSO migration no longer holds the provider identity guard");
+  }
+  for (const statement of statements) {
+    await db.execute(sql.raw(statement));
+  }
+};
+
 /** Install the scheduler pause triggers omitted by declarative schema push. */
 export const installPgliteSchedulerJobPauseLog = async (
   db: PgliteSchemaDb,
