@@ -134,6 +134,7 @@ export const TimeEntryNarrativeField = ({
           />
           <AiRewriteControl
             disabled={value.trim().length === 0}
+            disabledReason={tBilling("enterNarrative")}
             isPending={isPolishing}
             onRewrite={(instruction) => {
               detached(
