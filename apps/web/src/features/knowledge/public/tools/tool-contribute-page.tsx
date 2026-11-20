@@ -40,9 +40,9 @@ import {
 import { CopyButton } from "@/features/knowledge/public/tools/copy-button";
 import { ToggleChip } from "@/features/knowledge/public/tools/toggle-chip";
 import {
-  ContributeFormFrame,
-  ContributePageFrame,
-} from "@/features/knowledge/public/tools/tool-contribute-page.pending";
+  ContributeFormShell,
+  DEFAULT_SKILL_LICENSE,
+} from "@/features/knowledge/public/tools/tool-contribute-shell.pending";
 import {
   CATALOGUE_CONTRIBUTING_URL,
   CATALOGUE_ENTRIES_URL,
@@ -72,7 +72,7 @@ const INITIAL_FORM: ContributeFormState = {
   description: "",
   author: "",
   authorUrl: "",
-  license: "MIT",
+  license: DEFAULT_SKILL_LICENSE,
   cost: "free",
   setup: "none",
   jurisdictions: [],
@@ -85,16 +85,12 @@ const INITIAL_FORM: ContributeFormState = {
 
 type CommitStatus = "idle" | "loading" | "error";
 
-/** How to add a tool to the published catalogue. */
-export const ContributePage = () => {
+/** How to add a tool to the published catalogue, inside the route's shell. */
+export const ToolContributeContent = () => {
   const t = useTranslations();
 
   return (
-    <ContributePageFrame
-      className="overflow-y-auto"
-      intro={t("publicTools.contribute.intro")}
-      title={t("publicTools.contribute.title")}
-    >
+    <>
       <AddSkillForm />
 
       <div className="border-border border-t pt-6">
@@ -154,7 +150,7 @@ export const ContributePage = () => {
           {t("publicTools.contribute.repoLink")}
         </Button>
       </div>
-    </ContributePageFrame>
+    </>
   );
 };
 
@@ -253,10 +249,7 @@ const AddSkillForm = () => {
   };
 
   return (
-    <ContributeFormFrame
-      intro={t("publicTools.contribute.form.intro")}
-      title={t("publicTools.contribute.form.title")}
-    >
+    <ContributeFormShell>
       <FormRow
         htmlFor="skill-name"
         label={t("publicTools.contribute.form.name")}
@@ -565,7 +558,7 @@ const AddSkillForm = () => {
           </p>
         )}
       </div>
-    </ContributeFormFrame>
+    </ContributeFormShell>
   );
 };
 

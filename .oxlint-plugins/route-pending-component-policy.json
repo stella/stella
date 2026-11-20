@@ -21,6 +21,7 @@
     "@stll/ui/layout-tokens",
     "@stll/ui/list-shell",
     "@stll/ui/matter-icon",
+    "@stll/ui/prose",
     "@stll/ui/scroll-area",
     "@stll/ui/outcome-screen-face",
     "@stll/ui/separator",

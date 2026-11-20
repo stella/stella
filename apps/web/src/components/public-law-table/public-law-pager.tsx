@@ -7,6 +7,7 @@ import { PUBLIC_LAW_PAGE_SIZES } from "@stll/api-contract/limits";
 import { SEARCH_TOTAL_TYPE } from "@stll/api-contract/search";
 import { Button } from "@stll/ui/button";
 import { ChevronRightIcon } from "@stll/ui/icons";
+import { Label } from "@stll/ui/label";
 import {
   Select,
   SelectItem,
@@ -18,9 +19,7 @@ import {
 import {
   PublicLawCurrentPage,
   PublicLawPagerFrame,
-  PublicLawPagerStepDisabled,
   PublicLawPagerStepLabel,
-  PublicLawPageSizeLabel,
 } from "@/components/public-law-table/public-law-pager.pending";
 import type {
   PublicLawNumberedPagerModel,
@@ -95,6 +94,7 @@ export const PublicLawPager = ({
 
   return (
     <PublicLawPagerFrame
+      label={t("caseLaw.pagination.label")}
       position={
         <>
           {navigation.type === "numbered" ? (
@@ -108,7 +108,8 @@ export const PublicLawPager = ({
               {t("caseLaw.pagination.refineForMore")}
             </p>
           ) : null}
-          <PublicLawPageSizeLabel>
+          <Label variant="muted">
+            {t("caseLaw.pagination.perPage")}
             <Select
               onValueChange={(value: string | null) => {
                 const next = PUBLIC_LAW_PAGE_SIZES.find(
@@ -135,7 +136,7 @@ export const PublicLawPager = ({
                 ))}
               </SelectPopup>
             </Select>
-          </PublicLawPageSizeLabel>
+          </Label>
         </>
       }
       steps={
@@ -347,7 +348,11 @@ const StepLink = ({
   placement: "previous" | "next";
 }) => {
   if (page === null) {
-    return <PublicLawPagerStepDisabled label={label} placement={placement} />;
+    return (
+      <Button className="h-7 min-h-0" disabled size="sm" variant="ghost">
+        <PublicLawPagerStepLabel label={label} placement={placement} />
+      </Button>
+    );
   }
   return (
     <PageLink

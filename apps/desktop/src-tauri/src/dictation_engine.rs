@@ -31,12 +31,14 @@ use crate::{
   dictation_context::{self, CleanupContext},
   dictation_focus::{self, FocusTarget, Insertion},
   dictation_format::{AppClass, Segment},
-  dictation_hold_key::HoldChoice,
+  dictation_hold_key::{HoldChoice, MINIMUM_HOLD},
   dictation_input,
   dictation_live::{Ended, Live, Transcribe, Transcription},
   dictation_microphone::{self, Choice, InputDevice},
   dictation_pauses::Segmenter,
-  dictation_preview, dictation_spelling,
+  dictation_preview,
+  dictation_sounds::{self, Cue},
+  dictation_spelling,
   dictation_trace::{self, Cleanup, GlobeKey, Line, Outcome, Trace},
   dictation_worker::{self, Response},
 };
@@ -79,6 +81,20 @@ struct Active {
   trace: Trace,
   /// How often the panel checks for a password field between results.
   password_watch: dictation_preview::PasswordWatch,
+}
+
+impl Active {
+  /// Sounds the start once the hold is long enough to be a dictation, not
+  /// a tap, when the speaker wants sounds.
+  fn sound_start(&mut self, app: &AppHandle) {
+    if !self.capture.sounded
+      && self.trace.since_press() >= MINIMUM_HOLD
+      && dictation::sounds_enabled(app)
+    {
+      self.capture.sounded = true;
+      dictation_sounds::play(Cue::Start);
+    }
+  }
 }
 
 /// What a dictation that did not fail came to.
@@ -151,6 +167,7 @@ fn run(app: &AppHandle, commands: &Receiver<Command>) {
       Ok(Command::Press) => {
         if let Some(active) = active.as_mut() {
           active.capture.listen();
+          active.sound_start(app);
         }
       }
       Ok(Command::Cancel) => {
@@ -202,6 +219,7 @@ fn run(app: &AppHandle, commands: &Receiver<Command>) {
       Err(RecvTimeoutError::Timeout) => match active.as_mut() {
         Some(active) => {
           active.capture.listen();
+          active.sound_start(app);
           // Between transcription results too: a password field that takes
           // focus while the panel shows hides it at once.
           if active.password_watch.due(dictation_preview::showing(app))
@@ -285,6 +303,8 @@ struct Capture {
   language: SpeakerLanguage,
   /// Mono samples taken so far, for the local log.
   recorded: usize,
+  /// Whether the start sound played, so the stop sound plays too.
+  sounded: bool,
 }
 
 impl Capture {
@@ -358,6 +378,7 @@ fn begin(
     live,
     language,
     recorded: 0,
+    sounded: false,
   })
 }
 
@@ -386,6 +407,7 @@ fn finish(
     mut live,
     language,
     recorded,
+    sounded,
   } = capture;
   let channels = recorder.channels;
   let rate = recorder.rate;
@@ -402,6 +424,10 @@ fn finish(
     rate,
     stretches,
   );
+  // Only once the microphone is closed, so the transcript cannot hear it.
+  if sounded {
+    dictation_sounds::play(Cue::Stop);
+  }
   for stretch in segmenter.push(&to_mono(&last, channels)) {
     live.send(stretch);
   }

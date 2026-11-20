@@ -5,9 +5,5 @@
   "apps/web/src/routes/knowledge/route.tsx",
   "apps/web/src/routes/knowledge/styles.tsx",
   "apps/web/src/routes/knowledge/workflows.tsx",
-  "apps/web/src/routes/sharepoint.oauth-callback.tsx",
-  "apps/web/src/routes/tools/$slug.tsx",
-  "apps/web/src/routes/tools/contribute.tsx",
-  "apps/web/src/routes/tools/index.tsx",
-  "apps/web/src/routes/tools/route.tsx"
+  "apps/web/src/routes/sharepoint.oauth-callback.tsx"
 ]
