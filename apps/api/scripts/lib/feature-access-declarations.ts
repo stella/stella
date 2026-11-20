@@ -380,7 +380,7 @@ const importPlan = (
       return { type: "symbols", names: [] };
     }
     const members = new Set<string>();
-    let dynamicReference = false;
+    const dynamicReferences = new Set<Node>();
     walk(ast.parsed.program, (node, ancestors) => {
       if (identifierName(node) !== name || node === namespaceBinding) {
         return;
@@ -404,10 +404,10 @@ const importPlan = (
       ) {
         members.add(parent.property.name);
       } else {
-        dynamicReference = true;
+        dynamicReferences.add(node);
       }
     });
-    return dynamicReference
+    return dynamicReferences.size !== 0
       ? { type: "module" }
       : { type: "symbols", names: [...members] };
   }
