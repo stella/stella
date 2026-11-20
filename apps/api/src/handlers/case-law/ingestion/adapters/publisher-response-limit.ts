@@ -1,16 +1,10 @@
 // parser-output-unchanged: responses within the publisher byte ceiling stream through unchanged; a larger body fails the read as too-large.
-import { TaggedError } from "better-result";
 import { TransformStream } from "node:stream/web";
+
+import { BodyByteLimitError } from "@stll/fetch/body-reader";
 
 /** Maximum decoded bytes one publisher response may yield. */
 export const PUBLISHER_BODY_MAX_BYTES = 64 * 1024 * 1024;
-
-export class PublisherResponseTooLargeError extends TaggedError(
-  "PublisherResponseTooLargeError",
-)<{
-  message: string;
-  maxBytes: number;
-}> {}
 
 const copyResponse = (
   response: Response,
@@ -48,9 +42,9 @@ export const limitPublisherResponse = (
         bytes += chunk.byteLength;
         if (bytes > maxBytes) {
           controller.error(
-            new PublisherResponseTooLargeError({
+            new BodyByteLimitError({
               message: "Publisher response exceeded its byte limit",
-              maxBytes,
+              limit: maxBytes,
             }),
           );
           return;

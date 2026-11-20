@@ -38,6 +38,7 @@
 
 import { panic, Result } from "better-result";
 
+import { BodyByteLimitError } from "@stll/fetch/body-reader";
 import { INGESTION_STOP_KIND } from "@stll/legal-atlas/ingestion-cycle";
 import { readCappedBytes } from "@stll/skills/streaming";
 
@@ -55,10 +56,7 @@ import {
 } from "@/api/lib/errors/read-outcome";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 
-import {
-  PUBLISHER_BODY_MAX_BYTES,
-  PublisherResponseTooLargeError,
-} from "./publisher-response-limit";
+import { PUBLISHER_BODY_MAX_BYTES } from "./publisher-response-limit";
 import {
   fetchPublisher,
   type PublisherFetchInit,
@@ -188,11 +186,11 @@ const readBodyBytes = async (
     if (
       bytes.error.type === "unavailable" &&
       bytes.error.cause.kind === "thrown" &&
-      bytes.error.cause.error instanceof PublisherResponseTooLargeError
+      BodyByteLimitError.is(bytes.error.cause.error)
     ) {
       return readUnavailable({
         kind: "too-large",
-        maxBytes: bytes.error.cause.error.maxBytes,
+        maxBytes: bytes.error.cause.error.limit,
       });
     }
     return bytes.error;

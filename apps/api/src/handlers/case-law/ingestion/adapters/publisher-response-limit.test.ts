@@ -1,11 +1,9 @@
 import { describe, expect, test } from "bun:test";
 
+import { BodyByteLimitError } from "@stll/fetch/body-reader";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
-import {
-  limitPublisherResponse,
-  PublisherResponseTooLargeError,
-} from "./publisher-response-limit";
+import { limitPublisherResponse } from "./publisher-response-limit";
 
 describe("publisher response limit", () => {
   test("preserves response metadata and a body within the limit", async () => {
@@ -36,7 +34,8 @@ describe("publisher response limit", () => {
     const rejection = await rejectionOf(
       limitPublisherResponse(response, 4).arrayBuffer(),
     );
-    expect(rejection).toBeInstanceOf(PublisherResponseTooLargeError);
+    expect(BodyByteLimitError.is(rejection)).toBe(true);
+    expect(rejection).toHaveProperty("limit", 4);
     expect(pulls).toBeLessThanOrEqual(3);
   });
 });

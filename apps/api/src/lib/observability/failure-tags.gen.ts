@@ -414,7 +414,6 @@ export const FAILURE_TAGS = [
   "PublicReadCleanupError",
   "PublisherGateReplyError",
   "PublisherPacingStopped",
-  "PublisherResponseTooLargeError",
   "PublisherTargetError",
   "PushDeliveryRejectedError",
   "PushDeliveryRetryError",
