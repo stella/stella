@@ -1,12 +1,16 @@
 import { panic, Result } from "better-result";
-import { and, desc, eq, gt, isNull, lte } from "drizzle-orm";
+import { and, desc, eq, gt, isNotNull, isNull, lte } from "drizzle-orm";
 import * as v from "valibot";
 
 import { INGESTION_STOP_KIND } from "@stll/legal-atlas/ingestion-cycle";
 import { DAY_IN_MS, Temporal } from "@stll/time";
 
 import type { ScopedDb } from "@/api/db/safe-db";
-import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
+import {
+  caseLawDecisions,
+  caseLawHeldDecisionAttachments,
+  caseLawSources,
+} from "@/api/db/schema";
 import { setSharedTransactionTimeouts } from "@/api/db/shared-pool-timeouts";
 import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
 import { probeCzIsirRemoval } from "@/api/handlers/case-law/ingestion/adapters/cz-isir-removal";
@@ -16,6 +20,7 @@ import {
   PublisherRateLimitRefusalError,
 } from "@/api/handlers/case-law/ingestion/adapters/retry";
 import { probeUkFclRemoval } from "@/api/handlers/case-law/ingestion/adapters/uk-fcl-removal";
+import { removeHeldAttachmentAtPublisher } from "@/api/handlers/case-law/ingestion/pipeline/held-decision-attachment";
 import { removePublisherDecision } from "@/api/handlers/case-law/publisher-removal";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -51,6 +56,7 @@ import {
 import type { RemovalRetryItem } from "@/api/lib/legal-search/removal-reconciliation-store";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { commitReplaySafeIngestionBatch } from "@/api/lib/replay-safe-ingestion";
+import { deleteS3ObjectWithSignal } from "@/api/lib/s3";
 import { brandPersistedCaseLawDecisionId } from "@/api/lib/safe-id-boundaries";
 
 export const REMOVAL_RECONCILIATION_CONFIG_KEY = "removalReconciliation";
@@ -86,6 +92,8 @@ type SweepOptions = {
   clock?: () => number;
   probe?: RemovalProbe;
   remove?: typeof removePublisherDecision;
+  removeAttachment?: typeof removeHeldAttachmentAtPublisher;
+  deleteRaw?: (key: string, signal: AbortSignal) => Promise<void>;
 };
 type SourcePausedOutcome = { type: "source-paused"; resumeAt: string };
 type DiscoveryOutcome =
@@ -522,8 +530,110 @@ const processRemovalDecision = async ({
       };
 };
 
+type HeldAttachmentProbeStep =
+  | { type: "done" }
+  | { type: "probed"; sourceDocumentId: string }
+  | { type: "source-paused"; sourceDocumentId: string; resumeAt: string };
+
+/**
+ * The next record this source holds as an attachment to another source's
+ * decision, probed at its publisher: one the publisher confirms gone is
+ * removed from its host. A probe that does not answer leaves it for the next
+ * cycle; nothing is removed on a read that established nothing.
+ */
+const probeHeldAttachment = async ({
+  scopedDb,
+  sourceId,
+  after,
+  reader,
+  removeAttachment,
+  deleteRaw,
+  signal,
+  now,
+}: {
+  scopedDb: ScopedDb;
+  sourceId: SafeId<"caseLawSource">;
+  after: string | null;
+  reader: RemovalProbe;
+  removeAttachment: typeof removeHeldAttachmentAtPublisher;
+  deleteRaw: (key: string, signal: AbortSignal) => Promise<void>;
+  signal: AbortSignal;
+  now: () => Date;
+}): Promise<HeldAttachmentProbeStep> => {
+  const attachment = await scopedDb(async (tx) =>
+    (
+      await tx
+        .select({
+          sourceDocumentId: caseLawHeldDecisionAttachments.sourceDocumentId,
+        })
+        .from(caseLawHeldDecisionAttachments)
+        .where(
+          and(
+            eq(caseLawHeldDecisionAttachments.sourceId, sourceId),
+            isNotNull(caseLawHeldDecisionAttachments.hostDecisionId),
+            isNull(caseLawHeldDecisionAttachments.hostWithdrawnAt),
+            after === null
+              ? undefined
+              : gt(caseLawHeldDecisionAttachments.sourceDocumentId, after),
+          ),
+        )
+        .orderBy(caseLawHeldDecisionAttachments.sourceDocumentId)
+        .limit(1)
+    ).at(0),
+  );
+  if (attachment === undefined) {
+    return { type: "done" };
+  }
+  const { sourceDocumentId } = attachment;
+  const observed = (await reader(sourceDocumentId, signal)).andThen(
+    removalObservation,
+  );
+  if (observed.isErr()) {
+    const paused = publisherRemovalPause(observed.error, now());
+    if (paused !== null) {
+      return {
+        type: "source-paused",
+        sourceDocumentId,
+        resumeAt: paused.resumeAt,
+      };
+    }
+    captureError(
+      observed.error,
+      handlerErrorContext("caseLaw.removal.attachment_probe_failed", {
+        sourceDocumentId,
+      }),
+    );
+    return { type: "probed", sourceDocumentId };
+  }
+  if (observed.value.type !== "absent") {
+    return { type: "probed", sourceDocumentId };
+  }
+  const removed = await removeAttachment({
+    scopedDb,
+    sourceId,
+    sourceDocumentId,
+  });
+  if (removed.type === "removed" && removed.sourceRawS3Key !== null) {
+    const deleted = await Result.tryPromise(async () => {
+      await deleteRaw(removed.sourceRawS3Key ?? "", signal);
+    });
+    if (deleted.isErr()) {
+      captureError(
+        deleted.error,
+        handlerErrorContext("caseLaw.removal.attachment_raw_delete_failed", {
+          sourceDocumentId,
+        }),
+      );
+    }
+  }
+  return { type: "probed", sourceDocumentId };
+};
+
 type DiscoveryOptions = Required<
-  Pick<SweepOptions, "sourceId" | "signal" | "now" | "remove">
+  Pick<
+    SweepOptions,
+    "sourceId" | "signal" | "now" | "remove" | "removeAttachment" | "deleteRaw"
+  >
 > & {
   probe: RemovalProbe | undefined;
   scopedDb: ScopedDb;
@@ -537,6 +647,8 @@ const discoverPublisherRemovals = async ({
   now,
   probe,
   remove,
+  removeAttachment,
+  deleteRaw,
   deadline,
   clock,
 }: DiscoveryOptions): Promise<DiscoveryOutcome> => {
@@ -612,6 +724,47 @@ const discoverPublisherRemovals = async ({
       }
       continue;
     }
+    if (state.status === "running-attachments") {
+      // db-await-in-loop: one attachment is probed per discovery step.
+      const step = await probeHeldAttachment({
+        scopedDb,
+        sourceId,
+        after: state.after,
+        reader,
+        removeAttachment,
+        deleteRaw,
+        signal,
+        now,
+      });
+      if (step.type === "done") {
+        // db-await-in-loop: the cycle ends once its attachments are probed.
+        const committed = await commit({
+          status: "waiting",
+          nextCycleAt: new Date(
+            now().getTime() + REMOVAL_SWEEP_INTERVAL_MS,
+          ).toISOString(),
+        });
+        return { type: committed ? "complete" : "contended", checked };
+      }
+      const next = {
+        status: "running-attachments",
+        after: step.sourceDocumentId,
+      } as const;
+      // db-await-in-loop: the attachment cursor advances under the source CAS.
+      const committed = await commit(
+        step.type === "source-paused"
+          ? { status: "paused", resume: next, resumeAt: step.resumeAt }
+          : next,
+      );
+      if (!committed) {
+        return { type: "contended", checked };
+      }
+      checked++;
+      if (step.type === "source-paused") {
+        return { type: "paused", checked, resumeAt: new Date(step.resumeAt) };
+      }
+      continue;
+    }
     // db-await-in-loop: one indexed identity is selected per discovery step.
     const decision = await scopedDb(async (tx) =>
       (
@@ -638,13 +791,12 @@ const discoverPublisherRemovals = async ({
       ).at(0),
     );
     if (decision === undefined) {
-      const committed = await commit({
-        status: "waiting",
-        nextCycleAt: new Date(
-          now().getTime() + REMOVAL_SWEEP_INTERVAL_MS,
-        ).toISOString(),
-      });
-      return { type: committed ? "complete" : "contended", checked };
+      // db-await-in-loop: the source's own decisions are done; its records
+      // held by other sources' decisions follow in the same cycle.
+      if (!(await commit({ status: "running-attachments", after: null }))) {
+        return { type: "contended", checked };
+      }
+      continue;
     }
     // db-await-in-loop: every classified outcome flows through the single advancing commit below.
     const outcome = await processRemovalDecision({
@@ -821,6 +973,8 @@ export const reconcilePublisherRemovals = async ({
   clock = () => performance.now(),
   probe,
   remove = removePublisherDecision,
+  removeAttachment = removeHeldAttachmentAtPublisher,
+  deleteRaw = deleteS3ObjectWithSignal,
 }: SweepOptions): Promise<Result<SweepOutcome, DatabaseError>> =>
   await Result.tryPromise({
     try: async () => {
@@ -850,6 +1004,8 @@ export const reconcilePublisherRemovals = async ({
         now,
         probe,
         remove,
+        removeAttachment,
+        deleteRaw,
         deadline,
         clock,
       };
