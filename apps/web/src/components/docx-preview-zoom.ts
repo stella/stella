@@ -3,12 +3,9 @@ import type { RefObject } from "react";
 
 import { panic } from "better-result";
 
-import {
-  FIT_TO_WIDTH_MAX_ZOOM,
-  FIT_TO_WIDTH_PADDING_PX,
-  fitWidthZoom,
-} from "@stll/folio-core/paged-layout/fitWidthZoom";
+import { fitWidthZoom } from "@stll/folio-core/paged-layout/fitWidthZoom";
 
+import { DOCX_PAGE_WIDTH } from "@/components/docx/docx-page.logic";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 
 // Target the typical Word text area (page minus ~1-inch margins on
@@ -17,13 +14,6 @@ import { useExternalSyncEffect } from "@/hooks/use-effect";
 // leaving the page margins as dead whitespace. The page edges then
 // overflow horizontally and the user can scroll to inspect margins.
 const DOCX_TEXT_AREA_WIDTH = 624;
-
-// The full Letter page at 96 DPI (8.5 × 11 inches). Callers fitting the whole page
-// — margins included — divide their available width by DOCX_PAGE_WIDTH instead of
-// the text area, so the page sits centred rather than overflowing its side margins;
-// the loading shell sizes its placeholder page from both dimensions.
-export const DOCX_PAGE_WIDTH = 816;
-export const DOCX_PAGE_HEIGHT = 1056;
 
 // Fit target for whole-page surfaces: inflating the page width by a per-side
 // gutter reserves ~7.5% of the container width as symmetric breathing space,
@@ -36,19 +26,6 @@ const DOCX_DEFAULT_ZOOM = 1;
 const DOCX_MIN_ZOOM = 0.25;
 const DOCX_MAX_ZOOM = 2;
 const DOCX_PINCH_SENSITIVITY = 0.005;
-
-/**
- * The page width the editor's fit gives a page, as CSS, for a view that
- * cannot measure before it paints: the measured box's width (`100cqw`, the
- * nearest inline-size query container, which must be as wide as the box the
- * editor fits to) less the editor's fit padding, up to the page at the
- * editor's largest fitted zoom. The editor rounds its zoom to hundredths and
- * reserves a classic scrollbar once one shows, so the two can differ by under
- * one percent of the page.
- */
-export const DOCX_EDITOR_FIT_PAGE_WIDTH_CSS = `min(${String(
-  FIT_TO_WIDTH_MAX_ZOOM * DOCX_PAGE_WIDTH,
-)}px, calc(100cqw - ${String(FIT_TO_WIDTH_PADDING_PX)}px))`;
 
 type ZoomableDocxEditor = {
   getZoom: () => number;
@@ -142,7 +119,7 @@ export const useDocxFitZoom = ({
         }
         default: {
           fit satisfies never;
-          return panic("Unhandled DOCX fit");
+          panic("Unhandled DOCX fit");
         }
       }
     };

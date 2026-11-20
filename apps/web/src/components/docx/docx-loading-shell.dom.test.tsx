@@ -6,9 +6,10 @@ import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment
 GlobalRegistrator.register({ url: "http://localhost:3000/document" });
 
 const { act, cleanup, render } = await import("@testing-library/react");
-const { fitWidthZoom } =
+const { FIT_TO_WIDTH_MAX_ZOOM, FIT_TO_WIDTH_PADDING_PX, fitWidthZoom } =
   await import("@stll/folio-core/paged-layout/fitWidthZoom");
-const { DOCX_PAGE_WIDTH } = await import("@/components/docx-preview-zoom");
+const { DOCX_EDITOR_FIT_PAGE_WIDTH_CSS, DOCX_PAGE_WIDTH } =
+  await import("@/components/docx/docx-page.logic");
 const { DocxLoadingShell } = await import("./docx-loading-shell");
 
 const widthDescriptors = {
@@ -71,9 +72,26 @@ test("the loading sheet's page takes the editor's fitted page width", async () =
       ".folio-docx-preview > div",
     );
     expect(editorZoom).not.toBeNull();
-    expect(page?.style.width).toBe(
-      `${String(DOCX_PAGE_WIDTH * (editorZoom ?? 0))}px`,
+    const editorPageWidth = DOCX_PAGE_WIDTH * (editorZoom ?? 0);
+    expect(Number.parseFloat(page?.style.width ?? "")).toBeCloseTo(
+      editorPageWidth,
+      6,
+    );
+    // The cold-load view's CSS twin, `min(page × max zoom, column − padding)`,
+    // lands within the editor's rounding of its zoom (under 1% of the page).
+    const cssPageWidth = Math.min(
+      FIT_TO_WIDTH_MAX_ZOOM * DOCX_PAGE_WIDTH,
+      columnWidth - FIT_TO_WIDTH_PADDING_PX,
+    );
+    expect(Math.abs(cssPageWidth - editorPageWidth)).toBeLessThanOrEqual(
+      DOCX_PAGE_WIDTH / 100,
     );
     unmount();
   }
+});
+
+test("the cold-load sheet's CSS width is Folio's fit-width rule", () => {
+  expect(DOCX_EDITOR_FIT_PAGE_WIDTH_CSS).toBe(
+    `min(${String(FIT_TO_WIDTH_MAX_ZOOM * DOCX_PAGE_WIDTH)}px, calc(100cqw - ${String(FIT_TO_WIDTH_PADDING_PX)}px))`,
+  );
 });

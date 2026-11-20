@@ -38,7 +38,6 @@
     "@stll/workspace-ui/view-strip",
     "@/components/auth/inbox-quick-jump-face",
     "@/components/auth/otp-panel-text",
-    "@/components/docx/docx-loading-shell",
     "@/components/inspector/viewer-overlay-bar",
     "@/components/pending-cache",
     "@/components/pending-text",
