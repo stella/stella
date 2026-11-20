@@ -307,7 +307,6 @@ const assignIds = async (
     assignments,
     CASE_LAW_PROJECTION_REPAIR_BATCH_SIZE,
   )) {
-    // db-await-in-loop: one bounded source transaction preserves the canonical lock order.
     const changed = await ingestionDb(
       async (tx) =>
         await assignDecisionCourtIdsTx(tx, {
@@ -402,7 +401,7 @@ const walkSource = async (source: CourtIdentitySource): Promise<Tally> => {
         }
       }
     }
-    // db-await-in-loop: one set-based statement per page
+    // db-await-in-loop: bounded source batches per page preserve canonical lock order
     await assignIds(source, idOnly, tally);
   }
   return tally;
