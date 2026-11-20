@@ -221,6 +221,7 @@ const ChatRunOnChip = ({
             data-composer-chip="run-on"
             // Until the stored choice is known, nothing can be picked on it.
             disabled={disabled}
+            disabledReason={t("common.loading")}
             size="xs"
             variant="muted"
           />
@@ -258,6 +259,7 @@ export const ChatModelSelector = ({
   disabled = false,
   models,
 }: ChatModelSelectorProps) => {
+  const t = useTranslations();
   const [open, setOpen] = useState(false);
   const [detailsRequested, setDetailsRequested] = useState(false);
   const selectedTarget = chatRunOnTarget(models.runTarget);
@@ -302,6 +304,11 @@ export const ChatModelSelector = ({
               data-composer-chip="model"
               // Until the stored choice is known, nothing can be picked on it.
               disabled={disabled || models.state === "loading"}
+              disabledReason={
+                models.state === "loading"
+                  ? t("common.loading")
+                  : t("chat.composer.waitForChat")
+              }
               onFocus={() => setDetailsRequested(true)}
               onMouseEnter={() => setDetailsRequested(true)}
               size="xs"
