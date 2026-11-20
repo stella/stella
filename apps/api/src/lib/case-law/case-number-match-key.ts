@@ -1,4 +1,5 @@
 // parser-output-unchanged: Match keys are read by comparisons only; no adapter or parser writes them, and every stored key keeps its printed form.
+// parser-output-unchanged: adds only SQL comparison fragments and re-exports caseNumberKeysMatch; caseNumberMatchKey is unchanged and no adapter or parser calls the additions.
 /**
  * The one place a case-number key is compared to another.
  *
