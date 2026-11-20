@@ -162,7 +162,7 @@ static VERSIONS: Mutex<Option<(FileStamp, String)>> = Mutex::new(None);
 /// The Antigravity CLI on this computer and its version; `None` when it is
 /// not installed or does not say its version.
 pub(crate) fn antigravity() -> Option<(PathBuf, String)> {
-  let home = dirs_home();
+  let home = dirs::home_dir().filter(|home| home.is_absolute());
   let executable =
     find_antigravity(std::env::var_os("PATH").as_deref(), home.as_deref())?;
   let current = stamp(&executable)?;
@@ -189,14 +189,6 @@ pub(crate) fn antigravity() -> Option<(PathBuf, String)> {
     }
   };
   Some((executable, version))
-}
-
-fn dirs_home() -> Option<PathBuf> {
-  #[cfg(windows)]
-  let home = std::env::var_os("USERPROFILE");
-  #[cfg(not(windows))]
-  let home = std::env::var_os("HOME");
-  home.map(PathBuf::from).filter(|home| home.is_absolute())
 }
 
 #[cfg(test)]
