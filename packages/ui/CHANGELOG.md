@@ -1,5 +1,11 @@
 # @stll/ui
 
+## 0.78.0
+
+### Minor Changes
+
+- [#9097](https://github.com/stella/stella/pull/9097) [`b6194a7`](https://github.com/stella/stella/commit/b6194a73bae3624e7afb0f8a6b21ac9facdb97f8) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add `inspectorPaneWidthCss`, the docked inspector pane's width rule as CSS for a frame drawn before the viewport is known.
+
 ## 0.77.1
 
 ### Patch Changes
