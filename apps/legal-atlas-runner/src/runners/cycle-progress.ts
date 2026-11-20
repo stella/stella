@@ -347,7 +347,7 @@ type UpdateStalledAdapterOptions = {
   stopKind: IngestionStopKind;
 };
 
-export const updateStalledAdapter = (
+const updateStalledAdapter = (
   stalledAdapters: Map<string, IngestionStopKind>,
   { adapterKey, stallAlert, stopKind }: UpdateStalledAdapterOptions,
 ): void => {
