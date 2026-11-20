@@ -237,7 +237,9 @@ const exerciseMember = async (
 test("a signed-in member gets the same cleanup as a desktop, without any desktop decision", async () => {
   const { result, calls, limit } = await exerciseMember();
   if (result instanceof HttpStatusResponse) {
-    throw new TypeError(`Expected the cleaned segments, got ${result.code}`);
+    throw new TypeError(
+      `Expected the cleaned segments, got ${String(result.code)}`,
+    );
   }
   expect(v.parse(desktopDictationCleanupResponseSchema, result)).toEqual({
     segments: [
