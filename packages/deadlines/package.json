@@ -21,7 +21,7 @@
   "dependencies": {
     "@stll/time": "0.4.3",
     "better-result": "catalog:",
-    "date-holidays": "3.39.1"
+    "date-holidays": "3.39.2"
   },
   "devDependencies": {
     "@stll/property-testing": "workspace:*",

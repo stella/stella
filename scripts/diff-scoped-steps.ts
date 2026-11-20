@@ -12,8 +12,10 @@ const STEP_BASE =
 /** A script reading a base from the environment, or defaulting to main. */
 const SCRIPT_BASE =
   /process\.env(?:\.|\[\s*["'])\w*BASE\w*|\$\{?\w*BASE_(?:REF|SHA)\b|["'`]origin\/main["'`]/u;
+// A repository script, also when a step runs it from a tooling checkout
+// (`$GITHUB_WORKSPACE/.tooling/scripts/x.sh` runs `scripts/x.sh`).
 const SCRIPT_PATH =
-  /(?:^|[\s"'])((?:scripts|apps\/[\w-]+\/scripts|packages\/[\w-]+\/src)\/[\w./-]+\.(?:ts|sh|mjs))/gu;
+  /(?:^|[\s"']|\/\.[\w-]+\/)((?:scripts|apps\/[\w-]+\/scripts|packages\/[\w-]+\/src)\/[\w./-]+\.(?:ts|sh|mjs))/gu;
 // Classification labels are prose; a word in them must not decide membership.
 const LABEL_ENV = new Set(["CI_CHECK_KIND", "CI_CHECK_CONTEXT"]);
 
@@ -161,10 +163,6 @@ export const DIFF_SCOPED_STEPS = {
     diffComplete(
       "Checks exactly the pull requests between the group's base and head.",
     ),
-  "merge-group-hold.yml:dequeue-held-pull-request#Check out trusted base scripts":
-    operational(
-      "Checks out the hold check from the pull request's base; no verdict.",
-    ),
   "merge-group-hold.yml:dequeue-held-pull-request#Restore active hold labels and remove held pull requests from the queue":
     operational(
       "Restores hold labels and dequeues the pull request the event names; no verdict on content.",
@@ -178,6 +176,14 @@ export const DIFF_SCOPED_STEPS = {
   "publish-npm.yml:pack#Verify manual package recovery source": diffComplete(
     "Checks that the recovered package source is an ancestor of main.",
   ),
+  "publish-npm.yml:release-trigger#Resolve upstream release receipt":
+    operational(
+      "Proves protected main carries the release commit before pack builds it.",
+    ),
+  "ci.yml:ci-plan#Preserve the comparison-base resolver across source checkouts":
+    operational(
+      "Stages the comparison-base resolver for a later step; it resolves no base itself.",
+    ),
   "publish-npm.yml:pack#Build and pack selected packages": operational(
     "Packs the packages selected for publication.",
   ),
@@ -248,6 +254,12 @@ export const DIFF_SCOPED_STEPS = {
   "ci.yml:ci-checks-policy#SHA-256 migration ledger": fullTree(
     "Scans the whole ledger; the base only keeps it from growing.",
   ),
+  "ci.yml:ci-checks-policy#Startup bundle ledger": fullTree(
+    "Reads the whole ledger; the base only keeps it from gaining an exception.",
+  ),
+  "ci.yml:ci-checks-policy#Workspace test gating ledger": fullTree(
+    "Scans every workspace test file; the base only keeps the list from growing.",
+  ),
   "ci.yml:ci-checks-policy#Custom lint rule coverage": fullTree(
     "Checks every custom rule; the base is not read.",
   ),
@@ -310,6 +322,9 @@ export const DIFF_SCOPED_STEPS = {
   ),
   "ci.yml:ci-checks-rest#Check migration identity against the base branch":
     diffComplete("Concerns the migrations the change adds or removes."),
+  "ci.yml:ci-checks-rest#Action commit pins": diffComplete(
+    "Concerns only action pins new against the base; an unchanged pin was verified when it was added.",
+  ),
   "ci.yml:ci-checks-rest#Bridge-version guard": expands(
     "Watches the bridge files and every crate module the bridge calls, read from bridge.rs.",
   ),
@@ -342,6 +357,9 @@ export const DIFF_SCOPED_STEPS = {
     operational(
       "Selects the baseline file the full recall is measured against.",
     ),
+  "ci.yml:web-build#Startup gate base": operational(
+    "Selects the base's bundle baseline and pending-component exceptions the startup gates measure against.",
+  ),
   "ci.yml:database-migrations-check#Check migration coverage": expands(
     "A fast check of the schema entry files; the plan runs the migration jobs for every file the schema imports, and the schema parity step in database-migrations-apply-fresh compares the migrated database with the whole schema.",
   ),

@@ -99,10 +99,22 @@ export const ACCOUNT_EXPORT_REGISTRY = {
     type: "exempt",
     reason: ACCOUNT_EXPORT_EXEMPT_REASON.security,
   },
+  // A retry key of a send or answer the member made: ids only, kept a day.
+  chat_command_receipts: {
+    type: "exempt",
+    reason: ACCOUNT_EXPORT_EXEMPT_REASON.noUserContent,
+  },
   chat_limit_reminders: {
     type: "exempt",
     reason: ACCOUNT_EXPORT_EXEMPT_REASON.noUserContent,
   },
+  // Why a thread's queue waits: no content of the member's.
+  chat_queue_holds: {
+    type: "exempt",
+    reason: ACCOUNT_EXPORT_EXEMPT_REASON.noUserContent,
+  },
+  // A message the member wrote and queued: their content before it is sent.
+  chat_queued_messages: { type: "exported" },
   chat_threads: { type: "exported" },
   chat_tool_grants: {
     type: "exempt",
@@ -240,6 +252,10 @@ export const ACCOUNT_EXPORT_REGISTRY = {
     type: "exempt",
     reason: ACCOUNT_EXPORT_EXEMPT_REASON.organization,
   },
+  invoice_sends: {
+    type: "exempt",
+    reason: ACCOUNT_EXPORT_EXEMPT_REASON.organization,
+  },
   legal_list_claim_review_events: {
     type: "exempt",
     reason: ACCOUNT_EXPORT_EXEMPT_REASON.organization,
@@ -338,6 +354,11 @@ export const ACCOUNT_EXPORT_REGISTRY = {
   organization_professional_use_acceptances: {
     type: "exempt",
     reason: ACCOUNT_EXPORT_EXEMPT_REASON.organization,
+  },
+  // Confirmation envelopes bind encrypted previews to an actor and approval hash.
+  outbound_actions: {
+    type: "exempt",
+    reason: ACCOUNT_EXPORT_EXEMPT_REASON.security,
   },
   pdf_signing_sessions: {
     type: "exempt",

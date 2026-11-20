@@ -672,10 +672,6 @@
     "reason": "Existing READER_ANNOTATION_EDIT_TOOL_NAMES domain; contract ownership pending migration."
   },
   {
-    "id": "apps/web/src/components/chat/tool-call-card.tsx::CODE_SOURCE_INPUT_KEYS::domain:[\"typescriptCode\",\"code\"]::1",
-    "reason": "Existing CODE_SOURCE_INPUT_KEYS domain; contract ownership pending migration."
-  },
-  {
     "id": "apps/web/src/components/docx/docx-editor-host.logic.test.ts::slotOperations::maxLength:24::1",
     "reason": "Local test input domain or bound; retained for fixture coverage."
   },
@@ -840,10 +836,6 @@
     "reason": "Existing VersionLabelInput UI validation or presentation bound; contract migration pending."
   },
   {
-    "id": "apps/web/src/components/public-law-table/public-law-results-state.logic.test.ts::<module>::domain:[\"enter\",\"preload\",\"stay\"]::1",
-    "reason": "Local test input domain or bound; retained for fixture coverage."
-  },
-  {
     "id": "apps/web/src/components/registry-credential-setup.tsx::inputProps::maxLength:2000::1",
     "reason": "Existing inputProps UI validation or presentation bound; contract migration pending."
   },
@@ -872,20 +864,8 @@
     "reason": "Existing INPUT_TYPES domain; contract ownership pending migration."
   },
   {
-    "id": "apps/web/src/components/theme-provider.tsx::PALETTES::domain:[\"nord\",\"neutral\",\"flexoki\"]::1",
-    "reason": "Existing PALETTES domain; contract ownership pending migration."
-  },
-  {
-    "id": "apps/web/src/components/theme-provider.tsx::THEMES::domain:[\"light\",\"dark\",\"system\"]::1",
-    "reason": "Existing THEMES domain; contract ownership pending migration."
-  },
-  {
     "id": "apps/web/src/components/workspaces/cell-metadata-flags.tsx::TINT_PRIORITY::domain:[\"verified\",\"contradiction\",\"follow-up\",\"needs-review\",\"important\"]::1",
     "reason": "Existing TINT_PRIORITY domain; contract ownership pending migration."
-  },
-  {
-    "id": "apps/web/src/components/workspaces/entity-utils.ts::INTERNAL_PROPERTIES::domain:[\"name\",\"created-by\",\"updated-at\",\"version\",\"kind\",\"list-item-type\",\"status\",\"priority\",\"due-date\",\"assignee\"]::1",
-    "reason": "Existing INTERNAL_PROPERTIES domain; contract ownership pending migration."
   },
   {
     "id": "apps/web/src/components/workspaces/properties/composer-primitives.tsx::CREATABLE_CONTENT_TYPES::domain:[\"text\",\"int\",\"date\",\"single-select\",\"multi-select\"]::1",
@@ -988,18 +968,6 @@
     "reason": "Local test input domain or bound; retained for fixture coverage."
   },
   {
-    "id": "apps/web/src/features/case-law/decision-columns.logic.ts::DECISION_COLUMN_IDS::domain:[\"caseNumber\",\"summary\",\"court\",\"country\",\"date\",\"type\",\"headnote\",\"citedBy\",\"language\"]::1",
-    "reason": "Existing DECISION_COLUMN_IDS domain; contract ownership pending migration."
-  },
-  {
-    "id": "apps/web/src/features/case-law/decision-columns.logic.ts::DECISION_IDENTITY_LINE_FIELDS::domain:[\"court\",\"date\",\"type\"]::1",
-    "reason": "Existing DECISION_IDENTITY_LINE_FIELDS domain; contract ownership pending migration."
-  },
-  {
-    "id": "apps/web/src/features/case-law/decision-columns.logic.ts::DEFAULT_HIDDEN_DECISION_COLUMN_IDS::domain:[\"country\",\"headnote\",\"language\"]::1",
-    "reason": "Existing DEFAULT_HIDDEN_DECISION_COLUMN_IDS domain; contract ownership pending migration."
-  },
-  {
     "id": "apps/web/src/features/case-law/decision-find.logic.test.ts::<module>::domain:[\"caseNumber\",\"court\",\"headnote\",\"summary\"]::1",
     "reason": "Local test input domain or bound; retained for fixture coverage."
   },
@@ -1044,10 +1012,6 @@
     "reason": "Local test input domain or bound; retained for fixture coverage."
   },
   {
-    "id": "apps/web/src/features/chat/hooks/use-chat-session-send-queue.logic.test.ts::<module>::domain:[\"submitted\",\"streaming\"]::1",
-    "reason": "Local test input domain or bound; retained for fixture coverage."
-  },
-  {
     "id": "apps/web/src/features/chat/lib/suggested-prompts-availability.test.ts::<module>::domain:[\"client-disconnected\",\"timeout\"]::1",
     "reason": "Local test input domain or bound; retained for fixture coverage."
   },
@@ -1086,10 +1050,6 @@
   {
     "id": "apps/web/src/features/statutes/components/statute-search-results.test.tsx::<module>::domain:[\"strict\",\"relaxed\"]::1",
     "reason": "Local test input domain or bound; retained for fixture coverage."
-  },
-  {
-    "id": "apps/web/src/features/statutes/statute-columns.logic.ts::STATUTE_COLUMN_IDS::domain:[\"act\",\"type\",\"validity\",\"firstVersion\",\"amendments\",\"lastAmended\",\"citedBy\"]::1",
-    "reason": "Existing STATUTE_COLUMN_IDS domain; contract ownership pending migration."
   },
   {
     "id": "apps/web/src/features/statutes/statute-compare.test.ts::listInsertion::max:12::1",
@@ -1332,10 +1292,6 @@
     "reason": "Existing NUMERIC_PROPERTY_TYPES domain; contract ownership pending migration."
   },
   {
-    "id": "apps/web/src/lib/workspaces/table-store.logic.ts::TABLE_CONTENT_MODES::domain:[\"tight\",\"fit-content\"]::1",
-    "reason": "Existing TABLE_CONTENT_MODES domain; contract ownership pending migration."
-  },
-  {
     "id": "apps/web/src/lib/workspaces/types.ts::ALL_COLUMNS::domain:[\"client\",\"team\",\"reference\",\"entityCount\",\"lastActivityAt\",\"createdAt\"]::1",
     "reason": "Existing ALL_COLUMNS domain; contract ownership pending migration."
   },
@@ -1358,10 +1314,6 @@
   {
     "id": "apps/web/src/routes/-app-frame.logic.test.ts::<module>::domain:[\"checking\",\"unresolved\",\"none\"]::1",
     "reason": "Local test input domain or bound; retained for fixture coverage."
-  },
-  {
-    "id": "apps/web/src/routes/-protected-pending-skeleton.tsx::NAV_LABEL_WIDTHS::domain:[\"w-14\",\"w-10\",\"w-16\",\"w-20\",\"w-16\"]::1",
-    "reason": "Existing NAV_LABEL_WIDTHS domain; contract ownership pending migration."
   },
   {
     "id": "apps/web/src/routes/-protected-pending-skeleton.tsx::PINNED_ROW_KEYS::domain:[\"a\",\"b\",\"c\"]::1",
@@ -1440,44 +1392,28 @@
     "reason": "Existing PROCURACAO_REVIEW_FIELDS domain; contract ownership pending migration."
   },
   {
-    "id": "apps/web/src/routes/_protected.contacts/import.tsx::STEP_KEYS::domain:[\"contacts.importStudio.stepUpload\",\"contacts.importStudio.stepMap\",\"knowledge.playbooks.review.run\",\"common.done\"]::1",
-    "reason": "Existing STEP_KEYS domain; contract ownership pending migration."
+    "id": "apps/web/src/routes/_protected.settings/-account.profile.page.tsx::ProfilePageBody::maxLength:120::1",
+    "reason": "Existing ProfilePageBody UI validation or presentation bound; contract migration pending."
+  },
+  {
+    "id": "apps/web/src/routes/_protected.settings/-account.profile.page.tsx::ProfilePageBody::maxLength:120::2",
+    "reason": "Existing ProfilePageBody UI validation or presentation bound; contract migration pending."
+  },
+  {
+    "id": "apps/web/src/routes/_protected.settings/-account.profile.page.tsx::ProfilePageBody::maxLength:16::1",
+    "reason": "Existing ProfilePageBody UI validation or presentation bound; contract migration pending."
+  },
+  {
+    "id": "apps/web/src/routes/_protected.settings/-account.profile.page.tsx::ProfilePageBody::maxLength:6::1",
+    "reason": "Existing ProfilePageBody UI validation or presentation bound; contract migration pending."
   },
   {
     "id": "apps/web/src/routes/_protected.settings/-queries/connections.ts::connectedAppsKeys::domain:[\"settings\",\"connections\",\"connected-apps\"]::1",
     "reason": "Existing connectedAppsKeys domain; contract ownership pending migration."
   },
   {
-    "id": "apps/web/src/routes/_protected.settings/account.memory.tsx::MEMORY_ROW_SKELETON_KEYS::domain:[\"primary\",\"secondary\",\"tertiary\"]::1",
-    "reason": "Existing MEMORY_ROW_SKELETON_KEYS domain; contract ownership pending migration."
-  },
-  {
     "id": "apps/web/src/routes/_protected.settings/account.memory.tsx::MEMORY_TAB_PRIMED_STATUSES::domain:[\"suggested\",\"active\"]::1",
     "reason": "Existing MEMORY_TAB_PRIMED_STATUSES domain; contract ownership pending migration."
-  },
-  {
-    "id": "apps/web/src/routes/_protected.settings/account.memory.tsx::MEMORY_TAB_SKELETON_KEYS::domain:[\"mine\",\"firm\",\"matter\"]::1",
-    "reason": "Existing MEMORY_TAB_SKELETON_KEYS domain; contract ownership pending migration."
-  },
-  {
-    "id": "apps/web/src/routes/_protected.settings/account.profile.tsx::ProfilePageBody::maxLength:120::1",
-    "reason": "Existing ProfilePageBody UI validation or presentation bound; contract migration pending."
-  },
-  {
-    "id": "apps/web/src/routes/_protected.settings/account.profile.tsx::ProfilePageBody::maxLength:120::2",
-    "reason": "Existing ProfilePageBody UI validation or presentation bound; contract migration pending."
-  },
-  {
-    "id": "apps/web/src/routes/_protected.settings/account.profile.tsx::ProfilePageBody::maxLength:16::1",
-    "reason": "Existing ProfilePageBody UI validation or presentation bound; contract migration pending."
-  },
-  {
-    "id": "apps/web/src/routes/_protected.settings/account.profile.tsx::ProfilePageBody::maxLength:6::1",
-    "reason": "Existing ProfilePageBody UI validation or presentation bound; contract migration pending."
-  },
-  {
-    "id": "apps/web/src/routes/_protected.settings/organization.members.tsx::SKELETON_ROW_KEYS::domain:[\"a\",\"b\",\"c\",\"d\",\"e\",\"f\",\"g\",\"h\"]::1",
-    "reason": "Existing SKELETON_ROW_KEYS domain; contract ownership pending migration."
   },
   {
     "id": "apps/web/src/routes/_protected.settings/organization/-components/organization/number-series-form.logic.test.ts::<module>::domain:[\"invoice\",\"advance\",\"credit_note\"]::1",
@@ -1584,10 +1520,6 @@
     "reason": "Existing CreateCodeForm UI validation or presentation bound; contract migration pending."
   },
   {
-    "id": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/billing/split-entry-dialog.tsx::SplitEntryDialog::max:100::1",
-    "reason": "Existing SplitEntryDialog UI validation or presentation bound; contract migration pending."
-  },
-  {
     "id": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/calendar/calendar-utils.ts::INTERNAL_DATE_IDS::domain:[\"_created-at\",\"_updated-at\"]::1",
     "reason": "Existing INTERNAL_DATE_IDS domain; contract ownership pending migration."
   },
@@ -1614,58 +1546,6 @@
   {
     "id": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/view-toolbar.tsx::ZOOM_OPTIONS::domain:[\"day\",\"week\",\"month\",\"quarter\"]::1",
     "reason": "Existing ZOOM_OPTIONS domain; contract ownership pending migration."
-  },
-  {
-    "id": "apps/web/src/routes/_protected.workspaces/$workspaceId/correspondence/$correspondenceId.tsx::CorrespondenceDetailPage::domain:[\"spf\",\"dkim\",\"dmarc\"]::1",
-    "reason": "Existing CorrespondenceDetailPage domain; contract ownership pending migration."
-  },
-  {
-    "id": "apps/web/src/routes/_protected.workspaces/$workspaceId/invoices.tsx::SKELETON_ROW_KEYS::domain:[\"a\",\"b\",\"c\",\"d\",\"e\",\"f\",\"g\",\"h\"]::1",
-    "reason": "Existing SKELETON_ROW_KEYS domain; contract ownership pending migration."
-  },
-  {
-    "id": "apps/web/src/routes/_protected.workspaces/$workspaceId/invoices/$invoiceId.tsx::ENTRY_COLUMN_KEYS::domain:[\"context\",\"date\",\"narrative\",\"hours\",\"amount\"]::1",
-    "reason": "Existing ENTRY_COLUMN_KEYS domain; contract ownership pending migration."
-  },
-  {
-    "id": "apps/web/src/routes/_protected.workspaces/$workspaceId/invoices/$invoiceId.tsx::ENTRY_ROW_KEYS::domain:[\"a\",\"b\",\"c\",\"d\",\"e\"]::1",
-    "reason": "Existing ENTRY_ROW_KEYS domain; contract ownership pending migration."
-  },
-  {
-    "id": "apps/web/src/routes/_protected.workspaces/$workspaceId/invoices/$invoiceId.tsx::EditInvoiceForm::maxLength:3::1",
-    "reason": "Existing EditInvoiceForm UI validation or presentation bound; contract migration pending."
-  },
-  {
-    "id": "apps/web/src/routes/_protected.workspaces/$workspaceId/invoices/$invoiceId.tsx::INFO_CELL_KEYS::domain:[\"a\",\"b\",\"c\",\"d\"]::1",
-    "reason": "Existing INFO_CELL_KEYS domain; contract ownership pending migration."
-  },
-  {
-    "id": "apps/web/src/routes/_protected.workspaces/$workspaceId/invoices/$invoiceId.tsx::editInvoiceSchema::maxLength:64::1",
-    "reason": "Existing editInvoiceSchema UI validation or presentation bound; contract migration pending."
-  },
-  {
-    "id": "apps/web/src/routes/_protected.workspaces/$workspaceId/lists.tsx::LegalListDetail::maxLength:255::1",
-    "reason": "Existing LegalListDetail UI validation or presentation bound; contract migration pending."
-  },
-  {
-    "id": "apps/web/src/routes/_protected.workspaces/$workspaceId/lists.tsx::LegalListDetail::maxLength:256::1",
-    "reason": "Existing LegalListDetail UI validation or presentation bound; contract migration pending."
-  },
-  {
-    "id": "apps/web/src/routes/_protected.workspaces/$workspaceId/lists.tsx::LegalListsPage::maxLength:256::1",
-    "reason": "Existing LegalListsPage UI validation or presentation bound; contract migration pending."
-  },
-  {
-    "id": "apps/web/src/routes/_protected.workspaces/index.tsx::SKELETON_CARD_KEYS::domain:[\"a\",\"b\",\"c\",\"d\",\"e\",\"f\"]::1",
-    "reason": "Existing SKELETON_CARD_KEYS domain; contract ownership pending migration."
-  },
-  {
-    "id": "apps/web/src/routes/_protected.workspaces/index.tsx::SKELETON_TABLE_ROW_KEYS::domain:[\"a\",\"b\",\"c\",\"d\",\"e\",\"f\",\"g\",\"h\"]::1",
-    "reason": "Existing SKELETON_TABLE_ROW_KEYS domain; contract ownership pending migration."
-  },
-  {
-    "id": "apps/web/src/routes/agent-claim.tsx::AgentClaimPage::maxLength:32::1",
-    "reason": "Existing AgentClaimPage UI validation or presentation bound; contract migration pending."
   },
   {
     "id": "apps/web/src/routes/auth/-components/dev-quick-start-storage.ts::devQuickStartAttemptSchema::maxLength:128::1",
@@ -1844,24 +1724,12 @@
     "reason": "Existing optionalPublicDecisionSearchQuerySchema UI validation or presentation bound; contract migration pending."
   },
   {
-    "id": "apps/web/src/routes/law/-law-coverage/coverage-page.tsx::PENDING_ROW_KEYS::domain:[\"a\",\"b\",\"c\",\"d\"]::1",
-    "reason": "Existing PENDING_ROW_KEYS domain; contract ownership pending migration."
-  },
-  {
-    "id": "apps/web/src/routes/law/-law-coverage/coverage-page.tsx::PENDING_SECTION_KEYS::domain:[\"first\",\"second\"]::1",
-    "reason": "Existing PENDING_SECTION_KEYS domain; contract ownership pending migration."
-  },
-  {
     "id": "apps/web/src/routes/law/-law-home/law-scope-picker.tsx::SCOPE_ORDER::domain:[\"statutes\",\"decisions\"]::1",
     "reason": "Existing SCOPE_ORDER domain; contract ownership pending migration."
   },
   {
     "id": "apps/web/src/routes/law/-statutes-index.logic.test.ts::<module>::domain:[\"enter\",\"preload\",\"stay\"]::1",
     "reason": "Local test input domain or bound; retained for fixture coverage."
-  },
-  {
-    "id": "apps/web/src/routes/law/index.tsx::PENDING_ROW_KEYS::domain:[\"a\",\"b\",\"c\"]::1",
-    "reason": "Existing PENDING_ROW_KEYS domain; contract ownership pending migration."
   },
   {
     "id": "apps/web/src/routes/law/index.tsx::searchSchema::maxLength:3::1",

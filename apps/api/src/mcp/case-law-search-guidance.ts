@@ -12,24 +12,19 @@ import { LIMITS } from "@/api/lib/limits";
  *
  * `off` is the contract without experimental query-writing guidance, so the
  * gate can be evaluated against it. `v1` adds what a model cannot infer
- * from the schema: a hit is one passage holding every required word, so a
- * long phrasing finds less, not more; `limit` is shared evenly, so a weak
+ * from the schema: a full match holds every required word, so each extra
+ * word narrows the full matches; `limit` is shared evenly, so a weak
  * extra phrasing costs the good one slots; and the courts example names every
  * admitted country's apex courts from the court registry instead of one
  * country's.
  */
 
 /**
- * Required terms from which a phrasing that fills fewer slots than it was
- * given carries `many_required_terms`.
+ * Required terms from which a phrasing whose all-word hits fill fewer slots
+ * than it was given carries `many_required_terms`, in every mode: the
+ * warning says what happened, which is not query-writing guidance.
  */
 export const MANY_REQUIRED_TERMS_THRESHOLD = 6;
-
-/** Which modes raise `many_required_terms`; total, so a new mode decides. */
-export const CASE_LAW_SEARCH_GUIDANCE_RAISES_MANY_REQUIRED_TERMS = {
-  off: false,
-  v1: true,
-} as const satisfies Record<CaseLawSearchGuidanceMode, boolean>;
 
 export type SearchCaseLawTexts = {
   description: string;
@@ -55,7 +50,7 @@ const DESCRIPTION_HEAD =
   "names each hit's phrasings. `limit` is split evenly.";
 
 const DESCRIPTION_TAIL =
-  " Facets are opt-in, first phrasing, page one. total needs facets and one phrasing; not_counted means unknown, never zero. strict requires every word; otherwise function words are optional. Relevance pages may add some_terms hits after all_terms hits. searches[] reports queryUsed/warnings; a phrasing out of time shows time_budget and nextCursor reruns it. source_id uses facets.source values.";
+  " Facets are opt-in, first phrasing, page one. total needs facets and one phrasing; not_counted means unknown, never zero. strict needs every word, not necessarily adjacent (quote a phrase for that); otherwise function words are optional and some_terms hits may appear; terms names each hit's words. searches[] has queryUsed/warnings; on time_budget or partial_matches_budget nextCursor reruns it. source_id uses facets.source values.";
 
 const QUERIES_TAIL =
   "Their pages are merged and deduplicated within the page, so a reformulation costs no extra round trip; one phrasing is a valid call. Omit queries and pass provision to list every decision citing it, by authority or date, paged without a total.";
@@ -88,10 +83,10 @@ const SEARCH_CASE_LAW_TEXTS = {
     description: `${DESCRIPTION_HEAD} Put the most central phrasing first; three are usually enough.${DESCRIPTION_TAIL}${CONTINUATION_TAIL}`,
     queries:
       `Several phrasings of ONE question, at most ${String(LIMITS.caseLawSearchQueriesMax)}. ` +
-      "A full match needs every word of a phrasing except function words in " +
-      "one passage, so give each phrasing the two to four words that " +
-      "define the issue, and put an alternative wording in a phrasing of " +
-      "its own rather than lengthening one. Write a provision as `§ N` " +
+      "A full match needs every word of a phrasing except function words, " +
+      "so each extra word narrows the full matches: give each phrasing the " +
+      "words that define the issue, and put an alternative wording in a " +
+      "phrasing of its own rather than lengthening one. Write a provision as `§ N` " +
       `plus the act's name or abbreviation. ${QUERIES_TAIL}`,
     limit: `${LIMIT_OFF}, so a phrasing added takes slots from the others: put the most central first.`,
     courts: `Match any listed court. Apex courts by abbreviation: ${apexCourtExamples()}. ${COURTS_TAIL}`,

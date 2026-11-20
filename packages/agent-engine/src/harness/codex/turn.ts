@@ -15,6 +15,7 @@ import type {
 } from "../adapter";
 import {
   type HarnessApprovalOption,
+  harnessBoundary,
   harnessContextUsage,
   type HarnessContinuation,
   type HarnessEvent,
@@ -344,6 +345,8 @@ export class CodexTurnSession {
   /** Handlers for the process; messages before `begin` are held. */
   readonly handlers: AppServerHandlers = {
     notification: (method, params) => {
+      // Whatever the app-server says, pinned or not, shows it is alive.
+      this.lifecycle.heard();
       if (!isCodexNotificationMethod(method)) {
         return;
       }
@@ -604,7 +607,13 @@ export class CodexTurnSession {
     const { turn } = parsed;
     switch (turn.status) {
       case "completed":
-        this.emit({ type: "turn.completed", usage: this.usage });
+        // The thread holds every earlier continuation of this turn before
+        // this one, so the turn's end is this native turn's id.
+        this.emit({
+          type: "turn.completed",
+          usage: this.usage,
+          boundary: harnessBoundary(turn.id),
+        });
         return;
       case "interrupted":
         this.emit({ type: "turn.interrupted" });

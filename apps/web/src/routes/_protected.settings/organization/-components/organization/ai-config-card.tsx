@@ -1,3 +1,5 @@
+import type { ComponentProps } from "react";
+
 import { useQuery } from "@tanstack/react-query";
 import { useRouteContext } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
@@ -17,20 +19,33 @@ import { Button } from "@stll/ui/button";
 import {
   getProviderValues,
   hasUsableOpenAIKey,
+  roleModelsFromOverrideModels,
 } from "@/components/ai-config-role-models.logic";
 import { CopyControl } from "@/components/copy-control";
 import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { detached } from "@/lib/detached";
 import { providerSetupGuidance } from "@/lib/errors/provider-setup-guidance";
-import { aiConfigOptions } from "@/lib/organization/ai-config-queries";
+import {
+  aiAvailabilityOptions,
+  aiConfigOptions,
+} from "@/lib/organization/ai-config-queries";
 import type { OrganizationAIConfig } from "@/lib/organization/ai-config-queries";
 import { useCallerFeatureEnabled } from "@/lib/organization/feature-access/access";
 import { CALLER_FEATURE } from "@/lib/organization/feature-access/surfaces";
-import { SettingsPageHeader } from "@/routes/_protected.settings/-components/settings-page-header";
+import { queryView } from "@/lib/query-view.logic";
+import { useQueryViewError } from "@/lib/use-query-view";
 import { AIProviderRows } from "@/routes/_protected.settings/organization/-components/organization/ai-provider-rows";
 
 import { AIConfigAdvanced } from "./ai-config-advanced";
-import { hasCustomAIModels } from "./ai-config-form.logic";
+import {
+  AIConfigCardPending,
+  AIConfigFormLayout,
+} from "./ai-config-card.pending";
+import {
+  hasCustomAIModels,
+  resolveProviderKeyNeed,
+  sameProviderSet,
+} from "./ai-config-form.logic";
 import type { AIConfigFeedback } from "./ai-config-form.logic";
 import { AIProviderSettingsBoundary } from "./ai-provider-settings-boundary";
 import { AISettingsSectionFeedback } from "./ai-settings-section";
@@ -45,13 +60,12 @@ import { VerificationDecisionModelCard } from "./verification-decision-model-car
 import { WebSearchKeysCard } from "./web-search-keys-card";
 
 export const AIConfigCard = () => (
-  <AIProviderSettingsBoundary>
+  <AIProviderSettingsBoundary pending={<AIConfigCardPending />}>
     <AIConfigCardContent />
   </AIProviderSettingsBoundary>
 );
 
 const AIConfigCardContent = () => {
-  const t = useTranslations();
   const activeOrganizationId = useRouteContext({
     from: "/_protected",
     select: (ctx) => ctx.user.activeOrganizationId,
@@ -76,12 +90,7 @@ const AIConfigCardContent = () => {
   }
 
   if (!config) {
-    return (
-      <SettingsPageHeader
-        title={t("settings.organization.ai")}
-        description={t("settings.organization.aiDescription")}
-      />
-    );
+    return <AIConfigCardPending />;
   }
 
   return (
@@ -222,53 +231,126 @@ const VerificationDecisionModelSection = ({
     <VerificationDecisionModelCard setting={setting} />
   ) : null;
 
-type AuxiliaryCardsProps = {
-  form: AIConfigFormState;
-};
-
-const AuxiliaryCards = ({
-  form: { toggleSections, keySections, saving },
-}: AuxiliaryCardsProps) => {
-  const memoryEnabled = useCallerFeatureEnabled(CALLER_FEATURE.aiMemory);
-  return (
-    <>
-      <PromptCachingCard {...toggleSections.promptCaching} disabled={saving} />
-      <DocumentProcessingCard
-        {...toggleSections.documentProcessing}
-        disabled={saving}
-      />
-      {memoryEnabled && (
-        <MemoryExtractionCard
-          {...toggleSections.memoryExtraction}
-          disabled={saving}
-        />
-      )}
-      <div className="my-8 border-t" />
-      <DeepLKeyCard {...keySections.deepl} disabled={saving} />
-      <div className="my-8 border-t" />
-      <WebSearchKeysCard
-        search={{ ...keySections.search, disabled: saving }}
-        fetch={{ ...keySections.fetch, disabled: saving }}
-      />
-    </>
-  );
-};
+/** Shown only where the organization has AI memory. */
+const MemoryExtractionSection = (
+  props: ComponentProps<typeof MemoryExtractionCard>,
+) =>
+  useCallerFeatureEnabled(CALLER_FEATURE.aiMemory) ? (
+    <MemoryExtractionCard {...props} />
+  ) : null;
 
 export const AIConfigForm = ({
   readState,
   organizationId,
 }: AIConfigFormProps) => {
   const common = useTranslations("common");
-  const page = useTranslations("settings.organization");
   const form = useAIConfigForm({ readState, organizationId });
+  // A failed read keeps the providers' generic line; nothing else needs it.
+  const availabilityView = queryView(
+    useQuery(aiAvailabilityOptions({ organizationId })),
+  );
+  useQueryViewError(availabilityView, "AIConfigForm:availability");
   const settingsError = form.feedback.status === "error" ? form.feedback : null;
   const providerValues = getProviderValues(form.providers);
+  const { keySections, saving, toggleSections } = form;
+  const keyNeed = resolveProviderKeyNeed({
+    configured: form.storedProviders.length > 0,
+    availability:
+      availabilityView.type === "items" ? availabilityView.items : undefined,
+  });
+  // The effective model per mode, read only while the rows match what is
+  // saved: the defaults of an unsaved provider set describe a future state.
+  const roleSelections =
+    form.defaultModels !== null &&
+    sameProviderSet(form.providers, form.storedProviders)
+      ? roleModelsFromOverrideModels({
+          overrideModels: form.roleModels,
+          defaultModels: form.defaultModels,
+          providers: providerValues,
+        })
+      : null;
   return (
-    <div className="flex flex-col gap-4">
-      <SettingsPageHeader
-        title={page("ai")}
-        description={page("aiDescription")}
-        action={
+    <AIConfigFormLayout
+      deepl={<DeepLKeyCard {...keySections.deepl} disabled={saving} />}
+      details={
+        <>
+          {readState.status === "ready" &&
+            form.providers.length > 0 &&
+            form.storedProviders.length > 0 && (
+              <AIConfigAdvanced
+                disabled={form.saving}
+                providers={providerValues}
+                hasOpenAIKey={hasUsableOpenAIKey(form.providers)}
+                roleModels={form.roleModels}
+                defaultModels={form.defaultModels}
+                providerDefaultModels={form.providerDefaultModels}
+                defaultsFeedback={
+                  <QueryViewFeedback view={form.defaultsView} />
+                }
+                onRoleChange={form.changeRole}
+                onRoleReset={form.resetRole}
+                decisionState={form.decisionState}
+                storedDecision={form.storedDecision}
+                onDecisionChange={form.changeDecision}
+                decisionInstanceProvisioned={
+                  form.config?.decisionInstanceProvisioned ?? false
+                }
+                custom={hasCustomAIModels(form)}
+              />
+            )}
+          {settingsError && <SettingsError error={settingsError} />}
+          {form.feedback.status !== "error" && (
+            <AISettingsSectionFeedback feedback={form.feedback} />
+          )}
+          {readState.status === "ready" && (
+            <VerificationDecisionModelSection
+              setting={readState.config.verificationDecisionModel}
+            />
+          )}
+        </>
+      }
+      documentProcessing={
+        <DocumentProcessingCard
+          {...toggleSections.documentProcessing}
+          disabled={saving}
+        />
+      }
+      instructions={<OrganizationInstructionsCard />}
+      memoryExtraction={
+        <MemoryExtractionSection
+          {...toggleSections.memoryExtraction}
+          disabled={saving}
+        />
+      }
+      promptCaching={
+        <PromptCachingCard
+          {...toggleSections.promptCaching}
+          disabled={saving}
+        />
+      }
+      providers={
+        readState.status === "unreadable" ? (
+          <UnreadableRecovery form={form} onRetry={readState.onRetry} />
+        ) : (
+          <AIProviderRows
+            storedProviders={form.storedProviders}
+            providers={form.providers}
+            disabled={form.saving}
+            keyNeed={keyNeed}
+            roleSelections={roleSelections}
+            setupErrorCode={settingsError?.code}
+            onChange={form.changeProviders}
+            onRemove={form.removeProvider}
+          />
+        )
+      }
+      saveAction={
+        <div className="flex items-center gap-3">
+          {form.hasChangesToSave && !form.saving && (
+            <p className="text-muted-foreground text-xs" role="status">
+              {common("unsavedChanges")}
+            </p>
+          )}
           <Button
             size="sm"
             disabled={!form.canClickSave || form.saving}
@@ -279,54 +361,16 @@ export const AIConfigForm = ({
           >
             {common("saveChanges")}
           </Button>
-        }
-      />
-      {readState.status === "unreadable" ? (
-        <UnreadableRecovery form={form} onRetry={readState.onRetry} />
-      ) : (
-        <AIProviderRows
-          storedProviders={form.storedProviders}
-          providers={form.providers}
-          disabled={form.saving}
-          setupErrorCode={settingsError?.code}
-          onChange={form.changeProviders}
-          onRemove={form.removeProvider}
+        </div>
+      }
+      webSearch={
+        <WebSearchKeysCard
+          search={{ ...keySections.search, disabled: saving }}
+          fetch={{ ...keySections.fetch, disabled: saving }}
         />
-      )}
-      {readState.status === "ready" &&
-        form.providers.length > 0 &&
-        form.storedProviders.length > 0 && (
-          <AIConfigAdvanced
-            disabled={form.saving}
-            providers={providerValues}
-            hasOpenAIKey={hasUsableOpenAIKey(form.providers)}
-            roleModels={form.roleModels}
-            defaultModels={form.defaultModels}
-            providerDefaultModels={form.providerDefaultModels}
-            defaultsFeedback={<QueryViewFeedback view={form.defaultsView} />}
-            onRoleChange={form.changeRole}
-            onRoleReset={form.resetRole}
-            decisionState={form.decisionState}
-            storedDecision={form.storedDecision}
-            onDecisionChange={form.changeDecision}
-            decisionInstanceProvisioned={
-              form.config?.decisionInstanceProvisioned ?? false
-            }
-            custom={hasCustomAIModels(form)}
-          />
-        )}
-      {settingsError && <SettingsError error={settingsError} />}
-      {form.feedback.status !== "error" && (
-        <AISettingsSectionFeedback feedback={form.feedback} />
-      )}
-      {readState.status === "ready" && (
-        <VerificationDecisionModelSection
-          setting={readState.config.verificationDecisionModel}
-        />
-      )}
-      <OrganizationInstructionsCard />
-      <AuxiliaryCards form={form} />
+      }
+    >
       <LeaveGuard blocker={form.blocker} />
-    </div>
+    </AIConfigFormLayout>
   );
 };

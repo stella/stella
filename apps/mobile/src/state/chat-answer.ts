@@ -7,6 +7,12 @@
 // A coding agent's subagent is a row of its own holding the steps it took
 // (`@stll/api-contract/chat-local-run-steps`, which the web reads too).
 
+import * as v from "valibot";
+
+import {
+  codeStepResearch,
+  type CodeToolResearch,
+} from "@stll/api-contract/chat-code-step";
 import {
   isLocalRunInterruptedOutput,
   type LocalRunStepCall,
@@ -23,17 +29,22 @@ import {
 } from "@stll/api-contract/chat-local-run-steps";
 import { chatLocalRunParentCallId } from "@stll/api-contract/chat-local-run-tool";
 import {
+  CHAT_LOCAL_RUN_STEER_TOOL,
+  chatLocalRunSteerInputSchema,
+} from "@stll/api-contract/chat-run-target";
+import {
   chatToolLabel,
-  countProcessWork,
   groupProcessParts,
   isFailedToolOutput,
   isProcessPart,
   isVisibleProcessStep,
+  narratedIntentIndex,
+  summarizeProcessRun,
 } from "@stll/api-contract/chat-tool-activity";
 import type {
   ChatActivityPart,
   ChatToolLabel,
-  ProcessSummaryKind,
+  ProcessSummaryPiece,
 } from "@stll/api-contract/chat-tool-activity";
 
 /**
@@ -59,6 +70,11 @@ export type AnswerStep =
       readonly type: "tool";
       readonly label: ChatToolLabel;
       readonly status: StepStatus;
+      /**
+       * The legal research a code step does, which titles it in place of
+       * its tool, as on the web (`codeStepResearch`).
+       */
+      readonly research?: CodeToolResearch;
     }
   | {
       readonly type: "local";
@@ -85,12 +101,31 @@ export type AnswerBlock =
       readonly markdown: string;
     }
   | {
+      /**
+       * The plan the model wrote before its first step, shown as quiet
+       * prose above the steps rather than as the answer
+       * (`narratedIntentIndex`, as on the web).
+       */
+      readonly type: "intent";
+      readonly key: string;
+      readonly text: string;
+    }
+  | {
       readonly type: "steps";
       /** The run's place in the message, stable while it streams. */
       readonly key: string;
       readonly steps: readonly AnswerStep[];
-      /** What the run got done, by kind, for its settled summary. */
-      readonly work: ReadonlyMap<ProcessSummaryKind, number>;
+      /** What the run got done, in its settled summary's phrases. */
+      readonly summary: readonly ProcessSummaryPiece[];
+    }
+  | {
+      /**
+       * A message the person sent while a coding agent worked, which the
+       * agent took into its turn: their own words, where it took them.
+       */
+      readonly type: "steered";
+      readonly key: string;
+      readonly text: string;
     }
   | {
       /** A subagent a coding agent started, holding the steps it took. */
@@ -131,8 +166,18 @@ const toStep = (part: AnswerPart): AnswerStep => {
     input: part.input,
     output: part.output,
   });
+  const research = codeStepResearch({
+    input: part.input,
+    name,
+    output: part.output,
+  });
   return local === null
-    ? { type: "tool", label, status }
+    ? {
+        type: "tool",
+        label,
+        status,
+        ...(research === undefined ? {} : { research }),
+      }
     : {
         type: "local",
         label,
@@ -203,7 +248,21 @@ type Stretch =
       readonly type: "subagent";
       readonly id: string;
       readonly part: AnswerPart;
-    };
+    }
+  | { readonly type: "steered"; readonly key: string; readonly text: string };
+
+/**
+ * The words of a message the person steered a running turn with, stored as
+ * the API's own `user_message` call; `null` for any other part, and for one
+ * whose input is not readable yet (it streams in before the call ends).
+ */
+const steeredText = (part: AnswerPart): string | null => {
+  if (part.type !== "tool-call" || part.name !== CHAT_LOCAL_RUN_STEER_TOOL) {
+    return null;
+  }
+  const input = v.safeParse(chatLocalRunSteerInputSchema, part.input);
+  return input.success ? input.output.text : null;
+};
 
 /** A tool call the grouping can name: one with an id. */
 type IdentifiedCall = { readonly id: string; readonly part: AnswerPart };
@@ -236,6 +295,10 @@ export const answerBlocks = (parts: readonly AnswerPart[]): AnswerBlock[] => {
       part.type !== "text" ||
       (typeof part.content === "string" && part.content.trim() !== ""),
   );
+  // The plan the model wrote joins the run it introduces, so the run reads
+  // it above its steps, as on the web.
+  const intentIndex = narratedIntentIndex(drawn);
+  const intent = intentIndex === null ? undefined : drawn[intentIndex];
   const calls = identifiedCalls(drawn.filter(isProcessPart));
   const partOf = new Map(calls.map(({ id, part }) => [id, part]));
   const groups = localRunSubagentGroups(
@@ -279,7 +342,10 @@ export const answerBlocks = (parts: readonly AnswerPart[]): AnswerBlock[] => {
         .map(({ part }) => toStep(part)),
     };
   };
-  for (const group of groupProcessParts(drawn, isProcessPart)) {
+  for (const group of groupProcessParts(
+    drawn,
+    (part) => part === intent || isProcessPart(part),
+  )) {
     if (group.kind === "standard") {
       const { item } = group;
       const text =
@@ -302,7 +368,28 @@ export const answerBlocks = (parts: readonly AnswerPart[]): AnswerBlock[] => {
     }
     // The run's parts between its subagents, each stretch a run of its own.
     const stretches: Stretch[] = [];
+    if (intent !== undefined && group.items.includes(intent)) {
+      blocks.push({
+        type: "intent",
+        key: String(intentIndex),
+        text: typeof intent.content === "string" ? intent.content.trim() : "",
+      });
+    }
     for (const [offset, part] of group.items.entries()) {
+      if (part === intent) {
+        continue;
+      }
+      // A steered message splits the run: the steps before it, its words,
+      // then the steps after.
+      const steered = steeredText(part);
+      if (steered !== null) {
+        stretches.push({
+          type: "steered",
+          key: `steered:${String(group.startIndex + offset)}`,
+          text: steered,
+        });
+        continue;
+      }
       const id = typeof part.id === "string" && isStep(part) ? part.id : null;
       if (id !== null && groups.rowIn.has(id)) {
         continue;
@@ -323,13 +410,19 @@ export const answerBlocks = (parts: readonly AnswerPart[]): AnswerBlock[] => {
         blocks.push(subagentBlock(stretch.id, stretch.part));
         continue;
       }
+      if (stretch.type === "steered") {
+        blocks.push(stretch);
+        continue;
+      }
       const steps = stretch.items.filter(isStep).map(toStep);
       if (steps.length > 0) {
         blocks.push({
           type: "steps",
           key: String(group.startIndex + stretch.start),
           steps,
-          work: countProcessWork(stretch.items),
+          summary: summarizeProcessRun(stretch.items, {
+            stepCount: steps.length,
+          }),
         });
       }
     }

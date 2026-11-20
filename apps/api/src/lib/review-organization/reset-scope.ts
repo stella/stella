@@ -71,6 +71,8 @@ export const REVIEW_RESET_KEPT_TABLES = {
     "Storage tombstones: they must outlive the rows they erase.",
   entity_deletion_cleanup_requests:
     "Storage tombstones: they must outlive the rows they erase.",
+  agent_skill_original_cleanup_requests:
+    "Storage tombstones: they must outlive the rows they erase.",
   template_deletion_cleanup_requests:
     "Storage tombstones: they must outlive the rows they erase.",
   mcp_web_handoff: "Short-lived OAuth state; never reviewer content.",
@@ -118,8 +120,11 @@ export const REVIEW_RESET_CLEARED_TABLES = [
   "billing_codes",
   "case_law_research_answers",
   "case_law_research_columns",
+  "chat_command_receipts",
   "chat_run_log_entries",
   "chat_run_logs",
+  "chat_queue_holds",
+  "chat_queued_messages",
   "chat_secrets",
   "chat_threads",
   "chat_browser_site_grants",
@@ -239,6 +244,15 @@ export const REVIEW_RESET_SHARED_STATEMENTS: readonly (readonly (typeof REVIEW_R
     // for tools, and usage limit reminders, all keyed on the same member and
     // organization.
     ["chat_browser_site_grants", "chat_limit_reminders", "chat_tool_grants"],
+    // A chat's command receipts, run logs and queue: rows of the
+    // organization's chats that the owner removes directly, in one statement.
+    [
+      "chat_command_receipts",
+      "chat_run_log_entries",
+      "chat_run_logs",
+      "chat_queue_holds",
+      "chat_queued_messages",
+    ],
     // Independent search history deletion barriers under one owner policy.
     ["search_history_country_clears", "search_history_tombstones"],
   ];

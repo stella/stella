@@ -25,7 +25,7 @@ import {
 } from "@/api/lib/usage/configured-access";
 import type { OrganizationAccessSnapshot } from "@/api/lib/usage/organization-access-snapshot";
 
-export type FreeTierPolicy = { serviceActionsPerPeriod: number };
+type FreeTierPolicy = { serviceActionsPerPeriod: number };
 
 /**
  * The deployment's free floor. `on` without a policy is a fault (the flag is

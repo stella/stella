@@ -4,12 +4,13 @@ import { expect, test } from "bun:test";
 import { zstdCompress } from "@/api/lib/compression";
 import { StoredCorpusValidationError } from "@/api/lib/errors/tagged-errors";
 import { prepareCorpusAst } from "@/api/lib/legal-search/corpus-ast";
-import { projectionAstOfResult } from "@/api/lib/legal-search/corpus-index-projection-executor";
+import { projectionAstOfRead } from "@/api/lib/legal-search/corpus-index-projection-revision-block";
 import {
   parsePersistedCorpusAst,
   readCorpusAst,
   readCorpusForRecovery,
   readCorpusPayloadOrFallback,
+  readSizedCorpusAst,
 } from "@/api/lib/legal-search/corpus-storage";
 
 const malformed = { version: 1, blocks: [{ type: "paragraph" }] };
@@ -53,7 +54,11 @@ test("a classified store failure reaches the readable row before recovery", asyn
 test("typed recovery preserves the main validation contract and indexing requires text", async () => {
   const read = await readCorpusForRecovery({
     documentId: "synthetic-decision",
-    read: async () => parsePersistedCorpusAst(malformed),
+    read: async () =>
+      await readSizedCorpusAst("legal-corpus/synthetic/ast.zst", {
+        readObject: async () => zstdCompress(JSON.stringify(malformed)),
+        readTombstones: async () => new Set<string>(),
+      }),
   });
   expect(read.isErr()).toBe(true);
   if (Result.isOk(read)) {
@@ -63,18 +68,23 @@ test("typed recovery preserves the main validation contract and indexing require
   expect(read.error.code).toBe("stored_corpus_invalid");
   expect(read.error.paths.length).toBeGreaterThan(0);
   expect(JSON.stringify(read.error)).not.toContain("paragraph");
-  const withoutText = projectionAstOfResult(read, " \n");
+  const withoutText = projectionAstOfRead(read, " \n");
   expect(withoutText.isErr()).toBe(true);
   if (Result.isOk(withoutText)) {
     expect.unreachable("Invalid AST without text remains an error");
   }
   expect(withoutText.error).toBeInstanceOf(StoredCorpusValidationError);
-  const withText = projectionAstOfResult(read, "Decision text.");
+  const withText = projectionAstOfRead(read, "Decision text.");
   expect(withText.isOk()).toBe(true);
   if (withText.isErr()) {
     expect.unreachable("Readable text permits AST omission");
   }
-  expect(withText.value).toBeNull();
+  // The text alone is indexed, and the refusal is a typed outcome the batch
+  // counts rather than a silent omission.
+  expect(withText.value).toEqual({
+    ast: null,
+    storedAst: { type: "unreadable", reason: "stored_ast_invalid" },
+  });
 });
 
 test("a stored non-JSON AST has the same path-only classified failure", async () => {

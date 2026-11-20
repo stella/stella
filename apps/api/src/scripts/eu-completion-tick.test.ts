@@ -1,5 +1,8 @@
 import { describe, expect, test } from "bun:test";
+import { fileURLToPath } from "node:url";
 import { ValiError } from "valibot";
+
+import { createTestState } from "@stll/test-state";
 
 import { readEuCompletionTickEnvironment } from "@/api/env-eu-completion";
 import type { EuCompletionReport } from "@/api/handlers/case-law/ingestion/eu-completion";
@@ -8,6 +11,8 @@ import {
   euCompletionQueueMetricRecord,
   runEuCompletionTickScript,
 } from "@/api/scripts/eu-completion-tick";
+
+const testState = createTestState({ file: import.meta.path, config: {} });
 
 const environment = {
   CASE_LAW_EU_COMPLETION_ENABLED: true,
@@ -35,9 +40,9 @@ describe("scheduled EU completion", () => {
       cmd: [
         process.execPath,
         "--no-env-file",
-        new URL("eu-completion-tick.ts", import.meta.url).pathname,
+        fileURLToPath(new URL("eu-completion-tick.ts", import.meta.url)),
       ],
-      cwd: new URL("../..", import.meta.url).pathname,
+      cwd: fileURLToPath(new URL("../..", import.meta.url)),
       env: { PATH: process.env["PATH"], NODE_ENV: "test" },
       stdout: "pipe",
       stderr: "pipe",
@@ -57,7 +62,9 @@ describe("scheduled EU completion", () => {
   });
 
   test("production cannot obtain a fixture runner before runtime initialization", async () => {
-    const entry = new URL("eu-completion-tick.ts", import.meta.url).pathname;
+    const entry = fileURLToPath(
+      new URL("eu-completion-tick.ts", import.meta.url),
+    );
     const child = Bun.spawn({
       cmd: [
         process.execPath,
@@ -65,7 +72,7 @@ describe("scheduled EU completion", () => {
         "--eval",
         `const { getEuCompletionFixtureRunner } = await import(${JSON.stringify(entry)}); getEuCompletionFixtureRunner();`,
       ],
-      cwd: new URL("../..", import.meta.url).pathname,
+      cwd: fileURLToPath(new URL("../..", import.meta.url)),
       env: { PATH: process.env["PATH"], NODE_ENV: "production" },
       stdout: "pipe",
       stderr: "pipe",
@@ -219,59 +226,23 @@ describe("scheduled EU completion", () => {
   });
 
   test("environment defaults are dormant, reads fresh switches, and rejects invalid row budgets", () => {
-    const previous = {
-      CASE_LAW_EU_COMPLETION_ENABLED:
-        process.env["CASE_LAW_EU_COMPLETION_ENABLED"],
-      CASE_LAW_EU_COMPLETION_KILL_SWITCH:
-        process.env["CASE_LAW_EU_COMPLETION_KILL_SWITCH"],
-      CASE_LAW_EU_COMPLETION_MODE: process.env["CASE_LAW_EU_COMPLETION_MODE"],
-      CASE_LAW_EU_COMPLETION_MAX_ROWS:
-        process.env["CASE_LAW_EU_COMPLETION_MAX_ROWS"],
-    };
-    try {
-      delete process.env["CASE_LAW_EU_COMPLETION_ENABLED"];
-      delete process.env["CASE_LAW_EU_COMPLETION_KILL_SWITCH"];
-      delete process.env["CASE_LAW_EU_COMPLETION_MODE"];
-      delete process.env["CASE_LAW_EU_COMPLETION_MAX_ROWS"];
-      expect(readEuCompletionTickEnvironment()).toEqual({
-        ...environment,
-        CASE_LAW_EU_COMPLETION_ENABLED: false,
-      });
-      process.env["CASE_LAW_EU_COMPLETION_ENABLED"] = "true";
-      process.env["CASE_LAW_EU_COMPLETION_KILL_SWITCH"] = "true";
-      expect(readEuCompletionTickEnvironment()).toMatchObject({
-        CASE_LAW_EU_COMPLETION_ENABLED: true,
-        CASE_LAW_EU_COMPLETION_KILL_SWITCH: true,
-      });
-      for (const value of ["0", "101", "1.5", "NaN"]) {
-        process.env["CASE_LAW_EU_COMPLETION_MAX_ROWS"] = value;
-        expect(readEuCompletionTickEnvironment).toThrow(ValiError);
-      }
-    } finally {
-      if (previous.CASE_LAW_EU_COMPLETION_ENABLED === undefined) {
-        delete process.env["CASE_LAW_EU_COMPLETION_ENABLED"];
-      } else {
-        process.env["CASE_LAW_EU_COMPLETION_ENABLED"] =
-          previous.CASE_LAW_EU_COMPLETION_ENABLED;
-      }
-      if (previous.CASE_LAW_EU_COMPLETION_KILL_SWITCH === undefined) {
-        delete process.env["CASE_LAW_EU_COMPLETION_KILL_SWITCH"];
-      } else {
-        process.env["CASE_LAW_EU_COMPLETION_KILL_SWITCH"] =
-          previous.CASE_LAW_EU_COMPLETION_KILL_SWITCH;
-      }
-      if (previous.CASE_LAW_EU_COMPLETION_MODE === undefined) {
-        delete process.env["CASE_LAW_EU_COMPLETION_MODE"];
-      } else {
-        process.env["CASE_LAW_EU_COMPLETION_MODE"] =
-          previous.CASE_LAW_EU_COMPLETION_MODE;
-      }
-      if (previous.CASE_LAW_EU_COMPLETION_MAX_ROWS === undefined) {
-        delete process.env["CASE_LAW_EU_COMPLETION_MAX_ROWS"];
-      } else {
-        process.env["CASE_LAW_EU_COMPLETION_MAX_ROWS"] =
-          previous.CASE_LAW_EU_COMPLETION_MAX_ROWS;
-      }
+    testState.deleteEnv("CASE_LAW_EU_COMPLETION_ENABLED");
+    testState.deleteEnv("CASE_LAW_EU_COMPLETION_KILL_SWITCH");
+    testState.deleteEnv("CASE_LAW_EU_COMPLETION_MODE");
+    testState.deleteEnv("CASE_LAW_EU_COMPLETION_MAX_ROWS");
+    expect(readEuCompletionTickEnvironment()).toEqual({
+      ...environment,
+      CASE_LAW_EU_COMPLETION_ENABLED: false,
+    });
+    testState.setEnv("CASE_LAW_EU_COMPLETION_ENABLED", "true");
+    testState.setEnv("CASE_LAW_EU_COMPLETION_KILL_SWITCH", "true");
+    expect(readEuCompletionTickEnvironment()).toMatchObject({
+      CASE_LAW_EU_COMPLETION_ENABLED: true,
+      CASE_LAW_EU_COMPLETION_KILL_SWITCH: true,
+    });
+    for (const value of ["0", "101", "1.5", "NaN"]) {
+      testState.setEnv("CASE_LAW_EU_COMPLETION_MAX_ROWS", value);
+      expect(readEuCompletionTickEnvironment).toThrow(ValiError);
     }
   });
 });

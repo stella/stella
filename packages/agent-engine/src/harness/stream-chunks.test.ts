@@ -17,6 +17,7 @@ import { AI_FAILURE_CODES } from "@stll/api-contract/ai-errors";
 import {
   CHAT_LOCAL_RUN_CONTEXT_METADATA_KEY,
   CHAT_LOCAL_RUN_LIMIT_METADATA_KEY,
+  CHAT_LOCAL_RUN_MODEL_METADATA_KEY,
   chatLocalRunContextSchema,
   chatLocalRunLimitSchema,
 } from "@stll/api-contract/chat-run-target";
@@ -248,6 +249,7 @@ describe("local harness chunks", () => {
           reasoningOutputTokens: 5,
           context: null,
         },
+        boundary: null,
       },
     ];
 
@@ -305,7 +307,7 @@ describe("local harness chunks", () => {
         },
       },
       { type: "text.completed", messageId: "m-2", text: "Left it in place." },
-      { type: "turn.completed", usage: null },
+      { type: "turn.completed", usage: null, boundary: null },
     ];
     const chunks = await localChunks(events);
     const pauseIndex = chunks.findIndex(
@@ -421,7 +423,7 @@ describe("local harness chunks", () => {
           ],
         },
       },
-      { type: "turn.completed", usage: null },
+      { type: "turn.completed", usage: null, boundary: null },
     ]);
     expect(
       chunks.some(
@@ -552,6 +554,10 @@ describe("local harness chunks", () => {
         type: "retry_stalled",
         message: "The harness kept retrying the provider without progress.",
       },
+      request_unanswered: {
+        type: "request_unanswered",
+        message: "The model provider did not answer for too long.",
+      },
       tools_unavailable: {
         type: "tools_unavailable",
         message: "The harness could not connect to the stella MCP server.",
@@ -638,6 +644,7 @@ describe("local harness chunks", () => {
               reasoningOutputTokens: 0,
               context,
             },
+            boundary: null,
           },
         ])
       ).findLast((chunk) => chunk.type === EventType.RUN_FINISHED);
@@ -776,7 +783,11 @@ describe("chunk stream invariants", () => {
       .map((model) => ({ type: "model.rerouted" as const, model })),
   );
   const terminal: fc.Arbitrary<HarnessEvent | null> = fc.oneof(
-    fc.constant<HarnessEvent>({ type: "turn.completed", usage: null }),
+    fc.constant<HarnessEvent>({
+      type: "turn.completed",
+      usage: null,
+      boundary: null,
+    }),
     fc.constant<HarnessEvent>({ type: "turn.interrupted" }),
     fc.constant<HarnessEvent>({
       type: "turn.failed",
@@ -826,6 +837,12 @@ describe("chunk stream invariants", () => {
             ) {
               expect(named.success).toBe(true);
               terminalNamed += 1;
+            }
+            // A finish, a pause's included, tells the answer both models.
+            if (chunk.type === EventType.RUN_FINISHED) {
+              expect(
+                chunk.metadata?.[CHAT_LOCAL_RUN_MODEL_METADATA_KEY],
+              ).toEqual({ requested: MODEL, ran: ranOn });
             }
           }
           expect(terminalNamed).toBeGreaterThan(0);

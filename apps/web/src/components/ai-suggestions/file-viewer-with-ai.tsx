@@ -1,4 +1,4 @@
-import { lazy, useCallback, useState } from "react";
+import { lazy, useState } from "react";
 
 import { cn } from "@stll/ui/utils";
 
@@ -173,7 +173,7 @@ export const FileViewerWithAI = ({
 };
 
 const DocxHorizontalScrollbar = () => {
-  const trackRef = useCallback((track: HTMLDivElement | null) => {
+  const trackRef = (track: HTMLDivElement | null) => {
     if (!track?.parentElement) {
       return () => undefined;
     }
@@ -338,13 +338,13 @@ const DocxHorizontalScrollbar = () => {
       pointerCleanup();
       track.removeEventListener("pointerdown", handlePointerDown);
     };
-  }, []);
+  };
 
   return (
     <div
       ref={trackRef}
       aria-hidden="true"
-      className="absolute inset-x-1 bottom-1 z-[100] h-1.5 cursor-pointer"
+      className="absolute inset-x-1 bottom-[calc(var(--document-panel-bottom-inset,0px)+0.25rem)] z-[100] h-1.5 cursor-pointer"
       dir="ltr"
       hidden
     >

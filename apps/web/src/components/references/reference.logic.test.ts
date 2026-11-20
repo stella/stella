@@ -8,6 +8,7 @@ import {
 import type { ChatReference } from "@stll/api-contract/chat-reference-href";
 
 import {
+  decisionReferenceHref,
   entityReferenceHref,
   mentionAttrsToHref,
   mentionTagAttrs,
@@ -162,6 +163,7 @@ describe("one reference, every source", () => {
         category: "decision",
       }),
     ).toBe("#stella-decision=dec-1");
+    expect(decisionReferenceHref("dec-1")).toBe("#stella-decision=dec-1");
     expect(
       entityReferenceHref({ entityId: TASK_ID, matterId: MATTER_ID }),
     ).toBe(`#stella-entity=${MATTER_ID}:${TASK_ID}`);

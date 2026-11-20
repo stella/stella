@@ -19,6 +19,10 @@ import { redactCaseLawDecision } from "@/api/handlers/case-law/erasure";
 import { withdrawCaseLawDecisionDocument } from "@/api/handlers/case-law/withdraw-document";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
 import { openGatedTestDatabase } from "@/api/tests/gated-test-database";
+import {
+  guardPostgresSuiteSeeding,
+  insertProjectedFixtureDecisions,
+} from "@/api/tests/helpers/corpus-projection-seeding-guard-postgres";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 const databaseUrl = process.env["DATABASE_URL"];
@@ -32,7 +36,11 @@ if (!databaseUrl || !runPostgresTests) {
   });
 } else {
   describe("case-law withdrawal and redaction (postgres)", () => {
-    const { db, cleanUp } = openGatedTestDatabase(databaseUrl);
+    const database = openGatedTestDatabase(databaseUrl);
+    // A generation of the suite's own, so the writers below are held to
+    // the seeding rule.
+    guardPostgresSuiteSeeding(database, { generations: ["case_law_v10"] });
+    const { db, cleanUp } = database;
     const sourceId = createSafeId<"caseLawSource">();
     const decisionIds: SafeId<"caseLawDecision">[] = [];
     const scopedDb = asTestRaw<ScopedDb>(
@@ -63,17 +71,19 @@ if (!databaseUrl || !runPostgresTests) {
       }
       const id = createSafeId<"caseLawDecision">();
       decisionIds.push(id);
-      await db.insert(caseLawDecisions).values({
-        id,
-        sourceId,
-        sourceDocumentId: `withdrawal-fence-${id}`,
-        country: "POL",
-        court: "Withdrawal fence fixture court",
-        language: "pl",
-        caseNumber: `withdrawal-fence-${id}`,
-        fulltext: "stored payload",
-        contentHash: "stored-payload-hash",
-      });
+      await insertProjectedFixtureDecisions(db, [
+        {
+          id,
+          sourceId,
+          sourceDocumentId: `withdrawal-fence-${id}`,
+          country: "POL",
+          court: "Withdrawal fence fixture court",
+          language: "pl",
+          caseNumber: `withdrawal-fence-${id}`,
+          fulltext: "stored payload",
+          contentHash: "stored-payload-hash",
+        },
+      ]);
       return id;
     };
 

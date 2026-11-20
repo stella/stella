@@ -80,8 +80,8 @@
         "src/lib/ocr-searchable-pdf-worker.ts!",
         // Spike renderer process and its memory watchdog thread, started by
         // path from the session.
-        "src/handlers/invoices/pdf/typst/worker.ts",
-        "src/handlers/invoices/pdf/typst/watchdog.ts",
+        "src/lib/billing/invoice-pdf/typst/worker.ts",
+        "src/lib/billing/invoice-pdf/typst/watchdog.ts",
         "scripts/*.ts",
         // Locale content is consumed only by development seed entrypoints.
         "scripts/seed-content/*.ts",
@@ -98,7 +98,9 @@
         // Passed to Bun by the API test command builder.
         "src/tests/publisher-gate-preload.ts",
         "src/**/*.test.ts",
-        "scripts/**/*.test.ts"
+        "src/**/*.test.tsx",
+        "scripts/**/*.test.ts",
+        "evals/**/*.test.ts"
       ]
     },
     "apps/web": {
@@ -165,6 +167,9 @@
     "apps/legal-atlas-runner": {
       "entry": ["src/**/*.test.ts"],
       "ignoreDependencies": ["@stll/api"]
+    },
+    "packages/browser-page": {
+      "entry": ["src/**/*.test.ts"]
     },
     "packages/clipboard": {
       "entry": ["src/**/*.test.ts"]
@@ -264,7 +269,7 @@
       "entry": ["*.json", "**/*.test.ts"]
     },
     "packages/transactional": {
-      "entry": ["emails/*.tsx", "render/*.test.tsx"]
+      "entry": ["emails/*.tsx", "map/*.test.ts", "render/*.test.tsx"]
     },
     "packages/ui": {
       // Browser fixture CSS imports Tailwind; the Vite plugin consumes its peer.
@@ -284,7 +289,8 @@
         "src/components/*.tsx",
         "src/hooks/*.ts",
         "src/inspector/*.{ts,tsx}",
-        "src/lib/*.ts"
+        "src/lib/*.ts",
+        "scripts/*.ts"
       ]
     },
     "packages/user-agent": {

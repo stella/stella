@@ -1256,6 +1256,7 @@ if (!databaseUrl || !runPostgresTests) {
             accessTokenEncrypted: Buffer.from("fixture"),
             accessTokenIv: Buffer.from("fixture"),
             status: "connected" as const,
+            scope: "Files.Read.All Sites.Read.All",
           })),
         );
         await db.insert(sharepointOAuthState).values({
@@ -1384,7 +1385,7 @@ if (!databaseUrl || !runPostgresTests) {
             expect.objectContaining({
               changes: { status: { old: "awaiting_review", new: "cancelled" } },
             }),
-            ...persistedSteps.map((step) =>
+            ...persistedSteps.map((step): unknown =>
               expect.objectContaining({
                 changes: {
                   stepStatus: {

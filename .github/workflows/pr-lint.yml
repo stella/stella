@@ -5,11 +5,12 @@ defaults:
     shell: bash
 
 on:
-  pull_request_target:
+  pull_request:
     # Run when a PR opens, when its title or body is edited, and when a
-    # maintainer requests a rerun with "run-pr-lint". This metadata-only
-    # workflow reads the title and body and never checks out or executes PR
-    # code, so it is safe to run for forks without approval.
+    # maintainer requests a rerun with "run-pr-lint". The checks read the
+    # title and body only. Fork pull requests get a read-only token, so the
+    # reusable workflow's labelling and assignment steps, which never gate,
+    # apply to same-repository pull requests only.
     types: [opened, edited, labeled]
 
 concurrency:
@@ -21,14 +22,10 @@ concurrency:
     }}
   cancel-in-progress: true
 
-permissions:
-  contents: read
-  issues: read
-  pull-requests: write
+permissions: {}
 
 jobs:
   pr-body-log-lines:
-    permissions: {}
     if: >-
       github.event.action == 'opened'
       || github.event.action == 'edited'
@@ -36,7 +33,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 2
     steps:
-      - name: Checkout trusted workflow revision
+      - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
@@ -53,11 +50,16 @@ jobs:
 
   pr-lint:
     if: >-
-      github.event.pull_request.user.login != 'dependabot[bot]'
+      github.actor != 'dependabot[bot]'
+      && github.event.pull_request.user.login != 'dependabot[bot]'
       && (github.event.action == 'opened'
           || github.event.action == 'edited'
           || github.event.label.name == 'run-pr-lint')
+    permissions:
+      contents: read
+      issues: read
+      pull-requests: write
     # Reusable workflow only consumes the auto-provided GITHUB_TOKEN.
     # Do not switch to `secrets: inherit` — that widens the blast radius
     # if the reusable ever starts touching named secrets.
-    uses: stella/.github/.github/workflows/pr-lint.yml@2ba6dc5822df5213c500aa6edb7b6c4bdec56804
+    uses: stella/.github/.github/workflows/pr-lint.yml@2664e46f02aea7164ba71bcdd485a686166993a4

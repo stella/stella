@@ -1,9 +1,17 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
+import type {
+  InferDataFromTag,
+  QueryClient as QueryClientInstance,
+} from "@tanstack/react-query";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
+import { DATA_BOX_DOCUMENT_KINDS } from "@stll/api-contract/data-box";
+import type { DataBoxEnvelope } from "@stll/api-contract/data-box";
 import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
+import { reactCompilerBunPlugin } from "@stll/scripts/src/react-compiler-bun-plugin";
 
 import type { DocxBrowserEditorActions } from "@/components/docx/use-docx-browser-editor-actions";
+import arabicMessages from "@/i18n/langs/ar.json";
 import { toChatThreadId } from "@/lib/chat-thread-ref";
 import { toSafeId } from "@/lib/safe-id";
 
@@ -12,9 +20,35 @@ GlobalRegistrator.register({
 });
 
 const originalFetch = globalThis.fetch;
+const cadesPdfRequests: (RequestCredentials | undefined)[] = [];
 globalThis.fetch = Object.assign(
-  async (input: string | URL | Request) => {
+  async (input: string | URL | Request, init?: RequestInit) => {
     const url = input instanceof Request ? input.url : String(input);
+    if (url.includes("/cades/field-cades/content")) {
+      cadesPdfRequests.push(
+        init?.credentials ??
+          (input instanceof Request ? input.credentials : undefined),
+      );
+      return new Response("%PDF-1.7", {
+        headers: { "content-type": "application/pdf" },
+      });
+    }
+    if (url.includes("/structured-document/field-structured")) {
+      return Response.json({ text: "İlk sayfa\n法院文件", truncated: true });
+    }
+    if (
+      url.includes("/structured-document/field-preview-unavailable") ||
+      url.includes("/asic/field-asic-unsupported") ||
+      url.includes("/cades/field-cades-unsupported")
+    ) {
+      return Response.json(
+        { message: "Preview unavailable", code: "preview_unavailable" },
+        { status: 422 },
+      );
+    }
+    if (url.includes("/chat/threads/") && url.includes("/messages")) {
+      return Response.json({ message: "Thread not found" }, { status: 404 });
+    }
     if (url.includes("/chat/")) {
       return Response.json({ messages: [] });
     }
@@ -35,6 +69,11 @@ Object.assign(globalThis, {
   },
 });
 
+// The first plugin whose filter matches a module loads it, and the test
+// preload has already registered the React Compiler for every source module.
+// Clearing it lets the engine stubs register first; the compiler goes back
+// after them, so the panel still renders as it ships.
+Bun.plugin.clearAll();
 Bun.plugin({
   name: "file-tab-rendering-engine-test-loader",
   setup(build) {
@@ -69,12 +108,15 @@ Bun.plugin({
     }));
   },
 });
+Bun.plugin(reactCompilerBunPlugin);
 
 const { act, cleanup, fireEvent, render, waitFor } =
   await import("@testing-library/react");
 const React = await import("react");
 const { QueryClient, QueryClientProvider } =
   await import("@tanstack/react-query");
+const { createMemoryHistory, createRootRoute, createRouter, RouterProvider } =
+  await import("@tanstack/react-router");
 const { IntlProvider } = await import("use-intl");
 const { FormattingProvider } = await import("@/i18n/formatting-context");
 const { DocxEditorHost } = await import("@/components/docx/docx-editor-host");
@@ -83,7 +125,12 @@ const { AuthenticatedUserProvider } =
 const { useDocxEditorHostStore } =
   await import("@/components/docx/docx-editor-host-store");
 const { FileTabPanel } = await import("./file-tab-panel");
-const { fileOptions } = await import("@/lib/files/queries");
+const {
+  asicPreviewOptions,
+  cadesPreviewOptions,
+  dataBoxPreviewOptions,
+  fileOptions,
+} = await import("@/lib/files/queries");
 const { fileChatThreadOptions } = await import("@/features/chat/queries");
 const { mcpConnectorsOptions } = await import("@/lib/knowledge/queries");
 const { entityOptions } = await import("@/lib/workspaces/queries/entities");
@@ -153,6 +200,7 @@ afterEach(async () => {
   });
   docxEngineRenderCount = 0;
   pdfEngineRenderCount = 0;
+  cadesPdfRequests.length = 0;
 });
 
 afterAll(async () => {
@@ -215,10 +263,348 @@ test("PDF keeps the host registry and PDF engine inside the render budget", asyn
   expect(pdfEngineRenderCount - rendersAfterMount).toBeLessThanOrEqual(1);
 });
 
-function renderFileTab(tab: typeof docxTab | typeof pdfTab) {
+type DataBoxPreviewData = InferDataFromTag<
+  unknown,
+  ReturnType<typeof dataBoxPreviewOptions>["queryKey"]
+>;
+
+test.each(DATA_BOX_DOCUMENT_KINDS)(
+  "opens a ZFO %s in the inspector",
+  async (kind) => {
+    const tab = {
+      ...pdfTab,
+      id: toSafeId<"field">("field-data-box"),
+      label: "Data export",
+      fileName: "export.ZFO",
+      mimeType: "application/octet-stream",
+    };
+    const party = {
+      boxId: "abc2def",
+      name: "Sender office",
+      address: null,
+      referenceNumber: null,
+      fileMark: null,
+    };
+    const envelope = {
+      messageId: "1234567890",
+      messageType: "V",
+      sender: party,
+      recipient: { ...party, boxId: "xyz9876", name: "District court" },
+      toHands: null,
+      personalDelivery: null,
+      substituteDelivery: null,
+      deliveredAt: "2026-03-01T08:00:00Z",
+      acceptedAt: "2026-03-01T10:00:00Z",
+      status: "accepted_by_login",
+      seal: {
+        status: "unverified",
+        signerName: null,
+        issuerName: null,
+        serialNumber: null,
+        signedAt: null,
+      },
+      directionBasis: "unknown",
+    } satisfies DataBoxEnvelope;
+    const mounted = renderFileTab(tab, (client) => {
+      const queryKey = dataBoxPreviewOptions({
+        fieldId: tab.id,
+        workspaceId: tab.workspaceId,
+      }).queryKey;
+      const common = {
+        annotation: "Court notice",
+        envelope,
+        text: "Court notice",
+      };
+      // A literal passed straight to setQueryData meets its NoInfer'd data
+      // union and fails to discriminate; a typed value does not.
+      const preview: DataBoxPreviewData =
+        kind === "message"
+          ? {
+              ...common,
+              kind,
+              files: [
+                { fileName: "Order.pdf", entityId: ENTITY_ID },
+                { fileName: "Exhibit.pdf", entityId: null },
+              ],
+            }
+          : {
+              ...common,
+              kind,
+              events: [
+                {
+                  occurredAt: envelope.acceptedAt,
+                  description: "Message accepted",
+                },
+              ],
+            };
+      client.setQueryData(queryKey, preview);
+    });
+    expect(await mounted.findByText("Court notice")).toBeTruthy();
+    expect(mounted.getByText("District court")).toBeTruthy();
+    expect(
+      mounted.getByRole("button", { name: "Download original" }),
+    ).toBeTruthy();
+    if (kind === "message") {
+      expect(mounted.getByRole("button", { name: "Order.pdf" })).toBeTruthy();
+      expect(mounted.getByText("Exhibit.pdf")).toBeTruthy();
+      expect(
+        mounted.getByText(
+          bundledEnglishMessages.correspondence.dataBox.unlinkedFiles,
+        ),
+      ).toBeTruthy();
+    } else {
+      expect(
+        mounted.getByRole("heading", { name: "Delivery receipt" }),
+      ).toBeTruthy();
+      expect(mounted.getByText("Message accepted")).toBeTruthy();
+    }
+    expect(pdfEngineRenderCount).toBe(0);
+  },
+);
+
+test.each([
+  { mimeType: "application/pdf", fileName: "submission.pdf", text: "" },
+  {
+    mimeType: "text/plain",
+    fileName: "submission.txt",
+    text: "The enclosed submission",
+  },
+  {
+    mimeType: "application/octet-stream",
+    fileName: "submission.bin",
+    text: "",
+  },
+])(
+  "opens a signed container with $mimeType content in the inspector",
+  async (embedded) => {
+    const tab = {
+      ...pdfTab,
+      id: toSafeId<"field">("field-cades"),
+      label: "Signed submission",
+      fileName: "submission.P7M",
+      mimeType: "application/octet-stream",
+    };
+    const key = { fieldId: tab.id, workspaceId: tab.workspaceId };
+    const mounted = renderFileTab(tab, (client) => {
+      client.setQueryData(cadesPreviewOptions(key).queryKey, {
+        ...embedded,
+        layers: [
+          {
+            id: "layer-0",
+            signers: [
+              { id: "layer-0.signer-0", name: "First signer" },
+              { id: "layer-0.signer-1", name: "Second signer" },
+            ],
+          },
+          {
+            id: "layer-0.1",
+            signers: [{ id: "layer-0.1.signer-0", name: null }],
+          },
+        ],
+      });
+    });
+    expect(
+      await mounted.findByRole("heading", { name: embedded.fileName }),
+    ).toBeTruthy();
+    expect(
+      mounted.getByRole("heading", { name: "Signature layer 1" }),
+    ).toBeTruthy();
+    expect(
+      mounted.getByRole("heading", { name: "Signature layer 2" }),
+    ).toBeTruthy();
+    expect(mounted.getByText("First signer")).toBeTruthy();
+    expect(mounted.getByText("Second signer")).toBeTruthy();
+    expect(mounted.getByText("Unknown signer")).toBeTruthy();
+    expect(
+      mounted.getByText("The signatures have not been verified."),
+    ).toBeTruthy();
+    expect(
+      mounted.getByRole("button", { name: "Download original" }),
+    ).toBeTruthy();
+    if (embedded.mimeType === "application/pdf") {
+      expect(await mounted.findByTestId("pdf-engine")).toBeTruthy();
+      expect(cadesPdfRequests).toEqual(["include"]);
+    } else {
+      expect(cadesPdfRequests).toHaveLength(0);
+      expect(pdfEngineRenderCount).toBe(0);
+      expect(
+        mounted.getByText(
+          embedded.text || "No readable content is available for preview.",
+        ),
+      ).toBeTruthy();
+    }
+  },
+);
+
+test("keeps the original available when the signed container cannot be opened", async () => {
+  const mounted = renderFileTab({
+    ...pdfTab,
+    id: toSafeId<"field">("field-cades-unsupported"),
+    fileName: "detached.p7m",
+    mimeType: "application/octet-stream",
+  });
+  expect(
+    await mounted.findByText("The signed file could not be read."),
+  ).toBeTruthy();
+  expect(
+    mounted.getByRole("button", { name: "Download original" }),
+  ).toBeTruthy();
+  expect(pdfEngineRenderCount).toBe(0);
+});
+
+test.each([".asice", ".asics"])(
+  "lists and previews contained files in a signed %s archive",
+  async (extension) => {
+    const tab = {
+      ...pdfTab,
+      id: toSafeId<"field">("field-asic"),
+      fileName: `submission${extension}`,
+      mimeType: "application/octet-stream",
+    };
+    const key = { fieldId: tab.id, workspaceId: tab.workspaceId };
+    const mounted = renderFileTab(tab, (client) => {
+      client.setQueryData(asicPreviewOptions(key).queryKey, {
+        members: [
+          {
+            fileName: "submission.pdf",
+            status: "readable",
+            text: "The enclosed submission",
+          },
+          { fileName: "attachment.bin", status: "unavailable", text: "" },
+          {
+            fileName: "notes.txt",
+            status: "truncated",
+            text: "The first page",
+          },
+        ],
+      });
+    });
+
+    expect(
+      await mounted.findByRole("heading", { name: "submission.pdf" }),
+    ).toBeTruthy();
+    expect(
+      mounted.getByRole("heading", { name: "attachment.bin" }),
+    ).toBeTruthy();
+    expect(mounted.getByText("The enclosed submission")).toBeTruthy();
+    expect(mounted.getByText("The first page")).toBeTruthy();
+    expect(
+      mounted.getByText("The full text is unavailable in this preview."),
+    ).toBeTruthy();
+    expect(
+      mounted.getByText("No readable content is available for preview."),
+    ).toBeTruthy();
+    expect(
+      mounted.getByText("The signatures have not been verified."),
+    ).toBeTruthy();
+    expect(
+      mounted.getByRole("button", { name: "Download original" }),
+    ).toBeTruthy();
+    expect(pdfEngineRenderCount).toBe(0);
+  },
+);
+
+test("keeps the original ASiC archive available when preview is unavailable", async () => {
+  const mounted = renderFileTab({
+    ...pdfTab,
+    id: toSafeId<"field">("field-asic-unsupported"),
+    fileName: "unsupported.asice",
+    mimeType: "application/octet-stream",
+  });
+  expect(
+    await mounted.findByText("The signed file could not be read."),
+  ).toBeTruthy();
+  expect(
+    mounted.getByRole("button", { name: "Download original" }),
+  ).toBeTruthy();
+});
+
+test("isolates member names in the Arabic ASiC preview", async () => {
+  const tab = {
+    ...pdfTab,
+    id: toSafeId<"field">("field-asic-arabic"),
+    fileName: "submission.asice",
+    mimeType: "application/octet-stream",
+  };
+  const fileName = "Appendix ٢.pdf";
+  const mounted = renderFileTab(
+    tab,
+    (client) => {
+      const key = { fieldId: tab.id, workspaceId: tab.workspaceId };
+      client.setQueryData(asicPreviewOptions(key).queryKey, {
+        members: [{ fileName, status: "truncated", text: "جزء من المستند" }],
+      });
+    },
+    "ar",
+  );
+  const member = await mounted.findByRole("heading", { name: fileName });
+  expect(member.querySelector("bdi")?.textContent).toBe(fileName);
+  expect(member.closest('[dir="rtl"]')).toBeTruthy();
+  expect(
+    mounted.getByText(arabicMessages.common.previewTruncated),
+  ).toBeTruthy();
+});
+
+test.each([".udf", ".ofd"])(
+  "renders a %s text preview with its original download",
+  async (extension) => {
+    const mounted = renderFileTab(
+      {
+        ...pdfTab,
+        id: toSafeId<"field">("field-structured"),
+        fileName: `submission${extension}`,
+        mimeType: "application/octet-stream",
+      },
+      undefined,
+      "ar",
+    );
+
+    const text = await mounted.findByText("İlk sayfa 法院文件");
+    expect(text.getAttribute("dir")).toBe("auto");
+    expect(text.closest('[dir="rtl"]')).toBeTruthy();
+    expect(
+      mounted.getByText(arabicMessages.common.previewTruncated),
+    ).toBeTruthy();
+    expect(
+      mounted.getByText(arabicMessages.structuredDocument.textOnly),
+    ).toBeTruthy();
+    expect(
+      mounted.getByRole("button", {
+        name: arabicMessages.common.downloadOriginal,
+      }),
+    ).toBeTruthy();
+    expect(pdfEngineRenderCount).toBe(0);
+  },
+);
+
+test.each([".udf", ".ofd"])(
+  "keeps the %s original available when no text can be previewed",
+  async (extension) => {
+    const mounted = renderFileTab({
+      ...pdfTab,
+      id: toSafeId<"field">("field-preview-unavailable"),
+      fileName: `submission${extension}`,
+      mimeType: "application/octet-stream",
+    });
+    expect(
+      await mounted.findByText("No readable text is available for preview."),
+    ).toBeTruthy();
+    expect(
+      mounted.getByRole("button", { name: "Download original" }),
+    ).toBeTruthy();
+  },
+);
+
+function renderFileTab(
+  tab: typeof docxTab | typeof pdfTab,
+  seed?: (client: QueryClientInstance) => void,
+  locale: "ar" | "en" = "en",
+) {
+  const messages = locale === "ar" ? arabicMessages : bundledEnglishMessages;
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false, staleTime: Infinity } },
   });
+  seed?.(queryClient);
   queryClient.setQueryData(
     fileOptions({ fieldId: tab.id, workspaceId: tab.workspaceId }).queryKey,
     {
@@ -327,12 +713,8 @@ function renderFileTab(tab: typeof docxTab | typeof pdfTab) {
             wordEditShortcut: null,
           }}
         >
-          <IntlProvider
-            locale="en"
-            messages={bundledEnglishMessages}
-            timeZone="UTC"
-          >
-            <FormattingProvider locale="en" timeZone="UTC">
+          <IntlProvider locale={locale} messages={messages} timeZone="UTC">
+            <FormattingProvider locale={locale} timeZone="UTC">
               <button
                 data-testid="parent-rerender"
                 onClick={() => setParentRender((value) => value + 1)}
@@ -389,14 +771,18 @@ function renderFileTab(tab: typeof docxTab | typeof pdfTab) {
 
   render(
     <QueryClientProvider client={queryClient}>
-      <IntlProvider
-        locale="en"
-        messages={bundledEnglishMessages}
-        timeZone="UTC"
-      >
+      <IntlProvider locale={locale} messages={messages} timeZone="UTC">
         <DocxEditorHost />
       </IntlProvider>
     </QueryClientProvider>,
   );
-  return render(<Harness />);
+  const router = createRouter({
+    routeTree: createRootRoute({ component: Harness }),
+    history: createMemoryHistory({ initialEntries: ["/"] }),
+  });
+  return render(
+    <div dir={locale === "ar" ? "rtl" : "ltr"}>
+      <RouterProvider router={router} />
+    </div>,
+  );
 }

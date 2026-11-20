@@ -24,6 +24,7 @@ export const NON_PLUGIN_MODULES: ReadonlySet<string> = new Set([
   "case-law-replay-imports.ts",
   "case-law-replay-writer-registry.ts",
   "database-access.ts",
+  "disabled-control-needs-reason.logic.ts",
   "api-client-chain.ts",
   "icon-ownership.ts",
   "module-id.ts",

@@ -101,7 +101,7 @@ jobs:
 
       - name: Setup Bun
         timeout-minutes: 2
-        uses: stella/.github/actions/setup-bun-cached@2ba6dc5822df5213c500aa6edb7b6c4bdec56804
+        uses: stella/.github/actions/setup-bun-cached@2664e46f02aea7164ba71bcdd485a686166993a4
         with:
           save: ${{ github.ref == 'refs/heads/main' }}
 

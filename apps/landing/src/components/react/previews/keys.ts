@@ -10,6 +10,5 @@ export type ProductPreviewKey =
   | "cli-mcp-template"
   | "anonymization"
   | "agent-answer"
-  | "registry-lookup"
   | "template-editor"
   | "workspace";

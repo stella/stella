@@ -3,10 +3,10 @@ import type { MouseEvent, ReactNode } from "react";
 
 import { useHotkey } from "@tanstack/react-hotkeys";
 import { useMatch } from "@tanstack/react-router";
-import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
+import { DirectionalIcon } from "@stll/ui/directional-icon";
 import { CogIcon, PanelRightIcon, PinIcon, PinOffIcon } from "@stll/ui/icons";
 import {
   InspectorDock,
@@ -41,6 +41,8 @@ import { ChatMentionProviders } from "@/components/chat-mention-providers";
 import { DocxEditorHost } from "@/components/docx/docx-editor-host";
 import { DragAndDropLiveRegion } from "@/components/drag-and-drop-live-region";
 import { resolveInspectorDockVisibility } from "@/components/inspector/inspector-dock-visibility";
+import { INSPECTOR_FOCUS_INTENT } from "@/components/inspector/inspector-store-types";
+import { getInspectorTabWorkspaceId } from "@/components/inspector/inspector-tab-workspace";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import type { InspectorTab } from "@/components/inspector/inspector-tabs-store";
 import { newChatMatterScope } from "@/components/inspector/new-chat-scope";
@@ -89,6 +91,7 @@ import {
 } from "@/lib/workspaces/queries";
 import { shouldForceSidebarCollapsed } from "@/routes/-inspector-pane-width";
 import { ChatMenuContent } from "@/routes/-protected-app/-components/chat-menu-content";
+import { ExactDuplicateUploadDialog } from "@/routes/-protected-app/-components/exact-duplicate-upload-dialog";
 import { PaymentRetryBanner } from "@/routes/-protected-app/-components/payment-retry-banner";
 import {
   createSessionActivity,
@@ -136,7 +139,7 @@ const InspectorRailFallback = () => {
               SIDE_RAIL_ICON_BUTTON_SIZE,
             )}
           >
-            <PanelRightIcon className="size-4" />
+            <DirectionalIcon className="size-4" icon={PanelRightIcon} />
           </span>
         }
       />
@@ -176,6 +179,7 @@ export const ProtectedAppFrame = ({
   user: AuthenticatedUser;
   children: ReactNode;
 }) => {
+  const t = useTranslations();
   useMountEffect(() => {
     const activity = createSessionActivity({
       page: document,
@@ -256,14 +260,18 @@ export const ProtectedAppFrame = ({
       return;
     }
     if (activeWorkspaceId) {
-      store.openChat(newChatMatterScope(activeWorkspaceId));
+      store.openChat({
+        ...newChatMatterScope(activeWorkspaceId),
+        focus: INSPECTOR_FOCUS_INTENT.claim,
+      });
     }
   }, [activeWorkspaceId]);
   useHotkey(useEffectiveHotkey("toggleChat"), handleToggleInspectorHotkey);
   useHotkey(useEffectiveHotkey("newChat"), () => {
-    useInspectorTabsStore
-      .getState()
-      .openChat(newChatMatterScope(activeWorkspaceId));
+    useInspectorTabsStore.getState().openChat({
+      ...newChatMatterScope(activeWorkspaceId),
+      focus: INSPECTOR_FOCUS_INTENT.claim,
+    });
   });
 
   return (
@@ -286,6 +294,7 @@ export const ProtectedAppFrame = ({
                     <WorkspaceInspectorSidePanel
                       reservePane={reserveInspectorPane}
                       routeMatterChromeStyle={routeMatterChromeStyle}
+                      routeMatterColor={activeMatterColor}
                     />
                   }
                   navigation={{
@@ -296,6 +305,7 @@ export const ProtectedAppFrame = ({
                     ),
                     mode: "responsive",
                   }}
+                  skipToContentLabel={t("common.skipToContent")}
                   topBar={() => <ProtectedContent />}
                 >
                   {children}
@@ -309,6 +319,7 @@ export const ProtectedAppFrame = ({
                 <MakeSkillReviewDialog />
                 <AttachedTemplateUploadDialog />
                 <DocumentReferenceUploadDialog />
+                <ExactDuplicateUploadDialog />
                 <ShortcutEchoHud />
                 <KeyboardShortcutsDialog />
               </ChatEditorProvider>
@@ -358,11 +369,12 @@ function ProtectedContent() {
       // No tabs yet — open a new chat. With a matter context the
       // chat is workspace-scoped and seeded with that matter's
       // contextMatterIds; outside a matter we open a global chat.
-      openInspectorChat(
-        workspaceId === undefined
+      openInspectorChat({
+        ...(workspaceId === undefined
           ? {}
-          : { workspaceId, contextMatterIds: [workspaceId] },
-      );
+          : { workspaceId, contextMatterIds: [workspaceId] }),
+        focus: INSPECTOR_FOCUS_INTENT.claim,
+      });
       return;
     }
     toggleInspector();
@@ -400,11 +412,12 @@ function ProtectedContent() {
     setChatMenuOpen(true);
   };
   const handleOpenNewChatFromMenu = () => {
-    openInspectorChat(
-      workspaceId === undefined
+    openInspectorChat({
+      ...(workspaceId === undefined
         ? {}
-        : { workspaceId, contextMatterIds: [workspaceId] },
-    );
+        : { workspaceId, contextMatterIds: [workspaceId] }),
+      focus: INSPECTOR_FOCUS_INTENT.claim,
+    });
     setChatMenuOpen(false);
   };
 
@@ -555,32 +568,6 @@ const resolveInspectorWorkspaceId = ({
   return undefined;
 };
 
-const getInspectorTabWorkspaceId = (
-  tab: InspectorTab | undefined,
-): string | undefined => {
-  if (tab === undefined) {
-    return undefined;
-  }
-
-  switch (tab.type) {
-    case "pdf":
-    case "matter":
-    case "task":
-      return tab.workspaceId;
-    case "chat":
-      return tab.workspaceId ?? tab.contextMatterIds.at(0);
-    case "external":
-      return tab.workspaceId ?? undefined;
-    case "skill-resource":
-    case "view":
-      return undefined;
-    default: {
-      tab satisfies never;
-      return panic(`Unhandled tab: ${String(tab)}`);
-    }
-  }
-};
-
 /**
  * Workspace inspector pane — file viewers + chat tabs. Mounted at
  * the protected layout level (next to `TemplateAssistantSidePanel`)
@@ -594,9 +581,11 @@ const getInspectorTabWorkspaceId = (
 function WorkspaceInspectorSidePanel({
   reservePane,
   routeMatterChromeStyle,
+  routeMatterColor,
 }: {
   reservePane: boolean;
   routeMatterChromeStyle: MatterChromeStyle;
+  routeMatterColor: string | null;
 }) {
   const t = useTranslations();
   const { isMobile } = useSidebar();
@@ -628,7 +617,6 @@ function WorkspaceInspectorSidePanel({
   const sidebarWidth = useSidebarInlineSize();
   const viewportWidth = useViewportWidth();
   const { resetWidth, resizeHandleProps, width } = useSharedInspectorPaneWidth({
-    openedFrom: "matter",
     sidebarWidth,
     viewportWidth,
   });
@@ -708,7 +696,10 @@ function WorkspaceInspectorSidePanel({
             <SheetTitle>{t("inspector.title")}</SheetTitle>
           </SheetHeader>
           <Suspense fallback={<MobileInspectorFallback />}>
-            <LazyInspectorPanel workspaceId={activeWorkspaceId} />
+            <LazyInspectorPanel
+              routeMatterColor={routeMatterColor}
+              workspaceId={activeWorkspaceId}
+            />
           </Suspense>
         </SheetPopup>
       </Sheet>
@@ -727,7 +718,10 @@ function WorkspaceInspectorSidePanel({
       onResetWidth={resetWidth}
     >
       <Suspense fallback={<InspectorRailFallback />}>
-        <LazyInspectorPanel workspaceId={activeWorkspaceId} />
+        <LazyInspectorPanel
+          routeMatterColor={routeMatterColor}
+          workspaceId={activeWorkspaceId}
+        />
       </Suspense>
     </InspectorDock>
   );

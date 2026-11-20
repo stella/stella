@@ -6,10 +6,12 @@ import {
 import { type GenericSchema, safeParse } from "valibot";
 
 import { API_DATE_RUNTIME_ONLY_CHECKS } from "@stll/api-contract/api-date";
+import { MONEY_SCHEMA_BRAND } from "@stll/api-contract/billing-money";
 import { DECISION_PARAGRAPH_RANGE_RUNTIME_ONLY_CHECKS } from "@stll/api-contract/decision-paragraph-range";
 import { DISPLAY_NAME_RUNTIME_ONLY_ACTIONS } from "@stll/api-contract/display-name";
 import { wireValueOf } from "@stll/api-contract/http-input";
 import { keepUnicodePatternSource } from "@stll/api-contract/json-schema-regex";
+import { MICROSOFT365_CALENDAR_RUNTIME_ONLY_CHECKS } from "@stll/api-contract/microsoft365";
 import { RECORD_CELL_RUNTIME_ONLY_CHECKS } from "@stll/api-contract/record-cell";
 import { RECORD_SCHEMA_RUNTIME_ONLY_CHECKS } from "@stll/api-contract/record-schema";
 import { UUID_RUNTIME_ONLY_ACTIONS } from "@stll/api-contract/uuid";
@@ -80,6 +82,7 @@ const RUNTIME_ONLY_ACTIONS: ReadonlySet<unknown> = new Set([
   ...ANALYSIS_RUNTIME_ONLY_CHECKS,
   ...DECISION_IDENTIFIER_RUNTIME_ONLY_CHECKS,
   ...DECISION_PARAGRAPH_RANGE_RUNTIME_ONLY_CHECKS,
+  ...MICROSOFT365_CALENDAR_RUNTIME_ONLY_CHECKS,
   ...DOCUMENT_AST_RUNTIME_ONLY_ACTIONS,
   ...DISPLAY_NAME_RUNTIME_ONLY_ACTIONS,
   ...RECORD_CELL_RUNTIME_ONLY_CHECKS,
@@ -92,6 +95,7 @@ const RUNTIME_ONLY_CHECK_REQUIREMENTS: ReadonlySet<unknown> = new Set(
     ...ANALYSIS_RUNTIME_ONLY_CHECKS,
     ...DECISION_IDENTIFIER_RUNTIME_ONLY_CHECKS,
     ...DECISION_PARAGRAPH_RANGE_RUNTIME_ONLY_CHECKS,
+    ...MICROSOFT365_CALENDAR_RUNTIME_ONLY_CHECKS,
     ...RECORD_CELL_RUNTIME_ONLY_CHECKS,
     ...RECORD_SCHEMA_RUNTIME_ONLY_CHECKS,
   ].map(({ requirement }) => requirement),
@@ -117,6 +121,17 @@ const uniqueItemsAction: NonNullable<ConversionConfig["overrideAction"]> = ({
 }) =>
   isUniqueItemsCheck(valibotAction)
     ? { ...jsonSchema, uniqueItems: true }
+    : undefined;
+
+/** Money classification belongs to the typed response boundary, not the public wire schema. */
+const moneyBrandAction: NonNullable<ConversionConfig["overrideAction"]> = ({
+  valibotAction,
+  jsonSchema,
+}) =>
+  valibotAction.type === "brand" &&
+  "name" in valibotAction &&
+  valibotAction.name === MONEY_SCHEMA_BRAND
+    ? jsonSchema
     : undefined;
 
 const utf8ByteBoundsAction: NonNullable<ConversionConfig["overrideAction"]> = ({
@@ -168,6 +183,7 @@ export const toJsonSchema = (
   convertToJsonSchema(schema, {
     ...config,
     overrideAction: (context) =>
+      moneyBrandAction(context) ??
       stripInternalMetadata(context) ??
       keepUnicodePatternSource(context) ??
       uniqueItemsAction(context) ??
@@ -318,6 +334,7 @@ export const toRouteJsonSchema = (schema: GenericSchema): ApiJsonSchema =>
         return carried;
       }
       return (
+        moneyBrandAction(context) ??
         stripRouteInternalMetadata(context) ??
         keepUnicodePatternSource(context) ??
         uniqueItemsAction(context) ??

@@ -2,8 +2,7 @@ name: Merge group hold
 
 on:
   pull_request:
-  pull_request_target: # zizmor: ignore[dangerous-triggers] executes only immutable trusted base scripts
-    types: [labeled, unlabeled, reopened]
+    types: [opened, synchronize, reopened, labeled, unlabeled]
   merge_group:
     types: [checks_requested]
 
@@ -23,7 +22,8 @@ concurrency:
 jobs:
   merge-group-hold:
     name: merge-group-hold
-    if: github.event_name != 'pull_request_target'
+    # Label changes are for the dequeue job; the check runs once per head.
+    if: github.event_name == 'merge_group' || !contains(fromJSON('["labeled", "unlabeled"]'), github.event.action)
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
@@ -41,7 +41,7 @@ jobs:
             /scripts/retry.sh
       - name: Check out merge-group history for the resolver
         if: github.event_name == 'merge_group'
-        uses: stella/.github/actions/partial-clone-checkout@c6d66dfa2a5ad1f96a21b819fe456fecdd3d6f6d
+        uses: stella/.github/actions/partial-clone-checkout@2664e46f02aea7164ba71bcdd485a686166993a4
         timeout-minutes: 2
         with:
           ref: ${{ github.event.merge_group.head_sha }}
@@ -88,8 +88,15 @@ jobs:
 
   dequeue-held-pull-request:
     name: dequeue-held-pull-request
-    # Only the default branch's scripts run with write permission; a retargeted base never supplies them.
-    if: github.event_name == 'pull_request_target' && github.event.pull_request.base.ref == github.event.repository.default_branch
+    # Only pull requests from this repository, in runs Dependabot did not
+    # start, get the write scope on a pull_request run. A held fork pull
+    # request is still refused by the merge-group check above.
+    if: >-
+      github.event_name == 'pull_request'
+      && github.actor != 'dependabot[bot]'
+      && contains(fromJSON('["labeled", "unlabeled", "reopened"]'), github.event.action)
+      && github.event.pull_request.head.repo.full_name == github.repository
+      && github.event.pull_request.base.ref == github.event.repository.default_branch
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:
@@ -100,7 +107,8 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         timeout-minutes: 2
         with:
-          ref: ${{ github.event.pull_request.base.sha }}
+          # The default branch's scripts, never the pull request's.
+          ref: ${{ github.event.repository.default_branch }}
           persist-credentials: false
           sparse-checkout-cone-mode: false
           sparse-checkout: |

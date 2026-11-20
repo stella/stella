@@ -16,7 +16,10 @@ import type { ActionAdmissionRefusal } from "@stll/api-contract/action-admission
 import type { ChatTurnTiming } from "@stll/api-contract/chat";
 import type { ChatContextNotice } from "@stll/api-contract/chat-context-notice";
 import type { ChatLocalFilesUndone } from "@stll/api-contract/chat-local-files-undo";
-import type { ChatLocalRunContext } from "@stll/api-contract/chat-run-target";
+import type {
+  ChatLocalRunContext,
+  ChatLocalRunModel,
+} from "@stll/api-contract/chat-run-target";
 import type { ProviderDiagnostic } from "@stll/api-contract/provider-setup";
 import type { ChatTurnPauseReason } from "@stll/chat-limits";
 import type { ChatTurnResumeProbe } from "@stll/chat/resume-contract";
@@ -314,6 +317,12 @@ export type ChatMessageMetadata = {
    */
   localRunContext?: ChatLocalRunContext | undefined;
   /**
+   * The model a turn on the member's computer asked for and the one its
+   * harness ran it on, which a reroute makes differ. Server-owned; absent on
+   * a cloud turn.
+   */
+  localRunModel?: ChatLocalRunModel | undefined;
+  /**
    * The turn's file changes on the member's computer were undone. Written by
    * the server when the computer reports the restore; incoming client
    * metadata validation deliberately does not accept this field.
@@ -382,10 +391,39 @@ export type ChatMessageContentCandidate = {
 
 type PersistedChatToolPartV3 = PersistedToolCallPart | PersistedToolResultPart;
 
+export type ChatSubagentPart = Extract<ChatPart, { type: "subagent" }>;
+
+/** The fields of a sub-agent run a stored part keeps: every field the SDK
+ *  gives the run's handle except its messages and the client's stop hook. */
+export type PersistedSubagentHandle = Omit<
+  ChatSubagentPart["subagent"],
+  "messages" | "stop"
+>;
+
+/**
+ * One message of a sub-agent run as stored: its parts are encoded exactly as
+ * a chat message's own content, so every rule a stored message follows
+ * (canonical tool encoding, result retention, the part budget) holds for a
+ * child's parts too.
+ */
+type PersistedSubagentMessage = {
+  content: PersistedChatMessageContentV3;
+  id: string;
+  role: ChatSubagentPart["subagent"]["messages"][number]["role"];
+};
+
+export type PersistedSubagentPart = {
+  subagent: PersistedSubagentHandle & {
+    messages: PersistedSubagentMessage[];
+  };
+  type: "subagent";
+};
+
 export type PersistedChatMessageContentV3 = {
   data: (
     | PersistedChatToolPartV3
-    | Exclude<ChatPart, { type: "tool-call" | "tool-result" }>
+    | PersistedSubagentPart
+    | Exclude<ChatPart, { type: "tool-call" | "tool-result" | "subagent" }>
   )[];
   metadata?: ChatMessageMetadata | undefined;
   readonly [persistedChatMessageContentV3Proof]: true;

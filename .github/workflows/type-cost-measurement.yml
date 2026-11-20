@@ -53,7 +53,7 @@ jobs:
           matrix=$(python3 scripts/type-cost-projects.py)
           echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@2ba6dc5822df5213c500aa6edb7b6c4bdec56804
+        uses: stella/.github/actions/setup-bun-cached@2664e46f02aea7164ba71bcdd485a686166993a4
         with:
           save: ${{ github.ref == 'refs/heads/main' }}
       - name: Install dependencies
@@ -97,7 +97,7 @@ jobs:
           persist-credentials: false
           submodules: true
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@2ba6dc5822df5213c500aa6edb7b6c4bdec56804
+        uses: stella/.github/actions/setup-bun-cached@2664e46f02aea7164ba71bcdd485a686166993a4
         with:
           save: ${{ github.ref == 'refs/heads/main' }}
       - name: Install dependencies

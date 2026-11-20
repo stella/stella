@@ -17,6 +17,10 @@ import {
   WORKSPACES_PER_ORGANIZATION_MAX,
 } from "@stll/api-contract";
 import {
+  CASE_LAW_BROWSE_COURTS_MAX,
+  CASE_LAW_BROWSE_LISTING_DEPTH,
+} from "@stll/api-contract/case-law-browse-hubs";
+import {
   CASE_LAW_RESULT_DEPTH_MAX,
   MULTIPART_DOCUMENT_MAX_BYTES,
   READER_PAGE_MAX_CHARS,
@@ -566,6 +570,9 @@ export const LIMITS = {
    *  working set grows with it, so this bounds both. Larger files keep their
    *  original as the preview and record `failed`/`too-large`. */
   fileDerivativeSourceMaxBytes: 25 * 1024 * 1024,
+  /** Maximum PDF bytes a derivative conversion may return or native
+   * extraction may read. Matches the largest accepted document upload. */
+  fileDerivativePdfMaxBytes: 50 * 1024 * 1024,
   /** Derivative jobs one API process runs at once. Each conversion holds a
    *  whole source plus its output and, for images, a decoded surface: the
    *  largest single allocations the process makes. Running them one at a time
@@ -739,6 +746,18 @@ export const LIMITS = {
   caseLawDecisionBatchHydrationsMax: 3,
   caseLawSearchPageSizeDefault: 20,
   caseLawSearchPageSizeMax: 100,
+  /**
+   * Words one query can hold: every word takes at least one character and a
+   * separator. Bounds the per-hit matched and missing word lists.
+   */
+  caseLawSearchTermsMax: Math.ceil(SEARCH_QUERY_MAX_LENGTH / 2),
+  /**
+   * Distinct required words a search checks one by one: the partial-match
+   * phase and the per-word decision counts each spend one engine
+   * aggregation per word. A query with more required words than this runs
+   * neither, so no hit reports a word it never checked.
+   */
+  caseLawSearchTermCountsMax: 24,
   caseLawResultDepthMax: CASE_LAW_RESULT_DEPTH_MAX,
   /** Max language variants for one decision's languageGroupKey. Bounds the
    *  alternate-language reads (decision detail + sitemap hreflang) so a
@@ -784,6 +803,10 @@ export const LIMITS = {
   /** Courts on the browse page's "newest decisions" shelf, by corpus size. */
   caseLawLatestCourts: 4,
   caseLawLatestPerCourt: 5,
+  /** Courts the crawlable browse tree names per jurisdiction. */
+  caseLawBrowseCourtsMax: CASE_LAW_BROWSE_COURTS_MAX,
+  /** Decisions one browse period lists; a capped count stops one past it. */
+  caseLawBrowseListingDepth: CASE_LAW_BROWSE_LISTING_DEPTH,
   legislationListPageSizeDefault: 20,
   legislationListPageSizeMax: 100,
   publicStatuteSearchPageSizeMax: PUBLIC_STATUTE_SEARCH_PAGE_SIZE_MAX,
@@ -823,6 +846,8 @@ export const LIMITS = {
    * whole structure; a read says when it was cut.
    */
   legislationOutlineHeadingsMax: 200,
+  /** Governing wording entries one provision read carries beside its text. */
+  legislationGoverningTextMax: 32,
   /**
    * Characters of a European Legislation Identifier a tool input accepts. An
    * ELI is a path the publisher mints (`/eli/cz/sb/2012/89`), so the bound is
@@ -1010,6 +1035,15 @@ export const LIMITS = {
   workPoolHeavySidecarMaxWaiters: 0,
   workPoolHeavySidecarMaxWaitMs: 0,
   workPoolHeavySidecarDeadlineMs: 120_000,
+  /** CPU-heavy file scans one API process runs at once; other replicas keep
+   *  independent capacity. A single file above the byte budget runs alone. */
+  workPoolFileScanSlots: 1,
+  workPoolFileScanBytes: 150 * 1024 * 1024,
+  /** Scans that may wait for a slot, and how long, before the request fails
+   *  as retryable. */
+  workPoolFileScanMaxWaiters: 32,
+  workPoolFileScanMaxWaitMs: 20_000,
+  workPoolFileScanDeadlineMs: 120_000,
   /** Max distinct footer parts one DOCX stamp operation may update. */
   docxStampFooterPartsMax: 64,
   /** Max org-wide custom blacklist terms for anonymization. */

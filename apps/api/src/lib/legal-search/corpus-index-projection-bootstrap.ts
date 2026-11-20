@@ -1,5 +1,5 @@
 import { panic } from "better-result";
-import { and, asc, eq, gt, inArray, isNull } from "drizzle-orm";
+import { and, asc, eq, gt, inArray, isNull, not } from "drizzle-orm";
 
 import { DECISION_IDENTIFIER_MAX_COUNT } from "@stll/legal-ast/decision-identifier";
 
@@ -19,6 +19,7 @@ import {
   corpusIndexManifestScopeJurisdictions,
   requireCorpusIndexManifest,
 } from "@/api/lib/legal-search/corpus-index-manifest";
+import { registeredCorpusIndexGenerationsQuery } from "@/api/lib/legal-search/corpus-index-projected-generations";
 import { deriveCorpusIndexProjectionDescriptor } from "@/api/lib/legal-search/corpus-index-projection-descriptor";
 import {
   buildCorpusIndexProjectionDesiredStateValues,
@@ -31,7 +32,12 @@ import {
 } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
 import { readCaseLawProvisionKeys } from "@/api/lib/legal-search/corpus-index-projection-provision-keys";
 import { readCaseLawRankingSignals } from "@/api/lib/legal-search/corpus-index-projection-ranking-signals";
+import { CORPUS_ROW_PROJECTABLE } from "@/api/lib/legal-search/corpus-projectability";
 import type { isRedistributable } from "@/api/lib/legal-search/corpus-source";
+import {
+  brandPersistedCaseLawDecisionId,
+  brandPersistedLegislationDocumentId,
+} from "@/api/lib/safe-id-boundaries";
 
 /**
  * Upper bound for one bootstrap transaction. This bounds row locks and the
@@ -64,6 +70,13 @@ export type CorpusIndexProjectionBootstrapResult =
       generation: string;
       claimedCount: number;
       seededCount: number;
+      /** Canonical ids the page accounted for, seeded or already seeded. */
+      walkedCount: number;
+      /**
+       * Of those, rows not yet projectable with a desired state nowhere: no
+       * generation shows them, and their settle transaction seeds them.
+       */
+      deferredCount: number;
       entityIds: readonly SafeId<"caseLawDecision">[];
       nextAfterEntityId: SafeId<"caseLawDecision">;
     }
@@ -73,6 +86,13 @@ export type CorpusIndexProjectionBootstrapResult =
       generation: string;
       claimedCount: number;
       seededCount: number;
+      /** Canonical ids the page accounted for, seeded or already seeded. */
+      walkedCount: number;
+      /**
+       * Of those, rows not yet projectable with a desired state nowhere: no
+       * generation shows them, and their settle transaction seeds them.
+       */
+      deferredCount: number;
       entityIds: readonly SafeId<"legislationDocument">[];
       nextAfterEntityId: SafeId<"legislationDocument">;
     }
@@ -207,6 +227,89 @@ type CorpusBootstrapCandidate<TEntityId extends string> = {
   sourceDescriptor: Parameters<typeof isRedistributable>[0];
 };
 
+/**
+ * Which of these ids are not projectable (`CORPUS_ROW_PROJECTABLE`): an
+ * unlocked primary-key read, bounded by the ids.
+ */
+const selectUnprojectable = async (
+  tx: Transaction,
+  family: CorpusIndexProjectionSubject["family"],
+  entityIds: string[],
+): Promise<ReadonlySet<string>> => {
+  switch (family) {
+    case "case_law":
+      return new Set(
+        (
+          await tx
+            .select({ id: caseLawDecisions.id })
+            .from(caseLawDecisions)
+            .where(
+              and(
+                inArray(
+                  caseLawDecisions.id,
+                  entityIds.map(brandPersistedCaseLawDecisionId),
+                ),
+                not(CORPUS_ROW_PROJECTABLE.case_law),
+              ),
+            )
+            .limit(entityIds.length)
+        ).map(({ id }) => id),
+      );
+    case "legislation":
+      return new Set(
+        (
+          await tx
+            .select({ id: legislationDocuments.id })
+            .from(legislationDocuments)
+            .where(
+              and(
+                inArray(
+                  legislationDocuments.id,
+                  entityIds.map(brandPersistedLegislationDocumentId),
+                ),
+                not(CORPUS_ROW_PROJECTABLE.legislation),
+              ),
+            )
+            .limit(entityIds.length)
+        ).map(({ id }) => id),
+      );
+    default:
+      family satisfies never;
+      return panic(`Unhandled family: ${String(family)}`);
+  }
+};
+
+/**
+ * Which of the page's unprojectable ids have a desired state in some
+ * generation of the family. Those are owed one in this generation too; the
+ * rest are shown by no generation and wait for their settle transaction. A
+ * primary-key probe per registered generation, bounded by the page. The
+ * registry names the generations, not this process: a state held only by a
+ * generation a newer release registered counts as well.
+ */
+const selectProjectedAnywhere = async (
+  tx: Transaction,
+  family: CorpusIndexProjectionSubject["family"],
+  entityIds: string[],
+): Promise<ReadonlySet<string>> => {
+  if (entityIds.length === 0) {
+    return new Set();
+  }
+  const generations = registeredCorpusIndexGenerationsQuery(tx, family);
+  const rows = await tx
+    .selectDistinct({ entityId: corpusIndexProjectionStates.entityId })
+    .from(corpusIndexProjectionStates)
+    .where(
+      and(
+        eq(corpusIndexProjectionStates.family, family),
+        inArray(corpusIndexProjectionStates.generation, generations),
+        inArray(corpusIndexProjectionStates.entityId, entityIds),
+      ),
+    )
+    .limit(entityIds.length);
+  return new Set(rows.map(({ entityId }) => entityId));
+};
+
 /** One page's rows to insert; a family builds them with or without a query. */
 type CorpusBootstrapDesiredState =
   (typeof corpusIndexProjectionStates.$inferInsert)[];
@@ -223,6 +326,8 @@ type CorpusBootstrapPage<TEntityId extends string> =
       status: "advanced";
       claimedCount: number;
       seededCount: number;
+      walkedCount: number;
+      deferredCount: number;
       entityIds: TEntityId[];
       nextAfterEntityId: TEntityId;
     };
@@ -288,8 +393,30 @@ const runCorpusBootstrapPage = async <
     generation,
     entityIds: candidateIds,
   });
-  const unseededIds = candidateIds.filter(
+  const missingIds = candidateIds.filter(
     (candidateId) => !seededEntityIds.has(candidateId),
+  );
+  // A row whose text has not settled and that no generation holds is not this
+  // page's to seed: no generation shows it, and the transaction that settles
+  // it seeds every active generation. One that some generation holds is owed
+  // a state here as well, so every generation shows it or none does.
+  const unprojectable =
+    missingIds.length === 0
+      ? new Set<string>()
+      : await selectUnprojectable(tx, family, missingIds);
+  const projectedAnywhere = await selectProjectedAnywhere(
+    tx,
+    family,
+    missingIds.filter((candidateId) => unprojectable.has(candidateId)),
+  );
+  const deferredIds = new Set(
+    missingIds.filter(
+      (candidateId) =>
+        unprojectable.has(candidateId) && !projectedAnywhere.has(candidateId),
+    ),
+  );
+  const unseededIds = missingIds.filter(
+    (candidateId) => !deferredIds.has(candidateId),
   );
   // The page reads its whole id range but writes at most `seedLimit` rows, so
   // a caller that reserved its I/O up front can bound what a fresh region of
@@ -304,8 +431,12 @@ const runCorpusBootstrapPage = async <
   // would make a keyset cursor strand it indefinitely.
   const rows: TRow[] = [];
   let pageEndEntityId: TEntityId | undefined;
+  let walkedCount = 0;
+  let deferredCount = 0;
   for (const candidate of candidates) {
-    if (!seededEntityIds.has(candidate.documentId)) {
+    if (deferredIds.has(candidate.documentId)) {
+      deferredCount += 1;
+    } else if (!seededEntityIds.has(candidate.documentId)) {
       if (rows.length === seedLimit) {
         // The seed budget is spent and this id is still a gap. The cursor
         // stops at the last id the batch accounted for, so the rest of the
@@ -319,6 +450,7 @@ const runCorpusBootstrapPage = async <
       rows.push(row);
     }
     pageEndEntityId = candidate.documentId;
+    walkedCount += 1;
   }
   if (pageEndEntityId === undefined) {
     return { status: "busy" };
@@ -328,6 +460,8 @@ const runCorpusBootstrapPage = async <
       status: "advanced",
       claimedCount: 0,
       seededCount: 0,
+      walkedCount,
+      deferredCount,
       entityIds: [],
       nextAfterEntityId: pageEndEntityId,
     };
@@ -375,10 +509,31 @@ const runCorpusBootstrapPage = async <
     status: "advanced",
     claimedCount: rows.length,
     seededCount: inserted.length,
+    walkedCount,
+    deferredCount,
     entityIds,
     nextAfterEntityId: pageEndEntityId,
   };
 };
+
+/*
+ * The page's source lock. A page reads every source its range touches and
+ * holds it to commit, so its lock must not wait on what writers do to a
+ * source row all the time: lease renewals, observation orders, checkpoints
+ * and totals are plain updates, and a share lock waits on each of them (and
+ * a page that waits past its lock timeout is refused whole). A key-share lock
+ * waits on none of them, and still keeps the source row from being deleted
+ * or re-keyed under the page, which is all the join needs.
+ *
+ * A source-policy change does not wait on the page either, and does not need
+ * to: the page locks every decision it seeds for update, and the sweep that
+ * follows a policy change (`reconcileCorpusProjectionDesiredStateTx`) locks
+ * each decision for update before it re-derives the decision's states. So for
+ * each decision the sweep either runs after the page committed and rewrites
+ * what the page wrote from the old policy, or runs before the page locked it
+ * and leaves a state the page then finds and skips. Canonical writers keep
+ * the share lock: they write the decision, not only its states.
+ */
 
 /** The validated options one family's page runs on. */
 type FamilyBootstrapOptions<TEntityId extends string> = {
@@ -438,9 +593,7 @@ const bootstrapCaseLaw = async ({
         )
         .orderBy(asc(caseLawDecisions.id))
         .limit(limit)
-        // Canonical mutations lock source policy before the decision. Bootstrap
-        // uses the same order; a short policy update may delay this bounded claim.
-        .for("share", { of: caseLawSources }),
+        .for("key share", { of: caseLawSources }),
     lockUnseededRows: async (unseededIds) =>
       await tx
         .select({
@@ -623,7 +776,7 @@ const bootstrapLegislation = async ({
         )
         .orderBy(asc(legislationDocuments.id))
         .limit(limit)
-        .for("share", { of: legislationSources }),
+        .for("key share", { of: legislationSources }),
     lockUnseededRows: async (unseededIds) =>
       await tx
         .select({
@@ -707,6 +860,8 @@ export const bootstrapCorpusProjectionDesiredStateBatchTx = async (
         generation,
         claimedCount: page.claimedCount,
         seededCount: page.seededCount,
+        walkedCount: page.walkedCount,
+        deferredCount: page.deferredCount,
         entityIds: page.entityIds,
         nextAfterEntityId: page.nextAfterEntityId,
       };
@@ -728,6 +883,8 @@ export const bootstrapCorpusProjectionDesiredStateBatchTx = async (
         generation,
         claimedCount: page.claimedCount,
         seededCount: page.seededCount,
+        walkedCount: page.walkedCount,
+        deferredCount: page.deferredCount,
         entityIds: page.entityIds,
         nextAfterEntityId: page.nextAfterEntityId,
       };

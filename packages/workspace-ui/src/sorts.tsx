@@ -6,6 +6,7 @@ import { sortDirectionOf } from "./column-sort";
 import type { ColumnSortKind, SortDirectionLabels } from "./column-sort";
 import { PropertyIcon } from "./property-icon";
 import type { PropertyIconType } from "./property-icon";
+import { SORT_CHIP_CLASS, SORT_DIRECTION_CLASS } from "./sort-chip-classes";
 
 /** One sort a view carries. */
 export type SortDescriptor = {
@@ -121,10 +122,10 @@ const SortChip = ({
   onRemove,
   labels,
 }: SortChipProps) => (
-  <div className="bg-muted/50 flex items-center rounded-md border">
+  <div className={SORT_CHIP_CLASS}>
     <Button onClick={onToggle} size="xs" variant="ghost">
       {propertyName}
-      <span className="text-muted-foreground">
+      <span className={SORT_DIRECTION_CLASS}>
         {labels.directions[sortKind][sortDirectionOf(desc)]}
       </span>
     </Button>

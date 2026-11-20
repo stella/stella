@@ -145,8 +145,10 @@ export const deleteEntityVersionHandler = async function* ({
         });
       }
 
-      // Lock every edit owner anchored to this version first, establishing the
-      // edit-state -> entity order. Desktop sessions can be cancelled below;
+      // Lock every edit owner anchored to this version first, whatever its
+      // state, establishing the edit-state -> entity order: a session's base
+      // never changes, so the cancellations below reach only rows locked
+      // here or opened since. Desktop sessions can be cancelled below;
       // durable collaboration rooms must instead block the tombstone so their
       // shared working state never loses its base.
       await tx
@@ -156,7 +158,6 @@ export const deleteEntityVersionHandler = async function* ({
           and(
             eq(desktopEditSessions.baseVersionId, params.versionId),
             eq(desktopEditSessions.workspaceId, workspaceId),
-            eq(desktopEditSessions.status, "open"),
           ),
         )
         .for("update");
@@ -167,7 +168,6 @@ export const deleteEntityVersionHandler = async function* ({
           and(
             eq(pdfSigningSessions.baseVersionId, params.versionId),
             eq(pdfSigningSessions.workspaceId, workspaceId),
-            eq(pdfSigningSessions.status, "open"),
           ),
         )
         .for("update");
@@ -329,17 +329,6 @@ export const deleteEntityVersionHandler = async function* ({
               updatedAt: new Date(),
             })
             .where(eq(entities.id, params.entityId));
-          // The existing projection belongs to the withdrawn current version.
-          // Remove it atomically with promotion; post-commit processing below
-          // rebuilds the promoted version's projection.
-          await tx
-            .delete(searchDocuments)
-            .where(
-              and(
-                eq(searchDocuments.entityId, params.entityId),
-                eq(searchDocuments.workspaceId, workspaceId),
-              ),
-            );
           promotedVersionId = next.id;
         }
       }
@@ -356,6 +345,20 @@ export const deleteEntityVersionHandler = async function* ({
                 ? isNull(extractedContent.sourceEntityVersionId)
                 : undefined,
             ),
+          ),
+        );
+
+      // The projection includes reference stamps from every live version.
+      // Withdraw it atomically for current and historical tombstones alike;
+      // the durable repair queued below rebuilds only from versions that remain
+      // live. Missing search results are safer than serving withdrawn metadata
+      // while asynchronous repair is pending.
+      await tx
+        .delete(searchDocuments)
+        .where(
+          and(
+            eq(searchDocuments.entityId, params.entityId),
+            eq(searchDocuments.workspaceId, workspaceId),
           ),
         );
 

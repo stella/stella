@@ -164,8 +164,13 @@ test("tells the user when an approved save failed", async () => {
       </QueryClientProvider>
     </ChatThreadTestRouter>,
   );
-  await view.findByText(messages.chat.toolCall.failed);
-  expect(view.getByText(messages.common.showDetails)).toBeDefined();
+  // The card's mark names the failure and the answer's footer says the
+  // turn did not finish; the raw error waits for the technical details.
+  await view.findByText(messages.chat.answerNotFinished);
+  expect(
+    view.getByRole("img", { name: messages.chat.toolCall.failed }),
+  ).toBeDefined();
+  expect(view.queryByText(messages.common.showDetails)).toBeNull();
   expect(view.queryByLabelText(messages.chat.approval.allowed)).toBeNull();
   expect(view.queryByLabelText(messages.chat.approval.denied)).toBeNull();
   queryClient.clear();

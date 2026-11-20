@@ -252,6 +252,7 @@ export const DESKTOP_WINDOWS_DRY_RUN_INPUTS = [
   "apps/desktop/*",
   "packages/agent-engine/package.json",
   "packages/agent-engine/scripts/build-sidecar.ts",
+  "apps/desktop/scripts/build-pkcs11-helper.ts",
   "scripts/desktop-*",
   "scripts/*tauri*",
   "scripts/detect-desktop-*",
@@ -606,8 +607,13 @@ const deriveNormalScopeFacts = (
     "apps/web/*",
     "packages/*",
     "patches/*",
+    // The bundle gates run in web-build. A pull request builds the web app
+    // only when browser specs or armed route smoke select it
+    // (web_build_pr_required); these inputs select web-build for the merge
+    // queue and main, where the gates block a regression before it lands.
     "scripts/bundle-baseline.ts",
     "scripts/bundle-baseline.json",
+    "scripts/bundle-startup-*",
     "VERSION",
     "bun.lock",
     "bunfig.toml",
@@ -973,6 +979,7 @@ export const OUTPUT_RULES = {
           "*/Cargo.lock",
           "Cargo.toml",
           "*/Cargo.toml",
+          ".cargo/config.toml",
           "scripts/check-lockfile-release-ages.ts",
           "scripts/check-lockfile-release-ages.test.ts",
           "scripts/check-stll-quarantine-excludes.ts",

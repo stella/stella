@@ -32,9 +32,76 @@ import {
 import type { FeatureRegistry } from "../../src/lib/feature-access/registry";
 import type { RouteGate } from "../../src/lib/route-gates";
 import type { HandlerKind } from "../../src/lib/safe-handler-factories";
+import { isRecord } from "../../src/lib/type-guards";
+
+type ReviewedInvoiceManagementOptions<TEndpoint> = {
+  routes: readonly RouteEntry[];
+  endpoints: readonly TEndpoint[];
+  classify: (middleware: Middleware) => RouteGate;
+};
+
+/** Join the reviewed management group to discovery; endpoint filenames are never a second allowlist. */
+export const reviewedInvoiceManagementEndpoints = <
+  TEndpoint extends {
+    file: string;
+    definition: object;
+    config: Record<string, unknown>;
+  },
+>({
+  routes,
+  endpoints,
+  classify,
+}: ReviewedInvoiceManagementOptions<TEndpoint>): TEndpoint[] =>
+  routes.map(({ definition, middleware }) => {
+    const permissions = definition.config["permissions"];
+    if (
+      definition.access !== "workspace" ||
+      definition.config["featureAccess"] !== undefined ||
+      !isRecord(permissions) ||
+      Object.keys(permissions).length !== 1 ||
+      !Array.isArray(permissions["invoice"]) ||
+      permissions["invoice"].length !== 1 ||
+      permissions["invoice"].at(0) !== "update" ||
+      !middleware.some((stage) => {
+        const gate = classify(stage);
+        return (
+          gate.kind === "deployment-feature" &&
+          gate.flag === "FEATURE_TIME_BILLING"
+        );
+      }) ||
+      middleware.some((stage) => {
+        const gate = classify(stage);
+        return (
+          gate.kind !== "budget" &&
+          !(
+            gate.kind === "deployment-feature" &&
+            gate.flag === "FEATURE_TIME_BILLING"
+          )
+        );
+      })
+    ) {
+      return panic(
+        "Invoice management requires invoice:update and only time-billing deployment availability",
+      );
+    }
+    const matching = endpoints.filter(
+      (endpoint) => endpoint.definition === definition,
+    );
+    const endpoint = matching.at(0);
+    if (
+      matching.length !== 1 ||
+      endpoint === undefined ||
+      endpoint.config !== definition.config
+    ) {
+      return panic(
+        "Every reviewed invoice management route must identify exactly one discovered handler",
+      );
+    }
+    return endpoint;
+  });
 
 /** Handler-tree prefix stripped to turn a file path into a capability id. */
-export const HANDLERS_ROOT_PREFIX = "apps/api/src/handlers/";
+const HANDLERS_ROOT_PREFIX = "apps/api/src/handlers/";
 
 /**
  * Internal handler-tree words and the public word each becomes in a capability
@@ -191,6 +258,7 @@ export const DOMAIN_ACTION_VERBS = [
   "retry",
   "revert",
   "review",
+  "revoke",
   "rewrite",
   "run",
   "search",
@@ -223,11 +291,6 @@ export const isAllowedActionVerb = (id: string): boolean => {
   const verb = deriveActionVerb(id);
   return ALLOWED_ACTION_VERBS.has(verb);
 };
-
-/** Ids whose action verb is in neither allowed set, sorted (empty when all conform). */
-export const findNonConformingActionVerbs = (
-  ids: readonly string[],
-): string[] => ids.filter((id) => !isAllowedActionVerb(id)).toSorted();
 
 export type AccessClassification = {
   access: "read" | "write";
@@ -787,7 +850,7 @@ export const CAPABILITY_DISPATCH = {
  * destructured-context usage handlers actually write (e.g. `set.status`,
  * `redirect(...)`), not just the `ctx.`-qualified form.
  */
-export const CONTEXT_FIDELITY_PATTERNS: readonly {
+const CONTEXT_FIDELITY_PATTERNS: readonly {
   feature: string;
   pattern: RegExp;
 }[] = [
@@ -813,7 +876,7 @@ export const detectContextFidelityFeatures = (source: string): string[] => {
   return [...features].toSorted();
 };
 
-export type ContextFidelityViolation = { id: string; features: string[] };
+type ContextFidelityViolation = { id: string; features: string[] };
 
 export type ContextFidelityScan = {
   /** Catalog ids whose handler uses an un-honorable feature but is not waived. */
@@ -912,7 +975,7 @@ const isDirectBinaryProp = (schema: unknown): boolean => {
 };
 
 /** One top-level input property whose schema carries binary bytes. */
-export type BinarySchemaField = {
+type BinarySchemaField = {
   part: "body" | "params" | "query";
   field: string;
   /** Whether the part's `required` list names it (`v.optional(...)` -> false). */
@@ -1202,7 +1265,7 @@ export const returnsInlineFileResponse = (source: string): boolean =>
  * signal only (keeps the flag table honest); the refusal itself keys off the
  * flag plus the runtime backstop in `mapHandlerResult`.
  */
-export const constructsBinaryLike = (source: string): boolean =>
+const constructsBinaryLike = (source: string): boolean =>
   /\bnew Response\s*\(|\bsecureDocumentResponse\s*\(|\bUint8Array\b|\bArrayBuffer\b|\bnew Blob\s*\(|\bReadableStream\b/u.test(
     source,
   );
@@ -1400,8 +1463,8 @@ export const compareScopeStrictness = ({
  * The six write-only OAuth grants. A capability whose `access` is `read` must
  * never resolve to one of these — a read-only credential (`stella:read` /
  * `stella:admin_read`) would then be unable to invoke it. Enforced structurally
- * by the exporter's read-scope guard AND the `read-capabilities-with-write-scope`
- * ratchet, so the class stays impossible even if the resolver is later changed.
+ * by the exporter's read-scope guard, so the class stays impossible even if the
+ * resolver is later changed.
  */
 export const WRITE_ONLY_SCOPES: ReadonlySet<string> = new Set(
   MCP_WRITE_ONLY_RESOURCE_SCOPES,
@@ -1475,7 +1538,7 @@ export const resolveScope = ({
 // --- Coverage doc (generated docs/capability-coverage.md) -------------------
 
 /** The `mcp` disposition shape a coverage-doc entry carries (mirrors CapabilityMcp). */
-export type CoverageDocMcp =
+type CoverageDocMcp =
   | { type: "tool"; name: string }
   | { type: "covered"; by: string }
   | { type: "capability"; reason: string };

@@ -19,6 +19,7 @@ const ALLOWED_LEAF_IMPORTS = new Set([
   "@/api/db/auth-schema",
   "@/api/db/backfill-runtime",
   "@/api/db/billing-validators",
+  "@/api/db/case-law-content-changed-at",
   "@/api/db/case-law-court-activity-indexes",
   "@/api/db/case-law-sitemap-indexes",
   "@/api/db/case-law-parsed-input-state",

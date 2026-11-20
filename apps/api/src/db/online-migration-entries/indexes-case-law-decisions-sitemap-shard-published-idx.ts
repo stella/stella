@@ -13,6 +13,7 @@ const PUBLISHED_CASE_LAW_DECISION_INDEX_DEFINITION =
 export default {
   id: "indexes-case-law-decisions-sitemap-shard-published-idx",
   revision: 280,
+  lifecycle: "finalized",
   type: "indexes",
   values: [
     {

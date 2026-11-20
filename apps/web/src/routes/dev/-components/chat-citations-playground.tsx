@@ -14,6 +14,7 @@ import type {
   PersistedChatMessage,
 } from "@/components/chat/chat-ui-tools";
 import { StreamdownMentionLink } from "@/components/chat/streamdown-mention-link";
+import type { SuggestedFollowupsProps } from "@/features/chat/components/suggested-followups";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { createPlaygroundChatApproval } from "@/routes/dev/-components/playground-chat-approval";
 
@@ -89,8 +90,11 @@ const STREAMDOWN_COMPONENTS = {
  */
 export function ChatCitationsPlayground({
   cassette = CHAT_CITATIONS_CASSETTE,
+  followUps,
 }: {
   cassette?: Cassette;
+  /** Suggestions the settled answer ends with, as a thread page gives them. */
+  followUps?: SuggestedFollowupsProps | undefined;
 }) {
   const [frames] = useState(() => buildFrames(cassette));
   const lastFrame = frames.length - 1;
@@ -133,7 +137,7 @@ export function ChatCitationsPlayground({
       <ChatApprovalContext
         value={createPlaygroundChatApproval("dev-active-organization")}
       >
-        <div className="flex max-w-4xl flex-col gap-4">
+        <div className="flex max-w-3xl flex-col gap-4">
           <div className="flex items-center gap-2">
             <Button
               onClick={() => {
@@ -173,6 +177,9 @@ export function ChatCitationsPlayground({
               onOpenCreatedDocument={noop}
               onResend={noop}
               streamdownComponents={STREAMDOWN_COMPONENTS}
+              {...(frame.isGenerating || followUps === undefined
+                ? {}
+                : { followUps })}
             />
           </div>
         </div>

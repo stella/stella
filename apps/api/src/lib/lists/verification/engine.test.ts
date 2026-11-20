@@ -10,6 +10,7 @@ import * as v from "valibot";
 
 import { locateQuote } from "@stll/legal-ast/quote-locate";
 import { RUNTIME_MODE } from "@stll/runtime-mode";
+import { createTestState } from "@stll/test-state";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import { env } from "@/api/env";
@@ -47,6 +48,8 @@ import { ModelRunCapError } from "@/api/lib/usage/model-run-caps/caps";
 import { setRuntimeModeForTesting } from "@/api/runtime-mode";
 import { testModelAdmission } from "@/api/tests/helpers/model-dispatch-admission";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+
+const testState = createTestState({ file: import.meta.path, config: env });
 
 type Captured = { tenantWorkspaceIds: readonly string[]; messages: unknown[] };
 
@@ -1183,7 +1186,6 @@ test("access removal after extraction blocks the later grading batch", async () 
 });
 
 test("deployment disablement stops a later model request with a valid current proof", async () => {
-  const previousDeployment = env.FEATURE_LEGAL_LISTS;
   const restoreMode = setRuntimeModeForTesting({ mode: RUNTIME_MODE.strict });
   const call = createVerificationCall({
     deps,
@@ -1193,17 +1195,16 @@ test("deployment disablement stops a later model request with a valid current pr
     outputSchema: v.object({ value: v.string() }),
   });
   try {
-    env.FEATURE_LEGAL_LISTS = true;
+    testState.setConfig("FEATURE_LEGAL_LISTS", true);
     answers.push({ value: "fixture" });
     expect(await call.generate([])).toEqual(Result.ok({ value: "fixture" }));
-    env.FEATURE_LEGAL_LISTS = false;
+    testState.setConfig("FEATURE_LEGAL_LISTS", false);
     const denied = await call.generate([]);
     expect(Result.isError(denied) ? denied.error : null).toBeInstanceOf(
       ListVerificationAccessRevokedError,
     );
     expect(captured).toHaveLength(1);
   } finally {
-    env.FEATURE_LEGAL_LISTS = previousDeployment;
     restoreMode();
   }
 });

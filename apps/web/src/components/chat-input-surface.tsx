@@ -1,10 +1,11 @@
-import { useCallback, useRef } from "react";
+import { useRef } from "react";
 
 import "./chat-editor.css";
 import type { ReactNode } from "react";
 
 import { useTranslations } from "use-intl";
 
+import { CHAT_MEMBER_SEND_ACTION } from "@stll/api-contract/chat-send-intent";
 import {
   COMPOSER_BOX_ANONYMIZED_CLASS,
   COMPOSER_BOX_CLASS,
@@ -24,14 +25,23 @@ import type {
   ChatSend,
 } from "@/components/chat-editor-provider";
 import { ChatComposerActionButton } from "@/components/chat/chat-composer-action-button";
+import { ChatComposerQueueButton } from "@/components/chat/chat-composer-queue-button";
 import { ChatDraftAttachmentChips } from "@/components/chat/chat-draft-attachment-chips";
 import type { ComposerModelsMenuProps } from "@/components/chat/chat-model-options-menu";
 import { ChatPromptImproveButton } from "@/components/chat/chat-prompt-improve-button";
-import { ComposerControlSlot } from "@/components/chat/composer-control-slot";
 import {
   type ComposerContextMenuProps,
   ComposerPlusMenu,
 } from "@/components/chat/composer-plus-menu";
+import {
+  COMPOSER_COMPACT_GRID_CLASS,
+  COMPOSER_COMPACT_LEADING_SEAT_CLASS,
+  COMPOSER_COMPACT_TEXT_SEAT_CLASS,
+  COMPOSER_COMPACT_TRAILING_SEAT_CLASS,
+  COMPOSER_IMPROVE_SEAT_CLASS,
+  COMPOSER_TRAILING_GROUP_CLASS,
+  ComposerControlSlot,
+} from "@/components/chat/composer-row.pending";
 import { PromptEditorContent } from "@/components/prompt-editor";
 import { ReferenceRenderScope } from "@/components/references/reference-chip";
 import { RenderStormRegion } from "@/components/render-storm-canary";
@@ -70,6 +80,14 @@ type ChatInputSurfaceProps = {
    */
   isGenerating?: boolean;
   onStop?: () => void;
+  /**
+   * The member's queue action (Cmd/Ctrl+Enter, and a button beside the
+   * primary one while `queueOffered`): it holds the draft until the turn
+   * ends. Omit on surfaces whose plain send always queues behind a turn.
+   */
+  onQueue?: ChatSend | undefined;
+  /** A plain send would steer the turn, so the queue button is shown. */
+  queueOffered?: boolean | undefined;
   /** See `ChatComposerActionButton`'s `stopping`. */
   stopping?: boolean;
   /**
@@ -128,6 +146,29 @@ type ChatInputSurfaceProps = {
   mcpOrganizationId?: string | undefined;
 };
 
+/**
+ * What the disabled Send and Improve prompt buttons say instead of their
+ * labels. Only the empty draft is this surface's to explain; a caller that
+ * disables input or sending owns that message. `t` is typed to the keys it
+ * reads, so the full message tree is not re-instantiated here.
+ */
+const composerDisabledReasons = ({
+  canSubmit,
+  inputDisabled,
+  isBlank,
+  submitDisabled,
+  t,
+}: {
+  canSubmit: boolean;
+  inputDisabled: boolean;
+  isBlank: boolean;
+  submitDisabled: boolean;
+  t: (key: "chat.improvePromptEmpty" | "chat.sendPromptEmpty") => string;
+}) => ({
+  improve: !inputDisabled && isBlank ? t("chat.improvePromptEmpty") : undefined,
+  send: !submitDisabled && !canSubmit ? t("chat.sendPromptEmpty") : undefined,
+});
+
 export const ChatInputSurface = ({
   autoFocus,
   className,
@@ -140,6 +181,8 @@ export const ChatInputSurface = ({
   onFocusChange,
   isGenerating = false,
   onStop,
+  onQueue,
+  queueOffered,
   stopping = false,
   anonymized = false,
   dock,
@@ -172,26 +215,25 @@ export const ChatInputSurface = ({
   // during a turn is queued by `useChatSession` and dispatched once
   // the response finishes, so overlapping requests can't happen.
   const submitDisabled = Boolean(disabled || sendDisabled);
+  const canSend = !submitDisabled && canSubmit;
 
   // A failed send has already restored the draft (see `submit` in
   // chat-editor-provider), so the only thing missing is a user-visible
   // signal. Route it through analytics AND a toast: swallowing the
   // failure into telemetry alone leaves the send silently lost.
-  const handleSubmitError = useCallback(
-    (error: unknown): void => {
-      getAnalytics().captureError(error, {
-        fingerprintKey: "ChatInputSurface:failure",
-        scope: { type: "handler", handlerId: "ChatInputSurface:failure" },
-      });
-      notifyUserError(error, t("common.somethingWentWrong"));
-    },
-    [t],
-  );
+  const handleSubmitError = (error: unknown): void => {
+    getAnalytics().captureError(error, {
+      fingerprintKey: "ChatInputSurface:failure",
+      scope: { type: "handler", handlerId: "ChatInputSurface:failure" },
+    });
+    notifyUserError(error, t("common.somethingWentWrong"));
+  };
 
   const { submitDraft } = useChatComposerWiring({
     controller,
     inputDisabled,
     onSubmit,
+    onQueue,
     onSubmitError: handleSubmitError,
     submitDisabled,
   });
@@ -218,6 +260,13 @@ export const ChatInputSurface = ({
   };
 
   const isBlank = isEmpty && attachments.length === 0;
+  const disabledReasons = composerDisabledReasons({
+    canSubmit,
+    inputDisabled,
+    isBlank,
+    submitDisabled,
+    t,
+  });
   // Compact rows seat every control in the shared slot so it centres on the
   // text line; the large variant lays its controls out in a plain action row.
   const ControlGroup = variant === "compact" ? ComposerControlSlot : "div";
@@ -253,7 +302,7 @@ export const ChatInputSurface = ({
           <div
             className={cn(
               variant === "compact" && [
-                "grid grid-cols-[auto_minmax(0,1fr)_auto]",
+                COMPOSER_COMPACT_GRID_CLASS,
                 COMPOSER_COMPACT_ROW_CLASS,
               ],
             )}
@@ -263,7 +312,7 @@ export const ChatInputSurface = ({
                 "chat-editor overflow-hidden",
                 variant === "compact"
                   ? [
-                      "col-start-2 row-start-1",
+                      COMPOSER_COMPACT_TEXT_SEAT_CLASS,
                       COMPOSER_COMPACT_TEXT_CELL_CLASS,
                     ]
                   : ["relative min-w-0", COMPOSER_LARGE_TEXT_WELL_CLASS],
@@ -310,7 +359,7 @@ export const ChatInputSurface = ({
                 className={cn(
                   COMPOSER_LEADING_GROUP_CLASS,
                   variant === "compact"
-                    ? "col-start-1 row-start-1 self-end"
+                    ? COMPOSER_COMPACT_LEADING_SEAT_CLASS
                     : "me-auto",
                 )}
               >
@@ -348,26 +397,36 @@ export const ChatInputSurface = ({
               </ControlGroup>
               <ControlGroup
                 className={cn(
-                  "flex items-center gap-0.5",
-                  variant === "compact" && "col-start-3 row-start-1 self-end",
+                  COMPOSER_TRAILING_GROUP_CLASS,
+                  variant === "compact" && COMPOSER_COMPACT_TRAILING_SEAT_CLASS,
                 )}
               >
-                <span className="me-0.5 inline-flex">
+                <span className={COMPOSER_IMPROVE_SEAT_CLASS}>
                   <ChatPromptImproveButton
                     anonymized={anonymized}
                     controller={controller}
                     disabled={inputDisabled || isBlank}
+                    disabledReason={disabledReasons.improve}
                   />
                 </span>
                 {/* The single primary affordance morphs in place: the button
                   itself resolves send vs. stop from the state it is fed, so
                   this surface cannot render a second, parallel control. */}
+                <ChatComposerQueueButton
+                  canSend={canSend}
+                  offered={queueOffered}
+                  submitDraft={submitDraft}
+                />
                 <ChatComposerActionButton
-                  canSend={!submitDisabled && canSubmit}
+                  canSend={canSend}
+                  disabledReason={disabledReasons.send}
                   guideAnchorsEnabled={guideAnchorsEnabled}
                   isGenerating={isGenerating}
                   onSend={() => {
-                    detached(submitDraft(), "chat-input-surface.submit-draft");
+                    detached(
+                      submitDraft(CHAT_MEMBER_SEND_ACTION.send),
+                      "chat-input-surface.submit-draft",
+                    );
                   }}
                   onStop={onStop}
                   stopping={stopping}

@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 
 import { CAPABILITY_REQUEST_HEADER } from "@stll/api-contract/capability-request";
+import { CHAT_COMMAND_ID_HEADER } from "@stll/api-contract/chat-command";
 
 import { apiPipeline } from "@/api/api-pipeline";
 import { env } from "@/api/env";
@@ -46,4 +47,29 @@ test("browser create requests admit their composed mutation headers", async () =
       expect(allowedHeaders).toContain(header.toLowerCase());
     }
   }
+});
+
+test("a browser chat send may name its command for its retries", async () => {
+  await using server = serveForTest(
+    createHttpApp({ middleware: apiPipeline, routes: routes({}) }),
+  );
+  const origin = new URL(env.FRONTEND_URL).origin;
+  const response = await server.fetch(
+    new Request("http://localhost/v1/chat", {
+      method: "OPTIONS",
+      headers: {
+        Origin: origin,
+        "Access-Control-Request-Method": "POST",
+        "Access-Control-Request-Headers": `content-type, ${CHAT_COMMAND_ID_HEADER}`,
+      },
+    }),
+  );
+  expect(response.status).toBe(204);
+  expect(
+    response.headers
+      .get("Access-Control-Allow-Headers")
+      ?.toLowerCase()
+      .split(",")
+      .map((name) => name.trim()),
+  ).toContain(CHAT_COMMAND_ID_HEADER);
 });

@@ -71,6 +71,11 @@ export const brandPersistedSellerProfileId = (
   sellerProfileId: string,
 ): SafeId<"sellerProfile"> => toSafeId<"sellerProfile">(sellerProfileId);
 
+/** A send id read back from the invoice link lookup. */
+export const brandPersistedInvoiceSendId = (
+  id: string,
+): SafeId<"invoiceSend"> => toSafeId<"invoiceSend">(id);
+
 export const brandPersistedVatRateId = (id: string): SafeId<"vatRate"> =>
   toSafeId<"vatRate">(id);
 
@@ -198,10 +203,6 @@ export const brandValidatedPropertyId = (
 ): SafeId<"property"> | null =>
   isUuid(propertyId) ? toSafeId<"property">(propertyId) : null;
 
-export const brandPersistedPlaybookId = (
-  playbookId: string,
-): SafeId<"playbook"> => toSafeId<"playbook">(playbookId);
-
 export const brandPersistedPlaybookDefinitionId = (
   playbookDefinitionId: string,
 ): SafeId<"playbookDefinition"> =>
@@ -230,6 +231,10 @@ export const brandPersistedDesktopEditSessionId = (
 export const brandPersistedChatThreadId = (
   chatThreadId: string,
 ): SafeId<"chatThread"> => toSafeId<"chatThread">(chatThreadId);
+
+export const brandPersistedChatTurnId = (
+  chatTurnId: string,
+): SafeId<"chatTurn"> => toSafeId<"chatTurn">(chatTurnId);
 
 export const brandPersistedChatThreadCompactionId = (
   chatThreadCompactionId: string,
@@ -351,11 +356,6 @@ export const brandPersistedSearchHistoryEntryId = (
 export const brandPersistedTemplateLookupFormatId = (
   formatId: string,
 ): SafeId<"templateLookupFormat"> => toSafeId<"templateLookupFormat">(formatId);
-
-export const brandPersistedCaseLawResearchColumnId = (
-  researchColumnId: string,
-): SafeId<"caseLawResearchColumn"> =>
-  toSafeId<"caseLawResearchColumn">(researchColumnId);
 
 export const brandPersistedTimeEntryId = (
   timeEntryId: string,

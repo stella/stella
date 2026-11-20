@@ -2,8 +2,8 @@ import type { ReactNode } from "react";
 import { renderToReadableStream, renderToStaticMarkup } from "react-dom/server";
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { Result } from "better-result";
-import { afterAll, describe, expect, test } from "bun:test";
+import { panic, Result } from "better-result";
+import { describe, expect, test } from "bun:test";
 import { Window } from "happy-dom";
 import { IntlProvider } from "use-intl";
 import { createFormatter } from "use-intl/core";
@@ -18,18 +18,32 @@ import {
   ACTION_ADMISSION_CODES,
   ACTION_ADMISSION_REFUSALS,
 } from "@stll/api-contract/action-admission";
+import {
+  BROWSE_WEB_TOOL_NAME,
+  BROWSER_CONTROL_TOOL_NAME,
+} from "@stll/api-contract/browser-control";
 import { createChatPastedTextPart } from "@stll/api-contract/chat";
 import {
   PROVIDER_SETUP_ERROR_CATALOGUE,
   PROVIDER_SETUP_ERROR_CODE,
 } from "@stll/api-contract/provider-setup";
+import { createTestState } from "@stll/test-state";
 
 import { ChatApprovalContext } from "@/components/chat/chat-approval-context";
 import { testChatApprovalContextValue } from "@/components/chat/chat-approval-context.test-fixtures";
 import { ChatMattersContext } from "@/components/chat/chat-matters-context";
-import { getChatAssistantTurnError } from "@/components/chat/chat-ui-tools";
+import type {
+  SubagentChatPart,
+  SubagentChildPart,
+} from "@/components/chat/chat-subagent-parts.logic";
+import {
+  getChatAssistantTurnError,
+  isOpaquePersistedChatToolCallPart,
+  toSubagentChildUIPart,
+} from "@/components/chat/chat-ui-tools";
 import type {
   ChatUIMessage,
+  ChatUIPart,
   PersistedChatMessage,
 } from "@/components/chat/chat-ui-tools";
 import { withLocalRunLimitResetsAt } from "@/features/chat/chat-local-run-limit";
@@ -45,8 +59,9 @@ import {
 import { ProviderDiagnosticError } from "@/lib/errors/provider-diagnostic";
 import { MEDIUM_DATE_SHORT_TIME_FORMAT } from "@/lib/relative-time";
 
-const previousApiUrl = process.env["VITE_API_URL"];
-process.env["VITE_API_URL"] = previousApiUrl ?? "https://api.example.test";
+const testState = createTestState({ file: import.meta.path, config: {} });
+
+testState.setEnvIfAbsent("VITE_API_URL", "https://api.example.test");
 
 const { ChatEditorProvider } =
   await import("@/components/chat-editor-provider");
@@ -59,14 +74,6 @@ const { buildMessageTurns, CHAT_MESSAGE_RENDER_POLICY } =
 const RETRY_BUTTON = />Retry<\/(?:span><\/)?button>/u;
 const RETRY_BUTTONS = new RegExp(RETRY_BUTTON.source, "gu");
 const RESEND_BUTTON = />Resend<\/(?:span><\/)?button>/u;
-
-afterAll(() => {
-  if (previousApiUrl === undefined) {
-    delete process.env["VITE_API_URL"];
-    return;
-  }
-  process.env["VITE_API_URL"] = previousApiUrl;
-});
 
 const withProviders = (children: ReactNode, savedSecretAvailable = false) => {
   const queryClient = new QueryClient();
@@ -1055,6 +1062,157 @@ describe("chat thread messages", () => {
     expect(html).toContain("Use the Acme matter.");
   });
 
+  const browsingTask = "Find the registry's opening hours";
+  const browserApproval = (id: string) => {
+    const input = { action: "open", url: `https://www.example.cz/${id}` };
+    return {
+      approval: { id: `${id}-approval`, needsApproval: true },
+      arguments: JSON.stringify(input),
+      id,
+      input,
+      name: BROWSER_CONTROL_TOOL_NAME,
+      state: "approval-requested",
+      type: "tool-call",
+    } as const;
+  };
+  const browsingRun = (
+    id: string,
+    parts: SubagentChildPart[],
+    status: SubagentChatPart["subagent"]["status"],
+  ): SubagentChatPart => ({
+    subagent: {
+      id,
+      messages: [{ id: `${id}-message`, parts, role: "assistant" }],
+      name: BROWSE_WEB_TOOL_NAME,
+      parentToolCallId: `${id}-call`,
+      status,
+    },
+    type: "subagent",
+  });
+  /** The call that started a run: a tool this release does not register. */
+  const browseWebCall = (id: string) => {
+    const call: unknown = {
+      arguments: JSON.stringify({ task: browsingTask }),
+      id,
+      input: { task: browsingTask },
+      name: BROWSE_WEB_TOOL_NAME,
+      state: "input-complete",
+      type: "tool-call",
+    };
+    return isOpaquePersistedChatToolCallPart(call)
+      ? call
+      : panic("The fixture must be an opaque tool call");
+  };
+  const renderBrowsingTurn = (parts: ChatUIPart[]) =>
+    renderWithProviders(
+      <ChatThreadMessages
+        activitySession={{ reportedUnknownActivityTypes: new Set<string>() }}
+        approvalPendingMessageId="message-browse"
+        messages={[
+          {
+            id: "message-user",
+            parts: [{ type: "text", content: "When is the registry open?" }],
+            role: "user",
+          },
+          { id: "message-browse", parts, role: "assistant" },
+        ]}
+        onAskUserSubmit={() => {}}
+        onCreateDocumentResolve={() => {}}
+        onOpenCreatedDocument={() => {}}
+        streamdownComponents={{
+          a: ({ children, ...props }) => <a {...props}>{children}</a>,
+        }}
+      />,
+    );
+  const approvalCardsOutsideClosedPanels = (html: string) => {
+    const window = new Window();
+    const root = window.document.createElement("div");
+    // safe-html: React's static markup from this test's own components is parsed in a detached document.
+    root.innerHTML = html;
+    return [...root.querySelectorAll("button")]
+      .filter(
+        (button) => button.textContent === messages.chat.approval.allowOnce,
+      )
+      .filter((button) =>
+        [...root.querySelectorAll('[data-slot="collapsible-panel"]')].every(
+          (panel) => !panel.contains(button) || !panel.hasAttribute("hidden"),
+        ),
+      ).length;
+  };
+
+  test("shows a browsing run under its task with its approval card answerable outside any closed disclosure", () => {
+    const html = renderBrowsingTurn([
+      { type: "thinking", content: "The registry publishes its hours." },
+      browseWebCall("run-call"),
+      browsingRun(
+        "run",
+        [
+          { type: "text", content: "Opening the registry." },
+          browserApproval("open-registry"),
+        ],
+        "suspended",
+      ),
+    ]);
+    const text = renderedText(html);
+
+    expect(text).toContain(messages.chat.subagentRun.browseWeb);
+    expect(text).toContain(browsingTask);
+    expect(text).toContain("Opening the registry.");
+    expect(text).toContain(messages.chat.approval.browser.question);
+    expect(approvalCardsOutsideClosedPanels(html)).toBe(1);
+    expect(disclosureExpanded(html, messages.chat.subagentRun.browseWeb)).toBe(
+      "true",
+    );
+    // The run draws the call that started it; the call draws no step.
+    expect(text).not.toContain(messages.chat.tool.unknown);
+  });
+
+  test("keeps a text written before an approval card, which draws no run of steps", () => {
+    const text = renderedText(
+      renderBrowsingTurn([
+        { type: "text", content: "Opening the registry's website." },
+        toSubagentChildUIPart(browserApproval("top-level-page")) ??
+          panic("The fixture must be a canonical browser call"),
+      ]),
+    );
+    expect(text).toContain("Opening the registry's website.");
+    expect(text).toContain(messages.chat.approval.browser.question);
+  });
+
+  test("shows the approval card of a run nested inside a run", () => {
+    const html = renderBrowsingTurn([
+      browseWebCall("outer-call"),
+      browsingRun(
+        "outer",
+        [
+          browseWebCall("inner-call"),
+          browsingRun("inner", [browserApproval("inner-page")], "suspended"),
+        ],
+        // A run whose nested run stopped on an answer stops with it.
+        "suspended",
+      ),
+    ]);
+
+    expect(approvalCardsOutsideClosedPanels(html)).toBe(1);
+    expect(renderedText(html)).toContain("https://www.example.cz/inner-page");
+  });
+
+  test("folds a run that renders settled", () => {
+    const html = renderBrowsingTurn([
+      browseWebCall("run-call"),
+      browsingRun(
+        "run",
+        [{ type: "text", content: "Open 8:00 to 16:00 on weekdays." }],
+        "finished",
+      ),
+    ]);
+
+    expect(disclosureExpanded(html, messages.chat.subagentRun.browseWeb)).toBe(
+      "false",
+    );
+    expect(renderedText(html)).toContain(browsingTask);
+  });
+
   test("folds process steps across invisible tool results into one disclosure", () => {
     const chatMessages: ChatUIMessage[] = [
       {
@@ -1065,8 +1223,9 @@ describe("chat thread messages", () => {
             type: "tool-call",
             id: "tool-call-failed",
             // An external tool name keeps the output untyped, so the fixture
-            // can carry the runtime error shape the renderer inspects.
-            name: "mcp__external-lookup",
+            // can carry the runtime error shape the renderer inspects. Its
+            // verb makes it a read the run's summary counts as a source.
+            name: "mcp__external__lookup",
             arguments: JSON.stringify({ query: "deadline" }),
             state: "error",
             input: { query: "deadline" },
@@ -1084,7 +1243,7 @@ describe("chat thread messages", () => {
           {
             type: "tool-call",
             id: "tool-call-complete",
-            name: "mcp__external-lookup",
+            name: "mcp__external__lookup",
             arguments: JSON.stringify({ query: "governing law" }),
             state: "complete",
             input: { query: "governing law" },
@@ -1117,15 +1276,16 @@ describe("chat thread messages", () => {
     );
 
     // The whole run sits behind one summary of the work that landed,
-    // collapsed by default: the failed call is left out of it, and inside
-    // it reads as a short human line with the raw output tucked behind its
-    // own disclosure.
-    expect(html).toContain(">1 analysis<");
+    // collapsed by default: the failed call is left out of it. The turn went
+    // on to answer, so the failed step reads as retried, with no failure line
+    // in the summary; its raw output stays behind the step's own disclosure.
+    expect(html).toContain(">1 source checked<");
+    expect(html).not.toContain("2 sources checked");
     expect(html).not.toContain("3 steps");
-    expect(disclosureExpanded(html, "1 analysis")).toBe("false");
-    expect(disclosureExpanded(html, "Show details")).toBe("false");
-    expect(html).toContain("This step failed; stella will work around it.");
-    expect(html).toContain(">Show details<");
+    expect(disclosureExpanded(html, "1 source checked")).toBe("false");
+    expect(html).toContain(">Retried<");
+    expect(html).not.toContain("This step failed");
+    expect(html).not.toContain("work around it");
     expect(html).toContain("Here is the answer.");
   });
 

@@ -136,7 +136,9 @@ describe.skipIf(!enabled)(
           const firstWorkspaceId = createSafeId<"workspace">();
           const secondWorkspaceId = createSafeId<"workspace">();
           const workspaceIds = [firstWorkspaceId, secondWorkspaceId];
-          const login = (await client`SELECT current_user AS role`).at(0)?.role;
+          const login = (
+            await client<{ role: string }[]>`SELECT current_user AS role`
+          ).at(0)?.role;
           if (typeof login !== "string") {
             panic("Fixture login required");
           }

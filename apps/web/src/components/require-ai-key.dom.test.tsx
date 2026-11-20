@@ -15,6 +15,7 @@ import {
   aiAvailableResponse,
   aiUnavailableResponse,
 } from "@/__fixtures__/ai-availability";
+import { isDisabledControl } from "@/__fixtures__/disabled-control";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/law/cz/cases/1" });
 
@@ -72,6 +73,7 @@ globalThis.fetch = Object.assign(
           fast: { provider: "google", modelId: "gemini-3.8-flash" },
           reasoning: { provider: "google", modelId: "gemini-3.8-flash" },
           pdf: { provider: "google", modelId: "gemini-3.8-flash" },
+          browse: { provider: "google", modelId: "gemini-3.8-flash" },
         },
         providerDefaultModels: [
           {
@@ -81,6 +83,7 @@ globalThis.fetch = Object.assign(
               fast: { provider: "google", modelId: "gemini-3.8-flash" },
               reasoning: { provider: "google", modelId: "gemini-3.8-flash" },
               pdf: { provider: "google", modelId: "gemini-3.8-flash" },
+              browse: { provider: "google", modelId: "gemini-3.8-flash" },
             },
           },
         ],
@@ -100,6 +103,7 @@ globalThis.fetch = Object.assign(
               fast: null,
               reasoning: null,
               pdf: null,
+              browse: null,
             },
           })
         : Response.json({ error: "Forbidden" }, { status: configStatus });
@@ -109,7 +113,7 @@ globalThis.fetch = Object.assign(
   { preconnect: originalFetch.preconnect },
 );
 
-const { act, cleanup, render, screen, waitFor, fireEvent } =
+const { act, cleanup, render, screen, waitFor, fireEvent, within } =
   await import("@testing-library/react");
 const { QueryClient, QueryClientProvider } =
   await import("@tanstack/react-query");
@@ -244,16 +248,10 @@ test.each([
 );
 
 test.each([
-  [
-    "permission_required",
-    "Only an organization admin can connect an AI provider.",
-  ],
-  [
-    "account_restricted",
-    "AI provider settings are unavailable for this account.",
-  ],
+  ["permission_required", messages.ai.keyRequired.permissionRequired],
+  ["account_restricted", messages.ai.keyRequired.accountFeaturesUnavailable],
 ] as const)(
-  "%s capability never renders settings guidance or reads AI config",
+  "%s capability explains unavailable AI without exposing configuration",
   async (capability, message) => {
     providerConfiguration = capability;
     const queryClient = new QueryClient({
@@ -284,11 +282,16 @@ test.each([
       </QueryClientProvider>,
     );
 
-    await settle();
-    expect(screen.queryByText(message)).toBeNull();
+    const status = await screen.findByRole("status");
+    expect(status.textContent).toContain(message);
     expect(
-      screen.queryByRole("heading", { name: "Connect AI provider" }),
-    ).toBeNull();
+      screen.queryByRole("button", { name: messages.ai.keyRequired.cta }) ===
+        null,
+    ).toBe(true);
+    expect(
+      screen.queryByRole("dialog", { name: messages.ai.keyRequired.title }) ===
+        null,
+    ).toBe(true);
     expect(aiConfigRequests).toBe(0);
     queryClient.clear();
   },
@@ -337,7 +340,7 @@ test("an AI action a member cannot unblock says why instead of doing nothing", a
     });
     expect(proceeded).toBe(false);
     expect(toast).toHaveBeenCalledWith({
-      title: messages.ai.keyRequired.description,
+      title: messages.ai.keyRequired.permissionRequired,
       type: "info",
     });
     expect(
@@ -397,8 +400,17 @@ test("a provider under another provider reuses the outer gate", async () => {
   queryClient.clear();
 });
 
-const { AIProviderSettingsBoundary } =
+const { AIProviderSettingsBoundary: AIProviderSettingsAdmission } =
   await import("@/routes/_protected.settings/organization/-components/organization/ai-provider-settings-boundary");
+
+/** The settings boundary with a stand-in for the settings' pending phase. */
+const AIProviderSettingsBoundary = ({ children }: PropsWithChildren) => (
+  <AIProviderSettingsAdmission
+    pending={<p role="status">{messages.common.loading}</p>}
+  >
+    {children}
+  </AIProviderSettingsAdmission>
+);
 
 const surfaceBoundaries = {
   panel: ({ children }: PropsWithChildren) => (
@@ -485,6 +497,41 @@ test.each(roleSurfaceCases)(
     ).toBeNull();
     expect(await gates.get("gate")?.ensureAIAvailable()).toBe(true);
     expect(aiConfigRequests).toBe(0);
+    queryClient.clear();
+  },
+);
+
+const missingCredentialsCases = [
+  {
+    capability: "allowed",
+    message: messages.ai.keyRequired.description,
+    actions: [messages.ai.keyRequired.cta, messages.common.retry],
+  },
+  {
+    capability: "permission_required",
+    message: messages.ai.keyRequired.permissionRequired,
+    actions: [messages.common.retry],
+  },
+  {
+    capability: "account_restricted",
+    message: messages.ai.keyRequired.accountFeaturesUnavailable,
+    actions: [],
+  },
+] as const;
+
+test.each(missingCredentialsCases)(
+  "missing credentials tell a member with $capability configuration what they can do",
+  async ({ capability, message, actions }) => {
+    providerConfiguration = capability;
+    const { queryClient } = renderSurface(surfaceBoundaries.panel);
+
+    const status = await screen.findByRole("status");
+    expect(within(status).getByText(message)).toBeDefined();
+    expect(
+      within(status)
+        .queryAllByRole("button")
+        .map((button) => button.textContent),
+    ).toEqual([...actions]);
     queryClient.clear();
   },
 );
@@ -742,7 +789,7 @@ test.each(composerAvailabilityCases)(
         ?.setContent(composerText("Which clauses need revision?"));
     });
     const send = screen.getByRole("button", { name: messages.chat.sendPrompt });
-    expect(send.hasAttribute("disabled")).toBe(state.type !== "available");
+    expect(isDisabledControl(send)).toBe(state.type !== "available");
     fireEvent.keyDown(textbox, { key: "Enter" });
     await settle();
     expect(sends.length).toBe(state.type === "available" ? 1 : 0);
@@ -755,7 +802,7 @@ test.each(composerAvailabilityCases)(
         screen.getByRole("button", { name: messages.common.retry }),
       );
       await waitFor(() => {
-        expect(send.hasAttribute("disabled")).toBe(false);
+        expect(isDisabledControl(send)).toBe(false);
       });
       expect(
         screen.getByRole("textbox", { name: messages.chat.placeholder }),
@@ -783,11 +830,14 @@ test("the real chat textbox mounts during a pending availability read", async ()
       ?.setContent(composerText("Which clauses need revision?"));
   });
   expect(
-    screen
-      .getByRole("button", { name: messages.chat.sendPrompt })
-      .hasAttribute("disabled"),
+    isDisabledControl(
+      screen.getByRole("button", { name: messages.chat.sendPrompt }),
+    ),
   ).toBe(true);
   expect(textbox.getAttribute("contenteditable")).toBe("true");
+  // The wait shows in the composer row (send unavailable), not as a line
+  // added above the page that moves it when it goes.
+  expect(screen.queryByText(messages.common.loading)).toBeNull();
   expect(sends.length).toBe(0);
   instanceProvisioned = true;
   await act(async () => {
@@ -795,9 +845,9 @@ test("the real chat textbox mounts during a pending availability read", async ()
   });
   await waitFor(() => {
     expect(
-      screen
-        .getByRole("button", { name: messages.chat.sendPrompt })
-        .hasAttribute("disabled"),
+      isDisabledControl(
+        screen.getByRole("button", { name: messages.chat.sendPrompt }),
+      ),
     ).toBe(false);
   });
   expect(screen.getByRole("textbox", { name: messages.chat.placeholder })).toBe(

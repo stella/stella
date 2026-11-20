@@ -7,6 +7,7 @@ import {
 export default {
   id: "indexes-chat-messages-id-thread-uidx",
   revision: 580,
+  lifecycle: "finalized",
   type: "indexes",
   values: [
     onlineUniqueIndexDefinition(

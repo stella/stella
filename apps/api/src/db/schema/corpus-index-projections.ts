@@ -6,6 +6,7 @@ import {
 } from "@/api/lib/legal-search/corpus-generation-contract";
 import {
   CORPUS_INDEX_APPEND_DELIVERIES,
+  CORPUS_INDEX_APPEND_FAULTS,
   CORPUS_INDEX_DESIRED_ACTIONS,
   CORPUS_INDEX_DOCUMENT_COUNT_REQUIRED_INTENT_STATUSES,
   CORPUS_INDEX_INTENT_STATUSES,
@@ -84,6 +85,13 @@ export const corpusIndexProjectionIntents = p.pgTable(
     appendRequestId: p.uuid("append_request_id"),
     appendRequestRevisionCount: p.integer("append_request_revision_count"),
     appendCommittedAt: timestamptz("append_committed_at"),
+    /**
+     * What a failure of a committed offline revision is charged to
+     * (`CORPUS_INDEX_APPEND_FAULTS`), written with its commit by the record or
+     * the expired-lease sweep. Every prover and the offline request cap read
+     * it. Null on every ingest revision and on an offline one not committed.
+     */
+    appendFault: p.text("append_fault", { enum: CORPUS_INDEX_APPEND_FAULTS }),
     expectedDocumentCount: p.integer("expected_document_count"),
     appliedAt: timestamptz("applied_at"),
     appendPublishBarrierAt: timestamptz("append_publish_barrier_at"),
@@ -208,6 +216,20 @@ export const corpusIndexProjectionIntents = p.pgTable(
       .index("corpus_index_projection_intents_append_request_idx")
       .on(t.appendRequestId)
       .where(sql`${t.appendRequestId} IS NOT NULL`),
+    // The latest offline start of a route, which a new holder of the route's
+    // build waits out: one probe however long the revision history grows.
+    p
+      .index("corpus_index_projection_intents_offline_start_idx")
+      .on(t.family, t.generation, t.indexId, t.appendStartedAt)
+      .where(sql`${t.appendDelivery} = 'offline_indexer'`),
+    // A route's revisions in flight (started, or committed and undecided):
+    // whether an offline build of the route may call it drained, and when
+    // the first of them becomes decidable, read without the generation's
+    // other routes.
+    p
+      .index("corpus_index_projection_intents_route_in_flight_idx")
+      .on(t.family, t.generation, t.indexId)
+      .where(sql`${t.status} IN ('append_started', 'append_committed')`),
     // The absent census's other half: withdrawn revisions the engine must not
     // hold either, read beside the settled ones by the same page.
     p
@@ -262,6 +284,16 @@ export const corpusIndexProjectionIntents = p.pgTable(
           AND (${t.appendCommittedAt} IS NULL OR ${t.appendPublishBarrierAt} IS NOT NULL)
         ELSE false
       END`,
+    ),
+    p.check(
+      "corpus_index_projection_intents_append_fault_values",
+      sql`${t.appendFault} IN (${sqlValues(CORPUS_INDEX_APPEND_FAULTS)})`,
+    ),
+    // An offline revision states what its failure costs from its commit on
+    // (the commit instant is immutable); nothing else carries a fault.
+    p.check(
+      "corpus_index_projection_intents_append_fault_shape",
+      sql`(${t.appendFault} IS NOT NULL) = (${t.appendDelivery} = 'offline_indexer' AND ${t.appendCommittedAt} IS NOT NULL)`,
     ),
     p.check(
       "corpus_index_projection_intents_epoch_positive",
@@ -446,6 +478,88 @@ export const corpusIndexProjectionIntents = p.pgTable(
     ),
     ...globalCaseLawPolicies(),
     ...publicLawReaderPolicies(),
+  ],
+);
+
+/**
+ * One delete task of one index whose revisions may still wait in
+ * `cleanup_committed`: the settlement queue. The revisions' own rows are the
+ * truth; a task row only says where to look, so the settlement claim reads the
+ * next tasks off this table instead of grouping the whole committed backlog.
+ *
+ * Written by the owner's triggers on `corpus_index_projection_intents` in the
+ * transaction that stamps a delete receipt on a revision, so every writer of
+ * the receipt is covered; the online repair `corpus-projection-delete-tasks`
+ * adds the tasks recorded before the triggers existed. Settlement and the
+ * claim delete a task once none of its revisions is left in
+ * `cleanup_committed`, after locking the task row, so a receipt committing
+ * meanwhile is either seen or recreates the row.
+ */
+export const corpusIndexProjectionDeleteTasks = p.pgTable(
+  "corpus_index_projection_delete_tasks",
+  {
+    family: p.text({ enum: CORPUS_FAMILIES }).notNull(),
+    generation: p
+      .varchar({ length: CORPUS_INDEX_GENERATION_MAX_LENGTH })
+      .notNull(),
+    indexId: p.varchar("index_id", { length: 64 }).notNull(),
+    deleteOpstamp: p.bigint("delete_opstamp", { mode: "bigint" }).notNull(),
+    /** The metastore's creation instant for the task, from its receipt. */
+    taskCreatedAt: timestamptz("task_created_at").notNull(),
+    /** The earliest cleanup start among its revisions: the queue order. */
+    cleanupStartedAt: timestamptz("cleanup_started_at").notNull(),
+    /** A settlement turn's lease on the task; null while no turn holds it. */
+    leaseToken: p.uuid("lease_token"),
+    leaseExpiresAt: timestamptz("lease_expires_at"),
+    createdAt: timestamptz("created_at").defaultNow().notNull(),
+  },
+  (t) => [
+    p.primaryKey({
+      name: "corpus_index_projection_delete_tasks_pkey",
+      columns: [t.family, t.generation, t.indexId, t.deleteOpstamp],
+    }),
+    p
+      .foreignKey({
+        name: "corpus_index_projection_delete_tasks_generation_fk",
+        columns: [t.family, t.generation],
+        foreignColumns: [
+          corpusIndexGenerations.family,
+          corpusIndexGenerations.generation,
+        ],
+      })
+      .onDelete("cascade"),
+    // The claim's walk: one index's tasks, oldest cleanup first.
+    p
+      .index("corpus_index_projection_delete_tasks_claim_idx")
+      .on(
+        t.family,
+        t.generation,
+        t.indexId,
+        t.cleanupStartedAt,
+        t.deleteOpstamp,
+      ),
+    p.check(
+      "corpus_index_projection_delete_tasks_family_values",
+      sql`${t.family} IN (${sqlValues(CORPUS_FAMILIES)})`,
+    ),
+    p.check(
+      "corpus_index_projection_delete_tasks_opstamp_nonnegative",
+      sql`${t.deleteOpstamp} >= 0`,
+    ),
+    p.check(
+      "corpus_index_projection_delete_tasks_lease_shape",
+      sql`(${t.leaseToken} IS NULL) = (${t.leaseExpiresAt} IS NULL)`,
+    ),
+    // Row security is forced, so the owner's trigger functions are bound by
+    // policy too. The owner role is named per deployment, so the policy
+    // cannot name it; table privileges decide who reaches the rows.
+    p.pgPolicy("corpus_index_projection_delete_tasks_owner_access", {
+      for: "all",
+      to: "public",
+      using: sql`true`,
+      withCheck: sql`true`,
+    }),
+    ...caseLawIngestionOnlyPolicies(),
   ],
 );
 

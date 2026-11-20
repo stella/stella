@@ -148,6 +148,10 @@ export const TABLE_RETENTION = {
   document_types: {
     boundedBy: "Organization-owned document configuration and deletion.",
   },
+  agent_skill_original_cleanup_requests: {
+    boundedBy:
+      "Durable erasure queue of skill file originals; agentSkills.cleanOriginalObjects deletes each row once its objects are erased.",
+  },
   entity_deletion_cleanup_requests: {
     boundedBy: "Durable deletion queue drained by entity deletion cleanup.",
   },
@@ -169,6 +173,14 @@ export const TABLE_RETENTION = {
   },
   organization_file_usage: {
     boundedBy: "Organization-owned file accounting and deletion.",
+  },
+  email_delivery_failures: {
+    ttlColumn: "failed_at",
+    sweeper: "emailDeliverability.receive",
+  },
+  kept_transcript_deletions: {
+    boundedBy:
+      "One provider id per transcript still kept at the provider, deleted once the provider confirms its delete; dictation.deleteKeptTranscripts retries the rest and reports any kept past an hour.",
   },
   hosted_customer_erasures: {
     boundedBy:

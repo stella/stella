@@ -114,11 +114,32 @@
       "ordentliche erledigung (sachentscheidung)",
       "zurückweisung mangels erheblicher rechtsfrage"
     ],
+    "BRA": [
+      "acórdão",
+      "decisão da presidência",
+      "decisão monocrática",
+      "despacho",
+      "orientação jurisprudencial",
+      "orientação jurisprudencial transitória",
+      "precedente normativo",
+      "súmula"
+    ],
     "CZE": [
       "příkaz ministerstva spravedlnosti",
+      "rozhodnurí",
       "rozhodnutí ministerstva spravedlnosti",
+      "rozhodutí",
+      "rozsudek velkého senátu",
+      "rozsudek.",
+      "směrnice",
       "trestní příkaz",
-      "usnesení ministerstva spravedlnosti"
+      "usnesení ministerstva spravedlnosti",
+      "usnesení velkého senátu",
+      "výtah z materiálu",
+      "zhodnocení",
+      "zpráva",
+      "zásady",
+      "závěry"
     ],
     "EU": ["unknown"],
     "GBR": ["judgment"],

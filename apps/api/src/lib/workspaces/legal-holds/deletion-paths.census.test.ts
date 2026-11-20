@@ -1,10 +1,12 @@
 import { Glob } from "bun";
 import { describe, expect, test } from "bun:test";
+import nodePath from "node:path";
+import { fileURLToPath } from "node:url";
 import ts from "typescript6";
 
 const SOURCE_ROOTS = {
-  src: new URL("../../../", import.meta.url).pathname,
-  scripts: new URL("../../../../scripts/", import.meta.url).pathname,
+  src: fileURLToPath(new URL("../../../", import.meta.url)),
+  scripts: fileURLToPath(new URL("../../../../scripts/", import.meta.url)),
 };
 const PROTECTED_TABLES = new Set([
   "organization",
@@ -141,10 +143,6 @@ const EXCEPTIONS = new Map([
     "Deletes generated account-export archives, not the retained matter sources from which they were generated.",
   ],
   [
-    "handlers/style-sets/delete.ts",
-    "Style package object deletion delegates to the guarded organization-file deletion owner.",
-  ],
-  [
     "handlers/style-sets/storage.ts",
     "Style package rollback and replacement delegate to the guarded organization-file deletion owner.",
   ],
@@ -227,6 +225,10 @@ const EXCEPTIONS = new Map([
   [
     "mcp/file-comparison-run.ts",
     "Comparison staging object cleanup delegates to the guarded organization-file deletion owner.",
+  ],
+  [
+    "handlers/reports/report-export-queue.ts",
+    "Deletes a generated report export its writer left unpublished (exports/ keys), not the retained matter sources it was generated from; the key has no organization prefix, so no hold applies.",
   ],
 ]);
 
@@ -510,7 +512,7 @@ describe("legal hold deletion path census", () => {
         continue;
       }
       const source = await Bun.file(
-        `${SOURCE_ROOTS.src}/${relativePath}`,
+        nodePath.join(SOURCE_ROOTS.src, relativePath),
       ).text();
       if (handlesLegalHoldActiveError(source) && !mapsHoldRefusal(source)) {
         uncovered.push(relativePath);
@@ -612,7 +614,9 @@ describe("legal hold deletion path census", () => {
           continue;
         }
         const path = root === "src" ? relativePath : `${root}/${relativePath}`;
-        const source = await Bun.file(`${directory}/${relativePath}`).text();
+        const source = await Bun.file(
+          nodePath.join(directory, relativePath),
+        ).text();
         if (!mayDelete(source)) {
           continue;
         }

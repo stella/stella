@@ -1,3 +1,4 @@
+import { existsSync, readFileSync } from "node:fs";
 import * as v from "valibot";
 
 import { CLAUDE_STEER_PRIORITY } from "../src/harness/claude-code/protocol";
@@ -39,6 +40,12 @@ export type FakeStep =
    * as the CLI does once a message written mid-turn joins the turn.
    */
   | { echoUser: true }
+  /**
+   * About a user message taken, the last one unless `index` names another:
+   * `echo` it, as the CLI does when it starts a steer it held past its
+   * result as a turn of its own, or report its lifecycle state.
+   */
+  | { aboutUser: "echo" | "started" | "cancelled"; index?: number }
   | { emit: object }
   /** Send a control request and wait for the client's response. */
   | { control: object }
@@ -66,14 +73,30 @@ export type FakeStep =
 /** A scenario that starts differently when the client resumes a session. */
 type FakeScenario =
   | readonly FakeStep[]
-  | { resume: readonly FakeStep[]; fresh: readonly FakeStep[] };
+  | { resume: readonly FakeStep[]; fresh: readonly FakeStep[] }
+  /** One script for the first launch in the log, another for later ones. */
+  | { firstLaunch: readonly FakeStep[]; laterLaunch: readonly FakeStep[] };
 
 export const FAKE_CLAUDE_VERSION = "2.1.309";
 /** The server name the holder registers the browser tools under. */
 const FAKE_BROWSER_SERVER = "stella_browser";
 export const FAKE_RESUMED_SESSION_ID = "4f1d2c3b-5a6e-4b7c-8d9e-0f1a2b3c4d5e";
+/** A transcript entry of the resumed session a fork keeps through. */
+export const FAKE_FORK_BOUNDARY = "7c2e9a41-3b5d-4f6e-8a1c-2d3e4f5a6b7c";
 
+/**
+ * A subscription sign-in as 2.1.309 reports it: the account, with no
+ * `tokenSource` and no `apiKeySource`.
+ */
 const SUBSCRIPTION = {
+  email: "user@example.test",
+  organization: "Example Org",
+  subscriptionType: "max",
+  apiProvider: "firstParty",
+};
+
+/** A subscription sign-in as earlier releases report it. */
+const TOKEN_SOURCE_SUBSCRIPTION = {
   email: "user@example.test",
   subscriptionType: "max",
   tokenSource: "claude.ai",
@@ -290,6 +313,8 @@ export const FAKE_LONG_COMMAND = `echo ${"y".repeat(400)}`;
 /** What `approval_outcome` answers once the command ran, or did not. */
 const FAKE_APPROVED_ANSWER = "Removed draft.md.";
 const FAKE_DENIED_ANSWER = "Left the draft in place.";
+/** What `steered_over_approval` answers the message steered over its request. */
+const FAKE_STEERED_OVER_APPROVAL = "Left the draft and checked the annex.";
 
 export const FAKE_APPROVAL_REASON = "\u001B[33mDeletes a file\u001B[0m";
 
@@ -391,6 +416,37 @@ export const FAKE_SCENARIOS = {
     assistant("msg-2", [{ type: "text", text: "It stopped." }]),
     result(),
   ],
+  /**
+   * As `background_command`, and the next turn runs at another model and
+   * effort, which the process switches to.
+   */
+  background_command_switched: [
+    ...freshTurn(),
+    ...devServer,
+    backgroundTasks([["task-serve", "local_bash"]]),
+    result(),
+    { expect: "set_model", response: { model: "opus" } },
+    { expect: "apply_flag_settings", response: {} },
+    { expect: "set_permission_mode", response: {} },
+    { expectUser: true },
+    backgroundTasks([]),
+    assistant("msg-2", [{ type: "text", text: "It stopped." }]),
+    result(),
+  ],
+  /**
+   * As `background_command_switched`, but the CLI refuses the effort: the
+   * next turn resumes the session in a new process.
+   */
+  background_command_switch_refused: {
+    fresh: [
+      ...freshTurn(),
+      ...devServer,
+      backgroundTasks([["task-serve", "local_bash"]]),
+      result(),
+      { expect: "apply_flag_settings", error: "Unsupported control request" },
+    ],
+    resume: [...freshTurn(), result()],
+  },
   /**
    * A turn that leaves a dev server and a sub-agent running in the
    * background. The sub-agent is stopped at the turn's end, and the turn
@@ -1117,6 +1173,84 @@ export const FAKE_SCENARIOS = {
     assistant("msg-2", [{ type: "text", text: "Checked the annex as well." }]),
     result(),
   ],
+  /**
+   * A command asks for approval; the member declines it with a message
+   * written mid-turn, and the turn answers the message.
+   */
+  steered_over_approval: [
+    ...freshTurn(),
+    assistant("msg-1", [
+      toolUse("call-rm", "Bash", { command: "rm draft.md" }),
+    ]),
+    canUseTool(
+      "call-rm",
+      "Bash",
+      { command: "rm draft.md" },
+      { decision_reason: FAKE_APPROVAL_REASON },
+    ),
+    {
+      byDecision: {
+        // Approved, the message never follows: the turn answers as
+        // `approval_outcome` does.
+        approved: [
+          toolResult("call-rm", ""),
+          assistant("msg-2", [{ type: "text", text: FAKE_APPROVED_ANSWER }]),
+          result(),
+        ],
+        denied: [
+          { echoUser: true },
+          toolResult("call-rm", "The user denied this action.", true),
+          assistant("msg-2", [
+            { type: "text", text: FAKE_STEERED_OVER_APPROVAL },
+          ]),
+          result(),
+        ],
+      },
+    },
+  ],
+  /**
+   * The CLI writes its result while it holds the message written mid-turn,
+   * then reads it and answers it as a turn of its own.
+   */
+  steer_held_past_result: [
+    ...freshTurn(),
+    assistant("msg-1", [toolUse("call-long", "Bash", { command: "ls" })]),
+    { expectUser: true },
+    toolResult("call-long", "notes.md"),
+    assistant("msg-2", [{ type: "text", text: "Only the notes are here." }]),
+    result(),
+    { aboutUser: "started" },
+    { aboutUser: "echo" },
+    assistant("msg-3", [{ type: "text", text: "The annex is not here." }]),
+    result(),
+  ],
+  /**
+   * Two messages written mid-turn are held past the result: the CLI reads
+   * the first and drops the second, then answers the first.
+   */
+  steers_read_and_dropped_past_result: [
+    ...freshTurn(),
+    assistant("msg-1", [toolUse("call-long", "Bash", { command: "ls" })]),
+    { expectUser: true },
+    { expectUser: true },
+    toolResult("call-long", "notes.md"),
+    result(),
+    // The first of the two; the prompt was the first user message taken.
+    { aboutUser: "started", index: -2 },
+    { aboutUser: "echo", index: -2 },
+    { aboutUser: "cancelled" },
+    assistant("msg-3", [{ type: "text", text: "The annex is not here." }]),
+    result(),
+  ],
+  /** As above, but the CLI drops the held message unread. */
+  steer_dropped_past_result: [
+    ...freshTurn(),
+    assistant("msg-1", [toolUse("call-long", "Bash", { command: "ls" })]),
+    { expectUser: true },
+    toolResult("call-long", "notes.md"),
+    result(),
+    { aboutUser: "cancelled" },
+  ],
   /** The turn ends before it takes the message written mid-turn. */
   steer_too_late: [
     ...freshTurn(),
@@ -1156,10 +1290,33 @@ export const FAKE_SCENARIOS = {
     fresh: [...freshTurn(), result()],
   },
   resume_ok: [...freshTurn(), result()],
+  /** The resumed session holds no entry with the boundary's uuid. */
+  fork_missing: {
+    resume: [
+      {
+        emit: {
+          type: "result",
+          subtype: "error_during_execution",
+          is_error: true,
+          num_turns: 0,
+          session_id: FAKE_RESUMED_SESSION_ID,
+          errors: [
+            `No message found with message.uuid of: ${FAKE_FORK_BOUNDARY}`,
+          ],
+        },
+      },
+      { exit: 1 },
+    ],
+    fresh: [...freshTurn(), result()],
+  },
   signed_out: [initialize({ tokenSource: "none", apiProvider: "firstParty" })],
-  /** A key from a Console sign-in would bill the API, not the plan. */
+  /** An API key would bill the API, not the plan (2.1.309's shape). */
   api_key: [
-    initialize({ tokenSource: "none", apiKeySource: "/login managed key" }),
+    initialize({
+      tokenSource: "none",
+      apiKeySource: "ANTHROPIC_API_KEY",
+      apiProvider: "firstParty",
+    }),
   ],
   auth_expired: [
     ...freshTurn(),
@@ -1222,6 +1379,16 @@ export const FAKE_SCENARIOS = {
   malformed: [...freshTurn(), { raw: "{this is not json" }, { sleep: 5000 }],
   /** Alive but silent: `initialize` is never answered. */
   unresponsive: [{ sleep: 60_000 }],
+  /** A first launch too slow to answer `initialize`; the next one is not. */
+  slow_first_start: {
+    firstLaunch: [{ sleep: 60_000 }],
+    laterLaunch: [...freshTurn(), result()],
+  },
+  /** A first launch that never finishes connecting stella's MCP server. */
+  slow_first_mcp: {
+    firstLaunch: [initialize(), { sleep: 60_000 }],
+    laterLaunch: [...freshTurn(), result()],
+  },
   crash: [
     ...freshTurn(),
     assistant("msg-1", [toolUse("call-x", "Bash", { command: "ls" })]),
@@ -1317,6 +1484,23 @@ export const FAKE_SCENARIOS = {
     { exit: 1 },
   ],
   /** A full window whose reset has already passed: the snapshot is stale. */
+  /** An earlier release's subscription sign-in, named in `tokenSource`. */
+  probe_token_source: [
+    initialize(TOKEN_SOURCE_SUBSCRIPTION),
+    {
+      expect: "get_usage",
+      response: {
+        session: {},
+        rate_limits_available: false,
+        rate_limits: null,
+      },
+    },
+  ],
+  /** An API key in use beside a subscription account still bills the API. */
+  probe_api_key_with_subscription: [
+    initialize({ ...SUBSCRIPTION, apiKeySource: "/login managed key" }),
+  ],
+  probe_empty_account: [initialize({})],
   probe_reset_passed: [
     initialize(),
     {
@@ -1357,14 +1541,71 @@ export type FakeScenarioName = keyof typeof FAKE_SCENARIOS;
 const isScenario = (name: string): name is FakeScenarioName =>
   Object.hasOwn(FAKE_SCENARIOS, name);
 
+/**
+ * The CLI's own refusals of its session flags, as the pinned version words
+ * them: it writes the error and exits before any protocol message.
+ */
+const refusedSessionArgs = (args: readonly string[]): string | null => {
+  const resumes = args.includes("--resume");
+  if (args.includes("--resume-session-at") && !resumes) {
+    return "Error: --resume-session-at requires --resume";
+  }
+  if (
+    args.includes("--session-id") &&
+    resumes &&
+    !args.includes("--fork-session")
+  ) {
+    return "Error: --session-id can only be used with --continue or --resume if --fork-session is also specified.";
+  }
+  return null;
+};
+
+/** What the CLI writes about a user message it took (`lastUser` steps). */
+const aboutUser = (
+  { aboutUser: what, index = -1 }: Extract<FakeStep, { aboutUser: unknown }>,
+  users: readonly Record<string, unknown>[],
+) => {
+  const user = users.at(index);
+  return what === "echo"
+    ? {
+        type: "user",
+        message: user?.["message"],
+        parent_tool_use_id: null,
+        session_id: "s",
+        uuid: user?.["uuid"],
+        isReplay: true,
+      }
+    : {
+        type: "command_lifecycle",
+        command_uuid: user?.["uuid"],
+        state: what,
+        uuid: crypto.randomUUID(),
+        session_id: "s",
+      };
+};
+
 export const stepsFor = (
   scenario: FakeScenario,
   args: readonly string[],
+  earlierLaunches = 0,
 ): readonly FakeStep[] => {
+  if ("firstLaunch" in scenario) {
+    return earlierLaunches === 0 ? scenario.firstLaunch : scenario.laterLaunch;
+  }
   if (!("resume" in scenario)) {
     return scenario;
   }
   return args.includes("--resume") ? scenario.resume : scenario.fresh;
+};
+
+/** How many launches the log recorded before this one. */
+const launchesLogged = () => {
+  const logPath = process.env["FAKE_HARNESS_LOG"] ?? "";
+  return existsSync(logPath)
+    ? readFileSync(logPath, "utf-8")
+        .split("\n")
+        .filter((line) => line.startsWith('{"startup":')).length
+    : 0;
 };
 
 const IncomingSchema = v.looseObject({
@@ -1543,6 +1784,7 @@ export const run = async (
   let registeredServers: unknown = undefined;
   /** The client's answer to the last control request a step sent. */
   let lastResponse: { response?: unknown } | null = null;
+  const users: Record<string, unknown>[] = [];
   const queue = [...steps];
   for (let step = queue.shift(); step !== undefined; step = queue.shift()) {
     if ("expect" in step) {
@@ -1562,9 +1804,13 @@ export const run = async (
         response: controlAnswer(step, message.request_id, message.request),
       });
     } else if ("expectUser" in step) {
-      if ((await take("users")) === null) {
+      const user = await take("users");
+      if (user === null) {
         return;
       }
+      users.push(user);
+    } else if ("aboutUser" in step) {
+      write(aboutUser(step, users));
     } else if ("echoUser" in step) {
       const message = await take("users");
       if (message === null) {
@@ -1646,6 +1892,7 @@ export const run = async (
 if (import.meta.main) {
   const scenario = process.argv[2] ?? "";
   const args = process.argv.slice(3);
+  const earlierLaunches = launchesLogged();
   const log = fakeHarnessLog();
   log({
     startup: {
@@ -1661,6 +1908,12 @@ if (import.meta.main) {
     log({ unknownScenario: scenario });
     process.exit(98);
   }
-  await run(stepsFor(FAKE_SCENARIOS[scenario], args), log);
+  const refused = refusedSessionArgs(args);
+  if (refused !== null) {
+    log({ refused });
+    process.stderr.write(`${refused}\n`);
+    process.exit(1);
+  }
+  await run(stepsFor(FAKE_SCENARIOS[scenario], args, earlierLaunches), log);
   process.exit(0);
 }

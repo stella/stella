@@ -52,13 +52,15 @@ jobs:
     # A workflow_run trigger is accepted only from this repository's own
     # release workflow, started by a tag push or a manual dispatch. The tag
     # comes from that run's release manifest, never its head branch (a
-    # dispatched run reports main). Signing builds restore no caches.
+    # dispatched run reports main). Signing builds restore no caches. A
+    # release run whose jobs were all skipped carries no receipt and is ignored.
     if: >-
       (github.event_name == 'workflow_dispatch'
       && github.ref == 'refs/heads/main')
       || (github.event.workflow_run.head_repository.full_name == github.repository
       && github.event.workflow_run.path == '.github/workflows/release.yml'
-      && contains(fromJSON('["push", "workflow_dispatch"]'), github.event.workflow_run.event))
+      && contains(fromJSON('["push", "workflow_dispatch"]'), github.event.workflow_run.event)
+      && github.event.workflow_run.conclusion != 'skipped')
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:
@@ -98,11 +100,15 @@ jobs:
       # Lightweight first-pass checkout of the workflow's own ref
       # (not the release tag yet — that resolves below) so the
       # Resolve step can shell out to scripts/release-channel.sh.
-      # The pinned-SHA checkout further down then re-checks out
-      # the release commit for everything else.
+      # It lives in its own directory: actions/checkout reusing a
+      # sparse repository restores the sparse patterns after its
+      # `sparse-checkout disable`, so the release checkout below
+      # would stay sparse. That checkout clears the workspace and
+      # clones the release commit fresh for everything else.
       - name: Checkout workflow scripts
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          path: .workflow-scripts
           fetch-depth: 0
           sparse-checkout: scripts
           sparse-checkout-cone-mode: false
@@ -111,6 +117,7 @@ jobs:
       - name: Resolve release ref
         timeout-minutes: 5
         id: ref
+        working-directory: .workflow-scripts
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REPOSITORY: ${{ github.repository }}
@@ -163,7 +170,7 @@ jobs:
             exit 1
           fi
 
-          bash "${GITHUB_WORKSPACE}/scripts/retry.sh" git fetch --no-tags origin "refs/tags/${REF}:refs/tags/${REF}"
+          bash scripts/retry.sh git fetch --no-tags origin "refs/tags/${REF}:refs/tags/${REF}"
           if [[ -n "$UPSTREAM_RUN_ID" ]]; then
             receipt_status=0
             bash "$RUNNER_TEMP/check-release-publication-source.sh" "$UPSTREAM_RUN_ID" "$REF" "$RELEASE_SHA" || receipt_status=$?
@@ -337,7 +344,7 @@ jobs:
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
         with:
-          toolchain: 1.99.1
+          toolchain: 1.100.0
           targets: ${{ matrix.rust_targets }}
 
       # The locked crates for every target download once, retried as a unit;
@@ -458,6 +465,50 @@ jobs:
           codesign --verify --verbose=2 \
             --test-requirement="$expected_requirement" \
             "${app_bundles[0]}"
+
+      # The PKCS #11 helper is signed before Tauri bundles the app, with its
+      # own entitlements (the desktop's build:pkcs11-helper script), and
+      # bundled as is; the app's signature seals it and Tauri notarizes both.
+      # Only the helper may load libraries signed by another team.
+      - name: Verify PKCS #11 helper signature
+        if: matrix.os == 'macos'
+        working-directory: apps/desktop
+        env:
+          TARGET: ${{ matrix.target }}
+        run: |
+          if [[ ! -f src-tauri/Pkcs11HelperEntitlements.plist ]]; then
+            echo "This release predates the PKCS #11 helper."
+            exit 0
+          fi
+          shopt -s nullglob
+          app_bundles=(src-tauri/target/"$TARGET"/release/bundle/macos/*.app)
+          app="${app_bundles[0]}"
+          helper="$app/Contents/MacOS/stella-pkcs11-helper"
+          if [[ ! -f "$helper" ]]; then
+            echo "::error::The app bundle has no PKCS #11 helper"
+            exit 1
+          fi
+          codesign --verify --strict --verbose=2 \
+            --test-requirement='=anchor apple generic and certificate leaf[subject.OU] = "4N3QVH454C"' \
+            "$helper"
+          # Read whole, then searched: `grep -q` closing a pipe early would
+          # fail the producer under pipefail.
+          helper_details=$(codesign --display --verbose=2 "$helper" 2>&1)
+          if ! grep -q 'flags=.*runtime' <<<"$helper_details"; then
+            echo "::error::The PKCS #11 helper is not signed with the hardened runtime"
+            exit 1
+          fi
+          entitlement=com.apple.security.cs.disable-library-validation
+          helper_entitlements=$(codesign --display --entitlements - --xml "$helper" 2>/dev/null)
+          if ! grep -q "$entitlement" <<<"$helper_entitlements"; then
+            echo "::error::The PKCS #11 helper lacks $entitlement"
+            exit 1
+          fi
+          app_entitlements=$(codesign --display --entitlements - --xml "$app" 2>/dev/null)
+          if grep -q "$entitlement" <<<"$app_entitlements"; then
+            echo "::error::The app itself must not carry $entitlement"
+            exit 1
+          fi
 
       - name: Build styled DMG without Finder automation
         if: matrix.os == 'macos'

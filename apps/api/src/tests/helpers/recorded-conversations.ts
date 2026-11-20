@@ -12,6 +12,7 @@ import {
 import path from "node:path";
 
 import { buildCreateDocumentDownloadFileName } from "@stll/api-contract/chat-create-document";
+import { CHAT_STEP_LEDGER_KEY } from "@stll/api-contract/chat-step-ledger";
 import { CHAT_TURN_BUDGET } from "@stll/chat-limits";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
@@ -675,33 +676,6 @@ return { id: document.entityId, name: document.name };`;
         );
         await send(recorder, "Thanks", [answers("Anything else?")]);
       },
-      // The user types past a card that still waits: the new message replaces
-      // the waiting turn.
-      "supersede-approval": async (recorder) => {
-        await send(recorder, "Delete the NDA", [
-          asks([approvalCall("call-1")]),
-        ]);
-        await send(recorder, "Keep it and draft a new one", [
-          answers("Drafted"),
-        ]);
-      },
-      // The replacing turn asks for the same tool, and the user allows it for the
-      // conversation: the replaced card stays unanswered.
-      "supersede-approval-then-grant": async (recorder) => {
-        await send(recorder, "Delete the NDA", [
-          asks([approvalCall("call-1")]),
-        ]);
-        await send(recorder, "Delete the older copy instead", [
-          asks([approvalCall("call-2")]),
-        ]);
-        await approve(recorder, "call-2", "allow-in-conversation", [
-          answers("Deleted the older copy"),
-        ]);
-      },
-      "supersede-ask-user": async (recorder) => {
-        await send(recorder, "Draft the NDA", [asks([askUserCall("call-1")])]);
-        await send(recorder, "Use the buyer's form", [answers("Drafted")]);
-      },
       "connection-drop": async (recorder) => {
         const continued = Promise.withResolvers<undefined>();
         recorder.harness.streamLive(recorder.threadId);
@@ -804,6 +778,14 @@ return { id: document.entityId, name: document.name };`;
         // names in each request is only visible to the server, so it is checked
         // here, on every scenario.
         harness.expectStableRefs(threadId);
+        // A code step's ledger is for the page; no model call is handed one,
+        // on its own turn or when a later turn replays it.
+        expect(
+          harness
+            .promptsOf(threadId)
+            .flat()
+            .filter((block) => block.includes(CHAT_STEP_LEDGER_KEY)),
+        ).toEqual([]);
       } catch (error) {
         failure = error;
       } finally {

@@ -55,9 +55,9 @@ const BOOT_PREFETCH_TTL_MS = 30_000;
 const BOOT_PREFETCH_TIMEOUT_MS = 8000;
 
 // One slot per boot path: the key set is closed, so the store cannot grow.
-const slots: Record<BootPrefetchPath, PrefetchSlot | undefined> = {
-  "/get-session": undefined,
-  "/organization/get-active-member-role": undefined,
+const slots: Record<BootPrefetchPath, { current: PrefetchSlot | undefined }> = {
+  "/get-session": { current: undefined },
+  "/organization/get-active-member-role": { current: undefined },
 };
 let prefetchGeneration = 0;
 
@@ -76,11 +76,11 @@ export const takeBootPrefetch = async (
   if (path === undefined) {
     return null;
   }
-  const slot = slots[path];
+  const slot = slots[path].current;
   if (slot === undefined) {
     return null;
   }
-  slots[path] = undefined;
+  slots[path].current = undefined;
   if (
     Temporal.Now.instant().epochMilliseconds - slot.startedAt >
     BOOT_PREFETCH_TTL_MS
@@ -102,8 +102,8 @@ export const takeBootPrefetch = async (
 export const discardBootPrefetch = (): void => {
   prefetchGeneration += 1;
   for (const path of BOOT_PREFETCH_PATHS) {
-    slots[path]?.controller.abort();
-    slots[path] = undefined;
+    slots[path].current?.controller.abort();
+    slots[path].current = undefined;
   }
 };
 
@@ -200,7 +200,7 @@ export const startBootPrefetch = ({
       signal: requestSignal(),
     },
   ).catch(async (error: unknown) => await reportAndDrop(error, "/get-session"));
-  slots["/get-session"] = {
+  slots["/get-session"].current = {
     controller,
     generation,
     startedAt: now(),
@@ -211,7 +211,7 @@ export const startBootPrefetch = ({
   // console errors on every public-page boot. Reading the session response
   // first costs one round trip of latency only for signed-in users, and both
   // requests still finish while the route graph is downloading.
-  slots["/organization/get-active-member-role"] = {
+  slots["/organization/get-active-member-role"].current = {
     startedAt: now(),
     controller,
     generation,

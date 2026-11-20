@@ -79,6 +79,11 @@ const ROUTE_PRESENTATION_EXEMPTIONS: Readonly<Record<string, RouteExemption>> =
     "/consent": {
       reason: "Standalone consent shell; it does not render app breadcrumbs.",
     },
+    "/invoice-link": {
+      reason:
+        "Standalone invoice document; it does not render app breadcrumbs.",
+      fields: ["breadcrumb"],
+    },
     "/dev": { reason: "Development-only component catalogue." },
     "/law/$country/cases/$court/$slug": {
       reason: "The public law reader owns its document breadcrumb.",
@@ -87,6 +92,14 @@ const ROUTE_PRESENTATION_EXEMPTIONS: Readonly<Record<string, RouteExemption>> =
       reason: "The public law reader owns its document breadcrumb.",
     },
     "/law/": { reason: "The public law shell owns its breadcrumb." },
+    "/law/$country/": {
+      reason: "The public law hub renders its own heading.",
+      fields: ["breadcrumb"],
+    },
+    "/law/$country/courts/$": {
+      reason: "The public law hub renders its own heading and crumb trail.",
+      fields: ["breadcrumb"],
+    },
     "/law/$country/statutes/": {
       reason: "The public law shell owns its statutes breadcrumb.",
       fields: ["breadcrumb"],
@@ -103,7 +116,7 @@ const ROUTE_PRESENTATION_EXEMPTIONS: Readonly<Record<string, RouteExemption>> =
       reason: "Redirects to the public case-law search.",
     },
     "/law/cases/research/$tableId": {
-      reason: "The public law shell owns research presentation.",
+      reason: "Redirects to the public case-law search.",
     },
     "/law/coverage": {
       reason: "The public law shell owns coverage breadcrumbs.",
@@ -296,7 +309,7 @@ function findMissingRoutePresentation({
     const source =
       sourcePath === undefined
         ? undefined
-        : sourcesByPath.get(sourcePath)?.source;
+        : withPageModuleSources(sourcePath, sourcesByPath);
     if (source === undefined) {
       missing.push(`${id}: source`);
       continue;
@@ -327,6 +340,35 @@ function findMissingRoutePresentation({
     }
   }
   return missing.toSorted();
+}
+
+/**
+ * A route file's source with the page modules it renders (`./-x.page`): a
+ * converted route keeps its options in the route file and its component, a
+ * `<RouteDocumentTitle>` included, in the page module.
+ */
+function withPageModuleSources(
+  sourcePath: string,
+  sourcesByPath: ReadonlyMap<string, RouteSource>,
+): string | undefined {
+  const source = sourcesByPath.get(sourcePath)?.source;
+  if (source === undefined) {
+    return undefined;
+  }
+  const pageImport = /from "\.\/(-[^"]+\.page)"/gu;
+  const pageSources = [...source.matchAll(pageImport)].flatMap((match) => {
+    const pageModule = match[1];
+    if (pageModule === undefined) {
+      return [];
+    }
+    const pagePath = path.posix.join(
+      path.posix.dirname(sourcePath),
+      pageModule,
+    );
+    const pageSource = sourcesByPath.get(pagePath)?.source;
+    return pageSource === undefined ? [] : [pageSource];
+  });
+  return [source, ...pageSources].join("\n");
 }
 
 function routeSourcePaths(routeTree: string): Map<string, string> {

@@ -1,7 +1,13 @@
 import { useLocale, useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
-import { ClipboardIcon, Clock3Icon, FileTextIcon } from "@stll/ui/icons";
+import {
+  ClipboardIcon,
+  Clock3Icon,
+  DictateIcon,
+  FileTextIcon,
+  SignatureIcon,
+} from "@stll/ui/icons";
 import { Separator } from "@stll/ui/separator";
 
 import { formatShortcut } from "../shared/shortcut-keys";
@@ -58,6 +64,26 @@ export const HowItWorksStep = ({ onBack, onContinue, snapshot }: StepProps) => {
           icon={<ClipboardIcon className="size-4" />}
           title={t("howClipboard")}
         />
+        <Separator />
+        <FeatureRow
+          description={
+            DESKTOP_PLATFORM === "mac"
+              ? t("howSigningBodyMac")
+              : t("howSigningBodyPc")
+          }
+          icon={<SignatureIcon className="size-4" />}
+          title={t("howSigning")}
+        />
+        {snapshot.dictationAvailable ? (
+          <>
+            <Separator />
+            <FeatureRow
+              description={t("howDictationBody")}
+              icon={<DictateIcon className="size-4" />}
+              title={t("howDictation")}
+            />
+          </>
+        ) : null}
         {snapshot.activityAvailable ? (
           <>
             <Separator />

@@ -11,6 +11,7 @@ import {
 
 import {
   chatBackgroundTasksChangedRealtimeEvent,
+  chatQueueChangedRealtimeEvent,
   chatRunsChangedRealtimeEvent,
   chatThreadsChangedRealtimeEvent,
   type DesktopEditSessionRealtimeEvent,
@@ -134,6 +135,7 @@ const FANOUT_CASES: { [C in RealtimeChannel]: readonly ChannelEvent[C][] } = {
   user: [
     newNotificationRealtimeEvent(),
     chatBackgroundTasksChangedRealtimeEvent(),
+    chatQueueChangedRealtimeEvent(),
     chatRunsChangedRealtimeEvent(),
     chatThreadsChangedRealtimeEvent(),
   ],
@@ -251,6 +253,9 @@ const createFakeSubscriber = (): FakeSubscriberClient => {
 
 const loopbackPublisher = createSseBroadcastPublisher({
   createClient: () => ({
+    connect: async () => undefined,
+    close: () => undefined,
+    onClose: () => () => undefined,
     publish: async (_channel, message) => {
       redisPublishes += 1;
       for (const deliver of subscriberCallbacks) {

@@ -52,11 +52,16 @@ export const InitializeResponseSchema = v.object({
     }),
   ),
   account: v.object({
-    /** `none` when no subscription sign-in is present. */
+    /**
+     * `none` when no subscription sign-in is present. Newer releases leave it
+     * out for a subscription sign-in and report the account instead.
+     */
     tokenSource: v.optional(v.string()),
     /** Where an API key would come from; `none` when no key is in use. */
     apiKeySource: v.optional(v.string()),
     subscriptionType: v.optional(v.string()),
+    /** Read only to tell a sign-in is present; never logged or reported. */
+    email: v.optional(v.string()),
     apiProvider: v.optional(v.string()),
   }),
   claude_code_version: v.optional(v.string()),
@@ -106,6 +111,7 @@ const CLAUDE_MESSAGE_TYPES = [
   "conversation_reset",
   "active_goal",
   "keep_alive",
+  "command_lifecycle",
 ] as const;
 export type ClaudeMessageType = (typeof CLAUDE_MESSAGE_TYPES)[number];
 
@@ -212,6 +218,8 @@ export const AssistantMessageSchema = v.object({
   parent_tool_use_id: ParentToolUseId,
   /** Set on the synthetic message an API failure produces. */
   error: v.optional(v.string()),
+  /** The message's entry in the session's transcript. */
+  uuid: v.optional(v.string()),
 });
 
 const TextBlockSchema = v.object({
@@ -263,6 +271,24 @@ export const UserMessageSchema = v.object({
 export const CLAUDE_STOPPED_TOOL_KINDS: ReadonlySet<string> = new Set([
   "cancelled",
   "interrupted",
+]);
+
+/**
+ * What became of a message written to stdin with a uuid: `started` once the
+ * CLI reads it into the conversation; `cancelled`, `discarded` or `refused`
+ * when it drops it unread.
+ */
+export const CommandLifecycleSchema = v.object({
+  type: v.literal("command_lifecycle"),
+  command_uuid: v.string(),
+  state: v.string(),
+});
+
+/** The states of a message the CLI dropped without reading it. */
+export const CLAUDE_DROPPED_COMMAND_STATES: ReadonlySet<string> = new Set([
+  "cancelled",
+  "discarded",
+  "refused",
 ]);
 
 export const ResultMessageSchema = v.object({
@@ -384,6 +410,8 @@ export type ClaudeHostControlRequest =
   | "get_usage"
   | "mcp_set_servers"
   | "set_permission_mode"
+  | "set_model"
+  | "apply_flag_settings"
   | "stop_task";
 
 /**

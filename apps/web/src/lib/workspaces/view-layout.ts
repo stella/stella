@@ -19,6 +19,22 @@ export type AvtWorkspaceView = WorkspaceView & {
 export const isAvtView = (view: WorkspaceView): view is AvtWorkspaceView =>
   view.layout.type === "avt";
 
+export type FilesystemWorkspaceView = WorkspaceView & {
+  layout: Extract<ViewLayout, { type: "filesystem" }>;
+};
+
+export const isFilesystemView = (
+  view: WorkspaceView,
+): view is FilesystemWorkspaceView => view.layout.type === "filesystem";
+
+export type CalendarWorkspaceView = WorkspaceView & {
+  layout: Extract<ViewLayout, { type: "calendar" }>;
+};
+
+export const isCalendarView = (
+  view: WorkspaceView,
+): view is CalendarWorkspaceView => view.layout.type === "calendar";
+
 /** A new AVT view has no list until the reviewer picks one. */
 export const EMPTY_AVT_LAYOUT = {
   version: 1,

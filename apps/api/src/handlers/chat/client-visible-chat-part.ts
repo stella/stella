@@ -1,33 +1,113 @@
-import { EventType, type StreamChunk } from "@tanstack/ai";
-import { panic } from "better-result";
+import { EventType, type StreamChunk, wireSubagentInfo } from "@tanstack/ai";
+import { panic, Result } from "better-result";
 
 import {
   isUnsupportedChatPart,
   UNSUPPORTED_CHAT_PART_ACTIVITY_TYPE,
 } from "@stll/api-contract/chat";
+import { supersededToolResults } from "@stll/api-contract/chat-tool-result-retention";
 
-import { isChatPart } from "@/api/handlers/chat/chat-message-parts";
+import {
+  clientVisibleChatPart,
+  isChatPart,
+  retainSubagentResults,
+  SUBAGENT_RESULT_RETENTION,
+} from "@/api/handlers/chat/chat-message-parts";
 import { isTanStackStreamEventType } from "@/api/handlers/chat/tanstack-chat-lifecycle";
 import {
   projectSupersededPart,
   supersededCallOutputs,
 } from "@/api/handlers/chat/tool-result-retention";
-import type { ChatPart } from "@/api/handlers/chat/types";
-
-/** The client sees where an unknown stored part sits, never its raw payload. */
-export const clientVisibleChatPart = (part: ChatPart): ChatPart =>
-  isUnsupportedChatPart(part)
-    ? {
-        type: "activity",
-        activityType: UNSUPPORTED_CHAT_PART_ACTIVITY_TYPE,
-        content: {},
-      }
-    : part;
+import { arrayOrEmpty } from "@/api/lib/array";
 
 type SnapshotMessage = Extract<
   StreamChunk,
   { type: EventType.MESSAGES_SNAPSHOT }
 >["messages"][number];
+
+/** The sub-agent run a wire message belongs to (AG-UI `subagentRunId`), as
+ *  the SDK tags a child's messages when it serializes a sub-agent part. */
+const snapshotSubagentRunId = (message: SnapshotMessage): string | null => {
+  if ("parts" in message) {
+    return null;
+  }
+  const id: unknown = Reflect.get(message, "subagentRunId");
+  return typeof id === "string" && id.length > 0 ? id : null;
+};
+
+const parseJsonContent = (content: unknown): unknown => {
+  if (typeof content !== "string") {
+    return undefined;
+  }
+  const parsed = Result.try((): unknown => JSON.parse(content));
+  return Result.isError(parsed) ? undefined : parsed.value;
+};
+
+/**
+ * A snapshot's sub-agent rows with each run's tool results kept as the run's
+ * status allows (`SUBAGENT_RESULT_RETENTION`), as its stored part keeps them.
+ * The SDK serializes a sub-agent part as its child's own wire messages, each
+ * tagged with the run and its status, so a snapshot carries a child's results
+ * as `tool` rows of the run, never as parts.
+ */
+const retainSubagentWireResults = (
+  messages: readonly SnapshotMessage[],
+): readonly SnapshotMessage[] => {
+  const runs = new Map<string, SnapshotMessage[]>();
+  for (const message of messages) {
+    const runId = snapshotSubagentRunId(message);
+    if (runId === null) {
+      continue;
+    }
+    const run = runs.get(runId);
+    if (run === undefined) {
+      runs.set(runId, [message]);
+    } else {
+      run.push(message);
+    }
+  }
+  const projections = new Map<SnapshotMessage, unknown>();
+  for (const run of runs.values()) {
+    const status = run
+      .map((message) => wireSubagentInfo(message)?.status)
+      .find((candidate) => candidate !== undefined);
+    const toolNames = new Map(
+      run.flatMap((message) =>
+        message.role === "assistant"
+          ? arrayOrEmpty(message.toolCalls).map(
+              (call) => [call.id, call.function.name] as const,
+            )
+          : [],
+      ),
+    );
+    const superseded = supersededToolResults(
+      run,
+      (message) => {
+        if (message.role !== "tool") {
+          return null;
+        }
+        const toolName = toolNames.get(message.toolCallId);
+        return toolName === undefined
+          ? null
+          : { output: parseJsonContent(message.content), toolName };
+      },
+      // A run whose tag carries no status keeps its newest result.
+      status === undefined ? undefined : SUBAGENT_RESULT_RETENTION[status],
+    );
+    for (const [message, projection] of superseded) {
+      projections.set(message, projection);
+    }
+  }
+  if (projections.size === 0) {
+    return messages;
+  }
+  return messages.map((message) => {
+    const projection = projections.get(message);
+    return projection === undefined || message.role !== "tool"
+      ? message
+      : { ...message, content: JSON.stringify(projection) };
+  });
+};
 
 const clientVisibleSnapshotMessage = (
   message: SnapshotMessage,
@@ -47,12 +127,14 @@ const clientVisibleSnapshotMessage = (
     Array.isArray(message.parts)
   ) {
     const parts: unknown[] = message.parts;
-    if (parts.some(isUnsupportedChatPart)) {
-      const visible = {
-        parts: parts.map((part) =>
-          isUnsupportedChatPart(part) ? clientVisibleChatPart(part) : part,
-        ),
-      };
+    const visibleParts = parts.map((part) =>
+      isUnsupportedChatPart(part) ||
+      (isChatPart(part) && part.type === "subagent")
+        ? clientVisibleChatPart(part)
+        : part,
+    );
+    if (visibleParts.some((part, index) => part !== parts.at(index))) {
+      const visible = { parts: visibleParts };
       return { ...message, ...visible };
     }
   }
@@ -71,9 +153,9 @@ const snapshotParts = (message: SnapshotMessage): unknown[] | null =>
 /**
  * A snapshot's messages with each superseded tool result projected, as the
  * message stores it (`chat-tool-result-retention`): on the parts of the
- * message that made the call, and on the `tool` message the engine carries
- * beside them. Without it, a snapshot of a paused browsing turn would carry
- * every page the turn read.
+ * message that made the call, on the `tool` message the engine carries
+ * beside them, and inside each sub-agent part's child messages. Without it,
+ * a snapshot of a paused browsing turn would carry every page the turn read.
  */
 const retainSnapshotToolResults = (
   messages: readonly SnapshotMessage[],
@@ -85,21 +167,26 @@ const retainSnapshotToolResults = (
       return message;
     }
     const superseded = supersededCallOutputs(parts.filter(isChatPart));
-    if (superseded.size === 0) {
-      return message;
-    }
     for (const [callId, projection] of superseded) {
       projections.set(callId, projection);
     }
-    const visible = {
-      parts: parts.map((part) =>
-        isChatPart(part) ? projectSupersededPart(part, superseded) : part,
-      ),
-    };
+    // A sub-agent part's child keeps its results as the part stores them.
+    const visibleParts = parts.map((part) => {
+      if (!isChatPart(part)) {
+        return part;
+      }
+      return part.type === "subagent"
+        ? retainSubagentResults(part)
+        : projectSupersededPart(part, superseded);
+    });
+    if (visibleParts.every((part, index) => part === parts.at(index))) {
+      return message;
+    }
+    const visible = { parts: visibleParts };
     return { ...message, ...visible };
   });
   if (projections.size === 0) {
-    return messages;
+    return withParts;
   }
   return withParts.map((message) => {
     if (message.role !== "tool") {
@@ -120,9 +207,9 @@ export const clientVisibleStreamChunk = (chunk: StreamChunk): StreamChunk => {
   }
   switch (chunk.type) {
     case EventType.MESSAGES_SNAPSHOT: {
-      const messages = retainSnapshotToolResults(chunk.messages).map(
-        clientVisibleSnapshotMessage,
-      );
+      const messages = retainSubagentWireResults(
+        retainSnapshotToolResults(chunk.messages),
+      ).map(clientVisibleSnapshotMessage);
       return messages.every(
         (message, index) => message === chunk.messages[index],
       )

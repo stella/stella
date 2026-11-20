@@ -186,6 +186,13 @@ export type SupportedProvisionCitationGrammar<
   locateAbbreviatedProvisions: (text: string) => LocatedProvisionCitation[];
   locateGazetteCitations: (text: string) => LocatedGazetteCitation[];
   parseReference: (raw: string) => ProvisionReference | null;
+  /**
+   * The provisions a citation's own words name, from its first designator,
+   * whatever names the act after them: `§ 240 odst. 1 a 2 OSŘ` names
+   * subsections 1 and 2 of § 240. A link's label can be narrower than the
+   * provision its address lands on, and this is what it narrows to.
+   */
+  readLabelProvisions: (text: string) => ProvisionReference[];
   normalizeReference: (
     reference: ProvisionReference,
   ) => ProvisionReference | null;
@@ -413,6 +420,7 @@ export const createProvisionCitationGrammar = <
     return referenceOf(compiledLevels, values, unit);
   };
   const head = new RegExp(levels[0].marker, "giu");
+  const firstHead = new RegExp(levels[0].marker, "iu");
   const connector = sticky(`\\s*(?:${connectors.join("|")})\\s*`);
   const abbreviationAfter =
     abbreviations.length === 0
@@ -531,24 +539,8 @@ export const createProvisionCitationGrammar = <
     return parseCoordinatedValue(text, index, previous);
   };
 
-  type Chain = {
-    abbreviation: string;
-    elements: ChainElement[];
-    end: number;
-    /** The sentence the last element names, if it names one. */
-    sentence: string | null;
-  };
-
-  /**
-   * The chain opened by a designator at `index`, if an abbreviation closes
-   * it. Coordination is read greedily and given back one element at a time
-   * when no abbreviation follows, so a connector that opened prose rather
-   * than a further provision costs the chain nothing.
-   */
-  const parseChain = (text: string, index: number): Chain | null => {
-    if (abbreviationAfter === null) {
-      return null;
-    }
+  /** The designator-led element at `index` and every one coordinated after it. */
+  const readElements = (text: string, index: number): ChainElement[] | null => {
     const first = parseElement(text, index, 0, []);
     if (first === null) {
       return null;
@@ -570,6 +562,31 @@ export const createProvisionCitationGrammar = <
       }
       elements.push(next);
       position = next.end;
+    }
+    return elements;
+  };
+
+  type Chain = {
+    abbreviation: string;
+    elements: ChainElement[];
+    end: number;
+    /** The sentence the last element names, if it names one. */
+    sentence: string | null;
+  };
+
+  /**
+   * The chain opened by a designator at `index`, if an abbreviation closes
+   * it. Coordination is read greedily and given back one element at a time
+   * when no abbreviation follows, so a connector that opened prose rather
+   * than a further provision costs the chain nothing.
+   */
+  const parseChain = (text: string, index: number): Chain | null => {
+    if (abbreviationAfter === null) {
+      return null;
+    }
+    const elements = readElements(text, index);
+    if (elements === null) {
+      return null;
     }
     while (elements.length > 0) {
       const last = elements.at(-1);
@@ -647,6 +664,15 @@ export const createProvisionCitationGrammar = <
         return null;
       }
       return referenceOf(compiledLevels, element.values, unit);
+    },
+    readLabelProvisions: (text) => {
+      const opener = firstHead.exec(text);
+      const elements =
+        opener === null ? null : readElements(text, opener.index);
+      return (elements ?? []).flatMap((element) => {
+        const reference = referenceOf(compiledLevels, element.values, unit);
+        return reference === null ? [] : [reference];
+      });
     },
     anchor,
     parseAnchor,
@@ -895,6 +921,10 @@ export const PROVISION_CITATION_GRAMMARS = {
     parseAnchor: parseEuProvisionAnchor,
     normalizeReference: normalizeEuProvisionReference,
     parseReference: parseEuProvisionReference,
+    // An EU label names its act with its article, so the located citations
+    // are the label's provisions.
+    readLabelProvisions: (text: string) =>
+      locateEuProvisionCitations(text).map(({ reference }) => reference),
     locateGazetteCitations: () => [],
     gazette: {
       parse: (raw: string) => {
@@ -983,6 +1013,11 @@ export const PROVISION_CITATION_GRAMMARS = {
     parseAnchor: parseUsCodeAnchor,
     normalizeReference: normalizeUsCodeReference,
     parseReference: parseUsCodeReference,
+    readLabelProvisions: (text: string) =>
+      locateUsCodeCitations(text).flatMap((citation) => {
+        const reference = usCodeReference(citation);
+        return reference === null ? [] : [reference];
+      }),
     // A US citation names its section and its work in one span, so the
     // work-level reading would only repeat the provision: the provision
     // carries the work's ELI.

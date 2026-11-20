@@ -1,4 +1,7 @@
 {
+  "common": {
+    "previewTruncated": "Der vollständige Text ist in dieser Vorschau nicht verfügbar."
+  },
   "tabs": {
     "chat": "Chat",
     "close": "Schließen",
@@ -85,6 +88,7 @@
     "documentClose": "Schließen",
     "approvalBrowserNote": "Freigegeben läuft es in Ihrem Browser auf Ihrem Computer, über die stella-Erweiterung.",
     "grantFailed": "Die Freigabe konnte nicht gespeichert werden. Versuchen Sie es erneut.",
+    "limitReminderFailed": "Die Änderung konnte nicht gespeichert werden. Versuchen Sie es erneut.",
     "elsewhereBrowser": "Dieser Schritt läuft in Ihrem Browser auf Ihrem Computer, über die stella-Erweiterung. Öffnen Sie diese Unterhaltung dort in stella, um ihn abzuschließen.",
     "elsewhereSecret": "Dieser Schritt braucht einen Schlüssel. Aus Sicherheitsgründen werden Schlüssel in stella auf Ihrem Computer hinzugefügt, nicht in der App.",
     "elsewhereConnector": "Dieser Schritt verbindet eine App. Aus Sicherheitsgründen werden Apps in stella auf Ihrem Computer verbunden, nicht in der App.",
@@ -103,6 +107,8 @@
     "pickFailed": "Die Dateiauswahl konnte nicht geöffnet werden. Versuchen Sie es erneut.",
     "sendFileRefused": "Eine Datei konnte nicht gesendet werden, daher wurde die Nachricht nicht gesendet. Entfernen Sie die Datei und versuchen Sie es erneut.",
     "sendFileNotAnonymizable": "Diese Unterhaltung ist anonymisiert, und stella konnte eine der Dateien nicht anonymisieren, daher wurde nichts gesendet. Entfernen Sie die Datei und versuchen Sie es erneut.",
+    "sendLocalRunNotAnonymizable": "Diese Unterhaltung ist anonymisiert, und der Coding-Agent auf Ihrem Computer liest Ihre Dokumente so, wie sie sind, daher wurde ihm nichts gesendet.",
+    "sendWithoutAnonymization": "Ohne Anonymisierung senden",
     "pickTitle": "Unterhaltung wählen",
     "pickDescription": "Wählen Sie einen Verlauf aus der Liste oder beginnen Sie mit + einen neuen.",
     "runBanner": {
@@ -124,6 +130,8 @@
       "boe_search_legislation": "BOE-Gesetzessuche",
       "borme_get_summary": "BORME-Tageszusammenfassung",
       "business_registry_lookup": "Handelsregister durchsuchen",
+      "calendar_free_busy": "Verfügbarkeit im Kalender prüfen",
+      "calendar_list_events": "Kalendertermine lesen",
       "command_execution": "Befehl wird ausgeführt",
       "compare_versions": "Versionen vergleichen",
       "configure_template_fields": "Vorlagenfelder konfigurieren",
@@ -140,10 +148,10 @@
       "delete_reader_annotation": "Hervorhebung oder Kommentar löschen",
       "delete_task": "Aufgabe löschen",
       "delete_time_entry": "Zeiteintrag löschen",
-      "describe-stella-api": "Datensuche vorbereiten",
-      "describe-stella-function": "Datensuche vorbereiten",
+      "describe-stella-api": "Quellen auswählen",
+      "describe-stella-function": "Quellen auswählen",
       "describe_template": "Vorlagenfelder lesen",
-      "discover_tools": "Datensuche vorbereiten",
+      "discover_tools": "Quellen auswählen",
       "execute-typescript": "Akten-Daten lesen",
       "execute_typescript": "Akten-Daten lesen",
       "expand-chat-history": "Chatverlauf lesen",
@@ -183,6 +191,7 @@
       "save_document": "Dokument speichern",
       "save_matter": "Akte speichern",
       "save_playbook": "Playbook speichern",
+      "save_skill_package": "Skill speichern",
       "save_task": "Aufgabe speichern",
       "save_template": "Vorlage speichern",
       "save_time_entry": "Zeiteintrag speichern",
@@ -205,7 +214,13 @@
       "update_reader_annotation": "Hervorhebung oder Kommentar bearbeiten",
       "use-browser": "Ihren Browser verwenden",
       "use_connector_secret": "Zugangsdaten des Connectors verwenden",
+      "validate_skill_package": "Skill prüfen",
       "web_search": "Web wird durchsucht"
+    },
+    "toolResearch": {
+      "caseLaw": "Rechtsprechung durchsuchen",
+      "legislation": "Rechtsvorschriften lesen",
+      "legislationAndCaseLaw": "Rechtsvorschriften und Rechtsprechung durchsuchen"
     },
     "localRun": {
       "title": {
@@ -246,15 +261,33 @@
         "loadFailed": "Konnte nicht geladen werden.",
         "showMore": "Mehr anzeigen"
       },
-      "sessionNotResumed": "Der Coding-Agent auf Ihrem Computer konnte nicht dort weitermachen, wo er aufgehört hatte. Er hat daher anhand der Nachrichten in diesem Chat weitergearbeitet."
+      "sessionNotResumed": "Der Coding-Agent auf Ihrem Computer konnte nicht dort weitermachen, wo er aufgehört hatte. Er hat daher anhand der Nachrichten in diesem Chat weitergearbeitet.",
+      "steered": "Während der Arbeit des Agenten gesendet",
+      "ranOnModel": "Ausgeführt mit {model}",
+      "desktopSettingsSteps": "Öffnen Sie in stella desktop auf Ihrem Computer Einstellungen › Allgemein › KI-Abonnements.",
+      "errorLimitResetsAt": "Der Coding-Agent auf Ihrem Computer hat sein Nutzungslimit erreicht. Sie können es ab {time} erneut versuchen.",
+      "limitReminderNotify": "Benachrichtigen, sobald es zurückgesetzt ist",
+      "limitReminderScheduled": "Wir benachrichtigen Sie ab {time}.",
+      "limitResumeContinue": "Automatisch fortsetzen, sobald es zurückgesetzt ist",
+      "limitResumeScheduled": "Wird ab {time} automatisch fortgesetzt.",
+      "limitReminderCancel": "Abbrechen"
     },
     "processSummary": {
       "sourcesChecked": "{count, plural, one {# Quelle geprüft} other {# Quellen geprüft}}",
       "documentEdits": "{count, plural, one {# Dokumentänderung} other {# Dokumentänderungen}}",
       "changesSaved": "{count, plural, one {# Änderung gespeichert} other {# Änderungen gespeichert}}",
-      "analyses": "{count, plural, one {# Analyse} other {# Analysen}}"
+      "searchedLegislation": "Rechtsvorschriften durchsucht",
+      "searchedCaseLaw": "Rechtsprechung durchsucht",
+      "searchedLegislationAndCaseLaw": "Rechtsvorschriften und Rechtsprechung durchsucht",
+      "readDocument": "Dokument gelesen",
+      "readDocuments": "Dokumente gelesen",
+      "searchedMatters": "Akten durchgesehen",
+      "checkedRegisters": "Öffentliche Register geprüft",
+      "searchedWeb": "Web durchsucht",
+      "searchedChats": "Chatverlauf durchsucht"
     },
     "stepCount": "{count, plural, one {# Schritt} other {# Schritte}}",
+    "lookupCount": "{count, plural, one {# Abfrage} other {# Abfragen}}",
     "reasoning": "Argumentation",
     "historyTrimmed": "Ältere Nachrichten konnten nicht zusammengefasst werden. Diese Antwort berücksichtigt daher nur den jüngsten Teil der Unterhaltung.",
     "failure": {
@@ -285,6 +318,74 @@
       "sendErrorQuotaExhausted": "Das Kontingent des KI-Anbieters ist ausgeschöpft. Versuchen Sie es in einer Minute erneut, oder wenden Sie sich an Ihren Arbeitsbereichs-Admin.",
       "sendErrorStreamIncomplete": "Die Antwort der KI wurde abgebrochen, bevor sie fertig war. Versuchen Sie es erneut.",
       "sendErrorTurnTooLarge": "Diese Antwort ist zu umfangreich geworden, um vollständig übermittelt zu werden. Senden Sie eine neue Nachricht, um fortzufahren."
+    },
+    "steerPrompt": "An den Agenten senden, während er arbeitet",
+    "steerRefused": {
+      "turnNotRunning": "Der Agent arbeitet gerade nicht.",
+      "noRun": "Der Agent läuft gerade nicht auf Ihrem Computer.",
+      "cannotSteer": "Dieser Agent nimmt während der Arbeit keine Nachrichten an.",
+      "runFull": "Der Agent nimmt gerade keine weiteren Nachrichten an.",
+      "notTaken": "Der Agent konnte Ihre Nachricht gerade nicht annehmen.",
+      "queuedMessageChanged": "Die Nachricht wurde inzwischen geändert oder ist nicht mehr in der Warteschlange, daher hat der Agent sie nicht erhalten."
+    },
+    "queue": {
+      "notice": "Eingereiht – wird gesendet, sobald die aktuelle Antwort abgeschlossen ist",
+      "prompt": "Senden, wenn der Agent fertig ist",
+      "sendNow": "Jetzt senden",
+      "remove": "Eingereihte Nachricht abbrechen",
+      "edit": "Bearbeiten",
+      "moveUp": "Nach oben",
+      "moveDown": "Nach unten",
+      "cancel": "Abbrechen",
+      "attachments": "{count, plural, one {# Anhang} other {# Anhänge}}",
+      "actions": "Aktionen für die Nachricht in der Warteschlange",
+      "notSent": "Konnte nicht gesendet werden",
+      "pause": "Warteschlange pausieren",
+      "resume": "Warteschlange fortsetzen",
+      "replaceTitle": "Diese Nachricht jetzt senden?",
+      "replaceDescription": "Dieser Chat wartet auf Ihre Antwort. Wenn Sie diese Nachricht jetzt senden, wird die Frage oder Freigabe, auf die er wartet, abgebrochen.",
+      "noLongerQueued": "Diese Nachricht ist nicht mehr in der Warteschlange.",
+      "held": {
+        "turn-failed": "Warteschlange pausiert: Die letzte Antwort ist fehlgeschlagen. Setzen Sie fort, um die nächste Nachricht zu senden.",
+        "turn-interrupted": "Warteschlange pausiert: Die letzte Antwort wurde abgebrochen. Setzen Sie fort, um die nächste Nachricht zu senden.",
+        "member": "Warteschlange pausiert.",
+        "send-refused": "Warteschlange pausiert: Die erste Nachricht konnte nicht gesendet werden. Bearbeiten oder entfernen Sie sie und setzen Sie dann fort.",
+        "usage-limit": "Warteschlange pausiert: Ihr Nutzungslimit ist erreicht. Setzen Sie fort, sobald es zurückgesetzt ist.",
+        "computer-away": "Warten auf Ihren Computer: Nachrichten in der Warteschlange werden gesendet, sobald er verbunden ist."
+      }
+    },
+    "edit": {
+      "action": "Bearbeiten",
+      "title": "Nachricht bearbeiten",
+      "input": "Bearbeitete Nachricht",
+      "notice": "Beim Senden werden diese Nachricht und alle folgenden Nachrichten ersetzt.",
+      "cancel": "Abbrechen",
+      "refused": "Die Nachricht konnte nicht bearbeitet werden. Der Chat zeigt jetzt den gespeicherten Stand. Versuchen Sie es erneut, sobald keine Antwort mehr läuft.",
+      "refusedHistoryChanged": "Der Chat hat sich geändert, während die Bearbeitung gesendet wurde. Er zeigt jetzt den gespeicherten Stand. Senden Sie die Bearbeitung erneut.",
+      "refusedTargetMissing": "Diese Nachricht ist nicht mehr im Chat und kann daher nicht bearbeitet werden.",
+      "localFiles": {
+        "computer": {
+          "failed": "Das Rückgängigmachen wurde auf Ihrem Computer nicht abgeschlossen. Einige Dateien wurden möglicherweise schon geändert. Prüfen Sie deshalb den Ordner des Chats.",
+          "folderBusy": "Ein Lauf auf Ihrem Computer verwendet diesen Ordner. Versuchen Sie es erneut, wenn er beendet ist.",
+          "noCheckpoint": "Ihr Computer hat keine gespeicherte Kopie der Dateien von vor diesem Schritt, daher wurde nichts rückgängig gemacht.",
+          "updateForEarlier": "Aktualisieren Sie stella desktop, um Änderungen aus früheren Nachrichten rückgängig zu machen."
+        },
+        "conversationRestarts": "Der Agent beginnt neu mit dem Text dieses Chats, weil die Antwort vor dieser Nachricht nicht abgeschlossen wurde.",
+        "expired": "Ihr Computer hat nicht rechtzeitig geantwortet. Versuchen Sie es erneut.",
+        "option": "Auch die Dateiänderungen seit dieser Nachricht rückgängig machen",
+        "optionHint": "Dabei werden auch Änderungen rückgängig gemacht, die Sie selbst im Ordner vorgenommen haben.",
+        "pending": "Dateiänderungen auf Ihrem Computer werden rückgängig gemacht",
+        "refused": {
+          "alreadyUndone": "Diese Dateiänderungen wurden bereits rückgängig gemacht.",
+          "desktopOffline": "Ihr Computer ist offline. Öffnen Sie die stella-Desktop-App und versuchen Sie es erneut.",
+          "desktopUpdateRequired": "Die stella-Desktop-App auf Ihrem Computer ist zu alt, um Änderungen rückgängig zu machen. Aktualisieren Sie sie und versuchen Sie es erneut.",
+          "folderShared": "Seit dieser Nachricht hat ein anderer Chat in diesem Ordner gearbeitet.",
+          "noSavedCopy": "Ihr Computer hat keine Kopie des Ordners von vor dieser Nachricht behalten: Er war zu groß oder zu langsam zu speichern, oder neuere Kopien haben sie ersetzt.",
+          "severalFolders": "Spätere Nachrichten liefen auf einem anderen Computer oder in einem anderen Ordner.",
+          "threadBusy": "Dieser Chat arbeitet noch. Versuchen Sie es erneut, wenn er fertig ist."
+        },
+        "restored": "Dateiänderungen rückgängig gemacht"
+      }
     }
   },
   "tasks": {
@@ -444,6 +545,7 @@
     "title": "Dokument",
     "failedTitle": "Dieses Dokument konnte nicht geöffnet werden",
     "failure": {
+      "dataBoxUnreadable": "Die Datei konnte weder als Databox-Nachricht noch als Zustellnachweis gelesen werden.",
       "offline": "Sie sind offline. Stellen Sie eine Internetverbindung her und versuchen Sie es erneut.",
       "noFile": "Dieses Dokument hat noch keine Datei.",
       "failed": "Beim Öffnen ist ein Fehler aufgetreten. Versuchen Sie es gleich noch einmal.",
@@ -451,6 +553,7 @@
       "android": "In der Android-App lassen sich Dokumente noch nicht öffnen."
     },
     "retry": "Erneut versuchen",
+    "openOriginal": "Original öffnen",
     "preview": "Vorschau öffnen",
     "previewDescription": "Diese Datei wird in der Systemvorschau geöffnet.",
     "unrendered": "Dieses Dokument kann hier nicht angezeigt werden, die Systemvorschau kann es aber eventuell öffnen.",
@@ -508,7 +611,28 @@
     "signOutFailed": "Die Abmeldung konnte nicht abgeschlossen werden. Versuchen Sie es erneut.",
     "lockScreenTitle": "Sperrbildschirm",
     "timerDetails": "Timer-Details",
-    "timerDetailsHint": "Ändert sich ein Timer auf einem anderen Gerät, bringt Apples Mitteilungsdienst seine Beschreibung und Akte auf den Sperrbildschirm. Ausgeschaltet zeigt er nur die Zeit, bis Sie die App öffnen."
+    "timerDetailsHint": "Ändert sich ein Timer auf einem anderen Gerät, bringt Apples Mitteilungsdienst seine Beschreibung und Akte auf den Sperrbildschirm. Ausgeschaltet zeigt er nur die Zeit, bis Sie die App öffnen.",
+    "dictationTitle": "Diktieren",
+    "dictationModelDefault": "Standard",
+    "dictationModelDefaultNamed": "Standard ({model})",
+    "dictationModelOutsideRegion": "Außerhalb deiner Region",
+    "dictationModelRetainsData": "Speichert deine Aufnahmen",
+    "dictationModelRetainsWarning": "Dieses Modell läuft über ein Konto ohne Zero Data Retention. {provider} speichert Audio und Transkript von allem, was du diktierst, nach eigenen Bedingungen und außerhalb der Kontrolle von stella. Diktiere damit keine vertraulichen Informationen oder Mandantendaten.",
+    "dictationModelHint": "Das Modell, das aus deinem Diktat Text macht. stella speichert das Audio nicht.",
+    "dictationModelsUnavailable": "Die Modelle konnten nicht geladen werden. Diktieren nutzt das gewählte Modell oder das Standardmodell, wenn der Server das gewählte nicht mehr anbietet.",
+    "dictationCleanup": "Mit KI überarbeiten",
+    "dictationCleanupHint": "Behebt Erkennungsfehler und gesprochene Formatierung wie „neue Zeile“. Nur der Text, nicht das Audio, geht über stella an den KI-Anbieter deiner Organisation; stella speichert ihn nicht."
+  },
+  "signedFile": {
+    "layer": "Signaturebene {number, number}",
+    "noReadableContent": "Für die Vorschau sind keine lesbaren Inhalte verfügbar.",
+    "unknownSigner": "Unbekannte unterzeichnende Person",
+    "unreadable": "Die signierte Datei konnte nicht gelesen werden.",
+    "unverified": "Die Signaturen wurden nicht geprüft."
+  },
+  "structuredDocument": {
+    "noReadableContent": "Für die Vorschau ist kein lesbarer Text verfügbar.",
+    "textOnly": "Textvorschau ohne Seitenlayout und Bilder."
   },
   "header": {
     "search": "Suchen"

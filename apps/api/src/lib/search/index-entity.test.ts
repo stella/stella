@@ -2,6 +2,8 @@ import { afterEach, beforeEach, expect, mock, test } from "bun:test";
 import type { SQL } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
 
+import { createTestState } from "@stll/test-state";
+
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { encryptContent } from "@/api/lib/content-encryption";
@@ -13,10 +15,12 @@ import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemet
 import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
-process.env["REDIS_URL"] ??= "redis://localhost:6379";
-process.env["GOTENBERG_URL"] ??= "http://localhost:3002";
-process.env["GOTENBERG_USERNAME"] ??= "test";
-process.env["GOTENBERG_PASSWORD"] ??= "test";
+const testState = createTestState({ file: import.meta.path, config: {} });
+
+testState.setEnvIfAbsent("REDIS_URL", "redis://localhost:6379");
+testState.setEnvIfAbsent("GOTENBERG_URL", "http://localhost:3002");
+testState.setEnvIfAbsent("GOTENBERG_USERNAME", "test");
+testState.setEnvIfAbsent("GOTENBERG_PASSWORD", "test");
 
 const semanticUpdatedAt = new Date("2026-04-30T08:00:00.000Z");
 const semanticUpdatedAtToken =
@@ -263,8 +267,20 @@ test("rejects an out-of-order projection against the authoritative entity", asyn
     /COALESCE\(e\.updated_at, e\.created_at\)\s+IS NOT DISTINCT FROM/u,
   );
   expect(compiled.sql).toContain("::timestamptz");
-  expect(compiled.sql).toContain("FOR UPDATE");
-  expect(compiled.sql).toContain("FOR UPDATE OF e");
+  // The entity row is locked in its own statement first, so the CAS above
+  // reads every version commit made while the projection waited.
+  const statements = executeMock.mock.calls.map(
+    ([executedQuery]) => new PgDialect().sqlToQuery(executedQuery).sql,
+  );
+  const entityLockAt = statements.findIndex(
+    (statement) =>
+      statement.includes('"entities"') && statement.includes("FOR UPDATE"),
+  );
+  const projectionAt = statements.findIndex((statement) =>
+    statement.includes("INSERT INTO search_documents"),
+  );
+  expect(entityLockAt).toBeGreaterThan(-1);
+  expect(entityLockAt).toBeLessThan(projectionAt);
   expect(compiled.sql).toContain("NOT EXISTS");
   expect(compiled.sql).toContain("FROM extracted_content ec");
 });

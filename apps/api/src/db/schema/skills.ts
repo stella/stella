@@ -1,3 +1,5 @@
+import { denyStellaAccessPolicies } from "@/api/db/rls";
+
 import {
   agentSkillChildPolicies,
   agentSkillPolicies,
@@ -156,14 +158,31 @@ export const agentSkillResources = p.pgTable(
       .notNull()
       .references(() => agentSkills.id, { onDelete: "cascade" }),
     path: p.varchar({ length: 512 }).notNull(),
+    // The file's text: what models read and the editor shows. Empty for a
+    // file that has no text (an image, an archive); its bytes are only in
+    // the original below.
     content: p.text().notNull(),
     sizeBytes: p.integer("size_bytes").notNull(),
+    // The file as it was uploaded or imported, byte for byte, in object
+    // storage; null for a file that was only ever text. A write that changes
+    // `content` drops it (trigger `agent_skill_resources_original_staleness`)
+    // and a dropped or deleted original is queued for erasure.
+    originalS3Key: p.text("original_s3_key"),
+    originalSha256: p.varchar("original_sha256", { length: 64 }),
+    originalSizeBytes: p.integer("original_size_bytes"),
+    originalMediaType: p.text("original_media_type"),
     createdAt: timestamptz("created_at").notNull().defaultNow(),
   },
   (table) => [
     p
       .uniqueIndex("agent_skill_resources_skill_path_uidx")
       .on(table.skillId, table.path),
+    // Finds the row naming an original: the cleanup intent policy refuses a
+    // key a stored file already names. Built in the online phase.
+    p
+      .index("agent_skill_resources_original_s3_key_idx")
+      .on(table.originalS3Key)
+      .where(sql`original_s3_key IS NOT NULL`),
     p
       .index("agent_skill_resources_path_billing_trgm_idx")
       .using("gin", sql`${table.path} gin_trgm_ops`),
@@ -363,6 +382,49 @@ export const agentSkillComments = p.pgTable(
     p.index("agent_skill_comments_revision_idx").on(table.revisionId),
     p.index("agent_skill_comments_proposal_idx").on(table.proposalId),
     ...agentSkillChildPolicies("agent_skill_comments", "agent_skill_comment"),
+  ],
+);
+
+const agentSkillOriginalCleanupOwnerAccess = sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.agent_skill_original_cleanup_requests'::regclass)`;
+
+/**
+ * Skill file originals to erase from object storage: recorded by triggers on
+ * `agent_skill_resources` in the transaction that deletes a row or drops its
+ * original, whatever deleted it (a file, a skill, an account or an
+ * organization). It has no foreign key because it must outlive those rows
+ * until the erasure succeeds; the cleanup task deletes a row once its
+ * objects are gone and backs a failed one off. Only the owner's trigger and
+ * the scheduler reach it.
+ */
+export const agentSkillOriginalCleanupRequests = p.pgTable.withRLS(
+  "agent_skill_original_cleanup_requests",
+  {
+    id: pUuid<"agentSkillOriginalCleanupRequest">()
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
+    organizationId: safeOrganizationId("organization_id").notNull(),
+    s3Keys: p.text("s3_keys").array().notNull(),
+    /** Erasures that failed; each one backs the next try off. */
+    attempts: p.integer().notNull().default(0),
+    /** When the cleanup task may next try. */
+    nextAttemptAt: timestamptz("next_attempt_at").notNull().defaultNow(),
+    /** Why the last attempt did not erase the objects. */
+    lastError: p.text("last_error"),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+  },
+  (table) => [
+    p.index("agent_skill_original_cleanup_due_idx").on(table.nextAttemptAt),
+    p.check(
+      "agent_skill_original_cleanup_attempts_nonnegative",
+      sql`attempts >= 0`,
+    ),
+    p.pgPolicy("agent_skill_original_cleanup_owner_access", {
+      for: "all",
+      to: "public",
+      using: agentSkillOriginalCleanupOwnerAccess,
+      withCheck: agentSkillOriginalCleanupOwnerAccess,
+    }),
+    ...denyStellaAccessPolicies(),
   ],
 );
 

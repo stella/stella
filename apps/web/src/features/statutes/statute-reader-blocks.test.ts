@@ -1,12 +1,16 @@
 import { describe, expect, test } from "bun:test";
 
-import type { Block, HeadingBlock } from "@stll/legal-ast/document-ast";
+import type {
+  Block,
+  HeadingBlock,
+  ParagraphBlock,
+} from "@stll/legal-ast/document-ast";
 import { E_SBIRKA_ANCHORS } from "@stll/legal-ast/statute-anchor-scheme";
 
 import {
   prepareStatuteReader,
   provisionCitationCountByBlockAnchor,
-  statuteLandingAnchorId,
+  statuteLandingAnchorIds,
 } from "@/features/statutes/statute-reader-blocks";
 
 /** A Czech statute's blocks, read in e-Sbírka's anchor grammar. */
@@ -28,6 +32,14 @@ const heading = (
   level,
   plainText,
   type: "heading",
+});
+
+const paragraph = (id: string, plainText: string): ParagraphBlock => ({
+  anchorId: id,
+  id,
+  inlines: inlineText(plainText),
+  plainText,
+  type: "paragraph",
 });
 
 describe("statute reader blocks", () => {
@@ -142,6 +154,65 @@ describe("statute reader blocks", () => {
     }
   });
 
+  test("lettered notes an amendment inserted are footnotes too", () => {
+    const bodyText =
+      "(1) Řízení o dávce nemocenského pojištění80b) a úrazového pojištění80c) upravuje zvláštní zákon.";
+    const noteText = "80b) Zákon č. 187/2006 Sb., o nemocenském pojištění.";
+    const blocks: Block[] = [
+      {
+        anchorId: "par_1-odst_1",
+        id: "body",
+        inlines: inlineText(bodyText),
+        plainText: bodyText,
+        type: "paragraph",
+      },
+      {
+        anchorId: "ppc_80",
+        id: "note-80",
+        inlines: inlineText("80) § 71a zákona č. 358/1992 Sb."),
+        plainText: "80) § 71a zákona č. 358/1992 Sb.",
+        type: "paragraph",
+      },
+      {
+        anchorId: "ppc_80b",
+        id: "note-80b",
+        inlines: inlineText(noteText),
+        plainText: noteText,
+        type: "paragraph",
+      },
+    ];
+
+    const prepared = prepareStatuteReader({
+      blocks,
+      statuteTitle: "99/1963 Sb., občanský soudní řád",
+    }).blocks;
+    const body = prepared.at(0);
+    const note = prepared.at(2);
+
+    expect(body?.type).toBe("paragraph");
+    if (body?.type === "paragraph") {
+      expect(body.inlines).toContainEqual({
+        children: [{ text: "80b)", type: "text" }],
+        href: "#ppc_80b",
+        type: "link",
+      });
+      // The document carries no note 80c, so its marker stays text.
+      expect(
+        body.inlines.some(
+          (inline) => inline.type === "link" && inline.href === "#ppc_80c",
+        ),
+      ).toBe(false);
+    }
+    expect(note?.type).toBe("paragraph");
+    if (note?.type === "paragraph") {
+      expect(note.note).toEqual({
+        label: "80b",
+        noteId: "ppc_80b",
+        type: "footnote",
+      });
+    }
+  });
+
   test("unmatched parenthesized numbers remain ordinary text", () => {
     const text = "Body2) but the source has no matching note.";
     const prepared = prepareStatuteReader({
@@ -181,13 +252,42 @@ describe("statute reader blocks", () => {
       heading("hlava_2-par_9", 2, "§ 9"),
     ];
 
-    expect(statuteLandingAnchorId(czech(blocks), "cl_7")).toBe("cl_7");
+    const landing = (anchorId: string | undefined) =>
+      statuteLandingAnchorIds(czech(blocks), { anchorId });
+
+    expect(landing("cl_7")).toEqual(["cl_7"]);
     // The local provision id a citation states finds the namespaced block
     // the publisher rendered.
-    expect(statuteLandingAnchorId(czech(blocks), "cl_8")).toBe("prilohy-cl_8");
+    expect(landing("cl_8")).toEqual(["prilohy-cl_8"]);
     // Two blocks answer to it: guessing would land on the wrong provision.
-    expect(statuteLandingAnchorId(czech(blocks), "par_9")).toBeUndefined();
-    expect(statuteLandingAnchorId(czech(blocks), "cl_99")).toBeUndefined();
-    expect(statuteLandingAnchorId(czech(blocks), undefined)).toBeUndefined();
+    expect(landing("par_9")).toEqual([]);
+    expect(landing("cl_99")).toEqual([]);
+    expect(landing(undefined)).toEqual([]);
+  });
+
+  test("a statute tab marks the paragraphs its citation names", () => {
+    const blocks = [
+      heading("par_240", 2, "§ 240"),
+      paragraph("par_240-odst_1", "(1) Účastník může podat dovolání"),
+      paragraph("par_240-odst_2", "(2) Zmeškání lhůty"),
+      paragraph("par_240-odst_3", "(3) Lhůta je zachována také tehdy"),
+    ];
+    const landing = (citedAnchorIds: readonly string[]) =>
+      statuteLandingAnchorIds(czech(blocks), {
+        anchorId: "par_240",
+        citedAnchorIds,
+      });
+
+    expect(landing(["par_240-odst_3"])).toEqual(["par_240-odst_3"]);
+    expect(landing(["par_240-odst_1", "par_240-odst_2"])).toEqual([
+      "par_240-odst_1",
+      "par_240-odst_2",
+    ]);
+    // A paragraph the text does not hold is dropped; with none held, the
+    // provision the link names is marked as before.
+    expect(landing(["par_240-odst_9", "par_240-odst_2"])).toEqual([
+      "par_240-odst_2",
+    ]);
+    expect(landing(["par_240-odst_9"])).toEqual(["par_240"]);
   });
 });

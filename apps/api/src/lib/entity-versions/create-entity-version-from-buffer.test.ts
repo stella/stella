@@ -8,6 +8,7 @@ import {
 } from "@stll/api-contract";
 import { ZipArchive } from "@stll/docx-core/zip";
 import { sha256Hex as hashSha256Hex } from "@stll/sha256/node";
+import { createTestState } from "@stll/test-state";
 
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
@@ -18,6 +19,7 @@ import { envDocumentProcessingWorker } from "@/api/env-document-processing-worke
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
 import { injectStamp, stripStamp } from "@/api/lib/docx-stamp";
+import { CALLER_AUTHORIZED } from "@/api/lib/entities/buffer-write-authority";
 import { createEntityVersionFromBuffer } from "@/api/lib/entity-versions/create-entity-version-from-buffer";
 import type { CreateEntityVersionFromBufferDependencies } from "@/api/lib/entity-versions/create-entity-version-from-buffer";
 import {
@@ -37,6 +39,9 @@ import { testScannedFile } from "@/api/tests/helpers/scanned-file";
 import { createEncryptedPdf } from "@/api/tests/helpers/signed-pdf";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
+const testState = createTestState({ file: import.meta.path, config: env });
+const workerState = testState.forConfig(envDocumentProcessingWorker);
+
 beforeEach(() => {
   broadcastMock.mockReset();
   diffStatsMock.mockReset();
@@ -49,7 +54,8 @@ beforeEach(() => {
   writeFileVersionMock.mockReset();
 });
 
-const writeFileVersionMock = mock();
+const writeFileVersionMock =
+  mock<CreateEntityVersionFromBufferDependencies["writeFileVersion"]>();
 const processExtractionMock = mock();
 const requestNativeExtractionRunMock = mock();
 const enqueueSearchRepairsMock = mock();
@@ -190,6 +196,7 @@ const dependencies = {
   },
 } satisfies CreateEntityVersionFromBufferDependencies;
 const baseInput = {
+  authority: CALLER_AUTHORIZED,
   safeDb,
   organizationId: toSafeId<"organization">("org_1"),
   workspaceId: toSafeId<"workspace">("ws_1"),
@@ -263,26 +270,19 @@ describe("createEntityVersionFromBuffer", () => {
   });
 
   test("returns file-write failures without publishing a version or abandoning recovery", async () => {
-    const priorFlag = env.FEATURE_FILE_USAGE_LIMITS;
-    const priorWorkerFlag =
-      envDocumentProcessingWorker.FEATURE_FILE_USAGE_LIMITS;
-    env.FEATURE_FILE_USAGE_LIMITS = true;
-    envDocumentProcessingWorker.FEATURE_FILE_USAGE_LIMITS = false;
+    testState.setConfig("FEATURE_FILE_USAGE_LIMITS", true);
+    workerState.setConfig("FEATURE_FILE_USAGE_LIMITS", false);
     fake.failNext({ method: "PUT", code: "AccessDenied", status: 403 });
-    try {
-      const result = await createEntityVersionFromBuffer(baseInput);
-      expect(result).toMatchObject({
-        status: "error",
-        error: { reason: "storage_unavailable" },
-      });
-      expect(requestedKeys("DELETE")).toEqual([OBJECT_KEY]);
-      expect(fake.objects.has(STORED_OBJECT_ID)).toBe(false);
-      expect(writeFileVersionMock).not.toHaveBeenCalled();
-      expect(intentStatuses).toEqual(["scanning"]);
-    } finally {
-      env.FEATURE_FILE_USAGE_LIMITS = priorFlag;
-      envDocumentProcessingWorker.FEATURE_FILE_USAGE_LIMITS = priorWorkerFlag;
-    }
+
+    const result = await createEntityVersionFromBuffer(baseInput);
+    expect(result).toMatchObject({
+      status: "error",
+      error: { reason: "storage_unavailable" },
+    });
+    expect(requestedKeys("DELETE")).toEqual([OBJECT_KEY]);
+    expect(fake.objects.has(STORED_OBJECT_ID)).toBe(false);
+    expect(writeFileVersionMock).not.toHaveBeenCalled();
+    expect(intentStatuses).toEqual(["scanning"]);
   });
 
   test("keeps recovery after deleting an ambiguous initial write", async () => {
@@ -346,7 +346,7 @@ describe("createEntityVersionFromBuffer", () => {
         filePropertyId: toSafeId<"property">("property_1"),
         versionNumber: 2,
       };
-      await input.afterWrite(result);
+      await input.afterWrite?.(result);
       return result;
     });
 
@@ -404,7 +404,7 @@ describe("createEntityVersionFromBuffer", () => {
         filePropertyId: toSafeId<"property">("property_1"),
         versionNumber: 2,
       };
-      await input.afterWrite(result);
+      await input.afterWrite?.(result);
       return result;
     });
     const pdf = new Uint8Array(await createEncryptedPdf()).slice().buffer;
@@ -442,7 +442,7 @@ describe("createEntityVersionFromBuffer", () => {
         filePropertyId: toSafeId<"property">("property_1"),
         versionNumber: 2,
       };
-      await input.afterWrite(result);
+      await input.afterWrite?.(result);
       return result;
     });
     const submitted = await stampedDocxBytes();
@@ -558,7 +558,7 @@ describe("createEntityVersionFromBuffer", () => {
         filePropertyId: toSafeId<"property">("property_1"),
         versionNumber: 2,
       };
-      await input.afterWrite(result);
+      await input.afterWrite?.(result);
       return result;
     });
     const commitError = new Error("connection lost after commit");
@@ -605,7 +605,7 @@ describe("createEntityVersionFromBuffer", () => {
         filePropertyId: toSafeId<"property">("property_1"),
         versionNumber: 2,
       };
-      await input.afterWrite(result);
+      await input.afterWrite?.(result);
       return result;
     });
 

@@ -16,8 +16,8 @@ import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment
 import { installRenderProbe, RENDER_CAUSES } from "@stll/render-probe";
 import type { RenderSnapshot } from "@stll/render-probe";
 import { formatRenderReport } from "@stll/render-probe/report";
-import { reactCompilerBunPlugin } from "@stll/scripts/src/react-compiler-bun-plugin";
 
+import { isDisabledControl } from "@/__fixtures__/disabled-control";
 import type { ChatInputDraft } from "@/components/chat-editor-provider";
 import type { ChatThreadDomSession } from "@/components/chat/chat-thread-dom-page";
 import {
@@ -49,10 +49,6 @@ GlobalRegistrator.register({ url: "http://localhost:3000/chat" });
 // React DOM reads its DevTools hook once, when it loads: before any import
 // below reaches it.
 const probe = installRenderProbe();
-// The page renders as it ships: compiled by the React Compiler, as the Vite
-// build compiles it. Without it the page would render far wider than in the
-// app, and a width budget would hold the wrong program.
-Bun.plugin(reactCompilerBunPlugin);
 
 const ORACLE = "chat.render.stream-commits-bounded";
 
@@ -433,7 +429,7 @@ const createStreamingServer = (
             const stop = testing.screen.queryByRole("button", {
               name: translations.chat.stopResponse,
             });
-            burst.stopEnabled = stop !== null && !stop.hasAttribute("disabled");
+            burst.stopEnabled = stop !== null && !isDisabledControl(stop);
             burst.before = probe.snapshot();
           }
           if (index === lastKindIndex + 1) {
@@ -486,6 +482,13 @@ const createStreamingServer = (
       url.pathname === `/v1/chat/threads/${THREAD_ID}/messages`
     ) {
       return threadPage();
+    }
+    // Nothing is queued in the chat.
+    if (
+      method === "GET" &&
+      /^\/v1\/chat\/threads\/[^/]+\/queue$/u.test(url.pathname)
+    ) {
+      return Response.json({ hold: null, items: [] });
     }
     unexpected.push(`${method} ${url.pathname}`);
     return Response.json({ message: "Not served" }, { status: 404 });
@@ -582,7 +585,7 @@ const commitRateWhileStreaming = async (kind: StreamChunkKind) => {
   await server.closed;
   // Let the page settle what the end of the run started.
   await sleep(100);
-  expect(await sent).toEqual(Result.ok(undefined));
+  expect(await sent).toEqual(Result.ok(CHAT_SEND_SENT));
   expect(server.burst.stopEnabled, "Stop is enabled during the burst").toBe(
     true,
   );

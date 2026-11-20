@@ -11,7 +11,6 @@ import {
   EML_MIME_TYPE,
   MSG_MIME_TYPE,
 } from "@stll/api-contract/email-mime-types";
-import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 
 import { member, user } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
@@ -19,6 +18,7 @@ import { safeDbFromScoped, type ScopedDb } from "@/api/db/safe-db";
 import {
   correspondenceAttachments,
   entities,
+  entityVersions,
   fields,
   workspaces,
 } from "@/api/db/schema";
@@ -32,6 +32,7 @@ import {
   createCorrespondence,
   retireCorrespondenceSource,
 } from "@/api/lib/email/correspondence/create";
+import { dataBoxPayloadIdentity } from "@/api/lib/email/correspondence/data-box/payload-hash";
 import {
   type DataBoxMessageParseError,
   parseDataBoxMessage,
@@ -170,16 +171,22 @@ type ReadUploadedSourceOptions = {
   sourceFileId: string;
 };
 
-// Membership scopes uploader attribution; the immutable file id fences stale jobs.
+// The current version's author files its email; an entity without versions
+// falls back to its creator. Membership scopes that attribution, and the
+// immutable file id fences stale jobs.
 const readUploader = async ({
   database,
   scope: { entityId, workspaceId, organizationId },
   sourceFileId,
 }: ReadUploadedSourceOptions) =>
   await withAggregateTransaction(database, async (tx) => {
+    const uploaderId = sql<string | null>`CASE
+      WHEN ${entities.currentVersionId} IS NULL THEN ${entities.createdBy}
+      ELSE ${entityVersions.createdBy}
+    END`;
     const [file] = await tx
       .select({
-        createdBy: entities.createdBy,
+        createdBy: uploaderId,
         createdAt: entities.createdAt,
         currentVersionId: entities.currentVersionId,
         sourceMatches: sql<boolean>`EXISTS (
@@ -200,9 +207,16 @@ const readUploader = async ({
         ),
       )
       .leftJoin(
+        entityVersions,
+        and(
+          eq(entityVersions.id, entities.currentVersionId),
+          eq(entityVersions.workspaceId, workspaceId),
+        ),
+      )
+      .leftJoin(
         member,
         and(
-          eq(member.userId, entities.createdBy),
+          eq(member.userId, uploaderId),
           eq(member.organizationId, organizationId),
         ),
       )
@@ -412,33 +426,8 @@ const dataBoxCorrespondence = ({
   dataBox: envelope,
   direction: null,
   messageId: envelope.messageId,
-  // The seal describes this exported source, not the message asserted inside
-  // it, and the delivery state (delivery, acceptance and status) advances
-  // between exports of one message. Bind only the fields fixed when the
-  // message was sent, and every ordered attachment, so any other export of
-  // the message converges on the same filing.
-  contentHash: hashSha256Hex(
-    JSON.stringify([
-      annotation,
-      {
-        messageId: envelope.messageId,
-        messageType: envelope.messageType,
-        sender: envelope.sender,
-        recipient: envelope.recipient,
-        toHands: envelope.toHands,
-        personalDelivery: envelope.personalDelivery,
-        substituteDelivery: envelope.substituteDelivery,
-      } satisfies Omit<
-        typeof envelope,
-        "seal" | "deliveredAt" | "acceptedAt" | "status"
-      >,
-      files.map(({ fileName, mimeType, bytes }) => [
-        fileName,
-        mimeType,
-        hashSha256Hex(bytes),
-      ]),
-    ]),
-  ),
+  contentHash: dataBoxPayloadIdentity({ annotation, envelope, files })
+    .contentHash,
   from: { address: envelope.sender.boxId, name: envelope.sender.name },
   to: [{ address: envelope.recipient.boxId, name: envelope.recipient.name }],
   cc: [],

@@ -1,6 +1,7 @@
 import { Result } from "better-result";
 
 import type { ScopedResponse } from "@stll/api-client";
+import { AUTH_SIGN_IN_CODE_UNAVAILABLE_ERROR_CODE } from "@stll/auth-model";
 
 import {
   isSessionRefusal,
@@ -28,14 +29,20 @@ const isSocialLinkHintRequest = (requestUrl: URL | string): boolean =>
   new URL(requestUrl).pathname === `/api/auth${SOCIAL_LINK_HINT_PATH}`;
 
 const PASSWORD_SIGN_IN_PATH = "/api/auth/sign-in/email";
+/** Better Auth's code for a password sign-in it turned down. */
+export const INVALID_SIGN_IN_CODE = "INVALID_EMAIL_OR_PASSWORD";
 
 // The password sign-in form shows its own message for refused credentials.
 const isPasswordSignInRefusal = (
   error: AuthErrorValue,
   requestUrl: URL | string,
 ): boolean =>
-  error.code === "INVALID_EMAIL_OR_PASSWORD" &&
+  error.code === INVALID_SIGN_IN_CODE &&
   new URL(requestUrl).pathname === PASSWORD_SIGN_IN_PATH;
+
+// The sign-in page answers this code by opening its password form.
+const isSignInCodeUnavailable = (error: AuthErrorValue): boolean =>
+  error.code === AUTH_SIGN_IN_CODE_UNAVAILABLE_ERROR_CODE;
 
 // A refused code, a session that has ended and a code with a message of its own
 // each have an outcome in the web client. Any other server-declared auth code is
@@ -51,7 +58,8 @@ export const reportUnhandledAuthClientError = (
     isTypedCodeRefusal(error) ||
     isSessionRefusal(error) ||
     isSocialLinkHintRequest(requestUrl) ||
-    isPasswordSignInRefusal(error, requestUrl)
+    isPasswordSignInRefusal(error, requestUrl) ||
+    isSignInCodeUnavailable(error)
   ) {
     return;
   }

@@ -53,13 +53,18 @@ const PURE_AUTOFIX = {
   "online-unique-index-names":
     "apps/api/scripts/generate-online-unique-index-names.ts",
   "schema-index": "apps/api/scripts/generate-schema-index.ts",
+  // Walks the MCP apps' committed imports through workspace sources and
+  // rewrites only the stylesheet's sources block.
+  "mcp-app-style-sources": "packages/mcp-apps/scripts/style-sources.ts",
   // Renders the versioned transition spec into its existing migration;
   // directory discovery chooses exactly one committed version-one migration.
   "transition-triggers": "apps/api/scripts/generate-transition-triggers.ts",
-  // Static source analysis and pinned formatters render the catalog and CLI
-  // contracts; setup-env supplies static validation defaults, never live data.
-  "capability-catalog": "apps/api/scripts/export-capability-catalog.ts",
-  "cli-registry": "codegen",
+  // Static source analysis and pinned formatters render the coverage table and
+  // CLI contracts; setup-env supplies static validation defaults, never live data.
+  "capability-coverage": "apps/api/scripts/export-capability-catalog.ts",
+  "cli-registry": "codegen:registry",
+  // Projects the committed registry snapshot and the derived route map.
+  "cli-tool-reference": "packages/cli/scripts/generate-tool-reference.ts",
   // Compiler input discovery and pinned bundlers consume repository sources.
   "api-typecheck-projects": "packages/scripts/src/api-typecheck-regenerate.ts",
   "visual-sandbox-bundle": "build:visual-sandbox",
@@ -77,6 +82,9 @@ const PURE_AUTOFIX = {
   "mobile-icons": "scripts/generate-mobile-icons.ts",
   // Reads the installed @stll/folio-fonts catalogue, pinned by the lockfile.
   "mobile-folio-fonts": "scripts/generate-mobile-folio-fonts.ts",
+  // Renders a committed component with the lockfile-pinned React and compiles
+  // its utilities with the pinned Tailwind; reads only committed files.
+  "outcome-page": "packages/ui/scripts/generate-outcome-page.ts",
   // The committed release policy renders package names inside fixed markers.
   "published-package-list": "scripts/check-published-package-lists.ts",
   // Reads glossary data, normalizes Unicode and formats fixed Markdown tables.
@@ -95,8 +103,6 @@ const PURE_AUTOFIX = {
   // Reads `<dir>/en.json` alone and prints its key tree in source order.
   "i18n-messages-landing": "packages/scripts/src/i18n-typegen.ts",
   "i18n-messages-transactional": "packages/scripts/src/i18n-typegen.ts",
-  // Splices the static @stll/locales arrays between fixed markers.
-  "prepaint-locales": "apps/web/scripts/sync-prepaint-locales.ts",
   // `generate` renders the env catalog and schema defaults plus the web
   // Dockerfile; only `doctor` reads the process environment or env files.
   "env-examples": "env:generate",
@@ -226,8 +232,10 @@ test("every module the case-law re-parse imports selects it", () => {
   expect(
     [...graph.computedImports].filter((file) => closure.has(file)),
   ).toEqual([]);
+  // The segmenter shapes every re-parsed section; the payload reads it
+  // directly, not through the ingestion re-export.
   expect(closure).toContain(
-    "apps/api/src/handlers/case-law/ingestion/segmenter.ts",
+    "apps/api/src/lib/legal-search/segment-decision.ts",
   );
   const { inputs } = generator("case-law-fixture-reparse");
   expect(
@@ -296,12 +304,7 @@ test("translation content never becomes an autofix output", () => {
   }
 });
 
-test("locale contract changes select the prepaint locale block", () => {
-  expect(
-    generatorsForFiles(["packages/locales/src/languages.ts"]).map(
-      ({ id }) => id,
-    ),
-  ).toContain("prepaint-locales");
+test("message changes select their own catalogues", () => {
   expect(
     generatorsForFiles(["apps/landing/src/i18n/messages/en.json"]).map(
       ({ id }) => id,

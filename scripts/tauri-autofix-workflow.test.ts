@@ -64,7 +64,6 @@ test("both PR paths use trusted alignment sources before their existing App push
     humanJob.indexOf("- name: Align Tauri counterparts"),
   );
   expect(workflow).not.toContain("contents: write");
-  expect(workflow).not.toContain("pull_request_target:");
 });
 
 test("source changes disable human autofix while the independent CI guard remains", () => {

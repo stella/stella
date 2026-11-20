@@ -8,15 +8,9 @@ import {
 } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 
-import { TASK_STATUSES, VIEW_SORTS_MAX } from "@stll/api-contract";
+import { VIEW_SORTS_MAX } from "@stll/api-contract";
 import { Button } from "@stll/ui/button";
-import {
-  KanbanIcon,
-  PencilIcon,
-  PlusIcon,
-  TableIcon,
-  Trash2Icon,
-} from "@stll/ui/icons";
+import { PencilIcon, PlusIcon, Trash2Icon } from "@stll/ui/icons";
 import { Menu, MenuItem, MenuPopup, MenuTrigger } from "@stll/ui/menu";
 import {
   Select,
@@ -25,7 +19,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@stll/ui/select";
-import { Skeleton } from "@stll/ui/skeleton";
 import { ViewChromeBar, ViewToolbarChrome } from "@stll/ui/view-toolbar";
 import { SortChips } from "@stll/workspace-ui/sorts";
 import { WorkspaceViewSwitcher } from "@stll/workspace-ui/view-switcher";
@@ -38,6 +31,7 @@ import {
 } from "@/components/workspaces/view-grouping-controls";
 import { FilterChips } from "@/components/workspaces/view-toolbar-filters";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
+import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { usePermissions } from "@/hooks/use-permissions";
 import { getLangDir, useI18nStore } from "@/i18n/i18n-store";
 import { useAnalytics } from "@/lib/analytics/provider";
@@ -60,19 +54,34 @@ import {
   entityViewsOptions,
 } from "@/lib/workspaces/queries/entity-views";
 import { isTableView, mergeLayout } from "@/lib/workspaces/view-layout";
+import { useConfigStore } from "@/stores/config-store";
+import type { InboxLastView } from "@/stores/config-store";
 
-import { defaultEntityViews } from "./defaults";
+import {
+  DEFAULT_ENTITY_VIEW_ID,
+  DEFAULT_ENTITY_VIEW_LABEL_KEYS,
+  defaultEntityViews,
+  ENTITY_VIEW_EXTRA_GROUPS,
+  entityViewLastLayout,
+  entityViewsWithDefaults,
+  isUnsavedViewId,
+  selectEntityView,
+} from "./defaults.logic";
+import { EntityViewBodyPending } from "./entity-view-body.pending";
+import {
+  EntityViewsChromeFieldset,
+  EntityViewsFrame,
+  EntityViewsPending,
+  EntityViewTabIcon,
+} from "./entity-views.pending";
 import { EntityViewKanban } from "./kanban";
-import { ENTITY_VIEW_GROUP, toEntityViewRow } from "./model";
+import { toEntityViewRow } from "./model";
 import {
   EntityViewColumnToggle,
   EntityViewTable,
   useEntityViewSortProperties,
 } from "./table";
 import type { EntityViewScope } from "./types";
-
-const isUnsavedViewId = (id: string) =>
-  id.startsWith("default:") || id.startsWith("draft:");
 
 type EntityViewsProps = { organizationId: string; scope: EntityViewScope };
 
@@ -98,39 +107,53 @@ export const EntityViews = ({ organizationId, scope }: EntityViewsProps) => {
       });
     }
   }, [analytics, saved.error]);
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- load-bearing, without this memo boundary the React Compiler does not cache this value
   const defaults = useMemo(
     () =>
       defaultEntityViews({
-        table: t("workspaces.views.layouts.table"),
-        kanban: t("workspaces.views.layouts.kanban"),
+        table: t(DEFAULT_ENTITY_VIEW_LABEL_KEYS.table),
+        kanban: t(DEFAULT_ENTITY_VIEW_LABEL_KEYS.kanban),
       }),
     [t],
   );
-  const savedViews = useMemo(() => {
+  const savedViews = (() => {
     if (!saved.data) {
       return [];
     }
     return saved.data.items;
-  }, [saved.data]);
-  const views = [
-    ...savedViews,
-    ...defaults.filter(
-      (view) =>
-        !savedViews.some(
-          (savedView) => savedView.layout.type === view.layout.type,
-        ),
-    ),
-  ];
-  const [selectedId, setSelectedId] = useState("default:kanban");
+  })();
+  const views = entityViewsWithDefaults(savedViews, defaults);
+  const [selectedId, setSelectedId] = useState<string>(DEFAULT_ENTITY_VIEW_ID);
   const [proposalView, setProposalView] = useState<InboxView>("open");
   const [draft, setDraft] = useState<WorkspaceView | null>(null);
   const [editing, setEditing] = useState<{ id: string; name: string } | null>(
     null,
   );
   const activeView =
-    draft?.id === selectedId
-      ? draft
-      : (views.find((view) => view.id === selectedId) ?? views.at(0));
+    draft?.id === selectedId ? draft : selectEntityView(views, selectedId);
+  // The body a cold load draws next time is the one drawn now: keep the
+  // active view's layout in this browser once the saved views are read.
+  const rememberInboxView = useConfigStore((state) => state.rememberInboxView);
+  const lastLayout =
+    saved.isPending || activeView === undefined
+      ? null
+      : entityViewLastLayout(activeView.layout);
+  const lastView: InboxLastView | null =
+    lastLayout === null || activeView === undefined
+      ? null
+      : { organizationId, viewId: activeView.id, layout: lastLayout };
+  const rememberLastView = useLatestCallback(() => {
+    if (lastView !== null) {
+      rememberInboxView(lastView);
+    }
+  });
+  // Written when what it holds changes, not on every render.
+  const lastViewKey = lastView === null ? null : JSON.stringify(lastView);
+  useExternalSyncEffect(() => {
+    if (lastViewKey !== null) {
+      rememberLastView();
+    }
+  }, [lastViewKey, rememberLastView]);
   const reportError = (error: unknown) => {
     analytics.captureError(error, {
       fingerprintKey: "EntityViews.reportError:failure",
@@ -202,7 +225,7 @@ export const EntityViews = ({ organizationId, scope }: EntityViewsProps) => {
       await queryClient.invalidateQueries(
         entityViewsOptions(organizationId, userId),
       );
-      setSelectedId("default:kanban");
+      setSelectedId(DEFAULT_ENTITY_VIEW_ID);
     },
     onError: reportError,
   });
@@ -248,229 +271,232 @@ export const EntityViews = ({ organizationId, scope }: EntityViewsProps) => {
       persist({ ...activeView, layout });
     }
   };
-  const groups = [
-    { id: ENTITY_VIEW_GROUP.TYPE, label: t("common.type") },
-    { id: ENTITY_VIEW_GROUP.MATTER, label: t("common.matter") },
-  ];
+  const groups = ENTITY_VIEW_EXTRA_GROUPS.map(({ id, labelKey }) => ({
+    id,
+    label: t(labelKey),
+  }));
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-      {/* min-w-0: a fieldset's default min-inline-size is its content, which
-          would stop the bar inside from shrinking to one line. */}
-      <fieldset className="min-w-0" disabled={remove.isPending}>
-        <ViewChromeBar>
-          <WorkspaceViewSwitcher
-            activeViewId={activeView.id}
-            ariaLabel={t("workspaces.views.viewSettings")}
-            direction={direction}
-            views={views}
-            reorder={
-              canUpdateView &&
-              views.every((view) => !view.id.startsWith("default:"))
-                ? {
-                    onReorder: (ids) => reorder.mutate(ids),
-                    isBlocked: reorder.isPending,
-                  }
-                : null
-            }
-            onViewChange={(id) => {
-              setSelectedId(id);
-              setDraft(null);
-            }}
-            onViewDoubleClick={(view) => {
-              if (isUnsavedViewId(view.id) ? canCreateView : canUpdateView) {
-                setEditing({ id: view.id, name: view.name });
+    <EntityViewsFrame
+      chrome={
+        <EntityViewsChromeFieldset disabled={remove.isPending}>
+          <ViewChromeBar>
+            <WorkspaceViewSwitcher
+              activeViewId={activeView.id}
+              ariaLabel={t("workspaces.views.viewSettings")}
+              direction={direction}
+              views={views}
+              reorder={
+                canUpdateView &&
+                views.every((view) => !view.id.startsWith("default:"))
+                  ? {
+                      onReorder: (ids) => reorder.mutate(ids),
+                      isBlocked: reorder.isPending,
+                    }
+                  : null
               }
-            }}
-            renderIcon={(view) =>
-              view.layout.type === "table" ? (
-                <TableIcon className="size-3.5" />
-              ) : (
-                <KanbanIcon className="size-3.5" />
-              )
-            }
-            editing={
-              editing
-                ? {
-                    viewId: editing.id,
-                    renderLabel: (view) => (
-                      <InlineEdit
-                        value={editing.name}
-                        onChange={(name) => setEditing({ id: view.id, name })}
-                        onCancel={() => setEditing(null)}
-                        onCommit={() => {
-                          if (editing.name.trim()) {
-                            persist({ ...view, name: editing.name.trim() });
-                          }
-                          setEditing(null);
-                        }}
-                      />
-                    ),
-                  }
-                : null
-            }
-            actionMenu={{
-              label: t("common.actions"),
-              renderItems: (view) => (
-                <>
-                  <MenuItem
-                    disabled={
-                      isUnsavedViewId(view.id) ? !canCreateView : !canUpdateView
-                    }
-                    onClick={() => setEditing({ id: view.id, name: view.name })}
-                  >
-                    <PencilIcon className="size-3.5" />
-                    {t("common.rename")}
-                  </MenuItem>
-                  {canDeleteView && !isUnsavedViewId(view.id) && (
-                    <MenuItem onClick={() => remove.mutate(view.id)}>
-                      <Trash2Icon className="size-3.5" />
-                      {t("workspaces.views.deleteView")}
-                    </MenuItem>
-                  )}
-                </>
-              ),
-            }}
-            addControl={
-              canCreateView ? (
-                <Menu>
-                  <MenuTrigger
-                    render={
-                      <Button
-                        size="icon-xs"
-                        variant="ghost"
-                        aria-label={t("common.add")}
-                      />
-                    }
-                  >
-                    <PlusIcon className="size-3.5" />
-                  </MenuTrigger>
-                  <MenuPopup>
-                    {defaults.map((view) => (
-                      <MenuItem
-                        key={view.id}
-                        onClick={() =>
-                          persist({ ...view, id: `draft:${createUuid()}` })
-                        }
-                      >
-                        {t("workspaces.views.newView", {
-                          layoutType: view.layout.type,
-                          layout: view.name,
-                        })}
-                      </MenuItem>
-                    ))}
-                  </MenuPopup>
-                </Menu>
-              ) : null
-            }
-          />
-          <ViewToolbarChrome>
-            <Select
-              onValueChange={(view) => {
-                if (view) {
-                  setProposalView(view);
+              onViewChange={(id) => {
+                setSelectedId(id);
+                setDraft(null);
+              }}
+              onViewDoubleClick={(view) => {
+                if (isUnsavedViewId(view.id) ? canCreateView : canUpdateView) {
+                  setEditing({ id: view.id, name: view.name });
                 }
               }}
-              value={proposalView}
-            >
-              <SelectTrigger
-                aria-label={t("inbox.proposalView", {
-                  view: t(
-                    proposalView === "open"
-                      ? "inbox.view.new"
-                      : `inbox.view.${proposalView}`,
-                  ),
-                })}
-                size="sm"
+              renderIcon={(view) => <EntityViewTabIcon view={view} />}
+              editing={
+                editing
+                  ? {
+                      viewId: editing.id,
+                      renderLabel: (view) => (
+                        <InlineEdit
+                          value={editing.name}
+                          onChange={(name) => setEditing({ id: view.id, name })}
+                          onCancel={() => setEditing(null)}
+                          onCommit={() => {
+                            if (editing.name.trim()) {
+                              persist({ ...view, name: editing.name.trim() });
+                            }
+                            setEditing(null);
+                          }}
+                        />
+                      ),
+                    }
+                  : null
+              }
+              actionMenu={{
+                label: t("common.actions"),
+                renderItems: (view) => (
+                  <>
+                    <MenuItem
+                      disabled={
+                        isUnsavedViewId(view.id)
+                          ? !canCreateView
+                          : !canUpdateView
+                      }
+                      onClick={() =>
+                        setEditing({ id: view.id, name: view.name })
+                      }
+                    >
+                      <PencilIcon className="size-3.5" />
+                      {t("common.rename")}
+                    </MenuItem>
+                    {canDeleteView && !isUnsavedViewId(view.id) && (
+                      <MenuItem onClick={() => remove.mutate(view.id)}>
+                        <Trash2Icon className="size-3.5" />
+                        {t("workspaces.views.deleteView")}
+                      </MenuItem>
+                    )}
+                  </>
+                ),
+              }}
+              addControl={
+                canCreateView ? (
+                  <Menu>
+                    <MenuTrigger
+                      render={
+                        <Button
+                          size="icon-xs"
+                          variant="ghost"
+                          aria-label={t("common.add")}
+                        />
+                      }
+                    >
+                      <PlusIcon className="size-3.5" />
+                    </MenuTrigger>
+                    <MenuPopup>
+                      {defaults.map((view) => (
+                        <MenuItem
+                          key={view.id}
+                          onClick={() =>
+                            persist({ ...view, id: `draft:${createUuid()}` })
+                          }
+                        >
+                          {t("workspaces.views.newView", {
+                            layoutType: view.layout.type,
+                            layout: view.name,
+                          })}
+                        </MenuItem>
+                      ))}
+                    </MenuPopup>
+                  </Menu>
+                ) : null
+              }
+            />
+            <ViewToolbarChrome>
+              <Select
+                onValueChange={(view) => {
+                  if (view) {
+                    setProposalView(view);
+                  }
+                }}
+                value={proposalView}
               >
-                <SelectValue>
-                  {t("inbox.proposalView", {
+                <SelectTrigger
+                  aria-label={t("inbox.proposalView", {
                     view: t(
                       proposalView === "open"
                         ? "inbox.view.new"
                         : `inbox.view.${proposalView}`,
                     ),
                   })}
-                </SelectValue>
-              </SelectTrigger>
-              <SelectPopup>
-                {INBOX_VIEWS.map((view) => (
-                  <SelectItem key={view} value={view}>
-                    {t(
-                      view === "open" ? "inbox.view.new" : `inbox.view.${view}`,
-                    )}
-                  </SelectItem>
-                ))}
-              </SelectPopup>
-            </Select>
-            <fieldset disabled={!canEditView} className="contents">
-              <FilterChips
-                filters={activeView.layout.filters}
-                properties={[]}
-                onUpdate={(filters) =>
-                  onLayoutChange(mergeLayout(activeView.layout, { filters }))
-                }
-              />
-              <SortChips
-                sorts={activeView.layout.sorts}
-                properties={sortProperties}
-                maxSorts={VIEW_SORTS_MAX}
-                labels={{
-                  addSort: t("common.sort"),
-                  remove: t("common.remove"),
-                  directions: sortDirectionLabels((key) => t(key)),
-                }}
-                onUpdate={(sorts) =>
-                  onLayoutChange(mergeLayout(activeView.layout, { sorts }))
-                }
-              />
-              {activeView.layout.type === "kanban" && (
-                <KanbanGroupingSettings
+                  size="sm"
+                >
+                  <SelectValue>
+                    {t("inbox.proposalView", {
+                      view: t(
+                        proposalView === "open"
+                          ? "inbox.view.new"
+                          : `inbox.view.${proposalView}`,
+                      ),
+                    })}
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectPopup>
+                  {INBOX_VIEWS.map((view) => (
+                    <SelectItem key={view} value={view}>
+                      {t(
+                        view === "open"
+                          ? "inbox.view.new"
+                          : `inbox.view.${view}`,
+                      )}
+                    </SelectItem>
+                  ))}
+                </SelectPopup>
+              </Select>
+              <fieldset disabled={!canEditView} className="contents">
+                <FilterChips
+                  filters={activeView.layout.filters}
                   properties={[]}
-                  allowAssigneeGrouping
-                  additionalSubgroups={groups}
-                  groupByPropertyId={activeView.layout.groupByPropertyId}
-                  subgroupByPropertyId={activeView.layout.subgroupByPropertyId}
-                  onChange={(groupByPropertyId, subgroupByPropertyId) => {
-                    if (activeView.layout.type === "kanban") {
-                      onLayoutChange(
-                        mergeLayout(activeView.layout, {
-                          groupByPropertyId,
-                          subgroupByPropertyId,
-                        }),
-                      );
-                    }
+                  onUpdate={(filters) =>
+                    onLayoutChange(mergeLayout(activeView.layout, { filters }))
+                  }
+                />
+                <SortChips
+                  sorts={activeView.layout.sorts}
+                  properties={sortProperties}
+                  maxSorts={VIEW_SORTS_MAX}
+                  labels={{
+                    addSort: t("common.sort"),
+                    remove: t("common.remove"),
+                    directions: sortDirectionLabels((key) => t(key)),
                   }}
+                  onUpdate={(sorts) =>
+                    onLayoutChange(mergeLayout(activeView.layout, { sorts }))
+                  }
                 />
-              )}
-              {isTableView(activeView) && (
-                <EntityViewColumnToggle
-                  view={activeView}
-                  onLayoutChange={onLayoutChange}
-                />
-              )}
-              {activeView.layout.type === "table" && (
-                <GroupByControl
-                  properties={[]}
-                  additionalGroups={groups}
-                  allowNone
-                  allowAssigneeGrouping
-                  allowCreatedByGrouping
-                  groupByPropertyId={activeView.layout.groupByPropertyId}
-                  onChange={(groupByPropertyId) => {
-                    if (activeView.layout.type === "table") {
-                      onLayoutChange(
-                        mergeLayout(activeView.layout, {
-                          groupByPropertyId: groupByPropertyId || undefined,
-                        }),
-                      );
+                {activeView.layout.type === "kanban" && (
+                  <KanbanGroupingSettings
+                    properties={[]}
+                    allowAssigneeGrouping
+                    additionalSubgroups={groups}
+                    groupByPropertyId={activeView.layout.groupByPropertyId}
+                    subgroupByPropertyId={
+                      activeView.layout.subgroupByPropertyId
                     }
-                  }}
-                />
-              )}
-            </fieldset>
-          </ViewToolbarChrome>
-        </ViewChromeBar>
-      </fieldset>
+                    onChange={(groupByPropertyId, subgroupByPropertyId) => {
+                      if (activeView.layout.type === "kanban") {
+                        onLayoutChange(
+                          mergeLayout(activeView.layout, {
+                            groupByPropertyId,
+                            subgroupByPropertyId,
+                          }),
+                        );
+                      }
+                    }}
+                  />
+                )}
+                {isTableView(activeView) && (
+                  <EntityViewColumnToggle
+                    view={activeView}
+                    onLayoutChange={onLayoutChange}
+                  />
+                )}
+                {activeView.layout.type === "table" && (
+                  <GroupByControl
+                    properties={[]}
+                    additionalGroups={groups}
+                    allowNone
+                    allowAssigneeGrouping
+                    allowCreatedByGrouping
+                    groupByPropertyId={activeView.layout.groupByPropertyId}
+                    onChange={(groupByPropertyId) => {
+                      if (activeView.layout.type === "table") {
+                        onLayoutChange(
+                          mergeLayout(activeView.layout, {
+                            groupByPropertyId: groupByPropertyId || undefined,
+                          }),
+                        );
+                      }
+                    }}
+                  />
+                )}
+              </fieldset>
+            </ViewToolbarChrome>
+          </ViewChromeBar>
+        </EntityViewsChromeFieldset>
+      }
+    >
       <EntityViewContent
         organizationId={organizationId}
         proposalView={proposalView}
@@ -478,7 +504,7 @@ export const EntityViews = ({ organizationId, scope }: EntityViewsProps) => {
         view={activeView}
         onLayoutChange={onLayoutChange}
       />
-    </div>
+    </EntityViewsFrame>
   );
 };
 
@@ -509,13 +535,9 @@ const EntityViewContent = ({
   );
   // The server orders and pages tasks and signals as one window; rows render
   // in the order they arrive.
-  const rows = useMemo(
-    () =>
-      records.data
-        ? records.data.pages.flatMap((page) => page.items.map(toEntityViewRow))
-        : [],
-    [records.data],
-  );
+  const rows = records.data
+    ? records.data.pages.flatMap((page) => page.items.map(toEntityViewRow))
+    : [];
   const refresh = async () => {
     await Promise.all([
       queryClient.invalidateQueries({
@@ -554,8 +576,17 @@ const EntityViewContent = ({
     }
   }, [analytics, records.error]);
   const loading = records.isPending;
-  if (loading && !isTableView(view)) {
-    return <EntityViewsPending />;
+  // A table draws its own loading rows; a board's columns stand in its body
+  // while its first page loads, under the chrome that is already there.
+  const pendingLayout = isTableView(view)
+    ? null
+    : entityViewLastLayout(view.layout);
+  if (loading && pendingLayout !== null) {
+    return (
+      <EntityViewBodyPending
+        lastView={{ organizationId, viewId: view.id, layout: pendingLayout }}
+      />
+    );
   }
   const error = records.error;
   let content = null;
@@ -616,14 +647,3 @@ const EntityViewContent = ({
     </>
   );
 };
-
-export const EntityViewsPending = () => (
-  <div className="flex min-h-0 flex-1 flex-col gap-3 p-4">
-    <Skeleton className="h-8 w-72" />
-    <div className="flex flex-1 gap-3">
-      {[...TASK_STATUSES, "unassigned"].map((key) => (
-        <Skeleton key={key} className="min-w-64 flex-1" />
-      ))}
-    </div>
-  </div>
-);

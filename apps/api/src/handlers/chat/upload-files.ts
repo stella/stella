@@ -9,12 +9,14 @@ import {
   CHAT_THREAD_NOT_FOUND_ERROR_CODE,
 } from "@stll/api-contract";
 import {
+  chatFileSource,
   isChatFileMimeType,
   isRunOutputMimeType,
 } from "@stll/api-contract/chat-file-types";
 import { CHAT_CONTEXT_FILE_MAX_MEGABYTES } from "@stll/chat-limits";
 import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 
+import type { Transaction } from "@/api/db/root";
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import {
   chatThreads,
@@ -24,9 +26,7 @@ import {
 import { refuseAnonymizedCrossing } from "@/api/handlers/chat/anonymization-refusal";
 import {
   CHAT_MAX_FILE_BYTES,
-  TEXT_CSV_MIME_TYPE,
-  TEXT_MARKDOWN_MIME_TYPE,
-  TEXT_PLAIN_MIME_TYPE,
+  chatUploadMimeType,
 } from "@/api/handlers/chat/attachment-validation";
 import {
   createChatAttachmentPart,
@@ -94,7 +94,6 @@ import { isUserFileUrl, toUserFileUrl } from "@/api/lib/user-files/types";
 import { withTimeout } from "@/api/lib/with-timeout";
 import type { LegalHoldActiveError } from "@/api/lib/workspaces/legal-holds/errors";
 import { requireNoHold } from "@/api/lib/workspaces/legal-holds/holds";
-import { DOCX_MIME_TYPE, XLSX_MIME_TYPE } from "@/api/mime-types";
 
 import type {
   ChatAttachmentPart,
@@ -309,6 +308,119 @@ export const deleteUploadedChatFiles = async ({
   return Result.ok();
 };
 
+/**
+ * What `deleteChatFilesOnTx` did: deleted the files, with the cleanup to hand
+ * to its worker after commit (`handOffChatFileCleanup`), or nothing, because
+ * a legal hold keeps the thread's files.
+ */
+type ChatFilesDeletion =
+  | {
+      type: "deleted";
+      cleanup: SafeId<"entityDeletionCleanupRequest">[];
+    }
+  | { type: "held" };
+
+/**
+ * Delete chat files `fileIds` of the member's thread in `tx`: their rows, and
+ * a durable instruction to remove their stored objects. Under a legal hold on
+ * the thread the files stay with it.
+ */
+export const deleteChatFilesOnTx = async ({
+  fileIds,
+  organizationId,
+  recordAuditEvent,
+  threadId,
+  tx,
+  userId,
+  workspaceId,
+}: {
+  fileIds: readonly SafeId<"userFile">[];
+  organizationId: SafeId<"organization">;
+  recordAuditEvent: AuditRecorder;
+  threadId: SafeId<"chatThread">;
+  tx: Transaction;
+  userId: SafeId<"user">;
+  workspaceId: SafeId<"workspace"> | null;
+}): Promise<ChatFilesDeletion> => {
+  if (fileIds.length === 0) {
+    return { type: "deleted", cleanup: [] };
+  }
+  const hold = await requireNoHold({
+    tx,
+    organizationId,
+    target: { type: "thread", threadId },
+  });
+  if (hold.isErr()) {
+    return { type: "held" };
+  }
+  const files = await tx
+    .select({
+      id: userFiles.id,
+      s3Key: userFiles.s3Key,
+      thumbnailFileId: userFiles.thumbnailFileId,
+    })
+    .from(userFiles)
+    .where(
+      and(
+        inArray(userFiles.id, [...fileIds]),
+        eq(userFiles.threadId, threadId),
+        eq(userFiles.userId, userId),
+      ),
+    );
+  if (files.length === 0) {
+    return { type: "deleted", cleanup: [] };
+  }
+  const requestId = createSafeId<"entityDeletionCleanupRequest">();
+  await tx.insert(entityDeletionCleanupRequests).values({
+    id: requestId,
+    organizationId,
+    workspaceId,
+    s3Keys: files
+      .flatMap((file) =>
+        file.thumbnailFileId
+          ? [
+              file.s3Key,
+              createUserFileThumbnailKey({
+                sourceKey: file.s3Key,
+                thumbnailFileId: file.thumbnailFileId,
+                organizationId,
+                uploaderUserId: userId,
+              }),
+            ]
+          : [file.s3Key],
+      )
+      .filter((key) => key !== null),
+  });
+  await tx.delete(userFiles).where(
+    inArray(
+      userFiles.id,
+      files.map((file) => file.id),
+    ),
+  );
+  await recordAuditEvent(
+    tx,
+    files.map((file) => ({
+      action: AUDIT_ACTION.DELETE,
+      resourceType: AUDIT_RESOURCE_TYPE.CHAT_FILE,
+      resourceId: file.id,
+      workspaceId,
+      metadata: { threadId, s3Key: file.s3Key },
+    })),
+  );
+  return { type: "deleted", cleanup: [requestId] };
+};
+
+/** Hand the committed cleanup of `deleteChatFilesOnTx` to its worker. */
+export const handOffChatFileCleanup = async (
+  requestIds: readonly SafeId<"entityDeletionCleanupRequest">[],
+): Promise<void> => {
+  await handoffCommittedEntityDeletionCleanupBatch({
+    captureDeliveryError: captureError,
+    enqueueCleanup: enqueueEntityDeletionCleanup,
+    requestIds: [...requestIds],
+  });
+};
+
 type HydrateFilePartProps = {
   extractedText: string | null;
   fileName: string;
@@ -319,7 +431,7 @@ type HydrateFilePartProps = {
 
 export type HydratedFilePart =
   | {
-      // A text-extractable attachment (docx/xlsx/txt/csv/md) hydrated to a `text`
+      // A text-extractable attachment hydrated to a `text`
       // content part, or any part that carries anonymizable text. Text is
       // universal across provider adapters, so this is never modality-gated.
       cache: { status: "unchanged" } | { status: "write"; text: string };
@@ -335,32 +447,13 @@ export type HydratedFilePart =
       type: "rawOverride";
     };
 
-const DIRECT_TEXT_MIME_TYPES = [
-  TEXT_CSV_MIME_TYPE,
-  TEXT_MARKDOWN_MIME_TYPE,
-  TEXT_PLAIN_MIME_TYPE,
-] as const;
-
-type DirectTextMimeType = (typeof DIRECT_TEXT_MIME_TYPES)[number];
-type PlainTextHydratableMimeType =
-  DirectTextMimeType | typeof DOCX_MIME_TYPE | typeof XLSX_MIME_TYPE;
-
-const isDirectTextMimeType = (
-  mimeType: string,
-): mimeType is DirectTextMimeType =>
-  DIRECT_TEXT_MIME_TYPES.some(
-    (directTextMimeType) => directTextMimeType === mimeType,
-  );
-
 const THIRD_PARTY_BOUNDARY_REFUSAL_MESSAGE =
   "Cannot send this attachment to the AI in anonymized mode because stella cannot extract and anonymize it safely.";
 
-export const canHydrateFilePartAsPlainText = (
-  mimeType: string,
-): mimeType is PlainTextHydratableMimeType =>
-  isDirectTextMimeType(mimeType) ||
-  mimeType === DOCX_MIME_TYPE ||
-  mimeType === XLSX_MIME_TYPE;
+export const canHydrateFilePartAsPlainText = (mimeType: string): boolean => {
+  const source = chatFileSource(mimeType);
+  return source !== undefined && source !== "native";
+};
 
 const createBlockedHydratedFilePart = (): HydratedFilePart => ({
   error: refuseAnonymizedCrossing({
@@ -420,37 +513,40 @@ export const attachmentText = ({
   content: string;
 }): string => `Attached file "${fileName}":\n\n${content}`;
 
-const extractXlsxAttachmentText = async (file: ScannedFile) =>
-  (await extractFileTextResult(file.withMimeType(XLSX_MIME_TYPE))).map(
-    (extracted) => {
-      const text = extracted?.trim();
-      return text ? text.slice(0, LIMITS.chatContextFileMaxChars) : null;
-    },
-  );
+// A chat attachment is read whole and then cut to the chat context limit; it
+// is not a windowed document read.
+const extractChatAttachmentText = async (file: ScannedFile) =>
+  (
+    await extractFileTextResult(file, { includeContainerAttachments: true })
+  ).map((extracted) => {
+    const text = extracted?.trim();
+    return text ? text.slice(0, LIMITS.chatContextFileMaxChars) : null;
+  });
 
 export const hydrateFilePart = async ({
   extractedText,
   fileName,
-  mimeType,
+  mimeType: storedMimeType,
   sendMode,
   s3Key,
 }: HydrateFilePartProps) =>
   await Result.gen(async function* () {
+    const mimeType = chatUploadMimeType({ fileName, mimeType: storedMimeType });
     const requiresPlainText = sendMode === CHAT_SEND_MODE.anonymized;
     if (requiresPlainText && !canHydrateFilePartAsPlainText(mimeType)) {
       return Result.ok<HydratedFilePart>(createBlockedHydratedFilePart());
     }
 
-    if (mimeType !== XLSX_MIME_TYPE && extractedText !== null) {
-      return panic(
-        "Only XLSX chat attachments may carry cached extracted text",
-      );
-    }
-
-    if (mimeType === XLSX_MIME_TYPE && extractedText !== null) {
+    const source = chatFileSource(mimeType);
+    if (extractedText !== null) {
+      if (source !== "extracted-text") {
+        return panic(
+          "Only worker-extracted chat attachments may carry cached text",
+        );
+      }
       const text = extractedText.trim();
       if (!text) {
-        return panic("Cached XLSX chat attachment text must not be empty");
+        return panic("Cached chat attachment text must not be empty");
       }
 
       return Result.ok<HydratedFilePart>({
@@ -479,14 +575,14 @@ export const hydrateFilePart = async ({
     // never modality-gated and never crashes a stream (unlike a `document`
     // part, which the Mistral adapter rejects unless it is a PDF). rawOverride
     // ("anonymization off") means "skip anonymization", NOT "ship raw bytes":
-    // no adapter ingests raw docx/xlsx/csv/md. Only genuine binary formats (image,
+    // providers need the readable content. Only genuine binary formats (image,
     // PDF) are sent raw, in the fallthrough below. Ordering is load-bearing —
     // a rawOverride short-circuit placed before these branches (the previous
     // shape) made the extraction dead code whenever anonymization was off (the
     // default), shipping raw docx that every adapter rejects. The persisted
     // `userfile://` reference part (see `uploadMessageFiles`) still renders the
     // attachment chip; only the provider-bound copy becomes text.
-    if (isDirectTextMimeType(mimeType)) {
+    if (source === "plain-text") {
       return Result.ok<HydratedFilePart>({
         cache: { status: "unchanged" },
         part: createChatTextPart(
@@ -503,7 +599,7 @@ export const hydrateFilePart = async ({
       });
     }
 
-    if (mimeType === DOCX_MIME_TYPE) {
+    if (source === "docx-markdown") {
       // Use folio's structure-preserving Markdown extraction (headings,
       // tables, lists, content controls) rather than a flat paragraph join:
       // document structure is high-signal context for the model reading a
@@ -544,14 +640,14 @@ export const hydrateFilePart = async ({
       });
     }
 
-    if (mimeType === XLSX_MIME_TYPE) {
+    if (source === "extracted-text") {
       const extracted = yield* Result.await(
-        extractXlsxAttachmentText(stored).then((result) =>
+        extractChatAttachmentText(stored).then((result) =>
           Result.mapError(
             result,
             (cause) =>
               new ChatError({
-                message: "Failed to extract text from chat XLSX attachment",
+                message: "Failed to extract text from chat attachment",
                 cause,
               }),
           ),
@@ -566,7 +662,7 @@ export const hydrateFilePart = async ({
           new HandlerError({
             code: CHAT_INPUT_REFUSAL_CODE.attachmentNoText,
             status: 422,
-            message: "Chat XLSX attachment did not contain extractable text",
+            message: "Chat attachment did not contain extractable text",
           }),
         );
       }
@@ -583,6 +679,7 @@ export const hydrateFilePart = async ({
       });
     }
 
+    source satisfies "native" | undefined;
     // Remaining formats are genuine binary (image, PDF). Anonymized mode
     // blocked them above (they cannot be reduced to plain text), so only
     // rawOverride reaches here; send them raw for the model to ingest natively.
@@ -781,9 +878,43 @@ type UploadUserFileInput = {
   workspaceId: SafeId<"workspace"> | null;
 };
 
+const prepareChatAttachmentText = async (file: ScannedFile) => {
+  if (chatFileSource(file.mimeType) !== "extracted-text") {
+    return Result.ok(null);
+  }
+  const extracted = await extractChatAttachmentText(file);
+  if (extracted.isErr()) {
+    const cause = extracted.error;
+    return Result.err(
+      cause.workerErrorClass === FileScanRejectedError.name
+        ? new HandlerError({
+            code: API_FILE_SECURITY_REJECTED_ERROR_CODE,
+            status: 422,
+            message:
+              "An embedded chat attachment was rejected by the security scan",
+          })
+        : new HandlerError({
+            status: 500,
+            message: "Failed to extract text from chat attachment",
+            cause,
+          }),
+    );
+  }
+  if (extracted.value === null) {
+    return Result.err(
+      new HandlerError({
+        code: CHAT_INPUT_REFUSAL_CODE.attachmentNoText,
+        status: 422,
+        message: "Chat attachment did not contain extractable text",
+      }),
+    );
+  }
+  return Result.ok(extracted.value);
+};
+
 export const uploadUserFile = async ({
   dependencies,
-  file,
+  file: incomingFile,
   isRunOutput = false,
   organizationId,
   recordAuditEvent,
@@ -793,6 +924,9 @@ export const uploadUserFile = async ({
   workspaceId,
 }: UploadUserFileInput) =>
   await Result.gen(async function* () {
+    const file = isRunOutput
+      ? incomingFile
+      : { ...incomingFile, mimeType: chatUploadMimeType(incomingFile) };
     const reserveCleanupIntents =
       dependencies?.reserveChatObjectCleanupIntents ??
       reserveChatObjectCleanupIntents;
@@ -863,31 +997,9 @@ export const uploadUserFile = async ({
     const scanWarnings = scanned.scanWarnings;
     yield* Result.await(refuseEncryptedAttachment(scanned));
 
-    const extractedText =
-      file.mimeType === XLSX_MIME_TYPE
-        ? yield* Result.await(
-            extractXlsxAttachmentText(scanned).then((result) =>
-              Result.mapError(
-                result,
-                (cause) =>
-                  new HandlerError({
-                    status: 500,
-                    message: "Failed to extract text from chat XLSX attachment",
-                    cause,
-                  }),
-              ),
-            ),
-          )
-        : null;
-    if (file.mimeType === XLSX_MIME_TYPE && extractedText === null) {
-      return Result.err(
-        new HandlerError({
-          code: CHAT_INPUT_REFUSAL_CODE.attachmentNoText,
-          status: 422,
-          message: "Chat XLSX attachment did not contain extractable text",
-        }),
-      );
-    }
+    const extractedText = yield* Result.await(
+      prepareChatAttachmentText(scanned),
+    );
 
     // Best-effort image thumbnail + blur placeholder. A failure here never
     // blocks the upload: the original still serves; the row just carries no

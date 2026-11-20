@@ -35,19 +35,21 @@ import { SERVER_ANALYTICS_EVENTS } from "./server-analytics";
 import type { ServerAnalytics } from "./server-analytics";
 import type { TanStackAIAnalyticsCallbacks } from "./tanstack-ai";
 
-process.env["EMAIL_PROVIDER"] ??= "smtp";
-process.env["GOTENBERG_PASSWORD"] ??= "gotenberg";
-process.env["GOTENBERG_URL"] ??= "http://localhost:3003";
-process.env["GOTENBERG_USERNAME"] ??= "gotenberg";
-process.env["AI_PROVIDER"] = "openai";
-process.env["OPENAI_API_KEY"] ??= "test-openai-instance-key";
-process.env["REDIS_URL"] ??= "redis://localhost:6379";
-process.env["SMTP_HOST"] ??= "localhost";
-process.env["SMTP_PORT"] ??= "1025";
+const state = createTestState({ file: import.meta.path, config: {} });
 
-// The environment must be set before the validated configuration loads.
+state.setEnvIfAbsent("EMAIL_PROVIDER", "smtp");
+state.setEnvIfAbsent("GOTENBERG_PASSWORD", "gotenberg");
+state.setEnvIfAbsent("GOTENBERG_URL", "http://localhost:3003");
+state.setEnvIfAbsent("GOTENBERG_USERNAME", "gotenberg");
+state.setEnv("AI_PROVIDER", "openai");
+state.setEnvIfAbsent("OPENAI_API_KEY", "test-openai-instance-key");
+state.setEnvIfAbsent("REDIS_URL", "redis://localhost:6379");
+state.setEnvIfAbsent("SMTP_HOST", "localhost");
+state.setEnvIfAbsent("SMTP_PORT", "1025");
+
+// Bootstrap precedes validation; both objects share the fixture lifetime.
 const { env } = await import("@/api/env");
-const state = createTestState({ file: import.meta.path, config: env });
+const configState = state.forConfig(env);
 
 const loadTanStackAIAnalytics = async () => await import("./tanstack-ai");
 
@@ -786,6 +788,113 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
     expect(fallback.usageMetering).toBe(callbacks.usageMetering);
   });
 
+  test("records a role's usage under the role, at the role's model or the bound one", async () => {
+    const { createTanStackAIAnalyticsCallbacks } =
+      await loadTanStackAIAnalytics();
+    const { usageUnitsFromTokens } = await import("@/api/lib/usage/unit-model");
+    const ratedMicroUnits = (modelId: string) =>
+      usageUnitsFromTokens({
+        actionType: "chat",
+        isByok: true,
+        modelId,
+        outputTokens: usage.completionTokens,
+        serviceTier: "standard",
+        uncachedInputTokens: usage.promptTokens,
+      }).rawUsageMicroUnits;
+    // Three distinct rates, so rating the wrong model fails below.
+    expect(
+      new Set(["gpt-5.4-nano", "gpt-5.4-mini", "gpt-5.6"].map(ratedMicroUnits))
+        .size,
+    ).toBe(3);
+    const insertedRows: unknown[] = [];
+    const { safeDb } = createScopedDbMock({
+      select: () => ({
+        from: () => ({
+          where: () => ({
+            limit: async () => [
+              {
+                currentPeriodEnd: new Date("2026-07-01T00:00:00.000Z"),
+                currentPeriodStart: new Date("2026-06-01T00:00:00.000Z"),
+                status: "active",
+              },
+            ],
+            for: async () => [{ id: workspaceId }],
+          }),
+        }),
+      }),
+      insert: () => ({
+        values: (values: unknown) => {
+          insertedRows.push(values);
+          return {
+            onConflictDoNothing: () => ({
+              returning: async () => [{ id: "usage_event_1" }],
+            }),
+          };
+        },
+      }),
+    });
+    const events: Parameters<ServerAnalytics["capture"]>[0][] = [];
+    // No browsing pick: the role runs on the org's fast model (gpt-5.4-nano),
+    // which differs from the chat model a task-keyed default would rate.
+    const orgAIConfig = createOpenAIOrgAIConfig();
+    expect(orgAIConfig.overrideModels?.browse).toBeUndefined();
+    const callbacks = createTanStackAIAnalyticsCallbacks({
+      modelTier: MANAGED_MODEL_TIER.standard,
+      dataClass: "public_corpus",
+      analytics: {
+        capture: (event) => {
+          events.push(event);
+        },
+        flush: async () => undefined,
+        identifyOrganizationGroup: () => undefined,
+      },
+      feature: "chat.browse",
+      modelOverrideGroup: "browse",
+      orgAIConfig,
+      traceId: "trace_browse_role",
+      usageMetering: {
+        actionType: "chat",
+        organizationId: orgId,
+        safeDb,
+        serviceTier: "standard",
+        userId,
+        workspaceId,
+      },
+    });
+    const deferred: Promise<unknown>[] = [];
+    await callbacks.middleware.onUsage?.(
+      createMiddlewareContext({ deferred, runId: "resolved" }),
+      usage,
+    );
+    const bound = callbacks.forModel({
+      keySource: "byok",
+      modelId: "gpt-5.6",
+      provider: "openai",
+    });
+    await bound.middleware.onUsage?.(
+      createMiddlewareContext({ deferred, runId: "bound" }),
+      usage,
+    );
+    await Promise.all(deferred);
+
+    expect(insertedRows).toHaveLength(2);
+    expect(insertedRows[0]).toMatchObject({
+      modelRole: "browse",
+      rawUsageMicroUnits: ratedMicroUnits("gpt-5.4-nano"),
+    });
+    expect(insertedRows[1]).toMatchObject({
+      modelRole: "browse",
+      rawUsageMicroUnits: ratedMicroUnits("gpt-5.6"),
+    });
+    const generations = events.filter(
+      (event) => event.event === SERVER_ANALYTICS_EVENTS.aiGeneration,
+    );
+    expect(generations.map((event) => event.properties["$ai_model"])).toEqual([
+      "gpt-5.4-nano",
+      "gpt-5.6",
+    ]);
+  });
+
   test("meters standard-tier fallback usage as standard", async () => {
     const { createTanStackAIAnalyticsCallbacks } =
       await loadTanStackAIAnalytics();
@@ -958,7 +1067,7 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
       identifyOrganizationGroup: () => undefined,
     };
 
-    state.setConfig("REQUIRE_PERSONAL_AI_KEY", true);
+    configState.setConfig("REQUIRE_PERSONAL_AI_KEY", true);
 
     const callbacks = createTanStackAIAnalyticsCallbacks({
       modelTier: MANAGED_MODEL_TIER.standard,

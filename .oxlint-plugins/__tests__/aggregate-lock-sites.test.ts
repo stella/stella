@@ -4,10 +4,28 @@ import {
   aggregateLockBaseline,
   aggregateLockBaselineProblems,
   aggregateLockSites,
+  aggregateLockSourceIncluded,
 } from "../aggregate-lock-sites.ts";
 
 const file = "apps/api/src/handlers/example.ts";
 describe("aggregate lock confinement", () => {
+  test("only the exact pure invoice-lock fragment shares the canonical owner boundary", () => {
+    expect(
+      aggregateLockSourceIncluded(
+        "apps/api/src/lib/db/aggregate-lock/invoice-transition-source.ts",
+      ),
+    ).toBe(false);
+    expect(
+      aggregateLockSourceIncluded(
+        "apps/api/src/lib/db/aggregate-lock/neighbor.ts",
+      ),
+    ).toBe(true);
+    expect(
+      aggregateLockSourceIncluded(
+        "apps/api/src/lib/db/invoice-transition-source.ts",
+      ),
+    ).toBe(true);
+  });
   test("rejects raw API transaction boundaries including computed spellings", () => {
     for (const method of [
       ".transaction",
@@ -129,6 +147,17 @@ describe("aggregate lock confinement", () => {
       }
     }
     expect(aggregateLockSites(file, 'query["for"](mode)')).toHaveLength(1);
+  });
+  test("counts each lockRowsForWrite call as its own acquisition", () => {
+    expect(
+      aggregateLockSites(
+        file,
+        "await lockRowsForWrite({ table: t, query: tx.select({ id: t.id }).from(t) });",
+      ).map(({ primitive }) => primitive),
+    ).toEqual(["locked-rows-write"]);
+    expect(
+      aggregateLockSites(file, "locked.lockRowsForWrite(rows);"),
+    ).toHaveLength(0);
   });
   test("ignores comments and unrelated symbols while detecting SQL literals", () => {
     expect(

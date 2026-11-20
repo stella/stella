@@ -25,6 +25,8 @@ const UNPROJECTED_MEMBER_COLUMNS = [
   "lastActiveWorkspaceId",
   // When they joined is not shown in a picker.
   "createdAt",
+  // Whether a colleague may see billing amounts is not shown in a picker.
+  "billingAccess",
 ] as const satisfies readonly (keyof MemberRow)[];
 
 const MEMBER_CANDIDATE_COLUMNS = { userId: member.userId } as const;
@@ -36,6 +38,8 @@ const UNPROJECTED_USER_PROFILE_COLUMNS = [
   "emailVerified",
   // Time formatting preferences are not used by a picker.
   "timezoneId",
+  // Interface language belongs to the member's own preferences.
+  "locale",
   // A picker uses the canonical name, as other matter-team surfaces do.
   "preferredName",
   // Editor shortcut preferences are unrelated to choosing a person.

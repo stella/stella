@@ -158,6 +158,7 @@ export const NO_NATIVE_UI_REGISTRY = {
     nativeRuleId("menu"),
     "a context menu is a menu opened by the pointer",
   ),
+  "control-face": noNative("unavailable faces of controls for loading views"),
   "control-size": notComponent("control size tokens"),
   "copy-button": noNative(
     "a Button with clipboard feedback; its markup is the button rule's",
@@ -196,6 +197,9 @@ export const NO_NATIVE_UI_REGISTRY = {
   "details-grid": native("DetailsGrid from @stll/ui/details-grid", {
     elements: ["dl", "dt", "dd"],
   }),
+  "details-list-face": noNative(
+    "the fixed horizontal detail list and row used during loading",
+  ),
   dialog: native("Dialog from @stll/ui/dialog", {
     elements: ["dialog"],
     roles: ["dialog"],
@@ -225,6 +229,10 @@ export const NO_NATIVE_UI_REGISTRY = {
     nativeRuleId("color-picker"),
     "the native colour input is reported by the colour picker rule",
   ),
+  "highlighted-textarea": owned(
+    nativeRuleId("textarea"),
+    "the textarea rule owns native editing; this component couples its highlighted text layer",
+  ),
   "horizontal-scroller": owned(
     OVERFLOW_RULE,
     "raw overflow scrolling is reported there",
@@ -251,18 +259,26 @@ export const NO_NATIVE_UI_REGISTRY = {
   "input-otp": native("InputOTP from @stll/ui/input-otp", {
     attributes: [{ name: "autoComplete", values: ["one-time-code"] }],
   }),
+  "input-otp-face": noNative("presentational one-time code group and slots"),
   inspector: noNative("the inspector panel layout"),
   kanban: noNative("a board layout"),
+  "kanban-card-shell": noNative("a board card's frame"),
+  "kanban-column-header-shell": noNative(
+    "a board column header's row, without its cut text",
+  ),
+  "kanban-grouping": noNative("how a board resolves its columns"),
   kbd: noNative(
     "key caps; a rule for raw <kbd> follows once the existing key hints " +
       "render through Kbd, so it lands without a backlog",
   ),
   label: native("Label from @stll/ui/label", { elements: ["label"] }),
   landing: noNative("landing page sections"),
+  "landing-shell": noNative("the landing layout and its pending pieces"),
   "layout-tokens": notComponent("inspector layout tokens"),
   list: noNative(
     "grouped settings rows; a plain <ul> or <ol> is ordinary markup",
   ),
+  "list-shell": noNative("the grouped list's shell and its pending rows"),
   loader: owned(LOADER_RULE, "hand-rolled spinners are reported there"),
   "matter-colors": notComponent("matter colour tokens"),
   "matter-icon": owned(
@@ -288,12 +304,20 @@ export const NO_NATIVE_UI_REGISTRY = {
     inputTypes: ["number"],
   }),
   "option-color": notComponent("option colour tokens"),
+  "outcome-screen-face": noNative(
+    "the shared first-paint layout for a callback result",
+  ),
+  "outcome-screen": noNative(
+    "the screen a finished flow ends on; a hand-built one is " +
+      "no-adhoc-outcome-screen's",
+  ),
   "outline-rail": noNative("document outline navigation built from Button"),
   "overlay-layer": notComponent("overlay stacking tokens"),
   pagination: noNative(
     "HTML has no pagination element or role; a hand-rolled pager is " +
       "buttons and text no lexical pattern tells apart from other button rows",
   ),
+  "pane-width": notComponent("inspector pane width policy"),
   "panel-inset": notComponent("panel spacing tokens"),
   popover: native("Popover from @stll/ui/popover", {
     attributes: [{ name: "popover" }, { name: "popoverTarget" }],
@@ -389,6 +413,10 @@ export const NO_NATIVE_UI_REGISTRY = {
     ],
   }),
   "table-chart": noNative("a chart drawn from table data"),
+  "table-shell": owned(
+    nativeRuleId("table"),
+    "native table markup is reported by the table rule",
+  ),
   tabs: native("Tabs from @stll/ui/tabs", {
     roles: ["tablist", "tab", "tabpanel"],
   }),
@@ -441,6 +469,9 @@ export const NO_NATIVE_UI_REGISTRY = {
     nativeRuleId("tooltip"),
     "a title on truncated text is reported by the tooltip rule",
   ),
+  "truncated-text-face": noNative(
+    "cut text's box without its hint, for loading views",
+  ),
   "typed-character": notComponent("keystroke classification"),
   "use-contained-handler": notComponent("a React hook"),
   "use-content-dir": notComponent("a React hook"),
@@ -452,22 +483,307 @@ export const NO_NATIVE_UI_REGISTRY = {
   "view-toolbar": noNative(
     "a view's filter row; ARIA toolbars have no general @stll/ui primitive",
   ),
+  "view-toolbar-shell": noNative(
+    "the view chrome's rows without their controls, for loading views",
+  ),
   week: notComponent("week arithmetic"),
   "workspace-shell": noNative("the workspace page layout"),
 } as const satisfies Record<string, NoNativeUiEntry>;
 
 type Registry = typeof NO_NATIVE_UI_REGISTRY;
 
-/** The modules whose row generates a rule. */
-export type NativeModule = {
-  [Module in keyof Registry]: Registry[Module]["kind"] extends "native"
-    ? Module
-    : never;
+/**
+ * What a component is in the React Native app (apps/mobile), the registry's
+ * second column. Every component row has one:
+ *
+ *   renderer   `<module>.native.tsx` renders the component's shared contract
+ *              and package.json resolves the module to it under the
+ *              `react-native` condition. `replaces` lists the React Native
+ *              components (imported from "react-native") the app must not
+ *              render in its place; the module's `no-native-<module>` rule
+ *              reports them in apps/mobile. `TextInput[multiline]` names a
+ *              TextInput with a `multiline` attribute, which a plain
+ *              `TextInput` entry then leaves to that rule.
+ *   web-only   no native renderer; `reason` says why a phone does without.
+ *
+ * The registry test fails when a component has neither, when a renderer has
+ * no `react-native` export or a web-only module has one, or when two rules
+ * claim one React Native component.
+ */
+export type ReactNativeColumn =
+  | {
+      readonly kind: "renderer";
+      readonly use: string;
+      readonly replaces: readonly string[];
+    }
+  | { readonly kind: "web-only"; readonly reason: string };
+
+const renderer = (use: string, replaces: readonly string[]) =>
+  ({ kind: "renderer", use, replaces }) as const;
+
+const webOnly = (reason: string) => ({ kind: "web-only", reason }) as const;
+
+/** The modules whose row is a component (not a hook, helper or token set). */
+export type ComponentModule = {
+  [Module in keyof Registry]: Registry[Module]["kind"] extends "not-component"
+    ? never
+    : Module;
 }[keyof Registry];
 
-/** One generated rule's row. */
-export const nativeEntry = (module: NativeModule) =>
-  NO_NATIVE_UI_REGISTRY[module];
+export const NO_NATIVE_UI_REACT_NATIVE = {
+  accordion: webOnly(
+    "a phone discloses a section by navigating to it or through a native list section; the app has no disclosure row yet",
+  ),
+  "ai-label": webOnly(
+    "marks AI output in the web's review surfaces, which the app does not show",
+  ),
+  "alert-dialog": webOnly(
+    "a phone confirms through the platform's own alert (Alert.alert), which needs no wrapper",
+  ),
+  "animated-count": webOnly(
+    "a web number animation; the app shows counts as plain text",
+  ),
+  "animated-preview": webOnly(
+    "a web feature preview animation; the app plays no feature previews",
+  ),
+  "application-rail": webOnly(
+    "the web's navigation chrome; the app navigates with the platform's tab bar",
+  ),
+  avatar: webOnly("the app shows no user avatars yet"),
+  badge: webOnly("a web status pill; the app shows no badges yet"),
+  "bidi-text": webOnly(
+    "React Native lays out bidirectional text through the platform; there is no <bdi> to wrap",
+  ),
+  "brand-icons": webOnly("third-party sign-in artwork the app does not draw"),
+  breadcrumb: webOnly("a phone navigates with a back stack, not a trail"),
+  button: renderer("Button from @stll/ui/button", [
+    "Pressable",
+    "TouchableOpacity",
+    "TouchableHighlight",
+    "TouchableWithoutFeedback",
+    "TouchableNativeFeedback",
+    "Button",
+  ]),
+  "calendar-primitives": webOnly(
+    "the parts of the web's calendars; the app has no calendar view",
+  ),
+  checkbox: webOnly(
+    "iOS has no checkbox control; a binary choice on a phone is a Switch",
+  ),
+  collapsible: webOnly(
+    "a phone discloses details by navigating to them; the app has no disclosure row yet",
+  ),
+  "color-picker": webOnly("the app does not edit colours"),
+  combobox: webOnly(
+    "a phone picks from a list on its own screen or sheet (a searchable list), not a dropdown",
+  ),
+  command: webOnly(
+    "the app's palette is a sheet of Button rows over a search Input",
+  ),
+  composer: webOnly(
+    "the web's rich-text composer; the app composes from the shared composer tokens with Textarea and Button",
+  ),
+  "context-menu": webOnly(
+    "a phone opens a context menu through the platform (expo-router Link.Menu)",
+  ),
+  "control-face": webOnly(
+    "faces for the web's server-painted loading views; the app has none",
+  ),
+  "copy-button": webOnly(
+    "a Button with clipboard feedback the app does not offer yet",
+  ),
+  "court-badge": webOnly("a web review badge the app does not show"),
+  "court-filter": webOnly(
+    "the web's case-law court filter; the app has no search filters",
+  ),
+  "data-table": webOnly("a phone lists records in rows, not a table"),
+  "date-picker-popover": webOnly(
+    "a phone picks a date with the platform's picker",
+  ),
+  "date-range-filter": webOnly("the app has no date-range filters"),
+  "day-calendar": webOnly("the web's day grid; the app has no calendar view"),
+  "destructive-action-confirmation": webOnly(
+    "a phone confirms through the platform's own alert",
+  ),
+  "destructive-confirm-dialog": webOnly(
+    "a phone confirms through the platform's own alert",
+  ),
+  "details-list-face": webOnly(
+    "the phone presents account details in native rows",
+  ),
+  "details-grid": webOnly(
+    "a phone stacks labelled values as rows, not a definition grid",
+  ),
+  dialog: webOnly(
+    "a phone presents modal content as a page sheet (@stll/ui/sheet), which owns the platform's Modal",
+  ),
+  "directional-icon": webOnly(
+    "React Native mirrors layout for right-to-left itself",
+  ),
+  "document-identity-badge": webOnly(
+    "a web review badge the app does not show",
+  ),
+  "document-mark": renderer("DocumentMark from @stll/ui/document-mark", []),
+  "entity-actions": webOnly(
+    "a phone opens an object's actions through the platform (expo-router Link.Menu) or a swipe row",
+  ),
+  field: webOnly(
+    "the app labels a control with Text above it; there is no <label> element to pair",
+  ),
+  "file-input": webOnly(
+    "a phone picks files through the platform's document picker",
+  ),
+  form: webOnly(
+    "React Native has no form element; a screen submits from its own Button",
+  ),
+  frame: webOnly("a web layout surface; screens lay out with View"),
+  "hex-color-picker": webOnly("the app does not edit colours"),
+  "highlighted-textarea": webOnly(
+    "the web's highlighted editing field; the app composes with Textarea",
+  ),
+  "horizontal-scroller": webOnly("ScrollView scrolls natively on a phone"),
+  icons: webOnly(
+    "the app draws the same entries from lucide-react-native through its generated icon module",
+  ),
+  "identity-text": webOnly(
+    "discloses a clipped name in a hover tooltip; a phone has no hover and caps lines with Text's numberOfLines",
+  ),
+  "inline-drop-indicator": webOnly("the app has no drag and drop"),
+  "inline-rename": webOnly("the app renames nothing inline yet"),
+  input: renderer("Input from @stll/ui/input", ["TextInput"]),
+  "input-group": webOnly(
+    "a web input decoration; a phone field carries no inline addons yet",
+  ),
+  "input-otp": webOnly(
+    "the app signs in through the browser, not a code field",
+  ),
+  "input-otp-face": webOnly("the app opens the web sign-in flow in a browser"),
+  inspector: webOnly(
+    "the web's docked inspector; a phone shows details on their own screen",
+  ),
+  kanban: webOnly("a phone has no room for a board"),
+  "kanban-card-shell": webOnly("a phone has no room for a board"),
+  "kanban-column-header-shell": webOnly("a phone has no room for a board"),
+  "kanban-grouping": webOnly("a phone has no room for a board"),
+  kbd: webOnly("a phone has no keyboard shortcuts to show"),
+  label: webOnly(
+    "React Native has no label element; Text names the control above it",
+  ),
+  landing: webOnly("marketing sections for the website"),
+  "landing-shell": webOnly("the landing layout of the web home screens"),
+  list: webOnly(
+    'the app\'s lists are FlatList rows of Button size="row" divided by Separator',
+  ),
+  "list-shell": webOnly(
+    "the web list's shell for loading views; the app's lists are FlatList rows",
+  ),
+  loader: renderer("Loader from @stll/ui/loader", ["ActivityIndicator"]),
+  "matter-icon": renderer("MatterIcon from @stll/ui/matter-icon", []),
+  menu: webOnly(
+    "a phone opens menus through the platform (expo-router Link.Menu, native header menus)",
+  ),
+  "menu-section": webOnly("a phone opens menus through the platform"),
+  "middle-truncate": webOnly(
+    'React Native truncates a line natively (numberOfLines with ellipsizeMode "middle")',
+  ),
+  "number-input": webOnly("the app enters no numbers yet"),
+  "outcome-screen-face": webOnly(
+    "the browser renders the callback progress and result",
+  ),
+  "outcome-screen": webOnly(
+    "the web's end-of-flow screen; no app flow ends on one yet",
+  ),
+  "outline-rail": webOnly(
+    "the web's document outline; the app shows no outline",
+  ),
+  pagination: webOnly("a phone loads more as a list scrolls"),
+  popover: webOnly("a phone has no anchored popovers; it uses a sheet"),
+  "preview-card": webOnly("a hover card; a phone has no hover"),
+  "preview-pane": webOnly("a web menu preview layout"),
+  prose: webOnly(
+    "a web prose stylesheet; the app sets paragraphs with Text roles",
+  ),
+  "resource-calendar": webOnly(
+    "the web's resource grid; the app has no calendar view",
+  ),
+  "review-author-avatar": webOnly("the app shows no review surfaces"),
+  "review-comment-card": webOnly("the app shows no review surfaces"),
+  "review-decision-actions": webOnly("the app shows no review surfaces"),
+  "review-diff-text": webOnly("the app shows no review surfaces"),
+  "review-out-of-date-notice": webOnly("the app shows no review surfaces"),
+  "review-severity-dot": webOnly("the app shows no review surfaces"),
+  "review-status-badge": webOnly("the app shows no review surfaces"),
+  "run-state-mark": renderer("RunStateMark from @stll/ui/run-state-mark", []),
+  "scroll-area": webOnly("ScrollView scrolls natively on a phone"),
+  "scroll-to-top": webOnly("iOS scrolls to the top from the status bar"),
+  "search-field": webOnly(
+    'a phone searches through the header\'s system search bar or Input type="search"',
+  ),
+  "secret-input": webOnly(
+    "the app signs in through the browser and takes no passwords",
+  ),
+  "segmented-icon-toggle": webOnly("the app has no icon toggles yet"),
+  select: webOnly(
+    "a phone picks from a list on its own screen or sheet, not a dropdown",
+  ),
+  separator: renderer("Separator from @stll/ui/separator", []),
+  sheet: renderer("Sheet from @stll/ui/sheet", ["Modal"]),
+  sidebar: webOnly(
+    "the web's navigation chrome; the app navigates with the platform's tab bar",
+  ),
+  skeleton: webOnly("the app shows a Loader until content arrives"),
+  "split-button": webOnly("the app has no split buttons"),
+  "status-mark": webOnly("a web status glyph the app does not show"),
+  "stella-mark": renderer("StellaMark from @stll/ui/stella-mark", []),
+  "stella-wordmark": renderer(
+    "StellaWordmarkLatin from @stll/ui/stella-wordmark",
+    [],
+  ),
+  steps: webOnly("the app has no step flows"),
+  "swap-text": webOnly("a web text animation"),
+  switch: renderer("Switch from @stll/ui/switch", ["Switch"]),
+  table: webOnly("a phone lists records in rows, not a table"),
+  "table-chart": webOnly("the app draws no charts"),
+  "table-shell": webOnly("a phone lists records in rows, not a table"),
+  tabs: webOnly("a phone switches sections with the platform's tab bar"),
+  text: renderer("Text from @stll/ui/text", ["Text"]),
+  "text-mark": webOnly("the app highlights no text"),
+  textarea: renderer("Textarea from @stll/ui/textarea", [
+    "TextInput[multiline]",
+  ]),
+  "time-field": webOnly("a phone enters a time with the platform's picker"),
+  toast: webOnly(
+    "the app reports outcomes inline; there is no toast host on the phone",
+  ),
+  toggle: webOnly(
+    "the app has no pressed-state buttons yet; a binary choice on a phone is a Switch",
+  ),
+  "toggle-group": webOnly("the app has no segmented controls yet"),
+  "toolbar-icon-action": webOnly(
+    "a web toolbar button with a hover tooltip; a phone has no hover",
+  ),
+  tooltip: webOnly(
+    "a phone has no hover; a control's name is its accessibility label",
+  ),
+  "truncated-text": webOnly(
+    "reveals the full text in a hover tooltip; a phone has no hover and caps lines with Text's numberOfLines",
+  ),
+  "truncated-text-face": webOnly(
+    "the web's cut-text box for loading views; a phone caps lines with Text's numberOfLines",
+  ),
+  "view-toolbar": webOnly(
+    "the web's view filter row; the app filters from the header",
+  ),
+  "view-toolbar-shell": webOnly(
+    "the web view chrome's rows for loading views; the app filters from the header",
+  ),
+  "workspace-shell": webOnly(
+    "the web's page layout; screens lay out with the platform's navigation",
+  ),
+} as const satisfies Record<ComponentModule, ReactNativeColumn>;
+
+/** The module that marks a component a React Native renderer replaces. */
+export const REACT_NATIVE_MODULE = "react-native";
 
 /**
  * `<input>` types the input rule leaves alone because another rule owns them
@@ -487,17 +803,52 @@ export const INPUT_TYPES_OUTSIDE_INPUT_RULE: Readonly<Record<string, string>> =
     range: "no @stll/ui slider yet",
   };
 
-/** The modules that generate a rule, with their patterns. */
-export const nativeEntries = (): {
+/** One generated rule: its module, its replacement, and what it reports. */
+export type NativeRuleEntry = {
   module: string;
   use: string;
+  /** Web markup, from the row's patterns; empty for a React Native-only rule. */
   patterns: NativePatterns;
-}[] =>
+  /** React Native components, from the row's React Native column. */
+  reactNative: readonly string[];
+};
+
+const reactNativeColumn = (module: string): ReactNativeColumn | undefined => {
+  const columns: Readonly<Record<string, ReactNativeColumn>> =
+    NO_NATIVE_UI_REACT_NATIVE;
+  return columns[module];
+};
+
+/** The React Native components a module's rule reports, if any. */
+const reactNativeReplaced = (module: string): readonly string[] => {
+  const column = reactNativeColumn(module);
+  return column?.kind === "renderer" ? column.replaces : [];
+};
+
+/**
+ * The modules that generate a rule: every row of kind "native", and every
+ * component whose React Native renderer replaces a React Native component.
+ */
+export const nativeEntries = (): NativeRuleEntry[] =>
   Object.entries(NO_NATIVE_UI_REGISTRY).flatMap(
-    ([module, entry]: [string, NoNativeUiEntry]) =>
-      entry.kind === "native"
-        ? [{ module, use: entry.use, patterns: entry.patterns }]
-        : [],
+    ([module, entry]: [string, NoNativeUiEntry]) => {
+      const reactNative = reactNativeReplaced(module);
+      const column = reactNativeColumn(module);
+      if (entry.kind === "native") {
+        return [
+          { module, use: entry.use, patterns: entry.patterns, reactNative },
+        ];
+      }
+      return column?.kind === "renderer" && reactNative.length > 0
+        ? [{ module, use: column.use, patterns: {}, reactNative }]
+        : [];
+    },
+  );
+
+/** The generated rules a React Native surface enables: its renderers' rules. */
+export const reactNativeRuleModules = (): string[] =>
+  nativeEntries().flatMap(({ module }) =>
+    reactNativeColumn(module)?.kind === "renderer" ? [module] : [],
   );
 
 /**

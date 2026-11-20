@@ -7,9 +7,11 @@ import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
   caseLawCorpusUploadIntents,
+  caseLawDecisionFallbackIdentities,
   caseLawDecisionIdentifiers,
   caseLawDecisions,
   caseLawSources,
+  corpusIndexGenerations,
 } from "@/api/db/schema";
 import { czNsAdapter } from "@/api/handlers/case-law/ingestion/adapters/cz-ns";
 import { PL_COURTS_METADATA_URL_SCHEMA } from "@/api/handlers/case-law/ingestion/adapters/pl-courts.metadata-urls";
@@ -80,6 +82,8 @@ const unwrapPackFooter = (
 
 const events: string[] = [];
 const insertedRows: Record<string, unknown>[] = [];
+/** Fallback identity aliases the row writes reserved, read back as owners. */
+const reservedFallbackAliases: Record<string, unknown>[] = [];
 const updatedDecisionRows: Record<string, unknown>[] = [];
 
 /** Every pack the batches under test handed to the transfer. */
@@ -176,6 +180,7 @@ afterEach(() => {
   czNsAdapter.fetchPage = originalCzNsFetchPage;
   events.length = 0;
   insertedRows.length = 0;
+  reservedFallbackAliases.length = 0;
   updatedDecisionRows.length = 0;
   transferredPacks.length = 0;
   persistedAdapterKey = "canonical-unregistered-fixture";
@@ -189,7 +194,9 @@ afterEach(() => {
 
 const decision: IngestionResult = plainTextIngestionResult({
   caseNumber: "X/1/2026",
-  court: "Test Court",
+  // A directory court under its official name, so the write boundary stores
+  // the name as given.
+  court: "Najvyšší súd Slovenskej republiky",
   country: "SVK",
   language: "sk",
   fulltext: "Rozhodnutie o veci samej.",
@@ -239,6 +246,10 @@ const scopedDb: ScopedDb = async (callback) => {
       // drizzle's relational API returns undefined for a miss.
       caseLawDecisions: {
         findFirst: async () => await Promise.resolve(existingDecision),
+        findMany: async () =>
+          await Promise.resolve(
+            existingDecision === undefined ? [] : [existingDecision],
+          ),
       },
     },
     select: (selection: Record<string, unknown>) => ({
@@ -262,6 +273,11 @@ const scopedDb: ScopedDb = async (callback) => {
           }
           if (table === caseLawDecisionIdentifiers) {
             return [];
+          }
+          if (table === caseLawDecisionFallbackIdentities) {
+            return reservedFallbackAliases.map((alias) => ({
+              id: alias["decisionId"],
+            }));
           }
           if (table === caseLawDecisions && "citationKey" in selection) {
             return existingDecision
@@ -289,6 +305,13 @@ const scopedDb: ScopedDb = async (callback) => {
         if (table === caseLawDecisionIdentifiers) {
           return { where: rows };
         }
+        if (table === corpusIndexGenerations) {
+          // The generation registry, read whole and in generation order: no
+          // generation is registered, so nothing is projected.
+          return {
+            where: () => ({ orderBy: () => ({ limit: async () => [] }) }),
+          };
+        }
         return {
           innerJoin: () => ({
             where: () => ({ limit: () => ({ for: rows }) }),
@@ -314,6 +337,8 @@ const scopedDb: ScopedDb = async (callback) => {
             insertedRows.push(...inserted);
           } else if (table === caseLawCorpusUploadIntents) {
             events.push("intent-reserve");
+          } else if (table === caseLawDecisionFallbackIdentities) {
+            reservedFallbackAliases.push(...inserted);
           }
         }
         const returning = async () => {
@@ -782,7 +807,9 @@ describe("processDecision — canonical storage mode", () => {
     // holds no document, never by where a payload would have lived.
     expect(
       partialObservationFromMetadata(inserted?.["metadata"]),
-    ).toMatchObject({ detail: "listing-only" });
+    ).toMatchObject({
+      detail: "listing-only",
+    });
   });
 
   test("leaves a settled row's payload alone when only the publisher page moved", async () => {
@@ -875,7 +902,9 @@ describe("processDecision — canonical storage mode", () => {
       sourceRawS3Key: null,
       sourceRawContentType: null,
     };
-    const moved = plainTextIngestionResult({ ...decision, country: "CZE" });
+    // Into a jurisdiction that stores the court as printed, so only the
+    // jurisdiction moves.
+    const moved = plainTextIngestionResult({ ...decision, country: "POL" });
     // Not vacuous: the payload is the one the row records.
     expect(
       realCorpusStorage.corpusContentHash(

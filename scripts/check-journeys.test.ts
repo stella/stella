@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { chmod, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import type * as v from "valibot";
 
 import { CASE_LAW_COVERAGE_CURRENT_WITHIN_MS } from "../apps/api/src/lib/case-law/coverage-freshness";
@@ -51,7 +52,7 @@ const statuteHit = {
   title: "fixture",
 } satisfies Pick<StatuteHit, "documentId" | "eli" | "title">;
 
-const ROOT = new URL("../", import.meta.url).pathname;
+const ROOT = fileURLToPath(new URL("../", import.meta.url));
 
 const HOUR_SECONDS = 3600;
 const MINUTE_SECONDS = 60;

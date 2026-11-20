@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
+import { fileURLToPath } from "node:url";
 
 import { checkCzInsolvency } from "./cz-insolvency.js";
 import { checkCzVatReliability } from "./cz-vat-reliability.js";
@@ -163,7 +164,7 @@ describe("SOAP request schema contracts", () => {
     const sourceDir = new URL("./", import.meta.url);
     const callers: string[] = [];
     for await (const path of new Bun.Glob("**/*.ts").scan({
-      cwd: sourceDir.pathname,
+      cwd: fileURLToPath(sourceDir),
     })) {
       if (
         /\bsoapRequest\(\{/u.test(

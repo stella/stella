@@ -16,6 +16,8 @@ import type {
 } from "@stll/api-contract/desktop-runner";
 import { createDetached } from "@stll/errors";
 
+import { createAcpHarnessAdapter } from "../harness/acp/adapter";
+import { antigravityDefinition } from "../harness/acp/antigravity";
 import type {
   HarnessAdapter,
   HarnessContinuationRequest,
@@ -47,6 +49,8 @@ import { createEventQueue } from "../harness/event-queue";
 import {
   approvalMessage,
   HARNESS_FAILURE_OUTCOME,
+  type HarnessBoundary,
+  harnessBoundary,
   type HarnessEvent,
   type HarnessFailure,
   harnessSessionId,
@@ -79,6 +83,7 @@ import {
 } from "./outputs";
 import {
   SIDECAR_MAX_BACKGROUND_TASKS,
+  SIDECAR_RUN_SESSION,
   type SidecarFolderRestore,
   type SidecarHarnessLaunchSettings,
   type SidecarHostMessage,
@@ -89,6 +94,7 @@ import {
   type SidecarRunInput,
   type SidecarRunStart,
 } from "./protocol";
+import { SKIPPED_CAPTURE, SlowCheckpointFolders } from "./slow-folders";
 import { keepStepOutput, stepOutputRunDir } from "./step-outputs";
 import { createStepUploads, stepContentUploader } from "./step-uploads";
 
@@ -103,7 +109,8 @@ import { createStepUploads, stepContentUploader } from "./step-uploads";
  * still runs leaves its harness process to the chat's folder (a live
  * session, `HarnessLiveSession`): the chat's next run continues in it when it
  * resumes that session with the same launch, and sees that work. Anything
- * else ends it first: another session or launch, a stop of the next run, a
+ * else ends it first: another session or launch, a fork of a session (that
+ * work belongs to turns the fork leaves out), a stop of the next run, a
  * restore of the folder, the idle limit, the holder stopping, or another API
  * origin. It also ends by itself once its background work does. While it
  * waits, `background.tasks` reports how much work it holds.
@@ -116,6 +123,30 @@ export type SidecarCommand = Exclude<
 >;
 
 type RunOutcome = (typeof DESKTOP_RUNNER_RUN_OUTCOMES)[number];
+
+/** How a run's turn ended, and what it left of its native session. */
+type RunEnd = {
+  value: RunOutcome;
+  sessionId: string | null;
+  /** Where the turn ended in the session, once it completed. */
+  boundary: HarnessBoundary | null;
+};
+
+/**
+ * A run's last message. Only a completed turn's end is a point a later run
+ * may continue from; a run the desktop missed part of fails and names none.
+ */
+const runFinishedMessage = (runId: string, end: RunEnd, broken: boolean) => {
+  const outcome = broken ? "failed" : end.value;
+  return {
+    type: "run.finished",
+    runId,
+    outcome,
+    harnessSessionId: end.sessionId,
+    harnessBoundary:
+      outcome === "completed" && end.sessionId !== null ? end.boundary : null,
+  } as const;
+};
 
 /** How long an interrupt or a shutdown waits before a harness is killed. */
 const HARNESS_GRACE_MS = 5000;
@@ -141,7 +172,10 @@ const LIVE_SESSION_IDLE_MS = 4 * 60 * 60_000;
 
 /**
  * What a harness process was started with that a later turn cannot change:
- * a turn continues in a kept process only when this is the same.
+ * a turn continues in a kept process only when this is the same. The model,
+ * the reasoning effort and the approval mode are not part of it: the adapter
+ * switches them in the kept process, or starts a new one when its harness
+ * cannot (`HarnessLiveSession`).
  */
 const launchKey = (
   message: SidecarRunStart,
@@ -157,10 +191,9 @@ const launchKey = (
     message.toolPath,
     message.skillFolders,
     networkHosts,
-    message.model,
-    message.reasoningEffort,
     message.instructions,
-    message.policy,
+    message.policy.network,
+    message.policy.fs,
     message.mcp.serverName,
   ]);
 
@@ -172,13 +205,39 @@ const continuationOf = (
   if (taken !== null) {
     return { type: "live", session: taken.session };
   }
-  return message.harnessSessionId === null
-    ? { type: "fresh" }
-    : {
+  const { session } = message;
+  switch (session.type) {
+    case SIDECAR_RUN_SESSION.fresh:
+      return { type: "fresh" };
+    case SIDECAR_RUN_SESSION.resume:
+      return {
         type: "resume",
-        sessionId: harnessSessionId(message.harnessSessionId),
+        sessionId: harnessSessionId(session.sessionId),
       };
+    case SIDECAR_RUN_SESSION.fork: {
+      const boundary = harnessBoundary(session.boundary);
+      return boundary === null
+        ? panic("The protocol carries only boundaries a harness can name")
+        : {
+            type: "fork",
+            sessionId: harnessSessionId(session.sessionId),
+            boundary,
+          };
+    }
+    default:
+      session satisfies never;
+      return panic("Unknown run session");
+  }
 };
+
+/**
+ * The session a kept process holds that the run's turn continues whole; a
+ * fork continues none, since its session is a new one.
+ */
+const resumedSessionOf = (message: SidecarRunStart): string | null =>
+  message.session.type === SIDECAR_RUN_SESSION.resume
+    ? message.session.sessionId
+    : null;
 
 export type HarnessLaunch = {
   harness: AgentHarness;
@@ -339,6 +398,29 @@ const ADAPTERS = {
     });
   },
   opencode: null,
+  antigravity: (launch: HarnessLaunch, options: AdapterOptions) => {
+    // Antigravity takes no configuration overrides or client name.
+    if (
+      launch.launch.configOverrides.length > 0 ||
+      launch.launch.clientName !== null
+    ) {
+      panic("Antigravity adapter: launch settings it cannot apply");
+    }
+    return createAcpHarnessAdapter({
+      definition: antigravityDefinition(launch.executable),
+      executable: launch.executable,
+      configDir: launch.configDir,
+      environment: launchEnvironment(options.environment, launch.launch),
+      clientVersion: launch.clientVersion,
+      gracePeriodMs: HARNESS_GRACE_MS,
+      requestTimeoutMs: HARNESS_REQUEST_TIMEOUT_MS,
+      startupRequestTimeoutMs: HARNESS_STARTUP_REQUEST_TIMEOUT_MS,
+      onBackgroundError: options.onBackgroundError,
+      protocolLog: options.protocolLog,
+      platform: process.platform,
+      ...(options.onProcess === null ? {} : { onProcess: options.onProcess }),
+    });
+  },
 } as const satisfies Record<
   AgentHarness,
   ((launch: HarnessLaunch, options: AdapterOptions) => HarnessAdapter) | null
@@ -614,6 +696,7 @@ export class SidecarHost {
   >();
   /** Kept harness processes by their chat's folder, resolved. */
   private readonly live = new Map<string, LiveFolder>();
+  private readonly slowFolders = new SlowCheckpointFolders();
   /** Kept processes being ended, by folder, until each is gone. */
   private readonly endingLive = new Map<string, Promise<void>>();
   private stopping = false;
@@ -1206,7 +1289,7 @@ export class SidecarHost {
       !(
         live.session.harness === message.harness &&
         live.launch === run.launch &&
-        live.session.sessionId === message.harnessSessionId &&
+        live.session.sessionId === resumedSessionOf(message) &&
         live.proxy === config.proxy
       )
     ) {
@@ -1271,19 +1354,26 @@ export class SidecarHost {
     }
     // After the copies and before the harness: the folder as the member left
     // it, attachments included, so the turn's changes can be undone.
-    run.checkpoint = await captureCheckpoint({
-      workspaceDir: run.workspaceDir,
-      runId: message.runId,
-      memberFiles: copied.value,
-      protectedPaths: [
-        message.configDir,
-        message.cacheDir,
-        message.stepOutputDir,
-        ...message.skillFolders.map((folder) => folder.path),
-      ],
-      signal: run.stopCopying.signal,
-      log: this.options.log,
-    });
+    // A folder that keeps running out of time is spared the wait for a while.
+    const capturedAt = Temporal.Now.instant().epochMilliseconds;
+    run.checkpoint = this.slowFolders.skips(run.workspaceDir, capturedAt)
+      ? SKIPPED_CAPTURE
+      : await captureCheckpoint({
+          workspaceDir: run.workspaceDir,
+          runId: message.runId,
+          memberFiles: copied.value,
+          protectedPaths: [
+            message.configDir,
+            message.cacheDir,
+            message.stepOutputDir,
+            ...message.skillFolders.map((folder) => folder.path),
+          ],
+          signal: run.stopCopying.signal,
+          log: this.options.log,
+        });
+    if (run.checkpoint !== SKIPPED_CAPTURE) {
+      this.slowFolders.record(run.workspaceDir, run.checkpoint, capturedAt);
+    }
     if (run.checkpoint.status === "unavailable") {
       this.options.log(
         `a run's folder was not saved: ${run.checkpoint.reason}`,
@@ -1325,7 +1415,7 @@ export class SidecarHost {
     // it, or ends it.
     const taken = run.live;
     run.live = null;
-    const browser = this.browserFor(message, run, taken);
+    const browser = this.browserFor(message, run, taken, config.apiOrigin);
     const started = await adapter.value.startTurn({
       runId: message.runId,
       threadId: message.threadId,
@@ -1337,10 +1427,10 @@ export class SidecarHost {
       toolPath: message.toolPath,
       model: message.model,
       reasoningEffort: message.reasoningEffort,
-      instructions: withLocalBrowserInstructions(
-        message.instructions,
-        browser !== null,
-      ),
+      instructions: withLocalBrowserInstructions(message.instructions, {
+        hasBrowser: browser !== null,
+        readOnlyHost: this.options.browser?.readOnlyHost === true,
+      }),
       policy: message.policy,
       mcp: binding.value,
       browser,
@@ -1361,12 +1451,15 @@ export class SidecarHost {
     message: SidecarRunStart,
     run: HeldRun,
     taken: LiveFolder | null,
+    /** The account the run started for: its browser stays that account's. */
+    accountOrigin: string,
   ) {
     const browser = this.options.browser;
     if (browser === null) {
       return null;
     }
     const browserRun = {
+      accountOrigin,
       runId: message.runId,
       threadId: message.threadId,
       approvals: message.policy.approvals,
@@ -1395,9 +1488,10 @@ export class SidecarHost {
       run.live = null;
       await this.endLive(untaken);
     }
-    const outcome: { value: RunOutcome; sessionId: string | null } = {
+    const outcome: RunEnd = {
       value: "failed",
       sessionId: null,
+      boundary: null,
     };
     const runId = message.runId;
     /**
@@ -1505,6 +1599,7 @@ export class SidecarHost {
             break;
           case "turn.completed":
             outcome.value = "completed";
+            outcome.boundary = event.boundary;
             // A stop ends the wait: a stopped run does not wait to send.
             await steps.end("completed", run.outputSharing.signal);
             await shareRunOutputs();
@@ -1598,12 +1693,7 @@ export class SidecarHost {
     } else if (kept !== null) {
       await this.keepLive({ message, config, run, session: kept });
     }
-    const finished = {
-      type: "run.finished",
-      runId,
-      outcome: delivery.broken ? "failed" : outcome.value,
-      harnessSessionId: outcome.sessionId,
-    } as const;
+    const finished = runFinishedMessage(runId, outcome, delivery.broken);
     // Every accepted run ends with one `run.finished`: a native session id
     // the contract cannot carry fails the run instead of losing its end.
     if (!this.options.send(finished)) {
@@ -1611,6 +1701,7 @@ export class SidecarHost {
         ...finished,
         outcome: "failed",
         harnessSessionId: null,
+        harnessBoundary: null,
       });
     }
   }

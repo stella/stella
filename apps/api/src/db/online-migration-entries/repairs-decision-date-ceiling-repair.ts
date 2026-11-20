@@ -4,6 +4,7 @@ import type { OnlineMigrationEntry } from "../online-migration-entry";
 export default {
   id: "repairs-decision-date-ceiling-repair",
   revision: 1030,
+  lifecycle: "finalized",
   type: "repairs",
   values: [DECISION_DATE_CEILING_REPAIR],
 } satisfies OnlineMigrationEntry;

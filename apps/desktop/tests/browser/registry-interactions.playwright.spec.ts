@@ -335,6 +335,7 @@ const installNativeBoundary = async (
         // No install status either, read the same as the refusal with local agents off.
         harness_get_status: () => null,
         local_skill_folders_get: () => null,
+        signing_driver_get: () => null,
         local_linked_folders_get: () => null,
         account_get_state: () => accountSnapshot,
         open_stella_account: () => {
@@ -611,7 +612,7 @@ test("retains the explicitly requested query across browser sign-in and native f
     .click();
   await page.evaluate(() => {
     window.dispatchEvent(new Event("blur"));
-    const complete: unknown = Reflect.get(
+    const complete: (() => void) | undefined = Reflect.get(
       window,
       "__STELLA_COMPLETE_SIGN_IN__",
     );
@@ -645,7 +646,7 @@ test("refreshes the connection when the bridge stores a browser handoff", async 
     })
     .click();
   await page.evaluate(() => {
-    const complete: unknown = Reflect.get(
+    const complete: (() => void) | undefined = Reflect.get(
       window,
       "__STELLA_COMPLETE_SIGN_IN__",
     );
@@ -888,7 +889,7 @@ test("ignores an older response after a newer search completes", async ({
     page.getByRole("heading", { name: "Latest Company" }),
   ).toBeVisible();
   await page.evaluate(() => {
-    const resolve: unknown = Reflect.get(
+    const resolve: (() => void) | undefined = Reflect.get(
       window,
       "__STELLA_RESOLVE_FIRST_SEARCH__",
     );
@@ -1374,8 +1375,11 @@ for (const language of ["en", "ar"] as const) {
         { settings: true },
       );
       await page.goto("/#general");
+      // The sidebar names the state too; the badge is the General page's.
       await expect(
-        page.getByText(messages.settings.connectionExpired, { exact: true }),
+        page
+          .locator("[data-slot=settings-page]")
+          .getByText(messages.settings.connectionExpired, { exact: true }),
       ).toBeVisible();
       await expect(
         page.getByText(withHost(messages.settings.reconnectHostDescription), {
@@ -1450,10 +1454,14 @@ for (const language of ["en", "ar"] as const) {
           }
           const area = surface === "welcome" ? page.getByRole("dialog") : page;
           if (surface === "settings") {
+            // The sidebar names the state too; the badge is the General
+            // page's.
             await expect(
-              page.getByText(messages.settings.reconnectNeeded, {
-                exact: true,
-              }),
+              page
+                .locator("[data-slot=settings-page]")
+                .getByText(messages.settings.reconnectNeeded, {
+                  exact: true,
+                }),
             ).toBeVisible();
           }
           await area
@@ -1587,7 +1595,10 @@ for (const language of ["en", "ar"] as const) {
         )
         .toBe(1);
       await page.evaluate(() => {
-        const resolve = Reflect.get(window, "__STELLA_RESOLVE_FIRST_STATE__");
+        const resolve: (() => void) | undefined = Reflect.get(
+          window,
+          "__STELLA_RESOLVE_FIRST_STATE__",
+        );
         if (typeof resolve !== "function") {
           throw new TypeError("Missing state resolver");
         }
@@ -1683,24 +1694,27 @@ for (const language of ["en", "ar"] as const) {
       test(`${status} Settings header keeps its complete subtitle at the native window size`, async ({
         page,
       }) => {
-        await page.setViewportSize({ width: 480, height: 460 });
+        // The smallest the settings window can be made.
+        await page.setViewportSize({ width: 640, height: 460 });
         await installNativeBoundary(
           page,
           status === "connected" ? connected() : { status: "disconnected" },
           { settings: true },
         );
         await page.goto("/#general");
-        const subtitle = page.getByText(
+        const settingsPage = page.locator("[data-slot=settings-page]");
+        const subtitle =
           status === "connected"
-            ? "member@example.test"
-            : withHost(messages.settings.connectToHostDescription),
-          { exact: true },
-        );
+            ? settingsPage.locator("#desktop-account-description")
+            : settingsPage.getByText(
+                withHost(messages.settings.connectToHostDescription),
+                { exact: true },
+              );
         await expect(subtitle).toHaveCount(1);
         await expect(subtitle).toBeVisible();
         if (status === "connected") {
           await expect(
-            page.getByText("Synthetic Member", { exact: true }),
+            settingsPage.getByText("Synthetic Member", { exact: true }),
           ).toBeVisible();
         } else {
           await expect(
@@ -1710,9 +1724,13 @@ for (const language of ["en", "ar"] as const) {
             }),
           ).toHaveCount(1);
         }
+        if (status === "connected") {
+          await expect(subtitle).toContainText("member@example.test");
+        }
+        // The email and server read left to right in any interface language.
         await expect(subtitle).toHaveCSS(
           "direction",
-          language === "ar" ? "rtl" : "ltr",
+          language === "ar" && status === "disconnected" ? "rtl" : "ltr",
         );
         const geometry = await subtitle.evaluate((element) => {
           const style = getComputedStyle(element);
@@ -1799,7 +1817,11 @@ test("foreground Settings interactions record use without passing event data", a
   await installNativeBoundary(page, connected(), { settings: true });
   await page.goto("/#general");
   await page
-    .getByRole("tab", { name: enMessages.settings.general, exact: true })
+    .getByRole("navigation")
+    .getByRole("button", {
+      name: enMessages.settings.pages.general,
+      exact: true,
+    })
     .click();
   await expect
     .poll(async () =>

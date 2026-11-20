@@ -6,6 +6,12 @@ import { Tabs as TabsPrimitive } from "@base-ui/react/tabs";
 
 import { hasTabOrderChanged, revealActiveTab } from "../lib/tab-order";
 import { cn, composeRefs } from "../lib/utils";
+import {
+  TABS_INDICATOR_DEFAULT_CLASS,
+  TABS_LIST_BASE_CLASS,
+  TABS_LIST_DEFAULT_CLASS,
+  TABS_TAB_CLASS,
+} from "./tabs-classes";
 
 type TabsVariant = "default" | "underline";
 
@@ -71,7 +77,7 @@ const TabsList = ({
   return (
     <TabsPrimitive.List
       className={cn(
-        "text-muted-foreground relative z-0 flex w-fit max-w-full items-center justify-center-safe gap-x-0.5",
+        TABS_LIST_BASE_CLASS,
         // A list narrower than its tabs used to clip them with no way to reach
         // them, so the list scrolls itself. `w-fit` alone cannot deliver that:
         // the tabs are `shrink-0 whitespace-nowrap`, so the list's min-content
@@ -95,7 +101,7 @@ const TabsList = ({
         "scrollbar-none overflow-auto data-[orientation=horizontal]:overflow-y-hidden data-[orientation=horizontal]:overscroll-x-contain data-[orientation=vertical]:overflow-x-hidden data-[orientation=vertical]:overscroll-y-contain [&::-webkit-scrollbar]:hidden",
         "data-[orientation=vertical]:flex-col",
         variant === "default"
-          ? "bg-muted text-foreground-label rounded-lg p-0.5"
+          ? TABS_LIST_DEFAULT_CLASS
           : "*:data-[slot=tabs-tab]:hover:bg-accent data-[orientation=horizontal]:py-1 data-[orientation=vertical]:px-1",
         className,
       )}
@@ -109,7 +115,7 @@ const TabsList = ({
           "absolute bottom-0 left-0 h-(--active-tab-height) w-(--active-tab-width) translate-x-(--active-tab-left) -translate-y-(--active-tab-bottom) transition-[width,translate] duration-200 ease-in-out",
           variant === "underline"
             ? "bg-primary z-10 data-[orientation=horizontal]:h-0.5 data-[orientation=vertical]:w-0.5 data-[orientation=vertical]:-translate-x-px"
-            : "bg-background dark:bg-input -z-1 rounded-md shadow-sm/5",
+            : TABS_INDICATOR_DEFAULT_CLASS,
         )}
         data-slot="tab-indicator"
       />
@@ -123,10 +129,7 @@ const TabsList = ({
 // that survives whatever padding a consumer gives the list.
 const TabsTab = ({ className, ...props }: TabsPrimitive.Tab.Props) => (
   <TabsPrimitive.Tab
-    className={cn(
-      "hover:text-foreground focus-visible:ring-ring data-active:text-foreground relative flex h-9 shrink-0 grow cursor-pointer items-center justify-center gap-1.5 rounded-md border border-transparent px-[calc(--spacing(2.5)-1px)] text-base font-medium whitespace-nowrap outline-none select-none focus-visible:ring-2 focus-visible:ring-inset data-disabled:pointer-events-none data-disabled:opacity-64 data-[orientation=vertical]:w-full data-[orientation=vertical]:justify-start sm:h-8 sm:text-sm [&_svg]:pointer-events-none [&_svg]:-mx-0.5 [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4.5 sm:[&_svg:not([class*='size-'])]:size-4",
-      className,
-    )}
+    className={cn(TABS_TAB_CLASS, className)}
     data-slot="tabs-tab"
     {...props}
   />

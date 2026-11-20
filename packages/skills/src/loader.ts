@@ -1,5 +1,7 @@
 import { panic, Result } from "better-result";
 
+import { normalizeUnicode } from "@stll/text-normalize";
+
 import { isSkillResourceFolder, SKILL_RESOURCE_EXTENSIONS } from "./format";
 import { parseSkillFile } from "./frontmatter";
 import type { ParsedSkillFile, ParsedSkillMetadata } from "./frontmatter";
@@ -84,7 +86,10 @@ export const normalizeResourcePath = (resourcePath: string): string => {
     panic("Skill resource path must be relative");
   }
 
-  const normalized = normalizePosixPath(resourcePath.replaceAll("\\", "/"));
+  const normalized = normalizeUnicode(
+    normalizePosixPath(resourcePath.replaceAll("\\", "/")),
+    "NFC",
+  );
   if (
     normalized === "." ||
     normalized === ".." ||

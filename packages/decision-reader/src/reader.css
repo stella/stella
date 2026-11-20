@@ -153,7 +153,7 @@
 }
 
 /* The element the document's sizes are measured from, marked by the reader's
-   own +/- (see use-reader-text-scale.ts, which owns the slot and the step
+   own +/- (see reader-text-scale.ts, which owns the slot and the step
    together). One declaration moves the whole document: the running text
    through --reader-body-size, anything that merely inherits through the
    root's own font-size, and every Tailwind size utility inside through the
@@ -296,8 +296,7 @@ div:has(> p[data-note="footnote"]) + div > p[data-note="footnote"]:first-child {
 .reader-note-label,
 .reader-note-ref,
 .reader-page-marker,
-.reader-note-back,
-.reader-apparatus-summary {
+.reader-note-back {
   font-family: var(--font-sans, sans-serif);
 }
 
@@ -455,17 +454,12 @@ a.reader-note-ref:hover {
   margin-block: 0.75em;
 }
 
-.reader-apparatus-summary {
-  cursor: pointer;
+/* Document-label scale inherits its sans face from reader-chrome; the
+   canonical inline Button owns the action's colour and focus treatment. */
+.reader-apparatus-label {
   font-size: calc(0.78rem * var(--reader-text-scale));
-  color: var(--color-muted-foreground);
-  user-select: none;
 }
 
-.reader-apparatus-summary:hover {
-  color: var(--color-foreground);
-}
-
-.reader-apparatus[open] > .reader-apparatus-summary {
+.reader-apparatus[data-open] > .reader-apparatus-label {
   margin-bottom: 0.5em;
 }

@@ -44,8 +44,11 @@ import {
   caseLawDecisionIdentifiers,
   caseLawReplayBatches,
   caseLawSources,
+  chatThreads,
   contacts,
   corpusIndexGenerations,
+  corpusIndexGenerationSeedingPasses,
+  corpusIndexProjectionDeleteTasks,
   corpusIndexProjectionIntents,
   corpusIndexProjectionStates,
   documentReviewRuns,
@@ -55,9 +58,11 @@ import {
   folioCollabRooms,
   invoiceLines,
   invoices,
+  invoiceSends,
   legalHolds,
   legislationDocuments,
   organizationDataExports,
+  organizationFileUsage,
   organizationSettings,
   pdfSigningSessions,
   pendingUploads,
@@ -741,6 +746,41 @@ const byIdWithin = (
   scopeColumns: [scopeColumn],
   scopeValues: [scopeValue],
 });
+type ByIdWithinPrincipalOptions = {
+  table: string;
+  id: string;
+  organizationId: string;
+  userId: string;
+};
+const byIdWithinPrincipal = ({
+  table,
+  id,
+  organizationId,
+  userId,
+}: ByIdWithinPrincipalOptions): RowResource => ({
+  table,
+  columns: ["id"],
+  values: [id],
+  scopeColumns: ["organization_id", "user_id"],
+  scopeValues: [organizationId, userId],
+});
+type PrincipalRowOptions = Extract<
+  RowIdentityOptions,
+  { aggregate: "chatThread" | "readerAnswer" | "outboundAction" }
+>;
+const principalRowResource = (options: PrincipalRowOptions): RowResource => {
+  const tables = {
+    chatThread: "chat_threads",
+    readerAnswer: "legal_reader_answers",
+    outboundAction: "outbound_actions",
+  } as const;
+  return byIdWithinPrincipal({
+    table: tables[options.aggregate],
+    id: options.id.id,
+    organizationId: options.id.organizationId,
+    userId: options.id.userId,
+  });
+};
 // A root row found by its own key, with no owning scope to check.
 const byUnscopedKey = (
   table: string,
@@ -776,11 +816,15 @@ type AuxiliaryRowIdentityOptions = Extract<
   {
     aggregate:
       | "accountDeletionRequest"
+      | "contact"
       | "organizationSettings"
+      | "sharepointConnection"
       | "correspondence"
       | "desktopMembership"
       | "memory"
-      | "searchProjectionRepair";
+      | "searchProjectionRepair"
+      | "searchHistory"
+      | "savedSearch";
   }
 >;
 
@@ -788,6 +832,14 @@ const auxiliaryRowResource = (
   options: AuxiliaryRowIdentityOptions,
 ): RowResource => {
   switch (options.aggregate) {
+    case "savedSearch":
+      return {
+        table: "saved_searches",
+        columns: ["id"],
+        values: [options.id.id],
+        scopeColumns: ["organization_id", "user_id"],
+        scopeValues: [options.id.organizationId, options.id.userId],
+      };
     case "correspondence":
       return byIdWithin(
         "correspondence",
@@ -803,11 +855,25 @@ const auxiliaryRowResource = (
         scopeColumns: [],
         scopeValues: [],
       };
+    case "contact":
+      return byIdWithin(
+        "contacts",
+        options.id.id,
+        "organization_id",
+        options.id.organizationId,
+      );
     case "organizationSettings":
       return byUnscopedKey(
         "organization_settings",
         "organization_id",
         options.id,
+      );
+    case "sharepointConnection":
+      return byIdWithin(
+        "sharepoint_connections",
+        options.id.id,
+        "organization_id",
+        options.id.organizationId,
       );
     case "desktopMembership":
       return {
@@ -824,6 +890,14 @@ const auxiliaryRowResource = (
         "organization_id",
         options.id.organizationId,
       );
+    case "searchHistory":
+      return {
+        table: "search_history_owners",
+        columns: ["organization_id", "user_id"],
+        values: [options.id.organizationId, options.id.userId],
+        scopeColumns: [],
+        scopeValues: [],
+      };
     case "searchProjectionRepair":
       return {
         table: "search_projection_repair_queue",
@@ -863,20 +937,16 @@ const rowResource = (options: RowIdentityOptions): RowResource => {
         options.id.userId,
       );
     case "accountDeletionRequest":
+    case "contact":
     case "organizationSettings":
+    case "sharepointConnection":
     case "correspondence":
     case "desktopMembership":
     case "memory":
     case "searchProjectionRepair":
-      return auxiliaryRowResource(options);
+    case "savedSearch":
     case "searchHistory":
-      return {
-        table: "search_history_owners",
-        columns: ["organization_id", "user_id"],
-        values: [options.id.organizationId, options.id.userId],
-        scopeColumns: [],
-        scopeValues: [],
-      };
+      return auxiliaryRowResource(options);
     case "desktopCredential":
       return byIdWithin(
         "apikey",
@@ -981,21 +1051,9 @@ const rowResource = (options: RowIdentityOptions): RowResource => {
         options.id.organizationId,
       );
     case "chatThread":
-      return {
-        table: "chat_threads",
-        columns: ["id"],
-        values: [options.id.id],
-        scopeColumns: ["organization_id", "user_id"],
-        scopeValues: [options.id.organizationId, options.id.userId],
-      };
     case "readerAnswer":
-      return {
-        table: "legal_reader_answers",
-        columns: ["id"],
-        values: [options.id.id],
-        scopeColumns: ["organization_id", "user_id"],
-        scopeValues: [options.id.organizationId, options.id.userId],
-      };
+    case "outboundAction":
+      return principalRowResource(options);
     case "readerAnswerMessage":
       return byIdWithin(
         "legal_reader_answer_messages",
@@ -1395,13 +1453,23 @@ const hashedId = ({
   second: sql`hashtext(${id})`,
   order: [aggregate, id],
 });
+/** The second key and lock order of an aggregate one organization identifies. */
+const organizationKeyed = ({
+  aggregate,
+  id,
+}: {
+  aggregate: AggregateName;
+  id: { organizationId: string };
+}) => ({
+  second: sql`hashtext(${id.organizationId})`,
+  order: [aggregate, id.organizationId],
+});
 const advisoryResource = (options: AdvisoryIdentityOptions) => {
   switch (options.aggregate) {
     case "organizationObjectIntent":
       return {
         first: sql`${ORGANIZATION_OBJECT_INTENT_LOCK_NAMESPACE}::integer`,
-        second: sql`hashtext(${options.id})`,
-        order: [options.aggregate, options.id],
+        ...hashedId(options),
       };
     case "legislationAmendmentWork":
       return {
@@ -1425,8 +1493,7 @@ const advisoryResource = (options: AdvisoryIdentityOptions) => {
     case "chatStoredContentEgress":
       return {
         first: sql`${CHAT_STORED_CONTENT_EGRESS_LOCK_NAMESPACE}::integer`,
-        second: sql`hashtext(${options.id})`,
-        order: [options.aggregate, options.id],
+        ...hashedId(options),
       };
     case "desktopBatch":
       return {
@@ -1442,8 +1509,7 @@ const advisoryResource = (options: AdvisoryIdentityOptions) => {
     case "organizationDataBoxes":
       return {
         first: sql`hashtext('data-box-direction')`,
-        second: sql`hashtext(${options.id.organizationId})`,
-        order: [options.aggregate, options.id.organizationId],
+        ...organizationKeyed(options),
       };
     case "sampleCase":
       return {
@@ -1460,14 +1526,17 @@ const advisoryResource = (options: AdvisoryIdentityOptions) => {
     case "automatedFlowRunCap":
       return {
         first: sql`${0x0f_10_cc_a9}::integer`,
-        second: sql`hashtext(${options.id})`,
-        order: [options.aggregate, options.id],
+        ...hashedId(options),
+      };
+    case "invoiceSendCapacity":
+      return {
+        first: sql`hashtext('invoice-send-capacity')`,
+        ...organizationKeyed(options),
       };
     case "contactCapacity":
       return {
         first: sql`hashtext('contact_capacity')`,
-        second: sql`hashtext(${options.id.organizationId})`,
-        order: [options.aggregate, options.id.organizationId],
+        ...organizationKeyed(options),
       };
     case "chatToolGrants":
       return {
@@ -1482,8 +1551,7 @@ const advisoryResource = (options: AdvisoryIdentityOptions) => {
     case "billingDraftSettings":
       return {
         first: sql`${BILLING_DRAFT_SETTINGS_LOCK_NAMESPACE}::integer`,
-        second: sql`hashtext(${options.id.organizationId})`,
-        order: [options.aggregate, options.id.organizationId],
+        ...organizationKeyed(options),
       };
     case "desktopRunnerCapacity":
       return {
@@ -1498,8 +1566,7 @@ const advisoryResource = (options: AdvisoryIdentityOptions) => {
     case "fileComparisonCapacity":
       return {
         first: sql`${0x0f_10_cc_b2}::integer`,
-        second: sql`hashtext(${options.id.organizationId})`,
-        order: [options.aggregate, options.id.organizationId],
+        ...organizationKeyed(options),
       };
     case "billingCodeCapacity":
       return {
@@ -1701,9 +1768,22 @@ const physicalAdvisoryKey = (row: unknown): string => {
 /** Blocking acquisitions ascend; explicit nonblocking requests retain the high-water on success. */
 export const withAggregateLock = async (
   options: AggregateLockOptions,
+): Promise<AggregateLockResult> => await acquireAggregateLock(options);
+
+/**
+ * `alongside` is one further blocking transaction-scoped advisory lock this
+ * module owns, evaluated in the same statement right after the aggregate's
+ * own lock, so a pair that is always taken together costs one round trip.
+ */
+const acquireAggregateLock = async (
+  options: AggregateLockOptions,
+  alongside?: SQL,
 ): Promise<AggregateLockResult> => {
   const { tx, aggregate } = options;
   const wait = options.wait ?? "block";
+  if (alongside !== undefined && wait !== "block") {
+    return panic("A companion advisory lock only blocks");
+  }
   const history = lockHistory(tx);
   assertAggregateLevelAvailable(history);
   if (!isRowLockOptions(options)) {
@@ -1745,6 +1825,9 @@ export const withAggregateLock = async (
     ) {
       history.aliases.set(logicalKey, key);
       retainReservation(history, lock);
+      if (alongside !== undefined) {
+        await tx.execute(sql`SELECT ${alongside}`);
+      }
       return { status: "locked" };
     }
     if (
@@ -1779,7 +1862,9 @@ export const withAggregateLock = async (
     history.status = "acquiring";
     const rows = executedRows(
       await tx.execute(
-        sql`SELECT ${resource.first} AS key1, ${resource.second} AS key2, ${statements[mode][wait]} AS acquired`,
+        alongside === undefined
+          ? sql`SELECT ${resource.first} AS key1, ${resource.second} AS key2, ${statements[mode][wait]} AS acquired`
+          : sql`SELECT ${resource.first} AS key1, ${resource.second} AS key2, ${statements[mode][wait]} AS acquired, ${alongside} AS alongside`,
       ),
     );
     const row = rows.at(0);
@@ -1798,6 +1883,9 @@ export const withAggregateLock = async (
     }
     completeAcquisition(history);
     return acquired ? { status: "locked" } : busy(aggregate);
+  }
+  if (alongside !== undefined) {
+    return panic("A companion advisory lock accompanies an advisory aggregate");
   }
   const mode = options.mode;
   const lock = rowLock(options, mode);
@@ -2656,6 +2744,37 @@ export const lockCaseLawDecisionRows = async ({
   `);
 };
 
+type CaseLawDecisionSnapshotOptions = {
+  tx: Pick<Transaction, "select">;
+  /** The base table, passed in so this owner names no case-law relation itself. */
+  decisions: typeof caseLawDecisions;
+  decisionId: SafeId<"caseLawDecision">;
+  /** The storage slice supplies its document-presence policy without a dependency cycle. */
+  holdsDocument: SQL<boolean>;
+};
+
+/** Lock and read a decision's pre-refresh identity and payload state together. */
+export const lockCaseLawDecisionSnapshot = async ({
+  tx,
+  decisions,
+  decisionId,
+  holdsDocument,
+}: CaseLawDecisionSnapshotOptions) =>
+  await tx
+    .select({
+      citationKey: decisions.citationKey,
+      country: decisions.country,
+      court: decisions.court,
+      docketFamilyKey: decisions.docketFamilyKey,
+      language: decisions.language,
+      decisionDate: decisions.decisionDate,
+      holdsDocument,
+      metadata: decisions.metadata,
+    })
+    .from(decisions)
+    .where(eq(decisions.id, decisionId))
+    .for("update")
+    .limit(1);
 /** Hold every summary endpoint in one ordered batch before checking revisions. */
 export const lockLegislationVersionRows = async (
   tx: Transaction,
@@ -3041,6 +3160,35 @@ export const lockInvoiceInStatus = async (
   return invoice;
 };
 
+type LockInvoiceSendDeliveryOptions = {
+  invoiceId: SafeId<"invoice">;
+  organizationId: SafeId<"organization">;
+  sendId: SafeId<"invoiceSend">;
+};
+
+/** Lock the child only after its invoice and complete matter set are held. */
+export const lockInvoiceSendDelivery = async (
+  tx: Transaction,
+  { invoiceId, organizationId, sendId }: LockInvoiceSendDeliveryOptions,
+) => {
+  const rows = await tx
+    .select({
+      deliveryStatus: invoiceSends.deliveryStatus,
+      revokedAt: invoiceSends.revokedAt,
+    })
+    .from(invoiceSends)
+    .where(
+      and(
+        eq(invoiceSends.id, sendId),
+        eq(invoiceSends.invoiceId, invoiceId),
+        eq(invoiceSends.organizationId, organizationId),
+      ),
+    )
+    .limit(1)
+    .for("update");
+  return rows.at(0);
+};
+
 /** Caller holds the timer-owner and complete matter advisory set. */
 export const lockBillingTimeEntrySources = async (
   tx: Pick<PgAsyncDatabase<PgQueryResultHKT>, "select">,
@@ -3084,6 +3232,7 @@ export const lockOriginalInvoice = async (
       documentType: invoices.documentType,
       currency: invoices.currency,
       totalAmount: invoices.totalAmount,
+      sentAt: invoices.sentAt,
     })
     .from(invoices)
     .where(
@@ -3183,6 +3332,26 @@ export const lockMatterCreationMembers = async ({
     .limit(userIds.length)
     .for("update");
 
+/**
+ * Lock the chat thread every write of its turns and its queue serializes on:
+ * acceptance, settlement, a stop and every queue change. False when the
+ * caller cannot see the thread.
+ */
+export const lockChatThreadForTurnOnTx = async ({
+  threadId,
+  tx,
+}: {
+  threadId: SafeId<"chatThread">;
+  tx: Transaction;
+}): Promise<boolean> =>
+  (
+    await tx
+      .select({ id: chatThreads.id })
+      .from(chatThreads)
+      .where(eq(chatThreads.id, threadId))
+      .for("update")
+  ).length === 1;
+
 /** Lock the member within the caller's lifecycle or access-hold sequence. */
 export const lockMemberAccessRow = async ({
   tx,
@@ -3192,7 +3361,7 @@ export const lockMemberAccessRow = async ({
 }: MemberAccessRowLockOptions) =>
   (
     await tx
-      .select({ role: member.role })
+      .select({ role: member.role, billingAccess: member.billingAccess })
       .from(member)
       .where(
         and(
@@ -3203,6 +3372,43 @@ export const lockMemberAccessRow = async ({
       .limit(1)
       .for(mode)
   ).at(0);
+
+type OrganizationFileCounterLockOptions = {
+  tx: Pick<Transaction, "select">;
+  organizationIds: readonly SafeId<"organization">[];
+};
+
+/**
+ * Lock file accounting counters before their organization rows.
+ *
+ * Rolling-deploy fence: the previous release serializes every file byte and
+ * object transition on these counter rows alone (FOR UPDATE, then a foreign
+ * key share of the organization), so the organization row lock does not
+ * exclude it. Taking the counters first, in that release's order, keeps both
+ * releases on one queue without a lock cycle. Retire this once no deployed
+ * build predates organization-row file accounting. Callers insert missing
+ * counter rows first where they need one; absent rows are not returned.
+ */
+export const lockOrganizationFileCounters = async ({
+  tx,
+  organizationIds,
+}: OrganizationFileCounterLockOptions) => {
+  const ids = [...new Set(organizationIds)];
+  if (ids.length === 0) {
+    return [];
+  }
+  return await tx
+    .select({
+      organizationId: organizationFileUsage.organizationId,
+      committedBytes: organizationFileUsage.committedBytes,
+      reservedBytes: organizationFileUsage.reservedBytes,
+    })
+    .from(organizationFileUsage)
+    .where(inArray(organizationFileUsage.organizationId, ids))
+    .orderBy(asc(organizationFileUsage.organizationId))
+    .limit(ids.length)
+    .for("update");
+};
 
 /**
  * Holds off organization settings writes until the transaction ends: a first
@@ -3397,6 +3603,137 @@ export const lockTimerMatterAccessRows = async ({
   }
 };
 
+type WorkspaceCapacityAggregate = "billingCodeCapacity" | "expenseCapacity";
+
+const lockWorkspaceCapacity = async (
+  tx: ExecuteTransaction,
+  aggregate: WorkspaceCapacityAggregate,
+  workspaceId: SafeId<"workspace">,
+): Promise<void> => {
+  const result = await withAggregateLock({
+    aggregate,
+    id: { workspaceId },
+    tx,
+  });
+  if (result.status !== "locked") {
+    panic("Blocking workspace capacity lock was not acquired");
+  }
+};
+
+/** Serialize the bounded billing-code count and insert for one matter. */
+export const lockBillingCodeCapacity = async (
+  tx: ExecuteTransaction,
+  workspaceId: SafeId<"workspace">,
+): Promise<void> =>
+  await lockWorkspaceCapacity(tx, "billingCodeCapacity", workspaceId);
+
+/** Serialize the bounded expense count and insert for one matter. */
+export const lockExpenseCapacity = async (
+  tx: ExecuteTransaction,
+  workspaceId: SafeId<"workspace">,
+): Promise<void> =>
+  await lockWorkspaceCapacity(tx, "expenseCapacity", workspaceId);
+
+/**
+ * Preserve the legacy one-key fence during rolling deploys, then register the
+ * rate-table lock in the shared aggregate order for all current callers.
+ */
+export const lockRateTableWorkspace = async (
+  tx: ExecuteTransaction,
+  workspaceId: SafeId<"workspace">,
+): Promise<void> => {
+  await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${workspaceId}))`);
+  const result = await withAggregateLock({
+    aggregate: "rateTableWorkspace",
+    id: { workspaceId },
+    tx,
+  });
+  if (result.status !== "locked") {
+    panic("Blocking rate-table lock was not acquired");
+  }
+};
+
+/**
+ * Builds before the matter rate-table lock serialize rate-entry windows on
+ * this one-key lock alone, so every rate-entry writer takes it after the
+ * matter lock and overlap checks from either build exclude each other during
+ * a rolling deploy. Retire it once no running API build predates the matter
+ * rate-table lock.
+ */
+export const lockLegacyRateEntryTable = async (
+  tx: ExecuteTransaction,
+  rateTableId: SafeId<"rateTable">,
+): Promise<void> => {
+  await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${rateTableId}))`);
+};
+
+/**
+ * The one-key organization object-intent lock that builds before the
+ * registered fence take alone. Holders of the registered fence take it next,
+ * in the same mode, so writers and teardown from either build exclude each
+ * other during a rolling deploy. Retire it once no running API build predates
+ * the registered fence.
+ */
+const legacyOrganizationObjectIntentLock = (
+  organizationId: SafeId<"organization">,
+  mode: AdvisoryLockMode,
+): SQL => {
+  const key = organizationObjectIntentLockKey(organizationId);
+  return mode === "shared"
+    ? sql`pg_advisory_xact_lock_shared(hashtext(${key}))`
+    : sql`pg_advisory_xact_lock(hashtext(${key}))`;
+};
+
+/**
+ * Take the organization's object-intent fence: the registered aggregate lock,
+ * then the previous build's one-key lock in the same mode, in one statement.
+ */
+export const lockOrganizationObjectIntentFence = async (
+  tx: ExecuteTransaction,
+  organizationId: SafeId<"organization">,
+  mode: AdvisoryLockMode,
+): Promise<void> => {
+  const result = await acquireAggregateLock(
+    {
+      aggregate: "organizationObjectIntent",
+      id: organizationId,
+      mode,
+      tx,
+    },
+    legacyOrganizationObjectIntentLock(organizationId, mode),
+  );
+  if (result.status !== "locked") {
+    return panic("Organization object-intent fence was not acquired");
+  }
+};
+
+type LockCaseLawSourceIngestionLeaseOptions = {
+  tx: Transaction;
+  sourceId: SafeId<"caseLawSource">;
+  leaseToken: SafeId<"caseLawSourceIngestionLease">;
+};
+
+/** Fence source-lease takeover until a corpus bookkeeping transaction commits. */
+export const lockCaseLawSourceIngestionLease = async ({
+  tx,
+  sourceId,
+  leaseToken,
+}: LockCaseLawSourceIngestionLeaseOptions) => {
+  const owned = await tx
+    .select({ id: caseLawSources.id })
+    .from(caseLawSources)
+    .where(
+      and(
+        eq(caseLawSources.id, sourceId),
+        eq(caseLawSources.ingestionLeaseToken, leaseToken),
+        sql`${caseLawSources.ingestionLeaseExpiresAt} > now()`,
+      ),
+    )
+    .for("update")
+    .limit(1);
+  return owned.length > 0;
+};
+
 /** Fence snapshot writers before removal discards their inputs. */
 export const lockCaseLawRemovalSnapshots = async (
   tx: ExecuteTransaction,
@@ -3460,6 +3797,49 @@ export const lockCaseLawRemovalSource = async ({
   );
 };
 
+/** Lock the actor and target together so simultaneous membership changes use one row order. */
+export const lockMemberBillingAccessRows = async ({
+  tx,
+  organizationId,
+  actorUserId,
+  targetMemberId,
+}: {
+  tx: Transaction;
+  organizationId: SafeId<"organization">;
+  actorUserId: SafeId<"user">;
+  targetMemberId: string;
+}) => {
+  const result = await readBounded(
+    {
+      limit: (cap) =>
+        tx
+          .select({
+            id: member.id,
+            userId: member.userId,
+            role: member.role,
+            billingAccess: member.billingAccess,
+          })
+          .from(member)
+          .where(
+            and(
+              eq(member.organizationId, organizationId),
+              or(eq(member.userId, actorUserId), eq(member.id, targetMemberId)),
+            ),
+          )
+          .orderBy(member.id)
+          .limit(cap)
+          .for("update"),
+    },
+    2,
+  );
+  if (result.type === "overflow") {
+    return panic(
+      "A membership access change can lock at most its actor and target",
+    );
+  }
+  return result.rows;
+};
+
 /** Lock the accepted source predicate before distinguishing a replay no-op from a lost fence. */
 export const lockCaseLawReplaySource = async ({
   tx,
@@ -3473,6 +3853,32 @@ export const lockCaseLawReplaySource = async ({
     .from(caseLawSources)
     .where(where)
     .for("update");
+
+/**
+ * Serialize fallback publication enrichment through the decision row write,
+ * including absent rows: several identities of one source in one statement,
+ * in the order given. Callers pass them sorted, so overlapping sets never
+ * wait on each other in inverse order.
+ */
+export const lockCaseLawFallbackIdentities = async ({
+  tx,
+  sourceId,
+  identityKeys,
+}: {
+  tx: ExecuteTransaction;
+  sourceId: SafeId<"caseLawSource">;
+  identityKeys: readonly string[];
+}): Promise<void> => {
+  if (identityKeys.length === 0) {
+    return;
+  }
+  await tx.execute(
+    sql`SELECT pg_advisory_xact_lock(hashtext('case_law_fallback_identity'), hashtext(keys.key)) FROM unnest(ARRAY[${sql.join(
+      identityKeys.map((identityKey) => sql`${`${sourceId}:${identityKey}`}`),
+      sql`, `,
+    )}]::text[]) WITH ORDINALITY AS keys(key, position) ORDER BY keys.position`,
+  );
+};
 
 type LockBillingCodeOptions = {
   id: SafeId<"billingCode">;
@@ -3576,44 +3982,147 @@ export const lockOwnedContactsForBulkDelete = async ({
 /**
  * The time entries a batch action locks before it checks and updates them;
  * the caller holds the matter/timer guards. The action then updates these
- * rows by id, so it never changes a row it did not lock and check.
+ * rows through `where()`, so it never changes a row it did not lock and check.
  */
 export const lockBatchTimeEntryCandidates = async (
   tx: Transaction,
   condition: SQL | undefined,
   limit: number,
 ) =>
-  await tx
-    .select({
-      id: timeEntries.id,
-      dateWorked: timeEntries.dateWorked,
-      narrative: timeEntries.narrative,
-      timezoneId: timeEntries.timezoneId,
-    })
-    .from(timeEntries)
-    .where(condition)
-    .limit(limit)
-    .for("update");
+  await lockRowsForWrite({
+    table: timeEntries,
+    query: tx
+      .select({
+        id: timeEntries.id,
+        dateWorked: timeEntries.dateWorked,
+        narrative: timeEntries.narrative,
+        timezoneId: timeEntries.timezoneId,
+      })
+      .from(timeEntries)
+      .where(condition)
+      .limit(limit),
+  });
 
 /** Caller holds the matter/timer guards before changing nonbillable work. */
 export const lockUnbillableRateCandidates = async (
   tx: Transaction,
   condition: SQL | undefined,
 ) =>
-  await tx
-    .select({
-      currency: timeEntries.currency,
-      dateWorked: timeEntries.dateWorked,
-      activityCode: timeEntries.activityCode,
-      narrative: timeEntries.narrative,
-      timezoneId: timeEntries.timezoneId,
-      id: timeEntries.id,
-      rateAtEntry: timeEntries.rateAtEntry,
-      userId: timeEntries.userId,
-    })
-    .from(timeEntries)
-    .where(condition)
-    .for("update");
+  await lockRowsForWrite({
+    table: timeEntries,
+    query: tx
+      .select({
+        currency: timeEntries.currency,
+        dateWorked: timeEntries.dateWorked,
+        activityCode: timeEntries.activityCode,
+        narrative: timeEntries.narrative,
+        timezoneId: timeEntries.timezoneId,
+        id: timeEntries.id,
+        rateAtEntry: timeEntries.rateAtEntry,
+        userId: timeEntries.userId,
+      })
+      .from(timeEntries)
+      .where(condition),
+  });
+
+/** A table whose rows a lock can name by primary key. */
+type IdentifiedTable = PgTable & { id: PgColumn };
+
+/** The SELECT a caller builds for `lockRowsForWrite`, before its lock clause. */
+type LockableSelect<Row> = {
+  for: (strength: LockStrength, config?: LockConfig) => PromiseLike<Row[]>;
+  toSQL: () => { sql: string };
+  as: (alias: string) => Subquery;
+};
+
+type LockRowsForWriteOptions<Table extends IdentifiedTable, Row> = {
+  /** The table the rows are read from and later written. */
+  table: Table;
+  /** A SELECT from `table` that projects `id`, without a lock clause. */
+  query: LockableSelect<Row>;
+  /** `no key update` when the write leaves keys alone and must not block foreign-key checks. */
+  mode?: "update" | "no key update";
+};
+
+/**
+ * Lock the rows a decision reads and write exactly those rows.
+ *
+ * A `SELECT ... FOR UPDATE` followed by an UPDATE or DELETE that repeats the
+ * SELECT's WHERE also writes every row that started to match after the lock
+ * was taken: a concurrent transaction can commit a change that moves a row into
+ * the filter, and the second statement reads it although the decision never
+ * saw it. `where` is the WHERE an UPDATE or DELETE of the locked table uses
+ * instead: the ids the lock returned, with an optional `narrow` predicate
+ * ANDed on top that can only shrink that set.
+ *
+ *   const locked = await lockRowsForWrite({ table: t, query });
+ *   decide(locked.rows);
+ *   await tx.update(t).set(values).where(locked.where());
+ *
+ * The caller spells the statement in its own function so the lifecycle-write
+ * census, the audit, running-entry and cap-crossing rules, and the WHERE rules
+ * keep seeing it there. `require-locked-rows-write` reports a later write to
+ * `t` in that function that repeats the query's filter without naming the
+ * locked rows (`locked.where(...)` or a pin on `locked.ids`).
+ *
+ * Only the target table's rows are locked (`FOR UPDATE OF table`), so the
+ * query may join other tables for the decision without locking them; its
+ * `id` must still be the locked table's own. Each call outside this file is
+ * an acquisition of its own (`locked-rows-write`) in
+ * `scripts/aggregate-lock-baseline.json`, reviewed like an inline lock.
+ *
+ * Race test: `withLockThenWriteRace` in
+ * `apps/api/src/tests/helpers/lock-then-write-race.ts` runs tx A and tx B on
+ * two real connections in the order that exposes this: A locks and calls
+ * `pause()`, B commits a change that makes another row match A's predicate,
+ * then A writes. `pauseBeforeWrite` stops an unmodified handler right before
+ * its first write, so the race drives the real code path.
+ * `apps/api/src/handlers/time-entries/batch/update.postgres.test.ts` is the
+ * worked example; add one beside every lock-then-write fix.
+ */
+export const lockRowsForWrite = async <
+  Table extends IdentifiedTable,
+  Row extends { id: Table["id"]["_"]["data"] },
+>({
+  table,
+  query,
+  mode = "update",
+}: LockRowsForWriteOptions<Table, Row>) => {
+  const tableName = getTableName(table);
+  if (aggregateSelectTarget(query.toSQL().sql).table !== tableName) {
+    panic("Locked rows must be read from the table they are written to");
+  }
+  // `where()` names rows by `table.id`, so the projected `id` must be that
+  // column, not a joined table's id under the same name. The builder's own
+  // selection keeps each column's table; a subquery view of it would rename
+  // every column's table to the subquery's alias.
+  const builder: unknown = Reflect.get(query, "_");
+  const selection: unknown = isRecord(builder)
+    ? builder["selectedFields"]
+    : undefined;
+  const projectedId: unknown = isRecord(selection)
+    ? selection["id"]
+    : undefined;
+  if (
+    !is(projectedId, PgColumn) ||
+    projectedId.name !== table.id.name ||
+    getTableName(getColumnTable(projectedId)) !== tableName
+  ) {
+    panic("Locked rows must project the locked table's own id column");
+  }
+  const rows: readonly Row[] = await query.for(mode, { of: table });
+  const ids: readonly Row["id"][] = rows.map(({ id }) => id);
+  return {
+    /** The rows the lock returned. */
+    rows,
+    /** The primary keys of `rows`, the only rows `where` matches. */
+    ids,
+    /** The locked rows, and only those also matching `narrow` when given. */
+    where: (narrow?: SQL): SQL =>
+      and(inArray(table.id, ids), narrow) ??
+      panic("Locked rows predicate is empty"),
+  };
+};
 
 /** Legal-hold rows are locked after their organization placement fence. */
 export const readLockedLegalHolds = async ({
@@ -3656,7 +4165,7 @@ export const lockLegalHoldOrganizations = async ({
  * reserving storage; a lifecycle (matter or organization teardown) takes it
  * exclusively.
  */
-export const organizationObjectIntentLockKey = (
+const organizationObjectIntentLockKey = (
   organizationId: SafeId<"organization">,
 ): string => `buffer-object:${organizationId}`;
 
@@ -3682,9 +4191,7 @@ export const lockOrganizationObjectIntentsForLifecycle = async (
   if (lifecycleLockedOrganizations.get(tx)?.has(organizationId) === true) {
     return;
   }
-  await tx.execute(
-    sql`SELECT pg_advisory_xact_lock(hashtext(${organizationObjectIntentLockKey(organizationId)}))`,
-  );
+  await lockOrganizationObjectIntentFence(tx, organizationId, "exclusive");
   noteLifecycleLock(tx, organizationId);
 };
 
@@ -3841,6 +4348,26 @@ type CorpusProjectionReservationQueueOptions = {
   scopedIndexId: string | null;
   /** Physical indexes no append may reach yet (`unattestedCorpusIndexIdsTx`). */
   excludedIndexIds: readonly string[];
+  /**
+   * Start the walk after this queue key, exclusively. The key is the queue's
+   * own order, `coalesce(retry_not_before, updated_at)` as PostgreSQL text
+   * (exact to the microsecond) and the entity id, so a walker resumes where
+   * it stopped instead of reading its own unproven backlog again.
+   */
+  after?: CorpusProjectionReservationQueueKey | null;
+  /**
+   * Only entities that may travel with others. One a failed shared append
+   * isolated keeps to single requests, which only the per-row path sends.
+   */
+  batchableOnly?: boolean;
+  /** Entities the caller will not take this time; they keep their place. */
+  skipEntityIds?: readonly string[];
+};
+
+/** One position in the reservation queue's order. */
+export type CorpusProjectionReservationQueueKey = {
+  runnableAt: string;
+  entityId: string;
 };
 
 /**
@@ -3857,6 +4384,9 @@ export const corpusProjectionReservationQueue = (
     scopedEntityIds,
     scopedIndexId,
     excludedIndexIds,
+    after = null,
+    batchableOnly = false,
+    skipEntityIds = [],
   }: CorpusProjectionReservationQueueOptions,
 ) => {
   const runnableAt = sql<Date>`coalesce(
@@ -3865,6 +4395,7 @@ export const corpusProjectionReservationQueue = (
   )`;
   return tx
     .select({
+      runnableAt: sql<string>`(${runnableAt})::text`,
       entityId: corpusIndexProjectionStates.entityId,
       epoch: corpusIndexProjectionStates.desiredEpoch,
       fingerprint: corpusIndexProjectionStates.desiredFingerprint,
@@ -3907,6 +4438,17 @@ export const corpusProjectionReservationQueue = (
           "retry_scheduled",
           "repair_scheduled",
         ]),
+        skipEntityIds.length === 0
+          ? undefined
+          : notInArray(corpusIndexProjectionStates.entityId, [
+              ...skipEntityIds,
+            ]),
+        batchableOnly
+          ? eq(corpusIndexProjectionStates.appendMode, "batchable")
+          : undefined,
+        after === null
+          ? undefined
+          : sql`(${runnableAt}, ${corpusIndexProjectionStates.entityId}) > (${after.runnableAt}::timestamptz, ${after.entityId})`,
         lte(runnableAt, eligibilityAt),
         inArray(corpusIndexGenerations.status, ["building", "serving"]),
         pendingDesiredState,
@@ -3921,6 +4463,54 @@ export const corpusProjectionReservationQueue = (
       skipLocked: true,
     });
 };
+
+type CorpusIndexGenerationKey = { family: CorpusFamily; generation: string };
+
+/**
+ * One generation's registry row, share-locked. Every lifecycle transition
+ * locks the row for update before it changes the status, so the generation
+ * stays in its status until this transaction ends. The seeding walk takes it
+ * first, then its pass (`lockCorpusIndexGenerationSeedingPass`).
+ */
+export const lockCorpusIndexGenerationShared = async (
+  tx: Transaction,
+  { family, generation }: CorpusIndexGenerationKey,
+) =>
+  (
+    await tx
+      .select()
+      .from(corpusIndexGenerations)
+      .where(
+        and(
+          eq(corpusIndexGenerations.family, family),
+          eq(corpusIndexGenerations.generation, generation),
+        ),
+      )
+      .limit(1)
+      .for("share")
+  ).at(0);
+
+/**
+ * One generation's seeding pass, locked for update after the registry row,
+ * so two walkers of one generation never advance the same pass.
+ */
+export const lockCorpusIndexGenerationSeedingPass = async (
+  tx: Transaction,
+  { family, generation }: CorpusIndexGenerationKey,
+) =>
+  (
+    await tx
+      .select()
+      .from(corpusIndexGenerationSeedingPasses)
+      .where(
+        and(
+          eq(corpusIndexGenerationSeedingPasses.family, family),
+          eq(corpusIndexGenerationSeedingPasses.generation, generation),
+        ),
+      )
+      .limit(1)
+      .for("update")
+  ).at(0);
 
 /**
  * State rows precede their revisions in the projection lock order. Settling a
@@ -4005,6 +4595,87 @@ export const lockCorpusProjectionStatesByEntity = async (
     )
     .orderBy(asc(corpusIndexProjectionStates.entityId))
     .limit(entityIds.length)
+    .for("update");
+
+type CorpusProjectionDeleteTaskRoute = {
+  family: CorpusFamily;
+  generation: string;
+  indexId: string;
+};
+
+const corpusProjectionDeleteTaskRoute = ({
+  family,
+  generation,
+  indexId,
+}: CorpusProjectionDeleteTaskRoute) =>
+  and(
+    eq(corpusIndexProjectionDeleteTasks.family, family),
+    eq(corpusIndexProjectionDeleteTasks.generation, generation),
+    eq(corpusIndexProjectionDeleteTasks.indexId, indexId),
+  );
+
+/**
+ * Planned settlement tasks of one index whose lease is still free, in queue
+ * order, at most `limit`, skipping any another transaction holds: the
+ * settlement claim read its plan without locks, and never waits for a task.
+ */
+export const lockFreeCorpusProjectionDeleteTasks = async (
+  tx: Transaction,
+  {
+    deleteOpstamps,
+    limit,
+    ...route
+  }: CorpusProjectionDeleteTaskRoute & {
+    deleteOpstamps: readonly bigint[];
+    limit: number;
+  },
+) =>
+  await tx
+    .select({
+      deleteOpstamp: corpusIndexProjectionDeleteTasks.deleteOpstamp,
+      taskCreatedAt: corpusIndexProjectionDeleteTasks.taskCreatedAt,
+    })
+    .from(corpusIndexProjectionDeleteTasks)
+    .where(
+      and(
+        corpusProjectionDeleteTaskRoute(route),
+        inArray(corpusIndexProjectionDeleteTasks.deleteOpstamp, [
+          ...deleteOpstamps,
+        ]),
+        or(
+          isNull(corpusIndexProjectionDeleteTasks.leaseExpiresAt),
+          sql`${corpusIndexProjectionDeleteTasks.leaseExpiresAt} <= clock_timestamp()`,
+        ),
+      ),
+    )
+    .orderBy(
+      asc(corpusIndexProjectionDeleteTasks.cleanupStartedAt),
+      asc(corpusIndexProjectionDeleteTasks.deleteOpstamp),
+    )
+    .limit(limit)
+    .for("update", { skipLocked: true });
+
+/**
+ * One settlement task, waiting for a transaction that holds it: a turn that
+ * settled or reissued its revisions decides under this lock whether the task
+ * is drained, so a receipt committing meanwhile is seen.
+ */
+export const lockCorpusProjectionDeleteTask = async (
+  tx: Transaction,
+  {
+    deleteOpstamp,
+    ...route
+  }: CorpusProjectionDeleteTaskRoute & { deleteOpstamp: bigint },
+) =>
+  await tx
+    .select({ deleteOpstamp: corpusIndexProjectionDeleteTasks.deleteOpstamp })
+    .from(corpusIndexProjectionDeleteTasks)
+    .where(
+      and(
+        corpusProjectionDeleteTaskRoute(route),
+        eq(corpusIndexProjectionDeleteTasks.deleteOpstamp, deleteOpstamp),
+      ),
+    )
     .for("update");
 
 /**
@@ -4105,6 +4776,22 @@ export const lockCorpusProjectionAcceptedRows = async (
     .for("update");
   return { states, intents };
 };
+
+/**
+ * Lock projection intents a reservation cancel will move, in id order, after
+ * the generation's mutation lock: the order every intent writer takes.
+ */
+export const lockCorpusProjectionIntentsById = async (
+  tx: Transaction,
+  intentIds: readonly SafeId<"corpusIndexProjectionIntent">[],
+) =>
+  await tx
+    .select({ id: corpusIndexProjectionIntents.id })
+    .from(corpusIndexProjectionIntents)
+    .where(inArray(corpusIndexProjectionIntents.id, [...intentIds]))
+    .orderBy(asc(corpusIndexProjectionIntents.id))
+    .limit(intentIds.length)
+    .for("update");
 
 /** Canonical rows precede desired-state rows in the projection lock order. */
 export const lockCaseLawProjectionRepairStates = async (

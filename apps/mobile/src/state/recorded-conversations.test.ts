@@ -135,12 +135,19 @@ const drawn = (blocks: readonly AnswerBlock[]) =>
     switch (block.type) {
       case "text":
         return { text: block.markdown };
+      case "intent":
+        return { intent: block.text };
       case "steps":
-        return { steps: block.steps, work: block.work };
+        return {
+          steps: block.steps,
+          summary: block.summary.map(({ phrase }) => phrase),
+        };
       case "subagent": {
         const { key: _place, ...subagent } = block;
         return subagent;
       }
+      case "steered":
+        return { steered: block.text };
       default:
         block satisfies never;
         return panic("Unhandled answer block");
@@ -191,7 +198,8 @@ describe("recorded conversations on the phone", () => {
     expect(drawn(answer?.blocks ?? [])).toEqual([
       {
         steps: [{ type: "tool", label: "execute_typescript", status: "done" }],
-        work: new Map([["computation", 1]]),
+        // Its script lists the matters and reads their documents.
+        summary: ["readDocuments", "searchedMatters", "lookups"],
       },
       { text: "Two documents" },
     ]);

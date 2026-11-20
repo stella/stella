@@ -127,7 +127,11 @@ export const AnswerFormatProposal = ({
       }),
       {
         resources: [RESOURCE_TYPE.CHAT_MESSAGE],
-        scope: { type: "organization" },
+        scope: {
+          type: "organization",
+          organizationId: user.activeOrganizationId,
+          userId: user.id,
+        },
       },
     ),
   );

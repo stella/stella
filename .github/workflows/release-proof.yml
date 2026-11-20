@@ -1,7 +1,9 @@
 name: Prove release PR tree
 
+# Release pull requests come from this repository, where a pull_request run
+# gets the workflow's token scopes; fork pull requests never qualify.
 on:
-  pull_request_target:
+  pull_request:
     branches: [main]
     types: [opened, synchronize, ready_for_review]
 

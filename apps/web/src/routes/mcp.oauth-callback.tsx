@@ -1,26 +1,12 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useTranslations } from "use-intl";
+import { createFileRoute } from "@tanstack/react-router";
 import * as v from "valibot";
 
-import { Button } from "@stll/ui/button";
-import {
-  Frame,
-  FrameDescription,
-  FrameHeader,
-  FramePanel,
-  FrameTitle,
-} from "@stll/ui/frame";
-
-import { useMountEffect } from "@/hooks/use-effect";
-import { detached } from "@/lib/detached";
-import type { McpOAuthOutcome } from "@/lib/mcp-oauth-channel";
-import { broadcastMcpOAuthOutcome } from "@/lib/mcp-oauth-channel";
 import { pageTitle } from "@/lib/page-title";
 import { routeSearchSchema } from "@/route-search-params";
 import { APP_FRAME_SCOPE } from "@/routes/-app-frame-scope";
 
-const KNOWLEDGE_MCP_PATH = "/knowledge/tools";
-const FALLBACK_NAVIGATE_DELAY_MS = 150;
+import { McpOAuthCallbackPage } from "./-mcp.oauth-callback.page";
+import { McpOAuthCallbackPending } from "./-mcp.oauth-callback.pending";
 
 const searchSchema = routeSearchSchema({
   // A callback that does not say it connected reports a failure, never a
@@ -31,73 +17,14 @@ const searchSchema = routeSearchSchema({
 });
 
 export const Route = createFileRoute("/mcp/oauth-callback")({
-  staticData: { appFrame: APP_FRAME_SCOPE.none },
+  staticData: {
+    appFrame: APP_FRAME_SCOPE.none,
+    pendingText: "request-locale",
+  },
   validateSearch: searchSchema,
   head: () => ({
     meta: [{ title: pageTitle("knowledge.sections.mcp.title") }],
   }),
   component: McpOAuthCallbackPage,
+  pendingComponent: McpOAuthCallbackPending,
 });
-
-function McpOAuthCallbackPage() {
-  const t = useTranslations();
-  const navigate = useNavigate();
-  const status = Route.useSearch({ select: (search) => search.status });
-  const reason = Route.useSearch({ select: (search) => search.reason });
-
-  useMountEffect(() => {
-    const outcome: McpOAuthOutcome =
-      status === "connected"
-        ? { status: "connected" }
-        : { status: "error", reason: reason ?? "unexpected" };
-    broadcastMcpOAuthOutcome(outcome);
-    window.close();
-    // `window.close()` is a no-op for tabs the user navigated to
-    // themselves (the popup-blocked fallback path uses
-    // `window.location.assign`). If we're still here after a tick,
-    // route back to the MCP settings page so the user is not stranded.
-    const fallback = window.setTimeout(() => {
-      detached(
-        navigate({ to: KNOWLEDGE_MCP_PATH }),
-        "mcp-oauth-callback.navigate",
-      );
-    }, FALLBACK_NAVIGATE_DELAY_MS);
-    return () => window.clearTimeout(fallback);
-  });
-
-  const isError = status === "error";
-
-  return (
-    <div className="flex flex-1 items-center justify-center p-6">
-      <Frame className="w-full max-w-sm">
-        <FrameHeader>
-          <FrameTitle>
-            {isError
-              ? t("knowledge.mcp.errorTitle")
-              : t("knowledge.mcp.connectedToast")}
-          </FrameTitle>
-          {isError ? (
-            <FrameDescription>
-              {t("knowledge.mcp.errorDescription")}
-            </FrameDescription>
-          ) : null}
-        </FrameHeader>
-        <FramePanel>
-          <Button
-            className="w-full"
-            onClick={() => {
-              window.close();
-              detached(
-                navigate({ to: KNOWLEDGE_MCP_PATH }),
-                "mcp-oauth-callback.navigate",
-              );
-            }}
-            type="button"
-          >
-            {t("common.close")}
-          </Button>
-        </FramePanel>
-      </Frame>
-    </div>
-  );
-}

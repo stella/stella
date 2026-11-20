@@ -12,6 +12,7 @@ import { cn } from "@stll/ui/utils";
 import type { ForkProvenance } from "@/features/chat/queries";
 import { chatThreadRoute } from "@/lib/chat-thread-ref";
 import { isPlaceholderThreadTitle } from "@/lib/chat-thread-title";
+import { CHAT_READING_COLUMN_CLASS_NAME } from "@/routes/_protected.chat/-components/chat-reading-column";
 
 const BANNER_CLASSNAME =
   "text-muted-foreground inline-flex max-w-full items-center gap-1.5 text-xs";
@@ -39,7 +40,7 @@ export const ChatForkedFromBanner = ({
     }
     case "parent-unavailable": {
       return (
-        <div className="mx-auto w-full max-w-5xl px-4 pt-2">
+        <div className={cn(CHAT_READING_COLUMN_CLASS_NAME, "pt-2")}>
           <span className={BANNER_CLASSNAME}>
             <GitBranchIcon aria-hidden="true" className="size-3.5 shrink-0" />
             <TruncatedText>{t("chat.forkedFromUnavailable")}</TruncatedText>
@@ -50,7 +51,7 @@ export const ChatForkedFromBanner = ({
     case "parent": {
       const { threadId, title, workspaceId } = forkProvenance;
       return (
-        <div className="mx-auto w-full max-w-5xl px-4 pt-2">
+        <div className={cn(CHAT_READING_COLUMN_CLASS_NAME, "pt-2")}>
           <Link
             className={cn(
               BANNER_CLASSNAME,

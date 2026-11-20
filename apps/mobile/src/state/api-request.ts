@@ -17,13 +17,27 @@ export class ApiRequestError extends TaggedError("ApiRequestError")<{
   insufficientScope?: boolean | undefined;
   /** What the server said was wrong, and how to fix it, when it said so. */
   detail?: string | undefined;
+  /** The refusal's own code, when the server named one. */
+  code?: string | undefined;
+  /**
+   * The refusal's body as the server sent it, for a route whose refusal is
+   * an answer with its own shape (a 409 that says why), read by its caller.
+   */
+  refusal?: unknown;
   cause?: unknown;
 }> {}
 
 const refusalSchema = v.object({
   message: v.optional(v.string()),
   hint: v.optional(v.string()),
+  code: v.optional(v.string()),
 });
+
+/** The code a refusal's body names, if any. */
+export const refusalCode = (json: unknown): string | undefined => {
+  const parsed = v.safeParse(refusalSchema, json);
+  return parsed.success ? parsed.output.code : undefined;
+};
 
 /** The server's own words for a refusal, from its `{ message, hint }` body. */
 const refusalDetail = (json: unknown): string | undefined => {
@@ -118,6 +132,8 @@ const requestJson = async <TSchema extends v.GenericSchema>(
           json: undefined,
           insufficientScope,
           detail: refusalDetail(refusal),
+          code: refusalCode(refusal),
+          refusal,
         };
       }
       const json: unknown = await response.json();
@@ -126,6 +142,8 @@ const requestJson = async <TSchema extends v.GenericSchema>(
         json,
         insufficientScope: false,
         detail: undefined,
+        code: undefined,
+        refusal: undefined,
       };
     },
     catch: (cause) =>
@@ -134,7 +152,8 @@ const requestJson = async <TSchema extends v.GenericSchema>(
   if (Result.isError(answered)) {
     return Result.err(answered.error);
   }
-  const { status, json, insufficientScope, detail } = answered.value;
+  const { status, json, insufficientScope, detail, code, refusal } =
+    answered.value;
   if (json === undefined) {
     return Result.err(
       new ApiRequestError({
@@ -142,6 +161,8 @@ const requestJson = async <TSchema extends v.GenericSchema>(
         status,
         insufficientScope,
         detail,
+        code,
+        refusal,
       }),
     );
   }

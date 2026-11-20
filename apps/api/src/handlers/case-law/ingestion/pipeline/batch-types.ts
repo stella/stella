@@ -85,6 +85,7 @@ class CaseLawBatchBoundsError extends TaggedError("CaseLawBatchBoundsError")<{
 
 /** Why an applied batch returned no receipt. */
 export const CASE_LAW_BATCH_FAILURE = {
+  FALLBACK_IDENTITY: "fallback-identity",
   /** The source lease was not held when the batch ordered or settled. */
   LEASE_LOST: "lease-lost",
   ABORTED: "aborted",
@@ -105,11 +106,6 @@ export const CASE_LAW_BATCH_FAILURE = {
   RECORD_REJECTED: "record-rejected",
   /** A record's failure could not be written to the ingestion ledger. */
   FAILURE_WRITE: "failure-write",
-  /**
-   * Consecutive rejections stopped the batch before it reached every record;
-   * the records it did not reach were never attempted.
-   */
-  FAILURE_STREAK: "failure-streak",
   /** A fault outside the records that the batch does not classify. */
   UNCLASSIFIED: "unclassified",
 } as const;
@@ -240,6 +236,17 @@ type AdmittedPart = {
   admitted: AdmittedDecisions;
 };
 
+// A decision record names no identity of its own: the failure ledger takes
+// its publisher document id, else its captured input's hash
+// (`ingestionFailureRecordIdentity`), which bounds the column and makes a
+// replay land on the same row.
+const decisionBatchRecord = (
+  decision: IngestionResult,
+): Extract<CaseLawIngestionBatchRecord, { type: "decision" }> => ({
+  type: "decision",
+  decision,
+});
+
 const boundedRecordLimit = (recordLimit: number): number => {
   if (
     !Number.isSafeInteger(recordLimit) ||
@@ -323,10 +330,9 @@ export const admitPageDecisions = (
   decisions: readonly IngestionResult[],
   recordLimit: number = CASE_LAW_INGESTION_BATCH_LIMITS.records,
 ): AdmittedDecisions[] =>
-  admitParts(
-    decisions.map((decision) => ({ type: "decision", decision })),
-    recordLimit,
-  ).map(({ admitted }) => admitted);
+  admitParts(decisions.map(decisionBatchRecord), recordLimit).map(
+    ({ admitted }) => admitted,
+  );
 
 const boundsError = (
   reason: CaseLawBatchBoundsReason,
@@ -353,9 +359,7 @@ export const prepareCaseLawIngestionBatch = ({
   BoundedCaseLawIngestionBatch,
   CaseLawBatchBoundsError
 > => {
-  const inputBatchRecords =
-    inputRecords ??
-    decisions.map((decision) => ({ type: "decision" as const, decision }));
+  const inputBatchRecords = inputRecords ?? decisions.map(decisionBatchRecord);
   const records = boundedRecordLimit(recordLimit);
   const { encodedBytes } = CASE_LAW_INGESTION_BATCH_LIMITS;
   if (inputBatchRecords.length === 0) {

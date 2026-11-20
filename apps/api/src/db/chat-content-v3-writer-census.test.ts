@@ -141,6 +141,9 @@ const v2Baselines = {
     subagent: {
       id: "synthetic",
       name: "synthetic",
+      // A tool-mode part, the one shape v3 stores: a v2 row still refuses
+      // it, since no v2 writer stored one.
+      parentToolCallId: "call",
       status: "finished",
       messages: [],
     },

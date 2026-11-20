@@ -7,7 +7,10 @@ import { drizzle } from "drizzle-orm/pglite";
 import {
   DEFAULT_SEARCH_EXCERPT,
   DEFAULT_SEARCH_SORT,
+  SEARCH_PAGE_END,
   SEARCH_TOTAL_NOT_COUNTED,
+  searchPageEnd,
+  type SearchPageReach,
 } from "@stll/api-contract/search";
 
 import {
@@ -40,6 +43,7 @@ import {
   unresolvedPageDecisionRowsStatement,
 } from "@/api/handlers/case-law/decisions/search";
 import type { ProvisionRank } from "@/api/handlers/case-law/decisions/search";
+import { NO_HIT_TERMS } from "@/api/handlers/case-law/decisions/search-relaxed";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
 import type {
   CaseLawPublicReadDb,
@@ -84,6 +88,7 @@ import {
   installCorpusDispositionScan,
   installCorpusRevisionScan,
 } from "@/api/tests/helpers/corpus-disposition-scan";
+import { optOutOfCorpusProjectionSeedingGuard } from "@/api/tests/helpers/corpus-projection-seeding-guard";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   createTestPglite,
@@ -198,6 +203,10 @@ const heldProjection = ({
 beforeAll(
   async () => {
     client = await createTestPglite();
+    await optOutOfCorpusProjectionSeedingGuard(client, {
+      reason:
+        "Reader suite: stands up canonical rows and their serving states as fixtures; no desired writer runs here, and the writer suites keep the guard.",
+    });
     const db = drizzle({ client });
     await client.exec(
       "CREATE TEXT SEARCH CONFIGURATION public.stella_unaccent (COPY = pg_catalog.simple)",
@@ -909,6 +918,24 @@ test.each(["unchanged", "refreshed"] as const)(
           : [],
       });
     });
+    // The words of a decision shown from its refreshed copy are read again
+    // off that copy; here the refreshed copy no longer holds the word.
+    const wordReads: string[] = [];
+    const aggregateSpy = spyOn(
+      getCorpusIndexClient(manifest.cluster),
+      "aggregate",
+    ).mockImplementation(async ({ query }) => {
+      wordReads.push(query);
+      return await Promise.resolve(
+        Result.ok({
+          term_coverage: {
+            buckets: [],
+            sum_other_doc_count: 0,
+            doc_count_error_upper_bound: 0,
+          },
+        }),
+      );
+    });
     resetPublicCaseLawConfigForTesting(caseLawDb);
     try {
       const result = await searchCorpusIndexDecisions({
@@ -941,6 +968,19 @@ test.each(["unchanged", "refreshed"] as const)(
       expect(hit.anchorId).toBe(
         revisionState === "refreshed" ? null : anchorId,
       );
+      // Its words describe the copy it is shown from, never the one scanned.
+      if (revisionState === "refreshed") {
+        expect(wordReads).toHaveLength(1);
+        expect(wordReads.at(0)).toContain(refreshedRevision);
+        expect(wordReads.at(0)).not.toContain(originalRevision);
+        expect(hit.matchedTerms).toEqual([]);
+        expect(hit.missingTerms).toEqual(["promlčení"]);
+        expect(hit.match).toBe("some_terms");
+      } else {
+        expect(wordReads).toEqual([]);
+        expect(hit.matchedTerms).toEqual(["promlčení"]);
+        expect(hit.match).toBe("all_terms");
+      }
       const finalRows = await readCaseLawPageDecisionRows({
         body: SEARCH_BODY,
         caseLawDb,
@@ -952,6 +992,7 @@ test.each(["unchanged", "refreshed"] as const)(
       );
     } finally {
       searchSpy.mockRestore();
+      aggregateSpy.mockRestore();
       resetPublicCaseLawConfigForTesting();
       await db
         .delete(corpusIndexProjectionStates)
@@ -972,6 +1013,16 @@ test.each(["unchanged", "refreshed"] as const)(
     }
   },
 );
+
+const relaxedPageAnswer = (result: {
+  nextCursor: string | null;
+  pageReach: SearchPageReach;
+  paginationOutcome: { type: string };
+}) => ({
+  nextCursor: result.nextCursor,
+  reach: result.pageReach,
+  paginationOutcome: result.paginationOutcome,
+});
 
 test("a short strict page is topped up with new partial matches only, after the strict hits", async () => {
   const db = drizzle({ client });
@@ -1068,6 +1119,11 @@ test("a short strict page is topped up with new partial matches only, after the 
       }
       const answered: Record<string, unknown> = {};
       for (const name of Object.keys(aggs)) {
+        // A per-word count: "promlčení" is the common word here.
+        if (name === "decisions") {
+          answered[name] = { value: query.includes("promlčení") ? 40 : 3 };
+          continue;
+        }
         answered[name] =
           name === "total"
             ? { value: 1 }
@@ -1131,19 +1187,58 @@ test("a short strict page is topped up with new partial matches only, after the 
       { decisionId: String(czechId), match: "all_terms" },
       { decisionId: String(projectedId), match: "some_terms" },
     ]);
+    // Each hit says exactly which words its decision holds: the strict hit
+    // all of them, the partial one only the word its coverage found.
+    expect(
+      relaxed.result.hits.map(({ matchedTerms, missingTerms }) => ({
+        matchedTerms,
+        missingTerms,
+      })),
+    ).toEqual([
+      { matchedTerms: ["promlčení", "nároku"], missingTerms: [] },
+      { matchedTerms: ["promlčení"], missingTerms: ["nároku"] },
+    ]);
+    // Fewer decisions than the page holds contain both words, so each word
+    // is counted on its own, beside the exact count of the strict set.
+    expect(relaxed.result.termDecisionCounts).toEqual({
+      allTerms: 1,
+      terms: [
+        { term: "promlčení", count: 40 },
+        { term: "nároku", count: 3 },
+      ],
+      countType: "estimate",
+    });
     // The total and facets stay the strict set's.
     expect(relaxed.result.total).toEqual(strictOnly.result.total);
     expect(relaxed.result.facets).toEqual(strictOnly.result.facets);
-    expect(relaxed.result.relaxedTopUp).toBeUndefined();
+    expect(relaxed.result.paginationOutcome).toEqual({ type: "complete" });
+    expect(searchPageEnd(relaxedPageAnswer(relaxed.result))).toBe(
+      SEARCH_PAGE_END.COMPLETE,
+    );
+    // `strict` asks for no partial matches, so none are owed: complete.
+    expect(searchPageEnd(relaxedPageAnswer(strictOnly.result))).toBe(
+      SEARCH_PAGE_END.COMPLETE,
+    );
 
-    // A top-up that cannot finish keeps the strict page and says so.
+    // A top-up that cannot finish keeps the strict page and never calls it
+    // complete, however the strict scan ended.
     coverageRefuses = true;
     const unread = await search(false);
     expect(unread.result.hits.map(({ decisionId }) => decisionId)).toEqual([
       String(czechId),
     ]);
     expect(unread.result.relaxedHitCount).toBe(0);
-    expect(unread.result.relaxedTopUp).toBe("skipped");
+    expect(unread.result.paginationOutcome).toEqual({
+      type: "truncated",
+      reason: "partial_matches_budget",
+    });
+    expect(searchPageEnd(relaxedPageAnswer(unread.result))).toBe(
+      SEARCH_PAGE_END.STOPPED,
+    );
+    // The page cannot say nothing else matched.
+    expect(unread.result.warnings.map(({ code }) => code)).not.toContain(
+      "no_hits",
+    );
   } finally {
     scoredSpy.mockRestore();
     searchSpy.mockRestore();
@@ -2831,6 +2926,37 @@ test("the provision cursor codec tells a probe cursor from a plain one by its ta
   }
 });
 
+test("the Postgres relaxed statement says which query words each decision holds", async () => {
+  // Executed under the reader role, as the handler runs it: the per-word
+  // array must line up with the query's distinct words in order.
+  const plan = caseLawSearchPlan({
+    body: { country: "CZE", query: "chybějící sampleword chybějící" },
+    configs: [
+      {
+        languages: ["cs"],
+        regconfig: "simple",
+        includeDefault: false,
+        useUnaccent: false,
+      },
+    ],
+    courtWeights,
+    excerpt: DEFAULT_SEARCH_EXCERPT,
+    limit: 10,
+    parsedCursor: null,
+    queryUsed: "chybějící sampleword chybějící",
+    sort: DEFAULT_SEARCH_SORT,
+    match: "any",
+  });
+  const result = await withPublicLawReaderRole(
+    drizzle({ client }),
+    async (tx) => await tx.execute(plan.hits),
+  );
+  expect(result.rows.length).toBeGreaterThan(0);
+  for (const row of result.rows) {
+    expect(row["term_matches"]).toEqual([false, true]);
+  }
+});
+
 test("the Postgres search plan and the engine page read agree on a citation past the probe budget", async () => {
   await withGappedLinks({ missesOnly: [withheldId] }, async () => {
     const planIds = async (provision?: typeof GAPPED_PROVISION) => {
@@ -3252,6 +3378,7 @@ test("index search hits carry source text disposition and retain human excerpts"
     ),
     total: SEARCH_TOTAL_NOT_COUNTED,
     match: "all_terms",
+    termsOf: () => NO_HIT_TERMS,
   });
   expect(
     page.hits.map(({ decisionId, textWithheldReason }) => ({
@@ -3445,6 +3572,7 @@ test.each([
       snippetRevisionById: new Map(),
       total: SEARCH_TOTAL_NOT_COUNTED,
       match: "all_terms",
+      termsOf: () => NO_HIT_TERMS,
     });
     expect(page.hits.map((hit) => hit.textAvailability)).toEqual([expected]);
     expect(page.hits.at(0)?.headnote.type).toBe("present");

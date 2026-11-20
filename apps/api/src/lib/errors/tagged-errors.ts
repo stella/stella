@@ -37,7 +37,6 @@ import {
   FetchBoundaryError,
 } from "@stll/errors";
 import { isConnectionFailure } from "@stll/fetch";
-import type { PersistedAstDegradation } from "@stll/legal-ast/document-ast";
 import {
   INGESTION_STOP_KIND,
   type IngestionStopKind,
@@ -291,7 +290,7 @@ export class TelemetryError extends TaggedError("TelemetryError")<{
   cause?: unknown;
 }> {}
 
-export const USAGE_LIMIT_EXCEEDED_REASONS = [
+const USAGE_LIMIT_EXCEEDED_REASONS = [
   "no_entitlement",
   "usage_limit_exceeded",
   "entitlement_inactive",
@@ -367,6 +366,8 @@ export const UNPERSISTABLE_DECISION_FIELDS = {
   PUBLISHER_CITATIONS: "publisher-citations",
   PRIMARY_REFERENCE_TYPE: "primary-reference-type",
   SUPPLEMENT: "supplement",
+  FALLBACK_IDENTITY: "fallback-identity",
+  HELD_DECISION_ATTACHMENT: "held-decision-attachment",
 } as const;
 
 export type UnpersistableDecisionField =
@@ -422,19 +423,18 @@ export class CorpusMemberDigestMismatchError extends TaggedError(
 }> {}
 
 /**
- * A stored document AST carried vocabulary this reader does not declare
- * (a block role, a block kind, or an inline kind) or head matter after the
- * body. The read served the document with those degraded (see
- * `persistedAstDegradations` and `headMatterOrderDegradations` in
- * `@stll/legal-ast/document-ast`); this is telemetry only, so the row is
- * visible: either a writer newer than this reader, or a row written past
- * the ingestion boundary that needs repair.
+ * A stored document AST was served other than as written: degraded without
+ * loss (vocabulary this reader does not declare, repeated identities, head
+ * matter after the body; see `persistedAstDegradations`) or stored without
+ * structure. Telemetry only, so the row stays visible until a reparse
+ * repairs it; `reportStoredAstOutcome` in `stored-ast-outcome.ts` is its one
+ * reporter, and the record it writes carries the counts, never the content.
  */
 export class StoredAstDegradedError extends TaggedError(
   "StoredAstDegradedError",
 )<{
   message: string;
-  degradations: readonly PersistedAstDegradation[];
+  outcome: "degraded" | "structureless";
 }> {}
 
 export const STORED_CORPUS_VALIDATION_CODE = "stored_corpus_invalid";
@@ -600,33 +600,11 @@ export class DocumentTooLargeError extends TaggedError(
   budgetBytes: number;
 }> {}
 
-/** Post-generation OOXML structural violations. */
-export class OoxmlValidationError extends TaggedError("OoxmlValidationError")<{
-  message: string;
-  violations: {
-    rule: string;
-    message: string;
-    element?: string;
-  }[];
-}> {}
-
 /** Optimistic-lock failure inside a transaction. */
 export class ConcurrentModificationError extends TaggedError(
   "ConcurrentModificationError",
 )<{
   message: string;
-}> {}
-
-/** DOCX template block-directive structural errors. */
-export class TemplateDirectiveError extends TaggedError(
-  "TemplateDirectiveError",
-)<{
-  message: string;
-  errors: {
-    message: string;
-    paragraphIndex: number;
-    directive: string;
-  }[];
 }> {}
 
 type AdapterFetchErrorOptions = {

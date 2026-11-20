@@ -523,7 +523,13 @@ const RichTextArea = memo(
   forwardRef<HTMLDivElement, RichTextAreaProps>(
     ({ item, label, onInput }, ref) => {
       const plainTextLines = item.plainText.split("\n");
-      let lineStart = 0;
+      // Each line's offset in the text keys it; computed before render so no
+      // counter is mutated while the lines render.
+      const lineStarts = plainTextLines.map((_, index) =>
+        plainTextLines
+          .slice(0, index)
+          .reduce((offset, previous) => offset + previous.length + 1, 0),
+      );
       const content =
         item.type === "formattedText"
           ? {
@@ -531,10 +537,9 @@ const RichTextArea = memo(
               dangerouslySetInnerHTML: { __html: item.html },
             }
           : {
-              children: plainTextLines.map((line) => {
-                const key = lineStart;
-                const needsLineBreak = lineStart > 0;
-                lineStart += line.length + 1;
+              children: plainTextLines.map((line, index) => {
+                const key = lineStarts[index] ?? 0;
+                const needsLineBreak = key > 0;
                 return (
                   <Fragment key={key}>
                     {needsLineBreak ? <br /> : null}

@@ -34,6 +34,10 @@ import {
   getKanbanCardRenameInitialValue,
   toKanbanCardDragItem,
 } from "@/components/workspaces/kanban/kanban-card.logic";
+import {
+  KANBAN_CARD_CONTENT_CLASS,
+  KANBAN_CARD_NAME_ROW_CLASS,
+} from "@/components/workspaces/kanban/kanban-card.pending";
 import { useIsKanbanCardSelected } from "@/components/workspaces/kanban/kanban-selection";
 import type { KanbanSelection } from "@/components/workspaces/kanban/kanban-selection";
 import { buildKanbanCardDragData } from "@/components/workspaces/kanban/kanban-selection.logic";
@@ -257,8 +261,8 @@ export const KanbanCard = ({
   const showFooter = showAuthor || showUpdatedAt || showVersion;
 
   const content = (
-    <div className="flex flex-col gap-2 pe-5">
-      <span className="flex min-w-0 items-center gap-1.5 text-sm leading-snug font-medium">
+    <div className={KANBAN_CARD_CONTENT_CLASS}>
+      <span className={KANBAN_CARD_NAME_ROW_CLASS}>
         {icon}
         {nameElement}
         {entity.activeEditBy && (

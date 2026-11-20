@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { readdir } from "node:fs/promises";
+import { fileURLToPath } from "node:url";
 
 import { DESKTOP_LINK_STATE } from "./desktop-link";
 import {
@@ -53,7 +54,11 @@ describe("popupView", () => {
           }
           if (controller === null) {
             expect(view.state.type).toBe("open-stella-to-connect");
-            expect(view.primary).toBeNull();
+            expect(view.statusMessageKey).toBe("statusOpenStella");
+            expect(view.primary).toEqual({
+              action: "open-stella",
+              messageKey: "openStella",
+            });
             expect(view.secondary.map(({ action }) => action)).toEqual([
               "revoke",
             ]);
@@ -118,6 +123,19 @@ describe("popupView", () => {
       state: { origin: "https://example.com", type: "tab-handed-to-stella" },
       statusMessageKey: "statusConnected",
     });
+  });
+
+  test("offers to open stella only while no stella tab is in front to connect", () => {
+    for (const granted of grants) {
+      for (const controller of controllers) {
+        for (const activeTab of activeTabs) {
+          const view = popupView({ activeTab, controller, granted });
+          expect(view.primary?.action === "open-stella").toBe(
+            granted && controller === null && activeTab.kind !== "stella",
+          );
+        }
+      }
+    }
   });
 
   test("says what connecting does only until stella is connected", () => {
@@ -292,7 +310,7 @@ test("every locale has exactly the English messages, none left unused", async ()
   const extensionRoot = new URL("../../", import.meta.url);
   const files = [
     ...(await Array.fromAsync(
-      new Bun.Glob("src/**/*.ts").scan({ cwd: extensionRoot.pathname }),
+      new Bun.Glob("src/**/*.ts").scan({ cwd: fileURLToPath(extensionRoot) }),
     )),
     "wxt.config.ts",
   ];

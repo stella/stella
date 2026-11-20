@@ -1,10 +1,10 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useTranslations } from "use-intl";
 
 import { pageTitle } from "@/lib/page-title";
 import { routePresentation } from "@/routes/-route-presentation";
-import { SettingsPageHeader } from "@/routes/_protected.settings/-components/settings-page-header";
-import { AnonymizationDenyListCard } from "@/routes/_protected.settings/organization/-components/organization/anonymization-deny-list-card";
+
+import { OrganizationAnonymizationPage } from "./-organization.anonymization.page";
+import { AnonymizationPending } from "./-organization.anonymization.pending";
 
 export const Route = createFileRoute(
   "/_protected/settings/organization/anonymization",
@@ -20,18 +20,5 @@ export const Route = createFileRoute(
     meta: [{ title: pageTitle("settings.organization.anonymization.title") }],
   }),
   component: OrganizationAnonymizationPage,
+  pendingComponent: AnonymizationPending,
 });
-
-function OrganizationAnonymizationPage() {
-  const t = useTranslations();
-
-  return (
-    <>
-      <SettingsPageHeader
-        description={t("settings.organization.anonymization.description")}
-        title={t("settings.organization.anonymization.title")}
-      />
-      <AnonymizationDenyListCard />
-    </>
-  );
-}

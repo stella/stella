@@ -3,7 +3,11 @@ import { panic, Result } from "better-result";
 import { env } from "@/api/env";
 import { drainDeliverabilityEvents } from "@/api/lib/email/deliverability";
 import { resolveEmailEvents } from "@/api/lib/email/deliverability-config";
-import { recordRecipientRefusals } from "@/api/lib/email/recipient-deliverability";
+import {
+  pruneRecipientFailures,
+  recordRecipientFailures,
+  recordRecipientRefusals,
+} from "@/api/lib/email/recipient-deliverability";
 import {
   readApproximateQueueDepth,
   sqsClientFor,
@@ -45,9 +49,25 @@ export const receiveEmailDeliverability: SchedulerTask = async ({
     queueUrl: config.queue.url,
     topicArn: config.topicArn,
     markUndeliverable: recordRecipientRefusals,
+    recordFailures: recordRecipientFailures,
     signal,
     logger,
   });
+
+  // Failures past retention are deleted on every run; a failed prune is
+  // retried by the next one.
+  const pruned = await Result.tryPromise(
+    async () => await pruneRecipientFailures(),
+  );
+  if (pruned.isErr()) {
+    logger.warn("email_deliverability.failures.prune_failed", {
+      "error.type": errorTag(pruned.error),
+    });
+  } else if (pruned.value > 0) {
+    logger.info("email_deliverability.failures.pruned", {
+      "delivery.pruned_addresses": pruned.value,
+    });
+  }
 
   // Events the consumer could not apply wait in the dead-letter queue; their
   // count is reported on every run instead of a separate alarm.

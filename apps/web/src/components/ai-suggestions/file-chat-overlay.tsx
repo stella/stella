@@ -156,7 +156,6 @@ import { FILE_CHAT_DRAFT_DELIVERY } from "@/components/inspector/inspector-store
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { getLiveEditor } from "@/components/live-editor";
 import { useAIKeyGate } from "@/components/require-ai-key";
-import { SuggestedFollowupChips } from "@/features/chat/components/suggested-followup-chips";
 import { useChatSession } from "@/features/chat/hooks/use-chat-session";
 import { useChatThreadRuntime } from "@/features/chat/hooks/use-chat-thread-runtime";
 import { useChatUserContext } from "@/features/chat/hooks/use-chat-user-context";
@@ -1543,9 +1542,7 @@ const FileChatOverlayInner = ({
     continuePausedTurn,
     resendLatestMessage,
     sendMessage,
-    queuedMessages,
-    removeQueuedMessage,
-    sendQueuedMessageNow,
+    queue,
     stop,
     stopPending,
     leave,
@@ -1661,8 +1658,7 @@ const FileChatOverlayInner = ({
         notifyUserError(message.error, t("chat.sendErrorMessageEmpty"));
         return CHAT_SEND_KEPT;
       }
-      await sendMessage(message.value);
-      return CHAT_SEND_SENT;
+      return await sendMessage(message.value);
     },
   );
 
@@ -1682,25 +1678,19 @@ const FileChatOverlayInner = ({
     docxEditSafety,
   });
 
-  const {
-    handleAskUserEditingChange,
-    lastMessageId,
-    suggestedFollowupPrompt,
-    suggestedPrompts,
-  } = useSuggestedFollowupPrompts({
-    activeOrganizationId,
-    approvalPendingMessageId,
-    error,
-    isGenerating,
-    messages,
-    threadRef,
-    turnAbandoned,
-  });
+  const { handleAskUserEditingChange, lastMessageId, suggestedPrompts } =
+    useSuggestedFollowupPrompts({
+      activeOrganizationId,
+      approvalPendingMessageId,
+      error,
+      isGenerating,
+      messages,
+      threadRef,
+      turnAbandoned,
+    });
 
   const editorController = useChatEditor({
-    followupAnalytics: { surface: "document-chat" },
     placeholder: filePlaceholder,
-    suggestedFollowupPrompt,
     threadRef,
   });
   // Focus the composer when the user explicitly starts a new thread,
@@ -2676,6 +2666,47 @@ const FileChatOverlayInner = ({
               assistantTextDensity="compact"
               approvalPendingMessageId={approvalPendingMessageId}
               error={error}
+              followUps={{
+                analyticsSurface: "document-chat",
+                messageId: lastMessageId,
+                onSelect: (prompt) => {
+                  // Mirror the PromptBar send guard: when an editable DOCX's
+                  // edit snapshot isn't ready, block the follow-up send too
+                  // so the model never sees one without current edit context.
+                  if (
+                    isDraftChatFrozen() ||
+                    !canSubmitWithCurrentDocxSnapshot()
+                  ) {
+                    return;
+                  }
+                  editorController.setContent(composerStoredMarkdown(prompt));
+                  detached(
+                    editorController.submit(async (draft) => {
+                      if (!(await ensureAIAvailable())) {
+                        return CHAT_SEND_KEPT;
+                      }
+                      // Same model-race guard as the composer send path.
+                      if (
+                        Result.isError(await composer.awaitPendingSelection())
+                      ) {
+                        return CHAT_SEND_KEPT;
+                      }
+                      const message = await buildChatRequestMessage(draft);
+                      if (message.isErr()) {
+                        notifyUserError(
+                          message.error,
+                          t("chat.sendErrorMessageEmpty"),
+                        );
+                        return CHAT_SEND_KEPT;
+                      }
+                      return await sendMessage(message.value);
+                    }),
+                    "file-chat-overlay.submit",
+                  );
+                },
+                prompts: suggestedPrompts,
+                threadId: threadRef.threadId,
+              }}
               hasOlderMessages={olderCursor !== null}
               isGenerating={isGenerating}
               isLoadingOlder={isLoadingOlder}
@@ -2691,61 +2722,10 @@ const FileChatOverlayInner = ({
               onOpenPlaybook={handleOpenPlaybook}
               onContinuePausedTurn={handleContinuePausedTurn}
               onResend={resendLatestMessage}
-              queuedMessageActions={{
-                remove: removeQueuedMessage,
-                sendNow: sendQueuedMessageNow,
-              }}
-              queuedMessages={queuedMessages}
+              queue={queue}
               scrollContainerRef={threadScrollRef}
               streamdownComponents={streamdownComponents}
               workspaceId={workspaceId}
-            />
-            {/* Follow-up chips ride at the bottom of the transcript flow (not a
-                pinned footer, which the card's `max-h`/`overflow-hidden`
-                clipped): they stay inside the chat window, scroll with the
-                messages, and are never smashed against the card edge. */}
-            <SuggestedFollowupChips
-              analyticsSurface="document-chat"
-              messageId={lastMessageId}
-              onSelect={(prompt) => {
-                // Mirror the PromptBar send guard: when an editable DOCX's edit
-                // snapshot isn't ready, block the chip send too so the model
-                // never sees a follow-up without current edit context.
-                if (
-                  isDraftChatFrozen() ||
-                  !canSubmitWithCurrentDocxSnapshot()
-                ) {
-                  return;
-                }
-                editorController.setContent(composerStoredMarkdown(prompt));
-                detached(
-                  editorController.submit(async (draft) => {
-                    if (!(await ensureAIAvailable())) {
-                      return CHAT_SEND_KEPT;
-                    }
-                    // Same model-race guard as the composer send path.
-                    if (
-                      Result.isError(await composer.awaitPendingSelection())
-                    ) {
-                      return CHAT_SEND_KEPT;
-                    }
-                    const message = await buildChatRequestMessage(draft);
-                    if (message.isErr()) {
-                      notifyUserError(
-                        message.error,
-                        t("chat.sendErrorMessageEmpty"),
-                      );
-                      return CHAT_SEND_KEPT;
-                    }
-                    await sendMessage(message.value);
-                    return CHAT_SEND_SENT;
-                  }),
-                  "file-chat-overlay.submit",
-                );
-              }}
-              prompts={suggestedPrompts}
-              threadId={threadRef.threadId}
-              surface="plain"
             />
           </ChatThreadCard>
         )}

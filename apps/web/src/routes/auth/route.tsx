@@ -1,66 +1,14 @@
 import { createFileRoute, Outlet } from "@tanstack/react-router";
-import { useTranslations } from "use-intl";
 
-import { sanitizeHref } from "@stll/decision-reader/sanitize-href";
-
-import { LanguagePicker } from "@/components/language-picker";
-import { StellaWordmark } from "@/components/stella-wordmark";
-import { ThemePicker } from "@/components/theme-picker";
 import { APP_FRAME_SCOPE } from "@/routes/-app-frame-scope";
 import { loadAuthContext } from "@/routes/-auth-context";
-
-const landingUrl = "https://stll.app";
+import { LeafPendingView } from "@/routes/-route-pending-view";
 
 export const Route = createFileRoute("/auth")({
-  staticData: { appFrame: APP_FRAME_SCOPE.none },
+  staticData: { appFrame: APP_FRAME_SCOPE.auth },
+  // Signed OAuth state arrives in the URL fragment, which HTTP omits.
+  ssr: false,
   beforeLoad: async ({ context }) => await loadAuthContext(context.queryClient),
-  component: AuthLayout,
+  component: () => <Outlet />,
+  pendingComponent: LeafPendingView,
 });
-
-function AuthLayout() {
-  const t = useTranslations();
-
-  return (
-    <div className="auth-gradient flex min-h-dvh flex-col">
-      <style>{`
-        .auth-gradient {
-          background: linear-gradient(
-            to bottom,
-            var(--background) 40%,
-            var(--auth-gradient-end)
-          );
-        }
-      `}</style>
-      <div className="flex flex-1 flex-col px-8 lg:px-16 xl:px-24">
-        <header className="flex flex-wrap items-end justify-between gap-4 pt-12">
-          <div className="flex items-center gap-3">
-            <a
-              aria-label="Stella"
-              className="inline-flex transition-opacity hover:opacity-80"
-              href={sanitizeHref(landingUrl)}
-            >
-              <StellaWordmark className="text-foreground h-6 w-auto" />
-            </a>
-          </div>
-          <div className="flex items-center gap-2">
-            <ThemePicker />
-            <LanguagePicker />
-          </div>
-        </header>
-        <div className="flex flex-1 flex-col items-center min-[70rem]:flex-row min-[70rem]:items-baseline">
-          <div className="hidden flex-1 pt-[18svh] min-[70rem]:block">
-            <h1 className="text-foreground max-w-xl text-[2.75rem] leading-[1.15] font-light tracking-tight">
-              {t("auth.headline")}
-            </h1>
-            <p className="text-muted-foreground mt-5 max-w-md text-base">
-              {t("auth.subtitle")}
-            </p>
-          </div>
-          <div className="flex w-full min-w-0 flex-1 items-start justify-center pt-12 min-[70rem]:justify-start min-[70rem]:pt-[18svh]">
-            <Outlet />
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}

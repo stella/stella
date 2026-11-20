@@ -16,6 +16,7 @@ import type { McpMode } from "@/api/mcp/constants";
 import type { McpRequestResources } from "@/api/mcp/context";
 import { toDynamicToolTitle } from "@/api/mcp/gateway/list-tools";
 import { modeAllowsGatewayTools } from "@/api/mcp/gateway/mode-policy";
+import { skillPromptResourceUri } from "@/api/mcp/gateway/skill-prompt-resource-uri";
 import {
   loadSkillPrompts,
   readSkillTool,
@@ -37,8 +38,6 @@ const SKILL_PROMPT_REQUEST_ARGUMENT = "request";
  * Files past this many characters in total are named but not embedded.
  */
 const SKILL_PROMPT_RESOURCE_BUDGET_CHARS = 60_000;
-
-const SKILL_PROMPT_RESOURCE_URI_PREFIX = "stella://skills/";
 
 /**
  * The skills a session serves as prompts. A prompt is started by the user in
@@ -147,7 +146,7 @@ export const getSkillPrompt = async ({
         resource: {
           mimeType: "text/plain",
           text: content,
-          uri: `${SKILL_PROMPT_RESOURCE_URI_PREFIX}${encodeURIComponent(skill.name)}/${path}`,
+          uri: skillPromptResourceUri({ name: skill.name, path }),
         },
         type: "resource",
       },

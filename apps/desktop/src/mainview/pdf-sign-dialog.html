@@ -99,7 +99,50 @@
         margin-top: 6px;
         overflow-wrap: anywhere;
       }
-      select {
+      .token-panel {
+        display: grid;
+        gap: 8px;
+        margin-bottom: 18px;
+      }
+      .token-prompt,
+      .notice-text {
+        color: #a1a1a6;
+        font-size: 12px;
+        line-height: 1.45;
+        overflow-wrap: anywhere;
+      }
+      .pin-warning {
+        color: #ff9f0a;
+        font-size: 12px;
+        line-height: 1.45;
+      }
+      .pin-warning[data-tone="error"] {
+        color: #ff453a;
+      }
+      .notices {
+        display: grid;
+        gap: 10px;
+        margin-bottom: 18px;
+      }
+      .notice {
+        align-items: center;
+        background: #2c2c2e;
+        border: 1px solid #3a3a3c;
+        border-radius: 8px;
+        display: flex;
+        gap: 10px;
+        padding: 10px 12px;
+      }
+      .notice-text {
+        flex: 1;
+      }
+      .notice button {
+        flex: none;
+        font-size: 12px;
+        padding: 6px 10px;
+      }
+      select,
+      input {
         background: #2c2c2e;
         border: 1px solid #3a3a3c;
         border-radius: 8px;
@@ -108,6 +151,10 @@
         font-size: 13px;
         padding: 8px 10px;
         width: 100%;
+      }
+      input {
+        -webkit-user-select: text;
+        user-select: text;
       }
       .status {
         font-size: 13px;
@@ -172,16 +219,23 @@
         }
         .mark,
         .details,
+        .notice,
         .cancel,
-        select {
+        select,
+        input {
           background: #fff;
           border-color: #d1d1d6;
           color: #1c1c1e;
         }
         .subtitle,
         .label,
-        .identity-details {
+        .identity-details,
+        .token-prompt,
+        .notice-text {
           color: #636366;
+        }
+        .pin-warning {
+          color: #c93400;
         }
         .value {
           color: #1c1c1e;
@@ -240,8 +294,24 @@
         <select id="identities"></select>
         <span class="identity-details" dir="auto" id="identityDetails"></span>
       </label>
+      <div class="token-panel" hidden id="tokenPanel">
+        <p class="token-prompt" dir="auto" id="tokenPrompt"></p>
+        <label hidden id="pinField">
+          <span class="label" id="pinLabel"></span>
+          <input
+            autocomplete="off"
+            autocorrect="off"
+            id="pin"
+            spellcheck="false"
+            type="password"
+          />
+        </label>
+        <p class="pin-warning" hidden id="pinWarning" role="alert"></p>
+      </div>
+      <div class="notices" hidden id="notices"></div>
       <p class="status" hidden id="status"></p>
       <div class="actions">
+        <button class="cancel" hidden id="rescanBtn"></button>
         <button class="cancel" id="cancelBtn"></button>
         <button class="sign" hidden id="signBtn"></button>
       </div>
@@ -261,12 +331,14 @@
       // this page.
       const params = new URLSearchParams(window.location.hash.slice(1));
       const strings = JSON.parse(params.get("strings") || "{}");
-      // The picker as Rust last listed it; it re-lists while the user
-      // chooses, so a smart card inserted or removed shows up in place.
+      // The picker as Rust last listed it. While the user chooses, the
+      // store is re-read every few seconds; the smart cards are scanned
+      // again only with the Rescan button, as a scan starts their drivers.
       let listing = {
         identities: JSON.parse(params.get("identities") || "[]"),
         state: JSON.parse(params.get("state") || '"unsupportedPlatform"'),
         stateMessageKey: params.get("stateMessage"),
+        driverNotices: JSON.parse(params.get("driverNotices") || "[]"),
       };
       // Where the platform keeps signing keys: a sentence that names the
       // keychain has a `CertificateStore` variant, read where the store is not
@@ -302,6 +374,7 @@
           : strings.pdfSignInvisible,
       );
       setText("certificateLabel", strings.pdfSignCertificate);
+      setText("pinLabel", strings.pdfSignPin);
       setText("cancelBtn", strings.cancel);
       setText("signBtn", strings.pdfSignSign);
 
@@ -361,6 +434,14 @@
       });
       const describeIdentity = (identity) => {
         const parts = [];
+        if (identity.token && identity.token.label) {
+          parts.push(
+            (strings.pdfSignOnToken || "").replace(
+              "{tokenLabel}",
+              identity.token.label,
+            ),
+          );
+        }
         if (identity.issuer) {
           parts.push(`${strings.pdfSignIssuer || ""} ${identity.issuer}`);
         }
@@ -372,13 +453,118 @@
         }
         return parts.join(" · ");
       };
-      const showIdentityDetails = () => {
-        const selected = listing.identities.find(
+      const selectedIdentity = () =>
+        listing.identities.find(
           (identity) => identity.id === element("identities").value,
         );
-        setText("identityDetails", selected ? describeIdentity(selected) : "");
+      const documentName = params.get("documentName") || "";
+
+      // A token's PIN is asked for here unless its reader has a keypad of
+      // its own; the token's own count of wrong attempts decides the
+      // warning. A locked PIN cannot sign at all.
+      const PIN_WARNINGS = {
+        low: { key: "pdfSignPinLow", tone: "warning" },
+        finalTry: { key: "pdfSignPinFinalTry", tone: "warning" },
+        locked: { key: "pdfSignErrors.pinLocked", tone: "error" },
       };
+      const showPinWarning = (pinRetries) => {
+        const warning = PIN_WARNINGS[pinRetries];
+        element("pinWarning").hidden = !warning;
+        if (warning) {
+          setText("pinWarning", strings[warning.key]);
+          element("pinWarning").dataset["tone"] = warning.tone;
+        }
+      };
+      const needsTypedPin = (identity) =>
+        Boolean(identity && identity.token) &&
+        identity.token.pinEntry === "keyboard";
+      // Sign stays off until a typed PIN is there, and for a locked one.
+      const updateSignEnabled = () => {
+        const identity = selectedIdentity();
+        const locked = Boolean(
+          identity && identity.token && identity.token.pinRetries === "locked",
+        );
+        const missingPin =
+          needsTypedPin(identity) && element("pin").value.length === 0;
+        element("signBtn").disabled = locked || missingPin;
+      };
+      const showTokenPanel = (identity) => {
+        const token = identity && identity.token;
+        element("tokenPanel").hidden =
+          !token || token.pinEntry === "notRequired";
+        if (!token) {
+          return;
+        }
+        const typed = token.pinEntry === "keyboard";
+        element("pinField").hidden = !typed;
+        setText(
+          "tokenPrompt",
+          (
+            (typed ? strings.pdfSignPinPrompt : strings.pdfSignPinPad) || ""
+          ).replace("{documentName}", documentName),
+        );
+        showPinWarning(token.pinRetries);
+      };
+      // A typed PIN belongs to the certificate it was typed for: it is
+      // cleared when the choice changes, not when a re-listing keeps it.
+      let shownIdentityId = null;
+      const showIdentityDetails = () => {
+        const selected = selectedIdentity();
+        setText("identityDetails", selected ? describeIdentity(selected) : "");
+        setText(
+          "subtitle",
+          selected && selected.token
+            ? strings.pdfSignSubtitleToken
+            : wording("pdfSignSubtitle"),
+        );
+        const selectedId = selected ? selected.id : null;
+        if (selectedId !== shownIdentityId) {
+          element("pin").value = "";
+          shownIdentityId = selectedId;
+        }
+        showTokenPanel(selected);
+        updateSignEnabled();
+      };
+
+      // A driver that cannot run here, or a card whose driver is missing, is
+      // named with a way to the driver's download, whatever else the dialog
+      // says.
+      const respondToNotice = (driverId) =>
+        window.__TAURI_INTERNALS__
+          ? window.__TAURI_INTERNALS__.invoke("pdf_sign_open_driver_download", {
+              driverId,
+            })
+          : Promise.resolve(null);
+      const showDriverNotices = () => {
+        element("notices").replaceChildren();
+        for (const notice of listing.driverNotices) {
+          const row = document.createElement("div");
+          row.className = "notice";
+          const text = document.createElement("p");
+          text.className = "notice-text";
+          text.dir = "auto";
+          const sentence =
+            notice.kind === "missing"
+              ? strings.pdfSignDriverMissing
+              : strings.pdfSignDriverNeedsUpdate;
+          text.textContent = (sentence || "").replace(
+            "{vendor}",
+            notice.vendor,
+          );
+          const download = document.createElement("button");
+          download.className = "cancel";
+          download.textContent = strings.pdfSignDownloadDriver || "";
+          download.addEventListener("click", () => {
+            respondToNotice(notice.driverId).catch(() => undefined);
+          });
+          row.append(text, download);
+          element("notices").append(row);
+        }
+        element("notices").hidden = listing.driverNotices.length === 0;
+      };
+
       element("identities").addEventListener("change", showIdentityDetails);
+      element("pin").addEventListener("input", updateSignEnabled);
 
       // A re-listing keeps the user's choice when that certificate is still
       // there.
@@ -397,46 +583,72 @@
         if (listing.identities.some((identity) => identity.id === chosen)) {
           select.value = chosen;
         }
-        showIdentityDetails();
-        setText("subtitle", ready ? wording("pdfSignSubtitle") : "");
         element("picker").hidden = !ready;
         element("signBtn").hidden = !ready;
         if (ready) {
-          status.hidden = true;
-        } else if (listing.state === "noIdentities") {
-          showStatus(wording("pdfSignNoIdentities"), "error");
-        } else if (listing.state === "keychainUnavailable") {
-          showStatus(
-            wording(listing.stateMessageKey) || strings[GENERIC_ERROR_KEY],
-            "error",
-          );
+          element("status").hidden = true;
+          showIdentityDetails();
         } else {
-          showStatus(strings.pdfSignUnsupported, "error");
+          setText("subtitle", "");
+          element("tokenPanel").hidden = true;
+          if (listing.state === "noIdentities") {
+            showStatus(wording("pdfSignNoIdentities"), "error");
+          } else if (listing.state === "keychainUnavailable") {
+            showStatus(
+              wording(listing.stateMessageKey) || strings[GENERIC_ERROR_KEY],
+              "error",
+            );
+          } else {
+            showStatus(strings.pdfSignUnsupported, "error");
+          }
         }
+        showDriverNotices();
       };
       renderListing();
 
-      // Until the user signs or cancels, the dialog re-lists on focus and
-      // every few seconds, so a card inserted or pulled out while it is open
-      // updates the picker; a store that could not be read is retried only on
-      // focus. Listing reads certificates and never prompts.
+      // Until the user signs or cancels, the dialog re-reads the store on
+      // focus and every few seconds, so a certificate added or removed there
+      // updates the picker. That refresh never starts the smart card
+      // drivers; Rescan does. Listing reads certificates and never prompts.
       const RELIST_INTERVAL_MS = 3000;
       const RELISTED_STATES = ["ready", "noIdentities"];
       let choosing = listing.state !== "unsupportedPlatform";
+      element("rescanBtn").hidden = !choosing;
       // Re-rendering only on a change keeps an open dropdown from closing
       // under the pointer every few seconds.
-      const listingKey = ({ identities, state, stateMessageKey }) =>
-        JSON.stringify([state, stateMessageKey || null, identities]);
-      let relisting = false;
-      const relist = async () => {
-        if (!choosing || relisting || !window.__TAURI_INTERNALS__) {
+      const listingKey = ({
+        identities,
+        state,
+        stateMessageKey,
+        driverNotices,
+      }) =>
+        JSON.stringify([
+          state,
+          stateMessageKey || null,
+          identities,
+          driverNotices || [],
+        ]);
+      // The listing in flight, if any. A refresh that finds one skips its
+      // turn; a rescan the user asked for waits for it and then runs.
+      let relisting = null;
+      // `read` asks Rust for the listing: the store's refresh, or a rescan.
+      const relist = async (read, { wait = false } = {}) => {
+        if (!choosing || !window.__TAURI_INTERNALS__) {
           return;
         }
-        relisting = true;
+        if (relisting) {
+          if (!wait) {
+            return;
+          }
+          await relisting;
+          return relist(read, { wait });
+        }
+        let release = () => undefined;
+        relisting = new Promise((resolve) => {
+          release = resolve;
+        });
         try {
-          const next = await window.__TAURI_INTERNALS__.invoke(
-            "pdf_sign_identities",
-          );
+          const next = await read();
           if (
             choosing &&
             next &&
@@ -447,6 +659,9 @@
               identities: next.identities,
               state: next.state,
               stateMessageKey: next.stateMessageKey,
+              driverNotices: Array.isArray(next.driverNotices)
+                ? next.driverNotices
+                : [],
             };
             renderListing();
           }
@@ -454,17 +669,29 @@
           // The picker keeps what it last listed; signing re-reads the store
           // and reports a certificate that is gone.
         } finally {
-          relisting = false;
+          relisting = null;
+          release();
         }
       };
+      const refreshStore = () =>
+        window.__TAURI_INTERNALS__.invoke("pdf_sign_identities");
+      const rescanCards = () =>
+        window.__TAURI_INTERNALS__.invoke("pdf_sign_rescan_cards");
       window.addEventListener("focus", () => {
-        void relist();
+        void relist(refreshStore);
       });
       setInterval(() => {
         if (RELISTED_STATES.includes(listing.state)) {
-          void relist();
+          void relist(refreshStore);
         }
       }, RELIST_INTERVAL_MS);
+      setText("rescanBtn", strings.pdfSignRescanCards);
+      element("rescanBtn").addEventListener("click", () => {
+        element("rescanBtn").disabled = true;
+        void relist(rescanCards, { wait: true }).finally(() => {
+          element("rescanBtn").disabled = false;
+        });
+      });
 
       const respond = (body) =>
         window.__TAURI_INTERNALS__
@@ -515,6 +742,23 @@
           );
           return;
         }
+        // The token refused the PIN and takes more attempts: ask again, for
+        // the same certificate, with the token's new warning.
+        if (result && result.status === "pinRejected") {
+          showStatus(strings[result.messageKey], "error");
+          // The token's count is the one Sign checks from now on.
+          const rejected = selectedIdentity();
+          if (rejected && rejected.token) {
+            rejected.token.pinRetries = result.pinRetries;
+          }
+          showTokenPanel(rejected);
+          showPinWarning(result.pinRetries);
+          element("pin").value = "";
+          element("cancelBtn").disabled = false;
+          updateSignEnabled();
+          element("pin").focus();
+          return;
+        }
         if (result && result.status === "failed") {
           const { detail, text } = failureText(result);
           if (typeof result.retryWithinMs === "number") {
@@ -526,22 +770,59 @@
         }
       };
 
+      // The typed PIN goes to Rust with the click and leaves the page:
+      // the field is cleared before the answer comes back.
+      const signRequest = () => {
+        const identity = selectedIdentity();
+        const request = {
+          action: "sign",
+          identityId: element("identities").value,
+        };
+        if (needsTypedPin(identity)) {
+          request.pin = element("pin").value;
+        }
+        element("pin").value = "";
+        return request;
+      };
+      const pendingText = () => {
+        const identity = selectedIdentity();
+        return identity &&
+          identity.token &&
+          identity.token.pinEntry === "pinPad"
+          ? (strings.pdfSignPinPad || "").replace(
+              "{documentName}",
+              documentName,
+            )
+          : strings.pdfSignSigning;
+      };
+
       element("signBtn").addEventListener("click", () => {
         choosing = false;
+        element("rescanBtn").hidden = true;
         clearTimeout(retryExpiry);
         element("signBtn").disabled = true;
         element("cancelBtn").disabled = true;
         element("picker").hidden = true;
-        showStatus(strings.pdfSignSigning, "pending");
-        respond(
-          retrying
-            ? { action: "retry" }
-            : { action: "sign", identityId: element("identities").value },
-        ).then(renderOutcome, () => offerToClose(strings[GENERIC_ERROR_KEY]));
+        element("tokenPanel").hidden = true;
+        element("notices").hidden = true;
+        showStatus(
+          retrying ? strings.pdfSignSigning : pendingText(),
+          "pending",
+        );
+        respond(retrying ? { action: "retry" } : signRequest()).then(
+          renderOutcome,
+          () => offerToClose(strings[GENERIC_ERROR_KEY]),
+        );
+      });
+      element("pin").addEventListener("keydown", (event) => {
+        if (event.key === "Enter" && !element("signBtn").disabled) {
+          element("signBtn").click();
+        }
       });
 
       element("cancelBtn").addEventListener("click", () => {
         choosing = false;
+        element("rescanBtn").hidden = true;
         element("cancelBtn").disabled = true;
         element("signBtn").disabled = true;
         respond({ action: "cancel" });

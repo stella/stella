@@ -35,7 +35,12 @@
     "sessionNeedsAttention": "Nepieciešama uzmanība",
     "sessionOpeningInOffice": "Tiek atvērts Office",
     "sessionSavingDraft": "Tiek saglabāts melnraksts",
-    "reconnectAccount": "Atkārtoti savienot ar stella web…"
+    "reconnectAccount": "Atkārtoti savienot ar stella web…",
+    "transcribeRecording": "Transkribēt ierakstu…",
+    "dictation": "Diktēšana",
+    "dictationHint": "Lai diktētu, turiet {key}",
+    "dictationSettings": "Diktēšanas iestatījumi…",
+    "dictationTurnOn": "Ieslēgt diktēšanu…"
   },
   "notification": {
     "checkpointDelayedBody": "{fileName}: izmaiņas paliek lokālas un tiks automātiski mēģinātas vēlreiz",
@@ -81,6 +86,9 @@
     "pdfSignAppearance": "Paraksts",
     "pdfSignCertificate": "Parakstīšanas sertifikāts",
     "pdfSignDocument": "Dokuments",
+    "pdfSignDownloadDriver": "Lejupielādēt draiveri",
+    "pdfSignDriverMissing": "Lasītājā esošajai kartei vajag {vendor} draiveri, kas nav instalēts. Lai parakstītu ar šo karti, instalējiet to.",
+    "pdfSignDriverNeedsUpdate": "Instalētais {vendor} draiveris nedarbojas šī Mac procesorā. Lai parakstītu ar šo karti, instalējiet tā jaunāko versiju.",
     "pdfSignErrorCode": "Kļūdas kods: {code}",
     "pdfSignErrors": {
       "authenticationRequired": "Jūsu atslēgu saišķim vajadzīga atļauja piekļūt šim sertifikātam. Mēģiniet vēlreiz un atļaujiet piekļuvi, kad tiek prasīts.",
@@ -118,6 +126,9 @@
       "startAgain": "Parakstīšanu nevarēja turpināt. Sāciet parakstīšanu stella no jauna.",
       "temporarilyUnavailable": "stella pašlaik nevarēja pabeigt parakstīšanu. Mēģiniet vēlreiz.",
       "tokenNotPresent": "Viedkarte vai marķieris nav pievienots. Pievienojiet to un mēģiniet vēlreiz.",
+      "tokenSigningFailed": "Viedkarte vai marķieris neparakstīja dokumentu.",
+      "tokenTimeout": "Viedkarte vai marķieris laikā neatbildēja. Mēģiniet vēlreiz.",
+      "tokenUnreadable": "Viedkarti vai marķieri neizdevās nolasīt. Mēģiniet vēlreiz.",
       "unsupportedAlgorithm": "Ar šī sertifikāta atslēgu nevar izveidot šim dokumentam vajadzīgo parakstu. Izvēlieties citu sertifikātu.",
       "wouldBreakSignatures": "Šī PDF parakstīšana padarītu nederīgus parakstus, kas tajā jau ir."
     },
@@ -127,6 +138,13 @@
     "pdfSignMatter": "Lieta",
     "pdfSignNoIdentities": "Atslēgu saišķī nav pieejams neviens parakstīšanas sertifikāts.",
     "pdfSignNoIdentitiesCertificateStore": "Sertifikātu krātuvē nav pieejams neviens parakstīšanas sertifikāts.",
+    "pdfSignOnToken": "Glabājas: {tokenLabel}",
+    "pdfSignPin": "PIN kods",
+    "pdfSignPinFinalTry": "Vēl viens nepareizs PIN kods bloķēs karti vai marķieri.",
+    "pdfSignPinLow": "Iepriekš tika ievadīts nepareizs PIN kods. Rūpīgi pārbaudiet PIN kodu.",
+    "pdfSignPinPad": "Lai parakstītu {documentName}, ievadiet PIN kodu karšu lasītājā.",
+    "pdfSignPinPrompt": "Lai parakstītu {documentName}, ievadiet kartes vai marķiera PIN kodu.",
+    "pdfSignRescanCards": "Meklēt kartes vēlreiz",
     "pdfSignRetry": "Mēģināt vēlreiz",
     "pdfSignServer": "Pieprasa",
     "pdfSignSign": "Parakstīt",
@@ -135,6 +153,7 @@
     "pdfSignStampOnPage": "Redzams zīmogs {pageNumber}. lapā",
     "pdfSignSubtitle": "Privātā atslēga paliek atslēgu saišķī; no šī datora tiek nosūtīts tikai paraksts.",
     "pdfSignSubtitleCertificateStore": "Privātā atslēga paliek sertifikātu krātuvē; no šī datora tiek nosūtīts tikai paraksts.",
+    "pdfSignSubtitleToken": "Privātā atslēga paliek jūsu viedkartē vai marķierī; no šī datora tiek nosūtīts tikai paraksts.",
     "pdfSignTitle": "Vai parakstīt šo PDF?",
     "pdfSignUnsupported": "Parakstīšanai nepieciešams macOS vai Windows. Atveriet dokumentu Mac vai Windows datorā, lai to parakstītu.",
     "pdfSignVersion": "Versija",
@@ -167,15 +186,14 @@
     "handoffExpired": "Dokumenta saites derīgums beidzās, pirms stella desktop tika pievienots. Sāciet no jauna stella."
   },
   "settings": {
-    "about": "Par",
-    "accountLinked": "Konts ir saistīts",
+    "accountLinked": "Saistīts",
+    "disconnect": "Atvienot",
     "connectionExpired": "Savienojuma derīgums ir beidzies",
     "reconnectToStella": "Atkārtoti savienot ar stella web",
     "connectionExpiredDescription": "Savienojuma derīgums ir beidzies. Savienojieties atkārtoti ar stella web.",
     "connectToStella": "Savienot ar stella web",
     "connectToStellaDescription": "Saistiet šo datoru ar pašreizējo stella kontu, neatverot dokumentu.",
     "desktopBenefit": "Office faili un vietējā starpliktuves vēsture",
-    "disconnectAccount": "Atvienot kontu",
     "errorDisconnectAccount": "stella desktop neizdevās atvienot jūsu kontu.",
     "errorReadAccount": "stella desktop neizdevās pārbaudīt jūsu konta savienojumu.",
     "stellaWebAccount": "stella tīmekļa konts",
@@ -195,10 +213,8 @@
     "sendCrashReportsDescription": "Tehniskās kļūdas, laika mērījumi un avāriju kopsavilkumi; bez dokumentiem, starpliktuves satura vai darbību datiem.",
     "errorReadTelemetry": "Neizdevās nolasīt ziņojumu sūtīšanas iestatījumu. Mēģiniet vēlreiz.",
     "errorSaveTelemetry": "Neizdevās saglabāt ziņojumu sūtīšanas iestatījumu. Mēģiniet vēlreiz.",
-    "general": "Vispārīgi",
     "lastVerified": "Pēdējo reizi pārbaudīts",
     "language": "Valoda",
-    "languageDescription": "Izvēlieties desktop lietotnes valodu.",
     "setupGuide": "Iestatīšanas ceļvedis",
     "setupGuideDescription": "Iziet iestatīšanu vēlreiz: ko dara lietotne, atļaujas un starpliktuves īsinājumtaustiņš.",
     "setupGuideAction": "Palaist iestatīšanu vēlreiz",
@@ -222,13 +238,26 @@
     "stellaDesktop": "stella desktop",
     "support": "Atbalsts",
     "title": "Iestatījumi",
-    "serverLabel": "Serveris",
+    "pages": {
+      "general": "Vispārīgi",
+      "dictation": "Diktēšana",
+      "clipboard": "Starpliktuve",
+      "agents": "MI un aģenti",
+      "signing": "Parakstīšana",
+      "activity": "Darbība",
+      "notifications": "Paziņojumi",
+      "permissions": "Atļaujas",
+      "about": "Par"
+    },
+    "account": "Konts",
+    "app": "Lietotne",
+    "privacy": "Privātums",
+    "pageEmpty": "Šajā datorā šeit nav ko iestatīt.",
     "connectToHost": "Savienot ar {host}",
     "connectToHostDescription": "Atver {host} pārlūkā, lai jūs varētu apstiprināt šo datoru.",
     "reconnectNeeded": "Jāsavieno atkārtoti",
     "reconnect": "Savienot atkārtoti",
     "reconnectHostDescription": "Savienojums ar {host} ir jāatjauno. Pārlūkā vēlreiz apstipriniet šo datoru.",
-    "permissions": "Atļaujas",
     "permissionNotificationsDescription": "Paziņo, kad dokuments ir gatavs vai sinhronizācijai nepieciešama uzmanība.",
     "permissionAccessibility": "Pieejamība",
     "permissionAccessibilityDescription": "Ļauj aktivitāšu laika joslai ierakstīt logu nosaukumus.",
@@ -237,7 +266,9 @@
     "permissionAllowed": "Atļauts",
     "permissionAllow": "Atļaut",
     "permissionOpenSettings": "Atvērt iestatījumus",
-    "permissionDenied": "Izslēgts sistēmas iestatījumos.",
+    "permissionTurnedOff": "Izslēgts",
+    "permissionsDescription": "Katra ir jūsu izvēle un atbloķē vienu lietu.",
+    "neverRequested": "Nekad netiek pieprasīts",
     "permissionManaged": "Pārvalda jūsu organizācija",
     "errorUpdateAutostart": "stella desktop neizdevās atjaunināt palaišanu piesakoties.",
     "errorPermissions": "stella desktop nevarēja nolasīt vai mainīt šo atļauju.",
@@ -584,21 +615,32 @@
   },
   "dictation": {
     "title": "Diktēšana",
-    "description": "Turiet {shortcut} un runājiet. Teksts parādās lietotnē, kuru izmantojat. Runa tiek pārveidota šajā datorā un netiek saglabāta. Ja MI labošana ir ieslēgta, pārvērstais teksts (ne audio) caur stella tiek nosūtīts jūsu organizācijas MI pakalpojumu sniedzējam, lai izlabotu kļūdas un formatējumu; stella to nesaglabā.",
+    "description": "Turiet {shortcut} un runājiet. Teksts parādās lietotnē, kuru izmantojat. Runa tiek pārveidota šajā datorā un netiek saglabāta.",
     "descriptionCloud": "Turiet {shortcut} un runājiet. Teksts parādās lietotnē, kuru izmantojat. Runu tekstā pārvērš stella AI, un stella to nesaglabā.",
+    "lede": "Turiet <key>{shortcut}</key> un runājiet. Teksts parādās tur, kur rakstāt.",
+    "groups": {
+      "shortcut": "Īsinājumtaustiņš",
+      "transcription": "Transkripcija",
+      "cleanup": "Labošana",
+      "thisComputer": "Šajā datorā"
+    },
+    "sounds": {
+      "title": "Skaņas",
+      "description": "Atskaņot īsu, klusu skaņu, kad ieraksts sākas un kad tas beidzas."
+    },
     "cleanup": {
       "title": "Labot ar MI",
-      "description": "Runa joprojām tiek pārvērsta tekstā šajā datorā, un audio to nekad nepamet. Ja labošana ir ieslēgta, pārvērstais teksts caur stella tiek nosūtīts jūsu organizācijas MI pakalpojumu sniedzējam, kas izlabo atpazīšanas kļūdas un piemēro diktētās pieturzīmes un formatējumu, piemēram, “jauna rinda” vai “treknraksts”. stella to nesaglabā. Labošanai tiek nodots arī lietotnes veids, kurā diktējat, piemēram, e-pasts vai tērzēšana, lai teksts tai atbilstu.",
-      "descriptionCloud": "Ja labošana ir ieslēgta, stella AI arī izlabo atpazīšanas kļūdas pārvērstajā tekstā un piemēro diktētās pieturzīmes un formatējumu, piemēram, “jauna rinda” vai “treknraksts”. Labošanai tiek nodots arī lietotnes veids, kurā diktējat, piemēram, e-pasts vai tērzēšana, lai teksts tai atbilstu."
+      "description": "Izlabo atpazīšanas kļūdas un diktēto formatējumu, piemēram, “jauna rinda” vai “treknraksts”, un pielāgo tekstu lietotnei, piemēram, e-pastam. Caur stella jūsu organizācijas MI pakalpojumu sniedzējam tiek nosūtīts tikai teksts, ne audio; stella to nesaglabā.",
+      "descriptionCloud": "stella AI arī izlabo atpazīšanas kļūdas un diktēto formatējumu, piemēram, “jauna rinda” vai “treknraksts”, un pielāgo tekstu lietotnei, piemēram, e-pastam."
     },
     "context": {
       "windowTitle": {
-        "title": "Kopīgot loga nosaukumu ar MI labošanu",
-        "description": "Labošanai tiek nodots arī tā loga nosaukums, kurā diktējat, lai varētu atšķirt, piemēram, līgumu no iekšējas piezīmes. Logu nosaukumos var būt klientu vārdi vai lietu nosaukumi. Nosaukums caur stella tiek nosūtīts jūsu organizācijas MI pakalpojumu sniedzējam, un stella to nesaglabā."
+        "title": "Kopīgot loga nosaukumu",
+        "description": "Palīdz atšķirt līgumu no piezīmes. Logu nosaukumos var būt klientu vai lietu nosaukumi."
       },
       "textBeforeCursor": {
-        "title": "Kopīgot tekstu pirms kursora ar MI labošanu",
-        "description": "Labošanai tiek nodotas arī līdz {limit, number} rakstzīmēm pirms kursora, lai diktētais teksts turpinātu rakstīto. Tā daļa dokumenta, kurā strādājat, caur stella tiek nosūtīta jūsu organizācijas MI pakalpojumu sniedzējam, un stella to nesaglabā."
+        "title": "Kopīgot tekstu pirms kursora",
+        "description": "Līdz {limit, number} rakstzīmēm no dokumenta, kurā strādājat, lai diktētais atbilstu rakstītajam."
       }
     },
     "keptInHistory": "Katrs diktāts tiek saglabāts arī šī datora starpliktuves vēsturē.",
@@ -606,25 +648,54 @@
       "title": "Pārvērst ar",
       "local": "Šo datoru",
       "cloud": "stella AI",
+      "localDescription": "Runa tiek pārveidota šajā datorā un netiek saglabāta.",
       "cloudDescription": "Audio pamet šo datoru: pārvēršanai tekstā tas tiek nosūtīts uz stella un caur stella MI pakalpojumu sniedzēju izvēlētā modeļa nodrošinātājam. stella to nesaglabā.",
       "unavailableRegion": "stella AI jūsu organizācijas reģionā vēl nepiedāvā runas pārvēršanu tekstā.",
       "unavailableProvider": "Jūsu organizācijas MI pakalpojumu sniedzējs nepiedāvā runas pārvēršanu tekstā.",
       "unavailable": "Pārvēršana ar stella AI pašlaik nav pieejama.",
-      "model": "Pārvēršanas modelis"
+      "model": "Pārvēršanas modelis",
+      "chooseModel": "Izvēlieties modeli",
+      "outsideRegion": "Ārpus jūsu reģiona",
+      "retainsData": "Saglabā jūsu audio",
+      "retainsDataTitle": "{provider} saglabā to, ko diktējat",
+      "retainsDataWarning": "Šis modelis darbojas kontā bez nulles datu glabāšanas. {provider} saskaņā ar saviem noteikumiem, ārpus stella kontroles, glabā visa diktētā audio un transkripciju. Nediktējiet ar to konfidenciālu informāciju vai klientu datus."
     },
     "language": {
       "title": "Diktēšanas valoda",
-      "description": "Runa tiek atpazīta šajā valodā, un labošana saglabā tekstu tajā. Automātiski tiek izmantotas šī datora displeja un tastatūru valodas.",
+      "description": "Automātiski izmanto šī datora displeja un tastatūru valodas. Ja to ir vairākas, katrs vārds tiek atpazīts tajā valodā, kurā to izrunājat.",
       "automatic": "Automātiski",
       "automaticWith": "Automātiski ({languages})",
       "noResults": "Valodas netika atrastas"
     },
+    "customWords": {
+      "group": "Savi vārdi",
+      "title": "Vārdi un nosaukumi, kas stella jāraksta pareizi",
+      "description": "Piemēram, klientu vārdi vai angļu termini, ko lietojat, runājot citā valodā. Tie tiek glabāti šajā datorā šim kontam un nosūtīti tikai kopā ar diktātu: pārvēršanai ar stella AI un labošanai ar MI. Kad pārvērš šī datora runas modelis un labošana ar MI ir izslēgta, stella izlabo to rakstību šajā datorā.",
+      "count": "{count, number} no {limit, number}",
+      "input": "Pievienot vārdu vai nosaukumu",
+      "add": "Pievienot",
+      "remove": "Noņemt {word}",
+      "duplicate": "Šis vārds jau ir sarakstā.",
+      "full": "Sarakstā var būt ne vairāk kā {limit, number} vārdi. Lai pievienotu citu, noņemiet kādu.",
+      "failed": "Sarakstu neizdevās saglabāt. Mēģiniet vēlreiz."
+    },
     "modelNeeded": "Runas modelis darbojas šajā datorā.",
+    "speechModel": "Runas modelis",
+    "modelInstalled": "Runas modelis ({size} MB) ir šajā datorā.",
+    "removeModel": "Noņemt",
+    "removeFailed": "Runas modeli neizdevās noņemt. Mēģiniet vēlreiz.",
     "download": "Lejupielādēt ({size} MB)",
     "downloading": "Lejupielādē runas modeli: {percent}%",
     "downloadFailed": "Runas modeli neizdevās lejupielādēt.",
     "modelAttribution": "Speech model: Parakeet Ultra by Moondream, based on NVIDIA Parakeet TDT 0.6B v3, converted to GGUF by handy-computer. CC BY 4.0.",
     "shortcutTaken": "{shortcut} izmanto cita lietotne.",
+    "holdKey": {
+      "title": "Turamais taustiņš",
+      "description": "Turiet tikai to, lai diktētu. Īss pieskāriens vai īsinājumtaustiņš, kas to izmanto, neko nedara.",
+      "right": "Labais {key}",
+      "waiting": "stella pamanīs {shortcut}, kad tai būs piekļuve pieejamībai.",
+      "unavailable": "stella šajā datorā nevar sekot {shortcut}. Izvēlieties citu taustiņu."
+    },
     "failure": {
       "accessibility": "Atļaujiet piekļuvi pieejamībai, lai stella varētu rakstīt citās lietotnēs.",
       "microphone": "stella nedzird jūsu mikrofonu. Pārbaudiet piekļuvi mikrofonam sistēmas iestatījumos.",
@@ -633,9 +704,54 @@
       "focusChanged": "Jūs pārslēdzāties uz citu lietotni, pirms teksts bija gatavs, tāpēc nekas netika ievadīts. Mēģiniet vēlreiz.",
       "focusUnconfirmed": "stella nevarēja pārliecināties, kurā lietotnē ir fokuss, tāpēc nekas netika ievadīts. Mēģiniet vēlreiz.",
       "shortcutHeld": "Atlaidiet īsinājumtaustiņus, lai varētu ievadīt tekstu. Nekas netika ievadīts; mēģiniet vēlreiz.",
-      "cloudTranscription": "stella AI neizdevās pārvērst šo diktātu tekstā, un runas modeļa šajā datorā nav. Mēģiniet vēlreiz vai pie “Pārvērst ar” izvēlieties “Šo datoru” un lejupielādējiet modeli."
+      "passwordField": "Ir atlasīts paroles lauks, tāpēc diktētais netika saglabāts vai ievadīts.",
+      "cloudTranscription": "stella AI neizdevās pārvērst šo diktātu tekstā, un runas modeļa šajā datorā nav. Mēģiniet vēlreiz vai pie “Pārvērst ar” izvēlieties “Šo datoru” un lejupielādējiet modeli.",
+      "nothingHeard": "stella nedzirdēja runu. Pārbaudiet ievades ierīci skaņas iestatījumos."
     },
-    "failureKeptInHistory": "Teksts ir starpliktuves vēsturē."
+    "failureKeptInHistory": "Teksts ir starpliktuves vēsturē.",
+    "transcribeRecording": {
+      "title": "Ieraksta transkribēšana",
+      "description": "Līdz 4 stundām garu diktofona failu, balss piezīmi vai sanāksmes ierakstu pārvērš tekstā.",
+      "open": "Atvērt",
+      "failed": "Neizdevās atvērt logu. Mēģiniet vēlreiz."
+    },
+    "notice": {
+      "title": "stella nedzird jūsu mikrofonu",
+      "allowBody": "Atļaujiet piekļuvi mikrofonam un mēģiniet vēlreiz.",
+      "checkBodyMac": "Pārbaudiet piekļuvi mikrofonam sistēmas iestatījumos un mēģiniet vēlreiz.",
+      "checkBodyPc": "Pārbaudiet piekļuvi mikrofonam Windows iestatījumos un mēģiniet vēlreiz.",
+      "allow": "Atļaut mikrofonu",
+      "openSettingsMac": "Atvērt sistēmas iestatījumus",
+      "openSettingsPc": "Atvērt iestatījumus",
+      "dismiss": "Aizvērt",
+      "nothingTitle": "stella nedzirdēja runu",
+      "nothingBody": "Runājiet, kamēr turat taustiņu, vai skaņas iestatījumos izvēlieties citu ievadi.",
+      "inputDevice": "Ievade: {device}",
+      "openSoundMac": "Atvērt skaņas iestatījumus",
+      "openSoundPc": "Atvērt skaņas iestatījumus",
+      "missingTitle": "{missing} nav pievienota",
+      "missingBody": "Diktēšana tā vietā izmanto {device}.",
+      "chooseMicrophone": "Izvēlēties mikrofonu…"
+    },
+    "microphone": {
+      "title": "Mikrofons",
+      "hint": "Bluetooth austiņām vajag brīdi, lai pārslēgtos uz mikrofonu, un tās ieraksta zemākā kvalitātē. Iebūvētais mikrofons parasti ir skaidrāks.",
+      "systemDefault": "Sistēmas noklusējums",
+      "systemDefaultNamed": "Sistēmas noklusējums ({name})",
+      "bluetoothDevice": "{name} · Bluetooth",
+      "notConnected": "{name} (nav pievienota)",
+      "test": "Pārbaudīt mikrofonu",
+      "stopTest": "Apturēt",
+      "level": "Ievades līmenis",
+      "hearing": "Mēs jūs dzirdam.",
+      "noSound": "No ierīces {device} nenāk skaņa.",
+      "checkAccess": "Pārbaudīt piekļuvi mikrofonam"
+    },
+    "preview": {
+      "label": "Līdz šim diktētais teksts",
+      "listening": "Klausās…",
+      "finishing": "Tiek pabeigts…"
+    }
   },
   "shortcut": {
     "title": "Starpliktuves īsinājumtaustiņš",
@@ -702,6 +818,11 @@
     "howDocumentsBody": "Pie dokumenta stella izvēlieties Atvērt. Saglabājot labojums atgriežas stella kā jauna versija.",
     "howClipboard": "Starpliktuve",
     "howClipboardBody": "Kopējiet kā parasti, tad nospiediet {shortcut}, lai izvēlētos no nokopētā.",
+    "howSigning": "PDF parakstīšana",
+    "howSigningBodyMac": "Pie PDF stella izvēlieties “Parakstīt ar stella desktop”. Sertifikāts paliek jūsu atslēgu saišķī vai viedkartē, un parakstītais PDF atgriežas stella kā jauna versija.",
+    "howSigningBodyPc": "Pie PDF stella izvēlieties “Parakstīt ar stella desktop”. Sertifikāts paliek jūsu sertifikātu krātuvē vai viedkartē, un parakstītais PDF atgriežas stella kā jauna versija.",
+    "howDictation": "Diktēšana",
+    "howDictationBody": "Turiet īsinājumtaustiņu un runājiet, un teksts parādās lietotnē, kuru izmantojat. To var ieslēgt kādā no nākamajiem soļiem.",
     "howActivity": "Aktivitāte",
     "howActivityBody": "Skatiet, kur pazuda jūsu diena, un pārvērtiet to laika ierakstu melnrakstos. Izslēgta, līdz to palaižat.",
     "activityTitle": "Kā darbojas Aktivitāte",
@@ -729,8 +850,8 @@
     "permissionsTitlePc": "Iestatiet šo datoru",
     "permissionsBody": "Katra atļauja ir jūsu izvēle. Vēlāk tās varat mainīt iestatījumos.",
     "neverRequested": "Nekad netiek pieprasīts:",
-    "tryTitle": "Izmēģiniet tagad",
-    "tryBody": "Nokopējiet jebkādu tekstu, tad nospiediet {shortcut}.",
+    "tryTitle": "Izmēģiniet starpliktuves vēsturi",
+    "tryBody": "Nokopējiet jebkādu tekstu, tad nospiediet {shortcut}, lai atvērtu starpliktuves vēsturi.",
     "tryWaiting": "Gaida īsinājumtaustiņu",
     "tryKeepGoing": "Turpiniet…",
     "tryExtraModifier": "Tas ir {pressed}. Izmantojiet {shortcut}.",
@@ -752,30 +873,73 @@
     "introduceActivityTitle": "Jaunums: aktivitāšu laika josla",
     "introduceActivityBody": "Aktivitāte tagad ir pieejama jūsu kontā. Nekas netiek ierakstīts, līdz to palaižat aktivitāšu logā.",
     "openActivity": "Atvērt aktivitāti",
-    "dictationModel": "Runas modelis ({size} MB) tiek lejupielādēts vienreiz un darbojas šajā datorā.",
-    "dictationTurnOn": "Ieslēgt un lejupielādēt",
     "dictationDownloadContinues": "Varat turpināt. Lejupielāde turpinās fonā.",
-    "dictationReady": "Diktēšana ir ieslēgta un gatava.",
-    "dictationTryLabel": "Diktējiet šeit",
-    "dictationTryPlaceholder": "Noklikšķiniet šeit, turiet {shortcut} un pasakiet teikumu.",
-    "dictationListening": "Klausos…",
-    "dictationTranscribing": "Pierakstu teikto…",
     "dictationMicrophone": "Tā stella jūs dzird, kamēr turat īsinājumtaustiņu.",
     "dictationAccessibility": "Tā stella ieraksta teikto lietotnē, kuru pašlaik izmantojat.",
     "dictationFailed": "stella desktop neizdevās ieslēgt diktēšanu. Mēģiniet vēlreiz.",
     "introduceDictationTitle": "Jaunums: diktēšana",
+    "dictationSetup": {
+      "progress": "{current}. darbība no {total}",
+      "skipRest": "Izlaist pārējo",
+      "screens": {
+        "microphone": "Mikrofons",
+        "transcription": "Transkripcija",
+        "app": "Labošana",
+        "context": "Konteksts",
+        "words": "Vārdi"
+      },
+      "microphone": {
+        "title": "Ļaujiet stella jūs dzirdēt",
+        "body": "Turiet {shortcut} un runājiet, un teksts parādīsies tur, kur rakstāt. Vispirms atļaujiet mikrofonu, lai stella jūs dzirdētu.",
+        "bodyMac": "Turiet {shortcut} un runājiet, un teksts parādīsies tur, kur rakstāt. Vispirms atļaujiet mikrofonu, lai stella jūs dzirdētu, un Pieejamību, lai tā varētu ierakstīt tekstu.",
+        "choose": "Mikrofons diktēšanai"
+      },
+      "transcription": {
+        "title": "Kur transkribēt jūsu runu?",
+        "body": "To varēsiet vēlāk mainīt iestatījumos.",
+        "titleLocal": "Jūsu runa tiek transkribēta šajā datorā",
+        "bodyLocal": "Runas modelis darbojas šeit, tāpēc diktēšana darbojas arī bezsaistē.",
+        "localTitle": "Šajā datorā",
+        "localBody": "Darbojas bezsaistē. Jūsu audio nekad neatstāj šo datoru.",
+        "localModel": "Nepieciešams runas modelis ({size} MB), ko lejupielādē vienreiz.",
+        "cloudTitle": "stella AI",
+        "cloudBody": "Nekas nav jālejupielādē. Jūsu audio tiek nosūtīts stella un ar stella MI pakalpojumu sniedzēja starpniecību izvēlētā modeļa sniedzējam. stella to neglabā."
+      },
+      "app": {
+        "title": "Lietotnei piemērots teksts",
+        "body": "Labošana ar MI var rakstīt lietotnei, kurā diktējat: e-pasts izklausās pēc e-pasta, bet tērzēšanas ziņa pēc tērzēšanas ziņas.",
+        "sentAppKind": "Tai tiek pateikts lietotnes veids, piemēram, e-pasts, tērzēšana vai dokuments, nevis lietotnes nosaukums.",
+        "notStored": "stella neko no tā neglabā.",
+        "off": "Bez labošanas teksts tiek ierakstīts tā, kā tas tika transkribēts, un nekas netiek nosūtīts labošanai ar MI."
+      },
+      "context": {
+        "title": "Vairāk konteksta labošanai",
+        "body": "Neobligāti un izslēgts, līdz to ieslēdzat. Tiek nolasīts tikai, sākot diktēšanu, un nonāk tikai labošanai ar MI. stella neko no tā neglabā."
+      },
+      "words": {
+        "title": "Iemāciet stella savus vārdus",
+        "body": "Pievienojiet vārdus un terminus, kas stella jāraksta tā, kā jūs, piemēram, jūsu biroja, klientu nosaukumus vai citas valodas terminus. Saraksts sākumā ir tukšs.",
+        "examplesLabel": "Idejas:",
+        "examples": {
+          "firm": "Jūsu biroja nosaukums",
+          "client": "Klienta vārds",
+          "term": "Termins, ko lietojat"
+        }
+      }
+    },
     "guideWaiting": "Ieslēdziet stella desktop sarakstā augstāk, lai atļautu pieejamību.",
     "guideAllowed": "stella desktop ir atļauts",
     "never": {
       "screenRecording": "Ekrāna ierakstīšana",
       "camera": "Kamera",
       "keystrokes": "Taustiņsitieni",
+      "keystrokesWithoutHoldKey": "Taustiņsitieni, ja vien neizvēlaties turamo taustiņu",
       "fullDiskAccess": "Pilna piekļuve diskam",
       "administrator": "Administratora tiesības"
     }
   },
   "agentSubscriptions": {
-    "title": "MI abonementi",
+    "title": "AI abonementi",
     "chatGpt": "ChatGPT",
     "description": "Izmantojiet savu ChatGPT plānu MI pieprasījumiem stellā. Lietojums tiek uzskaitīts jūsu ChatGPT plānā, atsevišķi no stellas abonementa.",
     "continueWithChatGpt": "Turpināt ar ChatGPT",
@@ -811,9 +975,12 @@
       "storage": "Savienojumu šajā datorā neizdevās nolasīt vai saglabāt."
     },
     "callbackConnectedTitle": "ChatGPT ir savienots",
-    "callbackConnectedBody": "Varat aizvērt šo cilni un atgriezties stellā.",
+    "callbackConnectedBody": "MI pieprasījumi stellā tagad izmanto jūsu ChatGPT plānu.",
     "callbackNotConnectedTitle": "ChatGPT netika savienots",
-    "callbackNotConnectedBody": "Atgriezieties stellā, lai redzētu, kas notika, un mēģiniet vēlreiz.",
+    "callbackNotConnectedBody": "Iemesls ir redzams stella lietotnē. Lai mēģinātu vēlreiz, atveriet {section} › {group} un noklikšķiniet uz „{button}”.",
+    "callbackAccount": "Konts",
+    "callbackPlan": "Plāns",
+    "callbackCloseTab": "Šo cilni varat aizvērt.",
     "claudeCode": {
       "title": "Claude Code",
       "description": "Izmantojiet savu Claude abonementu vietējiem aģentiem stellā. Lietojums tiek uzskaitīts jūsu Claude plānā, atsevišķi no stellas abonementa.",
@@ -872,6 +1039,18 @@
       "path_changed": "Mainījusies augstāka līmeņa mape. Noņemiet šo mapi un pievienojiet to vēlreiz."
     }
   },
+  "signingDriver": {
+    "title": "Viedkartes draiveris",
+    "description": "Ja stella desktop pati neatrod jūsu viedkartes vai marķiera draiveri, izvēlieties tā PKCS #11 moduli. Tas tiek ielādēts tikai PDF parakstīšanai, atsevišķā procesā.",
+    "choose": "Izvēlēties moduli",
+    "remove": "Noņemt",
+    "notice": {
+      "action_failed": "Neizdevās. Mēģiniet vēlreiz.",
+      "missing": "Šī faila vairs nav.",
+      "needs_update": "Šis modulis nedarbojas šī Mac procesorā. Instalējiet draivera jaunāko versiju.",
+      "not_a_library": "Šis fails nav PKCS #11 modulis."
+    }
+  },
   "localLinkedFolders": {
     "title": "Saistītās mapes",
     "description": "Šī datora mapes, kurās var strādāt tērzēšanas aģents. Tērzēšana redz tikai mapes nosaukumu; tās ceļš paliek šajā datorā.",
@@ -891,6 +1070,117 @@
       "network_folder": "Šī mape atrodas tīkla koplietojumā. Saistiet mapi šī datora diskā.",
       "protected": "Šajā mapē ir pašas stella dati vai prasmju mape, tāpēc aģents tajā nevar strādāt.",
       "unreadable": "Šo mapi neizdevās nolasīt."
+    }
+  },
+  "keepAwake": {
+    "title": "Neļaut iemigt",
+    "enabled": "Neļaut šim datoram iemigt, kamēr strādā aģenti",
+    "description": "Kamēr šajā datorā strādā aģents, dators dīkstāvē neiemieg, tāpēc ilgi uzdevumi turpinās. Displejs joprojām var izslēgties. Mac klēpjdators tomēr iemieg, kad aizverat tā vāku.",
+    "onBattery": "Arī no akumulatora",
+    "onBatteryDescription": "Ja šī opcija ir izslēgta, dators, darbojoties no akumulatora, iemieg kā parasti, arī tad, kad strādā aģents.",
+    "errorSave": "Šo iestatījumu neizdevās saglabāt. Mēģiniet vēlreiz."
+  },
+  "transcribe": {
+    "title": "Ieraksta transkribēšana",
+    "retry": "Mēģināt vēlreiz",
+    "drop": {
+      "title": "Velciet ierakstu šeit",
+      "release": "Atlaidiet, lai transkribētu",
+      "description": "Diktofona faili, balss piezīmes, balss ziņas, sanāksmju ieraksti vai video skaņa.",
+      "choose": "Izvēlēties failu",
+      "formats": "WAV, MP3, M4A, AAC, FLAC, Ogg, Opus, AIFF, WMA, AMR un MP4 vai MOV video. Līdz 4 stundām.",
+      "formatsMac": "WAV, MP3, M4A, AAC, FLAC, Ogg, Opus, AIFF, AMR un MP4 vai MOV video. Līdz 4 stundām."
+    },
+    "destination": {
+      "title": "Transkribēt ar",
+      "thisComputer": "Šo datoru",
+      "cloud": "stella AI",
+      "localDescription": "Ieraksts paliek šajā datorā.",
+      "cloudDescription": "Skaņa transkribēšanai tiek nosūtīta stella un diktēšanas iestatījumos izvēlētā modeļa nodrošinātājam. stella to neglabā.",
+      "cloudDescriptionModel": "Skaņa transkribēšanai tiek nosūtīta stella un modeļa {model} nodrošinātājam. stella to neglabā.",
+      "localMissing": "Lai transkribētu šajā datorā, lejupielādējiet runas modeli sadaļā Iestatījumi, Diktēšana.",
+      "localMissingCloud": "Lejupielādējiet runas modeli sadaļā Iestatījumi, Diktēšana, vai transkribējiet ar stella AI.",
+      "retainsData": "Lūdzu, ņemiet vērā {provider} apstrādes noteikumus.",
+      "modelFailed": "stella AI modeli neizdevās nolasīt, tāpēc stella AI pašlaik nevar transkribēt. Mēģiniet vēlreiz vai transkribējiet šajā datorā."
+    },
+    "matter": {
+      "title": "Lieta",
+      "description": "Tās vārdi un lietu numuri tiek uzrakstīti pareizi, un tekstu varat saglabāt tajā.",
+      "none": "Nav",
+      "search": "Meklēt lietas",
+      "clearSearch": "Notīrīt meklēšanu",
+      "searching": "Meklē…",
+      "noMatters": "Lietas nav atrastas",
+      "failed": "Neizdevās ielādēt lietas. Mēģiniet vēlreiz."
+    },
+    "note": "Philips vai Olympus diktofonu DSS un DS2 failus vispirms saglabājiet WAV formātā programmā SpeechExec vai ODMS.",
+    "refused": {
+      "unsupported": "stella nevar nolasīt {name}. Izvēlieties ierakstu kādā no iepriekš minētajiem formātiem.",
+      "tooLong": "{name} ir garāks par 4 stundām. Vispirms sadaliet to īsākos ierakstos.",
+      "unreadable": "Neizdevās nolasīt {name}. Fails var būt bojāts; eksportējiet to vēlreiz un mēģiniet vēl reizi."
+    },
+    "kept": {
+      "ready": "{name} ir gatavs. Augstāk pārbaudiet, kā tas tiks transkribēts, un tad sāciet.",
+      "start": "Sākt transkribēšanu"
+    },
+    "failure": {
+      "start": "Neizdevās sākt transkribēšanu. Mēģiniet vēlreiz.",
+      "load": "Šo logu neizdevās ielādēt. Mēģiniet vēlreiz.",
+      "modelMissing": "Runas modeļa šajā datorā nav. Lejupielādējiet to sadaļā Iestatījumi, Diktēšana.",
+      "thisComputer": "Šī datora runas modelis nespēja transkribēt daļu ieraksta. Līdz šim iegūtais teksts paliek.",
+      "cloud": "stella AI nespēja transkribēt daļu ieraksta. Līdz šim iegūtais teksts paliek; mēģiniet vēlāk.",
+      "unreadable": "Ierakstu neizdevās nolasīt līdz galam. Līdz šim iegūtais teksts paliek.",
+      "tooLong": "Ieraksts ir garāks par 4 stundām. Līdz šim iegūtais teksts paliek."
+    },
+    "result": {
+      "minutes": "{minutes, number} min",
+      "thisComputer": "Šis dators",
+      "cloud": "stella AI, {model}",
+      "matter": "lieta {name}",
+      "copy": "Kopēt",
+      "copied": "Nokopēts",
+      "saveAs": "Saglabāt kā",
+      "saveWithTimestamps": "Teksts ar laika zīmogiem (.txt)",
+      "saveWithoutTimestamps": "Teksts bez laika zīmogiem (.txt)",
+      "saveToMatter": "Saglabāt lietā",
+      "savingToMatter": "Saglabā…",
+      "savedToMatter": "Saglabāts lietā {matter} kā {fileName}.",
+      "saveToMatterFailed": "Neizdevās saglabāt transkripciju lietā. Mēģiniet vēlreiz.",
+      "saveFailed": "Neizdevās nokopēt vai saglabāt transkripciju. Mēģiniet vēlreiz.",
+      "noSpeech": "Šajā ierakstā runa netika atrasta.",
+      "fileName": "{title} – transkripcija.txt",
+      "documentTitle": "{title} – transkripcija",
+      "transcriptTitle": "Transkripcija"
+    },
+    "progress": {
+      "running": "Transkribē {done, number} no {total, number} min",
+      "runningUnknown": "Transkribē: līdz šim {done, number} min",
+      "stop": "Apturēt",
+      "stopped": "Apturēts pēc {done, number} min. Līdz šim iegūtais teksts paliek.",
+      "done": "Transkribētas {total, number} min.",
+      "another": "Transkribēt citu ierakstu"
+    },
+    "cleaned": {
+      "title": "Sakārtots teksts",
+      "running": "Kārto…",
+      "waiting": "Katra daļa tiek sakārtota, tiklīdz tā ir transkribēta.",
+      "instructionsTitle": "Norādījumi diktātā · nav teksta daļa",
+      "instructionsLabel": "Norādījumi:",
+      "partFailed": "Šo daļu neizdevās sakārtot, tāpēc tā parādīta, kā transkribēta.",
+      "failedCount": "{count, plural, zero {# daļas nav sakārtotas} one {# daļa nav sakārtota} other {# daļas nav sakārtotas}}",
+      "saveMarkdown": "Formatēts teksts (.md)",
+      "saveText": "Vienkāršs teksts (.txt)",
+      "fileNameMarkdown": "{title} sakārtots.md",
+      "fileNameText": "{title} sakārtots.txt",
+      "offerTitle": "Sakārtot transkripciju ar MI",
+      "offerDescription": "Šis ieraksts tika transkribēts šajā datorā, un MI kārtošana iestatījumos ir izslēgta. Kārtošana nosūta jūsu organizācijas MI modelim tekstu, nekad ne skaņu.",
+      "offerStart": "Sakārtot"
+    },
+    "copyMenu": {
+      "label": "Kopēšanas iespējas",
+      "formatted": "Ar formatējumu",
+      "plain": "Kā vienkāršu tekstu",
+      "hint": "Ar formatējumu programmā Word vai Outlook tiek ielīmēti virsraksti, treknraksts un saraksti. Jūsu izvēle tiek atcerēta."
     }
   }
 }

@@ -195,7 +195,7 @@ jobs:
       # checked-out head and fails if the branch moved since the capture.
       - name: Push regenerated baselines
         if: steps.select.outputs.branch != ''
-        uses: stella/.github/.github/actions/signed-commit@2ba6dc5822df5213c500aa6edb7b6c4bdec56804
+        uses: stella/.github/.github/actions/signed-commit@2664e46f02aea7164ba71bcdd485a686166993a4
         with:
           token: ${{ steps.app-token.outputs.token }}
           mode: append

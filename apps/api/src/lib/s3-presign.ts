@@ -1,6 +1,7 @@
 import {
   CopyObjectCommand,
   GetObjectCommand,
+  type GetObjectCommandOutput,
   HeadObjectCommand,
   PutObjectCommand,
   S3Client as AwsS3Client,
@@ -30,9 +31,11 @@ import {
 import { AssumeRoleCommand, STSClient } from "@aws-sdk/client-sts";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { Result, TaggedError } from "better-result";
+import { TransformStream } from "node:stream/web";
 
 import { fetchWithTimeout } from "@stll/fetch";
 import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
+import { readCappedBytes } from "@stll/skills/streaming";
 import { Temporal } from "@stll/time";
 
 import { envBase } from "@/api/env-base";
@@ -40,6 +43,7 @@ import { PRIVATE_CACHE_CONTROL } from "@/api/http/cache";
 import { detached } from "@/api/lib/analytics/capture";
 import { contentDisposition } from "@/api/lib/content-disposition";
 import { markContentDeliveryIntent } from "@/api/lib/files/content-delivery";
+import { FILE_SIZE_LIMIT_BYTES } from "@/api/lib/limits";
 import { recordReadWork } from "@/api/lib/observability/request-work";
 import {
   isMissingS3ObjectError,
@@ -553,6 +557,55 @@ export const createTenantS3RequestSignal = (
   timeoutMs = AWS_SDK_REQUEST_TIMEOUT_MS,
 ): AbortSignal => AbortSignal.any([signal, AbortSignal.timeout(timeoutMs)]);
 
+const readTenantObjectBody = async ({
+  Body,
+  ContentLength,
+}: GetObjectCommandOutput): Promise<Result<Uint8Array, S3PresignError>> => {
+  if (
+    ContentLength === undefined ||
+    ContentLength > FILE_SIZE_LIMIT_BYTES.document
+  ) {
+    return Result.err(
+      new S3PresignError({
+        message: "S3 object length does not satisfy the document byte limit",
+      }),
+    );
+  }
+  if (!Body) {
+    return Result.err(
+      new S3PresignError({
+        message: "S3 returned an object without a response body",
+      }),
+    );
+  }
+  const body: ReadableStream<unknown> = Body.transformToWebStream();
+  const bytes = await readCappedBytes(
+    body.pipeThrough(
+      new TransformStream<unknown, Uint8Array>({
+        transform(chunk, controller) {
+          if (chunk instanceof Uint8Array) {
+            controller.enqueue(chunk);
+          } else {
+            controller.error(
+              new S3PresignError({
+                message: "S3 returned an invalid response chunk",
+              }),
+            );
+          }
+        },
+      }),
+    ),
+    FILE_SIZE_LIMIT_BYTES.document,
+  );
+  return bytes === null
+    ? Result.err(
+        new S3PresignError({
+          message: "S3 object body exceeds the document byte limit",
+        }),
+      )
+    : Result.ok(bytes);
+};
+
 const DEFAULT_TENANT_S3_OPERATION_HOOKS: TenantS3OperationHooks = {
   resolveClient: getTenantAwsS3Client,
   headObjectSize: async (client, command, signal) => {
@@ -562,15 +615,22 @@ const DEFAULT_TENANT_S3_OPERATION_HOOKS: TenantS3OperationHooks = {
     return response.ContentLength ?? null;
   },
   readObject: async (client, command, signal) => {
-    const response = await client.send(command, {
-      abortSignal: createTenantS3RequestSignal(signal),
-    });
-    if (!response.Body) {
-      throw new S3PresignError({
-        message: "S3 returned an object without a response body",
+    const operation = new AbortController();
+    try {
+      const response = await client.send(command, {
+        abortSignal: createTenantS3RequestSignal(
+          AbortSignal.any([signal, operation.signal]),
+        ),
       });
+      const body = await readTenantObjectBody(response);
+      if (Result.isError(body)) {
+        throw body.error;
+      }
+      return body.value;
+    } finally {
+      // Header refusal must close the unread body without aborting its caller.
+      operation.abort();
     }
-    return await response.Body.transformToByteArray();
   },
   writeObject: async (client, command, signal) => {
     await client.send(command, {
@@ -1004,6 +1064,51 @@ export type PresignDownloadOptions = {
 const refuseBackgroundSessionAuthority: SyntheticSessionAuthorityReader =
   async () => await Promise.resolve(null);
 
+type PresignInternalDownloadOptions = Pick<
+  PresignDownloadOptions,
+  "expiresIn" | "fileName" | "scope"
+>;
+
+/** Sign a server-internal fetch. The URL must never be returned to a caller. */
+const presignInternalDownloadUrl = async (
+  key: string,
+  { expiresIn, fileName, scope }: PresignInternalDownloadOptions,
+): Promise<string> => {
+  const result = await Result.tryPromise({
+    try: async () => {
+      const client = await getPresignClient({
+        expiresIn,
+        key,
+        scope,
+        actions: ["s3:GetObject"],
+      });
+      return await getSignedUrl(
+        client,
+        new GetObjectCommand({
+          Bucket: envBase.S3_BUCKET,
+          Key: key,
+          ResponseCacheControl: PRIVATE_CACHE_CONTROL,
+          ...(fileName
+            ? { ResponseContentDisposition: contentDisposition(fileName) }
+            : {}),
+        }),
+        { expiresIn },
+      );
+    },
+    catch: (cause) =>
+      new S3PresignError({
+        message: "Failed to generate presigned download URL",
+        cause,
+      }),
+  });
+
+  if (Result.isError(result)) {
+    throw result.error;
+  }
+
+  return result.value;
+};
+
 export const presignDownloadUrl = async (
   key: string,
   {
@@ -1033,40 +1138,13 @@ export const presignDownloadUrl = async (
           : refuseBackgroundSessionAuthority,
     },
   );
-  const result = await Result.tryPromise({
-    try: async () => {
-      const client = await getPresignClient({
-        expiresIn: issuedExpiresIn,
-        key,
-        scope,
-        actions: ["s3:GetObject"],
-      });
-      return await getSignedUrl(
-        client,
-        new GetObjectCommand({
-          Bucket: envBase.S3_BUCKET,
-          Key: key,
-          ResponseCacheControl: PRIVATE_CACHE_CONTROL,
-          ...(fileName
-            ? { ResponseContentDisposition: contentDisposition(fileName) }
-            : {}),
-        }),
-        { expiresIn: issuedExpiresIn },
-      );
-    },
-    catch: (cause) =>
-      new S3PresignError({
-        message: "Failed to generate presigned download URL",
-        cause,
-      }),
+  const url = await presignInternalDownloadUrl(key, {
+    expiresIn: issuedExpiresIn,
+    ...(fileName === undefined ? {} : { fileName }),
+    ...(scope === undefined ? {} : { scope }),
   });
-
-  if (Result.isError(result)) {
-    throw result.error;
-  }
-
   markContentDeliveryIntent();
-  return result.value;
+  return url;
 };
 
 export type HeadObjectResult = {

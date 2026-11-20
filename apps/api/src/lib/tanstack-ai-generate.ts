@@ -26,6 +26,7 @@ import {
   getOutputTokenLimit,
 } from "@stll/ai-catalog";
 import type {
+  ModelOverrideGroup,
   ModelTask,
   ReasoningEffort,
   TanStackAIProvider,
@@ -35,10 +36,12 @@ import { TimeoutError, withTimeout } from "@stll/concurrency/with-timeout";
 import { classifyFailure } from "@stll/errors";
 import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 
-import type {
-  AIRequestServiceTier,
-  CachingDecision,
-  OrgAIConfig,
+import {
+  type AIRequestServiceTier,
+  type CachingDecision,
+  type ModelLookup,
+  modelLookupTask,
+  type OrgAIConfig,
 } from "@/api/lib/ai-config";
 import {
   type AIErrorKind,
@@ -97,12 +100,10 @@ import {
 import type { ModelRunFinish } from "@/api/lib/errors/provider-call-error";
 import {
   createProviderCallError,
+  providerFailureKind,
   providerRequestIdFrom,
 } from "@/api/lib/errors/provider-call-failure";
-import {
-  PROVIDER_RETRY_WAIT_CAP_MS,
-  providerRetryDelayMs,
-} from "@/api/lib/errors/provider-retry-delay";
+import { providerRetryDelay } from "@/api/lib/errors/provider-retry-policy";
 import {
   AIGenerationCancelledError,
   ChatEmptyCompletionError,
@@ -130,9 +131,10 @@ import type { LayeredSystemPrompt } from "@/api/lib/tanstack-ai-caching";
 import {
   getStructuredOutputFallbackModelId,
   getTanStackTextModelById,
+  getTanStackTextModelForOverrideGroup,
   getTanStackTextModelForTask,
   getTanStackTextModelInfoById,
-  getTanStackTextModelInfoForTask,
+  getTanStackTextModelInfoForLookup,
   isMockTextAdapter,
   mockAnswersForOrganization,
 } from "@/api/lib/tanstack-ai-models";
@@ -278,8 +280,12 @@ type ResolveTextModelOptions = {
   modelId?: string | undefined;
   orgAIConfig: OrgAIConfig | null | undefined;
   reasoningEffort?: ReasoningEffort | undefined;
-  task: ModelTask;
-} & AIRequestPolicy &
+} & (
+  | { overrideGroup?: undefined; task: ModelTask }
+  /** A role an admin picks a model for (`browse`); never with `modelId`. */
+  | { modelId?: undefined; overrideGroup: ModelOverrideGroup; task?: undefined }
+) &
+  AIRequestPolicy &
   ModelDispatchScope;
 
 const CANCELLED_GENERATION_MESSAGE = "AI generation was cancelled";
@@ -447,48 +453,45 @@ const finishAccepted = (
 };
 
 /**
- * The provider's retry delay when a call failed for a rate limit or quota,
- * whether the failure is already a `ProviderCallError` or still the SDK's.
+ * When a failed request is sent again, by `providerRetryDelay`; undefined
+ * when it is not. A cancelled run is not retried, and a wait the call's
+ * deadline cannot cover is not started: the failure reaches the caller with
+ * its stated delay rather than ending as a timeout that forgot it.
  */
-const rateLimitRetryDelayMs = (error: unknown): number | undefined => {
-  if (error instanceof ProviderCallError) {
-    return error.kind === "quota_exhausted" ? error.retryAfterMs : undefined;
+const retryDelayWithin = ({
+  abortSignal,
+  deadlineAt,
+  error,
+  random,
+  retries,
+}: {
+  abortSignal: AbortSignal | undefined;
+  deadlineAt: number | undefined;
+  error: unknown;
+  random: () => number;
+  retries: number;
+}): number | undefined => {
+  if (abortSignal?.aborted === true) {
+    return undefined;
   }
-  return classifyAIError(error) === "quota_exhausted"
-    ? providerRetryDelayMs(error)
-    : undefined;
+  const delay = providerRetryDelay({ error, retries, random: random() });
+  if (
+    delay === undefined ||
+    (deadlineAt !== undefined && performance.now() + delay >= deadlineAt)
+  ) {
+    return undefined;
+  }
+  return delay;
 };
 
 /**
- * Wait out a short provider retry delay and try once more. A call refused
- * for a rate limit whose stated delay fits `PROVIDER_RETRY_WAIT_CAP_MS` runs
- * again after that delay; a longer delay, no stated delay, any other failure
- * and a second refusal all reach the caller unchanged, the delay still on the
- * error so the caller can say when to retry. A wait the call's deadline
- * cannot cover is not started: the refusal reaches the caller with its delay
- * rather than ending as a timeout that forgot it. The wait also honours the
- * abort signal.
+ * Waits `delay` ms. A cancellation during the wait ends the run as one
+ * during the call would.
  */
-export const withProviderRetryWait = async <T>(
+const waitBeforeRetry = async (
+  delay: number,
   abortSignal: AbortSignal | undefined,
-  run: () => Promise<T>,
-  deadlineAt?: number,
-): Promise<T> => {
-  const first = await Result.tryPromise({
-    try: run,
-    catch: (error: unknown) => error,
-  });
-  if (Result.isOk(first)) {
-    return first.value;
-  }
-  const delay = rateLimitRetryDelayMs(first.error);
-  if (
-    delay === undefined ||
-    delay > PROVIDER_RETRY_WAIT_CAP_MS ||
-    (deadlineAt !== undefined && performance.now() + delay >= deadlineAt)
-  ) {
-    throw first.error;
-  }
+): Promise<void> => {
   const waited = await Result.tryPromise({
     try: async () =>
       await sleep(
@@ -498,14 +501,144 @@ export const withProviderRetryWait = async <T>(
     catch: (error: unknown) => error,
   });
   if (Result.isError(waited)) {
-    // A cancellation during the wait ends the run as one during the call
-    // would; a deadline settles in `withGenerationDeadline` either way.
+    // A deadline settles in `withGenerationDeadline` either way.
     if (isAbortRejection({ error: waited.error, signal: abortSignal })) {
       throw cancelledGenerationError();
     }
     throw waited.error;
   }
-  return await run();
+};
+
+export type ProviderRetryOptions = {
+  /** When the call's deadline falls, on the `performance.now()` clock. */
+  deadlineAt?: number | undefined;
+  /** The backoff jitter's source; `Math.random` unless a test pins it. */
+  random?: (() => number) | undefined;
+};
+
+/**
+ * Sends a model request again while it fails the way the provider SDKs
+ * retried (`provider-retry-policy.ts`): the one retry loop a request has, so
+ * every send passes through `run` and every check `run` makes. Provider
+ * clients are built with their own retries off. A failure that is not
+ * transient, the last attempt's failure and a stated delay longer than a
+ * caller holds a request for reach the caller unchanged, the delay still on
+ * the error so the caller can say when to retry. The wait honours the abort
+ * signal and the call's deadline.
+ */
+export const withProviderRetryWait = async <T>(
+  abortSignal: AbortSignal | undefined,
+  run: () => Promise<T>,
+  { deadlineAt, random = Math.random }: ProviderRetryOptions = {},
+): Promise<T> => {
+  for (let retries = 0; ; retries += 1) {
+    const attempt = await Result.tryPromise({
+      try: run,
+      catch: (error: unknown) => error,
+    });
+    if (Result.isOk(attempt)) {
+      return attempt.value;
+    }
+    const delay = retryDelayWithin({
+      abortSignal,
+      deadlineAt,
+      error: attempt.error,
+      random,
+      retries,
+    });
+    if (delay === undefined) {
+      throw attempt.error;
+    }
+    await waitBeforeRetry(delay, abortSignal);
+  }
+};
+
+type ProviderStreamRetryOptions<T> = ProviderRetryOptions & {
+  abortSignal: AbortSignal | undefined;
+  /** Opens the stream; called once per attempt. */
+  open: () => AsyncIterable<T>;
+  /**
+   * Items a stream opens with before it carries any output (a run's
+   * `RUN_STARTED`): held back until the first output arrives, and dropped
+   * with a failed attempt, so the caller sees one run.
+   */
+  isPreamble?: ((item: T) => boolean) | undefined;
+  /** The failure an item reports in-band (a `RUN_ERROR`), if it is one. */
+  failureOf?: ((item: T) => unknown) | undefined;
+  /**
+   * Whether the attempt acted before its first output (a resumed run's
+   * pending tool ran): such an attempt is not sent again, whatever failed.
+   */
+  actedBeforeOutput?: (() => boolean) | undefined;
+};
+
+/**
+ * {@link withProviderRetryWait} for a streamed request: a stream that fails
+ * before its first output is opened again under the same policy, as the
+ * provider SDKs retried a request until its response began. Once output has
+ * reached the caller nothing is sent again; a failure after it, and the last
+ * attempt's failure, reach the caller as they arrived (thrown, or in-band).
+ *
+ * @yields The items of the attempt that answered, or of the last attempt.
+ */
+export const withProviderStreamRetryWait = async function* <T>({
+  abortSignal,
+  open,
+  isPreamble = () => false,
+  failureOf = () => undefined,
+  actedBeforeOutput,
+  deadlineAt,
+  random = Math.random,
+}: ProviderStreamRetryOptions<T>): AsyncIterable<T> {
+  for (let retries = 0; ; retries += 1) {
+    const held: T[] = [];
+    let started = false;
+    let retryAfterMs: number | undefined;
+    const retryDelayOf = (error: unknown) =>
+      actedBeforeOutput?.() === true
+        ? undefined
+        : retryDelayWithin({ abortSignal, deadlineAt, error, random, retries });
+    try {
+      for await (const item of open()) {
+        if (started) {
+          yield item;
+          continue;
+        }
+        if (isPreamble(item)) {
+          held.push(item);
+          continue;
+        }
+        const reported = failureOf(item);
+        if (reported !== undefined) {
+          retryAfterMs = retryDelayOf(reported);
+          if (retryAfterMs !== undefined) {
+            break;
+          }
+        }
+        // Output, or a failure that is not retried: either way the caller
+        // reads this run from here on, as it arrives.
+        started = true;
+        yield* held.splice(0);
+        yield item;
+      }
+    } catch (error) {
+      if (started) {
+        throw error;
+      }
+      retryAfterMs = retryDelayOf(error);
+      if (retryAfterMs === undefined) {
+        // The attempt the caller reads ends as it arrived: its preamble,
+        // then the failure.
+        yield* held;
+        throw error;
+      }
+    }
+    if (retryAfterMs === undefined) {
+      yield* held;
+      return;
+    }
+    await waitBeforeRetry(retryAfterMs, abortSignal);
+  }
 };
 
 export const generateTanStackTextForTask = async (
@@ -515,13 +648,9 @@ export const generateTanStackTextForTask = async (
   return await withGenerationDeadline(
     options,
     async (abortSignal, deadlineAt) =>
-      await withProviderRetryWait(
-        abortSignal,
-        async () =>
-          await generateTanStackTextWithin(
-            { ...options, abortSignal },
-            threadId,
-          ),
+      await generateTanStackTextWithin(
+        { ...options, abortSignal },
+        threadId,
         deadlineAt,
       ),
   );
@@ -530,6 +659,7 @@ export const generateTanStackTextForTask = async (
 const generateTanStackTextWithin = async (
   options: GenerateTanStackTextForTaskOptions,
   threadId: string,
+  deadlineAt: number | undefined,
 ): Promise<string> => {
   // Checked before the model resolves: a dispatch on a settled proof panics.
   const abortSignal = admittedDispatchSignal(options);
@@ -558,6 +688,7 @@ const generateTanStackTextWithin = async (
       serviceTier: options.serviceTier,
       system: guardedSystemPrompt(options),
       temperature: options.temperature,
+      deadlineAt,
       onFinish: (finish) => {
         run.finish = finish;
       },
@@ -721,6 +852,72 @@ const admittedAbortController = ({
   }
 };
 
+type ChatRunMiddleware = NonNullable<
+  StreamChatChunksOptions["middleware"]
+>[number];
+
+/**
+ * A chat run's chunks, opened again while the run fails before its first
+ * output (`withProviderStreamRetryWait`): a `RUN_STARTED` is all it may have
+ * shown, and its `RUN_ERROR` decides the retry. A tool runs only after the
+ * model's call to it, which is output, except a resumed run's pending tool,
+ * which the engine runs before its first request: `retryGuard`, a middleware
+ * the run must carry, records that, and such an attempt is not sent again.
+ *
+ * @yields The chunks of the attempt that answered, or of the last attempt.
+ */
+export const withProviderChatRunRetry = <TChunk extends PublicStreamChunk>({
+  abortSignal,
+  model,
+  open,
+}: {
+  abortSignal: AbortSignal | undefined;
+  model: ResolvedTanStackTextModel;
+  /** Opens the run with `retryGuard` among its middleware; called once per
+   *  attempt. */
+  open: (retryGuard: ChatRunMiddleware) => AsyncIterable<TChunk>;
+}): AsyncIterable<TChunk> => {
+  let acted = false;
+  const retryGuard: ChatRunMiddleware = {
+    name: "stella-provider-retry-guard",
+    onBeforeToolCall: () => {
+      acted = true;
+    },
+  };
+  return withProviderStreamRetryWait({
+    abortSignal,
+    open: () => {
+      acted = false;
+      return open(retryGuard);
+    },
+    isPreamble: (chunk) => chunk.type === EventType.RUN_STARTED,
+    failureOf: (chunk) =>
+      chunk.type === EventType.RUN_ERROR
+        ? tanStackRunError(chunk, model)
+        : undefined,
+    actedBeforeOutput: () => acted,
+  });
+};
+
+/** Each attempt of a chat run checks its admission again. */
+const retriedChatRunChunks = (
+  admitted: AdmittedChatRunOptions,
+): AsyncIterable<PublicStreamChunk> =>
+  withProviderChatRunRetry({
+    abortSignal: admitted.abortController?.signal,
+    model: admitted.model,
+    open: (retryGuard) => {
+      const options = admittedChatRunOptions(admitted);
+      return streamChatChunks({
+        ...options,
+        middleware:
+          options.middleware === undefined
+            ? [retryGuard]
+            : [...options.middleware, retryGuard],
+      });
+    },
+  });
+
 export const collectTanStackTextRun = async (
   admitted: AdmittedChatRunOptions,
 ): Promise<TanStackTextRun> => {
@@ -731,7 +928,7 @@ export const collectTanStackTextRun = async (
   let text = "";
 
   const result = await Result.tryPromise(async () => {
-    for await (const chunk of streamChatChunks(options)) {
+    for await (const chunk of retriedChatRunChunks(admitted)) {
       throwIfTanStackRunError(chunk, options.model);
       if (chunk.type === EventType.RUN_FINISHED) {
         // A tool loop runs several times inside one call; the last finish is
@@ -812,6 +1009,7 @@ const streamTanStackTextDeltas = async function* ({
   serviceTier,
   system,
   temperature,
+  deadlineAt,
   onFinish,
 }: {
   threadId: string;
@@ -825,11 +1023,14 @@ const streamTanStackTextDeltas = async function* ({
   serviceTier: AIRequestServiceTier;
   system: GuardedSystemPrompt | undefined;
   temperature: number | undefined;
+  /** When the call's deadline falls, on the `performance.now()` clock. */
+  deadlineAt?: number | undefined;
   onFinish?: ((finish: TextRunFinish) => void) | undefined;
 }): AsyncIterable<string> {
   const modelAnalytics = analytics?.forModel(model);
   yield* iterateWithStandardServiceTierFallback({
     abortSignal: abortController?.signal,
+    deadlineAt,
     model,
     serviceTier,
     stream: (requestedServiceTier) =>
@@ -870,67 +1071,89 @@ const streamTanStackTextDeltas = async function* ({
 
 type StandardServiceTierFallbackOptions<TResult> = {
   abortSignal?: AbortSignal | undefined;
+  /** When the call's deadline falls, on the `performance.now()` clock. */
+  deadlineAt?: number | undefined;
+  /** Sent without retries: a run whose tools may act between its requests. */
+  sendOnce?: boolean | undefined;
   model: ResolvedTanStackTextModel;
   serviceTier: AIRequestServiceTier;
   run: (serviceTier: AIRequestServiceTier) => Promise<TResult>;
 };
 
-// The only exit a failed non-streaming run has, so it is where that run's
-// provider status is recovered. The retry decision reads the recovered error
-// too: a fallback the provider's own status justifies cannot be skipped for
-// want of a status the message still carries. The standard-tier attempt
-// answers through this same function (`isDeferredServiceTier("standard")` is
-// false, so it takes the throw), which leaves both attempts recovered without
-// a second exit to keep in step.
+// Where a non-streaming model request is sent, once per attempt: its retries
+// (`withProviderRetryWait`) and its service-tier fallback are decided here.
+// A deferred tier is asked once; a failure the standard tier need not share
+// moves the request there at once, and later attempts repeat the standard
+// request. Every failure leaves through `withRecoveredProviderStatus`, so
+// both decisions read the provider's status even where only the message
+// still carries it.
 const withStandardServiceTierFallback = async <TResult>({
   abortSignal,
+  deadlineAt,
+  sendOnce = false,
   model,
   serviceTier,
   run,
 }: StandardServiceTierFallbackOptions<TResult>): Promise<TResult> => {
-  try {
-    return await run(serviceTier);
-  } catch (error) {
-    const recovered = withRecoveredProviderStatus({
-      error,
-      model,
-      abortSignal,
+  let tier = serviceTier;
+  const send = async (): Promise<TResult> => {
+    try {
+      return await run(tier);
+    } catch (error) {
+      throw withRecoveredProviderStatus({ error, model, abortSignal });
+    }
+  };
+  const attempt = async (): Promise<TResult> => {
+    const sent = await Result.tryPromise({
+      try: send,
+      catch: (error: unknown) => error,
     });
+    if (Result.isOk(sent)) {
+      return sent.value;
+    }
     if (
       !shouldRetryWithStandardServiceTier({
-        error: recovered,
+        error: sent.error,
         model,
-        serviceTier,
+        serviceTier: tier,
       })
     ) {
-      throw recovered;
+      throw sent.error;
     }
-
-    return await withStandardServiceTierFallback({
-      abortSignal,
-      model,
-      run,
-      serviceTier: "standard",
-    });
-  }
+    tier = "standard";
+    return await send();
+  };
+  return sendOnce
+    ? await attempt()
+    : await withProviderRetryWait(abortSignal, attempt, { deadlineAt });
 };
+
+/** Whether a run offers the model tools, which may act between requests. */
+const offersTools = (tools: readonly unknown[] | undefined): boolean =>
+  tools !== undefined && tools.length > 0;
 
 type StandardServiceTierStreamFallbackOptions<
   TChunk extends PublicStreamChunk,
   TResult,
 > = {
   abortSignal?: AbortSignal | undefined;
+  /** When the call's deadline falls, on the `performance.now()` clock. */
+  deadlineAt?: number | undefined;
   model: ResolvedTanStackTextModel;
   serviceTier: AIRequestServiceTier;
   stream: (serviceTier: AIRequestServiceTier) => AsyncIterable<TChunk>;
   onChunk: (chunk: TChunk) => TResult | undefined;
 };
 
-const iterateWithStandardServiceTierFallback = async function* <
+// `withStandardServiceTierFallback` for a streamed request: an attempt that
+// fails before its first result is sent again (`withProviderStreamRetryWait`),
+// on the standard tier once a deferred tier has failed.
+const iterateWithStandardServiceTierFallback = <
   TChunk extends PublicStreamChunk,
   TResult,
 >({
   abortSignal,
+  deadlineAt,
   model,
   serviceTier,
   stream,
@@ -938,44 +1161,45 @@ const iterateWithStandardServiceTierFallback = async function* <
 }: StandardServiceTierStreamFallbackOptions<
   TChunk,
   TResult
->): AsyncIterable<TResult> {
-  let yielded = false;
-
-  try {
-    for await (const chunk of stream(serviceTier)) {
-      throwIfTanStackRunError(chunk, model);
-      const result = onChunk(chunk);
-      if (result === undefined) {
-        continue;
+>): AsyncIterable<TResult> => {
+  let tier = serviceTier;
+  const attempt = async function* (): AsyncIterable<TResult> {
+    let yielded = false;
+    try {
+      for await (const chunk of stream(tier)) {
+        throwIfTanStackRunError(chunk, model);
+        const result = onChunk(chunk);
+        if (result === undefined) {
+          continue;
+        }
+        yielded = true;
+        yield result;
       }
-      yielded = true;
-      yield result;
-    }
-    return;
-  } catch (error) {
-    const recovered = withRecoveredProviderStatus({
-      error,
-      model,
-      abortSignal,
-    });
-    if (
-      yielded ||
-      !shouldRetryWithStandardServiceTier({
-        error: recovered,
+      return;
+    } catch (error) {
+      const recovered = withRecoveredProviderStatus({
+        error,
         model,
-        serviceTier,
-      })
-    ) {
-      throw recovered;
+        abortSignal,
+      });
+      if (
+        yielded ||
+        !shouldRetryWithStandardServiceTier({
+          error: recovered,
+          model,
+          serviceTier: tier,
+        })
+      ) {
+        throw recovered;
+      }
     }
-  }
-
-  yield* iterateWithStandardServiceTierFallback({
+    tier = "standard";
+    yield* attempt();
+  };
+  return withProviderStreamRetryWait({
     abortSignal,
-    model,
-    serviceTier: "standard",
-    stream,
-    onChunk,
+    deadlineAt,
+    open: attempt,
   });
 };
 
@@ -1094,7 +1318,7 @@ export const withRecoveredProviderStatus = ({
     body === undefined
       ? error
       : { cause: body, requestId: providerRequestIdFrom(error) };
-  const kind = classifyAIError(evidence);
+  const kind = providerFailureKind(evidence);
   // An answer that arrived but cannot be used is named from the code the
   // engine or adapter reported, whatever else the chain carries: left to the
   // fallback below it would leave as a bare `ModelRunError` and grade as an
@@ -1663,41 +1887,40 @@ const generateTanStackObjectWithin = async <TSchema extends v.GenericSchema>(
     const maxOutputTokens = requestedOutputTokens(options, requestModel);
     const generated = await Result.tryPromise({
       try: async () =>
-        await withProviderRetryWait(
-          abortSignal,
-          async () =>
-            await withStandardServiceTierFallback({
-              abortSignal: abortController?.signal,
-              model: requestModel,
-              serviceTier: options.serviceTier,
-              run: async (serviceTier) => {
-                await checkBeforeDispatch(options.beforeEachDispatch);
-                return await generateChatObject({
-                  threadId,
-                  adapter: requestModel.adapter,
-                  messages,
-                  outputSchema: tanStackOutputSchema,
-                  tools: options.tools,
-                  agentLoopStrategy: options.agentLoopStrategy,
-                  ...systemPromptsPatch({
-                    caching: options.caching,
-                    model: requestModel,
-                    system: guardedSystemPrompt(options),
-                  }),
-                  modelOptions: mergeGenerationOptions({
-                    caching: options.caching,
-                    model: requestModel,
-                    maxOutputTokens,
-                    serviceTier,
-                    temperature: options.temperature,
-                  }),
-                  ...(analytics ? { middleware: [analytics.middleware] } : {}),
-                  ...(abortController ? { abortController } : {}),
-                });
-              },
-            }),
+        await withStandardServiceTierFallback({
+          abortSignal: abortController?.signal,
           deadlineAt,
-        ),
+          model: requestModel,
+          // A tool the run called may already have acted when a later
+          // request of its loop fails.
+          sendOnce: offersTools(options.tools),
+          serviceTier: options.serviceTier,
+          run: async (serviceTier) => {
+            await checkBeforeDispatch(options.beforeEachDispatch);
+            return await generateChatObject({
+              threadId,
+              adapter: requestModel.adapter,
+              messages,
+              outputSchema: tanStackOutputSchema,
+              tools: options.tools,
+              agentLoopStrategy: options.agentLoopStrategy,
+              ...systemPromptsPatch({
+                caching: options.caching,
+                model: requestModel,
+                system: guardedSystemPrompt(options),
+              }),
+              modelOptions: mergeGenerationOptions({
+                caching: options.caching,
+                model: requestModel,
+                maxOutputTokens,
+                serviceTier,
+                temperature: options.temperature,
+              }),
+              ...(analytics ? { middleware: [analytics.middleware] } : {}),
+              ...(abortController ? { abortController } : {}),
+            });
+          },
+        }),
       catch: (error: unknown) => error,
     });
     if (Result.isError(generated)) {
@@ -2015,8 +2238,11 @@ export const resolveTanStackTextModel = async (
     orgAIConfig,
     reasoningEffort,
     task,
+    overrideGroup,
     ...policy
   } = options;
+  const lookup: ModelLookup =
+    overrideGroup === undefined ? { task } : { overrideGroup };
   // Every inference path (chat, subagents, field generators, workflow
   // batches) resolves its model here, so this is the one seam where a
   // request is classified `ai` for the split latency SLO — a new AI
@@ -2027,11 +2253,13 @@ export const resolveTanStackTextModel = async (
   let managedOpenRouterCredential: ManagedOpenRouterCredential | undefined;
   if (!orgAIConfig && !mockAnswersForOrganization(orgAIConfig)) {
     const info = modelId
-      ? getTanStackTextModelInfoById(modelId, orgAIConfig, task, {
-          dataClass: policy.dataClass,
-          modelTier,
-        })
-      : getTanStackTextModelInfoForTask(task, orgAIConfig, {
+      ? getTanStackTextModelInfoById(
+          modelId,
+          orgAIConfig,
+          modelLookupTask(lookup),
+          { dataClass: policy.dataClass, modelTier },
+        )
+      : getTanStackTextModelInfoForLookup(lookup, orgAIConfig, {
           organizationId,
           modelTier,
           ...policy,
@@ -2063,6 +2291,14 @@ export const resolveTanStackTextModel = async (
     }
   }
 
+  if (overrideGroup !== undefined) {
+    return getTanStackTextModelForOverrideGroup(overrideGroup, orgAIConfig, {
+      organizationId,
+      modelTier,
+      managedOpenRouterCredential,
+      ...policy,
+    });
+  }
   return modelId
     ? getTanStackTextModelById(modelId, orgAIConfig, {
         task,
@@ -2596,7 +2832,7 @@ export const streamTanStackChatRun = async function* (
 ): AsyncIterable<TanStackChatRunChunk> {
   const { model, ...options } = admittedChatRunOptions(admitted);
   try {
-    for await (const chunk of streamChatChunks(options)) {
+    for await (const chunk of retriedChatRunChunks(admitted)) {
       yield chunk.type === EventType.RUN_ERROR
         ? tanStackRunErrorChunk(chunk, model)
         : chunk;
@@ -2636,9 +2872,16 @@ export const generateTanStackChatObject = async <
   const { model, ...options } = admittedChatRunOptions(admitted);
   const requestMessages: ChatObjectMessages =
     options.messages ?? panic("A structured chat run needs its messages");
-  const run = async (messages: ChatObjectMessages): Promise<unknown> => {
-    const result = await Result.tryPromise({
-      try: async () =>
+  const run = async (messages: ChatObjectMessages): Promise<unknown> =>
+    await withStandardServiceTierFallback({
+      abortSignal: options.abortController?.signal,
+      model,
+      // A tool the run called may already have acted when a later request
+      // of its loop fails.
+      sendOnce: offersTools(options.tools),
+      // The caller's model options carry its tier; nothing falls back here.
+      serviceTier: "standard",
+      run: async () =>
         await generateChatObject({
           ...options,
           messages,
@@ -2646,17 +2889,7 @@ export const generateTanStackChatObject = async <
             toTanStackValibotSchema(outputSchema),
           ),
         }),
-      catch: (error) => error,
     });
-    if (Result.isError(result)) {
-      throw withRecoveredProviderStatus({
-        error: result.error,
-        model,
-        abortSignal: options.abortController?.signal,
-      });
-    }
-    return result.value;
-  };
   return await settleStructuredOutput({
     model,
     outputSchema,

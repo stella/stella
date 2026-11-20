@@ -1,31 +1,25 @@
 import { useState } from "react";
-import type { ReactNode } from "react";
 
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
-import { TaggedError } from "better-result";
+import { Result, TaggedError } from "better-result";
 import { useTranslations } from "use-intl";
 
 import {
   PROFESSIONAL_USE_DISPLAYED_VERSION_FIELD,
   PROFESSIONAL_USE_STATEMENT_VERSION,
 } from "@stll/api-contract/professional-use";
-import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { DialogFormState } from "@stll/ui/dialog";
-import {
-  Frame,
-  FrameDescription,
-  FrameHeader,
-  FramePanel,
-} from "@stll/ui/frame";
-import { InputOTP, InputOTPGroup, InputOTPSlot } from "@stll/ui/input-otp";
+import { FrameDescription } from "@stll/ui/frame";
+import { InputOTP, InputOTPSlot } from "@stll/ui/input-otp";
 import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 
 import { InboxQuickJump } from "@/components/auth/inbox-quick-jump";
 import { useInvalidateSession } from "@/hooks/use-invalidate-session";
 import { usePulse } from "@/hooks/use-pulse";
+import { updateUserResource } from "@/lib/account/update-user";
 import { useAnalytics } from "@/lib/analytics/provider";
 import {
   authClient,
@@ -44,10 +38,17 @@ import {
   socialProviderName,
 } from "./access-reset.logic";
 import type { SocialProvider } from "./access-reset.logic";
-
-const renderEmail = (chunks: ReactNode) => (
-  <BidiText direction="ltr">{chunks}</BidiText>
-);
+import {
+  AUTH_CODE_LENGTH,
+  AuthCodeSlots,
+  AuthCodeVerification,
+} from "./code-verification-face.pending";
+import {
+  OTPPanelFrame,
+  OTPPanelLayout,
+  OTPProfessionalUseStatement,
+} from "./otp-panel-face.pending";
+import { OTPEmailText, renderEmail } from "./otp-panel-text";
 
 type OTPPanelProps = {
   className?: string;
@@ -62,7 +63,6 @@ type OTPPanelProps = {
   linkProvider?: SocialProvider | undefined;
 };
 
-const OTP_LENGTH = 6;
 const OTP_EXPIRED_MESSAGE = "OTP expired";
 
 type VerifyOtpError = {
@@ -81,6 +81,17 @@ class AlreadyToastedError extends TaggedError("AlreadyToastedError")<{
 
 export const OTPPanel = ({
   className,
+  surface = "frame",
+  ...props
+}: OTPPanelProps) => {
+  const body = <OTPPanelBody {...props} surface={surface} />;
+  if (surface === "bare") {
+    return <div className={cn("w-full", className)}>{body}</div>;
+  }
+  return <OTPPanelFrame className={className}>{body}</OTPPanelFrame>;
+};
+
+export const OTPPanelBody = ({
   email,
   initialOtp,
   redirectTo,
@@ -88,9 +99,10 @@ export const OTPPanel = ({
   onUseDifferentEmail,
   onVerified,
   linkProvider,
-}: OTPPanelProps) => {
+}: Omit<OTPPanelProps, "className">) => {
   const t = useTranslations();
   const analytics = useAnalytics();
+  const queryClient = useQueryClient();
   const navigate = useNavigate();
   const [otp, setOtp] = useState(initialOtp ?? "");
   const [resetConfirmation, setResetConfirmation] = useState<{
@@ -98,7 +110,7 @@ export const OTPPanel = ({
     providers: string[];
   } | null>(null);
   const invalidateSession = useInvalidateSession();
-  const isOtpComplete = otp.length === OTP_LENGTH;
+  const isOtpComplete = otp.length === AUTH_CODE_LENGTH;
   const { isPulsing: isOtpPulsing, pulse: pulseOtp } = usePulse(600);
 
   // A closure over `t` (not a parameter) so its type is never written out:
@@ -230,7 +242,18 @@ export const OTPPanel = ({
           const browserTz = Intl.DateTimeFormat().resolvedOptions().timeZone;
           const timezones: readonly string[] = COMMON_TIMEZONES;
           if (timezones.includes(browserTz)) {
-            await authClient.updateUser({ timezoneId: browserTz });
+            const updated = await updateUserResource({
+              queryClient,
+              input: { timezoneId: browserTz },
+              owner: {
+                userId: freshSession.user.id,
+                organizationId:
+                  freshSession.session.activeOrganizationId ?? null,
+              },
+            });
+            if (Result.isError(updated)) {
+              throw updated.error;
+            }
           }
           return;
         })
@@ -267,15 +290,15 @@ export const OTPPanel = ({
     },
   });
 
-  const panel = (
+  return (
     <>
       <DialogFormState
         dirty={otp !== (initialOtp ?? "")}
         onDiscard={() => setOtp(initialOtp ?? "")}
       />
-      <p className="text-foreground-muted px-6 pt-6 text-xs">
+      <OTPProfessionalUseStatement>
         {t("auth.professionalUseStatement")}
-      </p>
+      </OTPProfessionalUseStatement>
       {resetConfirmation ? (
         <div className="flex flex-col gap-4 p-6">
           <FrameDescription>
@@ -324,7 +347,7 @@ export const OTPPanel = ({
           onOtpChange={setOtp}
           onResend={() => resendOtp.mutate()}
           onSubmit={(code = otp) => {
-            if (code.length !== OTP_LENGTH) {
+            if (code.length !== AUTH_CODE_LENGTH) {
               pulseOtp();
               return;
             }
@@ -338,12 +361,6 @@ export const OTPPanel = ({
       )}
     </>
   );
-
-  if (surface === "bare") {
-    return <div className={cn("w-full", className)}>{panel}</div>;
-  }
-
-  return <Frame className={cn("w-full max-w-md", className)}>{panel}</Frame>;
 };
 
 export const OTPPanelContent = ({
@@ -373,66 +390,58 @@ export const OTPPanelContent = ({
 }) => {
   const t = useTranslations();
 
-  const header = (
-    <>
-      <FrameDescription>
-        {t.rich("auth.weSentCodeTo", {
-          email: renderEmail,
-          emailAddress: email,
-        })}
-        {" · "}
-        <Button
-          className="h-auto p-0 align-baseline text-sm font-normal text-inherit underline"
-          disabled={verifyPending || resendPending}
-          onClick={onUseDifferentEmail}
-          variant="link"
-        >
-          {t("auth.useDifferentEmail")}
-        </Button>
-      </FrameDescription>
-      <div className="mt-2">
-        <InboxQuickJump email={email} />
-      </div>
-    </>
-  );
-
-  const body = (
-    <>
-      <div className="mx-auto flex w-fit flex-col items-stretch gap-2">
-        <InputOTP
-          autoFocus
-          containerClassName={cn(
-            "rounded-md",
-            isOtpPulsing && "ring-primary ring-2",
-          )}
-          maxLength={OTP_LENGTH}
-          onChange={onOtpChange}
-          onComplete={(code: string) => {
-            onOtpChange(code);
-            onSubmit(code);
-          }}
-          value={otp}
-        >
-          <InputOTPGroup>
-            <InputOTPSlot index={0} />
-            <InputOTPSlot index={1} />
-            <InputOTPSlot index={2} />
-            <InputOTPSlot index={3} />
-            <InputOTPSlot index={4} />
-            <InputOTPSlot index={5} />
-          </InputOTPGroup>
-        </InputOTP>
-        <Button
-          aria-disabled={!isOtpComplete || undefined}
-          className={cn(!isOtpComplete && "cursor-not-allowed opacity-64")}
-          disabled={verifyPending}
-          loading={verifyPending}
-          onClick={() => onSubmit()}
-        >
-          {t("common.verify")}
-        </Button>
-      </div>
-      <div className="mt-3 flex justify-center">
+  return (
+    <OTPPanelLayout
+      code={
+        <AuthCodeVerification
+          input={
+            <InputOTP
+              autoFocus
+              containerClassName={cn(
+                "rounded-md",
+                isOtpPulsing && "ring-primary ring-2",
+              )}
+              maxLength={AUTH_CODE_LENGTH}
+              onChange={onOtpChange}
+              onComplete={(code: string) => {
+                onOtpChange(code);
+                onSubmit(code);
+              }}
+              value={otp}
+            >
+              <AuthCodeSlots Slot={InputOTPSlot} />
+            </InputOTP>
+          }
+          verify={
+            <Button
+              aria-disabled={!isOtpComplete || undefined}
+              className={cn(!isOtpComplete && "cursor-not-allowed opacity-64")}
+              disabled={verifyPending}
+              loading={verifyPending}
+              onClick={() => onSubmit()}
+            >
+              {t("common.verify")}
+            </Button>
+          }
+        />
+      }
+      description={
+        <>
+          <OTPEmailText email={email} id="auth.weSentCodeTo" />
+          {" · "}
+          <Button
+            disabled={verifyPending || resendPending}
+            onClick={onUseDifferentEmail}
+            size="inline"
+            variant="link"
+          >
+            {t("auth.useDifferentEmail")}
+          </Button>
+        </>
+      }
+      inbox={<InboxQuickJump email={email} />}
+      isBare={isBare}
+      resend={
         <Button
           disabled={verifyPending || resendPending}
           loading={resendPending}
@@ -440,32 +449,13 @@ export const OTPPanelContent = ({
           size="sm"
           variant="link"
         >
-          {/* One inline run: as separate flex items, the button's gap would
-              stack on the space before the email. */}
+          {/* Keep the label and email in one flex item so the button's gap
+              does not add space before the address. */}
           <span>
-            {t.rich("auth.resendCode", {
-              email: renderEmail,
-              emailAddress: email,
-            })}
+            <OTPEmailText email={email} id="auth.resendCode" />
           </span>
         </Button>
-      </div>
-    </>
-  );
-
-  if (isBare) {
-    return (
-      <div className="flex flex-col gap-5">
-        <div>{header}</div>
-        <div>{body}</div>
-      </div>
-    );
-  }
-
-  return (
-    <>
-      <FrameHeader>{header}</FrameHeader>
-      <FramePanel>{body}</FramePanel>
-    </>
+      }
+    />
   );
 };

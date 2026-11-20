@@ -374,6 +374,10 @@ const buildFullCoverageChatTools = (
     skillMetadata: offeredSkillCatalog([
       {
         description: editableActiveSkillContext.description,
+        // Declares the skill-gated tools, so full coverage includes them.
+        metadata: {
+          "stella-required-tools": "validate_skill_package save_skill_package",
+        },
         name: editableActiveSkillContext.toolName,
         version: editableActiveSkillContext.version,
       },
@@ -513,7 +517,7 @@ const providerRequestProbes: ProviderRequestProbe[] = [
       return groups.flatMap((group) => {
         const record = requireRecord(group, "Gemini tool group");
         return Array.isArray(record["functionDeclarations"])
-          ? record["functionDeclarations"]
+          ? (record["functionDeclarations"] as unknown[])
           : [record];
       });
     },
@@ -1263,6 +1267,86 @@ describe("chat tool schemas", () => {
         requiresAnonymization: false,
       });
     }
+  });
+
+  test("offers skill package tools only to a turn whose skill declares them, the save behind approval", () => {
+    const declaringSkill = {
+      description: "Builds skills.",
+      metadata: {
+        "stella-required-tools": "validate_skill_package save_skill_package",
+      },
+      name: "skill-builder",
+      version: null,
+    };
+    const toolsFor = (
+      role: "intern" | "member" | "owner",
+      recordAuditEvent: typeof noopAuditRecorder | undefined,
+      skills: readonly (typeof declaringSkill)[] = [declaringSkill],
+    ) =>
+      getChatTools({
+        workspaceStatusById: new Map<string, AccessibleWorkspace["status"]>(),
+        orgAIConfig: null,
+        managedAIResidency: "eu" as const,
+        memberRole: sessionMemberRole(role),
+        organizationId,
+        requestWorkspaceId: workspaceId,
+        thirdPartyBoundary: { type: "raw" },
+        refRegistry: createChatRefRegistry(),
+        toolDefectMemo: createChatToolDefectMemo(),
+        safeDb: unusedSafeDb,
+        scopedDb: unusedScopedDb,
+        threadId,
+        pastChatScope: { type: PAST_CHAT_SCOPE_TYPE.allChats },
+        workspaceId: null,
+        userId,
+        userEmail: "standard@example.test",
+        toolWorkspaceIds: resolveToolWorkspaceIds({
+          pinnedIds: [],
+          accessibleWorkspaceIds: [workspaceId],
+        }),
+        hasActiveDocxEditClient: false,
+        hasActiveDocxFileClient: false,
+        docxSuggestionSurface: "template-studio",
+        webSearchEnabled: false,
+        webSearchProviders: { webSearchProvider: null, urlFetcher: null },
+        recordAuditEvent,
+        resolveMemorySourceWorkspaceIds: () => [],
+        skillMetadata: offeredSkillCatalog(skills),
+      });
+
+    // A chat whose skills declare neither keeps both out of its prompt.
+    const undeclared = toolsFor("owner", noopAuditRecorder, []);
+    expect(undeclared["validate_skill_package"]).toBeUndefined();
+    expect(undeclared["save_skill_package"]).toBeUndefined();
+
+    for (const role of ["member", "owner"] as const) {
+      const tools = toolsFor(role, noopAuditRecorder);
+      const validate = tools["validate_skill_package"];
+      const save = tools["save_skill_package"];
+      if (!validate || !save) {
+        throw new Error(`Expected skill package tools for ${role}`);
+      }
+      expect(getChatToolPolicy(validate)).toEqual({
+        kind: "internal",
+        needsApproval: false,
+        requiresAnonymization: false,
+      });
+      expect(save.needsApproval).toBe(true);
+      expect(getChatToolPolicy(save)).toEqual({
+        kind: "mutation",
+        needsApproval: true,
+        requiresAnonymization: false,
+      });
+    }
+
+    const intern = toolsFor("intern", noopAuditRecorder);
+    expect(intern["validate_skill_package"]).toBeUndefined();
+    expect(intern["save_skill_package"]).toBeUndefined();
+
+    // A save is audited; a tool set that records no audit offers only the check.
+    const unaudited = toolsFor("member", undefined);
+    expect(unaudited["validate_skill_package"]).toBeDefined();
+    expect(unaudited["save_skill_package"]).toBeUndefined();
   });
 
   test("does not expose full body replacement for truncated active skill bodies", () => {

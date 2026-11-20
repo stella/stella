@@ -4,6 +4,10 @@ import * as v from "valibot";
 import type { AgentHarness } from "@stll/api-contract/agent-harness";
 import type { ChatLocalRunSteerOutcome } from "@stll/api-contract/chat-run-target";
 import {
+  CHAT_TURN_STEERING,
+  type ChatTurnSteering,
+} from "@stll/api-contract/chat-send-intent";
+import {
   DESKTOP_RUNNER_ATTACHMENT_LINK_MAX_LENGTH,
   DESKTOP_RUNNER_DESKTOP_MESSAGE,
   DESKTOP_RUNNER_HARNESS_STATE,
@@ -28,10 +32,10 @@ import { pairAppCall, recordAppCall } from "@/api/lib/desktop-runner/app-calls";
 import type { DesktopRunnerDoorbell } from "@/api/lib/desktop-runner/doorbell";
 import {
   type FolderRestoreView,
-  readTurnFolderRestore,
+  type MessageFolderRestore,
+  readMessageFolderRestore,
   type RequestedFolderRestore,
   requestFolderRestore,
-  type TurnFolderRestore,
 } from "@/api/lib/desktop-runner/folder-restores";
 import {
   type RunAnswerMessage,
@@ -50,8 +54,11 @@ import {
   approveLinkedFolder,
   type ChatRunBinding,
   type ChatRunForRequest,
+  type ChatRunSession,
+  type ChatTurnRunOptions,
   type DesktopRunnerDb,
   type DesktopRunnerRunView,
+  type HandedOverChatRun,
   insertAssignedRun,
   type InsertedCommand,
   insertRunCommand,
@@ -59,6 +66,7 @@ import {
   readChatRunForRequest,
   readChatRunSession,
   readConnectedRunners,
+  readHandedOverChatRun,
   readMemberRunners,
   readOpenRunChatThread,
   readRun,
@@ -136,7 +144,8 @@ export type StartLocalRunInput = {
   reasoningEffort: DesktopRunnerReasoningEffort | null;
   /** How much the run asks before it acts; the computer must report it. */
   approvals: DesktopRunnerApprovalMode;
-  harnessSessionId: string | null;
+  /** The harness session the run continues, and how (`readChatRunSession`). */
+  session: ChatRunSession;
   instructions: string;
   messages: RunStart["messages"];
   /** Files to copy into the run's folder; each link is signed on every send. */
@@ -359,6 +368,24 @@ const withRestoredNote = (
   return [...messages.slice(0, -1), { ...last, content: [...parts, note] }];
 };
 
+/** A session as `run.start` carries it. */
+const runStartSession = (session: ChatRunSession) => {
+  switch (session.type) {
+    case "fresh":
+      return { harnessSessionId: null, harnessForkBoundary: null };
+    case "resume":
+      return { harnessSessionId: session.sessionId, harnessForkBoundary: null };
+    case "fork":
+      return {
+        harnessSessionId: session.sessionId,
+        harnessForkBoundary: session.boundary,
+      };
+    default:
+      session satisfies never;
+      return panic("Unknown chat run session");
+  }
+};
+
 const startRun = async (
   deps: ControlDeps,
   input: StartLocalRunInput,
@@ -375,7 +402,7 @@ const startRun = async (
     harnessVersion: input.harnessVersion,
     model: input.model,
     reasoningEffort: input.reasoningEffort,
-    harnessSessionId: input.harnessSessionId,
+    ...runStartSession(input.session),
     instructions: input.instructions,
     messages: input.messages,
     attachments: input.attachments.map(({ path, s3Key }) => ({ path, s3Key })),
@@ -557,10 +584,10 @@ const queue = async (
   return Result.ok({ type: "queued" });
 };
 
-type TurnRestoreOptions = {
+type MessageRestoreOptions = {
   owner: RunOwner;
   threadId: SafeId<"chatThread">;
-  turnId: SafeId<"chatTurn">;
+  messageId: SafeId<"chatMessage">;
 };
 
 export type RequestFolderRestoreOutcome =
@@ -568,13 +595,13 @@ export type RequestFolderRestoreOutcome =
   | Extract<RequestedFolderRestore, { type: "refused" }>;
 
 /**
- * Ask the run's computer to put the chat's folder back as it was before the
- * turn; the restore id is minted here. A repeat answers the turn's restore
- * that is still going or done.
+ * Ask the computer to put the chat's folder back as it was before the
+ * message's turn; the restore id is minted here. A repeat answers the
+ * restore of the same checkpoint that is still going or done.
  */
 const requestRestore = async (
   deps: ControlDeps,
-  options: TurnRestoreOptions,
+  options: MessageRestoreOptions,
 ): Promise<Result<RequestFolderRestoreOutcome, DatabaseError>> => {
   const requested = await Result.tryPromise({
     try: async () =>
@@ -652,8 +679,11 @@ const steerChatTurn = async (
   if (run.isErr()) {
     return run;
   }
-  if (run.value === null || !run.value.steerable) {
-    return Result.ok("unavailable");
+  if (run.value === null) {
+    return Result.ok({ type: "refused", reason: "no_run" });
+  }
+  if (!run.value.steerable) {
+    return Result.ok({ type: "refused", reason: "harness_cannot_steer" });
   }
   const queued = await queue(deps, owner, {
     type: DESKTOP_RUNNER_SERVER_MESSAGE.runInput,
@@ -661,11 +691,50 @@ const steerChatTurn = async (
     inputId,
     message: { role: "user", content: text },
   });
-  return queued.map((outcome) =>
-    outcome.type === "queued" || outcome.type === "duplicate"
-      ? "queued"
-      : "unavailable",
+  return queued.map(steerOutcomeOf);
+};
+
+/**
+ * Whether chat turn `chat` takes a message mid-turn: its open run's harness,
+ * on the computer running it, last reported `steer`. A turn with no open run
+ * for this member takes none.
+ */
+const readChatTurnSteering = async (
+  deps: ControlDeps,
+  options: ChatTurnRunOptions,
+): Promise<Result<ChatTurnSteering, DesktopRunnerControlError>> => {
+  const run = await Result.tryPromise({
+    try: async () => await readSteerableChatRun(deps.db, options),
+    catch: toDatabaseError,
+  });
+  return run.map((found) =>
+    found?.steerable === true
+      ? CHAT_TURN_STEERING.steerable
+      : CHAT_TURN_STEERING.notSteerable,
   );
+};
+
+/** What a steer's `run.input` command became, as the chat is told. */
+const steerOutcomeOf = (
+  outcome: QueueCommandOutcome,
+): ChatLocalRunSteerOutcome => {
+  switch (outcome.type) {
+    case "queued":
+    case "duplicate":
+      return { type: "queued" };
+    case "run_not_found":
+    case "run_ended":
+      return { type: "refused", reason: "no_run" };
+    case "command_limit":
+      return { type: "refused", reason: "run_full" };
+    case "not_requested":
+      return panic("A run.input answers no request of the run");
+    case "too_large":
+      return panic("A steer the request bounds admit outgrew one frame");
+    default:
+      outcome satisfies never;
+      return panic("Unhandled run command outcome");
+  }
 };
 
 type BackgroundTasksOptions = {
@@ -756,6 +825,9 @@ export const createDesktopRunnerControl = ({
      */
     steerChatTurn: async (options: SteerChatTurnOptions) =>
       await steerChatTurn(deps, options),
+    /** Whether the chat turn takes a message mid-turn (`ChatTurnSteering`). */
+    readChatTurnSteering: async (options: ChatTurnRunOptions) =>
+      await readChatTurnSteering(deps, options),
     /** The text the owner's run was steered with under `inputId`. */
     readRunInputText: async (options: RunInputTextOptions) =>
       await readSteeredText(deps, options),
@@ -881,10 +953,10 @@ export const createDesktopRunnerControl = ({
      */
     readBackgroundTasks: async (options: BackgroundTasksOptions) =>
       await readBackgroundTasks(deps, options),
-    /** The harness session a thread's next turn on this computer resumes. */
+    /** How a thread's next turn on this computer continues its session. */
     readChatRunSession: async (
       options: Parameters<typeof readChatRunSession>[1],
-    ): Promise<Result<string | null, DatabaseError>> =>
+    ): Promise<Result<ChatRunSession, DatabaseError>> =>
       await Result.tryPromise({
         try: async () => await readChatRunSession(db, options),
         catch: toDatabaseError,
@@ -897,16 +969,31 @@ export const createDesktopRunnerControl = ({
         try: async () => await readChatRunForRequest(db, options),
         catch: toDatabaseError,
       }),
-    /** Undo the file changes of the thread's newest turn on its computer. */
-    requestFolderRestore: async (options: TurnRestoreOptions) =>
+    /** The run a handed-over chat turn reads on (`readHandedOverChatRun`). */
+    readHandedOverChatRun: async (
+      options: Parameters<typeof readHandedOverChatRun>[1],
+    ): Promise<Result<HandedOverChatRun | null, DatabaseError>> =>
+      await Result.tryPromise({
+        try: async () => await readHandedOverChatRun(db, options),
+        catch: toDatabaseError,
+      }),
+    /** Undo the file changes made on the computer since the message. */
+    requestFolderRestore: async (options: MessageRestoreOptions) =>
       await requestRestore(deps, options),
-    /** Whether the turn can be undone, and its undo; `null` for another's turn. */
+    /**
+     * What an edit from the message does on the computer, and its undo;
+     * `null` for a message that is not the member's.
+     */
     readFolderRestore: async (
-      options: TurnRestoreOptions,
-    ): Promise<Result<TurnFolderRestore | null, DatabaseError>> =>
+      options: MessageRestoreOptions,
+    ): Promise<Result<MessageFolderRestore | null, DatabaseError>> =>
       await Result.tryPromise({
         try: async () =>
-          await readTurnFolderRestore(db, { ...options, now: deps.now() }),
+          await readMessageFolderRestore(db, {
+            ...options,
+            now: deps.now(),
+            seenSince: seenSince(deps),
+          }),
         catch: toDatabaseError,
       }),
     /** Record how far a chat turn read the run; it only moves forward. */

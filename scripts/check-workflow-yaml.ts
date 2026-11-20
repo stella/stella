@@ -6,6 +6,7 @@ import { readdir } from "node:fs/promises";
 import path from "node:path";
 import { isDeepStrictEqual } from "node:util";
 
+import { checkWorkflowPrivileges } from "./check-workflow-pr-write-token";
 import { isRepositoryCheckoutAction } from "./ci-job-classification/checkout-actions";
 import { flattenWorkflowSteps } from "./workflow-steps";
 
@@ -393,6 +394,14 @@ export const ARTIFACT_DOWNLOAD_EXCEPTIONS: readonly ArtifactDownloadException[] 
       detail: "Reads the selected capture run through run-id.",
     },
     {
+      file: ".github/workflows/publish-npm.yml",
+      job: "cli-native-sign",
+      step: "Download built standalone CLI",
+      reason: ARTIFACT_DOWNLOAD_EXCEPTION_REASON.noActionsRead,
+      detail:
+        "The artifact-only signer grants no repository-token permissions and has no checkout or repository scripts.",
+    },
+    {
       file: ".github/workflows/type-cost-measurement.yml",
       job: "measure",
       step: "Download compiler inputs",
@@ -636,6 +645,13 @@ export const checkWorkflowYaml = async (
     artifactDownloads,
   );
   await validateNoRubyProcessSpawns(root);
+  const [privileged] = checkWorkflowPrivileges(root);
+  if (privileged !== undefined) {
+    throw new WorkflowYamlError({
+      message: `${privileged.file}: job ${privileged.job}, ${privileged.step}: privileged job runs pull-request-controlled code (${privileged.class}, ${privileged.trigger}); see scripts/check-workflow-pr-write-token.ts`,
+      file: privileged.file,
+    });
+  }
 };
 
 if (import.meta.main) {

@@ -115,10 +115,11 @@ export const createFunctionDependentIndexReindex = ({
   functionSignature,
   replacementRevision,
 }: FunctionDependentIndexReindexOptions) => {
-  const name = `function-dependent-index-reindex:${functionSignature}`;
-  const checkpointName = `${name}:${replacementRevision}`;
+  // One function can be replaced by several revisions, so each registration
+  // is named by its checkpoint and stays unique in the repair registry.
+  const checkpointName = `function-dependent-index-reindex:${functionSignature}:${replacementRevision}`;
   return {
-    name,
+    name: checkpointName,
     functionSignature,
     introducedBy: replacementRevision,
     readCompletion: async (connection) => {
@@ -194,5 +195,9 @@ export const FUNCTION_DEPENDENT_INDEX_REINDEXES: readonly ReturnType<
   createFunctionDependentIndexReindex({
     functionSignature: CASE_LAW_FILING_YEAR_FUNCTION_SIGNATURE,
     replacementRevision: "20261111150500_decision_docket_filing_year_bra",
+  }),
+  createFunctionDependentIndexReindex({
+    functionSignature: CASE_LAW_FILING_YEAR_FUNCTION_SIGNATURE,
+    replacementRevision: "20261116180100_czech_docket_long_sheets",
   }),
 ];

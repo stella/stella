@@ -1,0 +1,5 @@
+{
+  "metric": "audit-skip-directives",
+  "delta": 3,
+  "reason": "Three case-law erasure bookkeeping writes record no audit event of their own: supplement erasure retires its completed recovery obligation, removal reconciliation stores its durable retry obligation, and the publisher-removals task advances its lease-fenced scheduler progress. Each erasure keeps its canonical audit, recorded by the redaction owner."
+}

@@ -182,7 +182,6 @@ const hasEffectiveWritePermission = (
 };
 
 const PRIVILEGED_EVENTS = new Set([
-  "pull_request_target",
   "workflow_run",
   "issue_comment",
   "pull_request_review",

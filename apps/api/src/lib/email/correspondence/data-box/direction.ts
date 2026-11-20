@@ -5,7 +5,10 @@
  * unknown basis. The rule runs on each read against the current box inventory.
  */
 import type { CorrespondenceDirection } from "@stll/api-contract/correspondence";
-import type { DataBoxDirectionBasis } from "@stll/api-contract/data-box";
+import type {
+  DataBoxDirectionBasis,
+  DataBoxStatedEnvelope,
+} from "@stll/api-contract/data-box";
 
 export const DIRECTION_BY_BASIS = {
   organization_sender: "out",
@@ -31,3 +34,15 @@ export const deriveDataBoxDirectionBasis = ({
   }
   return fromOrganization ? "organization_sender" : "organization_recipient";
 };
+
+export const withDataBoxDirection = (
+  envelope: DataBoxStatedEnvelope,
+  organizationBoxIds: readonly string[],
+) => ({
+  ...envelope,
+  directionBasis: deriveDataBoxDirectionBasis({
+    senderBoxId: envelope.sender.boxId,
+    recipientBoxId: envelope.recipient.boxId,
+    organizationBoxIds,
+  }),
+});

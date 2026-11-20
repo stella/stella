@@ -89,11 +89,18 @@ const normalized = (lists: Record<string, readonly string[]>) =>
     ]),
   );
 
-const variantTypes = (
-  options: readonly {
-    readonly entries: { readonly type: { literal: string } };
-  }[],
-) => sorted(options.map(({ entries }) => entries.type.literal));
+type VariantOption =
+  | { readonly entries: { readonly type: { literal: string } } }
+  /** A message whose shape a second key (such as its outcome) decides. */
+  | { readonly options: readonly VariantOption[] };
+
+const typesOf = (option: VariantOption): string[] =>
+  "entries" in option
+    ? [option.entries.type.literal]
+    : option.options.flatMap(typesOf);
+
+const variantTypes = (options: readonly VariantOption[]) =>
+  sorted(new Set(options.flatMap(typesOf)));
 
 type Hello = Extract<DesktopRunnerDesktopMessage, { type: "hello" }>;
 
@@ -285,6 +292,36 @@ describe("desktop runner fixtures", () => {
     expect(parsed.success).toBe(true);
     expect(parsed.output).toMatchObject({
       models: [{ id: "model-large", reasoningEfforts: [] }],
+    });
+  });
+
+  test("a finish from a desktop before boundaries names none", () => {
+    const finished = {
+      type: "run.finished",
+      runId: "0192f3a0-6b1c-7d2e-8f30-000000000001",
+      seq: 4,
+      outcome: "completed",
+      harnessSessionId: "session-1",
+    };
+    expect("harnessBoundary" in finished).toBe(false);
+    expect(parsedDesktop(finished)).toMatchObject({ harnessBoundary: null });
+  });
+
+  test("a start queued before fork boundaries resumes its session whole", () => {
+    const fixture =
+      fixtures.valid.server
+        .flatMap((message) =>
+          "harnessForkBoundary" in message &&
+          message.harnessForkBoundary !== null
+            ? [message]
+            : [],
+        )
+        .at(0) ?? panic("no run.start fixture forks a session");
+    const { harnessForkBoundary, ...queued } = fixture;
+    expect(harnessForkBoundary).not.toBeNull();
+    expect(parsedServer(queued)).toMatchObject({
+      harnessSessionId: "session-1",
+      harnessForkBoundary: null,
     });
   });
 

@@ -1,5 +1,10 @@
+// parser-output-unchanged: the cz-ns-sbirka adapter entry is new; existing adapters read only their own keys, so their parsed output is unchanged.
+// parser-output-unchanged: the br-tjdft adapter entry is new; existing adapters read only their own keys, so their parsed output is unchanged.
+// parser-output-unchanged: the TST adapter entry is new; existing adapters read only their own keys, so their parsed output is unchanged.
+// parser-output-unchanged: Registers the NSS publisher-reference URL schema; other adapters retain their own schemas.
 // parser-output-unchanged: the ÚOHS adapter entry is new; existing adapters read only their own keys, so their parsed output is unchanged.
 import { AT_RIS_HEADNOTE_METADATA_URL_SCHEMA } from "@/api/handlers/case-law/ingestion/adapters/at-courts.metadata-urls";
+import { CZ_NSS_PUBLISHER_METADATA_URL_SCHEMA } from "@/api/handlers/case-law/ingestion/adapters/cz-nss.metadata-urls";
 import { CZ_UOHS_METADATA_URL_SCHEMA } from "@/api/handlers/case-law/ingestion/adapters/cz-uohs.metadata-urls";
 import { EU_ECJ_METADATA_URL_SCHEMA } from "@/api/handlers/case-law/ingestion/adapters/eu-ecj.metadata-urls";
 import { PL_COURTS_METADATA_URL_SCHEMA } from "@/api/handlers/case-law/ingestion/adapters/pl-courts.metadata-urls";
@@ -8,6 +13,7 @@ import { PL_NSA_METADATA_URL_SCHEMA } from "@/api/handlers/case-law/ingestion/ad
 import { PL_TK_METADATA_URL_SCHEMA } from "@/api/handlers/case-law/ingestion/adapters/pl-tk.metadata-urls";
 import { PL_UOKIK_METADATA_URL_SCHEMA } from "@/api/handlers/case-law/ingestion/adapters/pl-uokik.metadata-urls";
 import { SK_COURTS_METADATA_URL_SCHEMA } from "@/api/handlers/case-law/ingestion/adapters/sk-courts.metadata-urls";
+import { CZ_NS_COLLECTION_METADATA_URL_SCHEMA } from "@/api/lib/legal-search/cz-ns-collection-entry";
 import {
   ADAPTER_KEYS,
   type AdapterKey,
@@ -23,7 +29,7 @@ const DOCUMENT_SUPPLEMENTS_METADATA_URL_SCHEMA = {
 export const METADATA_URL_SCHEMAS = {
   [ADAPTER_KEYS.CZ_REGIONAL]: undefined,
   [ADAPTER_KEYS.CZ_NS]: undefined,
-  [ADAPTER_KEYS.CZ_NSS]: undefined,
+  [ADAPTER_KEYS.CZ_NSS]: CZ_NSS_PUBLISHER_METADATA_URL_SCHEMA,
   [ADAPTER_KEYS.CZ_US]: undefined,
   [ADAPTER_KEYS.SK_COURTS]: SK_COURTS_METADATA_URL_SCHEMA,
   [ADAPTER_KEYS.SK_US]: undefined,
@@ -54,7 +60,11 @@ export const METADATA_URL_SCHEMAS = {
   [ADAPTER_KEYS.PL_KIS]: PL_KIS_METADATA_URL_SCHEMA,
   [ADAPTER_KEYS.PL_UODO]: undefined,
   [ADAPTER_KEYS.PL_UOKIK]: PL_UOKIK_METADATA_URL_SCHEMA,
+  [ADAPTER_KEYS.BR_TJDFT]: undefined,
+  [ADAPTER_KEYS.CZ_NS_SBIRKA]: CZ_NS_COLLECTION_METADATA_URL_SCHEMA,
+  [ADAPTER_KEYS.CZ_ISIR]: undefined,
   [ADAPTER_KEYS.CZ_UOHS]: CZ_UOHS_METADATA_URL_SCHEMA,
+  [ADAPTER_KEYS.BR_TST]: undefined,
   [IMPORT_SOURCE_KEYS.COURTLISTENER]: undefined,
 } as const satisfies Record<AdapterKey | ImportSourceKey, unknown>;
 

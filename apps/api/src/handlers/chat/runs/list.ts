@@ -61,8 +61,10 @@ const activeRunStateOf = ({
   status: ChatTurnStatus;
 }): ActiveRunState => {
   switch (status) {
+    // A handed-over turn is released to another task, which goes on with it.
     case "accepted":
     case "running":
+    case "handed-over":
       return { state: CHAT_ACTIVE_RUN_STATE.working };
     case "awaiting-user":
       return interactionType === null
@@ -206,7 +208,7 @@ export const createListActiveChatRuns = ({
         // bound parameters imply it.
         eq(chatTurns.organizationId, session.activeOrganizationId),
         eq(chatTurns.userId, user.id),
-        sql`${chatTurns.status} IN ('accepted', 'running', 'awaiting-user')`,
+        sql`${chatTurns.status} IN ('accepted', 'running', 'awaiting-user', 'handed-over')`,
         eq(chatThreads.organizationId, session.activeOrganizationId),
         eq(chatThreads.userId, user.id),
         // A matter being deleted is sealed, as in the thread list.

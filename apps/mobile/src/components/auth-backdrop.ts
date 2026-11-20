@@ -1,7 +1,7 @@
 import { UI_COLORS } from "@/ui-theme.gen";
 
 /**
- * The web sign-in's backdrop (apps/web/src/routes/auth/route.tsx): the page
+ * The web sign-in's backdrop (apps/web/src/styles/app.css): the page
  * background down to 40%, then a blue toward the foot, per colour scheme.
  * The native colours are generated from the shared web theme.
  */

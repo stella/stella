@@ -1,6 +1,7 @@
+import { runAgentStream } from "@tanstack/ai";
 import type { ModelMessage } from "@tanstack/ai";
 import { panic, Result } from "better-result";
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { afterAll, describe, expect, test } from "bun:test";
 import { inArray } from "drizzle-orm";
 import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
@@ -8,14 +9,18 @@ import path from "node:path";
 import type { ModelTask } from "@stll/ai-catalog";
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
 import { CHAT_TOOL_POLICY_KIND } from "@stll/api-contract";
+import { BROWSER_CONTROL_TOOL_NAME } from "@stll/api-contract/browser-control";
 import { CHAT_PROMPT_IMPROVEMENT_STRATEGIES } from "@stll/api-contract/chat";
 import { repoRelativePath } from "@stll/portable-path";
+import { createTestState } from "@stll/test-state";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import { chatMessages, chatThreads } from "@/api/db/schema";
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
 import { env } from "@/api/env";
+import { createBrowseWebAgent } from "@/api/handlers/chat/browse-web-agent";
 import { toPersistedChatMessageContentV3 } from "@/api/handlers/chat/chat-message-parts";
+import { createChatTurnBudget } from "@/api/handlers/chat/chat-turn-budget";
 import {
   compactChatMessagesForModel,
   compactModelMessagesForModel,
@@ -27,6 +32,7 @@ import { runSubagent } from "@/api/handlers/chat/subagent-runner";
 import { createSuggestThreadTitle } from "@/api/handlers/chat/suggest-thread-title";
 import { createChatThirdPartyBoundary } from "@/api/handlers/chat/third-party-boundary";
 import { generateThreadRecapText } from "@/api/handlers/chat/thread-recap";
+import { createBrowserControlTool } from "@/api/handlers/chat/tools/browser-control-tool";
 import { applyChatToolPolicy } from "@/api/handlers/chat/tools/tool-policy";
 import type { ChatMessage } from "@/api/handlers/chat/types";
 import createSkillComment from "@/api/handlers/skills/comments/create";
@@ -89,6 +95,8 @@ import {
 import type { TestIds } from "@/api/tests/security/rls-helpers";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
 
+const testState = createTestState({ file: import.meta.path, config: env });
+
 // Every provider request the chat surface builds besides the chat turn
 // (`provider-request-schemas.integration.test.ts`), each through the
 // production function that builds it, with the organization's real adapter
@@ -115,8 +123,7 @@ const cassettes = loadProviderWireCassettes();
 let testDb: TestDatabase;
 let ids: TestIds;
 let replay: ProviderWireReplay;
-let previousMockAI: typeof env.USE_MOCK_AI;
-let previousBedrockEndpoint: string | undefined;
+
 const seededThreadIds: SafeId<"chatThread">[] = [];
 
 registerProviderWireReplay({
@@ -125,24 +132,20 @@ registerProviderWireReplay({
   },
 });
 
-beforeAll(async () => {
+testState.beforeAll(async () => {
   const fixture = await getRlsFixture();
   testDb = fixture.testDb;
   ids = fixture.ids;
-  previousMockAI = env.USE_MOCK_AI;
-  env.USE_MOCK_AI = false;
-  previousBedrockEndpoint = process.env["AWS_ENDPOINT_URL_BEDROCK_RUNTIME"];
-  process.env["AWS_ENDPOINT_URL_BEDROCK_RUNTIME"] =
-    "https://bedrock-runtime.us-east-1.amazonaws.com.cassette.invalid";
+
+  testState.setConfig("USE_MOCK_AI", false);
+
+  testState.setEnv(
+    "AWS_ENDPOINT_URL_BEDROCK_RUNTIME",
+    "https://bedrock-runtime.us-east-1.amazonaws.com.cassette.invalid",
+  );
 });
 
 afterAll(async () => {
-  env.USE_MOCK_AI = previousMockAI;
-  if (previousBedrockEndpoint === undefined) {
-    delete process.env["AWS_ENDPOINT_URL_BEDROCK_RUNTIME"];
-  } else {
-    process.env["AWS_ENDPOINT_URL_BEDROCK_RUNTIME"] = previousBedrockEndpoint;
-  }
   if (seededThreadIds.length > 0) {
     await testDb
       .delete(chatThreads)
@@ -454,6 +457,48 @@ const TASK_REQUESTS = {
       });
     },
   },
+  // The browsing sub-agent's child, on the `browse` role (its task is
+  // `short-text`): the main turn hands it a task and it answers from it.
+  browse: {
+    file: "handlers/chat/browse-web-agent.ts",
+    task: "short-text",
+    settings: { caching: false, sendMode: true },
+    run: async (run) => {
+      const agent = createBrowseWebAgent({
+        admission: testModelAdmission(ids.orgA),
+        browserTool: applyChatToolPolicy(
+          createBrowserControlTool()[BROWSER_CONTROL_TOOL_NAME],
+          CHAT_TOOL_POLICY_KIND.external,
+        ),
+        feature: "chat.stream",
+        managedAIResidency: "eu" as const,
+        organizationId: ids.orgA,
+        orgAIConfig: run.orgAIConfig,
+        safeDb: safeDbOf(),
+        suspendedRuns: new Map(),
+        tenantWorkspaceIds: [],
+        thirdPartyBoundary: boundaryOf(run),
+        threadId: toSafeId<"chatThread">(Bun.randomUUIDv7()),
+        turnBudget: createChatTurnBudget({ owningMessage: undefined })
+          .childMiddleware,
+        usageLane: undefined,
+        userId: ids.userA1,
+        workspaceId: null,
+      });
+      const subagentRunId = Bun.randomUUIDv7();
+      // Run as the SDK spawns a child: it builds the run's context.
+      for await (const _chunk of runAgentStream(agent, {
+        input: { task: "Find the termination clause on example.cz." },
+        messages: [],
+        parentRunId: "parent-run",
+        runId: `parent-run:${subagentRunId}`,
+        subagentRunId,
+        threadId: "browse-thread",
+      })) {
+        // Drained: the requests it sent are what the test reads.
+      }
+    },
+  },
   "skill-draft": {
     file: "handlers/skills/drafts/generate.ts",
     task: "short-text",
@@ -559,7 +604,8 @@ type TaskRequestName = keyof typeof TASK_REQUESTS;
 const MODEL_TASK_COVERAGE = {
   chat: { covered: "The chat turn, and the compaction summaries." },
   "short-text": {
-    covered: "Titles, suggestions, recaps, subagents and skills.",
+    covered:
+      "Titles, suggestions, recaps, subagents, browsing (the browse role inherits it) and skills.",
   },
   analysis: { neverSent: "No chat-surface builder uses analysis." },
   classify: { neverSent: "No chat-surface builder uses classify." },

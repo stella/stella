@@ -342,7 +342,7 @@ test("captures use a caller-scoped delta and recover a burst revision gap", asyn
   await openClipboard(page, { language: "en" });
   const capture = async (texts: string[]) =>
     page.evaluate((values): unknown => {
-      const emit: unknown = Reflect.get(
+      const emit: ((texts: string[]) => unknown) | undefined = Reflect.get(
         window,
         "__STELLA_TEST_CAPTURE_CLIPBOARD__",
       );
@@ -588,7 +588,7 @@ for (const {
         const parked = await page.evaluate((source) => {
           let eventTarget: unknown;
           if (source === "native") {
-            const emit: unknown = Reflect.get(
+            const emit: (() => unknown) | undefined = Reflect.get(
               window,
               "__STELLA_TEST_NATIVE_BLUR__",
             );
@@ -1931,7 +1931,7 @@ test("a successful multi-copy cannot carry selection into a reopened clipboard s
     ids: ["clip-1", "clip-3"],
   });
   const session = await page.evaluate(() => {
-    const reopen: unknown = Reflect.get(
+    const reopen: (() => unknown) | undefined = Reflect.get(
       window,
       "__STELLA_TEST_REOPEN_CLIPBOARD__",
     );
@@ -1966,7 +1966,7 @@ test("dismissing and reopening starts a new selection session without a copy", a
   await expect(page.locator("html")).toHaveAttribute("hidden", "");
   expect(
     await page.evaluate(() => {
-      const reopen: unknown = Reflect.get(
+      const reopen: (() => unknown) | undefined = Reflect.get(
         window,
         "__STELLA_TEST_REOPEN_CLIPBOARD__",
       );

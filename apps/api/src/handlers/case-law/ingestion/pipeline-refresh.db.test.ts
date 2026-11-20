@@ -62,7 +62,7 @@ const storedAst: DocumentAst = {
   metadata: {
     caseNumber: "1T/7/2026",
     ecli: null,
-    court: "Okresný súd",
+    court: "Okresný súd Bratislava I",
     decisionDate: null,
     decisionType: null,
     keywords: [],
@@ -119,13 +119,20 @@ if (!databaseUrl || !runPostgresTests) {
     const suffix = Bun.randomUUIDv7().slice(0, 8);
 
     /** The row a hydration or a corpus backfill leaves behind. */
+    /**
+     * The publisher's own id: a refresh is found by it. Without one, changed
+     * metadata reads as a sibling decision on the same docket.
+     */
+    const publisherIdOf = (caseNumber: string) => `sk-${caseNumber}`;
+
     const insertHydratedDecision = async (caseNumber: string) => {
       const [row] = await db
         .insert(caseLawDecisions)
         .values({
           sourceId,
           caseNumber,
-          court: "Okresný súd",
+          sourceDocumentId: publisherIdOf(caseNumber),
+          court: "Okresný súd Bratislava I",
           country: "SVK",
           language: "sk",
           fulltext: STORED_TEXT,
@@ -157,7 +164,8 @@ if (!databaseUrl || !runPostgresTests) {
         .values({
           sourceId,
           caseNumber,
-          court: "Okresný súd",
+          sourceDocumentId: publisherIdOf(caseNumber),
+          court: "Okresný súd Bratislava I",
           country: "SVK",
           language: "sk",
           documentUrl: "https://example.test/refresh.pdf",
@@ -176,7 +184,8 @@ if (!databaseUrl || !runPostgresTests) {
     const metadataOnlyResult = (caseNumber: string): IngestionResult =>
       plainTextIngestionResult({
         caseNumber,
-        court: "Okresný súd",
+        sourceDocumentId: publisherIdOf(caseNumber),
+        court: "Okresný súd Bratislava I",
         country: "SVK",
         language: "sk",
         decisionType: "rozsudok",

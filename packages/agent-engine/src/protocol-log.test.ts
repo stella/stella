@@ -834,7 +834,7 @@ describe("protocol log redaction", () => {
           attachments: [],
           skillFolders: [],
           toolPath: [],
-          harnessSessionId: null,
+          session: { type: "fresh" },
           policy: { network: "open", fs: "workspace_write", approvals: "ask" },
           mcp: {
             serverName: "stella",

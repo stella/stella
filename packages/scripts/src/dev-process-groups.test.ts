@@ -12,6 +12,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { PassThrough, type Readable } from "node:stream";
 import { json } from "node:stream/consumers";
+import { fileURLToPath } from "node:url";
 import * as v from "valibot";
 
 import {
@@ -29,12 +30,12 @@ import {
 } from "./dev-process-groups";
 import { devStatePath } from "./dev-runtime";
 
-const fixture = new URL("fixtures/dev-process-tree.ts", import.meta.url)
-  .pathname;
-const outputOwnerFixture = new URL(
-  "fixtures/dev-process-tree-output-owner.ts",
-  import.meta.url,
-).pathname;
+const fixture = fileURLToPath(
+  new URL("fixtures/dev-process-tree.ts", import.meta.url),
+);
+const outputOwnerFixture = fileURLToPath(
+  new URL("fixtures/dev-process-tree-output-owner.ts", import.meta.url),
+);
 const readySchema = v.object({ pid: v.number(), port: v.number() });
 const readTreeReady = async (stream: Readable) =>
   v.parse(readySchema, await json(stream));

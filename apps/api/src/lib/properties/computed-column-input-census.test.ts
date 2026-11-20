@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { fileURLToPath } from "node:url";
 
 const OWNED_PROPERTY_WRITERS = [
   "../../handlers/properties/create.ts",
@@ -21,7 +22,7 @@ describe("computed column input owner census", () => {
 
       expect(
         source.includes(ownerCall),
-        `${url.pathname}:${line}: property tool/dependency writer bypasses the computed-column input owner`,
+        `${fileURLToPath(url)}:${line}: property tool/dependency writer bypasses the computed-column input owner`,
       ).toBe(true);
     });
   }

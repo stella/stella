@@ -25,6 +25,10 @@ import {
   updateMemory as updateMemoryRequest,
 } from "@/lib/memory-api";
 import type { NonEmptyPatch } from "@/lib/mutation-command";
+import {
+  MEMORY_KIND_CHIP_CLASS,
+  MEMORY_ROW_CLASS,
+} from "@/routes/_protected.settings/-components/account/memory/memory-row.pending";
 import { invalidateMemories } from "@/routes/_protected.settings/-queries/memories";
 import type { MemoryListItem } from "@/routes/_protected.settings/-queries/memories";
 
@@ -117,7 +121,7 @@ export const MemoryRow = ({
   };
 
   return (
-    <div className="bg-card flex flex-col gap-2 rounded-lg border p-3">
+    <div className={MEMORY_ROW_CLASS}>
       <DestructiveConfirmDialog
         cancelLabel={commonT("cancel")}
         confirmLabel={commonT("delete")}
@@ -135,7 +139,7 @@ export const MemoryRow = ({
         title={t("deleteTitle")}
       />
       <div className="flex items-start justify-between gap-2">
-        <span className="bg-muted text-muted-foreground rounded-sm px-1.5 py-0.5 text-xs font-medium">
+        <span className={MEMORY_KIND_CHIP_CLASS}>
           {tRoot(MEMORY_KIND_KEYS[memory.kind])}
         </span>
         <MemoryActions

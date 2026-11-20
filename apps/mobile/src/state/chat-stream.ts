@@ -3,13 +3,32 @@ import * as v from "valibot";
 
 import { CHAT_TURN_ID_HEADER, CHAT_TURN_INTENT } from "@stll/api-contract";
 import type { AIErrorKind } from "@stll/api-contract/ai-errors";
+import { isCodeToolName } from "@stll/api-contract/chat-code-step";
+import {
+  CHAT_COMMAND_CONFIRMATION_MS,
+  CHAT_COMMAND_ID_HEADER,
+  CHAT_COMMAND_MAX_RETRIES,
+} from "@stll/api-contract/chat-command";
 import type { ChatContextNotice } from "@stll/api-contract/chat-context-notice";
 import {
   CHAT_LOCAL_RUN_PARENT_CALL_METADATA_KEY,
   chatLocalRunParentCallId,
   isChatLocalRunToolName,
 } from "@stll/api-contract/chat-local-run-tool";
+import {
+  CHAT_LOCAL_RUN_STEER_EVENT,
+  chatLocalRunSteerEventSchema,
+  type ChatLocalRunSteerOutcome,
+  chatLocalRunSteerOutcomeSchema,
+  type ChatLocalRunSteerRequest,
+  type ChatLocalRunSteerSource,
+} from "@stll/api-contract/chat-run-target";
+import {
+  CHAT_TURN_STEERING_EVENT,
+  chatTurnSteeringEventSchema,
+} from "@stll/api-contract/chat-send-intent";
 import { SSE_SILENCE_BOUND_MS } from "@stll/api-contract/sse-heartbeat";
+import { hedgedAttempts } from "@stll/concurrency/hedged-attempts";
 
 import { SignedOutError } from "@/connection/errors";
 import { fetchWithTimeout } from "@/connection/http";
@@ -17,6 +36,7 @@ import type { Fetch } from "@/connection/http";
 import type { AccessTokenSource } from "@/connection/session";
 import {
   ApiRequestError,
+  refusalCode,
   requestApi,
   withAccessToken,
 } from "@/state/api-request";
@@ -136,6 +156,18 @@ const chatEventSchema = v.union([
   }),
   // `code` names the failure, as the stored answer's outcome does.
   v.object({ type: v.literal("RUN_ERROR"), code: v.optional(v.unknown()) }),
+  // What became of a message steered into the turn (`steerChatTurn`).
+  v.object({
+    type: v.literal("CUSTOM"),
+    name: v.literal(CHAT_LOCAL_RUN_STEER_EVENT),
+    value: chatLocalRunSteerEventSchema,
+  }),
+  // Whether the turn takes a message mid-turn, as the server knows it.
+  v.object({
+    type: v.literal("CUSTOM"),
+    name: v.literal(CHAT_TURN_STEERING_EVENT),
+    value: chatTurnSteeringEventSchema,
+  }),
 ]);
 
 export type ChatEvent = v.InferOutput<typeof chatEventSchema>;
@@ -172,9 +204,11 @@ type StreamedPart =
       readonly name: string;
       readonly state: "input-streaming" | "complete" | "error";
       /**
-       * What a step a coding agent took on the person's computer was
-       * given: its arguments as they arrive, then, once whole, read as the
-       * input a stored call keeps. No other call's arguments are kept.
+       * What a step a coding agent took on the person's computer, or a
+       * code step, was given: its arguments as they arrive, then, once
+       * whole, read as the input a stored call keeps, so the live step is
+       * titled and summed up as the stored one (a code step's script names
+       * its reads). No other call's arguments are kept.
        */
       readonly args?: string;
       readonly input?: unknown;
@@ -324,7 +358,7 @@ export const applyChatEvent = (
         parts: answer.parts.map((part): StreamedPart =>
           part.type === "tool-call" &&
           part.id === event.toolCallId &&
-          isChatLocalRunToolName(part.name)
+          (isChatLocalRunToolName(part.name) || isCodeToolName(part.name))
             ? { ...part, args: `${part.args ?? ""}${event.delta}` }
             : part,
         ),
@@ -369,6 +403,11 @@ export const applyChatEvent = (
         status: "failed",
         failure: streamedTurnFailure(event.code),
       };
+    }
+    // A steer's outcome and the turn's steering are the turn's to act on,
+    // not part of the answer.
+    case "CUSTOM": {
+      return answer;
     }
     default: {
       event satisfies never;
@@ -461,14 +500,7 @@ export const chatSendBody = ({
 }) => {
   const forwarded = {
     ...turnScope({ anonymized, matterId, runId, threadId }),
-    message: {
-      id: messageId,
-      role: "user",
-      parts: [
-        ...(text === "" ? [] : [{ type: "text", content: text }]),
-        ...attachmentParts(files),
-      ],
-    },
+    message: userMessage({ files, messageId, text }),
   };
   return {
     threadId,
@@ -481,6 +513,36 @@ export const chatSendBody = ({
     data: forwarded,
   };
 };
+
+/** A message the person wrote, with its files after its text. */
+const userMessage = ({
+  files,
+  messageId,
+  text,
+}: {
+  readonly files: readonly ReadyFile[];
+  readonly messageId: string;
+  readonly text: string;
+}) => ({
+  id: messageId,
+  role: "user",
+  parts: [
+    ...(text === "" ? [] : [{ type: "text", content: text }]),
+    ...attachmentParts(files),
+  ],
+});
+
+/** The thread's matter, and how its text is sent. */
+const sendScope = ({
+  anonymized,
+  matterId,
+}: {
+  readonly anonymized: boolean;
+  readonly matterId: string | undefined;
+}) => ({
+  ...(matterId === undefined ? {} : { workspaceId: matterId }),
+  sendMode: anonymized ? "anonymized" : "rawOverride",
+});
 
 /**
  * What every request about a thread's turn names: the thread, the new run,
@@ -496,11 +558,27 @@ const turnScope = ({
   readonly matterId: string | undefined;
   readonly runId: string;
   readonly threadId: string;
+}) => ({ threadId, runId, ...sendScope({ anonymized, matterId }) });
+
+/**
+ * A message the server keeps queued until the thread is free: what a send
+ * forwards, without its thread and run, under the same message id.
+ */
+export const queuedChatSend = ({
+  anonymized,
+  files = [],
+  matterId,
+  messageId,
+  text,
+}: {
+  readonly anonymized: boolean;
+  readonly files?: readonly ReadyFile[];
+  readonly matterId: string | undefined;
+  readonly messageId: string;
+  readonly text: string;
 }) => ({
-  threadId,
-  runId,
-  ...(matterId === undefined ? {} : { workspaceId: matterId }),
-  sendMode: anonymized ? "anonymized" : "rawOverride",
+  ...sendScope({ anonymized, matterId }),
+  message: userMessage({ files, messageId, text }),
 });
 
 /**
@@ -585,6 +663,50 @@ export const chatRegenerateBody = ({
   };
 };
 
+/**
+ * Replaces one of the person's stored messages with its edit and answers it
+ * again ("Edit from here", as the web sends it): the edited message goes
+ * under the same id, naming itself as where the thread is cut, so the
+ * server drops it and every later turn before the model runs. A thread
+ * whose turns run on the person's computer names its target, as a
+ * regeneration does.
+ */
+export const chatEditBody = ({
+  anonymized,
+  matterId,
+  messageId,
+  parts,
+  runId,
+  runTarget,
+  threadId,
+}: {
+  readonly anonymized: boolean;
+  readonly matterId: string | undefined;
+  readonly messageId: string;
+  readonly parts: readonly unknown[];
+  readonly runId: string;
+  readonly runTarget: LocalRunTarget | undefined;
+  readonly threadId: string;
+}) => {
+  const forwarded = {
+    ...turnScope({ anonymized, matterId, runId, threadId }),
+    ...(runTarget === undefined ? {} : { runTarget }),
+    message: { id: messageId, role: "user", parts },
+    turnIntent: CHAT_TURN_INTENT.edit,
+    truncateAfterMessageId: messageId,
+  };
+  return {
+    threadId,
+    runId,
+    state: {},
+    messages: [{ id: messageId, role: "user" }],
+    tools: [],
+    context: [],
+    forwardedProps: forwarded,
+    data: forwarded,
+  };
+};
+
 /** The paused message an answer continues, and what the answer carries. */
 type ChatContinuation = {
   readonly messageId: string;
@@ -610,6 +732,8 @@ export type StreamFetch = (
   readonly ok: boolean;
   readonly status: number;
   readonly headers: { get: (name: string) => string | null };
+  /** A refusal's body, which names why. */
+  readonly json: () => Promise<unknown>;
   readonly body: {
     getReader: () => {
       read: () => Promise<{ done: boolean; value?: Uint8Array | undefined }>;
@@ -651,6 +775,55 @@ export const streamConnectTimeout = (bodyLength: number): number =>
     STREAM_UPLOAD_TIMEOUT_MS,
   );
 
+/** One request of a stream: how to end it, and when it gives up. */
+type ChatAttempt = {
+  readonly abort: () => void;
+  readonly deadline: ReturnType<typeof setTimeout>;
+};
+
+type OpenedChatAttempt = {
+  readonly attempt: ChatAttempt;
+  readonly response: Awaited<ReturnType<StreamFetch>>;
+};
+
+/**
+ * Opens a member's command (a send, an answer) under its command id, as the
+ * web does (`@stll/api-contract/chat-command`): an attempt whose response is
+ * lost is followed by the next one at once, and one unanswered after the
+ * confirmation time (or the upload-aware connect time, when longer) by the
+ * next one too, left running, since abandoning a request the server is
+ * still preparing would stop the turn it accepted. At most
+ * `CHAT_COMMAND_MAX_RETRIES` attempts follow the first, each given up only
+ * once the whole retry window has passed. The first response that arrives
+ * is the command's: the server's receipt makes the others replays of it.
+ */
+const openChatCommand = async ({
+  connectMs,
+  open,
+  signal,
+}: {
+  readonly connectMs: number;
+  readonly open: (deadlineMs: number) => Promise<OpenedChatAttempt>;
+  readonly signal: AbortSignal;
+}) => {
+  const hedgeAfterMs = Math.max(CHAT_COMMAND_CONFIRMATION_MS, connectMs);
+  return await hedgedAttempts({
+    attempt: async () =>
+      await open(hedgeAfterMs * (CHAT_COMMAND_MAX_RETRIES + 1)),
+    hedgeAfterMs,
+    // Every failure but the member leaving lost the response.
+    isLost: () => !signal.aborted,
+    maxRetries: CHAT_COMMAND_MAX_RETRIES,
+    onLateAnswer: ({ attempt, response }) => {
+      clearTimeout(attempt.deadline);
+      void response.body
+        ?.getReader()
+        .cancel()
+        .catch(() => undefined);
+    },
+  });
+};
+
 /**
  * Opens one SSE request and hands each answer event to `onEvent` as it
  * arrives. The turn id the server names in its response reaches `onTurn`
@@ -663,6 +836,7 @@ export const streamConnectTimeout = (bodyLength: number): number =>
  */
 const readChatStream = async ({
   body,
+  commandId,
   fetch,
   lastEventId,
   method,
@@ -673,6 +847,11 @@ const readChatStream = async ({
   source,
 }: {
   readonly body?: string;
+  /**
+   * The member's command (a send, an answer) this request carries, under the
+   * id it is sent again with when its response is lost.
+   */
+  readonly commandId?: string | undefined;
   readonly fetch: StreamFetch;
   readonly lastEventId?: string | undefined;
   readonly method: "GET" | "POST";
@@ -696,42 +875,87 @@ const readChatStream = async ({
   // the last event it delivered.
   let lastId = lastEventId;
   const ended = await withAccessToken(source, async (token) => {
-    const controller = new AbortController();
-    const abort = () => {
-      controller.abort();
+    const connectMs = streamConnectTimeout(body?.length ?? 0);
+    const attempts: ChatAttempt[] = [];
+    const open = async (deadlineMs: number) => {
+      const controller = new AbortController();
+      const abort = () => {
+        controller.abort();
+      };
+      signal.addEventListener("abort", abort);
+      const attempt: ChatAttempt = {
+        abort,
+        deadline: setTimeout(abort, deadlineMs),
+      };
+      attempts.push(attempt);
+      const response = await fetch(url, {
+        method,
+        headers: {
+          Accept: "text/event-stream",
+          Authorization: `Bearer ${token}`,
+          ...(body === undefined ? {} : { "Content-Type": "application/json" }),
+          ...(lastEventId === undefined
+            ? {}
+            : { "Last-Event-ID": lastEventId }),
+          ...(commandId === undefined
+            ? {}
+            : { [CHAT_COMMAND_ID_HEADER]: commandId }),
+        },
+        ...(body === undefined ? {} : { body }),
+        signal: controller.signal,
+      });
+      return { attempt, response };
     };
-    signal.addEventListener("abort", abort);
-    const connectTimer = setTimeout(
-      abort,
-      streamConnectTimeout(body?.length ?? 0),
-    );
+    const opened =
+      commandId === undefined
+        ? await Result.tryPromise({
+            try: async () => await open(connectMs),
+            catch: (cause) => cause,
+          })
+        : (await openChatCommand({ connectMs, open, signal })).mapError(
+            ({ error }) => error,
+          );
+    const release = () => {
+      for (const { abort, deadline } of attempts) {
+        clearTimeout(deadline);
+        signal.removeEventListener("abort", abort);
+      }
+    };
+    if (Result.isError(opened)) {
+      release();
+      return signal.aborted
+        ? Result.ok({ lastEventId: lastId })
+        : Result.err(
+            new ApiRequestError({
+              message: `The stream from ${url} broke`,
+              cause: opened.error,
+            }),
+          );
+    }
+    const { attempt, response } = opened.value;
+    const abort = attempt.abort;
     const read = await Result.tryPromise({
       try: async () => {
-        const response = await fetch(url, {
-          method,
-          headers: {
-            Accept: "text/event-stream",
-            Authorization: `Bearer ${token}`,
-            ...(body === undefined
-              ? {}
-              : { "Content-Type": "application/json" }),
-            ...(lastEventId === undefined
-              ? {}
-              : { "Last-Event-ID": lastEventId }),
-          },
-          ...(body === undefined ? {} : { body }),
-          signal: controller.signal,
-        });
-        clearTimeout(connectTimer);
         // A refusal names the turn too once the server has stored the
-        // message, so the thread, not the draft, holds what was sent.
+        // message, so the thread, not the draft, holds what was sent. A
+        // replay of an earlier attempt of the command names the turn that
+        // attempt started, which the phone follows as its own.
         const turnId = response.headers.get(CHAT_TURN_ID_HEADER);
         if (turnId !== null) {
           onTurn?.(turnId);
         }
         if (!response.ok || response.body === null) {
-          return response.status;
+          // A refusal names why, so a send the server queues instead of
+          // starting can be queued under the same message id.
+          // Its body is read within the connection's deadline: a stalled
+          // one is aborted and the status still answers.
+          const refusal: unknown = response.ok
+            ? undefined
+            : await response.json().catch(() => undefined);
+          clearTimeout(attempt.deadline);
+          return { status: response.status, code: refusalCode(refusal) };
         }
+        clearTimeout(attempt.deadline);
         const reader = response.body.getReader();
         const decoder = new TextDecoder();
         const parse = createSseParser();
@@ -767,7 +991,7 @@ const readChatStream = async ({
             }
           }
         }
-        return response.status;
+        return { status: response.status, code: undefined };
       },
       catch: (cause) =>
         cause instanceof ApiRequestError
@@ -777,19 +1001,19 @@ const readChatStream = async ({
               cause,
             }),
     });
-    clearTimeout(connectTimer);
-    signal.removeEventListener("abort", abort);
+    release();
     if (Result.isError(read)) {
       return signal.aborted
         ? Result.ok({ lastEventId: lastId })
         : Result.err(read.error);
     }
-    const status = read.value;
+    const { status, code } = read.value;
     if (status < 200 || status >= 300) {
       return Result.err(
         new ApiRequestError({
           message: `The request to ${url} responded ${status}`,
           status,
+          code,
         }),
       );
     }
@@ -805,9 +1029,14 @@ const turnPath = (threadId: string, turnId: string) =>
 const scopeQuery = (matterId: string | undefined) =>
   matterId === undefined ? "" : `?workspaceId=${encodeURIComponent(matterId)}`;
 
-/** Sends one message, with any files attached to it, and streams the answer to it. */
+/**
+ * Sends one message, with any files attached to it, and streams the answer to
+ * it. `commandId` names the member's send: a lost response is sent again
+ * under it, and a replay of an earlier attempt names that attempt's turn.
+ */
 export const sendChatMessage = async ({
   anonymized,
+  commandId,
   fetch,
   files = [],
   matterId,
@@ -821,6 +1050,7 @@ export const sendChatMessage = async ({
   threadId,
 }: {
   readonly anonymized: boolean;
+  readonly commandId: string;
   readonly fetch: StreamFetch;
   readonly files?: readonly ReadyFile[];
   readonly matterId: string | undefined;
@@ -845,6 +1075,7 @@ export const sendChatMessage = async ({
         threadId,
       }),
     ),
+    commandId,
     fetch,
     method: "POST",
     onEvent,
@@ -856,10 +1087,12 @@ export const sendChatMessage = async ({
 
 /**
  * Answers what a paused turn waits for and streams the answer's run, as a
- * send does: the server names the new turn before any event.
+ * send does: the server names the new turn before any event. `commandId`
+ * names the member's answer, as a send's does.
  */
 export const continueChatTurn = async ({
   anonymized,
+  commandId,
   continuation,
   fetch,
   matterId,
@@ -872,6 +1105,7 @@ export const continueChatTurn = async ({
   threadId,
 }: {
   readonly anonymized: boolean;
+  readonly commandId: string;
   readonly continuation: ChatContinuation;
   readonly fetch: StreamFetch;
   readonly matterId: string | undefined;
@@ -894,6 +1128,7 @@ export const continueChatTurn = async ({
         threadId,
       }),
     ),
+    commandId,
     fetch,
     method: "POST",
     onEvent,
@@ -930,6 +1165,55 @@ export const regenerateChatTurn = async ({
   await readChatStream({
     body: JSON.stringify(
       chatRegenerateBody({ anonymized, matterId, retry, runId, threadId }),
+    ),
+    fetch,
+    method: "POST",
+    onEvent,
+    onTurn,
+    path: "/v1/chat",
+    signal,
+    source,
+  });
+
+/** Sends the edit of a stored message and streams the new answer, as a send does. */
+export const editChatTurn = async ({
+  anonymized,
+  fetch,
+  matterId,
+  messageId,
+  onEvent,
+  onTurn,
+  parts,
+  runId,
+  runTarget,
+  signal,
+  source,
+  threadId,
+}: {
+  readonly anonymized: boolean;
+  readonly fetch: StreamFetch;
+  readonly matterId: string | undefined;
+  readonly messageId: string;
+  readonly onEvent: (event: ChatEvent) => void;
+  readonly onTurn: (turnId: string) => void;
+  readonly parts: readonly unknown[];
+  readonly runId: string;
+  readonly runTarget: LocalRunTarget | undefined;
+  readonly signal: AbortSignal;
+  readonly source: AccessTokenSource;
+  readonly threadId: string;
+}): Promise<Result<StreamEnd, StreamBreak>> =>
+  await readChatStream({
+    body: JSON.stringify(
+      chatEditBody({
+        anonymized,
+        matterId,
+        messageId,
+        parts,
+        runId,
+        runTarget,
+        threadId,
+      }),
     ),
     fetch,
     method: "POST",
@@ -1010,7 +1294,55 @@ export const probeChatTurn = async ({
     return Result.ok(probe.type);
   });
 
-/** Asks the server to stop a turn; the stream then ends with the run stopped. */
+const steerAnswerSchema = v.object({ steer: chatLocalRunSteerOutcomeSchema });
+
+/**
+ * Hands a message to a turn running on the person's computer, without
+ * stopping it: `queued` once the computer was handed it (the turn's stream
+ * then says whether the agent took it), or `refused` with why.
+ */
+export const steerChatTurn = async ({
+  fetch,
+  inputId,
+  messageSource,
+  source,
+  text,
+  threadId,
+  turnId,
+}: {
+  readonly fetch: Fetch;
+  readonly inputId: string;
+  /** Where the message comes from; a queued one names the revision read. */
+  readonly messageSource: ChatLocalRunSteerSource;
+  readonly source: AccessTokenSource;
+  readonly text: string;
+  readonly threadId: string;
+  readonly turnId: string;
+}): Promise<Result<ChatLocalRunSteerOutcome, ApiError>> =>
+  await Result.gen(async function* () {
+    const body = {
+      inputId,
+      text,
+      source: messageSource,
+    } satisfies ChatLocalRunSteerRequest;
+    const answered = yield* Result.await(
+      requestApi({
+        fetch,
+        path: `${turnPath(threadId, turnId)}/steer`,
+        body,
+        schema: steerAnswerSchema,
+        source,
+      }),
+    );
+    return Result.ok(answered.steer);
+  });
+
+/**
+ * Asks the server to stop a turn; the stream then ends with the run stopped.
+ * An answer that never arrived is asked for again, at most
+ * `CHAT_COMMAND_MAX_RETRIES` times, as the web asks: a stop names its turn,
+ * so asking again can stop only that turn.
+ */
 export const cancelChatTurn = async ({
   fetch,
   source,
@@ -1030,15 +1362,27 @@ export const cancelChatTurn = async ({
   }
   const url = `${session.serverUrl}${turnPath(threadId, turnId)}/cancel`;
   return await withAccessToken(source, async (token) => {
-    const answered = await Result.tryPromise({
-      try: async () =>
-        await fetchWithTimeout(fetch, url, {
-          method: "POST",
-          headers: { Authorization: `Bearer ${token}` },
-        }),
-      catch: (cause) =>
-        new ApiRequestError({ message: `The request to ${url} failed`, cause }),
-    });
+    const ask = async () =>
+      await Result.tryPromise({
+        try: async () =>
+          await fetchWithTimeout(fetch, url, {
+            method: "POST",
+            headers: { Authorization: `Bearer ${token}` },
+          }),
+        catch: (cause) =>
+          new ApiRequestError({
+            message: `The request to ${url} failed`,
+            cause,
+          }),
+      });
+    let answered = await ask();
+    for (
+      let retry = 0;
+      retry < CHAT_COMMAND_MAX_RETRIES && Result.isError(answered);
+      retry += 1
+    ) {
+      answered = await ask();
+    }
     if (Result.isError(answered)) {
       return Result.err(answered.error);
     }

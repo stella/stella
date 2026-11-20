@@ -11,16 +11,13 @@ import { fetchWithTimeout } from "@stll/fetch";
 import { Button } from "@stll/ui/button";
 import {
   AiActionIcon,
-  AlignJustifyIcon,
   CalendarIcon,
   ClockIcon,
   DownloadIcon,
   HashIcon,
   PlayIcon,
-  Rows3Icon,
   SparklesIcon,
   UserIcon,
-  WrapTextIcon,
 } from "@stll/ui/icons";
 import { Loader } from "@stll/ui/loader";
 import {
@@ -44,6 +41,7 @@ import {
 } from "@stll/ui/select";
 import { stellaToast } from "@stll/ui/toast";
 import { ViewToolbarChrome } from "@stll/ui/view-toolbar";
+import { PropertyIcon } from "@stll/workspace-ui/property-icon";
 
 import { CsvIcon, DocxIcon, XlsxIcon } from "@/components/document-icon";
 import { FolderExpandToggle } from "@/components/file-tree/folder-expand-toggle";
@@ -52,7 +50,6 @@ import { AiColumnSelectionAction } from "@/components/workspaces/ai-column-run-c
 import { BulkAddColumns } from "@/components/workspaces/bulk-add-columns";
 import { getInternalPropertyId } from "@/components/workspaces/entity-utils";
 import { useStartWorkflow } from "@/components/workspaces/hooks/use-start-workflow";
-import { PropertyIcon } from "@/components/workspaces/property-helpers";
 import { RowActions } from "@/components/workspaces/row-actions";
 import { ColumnToggle } from "@/components/workspaces/table/column-toggle";
 import type { ColumnToggleGroup } from "@/components/workspaces/table/column-toggle";
@@ -99,7 +96,6 @@ import {
   propertiesOptions,
 } from "@/lib/workspaces/queries/properties";
 import { useWorkspaceStore } from "@/lib/workspaces/store";
-import type { TableContentMode } from "@/lib/workspaces/table-store";
 import { useTableStore } from "@/lib/workspaces/table-store";
 import { isTableView, mergeLayout } from "@/lib/workspaces/view-layout";
 import { ExistingFileOrganizerDialog } from "@/routes/_protected.workspaces/$workspaceId/-components/existing-file-organizer-dialog";
@@ -108,6 +104,26 @@ import { ExportReportControl } from "@/routes/_protected.workspaces/$workspaceId
 import { admitsOnlyTaskKind } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-kind-filters";
 import { ViewToolbarSearch } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-toolbar-search";
 import { SortChips } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-toolbar-sorts";
+import {
+  ADDITIONAL_DATES_BUTTON,
+  ADDITIONAL_DATES_ICON_CLASS,
+  CALENDAR_MODE_LABEL_KEYS,
+  CALENDAR_SHOW_BY_LABEL_CLASS,
+  FILE_ORGANIZER_BUTTON,
+  FileOrganizerActionContent,
+  INTERNAL_DATE_OPTIONS,
+  ownDateLabelKey,
+  TABLE_CONTENT_MODE_OPTIONS,
+  TABLE_EXPORT_BUTTON,
+  TABLE_EXPORT_ICON_CLASS,
+  TASK_DATE_OPTIONS,
+  TIMELINE_DATE_LABEL_CLASS,
+  TIMELINE_ZOOM_LABEL_KEYS,
+  TOOLBAR_CHOICE_ROW_CLASS,
+  TOOLBAR_FIELD_ROW_CLASS,
+  toolbarChoiceButton,
+  ViewToolbarDivider,
+} from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-toolbar.pending";
 
 const protectedRouteApi = getRouteApi("/_protected");
 
@@ -166,7 +182,7 @@ export const ViewToolbar = ({
             allExpanded={folderState.allExpanded}
             onToggle={toggleAllFolders}
           />
-          <span className="bg-border mx-1 h-4 w-px" />
+          <ViewToolbarDivider />
         </>
       )}
 
@@ -200,7 +216,7 @@ export const ViewToolbar = ({
 
       {view.layout.type === "kanban" && (
         <>
-          <span className="bg-border mx-1 h-4 w-px" />
+          <ViewToolbarDivider />
           <KanbanGroupingSettings
             allowAssigneeGrouping={allowAssigneeGrouping}
             groupByPropertyId={view.layout.groupByPropertyId}
@@ -215,7 +231,7 @@ export const ViewToolbar = ({
 
       {view.layout.type === "calendar" && (
         <>
-          <span className="bg-border mx-1 h-4 w-px" />
+          <ViewToolbarDivider />
           <CalendarDatePropertyControl
             datePropertyId={view.layout.datePropertyId}
             endDatePropertyId={view.layout.endDatePropertyId}
@@ -243,7 +259,7 @@ export const ViewToolbar = ({
 
       {view.layout.type === "timeline" && (
         <>
-          <span className="bg-border mx-1 h-4 w-px" />
+          <ViewToolbarDivider />
           <TimelineDatePropertyControl
             endDatePropertyId={view.layout.endDatePropertyId}
             onChange={(startDatePropertyId, endDatePropertyId) =>
@@ -264,7 +280,7 @@ export const ViewToolbar = ({
 
       {view.layout.type === "filesystem" && (
         <>
-          <span className="bg-border mx-1 h-4 w-px" />
+          <ViewToolbarDivider />
           <FilesystemOrganizerAction workspaceId={workspaceId} />
         </>
       )}
@@ -276,7 +292,7 @@ export const ViewToolbar = ({
           of the table header. */}
       {view.layout.type === "table" && (
         <>
-          <span className="bg-border mx-1 h-4 w-px" />
+          <ViewToolbarDivider />
           <GroupByControl
             allowMultiSelectGrouping
             allowNone
@@ -432,23 +448,6 @@ type TableContentModeControlProps = {
   viewId: string;
 };
 
-const TABLE_CONTENT_MODE_OPTIONS = [
-  {
-    mode: "tight",
-    icon: AlignJustifyIcon,
-    labelKey: "workspaces.table.tightContent",
-  },
-  {
-    mode: "fit-content",
-    icon: WrapTextIcon,
-    labelKey: "workspaces.table.wrapContent",
-  },
-] as const satisfies readonly {
-  mode: TableContentMode;
-  icon: ComponentType<{ className?: string }>;
-  labelKey: TranslationKey;
-}[];
-
 const TableContentModeControl = ({
   workspaceId,
   viewId,
@@ -593,14 +592,14 @@ const TableExportMenu = ({ view, workspaceId }: TableExportMenuProps) => {
               aria-busy={exportingFormat !== null}
               aria-label={t("workspaces.views.exportTable")}
               disabled={exportingFormat !== null}
-              size="icon-xs"
+              size={TABLE_EXPORT_BUTTON.size}
               title={t("workspaces.views.exportTable")}
-              variant="ghost"
+              variant={TABLE_EXPORT_BUTTON.variant}
             />
           }
         >
           {exportingFormat === null ? (
-            <DownloadIcon className="size-3.5" />
+            <DownloadIcon className={TABLE_EXPORT_ICON_CLASS} />
           ) : (
             <Loader className="size-3.5" size="sm" variant="decorative" />
           )}
@@ -983,7 +982,7 @@ const FilesystemOrganizerAction = ({
           filesDataView.type === "error"
         }
         onClick={() => setOpen(true)}
-        size="xs"
+        size={FILE_ORGANIZER_BUTTON.size}
         title={
           selectedFiles.length > 0
             ? t("workspaces.importOrganizer.actionSelected", {
@@ -992,16 +991,17 @@ const FilesystemOrganizerAction = ({
             : t("workspaces.importOrganizer.action")
         }
         type="button"
-        variant="outline"
+        variant={FILE_ORGANIZER_BUTTON.variant}
       >
-        <Rows3Icon />
-        <span className="hidden sm:inline">
-          {selectedFiles.length > 0
-            ? t("workspaces.importOrganizer.actionSelected", {
-                count: organizerFiles.length,
-              })
-            : t("workspaces.importOrganizer.action")}
-        </span>
+        <FileOrganizerActionContent
+          label={
+            selectedFiles.length > 0
+              ? t("workspaces.importOrganizer.actionSelected", {
+                  count: organizerFiles.length,
+                })
+              : t("workspaces.importOrganizer.action")
+          }
+        />
       </Button>
       <ExistingFileOrganizerDialog
         existingFolders={existingFolders}
@@ -1088,22 +1088,6 @@ const useMatterColumnToggleGroups = (
 
 // -- Calendar controls --
 
-const INTERNAL_DATE_OPTIONS = [
-  {
-    id: "_created-at",
-    labelKey: "workspaces.views.calendar.createdAt",
-  },
-  {
-    id: "_updated-at",
-    labelKey: "common.lastUpdated",
-  },
-] as const satisfies readonly { id: string; labelKey: TranslationKey }[];
-
-const TASK_DATE_OPTIONS = [
-  { id: "_due-date", labelKey: "tasks.dueDate" },
-  { id: "_start-date", labelKey: "workspaces.views.timeline.startDate" },
-] as const satisfies readonly { id: string; labelKey: TranslationKey }[];
-
 type ResolveDatePropertyLabelArgs = {
   dateProperties: WorkspaceProperty[];
   id: string;
@@ -1123,13 +1107,9 @@ const resolveDatePropertyLabel = ({
   dateProperties,
   id,
 }: ResolveDatePropertyLabelArgs): DatePropertyLabel => {
-  const internal = INTERNAL_DATE_OPTIONS.find((o) => o.id === id);
-  if (internal) {
-    return { key: internal.labelKey, type: "translated" };
-  }
-  const taskDate = TASK_DATE_OPTIONS.find((o) => o.id === id);
-  if (taskDate) {
-    return { key: taskDate.labelKey, type: "translated" };
+  const ownKey = ownDateLabelKey(id);
+  if (ownKey !== null) {
+    return { key: ownKey, type: "translated" };
   }
   const propertyName = dateProperties.find((p) => p.id === id)?.name;
   if (propertyName) {
@@ -1163,8 +1143,8 @@ const CalendarDatePropertyControl = ({
       : resolvedDatePropertyLabel.value;
 
   return (
-    <span className="flex items-center gap-1 text-xs">
-      <span className="text-muted-foreground shrink-0">
+    <span className={TOOLBAR_FIELD_ROW_CLASS}>
+      <span className={CALENDAR_SHOW_BY_LABEL_CLASS}>
         {t("workspaces.views.calendar.showBy")}
       </span>
       <Select
@@ -1250,8 +1230,11 @@ const AdditionalDatesControl = ({
     <Menu>
       <MenuTrigger
         render={
-          <Button size="xs" variant="ghost">
-            <CalendarIcon className="me-1 size-3" />
+          <Button
+            size={ADDITIONAL_DATES_BUTTON.size}
+            variant={ADDITIONAL_DATES_BUTTON.variant}
+          >
+            <CalendarIcon className={ADDITIONAL_DATES_ICON_CLASS} />
             {count > 0
               ? t("workspaces.views.calendar.additionalDates", {
                   count: String(count),
@@ -1294,27 +1277,24 @@ type CalendarModeControlProps = {
 
 const CALENDAR_MODES = ["year", "month", "week"] as const;
 
-const calendarModeKeys = {
-  year: "workspaces.views.calendar.year",
-  month: "workspaces.views.calendar.month",
-  week: "workspaces.views.calendar.week",
-} as const satisfies Record<CalendarMode, TranslationKey>;
-
 const CalendarModeControl = ({ mode, onChange }: CalendarModeControlProps) => {
   const t = useTranslations();
 
   return (
-    <span className="flex items-center gap-0.5 text-xs">
-      {CALENDAR_MODES.map((m) => (
-        <Button
-          key={m}
-          onClick={() => onChange(m)}
-          size="xs"
-          variant={mode === m ? "secondary" : "ghost"}
-        >
-          {t(calendarModeKeys[m])}
-        </Button>
-      ))}
+    <span className={TOOLBAR_CHOICE_ROW_CLASS}>
+      {CALENDAR_MODES.map((m) => {
+        const button = toolbarChoiceButton(mode === m);
+        return (
+          <Button
+            key={m}
+            onClick={() => onChange(m)}
+            size={button.size}
+            variant={button.variant}
+          >
+            {t(CALENDAR_MODE_LABEL_KEYS[m])}
+          </Button>
+        );
+      })}
     </span>
   );
 };
@@ -1371,8 +1351,8 @@ const TimelineDatePropertyControl = ({
   );
 
   return (
-    <span className="flex items-center gap-1 text-xs">
-      <span className="text-muted-foreground">
+    <span className={TOOLBAR_FIELD_ROW_CLASS}>
+      <span className={TIMELINE_DATE_LABEL_CLASS}>
         {t("workspaces.views.timeline.startDate")}
       </span>
       <Select
@@ -1390,7 +1370,7 @@ const TimelineDatePropertyControl = ({
         </SelectTrigger>
         <SelectPopup>{dateOptions}</SelectPopup>
       </Select>
-      <span className="text-muted-foreground">
+      <span className={TIMELINE_DATE_LABEL_CLASS}>
         {t("workspaces.views.timeline.endDate")}
       </span>
       <Select
@@ -1419,30 +1399,24 @@ type TimelineZoomControlProps = {
 
 const ZOOM_OPTIONS = ["day", "week", "month", "quarter"] as const;
 
-type TimelineZoom = "day" | "week" | "month" | "quarter";
-
-const ZOOM_LABEL_KEYS = {
-  day: "workspaces.views.timeline.day",
-  week: "workspaces.views.timeline.week",
-  month: "workspaces.views.timeline.month",
-  quarter: "workspaces.views.timeline.quarter",
-} as const satisfies Record<TimelineZoom, TranslationKey>;
-
 const TimelineZoomControl = ({ zoom, onChange }: TimelineZoomControlProps) => {
   const t = useTranslations();
 
   return (
-    <span className="flex items-center gap-0.5 text-xs">
-      {ZOOM_OPTIONS.map((z) => (
-        <Button
-          key={z}
-          onClick={() => onChange(z)}
-          size="xs"
-          variant={zoom === z ? "secondary" : "ghost"}
-        >
-          {t(ZOOM_LABEL_KEYS[z])}
-        </Button>
-      ))}
+    <span className={TOOLBAR_CHOICE_ROW_CLASS}>
+      {ZOOM_OPTIONS.map((z) => {
+        const button = toolbarChoiceButton(zoom === z);
+        return (
+          <Button
+            key={z}
+            onClick={() => onChange(z)}
+            size={button.size}
+            variant={button.variant}
+          >
+            {t(TIMELINE_ZOOM_LABEL_KEYS[z])}
+          </Button>
+        );
+      })}
     </span>
   );
 };

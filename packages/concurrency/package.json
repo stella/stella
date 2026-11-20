@@ -14,7 +14,8 @@
     "./backoff-delay": "./src/backoff-delay.ts",
     "./chunk": "./src/chunk.ts",
     "./ttl-flight-cache": "./src/ttl-flight-cache.ts",
-    "./coalesced-drain": "./src/coalesced-drain.ts"
+    "./coalesced-drain": "./src/coalesced-drain.ts",
+    "./hedged-attempts": "./src/hedged-attempts.ts"
   },
   "scripts": {
     "clean": "git clean -xdf .cache .turbo node_modules",

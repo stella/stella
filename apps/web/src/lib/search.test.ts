@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import { RESOURCE_TYPE, resourceRef, toResourceName } from "@stll/api-contract";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
+import { createTestState } from "@stll/test-state";
 
 import type { GlobalSearchHit } from "@/lib/api-contract";
 import { toSafeId } from "@/lib/safe-id";
@@ -21,7 +22,9 @@ import {
 } from "@/lib/search.logic";
 import type { SearchPreviewChatMessage } from "@/lib/search.logic";
 
-process.env["VITE_API_URL"] ??= "http://localhost:3001";
+const testState = createTestState({ file: import.meta.path, config: {} });
+
+testState.setEnvIfAbsent("VITE_API_URL", "http://localhost:3001");
 
 const SEARCH_TEST_RESOURCES = {
   caseLawDecision: resourceRef({

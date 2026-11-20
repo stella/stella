@@ -65,6 +65,37 @@ const ROOT_MUTATION_DISPOSITIONS = {
     type: "non-replay",
     reason: "current-state",
   },
+  // A queued message's id is its client-minted idempotency key: a repeated
+  // enqueue answers the stored row or "already sent". A replacement names the
+  // revision it read, and the queue's other changes answer its current state.
+  "POST /v1/chat/threads/:threadId/queue": {
+    type: "non-replay",
+    reason: "current-state",
+  },
+  "PUT /v1/chat/threads/:threadId/queue/:messageId": {
+    type: "non-replay",
+    reason: "current-state",
+  },
+  "DELETE /v1/chat/threads/:threadId/queue/:messageId": {
+    type: "non-replay",
+    reason: "current-state",
+  },
+  "POST /v1/chat/threads/:threadId/queue/:messageId/move": {
+    type: "non-replay",
+    reason: "current-state",
+  },
+  "POST /v1/chat/threads/:threadId/queue/:messageId/send-now": {
+    type: "non-replay",
+    reason: "current-state",
+  },
+  "PUT /v1/chat/threads/:threadId/queue/hold": {
+    type: "non-replay",
+    reason: "current-state",
+  },
+  "DELETE /v1/chat/threads/:threadId/queue/hold": {
+    type: "non-replay",
+    reason: "current-state",
+  },
   "DELETE /v1/clause-categories/:categoryId": {
     type: "non-replay",
     reason: "current-state",
@@ -483,8 +514,8 @@ const ROOT_MUTATION_DISPOSITIONS = {
     type: "non-replay",
     reason: "stream",
   },
-  // A repeat answers the turn's undo that is queued, sent or done.
-  "POST /v1/chat/threads/:threadId/turns/:turnId/local-files/undo": {
+  // A repeat answers the undo of the same checkpoint that is queued, sent or done.
+  "POST /v1/chat/threads/:threadId/messages/:messageId/local-files/undo": {
     type: "non-replay",
     reason: "current-state",
   },
@@ -613,6 +644,10 @@ const ROOT_MUTATION_DISPOSITIONS = {
     type: "non-replay",
     reason: "current-state",
   },
+  "POST /v1/dictation/cleanup": {
+    type: "non-replay",
+    reason: "current-state",
+  },
   "POST /v1/dictation/transcribe": {
     type: "non-replay",
     reason: "external-effect",
@@ -735,6 +770,14 @@ const ROOT_MUTATION_DISPOSITIONS = {
     reason: "current-state",
   },
   "POST /v1/organization-settings/web-search-key": {
+    type: "non-replay",
+    reason: "current-state",
+  },
+  "POST /v1/outbound-actions/:actionId/confirm": {
+    type: "non-replay",
+    reason: "current-state",
+  },
+  "POST /v1/outbound-actions/:actionId/discard": {
     type: "non-replay",
     reason: "current-state",
   },
@@ -1140,9 +1183,17 @@ const ROOT_MUTATION_DISPOSITIONS = {
     type: "non-replay",
     reason: "current-state",
   },
+  "PUT /v1/organization-settings/members/:memberId/billing": {
+    type: "non-replay",
+    reason: "current-state",
+  },
   "PUT /v1/playbooks/:playbookId": {
     type: "non-replay",
     reason: "current-state",
+  },
+  "PUT /v1/sharepoint/capabilities": {
+    type: "non-replay",
+    reason: "credential",
   },
   "PUT /v1/sharepoint/enablement": {
     type: "non-replay",
@@ -1198,6 +1249,11 @@ const ROOT_MUTATION_DISPOSITIONS = {
 } as const satisfies Record<string, RootMutationDisposition>;
 
 const CREATE_MUTATION_DISPOSITIONS = {
+  "src/handlers/invoices/sends/create.ts": {
+    type: "non-replay",
+    reason:
+      "SMTP and SES delivery cannot roll back with a JSON response receipt: the send commits pending state before transport and records delivery in a separate transaction.",
+  },
   "src/handlers/invoices/payments/create.ts": {
     type: "non-replay",
     reason:
@@ -1233,8 +1289,6 @@ const IDEMPOTENCY_EXCEPTIONS = {
     "Folder reservations, file uploads and file organization require lifecycle work beyond the create response.",
   "src/handlers/invoices/create.ts":
     "The create response is one step of create, finalize and read workflows; replaying it does not replay their completion.",
-  "src/handlers/lists/items/sources/create.ts":
-    "The source form resolves a live document version before creation, so a manual retry can submit a different version for the same user intent.",
   "src/handlers/properties/create.ts":
     "Property creation participates in upload task chains whose completion is outside this create operation.",
   "src/handlers/views/create.ts":

@@ -409,6 +409,18 @@
       }
     },
     {
+      "id": "google/gemini-4-neon",
+      "reasoning": {
+        "default_effort": "medium"
+      }
+    },
+    {
+      "id": "google/gemini-4-neon:batch",
+      "reasoning": {
+        "default_effort": "medium"
+      }
+    },
+    {
       "id": "google/gemini-nano-banana-2.1",
       "reasoning": {
         "default_effort": "minimal"
@@ -967,6 +979,54 @@
       }
     },
     {
+      "id": "openai/gpt-6.2-astra",
+      "reasoning": {
+        "default_effort": "medium"
+      }
+    },
+    {
+      "id": "openai/gpt-6.2-astra-pro",
+      "reasoning": {
+        "default_effort": "medium"
+      }
+    },
+    {
+      "id": "openai/gpt-6.2-astra-pro:batch",
+      "reasoning": {
+        "default_effort": "medium"
+      }
+    },
+    {
+      "id": "openai/gpt-6.2-astra:batch",
+      "reasoning": {
+        "default_effort": "medium"
+      }
+    },
+    {
+      "id": "openai/gpt-6.2-sol",
+      "reasoning": {
+        "default_effort": "medium"
+      }
+    },
+    {
+      "id": "openai/gpt-6.2-sol-pro",
+      "reasoning": {
+        "default_effort": "medium"
+      }
+    },
+    {
+      "id": "openai/gpt-6.2-sol-pro:batch",
+      "reasoning": {
+        "default_effort": "medium"
+      }
+    },
+    {
+      "id": "openai/gpt-6.2-sol:batch",
+      "reasoning": {
+        "default_effort": "medium"
+      }
+    },
+    {
       "id": "openai/gpt-oss-120b",
       "reasoning": {
         "default_effort": "medium"
@@ -1048,6 +1108,12 @@
       "id": "qwen/qwen3.8-max-prime",
       "reasoning": {
         "default_effort": "xhigh"
+      }
+    },
+    {
+      "id": "qwen/qwen4-max",
+      "reasoning": {
+        "default_effort": "high"
       }
     },
     {
@@ -1208,6 +1274,12 @@
     },
     {
       "id": "z-ai/glm-5.2",
+      "reasoning": {
+        "default_effort": "high"
+      }
+    },
+    {
+      "id": "z-ai/glm-5.2:batch",
       "reasoning": {
         "default_effort": "high"
       }

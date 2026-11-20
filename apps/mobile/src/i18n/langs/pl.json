@@ -1,4 +1,7 @@
 {
+  "common": {
+    "previewTruncated": "Pełny tekst nie jest dostępny w tym podglądzie."
+  },
   "tabs": {
     "chat": "Czat",
     "close": "Zamknij",
@@ -85,6 +88,7 @@
     "documentClose": "Zamknij",
     "approvalBrowserNote": "Po zezwoleniu uruchomi się w Twojej przeglądarce na komputerze, przez rozszerzenie stella.",
     "grantFailed": "Nie udało się zapisać zgody. Spróbuj ponownie.",
+    "limitReminderFailed": "Nie udało się zapisać zmiany. Spróbuj ponownie.",
     "elsewhereBrowser": "Ten krok działa w Twojej przeglądarce na komputerze, przez rozszerzenie stella. Otwórz tam tę rozmowę w stelli, aby go dokończyć.",
     "elsewhereSecret": "Ten krok wymaga klucza. Ze względów bezpieczeństwa klucze dodaje się w stelli na komputerze, nie w aplikacji.",
     "elsewhereConnector": "Ten krok łączy aplikację. Ze względów bezpieczeństwa aplikacje łączy się w stelli na komputerze, nie w aplikacji.",
@@ -103,6 +107,8 @@
     "pickFailed": "Nie udało się otworzyć wyboru plików. Spróbuj ponownie.",
     "sendFileRefused": "Nie udało się wysłać pliku, więc wiadomość nie została wysłana. Usuń plik i spróbuj ponownie.",
     "sendFileNotAnonymizable": "Ta rozmowa jest anonimizowana, a stella nie mogła zanonimizować jednego z plików, więc nic nie wysłano. Usuń plik i spróbuj ponownie.",
+    "sendLocalRunNotAnonymizable": "Ta rozmowa jest anonimizowana, a agent programistyczny na Twoim komputerze odczytuje Twoje dokumenty w oryginalnej postaci, więc nic do niego nie wysłano.",
+    "sendWithoutAnonymization": "Wyślij bez anonimizacji",
     "pickTitle": "Wybierz rozmowę",
     "pickDescription": "Wybierz wątek z listy lub rozpocznij nowy przyciskiem +.",
     "runBanner": {
@@ -124,6 +130,8 @@
       "boe_search_legislation": "Wyszukiwanie w BOE",
       "borme_get_summary": "Dzienne podsumowanie BORME",
       "business_registry_lookup": "Wyszukiwanie w rejestrze przedsiębiorstw",
+      "calendar_free_busy": "Sprawdź dostępność w kalendarzu",
+      "calendar_list_events": "Odczytaj wydarzenia z kalendarza",
       "command_execution": "Uruchamianie polecenia",
       "compare_versions": "Porównywanie wersji",
       "configure_template_fields": "Skonfiguruj pola szablonu",
@@ -140,10 +148,10 @@
       "delete_reader_annotation": "Usuń wyróżnienie lub komentarz",
       "delete_task": "Usuń zadanie",
       "delete_time_entry": "Usuń wpis czasu",
-      "describe-stella-api": "Przygotowywanie odczytu danych",
-      "describe-stella-function": "Przygotowywanie odczytu danych",
+      "describe-stella-api": "Wybieranie źródeł",
+      "describe-stella-function": "Wybieranie źródeł",
       "describe_template": "Odczytywanie pól szablonu",
-      "discover_tools": "Przygotowywanie odczytu danych",
+      "discover_tools": "Wybieranie źródeł",
       "execute-typescript": "Odczytywanie danych sprawy",
       "execute_typescript": "Odczytywanie danych sprawy",
       "expand-chat-history": "Odczytywanie historii czatu",
@@ -183,6 +191,7 @@
       "save_document": "Zapisz dokument",
       "save_matter": "Zapisz sprawę",
       "save_playbook": "Zapisz playbook",
+      "save_skill_package": "Zapisz umiejętność",
       "save_task": "Zapisz zadanie",
       "save_template": "Zapisz szablon",
       "save_time_entry": "Zapisz wpis czasu",
@@ -205,7 +214,13 @@
       "update_reader_annotation": "Edytuj wyróżnienie lub komentarz",
       "use-browser": "Korzystanie z Twojej przeglądarki",
       "use_connector_secret": "Używanie danych dostępowych łącznika",
+      "validate_skill_package": "Sprawdź umiejętność",
       "web_search": "Wyszukiwanie w sieci"
+    },
+    "toolResearch": {
+      "caseLaw": "Przeszukiwanie orzecznictwa",
+      "legislation": "Odczytywanie przepisów",
+      "legislationAndCaseLaw": "Przeszukiwanie przepisów i orzecznictwa"
     },
     "localRun": {
       "title": {
@@ -246,15 +261,33 @@
         "loadFailed": "Nie udało się wczytać.",
         "showMore": "Pokaż więcej"
       },
-      "sessionNotResumed": "Agent programistyczny na Twoim komputerze nie mógł wznowić pracy tam, gdzie skończył, dlatego kontynuował na podstawie wiadomości z tego czatu."
+      "sessionNotResumed": "Agent programistyczny na Twoim komputerze nie mógł wznowić pracy tam, gdzie skończył, dlatego kontynuował na podstawie wiadomości z tego czatu.",
+      "steered": "Wysłano podczas pracy agenta",
+      "ranOnModel": "Wykonano na modelu {model}",
+      "desktopSettingsSteps": "W stella desktop na swoim komputerze otwórz Ustawienia › Ogólne › Subskrypcje AI.",
+      "errorLimitResetsAt": "Agent programistyczny na Twoim komputerze osiągnął limit użycia. Możesz spróbować ponownie po {time}.",
+      "limitReminderNotify": "Powiadom mnie po odnowieniu",
+      "limitReminderScheduled": "Powiadomimy Cię po {time}.",
+      "limitResumeContinue": "Kontynuuj automatycznie po odnowieniu",
+      "limitResumeScheduled": "Wznowimy automatycznie po {time}.",
+      "limitReminderCancel": "Anuluj"
     },
     "processSummary": {
       "sourcesChecked": "{count, plural, one {# sprawdzone źródło} few {# sprawdzone źródła} many {# sprawdzonych źródeł} other {# sprawdzonego źródła}}",
       "documentEdits": "{count, plural, one {# edycja dokumentu} few {# edycje dokumentu} many {# edycji dokumentu} other {# edycji dokumentu}}",
       "changesSaved": "{count, plural, one {# zapisana zmiana} few {# zapisane zmiany} many {# zapisanych zmian} other {# zapisanej zmiany}}",
-      "analyses": "{count, plural, one {# analiza} few {# analizy} many {# analiz} other {# analizy}}"
+      "searchedLegislation": "Przeszukano przepisy",
+      "searchedCaseLaw": "Przeszukano orzecznictwo",
+      "searchedLegislationAndCaseLaw": "Przeszukano przepisy i orzecznictwo",
+      "readDocument": "Odczytano dokument",
+      "readDocuments": "Odczytano dokumenty",
+      "searchedMatters": "Przejrzano sprawy",
+      "checkedRegisters": "Sprawdzono rejestry publiczne",
+      "searchedWeb": "Przeszukano sieć",
+      "searchedChats": "Przeszukano historię czatu"
     },
     "stepCount": "{count, plural, one {# krok} few {# kroki} many {# kroków} other {# kroku}}",
+    "lookupCount": "{count, plural, one {# zapytanie} few {# zapytania} many {# zapytań} other {# zapytania}}",
     "reasoning": "Rozumowanie",
     "historyTrimmed": "Nie udało się podsumować wcześniejszych wiadomości, dlatego ta odpowiedź uwzględnia tylko najnowszą część rozmowy.",
     "failure": {
@@ -285,6 +318,74 @@
       "sendErrorQuotaExhausted": "Limit dostawcy AI został wyczerpany. Spróbuj ponownie za minutę albo skontaktuj się z administratorem obszaru roboczego.",
       "sendErrorStreamIncomplete": "Odpowiedź AI urwała się przed zakończeniem. Spróbuj ponownie.",
       "sendErrorTurnTooLarge": "Ta odpowiedź stała się zbyt duża, aby dostarczyć ją w całości. Wyślij nową wiadomość, aby kontynuować."
+    },
+    "steerPrompt": "Wyślij do agenta w trakcie pracy",
+    "steerRefused": {
+      "turnNotRunning": "Agent w tej chwili nie pracuje.",
+      "noRun": "Agent nie działa teraz na Twoim komputerze.",
+      "cannotSteer": "Ten agent nie przyjmuje wiadomości w trakcie pracy.",
+      "runFull": "Agent nie przyjmie teraz kolejnych wiadomości.",
+      "notTaken": "Agent nie mógł teraz przyjąć twojej wiadomości.",
+      "queuedMessageChanged": "Wiadomość się zmieniła lub nie ma jej już w kolejce, więc agent jej nie otrzymał."
+    },
+    "queue": {
+      "notice": "W kolejce: zostanie wysłana po zakończeniu bieżącej odpowiedzi",
+      "prompt": "Wyślij, gdy agent skończy",
+      "sendNow": "Wyślij teraz",
+      "remove": "Anuluj wiadomość w kolejce",
+      "edit": "Edytuj",
+      "moveUp": "Przesuń w górę",
+      "moveDown": "Przesuń w dół",
+      "cancel": "Anuluj",
+      "attachments": "{count, plural, one {# załącznik} few {# załączniki} many {# załączników} other {# załącznika}}",
+      "actions": "Akcje wiadomości w kolejce",
+      "notSent": "Nie udało się wysłać",
+      "pause": "Wstrzymaj kolejkę",
+      "resume": "Wznów kolejkę",
+      "replaceTitle": "Wysłać tę wiadomość teraz?",
+      "replaceDescription": "Ten czat czeka na Twoją odpowiedź. Wysłanie tej wiadomości teraz anuluje pytanie lub zatwierdzenie, na które czeka.",
+      "noLongerQueued": "Tej wiadomości nie ma już w kolejce.",
+      "held": {
+        "turn-failed": "Kolejka wstrzymana: ostatnia odpowiedź nie powiodła się. Wznów, aby wysłać następną wiadomość.",
+        "turn-interrupted": "Kolejka wstrzymana: ostatnia odpowiedź została przerwana. Wznów, aby wysłać następną wiadomość.",
+        "member": "Kolejka wstrzymana.",
+        "send-refused": "Kolejka wstrzymana: nie udało się wysłać pierwszej wiadomości. Edytuj ją lub usuń, a potem wznów.",
+        "usage-limit": "Kolejka wstrzymana: osiągnięto limit użycia. Wznów, gdy zostanie odnowiony.",
+        "computer-away": "Oczekiwanie na Twój komputer: wiadomości z kolejki zostaną wysłane, gdy się połączy."
+      }
+    },
+    "edit": {
+      "action": "Edytuj",
+      "title": "Edytuj wiadomość",
+      "input": "Edytowana wiadomość",
+      "notice": "Wysłanie zastąpi tę wiadomość i wszystkie późniejsze wiadomości.",
+      "cancel": "Anuluj",
+      "refused": "Nie udało się edytować wiadomości. Czat pokazuje teraz zapisany stan; spróbuj ponownie, gdy nie będzie trwała żadna odpowiedź.",
+      "refusedHistoryChanged": "Czat zmienił się podczas wysyłania edycji. Pokazuje teraz zapisany stan; wyślij edycję ponownie.",
+      "refusedTargetMissing": "Tej wiadomości nie ma już w czacie, więc nie można jej edytować.",
+      "localFiles": {
+        "computer": {
+          "failed": "Cofanie zmian nie zakończyło się na Twoim komputerze. Niektóre pliki mogły już zostać zmienione, więc sprawdź folder czatu.",
+          "folderBusy": "Ten folder na Twoim komputerze jest używany przez inne uruchomienie. Spróbuj ponownie, gdy się zakończy.",
+          "noCheckpoint": "Twój komputer nie ma zapisanej kopii plików sprzed tego kroku, więc nic nie zostało cofnięte.",
+          "updateForEarlier": "Zaktualizuj stella desktop, aby cofać zmiany z wcześniejszych wiadomości."
+        },
+        "conversationRestarts": "Agent zacznie od nowa na podstawie tekstu tego czatu, bo odpowiedź przed tą wiadomością nie została ukończona.",
+        "expired": "Twój komputer nie odpowiedział na czas. Spróbuj ponownie.",
+        "option": "Cofnij też zmiany w plikach od tej wiadomości",
+        "optionHint": "Cofa to również zmiany wprowadzone przez Ciebie w folderze.",
+        "pending": "Cofanie zmian w plikach na Twoim komputerze",
+        "refused": {
+          "alreadyUndone": "Te zmiany w plikach zostały już cofnięte.",
+          "desktopOffline": "Twój komputer jest offline. Otwórz aplikację desktopową stella i spróbuj ponownie.",
+          "desktopUpdateRequired": "Aplikacja desktopowa stella na Twoim komputerze jest zbyt stara, aby cofać zmiany. Zaktualizuj ją i spróbuj ponownie.",
+          "folderShared": "Od tej wiadomości w tym folderze pracował inny czat.",
+          "noSavedCopy": "Twój komputer nie zachował kopii folderu sprzed tej wiadomości: był za duży lub zapisywał się zbyt wolno albo zastąpiły ją nowsze kopie.",
+          "severalFolders": "Późniejsze wiadomości działały na innym komputerze lub w innym folderze.",
+          "threadBusy": "Ten czat jeszcze pracuje. Spróbuj ponownie, gdy skończy."
+        },
+        "restored": "Zmiany w plikach cofnięte"
+      }
     }
   },
   "tasks": {
@@ -444,6 +545,7 @@
     "title": "Dokument",
     "failedTitle": "Nie udało się otworzyć tego dokumentu",
     "failure": {
+      "dataBoxUnreadable": "Nie można odczytać tego pliku jako wiadomości ze skrzynki danych ani jako potwierdzenia doręczenia.",
       "offline": "Jesteś offline. Połącz się z internetem i spróbuj ponownie.",
       "noFile": "Ten dokument nie ma jeszcze pliku.",
       "failed": "Podczas otwierania coś poszło nie tak. Spróbuj ponownie za chwilę.",
@@ -451,6 +553,7 @@
       "android": "W aplikacji na Androida nie można jeszcze otwierać dokumentów."
     },
     "retry": "Spróbuj ponownie",
+    "openOriginal": "Otwórz oryginał",
     "preview": "Otwórz podgląd",
     "previewDescription": "Ten plik otworzy się w podglądzie systemowym.",
     "unrendered": "Tego dokumentu nie można tu wyświetlić, ale podgląd systemowy może go otworzyć.",
@@ -508,7 +611,28 @@
     "signOutFailed": "Nie udało się wylogować. Spróbuj ponownie.",
     "lockScreenTitle": "Ekran blokady",
     "timerDetails": "Szczegóły licznika",
-    "timerDetailsHint": "Gdy licznik zmieni się na innym urządzeniu, usługa powiadomień Apple przekazuje jego opis i sprawę na ekran blokady. Po wyłączeniu widać tylko czas, dopóki nie otworzysz aplikacji."
+    "timerDetailsHint": "Gdy licznik zmieni się na innym urządzeniu, usługa powiadomień Apple przekazuje jego opis i sprawę na ekran blokady. Po wyłączeniu widać tylko czas, dopóki nie otworzysz aplikacji.",
+    "dictationTitle": "Dyktowanie",
+    "dictationModelDefault": "Domyślny",
+    "dictationModelDefaultNamed": "Domyślny ({model})",
+    "dictationModelOutsideRegion": "Poza Twoim regionem",
+    "dictationModelRetainsData": "Przechowuje Twój dźwięk",
+    "dictationModelRetainsWarning": "Ten model działa na koncie bez zerowej retencji danych. {provider} przechowuje dźwięk i transkrypcję wszystkiego, co dyktujesz, na własnych warunkach, poza kontrolą stella. Nie dyktuj za jego pomocą informacji poufnych ani danych klientów.",
+    "dictationModelHint": "Model, który zamienia dyktowanie na tekst. stella nie przechowuje dźwięku.",
+    "dictationModelsUnavailable": "Nie udało się wczytać modeli. Dyktowanie użyje wybranego modelu albo domyślnego, jeśli serwer już go nie oferuje.",
+    "dictationCleanup": "Popraw za pomocą AI",
+    "dictationCleanupHint": "Poprawia błędy rozpoznawania i wypowiedziane formatowanie, takie jak „nowa linia”. Tylko tekst, nie dźwięk, trafia przez stella do dostawcy AI Twojej organizacji; stella go nie przechowuje."
+  },
+  "signedFile": {
+    "layer": "Warstwa podpisów {number, number}",
+    "noReadableContent": "Brak czytelnej zawartości do wyświetlenia w podglądzie.",
+    "unknownSigner": "Nieznany podpisujący",
+    "unreadable": "Nie udało się odczytać podpisanego pliku.",
+    "unverified": "Podpisy nie zostały zweryfikowane."
+  },
+  "structuredDocument": {
+    "noReadableContent": "Brak czytelnego tekstu do wyświetlenia w podglądzie.",
+    "textOnly": "Podgląd tekstu bez układu strony i obrazów."
   },
   "header": {
     "search": "Szukaj"

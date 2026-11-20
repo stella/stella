@@ -8,6 +8,7 @@ import { Doc, encodeStateAsUpdate, XmlElement, XmlText } from "yjs";
 import { FOLIO_YJS_ATTR_SCHEMA_VERSION } from "@stll/folio-core/server";
 import { sha256Hex } from "@stll/sha256/node";
 import { createTestClock } from "@stll/test-kit";
+import { createTestState } from "@stll/test-state";
 
 import { folioCollabRooms, workspaces } from "@/api/db/schema";
 import { createMockDatabase } from "@/api/db/sql-client";
@@ -16,9 +17,13 @@ import { envBase } from "@/api/env-base";
 import { envDocumentProcessingWorker } from "@/api/env-document-processing-worker";
 import { toSafeId } from "@/api/lib/branded-types";
 import { createFileKey } from "@/api/lib/file-key";
+import { aggregateExecutionRows } from "@/api/tests/fixtures/aggregate-lock-order";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+
+const testState = createTestState({ file: import.meta.path, config: env });
+const workerState = testState.forConfig(envDocumentProcessingWorker);
 
 type Row = Record<string, unknown>;
 type QueuedRows = Row[] | (() => Row[]);
@@ -162,10 +167,14 @@ const scopedTransaction: QueryApi = {
   },
   execute: async (query) => {
     const { sql } = new PgDialect().sqlToQuery(query);
+    // Owner-registered advisory locks report the physical key they took.
+    if (sql.includes("AS key1")) {
+      return aggregateExecutionRows(query);
+    }
     if (sql.includes("pg_advisory_xact_lock")) {
       return [{}];
     }
-    if (/FOR (?:NO KEY )?UPDATE/u.test(sql)) {
+    if (/FOR (?:NO KEY UPDATE|UPDATE|SHARE)/u.test(sql)) {
       return [{ id: workspaceId, organizationId }];
     }
     const rows = resolveQueuedRows(scopedRows.shift());
@@ -186,7 +195,8 @@ const createScopedDbTestDouble =
     if (scopedFailure !== null && scopedCalls > scopedFailureAfterCalls) {
       throw new Error(scopedFailure.message, { cause: scopedFailure });
     }
-    return await callback(scopedTransaction);
+    // Each scoped call is its own transaction, with its own lock history.
+    return await callback({ ...scopedTransaction });
   };
 // Object storage is the real `lib/s3`, pointed at an in-process store: the
 // keys, content types and deletes below are the ones the module actually put
@@ -750,34 +760,28 @@ describe("folio collaboration room snapshot generation", () => {
     if (authorized.status !== "authorized") {
       return;
     }
-    const priorFlag = env.FEATURE_FILE_USAGE_LIMITS;
-    const priorWorkerFlag =
-      envDocumentProcessingWorker.FEATURE_FILE_USAGE_LIMITS;
-    env.FEATURE_FILE_USAGE_LIMITS = true;
-    envDocumentProcessingWorker.FEATURE_FILE_USAGE_LIMITS = false;
+
+    testState.setConfig("FEATURE_FILE_USAGE_LIMITS", true);
+    workerState.setConfig("FEATURE_FILE_USAGE_LIMITS", false);
     fake.failNext({ method: "PUT", code: "AccessDenied", status: 403 });
-    try {
-      const result = await storeFolioCollabSnapshot({
-        authority: { type: "participant", userId: firstUserId },
-        expectedGeneration: 3,
-        expectedSnapshotRevision: 0,
-        snapshotBytes: new TextEncoder().encode("snapshot"),
-        value: authorized.value,
-      });
-      expect(result).toMatchObject({
-        status: "error",
-        error: { reason: "storage_unavailable" },
-      });
-      expect(
-        fake.requests.filter(({ method }) => method === "DELETE"),
-      ).toHaveLength(1);
-      expect(scopedInsertedRows).toHaveLength(1);
-      expect(scopedDeleteCalls).toBe(0);
-      expect([...fake.objects.keys()]).toEqual([]);
-    } finally {
-      env.FEATURE_FILE_USAGE_LIMITS = priorFlag;
-      envDocumentProcessingWorker.FEATURE_FILE_USAGE_LIMITS = priorWorkerFlag;
-    }
+
+    const result = await storeFolioCollabSnapshot({
+      authority: { type: "participant", userId: firstUserId },
+      expectedGeneration: 3,
+      expectedSnapshotRevision: 0,
+      snapshotBytes: new TextEncoder().encode("snapshot"),
+      value: authorized.value,
+    });
+    expect(result).toMatchObject({
+      status: "error",
+      error: { reason: "storage_unavailable" },
+    });
+    expect(
+      fake.requests.filter(({ method }) => method === "DELETE"),
+    ).toHaveLength(1);
+    expect(scopedInsertedRows).toHaveLength(1);
+    expect(scopedDeleteCalls).toBe(0);
+    expect([...fake.objects.keys()]).toEqual([]);
   });
 
   test("accepts a generation-fenced store from the collaboration service", () => {

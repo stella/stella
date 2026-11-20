@@ -85,7 +85,7 @@ import {
 import type { ReaderAnnotationMark } from "@/components/chat/tool-approval-summary";
 import {
   getToolOutputError,
-  ToolCallFailureDetails,
+  ToolCallRawError,
   toolFailureLabelKey,
 } from "@/components/chat/tool-call-card";
 import type { ToolCallAction } from "@/components/chat/tool-call-card";
@@ -750,8 +750,12 @@ export const ToolApprovalCard = ({
         )}
         {isFailed && (
           <XIcon
-            aria-hidden
+            aria-label={
+              failureLabelKey === undefined ? undefined : t(failureLabelKey)
+            }
+            aria-hidden={failureLabelKey === undefined}
             className="text-destructive ms-auto size-3.5 shrink-0"
+            role="img"
           />
         )}
         {action !== undefined && (
@@ -777,10 +781,7 @@ export const ToolApprovalCard = ({
       />
       {failureLabelKey !== undefined && (
         <div className="px-3">
-          <ToolCallFailureDetails
-            errorMessage={t(failureLabelKey)}
-            rawErrorDetails={rawErrorDetails}
-          />
+          <ToolCallRawError rawErrorDetails={rawErrorDetails} />
         </div>
       )}
       {isAwaitingDecision &&

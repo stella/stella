@@ -1,8 +1,8 @@
 import { panic, Result } from "better-result";
 import { describe, expect, mock, test } from "bun:test";
 
-import { readCapabilityCatalog } from "@stll/cli/capability-catalog-data";
 import { RUNTIME_MODE } from "@stll/runtime-mode";
+import { createTestState } from "@stll/test-state";
 
 import { ORGANIZATION_AI_INSTRUCTIONS_MAX_LENGTH } from "@/api/db/organization-settings-constants";
 import { env } from "@/api/env";
@@ -24,8 +24,11 @@ import { listMcpTools } from "@/api/mcp/tools";
 import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
 import { setRuntimeModeForTesting } from "@/api/runtime-mode";
 import { authorizedMcpContextForTest } from "@/api/tests/helpers/authorized-mcp-context";
+import { repositoryCapabilityCatalog } from "@/api/tests/helpers/repository-capability-catalog";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
+
+const testState = createTestState({ file: import.meta.path, config: env });
 
 const WORKSPACE_ID = "00000000-0000-4000-8000-000000000001";
 
@@ -162,14 +165,14 @@ describe("search_boe_legislation feature gating", () => {
     run: () => Promise<void>,
   ) => {
     const previousFeaturePublicLaw = env.FEATURE_PUBLIC_LAW;
-    env.FEATURE_PUBLIC_LAW = featurePublicLaw;
+    testState.setConfig("FEATURE_PUBLIC_LAW", featurePublicLaw);
     const restoreRuntimeMode = setRuntimeModeForTesting({
       mode: localDevOpen ? RUNTIME_MODE.open : RUNTIME_MODE.strict,
     });
     try {
       await run();
     } finally {
-      env.FEATURE_PUBLIC_LAW = previousFeaturePublicLaw;
+      testState.setConfig("FEATURE_PUBLIC_LAW", previousFeaturePublicLaw);
       restoreRuntimeMode();
     }
   };
@@ -406,7 +409,7 @@ describe("matter membership and organization settings", () => {
         }),
       ),
     ).toContain("validation_error");
-    const entry = readCapabilityCatalog().find(
+    const entry = repositoryCapabilityCatalog.find(
       (candidate) =>
         typeof candidate === "object" &&
         candidate !== null &&

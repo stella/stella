@@ -84,7 +84,13 @@ export const ENUM_COLUMN_ROLES = {
     origin: ATTRIBUTE,
   },
   case_law_citations: {
+    cited_part: ATTRIBUTE,
     doctrinal_treatment: ATTRIBUTE,
+    polarity_source: ATTRIBUTE,
+  },
+  case_law_completeness_census: {
+    outcome: ATTRIBUTE,
+    scope_status: ATTRIBUTE,
   },
   case_law_corpus_pack_refs: {
     kind: ATTRIBUTE,
@@ -99,8 +105,19 @@ export const ENUM_COLUMN_ROLES = {
   case_law_decision_judges: {
     role: ATTRIBUTE,
   },
+  case_law_decision_reviews: {
+    evidence_classification: ATTRIBUTE,
+    outcome: ATTRIBUTE,
+    source: ATTRIBUTE,
+  },
   case_law_decisions: {
     case_number_type: ATTRIBUTE,
+  },
+  case_law_held_decision_attachments: {
+    match_basis: ATTRIBUTE,
+  },
+  case_law_polarity_rules: {
+    kind: ATTRIBUTE,
   },
   case_law_population_counts: {
     kind: ATTRIBUTE,
@@ -149,6 +166,9 @@ export const ENUM_COLUMN_ROLES = {
   case_law_research_answers: {
     failure_reason: ATTRIBUTE,
   },
+  case_law_ingestion_failure_evidence: {
+    identity_kind: ATTRIBUTE,
+  },
   case_law_sources: {
     ingestion_lease_purpose: ATTRIBUTE,
   },
@@ -164,6 +184,14 @@ export const ENUM_COLUMN_ROLES = {
   chat_content_v3_backfill_receipts: {
     outcome: ATTRIBUTE,
     source: ATTRIBUTE,
+  },
+  // What a limit reminder does when due; the member may switch either way.
+  chat_limit_reminders: {
+    on_reset: ATTRIBUTE,
+  },
+  // Why a queue waits; any reason may replace another.
+  chat_queue_holds: {
+    reason: ATTRIBUTE,
   },
   chat_secrets: {
     decision: ATTRIBUTE,
@@ -206,14 +234,24 @@ export const ENUM_COLUMN_ROLES = {
     contract_version: ATTRIBUTE,
     family: ATTRIBUTE,
   },
+  corpus_index_generation_flips: {
+    family: ATTRIBUTE,
+  },
+  corpus_index_generation_seeding_passes: {
+    family: ATTRIBUTE,
+  },
   corpus_index_group_withdrawals: {
     family: ATTRIBUTE,
   },
   corpus_index_jurisdiction_serving: {
     family: ATTRIBUTE,
   },
+  corpus_index_projection_delete_tasks: {
+    family: ATTRIBUTE,
+  },
   corpus_index_projection_intents: {
     append_delivery: ATTRIBUTE,
+    append_fault: ATTRIBUTE,
     family: ATTRIBUTE,
   },
   corpus_index_projection_revisions: {
@@ -225,6 +263,17 @@ export const ENUM_COLUMN_ROLES = {
     desired_action: ATTRIBUTE,
     family: ATTRIBUTE,
     last_failure_kind: ATTRIBUTE,
+  },
+  // The expectation is a walk position (a pass moves present -> absent -> present,
+  // and a revocation restarts it at present) and the reason a fact about the
+  // last revocation: any value may follow any other.
+  corpus_index_route_proofs: {
+    family: ATTRIBUTE,
+    pass_expectation: ATTRIBUTE,
+    revoke_reason: ATTRIBUTE,
+  },
+  corpus_index_route_seedings: {
+    family: ATTRIBUTE,
   },
   correspondence: {
     channel: ATTRIBUTE,
@@ -311,6 +360,9 @@ export const ENUM_COLUMN_ROLES = {
     entity_feature_gate: ATTRIBUTE,
     severity: ATTRIBUTE,
   },
+  email_delivery_failures: {
+    reason: ATTRIBUTE,
+  },
   entities: {
     agenda_kind: ATTRIBUTE,
     agenda_source: ATTRIBUTE,
@@ -383,6 +435,9 @@ export const ENUM_COLUMN_ROLES = {
     method: ATTRIBUTE,
     origin: ATTRIBUTE,
   },
+  invoice_sends: {
+    language: ATTRIBUTE,
+  },
   invoices: {
     billing_mode: ATTRIBUTE,
     document_type: ATTRIBUTE,
@@ -390,6 +445,9 @@ export const ENUM_COLUMN_ROLES = {
   },
   justifications: {
     entity_feature_gate: ATTRIBUTE,
+  },
+  kept_transcript_deletions: {
+    environment: ATTRIBUTE,
   },
   legal_graph_edges: {
     confidence: ATTRIBUTE,
@@ -675,6 +733,7 @@ export const ENUM_COLUMN_ROLES = {
     result: LIFECYCLE,
   },
   user: {
+    locale: ATTRIBUTE,
     reader_answer_language: ATTRIBUTE,
   },
   user_professional_use_acceptances: {

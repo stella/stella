@@ -1,7 +1,15 @@
 import { PGlite } from "@electric-sql/pglite";
 import { pg_trgm } from "@electric-sql/pglite/contrib/pg_trgm";
 import { panic } from "better-result";
-import { getColumns, getTableName, isTable, sql } from "drizzle-orm";
+import {
+  Column,
+  getColumns,
+  getTableName,
+  is,
+  isTable,
+  SQL,
+  sql,
+} from "drizzle-orm";
 import type { SQLWrapper } from "drizzle-orm";
 import { getViewConfig, isPgView, PgDialect } from "drizzle-orm/pg-core";
 import { drizzle } from "drizzle-orm/pglite";
@@ -14,22 +22,28 @@ import type { ScopedDb } from "@/api/db/safe-db";
 import * as schema from "@/api/db/schema";
 import type { AnyDrizzle } from "@/api/db/scoped";
 import {
-  CASE_LAW_DECISION_VIEWS,
+  CASE_LAW_SITEMAP_RANGE_COLUMN_GRANTS_BY_RELATION,
   caseLawDecisionViewGrantStatement,
-  CENSUS_COLUMN_GRANTS_BY_RELATION,
+  CITATION_POLARITY_EVIDENCE_COLUMN_GRANTS_BY_RELATION,
+  COLLECTION_BODY_COLUMN_GRANTS_BY_RELATION,
+  COLLECTION_OBSERVATION_COLUMN_GRANTS_BY_RELATION,
+  COLLECTION_PART_COLUMN_GRANTS_BY_RELATION,
   PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION,
+  type PublicLawColumnGrant,
   publicLawColumnPairs,
   ROLLOUT_CASE_LAW_SOURCE_COLUMNS,
   ROLLOUT_CASE_LAW_SOURCE_RELATION,
   ROLLOUT_CASE_LAW_WHOLE_RELATIONS,
 } from "@/api/lib/public-law-relations";
 import { readPgliteTestSnapshotPath } from "@/api/tests/env";
+import { installCorpusProjectionSeedingGuard } from "@/api/tests/helpers/corpus-projection-seeding-guard";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   createSchemaPglite,
   installPgliteAccountAuditRls,
   installPgliteAgentSkillRevisionTrigger,
   installPgliteAiMemoryActiveUserGuard,
+  installPgliteCaseLawContentChangedAt,
   installPgliteCaseLawCountryShape,
   installPgliteCaseLawCoverageSummary,
   installPgliteCaseLawObservationFence,
@@ -45,6 +59,9 @@ import {
   installPgliteChatTurnRunIdLookup,
   installPgliteCitationDoctrineRls,
   installPgliteConflictCheckRoutines,
+  installPgliteCorpusIndexGenerationRetire,
+  installPgliteCorpusIndexSeedingLifecycle,
+  installPgliteCorpusProjectionDeleteTasks,
   installPgliteCorpusProjectionRevisionFence,
   installPgliteCorrespondenceSources,
   installPgliteDecisionAliases,
@@ -52,12 +69,15 @@ import {
   installPgliteDecisionDocketFilingYear,
   installPgliteDesktopPresenceRls,
   installPgliteEntityFeatureGateMaintenance,
+  installPgliteFileObjectReconciliationFill,
   installPgliteFindingDecisionHistory,
   installPgliteFlowTransitions,
+  installPgliteInvoiceLinks,
   installPgliteInvoiceObjects,
   installPgliteLegalHoldDeleteBackstop,
   installPgliteLegislationExpressionIdentity,
   installPgliteLegislationPayloadRevision,
+  installPgliteMatterTimerPresence,
   installPgliteModelRunBudgets,
   installPgliteOrganizationDeleteOwnerGuard,
   installPgliteOrganizationMemberCapacity,
@@ -71,6 +91,7 @@ import {
   installPgliteSchemaPrerequisites,
   installPgliteSearchHistoryClearFence,
   installPgliteServiceClientCredentialCascade,
+  installPgliteSharepointPolicyFence,
   installPgliteStatuteCitationCounts,
   installPgliteSyntheticMembershipTrigger,
   installPgliteTimeEntryTimerSignals,
@@ -280,6 +301,7 @@ export const CASE_LAW_SOURCE_INGESTION_UPDATE_COLUMNS = [
   "stored_total_next_refresh_at",
   "stored_total_held_since",
   "stored_total_warned_slot",
+  "import_snapshot_date",
 ] as const;
 
 /**
@@ -347,38 +369,76 @@ const CORPUS_PROJECTION_REVISION_TABLE_SQL = quoteSqlIdentifier(
  */
 const PUBLIC_LAW_COLUMNS_GRANTED_IN_A_LATER_RELEASE: ReadonlySet<string> =
   new Set(
-    publicLawColumnPairs(CENSUS_COLUMN_GRANTS_BY_RELATION).map(
-      ({ relation, column }) => `${relation}.${column}`,
-    ),
+    [
+      CITATION_POLARITY_EVIDENCE_COLUMN_GRANTS_BY_RELATION,
+      CASE_LAW_SITEMAP_RANGE_COLUMN_GRANTS_BY_RELATION,
+      COLLECTION_BODY_COLUMN_GRANTS_BY_RELATION,
+      COLLECTION_OBSERVATION_COLUMN_GRANTS_BY_RELATION,
+      COLLECTION_PART_COLUMN_GRANTS_BY_RELATION,
+    ]
+      .flatMap(publicLawColumnPairs)
+      .map(({ relation, column }) => `${relation}.${column}`),
   );
 
-const decisionColumnNames = new Set(
-  Object.values(getColumns(schema.caseLawDecisions)).map(({ name }) => name),
+const installedSchemaColumns = new Map(
+  Object.values(schema).flatMap((relation) => {
+    if (!isTable(relation) && !isPgView(relation)) {
+      return [];
+    }
+    const name = isTable(relation)
+      ? getTableName(relation)
+      : getViewConfig(relation).name;
+    const columns = new Set(
+      Object.values(getColumns(relation)).map((column) => {
+        if (is(column, Column)) {
+          return column.name;
+        }
+        if (is(column, SQL.Aliased)) {
+          return column.fieldAlias;
+        }
+        return panic(
+          `Unsupported fixture column in public-law relation ${name}`,
+        );
+      }),
+    );
+    return [[name, columns] as const];
+  }),
 );
-const decisionRelationNames = new Set<string>(CASE_LAW_DECISION_VIEWS);
 
-const grantedPublicLawColumns = (
+export const grantedPublicLawColumns = (
   relation: string,
-  columns: Readonly<Record<string, unknown>>,
+  columns: Readonly<Record<string, PublicLawColumnGrant>>,
+  installedColumns: ReadonlySet<string> | undefined,
 ) =>
-  Object.keys(columns).filter(
-    (column) =>
-      (!decisionRelationNames.has(relation) ||
-        decisionColumnNames.has(column)) &&
-      !PUBLIC_LAW_COLUMNS_GRANTED_IN_A_LATER_RELEASE.has(
-        `${relation}.${column}`,
-      ),
-  );
+  Object.entries(columns).flatMap(([column, grant]) => {
+    switch (grant) {
+      case "required":
+        if (!installedColumns?.has(column)) {
+          return panic(
+            `Required public-law fixture column is absent: ${relation}.${column}`,
+          );
+        }
+        break;
+      case "permitted":
+        if (!installedColumns?.has(column)) {
+          return [];
+        }
+        break;
+      default:
+        grant satisfies never;
+        return panic("Unhandled public-law fixture column grant");
+    }
+    return PUBLIC_LAW_COLUMNS_GRANTED_IN_A_LATER_RELEASE.has(
+      `${relation}.${column}`,
+    )
+      ? []
+      : [column];
+  });
 
 // Expansion releases may declare permitted grants before their relations exist.
 // The harness pushes only this checkout's schema, so it cannot grant those yet.
-export const availableSchemaRelationNames = new Set<string>(
-  Object.values(schema).flatMap((relation) => {
-    if (isTable(relation)) {
-      return [getTableName(relation)];
-    }
-    return isPgView(relation) ? [getViewConfig(relation).name] : [];
-  }),
+export const availableSchemaRelationNames = new Set(
+  installedSchemaColumns.keys(),
 );
 
 /**
@@ -388,6 +448,7 @@ export const availableSchemaRelationNames = new Set<string>(
  * is how a REVOKE goes missing from the harness.
  */
 export const ROLE_GRANT_STATEMENTS = [
+  `GRANT UPDATE (${schema.INVOICE_SEND_UPDATE_COLUMNS.map(({ name }) => quoteSqlIdentifier(name)).join(", ")}) ON TABLE "invoice_sends" TO stella`,
   `GRANT SELECT (generation_provenance), UPDATE (generation_provenance), INSERT (generation_provenance) ON chat_threads TO stella`,
   `GRANT SELECT ON TABLE "soft_law_sources", "soft_law_documents", "soft_law_document_versions", "soft_law_document_locators", "soft_law_ingestion_attempts" TO stella_ingestion`,
   `GRANT INSERT, UPDATE ON TABLE "soft_law_documents", "soft_law_document_versions", "soft_law_document_locators", "soft_law_ingestion_attempts" TO stella_ingestion`,
@@ -395,6 +456,7 @@ export const ROLE_GRANT_STATEMENTS = [
   `GRANT INSERT ON TABLE "soft_law_sources" TO stella_ingestion`,
   `GRANT INSERT ON TABLE "system_audit_runs" TO stella_ingestion`,
   `GRANT SELECT, INSERT, UPDATE ON TABLE "case_law_decision_aliases" TO stella_ingestion`,
+  `GRANT SELECT, INSERT, UPDATE ON TABLE "case_law_completeness_census" TO stella_ingestion`,
   `GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "case_law_decision_alias_moved_identities" TO stella_ingestion`,
   caseLawDecisionViewGrantStatement("later", "stella_ingestion"),
   `
@@ -428,6 +490,7 @@ export const ROLE_GRANT_STATEMENTS = [
       "case_law_judges",
       "case_law_decision_judges",
       "case_law_citations",
+      "case_law_decision_reviews",
       "case_law_provision_citations",
       "case_law_statute_citation_memberships",
       "case_law_statute_citation_counts",
@@ -456,6 +519,7 @@ export const ROLE_GRANT_STATEMENTS = [
       "case_law_judges",
       "case_law_decision_judges",
       "case_law_citations",
+      "case_law_decision_reviews",
       "case_law_provision_citations",
       "case_law_statute_citation_memberships",
       "case_law_statute_citation_counts",
@@ -483,6 +547,9 @@ export const ROLE_GRANT_STATEMENTS = [
   `
     GRANT SELECT ("removal_checkpoint") ON TABLE "case_law_sources" TO stella_ingestion
   `,
+  `
+    GRANT SELECT ("import_snapshot_date") ON TABLE "case_law_sources" TO stella_ingestion
+  `,
   // Ingestion-owned case-law tables the migrations grant one by one, as they
   // were added. `pglite-role-grants.test.ts` holds this list and the
   // migrations to agreement, so the next such table cannot be forgotten here.
@@ -496,7 +563,10 @@ export const ROLE_GRANT_STATEMENTS = [
       "case_law_corpus_pack_refs",
       "case_law_corpus_tombstones",
       "case_law_decision_source_identities",
+      "case_law_decision_fallback_identities",
       "case_law_decision_supplements",
+      "case_law_held_decision_attachments",
+      "case_law_ingestion_failure_evidence",
       "case_law_search_document_preview_passages",
       "case_law_citation_resolution_census",
       "case_law_citation_resolution_census_runs",
@@ -524,6 +594,15 @@ export const ROLE_GRANT_STATEMENTS = [
   `,
   `
     GRANT UPDATE ("claimed_until") ON TABLE "case_law_ranking_signal_changes"
+    TO stella_ingestion
+  `,
+  `
+    GRANT SELECT, DELETE ON TABLE "corpus_index_projection_delete_tasks"
+    TO stella_ingestion
+  `,
+  `
+    GRANT UPDATE ("lease_token", "lease_expires_at")
+    ON TABLE "corpus_index_projection_delete_tasks"
     TO stella_ingestion
   `,
   `
@@ -649,6 +728,29 @@ export const ROLE_GRANT_STATEMENTS = [
     GRANT SELECT, INSERT ON TABLE "corpus_index_group_withdrawals"
     TO stella_ingestion
   `,
+  // Flip receipts are append-only: the guarded flip records, the app reads.
+  `
+    GRANT SELECT, INSERT ON TABLE "corpus_index_generation_flips"
+    TO stella_ingestion
+  `,
+  // Route proofs: the projection runner advances and revokes them; only the
+  // generation's cascade deletes one.
+  `
+    GRANT SELECT, INSERT, UPDATE ON TABLE "corpus_index_route_proofs"
+    TO stella_ingestion
+  `,
+  // Seeding passes: the seeding walk writes them; the transition that takes
+  // a generation out of the active set deletes its pass, and its route rows
+  // cascade.
+  `
+    GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE
+      "corpus_index_generation_seeding_passes"
+    TO stella_ingestion
+  `,
+  `
+    GRANT SELECT, INSERT, UPDATE ON TABLE "corpus_index_route_seedings"
+    TO stella_ingestion
+  `,
   `
     GRANT INSERT, UPDATE ON TABLE
       ${CORPUS_PROJECTION_HISTORY_TABLES_SQL}
@@ -685,13 +787,20 @@ export const ROLE_GRANT_STATEMENTS = [
   ...Object.entries(PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION)
     .filter(
       ([relation, columns]) =>
-        availableSchemaRelationNames.has(relation) &&
         relation !== getTableName(schema.caseLawDecisionAliases) &&
-        grantedPublicLawColumns(relation, columns).length > 0,
+        grantedPublicLawColumns(
+          relation,
+          columns,
+          installedSchemaColumns.get(relation),
+        ).length > 0,
     )
     .map(
       ([relation, columns]) => `
-      GRANT SELECT (${grantedPublicLawColumns(relation, columns)
+      GRANT SELECT (${grantedPublicLawColumns(
+        relation,
+        columns,
+        installedSchemaColumns.get(relation),
+      )
         .map(quoteSqlIdentifier)
         .join(", ")})
         ON TABLE ${quoteSqlIdentifier(relation)}
@@ -792,9 +901,7 @@ const installTestPublicLawViews = async (
       panic(`Public-law view ${config.name} query has bound parameters`);
     }
     await db.execute(sql`
-      CREATE VIEW ${sql.identifier(config.schema ?? "public")}.${sql.identifier(
-        config.name,
-      )}
+      CREATE VIEW ${sql.identifier(config.schema ?? "public")}.${sql.identifier(config.name)}
       AS (${sql.raw(rendered.sql)})
     `);
   }
@@ -809,9 +916,7 @@ export const rebuildTestPublicLawViews = async (
   for (const view of publicLawViews) {
     const config = getViewConfig(view);
     await db.execute(sql`
-      DROP VIEW ${sql.identifier(config.schema ?? "public")}.${sql.identifier(
-        config.name,
-      )}
+      DROP VIEW ${sql.identifier(config.schema ?? "public")}.${sql.identifier(config.name)}
     `);
   }
   await change();
@@ -872,16 +977,19 @@ export const buildFullTestPglite = async (): Promise<PGlite> => {
   await installPgliteFlowTransitions(db);
   await installPgliteWorkspaceAccessObjects(db);
   await installPgliteInvoiceObjects(db);
+  await installPgliteMatterTimerPresence(db);
   await db.transaction(async (tx) => {
     await installPgliteEntityFeatureGateMaintenance(tx);
   });
   await installPgliteAgentSkillRevisionTrigger(db);
   await installPgliteSyntheticMembershipTrigger(db);
+  await installPgliteSharepointPolicyFence(db);
   await installPgliteUserFileOrganizationKeyGuard(db);
   await installPgliteConflictCheckRoutines(db);
   await installPgliteAiMemoryActiveUserGuard(db);
   await installPgliteDecisionAliases(db);
   await installPgliteCorpusProjectionRevisionFence(db);
+  await installPgliteCorpusIndexGenerationRetire(db);
   await installPgliteServiceClientCredentialCascade(db);
   await installPgliteStatuteCitationCounts(db);
   await installPgliteDecisionCitationStats(db);
@@ -892,10 +1000,14 @@ export const buildFullTestPglite = async (): Promise<PGlite> => {
   await installPgliteCaseLawCoverageSummary(db);
   await installPgliteCaseLawObservationFence(db);
   await installPgliteCaseLawParsedSourceInvalidation(db);
+  await installPgliteCaseLawContentChangedAt(db);
   await installPgliteCaseLawSitemapChanges(db);
   await installPgliteCaseLawRankingSignalChanges(db);
+  await installPgliteCorpusProjectionDeleteTasks(db);
   await installPgliteCaseLawPopulationCounts(db);
+  await installPgliteCorpusIndexSeedingLifecycle(db);
   await installPglitePdfSigningTokenScopes(db);
+  await installPgliteInvoiceLinks(db);
   await installPgliteDesktopPresenceRls(db);
   await installPgliteChatTurnRunIdLookup(db);
   await installPgliteOrganizationMemberCapacity(db);
@@ -918,6 +1030,7 @@ export const buildFullTestPglite = async (): Promise<PGlite> => {
   }
   await installPgliteTimeEntryTimerSignals(db);
   await installPgliteChatStoredContentEgress(db);
+  await installPgliteFileObjectReconciliationFill(db);
   await installPgliteSanctionsMonitoringTriggers(db);
   await installPgliteSearchHistoryClearFence(db);
   await installPgliteChatTurnOrdinal(db);
@@ -927,6 +1040,8 @@ export const buildFullTestPglite = async (): Promise<PGlite> => {
     await installPgliteCorrespondenceSources(tx);
   });
   await installPgliteLegalHoldDeleteBackstop(db);
+  // On by default: every suite that commits a canonical row is checked.
+  await installCorpusProjectionSeedingGuard(client);
 
   return client;
 };

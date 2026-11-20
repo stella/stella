@@ -14,8 +14,12 @@ import {
   resolveCitationsForDecision,
 } from "@/api/handlers/case-law/citation-resolution";
 import { deriveDecisionReferences } from "@/api/handlers/case-law/citations/decision-references";
-import type { DecisionReference } from "@/api/handlers/case-law/citations/decision-references";
 import type { extractCitations } from "@/api/handlers/case-law/ingestion/citation-extractor";
+import {
+  citationEvidenceColumns,
+  readReference,
+} from "@/api/handlers/case-law/ingestion/pipeline/citation-reading";
+import type { ReadReference } from "@/api/handlers/case-law/ingestion/pipeline/citation-reading";
 import {
   applyCitationReviews,
   applyDoctrineReviews,
@@ -23,15 +27,13 @@ import {
 import {
   ACTIVE_RULE_SOURCES,
   loadRules,
-  selectCitationPolarity,
 } from "@/api/handlers/case-law/polarity/rule-engine";
-import type {
-  CitationPolarityVerdict,
-  RuleCache,
-} from "@/api/handlers/case-law/polarity/rule-engine";
+import type { RuleCache } from "@/api/handlers/case-law/polarity/rule-engine";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { parseCitationEvidenceWindows } from "@/api/lib/case-law/citation-evidence";
 import { assertCitationStorageField } from "@/api/lib/case-law/citation-storage-bounds";
+import { persistedColumnNumber } from "@/api/lib/db/column-storage";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import { brandPersistedCaseLawCitationId } from "@/api/lib/safe-id-boundaries";
 import { isRecord } from "@/api/lib/type-guards";
@@ -45,12 +47,6 @@ type PlanDecisionCitationsOptions = {
   proceduralKeys: ProceduralKeys;
   scopedDb: ScopedDb;
   sections: { index: number; text: string }[];
-};
-
-/** One reference and the rule tier's reading of its treatment. */
-type ReadReference = {
-  reference: DecisionReference;
-  verdict: CitationPolarityVerdict | null;
 };
 
 /** A decision's references as the writer publishes them. */
@@ -72,9 +68,10 @@ type CitationRow = typeof caseLawCitations.$inferInsert;
 /** The row a reference is stored as, before it is settled. */
 export const citationRowOf = (
   citingDecisionId: SafeId<"caseLawDecision">,
-  { reference, verdict }: ReadReference,
+  read: ReadReference,
 ) =>
   Result.gen(function* () {
+    const { reference, verdict } = read;
     const [identifier] = reference.identifiers;
     const citationText = yield* assertCitationStorageField(
       "text",
@@ -106,6 +103,9 @@ export const citationRowOf = (
       sectionIndex: reference.sectionIndex,
       polarity: verdict?.polarity ?? null,
       polarityRuleId: verdict?.ruleId ?? null,
+      // Where the stored polarity came from, the exact text it was read from,
+      // and the opinion part the reference cites.
+      ...citationEvidenceColumns(read),
     } satisfies CitationRow);
   });
 
@@ -167,17 +167,17 @@ export const planDecisionCitations = async ({
       references: [],
     } as const);
   }
+  // One rule set per decision language, loaded once for every reference.
   const rules = await loadRules(language, scopedDb, polarityRules);
   const plan = {
     disposition: "legacy-graph",
     citingDecisionId,
-    references: references.map((reference) => ({
-      reference,
-      verdict:
-        reference.polarityMentions === null
-          ? null
-          : selectCitationPolarity(rules, reference.polarityMentions),
-    })),
+    // Each reference carries the opinion part it cites; a precedent also
+    // carries the rule tier's verdict over its mentions and the evidence
+    // windows that verdict was read from (see `readReference`).
+    references: references.map((reference) =>
+      readReference(reference, rules, language),
+    ),
   } as const satisfies LegacyGraphCitationPlan;
   return citationRowsOf(plan).map(() => plan);
 };
@@ -254,7 +254,15 @@ const settleRuleVerdicts = async (
   );
   return rows.map((row) =>
     row.polarityRuleId && !active.has(row.polarityRuleId)
-      ? { ...row, polarity: null, polarityRuleId: null }
+      ? {
+          ...row,
+          polarity: null,
+          polarityRuleId: null,
+          polaritySource: null,
+          polarityClassifierVersion: null,
+          polarityEvidenceWindows: null,
+          polarityConfidence: null,
+        }
       : row,
   );
 };
@@ -267,7 +275,7 @@ const textOrNull = (value: unknown): string | null =>
  * rows equal on these are the same citation, whatever the resolver has since
  * made of either.
  */
-const citationContent = (row: {
+export const citationContent = (row: {
   citationText: string;
   citationKey?: string | null | undefined;
   identifierType?: string | null | undefined;
@@ -281,6 +289,11 @@ const citationContent = (row: {
   polarity?: string | null | undefined;
   polarityRuleId?: string | null | undefined;
   doctrinalTreatment?: string | null | undefined;
+  polaritySource?: string | null | undefined;
+  polarityClassifierVersion?: string | null | undefined;
+  polarityEvidenceWindows?: unknown;
+  polarityConfidence?: number | null | undefined;
+  citedPart?: string | undefined;
 }): string =>
   JSON.stringify([
     row.citationText,
@@ -292,10 +305,20 @@ const citationContent = (row: {
     row.citedSheetNumber ?? null,
     row.citedDecisionDate ?? null,
     row.kind ?? CITATION_KIND.PRECEDENT,
-    row.sectionIndex ?? null,
+    persistedColumnNumber(caseLawCitations.sectionIndex, row.sectionIndex),
     row.polarity ?? null,
     row.polarityRuleId ?? null,
     row.doctrinalTreatment ?? null,
+    row.polaritySource ?? null,
+    row.polarityClassifierVersion ?? null,
+    JSON.stringify(
+      parseCitationEvidenceWindows(row.polarityEvidenceWindows ?? null),
+    ),
+    persistedColumnNumber(
+      caseLawCitations.polarityConfidence,
+      row.polarityConfidence,
+    ),
+    row.citedPart ?? "not-stated",
   ]);
 
 /**
@@ -364,7 +387,10 @@ export const writeDecisionCitations = async (
                section_index,
                polarity,
                polarity_rule_id::text AS polarity_rule_id,
-               doctrinal_treatment
+               doctrinal_treatment,
+               polarity_source, polarity_classifier_version,
+               polarity_evidence_windows,
+               polarity_confidence, cited_part
           FROM ${caseLawCitations}
          WHERE citing_decision_id = ${decisionId}::uuid
       `),
@@ -385,13 +411,25 @@ export const writeDecisionCitations = async (
         citedSheetNumber: textOrNull(row["cited_sheet_number"]),
         citedDecisionDate: textOrNull(row["cited_decision_date"]),
         kind: textOrNull(row["kind"]) ?? CITATION_KIND.PRECEDENT,
-        sectionIndex:
-          row["section_index"] === null || row["section_index"] === undefined
-            ? null
-            : Number(row["section_index"]),
+        sectionIndex: persistedColumnNumber(
+          caseLawCitations.sectionIndex,
+          row["section_index"],
+        ),
         polarity: textOrNull(row["polarity"]),
         polarityRuleId: textOrNull(row["polarity_rule_id"]),
         doctrinalTreatment: textOrNull(row["doctrinal_treatment"]),
+        polaritySource: textOrNull(row["polarity_source"]),
+        polarityClassifierVersion: textOrNull(
+          row["polarity_classifier_version"],
+        ),
+        polarityEvidenceWindows: parseCitationEvidenceWindows(
+          row["polarity_evidence_windows"],
+        ),
+        polarityConfidence: persistedColumnNumber(
+          caseLawCitations.polarityConfidence,
+          row["polarity_confidence"],
+        ),
+        citedPart: textOrNull(row["cited_part"]) ?? "not-stated",
       });
       const id = brandPersistedCaseLawCitationId(row["id"]);
       const ids = unmatched.get(key);

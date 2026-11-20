@@ -1,4 +1,6 @@
 import { describe, expect, test } from "bun:test";
+import nodePath from "node:path";
+import { fileURLToPath } from "node:url";
 
 import { ZipArchive } from "@stll/docx-core/zip";
 
@@ -712,12 +714,12 @@ describe("document conversion input", () => {
   });
 
   test("converts the repository document corpus", async () => {
-    const root = new URL("../../../../../", import.meta.url).pathname;
+    const root = fileURLToPath(new URL("../../../../../", import.meta.url));
     const paths: string[] = [];
     for (const directory of ["apps", "packages"]) {
       const glob = new Bun.Glob(`**/*.{docx,xlsx,pptx,odt,rtf,doc}`);
       for await (const path of glob.scan({
-        cwd: `${root}${directory}`,
+        cwd: nodePath.join(root, directory),
         onlyFiles: true,
       })) {
         paths.push(`${directory}/${path}`);
@@ -733,7 +735,7 @@ describe("document conversion input", () => {
       }
       const result = await checkConversionInput(
         mime,
-        new Uint8Array(await Bun.file(`${root}${path}`).arrayBuffer()),
+        new Uint8Array(await Bun.file(nodePath.join(root, path)).arrayBuffer()),
       );
       const refusalReason = DELIBERATE_FIXTURE_REFUSALS[path];
       if (refusalReason !== undefined) {

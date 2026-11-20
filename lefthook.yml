@@ -59,7 +59,7 @@ pre-commit:
       run: bun scripts/check-tracked-symlinks.ts
     lockfiles:
       # Reads the index, so a lockfile staged in this commit is checked too.
-      run: bun run check:standalone-lockfiles
+      run: bun run check:standalone-lockfiles && bun scripts/check-patched-dependencies.ts
 
 # Pre-push keeps only focused checks whose failure would cost a full CI round
 # trip. Lint, format, i18n, and the

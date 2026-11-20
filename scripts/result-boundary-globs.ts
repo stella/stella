@@ -97,10 +97,12 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "apps/api/src/handlers/folio-collab/**/*.ts",
   "apps/api/src/handlers/legal-resolve/**/*.ts",
   "apps/api/src/handlers/legal-reader/**/*.ts",
+  "apps/api/src/handlers/invoice-links/**/*.ts",
   "apps/api/src/handlers/mcp/**/*.ts",
   "apps/api/src/handlers/me/**/*.ts",
   "apps/api/src/handlers/memories/**/*.ts",
   "apps/api/src/handlers/notifications/**/*.ts",
+  "apps/api/src/handlers/outbound-actions/**/*.ts",
   "apps/api/src/handlers/operator/**/*.ts",
   "apps/api/src/handlers/number-series/**/*.ts",
   "apps/api/src/handlers/vat-rates/**/*.ts",
@@ -133,6 +135,7 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "apps/api/src/lib/clauses/**/*.ts",
   "apps/api/src/lib/conditions/**/*.ts",
   "apps/api/src/lib/data-export/**/*.ts",
+  "apps/api/src/lib/dictation/**/*.ts",
   "apps/api/src/lib/document-review/**/*.ts",
   "apps/api/src/lib/document-translation/**/*.ts",
   "apps/api/src/lib/document-types/**/*.ts",
@@ -175,8 +178,10 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "apps/api/src/lib/work-obligations/**/*.ts",
   "apps/api/src/lib/workspaces/**/*.ts",
   "apps/api/src/lib/write-contract/**/*.ts",
+  "apps/desktop/src/dictation/**/*.{ts,tsx}",
   "apps/desktop/src/onboarding/**/*.{ts,tsx}",
   "apps/desktop/src/registry/**/*.{ts,tsx}",
+  "apps/desktop/src/transcribe/**/*.{ts,tsx}",
   "apps/web/src/components/ai-elements/**/*.{ts,tsx}",
   "apps/web/src/components/ai-prompt-input/**/*.{ts,tsx}",
   "apps/web/src/components/billing/**/*.{ts,tsx}",
@@ -199,6 +204,7 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "apps/web/src/components/viewer/**/*.{ts,tsx}",
   "apps/web/src/features/avt/**/*.{ts,tsx}",
   "apps/web/src/features/command-palette/**/*.{ts,tsx}",
+  "apps/web/src/features/correspondence/**/*.{ts,tsx}",
   "apps/web/src/features/organization/**/*.{ts,tsx}",
   "apps/web/src/features/desktop/**/*.{ts,tsx}",
   "apps/web/src/features/guides/**/*.{ts,tsx}",
@@ -274,6 +280,10 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
 ] as const;
 
 export const RESULT_BOUNDARY_GLOBS = [
+  // The page script runs serialised inside a web page and may reference
+  // nothing outside itself, so it cannot import better-result; its catches
+  // turn a DOM parse that throws into a fallback value.
+  "packages/browser-page/src/page-script.ts",
   // Adapter definitions return typed stored-read failures; the existing replay
   // callback protocol consumes those failures through Promise rejection.
   "apps/api/src/lib/legal-search/stored-raw-reparse-boundary.ts",
@@ -306,6 +316,7 @@ export const RESULT_BOUNDARY_GLOBS = [
   // Better Auth invokes these hooks and consumes rejected APIError values.
   // Better Auth organization hooks reject invalid slug operations through APIError.
   "apps/api/src/lib/auth/organization-slug-hooks.ts",
+  "apps/api/src/lib/auth/organization-logo-hooks.ts",
   "apps/api/src/lib/auth/demo-account-hooks.ts",
   "apps/api/src/lib/auth/review-account-plugin.ts",
   "apps/api/src/lib/auth/request-budget-hooks.ts",
@@ -420,6 +431,9 @@ export const RESULT_BOUNDARY_GLOBS = [
   "packages/scripts/src/offline-check-startup.ts",
   "packages/start-runtime/src/runtime.ts",
   "packages/ssr-testkit/src/assert-document.ts",
+  // The TanStack Start request boundary turns callback throws into responses;
+  // test assertions rethrow their original value for Bun to report.
+  "packages/start-runtime/src/test-request.ts",
   "packages/property-testing/src/index.ts",
   // wasm-bindgen reports initialization failures and traps through rejection;
   // this adapter converts that runtime contract to a typed Result.
@@ -557,6 +571,11 @@ export const RESULT_CONVENTION_OPT_OUTS = [
     reason:
       "Chrome extension library: tab-executor is the boundary that maps chrome.* rejections to protocol error codes. Enrol once chrome.* calls sit behind Result.tryPromise.",
     unit: "apps/extension/src/lib",
+  },
+  {
+    reason:
+      "Shared page code of the browser hosts, moved here from the extension library unchanged. Enrol it with that library; the page script itself is a boundary module.",
+    unit: "packages/browser-page/src",
   },
   { reason: "unreviewed", unit: "apps/landing/src" },
   { reason: "unreviewed", unit: "apps/landing/src/components" },

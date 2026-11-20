@@ -57,8 +57,7 @@ export const publicLawAskScope = (
 };
 
 /**
- * The one box of a public-law browser: an identifier, an alias or words. A
- * form so Enter submits the way the browser already knows how to. The
+ * The one box of a public-law browser: an identifier, an alias or words. The
  * statutes and case-law browsers share it so a reader learns one box, not
  * two; the home's entry box is built from the same parts.
  *
@@ -91,7 +90,7 @@ export const PublicLawSearch = ({
     >
       <Input
         aria-label={searchLabel}
-        className="h-11 min-h-11 min-w-64 flex-1 text-base"
+        className="h-11 min-h-11 min-w-64 flex-1"
         maxLength={maxLength}
         onChange={(event) => onQueryChange(event.currentTarget.value)}
         placeholder={placeholder}

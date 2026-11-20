@@ -73,6 +73,13 @@ export const SYSTEM_RUN_ACTOR_COUNTS = {
   "system:legislation-expression-id-backfill": ["claimedDocuments"],
   "system:search-history-country-repair": ["classified", "unclassifiable"],
   "system:audit-retention": ["deletedRuns"],
+  "system:case-law-review-reconcile": [
+    "removedReviews",
+    "writtenReviews",
+    "resolvedReviews",
+    "extractionVersions",
+  ],
+  "system:case-law-citation-form-repair": ["attempted", "applied", "skipped"],
   "system:case-law-background-replay": [
     "attempted",
     "applied",
@@ -108,6 +115,12 @@ export const SYSTEM_RUN_ACTOR_COUNTS = {
   ],
   "system:eu-soft-law-ingestion": ["sourcesRegistered"],
   "system:corpus-generation-operator": ["registered", "promoted", "demoted"],
+  "system:corpus-generation-retire": [
+    "retired",
+    "deletedIndexes",
+    "deletedStates",
+    "deletedIntents",
+  ],
   "system:partner-client-operator": ["created", "rotated", "disabled"],
 } as const satisfies Record<`system:${string}`, readonly string[]>;
 

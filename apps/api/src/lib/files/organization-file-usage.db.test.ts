@@ -1,8 +1,13 @@
 import { panic, Result } from "better-result";
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { eq } from "drizzle-orm";
+import { afterAll, describe, expect, test } from "bun:test";
+import { eq, inArray } from "drizzle-orm";
 
+import { createTestState } from "@stll/test-state";
+
+import type { Transaction } from "@/api/db/root";
 import {
+  BUFFER_OBJECT_CLEANUP_INTENT_STATUS,
+  bufferObjectCleanupIntents,
   ORGANIZATION_ACCESS_STATE,
   organizationAccessStates,
   organizationFileObjects,
@@ -10,12 +15,23 @@ import {
   usageEntitlements,
   usagePolicies,
   usageSeatAssignments,
+  workspaces,
 } from "@/api/db/schema";
 import { env } from "@/api/env";
 import { envBase } from "@/api/env-base";
 import { envDocumentProcessingWorker } from "@/api/env-document-processing-worker";
 import { createSafeId } from "@/api/lib/branded-types";
-import { copyOrganizationFiles } from "@/api/lib/files/copy-organization-files";
+import {
+  BUFFER_INTENT_RECOVERY_RETIRE_AFTER_ATTEMPTS,
+  reconcileBufferObjectCleanupIntents,
+  releaseObjectCleanupIntentsForLifecycle,
+} from "@/api/lib/buffer-intent-reconciliation";
+import {
+  copyOrganizationFiles,
+  copyOrganizationFilesForPublication,
+  lockCopyPublicationIntentsInTransaction,
+  retirePublishedCopyIntentsInTransaction,
+} from "@/api/lib/files/copy-organization-files";
 import {
   DeleteOrganizationFileError,
   deleteOrganizationFilesWithSignal,
@@ -49,10 +65,12 @@ import type { TestIds } from "@/api/tests/security/rls-helpers";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
 
+const testState = createTestState({ file: import.meta.path, config: env });
+const workerState = testState.forConfig(envDocumentProcessingWorker);
+
 let testDb: TestDatabase;
 let ids: TestIds;
-const priorFlag = env.FEATURE_FILE_USAGE_LIMITS;
-const priorWorkerFlag = envDocumentProcessingWorker.FEATURE_FILE_USAGE_LIMITS;
+
 const policyId = createSafeId<"usagePolicy">();
 const entitlementId = createSafeId<"usageEntitlement">();
 const assignmentId = createSafeId<"usageSeatAssignment">();
@@ -92,7 +110,7 @@ const releaseConfirmedAbsentReservation = async (key: string) => {
   );
 };
 
-beforeAll(async () => {
+testState.beforeAll(async () => {
   testDb = await getTestDb();
   ids = createTestIds();
   await setupRlsTestData(testDb, ids);
@@ -120,13 +138,11 @@ beforeAll(async () => {
     organizationId: ids.orgA,
     userId: ids.userA1,
   });
-  env.FEATURE_FILE_USAGE_LIMITS = true;
-  envDocumentProcessingWorker.FEATURE_FILE_USAGE_LIMITS = true;
+  testState.setConfig("FEATURE_FILE_USAGE_LIMITS", true);
+  workerState.setConfig("FEATURE_FILE_USAGE_LIMITS", true);
 });
 
 afterAll(async () => {
-  env.FEATURE_FILE_USAGE_LIMITS = priorFlag;
-  envDocumentProcessingWorker.FEATURE_FILE_USAGE_LIMITS = priorWorkerFlag;
   await testDb
     .delete(organizationFileObjects)
     .where(eq(organizationFileObjects.organizationId, ids.orgA));
@@ -1067,6 +1083,199 @@ describe("organization file usage", () => {
     }
   });
 
+  test("publishes copied ownership and retires its exact-key cleanup intent atomically", async () => {
+    const key = `${ids.orgA}/${ids.wsA1}/prepublication-success.pdf`;
+    const copied = await copyOrganizationFilesForPublication({
+      inputs: [
+        {
+          cleanupScope: {
+            type: "workspaces",
+            workspaces: [{ id: ids.wsA1, state: "active" }],
+          },
+          copy: async () => Result.ok("copied"),
+          objectKey: key,
+          organizationId: ids.orgA,
+          sizeBytes: 3,
+          source: "source",
+        },
+      ],
+      concurrency: 1,
+      db: db(),
+    });
+    expect(Result.isOk(copied)).toBe(true);
+    if (Result.isError(copied)) {
+      return;
+    }
+    const intentIds = copied.value.publicationIntents.flatMap(
+      ({ cleanupIntentIds }) => cleanupIntentIds,
+    );
+    expect(intentIds).toHaveLength(1);
+    await testDb.transaction(async (tx) => {
+      const transaction = asTestRaw<Transaction>(tx);
+      expect(
+        Result.isOk(
+          await lockCopyPublicationIntentsInTransaction({
+            intentIds,
+            organizationId: ids.orgA,
+            tx: transaction,
+            workspaceIds: [ids.wsA1],
+            workspaceMode: "share",
+          }),
+        ),
+      ).toBe(true);
+      expect(
+        Result.isOk(
+          await retirePublishedCopyIntentsInTransaction({
+            intentIds,
+            organizationId: ids.orgA,
+            tx: transaction,
+            workspaceIds: [ids.wsA1],
+          }),
+        ),
+      ).toBe(true);
+    });
+    expect(
+      await testDb
+        .select({ id: bufferObjectCleanupIntents.id })
+        .from(bufferObjectCleanupIntents)
+        .where(inArray(bufferObjectCleanupIntents.id, intentIds)),
+    ).toEqual([]);
+    expect(
+      await testDb
+        .select({ status: organizationFileObjects.status })
+        .from(organizationFileObjects)
+        .where(eq(organizationFileObjects.objectKey, key)),
+    ).toEqual([{ status: "committed" }]);
+    await removeOrganizationFileBytes(key, db());
+  });
+
+  test("a lifecycle deletion preempts a paused copy and late completion converges through cleanup", async () => {
+    const workspaceId = createSafeId<"workspace">();
+    const key = `${ids.orgB}/${workspaceId}/late-copy.pdf`;
+    await testDb.insert(workspaces).values({
+      id: workspaceId,
+      name: "Late copy target",
+      organizationId: ids.orgB,
+      reference: `late-${workspaceId}`,
+      status: "active",
+    });
+    const started = Promise.withResolvers<undefined>();
+    const completeCopy = Promise.withResolvers<Result<string, Error>>();
+    const running = copyOrganizationFilesForPublication({
+      inputs: [
+        {
+          cleanupScope: {
+            type: "workspaces",
+            workspaces: [{ id: workspaceId, state: "active" }],
+          },
+          copy: async () => {
+            started.resolve(undefined);
+            return await completeCopy.promise;
+          },
+          objectKey: key,
+          organizationId: ids.orgB,
+          sizeBytes: 4,
+          source: "source",
+        },
+      ],
+      concurrency: 1,
+      db: db(),
+    });
+    await started.promise;
+    const safeDb = async <T>(run: (tx: Transaction) => Promise<T>) =>
+      await Result.tryPromise(
+        async () =>
+          await testDb.transaction(
+            async (tx) => await run(asTestRaw<Transaction>(tx)),
+          ),
+      );
+    const inFlightDeletes: string[] = [];
+    expect(
+      await reconcileBufferObjectCleanupIntents({
+        deleteObject: async (objectKey) => {
+          inFlightDeletes.push(objectKey);
+          return Result.ok(undefined);
+        },
+        limit: 1,
+        safeDb,
+      }),
+    ).toBe(0);
+    expect(inFlightDeletes).toEqual([]);
+    await testDb.transaction(async (tx) => {
+      const transaction = asTestRaw<Transaction>(tx);
+      await tx
+        .update(workspaces)
+        .set({ status: "deleting" })
+        .where(eq(workspaces.id, workspaceId));
+      await releaseObjectCleanupIntentsForLifecycle(transaction, {
+        organizationId: ids.orgB,
+        type: "workspace",
+        workspaceId,
+      });
+      await tx.delete(workspaces).where(eq(workspaces.id, workspaceId));
+    });
+    completeCopy.resolve(Result.ok("copied late"));
+    const late = await running;
+    expect(late).toMatchObject({
+      error: { reason: "destination_unavailable" },
+    });
+    const intent = await testDb
+      .select({
+        id: bufferObjectCleanupIntents.id,
+        status: bufferObjectCleanupIntents.status,
+      })
+      .from(bufferObjectCleanupIntents)
+      .where(eq(bufferObjectCleanupIntents.objectKey, key))
+      .then((rows) => rows.at(0));
+    expect(intent?.status).toBe(BUFFER_OBJECT_CLEANUP_INTENT_STATUS.RECOVERING);
+    expect(intent).toBeDefined();
+    if (!intent) {
+      return;
+    }
+    await testDb
+      .update(bufferObjectCleanupIntents)
+      .set({
+        attemptCount: BUFFER_INTENT_RECOVERY_RETIRE_AFTER_ATTEMPTS,
+        nextAttemptAt: new Date(0),
+      })
+      .where(eq(bufferObjectCleanupIntents.id, intent.id));
+    const deletedKeys: string[] = [];
+    expect(
+      await reconcileBufferObjectCleanupIntents({
+        deleteObject: async (objectKey) => {
+          deletedKeys.push(objectKey);
+          return Result.ok(undefined);
+        },
+        limit: 1,
+        safeDb,
+      }),
+    ).toBe(1);
+    expect(deletedKeys).toEqual([key]);
+    expect(
+      await testDb
+        .select({ id: bufferObjectCleanupIntents.id })
+        .from(bufferObjectCleanupIntents)
+        .where(eq(bufferObjectCleanupIntents.id, intent.id)),
+    ).toEqual([]);
+    const reservation = await testDb
+      .select({ writeId: organizationFileObjects.writeId })
+      .from(organizationFileObjects)
+      .where(eq(organizationFileObjects.objectKey, key))
+      .then((rows) => rows.at(0));
+    expect(reservation?.writeId).toBeTruthy();
+    if (reservation?.writeId) {
+      await releaseOrganizationFileBytes(
+        {
+          objectKey: key,
+          organizationId: ids.orgB,
+          status: "reserved",
+          writeId: reservation.writeId,
+        },
+        db(),
+      );
+    }
+  });
+
   test("batch commits settle matching siblings when one reservation is reclaimed", async () => {
     const reserved = await reserveOrganizationFilesBytes(
       [input("fixture/reclaimed-a", 7), input("fixture/reclaimed-b", 5)],
@@ -1174,8 +1383,8 @@ describe("organization file usage", () => {
   });
 
   test("flag off does not call the database", async () => {
-    env.FEATURE_FILE_USAGE_LIMITS = false;
-    envDocumentProcessingWorker.FEATURE_FILE_USAGE_LIMITS = false;
+    testState.setConfig("FEATURE_FILE_USAGE_LIMITS", false);
+    workerState.setConfig("FEATURE_FILE_USAGE_LIMITS", false);
     const noDb = {
       transaction: async () => {
         throw new Error("unexpected transaction");
@@ -1188,7 +1397,7 @@ describe("organization file usage", () => {
       >(noDb),
     );
     expect(reservation).toMatchObject({ value: { status: "disabled" } });
-    env.FEATURE_FILE_USAGE_LIMITS = true;
-    envDocumentProcessingWorker.FEATURE_FILE_USAGE_LIMITS = true;
+    testState.setConfig("FEATURE_FILE_USAGE_LIMITS", true);
+    workerState.setConfig("FEATURE_FILE_USAGE_LIMITS", true);
   });
 });

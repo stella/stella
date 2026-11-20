@@ -2,7 +2,6 @@ import { describe, expect, test } from "bun:test";
 
 import {
   nextReaderTextScale,
-  parseReaderTextScale,
   READER_TEXT_SCALE_DEFAULT,
   READER_TEXT_SCALES,
   readerTextScaleBounds,
@@ -59,20 +58,5 @@ describe("reader text scale", () => {
       atMax: true,
       atMin: false,
     });
-  });
-
-  test("only a stored rung is read back", () => {
-    for (const rung of READER_TEXT_SCALES) {
-      expect(parseReaderTextScale(JSON.stringify(rung))).toBe(rung);
-    }
-  });
-
-  test("anything else is no choice at all", () => {
-    expect(parseReaderTextScale(null)).toBeNull();
-    expect(parseReaderTextScale("")).toBeNull();
-    expect(parseReaderTextScale("1.15")).toBeNull();
-    expect(parseReaderTextScale('"1"')).toBeNull();
-    expect(parseReaderTextScale("large")).toBeNull();
-    expect(parseReaderTextScale("{}")).toBeNull();
   });
 });

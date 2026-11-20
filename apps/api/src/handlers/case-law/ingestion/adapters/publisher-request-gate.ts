@@ -1,3 +1,8 @@
+// parser-output-unchanged: the cz-isir adapter entry is new; existing adapters read only their own keys, so their parsed output is unchanged.
+// parser-output-unchanged: the Finanční správa and Ministry of the Interior gate reservations are new; existing gates and parsed output are unchanged.
+// parser-output-unchanged: the cz-ns-sbirka adapter entry is new; existing adapters read only their own keys, so their parsed output is unchanged.
+// parser-output-unchanged: the TJDFT gate reservation is new; existing gates and parsed output are unchanged.
+// parser-output-unchanged: the TST gate reservation is new; existing gates and parsed output are unchanged.
 // parser-output-unchanged: gate reservation timeouts carry a static label per gate; parsed response output is unchanged.
 // parser-output-unchanged: typed pacing availability and reply validation affect request scheduling only; parsed response values and persisted records are unchanged.
 // parser-output-unchanged: request scheduling and scoped fixture dependencies only; parsed response output is unchanged.
@@ -51,8 +56,14 @@ const PUBLISHER_GATE_TIMEOUT_LABEL = {
   "cellar-eu": "cellar-eu publisher gate reservation",
   "bfdi-de": "bfdi-de publisher gate reservation",
   "fcl-uk": "fcl-uk publisher gate reservation",
+  "tjdft-jus-br": "tjdft-jus-br publisher gate reservation",
+  "nsoud-sbirka-cz": "nsoud-sbirka-cz publisher gate reservation",
+  "isir-justice-cz": "isir-justice-cz publisher gate reservation",
+  "tst-jus-br": "tst-jus-br publisher gate reservation",
   "suip-cz": "suip-cz publisher gate reservation",
   "uoou-sk": "uoou-sk publisher gate reservation",
+  "financnisprava-cz": "financnisprava-cz publisher gate reservation",
+  "mv-cz": "mv-cz publisher gate reservation",
 } as const satisfies Record<PublisherGateId, string>;
 
 const TRY_RESERVE_SLOT_SCRIPT = `
@@ -191,7 +202,7 @@ const loadRedisClient = async () => {
 
 let deployedStore:
   ReturnType<typeof RedisClientModule.createAdmissionRedis> | undefined;
-const deployedGateClient = async () => {
+export const deployedPublisherGateClient = async () => {
   const { createAdmissionRedis } = await loadRedisClient();
   deployedStore ??= createAdmissionRedis();
   const connection = await deployedStore.ready();
@@ -259,7 +270,7 @@ const defaultDependencies = (
       if (isLocalDevOpen()) {
         return localRedis;
       }
-      return await deployedGateClient();
+      return await deployedPublisherGateClient();
     },
     sleep: abortableSleep,
   };

@@ -12,6 +12,7 @@ import {
   BROWSER_EXTENSION_MESSAGE_SOURCE,
   type BrowserControlCommand,
   type BrowserControlResult,
+  browserControlResultPage,
   browserDocumentAddress,
   browserDownloadStagedPath,
   formatElementReference,
@@ -23,6 +24,7 @@ import {
   parseBrowserExtensionPeerVersion,
   parseBrowserExtensionRequest,
   parseBrowserExtensionResponse,
+  parseBrowserWebPeerVersion,
   parseElementReference,
   supersedeBrowserControlResult,
   SUPERSEDED_BROWSER_FIND_NOTE,
@@ -407,6 +409,38 @@ describe("browser control result contract", () => {
     expect(JSON.stringify(projected).length).toBeLessThan(1000);
   });
 
+  test("names the page a read, a find or its projection read, as the extension reported it", () => {
+    const found = {
+      found: {
+        contentTrust: BROWSER_CONTROL_CONTENT_TRUST.untrustedWebContent,
+        headings: [{ cursor: CURSOR, level: 2, text: "Fees" }],
+        tabId: 7,
+        title: "Example",
+        type: "headings",
+        url: "https://example.com/fees",
+      },
+      protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
+      status: "found",
+    } satisfies BrowserControlResult;
+    const page = { title: "Example", url: "https://example.com/fees" };
+    expect(browserControlResultPage(found)).toEqual(page);
+    expect(
+      browserControlResultPage(supersedeBrowserControlResult(found)),
+    ).toEqual(page);
+    expect(
+      browserControlResultPage({
+        code: BROWSER_CONTROL_ERROR_CODE.timedOut,
+        message: "The page did not answer.",
+        protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
+        status: "error",
+      }),
+    ).toBeNull();
+    // A URL the model wrote is not an output the extension reported.
+    expect(
+      browserControlResultPage({ url: "https://example.com/" }),
+    ).toBeNull();
+  });
+
   test("accepts find results bounded like a page", () => {
     const found = {
       found: {
@@ -637,6 +671,33 @@ describe("extension peer version", () => {
     ["not an object", "stella-browser-extension"],
   ])("ignores %s", (_name, input) => {
     expect(parseBrowserExtensionPeerVersion(input)).toBeNull();
+  });
+});
+
+describe("stella web peer version", () => {
+  test("reads the version of a stella page message from another protocol", () => {
+    const olderPing = {
+      protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION - 1,
+      requestId: "request-1",
+      source: "stella-web",
+      type: "ping",
+    };
+    expect(parseBrowserExtensionRequest(olderPing)).toBeNull();
+    expect(parseBrowserWebPeerVersion(olderPing)).toBe(
+      BROWSER_CONTROL_PROTOCOL_VERSION - 1,
+    );
+  });
+
+  test.each([
+    [
+      "an extension message",
+      { protocolVersion: 3, source: "stella-browser-extension" },
+    ],
+    ["no version", { source: "stella-web" }],
+    ["a fractional version", { protocolVersion: 1.5, source: "stella-web" }],
+    ["not an object", "stella-web"],
+  ])("ignores %s", (_name, input) => {
+    expect(parseBrowserWebPeerVersion(input)).toBeNull();
   });
 });
 

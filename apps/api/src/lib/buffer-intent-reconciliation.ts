@@ -20,15 +20,16 @@ import type { PendingUploadPurposeData } from "@/api/db/schema";
 import { captureError } from "@/api/lib/analytics/capture";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
-import {
-  organizationObjectIntentLockKey,
-  withAggregateRowQuery,
-} from "@/api/lib/db/aggregate-lock";
+import { withAggregateRowQuery } from "@/api/lib/db/aggregate-lock";
 import { createFileKey } from "@/api/lib/file-key";
 import {
   type DeleteOrganizationFileError,
   deleteOrganizationFileWithSignal,
 } from "@/api/lib/files/delete-organization-file";
+import {
+  insertWritingObjectCleanupIntents,
+  lockOrganizationObjectIntentsForWriter,
+} from "@/api/lib/files/object-cleanup-intent-fence";
 import type { OrganizationFileUsageError } from "@/api/lib/files/organization-file-usage";
 import { LIMITS } from "@/api/lib/limits";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
@@ -36,6 +37,8 @@ import { S3_OBJECT_WRITE_CERTAINTY } from "@/api/lib/s3";
 import type { S3ObjectWriteCertainty } from "@/api/lib/s3";
 import { withTimeout } from "@/api/lib/with-timeout";
 import type { LegalHoldActiveError } from "@/api/lib/workspaces/legal-holds/errors";
+
+export { lockOrganizationObjectIntentsForWriter } from "@/api/lib/files/object-cleanup-intent-fence";
 
 type DeleteObject = (
   key: string,
@@ -50,10 +53,9 @@ type DeleteObject = (
   | undefined
 >;
 
-export const BUFFER_INTENT_TTL_MS = 5 * 60 * 1000;
+const BUFFER_INTENT_TTL_MS = 5 * 60 * 1000;
 export const BUFFER_INTENT_STALE_MS = 60 * 1000;
-export const BUFFER_INTENT_HEARTBEAT_MS = 15 * 1000;
-const BUFFER_INTENT_RECONCILE_LIMIT = 25;
+const BUFFER_INTENT_HEARTBEAT_MS = 15 * 1000;
 export const BUFFER_INTENT_DELETE_TIMEOUT_MS = 30 * 1000;
 export const BUFFER_INTENT_WRITE_TIMEOUT_MS = 2 * 60 * 1000;
 export const OBJECT_WRITE_RECOVERY_DELAY_MS = BUFFER_INTENT_WRITE_TIMEOUT_MS;
@@ -157,15 +159,6 @@ class BufferIntentOwnershipError extends TaggedError(
   "BufferIntentOwnershipError",
 )<{ message: string }> {}
 
-export const lockOrganizationObjectIntentsForWriter = async (
-  tx: Transaction,
-  organizationId: SafeId<"organization">,
-): Promise<void> => {
-  await tx.execute(
-    sql`SELECT pg_advisory_xact_lock_shared(hashtext(${organizationObjectIntentLockKey(organizationId)}))`,
-  );
-};
-
 type ActiveWorkspaceBufferIntentOptions = {
   tx: Transaction;
   workspaceId: SafeId<"workspace">;
@@ -251,6 +244,8 @@ export const reserveObjectCleanupIntents = async ({
     await lockOrganizationObjectIntentsForWriter(tx, organizationId);
 
     if (uniqueWorkspaceIds.length > 0) {
+      // Readers keep the shared matter lock they take today; publication
+      // takes the matter's update lock first, through the aggregate owner.
       const lockedWorkspaces = await tx
         .select({ id: workspaces.id, status: workspaces.status })
         .from(workspaces)
@@ -276,8 +271,8 @@ export const reserveObjectCleanupIntents = async ({
         });
       }
     }
-    // audit: skip; crash-recovery ownership for the later audited mutation.
-    await tx.insert(bufferObjectCleanupIntents).values(
+    await insertWritingObjectCleanupIntents(
+      tx,
       intents.map(({ id, objectKey, ownerWorkspaceId }) => ({
         chatThreadId: chatThreadId ?? null,
         id,
@@ -287,7 +282,6 @@ export const reserveObjectCleanupIntents = async ({
         ),
         objectKey,
         organizationId,
-        status: BUFFER_OBJECT_CLEANUP_INTENT_STATUS.WRITING,
         workspaceId: ownerWorkspaceId,
       })),
     );
@@ -800,7 +794,7 @@ export const startBufferIntentHeartbeat = ({
   };
 };
 
-export const isRecoverableBufferIntent = (
+const isRecoverableBufferIntent = (
   value: PendingUploadPurposeData,
   purpose: BufferIntentPurpose,
 ): value is RecoverableBufferIntent =>
@@ -814,7 +808,7 @@ const rejectionReason = (purpose: BufferIntentPurpose): string =>
     ? "Reconciled abandoned server-generated entity bytes"
     : "Reconciled abandoned server-generated version bytes";
 
-export const isBufferIntentPurpose = (
+const isBufferIntentPurpose = (
   purpose: string,
 ): purpose is BufferIntentPurpose =>
   purpose === "entity_create" || purpose === "entity_version";
@@ -1169,30 +1163,6 @@ export const reconcileBufferObjectCleanupIntents = async ({
     }
   }
   return claimedResult.value.length;
-};
-
-/**
- * Claim and remove one bounded workspace batch of final-key objects whose
- * durable intent proves that no entity/version transaction committed. The
- * intent is finalized atomically with the reference, so a committed object
- * can never satisfy this stale-scanning predicate.
- */
-export const reconcileStaleBufferIntents = async ({
-  safeDb,
-  organizationId,
-  workspaceId,
-  purpose,
-}: {
-  safeDb: SafeDb;
-  organizationId: SafeId<"organization">;
-  workspaceId: SafeId<"workspace">;
-  purpose: BufferIntentPurpose;
-}): Promise<void> => {
-  await reconcileStaleBufferIntentBatch({
-    safeDb,
-    scope: { organizationId, workspaceId, purpose },
-    limit: BUFFER_INTENT_RECONCILE_LIMIT,
-  });
 };
 
 /**

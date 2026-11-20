@@ -19,11 +19,24 @@ import getLocalRunStepContent from "@/api/handlers/chat/local-run-step-content";
 import getLocalRunners from "@/api/handlers/chat/local-runners";
 import getMessage from "@/api/handlers/chat/messages/get";
 import getMessages from "@/api/handlers/chat/messages/list";
+import {
+  readLocalFilesUndo,
+  undoLocalFiles,
+} from "@/api/handlers/chat/messages/local-files-undo";
 import acceptMessageRevision from "@/api/handlers/chat/messages/revisions/accept";
 import getMessageRevisions from "@/api/handlers/chat/messages/revisions/list";
 import revertMessageRevision from "@/api/handlers/chat/messages/revisions/revert";
 import proposeMessageSpanEdit from "@/api/handlers/chat/messages/revisions/span-edit";
 import getOlderMessages from "@/api/handlers/chat/older-messages/list";
+import cancelQueuedChatMessage from "@/api/handlers/chat/queue/cancel";
+import enqueueChatMessage from "@/api/handlers/chat/queue/enqueue";
+import moveQueuedChatMessage from "@/api/handlers/chat/queue/move";
+import pauseChatQueue from "@/api/handlers/chat/queue/pause";
+import readChatQueue from "@/api/handlers/chat/queue/read";
+import readQueuedChatMessage from "@/api/handlers/chat/queue/read-message";
+import replaceQueuedChatMessage from "@/api/handlers/chat/queue/replace";
+import resumeChatQueue from "@/api/handlers/chat/queue/resume";
+import sendQueuedChatMessageNow from "@/api/handlers/chat/queue/send-now";
 import readFileThread from "@/api/handlers/chat/read-file-thread";
 import resolveFileThread from "@/api/handlers/chat/resolve-file-thread";
 import resolveTemplateThread from "@/api/handlers/chat/resolve-template-thread";
@@ -48,10 +61,6 @@ import createChatToolGrant from "@/api/handlers/chat/tool-grants/create";
 import deleteChatToolGrant from "@/api/handlers/chat/tool-grants/delete";
 import listChatToolGrants from "@/api/handlers/chat/tool-grants/list";
 import cancelTurn from "@/api/handlers/chat/turns/cancel";
-import {
-  readLocalFilesUndo,
-  undoLocalFiles,
-} from "@/api/handlers/chat/turns/local-files-undo";
 import { joinChatTurn, probeChatTurn } from "@/api/handlers/chat/turns/resume";
 import steerTurn from "@/api/handlers/chat/turns/steer";
 import updateThreadModel from "@/api/handlers/chat/update-thread-model";
@@ -123,11 +132,30 @@ export const chatRoute = routes(
     "/threads/:threadId/turns/:turnId/join": { GET: joinChatTurn },
     "/threads/:threadId/turns/:turnId/cancel": { POST: cancelTurn },
     "/threads/:threadId/turns/:turnId/steer": { POST: steerTurn },
-    "/threads/:threadId/turns/:turnId/local-files/undo": {
+    "/threads/:threadId/messages/:messageId/local-files/undo": {
       GET: readLocalFilesUndo,
       POST: undoLocalFiles,
     },
     "/threads/:threadId/background-tasks": { GET: readBackgroundTasks },
+    "/threads/:threadId/queue": {
+      GET: readChatQueue,
+      POST: enqueueChatMessage,
+    },
+    "/threads/:threadId/queue/hold": {
+      PUT: pauseChatQueue,
+      DELETE: resumeChatQueue,
+    },
+    "/threads/:threadId/queue/:messageId": {
+      GET: readQueuedChatMessage,
+      PUT: replaceQueuedChatMessage,
+      DELETE: cancelQueuedChatMessage,
+    },
+    "/threads/:threadId/queue/:messageId/move": {
+      POST: moveQueuedChatMessage,
+    },
+    "/threads/:threadId/queue/:messageId/send-now": {
+      POST: sendQueuedChatMessageNow,
+    },
     "/threads/:threadId/fork": { POST: forkThread },
     "/threads/:threadId/export": { POST: createMessageExport },
   },

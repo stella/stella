@@ -4,7 +4,15 @@ import path from "node:path";
 import * as v from "valibot";
 
 import { AI_ERROR_KINDS } from "@stll/api-contract/ai-errors";
-import { CHAT_TOOL_LABELS } from "@stll/api-contract/chat-tool-activity";
+import {
+  CODE_TOOL_RESEARCHES,
+  type CodeToolResearch,
+} from "@stll/api-contract/chat-code-step";
+import {
+  CHAT_TOOL_LABELS,
+  PROCESS_SUMMARY_PHRASES,
+  type ProcessSummaryPhrase,
+} from "@stll/api-contract/chat-tool-activity";
 import { UI_LOCALES } from "@stll/locales";
 
 import { CHAT_FAILURE_KEYS } from "@/state/chat-failure";
@@ -41,6 +49,30 @@ const WEB_TITLE_KEYS: Readonly<Record<string, readonly string[]>> = {
   show_visual: ["chat", "generatedView"],
   "skill-edit": ["common", "edit"],
 };
+
+/** Where the web keeps the title of each research a code step does
+ *  (`CODE_TOOL_RESEARCH_TITLE_KEYS` in `tool-call-title.logic.ts`). */
+const WEB_RESEARCH_TITLE_KEYS = {
+  caseLaw: ["chat", "toolCall", "searchingCaseLaw"],
+  legislation: ["chat", "toolCall", "readingLegislation"],
+  legislationAndCaseLaw: ["chat", "toolCall", "searchingLegislationAndCaseLaw"],
+} as const satisfies Record<CodeToolResearch, readonly string[]>;
+
+/**
+ * Where the phone (`answer-steps`) and the web (`chat-step-summary`) keep
+ * each phrase of a run's summary: under `processSummary`, except the two
+ * counts both share with other rows.
+ */
+const SHARED_SUMMARY_KEYS: Partial<
+  Record<ProcessSummaryPhrase, { phone: string[]; web: string[] }>
+> = {
+  lookups: { phone: ["lookupCount"], web: ["chat", "toolCall", "lookupCount"] },
+  steps: { phone: ["stepCount"], web: ["common", "stepCount"] },
+};
+const phoneSummaryKey = (phrase: ProcessSummaryPhrase) =>
+  SHARED_SUMMARY_KEYS[phrase]?.phone ?? ["processSummary", phrase];
+const webSummaryKey = (phrase: ProcessSummaryPhrase) =>
+  SHARED_SUMMARY_KEYS[phrase]?.web ?? ["chat", "processSummary", phrase];
 
 /**
  * Where the web keeps each phrase of a coding agent's own steps: the title
@@ -102,6 +134,15 @@ const WEB_LOCAL_RUN_KEYS = {
     showMore: ["common", "showMore"],
   },
   sessionNotResumed: ["chat", "localRun", "sessionNotResumed"],
+  steered: ["chat", "tool", "user_message"],
+  ranOnModel: ["chat", "ranOnModel"],
+  desktopSettingsSteps: ["chat", "localRun", "desktopSettingsSteps"],
+  errorLimitResetsAt: ["chat", "localRun", "errorLimitResetsAt"],
+  limitReminderNotify: ["chat", "localRun", "limitReminderNotify"],
+  limitReminderScheduled: ["chat", "localRun", "limitReminderScheduled"],
+  limitResumeContinue: ["chat", "localRun", "limitResumeContinue"],
+  limitResumeScheduled: ["chat", "localRun", "limitResumeScheduled"],
+  limitReminderCancel: ["common", "cancel"],
 } as const satisfies WebKeysOf<MobileMessages["chat"]["localRun"]>;
 
 /** Where the web keeps the reason each failed turn gives (`AI_FAILURE_ERROR_KEYS`). */
@@ -179,8 +220,26 @@ describe("an answer's steps", () => {
         title: at(web, WEB_TITLE_KEYS[label] ?? ["chat", "tool", label]),
       }).toEqual({ label, title });
     }
+    // A code step is titled by the research it does, from the same rules
+    // the web uses (`codeStepResearch`), in the web's words.
+    expect(Object.keys(chat.toolResearch).toSorted()).toEqual(
+      [...CODE_TOOL_RESEARCHES].toSorted(),
+    );
+    expect(webMessages(web, WEB_RESEARCH_TITLE_KEYS)).toEqual(
+      chat.toolResearch,
+    );
     expect(at(web, ["chat", "processSummary"])).toEqual(chat.processSummary);
     expect(at(web, ["common", "stepCount"])).toBe(chat.stepCount);
+    // Each phrase a run's summary is made of (`summarizeProcessRun`), read
+    // where the phone keeps it, in the web's words.
+    for (const phrase of PROCESS_SUMMARY_PHRASES) {
+      const phone = at(chat, phoneSummaryKey(phrase));
+      expect({ phrase, phone }).toEqual({
+        phrase,
+        phone: at(web, webSummaryKey(phrase)),
+      });
+      expect(typeof phone).toBe("string");
+    }
     expect(at(web, ["chat", "reasoning"])).toBe(chat.reasoning);
     expect(at(web, ["chat", "historyTrimmed"])).toBe(chat.historyTrimmed);
     expect(webMessages(web, WEB_LOCAL_RUN_KEYS)).toEqual(chat.localRun);
@@ -212,5 +271,44 @@ describe("a failed answer", () => {
         webKey: WEB_FAILURE_KEYS[CHAT_FAILURE_KEYS[kind]].join("."),
       });
     }
+  });
+});
+
+/** Where the web keeps each string of the phone's chat queue. */
+const WEB_QUEUE_KEYS = {
+  notice: ["chat", "queuedNotice"],
+  prompt: ["chat", "queuePrompt"],
+  sendNow: ["chat", "sendQueuedMessageNow"],
+  remove: ["chat", "cancelQueuedMessage"],
+  edit: ["common", "edit"],
+  moveUp: ["common", "moveUp"],
+  moveDown: ["common", "moveDown"],
+  cancel: ["common", "cancel"],
+  attachments: ["chat", "queuedAttachmentCount"],
+  actions: ["chat", "queue", "actions"],
+  notSent: ["chat", "queue", "notSent"],
+  pause: ["chat", "queue", "pause"],
+  resume: ["chat", "queue", "resume"],
+  replaceTitle: ["chat", "queue", "replaceTitle"],
+  replaceDescription: ["chat", "queue", "replaceDescription"],
+  noLongerQueued: ["chat", "queue", "noLongerQueued"],
+  held: {
+    "turn-failed": ["chat", "queue", "heldTurnFailed"],
+    "turn-interrupted": ["chat", "queue", "heldTurnInterrupted"],
+    member: ["chat", "queue", "heldByMember"],
+    "send-refused": ["chat", "queue", "heldSendRefused"],
+    "usage-limit": ["chat", "queue", "heldUsageLimit"],
+    "computer-away": ["chat", "queue", "heldComputerAway"],
+  },
+} as const satisfies {
+  readonly [Key in keyof MobileMessages["chat"]["queue"]]: unknown;
+};
+
+// The queue reads as on the web: the same notices, actions and reasons.
+describe("a chat's queue", () => {
+  test.each(UI_LOCALES)("is worded in %s as on the web", (locale) => {
+    const web = webCatalog(locale);
+    const { chat } = CATALOGS[locale];
+    expect(webMessages(web, WEB_QUEUE_KEYS)).toEqual(chat.queue);
   });
 });

@@ -3,6 +3,7 @@ import type { OnlineMigrationEntry } from "../online-migration-entry";
 export default {
   id: "indexes-sanctions-screening-events-org-cursor-idx",
   revision: 300,
+  lifecycle: "finalized",
   type: "indexes",
   values: [
     {

@@ -43,7 +43,7 @@ jobs:
       contents: read
     env:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-      RUSTUP_TOOLCHAIN: 1.99.1
+      RUSTUP_TOOLCHAIN: 1.100.0
     steps:
       - name: Validate inputs
         env:
@@ -64,7 +64,7 @@ jobs:
           submodules: true
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@2ba6dc5822df5213c500aa6edb7b6c4bdec56804
+        uses: stella/.github/actions/setup-bun-cached@2664e46f02aea7164ba71bcdd485a686166993a4
         with:
           # Always false here: this job never runs on main.
           save: ${{ github.ref == 'refs/heads/main' }}

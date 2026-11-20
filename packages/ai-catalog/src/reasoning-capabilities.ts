@@ -33,6 +33,20 @@ export type ModelReasoningCapabilities = {
 // Native Anthropic currently emits signed thinking only; redacted blocks are
 // not exposed by the installed adapter, so they are not admitted for replay.
 export const MODEL_REASONING_CAPABILITIES = {
+  "gemini-4-neon": {
+    support: "supported",
+    emittedFormats: ["google-thought-signature"],
+    openAIIncludeEncryptedContent: false,
+    openAIStore: null,
+    anthropicThinking: "none",
+    replayCompatibility: [
+      {
+        provider: "google",
+        model: "gemini-4-neon",
+        format: "google-thought-signature",
+      },
+    ],
+  },
   "gemini-4-hydrogen": {
     support: "supported",
     emittedFormats: ["google-thought-signature"],
@@ -173,6 +187,22 @@ export const MODEL_REASONING_CAPABILITIES = {
       },
     ],
   },
+  "openai/gpt-6.2-astra": {
+    support: "supported",
+    emittedFormats: ["none"],
+    openAIIncludeEncryptedContent: false,
+    openAIStore: null,
+    anthropicThinking: "none",
+    replayCompatibility: [],
+  },
+  "openai/gpt-6.2-sol": {
+    support: "supported",
+    emittedFormats: ["none"],
+    openAIIncludeEncryptedContent: false,
+    openAIStore: null,
+    anthropicThinking: "none",
+    replayCompatibility: [],
+  },
   "openai/gpt-6.1-sol": {
     support: "supported",
     emittedFormats: ["none"],
@@ -230,6 +260,14 @@ export const MODEL_REASONING_CAPABILITIES = {
     replayCompatibility: [],
   },
   "openai/gpt-5.6-luna": {
+    support: "supported",
+    emittedFormats: ["none"],
+    openAIIncludeEncryptedContent: false,
+    openAIStore: null,
+    anthropicThinking: "none",
+    replayCompatibility: [],
+  },
+  "google/gemini-4-neon": {
     support: "supported",
     emittedFormats: ["none"],
     openAIIncludeEncryptedContent: false,
@@ -380,6 +418,34 @@ export const MODEL_REASONING_CAPABILITIES = {
     openAIStore: null,
     anthropicThinking: "none",
     replayCompatibility: [],
+  },
+  "gpt-6.2-astra": {
+    support: "supported",
+    emittedFormats: ["openai-encrypted-content"],
+    openAIIncludeEncryptedContent: true,
+    openAIStore: false,
+    anthropicThinking: "none",
+    replayCompatibility: [
+      {
+        provider: "openai",
+        model: "gpt-6.2-astra",
+        format: "openai-encrypted-content",
+      },
+    ],
+  },
+  "gpt-6.2-sol": {
+    support: "supported",
+    emittedFormats: ["openai-encrypted-content"],
+    openAIIncludeEncryptedContent: true,
+    openAIStore: false,
+    anthropicThinking: "none",
+    replayCompatibility: [
+      {
+        provider: "openai",
+        model: "gpt-6.2-sol",
+        format: "openai-encrypted-content",
+      },
+    ],
   },
   "gpt-6.1-sol": {
     support: "supported",

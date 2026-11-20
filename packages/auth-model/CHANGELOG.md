@@ -1,5 +1,31 @@
 # @stll/auth-model
 
+## 0.10.0
+
+### Minor Changes
+
+- [#8919](https://github.com/stella/stella/pull/8919) [`fdd1eb7`](https://github.com/stella/stella/commit/fdd1eb7769c43f9c2242d5f05399cb36314c3638) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Align the schema contract version with Better Auth 1.7.25 after verifying the core and organization schemas are unchanged. `BETTER_AUTH_CONTRACT_VERSION` and `BETTER_AUTH_PARITY_MANIFEST.betterAuthVersion` now carry the literal `"1.7.25"`; no entrypoints are removed.
+
+## 0.9.0
+
+### Minor Changes
+
+- [#8618](https://github.com/stella/stella/pull/8618) [`e229034`](https://github.com/stella/stella/commit/e22903462cf3734c29b0a97f2f48dc3023e758c8) Thanks [@dependabot](https://github.com/apps/dependabot)! - Align the schema contract version with Better Auth 1.7.20 after verifying the core and organization schemas are unchanged. `BETTER_AUTH_CONTRACT_VERSION` and `BETTER_AUTH_PARITY_MANIFEST.betterAuthVersion` now carry the literal `"1.7.20"`; no entrypoints are removed.
+
+## 0.8.2
+
+### Patch Changes
+
+- [#7365](https://github.com/stella/stella/pull/7365) [`5613d6a`](https://github.com/stella/stella/commit/5613d6aa3e4c87ff5fcf2fb408db801df5d89909) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Require billing visibility for monetary operations and preserve hidden rates as null in time records.
+
+- [#8574](https://github.com/stella/stella/pull/8574) [`81de98c`](https://github.com/stella/stella/commit/81de98c398770aea32040c9463006f70b3317c72) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add `AUTH_SIGN_IN_CODE_UNAVAILABLE_ERROR_CODE`, the error code for a sign-in code request that names an account signing in with a password.
+
+## 0.8.1
+
+### Patch Changes
+
+- [#8564](https://github.com/stella/stella/pull/8564) [`383c1db`](https://github.com/stella/stella/commit/383c1db86a75f2b3114fdfeda0dff9df7b6bb975) Thanks [@NavpreetSSidhu](https://github.com/NavpreetSSidhu)! - Add `ORGANIZATION_LOGO_RULES`, the format and size rules for an organization logo.
+
 ## 0.8.0
 
 ### Minor Changes

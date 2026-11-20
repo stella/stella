@@ -3,6 +3,7 @@ import type { OnlineMigrationEntry } from "../online-migration-entry";
 export default {
   id: "indexes-session-originconsentid-idx",
   revision: 200,
+  lifecycle: "finalized",
   type: "indexes",
   values: [
     {

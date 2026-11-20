@@ -55,13 +55,15 @@ type AppServerAnswer = Result<unknown, AppServerRequestError>;
 
 /**
  * Startup requests, which wait on the startup deadline: initialize covers
- * the CLI's first launch (an antivirus scan, a busy computer); starting or
- * resuming a thread waits for its MCP servers, stella's among them.
+ * the CLI's first launch (an antivirus scan, a busy computer); starting,
+ * resuming or forking a thread waits for its MCP servers, stella's among
+ * them.
  */
 const STARTUP_REQUESTS: ReadonlySet<CodexClientRequestMethod> = new Set([
   "initialize",
   "thread/start",
   "thread/resume",
+  "thread/fork",
 ]);
 
 export type AppServerClient = {
@@ -82,6 +84,8 @@ export type AppServerClient = {
   pid: number;
   /** Settles when the process has exited, however that happened. */
   exited: Promise<HarnessExit>;
+  /** A request went unanswered past its deadline, which ended the server. */
+  missedDeadline: () => boolean;
   /** Ends stdin, which asks the server to flush its state and exit. */
   closeInput: () => void;
   /** SIGTERM, then SIGKILL once the termination deadline passes. */
@@ -186,6 +190,7 @@ export const startAppServer = ({
       server.write({ id, error: { code, message } });
     },
     exited: server.exited,
+    missedDeadline: server.missedDeadline,
     closeInput: server.closeInput,
     kill: server.kill,
   });

@@ -4,6 +4,7 @@ import type { OnlineMigrationEntry } from "../online-migration-entry";
 export default {
   id: "repairs-list-verification-scope-constraint-validation",
   revision: 1441,
+  lifecycle: "finalized",
   type: "repairs",
   values: [LIST_VERIFICATION_SCOPE_CONSTRAINT_VALIDATION],
 } satisfies OnlineMigrationEntry;
