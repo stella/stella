@@ -4680,6 +4680,17 @@ type OutgoingChunkTransformerOptions = {
   holdStellaHrefs?: boolean | undefined;
 };
 
+/** A content event whose delta the transformer may hold back in part. */
+type HeldContentChunk = Extract<
+  StreamChunk,
+  {
+    type:
+      | EventType.REASONING_MESSAGE_CONTENT
+      | EventType.TEXT_MESSAGE_CONTENT
+      | EventType.TOOL_CALL_ARGS;
+  }
+>;
+
 /** An event whose text arrives in message chunks without an END of its own. */
 type TextLikeChunk = Extract<
   StreamChunk,
@@ -4696,7 +4707,10 @@ const createOutgoingChunkTransformer = ({
   restorationPairs,
   holdStellaHrefs = false,
 }: OutgoingChunkTransformerOptions) => {
-  const buffers = new Map<string, string>();
+  // Held text with the event it came from: what is released later is that
+  // event with a new delta, so every field the engine set on it (a child
+  // run's `subagentRunId` among them) reaches the processor and the client.
+  const buffers = new Map<string, { chunk: HeldContentChunk; text: string }>();
   const emittedPlaceholders = new Set(initialRestorationPlaceholders);
   const toolNamesByCallId = new Map<string, string>();
   const lenientCollector =
@@ -4759,75 +4773,44 @@ const createOutgoingChunkTransformer = ({
     return deanonymizeFromBoundary({ boundary, text: resolved });
   };
 
-  const flushText = ({
-    messageId,
+  /** `text` released as `chunk`'s delta, restored for the reader. */
+  const releaseHeld = ({
+    chunk,
     text,
   }: {
-    messageId: string;
+    chunk: HeldContentChunk;
     text: string;
   }): StreamChunk[] => {
     if (text.length === 0) {
       return [];
     }
-
+    const timestamp = Temporal.Now.instant().epochMilliseconds;
+    if (chunk.type === EventType.TOOL_CALL_ARGS) {
+      return [
+        ...emitRestorationDelta(
+          collectPlaceholdersFromText(text, lenientCollector),
+        ),
+        {
+          ...chunk,
+          delta:
+            boundary.type === "anonymized"
+              ? deanonymizeToolInputText(boundary, text)
+              : text,
+          timestamp,
+        },
+      ];
+    }
     return [
       ...emitRestorationDelta(collectTextPlaceholders(text)),
-      {
-        type: EventType.TEXT_MESSAGE_CONTENT,
-        messageId,
-        delta: transformText(text),
-        timestamp: Temporal.Now.instant().epochMilliseconds,
-      },
+      { ...chunk, delta: transformText(text), timestamp },
     ];
   };
 
-  const flushReasoning = ({
-    messageId,
-    text,
-  }: {
-    messageId: string;
-    text: string;
-  }): StreamChunk[] => {
-    if (text.length === 0) {
-      return [];
-    }
-
-    return [
-      ...emitRestorationDelta(collectTextPlaceholders(text)),
-      {
-        type: EventType.REASONING_MESSAGE_CONTENT,
-        messageId,
-        delta: transformText(text),
-        timestamp: Temporal.Now.instant().epochMilliseconds,
-      },
-    ];
-  };
-
-  const flushToolArguments = ({
-    text,
-    toolCallId,
-  }: {
-    text: string;
-    toolCallId: string;
-  }): StreamChunk[] => {
-    if (text.length === 0) {
-      return [];
-    }
-
-    return [
-      ...emitRestorationDelta(
-        collectPlaceholdersFromText(text, lenientCollector),
-      ),
-      {
-        type: EventType.TOOL_CALL_ARGS,
-        toolCallId,
-        delta:
-          boundary.type === "anonymized"
-            ? deanonymizeToolInputText(boundary, text)
-            : text,
-        timestamp: Temporal.Now.instant().epochMilliseconds,
-      },
-    ];
+  /** The text held under `key`, released, and the hold dropped. */
+  const releaseHeldKey = (key: string): StreamChunk[] => {
+    const held = buffers.get(key);
+    buffers.delete(key);
+    return held === undefined ? [] : releaseHeld(held);
   };
 
   // The longest prefix every text rewrite can see whole: a placeholder for
@@ -4932,64 +4915,40 @@ const createOutgoingChunkTransformer = ({
 
     if (chunk.type === EventType.TEXT_MESSAGE_CONTENT) {
       const key = `text:${chunk.messageId}`;
-      const buffer = `${buffers.get(key) ?? ""}${chunk.delta}`;
+      const buffer = `${buffers.get(key)?.text ?? ""}${chunk.delta}`;
       const prefixLength = completeTextPrefixLength(buffer);
-      buffers.set(key, buffer.slice(prefixLength));
-      return flushText({
-        messageId: chunk.messageId,
-        text: buffer.slice(0, prefixLength),
-      });
+      buffers.set(key, { chunk, text: buffer.slice(prefixLength) });
+      return releaseHeld({ chunk, text: buffer.slice(0, prefixLength) });
     }
 
     if (chunk.type === EventType.TEXT_MESSAGE_END) {
-      const key = `text:${chunk.messageId}`;
-      const pending = buffers.get(key) ?? "";
-      buffers.delete(key);
-      return [
-        ...flushText({ messageId: chunk.messageId, text: pending }),
-        chunk,
-      ];
+      return [...releaseHeldKey(`text:${chunk.messageId}`), chunk];
     }
 
     if (chunk.type === EventType.REASONING_MESSAGE_CONTENT) {
       const key = `reasoning:${chunk.messageId}`;
-      const buffer = `${buffers.get(key) ?? ""}${chunk.delta}`;
+      const buffer = `${buffers.get(key)?.text ?? ""}${chunk.delta}`;
       const prefixLength = completeTextPrefixLength(buffer);
-      buffers.set(key, buffer.slice(prefixLength));
-      return flushReasoning({
-        messageId: chunk.messageId,
-        text: buffer.slice(0, prefixLength),
-      });
+      buffers.set(key, { chunk, text: buffer.slice(prefixLength) });
+      return releaseHeld({ chunk, text: buffer.slice(0, prefixLength) });
     }
 
     if (chunk.type === EventType.REASONING_MESSAGE_END) {
-      const key = `reasoning:${chunk.messageId}`;
-      const pending = buffers.get(key) ?? "";
-      buffers.delete(key);
-      return [
-        ...flushReasoning({ messageId: chunk.messageId, text: pending }),
-        chunk,
-      ];
+      return [...releaseHeldKey(`reasoning:${chunk.messageId}`), chunk];
     }
 
     if (chunk.type === EventType.TOOL_CALL_ARGS) {
       const key = `tool:${chunk.toolCallId}`;
-      const buffer = `${buffers.get(key) ?? ""}${chunk.delta}`;
+      const buffer = `${buffers.get(key)?.text ?? ""}${chunk.delta}`;
       const prefixLength =
         boundary.type === "anonymized"
           ? getDeanonymisablePrefixLength(buffer)
           : buffer.length;
-      buffers.set(key, buffer.slice(prefixLength));
-      return flushToolArguments({
-        text: buffer.slice(0, prefixLength),
-        toolCallId: chunk.toolCallId,
-      });
+      buffers.set(key, { chunk, text: buffer.slice(prefixLength) });
+      return releaseHeld({ chunk, text: buffer.slice(0, prefixLength) });
     }
 
     if (chunk.type === EventType.TOOL_CALL_END) {
-      const key = `tool:${chunk.toolCallId}`;
-      const pending = buffers.get(key) ?? "";
-      buffers.delete(key);
       const toolName =
         toolCallNameOf(chunk) ?? toolNamesByCallId.get(chunk.toolCallId);
       if (toolName !== undefined) {
@@ -5022,10 +4981,7 @@ const createOutgoingChunkTransformer = ({
         });
       }
       return [
-        ...flushToolArguments({
-          text: pending,
-          toolCallId: chunk.toolCallId,
-        }),
+        ...releaseHeldKey(`tool:${chunk.toolCallId}`),
         input === undefined && output === undefined
           ? chunk
           : {
@@ -5090,33 +5046,10 @@ const createOutgoingChunkTransformer = ({
       : [...closeChunkMessage(), ...transformChunk(chunk)];
 
   transform.flush = (): StreamChunk[] => {
-    const chunks: StreamChunk[] = [...closeChunkMessage()];
-    for (const [key, value] of buffers) {
-      if (key.startsWith("text:")) {
-        chunks.push(
-          ...flushText({
-            messageId: key.slice("text:".length),
-            text: value,
-          }),
-        );
-      }
-      if (key.startsWith("reasoning:")) {
-        chunks.push(
-          ...flushReasoning({
-            messageId: key.slice("reasoning:".length),
-            text: value,
-          }),
-        );
-      }
-      if (key.startsWith("tool:")) {
-        chunks.push(
-          ...flushToolArguments({
-            toolCallId: key.slice("tool:".length),
-            text: value,
-          }),
-        );
-      }
-    }
+    const chunks: StreamChunk[] = [
+      ...closeChunkMessage(),
+      ...[...buffers.values()].flatMap((held) => releaseHeld(held)),
+    ];
     buffers.clear();
     return chunks;
   };
