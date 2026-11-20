@@ -2,9 +2,11 @@ import type { ReactNode } from "react";
 
 import { useTranslations } from "use-intl";
 
+import type { TableContentMode } from "@stll/api-contract/public-law-table";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { XIcon } from "@stll/ui/icons";
+import { SegmentedIconToggle } from "@stll/ui/segmented-icon-toggle";
 import {
   Select,
   SelectItem,
@@ -15,9 +17,9 @@ import {
 import { TruncatedText } from "@stll/ui/truncated-text";
 
 import {
-  PublicLawContentModeToggle,
   PublicLawResultsToolbarFace,
   PublicLawToolbarSelectLabel,
+  TABLE_CONTENT_MODE_OPTIONS,
 } from "@/components/public-law-table/public-law-results-toolbar.pending";
 import type {
   PublicLawTableLayout,
@@ -99,6 +101,29 @@ export const PublicLawResultsToolbar = <TLayout extends PublicLawTableLayout>({
     summary={summary}
   />
 );
+
+const PublicLawContentModeToggle = ({
+  onChange,
+  value,
+}: {
+  onChange: (contentMode: TableContentMode) => void;
+  value: TableContentMode;
+}) => {
+  const t = useTranslations();
+  return (
+    <SegmentedIconToggle
+      onChange={onChange}
+      options={TABLE_CONTENT_MODE_OPTIONS.map(
+        ({ icon, labelKey, value: mode }) => ({
+          icon,
+          label: t(labelKey),
+          value: mode,
+        }),
+      )}
+      value={value}
+    />
+  );
+};
 
 type ToolbarSelectProps<TValue extends string> = {
   /** Already translated; drawn beside the control from `sm` up. */

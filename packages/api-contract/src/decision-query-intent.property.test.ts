@@ -179,10 +179,10 @@ test(
 );
 
 test(
-  "constitutional references preserve senate and year width in each scope",
+  "constitutional references keep senate and year width and name either year form",
   () => {
     assertProperty(
-      "constitutional references preserve senate and year width in each scope",
+      "constitutional references keep senate and year width and name either year form",
       fc.property(fc.integer({ min: 1, max: 9999 }), (number) => {
         for (const jurisdiction of ["CZE", "SVK"] as const) {
           const options = { grammar: DECISION_DOCKET_GRAMMARS[jurisdiction] };
@@ -205,13 +205,20 @@ test(
                   : entry,
               );
               expect(parseDecisionQuery(intent.value, options)).toEqual(intent);
+              // The same case printed with its year in the other width is
+              // the same decision; another number is not.
               const siblingYear =
                 year.length === 2 ? `20${year}` : year.slice(-2);
               const hit = {
                 caseNumber: `${senate}. ÚS ${number}/${siblingYear}`,
                 ecli: null,
               };
-              expect(namedDecisionsOf(intent, [hit])).toEqual([]);
+              expect(namedDecisionsOf(intent, [hit])).toEqual([hit]);
+              const otherCase = {
+                caseNumber: `${senate}. ÚS ${number + 1}/${siblingYear}`,
+                ecli: null,
+              };
+              expect(namedDecisionsOf(intent, [otherCase])).toEqual([]);
             }
           }
         }

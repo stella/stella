@@ -100,11 +100,15 @@ jobs:
       # Lightweight first-pass checkout of the workflow's own ref
       # (not the release tag yet — that resolves below) so the
       # Resolve step can shell out to scripts/release-channel.sh.
-      # The pinned-SHA checkout further down then re-checks out
-      # the release commit for everything else.
+      # It lives in its own directory: actions/checkout reusing a
+      # sparse repository restores the sparse patterns after its
+      # `sparse-checkout disable`, so the release checkout below
+      # would stay sparse. That checkout clears the workspace and
+      # clones the release commit fresh for everything else.
       - name: Checkout workflow scripts
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          path: .workflow-scripts
           fetch-depth: 0
           sparse-checkout: scripts
           sparse-checkout-cone-mode: false
@@ -113,6 +117,7 @@ jobs:
       - name: Resolve release ref
         timeout-minutes: 5
         id: ref
+        working-directory: .workflow-scripts
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REPOSITORY: ${{ github.repository }}
@@ -165,7 +170,7 @@ jobs:
             exit 1
           fi
 
-          bash "${GITHUB_WORKSPACE}/scripts/retry.sh" git fetch --no-tags origin "refs/tags/${REF}:refs/tags/${REF}"
+          bash scripts/retry.sh git fetch --no-tags origin "refs/tags/${REF}:refs/tags/${REF}"
           if [[ -n "$UPSTREAM_RUN_ID" ]]; then
             receipt_status=0
             bash "$RUNNER_TEMP/check-release-publication-source.sh" "$UPSTREAM_RUN_ID" "$REF" "$RELEASE_SHA" || receipt_status=$?

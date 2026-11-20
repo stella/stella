@@ -16,6 +16,8 @@ export const RESERVED_FLAG_KEYS = {
   dryRun: "dryRun",
   /** Print the command's input JSON schema and exit, without calling the server. */
   schema: "schema",
+  /** Capability leaves only: write the result's downloadUrl to this path. */
+  save: "save",
   /** Expand the startup registry-drift report; read before dispatch (see `cli.ts`). */
   verbose: "verbose",
 } as const;

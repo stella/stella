@@ -1538,6 +1538,7 @@
         "better-result": "catalog:",
         "oxc-parser": "catalog:",
         "oxc-transform-react": "catalog:",
+        "valibot": "catalog:",
       },
       "devDependencies": {
         "@stll/property-testing": "workspace:*",
@@ -1678,10 +1679,13 @@
       "version": "0.0.0",
       "dependencies": {
         "@stll/api-contract": "workspace:*",
+        "@stll/country-codes": "workspace:*",
         "@stll/locales": "workspace:*",
+        "better-result": "catalog:",
         "react": "catalog:react19",
         "react-dom": "catalog:react19",
         "use-intl": "catalog:",
+        "world-atlas": "2.0.2",
       },
       "devDependencies": {
         "@stll/typescript-config": "workspace:*",
@@ -1885,6 +1889,7 @@
     "@tanstack/ai-gemini@1.2.2": "patches/@tanstack%2Fai-gemini@1.2.2.patch",
     "@tanstack/ai-anthropic@1.1.1": "patches/@tanstack%2Fai-anthropic@1.1.1.patch",
     "@better-auth/cimd@1.7.25": "patches/@better-auth%2Fcimd@1.7.25.patch",
+    "@tanstack/ai-openai@1.1.1": "patches/@tanstack%2Fai-openai@1.1.1.patch",
   },
   "overrides": {
     "@atlaskit/pragmatic-drag-and-drop": "4.0.0",
@@ -6170,6 +6175,8 @@
     "which": ["which@2.0.2", "", { "dependencies": { "isexe": "^2.0.0" }, "bin": { "node-which": "./bin/node-which" } }, "sha512-BLI3Tl1TW3Pvl70l3yq3Y64i+awpwXqsGBYWkkqMtnbXgrMD+yj7rhW0kuEDxzJaYXGjEW5ogapKNMEKNMjibA=="],
 
     "word-wrap": ["word-wrap@1.2.5", "", {}, "sha512-BN22B5eaMMI9UMtjrGd5g5eCYPpCPDUy0FJXbYsaT5zYxjFOckS53SQDE3pWkVoWpHXVb3BrYcEN4Twa55B5cA=="],
+
+    "world-atlas": ["world-atlas@2.0.2", "", {}, "sha512-IXfV0qwlKXpckz1FhwXVwKRjiIhOnWttOskm5CtxMsjgE/MXAYRHWJqgXOpM8IkcPBoXnyTU5lFHcYa5ChG0LQ=="],
 
     "wrap-ansi": ["wrap-ansi@7.0.0", "", { "dependencies": { "ansi-styles": "^4.0.0", "string-width": "^4.1.0", "strip-ansi": "^6.0.0" } }, "sha512-YVGIj2kamLSTxw6NsZjoBxfSwsn0ycdesmc4p+Q21c5zPuZ1pl+NfxVdxPtdHvmNVOQ6XSYG4AUtyt/Fi7D16Q=="],
 

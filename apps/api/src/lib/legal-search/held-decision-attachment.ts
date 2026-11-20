@@ -8,6 +8,10 @@ import {
 
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
 import {
+  CZ_ISIR_METADATA_KEY,
+  czIsirDecisionMetadataSchema,
+} from "@/api/lib/legal-search/cz-isir-decision";
+import {
   CZ_NS_COLLECTION_METADATA_KEY,
   czNsCollectionDocumentPartSchema,
   storedCzNsCollectionEntrySchema,
@@ -19,6 +23,15 @@ import {
 } from "@/api/lib/legal-search/ingestion-constants";
 
 import type { CollectionDocumentPart } from "./collection-document-part";
+
+/**
+ * What tells two orders of one docket on one day apart: the sheet within the
+ * file (`-24`), or the file position a high court's docket names (`B-24`).
+ */
+type HeldDecisionOrderMark = {
+  readonly sheetNumber: string | null;
+  readonly filePosition: string | null;
+};
 
 /**
  * A source whose records can enrich a decision another source already holds,
@@ -70,6 +83,37 @@ export type HeldDecisionAttachment<THostKey extends string = AdapterKey> = {
    * and its hosts' can disagree for one decision.
    */
   readonly docketHeldUnderOtherDate: "park-for-review" | "own-row";
+  /**
+   * The record's order mark, where the source states one. A record with a
+   * mark matches by court, docket and date only a decision that states the
+   * same mark, since one court issues several orders under one docket on one
+   * day. Absent where court, docket and date name one decision.
+   */
+  readonly orderMarkOf?: (observed: {
+    readonly sheetNumber?: string | undefined;
+    readonly metadata: Readonly<Record<string, unknown>>;
+  }) => HeldDecisionOrderMark | null;
+};
+
+/** The register's order mark: the decision's sheet, or its file position. */
+const czIsirOrderMark = ({
+  sheetNumber,
+  metadata,
+}: {
+  readonly sheetNumber?: string | undefined;
+  readonly metadata: Readonly<Record<string, unknown>>;
+}): HeldDecisionOrderMark | null => {
+  const stored = metadata[CZ_ISIR_METADATA_KEY];
+  const filePosition =
+    typeof stored === "object" &&
+    stored !== null &&
+    "filePosition" in stored &&
+    typeof stored.filePosition === "string"
+      ? stored.filePosition
+      : null;
+  return sheetNumber === undefined && filePosition === null
+    ? null
+    : { sheetNumber: sheetNumber ?? null, filePosition };
 };
 
 /**
@@ -101,6 +145,19 @@ export const HELD_DECISION_ATTACHMENTS: Readonly<
   // The Supreme Court's collection reprints decisions the Czech courts'
   // databases already publish; its dates and its hosts' sometimes disagree
   // for one decision, so a docket held under another date waits for review.
+  // The insolvency register republishes, unanonymised, decisions the
+  // courts' database and the Supreme Court's collection publish too: a
+  // register copy of a decision already held enriches that decision. A high
+  // court decides many times under one senate mark, so the same docket on
+  // another date is another decision.
+  [ADAPTER_KEYS.CZ_ISIR]: {
+    hostAdapterKeys: otherSourcesOf(ADAPTER_KEYS.CZ_ISIR),
+    metadataKey: CZ_ISIR_METADATA_KEY,
+    metadataSchema: czIsirDecisionMetadataSchema,
+    declaredIdentifierTypes: [DECISION_IDENTIFIER_TYPES.CASE_NUMBER],
+    docketHeldUnderOtherDate: "own-row",
+    orderMarkOf: czIsirOrderMark,
+  },
   [ADAPTER_KEYS.CZ_NS_SBIRKA]: {
     hostAdapterKeys: otherSourcesOf(ADAPTER_KEYS.CZ_NS_SBIRKA),
     metadataKey: CZ_NS_COLLECTION_METADATA_KEY,

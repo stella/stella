@@ -7,6 +7,7 @@ import dataBoxEndpoint from "@/api/handlers/files/data-box";
 import emailAttachmentEndpoint from "@/api/handlers/files/email-attachment";
 import saveEmailAttachmentEndpoint from "@/api/handlers/files/email-attachment/create";
 import officeCitationEndpoint from "@/api/handlers/files/office-citation";
+import { readFileContentEndpoint } from "@/api/handlers/files/read-content";
 import {
   markedDownloadEndpoint,
   ocrExportEndpoint,
@@ -52,4 +53,10 @@ export const filesRoute = routes(
     },
   },
   { prefix: "/files/:workspaceId" },
+);
+
+// A short-lived grant names the file; no workspace prefix or session applies.
+export const fileContentRoute = routes(
+  { "/:grant": { GET: readFileContentEndpoint } },
+  { prefix: "/file-content" },
 );

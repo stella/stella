@@ -30,6 +30,8 @@ export const ADAPTER_KEYS = {
 
   BR_TST: "br-tst",
 
+  CZ_ISIR: "cz-isir",
+
   CZ_NS_SBIRKA: "cz-ns-sbirka",
 
   CZ_NS: "cz-ns",
@@ -102,6 +104,8 @@ export const PARSER_VERSIONS = {
 
   [ADAPTER_KEYS.BR_TST]: 2,
 
+  [ADAPTER_KEYS.CZ_ISIR]: 2,
+
   [ADAPTER_KEYS.CZ_NS_SBIRKA]: 2,
 
   [ADAPTER_KEYS.CZ_NS]: 34,
@@ -170,6 +174,8 @@ export const SOURCE_FINGERPRINT_VERSIONS = {
   [ADAPTER_KEYS.BR_TJDFT]: 0,
 
   [ADAPTER_KEYS.BR_TST]: 0,
+
+  [ADAPTER_KEYS.CZ_ISIR]: 0,
 
   [ADAPTER_KEYS.CZ_NS_SBIRKA]: 0,
 
@@ -241,6 +247,8 @@ export const PARSER_VERSION_SCOPES = {
   [ADAPTER_KEYS.BR_TJDFT]: { version: PARSER_VERSIONS[ADAPTER_KEYS.BR_TJDFT], scope: {"type":"all","reason":"Re-derive stored citations with rule kinds, polarity evidence windows and cited parts; the canonical AST and publisher metadata do not change."} },
 
   [ADAPTER_KEYS.BR_TST]: { version: PARSER_VERSIONS[ADAPTER_KEYS.BR_TST], scope: {"type":"all","reason":"Re-derive stored citations with rule kinds, polarity evidence windows and cited parts; the canonical AST and publisher metadata do not change."} },
+
+  [ADAPTER_KEYS.CZ_ISIR]: { version: PARSER_VERSIONS[ADAPTER_KEYS.CZ_ISIR], scope: {"type":"all","reason":"the source has never been enabled; there are no stored rows to narrow"} },
 
   [ADAPTER_KEYS.CZ_NS_SBIRKA]: { version: PARSER_VERSIONS[ADAPTER_KEYS.CZ_NS_SBIRKA], scope: {"type":"all","reason":"Recognize split and complete report editions from their stored detail HTML; earlier rows do not store the edition layout."} },
 

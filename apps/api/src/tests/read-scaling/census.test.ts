@@ -60,6 +60,7 @@ import {
   documentAnnotationScalingScenarios,
   markedPdfDownloadScalingScenario,
 } from "./document-annotations";
+import { fileContentScalingScenario } from "./file-content";
 import { graphToolsScalingScenarios } from "./graph-tools";
 import { invoicePaymentScalingScenarios } from "./invoice-payments";
 import { invoiceSendScalingScenarios } from "./invoice-sends";
@@ -87,7 +88,8 @@ import {
 } from "./scenario-membership";
 import { readScalingScenarios } from "./scenarios";
 import { sharepointBrowseScalingScenarios } from "./sharepoint-browse";
-import { skillExportScalingScenario } from "./skill-export";
+import { sharepointCapabilitiesScalingScenario } from "./sharepoint-capabilities";
+import { skillExportScalingScenarios } from "./skill-export";
 import {
   softLawReadScalingScenario,
   softLawSearchScalingScenario,
@@ -113,6 +115,7 @@ const repoRoot = path.resolve(import.meta.dir, "../../../../..");
 const measuredApiScenarios = [
   savedSearchReadScalingScenario,
   ...dataExportReadScalingScenarios,
+  ...skillExportScalingScenarios,
   organizationCreateScalingScenario,
   matterVocabularyScalingScenario,
   verifyQuoteApiScalingScenario,
@@ -121,6 +124,7 @@ const measuredApiScenarios = [
   memberBillingScalingScenario,
   exactIconScalingScenario,
   decisionSummaryScalingScenario,
+  fileContentScalingScenario,
   decisionAnchorRedirectsScalingScenario,
   decisionFilterValidationScalingScenario,
   browseCalendarScalingScenario,
@@ -163,6 +167,7 @@ const measuredApiScenarios = [
   memberCandidatesScalingScenario,
   mobileUpdateScalingScenario,
   ...invoicePaymentScalingScenarios,
+  sharepointCapabilitiesScalingScenario,
   ...invoiceSendScalingScenarios,
   ...outboundActionScalingScenarios,
   ...legalHoldScalingScenarios,
@@ -175,7 +180,6 @@ const measuredApiScenarios = [
   softLawSearchScalingScenario,
   softLawReadScalingScenario,
   ...sharepointBrowseScalingScenarios,
-  skillExportScalingScenario,
 ];
 const measuredApiReads = apiApp.routes
   .filter(({ definition }) =>

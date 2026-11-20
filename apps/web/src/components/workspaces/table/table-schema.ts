@@ -21,7 +21,8 @@ import type { WorkspaceProperty } from "@/lib/types";
 
 export { DEFAULT_TABLE_COLUMN_MIN_SIZE } from "@/components/workspaces/table/table-column-sizing";
 
-export const SELECT_COLUMN_SIZE = 48;
+export { SELECT_COLUMN_SIZE } from "@/components/workspaces/table/workspace-grid";
+
 export const ADD_PROPERTY_COLUMN_SIZE = 48;
 export const PROPERTY_COLUMN_SIZE = 200;
 

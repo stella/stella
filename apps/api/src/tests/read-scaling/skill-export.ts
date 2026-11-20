@@ -1,113 +1,149 @@
-import { panic, Result } from "better-result";
-import { inArray } from "drizzle-orm";
+import { panic } from "better-result";
+import { eq } from "drizzle-orm";
 
-import type { SafeDb } from "@/api/db/safe-db";
+import { member, organization, user } from "@/api/db/auth-schema";
 import { agentSkillResources, agentSkills } from "@/api/db/schema";
+import { createSafeDb, createScopedDb, markRlsDatabase } from "@/api/db/scoped";
 import exportSkill from "@/api/handlers/skills/export";
+import { isHttpStatusResponse } from "@/api/http/status";
+import { createBackgroundAuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
-import type { SafeId } from "@/api/lib/branded-types";
 import { runWithMeasuredQueryCounter } from "@/api/lib/db-query-counter";
-import { sessionMemberRole } from "@/api/lib/permission-authorization";
+import { recordNewOrganizationAccessState } from "@/api/lib/usage/organization-access-state";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
-import { auditRecorderDouble } from "@/api/tests/helpers/audit-recorder-double";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
-import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 
-/** Files the exported skill holds, the same at every tenant cardinality. */
-const TARGET_RESOURCES = 5;
-
-/**
- * One organization's skill among `size` skills of other organizations, each
- * with as many files: the export reads only its own skill's rows.
- */
+/** One private skill holding `size` files, as its author exports it. */
 export const seedSkillExportScaling = async (db: GatedTestDb, size: number) => {
-  const skill = (
-    organizationId: SafeId<"organization">,
-    userId: SafeId<"user">,
-  ) => ({
-    body: "Read `references/topic-0.md`.",
-    contentHash: "0".repeat(64),
-    description: "Scaling fixture skill.",
-    id: createSafeId<"agentSkill">(),
-    metadata: {},
-    name: "scaling-skill",
-    organizationId,
-    origin: "authored" as const,
-    scope: "private" as const,
-    slug: `scaling-skill-${createSafeId<"agentSkill">()}`,
-    userId,
-  });
   const organizationId = mintAuthProviderId<"organization">();
   const userId = mintAuthProviderId<"user">();
-  const target = skill(organizationId, userId);
-  const peers = Array.from({ length: size }, () =>
-    skill(mintAuthProviderId<"organization">(), mintAuthProviderId<"user">()),
-  );
-  const skills = [target, ...peers];
-  await db.insert(agentSkills).values(skills);
-  await db.insert(agentSkillResources).values(
-    skills.flatMap((row) =>
-      Array.from({ length: TARGET_RESOURCES }, (_, index) => ({
-        content: `Topic ${String(index)}.`,
-        organizationId: row.organizationId,
-        path: `references/topic-${String(index)}.md`,
-        sizeBytes: 8,
-        skillId: row.id,
-      })),
-    ),
-  );
-  const safeDb: SafeDb = async (work) =>
-    await Result.tryPromise(async () => await db.transaction(work));
-  return {
-    organizationId,
-    safeDb,
-    skillId: target.id,
-    userId,
-    cleanup: async () => {
-      await db.delete(agentSkills).where(
-        inArray(
-          agentSkills.id,
-          skills.map(({ id }) => id),
-        ),
-      );
+  const email = `${userId}@example.test`;
+  const skillId = createSafeId<"agentSkill">();
+  const rlsDb = markRlsDatabase(db);
+  const scopedDb = createScopedDb(rlsDb, [], organizationId, userId);
+  const safeDb = createSafeDb(rlsDb, [], organizationId, userId);
+  const recordAuditEvent = createBackgroundAuditRecorder({
+    execution: {
+      performer: { id: userId, type: "user" },
+      trigger: { type: "user_dispatch", source: "action", userId },
     },
+    organizationId,
+    workspaceId: null,
+    userId,
+  });
+  const cleanup = async () => {
+    await deleteOrganizationsForTest(db, [organizationId]);
+    await db.delete(user).where(eq(user.id, userId));
   };
+  try {
+    await db.insert(organization).values({
+      id: organizationId,
+      name: "Skill export fixture",
+      slug: organizationId,
+      createdAt: new Date("2026-01-01T00:00:00Z"),
+    });
+    await db.insert(user).values({
+      id: userId,
+      name: "Skill exporter",
+      email,
+      emailVerified: true,
+    });
+    await recordNewOrganizationAccessState(db, {
+      organizationId,
+      now: new Date(),
+    });
+    await db.insert(member).values({
+      id: Bun.randomUUIDv7(),
+      userId,
+      organizationId,
+      role: "member",
+      createdAt: new Date(),
+    });
+    await scopedDb(async (tx) => {
+      await tx.insert(agentSkills).values({
+        body: "Read the references.",
+        contentHash: "0".repeat(64),
+        description: "Export scaling fixture.",
+        id: skillId,
+        metadata: {},
+        name: "Export scaling",
+        organizationId,
+        origin: "authored",
+        scope: "private",
+        slug: "export-scaling",
+        userId,
+      });
+      await tx.insert(agentSkillResources).values(
+        Array.from({ length: size }, (_, index) => ({
+          content: `Reference ${String(index)}\n`,
+          organizationId,
+          path: `references/ref-${String(index).padStart(4, "0")}.md`,
+          sizeBytes: `Reference ${String(index)}\n`.length,
+          skillId,
+        })),
+      );
+    });
+    return {
+      cleanup,
+      email,
+      organizationId,
+      recordAuditEvent,
+      safeDb,
+      scopedDb,
+      skillId,
+      userId,
+    };
+  } catch (error) {
+    await cleanup();
+    throw error;
+  }
 };
 
 type SkillExportFixture = Awaited<ReturnType<typeof seedSkillExportScaling>>;
 
-export const skillExportScalingScenario = {
-  name: "skill archive export",
-  definition: exportSkill,
-  measure: async (fixture: SkillExportFixture) =>
-    await runWithMeasuredQueryCounter(async (counter) => {
-      const response = await exportSkill.handler(
-        asTestRaw<Parameters<typeof exportSkill.handler>[0]>({
-          memberRole: sessionMemberRole("owner"),
-          params: { skillId: fixture.skillId },
-          recordAuditEvent: auditRecorderDouble(),
-          request: new Request(
-            `https://example.test/v1/skills/${fixture.skillId}/export`,
+export const skillExportScalingScenarios = [
+  {
+    name: "skill archive export",
+    definition: exportSkill,
+    expectedRows: 1,
+    // The archive grows with the files and is stored, never returned: the
+    // response is one download grant and the reads are one skill and one
+    // bounded file set, whatever the count.
+    measure: async (fixture: SkillExportFixture) =>
+      await runWithMeasuredQueryCounter(async (counter) => {
+        const response = await exportSkill.handler(
+          createTestHandlerContext<Parameters<typeof exportSkill.handler>[0]>({
+            audit: fixture.recordAuditEvent,
+            params: { skillId: fixture.skillId },
+            query: { format: "zip" },
+            request: new Request(
+              `https://example.test/v1/skills/${fixture.skillId}/export?format=zip`,
+            ),
+            route: "/v1/skills/:skillId/export",
+            safeDb: fixture.safeDb,
+            scopedDb: fixture.scopedDb,
+            session: { activeOrganizationId: fixture.organizationId },
+            user: { email: fixture.email, id: fixture.userId },
+          }),
+        );
+        if (
+          isHttpStatusResponse(response) ||
+          response.fileName !== "export-scaling.zip"
+        ) {
+          panic("Skill export scaling requires a successful grant");
+        }
+        return {
+          rows: 1,
+          // An instant prints without trailing zero digits, so its length
+          // varies by the clock, not by the data.
+          responseBytes: Buffer.byteLength(
+            JSON.stringify({ ...response, expiresAt: "" }),
           ),
-          route: "/v1/skills/:skillId/export",
-          safeDb: fixture.safeDb,
-          session: { activeOrganizationId: fixture.organizationId },
-          user: {
-            email: `${fixture.userId}@example.test`,
-            emailVerified: true,
-            id: fixture.userId,
-          },
-        }),
-      );
-      if (!(response instanceof Response)) {
-        return panic("Skill export must answer with the archive");
-      }
-      const bytes = await response.arrayBuffer();
-      return {
-        responseBytes: bytes.byteLength,
-        rows: TARGET_RESOURCES + 1,
-        statements: counter.count,
-        transactionRoundTrips: counter.transactions,
-      };
-    }),
-};
+          statements: counter.count,
+          transactionRoundTrips: counter.transactions,
+        };
+      }),
+  },
+];

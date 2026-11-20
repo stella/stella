@@ -174,6 +174,7 @@ export * from "./schema/desktop-presence";
 export * from "./schema/desktop-device-proof-replay";
 
 export * from "./schema/kept-transcript-deletions";
+export * from "./schema/email-delivery-failures";
 export * from "./schema/desktop-runner";
 
 export * from "./schema/mcp-web-handoff";

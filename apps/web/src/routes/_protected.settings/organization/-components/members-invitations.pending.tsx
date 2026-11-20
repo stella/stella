@@ -66,6 +66,9 @@ export const InvitationsTableRow = ({
   </TableRow>
 );
 
+/** Spanned by the row that replaces invitations when none match. */
+export const INVITATION_COLUMN_COUNT = INVITATION_COLUMNS.length;
+
 export const InvitationsTableFrame = ({
   label,
   children,

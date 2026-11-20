@@ -224,7 +224,7 @@ if (!databaseUrl || !runPostgresTests) {
             workspaceId: ids.wsA1,
             entityId,
             versionNumber,
-            createdBy: versionNumber === 1 ? ids.userA1 : ids.userAdmin,
+            createdBy: ids.userA1,
           });
           await testDb.insert(fields).values({
             id: createSafeId<"field">(),
@@ -298,9 +298,9 @@ if (!databaseUrl || !runPostgresTests) {
         const currentFileId = await addVersion(2, mimeType);
         if (change === "remove_uploader") {
           await testDb
-            .update(entities)
+            .update(entityVersions)
             .set({ createdBy: null })
-            .where(eq(entities.id, entityId));
+            .where(eq(entityVersions.entityId, entityId));
         }
         if (change === "attach") {
           const deliveredFileId = createSafeId<"entity">();
@@ -382,7 +382,7 @@ if (!databaseUrl || !runPostgresTests) {
             entityId,
             workspaceId: ids.wsA1,
             versionNumber: 3,
-            createdBy: ids.userAdmin,
+            createdBy: ids.userA1,
           });
           await testDb.insert(fields).values({
             id: createSafeId<"field">(),
@@ -595,12 +595,14 @@ if (!databaseUrl || !runPostgresTests) {
           entityId,
           workspaceId: ids.wsA1,
           versionNumber: 1,
+          createdBy: ids.userA1,
         },
         {
           id: currentVersionId,
           entityId,
           workspaceId: ids.wsA1,
           versionNumber: 2,
+          createdBy: ids.userA1,
         },
       ]);
       await testDb.insert(fields).values(

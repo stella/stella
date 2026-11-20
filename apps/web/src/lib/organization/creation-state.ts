@@ -11,6 +11,7 @@ import { ownEntry } from "@stll/api-contract/own-key";
 
 import type { TranslationKey } from "@/i18n/types";
 import { APIError } from "@/lib/errors/api";
+import { markOrganizationSetupPending } from "@/lib/organization/setup-pending";
 import type { SafeId } from "@/lib/safe-id";
 
 const REFUSAL_MESSAGES = {
@@ -138,6 +139,9 @@ const createOrganizationCreationOwner = () => {
         panic("Organization creation completed without its pending intent");
       }
       state.setState({ status: "created", intent, organization }, true);
+      // However the creator later switches to it, the new organization opens
+      // with a prompt to invite members and set up AI.
+      markOrganizationSetupPending(organization.organizationId);
     },
     failed: (intent: CreationIntent, error: unknown) => {
       const current = state.getState();

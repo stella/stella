@@ -3,5 +3,5 @@ import { framePendingView } from "@/routes/-pending-view.logic";
 
 /** The ready-made playbooks while they load: the playbooks page's shape. */
 export const PlaybooksCataloguePending = framePendingView(() => (
-  <PlaybooksPagePending />
+  <PlaybooksPagePending page="catalogue" />
 ));

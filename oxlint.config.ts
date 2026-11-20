@@ -1425,7 +1425,7 @@ const bunNativeFiles = [
   "apps/api/src/handlers/legal-resolve/authorization.test.ts",
   "apps/api/src/handlers/legislation/search-relaxed.contract.test.ts",
   "apps/api/src/handlers/lists/verifications/get.db.test.ts",
-  "apps/api/src/handlers/sharepoint/graph-oauth.ts",
+  "apps/api/src/lib/auth/microsoft365/graph-oauth.ts",
   "apps/api/src/handlers/soft-law/adapters/edpb.test.ts",
   "apps/api/src/handlers/soft-law/adapters/edpb.ts",
   "apps/api/src/handlers/soft-law/adapters/wp29.test.ts",
@@ -2132,6 +2132,7 @@ const config = defineConfig({
     // The package's plugins load through local re-exports; the modules say why.
     "./scripts/oxlint-presets/stella-lowercase-plugin.mjs",
     "./.oxlint-plugins/no-raw-cache-control.ts",
+    "./.oxlint-plugins/no-raw-cloudfront-viewer-header.ts",
     "./.oxlint-plugins/confine-sql-close.ts",
     "./.oxlint-plugins/confine-online-ddl.ts",
     "./.oxlint-plugins/raw-hash-from-source-fingerprint.ts",
@@ -2428,6 +2429,7 @@ const config = defineConfig({
     "./.oxlint-plugins/no-raw-path-relative.ts",
     "./.oxlint-plugins/no-direct-unicode-normalize.ts",
     "./.oxlint-plugins/no-adhoc-email-fold.ts",
+    "./.oxlint-plugins/no-raw-case-number-key-equality.ts",
     "./.oxlint-plugins/no-local-letter-spacing.ts",
     "./.oxlint-plugins/no-local-paragraph-label.ts",
     "./.oxlint-plugins/no-ambient-dev-docker.ts",
@@ -2507,7 +2509,8 @@ const config = defineConfig({
         "apps/landing/src/components/ProductPage.astro",
         "apps/landing/src/pages/security.astro",
         "apps/landing/src/pages/support.astro",
-        "apps/web/src/routes/tools/-components/public-tools-index.tsx",
+        "apps/web/src/routes/tools/-index.page.tsx",
+        "apps/web/src/routes/tools/-index.pending.tsx",
         ".oxlint-plugins/__fixtures__/narrative-prose-component.fixture.tsx",
       ],
       rules: {
@@ -2723,7 +2726,7 @@ const config = defineConfig({
         "no-direct-status-set/no-direct-status-set": [
           "error",
           {
-            owner: STATUS_TRANSITION_OWNERSHIP.owner[0],
+            owners: STATUS_TRANSITION_OWNERSHIP.owner,
             columns: STATUS_TRANSITION_OWNERSHIP.enforcement.columns,
           },
         ],
@@ -2747,7 +2750,7 @@ const config = defineConfig({
         "no-direct-status-set/no-direct-status-set": [
           "error",
           {
-            owner: STATUS_TRANSITION_OWNERSHIP.owner[0],
+            owners: STATUS_TRANSITION_OWNERSHIP.owner,
             columns: STATUS_TRANSITION_OWNERSHIP.enforcement.columns,
           },
         ],
@@ -3783,6 +3786,31 @@ const config = defineConfig({
       ],
       rules: {
         "no-local-paragraph-label/no-local-paragraph-label": "error",
+      },
+    },
+    {
+      // Case-number keys are compared through
+      // apps/api/src/lib/case-law/case-number-match-key.ts, which reads a key
+      // printed with a four-digit year and one printed with two as one case.
+      // Excepted: the case-law review tables, keyed by the copy a review row
+      // keeps of its citation's own key and compared byte for byte with it
+      // (polarity/reviews.ts); one-off maintenance scripts, which run once
+      // against the keys of their day; and tests, which state expected rows
+      // independently of the owner.
+      files: [
+        "apps/api/src/**/*.ts",
+        ".oxlint-plugins/__fixtures__/no-raw-case-number-key-equality.fixture.ts",
+      ],
+      excludeFiles: [
+        "apps/api/src/lib/case-law/case-number-match-key.ts",
+        "apps/api/src/handlers/case-law/polarity/reviews.ts",
+        "apps/api/src/scripts/**",
+        "apps/api/src/tests/**",
+        "apps/api/src/**/*.test.ts",
+      ],
+      rules: {
+        "no-raw-case-number-key-equality/no-raw-case-number-key-equality":
+          "error",
       },
     },
     {
@@ -7131,6 +7159,25 @@ const config = defineConfig({
       ],
       rules: {
         "no-raw-cache-control/no-raw-cache-control": "error",
+      },
+    },
+    {
+      // CloudFront viewer headers are read only behind the origin proof, by
+      // the modules the rule names as owners.
+      files: [
+        "apps/*/src/**/*.{ts,tsx}",
+        "packages/*/src/**/*.{ts,tsx}",
+        ".oxlint-plugins/__fixtures__/no-raw-cloudfront-viewer-header.fixture.ts",
+      ],
+      excludeFiles: [
+        "**/*.test.ts",
+        "**/*.test.tsx",
+        "apps/api/src/tests/**/*.ts",
+        "**/__tests__/**",
+      ],
+      rules: {
+        "no-raw-cloudfront-viewer-header/no-raw-cloudfront-viewer-header":
+          "error",
       },
     },
     {

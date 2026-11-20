@@ -892,6 +892,7 @@ const runBuild = async (
                 ? `Text of ${material.lease.entityId}. ${"Words ".repeat(4000)}`
                 : `Text of ${material.lease.entityId}.`,
               ast: null,
+              storedAst: { type: "absent" },
             }),
         },
       }),

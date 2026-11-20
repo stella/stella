@@ -1,5 +1,7 @@
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
+import type { SQL } from "drizzle-orm";
+import { PgDialect } from "drizzle-orm/pg-core";
 
 import { sha256Hex } from "@stll/sha256/node";
 
@@ -11,6 +13,7 @@ import { handlePrepareFileComparisonFromLinksTool } from "@/api/mcp/file-compari
 import type { PrepareFileComparisonFromLinksDependencies } from "@/api/mcp/file-comparison-links-tool";
 import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
+import { aggregateExecutionRows } from "@/api/tests/fixtures/aggregate-lock-order";
 import { createEncryptedPdf } from "@/api/tests/helpers/signed-pdf";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
@@ -69,6 +72,23 @@ const createHarness = ({
   let downloadCount = 0;
 
   const { safeDb, scopedDb } = createScopedDbMock({
+    // The reservation takes its capacity lock and reads the organization's
+    // retained capacity census before inserting.
+    execute: async (statement: SQL) =>
+      await Promise.resolve(
+        new PgDialect()
+          .sqlToQuery(statement)
+          .sql.includes("file_comparison_outstanding_capacity()")
+          ? [
+              {
+                organization_bytes: 0,
+                organization_rows: 0,
+                user_bytes: 0,
+                user_rows: 0,
+              },
+            ]
+          : aggregateExecutionRows(statement),
+      ),
     insert: () => ({
       values: async (rows: InsertedRow[]) => {
         inserted.push(rows);

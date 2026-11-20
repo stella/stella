@@ -99,7 +99,7 @@ export function EntitlementPending() {
 
 export const UsagePending = framePendingView(() =>
   env.VITE_FEATURE_USAGE ? (
-    <SettingsPagePending>
+    <SettingsPagePending area="organization">
       <UsageShell plans={<UsagePlansPending />}>
         <EntitlementPending />
       </UsageShell>

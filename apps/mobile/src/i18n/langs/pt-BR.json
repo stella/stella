@@ -130,6 +130,8 @@
       "boe_search_legislation": "Busca no BOE",
       "borme_get_summary": "Resumo diário BORME",
       "business_registry_lookup": "Buscando no registro de empresas",
+      "calendar_free_busy": "Verificar disponibilidade no calendário",
+      "calendar_list_events": "Ler eventos do calendário",
       "command_execution": "Executando um comando",
       "compare_versions": "Comparando versões",
       "configure_template_fields": "Configurar campos do modelo",

@@ -20,6 +20,14 @@ export type StaleMigrationStamp = {
 export const MIGRATION_TIMESTAMP = /(?:^|\/)([0-9]{14})_[^/]+$/u;
 export const MIGRATION_FILE = /^apps\/api\/drizzle\/[^/]+\/migration\.sql$/u;
 export const MIGRATION_FOLDER_FILE = /^apps\/api\/drizzle\/[^/]+\/.+$/u;
+/**
+ * Re-stamps a branch's stale migrations with their lock allowances and the
+ * references in generated files and API tests. Failure messages print it, and
+ * scripts/migration-stamp-early-warning.sh repeats it for runs without an
+ * install.
+ */
+export const MIGRATION_RESTAMP_COMMAND =
+  "git fetch origin main && bun scripts/migration-restamp.ts --write --base origin/main --update-tests";
 export const ALIAS_INVENTORY_PATH =
   "apps/api/src/lib/db/migration-alias-inventory.json";
 

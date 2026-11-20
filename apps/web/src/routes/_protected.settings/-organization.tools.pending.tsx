@@ -32,7 +32,7 @@ export function ToolsShell({ children }: { children: ReactNode }) {
 }
 
 export const ToolsPending = framePendingView(() => (
-  <SettingsPagePending>
+  <SettingsPagePending area="organization">
     <ToolsShell>
       <NativeToolsSearchFace />
       <NativeToolsRowsPending />

@@ -11288,28 +11288,12 @@
         "job": "measure-1"
       }
     },
-    "src/handlers/sharepoint/crypto.test.ts": {
-      "peakMb": 211,
-      "baselineMb": 211,
-      "source": {
-        "runId": "43667897818",
-        "job": "measure-2"
-      }
-    },
     "src/handlers/sharepoint/graph-client.test.ts": {
       "peakMb": 196,
       "baselineMb": 196,
       "source": {
         "runId": "43667897818",
         "job": "measure-3"
-      }
-    },
-    "src/handlers/sharepoint/graph-oauth.test.ts": {
-      "peakMb": 182,
-      "baselineMb": 182,
-      "source": {
-        "runId": "43667897818",
-        "job": "measure-1"
       }
     },
     "src/handlers/sharepoint/import-file.test.ts": {
@@ -16334,14 +16318,6 @@
       "source": {
         "runId": "43667897818",
         "job": "measure-2"
-      }
-    },
-    "src/lib/detected-country.test.ts": {
-      "peakMb": 196,
-      "baselineMb": 196,
-      "source": {
-        "runId": "43667897818",
-        "job": "measure-3"
       }
     },
     "src/lib/dev-origins.test.ts": {

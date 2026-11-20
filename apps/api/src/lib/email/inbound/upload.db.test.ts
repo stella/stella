@@ -18,6 +18,9 @@ import {
   correspondenceAttachments,
   correspondenceFilers,
   entities,
+  entityVersions,
+  fields,
+  properties,
   workspaceMembers,
   workspaces,
 } from "@/api/db/schema";
@@ -98,10 +101,64 @@ const storeEmailFile = async ({
   return entityId;
 };
 
+type StoreVersionedEmailFileOptions = {
+  entityCreatedBy: SafeId<"user">;
+  versionCreatedBy: SafeId<"user">;
+};
+
+/** An email file whose current version was added by another member. */
+const storeVersionedEmailFile = async ({
+  entityCreatedBy,
+  versionCreatedBy,
+}: StoreVersionedEmailFileOptions) => {
+  const entityId = await storeEmailFile({ createdBy: entityCreatedBy });
+  const propertyId = createSafeId<"property">();
+  const versionId = createSafeId<"entityVersion">();
+  const sourceFileId = `source-${versionId}`;
+  await db.insert(properties).values({
+    id: propertyId,
+    workspaceId,
+    name: `File ${propertyId}`,
+    status: "fresh",
+    content: { version: 1, type: "file" },
+    tool: { version: 1, type: "manual-input" },
+  });
+  await db.insert(entityVersions).values({
+    id: versionId,
+    workspaceId,
+    entityId,
+    versionNumber: 1,
+    createdBy: versionCreatedBy,
+  });
+  await db.insert(fields).values({
+    id: createSafeId<"field">(),
+    workspaceId,
+    entityVersionId: versionId,
+    propertyId,
+    content: {
+      type: "file",
+      id: sourceFileId,
+      mimeType: EML_MIME_TYPE,
+      fileName: "letter.eml",
+      sizeBytes: 128,
+      pdfFileId: null,
+      sha256Hex: "a".repeat(64),
+      encrypted: false,
+      version: 1,
+    },
+  });
+  await db
+    .update(entities)
+    .set({ currentVersionId: versionId })
+    .where(eq(entities.id, entityId));
+  return { entityId, sourceFileId };
+};
+
 type ProcessUploadOptions = {
   entityId: SafeId<"entity">;
   bytes: ArrayBuffer;
   mimeType?: string;
+  sourceFileId?: string;
   verifyOriginal?: typeof verifyOriginalSignature;
 };
 
@@ -109,13 +166,14 @@ const processUpload = async ({
   entityId,
   bytes,
   mimeType = EML_MIME_TYPE,
+  // Unversioned fixture files fence no generation.
+  sourceFileId = "unversioned-file",
   verifyOriginal = unverifiedOriginal,
 }: ProcessUploadOptions) =>
   await fileUploadedMail({
     bytes,
     mimeType,
-    // These fixture files have no stored version; no generation is fenced.
-    sourceFileId: "unversioned-file",
+    sourceFileId,
     scope: { organizationId, workspaceId, entityId },
     database: db,
     scopedDbForUploader: (scope) =>
@@ -573,6 +631,38 @@ if (!databaseUrl || !runPostgresTests) {
       const entityId = await storeEmailFile({ createdBy: outsiderId });
       const outcome = await processUpload({
         entityId,
+        bytes: emlFile(GOLDEN_MESSAGE),
+      });
+      expect(outcome.isOk() && outcome.value).toEqual({
+        status: "skipped",
+        reason: "no_matter_access",
+      });
+      expect(await records()).toHaveLength(0);
+      expect(await filers()).toHaveLength(0);
+    });
+
+    test("an uploaded version is filed under the member who added that version", async () => {
+      const { entityId, sourceFileId } = await storeVersionedEmailFile({
+        entityCreatedBy: outsiderId,
+        versionCreatedBy: uploaderId,
+      });
+      const outcome = await processUpload({
+        entityId,
+        sourceFileId,
+        bytes: emlFile(GOLDEN_MESSAGE),
+      });
+      expect(outcome.isOk() && outcome.value.status).toBe("filed");
+      expect(await filers()).toMatchObject([{ filedByUserId: uploaderId }]);
+    });
+
+    test("an uploaded version added by a member without matter access files nothing", async () => {
+      const { entityId, sourceFileId } = await storeVersionedEmailFile({
+        entityCreatedBy: uploaderId,
+        versionCreatedBy: outsiderId,
+      });
+      const outcome = await processUpload({
+        entityId,
+        sourceFileId,
         bytes: emlFile(GOLDEN_MESSAGE),
       });
       expect(outcome.isOk() && outcome.value).toEqual({

@@ -6,6 +6,7 @@ import { ChevronRightIcon } from "@stll/ui/icons";
 import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
+import { FILE_TREE_ROW_HEIGHT_PX } from "@/components/file-tree/file-tree.pending";
 import { EntityKindIcon } from "@/components/workspaces/entity-kind-icon";
 
 // Shared presentation for the file/folder tree used by the workspace Files view
@@ -13,7 +14,6 @@ import { EntityKindIcon } from "@/components/workspaces/entity-kind-icon";
 // guides, disclosure chevron, icon, name) from one place. Data, selection, and
 // behaviour live in the host; this module owns the look.
 
-const FILE_TREE_ROW_HEIGHT_PX = 36;
 const FILE_TREE_INDENT_PX = 20;
 const DISCLOSURE_SLOT_PX = 14;
 const GUIDE_COLUMN_OFFSET_PX = DISCLOSURE_SLOT_PX / 2;
