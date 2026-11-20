@@ -627,10 +627,9 @@ const settleAttachmentConflictTx = async (
   },
 ): Promise<AttachmentPlan | null> => {
   const { sourceId, observation, observationOrder, observedAt } = options;
+  const previousHostId = stored?.hostDecisionId ?? null;
   const previousHost =
-    stored === undefined || stored.hostDecisionId === null
-      ? undefined
-      : await readHostTx(tx, stored.hostDecisionId);
+    previousHostId === null ? undefined : await readHostTx(tx, previousHostId);
   if (
     stored !== undefined &&
     stored.hostDecisionId !== null &&
@@ -918,7 +917,7 @@ const attachmentMatchesPlan = ({
   current?.hostDecisionId === planned?.hostDecisionId &&
   current?.sourceHash === planned?.sourceHash &&
   current?.documentBodySha256 === planned?.documentBodySha256 &&
-  (current === undefined || current.hostWithdrawnAt === null);
+  (current?.hostWithdrawnAt ?? null) === null;
 
 const writeAttachmentTx = async (
   tx: CitationGraphTransaction<Transaction>,
@@ -1307,6 +1306,7 @@ const writeAttachmentPayloads = async ({
       if (encodedBody === null) {
         return Result.ok({ rawKey: raw.value, body: null });
       }
+      const storedBodyKey = stored?.documentBodyS3Key ?? null;
       const body = await rawPayloadWriter({
         ...(signal === undefined ? {} : { signal }),
         ...(s3Policy === undefined ? {} : { s3Policy }),
@@ -1318,11 +1318,9 @@ const writeAttachmentPayloads = async ({
         sourceId: host.sourceId,
         ownerId: host.id,
         contentType: COLLECTION_DOCUMENT_BODY_CONTENT_TYPE,
-        storedKey: stored?.documentBodyS3Key ?? null,
+        storedKey: storedBodyKey,
         storedContentType:
-          stored === undefined || stored.documentBodyS3Key === null
-            ? null
-            : COLLECTION_DOCUMENT_BODY_CONTENT_TYPE,
+          storedBodyKey === null ? null : COLLECTION_DOCUMENT_BODY_CONTENT_TYPE,
         window: options.rawWindow,
       });
       return body.map((key) => ({

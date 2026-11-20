@@ -103,7 +103,7 @@ type HeldDecisionCandidateQueryOptions = {
  * Every identity lookup shares this candidate owner. Match indexed historical
  * rows first, then collapse approved aliases before checking the candidate cap.
  */
-export const readHeldDecisionCandidates = (
+export const readHeldDecisionCandidates = async (
   tx: Transaction,
   {
     country,
@@ -166,7 +166,7 @@ export const readHeldDecisionCandidates = (
           path.primaryValues.map((value) => value.toLocaleUpperCase("und")),
         )})`
       : docket;
-  return readBounded(
+  return await readBounded(
     tx
       .selectDistinct({
         id: canonical.id,
