@@ -38,6 +38,7 @@ import {
 } from "@/api/lib/legal-search/collection-document-part";
 import { EMPTY_AST } from "@/api/lib/legal-search/document-types";
 import type { HeldDecisionAttachment } from "@/api/lib/legal-search/held-decision-attachment";
+import type { RawIngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import {
   RAW_SOURCE_FAMILY,
@@ -165,7 +166,7 @@ const fixture = async (index: number) => {
       },
       blocks,
     } satisfies DocumentAst;
-    return plainTextIngestionResult({
+    return {
       country: "USA",
       language: "en",
       court: court.name,
@@ -180,10 +181,10 @@ const fixture = async (index: number) => {
       metadata: { collectionFixture: { part: descriptor } },
       ...(ecli === undefined ? {} : { ecli }),
       textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
-    });
+    } satisfies RawIngestionResult;
   };
   const ingestOutcome = async (
-    item: ReturnType<typeof input>,
+    item: RawIngestionResult,
     role: "collection" | "publisher" = "collection",
     options: {
       scopedDb?: ScopedDb;
@@ -198,7 +199,7 @@ const fixture = async (index: number) => {
     };
     return await processDecision(
       {
-        input: item,
+        input: plainTextIngestionResult(item),
         sourceId: producer.id,
         scopedDb: options.scopedDb ?? scopedDb,
         observedAt: new Date(Date.UTC(2026, 10, 19, 10, 0, order)),
