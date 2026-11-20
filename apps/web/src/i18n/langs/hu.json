@@ -1740,6 +1740,18 @@
       "verified": "Ellenőrzött idézet",
       "verifiedHint": "Szó szerint: {source}"
     },
+    "answerTable": {
+      "copy": "Táblázat másolása",
+      "copyAs": "Másolás {format} formátumban",
+      "download": "Táblázat letöltése",
+      "downloadAs": "Letöltés {format} formátumban",
+      "fullscreen": "Megnyitás teljes képernyőn",
+      "fullscreenTitle": "Táblázat teljes képernyőn",
+      "singleLine": "Egy sorban",
+      "size": "{rows, plural, one {# sor} other {# sor}} · {columns, plural, one {# oszlop} other {# oszlop}}",
+      "textMode": "Cellaszöveg",
+      "wrap": "Szöveg tördelése"
+    },
     "applyMode": {
       "description": "A Word rögzíti, ki végezte az egyes módosításokat. Megjegyezzük a választását.",
       "direct": "Nem, közvetlen alkalmazás",
@@ -7930,7 +7942,6 @@
         "endDate": "Befejező dátum",
         "month": "Hónap",
         "quarter": "Negyedév",
-        "showTable": "Táblázat megjelenítése",
         "startDate": "Kezdő dátum",
         "week": "Hét"
       },

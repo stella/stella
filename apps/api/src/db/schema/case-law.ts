@@ -98,6 +98,7 @@ import {
 } from "@/api/lib/case-law/decision-court-id-sql";
 import { DOCTRINAL_TREATMENTS } from "@/api/lib/case-law/doctrine";
 import { fallbackDecisionIdentityIndexes } from "@/api/lib/case-law/fallback-decision-identity-index";
+import { INGESTION_FAILURE_IDENTITY_KINDS } from "@/api/lib/case-law/ingestion-failure-identity";
 import { CASE_LAW_PROVISION_SEARCH_INDEX } from "@/api/lib/case-law/provision-search-index";
 import {
   publishedCaseLawDecisionFor,
@@ -776,9 +777,10 @@ const citationCandidateIndexes = (
       sql`${isNotNull(t.citationKey)} AND ${publishedCaseLawDecisionFor(t)}`,
     ),
   p
-    .index("case_law_decisions_citation_match_key_idx")
-    .on(caseNumberMatchKeySql(t.citationKey), t.country, t.decisionDate, t.id)
-    .where(isNotNull(t.citationKey)),
+    // Full, not partial: the match-key expression's statistics come only
+    // from a non-partial index.
+    .index("case_law_decisions_citation_match_key_all_idx")
+    .on(caseNumberMatchKeySql(t.citationKey), t.country, t.decisionDate, t.id),
   p
     .index("case_law_decisions_citation_match_key_published_idx")
     .on(caseNumberMatchKeySql(t.citationKey), t.country, t.decisionDate, t.id)
@@ -4615,6 +4617,55 @@ export const caseLawIngestionEvents = p.pgTable(
       .index("case_law_ingestion_events_source_finished_idx")
       .on(t.sourceId, t.finishedAt.desc(), t.id.desc()),
     ...globalCaseLawPolicies(),
+  ],
+);
+
+/** Replay inputs for rejected records; never exposed through public failure summaries. */
+export const caseLawIngestionFailureEvidence = p.pgTable(
+  "case_law_ingestion_failure_evidence",
+  {
+    sourceId: safeUuid<"caseLawSource">("source_id").notNull(),
+    recordIdentity: p.varchar("record_identity", { length: 256 }).notNull(),
+    identityKind: p
+      .varchar("identity_kind", {
+        length: 32,
+        enum: INGESTION_FAILURE_IDENTITY_KINDS,
+      })
+      .notNull(),
+    sourceDocumentId: p.varchar("source_document_id", { length: 256 }),
+    payloadHash: p.varchar("payload_hash", { length: 64 }).notNull(),
+    observationOrder: p
+      .bigint("observation_order", { mode: "bigint" })
+      .notNull(),
+    observedAt: timestamptz("observed_at").notNull(),
+    /** Versioned JSON text with explicit base64 binary fields; retained verbatim. */
+    payload: p.text().notNull(),
+    errorType: p.varchar("error_type", { length: 128 }).notNull(),
+    createdAt: timestamptz("created_at").defaultNow().notNull(),
+  },
+  (t) => [
+    p
+      .foreignKey({
+        name: "case_law_ingestion_failure_evidence_source_fk",
+        columns: [t.sourceId],
+        foreignColumns: [caseLawSources.id],
+      })
+      .onDelete("cascade"),
+    p.primaryKey({
+      columns: [t.sourceId, t.recordIdentity, t.payloadHash, t.errorType],
+      name: "case_law_ingestion_failure_evidence_pk",
+    }),
+    p.check(
+      "case_law_ingestion_failure_evidence_identity_kind",
+      sql`${t.identityKind} IN (${sql.join(
+        INGESTION_FAILURE_IDENTITY_KINDS.map((kind) => sql`${kind}`),
+        sql`, `,
+      )})`,
+    ),
+    p
+      .index("case_law_ingestion_failure_evidence_document_idx")
+      .on(t.sourceId, t.sourceDocumentId),
+    ...caseLawIngestionOnlyPolicies(),
   ],
 );
 

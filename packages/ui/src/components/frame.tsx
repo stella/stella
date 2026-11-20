@@ -36,9 +36,20 @@ const FrameHeader = ({
   />
 );
 
-const FrameTitle = ({ className, ...props }: React.ComponentProps<"div">) => (
+/** `destructive` names an irreversible section (a danger zone). */
+type FrameTitleTone = "default" | "destructive";
+
+const FrameTitle = ({
+  className,
+  tone = "default",
+  ...props
+}: React.ComponentProps<"div"> & { tone?: FrameTitleTone | undefined }) => (
   <div
-    className={cn("text-sm font-semibold", className)}
+    className={cn(
+      "text-sm font-semibold",
+      tone === "destructive" && "text-destructive-foreground",
+      className,
+    )}
     data-slot="frame-panel-title"
     {...props}
   />

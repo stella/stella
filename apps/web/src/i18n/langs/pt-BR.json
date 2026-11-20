@@ -1740,6 +1740,18 @@
       "verified": "Citação verificada",
       "verifiedHint": "Palavra por palavra em {source}"
     },
+    "answerTable": {
+      "copy": "Copiar tabela",
+      "copyAs": "Copiar como {format}",
+      "download": "Baixar tabela",
+      "downloadAs": "Baixar como {format}",
+      "fullscreen": "Abrir em tela cheia",
+      "fullscreenTitle": "Tabela em tela cheia",
+      "singleLine": "Linha única",
+      "size": "{rows, plural, one {# linha} many {# linhas} other {# linhas}} · {columns, plural, one {# coluna} many {# colunas} other {# colunas}}",
+      "textMode": "Texto das células",
+      "wrap": "Quebrar texto"
+    },
     "applyMode": {
       "description": "O Word armazena quem fez cada alteração. Lembraremos da sua escolha.",
       "direct": "Não, aplicar diretamente",
@@ -7930,7 +7942,6 @@
         "endDate": "Data de término",
         "month": "Mês",
         "quarter": "Trimestre",
-        "showTable": "Mostrar tabela",
         "startDate": "Data de início",
         "week": "Semana"
       },

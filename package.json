@@ -292,7 +292,7 @@
     "better-result": "3.0.1",
     "cldr-misc-full": "49.0.0",
     "diff": "9.0.0",
-    "disposable-email-domains-js": "1.26.0",
+    "disposable-email-domains-js": "2.0.0",
     "drizzle-kit": "1.0.0-rc.5",
     "drizzle-orm": "1.0.0-rc.5",
     "eslint": "10.14.0",
