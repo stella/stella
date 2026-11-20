@@ -1169,7 +1169,15 @@ describe("public law sitemap", () => {
       "documentPresentationSnapshot(readRequestPresentationPrefs())",
     );
     expect(source).not.toContain("useI18nStore.getState()");
-    expect(source).toContain("hydrate: restoreHydratedDocumentPresentation");
+    // The snapshot is restored, then handed to the matches the hydration
+    // builds, so a member page's root (not loaded on the server) hydrates
+    // with the presentation the server painted.
+    expect(source).toContain(
+      "await restoreHydratedDocumentPresentation(snapshot);",
+    );
+    expect(source).toContain(
+      "router.options.context.presentationPrefs = snapshot.prefs;",
+    );
     expect(source).not.toContain("localeUserId");
     expect(source).not.toContain("loadAuthContext");
     const root = await readSource("apps/web/src/routes/__root.tsx");
