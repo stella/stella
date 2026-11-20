@@ -278,6 +278,22 @@ describe("a settled run's summary", () => {
     ).toEqual(["readDocument:1", "documentEdits:1", "changesSaved:1"]);
   });
 
+  test("names a coding agent's direct stella reads like a code step's", () => {
+    // A local run calls stella's tools under their registry names.
+    expect(
+      summary([
+        call("search_legislation", "complete", { results: [] }),
+        call("read_statute_provisions", "complete", { items: [] }),
+        call("read_statute_provisions", "complete", { error: "Not found" }),
+        call("search_case_law", "complete", { results: [] }),
+      ]),
+    ).toEqual(["searchedLegislationAndCaseLaw:1", "lookups:3"]);
+    expect(getChatToolActivityCategory("read_statute")).toBe("research");
+    expect(getChatToolActivityCategory("save_filled_template")).toBe(
+      "mutation",
+    );
+  });
+
   test("falls back to the step count when the run read and changed nothing", () => {
     expect(
       summary(

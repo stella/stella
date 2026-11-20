@@ -713,6 +713,56 @@ describe("answer link ids", () => {
   });
 });
 
+/**
+ * The answer's blocks: the children of Streamdown's root, which carries the
+ * gap between blocks (`space-y-*` margins on each child).
+ */
+const answerBlocks = (root: HTMLElement): HTMLElement[] =>
+  [...(root.firstElementChild?.children ?? [])].filter(
+    (node) => node instanceof HTMLElement,
+  );
+
+/** Margins do nothing on a `display: contents` box, so the gap would vanish. */
+const blocksWithoutMargins = (root: HTMLElement): string[] =>
+  answerBlocks(root)
+    .filter((answerBlock) => answerBlock.style.display === "contents")
+    .map((answerBlock) => answerBlock.outerHTML);
+
+describe("block spacing while an answer streams", () => {
+  test("every streamed block takes the gap a settled block takes", async () => {
+    await assertProperty(
+      "streamed answer blocks take the block gap",
+      fc.asyncProperty(streamedChatAnswerArbitrary, async ({ prefixes }) => {
+        const view = await mountAnswer(prefixes.at(0) ?? "", {
+          isAnimating: true,
+        });
+        for (const prefix of prefixes) {
+          await view.update(prefix);
+          expect({ prefix, blocks: blocksWithoutMargins(view.root) }).toEqual({
+            prefix,
+            blocks: [],
+          });
+        }
+        await view.unmount();
+      }),
+      { numRuns: 15 },
+    );
+  });
+
+  test("two streamed paragraphs render as two spaced blocks", async () => {
+    const view = await mountAnswer("First paragraph.\n\nSecond paragraph.", {
+      isAnimating: true,
+    });
+    const blocks = answerBlocks(view.root);
+    expect(blocks.map((answerBlock) => answerBlock.textContent)).toEqual([
+      "First paragraph.",
+      "Second paragraph.",
+    ]);
+    expect(blocksWithoutMargins(view.root)).toEqual([]);
+    await view.unmount();
+  });
+});
+
 describe("code block actions while an answer streams", () => {
   test("an incomplete block holds its actions until the stream settles", async () => {
     const open = "Example:\n\n```js\nconst total = 1;";

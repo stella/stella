@@ -46,6 +46,9 @@ const ANON_TAG_ALLOWED: { "stll-anon": string[] } = { "stll-anon": ["ph"] };
  */
 const ANSWER_TYPOGRAPHY_CLASS_NAME = cn(
   "size-full [&>*:first-child]:mt-0 [&>*:last-child]:mb-0",
+  // A streamed block sits in its direction wrapper (`AnswerBlock`), and a
+  // heading's margin collapses through it: trim the first and last the same.
+  "[&>div[dir]:first-child>:first-child]:mt-0 [&>div[dir]:last-child>:last-child]:mb-0",
   // 12px between blocks. Margins collapse, so a heading's own space above
   // replaces the gap rather than adding to it.
   "space-y-3",
