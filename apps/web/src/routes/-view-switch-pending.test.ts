@@ -6,8 +6,8 @@ import { repoRelativePath } from "@stll/portable-path";
 
 import { VIEW_SWITCH_PENDING } from "@/routes/-pending-view.logic";
 
-// A view switch replaces the `$viewId` match, so every route under it is
-// where the router decides how long the outgoing view stays on screen.
+// A view switch replaces the `$viewId` match and the matches under it, so
+// these routes decide how long the outgoing view stays on screen.
 const VIEW_SWITCH_ROUTE_PREFIX = "/_protected/workspaces/$workspaceId/$viewId";
 
 // Each timing option, read from the shared constant in the route's options.
@@ -29,12 +29,20 @@ const isViewSwitchRoute = ({ source }: RouteSource) => {
   );
 };
 
-/** View-switch routes left on the router's default pending timing. */
-const findLingeringViewRoutes = (sources: readonly RouteSource[]) =>
+/**
+ * View-switch routes on the wrong pending timing. A route with `loaderDeps`
+ * also gets a new match from a search change inside its own page (the
+ * document page's `field` when a saved version opens); a pending view shown
+ * early there would unmount the page and the state it hands over, so it
+ * keeps the router default. Every other route takes `VIEW_SWITCH_PENDING`.
+ */
+const findMistimedViewRoutes = (sources: readonly RouteSource[]) =>
   sources
     .filter(isViewSwitchRoute)
     .filter(({ source }) =>
-      REQUIRED_OPTIONS.some((option) => !source.includes(option)),
+      source.includes("loaderDeps:")
+        ? source.includes("VIEW_SWITCH_PENDING")
+        : REQUIRED_OPTIONS.some((option) => !source.includes(option)),
     )
     .map(({ file }) => file);
 
@@ -66,14 +74,23 @@ test("every route a view switch lands on takes the view-switch pending timing", 
   // The view layout, its body and the document page; fewer means the prefix
   // stopped matching and the check below would pass on nothing.
   expect(viewRoutes.length).toBeGreaterThanOrEqual(3);
-  expect(findLingeringViewRoutes(sources)).toEqual([]);
+  expect(findMistimedViewRoutes(sources)).toEqual([]);
 });
 
-test("the check names a view route on the router's default timing", () => {
+test("the check names a view route on the wrong timing", () => {
+  const timed = REQUIRED_OPTIONS.join("\n  ");
   const sources = [
     {
       file: "view.timeline.tsx",
       source: `createFileRoute(\n  "${VIEW_SWITCH_ROUTE_PREFIX}/timeline",\n)({ pendingComponent: TimelinePending })`,
+    },
+    {
+      file: "view.record.tsx",
+      source: `createFileRoute("${VIEW_SWITCH_ROUTE_PREFIX}/record")({\n  loaderDeps: ({ search }) => search,\n  ${timed}\n})`,
+    },
+    {
+      file: "view.document.tsx",
+      source: `createFileRoute("${VIEW_SWITCH_ROUTE_PREFIX}/document")({\n  loaderDeps: ({ search }) => search,\n})`,
     },
     {
       file: "lists.tsx",
@@ -81,9 +98,12 @@ test("the check names a view route on the router's default timing", () => {
     },
     {
       file: "view.route.tsx",
-      source: `createFileRoute("${VIEW_SWITCH_ROUTE_PREFIX}")({\n  ${REQUIRED_OPTIONS.join("\n  ")}\n})`,
+      source: `createFileRoute("${VIEW_SWITCH_ROUTE_PREFIX}")({\n  ${timed}\n})`,
     },
   ];
 
-  expect(findLingeringViewRoutes(sources)).toEqual(["view.timeline.tsx"]);
+  expect(findMistimedViewRoutes(sources)).toEqual([
+    "view.timeline.tsx",
+    "view.record.tsx",
+  ]);
 });

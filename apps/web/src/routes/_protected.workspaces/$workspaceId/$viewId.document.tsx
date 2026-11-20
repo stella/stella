@@ -21,7 +21,6 @@ import { entityOptions } from "@/lib/workspaces/queries/entities";
 import { entityVersionsOptions } from "@/lib/workspaces/queries/entity-versions";
 import { justificationsOptions } from "@/lib/workspaces/queries/workspace";
 import { routeSearchSchema } from "@/route-search-params";
-import { VIEW_SWITCH_PENDING } from "@/routes/-pending-view.logic";
 import { routePresentation } from "@/routes/-route-presentation";
 
 import { DocumentPage } from "./-$viewId.document.page";
@@ -323,6 +322,4 @@ export const Route = createFileRoute(
     }
   },
   pendingComponent: DocumentPagePending,
-  pendingMs: VIEW_SWITCH_PENDING.pendingMs,
-  pendingMinMs: VIEW_SWITCH_PENDING.pendingMinMs,
 });
