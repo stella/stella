@@ -60,7 +60,9 @@ pub use managed_preferences::{ManagedPreference, managed_preference};
 #[cfg(target_os = "macos")]
 mod microphone;
 #[cfg(target_os = "macos")]
-pub use microphone::microphone_input_bundle_ids;
+pub use microphone::{
+  AudioTransport, audio_device_transport, microphone_input_bundle_ids,
+};
 
 #[cfg(target_os = "macos")]
 mod system_permissions;

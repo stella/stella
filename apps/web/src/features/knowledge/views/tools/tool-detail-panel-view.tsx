@@ -18,15 +18,17 @@ import {
   XIcon,
 } from "@stll/ui/icons";
 import { TruncatedText } from "@stll/ui/truncated-text";
-import { cn } from "@stll/ui/utils";
 
 import {
   nativeToolDescriptionKey,
   nativeToolLabelKey,
 } from "@/components/catalogue/native-tool-label";
 import Tooltip from "@/components/tooltip";
+import {
+  ToolDetailPanelFrame,
+  ToolDetailSection,
+} from "@/features/knowledge/views/tools/tool-detail-panel.pending";
 import type { KnowledgeToolDetail } from "@/features/knowledge/views/tools/tools-seam";
-import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 
 type ToolDetailPanelViewProps = {
   tool: KnowledgeToolDetail;
@@ -57,134 +59,124 @@ export const ToolDetailPanelView = ({
   const description = descriptionKey ? t(descriptionKey) : tool.description;
 
   return (
-    <div className="flex h-full min-h-0 w-full flex-col">
-      <header
-        className={cn(
-          "border-border flex shrink-0 items-center gap-2 border-b px-3",
-          TOOLBAR_ROW_HEIGHT,
-        )}
-      >
-        <h2
-          className="text-foreground min-w-0 text-sm font-semibold"
-          dir="auto"
-        >
-          <TruncatedText>
-            {labelKey ? t(labelKey) : tool.displayName}
-          </TruncatedText>
-        </h2>
-        {homepageUrl && (
-          <a
-            aria-label={t("catalogue.openHomepage")}
-            className="text-muted-foreground hover:text-foreground shrink-0"
-            href={sanitizeHref(tool.homepage ?? tool.authorUrl)}
-            onClick={(e) => e.stopPropagation()}
-            rel="noreferrer"
-            target="_blank"
-          >
-            <ExternalLinkIcon className="size-3.5" />
-          </a>
-        )}
-        <Button
-          aria-label={t("common.close")}
-          className="ms-auto shrink-0"
-          onClick={onClose}
-          size="icon-xs"
-          type="button"
-          variant="ghost"
-        >
-          <XIcon className="size-3.5" />
-        </Button>
-      </header>
-
-      <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto px-3 py-4">
-        {description && (
-          <Section title={t("onboarding.catalogueDetailAbout")}>
-            {/* Remount per entry so expanded/overflow state starts fresh
+    <ToolDetailPanelFrame
+      body={
+        <>
+          {description && (
+            <ToolDetailSection title={t("onboarding.catalogueDetailAbout")}>
+              {/* Remount per entry so expanded/overflow state starts fresh
                 (the panel itself is not remounted per selection). */}
-            <ExpandableText key={description} text={description} />
-          </Section>
-        )}
-
-        {tool.connection && (
-          <Section title={t("catalogue.configuration")}>
-            <div className="flex flex-col gap-2">
-              <Field
-                ariaLabel={t("knowledge.mcp.urlLabel")}
-                icon={LinkIcon}
-                value={tool.connection.url}
-              />
-              <Field
-                ariaLabel={t("catalogue.detailAuthMethod")}
-                icon={KeyRoundIcon}
-                value={t(
-                  `knowledge.mcp.auth.${authKey(tool.connection.authType)}`,
-                )}
-              />
-              {tool.connection.serverVersion && (
-                <Field
-                  ariaLabel={t("common.version")}
-                  icon={TagIcon}
-                  value={tool.connection.serverVersion}
-                />
-              )}
-            </div>
-          </Section>
-        )}
-
-        {body}
-
-        <div className="mt-auto flex flex-col gap-5">
-          <Divider />
-          <Section title={t("common.details")}>
-            <div className="grid grid-cols-2 gap-3">
-              <AuthorField
-                ariaLabel={t("common.author")}
-                authorUrl={tool.authorUrl}
-                value={isFirstParty ? "stella" : tool.author}
-              />
-              {tool.license && (
-                <Field
-                  ariaLabel={t("onboarding.catalogueDetailLicense")}
-                  icon={FileBadgeIcon}
-                  value={tool.license}
-                />
-              )}
-              {tool.cost && (
-                <Field
-                  ariaLabel={t("onboarding.catalogueDetailCost")}
-                  icon={BanknoteIcon}
-                  value={t(`catalogue.cost.${tool.cost}`)}
-                />
-              )}
-              <Field
-                ariaLabel={t("onboarding.catalogueDetailSetup")}
-                icon={CogIcon}
-                value={t(`catalogue.setup.${setupKey(tool.setup)}`)}
-              />
-            </div>
-            {tool.jurisdictions.length > 0 && (
-              <ChipRow
-                ariaLabel={t("onboarding.catalogueDetailJurisdictions")}
-                icon={TagIcon}
-                values={tool.jurisdictions}
-              />
-            )}
-          </Section>
-        </div>
-      </div>
-
-      {footer !== undefined && (
-        <footer
-          className={cn(
-            "border-border flex shrink-0 items-center gap-2 border-t px-3",
-            TOOLBAR_ROW_HEIGHT,
+              <ExpandableText key={description} text={description} />
+            </ToolDetailSection>
           )}
-        >
-          {footer}
-        </footer>
-      )}
+
+          {tool.connection && (
+            <ToolDetailSection title={t("catalogue.configuration")}>
+              <div className="flex flex-col gap-2">
+                <Field
+                  ariaLabel={t("knowledge.mcp.urlLabel")}
+                  icon={LinkIcon}
+                  value={tool.connection.url}
+                />
+                <Field
+                  ariaLabel={t("catalogue.detailAuthMethod")}
+                  icon={KeyRoundIcon}
+                  value={t(
+                    `knowledge.mcp.auth.${authKey(tool.connection.authType)}`,
+                  )}
+                />
+                {tool.connection.serverVersion && (
+                  <Field
+                    ariaLabel={t("common.version")}
+                    icon={TagIcon}
+                    value={tool.connection.serverVersion}
+                  />
+                )}
+              </div>
+            </ToolDetailSection>
+          )}
+
+          {body}
+
+          <div className="mt-auto flex flex-col gap-5">
+            <Divider />
+            <ToolDetailSection title={t("common.details")}>
+              <div className="grid grid-cols-2 gap-3">
+                <AuthorField
+                  ariaLabel={t("common.author")}
+                  authorUrl={tool.authorUrl}
+                  value={isFirstParty ? "stella" : tool.author}
+                />
+                {tool.license && (
+                  <Field
+                    ariaLabel={t("onboarding.catalogueDetailLicense")}
+                    icon={FileBadgeIcon}
+                    value={tool.license}
+                  />
+                )}
+                {tool.cost && (
+                  <Field
+                    ariaLabel={t("onboarding.catalogueDetailCost")}
+                    icon={BanknoteIcon}
+                    value={t(`catalogue.cost.${tool.cost}`)}
+                  />
+                )}
+                <Field
+                  ariaLabel={t("onboarding.catalogueDetailSetup")}
+                  icon={CogIcon}
+                  value={t(`catalogue.setup.${setupKey(tool.setup)}`)}
+                />
+              </div>
+              {tool.jurisdictions.length > 0 && (
+                <ChipRow
+                  ariaLabel={t("onboarding.catalogueDetailJurisdictions")}
+                  icon={TagIcon}
+                  values={tool.jurisdictions}
+                />
+              )}
+            </ToolDetailSection>
+          </div>
+        </>
+      }
+      bodyClassName="overflow-y-auto"
+      footer={footer}
+      header={
+        <>
+          <h2
+            className="text-foreground min-w-0 text-sm font-semibold"
+            dir="auto"
+          >
+            <TruncatedText>
+              {labelKey ? t(labelKey) : tool.displayName}
+            </TruncatedText>
+          </h2>
+          {homepageUrl && (
+            <a
+              aria-label={t("catalogue.openHomepage")}
+              className="text-muted-foreground hover:text-foreground shrink-0"
+              href={sanitizeHref(tool.homepage ?? tool.authorUrl)}
+              onClick={(e) => e.stopPropagation()}
+              rel="noreferrer"
+              target="_blank"
+            >
+              <ExternalLinkIcon className="size-3.5" />
+            </a>
+          )}
+          <Button
+            aria-label={t("common.close")}
+            className="ms-auto shrink-0"
+            onClick={onClose}
+            size="icon-xs"
+            type="button"
+            variant="ghost"
+          >
+            <XIcon className="size-3.5" />
+          </Button>
+        </>
+      }
+    >
       {children}
-    </div>
+    </ToolDetailPanelFrame>
   );
 };
 
@@ -242,21 +234,6 @@ const ExpandableText = ({ text }: { text: string }) => {
     </div>
   );
 };
-
-const Section = ({
-  title,
-  children,
-}: {
-  title: string;
-  children: React.ReactNode;
-}) => (
-  <section className="flex flex-col gap-2.5">
-    <h3 className="text-muted-foreground text-xs font-medium tracking-wider uppercase">
-      {title}
-    </h3>
-    {children}
-  </section>
-);
 
 type FieldProps = {
   icon: LucideIcon;

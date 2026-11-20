@@ -276,6 +276,19 @@ const CLOUDFRONT_VIEWER_ADDRESS_HEADER = "cloudfront-viewer-address";
 const requiresOriginProof = (header: string | null | undefined): boolean =>
   header?.trim().toLowerCase() === CLOUDFRONT_VIEWER_ADDRESS_HEADER;
 
+/**
+ * Whether the address was read from CloudFront's viewer address header, which
+ * is honoured only on a request carrying the origin secret. Such a request
+ * came through CloudFront, so CloudFront's other viewer headers on it (the
+ * geolocation ones) were written by CloudFront rather than by the caller.
+ */
+export const isCloudFrontVerifiedAddress = (
+  clientAddress: ClientAddress | null | undefined,
+  edgeHeader: string | null | undefined = env.STELLA_CLIENT_ADDRESS_HEADER,
+): boolean =>
+  clientAddress?.source === CLIENT_ADDRESS_SOURCE.edgeHeader &&
+  requiresOriginProof(edgeHeader);
+
 type ClientAddressConfigurationOptions = {
   edgeHeader?: string | undefined;
   originVerifySecret?: string | undefined;

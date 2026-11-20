@@ -36,6 +36,8 @@ describe("TanStack AI is the only live app provider SDK boundary", () => {
       "lib/tanstack-ai-generate.canary.test.ts",
       "lib/analytics/tanstack-ai-cache-usage.test.ts",
       "lib/openai-incomplete-tool-usage.test.ts",
+      // Reads the adapters' model lists; constructs no adapter.
+      "lib/adapter-model-coverage.test.ts",
     ]);
     const forbiddenPackages = [
       "@tanstack/ai-anthropic",

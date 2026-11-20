@@ -63,6 +63,7 @@ import { detached } from "@/lib/detached";
 import { toAuthClientError } from "@/lib/errors/auth";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { getDisplayName } from "@/lib/get-display-name";
+import { roleTranslationKeys } from "@/lib/organization/consts";
 import {
   getOrganizationCreationOwner,
   organizationCreationView,
@@ -147,7 +148,7 @@ export const SidebarUserMenu = ({ user }: SidebarUserMenuProps) => {
                       </TruncatedText>
                       {role && (
                         <span className="bg-muted text-muted-foreground text-3xs inline-flex shrink-0 items-center rounded-md px-1.5 py-0.5 font-medium select-none">
-                          {t(`organization.roles.${role}`)}
+                          {t(roleTranslationKeys[role].labelKey)}
                         </span>
                       )}
                     </div>
@@ -175,7 +176,7 @@ export const SidebarUserMenu = ({ user }: SidebarUserMenuProps) => {
                     </TruncatedText>
                     {role && (
                       <span className="bg-muted text-muted-foreground text-3xs inline-flex shrink-0 items-center rounded-md px-1.5 py-0.5 font-medium select-none">
-                        {t(`organization.roles.${role}`)}
+                        {t(roleTranslationKeys[role].labelKey)}
                       </span>
                     )}
                   </div>
@@ -438,7 +439,7 @@ const OrganizationRoleBadge = ({ role }: { role: Role | undefined }) => {
 
   return (
     <span className="bg-muted text-muted-foreground text-2xs inline-flex shrink-0 items-center rounded-md px-1.5 py-0.5 font-medium select-none">
-      {t(`organization.roles.${role}`)}
+      {t(roleTranslationKeys[role].labelKey)}
     </span>
   );
 };

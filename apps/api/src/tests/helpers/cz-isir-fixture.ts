@@ -1,9 +1,9 @@
 /**
  * The insolvency register as tests serve it.
  *
- * The register's PDFs are not kept as fixtures, since they are not
- * anonymised: a document is set here as a PDF from the anonymised paragraphs
- * of a recorded decision (`parsers/__fixtures__/cz-isir-*.json`), typeset the
+ * The register's PDFs are not kept as fixtures, since they name parties: a
+ * document is set here as a PDF from the paragraphs of a recorded decision
+ * whose personal data were replaced (`parsers/__fixtures__/cz-isir-*.json`), typeset the
  * way a court's PDF is (first lines indented, headings in bold, the
  * register's signature stamp at each page's foot). The feed page is composed
  * from recorded actions (`adapters/__fixtures__/cz-isir-feed-page.xml`).
@@ -16,7 +16,6 @@ import {
   czIsirFetchPage,
   encodeCzIsirCursor,
 } from "@/api/handlers/case-law/ingestion/adapters/cz-isir";
-import type { CzIsirAnonymizer } from "@/api/handlers/case-law/ingestion/adapters/cz-isir-anonymization";
 import { CZ_ISIR_FEED_URL } from "@/api/handlers/case-law/ingestion/adapters/cz-isir-feed";
 import type { CzIsirParagraph } from "@/api/handlers/case-law/ingestion/parsers/cz-isir";
 import { planUnreadItems } from "@/api/handlers/case-law/ingestion/pipeline/unread-items";
@@ -185,25 +184,12 @@ export const czIsirTransport = async (
   });
 };
 
-/**
- * Passes text through unchanged: the fixtures' text is anonymised already,
- * and anonymisation has a suite of its own.
- */
-export const CZ_ISIR_PASS_THROUGH: CzIsirAnonymizer = {
-  anonymize: (paragraphs) => Result.ok([...paragraphs]),
-};
-
 /** The decision the feed page's first high-court action builds. */
 export const buildCzIsirFixtureDecision = async (): Promise<IngestionResult> =>
   await withTestFetch(
     await czIsirTransport(await czIsirFixtureDocuments()),
     async () => {
-      const page = await czIsirFetchPage(
-        CZ_ISIR_FIXTURE_CURSOR,
-        {},
-        undefined,
-        CZ_ISIR_PASS_THROUGH,
-      );
+      const page = await czIsirFetchPage(CZ_ISIR_FIXTURE_CURSOR, {});
       if (Result.isError(page)) {
         return await Promise.reject(page.error);
       }

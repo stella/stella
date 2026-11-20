@@ -1,8 +1,7 @@
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
-import { PlusIcon, RotateCcwIcon, WorkflowIcon } from "@stll/ui/icons";
-import { Skeleton } from "@stll/ui/skeleton";
+import { PlusIcon, RotateCcwIcon } from "@stll/ui/icons";
 import { Switch } from "@stll/ui/switch";
 import { TruncatedText } from "@stll/ui/truncated-text";
 
@@ -15,34 +14,13 @@ import {
   FLOW_EXAMPLE_KEYS,
   type FlowExampleKey,
 } from "@/routes/knowledge/-components/flow-examples";
+import {
+  FLOW_LIST_CLASS,
+  FLOW_ROW_CLASS,
+  FlowListToolbar,
+  FlowRowBody,
+} from "@/routes/knowledge/-components/flow-list.pending";
 import type { FlowListItem } from "@/routes/knowledge/-components/flow-types";
-
-const FLOW_LIST_CLASS = "flex min-h-0 flex-1 flex-col";
-const FLOW_TOOLBAR_CLASS =
-  "flex items-center justify-end gap-1 border-b px-4 py-2";
-const FLOW_ROW_CLASS = "flex items-center gap-3 px-4 py-3";
-const FLOW_ROW_KEYS = ["a", "b", "c", "d", "e"];
-
-export const FlowListSkeleton = () => (
-  <div aria-hidden="true" className={FLOW_LIST_CLASS}>
-    <div className={FLOW_TOOLBAR_CLASS}>
-      <Skeleton className="h-8 w-8 rounded-md" />
-      <Skeleton className="h-8 w-28 rounded-md" />
-    </div>
-    <ul className="flex-1 divide-y">
-      {FLOW_ROW_KEYS.map((key) => (
-        <li className={FLOW_ROW_CLASS} key={key}>
-          <Skeleton className="size-9 shrink-0 rounded-lg" />
-          <div className="min-w-0 flex-1">
-            <Skeleton className="h-5 w-48 max-w-full" />
-            <Skeleton className="mt-0.5 h-4 w-32 max-w-full" />
-          </div>
-          <Skeleton className="h-5 w-9 rounded-full" />
-        </li>
-      ))}
-    </ul>
-  </div>
-);
 
 type FlowListProps = {
   flows: FlowListItem[];
@@ -69,7 +47,7 @@ export const FlowList = ({
 
   return (
     <div className={FLOW_LIST_CLASS}>
-      <div className={FLOW_TOOLBAR_CLASS}>
+      <FlowListToolbar>
         <Button
           aria-label={t("common.refresh")}
           onClick={onRefresh}
@@ -91,7 +69,7 @@ export const FlowList = ({
             <span className="hidden sm:inline">{t("flows.createFlow")}</span>
           </Button>
         )}
-      </div>
+      </FlowListToolbar>
 
       <div className="flex-1 overflow-y-auto">
         {flows.length === 0 && (
@@ -214,25 +192,24 @@ const FlowRow = ({
   return (
     <li className={FLOW_ROW_CLASS}>
       <Button className="min-w-0 flex-1" onClick={onSelect} variant="plain">
-        <span className="flex min-w-0 flex-1 items-center gap-3">
-          <div className="bg-muted flex size-9 shrink-0 items-center justify-center rounded-lg">
-            <WorkflowIcon className="text-muted-foreground size-4" />
-          </div>
-          <div className="min-w-0 flex-1">
+        <FlowRowBody
+          meta={
+            <>
+              <FlowTriggerBadge triggerType={flow.triggerType} />
+              <span>{t("common.stepCount", { count: flow.stepCount })}</span>
+            </>
+          }
+          title={
             <TruncatedText
               className="text-sm font-medium"
               dir="auto"
-              render={<p />}
+              render={<span />}
             >
               {flow.name}
             </TruncatedText>
-            <div className="text-muted-foreground mt-0.5 flex items-center gap-2 text-xs">
-              <FlowTriggerBadge triggerType={flow.triggerType} />
-              <span>{t("common.stepCount", { count: flow.stepCount })}</span>
-            </div>
-          </div>
-          <span className="sr-only">{t("common.edit")}</span>
-        </span>
+          }
+        />
+        <span className="sr-only">{t("common.edit")}</span>
       </Button>
       <Switch
         aria-label={
