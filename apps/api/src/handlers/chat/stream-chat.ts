@@ -2287,6 +2287,7 @@ const runChatAttempt = async function* ({
                     tenantWorkspaceIds,
                     thirdPartyBoundary,
                     threadId,
+                    turnBudget: turnBudget.childMiddleware,
                     usageLane,
                     userId,
                     workspaceId,

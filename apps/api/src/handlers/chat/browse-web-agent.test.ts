@@ -17,9 +17,11 @@ import {
 } from "@stll/api-contract/browser-control";
 import { CHAT_TOOL_EXECUTOR_METADATA_KEY } from "@stll/api-contract/chat";
 import { memberWaitsOf } from "@stll/api-contract/chat-member-wait";
+import { CHAT_TURN_BUDGET, type ChatTurnBudget } from "@stll/chat-limits";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import {
+  BROWSE_WEB_RESULT_MAX_CHARS,
   browseWebResultsForModel,
   createBrowseWebAgent,
   prepareSuspendedBrowseRuns,
@@ -34,6 +36,7 @@ import {
   toPersistedChatMessageContentV3,
 } from "@/api/handlers/chat/chat-message-parts";
 import { validateMessage } from "@/api/handlers/chat/chat-schema";
+import { createChatTurnBudget } from "@/api/handlers/chat/chat-turn-budget";
 import { createBrowserControlTool } from "@/api/handlers/chat/tools/browser-control-tool";
 import {
   applyChatToolPolicy,
@@ -131,7 +134,7 @@ const persistedPart = (part: UIMessage["parts"][number]) => {
     : panic(`The ${decision.partType} part was dropped`);
 };
 
-const browseScenario = () => {
+const browseScenario = (caps: ChatTurnBudget = CHAT_TURN_BUDGET) => {
   const parent = recordingModel([
     {
       arguments: JSON.stringify({ task: "Find the filing fee on example.cz." }),
@@ -176,6 +179,11 @@ const browseScenario = () => {
       metered.push(usage.totalTokens);
     },
   };
+  // One budget across the turn's requests, as the stored spend carries it.
+  const budget = createChatTurnBudget({
+    budget: caps,
+    owningMessage: undefined,
+  });
   const browserTool = applyChatToolPolicy(
     createBrowserControlTool()[BROWSER_CONTROL_TOOL_NAME],
     CHAT_TOOL_POLICY_KIND.external,
@@ -194,6 +202,7 @@ const browseScenario = () => {
         tenantWorkspaceIds: [],
         thirdPartyBoundary: { type: "raw" },
         threadId: THREAD,
+        turnBudget: budget.childMiddleware,
         usageLane: undefined,
         userId: USER,
         workspaceId: null,
@@ -283,6 +292,7 @@ const browseScenario = () => {
       ...(parentRunId === undefined ? {} : { parentRunId }),
       ...(resume === undefined ? {} : { resume }),
       subagents: { agents: [agentFor(suspended.value.runs)] },
+      middleware: [budget.middleware],
     })) {
       chunks.push(asTestRaw<StreamChunk>(chunk));
       processor.processChunk(asTestRaw<StreamChunk>(chunk));
@@ -292,7 +302,7 @@ const browseScenario = () => {
   };
   const answer = (): UIMessage =>
     processor.getMessages().at(-1) ?? panic("The run built no message");
-  return { answer, child, metered, parent, run };
+  return { answer, budget, child, metered, parent, run };
 };
 
 const terminalOf = (chunks: readonly StreamChunk[]) => {
@@ -440,6 +450,66 @@ describe("the browsing sub-agent through the SDK runtime", () => {
     // The SDK lists usage per call only once a child's usage joins the
     // terminal (`withChildUsage`); this one stays the main model's alone.
     expect(Array.isArray(final.usage)).toBe(false);
+  });
+
+  /** The three requests of a browse: the approval, the page, the answer. */
+  const browseThrough = async (scenario: ReturnType<typeof browseScenario>) => {
+    const first = await scenario.run({ runId: "run-1" });
+    const approval =
+      interruptsOf(first).at(0) ?? panic("The turn did not stop");
+    const second = await scenario.run({
+      parentRunId: "run-1",
+      resume: [
+        {
+          interruptId: approval.id,
+          payload: { approved: true },
+          status: "resolved",
+        },
+      ],
+      runId: "run-2",
+    });
+    const browserCall =
+      interruptsOf(second).at(0) ?? panic("The turn did not stop");
+    return await scenario.run({
+      parentRunId: "run-2",
+      resume: [
+        {
+          interruptId: browserCall.id,
+          payload: pageResult(PAGE_LABEL),
+          status: "resolved",
+        },
+      ],
+      runId: "run-3",
+    });
+  };
+
+  test("spends the turn's budget: the child's model calls count toward its prompt tokens", async () => {
+    const scenario = browseScenario();
+    await browseThrough(scenario);
+    expect(scenario.budget.spend().promptTokens).toBe(
+      PARENT_CALL_USAGE.promptTokens +
+        CHILD_STEP_USAGE.promptTokens +
+        CHILD_ANSWER_USAGE.promptTokens +
+        PARENT_USAGE.promptTokens,
+    );
+  });
+
+  test("pauses the turn at its cap when the child's model calls reach it", async () => {
+    // The main model's call alone stays under the cap; with the child's
+    // first step the turn reaches it. Every child step that browses waits on
+    // the page, so the child's own steps end at that pause; the main model
+    // is not called again once the run returns.
+    const scenario = browseScenario({
+      ...CHAT_TURN_BUDGET,
+      maxPromptTokens:
+        PARENT_CALL_USAGE.promptTokens + CHILD_STEP_USAGE.promptTokens,
+    });
+    await browseThrough(scenario);
+    expect(scenario.parent.requests).toHaveLength(1);
+    expect(scenario.budget.pause()).toMatchObject({
+      reason: "prompt-tokens",
+      type: "paused",
+    });
   });
 
   test("a stopped turn closes the child's pending approval and stops the child", async () => {
@@ -645,5 +715,30 @@ describe("the main model's view of a browsing result", () => {
       result("browse", { error: "Stopped", subagentRunId: "run" }),
     ];
     expect(browseWebResultsForModel(failed)).toEqual(failed);
+  });
+
+  test("cuts an answer that relays a whole page to the browsing result limit", () => {
+    // A child that copies the page into its answer, ending on an emoji
+    // whose pair the limit would split.
+    const page = `${"a".repeat(BROWSE_WEB_RESULT_MAX_CHARS - 1)}😀${PAGE_TEXT}`;
+    const view = browseWebResultsForModel([
+      call("browse", BROWSE_WEB_TOOL_NAME),
+      result("browse", { result: page, subagentRunId: "run" }),
+    ]);
+    const read: unknown = JSON.parse(String(view.at(1)?.content));
+    expect(read).toMatchObject({
+      contentTrust: BROWSER_CONTROL_CONTENT_TRUST.untrustedWebContent,
+      text: "a".repeat(BROWSE_WEB_RESULT_MAX_CHARS - 1),
+      truncated: true,
+    });
+    expect(JSON.stringify(read)).not.toContain(PAGE_TEXT);
+    // An answer within the limit is read whole.
+    const short = browseWebResultsForModel([
+      call("browse", BROWSE_WEB_TOOL_NAME),
+      result("browse", { result: "Fee: 10 EUR.", subagentRunId: "run" }),
+    ]);
+    expect(JSON.parse(String(short.at(1)?.content))).not.toHaveProperty(
+      "truncated",
+    );
   });
 });
