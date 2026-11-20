@@ -124,3 +124,32 @@ test("invalid identities and uncaptured anonymous inputs cannot certify a park",
     identityKind: "captured-input",
   });
 });
+
+test.each([undefined, "publisher-post-42"])(
+  "classifies a failed label with publisher identity %s without mistaking a quarantine key for a post",
+  (sourceDocumentId) => {
+    const failed = plainTextIngestionResult({
+      ...input,
+      sourceDocumentId,
+      caseNumber: "{\\rtf1 invalid label}",
+    });
+    expect(failed.plainTextOutcome.type).toBe("item_build_failed");
+    const evidence = captureFailureEvidence({
+      record: { type: "decision", decision: failed },
+      observation: { order: 1n, observedAt: new Date("2026-01-01T00:00:00Z") },
+    }).unwrap();
+    const identity = ingestionFailureRecordIdentity({
+      sourceDocumentId: failed.sourceDocumentId,
+      replayEvidence: evidence,
+    });
+    expect(evidence.sourceDocumentId).toBe(failed.sourceDocumentId);
+    expect(identity).toEqual(
+      sourceDocumentId === undefined
+        ? {
+            recordIdentity: `input:${evidence.payloadHash}`,
+            identityKind: "captured-input",
+          }
+        : { recordIdentity: sourceDocumentId, identityKind: "source-document" },
+    );
+  },
+);

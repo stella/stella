@@ -1189,7 +1189,6 @@ describe("runIngestionPipeline — failure records", () => {
             language: "sk-SK-x-long",
           }),
         ],
-        itemBuildFailures: { type: "item_build_failed", count: 2 },
         publisherRequest: PUBLISHER_REQUEST.ANSWERED,
         nextCursor: "cursor-2",
       });
@@ -1213,11 +1212,69 @@ describe("runIngestionPipeline — failure records", () => {
     expect(result.haltReason).toBeNull();
     expect(result.nextCursor).toBe("cursor-2");
     expect(state.persistedCursor).toBe("cursor-2");
-    expect(
-      logs.records.find(
-        ({ message }) => message === "case_law.ingestion.pipeline_page_done",
-      )?.attributes?.["itemBuildFailures"],
-    ).toBe(2);
+  });
+
+  test.each([0, 1])(
+    "holds a page with %i retained typed failures and one omitted item",
+    async (retained) => {
+      const source = caseLawSourceRow({ name: "Incomplete failed page" });
+      const rejected = plainTextIngestionResult({
+        ...baseResult({}),
+        sourceDocumentId: "retained-failed-input",
+        caseNumber: "{\\rtf1 invalid label}",
+        sourceRaw: "original publisher listing",
+      });
+      expect(rejected.plainTextOutcome.type).toBe("item_build_failed");
+      czNsAdapter.fetchPage = async () =>
+        Result.ok({
+          decisions: retained === 0 ? [] : [rejected],
+          itemBuildFailures: { type: "item_build_failed", count: retained + 1 },
+          publisherRequest: PUBLISHER_REQUEST.ANSWERED,
+          nextCursor: "cursor-2",
+        });
+      const { scopedDb, state } = failingDecisionDb(null, false);
+      const result = await runIngestionPipeline({
+        source,
+        sourceLease: testSourceLease(source),
+        scopedDb,
+        maxPages: 1,
+        acquireStoredTotalAdmission: async () => "held",
+      });
+      expect(result.haltReason).toContain("lack replayable per-item outcomes");
+      expect(result.stopKind).toBe(INGESTION_STOP_KIND.ADAPTER_ERROR);
+      expect(result.nextCursor).toBe(source.syncCursor);
+      expect(state.persistedCursor).toBe(source.syncCursor);
+      expect(state.insertedRows).toHaveLength(retained);
+    },
+  );
+
+  test("passes a failed build only after its retained input reaches the ledger", async () => {
+    const source = caseLawSourceRow({ name: "Retained failed page" });
+    const rejected = plainTextIngestionResult({
+      ...baseResult({}),
+      sourceDocumentId: "retained-failed-input",
+      caseNumber: "{\\rtf1 invalid label}",
+      sourceRaw: "original publisher listing",
+    });
+    expect(rejected.plainTextOutcome.type).toBe("item_build_failed");
+    czNsAdapter.fetchPage = async () =>
+      Result.ok({
+        decisions: [rejected],
+        itemBuildFailures: { type: "item_build_failed", count: 1 },
+        publisherRequest: PUBLISHER_REQUEST.ANSWERED,
+        nextCursor: "cursor-2",
+      });
+    const { scopedDb, state } = failingDecisionDb(null, false);
+    const result = await runIngestionPipeline({
+      source,
+      sourceLease: testSourceLease(source),
+      scopedDb,
+      maxPages: 1,
+      acquireStoredTotalAdmission: async () => "held",
+    });
+    expect(result.haltReason).toBeNull();
+    expect(result.nextCursor).toBe("cursor-2");
+    expect(state.insertedRows).toHaveLength(1);
   });
 
   test("holds the cursor when the database rejects the failure record", async () => {

@@ -42,6 +42,7 @@ import {
   fallbackEcliComparisonKey,
 } from "@/api/lib/case-law/fallback-decision-identity";
 import type { DecisionStorageIdentity } from "@/api/lib/case-law/fallback-decision-identity";
+import type { PlainTextError } from "@/api/lib/case-law/plain-text";
 import { toPlainText } from "@/api/lib/case-law/plain-text";
 import { rowHoldsDocumentFor } from "@/api/lib/case-law/stored-payload";
 import type { StoredCorpusValidationError } from "@/api/lib/errors/tagged-errors";
@@ -107,10 +108,14 @@ export const observeDecision = ({
   | StoredCorpusValidationError
   | DecisionCourtIdentityError
   | DecisionCourtUnrecognizedError
+  | PlainTextError
 > => {
   const sanitized = sanitizeResult(input, metadataUrlSchema);
   if (sanitized.isErr()) {
     return sanitized;
+  }
+  if (sanitized.value.plainTextOutcome.type === "item_build_failed") {
+    return Result.err(sanitized.value.plainTextOutcome.error);
   }
   // A directory jurisdiction's adapter maps its source's court id and rejects
   // what the directory does not admit before a result gets here; one that

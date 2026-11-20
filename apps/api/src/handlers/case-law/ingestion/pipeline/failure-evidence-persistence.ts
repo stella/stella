@@ -19,11 +19,11 @@ import {
   captureFailureEvidence,
   encodeIngestionFailureEvidence,
   type IngestionFailureEvidence,
-  type IngestionFailureIdentityKind,
   ingestionFailureRecordIdentity,
 } from "@/api/handlers/case-law/ingestion/pipeline/failure-evidence";
 import type { SafeId } from "@/api/lib/branded-types";
 import { canonicalDecisionIdSql } from "@/api/lib/case-law/decision-alias";
+import type { IngestionFailureIdentityKind } from "@/api/lib/case-law/ingestion-failure-identity";
 import { replayWrite } from "@/api/lib/case-law/replay-write";
 import { lockCaseLawDecisionRows } from "@/api/lib/db/aggregate-lock";
 import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
@@ -241,7 +241,9 @@ const writeFailureEvidenceTx = async (
         caseLawIngestionFailureEvidence.errorType,
       ],
       set: write.set,
-      setWhere: and(newer, write.setWhere),
+      setWhere:
+        and(newer, write.setWhere) ??
+        panic("Evidence updates require an observation fence"),
     });
 };
 

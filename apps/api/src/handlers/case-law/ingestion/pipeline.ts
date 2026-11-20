@@ -246,6 +246,19 @@ const pageItemCount = ({
 }: SyncPage): number =>
   decisions.length + (supplements?.length ?? 0) + (unreadItems?.length ?? 0);
 
+/** An aggregate count cannot certify records the adapter omitted. */
+const unsettledBuildFailureCount = ({
+  decisions,
+  itemBuildFailures,
+}: SyncPage): number =>
+  Math.max(
+    0,
+    (itemBuildFailures?.count ?? 0) -
+      decisions.filter(
+        ({ plainTextOutcome }) => plainTextOutcome.type === "item_build_failed",
+      ).length,
+  );
+
 /** One when the publisher answered a request for the page, else zero. */
 const publisherAnsweredCount = ({ publisherRequest }: SyncPage): number =>
   publisherRequest === PUBLISHER_REQUEST.ANSWERED ? 1 : 0;
@@ -785,6 +798,11 @@ const runScopedIngestionPipeline = async ({
     });
     if (placed !== null || s3UploadFailures > s3FailuresBefore) {
       return placed;
+    }
+    const unsettled = unsettledBuildFailureCount(page);
+    if (unsettled > 0) {
+      stopKind = INGESTION_STOP_KIND.ADAPTER_ERROR;
+      return `${unsettled} adapter item build failure(s) lack replayable per-item outcomes; cursor held for retry`;
     }
     return await settlePageUnreadItems({
       unreadItems: page.unreadItems,

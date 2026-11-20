@@ -858,6 +858,71 @@ describe("crawl cancellation", () => {
     propertyTestTimeout(120_000),
   );
 
+  test.each([1, 2])(
+    "certifies %i reported build failures only when every input was retained",
+    async (reported) => {
+      const sourceId = await crawlSource();
+      const sourceLease = await leaseFor(sourceId);
+      const input = await plCourtsFixture().buildDecision();
+      const failed = plainTextIngestionResult({
+        ...input,
+        sourceDocumentId: "failed-publisher-entry",
+        caseNumber: "{\\rtf1 invalid label}",
+        sourceRaw: "original publisher listing for a failed label",
+      });
+      expect(failed.country).toBe("POL");
+      expect(failed.plainTextOutcome.type).toBe("item_build_failed");
+      czNsAdapter.fetchPage = async () =>
+        Result.ok({
+          decisions: [failed],
+          itemBuildFailures: { type: "item_build_failed", count: reported },
+          nextCursor: "next-page",
+          publisherRequest: PUBLISHER_REQUEST.ANSWERED,
+        });
+      try {
+        const result = await runIngestionPipeline({
+          source: sourceLease.source,
+          sourceLease,
+          scopedDb,
+          corpus: landingTransfer().corpus,
+          maxPages: 1,
+          acquireStoredTotalAdmission: async () => "held",
+        });
+        const evidence = await db
+          .select()
+          .from(caseLawIngestionFailureEvidence)
+          .where(eq(caseLawIngestionFailureEvidence.sourceId, sourceId));
+        expect(evidence).toHaveLength(1);
+        expect(evidence.at(0)?.sourceDocumentId).toBe("failed-publisher-entry");
+        expect(evidence.at(0)?.errorType).toBe("PlainTextError");
+        expect(evidence.at(0)?.payload).toContain(
+          "original publisher listing for a failed label",
+        );
+        expect(await ledgerRows(sourceId)).toHaveLength(1);
+        expect(
+          await db
+            .select()
+            .from(caseLawDecisions)
+            .where(eq(caseLawDecisions.sourceId, sourceId)),
+        ).toEqual([]);
+        if (reported === 1) {
+          expect(result.haltReason).toBeNull();
+          expect(await sourceCursor(sourceId)).toBe("next-page");
+        } else {
+          expect(result.stopKind).toBe(INGESTION_STOP_KIND.ADAPTER_ERROR);
+          expect(result.haltReason).toContain(
+            "lack replayable per-item outcomes",
+          );
+          expect(await sourceCursor(sourceId)).toBe(
+            sourceLease.source.syncCursor,
+          );
+        }
+      } finally {
+        await sourceLease.release();
+      }
+    },
+  );
+
   test("an admission pause holds the page without recording failures", async () => {
     const sourceId = await crawlSource();
     const sourceLease = await leaseFor(sourceId);

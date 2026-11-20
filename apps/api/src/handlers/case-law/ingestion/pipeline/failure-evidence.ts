@@ -3,26 +3,16 @@ import { panic, Result } from "better-result";
 import { sha256Hex } from "@stll/sha256/bun";
 
 import type { RejectedCaseLawIngestionRecord } from "@/api/handlers/case-law/ingestion/pipeline/batch-types";
+import {
+  INGESTION_FAILURE_IDENTITY_KIND,
+  type IngestionFailureIdentityKind,
+} from "@/api/lib/case-law/ingestion-failure-identity";
 import type {
   DecisionSupplement,
   IngestionResult,
 } from "@/api/lib/legal-search/ingestion-types";
+import { isPlainTextQuarantineSourceDocumentId } from "@/api/lib/legal-search/plain-text-assembly";
 import { sortDeep } from "@/api/lib/sort-deep";
-
-const INGESTION_FAILURE_IDENTITY_KIND = {
-  SOURCE_DOCUMENT: "source-document",
-  PROVIDED_RECORD: "provided-record",
-  CAPTURED_INPUT: "captured-input",
-} as const;
-
-export type IngestionFailureIdentityKind =
-  (typeof INGESTION_FAILURE_IDENTITY_KIND)[keyof typeof INGESTION_FAILURE_IDENTITY_KIND];
-
-export const INGESTION_FAILURE_IDENTITY_KINDS = [
-  INGESTION_FAILURE_IDENTITY_KIND.SOURCE_DOCUMENT,
-  INGESTION_FAILURE_IDENTITY_KIND.PROVIDED_RECORD,
-  INGESTION_FAILURE_IDENTITY_KIND.CAPTURED_INPUT,
-] as const satisfies readonly IngestionFailureIdentityKind[];
 
 const validFailureIdentity = (value: string | undefined): value is string =>
   value !== undefined &&
@@ -34,6 +24,7 @@ const validFailureIdentity = (value: string | undefined): value is string =>
 export type IngestionFailureEvidence = {
   payload: string;
   payloadHash: string;
+  /** Legacy quarantine keys remain addressable for erasure until those rows retire. */
   sourceDocumentId: string | null;
   observationOrder: bigint;
   observedAt: Date;
@@ -154,18 +145,23 @@ export const ingestionFailureRecordIdentity = ({
 }: IngestionFailureRecordIdentityOptions):
   | { recordIdentity: string; identityKind: IngestionFailureIdentityKind }
   | undefined => {
+  const publisherDocumentId =
+    validFailureIdentity(sourceDocumentId) &&
+    !isPlainTextQuarantineSourceDocumentId(sourceDocumentId)
+      ? sourceDocumentId
+      : undefined;
   const identityKind = (() => {
     if (recordIdentity !== undefined) {
       return INGESTION_FAILURE_IDENTITY_KIND.PROVIDED_RECORD;
     }
-    if (validFailureIdentity(sourceDocumentId)) {
+    if (publisherDocumentId !== undefined) {
       return INGESTION_FAILURE_IDENTITY_KIND.SOURCE_DOCUMENT;
     }
     return INGESTION_FAILURE_IDENTITY_KIND.CAPTURED_INPUT;
   })();
   const identity =
     recordIdentity ??
-    (validFailureIdentity(sourceDocumentId) ? sourceDocumentId : undefined) ??
+    publisherDocumentId ??
     (replayEvidence === undefined
       ? undefined
       : `input:${replayEvidence.payloadHash}`);
