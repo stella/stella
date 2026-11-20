@@ -5404,6 +5404,11 @@
       "googleKeyRestricted": "Patikrinkite šio rakto API, IP adresų ir nukreipiančių svetainių apribojimus Google Cloud. Leiskite reikiamą API ir savo serverio užklausas, tada bandykite dar kartą.",
       "keepSavedKey": "Palikti išsaugotą raktą",
       "keyFormatHint": "Šio rakto formatas neįprastas teikėjui {provider}. Išsaugokite, kad teikėjas jį patikrintų.",
+      "keyNeed": {
+        "builtIn": "Neprivaloma. Be savo rakto šios organizacijos DI naudoja stella teikiamus modelius.",
+        "keyRequired": "Šios organizacijos DI reikia teikėjo rakto. Pridėkite jį, kad įjungtumėte DI.",
+        "ownKeys": "Šios organizacijos DI naudoja toliau nurodytus raktus."
+      },
       "modelForRole": "{role} modelis",
       "modelIdPlaceholder": "Ieškoti modelių",
       "modelsDescription": "Kiekvienai DI kategorijai pasirinkite teikėją ir vieną siūlomą multimodalinį modelį.",
@@ -5411,6 +5416,7 @@
       "newApiKey": "Naujas API raktas",
       "newApiKeyDescription": "Išsaugojus pakeitimus jis pakeis išsaugotą raktą.",
       "noModelResults": "Nėra atitinkančių siūlomų modelių",
+      "noProviders": "Teikėjų raktų dar nepridėta.",
       "openaiInsufficientQuota": "Patikrinkite OpenAI projekto biudžetą ir API atsiskaitymo nustatymus. Papildykite kreditų likutį arba padidinkite atitinkamą limitą ir bandykite dar kartą.",
       "openaiProjectOrganizationMismatch": "Naudokite reikiamo OpenAI projekto ir organizacijos API raktą. Patikrinkite jų prieigos nustatymus ir bandykite dar kartą.",
       "openrouterNoCredits": "Papildykite kreditų likutį OpenRouter atsiskaitymo skiltyje ir bandykite dar kartą.",
@@ -5433,6 +5439,8 @@
       "providerForRole": "{role} teikėjas",
       "providerKeyInvalid": "{provider} atmetė raktą. Prieš išsaugodami patikrinkite.",
       "providerKeyInvalidShort": "Negaliojantis",
+      "providerModes": "Naudojamas režimams: {modes}",
+      "providerModesNone": "Nenaudojamas jokiam režimui. Priskirkite jį režimui skiltyje Išplėstiniai nustatymai.",
       "providerSetupConsole": "Atidaryti teikėjo nustatymus",
       "providersDescription": "Pridėkite teikėjų prisijungimo duomenis, kuriuos stella turėtų naudoti.",
       "providersPanel": "Teikėjai",
@@ -5969,7 +5977,7 @@
     "organization": {
       "activeMembers": "Aktyvūs nariai",
       "ai": "DI konfigūracija",
-      "aiDescription": "Prijunkite savo DI paslaugų teikėjų raktus.",
+      "aiDescription": "Pasirinkite, kaip DI veikia šioje organizacijoje.",
       "anonymization": {
         "addPlaceholder": "Visada maskuotinas terminas (pvz., komandos pavadinimas)",
         "deleteAction": "Pašalinti terminą",

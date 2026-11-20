@@ -5404,6 +5404,11 @@
       "googleKeyRestricted": "Pārbaudiet šīs atslēgas API, IP adrešu un novirzošo vietņu ierobežojumus Google Cloud. Atļaujiet nepieciešamo API un sava servera pieprasījumus, pēc tam mēģiniet vēlreiz.",
       "keepSavedKey": "Paturēt saglabāto atslēgu",
       "keyFormatHint": "Šai atslēgai ir neparasts formāts pakalpojuma sniedzējam {provider}. Saglabājiet to, lai sniedzējs to pārbaudītu.",
+      "keyNeed": {
+        "builtIn": "Nav obligāti. Bez savas atslēgas šīs organizācijas AI izmanto stella nodrošinātos modeļus.",
+        "keyRequired": "Šīs organizācijas AI ir vajadzīga pakalpojumu sniedzēja atslēga. Pievienojiet to, lai ieslēgtu AI.",
+        "ownKeys": "Šīs organizācijas AI izmanto tālāk norādītās atslēgas."
+      },
       "modelForRole": "{role} modelis",
       "modelIdPlaceholder": "Meklēt modeļus",
       "modelsDescription": "Katrai AI kategorijai izvēlieties pakalpojumu sniedzēju un vienu piedāvāto multimodālo modeli.",
@@ -5411,6 +5416,7 @@
       "newApiKey": "Jauna API atslēga",
       "newApiKeyDescription": "Saglabājot izmaiņas, tā aizstās saglabāto atslēgu.",
       "noModelResults": "Nav atbilstošu piedāvāto modeļu",
+      "noProviders": "Pakalpojumu sniedzēju atslēgas vēl nav pievienotas.",
       "openaiInsufficientQuota": "Pārbaudiet OpenAI projekta budžetu un API norēķinu iestatījumus. Papildiniet kredītu atlikumu vai palieliniet attiecīgo limitu un mēģiniet vēlreiz.",
       "openaiProjectOrganizationMismatch": "Izmantojiet vajadzīgā OpenAI projekta un organizācijas API atslēgu. Pārbaudiet to piekļuves iestatījumus un mēģiniet vēlreiz.",
       "openrouterNoCredits": "Papildiniet kredītu atlikumu OpenRouter norēķinu sadaļā un mēģiniet vēlreiz.",
@@ -5433,6 +5439,8 @@
       "providerForRole": "{role} pakalpojumu sniedzējs",
       "providerKeyInvalid": "{provider} atteica atslēgu. Pārbaudiet to pirms saglabāšanas.",
       "providerKeyInvalidShort": "Nederīgs",
+      "providerModes": "Izmanto režīmos: {modes}",
+      "providerModesNone": "Netiek izmantota nevienā režīmā. Piešķiriet to režīmam sadaļā Papildu iestatījumi.",
       "providerSetupConsole": "Atvērt pakalpojuma sniedzēja iestatījumus",
       "providersDescription": "Pievienojiet to pakalpojumu sniedzēju akreditācijas datus, kurus stella izmantos.",
       "providersPanel": "Pakalpojumu sniedzēji",
@@ -5969,7 +5977,7 @@
     "organization": {
       "activeMembers": "Aktīvie dalībnieki",
       "ai": "AI konfigurācija",
-      "aiDescription": "Pievienojiet savas AI pakalpojumu sniedzēju atslēgas.",
+      "aiDescription": "Izvēlieties, kā AI darbojas šajā organizācijā.",
       "anonymization": {
         "addPlaceholder": "Termins, kas vienmēr jāmaskē (piem., komandas nosaukums)",
         "deleteAction": "Dzēst terminu",

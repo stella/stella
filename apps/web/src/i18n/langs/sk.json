@@ -5404,6 +5404,11 @@
       "googleKeyRestricted": "V Google Cloud skontrolujte obmedzenia kľúča podľa API, IP adries a odkazujúcich webov. Povoľte potrebné API a požiadavky svojho servera a skúste to znova.",
       "keepSavedKey": "Ponechať uložený kľúč",
       "keyFormatHint": "Tento kľúč má pre {provider} nezvyčajný formát. Uložením ho overíte u poskytovateľa.",
+      "keyNeed": {
+        "builtIn": "Nepovinné. Bez vlastného kľúča beží AI v tejto organizácii na modeloch, ktoré poskytuje stella.",
+        "keyRequired": "AI v tejto organizácii potrebuje kľúč poskytovateľa. Pridajte ho a AI sa zapne.",
+        "ownKeys": "AI v tejto organizácii beží na kľúčoch nižšie."
+      },
       "modelForRole": "Model pre rolu {role}",
       "modelIdPlaceholder": "Hľadať modely",
       "modelsDescription": "Pre každú kategóriu AI vyberte poskytovateľa a jeden ponúkaný multimodálny model.",
@@ -5411,6 +5416,7 @@
       "newApiKey": "Nový API kľúč",
       "newApiKeyDescription": "Po uložení zmien nahradí uložený kľúč.",
       "noModelResults": "Žiadne zodpovedajúce ponúkané modely",
+      "noProviders": "Zatiaľ nie sú pridané žiadne kľúče poskytovateľov.",
       "openaiInsufficientQuota": "Skontrolujte rozpočet projektu OpenAI a fakturáciu API. Doplňte kredit alebo zvýšte príslušný limit a skúste to znova.",
       "openaiProjectOrganizationMismatch": "Použite API kľúč z požadovaného projektu a organizácie OpenAI. Skontrolujte ich nastavenia prístupu a skúste to znova.",
       "openrouterNoCredits": "Doplňte kredit vo fakturácii OpenRouter a skúste to znova.",
@@ -5433,6 +5439,8 @@
       "providerForRole": "Poskytovateľ pre {role}",
       "providerKeyInvalid": "{provider} odmietol kľúč. Skontrolujte ho pred uložením.",
       "providerKeyInvalidShort": "Neplatný",
+      "providerModes": "Používa sa pre: {modes}",
+      "providerModesNone": "Nepoužíva sa pre žiadny mód. Priraďte ho módu v časti Rozšírené.",
       "providerSetupConsole": "Otvoriť nastavenia poskytovateľa",
       "providersDescription": "Pridajte prihlasovacie údaje poskytovateľov, ktoré má stella používať.",
       "providersPanel": "Poskytovatelia",
@@ -5969,7 +5977,7 @@
     "organization": {
       "activeMembers": "Aktívni členovia",
       "ai": "Konfigurácia AI",
-      "aiDescription": "Pripojte vlastné kľúče poskytovateľov AI.",
+      "aiDescription": "Nastavte, ako v tejto organizácii funguje AI.",
       "anonymization": {
         "addPlaceholder": "Pojem, ktorý sa má vždy maskovať (napr. názov tímu)",
         "deleteAction": "Zmazať pojem",

@@ -14,7 +14,7 @@ import {
 import { Button } from "@stll/ui/button";
 import { PlusIcon, Trash2Icon } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
-import { ListItem } from "@stll/ui/list";
+import { ListEmpty, ListItem } from "@stll/ui/list";
 import {
   Select,
   SelectItem,
@@ -34,10 +34,13 @@ import {
 import type {
   ProviderCredentialDraft,
   ProviderValue,
+  RoleValue,
 } from "@/components/ai-config-role-models.logic";
 import { SecretInput } from "@/components/secret-input";
+import { useFormatter } from "@/i18n/formatting-context";
 import { providerSetupGuidance } from "@/lib/errors/provider-setup-guidance";
 
+import type { ProviderKeyNeed } from "./ai-config-form.logic";
 import {
   AI_PROVIDER_ROW_LINE_CLASS,
   AIProviderRowsFrame,
@@ -46,6 +49,8 @@ import {
 export const AIProviderRows = ({
   providers,
   disabled,
+  keyNeed,
+  modes,
   onChange,
   onRemove,
   storedProviders = EMPTY_PROVIDERS,
@@ -54,6 +59,11 @@ export const AIProviderRows = ({
   const t = useTranslations("organization.aiConfig");
   return (
     <AIProviderRowsFrame
+      description={
+        keyNeed === "unknown"
+          ? t("providersDescription")
+          : t(`keyNeed.${keyNeed}`)
+      }
       addAction={
         <Button
           variant="ghost"
@@ -71,11 +81,13 @@ export const AIProviderRows = ({
         </Button>
       }
     >
+      {providers.length === 0 && <ListEmpty>{t("noProviders")}</ListEmpty>}
       {providers.map((draft) => (
         <AIProviderRow
           key={draft.provider}
           draft={draft}
           disabled={disabled}
+          modes={modes === null ? null : (modes.get(draft.provider) ?? [])}
           setupErrorCode={setupErrorCode}
           removalImpact={
             storedProviders.filter((provider) => provider.apiKeyMasked)
@@ -109,6 +121,21 @@ export const AIProviderRows = ({
 
 const EMPTY_PROVIDERS = [] as const;
 
+/** Which modes a saved key serves, so each key's purpose is visible. */
+const ProviderModes = ({ modes }: { modes: readonly RoleValue[] }) => {
+  const t = useTranslations("organization.aiConfig");
+  const format = useFormatter();
+  return (
+    <p className="text-muted-foreground text-xs">
+      {modes.length === 0
+        ? t("providerModesNone")
+        : t("providerModes", {
+            modes: format.list(modes.map((role) => t(`roles.${role}`))),
+          })}
+    </p>
+  );
+};
+
 const KEY_FORMATS = {
   google: /^AIza[A-Za-z0-9_-]{35}$/u,
   anthropic: /^sk-ant-(?:api\d+|usr)-[A-Za-z0-9_-]+$/u,
@@ -122,6 +149,9 @@ type AIProviderRowsProps = {
   providers: ProviderCredentialDraft[];
   storedProviders?: readonly ProviderCredentialDraft[];
   disabled: boolean;
+  keyNeed: ProviderKeyNeed;
+  /** The modes each provider serves; null while that cannot be told. */
+  modes: ReadonlyMap<ProviderValue, readonly RoleValue[]> | null;
   setupErrorCode?: string | undefined;
   onChange: (providers: ProviderCredentialDraft[]) => void;
   onRemove: (provider: ProviderCredentialDraft) => void;
@@ -132,6 +162,7 @@ type AIProviderRowProps = {
   removalImpact: "provider" | "configuration";
   dirty: boolean;
   disabled: boolean;
+  modes: readonly RoleValue[] | null;
   options: ProviderValue[];
   setupErrorCode?: string | undefined;
   onChange: (draft: ProviderCredentialDraft) => void;
@@ -143,6 +174,7 @@ function AIProviderRow({
   removalImpact,
   dirty,
   disabled,
+  modes,
   options,
   setupErrorCode,
   onChange,
@@ -268,6 +300,7 @@ function AIProviderRow({
           {common("unsavedChanges")}
         </p>
       )}
+      {!editable && modes !== null && <ProviderModes modes={modes} />}
       <AlertDialog
         open={removalState === "confirming"}
         onOpenChange={(open) => setRemovalState(open ? "confirming" : "idle")}

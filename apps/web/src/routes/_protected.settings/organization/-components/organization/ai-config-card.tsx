@@ -19,15 +19,21 @@ import { Button } from "@stll/ui/button";
 import {
   getProviderValues,
   hasUsableOpenAIKey,
+  roleModelsFromOverrideModels,
 } from "@/components/ai-config-role-models.logic";
 import { CopyControl } from "@/components/copy-control";
 import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { detached } from "@/lib/detached";
 import { providerSetupGuidance } from "@/lib/errors/provider-setup-guidance";
-import { aiConfigOptions } from "@/lib/organization/ai-config-queries";
+import {
+  aiAvailabilityOptions,
+  aiConfigOptions,
+} from "@/lib/organization/ai-config-queries";
 import type { OrganizationAIConfig } from "@/lib/organization/ai-config-queries";
 import { useCallerFeatureEnabled } from "@/lib/organization/feature-access/access";
 import { CALLER_FEATURE } from "@/lib/organization/feature-access/surfaces";
+import { queryView } from "@/lib/query-view.logic";
+import { useQueryViewError } from "@/lib/use-query-view";
 import { AIProviderRows } from "@/routes/_protected.settings/organization/-components/organization/ai-provider-rows";
 
 import { AIConfigAdvanced } from "./ai-config-advanced";
@@ -35,7 +41,12 @@ import {
   AIConfigCardPending,
   AIConfigFormLayout,
 } from "./ai-config-card.pending";
-import { hasCustomAIModels } from "./ai-config-form.logic";
+import {
+  hasCustomAIModels,
+  modesByProvider,
+  resolveProviderKeyNeed,
+  sameProviderSet,
+} from "./ai-config-form.logic";
 import type { AIConfigFeedback } from "./ai-config-form.logic";
 import { AIProviderSettingsBoundary } from "./ai-provider-settings-boundary";
 import { AISettingsSectionFeedback } from "./ai-settings-section";
@@ -235,9 +246,32 @@ export const AIConfigForm = ({
 }: AIConfigFormProps) => {
   const common = useTranslations("common");
   const form = useAIConfigForm({ readState, organizationId });
+  // A failed read keeps the providers' generic line; nothing else needs it.
+  const availabilityView = queryView(
+    useQuery(aiAvailabilityOptions({ organizationId })),
+  );
+  useQueryViewError(availabilityView, "AIConfigForm:availability");
   const settingsError = form.feedback.status === "error" ? form.feedback : null;
   const providerValues = getProviderValues(form.providers);
   const { keySections, saving, toggleSections } = form;
+  const keyNeed = resolveProviderKeyNeed({
+    configured: form.storedProviders.length > 0,
+    availability:
+      availabilityView.type === "items" ? availabilityView.items : undefined,
+  });
+  // Each saved key's modes, read only while the rows match what is saved:
+  // the defaults of an unsaved provider set would describe a future state.
+  const providerModes =
+    form.defaultModels !== null &&
+    sameProviderSet(form.providers, form.storedProviders)
+      ? modesByProvider(
+          roleModelsFromOverrideModels({
+            overrideModels: form.roleModels,
+            defaultModels: form.defaultModels,
+            providers: providerValues,
+          }),
+        )
+      : null;
   return (
     <AIConfigFormLayout
       deepl={<DeepLKeyCard {...keySections.deepl} disabled={saving} />}
@@ -305,6 +339,8 @@ export const AIConfigForm = ({
             storedProviders={form.storedProviders}
             providers={form.providers}
             disabled={form.saving}
+            keyNeed={keyNeed}
+            modes={providerModes}
             setupErrorCode={settingsError?.code}
             onChange={form.changeProviders}
             onRemove={form.removeProvider}
@@ -312,16 +348,23 @@ export const AIConfigForm = ({
         )
       }
       saveAction={
-        <Button
-          size="sm"
-          disabled={!form.canClickSave || form.saving}
-          loading={form.saving}
-          onClick={() =>
-            detached(form.saveSettings(), "ai-config.save-settings")
-          }
-        >
-          {common("saveChanges")}
-        </Button>
+        <div className="flex items-center gap-3">
+          {form.hasChangesToSave && !form.saving && (
+            <p className="text-muted-foreground text-xs" role="status">
+              {common("unsavedChanges")}
+            </p>
+          )}
+          <Button
+            size="sm"
+            disabled={!form.canClickSave || form.saving}
+            loading={form.saving}
+            onClick={() =>
+              detached(form.saveSettings(), "ai-config.save-settings")
+            }
+          >
+            {common("saveChanges")}
+          </Button>
+        </div>
       }
       webSearch={
         <WebSearchKeysCard

@@ -5404,6 +5404,11 @@
       "googleKeyRestricted": "Vérifiez les restrictions d’API, d’adresses IP et de sites référents de cette clé dans Google Cloud. Autorisez l’API requise et les requêtes de votre serveur, puis réessayez.",
       "keepSavedKey": "Conserver la clé enregistrée",
       "keyFormatHint": "Le format de cette clé est inhabituel pour {provider}. Enregistrez-la pour la vérifier auprès du fournisseur.",
+      "keyNeed": {
+        "builtIn": "Facultatif. Sans clé propre, l’IA de cette organisation utilise des modèles fournis par stella.",
+        "keyRequired": "L’IA de cette organisation a besoin d’une clé de fournisseur. Ajoutez-en une pour activer l’IA.",
+        "ownKeys": "L’IA de cette organisation utilise les clés ci-dessous."
+      },
       "modelForRole": "Modèle pour {role}",
       "modelIdPlaceholder": "Rechercher des modèles",
       "modelsDescription": "Choisissez un fournisseur et un modèle multimodal proposé pour chaque catégorie IA.",
@@ -5411,6 +5416,7 @@
       "newApiKey": "Nouvelle clé API",
       "newApiKeyDescription": "Elle remplacera la clé enregistrée lors de l’enregistrement.",
       "noModelResults": "Aucun modèle proposé correspondant",
+      "noProviders": "Aucune clé de fournisseur ajoutée.",
       "openaiInsufficientQuota": "Vérifiez le budget de votre projet OpenAI et la facturation de l’API. Ajoutez des crédits ou augmentez la limite concernée, puis réessayez.",
       "openaiProjectOrganizationMismatch": "Utilisez une clé API du projet et de l’organisation OpenAI souhaités. Vérifiez leurs paramètres d’accès, puis réessayez.",
       "openrouterNoCredits": "Ajoutez des crédits dans la rubrique de facturation OpenRouter, puis réessayez.",
@@ -5433,6 +5439,8 @@
       "providerForRole": "Fournisseur pour {role}",
       "providerKeyInvalid": "{provider} a rejeté la clé. Vérifiez-la avant d'enregistrer.",
       "providerKeyInvalidShort": "Invalide",
+      "providerModes": "Utilisée pour : {modes}",
+      "providerModesNone": "Utilisée pour aucun mode. Attribuez-la à un mode dans Avancé.",
       "providerSetupConsole": "Ouvrir les paramètres du fournisseur",
       "providersDescription": "Ajoutez les identifiants des fournisseurs que stella doit utiliser.",
       "providersPanel": "Fournisseurs",
@@ -5969,7 +5977,7 @@
     "organization": {
       "activeMembers": "Membres actifs",
       "ai": "Configuration de l’IA",
-      "aiDescription": "Connectez vos propres clés de fournisseurs d’IA.",
+      "aiDescription": "Choisissez comment l’IA fonctionne dans cette organisation.",
       "anonymization": {
         "addPlaceholder": "Terme à toujours masquer (ex. nom de l’équipe)",
         "deleteAction": "Supprimer le terme",

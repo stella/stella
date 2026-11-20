@@ -1,5 +1,8 @@
+import { panic } from "better-result";
+
+import type { OrganizationAIAvailability } from "@stll/api-contract/organization-ai-availability";
+
 import {
-  createProviderCredentialDraft,
   getProviderValues,
   hasProviderCredentialChanges,
   hasUsableDecisionModel,
@@ -7,13 +10,17 @@ import {
   hasUsableProviderDrafts,
   haveSameRoleModelSelections,
   providerDraftsFromStoredProviders,
+  ROLE_KEYS,
   roleOverridesFromStoredModels,
   serializeRoleOverrides,
 } from "@/components/ai-config-role-models.logic";
 import type {
   DecisionModelState,
   ProviderCredentialDraft,
+  ProviderValue,
   RoleModelOverrides,
+  RoleModelSelections,
+  RoleValue,
   StoredDecisionModel,
 } from "@/components/ai-config-role-models.logic";
 import type { OrganizationAIConfig } from "@/lib/organization/ai-config-queries";
@@ -34,10 +41,12 @@ type InitialAIConfig = {
 export const deriveInitialAIConfig = (
   config: OrganizationAIConfig | null,
 ): InitialAIConfig => {
+  // No rows until the admin adds one: a pre-added blank row reads as a
+  // provider the organization chose and still has to fill.
   if (config?.configured !== true) {
     return {
       storedProviders: [],
-      providers: [createProviderCredentialDraft()],
+      providers: [],
       roles: {},
       decision: null,
     };
@@ -131,3 +140,67 @@ export const hasCustomAIModels = ({
     ? storedDecision !== null
     : decisionState.kind === "set";
 };
+
+/**
+ * What the organization's own provider keys mean for it: AI already runs on
+ * the models stella provides (`builtIn`), needs a key first (`keyRequired`),
+ * or runs on the saved keys (`ownKeys`). `unknown` while availability is
+ * unread or cannot tell (a member without an AI seat, an unreadable config).
+ */
+export type ProviderKeyNeed = "builtIn" | "keyRequired" | "ownKeys" | "unknown";
+
+type ProviderKeyNeedOptions = {
+  configured: boolean;
+  availability: OrganizationAIAvailability | undefined;
+};
+
+export const resolveProviderKeyNeed = ({
+  configured,
+  availability,
+}: ProviderKeyNeedOptions): ProviderKeyNeed => {
+  if (configured) {
+    return "ownKeys";
+  }
+  if (availability === undefined) {
+    return "unknown";
+  }
+  if (availability.available) {
+    return "builtIn";
+  }
+  switch (availability.unavailableReason) {
+    case "own_key_required":
+    case "provider_not_configured":
+      return "keyRequired";
+    case "member_assignment_required":
+    case "unreadable":
+    case null:
+      return "unknown";
+    default:
+      availability.unavailableReason satisfies never;
+      return panic("Unhandled AI unavailable reason");
+  }
+};
+
+/** The modes (chat, fast, reasoning, PDF) each provider serves, in mode order. */
+export const modesByProvider = (
+  selections: RoleModelSelections,
+): ReadonlyMap<ProviderValue, readonly RoleValue[]> => {
+  const modes = new Map<ProviderValue, RoleValue[]>();
+  for (const role of ROLE_KEYS) {
+    const provider = selections[role]?.provider;
+    if (provider !== undefined) {
+      modes.set(provider, [...(modes.get(provider) ?? []), role]);
+    }
+  }
+  return modes;
+};
+
+/** Whether two provider lists name the same providers, in any order. */
+export const sameProviderSet = (
+  left: readonly ProviderCredentialDraft[],
+  right: readonly ProviderCredentialDraft[],
+) =>
+  left.length === right.length &&
+  left.every((draft) =>
+    right.some((other) => other.provider === draft.provider),
+  );
