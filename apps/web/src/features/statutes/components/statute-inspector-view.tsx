@@ -40,7 +40,7 @@ import {
 import type { StatuteViewPayload } from "@/features/statutes/statute-inspector.logic";
 import {
   prepareStatuteReader,
-  statuteLandingAnchorId,
+  statuteLandingAnchorIds,
 } from "@/features/statutes/statute-reader-blocks";
 import { optionalArray } from "@/lib/arrays";
 import { detached } from "@/lib/detached";
@@ -101,12 +101,12 @@ export const StatuteInspectorView = ({
     blocks: ast === null ? [] : ast.blocks,
     statuteTitle: statute?.title ?? payload.statuteTitle,
   });
-  const landingAnchorId = statuteLandingAnchorId(
+  const landingAnchorIds = statuteLandingAnchorIds(
     {
       blocks: preparedReader.blocks,
       scheme: statuteAnchorSchemeFor(payload.country),
     },
-    payload.anchorId,
+    payload,
   );
   // The chat is bound to the consolidation the tab holds, which is the
   // document the full reader binds: a question asked here and one asked there
@@ -209,7 +209,7 @@ export const StatuteInspectorView = ({
               {statute !== undefined && (
                 <StatuteReaderBody
                   blocks={preparedReader.blocks}
-                  landingAnchorId={landingAnchorId}
+                  landingAnchorIds={landingAnchorIds}
                   masthead={preparedReader.masthead}
                   scrollContainerRef={contentRef}
                   statute={statute}
