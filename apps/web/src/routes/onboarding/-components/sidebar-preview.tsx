@@ -2,13 +2,8 @@ import { useState } from "react";
 
 import { useTranslations } from "use-intl";
 
-import {
-  LibraryBigIcon,
-  MessageSquareIcon,
-  SearchIcon,
-  UsersIcon,
-} from "@stll/ui/icons";
-import { MatterIcon, MattersNavIcon } from "@stll/ui/matter-icon";
+import { UsersIcon } from "@stll/ui/icons";
+import { MatterIcon } from "@stll/ui/matter-icon";
 import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
@@ -23,10 +18,7 @@ import { useMountEffect } from "@/hooks/use-effect";
 import { useHydrationSafeHotkeyPlatform } from "@/hooks/use-hydration-safe-hotkey-platform";
 import { formatHotkeyForPlatform, HOTKEYS } from "@/lib/hotkeys";
 
-import {
-  OnboardingSidebarFrame,
-  OnboardingSidebarNavItem,
-} from "./sidebar-preview.pending";
+import { OnboardingSidebarFrame } from "./sidebar-preview.pending";
 
 type SidebarPreviewProps = {
   organizationName: string;
@@ -89,76 +81,13 @@ export const SidebarPreview = ({
 
   return (
     <OnboardingSidebarFrame
-      wordmark={<StellaWordmark className="text-foreground h-4 w-auto" />}
-    >
-      <style>{ANIMATION_STYLE}</style>
-
-      {/* Org name */}
-      <div className="border-b px-4 py-2.5">
-        {organizationName ? (
-          <TruncatedText
-            className="animate-slide-in text-foreground text-sm font-medium"
-            render={<div />}
-          >
-            {organizationName}
-          </TruncatedText>
-        ) : (
-          <div className="text-foreground-subtle text-sm font-medium">
-            {t("onboarding.orgNameLabel")}
-          </div>
-        )}
-      </div>
-
-      {/* Nav items */}
-      <div className="flex flex-col gap-0.5 px-3 py-3">
-        <OnboardingSidebarNavItem
-          icon={SearchIcon}
-          label={
-            <TruncatedText className="flex-1">
-              {t("navigation.search")}
-            </TruncatedText>
-          }
-          trailing={
-            <kbd className="text-foreground-strong-muted text-3xs">
-              {formatHotkeyForPlatform(HOTKEYS.SEARCH, hotkeyPlatform)}
-            </kbd>
-          }
-        />
-        <OnboardingSidebarNavItem
-          active={showChatActive}
-          icon={MessageSquareIcon}
-          label={
-            <TruncatedText className="flex-1">
-              {t("navigation.chat")}
-            </TruncatedText>
-          }
-        />
-        <OnboardingSidebarNavItem
-          active={!showChatActive}
-          icon={MattersNavIcon}
-          label={
-            <TruncatedText className="flex-1">
-              {t("common.matters")}
-            </TruncatedText>
-          }
-        />
-        <OnboardingSidebarNavItem
-          icon={LibraryBigIcon}
-          label={
-            <TruncatedText className="flex-1">
-              {t("navigation.knowledge")}
-            </TruncatedText>
-          }
-        />
-      </div>
-
-      {/* Documents section — placeholder skeleton when no matter exists */}
-      <div className="px-3 py-2">
-        <div className="text-muted-foreground text-2xs px-2 pb-1.5 font-medium tracking-wide uppercase">
-          {t("common.matters")}
-        </div>
-
-        {matterName ? (
+      chatActive={showChatActive}
+      label={(id) => t(id)}
+      navLabel={(id) => (
+        <TruncatedText className="flex-1">{t(id)}</TruncatedText>
+      )}
+      matter={
+        matterName ? (
           <div className="animate-slide-in flex items-center gap-2 rounded-md px-2 py-1.5">
             <MatterIcon
               className="size-3.5 shrink-0"
@@ -168,13 +97,26 @@ export const SidebarPreview = ({
               {matterName}
             </TruncatedText>
           </div>
-        ) : (
-          <div className="flex items-center gap-2 rounded-md px-2 py-1.5">
-            <div className="bg-muted size-3.5 rounded-sm" />
-            <div className="bg-muted h-3 w-24 rounded-sm" />
-          </div>
-        )}
-      </div>
+        ) : undefined
+      }
+      organization={
+        organizationName ? (
+          <TruncatedText
+            className="animate-slide-in text-foreground text-sm font-medium"
+            render={<div />}
+          >
+            {organizationName}
+          </TruncatedText>
+        ) : undefined
+      }
+      searchHint={
+        <kbd className="text-foreground-strong-muted text-3xs">
+          {formatHotkeyForPlatform(HOTKEYS.SEARCH, hotkeyPlatform)}
+        </kbd>
+      }
+      wordmark={<StellaWordmark className="text-foreground h-4 w-auto" />}
+    >
+      <style>{ANIMATION_STYLE}</style>
 
       {/* AI status — one row per configured provider */}
       {aiProviders.length > 0 && (

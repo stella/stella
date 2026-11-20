@@ -4,10 +4,9 @@ import { useSearch } from "@tanstack/react-router";
 
 import { ButtonFace } from "@stll/ui/control-face";
 import type { OutcomeScreen } from "@stll/ui/outcome-screen";
-import { OutcomeScreenPending } from "@stll/ui/outcome-screen";
-import { cn } from "@stll/ui/utils";
+import { OutcomeScreenFace } from "@stll/ui/outcome-screen-face";
 
-import { PendingText, useIntlMounted } from "@/components/pending-text";
+import { PendingText } from "@/components/pending-text";
 import type { McpOAuthOutcome } from "@/lib/mcp-oauth-channel";
 import { framePendingView } from "@/routes/-pending-view.logic";
 
@@ -28,7 +27,7 @@ export const MCP_OAUTH_OUTCOME_LABELS = {
 >;
 
 type LoadedScreen = ComponentProps<typeof OutcomeScreen>;
-type PendingScreen = ComponentProps<typeof OutcomeScreenPending>;
+type PendingScreen = ComponentProps<typeof OutcomeScreenFace>;
 
 type McpOAuthCallbackShellProps =
   | { screen: PendingScreen; Screen?: undefined }
@@ -39,7 +38,7 @@ export const McpOAuthCallbackShell = ({
   Screen,
 }: McpOAuthCallbackShellProps) =>
   Screen === undefined ? (
-    <OutcomeScreenPending {...screen} />
+    <OutcomeScreenFace {...screen} />
   ) : (
     <Screen {...screen} />
   );
@@ -57,35 +56,6 @@ const RetryActionsPending = ({ slug }: { slug: string | undefined }) => (
   </>
 );
 
-const OutcomeDescriptionPending = ({
-  status,
-}: {
-  status: McpOAuthOutcome["status"];
-}) => {
-  const intlMounted = useIntlMounted();
-  const text = (
-    <PendingText
-      barClassName="w-64 max-w-full"
-      id={MCP_OAUTH_OUTCOME_LABELS[status].description}
-    />
-  );
-  if (intlMounted) {
-    return text;
-  }
-  return (
-    <span
-      className={cn(
-        "block",
-        status === "connected"
-          ? "min-h-[1lh] max-[24rem]:min-h-[2lh]"
-          : "min-h-[2lh]",
-      )}
-    >
-      {text}
-    </span>
-  );
-};
-
 export const McpOAuthCallbackPending = framePendingView(() => {
   const { connected, slug } = useSearch({
     strict: false,
@@ -95,12 +65,12 @@ export const McpOAuthCallbackPending = framePendingView(() => {
     }),
   });
   const status = connected ? "connected" : "error";
-  const { title, tone } = MCP_OAUTH_OUTCOME_LABELS[status];
+  const { description, title, tone } = MCP_OAUTH_OUTCOME_LABELS[status];
   return (
     <McpOAuthCallbackShell
       screen={{
         actions: connected ? undefined : <RetryActionsPending slug={slug} />,
-        description: <OutcomeDescriptionPending status={status} />,
+        description: <PendingText barClassName="w-64" id={description} />,
         title: <PendingText barClassName="w-56 max-w-full" id={title} />,
         tone,
       }}

@@ -3,9 +3,11 @@ import {
   consentChromePending,
 } from "@/components/oauth-consent/consent-card-shell.pending";
 import {
-  ConsentAccountRowsPending,
   ConsentActingAsPending,
   ConsentDecisionBarPending,
+  ConsentOrganizationPending,
+  OAuthAccountList,
+  OAuthAccountRowPending,
 } from "@/components/oauth-consent/consent-control-faces.pending";
 import { ScopeSummaryPending } from "@/components/oauth-consent/scope-summary.pending";
 import { PendingText } from "@/components/pending-text";
@@ -16,10 +18,13 @@ export { ConsentCardShell };
 export const ConsentPending = framePendingView(() => (
   <ConsentCardShell
     {...consentChromePending}
-    details={<div aria-hidden="true" className="size-11" />}
+    details={null}
     decision={<ConsentDecisionBarPending />}
   >
-    <ConsentAccountRowsPending />
+    <OAuthAccountList>
+      <OAuthAccountRowPending />
+      <ConsentOrganizationPending />
+    </OAuthAccountList>
     <ConsentActingAsPending />
     <ScopeSummaryPending />
     <p className="text-muted-foreground text-xs text-pretty">

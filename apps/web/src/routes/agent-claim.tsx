@@ -14,7 +14,10 @@ const searchSchema = routeSearchSchema({
 });
 
 export const Route = createFileRoute("/agent-claim")({
-  staticData: { appFrame: APP_FRAME_SCOPE.none },
+  staticData: {
+    appFrame: APP_FRAME_SCOPE.none,
+    pendingText: "request-locale",
+  },
   validateSearch: searchSchema,
   beforeLoad: async ({ context, location }) => {
     const authContext = await loadAuthContext(context.queryClient);

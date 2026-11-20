@@ -2,15 +2,15 @@ import type { ReactNode } from "react";
 
 const ONBOARDING_GRADIENT_DARK_URL = "/branding/onboarding-gradient-dark.svg";
 const ONBOARDING_GRADIENT_LIGHT_URL = "/branding/onboarding-gradient-light.svg";
+const GRADIENT_MASK =
+  "linear-gradient(to right, var(--foreground) 0%, var(--foreground) 14%, transparent 43%, transparent 62%, var(--foreground) 88%, var(--foreground) 100%)";
 
 export const OnboardingLayoutShell = ({
   children,
   preview,
-  contentMaxWidth = 460,
 }: {
   children: ReactNode;
   preview: ReactNode;
-  contentMaxWidth?: number | undefined;
 }) => (
   <div className="flex h-dvh overflow-hidden" data-slot="onboarding-layout">
     {/* Left: form. overflow-y-auto so tall steps (AI provider/model
@@ -19,7 +19,7 @@ export const OnboardingLayoutShell = ({
     <div className="flex w-full flex-col overflow-y-auto px-6 pt-[8svh] pb-10 md:w-1/2 md:px-12 md:pt-[10svh] lg:px-20">
       <div
         className="relative mx-auto flex min-h-0 w-full flex-1 flex-col"
-        style={{ maxWidth: contentMaxWidth }}
+        style={{ maxWidth: 460 }}
       >
         {children}
       </div>
@@ -34,12 +34,7 @@ export const OnboardingLayoutShell = ({
       <div
         aria-hidden
         className="pointer-events-none absolute inset-0"
-        style={{
-          maskImage:
-            "linear-gradient(to right, var(--foreground) 0%, var(--foreground) 14%, transparent 43%, transparent 62%, var(--foreground) 88%, var(--foreground) 100%)",
-          WebkitMaskImage:
-            "linear-gradient(to right, var(--foreground) 0%, var(--foreground) 14%, transparent 43%, transparent 62%, var(--foreground) 88%, var(--foreground) 100%)",
-        }}
+        style={{ maskImage: GRADIENT_MASK, WebkitMaskImage: GRADIENT_MASK }}
       >
         <img
           alt=""

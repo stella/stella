@@ -2,4 +2,4 @@
 "@stll/ui": minor
 ---
 
-Expose a presentational outcome screen for loading views that need the same layout before focus and tab-closing behavior can run.
+Expose lightweight horizontal detail rows and a callback outcome layout for pages that reserve their content before account data or tab actions are available.

@@ -70,10 +70,7 @@ import {
   ONBOARDING_TRANSITION_TYPE,
   OnboardingLayout,
 } from "@/routes/onboarding/-components/onboarding-layout";
-import {
-  ONBOARDING_STEP_COUNT,
-  onboardingStepIndex,
-} from "@/routes/onboarding/-components/onboarding-steps.logic";
+import { onboardingStepIndex } from "@/routes/onboarding/-components/onboarding-steps.logic";
 import type { OnboardingStep } from "@/routes/onboarding/-components/onboarding-steps.logic";
 import { SidebarPreview } from "@/routes/onboarding/-components/sidebar-preview";
 import { AIStep } from "@/routes/onboarding/-components/steps/ai-step";
@@ -606,7 +603,6 @@ export const OnboardingWizard = () => {
         <OnboardingLayout
           currentStep={onboardingStepIndex("organization")}
           preview={preview}
-          totalSteps={ONBOARDING_STEP_COUNT}
         >
           <OrganizationStep
             defaultName={data.orgName}
@@ -630,7 +626,6 @@ export const OnboardingWizard = () => {
           currentStep={onboardingStepIndex("jurisdiction")}
           onBack={() => navigateStep("organization")}
           preview={preview}
-          totalSteps={ONBOARDING_STEP_COUNT}
         >
           <JurisdictionStep
             selected={data.practiceJurisdictions}
@@ -661,7 +656,6 @@ export const OnboardingWizard = () => {
           currentStep={onboardingStepIndex("catalogue")}
           onBack={() => navigateStep("jurisdiction")}
           preview={preview}
-          totalSteps={ONBOARDING_STEP_COUNT}
         >
           <CatalogueStep
             focusedSlug={catalogueFocusedSlug}
@@ -706,7 +700,6 @@ export const OnboardingWizard = () => {
         <OnboardingLayout
           currentStep={onboardingStepIndex("invite")}
           preview={preview}
-          totalSteps={ONBOARDING_STEP_COUNT}
           {...(isCreating ? {} : { onBack: () => navigateStep("ai") })}
         >
           <InviteStep
@@ -732,7 +725,6 @@ export const OnboardingWizard = () => {
           currentStep={onboardingStepIndex("ai")}
           onBack={() => navigateStep("catalogue")}
           preview={preview}
-          totalSteps={ONBOARDING_STEP_COUNT}
         >
           <AIStep
             onNext={() => navigateStep("invite")}
@@ -761,7 +753,6 @@ export const OnboardingWizard = () => {
       <OnboardingLayout
         currentStep={onboardingStepIndex("download")}
         preview={preview}
-        totalSteps={ONBOARDING_STEP_COUNT}
       >
         <DownloadStep
           onSelect={setDownloadTarget}

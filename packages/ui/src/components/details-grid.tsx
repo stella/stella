@@ -3,6 +3,7 @@ import type * as React from "react";
 
 import { rendersNothing } from "../lib/renders-nothing";
 import { cn } from "../lib/utils";
+import { DetailsListFace, DetailsListItemFace } from "./details-list-face";
 
 /**
  * - `sheet`: a fact sheet; small uppercase labels, up to three pairs per row
@@ -44,17 +45,15 @@ const DetailsShapeContext = createContext<DetailsShape>({
 
 const LIST_CLASS_NAME = {
   auto: "flex min-w-0 flex-col gap-2 text-sm @min-[24rem]:grid @min-[24rem]:items-center @min-[24rem]:gap-x-4 @min-[24rem]:gap-y-1",
-  horizontal: "grid items-center gap-x-4 gap-y-1 text-sm",
   vertical: "flex min-w-0 flex-col gap-2 text-sm",
-} as const satisfies Record<DetailsOrientation, string>;
+} as const satisfies Record<Exclude<DetailsOrientation, "horizontal">, string>;
 
 /** The list's label and value tracks, per label width. */
 const LIST_COLUMNS_CLASS_NAME = {
-  auto: "grid-cols-[auto_minmax(0,1fr)]",
   lg: "grid-cols-[10rem_minmax(0,1fr)]",
   md: "grid-cols-[7rem_minmax(0,1fr)]",
   sm: "grid-cols-[5rem_minmax(0,1fr)]",
-} as const satisfies Record<DetailsLabelWidth, string>;
+} as const satisfies Record<Exclude<DetailsLabelWidth, "auto">, string>;
 
 /** The same tracks, applied only once an `auto` list turns horizontal. */
 const LIST_AUTO_COLUMNS_CLASS_NAME = {
@@ -82,8 +81,6 @@ const SHEET_AUTO_ITEM_COLUMNS_CLASS_NAME = {
 const ITEM_CLASS_NAME = {
   list: {
     auto: "flex min-w-0 flex-col gap-0.5 @min-[24rem]:col-span-full @min-[24rem]:grid @min-[24rem]:grid-cols-subgrid @min-[24rem]:items-center",
-    // A subgrid row, so every label shares the list's one label column.
-    horizontal: "col-span-full grid grid-cols-subgrid items-center",
     vertical: "flex min-w-0 flex-col gap-2",
   },
   sheet: {
@@ -91,12 +88,14 @@ const ITEM_CLASS_NAME = {
     horizontal: "grid min-w-0 items-start gap-x-4 text-xs",
     vertical: "flex min-w-0 flex-col gap-1 text-xs",
   },
-} as const satisfies Record<DetailsVariant, Record<DetailsOrientation, string>>;
+} as const satisfies {
+  list: Record<Exclude<DetailsOrientation, "horizontal">, string>;
+  sheet: Record<DetailsOrientation, string>;
+};
 
 const LABEL_CLASS_NAME = {
   list: {
     auto: "text-muted-foreground min-w-0",
-    horizontal: "text-muted-foreground min-w-0",
     vertical: "font-medium",
   },
   sheet: {
@@ -106,7 +105,10 @@ const LABEL_CLASS_NAME = {
     vertical:
       "text-foreground-disabled min-w-0 font-medium tracking-wide wrap-anywhere uppercase",
   },
-} as const satisfies Record<DetailsVariant, Record<DetailsOrientation, string>>;
+} as const satisfies {
+  list: Record<Exclude<DetailsOrientation, "horizontal">, string>;
+  sheet: Record<DetailsOrientation, string>;
+};
 
 const VALUE_CLASS_NAME = {
   list: "min-w-0 wrap-anywhere",
@@ -136,12 +138,25 @@ const DetailsGrid = ({
     variant,
   };
   if (variant === "list") {
+    if (orientation === "horizontal") {
+      return (
+        <DetailsShapeContext.Provider value={shape}>
+          <DetailsListFace
+            className={cn(
+              shape.labelWidth === "auto"
+                ? undefined
+                : LIST_COLUMNS_CLASS_NAME[shape.labelWidth],
+              className,
+            )}
+            {...props}
+          />
+        </DetailsShapeContext.Provider>
+      );
+    }
     const list = (
       <dl
         className={cn(
           LIST_CLASS_NAME[orientation],
-          orientation === "horizontal" &&
-            LIST_COLUMNS_CLASS_NAME[shape.labelWidth],
           orientation === "auto" &&
             LIST_AUTO_COLUMNS_CLASS_NAME[shape.labelWidth],
           className,
@@ -201,10 +216,38 @@ const DetailsItem = ({
   ...props
 }: DetailsItemProps) => {
   const { labelWidth, orientation, variant } = useContext(DetailsShapeContext);
+  const value = isEmptyValue(children) ? (
+    // A fact with no value still holds its row, so the reader sees it
+    // was looked for. The dash is drawn but stays silent to assistive technology.
+    <span
+      aria-hidden="true"
+      className="text-foreground-disabled"
+      data-slot="details-empty"
+    >
+      —
+    </span>
+  ) : (
+    children
+  );
+  if (variant === "list" && orientation === "horizontal") {
+    return (
+      <DetailsListItemFace label={label} className={className} {...props}>
+        {value}
+      </DetailsListItemFace>
+    );
+  }
+  const itemClassName =
+    variant === "list" && orientation !== "horizontal"
+      ? ITEM_CLASS_NAME.list[orientation]
+      : ITEM_CLASS_NAME.sheet[orientation];
+  const labelClassName =
+    variant === "list" && orientation !== "horizontal"
+      ? LABEL_CLASS_NAME.list[orientation]
+      : LABEL_CLASS_NAME.sheet[orientation];
   return (
     <div
       className={cn(
-        ITEM_CLASS_NAME[variant][orientation],
+        itemClassName,
         variant === "sheet" &&
           orientation === "horizontal" &&
           SHEET_ITEM_COLUMNS_CLASS_NAME[labelWidth],
@@ -217,22 +260,8 @@ const DetailsItem = ({
       data-slot="details-item"
       {...props}
     >
-      <dt className={LABEL_CLASS_NAME[variant][orientation]}>{label}</dt>
-      <dd className={VALUE_CLASS_NAME[variant]}>
-        {isEmptyValue(children) ? (
-          // A fact with no value still holds its row, so the reader sees it
-          // was looked for; the dash is drawn, not read.
-          <span
-            aria-hidden="true"
-            className="text-foreground-disabled"
-            data-slot="details-empty"
-          >
-            —
-          </span>
-        ) : (
-          children
-        )}
-      </dd>
+      <dt className={labelClassName}>{label}</dt>
+      <dd className={VALUE_CLASS_NAME[variant]}>{value}</dd>
     </div>
   );
 };

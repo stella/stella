@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 
 import { useLatest } from "../hooks/use-latest";
-import { OutcomeLayout, OutcomeScreenView } from "./outcome-screen-view";
+import { OutcomeScreenView } from "./outcome-screen-view";
 import type { OutcomeScreenViewProps } from "./outcome-screen-view";
 
 export type { OutcomeDetail } from "./outcome-screen-view";
@@ -70,11 +70,3 @@ export const OutcomeScreen = ({ closeTab, ...view }: OutcomeScreenProps) => {
   const heading = useFocusedHeading();
   return <OutcomeScreenView {...view} headingRef={heading} />;
 };
-
-/** Render the outcome's chrome before the interactive screen can take focus. */
-export const OutcomeScreenPending = (
-  props: Pick<
-    React.ComponentProps<typeof OutcomeLayout>,
-    "actions" | "description" | "title" | "tone"
-  >,
-) => <OutcomeLayout {...props} />;

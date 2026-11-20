@@ -140,7 +140,7 @@ const PAGE_CONTENT_MARKS = [
   },
   {
     file: "routes/onboarding/-components/sidebar-preview.pending.tsx",
-    component: "OnboardingSidebarPending",
+    component: "OnboardingSidebarFrame",
     module: "@stll/ui/stella-wordmark",
     symbol: "StellaWordmarkLatin",
   },

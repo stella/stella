@@ -30,18 +30,18 @@ export const OrganizationPageShell = ({
 export const OrganizationPickerShell = ({
   account,
   children,
-  description,
-  title,
 }: {
   account: ReactNode;
   children: ReactNode;
-  description: ReactNode;
-  title: ReactNode;
 }) => (
   <Frame className="w-full max-w-sm">
     <FrameHeader>
-      <FrameTitle>{title}</FrameTitle>
-      <FrameDescription>{description}</FrameDescription>
+      <FrameTitle>
+        <PendingText id="auth.selectOrganization" barClassName="w-48" />
+      </FrameTitle>
+      <FrameDescription>
+        <PendingText id="auth.chooseOrganization" barClassName="w-64" />
+      </FrameDescription>
       {account}
     </FrameHeader>
     <FramePanel className="flex flex-col gap-2">{children}</FramePanel>
@@ -77,10 +77,6 @@ export const OrganizationPendingBody = ({ rowCount }: { rowCount: number }) => (
         </OAuthAccountList>
       </div>
     }
-    description={
-      <PendingText id="auth.chooseOrganization" barClassName="w-64" />
-    }
-    title={<PendingText id="auth.selectOrganization" barClassName="w-48" />}
   >
     {Array.from({ length: rowCount }, (_, index) => (
       <OrganizationRowFace as="div" key={index}>

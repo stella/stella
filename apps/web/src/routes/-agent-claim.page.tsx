@@ -105,13 +105,6 @@ export function AgentClaimPage() {
 
   return (
     <AgentClaimShell
-      access={
-        <AgentClaimDetail
-          label={t("agentClaim.access")}
-          value={t("agentClaim.accessReadSearch")}
-        />
-      }
-      description={t("agentClaim.description")}
       form={
         <Form
           onSubmit={(event) => {
@@ -131,7 +124,6 @@ export function AgentClaimPage() {
                 onChange={(event) => setUserCode(event.target.value)}
               />
             }
-            label={t("agentClaim.codeLabel")}
             submit={
               <Button
                 className="w-full"
@@ -146,7 +138,6 @@ export function AgentClaimPage() {
         </Form>
       }
       organization={organization}
-      title={t("agentClaim.title")}
     />
   );
 }

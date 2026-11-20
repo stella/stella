@@ -17,7 +17,10 @@ const searchSchema = routeSearchSchema({
 });
 
 export const Route = createFileRoute("/mcp/oauth-callback")({
-  staticData: { appFrame: APP_FRAME_SCOPE.none },
+  staticData: {
+    appFrame: APP_FRAME_SCOPE.none,
+    pendingText: "request-locale",
+  },
   validateSearch: searchSchema,
   head: () => ({
     meta: [{ title: pageTitle("knowledge.sections.mcp.title") }],

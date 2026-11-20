@@ -315,8 +315,6 @@ const OrganizationList = ({
   return (
     <OrganizationPickerShell
       account={<SignedInAccount disabled={isSelectPending} />}
-      description={t("auth.chooseOrganization")}
-      title={t("auth.selectOrganization")}
     >
       {organizations.map((org) => (
         <Button

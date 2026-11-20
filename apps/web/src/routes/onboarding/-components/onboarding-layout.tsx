@@ -32,10 +32,7 @@ type OnboardingLayoutProps = {
   children: ReactNode;
   preview: ReactNode;
   currentStep: number;
-  totalSteps: number;
   onBack?: () => void;
-  /** Pixel width for the inner content column. Defaults to 460. */
-  contentMaxWidth?: number;
 };
 
 /**
@@ -47,14 +44,12 @@ export const OnboardingLayout = ({
   children,
   preview,
   currentStep,
-  totalSteps,
   onBack,
-  contentMaxWidth = 460,
 }: OnboardingLayoutProps) => {
   const t = useTranslations();
 
   return (
-    <OnboardingLayoutShell contentMaxWidth={contentMaxWidth} preview={preview}>
+    <OnboardingLayoutShell preview={preview}>
       {onBack && (
         <Button
           aria-label={t("common.goBack")}
@@ -68,7 +63,7 @@ export const OnboardingLayout = ({
         </Button>
       )}
       <Fragment key={currentStep} ref={focusStep}>
-        <OnboardingProgress currentStep={currentStep} totalSteps={totalSteps} />
+        <OnboardingProgress currentStep={currentStep} />
         <ViewTransition
           default="none"
           enter={STEP_TRANSITION_CLASS}

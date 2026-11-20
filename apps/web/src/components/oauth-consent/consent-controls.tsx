@@ -1,6 +1,7 @@
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
+import { DetailsListItemFace } from "@stll/ui/details-list-face";
 import {
   Select,
   SelectItem,
@@ -14,7 +15,6 @@ import {
   ConsentActingAsPending,
   ConsentDecisionBarFace,
   ConsentOrganizationPending,
-  ConsentOrganizationRow,
   ConsentOrganizationValue,
   OAuthAccountList,
 } from "@/components/oauth-consent/consent-control-faces.pending";
@@ -52,7 +52,7 @@ export const ConsentAccountRows = ({
         onAccountSwitch={onAccountSwitch}
       />
       {organizationName ? (
-        <ConsentOrganizationRow label={tCommon("organization")}>
+        <DetailsListItemFace label={tCommon("organization")}>
           {organizations !== undefined && organizations.length > 1 ? (
             <Select
               disabled={disabled}
@@ -85,7 +85,7 @@ export const ConsentAccountRows = ({
               {organizationName}
             </ConsentOrganizationValue>
           )}
-        </ConsentOrganizationRow>
+        </DetailsListItemFace>
       ) : (
         organizationsPending &&
         activeOrganizationId !== null && <ConsentOrganizationPending />
@@ -135,32 +135,27 @@ export const ConsentDecisionBar = ({
           <p className="text-destructive text-sm">{t("error")}</p>
         ) : null
       }
-      decline={
-        <Button
-          className="min-h-11 w-full"
-          disabled={isPending}
-          onClick={() => {
-            onDecide(false);
-          }}
-          type="button"
-          variant="outline"
-        >
-          {tCommon("decline")}
-        </Button>
-      }
-      allow={
-        <Button
-          className="min-h-11 w-full"
-          disabled={isPending || allowDisabled}
-          loading={isPending}
-          onClick={() => {
-            onDecide(true);
-          }}
-          type="button"
-        >
-          {t("allow")}
-        </Button>
-      }
-    />
+    >
+      <Button
+        disabled={isPending}
+        onClick={() => {
+          onDecide(false);
+        }}
+        type="button"
+        variant="outline"
+      >
+        {tCommon("decline")}
+      </Button>
+      <Button
+        disabled={isPending || allowDisabled}
+        loading={isPending}
+        onClick={() => {
+          onDecide(true);
+        }}
+        type="button"
+      >
+        {t("allow")}
+      </Button>
+    </ConsentDecisionBarFace>
   );
 };
