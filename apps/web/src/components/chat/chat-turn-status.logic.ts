@@ -107,11 +107,22 @@ export const turnPhaseForTool = (
  *  question waits on the user exactly as a top-level one does. */
 export const turnPhaseFromParts = (
   parts: readonly ChatPart[],
-  toolLabel: (part: Extract<ChatPart, { type: "tool-call" }>) => string,
+  toolLabel: (call: {
+    input: unknown;
+    name: string;
+    output: unknown;
+  }) => string,
 ): TurnActivePhase => {
   for (const part of withSubagentRunParts(parts).toReversed()) {
     if (part.type === "tool-call") {
-      const phase = turnPhaseForTool(part.state, toolLabel(part));
+      const phase = turnPhaseForTool(
+        part.state,
+        toolLabel({
+          input: "input" in part ? part.input : undefined,
+          name: part.name,
+          output: part.output,
+        }),
+      );
       if (phase !== null) {
         if (
           isUserInputChatToolName(part.name) &&

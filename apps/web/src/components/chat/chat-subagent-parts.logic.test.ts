@@ -168,7 +168,7 @@ describe("a sub-agent run's pending work counts like a top-level one", () => {
       browseWebCall("run-call"),
       run("run", [browserCall("page", "approval-requested")], "suspended"),
     ];
-    expect(turnPhaseFromParts(parts, (name) => name)).toEqual({
+    expect(turnPhaseFromParts(parts, (call) => call.name)).toEqual({
       type: "waiting-for-approval",
     });
   });

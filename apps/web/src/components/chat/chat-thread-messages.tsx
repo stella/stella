@@ -409,14 +409,8 @@ const ActiveTurnStatus = memo(
             ? { state: "submitted", phase: null, sentAt: turnSentAt }
             : {
                 state: "streaming",
-                phase: turnPhaseFromParts(assistant.parts, (part) =>
-                  t(
-                    getToolCallTitleKey({
-                      input: "input" in part ? part.input : undefined,
-                      name: part.name,
-                      output: part.output,
-                    }),
-                  ),
+                phase: turnPhaseFromParts(assistant.parts, (call) =>
+                  t(getToolCallTitleKey(call)),
                 ),
                 timing: assistant.metadata?.turnTiming,
                 sentAt: turnSentAt,

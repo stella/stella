@@ -39,6 +39,7 @@ import type {
 import {
   getChatAssistantTurnError,
   isOpaquePersistedChatToolCallPart,
+  toSubagentChildUIPart,
 } from "@/components/chat/chat-ui-tools";
 import type {
   ChatUIMessage,
@@ -1170,7 +1171,8 @@ describe("chat thread messages", () => {
     const text = renderedText(
       renderBrowsingTurn([
         { type: "text", content: "Opening the registry's website." },
-        browserApproval("top-level-page"),
+        toSubagentChildUIPart(browserApproval("top-level-page")) ??
+          panic("The fixture must be a canonical browser call"),
       ]),
     );
     expect(text).toContain("Opening the registry's website.");
