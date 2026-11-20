@@ -1,4 +1,5 @@
-// parser-output-unchanged: [sk-us] only adds isSkOpeningFormula, skTitleFormulaStart and isSkPortalMetadataRow, which only the Slovak courts' PDF reader calls; this source's lines are read as before.
+// parser-output-unchanged: [sk-us] only adds isSkVerdictFormulaLine, which only the structure-fidelity guard calls; this source's lines are read as before.
+// parser-output-unchanged: [sk-courts] only adds isSkVerdictFormulaLine, which only the structure-fidelity guard calls; this source's lines are read as before.
 import { collapseSpacedLetters } from "@stll/text-normalize";
 
 import { caseLawSectionHeading } from "./case-law-heading";
@@ -61,7 +62,8 @@ export const isSkDecisionTitle = (text: string): boolean =>
 /**
  * The formula a court decides under, printed with the title in the same
  * type (`ROZSUDOK` / `V MENE SLOVENSKEJ REPUBLIKY`). It is the court's
- * words, not its title, so it is never part of the `decision-title`.
+ * words, not its title, so it is never part of the `decision-title`; every
+ * Slovak reader gives it the `opening-formula` role.
  */
 const OPENING_FORMULAE: ReadonlySet<string> = new Set([
   "vmeneslovenskejrepubliky",
@@ -70,6 +72,15 @@ const OPENING_FORMULAE: ReadonlySet<string> = new Set([
 
 export const isSkOpeningFormula = (text: string): boolean =>
   OPENING_FORMULAE.has(normalized(text));
+
+/**
+ * The state a court decides for, printed alone above the title
+ * (`SLOVENSKÁ REPUBLIKA`). Read as the opening formula only above the title:
+ * the same words on a line of their own further on are a party or a
+ * sentence the layout broke there.
+ */
+export const isSkStateLine = (text: string): boolean =>
+  normalized(text) === "slovenskárepublika";
 
 /**
  * A row of the box the court portal prints at the head of every decision
@@ -155,3 +166,18 @@ export const skSectionHeading = (text: string, section: SkDocumentSection) => {
   }
   return caseLawSectionHeading(trimmed);
 };
+
+/**
+ * The lines a criminal verdict prints between the parts of its ruling, each
+ * on its own line: `uznáva sa za vinného, že`, `teda`, `čím spáchal`,
+ * `pričom`, `za to mu súd ukladá`. The verdict's sentence runs on across
+ * them by the court's own layout, not where a line or a page ended.
+ */
+const VERDICT_FORMULA_RE =
+  /^(?:uznáva sa za vinn\p{Ll}+,? že|teda|čím spáchal\p{Ll}*|pričom|za to (?:mu|jej|im) súd ukladá)(?!\p{L})/iu;
+
+/** Whether a line opens one of a criminal verdict's formula lines. */
+export const isSkVerdictFormulaLine = (text: string): boolean =>
+  VERDICT_FORMULA_RE.test(
+    collapseSpacedLetters(text.trim()).replaceAll(/\s+/gu, " "),
+  );

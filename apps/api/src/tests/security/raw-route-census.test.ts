@@ -303,6 +303,22 @@ const RAW_ROUTES: ReadonlyMap<ApiRouteKey, RawRouteReview> = new Map([
     },
   ],
   [
+    "GET /smoke/scheduled-jobs/journey-prerequisites",
+    {
+      access: RAW_ROUTE_ACCESS.sessionless,
+      reason:
+        "Authorized by a shared secret and refused outside the staging deployment. Reads the scheduler state and latest run of a journey's declared jobs, and the public freshness of the lists they refresh.",
+    },
+  ],
+  [
+    "POST /smoke/scheduled-jobs/journey-prerequisites",
+    {
+      access: RAW_ROUTE_ACCESS.sessionless,
+      reason:
+        "Authorized by a shared secret and refused outside the staging deployment. Only moves a journey's declared recurring jobs' next run forward.",
+    },
+  ],
+  [
     "POST /smoke/session",
     {
       access: RAW_ROUTE_ACCESS.sessionless,

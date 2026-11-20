@@ -63,6 +63,9 @@ export const TYPED_ABSENCE_DEBT = {
   "pl-uodo": unclassified,
   "pl-uokik": unclassified,
   "cz-uohs": [],
+  "br-tjdft": [],
+  "cz-ns-sbirka": [],
+  "br-tst": [],
   "us-courtlistener": unclassified,
 } as const satisfies Record<
   SourceRegistrationKey,

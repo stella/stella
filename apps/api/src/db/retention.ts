@@ -53,6 +53,18 @@ export const TABLE_RETENTION = {
     boundedBy:
       "At most DESKTOP_RUNNER_LIMITS.maxCommandsPerRun commands per run, cascade-deleted when pruneEndedRuns deletes the ended run.",
   },
+  desktop_runner_app_calls: {
+    boundedBy:
+      "MAX_APP_CALLS_PER_RUN rows per run, a few more only when calls were answered at the same moment, each within the chat app part limit, cascade-deleted when pruneEndedRuns deletes the ended run.",
+  },
+  desktop_runner_folder_restores: {
+    boundedBy:
+      "At most one live undo per run and one more per refused or expired attempt the member asks again, cascade-deleted when pruneEndedRuns deletes the ended run.",
+  },
+  chat_local_run_step_contents: {
+    boundedBy:
+      "One row per step of a chat's local runs, each within CHAT_LOCAL_RUN_STEP_MAX_BYTES and all of one run within CHAT_LOCAL_RUN_STEP_CONTENT_RUN_BUDGET; cascade-deleted with the turn or message that shows the step, and with the thread.",
+  },
   desktop_runner_events: {
     boundedBy:
       "At most DESKTOP_RUNNER_LIMITS.maxMessagesPerRun messages and maxMessageBytesPerRun bytes per run, cascade-deleted when pruneEndedRuns deletes the ended run.",
@@ -136,6 +148,10 @@ export const TABLE_RETENTION = {
   document_types: {
     boundedBy: "Organization-owned document configuration and deletion.",
   },
+  agent_skill_original_cleanup_requests: {
+    boundedBy:
+      "Durable erasure queue of skill file originals; agentSkills.cleanOriginalObjects deletes each row once its objects are erased.",
+  },
   entity_deletion_cleanup_requests: {
     boundedBy: "Durable deletion queue drained by entity deletion cleanup.",
   },
@@ -157,6 +173,10 @@ export const TABLE_RETENTION = {
   },
   organization_file_usage: {
     boundedBy: "Organization-owned file accounting and deletion.",
+  },
+  kept_transcript_deletions: {
+    boundedBy:
+      "One provider id per transcript still kept at the provider, deleted once the provider confirms its delete; dictation.deleteKeptTranscripts retries the rest and reports any kept past an hour.",
   },
   hosted_customer_erasures: {
     boundedBy:

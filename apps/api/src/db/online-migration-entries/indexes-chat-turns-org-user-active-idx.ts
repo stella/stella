@@ -3,6 +3,7 @@ import type { OnlineMigrationEntry } from "../online-migration-entry";
 export default {
   id: "indexes-chat-turns-org-user-active-idx",
   revision: 1405,
+  lifecycle: "finalized",
   type: "indexes",
   values: [
     {

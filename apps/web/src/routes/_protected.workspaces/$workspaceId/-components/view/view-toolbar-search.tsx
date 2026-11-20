@@ -3,8 +3,8 @@ import type { RefObject } from "react";
 import { useTranslations } from "use-intl";
 
 import { InfoIcon } from "@stll/ui/icons";
+import { PropertyIcon } from "@stll/workspace-ui/property-icon";
 
-import { PropertyIcon } from "@/components/workspaces/property-helpers";
 import { entityPickerColumns } from "@/components/workspaces/table/entity-find.logic";
 import type { EntityFindPickerColumn } from "@/components/workspaces/table/entity-find.logic";
 import { TableFindBar } from "@/components/workspaces/table/table-find-bar";

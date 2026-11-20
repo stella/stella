@@ -80,15 +80,17 @@ export const useUploadVersion = () => {
       }
 
       return await Result.tryPromise({
-        try: async () =>
-          unwrapApiResponse(
-            await api
-              .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
-              ["upload-version"].post({
-                entityId: toSafeId<"entity">(entityId),
-                file: fileToUpload,
-              }),
-          ),
+        try: async () => {
+          const entitiesApi = api.entities({
+            workspaceId: toSafeId<"workspace">(workspaceId),
+          });
+          return unwrapApiResponse(
+            await entitiesApi["upload-version"].post({
+              entityId: toSafeId<"entity">(entityId),
+              file: fileToUpload,
+            }),
+          );
+        },
         catch: (cause) => cause,
       });
     },

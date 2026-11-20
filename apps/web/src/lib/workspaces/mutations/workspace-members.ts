@@ -3,13 +3,11 @@ import { useQueryClient } from "@tanstack/react-query";
 import { getTranslator } from "@/i18n/translator";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
-import { detached } from "@/lib/detached";
 import { unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { useIdempotentMutation } from "@/lib/idempotency/use-idempotent-mutation";
 import { toSafeId } from "@/lib/safe-id";
-import { workspacesKeys } from "@/lib/workspaces/queries";
-import { workspaceMembersKeys } from "@/lib/workspaces/queries/workspace-members";
+import { resourceMutation } from "@/lib/workspace-realtime";
 
 type AddMemberVars = {
   workspaceId: string;
@@ -21,25 +19,17 @@ export const useAddWorkspaceMember = () => {
   const queryClient = useQueryClient();
 
   return useIdempotentMutation({
-    mutationFn: async ({ workspaceId, userId }: AddMemberVars) => {
-      const response = await api
-        .workspaces({ workspaceId })
-        .members.put({ userId: toSafeId<"user">(userId) });
+    mutationFn: resourceMutation({
+      mutation: "addWorkspaceMember",
+      queryClient,
+      mutationFn: async ({ workspaceId, userId }: AddMemberVars) => {
+        const response = await api
+          .workspaces({ workspaceId })
+          .members.put({ userId: toSafeId<"user">(userId) });
 
-      return unwrapApiResponse(response);
-    },
-    onSuccess: (_data, vars) => {
-      detached(
-        queryClient.invalidateQueries({
-          queryKey: workspaceMembersKeys.all(vars.workspaceId),
-        }),
-        "workspace-members.invalidate",
-      );
-      detached(
-        queryClient.invalidateQueries({ queryKey: workspacesKeys.all }),
-        "workspace-members.invalidate",
-      );
-    },
+        return unwrapApiResponse(response);
+      },
+    }),
     onError: (error) => {
       analytics.captureError(error, {
         fingerprintKey: "useAddWorkspaceMember:failure",
@@ -49,7 +39,3 @@ export const useAddWorkspaceMember = () => {
     },
   });
 };
-
-export const workspaceMemberMutationInvalidationKeys = (
-  workspaceId: string,
-) => [workspaceMembersKeys.all(workspaceId), workspacesKeys.all];

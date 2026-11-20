@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
+import { TruncatedText } from "@stll/ui/truncated-text";
 
 import { AiRewriteControl } from "@/components/ai-rewrite-control";
 import { QueryViewFeedback } from "@/components/query-view-feedback";
@@ -39,9 +40,13 @@ export const FillClausesSection = ({
   const dataQuery = useQuery({
     queryKey: ["template-clause-slots", templateId],
     queryFn: async ({ signal }) => {
-      const response = await api
-        .templates({ templateId: toSafeId<"template">(templateId) })
-        ["clause-slots"].get({ fetch: { signal } });
+      const templateApi = api.templates({
+        templateId: toSafeId<"template">(templateId),
+      });
+
+      const response = await templateApi["clause-slots"].get({
+        fetch: { signal },
+      });
       return unwrapApiResponse(response);
     },
   });
@@ -136,9 +141,9 @@ const ClauseFillItem = ({
     <li className="rounded-md border p-3">
       <div className="flex items-start justify-between gap-2">
         <div className="flex min-w-0 items-center gap-2">
-          <span className="truncate text-sm font-medium" dir="auto">
+          <TruncatedText className="text-sm font-medium" dir="auto">
             {slot.name}
-          </span>
+          </TruncatedText>
           {edited && (
             <span className="bg-muted text-muted-foreground text-3xs rounded-sm px-1.5 py-0.5 font-medium">
               {t("common.edited")}
@@ -162,9 +167,13 @@ const ClauseFillItem = ({
           />
         </div>
       </div>
-      <p className="text-muted-foreground mt-2 line-clamp-4 text-xs whitespace-pre-wrap">
+      <TruncatedText
+        className="text-muted-foreground mt-2 text-xs whitespace-pre-wrap"
+        lines={4}
+        render={<p />}
+      >
         {bodyToText(body)}
-      </p>
+      </TruncatedText>
     </li>
   );
 };

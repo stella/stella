@@ -109,26 +109,31 @@ export const WORK_OBLIGATION_TRANSITIONS = {
  * was decided) closes it from any open status: the owner's acknowledgement
  * was a step towards the decision, not a precondition of recording it.
  */
+const SOURCE_SETTLEMENT_MOVES = {
+  complete: {
+    from: WORK_OBLIGATION_TRANSITIONS.cancel.from,
+    to: WORK_OBLIGATION_TRANSITIONS.complete.to,
+  },
+  cancel: {
+    from: WORK_OBLIGATION_TRANSITIONS.cancel.from,
+    to: WORK_OBLIGATION_TRANSITIONS.cancel.to,
+  },
+} as const;
+
 export const WORK_OBLIGATION_SOURCE_SETTLEMENT = {
   complete: {
     type: "allowed",
-    from: [
-      WORK_OBLIGATION_STATUS.UNASSIGNED,
-      WORK_OBLIGATION_STATUS.AWAITING_ACKNOWLEDGEMENT,
-      WORK_OBLIGATION_STATUS.ACTIVE,
-    ],
-    nextStatus: WORK_OBLIGATION_STATUS.COMPLETED,
+    move: SOURCE_SETTLEMENT_MOVES.complete,
+    from: SOURCE_SETTLEMENT_MOVES.complete.from,
+    nextStatus: SOURCE_SETTLEMENT_MOVES.complete.to,
     eventType: WORK_OBLIGATION_EVENT_TYPE.COMPLETED,
     taskStatus: TASK_STATUS.DONE,
   },
   cancel: {
     type: "allowed",
-    from: [
-      WORK_OBLIGATION_STATUS.UNASSIGNED,
-      WORK_OBLIGATION_STATUS.AWAITING_ACKNOWLEDGEMENT,
-      WORK_OBLIGATION_STATUS.ACTIVE,
-    ],
-    nextStatus: WORK_OBLIGATION_STATUS.CANCELLED,
+    move: SOURCE_SETTLEMENT_MOVES.cancel,
+    from: SOURCE_SETTLEMENT_MOVES.cancel.from,
+    nextStatus: SOURCE_SETTLEMENT_MOVES.cancel.to,
     eventType: WORK_OBLIGATION_EVENT_TYPE.CANCELLED,
     taskStatus: TASK_STATUS.CANCELLED,
   },
@@ -165,7 +170,7 @@ type WorkObligationOwnershipState = {
 export const reopenedWorkObligationStatus = ({
   acknowledgedAt,
   ownerUserId,
-}: WorkObligationOwnershipState): WorkObligationStatus => {
+}: WorkObligationOwnershipState) => {
   if (ownerUserId === null) {
     return WORK_OBLIGATION_STATUS.UNASSIGNED;
   }
@@ -196,14 +201,46 @@ type WorkObligationState = WorkObligationOwnershipState & {
   status: WorkObligationStatus;
 };
 
+type OpenWorkObligationStatus =
+  (typeof WORK_OBLIGATION_TRANSITIONS.cancel.from)[number];
+type ClosedWorkObligationStatus =
+  (typeof WORK_OBLIGATION_TRANSITIONS.reopen.from)[number];
+
 export type WorkObligationTransitionResolution =
-  | {
+  | ({
       type: "allowed";
       eventType: LifecycleEventType;
-      from: readonly WorkObligationStatus[];
-      nextStatus: WorkObligationStatus;
       taskStatus: TaskStatus;
-    }
+    } & (
+      | {
+          from: readonly [
+            OpenWorkObligationStatus,
+            ...OpenWorkObligationStatus[],
+          ];
+          nextStatus: ClosedWorkObligationStatus;
+          move: {
+            from: readonly [
+              OpenWorkObligationStatus,
+              ...OpenWorkObligationStatus[],
+            ];
+            to: ClosedWorkObligationStatus;
+          };
+        }
+      | {
+          from: readonly [
+            ClosedWorkObligationStatus,
+            ...ClosedWorkObligationStatus[],
+          ];
+          nextStatus: OpenWorkObligationStatus;
+          move: {
+            from: readonly [
+              ClosedWorkObligationStatus,
+              ...ClosedWorkObligationStatus[],
+            ];
+            to: OpenWorkObligationStatus;
+          };
+        }
+    ))
   | { type: "invalid_status" };
 
 export const resolveWorkObligationTransition = (
@@ -214,12 +251,30 @@ export const resolveWorkObligationTransition = (
   if (!transition.from.some((status) => status === obligation.status)) {
     return { type: "invalid_status" };
   }
+  if (action === WORK_OBLIGATION_TRANSITION_ACTION.REOPEN) {
+    const reopen = WORK_OBLIGATION_TRANSITIONS.reopen;
+    const move = {
+      from: reopen.from,
+      to: reopenedWorkObligationStatus(obligation),
+    };
+    return {
+      type: "allowed",
+      eventType: reopen.eventType,
+      move,
+      from: move.from,
+      nextStatus: move.to,
+      taskStatus: reopen.taskStatus,
+    };
+  }
+  const closing = WORK_OBLIGATION_TRANSITIONS[action];
+  const move = { from: closing.from, to: closing.to };
   return {
     type: "allowed",
-    eventType: transition.eventType,
-    from: transition.from,
-    nextStatus: nextWorkObligationStatus(action, obligation),
-    taskStatus: transition.taskStatus,
+    eventType: closing.eventType,
+    move,
+    from: move.from,
+    nextStatus: move.to,
+    taskStatus: closing.taskStatus,
   };
 };
 

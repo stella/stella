@@ -1,28 +1,14 @@
 import * as v from "valibot";
 
 import type { AuthCapabilities } from "../../src/components/auth/sign-in-panel.logic";
+import { SIGN_IN_PROVIDERS } from "../fixtures/sign-in-providers";
 import { installContentSecurityPolicyCollector } from "../helpers/content-security-policy";
+import { apiJson, authJson, respond, staticBody } from "../helpers/route-mock";
 import { expect, test } from "../helpers/test";
-
-// The production E2E build enables both buttons. Stub only the auth metadata
-// and authorization URL response so this browser boundary needs no credentials
-// or provider account; the application still performs the navigation itself.
-const PROVIDERS = [
-  {
-    name: "Google",
-    id: "google",
-    url: "https://accounts.google.com/o/oauth2/v2/auth?client_id=csp-smoke",
-  },
-  {
-    name: "Microsoft",
-    id: "microsoft",
-    url: "https://login.microsoftonline.com/common/oauth2/v2.0/authorize?client_id=csp-smoke",
-  },
-] as const;
 
 test.use({ storageState: { cookies: [], origins: [] }, locale: "en-US" });
 
-for (const provider of PROVIDERS) {
+for (const provider of SIGN_IN_PROVIDERS) {
   test(`sign-in navigates to ${provider.name} without CSP violations`, async ({
     page,
   }) => {
@@ -35,9 +21,13 @@ for (const provider of PROVIDERS) {
         bootstrap: false,
         social: { google: true, microsoft: true, apple: false },
       } satisfies AuthCapabilities;
-      await route.fulfill({
-        json: { ...capabilities, transactionalEmail: true },
-      });
+      await respond(
+        route,
+        apiJson("v1/auth/capabilities", "get", {
+          ...capabilities,
+          transactionalEmail: true,
+        }),
+      );
     });
     await page.route("**/api/auth/sign-in/social", async (route) => {
       const body = v.parse(
@@ -45,17 +35,23 @@ for (const provider of PROVIDERS) {
         route.request().postDataJSON(),
       );
       expect(body.provider).toBe(provider.id);
-      await route.fulfill({ json: { url: provider.url, redirect: true } });
+      await respond(
+        route,
+        authJson("sign-in/social", { url: provider.url, redirect: true }),
+      );
     });
     let navigationTarget: string | undefined;
     await page.route(`${new URL(provider.url).origin}/**`, async (route) => {
       expect(route.request().isNavigationRequest()).toBe(true);
       expect(route.request().frame()).toBe(page.mainFrame());
       const target = route.request().url();
-      await route.fulfill({
-        contentType: "text/html",
-        body: "<html><body>Provider navigation received</body></html>",
-      });
+      await respond(
+        route,
+        staticBody({
+          contentType: "text/html",
+          body: "<html><body>Provider navigation received</body></html>",
+        }),
+      );
       navigationTarget = target;
     });
     await page.goto("/auth", { waitUntil: "domcontentloaded" });

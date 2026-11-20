@@ -4,6 +4,7 @@ import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
 import { XIcon } from "@stll/ui/icons";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import {
@@ -98,9 +99,9 @@ export const LeadSection = ({ workspaceId }: LeadSectionProps) => {
         TOOLBAR_ROW_HEIGHT,
       )}
     >
-      <span className="text-muted-foreground truncate text-sm font-medium">
+      <TruncatedText className="text-muted-foreground text-sm font-medium">
         {t("workspaces.lead")}
-      </span>
+      </TruncatedText>
       <div className="min-w-0">
         <QueryViewFeedback view={workspaceView} />
         <QueryViewFeedback view={membersView} />

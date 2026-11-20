@@ -1,5 +1,6 @@
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
+import { fileURLToPath } from "node:url";
 
 import { apiApp } from "@/api/server";
 
@@ -9,7 +10,7 @@ const isLocalDevPath = (path: string) =>
   path.startsWith("/dev-public/") || path.startsWith("/v1/dev/");
 
 const serverModuleUrl = new URL("../../server.ts", import.meta.url).href;
-const apiRoot = new URL("../../..", import.meta.url).pathname;
+const apiRoot = fileURLToPath(new URL("../../..", import.meta.url));
 
 // A complete strict configuration: loopback services, a content key, no
 // local development opt-in.

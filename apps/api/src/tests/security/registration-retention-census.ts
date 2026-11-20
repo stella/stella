@@ -222,7 +222,7 @@ export const collectRetentionWrites = ({
       statement.attributes.some(
         (attribute) =>
           exportName(attribute.key) === "type" &&
-          ["file", "json"].includes(attribute.value.value),
+          ["file", "json", "text"].includes(attribute.value.value),
       )
     ) {
       return undefined;

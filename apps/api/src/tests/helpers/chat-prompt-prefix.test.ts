@@ -1,3 +1,4 @@
+import { orderedAssistantBlocks } from "@tanstack/ai";
 import type { ModelMessage } from "@tanstack/ai";
 import { describe, expect, test } from "bun:test";
 
@@ -92,6 +93,45 @@ describe("the prompt prefix of a thread's model calls", () => {
           systemPrompts: [{ content: SYSTEM, metadata: {} }],
         },
       ),
+    ).toEqual([]);
+  });
+
+  test("detects changes to the assistant block order sent to the provider", () => {
+    const original: ModelMessage = {
+      role: "assistant",
+      content: "Answer",
+      thinking: [{ content: "Reason" }],
+      blockOrder: [
+        { type: "thinking", index: 0 },
+        { type: "text", length: 6 },
+      ],
+    };
+    const reordered: ModelMessage = {
+      ...original,
+      blockOrder: [
+        { type: "text", length: 6 },
+        { type: "thinking", index: 0 },
+      ],
+    };
+    expect(orderedAssistantBlocks(reordered)).not.toEqual(
+      orderedAssistantBlocks(original),
+    );
+    expect(
+      breaksOf({ messages: [original] }, { messages: [reordered] }),
+    ).toMatchObject([{ block: { index: 0, segment: "messages" }, call: 1 }]);
+  });
+
+  test("ignores the message's persisted mid-conversation bookkeeping", () => {
+    const original = answer("Answer");
+    const hydrated: ModelMessage = {
+      ...original,
+      midConversationChange: {
+        tools: ["list_templates"],
+        systemPrompts: ["prompt-hash"],
+      },
+    };
+    expect(
+      breaksOf({ messages: [original] }, { messages: [hydrated] }),
     ).toEqual([]);
   });
 

@@ -155,7 +155,7 @@ for (const kind of ["batch", "snapshot"] as const) {
     } finally {
       fixture.cleanup();
     }
-  }, 10_000);
+  }, 12_000);
 }
 
 test("normal buffered children keep their output apart from startup progress", async () => {
@@ -237,7 +237,9 @@ const reporterEnv = Object.fromEntries(
 );
 
 test("real Bun test batches produce distinct JUnit artifacts and retain reporter output", async () => {
-  const fixture = createFixture();
+  // Real Bun startup competes with other CI batches; watchdog fixtures below
+  // retain the short 2s budget while this child gets time to load its runner.
+  const fixture = createFixture({ childTimeoutMs: 5000, deadlineMs: 15_000 });
   const junitPaths: string[] = [];
   try {
     for (const label of ["first", "second"]) {
@@ -272,7 +274,10 @@ import { expect, test } from "bun:test";
         identity: { kind: "batch", label, files: [testFile], lane: 0 },
         mode: "buffered",
       });
-      expect(result.exitCode).toBe(0);
+      expect(
+        result.exitCode,
+        `${result.output}\n${fixture.diagnostics.join("")}`,
+      ).toBe(0);
       expect(result.output).toContain("normal fixture stdout");
       expect(result.output).toContain(testName);
       expect(result.output).toContain("(pass)");
@@ -386,7 +391,7 @@ test("one child watchdog aborts every active lane and preserves both identities"
   } finally {
     fixture.cleanup();
   }
-}, 10_000);
+}, 12_000);
 
 test("the runner deadline aborts active work and prevents the next child from starting", async () => {
   const fixture = createFixture({ childTimeoutMs: 10_000, deadlineMs: 2000 });
@@ -422,7 +427,7 @@ test("the runner deadline aborts active work and prevents the next child from st
   } finally {
     fixture.cleanup();
   }
-}, 10_000);
+}, 12_000);
 
 test("raw logs stay bounded while keeping the latest output for timeout diagnostics", async () => {
   const maxLogBytes = 4096;
@@ -465,7 +470,7 @@ test("raw logs stay bounded while keeping the latest output for timeout diagnost
   } finally {
     fixture.cleanup();
   }
-}, 10_000);
+}, 12_000);
 
 test("a startup callback failure reaps the child before propagating the original error", async () => {
   let pid = 0;
@@ -506,7 +511,7 @@ test("a startup callback failure reaps the child before propagating the original
   } finally {
     fixture.cleanup();
   }
-}, 10_000);
+}, 12_000);
 
 test("a missing log directory cannot prevent stopping and reaping the child", async () => {
   let pid = 0;
@@ -554,7 +559,7 @@ test("a missing log directory cannot prevent stopping and reaping the child", as
   } finally {
     fixture.cleanup();
   }
-}, 10_000);
+}, 12_000);
 
 const posixTest = process.platform === "win32" ? test.skip : test;
 

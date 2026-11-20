@@ -9,6 +9,7 @@
 
 import { Result } from "better-result";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { Param, SQL } from "drizzle-orm";
 
 import {
   CASE_LAW_WORK_EXPRESSIONS_METADATA_KEY,
@@ -385,8 +386,10 @@ describe("notice publication outcomes", () => {
       citationKey: null,
       country: result.country,
       decisionDate: result.decisionDate ?? null,
+      decisionType: result.decisionType ?? null,
       sourceDocumentId: result.sourceDocumentId ?? null,
       ecli: result.ecli ?? null,
+      sheetNumber: result.sheetNumber ?? null,
       metadata: result.metadata,
       sourceHash: result.rawHash,
       sourceHashVersion: 0,
@@ -394,7 +397,15 @@ describe("notice publication outcomes", () => {
       sourceObservationHash: result.rawHash,
       redactedAt: null,
       corpusMirrorStatus: CASE_LAW_CORPUS_MIRROR_STATUS.SETTLED,
+      fulltext: result.fulltext ?? null,
+      sections: result.sections ?? null,
+      documentAst: result.documentAst,
       contentHash: "stored-complete-document",
+      fallbackContentHash: null,
+      fallbackIdentityKey: null,
+      fallbackCohortKey: null,
+      fallbackPublicationHash: null,
+      fallbackDocumentHash: null,
       textS3Key: "stored/text",
       normalizedS3Key: "stored/normalized",
       astS3Key: "stored/ast",
@@ -533,7 +544,9 @@ describe("notice publication outcomes", () => {
               };
             }
             expect(table).toBe(corpusIndexGenerations);
-            return { where: () => ({ limit: async () => [] }) };
+            return {
+              where: () => ({ orderBy: () => ({ limit: async () => [] }) }),
+            };
           },
         }),
         update: (table: unknown) => {
@@ -541,7 +554,27 @@ describe("notice publication outcomes", () => {
           return {
             set: (values: Record<string, unknown>) => {
               writes.push(values);
-              Object.assign(persisted, values);
+              Object.assign(
+                persisted,
+                Object.fromEntries(
+                  Object.entries(values).flatMap(([key, value]) => {
+                    if (!(value instanceof SQL)) {
+                      return [[key, value]];
+                    }
+                    const parameter = value.queryChunks.find(
+                      (chunk) => chunk instanceof Param,
+                    );
+                    if (parameter instanceof Param) {
+                      return [[key, parameter.value]];
+                    }
+                    expect(key).toBe("updatedAt");
+                    expect(value.queryChunks).toContain(
+                      caseLawDecisions.updatedAt,
+                    );
+                    return [];
+                  }),
+                ),
+              );
               return {
                 where: () => ({ returning: async () => [{ id: existing.id }] }),
               };

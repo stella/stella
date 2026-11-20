@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { fileURLToPath } from "node:url";
 import * as v from "valibot";
 
 import { envApiServerSchema } from "../env-schema";
@@ -18,7 +19,7 @@ const credentialNames = Object.keys(envApiServerSchema).filter(
     (name.includes("API_KEY") || name.startsWith("OPENROUTER_WIF_")),
 );
 const placeholder = "stella-test-provider-credential-0";
-const preloadPath = new URL("setup-env.ts", import.meta.url).pathname;
+const preloadPath = fileURLToPath(new URL("setup-env.ts", import.meta.url));
 
 const readPreloadedCredentials = (
   env: Record<string, string | undefined>,
@@ -33,14 +34,14 @@ const readPreloadedCredentials = (
       "-e",
       `console.log(JSON.stringify(${JSON.stringify(names)}.map(name => [name, process.env[name] ?? null])));`,
     ],
-    cwd: new URL("../..", import.meta.url).pathname,
+    cwd: fileURLToPath(new URL("../..", import.meta.url)),
     env,
     stdout: "pipe",
     stderr: "pipe",
     timeout: 10_000,
   });
   expect(child.exitCode, child.stderr.toString()).toBe(0);
-  return JSON.parse(child.stdout.toString());
+  return JSON.parse(child.stdout.toString()) as unknown;
 };
 
 describe("API test preload credentials", () => {

@@ -2,19 +2,16 @@ import { Suspense, useState, useTransition } from "react";
 
 import { Result } from "better-result";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
-import {
-  ActivityIndicator,
-  Platform,
-  Pressable,
-  ScrollView,
-  View,
-} from "react-native";
+import { Platform, ScrollView, View } from "react-native";
 import { useFormatter, useTimeZone, useTranslations } from "use-intl";
 
 import { Input } from "@stll/ui/input";
+import { Loader } from "@stll/ui/loader";
 import { Text } from "@stll/ui/text";
 
 import { useChanged } from "@/components/changes";
+import { ChoiceChip } from "@/components/choice-chip";
+import { DictateButton } from "@/components/dictate-button";
 import { DueDatePicker } from "@/components/due-date-picker";
 import { screenStyles } from "@/components/empty-state-screen";
 import { MatterPicker } from "@/components/matter-picker";
@@ -24,27 +21,18 @@ import type { WriteFailure } from "@/components/write-failure";
 import { epochMilliseconds } from "@/connection/clock";
 import type { AccessTokenSource } from "@/connection/session";
 import { useSession } from "@/connection/session-provider";
+import { appendDictation } from "@/state/dictation";
 import { listMatters } from "@/state/matters";
 import { pickerDate } from "@/state/picked-day";
 import {
   chosenDueDate,
   createTask,
   dayAt,
+  DUE_CHOICES,
   listMatterMembers,
   newTaskAssignees,
 } from "@/state/tasks";
-import { useAppColors, useUiColors } from "@/theme";
-
-/** The due dates the sheet offers, as days from today; null leaves it undated. */
-const DUE_CHOICES = [
-  { key: "none", days: null },
-  { key: "today", days: 0 },
-  { key: "tomorrow", days: 1 },
-  { key: "nextWeek", days: 7 },
-] as const;
-
-/** A preset, or "pick": the day chosen in the calendar. */
-type DueChoice = (typeof DUE_CHOICES)[number]["key"] | "pick";
+import type { DueChoice } from "@/state/tasks";
 
 /**
  * A new task, presented as a sheet over the tasks: its name, when it is due
@@ -62,7 +50,6 @@ const NewTaskScreen = () => {
 const NewTaskForm = ({ source }: { source: AccessTokenSource }) => {
   const t = useTranslations("tasks");
   const tabs = useTranslations("tabs");
-  const colors = useAppColors();
   const router = useRouter();
   const { end } = useSession();
   const changed = useChanged();
@@ -90,6 +77,8 @@ const NewTaskForm = ({ source }: { source: AccessTokenSource }) => {
     return new Set(session === undefined ? [] : [session.userId]);
   });
   const [failure, setFailure] = useState<WriteFailure | null>(null);
+  // Adding waits for a dictation to land in the name: closing the form drops it.
+  const [dictating, setDictating] = useState(false);
   const [adding, startAdding] = useTransition();
   const [matters] = useState(async () => {
     const result = await listMatters({ fetch, source });
@@ -98,10 +87,11 @@ const NewTaskForm = ({ source }: { source: AccessTokenSource }) => {
     }
     return result;
   });
-  const ready = name.trim() !== "" && matterId !== null && !adding;
+  const ready =
+    name.trim() !== "" && matterId !== null && !adding && !dictating;
 
   const add = () => {
-    if (matterId === null) {
+    if (matterId === null || dictating) {
       return;
     }
     const days = DUE_CHOICES.find((choice) => choice.key === due)?.days ?? null;
@@ -176,6 +166,13 @@ const NewTaskForm = ({ source }: { source: AccessTokenSource }) => {
           returnKeyType="done"
           value={name}
         />
+        <DictateButton
+          matterId={matterId ?? undefined}
+          onBusyChange={setDictating}
+          onText={(dictated) => {
+            setName((typed) => appendDictation(typed, dictated));
+          }}
+        />
         <WriteFailureNotice failure={failure} message={t("addFailed")} />
         <View className="gap-2">
           <View className="px-1">
@@ -183,7 +180,7 @@ const NewTaskForm = ({ source }: { source: AccessTokenSource }) => {
           </View>
           <View className="flex-row flex-wrap gap-2">
             {DUE_CHOICES.map((choice) => (
-              <DueChip
+              <ChoiceChip
                 key={choice.key}
                 label={t(`dueChoice.${choice.key}`)}
                 onPress={() => {
@@ -194,7 +191,7 @@ const NewTaskForm = ({ source }: { source: AccessTokenSource }) => {
             ))}
             {/* The web build has no calendar to pick a day from. */}
             {Platform.OS === "web" ? null : (
-              <DueChip
+              <ChoiceChip
                 label={
                   due === "pick"
                     ? format.dateTime(
@@ -227,7 +224,7 @@ const NewTaskForm = ({ source }: { source: AccessTokenSource }) => {
           <View className="px-1">
             <Text variant="section">{t("matterTitle")}</Text>
           </View>
-          <Suspense fallback={<ActivityIndicator color={colors.muted} />}>
+          <Suspense fallback={<Loader />}>
             <MatterPicker
               matters={matters}
               onSelect={(id) => {
@@ -243,7 +240,7 @@ const NewTaskForm = ({ source }: { source: AccessTokenSource }) => {
             <View className="px-1">
               <Text variant="section">{t("assignedTo")}</Text>
             </View>
-            <Suspense fallback={<ActivityIndicator color={colors.muted} />}>
+            <Suspense fallback={<Loader />}>
               <MemberList
                 assigned={chosen}
                 load={members.load}
@@ -266,36 +263,6 @@ const NewTaskForm = ({ source }: { source: AccessTokenSource }) => {
         )}
       </ScrollView>
     </>
-  );
-};
-
-/** One of the due choices, filled while it is the chosen one. */
-const DueChip = ({
-  label,
-  onPress,
-  selected,
-}: {
-  label: string;
-  onPress: () => void;
-  selected: boolean;
-}) => {
-  const ui = useUiColors();
-  return (
-    <Pressable
-      accessibilityRole="radio"
-      accessibilityState={{ selected }}
-      className={`rounded-full border px-3 py-1.5 active:opacity-60 ${
-        selected ? "border-foreground bg-foreground" : "border-border bg-card"
-      }`}
-      onPress={onPress}
-    >
-      <Text
-        style={selected ? { color: ui.background } : undefined}
-        variant="label"
-      >
-        {label}
-      </Text>
-    </Pressable>
   );
 };
 

@@ -1,6 +1,6 @@
 {
   "name": "@stll/start-runtime",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "Bun runtime primitives for serving TanStack Start applications with explicit asset, health, and startup checks.",
   "keywords": [
     "bun",
@@ -27,7 +27,8 @@
   "sideEffects": false,
   "exports": {
     ".": "./src/runtime.ts",
-    "./local-module-loader": "./src/local-module-loader.ts"
+    "./local-module-loader": "./src/local-module-loader.ts",
+    "./test-request": "./src/test-request.ts"
   },
   "publishConfig": {
     "access": "public"
@@ -38,11 +39,12 @@
     "pack:dry-run": "bun pm pack --dry-run",
     "test": "bun test src",
     "typecheck": "bun check --no-pretty --all --project=tsconfig.json",
-    "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --type-aware --type-check packages/start-runtime",
-    "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix packages/start-runtime",
+    "lint": "cd ../.. && bun scripts/lint.ts packages/start-runtime",
+    "lint:fix": "cd ../.. && bun scripts/lint.ts --fix packages/start-runtime",
     "prepack": "bun run build"
   },
   "dependencies": {
+    "@tanstack/react-start": "^1.169.5",
     "better-result": "catalog:"
   },
   "devDependencies": {

@@ -3,7 +3,9 @@ import { matchError, Result } from "better-result";
 import { backoffDelay } from "@stll/concurrency/backoff-delay";
 
 import type { AIRequestServiceTier } from "@/api/lib/ai-config";
+import { aiFailureCanClearOnRetry } from "@/api/lib/ai-error";
 import type {
+  DocumentTooLargeError,
   WorkflowIntegrationError,
   WorkflowValidationError,
 } from "@/api/lib/errors/tagged-errors";
@@ -21,7 +23,8 @@ const JOB_TIMEOUT_PER_LEVEL_OVERHEAD_MS = 60 * 1000;
 const MIN_WORKFLOW_RUN_LOCK_TTL_SEC = 60 * 60;
 const WORKFLOW_RUN_LOCK_TTL_BUFFER_MS = 5 * 60 * 1000;
 
-type WorkflowBatchError = WorkflowIntegrationError | WorkflowValidationError;
+type WorkflowBatchError =
+  WorkflowIntegrationError | WorkflowValidationError | DocumentTooLargeError;
 
 type WorkflowBatchGenerationResult<TValue> = Result<TValue, WorkflowBatchError>;
 
@@ -102,8 +105,9 @@ const shouldRetryWorkflowBatchError = ({
   }
 
   return matchError(error, {
-    WorkflowIntegrationError: () => true,
+    WorkflowIntegrationError: aiFailureCanClearOnRetry,
     WorkflowValidationError: () => false,
+    DocumentTooLargeError: () => false,
   });
 };
 

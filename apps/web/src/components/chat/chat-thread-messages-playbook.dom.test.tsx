@@ -2,13 +2,14 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
 import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
+import { createTestState } from "@stll/test-state";
 
 import { testChatApprovalContextValue } from "@/components/chat/chat-approval-context.test-fixtures";
 
 GlobalRegistrator.register({ url: "https://app.example.test/chat/thread" });
 
-const previousApiUrl = process.env["VITE_API_URL"];
-process.env["VITE_API_URL"] = previousApiUrl ?? "https://api.example.test";
+const state = createTestState({ file: import.meta.path, config: {} });
+state.setEnvIfAbsent("VITE_API_URL", "https://api.example.test");
 const originalFetch = globalThis.fetch;
 globalThis.fetch = Object.assign(
   async () => await Promise.resolve(Response.json(null)),
@@ -37,11 +38,6 @@ afterEach(async () => {
 
 afterAll(async () => {
   globalThis.fetch = originalFetch;
-  if (previousApiUrl === undefined) {
-    delete process.env["VITE_API_URL"];
-  } else {
-    process.env["VITE_API_URL"] = previousApiUrl;
-  }
   await unregisterDomEnvironment();
 });
 
@@ -168,8 +164,13 @@ test("tells the user when an approved save failed", async () => {
       </QueryClientProvider>
     </ChatThreadTestRouter>,
   );
-  await view.findByText(messages.chat.toolCall.failed);
-  expect(view.getByText(messages.common.showDetails)).toBeDefined();
+  // The card's mark names the failure and the answer's footer says the
+  // turn did not finish; the raw error waits for the technical details.
+  await view.findByText(messages.chat.answerNotFinished);
+  expect(
+    view.getByRole("img", { name: messages.chat.toolCall.failed }),
+  ).toBeDefined();
+  expect(view.queryByText(messages.common.showDetails)).toBeNull();
   expect(view.queryByLabelText(messages.chat.approval.allowed)).toBeNull();
   expect(view.queryByLabelText(messages.chat.approval.denied)).toBeNull();
   queryClient.clear();

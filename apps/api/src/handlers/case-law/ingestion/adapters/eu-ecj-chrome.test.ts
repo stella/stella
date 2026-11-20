@@ -1,5 +1,6 @@
 import { Glob } from "bun";
 import { describe, expect, setDefaultTimeout, test } from "bun:test";
+import { fileURLToPath } from "node:url";
 
 import { load } from "@stll/html";
 
@@ -20,11 +21,11 @@ const PARSER_FIXTURES = new URL(
 const ADAPTER_FIXTURES = new URL("__fixtures__/", import.meta.url);
 const fixtures = [
   ...Array.from(
-    new Glob("*.html.gz").scanSync(PARSER_FIXTURES.pathname),
+    new Glob("*.html.gz").scanSync(fileURLToPath(PARSER_FIXTURES)),
     (name) => new URL(name, PARSER_FIXTURES),
   ),
   ...Array.from(
-    new Glob("eu-ecj-*.html{,.gz}").scanSync(ADAPTER_FIXTURES.pathname),
+    new Glob("eu-ecj-*.html{,.gz}").scanSync(fileURLToPath(ADAPTER_FIXTURES)),
     (name) => new URL(name, ADAPTER_FIXTURES),
   ),
 ];

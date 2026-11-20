@@ -37,10 +37,12 @@ type CapturedTransport = {
   url: string;
 };
 
+const fixtureNow = 1_700_000_000_000;
+
 // Mutable controls the mocked collaborators close over. Reset per test.
 const state = {
   closes: 0,
-  now: new Date(),
+  now: new Date(fixtureNow),
   dbSets: [] as Record<string, unknown>[],
   reviews: [] as Record<string, unknown>[],
   decryptCalls: 0,
@@ -106,7 +108,7 @@ const connectionDependenciesTestDouble = {
     state.refreshCalls += 1;
     return state.refresh();
   },
-  tokenExpiresAt: () => new Date(Date.now() + 3_600_000),
+  tokenExpiresAt: () => new Date(state.now.getTime() + 3_600_000),
   decryptMcpSecret: async ({ purpose }: { purpose: string }) => {
     state.decryptCalls += 1;
     return `decrypted-${purpose}`;
@@ -286,7 +288,7 @@ const oauthRow = (
   description: "Registry connector",
   displayName: "Registry",
   // Expired by default so the refresh path is exercised.
-  expiresAt: new Date(Date.now() - 60_000),
+  expiresAt: new Date(state.now.getTime() - 60_000),
   oauthAuthorizationServerUrl: "https://auth.example.com",
   oauthIssuerBinding: {
     type: "approved",
@@ -316,7 +318,7 @@ let analytics: RecordingAnalytics;
 
 beforeEach(() => {
   analytics = installRecordingAnalytics();
-  state.now = new Date();
+  state.now = new Date(fixtureNow);
   state.closes = 0;
   state.dbSets = [];
   state.reviews = [];
@@ -411,7 +413,7 @@ describe("MCP upstream connection lifecycle", () => {
   test("valid, unexpired OAuth token is used directly without a refresh", async () => {
     const client = await createMcpClientForConnection({
       organizationId,
-      row: oauthRow({ expiresAt: new Date(Date.now() + 3_600_000) }),
+      row: oauthRow({ expiresAt: new Date(state.now.getTime() + 3_600_000) }),
       safeDb: makeSafeDb(),
       userId,
     });
@@ -564,7 +566,7 @@ describe("MCP upstream connection lifecycle", () => {
       organizationId,
       permit: outboundPermit,
       outboundFetch: recordingOutboundFetch,
-      row: oauthRow({ expiresAt: new Date(Date.now() + 3_600_000) }),
+      row: oauthRow({ expiresAt: new Date(state.now.getTime() + 3_600_000) }),
       safeDb: makeSafeDb(),
       userId,
     });
@@ -628,7 +630,7 @@ describe("MCP upstream connection lifecycle", () => {
       dependencies: initializingDependencies,
       organizationId,
       outboundFetch: recordingOutboundFetch,
-      row: oauthRow({ expiresAt: new Date(Date.now() + 3_600_000) }),
+      row: oauthRow({ expiresAt: new Date(state.now.getTime() + 3_600_000) }),
       safeDb: makeSafeDb(),
       userId,
     });

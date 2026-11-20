@@ -1,9 +1,11 @@
 /**
  * Online repair for the Better Auth OAuth resource policy.
  *
- * Every MCP audience is an OAuth resource, and startup refuses to serve until
+ * Every MCP audience is an OAuth resource. A deploy must not finish until
  * `oauth_resource` covers `buildBetterAuthOAuthResources()` and every client
- * registration is linked to a resource (`ensureBetterAuthOAuthPolicy`). Startup deliberately does not repair:
+ * registration is linked to a resource; startup reports a gap as an error
+ * (`ensureBetterAuthOAuthPolicy`) and Better Auth refuses the affected
+ * requests, but neither refuses boot. Startup deliberately does not repair:
  * `resourceSeedMode: "none"` in `lib/auth.ts` keeps resource creation out of
  * the request path, and `initializePristineBetterAuthOAuthPolicy` seeds only an
  * entirely empty auth database.
@@ -12,8 +14,8 @@
  * database. The one-time 1.7 cutover command owns the same work, but it is an
  * operator script: it wants a write freeze and the private trusted-identity
  * manifest, and no deploy path runs it. Shipping an audience against that would
- * mean the next release's API failing its boot census on every environment
- * until somebody ran a script by hand.
+ * mean the next release's OAuth audiences failing on every environment until
+ * somebody ran a script by hand.
  *
  * So the policy half of that backfill runs here instead, on the migrate
  * entrypoint, before the API rolls. It reuses the cutover command's own

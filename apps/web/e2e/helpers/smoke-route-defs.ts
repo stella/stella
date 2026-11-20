@@ -263,6 +263,11 @@ export const INTENTIONALLY_NOT_SMOKED = new Set([
   "/knowledge/company-formats/$registry/$companyId",
   // A file download handler, not a page.
   "/knowledge/tools/$entry/download",
+  // Opens one of the organization's skills; agent-skills.spec.ts creates one
+  // and drives its editor there.
+  "/knowledge/tools/skills/$skillId",
+  // Requires a served regulator guidance document; the smoke world has none.
+  "/guidance/$guidanceId",
   "/workspaces/$workspaceId/invoices/$invoiceId",
   "/workspaces/$workspaceId/reports/$exportId",
 ]);

@@ -1,5 +1,4 @@
 import { panic, Result } from "better-result";
-import { isNotNull } from "drizzle-orm";
 
 import { sanitizeErrorAttributesForOutput } from "@stll/errors";
 import {
@@ -7,12 +6,7 @@ import {
   type IngestionStopKind,
 } from "@stll/legal-atlas/ingestion-cycle";
 
-import {
-  CASE_LAW_INGESTION_FAILURES_SOURCE_RECORD_UIDX,
-  onlineUniqueIndexTarget,
-} from "@/api/db/online-unique-indexes";
 import type { ScopedDb } from "@/api/db/safe-db";
-import { caseLawIngestionFailures } from "@/api/db/schema";
 import {
   CASE_LAW_BATCH_FAILURE,
   CaseLawBatchApplyError,
@@ -28,6 +22,14 @@ import type {
 import { processDecision } from "@/api/handlers/case-law/ingestion/pipeline/decision";
 import { CASE_LAW_CORPUS_DEPENDENCIES } from "@/api/handlers/case-law/ingestion/pipeline/dependencies";
 import type { CaseLawCorpusDependencies } from "@/api/handlers/case-law/ingestion/pipeline/dependencies";
+import {
+  captureFailureEvidence,
+  ingestionFailureRecordIdentity,
+} from "@/api/handlers/case-law/ingestion/pipeline/failure-evidence";
+import {
+  type IngestionFailureRow,
+  writeIngestionFailureRowsTx,
+} from "@/api/handlers/case-law/ingestion/pipeline/failure-evidence-persistence";
 import {
   PROCESS_DECISION_RETRY_REASON,
   PROCESS_DECISION_STATUS,
@@ -94,85 +96,6 @@ const sourceLeaseStepFailed = failureSink({
   expected: [],
 });
 
-export type IngestionFailureRow = typeof caseLawIngestionFailures.$inferInsert;
-
-/** Column bounds of `case_law_ingestion_failures` (schema/case-law.ts). */
-const INGESTION_FAILURE_LIMITS = {
-  caseNumber: 256,
-  language: 8,
-  errorType: 128,
-  errorMessage: 2048,
-} as const;
-
-/** Postgres text and jsonb columns do not store NUL characters. */
-const storableText = (value: string, maxLength?: number): string => {
-  const text = value.replaceAll("\u0000", "");
-  return maxLength === undefined ? text : text.slice(0, maxLength);
-};
-
-/**
- * A failure row as the table accepts it: values copied from the decision
- * that failed are held to the column bounds and carry no NUL characters.
- */
-const storableIngestionFailure = (
-  row: IngestionFailureRow,
-): IngestionFailureRow => ({
-  ...row,
-  caseNumber: storableText(row.caseNumber, INGESTION_FAILURE_LIMITS.caseNumber),
-  errorType: storableText(row.errorType, INGESTION_FAILURE_LIMITS.errorType),
-  errorMessage: storableText(
-    row.errorMessage,
-    INGESTION_FAILURE_LIMITS.errorMessage,
-  ),
-  ...(typeof row.language === "string"
-    ? {
-        language: storableText(row.language, INGESTION_FAILURE_LIMITS.language),
-      }
-    : {}),
-  ...(typeof row.cursor === "string"
-    ? { cursor: storableText(row.cursor) }
-    : {}),
-});
-
-const logIngestionFailures = async (
-  scopedDb: ScopedDb,
-  failures: readonly IngestionFailureRow[],
-) => {
-  if (failures.length === 0) {
-    return;
-  }
-  const rows = failures.map(storableIngestionFailure);
-  const identified = rows.filter(
-    ({ recordIdentity }) => typeof recordIdentity === "string",
-  );
-  const anonymous = rows.filter(
-    ({ recordIdentity }) => typeof recordIdentity !== "string",
-  );
-  // audit: skip — background case-law ingestion pipeline; public case-law data, not user actions
-  await scopedDb(async (tx) => {
-    // audit: skip — background case-law ingestion pipeline; public case-law data, not user actions
-    if (anonymous.length > 0) {
-      // Rows without an identity insert as they always have.
-      await tx.insert(caseLawIngestionFailures).values(anonymous);
-    }
-    if (identified.length > 0) {
-      // A row that names its record's identity lands once: a replay of the
-      // same record meets the partial unique index and keeps the row already
-      // there. Only that index's conflict is absorbed.
-      await tx
-        .insert(caseLawIngestionFailures)
-        .values(identified)
-        .onConflictDoNothing({
-          target: onlineUniqueIndexTarget(
-            CASE_LAW_INGESTION_FAILURES_SOURCE_RECORD_UIDX,
-            caseLawIngestionFailures,
-          ),
-          where: isNotNull(caseLawIngestionFailures.recordIdentity),
-        });
-    }
-  });
-};
-
 /**
  * Whether a set of failure rows reached the ledger. A timeout or a transient
  * database condition may pass on a replay; a rejection repeats on a replay
@@ -180,6 +103,8 @@ const logIngestionFailures = async (
  */
 export type FailureLedgerWrite =
   | { type: "written" }
+  | { type: "unreplayable" }
+  | { type: "ownership-unavailable" }
   | { type: "timeout"; error: TimeoutError }
   | { type: "transient"; count: number }
   | { type: "rejected" };
@@ -196,12 +121,32 @@ export const recordIngestionFailures = async ({
   failures,
   adapterKey,
 }: RecordIngestionFailuresOptions): Promise<FailureLedgerWrite> => {
+  if (failures.length === 0) {
+    return { type: "written" };
+  }
   const logged = await Result.tryPromise({
-    try: async () => await logIngestionFailures(scopedDb, failures),
+    try: async () =>
+      await scopedDb(
+        async (tx) => await writeIngestionFailureRowsTx(tx, failures),
+      ),
     catch: (cause) => cause,
   });
   if (Result.isOk(logged)) {
-    return { type: "written" };
+    const written = logged.value;
+    if (Result.isOk(written)) {
+      return written.value;
+    }
+    const { reason } = written.error;
+    switch (reason) {
+      case "owner-unavailable":
+        return { type: "ownership-unavailable" };
+      case "capture":
+      case "unaddressable":
+        return { type: "unreplayable" };
+      default:
+        reason satisfies never;
+        return panic("Unhandled failure-evidence refusal");
+    }
   }
   const { error } = logged;
   observeFailure(error, {
@@ -221,6 +166,8 @@ type ProcessRetryReason =
   (typeof PROCESS_DECISION_RETRY_REASON)[keyof typeof PROCESS_DECISION_RETRY_REASON];
 
 const RETRY_FAILURE = {
+  [PROCESS_DECISION_RETRY_REASON.FALLBACK_IDENTITY]:
+    CASE_LAW_BATCH_FAILURE.FALLBACK_IDENTITY,
   [PROCESS_DECISION_RETRY_REASON.CONTENTION]: CASE_LAW_BATCH_FAILURE.CONTENTION,
   [PROCESS_DECISION_RETRY_REASON.CORPUS_WRITE]:
     CASE_LAW_BATCH_FAILURE.PACK_WRITE,
@@ -232,6 +179,11 @@ const RETRY_FAILURE = {
 export type DecisionBatchHalt =
   | { type: "retryable"; reason: ProcessRetryReason }
   | { type: "timeout"; error: TimeoutError }
+  /**
+   * A decision raised a failure that grades transient: the record is not at
+   * fault and a retry clears it, so the batch stops and the cursor holds.
+   */
+  | { type: "transient"; tag: string; message: string }
   | { type: "insert-limit" }
   | {
       type: "failure-streak";
@@ -310,6 +262,7 @@ const settleDecision = (
           tally.corpusWriteFailures++;
           break;
         case PROCESS_DECISION_RETRY_REASON.CONTENTION:
+        case PROCESS_DECISION_RETRY_REASON.FALLBACK_IDENTITY:
           break;
         default:
           outcome.reason satisfies never;
@@ -333,13 +286,16 @@ type RejectDecisionOptions = {
   recordIdentity: string | undefined;
   sourceId: SafeId<"caseLawSource">;
   context: BatchLogContext;
+  observation: ApplyDecisionBatchOptions["observation"];
 };
 
 /**
  * A decision that raised: logged, and recorded for the ledger unless the
- * database timed out, which holds the batch instead. A transient database
- * condition is recorded the same way, and settles as transient rather than
- * as a rejection of the record.
+ * database timed out, which holds the batch instead. A failure that grades
+ * transient (a database condition, a writer of an older release refusing a
+ * generation it does not know) is recorded the same way, settles as
+ * transient rather than as a rejection of the record, and stops the batch so
+ * the cursor holds and the record is read again.
  */
 const rejectDecision = ({
   tally,
@@ -348,6 +304,7 @@ const rejectDecision = ({
   recordIdentity,
   sourceId,
   context: { adapterKey, cursor },
+  observation,
 }: RejectDecisionOptions): DecisionBatchHalt | null => {
   tally.failureStreak++;
   const tag = errorTag(error);
@@ -386,6 +343,10 @@ const rejectDecision = ({
   }
 
   tally.ledgerIndexes.push(tally.settlements.length);
+  const captured = captureFailureEvidence({
+    observation,
+    record: { type: "decision", decision: input },
+  });
   tally.failures.push({
     sourceId,
     caseNumber: input.caseNumber,
@@ -393,17 +354,27 @@ const rejectDecision = ({
     errorType: tag.slice(0, 128),
     errorMessage: message.slice(0, 2048),
     cursor,
-    ...(recordIdentity === undefined ? {} : { recordIdentity }),
+    ...ingestionFailureRecordIdentity({
+      sourceDocumentId: input.sourceDocumentId,
+      recordIdentity,
+      replayEvidence: Result.isOk(captured) ? captured.value : undefined,
+    }),
+    ...(Result.isOk(captured) ? { replayEvidence: captured.value } : {}),
   });
   tally.skipped++;
+  const transient =
+    gradeFailure(readEvidence(error), decisionNotApplied).grade === "transient";
   tally.settlements.push({
     type: "unsettled",
-    reason:
-      gradeFailure(readEvidence(error), decisionNotApplied).grade ===
-      "transient"
-        ? CASE_LAW_BATCH_FAILURE.TRANSIENT
-        : CASE_LAW_BATCH_FAILURE.RECORD_REJECTED,
+    reason: transient
+      ? CASE_LAW_BATCH_FAILURE.TRANSIENT
+      : CASE_LAW_BATCH_FAILURE.RECORD_REJECTED,
   });
+  if (transient) {
+    // Not a rejection of the record: moving past it would leave it behind a
+    // cursor that never returns, so the batch stops here and is read again.
+    return { type: "transient", tag, message };
+  }
 
   return tally.failureStreak >= MAX_CONSECUTIVE_FAILURES
     ? {
@@ -419,6 +390,7 @@ type RejectSourceRecordOptions = {
   tally: BatchTally;
   record: RejectedCaseLawIngestionRecord;
   sourceId: SafeId<"caseLawSource">;
+  observation: ApplyDecisionBatchOptions["observation"];
 };
 
 /** Persist a source rejection without reserving a decision identity. */
@@ -426,9 +398,11 @@ const rejectSourceRecord = ({
   tally,
   record,
   sourceId,
+  observation,
 }: RejectSourceRecordOptions): DecisionBatchHalt | null => {
   tally.failureStreak++;
   tally.ledgerIndexes.push(tally.settlements.length);
+  const captured = captureFailureEvidence({ record, observation });
   tally.failures.push({
     sourceId,
     caseNumber: record.primaryLabel ?? record.recordKey,
@@ -436,9 +410,12 @@ const rejectSourceRecord = ({
     errorType: record.reason,
     errorMessage: record.message,
     cursor: `${record.recordKey}:${record.recordHash}`,
-    ...(record.recordIdentity === undefined
-      ? {}
-      : { recordIdentity: record.recordIdentity }),
+    ...ingestionFailureRecordIdentity({
+      sourceDocumentId: undefined,
+      recordIdentity: record.recordIdentity ?? record.recordKey,
+      replayEvidence: Result.isOk(captured) ? captured.value : undefined,
+    }),
+    ...(Result.isOk(captured) ? { replayEvidence: captured.value } : {}),
   });
   tally.skipped++;
   tally.settlements.push({
@@ -625,7 +602,7 @@ export const applyDecisionBatch = async (
       }
       current = index;
       if (record.type === "rejected") {
-        halt = rejectSourceRecord({ tally, record, sourceId });
+        halt = rejectSourceRecord({ tally, record, sourceId, observation });
         if (halt !== null) {
           break;
         }
@@ -638,6 +615,7 @@ export const applyDecisionBatch = async (
           await processDecision(
             {
               input,
+              recordIdentity,
               sourceId,
               scopedDb,
               observedAt: observation.observedAt,
@@ -667,6 +645,7 @@ export const applyDecisionBatch = async (
             recordIdentity,
             sourceId,
             context,
+            observation,
           })
         : settleDecision(tally, processed.value);
       if (halt !== null) {
@@ -693,12 +672,22 @@ export const applyDecisionBatch = async (
     });
   }
   if (failureLedger.type !== "written") {
-    // Not recorded, so not a settled rejection either.
+    // A rejection settles only once its replay input is certified.
     for (const index of tally.ledgerIndexes) {
-      tally.settlements[index] = {
-        type: "unsettled",
-        reason: CASE_LAW_BATCH_FAILURE.FAILURE_WRITE,
-      };
+      const settlement =
+        tally.settlements.at(index) ??
+        panic("Failure ledger index has no settlement");
+      // The original transient failure remains the retry cause for an unbacked reservation.
+      if (
+        failureLedger.type !== "ownership-unavailable" ||
+        settlement.type !== "unsettled" ||
+        settlement.reason !== CASE_LAW_BATCH_FAILURE.TRANSIENT
+      ) {
+        tally.settlements[index] = {
+          type: "unsettled",
+          reason: CASE_LAW_BATCH_FAILURE.FAILURE_WRITE,
+        };
+      }
     }
   }
   return {
@@ -780,6 +769,7 @@ const stopFailure = (
   switch (stop.type) {
     case "retryable":
     case "timeout":
+    case "transient":
       // The record that stopped the batch carries the reason.
       return null;
     case "failure-streak":
@@ -877,8 +867,9 @@ type CaseLawBatchReceipt = {
 
 /**
  * Apply a prepared batch through the path a crawl page takes, and certify it
- * only once every record has settled: its row written or left unchanged, and
- * any payload it queued settled in the pack. Anything short of that is an
+ * only once every record has settled: its row written or left unchanged, or
+ * its exact input durably parked for review, and any queued payload settled
+ * in the pack. Anything short of that is an
  * error naming why; applying the same batch again converges.
  *
  * Order: an owned copy of the records admitted again, lease renewal, one

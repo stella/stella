@@ -4,10 +4,12 @@ import { panic, Result } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { extractCaseLawDecisionIdFromIdRouteParam } from "@stll/api-contract/case-law-decision-route";
+import type { CitedDecisionParagraph } from "@stll/api-contract/chat-reference-href";
 import { resolveLegalCitationLinks } from "@stll/api-contract/legal-citation-links";
 import { isPlainPrimaryClick } from "@stll/decision-reader/citation-click";
 import { sanitizeHref } from "@stll/decision-reader/sanitize-href";
 import { BidiText } from "@stll/ui/bidi-text";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import { openCaseLawDecision } from "@/components/chat/case-law-open";
@@ -19,8 +21,7 @@ import {
 } from "@/components/chat/chat-decision-citation";
 import type { ExternalSourceReference } from "@/components/chat/external-source-store";
 import { useOpenStatuteLink } from "@/components/chat/statute-open";
-import { InlinePill } from "@/components/inline-pill";
-import type { CitedDecisionParagraph } from "@/components/references/reference.logic";
+import { UNDERLINED_CITATION_CLASS_NAME } from "@/components/references/underlined-citation";
 import { useOpenDecisionTab } from "@/features/case-law/open-decision-tab";
 import { ProxyChatLink } from "@/features/chat/components/proxy-chat-link";
 import type { LinkIconSource } from "@/features/chat/components/proxy-chat-link";
@@ -41,11 +42,15 @@ type LegalCitationLinkProps = {
   anchorId?: string | undefined;
   fallback?: ReactElement;
   fullTrayLabel?: boolean | undefined;
+  /** The answer's prose just before an inline citation (`rehypeCitationLeadIn`). */
+  leadIn?: string | undefined;
 };
 
-// One chip per citation and no glyph: the citation's own text names the
-// provision, so the chip only has to read as clickable. The reader opens the
-// publisher source, so the chip never trails a second link.
+// One link per citation and no glyph: the citation's own text names the
+// provision, so inline it is the answer's words, quietly underlined, rather
+// than a box with padding that pushes away the brackets around it. The tray
+// keeps its chip. The reader opens the publisher source, so the citation
+// never trails a second link.
 const LegalCitationView = ({
   appearance,
   children,
@@ -60,19 +65,17 @@ const LegalCitationView = ({
       "focus-visible:outline-ring cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2",
       appearance === "tray"
         ? "bg-muted/50 hover:bg-muted inline-flex max-w-full shrink-0 items-center rounded-md border px-1.5 py-0.5 text-xs"
-        : "group rounded-sm",
+        : UNDERLINED_CITATION_CLASS_NAME,
     )}
     href={sanitizeHref(citation.url)}
     onClick={onClick}
   >
     {appearance === "tray" ? (
-      <BidiText as="span" className="max-w-[20ch] truncate">
+      <TruncatedText className="max-w-[20ch]" render={<BidiText as="span" />}>
         {children}
-      </BidiText>
+      </TruncatedText>
     ) : (
-      <InlinePill className="group-hover:bg-accent/80" truncate>
-        {children}
-      </InlinePill>
+      children
     )}
   </a>
 );
@@ -230,6 +233,7 @@ export const LegalCitationLink = (props: LegalCitationLinkProps) => {
     return (
       <ChatDecisionCitation
         decisionId={props.source.caseLawDecision.decisionId}
+        leadIn={props.leadIn}
         passage={passage}
         {...(props.anchorId === undefined
           ? {}
@@ -258,6 +262,7 @@ export const LegalCitationLink = (props: LegalCitationLinkProps) => {
       extractCaseLawDecisionIdFromIdRouteParam(citation.params.slug);
     const anchorId = props.anchorId ?? readUrlAnchor(citation.url);
     const decisionProps = {
+      leadIn: props.leadIn,
       passage,
       ...(anchorId === undefined
         ? {}

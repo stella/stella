@@ -22,18 +22,11 @@ import {
   DialogPopup,
   DialogTitle,
 } from "@stll/ui/dialog";
-import {
-  Frame,
-  FrameDescription,
-  FrameHeader,
-  FramePanel,
-  FrameTitle,
-} from "@stll/ui/frame";
 import { InputOTP, InputOTPGroup, InputOTPSlot } from "@stll/ui/input-otp";
 import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 
-import { CopyActionButton } from "@/components/copy-action-button";
+import { CopyControl } from "@/components/copy-control";
 import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { SecretInput } from "@/components/secret-input";
 import { linkedAccountsOptions } from "@/lib/account/queries";
@@ -52,6 +45,10 @@ import { toAuthClientError } from "@/lib/errors/auth";
 import { notifyUserError, notifyUserProblem } from "@/lib/errors/user-toast";
 import { queryView } from "@/lib/query-view.logic";
 import { downloadFile } from "@/lib/utils";
+import {
+  TWO_FACTOR_STATUS_CLASS,
+  TwoFactorCardFrame,
+} from "@/routes/_protected.settings/-components/account/two-factor-card.pending";
 
 const ERROR_CAPTURE = {
   enable: {
@@ -125,55 +122,50 @@ export const TwoFactorCard = () => {
       : undefined;
 
   return (
-    <Frame>
-      <FrameHeader>
-        <FrameTitle>{t("settings.account.twoFactor.title")}</FrameTitle>
-        <FrameDescription>
-          {t("settings.account.twoFactor.description")}
-        </FrameDescription>
-      </FrameHeader>
-      <FramePanel>
-        <div className="flex items-center justify-between gap-4 p-4">
-          <span
-            className={cn(
-              enabled
-                ? "bg-success/16 text-success-foreground inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium"
-                : "bg-muted text-muted-foreground inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium",
-            )}
+    <TwoFactorCardFrame
+      actions={
+        <>
+          {enabled && (
+            <Button
+              onClick={() => setIsRegenerateOpen(true)}
+              size="sm"
+              variant="outline"
+            >
+              {t("settings.account.twoFactor.regenerateBackupCodes")}
+            </Button>
+          )}
+          <Button
+            onClick={() => {
+              if (enabled) {
+                setIsDisableOpen(true);
+                return;
+              }
+              setIsEnableOpen(true);
+            }}
+            size="sm"
+            variant={enabled ? "destructive" : "default"}
           >
             {enabled
-              ? t("settings.account.twoFactor.enabledStatus")
-              : t("settings.account.twoFactor.disabledStatus")}
-          </span>
-          <div className="flex gap-2">
-            {enabled && (
-              <Button
-                onClick={() => setIsRegenerateOpen(true)}
-                size="sm"
-                variant="outline"
-              >
-                {t("settings.account.twoFactor.regenerateBackupCodes")}
-              </Button>
-            )}
-            <Button
-              onClick={() => {
-                if (enabled) {
-                  setIsDisableOpen(true);
-                  return;
-                }
-                setIsEnableOpen(true);
-              }}
-              size="sm"
-              variant={enabled ? "destructive" : "default"}
-            >
-              {enabled
-                ? t("settings.account.twoFactor.disable")
-                : t("settings.account.twoFactor.enable")}
-            </Button>
-          </div>
-        </div>
-      </FramePanel>
-
+              ? t("settings.account.twoFactor.disable")
+              : t("settings.account.twoFactor.enable")}
+          </Button>
+        </>
+      }
+      status={
+        <span
+          className={cn(
+            TWO_FACTOR_STATUS_CLASS,
+            enabled
+              ? "bg-success/16 text-success-foreground"
+              : "bg-muted text-muted-foreground",
+          )}
+        >
+          {enabled
+            ? t("settings.account.twoFactor.enabledStatus")
+            : t("settings.account.twoFactor.disabledStatus")}
+        </span>
+      }
+    >
       <EnableTwoFactorDialog
         queryFeedback={
           <>
@@ -199,7 +191,7 @@ export const TwoFactorCard = () => {
         open={isRegenerateOpen}
         requiresPassword={requiresPassword}
       />
-    </Frame>
+    </TwoFactorCardFrame>
   );
 };
 
@@ -299,7 +291,7 @@ const BackupCodesList = ({ codes }: { codes: readonly string[] }) => {
         ))}
       </div>
       <div className="flex gap-2">
-        <CopyActionButton
+        <CopyControl
           label={t("settings.account.twoFactor.copyAllCodes")}
           size="sm"
           text={codes.join("\n")}

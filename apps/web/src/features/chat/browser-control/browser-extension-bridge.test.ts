@@ -1,4 +1,6 @@
 import { afterEach, beforeEach, describe, expect, jest, test } from "bun:test";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 import {
   BROWSER_CONTROL_ERROR_CODE,
@@ -20,6 +22,7 @@ import {
   BROWSER_APPROVAL_MODE,
   setBrowserApprovalMode,
 } from "./browser-approval-mode";
+import { listenForBrowserExtensionAnnouncement } from "./browser-extension-announcement";
 import {
   BROWSER_EXTENSION_ANNOUNCEMENT_DEADLINE_MS,
   browserExtensionSupport,
@@ -49,7 +52,10 @@ type FakeWindow = {
   location: { origin: string };
   posted: BrowserExtensionRequest[];
   postMessage: (message: BrowserExtensionRequest) => void;
-  removeEventListener: (type: string) => void;
+  removeEventListener: (
+    type: string,
+    listener: (event: unknown) => void,
+  ) => void;
   sessionStorage: Pick<Storage, "getItem" | "setItem">;
 };
 
@@ -58,7 +64,7 @@ const storedValues = new Map<string, string>();
 
 let previousWindow: PropertyDescriptor | undefined;
 let previousNavigator: PropertyDescriptor | undefined;
-let messageListener: ((event: unknown) => void) | null = null;
+const messageListeners = new Set<(event: unknown) => void>();
 let fakeWindow: FakeWindow;
 let unmount: (() => void) | null = null;
 
@@ -72,7 +78,7 @@ beforeEach(() => {
   fakeWindow = {
     addEventListener: (type, listener) => {
       if (type === "message") {
-        messageListener = listener;
+        messageListeners.add(listener);
       }
     },
     location: { origin: ORIGIN },
@@ -80,9 +86,9 @@ beforeEach(() => {
     postMessage: (message) => {
       fakeWindow.posted.push(message);
     },
-    removeEventListener: (type) => {
+    removeEventListener: (type, listener) => {
       if (type === "message") {
-        messageListener = null;
+        messageListeners.delete(listener);
       }
     },
     sessionStorage: {
@@ -115,7 +121,9 @@ afterEach(() => {
 });
 
 const deliver = (data: unknown) => {
-  messageListener?.({ data, origin: ORIGIN, source: fakeWindow });
+  for (const listener of messageListeners) {
+    listener({ data, origin: ORIGIN, source: fakeWindow });
+  }
 };
 
 const report = (
@@ -326,6 +334,89 @@ describe("live browser extension state", () => {
     expect(getBrowserExtensionState().status).toBe("connected");
   });
 
+  test.each([
+    {
+      side: "an older extension",
+      version: BROWSER_CONTROL_PROTOCOL_VERSION - 1,
+      status: "extension-outdated",
+    },
+    {
+      side: "a newer extension",
+      version: BROWSER_CONTROL_PROTOCOL_VERSION + 1,
+      status: "stella-outdated",
+    },
+  ])(
+    "$side that announced itself before the bridge mounted is not taken for missing",
+    ({ status, version }) => {
+      jest.useFakeTimers();
+      const stopListening = listenForBrowserExtensionAnnouncement();
+      try {
+        // The content script loads before the app shell mounts the bridge,
+        // and ignores this tab's pings because their version differs.
+        deliver({
+          allSitesGranted: false,
+          protocolVersion: version,
+          requestId: "extension-ready",
+          source: BROWSER_EXTENSION_MESSAGE_SOURCE.extension,
+          type: "pong",
+        });
+        unmount = mountBrowserExtensionBridge();
+        jest.advanceTimersByTime(BROWSER_EXTENSION_ANNOUNCEMENT_DEADLINE_MS);
+        expect(getBrowserExtensionState().status).toBe(status);
+      } finally {
+        stopListening();
+      }
+    },
+  );
+
+  test("an announcement on this protocol heard before mount waits for a live answer", () => {
+    jest.useFakeTimers();
+    const stopListening = listenForBrowserExtensionAnnouncement();
+    try {
+      deliver({
+        allSitesGranted: false,
+        controlledTabId: null,
+        controllerId: null,
+        protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
+        requestId: "extension-ready",
+        source: BROWSER_EXTENSION_MESSAGE_SOURCE.extension,
+        type: "pong",
+      });
+      fakeWindow.posted = [];
+      unmount = mountBrowserExtensionBridge();
+      // Only the mount ping: the extension on this version answers it.
+      expect(fakeWindow.posted.map(({ type }) => type)).toEqual(["ping"]);
+      expect(getBrowserExtensionState().status).toBe("checking");
+      report(null, null, false);
+      jest.advanceTimersByTime(BROWSER_EXTENSION_ANNOUNCEMENT_DEADLINE_MS);
+      expect(getBrowserExtensionState().status).toBe("needs-site-access");
+    } finally {
+      stopListening();
+    }
+  });
+
+  test("an announcement on this protocol with no live answer after mount is not installed", () => {
+    jest.useFakeTimers();
+    const stopListening = listenForBrowserExtensionAnnouncement();
+    try {
+      // Disabled after it announced itself: nothing answers the mount ping.
+      deliver({
+        allSitesGranted: false,
+        controlledTabId: null,
+        controllerId: null,
+        protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
+        requestId: "extension-ready",
+        source: BROWSER_EXTENSION_MESSAGE_SOURCE.extension,
+        type: "pong",
+      });
+      unmount = mountBrowserExtensionBridge();
+      jest.advanceTimersByTime(BROWSER_EXTENSION_ANNOUNCEMENT_DEADLINE_MS);
+      expect(getBrowserExtensionState().status).toBe("not-installed");
+    } finally {
+      stopListening();
+    }
+  });
+
   test("a message from a stella page is not taken for an extension", () => {
     jest.useFakeTimers();
     unmount = mountBrowserExtensionBridge();
@@ -403,14 +494,15 @@ const snapshotResult = (tabId: number, revision: string) =>
     snapshot: {
       contentTrust: "untrusted-web-content",
       elements: [],
+      elementsLeftOut: false,
+      facts: { meta: [] },
       revision,
       tabId,
       tabs: [{ active: true, tabId, url: "https://example.com/" }],
       text: "",
-      textOffset: 0,
-      textTotalChars: 0,
       title: "Example",
       url: "https://example.com/",
+      window: { cursor: "r1.window", fromPercent: 0, toPercent: 100 },
     },
     status: "success",
   }) satisfies BrowserControlResult;
@@ -674,7 +766,7 @@ describe("the bridge outlives every chat surface", () => {
 
 describe("the bridge mount site", () => {
   test("only the app frame host mounts the bridge", async () => {
-    const root = new URL("../../..", import.meta.url).pathname;
+    const root = fileURLToPath(new URL("../../..", import.meta.url));
     const mounters: string[] = [];
     for await (const file of new Bun.Glob("**/*.{ts,tsx}").scan(root)) {
       if (
@@ -684,7 +776,7 @@ describe("the bridge mount site", () => {
         continue;
       }
       if (
-        (await Bun.file(`${root}${file}`).text()).includes(
+        (await Bun.file(path.join(root, file)).text()).includes(
           "mountBrowserExtensionBridge",
         )
       ) {

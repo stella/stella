@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
+import { mobileClientMetadataUrl } from "@stll/api-contract/mobile-client";
+import { outlookClientMetadataUrl } from "@stll/api-contract/outlook-client";
 import { RUNTIME_MODE } from "@stll/runtime-mode";
 
 import { ownNativeClientResourceLinks } from "@/api/lib/auth/oauth-own-client-links";
@@ -9,6 +11,7 @@ import {
   getBetterAuthOAuthResources,
   getDefaultClientResourceIdentifiers,
   isApiResourceClient,
+  isMobileAppClient,
 } from "@/api/lib/oauth-resource-policy";
 import { getMcpBaseUrl } from "@/api/mcp/constants";
 import { setRuntimeModeForTesting } from "@/api/runtime-mode";
@@ -52,6 +55,31 @@ describe("which resources a client registration reaches", () => {
     // A local server has no document client; the app registers there.
     expect(
       inMode(RUNTIME_MODE.open, () => isApiResourceClient("registered-client")),
+    ).toBe(true);
+  });
+
+  test("only the phone app's own client counts as the phone app, outside local development", () => {
+    const origin = getMcpBaseUrl();
+    const mobile = mobileClientMetadataUrl(origin);
+    const outlook = outlookClientMetadataUrl(origin);
+    if (mobile !== undefined) {
+      expect(inMode(RUNTIME_MODE.strict, () => isMobileAppClient(mobile))).toBe(
+        true,
+      );
+    }
+    if (outlook !== undefined) {
+      expect(
+        inMode(RUNTIME_MODE.strict, () => isMobileAppClient(outlook)),
+      ).toBe(false);
+    }
+    expect(
+      inMode(RUNTIME_MODE.strict, () =>
+        isMobileAppClient("https://client.example.test/metadata.json"),
+      ),
+    ).toBe(false);
+    // A local server has no document client; the app registers there.
+    expect(
+      inMode(RUNTIME_MODE.open, () => isMobileAppClient("registered-client")),
     ).toBe(true);
   });
 

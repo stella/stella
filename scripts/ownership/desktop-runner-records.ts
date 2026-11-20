@@ -25,7 +25,12 @@ export default {
       {
         path: "apps/api/src/lib/member-assignment-offboarding.ts",
         reason:
-          "Deletes the member's runners, and with them their runs, during organization membership removal.",
+          "Deletes the member's runs and runners during organization membership removal.",
+      },
+      {
+        path: "apps/api/src/lib/account-deletion-steps.ts",
+        reason:
+          "Deletes the account's runs and runners in every organization during account deletion.",
       },
       {
         path: "apps/api/src/lib/auth-artifacts.postgres.test.ts",

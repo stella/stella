@@ -1,0 +1,11 @@
+{
+  "type": "parser",
+  "name": "CZ_NS_SBIRKA",
+  "key": "cz-ns-sbirka",
+  "parserVersion": 2,
+  "sourceFingerprintVersion": 0,
+  "scope": {
+    "type": "all",
+    "reason": "Recognize split and complete report editions from their stored detail HTML; earlier rows do not store the edition layout."
+  }
+}

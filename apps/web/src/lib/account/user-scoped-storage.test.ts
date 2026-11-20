@@ -89,7 +89,7 @@ describe("pruneUserStorage", () => {
     local.setItem("stella-search-recent-files:org-1::u:user-b", "[]");
     local.setItem("stella.chat.alwaysApprovedTools:u:user-b", "[]");
     local.setItem("sidebar_pinned:u:user-b", "[]");
-    local.setItem("stella-ui-theme", "dark");
+    local.setItem("stella:chat-turn-notifications", "dark");
 
     pruneUserStorage(areas(), USER_B, USER_A);
 
@@ -99,7 +99,7 @@ describe("pruneUserStorage", () => {
       "sidebar_pinned:u:user-b",
       "stella-search-recent-searches:org-1::u:user-a",
       "stella-search-recent-searches:org-1::u:user-b",
-      "stella-ui-theme",
+      "stella:chat-turn-notifications",
     ]);
   });
 
@@ -187,14 +187,14 @@ describe("signing out", () => {
     local.setItem(userStorageKey("stella.report-exports.active"), "{}");
     local.setItem(userStorageKey("stella-search-recent-files:org-1:"), "[]");
     session.setItem(userStorageKey("stella.chat.browserApprovalMode"), "ask");
-    local.setItem("stella-ui-theme", "dark");
+    local.setItem("stella:chat-turn-notifications", "dark");
 
     releaseUserStorage(areas());
 
     expect(storageOwner()).toEqual(VISITOR);
     expect(keys(local)).toEqual([
       "law_search_history:u:user-a",
-      "stella-ui-theme",
+      "stella:chat-turn-notifications",
     ]);
     expect(keys(session)).toEqual(["stella.storage-owner"]);
     // The visitor reads only the visitor's entry.
@@ -211,14 +211,14 @@ describe("signing out", () => {
     local.setItem(userStorageKey("law_search_history"), HISTORY_A);
     local.setItem(userStorageKey("law_search_history", USER_B), HISTORY_A);
     local.setItem("sidebar_pinneduser-a", '["matter-a"]');
-    local.setItem("stella-ui-theme", "dark");
+    local.setItem("stella:chat-turn-notifications", "dark");
 
     forgetUserStorage("user-a", areas());
 
     expect(storageOwner()).toEqual(VISITOR);
     expect(keys(local)).toEqual([
       "law_search_history:u:user-b",
-      "stella-ui-theme",
+      "stella:chat-turn-notifications",
     ]);
   });
 

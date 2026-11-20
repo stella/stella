@@ -306,8 +306,9 @@ export type PropertyTool = v.InferOutput<typeof propertyToolSchema>;
  * queue, so nothing will ever pick the derivative up again and a reconciler
  * must retry it; `processing` means the worker ran and exhausted its attempts,
  * which is terminal; `too-large` means admission refused the source (bytes or
- * declared pixels over the derivative budget) before any conversion, which is
- * also terminal: the stored file is unchanged, so a retry would refuse again. Absent on rows written before the distinction existed:
+ * declared pixels) or the converted PDF exceeded the stored-document byte
+ * limit. Both are terminal: retrying the same stored file would refuse again.
+ * Absent on rows written before the distinction existed:
  * those are read as terminal, because resurrecting a genuine processing
  * failure is the more expensive mistake.
  */

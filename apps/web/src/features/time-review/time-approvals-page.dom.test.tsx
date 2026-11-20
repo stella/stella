@@ -22,8 +22,7 @@ const { myTimeEntriesKeys } =
   await import("@/lib/workspaces/queries/my-time-entries");
 const { stellaToast } = await import("@stll/ui/toast");
 const { FormattingProvider } = await import("@/i18n/formatting-context");
-const { TimeApprovalsPage } =
-  await import("@/features/time-review/time-approvals-page");
+const { TimeApprovalsPage } = await import("@/routes/-time-approvals.page");
 
 const ORGANIZATION_ID = "organization-1";
 const APPROVER_ID = "approver-1";
@@ -452,7 +451,7 @@ describe("approving time by person", () => {
     });
 
     await waitFor(() => {
-      expect(screen.queryByText("Narrative adam-1")).toBeNull();
+      expect(screen.queryByText("Narrative adam-1") === null).toBe(true);
     });
     expect(screen.queryByText("Narrative adam-3")).toBeNull();
     expect(screen.getByText("Narrative adam-2")).toBeTruthy();
@@ -497,7 +496,7 @@ describe("approving time by person", () => {
     });
 
     await waitFor(() => {
-      expect(screen.queryByText("Narrative adam-1")).toBeNull();
+      expect(screen.queryByText("Narrative adam-1") === null).toBe(true);
     });
     const refused = (await screen.findByText("Narrative adam-2")).closest("li");
     if (!(refused instanceof HTMLElement)) {

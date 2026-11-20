@@ -37,9 +37,13 @@ const withForeground = (classes: string): string =>
     ? classes
     : `text-foreground ${classes}`;
 
+/** The embedded face of one weight, for a glyph set outside every role. */
+export const sansFontFamily = (weight: TextFace["weight"]): string =>
+  SANS_FACES[weight];
+
 /** The font a role is set in, for a native control that draws its own text. */
 export const textFontFamily = (variant: TextContract["variant"]): string =>
-  SANS_FACES[TEXT_VARIANT_FACES[variant ?? "body"].weight];
+  sansFontFamily(TEXT_VARIANT_FACES[variant ?? "body"].weight);
 
 /**
  * Text in one of the design system's roles (./text.shared.ts), as the web

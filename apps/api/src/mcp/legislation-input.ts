@@ -3,12 +3,12 @@ import * as v from "valibot";
 import type { AgentInputNormalizationAnnotation } from "@stll/agent-input";
 
 import { LIMITS } from "@/api/lib/limits";
+import { isBoundTextCursor } from "@/api/mcp/bound-text-window";
 import {
   cursorInput,
   ELI_NORMALIZATION,
   nullAsAbsent,
 } from "@/api/mcp/input-schemas";
-import { isProvisionTextCursor } from "@/api/mcp/provision-text-window";
 
 export const eliInputSchema = v.pipe(
   v.string(),
@@ -30,7 +30,8 @@ export const anchorInputSchema = v.pipe(
       "the chosen consolidation. Czech e-Sbírka commonly uses par_<section>, " +
       "-odst_<paragraph>, and -pism_<letter> (par_1729, par_1729-odst_1, " +
       "par_1729-odst_2-pism_a). Subdivision anchors narrow the answer to " +
-      "that subdivision. Other publishers may use different schemes.",
+      "that subdivision. An annex also reads by number (priloha_3). " +
+      "Other publishers may use different schemes.",
   ),
 );
 
@@ -68,7 +69,7 @@ export const readProvisionHistoryArgsSchema = nullAsAbsent(
     text_cursor: cursorInput({
       description:
         "Opaque nextTextCursor from one item in the requested history page",
-      issuedBy: isProvisionTextCursor,
+      issuedBy: isBoundTextCursor,
     }),
   }),
 );

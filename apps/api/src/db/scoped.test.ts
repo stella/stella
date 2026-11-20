@@ -1,16 +1,36 @@
 import { Result, UnhandledException } from "better-result";
-import { describe, expect, it } from "bun:test";
+import { describe, expect, it, spyOn } from "bun:test";
 import { DrizzleQueryError } from "drizzle-orm";
+import type { SQL, SQLWrapper } from "drizzle-orm";
+import { PgDialect } from "drizzle-orm/pg-core";
 
-import { createSafeDb, markRlsDatabase } from "@/api/db/scoped";
+import { createTestClock } from "@stll/test-kit";
+import type { TestClock } from "@stll/test-kit";
+
+import { WORKSPACE_ACCESS_MODE } from "@/api/db/rls";
+import {
+  createExplicitSafeDb,
+  createExplicitScopedDb,
+  createMembershipScopedDb,
+  createSafeDb,
+  markRlsDatabase,
+  reportOverDeadline,
+  setScopedTransactionSettings,
+  TRANSACTION_DEADLINE,
+  TRANSACTION_DEADLINE_MODE,
+} from "@/api/db/scoped";
+import type { TransactionDeadline } from "@/api/db/scoped";
 import { createSafeId } from "@/api/lib/branded-types";
 import {
   DatabaseError,
   DatabaseRlsError,
 } from "@/api/lib/errors/tagged-errors";
 import { errorSystemFields } from "@/api/lib/errors/utils";
+import { withExceptionScope } from "@/api/lib/observability/exception-scope";
+import { logger } from "@/api/lib/observability/logger";
 import { PG_ERROR } from "@/api/lib/pg-error";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 /**
  * A transaction that fails before its callback runs.
@@ -110,5 +130,201 @@ describe("createSafeDb failure classification", () => {
     const error = await failedTransaction(new Error("not a database failure"));
 
     expect(UnhandledException.is(error)).toBe(true);
+  });
+});
+
+type SettingsTransaction = Parameters<
+  typeof setScopedTransactionSettings
+>[0]["tx"];
+
+describe("scoped transaction deadline", () => {
+  const dialect = new PgDialect();
+  /** A transaction that records the settings statements it is sent. */
+  const recordingTransaction = () => {
+    const statements: string[] = [];
+    const tx = {
+      execute: async (query: SQL) => {
+        statements.push(dialect.sqlToQuery(query).sql);
+        return await Promise.resolve([]);
+      },
+    };
+    return { statements, tx: asTestRaw<SettingsTransaction>(tx) };
+  };
+  const settingsFor = async (deadline?: TransactionDeadline) => {
+    const { statements, tx } = recordingTransaction();
+    await setScopedTransactionSettings({
+      tx,
+      organizationId: mintAuthProviderId<"organization">(),
+      userId: mintAuthProviderId<"user">(),
+      workspaceScope: {
+        type: WORKSPACE_ACCESS_MODE.explicit,
+        workspaceIds: [createSafeId<"workspace">()],
+      },
+      featureIds: [],
+      ...(deadline === undefined ? {} : { deadline }),
+    });
+    return statements;
+  };
+
+  const enforced: TransactionDeadline = {
+    timeoutMs: TRANSACTION_DEADLINE.request.timeoutMs, // timeout under test
+    mode: TRANSACTION_DEADLINE_MODE.enforce,
+  };
+
+  it("sets an enforced deadline in the same statement as its scope", async () => {
+    const statements = await settingsFor(enforced);
+    expect(statements).toHaveLength(1);
+    expect(statements[0]).toContain("set_config('role'");
+    expect(statements[0]).toContain("set_config('transaction_timeout'");
+  });
+
+  it("only observes a request's deadline, and sets none for background work", async () => {
+    for (const deadline of [TRANSACTION_DEADLINE.request, undefined]) {
+      const statements = await settingsFor(deadline);
+      expect(statements.join("\n")).not.toContain("transaction_timeout");
+    }
+  });
+
+  it("reports a transaction that ran past its deadline, and nothing else", () => {
+    const warn = spyOn(logger, "warn").mockImplementation(() => undefined);
+    try {
+      const { timeoutMs } = TRANSACTION_DEADLINE.request;
+      reportOverDeadline({
+        deadline: undefined,
+        elapsedMs: timeoutMs * 2,
+        connectionWaitMs: 0,
+      });
+      reportOverDeadline({
+        deadline: TRANSACTION_DEADLINE.request,
+        elapsedMs: timeoutMs,
+        connectionWaitMs: 0,
+      });
+      expect(warn).not.toHaveBeenCalled();
+      reportOverDeadline({
+        deadline: TRANSACTION_DEADLINE.request,
+        elapsedMs: timeoutMs + 1,
+        connectionWaitMs: 0,
+      });
+      expect(warn).toHaveBeenCalledTimes(1);
+      expect(warn.mock.calls[0]?.[0]).toBe(
+        "database.transaction_over_deadline",
+      );
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it("names the route the request pipeline declared", async () => {
+    const warn = spyOn(logger, "warn").mockImplementation(() => undefined);
+    try {
+      const { timeoutMs } = TRANSACTION_DEADLINE.request;
+      await withExceptionScope(
+        {
+          type: "request",
+          method: "POST",
+          routeTemplate: "/api/v1/workspaces/:workspaceId/documents",
+        },
+        async () => {
+          reportOverDeadline({
+            deadline: TRANSACTION_DEADLINE.request,
+            elapsedMs: timeoutMs + 1,
+            connectionWaitMs: 0,
+          });
+          await Promise.resolve();
+        },
+      );
+      expect(warn.mock.calls[0]?.[1]).toMatchObject({
+        "http.method": "POST",
+        "http.route": "/api/v1/workspaces/:workspaceId/documents",
+      });
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  /**
+   * A pool that hands over its connection after `connectionWaitMs` on `clock`,
+   * as Bun does: the transaction callback runs only once a connection is free.
+   */
+  const pooledDatabase = (clock: TestClock, connectionWaitMs: number) => {
+    const params: unknown[] = [];
+    const tx = {
+      execute: async (query: SQLWrapper | string) => {
+        if (typeof query !== "string") {
+          params.push(...dialect.sqlToQuery(query.getSQL()).params);
+        }
+        return await Promise.resolve([]);
+      },
+    };
+    const database = markRlsDatabase({
+      transaction: async <TResult>(
+        fn: (open: typeof tx) => Promise<TResult>,
+      ) => {
+        await clock.advance(connectionWaitMs);
+        return await fn(tx);
+      },
+    });
+    return { database, params };
+  };
+  const observedOn = (clock: TestClock): TransactionDeadline => ({
+    ...TRANSACTION_DEADLINE.request,
+    clock,
+  });
+
+  it("measures from the transaction's entry, not from the wait for a connection", async () => {
+    const warn = spyOn(logger, "warn").mockImplementation(() => undefined);
+    try {
+      const clock = createTestClock();
+      const { timeoutMs } = TRANSACTION_DEADLINE.request;
+      const { database } = pooledDatabase(clock, timeoutMs * 2);
+      const scopedDb = createMembershipScopedDb(database, {
+        organizationId: mintAuthProviderId<"organization">(),
+        serverValidatedWorkspaceIds: [],
+        userId: mintAuthProviderId<"user">(),
+        deadline: observedOn(clock),
+      });
+      await scopedDb(async () => {
+        await clock.advance(1);
+      });
+      expect(warn).not.toHaveBeenCalled();
+
+      await scopedDb(async () => {
+        await clock.advance(timeoutMs + 1);
+      });
+      expect(warn).toHaveBeenCalledTimes(1);
+      expect(warn.mock.calls[0]?.[1]).toMatchObject({
+        "db.transaction.duration_ms": timeoutMs + 1,
+        "db.transaction.connection_wait_ms": timeoutMs * 2,
+      });
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it("observes an explicit workspace scope under the deadline it is given", async () => {
+    const warn = spyOn(logger, "warn").mockImplementation(() => undefined);
+    try {
+      const clock = createTestClock();
+      const { timeoutMs } = TRANSACTION_DEADLINE.request;
+      const { database, params } = pooledDatabase(clock, 0);
+      const workspaceId = createSafeId<"workspace">();
+      const identity = {
+        workspaceIds: [workspaceId],
+        organizationId: mintAuthProviderId<"organization">(),
+        userId: mintAuthProviderId<"user">(),
+        deadline: observedOn(clock),
+      };
+      const overrun = async () => {
+        await clock.advance(timeoutMs + 1);
+      };
+      await createExplicitScopedDb(database, identity)(overrun);
+      const safe = await createExplicitSafeDb(database, identity)(overrun);
+      expect(Result.isOk(safe)).toBe(true);
+      expect(warn).toHaveBeenCalledTimes(2);
+      expect(params).toContain(WORKSPACE_ACCESS_MODE.explicit);
+      expect(params).toContain(`{${workspaceId}}`);
+    } finally {
+      warn.mockRestore();
+    }
   });
 });

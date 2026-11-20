@@ -35,6 +35,7 @@ import {
   SelectValue,
 } from "@stll/ui/select";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "@stll/ui/tooltip";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import { subscribeDesktopEvent } from "../shared/desktop-events";
@@ -522,7 +523,13 @@ const RichTextArea = memo(
   forwardRef<HTMLDivElement, RichTextAreaProps>(
     ({ item, label, onInput }, ref) => {
       const plainTextLines = item.plainText.split("\n");
-      let lineStart = 0;
+      // Each line's offset in the text keys it; computed before render so no
+      // counter is mutated while the lines render.
+      const lineStarts = plainTextLines.map((_, index) =>
+        plainTextLines
+          .slice(0, index)
+          .reduce((offset, previous) => offset + previous.length + 1, 0),
+      );
       const content =
         item.type === "formattedText"
           ? {
@@ -530,10 +537,9 @@ const RichTextArea = memo(
               dangerouslySetInnerHTML: { __html: item.html },
             }
           : {
-              children: plainTextLines.map((line) => {
-                const key = lineStart;
-                const needsLineBreak = lineStart > 0;
-                lineStart += line.length + 1;
+              children: plainTextLines.map((line, index) => {
+                const key = lineStarts[index] ?? 0;
+                const needsLineBreak = key > 0;
                 return (
                   <Fragment key={key}>
                     {needsLineBreak ? <br /> : null}
@@ -956,9 +962,11 @@ const ClipboardEditor = ({ onIdle }: ClipboardEditorProps) => {
         data-tauri-drag-region
       >
         <div className="min-w-0 flex-1" data-tauri-drag-region>
-          <h1 className="truncate text-sm font-semibold" data-tauri-drag-region>
-            {t("editItem")}
-          </h1>
+          <TruncatedText
+            className="text-sm font-semibold"
+            render={<h1 data-tauri-drag-region>{t("editItem")}</h1>}
+            tooltip={t("editItem")}
+          />
           {sourceName ? (
             // The source line truncates in the narrow header; the tooltip
             // names the app and page in full.
@@ -966,7 +974,7 @@ const ClipboardEditor = ({ onIdle }: ClipboardEditorProps) => {
               <TooltipTrigger
                 render={
                   <p
-                    className="text-muted-foreground flex min-w-0 items-center gap-1.5 truncate text-xs"
+                    className="text-muted-foreground flex min-w-0 items-center gap-1.5 text-xs"
                     data-tauri-drag-region
                   />
                 }
@@ -986,9 +994,9 @@ const ClipboardEditor = ({ onIdle }: ClipboardEditorProps) => {
                     }}
                   />
                 )}
-                <span className="truncate" dir="auto">
+                <TruncatedText dir="auto" hint={false}>
                   {sourceName}
-                </span>
+                </TruncatedText>
               </TooltipTrigger>
               <TooltipPopup>{sourceTitle}</TooltipPopup>
             </Tooltip>
@@ -1046,6 +1054,7 @@ const ClipboardEditor = ({ onIdle }: ClipboardEditorProps) => {
               }
             }}
             placeholder={clipboardUntitledName(item, {
+              dictation: t("dictation"),
               image: t("image"),
               text: t("unnamedClip"),
             })}

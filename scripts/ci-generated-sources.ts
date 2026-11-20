@@ -1,6 +1,7 @@
 import { panic } from "better-result";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 import { childExitStatus } from "../packages/scripts/src/child-exit-status";
 import { ciGeneratedFiles } from "../packages/scripts/src/generated-file-inventory";
@@ -16,7 +17,7 @@ import {
 import { checkMcpGeneratedTracking } from "./check-mcp-generated-tracking";
 import { CI_GENERATION_COMMANDS } from "./generated-files";
 
-const root = new URL("../", import.meta.url).pathname;
+const root = fileURLToPath(new URL("../", import.meta.url));
 
 const run = (command: readonly string[]) => {
   const result = Bun.spawnSync([...command], {

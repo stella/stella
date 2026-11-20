@@ -1,5 +1,219 @@
 # @stll/cli
 
+## 7.1.0
+
+### Minor Changes
+
+- [#7360](https://github.com/stella/stella/pull/7360) [`f0fd35c`](https://github.com/stella/stella/commit/f0fd35cdd1f2ea9dd4f7432b16945c944e86339f) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Email an issued invoice as a secure link with `invoices sends-create`, list its sends with `invoices sends-list` and withdraw a link with `invoices sends-revoke`. Seller profiles take an `email` that receives the replies.
+
+- [#7613](https://github.com/stella/stella/pull/7613) [`a739024`](https://github.com/stella/stella/commit/a739024d926e4f530d1e397518d20d6ae87c3867) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add standalone native installation, checksum-verified self updates, and installation diagnostics. Check the server protocol and minimum CLI version before API operations, using a fresh cached contract when available.
+
+### Patch Changes
+
+- [#8854](https://github.com/stella/stella/pull/8854) [`af74f9f`](https://github.com/stella/stella/commit/af74f9f00b5503a2d90983ab006af94c7e9eced7) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Statute `amendedBy` and `pendingChanges` show an instruction the publisher restates under several links once, naming every link in `duplicatePublisherIds`. Provision reads document `governingText`, `governingTextTruncated` and reading an annex by its number.
+
+- [#8822](https://github.com/stella/stella/pull/8822) [`02e421a`](https://github.com/stella/stella/commit/02e421ae319b02973c148ee6e18dcb084c869bab) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `search_case_law` says which query words each decision holds, how many decisions hold each word when few hold them all, and gives a cursor that runs a phrasing again when its partial matches went unread.
+
+- [#8851](https://github.com/stella/stella/pull/8851) [`3aa0b3e`](https://github.com/stella/stella/commit/3aa0b3ec0b76d1240a5024c03071ce3d233771de) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `dictation.transcribe` describes its optional `labels` field: sent as `1` only when the client showed which models leave the organization's region or keep the audio.
+
+- [#7360](https://github.com/stella/stella/pull/7360) [`f0fd35c`](https://github.com/stella/stella/commit/f0fd35cdd1f2ea9dd4f7432b16945c944e86339f) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Sending invoice links requires the organization's invoice-links invitation grant and time-billing access. History and revocation remain available through normal invoice access without an invitation or personal enrolment.
+
+- [#8835](https://github.com/stella/stella/pull/8835) [`693e387`](https://github.com/stella/stella/commit/693e387fe6c57ac4075dd1aa052c78e4dae65101) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `read_statute_provisions` and `read_provision_history` return `governingText` beside a subdivision's text: the lead-in and closing wording of every unit it is nested in, so a letter is never read without the sentence that qualifies it.
+
+- [#8814](https://github.com/stella/stella/pull/8814) [`85406ec`](https://github.com/stella/stella/commit/85406ec1d179cca1acd00118247f5fbcb3935c8a) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `resolve_case_law_decision` answers a decision it does not find with what the reconciled publisher listings say about it.
+
+- [#8803](https://github.com/stella/stella/pull/8803) [`d1159d8`](https://github.com/stella/stella/commit/d1159d8d2f578700fda1bf7c45e6126d088176bd) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `save_contact` describes its registration, tax and VAT fields as a business's numbers.
+
+- [#8836](https://github.com/stella/stella/pull/8836) [`e96cbe2`](https://github.com/stella/stella/commit/e96cbe2cda938d3a4e364f899bc5ff86136c1e31) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Statute reads accept an annex by its number in any spelling (`priloha_3`, `příloha č. 3`), `read_statute` keeps every annex in a bounded outline, and a missing annex lists the annex anchors the consolidation carries.
+
+## 7.0.0
+
+### Major Changes
+
+- [#8799](https://github.com/stella/stella/pull/8799) [`19eceaf`](https://github.com/stella/stella/commit/19eceaf2e74281a6883c86b1236428763841270b) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Require `expectedUpdatedAt` when replacing a workflow definition with `flows.update`. Read the definition with `flows.get` and send its `updatedAt` value with the edited fields. A stale version returns `version_conflict` without changing the workflow; read the current definition and reconcile the intended changes before submitting again. Successful updates return the new `updatedAt` value.
+
+### Minor Changes
+
+- [#5966](https://github.com/stella/stella/pull/5966) [`fc38c10`](https://github.com/stella/stella/commit/fc38c10f9175cc88326b65878c1dea072039768a) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Case-law coverage reports publisher slice counts, stored and text counts, and conservative completeness verdicts for each source and country.
+
+### Patch Changes
+
+- [#7269](https://github.com/stella/stella/pull/7269) [`604cc21`](https://github.com/stella/stella/commit/604cc21ae47f2738c83c86c6f3bdae0be4194a6b) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Include procedural review evidence alongside case-law citation results.
+
+- [#8701](https://github.com/stella/stella/pull/8701) [`d30260f`](https://github.com/stella/stella/commit/d30260fb5afb4282a8a5b175639e0935783db83d) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Enforce the shared 500-character search query limit in contact list and search capability schemas.
+
+- [#5572](https://github.com/stella/stella/pull/5572) [`fe13937`](https://github.com/stella/stella/commit/fe1393702ae233ad52d6bd63b7e3a0602baf6909) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Document citation polarity evidence and the cited opinion part in case-law citation reads.
+
+- [#8770](https://github.com/stella/stella/pull/8770) [`334df25`](https://github.com/stella/stella/commit/334df2523710c3102c0088075a751c3a2423cefa) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Apply the existing 500-character search query limit to clause searches in the generated capability contract.
+
+- [#8697](https://github.com/stella/stella/pull/8697) [`3505436`](https://github.com/stella/stella/commit/3505436363a468d70e34faa5d8511a31e6cb80a9) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `dictation transcribe` accepts the direct ElevenLabs Scribe v3 model id.
+
+- [#8679](https://github.com/stella/stella/pull/8679) [`e5dacf4`](https://github.com/stella/stella/commit/e5dacf41a6d171397eb8b81fcd69385d41767005) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `dictation transcribe` accepts the refreshed transcription model ids.
+
+- [#8662](https://github.com/stella/stella/pull/8662) [`b1ce389`](https://github.com/stella/stella/commit/b1ce389d73729179bd174166e78499310331479e) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add `OutcomeScreen` (`@stll/ui/outcome-screen`), the one screen a finished flow shows. The CLI's browser sign-in page is now rendered from it.
+
+- [#8706](https://github.com/stella/stella/pull/8706) [`6359411`](https://github.com/stella/stella/commit/6359411768fbe352d04d63ead41386de9e70137b) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `OutcomeScreen` lists what a flow connected (`details`) and can offer a command to run (`command`). The CLI's browser sign-in page names the signed-in account and organization, and a failed sign-in shows `stella auth login` to try again.
+
+- [#7598](https://github.com/stella/stella/pull/7598) [`d2b14cc`](https://github.com/stella/stella/commit/d2b14ccccc1164d52d47cd3a5a4c69daf4c4e378) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Generate the packaged capability manifests from API sources during CLI builds and package preparation.
+
+## 6.12.1
+
+### Patch Changes
+
+- [#7365](https://github.com/stella/stella/pull/7365) [`5613d6a`](https://github.com/stella/stella/commit/5613d6aa3e4c87ff5fcf2fb408db801df5d89909) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Require billing visibility for monetary operations and preserve hidden rates as null in time records.
+
+- [#8617](https://github.com/stella/stella/pull/8617) [`3b7aa79`](https://github.com/stella/stella/commit/3b7aa79fba704ac50faaeffd05c02afd13855efc) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Preserve own keys when building command trees, flags, schema examples and output summaries. Read nested input and output fields only from their owning records.
+
+- [#8638](https://github.com/stella/stella/pull/8638) [`1dd60fc`](https://github.com/stella/stella/commit/1dd60fc04d3aa1de8a17d6d7d61a0a8ec1cc33f9) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Support idempotent replay when attaching a source to a list item.
+- Updated dependencies []:
+  - @stll/agent-input@0.4.5
+
+## 6.12.0
+
+### Minor Changes
+
+- [#7358](https://github.com/stella/stella/pull/7358) [`4a50e24`](https://github.com/stella/stella/commit/4a50e2429f7c746aa946d46f28654e949f878b2d) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add `stella case-law verify-quote` to check exact quotations, inspect altered passages, and distinguish unreadable decision text.
+
+### Patch Changes
+
+- [#8445](https://github.com/stella/stella/pull/8445) [`1828586`](https://github.com/stella/stella/commit/18285864db463bcf164708623026aef0a7155802) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `lists.verifications.get` claims carry `decider`: who decided the verdict, the generative model (with the reason when the organization's decision model was asked and its answer was not used) or the decision model, with its model, confidence and the state it replaced.
+
+- [#8444](https://github.com/stella/stella/pull/8444) [`6ed69bc`](https://github.com/stella/stella/commit/6ed69bcafbae7e57a4e399c3641cd0ca85751d52) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Document uploads accept files up to 200 MiB, the server's document limit, read from the API contract instead of a copy.
+
+- [#7627](https://github.com/stella/stella/pull/7627) [`dd44086`](https://github.com/stella/stella/commit/dd4408646b7c5ae22763524521ce16e1add29a4d) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Preserve legal_hold_active refusals, map them to conflict exit code 10, and print each hold's scope beside its issue line.
+
+- [#8389](https://github.com/stella/stella/pull/8389) [`a8999a1`](https://github.com/stella/stella/commit/a8999a1d5cb7cd03b2f9f454b8021fa5e1982e27) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `lists.verifications.get` claims carry `assertedOn`: the date the claim's words give, as `dated` with a `day`, `month` or `year` precision (stored as its first day) and its `source` (the words, or the grader when they name no complete date), or `none`. A re-check records its own reading.
+
+- [#8374](https://github.com/stella/stella/pull/8374) [`2a93e95`](https://github.com/stella/stella/commit/2a93e958ddf2070b50e8723690effbd9704a2cf9) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add `lists.verifications.claim-rechecks.bulk.create`: checks several claims of one verification again in one request, each under its own request key, and reports each claim's outcome. `lists.verifications.get` claims carry `staleness`, the reasons a claim's grade may no longer stand on the list as it is now.
+
+- [#8380](https://github.com/stella/stella/pull/8380) [`f2ea91d`](https://github.com/stella/stella/commit/f2ea91dbe10a7d8694e0bf72766ad094c5d90961) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Three read capabilities query a matter's graph of verified claims, list facts and the documents the facts come from. `lists.graph.nodes.list` finds facts, claims and documents by their words. `lists.graph.neighbours.list` reads one node's links, with a summary by kind, stance and decision and a page of edges. `lists.graph.paths.list` follows links from a node for up to three hops. Every edge comes with the exact text it rests on, who produced it and its decision, and each tool filters by edge kind, stance or decision.
+
+- [#8441](https://github.com/stella/stella/pull/8441) [`a188bba`](https://github.com/stella/stella/commit/a188bba1f054cebf94c8d66505e617c382db07ca) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `lists.verifications.graph.get` gives each claim the printed number of the paragraph it sits in (`paragraph`) and each source link the source's `quote`; `lists.verifications.get` gives each claim its `paragraph`.
+
+- [#8441](https://github.com/stella/stella/pull/8441) [`a188bba`](https://github.com/stella/stella/commit/a188bba1f054cebf94c8d66505e617c382db07ca) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add `lists.verifications.graph.get`: reads the verification graph of one list, a page of verified documents at a time: their claims with the verdict as reviewers see it, the list's facts (held, tier, off the list), the documents those facts come from, each claim's links to the facts it cites or conflicts on, and each fact's source locators.
+
+- [#8408](https://github.com/stella/stella/pull/8408) [`40a7114`](https://github.com/stella/stella/commit/40a71140af64d782c7ec4036f0b59d2d12422760) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `matters.get` reads one matter, archived ones included, and `matters.contacts.list` lists a matter's parties in their roles. `matter add-member` and `matter remove-member` (and `matters.members.add`/`.remove`) now need the matters write consent instead of the admin one; who may run them is unchanged.
+
+- [#8407](https://github.com/stella/stella/pull/8407) [`5fdff95`](https://github.com/stella/stella/commit/5fdff956561a942bb851fe9d41a44f9cb3a9c292) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `matters.member-candidates.list` lists the people of your organization a matter can be shared with, for `matters.create` and `matters.members.add`.
+
+- [#8456](https://github.com/stella/stella/pull/8456) [`fb0f549`](https://github.com/stella/stella/commit/fb0f5491dbfbe88e6da0ac09239e5f5ead1f8651) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `matters.matter-numbering.get` reads the organization's matter-number pattern and its padding, so a matter number can be checked against them without reading the organization's settings.
+
+- [#8438](https://github.com/stella/stella/pull/8438) [`ffc2eaf`](https://github.com/stella/stella/commit/ffc2eaf28308dac71baf5a8a3652c5c997e749b4) Thanks [@jan-kubica](https://github.com/jan-kubica)! - An organization's run limits answer with `run_active_limit_reached` and `run_daily_limit_reached` for list verifications, fact extractions and document reviews alike; the exit classes are unchanged.
+
+- [#8537](https://github.com/stella/stella/pull/8537) [`001c640`](https://github.com/stella/stella/commit/001c640e64cb00e3948bdf68a18a40347c65a40f) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Refresh the supported chart, editor, icon, and styling dependency versions.
+
+- [#8458](https://github.com/stella/stella/pull/8458) [`cff2057`](https://github.com/stella/stella/commit/cff20574a28919904ab2f7cb95bbf3f214a88db3) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `tasks.delete` deletes one task from its matter at the matters write consent, as `delete_task` does; anything that is not a task is not found.
+
+- [#8458](https://github.com/stella/stella/pull/8458) [`cff2057`](https://github.com/stella/stella/commit/cff20574a28919904ab2f7cb95bbf3f214a88db3) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `tasks.list` lists anyone's or unassigned tasks (`assignee`), one matter's (`matterId`), finished ones too (`openOnly=false`) and those due on or before a day (`dateTo`); without them it lists the caller's own open tasks as before.
+
+- [#8454](https://github.com/stella/stella/pull/8454) [`b5df027`](https://github.com/stella/stella/commit/b5df0276c1c7e3f00f2b392fa11666e9801d63b8) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `lists.verifications.get` returns `unreadParts`: the text a completed run could not read, each from a `start` to an `end` edge (a block id and an offset). No claim was looked for there; verify the document again to read it. Empty when the run read everything.
+- Updated dependencies [[`001c640`](https://github.com/stella/stella/commit/001c640e64cb00e3948bdf68a18a40347c65a40f)]:
+  - @stll/agent-input@0.4.4
+
+## 6.11.1
+
+### Patch Changes
+
+- [#8352](https://github.com/stella/stella/pull/8352) [`f4683ca`](https://github.com/stella/stella/commit/f4683ca55ff4b4d3e000845611da901904ae35ff) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `skills.resources.create` and `skills.resources.update` accept resource files up to 2,000,000 characters, up from 100,000. `skills.resources.upload` rejects a file whose text exceeds that limit instead of truncating it.
+
+- [#8340](https://github.com/stella/stella/pull/8340) [`bb5330e`](https://github.com/stella/stella/commit/bb5330e5f026aa20fe223b9cc5450d482991d5c0) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `lists.verifications.create` takes `paragraphs` (`82-136`) to check only that range of the document's paragraphs, by the numbers the document prints on them; a range the document does not have is refused. Runs report their `scope`.
+
+## 6.11.0
+
+### Minor Changes
+
+- [#5798](https://github.com/stella/stella/pull/5798) [`a428d7d`](https://github.com/stella/stella/commit/a428d7d0845eb4cc849a4384e65f20666e66c621) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add the `data-exports` capabilities: start an organization data export, list and read exports, and get download links for their parts and manifest.
+
+- [#6660](https://github.com/stella/stella/pull/6660) [`ab7a496`](https://github.com/stella/stella/commit/ab7a4968b8e0e52dd7006c0b13c0e3096d65c0c7) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Clear law history for the selected country.
+
+### Patch Changes
+
+- [#6815](https://github.com/stella/stella/pull/6815) [`3e19e3e`](https://github.com/stella/stella/commit/3e19e3ea27fe2071bdc0d562d0abb0450a666cb4) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Include the pending Brazil jurisdiction in generated CLI contract schemas.
+
+- [#8341](https://github.com/stella/stella/pull/8341) [`bd9660d`](https://github.com/stella/stella/commit/bd9660dc779559dd6750f3edf3386f8cb7f2b373) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `conflict-checks.list`, `.get`, `.create`, `.review` and `.link` run and record internal conflict-of-interest checks where a deployment enables them.
+
+- [#8188](https://github.com/stella/stella/pull/8188) [`8110007`](https://github.com/stella/stella/commit/81100072265ab161356dc559e29aba9ab910bf17) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `resolve_law_citation` resolves article citations (`čl. 38`, `článok 46`) to their article, and a bare number to the article when the act has no section of that number.
+
+- [#8325](https://github.com/stella/stella/pull/8325) [`1e121e9`](https://github.com/stella/stella/commit/1e121e9c7b6f054d44827b4a216b8ac1ffb21874) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add `lists.verifications.claim-rechecks.create`: checks one verified claim again against the list's current facts and records the new grade as a review event, leaving the run's claim unchanged. Claim reviews accept `fact-link` to link or unlink a fact of the verified list, and the review history lists links and re-checks.
+
+- [#8369](https://github.com/stella/stella/pull/8369) [`6ecc506`](https://github.com/stella/stella/commit/6ecc50659b97b0e0362b6f8802357d8814e3dc7a) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `lists.verifications.get` returns `carryOver`: what a verification took from the previous verification of the same document against the same list. Notes and fact links follow a claim with the same words or with edited words in the same paragraph or page; other reviewer decisions follow only the same words with an unchanged verdict. It counts the reviewed claims that came across whole and lists the rest as `text-changed`, `verdict-changed`, `unmatched` or `ambiguous`. `lists.verifications.claim-reviews.list` entries carry `carriedFrom`, the earlier verification an action was first taken on.
+
+- [#8338](https://github.com/stella/stella/pull/8338) [`9beb462`](https://github.com/stella/stella/commit/9beb46276580e9949fa6d6d3852d121f1a0b8525) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add `sharepoint.sites.list`, `sharepoint.drives.list` and `sharepoint.drives.items.list` to browse SharePoint sites, document libraries, OneDrive and folders with your own connected Microsoft account, and `sharepoint.imports.create` to copy chosen files into a matter as documents. Importing a file again adds a version only when its content changed. They are available when the deployment enables SharePoint and your organization has turned the connection on.
+
+- [#8336](https://github.com/stella/stella/pull/8336) [`3f1f76f`](https://github.com/stella/stella/commit/3f1f76f4ad2af44458ae6e89c5538e32709767e1) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `skills.upload` and `uploads.create` (purpose `agent_skill`) accept skill packs up to 50 MB, up from 2 MB. A pack may hold up to 1,000 files, 50 MB uncompressed and 500 resources. `skills.upload` now also answers the installed skill's `name`.
+
+- [#8362](https://github.com/stella/stella/pull/8362) [`5221098`](https://github.com/stella/stella/commit/5221098a06bcc7decbe451071b9af0791df76d1d) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `tasks.create` accepts an idempotency key: a retried create with the same key returns the first task or list item instead of creating another.
+- Updated dependencies []:
+  - @stll/agent-input@0.4.3
+
+## 6.10.0
+
+### Minor Changes
+
+- [#5730](https://github.com/stella/stella/pull/5730) [`bb3c063`](https://github.com/stella/stella/commit/bb3c0631575a9cb18be3688c80fbb16819802dfd) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Read and update organization-wide AI instructions, including the `--ai-instructions` option for organization settings.
+
+### Patch Changes
+
+- [#8290](https://github.com/stella/stella/pull/8290) [`ceb5745`](https://github.com/stella/stella/commit/ceb5745c39fd4dc6676676cdc797dc5dafc1dc54) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add `chat.threads.read-state.update` and `chat.threads.pin-state.update`: mark one of your chats read or unread, and pin it to the top of your list or unpin it. `chat.threads.list` now says, for each chat, whether you have read its latest answer and whether you pinned it, and takes `pinState` to list only pinned or only unpinned chats.
+
+- [#8317](https://github.com/stella/stella/pull/8317) [`4571450`](https://github.com/stella/stella/commit/4571450505b901883f85e9d5ff68de355bd0c986) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `chat.threads.read-state.update` and `chat.threads.pin-state.update` describe that asking for the state a chat already has changes nothing and notifies none of your devices.
+
+- [#8282](https://github.com/stella/stella/pull/8282) [`fdc86ae`](https://github.com/stella/stella/commit/fdc86ae113bd086fda0d174b200f59dce7abeaa1) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `entities.files.list` returns each file's size in bytes.
+
+- [#8283](https://github.com/stella/stella/pull/8283) [`b387911`](https://github.com/stella/stella/commit/b3879115ee4a9517c74c212325165bb9cd7409da) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `lists.verifications.get` returns each claim's qualifiers: caveats beside its verdict that never change it (the record is not expected to speak to the point, a cited fact has a different scope, every fact it rests on is unsourced, or it rests on a held fact).
+
+- [#8309](https://github.com/stella/stella/pull/8309) [`7813e23`](https://github.com/stella/stella/commit/7813e230de265794852ca9147146bc21f49b792b) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `lists.verifications.claim-reviews.create` requires `reason` on `override`, `reopen` and `record-conflict` actions and takes an optional one on `status`, which can now also be `needs-evidence` (open until the record can answer it; never accepted in bulk). `lists.verifications.claim-reviews.list` reads a verification's review history, newest first: who acted, when, the action, its reason, and the claim's disposition just before and after, filterable by claim, action kind and reviewer.
+
+- [#8243](https://github.com/stella/stella/pull/8243) [`aa71bbb`](https://github.com/stella/stella/commit/aa71bbba70829a96ad63d85d42d94c0a60578d24) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add `lists.fact-extractions.create`: stella reads evidence documents and proposes their facts, each citing the passage it comes from, as generation candidates to accept or reject.
+
+- [#8236](https://github.com/stella/stella/pull/8236) [`efafd07`](https://github.com/stella/stella/commit/efafd0742a3e6818cc18113f060d2e01c2dd8956) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Generation candidates of fact items carry their proposed fact details: submitting accepts them, listing returns them, and accepting a fact writes them onto the item. Generation runs list who produced them. A candidate name is held to the task name bound and a source quote to 2,000 characters.
+
+- [#8305](https://github.com/stella/stella/pull/8305) [`05f2f90`](https://github.com/stella/stella/commit/05f2f9073e6eb927ca6bb2a9a120970f6124359a) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `lists.source-documents.update` marks a document as testimony (a witness statement, interview note or transcript) or a record for one list's facts, and `lists.source-documents.list` reads the kind of each named document. `lists.items.list` returns each fact's tier (`document`, `testimony` or `unsourced`); `lists.verifications.get` returns the tier of each pinned fact in place of `sourcing`, the `testimony-only` qualifier, and for a record conflict the fact suggested to govern it.
+
+## 6.9.0
+
+### Minor Changes
+
+- [#8178](https://github.com/stella/stella/pull/8178) [`4f1cb55`](https://github.com/stella/stella/commit/4f1cb55d3b32c02e2913813d2d5634af2fe88271) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Adds `guidance search` and `guidance read` for regulator guidance served by stella.
+
+### Patch Changes
+
+- [#8172](https://github.com/stella/stella/pull/8172) [`23f7f99`](https://github.com/stella/stella/commit/23f7f992d6cc1070dd3799beffe477e797ed2362) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Reading case-law citations accepts `detail: compact` for short passages and `passage_query` to keep only citations whose citing paragraph holds given words.
+
+- [#8166](https://github.com/stella/stella/pull/8166) [`e25f865`](https://github.com/stella/stella/commit/e25f8658da8918e08519a1818ef9c4cf2c711dbd) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `case-law search` accepts `--docket-registers` and `--senate` to filter Czech and Slovak decisions by their docket.
+
+- [#8164](https://github.com/stella/stella/pull/8164) [`f0b45d2`](https://github.com/stella/stella/commit/f0b45d25b1c2d8813ea028e3b0a36b219d412f27) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `case-law search` and `case-law read` accept `--preferred-language` to return a decision in that language where a version exists.
+
+- [#8176](https://github.com/stella/stella/pull/8176) [`7770328`](https://github.com/stella/stella/commit/777032868a3d921d9932673937fd687300a762a4) Thanks [@jan-kubica](https://github.com/jan-kubica)! - The case-law search `provision` description no longer offers EU provisions, which have no recorded links yet; name them in the query instead.
+
+- [#8168](https://github.com/stella/stella/pull/8168) [`04bec78`](https://github.com/stella/stella/commit/04bec78f6570b722b6269b996c7c6b4588e43f12) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `case-law read` accepts `--resume-after` to continue a query's matches and `--section court_reasoning` to restrict them, reporting when the boundary was not found.
+
+- [#8171](https://github.com/stella/stella/pull/8171) [`adfa8f1`](https://github.com/stella/stella/commit/adfa8f1f4ad88cddc45d94f3fe86516a4a22495d) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `search_case_law` returns the phrasings that finished when others run out of time, and the returned cursor runs those phrasings again.
+
+- [#8162](https://github.com/stella/stella/pull/8162) [`1fd0738`](https://github.com/stella/stella/commit/1fd0738aa53af83db7229285149db7b42051c98b) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `search_case_law` reports a total only when the call names facets, for a single phrasing.
+
+- [#8137](https://github.com/stella/stella/pull/8137) [`6fe6aa0`](https://github.com/stella/stella/commit/6fe6aa052474508b3b0c784298231bf77d168c41) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `organization-settings get` also returns `localRunMaxApprovalMode`, the most a chat turn run on a member's computer may do without asking.
+
+- [#8183](https://github.com/stella/stella/pull/8183) [`6f5b448`](https://github.com/stella/stella/commit/6f5b4481750c601bd1935a042789287ccfb61728) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `search_case_law` and `search_legislation` can answer `status: "running"` with `continuation_token` when a search outlives its response deadline, instead of timing out. Calling again with the token collects the answer. Two new error codes: `continuation_expired` and `public_read_unfinished`.
+
+## 6.8.3
+
+### Patch Changes
+
+- [#7940](https://github.com/stella/stella/pull/7940) [`ad81543`](https://github.com/stella/stella/commit/ad81543e9c85c79cc921caa5b72d7ee39cde94c3) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `properties create` and `properties batch-create` accept `toolType: "ai-model"` for a money column, and `properties prompt-suggest` accepts the `money` content type. An AI money column requires the `table-analysis` feature.
+
+- [#7948](https://github.com/stella/stella/pull/7948) [`f0bb587`](https://github.com/stella/stella/commit/f0bb587b3b56b0f59c2e366c6fbf844a1d85a123) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `fields cell-metadata-update` accepts `overrideReason`: why a person replaced the value a run produced in a cell. It is refused with `cell_override_absent` on a cell that holds no such replacement.
+
+- [#7924](https://github.com/stella/stella/pull/7924) [`8bcf336`](https://github.com/stella/stella/commit/8bcf336068af58ccb4a28150967aa128e586ba88) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Update compatible runtime dependencies: `@stll/time` 0.4.2, `temporal-polyfill` 1.0.6, `lucide-react` 1.65.0, Tiptap 3.32.1 and the MCP client 2.4.0.
+
+- [#8045](https://github.com/stella/stella/pull/8045) [`f89caa2`](https://github.com/stella/stella/commit/f89caa2e730c7da753ccd0efe2e67785e77732cf) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `stella case-law read --query` says which words a query with no match could not find together, and which query to try next. It still returns no paragraph unless one holds every word.
+
+- [#8046](https://github.com/stella/stella/pull/8046) [`34d9234`](https://github.com/stella/stella/commit/34d923482605050a0c62be2e17b3e820886cea0d) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `stella case-law search`, `stella legislation search` and `stella legislation read` results carry the publisher link once, as `source_url`. The duplicate `sourceUrl` field is gone.
+
+- [#8041](https://github.com/stella/stella/pull/8041) [`72ba870`](https://github.com/stella/stella/commit/72ba8701d59996f51b43a4f77b3aa42411f355f1) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `stella case-law resolve` returns a decision's identity and whether its text can be read, not the text. Read the text with `stella case-law read`.
+- Updated dependencies [[`8bcf336`](https://github.com/stella/stella/commit/8bcf336068af58ccb4a28150967aa128e586ba88)]:
+  - @stll/agent-input@0.4.2
+
 ## 6.8.2
 
 ### Patch Changes

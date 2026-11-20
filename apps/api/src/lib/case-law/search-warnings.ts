@@ -1,4 +1,7 @@
+import { panic } from "better-result";
+
 import type {
+  CaseLawHitOrder,
   CaseLawSearchWarning,
   CaseLawSearchWarningCode,
 } from "@stll/api-contract/search";
@@ -7,11 +10,9 @@ import type {
  * The agent-facing wording of each case-law search warning.
  *
  * A warning never fails a search: the page it rides on is the page the search
- * found. It exists because the three ways a case-law search surprises its
- * caller are all invisible in the result alone — a query that required fewer
- * words than it carried, an empty page a filter caused, and an empty page
- * nothing caused — and a caller that cannot tell them apart cannot act on
- * any of them. So every code names its corrective action in `hint`.
+ * found. It explains query interpretation and why a page is empty; a caller
+ * that cannot distinguish those outcomes cannot act on them. Every code
+ * names its corrective action in `hint`.
  *
  * The codes are the contract's (`@stll/api-contract/search`), shared with the
  * web, which renders its own translated wording from the same code. This
@@ -34,6 +35,8 @@ type CaseLawSearchWarningsOptions = {
    */
   droppedFunctionWords: readonly string[];
   partialHitCount?: number;
+  /** The order the page's hits are in, which decides how partial hits are told. */
+  hitOrder: CaseLawHitOrder;
   /** Filters the request narrowed with, empty for an unnarrowed search. */
   filters: CaseLawSearchFilterNames;
   /**
@@ -52,6 +55,14 @@ export const functionWordsWarning = (
   // question needs to know which words it stopped requiring, not how many.
   message: `The search did not require these words, which are grammar rather than subject matter: ${dropped.join(", ")}.`,
   hint: "Pass strict: true to require every word, or quote a phrase to require its words adjacently.",
+});
+
+export const collectionCitationUnresolvedWarning = (
+  citation: string,
+): CaseLawSearchWarning => ({
+  code: "collection_citation_unresolved",
+  message: `No exact decision identity was found for the collection citation ${citation}.`,
+  hint: "Call resolve_case_law_decision with the citation and country CZE to check coverage, or supply the decision’s docket or ECLI.",
 });
 
 const noHitsWarning = (): CaseLawSearchWarning => ({
@@ -84,6 +95,7 @@ const noHitsFilteredWarning = (
 export const caseLawSearchWarnings = ({
   droppedFunctionWords,
   partialHitCount = 0,
+  hitOrder,
   filters,
   emptyResultSet,
 }: CaseLawSearchWarningsOptions): CaseLawSearchWarning[] => {
@@ -93,9 +105,10 @@ export const caseLawSearchWarnings = ({
   }
   if (partialHitCount > 0) {
     warnings.push(
-      partialMatchesAppendedWarning({
+      partialMatchesWarning({
         partial: partialHitCount,
         countsStrictSet: true,
+        order: hitOrder,
       }),
     );
   }
@@ -121,16 +134,21 @@ export const caseLawSearchWarnings = ({
  *   nothing for it.
  * - `filter_unread`: the known values could not be read within the search's
  *   budget, so the value was used exactly as sent, unread.
- * - `many_required_terms`: a phrasing required many words in one passage and
- *   filled fewer result slots than it was given, so dropping a word is the
- *   likelier fix than paging. Raised only under `MCP_CASE_LAW_SEARCH_GUIDANCE`
- *   `v1`, from the page already returned: it costs no search.
+ * - `many_required_terms`: a phrasing has many words and fewer decisions
+ *   than its result slots hold every one, so dropping a word is the likelier
+ *   fix than paging. Raised in every guidance mode, from the page already
+ *   returned: it costs no search.
  * - `provision_cited_widely`: the provision filter is cited by more decisions
  *   than one search can filter by, so the page holds the topic's best matches
  *   that cite it rather than every one; the count and the narrowing are said.
+ * - `provision_scope_unread`: the provision's citing decisions could not be
+ *   enumerated within the search's budget, so the page holds the topic's best
+ *   matches that cite it; how widely it is cited was not established.
  * - `phrasing_timed_out`: one of several phrasings ran out of the call's time
  *   budget, so the page holds the phrasings that finished and none of its
- *   hits; the hint names how to run it again.
+ *   hits; the returned cursor runs it again.
+ * - `partial_matches_unread`: the partial matches a short page tops up with
+ *   were due and could not be read, so the list is shorter than usual.
  */
 export const AGENT_CASE_LAW_SEARCH_WARNING_CODES = [
   "filter_read",
@@ -138,7 +156,9 @@ export const AGENT_CASE_LAW_SEARCH_WARNING_CODES = [
   "filter_unread",
   "many_required_terms",
   "provision_cited_widely",
+  "provision_scope_unread",
   "phrasing_timed_out",
+  "partial_matches_unread",
 ] as const;
 
 type AgentCaseLawSearchWarningCode =
@@ -302,25 +322,35 @@ export const filterUnreadWarning = ({
 /**
  * A phrasing of a several-phrasing search stopped on the call's time budget
  * while the others finished. Its absence from the page is not "nothing
- * matched", so it is said: a continuation of the page retries it, and a
- * phrasing that had not returned a page yet is rerun by name, since the
- * cursor cannot hold a first page that never ran.
+ * matched", so it is said, and the page's cursor runs it again from where it
+ * stood: its continuation, or its first page if it had not returned one.
  */
 export const phrasingTimedOutWarning = ({
   query,
-  retriedByCursor,
 }: {
   query: string;
-  /** Whether the page's cursor carries this phrasing's continuation. */
-  retriedByCursor: boolean;
 }): AgentCaseLawSearchWarning => ({
   code: "phrasing_timed_out",
   // The phrasing is named: two phrasings can time out on one page, and the
   // call keeps each distinct note once, so identical wording would merge them.
   message: `The phrasing ${JSON.stringify(query)} ran out of the search's time budget, so the page holds none of its hits; the phrasings that finished are on the page.`,
-  hint: retriedByCursor
-    ? "Pass the returned cursor to retry this phrasing with the others, or search it on its own."
-    : `Search this phrasing on its own (queries: [${JSON.stringify(query)}]), or narrow it with a court, date range or provision filter.`,
+  hint: "Pass the returned nextCursor as cursor, with the same queries in the same order, to run this phrasing again; the phrasings that finished continue from their next page. If it times out again, search it on its own or narrow it with a court, date range or provision filter.",
+});
+
+/**
+ * A short page whose top-up with partial matches did not finish. What it holds
+ * is correct but not everything it would normally hold, which the caller cannot
+ * tell from the hits, so the page is never `complete` and its cursor runs the
+ * phrasing again. The phrasing is named for the same reason as above.
+ */
+export const partialMatchesUnreadWarning = ({
+  query,
+}: {
+  query: string;
+}): AgentCaseLawSearchWarning => ({
+  code: "partial_matches_unread",
+  message: `Decisions holding only some of the words of ${JSON.stringify(query)} could not be read in time, so this page may hold fewer "some_terms" hits than usual, or none. Do not read the shorter list as all there is.`,
+  hint: "Pass the returned nextCursor as cursor, with the same queries in the same order, to run this phrasing again with its partial matches; it may repeat the hits above. If they stay unread after a rerun, search this phrasing on its own or narrow it with a court, date range or provision filter. Pass strict: true if only decisions holding every word are wanted.",
 });
 
 export const manyRequiredTermsWarning = ({
@@ -336,8 +366,8 @@ export const manyRequiredTermsWarning = ({
   slots: number;
 }): AgentCaseLawSearchWarning => ({
   code: "many_required_terms",
-  message: `This phrasing required ${String(wordCount)} words in one passage and filled fewer than its ${String(slots)} result slots: ${terms.join(", ")}.`,
-  hint: "Drop the least central of these words, or move an alternative wording into a phrasing of its own: a hit holds every required word in the same passage.",
+  message: `This phrasing has ${String(wordCount)} words and fewer decisions than its ${String(slots)} result slots hold every one of them: ${terms.join(", ")}.`,
+  hint: "Each hit's terms.missing names the words it lacks. Drop the least central of these words, or move an alternative wording into a phrasing of its own, to find decisions that hold all of them.",
 });
 
 export const provisionCitedWidelyWarning = ({
@@ -351,9 +381,27 @@ export const provisionCitedWidelyWarning = ({
   hint: "Add a subsection or letter to the provision, or more topic words, to narrow; or omit queries to list every decision citing it, with pagination.",
 });
 
-export const partialMatchesAppendedWarning = ({
+export const provisionScopeUnreadWarning = ({
+  provision,
+}: {
+  /** The provision as the caller wrote it. */
+  provision: string;
+}): AgentCaseLawSearchWarning => ({
+  code: "provision_scope_unread",
+  message: `The decisions citing ${provision} could not be enumerated within this search's time budget: these results are the topic's best matches that cite it, not all of them.`,
+  hint: "Repeat this search to try again, or omit queries to list every decision citing it, with pagination.",
+});
+
+/**
+ * The warning for a page that holds partial matches, chosen by where the page
+ * put them. A page that lists them after the full matches and one that ranks
+ * them among the full matches are told apart, because "appended after" read
+ * off a page in score order sends the caller to the wrong end of the list.
+ */
+export const partialMatchesWarning = ({
   partial,
   countsStrictSet,
+  order,
 }: {
   /** How many returned hits hold only some of the phrasing's words. */
   partial: number;
@@ -363,11 +411,31 @@ export const partialMatchesAppendedWarning = ({
    * uncounted and the facets describe the first phrasing only).
    */
   countsStrictSet: boolean;
-}): CaseLawSearchWarning => ({
-  code: "partial_matches_appended",
-  message: `Few decisions held every word, so ${String(partial)} hit${partial === 1 ? "" : "s"} marked match "some_terms" ${partial === 1 ? "was" : "were"} appended after the ones that did${countsStrictSet ? "; the total and facets count only the decisions holding every word" : ""}.`,
-  hint: 'Read the "all_terms" hits first; judge each "some_terms" hit by its snippet, or pass strict: true to search only for decisions holding every word.',
-});
+  /** The order the page's hits are in. */
+  order: CaseLawHitOrder;
+}): CaseLawSearchWarning => {
+  const hits = `${String(partial)} hit${partial === 1 ? "" : "s"} marked match "some_terms"`;
+  const counted = countsStrictSet
+    ? "; the total and facets count only the decisions holding every word"
+    : "";
+  switch (order) {
+    case "all_words_first":
+      return {
+        code: "partial_matches_appended",
+        message: `Few decisions held every word, so ${hits} ${partial === 1 ? "was" : "were"} appended after the ones that did${counted}.`,
+        hint: 'Read the "all_terms" hits first; judge each "some_terms" hit by its snippet, or pass strict: true to search only for decisions holding every word.',
+      };
+    case "score":
+      return {
+        code: "partial_matches_ranked",
+        message: `${hits} ${partial === 1 ? "holds" : "hold"} only some of the words and ${partial === 1 ? "is" : "are"} ranked among the decisions holding every word, by how many of the words and how rare${counted}.`,
+        hint: "Each hit's terms say which words it holds and which it lacks; pass strict: true to search only for decisions holding every word.",
+      };
+    default:
+      order satisfies never;
+      return panic("Unhandled case-law hit order");
+  }
+};
 
 /**
  * The values a facet counted for an empty page's filters, appended to its
@@ -398,10 +466,22 @@ export const withFacetValues = (
  */
 export const CASE_LAW_SEARCH_WARNING_PRODUCERS = {
   function_words_optional: () => functionWordsWarning(["na"]),
+  collection_citation_unresolved: () =>
+    collectionCitationUnresolvedWarning("Rc 60/2015"),
   no_hits: noHitsWarning,
   no_hits_filtered: () => noHitsFilteredWarning(["court"]),
   partial_matches_appended: () =>
-    partialMatchesAppendedWarning({ partial: 3, countsStrictSet: true }),
+    partialMatchesWarning({
+      partial: 3,
+      countsStrictSet: true,
+      order: "all_words_first",
+    }),
+  partial_matches_ranked: () =>
+    partialMatchesWarning({
+      partial: 3,
+      countsStrictSet: true,
+      order: "score",
+    }),
 } as const satisfies Record<
   CaseLawSearchWarningCode,
   () => CaseLawSearchWarning
@@ -426,6 +506,10 @@ export const AGENT_CASE_LAW_SEARCH_WARNING_PRODUCERS = {
     provisionCitedWidelyWarning({
       provision: "§ 2910 OZ",
     }),
+  provision_scope_unread: () =>
+    provisionScopeUnreadWarning({
+      provision: "§ 2910 OZ",
+    }),
   many_required_terms: () =>
     manyRequiredTermsWarning({
       terms: [
@@ -440,10 +524,9 @@ export const AGENT_CASE_LAW_SEARCH_WARNING_PRODUCERS = {
       slots: 5,
     }),
   phrasing_timed_out: () =>
-    phrasingTimedOutWarning({
-      query: "náhrada škody promlčení",
-      retriedByCursor: false,
-    }),
+    phrasingTimedOutWarning({ query: "náhrada škody promlčení" }),
+  partial_matches_unread: () =>
+    partialMatchesUnreadWarning({ query: "náhrada škody promlčení" }),
 } as const satisfies Record<
   AgentCaseLawSearchWarningCode,
   () => AgentCaseLawSearchWarning

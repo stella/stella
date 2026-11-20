@@ -3,6 +3,7 @@ import type { OnlineMigrationEntry } from "../online-migration-entry";
 export default {
   id: "indexes-time-entries-submitted-queue-idx",
   revision: 360,
+  lifecycle: "finalized",
   type: "indexes",
   values: [
     {

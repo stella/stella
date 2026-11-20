@@ -261,7 +261,9 @@ test.each([
       ({ message }) => message === "mcp.tool_call.completed",
     );
     const phaseRecord = metricLines
-      .map((line) => JSON.parse(line))
+      .map((line) =>
+        asTestRaw<{ event?: unknown; toolName?: unknown }>(JSON.parse(line)),
+      )
       .find((record) => record.event === "mcp.request.phases");
     expect(phaseRecord?.toolName).toBe(toolCallRecord?.attributes?.["tool"]);
   },
@@ -319,6 +321,18 @@ describe("MCP tool refusal logs", () => {
     const attributes = await completedRecord(envelope("not_found"));
     expect(attributes).toMatchObject({ "error.code": "not_found" });
     expect(attributes).not.toHaveProperty("refused_fields");
+  });
+
+  test("a failure in plain text is logged as having no known code", async () => {
+    const attributes = await completedRecord({
+      content: [{ type: "text", text: "Forbidden" }],
+      isError: true,
+    });
+    expect(attributes).toMatchObject({
+      outcome: "tool_error",
+      "error.code": "unknown",
+    });
+    expect(JSON.stringify(attributes)).not.toContain("Forbidden");
   });
 
   test("a successful call carries no refusal", async () => {

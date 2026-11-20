@@ -1,4 +1,4 @@
-import { panic, Result } from "better-result";
+import { panic } from "better-result";
 
 import { formatMoneyCents } from "@stll/money";
 import { Temporal } from "@stll/time";
@@ -7,11 +7,7 @@ import { summarizeRecordField } from "@stll/workspace-ui/field-value-logic";
 import type { TableTreeNode } from "@/components/workspaces/table/types";
 import { getFormatter, getFormattingLocale } from "@/i18n/i18n-store";
 import { startOfWeek } from "@/i18n/week";
-import type {
-  WorkspaceEntity,
-  WorkspaceField,
-  WorkspaceProperty,
-} from "@/lib/types";
+import type { WorkspaceEntity, WorkspaceField } from "@/lib/types";
 
 const dateOnlyEpoch = (value: string): number =>
   Temporal.PlainDate.from(value).toZonedDateTime({
@@ -19,34 +15,11 @@ const dateOnlyEpoch = (value: string): number =>
     timeZone: "UTC",
   }).epochMilliseconds;
 
-const instantEpoch = (value: string): number =>
-  Result.try(() => Temporal.Instant.from(value).epochMilliseconds).unwrapOr(0);
-
-type InternalColId = "select" | "add-property";
-
-export const getInternalColId = (col: InternalColId): InternalColId => col;
-
-// -- Internal property IDs (metadata columns stored in view config) --
-
-const INTERNAL_PROPERTIES = [
-  "name",
-  "created-by",
-  "updated-at",
-  "version",
-  "kind",
-  "list-item-type",
-  "status",
-  "priority",
-  "due-date",
-  "assignee",
-] as const;
-
-type InternalProperty = (typeof INTERNAL_PROPERTIES)[number];
-export type InternalPropertyId = `_${InternalProperty}`;
-
-export const getInternalPropertyId = (
-  p: InternalProperty,
-): InternalPropertyId => `_${p}`;
+export {
+  getInternalColId,
+  getInternalPropertyId,
+} from "@/components/workspaces/internal-ids.logic";
+export { resolveKanbanGroupBy } from "@/components/workspaces/kanban/kanban-grouping.logic";
 
 export const getFieldValue = (field: WorkspaceField | undefined) => {
   if (!field) {
@@ -355,34 +328,4 @@ export const countDescendants = (node: TableTreeNode): number => {
     child = stack.pop();
   }
   return count;
-};
-
-/**
- * Resolve the group-by property ID for kanban views.
- *
- * Fallback order when no explicit config is set:
- * 1. A single-select property named "Status" (case-insensitive)
- * 2. The most recently created single-select manual-input property
- */
-export const resolveKanbanGroupBy = (
-  configuredId: string,
-  properties: readonly WorkspaceProperty[],
-): string => {
-  if (configuredId) {
-    return configuredId;
-  }
-
-  const eligible = properties.filter((p) => p.content.type === "single-select");
-
-  const statusProp = eligible.find((p) => p.name.toLowerCase() === "status");
-  if (statusProp) {
-    return statusProp.id;
-  }
-
-  const latest = eligible
-    .filter((p) => p.tool.type === "manual-input")
-    .toSorted((a, b) => instantEpoch(b.createdAt) - instantEpoch(a.createdAt))
-    .at(0);
-
-  return latest?.id ?? "";
 };

@@ -32,6 +32,7 @@
             "include_usage": true
           },
           "tools": [
+            "show_app",
             "ask-user",
             "request_secret",
             "use_connector_secret",
@@ -132,6 +133,7 @@
             "include_usage": true
           },
           "tools": [
+            "show_app",
             "ask-user",
             "request_secret",
             "use_connector_secret",
@@ -247,6 +249,7 @@
             "include_usage": true
           },
           "tools": [
+            "show_app",
             "ask-user",
             "request_secret",
             "use_connector_secret",

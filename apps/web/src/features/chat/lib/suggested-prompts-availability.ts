@@ -1,14 +1,10 @@
 import { panic } from "better-result";
 
-import type {
-  ChatMessage,
-  ChatPart,
-  UserInputChatToolName,
-} from "@/components/chat/chat-ui-tools";
-import {
-  isUserInputChatToolName,
-  resolveChatAssistantTurnOutcome,
-} from "@/components/chat/chat-ui-tools";
+import { isUserInputChatToolName } from "@stll/api-contract/chat-tool-activity";
+import type { UserInputChatToolName } from "@stll/api-contract/chat-tool-activity";
+
+import type { ChatMessage, ChatPart } from "@/components/chat/chat-ui-tools";
+import { resolveChatAssistantTurnOutcome } from "@/components/chat/chat-ui-tools";
 
 type SuggestedPromptsAvailability =
   | { status: "eligible"; lastMessageId: string }
@@ -130,6 +126,7 @@ export const resolveSuggestedPromptsAvailability = ({
     return { status: "blocked", reason: "no-assistant-turn" };
   }
   const turnOutcome = resolveChatAssistantTurnOutcome(lastMessage);
+  // A paused turn offers Continue; a chip would answer for the user.
   switch (turnOutcome.type) {
     case "completed":
     case "legacy-completed":
@@ -139,6 +136,7 @@ export const resolveSuggestedPromptsAvailability = ({
     case "failed":
     case "incomplete":
     case "interrupted":
+    case "paused":
       return { status: "blocked", reason: "terminal-outcome" };
     default:
       turnOutcome satisfies never;

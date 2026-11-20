@@ -1,15 +1,42 @@
-import type { AnchorHTMLAttributes, ComponentProps, ReactNode } from "react";
-import { useCallback, useMemo, useState } from "react";
+import type {
+  AnchorHTMLAttributes,
+  ComponentProps,
+  KeyboardEvent,
+  ReactNode,
+} from "react";
+import { useState } from "react";
 
+import { panic } from "better-result";
 import { defaultRehypePlugins, Streamdown } from "streamdown";
 import type { Pluggable } from "unified";
 import { useTranslations } from "use-intl";
 
+import {
+  ASK_USER_SELECTION,
+  type AskUserAnswer,
+  askUserAnswerValues,
+  type AskUserQuestion,
+  askUserSelectionOf,
+} from "@stll/api-contract/chat-ask-user";
+import {
+  answersInOwnWords,
+  askUserAnswerOf,
+  askUserAnswersOf,
+  type AskUserDraft,
+  askUserDraftOf,
+  askUserDraftsFromAnswers,
+  askUserOptionsOf,
+  initialAskUserDrafts,
+  pickAllAskUserOptions,
+  pickAskUserOption,
+} from "@stll/api-contract/chat-ask-user-draft";
 import { rehypeChatLinks } from "@stll/chat/link-markdown";
 import { Button } from "@stll/ui/button";
+import { Checkbox } from "@stll/ui/checkbox";
 import { Form } from "@stll/ui/form";
 import { CheckIcon, HelpCircleIcon, PencilIcon } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
+import { Label } from "@stll/ui/label";
 import { Loader } from "@stll/ui/loader";
 import { Step, Steps } from "@stll/ui/steps";
 import { contentDir } from "@stll/ui/use-content-dir";
@@ -17,6 +44,10 @@ import { cn } from "@stll/ui/utils";
 
 import { messageComponents } from "@/components/ai-elements/message-response-components";
 import { AnonymizedSpan } from "@/components/chat/anonymized-span";
+import {
+  ASK_USER_OPTION_LAYOUT,
+  askUserOptionLayout,
+} from "@/components/chat/ask-user-card.logic";
 import type {
   AskUserInput,
   AskUserOutput,
@@ -147,18 +178,163 @@ const renderAnonPills = (
   return nodes.length === 1 && typeof nodes[0] === "string" ? nodes[0] : nodes;
 };
 
-/** `answers` with each question's default wherever it has no answer yet. */
-const withDefaultAnswers = (
-  input: AskUserInput,
-  answers: Readonly<Record<number, string>>,
-): Record<number, string> => {
-  const seeded = { ...answers };
-  for (const [index, question] of input.questions.entries()) {
-    if (question.default && !Object.hasOwn(seeded, index)) {
-      seeded[index] = question.default;
-    }
+const submitOnEnter = (event: KeyboardEvent<HTMLElement>) => {
+  if (event.key !== "Enter") {
+    return;
   }
-  return seeded;
+  event.preventDefault();
+  event.currentTarget.closest("form")?.requestSubmit();
+};
+
+type AskUserOptionsProps = {
+  question: AskUserQuestion;
+  draft: AskUserDraft;
+  onChange: (next: (draft: AskUserDraft) => AskUserDraft) => void;
+  pairs: readonly ChatAnonRestoration[];
+};
+
+/**
+ * A question's options: chips, or one checkbox row per option when a
+ * multiple-choice question has many or long ones. On a multiple-choice
+ * question Space ticks the focused option and Enter sends the card.
+ */
+const AskUserOptions = ({
+  question,
+  draft,
+  onChange,
+  pairs,
+}: AskUserOptionsProps) => {
+  const t = useTranslations();
+  const options = askUserOptionsOf(question);
+  const isMultiple =
+    askUserSelectionOf(question) === ASK_USER_SELECTION.multiple;
+  const pick = (option: string) =>
+    onChange((current) => pickAskUserOption(question, current, option));
+  const writeOwn = (
+    <Button
+      onClick={() => onChange((current) => ({ ...current, ownWords: true }))}
+      size="xs"
+      variant="outline"
+    >
+      <PencilIcon className="size-2.5" />
+      {t("chat.askUser.custom")}
+    </Button>
+  );
+  const layout = askUserOptionLayout(question);
+  return (
+    <>
+      {isMultiple && (
+        <div className="text-muted-foreground flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
+          <span>{t("chat.localRunQuestion.chooseSeveral")}</span>
+          <span aria-live="polite" className="tabular-nums">
+            {t("common.selectedCount", { count: draft.picked.length })}
+          </span>
+          <Button
+            disabled={draft.picked.length === options.length}
+            onClick={() =>
+              onChange((current) => pickAllAskUserOptions(question, current))
+            }
+            size="xs"
+            variant="ghost"
+          >
+            {t("common.selectAll")}
+          </Button>
+          <Button
+            disabled={draft.picked.length === 0}
+            onClick={() => onChange((current) => ({ ...current, picked: [] }))}
+            size="xs"
+            variant="ghost"
+          >
+            {t("common.clearSelection")}
+          </Button>
+        </div>
+      )}
+      {(() => {
+        switch (layout) {
+          case ASK_USER_OPTION_LAYOUT.list:
+            return (
+              <div className="flex flex-col">
+                {options.map((option) => (
+                  <Label
+                    className="text-xs sm:text-xs"
+                    key={option}
+                    variant="choice"
+                  >
+                    <Checkbox
+                      checked={draft.picked.includes(option)}
+                      onCheckedChange={() => pick(option)}
+                      onKeyDown={submitOnEnter}
+                    />
+                    <span dir="auto">
+                      {renderAnonPills(option, pairs, { interactive: false })}
+                    </span>
+                  </Label>
+                ))}
+                <div>{writeOwn}</div>
+              </div>
+            );
+          case ASK_USER_OPTION_LAYOUT.chips:
+            return (
+              <div className="flex flex-wrap gap-1.5">
+                {options.map((option) => {
+                  const isPicked = draft.picked.includes(option);
+                  return (
+                    <Button
+                      aria-pressed={isPicked}
+                      key={option}
+                      onClick={() => pick(option)}
+                      onKeyDown={isMultiple ? submitOnEnter : undefined}
+                      selected={isPicked}
+                      size="xs"
+                      variant="outline"
+                    >
+                      {isMultiple && isPicked && (
+                        <CheckIcon className="size-3" />
+                      )}
+                      {renderAnonPills(option, pairs, { interactive: false })}
+                    </Button>
+                  );
+                })}
+                {writeOwn}
+              </div>
+            );
+          default:
+            layout satisfies never;
+            return panic(`Unknown ask-user option layout: ${String(layout)}`);
+        }
+      })()}
+    </>
+  );
+};
+
+/** An answered question: its one answer, or each ticked option. */
+const AskUserAnswerView = ({
+  answer,
+  pairs,
+}: {
+  answer: AskUserAnswer | null | undefined;
+  pairs: readonly ChatAnonRestoration[];
+}) => {
+  const t = useTranslations();
+  const values = (answer ? askUserAnswerValues(answer) : []).filter(
+    (value) => value !== "",
+  );
+  if (values.length > 1) {
+    return (
+      <ul className="text-muted-foreground list-disc space-y-0.5 ps-4 text-xs">
+        {values.map((value) => (
+          <li dir="auto" key={value}>
+            {renderAnonPills(value, pairs)}
+          </li>
+        ))}
+      </ul>
+    );
+  }
+  return (
+    <p className="text-muted-foreground text-xs" dir="auto">
+      {renderAnonPills(values.at(0) ?? t("chat.askUser.noAnswer"), pairs)}
+    </p>
+  );
 };
 
 export const AskUserCard = ({
@@ -178,27 +354,19 @@ export const AskUserCard = ({
   // caller doesn't pass any pairs.
   const pairs: readonly ChatAnonRestoration[] =
     restorationPairs ?? EMPTY_RESTORATION_PAIRS;
-  const analysisComponents = useMemo(
-    () => ({
-      a: createAnalysisAnchor(workspaceId),
-      img: messageComponents.img,
-      "stll-anon": renderAnalysisAnonymizedSpan,
-    }),
-    [workspaceId],
-  );
+  const analysisComponents = {
+    a: createAnalysisAnchor(workspaceId),
+    img: messageComponents.img,
+    "stll-anon": renderAnalysisAnonymizedSpan,
+  };
   // Stable rehype-plugins identity so Streamdown's internal memo
   // can short-circuit when nothing actually changed.
-  const analysisRehypePlugins = useMemo(
-    () => [
-      ...Object.values(defaultRehypePlugins),
-      rehypeScopeAnswerIds,
-      ...(pairs.length > 0
-        ? [[rehypeAnonSpans, pairs] satisfies Pluggable]
-        : []),
-      rehypeChatLinks,
-    ],
-    [pairs],
-  );
+  const analysisRehypePlugins = [
+    ...Object.values(defaultRehypePlugins),
+    rehypeScopeAnswerIds,
+    ...(pairs.length > 0 ? [[rehypeAnonSpans, pairs] satisfies Pluggable] : []),
+    rehypeChatLinks,
+  ];
   const answeredOutput = part.state === "complete" ? part.output : null;
   const isLoading =
     part.state === "awaiting-input" || part.state === "input-streaming";
@@ -208,22 +376,21 @@ export const AskUserCard = ({
   const input: AskUserInput | null =
     (part.state !== "input-streaming" ? part.input : null) ?? null;
 
-  const [answers, setAnswers] = useState<Record<number, string>>(() =>
-    input ? withDefaultAnswers(input, {}) : {},
+  const [drafts, setDrafts] = useState<Record<number, AskUserDraft>>(() =>
+    input ? initialAskUserDrafts(input.questions) : {},
   );
   const [defaultsSeeded, setDefaultsSeeded] = useState(input !== null);
   // Seed defaults once the full input arrives (after streaming).
   // The useState initializer only runs on mount, when input may
-  // still be null. `answers` is user-mutated interactive state set in
+  // still be null. `drafts` is user-mutated interactive state set in
   // several handlers, so this is a one-shot prop-arrival merge into
   // existing state, not plain derived state. Guarded render-time adjustment
   // applies the transition before children render and avoids an extra commit.
   if (input !== null && !defaultsSeeded) {
     setDefaultsSeeded(true);
-    setAnswers(withDefaultAnswers(input, answers));
+    setDrafts({ ...initialAskUserDrafts(input.questions), ...drafts });
   }
 
-  const [customMode, setCustomMode] = useState<Record<number, boolean>>({});
   const [submitted, setSubmitted] = useState(false);
   // Local "edit mode" lets the user flip an answered card back
   // into its input form, pre-filled with the previous answers, so
@@ -243,34 +410,20 @@ export const AskUserCard = ({
     return () => onEditingChange?.(part.id, false);
   }, [isEditing, onEditingChange, part.id]);
 
-  const setAnswer = useCallback(
-    (idx: number, value: string) =>
-      setAnswers((prev) => ({ ...prev, [idx]: value })),
-    [],
-  );
+  const updateDraft = (
+    index: number,
+    next: (draft: AskUserDraft) => AskUserDraft,
+  ) =>
+    setDrafts((current) => ({
+      ...current,
+      [index]: next(askUserDraftOf(current, index)),
+    }));
 
-  const toggleCustom = useCallback(
-    (idx: number) =>
-      setCustomMode((prev) => ({
-        ...prev,
-        [idx]: !prev[idx],
-      })),
-    [],
-  );
+  const answers = input ? askUserAnswersOf(input.questions, drafts) : null;
+  const buildOutput = (): AskUserOutput | null =>
+    answers === null ? null : { answers };
 
-  const buildOutput = useCallback((): AskUserOutput | null => {
-    if (!input) {
-      return null;
-    }
-    return {
-      answers: input.questions.map((q, i) => ({
-        question: q.question,
-        answer: answers[i] ?? "",
-      })),
-    };
-  }, [input, answers]);
-
-  const handleSubmit = useCallback(() => {
+  const handleSubmit = () => {
     if (!input || submitted) {
       return;
     }
@@ -280,48 +433,23 @@ export const AskUserCard = ({
     }
     setSubmitted(true);
     onSubmit(part.id, output);
-  }, [input, submitted, buildOutput, onSubmit, part.id]);
+  };
 
-  const handleStartEdit = useCallback(() => {
+  const handleStartEdit = () => {
     if (!input || !answeredOutput || !canRerun) {
       return;
     }
-    const seeded: Record<number, string> = {};
-    for (let i = 0; i < input.questions.length; i++) {
-      const previous = answeredOutput.answers[i]?.answer;
-      if (previous !== undefined) {
-        seeded[i] = previous;
-      } else {
-        const def = input.questions[i]?.default;
-        if (def) {
-          seeded[i] = def;
-        }
-      }
-    }
-    setAnswers(seeded);
-    // Reset custom-vs-options mode based on whether the previous
-    // answer matches one of the offered options; if it doesn't,
-    // flip the question into free-text so the prior text stays
-    // visible and editable.
-    const nextCustom: Record<number, boolean> = {};
-    for (let i = 0; i < input.questions.length; i++) {
-      const question = input.questions[i];
-      const previous = answeredOutput.answers[i]?.answer;
-      const optionsSet = question?.options ? new Set(question.options) : null;
-      if (optionsSet && previous && !optionsSet.has(previous)) {
-        nextCustom[i] = true;
-      }
-    }
-    setCustomMode(nextCustom);
+    setDrafts(
+      askUserDraftsFromAnswers(input.questions, answeredOutput.answers),
+    );
     setIsEditing(true);
-  }, [input, answeredOutput, canRerun]);
+  };
 
-  const handleCancelEdit = useCallback(() => {
+  const handleCancelEdit = () => {
     setIsEditing(false);
-    setCustomMode({});
-  }, []);
+  };
 
-  const handleRerun = useCallback(() => {
+  const handleRerun = () => {
     if (!input || !onEditAndRerun) {
       return;
     }
@@ -331,22 +459,19 @@ export const AskUserCard = ({
     }
     setIsEditing(false);
     detached(onEditAndRerun(part.id, output), "ask-user-card.edit-and-rerun");
-  }, [input, onEditAndRerun, buildOutput, part.id]);
+  };
 
-  const handleFormSubmit = useCallback<
-    NonNullable<ComponentProps<"form">["onSubmit"]>
-  >(
-    (event) => {
-      event.preventDefault();
-      if (isEditing) {
-        handleRerun();
-        return;
-      }
+  const handleFormSubmit: NonNullable<ComponentProps<"form">["onSubmit"]> = (
+    event,
+  ) => {
+    event.preventDefault();
+    if (isEditing) {
+      handleRerun();
+      return;
+    }
 
-      handleSubmit();
-    },
-    [handleRerun, handleSubmit, isEditing],
-  );
+    handleSubmit();
+  };
 
   if (!input || isWithdrawn) {
     return (
@@ -414,7 +539,11 @@ export const AskUserCard = ({
           <div className="border-border/50 border-t px-3 py-3">
             <Steps lang={formattingLocale} markerStyle={markerStyle}>
               {input.questions.map((q, i) => {
+                const draft = askUserDraftOf(drafts, i);
+                const ownWords = answersInOwnWords(q, draft);
                 const hasOptions = (q.options?.length ?? 0) > 0;
+                const answered =
+                  answeredOutput?.answers.at(i) ?? askUserAnswerOf(q, draft);
                 return (
                   <Step key={q.question}>
                     <div className="space-y-1.5">
@@ -422,49 +551,42 @@ export const AskUserCard = ({
                         {renderAnonPills(q.question, pairs)}
                       </p>
 
-                      {!isDone && hasOptions && !customMode[i] && (
-                        <div className="flex flex-wrap gap-1.5">
-                          {q.options?.map((opt) => (
-                            <Button
-                              aria-pressed={answers[i] === opt}
-                              key={opt}
-                              onClick={() => setAnswer(i, opt)}
-                              selected={answers[i] === opt}
-                              size="xs"
-                              variant="outline"
-                            >
-                              {renderAnonPills(opt, pairs, {
-                                interactive: false,
-                              })}
-                            </Button>
-                          ))}
-                          <Button
-                            onClick={() => toggleCustom(i)}
-                            size="xs"
-                            variant="outline"
-                          >
-                            <PencilIcon className="size-2.5" />
-                            {t("chat.askUser.custom")}
-                          </Button>
-                        </div>
+                      {!isDone && !ownWords && (
+                        <AskUserOptions
+                          draft={draft}
+                          onChange={(next) => updateDraft(i, next)}
+                          pairs={pairs}
+                          question={q}
+                        />
                       )}
 
-                      {!isDone && (!hasOptions || customMode[i]) && (
+                      {!isDone && ownWords && (
                         <div className="flex gap-1.5">
                           <Input
                             className="flex-1"
-                            dir={contentDir(answers[i] ?? "")}
-                            onChange={(e) => setAnswer(i, e.target.value)}
+                            dir={contentDir(draft.text)}
+                            onChange={(e) => {
+                              const text = e.target.value;
+                              updateDraft(i, (current) => ({
+                                ...current,
+                                text,
+                              }));
+                            }}
                             placeholder={
                               q.default ?? t("chat.askUser.placeholder")
                             }
                             size="sm"
                             type="text"
-                            value={answers[i] ?? ""}
+                            value={draft.text}
                           />
-                          {hasOptions && customMode[i] && (
+                          {hasOptions && (
                             <Button
-                              onClick={() => toggleCustom(i)}
+                              onClick={() =>
+                                updateDraft(i, (current) => ({
+                                  ...current,
+                                  ownWords: false,
+                                }))
+                              }
                               size="xs"
                               variant="muted"
                             >
@@ -475,14 +597,7 @@ export const AskUserCard = ({
                       )}
 
                       {isDone && (
-                        <p className="text-muted-foreground text-xs">
-                          {renderAnonPills(
-                            answeredOutput?.answers[i]?.answer ||
-                              answers[i] ||
-                              t("chat.askUser.noAnswer"),
-                            pairs,
-                          )}
-                        </p>
+                        <AskUserAnswerView answer={answered} pairs={pairs} />
                       )}
                     </div>
                   </Step>
@@ -500,7 +615,7 @@ export const AskUserCard = ({
                 </p>
               )}
               <div className="flex items-center gap-2">
-                <Button size="xs" type="submit">
+                <Button disabled={answers === null} size="xs" type="submit">
                   {isEditing
                     ? t("chat.askUser.rerun")
                     : t("chat.askUser.submit")}

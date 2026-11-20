@@ -74,6 +74,11 @@ const UNSELECTED_SUMMARY_COLUMNS = [
   "sourceUrl",
   "documentUrl",
   "sourceDocumentId",
+  "fallbackIdentityKey",
+  "fallbackCohortKey",
+  "fallbackContentHash",
+  "fallbackPublicationHash",
+  "fallbackDocumentHash",
   "sheetNumber",
   // Documents, raw observations and analysis are deliberately never loaded by hover.
   "fulltext",
@@ -82,6 +87,7 @@ const UNSELECTED_SUMMARY_COLUMNS = [
   "analysis",
   "extractionWarnings",
   "parserVersion",
+  "reviewExtractionVersion",
   "sourceRaw",
   "sourceRawS3Key",
   "sourceRawContentType",
@@ -124,6 +130,7 @@ const UNSELECTED_SUMMARY_COLUMNS = [
   "projectionEpoch",
   "createdAt",
   "updatedAt",
+  "contentChangedAt",
 ] as const satisfies readonly (keyof PublishedDecisionRow)[];
 type MissingSummarySourceColumn = UnprojectedColumns<
   PublishedDecisionRow,
@@ -149,6 +156,7 @@ const UNSELECTED_REPORTER_COLUMNS = [
   // Normalization, alias provenance and ingestion time do not describe the publication.
   "normalizedValue",
   "declaredAt",
+  "independentClaims",
   "createdAt",
 ] as const satisfies readonly (keyof ReporterIdentifierRow)[];
 type MissingReporterColumn = UnprojectedColumns<

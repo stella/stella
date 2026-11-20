@@ -1,5 +1,35 @@
 # @stll/template-conditions
 
+## 0.7.0
+
+### Minor Changes
+
+- [#8660](https://github.com/stella/stella/pull/8660) [`2bd32fc`](https://github.com/stella/stella/commit/2bd32fc25f460bde72f255886a4008de8ac18b70) Thanks [@jan-kubica](https://github.com/jan-kubica)! - The root `@stll/template-conditions` entrypoint now exposes
+  `evaluateCondition(expression, data, namedConditions?)`. Remove the fourth
+  `_resolved` and fifth `_depth` arguments: cycle tracking and the 50-reference
+  depth limit are owned by a private evaluation context. This is a breaking 0.7
+  release for callers that supplied those arguments; two- and three-argument calls
+  retain their behavior.
+
+  Calls that passed the defaults (`new Set()` and `0`) can drop those arguments.
+  Consumers that intentionally supplied visited names or a starting depth must
+  adapt that logic before upgrading or remain on 0.6.x. There is no replacement
+  public recursion-state API.
+
+## 0.6.6
+
+### Patch Changes
+
+- [#8537](https://github.com/stella/stella/pull/8537) [`001c640`](https://github.com/stella/stella/commit/001c640e64cb00e3948bdf68a18a40347c65a40f) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Build declarations through the native tsrs API supported by tsdown 0.23.7, resolving the compiler from each package.
+- Updated dependencies [[`001c640`](https://github.com/stella/stella/commit/001c640e64cb00e3948bdf68a18a40347c65a40f)]:
+  - @stll/conditions@0.4.1
+
+## 0.6.5
+
+### Patch Changes
+
+- [#7924](https://github.com/stella/stella/pull/7924) [`8bcf336`](https://github.com/stella/stella/commit/8bcf336068af58ccb4a28150967aa128e586ba88) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Update compatible runtime dependencies: `@stll/time` 0.4.2, `temporal-polyfill` 1.0.6, `lucide-react` 1.65.0, Tiptap 3.32.1 and the MCP client 2.4.0.
+
 ## 0.6.4
 
 ### Patch Changes

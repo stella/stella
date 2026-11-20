@@ -40,6 +40,7 @@ import path from "node:path";
 import { repoRelativePath } from "@stll/portable-path";
 
 import { repositoryRules } from "./check-oxlint-rule-coverage.ts";
+import { lintCommand } from "./lint-command.ts";
 
 const REPO_ROOT = path.resolve(import.meta.dir, "..");
 const PLUGIN_DIRECTORY = ".oxlint-plugins";
@@ -324,15 +325,7 @@ const lintMirror = (
   // A piped stdout truncates large reports; write the JSON to a file instead.
   const reportPath = path.join(mirror, "oxlint-report.json");
   const result = Bun.spawnSync(
-    [
-      "bun",
-      "--bun",
-      "oxlint",
-      "-c",
-      "oxlint.config.ts",
-      "--format=json",
-      ...targets,
-    ],
+    lintCommand({ mode: "config-only" }, ["--format=json", ...targets]),
     { cwd: mirror, stdout: Bun.file(reportPath), stderr: "pipe" },
   );
   const stdout = readFileSync(reportPath, "utf-8");

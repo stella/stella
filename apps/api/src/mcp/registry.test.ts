@@ -238,6 +238,7 @@ describe("MCP tool registry", () => {
       "case_law_coverage",
       "read_case_law_decision",
       "read_case_law_citations",
+      "verify_quote",
       "open_case_law_decision",
       "read_case_law_decision_blocks",
       "preview_cited_provision",
@@ -246,6 +247,8 @@ describe("MCP tool registry", () => {
       "read_statute",
       "read_statute_provisions",
       "read_provision_history",
+      "search_guidance",
+      "read_guidance",
       "resolve_case_law_decision",
       "resolve_law_citation",
     ]);

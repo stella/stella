@@ -686,7 +686,7 @@ describe("first file version persistence", () => {
     }
     await testDb
       .update(entityVersions)
-      .set({ deletedAt: new Date() })
+      .set({ deletedAt: new Date("2026-04-30T09:00:00.000Z") })
       .where(eq(entityVersions.id, derivedVersionId));
 
     const replay = await writeTestFile(entityId, {

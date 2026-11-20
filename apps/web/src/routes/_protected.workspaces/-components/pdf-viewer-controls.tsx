@@ -10,7 +10,7 @@ import { Button } from "@stll/ui/button";
 import {
   ChevronDownIcon,
   ChevronUpIcon,
-  FilePenLineIcon,
+  EditPagesIcon,
   PrinterIcon,
 } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
@@ -22,6 +22,10 @@ import { downloadTabFile } from "@/components/inspector/file-download-service";
 import type { DownloadRendition } from "@/components/inspector/file-download-service.logic";
 import { PdfSignButton } from "@/components/inspector/pdf-sign-action";
 import type { PdfSignTarget } from "@/components/inspector/pdf-sign-action";
+import {
+  PDF_PAGE_FIELD_ROW_CLASS,
+  PDF_ZOOM_GROUP_CLASS,
+} from "@/components/pdf/pdf-viewer.pending";
 import {
   fetchPrintPdf,
   printPdfBuffer,
@@ -169,7 +173,7 @@ export const PdfViewerControls = ({
   const primaryControls = (
     <div className="flex items-center gap-1">
       {fieldId.length > 0 && <QueryViewFeedback view={fileMetadataView} />}
-      <div className="flex items-center rounded-md border p-0.5">
+      <div className={PDF_ZOOM_GROUP_CLASS}>
         <PeekPdfControls
           atMax={scaleOffset >= PDF_MAX_SCALE_OFFSET}
           atMin={scaleOffset <= PDF_MIN_SCALE_OFFSET}
@@ -222,7 +226,9 @@ export const PdfViewerControls = ({
           >
             <ChevronDownIcon className="size-3.5" />
           </Button>
-          <div className="ms-1.5 me-2 flex gap-x-1.5 text-sm">
+          {/* The "/ total" sits on the field's centre line, so it never
+              floats above the box. */}
+          <div className={PDF_PAGE_FIELD_ROW_CLASS}>
             <Input
               aria-label={t("common.currentPage")}
               autoComplete="off"
@@ -272,7 +278,7 @@ export const PdfViewerControls = ({
               <ToolbarIconAction
                 density="toolbar"
                 disabled={totalPages === 0}
-                icon={<FilePenLineIcon className="size-3.5" />}
+                icon={<EditPagesIcon className="size-3.5" />}
                 label={t("workspaces.pdf.pageEditor.editPages")}
                 onClick={onEditPages}
               />

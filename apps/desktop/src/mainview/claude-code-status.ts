@@ -1,3 +1,5 @@
+import { panic } from "better-result";
+
 /**
  * The managed Claude Code CLI's sign-in as the native side reports it
  * (`claude_code_auth::ClaudeCodeStatus`). It never carries a credential or
@@ -19,6 +21,8 @@ export type ClaudeCodeStatus =
   | { state: "signing_in"; signInPage: boolean }
   | { state: "signed_in"; email: string | null; plan: string | null }
   | { state: "api_key" }
+  /** The sign-in could not be read; it is read again after a wait. */
+  | { state: "unknown" }
   | { state: "failed"; reason: ClaudeCodeFailure };
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -39,7 +43,8 @@ export const isClaudeCodeStatus = (
   switch (value["state"]) {
     case "not_installed":
     case "signed_out":
-    case "api_key": {
+    case "api_key":
+    case "unknown": {
       return true;
     }
     case "signing_in": {
@@ -56,5 +61,28 @@ export const isClaudeCodeStatus = (
     default: {
       return false;
     }
+  }
+};
+
+/**
+ * Whether a `stella://settings/agents?harness=claude-code` link starts the
+ * card's "Sign in with Claude": only while Claude Code is installed, not
+ * signed in with a subscription and not already signing in. Otherwise the
+ * link only brings the card into view.
+ */
+export const claudeCodeLinkStartsSignIn = (status: ClaudeCodeStatus) => {
+  switch (status.state) {
+    case "signed_out":
+    case "api_key":
+    case "failed":
+      return true;
+    case "not_installed":
+    case "signing_in":
+    case "signed_in":
+    case "unknown":
+      return false;
+    default:
+      status satisfies never;
+      return panic("Unknown Claude Code state");
   }
 };

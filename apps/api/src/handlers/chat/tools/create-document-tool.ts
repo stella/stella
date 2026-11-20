@@ -1,6 +1,8 @@
 import { toolDefinition } from "@tanstack/ai";
 import * as v from "valibot";
 
+import { createDocumentInputSchema } from "@stll/api-contract/chat-create-document";
+
 import { CREATE_DOCUMENT_TOOL_NAME } from "@/api/handlers/chat/tools/native-chat-tool-names";
 import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
 
@@ -12,27 +14,8 @@ export { CREATE_DOCUMENT_TOOL_NAME } from "@/api/handlers/chat/tools/native-chat
 // matter-pick card), calls `POST /chat/tools/create-document`
 // to do the actual compile + persist, and posts the result
 // back via TanStack ChatClient.addToolResult. Mirrors the pattern
-// used by `suggest_changes`.
-//
-// `workspaceId` is intentionally NOT in the input schema —
-// matter resolution is a UI concern, not something the model
-// should pass.
-export const createDocumentToolInputSchema = v.strictObject({
-  name: v.pipe(
-    v.string(),
-    v.minLength(1),
-    v.maxLength(256),
-    v.description("Document file name (without .docx extension)"),
-  ),
-  source: v.pipe(
-    v.string(),
-    v.minLength(1),
-    v.description(
-      "Document body written as `@`-directives (see tool description).",
-    ),
-  ),
-});
-
+// used by `suggest_changes`. The input schema is shared with the
+// clients that resolve the call.
 const legalSourceDiagnosticSchema = v.strictObject({
   code: v.string(),
   message: v.string(),
@@ -157,6 +140,6 @@ export const createCreateDocumentTool = () =>
       "with the corrected full source.\n\n" +
       "PLACEHOLDERS: wrap unknown values in `[[ ]]` — the compiler highlights them in yellow so the user can spot and fill them. Example: `Buyer shall pay [[purchase price]] on or before [[closing date]].` Briefly tell the user in your reply which placeholders you left.\n\n" +
       "@signatures: one block at the end, key:value lines per party. Keys: `party` (legal name), `by` (signing person, alias `name`), `title` (role). Use the document-language alias for the keys — e.g. `party / strana / partei / partie / parte / fél`. Each `party:` line opens a new party block; omit `by` and `title` to leave a blank line for hand-fill. The compiler renders one column per party (party name bolded, signing space, rule, then your `by:` / `title:` values raw) — no compiler-added captions. If you want labels like 'Datum:' or 'Podpis', write them inline in the source above the @signatures block (with @paragraph), in the document's language.",
-    inputSchema: toTanStackToolSchema(createDocumentToolInputSchema),
+    inputSchema: toTanStackToolSchema(createDocumentInputSchema),
     outputSchema: toTanStackToolSchema(createDocumentToolOutputSchema),
   });

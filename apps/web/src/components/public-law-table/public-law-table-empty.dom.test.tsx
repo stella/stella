@@ -19,7 +19,7 @@ const { cleanup, render } = await import("@testing-library/react");
 const { IntlProvider } = await import("use-intl");
 const { FormattingProvider } = await import("@/i18n/formatting-context");
 const { PublicLawTable } = await import("./public-law-table");
-const { publicLawRowsPhase } = await import("./public-law-results-state.logic");
+const { routeRowsPhase } = await import("@/lib/query-view.logic");
 
 afterEach(cleanup);
 afterAll(async () => await unregisterDomEnvironment());
@@ -62,7 +62,7 @@ const tableFor = (query: {
   isLoading: boolean;
   isPlaceholderData: boolean;
 }): TableState => {
-  const phase = publicLawRowsPhase({
+  const phase = routeRowsPhase({
     ...query,
     keptRowCount: NO_ROWS.length,
     routeState: "loaded",

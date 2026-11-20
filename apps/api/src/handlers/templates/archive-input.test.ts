@@ -1,6 +1,7 @@
 import { Result } from "better-result";
 import { expect, test } from "bun:test";
 
+import { API_FILE_SECURITY_REJECTED_ERROR_CODE } from "@stll/api-contract";
 import { ZipArchive } from "@stll/docx-core/zip";
 
 import uploadSkill from "@/api/handlers/skills/upload";
@@ -67,9 +68,11 @@ test("archive entry validation returns a client response before parsing", async 
       },
     }),
   );
+  // A skill upload is read by its bytes, which are no archive here: the file
+  // scan refuses the mislabeled zip before any parser runs.
   expect(uploaded).toMatchObject({
     code: 422,
-    response: { message: "Invalid archive" },
+    response: { code: API_FILE_SECURITY_REJECTED_ERROR_CODE },
   });
 });
 

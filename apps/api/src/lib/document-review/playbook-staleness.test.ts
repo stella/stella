@@ -28,6 +28,7 @@ const pinnedPlaybook = (
   definitionSnapshot: {
     name: "Sale and purchase",
     positions: { version: 3, items: [] },
+    scope: null,
   },
 });
 
@@ -42,6 +43,7 @@ describe("resolvePlaybookStaleness", () => {
           definitionSnapshot: {
             name: "Positions confirmed for this review",
             positions: { version: 3, items: [] },
+            scope: null,
           },
         },
         latestVersionId: NEWER_VERSION_ID,

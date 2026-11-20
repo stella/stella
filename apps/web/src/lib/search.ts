@@ -4,6 +4,7 @@ import { DAY_IN_MS, Temporal } from "@stll/time";
 
 import { api } from "@/lib/api";
 import type { EntityKind, GlobalSearchResultType } from "@/lib/api-contract";
+import { invokeAppOnlyWrite } from "@/lib/capabilities/capability-request";
 import { unwrapApiResponse } from "@/lib/errors/api";
 import { stringCursorSeed } from "@/lib/infinite-query";
 import { toSafeId } from "@/lib/safe-id";
@@ -137,6 +138,15 @@ const searchKeys = {
         limit: params.limit,
       },
     ] as const,
+  caseLawSection: (params: CaseLawSectionParams) =>
+    [
+      ...searchKeys.owner(params),
+      "case-law-section",
+      {
+        query: normalizeSearchQuery(params.query),
+        limit: params.limit,
+      },
+    ] as const,
   preview: ({
     organizationId,
     userId,
@@ -227,6 +237,45 @@ export const searchInfiniteOptions = (params: SearchParams) =>
 
       return unwrapApiResponse(response);
     },
+    initialPageParam: stringCursorSeed(),
+    getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
+    placeholderData: (previousData, previousQuery) =>
+      belongsToSearchOwner(previousQuery?.queryKey, params)
+        ? previousData
+        : undefined,
+    enabled: params.enabled,
+  });
+
+export type CaseLawSectionParams = SearchOwner & {
+  /** UI-owned gate: the query is typed and settled. */
+  enabled: boolean;
+  query: string;
+  limit?: number | undefined;
+};
+
+/**
+ * The palette's case-law section. The public corpus is answered by its own
+ * search engine (per country, the organization's practised ones first), not by
+ * the matter search above, so the matter filters do not apply to it.
+ */
+export const caseLawSectionInfiniteOptions = (params: CaseLawSectionParams) =>
+  infiniteQueryOptions({
+    queryKey: searchKeys.caseLawSection(params),
+    // A read posted as a search body, like the matter search: the palette's
+    // own surface, with no automation capability behind it.
+    queryFn: async ({ signal, pageParam }) =>
+      await invokeAppOnlyWrite("search.case-law-section.list", async () =>
+        unwrapApiResponse(
+          await api.search["case-law"].post(
+            {
+              query: normalizeSearchQuery(params.query),
+              ...(pageParam ? { cursor: pageParam } : {}),
+              ...(params.limit !== undefined ? { limit: params.limit } : {}),
+            },
+            { fetch: { signal } },
+          ),
+        ),
+      ),
     initialPageParam: stringCursorSeed(),
     getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
     placeholderData: (previousData, previousQuery) =>

@@ -23,7 +23,12 @@ import {
 
 import { createUuid } from "@/lib/uuid";
 
-import { resetBrowserApproval } from "./browser-approval-mode";
+import {
+  observeBrowserPage,
+  resetBrowserApproval,
+  toBrowserObservedPage,
+} from "./browser-approval-mode";
+import { latestBrowserExtensionAnnouncement } from "./browser-extension-announcement";
 import type { BrowserCommandRun } from "./browser-tool-execution";
 
 const RESPONSE_TIMEOUT_MS = 45_000;
@@ -194,11 +199,7 @@ const markAnnounced = (runtime: BrowserExtensionBridgeRuntime): void => {
   }
 };
 
-const handleMessage = ({ data, origin, source }: MessageEvent): void => {
-  if (source !== window || origin !== window.location.origin) {
-    return;
-  }
-
+const handleExtensionMessage = (data: unknown): void => {
   const response = parseBrowserExtensionResponse(data);
   if (!response) {
     // An extension on another protocol version is installed, not missing:
@@ -249,8 +250,18 @@ const handleMessage = ({ data, origin, source }: MessageEvent): void => {
       controlledTabId: tabId,
       controllerId: runtime.identity?.controllerId ?? runtime.controllerId,
     };
+    // Website approvals judge the next command by this report, never by a
+    // URL the model wrote.
+    observeBrowserPage(toBrowserObservedPage(response.result.snapshot));
   }
   pending.resolve(response.result);
+};
+
+const handleMessage = ({ data, origin, source }: MessageEvent): void => {
+  if (source !== window || origin !== window.location.origin) {
+    return;
+  }
+  handleExtensionMessage(data);
 };
 
 const handleWindowFocus = (): void => {
@@ -268,6 +279,14 @@ export const mountBrowserExtensionBridge = (): (() => void) => {
       runtime.announcementDeadline = null;
       notifyConnectionListeners();
     }, BROWSER_EXTENSION_ANNOUNCEMENT_DEADLINE_MS);
+    // An extension on another protocol version ignores the ping; its load
+    // announcement, heard before this mount, is all that says it is there.
+    // One on this version answers the ping, so only a live answer counts:
+    // an extension disabled since it announced itself lets the deadline pass.
+    const announcement = latestBrowserExtensionAnnouncement();
+    if (announcement !== null && !parseBrowserExtensionResponse(announcement)) {
+      handleExtensionMessage(announcement);
+    }
   }
 
   return () => {
@@ -294,6 +313,7 @@ export const mountBrowserExtensionBridge = (): (() => void) => {
     }
     runtime.pendingRequests.clear();
     bridgeRuntime = null;
+    observeBrowserPage(null);
     notifyConnectionListeners();
   };
 };

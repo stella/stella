@@ -47,7 +47,7 @@ jobs:
       github.event_name != 'workflow_dispatch'
       || github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
-    timeout-minutes: 5
+    timeout-minutes: 15
     permissions:
       contents: read
     outputs:
@@ -190,6 +190,42 @@ jobs:
           retention-days: 1
           if-no-files-found: error
 
+      - name: Checkout MCP export tooling
+        if: steps.release.outputs.channel == 'final'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.workflow_sha }}
+          path: .surface-tooling
+          persist-credentials: false
+          sparse-checkout: |
+            scripts/export-release-mcp-surface.sh
+            scripts/retry.sh
+            apps/api/package.json
+            apps/api/scripts/export-mcp-surface.ts
+            apps/api/src/env-schema.ts
+            apps/api/src/tests/setup-env.ts
+            apps/api/src/tests/test-database-environment.ts
+          sparse-checkout-cone-mode: false
+      - name: Set up Bun for the released MCP surface
+        if: steps.release.outputs.channel == 'final'
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: package.json
+          no-cache: true
+      - name: Export released MCP surface
+        if: steps.release.outputs.channel == 'final'
+        timeout-minutes: 8
+        run: bash .surface-tooling/scripts/export-release-mcp-surface.sh . "$RUNNER_TEMP/mcp-surface.json"
+      - name: Pass released MCP surface to the publisher
+        if: steps.release.outputs.channel == 'final'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: released-mcp-surface
+          path: ${{ runner.temp }}/mcp-surface.json
+          if-no-files-found: error
+          overwrite: true
+          retention-days: 1
+
   smoke:
     name: Smoke test API image
     runs-on: ubuntu-24.04-arm
@@ -210,7 +246,7 @@ jobs:
           persist-credentials: false
 
       - name: Login to GitHub Container Registry
-        uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
+        uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
@@ -277,8 +313,8 @@ jobs:
           CI_IMAGE_MIRROR_ENABLED: ${{ github.event.pull_request.head.repo.fork != true && github.token != '' }}
         run: |
           set -euo pipefail
-          POSTGRES_IMAGE="$(bun .workflow-tooling/scripts/ci-service-images.ts --image docker.io/library/postgres:18.6@sha256:74935e72241653ca55e0414067e6d8763aceb8a810eb51b452253ec3dcfc4336)"
-          REDIS_IMAGE="$(bun .workflow-tooling/scripts/ci-service-images.ts --image docker.io/library/redis:8@sha256:298e5b3bc566bade82f46ad5511777a4a07a294097ce16ada2f6a42be5239df5)"
+          POSTGRES_IMAGE="$(bun .workflow-tooling/scripts/ci-service-images.ts --image docker.io/library/postgres:18.6@sha256:e3d24f6906d0760bf4da0dae872415391ededefad23fd471c47dc53b0ddf3c42)"
+          REDIS_IMAGE="$(bun .workflow-tooling/scripts/ci-service-images.ts --image docker.io/library/redis:8@sha256:1f88291b4c57bdf249f02eb085a8669889b2d2954e91d4de5118a5da6b78dd53)"
           bash .workflow-tooling/scripts/retry.sh docker pull "$POSTGRES_IMAGE"
           bash .workflow-tooling/scripts/retry.sh docker pull "$REDIS_IMAGE"
           printf 'POSTGRES_IMAGE=%s\nREDIS_IMAGE=%s\n' "$POSTGRES_IMAGE" "$REDIS_IMAGE" >> "$GITHUB_ENV"
@@ -350,9 +386,11 @@ jobs:
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+        with:
+          cleanup: false
 
       - name: Login to GitHub Container Registry
-        uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
+        uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
@@ -460,9 +498,11 @@ jobs:
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+        with:
+          cleanup: false
 
       - name: Login to GitHub Container Registry
-        uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
+        uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
@@ -695,9 +735,11 @@ jobs:
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+        with:
+          cleanup: false
 
       - name: Login to GitHub Container Registry
-        uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
+        uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
@@ -907,7 +949,7 @@ jobs:
           path: .release-source
           persist-credentials: false
       - name: Login to GitHub Container Registry
-        uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
+        uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
@@ -980,9 +1022,11 @@ jobs:
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+        with:
+          cleanup: false
 
       - name: Login to GitHub Container Registry
-        uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
+        uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
@@ -1275,6 +1319,7 @@ jobs:
     needs: resolve
     if: ${{ success() && needs.resolve.outputs.channel == 'final' }}
     permissions:
+      actions: read
       contents: write
       packages: write
       id-token: write # attest the aliased web image's publication
@@ -1301,10 +1346,17 @@ jobs:
         with:
           ref: ${{ github.workflow_sha }}
           persist-credentials: false
+      - name: Download released MCP surface
+        timeout-minutes: 3
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/download-run-artifact.sh --name released-mcp-surface --path "$RUNNER_TEMP/released-surface"
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+        with:
+          cleanup: false
       - name: Login to GitHub Container Registry
-        uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
+        uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
@@ -1338,6 +1390,7 @@ jobs:
             bash "$GH_RETRY_SCRIPT" release create "$RELEASE_REF" --draft --verify-tag --title "$RELEASE_REF" --notes-file NOTES.md
           fi
           bash "$GH_RETRY_SCRIPT" release upload "$RELEASE_REF" release-manifest.json --clobber
+          bash "$GH_RETRY_SCRIPT" release upload "$RELEASE_REF" "$RUNNER_TEMP/released-surface/mcp-surface.json" --clobber
           for asset in rc/*.zip; do
             [[ -f "$asset" ]] || continue
             bash "$GH_RETRY_SCRIPT" release upload "$RELEASE_REF" "$asset" --clobber
@@ -1692,9 +1745,11 @@ jobs:
         run: echo "GH_RETRY_SCRIPT=$GITHUB_WORKSPACE/scripts/gh-retry.sh" >> "$GITHUB_ENV"
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+        with:
+          cleanup: false
 
       - name: Login to GitHub Container Registry
-        uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
+        uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
@@ -1930,8 +1985,10 @@ jobs:
           persist-credentials: false
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+        with:
+          cleanup: false
       - name: Login to GitHub Container Registry
-        uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
+        uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}

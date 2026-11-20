@@ -19,7 +19,10 @@ import { ContactBreadcrumb } from "@/components/breadcrumbs/contact-breadcrumb";
 import { PdfBreadcrumb } from "@/components/breadcrumbs/pdf-breadcrumb";
 import { PlaybooksBreadcrumb } from "@/components/breadcrumbs/playbooks-breadcrumb";
 import { BreadcrumbLink } from "@/components/breadcrumbs/shared";
-import { SkillBreadcrumb } from "@/components/breadcrumbs/skill-breadcrumb";
+import {
+  SkillBreadcrumb,
+  ToolBreadcrumb,
+} from "@/components/breadcrumbs/skill-breadcrumb";
 import { TemplatesBreadcrumb } from "@/components/breadcrumbs/templates-breadcrumb";
 import { WorkspaceBreadcrumb } from "@/components/breadcrumbs/workspace-breadcrumb";
 import { getTranslator } from "@/i18n/i18n-store";
@@ -34,9 +37,15 @@ import type { RouteBreadcrumb } from "@/routes/-route-presentation";
  * several items, so the fold works on the drawn items, and the ellipsis shows
  * only when there is an item to fold (its two fold items, then at least item,
  * separator, item).
+ *
+ * The list fills the bar rather than sizing to its items: a crumb that takes
+ * "the rest of the bar" (`flex-1`, the chat title) then shares real free
+ * space instead of depending on how the engine sizes a zero-basis item inside
+ * a list sized to its content, which left the title cut short beside an empty
+ * header in the desktop app.
  */
 const APP_CRUMB_LIST_CLASS = cn(
-  "flex-nowrap overflow-hidden has-[input]:w-full",
+  "min-w-0 flex-1 flex-nowrap overflow-hidden",
   "max-md:[&>li:not(:last-child,[data-crumb-fold])]:hidden",
   "max-md:[&>li:last-child]:min-w-0",
   "max-md:[&>li:last-child]:flex-1",
@@ -115,6 +124,9 @@ function renderBreadcrumb(
   }
   if (decision.detail === "skill") {
     return <SkillBreadcrumb />;
+  }
+  if (decision.detail === "tool") {
+    return <ToolBreadcrumb />;
   }
   return <TemplatesBreadcrumb />;
 }

@@ -18,6 +18,7 @@ import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
 import { ReviewStatusBadge } from "@stll/ui/review-status-badge";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import type { ConditionChipState } from "@/components/templates/template-ai-conditions.logic";
@@ -236,7 +237,7 @@ const ConditionChip = ({
           tone={tone}
           variant={state.kind === "forced" ? "solid" : "outline"}
         >
-          <span className="text-foreground min-w-0 truncate">{label}</span>
+          <TruncatedText className="text-foreground">{label}</TruncatedText>
           <span className="shrink-0 tabular-nums">{answerText()}</span>
         </ReviewStatusBadge>
       </span>
@@ -263,12 +264,17 @@ type DecideConditionsOptionsInput = QueryOptionsInput<
 
 const requestConditionDecisions =
   (key: DecideConditionsKey, values: Record<string, unknown>) =>
-  async ({ signal }: { signal: AbortSignal }) =>
-    unwrapApiResponse(
-      await api
-        .templates({ templateId: toSafeId<"template">(key.templateId) })
-        ["decide-conditions"].post({ values }, { fetch: { signal } }),
+  async ({ signal }: { signal: AbortSignal }) => {
+    const templateApi = api.templates({
+      templateId: toSafeId<"template">(key.templateId),
+    });
+    return unwrapApiResponse(
+      await templateApi["decide-conditions"].post(
+        { values },
+        { fetch: { signal } },
+      ),
     );
+  };
 
 const decideConditionsOptions = ({
   key,

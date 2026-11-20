@@ -9,6 +9,10 @@ import {
   parseCanonicalChatSourceCitationHref,
 } from "@stll/api-contract";
 import { isCaseLawDecisionId } from "@stll/api-contract/case-law-decision-route";
+import {
+  isReferenceHref,
+  referenceFromHref,
+} from "@stll/api-contract/chat-reference-href";
 import { sanitizeHref } from "@stll/decision-reader/sanitize-href";
 import { isFolioBlockId } from "@stll/folio-react";
 import { MailIcon } from "@stll/ui/icons";
@@ -30,6 +34,7 @@ import {
 } from "@/components/chat/entity-open";
 import { useExternalSourceStore } from "@/components/chat/external-source-store";
 import { LegalCitationLink } from "@/components/chat/legal-citation-link";
+import type { CITATION_LEAD_IN_ATTRIBUTE } from "@/components/chat/rehype-citation-lead-in";
 import { activateSourceCitation } from "@/components/chat/source-citation-navigation";
 import { InlinePill } from "@/components/inline-pill";
 import { useInspectorCommandStore } from "@/components/inspector/inspector-command-store";
@@ -38,10 +43,6 @@ import {
   MarkdownReferenceChip,
   ReferenceFileTypeIcon,
 } from "@/components/references/reference-chip";
-import {
-  isReferenceHref,
-  referenceFromHref,
-} from "@/components/references/reference.logic";
 import { env } from "@/env";
 import { ProxyChatLink } from "@/features/chat/components/proxy-chat-link";
 import { useVerifiedEmailCitationTarget } from "@/hooks/use-verified-email-citation-target";
@@ -125,14 +126,25 @@ type StreamdownMentionLinkProps =
   React.AnchorHTMLAttributes<HTMLAnchorElement> & {
     interactive: boolean;
     workspaceId?: string | undefined;
+    /** `written`: a web link shows the text it was written with, not a
+     *  citation chip (a person's own message, not a model's cited source).
+     *  References, mentions and citations render as chips either way. */
+    externalLinks?: "citation" | "written" | undefined;
+    /** The prose just before the link (`rehypeCitationLeadIn`): an inline
+     *  decision citation drops its court badge when this names the court. */
+    [CITATION_LEAD_IN_ATTRIBUTE]?: string | undefined;
   };
 
 const ReferenceCitationLink = ({
   href,
   children,
   interactive,
+  leadIn,
   workspaceId,
-}: StreamdownMentionLinkProps & { href: string }) => {
+}: Omit<StreamdownMentionLinkProps, typeof CITATION_LEAD_IN_ATTRIBUTE> & {
+  href: string;
+  leadIn: string | undefined;
+}) => {
   const parsed = referenceFromHref(href, getPlainText(children) ?? "", {
     renderWorkspaceId: workspaceId,
   });
@@ -160,6 +172,7 @@ const ReferenceCitationLink = ({
     return (
       <ChatDecisionCitation
         decisionId={decision.locator.ref}
+        leadIn={leadIn}
         passage={children}
         paragraph={decision.paragraph ?? undefined}
         interactive={interactive}
@@ -169,6 +182,7 @@ const ReferenceCitationLink = ({
   if (decision?.locator.type === "route") {
     return (
       <ChatRouteDecisionCitation
+        leadIn={leadIn}
         params={decision.locator.params}
         passage={children}
         paragraph={decision.paragraph ?? undefined}
@@ -185,6 +199,7 @@ const ReferenceCitationLink = ({
       anchorId={decision?.paragraph?.anchorId}
       fallback={fallback}
       interactive={interactive}
+      leadIn={leadIn}
       linkIconSource={{ kind: "tool-source" }}
       source={source}
       workspaceId={workspaceId}
@@ -199,6 +214,10 @@ export const StreamdownMentionLink = ({
   children,
   interactive,
   workspaceId,
+  externalLinks = "citation",
+  // A literal key: the React Compiler cannot lower a computed key in a
+  // destructuring pattern. The props type keys it by the shared constant.
+  "data-lead-in": leadIn,
   ...props
 }: StreamdownMentionLinkProps) => {
   const emailCitation = useVerifiedEmailCitationTarget(href ?? "", workspaceId);
@@ -264,6 +283,7 @@ export const StreamdownMentionLink = ({
       <ReferenceCitationLink
         href={href}
         interactive={interactive}
+        leadIn={leadIn}
         workspaceId={workspaceId}
       >
         {children}
@@ -276,11 +296,23 @@ export const StreamdownMentionLink = ({
     (href.startsWith("/")
       ? getHttpUrl(new URL(href, env.VITE_PUBLIC_APP_URL).toString())
       : null);
+  if (httpUrl && externalLinks === "written") {
+    return (
+      <ProxyChatLink
+        href={href}
+        iconSource={{ kind: "model-text" }}
+        urlLabel="written"
+      >
+        {children}
+      </ProxyChatLink>
+    );
+  }
   if (httpUrl) {
     return (
       <ExternalCitationLink
         href={href}
         interactive={interactive}
+        leadIn={leadIn}
         url={httpUrl}
         workspaceId={workspaceId ?? null}
       >
@@ -689,12 +721,14 @@ const ExternalCitationLink = ({
   url,
   workspaceId,
   interactive,
+  leadIn,
 }: {
   children: React.ReactNode;
   href: string;
   url: URL;
   workspaceId: string | null;
   interactive: boolean;
+  leadIn: string | undefined;
 }) => {
   const hostname = url.hostname.replace(/^www\./u, "");
   const inlineLabel = (getPlainText(children) ?? "").trim();
@@ -709,6 +743,7 @@ const ExternalCitationLink = ({
     <LegalCitationLink
       appearance="inline"
       interactive={interactive}
+      leadIn={leadIn}
       externalHref={href}
       // A link the source store does not know came from model text only.
       linkIconSource={

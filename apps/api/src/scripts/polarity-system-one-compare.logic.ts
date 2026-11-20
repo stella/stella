@@ -26,6 +26,7 @@ import type {
   ClassifiablePolarity,
   Polarity,
 } from "@/api/handlers/case-law/polarity/consts";
+import type { POLARITY_READINGS } from "@/api/handlers/case-law/polarity/model-readings";
 import type { DecisionModelProvider } from "@/api/lib/ai-config";
 import { SYSTEM_ONE_ERROR_KINDS } from "@/api/lib/workflow/decisions/system-one";
 import type { SystemOneErrorKind } from "@/api/lib/workflow/decisions/system-one";
@@ -91,6 +92,17 @@ export type DecisionReading = {
   /** The versioned model that answered, as the response reports it. */
   model: string;
 };
+
+/** The form choice contributes to neutral in a polarity-only report. */
+export const polarityProbabilitiesOf = (
+  probabilities: Record<keyof typeof POLARITY_READINGS, number>,
+) =>
+  ({
+    positive: probabilities.positive,
+    supportive: probabilities.supportive,
+    neutral: probabilities.neutral + probabilities.form,
+    negative: probabilities.negative,
+  }) satisfies DecisionReading["probabilities"];
 
 export type DecisionOutcome =
   | ({ status: "read" } & DecisionReading)

@@ -1,0 +1,7 @@
+{
+  "capture": "recorded",
+  "sha256": "bd14ad545fcea08a62e118d39744b3fa06170bbe46a356f7a6ec8a0953cb560b",
+  "sourceUrl": "https://jurisdf.tjdft.jus.br/api/v1/pesquisa",
+  "capturedAt": "2026-10-25T02:26:27.000Z",
+  "note": "POST body {\"termosAcessorios\":[{\"campo\":\"uuid\",\"valor\":\"aba1c2e4-73c5-4b68-b27d-0cd63c2c7b2f\"}],\"pagina\":0,\"tamanho\":1,\"espelho\":false,\"inteiroTeor\":false,\"sinonimos\":false,\"retornaInteiroTeor\":true,\"retornaTotalizacao\":false}; an acórdão of the Câmara Criminal that names a revisor"
+}

@@ -57,6 +57,7 @@ import { chargeMcpReadBytes } from "@/api/lib/rate-limit/mcp-read-fence";
 import { isEventStreamResponse, withSseHeartbeat } from "@/api/lib/sse";
 import type { SseStreamBinding } from "@/api/lib/sse";
 import { mcpActionPeriodIdentity } from "@/api/mcp/action-admission-identity";
+import { recordAgentRunAppCall } from "@/api/mcp/agent-run-app-calls";
 import {
   resolveMachineApiKeySession,
   revalidateMachineApiKeySession,
@@ -91,6 +92,7 @@ import {
 import { isMcpDescriptorFeatureEnabled } from "@/api/mcp/feature-access";
 import type { McpFeatureAccessContext } from "@/api/mcp/feature-access";
 import { isMcpToolFeatureEnabled } from "@/api/mcp/gateway/list-tools";
+import type { SkillToolSession } from "@/api/mcp/gateway/mode-policy";
 import {
   getSkillPrompt,
   listSkillPrompts,
@@ -236,6 +238,7 @@ type McpServerDependencies = {
   getMcpToolRequiredScopesHint: (
     toolName: string,
     mode?: McpMode,
+    session?: SkillToolSession,
   ) => readonly ToolScope[] | undefined;
   handleMcpToolCall: ({
     args,
@@ -1080,7 +1083,7 @@ export const createMcpHttpRequestHandler = ({
       id: toolName,
       featureId: staticTool?.featureId,
     })
-      ? getMcpToolRequiredScopesHint(toolName, mode)
+      ? getMcpToolRequiredScopesHint(toolName, mode, context)
       : undefined;
     const missingHintedScope = requiredScopesHint?.find(
       (scope) => !hasGrantedScope(session.scopes, scope),
@@ -1203,7 +1206,7 @@ export const createMcpHttpRequestHandler = ({
         toolName === MCP_WEB_HANDOFF_TOOL || mode === "anonymized"
           ? result
           : await decorateToolResult(result, context);
-      return await boundMcpToolResult({
+      const answered = await boundMcpToolResult({
         result: decoratedResult,
         requestId: mcpReq.id,
         definition,
@@ -1213,6 +1216,16 @@ export const createMcpHttpRequestHandler = ({
         toolName,
         chargeReadBytes,
       });
+      // What the run is answered, once its limits passed, and before the
+      // answer leaves, so a chat turn reading the run finds it. A read the
+      // limits refused answers an error, which keeps nothing.
+      await recordAgentRunAppCall({
+        context,
+        toolName,
+        args: toolRequest.params.arguments ?? {},
+        result: answered,
+      });
+      return answered;
     };
     let consumesServices = definition.consumesServices;
     if (

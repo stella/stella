@@ -2,6 +2,7 @@ import { Result } from "better-result";
 
 import {
   type ChatLocalHarnessReadiness,
+  type ChatLocalLinkedFolderReadiness,
   type ChatLocalRunReadiness,
   isChatLocalRunHarness,
 } from "@stll/api-contract/chat-run-target";
@@ -10,6 +11,7 @@ import { DESKTOP_RUNNER_FEATURE_ID } from "@stll/api-contract/desktop-runner";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { loadFeatureAccessSnapshot } from "@/api/lib/auth/feature-access/context";
+import { readLocalRunApprovalCeiling } from "@/api/lib/chat/local-run-approval-ceiling";
 import type { DesktopRunnerControl } from "@/api/lib/desktop-runner/control";
 import { getDesktopRunnerControl } from "@/api/lib/desktop-runner/runtime";
 import { isFeatureEnabled } from "@/api/lib/feature-access/policy";
@@ -33,7 +35,8 @@ type LocalRunnersDependencies = {
 /**
  * The member's computers and what each harness a chat turn can run on last
  * reported (ready with its models, sign-in needed, limited until a time, not
- * installed). `hidden` when the member cannot run chat turns on a computer,
+ * installed), and the most the organization lets a run do without asking.
+ * `hidden` when the member cannot run chat turns on a computer,
  * so the composer offers nothing.
  */
 const createLocalRunnersEndpoint = (dependencies?: LocalRunnersDependencies) =>
@@ -54,6 +57,9 @@ const createLocalRunnersEndpoint = (dependencies?: LocalRunnersDependencies) =>
     if (runners.isErr()) {
       return Result.err(runners.error);
     }
+    const maxApprovals = yield* Result.await(
+      readLocalRunApprovalCeiling(safeDb, owner.organizationId),
+    );
     const enabled: ChatLocalRunReadiness = {
       status: "enabled",
       runners: runners.value.map((runner) => ({
@@ -66,7 +72,16 @@ const createLocalRunnersEndpoint = (dependencies?: LocalRunnersDependencies) =>
               ? [{ ...report, id: report.id }]
               : [],
         ),
+        linkedFolders: runner.linkedFolders.map(
+          (folder): ChatLocalLinkedFolderReadiness => ({
+            ...folder,
+            approval: runner.approvedFolderIds.includes(folder.id)
+              ? "approved"
+              : "pending",
+          }),
+        ),
       })),
+      maxApprovals,
     };
     return answer(enabled);
   });

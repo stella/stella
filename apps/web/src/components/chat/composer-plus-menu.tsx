@@ -37,6 +37,7 @@ import {
   MenuSubTrigger,
   MenuTrigger,
 } from "@stll/ui/menu";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { typedCharacter } from "@stll/ui/typed-character";
 import { cn } from "@stll/ui/utils";
 
@@ -74,7 +75,6 @@ import {
   ComposerEditModeSubmenu,
 } from "@/components/chat/chat-edit-mode-menu";
 import {
-  CHAT_MODEL_MENU_POPUP_CLASS_NAME,
   ChatModelOptionsMenu,
   type ComposerModelsMenuProps,
 } from "@/components/chat/chat-model-options-menu";
@@ -166,7 +166,7 @@ type ComposerPlusMenuProps = {
    *  (a thread with nothing to leave, or a rotation under way), mirroring
    *  the dock's own new-chat button which keeps the same action. */
   onNewThread?: (() => void) | null | undefined;
-  models?: ComposerModelsMenuProps | undefined;
+  models?: ComposerModelsMenuProps | null | undefined;
   /** Enables the Edit mode submenu (how AI edits land in the open DOCX).
    *  Lives only here, never in the dock; omit on surfaces without a
    *  selectable edit mode. */
@@ -488,11 +488,13 @@ const ComposerModelsSubmenu = ({
     <MenuSub onOpenChange={setOpen} open={open}>
       <MenuSubTrigger
         {...guideAnchor(GUIDE_ANCHORS.chatMenuModels, guideAnchorsEnabled)}
+        // Until the stored choice is known, nothing can be picked on it.
+        disabled={models.state === "loading"}
       >
         <CpuIcon />
         {t("chat.composerMenu.models")}
       </MenuSubTrigger>
-      <MenuSubPopup className={CHAT_MODEL_MENU_POPUP_CLASS_NAME}>
+      <MenuSubPopup className="w-[min(32rem,calc(100vw-2rem))] max-w-(--available-width)">
         <ChatModelOptionsMenu
           enabled={enabled && open}
           key={open ? "open" : "closed"}
@@ -551,25 +553,20 @@ const ComposerSkillItemBody = ({
       className={cn("mt-0.5 self-start", blocked && "text-muted-foreground")}
     />
     <span className="min-w-0 flex-1">
-      <BidiText
-        as="span"
-        className={cn(
-          "block truncate text-sm",
-          blocked && "text-muted-foreground",
-        )}
+      <TruncatedText
+        className={cn("text-sm", blocked && "text-muted-foreground")}
+        render={<BidiText as="span" />}
       >
         {itemName(item)}
-      </BidiText>
-      <BidiText
-        as="span"
-        className={cn(
-          "text-muted-foreground block text-xs",
-          // The reason is the row's point; let it wrap rather than clip.
-          !blocked && "truncate",
-        )}
+      </TruncatedText>
+      <TruncatedText
+        className="text-muted-foreground block text-xs"
+        // The reason is the row's point; let it wrap rather than clip.
+        lines={blocked ? "none" : 1}
+        render={<BidiText as="span" />}
       >
         {secondary}
-      </BidiText>
+      </TruncatedText>
     </span>
   </>
 );
@@ -735,10 +732,12 @@ export const ComposerSkillsMenu = ({
   const unavailableSkillIds = availability?.hidden;
   const browserExtensionStoreUrl = useBrowserExtensionStoreUrl();
   const oneClickNeeds = oneClickSkillNeeds(chat, browserExtensionStoreUrl);
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- load-bearing, without this memo boundary the React Compiler does not cache this value
   const shortcutRows = useMemo(
     () => commandShortcutRowsFromSkillPages(data?.pages, unavailableSkillIds),
     [data?.pages, unavailableSkillIds],
   );
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- load-bearing, without this memo boundary the React Compiler does not cache this value
   const items = useMemo(
     () =>
       buildChatSlashItems({
@@ -1289,9 +1288,9 @@ const ComposerMentionItem = ({
         {...capabilityProps}
       >
         <MentionIcon mention={option} />
-        <BidiText as="span" className="min-w-0 flex-1 truncate">
+        <TruncatedText className="flex-1" render={<BidiText as="span" />}>
           {option.label}
-        </BidiText>
+        </TruncatedText>
       </MenuItem>
     )}
   </CapabilityAction>
@@ -1326,10 +1325,7 @@ const ComposerContextMatterSub = ({
     enabled: open,
   });
   const activeView = views?.at(0) ?? null;
-  const { filters, sorts } = useMemo(
-    () => getMentionViewScope(activeView?.layout),
-    [activeView?.layout],
-  );
+  const { filters, sorts } = getMentionViewScope(activeView?.layout);
   // Same 150ms settle window as the workspace mention source's entity search
   // (`use-workspace-chat-mention-registration.ts`), so typing here produces
   // the same request cadence instead of a query per keystroke.
@@ -1337,16 +1333,13 @@ const ComposerContextMatterSub = ({
     search.trim(),
     CHAT_MENTION_SEARCH_DEBOUNCE_MS,
   );
-  const entitiesKey = useMemo(
-    () => ({
-      workspaceId: matter.id,
-      filters,
-      sorts,
-      ...(debouncedSearch && { search: debouncedSearch }),
-      pageSize: CHAT_MENTION_ENTITY_RESULT_LIMIT,
-    }),
-    [debouncedSearch, filters, matter.id, sorts],
-  );
+  const entitiesKey = {
+    workspaceId: matter.id,
+    filters,
+    sorts,
+    ...(debouncedSearch && { search: debouncedSearch }),
+    pageSize: CHAT_MENTION_ENTITY_RESULT_LIMIT,
+  };
   const { data: entitiesData, isError: entitiesFailed } = useQuery({
     ...useEntitiesOptions(entitiesKey),
     enabled: open && views !== undefined,
@@ -1359,7 +1352,7 @@ const ComposerContextMatterSub = ({
     threadRef.scope === "workspace" && threadRef.workspaceId === matter.id
       ? undefined
       : matter.id;
-  const fileOptions = useMemo<ChatMentionOption[]>(() => {
+  const fileOptions: ChatMentionOption[] = (() => {
     if (!entitiesData) {
       return [];
     }
@@ -1370,15 +1363,12 @@ const ComposerContextMatterSub = ({
         sourceWorkspaceId,
       }),
     );
-  }, [entitiesData, matter.id, sourceWorkspaceId]);
-  const matterMentionOption = useMemo<ChatMentionOption | undefined>(
-    () =>
-      buildWorkspaceMentionOptions({
-        workspaces: [{ id: matter.id, name: matter.name }],
-        firstViewIdsByWorkspaceId: undefined,
-      }).at(0),
-    [matter.id, matter.name],
-  );
+  })();
+  const matterMentionOption: ChatMentionOption | undefined =
+    buildWorkspaceMentionOptions({
+      workspaces: [{ id: matter.id, name: matter.name }],
+      firstViewIdsByWorkspaceId: undefined,
+    }).at(0);
 
   const renderFileOptions = () => {
     if (viewsFailed || entitiesFailed) {
@@ -1421,9 +1411,9 @@ const ComposerContextMatterSub = ({
           className="size-3.5 shrink-0"
           matter={{ id: matter.id, color: matter.color }}
         />
-        <BidiText as="span" className="min-w-0 flex-1 truncate">
+        <TruncatedText className="flex-1" render={<BidiText as="span" />}>
           {matter.name}
-        </BidiText>
+        </TruncatedText>
       </MenuSubTrigger>
       <MenuSubPopup
         className="w-72"
@@ -1453,15 +1443,18 @@ const ComposerContextMatterSub = ({
                   matter={{ id: matter.id, color: matter.color }}
                 />
                 <span className="min-w-0 flex-1">
-                  <BidiText as="span" className="block truncate text-sm">
+                  <TruncatedText
+                    className="text-sm"
+                    render={<BidiText as="span" />}
+                  >
                     {matter.name}
-                  </BidiText>
-                  <BidiText
-                    as="span"
-                    className="text-muted-foreground block truncate text-xs"
+                  </TruncatedText>
+                  <TruncatedText
+                    className="text-muted-foreground text-xs"
+                    render={<BidiText as="span" />}
                   >
                     {t("chat.composerMenu.referenceMatter")}
-                  </BidiText>
+                  </TruncatedText>
                 </span>
               </MenuItem>
             )}
@@ -1511,7 +1504,7 @@ export const ComposerMcpSubmenu = ({
   const connectionsData =
     connectionsView.type === "items" ? connectionsView.items : undefined;
 
-  const connectionBySlug = useMemo(() => {
+  const connectionBySlug = (() => {
     const map = new Map<
       string,
       NonNullable<typeof connectionsData>["connections"][number]
@@ -1522,7 +1515,7 @@ export const ComposerMcpSubmenu = ({
       }
     }
     return map;
-  }, [connectionsData]);
+  })();
 
   const connectors = connectorsData ? connectorsData.connectors : [];
   const rows = filterBySearchQuery({
@@ -1576,9 +1569,9 @@ export const ComposerMcpSubmenu = ({
       if (!connection) {
         return (
           <MenuItem key={connector.id} onClick={openMcpSettings}>
-            <BidiText as="span" className="truncate">
+            <TruncatedText render={<BidiText as="span" />}>
               {connector.displayName}
-            </BidiText>
+            </TruncatedText>
           </MenuItem>
         );
       }
@@ -1594,9 +1587,9 @@ export const ComposerMcpSubmenu = ({
             );
           }}
         >
-          <BidiText as="span" className="truncate">
+          <TruncatedText render={<BidiText as="span" />}>
             {connector.displayName}
-          </BidiText>
+          </TruncatedText>
         </MenuCheckboxItem>
       );
     });

@@ -313,7 +313,7 @@ describe("signed thinking keeps its place", () => {
     ).toEqual(["a thinking block has no signature"]);
   });
 
-  test("a Gemini call replayed without the signature it was produced with is a finding", () => {
+  describe("Gemini thought signatures", () => {
     const answer = `data: ${JSON.stringify({
       candidates: [
         {
@@ -329,10 +329,16 @@ describe("signed thinking keeps its place", () => {
         },
       ],
     })}\r\n\r\n`;
-    const signedCalls = new Map(signedGeminiCallsOf(answer));
-    expect([...signedCalls]).toEqual([["a", "EoYCCoMC"]]);
-
-    const replayed = (part: Record<string, unknown>): ProviderRequest => ({
+    const signedCalls = new Map(
+      signedGeminiCallsOf(answer).map(([id, signature]) => [
+        id,
+        { signature, model: "gemini-4-carbon" },
+      ]),
+    );
+    const replayed = (
+      part: Record<string, unknown>,
+      model: string,
+    ): ProviderRequest => ({
       body: {
         contents: [
           { parts: [{ text: "Delete the draft" }], role: "user" },
@@ -351,12 +357,36 @@ describe("signed thinking keeps its place", () => {
         ],
       },
       format: "gemini",
+      model,
       signedCalls,
     });
-    expect(problemsOf(replayed({ thoughtSignature: "EoYCCoMC" }))).toEqual([]);
-    expect(problemsOf(replayed({}))).toEqual([
-      "a replayed tool call lost the thinking produced with it",
-    ]);
+
+    test("an answer's signed calls are read with their signatures", () => {
+      expect(signedGeminiCallsOf(answer)).toEqual([["a", "EoYCCoMC"]]);
+    });
+
+    test("a call replayed to the same model without its signature is a finding", () => {
+      expect(
+        problemsOf(
+          replayed({ thoughtSignature: "EoYCCoMC" }, "gemini-4-carbon"),
+        ),
+      ).toEqual([]);
+      expect(problemsOf(replayed({}, "gemini-4-carbon"))).toEqual([
+        "a replayed tool call lost the thinking produced with it",
+      ]);
+      expect(
+        problemsOf(replayed({ thoughtSignature: "other" }, "gemini-4-carbon")),
+      ).toEqual(["a replayed tool call lost the thinking produced with it"]);
+    });
+
+    test("a call replayed to another Gemini model may drop the previous model's signature", () => {
+      expect(problemsOf(replayed({}, "gemini-4-hydrogen"))).toEqual([]);
+      expect(
+        problemsOf(
+          replayed({ thoughtSignature: "EoYCCoMC" }, "gemini-4-hydrogen"),
+        ),
+      ).toEqual([]);
+    });
   });
 
   test("Bedrock reasoning without its signature is a finding", () => {

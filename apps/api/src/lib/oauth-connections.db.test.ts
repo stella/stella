@@ -59,6 +59,7 @@ import type { TestDatabase } from "@/api/tests/security/test-utils";
 const routeServer = serveRoutesForTest(meRoute);
 afterAll(async () => {
   await routeServer.stop();
+  await releaseAgentAuthTestDb();
 });
 
 // Disconnecting a connected app from the settings page, through the real
@@ -90,10 +91,6 @@ createTestFetch().set(
     { preconnect: passThroughFetch.preconnect },
   ),
 );
-
-afterAll(async () => {
-  await releaseAgentAuthTestDb();
-});
 afterEach(() => {
   mock.restore();
   resetLogSinkForTesting();

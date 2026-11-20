@@ -50,6 +50,7 @@ export const loadLatestApprovedVersions = async ({
       id: playbookDefinitionVersions.id,
       name: playbookDefinitionVersions.name,
       positions: playbookDefinitionVersions.positions,
+      scope: playbookDefinitionVersions.scope,
     })
     .from(playbookDefinitionVersions)
     .where(
@@ -76,6 +77,7 @@ export const loadLatestApprovedVersions = async ({
       id: row.id,
       name: row.name,
       positions: row.positions,
+      scope: row.scope,
     });
   }
   return byDefinitionId;

@@ -14,7 +14,6 @@ const OWNERS = [
   "apps/web/src/features/case-law/components/case-viewer/analysis/analysis-error-notice.tsx",
   // Existing scoped status and validation surfaces. They own recovery in place;
   // listing exact modules keeps new raw renderers fail-closed.
-  "apps/web/src/components/bilingual-run-panel.tsx",
   "apps/web/src/components/chat/connect-connector-card.tsx",
   "apps/web/src/components/chat/request-secret-card.tsx",
   "apps/web/src/components/contact-read-error.tsx",
@@ -34,7 +33,6 @@ const OWNERS = [
   "apps/web/src/routes/_protected.settings/organization/-components/organization/number-series-seller-picker.tsx",
   "apps/web/src/routes/_protected.settings/organization/-components/organization/seller-profile-refusal.tsx",
   "apps/web/src/routes/_protected.settings/organization/-components/organization/vat-rate-display.tsx",
-  "apps/web/src/routes/_protected.settings/account.beta.tsx",
   "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/overview-time-read.tsx",
   "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/report-export-history.tsx",
   "apps/web/src/routes/knowledge/-components/skill-editor.tsx",

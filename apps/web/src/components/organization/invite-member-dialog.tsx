@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import type { ComponentProps } from "react";
 
 import { useForm, useSelector } from "@tanstack/react-form";
@@ -21,7 +21,6 @@ import {
 } from "@stll/ui/dialog";
 import { Field, FieldError, FieldLabel } from "@stll/ui/field";
 import { Form } from "@stll/ui/form";
-import { UserPlusIcon } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
 import {
   Select,
@@ -32,6 +31,11 @@ import {
 } from "@stll/ui/select";
 import { stellaToast } from "@stll/ui/toast";
 
+import {
+  INVITE_MEMBER_BUTTON_SIZE,
+  INVITE_MEMBER_BUTTON_VARIANT,
+  InviteMemberTriggerContent,
+} from "@/components/organization/invite-member-trigger.pending";
 import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import type { Role } from "@/lib/auth-client";
@@ -96,8 +100,8 @@ type InviteMemberFormProps = InviteMemberDialogProps & {
 
 const InviteMemberForm = ({
   buttonLabel,
-  buttonSize = "sm",
-  buttonVariant = "outline",
+  buttonSize = INVITE_MEMBER_BUTTON_SIZE,
+  buttonVariant = INVITE_MEMBER_BUTTON_VARIANT,
   description,
   currentUserRole,
   defaultRole,
@@ -108,14 +112,11 @@ const InviteMemberForm = ({
   const [isOpen, setIsOpen] = useState(false);
   const isDialogOpen = useLatestCallback(() => isOpen);
   const inviteMember = useInviteMember(isDialogOpen);
-  const schema = useMemo(
-    () => inviteMemberSchema(currentUserRole, t("validation.invalidEmail")),
-    [currentUserRole, t],
+  const schema = inviteMemberSchema(
+    currentUserRole,
+    t("validation.invalidEmail"),
   );
-  const defaultValues = useMemo(
-    () => ({ email: "", role: defaultRole }),
-    [defaultRole],
-  );
+  const defaultValues = { email: "", role: defaultRole };
   const roles = roleAssignmentOptions(currentUserRole).map(({ value }) => ({
     description: t(roleTranslationKeys[value].descriptionKey),
     label: t(roleTranslationKeys[value].labelKey),
@@ -176,8 +177,10 @@ const InviteMemberForm = ({
       <DialogTrigger
         render={<Button size={buttonSize} variant={buttonVariant} />}
       >
-        {showIcon ? <UserPlusIcon className="size-4" /> : null}
-        {buttonLabel ?? t("common.invite")}
+        <InviteMemberTriggerContent
+          label={buttonLabel ?? t("common.invite")}
+          showIcon={showIcon}
+        />
       </DialogTrigger>
       <DialogPopup>
         <Form

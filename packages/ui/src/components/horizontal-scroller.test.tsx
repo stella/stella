@@ -40,7 +40,7 @@ globalThis.ResizeObserver = TestResizeObserver;
 
 const { act, cleanup, fireEvent, render } =
   await import("@testing-library/react");
-const { HorizontalScroller, scrollState, wheelDeltaPixels } =
+const { HorizontalScroller, fitsRow, scrollState, wheelDeltaPixels } =
   await import("./horizontal-scroller");
 
 afterEach(cleanup);
@@ -67,6 +67,16 @@ test("reports logical start, middle, end, no overflow, and RTL", () => {
     canScrollStart: true,
     canScrollEnd: false,
   });
+});
+
+test("decides overflow from the full row, not the viewport the controls narrowed", () => {
+  // A 300px row whose controls take 30px: content that shrank to 290px fits
+  // the row once the controls are gone, so no control is needed, although it
+  // is wider than the 270px viewport the controls left.
+  expect(fitsRow(290, 300)).toBe(true);
+  expect(scrollState(0, 290, 270, "ltr").canScrollEnd).toBe(true);
+  // Content wider than the whole row still needs them.
+  expect(fitsRow(310, 300)).toBe(false);
 });
 
 test("shows directional controls and scrolls forward", () => {
@@ -96,6 +106,33 @@ test("shows directional controls and scrolls forward", () => {
   });
   fireEvent.scroll(viewport);
   expect(view.getByLabelText("Previous").getAttribute("aria-disabled")).toBe(
+    "false",
+  );
+});
+
+test("shows the controls when content overflows a padded row", () => {
+  const view = render(
+    <HorizontalScroller
+      className="px-4"
+      previousLabel="Previous"
+      nextLabel="Next"
+    >
+      <button type="button">Item</button>
+    </HorizontalScroller>,
+  );
+  const viewport = divOf(view.getByText("Item").parentElement?.parentElement);
+  const row = divOf(viewport.parentElement);
+  // A 300px row with 16px padding on each side leaves the viewport 268px.
+  Object.defineProperty(row, "clientWidth", { value: 300 });
+  Object.defineProperties(viewport, {
+    clientWidth: { value: 268 },
+    scrollWidth: { value: 290 },
+    getBoundingClientRect: {
+      value: () => DOMRect.fromRect({ x: 16, y: 0, width: 268, height: 24 }),
+    },
+  });
+  act(() => TestResizeObserver.notify());
+  expect(view.getByLabelText("Next").getAttribute("aria-disabled")).toBe(
     "false",
   );
 });
@@ -300,4 +337,32 @@ test("keeps focus on a control that scrolled the row to its edge", () => {
   expect(view.getByLabelText("Previous").tabIndex).toBe(0);
   fireEvent.click(next);
   expect(scrollBy).not.toHaveBeenCalled();
+});
+
+test("keeps its controls beside the row, taking room only while they can scroll", () => {
+  const view = render(
+    <HorizontalScroller previousLabel="Previous" nextLabel="Next">
+      <button type="button">Item</button>
+    </HorizontalScroller>,
+  );
+  const viewport = divOf(view.getByText("Item").parentElement?.parentElement);
+  Object.defineProperties(viewport, {
+    clientWidth: { value: 100 },
+    scrollWidth: { value: 300 },
+  });
+  act(() => TestResizeObserver.notify());
+  const previous = view.getByLabelText("Previous");
+  const next = view.getByLabelText("Next");
+
+  // Siblings of the viewport in reading order, so no control overlays an item.
+  expect([...(viewport.parentElement?.children ?? [])]).toEqual([
+    previous,
+    viewport,
+    next,
+  ]);
+  for (const control of [previous, next]) {
+    expect(control.className).not.toContain("absolute");
+  }
+  expect(previous.className).toContain("w-0");
+  expect(next.className).not.toContain("w-0");
 });

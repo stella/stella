@@ -1,6 +1,7 @@
 import { panic, Result } from "better-result";
 import { readFileSync } from "node:fs";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 import { childExitStatus } from "../packages/scripts/src/child-exit-status";
 import { buildImportGraph } from "./api-test-impact";
@@ -55,7 +56,7 @@ export const isUnregisteredGeneratedFile = (
 
 const git = (args: string[]) => {
   const result = Bun.spawnSync(["git", ...args], {
-    cwd: ROOT.pathname,
+    cwd: fileURLToPath(ROOT),
     stdout: "pipe",
     stderr: "pipe",
   });
@@ -79,7 +80,7 @@ const guardA = async () => {
       "--",
       ".",
     ],
-    { cwd: ROOT.pathname, stdout: "pipe", stderr: "pipe" },
+    { cwd: fileURLToPath(ROOT), stdout: "pipe", stderr: "pipe" },
   );
   if (grep.exitCode !== 0 && grep.exitCode !== 1) {
     panic(`git grep failed: ${decode(grep.stderr)}`);
@@ -218,7 +219,10 @@ const checkManifest = async () => {
 
 const packageScript = (directory: string, name: string): string => {
   const manifest: unknown = JSON.parse(
-    readFileSync(path.join(ROOT.pathname, directory, "package.json"), "utf-8"),
+    readFileSync(
+      path.join(fileURLToPath(ROOT), directory, "package.json"),
+      "utf-8",
+    ),
   );
   const scripts = isRecord(manifest) ? manifest["scripts"] : undefined;
   const command = isRecord(scripts) ? scripts[name] : undefined;
@@ -275,12 +279,15 @@ const commandModules = (command: readonly string[], base = "."): string[] => {
       continue;
     }
     const name = match[1] ?? panic("Missing root script name");
+    // `bun run` resolves against the directory it runs in: a package script
+    // naming a sibling script runs that package's script, not the root's.
+    const directory = cwdAt(match.index);
     if (/\.[cm]?[jt]sx?$/u.test(name)) {
-      modules.push(
-        path.posix.normalize(path.posix.join(cwdAt(match.index), name)),
-      );
+      modules.push(path.posix.normalize(path.posix.join(directory, name)));
     } else {
-      modules.push(...commandModules([packageScript(".", name)]));
+      modules.push(
+        ...commandModules([packageScript(directory, name)], directory),
+      );
     }
   }
   for (const match of joined.matchAll(fileMatch)) {
@@ -354,9 +361,9 @@ const BUN_BUILTIN_COMMANDS: ReadonlySet<string> = new Set(["fmt"]);
 const workspaceDirectory = (name: string): string => {
   for (const manifest of new Bun.Glob(
     "{apps,packages}/*/package.json",
-  ).scanSync({ cwd: ROOT.pathname })) {
+  ).scanSync({ cwd: fileURLToPath(ROOT) })) {
     const parsed: unknown = JSON.parse(
-      readFileSync(path.join(ROOT.pathname, manifest), "utf-8"),
+      readFileSync(path.join(fileURLToPath(ROOT), manifest), "utf-8"),
     );
     if (
       typeof parsed === "object" &&
@@ -382,7 +389,7 @@ const IMPLICIT_MODULE_INPUTS: Readonly<
 /** Static proof that every local module capable of influencing a family is declared. */
 export const generatorInputCensus = (
   generators: readonly Generator[],
-  root = ROOT.pathname,
+  root = fileURLToPath(ROOT),
 ): string[] => {
   const failures: string[] = [];
   const entries = generators.map((generator) => ({
@@ -448,7 +455,7 @@ export const generatorInputCensus = (
 
 const GUARD_ENTRY = "scripts/generated-files-guard.ts";
 /** This guard's own import closure: the manifest, the census and the selection. */
-export const guardSelectionSources = (root: string = ROOT.pathname) =>
+export const guardSelectionSources = (root: string = fileURLToPath(ROOT)) =>
   buildImportGraph(root, [GUARD_ENTRY]).closure(GUARD_ENTRY);
 
 /**
@@ -501,7 +508,7 @@ const comparisonBase = (): string | undefined => {
   if (requested) {
     const result = Bun.spawnSync(
       ["git", "cat-file", "-e", `${requested}^{commit}`],
-      { cwd: ROOT.pathname },
+      { cwd: fileURLToPath(ROOT) },
     );
     return result.exitCode === 0 ? requested : undefined;
   }
@@ -511,12 +518,12 @@ const comparisonBase = (): string | undefined => {
   }
   const result = Bun.spawnSync(
     ["git", "merge-base", "HEAD", `origin/${baseRef}`],
-    { cwd: ROOT.pathname, stdout: "pipe", stderr: "ignore" },
+    { cwd: fileURLToPath(ROOT), stdout: "pipe", stderr: "ignore" },
   );
   return result.exitCode === 0 ? decode(result.stdout).trim() : undefined;
 };
 
-export const changedSince = (base: string, root = ROOT.pathname) => {
+export const changedSince = (base: string, root = fileURLToPath(ROOT)) => {
   const result = Bun.spawnSync(
     ["git", "diff", "--no-renames", "--name-only", "-z", `${base}...HEAD`],
     { cwd: root, stdout: "pipe", stderr: "pipe" },
@@ -584,7 +591,6 @@ const LIGHT_CHECK_COMMANDS = [
     "apps/web/src/i18n",
     "--check",
   ],
-  ["bun", "apps/web/scripts/sync-prepaint-locales.ts", "--check"],
   ["bun", "run", "selfhost:check"],
   [
     "bun",
@@ -617,7 +623,7 @@ const checkGenerator = async ({
   console.log(`Checking ${id}`);
   const started = performance.now();
   const child = Bun.spawn([...check], {
-    cwd: ROOT.pathname,
+    cwd: fileURLToPath(ROOT),
     stdout: "inherit",
     stderr: "inherit",
   });
@@ -773,7 +779,7 @@ const guardB = async () => {
       ? (() => {
           const exists = Bun.spawnSync(
             ["git", "rev-parse", "--verify", "HEAD~1"],
-            { cwd: ROOT.pathname, stdout: "ignore", stderr: "ignore" },
+            { cwd: fileURLToPath(ROOT), stdout: "ignore", stderr: "ignore" },
           );
           return exists.exitCode === 0 ? changedSince("HEAD~1") : [];
         })()

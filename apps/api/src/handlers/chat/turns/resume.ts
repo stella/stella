@@ -26,6 +26,7 @@ import {
   ChatRunLogOffsetBeyondTailError,
   createChatRunLogReplay,
 } from "@/api/lib/chat/run-log";
+import { CHAT_TURN_LOG_IS_LIVE } from "@/api/lib/chat/turn-status";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { memberSessionStreamBinding, withSseHeartbeat } from "@/api/lib/sse";
@@ -156,7 +157,7 @@ const createResumeHandler = (delivery: "probe" | "stream") => {
           }).metadata?.resumeSnapshot
         : undefined;
     if (
-      record.status !== "running" ||
+      !CHAT_TURN_LOG_IS_LIVE[record.status] ||
       record.runId === null ||
       record.closedAt !== null ||
       (runId !== undefined && runId !== record.runId)

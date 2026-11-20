@@ -70,15 +70,15 @@ const declarations: Record<string, Declaration> = {
     { disposition: "null", reason: "absorbed rows clear their citation key" },
   "src/scripts/backfill-citation-keys.ts:step:sql:1": {
     disposition: "bounded",
-    reason: "values derive from bounded decisionCitationKeyOf or citationKeyOf",
+    reason: "values derive from bounded decisionDocketColumns or citationKeyOf",
   },
   "src/scripts/backfill-citation-keys.ts:step:sql:2": {
     disposition: "bounded",
-    reason: "values derive from bounded decisionCitationKeyOf or citationKeyOf",
+    reason: "values derive from bounded decisionDocketColumns or citationKeyOf",
   },
   "src/scripts/backfill-citation-keys.ts:step:sql:3": {
     disposition: "bounded",
-    reason: "values derive from bounded decisionCitationKeyOf or citationKeyOf",
+    reason: "values derive from bounded decisionDocketColumns or citationKeyOf",
   },
   "src/scripts/apply-reviewed-citation-labels-plan.ts:upsertReviewsStatement:sql:1":
     {
@@ -95,18 +95,6 @@ const declarations: Record<string, Declaration> = {
     disposition: "copy",
     reason: "copies synthetic rehearsal decision key and short docket",
   },
-  "src/handlers/case-law/ingestion/pipeline/decision-existing.ts:advancePartialObservationWatermark:orm-set-caseLawDecisions:1":
-    {
-      disposition: "copy",
-      reason:
-        "metadata or document payload update; no citation identity assignment",
-    },
-  "src/handlers/case-law/ingestion/pipeline/decision-existing.ts:advanceUnchangedObservationWatermark:orm-set-caseLawDecisions:1":
-    {
-      disposition: "copy",
-      reason:
-        "metadata or document payload update; no citation identity assignment",
-    },
   "src/handlers/case-law/ingestion/pipeline/corpus-mirror.ts:settleCaseLawCorpusMirrorTx:orm-set-caseLawDecisions:1":
     {
       disposition: "copy",
@@ -353,9 +341,9 @@ const boundedPayloadProblems = (members: readonly Writer[]): string[] =>
       expected = /^settled$/u;
     } else if (writer.id.includes("backfill-citation-keys.ts")) {
       expected =
-        /WITH v\(id, key\) AS \(VALUES \$\{values\}\)[\s\S]*SET citation_key = v\.key/u;
+        /WITH v\(id, key(?:, family)?\) AS \(VALUES \$\{values\}\)[\s\S]*SET citation_key = v\.key/u;
     } else if (writer.id.includes(":upsertReviewsStatement:")) {
-      expected = /\$\{checked\.value\}/u;
+      expected = /FROM \$\{labelValues\(labels,\s*domain\)\}/u;
     } else {
       expected =
         /WITH projected AS \(\s*SELECT \* FROM jsonb_to_recordset\(\$\{projected\}::text::jsonb\)[\s\S]*normalized_identifier_value = projected\.normalized_value/u;
@@ -511,12 +499,22 @@ const producerProblems = (input: ReadonlyMap<string, string>): string[] => {
     /decisionDocketColumns\(/u,
   ]);
   requireProducer("src/scripts/backfill-citation-keys.ts", "backfillTable", [
-    /key:\s*table\s*===\s*"case_law_decisions"\s*\?\s*decisionCitationKeyOf\(/u,
-    /:\s*citationKeyOf\(row\["text"\]\)/u,
+    /key:\s*citationKeyOf\(row\["text"\]\)/u,
+    /const next = decisionKeysToWrite\(/u,
+    /key:\s*next\.citationKey/u,
   ]);
   requireProducer(
+    "src/scripts/backfill-citation-keys-plan.ts",
+    "decisionKeysToWrite",
+    [
+      /const derived = decisionDocketColumns\(/u,
+      /citationKey:\s*row\.storedCitationKey\s*\?\?\s*derived\.citationKey/u,
+      /citationKey:\s*derived\.citationKey/u,
+    ],
+  );
+  requireProducer(
     "src/scripts/apply-reviewed-citation-labels-plan.ts",
-    "upsertReviewsStatement",
+    "labelValues",
     [
       /const checked = assertCitationStorageField\(\s*"key",\s*label\.citationKey\s*,?\s*\)/u,
       /if \(checked\.isErr\(\)\) \{\s*throw checked\.error/u,

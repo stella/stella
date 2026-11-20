@@ -84,7 +84,13 @@ export const ENUM_COLUMN_ROLES = {
     origin: ATTRIBUTE,
   },
   case_law_citations: {
+    cited_part: ATTRIBUTE,
     doctrinal_treatment: ATTRIBUTE,
+    polarity_source: ATTRIBUTE,
+  },
+  case_law_completeness_census: {
+    outcome: ATTRIBUTE,
+    scope_status: ATTRIBUTE,
   },
   case_law_corpus_pack_refs: {
     kind: ATTRIBUTE,
@@ -99,8 +105,19 @@ export const ENUM_COLUMN_ROLES = {
   case_law_decision_judges: {
     role: ATTRIBUTE,
   },
+  case_law_decision_reviews: {
+    evidence_classification: ATTRIBUTE,
+    outcome: ATTRIBUTE,
+    source: ATTRIBUTE,
+  },
   case_law_decisions: {
     case_number_type: ATTRIBUTE,
+  },
+  case_law_held_decision_attachments: {
+    match_basis: ATTRIBUTE,
+  },
+  case_law_polarity_rules: {
+    kind: ATTRIBUTE,
   },
   case_law_population_counts: {
     kind: ATTRIBUTE,
@@ -149,6 +166,9 @@ export const ENUM_COLUMN_ROLES = {
   case_law_research_answers: {
     failure_reason: ATTRIBUTE,
   },
+  case_law_ingestion_failure_evidence: {
+    identity_kind: ATTRIBUTE,
+  },
   case_law_sources: {
     ingestion_lease_purpose: ATTRIBUTE,
   },
@@ -165,6 +185,14 @@ export const ENUM_COLUMN_ROLES = {
     outcome: ATTRIBUTE,
     source: ATTRIBUTE,
   },
+  // What a limit reminder does when due; the member may switch either way.
+  chat_limit_reminders: {
+    on_reset: ATTRIBUTE,
+  },
+  // Why a queue waits; any reason may replace another.
+  chat_queue_holds: {
+    reason: ATTRIBUTE,
+  },
   chat_secrets: {
     decision: ATTRIBUTE,
   },
@@ -179,6 +207,13 @@ export const ENUM_COLUMN_ROLES = {
     failure_code: ATTRIBUTE,
     interaction_type: ATTRIBUTE,
     interruption_reason: ATTRIBUTE,
+  },
+  // Any recorded decision may replace another (a conflict later waived); the
+  // decision path still moves it through the transition owner, with a
+  // revision in the predicate.
+  conflict_checks: {
+    decision: ATTRIBUTE,
+    outcome: ATTRIBUTE,
   },
   contact_relationships: {
     relationship_type: ATTRIBUTE,
@@ -199,13 +234,24 @@ export const ENUM_COLUMN_ROLES = {
     contract_version: ATTRIBUTE,
     family: ATTRIBUTE,
   },
+  corpus_index_generation_flips: {
+    family: ATTRIBUTE,
+  },
+  corpus_index_generation_seeding_passes: {
+    family: ATTRIBUTE,
+  },
   corpus_index_group_withdrawals: {
     family: ATTRIBUTE,
   },
   corpus_index_jurisdiction_serving: {
     family: ATTRIBUTE,
   },
+  corpus_index_projection_delete_tasks: {
+    family: ATTRIBUTE,
+  },
   corpus_index_projection_intents: {
+    append_delivery: ATTRIBUTE,
+    append_fault: ATTRIBUTE,
     family: ATTRIBUTE,
   },
   corpus_index_projection_revisions: {
@@ -217,6 +263,17 @@ export const ENUM_COLUMN_ROLES = {
     desired_action: ATTRIBUTE,
     family: ATTRIBUTE,
     last_failure_kind: ATTRIBUTE,
+  },
+  // The expectation is a walk position (a pass moves present -> absent -> present,
+  // and a revocation restarts it at present) and the reason a fact about the
+  // last revocation: any value may follow any other.
+  corpus_index_route_proofs: {
+    family: ATTRIBUTE,
+    pass_expectation: ATTRIBUTE,
+    revoke_reason: ATTRIBUTE,
+  },
+  corpus_index_route_seedings: {
+    family: ATTRIBUTE,
   },
   correspondence: {
     channel: ATTRIBUTE,
@@ -259,8 +316,12 @@ export const ENUM_COLUMN_ROLES = {
   desktop_runner_events: {
     type: ATTRIBUTE,
   },
+  desktop_runner_folder_restores: {
+    reason: ATTRIBUTE,
+  },
   desktop_runner_runs: {
     harness: ATTRIBUTE,
+    lost_reason: ATTRIBUTE,
     outcome: ATTRIBUTE,
     reject_reason: ATTRIBUTE,
   },
@@ -371,6 +432,9 @@ export const ENUM_COLUMN_ROLES = {
     method: ATTRIBUTE,
     origin: ATTRIBUTE,
   },
+  invoice_sends: {
+    language: ATTRIBUTE,
+  },
   invoices: {
     billing_mode: ATTRIBUTE,
     document_type: ATTRIBUTE,
@@ -379,11 +443,35 @@ export const ENUM_COLUMN_ROLES = {
   justifications: {
     entity_feature_gate: ATTRIBUTE,
   },
+  kept_transcript_deletions: {
+    environment: ATTRIBUTE,
+  },
+  legal_graph_edges: {
+    confidence: ATTRIBUTE,
+    entity_feature_gate: ATTRIBUTE,
+    from_kind: ATTRIBUTE,
+    kind: ATTRIBUTE,
+    producer_kind: ATTRIBUTE,
+    stance: ATTRIBUTE,
+    to_kind: ATTRIBUTE,
+  },
+  // Whether a hold covers a matter or one item: fixed when it is placed.
+  legal_holds: {
+    scope_type: ATTRIBUTE,
+  },
+  legal_list_claim_carry_outcomes: {
+    entity_feature_gate: ATTRIBUTE,
+    outcome: ATTRIBUTE,
+  },
   legal_list_claim_review_events: {
     entity_feature_gate: ATTRIBUTE,
     kind: ATTRIBUTE,
   },
   legal_list_claims: {
+    asserted_on_precision: ATTRIBUTE,
+    // Where a claim's date came from; `pending` only marks a row the backfill
+    // has yet to read, not a step a claim moves through.
+    asserted_on_source: ATTRIBUTE,
     entity_feature_gate: ATTRIBUTE,
     framing: ATTRIBUTE,
     type: ATTRIBUTE,
@@ -398,9 +486,17 @@ export const ENUM_COLUMN_ROLES = {
     entity_feature_gate: ATTRIBUTE,
   },
   legal_list_generation_candidates: {
+    confidence: ATTRIBUTE,
     entity_feature_gate: ATTRIBUTE,
     item_type: ATTRIBUTE,
+    occurred_on_precision: ATTRIBUTE,
     priority: ATTRIBUTE,
+    scoring: ATTRIBUTE,
+  },
+  legal_list_generation_runs: {
+    error_code: ATTRIBUTE,
+    item_type: ATTRIBUTE,
+    producer: ATTRIBUTE,
   },
   legal_list_generation_sources: {
     entity_feature_gate: ATTRIBUTE,
@@ -420,6 +516,10 @@ export const ENUM_COLUMN_ROLES = {
   },
   legal_list_items: {
     entity_feature_gate: ATTRIBUTE,
+  },
+  legal_list_source_documents: {
+    entity_feature_gate: ATTRIBUTE,
+    source_kind: ATTRIBUTE,
   },
   legal_list_verification_blocks: {
     entity_feature_gate: ATTRIBUTE,
@@ -470,6 +570,9 @@ export const ENUM_COLUMN_ROLES = {
   mcp_web_handoff: {
     kind: ATTRIBUTE,
   },
+  model_run_budgets: {
+    run_kind: ATTRIBUTE,
+  },
   notifications: {
     entity_type: ATTRIBUTE,
     kind: ATTRIBUTE,
@@ -490,10 +593,14 @@ export const ENUM_COLUMN_ROLES = {
   organization_access_states: {
     origin: ATTRIBUTE,
   },
+  organization_data_exports: {
+    version_scope: ATTRIBUTE,
+  },
   organization_settings: {
     ai_billing_drafts_mode: ATTRIBUTE,
     document_processing_mode: ATTRIBUTE,
     invoice_language: ATTRIBUTE,
+    local_run_max_approval_mode: ATTRIBUTE,
     managed_ai_residency: ATTRIBUTE,
     personal_api_key_policy: ATTRIBUTE,
     sanctions_monitoring_mode: ATTRIBUTE,
@@ -623,6 +730,7 @@ export const ENUM_COLUMN_ROLES = {
     result: LIFECYCLE,
   },
   user: {
+    locale: ATTRIBUTE,
     reader_answer_language: ATTRIBUTE,
   },
   user_professional_use_acceptances: {

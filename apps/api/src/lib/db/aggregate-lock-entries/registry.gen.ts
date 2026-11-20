@@ -14,46 +14,51 @@ import entry12 from "./chatThread";
 import entry13 from "./chatToolGrants";
 import entry14 from "./chatTurn";
 import entry15 from "./contactCapacity";
-import entry16 from "./correspondence";
-import entry17 from "./currentStep";
-import entry18 from "./definition";
-import entry19 from "./definitionCap";
-import entry20 from "./desktopBatch";
-import entry21 from "./desktopCredential";
-import entry22 from "./desktopMembership";
-import entry23 from "./desktopRunnerCapacity";
-import entry24 from "./entity";
-import entry25 from "./entityVersion";
-import entry26 from "./expenseCapacity";
-import entry27 from "./field";
-import entry28 from "./fileComparisonCapacity";
-import entry29 from "./folioCollabRoom";
-import entry30 from "./legislationAmendmentWork";
-import entry31 from "./mcpOAuthState";
-import entry32 from "./memberCleanup";
-import entry33 from "./memory";
-import entry34 from "./obligation";
-import entry35 from "./orgFeatureAdmission";
-import entry36 from "./organization";
-import entry37 from "./organizationDataBoxes";
-import entry38 from "./organizationObjectIntent";
-import entry39 from "./personalCatalog";
-import entry40 from "./processingClaim";
-import entry41 from "./professionalUseAcceptance";
-import entry42 from "./rateTableWorkspace";
-import entry43 from "./readerAnnotation";
-import entry44 from "./readerAnswer";
-import entry45 from "./readerAnswerMessage";
-import entry46 from "./requestReceipt";
-import entry47 from "./run";
-import entry48 from "./sampleCase";
-import entry49 from "./schedulerClaim";
-import entry50 from "./scoutCensus";
-import entry51 from "./searchHistory";
-import entry52 from "./searchProjectionRepair";
-import entry53 from "./signal";
-import entry54 from "./signingSession";
-import entry55 from "./workspace";
+import entry16 from "./corpusProjectionOfflineRequest";
+import entry17 from "./correspondence";
+import entry18 from "./currentStep";
+import entry19 from "./definition";
+import entry20 from "./definitionCap";
+import entry21 from "./desktopBatch";
+import entry22 from "./desktopCredential";
+import entry23 from "./desktopMembership";
+import entry24 from "./desktopRunnerCapacity";
+import entry25 from "./entity";
+import entry26 from "./entityVersion";
+import entry27 from "./expenseCapacity";
+import entry28 from "./field";
+import entry29 from "./fileComparisonCapacity";
+import entry30 from "./folioCollabRoom";
+import entry31 from "./invoiceSendCapacity";
+import entry32 from "./legislationAmendmentWork";
+import entry33 from "./mcpOAuthState";
+import entry34 from "./memberCleanup";
+import entry35 from "./memory";
+import entry36 from "./obligation";
+import entry37 from "./orgFeatureAdmission";
+import entry38 from "./organization";
+import entry39 from "./organizationDataBoxes";
+import entry40 from "./organizationObjectIntent";
+import entry41 from "./organizationSettings";
+import entry42 from "./outboundAction";
+import entry43 from "./personalCatalog";
+import entry44 from "./processingClaim";
+import entry45 from "./professionalUseAcceptance";
+import entry46 from "./rateTableWorkspace";
+import entry47 from "./readerAnnotation";
+import entry48 from "./readerAnswer";
+import entry49 from "./readerAnswerMessage";
+import entry50 from "./requestReceipt";
+import entry51 from "./run";
+import entry52 from "./sampleCase";
+import entry53 from "./savedSearch";
+import entry54 from "./schedulerClaim";
+import entry55 from "./scoutCensus";
+import entry56 from "./searchHistory";
+import entry57 from "./searchProjectionRepair";
+import entry58 from "./signal";
+import entry59 from "./signingSession";
+import entry60 from "./workspace";
 
 export default {
   "account": entry0,
@@ -72,44 +77,49 @@ export default {
   "chatToolGrants": entry13,
   "chatTurn": entry14,
   "contactCapacity": entry15,
-  "correspondence": entry16,
-  "currentStep": entry17,
-  "definition": entry18,
-  "definitionCap": entry19,
-  "desktopBatch": entry20,
-  "desktopCredential": entry21,
-  "desktopMembership": entry22,
-  "desktopRunnerCapacity": entry23,
-  "entity": entry24,
-  "entityVersion": entry25,
-  "expenseCapacity": entry26,
-  "field": entry27,
-  "fileComparisonCapacity": entry28,
-  "folioCollabRoom": entry29,
-  "legislationAmendmentWork": entry30,
-  "mcpOAuthState": entry31,
-  "memberCleanup": entry32,
-  "memory": entry33,
-  "obligation": entry34,
-  "orgFeatureAdmission": entry35,
-  "organization": entry36,
-  "organizationDataBoxes": entry37,
-  "organizationObjectIntent": entry38,
-  "personalCatalog": entry39,
-  "processingClaim": entry40,
-  "professionalUseAcceptance": entry41,
-  "rateTableWorkspace": entry42,
-  "readerAnnotation": entry43,
-  "readerAnswer": entry44,
-  "readerAnswerMessage": entry45,
-  "requestReceipt": entry46,
-  "run": entry47,
-  "sampleCase": entry48,
-  "schedulerClaim": entry49,
-  "scoutCensus": entry50,
-  "searchHistory": entry51,
-  "searchProjectionRepair": entry52,
-  "signal": entry53,
-  "signingSession": entry54,
-  "workspace": entry55,
+  "corpusProjectionOfflineRequest": entry16,
+  "correspondence": entry17,
+  "currentStep": entry18,
+  "definition": entry19,
+  "definitionCap": entry20,
+  "desktopBatch": entry21,
+  "desktopCredential": entry22,
+  "desktopMembership": entry23,
+  "desktopRunnerCapacity": entry24,
+  "entity": entry25,
+  "entityVersion": entry26,
+  "expenseCapacity": entry27,
+  "field": entry28,
+  "fileComparisonCapacity": entry29,
+  "folioCollabRoom": entry30,
+  "invoiceSendCapacity": entry31,
+  "legislationAmendmentWork": entry32,
+  "mcpOAuthState": entry33,
+  "memberCleanup": entry34,
+  "memory": entry35,
+  "obligation": entry36,
+  "orgFeatureAdmission": entry37,
+  "organization": entry38,
+  "organizationDataBoxes": entry39,
+  "organizationObjectIntent": entry40,
+  "organizationSettings": entry41,
+  "outboundAction": entry42,
+  "personalCatalog": entry43,
+  "processingClaim": entry44,
+  "professionalUseAcceptance": entry45,
+  "rateTableWorkspace": entry46,
+  "readerAnnotation": entry47,
+  "readerAnswer": entry48,
+  "readerAnswerMessage": entry49,
+  "requestReceipt": entry50,
+  "run": entry51,
+  "sampleCase": entry52,
+  "savedSearch": entry53,
+  "schedulerClaim": entry54,
+  "scoutCensus": entry55,
+  "searchHistory": entry56,
+  "searchProjectionRepair": entry57,
+  "signal": entry58,
+  "signingSession": entry59,
+  "workspace": entry60,
 } as const;

@@ -1,18 +1,21 @@
 import { panic, Result } from "better-result";
 
 import {
-  type BrowserExtensionCapability,
   BUILT_IN_CHAT_TOOL_POLICY_KINDS,
   type ChatSourceScope,
 } from "@stll/api-contract";
 import { DOCX_SUGGESTION_SURFACE } from "@stll/api-contract/chat-docx-suggestions";
 import type { DocxSuggestionSurface } from "@stll/api-contract/chat-docx-suggestions";
+import { readSkillRequiredTools } from "@stll/skills";
 import type { SkillMetadata } from "@stll/skills/frontmatter";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import type { UsageEventLane } from "@/api/db/schema";
 import type { ActiveChatSkillContext } from "@/api/handlers/chat/active-skill-context";
-import { browserExtensionPolicy } from "@/api/handlers/chat/browser-extension-capability";
+import {
+  browserExtensionPolicy,
+  type TurnBrowserExtension,
+} from "@/api/handlers/chat/browser-extension-capability";
 import {
   CHAT_EDIT_APPLY_MODE,
   type ChatEditApplyMode,
@@ -67,7 +70,14 @@ import {
   REMEMBER_TOOL_NAME,
 } from "@/api/handlers/chat/tools/remember-tool";
 import { createSecretTools } from "@/api/handlers/chat/tools/secret-tools";
+import {
+  createShowAppTool,
+  createTurnAppLedger,
+  SHOW_APP_DEPLOYMENT_FEATURE,
+} from "@/api/handlers/chat/tools/show-app-tool";
+import type { TurnAppLedger } from "@/api/handlers/chat/tools/show-app-tool";
 import { createShowVisualTools } from "@/api/handlers/chat/tools/show-visual-tools";
+import { createSkillPackageTools } from "@/api/handlers/chat/tools/skill-package-tools";
 import {
   businessRegistryCallScope,
   restrictChatToolsToSourceScope,
@@ -142,6 +152,7 @@ import {
 import type { ResolvedWebSearchProviders } from "@/api/lib/web-search/select-provider";
 import { isMcpDescriptorFeatureEnabled } from "@/api/mcp/feature-access";
 import { getStaticMcpToolDefinition } from "@/api/mcp/static-tool-definitions";
+import { isMcpToolFeatureEnabled } from "@/api/mcp/tool-feature";
 import { isAccountAuthorizedForMcpTool } from "@/api/mcp/write-tool-authority";
 
 const WEB_SEARCH_NATIVE_TOOL_SLUG = "web-search";
@@ -330,6 +341,7 @@ type WorkspaceTools = ReturnType<typeof createWorkspaceTools>;
 type OrgTools = ReturnType<typeof createOrgTools>;
 type ChatExecutionTools = ChatCodeModeToolMap;
 type SkillTools = ReturnType<typeof createSkillTools>;
+type SkillPackageTools = ReturnType<typeof createSkillPackageTools>;
 type BusinessRegistryTools = ReturnType<typeof createBusinessRegistryTools>;
 type CounterpartyCheckTools = ReturnType<typeof createCounterpartyCheckTools>;
 type BoeTools = ReturnType<typeof createBoeTools>;
@@ -388,6 +400,7 @@ type RegistryWriteTools = ChatRegistryWriteToolMap;
 type SubagentTools = ReturnType<typeof createSpawnSubagentsTool>;
 type RememberTools = ReturnType<typeof createRememberTools>;
 type ShowVisualTools = ReturnType<typeof createShowVisualTools>;
+type ShowAppTools = ReturnType<typeof createShowAppTool>;
 type SecretTools = ReturnType<typeof createSecretTools>;
 type ConnectorTools = ReturnType<typeof createConnectorTools>;
 
@@ -396,6 +409,7 @@ type BuiltInChatTools = OrgTools &
   ConnectorTools &
   ChatExecutionTools &
   SkillTools &
+  SkillPackageTools &
   CurrentSkillEditTools &
   BusinessRegistryTools &
   CounterpartyCheckTools &
@@ -416,7 +430,8 @@ type BuiltInChatTools = OrgTools &
   RegistryWriteTools &
   SubagentTools &
   RememberTools &
-  ShowVisualTools;
+  ShowVisualTools &
+  ShowAppTools;
 
 export type ChatTools = BuiltInChatTools;
 
@@ -428,9 +443,40 @@ export type ChatBuiltinApprovalToolName = Exclude<
 type BuiltInChatToolPolicyName =
   keyof BuiltInChatTools | CurrentSkillEditToolName;
 
+/**
+ * A turn's `show_app` and the ledger its code-mode reads feed. Every app
+ * chat shows presents a public-law read, so without the corpus, or without
+ * an origin that stores the turn's answer, a turn offers neither.
+ */
+const turnAppTools = (
+  appTools: Pick<Parameters<typeof createShowAppTool>[0], "origin"> | undefined,
+): {
+  codeMode: { recordAppRead?: TurnAppLedger["record"] };
+  tools: Partial<ShowAppTools>;
+} => {
+  if (
+    appTools === undefined ||
+    !isMcpToolFeatureEnabled(SHOW_APP_DEPLOYMENT_FEATURE)
+  ) {
+    return { codeMode: {}, tools: {} };
+  }
+  const ledger = createTurnAppLedger();
+  return {
+    codeMode: { recordAppRead: ledger.record },
+    tools: createShowAppTool({ ledger, origin: appTools.origin }),
+  };
+};
+
 export type GetChatToolsProps = {
+  organizationAIInstructions?: string | undefined;
   /** Only the owning chat turn can issue and store displayed visual resources. */
   visualTools?: Parameters<typeof createShowVisualTools>[0] | undefined;
+  /**
+   * The owning turn's origin, which mints the parts `show_app` shows. Only a
+   * turn that stores its own answer offers the tool.
+   */
+  appTools?:
+    Pick<Parameters<typeof createShowAppTool>[0], "origin"> | undefined;
   featureAccessSnapshot?: FeatureAccessSnapshot | undefined;
   testDependencies?: ChatRegistryContextDeps["testDependencies"] | undefined;
   /** Deployment gate; injectable so both disabled and enabled toolsets test. */
@@ -537,7 +583,7 @@ export type GetChatToolsProps = {
    * Present only when the requesting web surface has a live, permissioned
    * extension executor; absent means the tool is not registered.
    */
-  browserExtension?: BrowserExtensionCapability | undefined;
+  browserExtension?: TurnBrowserExtension | undefined;
   /**
    * Which client executor resolves `suggest_changes` this turn, and so
    * which per-surface schema the model sees. Not derivable from the two
@@ -585,6 +631,13 @@ export type GetChatToolsProps = {
   externalConnectors?: readonly ScopedExternalConnector[] | undefined;
   registryDispatch: Record<BusinessRegistrySlug, RegistryHandler>;
   skillMetadata?: ModelOfferedSkills<SkillMetadata> | undefined;
+  /**
+   * Which skill-gated tools (the skill package tools) the set registers:
+   * `turn`, the default, those the turn's skills declare in
+   * `stella-required-tools`; `every`, all the caller may have, for the
+   * tool-name set skill availability is decided over.
+   */
+  skillGatedTools?: SkillGatedTools | undefined;
   /**
    * Where the turn may use a bound skill. Absent (validation and tool-name
    * sets, which never run a skill read) means unbound skills only.
@@ -793,6 +846,37 @@ true satisfies Exclude<
   ? true
   : never;
 
+export const SKILL_GATED_TOOLS = {
+  every: "every",
+  turn: "turn",
+} as const;
+type SkillGatedTools =
+  (typeof SKILL_GATED_TOOLS)[keyof typeof SKILL_GATED_TOOLS];
+
+/**
+ * Every tool the turn's skills require: the active skill's, and each skill
+ * the model is offered this turn (an `auto` skill, or one the user invoked),
+ * which may be loaded mid-turn and so needs its tools from the start.
+ */
+const skillDeclaredToolNames = ({
+  activeSkillContext,
+  skills,
+}: {
+  activeSkillContext: ActiveChatSkillContext | null | undefined;
+  skills: ModelOfferedSkills<SkillMetadata> | undefined;
+}): ReadonlySet<string> => {
+  const names = new Set(activeSkillContext?.requiredTools);
+  // Absent when the caller loaded no catalog.
+  if (skills !== undefined) {
+    for (const skill of skills) {
+      for (const name of readSkillRequiredTools(skill.metadata)) {
+        names.add(name);
+      }
+    }
+  }
+  return names;
+};
+
 /**
  * The active skill's chat declarations as a turn's tool set honours them. The
  * streaming set applies both; the validation set ignores both, since neither
@@ -976,6 +1060,7 @@ const buildChatTools = (props: GetChatToolsProps): ChatToolMap => {
     editApplyMode = DEFAULT_CHAT_EDIT_APPLY_MODE,
     docxEditRepresentation = DEFAULT_DOCX_EDIT_REPRESENTATION,
     purpose = CHAT_TOOL_SET_PURPOSE.run,
+    skillGatedTools = SKILL_GATED_TOOLS.turn,
     createAIAbortSignal = () => AbortSignal.timeout(120_000),
     promptCachingEnabled = false,
     usageLane,
@@ -1048,7 +1133,9 @@ const buildChatTools = (props: GetChatToolsProps): ChatToolMap => {
     directTools: [],
     unavailableReasons: new Map(),
   };
+  const turnApps = turnAppTools(props.appTools);
   const executionTools = buildChatCodeModeTools({
+    ...turnApps.codeMode,
     sourceScopes,
     featureAccessSnapshot,
     testDependencies,
@@ -1078,6 +1165,24 @@ const buildChatTools = (props: GetChatToolsProps): ChatToolMap => {
     recordReadAuditEvent,
     safeDb,
     skills: skillMetadata,
+    userId,
+  });
+  const skillPackageTools = createSkillPackageTools({
+    memberRole,
+    offer:
+      forValidation || skillGatedTools === SKILL_GATED_TOOLS.every
+        ? { type: "every" }
+        : {
+            type: "declared",
+            names: skillDeclaredToolNames({
+              activeSkillContext,
+              skills: skillMetadata,
+            }),
+          },
+    organizationId,
+    recordAuditEvent,
+    safeDb,
+    scopedDb,
     userId,
   });
   // Unified business-registry tool: register once with a dynamic
@@ -1113,7 +1218,8 @@ const buildChatTools = (props: GetChatToolsProps): ChatToolMap => {
     disabledNativeToolSlugs,
   );
   const browserControlTools =
-    browserExtension && browserExtensionPolicy(browserExtension).toolOffered
+    browserExtension !== undefined &&
+    browserExtensionPolicy(browserExtension).toolOffered
       ? createBrowserControlTool()
       : {};
   const { webSearchProvider, urlFetcher } = webSearchProviders;
@@ -1405,12 +1511,14 @@ const buildChatTools = (props: GetChatToolsProps): ChatToolMap => {
             ...props,
             browserExtension: undefined,
             visualTools: undefined,
+            appTools: undefined,
             hasActiveDocxEditClient: false,
             delegationDepth: delegationDepth + 1,
             projectToolSet: (tools) =>
               projectToolMapForSubagent(tools, proposalSink),
           }),
         organizationId,
+        organizationAIInstructions: props.organizationAIInstructions,
         modelAdmission,
         orgAIConfig,
         managedAIResidency,
@@ -1429,11 +1537,13 @@ const buildChatTools = (props: GetChatToolsProps): ChatToolMap => {
       ...(props.visualTools === undefined
         ? {}
         : createShowVisualTools(props.visualTools)),
+      ...turnApps.tools,
       ...orgTools,
       ...secretTools,
       ...connectorTools,
       ...executionTools,
       ...skillTools,
+      ...skillPackageTools,
       ...businessRegistryTools,
       ...counterpartyCheckTools,
       ...boeTools,

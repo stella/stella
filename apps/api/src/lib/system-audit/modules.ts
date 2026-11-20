@@ -50,8 +50,12 @@ export const SYSTEM_AUDIT_MODULES = {
     "system:case-law-parsed-input-state-backfill",
   "apps/api/src/lib/scheduler/tasks/legislation-expression-id-backfill.ts":
     "system:legislation-expression-id-backfill",
+  "apps/api/src/db/search-history-country-repair.ts":
+    "system:search-history-country-repair",
   "apps/api/src/lib/scheduler/tasks/system-audit-retention.ts":
     "system:audit-retention",
+  "apps/api/src/handlers/case-law/polarity/form-repair.ts":
+    "system:case-law-citation-form-repair",
   "apps/api/src/handlers/case-law/ingestion/background-replay-store.ts":
     "system:case-law-background-replay",
   "apps/api/src/lib/legal-search/case-law-replay-audit.ts":

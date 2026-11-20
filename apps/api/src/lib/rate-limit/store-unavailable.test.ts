@@ -133,6 +133,8 @@ const FAIL_CLOSED_OWNERS = [
   "handlers/dictation/limits.ts",
   "handlers/legal-resolve/routes.ts",
   "lib/auth/mcp-web-handoff-service.ts",
+  "lib/rate-limit/invoice-email-admission.ts",
+  "lib/rate-limit/invoice-link-admission.ts",
   "lib/rate-limit/public-corpus-rate-limits.ts",
   "lib/rate-limit/synthetic-session-budget.ts",
 ];
@@ -205,7 +207,11 @@ test("every fail-closed counter is owned by the shared unavailable outcome", asy
       )
       .map(([path]) => path)
       .toSorted(),
-  ).toEqual(["mcp/context.ts", "mcp/tools.ts"]);
+  ).toEqual([
+    "mcp/context.ts",
+    "mcp/public-read-continuation.ts",
+    "mcp/tools.ts",
+  ]);
   const owner = sources.get("lib/rate-limit/redis-context.ts");
   expect(owner).toContain("LimiterStoreUnavailableError");
   expect(owner).not.toContain("FAIL_CLOSED_COUNT");

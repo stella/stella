@@ -72,6 +72,12 @@ export const KILL_SWITCHES = {
     offHint:
       "Search refinement and summaries are turned off. Do not retry until they are turned back on.",
   },
+  "email-assist": {
+    default: KILL_SWITCH_STATE.on,
+    owner: "apps/api/src/handlers/ai",
+    offHint:
+      "Email summaries, answers and reply drafts are turned off. Do not retry until they are turned back on.",
+  },
   "case-law-research": {
     default: KILL_SWITCH_STATE.on,
     owner: "apps/api/src/handlers/case-law",
@@ -162,6 +168,12 @@ export const KILL_SWITCHES = {
     offHint:
       "List verification is turned off. Do not retry until it is turned back on.",
   },
+  "list-fact-extraction": {
+    default: KILL_SWITCH_STATE.on,
+    owner: "apps/api/src/handlers/lists/fact-extractions",
+    offHint:
+      "Fact extraction is turned off. Do not retry until it is turned back on.",
+  },
   "report-export": {
     default: KILL_SWITCH_STATE.on,
     owner: "apps/api/src/handlers/reports",
@@ -185,6 +197,7 @@ export type KillSwitchId = keyof typeof KILL_SWITCHES;
  */
 export const ACTION_KIND_KILL_SWITCH = {
   "dictation.transcribe": "dictation",
+  "dictation.cleanup": "dictation",
   "chat.send": "chat",
   "chat.generate-thread-title": "chat",
   "chat.improve-prompt": "chat",
@@ -206,6 +219,7 @@ export const ACTION_KIND_KILL_SWITCH = {
   "templates.fill": "templates",
   "skills.rewrite-resource": "skills",
   "skills.generate-draft": "skills",
+  "skills.draft-from-chat": "skills",
   "skills.propose-from-comments": "skills",
   "time-entries.polish-narrative": "time-narratives",
   "billing.activity-drafts": "billing-drafts",
@@ -215,6 +229,9 @@ export const ACTION_KIND_KILL_SWITCH = {
   "properties.preview": "workflows",
   "search.refine": "search-assist",
   "search.summarize": "search-assist",
+  "email.summarize": "email-assist",
+  "email.draft-reply": "email-assist",
+  "email.ask": "email-assist",
   "playbooks.derive-ask": "document-reviews",
   "case-law.analysis": "case-law-research",
   "case-law.search-refine": "case-law-research",
@@ -233,6 +250,9 @@ export const ACTION_KIND_KILL_SWITCH = {
   "bilingual.background": "bilingual-documents",
   "list-verification.start": "list-verification",
   "list-verification.background": "list-verification",
+  "list-verification.recheck": "list-verification",
+  "list-fact-extraction.start": "list-fact-extraction",
+  "list-fact-extraction.background": "list-fact-extraction",
   "report-export.start": "report-export",
   "report-export.background": "report-export",
   "mcp.services/call": "mcp-tools",

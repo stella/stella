@@ -11,7 +11,7 @@ import { bufferObjectCleanupIntents, templates } from "@/api/db/schema";
 import { createSafeDb } from "@/api/db/scoped";
 import { createSafeId } from "@/api/lib/branded-types";
 import {
-  reserveObjectCleanupIntents,
+  reserveObjectCleanupIntentsForKey,
   settleObjectCleanupIntentsAfterWriter,
 } from "@/api/lib/buffer-intent-reconciliation";
 import { buildTemplateS3Key } from "@/api/lib/templates/storage-keys";
@@ -41,7 +41,7 @@ let migratedPolicyExpression: string;
 
 const migrationPath = nodePath.resolve(
   import.meta.dir,
-  "../../../drizzle/20261020000300_chat_cleanup_intent_organization_keys/migration.sql",
+  "../../../drizzle/20261120070300_agent_skill_original_cleanup_intent_keys/migration.sql",
 );
 
 const insertPolicy = getTableConfig(bufferObjectCleanupIntents).policies.find(
@@ -69,7 +69,7 @@ const readInsertPolicyExpression = async (): Promise<string> => {
 };
 
 const reserve = async (objectKey: string) =>
-  await reserveObjectCleanupIntents({
+  await reserveObjectCleanupIntentsForKey({
     objectKey,
     organizationId,
     safeDb: scopedSafeDb,

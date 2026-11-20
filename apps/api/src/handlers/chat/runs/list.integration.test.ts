@@ -9,7 +9,10 @@ import {
 } from "bun:test";
 import { eq } from "drizzle-orm";
 
-import { CHAT_ACTIVE_RUN_STATE } from "@stll/api-contract/chat";
+import {
+  CHAT_ACTIVE_RUN_STATE,
+  CHAT_TURN_INTERACTION_TYPES,
+} from "@stll/api-contract/chat";
 import type { ChatActiveRun } from "@stll/api-contract/chat";
 
 import type { ScopedDb } from "@/api/db/safe-db";
@@ -229,6 +232,29 @@ describe("the member's active chat runs", () => {
       since: at(50).toISOString(),
       state: CHAT_ACTIVE_RUN_STATE.needsYou,
     });
+    // Only a waiting run says what it waits on.
+    expect(byThread.get(running ?? "")).not.toHaveProperty("interaction");
+  });
+
+  test("a waiting run names what it waits on, for every interaction a turn stores", async () => {
+    const threadIds = await seed(
+      CHAT_TURN_INTERACTION_TYPES.map((interactionType) =>
+        mine("awaiting-user", { interactionType, title: interactionType }),
+      ),
+    );
+
+    const byThread = new Map(
+      (await listAll()).map((run) => [run.threadId, run]),
+    );
+
+    expect(
+      threadIds.map((threadId) => {
+        const run = byThread.get(threadId);
+        return run?.state === CHAT_ACTIVE_RUN_STATE.needsYou
+          ? run.interaction
+          : undefined;
+      }),
+    ).toEqual([...CHAT_TURN_INTERACTION_TYPES]);
   });
 
   test("orders runs waiting on the member first, then oldest first", async () => {

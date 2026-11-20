@@ -18,29 +18,60 @@
  */
 
 import { toMarkdownBytes } from "@firecrawl/anydoc";
-import { Result } from "better-result";
+import { panic, Result, type UnhandledException } from "better-result";
+import type * as v from "valibot";
 
-import { DATA_BOX_MESSAGE_MIME_TYPE } from "@stll/api-contract/data-box";
+import { parseIntegerToken } from "@stll/agent-input/numeric-token";
+import type { cadesPreviewSchema } from "@stll/api-contract/cades";
+import { legalFileFormat } from "@stll/api-contract/document-format";
 import {
   EMAIL_MIME_TYPES,
   EML_MIME_TYPE,
   MSG_MIME_TYPE,
 } from "@stll/api-contract/email-mime-types";
+import {
+  LEGAL_FILE_FORMATS,
+  type LegalFileFormatKind,
+} from "@stll/api-contract/legal-file-formats";
 import { sanitizeErrorForOutput, sanitizeQueryErrorText } from "@stll/errors";
 import { extractDocxText, FolioDocxReviewer } from "@stll/folio-core/server";
 import { load } from "@stll/html";
 
+import { dataBoxDocumentText } from "@/api/lib/email/correspondence/data-box/document-text";
+import { DATA_BOX_PREVIEW_MODE } from "@/api/lib/email/correspondence/data-box/preview-contract";
+import { extractDataBoxPreview } from "@/api/lib/email/correspondence/data-box/preview-worker";
+import { parseDataBoxDocument } from "@/api/lib/email/correspondence/data-box/zfo";
+import type {
+  FileScanFailedError,
+  FileScanRejectedError,
+} from "@/api/lib/file-scan/scan-upload";
+import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 import {
-  dataBoxMessageText,
-  parseDataBoxMessage,
-} from "@/api/lib/email/correspondence/data-box/zfo";
+  ARCHIVE_PREVIEW_WORKER_EXIT,
+  ASIC_PREVIEW_WORKER_MODE,
+  STRUCTURED_DOCUMENT_PREVIEW_MODE,
+} from "@/api/lib/files/archive-preview-protocol";
+import type { AsicParseError } from "@/api/lib/files/asic-container";
+import { asicDocumentText } from "@/api/lib/files/asic-document-text";
+import { extractAsicPreview } from "@/api/lib/files/asic-preview-worker";
+import { cadesDocumentText } from "@/api/lib/files/cades-document-text";
+import {
+  CADES_WORKER_EXIT,
+  CADES_WORKER_MODE,
+  type CadesWorkerMode,
+} from "@/api/lib/files/cades-preview-protocol";
+import { scanCadesPayload } from "@/api/lib/files/cades-preview-worker";
+import type { DocumentPackageError } from "@/api/lib/files/document-archive";
 import {
   type EmailAttachment,
   type EmailParseError,
   parsedEmailToText,
   parseEmail,
 } from "@/api/lib/files/email-to-html";
+import type { P7mParseError } from "@/api/lib/files/p7m";
+import { extractStructuredDocument } from "@/api/lib/files/structured-document-worker";
 import { LIMITS } from "@/api/lib/limits";
+import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 import {
   canExtractMimeType,
   isDirectTextMimeType,
@@ -50,11 +81,13 @@ import {
 import {
   classifyAttachmentError,
   formatAttachmentIssue,
+  STANDALONE_ATTACHMENT_MODE,
 } from "@/api/lib/search/extraction-worker-attachments";
 import {
   formatWorkerErrorLine,
   getWorkerErrorClass,
 } from "@/api/lib/search/extraction-worker-error";
+import { writeWorkerStdout } from "@/api/lib/subprocess";
 import {
   DOC_MIME_TYPE,
   DOCM_MIME_TYPE,
@@ -104,7 +137,6 @@ const ATTACHMENT_EXTENSION_MIME_TYPES: Record<string, string> = {
   xls: XLS_MIME_TYPE,
   xlsb: XLSB_MIME_TYPE,
   xlsx: XLSX_MIME_TYPE,
-  zfo: DATA_BOX_MESSAGE_MIME_TYPE,
 };
 
 /**
@@ -263,7 +295,8 @@ const extractAttachmentPlaintext = async ({
 }): Promise<string | null> => {
   const result = (
     await Result.tryPromise({
-      try: async () => await extract(bytes, mimeType, maxChars, nestingDepth),
+      try: async () =>
+        await extract({ fileBytes: bytes, mimeType, maxChars, nestingDepth }),
       catch: (error) => error,
     })
   ).andThen((extracted) => extracted);
@@ -280,12 +313,143 @@ const extractAttachmentPlaintext = async ({
   return result.value;
 };
 
-const extract = async (
-  fileBytes: Uint8Array,
-  mimeType: string,
-  maxChars: number,
+type LegalTextReadOptions = {
+  fileBytes: Uint8Array;
+  mimeType: string;
+  maxChars: number;
+  nestingDepth: number;
+  includeContainerAttachments: boolean;
+};
+
+type LegalTextReadError =
+  | AsicParseError
+  | DocumentPackageError
+  | FileScanFailedError
+  | FileScanRejectedError
+  | P7mParseError
+  | UnhandledException;
+
+const extractDataBoxText = async ({
+  fileBytes,
+  maxChars,
+  nestingDepth,
+  includeContainerAttachments,
+}: LegalTextReadOptions): Promise<
+  Result<string | null, LegalTextReadError>
+> => {
+  // Each filed attachment has its own matter document and searchable text.
+  const document = parseDataBoxDocument(fileBytes);
+  if (document.isErr()) {
+    return Result.ok(null);
+  }
+  let text = dataBoxDocumentText(document.value);
+  if (includeContainerAttachments && document.value.kind === "message") {
+    const { scanUpload } = await import("@/api/lib/file-scan/scan-upload");
+    for (const file of document.value.files) {
+      const mimeType = resolveAttachmentMimeType(file) ?? file.mimeType;
+      const scanned = await scanUpload({
+        bytes: file.bytes,
+        fileName: sanitizeFilename(file.fileName),
+        declaredMimeType: mimeType,
+      });
+      if (scanned.isErr()) {
+        return Result.err(scanned.error);
+      }
+      const heading = `
+
+Attachment: ${file.fileName}
+`;
+      const remainingChars = maxChars - text.length - heading.length;
+      if (remainingChars <= 0) {
+        continue;
+      }
+      const content = canExtractMimeType(mimeType)
+        ? await extractAttachmentPlaintext({
+            bytes: new Uint8Array(scanned.value.bytes),
+            maxChars: remainingChars,
+            mimeType,
+            nestingDepth: nestingDepth + 1,
+          })
+        : null;
+      text += heading + (content ?? "Attachment text unavailable.");
+    }
+  }
+  return Result.ok(text);
+};
+
+const extractCadesText = async ({
+  fileBytes,
+  maxChars,
+}: LegalTextReadOptions): Promise<
+  Result<string | null, LegalTextReadError | EmailParseError>
+> => {
+  const scanned = await scanCadesPayload(fileBytes, "");
+  if (scanned.isErr()) {
+    return Result.err(scanned.error);
+  }
+  const { file, layers } = scanned.value;
+  const content = await extractEmbeddedPayloadText(file, maxChars);
+  if (content.isErr()) {
+    return content;
+  }
+  return Result.ok(cadesDocumentText({ layers, text: content.value ?? "" }));
+};
+
+const extractAsicText = async ({
+  fileBytes,
+  mimeType,
+  maxChars,
+}: LegalTextReadOptions): Promise<
+  Result<string | null, LegalTextReadError | EmailParseError>
+> => {
+  const preview = await extractAsicPreview({
+    fileBytes,
+    expectedMimeType: mimeType,
+    maxChars,
+    readText: extractEmbeddedPayloadText,
+  });
+  if (preview.isErr()) {
+    return Result.err(preview.error);
+  }
+  return Result.ok(asicDocumentText(preview.value));
+};
+
+const extractStructuredText = async (options: LegalTextReadOptions) => {
+  const read = await extractStructuredDocument(options);
+  return read.map(({ text }) => text);
+};
+
+const LEGAL_TEXT_READERS = {
+  ofd: extractStructuredText,
+  uyap: extractStructuredText,
+  asicE: extractAsicText,
+  asicS: extractAsicText,
+  cades: extractCadesText,
+  dataBox: extractDataBoxText,
+} satisfies Record<
+  LegalFileFormatKind,
+  (
+    options: LegalTextReadOptions,
+  ) => Promise<Result<string | null, LegalTextReadError | EmailParseError>>
+>;
+
+type ExtractOptions = {
+  fileBytes: Uint8Array;
+  mimeType: string;
+  maxChars: number;
+  nestingDepth?: number;
+  includeContainerAttachments?: boolean;
+};
+
+const extract = async ({
+  fileBytes,
+  mimeType,
+  maxChars,
   nestingDepth = 0,
-): Promise<Result<string | null, EmailParseError>> => {
+  includeContainerAttachments = false,
+}: ExtractOptions): Promise<
+  Result<string | null, EmailParseError | LegalTextReadError>
+> => {
   const normalizedMimeType = normalizeMimeType(mimeType);
   let text: string | null = null;
 
@@ -312,12 +476,23 @@ const extract = async (
       mimeType: normalizedMimeType,
       nestingDepth,
     });
-  } else if (normalizedMimeType === DATA_BOX_MESSAGE_MIME_TYPE) {
-    // The message's files are stored as documents of their own, so only the
-    // envelope is this file's text. An unreadable file has none; filing it
-    // as correspondence records why it was skipped.
-    const message = parseDataBoxMessage(fileBytes);
-    text = message.isOk() ? dataBoxMessageText(message.value) : null;
+  } else {
+    const legal = LEGAL_FILE_FORMATS.find(
+      (format) => format.mimeType === normalizedMimeType,
+    );
+    if (legal) {
+      const legalText = await LEGAL_TEXT_READERS[legal.kind]({
+        fileBytes,
+        mimeType: legal.mimeType,
+        maxChars,
+        nestingDepth,
+        includeContainerAttachments,
+      });
+      if (legalText.isErr()) {
+        return Result.err(legalText.error);
+      }
+      text = legalText.value;
+    }
   }
 
   if (!text || text.trim().length === 0) {
@@ -328,8 +503,12 @@ const extract = async (
 };
 
 const resolveAttachmentMimeType = (
-  attachment: EmailAttachment,
+  attachment: Pick<EmailAttachment, "fileName" | "mimeType">,
 ): string | null => {
+  const legal = legalFileFormat(attachment.mimeType, attachment.fileName);
+  if (legal) {
+    return legal.mimeType;
+  }
   const normalized = normalizeMimeType(attachment.mimeType ?? "");
   if (canExtractMimeType(normalized)) {
     return normalized;
@@ -372,33 +551,203 @@ const toArrayBuffer = (bytes: Uint8Array): ArrayBuffer => {
   return buffer;
 };
 
-// ── Main ──────────────────────────────────────────────────
+/** The caller's character budget (argv[3]); the shared one when absent. */
+const readMaxCharsArgument = (value: string | undefined): number => {
+  if (value === undefined) {
+    return LIMITS.extractedContentMaxChars;
+  }
+  const parsed = parseIntegerToken(value, { sign: "unsigned" }).unwrapOr(0);
+  if (parsed < 1) {
+    return panic("Extraction worker character budget is invalid");
+  }
+  return parsed;
+};
 
-try {
-  const mimeType = process.argv[2] ?? "";
-  const fileBytes = new Uint8Array(await Bun.stdin.arrayBuffer());
-  const result = await extract(
-    fileBytes,
-    mimeType,
-    LIMITS.extractedContentMaxChars,
-  );
-  if (result.isErr()) {
-    const errorClass = getWorkerErrorClass(result.error);
-    const output = sanitizeErrorForOutput(formatWorkerErrorLine(errorClass));
-    process.stderr.write(
-      `${typeof output === "string" ? output : formatWorkerErrorLine("UnknownError")}\n`,
-    );
-    process.exit(1);
+const extractEmbeddedPayloadText = async (
+  file: ScannedFile,
+  maxChars: number,
+) => {
+  // Embedded data is dispatched only to leaf readers, even if an archive
+  // member is itself a signed container or a message.
+  const bytes = new Uint8Array(file.bytes);
+  const mimeType = normalizeMimeType(file.mimeType);
+  const content = await Result.tryPromise(async () => {
+    if (mimeType === PDF_MIME_TYPE) {
+      return await extractPdfMarkdown(bytes);
+    }
+    if (mimeType === DOCX_MIME_TYPE || isOfficeDocumentMimeType(mimeType)) {
+      return await extractOfficeDocumentMarkdown(bytes);
+    }
+    if (isDirectTextMimeType(mimeType)) {
+      return extractDirectText(bytes, mimeType);
+    }
+    return null;
+  });
+  if (content.isOk()) {
+    return Result.ok(content.value?.slice(0, maxChars) || null);
   }
-  if (result.value) {
-    process.stdout.write(result.value);
+
+  const error = content.error.cause;
+  if (error instanceof Error && "code" in error) {
+    switch (error.code) {
+      case "encrypted":
+      case "malformed":
+      case "missingPart":
+      case "needsOcr":
+      case "resourceLimit":
+      case "unsupported":
+        // Keep the container metadata readable when an embedded document has
+        // no text. Only converter-declared outcomes can take this path.
+        return Result.ok(null);
+      default:
+        break;
+    }
   }
-  process.exit(0);
-} catch (error) {
+  return Result.err(content.error);
+};
+
+type CadesWorkerOptions = {
+  mode: CadesWorkerMode;
+  fileBytes: Uint8Array;
+  fileName: string;
+  maxChars: number;
+};
+
+const writeCadesPreview = async ({
+  mode,
+  fileBytes,
+  fileName,
+  maxChars,
+}: CadesWorkerOptions) => {
+  const payload = await scanCadesPayload(fileBytes, fileName);
+  if (payload.isErr()) {
+    switch (payload.error._tag) {
+      case "P7mParseError":
+        return Result.ok(CADES_WORKER_EXIT.unreadable);
+      case "FileScanRejectedError":
+        return Result.ok(CADES_WORKER_EXIT.rejected);
+      case "FileScanFailedError":
+        return Result.err(payload.error);
+    }
+  }
+  const { file, layers } = payload.value;
+  const bytes = new Uint8Array(file.bytes);
+  if (mode === CADES_WORKER_MODE.pdf) {
+    if (file.mimeType !== PDF_MIME_TYPE) {
+      return Result.ok(CADES_WORKER_EXIT.unreadable);
+    }
+    await writeWorkerStdout(bytes);
+    return Result.ok(0);
+  }
+
+  const content = await extractEmbeddedPayloadText(file, maxChars);
+  if (content.isErr()) {
+    return content;
+  }
+  const preview = {
+    fileName: sanitizeFilename(file.fileName),
+    mimeType: file.mimeType,
+    layers,
+    text: content.value ?? "",
+  } satisfies v.InferOutput<typeof cadesPreviewSchema>;
+  await writeWorkerStdout(JSON.stringify(preview));
+  return Result.ok(0);
+};
+
+const writeAsicPreview = async (options: {
+  fileBytes: Uint8Array;
+  expectedMimeType: string;
+  maxChars: number;
+}) => {
+  const preview = await extractAsicPreview({
+    ...options,
+    readText: extractEmbeddedPayloadText,
+  });
+  if (preview.isErr()) {
+    switch (preview.error._tag) {
+      case "AsicParseError":
+        return Result.ok(ARCHIVE_PREVIEW_WORKER_EXIT.unreadable);
+      case "FileScanRejectedError":
+        return Result.ok(ARCHIVE_PREVIEW_WORKER_EXIT.rejected);
+      case "FileScanFailedError":
+      case "UnhandledException":
+        return Result.err(preview.error);
+    }
+  }
+  await writeWorkerStdout(JSON.stringify(preview.value));
+  return Result.ok(0);
+};
+
+function exitWithWorkerError(error: unknown): never {
   const errorClass = getWorkerErrorClass(error);
   const output = sanitizeErrorForOutput(formatWorkerErrorLine(errorClass));
   process.stderr.write(
     `${typeof output === "string" ? output : formatWorkerErrorLine("UnknownError")}\n`,
   );
   process.exit(1);
+}
+
+// ── Main ──────────────────────────────────────────────────
+
+try {
+  const mimeType = process.argv[2] ?? "";
+  const maxChars = readMaxCharsArgument(process.argv[3]);
+  const fileBytes = new Uint8Array(await Bun.stdin.arrayBuffer());
+  if (mimeType === DATA_BOX_PREVIEW_MODE) {
+    await writeWorkerStdout(JSON.stringify(extractDataBoxPreview(fileBytes)));
+    process.exit(0);
+  }
+  if (
+    mimeType === CADES_WORKER_MODE.preview ||
+    mimeType === CADES_WORKER_MODE.pdf
+  ) {
+    const preview = await writeCadesPreview({
+      mode: mimeType,
+      fileBytes,
+      fileName: process.argv[4] ?? "",
+      maxChars,
+    });
+    if (preview.isErr()) {
+      exitWithWorkerError(preview.error);
+    }
+    process.exit(preview.value);
+  }
+  if (mimeType === STRUCTURED_DOCUMENT_PREVIEW_MODE) {
+    const preview = await extractStructuredDocument({
+      fileBytes,
+      mimeType: process.argv[4] ?? "",
+      maxChars,
+    });
+    if (preview.isErr()) {
+      process.exit(ARCHIVE_PREVIEW_WORKER_EXIT.unreadable);
+    }
+    await writeWorkerStdout(JSON.stringify(preview.value));
+    process.exit(0);
+  }
+  if (mimeType === ASIC_PREVIEW_WORKER_MODE) {
+    const preview = await writeAsicPreview({
+      fileBytes,
+      expectedMimeType: process.argv[4] ?? "",
+      maxChars,
+    });
+    if (preview.isErr()) {
+      exitWithWorkerError(preview.error);
+    }
+    process.exit(preview.value);
+  }
+  const result = await extract({
+    fileBytes,
+    mimeType,
+    maxChars,
+    includeContainerAttachments: process.argv[4] === STANDALONE_ATTACHMENT_MODE,
+  });
+  if (result.isErr()) {
+    exitWithWorkerError(result.error);
+  }
+  if (result.value) {
+    await writeWorkerStdout(result.value);
+  }
+  process.exit(0);
+} catch (error) {
+  exitWithWorkerError(error);
 }

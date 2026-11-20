@@ -36,8 +36,13 @@ export const hasCarriedCellMetadata = (
  */
 const isMachineOutcome = (
   settlement: AiCellSettlement | null,
-): settlement is Extract<AiCellSettlement, { type: "value" | "notStated" }> =>
-  settlement?.type === "value" || settlement?.type === "notStated";
+): settlement is Extract<
+  AiCellSettlement,
+  { type: "value" | "notStated" | "notFoundInCutDocument" }
+> =>
+  settlement?.type === "value" ||
+  settlement?.type === "notStated" ||
+  settlement?.type === "notFoundInCutDocument";
 
 type ReplacedField = {
   content: FieldContent;

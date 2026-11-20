@@ -38,14 +38,8 @@ import {
   SelectValue,
 } from "@stll/ui/select";
 import { Switch } from "@stll/ui/switch";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@stll/ui/table";
+import { Table, TableBody, TableCell, TableRow } from "@stll/ui/table";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import { formatCurrencyAmount } from "@/components/billing/format-currency";
@@ -69,6 +63,7 @@ import { notifyUserError } from "@/lib/errors/user-toast";
 import { useIdempotentSubmit } from "@/lib/idempotency/use-idempotent-submit";
 import { expensesQueryRoot } from "@/lib/resource-query-roots.logic";
 import { toSafeId } from "@/lib/safe-id";
+import { resourceMutation } from "@/lib/workspace-realtime";
 import {
   clientInvoicesKeys,
   invoiceByIdOptions,
@@ -101,15 +96,16 @@ import type {
   ComposerVatDecision,
   EntryChoice,
 } from "./invoice-composer.logic";
-
-type ComposerStep = "items" | "details" | "issue";
-const COMPOSER_STEPS: readonly ComposerStep[] = ["items", "details", "issue"];
-
-const STEP_LABELS = {
-  items: "billing.invoiceComposer.steps.items",
-  details: "common.details",
-  issue: "billing.invoiceComposer.steps.issue",
-} as const satisfies Record<ComposerStep, TranslationKey>;
+import {
+  COMPOSER_STEPS,
+  ComposerFooterFrame,
+  ComposerFrame,
+  ComposerStepList,
+  ComposerTimeEntriesTable,
+  InvoiceExpensesSection,
+  InvoiceTimeSection,
+} from "./invoice-composer.pending";
+import type { ComposerStep } from "./invoice-composer.pending";
 
 const VAT_TREATMENT_LABELS = {
   domestic_vat: "billing.invoiceComposer.noVat",
@@ -141,7 +137,7 @@ export type IssuedInvoice = {
   workspaceId: string;
   invoiceNumber: string | null;
   issued: boolean;
-  totalAmount: number;
+  totalAmount: number | null;
   currency: string;
   dueDate: string | null;
 };
@@ -327,6 +323,7 @@ export const InvoiceComposer = ({
 
   const send = (issue: boolean) =>
     submit.mutate({
+      workspaceId,
       issue,
       body: {
         invoiceDate,
@@ -353,77 +350,78 @@ export const InvoiceComposer = ({
     });
 
   return (
-    <div className="flex min-h-full flex-col">
-      <div className="flex flex-1 flex-col gap-4 p-4 sm:p-6">
-        <StepNav hasItems={hasItems} onStep={setStep} step={step} />
-        {step === "items" && (
-          <ItemsStep
-            choices={choices}
-            {...(client === undefined ? {} : { client })}
-            currency={currency}
-            entries={entries}
-            expenses={expenses}
-            includedExpenseIds={includedExpenseIds}
-            onChoice={(entry, change) =>
-              setChoices((current) =>
-                new Map(current).set(entry.id, {
-                  ...entryChoice(current, entry),
-                  ...change,
-                }),
-              )
-            }
-            onExpense={(expense, included) =>
-              setIncludedExpenseIds((current) => {
-                const next = new Set(current);
-                if (included) {
-                  next.add(expense.id);
-                } else {
-                  next.delete(expense.id);
-                }
-                return next;
-              })
-            }
-            prefill={{ ...prefill, vat }}
-          />
-        )}
-        {step === "details" && (
-          <DetailsStep
-            vat={vat}
-            currency={currency}
-            dueDate={dueDate}
-            dueDays={dueDays}
-            invoiceDate={invoiceDate}
-            language={language}
-            onDueDays={setDueDays}
-            onInvoiceDate={setInvoiceDate}
-            onLanguage={setLanguage}
-            prefill={prefill}
-            supplyDate={supplyDate}
-          />
-        )}
-        {step === "issue" && (
-          <IssueStep
-            blockers={prefill.issueBlockers}
-            buyerName={prefill.buyer.buyerName}
-            currency={currency}
-            dueDate={dueDate}
-            lineCount={includedEntryIds.length + includedExpenses.length}
-            totals={totals}
-          />
-        )}
-      </div>
-      <ComposerFooter
-        currency={currency}
-        canSave={hasItems && vat.reason !== "no_vat_rate"}
-        canIssue={prefill.issueBlockers.length === 0}
-        hasItems={hasItems}
-        onSave={send}
-        onStep={setStep}
-        pending={submit.isPending}
-        step={step}
-        totals={totals}
-      />
-    </div>
+    <ComposerFrame
+      navigation={<StepNav hasItems={hasItems} onStep={setStep} step={step} />}
+      footer={
+        <ComposerFooter
+          currency={currency}
+          canSave={hasItems && vat.reason !== "no_vat_rate"}
+          canIssue={prefill.issueBlockers.length === 0}
+          hasItems={hasItems}
+          onSave={send}
+          onStep={setStep}
+          pending={submit.isPending}
+          step={step}
+          totals={totals}
+        />
+      }
+    >
+      {step === "items" && (
+        <ItemsStep
+          choices={choices}
+          {...(client === undefined ? {} : { client })}
+          currency={currency}
+          entries={entries}
+          expenses={expenses}
+          includedExpenseIds={includedExpenseIds}
+          onChoice={(entry, change) =>
+            setChoices((current) =>
+              new Map(current).set(entry.id, {
+                ...entryChoice(current, entry),
+                ...change,
+              }),
+            )
+          }
+          onExpense={(expense, included) =>
+            setIncludedExpenseIds((current) => {
+              const next = new Set(current);
+              if (included) {
+                next.add(expense.id);
+              } else {
+                next.delete(expense.id);
+              }
+              return next;
+            })
+          }
+          prefill={{ ...prefill, vat }}
+        />
+      )}
+      {step === "details" && (
+        <DetailsStep
+          vat={vat}
+          currency={currency}
+          dueDate={dueDate}
+          dueDays={dueDays}
+          invoiceDate={invoiceDate}
+          language={language}
+          onDueDays={setDueDays}
+          onInvoiceDate={setInvoiceDate}
+          onLanguage={setLanguage}
+          prefill={prefill}
+          supplyDate={supplyDate}
+        />
+      )}
+      {step === "issue" && (
+        <IssueStep
+          blockers={prefill.issueBlockers}
+          buyerName={prefill.buyer.buyerName}
+          currency={currency}
+          dueDate={dueDate}
+          lineCount={includedEntryIds.length + includedExpenses.length}
+          totals={totals}
+        />
+      )}
+    </ComposerFrame>
   );
 };
 
@@ -446,130 +444,133 @@ export const useComposerSubmit = ({
   const t = useTranslations();
   const queryClient = useQueryClient();
   const submit = useIdempotentSubmit();
-  return useMutation({
-    mutationFn: async ({
+  const createInvoiceRequest = async ({
+    issue,
+    body,
+  }: {
+    workspaceId: string;
+    issue: boolean;
+    body: CreateInvoiceBody;
+  }): Promise<IssuedInvoice> =>
+    await submitComposedInvoice({
       issue,
-      body,
-    }: {
-      issue: boolean;
-      body: CreateInvoiceBody;
-    }): Promise<IssuedInvoice> => {
-      const invoices = api.invoices({
-        workspaceId: toSafeId<"workspace">(workspaceId),
-      });
-      return await submitComposedInvoice({
-        issue,
-        create: async () => {
-          if (client === undefined) {
-            return unwrapApiResponse(
-              await submit.run({
-                operation: `invoices.${workspaceId}.create`,
-                body,
-                send: async (payload) =>
-                  await invokeCapability("invoices.create", async (request) =>
-                    invoices.put(payload, request),
-                  ),
-              }),
-            );
-          }
+      create: async () => {
+        if (client === undefined) {
           return unwrapApiResponse(
             await submit.run({
-              operation: `client-invoices.${client.clientId}.create`,
-              body: {
-                ...clientInvoiceDetails(body),
-                matters: client.matters.flatMap((matter) => {
-                  const timeEntryIds = matter.prefill.timeEntries
-                    .filter((entry) =>
-                      body.timeEntryIds.includes(
-                        toSafeId<"timeEntry">(entry.id),
-                      ),
-                    )
-                    .map((entry) => toSafeId<"timeEntry">(entry.id));
-                  const expenseIds = matter.prefill.expenses
-                    .filter((expense) =>
-                      body.expenseIds?.includes(
-                        toSafeId<"expense">(expense.id),
-                      ),
-                    )
-                    .map((expense) => toSafeId<"expense">(expense.id));
-                  return timeEntryIds.length + expenseIds.length === 0
-                    ? []
-                    : [
-                        {
-                          workspaceId: toSafeId<"workspace">(
-                            matter.workspaceId,
-                          ),
-                          timeEntryIds,
-                          expenseIds,
-                        },
-                      ];
-                }),
-              },
-              send: async (payload, replayRequest) =>
-                await invokeCapability(
-                  "client-invoices.create",
-                  async (request) =>
-                    api["client-invoices"]({
-                      clientId: toSafeId<"contact">(client.clientId),
-                    }).put(payload, {
-                      ...request,
-                      headers: {
-                        "Idempotency-Key":
-                          replayRequest.headers["Idempotency-Key"],
-                        ...request.headers,
-                      },
-                    }),
+              operation: `invoices.${workspaceId}.create`,
+              body,
+              send: async (payload) =>
+                await invokeCapability("invoices.create", async (request) =>
+                  api
+                    .invoices({
+                      workspaceId: toSafeId<"workspace">(workspaceId),
+                    })
+                    .put(payload, request),
                 ),
             }),
           );
-        },
-        finalize: async (id) => {
-          const finalized = await invokeCapability(
-            "invoices.transition",
-            async (request) =>
-              invoices({
+        }
+        return unwrapApiResponse(
+          await submit.run({
+            operation: `client-invoices.${client.clientId}.create`,
+            body: {
+              ...clientInvoiceDetails(body),
+              matters: client.matters.flatMap((matter) => {
+                const timeEntryIds = matter.prefill.timeEntries
+                  .filter((entry) =>
+                    body.timeEntryIds.includes(toSafeId<"timeEntry">(entry.id)),
+                  )
+                  .map((entry) => toSafeId<"timeEntry">(entry.id));
+                const expenseIds = matter.prefill.expenses
+                  .filter((expense) =>
+                    body.expenseIds?.includes(toSafeId<"expense">(expense.id)),
+                  )
+                  .map((expense) => toSafeId<"expense">(expense.id));
+                return timeEntryIds.length + expenseIds.length === 0
+                  ? []
+                  : [
+                      {
+                        workspaceId: toSafeId<"workspace">(matter.workspaceId),
+                        timeEntryIds,
+                        expenseIds,
+                      },
+                    ];
+              }),
+            },
+            send: async (payload, replayRequest) =>
+              await invokeCapability(
+                "client-invoices.create",
+                async (request) =>
+                  api["client-invoices"]({
+                    clientId: toSafeId<"contact">(client.clientId),
+                  }).put(payload, {
+                    ...request,
+                    headers: {
+                      "Idempotency-Key":
+                        replayRequest.headers["Idempotency-Key"],
+                      ...request.headers,
+                    },
+                  }),
+              ),
+          }),
+        );
+      },
+      finalize: async (id) => {
+        const finalized = await invokeCapability(
+          "invoices.transition",
+          async (request) =>
+            api
+              .invoices({ workspaceId: toSafeId<"workspace">(workspaceId) })({
                 invoiceId: toSafeId<"invoice">(id),
-              }).transition.post({ action: "finalize" }, request),
-          );
-          unwrapApiResponse(finalized);
-        },
-        read: async (id): Promise<IssuedInvoice> => {
-          const invoice = await queryClient.query(
-            invoiceByIdOptions(workspaceId, id),
-          );
-          return {
-            id: invoice.id,
-            workspaceId,
-            invoiceNumber: invoice.invoiceNumber,
-            issued: invoice.status !== "draft",
-            totalAmount: invoice.totalAmount,
-            currency: invoice.currency,
-            dueDate: invoice.dueDate,
-          };
-        },
-        savedDraft: (created, error) => {
-          const issueFailed = t("billing.invoiceComposer.issueFailed");
-          // A refusal that names its reason leads with it; the person still
-          // learns that the draft they composed was kept.
-          notifyUserError(
-            error,
-            issueFailed,
-            userErrorFromThrown(error, issueFailed) === issueFailed
-              ? {}
-              : { description: issueFailed },
-          );
-          return {
-            id: created.id,
-            workspaceId,
-            invoiceNumber: null,
-            issued: false,
-            totalAmount: created.totalAmount,
-            currency: body.currency,
-            dueDate: body.dueDate ?? null,
-          };
-        },
-      });
-    },
+              })
+              .transition.post({ action: "finalize" }, request),
+        );
+        unwrapApiResponse(finalized);
+      },
+      read: async (id): Promise<IssuedInvoice> => {
+        const invoice = await queryClient.query(
+          invoiceByIdOptions(workspaceId, id),
+        );
+        return {
+          id: invoice.id,
+          workspaceId,
+          invoiceNumber: invoice.invoiceNumber,
+          issued: invoice.status !== "draft",
+          totalAmount: invoice.totalAmount,
+          currency: invoice.currency,
+          dueDate: invoice.dueDate,
+        };
+      },
+      savedDraft: (created, error) => {
+        const issueFailed = t("billing.invoiceComposer.issueFailed");
+        // A refusal that names its reason leads with it; the person still
+        // learns that the draft they composed was kept.
+        notifyUserError(
+          error,
+          issueFailed,
+          userErrorFromThrown(error, issueFailed) === issueFailed
+            ? {}
+            : { description: issueFailed },
+        );
+        return {
+          id: created.id,
+          workspaceId,
+          invoiceNumber: null,
+          issued: false,
+          totalAmount: created.totalAmount,
+          currency: body.currency,
+          dueDate: body.dueDate ?? null,
+        };
+      },
+    });
+  const createInvoiceMutation = resourceMutation({
+    mutation: "createInvoice",
+    queryClient,
+    mutationFn: createInvoiceRequest,
+  });
+  return useMutation({
+    mutationFn: createInvoiceMutation,
     onSuccess: (invoice) => {
       for (const queryKey of [
         ...(
@@ -602,10 +603,11 @@ type StepNavProps = {
 
 const StepNav = ({ step, hasItems, onStep }: StepNavProps) => {
   const t = useTranslations();
-  const current = COMPOSER_STEPS.indexOf(step);
+  const format = useFormatter();
+  const current = COMPOSER_STEPS.findIndex(({ id }) => id === step);
   return (
-    <ol className="flex flex-wrap gap-2">
-      {COMPOSER_STEPS.map((candidate, index) => (
+    <ComposerStepList>
+      {COMPOSER_STEPS.map(({ id: candidate, label }, index) => (
         <li key={candidate}>
           <Button
             aria-current={candidate === step ? "step" : undefined}
@@ -618,14 +620,14 @@ const StepNav = ({ step, hasItems, onStep }: StepNavProps) => {
               <CheckIcon aria-hidden />
             ) : (
               <span aria-hidden className="tabular-nums">
-                {index + 1}
+                {format.number(index + 1)}
               </span>
             )}
-            {t(STEP_LABELS[candidate])}
+            {t(label)}
           </Button>
         </li>
       ))}
-    </ol>
+    </ComposerStepList>
   );
 };
 
@@ -785,20 +787,19 @@ const ItemsStep = ({
           })}
         </Callout>
       )}
-      <Frame>
-        <FrameHeader>
-          <FrameTitle>{t("billing.invoiceComposer.timeEntries")}</FrameTitle>
-          <FrameDescription>
-            <span className="tabular-nums">
-              {t("billing.invoiceComposer.timeSummary", {
-                count: includedCount,
-                hours: format.number(includedMinutes(entries, choices) / 60, {
-                  maximumFractionDigits: 2,
-                }),
-              })}
-            </span>
-          </FrameDescription>
-        </FrameHeader>
+      <InvoiceTimeSection
+        title={t("billing.invoiceComposer.timeEntries")}
+        description={
+          <span className="tabular-nums">
+            {t("billing.invoiceComposer.timeSummary", {
+              count: includedCount,
+              hours: format.number(includedMinutes(entries, choices) / 60, {
+                maximumFractionDigits: 2,
+              }),
+            })}
+          </span>
+        }
+      >
         {entries.length === 0 ? (
           <FramePanel>
             <p className="text-muted-foreground text-sm">
@@ -814,12 +815,9 @@ const ItemsStep = ({
             onChoice={onChoice}
           />
         )}
-      </Frame>
+      </InvoiceTimeSection>
       {!flatFee && (
-        <Frame>
-          <FrameHeader>
-            <FrameTitle>{t("common.expenses")}</FrameTitle>
-          </FrameHeader>
+        <InvoiceExpensesSection title={t("common.expenses")}>
           {expenses.length === 0 ? (
             <FramePanel>
               <p className="text-muted-foreground text-sm">
@@ -834,7 +832,7 @@ const ItemsStep = ({
               onExpense={onExpense}
             />
           )}
-        </Frame>
+        </InvoiceExpensesSection>
       )}
     </div>
   );
@@ -858,109 +856,85 @@ const TimeEntriesTable = ({
   const t = useTranslations();
   const format = useFormatter();
   return (
-    <Table>
-      <TableHeader>
-        <TableRow>
-          <TableHead className="w-10">
-            <span className="sr-only">
-              {t("billing.invoiceComposer.include")}
-            </span>
-          </TableHead>
-          <TableHead>{t("common.date")}</TableHead>
-          <TableHead>{t("billing.narrative")}</TableHead>
-          <TableHead className="text-end">
-            {t("billing.invoiceComposer.billedHours")}
-          </TableHead>
-          <TableHead className="text-end">
-            {t("billing.invoiceComposer.rate")}
-          </TableHead>
-          <TableHead className="text-end">{t("billing.amount")}</TableHead>
-          <TableHead>{t("billing.invoiceComposer.noCharge")}</TableHead>
-        </TableRow>
-      </TableHeader>
-      <TableBody>
-        {entries.map((entry) => {
-          const choice = entryChoice(choices, entry);
-          const excluded = !choice.included;
-          return (
-            <TableRow key={entry.id}>
-              <TableCell>
-                <Checkbox
-                  aria-label={t("billing.invoiceComposer.include")}
-                  checked={choice.included}
-                  onCheckedChange={(checked) =>
-                    onChoice(entry, { included: checked })
-                  }
-                />
-              </TableCell>
-              <TableCell className="whitespace-nowrap">
-                <RowText
-                  className="text-muted-foreground tabular-nums"
-                  excluded={excluded}
-                >
-                  {format.dateTime(
-                    plainDateEpoch(entry.dateWorked),
-                    SHORT_DATE,
-                  )}
-                </RowText>
-              </TableCell>
-              <TableCell className="min-w-0">
-                <RowText className="line-clamp-2" excluded={excluded}>
+    <ComposerTimeEntriesTable renderLabel={t}>
+      {entries.map((entry) => {
+        const choice = entryChoice(choices, entry);
+        const excluded = !choice.included;
+        return (
+          <TableRow key={entry.id}>
+            <TableCell>
+              <Checkbox
+                aria-label={t("billing.invoiceComposer.include")}
+                checked={choice.included}
+                onCheckedChange={(checked) =>
+                  onChoice(entry, { included: checked })
+                }
+              />
+            </TableCell>
+            <TableCell className="whitespace-nowrap">
+              <RowText
+                className="text-muted-foreground tabular-nums"
+                excluded={excluded}
+              >
+                {format.dateTime(plainDateEpoch(entry.dateWorked), SHORT_DATE)}
+              </RowText>
+            </TableCell>
+            <TableCell className="min-w-0">
+              <RowText excluded={excluded}>
+                <TruncatedText lines={2}>
                   {entry.invoiceNarrative ?? entry.narrative}
-                </RowText>
-                {entry.timekeeperName !== null && (
-                  <span className="text-muted-foreground block text-xs">
-                    {entry.timekeeperName}
-                  </span>
+                </TruncatedText>
+              </RowText>
+              {entry.timekeeperName !== null && (
+                <span className="text-muted-foreground block text-xs">
+                  {entry.timekeeperName}
+                </span>
+              )}
+            </TableCell>
+            <TableCell className="text-end">
+              <BilledHoursInput
+                disabled={locked || excluded}
+                key={`${entry.id}:${choice.billedMinutes}`}
+                loggedMinutes={entry.durationMinutes}
+                minutes={choice.billedMinutes}
+                recordedMinutes={entry.billedMinutes}
+                onCommit={(billedMinutes) => onChoice(entry, { billedMinutes })}
+              />
+            </TableCell>
+            <TableCell className="text-end whitespace-nowrap">
+              <RowText
+                className="text-muted-foreground tabular-nums"
+                excluded={excluded}
+              >
+                {formatCurrencyAmount(entry.rateAtEntry, currency)}
+              </RowText>
+            </TableCell>
+            <TableCell className="text-end whitespace-nowrap">
+              <RowText
+                className={cn(
+                  "font-medium tabular-nums",
+                  choice.noCharge && "text-muted-foreground line-through",
                 )}
-              </TableCell>
-              <TableCell className="text-end">
-                <BilledHoursInput
-                  disabled={locked || excluded}
-                  key={`${entry.id}:${choice.billedMinutes}`}
-                  loggedMinutes={entry.durationMinutes}
-                  minutes={choice.billedMinutes}
-                  recordedMinutes={entry.billedMinutes}
-                  onCommit={(billedMinutes) =>
-                    onChoice(entry, { billedMinutes })
-                  }
-                />
-              </TableCell>
-              <TableCell className="text-end whitespace-nowrap">
-                <RowText
-                  className="text-muted-foreground tabular-nums"
-                  excluded={excluded}
-                >
-                  {formatCurrencyAmount(entry.rateAtEntry, currency)}
-                </RowText>
-              </TableCell>
-              <TableCell className="text-end whitespace-nowrap">
-                <RowText
-                  className={cn(
-                    "font-medium tabular-nums",
-                    choice.noCharge && "text-muted-foreground line-through",
-                  )}
-                  excluded={excluded}
-                >
-                  {formatCurrencyAmount(
-                    entryAmount(entry, { ...choice, noCharge: false }),
-                    currency,
-                  )}
-                </RowText>
-              </TableCell>
-              <TableCell>
-                <Switch
-                  aria-label={t("billing.invoiceComposer.noCharge")}
-                  checked={choice.noCharge}
-                  disabled={locked || excluded}
-                  onCheckedChange={(noCharge) => onChoice(entry, { noCharge })}
-                />
-              </TableCell>
-            </TableRow>
-          );
-        })}
-      </TableBody>
-    </Table>
+                excluded={excluded}
+              >
+                {formatCurrencyAmount(
+                  entryAmount(entry, { ...choice, noCharge: false }),
+                  currency,
+                )}
+              </RowText>
+            </TableCell>
+            <TableCell>
+              <Switch
+                aria-label={t("billing.invoiceComposer.noCharge")}
+                checked={choice.noCharge}
+                disabled={locked || excluded}
+                onCheckedChange={(noCharge) => onChoice(entry, { noCharge })}
+              />
+            </TableCell>
+          </TableRow>
+        );
+      })}
+    </ComposerTimeEntriesTable>
   );
 };
 
@@ -1005,8 +979,10 @@ const ExpensesTable = ({
                 </RowText>
               </TableCell>
               <TableCell className="min-w-0">
-                <RowText className="line-clamp-2" excluded={!included}>
-                  {expense.invoiceDescription ?? expense.description}
+                <RowText excluded={!included}>
+                  <TruncatedText lines={2}>
+                    {expense.invoiceDescription ?? expense.description}
+                  </TruncatedText>
                 </RowText>
               </TableCell>
               <TableCell className="text-end whitespace-nowrap">
@@ -1338,20 +1314,20 @@ const ComposerFooter = ({
   onSave,
 }: ComposerFooterProps) => {
   const t = useTranslations();
-  const index = COMPOSER_STEPS.indexOf(step);
-  const previous = COMPOSER_STEPS[index - 1];
-  const next = COMPOSER_STEPS[index + 1];
+  const index = COMPOSER_STEPS.findIndex(({ id }) => id === step);
+  const previous = COMPOSER_STEPS[index - 1]?.id;
+  const next = COMPOSER_STEPS[index + 1]?.id;
   return (
-    <div className="bg-background sticky bottom-0 flex flex-wrap items-center gap-3 border-t px-4 py-3 sm:px-6">
-      <span className="text-muted-foreground text-sm tabular-nums">
-        {totals !== null &&
-          t("billing.invoiceComposer.totalsSummary", {
-            net: formatCurrencyAmount(totals.netAmountMinor, currency),
-            vat: formatCurrencyAmount(totals.vatAmountMinor, currency),
-            total: formatCurrencyAmount(totals.grossAmountMinor, currency),
-          })}
-      </span>
-      <span className="flex-1" />
+    <ComposerFooterFrame
+      summary={
+        totals !== null &&
+        t("billing.invoiceComposer.totalsSummary", {
+          net: formatCurrencyAmount(totals.netAmountMinor, currency),
+          vat: formatCurrencyAmount(totals.vatAmountMinor, currency),
+          total: formatCurrencyAmount(totals.grossAmountMinor, currency),
+        })
+      }
+    >
       {previous !== undefined && (
         <Button
           disabled={pending}
@@ -1388,7 +1364,7 @@ const ComposerFooter = ({
           <DirectionalIcon className="size-4" icon={ArrowRightIcon} />
         </Button>
       )}
-    </div>
+    </ComposerFooterFrame>
   );
 };
 
@@ -1467,7 +1443,9 @@ export const IssuedState = ({
   const format = useFormatter();
   const summary = [
     buyerName,
-    formatCurrencyAmount(invoice.totalAmount, invoice.currency),
+    invoice.totalAmount === null
+      ? null
+      : formatCurrencyAmount(invoice.totalAmount, invoice.currency),
     invoice.dueDate === null
       ? null
       : t("billing.invoiceComposer.dueOn", {

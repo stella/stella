@@ -35,6 +35,12 @@ const PDF_FIXTURE = new URL(
   import.meta.url,
 );
 
+/** A ruling whose font sets `ż` as `Ŝ` in its text layer. */
+const SUBSTITUTED_FONT_PDF = new URL(
+  "../../parsers/__fixtures__/pl-uokik-ruling-iii-sk-17-09.pdf",
+  import.meta.url,
+);
+
 /** DOK-9/2011: a decision PDF and two court rulings on its appeal. */
 const WITH_RULINGS = "2520D55B0F17A317C1257EC6007B9773";
 /** DIH-4/2009: filed with no attachment. */
@@ -165,4 +171,27 @@ test("all attachments share the PDF projection byte budget", async () => {
     type: "no-text",
     reason: RETENTION_TEXT_ABSENCE.OVER_CHECK_BUDGET,
   });
+});
+
+test("an attachment's text reads through its font's letter substitution", async () => {
+  if (plUokikRetention.type !== "checked") {
+    expect.unreachable();
+  }
+  const bytes = new Uint8Array(
+    await Bun.file(SUBSTITUTED_FONT_PDF).arrayBuffer(),
+  );
+  const projection = await plUokikRetention.project(
+    encodeSourceRawEnvelope({ listing: "{}" }),
+    {
+      sourceRawObjects: {
+        document: { bytes, contentType: "application/pdf" },
+      },
+    },
+  );
+  if (projection.type !== "source" || typeof projection.source === "string") {
+    expect.unreachable("The stored PDF has readable text");
+  }
+  const text = projection.source.paragraphs.join(" ");
+  expect(text).toContain("Sąd Najwyższy");
+  expect(text).not.toContain("Ŝ");
 });

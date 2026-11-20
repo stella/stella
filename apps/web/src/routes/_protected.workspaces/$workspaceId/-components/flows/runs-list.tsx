@@ -4,6 +4,7 @@ import { Temporal } from "@stll/time";
 import { Button } from "@stll/ui/button";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
 import { ChevronRightIcon } from "@stll/ui/icons";
+import { TruncatedText } from "@stll/ui/truncated-text";
 
 import {
   FlowStatusBadge,
@@ -12,6 +13,8 @@ import {
 import { useFormatter } from "@/i18n/formatting-context";
 import { MEDIUM_DATE_SHORT_TIME_FORMAT } from "@/lib/relative-time";
 import type { FlowRunListItem } from "@/routes/_protected.workspaces/$workspaceId/-components/flows/flow-run-types";
+
+import { RunRowFrame, RunsListFrame } from "./runs-list.pending";
 
 type RunsListProps = {
   runs: FlowRunListItem[];
@@ -33,11 +36,11 @@ export const RunsList = ({ runs, onSelect }: RunsListProps) => {
   }
 
   return (
-    <ul className="divide-y rounded-lg border">
+    <RunsListFrame>
       {runs.map((run) => (
         <RunRow key={run.id} onSelect={() => onSelect(run.id)} run={run} />
       ))}
-    </ul>
+    </RunsListFrame>
   );
 };
 
@@ -56,13 +59,17 @@ const RunRow = ({
   return (
     <li>
       <Button className="block w-full" onClick={onSelect} variant="plain">
-        <span className="hover:bg-muted/50 flex w-full items-center gap-3 px-4 py-3">
+        <RunRowFrame>
           <FlowStatusBadge status={run.status} />
-          <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-medium" dir="auto">
+          <span className="min-w-0 flex-1">
+            <TruncatedText
+              className="block text-sm font-medium"
+              dir="auto"
+              render={<span />}
+            >
               {run.name}
-            </p>
-            <div className="text-muted-foreground mt-0.5 flex items-center gap-2 text-xs">
+            </TruncatedText>
+            <span className="text-muted-foreground mt-0.5 flex items-center gap-2 text-xs">
               <FlowTriggerBadge triggerType={run.triggerType} />
               <span className="tabular-nums">
                 {format.dateTime(
@@ -78,13 +85,13 @@ const RunRow = ({
                   total: format.number(run.stepCount),
                 })}
               </span>
-            </div>
-          </div>
+            </span>
+          </span>
           <DirectionalIcon
             className="text-muted-foreground size-4 shrink-0"
             icon={ChevronRightIcon}
           />
-        </span>
+        </RunRowFrame>
       </Button>
     </li>
   );

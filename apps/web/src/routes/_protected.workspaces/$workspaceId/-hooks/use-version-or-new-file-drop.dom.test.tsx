@@ -91,7 +91,7 @@ const fetchImplementation = Object.assign(
       ) {
         throw new Error("expected a tree upload request body");
       }
-      const file = body.files.at(0);
+      const file: unknown = body.files.at(0);
       if (
         typeof file !== "object" ||
         file === null ||
@@ -358,7 +358,7 @@ const mountFilesView = async () => {
     </ToastProvider>,
   );
   await waitFor(() =>
-    expect(document.querySelectorAll("[data-entity-row]")).toHaveLength(2),
+    expect(document.querySelectorAll("[data-entity-row]").length).toBe(2),
   );
   return { mounted, client };
 };

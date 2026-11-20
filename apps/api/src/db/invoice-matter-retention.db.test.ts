@@ -1,8 +1,7 @@
 import { PGlite } from "@electric-sql/pglite";
 import { Result } from "better-result";
 import { expect, test } from "bun:test";
-import { is } from "drizzle-orm";
-import { getTableConfig, PgTable } from "drizzle-orm/pg-core";
+import { getTableConfig } from "drizzle-orm/pg-core";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -18,12 +17,10 @@ import {
   validateOnlineConstraints,
 } from "./online-ddl";
 import type { OnlineMigrationConnection } from "./online-migration-connection";
+import { schemaTables } from "./schema-tables";
 
-const invoiceTables = Object.values(schema).flatMap((value) =>
-  is(value, PgTable) &&
-  /^invoices?$|^invoice_/u.test(getTableConfig(value).name)
-    ? [value]
-    : [],
+const invoiceTables = schemaTables(schema).filter((table) =>
+  /^invoices?$|^invoice_/u.test(getTableConfig(table).name),
 );
 
 // Derive the deletion graph from the shipped schema; copied foreign keys

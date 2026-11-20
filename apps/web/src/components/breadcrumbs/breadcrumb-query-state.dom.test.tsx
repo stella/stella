@@ -112,8 +112,10 @@ const seedPersistedThread = (client: InstanceType<typeof QueryClient>) => {
 const utcTimeZone =
   parseTimeZoneId("UTC") ?? panic("UTC fixture must be a supported time zone");
 const organizationSettings = {
+  aiInstructions: "",
+  aiInstructionsMaxLength: 3000,
   declaredFeatureIds: [],
-  deploymentFeatures: { legalLists: true },
+  deploymentFeatures: { legalLists: true, invoiceLinks: true },
   capabilities: {},
   documentProcessingMode: "off",
   matterNumberPattern: "{year}/{number}",
@@ -123,6 +125,7 @@ const organizationSettings = {
   promptCachingEnabled: true,
   managedAIResidency: "eu",
   memoryExtractionEnabled: false,
+  localRunMaxApprovalMode: "full_auto",
   timeMinimumUnitMinutes: 1,
   timeEditWindowDays: 30,
   timeLockedThroughMonth: null,
@@ -159,8 +162,8 @@ const cases = [
   },
   {
     name: "skill",
-    path: "/knowledge/tools_/$entry",
-    url: "/knowledge/tools_/11111111-1111-4111-8111-111111111111",
+    path: "/knowledge/tools_/skills/$skillId",
+    url: "/knowledge/tools_/skills/11111111-1111-4111-8111-111111111111",
     key: skillDetailOptions(
       user.activeOrganizationId,
       user.id,

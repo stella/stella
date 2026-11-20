@@ -9,15 +9,19 @@ import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
 import {
+  BanIcon,
   CheckIcon,
   EqualIcon,
   EyeIcon,
   MinusIcon,
+  PlusIcon,
   RefreshCwIcon,
   XIcon,
 } from "@stll/ui/icons";
 import type { LucideIcon } from "@stll/ui/icons";
+import { TruncatedText } from "@stll/ui/truncated-text";
 
+import type { ReviewVerdict } from "@/components/ai-suggestions/document-review-queries";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import Tooltip from "@/components/tooltip";
 import { ActiveEditBadge } from "@/components/workspaces/active-edit-badge";
@@ -347,17 +351,22 @@ const VERDICT_TIER_LABEL_KEYS = {
   fallback: "knowledge.playbooks.verdict.fallback",
   deviation: "knowledge.playbooks.verdict.deviation",
   missing: "knowledge.playbooks.verdict.missing",
-} as const satisfies Record<string, TranslationKey>;
+  additional: "knowledge.playbooks.verdict.additional",
+  "not-applicable": "knowledge.playbooks.verdict.notApplicable",
+} as const satisfies Record<ReviewVerdict, TranslationKey>;
 
 // Each tier also carries a distinct glyph so the badge encodes the verdict by
 // shape as well as color (colorblind-safe): check = on standard, equals = an
-// accepted alternative, cross = a deviation, dash = nothing extracted.
+// accepted alternative, cross = a deviation, dash = nothing extracted, plus =
+// beyond the standard, ban = does not pertain to this document.
 const VERDICT_TIER_ICONS = {
   compliant: CheckIcon,
   fallback: EqualIcon,
   deviation: XIcon,
   missing: MinusIcon,
-} as const satisfies Record<string, LucideIcon>;
+  additional: PlusIcon,
+  "not-applicable": BanIcon,
+} as const satisfies Record<ReviewVerdict, LucideIcon>;
 
 // Narrows an arbitrary tier id to a known tier without widening to the full
 // TranslationKey union, so `t()` resolves the placeholder-free overload.
@@ -440,7 +449,7 @@ export const VerdictBadge = ({
             style={{ color: color.foreground }}
           />
         )}
-        <span className="truncate">{label}</span>
+        <TruncatedText>{label}</TruncatedText>
       </span>
     </span>
   );

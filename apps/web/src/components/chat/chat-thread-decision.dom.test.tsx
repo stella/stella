@@ -56,6 +56,8 @@ const THREAD = {
   createdAt: "2026-05-16T08:00:00.000Z",
   decision: { type: "present" as const, badge: DECISION },
   origin: "original" as const,
+  pinState: "unpinned" as const,
+  readState: "read" as const,
   title: "Liability for damage",
   updatedAt: "2026-05-16T08:00:00.000Z",
   usedAnonymization: false,

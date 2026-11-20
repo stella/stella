@@ -1,12 +1,15 @@
 import type { PropsWithChildren } from "react";
-import { createContext, use, useCallback, useMemo, useState } from "react";
+import { createContext, use, useState } from "react";
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
 import type { OrganizationAIAvailability } from "@stll/api-contract/organization-ai-availability";
-import { resolveAIProviderSettings } from "@stll/api-contract/organization-ai-availability";
+import {
+  AI_PROVIDER_CONFIGURATION,
+  resolveAIProviderSettings,
+} from "@stll/api-contract/organization-ai-availability";
 import { Button } from "@stll/ui/button";
 import {
   Dialog,
@@ -108,17 +111,16 @@ const AIAvailabilityRoot = ({ children }: PropsWithChildren) => {
   const t = useTranslations();
   const queryClient = useQueryClient();
   const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
-  const availabilityOptions = useMemo(
-    () => aiAvailabilityOptions({ organizationId: activeOrganizationId }),
-    [activeOrganizationId],
-  );
+  const availabilityOptions = aiAvailabilityOptions({
+    organizationId: activeOrganizationId,
+  });
   const dataQuery = useChromeQuery(availabilityOptions);
   const dataView = queryView(dataQuery);
   useQueryViewError(dataView, "AIAvailabilityRoot:query");
   const { isFetching } = dataQuery;
   const data = dataView.type === "items" ? dataView.items : undefined;
 
-  const openAIKeyDialog = useCallback(() => {
+  const openAIKeyDialog = () => {
     if (
       dataQuery.status === "success" &&
       data?.providerConfiguration === "allowed" &&
@@ -126,9 +128,9 @@ const AIAvailabilityRoot = ({ children }: PropsWithChildren) => {
     ) {
       setOpen(true);
     }
-  }, [data, dataQuery.status]);
+  };
 
-  const ensureAIAvailable = useCallback(async () => {
+  const ensureAIAvailable = async () => {
     const availability = await queryClient
       .query({
         ...availabilityOptions,
@@ -184,9 +186,9 @@ const AIAvailabilityRoot = ({ children }: PropsWithChildren) => {
       type: "info",
     });
     return false;
-  }, [availabilityOptions, dataQuery.status, queryClient, t]);
+  };
 
-  const openIfAIUnavailable = useCallback(() => {
+  const openIfAIUnavailable = () => {
     if (
       dataQuery.status === "success" &&
       data &&
@@ -197,7 +199,7 @@ const AIAvailabilityRoot = ({ children }: PropsWithChildren) => {
     ) {
       setOpen(true);
     }
-  }, [data, dataQuery.status, isFetching]);
+  };
   let aiUnavailable: AIUnavailableState | null = null;
   if (
     dataQuery.status === "error" ||
@@ -241,15 +243,12 @@ const AIAvailabilityRoot = ({ children }: PropsWithChildren) => {
     availability = "available";
   }
 
-  const value = useMemo(
-    () => ({
-      availability,
-      ensureAIAvailable,
-      openAIKeyDialog,
-      openIfAIUnavailable,
-    }),
-    [availability, ensureAIAvailable, openAIKeyDialog, openIfAIUnavailable],
-  );
+  const value = {
+    availability,
+    ensureAIAvailable,
+    openAIKeyDialog,
+    openIfAIUnavailable,
+  };
 
   return (
     <AIAvailabilityContext value={value}>
@@ -309,14 +308,18 @@ export const AIUnavailableDialogTrigger = () => {
               {t("ai.keyRequired.cta")}
             </Button>
           ) : null}
-          <Button
-            size="sm"
-            variant="ghost"
-            loading={state.retrying}
-            onClick={state.retry}
-          >
-            {t("common.retry")}
-          </Button>
+          {/* Nothing a retry reads can change for a restricted account. */}
+          {state.availability.providerConfiguration ===
+          AI_PROVIDER_CONFIGURATION.accountRestricted ? null : (
+            <Button
+              size="sm"
+              variant="ghost"
+              loading={state.retrying}
+              onClick={state.retry}
+            >
+              {t("common.retry")}
+            </Button>
+          )}
         </div>
       );
     default:
@@ -325,21 +328,41 @@ export const AIUnavailableDialogTrigger = () => {
   }
 };
 
-/** Keep the route's composer and draft mounted in every availability state. */
+/**
+ * Keep the route's composer and draft mounted in every availability state.
+ * While availability is read, nothing is added above the page: the
+ * composer's send control stays unavailable until it is known (each chat
+ * surface passes `sendDisabled` while it is not "available"), so the wait
+ * shows in the composer row and the page does not move when it ends.
+ */
 export const RequireAIKey = ({ children }: PropsWithChildren) => {
   const { availability } = useAIKeyGate();
   return (
     <div className="flex h-full min-h-0 w-full min-w-0 flex-1 flex-col">
-      {availability === "pending" ? (
-        <QueryViewFeedback view={{ type: "pending" }} />
-      ) : (
-        <AIUnavailableDialogTrigger />
-      )}
+      {availability === "pending" ? null : <AIUnavailableDialogTrigger />}
       <AIAvailabilityFeedbackContext value={true}>
         {children}
       </AIAvailabilityFeedbackContext>
     </div>
   );
+};
+
+// Credentials are missing: name who can add them. Asking someone who cannot
+// leaves them with an instruction they have no way to follow.
+const missingCredentialsMessageKey = (
+  providerConfiguration: OrganizationAIAvailability["providerConfiguration"],
+) => {
+  switch (providerConfiguration) {
+    case AI_PROVIDER_CONFIGURATION.allowed:
+      return "ai.keyRequired.description" as const;
+    case AI_PROVIDER_CONFIGURATION.permissionRequired:
+      return "ai.keyRequired.permissionRequired" as const;
+    case AI_PROVIDER_CONFIGURATION.accountRestricted:
+      return "ai.keyRequired.accountFeaturesUnavailable" as const;
+    default:
+      providerConfiguration satisfies never;
+      return panic("Unhandled AI provider configuration");
+  }
 };
 
 function aiUnavailableMessageKey(availability: OrganizationAIAvailability) {
@@ -350,7 +373,7 @@ function aiUnavailableMessageKey(availability: OrganizationAIAvailability) {
       return "ai.keyRequired.configUnreadable" as const;
     case "own_key_required":
     case "provider_not_configured":
-      return "ai.keyRequired.description" as const;
+      return missingCredentialsMessageKey(availability.providerConfiguration);
     case null:
       return panic("Available AI rendered an unavailable message");
     default:
@@ -606,13 +629,13 @@ export const AIKeyRequiredDialog = ({
             setRoleModels(initialRoleModels);
           }}
         />
-        <DialogHeader className="p-4 pb-2">
+        <DialogHeader className="p-4 pb-1">
           <DialogTitle>{t("ai.keyRequired.title")}</DialogTitle>
           <DialogDescription>
             {t("ai.keyRequired.description")}
           </DialogDescription>
         </DialogHeader>
-        <div className="min-h-0 overflow-x-hidden overflow-y-auto px-4 pb-3">
+        <div className="min-h-0 overflow-x-hidden overflow-y-auto px-4 pt-1 pb-3">
           {configRefusalKey !== null ? (
             <p className="text-muted-foreground text-sm">
               {t(configRefusalKey)}

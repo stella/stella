@@ -43,6 +43,10 @@ export default {
         path: "apps/api/src/mcp/matter-tools.ts",
         reason: "Read task detail projection.",
       },
+      {
+        path: "apps/api/src/handlers/data-exports/",
+        reason: "Read assignments into organization data exports.",
+      },
     ],
   },
 } as const satisfies OwnershipEntry;

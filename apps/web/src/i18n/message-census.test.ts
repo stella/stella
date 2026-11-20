@@ -13,6 +13,7 @@ import {
   TYPE,
 } from "@formatjs/icu-messageformat-parser";
 import { expect, test } from "bun:test";
+import { fileURLToPath } from "node:url";
 import { createTranslator } from "use-intl/core";
 
 import { sourceFileIndex } from "@stll/scripts/src/source-file-index";
@@ -467,7 +468,7 @@ const renderingErrors = (
 };
 
 const catalogFiles = sourceFileIndex(
-  new URL("langs", import.meta.url).pathname,
+  fileURLToPath(new URL("langs", import.meta.url)),
   {
     pattern: "*.json",
   },

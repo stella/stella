@@ -37,8 +37,59 @@ fn link_clang_runtime() {
   println!("cargo:rustc-link-lib=static=clang_rt.osx");
 }
 
+/// The value of a one-line `export const NAME... = a * b * c;` declaration in
+/// an API contract module, whose factors are integer literals.
+fn declared_bytes(module: &str, declaration: &str) -> u64 {
+  let manifest_dir =
+    std::env::var("CARGO_MANIFEST_DIR").expect("cargo sets CARGO_MANIFEST_DIR");
+  let source_path = std::path::Path::new(&manifest_dir)
+    .join("../../../packages/api-contract/src")
+    .join(module);
+  println!("cargo:rerun-if-changed={}", source_path.display());
+  let source =
+    std::fs::read_to_string(&source_path).expect("the API contract module is readable");
+  source
+    .lines()
+    .find_map(|line| line.strip_prefix(declaration))
+    .and_then(|rest| rest.strip_suffix(';'))
+    .expect("the API contract declares the byte bound on one line")
+    .split('*')
+    .map(|factor| {
+      factor
+        .trim()
+        .replace('_', "")
+        .parse::<u64>()
+        .expect("each factor of a byte bound is an integer literal")
+    })
+    .try_fold(1_u64, u64::checked_mul)
+    .expect("the byte bound fits in u64")
+}
+
+/// The API contract owns the document limits. A desktop edit session saves
+/// each checkpoint as one multipart form, so the largest Office file it can
+/// edit is the contract's `MULTIPART_DOCUMENT_MAX_BYTES`: the stored document
+/// limit, capped by the server's ingress ceiling less the form's envelope.
+/// It is computed here from the same declarations, read from the contract's
+/// source at build time, so no copy of any of them exists in the crate.
+fn emit_editable_document_limit() {
+  let stored = declared_bytes(
+    "document-version-upload.ts",
+    "export const UPLOAD_DOCUMENT_MAX_BYTES: number = ",
+  );
+  let ingress =
+    declared_bytes("limits.ts", "export const HTTP_REQUEST_BODY_MAX_BYTES = ");
+  let envelope =
+    declared_bytes("limits.ts", "export const MULTIPART_ENVELOPE_MAX_BYTES = ");
+  let form = ingress
+    .checked_sub(envelope)
+    .expect("the ingress ceiling exceeds the multipart envelope");
+  let editable = stored.min(form);
+  println!("cargo:rustc-env=STELLA_EDITABLE_DOCUMENT_MAX_BYTES={editable}");
+}
+
 fn main() {
   configure_dictation();
+  emit_editable_document_limit();
   let attributes = tauri_build::Attributes::new()
     .app_manifest(tauri_build::AppManifest::new().commands(STELLA_COMMAND_NAMES));
   tauri_build::try_build(attributes).expect("failed to run tauri build script");

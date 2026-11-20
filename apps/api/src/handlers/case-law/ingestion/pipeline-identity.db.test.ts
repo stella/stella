@@ -10,6 +10,10 @@ import {
 } from "bun:test";
 import { and, eq, inArray, sql } from "drizzle-orm";
 
+import {
+  directoryCourtIdentities,
+  readPrintedCourt,
+} from "@stll/api-contract/court-identity";
 import { waitForExternalState } from "@stll/property-testing/external-state";
 import { rejectionOf } from "@stll/property-testing/rejection";
 import { sha256Hex as hashContent } from "@stll/sha256/node";
@@ -37,6 +41,7 @@ import {
 import { EMPTY_AST } from "@/api/lib/legal-search/ingestion-types";
 import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
+import { isPgConstraintError, PG_ERROR } from "@/api/lib/pg-error";
 import { isRecord } from "@/api/lib/type-guards";
 import {
   openGatedTestDatabase,
@@ -57,26 +62,69 @@ const databaseUrl = process.env["DATABASE_URL"];
 const runPostgresTests = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
 
 /**
+ * The Slovak court a case's label stands for. The write boundary stores a
+ * Slovak decision only under a directory court, so a label that names one is
+ * that court, and any other label is given a court of its own: two labels are
+ * never one court, and one label is always the same court.
+ */
+const SLOVAK_COURTS = directoryCourtIdentities("SVK").map(({ name }) => name);
+/** Courts these cases name outright, never given to another label. */
+const NAMED_COURTS = new Set(
+  [
+    "Mestský súd Košice",
+    "Okresný súd Bardejov",
+    "Okresný súd Prievidza",
+    "Okresný súd Trenčín",
+    "Najvyšší súd SR",
+  ].map((label) => {
+    const reading = readPrintedCourt("SVK", label);
+    return reading.type === "court" ? reading.court.name : label;
+  }),
+);
+const labelOfCourt = new Map<string, string>();
+const courtOfLabel = new Map<string, string>();
+const courtFor = (label: string): string => {
+  const known = courtOfLabel.get(label);
+  if (known !== undefined) {
+    return known;
+  }
+  const reading = readPrintedCourt("SVK", label);
+  const court =
+    reading.type === "court"
+      ? reading.court.name
+      : (SLOVAK_COURTS.find(
+          (name) => !labelOfCourt.has(name) && !NAMED_COURTS.has(name),
+        ) ?? panic("More case labels than Slovak courts"));
+  const holder = labelOfCourt.get(court);
+  if (holder !== undefined) {
+    return panic(`Labels ${holder} and ${label} would share ${court}`);
+  }
+  labelOfCourt.set(court, label);
+  courtOfLabel.set(label, court);
+  return court;
+};
+
+/**
  * Courts number their dockets per court, so one source covering many courts
  * issues the same number repeatedly. These decisions are unrelated and must
  * both survive; identity comes from the publisher's id, not the number.
  */
 const decisionAt = (
-  court: string,
+  label: string,
   sourceDocumentId: string | undefined,
 ): IngestionResult =>
   plainTextIngestionResult({
     caseNumber: "0T/42/2019",
     sourceDocumentId,
-    court,
+    court: courtFor(label),
     country: "SVK",
     language: "sk",
     decisionDate: "2019-05-14",
     decisionType: "rozsudok",
-    fulltext: `Rozsudok ${court}`,
-    metadata: { court },
+    fulltext: `Rozsudok ${label}`,
+    metadata: { court: courtFor(label) },
     textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
-    rawHash: `hash-${court}`,
+    rawHash: `hash-${label}`,
     documentAst: EMPTY_AST,
   });
 
@@ -148,6 +196,102 @@ if (!databaseUrl || !runPostgresTests) {
             ),
           );
         await db.delete(caseLawSources).where(eq(caseLawSources.id, sourceId));
+      }
+    });
+
+    test("known pre-contract state rejects fallback siblings without overwriting the first decision", async () => {
+      const scopedSourceId = createSafeId<"caseLawSource">();
+      await db.insert(caseLawSources).values({
+        id: scopedSourceId,
+        adapterKey: `fallback-${scopedSourceId}`,
+        name: "Fallback identity fixture",
+        enabled: false,
+      });
+      let observationOrder = 0n;
+      const write = async (court: string, decisionDate: string) =>
+        await processDecision({
+          input: {
+            ...decisionAt(court, undefined),
+            decisionDate,
+            rawHash: `${court}:${decisionDate}`,
+          },
+          observationOrder: ++observationOrder,
+          sourceId: scopedSourceId,
+          scopedDb,
+          observedAt: new Date("2026-07-31T12:00:00.000Z"),
+        });
+      try {
+        await write("Mestský súd Košice", "2025-04-18");
+        const before = await db
+          .select({
+            id: caseLawDecisions.id,
+            court: caseLawDecisions.court,
+            decisionDate: caseLawDecisions.decisionDate,
+            fallbackCohortKey: caseLawDecisions.fallbackCohortKey,
+            fallbackContentHash: caseLawDecisions.fallbackContentHash,
+          })
+          .from(caseLawDecisions)
+          .where(eq(caseLawDecisions.sourceId, scopedSourceId));
+        expect(before).toHaveLength(1);
+        const original =
+          before.at(0) ?? panic("Initial fallback observation must be stored");
+        expect(original.fallbackContentHash).not.toBeNull();
+        for (const [court, decisionDate] of [
+          ["Okresný súd Bardejov", "2025-04-18"],
+        ] as const) {
+          // db-await-in-loop: each observation must leave the first decision unchanged.
+          // processDecision answers a refused write as an error result.
+          const attempted = await write(court, decisionDate);
+          expect(attempted.isErr()).toBe(true);
+          if (attempted.isErr()) {
+            expect(
+              isPgConstraintError(
+                attempted.error,
+                PG_ERROR.UNIQUE_VIOLATION,
+                "case_law_decisions_source_case_lang_null_idx",
+              ),
+            ).toBe(true);
+          }
+        }
+        expect(
+          await db
+            .select({
+              id: caseLawDecisions.id,
+              court: caseLawDecisions.court,
+              decisionDate: caseLawDecisions.decisionDate,
+              fallbackCohortKey: caseLawDecisions.fallbackCohortKey,
+              fallbackContentHash: caseLawDecisions.fallbackContentHash,
+            })
+            .from(caseLawDecisions)
+            .where(eq(caseLawDecisions.sourceId, scopedSourceId)),
+        ).toEqual(before);
+        await write("Mestský súd Košice", "2025-04-18");
+        expect(
+          await db
+            .select({ id: caseLawDecisions.id })
+            .from(caseLawDecisions)
+            .where(eq(caseLawDecisions.sourceId, scopedSourceId)),
+        ).toHaveLength(1);
+        await write("Mestský súd Košice", "2025-05-28");
+        const corrected = await db
+          .select({
+            id: caseLawDecisions.id,
+            decisionDate: caseLawDecisions.decisionDate,
+            fallbackContentHash: caseLawDecisions.fallbackContentHash,
+          })
+          .from(caseLawDecisions)
+          .where(eq(caseLawDecisions.sourceId, scopedSourceId));
+        expect(corrected).toEqual([
+          {
+            id: original.id,
+            decisionDate: "2025-05-28",
+            fallbackContentHash: original.fallbackContentHash,
+          },
+        ]);
+      } finally {
+        await db
+          .delete(caseLawSources)
+          .where(eq(caseLawSources.id, scopedSourceId));
       }
     });
 
@@ -276,7 +420,9 @@ if (!databaseUrl || !runPostgresTests) {
         const staleClient = openClient({
           connection: { statement_timeout: 5000 },
         }).sql;
-        const [writer] = await staleClient`SELECT pg_backend_pid() AS pid`;
+        const [writer] = await staleClient<
+          { pid: unknown }[]
+        >`SELECT pg_backend_pid() AS pid`;
         const writerPid: unknown = writer?.pid;
         if (typeof writerPid !== "number") {
           throw new TypeError("Expected PostgreSQL backend PID");
@@ -300,7 +446,9 @@ if (!databaseUrl || !runPostgresTests) {
             timeoutMs: 3000,
             read: async () =>
               (
-                await session`SELECT locktype, classid::int AS classid, objid::int AS objid
+                await session<
+                  { locktype: string; classid: number; objid: number }[]
+                >`SELECT locktype, classid::int AS classid, objid::int AS objid
                 FROM pg_locks WHERE pid = ${writerPid} AND NOT granted`
               ).at(0),
           });
@@ -770,6 +918,56 @@ if (!databaseUrl || !runPostgresTests) {
       expect(await docketRows(caseNumber)).toEqual([
         { id: legacyRow.id, sourceDocumentId: "nalus-record:uncounted" },
       ]);
+    });
+
+    test("adopts a legacy row at the document's own URL under a reissued docket and ECLI", async () => {
+      // A court adding a sibling to a docket suffixes the first document's
+      // number and reissues its ECLI: only the URL still names it.
+      const caseNumber = "22 Cdo 120/2026";
+      const url = "https://publisher.test/WebSearch/renamed-unid";
+      const legacy = plainTextIngestionResult({
+        ...decisionAt(`Renamed ${caseNumber}`, undefined),
+        caseNumber,
+        ecli: "ECLI:CZ:NS:2026:22.CDO.120.2026.1",
+        sourceUrl: url,
+      });
+      (
+        await processDecision({
+          input: legacy,
+          observationOrder: 1n,
+          sourceId,
+          scopedDb,
+          observedAt: new Date("2026-07-31T12:00:00.000Z"),
+        })
+      ).unwrap();
+      const [legacyRow] = await docketRows(caseNumber);
+      if (legacyRow === undefined) {
+        throw new Error("expected legacy row");
+      }
+
+      const renamedCaseNumber = `${caseNumber}- I.`;
+      (
+        await processDecision({
+          input: plainTextIngestionResult({
+            ...legacy,
+            caseNumber: renamedCaseNumber,
+            ecli: "ECLI:CZ:NS:2026:22.CDO.120.2026.2",
+            sourceDocumentId: "renamed-unid",
+            legacyCaseNumber: caseNumber,
+            legacySourceUrls: [url],
+            rawHash: "hash-renamed-docket",
+          }),
+          observationOrder: 2n,
+          sourceId,
+          scopedDb,
+          observedAt: new Date("2026-07-31T12:00:01.000Z"),
+        })
+      ).unwrap();
+
+      expect(await docketRows(caseNumber)).toEqual([
+        { id: legacyRow.id, sourceDocumentId: "renamed-unid" },
+      ]);
+      expect(await docketRows(renamedCaseNumber)).toEqual([]);
     });
 
     test("adopts a legacy row stored under the docket an earlier release derived", async () => {
@@ -1444,14 +1642,14 @@ if (!databaseUrl || !runPostgresTests) {
                  SELECT count(*)::int
                  FROM case_law_decisions
                  WHERE source_id = ${sourceId}
-                   AND court = 'Distinct row after repair'
+                   AND court = ${courtFor("Distinct row after repair")}
                    AND source_document_id = 'nalus-record:known-repair-collision'
                ) AS "postRepairDistinctCount",
                (
                  SELECT count(*)::int
                  FROM case_law_decisions
                  WHERE source_id = ${sourceId}
-                   AND court LIKE 'Distinct repair row %'
+                   AND court IN (${courtFor("Distinct repair row 0")}, ${courtFor("Distinct repair row 1")})
                ) AS "distinctCount",
                (
                  SELECT count(*)::int
@@ -1787,8 +1985,11 @@ if (!databaseUrl || !runPostgresTests) {
     test("binds a legacy row before a listing-only preservation return", async () => {
       const publisherId = "listing-only-legacy-binding";
       const legacyUrl = "https://publisher.test/listing-only-legacy";
+      // A docket of its own: before the contract phase, the docket-only index
+      // refuses a second court's document-less row on the shared docket.
       const legacy = plainTextIngestionResult({
         ...decisionAt("Listing-only legacy", undefined),
+        caseNumber: "0T/77/2019",
         sourceUrl: legacyUrl,
       });
       (
@@ -1880,7 +2081,7 @@ if (!databaseUrl || !runPostgresTests) {
         WHERE source_id = ${sourceId} AND source_document_id = ${publisherId}
       `);
       expect(isRecord(row) ? row["court"] : undefined).toBe(
-        "Newest observation",
+        courtFor("Newest observation"),
       );
     });
 
@@ -1930,7 +2131,7 @@ if (!databaseUrl || !runPostgresTests) {
       `,
       );
       expect(isRecord(row) ? row["court"] : undefined).toBe(
-        "Current observation",
+        courtFor("Current observation"),
       );
       expect(isRecord(row) ? row["observedAt"] : undefined).toEqual(
         new Date("2026-07-31T12:02:02.000Z"),
@@ -1939,6 +2140,74 @@ if (!databaseUrl || !runPostgresTests) {
         isRecord(initialRow) ? initialRow["updatedAt"] : undefined,
       );
     });
+
+    test.each(["unchanged", "partial"] as const)(
+      "an identical %s watermark replay leaves the stored row unchanged",
+      async (observationKind) => {
+        const publisherId = `watermark-fixed-point-${observationKind}`;
+        const initial = decisionAt("Stored detail", publisherId);
+        (
+          await processDecision({
+            input: initial,
+            observationOrder: 10n,
+            sourceId,
+            scopedDb,
+            observedAt: new Date("2026-07-31T12:06:00.000Z"),
+          })
+        ).unwrap();
+        const input =
+          observationKind === "unchanged"
+            ? initial
+            : plainTextIngestionResult({
+                ...initial,
+                fulltext: undefined,
+                isListingOnly: true,
+                metadata: { listedOnly: true },
+                rawHash: "partial-watermark-fixed-point",
+              });
+        const observation = {
+          input,
+          observationOrder: 11n,
+          sourceId,
+          scopedDb,
+          observedAt: new Date("2026-07-31T12:06:01.000Z"),
+        };
+        (await processDecision(observation)).unwrap();
+        const before = await db
+          .select({
+            version: sql<string>`xmin::text`,
+            order: caseLawDecisions.sourceObservationOrder,
+            updatedAt: caseLawDecisions.updatedAt,
+            sourceHash: caseLawDecisions.sourceHash,
+            metadata: caseLawDecisions.metadata,
+          })
+          .from(caseLawDecisions)
+          .where(
+            and(
+              eq(caseLawDecisions.sourceId, sourceId),
+              eq(caseLawDecisions.sourceDocumentId, publisherId),
+            ),
+          );
+        expect(before.at(0)?.order).toBe(11n);
+        (await processDecision(observation)).unwrap();
+        const after = await db
+          .select({
+            version: sql<string>`xmin::text`,
+            order: caseLawDecisions.sourceObservationOrder,
+            updatedAt: caseLawDecisions.updatedAt,
+            sourceHash: caseLawDecisions.sourceHash,
+            metadata: caseLawDecisions.metadata,
+          })
+          .from(caseLawDecisions)
+          .where(
+            and(
+              eq(caseLawDecisions.sourceId, sourceId),
+              eq(caseLawDecisions.sourceDocumentId, publisherId),
+            ),
+          );
+        expect(after).toEqual(before);
+      },
+    );
 
     test("a watermark replay reconciles content changed after its read", async () => {
       const publisherId = "watermark-contention";
@@ -2007,7 +2276,7 @@ if (!databaseUrl || !runPostgresTests) {
         `,
       );
       expect(row).toMatchObject({
-        court: "Initial content",
+        court: courtFor("Initial content"),
         sourceHash: "hash-Initial content",
         observationOrder: 32n,
       });
@@ -2256,7 +2525,9 @@ if (!databaseUrl || !runPostgresTests) {
         SELECT court FROM case_law_decisions
         WHERE source_id = ${sourceId} AND source_document_id = ${publisherId}
       `);
-      expect(isRecord(row) ? row["court"] : undefined).toBe("Database winner");
+      expect(isRecord(row) ? row["court"] : undefined).toBe(
+        courtFor("Database winner"),
+      );
     });
 
     test("concurrent collision inserts converge to unique stable slugs", async () => {
@@ -2442,7 +2713,7 @@ if (!databaseUrl || !runPostgresTests) {
       const row = Array.isArray(rows) ? rows.at(0) : undefined;
       expect(isRecord(row) ? Number(row["count"]) : 0).toBe(1);
       expect(isRecord(row) ? row["court"] : undefined).toBe(
-        "Okresný súd Reconciled",
+        courtFor("Okresný súd Reconciled"),
       );
       expect(isRecord(row) ? row["source_hash"] : undefined).toBe(
         "hash-Okresný súd Reconciled",

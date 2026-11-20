@@ -8,6 +8,7 @@ import {
   SIDE_PANEL_CHAT_READY_MS,
   SIDE_PANEL_CHAT_STATUS,
 } from "@/components/chat/side-panel-chat-status.logic";
+import { INSPECTOR_FOCUS_INTENT } from "@/components/inspector/inspector-store-types";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { useMountEffect } from "@/hooks/use-effect";
 import type { ChatThreadId, ChatThreadRef } from "@/lib/chat-thread-ref";
@@ -57,6 +58,7 @@ const useOpenChatInInspector = () => {
       id: threadId,
       workspaceId,
       contextMatterIds: [...contextMatterIds],
+      focus: INSPECTOR_FOCUS_INTENT.claim,
     });
     flashTab(threadId);
 

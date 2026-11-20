@@ -1,13 +1,15 @@
 import { Suspense, use, useState, useTransition } from "react";
 
 import { Result } from "better-result";
-import { ActivityIndicator, Pressable, View } from "react-native";
+import { View } from "react-native";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
+import { Loader } from "@stll/ui/loader";
 import { Text } from "@stll/ui/text";
 
 import { useChanged } from "@/components/changes";
+import { useCan } from "@/components/role";
 import { writeFailure, WriteFailureNotice } from "@/components/write-failure";
 import type { WriteFailure } from "@/components/write-failure";
 import type { AccessTokenSource } from "@/connection/session";
@@ -53,6 +55,8 @@ export const TaskAssignees = ({
   const [failure, setFailure] = useState<WriteFailure | null>(null);
   const [saving, startSaving] = useTransition();
   const names = assignees.map((assignee) => assignee.name ?? t("someone"));
+  // Assigning is a task edit; a role that cannot edit tasks only sees who.
+  const canAssign = useCan({ entity: ["update"] });
 
   const toggle = (member: MatterMember, assign: boolean) => {
     startSaving(async () => {
@@ -98,23 +102,25 @@ export const TaskAssignees = ({
             {names.length === 0 ? t("nobody") : names.join(", ")}
           </Text>
         </View>
-        <Button
-          loading={saving}
-          onPress={() => {
-            if (members !== null) {
-              setMembers(null);
-              return;
-            }
-            setMembers(listMatterMembers({ fetch, matterId, source }));
-          }}
-          size="sm"
-          variant="outline"
-        >
-          {members === null ? t("assign") : t("doneAssigning")}
-        </Button>
+        {canAssign ? (
+          <Button
+            loading={saving}
+            onPress={() => {
+              if (members !== null) {
+                setMembers(null);
+                return;
+              }
+              setMembers(listMatterMembers({ fetch, matterId, source }));
+            }}
+            size="sm"
+            variant="outline"
+          >
+            {members === null ? t("assign") : t("doneAssigning")}
+          </Button>
+        ) : null}
       </View>
       {members === null ? null : (
-        <Suspense fallback={<ActivityIndicator />}>
+        <Suspense fallback={<Loader />}>
           <MemberList
             assigned={new Set(assignees.map((assignee) => assignee.userId))}
             load={members}
@@ -164,21 +170,26 @@ export const MemberList = ({
       {loaded.value.map((member) => {
         const isAssigned = assigned.has(member.userId);
         return (
-          <Pressable
+          <Button
             accessibilityRole="checkbox"
-            accessibilityState={{ checked: isAssigned, disabled: saving }}
-            className="border-border active:bg-accent min-h-11 flex-row items-center gap-3 border-b py-2"
+            accessibilityState={{ checked: isAssigned }}
             disabled={saving}
             key={member.userId}
             onPress={() => {
               onToggle(member, !isAssigned);
             }}
+            size="row"
+            variant="ghost"
           >
-            <Text className="flex-1" numberOfLines={1} variant="rowTitle">
-              {member.user?.name ?? t("someone")}
-            </Text>
-            {isAssigned ? <CheckIcon color={ui.foreground} size={18} /> : null}
-          </Pressable>
+            <View className="border-border flex-1 flex-row items-center gap-3 border-b py-2">
+              <Text className="flex-1" numberOfLines={1} variant="rowTitle">
+                {member.user?.name ?? t("someone")}
+              </Text>
+              {isAssigned ? (
+                <CheckIcon color={ui.foreground} size={18} />
+              ) : null}
+            </View>
+          </Button>
         );
       })}
     </View>

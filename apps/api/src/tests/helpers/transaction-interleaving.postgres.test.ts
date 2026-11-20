@@ -315,6 +315,7 @@ if (!databaseUrl || !runPostgres) {
               run: async (tx: Transaction) =>
                 await tx.execute(
                   sql`SELECT * FROM ${rows} WHERE id = ${first} FOR UPDATE`,
+                  "objects",
                 ),
             },
             {
@@ -322,6 +323,7 @@ if (!databaseUrl || !runPostgres) {
               run: async (tx: Transaction) =>
                 await tx.execute(
                   sql`SELECT * FROM ${rows} WHERE id = ${second} FOR UPDATE`,
+                  "objects",
                 ),
             },
           ],
@@ -423,7 +425,10 @@ if (!databaseUrl || !runPostgres) {
               {
                 name: "read",
                 run: async (tx: Transaction) =>
-                  await tx.execute(sql`SELECT * FROM ${rows} WHERE id = 0`),
+                  await tx.execute(
+                    sql`SELECT * FROM ${rows} WHERE id = 0`,
+                    "objects",
+                  ),
               },
               {
                 name: "write",
@@ -497,9 +502,9 @@ if (!databaseUrl || !runPostgres) {
         ).toBeInstanceOf(InterleavingTimeout);
         expect(stepSettled).toBe(true);
         expect(
-          (await connection.db.execute(sql`SELECT 1 AS value`)).at(0)?.[
-            "value"
-          ],
+          (await connection.db.execute(sql`SELECT 1 AS value`, "objects")).at(
+            0,
+          )?.["value"],
         ).toBe(1);
       });
     }, 5000);
@@ -573,7 +578,9 @@ if (!databaseUrl || !runPostgres) {
         expect(clock.pendingSleepers()).toBe(0);
         for (const { db } of Object.values(connections)) {
           expect(
-            (await db.execute(sql`SELECT 1 AS value`)).at(0)?.["value"],
+            (await db.execute(sql`SELECT 1 AS value`, "objects")).at(0)?.[
+              "value"
+            ],
           ).toBe(1);
         }
       });

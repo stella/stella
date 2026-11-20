@@ -9,6 +9,7 @@ import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { dropTargetForElements } from "@/lib/drag-and-drop/element-registration";
 import type { WorkspaceGroup } from "@/lib/workspaces/types";
 import { ClientGroupHeader } from "@/routes/_protected.workspaces/-components/client-group-header";
+import { CLIENT_GROUP_SECTION_CLASS } from "@/routes/_protected.workspaces/-components/client-group-section.pending";
 import {
   readMatterCardDragData,
   resolveMatterClientDrop,
@@ -91,7 +92,7 @@ export const ClientGroupSection = ({
   return (
     <div
       className={cn(
-        "group/client-section col-span-full grid auto-rows-min gap-3 rounded-xl md:grid-cols-subgrid",
+        CLIENT_GROUP_SECTION_CLASS,
         isDropTarget && "outline-primary outline-2 outline-offset-4",
       )}
       ref={sectionRef}

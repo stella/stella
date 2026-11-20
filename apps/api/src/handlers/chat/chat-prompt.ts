@@ -26,6 +26,7 @@ import {
   DOCX_SUGGEST_CHANGES_OPTIONS_BY_SURFACE,
   DOCX_SUGGESTION_SURFACE,
 } from "@stll/api-contract/chat-docx-suggestions";
+import type { ChatLocalRunWebSearch } from "@stll/api-contract/chat-run-target";
 import { resolveEmailMimeType } from "@stll/api-contract/email-mime-types";
 import type {
   ReaderAnnotationColor,
@@ -68,11 +69,14 @@ import {
   workspaces,
 } from "@/api/db/schema";
 import type { PracticeJurisdiction } from "@/api/db/schema";
-import { corpusStorageMode } from "@/api/env-base";
+import { corpusStorageMode, envBase } from "@/api/env-base";
 import type { ActiveChatSkillContext } from "@/api/handlers/chat/active-skill-context";
 import { selectStatuteProvisions } from "@/api/handlers/chat/active-statute-selection.logic";
 import type { StatuteProvisionSelection } from "@/api/handlers/chat/active-statute-selection.logic";
-import { browserExtensionPolicy } from "@/api/handlers/chat/browser-extension-capability";
+import {
+  browserExtensionPolicy,
+  type TurnBrowserExtension,
+} from "@/api/handlers/chat/browser-extension-capability";
 import {
   CHAT_REVISION_CONTEXT_MAX_EDITS,
   readChatRevisionContextChanges,
@@ -94,6 +98,7 @@ import {
   NO_DECISION_PASSAGE_NUMBERS,
 } from "@/api/handlers/chat/decision-passage-numbers";
 import type { DecisionPassageNumbers } from "@/api/handlers/chat/decision-passage-numbers";
+import type { LocalRunSkillTool } from "@/api/handlers/chat/local-run-skills";
 import { buildMemoryPromptParts } from "@/api/handlers/chat/memory-context";
 import {
   CHAT_CODE_MODE_SYSTEM_PROMPT,
@@ -117,6 +122,7 @@ import {
   CHAT_SKILL_SOURCE,
   listAvailableChatSkillMetadata,
 } from "@/api/lib/agent-skills/skills";
+import { estimateTextTokens } from "@/api/lib/ai-generation/token-estimate";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
@@ -134,7 +140,7 @@ import type {
   ChatOrganizationPromptLayer,
   ChatSafePromptLayers,
 } from "@/api/lib/chat/chat-prompt-layers";
-import { estimateTextTokens } from "@/api/lib/chat/compaction-tokens";
+import { buildOrganizationAIInstructionsPrompt } from "@/api/lib/chat/organization-ai-instructions";
 import type { ChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { formatDateInTimeZone } from "@/api/lib/date-format";
 import { DOCX_REVIEW_MARKUP_EXAMPLES } from "@/api/lib/docx-review-markup";
@@ -167,14 +173,14 @@ import {
 } from "@/api/lib/legal-search/legislation-version-blocks";
 import { legislationPublicReadDb } from "@/api/lib/legislation-public-read-db";
 import type { LegislationPublicReadDb } from "@/api/lib/legislation-public-read-db";
-import { FILE_SIZE_LIMIT_BYTES } from "@/api/lib/limits";
+import { FILE_SIZE_LIMIT_BYTES, LIMITS } from "@/api/lib/limits";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import {
   sanitizeForPrompt,
   sanitizePromptLine,
   untrustedText,
 } from "@/api/lib/prompt-safety";
-import { readS3ArrayBuffer } from "@/api/lib/s3";
+import { OBJECT_READ_TIMEOUT_MS, readS3ObjectBounded } from "@/api/lib/s3";
 import type { McpFeatureAccessContext } from "@/api/mcp/feature-access";
 
 export type {
@@ -183,7 +189,7 @@ export type {
 } from "@/api/lib/chat/chat-prompt-layers";
 
 export const browserExtensionPromptLine = (
-  extension: BrowserExtensionCapability,
+  extension: TurnBrowserExtension,
 ): string => browserExtensionPolicy(extension).promptLine;
 
 const TITLE_MAX_LENGTH = 80;
@@ -453,6 +459,40 @@ const ASK_USER_BOUNDARY =
 
 const ASK_USER_BOUNDARY_WITH_SKILLS = `${ASK_USER_BOUNDARY} EXCEPTION: \`load-skill\` may immediately precede \`ask-user\` in the same turn so the clarifying questions can be informed by the skill's methodology.`;
 
+// Rules every chat turn follows, wherever it runs.
+const TRUTHFULNESS_RULE =
+  "TRUTHFULNESS: Never guess, infer, or fabricate document content — retrieve via tools first. Only claim an action occurred when its tool returned success for that action; surface skips, no-ops, and errors plainly.";
+
+const TOOL_FAILURE_RECOVERY_RULE =
+  "TOOL FAILURE RECOVERY: A failed tool call is not a failed user turn. Read the tool error, then continue autonomously: correct the input, choose an available alternative, or complete the task without that tool. Mention the failure only when it materially limits the answer. Ask the user to retry only when no useful path remains. If the error names a server-side defect, never repeat the identical call — the server refuses re-execution for the rest of the turn; use another tool or state the limitation.";
+
+const FRESH_DATA_RULE =
+  "FRESH DATA: Answer questions about what currently exists in a matter (which matters, documents, tasks, contacts, or fields there are) from a fresh tool call, never from memory or an earlier turn — matter data changes between turns.";
+
+const LEGAL_REFERENCE_RULE =
+  "LEGAL REFERENCE RESOLUTION: Citation resolvers are exact-match. On a no-match, retry with a broader search tool using citation variants before declaring it unavailable.";
+
+const USER_FACING_LANGUAGE_RULE =
+  "USER-FACING LANGUAGE: Speak in legal-work terms; never expose internal names, tool names, or schema identifiers — refer to documents, matters, and folders by their human names. Reply in the user's UI language (see user context); switch only if the user themselves writes a natural-language message in another language. Copy `mention` strings from tool outputs verbatim instead of rewriting refs.";
+
+// The sentence the chat shows above the turn's steps (`narratedIntentIndex`
+// in `@stll/api-contract/chat-tool-activity`), so a person sees what is
+// being looked up in their own language rather than a reasoning trace.
+const PLAN_LINE_RULE =
+  "PLAN LINE: When you will use tools to answer, first write one short sentence in the user's language saying what you will look up or do (which provisions, courts, documents or matters), then make your first tool call. Write it once per turn, before the first call only, as plain prose without headings or lists. Skip it when you answer without tools. It is shown above your steps, so do not repeat it in the answer.";
+
+const DOCX_REVIEW_TAGS_RULE = `DOCX REVIEW TAGS: DOCX text from read tools may contain insertion/deletion/comment tags (${DOCX_REVIEW_MARKUP_EXAMPLES.insertion}, ${DOCX_REVIEW_MARKUP_EXAMPLES.deletion}, ${DOCX_REVIEW_MARKUP_EXAMPLES.comment}) with optional author/initials/date/status/thread attributes. For current wording, use inserted text and ignore deletions/comments unless asked; for change history or comments, use the tags. Never show tag syntax unless explicitly asked.`;
+
+const CITATIONS_RULE =
+  "CITATIONS: When a tool returns a stable URL (a stella decision is cited by DECISION CITATIONS instead), cite each individual claim inline with its OWN Markdown link — one citation per sentence (or per discrete fact) rather than a single trailing 'Sources:' block. Anchor text should be short (source domain, citation, or `[1]`-style footnote), and each link must point to the specific URL that supports THAT claim. The stella inspector opens these links in-app on click, so prefer them over plain text. For legal corpus results, use the returned url as the primary citation: it opens the held statute, provision or decision in stella. Use source_url only as a secondary publisher source link; when the corpus does not hold the item, use the returned external url. Never invent URLs.";
+
+const MATTER_MENTIONS_RULE =
+  "MATTER MENTIONS: When you name a matter, document, task, or contact from tool results, link it with the ref the tool returned: [Human name](#stella-entity-ref=ent_N) for entities, [Matter name](#stella-workspace-ref=mat_N) for matters, copying the ref verbatim from the tool output (entityRef, matterRef, or list item ids). Never invent a ref — a citation with an unknown ref renders as plain text and is flagged. If you cannot cite a ref for an item, you did not read it from a tool this turn, so do not present it as existing (see FRESH DATA).";
+
+const DECISION_CITATIONS_RULE = `DECISION CITATIONS: When you name a case-law decision that a stella case-law tool returned this turn, link it with the decisionId the tool gave: [court and docket](${CHAT_DECISION_HREF_TEMPLATE}), copying decisionId verbatim. Prefer the decisionId link for an in-app decision citation; when a URL is needed, use the returned primary url. The source_url is only a secondary publisher source. A statement about what courts hold, require, or usually do is a claim about decisions: cite at least one returned decision that supports it, or say that the corpus returned none and present the statement as unsupported.`;
+
+const PEOPLE_MENTIONS_RULE = `PEOPLE MENTIONS: When you name a person a tool returned with a userId (a task assignee, a matter member, a person field), link the name with that userId: [Person's name](${CHAT_USER_HREF_TEMPLATE}), copying userId verbatim. This applies to every person you name, including in lists and "assigned to" lines. A person without a userId stays plain text; never build a link from a name, handle, or email.`;
+
 type BuildCoreRuleSectionsOptions = {
   skillCatalogStatus: "available" | "empty";
   toolAvailability: ChatToolAvailability;
@@ -487,10 +527,10 @@ const buildCoreRuleSections = ({
     ? ASK_USER_BOUNDARY_WITH_SKILLS
     : ASK_USER_BOUNDARY,
   "REPEATED-QUESTION GUARD: When the user answers a question (even tersely — 'Yes', 'Czechia', 'all parties'), treat the answer as the answer and advance to the next step. Do not re-ask the same question with cosmetic rewording or restate it as confirmation. If their answer leaves a required fact still missing, ask ONLY for that missing fact, never the one they already answered.",
-  "TRUTHFULNESS: Never guess, infer, or fabricate document content — retrieve via tools first. Only claim an action occurred when its tool returned success for that action; surface skips, no-ops, and errors plainly.",
-  "TOOL FAILURE RECOVERY: A failed tool call is not a failed user turn. Read the tool error, then continue autonomously: correct the input, choose an available alternative, or complete the task without that tool. Mention the failure only when it materially limits the answer. Ask the user to retry only when no useful path remains. If the error names a server-side defect, never repeat the identical call — the server refuses re-execution for the rest of the turn; use another tool or state the limitation.",
+  TRUTHFULNESS_RULE,
+  TOOL_FAILURE_RECOVERY_RULE,
   "WRITES: Creating, updating, or deleting matter data happens through direct write tools, discoverable the same way as the read surface. Every write is gated — the user approves each call before it runs — so never state or imply a change was made until that tool returns success; a pending approval is not a completed action. Library, template, contact and organization writes need no matter; a write that works inside a matter says so when the user has none yet. Then offer to create one: ask with `ask-user` for its name and client, create it only once they agree, and retry the original write in the new matter. If their role cannot create matters, say who can instead.",
-  "FRESH DATA: Answer questions about what currently exists in a matter (which matters, documents, tasks, contacts, or fields there are) from a fresh tool call, never from memory or an earlier turn — matter data changes between turns.",
+  FRESH_DATA_RULE,
   getExternalFactSourcingRule({
     skillCatalogStatus,
     webResearch,
@@ -502,16 +542,206 @@ const buildCoreRuleSections = ({
         `SKILL-REF LINKS: A markdown link of the form \`[name](${SKILL_REF_HREF_PREFIX}slug)\` in the user's message is an explicit request to use that skill. Its instructions are preloaded under REQUESTED SKILLS: apply them and follow POST-LOAD-SKILL. Call \`load-skill\` only for a referenced skill that section tells you to load. Do not echo the link or narrate the load.`,
       ]
     : []),
-  `DOCX REVIEW TAGS: DOCX text from read tools may contain insertion/deletion/comment tags (${DOCX_REVIEW_MARKUP_EXAMPLES.insertion}, ${DOCX_REVIEW_MARKUP_EXAMPLES.deletion}, ${DOCX_REVIEW_MARKUP_EXAMPLES.comment}) with optional author/initials/date/status/thread attributes. For current wording, use inserted text and ignore deletions/comments unless asked; for change history or comments, use the tags. Never show tag syntax unless explicitly asked.`,
-  "CITATIONS: When a tool returns a stable URL (a stella decision is cited by DECISION CITATIONS instead), cite each individual claim inline with its OWN Markdown link — one citation per sentence (or per discrete fact) rather than a single trailing 'Sources:' block. Anchor text should be short (source domain, citation, or `[1]`-style footnote), and each link must point to the specific URL that supports THAT claim. The stella inspector opens these links in-app on click, so prefer them over plain text. For legal corpus results, use the returned url as the primary citation: it opens the held statute, provision or decision in stella. Use source_url only as a secondary publisher source link; when the corpus does not hold the item, use the returned external url. Never invent URLs.",
-  "MATTER MENTIONS: When you name a matter, document, task, or contact from tool results, link it with the ref the tool returned: [Human name](#stella-entity-ref=ent_N) for entities, [Matter name](#stella-workspace-ref=mat_N) for matters, copying the ref verbatim from the tool output (entityRef, matterRef, or list item ids). Never invent a ref — a citation with an unknown ref renders as plain text and is flagged. If you cannot cite a ref for an item, you did not read it from a tool this turn, so do not present it as existing (see FRESH DATA).",
-  `DECISION CITATIONS: When you name a case-law decision that a stella case-law tool returned this turn, link it with the decisionId the tool gave: [court and docket](${CHAT_DECISION_HREF_TEMPLATE}), copying decisionId verbatim. Prefer the decisionId link for an in-app decision citation; when a URL is needed, use the returned primary url. The source_url is only a secondary publisher source. A statement about what courts hold, require, or usually do is a claim about decisions: cite at least one returned decision that supports it, or say that the corpus returned none and present the statement as unsupported.`,
-  `PEOPLE MENTIONS: When you name a person a tool returned with a userId (a task assignee, a matter member, a person field), link the name with that userId: [Person's name](${CHAT_USER_HREF_TEMPLATE}), copying userId verbatim. This applies to every person you name, including in lists and "assigned to" lines. A person without a userId stays plain text; never build a link from a name, handle, or email.`,
-  "LEGAL REFERENCE RESOLUTION: Citation resolvers are exact-match. On a no-match, retry with a broader search tool using citation variants before declaring it unavailable.",
+  DOCX_REVIEW_TAGS_RULE,
+  CITATIONS_RULE,
+  MATTER_MENTIONS_RULE,
+  DECISION_CITATIONS_RULE,
+  PEOPLE_MENTIONS_RULE,
+  LEGAL_REFERENCE_RULE,
   CORPUS_ONLY_CASE_LAW_SECTION,
-  "USER-FACING LANGUAGE: Speak in legal-work terms; never expose internal names, tool names, or schema identifiers — refer to documents, matters, and folders by their human names. Reply in the user's UI language (see user context); switch only if the user themselves writes a natural-language message in another language. Copy `mention` strings from tool outputs verbatim instead of rewriting refs.",
+  USER_FACING_LANGUAGE_RULE,
+  PLAN_LINE_RULE,
   ...(subagents ? [SUBAGENT_DELEGATION_SECTION] : []),
 ];
+
+/**
+ * Where the turn's model runs: stella's cloud models with stella's own tools,
+ * or a coding agent on the member's computer (Codex, Claude Code) with its
+ * own tools and stella's tools over MCP.
+ */
+export type ChatPromptTarget =
+  | { type: "cloud" }
+  | {
+      type: "local_run";
+      /** How the agent's own web search runs at the turn's permission level. */
+      webSearch: ChatLocalRunWebSearch;
+      /** The skill tools its stella MCP server serves it (`local-run-skills.ts`). */
+      skillTools: readonly LocalRunSkillTool[];
+    };
+
+export const CLOUD_PROMPT_TARGET = {
+  type: "cloud",
+} as const satisfies ChatPromptTarget;
+
+const LOCAL_RUN_IDENTITY =
+  "You are a coding agent on the member's computer, working inside stella, a legal workspace. Answer directly; skip greetings and persona.";
+
+/**
+ * What the agent is told about its own web search, which follows the
+ * permission level: it must not claim it cannot search when a search only
+ * waits for approval, nor search where it cannot.
+ */
+const LOCAL_RUN_WEB_SEARCH = {
+  unasked: "You can search and read the web with your own web tools.",
+  asks: "You can search and read the web with your own web tools; at the current permission setting each web search waits for the member's approval, which shows them your query.",
+  off: "Your own web search is off at the current permission setting, because a search there cannot wait for the member's approval. You can still reach the web, for example by fetching a page you have the address of with a command. When a search would help, say that a higher permission setting turns web search on.",
+} as const satisfies Record<ChatLocalRunWebSearch, string>;
+
+const localRunCapabilities = (webSearch: ChatLocalRunWebSearch) =>
+  `WHAT YOU CAN DO: You run with your own tools on the member's computer. You can read and change the files in your working folder and run commands. ${LOCAL_RUN_WEB_SEARCH[webSearch]} stella's own tools (matters, documents, tasks, contacts, case law and legislation) reach you from the stella MCP server; use them for anything in the member's stella workspace. Your permission setting decides what you do without asking; when you ask for approval, stella shows the request to the member.`;
+
+const LOCAL_RUN_WRITES =
+  "WRITES: Changes to stella data (matters, documents, tasks, contacts) go through the stella MCP server's write tools, and the member approves each one before it runs. Never state or imply a change was made until its tool returns success; a pending approval is not a completed action.";
+
+const LOCAL_RUN_EXTERNAL_FACT_SOURCING =
+  "EXTERNAL-FACT SOURCING: Ground factual answers in a source. Use stella's case-law and legislation tools for law they hold, and the web for everything else, reading the pages when snippets are short or contradict. Answer from your own knowledge only when no source helps, and say so plainly.";
+
+/**
+ * The rules for a turn that a coding agent answers on the member's computer:
+ * the rules every turn follows, and what that agent can do there. Nothing
+ * here names stella's cloud tools or settings (code mode, `ask-user`, the
+ * chat's web-search switch, skill loading or subagents): the agent has none
+ * of them, and its own web search follows the permission level.
+ */
+const buildLocalRunCoreRuleSections = (
+  webSearch: ChatLocalRunWebSearch,
+): readonly string[] => [
+  LOCAL_RUN_IDENTITY,
+  localRunCapabilities(webSearch),
+  TRUTHFULNESS_RULE,
+  TOOL_FAILURE_RECOVERY_RULE,
+  LOCAL_RUN_WRITES,
+  FRESH_DATA_RULE,
+  LOCAL_RUN_EXTERNAL_FACT_SOURCING,
+  DOCX_REVIEW_TAGS_RULE,
+  CITATIONS_RULE,
+  MATTER_MENTIONS_RULE,
+  DECISION_CITATIONS_RULE,
+  PEOPLE_MENTIONS_RULE,
+  LEGAL_REFERENCE_RULE,
+  CORPUS_ONLY_CASE_LAW_SECTION,
+  USER_FACING_LANGUAGE_RULE,
+  PLAN_LINE_RULE,
+];
+
+/**
+ * The local-run skill catalog's bounds. A run's instructions are capped at
+ * 65,536 characters (`desktop-runner.ts`), so the catalog keeps to a fixed
+ * share of them: each description is cut to a line, and past the budget the
+ * descriptions shorten so every skill keeps its name in the list.
+ */
+const LOCAL_RUN_SKILL_DESCRIPTION_MAX_CHARS = 160;
+export const LOCAL_RUN_SKILL_CATALOG_MAX_CHARS = 16_000;
+/** Below this, a description says too little to be worth its characters. */
+const LOCAL_RUN_SKILL_DESCRIPTION_MIN_CHARS = 24;
+const LOCAL_RUN_SKILL_TOOL_NAME_MAX_CHARS = 80;
+
+const LOCAL_RUN_SKILLS_RULE =
+  "STELLA SKILLS: stella skills are methods and templates from stella, the member's organization and the member. Each one below is a tool on the stella MCP server, listed by its tool name and what it is for. When a request matches a skill, call its tool without arguments before you start: it returns the skill's instructions and the paths of its files. Then read every file the task depends on by calling the same tool with `resource` set to that path (and `cursor` to continue a long file). Apply the instructions; if you skip a file, say so. Skills guide the work; they grant no data access.";
+const LOCAL_RUN_INSTALLED_SKILLS_HEADING =
+  "Skills from the member's organization and the member's own (stella MCP tools):";
+
+type LocalRunSkillCatalog = {
+  /** Rule and stella's own skills: server-authored text. */
+  builtIn: string;
+  /** Installed skills: user-configured names and descriptions. */
+  installed: string;
+};
+
+const localRunSkillOverflowNote = (omitted: number) =>
+  `${String(omitted)} more skills did not fit in this list; their tools are on the stella MCP server under names starting with skill__.`;
+const LOCAL_RUN_SKILL_OVERFLOW_NOTE_MAX_CHARS = localRunSkillOverflowNote(
+  Number.MAX_SAFE_INTEGER,
+).length;
+
+/** Cut at a word where one is near, marking the cut. */
+const truncatePromptDescription = (text: string, maxLength: number) => {
+  if (text.length <= maxLength) {
+    return text;
+  }
+  const cut = text.slice(0, Math.max(0, maxLength - 1));
+  const wordEnd = cut.lastIndexOf(" ");
+  return `${(wordEnd > maxLength / 2 ? cut.slice(0, wordEnd) : cut).trimEnd()}…`;
+};
+
+/**
+ * The skills a run on the member's computer can load, each named by the MCP
+ * tool that serves it. Built-ins are listed first: they are few and
+ * server-authored. Descriptions are cut to one line and, when the catalog
+ * would pass its budget, shortened evenly; a skill past even that keeps its
+ * tool in the MCP server's list.
+ */
+export const buildLocalRunSkillCatalog = (
+  skillTools: readonly LocalRunSkillTool[],
+): LocalRunSkillCatalog => {
+  if (skillTools.length === 0) {
+    return { builtIn: "", installed: "" };
+  }
+  const entries = [
+    ...skillTools.filter(({ source }) => source === CHAT_SKILL_SOURCE.builtIn),
+    ...skillTools.filter(
+      ({ source }) => source === CHAT_SKILL_SOURCE.installed,
+    ),
+  ].map((skill) => ({
+    builtIn: skill.source === CHAT_SKILL_SOURCE.builtIn,
+    description: sanitizePromptLine({
+      maxLength: LIMITS.agentSkillDescriptionMaxChars,
+      text: skill.description,
+    }).trim(),
+    name: sanitizePromptLine({
+      maxLength: LOCAL_RUN_SKILL_TOOL_NAME_MAX_CHARS,
+      text: skill.toolName,
+    }),
+  }));
+  const budget =
+    LOCAL_RUN_SKILL_CATALOG_MAX_CHARS -
+    LOCAL_RUN_SKILLS_RULE.length -
+    LOCAL_RUN_INSTALLED_SKILLS_HEADING.length -
+    LOCAL_RUN_SKILL_OVERFLOW_NOTE_MAX_CHARS;
+  // Per line: `- `, the name, and a newline; a description adds `: ` and itself.
+  const nameChars = entries.reduce((sum, { name }) => sum + name.length + 3, 0);
+  const fullChars = entries.reduce(
+    (sum, { description }) =>
+      sum +
+      Math.min(description.length, LOCAL_RUN_SKILL_DESCRIPTION_MAX_CHARS) +
+      2,
+    nameChars,
+  );
+  const evenShare = Math.floor((budget - nameChars) / entries.length) - 2;
+  let descriptionMax = LOCAL_RUN_SKILL_DESCRIPTION_MAX_CHARS;
+  if (fullChars > budget) {
+    descriptionMax =
+      evenShare >= LOCAL_RUN_SKILL_DESCRIPTION_MIN_CHARS ? evenShare : 0;
+  }
+
+  const builtInLines: string[] = [];
+  const installedLines: string[] = [];
+  let remaining = budget;
+  let omitted = 0;
+  for (const { builtIn, description, name } of entries) {
+    const shown =
+      descriptionMax === 0
+        ? ""
+        : truncatePromptDescription(description, descriptionMax);
+    const line = shown === "" ? `- ${name}` : `- ${name}: ${shown}`;
+    if (line.length + 1 > remaining) {
+      omitted += 1;
+      continue;
+    }
+    remaining -= line.length + 1;
+    (builtIn ? builtInLines : installedLines).push(line);
+  }
+
+  return {
+    builtIn: [LOCAL_RUN_SKILLS_RULE, ...builtInLines].join("\n"),
+    installed: [
+      ...(installedLines.length > 0
+        ? [LOCAL_RUN_INSTALLED_SKILLS_HEADING, ...installedLines]
+        : []),
+      ...(omitted > 0 ? [localRunSkillOverflowNote(omitted)] : []),
+    ].join("\n"),
+  };
+};
 
 export type UserContext = IncomingUserContext;
 
@@ -687,9 +917,10 @@ export const buildChatPromptCacheKey = (
 };
 
 type BuildChatSystemPromptProps = {
-  browserExtension?: BrowserExtensionCapability | undefined;
+  browserExtension?: TurnBrowserExtension | undefined;
   caseLawDb?: CaseLawPublicReadDb;
   featureAccessContext?: McpFeatureAccessContext | undefined;
+  legislationDb?: LegislationPublicReadDb;
   activeDecision: IncomingActiveDecision | undefined;
   activeDraft?: IncomingActiveDraft | undefined;
   activeExternal: IncomingActiveExternal | undefined;
@@ -718,6 +949,7 @@ type BuildChatSystemPromptProps = {
    * it cannot finish.
    */
   offeredToolNamesForSkills: () => ReadonlySet<string>;
+  organizationAIInstructions?: string | undefined;
   practiceJurisdictions: readonly PracticeJurisdiction[];
   refRegistry: ChatRefRegistry;
   safeDb: SafeDb;
@@ -737,6 +969,8 @@ type BuildChatSystemPromptProps = {
    * is absent from the registered `ChatToolMap`.
    */
   toolAvailability: ChatToolAvailability;
+  /** Cloud unless a coding agent on the member's computer answers the turn. */
+  promptTarget?: ChatPromptTarget | undefined;
   userContext: IncomingUserContext | undefined;
   workspaceId: SafeId<"workspace"> | null;
   organizationId?: SafeId<"organization"> | undefined;
@@ -841,9 +1075,16 @@ const resolveActiveFilePromptContext = async ({
       },
       workspaceId,
     });
+    if (Result.isError(officeCitationSnapshot)) {
+      // The evidence owner reported the failure. Locator evidence is optional: keep the
+      // real AnyDoc-backed file prompt without claiming the citation is absent.
+      return Result.ok(promptBase);
+    }
     return Result.ok({
       ...promptBase,
-      ...(officeCitationSnapshot ? { officeCitationSnapshot } : {}),
+      ...(officeCitationSnapshot.value
+        ? { officeCitationSnapshot: officeCitationSnapshot.value }
+        : {}),
     });
   }
   const emailMimeType = resolveEmailMimeType({
@@ -856,14 +1097,17 @@ const resolveActiveFilePromptContext = async ({
 
   const readResult = await Result.tryPromise({
     try: async () =>
-      await readS3ArrayBuffer(
-        createFileKey({
+      await readS3ObjectBounded({
+        bucket: envBase.S3_BUCKET,
+        key: createFileKey({
           organizationId,
           workspaceId,
           fileId: content.id,
           mimeType: content.mimeType,
         }),
-      ),
+        maxBytes: FILE_SIZE_LIMIT_BYTES.document,
+        signal: AbortSignal.timeout(OBJECT_READ_TIMEOUT_MS),
+      }),
     catch: (cause) => cause,
   });
   if (Result.isError(readResult)) {
@@ -879,7 +1123,14 @@ const resolveActiveFilePromptContext = async ({
     );
     return Result.ok(promptBase);
   }
-  const previewResult = await emailToPreview(readResult.value, emailMimeType);
+  const bytes = readResult.value;
+  const buffer =
+    bytes.buffer instanceof ArrayBuffer &&
+    bytes.byteOffset === 0 &&
+    bytes.byteLength === bytes.buffer.byteLength
+      ? bytes.buffer
+      : bytes.slice().buffer;
+  const previewResult = await emailToPreview(buffer, emailMimeType);
   if (Result.isError(previewResult)) {
     captureError(
       previewResult.error,
@@ -954,10 +1205,25 @@ const requireActiveSkillInBindingScope = ({
         }),
       );
 
+/** The sections for the decision and the act the user has open. */
+const buildActiveCorpusSections = async (
+  props: ActiveDecisionSectionProps & ActiveStatuteSectionProps,
+) =>
+  await Result.gen(async function* () {
+    const decisionSection = yield* Result.await(
+      buildActiveDecisionSection(props),
+    );
+    const statuteSection = yield* Result.await(
+      buildActiveStatuteSection(props),
+    );
+    return Result.ok({ decisionSection, statuteSection });
+  });
+
 export const buildChatSystemPromptParts = async ({
   browserExtension = DEFAULT_BROWSER_EXTENSION,
   caseLawDb = caseLawPublicReadDb,
   featureAccessContext,
+  legislationDb = legislationPublicReadDb,
   activeDecision,
   activeDraft,
   activeExternal,
@@ -969,6 +1235,7 @@ export const buildChatSystemPromptParts = async ({
   hasReachableMatter,
   offeredToolNamesForSkills,
   organizationId,
+  organizationAIInstructions,
   practiceJurisdictions,
   refRegistry,
   safeDb,
@@ -977,6 +1244,7 @@ export const buildChatSystemPromptParts = async ({
   skillBindingScope,
   threadId,
   toolAvailability,
+  promptTarget = CLOUD_PROMPT_TARGET,
   userContext,
   userId,
   workspaceId,
@@ -1016,43 +1284,34 @@ export const buildChatSystemPromptParts = async ({
     // third-party PII.
     const documentedChatReads =
       activeSkillContext === null ? [] : activeSkillContext.documentedChatReads;
+    const sharedPromptProps = {
+      featureAccessContext,
+      promptTarget,
+      documentedChatReads,
+      organizationAIInstructions,
+      practiceJurisdictions,
+      skillMetadata: promptSkillMetadata,
+      toolAvailability,
+      userContext: userContext ?? null,
+    };
     const safeParts =
       workspaceId === null
-        ? buildGlobalPromptParts({
-            featureAccessContext,
-            documentedChatReads,
-            practiceJurisdictions,
-            skillMetadata: promptSkillMetadata,
-            toolAvailability,
-            userContext: userContext ?? null,
-          })
+        ? buildGlobalPromptParts(sharedPromptProps)
         : yield* Result.await(
             buildWorkspacePromptPartsFromDb({
-              featureAccessContext,
-              documentedChatReads,
-              practiceJurisdictions,
+              ...sharedPromptProps,
               refRegistry,
               safeDb,
-              skillMetadata: promptSkillMetadata,
-              toolAvailability,
-              userContext: userContext ?? null,
               workspaceId,
             }),
           );
 
-    const decisionSection = yield* Result.await(
-      buildActiveDecisionSection({
+    const { decisionSection, statuteSection } = yield* Result.await(
+      buildActiveCorpusSections({
         activeDecision,
-        caseLawDb,
-        organizationId,
-        safeDb,
-        userId,
-      }),
-    );
-    const statuteSection = yield* Result.await(
-      buildActiveStatuteSection({
         activeStatute,
-        legislationDb: legislationPublicReadDb,
+        caseLawDb,
+        legislationDb,
         organizationId,
         safeDb,
         userId,
@@ -1062,6 +1321,7 @@ export const buildChatSystemPromptParts = async ({
     const activeSkillSection = buildActiveSkillSection(
       activeSkillContext,
       activeSkillMissingTools,
+      promptTarget,
     );
     const matterScopeSection =
       workspaceId === null
@@ -1263,14 +1523,22 @@ export const buildActiveDraftPrompt = (
   ].join("\n");
 };
 
+/**
+ * The thread's first title, from the message that starts it: its text as
+ * the person wrote it. A reference chip (`<entity-mention>`) has no text of
+ * its own, so it reads as its label, as the web's composer reads it
+ * (`chatDraftHasModelContent`); without that, a request naming two
+ * documents titles the thread without either name.
+ */
 export const extractTitle = (parts: ChatMessage["parts"]) => {
   const raw = parts
     .map((part) => (part.type === "text" ? part.content : ""))
     .join("");
-  const plainText = load(raw, undefined, false)
-    .text()
-    .replaceAll(/\s+/gu, " ")
-    .trim();
+  const $ = load(raw, undefined, false);
+  $("entity-mention").each((_, node) => {
+    $(node).text($(node).attr("data-label") ?? "");
+  });
+  const plainText = $.text().replaceAll(/\s+/gu, " ").trim();
 
   if (plainText.length > TITLE_MAX_LENGTH) {
     return `${plainText.slice(0, TITLE_MAX_LENGTH)}…`;
@@ -1281,34 +1549,27 @@ export const extractTitle = (parts: ChatMessage["parts"]) => {
 
 type BuildGlobalPromptProps = {
   featureAccessContext?: McpFeatureAccessContext | undefined;
+  promptTarget?: ChatPromptTarget | undefined;
   /** The active skill's documented reads; none without a skill. */
   documentedChatReads?: readonly RegistryReadToolName[] | undefined;
+  organizationAIInstructions?: string | undefined;
   practiceJurisdictions?: readonly PracticeJurisdiction[];
   skillMetadata?: readonly PromptSkillMetadata[] | undefined;
   toolAvailability?: ChatToolAvailability | undefined;
   userContext: UserContext | null;
 };
 
-export const buildGlobalPrompt = ({
-  featureAccessContext,
-  documentedChatReads = [],
-  practiceJurisdictions = [],
-  skillMetadata = [],
-  toolAvailability = DEFAULT_CHAT_TOOL_AVAILABILITY,
-  userContext,
-}: BuildGlobalPromptProps) =>
-  buildGlobalPromptParts({
-    featureAccessContext,
-    documentedChatReads,
-    practiceJurisdictions,
-    skillMetadata,
-    toolAvailability,
-    userContext,
-  }).fullPrompt;
+// The text is the parts' full prompt, from the same props: a wrapper that
+// listed them again could drop one (the prompt target once fell back to the
+// cloud here).
+export const buildGlobalPrompt = (props: BuildGlobalPromptProps) =>
+  buildGlobalPromptParts(props).fullPrompt;
 
 export const buildGlobalPromptParts = ({
   featureAccessContext,
+  promptTarget = CLOUD_PROMPT_TARGET,
   documentedChatReads = [],
+  organizationAIInstructions = "",
   practiceJurisdictions = [],
   skillMetadata = [],
   toolAvailability = DEFAULT_CHAT_TOOL_AVAILABILITY,
@@ -1316,7 +1577,9 @@ export const buildGlobalPromptParts = ({
 }: BuildGlobalPromptProps): ChatPromptParts =>
   buildPromptParts({
     featureAccessContext,
+    promptTarget,
     documentedChatReads,
+    organizationAIInstructions,
     practiceJurisdictions,
     requestContextSections: [],
     skillMetadata,
@@ -1369,7 +1632,9 @@ export const estimateChatContextPromptTokens = ({
 
 type BuildWorkspacePromptProps = {
   featureAccessContext?: McpFeatureAccessContext | undefined;
+  promptTarget?: ChatPromptTarget | undefined;
   documentedChatReads: readonly RegistryReadToolName[];
+  organizationAIInstructions?: string | undefined;
   practiceJurisdictions?: readonly PracticeJurisdiction[];
   refRegistry: ChatRefRegistry;
   safeDb: SafeDb;
@@ -1381,7 +1646,9 @@ type BuildWorkspacePromptProps = {
 
 const buildWorkspacePromptPartsFromDb = async ({
   featureAccessContext,
+  promptTarget,
   documentedChatReads,
+  organizationAIInstructions = "",
   practiceJurisdictions = [],
   refRegistry,
   safeDb,
@@ -1401,9 +1668,11 @@ const buildWorkspacePromptPartsFromDb = async ({
     return Result.ok(
       buildWorkspacePromptParts({
         featureAccessContext,
+        promptTarget,
         documentedChatReads,
         entityCount: workspacePromptData.entityCount,
         extractedProperties: workspacePromptData.extractedProperties,
+        organizationAIInstructions,
         practiceJurisdictions,
         refRegistry,
         skillMetadata,
@@ -1537,10 +1806,12 @@ const buildWorkspaceContextSections = ({
 
 type BuildWorkspacePromptTextProps = {
   featureAccessContext?: McpFeatureAccessContext | undefined;
+  promptTarget?: ChatPromptTarget | undefined;
   /** The active skill's documented reads; none without a skill. */
   documentedChatReads?: readonly RegistryReadToolName[] | undefined;
   entityCount: number;
   extractedProperties?: readonly ExtractedPropertySummary[] | undefined;
+  organizationAIInstructions?: string | undefined;
   practiceJurisdictions?: readonly PracticeJurisdiction[];
   refRegistry: ChatRefRegistry;
   skillMetadata?: readonly PromptSkillMetadata[] | undefined;
@@ -1550,38 +1821,18 @@ type BuildWorkspacePromptTextProps = {
   workspaceName: string;
 };
 
-export const buildWorkspacePromptText = ({
-  featureAccessContext,
-  documentedChatReads = [],
-  entityCount,
-  extractedProperties = [],
-  practiceJurisdictions = [],
-  refRegistry,
-  skillMetadata = [],
-  toolAvailability = DEFAULT_CHAT_TOOL_AVAILABILITY,
-  userContext,
-  workspaceId,
-  workspaceName,
-}: BuildWorkspacePromptTextProps) =>
-  buildWorkspacePromptParts({
-    featureAccessContext,
-    documentedChatReads,
-    entityCount,
-    extractedProperties,
-    practiceJurisdictions,
-    refRegistry,
-    skillMetadata,
-    toolAvailability,
-    userContext,
-    workspaceId,
-    workspaceName,
-  }).fullPrompt;
+// See `buildGlobalPrompt`: the props pass through whole.
+export const buildWorkspacePromptText = (
+  props: BuildWorkspacePromptTextProps,
+) => buildWorkspacePromptParts(props).fullPrompt;
 
 export const buildWorkspacePromptParts = ({
   featureAccessContext,
+  promptTarget = CLOUD_PROMPT_TARGET,
   documentedChatReads = [],
   entityCount,
   extractedProperties = [],
+  organizationAIInstructions = "",
   practiceJurisdictions = [],
   refRegistry,
   skillMetadata = [],
@@ -1592,7 +1843,9 @@ export const buildWorkspacePromptParts = ({
 }: BuildWorkspacePromptTextProps): ChatPromptParts =>
   buildPromptParts({
     featureAccessContext,
+    promptTarget,
     documentedChatReads,
+    organizationAIInstructions,
     practiceJurisdictions,
     requestContextSections: buildWorkspaceContextSections({
       entityCount,
@@ -1636,7 +1889,7 @@ const buildActiveFilePrompt = ({
 
   return [
     `ACTIVE FILE: The user is viewing "${safeName}" (entity ref ${entityRef}) in the inspector sidebar.`,
-    `DEFAULT SCOPE: While an active file is set, treat it as the sole subject of any open-ended question ("what's going on", "summarize this", "what does it say", "explain", and similar). Read its contents by calling \`execute_typescript\` with \`external_read_content_across_matters({ entity_id: "${entityRef}" })\`, and answer ONLY from that file.`,
+    `DEFAULT SCOPE: While an active file is set, treat it as the sole subject of any open-ended question ("what's going on", "summarize this", "what does it say", "explain", and similar). For an envelope, its attachment list is part of this scope. When the answer depends on an attachment, read its returned entity reference and cite that document for its contents. Read the active file by calling \`execute_typescript\` with \`external_read_content_across_matters({ entity_id: "${entityRef}" })\`, and answer ONLY from that file.`,
     `LONG-DOCUMENT LOOKUPS: \`external_read_content_across_matters\` returns the document as Markdown (headings, tables, and lists preserved) for DOCX files, or plain text otherwise, one truncated window at a time starting from the beginning. If the answer is not in the first window, call it again with \`cursor\` set to the previous response's \`nextCursor\` to keep reading further into the document — page through until you find it or \`nextCursor\` comes back null.`,
     "DIRECT FILE FALLBACK: If the latest user message includes the active file as a direct attachment, that attachment is the exact version displayed to the user and is authoritative for this turn. Inspect it directly instead of calling entity-level retrieval. Do not claim the file has no extracted text when a direct attachment is available.",
     emailCitationSection,
@@ -3062,19 +3315,101 @@ const mergeActiveSkillMetadata = ({
 };
 
 /**
+ * How a turn's model reaches a skill beyond what its prompt carries: the
+ * cloud chat's `load-skill` / `read-skill-resource`, or, for a run on the
+ * member's computer, the skill's own tool on its stella MCP server.
+ */
+type SkillAccess = {
+  intro: string;
+  files: (skillName: string) => string;
+  truncated: (skillName: string) => string;
+  /** Referenced skills past the preload bound; the rest are unreachable. */
+  notPreloaded: (slugs: readonly string[]) => {
+    line: string;
+    unreachable: string[];
+  };
+  /** What the model runs in, as the prompt names it. */
+  surface: "chat" | "run";
+};
+
+const CLOUD_SKILL_ACCESS: SkillAccess = {
+  intro:
+    "REQUESTED SKILLS: The user's latest message references these skills explicitly. Their instructions are loaded below, as `load-skill` would return them: apply them to the request and follow POST-LOAD-SKILL and SKILL-RESOURCES. Call `load-skill` for one of them only when its instructions below say they are cut short.",
+  files: () => "Files (read with read-skill-resource):",
+  truncated: () =>
+    `Instructions (first ${String(ACTIVE_SKILL_BODY_PROMPT_MAX_CHARS)} characters; call load-skill for the rest):`,
+  notPreloaded: (slugs) => ({
+    line: `The user's latest message also references these skills; call load-skill for each before answering: ${slugs
+      .map((slug) => sanitizePromptLine({ maxLength: 80, text: slug }))
+      .join(", ")}.`,
+    unreachable: [],
+  }),
+  surface: "chat",
+};
+
+const localRunSkillAccess = (
+  skillTools: readonly LocalRunSkillTool[],
+): SkillAccess => {
+  const toolBySlug = new Map(
+    skillTools.map(({ name, toolName }) => [name, toolName]),
+  );
+  const toolOf = (skillName: string) => {
+    const toolName = toolBySlug.get(skillName);
+    return toolName === undefined
+      ? undefined
+      : sanitizePromptLine({ maxLength: 80, text: toolName });
+  };
+  return {
+    intro:
+      "REQUESTED SKILLS: The user's latest message references these skills explicitly. Their instructions are loaded below: apply them to the request, and read the files the task depends on before you answer.",
+    files: (skillName) => {
+      const toolName = toolOf(skillName);
+      return toolName === undefined
+        ? "Files (this run cannot read them; work from the instructions below):"
+        : `Files (read each by calling the stella MCP tool ${toolName} with \`resource\` set to its path):`;
+    },
+    truncated: (skillName) => {
+      const toolName = toolOf(skillName);
+      return toolName === undefined
+        ? `Instructions (first ${String(ACTIVE_SKILL_BODY_PROMPT_MAX_CHARS)} characters; this run cannot read the rest):`
+        : `Instructions (first ${String(ACTIVE_SKILL_BODY_PROMPT_MAX_CHARS)} characters; call the stella MCP tool ${toolName} for the rest):`;
+    },
+    notPreloaded: (slugs) => {
+      const toolNames = slugs.flatMap((slug) => {
+        const toolName = toolOf(slug);
+        return toolName === undefined ? [] : [toolName];
+      });
+      return {
+        line:
+          toolNames.length === 0
+            ? ""
+            : `The user's latest message also references these skills; call each one's stella MCP tool before answering: ${toolNames.join(", ")}.`,
+        unreachable: slugs.filter((slug) => toolOf(slug) === undefined),
+      };
+    },
+    surface: "run",
+  };
+};
+
+const skillAccessFor = (promptTarget: ChatPromptTarget): SkillAccess =>
+  promptTarget.type === "local_run"
+    ? localRunSkillAccess(promptTarget.skillTools)
+    : CLOUD_SKILL_ACCESS;
+
+/**
  * The skills the latest user message references explicitly. Their
  * instructions ride in the prompt, so an explicit pick does not depend on the
- * model deciding to call `load-skill`.
+ * model deciding to load it.
  */
-export const buildRequestedSkillsSection = ({
-  loaded,
-  notPreloaded,
-  unavailable,
-}: RequestedSkills): string => {
+export const buildRequestedSkillsSection = (
+  { loaded, notPreloaded, unavailable }: RequestedSkills,
+  promptTarget: ChatPromptTarget = CLOUD_PROMPT_TARGET,
+): string => {
+  const access = skillAccessFor(promptTarget);
   const sections = loaded.map((skill) => {
     const resources =
       skill.resources.length > 0
-        ? `\nFiles (read with read-skill-resource):\n${skill.resources
+        ? `\n${access.files(skill.name)}\n${skill.resources
             .slice(0, ACTIVE_SKILL_RESOURCE_LIST_MAX_COUNT)
             .map(
               (resource) =>
@@ -3085,9 +3420,7 @@ export const buildRequestedSkillsSection = ({
     const truncated = skill.body.length > ACTIVE_SKILL_BODY_PROMPT_MAX_CHARS;
     return [
       `Skill: ${sanitizePromptLine({ maxLength: 80, text: skill.name })}${resources}`,
-      truncated
-        ? `Instructions (first ${String(ACTIVE_SKILL_BODY_PROMPT_MAX_CHARS)} characters; call load-skill for the rest):`
-        : "Instructions:",
+      truncated ? access.truncated(skill.name) : "Instructions:",
       sanitizePromptBlock({
         maxLength: ACTIVE_SKILL_BODY_PROMPT_MAX_CHARS,
         text: skill.body,
@@ -3095,20 +3428,19 @@ export const buildRequestedSkillsSection = ({
     ].join("\n");
   });
   if (loaded.length > 0) {
-    sections.unshift(
-      "REQUESTED SKILLS: The user's latest message references these skills explicitly. Their instructions are loaded below, as `load-skill` would return them: apply them to the request and follow POST-LOAD-SKILL and SKILL-RESOURCES. Call `load-skill` for one of them only when its instructions below say they are cut short.",
-    );
+    sections.unshift(access.intro);
   }
-  if (notPreloaded.length > 0) {
-    sections.push(
-      `The user's latest message also references these skills; call load-skill for each before answering: ${notPreloaded
-        .map((slug) => sanitizePromptLine({ maxLength: 80, text: slug }))
-        .join(", ")}.`,
-    );
+  const later =
+    notPreloaded.length > 0
+      ? access.notPreloaded(notPreloaded)
+      : { line: "", unreachable: [] };
+  if (later.line !== "") {
+    sections.push(later.line);
   }
-  if (unavailable.length > 0) {
+  const unusable = [...unavailable, ...later.unreachable];
+  if (unusable.length > 0) {
     sections.push(
-      `UNAVAILABLE SKILLS: The user's latest message references skills that are not available in this chat (removed, disabled, not shared with the user, or needing a tool this chat does not have): ${unavailable
+      `UNAVAILABLE SKILLS: The user's latest message references skills that are not available in this ${access.surface} (removed, disabled, not shared with the user, or needing a tool this ${access.surface} does not have): ${unusable
         .map((slug) => sanitizePromptLine({ maxLength: 80, text: slug }))
         .join(
           ", ",
@@ -3122,9 +3454,16 @@ export const buildActiveSkillSection = (
   activeSkillContext: ActiveChatSkillContext | null,
   /** Required tools of the active skill that this turn does not offer. */
   missingRequiredTools: readonly string[] = [],
+  promptTarget: ChatPromptTarget = CLOUD_PROMPT_TARGET,
 ): string => {
   if (!activeSkillContext) {
     return "";
+  }
+  if (promptTarget.type === "local_run") {
+    return buildLocalRunActiveSkillSection(
+      activeSkillContext,
+      promptTarget.skillTools,
+    );
   }
 
   const version = activeSkillContext.version
@@ -3159,9 +3498,7 @@ export const buildActiveSkillSection = (
     );
   const resourceOverflow =
     resourcesList.length > ACTIVE_SKILL_RESOURCE_LIST_MAX_COUNT
-      ? `\n- ...${String(
-          resourcesList.length - ACTIVE_SKILL_RESOURCE_LIST_MAX_COUNT,
-        )} more`
+      ? `\n- ...${String(resourcesList.length - ACTIVE_SKILL_RESOURCE_LIST_MAX_COUNT)} more`
       : "";
   const resources =
     resourceLines.length > 0
@@ -3199,6 +3536,61 @@ export const buildActiveSkillSection = (
   ].join("\n");
 };
 
+/**
+ * The active skill, for a run on the member's computer: it cannot edit the
+ * skill, and it reads the skill's files through the skill's stella MCP tool
+ * when its server serves one.
+ */
+const buildLocalRunActiveSkillSection = (
+  activeSkillContext: ActiveChatSkillContext,
+  skillTools: readonly LocalRunSkillTool[],
+): string => {
+  const toolName = skillTools.find(
+    ({ name }) => name === activeSkillContext.toolName,
+  )?.toolName;
+  const version = activeSkillContext.version
+    ? `\nVersion: ${sanitizePromptLine({
+        maxLength: 80,
+        text: activeSkillContext.version,
+      })}`
+    : "";
+  const resourceLines = activeSkillContext.resources
+    .slice(0, ACTIVE_SKILL_RESOURCE_LIST_MAX_COUNT)
+    .map(
+      (resource) =>
+        `- ${sanitizePromptLine({ maxLength: 512, text: resource.path })}`,
+    );
+  const bodyTruncated =
+    activeSkillContext.body.length > ACTIVE_SKILL_BODY_PROMPT_MAX_CHARS;
+  return [
+    "ACTIVE SKILL CONTEXT: The user is currently inside this stella skill.",
+    `Display name: ${sanitizePromptLine({
+      maxLength: 120,
+      text: activeSkillContext.displayName,
+    })}`,
+    `Skill name: ${sanitizePromptLine({
+      maxLength: 80,
+      text: activeSkillContext.toolName,
+    })}${version}`,
+    toolName === undefined
+      ? "This run has no stella MCP tool for this skill: work from the text below."
+      : `Its stella MCP tool is ${sanitizePromptLine({ maxLength: 80, text: toolName })}: call it for the full instructions, and with \`resource\` set to a path to read one of its files.`,
+    'When the user says "this skill", "the current skill", "its files", or "SKILL.md", they mean this active skill. Do not propose unrelated skill names.',
+    "This skill is read-only in this run; do not attempt to edit its files.",
+    resourceLines.length > 0
+      ? `Files:\n${resourceLines.join("\n")}`
+      : "Files: none",
+    `${
+      bodyTruncated
+        ? `Current SKILL.md body prefix (first ${String(ACTIVE_SKILL_BODY_PROMPT_MAX_CHARS)} characters):`
+        : "Current SKILL.md body:"
+    }\n${sanitizePromptBlock({
+      maxLength: ACTIVE_SKILL_BODY_PROMPT_MAX_CHARS,
+      text: activeSkillContext.body,
+    })}`,
+  ].join("\n");
+};
+
 export const buildActiveFileSection = ({
   activeFile,
   entityExists,
@@ -3223,7 +3615,9 @@ export const buildActiveFileSection = ({
 
 type BuildPromptProps = {
   featureAccessContext?: McpFeatureAccessContext | undefined;
+  promptTarget?: ChatPromptTarget | undefined;
   documentedChatReads: readonly RegistryReadToolName[];
+  organizationAIInstructions?: string | undefined;
   practiceJurisdictions: readonly PracticeJurisdiction[];
   requestContextSections: string[];
   skillMetadata: readonly PromptSkillMetadata[];
@@ -3233,7 +3627,9 @@ type BuildPromptProps = {
 
 const buildPromptParts = ({
   featureAccessContext,
+  promptTarget = CLOUD_PROMPT_TARGET,
   documentedChatReads,
+  organizationAIInstructions,
   practiceJurisdictions,
   requestContextSections,
   skillMetadata,
@@ -3253,15 +3649,30 @@ const buildPromptParts = ({
   // and stays in the cache-stable prefix: it is constant for a thread while
   // the skill is active, and a different prefix must derive a different
   // prompt-cache key.
+  // A coding agent on the member's computer has no code mode. Its skills are
+  // tools on its stella MCP server, so its catalog names those tools (built
+  // from what that server serves it, not from this chat's catalog).
+  const localRunSkillCatalog =
+    promptTarget.type === "local_run"
+      ? buildLocalRunSkillCatalog(promptTarget.skillTools)
+      : null;
   const cacheStablePrefix = brandChatCacheStablePrefix(
-    joinPromptSections([
-      ...buildCoreRuleSections({
-        skillCatalogStatus: skillMetadata.length > 0 ? "available" : "empty",
-        toolAvailability,
-      }),
-      buildSkillCatalogSection(builtInSkillMetadata),
-      chatCodeModeSystemPrompt(documentedChatReads, featureAccessContext),
-    ]),
+    joinPromptSections(
+      promptTarget.type === "local_run"
+        ? [
+            ...buildLocalRunCoreRuleSections(promptTarget.webSearch),
+            localRunSkillCatalog?.builtIn ?? "",
+          ]
+        : [
+            ...buildCoreRuleSections({
+              skillCatalogStatus:
+                skillMetadata.length > 0 ? "available" : "empty",
+              toolAvailability,
+            }),
+            buildSkillCatalogSection(builtInSkillMetadata),
+            chatCodeModeSystemPrompt(documentedChatReads, featureAccessContext),
+          ],
+    ),
   );
   // Safe half: scaffold + jurisdiction labels. Both are
   // server-defined catalogs with no third-party PII. The jurisdictions are the
@@ -3275,8 +3686,8 @@ const buildPromptParts = ({
   const safePrompt = chatSafePromptText(safeLayers);
 
   // Untrusted half: anything that interpolates user-controlled
-  // text into the prompt. Installed skill names/descriptions are
-  // user-configured text; `requestContextSections` includes the
+  // text into the prompt. Administrator instructions and installed skill
+  // names/descriptions are user-configured text; `requestContextSections` includes the
   // `Connected to matter "..."` line (matter names commonly carry
   // client / opposing-party names); `userContextBlock` echoes the
   // user's own profile (name, email). All must cross the
@@ -3285,8 +3696,17 @@ const buildPromptParts = ({
   const untrustedSections: (
     ChatUserPromptSection | ChatVolatilePromptSection
   )[] = [
+    // Administrator-authored text can contain client names, so it crosses
+    // the anonymizer and leaves the provider's cacheable blocks untouched.
+    chatVolatilePromptSection(
+      buildOrganizationAIInstructionsPrompt(organizationAIInstructions ?? ""),
+    ),
     // Team skills and the user's own (`listAvailableChatSkillMetadata`).
-    chatUserPromptSection(buildSkillCatalogSection(installedSkillMetadata)),
+    chatUserPromptSection(
+      localRunSkillCatalog === null
+        ? buildSkillCatalogSection(installedSkillMetadata)
+        : localRunSkillCatalog.installed,
+    ),
     ...requestContextSections.map(chatVolatilePromptSection),
   ];
   const userContextBlock = buildUserContextBlock(userContext);

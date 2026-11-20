@@ -2,9 +2,14 @@ import { panic, Result } from "better-result";
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
-import { CHAT_INPUT_REFUSAL_CODE } from "@stll/api-contract";
+import {
+  API_FILE_SECURITY_REJECTED_ERROR_CODE,
+  CHAT_INPUT_REFUSAL_CODE,
+} from "@stll/api-contract";
+import { DATA_BOX_FILE_FORMAT } from "@stll/api-contract/legal-file-formats";
 import { ZipArchive } from "@stll/docx-core/zip";
 import { sha256Hex as legacySha256Hex } from "@stll/sha256/node";
+import { createTestState } from "@stll/test-state";
 
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
@@ -20,7 +25,7 @@ import {
   createChatAttachmentPart,
   toPersistableChatMessage,
 } from "@/api/handlers/chat/chat-message-parts";
-import { toSafeId } from "@/api/lib/branded-types";
+import { type SafeId, toSafeId } from "@/api/lib/branded-types";
 import { toDataUrl } from "@/api/lib/data-url";
 import { DatabaseError } from "@/api/lib/errors/tagged-errors";
 import type { writeOrganizationFile } from "@/api/lib/files/organization-file-usage";
@@ -30,10 +35,12 @@ import {
   PDF_MIME_TYPE,
   XLSX_MIME_TYPE,
 } from "@/api/mime-types";
+import { FIXTURE_MESSAGE, zfoFile } from "@/api/tests/fixtures/zfo";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
 import { testFileKey } from "@/api/tests/helpers/file-key";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+import { createSelectQueryMock } from "@/api/tests/scoped-db-mock";
 
 import {
   canHydrateFilePartAsPlainText,
@@ -42,6 +49,9 @@ import {
   uploadMessageFiles,
   uploadUserFile,
 } from "./upload-files";
+
+const testState = createTestState({ file: import.meta.path, config: env });
+const workerState = testState.forConfig(envDocumentProcessingWorker);
 
 const fileBytes = new TextEncoder().encode("Jan Novak,Acme");
 const IMAGE_PNG_MIME_TYPE = "image/png";
@@ -78,8 +88,25 @@ const makeDocxBytes = async (): Promise<Uint8Array> => {
 };
 const organizationId = toSafeId<"organization">("organization_1");
 const workspaceId = toSafeId<"workspace">("workspace_1");
+const createFileDeletionTx = () =>
+  asTestRaw<Transaction>({
+    select: () => createSelectQueryMock([]),
+    selectDistinct: () => createSelectQueryMock([]),
+  });
+const fileUsageDb = {
+  transaction: async <T>(callback: (tx: Transaction) => Promise<T>) =>
+    await callback(createFileDeletionTx()),
+};
+/** Reserves every object of an upload under `intentIds`, as one call. */
+const reservingAs =
+  (intentIds: SafeId<"pendingUpload">[]) =>
+  async ({ objectKeys }: { objectKeys: readonly string[] }) =>
+    await Promise.resolve(
+      Result.ok(new Map(objectKeys.map((key) => [key, intentIds]))),
+    );
 const uploadDependencies = {
-  reserveChatObjectCleanupIntent: async () => Result.ok([]),
+  organizationFileUsageDb: fileUsageDb,
+  reserveChatObjectCleanupIntents: reservingAs([]),
 };
 
 describe("chat attachment hydration", () => {
@@ -293,54 +320,119 @@ describe("chat attachment hydration", () => {
     },
   );
 
-  test("persists XLSX text at upload and hydrates it without rereading the workbook", async () => {
-    const values = mock(
-      async (_row: { extractedText: string | null }) => undefined,
-    );
-    const testTx = asTestRaw<Transaction>({
-      insert: mock(() => ({ values })),
-    });
-    const safeDb: SafeDb = async (callback) =>
-      await Result.tryPromise(async () => await callback(testTx));
-    const bytes = new Uint8Array(
-      await Bun.file(
-        new URL("../../lib/search/__fixtures__/schedule.xlsx", import.meta.url),
-      ).arrayBuffer(),
-    );
+  test.each([
+    {
+      fileName: "schedule.xlsx",
+      mimeType: XLSX_MIME_TYPE,
+      bytes: async () =>
+        await Bun.file(
+          new URL(
+            "../../lib/search/__fixtures__/schedule.xlsx",
+            import.meta.url,
+          ),
+        ).arrayBuffer(),
+      fragments: ["Acme s.r.o."],
+    },
+    {
+      fileName: "zprava.ZFO",
+      mimeType: "application/octet-stream",
+      bytes: zfoFile,
+      fragments: [
+        FIXTURE_MESSAGE.annotation,
+        "dodáno",
+        "doručeno",
+        "unverified",
+        "pouceni.txt",
+        "Synthetic instructions.",
+      ],
+    },
+  ])(
+    "persists and hydrates $fileName as readable text without fetching it again",
+    async ({ fileName, mimeType, bytes, fragments }) => {
+      const values = mock(
+        async (_row: { extractedText: string | null }) => undefined,
+      );
+      const testTx = asTestRaw<Transaction>({
+        insert: mock(() => ({ values })),
+      });
+      const safeDb: SafeDb = async (callback) =>
+        await Result.tryPromise(async () => await callback(testTx));
+      const uploadResult = await uploadUserFile({
+        dependencies: uploadDependencies,
+        file: {
+          bytes: new Uint8Array(await bytes()),
+          fileName,
+          mimeType,
+        },
+        organizationId,
+        recordAuditEvent: mock(async () => undefined),
+        safeDb,
+        threadId: toSafeId<"chatThread">(
+          "11111111-1111-4111-8111-111111111112",
+        ),
+        userId: toSafeId<"user">("11111111-1111-4111-8111-111111111113"),
+        workspaceId,
+      });
 
-    const uploadResult = await uploadUserFile({
+      expect(Result.isOk(uploadResult)).toBe(true);
+      const extractedText = values.mock.calls.at(0)?.at(0)?.extractedText;
+      if (typeof extractedText !== "string") {
+        throw new TypeError("Expected upload to persist extracted text");
+      }
+      for (const fragment of fragments) {
+        expect(extractedText).toContain(fragment);
+      }
+
+      const hydrateResult = await hydrateFilePart({
+        extractedText,
+        fileName,
+        mimeType,
+        sendMode: CHAT_SEND_MODE.rawOverride,
+        s3Key: testFileKey(ATTACHMENT_KEY),
+      });
+
+      expect(Result.isOk(hydrateResult)).toBe(true);
+      expect(hydrateResult.unwrap()).toMatchObject({
+        type: "anonymizable",
+        part: { type: "text", content: expect.stringContaining(extractedText) },
+      });
+      expect(requestKeys("GET")).toEqual([]);
+    },
+  );
+
+  test("rejects a standalone envelope when an embedded document fails its upload scan", async () => {
+    const bytes = new Uint8Array(
+      await zfoFile({
+        files: [
+          {
+            name: "notice.pdf",
+            mimeType: PDF_MIME_TYPE,
+            content: new TextEncoder().encode(
+              "A text-only document incorrectly labelled PDF.",
+            ),
+          },
+        ],
+      }),
+    );
+    const result = await uploadUserFile({
       dependencies: uploadDependencies,
       file: {
         bytes,
-        fileName: "schedule.xlsx",
-        mimeType: XLSX_MIME_TYPE,
+        fileName: "notice.zfo",
+        mimeType: DATA_BOX_FILE_FORMAT.mimeType,
       },
       organizationId,
+      workspaceId,
+      safeDb: async () => panic("Rejected uploads do not write a chat file"),
       recordAuditEvent: mock(async () => undefined),
-      safeDb,
       threadId: toSafeId<"chatThread">("11111111-1111-4111-8111-111111111112"),
       userId: toSafeId<"user">("11111111-1111-4111-8111-111111111113"),
-      workspaceId,
     });
-
-    expect(Result.isOk(uploadResult)).toBe(true);
-    const extractedText = values.mock.calls.at(0)?.at(0)?.extractedText;
-    if (typeof extractedText !== "string") {
-      throw new TypeError("Expected upload to persist extracted XLSX text");
-    }
-    expect(extractedText).toContain("Acme s.r.o.");
-
-    const hydrateResult = await hydrateFilePart({
-      extractedText,
-      fileName: "schedule.xlsx",
-      mimeType: XLSX_MIME_TYPE,
-      sendMode: CHAT_SEND_MODE.rawOverride,
-      s3Key: testFileKey(ATTACHMENT_KEY),
+    expect(result.isErr() && result.error).toMatchObject({
+      status: 422,
+      code: API_FILE_SECURITY_REJECTED_ERROR_CODE,
     });
-
-    expect(Result.isOk(hydrateResult)).toBe(true);
-    // The cached text answered the hydration: the workbook was never fetched.
-    expect(requestKeys("GET")).toEqual([]);
+    expect(requestKeys("PUT")).toEqual([]);
   });
 
   test("cleans up already uploaded files when a later attachment fails", async () => {
@@ -349,6 +441,9 @@ describe("chat attachment hydration", () => {
     const whereMock = mock(async () => undefined);
     const deleteMock = mock(() => ({ where: whereMock }));
     const tx = {
+      execute: async () => [],
+      select: () => createSelectQueryMock([]),
+      query: { chatThreads: { findFirst: async () => ({ organizationId }) } },
       delete: deleteMock,
       insert: insertMock,
     };
@@ -390,11 +485,13 @@ describe("chat attachment hydration", () => {
     });
 
     expect(Result.isError(result)).toBe(true);
-    // The first attachment landed and was then rolled back out of the store,
-    // leaving only the seeded fixture behind.
+    // Row withdrawal and durable storage cleanup are committed together;
+    // the worker receives the exact stored key.
     expect(requestKeys("PUT")).toHaveLength(1);
-    expect(requestKeys("DELETE")).toEqual(requestKeys("PUT"));
-    expect([...fake.objects.keys()]).toEqual([`${bucket}/${ATTACHMENT_KEY}`]);
+    expect(requestKeys("DELETE")).toEqual([]);
+    expect(valuesMock).toHaveBeenCalledWith(
+      expect.objectContaining({ s3Keys: requestKeys("PUT") }),
+    );
     expect(whereMock).toHaveBeenCalledTimes(1);
     expect(recordAuditEvent).toHaveBeenCalledWith(
       testTx,
@@ -438,8 +535,8 @@ describe("chat attachment hydration", () => {
 
     const result = await uploadUserFile({
       dependencies: {
-        reserveChatObjectCleanupIntent: async () =>
-          Result.ok([cleanupIntentId]),
+        ...uploadDependencies,
+        reserveChatObjectCleanupIntents: reservingAs([cleanupIntentId]),
         settleObjectCleanupIntentsAfterWriter: settleIntents,
       },
       file: {
@@ -482,14 +579,23 @@ describe("chat attachment hydration", () => {
     const thumbnailCleanupIntentId = toSafeId<"pendingUpload">(
       "11111111-1111-4111-8111-111111111115",
     );
-    let reservationCount = 0;
-    const reserveChatObjectCleanupIntent = mock(async () => {
-      reservationCount += 1;
-      if (reservationCount === 1) {
-        return Result.ok([sourceCleanupIntentId]);
-      }
-      return Result.ok([thumbnailCleanupIntentId]);
-    });
+    const reserveChatObjectCleanupIntents = mock(
+      async ({ objectKeys }: { objectKeys: readonly string[] }) =>
+        await Promise.resolve(
+          Result.ok(
+            new Map(
+              objectKeys.map((key, index) => [
+                key,
+                [
+                  index === 0
+                    ? sourceCleanupIntentId
+                    : thumbnailCleanupIntentId,
+                ],
+              ]),
+            ),
+          ),
+        ),
+    );
     const settleIntents = mock(async () => Result.ok(undefined));
     let putCount = 0;
     const putS3ObjectWithSignal = mock(async () => {
@@ -527,13 +633,14 @@ describe("chat attachment hydration", () => {
     );
     const result = await uploadUserFile({
       dependencies: {
+        ...uploadDependencies,
         generateImageThumbnail: async () =>
           Result.ok({
             placeholder: "data:image/png;base64,placeholder",
             webp: new Uint8Array([1]),
           }),
         putS3ObjectWithSignal,
-        reserveChatObjectCleanupIntent,
+        reserveChatObjectCleanupIntents,
         settleObjectCleanupIntentsAfterWriter: settleIntents,
       },
       file: {
@@ -550,6 +657,11 @@ describe("chat attachment hydration", () => {
     });
 
     expect(Result.isError(result)).toBe(true);
+    // The image and its thumbnail are reserved in one call.
+    expect(reserveChatObjectCleanupIntents).toHaveBeenCalledTimes(1);
+    expect(
+      reserveChatObjectCleanupIntents.mock.calls.at(0)?.[0].objectKeys,
+    ).toHaveLength(2);
     expect(putS3ObjectWithSignal).toHaveBeenCalledTimes(2);
     expect(settleIntents).toHaveBeenCalledWith({
       intentIds: [thumbnailCleanupIntentId],
@@ -658,11 +770,11 @@ describe("chat attachment hydration", () => {
         NonNullable<Parameters<typeof writeOrganizationFile>[0]["db"]>
       >({ transaction: async () => ({ status: reservationStatus }) });
       const settleIntents = mock(async () => Result.ok(undefined));
-      const priorFlag = env.FEATURE_FILE_USAGE_LIMITS;
+
       const priorWorkerFlag =
         envDocumentProcessingWorker.FEATURE_FILE_USAGE_LIMITS;
-      env.FEATURE_FILE_USAGE_LIMITS = true;
-      envDocumentProcessingWorker.FEATURE_FILE_USAGE_LIMITS = true;
+      testState.setConfig("FEATURE_FILE_USAGE_LIMITS", true);
+      workerState.setConfig("FEATURE_FILE_USAGE_LIMITS", true);
       try {
         const result = await uploadUserFile({
           dependencies: {
@@ -691,8 +803,7 @@ describe("chat attachment hydration", () => {
         expect(result.error).toMatchObject({ status: expectedStatus });
         expect(requestKeys("PUT")).toHaveLength(0);
       } finally {
-        env.FEATURE_FILE_USAGE_LIMITS = priorFlag;
-        envDocumentProcessingWorker.FEATURE_FILE_USAGE_LIMITS = priorWorkerFlag;
+        workerState.setConfig("FEATURE_FILE_USAGE_LIMITS", priorWorkerFlag);
       }
     },
   );

@@ -2,7 +2,11 @@ import { useDeferredValue } from "react";
 
 import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
 
-import { isEntityPriority, isTaskStatus } from "@stll/api-contract";
+import {
+  isEntityPriority,
+  isTaskStatus,
+  RESOURCE_TYPE,
+} from "@stll/api-contract";
 import { isListItemType } from "@stll/api-contract/entity-options";
 
 import { api } from "@/lib/api";
@@ -17,6 +21,7 @@ import type {
   WorkspaceEntity,
   WorkspaceField,
 } from "@/lib/types";
+import { resourceQueryOptions } from "@/lib/workspace-realtime";
 import {
   DEFAULT_ENTITY_VIEW_PAGE_SIZE,
   DEFAULT_ENTITY_WINDOW_SIZE,
@@ -172,26 +177,28 @@ export const entitiesOptions = (key: EntitiesOptionsInput) =>
     queryKey: entitiesKeys.sample(key),
     queryFn: async ({ signal }) => {
       const fieldMode = key.fieldMode ?? "visible";
-      const response = await api
-        .entities({ workspaceId: toSafeId<"workspace">(key.workspaceId) })
-        ["query-window"].post(
-          {
-            filters: key.filters,
-            sorts: key.sorts,
-            ...(key.search?.trim() && { search: key.search.trim() }),
-            excludedKinds: normalizeOptionalArray(key.excludedKinds),
-            fieldMode,
-            fieldIds:
-              fieldMode === "visible"
-                ? normalizeVisibleFieldIds(key.fieldIds).map((fieldId) =>
-                    toSafeId<"property">(fieldId),
-                  )
-                : [],
-            previewableForAi: key.previewableForAi ?? false,
-            limit: key.pageSize ?? DEFAULT_ENTITY_VIEW_PAGE_SIZE,
-          },
-          { fetch: { signal } },
-        );
+      const entitiesApi = api.entities({
+        workspaceId: toSafeId<"workspace">(key.workspaceId),
+      });
+
+      const response = await entitiesApi["query-window"].post(
+        {
+          filters: key.filters,
+          sorts: key.sorts,
+          ...(key.search?.trim() && { search: key.search.trim() }),
+          excludedKinds: normalizeOptionalArray(key.excludedKinds),
+          fieldMode,
+          fieldIds:
+            fieldMode === "visible"
+              ? normalizeVisibleFieldIds(key.fieldIds).map((fieldId) =>
+                  toSafeId<"property">(fieldId),
+                )
+              : [],
+          previewableForAi: key.previewableForAi ?? false,
+          limit: key.pageSize ?? DEFAULT_ENTITY_VIEW_PAGE_SIZE,
+        },
+        { fetch: { signal } },
+      );
 
       const { items: rawEntities, ...rest } = unwrapApiResponse(response);
       const entities: WorkspaceEntity[] = rawEntities.map(toWorkspaceEntity);
@@ -205,29 +212,31 @@ export const entitiesWindowOptions = (key: EntitiesWindowOptionsInput) =>
     queryKey: entitiesKeys.window(key),
     queryFn: async ({ signal, pageParam }) => {
       const fieldMode = key.fieldMode ?? "visible";
-      const response = await api
-        .entities({ workspaceId: toSafeId<"workspace">(key.workspaceId) })
-        ["query-window"].post(
-          {
-            filters: key.filters,
-            sorts: key.sorts,
-            ...(key.search?.trim() && { search: key.search.trim() }),
-            ...findRequestFields(key),
-            limit: key.limit ?? DEFAULT_ENTITY_WINDOW_SIZE,
-            excludedKinds: normalizeOptionalArray(key.excludedKinds),
-            fieldMode,
-            fieldIds:
-              fieldMode === "visible"
-                ? normalizeVisibleFieldIds(key.fieldIds).map((fieldId) =>
-                    toSafeId<"property">(fieldId),
-                  )
-                : [],
-            previewableForAi: key.previewableForAi ?? false,
-            includeAssignees: key.includeAssignees ?? false,
-            ...(pageParam !== undefined && { cursor: pageParam }),
-          },
-          { fetch: { signal } },
-        );
+      const entitiesApi = api.entities({
+        workspaceId: toSafeId<"workspace">(key.workspaceId),
+      });
+
+      const response = await entitiesApi["query-window"].post(
+        {
+          filters: key.filters,
+          sorts: key.sorts,
+          ...(key.search?.trim() && { search: key.search.trim() }),
+          ...findRequestFields(key),
+          limit: key.limit ?? DEFAULT_ENTITY_WINDOW_SIZE,
+          excludedKinds: normalizeOptionalArray(key.excludedKinds),
+          fieldMode,
+          fieldIds:
+            fieldMode === "visible"
+              ? normalizeVisibleFieldIds(key.fieldIds).map((fieldId) =>
+                  toSafeId<"property">(fieldId),
+                )
+              : [],
+          previewableForAi: key.previewableForAi ?? false,
+          includeAssignees: key.includeAssignees ?? false,
+          ...(pageParam !== undefined && { cursor: pageParam }),
+        },
+        { fetch: { signal } },
+      );
 
       const { items: rawEntities, ...rest } = unwrapApiResponse(response);
       const entities: WorkspaceEntity[] = rawEntities.map(toWorkspaceEntity);
@@ -253,24 +262,26 @@ export const filesystemEntitiesOptions = (
       >();
       await visitCursorPages({
         getPage: async (cursor) => {
-          const response = await api
-            .entities({ workspaceId: toSafeId<"workspace">(key.workspaceId) })
-            ["filesystem-tree"].post(
-              {
-                ...(cursor !== undefined && { cursor }),
-                filters: key.filters,
-                sorts: key.sorts,
-                ...(key.search?.trim() && { search: key.search.trim() }),
-                fieldMode,
-                fieldIds:
-                  fieldMode === "visible"
-                    ? normalizeVisibleFieldIds(key.fieldIds).map((fieldId) =>
-                        toSafeId<"property">(fieldId),
-                      )
-                    : [],
-              },
-              { fetch: { signal } },
-            );
+          const entitiesApi = api.entities({
+            workspaceId: toSafeId<"workspace">(key.workspaceId),
+          });
+
+          const response = await entitiesApi["filesystem-tree"].post(
+            {
+              ...(cursor !== undefined && { cursor }),
+              filters: key.filters,
+              sorts: key.sorts,
+              ...(key.search?.trim() && { search: key.search.trim() }),
+              fieldMode,
+              fieldIds:
+                fieldMode === "visible"
+                  ? normalizeVisibleFieldIds(key.fieldIds).map((fieldId) =>
+                      toSafeId<"property">(fieldId),
+                    )
+                  : [],
+            },
+            { fetch: { signal } },
+          );
 
           return unwrapApiResponse(response);
         },
@@ -305,35 +316,37 @@ export const kanbanGroupOptions = (key: KanbanGroupOptionsInput) =>
     queryKey: entitiesKeys.kanbanGroup(key),
     queryFn: async ({ signal, pageParam }) => {
       const fieldMode = key.fieldMode ?? "visible";
-      const response = await api
-        .entities({ workspaceId: toSafeId<"workspace">(key.workspaceId) })
-        ["kanban-group"].post(
-          {
-            filters: key.filters,
-            sorts: key.sorts,
-            ...findRequestFields(key),
-            limit: key.limit ?? DEFAULT_ENTITY_WINDOW_SIZE,
-            fieldMode,
-            fieldIds:
-              fieldMode === "visible"
-                ? normalizeVisibleFieldIds(key.fieldIds).map((fieldId) =>
-                    toSafeId<"property">(fieldId),
-                  )
-                : [],
-            groupByPropertyId:
-              key.groupByPropertyId === "_status" ||
-              key.groupByPropertyId === "_kind"
-                ? key.groupByPropertyId
-                : toSafeId<"property">(key.groupByPropertyId),
-            groupValue: key.groupValue,
-            excludedKinds: normalizeOptionalArray(key.excludedKinds),
-            ...(key.optionValues !== undefined && {
-              optionValues: key.optionValues,
-            }),
-            ...(pageParam !== undefined && { cursor: pageParam }),
-          },
-          { fetch: { signal } },
-        );
+      const entitiesApi = api.entities({
+        workspaceId: toSafeId<"workspace">(key.workspaceId),
+      });
+
+      const response = await entitiesApi["kanban-group"].post(
+        {
+          filters: key.filters,
+          sorts: key.sorts,
+          ...findRequestFields(key),
+          limit: key.limit ?? DEFAULT_ENTITY_WINDOW_SIZE,
+          fieldMode,
+          fieldIds:
+            fieldMode === "visible"
+              ? normalizeVisibleFieldIds(key.fieldIds).map((fieldId) =>
+                  toSafeId<"property">(fieldId),
+                )
+              : [],
+          groupByPropertyId:
+            key.groupByPropertyId === "_status" ||
+            key.groupByPropertyId === "_kind"
+              ? key.groupByPropertyId
+              : toSafeId<"property">(key.groupByPropertyId),
+          groupValue: key.groupValue,
+          excludedKinds: normalizeOptionalArray(key.excludedKinds),
+          ...(key.optionValues !== undefined && {
+            optionValues: key.optionValues,
+          }),
+          ...(pageParam !== undefined && { cursor: pageParam }),
+        },
+        { fetch: { signal } },
+      );
 
       const { items: rawEntities, ...rest } = unwrapApiResponse(response);
       const entities: WorkspaceEntity[] = rawEntities.map(toWorkspaceEntity);
@@ -360,20 +373,22 @@ export const groupCountsOptions = (key: GroupCountsOptionsInput) =>
   queryOptions({
     queryKey: entitiesKeys.groupCounts(key),
     queryFn: async ({ signal }) => {
-      const response = await api
-        .entities({ workspaceId: toSafeId<"workspace">(key.workspaceId) })
-        ["group-counts"].post(
-          {
-            filters: key.filters,
-            ...findRequestFields(key),
-            groupByPropertyId:
-              key.groupByPropertyId === "_status" ||
-              key.groupByPropertyId === "_kind"
-                ? key.groupByPropertyId
-                : toSafeId<"property">(key.groupByPropertyId),
-          },
-          { fetch: { signal } },
-        );
+      const entitiesApi = api.entities({
+        workspaceId: toSafeId<"workspace">(key.workspaceId),
+      });
+
+      const response = await entitiesApi["group-counts"].post(
+        {
+          filters: key.filters,
+          ...findRequestFields(key),
+          groupByPropertyId:
+            key.groupByPropertyId === "_status" ||
+            key.groupByPropertyId === "_kind"
+              ? key.groupByPropertyId
+              : toSafeId<"property">(key.groupByPropertyId),
+        },
+        { fetch: { signal } },
+      );
 
       return unwrapApiResponse(response).counts;
     },
@@ -495,11 +510,17 @@ const fetchAllWorkspaceFolders = async ({
 // response is paginated so large matters never return one giant
 // organizer payload.
 export const workspaceFoldersOptions = (workspaceId: string) =>
-  queryOptions({
-    queryKey: entitiesKeys.folders(workspaceId),
-    queryFn: async ({ signal }) =>
-      await fetchAllWorkspaceFolders({ signal, workspaceId }),
-  });
+  resourceQueryOptions(
+    queryOptions({
+      queryKey: entitiesKeys.folders(workspaceId),
+      queryFn: async ({ signal }) =>
+        await fetchAllWorkspaceFolders({ signal, workspaceId }),
+    }),
+    {
+      resources: [RESOURCE_TYPE.ENTITY],
+      scope: { type: "workspace", workspaceId },
+    },
+  );
 
 export type WorkspaceFile = {
   entityId: string;
@@ -508,6 +529,7 @@ export type WorkspaceFile = {
   parentId: string | null;
   fileName: string;
   mimeType: string;
+  sizeBytes: number;
 };
 
 const fetchAllWorkspaceFiles = async ({
@@ -541,6 +563,7 @@ const fetchAllWorkspaceFiles = async ({
           parentId: file.parentId,
           fileName: file.fileName,
           mimeType: file.mimeType,
+          sizeBytes: file.sizeBytes,
         })),
       );
     },

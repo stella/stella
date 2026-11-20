@@ -15,6 +15,7 @@ import {
   ActionAdmissionError,
   actionAdmissionRefusal,
 } from "@/api/lib/errors/action-admission-error";
+import { runAsCorpusSearchCaller } from "@/api/lib/legal-search/corpus-index-admission";
 import { publicReadTimeoutError } from "@/api/lib/legal-search/public-read-timeout";
 import { runWithPublicReadScope } from "@/api/lib/legal-search/public-read-timeout-context";
 import { isSearchIndexUnavailable } from "@/api/lib/legal-search/search-index-unavailable";
@@ -25,7 +26,10 @@ import {
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
-import { withMcpPublicReadAdmission } from "@/api/lib/rate-limit/mcp-public-read-admission";
+import {
+  mcpPublicReadCallerKey,
+  withMcpPublicReadAdmission,
+} from "@/api/lib/rate-limit/mcp-public-read-admission";
 import type { McpMode } from "@/api/mcp/constants";
 import {
   bindApprovedMcpAuditContext,
@@ -44,7 +48,11 @@ import {
   resolveMcpToolOutputContract,
   toMcpTools,
 } from "@/api/mcp/gateway/list-tools";
-import { modeAllowsGatewayTools } from "@/api/mcp/gateway/mode-policy";
+import {
+  modeAllowsGatewayTools,
+  modeAllowsSkillTools,
+  type SkillToolSession,
+} from "@/api/mcp/gateway/mode-policy";
 import { hasGrantedScope } from "@/api/mcp/gateway/static-tool-visibility";
 import {
   agentInputValidationError,
@@ -53,6 +61,7 @@ import {
 } from "@/api/mcp/input-normalization";
 import { matterRequiredResult } from "@/api/mcp/matter-requirement";
 import { observeMcpToolCall } from "@/api/mcp/observe-tool-call";
+import { CONTINUABLE_PUBLIC_READ_TOOLS } from "@/api/mcp/public-read-continuation";
 import {
   getStaticMcpToolDefinition,
   getStaticMcpToolHandler,
@@ -215,6 +224,8 @@ export const getMcpToolDefinition = async (
 export const getMcpToolRequiredScopesHint = (
   toolName: string,
   mode: McpMode = "default",
+  /** The caller's credential; without it, only the advanced surface serves skills. */
+  session: SkillToolSession = {},
 ): readonly ToolScope[] | undefined => {
   const staticTool = getStaticMcpToolDefinition(toolName, mode);
   if (staticTool) {
@@ -223,16 +234,13 @@ export const getMcpToolRequiredScopesHint = (
     }
     return [staticTool.scope, ...staticTool.additionalScopes];
   }
-  if (!modeAllowsGatewayTools(mode)) {
-    return undefined;
-  }
 
   if (isExternalMcpToolName(toolName)) {
-    return ["stella:external_mcps"];
+    return modeAllowsGatewayTools(mode) ? ["stella:external_mcps"] : undefined;
   }
 
   if (isSkillToolName(toolName)) {
-    return ["stella:skills"];
+    return modeAllowsSkillTools(mode, session) ? ["stella:skills"] : undefined;
   }
 
   return undefined;
@@ -661,6 +669,7 @@ const dispatchMcpToolCall = async ({
               context: executionContext,
               mode,
               response,
+              outputSchema: outputContract.outputSchemaSource,
             },
             {
               anonymizeTextFields:
@@ -835,6 +844,23 @@ const runAuthorizedMcpToolCall = async ({
   if (budgetMs === undefined) {
     return await run();
   }
+  // The continuation owns these tools' concurrency and takes the caller's
+  // fleet-wide slot for the detached run: a call over the limit is queued and
+  // told so, not refused.
+  if (CONTINUABLE_PUBLIC_READ_TOOLS.has(toolName)) {
+    const finished = await runWithPublicReadScope(
+      { budgetMs, signal: context.request?.signal },
+      run,
+    );
+    return Result.isOk(finished)
+      ? finished.value
+      : internalErrorResult({
+          mode,
+          context,
+          toolName,
+          error: finished.error,
+        });
+  }
   const admitted = await (
     dependencies?.admitPublicRead ??
     context.testDependencies?.admitPublicRead ??
@@ -843,7 +869,10 @@ const runAuthorizedMcpToolCall = async ({
     caller: context,
     signal: context.request?.signal,
     run: async (signal) =>
-      await runWithPublicReadScope({ budgetMs, signal }, run),
+      await runAsCorpusSearchCaller(
+        mcpPublicReadCallerKey(context),
+        async () => await runWithPublicReadScope({ budgetMs, signal }, run),
+      ),
   });
   if (Result.isOk(admitted)) {
     const outcome = admitted.value;

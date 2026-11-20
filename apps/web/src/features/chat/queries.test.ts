@@ -5,15 +5,7 @@ import {
   replaceEqualDeep,
 } from "@tanstack/react-query";
 import { Result } from "better-result";
-import {
-  afterEach,
-  beforeEach,
-  describe,
-  expect,
-  mock,
-  spyOn,
-  test,
-} from "bun:test";
+import { afterEach, beforeEach, describe, expect, mock, spyOn } from "bun:test";
 
 import type { ReasoningEffort } from "@stll/ai-catalog";
 import {
@@ -32,6 +24,7 @@ import {
 import type { ChatRunTarget } from "@stll/api-contract/chat-run-target";
 import { sleep } from "@stll/concurrency/sleep";
 import { rejectionOf } from "@stll/property-testing/rejection";
+import { requestTest as test } from "@stll/start-runtime/test-request";
 
 import { getChatAssistantTurnError } from "@/components/chat/chat-ui-tools";
 import type { PersistedChatMessage } from "@/components/chat/chat-ui-tools";
@@ -179,6 +172,27 @@ describe("chatKeys", () => {
     expect(inMatter.queryKey.at(-1)).toBe("matter_b");
   });
 
+  test("isolates the pinned and unpinned histories from each other and the unfiltered list", () => {
+    const activeOrganizationId = "org_test";
+    const userId = "user_test";
+    const keys = ([undefined, "pinned", "unpinned"] as const).map(
+      (pinState) =>
+        groupedChatThreadsOptions({
+          activeOrganizationId,
+          ...(pinState === undefined ? {} : { pinState }),
+          userId,
+        }).queryKey,
+    );
+
+    expect(new Set(keys.map((key) => JSON.stringify(key))).size).toBe(3);
+    // Each sits under the reader's lists prefix the user stream refreshes.
+    for (const key of keys) {
+      expect(key.slice(0, 5)).toEqual(
+        chatKeys.groupedThreadLists(activeOrganizationId, userId),
+      );
+    }
+  });
+
   test("separates plain chat transports from active DOCX edit transports", () => {
     const threadId = toChatThreadId("thread-A");
     const base = {
@@ -306,13 +320,12 @@ describe("chat thread fetch failures", () => {
     });
   });
 
-  test.each([
+  for (const { allowMissingThread, status } of [
     { allowMissingThread: false, status: 404 },
     { allowMissingThread: false, status: 500 },
     { allowMissingThread: true, status: 500 },
-  ])(
-    "propagates status $status when allowMissingThread is $allowMissingThread",
-    async ({ allowMissingThread, status }) => {
+  ]) {
+    test(`propagates status ${status} when allowMissingThread is ${allowMissingThread}`, async () => {
       globalThis.fetch = createFetchMock(status, { message: "Request failed" });
       const result = await Result.tryPromise({
         try: async () => await queryClient().query(options(allowMissingThread)),
@@ -326,8 +339,8 @@ describe("chat thread fetch failures", () => {
           expect(result.error.status).toBe(status);
         }
       }
-    },
-  );
+    });
+  }
 });
 
 describe("thread-scoped chat keys", () => {
@@ -528,6 +541,8 @@ describe("mergeGroupedChatThreadPages", () => {
             usedAnonymization: false,
             context: EMPTY_THREAD_CONTEXT,
             decision: null,
+            pinState: "unpinned",
+            readState: "read",
           },
         ],
         nextCursor: "page-2",
@@ -545,6 +560,8 @@ describe("mergeGroupedChatThreadPages", () => {
                 usedAnonymization: false,
                 context: EMPTY_THREAD_CONTEXT,
                 decision: null,
+                pinState: "unpinned",
+                readState: "read",
               },
             ],
           },
@@ -561,6 +578,8 @@ describe("mergeGroupedChatThreadPages", () => {
             usedAnonymization: false,
             context: EMPTY_THREAD_CONTEXT,
             decision: null,
+            pinState: "unpinned",
+            readState: "read",
           },
           {
             createdAt: "2026-05-16T06:00:00.000Z",
@@ -571,6 +590,8 @@ describe("mergeGroupedChatThreadPages", () => {
             usedAnonymization: false,
             context: EMPTY_THREAD_CONTEXT,
             decision: null,
+            pinState: "unpinned",
+            readState: "read",
           },
         ],
         nextCursor: null,
@@ -588,6 +609,8 @@ describe("mergeGroupedChatThreadPages", () => {
                 usedAnonymization: false,
                 context: EMPTY_THREAD_CONTEXT,
                 decision: null,
+                pinState: "unpinned",
+                readState: "read",
               },
               {
                 createdAt: "2026-05-16T05:00:00.000Z",
@@ -598,6 +621,8 @@ describe("mergeGroupedChatThreadPages", () => {
                 usedAnonymization: false,
                 context: EMPTY_THREAD_CONTEXT,
                 decision: null,
+                pinState: "unpinned",
+                readState: "read",
               },
             ],
           },
@@ -614,6 +639,8 @@ describe("mergeGroupedChatThreadPages", () => {
                 usedAnonymization: false,
                 context: EMPTY_THREAD_CONTEXT,
                 decision: null,
+                pinState: "unpinned",
+                readState: "read",
               },
               {
                 createdAt: "2026-05-16T04:00:00.000Z",
@@ -624,6 +651,8 @@ describe("mergeGroupedChatThreadPages", () => {
                 usedAnonymization: false,
                 context: EMPTY_THREAD_CONTEXT,
                 decision: null,
+                pinState: "unpinned",
+                readState: "read",
               },
             ],
           },
@@ -789,7 +818,7 @@ describe("buildSendRequestBody", () => {
     });
   });
 
-  test("carries a computer run target and leaves the cloud default unsent", () => {
+  test("names the Run on choice, cloud included, and nothing without one", () => {
     const threadId = toChatThreadId("thread-A");
     const bodyFor = (runTarget: ChatRunTarget | undefined) =>
       buildSendRequestBody({
@@ -804,9 +833,12 @@ describe("buildSendRequestBody", () => {
       harness: "codex",
       model: "gpt-5-codex",
       approvals: "full_auto",
+      reasoningEffort: null,
     };
     expect(bodyFor(local).runTarget).toEqual(local);
-    expect("runTarget" in bodyFor({ kind: "cloud" })).toBe(false);
+    // The server runs a send that names no target where its thread runs, so
+    // a member who picked cloud on a thread that ran on a computer must say so.
+    expect(bodyFor({ kind: "cloud" }).runTarget).toEqual({ kind: "cloud" });
     expect("runTarget" in bodyFor(undefined)).toBe(false);
   });
 
@@ -1911,6 +1943,8 @@ describe("chat runtime", () => {
       reloadThread: () => {},
     });
 
+    expect(runtime.getSnapshot().turnsStarted).toBe(0);
+
     await runtime.reload();
 
     expect(requests).toHaveLength(1);
@@ -1920,6 +1954,8 @@ describe("chat runtime", () => {
         turnIntent: CHAT_TURN_INTENT.regenerate,
       },
     });
+    // A retry is a turn the page started, which the turn announcer reads.
+    expect(runtime.getSnapshot().turnsStarted).toBe(1);
   });
 
   test("streams reasoning-first chunks through tanstack ChatClient", async () => {
@@ -2563,7 +2599,7 @@ describe("chat runtime", () => {
   }: Awaited<ReturnType<typeof sendWhileInterruptPending>>) => {
     expect(requests).toHaveLength(2);
     expect(requests.at(1)).toMatchObject({
-      data: { message: { id: followUpMessageId } },
+      forwardedProps: { message: { id: followUpMessageId } },
     });
     expect(requests.at(1)).not.toHaveProperty("resume");
     expect(requests.at(1)).not.toHaveProperty("parentRunId");
@@ -3352,15 +3388,14 @@ describe("acquireChatRuntime reconcile", () => {
     },
   ];
 
-  test.each([
+  for (const { code, reported } of [
     { code: "provider_unavailable", reported: false },
     { code: "local_runner_needs_login", reported: false },
     { code: ACTION_ADMISSION_CODES.concurrencyBusy, reported: false },
     { code: "unknown", reported: true },
     { code: undefined, reported: true },
-  ])(
-    "reports a run error with code $code only when the server left it unclassified",
-    async ({ code, reported }) => {
+  ]) {
+    test(`reports a run error with code ${String(code)} only when the server left it unclassified`, async () => {
       const capture = spyOn(getAnalytics(), "captureError").mockImplementation(
         () => undefined,
       );
@@ -3400,8 +3435,8 @@ describe("acquireChatRuntime reconcile", () => {
           options.fingerprintKey === "acquireChatRuntime:failure",
       );
       expect(reports).toHaveLength(reported ? 1 : 0);
-    },
-  );
+    });
+  }
 
   test("shows a rejected native approval continuation as the thread error", async () => {
     const requests: unknown[] = [];
@@ -3667,6 +3702,10 @@ describe("acquireChatRuntime reconcile", () => {
       queryClient,
     });
     expect(afterRefetch).not.toBe(handoff);
+    // Replacing the runtime is not a turn: the page's count of the turns it
+    // started on the thread goes on, so the turn announcer hears no change.
+    expect(handoff.getSnapshot().turnsStarted).toBe(1);
+    expect(afterRefetch.getSnapshot().turnsStarted).toBe(1);
   });
 
   test("replaces an errored runtime with a stranded tool part", async () => {
@@ -3711,10 +3750,22 @@ describe("acquireChatRuntime reconcile", () => {
       type: "tool-call",
     });
 
+    // The server accepted the turn before it failed, so the stored thread
+    // holds the message the page sent.
     const reconciled = acquireChatRuntime({
       activeOrganizationId,
       context: { allowMissingThread: true },
-      data: newerThreadData(),
+      data: buildThreadData({
+        lastActivityAt: "2026-07-08T10:00:00.000Z",
+        messages: [
+          createMessage("22222222-2222-4222-8222-2222222222e1"),
+          {
+            id: assistantMessageId,
+            role: "assistant",
+            parts: [{ type: "text", content: "Ahoj!" }],
+          },
+        ],
+      }),
       key: threadRef,
       queryClient,
     });

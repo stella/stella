@@ -4,9 +4,15 @@ import { useTranslations } from "use-intl";
 
 import { MCP_HTTP_PATH } from "@stll/api-contract";
 import { sanitizeHref } from "@stll/decision-reader/sanitize-href";
+import { TruncatedText } from "@stll/ui/truncated-text";
 
 import { AIProviderIcon } from "@/components/ai-provider-icons";
-import { CopyActionButton } from "@/components/copy-action-button";
+import {
+  ASSISTANT_ADDRESS_ROW_CLASS,
+  ASSISTANT_GUIDE_TILE_CLASS,
+  AssistantSetupCard,
+} from "@/components/assistant-setup.pending";
+import { CopyControl } from "@/components/copy-control";
 import { externalApiOrigin } from "@/lib/api-origins";
 import { CONNECT_AI_ASSISTANT_DOCS_URL } from "@/lib/consts";
 
@@ -63,19 +69,20 @@ export const AssistantSetup = ({
         <span className="text-muted-foreground text-xs">
           {t("agentSetup.addressLabel")}
         </span>
-        <div className="bg-muted flex items-center gap-2 rounded-lg py-1 ps-3 pe-1">
-          <code
-            className="text-foreground min-w-0 flex-1 truncate font-mono text-sm"
+        <div className={ASSISTANT_ADDRESS_ROW_CLASS}>
+          <TruncatedText
+            className="text-foreground flex-1 font-mono text-sm"
             dir="ltr"
+            render={<code />}
           >
             {mcpUrl}
-          </code>
-          <CopyActionButton size="sm" text={mcpUrl} variant="default" />
+          </TruncatedText>
+          <CopyControl size="sm" text={mcpUrl} variant="default" />
         </div>
       </div>
       <div className="text-muted-foreground flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
         <span>{t("agentSetup.selfSetupHint")}</span>
-        <CopyActionButton
+        <CopyControl
           label={t("agentSetup.copy")}
           size="xs"
           text={instructions}
@@ -90,20 +97,7 @@ export const AssistantSetup = ({
     return body;
   }
 
-  return (
-    <section
-      aria-labelledby="assistant-setup-title"
-      className="bg-background ring-border flex flex-col gap-3 rounded-xl p-5 shadow-xs/5 ring-1"
-    >
-      <h2
-        className="text-foreground text-base font-medium text-balance"
-        id="assistant-setup-title"
-      >
-        {t("agentSetup.title")}
-      </h2>
-      {body}
-    </section>
-  );
+  return <AssistantSetupCard>{body}</AssistantSetupCard>;
 };
 
 const GuideTile = ({
@@ -114,7 +108,7 @@ const GuideTile = ({
 }: React.PropsWithChildren<{ href: string; label: string; name: string }>) => (
   <a
     aria-label={label}
-    className="bg-muted/60 text-foreground hover:bg-muted flex min-h-11 flex-1 items-center justify-center gap-2.5 rounded-xl px-4 py-2.5 text-sm font-medium"
+    className={ASSISTANT_GUIDE_TILE_CLASS}
     href={sanitizeHref(href)}
     rel="noreferrer"
     target="_blank"

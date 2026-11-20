@@ -641,11 +641,7 @@ export const enumerateSources = (
     .map((file) => ({ file }));
 };
 
-const PULL_REQUEST_TRIGGERS = [
-  "pull_request",
-  "pull_request_target",
-  "merge_group",
-];
+const PULL_REQUEST_TRIGGERS = ["pull_request", "merge_group"];
 
 const workflowTriggers = (workflow: unknown): string[] => {
   const triggers = isRecord(workflow) ? workflow["on"] : undefined;

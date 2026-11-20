@@ -1,0 +1,6 @@
+{
+  "create-table-references": "The new table is empty, so its chat thread, chat turn, run and runner foreign keys validate no existing rows. The referenced tables take bounded locks under 1s lock_timeout and 5s statement_timeout.",
+  "row-level-security": "Enabling and forcing RLS changes only metadata on the new empty table, bounded by 1s lock_timeout and 5s statement_timeout.",
+  "create-policy": "The owner-only and deny-application policies are metadata on the new empty table, bounded by 1s lock_timeout and 5s statement_timeout.",
+  "add-constraint": "The widened reject-reason check replaces the old one on desktop_runner_runs, which holds few rows (pruned ended runs), so validation reads them within the 5s statement_timeout and ACCESS EXCLUSIVE acquisition is bounded by the 1s lock_timeout."
+}

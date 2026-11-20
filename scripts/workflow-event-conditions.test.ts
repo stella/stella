@@ -21,7 +21,7 @@ const triggersOf = (on: unknown): Set<string> => {
   return new Set(isRecord(on) ? Object.keys(on) : []);
 };
 
-export const namedEvents = (source: string): Set<string> => {
+const namedEvents = (source: string): Set<string> => {
   const events = new Set<string>();
   // A full-line YAML comment is prose, not a condition.
   const code = source

@@ -1,4 +1,5 @@
 export const APP_FRAME_SCOPE = {
+  auth: "auth",
   none: "none",
   member: "member",
   knowledge: "knowledge",

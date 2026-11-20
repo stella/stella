@@ -17,13 +17,27 @@ export class ApiRequestError extends TaggedError("ApiRequestError")<{
   insufficientScope?: boolean | undefined;
   /** What the server said was wrong, and how to fix it, when it said so. */
   detail?: string | undefined;
+  /** The refusal's own code, when the server named one. */
+  code?: string | undefined;
+  /**
+   * The refusal's body as the server sent it, for a route whose refusal is
+   * an answer with its own shape (a 409 that says why), read by its caller.
+   */
+  refusal?: unknown;
   cause?: unknown;
 }> {}
 
 const refusalSchema = v.object({
   message: v.optional(v.string()),
   hint: v.optional(v.string()),
+  code: v.optional(v.string()),
 });
+
+/** The code a refusal's body names, if any. */
+export const refusalCode = (json: unknown): string | undefined => {
+  const parsed = v.safeParse(refusalSchema, json);
+  return parsed.success ? parsed.output.code : undefined;
+};
 
 /** The server's own words for a refusal, from its `{ message, hint }` body. */
 const refusalDetail = (json: unknown): string | undefined => {
@@ -62,6 +76,12 @@ type ApiRequest<TSchema extends v.GenericSchema> = {
   readonly method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
   /** For a route that is slow by design; the default suits the rest. */
   readonly timeoutMs?: number;
+  /**
+   * Names one write, so the server answers a repeat of it, sent again after
+   * a lost response or on a fresh token, with the first answer instead of
+   * making the change twice. Only routes that keep receipts accept one.
+   */
+  readonly idempotencyKey?: string;
 };
 
 const requestJson = async <TSchema extends v.GenericSchema>(
@@ -74,6 +94,7 @@ const requestJson = async <TSchema extends v.GenericSchema>(
     body,
     method = body === undefined ? "GET" : "POST",
     timeoutMs,
+    idempotencyKey,
   }: Omit<ApiRequest<TSchema>, "path">,
 ): Promise<Result<v.InferOutput<TSchema>, ApiRequestError>> => {
   const form = body instanceof FormData ? body : undefined;
@@ -91,6 +112,9 @@ const requestJson = async <TSchema extends v.GenericSchema>(
             ...(body === undefined || form !== undefined
               ? {}
               : { "Content-Type": "application/json" }),
+            ...(idempotencyKey === undefined
+              ? {}
+              : { "Idempotency-Key": idempotencyKey }),
           },
           method,
           ...(body === undefined ? {} : { body: form ?? JSON.stringify(body) }),
@@ -108,6 +132,8 @@ const requestJson = async <TSchema extends v.GenericSchema>(
           json: undefined,
           insufficientScope,
           detail: refusalDetail(refusal),
+          code: refusalCode(refusal),
+          refusal,
         };
       }
       const json: unknown = await response.json();
@@ -116,6 +142,8 @@ const requestJson = async <TSchema extends v.GenericSchema>(
         json,
         insufficientScope: false,
         detail: undefined,
+        code: undefined,
+        refusal: undefined,
       };
     },
     catch: (cause) =>
@@ -124,7 +152,8 @@ const requestJson = async <TSchema extends v.GenericSchema>(
   if (Result.isError(answered)) {
     return Result.err(answered.error);
   }
-  const { status, json, insufficientScope, detail } = answered.value;
+  const { status, json, insufficientScope, detail, code, refusal } =
+    answered.value;
   if (json === undefined) {
     return Result.err(
       new ApiRequestError({
@@ -132,6 +161,8 @@ const requestJson = async <TSchema extends v.GenericSchema>(
         status,
         insufficientScope,
         detail,
+        code,
+        refusal,
       }),
     );
   }

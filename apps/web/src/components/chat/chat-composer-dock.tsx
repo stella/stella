@@ -13,12 +13,19 @@ import { ConversationScrollButton } from "@/components/ai-elements/conversation"
 import { AnonymizationPreviewCard } from "@/components/chat/anonymization-preview";
 import { BrowserExtensionChip } from "@/components/chat/browser-extension-chip";
 import {
+  CHAT_COMPOSER_DOCK_END_CLASS,
+  CHAT_COMPOSER_DOCK_START_CLASS,
+} from "@/components/chat/chat-composer-dock.pending";
+import {
   ChatContextMeter,
   type ChatContextUsage,
 } from "@/components/chat/chat-context-meter";
 import { ChatMockModelBadge } from "@/components/chat/chat-mock-model-badge";
-import type { ComposerModelsMenuProps } from "@/components/chat/chat-model-options-menu";
-import { ChatModelSelector } from "@/components/chat/chat-model-selector";
+import {
+  chatRunOnTarget,
+  type ComposerModelsMenuProps,
+} from "@/components/chat/chat-model-options-menu";
+import { ChatComposerChips } from "@/components/chat/chat-model-selector";
 import { ChatAnonymizedToggle } from "@/features/chat/components/chat-anonymized-toggle";
 import { ChatWebSearchToggle } from "@/features/chat/components/chat-web-search-toggle";
 import { guideAnchor } from "@/features/guides/guide-anchor";
@@ -42,8 +49,13 @@ type ChatComposerNewThreadPrompt = {
 type ChatComposerDockCommonProps = {
   threadRef: ChatThreadRef;
   guideAnchorsEnabled?: boolean;
-  /** Model picker rendered beside the context meter when the surface has one. */
-  models?: ComposerModelsMenuProps | undefined;
+  /**
+   * Model picker rendered beside the context meter, with where the thread's
+   * turns run. Required, so a surface cannot drop the Run on choice by
+   * leaving a prop out; `null` only where the surface pins the model or has
+   * no thread to choose for yet.
+   */
+  models: ComposerModelsMenuProps | null;
   /**
    * Genuine per-surface leading context, rendered first in the start
    * cluster: the main-chat matter picker, or the file overlay's
@@ -73,7 +85,7 @@ type ChatComposerDockProps = ChatComposerDockCommonProps &
 type ChatComposerDockRenderState = {
   disabled: boolean;
   endExtras: ReactNode | undefined;
-  models?: ComposerModelsMenuProps | undefined;
+  models: ComposerModelsMenuProps | null;
   onNewThread: (() => void) | null;
   newThreadPrompt: ChatComposerNewThreadPrompt | undefined;
 } & (
@@ -140,8 +152,14 @@ export const ChatComposerDock = (props: ChatComposerDockProps) => {
   const renderState = resolveChatComposerDockRenderState(props);
   const { disabled, endExtras, models, newThreadPrompt, onNewThread } =
     renderState;
+  // The switch governs stella's web tools on cloud turns. A coding agent on
+  // the member's computer always has its own web search, so the switch would
+  // say nothing true there.
+  const runsOnComputer =
+    models !== null && chatRunOnTarget(models.runTarget).kind === "local";
   const showWebSearch =
-    renderState.status === "pending" || renderState.data.webSearchAvailable;
+    !runsOnComputer &&
+    (renderState.status === "pending" || renderState.data.webSearchAvailable);
   const webSearchEnabled =
     renderState.status === "ready" && renderState.data.webSearchEnabled;
   const t = useTranslations();
@@ -161,7 +179,7 @@ export const ChatComposerDock = (props: ChatComposerDockProps) => {
           // the one opposite it are together wider than the row, and a
           // `shrink-0` here would spend the difference on a horizontal
           // scrollbar. The model label truncates instead.
-          className="flex min-w-0 items-center gap-0.5"
+          className={CHAT_COMPOSER_DOCK_END_CLASS}
         >
           {/* An open prompt keeps the button that anchors it, disabled while
               the surface offers no new thread (a rotation is under way). */}
@@ -211,7 +229,7 @@ export const ChatComposerDock = (props: ChatComposerDockProps) => {
           {/* Beside the model it qualifies: while the local mock answers,
               the selected model is not the one replying. */}
           <ChatMockModelBadge />
-          {models && <ChatModelSelector models={models} />}
+          {models && <ChatComposerChips models={models} />}
           {/* The meter renders on every surface: it shows an empty ring
               for a brand-new thread (context null) and fills in once an
               estimate lands. */}
@@ -228,7 +246,7 @@ export const ChatComposerDock = (props: ChatComposerDockProps) => {
         // (muted text-xs, borderless controls), never a second toolbar.
         <div
           aria-hidden={disabled ? true : undefined}
-          className="flex min-w-0 flex-1 items-center gap-1"
+          className={CHAT_COMPOSER_DOCK_START_CLASS}
           data-slot="chat-composer-dock"
           data-status={props.status}
         >

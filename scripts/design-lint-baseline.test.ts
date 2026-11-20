@@ -117,6 +117,10 @@ test("a diagnostic code maps to its tracked rule for both plugin kinds", () => {
       "no-computed-key-record-assignment/no-computed-key-record-assignment",
     ],
     [
+      "exhaustive-union-map(exhaustive-union-map)",
+      "exhaustive-union-map/exhaustive-union-map",
+    ],
+    [
       "no-direct-status-set(no-direct-status-set)",
       "no-direct-status-set/no-direct-status-set",
     ],
@@ -163,6 +167,7 @@ test("a diagnostic code maps to its tracked rule for both plugin kinds", () => {
     "require-bounded-request-schema",
     "no-unbounded-response-body",
     "no-computed-key-record-assignment",
+    "exhaustive-union-map",
     "no-direct-status-set",
     "require-polite-publisher-fetch",
     "no-native-ui",

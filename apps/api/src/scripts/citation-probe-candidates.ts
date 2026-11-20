@@ -88,11 +88,22 @@ const BENIGN: readonly RegExp[] = [
   // rule above misses it whenever the detector's greedy tail reaches into
   // following prose that carries a date.
   /^(?:sp\.\s{0,3}zn\.|sen\.\s{0,3}zn\.|sygn\.(?:\s{1,3}akt)?|[čc]\.\s{0,3}j\.:?)\s{0,3}[Aa]nonymizov[aá]no\b/u,
+  // Czech anonymization label standing where the file number belongs ("č. j.
+  // číslo jednací ze dne …", "č. j. Číslo jednací …", "č. j. č. účtu ze dne
+  // …"): a lowercase word follows the label, never a number, so trailing prose
+  // digits must not keep it a residual. A docket-shaped number/year shortly
+  // after the label ("č. j. číslo jednací 12 C 345/2020") is a real reference.
+  /^[čc]\.\s{0,3}j\.:?\s{0,3}(?:[čČ]íslo|[čČ]\.\s{0,2}účtu)(?=\s{1,3}\p{Ll}|$)(?![^\n]{0,45}?\d{1,6}\/\d{2,4})/u,
   // Czech regional-authority file number with a space-separated office
   // code ("č. j. KUAB 12345/2020"): every krajský úřad code opens with
   // "KU", which no court registry does, and the reference is not a court
   // docket the corpus can hold.
   /^[čc]\.\s{0,3}j\.:?\s{0,3}KU\p{Lu}{2,4}\s{1,3}\d{1,7}\/\d{4}(?![\p{L}\d/-])/u,
+  // Prague City Hall file number ("č. j. MHMP 123456/2020", its "S-MHMP"
+  // file-register spelling, optionally closed by the clerk's initials): the
+  // municipal authority's code opens the reference where a court docket
+  // carries a chamber number, and the file is not a court decision.
+  /^[čc]\.\s{0,3}j\.:?\s{0,3}(?:S-)?MHMP\s{1,3}\d{1,7}\/\d{4}(?:\/\p{L}{1,8})?(?![\p{L}\d/-])/u,
   // Slovak enforcement-officer ("sp. zn. EX 1234/23") and arbitration-court
   // ("sp. zn. SR 01234/08") file numbers: the registry code opens the
   // reference with no chamber number, which every court docket carries, and

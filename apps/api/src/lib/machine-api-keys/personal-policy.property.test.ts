@@ -3,7 +3,6 @@ import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 import * as v from "valibot";
 
-import { readCapabilityCatalog } from "@stll/cli/capability-catalog-data";
 import { roles, statements } from "@stll/permissions";
 import { assertProperty, propertyTestTimeout } from "@stll/property-testing";
 
@@ -31,6 +30,7 @@ import { resolveMachineApiKeySession } from "@/api/mcp/api-key-auth";
 import { mcpMemberAuthority } from "@/api/mcp/effective-authority";
 import { McpAuthenticationError } from "@/api/mcp/errors";
 import { PLAIN_MEMBER_FACTS } from "@/api/tests/helpers/member-authorization";
+import { repositoryCapabilityCatalog } from "@/api/tests/helpers/repository-capability-catalog";
 
 const roleNames = Object.keys(roles).filter(isMemberRole);
 const roleArbitrary = fc.constantFrom(...roleNames);
@@ -44,7 +44,7 @@ const capabilityCatalog = v.parse(
       permissions: v.optional(v.nullable(machineApiKeyPermissionsSchema)),
     }),
   ),
-  readCapabilityCatalog(),
+  repositoryCapabilityCatalog,
 );
 const positiveWriteCapabilities = {
   "stella:documents_write": "entities.blank-document.create",
@@ -94,6 +94,7 @@ const verification = (permissions: Record<string, string[]>) => ({
   key: verifiedKey(permissions),
 });
 const authorizeAs = (role: (typeof roleNames)[number]) => async () => ({
+  billingAccess: false,
   memberId: "member_fixture",
   email: "member@example.test",
   role,
@@ -274,10 +275,12 @@ describe("personal API key authority", () => {
 
   test("read-only defaults carry no write permissions for any role", () => {
     for (const role of roleNames) {
-      expect(personalApiKeyPermissions(sessionMemberRole(role))).toEqual({
-        workspace: ["read"],
-        searchHistory: ["read"],
-      });
+      const permissions = personalApiKeyPermissions(sessionMemberRole(role));
+      expect(permissions["workspace"]).toEqual(["read"]);
+      expect(permissions["searchHistory"]).toEqual(["read"]);
+      for (const actions of Object.values(permissions)) {
+        expect(actions.every((action) => action === "read")).toBe(true);
+      }
     }
   });
 

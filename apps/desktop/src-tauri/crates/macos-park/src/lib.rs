@@ -12,8 +12,44 @@
 mod focused_window;
 #[cfg(target_os = "macos")]
 pub use focused_window::{
-  FocusedWindowDetails, accessibility_trusted, focused_window_details,
-  request_accessibility_permission,
+  FocusedWindowDetails, accessibility_trusted, focused_field_is_secure,
+  focused_window_details, request_accessibility_permission, text_before_cursor,
+};
+
+#[cfg(any(target_os = "macos", target_os = "windows"))]
+#[cfg_attr(
+  not(target_os = "windows"),
+  allow(
+    dead_code,
+    reason = "the Windows matcher is tested everywhere, used on Windows"
+  )
+)]
+mod hold_key_edges;
+#[cfg(any(target_os = "macos", target_os = "windows"))]
+pub use hold_key_edges::{HoldEdge, HoldKey};
+
+#[cfg(target_os = "macos")]
+mod hold_key;
+#[cfg(target_os = "macos")]
+pub use hold_key::{
+  HoldKeyListener, HoldKeyUnsupported, globe_key_usage, listen_for_hold_key,
+};
+
+#[cfg(target_os = "windows")]
+mod windows_hold_key;
+#[cfg(target_os = "windows")]
+pub use windows_hold_key::{HoldKeyListener, HoldKeyUnsupported, listen_for_hold_key};
+
+#[cfg(target_os = "macos")]
+mod idle_sleep;
+#[cfg(target_os = "macos")]
+pub use idle_sleep::{IdleSleepAssertion, on_battery_power, prevent_idle_sleep};
+
+#[cfg(target_os = "windows")]
+mod windows_idle_sleep;
+#[cfg(target_os = "windows")]
+pub use windows_idle_sleep::{
+  IdleSleepAssertion, on_battery_power, prevent_idle_sleep,
 };
 
 #[cfg(target_os = "macos")]
@@ -30,19 +66,35 @@ pub use microphone::microphone_input_bundle_ids;
 mod system_permissions;
 #[cfg(target_os = "macos")]
 pub use system_permissions::{
-  LoginItemApproval, NotificationAuthorization, login_item_approval,
-  notification_authorization, request_notification_authorization,
+  LoginItemApproval, MicrophoneAuthorization, NotificationAuthorization,
+  login_item_approval, microphone_authorization, notification_authorization,
+  request_microphone_permission, request_notification_authorization,
 };
 
 #[cfg(target_os = "macos")]
 mod text_input;
 #[cfg(target_os = "macos")]
-pub use text_input::{TypeTextError, type_text};
+pub use text_input::{FormattingKey, TypeTextError, press_key, type_text};
+
+#[cfg(target_os = "macos")]
+mod user_languages;
+#[cfg(target_os = "macos")]
+pub use user_languages::{keyboard_languages, preferred_languages};
+
+#[cfg(target_os = "macos")]
+mod work_priority;
+#[cfg(target_os = "macos")]
+pub use work_priority::prefer_user_initiated;
+
+#[cfg(target_os = "windows")]
+mod windows_languages;
+#[cfg(target_os = "windows")]
+pub use windows_languages::{keyboard_languages, preferred_languages};
 
 #[cfg(target_os = "macos")]
 mod window_bounds;
 #[cfg(target_os = "macos")]
-pub use window_bounds::{WindowBounds, largest_window_bounds};
+pub use window_bounds::{WindowBounds, frontmost_window_number, largest_window_bounds};
 
 #[cfg(any(target_os = "macos", target_os = "windows"))]
 mod process_identity;
@@ -50,6 +102,30 @@ mod process_identity;
 pub use process_identity::parent_process_id;
 #[cfg(target_os = "windows")]
 pub use process_identity::{create_owner_only_pipe, named_pipe_client_process_id};
+
+/// Why the operating system could not decode a recording.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SystemAudioError {
+  /// No decoder on this computer reads the file.
+  Unsupported,
+  /// The file stopped decoding partway, or reported an impossible format.
+  Unreadable,
+}
+
+#[cfg(target_os = "macos")]
+mod system_audio;
+#[cfg(target_os = "macos")]
+pub use system_audio::SystemAudioReader;
+
+#[cfg(target_os = "windows")]
+mod system_audio_windows;
+#[cfg(target_os = "windows")]
+pub use system_audio_windows::SystemAudioReader;
+
+#[cfg(target_os = "windows")]
+mod windows_password_field;
+#[cfg(target_os = "windows")]
+pub use windows_password_field::focused_field_is_secure;
 
 #[cfg(target_os = "windows")]
 mod windows_window;
@@ -67,4 +143,5 @@ mod park;
 pub use park::{
   disable_occlusion_detection, is_panel_presented, park_window,
   prepare_transient_overlay, present_activating_window, present_key_panel,
+  present_passive_overlay,
 };

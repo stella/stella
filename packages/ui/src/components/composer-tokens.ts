@@ -65,9 +65,13 @@ export const COMPOSER_LARGE_TEXT_WELL_CLASS = "ps-3 pe-3 pt-2 pb-1";
 /** The `large` editable element's stature: three lines before it grows. */
 export const COMPOSER_LARGE_EDITOR_CLASS = "min-h-15";
 
-/** The placeholder painted over an empty editor, in either stature. */
+/**
+ * The placeholder painted over an empty editor, in either stature.
+ * `ComposerPlaceholder` cuts its text through TruncatedText; a row that wears
+ * this class around other content cuts its own text the same way.
+ */
 export const COMPOSER_PLACEHOLDER_CLASS =
-  "text-foreground-placeholder pointer-events-none absolute truncate text-sm";
+  "text-foreground-placeholder pointer-events-none absolute text-sm";
 
 /** The `large` action row under the text well: leading controls, trailing send. */
 export const COMPOSER_LARGE_ACTION_ROW_CLASS =
@@ -92,3 +96,15 @@ export const COMPOSER_SEND_BUTTON_CLASS =
  */
 export const COMPOSER_PICKER_TRIGGER_CLASS =
   "text-muted-foreground hover:text-foreground hover:bg-accent inline-flex min-w-0 shrink items-center gap-1 rounded-md px-1.5 py-0.5 text-2xs";
+
+/**
+ * The slim status row under a composer box (`ComposerStatusRow`), with a
+ * middle slot: three columns whose sides share the remaining width, so the
+ * middle stays centred. A loading view draws the row from the same class.
+ */
+export const COMPOSER_STATUS_ROW_CENTERED_CLASS =
+  "text-muted-foreground @container mt-1.5 grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 px-1 text-xs";
+
+/** The status row without a middle slot: a start cluster and an end slot. */
+export const COMPOSER_STATUS_ROW_CLASS =
+  "text-muted-foreground mt-1.5 flex items-center justify-between gap-2 px-1 text-xs";

@@ -48,14 +48,14 @@ const DERIVE_ASK_TASK = "pdf" as const;
 
 export const DERIVE_CLAUSE_ASK_SYSTEM_PROMPT =
   "You turn a contract-review issue and its tiered rules into ONE extraction " +
-  "question. A reviewer will judge the contract against every rule while seeing " +
-  "only the answer to your question, so the question must ask for the contract's " +
-  "own wording on every term the rules cover, naming each term. Never narrow it " +
-  "to a single value. Ask WHAT the contract says, not whether it meets a rule, " +
-  "and do not mention the rules, tiers, or grading. Ask for the wording to be " +
-  "quoted verbatim and in full, at whatever length that takes, with no commentary " +
-  "and nothing said about a term the contract does not address, and for no answer " +
-  "at all when the contract does not address the issue. Write the question in " +
+  "question. A reviewer will judge the contract against every rule from what the " +
+  "answer draws on, so the question must cover every term the rules cover, naming " +
+  "each term. Never narrow it to a single value. Ask WHAT the contract says, not " +
+  "whether it meets a rule, and do not mention the rules, tiers, or grading. Do " +
+  "not say how long the answer should be or whether to quote: the answer's format " +
+  "is set separately for each document. Ask for nothing to be said about a term " +
+  "the contract does not address, and for no answer at all when the contract does " +
+  "not address the issue. Write the question in " +
   'the language of the issue, in under 800 characters. Set contentType to "text".';
 
 export const DERIVE_CONSTRAINT_ASK_SYSTEM_PROMPT =
@@ -114,7 +114,8 @@ export type DeriveAskGenerate = (input: {
 
 // Not destructured in the parameter: the ownership-id lint rule needs the
 // branded type visible on the binding, which the aliased object type hides.
-const defaultDeriveAskGenerate: DeriveAskGenerate = async (input) => {
+/** Wrapped by the playbook clause eval to compare question prompts. @public */
+export const defaultDeriveAskGenerate: DeriveAskGenerate = async (input) => {
   const {
     admission,
     system,

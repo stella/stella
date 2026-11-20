@@ -23,6 +23,11 @@ const SUBJECT_FREE_ROUTES = [
   // the redistribution gate the subject factory would apply per row is
   // applied once, to the source catalogue, so a withheld feed reaches none
   // of the figures.
+  // The browse tree names courts and periods, never a decision: its court
+  // list reads the policy-filtered folded counts, and its calendar counts
+  // rows of a court the court list admitted.
+  "GET /case/browse/calendar",
+  "GET /case/browse/courts",
   "GET /case/coverage",
   "GET /case/decisions",
   "GET /case/decisions/facets",
@@ -86,12 +91,14 @@ describe("public decision routes are gated by construction", () => {
       .toSorted();
     expect(gated).toEqual([
       "GET /case/decisions/:decisionId",
+      "GET /case/decisions/:decisionId/anchor-redirects",
       "GET /case/decisions/:decisionId/citations",
       "GET /case/decisions/:decisionId/citations/leading",
       "GET /case/decisions/:decisionId/citations/summary",
       "GET /case/decisions/:decisionId/provisions",
       "GET /case/decisions/:decisionId/summary",
       "GET /case/decisions/by-slug/:slug",
+      "POST /case/decisions/quotes/verify",
     ]);
   });
 });

@@ -28,7 +28,7 @@ const IMAGE_MIME_PREFIX = "image/";
 const createChatMessageId = (): SafeId<"chatMessage"> =>
   toSafeId<"chatMessage">(createUuid());
 
-const toDataUrl = async (file: File) =>
+const toDataUrl = async (file: Blob) =>
   await new Promise<string>((resolve, reject) => {
     const reader = new FileReader();
     reader.addEventListener("error", () => {
@@ -83,9 +83,15 @@ export const buildChatRequestMessage = async (
         if (file.type === "pasted_text") {
           return createChatPastedTextPart(file.text);
         }
+        // A stored file goes by reference; a file picked here, inline.
         const source = {
           type: "url" as const,
-          value: await toDataUrl(file.file),
+          value:
+            file.type === "stored_file"
+              ? file.url
+              : await toDataUrl(
+                  file.file.slice(0, file.file.size, file.mimeType),
+                ),
           mimeType: file.mimeType,
         };
         const metadata = { filename: file.filename };

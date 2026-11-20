@@ -18,6 +18,7 @@ import {
 } from "@stll/ui/select";
 import { Skeleton } from "@stll/ui/skeleton";
 import { stellaToast } from "@stll/ui/toast";
+import { TruncatedText } from "@stll/ui/truncated-text";
 
 import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { RunSizeConfirmDialog } from "@/components/usage/run-size-confirm-dialog";
@@ -37,6 +38,7 @@ import { entitySummariesOptions } from "@/lib/workspaces/queries/entities";
 import { flowRunsKeys } from "@/lib/workspaces/queries/flow-runs";
 
 import { filterEntitiesByName } from "./run-launcher.logic";
+import { RunLauncherFrame, RunLauncherSkeleton } from "./run-launcher.pending";
 
 type RunLauncherProps = {
   workspaceId: string;
@@ -138,7 +140,11 @@ export const RunLauncher = ({
     onStarted(response.data.runId);
   };
 
-  if (flowsDataView.type === "pending" || flowsDataView.type === "error") {
+  if (flowsDataView.type === "pending") {
+    return <RunLauncherSkeleton />;
+  }
+
+  if (flowsDataView.type === "error") {
     return <QueryViewFeedback view={flowsDataView} />;
   }
 
@@ -156,7 +162,7 @@ export const RunLauncher = ({
   }
 
   return (
-    <div className="grid gap-4 rounded-lg border p-4">
+    <RunLauncherFrame>
       <QueryViewFeedback view={flowsDataView} />
       <div className="grid gap-1.5">
         <Label htmlFor="flow-run-definition">
@@ -217,9 +223,9 @@ export const RunLauncher = ({
                 checked={selectedEntityIds.includes(entity.id)}
                 onCheckedChange={(checked) => toggleEntity(entity.id, checked)}
               />
-              <span className="truncate text-sm font-normal" dir="auto">
+              <TruncatedText className="text-sm font-normal" dir="auto">
                 {entity.name}
-              </span>
+              </TruncatedText>
             </Label>
           ))}
         </div>
@@ -260,6 +266,6 @@ export const RunLauncher = ({
           {t("common.start")}
         </Button>
       </div>
-    </div>
+    </RunLauncherFrame>
   );
 };

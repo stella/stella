@@ -4,6 +4,7 @@ import { activeLegalDocumentRef } from "@/components/ai-suggestions/active-legal
 import type { ActiveLegalDocument } from "@/components/ai-suggestions/active-legal-document";
 import { createChatComposerDocument } from "@/components/chat-editor-markdown.logic";
 import { toChatMentionNodeAttrs } from "@/components/chat-mention-node-attrs";
+import { INSPECTOR_FOCUS_INTENT } from "@/components/inspector/inspector-store-types";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { ensureLegalDocumentChatThread } from "@/features/chat/legal-document-chat-threads";
 import {
@@ -59,6 +60,7 @@ export const openPublicLawChat = ({
     id: threadId,
     label,
     ...(documentKey === undefined ? {} : { activeLegalKey: documentKey }),
+    focus: INSPECTOR_FOCUS_INTENT.claim,
   });
 };
 
@@ -96,7 +98,11 @@ export const askPublicLawInChat = ({
     threadId: createChatThreadId(),
   };
   queueChatSend(threadRef, html);
-  useInspectorTabsStore.getState().openChat({ id: threadRef.threadId, label });
+  useInspectorTabsStore.getState().openChat({
+    id: threadRef.threadId,
+    label,
+    focus: INSPECTOR_FOCUS_INTENT.claim,
+  });
 };
 
 /**

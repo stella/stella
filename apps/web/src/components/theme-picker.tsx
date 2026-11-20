@@ -10,6 +10,10 @@ import {
   MenuTrigger,
 } from "@stll/ui/menu";
 
+import {
+  PickerTriggerIcon,
+  pickerTriggerProps,
+} from "@/components/picker-trigger.pending";
 import { THEMES, useTheme } from "@/components/theme-provider";
 
 const THEME_ICON = {
@@ -27,9 +31,9 @@ export const ThemePicker = () => {
     <Menu>
       <MenuTrigger
         aria-label={t("appearance.theme")}
-        render={<Button size="sm" variant="outline" />}
+        render={<Button {...pickerTriggerProps} />}
       >
-        <TriggerIcon className="size-4" />
+        <PickerTriggerIcon icon={TriggerIcon} />
         {t(`appearance.${theme}`)}
       </MenuTrigger>
       <MenuPopup side="bottom">

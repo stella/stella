@@ -6,7 +6,11 @@ import type {
   TableChartRequest,
 } from "@stll/api-contract/table-chart";
 
-import { chartTableFromNode, tableChartPoints } from "./table-chart.logic";
+import {
+  chartTableFromNode,
+  tableChartPoints,
+  tableChartValueLabel,
+} from "./table-chart.logic";
 
 const table = {
   headers: ["Month", "Hours"],
@@ -172,4 +176,39 @@ test("parsed inline markup contributes text rather than markdown syntax", () => 
     rows: [["June", "12"]],
   });
   expect(chartTableFromNode(undefined)).toBeNull();
+});
+
+test("the value axis names its one value column and leaves several to the legend", () => {
+  expect(tableChartValueLabel({ table, plan })).toBe("Hours");
+  const twoValues = {
+    headers: ["Month", "Hours billed", "Hours written off"],
+    rows: [["June", "12", "1.5"]],
+  } satisfies TableChartRequest;
+  expect(
+    tableChartValueLabel({
+      table: twoValues,
+      plan: {
+        ...plan,
+        columns: [
+          { index: 0, role: "label" },
+          { index: 1, role: "y" },
+          { index: 2, role: "y" },
+        ],
+      },
+    }),
+  ).toBeUndefined();
+  // A column left out of the chart does not count as a value.
+  expect(
+    tableChartValueLabel({
+      table: twoValues,
+      plan: {
+        ...plan,
+        columns: [
+          { index: 0, role: "label" },
+          { index: 1, role: "y" },
+          { index: 2, role: "ignore" },
+        ],
+      },
+    }),
+  ).toBe("Hours billed");
 });

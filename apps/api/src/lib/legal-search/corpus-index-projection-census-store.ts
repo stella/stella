@@ -1,5 +1,5 @@
 import { panic } from "better-result";
-import { and, asc, eq, gt, inArray, isNotNull, sql } from "drizzle-orm";
+import { and, asc, eq, gt, inArray, isNotNull, lte, sql } from "drizzle-orm";
 
 import { isUuid } from "@stll/uuid-codec";
 
@@ -19,7 +19,10 @@ import { CORPUS_PROJECTION_DELETE_MAX_REVISIONS } from "@/api/lib/legal-search/c
 import {
   corpusProjectionAcceptedAppendCleanupFence,
   corpusProjectionAppendIsPublished,
+  corpusProjectionRetiredRevisionRunnableAt,
 } from "@/api/lib/legal-search/corpus-index-projection-publish-fence";
+import { revokeCorpusIndexRouteProofTx } from "@/api/lib/legal-search/corpus-index-route-proof-store";
+import { logger } from "@/api/lib/observability/logger";
 import { brandValidatedCorpusIndexProjectionIntentId } from "@/api/lib/safe-id-boundaries";
 import { isRecord } from "@/api/lib/type-guards";
 
@@ -46,13 +49,26 @@ type CorpusProjectionCensusPageOptions = {
   generation: string;
   indexId: string;
   after: string | null;
+  /**
+   * The last key the walk reads, captured when it began: what sorts after it
+   * arrived later and was proven by its own transition, so a walk under
+   * inflow still ends. Omitted, the walk runs to the current end.
+   */
+  through?: string;
   limit: number;
 };
 
 const validateCensusPage = ({
   after,
+  through,
   limit,
-}: Pick<CorpusProjectionCensusPageOptions, "after" | "limit">): void => {
+}: Pick<
+  CorpusProjectionCensusPageOptions,
+  "after" | "through" | "limit"
+>): void => {
+  if (through !== undefined && !isUuid(through)) {
+    return panic("Corpus projection census bound must be a UUID");
+  }
   if (
     !Number.isSafeInteger(limit) ||
     limit < 1 ||
@@ -142,6 +158,9 @@ export const readAppliedCorpusProjectionCensusPageTx = async (
         options.after === null
           ? undefined
           : gt(corpusIndexProjectionStates.entityId, options.after),
+        options.through === undefined
+          ? undefined
+          : lte(corpusIndexProjectionStates.entityId, options.through),
       ),
     )
     .orderBy(asc(corpusIndexProjectionStates.entityId))
@@ -209,9 +228,11 @@ type RepairAppliedCorpusProjectionDriftOptions = {
 };
 
 /**
- * Fence still-authoritative broken revisions into exact cleanup. The explicit
- * repair state makes the unchanged desired epoch runnable again only after
- * that cleanup settles, without moving applied history backward.
+ * Fence still-authoritative broken revisions into exact cleanup and stop
+ * serving them. The state is marked `repair_scheduled` first because the
+ * intent guard admits retiring a revision at its own desired epoch only for
+ * that state; it is un-named last because the state guard admits that only
+ * once the revision has left `applied`.
  */
 export const repairAppliedCorpusProjectionDriftTx = async (
   tx: Transaction,
@@ -299,12 +320,58 @@ export const repairAppliedCorpusProjectionDriftTx = async (
       ),
     )
     .returning({ id: corpusIndexProjectionIntents.id });
+  // The copy is drift, so the state stops naming it and becomes a first
+  // append: it needs work until a re-append lands, whatever a failed attempt
+  // charges short of `blocked`. The re-append waits for the retired revision
+  // to settle, so the state is queued for the append walk at the instant it
+  // can have settled.
+  // audit: skip - applied-state bookkeeping on the derived public corpus projection
+  const unnamed = await tx
+    .update(corpusIndexProjectionStates)
+    .set({
+      appliedAction: null,
+      appliedEpoch: null,
+      appliedRevision: null,
+      appliedFingerprint: null,
+      appliedIndexId: null,
+      appliedAt: null,
+      updatedAt: corpusProjectionRetiredRevisionRunnableAt(
+        manifest,
+        corpusIndexProjectionStates.appliedRevision,
+      ),
+    })
+    .where(
+      and(
+        eq(corpusIndexProjectionStates.family, options.family),
+        eq(corpusIndexProjectionStates.generation, options.generation),
+        inArray(corpusIndexProjectionStates.appliedRevision, revisions),
+      ),
+    )
+    .returning({ entityId: corpusIndexProjectionStates.entityId });
   if (
     scheduled.length !== candidates.length ||
-    retired.length !== candidates.length
+    retired.length !== candidates.length ||
+    unnamed.length !== candidates.length
   ) {
     return panic("Corpus projection census repair lost its state fence");
   }
+  // The route held a copy other than PostgreSQL's record, so whatever proved
+  // it no longer does; only a pass started after this repair proves it again.
+  await revokeCorpusIndexRouteProofTx(
+    tx,
+    {
+      family: options.family,
+      generation: options.generation,
+      indexId: options.indexId,
+    },
+    "present_drift",
+  );
+  logger.info("corpus_projection.repair_pending_reappend", {
+    family: options.family,
+    generation: options.generation,
+    index: options.indexId,
+    revisions: unnamed.length,
+  });
   return retired.length;
 };
 
@@ -315,10 +382,10 @@ type CorpusProjectionCensusScope = Pick<
 
 /**
  * Every index a full census of the generation covers: each index an applied
- * projection names, and each index a settled revision was written to. A loose
- * index scan over the two census indexes reads one row per distinct index id,
- * never the generation; the partial-index predicates are spelled as literals
- * so the planner can match them.
+ * projection names, and each index a settled or withdrawn revision was
+ * written to. A loose index scan over each census index reads one row per
+ * distinct index id, never the generation; the partial-index predicates are
+ * spelled as literals so the planner can match them.
  */
 export const readCorpusProjectionCensusIndexIdsTx = async (
   tx: Transaction,
@@ -333,6 +400,9 @@ export const readCorpusProjectionCensusIndexIdsTx = async (
   const settledScope = sql`${intents.family} = ${family}
     AND ${intents.generation} = ${generation}
     AND ${intents.status} = 'settled'`;
+  const withdrawnScope = sql`${intents.family} = ${family}
+    AND ${intents.generation} = ${generation}
+    AND ${intents.status} = 'withdrawn'`;
   const result: unknown = await tx.execute(sql`
     WITH RECURSIVE applied_index(index_id) AS (
       (
@@ -369,10 +439,30 @@ export const readCorpusProjectionCensusIndexIdsTx = async (
       )
       FROM settled_index
       WHERE settled_index.index_id IS NOT NULL
+    ),
+    withdrawn_index(index_id) AS (
+      (
+        SELECT ${intents.indexId} FROM ${intents}
+        WHERE ${withdrawnScope}
+        ORDER BY ${intents.indexId}
+        LIMIT 1
+      )
+      UNION ALL
+      SELECT (
+        SELECT ${intents.indexId} FROM ${intents}
+        WHERE ${withdrawnScope}
+          AND ${intents.indexId} > withdrawn_index.index_id
+        ORDER BY ${intents.indexId}
+        LIMIT 1
+      )
+      FROM withdrawn_index
+      WHERE withdrawn_index.index_id IS NOT NULL
     )
     SELECT index_id AS "indexId" FROM applied_index WHERE index_id IS NOT NULL
     UNION
     SELECT index_id AS "indexId" FROM settled_index WHERE index_id IS NOT NULL
+    UNION
+    SELECT index_id AS "indexId" FROM withdrawn_index WHERE index_id IS NOT NULL
     ORDER BY "indexId"
   `);
   return executedRows(result).map((row) =>
@@ -382,7 +472,13 @@ export const readCorpusProjectionCensusIndexIdsTx = async (
   );
 };
 
-/** Bounded retired revisions that the engine must no longer contain. */
+/**
+ * Bounded revisions that the engine must no longer contain: settled ones,
+ * whose delete was proven, and withdrawn ones, which an exact census found
+ * empty once their offline indexer had ended. One page in revision order over
+ * both: each status is read in order from its own partial index, never the
+ * other's history, and the two ordered reads merge.
+ */
 export const readSettledCorpusProjectionCensusPageTx = async (
   tx: Transaction,
   options: CorpusProjectionCensusPageOptions,
@@ -400,21 +496,40 @@ export const readSettledCorpusProjectionCensusPageTx = async (
       ? null
       : (brandValidatedCorpusIndexProjectionIntentId(options.after) ??
         panic("Lost validated corpus projection census cursor"));
-  const candidates = await tx
-    .select({ revision: corpusIndexProjectionIntents.id })
-    .from(corpusIndexProjectionIntents)
-    .where(
-      and(
-        eq(corpusIndexProjectionIntents.family, options.family),
-        eq(corpusIndexProjectionIntents.generation, options.generation),
-        eq(corpusIndexProjectionIntents.indexId, options.indexId),
-        eq(corpusIndexProjectionIntents.status, "settled"),
-        afterRevision === null
-          ? undefined
-          : gt(corpusIndexProjectionIntents.id, afterRevision),
-      ),
-    )
-    .orderBy(asc(corpusIndexProjectionIntents.id))
-    .limit(options.limit);
+  const throughRevision =
+    options.through === undefined
+      ? null
+      : (brandValidatedCorpusIndexProjectionIntentId(options.through) ??
+        panic("Lost validated corpus projection census bound"));
+  const absentWith = (status: "settled" | "withdrawn") =>
+    tx
+      .select({ revision: corpusIndexProjectionIntents.id })
+      .from(corpusIndexProjectionIntents)
+      .where(
+        and(
+          eq(corpusIndexProjectionIntents.family, options.family),
+          eq(corpusIndexProjectionIntents.generation, options.generation),
+          eq(corpusIndexProjectionIntents.indexId, options.indexId),
+          eq(corpusIndexProjectionIntents.status, status),
+          afterRevision === null
+            ? undefined
+            : gt(corpusIndexProjectionIntents.id, afterRevision),
+          throughRevision === null
+            ? undefined
+            : lte(corpusIndexProjectionIntents.id, throughRevision),
+        ),
+      )
+      .orderBy(asc(corpusIndexProjectionIntents.id))
+      .limit(options.limit);
+  const [settled, withdrawn] = [
+    await absentWith("settled"),
+    await absentWith("withdrawn"),
+  ];
+  // Lowercase hex UUIDs order as strings exactly as PostgreSQL orders them,
+  // so the merged page continues where the cursor says. A revision has one
+  // status, so the two reads never share one.
+  const candidates = [...settled, ...withdrawn]
+    .toSorted((left, right) => (left.revision < right.revision ? -1 : 1))
+    .slice(0, options.limit);
   return censusPage(candidates, options.limit, ({ revision }) => revision);
 };

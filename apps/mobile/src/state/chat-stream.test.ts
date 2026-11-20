@@ -1,7 +1,29 @@
-import { Result } from "better-result";
-import { describe, expect, test } from "bun:test";
+import { panic, Result } from "better-result";
+import { afterEach, describe, expect, jest, test } from "bun:test";
 
 import { CHAT_TURN_ID_HEADER } from "@stll/api-contract";
+import {
+  CHAT_COMMAND_ERROR_CODE,
+  CHAT_COMMAND_ID_HEADER,
+  CHAT_COMMAND_MAX_RETRIES,
+  chatCommandOutcomeOf,
+} from "@stll/api-contract/chat-command";
+import {
+  CHAT_CONTEXT_NOTICE_EVENTS,
+  CHAT_CONTEXT_NOTICE_METADATA_KEY,
+} from "@stll/api-contract/chat-context-notice";
+import type { ChatContextNotice } from "@stll/api-contract/chat-context-notice";
+import { CHAT_LOCAL_RUN_PARENT_CALL_METADATA_KEY } from "@stll/api-contract/chat-local-run-tool";
+import { CHAT_SEND_QUEUES_INSTEAD_CODE } from "@stll/api-contract/chat-queue";
+import {
+  CHAT_TURN_STEERING,
+  CHAT_TURN_STEERING_EVENT,
+} from "@stll/api-contract/chat-send-intent";
+import {
+  SSE_HEARTBEAT_FRAME,
+  SSE_HEARTBEAT_INTERVAL_MS,
+  SSE_SILENCE_BOUND_MS,
+} from "@stll/api-contract/sse-heartbeat";
 
 import type { Fetch } from "@/connection/http";
 import {
@@ -10,16 +32,19 @@ import {
   type StoredSession,
 } from "@/connection/session";
 
+import { queuesInstead } from "./chat-queue";
 import {
   answerEntry,
   applyChatEvent,
   cancelChatTurn,
+  chatRegenerateBody,
   chatSendBody,
   createSseParser,
   EMPTY_ANSWER,
   joinChatTurn,
   parseChatEvent,
   probeChatTurn,
+  regenerateChatTurn,
   sendChatMessage,
   streamConnectTimeout,
 } from "./chat-stream";
@@ -65,6 +90,7 @@ const THREAD_ID = "00000000-0000-7000-8000-000000000002";
 const MESSAGE_ID = "00000000-0000-7000-8000-000000000001";
 const ANSWER_ID = "00000000-0000-7000-8000-000000000003";
 const TURN_ID = "00000000-0000-7000-8000-000000000004";
+const COMMAND_ID = "00000000-0000-4000-8000-000000000005";
 
 /** The shape of a recorded run: text, a tool, more text, then the end. */
 const RUN_EVENTS = [
@@ -85,6 +111,13 @@ const RUN_EVENTS = [
   },
   { type: "TOOL_CALL_ARGS", toolCallId: "call-1", delta: "{}" },
   { type: "TOOL_CALL_END", toolCallId: "call-1" },
+  {
+    type: "TOOL_CALL_RESULT",
+    messageId: ANSWER_ID,
+    toolCallId: "call-1",
+    content: '{"templates":[]}',
+    role: "tool",
+  },
   { type: "TEXT_MESSAGE_START", messageId: ANSWER_ID, role: "assistant" },
   { type: "TEXT_MESSAGE_CONTENT", messageId: ANSWER_ID, delta: "Two found." },
   { type: "TEXT_MESSAGE_END", messageId: ANSWER_ID },
@@ -118,6 +151,10 @@ const reduce = (events: readonly ChatEvent[]): StreamedAnswer => {
   return answer;
 };
 
+/** The answer's texts, in order. */
+const textsOf = (answer: StreamedAnswer): string[] =>
+  answer.parts.flatMap((part) => (part.type === "text" ? [part.content] : []));
+
 describe("reading server-sent events", () => {
   test("yields the same events wherever the body is cut", () => {
     const body = `: heartbeat\r\nid: 7\r\ndata: {"a":1}\r\n\r\ndata: line one\ndata: line two\nretry: 10\n\n`;
@@ -141,27 +178,368 @@ describe("reading server-sent events", () => {
   });
 });
 
+describe("an answer's context notice", () => {
+  const NOTICE = {
+    type: "session-not-resumed",
+  } as const satisfies ChatContextNotice;
+  /** One event of each kind the server stamps the notice on. */
+  const STAMPED = {
+    TEXT_MESSAGE_START: {
+      type: "TEXT_MESSAGE_START",
+      messageId: ANSWER_ID,
+      role: "assistant",
+    },
+    TEXT_MESSAGE_CONTENT: {
+      type: "TEXT_MESSAGE_CONTENT",
+      messageId: ANSWER_ID,
+      delta: "Done.",
+    },
+    TEXT_MESSAGE_END: { type: "TEXT_MESSAGE_END", messageId: ANSWER_ID },
+    REASONING_MESSAGE_CONTENT: {
+      type: "REASONING_MESSAGE_CONTENT",
+      messageId: "reasoning-1",
+      delta: "Check the register.",
+    },
+  } as const satisfies Record<
+    (typeof CHAT_CONTEXT_NOTICE_EVENTS)[number],
+    Readonly<Record<string, string>>
+  >;
+  const parsed = (event: object): ChatEvent =>
+    parseChatEvent(JSON.stringify(event)) ??
+    panic("A stamped event must be one an answer is drawn from");
+
+  test("is read from every event the server stamps it on, kept, and withdrawn by null", () => {
+    for (const type of CHAT_CONTEXT_NOTICE_EVENTS) {
+      const shown = reduce([
+        parsed({
+          ...STAMPED[type],
+          metadata: { [CHAT_CONTEXT_NOTICE_METADATA_KEY]: NOTICE },
+        }),
+        // A later event without the notice leaves it standing.
+        parsed(STAMPED.TEXT_MESSAGE_CONTENT),
+      ]);
+      expect(
+        answerEntry(shown, "2026-10-20T10:00:00.000Z").contextNotice,
+      ).toEqual(NOTICE);
+      const withdrawn = applyChatEvent(
+        shown,
+        parsed({
+          ...STAMPED[type],
+          metadata: { [CHAT_CONTEXT_NOTICE_METADATA_KEY]: null },
+        }),
+      );
+      expect(withdrawn.contextNotice).toBeNull();
+    }
+  });
+});
+
+describe("whether the turn takes a message mid-turn", () => {
+  test("is read from the event the server sends with the turn's start, and leaves the answer as it was", () => {
+    const told = parseChatEvent(
+      JSON.stringify({
+        type: "CUSTOM",
+        name: CHAT_TURN_STEERING_EVENT,
+        value: { steering: CHAT_TURN_STEERING.steerable },
+      }),
+    );
+    expect(told).toEqual({
+      type: "CUSTOM",
+      name: CHAT_TURN_STEERING_EVENT,
+      value: { steering: CHAT_TURN_STEERING.steerable },
+    });
+    expect(applyChatEvent(EMPTY_ANSWER, told ?? panic("Not read"))).toBe(
+      EMPTY_ANSWER,
+    );
+    // One it cannot read is not drawn from.
+    expect(
+      parseChatEvent(
+        JSON.stringify({
+          type: "CUSTOM",
+          name: CHAT_TURN_STEERING_EVENT,
+          value: { steering: "sometimes" },
+        }),
+      ),
+    ).toBeUndefined();
+  });
+});
+
 describe("drawing an answer from its events", () => {
   const events = RUN_EVENTS.flatMap(
     (event) => parseChatEvent(JSON.stringify(event)) ?? [],
   );
 
-  test("keeps the text segments, the tools between them, and the end", () => {
+  test("keeps the texts, the tools between them in order, and the end", () => {
     const answer = reduce(events);
     expect(answer).toEqual({
       messageId: ANSWER_ID,
-      segments: ["Checking the register", "Two found."],
-      tools: ["list_templates"],
+      parts: [
+        { type: "text", content: "Checking the register" },
+        {
+          type: "tool-call",
+          id: "call-1",
+          name: "list_templates",
+          state: "complete",
+          output: { templates: [] },
+        },
+        { type: "text", content: "Two found." },
+      ],
       status: "finished",
+      contextNotice: null,
     });
     expect(answerEntry(answer, "2026-10-20T10:00:00.000Z")).toEqual({
       id: ANSWER_ID,
       role: "assistant",
       createdAt: "2026-10-20T10:00:00.000Z",
       text: "Checking the register\n\nTwo found.",
-      tools: ["list_templates"],
+      blocks: [
+        // Written before the step, it reads as the run's plan.
+        { type: "intent", key: "0", text: "Checking the register" },
+        {
+          type: "steps",
+          key: "1",
+          steps: [{ type: "tool", label: "list_templates", status: "done" }],
+          summary: [{ phrase: "sourcesChecked", count: 1 }],
+        },
+        { type: "text", key: "2", markdown: "Two found." },
+      ],
       files: [],
+      drafts: [],
+      contextNotice: null,
     });
+  });
+
+  test("a step is running until its result comes back, and failed when the result says so", () => {
+    // Up to the tool call's start: no result yet.
+    const started = reduce(
+      events.slice(
+        0,
+        events.findIndex(({ type }) => type === "TOOL_CALL_START") + 1,
+      ),
+    );
+    expect(answerEntry(started, "2026-10-20T10:00:00.000Z").blocks[1]).toEqual({
+      type: "steps",
+      key: "1",
+      steps: [{ type: "tool", label: "list_templates", status: "running" }],
+      summary: [{ phrase: "steps", count: 1 }],
+    });
+    const failed = applyChatEvent(started, {
+      type: "TOOL_CALL_RESULT",
+      toolCallId: "call-1",
+      content: '{"error":"Unavailable"}',
+    });
+    expect(answerEntry(failed, "2026-10-20T10:00:00.000Z").blocks[1]).toEqual({
+      type: "steps",
+      key: "1",
+      steps: [{ type: "tool", label: "list_templates", status: "failed" }],
+      summary: [{ phrase: "steps", count: 1 }],
+    });
+    // A local agent's step that failed or was cancelled says so in the
+    // result's state, not its content; the stored message keeps it errored.
+    for (const content of ['{"status":"failed"}', '{"status":"interrupted"}']) {
+      const errored = applyChatEvent(started, {
+        type: "TOOL_CALL_RESULT",
+        toolCallId: "call-1",
+        content,
+        state: "output-error",
+      });
+      expect(
+        answerEntry(errored, "2026-10-20T10:00:00.000Z").blocks[1],
+      ).toEqual({
+        type: "steps",
+        key: "1",
+        steps: [{ type: "tool", label: "list_templates", status: "failed" }],
+        summary: [{ phrase: "steps", count: 1 }],
+      });
+    }
+  });
+
+  test("a coding agent's subagent groups its steps while the answer arrives, as the stored answer does", () => {
+    const subagentInput = {
+      tool: "Agent",
+      detail: { kind: "subagent", description: "Check the lease" },
+    };
+    const stepInput = { command: "rg lease" };
+    // The start of a subagent's call names the subagent's step beside it,
+    // with whatever else a start carries, none of which is kept.
+    const inSubagent = {
+      [CHAT_LOCAL_RUN_PARENT_CALL_METADATA_KEY]: "agent",
+    };
+    const argumentDeltas = (args: string) => {
+      const middle = Math.floor(args.length / 2);
+      return [args.slice(0, middle), args.slice(middle)];
+    };
+    const stepsOf = (
+      id: string,
+      name: string,
+      input: unknown,
+      metadata?: object,
+    ): readonly unknown[] => [
+      {
+        type: "TOOL_CALL_START",
+        toolCallId: id,
+        toolCallName: name,
+        ...(metadata === undefined ? {} : { metadata }),
+      },
+      // A native step's arguments arrive whole; split, they read the same.
+      ...argumentDeltas(JSON.stringify(input)).map((delta) => ({
+        type: "TOOL_CALL_ARGS",
+        toolCallId: id,
+        delta,
+      })),
+      { type: "TOOL_CALL_END", toolCallId: id },
+    ];
+    const result = (id: string) => ({
+      type: "TOOL_CALL_RESULT",
+      toolCallId: id,
+      content: '{"status":"completed"}',
+    });
+    const answer = reduce(
+      [
+        ...stepsOf("agent", "harness_native_tool", subagentInput),
+        ...stepsOf("step", "command_execution", stepInput, {
+          ...inSubagent,
+          tanstack: { model: "test-model" },
+        }),
+        // A step whose input alone names the subagent is not its step.
+        ...stepsOf("loose", "command_execution", {
+          command: "ls",
+          parentCallId: "agent",
+        }),
+        // Another tool's arguments are not kept.
+        ...stepsOf("other", "list_templates", { query: "lease" }),
+        result("loose"),
+        result("step"),
+        result("agent"),
+      ].flatMap((event) => parseChatEvent(JSON.stringify(event)) ?? []),
+    );
+    expect(answer.parts).toEqual([
+      {
+        type: "tool-call",
+        id: "agent",
+        name: "harness_native_tool",
+        state: "complete",
+        input: subagentInput,
+        output: { status: "completed" },
+      },
+      {
+        type: "tool-call",
+        id: "step",
+        name: "command_execution",
+        state: "complete",
+        input: stepInput,
+        metadata: inSubagent,
+        output: { status: "completed" },
+      },
+      {
+        type: "tool-call",
+        id: "loose",
+        name: "command_execution",
+        state: "complete",
+        input: { command: "ls", parentCallId: "agent" },
+        output: { status: "completed" },
+      },
+      {
+        type: "tool-call",
+        id: "other",
+        name: "list_templates",
+        state: "input-streaming",
+      },
+    ]);
+    expect(answerEntry(answer, "2026-10-20T10:00:00.000Z").blocks).toEqual([
+      {
+        type: "subagent",
+        key: "subagent:agent",
+        description: "Check the lease",
+        agentType: null,
+        status: "done",
+        conversationCallId: "agent",
+        stepCount: 1,
+        steps: [
+          {
+            type: "local",
+            label: "command_execution",
+            titleKind: null,
+            subtitle: { type: "text", text: "rg lease" },
+            status: "done",
+            contentCallId: "step",
+          },
+        ],
+      },
+      {
+        type: "steps",
+        key: "2",
+        steps: [
+          {
+            type: "local",
+            label: "command_execution",
+            titleKind: null,
+            subtitle: { type: "text", text: "ls" },
+            status: "done",
+            contentCallId: "loose",
+          },
+          { type: "tool", label: "list_templates", status: "running" },
+        ],
+        summary: [{ phrase: "steps", count: 2 }],
+      },
+    ]);
+  });
+
+  test("a subagent still open when the run fails or is stopped reads as stopped, and one waiting for the person stays open", () => {
+    const open = (
+      id: string,
+      name: string,
+      input: unknown,
+      parentCallId?: string,
+    ): readonly unknown[] => [
+      {
+        type: "TOOL_CALL_START",
+        toolCallId: id,
+        toolCallName: name,
+        ...(parentCallId === undefined
+          ? {}
+          : {
+              metadata: {
+                [CHAT_LOCAL_RUN_PARENT_CALL_METADATA_KEY]: parentCallId,
+              },
+            }),
+      },
+      { type: "TOOL_CALL_ARGS", toolCallId: id, delta: JSON.stringify(input) },
+      { type: "TOOL_CALL_END", toolCallId: id },
+    ];
+    const statusAfter = (end: unknown) =>
+      answerEntry(
+        reduce(
+          [
+            ...open("agent", "harness_native_tool", {
+              tool: "Agent",
+              detail: { kind: "subagent", description: "Check the lease" },
+            }),
+            ...open(
+              "step",
+              "command_execution",
+              { command: "rg lease" },
+              "agent",
+            ),
+            end,
+          ].flatMap((event) => parseChatEvent(JSON.stringify(event)) ?? []),
+        ),
+        "2026-10-20T10:00:00.000Z",
+      ).blocks.flatMap((block) =>
+        block.type === "subagent"
+          ? [`${block.status}:${String(block.stepCount)}`]
+          : [],
+      );
+    // Cut off, its step is still its own: the link outlasts the end.
+    expect(
+      statusAfter({ type: "RUN_ERROR", message: "Provider failed" }),
+    ).toEqual(["interrupted:1"]);
+    expect(
+      statusAfter({ type: "RUN_FINISHED", outcome: { type: "cancelled" } }),
+    ).toEqual(["interrupted:1"]);
+    // The stored thread, read next, says what the turn waits for.
+    expect(
+      statusAfter({ type: "RUN_FINISHED", outcome: { type: "interrupt" } }),
+    ).toEqual(["running:1"]);
   });
 
   test("is still streaming until the run says it finished", () => {
@@ -182,11 +560,90 @@ describe("drawing an answer from its events", () => {
     );
   });
 
+  test("a failure says why by the code its error event carries", () => {
+    const failureAfter = (event: unknown) =>
+      reduce([parseChatEvent(JSON.stringify(event)) ?? []].flat()).failure;
+    expect(
+      failureAfter({
+        type: "RUN_ERROR",
+        message: "None of the member's computers is connected.",
+        code: "ai_local_runner_no_computer",
+      }),
+    ).toBe("local_runner_no_computer");
+    // A code this build does not know, or none, still reads as a failure.
+    expect(
+      failureAfter({ type: "RUN_ERROR", message: "x", code: "ai_newer" }),
+    ).toBe("unknown");
+    expect(failureAfter({ type: "RUN_ERROR", message: "x" })).toBe("unknown");
+    expect(
+      failureAfter({ type: "RUN_FINISHED", outcome: { type: "completed" } }),
+    ).toBeUndefined();
+  });
+
   test("passes over events it does not draw, and data that is not JSON", () => {
     expect(parseChatEvent('{"type":"MESSAGES_SNAPSHOT","messages":[]}')).toBe(
       undefined,
     );
     expect(parseChatEvent("not json")).toBe(undefined);
+  });
+});
+
+describe("answering the latest message again", () => {
+  const PARTS = [{ type: "text", content: "Which leases end this year?" }];
+  const LOCAL = {
+    kind: "local",
+    harness: "codex",
+    model: "gpt-5-codex",
+  } as const;
+
+  test("sends the stored message back as a regeneration, on the thread's computer", () => {
+    const body = chatRegenerateBody({
+      anonymized: false,
+      matterId: undefined,
+      retry: {
+        answerId: ANSWER_ID,
+        messageId: MESSAGE_ID,
+        parts: PARTS,
+        runTarget: LOCAL,
+      },
+      runId: "run-2",
+      threadId: THREAD_ID,
+    });
+    expect(body.forwardedProps).toEqual({
+      threadId: THREAD_ID,
+      runId: "run-2",
+      sendMode: "rawOverride",
+      runTarget: LOCAL,
+      message: { id: MESSAGE_ID, role: "user", parts: PARTS },
+      turnIntent: "regenerate",
+    });
+    // The server refuses an envelope whose copies disagree.
+    expect(body.data).toEqual(body.forwardedProps);
+    expect(body.messages).toEqual([{ id: MESSAGE_ID, role: "user" }]);
+  });
+
+  test("names no target for a thread on stella's own models", () => {
+    expect(
+      chatRegenerateBody({
+        anonymized: true,
+        matterId: "matter-1",
+        retry: {
+          answerId: ANSWER_ID,
+          messageId: MESSAGE_ID,
+          parts: PARTS,
+          runTarget: undefined,
+        },
+        runId: "run-2",
+        threadId: THREAD_ID,
+      }).forwardedProps,
+    ).toEqual({
+      threadId: THREAD_ID,
+      runId: "run-2",
+      workspaceId: "matter-1",
+      sendMode: "anonymized",
+      message: { id: MESSAGE_ID, role: "user", parts: PARTS },
+      turnIntent: "regenerate",
+    });
   });
 });
 
@@ -351,6 +808,7 @@ describe("sending a message", () => {
     );
     const sent = await sendChatMessage({
       anonymized: false,
+      commandId: COMMAND_ID,
       fetch,
       matterId: undefined,
       messageId: MESSAGE_ID,
@@ -372,7 +830,7 @@ describe("sending a message", () => {
       lastEventId: String(RUN_EVENTS.length),
     });
     expect(order[0]).toBe(`turn ${TURN_ID}`);
-    expect(reduce(events).segments).toEqual([
+    expect(textsOf(reduce(events))).toEqual([
       "Checking the register",
       "Two found.",
     ]);
@@ -400,6 +858,7 @@ describe("sending a message", () => {
     );
     const sent = await sendChatMessage({
       anonymized: false,
+      commandId: COMMAND_ID,
       fetch,
       matterId: undefined,
       messageId: MESSAGE_ID,
@@ -422,6 +881,7 @@ describe("sending a message", () => {
     const { fetch } = streamingFetch(() => new Response("{}", { status: 409 }));
     const sent = await sendChatMessage({
       anonymized: false,
+      commandId: COMMAND_ID,
       fetch,
       matterId: undefined,
       messageId: MESSAGE_ID,
@@ -438,6 +898,70 @@ describe("sending a message", () => {
         ? sent.error.error.status
         : undefined,
     ).toBe(409);
+  });
+
+  test("reports the code of a refused send, which says to queue it instead", async () => {
+    const { fetch } = streamingFetch(
+      () =>
+        new Response(
+          JSON.stringify({
+            code: CHAT_SEND_QUEUES_INSTEAD_CODE.turnAwaitingMember,
+            message: "A turn waits on you",
+          }),
+          { status: 409 },
+        ),
+    );
+    const sent = await sendChatMessage({
+      anonymized: false,
+      commandId: COMMAND_ID,
+      fetch,
+      matterId: undefined,
+      messageId: MESSAGE_ID,
+      onEvent: () => {},
+      onTurn: () => {},
+      runId: "run-1",
+      signal: new AbortController().signal,
+      source: sourceFor(),
+      text: "Hello",
+      threadId: THREAD_ID,
+    });
+    expect(Result.isError(sent) && queuesInstead(sent.error.error)).toBe(true);
+  });
+
+  test("names the turn of a send refused after the server stored it, and none before", async () => {
+    const send = async (response: Response) => {
+      const named: string[] = [];
+      const { fetch } = streamingFetch(() => response);
+      const sent = await sendChatMessage({
+        anonymized: false,
+        commandId: COMMAND_ID,
+        fetch,
+        matterId: undefined,
+        messageId: MESSAGE_ID,
+        onEvent: () => {},
+        onTurn: (turnId) => {
+          named.push(turnId);
+        },
+        runId: "run-1",
+        signal: new AbortController().signal,
+        source: sourceFor(),
+        text: "Hello",
+        threadId: THREAD_ID,
+      });
+      expect(Result.isError(sent)).toBe(true);
+      return named;
+    };
+    // Accepted, then refused: the thread holds the message.
+    expect(
+      await send(
+        new Response("{}", {
+          status: 429,
+          headers: { [CHAT_TURN_ID_HEADER]: TURN_ID },
+        }),
+      ),
+    ).toEqual([TURN_ID]);
+    // Refused before anything was stored.
+    expect(await send(new Response("{}", { status: 409 }))).toEqual([]);
   });
 
   test("ends quietly on abort, keeping the last event id it read", async () => {
@@ -457,6 +981,7 @@ describe("sending a message", () => {
       );
     const sent = await sendChatMessage({
       anonymized: false,
+      commandId: COMMAND_ID,
       fetch,
       matterId: undefined,
       messageId: MESSAGE_ID,
@@ -475,6 +1000,119 @@ describe("sending a message", () => {
     expect(sent.isOk() ? sent.value : sent.error).toEqual({
       lastEventId: "4",
     });
+  });
+});
+
+describe("a send whose response is lost", () => {
+  const lostThen = (answer: () => Response, lost = 1) => {
+    let losses = lost;
+    return streamingFetch((call) => {
+      if (call.method === "POST" && losses > 0) {
+        losses -= 1;
+        throw new TypeError("Network request failed");
+      }
+      return answer();
+    });
+  };
+
+  const send = async (fetch: StreamFetch, onTurn = (_turnId: string) => {}) =>
+    await sendChatMessage({
+      anonymized: false,
+      commandId: COMMAND_ID,
+      fetch,
+      matterId: undefined,
+      messageId: MESSAGE_ID,
+      onEvent: () => {},
+      onTurn,
+      runId: "run-1",
+      signal: new AbortController().signal,
+      source: sourceFor(),
+      text: "Hello",
+      threadId: THREAD_ID,
+    });
+
+  test("is sent again at once under the same command id", async () => {
+    const { calls, fetch } = lostThen(
+      () => new Response(streamOf([sse(RUN_EVENTS)])),
+    );
+    const sent = await send(fetch);
+    expect(sent.isOk()).toBe(true);
+    expect(calls.map((call) => call.headers[CHAT_COMMAND_ID_HEADER])).toEqual([
+      COMMAND_ID,
+      COMMAND_ID,
+    ]);
+    expect(calls[1]?.body).toBe(calls[0]?.body ?? "");
+  });
+
+  test(`is sent at most ${String(CHAT_COMMAND_MAX_RETRIES + 1)} times, then fails`, async () => {
+    const { calls, fetch } = lostThen(
+      () => new Response(streamOf([sse(RUN_EVENTS)])),
+      CHAT_COMMAND_MAX_RETRIES + 1,
+    );
+    const sent = await send(fetch);
+    expect(Result.isError(sent) && sent.error.error._tag).toBe(
+      "ApiRequestError",
+    );
+    expect(calls).toHaveLength(CHAT_COMMAND_MAX_RETRIES + 1);
+  });
+
+  test("whose retry is a replay names the first attempt's turn, which the phone follows", async () => {
+    const named: string[] = [];
+    const { fetch } = lostThen(
+      () =>
+        new Response(
+          JSON.stringify({
+            code: CHAT_COMMAND_ERROR_CODE.replayed,
+            message: "The command was accepted earlier; join its turn",
+          }),
+          { headers: { [CHAT_TURN_ID_HEADER]: TURN_ID }, status: 409 },
+        ),
+    );
+    const sent = await send(fetch, (turnId) => {
+      named.push(turnId);
+    });
+    expect(named).toEqual([TURN_ID]);
+    expect(
+      Result.isError(sent) && sent.error.error._tag === "ApiRequestError"
+        ? chatCommandOutcomeOf({
+            code: sent.error.error.code,
+            status: sent.error.error.status ?? 0,
+            turnId: named[0] ?? null,
+          })
+        : undefined,
+    ).toEqual({ type: "replayed", turnId: TURN_ID });
+  });
+
+  test("is not sent again once a refusal arrived", async () => {
+    const { calls, fetch } = streamingFetch(
+      () => new Response("{}", { status: 409 }),
+    );
+    expect(Result.isError(await send(fetch))).toBe(true);
+    expect(calls).toHaveLength(1);
+  });
+
+  test("a regeneration carries no command id", async () => {
+    const { calls, fetch } = streamingFetch(
+      () => new Response(streamOf([sse(RUN_EVENTS)])),
+    );
+    await regenerateChatTurn({
+      anonymized: false,
+      fetch,
+      matterId: undefined,
+      onEvent: () => {},
+      onTurn: () => {},
+      retry: {
+        answerId: ANSWER_ID,
+        messageId: MESSAGE_ID,
+        parts: [],
+        runTarget: undefined,
+      },
+      runId: "run-2",
+      signal: new AbortController().signal,
+      source: sourceFor(),
+      threadId: THREAD_ID,
+    });
+    expect(calls[0]?.headers[CHAT_COMMAND_ID_HEADER]).toBeUndefined();
   });
 });
 
@@ -510,7 +1148,7 @@ describe("rejoining a turn", () => {
       threadId: THREAD_ID,
       turnId: TURN_ID,
     });
-    expect(reduce(events).segments).toEqual(["Checking the "]);
+    expect(textsOf(reduce(events))).toEqual(["Checking the "]);
     expect(
       Result.isError(joined)
         ? [joined.error.error._tag, joined.error.lastEventId]
@@ -583,6 +1221,131 @@ describe("rejoining a turn", () => {
   });
 });
 
+describe("a stream's liveness", () => {
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
+  /** A turn's stream the test writes to, joined by one request. */
+  const joinHeldStream = () => {
+    const encoder = new TextEncoder();
+    const requests: AbortSignal[] = [];
+    let stream: ReadableStreamDefaultController<Uint8Array> | undefined;
+    let asked = Promise.withResolvers<undefined>();
+    const fetch: StreamFetch = async (_url, init) => {
+      requests.push(init.signal);
+      return new Response(
+        new ReadableStream<Uint8Array>(
+          {
+            start(controller) {
+              stream = controller;
+              // Like a platform fetch, the body errors once its request is
+              // aborted.
+              init.signal.addEventListener("abort", () => {
+                controller.error(init.signal.reason);
+              });
+            },
+            // No queue of its own, so a pull is the app asking for bytes.
+            pull() {
+              asked.resolve(undefined);
+            },
+          },
+          { highWaterMark: 0 },
+        ),
+      );
+    };
+    const events: ChatEvent[] = [];
+    const joined = joinChatTurn({
+      fetch,
+      lastEventId: undefined,
+      matterId: undefined,
+      onEvent: (event) => {
+        events.push(event);
+      },
+      signal: new AbortController().signal,
+      source: sourceFor(),
+      threadId: THREAD_ID,
+      turnId: TURN_ID,
+    });
+    return {
+      events,
+      joined,
+      requests,
+      /** The app has read all that was written and waits for more. */
+      waiting: async () => {
+        await asked.promise;
+      },
+      write: (text: string) => {
+        asked = Promise.withResolvers<undefined>();
+        stream?.enqueue(encoder.encode(text));
+      },
+      close: () => stream?.close(),
+    };
+  };
+
+  test("a turn silent for hours keeps its one stream while keep-alive frames arrive", async () => {
+    jest.useFakeTimers();
+    const turn = joinHeldStream();
+    await turn.waiting();
+    turn.write(sse(RUN_EVENTS.slice(0, 4)));
+    const beats = (4 * 60 * 60 * 1000) / SSE_HEARTBEAT_INTERVAL_MS;
+    for (let beat = 0; beat < beats; beat += 1) {
+      await turn.waiting();
+      jest.advanceTimersByTime(SSE_HEARTBEAT_INTERVAL_MS);
+      turn.write(SSE_HEARTBEAT_FRAME);
+    }
+    await turn.waiting();
+    turn.write(sse(RUN_EVENTS.slice(4), 5));
+    await turn.waiting();
+    turn.close();
+
+    const joined = await turn.joined;
+    expect(joined.isOk() ? joined.value : joined.error).toEqual({
+      lastEventId: String(RUN_EVENTS.length),
+    });
+    // The same events as a stream that arrives all at once.
+    const whole: ChatEvent[] = [];
+    await joinChatTurn({
+      fetch: async () => new Response(streamOf([sse(RUN_EVENTS)])),
+      lastEventId: undefined,
+      matterId: undefined,
+      onEvent: (event) => {
+        whole.push(event);
+      },
+      signal: new AbortController().signal,
+      source: sourceFor(),
+      threadId: THREAD_ID,
+      turnId: TURN_ID,
+    });
+    expect(whole.length).toBeGreaterThan(0);
+    expect(turn.events).toEqual(whole);
+    expect(turn.requests.map(({ aborted }) => aborted)).toEqual([false]);
+  });
+
+  test("a stream that falls silent breaks at the bound, keeping the last event id it read", async () => {
+    jest.useFakeTimers();
+    const turn = joinHeldStream();
+    await turn.waiting();
+    turn.write(sse(RUN_EVENTS.slice(0, 4)));
+    await turn.waiting();
+
+    // One millisecond short of the bound the app still waits.
+    jest.advanceTimersByTime(SSE_SILENCE_BOUND_MS - 1);
+    expect(turn.requests.map(({ aborted }) => aborted)).toEqual([false]);
+
+    jest.advanceTimersByTime(1);
+    const joined = await turn.joined;
+    expect(
+      Result.isError(joined)
+        ? [joined.error.error._tag, joined.error.lastEventId]
+        : joined.value,
+    ).toEqual(["ApiRequestError", "4"]);
+    // The connection is released, and a rejoin picks up after event 4.
+    expect(turn.requests.map(({ aborted }) => aborted)).toEqual([true]);
+    expect(textsOf(reduce(turn.events))).toEqual(["Checking the "]);
+  });
+});
+
 describe("stopping a turn", () => {
   test("posts the cancel and accepts the server's answer", async () => {
     const calls: { url: string; method: string | undefined }[] = [];
@@ -603,6 +1366,50 @@ describe("stopping a turn", () => {
         method: "POST",
       },
     ]);
+  });
+});
+
+describe("stopping a turn whose answer is lost", () => {
+  test("asks again for the same turn", async () => {
+    let lost = 2;
+    const urls: string[] = [];
+    const fetch: Fetch = async (url) => {
+      urls.push(url);
+      if (lost > 0) {
+        lost -= 1;
+        throw new TypeError("Network request failed");
+      }
+      return Response.json({ turn: {} }, { status: 202 });
+    };
+    const stopped = await cancelChatTurn({
+      fetch,
+      source: sourceFor(),
+      threadId: THREAD_ID,
+      turnId: TURN_ID,
+    });
+    expect(stopped.isOk()).toBe(true);
+    expect(new Set(urls)).toEqual(
+      new Set([
+        `https://stella.example.com/v1/chat/threads/${THREAD_ID}/turns/${TURN_ID}/cancel`,
+      ]),
+    );
+    expect(urls).toHaveLength(3);
+  });
+
+  test("does not ask again once the server refused", async () => {
+    let asked = 0;
+    const fetch: Fetch = async () => {
+      asked += 1;
+      return new Response("{}", { status: 404 });
+    };
+    const stopped = await cancelChatTurn({
+      fetch,
+      source: sourceFor(),
+      threadId: THREAD_ID,
+      turnId: TURN_ID,
+    });
+    expect(stopped.isErr()).toBe(true);
+    expect(asked).toBe(1);
   });
 });
 

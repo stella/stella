@@ -97,6 +97,22 @@ const releaseDegradedAcquire = async ({
   );
 };
 
+/**
+ * Who a public-law MCP read is charged to, hashed. OAuth client IDs come from
+ * verified session claims, never tool arguments; other authenticated
+ * credentials for one user share the same caller pool.
+ */
+export const mcpPublicReadCallerKey = (
+  caller: Pick<McpRequestContext, "organizationId" | "userId" | "clientId">,
+): string =>
+  sha256Hex(
+    JSON.stringify([
+      caller.organizationId,
+      caller.userId,
+      caller.clientId ?? null,
+    ]),
+  );
+
 type McpPublicReadAdmissionOptions<T> = {
   caller: Pick<McpRequestContext, "organizationId" | "userId" | "clientId">;
   signal?: AbortSignal | undefined;
@@ -120,18 +136,9 @@ export const withMcpPublicReadAdmission = async <T>({
 }: McpPublicReadAdmissionOptions<T>): Promise<
   Result<PublicReadAdmissionOutcome<T>, unknown>
 > => {
-  // OAuth client IDs come from verified session claims, never tool arguments.
-  // Other authenticated credentials for one user share the same caller pool.
-  const callerHash = sha256Hex(
-    JSON.stringify([
-      caller.organizationId,
-      caller.userId,
-      caller.clientId ?? null,
-    ]),
-  );
   const key = coordinationKey({
     scope: "action-admission",
-    slot: callerHash,
+    slot: mcpPublicReadCallerKey(caller),
     suffix: "mcp-public-read",
   });
   // The shared executor admits both pools atomically; a caller has one pool.

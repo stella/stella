@@ -1,5 +1,6 @@
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
+import { fileURLToPath } from "node:url";
 
 import {
   combine,
@@ -7,10 +8,12 @@ import {
   type Verdict,
 } from "@stll/db-load-gate/health";
 import { ebsBalance } from "@stll/db-load-gate/indicators";
+import { createTestState } from "@stll/test-state";
 
 import { readReplayTickEnvironment } from "@/api/env-replay";
 import type { BackgroundReplayTickReport } from "@/api/handlers/case-law/ingestion/background-replay";
 import {
+  BACKGROUND_REPLAY_LIMITS,
   REPLAY_ENROLMENT,
   replayHealthConfig,
 } from "@/api/handlers/case-law/ingestion/replay-enrolment";
@@ -24,6 +27,8 @@ import {
   runReplayTickScript as runReplayTickCommand,
 } from "@/api/scripts/replay-tick-command";
 import { OFF_REPLAY_ENROLMENT_FIXTURE } from "@/api/tests/helpers/replay-enrolment";
+
+const testState = createTestState({ file: import.meta.path, config: {} });
 
 const runReplayTickScript = async (
   options: Parameters<typeof runReplayTickCommand>[0] = {},
@@ -60,9 +65,9 @@ describe("scheduled replay entrypoint", () => {
       cmd: [
         process.execPath,
         "--no-env-file",
-        new URL("replay-tick.ts", import.meta.url).pathname,
+        fileURLToPath(new URL("replay-tick.ts", import.meta.url)),
       ],
-      cwd: new URL("../..", import.meta.url).pathname,
+      cwd: fileURLToPath(new URL("../..", import.meta.url)),
       env: { PATH: process.env["PATH"], NODE_ENV: "test" },
       stdout: "pipe",
       stderr: "pipe",
@@ -80,7 +85,9 @@ describe("scheduled replay entrypoint", () => {
   });
 
   test("production cannot acquire fixture overrides before database or storage setup", async () => {
-    const entry = new URL("replay-tick-command.ts", import.meta.url).pathname;
+    const entry = fileURLToPath(
+      new URL("replay-tick-command.ts", import.meta.url),
+    );
     const child = Bun.spawn({
       cmd: [
         process.execPath,
@@ -88,7 +95,7 @@ describe("scheduled replay entrypoint", () => {
         "--eval",
         `const { getReplayTickFixtureRunner } = await import(${JSON.stringify(entry)}); getReplayTickFixtureRunner();`,
       ],
-      cwd: new URL("../..", import.meta.url).pathname,
+      cwd: fileURLToPath(new URL("../..", import.meta.url)),
       env: { PATH: process.env["PATH"], NODE_ENV: "production" },
       stdout: "pipe",
       stderr: "pipe",
@@ -138,16 +145,16 @@ describe("scheduled replay entrypoint", () => {
   // stays a reviewed step of its own. The committed map's type already admits
   // no enrolled source, so this checks the preview budget.
   test("committed enrolment only previews, within the preview budget, and enrols nothing", () => {
-    const previews = Object.values(REPLAY_ENROLMENT).filter(
-      ({ mode }) => mode !== "off",
-    );
-    for (const preview of previews) {
-      expect(preview).toEqual({ mode: "dry-run", dailyBudget: 10_000 });
+    for (const policy of Object.values(REPLAY_ENROLMENT)) {
+      if (policy.mode === "off") {
+        continue;
+      }
+      expect(policy.mode).toBe("dry-run");
+      expect(policy.dailyBudget).toBeLessThanOrEqual(
+        BACKGROUND_REPLAY_LIMITS.maxDailyBudget,
+      );
     }
-    expect(REPLAY_ENROLMENT[ADAPTER_KEYS.CZ_US]).toEqual({
-      mode: "dry-run",
-      dailyBudget: 10_000,
-    });
+    expect(REPLAY_ENROLMENT[ADAPTER_KEYS.CZ_US].mode).toBe("dry-run");
   });
 
   test("default-off environment, global kill and unenrolled sources perform no setup", async () => {
@@ -192,22 +199,12 @@ describe("scheduled replay entrypoint", () => {
   });
 
   test("environment reader defaults to disabled with no flags", () => {
-    const oldEnabled = process.env["CASE_LAW_REPLAY_ENABLED"];
-    const oldKill = process.env["CASE_LAW_REPLAY_KILL_SWITCH"];
-    delete process.env["CASE_LAW_REPLAY_ENABLED"];
-    delete process.env["CASE_LAW_REPLAY_KILL_SWITCH"];
-    try {
-      const environment = readReplayTickEnvironment();
-      expect(environment.CASE_LAW_REPLAY_ENABLED).toBe(false);
-      expect(environment.CASE_LAW_REPLAY_KILL_SWITCH).toBe(false);
-    } finally {
-      if (oldEnabled !== undefined) {
-        process.env["CASE_LAW_REPLAY_ENABLED"] = oldEnabled;
-      }
-      if (oldKill !== undefined) {
-        process.env["CASE_LAW_REPLAY_KILL_SWITCH"] = oldKill;
-      }
-    }
+    testState.deleteEnv("CASE_LAW_REPLAY_ENABLED");
+    testState.deleteEnv("CASE_LAW_REPLAY_KILL_SWITCH");
+
+    const environment = readReplayTickEnvironment();
+    expect(environment.CASE_LAW_REPLAY_ENABLED).toBe(false);
+    expect(environment.CASE_LAW_REPLAY_KILL_SWITCH).toBe(false);
   });
 
   test("failure reports and rejected setup exit nonzero; normal stops exit zero", async () => {

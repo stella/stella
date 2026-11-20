@@ -20,7 +20,7 @@
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
   "apps/api/scripts/test-db-snapshot-cache.test.ts": {
-    "count": 3,
+    "count": 1,
     "owner": "api",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
@@ -209,11 +209,6 @@
     "owner": "api",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
-  "apps/api/src/lib/document-processing-idle-exit.test.ts": {
-    "count": 1,
-    "owner": "api",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
   "apps/api/src/lib/document-processing-queue.test.ts": {
     "count": 5,
     "owner": "api",
@@ -374,16 +369,6 @@
     "owner": "api",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
-  "apps/api/src/lib/sse-publish-timeout.test.ts": {
-    "count": 1,
-    "owner": "api",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
-  "apps/api/src/lib/sse.test.ts": {
-    "count": 7,
-    "owner": "api",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
   "apps/api/src/lib/subprocess.test.ts": {
     "count": 1,
     "owner": "api",
@@ -391,11 +376,6 @@
   },
   "apps/api/src/lib/tanstack-ai-provider-retry.test.ts": {
     "count": 1,
-    "owner": "api",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
-  "apps/api/src/lib/uploads/finalize-admission.test.ts": {
-    "count": 2,
     "owner": "api",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
@@ -449,11 +429,6 @@
     "owner": "collab",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
-  "apps/desktop/tests/AgentSubscriptionsSection.dom.test.tsx": {
-    "count": 2,
-    "owner": "desktop",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
   "apps/desktop/tests/desktop-events.test.ts": {
     "count": 1,
     "owner": "desktop",
@@ -501,11 +476,6 @@
   },
   "apps/web/src/components/action-admission-outcome.dom.test.tsx": {
     "count": 1,
-    "owner": "web",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
-  "apps/web/src/components/ai-suggestions/docx-suggestion-cache.test.ts": {
-    "count": 3,
     "owner": "web",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
@@ -559,11 +529,6 @@
     "owner": "web",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
-  "apps/web/src/components/inspector/markdown-file-viewer.dom.test.tsx": {
-    "count": 1,
-    "owner": "web",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
   "apps/web/src/components/inspector/maximize-tab.test.ts": {
     "count": 1,
     "owner": "web",
@@ -576,11 +541,6 @@
   },
   "apps/web/src/components/legal-reader/legal-reader-ai-chat.dom.test.tsx": {
     "count": 1,
-    "owner": "web",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
-  "apps/web/src/components/legal-reader/reference-peek.dom.test.tsx": {
-    "count": 2,
     "owner": "web",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
@@ -635,7 +595,7 @@
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
   "apps/web/src/features/case-law/components/case-viewer/use-reader-answers.dom.test.tsx": {
-    "count": 6,
+    "count": 5,
     "owner": "web",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
@@ -650,11 +610,6 @@
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
   "apps/web/src/features/chat/chat-runtime-stop.test.ts": {
-    "count": 1,
-    "owner": "web",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
-  "apps/web/src/features/chat/chat-runtime-version-skew.test.ts": {
     "count": 1,
     "owner": "web",
     "reason": "pre-kit census; migrate to @stll/test-kit"
@@ -851,11 +806,6 @@
   },
   "packages/concurrency/src/sleep.test.ts": {
     "count": 3,
-    "owner": "concurrency",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
-  "packages/concurrency/src/with-timeout.test.ts": {
-    "count": 5,
     "owner": "concurrency",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },

@@ -6,11 +6,13 @@ import { useTranslations } from "use-intl";
 
 import { BidiText } from "@stll/ui/bidi-text";
 import { GitBranchIcon } from "@stll/ui/icons";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import type { ForkProvenance } from "@/features/chat/queries";
 import { chatThreadRoute } from "@/lib/chat-thread-ref";
 import { isPlaceholderThreadTitle } from "@/lib/chat-thread-title";
+import { CHAT_READING_COLUMN_CLASS_NAME } from "@/routes/_protected.chat/-components/chat-reading-column";
 
 const BANNER_CLASSNAME =
   "text-muted-foreground inline-flex max-w-full items-center gap-1.5 text-xs";
@@ -38,10 +40,10 @@ export const ChatForkedFromBanner = ({
     }
     case "parent-unavailable": {
       return (
-        <div className="mx-auto w-full max-w-5xl px-4 pt-2">
+        <div className={cn(CHAT_READING_COLUMN_CLASS_NAME, "pt-2")}>
           <span className={BANNER_CLASSNAME}>
             <GitBranchIcon aria-hidden="true" className="size-3.5 shrink-0" />
-            <span className="truncate">{t("chat.forkedFromUnavailable")}</span>
+            <TruncatedText>{t("chat.forkedFromUnavailable")}</TruncatedText>
           </span>
         </div>
       );
@@ -49,7 +51,7 @@ export const ChatForkedFromBanner = ({
     case "parent": {
       const { threadId, title, workspaceId } = forkProvenance;
       return (
-        <div className="mx-auto w-full max-w-5xl px-4 pt-2">
+        <div className={cn(CHAT_READING_COLUMN_CLASS_NAME, "pt-2")}>
           <Link
             className={cn(
               BANNER_CLASSNAME,
@@ -58,7 +60,7 @@ export const ChatForkedFromBanner = ({
             {...chatThreadRoute({ threadId, workspaceId })}
           >
             <GitBranchIcon aria-hidden="true" className="size-3.5 shrink-0" />
-            <span className="truncate">
+            <TruncatedText>
               {t.rich("chat.forkedFrom", {
                 bdi: (chunks: ReactNode) => <BidiText>{chunks}</BidiText>,
                 // Threads are titled asynchronously, so a very fresh parent is
@@ -68,7 +70,7 @@ export const ChatForkedFromBanner = ({
                   ? t("chat.newChat")
                   : title,
               })}
-            </span>
+            </TruncatedText>
           </Link>
         </div>
       );

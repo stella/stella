@@ -13,12 +13,14 @@ import {
 } from "@stll/ui/icons";
 import { Loader } from "@stll/ui/loader";
 import { Skeleton } from "@stll/ui/skeleton";
+import { TruncatedText } from "@stll/ui/truncated-text";
 
 import { PlaybookStatusBadge } from "@/components/playbook-status-badge";
 import type {
   KnowledgeActions,
   KnowledgeSource,
 } from "@/features/knowledge/views/knowledge-seam";
+import { PlaybooksPageFrame } from "@/features/knowledge/views/playbooks/playbooks-page-shape";
 import type {
   KnowledgePlaybook,
   KnowledgePlaybookStarter,
@@ -51,7 +53,7 @@ export const PlaybooksPageView = ({
 
   return (
     <div className="min-h-0 flex-1 overflow-y-auto">
-      <div className="mx-auto flex w-full max-w-6xl flex-col gap-9 px-5 py-7 sm:px-7 sm:py-9">
+      <PlaybooksPageFrame>
         <header className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
           <div>
             <h1 className="text-2xl font-semibold tracking-tight">
@@ -171,7 +173,7 @@ export const PlaybooksPageView = ({
             )}
           </section>
         )}
-      </div>
+      </PlaybooksPageFrame>
     </div>
   );
 };
@@ -240,9 +242,12 @@ const BuildWithAiCard = ({ onStart, disabled }: BuildWithAiCardProps) => {
           <span className="mt-3 font-medium">
             {t("knowledge.playbooks.buildWithAi.title")}
           </span>
-          <span className="text-muted-foreground mt-1 line-clamp-2 text-sm">
+          <TruncatedText
+            className="text-muted-foreground mt-1 text-sm"
+            lines={2}
+          >
             {t("knowledge.playbooks.buildWithAi.description")}
-          </span>
+          </TruncatedText>
           <StarterCardAction isPending={false} label={t("common.start")} />
         </div>
       </Button>
@@ -310,12 +315,13 @@ const PlaybookStarterCards = ({
                 <span className="mt-3 font-medium" dir="auto">
                   {starter.name}
                 </span>
-                <span
-                  className="text-muted-foreground mt-1 line-clamp-2 text-sm"
+                <TruncatedText
+                  className="text-muted-foreground mt-1 text-sm"
                   dir="auto"
+                  lines={2}
                 >
                   {starter.description}
-                </span>
+                </TruncatedText>
                 <span className="text-muted-foreground mt-2 text-xs">
                   {t("knowledge.playbooks.starters.positionCount", {
                     count: starter.positionCount,
@@ -355,17 +361,24 @@ const RecentPlaybookRow = ({
             <Clock3Icon className="text-muted-foreground size-4" />
           </div>
           <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-medium" dir="auto">
+            <TruncatedText
+              className="text-sm font-medium"
+              dir="auto"
+              render={<p />}
+            >
               {playbook.name}
-            </p>
-            <p className="text-muted-foreground mt-0.5 truncate text-xs">
+            </TruncatedText>
+            <TruncatedText
+              className="text-muted-foreground mt-0.5 text-xs"
+              render={<p />}
+            >
               {t("knowledge.playbooks.lastUsed", {
                 date: format.dateTime(
                   new Date(playbook.lastUsedAt),
                   MEDIUM_DATE_SHORT_TIME_FORMAT,
                 ),
               })}
-            </p>
+            </TruncatedText>
           </div>
           <PlaybookStatusBadge status={playbook.status} />
         </div>
@@ -413,15 +426,20 @@ const PlaybookRow = ({
             <ClipboardCheckIcon className="text-muted-foreground size-4" />
           </div>
           <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-medium" dir="auto">
-              {playbook.name}
-            </p>
-            <p
-              className="text-muted-foreground mt-0.5 truncate text-xs"
+            <TruncatedText
+              className="text-sm font-medium"
               dir="auto"
+              render={<p />}
+            >
+              {playbook.name}
+            </TruncatedText>
+            <TruncatedText
+              className="text-muted-foreground mt-0.5 text-xs"
+              dir="auto"
+              render={<p />}
             >
               <PlaybookRowDetail playbook={playbook} />
-            </p>
+            </TruncatedText>
           </div>
           <PlaybookStatusBadge status={playbook.status} />
           <span className="sr-only">{t("common.edit")}</span>
@@ -430,43 +448,3 @@ const PlaybookRow = ({
     </li>
   );
 };
-
-const PLAYBOOK_ROW_KEYS = ["a", "b", "c", "d", "e", "f"];
-
-// Mirrors the playbooks page (header, ready-made cards, list rows) so the page
-// keeps its shape while the playbooks load.
-export const PlaybooksPageSkeleton = () => (
-  <div className="min-h-0 flex-1 overflow-y-auto">
-    <div className="mx-auto flex w-full max-w-6xl flex-col gap-9 px-5 py-7 sm:px-7 sm:py-9">
-      <div className="flex items-center justify-between gap-4">
-        <div className="space-y-2">
-          <Skeleton className="h-7 w-36" />
-          <Skeleton className="h-4 w-96 max-w-full" />
-        </div>
-        <Skeleton className="h-11 w-36 rounded-md" />
-      </div>
-      <div>
-        <Skeleton className="mb-3 h-5 w-44" />
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-          {["starter-a", "starter-b", "starter-c", "starter-d"].map((key) => (
-            <Skeleton className="h-44 rounded-xl" key={key} />
-          ))}
-        </div>
-      </div>
-      <div>
-        <Skeleton className="mb-3 h-5 w-28" />
-        <ul className="divide-y rounded-xl border">
-          {PLAYBOOK_ROW_KEYS.map((key) => (
-            <li className="flex min-h-16 items-center gap-3 px-4" key={key}>
-              <Skeleton className="size-9 shrink-0 rounded-lg" />
-              <div className="min-w-0 flex-1 space-y-1.5">
-                <Skeleton className="h-4 w-48" />
-                <Skeleton className="h-3 w-32" />
-              </div>
-            </li>
-          ))}
-        </ul>
-      </div>
-    </div>
-  </div>
-);

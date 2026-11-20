@@ -1,3 +1,7 @@
+import { panic } from "better-result";
+
+import { publicCaseLawPageCountry } from "@stll/api-contract/case-law-launch-readiness";
+import { noDecisionReviewFound } from "@stll/api-contract/case-law-reviews";
 import { DECISION_READ_RESOLUTION } from "@stll/api-contract/case-law-decision-resolution";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 
@@ -5,12 +9,26 @@ import type { PublicCaseLawDecision } from "@/features/case-law/public-decision"
 import type { PublicStatute } from "@/features/statutes/queries/statutes";
 import type { api } from "@/lib/api";
 import { toSafeId } from "@/lib/safe-id";
+import type { Route as CourtBrowseRoute } from "@/routes/law/$country/courts/$";
+import type { Route as JurisdictionHubRoute } from "@/routes/law/$country/index";
 import type { Route as StatuteRoute } from "@/routes/law/$country/statutes/$slug/index";
 
 export const publicRouteExceptions: Record<string, string> = {
   "/": "RootRedirect immediately navigates according to the audience; it has no stable leaf body. Destination routes are covered separately.",
   "/auth/handoff":
     "The handoff confirmation route requires root-loader state captured from an MCP handoff; its panel is covered separately.",
+  "/sharepoint/oauth-callback":
+    "The SharePoint OAuth callback reports the outcome and navigates to the connections settings on mount; it has no stable leaf body. The destination route is covered separately.",
+  "/knowledge/templates:anonymous":
+    "An organization's templates send a visitor to the published catalogue (`/knowledge/templates/catalogue`, covered separately) before the page body mounts.",
+  "/knowledge/playbooks:anonymous":
+    "An organization's playbooks send a visitor to the ready-made ones (`/knowledge/playbooks/catalogue`, covered separately) before the page body mounts.",
+  "/knowledge/tools:anonymous":
+    "An organization's tools send a visitor to the published list (`/knowledge/tools/catalogue`, covered separately) before the page body mounts.",
+  "/knowledge/tools_/skills/$skillId:member":
+    "The skill editor needs a browser editing surface (EditContext, execCommand) the DOM fixture lacks; agent-skills.spec.ts drives it in a browser.",
+  "/knowledge/tools_/skills/$skillId:anonymous":
+    "A skill belongs to an organization: a visitor gets the not-found page, not the editor.",
   "/knowledge/clauses:anonymous":
     "KnowledgeMemberOnly redirects anonymous visitors to the Knowledge landing before its page body mounts.",
   "/knowledge/styles:anonymous":
@@ -24,6 +42,7 @@ export const publicRouteExceptions: Record<string, string> = {
 const absentText = { type: "absent", reason: "not_published" } as const;
 
 const decision = {
+  appealReviews: noDecisionReviewFound(),
   caseFile: { items: [], nextCursor: null, limit: 50 },
   caseNumber: "SYN 1/2026",
   caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
@@ -46,6 +65,8 @@ const decision = {
   documentPending: false,
   documentReadFailed: false,
   documentUnavailable: false,
+  textIncompleteReason: null,
+  textWithheldReason: null,
   documentUrl: null,
   ecli: null,
   extractionWarnings: [],
@@ -115,6 +136,36 @@ const statuteData = {
   work: statute,
 } satisfies typeof StatuteRoute.types.loaderData;
 
+const HUB_SCOPE =
+  publicCaseLawPageCountry("CZE") ?? panic("CZE has public case-law pages");
+
+const jurisdictionHubData = {
+  scope: HUB_SCOPE,
+  courts: [{ name: "Nejvyšší soud", segment: "nejvyssi-soud" }],
+  head: {
+    description: "Courts with public decisions in Czechia.",
+    items: [],
+    path: "/law/cze",
+    title: "Czech case law",
+  },
+} satisfies typeof JurisdictionHubRoute.types.loaderData;
+
+const courtBrowseData = {
+  scope: HUB_SCOPE,
+  court: "Nejvyšší soud",
+  page: {
+    kind: "periods",
+    target: { level: "court", court: "nejvyssi-soud" },
+    periods: [{ value: 2023, count: 0 }],
+  },
+  head: {
+    description: "Decisions of Nejvyšší soud by year.",
+    items: [],
+    path: "/law/cze/courts/nejvyssi-soud",
+    title: "Nejvyšší soud",
+  },
+} satisfies typeof CourtBrowseRoute.types.loaderData;
+
 export const publicFixtureLoaderData = (routeId: string) => {
   switch (routeId) {
     case "/law/$country/cases/$court/$slug":
@@ -123,6 +174,10 @@ export const publicFixtureLoaderData = (routeId: string) => {
     case "/law/$country/statutes/$slug/":
     case "/law/$country/statutes/$slug/v/$version":
       return statuteData;
+    case "/law/$country/":
+      return jurisdictionHubData;
+    case "/law/$country/courts/$":
+      return courtBrowseData;
     default:
       return undefined;
   }
@@ -324,16 +379,26 @@ export const publicFixtureReadyText = (routeId: string) => {
   if (data === undefined) {
     return undefined;
   }
-  return "statute" in data
-    ? data.statute.fulltext.split("\n").at(-1)
-    : data.fulltext;
+  if ("statute" in data) {
+    return data.statute.fulltext.split("\n").at(-1);
+  }
+  // The hubs list links, not a document: their court name is the content.
+  if ("courts" in data) {
+    return data.courts[0]?.name;
+  }
+  if ("page" in data) {
+    return data.court;
+  }
+  return data.fulltext;
 };
 
 export const publicFixtureReadySelector = (
   routeId: string,
   audience: "member" | "anonymous",
 ) => {
-  if (publicFixtureLoaderData(routeId) === undefined) {
+  const data = publicFixtureLoaderData(routeId);
+  // The hubs have no document viewer to wait for.
+  if (data === undefined || "courts" in data || "page" in data) {
     return undefined;
   }
   return audience === "member"

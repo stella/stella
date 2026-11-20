@@ -1,0 +1,3 @@
+{
+  "add-constraint": "The widened harness check on desktop_runner_runs validates a table of a handful of runs per member (pruned ended runs) within the 10s statement_timeout; every existing row already holds an allowed harness, and ACCESS EXCLUSIVE acquisition is bounded by the 1s lock_timeout."
+}

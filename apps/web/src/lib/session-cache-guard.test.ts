@@ -1,8 +1,12 @@
 import { QueryClient } from "@tanstack/react-query";
 import { isRedirect } from "@tanstack/react-router";
-import { afterAll, describe, expect, test } from "bun:test";
+import { afterAll, describe, expect } from "bun:test";
 import { readFileSync } from "node:fs";
 import nodePath from "node:path";
+
+import { requestTest as test } from "@stll/start-runtime/test-request";
+
+import { memberSessionFor } from "@/lib/account/auth-session.test-fixtures";
 
 // The network these reads go to: the signed-in member (or nobody) answers.
 let signedIn: string | null = "member-a";
@@ -51,8 +55,12 @@ const { refreshAuthQueries, roleOptions, sessionOptions } =
   await import("@/lib/auth-queries");
 const { groupedChatThreadsOptions } = await import("@/features/chat/queries");
 const { isAuthFlowPathname } = await import("@/lib/redirect");
-const { installSessionCacheGuard, requireFreshDocument } =
-  await import("@/lib/session-cache-guard");
+const {
+  installSessionCacheGuard,
+  isCurrentDocumentSession,
+  requireFreshDocument,
+  resetAuthTransition,
+} = await import("@/lib/session-cache-guard");
 
 afterAll(() => {
   globalThis.fetch = originalFetch;
@@ -99,6 +107,19 @@ const cachedKeys = (queryClient: QueryClient) =>
     .toSorted();
 
 const SESSION_ONLY = [JSON.stringify(["session"])];
+
+test("document actions require the successfully cached member to match the just-read identity", () => {
+  const queryClient = new QueryClient();
+  expect(isCurrentDocumentSession(queryClient, "member-a")).toBe(true);
+  queryClient.setQueryData(
+    sessionOptions.queryKey,
+    memberSessionFor({ userId: "member-a", locale: "en" }),
+  );
+  expect(isCurrentDocumentSession(queryClient, "member-a")).toBe(true);
+  expect(isCurrentDocumentSession(queryClient, "member-b")).toBe(false);
+  expect(isCurrentDocumentSession(queryClient, null)).toBe(false);
+  queryClient.clear();
+});
 
 /** Signs `member` in the way every sign-in step does, from the sign-in page. */
 const signInAs = async (
@@ -257,6 +278,29 @@ describe("sign-in and the client cache", () => {
     expect(
       await nextNavigation(client.queryClient, { pathname: "/chat" }),
     ).toBe("stay");
+  });
+
+  test("the first page after signing in keeps the reads its loaders started", async () => {
+    // A signed-out visitor opens a member page and is sent to sign in.
+    signedIn = null;
+    const client = createClient("/workspaces");
+    await client.queryClient.query(sessionOptions);
+    client.location.pathname = "/auth/otp";
+    signedIn = "member-a";
+    await refreshAuthQueries(client.queryClient);
+
+    // The destination's loader starts its read, then the member frame mounts
+    // for the visitor now signed in, as the frame host does on first show.
+    client.location.pathname = "/workspaces";
+    const response = Promise.withResolvers<string>();
+    const loaderRead = client.queryClient.query({
+      queryKey: ["workspaces", "org-x"],
+      queryFn: async () => await response.promise,
+    });
+    await resetAuthTransition(client.queryClient, "member:member-a:org-x");
+    response.resolve("matters");
+
+    expect(await loaderRead).toBe("matters");
   });
 });
 

@@ -6,12 +6,18 @@ import { useNavigate } from "@tanstack/react-router";
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
+import { DirectionalIcon } from "@stll/ui/directional-icon";
 import {
   type EntityAction,
   EntityActions,
   EntityActionsButton,
 } from "@stll/ui/entity-actions";
-import { DownloadIcon, GitBranchIcon, PanelRightIcon } from "@stll/ui/icons";
+import {
+  CheckIcon,
+  DownloadIcon,
+  GitBranchIcon,
+  MoveToSideIcon,
+} from "@stll/ui/icons";
 import { Loader } from "@stll/ui/loader";
 
 import type { PersistedChatMessage } from "@/components/chat/chat-ui-tools";
@@ -48,6 +54,9 @@ type ChatMessageActionsProps = {
    *  must be told it. Defaults to the thread's own matter. */
   contextMatterIds?: readonly string[] | undefined;
   exportArtifact: CreateDocumentDraft | null;
+  /** An edit undid the file changes of this message's turn, as the server
+   *  marked the answer: it keeps the marker. */
+  localFilesUndone?: boolean | undefined;
   message: PersistedChatMessage;
   threadRef: ChatThreadRef;
 };
@@ -65,10 +74,12 @@ const FORK_DESTINATION_LABELS = {
   main: "chat.forkFromHere",
 } as const satisfies Record<ForkDestination, TranslationKey>;
 
+// The side-panel fork sends the new chat to the side, so it draws the same
+// glyph as "Move to side panel", mirrored under RTL with the panel.
 const FORK_DESTINATION_ICONS = {
-  inspector: PanelRightIcon,
-  main: GitBranchIcon,
-} as const satisfies Record<ForkDestination, unknown>;
+  inspector: () => <DirectionalIcon icon={MoveToSideIcon} />,
+  main: () => <GitBranchIcon aria-hidden="true" />,
+} as const satisfies Record<ForkDestination, () => ReactNode>;
 
 /** No matters beyond the thread's own: the fork keeps just that scope. */
 const NO_EXTRA_CONTEXT_MATTERS: readonly string[] = [];
@@ -89,6 +100,7 @@ const ChatMessageActions = ({
   children,
   contextMatterIds = NO_EXTRA_CONTEXT_MATTERS,
   exportArtifact,
+  localFilesUndone = false,
   message,
   threadRef,
 }: ChatMessageActionsProps) => {
@@ -173,7 +185,7 @@ const ChatMessageActions = ({
           icon: forking ? (
             <Loader label={t("chat.forkingThread")} size="sm" />
           ) : (
-            <Icon aria-hidden="true" />
+            <Icon />
           ),
           label: forking
             ? t("chat.forkingThread")
@@ -204,6 +216,16 @@ const ChatMessageActions = ({
       <>
         <SidePanelChatNote status={sidePanelChat.status} />
         <SidePanelChatAnnouncer status={sidePanelChat.status} />
+        {localFilesUndone && (
+          <span
+            className="text-muted-foreground flex items-center gap-1.5 text-xs"
+            data-local-files-undo="restored"
+            role="status"
+          >
+            <CheckIcon aria-hidden="true" className="size-3.5" />
+            {t("chat.localFilesUndo.restored")}
+          </span>
+        )}
         {canExport && (
           <MessageExportMenu
             anchor={trigger}

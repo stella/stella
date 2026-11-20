@@ -76,18 +76,6 @@ const runImplementedRunner = async ({
     return await runCaseLawIngest(argv);
   }
 
-  if (runnerName === "case-law-corpus-storage-backfill") {
-    const { runCaseLawCorpusStorageBackfill } =
-      await import("./runners/case-law-corpus-storage-backfill.js");
-    return await runCaseLawCorpusStorageBackfill(argv);
-  }
-
-  if (runnerName === "legal-corpus-storage-backfill") {
-    const { runLegalCorpusStorageBackfill } =
-      await import("./runners/case-law-corpus-storage-backfill.js");
-    return await runLegalCorpusStorageBackfill(argv);
-  }
-
   await writeErr(`Runner ${runnerName} is registered without an entrypoint.`);
   return 70;
 };

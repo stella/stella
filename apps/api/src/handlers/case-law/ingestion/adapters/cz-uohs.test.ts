@@ -10,6 +10,8 @@ import {
 } from "@/api/handlers/case-law/ingestion/adapters/__fixtures__/cz-uohs.synthetic";
 import {
   buildCzUohsDecision as uncheckedBuildCzUohsDecision,
+  CZ_UOHS_DOCUMENT_TIMEOUT_MS,
+  CZ_UOHS_PAGE_SIZE,
   czUohsAdapter,
   czUohsCollectionOf,
   czUohsDecisionIdentifiers,
@@ -26,6 +28,8 @@ import {
 } from "@/api/handlers/case-law/ingestion/parsers/pdf-bands";
 import { publishedCaseLawDecisionIndexPredicateSql } from "@/api/lib/case-law/published-decisions-sql";
 import { savePdfRewrite } from "@/api/lib/files/pdf-signatures";
+import { ADAPTER_TIMEOUT } from "@/api/lib/legal-search/ingestion-constants";
+import { sanitizeResult } from "@/api/lib/legal-search/ingestion-normalization";
 import { decodeSourceRawEnvelope } from "@/api/lib/legal-search/ingestion-types";
 import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
 import { createTestFetch } from "@/api/tests/helpers/test-fetch";
@@ -284,6 +288,35 @@ describe("ÚOHS JSON-LD", () => {
         "o právním posouzení šetřeného případu Úřadem a předal mu také informace",
       );
     });
+
+    test.each([
+      [
+        "cz-uohs-2018-R0003.pdf",
+        "uvedených v její Příloze č. 1, a s účinností od",
+        "11. února 2015",
+      ],
+      [
+        "cz-uohs-2015-S0569.pdf",
+        "jednání konaném v rámci správního řízení ve dnech",
+        "29. 4. 2016",
+      ],
+      [
+        "cz-uohs-2024-R0145.pdf",
+        "v zadávacím řízení“ ze dne",
+        "29. 8. 2024, které je ve správním spise",
+      ],
+    ] as const)(
+      "%s: a date wrapped after its day goes on in its paragraph",
+      async (fixture, sentence, date) => {
+        const body = bodyOf(await read(fixture));
+        expect(
+          body.filter(({ plainText }) => plainText.startsWith(date)),
+        ).toEqual([]);
+        expect(
+          body.find(({ plainText }) => plainText.includes(sentence))?.plainText,
+        ).toContain(date);
+      },
+    );
 
     test("every footnote is a note, in order, and none is left in the text", async () => {
       const ast = await read("cz-uohs-2018-R0003.pdf");
@@ -587,6 +620,32 @@ describe("ÚOHS JSON-LD", () => {
     ).toBe("ÚOHS-S0904");
   });
 
+  test("leaves out a reference number past the identifier bound", async () => {
+    // A joined proceeding: the listed file number is shortened, the
+    // reference number names every joined file.
+    const serials = Array.from({ length: 60 }, (_, index) =>
+      String(100 + index).padStart(4, "0"),
+    );
+    const [first] = await records();
+    const record = {
+      ...first!,
+      spisová_značka: `S${serials.slice(0, 20).join(",")}...`,
+      číslo_jednací: `S${serials.join(",")}/2014/VZ-12345/2014/513/ABc`,
+      dokument: [],
+    };
+
+    expect(czUohsDecisionIdentifiers(record)).toHaveLength(1);
+    const decision = await buildCzUohsDecision(record);
+    expect(sanitizeResult(decision).isOk()).toBe(true);
+    // A reference within the bound stays a lookup key.
+    expect(
+      czUohsDecisionIdentifiers({
+        spisová_značka: "S817,818,819",
+        číslo_jednací: "S817,818,819/2014/VZ 26112/2014/533/ZPr",
+      }),
+    ).toHaveLength(2);
+  });
+
   test("reads the date beside the reference number in older letterheads", () => {
     expect(
       czUohsLetterheadDate(
@@ -635,10 +694,10 @@ describe("ÚOHS JSON-LD", () => {
     ).toBeUndefined();
   });
 
-  test("emits citation-shaped authority identifiers", async () => {
+  test("emits authority identifiers as the office prints them", async () => {
     expect(czUohsDecisionIdentifiers((await records())[0]!)).toEqual([
-      { type: "authority-decision-number", value: "úohs-r0901/2026/vz" },
-      { type: "authority-decision-number", value: "úohs-90001/2026/163" },
+      { type: "authority-decision-number", value: "ÚOHS-R0901/2026/VZ" },
+      { type: "authority-decision-number", value: "ÚOHS-90001/2026/163" },
     ]);
   });
 
@@ -741,7 +800,7 @@ describe("ÚOHS JSON-LD", () => {
       "document",
       "document-1",
     ]);
-    const provenance = JSON.parse(
+    const provenance: { documents: Record<string, unknown> } = JSON.parse(
       decodeSourceRawEnvelope(decision.sourceRaw ?? "")?.["provenance"] ??
         "null",
     );
@@ -777,6 +836,17 @@ describe("ÚOHS JSON-LD", () => {
     expect(second.decisions).toHaveLength(1);
     expect(listingRequests).toBe(1);
     expect(second.nextCursor).not.toBe(first.nextCursor);
+  });
+
+  test("a page deadline fits a full page of gated document reads and one slow read", () => {
+    const documentsPerRecord = 2;
+    const gatedReads =
+      CZ_UOHS_PAGE_SIZE *
+      documentsPerRecord *
+      czUohsAdapter.minRequestIntervalMs;
+    expect(czUohsAdapter.pageTimeoutMs ?? ADAPTER_TIMEOUT.PAGE).toBeGreaterThan(
+      gatedReads + CZ_UOHS_DOCUMENT_TIMEOUT_MS,
+    );
   });
 
   test("a parked walk resumes after its frontier, not from the start", async () => {
@@ -842,7 +912,7 @@ describe("ÚOHS JSON-LD", () => {
     if (first.nextCursor === null) {
       return;
     }
-    const cursor = JSON.parse(first.nextCursor);
+    const cursor: { snapshotId: string } = JSON.parse(first.nextCursor);
     cursor.snapshotId = "not-cached";
     const second = (
       await czUohsAdapter.fetchPage(JSON.stringify(cursor), {}, undefined)

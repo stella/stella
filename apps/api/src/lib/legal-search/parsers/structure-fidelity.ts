@@ -30,6 +30,10 @@ import {
 } from "@stll/legal-ast/decision-role-grammar";
 // parser-output-unchanged: imports the document AST from its package owner
 import type { Block } from "@stll/legal-ast/document-ast";
+import {
+  PRINTED_LABEL_KIND,
+  readPrintedLabel,
+} from "@stll/legal-ast/printed-paragraph-labels";
 
 import {
   continuesAcrossPageBreak,
@@ -72,6 +76,11 @@ export const STRUCTURE_FIDELITY_RULES = {
    * block: the parser read the ruling as head matter or as reasons.
    */
   RULING_WITHOUT_HOLDING: "ruling-without-holding",
+  /**
+   * The instruction on the remedy against the decision, read as its ruling:
+   * the parser carried the operative part on past the ruling's end.
+   */
+  INSTRUCTION_AS_HOLDING: "instruction-as-holding",
 } as const;
 
 type StructureFidelityRule =
@@ -114,6 +123,91 @@ const separatesLabelledLines = (
   SEPARATOR_WORD_RE.test(nextText) &&
   afterNext?.type === "paragraph" &&
   OPENS_ON_LABEL_RE.test(afterNext.plainText.trim());
+
+/** The labels a list's points open on: `2.`, `2)`, `b)`, `5.5.`. */
+const LIST_POINT_KINDS: ReadonlySet<string> = new Set([
+  PRINTED_LABEL_KIND.NUMBER,
+  PRINTED_LABEL_KIND.SUBNUMBER,
+  PRINTED_LABEL_KIND.LETTER,
+]);
+
+/** A list point a sentence names before its label (`v bode 2) …`). */
+const NAMED_POINT_PREFIX = "v bode ";
+
+/**
+ * Whether a paragraph is a point of a list the sentence runs on into,
+ * opening on its label as the printed-label grammar reads it (`b) …`,
+ * `v bode 2) …`): the list's own paragraph, not the rest of a cut sentence.
+ */
+const opensListPoint = (text: string): boolean => {
+  const point = text.startsWith(NAMED_POINT_PREFIX)
+    ? text.slice(NAMED_POINT_PREFIX.length)
+    : text;
+  const label = readPrintedLabel(point);
+  return label !== null && LIST_POINT_KINDS.has(label.kind);
+};
+
+/**
+ * Whether a paragraph break inside a criminal verdict's ruling falls at one
+ * of the verdict's formula lines (`uznáva sa za vinného, že`, `teda`), which
+ * the court prints on lines of their own.
+ */
+const breaksAtVerdictFormula = (
+  grammar: DecisionRoleGrammar | undefined,
+  role: string | undefined,
+  text: string,
+  nextText: string,
+): boolean =>
+  role === "holding" &&
+  grammar?.isVerdictFormulaLine !== undefined &&
+  (grammar.isVerdictFormulaLine(text) ||
+    grammar.isVerdictFormulaLine(nextText));
+
+/**
+ * A party's line in the Court of Justice's list of appearances, ended with a
+ * comma: set on a dash (`– w imieniu Komisji Europejskiej – B.-R. Killmann
+ * oraz W. Roels, w charakterze pełnomocników,`) or naming the party's agents
+ * (`…, by E. Montaguti and F. Wilman, acting as Agents,`).
+ */
+const DASH_BULLET_RE = /^[-–—]\s/u;
+const AGENTS_ENDING_RE =
+  /(?:acting as Agents?|w charakterze pełnomocnik(?:a|ów))$/u;
+
+const isPartyLine = (text: string): boolean => {
+  if (!text.endsWith(",")) {
+    return false;
+  }
+  const withoutComma = text.slice(0, -1).trimEnd();
+  return DASH_BULLET_RE.test(text) || AGENTS_ENDING_RE.test(withoutComma);
+};
+
+/**
+ * The recital the Court of Justice runs on in a paragraph of its own after
+ * its list of appearances: `podjąwszy …`, `after hearing the Opinion …`.
+ */
+const RECITAL_OPENING_RE =
+  /^(?:podjąwszy|po wysłuchaniu|po zapoznaniu się|after hearing|having regard|having considered)(?=[\s,])/u;
+
+/**
+ * The formula the Court of Justice sets on a line of its own in an
+ * operative part, after the provision it interprets: `należy interpretować
+ * w ten sposób, że:`, `must be interpreted as …`.
+ */
+const INTERPRETATION_FORMULA_RE =
+  /^(?:należy interpretować (?:w ten sposób|jako)|must be interpreted as)(?=[\s,:])/u;
+
+/** Whether a paragraph break is a court's own layout, not a cut sentence. */
+const breaksAtCourtLayout = (text: string, nextText: string): boolean =>
+  (isPartyLine(text) && RECITAL_OPENING_RE.test(nextText)) ||
+  INTERPRETATION_FORMULA_RE.test(nextText);
+
+/**
+ * A paragraph opening on a full date (`1 lipca 2024 r. …`, `22 March
+ * 2018 …`): after a sentence that ended, a sentence that opens on its date,
+ * not a date cut off the line above.
+ */
+const OPENS_ON_FULL_DATE_RE = /^\d{1,2}\s+\p{L}+\s+\d{4}\b/u;
+const ENDS_SENTENCE_RE = /[.!?…]$/u;
 
 /** Units a table row prints beside its figures, compared lowercased. */
 const TABLE_UNITS: ReadonlySet<string> = new Set([
@@ -206,6 +300,9 @@ const holdingRoleRules = (
   ...(!ruled && grammar?.isRecitalLine?.(text) === true
     ? [STRUCTURE_FIDELITY_RULES.RECITAL_AS_HOLDING]
     : []),
+  ...(grammar?.isAppealInstruction?.(text) === true
+    ? [STRUCTURE_FIDELITY_RULES.INSTRUCTION_AS_HOLDING]
+    : []),
 ];
 
 /** Whether a block opens a ruling, by the language's grammar. */
@@ -228,9 +325,58 @@ const rules = (
  * Every printed-page structure the blocks carry, in document order, and
  * every role the decision's language grammar reads otherwise.
  */
+/**
+ * Whether a paragraph opens on a bare number the line above lost, rather
+ * than a sentence opening on its date after one that ended.
+ */
+const opensOnStrayNumber = (
+  text: string,
+  previous: Block | undefined,
+): boolean =>
+  STRAY_LEADING_NUMBER_RE.test(text) &&
+  !(
+    OPENS_ON_FULL_DATE_RE.test(text) &&
+    previous?.type === "paragraph" &&
+    ENDS_SENTENCE_RE.test(previous.plainText.trim())
+  );
+
+/**
+ * Whether a paragraph's sentence goes on in the next paragraph of its role,
+ * past every layout a court or a table sets on lines of their own.
+ */
+const cutsSentence = ({
+  grammar,
+  role,
+  text,
+  nextText,
+  afterNext,
+}: {
+  grammar: DecisionRoleGrammar | undefined;
+  role: string | undefined;
+  text: string;
+  nextText: string;
+  afterNext: Block | undefined;
+}): boolean =>
+  !OPENS_ON_LABEL_RE.test(nextText) &&
+  !isTableRow(text) &&
+  !isTableRow(nextText) &&
+  !separatesLabelledLines(nextText, afterNext) &&
+  !opensListPoint(nextText) &&
+  !breaksAtVerdictFormula(grammar, role, text, nextText) &&
+  !breaksAtCourtLayout(text, nextText) &&
+  continuesAcrossPageBreak(text, nextText);
+
+/**
+ * What the document is. `decision` (the default) is a court's or an
+ * authority's ruling; `other` is a document that rules on nothing (a
+ * brochure, guidance, a newsletter), whose ruling verbs open no ruling.
+ */
+export type StructureFidelityDocument = "decision" | "other";
+
 export const structureFidelityIn = (
   blocks: readonly Block[],
   language?: string,
+  document: StructureFidelityDocument = "decision",
 ): StructureFidelityFinding[] => {
   const findings: StructureFidelityFinding[] = [];
   let signed = false;
@@ -276,7 +422,7 @@ export const structureFidelityIn = (
     }
     if (isPageNumberLine(text)) {
       finding(STRUCTURE_FIDELITY_RULES.PAGE_NUMBER_BLOCK);
-    } else if (STRAY_LEADING_NUMBER_RE.test(text)) {
+    } else if (opensOnStrayNumber(text, blocks[index - 1])) {
       finding(STRUCTURE_FIDELITY_RULES.STRAY_LEADING_NUMBER);
     }
     const next = blocks[index + 1];
@@ -284,11 +430,13 @@ export const structureFidelityIn = (
     if (
       next?.type === "paragraph" &&
       next.role === block.role &&
-      !OPENS_ON_LABEL_RE.test(nextText) &&
-      !isTableRow(text) &&
-      !isTableRow(nextText) &&
-      !separatesLabelledLines(nextText, blocks[index + 2]) &&
-      continuesAcrossPageBreak(text, nextText)
+      cutsSentence({
+        grammar: reading.grammar,
+        role: block.role,
+        text,
+        nextText,
+        afterNext: blocks[index + 2],
+      })
     ) {
       finding(
         STRUCTURE_FIDELITY_RULES.SENTENCE_CUT,
@@ -298,7 +446,7 @@ export const structureFidelityIn = (
     reading.reasoned ||= opens;
   }
   const opening = reading.rulingOpening;
-  if (opening !== undefined && !reading.held) {
+  if (document === "decision" && opening !== undefined && !reading.held) {
     findings.push({
       rule: STRUCTURE_FIDELITY_RULES.RULING_WITHOUT_HOLDING,
       anchorId: opening.anchorId,

@@ -59,6 +59,7 @@ import {
   SelectValue,
 } from "@stll/ui/select";
 import { Textarea } from "@stll/ui/textarea";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import type { ReferencePassageTexts } from "@/components/ai-suggestions/document-review-passage-texts";
@@ -535,12 +536,15 @@ const PositionSourcesRow = ({
               variant="plain"
             >
               <span className="group-hover/plain:text-foreground flex min-w-0 items-baseline gap-1.5 py-1">
-                <UserText className="truncate font-medium">
+                <TruncatedText className="font-medium" render={<UserText />}>
                   {source.name}
-                </UserText>
-                <UserText className="text-muted-foreground truncate">
+                </TruncatedText>
+                <TruncatedText
+                  className="text-muted-foreground"
+                  render={<UserText />}
+                >
                   {source.workspaceName}
-                </UserText>
+                </TruncatedText>
               </span>
             </Button>
             <Button

@@ -4,7 +4,11 @@ import type { ReactNode } from "react";
 
 import { ChevronDownIcon } from "../icons";
 import { cn } from "../lib/utils";
-import { COMPOSER_PICKER_TRIGGER_CLASS } from "./composer-tokens";
+import {
+  COMPOSER_PLACEHOLDER_CLASS,
+  COMPOSER_STATUS_ROW_CENTERED_CLASS,
+  COMPOSER_STATUS_ROW_CLASS,
+} from "./composer-tokens";
 import {
   Menu,
   MenuPopup,
@@ -12,6 +16,7 @@ import {
   MenuRadioItem,
   MenuTrigger,
 } from "./menu";
+import { TruncatedText } from "./truncated-text";
 
 export {
   COMPOSER_CONTROL_BUTTON_SIZE,
@@ -28,7 +33,38 @@ export {
   COMPOSER_LEADING_GROUP_CLASS,
   COMPOSER_SEND_BUTTON_CLASS,
   COMPOSER_PICKER_TRIGGER_CLASS,
+  COMPOSER_STATUS_ROW_CENTERED_CLASS,
+  COMPOSER_STATUS_ROW_CLASS,
 } from "./composer-tokens";
+
+/** Where the placeholder sits over the editor, in each stature. */
+const COMPOSER_PLACEHOLDER_POSITION_CLASS = {
+  compact: "start-0 end-0 top-1/2 -translate-y-1/2",
+  large: "start-3 end-3 top-2",
+} as const;
+
+/**
+ * The placeholder painted over an empty editor, cut to one line. It takes no
+ * pointer and is hidden from assistive tech, so it shows no hint.
+ */
+export const ComposerPlaceholder = ({
+  children,
+  stature,
+}: {
+  children: ReactNode;
+  stature: keyof typeof COMPOSER_PLACEHOLDER_POSITION_CLASS;
+}) => (
+  <TruncatedText
+    aria-hidden="true"
+    className={cn(
+      COMPOSER_PLACEHOLDER_CLASS,
+      COMPOSER_PLACEHOLDER_POSITION_CLASS[stature],
+    )}
+    hint={false}
+  >
+    {children}
+  </TruncatedText>
+);
 
 type ComposerStatusRowProps = {
   /** Left cluster: matter picker, web-search / anonymize toggles, ... */
@@ -64,12 +100,7 @@ export const ComposerStatusRow = ({
 
   if (center !== undefined) {
     return (
-      <div
-        className={cn(
-          "text-muted-foreground @container mt-1.5 grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 px-1 text-xs",
-          className,
-        )}
-      >
+      <div className={cn(COMPOSER_STATUS_ROW_CENTERED_CLASS, className)}>
         <div className="flex min-w-0 items-center">{start}</div>
         <div className="flex items-center justify-center">{center}</div>
         <div className="flex min-w-0 items-center justify-end">{end}</div>
@@ -78,12 +109,7 @@ export const ComposerStatusRow = ({
   }
 
   return (
-    <div
-      className={cn(
-        "text-muted-foreground mt-1.5 flex items-center justify-between gap-2 px-1 text-xs",
-        className,
-      )}
-    >
+    <div className={cn(COMPOSER_STATUS_ROW_CLASS, className)}>
       {start}
       {end !== undefined && <div className="ms-auto">{end}</div>}
     </div>
@@ -122,14 +148,11 @@ export const ComposerPicker = <Value extends string>({
 
   return (
     <Menu>
-      <MenuTrigger
-        aria-label={ariaLabel}
-        className={COMPOSER_PICKER_TRIGGER_CLASS}
-      >
+      <MenuTrigger appearance="caption" aria-label={ariaLabel}>
         <span className="flex size-3 shrink-0 items-center justify-center [&>svg]:size-3">
           {icon}
         </span>
-        <span className="truncate">{current?.label ?? value}</span>
+        <TruncatedText hint={false}>{current?.label ?? value}</TruncatedText>
         <ChevronDownIcon
           aria-hidden="true"
           className="size-3 shrink-0 opacity-70"

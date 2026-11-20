@@ -13,6 +13,7 @@ test("candidate batches advance their SQL keyset through the entire bounded inpu
     { length: 251 },
     (_, index) =>
       ({
+        generation_provenance: null,
         id: String(index),
         tier: index < 100 ? 4 : 1,
         score: (index < 100 ? 1000 : 2000) - index,
@@ -48,7 +49,12 @@ test("a window past the batch limit keeps the threads it read and reports partia
       calls++;
       return Array.from(
         { length: LIMITS.searchChatCandidateThreadsMax + 1 },
-        (_, index) => ({ id: `${calls}-${index}`, tier: 1, score: 1 }),
+        (_, index) => ({
+          id: `${calls}-${index}`,
+          generation_provenance: null,
+          tier: 1,
+          score: 1,
+        }),
       );
     },
   });
@@ -62,14 +68,15 @@ test("a window past the batch limit keeps the threads it read and reports partia
 test("the byte budget keeps earlier threads of the same batch", async () => {
   const read = await readChatCandidateBatches({
     readBatch: async () => [
-      { id: "first", tier: 1, score: 2 },
+      { id: "first", generation_provenance: null, tier: 1, score: 2 },
       {
+        generation_provenance: null,
         id: "oversized",
         tier: 1,
         score: 1,
         text: "x".repeat(LIMITS.searchChatCandidateBytesMax),
       },
-      { id: "after", tier: 1, score: 0 },
+      { id: "after", generation_provenance: null, tier: 1, score: 0 },
     ],
   });
   expect(read.rows.map(({ id }) => id)).toEqual(["first"]);
@@ -80,6 +87,7 @@ test("a thread past the source limit stays a candidate beside the threads after 
   const read = await readChatCandidateBatches({
     readBatch: async () => [
       {
+        generation_provenance: null,
         id: "long",
         tier: 1,
         score: 2,
@@ -89,6 +97,7 @@ test("a thread past the source limit stays a candidate beside the threads after 
         ],
       },
       {
+        generation_provenance: null,
         id: "short",
         tier: 1,
         score: 1,

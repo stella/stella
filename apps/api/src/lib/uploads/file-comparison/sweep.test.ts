@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
+import { DeleteOrganizationFileError } from "@/api/lib/files/delete-organization-file";
 import { OrganizationFileUsageError } from "@/api/lib/files/organization-file-usage";
 import {
   FileComparisonSweepError,
@@ -88,9 +89,13 @@ const createHarness = ({
             }
             if (ledgerFailsFor.has(key)) {
               return Result.err(
-                new OrganizationFileUsageError({
+                new DeleteOrganizationFileError({
                   message: "Ledger unavailable",
-                  reason: "storage_unavailable",
+                  stage: "usage_removal",
+                  cause: new OrganizationFileUsageError({
+                    message: "Ledger unavailable",
+                    reason: "storage_unavailable",
+                  }),
                 }),
               );
             }
@@ -156,7 +161,11 @@ describe("file comparison expiry sweep", () => {
     if (Result.isOk(swept)) {
       throw new Error("Expected ledger failure");
     }
-    expect(swept.error.cause).toBeInstanceOf(OrganizationFileUsageError);
+    expect(swept.error.cause).toBeInstanceOf(DeleteOrganizationFileError);
+    expect(
+      DeleteOrganizationFileError.is(swept.error.cause) &&
+        swept.error.cause.cause,
+    ).toBeInstanceOf(OrganizationFileUsageError);
     expect(swept.error.summary).toEqual({
       scanned: 2,
       sweptUploads: 1,
@@ -220,7 +229,11 @@ test("keeps the first row cause when multiple deletes and row removal fail", asy
   if (Result.isOk(outcome)) {
     throw new Error("Expected partial failure");
   }
-  expect(outcome.error.cause).toBeInstanceOf(OrganizationFileUsageError);
+  expect(outcome.error.cause).toBeInstanceOf(DeleteOrganizationFileError);
+  expect(
+    DeleteOrganizationFileError.is(outcome.error.cause) &&
+      outcome.error.cause.cause,
+  ).toBeInstanceOf(OrganizationFileUsageError);
   expect(outcome.error.summary).toEqual({
     scanned: 2,
     sweptUploads: 0,

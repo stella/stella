@@ -1,0 +1,6 @@
+{
+  "metric": "no-db-await-in-loop-suppressions",
+  "file": "apps/api/src/lib/case-law/held-decision-attachment-census.ts",
+  "delta": 1,
+  "reason": "The read-only runbook census runs one bounded set of reads per source that declares a held-decision attachment; the declarations are a static map of a handful of sources, not rows."
+}

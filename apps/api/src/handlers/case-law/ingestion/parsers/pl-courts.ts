@@ -1,3 +1,8 @@
+// parser-output-unchanged: pushHeading now takes named options; call values, evaluation order, parameter bindings, and emitted heading logic are unchanged.
+// parser-output-unchanged: [pl-kio] only adds the common-court reader with its paragraph numbering, which the procurement chamber's reader does not call.
+// parser-output-unchanged: [pl-kis] only adds the common-court reader with its paragraph numbering, which the tax-ruling reader does not call.
+// parser-output-unchanged: [pl-sn] only adds the common-court reader with its paragraph numbering, which the Supreme Court's reader does not call.
+// parser-output-unchanged: [pl-uokik] only adds the common-court reader with its paragraph numbering, which the competition authority's reader does not call.
 // parser-output-unchanged: HTML loads through @stll/html, which reproduces cheerio.load output; parsed content is unchanged.
 // parser-output-unchanged: footnoteIds is supplied only by the PL-SN and UOKIK PDF readers; other callers retain sanitizeUrl and their existing link output.
 // parser-output-unchanged: [cz-nss] Printed-line joining changes only the common-court recital and EUREKA <br> runs; committed output of this source is unchanged (replay fingerprint identical).
@@ -59,20 +64,34 @@ import {
   startsDecisionBody,
 } from "@stll/legal-ast/document-ast";
 import {
+  stripInlinePrefix,
+  stripInlineSuffix,
+} from "@stll/legal-ast/inline-line";
+import {
   containsPlOperativeVerb,
+  isPlAppealInstruction,
+  isPlAuthorityDecisionTitle,
+  isPlBenchMemberLine,
   isPlClosingLine,
   isPlCompositionLine,
+  isPlDecisionDateLine,
   isPlHoldingHeading,
+  isPlInstructionHeading,
   isPlLegalBasisRuling,
   isPlNumberedReasonsHeading,
   isPlOpeningRecital,
   isPlReasonsHeading,
+  isPlRecitalLine,
+  isPlRemedyFilingLine,
   isPlSignatureBlank,
   isPlSignatureLine,
   namesPlDocumentType,
   opensPlRuling,
-  opensWithPlSignatureTitle,
+  plRulingClauseStart,
+  statesPlAuthorityRuling,
 } from "@stll/legal-ast/polish-document-roles";
+// parser-output-unchanged: the subheading outline number moved unchanged into the printed-label grammar.
+import { SUBHEADING_OUTLINE_NUMBER_RE } from "@stll/legal-ast/printed-paragraph-labels";
 import { collapseLetterSpacing } from "@stll/text-normalize";
 
 import { stripHtml } from "@/api/handlers/case-law/ingestion/parsers/strip-html";
@@ -81,6 +100,7 @@ import {
   renderHtmlWhiteSpace,
 } from "@/api/lib/legal-search/document-builders/html-whitespace";
 import { inlineStyleValue } from "@/api/lib/legal-search/document-builders/inline-style";
+import { courtParagraphNumbers } from "@/api/lib/legal-search/parsers/court-paragraph-numbers";
 import { readInlineLetterSpacing } from "@/api/lib/legal-search/parsers/letter-spacing";
 import { sanitizeUrl } from "@/api/lib/sanitize-url";
 import { includes } from "@/api/lib/type-guards";
@@ -140,10 +160,32 @@ type ParsePlDecisionInput = {
    * any publisher's.
    */
   markup?: PlDecisionMarkup | undefined;
+  /**
+   * How the document sets out its parts, where its headings alone do not
+   * say. Omitted, the document is read as a court's decision.
+   */
+  layout?: PlDecisionLayout | undefined;
 };
 
+// parser-output-unchanged: the `layout` input is opt-in; only the tax administration's reader passes it, with its version bump, and every other caller reads its document as before.
 /**
- * `COMMON_COURT`: the courts' own editor, which SAOS copies and the courts'
+ * `SECTIONED_LETTER`: an authority's letter set out by its template under
+ * headings (the tax administration's interpretations, opinions and rulings).
+ * The heading it opens with, before any text, is its title; the authority
+ * states its ruling in the letter's opening in its own voice (`stwierdzam,
+ * że …`, `Dyrektor … odmawia …`, `Szef … wydał opinię …`); and a heading
+ * after the opening opens the body, which sets out the request, the
+ * assessment and the reasons under headings of their own.
+ */
+export const PL_DECISION_LAYOUT = {
+  SECTIONED_LETTER: "sectioned-letter",
+} as const;
+
+type PlDecisionLayout =
+  (typeof PL_DECISION_LAYOUT)[keyof typeof PL_DECISION_LAYOUT];
+
+/**
+ * `COMMON_COURT`:the courts' own editor, which SAOS copies and the courts'
  * portal serves. SAOS's serializer opens every inline element with a
  * newline, a line break inside a running sentence wraps it (see
  * `readCommonCourtInlines`), a list item is its marker and its text, text
@@ -188,7 +230,8 @@ const DECISION_TITLES: ReadonlySet<string> = new Set(
     (title) => title !== POLISH_DECISION_TITLE_MAP.decyzja,
   ),
 );
-const CASE_NUMBER_RE = /^sygn(?:atura)?\.?\s*akt[:\s]/iu;
+/** A docket line: `Sygn. akt: I C 155/19`, `Sygn. akt. I C 155/19`. */
+const CASE_NUMBER_RE = /^sygn(?:atura)?\.?\s*akt\.?[:\s]/iu;
 const DECISION_ITEM_PREFIX_RE = /^(?:[IVXLCDM]+|\d+|[a-z])[.)](?:\s+|$)/iu;
 const DECISION_ITEM_MARKER_RE =
   /^(?<marker>[IVXLCDM]+|\d+|[a-z])[.)](?:\s+|$)/iu;
@@ -216,7 +259,6 @@ const itemFamilyOf = (text: string): ItemFamily | undefined => {
  * Numbered and multi-letter Roman points are never read this way.
  */
 const LETTER_ABBREVIATION_PREFIX_RE = /^[b-hj-z][.)](?:\s+|$)/iu;
-const AUTHORITY_DECISION_TITLE_RE = /^decyzja\s+nr\b/iu;
 const PANEL_MEMBER_RE = /^(?:SSN|SSA|SSO|SSR)\b|\(ławnik[^)]*\)$/iu;
 const CLERK_MARK_RE = /^\[(?:\p{L}{2,3}|\p{L}\.(?:\p{L}\.?){1,3})\]$/u;
 const CLERK_INITIALS_RE = /^(?:\p{Lu}\.){1,4}$/u;
@@ -245,6 +287,7 @@ type ParserState = {
   superscripts: boolean;
   boldSubheadings: boolean;
   markup: PlDecisionMarkup | undefined;
+  layout: PlDecisionLayout | undefined;
   /**
    * How the list a recital announced numbers its points (`… o zbadanie:`
    * then `1)`, `2)`, `a)`): its points, and the points nested under them,
@@ -305,6 +348,7 @@ type CreateStateOptions = {
   superscripts: boolean;
   boldSubheadings: boolean;
   markup: PlDecisionMarkup | undefined;
+  layout: PlDecisionLayout | undefined;
   caseNumber: string;
   fallbackDecisionTitle: string | undefined;
   declaredType: string | undefined;
@@ -316,6 +360,7 @@ const createState = ({
   superscripts,
   boldSubheadings,
   markup,
+  layout,
   caseNumber,
   fallbackDecisionTitle,
   declaredType,
@@ -337,6 +382,7 @@ const createState = ({
   superscripts,
   boldSubheadings,
   markup,
+  layout,
   recitalList: undefined,
   pendingMarker: undefined,
   listMarkers: new WeakMap(),
@@ -348,13 +394,21 @@ const nextBlockId = (state: ParserState): string => {
   return `b${state.blockIdCounter}`;
 };
 
-const pushHeading = (
-  state: ParserState,
-  level: 1 | 2 | 3,
-  plainText: string,
-  role: "decision-title" | "section-heading",
-  inlines: Inline[],
-): void => {
+type PushHeadingOptions = {
+  state: ParserState;
+  level: 1 | 2 | 3;
+  plainText: string;
+  role: "decision-title" | "section-heading";
+  inlines: Inline[];
+};
+
+const pushHeading = ({
+  state,
+  level,
+  plainText,
+  role,
+  inlines,
+}: PushHeadingOptions): void => {
   state.blockIndex += 1;
   state.blocks.push({
     id: nextBlockId(state),
@@ -727,9 +781,17 @@ const MARKS_ONLY_RE = /^[-–—.,;:·•*_<>■□▪]+$/u;
 /** Longest line a subheading set in bold runs to. */
 const BOLD_SUBHEADING_MAX_CHARS = 120;
 const TERMINAL_MARK_RE = /[.,;:!?…]$/u;
-/** The outline number a subheading may open with (`2.1.`, `5.2.1.2`). */
-const OUTLINE_NUMBER_RE = /^\d{1,2}(?:\.\d{1,2}){0,4}\.? /u;
-const DIGIT_RE = /\p{N}/u;
+/**
+ * A figure a table row prints, which a subheading never does: an amount with
+ * its decimals (`149,00`), a number of three digits or more, or a currency
+ * or percent sign. A subheading may number itself (`Przykład nr 12`).
+ */
+const TABLE_FIGURE_RE =
+  /\d,\d{2}(?!\d)|\d{3,}|(?<!\p{L})(?:USD|EUR|PLN|CHF|zł|%)(?!\p{L})/u;
+/** A word a heading names its part with: an abbreviation (`a/a`) is none. */
+const HEADING_WORD_RE = /\p{L}{3,}/u;
+/** A ruling's own point number (`I.`, `a)`), which never heads the reasons. */
+const RULING_POINT_PREFIX_RE = /^(?:[IVXLCDM]+|[a-z])[.)](?:\s|$)/iu;
 
 /**
  * A short line set wholly in bold between paragraphs of the reasons, with no
@@ -742,8 +804,9 @@ const isBoldSubheading = (inlines: readonly Inline[], plainText: string) =>
   plainText.length <= BOLD_SUBHEADING_MAX_CHARS &&
   WORD_CHAR_RE.test(plainText) &&
   !TERMINAL_MARK_RE.test(plainText) &&
-  !DECISION_ITEM_PREFIX_RE.test(plainText) &&
-  !DIGIT_RE.test(plainText.replace(OUTLINE_NUMBER_RE, "")) &&
+  !RULING_POINT_PREFIX_RE.test(plainText) &&
+  !TABLE_FIGURE_RE.test(plainText.replace(SUBHEADING_OUTLINE_NUMBER_RE, "")) &&
+  HEADING_WORD_RE.test(plainText) &&
   inlines.some((inline) => inline.type === "bold") &&
   inlines.every(
     (inline) =>
@@ -761,6 +824,121 @@ const signsBlank = (state: ParserState, plainText: string): boolean => {
   );
 };
 
+/** Whether the last heading so far heads the instructions on appeal. */
+const underInstructionHeading = (state: ParserState): boolean => {
+  const heading = state.blocks.findLast((block) => block.type === "heading");
+  return heading !== undefined && isPlInstructionHeading(heading.plainText);
+};
+
+/** Whether a line closes or signs the decision. */
+const closesOrSigns = (state: ParserState, plainText: string): boolean =>
+  isPlClosingLine(plainText) ||
+  isPlSignatureLine(plainText) ||
+  signsBlank(state, plainText);
+
+/**
+ * Whether a paragraph instructs the parties on appeal: the instruction
+ * itself, where the remedy is filed right after it, or any line under the
+ * instructions' heading that neither closes nor signs the decision.
+ */
+const instructsOnAppeal = (state: ParserState, plainText: string): boolean => {
+  if (isPlAppealInstruction(plainText)) {
+    return true;
+  }
+  const previous = state.blocks.at(-1);
+  if (
+    previous?.type === "paragraph" &&
+    previous.role === undefined &&
+    isPlRemedyFilingLine(plainText) &&
+    (isPlAppealInstruction(previous.plainText) ||
+      isPlRemedyFilingLine(previous.plainText))
+  ) {
+    return true;
+  }
+  return underInstructionHeading(state) && !closesOrSigns(state, plainText);
+};
+
+/** Whether the line before a numbered point titles the decision. */
+const titlesDecision = (block: Block | undefined): boolean =>
+  (block?.type === "heading" && block.role === "decision-title") ||
+  // The authority's numbered title, printed under the bare type word that
+  // already titles the document, also opens the ruling under it.
+  (block?.type === "paragraph" && isPlAuthorityDecisionTitle(block.plainText));
+
+/** A head-matter line printed between a title and its ruling: a date. */
+const standsBetweenTitleAndRuling = (block: Block | undefined): boolean =>
+  block?.type === "paragraph" &&
+  block.role === "intro" &&
+  isPlDecisionDateLine(block.plainText);
+
+/**
+ * Whether the blocks before a numbered point end on the decision's title,
+ * across a date line printed between the title and the ruling.
+ */
+const followsDecisionTitle = (blocks: readonly Block[]): boolean => {
+  let index = blocks.length - 1;
+  while (standsBetweenTitleAndRuling(blocks.at(index))) {
+    index -= 1;
+  }
+  return index >= 0 && titlesDecision(blocks.at(index));
+};
+
+/**
+ * Whether a numbered point opens the ruling: a point that rules on its own
+ * legal basis (`I. Na podstawie art. 27 … uznaje …`) opens it wherever the
+ * head matter ends, with or without a line that names the ruling's verb
+ * first.
+ */
+const opensStructuredHolding = (
+  state: ParserState,
+  normalizedText: string,
+): boolean =>
+  ((state.section === "composition" || state.section === "recital") &&
+    !LETTER_ABBREVIATION_PREFIX_RE.test(normalizedText)) ||
+  followsDecisionTitle(state.blocks) ||
+  opensPlRuling(normalizedText) ||
+  isPlLegalBasisRuling(normalizedText.replace(DECISION_ITEM_PREFIX_RE, ""));
+
+/**
+ * Whether a line of a sectioned letter's opening states its ruling in the
+ * authority's voice. The recital and the legal basis it rules on stay the
+ * head matter.
+ */
+const statesLetterRuling = (state: ParserState, text: string): boolean =>
+  state.layout === PL_DECISION_LAYOUT.SECTIONED_LETTER &&
+  statesPlAuthorityRuling(text) &&
+  !isPlRecitalLine(text);
+
+/**
+ * A sectioned letter's heading: the title, where the letter opens on it, or
+ * a section; a section after the opening opens the letter's body.
+ */
+const handleLetterHeading = (
+  state: ParserState,
+  plainText: string,
+  inlines: Inline[],
+): boolean => {
+  if (state.layout !== PL_DECISION_LAYOUT.SECTIONED_LETTER) {
+    return false;
+  }
+  if (!state.sawDecisionTitle && state.blocks.length === 0) {
+    pushHeading({
+      state,
+      level: 1,
+      plainText,
+      role: "decision-title",
+      inlines,
+    });
+    state.sawDecisionTitle = true;
+    state.decisionTitle = plainText;
+    return true;
+  }
+  if (state.blocks.some((block) => block.type === "paragraph")) {
+    state.section = "reasoning";
+  }
+  return false;
+};
+
 const inferParagraphRole = (
   state: ParserState,
   plainText: string,
@@ -771,19 +949,8 @@ const inferParagraphRole = (
   }
 
   const numbered = DECISION_ITEM_PREFIX_RE.test(normalizedText);
-  const previous = state.blocks.at(-1);
-  // A point that rules on its own legal basis (`I. Na podstawie art. 27 …
-  // uznaje …`) opens the ruling wherever the head matter ends, with or
-  // without a line that names the ruling's verb first.
   const isStructuredHolding =
-    numbered &&
-    (((state.section === "composition" || state.section === "recital") &&
-      !LETTER_ABBREVIATION_PREFIX_RE.test(normalizedText)) ||
-      (previous?.type === "heading" && previous.role === "decision-title") ||
-      opensPlRuling(normalizedText) ||
-      isPlLegalBasisRuling(
-        normalizedText.replace(DECISION_ITEM_PREFIX_RE, ""),
-      ));
+    numbered && opensStructuredHolding(state, normalizedText);
   // The ruling also opens on its legal basis when the same sentence rules
   // (`Na podstawie art. 14b … stwierdza, że …`).
   const isUnnumberedOperative =
@@ -820,11 +987,7 @@ const inferParagraphRole = (
       if (isPlClosingLine(plainText)) {
         return "closing";
       }
-      if (
-        isPlSignatureLine(plainText) ||
-        opensWithPlSignatureTitle(plainText) ||
-        signsBlank(state, plainText)
-      ) {
+      if (isPlSignatureLine(plainText) || signsBlank(state, plainText)) {
         return "signature";
       }
       return "argumentation";
@@ -836,7 +999,11 @@ const inferParagraphRole = (
     case "preamble":
     case "composition":
     case "recital":
-      return isStructuredHolding || isUnnumberedOperative ? "holding" : "intro";
+      return isStructuredHolding ||
+        isUnnumberedOperative ||
+        statesLetterRuling(state, normalizedText)
+        ? "holding"
+        : "intro";
     default:
       state.section satisfies never;
       return panic("Unknown Polish decision region");
@@ -906,6 +1073,13 @@ const classifyParagraph = (
       ? "publisher-note"
       : "apparatus";
   }
+  // The instructions on appeal are neither the ruling nor its reasons.
+  if (
+    (state.section === "holding" || state.section === "reasoning") &&
+    instructsOnAppeal(state, plainText)
+  ) {
+    return undefined;
+  }
   const role = inferParagraphRole(state, plainText);
   // A block of marks alone (`-`, `.`) is no part of the decision's text,
   // unless it is the blank a signature is written on.
@@ -945,9 +1119,15 @@ const handleHeadingText = (
   if (
     !state.sawDecisionTitle &&
     state.fallbackDecisionTitle === POLISH_DECISION_TITLE_MAP.decyzja &&
-    AUTHORITY_DECISION_TITLE_RE.test(plainText)
+    isPlAuthorityDecisionTitle(plainText)
   ) {
-    pushHeading(state, 1, plainText, "decision-title", inlines);
+    pushHeading({
+      state,
+      level: 1,
+      plainText,
+      role: "decision-title",
+      inlines,
+    });
     state.sawDecisionTitle = true;
     state.decisionTitle = POLISH_DECISION_TITLE_MAP.decyzja;
     return true;
@@ -959,7 +1139,13 @@ const handleHeadingText = (
     state.fallbackDecisionTitle !== undefined &&
     state.fallbackDecisionTitle !== POLISH_DECISION_TITLE_MAP.uzasadnienie
   ) {
-    pushHeading(state, 2, plainText, "section-heading", inlines);
+    pushHeading({
+      state,
+      level: 2,
+      plainText,
+      role: "section-heading",
+      inlines,
+    });
     state.section = "reasoning";
     return true;
   }
@@ -973,7 +1159,13 @@ const handleHeadingText = (
     !isDecisionTitleText(plainText) &&
     namesPlDocumentType(plainText, state.declaredType)
   ) {
-    pushHeading(state, 1, plainText, "decision-title", inlines);
+    pushHeading({
+      state,
+      level: 1,
+      plainText,
+      role: "decision-title",
+      inlines,
+    });
     state.sawDecisionTitle = true;
     state.decisionTitle = plainText;
     return true;
@@ -993,12 +1185,24 @@ const handleHeadingText = (
     }
 
     if (isPlReasonsHeading(plainText) && state.sawDecisionTitle) {
-      pushHeading(state, 2, plainText, "section-heading", inlines);
+      pushHeading({
+        state,
+        level: 2,
+        plainText,
+        role: "section-heading",
+        inlines,
+      });
       state.section = "reasoning";
       return true;
     }
 
-    pushHeading(state, 1, plainText, "decision-title", inlines);
+    pushHeading({
+      state,
+      level: 1,
+      plainText,
+      role: "decision-title",
+      inlines,
+    });
     state.sawDecisionTitle = true;
     state.decisionTitle = plainText;
     if (isPlReasonsHeading(plainText)) {
@@ -1012,13 +1216,40 @@ const handleHeadingText = (
     (state.markup === PL_DECISION_MARKUP.COMMON_COURT &&
       isPlNumberedReasonsHeading(plainText))
   ) {
-    pushHeading(state, 2, plainText, "section-heading", inlines);
+    pushHeading({
+      state,
+      level: 2,
+      plainText,
+      role: "section-heading",
+      inlines,
+    });
     state.section = "reasoning";
     return true;
   }
 
+  // The instructions on appeal stand under a heading of their own.
+  if (
+    (state.section === "holding" || state.section === "reasoning") &&
+    isPlInstructionHeading(plainText)
+  ) {
+    pushHeading({
+      state,
+      level: 2,
+      plainText,
+      role: "section-heading",
+      inlines,
+    });
+    return true;
+  }
+
   if (state.section !== "reasoning" && isPlHoldingHeading(plainText)) {
-    pushHeading(state, 2, plainText, "section-heading", inlines);
+    pushHeading({
+      state,
+      level: 2,
+      plainText,
+      role: "section-heading",
+      inlines,
+    });
     state.section = "holding";
     return true;
   }
@@ -1064,7 +1295,13 @@ const parseParagraphElement = (
     state.section === "reasoning" &&
     isBoldSubheading(inlines, plainText)
   ) {
-    pushHeading(state, 3, plainText, "section-heading", inlines);
+    pushHeading({
+      state,
+      level: 3,
+      plainText,
+      role: "section-heading",
+      inlines,
+    });
     return true;
   }
 
@@ -1075,13 +1312,75 @@ const parseParagraphElement = (
     itemMarker === undefined
       ? plainText
       : normalizeWhitespace(inlinesToPlainText(marked));
+  pushClassifiedParagraph(state, markedText, marked);
+  return true;
+};
+
+/** Whether no paragraph of the ruling read so far has ruled. */
+const rulingNotYetStated = (state: ParserState): boolean =>
+  !state.blocks.some(
+    (block) =>
+      block.type === "paragraph" &&
+      block.role === "holding" &&
+      containsPlOperativeVerb(block.plainText),
+  );
+
+/**
+ * The paragraphs read as the ruling before it states anything (its legal
+ * basis, `w imieniu Prezesa Urzędu …`) are the head matter the ruling
+ * follows, once a recital shows the ruling has not begun.
+ */
+const demoteUnstatedRuling = (state: ParserState): void => {
+  for (let index = state.blocks.length - 1; index >= 0; index -= 1) {
+    const block = state.blocks[index];
+    if (block?.type !== "paragraph" || block.role !== "holding") {
+      return;
+    }
+    state.blocks[index] = { ...block, role: "intro" };
+  }
+};
+
+/**
+ * Push a paragraph with its role. A paragraph that opens on the recital and
+ * rules in its last clause (`po przeprowadzeniu postępowania … , uznaje
+ * się, że …`) is two: the recital the ruling follows, then the ruling. The
+ * text stays as printed; only the paragraph break between them is added.
+ */
+const pushClassifiedParagraph = (
+  state: ParserState,
+  plainText: string,
+  inlines: Inline[],
+): void => {
+  const printed = inlinesToPlainText(inlines);
+  const rulingStart =
+    state.section !== "reasoning" && rulingNotYetStated(state)
+      ? plRulingClauseStart(printed)
+      : undefined;
+  if (rulingStart === undefined) {
+    pushParagraph(
+      state,
+      plainText,
+      inlines,
+      classifyParagraph(state, plainText),
+    );
+    return;
+  }
+  demoteUnstatedRuling(state);
+  const recitalInlines = stripInlineSuffix(
+    inlines,
+    printed.length - rulingStart,
+  );
+  const recitalText = normalizeWhitespace(inlinesToPlainText(recitalInlines));
+  pushParagraph(state, recitalText, recitalInlines, "intro");
+  state.section = "recital";
+  const rulingInlines = stripInlinePrefix(inlines, rulingStart);
+  const rulingText = normalizeWhitespace(inlinesToPlainText(rulingInlines));
   pushParagraph(
     state,
-    markedText,
-    marked,
-    classifyParagraph(state, markedText),
+    rulingText,
+    rulingInlines,
+    classifyParagraph(state, rulingText),
   );
-  return true;
 };
 
 const parseTableElement = (
@@ -1282,6 +1581,68 @@ const parseListItemContent = ({
   return marker;
 };
 
+/** A heading element: a heading, or a line the layout only set apart. */
+const parseHeadingElement = (
+  $: cheerio.CheerioAPI,
+  state: ParserState,
+  $node: cheerio.Cheerio<AnyNode>,
+  tag: string,
+): void => {
+  const inlines = walkInlines($, $node, state);
+  const plainText = normalizeWhitespace(inlinesToPlainText(inlines));
+  if (!plainText) {
+    return;
+  }
+
+  // A layout that sets the signing label apart as a heading still signs:
+  // it is the bench's line under the ruling, not a part of the decision.
+  if (
+    (state.section === "holding" || state.section === "reasoning") &&
+    isPlSignatureLine(plainText)
+  ) {
+    pushParagraph(state, plainText, inlines, "signature");
+    state.section = "reasoning";
+    return;
+  }
+
+  // A layout that sets the docket apart as a heading still prints the
+  // docket: it names the case, it heads no part of the decision.
+  if (isCaseNumberText(state, plainText)) {
+    pushParagraph(state, plainText, inlines, "case-number");
+    return;
+  }
+
+  if (handleHeadingText(state, plainText, inlines)) {
+    return;
+  }
+
+  // A layout that sets a line of the head matter apart as a heading (the
+  // decision's date, who sat on the bench) still prints the head matter:
+  // the line heads no part of the decision and opens no ruling, wherever
+  // the head matter stands to the title.
+  if (
+    (state.section === "preamble" ||
+      state.section === "composition" ||
+      state.section === "recital") &&
+    (isPlBenchMemberLine(plainText) || isPlDecisionDateLine(plainText))
+  ) {
+    pushParagraph(state, plainText, inlines, "intro");
+    return;
+  }
+
+  if (handleLetterHeading(state, plainText, inlines)) {
+    return;
+  }
+
+  pushHeading({
+    state,
+    level: tag === "h1" || tag === "h2" ? 2 : 3,
+    plainText,
+    role: "section-heading",
+    inlines,
+  });
+};
+
 const parseNode = (
   $: cheerio.CheerioAPI,
   state: ParserState,
@@ -1331,34 +1692,7 @@ const parseNode = (
   }
 
   if (/^h[1-6]$/u.test(tag)) {
-    const inlines = walkInlines($, $node, state);
-    const plainText = normalizeWhitespace(inlinesToPlainText(inlines));
-    if (!plainText) {
-      return;
-    }
-
-    // A layout that sets the signing label apart as a heading still signs:
-    // it is the bench's line under the ruling, not a part of the decision.
-    if (
-      (state.section === "holding" || state.section === "reasoning") &&
-      isPlSignatureLine(plainText)
-    ) {
-      pushParagraph(state, plainText, inlines, "signature");
-      state.section = "reasoning";
-      return;
-    }
-
-    if (handleHeadingText(state, plainText, inlines)) {
-      return;
-    }
-
-    pushHeading(
-      state,
-      tag === "h1" || tag === "h2" ? 2 : 3,
-      plainText,
-      "section-heading",
-      inlines,
-    );
+    parseHeadingElement($, state, $node, tag);
     return;
   }
 
@@ -1796,6 +2130,7 @@ export const parsePlDecisionContent = (
     superscripts: input.superscripts === true,
     boldSubheadings: input.boldSubheadings === true,
     markup: input.markup,
+    layout: input.layout,
     caseNumber: input.caseNumber,
     fallbackDecisionTitle: normalizeDecisionTitle(input.decisionType),
     declaredType: input.decisionType,
@@ -1836,7 +2171,13 @@ export const parsePlDecisionContent = (
 
   if (!state.sawDecisionTitle && state.fallbackDecisionTitle !== undefined) {
     const title = state.fallbackDecisionTitle;
-    pushHeading(state, 1, title, "decision-title", textInline(title));
+    pushHeading({
+      state,
+      level: 1,
+      plainText: title,
+      role: "decision-title",
+      inlines: textInline(title),
+    });
     const fallbackHeading = state.blocks.pop();
     if (fallbackHeading === undefined) {
       return panic("Fallback decision title was not added");
@@ -1900,5 +2241,35 @@ export const parsePlDecisionContent = (
   return {
     documentAst,
     fulltext,
+  };
+};
+
+/**
+ * A common court's decision, as SAOS and the courts' own portal publish it.
+ * Neither marks the court's paragraph numbers as structure: the portal's
+ * numbered units are its ruling's points and the lists inside a paragraph,
+ * and the court prints the numbers of its reasons as text (`1. Pozwana
+ * podniosła …`). So the printed numbers move into the blocks through the
+ * one court-numbering reading, which takes them only where the reasons read
+ * as one numbering.
+ */
+export const parsePlCommonCourtDecision = (
+  input: Omit<ParsePlDecisionInput, "markup">,
+  parser: "pl-courts" | "pl-ncourt",
+): ParsePlDecisionOutput => {
+  const parsed = parsePlDecisionContent({
+    ...input,
+    markup: PL_DECISION_MARKUP.COMMON_COURT,
+  });
+  const blocks = courtParagraphNumbers(parsed.documentAst.blocks, {
+    parser,
+    caseNumber: input.caseNumber,
+    url: input.sourceUrl,
+  });
+  return {
+    documentAst: { ...parsed.documentAst, blocks },
+    fulltext: blocks
+      .flatMap((block) => (block.plainText ? [block.plainText] : []))
+      .join("\n\n"),
   };
 };

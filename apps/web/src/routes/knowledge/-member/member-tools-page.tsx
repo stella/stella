@@ -4,12 +4,9 @@ import { useQueryClient, useSuspenseQueries } from "@tanstack/react-query";
 import { getRouteApi } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
+import { ScrollArea } from "@stll/ui/scroll-area";
 import { stellaToast } from "@stll/ui/toast";
 
-import {
-  ToolsCatalogueSkeleton,
-  ToolsPageHeader,
-} from "@/features/knowledge/views/tools/tools-page-chrome";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { authClient } from "@/lib/auth-client";
 import { roleOptions } from "@/lib/auth-queries";
@@ -27,6 +24,10 @@ import {
 import { hasOrganizationManagementAccess } from "@/lib/organization/role-assignment.logic";
 import { organizationSettingsOptions } from "@/lib/organization/settings-queries";
 import type { CatalogueBrowserFilterKind } from "@/routes/knowledge/-components/catalogue/catalogue-browser";
+import {
+  ToolsCatalogueSkeleton,
+  ToolsPageShell,
+} from "@/routes/knowledge/-tools/tools-page-shape";
 
 const LazyCatalogueBrowser = lazy(async () => {
   const module =
@@ -99,22 +100,23 @@ export function MemberToolsPage({
   );
 
   return (
-    <div className="flex flex-1 flex-col overflow-y-auto p-6">
-      <ToolsPageHeader />
-      <Suspense fallback={<ToolsCatalogueSkeleton />}>
-        <LazyCatalogueBrowser
-          canCreateSkills={canCreateSkills}
-          canManageCustomTools={canManageCustomTools}
-          initialKind={initialKind}
-          initialSlug={initialSlug}
-          // The browser reads both search params once, on mount, so a link that
-          // changes either one remounts it rather than leaving the previous
-          // filter or detail panel in place.
-          key={`${initialKind ?? "all"}:${initialSlug ?? ""}`}
-          organizationId={organizationId}
-          practiceJurisdictions={settings.practiceJurisdictions}
-        />
-      </Suspense>
-    </div>
+    <ScrollArea axis="vertical" className="flex-1">
+      <ToolsPageShell>
+        <Suspense fallback={<ToolsCatalogueSkeleton />}>
+          <LazyCatalogueBrowser
+            canCreateSkills={canCreateSkills}
+            canManageCustomTools={canManageCustomTools}
+            initialKind={initialKind}
+            initialSlug={initialSlug}
+            // The browser reads both search params once, on mount, so a link that
+            // changes either one remounts it rather than leaving the previous
+            // filter or detail panel in place.
+            key={`${initialKind ?? "all"}:${initialSlug ?? ""}`}
+            organizationId={organizationId}
+            practiceJurisdictions={settings.practiceJurisdictions}
+          />
+        </Suspense>
+      </ToolsPageShell>
+    </ScrollArea>
   );
 }

@@ -10,7 +10,10 @@ import {
 } from "bun:test";
 
 import {
+  chatBackgroundTasksChangedRealtimeEvent,
+  chatQueueChangedRealtimeEvent,
   chatRunsChangedRealtimeEvent,
+  chatThreadsChangedRealtimeEvent,
   type DesktopEditSessionRealtimeEvent,
   newNotificationRealtimeEvent,
   type OrganizationRealtimeEvent,
@@ -129,7 +132,13 @@ const FANOUT_CASES: { [C in RealtimeChannel]: readonly ChannelEvent[C][] } = {
     },
   ],
   organization: [resourceSetUpdatedRealtimeEvent(RESOURCE_TYPE.ENTITY)],
-  user: [newNotificationRealtimeEvent(), chatRunsChangedRealtimeEvent()],
+  user: [
+    newNotificationRealtimeEvent(),
+    chatBackgroundTasksChangedRealtimeEvent(),
+    chatQueueChangedRealtimeEvent(),
+    chatRunsChangedRealtimeEvent(),
+    chatThreadsChangedRealtimeEvent(),
+  ],
   session: [
     {
       type: REALTIME_EVENT_TYPE.TAKEOVER_REQUESTED,
@@ -244,6 +253,9 @@ const createFakeSubscriber = (): FakeSubscriberClient => {
 
 const loopbackPublisher = createSseBroadcastPublisher({
   createClient: () => ({
+    connect: async () => undefined,
+    close: () => undefined,
+    onClose: () => () => undefined,
     publish: async (_channel, message) => {
       redisPublishes += 1;
       for (const deliver of subscriberCallbacks) {
@@ -419,7 +431,7 @@ const userStreams = ({
   Array.from({ length: count }, (_unused, index) =>
     subscribeUser({
       organizationId,
-      sessionId: sessionFor(userId, index),
+      holder: { id: sessionFor(userId, index), kind: "session" },
       signal,
       userId,
     }),

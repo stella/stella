@@ -3,14 +3,16 @@ import { useTranslations } from "use-intl";
 import type { ChatCorpus, ChatCorpusScope } from "@stll/api-contract";
 import { isPublicCountry } from "@stll/api-contract/public-country-capability";
 import { Button } from "@stll/ui/button";
-import { Form } from "@stll/ui/form";
 import { AiActionIcon, MessageSquareTextIcon } from "@stll/ui/icons";
-import { Input } from "@stll/ui/input";
 import { Loader } from "@stll/ui/loader";
 
 import { ACCOUNT_GATE_OUTCOME } from "@/components/auth/require-account.logic";
 import { useRequireAccount } from "@/components/auth/use-require-account";
 import { askPublicLawInChat } from "@/components/public-law-ask";
+import {
+  PublicLawSearchFrame,
+  PublicLawSearchInput,
+} from "@/components/public-law-search.pending";
 import { useMaybeAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { CapabilityAction } from "@/lib/organization/feature-access/capability-actions";
 
@@ -57,8 +59,7 @@ export const publicLawAskScope = (
 };
 
 /**
- * The one box of a public-law browser: an identifier, an alias or words. A
- * form so Enter submits the way the browser already knows how to. The
+ * The one box of a public-law browser: an identifier, an alias or words. The
  * statutes and case-law browsers share it so a reader learns one box, not
  * two; the home's entry box is built from the same parts.
  *
@@ -79,23 +80,12 @@ export const PublicLawSearch = ({
   const trimmed = query.trim();
 
   return (
-    <Form
-      className="mx-auto max-w-2xl flex-wrap justify-center"
-      density="compact"
-      layout="inline"
-      onSubmit={(event) => {
-        event.preventDefault();
-        onSubmit();
-      }}
-      role="search"
-    >
-      <Input
+    <PublicLawSearchFrame onSubmit={onSubmit}>
+      <PublicLawSearchInput
         aria-label={searchLabel}
-        className="h-11 min-h-11 min-w-64 flex-1 text-base"
         maxLength={maxLength}
         onChange={(event) => onQueryChange(event.currentTarget.value)}
         placeholder={placeholder}
-        type="search"
         value={query}
       />
       {refine !== undefined && (
@@ -108,7 +98,7 @@ export const PublicLawSearch = ({
       {askScope !== null && trimmed.length > 0 && (
         <PublicLawAskInChat askScope={askScope} question={trimmed} />
       )}
-    </Form>
+    </PublicLawSearchFrame>
   );
 };
 

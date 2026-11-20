@@ -22,8 +22,9 @@ afterEach(() => {
 });
 
 /**
- * Tabs 1 (stella) and 3 are open. Storing the contained set waits for the
- * test, so a download can arrive while a containment change is applied.
+ * Tabs 1 (stella) and 3 (on https://portal.example.com) are open. Storing
+ * the contained set waits for the test, so a download can arrive while a
+ * containment change is applied.
  */
 const installFakeChrome = () => {
   const events: string[] = [];
@@ -75,20 +76,31 @@ const installFakeChrome = () => {
         },
       },
       tabs: { query: async () => [{ id: 1 }, { id: 3 }] },
+      webNavigation: {
+        getAllFrames: async ({ tabId }: { tabId: number }) => [
+          {
+            frameId: 0,
+            url:
+              tabId === 3
+                ? "https://portal.example.com/"
+                : "https://files.example.org/",
+          },
+        ],
+      },
     },
   });
   return { events, gate };
 };
 
-/** A `data:` download with no referring page: nothing traces it. */
-const originless = (id: number): chrome.downloads.DownloadItem => ({
+/** A small file a page in tab 3 saves from script. */
+const savedInTab3 = (id: number): chrome.downloads.DownloadItem => ({
   bytesReceived: 0,
   canResume: false,
   danger: "safe",
   exists: true,
   fileSize: 10,
   filename: "",
-  finalUrl: "data:text/plain,notes",
+  finalUrl: "blob:https://portal.example.com/7f0c",
   id,
   incognito: false,
   mime: "text/plain",
@@ -97,7 +109,7 @@ const originless = (id: number): chrome.downloads.DownloadItem => ({
   startTime: "2026-09-26T00:00:00.000Z",
   state: "in_progress",
   totalBytes: 10,
-  url: "data:text/plain,notes",
+  url: "blob:https://portal.example.com/7f0c",
 });
 
 onContainedTabsChanged(setDownloadScope);
@@ -116,7 +128,7 @@ describe("download scope during containment changes", () => {
     // The rules are in place; the new owners are not stored yet.
     expect(events).toEqual(["rules"]);
 
-    await judgeDownload(originless(61));
+    await judgeDownload(savedInTab3(61));
     expect(events).toContain("cancel:61");
 
     gate.release();
@@ -128,7 +140,7 @@ describe("download scope during containment changes", () => {
     await containControlledTab(3);
     await releaseContainedTabs();
 
-    await judgeDownload(originless(62));
+    await judgeDownload(savedInTab3(62));
     expect(events).not.toContain("cancel:62");
   });
 });

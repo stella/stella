@@ -29,10 +29,10 @@ import { createSha256 } from "@stll/sha256/node";
 
 import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
-import type { caseLawIngestionFailures } from "@/api/db/schema";
 import {
   caseLawDecisionIdentifiers,
   caseLawDecisions,
+  caseLawIngestionFailures,
   caseLawSources,
 } from "@/api/db/schema";
 import { envBase } from "@/api/env-base";
@@ -49,6 +49,7 @@ import { processDecision } from "@/api/handlers/case-law/ingestion/pipeline/deci
 import { wrappedErrorDetail } from "@/api/handlers/case-law/ingestion/pipeline/outcomes";
 import { createSafeId } from "@/api/lib/branded-types";
 import { CITATION_STORAGE_WIDTHS } from "@/api/lib/case-law/citation-storage-bounds";
+import { DECISION_IDENTIFIER_CLAIM } from "@/api/lib/case-law/decision-identifier-claims";
 import {
   absentDecisionTextFields,
   absentTextField,
@@ -148,7 +149,10 @@ const cursorOnlyDb =
     const tx = {
       insert: () => ({ values: insertedValues }),
       query: {
-        caseLawDecisions: { findFirst: async () => undefined },
+        caseLawDecisions: {
+          findFirst: async () => undefined,
+          findMany: async () => await Promise.resolve([]),
+        },
       },
       select: () => ({
         from: (table: unknown) => ({
@@ -929,7 +933,7 @@ describe("runIngestionPipeline — failure records", () => {
   /**
    * Reject the third database call to simulate a decision failure after its
    * observation and source read. With rejection disabled, planning reads reach
-   * storage validation; both paths record the refusal and advance the cursor.
+   * storage validation; both paths must durably record the refusal before advancing.
    */
   const failingDecisionDb = (
     insertError: Error | null,
@@ -968,7 +972,8 @@ describe("runIngestionPipeline — failure records", () => {
           }),
         }),
         insert: (table: unknown) => ({
-          values: async (rows: FailureRow[]) => {
+          // oxlint-disable-next-line typescript/promise-function-async -- returns awaitable rows with conflict chains; async would discard those methods
+          values: (rows: FailureRow[]) => {
             if (table === caseLawDecisions) {
               state.decisionWrites++;
               throw new Error("unexpected decision write");
@@ -976,8 +981,13 @@ describe("runIngestionPipeline — failure records", () => {
             if (insertError !== null) {
               throw insertError;
             }
-            state.insertedRows.push(...rows);
-            return await Promise.resolve([]);
+            if (table === caseLawIngestionFailures) {
+              state.insertedRows.push(...rows);
+            }
+            return Object.assign(Promise.resolve([]), {
+              onConflictDoNothing: async () => [],
+              onConflictDoUpdate: async () => [],
+            });
           },
         }),
         execute: async () => await Promise.resolve([]),
@@ -1175,11 +1185,12 @@ describe("runIngestionPipeline — failure records", () => {
         decisions: [
           plainTextIngestionResult({
             ...baseResult({}),
+            // A publisher id: a full-width docket forms no fallback identity.
+            sourceDocumentId: "failure-record-columns",
             caseNumber,
             language: "sk-SK-x-long",
           }),
         ],
-        itemBuildFailures: { type: "item_build_failed", count: 2 },
         publisherRequest: PUBLISHER_REQUEST.ANSWERED,
         nextCursor: "cursor-2",
       });
@@ -1203,14 +1214,72 @@ describe("runIngestionPipeline — failure records", () => {
     expect(result.haltReason).toBeNull();
     expect(result.nextCursor).toBe("cursor-2");
     expect(state.persistedCursor).toBe("cursor-2");
-    expect(
-      logs.records.find(
-        ({ message }) => message === "case_law.ingestion.pipeline_page_done",
-      )?.attributes?.["itemBuildFailures"],
-    ).toBe(2);
   });
 
-  test("reports a failure record the database rejects as invalid data and moves the cursor on", async () => {
+  test.each([0, 1])(
+    "holds a page with %i retained typed failures and one omitted item",
+    async (retained) => {
+      const source = caseLawSourceRow({ name: "Incomplete failed page" });
+      const rejected = plainTextIngestionResult({
+        ...baseResult({}),
+        sourceDocumentId: "retained-failed-input",
+        caseNumber: "{\\rtf1 invalid label}",
+        sourceRaw: "original publisher listing",
+      });
+      expect(rejected.plainTextOutcome.type).toBe("item_build_failed");
+      czNsAdapter.fetchPage = async () =>
+        Result.ok({
+          decisions: retained === 0 ? [] : [rejected],
+          itemBuildFailures: { type: "item_build_failed", count: retained + 1 },
+          publisherRequest: PUBLISHER_REQUEST.ANSWERED,
+          nextCursor: "cursor-2",
+        });
+      const { scopedDb, state } = failingDecisionDb(null, false);
+      const result = await runIngestionPipeline({
+        source,
+        sourceLease: testSourceLease(source),
+        scopedDb,
+        maxPages: 1,
+        acquireStoredTotalAdmission: async () => "held",
+      });
+      expect(result.haltReason).toContain("lack replayable per-item outcomes");
+      expect(result.stopKind).toBe(INGESTION_STOP_KIND.ADAPTER_ERROR);
+      expect(result.nextCursor).toBe(source.syncCursor);
+      expect(state.persistedCursor).toBe(source.syncCursor);
+      expect(state.insertedRows).toHaveLength(retained);
+    },
+  );
+
+  test("passes a failed build only after its retained input reaches the ledger", async () => {
+    const source = caseLawSourceRow({ name: "Retained failed page" });
+    const rejected = plainTextIngestionResult({
+      ...baseResult({}),
+      sourceDocumentId: "retained-failed-input",
+      caseNumber: "{\\rtf1 invalid label}",
+      sourceRaw: "original publisher listing",
+    });
+    expect(rejected.plainTextOutcome.type).toBe("item_build_failed");
+    czNsAdapter.fetchPage = async () =>
+      Result.ok({
+        decisions: [rejected],
+        itemBuildFailures: { type: "item_build_failed", count: 1 },
+        publisherRequest: PUBLISHER_REQUEST.ANSWERED,
+        nextCursor: "cursor-2",
+      });
+    const { scopedDb, state } = failingDecisionDb(null, false);
+    const result = await runIngestionPipeline({
+      source,
+      sourceLease: testSourceLease(source),
+      scopedDb,
+      maxPages: 1,
+      acquireStoredTotalAdmission: async () => "held",
+    });
+    expect(result.haltReason).toBeNull();
+    expect(result.nextCursor).toBe("cursor-2");
+    expect(state.insertedRows).toHaveLength(1);
+  });
+
+  test("holds the cursor when the database rejects the failure record", async () => {
     const source = caseLawSourceRow({ name: "Failure-record source" });
     czNsAdapter.fetchPage = async () =>
       Result.ok({
@@ -1229,8 +1298,10 @@ describe("runIngestionPipeline — failure records", () => {
       maxPages: 1,
     });
 
-    expect(state.persistedCursor).toBe("cursor-2");
-    expect(result.haltReason).toBeNull();
+    expect(state.persistedCursor).toBe("cursor-1");
+    expect(result.nextCursor).toBe("cursor-1");
+    expect(result.pagesProcessed).toBe(0);
+    expect(result.haltReason).toContain("cursor held for retry");
     expect(
       logs
         .at("ERROR")
@@ -1647,6 +1718,157 @@ describe("runIngestionPipeline — cycle deadline", () => {
     }
   });
 
+  test.each(["page", "cycle"] as const)(
+    "keeps a publisher failure that settled before the %s signal fired",
+    async (ending) => {
+      const source = caseLawSourceRow({ name: "Publisher-first source" });
+      const drain = new AbortController();
+      const originalPageTimeout = czNsAdapter.pageTimeoutMs;
+      if (ending === "page") {
+        czNsAdapter.pageTimeoutMs = 20;
+      }
+      let pageSignal: AbortSignal | undefined;
+      czNsAdapter.fetchPage = async (_cursor, _config, signal) => {
+        pageSignal = signal;
+        expect(signal?.aborted).toBe(false);
+        // The publisher's own request timeout, not ours.
+        return Result.err(
+          new AdapterFetchError({
+            message: "Publisher request timed out",
+            adapterKey: "cz-ns",
+            cursor: source.syncCursor,
+            cause: new DOMException("The operation timed out.", "TimeoutError"),
+          }),
+        );
+      };
+      // The lease renewal after the request waits on the database until our
+      // own page or cycle signal has fired.
+      const lease: CaseLawSourceIngestionLease = {
+        ...testSourceLease(source),
+        beforeRemoteEffect: async (effect) => {
+          const settled = await effect();
+          if (ending === "cycle") {
+            drain.abort();
+          }
+          const signal = pageSignal;
+          if (signal !== undefined && !signal.aborted) {
+            await new Promise<void>((resolve) => {
+              signal.addEventListener("abort", () => resolve(), { once: true });
+            });
+          }
+          return settled;
+        },
+      };
+      let persistedCursor: string | null | undefined;
+      try {
+        const result = await runIngestionPipeline({
+          source,
+          sourceLease: lease,
+          acquireStoredTotalAdmission: async () => "held",
+          scopedDb: cursorOnlyDb((cursor) => {
+            persistedCursor = cursor;
+          }),
+          cycle: { budgetMs: 60_000, abortEarlyOn: [drain.signal] },
+        });
+        expect(pageSignal?.aborted).toBe(true);
+        expect(result.stopKind).toBe(INGESTION_STOP_KIND.SOURCE_UNREACHABLE);
+        expect(result.pagesProcessed).toBe(0);
+        expect(result.nextCursor).toBe(source.syncCursor);
+        expect(persistedCursor).toBe(source.syncCursor);
+      } finally {
+        czNsAdapter.pageTimeoutMs = originalPageTimeout;
+      }
+    },
+  );
+
+  test.each(["page", "cycle"] as const)(
+    "a fetch that settles after the %s signal fired is a deadline",
+    async (ending) => {
+      const source = caseLawSourceRow({ name: "Deadline-only source" });
+      const drain = new AbortController();
+      const originalPageTimeout = czNsAdapter.pageTimeoutMs;
+      if (ending === "page") {
+        czNsAdapter.pageTimeoutMs = 20;
+      }
+      czNsAdapter.fetchPage = async (_cursor, _config, signal) => {
+        if (ending === "cycle") {
+          drain.abort(
+            new DOMException("The operation timed out.", "TimeoutError"),
+          );
+        }
+        if (signal !== undefined && !signal.aborted) {
+          await new Promise<void>((resolve) => {
+            signal.addEventListener("abort", () => resolve(), { once: true });
+          });
+        }
+        // Our own abort reason reads as a request timeout on its own; only
+        // the order of events says it was our deadline.
+        const error = new AdapterFetchError({
+          message: "Request aborted",
+          adapterKey: "cz-ns",
+          cursor: source.syncCursor,
+          cause: signal?.reason,
+        });
+        expect(error.stopKind).toBe(INGESTION_STOP_KIND.SOURCE_UNREACHABLE);
+        return Result.err(error);
+      };
+      try {
+        const result = await runIngestionPipeline({
+          source,
+          sourceLease: testSourceLease(source),
+          acquireStoredTotalAdmission: async () => "held",
+          scopedDb: cursorOnlyDb(() => undefined),
+          cycle: { budgetMs: 60_000, abortEarlyOn: [drain.signal] },
+        });
+        expect(result.stopKind).toBe(INGESTION_STOP_KIND.DEADLINE);
+        expect(result.pagesProcessed).toBe(0);
+        expect(result.nextCursor).toBe(source.syncCursor);
+      } finally {
+        czNsAdapter.pageTimeoutMs = originalPageTimeout;
+      }
+    },
+  );
+
+  test("a page the database brake holds until the cycle ends is a deadline", async () => {
+    const source = caseLawSourceRow({ name: "Brake-held source" });
+    const drain = new AbortController();
+    czNsAdapter.fetchPage = async () =>
+      Result.ok({
+        decisions: [baseResult(EMPTY_AST)],
+        publisherRequest: PUBLISHER_REQUEST.ANSWERED,
+        nextCursor: "cursor-2",
+      });
+    let releases = 0;
+    const dbSlot = {
+      acquire: async (signal?: AbortSignal) => {
+        // The brake holds the slot; the cycle ends while the page waits.
+        drain.abort();
+        expect(signal?.aborted).toBe(true);
+        throw new DOMException("aborted", "AbortError");
+      },
+      release: () => {
+        releases++;
+      },
+    };
+    let persistedCursor: string | null | undefined;
+    const result = await runIngestionPipeline({
+      source,
+      sourceLease: testSourceLease(source),
+      acquireStoredTotalAdmission: async () => "held",
+      scopedDb: cursorOnlyDb((cursor) => {
+        persistedCursor = cursor;
+      }),
+      dbSlot,
+      cycle: { budgetMs: 60_000, abortEarlyOn: [drain.signal] },
+    });
+    expect(releases).toBe(0);
+    expect(result.haltReason).toBe(CYCLE_HALT_REASON.TIMEOUT);
+    expect(result.stopKind).toBe(INGESTION_STOP_KIND.DEADLINE);
+    expect(result.pagesProcessed).toBe(0);
+    expect(result.nextCursor).toBe(source.syncCursor);
+    expect(persistedCursor).toBe(source.syncCursor);
+  });
+
   test("stops before a page the remaining budget cannot cover", async () => {
     const source = caseLawSourceRow({ name: "Short-budget source" });
 
@@ -1725,6 +1947,7 @@ describe("runIngestionPipeline — cycle deadline", () => {
     expect(fetches).toBe(0);
     expect(result.pagesProcessed).toBe(0);
     expect(result.haltReason).toBe(CYCLE_HALT_REASON.TIMEOUT);
+    expect(result.stopKind).toBe(INGESTION_STOP_KIND.DEADLINE);
     expect(persistedCursor).toBe("cursor-1");
   });
 
@@ -1817,6 +2040,9 @@ describe("processDecision — corpus storage off", () => {
                     ? [{ adapterKey: ADAPTER_KEYS.SK_COURTS }]
                     : [],
                 ),
+              // The generation registry, read in generation order: no
+              // generation is registered, so nothing is projected.
+              orderBy: () => ({ limit: async () => await Promise.resolve([]) }),
             }),
           }),
         }),
@@ -1827,6 +2053,7 @@ describe("processDecision — corpus storage off", () => {
         query: {
           caseLawDecisions: {
             findFirst: async () => await Promise.resolve(existing),
+            findMany: async () => await Promise.resolve([existing]),
           },
         },
         update: (table: unknown) => ({
@@ -1855,7 +2082,7 @@ describe("processDecision — corpus storage off", () => {
       await processDecision({
         input: plainTextIngestionResult({
           caseNumber: "X/1/2026",
-          court: "Test Court",
+          court: "Najvyšší súd Slovenskej republiky",
           country: "SVK",
           language: "sk",
           fulltext: "Rozhodnutie o veci samej.",
@@ -1927,6 +2154,9 @@ describe("processDecision — the decision's judges", () => {
                     ? [{ adapterKey: ADAPTER_KEYS.SK_COURTS }]
                     : [],
                 ),
+              // The generation registry, read in generation order: no
+              // generation is registered, so nothing is projected.
+              orderBy: () => ({ limit: async () => await Promise.resolve([]) }),
             }),
           }),
         }),
@@ -1934,6 +2164,7 @@ describe("processDecision — the decision's judges", () => {
         query: {
           caseLawDecisions: {
             findFirst: async () => await Promise.resolve(existing),
+            findMany: async () => await Promise.resolve([existing]),
           },
         },
         update: () => ({
@@ -2041,6 +2272,9 @@ describe("processDecision — fields on an existing row", () => {
                     {
                       type: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
                       normalizedValue: bareCitationKey("X/1/2026"),
+                      value: "X/1/2026",
+                      declaredAt: null,
+                      independentClaims: [DECISION_IDENTIFIER_CLAIM.HOST],
                     },
                   ],
                 }
@@ -2074,6 +2308,11 @@ describe("processDecision — fields on an existing row", () => {
                           ? [{ adapterKey: ADAPTER_KEYS.SK_COURTS }]
                           : [],
                       ),
+                    // The generation registry, read in generation order: no
+                    // generation is registered, so nothing is projected.
+                    orderBy: () => ({
+                      limit: async () => await Promise.resolve([]),
+                    }),
                   }),
                 },
         }),
@@ -2084,6 +2323,7 @@ describe("processDecision — fields on an existing row", () => {
         query: {
           caseLawDecisions: {
             findFirst: async () => await Promise.resolve(existing),
+            findMany: async () => await Promise.resolve([existing]),
           },
         },
         update: (table: unknown) => ({
@@ -2112,7 +2352,7 @@ describe("processDecision — fields on an existing row", () => {
       await processDecision({
         input: plainTextIngestionResult({
           caseNumber: "X/1/2026",
-          court: "Test Court",
+          court: "Najvyšší súd Slovenskej republiky",
           country: "SVK",
           language: "sk",
           decisionDate,
@@ -2231,6 +2471,9 @@ describe("processDecision — source raw upload failure", () => {
                     ? [{ adapterKey: ADAPTER_KEYS.SK_COURTS }]
                     : [],
                 ),
+              // The generation registry, read in generation order: no
+              // generation is registered, so nothing is projected.
+              orderBy: () => ({ limit: async () => await Promise.resolve([]) }),
             }),
           }),
         }),
@@ -2241,6 +2484,7 @@ describe("processDecision — source raw upload failure", () => {
         query: {
           caseLawDecisions: {
             findFirst: async () => await Promise.resolve(undefined),
+            findMany: async () => await Promise.resolve([]),
           },
         },
       };
@@ -2255,7 +2499,7 @@ describe("processDecision — source raw upload failure", () => {
       await processDecision({
         input: plainTextIngestionResult({
           caseNumber: "X/2/2026",
-          court: "Test Court",
+          court: "Najvyšší súd Slovenskej republiky",
           country: "SVK",
           language: "sk",
           fulltext: "Rozhodnutie o veci samej.",
@@ -2321,6 +2565,9 @@ describe("processDecision — source raw upload failure", () => {
                     ? [{ adapterKey: ADAPTER_KEYS.SK_COURTS }]
                     : [],
                 ),
+              // The generation registry, read in generation order: no
+              // generation is registered, so nothing is projected.
+              orderBy: () => ({ limit: async () => await Promise.resolve([]) }),
             }),
           }),
         }),
@@ -2331,6 +2578,7 @@ describe("processDecision — source raw upload failure", () => {
         query: {
           caseLawDecisions: {
             findFirst: async () => await Promise.resolve(undefined),
+            findMany: async () => await Promise.resolve([]),
           },
         },
       };
@@ -2345,7 +2593,7 @@ describe("processDecision — source raw upload failure", () => {
       await processDecision({
         input: plainTextIngestionResult({
           caseNumber: "X/3/2026",
-          court: "Test Court",
+          court: "Najvyšší súd Slovenskej republiky",
           country: "SVK",
           language: "sk",
           fulltext: "Rozhodnutie o veci samej.",

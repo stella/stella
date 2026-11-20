@@ -17,7 +17,12 @@ Default palette: clean neutral grays on white. Accent palettes
 monochrome with the Stella symbol (`StellaMark` from
 `@stll/ui/stella-mark`). Never substitute a letter or a section-sign glyph
 for the symbol; static markup uses the official
-`apps/landing/public/brand/stella-symbol.svg` asset.
+`apps/landing/public/brand/stella-symbol.svg` asset. An app's own
+packaged icon (the app icon stella desktop and the browser extension
+ship) is shown unchanged where that app names itself in its own shell,
+such as the extension popup's header, so it matches the icon the
+operating system or browser shows; everywhere inside the product the
+brand stays monochrome with the symbol.
 
 Brand colours (reference, not for hard-coding):
 
@@ -177,7 +182,7 @@ an outcome with `@stll/ui/toast`, and put a field error next to the field.
   (sorting, numbers, dates side by side). [review]
 - **Nothing scrolls sideways.** Free text (descriptions, scope lists,
   notes) never sits in a `whitespace-nowrap` cell or row. Clamp it
-  (`line-clamp-1`/`-2` with `min-w-0` on the column), and collapse a
+  (`<TruncatedText lines={2}>` with `min-w-0` on the column), and collapse a
   long list into a count that opens a popover ("15 permissions"). The
   trailing actions stay on screen at every width. [review]
 - **Status is a dot plus a label** (`ListItemStatus` with a tone). The

@@ -4,6 +4,7 @@ import type { OnlineMigrationEntry } from "../online-migration-entry";
 export default {
   id: "repairs-corpus-projection-cleanup-stall-repair",
   revision: 1180,
+  lifecycle: "finalized",
   type: "repairs",
   values: [CORPUS_PROJECTION_CLEANUP_STALL_REPAIR],
 } satisfies OnlineMigrationEntry;

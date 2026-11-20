@@ -7,7 +7,10 @@ import {
   browserControlResultJsonSchema,
 } from "@stll/api-contract/browser-control-json-schema";
 
-import { beginBrowserCommand } from "./browser-approval-mode";
+import {
+  beginBrowserCommand,
+  browserApprovalProvenanceFor,
+} from "./browser-approval-mode";
 import { executeBrowserExtensionCommand } from "./browser-extension-bridge";
 import { createBrowserToolExecutionCache } from "./browser-tool-execution";
 import { createTurnStopper } from "./browser-turn";
@@ -29,6 +32,7 @@ export const createBrowserExtensionTool = ({
   const executions = createBrowserToolExecutionCache(
     executeBrowserExtensionCommand,
     beginBrowserCommand,
+    browserApprovalProvenanceFor,
   );
   const stopper = createTurnStopper();
 

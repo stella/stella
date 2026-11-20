@@ -2,7 +2,6 @@ import { panic } from "better-result";
 
 import { RESOURCE_TYPE, resourceRef, toResourceName } from "@stll/api-contract";
 import { createCaseLawDecisionRouteParams } from "@stll/api-contract/case-law-decision-route";
-import { GLOBAL_SEARCH_RESULT_LIMIT } from "@stll/api-contract/search";
 
 import type { SearchScope } from "@/components/search-scope";
 import type {
@@ -404,29 +403,14 @@ export const rememberSelectedFacetLabels = (
   selected: readonly string[],
   labelsByValue: ReadonlyMap<string, string>,
 ): Record<string, string> => {
-  let next = current;
+  let next: Map<string, string> | undefined;
   for (const value of selected) {
     const label = labelsByValue.get(value);
     if (label === undefined || current[value] === label) {
       continue;
     }
-    if (next === current) {
-      next = { ...current };
-    }
-    next[value] = label;
+    next ??= new Map(Object.entries(current));
+    next.set(value, label);
   }
-  return next;
+  return next === undefined ? current : Object.fromEntries(next);
 };
-
-/**
- * The case-law facet count as words. The number counts matching decisions,
- * capped at the global search ceiling, so a count at the ceiling is shown as
- * "at least" rather than as an exact total.
- */
-export const caseLawFacetCountMessage = (count: number) =>
-  count >= GLOBAL_SEARCH_RESULT_LIMIT
-    ? ({
-        key: "search.caseLawMatchingDecisionsAtLeast",
-        count: GLOBAL_SEARCH_RESULT_LIMIT,
-      } as const)
-    : ({ key: "search.caseLawMatchingDecisions", count } as const);

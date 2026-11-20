@@ -16,9 +16,11 @@ import {
   polishKioDocketKey,
 } from "@stll/api-contract/decision-docket-grammar";
 import {
-  canonicalUsReporterCitation,
-  readsUsReporterCitations,
-} from "@stll/api-contract/us-reporter-citation";
+  CZ_NSS_REPORTER_SOURCE,
+  czechConstitutionalDesignation,
+  decisionReporterGrammarForJurisdiction,
+} from "@stll/api-contract/decision-reporter-grammar";
+import { readsUsReporterCitations } from "@stll/api-contract/us-reporter-citation";
 import {
   CZ_FILE_NUMBER_PREFIX_SOURCE,
   stripCitationPrefix,
@@ -94,7 +96,8 @@ export type ExtractedCitation = {
    * where a sentence names one decision twice over — by docket and by
    * collection number. There the entry anchors on the docket the reader sees
    * and takes its identity from the collection number, which names exactly
-   * one decision where a docket may name a file's worth.
+   * one decision where a docket may name a file's worth. A docket printed
+   * with its sheet names one decision too, and keeps its own identity.
    */
   identifierValue: string;
   /**
@@ -204,7 +207,7 @@ const CASE_NUMBER_BODY_COMMA = String.raw`(?<caseNumber>\d{1,3}\s{0,3}\p{L}{1,6}
 // (a dropped diacritic, likely an encoding fallback) is the same class.
 const US_MARK_SOURCE = String.raw`[ÚU]\p{Mn}*S`;
 
-export const CZECH_REPORTER_CITATION_SOURCE = String.raw`[čc]\.\s*\d{1,5}\/\d{4}\s+Sb\.\s*(?:rozh\.\s*(?:tr|ob)\.?|NSS|NS)`;
+export const CZECH_REPORTER_CITATION_SOURCE = String.raw`(?:${CZ_NSS_REPORTER_SOURCE}|[čc]\.\s*\d{1,5}\/\d{4}\s+Sb\.\s*(?:rozh\.\s*(?:tr|ob)\.?|NS(?![\p{L}\d])))`;
 
 const CZECH_REPORTER_CITATION_RE = new RegExp(
   `^${CZECH_REPORTER_CITATION_SOURCE}$`,
@@ -244,45 +247,6 @@ export const CZ_US_REPORT_SOURCE = String.raw`(?<![\p{L}\p{N}])[NU]\s?\d{1,4}\/\
  * counts in.
  */
 const CZ_US_REPORT_VOLUME_SOURCE = String.raw`(?:Sbír(?:ka|ky|ce|ku)\s+nálezů\s+a\s+usnesení(?:\s+(?:Ústavního\s+soudu|${US_MARK_SOURCE}))?\s*,?\s*)?(?:svaz(?:ek|ku)|sv\.)\s*\d{1,3}\s*,\s*(?:nález|usnesení)\s+[čc]\.\s*\d{1,4}(?!\d)`;
-
-const CZ_US_GAZETTE_RE = /^(?<number>\d{1,4})\/(?<year>\d{4}) Sb\.?$/u;
-const CZ_US_REPORT_RE =
-  /^(?<kind>[NU]) ?(?<number>\d{1,4})\/(?<volume>\d{1,3}) SbNU(?: \d{1,4})?$/u;
-const CZ_US_REPORT_VOLUME_RE =
-  /^(?:Sbír\p{L}{1,2} nálezů a usnesení(?: \S+(?: soudu)?)? ?,? ?)?(?:svaz\p{L}{2}|sv\.) ?(?<volume>\d{1,3}) ?, ?(?<kind>nález|usnesení) [čc]\. ?(?<number>\d{1,4})$/u;
-
-/**
- * A Constitutional Court ruling in one spelling per publication, for the
- * reporter-citation normalization, or null for text that is neither: the
- * gazette number as `234/2002 Sb.`, the reporter entry as `SbNU sv. 26 N 53`.
- *
- * The reporter entry keeps volume, series and number and drops the page: the
- * three name the entry, the page only locates it, and a citation that leaves
- * the page out still names the same ruling. Letters stand between the numbers
- * because the shared normalization strips punctuation, and `N 5/326` must not
- * meet `N 53/26`.
- */
-const czechConstitutionalDesignation = (value: string): string | null => {
-  const text = normalizeUnicode(value, "NFC")
-    .replace(/\s+/gu, " ")
-    .replace(/ ?\/ ?/gu, "/")
-    .trim();
-  const gazette = CZ_US_GAZETTE_RE.exec(text)?.groups;
-  if (gazette !== undefined) {
-    return `${requiredGroup(gazette, "number")}/${requiredGroup(gazette, "year")} Sb.`;
-  }
-  const report =
-    CZ_US_REPORT_RE.exec(text)?.groups ??
-    CZ_US_REPORT_VOLUME_RE.exec(text)?.groups;
-  if (report === undefined) {
-    return null;
-  }
-  const kind = requiredGroup(report, "kind");
-  const series = kind === "U" || kind === "usnesení" ? "U" : "N";
-  const volume = Number(requiredGroup(report, "volume"));
-  const number = Number(requiredGroup(report, "number"));
-  return `SbNU sv. ${String(volume)} ${series} ${String(number)}`;
-};
 
 /**
  * Reporter identifiers for a Constitutional Court ruling, read from the
@@ -1202,6 +1166,21 @@ const normalizeDashes = (text: string): string => text.replace(DASH_RE, "-");
  * dot normalization, splitting it into its three components so the dedup
  * key can rebuild them with one canonical separator.
  */
+/**
+ * Registers whose decisions the publisher stores under another spelling than
+ * the one the courts print, keyed by the printed spelling (lowercased). The
+ * Czech Supreme Court's insolvency register is printed "NSČR" in judgments
+ * ("sen. zn. 29 NSČR 112/2013"), while its own database, and the ECLI it
+ * assigns (`29.NSCR.112.2013`), spell it "NSCR"; the stored case number takes
+ * that spelling. Without the fold a citation keyed `29nsčr/…` never meets the
+ * decision keyed `29nscr/…`. The fold is per register rather than a blanket
+ * diacritic strip, because other registers (the Slovak "Sžo") are stored with
+ * their diacritic and their stored keys must keep matching.
+ */
+const REGISTER_KEY_SPELLINGS: ReadonlyMap<string, string> = new Map([
+  ["nsčr", "nscr"],
+]);
+
 const SEPARATOR_NORMALIZE_RE =
   /^(?<number>\d{1,3})\s?(?<registry>\p{L}{1,6})[\s/](?<docket>\d{1,6}\/\d{2,4})$/u;
 
@@ -1440,13 +1419,18 @@ const canonicalizeDedupKey = (text: string): string => {
 
   const numeric = SEPARATOR_NORMALIZE_RE.exec(cleaned);
   if (numeric?.groups) {
-    const canonical = `${requiredGroup(numeric.groups, "number")}${requiredGroup(numeric.groups, "registry")}/${requiredGroup(numeric.groups, "docket")}`;
+    const registry = requiredGroup(numeric.groups, "registry").toLowerCase();
+    const canonical = `${requiredGroup(numeric.groups, "number")}${REGISTER_KEY_SPELLINGS.get(registry) ?? registry}/${requiredGroup(numeric.groups, "docket")}`;
     return canonical.toLowerCase();
   }
 
   const consolidated = CONSOLIDATED_DOCKET_NORMALIZE_RE.exec(cleaned);
   if (consolidated?.groups) {
-    const canonical = `${requiredGroup(consolidated.groups, "number")}${requiredGroup(consolidated.groups, "registry")}/${requiredGroup(consolidated.groups, "docket1")},${requiredGroup(consolidated.groups, "docket2")}/${requiredGroup(consolidated.groups, "year")}`;
+    const registry = requiredGroup(
+      consolidated.groups,
+      "registry",
+    ).toLowerCase();
+    const canonical = `${requiredGroup(consolidated.groups, "number")}${REGISTER_KEY_SPELLINGS.get(registry) ?? registry}/${requiredGroup(consolidated.groups, "docket1")},${requiredGroup(consolidated.groups, "docket2")}/${requiredGroup(consolidated.groups, "year")}`;
     return canonical.toLowerCase();
   }
 
@@ -1800,23 +1784,31 @@ export const normalizeDecisionIdentifierValue = (
  * An identifier's stored key in the jurisdiction that holds it. Decision
  * identifier rows are written through it, by ingestion and by the backfill,
  * and exact lookup and search read through it, so writer and reader agree.
- * In the reporter jurisdiction a reporter citation is keyed by its canonical
- * volume, reporter and first page, so a variant abbreviation or a pin names
- * the same decision. Everywhere else, and for every other type, the key is
- * `normalizeDecisionIdentifier`'s, unchanged, so no stored key moves.
+ * Reporter jurisdictions key each citation through the grammar resolve reads,
+ * so publication spellings and pins name the same entry. Other types and
+ * unclaimed reporter values keep their existing normalization.
  */
 export const normalizeDecisionIdentifierIn = (
   jurisdiction: string | undefined,
   identifier: DecisionIdentifier,
-): string =>
-  identifier.type === DECISION_IDENTIFIER_TYPES.REPORTER_CITATION &&
-  readsUsReporterCitations(jurisdiction)
-    ? normalizeStructuredDecisionIdentifier({
-        type: identifier.type,
-        value:
-          canonicalUsReporterCitation(identifier.value) ?? identifier.value,
-      })
-    : normalizeDecisionIdentifier(identifier);
+): string => {
+  if (identifier.type !== DECISION_IDENTIFIER_TYPES.REPORTER_CITATION) {
+    return normalizeDecisionIdentifier(identifier);
+  }
+  const canonical = decisionReporterGrammarForJurisdiction(
+    jurisdiction,
+  )?.canonicalCitation(identifier.value);
+  if (
+    readsUsReporterCitations(jurisdiction) ||
+    (canonical !== null && canonical !== undefined)
+  ) {
+    return normalizeStructuredDecisionIdentifier({
+      type: identifier.type,
+      value: canonical ?? identifier.value,
+    });
+  }
+  return normalizeDecisionIdentifier(identifier);
+};
 
 /** `normalizeDecisionIdentifierIn` for a value whose type is known apart. */
 export const normalizeDecisionIdentifierValueIn = (
@@ -1941,9 +1933,10 @@ const collectionJoinAfterDocket = (
  * collection number becomes the identity, because it names exactly one
  * decision where a docket names a whole file.
  *
- * A Constitutional Court docket is the exception: the collection mention
- * beside it is absorbed into the docket's citation, which keeps the docket's
- * identity.
+ * Two dockets are the exception: a Constitutional Court docket, and a docket
+ * printed with its sheet, which names one decision already. The collection
+ * mention beside either is absorbed into the docket's citation, which keeps
+ * the docket's identity.
  *
  * Czech collections only. A Hungarian docket already names one decision (its
  * document number), and the only Hungarian reporter-type citation, a
@@ -1987,8 +1980,14 @@ const mergeCollectionCitations = ({
       }
       // A Constitutional Court docket keeps resolving by itself: the
       // collection numbers reach a ruling only once its row carries them, and
-      // the docket reaches it either way.
-      if (join !== CZ_US_COLLECTION_AFTER_DOCKET) {
+      // the docket reaches it either way. So does a docket printed with its
+      // sheet ("č. j. 1 Azs 13/2006-39"): docket and sheet name one decision
+      // as exactly as the collection number does, and every row carries its
+      // docket while few carry their collection number.
+      if (
+        join !== CZ_US_COLLECTION_AFTER_DOCKET &&
+        docket.citedSheetNumber === null
+      ) {
         docket.identifierType = reporter.identifierType;
         docket.identifierValue = reporter.identifierValue;
       }

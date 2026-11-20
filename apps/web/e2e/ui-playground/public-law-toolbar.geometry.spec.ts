@@ -41,7 +41,6 @@ type ToolbarGeometry = {
     clientWidth: number;
     scrollWidth: number;
     textOverflow: string;
-    title: string | null;
   };
 };
 
@@ -60,7 +59,7 @@ const readGeometry = async (page: Page, width: number) => {
     const summary = toolbar?.querySelector(
       '[data-slot="public-law-results-summary"]',
     );
-    const resultsLine = summary?.querySelector("p[title]");
+    const resultsLine = summary?.querySelector('[data-slot="truncated-text"]');
     if (
       !(toolbar instanceof HTMLElement) ||
       !(summary instanceof HTMLElement) ||
@@ -90,7 +89,6 @@ const readGeometry = async (page: Page, width: number) => {
         clientWidth: resultsLine.clientWidth,
         scrollWidth: resultsLine.scrollWidth,
         textOverflow: style.textOverflow,
-        title: resultsLine.getAttribute("title"),
       },
     };
   }, width);
@@ -138,11 +136,11 @@ for (const width of BENCH_WIDTHS) {
       );
     }
 
-    // A long query ends in an ellipsis on one line; the title keeps it whole.
+    // A long query ends in an ellipsis on one line; TruncatedText shows it
+    // whole on hover, focus or tap.
     const line = geometry.resultsLine;
     expect(line.height).toBeLessThanOrEqual(line.lineHeight + TOLERANCE_PX);
     expect(line.textOverflow).toBe("ellipsis");
-    expect(line.title?.length ?? 0).toBeGreaterThan(0);
     if (toolbarWidth < OWN_ROW_BELOW_PX) {
       expect(line.scrollWidth).toBeGreaterThan(line.clientWidth);
     }

@@ -330,7 +330,7 @@ describe("the real catalogue", () => {
     ).toEqual([
       "Claude Opus 5.5",
       "GPT-6 Luna",
-      "GPT-6.1 Sol",
+      "GPT-6.2 Sol",
       "Gemini 3.8 Flash",
     ]);
   });
