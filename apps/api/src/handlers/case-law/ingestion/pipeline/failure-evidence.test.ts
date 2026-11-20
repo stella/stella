@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { expect, test } from "bun:test";
 
 import {
@@ -8,9 +9,10 @@ import {
   absentDecisionTextFields,
   TEXT_ABSENCE_REASON,
 } from "@/api/lib/case-law/decision-text";
+import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 
-const input = plainTextIngestionResult({
+const rawInput = {
   caseNumber: "No. 24-100",
   country: "USA",
   language: "en",
@@ -21,19 +23,22 @@ const input = plainTextIngestionResult({
   rawHash: "synthetic-input",
   sourceRaw: "publisher body",
   documentAst: {},
-});
+};
+const input = plainTextIngestionResult(rawInput);
 
 test("captured-input identity is deterministic and separate from a publisher post", () => {
-  const capture = (decision: typeof input) =>
+  const capture = (decision: IngestionResult) =>
     captureFailureEvidence({
       record: { type: "decision", decision },
       observation: { order: 1n, observedAt: new Date("2026-01-01T00:00:00Z") },
     }).unwrap();
   const evidence = capture(input);
-  const equivalent = capture({
-    ...input,
-    metadata: { a: "first", b: "second" },
-  });
+  const equivalent = capture(
+    plainTextIngestionResult({
+      ...rawInput,
+      metadata: { a: "first", b: "second" },
+    }),
+  );
   expect(equivalent).toEqual(evidence);
   const later = captureFailureEvidence({
     record: { type: "decision", decision: input },
@@ -56,16 +61,16 @@ test("captured-input identity is deterministic and separate from a publisher pos
     }),
   ).toEqual(fallback);
   for (const changed of [
-    { ...input, sourceRaw: "different body" },
-    {
-      ...input,
-      caseNumber: plainTextIngestionResult({
-        ...input,
-        caseNumber: "No. 24-101",
-      }).caseNumber,
-    },
-    { ...input, sourceRawBytes: Uint8Array.from([0, 255]) },
-    { ...input, metadata: { a: "different publisher evidence" } },
+    plainTextIngestionResult({ ...rawInput, sourceRaw: "different body" }),
+    plainTextIngestionResult({ ...rawInput, caseNumber: "No. 24-101" }),
+    plainTextIngestionResult({
+      ...rawInput,
+      sourceRawBytes: Uint8Array.from([0, 255]),
+    }),
+    plainTextIngestionResult({
+      ...rawInput,
+      metadata: { a: "different publisher evidence" },
+    }),
   ]) {
     expect(
       ingestionFailureRecordIdentity({
@@ -138,11 +143,14 @@ test.each([undefined, "publisher-post-42"])(
       record: { type: "decision", decision: failed },
       observation: { order: 1n, observedAt: new Date("2026-01-01T00:00:00Z") },
     }).unwrap();
+    const storedIdentity =
+      failed.sourceDocumentId ??
+      panic("Rejected labels retain a source identity");
     const identity = ingestionFailureRecordIdentity({
-      sourceDocumentId: failed.sourceDocumentId,
+      sourceDocumentId: storedIdentity,
       replayEvidence: evidence,
     });
-    expect(evidence.sourceDocumentId).toBe(failed.sourceDocumentId);
+    expect(evidence.sourceDocumentId).toBe(storedIdentity);
     expect(identity).toEqual(
       sourceDocumentId === undefined
         ? {
