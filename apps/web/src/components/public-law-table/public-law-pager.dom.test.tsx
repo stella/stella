@@ -312,7 +312,7 @@ describe("the numbered pager", () => {
     });
     const next = view.getByRole("button", { name: messages.common.next });
 
-    expect(next.hasAttribute("disabled")).toBe(true);
+    expect(next.getAttribute("aria-disabled")).toBe("true");
     expect(
       view.getByText(messages.caseLaw.pagination.refineForMore),
     ).toBeDefined();
@@ -328,8 +328,10 @@ describe("the numbered pager", () => {
 
     expect(view.queryByLabelText("Go to page 4")).toBeNull();
     expect(
-      view.getByRole("button", { name: messages.common.next }),
-    ).toHaveProperty("disabled", true);
+      view
+        .getByRole("button", { name: messages.common.next })
+        .getAttribute("aria-disabled"),
+    ).toBe("true");
     expect(view.getByText("Page 3 of 3")).toBeDefined();
     expect(
       view.queryByText(messages.caseLaw.pagination.refineForMore),
