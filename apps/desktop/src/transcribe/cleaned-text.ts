@@ -15,9 +15,74 @@ export type Block =
   | { kind: "paragraph"; inline: Inline[] }
   | { kind: "list"; ordered: boolean; items: Inline[][] };
 
-const HEADING = /^(#{1,3})\s+(.*)$/u;
-const BULLET = /^\s*[-*•]\s+(.*)$/u;
-const NUMBERED = /^\s*\d{1,3}[.)]\s+(.*)$/u;
+const isSpace = (character: string | undefined): boolean =>
+  character === " " || character === "\t";
+
+const isDigit = (character: string | undefined): boolean =>
+  character !== undefined && character >= "0" && character <= "9";
+
+const WORD_CHARACTER = /[\p{L}\p{N}]/u;
+const isWordCharacter = (character: string | undefined): boolean =>
+  character !== undefined && WORD_CHARACTER.test(character);
+
+/** `# Title` to `### Title`: the level and the title, or null. */
+const headingOf = (line: string): { level: 1 | 2 | 3; text: string } | null => {
+  let level = 0;
+  while (line[level] === "#") {
+    level += 1;
+  }
+  if (level < 1 || level > 3 || !isSpace(line[level])) {
+    return null;
+  }
+  return { level: level as 1 | 2 | 3, text: line.slice(level).trim() };
+};
+
+/** `- item`, `* item` or `• item`: the item, or null. */
+const bulletOf = (line: string): string | null => {
+  const trimmed = line.trimStart();
+  const [mark] = trimmed;
+  return (mark === "-" || mark === "*" || mark === "•") && isSpace(trimmed[1])
+    ? trimmed.slice(2).trim()
+    : null;
+};
+
+/** `1. item` or `1) item`, up to three digits: the item, or null. */
+const numberedOf = (line: string): string | null => {
+  const trimmed = line.trimStart();
+  let digits = 0;
+  while (digits < 4 && isDigit(trimmed[digits])) {
+    digits += 1;
+  }
+  const mark = trimmed[digits];
+  return digits >= 1 &&
+    digits <= 3 &&
+    (mark === "." || mark === ")") &&
+    isSpace(trimmed[digits + 1])
+    ? trimmed.slice(digits + 2).trim()
+    : null;
+};
+
+/** Where the italic run opened at `start` by `mark` closes, or -1: the
+ *  mark must not touch a space inside, nor a letter or digit outside. */
+const italicEnd = (source: string, start: number, mark: string): number => {
+  if (isWordCharacter(source[start - 1])) {
+    return -1;
+  }
+  const first = source[start + 1];
+  if (first === undefined || isSpace(first) || first === "*" || first === "_") {
+    return -1;
+  }
+  for (let at = start + 2; at < source.length; at += 1) {
+    if (
+      source[at] === mark &&
+      !isSpace(source[at - 1]) &&
+      !isWordCharacter(source[at + 1])
+    ) {
+      return at;
+    }
+  }
+  return -1;
+};
 
 /** Bold (`**`) and italic (`*` or `_`) runs; unmatched marks stay text. */
 export const parseInline = (source: string): Inline[] => {
@@ -33,21 +98,36 @@ export const parseInline = (source: string): Inline[] => {
     }
     runs.push({ text, bold, italic });
   };
-  const pattern =
-    /\*\*(.+?)\*\*|(?<![\p{L}\p{N}])[*_](?![\s*_])(.+?)(?<![\s*_])[*_](?![\p{L}\p{N}])/gu;
+  let plain = "";
   let at = 0;
-  for (const match of source.matchAll(pattern)) {
-    push(source.slice(at, match.index), false, false);
-    if (match[1] !== undefined) {
-      for (const inner of parseInline(match[1])) {
-        push(inner.text, true, inner.italic);
+  while (at < source.length) {
+    if (source.startsWith("**", at)) {
+      const close = source.indexOf("**", at + 2);
+      if (close > at + 2) {
+        push(plain, false, false);
+        plain = "";
+        for (const inner of parseInline(source.slice(at + 2, close))) {
+          push(inner.text, true, inner.italic);
+        }
+        at = close + 2;
+        continue;
       }
-    } else {
-      push(match[2] ?? "", false, true);
     }
-    at = match.index + match[0].length;
+    const mark = source[at] ?? "";
+    if (mark === "*" || mark === "_") {
+      const close = italicEnd(source, at, mark);
+      if (close !== -1) {
+        push(plain, false, false);
+        plain = "";
+        push(source.slice(at + 1, close), false, true);
+        at = close + 1;
+        continue;
+      }
+    }
+    plain += mark;
+    at += 1;
   }
-  push(source.slice(at), false, false);
+  push(plain, false, false);
   return runs;
 };
 
@@ -69,24 +149,24 @@ export const parseMarkdown = (markdown: string): Block[] => {
       flush();
       continue;
     }
-    const heading = HEADING.exec(line);
-    const bullet = BULLET.exec(line);
-    const numbered = bullet ? null : NUMBERED.exec(line);
+    const heading = headingOf(line);
+    const bullet = bulletOf(line);
+    const numbered = bullet === null ? numberedOf(line) : null;
     if (heading) {
       flush();
       blocks.push({
         kind: "heading",
-        level: Math.min(3, heading[1]?.length ?? 1) as 1 | 2 | 3,
-        inline: parseInline(heading[2] ?? ""),
+        level: heading.level,
+        inline: parseInline(heading.text),
       });
       continue;
     }
     const item = bullet ?? numbered;
-    if (item) {
+    if (item !== null) {
       flush();
       const ordered = numbered !== null;
       const last = blocks.at(-1);
-      const inline = parseInline(item[1] ?? "");
+      const inline = parseInline(item);
       if (last?.kind === "list" && last.ordered === ordered) {
         last.items.push(inline);
       } else {

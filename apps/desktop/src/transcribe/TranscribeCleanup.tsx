@@ -26,7 +26,7 @@ import type { Paragraph } from "./transcribe-logic";
  *  contract's recording cleanup limit. */
 const MAX_PART_CHARACTERS = 12_000;
 
-export type CleanedPart = { instructions: string[]; markdown: string };
+type CleanedPart = { instructions: string[]; markdown: string };
 
 type PartState = {
   from: number;
@@ -36,7 +36,7 @@ type PartState = {
   result: CleanedPart | null;
 };
 
-export type RecordingCleanup = {
+type RecordingCleanup = {
   parts: readonly PartState[];
   instructions: string[];
   markdown: string;
@@ -204,7 +204,7 @@ const HEADING_CLASSES = {
   3: "mt-1 text-sm font-semibold",
 } as const;
 
-export const CleanedBlocks = ({ blocks }: { blocks: readonly Block[] }) =>
+const CleanedBlocks = ({ blocks }: { blocks: readonly Block[] }) =>
   blocks.map((block, index) => {
     const key = `${block.kind}:${index}`;
     switch (block.kind) {
@@ -333,7 +333,7 @@ export const CleanedText = ({
   );
 };
 
-export type CopyFormat = "formatted" | "plain";
+type CopyFormat = "formatted" | "plain";
 
 const COPY_FORMAT_KEY = "stella.transcribe.copyFormat";
 
@@ -348,13 +348,18 @@ export const useCopyFormat = (): [CopyFormat, (next: CopyFormat) => void] => {
   });
   const choose = useCallback((next: CopyFormat) => {
     setFormat(next);
+    const stored = Result.try(() => {
+      localStorage.setItem(COPY_FORMAT_KEY, next);
+    });
     // Without storage the choice lasts only while the window is open.
-    Result.try(() => localStorage.setItem(COPY_FORMAT_KEY, next));
+    if (Result.isError(stored)) {
+      return;
+    }
   }, []);
   return [format, choose];
 };
 
-export type SaveOption = { id: string; label: string; onSave: () => void };
+type SaveOption = { id: string; label: string; onSave: () => void };
 
 /** Copy (in the remembered format, with a menu to change it) and Save as,
  *  for one pane. */
