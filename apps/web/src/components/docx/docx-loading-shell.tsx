@@ -2,7 +2,7 @@ import { useDocxFitZoom } from "@/components/docx-preview-zoom";
 import {
   DOCX_LOADING_SURFACE_CLASS,
   DocxLoadingPage,
-} from "@/components/docx/docx-loading-sheet.pending";
+} from "@/components/docx/docx-loading-sheet";
 import {
   DOCX_PAGE_HEIGHT,
   DOCX_PAGE_WIDTH,

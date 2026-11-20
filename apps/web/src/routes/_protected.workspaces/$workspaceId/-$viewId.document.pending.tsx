@@ -4,7 +4,7 @@ import { useParams, useSearch } from "@tanstack/react-router";
 
 import { cn } from "@stll/ui/utils";
 
-import { DocxLoadingSheetPending } from "@/components/docx/docx-loading-sheet.pending";
+import { DocxLoadingSheetPending } from "@/components/docx/docx-loading-sheet";
 import {
   PdfLoadingShell,
   PdfToolbarFace,
