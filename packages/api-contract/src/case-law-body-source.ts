@@ -24,6 +24,24 @@ export const COLLECTION_PROVENANCE_COVERAGE = {
 
 export const COLLECTION_PUBLICATION_PROJECTION_MAX = 32;
 
+export const COLLECTION_CONTEXT_REPRESENTATION = {
+  DISPLAYED: "displayed",
+  ALTERNATE_WRAPPING: "alternate-wrapping",
+} as const;
+
+export const collectionContextLayoutSchema = v.strictObject({
+  sha256: v.pipe(
+    v.string(),
+    v.minLength(64),
+    v.maxLength(64),
+    v.regex(/^[0-9a-f]{64}$/u),
+  ),
+  representation: v.picklist(Object.values(COLLECTION_CONTEXT_REPRESENTATION)),
+});
+export type CollectionContextLayout = v.InferOutput<
+  typeof collectionContextLayoutSchema
+>;
+
 const sourceSchema = v.strictObject({
   id: v.pipe(v.string(), v.uuid(), v.maxLength(36)),
   name: v.pipe(v.string(), v.maxLength(1024)),
@@ -58,6 +76,7 @@ export const collectionPublicationSchema = v.variant("extent", [
     extent: v.literal(COLLECTION_BODY_EXTENT.SECTION),
     sectionNumber: positiveInteger,
     collectionLabel: v.pipe(v.string(), v.maxLength(256)),
+    contextLayout: v.optional(collectionContextLayoutSchema),
     ...publicationEntries,
   }),
   v.strictObject({

@@ -1,13 +1,28 @@
 import { panic, Result, TaggedError } from "better-result";
 
-import type { DecisionBodySource } from "@stll/api-contract/case-law-body-source";
+import { COLLECTION_CONTEXT_REPRESENTATION } from "@stll/api-contract/case-law-body-source";
+import type {
+  CollectionContextLayout,
+  DecisionBodySource,
+} from "@stll/api-contract/case-law-body-source";
 import { compareCodeUnit } from "@stll/collation";
 import { declareFingerprintFields } from "@stll/errors";
-import type { Block, DecisionMetadata } from "@stll/legal-ast/document-ast";
+import type {
+  Block,
+  DecisionMetadata,
+  Inline,
+} from "@stll/legal-ast/document-ast";
 import {
+  hasInlineChildren,
   hasUsableAst,
+  plainTextOf,
   withUniqueBlockIdentities,
 } from "@stll/legal-ast/document-ast";
+import {
+  mapInlineText,
+  rewriteInlineWhitespace,
+} from "@stll/legal-ast/inline-line";
+import { sha256Hex } from "@stll/sha256/bun";
 
 import { sectionsFromAst } from "@/api/handlers/case-law/ingestion/sections-from-ast";
 import type { CollectionDocumentPartRead } from "@/api/lib/legal-search/collection-document-part-read";
@@ -141,6 +156,9 @@ type CollectionDecisionIdentity = Pick<
 type ComposedCollectionDocument = {
   plan: CollectionDocumentPlan;
   payload: CorpusPayload;
+  contextLayouts: readonly (CollectionContextLayout & {
+    publication: CollectionPublication;
+  })[];
 };
 
 type ComposeCollectionDocumentOptions = {
@@ -153,13 +171,63 @@ type ComposeCollectionDocumentOptions = {
 const commonBlockKey = ({ id: _id, anchorId: _anchorId, ...content }: Block) =>
   JSON.stringify(sortDeep(content));
 
-const sameBlocks = (left: readonly Block[], right: readonly Block[]) =>
+const mergeTextRuns = (nodes: readonly Inline[]): Inline[] => {
+  const merged: Inline[] = [];
+  for (const node of nodes) {
+    const previous = merged.at(-1);
+    if (
+      node.type === "text" &&
+      previous?.type === "text" &&
+      node.anonymized === previous.anonymized
+    ) {
+      previous.text += node.text;
+    } else {
+      merged.push(
+        hasInlineChildren(node)
+          ? { ...node, children: mergeTextRuns(node.children) }
+          : { ...node },
+      );
+    }
+  }
+  return merged;
+};
+
+const LIST_ITEM_START = /^(?:\d+[.)]|[a-zA-Z][.)]|[IVXLCDM]+[.)]|[•‣▪])\s/u;
+
+/** Printed markers retain item boundaries even when an edition wraps beside one. */
+const listWrappingKey = (text: string): string => {
+  const lines = text.split("\n").map((line) => line.trim());
+  return lines.filter((line) => LIST_ITEM_START.test(line)).length >= 2 &&
+    lines.every((line) => line !== "")
+    ? lines.join(" ")
+    : text;
+};
+
+const commonContextKey = (block: Block): string => {
+  if (
+    block.type !== "paragraph" ||
+    (block.role !== undefined && block.role !== "apparatus")
+  ) {
+    return commonBlockKey(block);
+  }
+  const inlines = mergeTextRuns(
+    rewriteInlineWhitespace(
+      mapInlineText(block.inlines, (text) => text.replace(/\s+/gu, " ")),
+      listWrappingKey,
+    ),
+  );
+  return commonBlockKey({ ...block, inlines, plainText: plainTextOf(inlines) });
+};
+
+const sameBlocks = (
+  left: readonly Block[],
+  right: readonly Block[],
+  keyOf = commonBlockKey,
+) =>
   left.length === right.length &&
   left.every((block, index) => {
     const other = right.at(index);
-    return (
-      other !== undefined && commonBlockKey(block) === commonBlockKey(other)
-    );
+    return other !== undefined && keyOf(block) === keyOf(other);
   });
 
 /** Parts are retained snapshots, never publisher calls or inferred missing sections. */
@@ -200,7 +268,7 @@ export const composeCollectionDocument = ({
     case "complete": {
       const { payload } = loadedOf(plan.publications[0]);
       return payloadCarriesDocument(payload)
-        ? Result.ok({ plan, payload })
+        ? Result.ok({ plan, payload, contextLayouts: [] })
         : Result.err(
             new CollectionDocumentCompositionError({
               message: "An explicit complete edition has no retained body",
@@ -212,6 +280,7 @@ export const composeCollectionDocument = ({
       return Result.ok({
         plan,
         payload: loadedOf(plan.publications[0]).payload,
+        contextLayouts: [],
       });
     case "section": {
       const fragments = [];
@@ -252,8 +321,8 @@ export const composeCollectionDocument = ({
       if (
         fragments.some(
           ({ prefix, suffix }) =>
-            !sameBlocks(first.prefix, prefix) ||
-            !sameBlocks(first.suffix, suffix),
+            !sameBlocks(first.prefix, prefix, commonContextKey) ||
+            !sameBlocks(first.suffix, suffix, commonContextKey),
         )
       ) {
         return Result.err(
@@ -283,8 +352,32 @@ export const composeCollectionDocument = ({
         ...[...sections.values()].flat(),
         ...first.suffix,
       ]);
+      const layouts = fragments.map(({ publication, prefix, suffix }) => ({
+        publication,
+        sha256: sha256Hex(
+          JSON.stringify([
+            prefix.map(commonBlockKey),
+            suffix.map(commonBlockKey),
+          ]),
+        ),
+      }));
+      const displayed = (
+        layouts.at(0) ?? panic("Lost the displayed collection context")
+      ).sha256;
+      const contextLayouts =
+        new Set(layouts.map(({ sha256 }) => sha256)).size === 1
+          ? []
+          : layouts.map(({ publication, sha256 }) => ({
+              publication,
+              sha256,
+              representation:
+                sha256 === displayed
+                  ? COLLECTION_CONTEXT_REPRESENTATION.DISPLAYED
+                  : COLLECTION_CONTEXT_REPRESENTATION.ALTERNATE_WRAPPING,
+            }));
       return Result.ok({
         plan,
+        contextLayouts,
         payload: {
           text: blocks.map(({ plainText }) => plainText).join("\n\n"),
           sections: sectionsFromAst(blocks),

@@ -331,10 +331,19 @@ export const readCollectionBody = async ({
     const contributing = new Set(
       composed.value.plan.publications.map(publicationKey),
     );
+    const contextLayouts = new Map(
+      composed.value.contextLayouts.map(
+        ({ publication, sha256, representation }) => [
+          publicationKey(publication),
+          { sha256, representation },
+        ],
+      ),
+    );
     const bodySource = collectionBodySourceOf({
       primary: publicationProvenanceOf(
         primary,
         COLLECTION_PUBLICATION_CONTRIBUTION.BODY,
+        contextLayouts.get(publicationKey(primary)),
       ),
       publications: publications.map((publication) =>
         publicationProvenanceOf(
@@ -342,6 +351,7 @@ export const readCollectionBody = async ({
           contributing.has(publicationKey(publication))
             ? COLLECTION_PUBLICATION_CONTRIBUTION.BODY
             : COLLECTION_PUBLICATION_CONTRIBUTION.RELATED,
+          contextLayouts.get(publicationKey(publication)),
         ),
       ),
       totalCount: selected.totalCount,

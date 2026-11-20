@@ -2,8 +2,12 @@ import { panic, Result } from "better-result";
 import { expect, test } from "bun:test";
 import fc from "fast-check";
 
-import type { Block } from "@stll/legal-ast/document-ast";
-import { hasUsableAst } from "@stll/legal-ast/document-ast";
+import type {
+  Block,
+  Inline,
+  ParagraphRole,
+} from "@stll/legal-ast/document-ast";
+import { hasUsableAst, plainTextOf } from "@stll/legal-ast/document-ast";
 import { assertProperty } from "@stll/property-testing";
 
 import type { CollectionDocumentPart } from "@/api/lib/legal-search/collection-document-part";
@@ -96,6 +100,199 @@ const compose = (publications: readonly LoadedCollectionPublication[]) =>
     identity,
     publications,
   });
+
+const withOpening = (
+  part: ReturnType<typeof section>,
+  inlines: Inline[],
+  role?: ParagraphRole,
+) => ({
+  publication: part.publication,
+  payload: {
+    ...part.payload,
+    ast: {
+      ...part.payload.ast,
+      blocks: part.payload.ast.blocks.map((block, index) =>
+        index === 0
+          ? { ...block, role, inlines, plainText: plainTextOf(inlines) }
+          : block,
+      ),
+    },
+  },
+});
+
+const listOpening = [
+  { type: "text", text: "1. A long item" },
+  { type: "line-break" },
+  { type: "text", text: "2. Next item" },
+] satisfies Inline[];
+
+test("list wrapping retains an original layout and attributes both variants", () => {
+  const first = withOpening(section(1), listOpening);
+  const second = withOpening(section(2), [
+    { type: "text", text: "1. A" },
+    { type: "line-break" },
+    { type: "text", text: "long item" },
+    { type: "line-break" },
+    { type: "text", text: "2. Next item" },
+  ]);
+  const result = compose([second, first]).unwrap(
+    "Expected wrapping variants to compose",
+  );
+  expect(result.payload.ast?.blocks.at(0)?.plainText).toBe(
+    plainTextOf(listOpening),
+  );
+  expect(
+    result.contextLayouts.map(({ representation }) => representation),
+  ).toEqual(["displayed", "alternate-wrapping"]);
+  expect(new Set(result.contextLayouts.map(({ sha256 }) => sha256)).size).toBe(
+    2,
+  );
+  expect(second.payload.ast.blocks.at(0)?.plainText).toBe(
+    "1. A\nlong item\n2. Next item",
+  );
+});
+
+test("case-law.collection-list-wrapping-preserves-original", () => {
+  assertProperty(
+    "case-law.collection-list-wrapping-preserves-original",
+    fc.property(
+      fc.array(fc.constantFrom("Alpha", "Beta", "Gamma"), {
+        minLength: 2,
+        maxLength: 8,
+      }),
+      fc.nat(),
+      (words, offset) => {
+        const split = 1 + (offset % (words.length - 1));
+        const original = [
+          { type: "text", text: `1. ${words.join(" ")}` },
+          { type: "line-break" },
+          { type: "text", text: "2. End" },
+        ] satisfies Inline[];
+        const wrapped = [
+          { type: "text", text: `1. ${words.slice(0, split).join(" ")}` },
+          { type: "line-break" },
+          { type: "text", text: words.slice(split).join(" ") },
+          { type: "line-break" },
+          { type: "text", text: "2. End" },
+        ] satisfies Inline[];
+        const result = compose([
+          withOpening(section(2), wrapped),
+          withOpening(section(1), original),
+        ]).unwrap(
+          "Expected list wrapping to retain its original representation",
+        );
+        expect(result.payload.ast?.blocks.at(0)?.plainText).toBe(
+          plainTextOf(original),
+        );
+        expect(
+          result.contextLayouts.map(({ representation }) => representation),
+        ).toEqual(["displayed", "alternate-wrapping"]);
+      },
+    ),
+  );
+});
+
+test.each([
+  {
+    original: [
+      { type: "text", text: "First" },
+      { type: "line-break" },
+      { type: "text", text: "Next" },
+    ] satisfies Inline[],
+    variant: [{ type: "text", text: "First Next" }] satisfies Inline[],
+  },
+  {
+    original: listOpening,
+    variant: [
+      { type: "bold", children: [{ type: "text", text: "1. A long item" }] },
+      { type: "line-break" },
+      { type: "text", text: "2. Next item" },
+    ] satisfies Inline[],
+  },
+  {
+    original: [
+      {
+        type: "link",
+        href: "https://example.test/first",
+        children: [{ type: "text", text: "1. A long item" }],
+      },
+    ] satisfies Inline[],
+    variant: [
+      {
+        type: "link",
+        href: "https://example.test/second",
+        children: [{ type: "text", text: "1. A long item" }],
+      },
+    ] satisfies Inline[],
+  },
+])(
+  "structural context differences remain conflicts %#",
+  ({ original, variant }) => {
+    const result = compose([
+      withOpening(section(1), original),
+      withOpening(section(2), variant),
+    ]);
+    expect(Result.isError(result)).toBe(true);
+    if (Result.isOk(result)) {
+      return panic("Expected a structural context conflict");
+    }
+    expect(result.error.reason).toBe("common-context-conflict");
+    return undefined;
+  },
+);
+
+test("quoted context and competing same-ordinal sections retain exact layout", () => {
+  const wrapped = [
+    { type: "text", text: "1. A" },
+    { type: "line-break" },
+    { type: "text", text: "long item" },
+    { type: "line-break" },
+    { type: "text", text: "2. Next item" },
+  ] satisfies Inline[];
+  expect(
+    Result.isError(
+      compose([
+        withOpening(section(1), listOpening, "quote"),
+        withOpening(section(2), wrapped, "quote"),
+      ]),
+    ),
+  ).toBe(true);
+  const result = compose([
+    section(1, "1. A long item", "first"),
+    section(1, "1. A\nlong item", "second"),
+  ]);
+  expect(Result.isError(result)).toBe(true);
+  if (Result.isOk(result)) {
+    return panic("Expected an exact section conflict");
+  }
+  expect(result.error.reason).toBe("section-conflict");
+  return undefined;
+});
+
+test("printed list depth remains a structural context boundary", () => {
+  const second = withOpening(section(2), listOpening);
+  const result = compose([
+    withOpening(section(1), listOpening),
+    {
+      publication: second.publication,
+      payload: {
+        ...second.payload,
+        ast: {
+          ...second.payload.ast,
+          blocks: second.payload.ast.blocks.map((block, index) =>
+            index === 0 ? { ...block, listDepth: 1 as const } : block,
+          ),
+        },
+      },
+    },
+  ]);
+  expect(Result.isError(result)).toBe(true);
+  if (Result.isOk(result)) {
+    return panic("Expected list depth to remain structural");
+  }
+  expect(result.error.reason).toBe("common-context-conflict");
+  return undefined;
+});
 
 test("Austrian collection sections retain common context once in printed order", () => {
   const parts = [section(1), section(2), section(3)];

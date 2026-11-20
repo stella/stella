@@ -8,6 +8,7 @@ import {
   DECISION_BODY_TEXT_SOURCE,
 } from "@stll/api-contract/case-law-body-source";
 import type {
+  CollectionContextLayout,
   CollectionPublicationProvenance,
   DecisionBodySource,
 } from "@stll/api-contract/case-law-body-source";
@@ -33,6 +34,7 @@ export const publicationProvenanceOf = <
     documentPart,
   }: CollectionPublication,
   contribution: TContribution,
+  contextLayout?: CollectionContextLayout,
 ): CollectionPublicationProvenance & { contribution: TContribution } => {
   const common = {
     source,
@@ -49,6 +51,7 @@ export const publicationProvenanceOf = <
         extent: COLLECTION_BODY_EXTENT.SECTION,
         sectionNumber: documentPart.sectionNumber,
         collectionLabel: documentPart.collectionLabel,
+        ...(contextLayout === undefined ? {} : { contextLayout }),
         ...common,
       };
     case "unclassified":

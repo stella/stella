@@ -290,14 +290,12 @@ test("retained Polish publication parts compose through public readers and yield
   const ownId = createSafeId<"caseLawDecision">();
   const canonicalId = createSafeId<"caseLawDecision">();
   const collectionId = createSafeId<"caseLawSource">();
-  await fixture.db
-    .insert(caseLawSources)
-    .values(
-      caseLawSourceRow({
-        id: collectionId,
-        adapterKey: ADAPTER_KEYS.PL_COURTS,
-      }),
-    );
+  await fixture.db.insert(caseLawSources).values(
+    caseLawSourceRow({
+      id: collectionId,
+      adapterKey: ADAPTER_KEYS.PL_COURTS,
+    }),
+  );
   const identity = {
     caseNumber: "III CZP 1/2025",
     court: "Sąd Najwyższy",
@@ -323,11 +321,17 @@ test("retained Polish publication parts compose through public readers and yield
           id: `block-${index}`,
           anchorId: `block-${index}`,
           plainText: text,
-          inlines: [{ type: "text", text }],
+          inlines: text
+            .split("\n")
+            .flatMap((line, lineIndex) => [
+              ...(lineIndex === 0 ? [] : [{ type: "line-break" as const }]),
+              { type: "text" as const, text: line },
+            ]),
         })),
       },
     }) satisfies CorpusPayload;
-  const firstTexts = ["Common opening", "Section one", "Common closing"];
+  const opening = "1. Shared long item\n2. Another item";
+  const firstTexts = [opening, "Section one", "Common closing"];
   await fixture.db.insert(caseLawDecisions).values({
     id: ownId,
     sourceId: collectionId,
@@ -396,23 +400,36 @@ test("retained Polish publication parts compose through public readers and yield
     }) satisfies CollectionDocumentPart;
   await retain("part-1", part(1), firstTexts);
   await retain("part-2", part(2), [
-    "Common opening",
+    "1. Shared\nlong item\n2. Another item",
     "Section two",
     "Common closing",
   ]);
   const composed = await readApi(ownId);
   expect(composed.fulltext).toBe(
-    "Common opening\n\nSection one\n\nSection two\n\nCommon closing",
+    `${opening}\n\nSection one\n\nSection two\n\nCommon closing`,
   );
   expect(composed.bodySource).toMatchObject({
     textSource: "collection",
     extent: "section",
-    provenance: { totalCount: 2, omittedCount: 0 },
+    provenance: {
+      totalCount: 2,
+      omittedCount: 0,
+      records: expect.arrayContaining([
+        expect.objectContaining({
+          sourceDocumentId: "part-2",
+          contextLayout: {
+            representation: "alternate-wrapping",
+            sha256: expect.stringMatching(/^[0-9a-f]{64}$/u),
+          },
+        }),
+      ]),
+    },
   });
   expect(JSON.stringify(composed.documentAst)).toContain("Section two");
   const publicBlocks = JSON.stringify(await blocks(ownId));
   expect(publicBlocks).toContain("Section one");
   expect(publicBlocks).toContain("Section two");
+  expect(publicBlocks).toContain("alternate-wrapping");
   expect(publicBlocks).toContain("https://example.test/collection/part-1");
   expect(publicBlocks).toContain("https://example.test/collection/part-2");
   const completeKey = await retain(
@@ -541,30 +558,28 @@ test("legacy collection-owned rows retain their observed time or explicit unknow
       encoded.value,
       COLLECTION_DOCUMENT_BODY_CONTENT_TYPE,
     );
-    await fixture.db
-      .insert(caseLawHeldDecisionAttachments)
-      .values({
-        sourceId: collectionSourceId,
-        sourceDocumentId: `related-${id}`,
-        hostDecisionId: id,
-        matchBasis: HELD_DECISION_MATCH_BASIS.COURT_DOCKET_DATE,
-        matchEvidence: {
-          status: "matched",
-          basis: HELD_DECISION_MATCH_BASIS.COURT_DOCKET_DATE,
-          ecliDiscrepancy: null,
-        },
-        documentPart: {
-          extent: "unclassified",
-          legalSentence: "Actual related headnote",
-          keywords: [],
-        },
-        documentBodyS3Key: bodyKey,
-        documentBodySha256: hash,
-        sourceHash: hash,
-        sourceUrl: `https://example.test/collection/related-${id}`,
-        observedAt: new Date(observedAt),
-        observationOrder: 1n,
-      });
+    await fixture.db.insert(caseLawHeldDecisionAttachments).values({
+      sourceId: collectionSourceId,
+      sourceDocumentId: `related-${id}`,
+      hostDecisionId: id,
+      matchBasis: HELD_DECISION_MATCH_BASIS.COURT_DOCKET_DATE,
+      matchEvidence: {
+        status: "matched",
+        basis: HELD_DECISION_MATCH_BASIS.COURT_DOCKET_DATE,
+        ecliDiscrepancy: null,
+      },
+      documentPart: {
+        extent: "unclassified",
+        legalSentence: "Actual related headnote",
+        keywords: [],
+      },
+      documentBodyS3Key: bodyKey,
+      documentBodySha256: hash,
+      sourceHash: hash,
+      sourceUrl: `https://example.test/collection/related-${id}`,
+      observedAt: new Date(observedAt),
+      observationOrder: 1n,
+    });
     const beforeRead = store.requests.length;
     const result = await readApi(id);
     expect(result.fulltext).toBe("Retained legacy publication text");
@@ -592,17 +607,15 @@ test("an empty retained snapshot does not attest an empty publisher page", async
     decisionDate: undefined,
     decisionType: undefined,
   };
-  await fixture.db
-    .insert(caseLawDecisions)
-    .values({
-      id,
-      sourceId,
-      country: "CZE",
-      language: "cs",
-      caseNumber: identity.caseNumber,
-      court: identity.court,
-      fulltext: "",
-    });
+  await fixture.db.insert(caseLawDecisions).values({
+    id,
+    sourceId,
+    country: "CZE",
+    language: "cs",
+    caseNumber: identity.caseNumber,
+    court: identity.court,
+    fulltext: "",
+  });
   const encoded = encodeCollectionDocumentBody({
     text: "",
     sections: [],
@@ -622,30 +635,28 @@ test("an empty retained snapshot does not attest an empty publisher page", async
     encoded.value,
     COLLECTION_DOCUMENT_BODY_CONTENT_TYPE,
   );
-  await fixture.db
-    .insert(caseLawHeldDecisionAttachments)
-    .values({
-      sourceId: collectionSourceId,
-      sourceDocumentId: postId,
-      hostDecisionId: id,
-      matchBasis: HELD_DECISION_MATCH_BASIS.COURT_DOCKET_DATE,
-      matchEvidence: {
-        status: "matched",
-        basis: HELD_DECISION_MATCH_BASIS.COURT_DOCKET_DATE,
-        ecliDiscrepancy: null,
-      },
-      documentPart: {
-        extent: "unclassified",
-        legalSentence: null,
-        keywords: [],
-      },
-      documentBodyS3Key: bodyKey,
-      documentBodySha256: hash,
-      sourceHash: hash,
-      sourceUrl: `https://example.test/collection/${postId}`,
-      observedAt: new Date(observedAt),
-      observationOrder: 1n,
-    });
+  await fixture.db.insert(caseLawHeldDecisionAttachments).values({
+    sourceId: collectionSourceId,
+    sourceDocumentId: postId,
+    hostDecisionId: id,
+    matchBasis: HELD_DECISION_MATCH_BASIS.COURT_DOCKET_DATE,
+    matchEvidence: {
+      status: "matched",
+      basis: HELD_DECISION_MATCH_BASIS.COURT_DOCKET_DATE,
+      ecliDiscrepancy: null,
+    },
+    documentPart: {
+      extent: "unclassified",
+      legalSentence: null,
+      keywords: [],
+    },
+    documentBodyS3Key: bodyKey,
+    documentBodySha256: hash,
+    sourceHash: hash,
+    sourceUrl: `https://example.test/collection/${postId}`,
+    observedAt: new Date(observedAt),
+    observationOrder: 1n,
+  });
   const snapshot = await readPublic(
     async (tx) => await readCollectionBody({ tx, decisionId: id, identity }),
   );
