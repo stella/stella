@@ -180,7 +180,7 @@ an outcome with `@stll/ui/toast`, and put a field error next to the field.
   `SettingsPanel`. One option is one row: its title and one line at the
   start, its control at the end. The section title names the group and is
   never repeated in a row; a lone switch never gets its own card.
-  [test: .oxlint-plugins/**tests**/settings-layout-primitives.test.ts]
+  [check: ratchet:lint-suppression-directives]
 - **Inventories of named things are grouped lists, not tables.**
   Connections, sessions, keys, integrations: use `@stll/ui/list`. A
   `ListGroup` has a header (title + `ListGroupCount` + one quiet line +
