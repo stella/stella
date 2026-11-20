@@ -62,6 +62,84 @@ const recorded = async (name: string): Promise<string> =>
     Bun.gunzipSync(await Bun.file(new URL(name, FIXTURES)).bytes()),
   );
 
+const reportPage = (
+  lines: readonly string[],
+) => `<h1>Rozhodnutí Nejvyššího soudu ze dne 01.01.2004, sp. zn. Ts 1/2003</h1>
+<div class="breadcrumbs"><a>Rok 2004</a></div>
+<table class="content-table"><tr><td>Heslo:</td><td>Dokazování</td></tr>
+<tr><td></td><td><div class="detail-section__table-heading">Sbírkový text rozhodnutí</div>
+${lines.map((line) => `<p>${line}</p>`).join("")}</td></tr></table>`;
+
+const reportContents =
+  "OBSAH<br>I. Úvod<br>II. Předměty průzkumu<br>III. Závěry";
+const reportStart = [
+  "Č. 36",
+  "Zpráva",
+  reportContents,
+  "I. ÚVOD",
+  "Společný úvod.",
+];
+const reportEnd = ["III. ZÁVĚRY", "Společný závěr."];
+
+describe("editions of a collection report", () => {
+  test.each([1, 11, 22])(
+    "keeps the published block range of section %i",
+    (section) => {
+      const lines = [`${section}. Dokazování`, "Obsah tohoto oddílu."];
+      const decision =
+        buildCzNsSbirkaDecision({
+          postId: String(section),
+          detailHtml: reportPage([
+            ...reportStart,
+            "II. PŘEDMĚTY PRŮZKUMU",
+            ...lines,
+            ...reportEnd,
+          ]),
+        }) ?? panic("missing report");
+      const entry = entryOf(decision);
+      expect(entry.reportEdition?.extent).toBe("section");
+      expect(entry.number).toBe("36");
+      expect(entry.keywords).toEqual(["Dokazování"]);
+      expect(entry.legalSentence).toBeNull();
+      const edition = entry.reportEdition;
+      if (edition?.extent !== "section") {
+        panic("missing section");
+      }
+      const part = edition.sectionPart;
+      expect(part.sectionNumber).toBe(section);
+      expect(part.collectionLabel).toBe("Č. 36");
+      if (!hasUsableAst(decision.documentAst)) {
+        panic("missing text");
+      }
+      expect(
+        decision.documentAst.blocks
+          .slice(part.firstBlock, part.afterLastBlock)
+          .map((block) => block.plainText),
+      ).toEqual(lines);
+    },
+  );
+
+  test("certifies a full edition only when it contains every listed subsection", () => {
+    const headings = ["1. První téma", "2. Druhé téma", "3. Třetí téma"];
+    const build = (sections: readonly string[]) =>
+      entryOf(
+        buildCzNsSbirkaDecision({
+          postId: "7",
+          detailHtml: reportPage([
+            ...reportStart,
+            ...headings,
+            "II. PŘEDMĚTY PRŮZKUMU",
+            ...sections.flatMap((line) => [line, "Poznatky z průzkumu."]),
+            ...reportEnd,
+          ]),
+        }) ?? panic("missing report"),
+      );
+    expect(build(headings).reportEdition?.extent).toBe("complete");
+    expect(build(headings.slice(0, 2)).reportEdition?.extent).toBeUndefined();
+    expect(build(headings.toReversed()).reportEdition?.extent).toBeUndefined();
+  });
+});
+
 /** A branded row value, compared as the plain value it holds. */
 const observed = (value: unknown): unknown => value;
 

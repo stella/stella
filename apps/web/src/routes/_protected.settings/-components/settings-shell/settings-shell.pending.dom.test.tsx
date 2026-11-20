@@ -1,0 +1,128 @@
+import type { ReactNode } from "react";
+
+import { GlobalRegistrator } from "@happy-dom/global-registrator";
+import { afterAll, afterEach, describe, expect, test } from "bun:test";
+
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
+
+import messages from "@/i18n/langs/en.json";
+
+GlobalRegistrator.register({
+  url: "http://localhost:3000/settings/account/profile",
+  width: 1280,
+});
+
+const testing = await import("@testing-library/react");
+const { IntlProvider } = await import("use-intl");
+const { PendingTextIntlScope } = await import("@/components/pending-text");
+const { ACCOUNT_SECTION, SettingsChromeScope, SettingsPagePending } =
+  await import("@/routes/_protected.settings/-components/settings-shell/settings-shell.pending");
+const { ProfilePending } =
+  await import("@/routes/_protected.settings/-account.profile.pending");
+const { ConnectionsPending } =
+  await import("@/routes/_protected.settings/-account.connections.pending");
+const { MemoryPending } =
+  await import("@/routes/_protected.settings/-account.memory.pending");
+const { DesktopPending } =
+  await import("@/routes/_protected.settings/-account.desktop.pending");
+const { BetaPending } =
+  await import("@/routes/_protected.settings/-account.beta.pending");
+
+afterEach(() => {
+  testing.cleanup();
+});
+afterAll(async () => {
+  await unregisterDomEnvironment();
+});
+
+const withIntl = (node: ReactNode) => (
+  <IntlProvider locale="en" messages={messages}>
+    <PendingTextIntlScope formattingLocale="en">{node}</PendingTextIntlScope>
+  </IntlProvider>
+);
+
+const navRowCount = (container: HTMLElement) =>
+  container.querySelectorAll(".bg-muted\\/30 svg").length;
+
+const UNGATED_ACCOUNT_ROWS = ACCOUNT_SECTION.items.filter(
+  (item) => !("gate" in item),
+).length;
+
+describe("a settings page's pending view", () => {
+  test("drawn before the shell mounts, it brings the settings chrome around the page", () => {
+    const view = testing.render(
+      <SettingsPagePending>
+        <p data-testid="page" />
+      </SettingsPagePending>,
+    );
+    expect(view.getByTestId("page").closest("section") !== null).toBe(true);
+    // The account rows every member sees, plus the shortcuts row.
+    expect(navRowCount(view.container)).toBe(UNGATED_ACCOUNT_ROWS + 1);
+    // Painted before intl: no label text, only its bars.
+    expect(view.container.textContent).toBe("");
+  });
+
+  test("inside the live shell, it is the page alone", () => {
+    const view = testing.render(
+      <SettingsChromeScope>
+        <SettingsPagePending>
+          <p data-testid="page" />
+        </SettingsPagePending>
+      </SettingsChromeScope>,
+    );
+    expect(view.getByTestId("page").parentElement === view.container).toBe(
+      true,
+    );
+    expect(navRowCount(view.container)).toBe(0);
+  });
+});
+
+describe("the account pages' pending views", () => {
+  const views = {
+    beta: BetaPending,
+    connections: ConnectionsPending,
+    desktop: DesktopPending,
+    memory: MemoryPending,
+    profile: ProfilePending,
+  } as const;
+
+  for (const [name, View] of Object.entries(views)) {
+    test(`${name}: the real heading, and no loading line where content belongs`, () => {
+      const view = testing.render(
+        withIntl(
+          <SettingsChromeScope>
+            <View />
+          </SettingsChromeScope>,
+        ),
+      );
+      const heading = view.getByRole("heading", { level: 1 });
+      expect(heading.textContent.length > 0).toBe(true);
+      expect(view.container.textContent.includes(messages.common.loading)).toBe(
+        false,
+      );
+    });
+  }
+
+  test("profile: the cards' titles in the page's order", () => {
+    const view = testing.render(
+      withIntl(
+        <SettingsChromeScope>
+          <ProfilePending />
+        </SettingsChromeScope>,
+      ),
+    );
+    const titles = [
+      ...view.container.querySelectorAll('[data-slot="frame-panel-title"]'),
+    ].map((title) => title.textContent);
+    expect(titles).toEqual([
+      messages.common.displayName,
+      messages.settings.account.timezone,
+      messages.settings.account.chatNotifications,
+      messages.settings.account.chatTechnicalDetails,
+      messages.settings.account.twoFactor.title,
+      messages.common.sessions,
+      messages.settings.account.personalDataExportTitle,
+      messages.settings.account.dangerZone,
+    ]);
+  });
+});

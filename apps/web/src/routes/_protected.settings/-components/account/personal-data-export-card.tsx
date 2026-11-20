@@ -5,13 +5,6 @@ import { useTranslations } from "use-intl";
 import { sanitizeHref } from "@stll/decision-reader/sanitize-href";
 import { Temporal } from "@stll/time";
 import { Button } from "@stll/ui/button";
-import {
-  Frame,
-  FrameDescription,
-  FrameHeader,
-  FramePanel,
-  FrameTitle,
-} from "@stll/ui/frame";
 import { DownloadIcon } from "@stll/ui/icons";
 import { Loader } from "@stll/ui/loader";
 
@@ -30,6 +23,10 @@ import { notifyUserError } from "@/lib/errors/user-toast";
 import { queryView } from "@/lib/query-view.logic";
 import { MEDIUM_DATE_SHORT_TIME_FORMAT } from "@/lib/relative-time";
 import { useQueryViewError } from "@/lib/use-query-view";
+import {
+  PersonalDataExportCardFrame,
+  PersonalDataExportStatusPending,
+} from "@/routes/_protected.settings/-components/account/personal-data-export-card.pending";
 
 export const PersonalDataExportCard = () => {
   const t = useTranslations();
@@ -80,42 +77,28 @@ export const PersonalDataExportCard = () => {
   );
 
   return (
-    <Frame>
-      <FrameHeader>
-        <FrameTitle>{t("settings.account.personalDataExportTitle")}</FrameTitle>
-        <FrameDescription>
-          {t("settings.account.personalDataExportDescription")}
-        </FrameDescription>
-      </FrameHeader>
-      <FramePanel>
-        <div className="flex flex-col items-start gap-3 p-4">
-          {latestView.type === "pending" && (
-            <QueryViewFeedback view={latestView} />
-          )}
-          {latestView.type === "error" && (
-            <QueryViewFeedback view={latestView} />
-          )}
-          {latestView.type === "empty" &&
-            requestButton(t("settings.account.personalDataExportRequest"))}
-          {latestView.type === "items" && latestView.items !== null && (
-            <>
-              <QueryViewFeedback view={latestView} />
-              <PersonalDataExportStatus
-                onRequest={() => requestExport.mutate()}
-                requestPending={requestExport.isPending}
-                status={latestView.items}
-                formatExpiresAt={(instant) =>
-                  format.dateTime(
-                    new Date(Temporal.Instant.from(instant).epochMilliseconds),
-                    MEDIUM_DATE_SHORT_TIME_FORMAT,
-                  )
-                }
-              />
-            </>
-          )}
-        </div>
-      </FramePanel>
-    </Frame>
+    <PersonalDataExportCardFrame>
+      {latestView.type === "pending" && <PersonalDataExportStatusPending />}
+      {latestView.type === "error" && <QueryViewFeedback view={latestView} />}
+      {latestView.type === "empty" &&
+        requestButton(t("settings.account.personalDataExportRequest"))}
+      {latestView.type === "items" && latestView.items !== null && (
+        <>
+          <QueryViewFeedback view={latestView} />
+          <PersonalDataExportStatus
+            onRequest={() => requestExport.mutate()}
+            requestPending={requestExport.isPending}
+            status={latestView.items}
+            formatExpiresAt={(instant) =>
+              format.dateTime(
+                new Date(Temporal.Instant.from(instant).epochMilliseconds),
+                MEDIUM_DATE_SHORT_TIME_FORMAT,
+              )
+            }
+          />
+        </>
+      )}
+    </PersonalDataExportCardFrame>
   );
 };
 

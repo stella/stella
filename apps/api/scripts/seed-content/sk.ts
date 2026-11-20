@@ -1520,8 +1520,7 @@ export const SK_SEED_CONTENT = {
         confirm: "Súhlas na overenie",
         notice: "Len oznámenie",
       },
-      statDetail:
-        "{counterparties} protistrany · {documents} dokumentov · {share} hodnoty",
+      statDetail: "{counterparties} protistrany · {share} hodnoty",
       splitLabel: "Podiel na hodnote zmlúv podľa dosahu zmeny kontroly",
       columns: [
         "Protistrana",
@@ -1529,7 +1528,6 @@ export const SK_SEED_CONTENT = {
         "Dokumenty",
         "Hodnota zmlúv",
         "Riziko",
-        "Zmena kontroly",
       ],
     },
     agreementLabel: (documentType, year) => `${documentType} ${year}`,

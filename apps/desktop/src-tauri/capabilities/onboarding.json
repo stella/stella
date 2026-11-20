@@ -30,7 +30,19 @@
     "allow-dictation-get-snapshot",
     "allow-dictation-set-enabled",
     "allow-dictation-set-cleanup",
+    "allow-dictation-set-share-window-title",
+    "allow-dictation-set-share-text-before-cursor",
+    "allow-dictation-set-custom-words",
+    "allow-dictation-set-destination",
+    "allow-dictation-get-cloud-models",
+    "allow-dictation-set-cloud-model",
     "allow-dictation-download-model",
+    "allow-dictation-get-microphones",
+    "allow-dictation-set-microphone",
+    "allow-dictation-test-microphone-start",
+    "allow-dictation-test-microphone-stop",
+    "allow-dictation-notice-get-state",
+    "allow-dictation-notice-respond",
     "core:window:allow-start-dragging"
   ]
 }

@@ -8,7 +8,7 @@ import { cn } from "@stll/ui/utils";
 import type { OnboardingSnapshot } from "./onboarding-types";
 
 type StepFooterProps = {
-  onBack?: () => void;
+  onBack?: (() => void) | undefined;
   primary?: ReactNode;
   secondary?: ReactNode;
   snapshot: OnboardingSnapshot;

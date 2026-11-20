@@ -1,5 +1,5 @@
 import { panic, Result } from "better-result";
-import { and, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
+import { and, eq, inArray, isNotNull } from "drizzle-orm";
 
 import { createCaseLawDecisionSlug } from "@stll/api-contract/case-law-decision-route";
 
@@ -18,6 +18,7 @@ import {
 import { runCitationGraphTransaction } from "@/api/handlers/case-law/citation-graph-transaction";
 import type { CitationGraphTransaction } from "@/api/handlers/case-law/citation-graph-transaction";
 import { settleReopenedCitations } from "@/api/handlers/case-law/citation-resolution";
+import { refreshHostDecisionIdentifiersTx } from "@/api/handlers/case-law/decision-identifier-claims-persistence";
 import {
   CASE_LAW_DECISION_SLUG_ALLOCATION_ATTEMPTS,
   createCaseLawDecisionSlugCandidate,
@@ -49,6 +50,7 @@ import {
 } from "@/api/handlers/case-law/ingestion/supplement-composition";
 import type { SafeId } from "@/api/lib/branded-types";
 import { canonicalDecisionIdSql } from "@/api/lib/case-law/decision-alias";
+import { DECISION_IDENTIFIER_CLAIM } from "@/api/lib/case-law/decision-identifier-claims";
 import { runDecisionWriteExtension } from "@/api/lib/case-law/decision-write-extension";
 import {
   decisionFallbackState,
@@ -454,34 +456,10 @@ const writeDecisionRow = async (
       }
 
       if (!preservesExistingDetail) {
-        // Observed identifiers are re-derived; declared aliases stay, and an
-        // observed identifier equal to one is already held by it.
-        await tx
-          .delete(caseLawDecisionIdentifiers)
-          .where(
-            and(
-              eq(caseLawDecisionIdentifiers.decisionId, existing.id),
-              isNull(caseLawDecisionIdentifiers.declaredAt),
-            ),
-          );
-        await tx
-          .insert(caseLawDecisionIdentifiers)
-          .values(
-            write.plan.identifierRows.map((identifier) => ({
-              decisionId: existing.id,
-              ...identifier,
-            })),
-          )
-          // A declared alias the observation also derives takes the
-          // observed spelling and stays declared.
-          .onConflictDoUpdate({
-            target: [
-              caseLawDecisionIdentifiers.decisionId,
-              caseLawDecisionIdentifiers.type,
-              caseLawDecisionIdentifiers.normalizedValue,
-            ],
-            set: { value: sql`excluded.value` },
-          });
+        await refreshHostDecisionIdentifiersTx(tx, {
+          decisionId: existing.id,
+          identifiers: write.plan.identifierRows,
+        });
         await writeDecisionJudges(tx, write, existing.id);
       }
 
@@ -524,6 +502,7 @@ const writeDecisionRow = async (
       write.plan.identifierRows.map((identifier) => ({
         decisionId: insertedId,
         ...identifier,
+        independentClaims: [DECISION_IDENTIFIER_CLAIM.HOST],
       })),
     );
     return await finishInsertedRowTx(tx, write, insertedId, projectionLock);
