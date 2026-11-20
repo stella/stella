@@ -216,8 +216,25 @@ test("the older series reads its status line as validity and keeps it out of the
   expect(pokyny.get("D-6")?.metadata).toMatchObject({
     title:
       "Pokyn D - 6 Rozhodnutí podle ust. § 96 odst. 2 písm. a) zákona č. 337/1992 Sb. (nevyměření a nevybrání DPH a spotřební daně)",
-    validity: { state: "withdrawn" },
+    validity: { state: "historical_repealed_basis" },
   });
+  // "NEAKTUÁLNÍ" is no longer current law, never a repeal; "ZRUŠEN" stays withdrawn.
+  const states = (pattern: RegExp) =>
+    new Set(
+      documents(listed.entries)
+        .filter((entry) =>
+          entry.sourceRaw?.some((part) =>
+            pattern.test(
+              Buffer.from(part.contentBase64, "base64").toString("utf-8"),
+            ),
+          ),
+        )
+        .map((entry) => entry.metadata.validity.state),
+    );
+  expect(states(/>\s*NEAKTUÁLNÍ\s*</u)).toEqual(
+    new Set(["historical_repealed_basis"]),
+  );
+  expect(states(/>\s*ZRUŠEN\s*</u)).toEqual(new Set(["withdrawn"]));
   expect(
     listed.entries.find(
       (entry) =>
