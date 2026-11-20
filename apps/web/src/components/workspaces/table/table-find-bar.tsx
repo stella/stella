@@ -385,10 +385,9 @@ const FindColumnRow = ({
   <Button
     aria-pressed={checked}
     disabled={disabled}
+    disabledReason={title}
     onClick={onClick}
     size="row"
-    // Why a column cannot be searched, reachable while the row is disabled.
-    tooltip={title}
     variant="ghost"
   >
     {icon}
