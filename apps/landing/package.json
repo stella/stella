@@ -70,7 +70,7 @@
   },
   "devDependencies": {
     "@astrojs/check": "^0.9.12",
-    "@playwright/test": "^1.65.0",
+    "@playwright/test": "^1.65.1",
     "@stll/playwright-tools": "workspace:*",
     "@stll/property-testing": "workspace:*",
     "@stll/text-normalize": "workspace:*",

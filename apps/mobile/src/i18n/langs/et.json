@@ -609,6 +609,13 @@
     "dictationCleanup": "Paranda tehisintellektiga",
     "dictationCleanupHint": "Parandab tuvastusvead ja dikteeritud vormingu, näiteks „uus rida“. Ainult tekst, mitte heli, läheb stella kaudu teie organisatsiooni tehisintellekti teenusepakkujale; stella seda ei talleta."
   },
+  "signedFile": {
+    "layer": "Allkirjakiht {number, number}",
+    "noReadableContent": "Eelvaateks pole loetavat sisu saadaval.",
+    "unknownSigner": "Tundmatu allkirjastaja",
+    "unreadable": "Allkirjastatud faili ei õnnestunud lugeda.",
+    "unverified": "Allkirju ei ole kontrollitud."
+  },
   "header": {
     "search": "Otsing"
   },
