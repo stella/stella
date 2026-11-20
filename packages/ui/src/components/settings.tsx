@@ -122,13 +122,11 @@ type SettingsRowProps = {
   /** Shown dimmed: its control is disabled until something else allows it. */
   disabled?: boolean | undefined;
   interaction?: SettingsRowInteraction | undefined;
-  className?: string | undefined;
 };
 
 /** One option: media, title and secondary line, then its control. */
 const SettingsRow = ({
   children,
-  className,
   depth = "top",
   description,
   disabled = false,
@@ -152,7 +150,6 @@ const SettingsRow = ({
           ROW_DEPTH_CLASS[depth],
           interaction === "label" &&
             "hover:bg-muted/50 cursor-pointer has-data-disabled:cursor-not-allowed has-data-disabled:hover:bg-transparent",
-          className,
         )}
       >
         {media}
@@ -189,7 +186,9 @@ const SettingsRow = ({
         )}
       </Box>
       {rendersSomething(footer) && (
-        <div className={cn("pe-4 pb-3", ROW_DEPTH_CLASS[depth])}>{footer}</div>
+        <div className={cn("pe-4 pb-3 empty:hidden", ROW_DEPTH_CLASS[depth])}>
+          {footer}
+        </div>
       )}
     </li>
   );
@@ -199,18 +198,20 @@ const SettingsRow = ({
  *  its own rows edge to edge. */
 type SettingsPanelInset = "padded" | "flush";
 
-/** A form, or other content that is not a row, on a section's surface. */
+/**
+ * A form, or other content that is not a row, on a section's surface. The
+ * panel owns its inset; the content lays itself out inside it.
+ */
 const SettingsPanel = ({
-  className,
   inset = "padded",
   ...props
-}: React.ComponentProps<"li"> & {
+}: Omit<React.ComponentProps<"li">, "className"> & {
   inset?: SettingsPanelInset | undefined;
 }) => (
   <li
-    className={cn("block min-w-0", inset === "padded" && "p-4", className)}
     data-slot="settings-panel"
     {...props}
+    className={cn("block min-w-0", inset === "padded" && "p-4")}
   />
 );
 

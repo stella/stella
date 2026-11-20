@@ -1059,45 +1059,47 @@ const BillingDraftConsentSettings = () => {
     return null;
   }
   return (
-    <SettingsPanel className="flex flex-col gap-2">
-      <span className="text-sm">{t("billingDraftsTitle")}</span>
-      <p className="text-muted-foreground text-xs">
-        {withdrawable ? t("billingDraftsGranted") : t("billingDraftsRevoked")}
-      </p>
-      {consent === "pending-withdrawal" ? (
-        <p className="text-muted-foreground text-xs" role="status">
-          {t("billingDraftsWithdrawPending")}
+    <SettingsPanel>
+      <div className="flex flex-col gap-2">
+        <span className="text-sm">{t("billingDraftsTitle")}</span>
+        <p className="text-muted-foreground text-xs">
+          {withdrawable ? t("billingDraftsGranted") : t("billingDraftsRevoked")}
         </p>
-      ) : null}
-      {settings.preference === null ? null : (
-        <div className="flex flex-col gap-1">
-          <span className="text-muted-foreground text-xs">
-            {t("billingDraftsPreference")}
-          </span>
-          <bdi className="text-sm text-pretty">{settings.preference}</bdi>
+        {consent === "pending-withdrawal" ? (
+          <p className="text-muted-foreground text-xs" role="status">
+            {t("billingDraftsWithdrawPending")}
+          </p>
+        ) : null}
+        {settings.preference === null ? null : (
+          <div className="flex flex-col gap-1">
+            <span className="text-muted-foreground text-xs">
+              {t("billingDraftsPreference")}
+            </span>
+            <bdi className="text-sm text-pretty">{settings.preference}</bdi>
+            <Button
+              className="self-start"
+              onClick={() => {
+                void setPreference(null);
+              }}
+              size="xs"
+              variant="ghost"
+            >
+              {t("billingDraftsForgetPreference")}
+            </Button>
+          </div>
+        )}
+        {consent === "granted" ? (
           <Button
             className="self-start"
             onClick={() => {
-              void setPreference(null);
+              void setConsent("revoked");
             }}
-            size="xs"
-            variant="ghost"
+            variant="outline"
           >
-            {t("billingDraftsForgetPreference")}
+            {t("billingDraftsWithdraw")}
           </Button>
-        </div>
-      )}
-      {consent === "granted" ? (
-        <Button
-          className="self-start"
-          onClick={() => {
-            void setConsent("revoked");
-          }}
-          variant="outline"
-        >
-          {t("billingDraftsWithdraw")}
-        </Button>
-      ) : null}
+        ) : null}
+      </div>
     </SettingsPanel>
   );
 };
