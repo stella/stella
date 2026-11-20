@@ -2342,7 +2342,7 @@
               "type": "object",
               "properties": {
                 "textSource": {
-                  "enum": ["host", "collection"],
+                  "examples": ["host", "collection"],
                   "type": "string"
                 },
                 "source": {
@@ -2355,13 +2355,20 @@
                   "maxLength": 8192
                 },
                 "retrievedAt": {
-                  "type": "string",
+                  "type": ["string", "null"],
                   "format": "date-time",
                   "maxLength": 32
+                },
+                "extent": {
+                  "examples": ["complete", "section", "unclassified"],
+                  "type": "string"
+                },
+                "provenance": {
+                  "type": "object",
+                  "additionalProperties": true
                 }
               },
-              "required": ["textSource"],
-              "additionalProperties": false
+              "required": ["textSource"]
             },
             "decisionId": {
               "type": "string"
@@ -2525,7 +2532,7 @@
               "type": "object",
               "properties": {
                 "textSource": {
-                  "enum": ["host", "collection"],
+                  "examples": ["host", "collection"],
                   "type": "string"
                 },
                 "source": {
@@ -2538,13 +2545,20 @@
                   "maxLength": 8192
                 },
                 "retrievedAt": {
-                  "type": "string",
+                  "type": ["string", "null"],
                   "format": "date-time",
                   "maxLength": 32
+                },
+                "extent": {
+                  "examples": ["complete", "section", "unclassified"],
+                  "type": "string"
+                },
+                "provenance": {
+                  "type": "object",
+                  "additionalProperties": true
                 }
               },
-              "required": ["textSource"],
-              "additionalProperties": false
+              "required": ["textSource"]
             },
             "decisionId": {
               "type": "string"
