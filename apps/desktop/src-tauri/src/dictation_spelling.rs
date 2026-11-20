@@ -86,7 +86,8 @@ fn target(word: &str) -> Option<Target<'_>> {
 }
 
 /// Splits `text` into words and what lies between them. A word is a run of
-/// letters and digits, with an apostrophe or a hyphen inside it.
+/// letters and digits, with an apostrophe or a hyphen inside it and the
+/// combining accents that follow its letters.
 fn pieces(text: &str) -> Vec<Piece<'_>> {
   let mut pieces = Vec::new();
   let mut start = 0;
@@ -98,7 +99,8 @@ fn pieces(text: &str) -> Vec<Piece<'_>> {
       && chars
         .get(position + 1)
         .is_some_and(|(_, next)| next.is_alphanumeric());
-    let wordlike = character.is_alphanumeric() || joins;
+    let wordlike =
+      character.is_alphanumeric() || joins || (in_word && combining(character));
     if wordlike != in_word && offset > start {
       pieces.push(piece(&text[start..offset], in_word));
       start = offset;
@@ -145,11 +147,14 @@ fn best_match<'t>(
     let Some((words, taken)) = leading_words(pieces, target.folded.len()) else {
       continue;
     };
-    let distance = words
+    let Some(distance) = words
       .iter()
       .zip(&target.folded)
-      .map(|(word, folded)| distance(&fold(word), folded))
-      .sum::<usize>();
+      .map(|(word, folded)| word_distance(&fold(word), folded))
+      .sum::<Option<usize>>()
+    else {
+      continue;
+    };
     if distance > allowed(target.letters) {
       continue;
     }
@@ -189,6 +194,15 @@ fn leading_words<'p>(
   None
 }
 
+/// Edits between a folded word and a folded custom word; `None` when they
+/// differ in a word with digits, such as a section or standard number, which
+/// must match exactly.
+fn word_distance(word: &str, custom: &str) -> Option<usize> {
+  let apart = distance(word, custom);
+  let numbered = |text: &str| text.chars().any(|character| character.is_numeric());
+  (apart == 0 || !(numbered(word) || numbered(custom))).then_some(apart)
+}
+
 /// How many letters may differ in a custom word of `letters` letters.
 const fn allowed(letters: usize) -> usize {
   if letters >= TWO_OFF_LETTERS {
@@ -220,10 +234,20 @@ fn cased_like(spelling: &str, original: &str) -> String {
 fn fold(word: &str) -> String {
   word
     .chars()
-    .filter(|character| !matches!(character, '\'' | '’' | '-'))
+    .filter(|character| {
+      !matches!(character, '\'' | '’' | '-') && !combining(*character)
+    })
     .flat_map(char::to_lowercase)
     .map(base_letter)
     .collect()
+}
+
+/// A combining accent, written after the letter it belongs to.
+const fn combining(character: char) -> bool {
+  matches!(
+    character as u32,
+    0x0300..=0x036F | 0x1AB0..=0x1AFF | 0x1DC0..=0x1DFF | 0x20D0..=0x20FF | 0xFE20..=0xFE2F
+  )
 }
 
 /// The letter without its diacritic, for the Latin letters the dictation
@@ -396,6 +420,32 @@ mod tests {
   fn the_right_spelling_and_no_words_change_nothing() {
     assert_eq!(respell("pan Novák", &words(&["Novák"])), "pan Novák");
     assert_eq!(respell("pan novak", &[]), "pan novak");
+  }
+
+  #[test]
+  fn numbers_must_match_exactly() {
+    assert_eq!(
+      respell("podle ISO 27002", &words(&["ISO 27001"])),
+      "podle ISO 27002"
+    );
+    assert_eq!(
+      respell("viz section 124", &words(&["Section 123"])),
+      "viz section 124"
+    );
+    assert_eq!(
+      respell("podle iso 27001", &words(&["ISO 27001"])),
+      "podle ISO 27001"
+    );
+  }
+
+  #[test]
+  fn combining_accents_stay_with_their_word() {
+    assert_eq!(respell("pan Jose\u{301}", &words(&["José"])), "pan José");
+    assert_eq!(respell("pan jose\u{301}", &words(&["José"])), "pan José");
+    assert_eq!(
+      respell("Dvor\u{30c}a\u{301}k", &words(&["Dvořák"])),
+      "Dvořák"
+    );
   }
 
   #[test]
