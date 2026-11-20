@@ -40,7 +40,7 @@ const toneWav = (seconds: number): Uint8Array => {
   return bytes;
 };
 
-async function* inSlices(bytes: Uint8Array, size: number) {
+function* inSlices(bytes: Uint8Array, size: number) {
   for (let offset = 0; offset < bytes.length; offset += size) {
     yield bytes.subarray(offset, offset + size);
   }
@@ -53,9 +53,9 @@ beforeAll(async () => {
 });
 
 describe("openRecording", () => {
-  test("hands out ordered 16 kHz WAV pieces that cover the recording", async () => {
+  test("hands out ordered 16 kHz WAV pieces that cover the recording", () => {
     const wav = toneWav(120);
-    const opened = await openRecording({
+    const opened = openRecording({
       size: wav.length,
       chunks: inSlices(wav, 64 * 1024),
       extension: "wav",
@@ -98,9 +98,9 @@ describe("openRecording", () => {
     expect(pieces.at(-1)?.endMs).toBeGreaterThan(119_900);
   });
 
-  test("refuses bytes that are no recording", async () => {
+  test("refuses bytes that are no recording", () => {
     const bytes = new TextEncoder().encode("not a recording at all");
-    const opened = await openRecording({
+    const opened = openRecording({
       size: bytes.length,
       chunks: inSlices(bytes, 8),
       extension: "m4a",
@@ -108,15 +108,15 @@ describe("openRecording", () => {
     expect(opened.isErr() && opened.error.refusal).toBe("unsupported");
   });
 
-  test("refuses content longer or shorter than its declared size", async () => {
+  test("refuses content longer or shorter than its declared size", () => {
     const wav = toneWav(1);
-    const longer = await openRecording({
+    const longer = openRecording({
       size: wav.length - 1,
       chunks: inSlices(wav, 1024),
       extension: "wav",
     });
     expect(longer.isErr() && longer.error.refusal).toBe("unreadable");
-    const shorter = await openRecording({
+    const shorter = openRecording({
       size: wav.length + 1,
       chunks: inSlices(wav, 1024),
       extension: "wav",

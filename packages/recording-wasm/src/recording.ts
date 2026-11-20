@@ -74,20 +74,20 @@ export const RECORDING_WASM_URL = new URL(
 );
 
 /**
- * Opens a recording of `size` bytes whose content arrives in `chunks`
- * (concatenated in order), written straight into the reader's memory, so
- * the caller holds no copy of its own. `extension` is the file name's,
- * without the dot.
+ * Opens a recording of `size` bytes whose content is `chunks` (concatenated
+ * in order), written straight into the reader's memory, so the caller can
+ * drop its own copy chunk by chunk. `extension` is the file name's, without
+ * the dot. Synchronous: run it off the main thread.
  */
-export const openRecording = async ({
+export const openRecording = ({
   size,
   chunks,
   extension,
 }: {
   size: number;
-  chunks: AsyncIterable<Uint8Array>;
+  chunks: Iterable<Uint8Array>;
   extension: string | null;
-}): Promise<Result<OpenedRecording, RecordingRefusedError>> => {
+}): Result<OpenedRecording, RecordingRefusedError> => {
   if (!initialized) {
     return Result.err(
       new RecordingRefusedError({
@@ -98,7 +98,7 @@ export const openRecording = async ({
   }
   const bytes = new RecordingBytes(size);
   let offset = 0;
-  for await (const chunk of chunks) {
+  for (const chunk of chunks) {
     if (!bytes.write(offset, chunk)) {
       bytes.free();
       return Result.err(refusalOf(new Error("unreadable")));

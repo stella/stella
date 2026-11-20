@@ -14,7 +14,7 @@ import {
 initRecordingReader(
   await WebAssembly.compile(await Bun.file(RECORDING_WASM_URL).arrayBuffer()),
 );
-const opened = await openRecording({ size, chunks, extension: "m4a" });
+const opened = openRecording({ size, chunks, extension: "m4a" });
 ```
 
 `openRecording` writes the chunks straight into WebAssembly memory, so the recording is held once. Pieces are decoded when `next()` asks for them; `close()` frees the recording. Run it off the main thread: decoding one piece takes tens of milliseconds.
