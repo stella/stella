@@ -29,7 +29,10 @@ const MAX_INSTRUCTIONS: usize = 20;
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct Contract {
-  recording_cleanup: RecordingContract,
+  /// Absent from a contract older than the recording cleanup route; the
+  /// window then shows the transcript alone.
+  #[serde(default)]
+  recording_cleanup: Option<RecordingContract>,
 }
 
 #[derive(Deserialize)]
@@ -43,19 +46,23 @@ struct RecordingContract {
 const CONTRACT: &str =
   include_str!("../../../../packages/api-contract/src/desktop-dictation-cleanup.json");
 
-fn contract() -> &'static RecordingContract {
+fn contract() -> Option<&'static RecordingContract> {
   static PARSED: OnceLock<Contract> = OnceLock::new();
-  &PARSED
+  PARSED
     .get_or_init(|| {
       serde_json::from_str(CONTRACT)
         .expect("the committed dictation cleanup contract must be valid")
     })
     .recording_cleanup
+    .as_ref()
 }
 
-/// The longest part one request may carry, in characters.
+const UNSUPPORTED: &str = "recording cleanup is not in this build's contract";
+
+/// The longest part one request may carry, in characters; none without
+/// the route.
 pub fn max_part_length() -> usize {
-  contract().max_transcript_length
+  contract().map_or(0, |contract| contract.max_transcript_length)
 }
 
 #[derive(Serialize)]
@@ -148,6 +155,7 @@ pub async fn clean_up(
   transcript: &str,
   previous_text: Option<&str>,
 ) -> Result<CleanedPart, String> {
+  let route = contract().ok_or(UNSUPPORTED)?;
   if !valid_part(transcript) {
     return Err("the part is empty or too long to clean up".to_string());
   }
@@ -156,11 +164,11 @@ pub async fn clean_up(
   let previous = previous_text
     .map(str::trim)
     .filter(|text| !text.is_empty())
-    .map(|text| tail(text, contract().max_previous_text_length));
+    .map(|text| tail(text, route.max_previous_text_length));
   let account = crate::dictation_cleanup::dictation_account(app).await?;
   let request = crate::http_client::device_proof_request(
     client()?
-      .post(format!("{}{}", account.api_base_url, contract().path))
+      .post(format!("{}{}", account.api_base_url, route.path))
       .json(&CleanupRequest {
         transcript,
         previous_text: previous,
@@ -199,11 +207,14 @@ mod tests {
   use super::*;
 
   #[test]
-  fn the_contract_names_the_route_and_its_limits() {
-    let contract = contract();
-    assert!(contract.path.starts_with("/v1/desktop/dictation/"));
-    assert!(contract.max_transcript_length >= 1000);
-    assert!(contract.max_previous_text_length > 0);
+  fn the_contract_names_the_route_and_its_limits_when_it_has_one() {
+    if let Some(contract) = contract() {
+      assert!(contract.path.starts_with("/v1/desktop/dictation/"));
+      assert!(contract.max_transcript_length >= 1000);
+      assert!(contract.max_previous_text_length > 0);
+    }
+    let older: Contract = serde_json::from_str("{}").unwrap();
+    assert!(older.recording_cleanup.is_none());
   }
 
   #[test]
@@ -215,9 +226,11 @@ mod tests {
 
   #[test]
   fn a_part_must_hold_text_within_the_limit() {
-    assert!(valid_part("Ahoj."));
     assert!(!valid_part("   "));
     assert!(!valid_part(&"a".repeat(max_part_length() + 1)));
+    if contract().is_some() {
+      assert!(valid_part("Ahoj."));
+    }
   }
 
   #[test]

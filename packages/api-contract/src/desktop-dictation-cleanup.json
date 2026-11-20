@@ -89,13 +89,5 @@
     "teda",
     "oprava",
     "nie"
-  ],
-  "recordingCleanup": {
-    "path": "/v1/desktop/dictation/recording-cleanup",
-    "maxTranscriptLength": 12000,
-    "maxPreviousTextLength": 1000,
-    "maxInstructions": 20,
-    "maxInstructionLength": 2000,
-    "maxMarkdownLength": 24000
-  }
+  ]
 }
