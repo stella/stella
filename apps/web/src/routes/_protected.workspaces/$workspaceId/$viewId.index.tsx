@@ -32,6 +32,7 @@ import { propertiesOptions } from "@/lib/workspaces/queries/properties";
 import { viewsOptions } from "@/lib/workspaces/queries/views";
 import { isFilesystemView } from "@/lib/workspaces/view-layout";
 import { routeSearchSchema } from "@/route-search-params";
+import { VIEW_SWITCH_PENDING } from "@/routes/-pending-view.logic";
 import { routePresentation } from "@/routes/-route-presentation";
 
 import { ViewIndexPage } from "./-$viewId.index.page";
@@ -50,6 +51,8 @@ export const Route = createFileRoute(
   staticData: { presentation: routePresentation({ type: "inherit" }) },
   component: ViewIndexPage,
   pendingComponent: ViewIndexPending,
+  pendingMs: VIEW_SWITCH_PENDING.pendingMs,
+  pendingMinMs: VIEW_SWITCH_PENDING.pendingMinMs,
   validateSearch: searchSchema,
   loader: async ({ context, params }) => {
     const { queryClient } = context;

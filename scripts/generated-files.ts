@@ -65,6 +65,8 @@ export const effectiveGeneratorInputs = (generator: Generator) => [
 
 const TRANSITIVE_GENERATOR_INPUTS = {
   "account-export-tables": [
+    "apps/api/src/lib/db/sealed-text.ts",
+    "apps/api/src/lib/db/sso-provider-config.ts",
     "apps/api/src/lib/imports/external-ref-limits.ts",
     "apps/api/src/*",
     "apps/api/src/db/*",
@@ -477,6 +479,7 @@ const TRANSITIVE_GENERATOR_INPUTS = {
     "apps/api/src/lib/template-binding/build-binding-context.ts",
     "apps/api/src/lib/templates/*",
     "apps/api/src/lib/uploads/entity-create.ts",
+    "apps/api/src/lib/uploads/exact-duplicates.ts",
     "apps/api/src/lib/uploads/reserve-presigned-upload.ts",
     "packages/docx-authoring/src/*",
     "apps/api/src/lib/uploads/runtime.ts",
@@ -608,6 +611,7 @@ const TRANSITIVE_GENERATOR_INPUTS = {
     "packages/transactional/emails/*",
     "packages/transactional/i18n/translate.ts",
     "packages/transactional/i18n/langs/*",
+    "packages/transactional/map/*",
     "packages/transactional/render/*",
     "packages/user-agent/src/index.ts",
     "packages/user-agent/src/parse-user-agent.ts",
@@ -808,6 +812,8 @@ const TRANSITIVE_GENERATOR_INPUTS = {
     "scripts/generated-source-hash.ts",
   ],
   "status-tables": [
+    "apps/api/src/lib/db/sealed-text.ts",
+    "apps/api/src/lib/db/sso-provider-config.ts",
     "apps/api/src/lib/imports/external-ref-limits.ts",
     "apps/api/src/*",
     "apps/api/src/db/*",
@@ -925,6 +931,8 @@ const TRANSITIVE_GENERATOR_INPUTS = {
     "scripts/oxlint-presets/*",
   ],
   "transition-triggers": [
+    "apps/api/src/lib/db/sealed-text.ts",
+    "apps/api/src/lib/db/sso-provider-config.ts",
     "apps/api/src/lib/imports/external-ref-limits.ts",
     "apps/api/src/*",
     "apps/api/src/db/*",
@@ -1255,6 +1263,7 @@ const GENERATOR_DECLARATIONS = [
       "packages/transactional/components/**",
       "packages/transactional/emails/**",
       "packages/transactional/i18n/**",
+      "packages/transactional/map/**",
       "packages/transactional/render/**",
       "bunfig.toml",
       ".prettierrc.yml",
@@ -1990,6 +1999,7 @@ const GENERATOR_DECLARATIONS = [
       "packages/mcp-apps/scripts/build-mcp-apps.ts",
       "packages/mcp-apps/scripts/lib/mcp-app-html-guard.ts",
       "packages/mcp-apps/scripts/lib/mcp-reader-ui-guard.ts",
+      "packages/mcp-apps/scripts/lib/metafile-path.ts",
       "packages/mcp-apps/scripts/lib/namespace-members.ts",
       "packages/mcp-apps/scripts/lib/precompiled-messages.ts",
       "packages/mcp-apps/scripts/style-sources.ts",

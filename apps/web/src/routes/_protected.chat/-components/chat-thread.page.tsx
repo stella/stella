@@ -136,6 +136,7 @@ import {
 } from "@/routes/_protected.chat/-components/chat-thread.pending";
 import { ChatTurnAnnouncer } from "@/routes/_protected.chat/-components/chat-turn-announcer";
 import { ChatTurnNavigator } from "@/routes/_protected.chat/-components/chat-turn-navigator";
+import { OrganizationSetupNudge } from "@/routes/_protected.chat/-components/organization-setup-nudge";
 
 // The composer block publishes its live height on this element, the
 // transcript's nearest shared ancestor (see `observeComposerBlock`).
@@ -801,6 +802,7 @@ export const ChatThreadPage = ({
                             prompts={suggestedSkills}
                           />
                         )}
+                        <OrganizationSetupNudge />
                         <GuideNudge />
                       </div>
                     ) : (
@@ -955,6 +957,10 @@ export const ChatThreadPage = ({
               // height, so transcript clearance and the scroll button's
               // offset track the change automatically.
               composerBlockRef={observeComposerBlock}
+              fileDrop={{
+                onDragOver: controller.handleDragOver,
+                onDrop: controller.handleDrop,
+              }}
               aboveComposer={
                 <>
                   {env.VITE_FEATURE_USAGE && <UsageFallbackNotice />}

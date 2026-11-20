@@ -397,7 +397,17 @@ async fn within<T>(
 /// The dictation account, read within the cleanup bound, and only while the
 /// server enables stella AI transcription for that same account.
 async fn cloud_account(app: &AppHandle) -> Result<AccountRequest, String> {
-  let account = within(ACCOUNT_TIMEOUT, TIMED_OUT, dictation_account(app)).await?;
+  cloud_account_within(app, ACCOUNT_TIMEOUT).await
+}
+
+/// The dictation account within `limit`. Every request holds the account
+/// lease while it runs, so a recording piece queued behind others waits for
+/// them inside its own budget rather than the live dictation bound.
+async fn cloud_account_within(
+  app: &AppHandle,
+  limit: Duration,
+) -> Result<AccountRequest, String> {
+  let account = within(limit, TIMED_OUT, dictation_account(app)).await?;
   let bound = app
     .try_state::<FeatureGates>()
     .and_then(|gates| gates.account_binding(DesktopFeature::DictationCloud))
@@ -1014,10 +1024,14 @@ pub(crate) async fn transcribe_recording_piece(
       "the piece is larger than stella AI accepts".to_string(),
     ));
   }
-  let account = cloud_account(app).await.map_err(PieceFailure::Failed)?;
+  let waited = std::time::Instant::now();
+  let account = cloud_account_within(app, piece.timeout)
+    .await
+    .map_err(PieceFailure::Failed)?;
   if account.local_data_namespace() != piece.model.account {
     return Err(PieceFailure::AccountChanged);
   }
+  let timeout = upload_budget(piece.timeout, waited.elapsed());
   let words = crate::dictation_words::stored_for(&piece.model.account);
   let text = send_chunk(
     &account,
@@ -1028,12 +1042,18 @@ pub(crate) async fn transcribe_recording_piece(
       vocabulary: chunk_vocabulary(piece.model.takes_vocabulary, &words),
       matter_id: piece.matter_id,
       piece_id: Some(piece.piece_id),
-      timeout: piece.timeout,
+      timeout,
     },
   )
   .await;
   drop(account);
   text.map_err(PieceFailure::Failed)
+}
+
+/// What is left of a piece's budget for its upload once it had to wait for
+/// the account lease.
+fn upload_budget(piece_timeout: Duration, waited: Duration) -> Duration {
+  piece_timeout.saturating_sub(waited)
 }
 
 /// One model stella AI offers this organization. Fields a newer API adds are
@@ -1313,6 +1333,17 @@ mod tests {
     .await;
     assert_eq!(after, Err(TIMED_OUT.to_string()));
     assert_eq!(sent.load(Ordering::SeqCst), 1);
+  }
+
+  #[test]
+  fn a_piece_that_waited_for_the_lease_uploads_in_what_is_left() {
+    let piece = Duration::from_secs(90);
+    // Queued behind two slow pieces: far past the live dictation bound, yet
+    // the piece still runs.
+    let waited = ACCOUNT_TIMEOUT * 2;
+    assert!(waited < piece);
+    assert_eq!(upload_budget(piece, waited), piece - waited);
+    assert_eq!(upload_budget(piece, piece * 2), Duration::ZERO);
   }
 
   #[tokio::test(start_paused = true)]

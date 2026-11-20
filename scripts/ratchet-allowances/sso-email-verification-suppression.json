@@ -1,0 +1,5 @@
+{
+  "metric": "lint-suppression-directives",
+  "delta": 1,
+  "reason": "The SSO plugin marks its email verification option deprecated, yet without it every user the plugin creates is stored unverified. The sign-in resolver never relies on the provider flag alone: it also requires the signed ID token to verify the same address in one of the provider's verified domains, which the suppression's reason states."
+}

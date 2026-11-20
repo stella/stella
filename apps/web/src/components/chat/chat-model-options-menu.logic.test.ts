@@ -331,7 +331,7 @@ describe("the real catalogue", () => {
       "Claude Opus 5.5",
       "GPT-6 Luna",
       "GPT-6.2 Sol",
-      "Gemini 3.8 Flash",
+      "Gemini 4 Hydrogen",
     ]);
   });
 });

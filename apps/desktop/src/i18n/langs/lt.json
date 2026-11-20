@@ -624,6 +624,10 @@
       "cleanup": "Taisymas",
       "thisComputer": "Šiame kompiuteryje"
     },
+    "sounds": {
+      "title": "Garsai",
+      "description": "Groti trumpą tylų garsą, kai įrašymas prasideda ir kai baigiasi."
+    },
     "cleanup": {
       "title": "Taisyti su DI",
       "description": "Ištaiso atpažinimo klaidas ir padiktuotą formatavimą, pavyzdžiui, „nauja eilutė“ arba „paryškinti“, ir pritaiko tekstą programai, pavyzdžiui, el. paštui. Per stella jūsų organizacijos DI teikėjui siunčiamas tik tekstas, ne garsas; stella jo nesaugo.",
@@ -666,7 +670,7 @@
     "customWords": {
       "group": "Savi žodžiai",
       "title": "Žodžiai ir vardai, kuriuos stella turi rašyti teisingai",
-      "description": "Pavyzdžiui, klientų vardai ar angliški terminai, kuriuos vartojate kalbėdami kita kalba. Jie saugomi šiame kompiuteryje šiai paskyrai ir siunčiami tik su jūsų diktavimu: pavertimui naudojant stella AI ir taisymui su DI. Šio kompiuterio kalbos modelis jų nenaudoja.",
+      "description": "Pavyzdžiui, klientų vardai ar angliški terminai, kuriuos vartojate kalbėdami kita kalba. Jie saugomi šiame kompiuteryje šiai paskyrai ir siunčiami tik su jūsų diktavimu: pavertimui naudojant stella AI ir taisymui su DI. Kai verčia šio kompiuterio kalbos modelis, o taisymas su DI išjungtas, stella jų rašybą pataiso šiame kompiuteryje.",
       "count": "{count, number} iš {limit, number}",
       "input": "Pridėti žodį ar vardą",
       "add": "Pridėti",
@@ -1111,7 +1115,7 @@
       "cloudDescriptionModel": "Garsas transkribuoti siunčiamas stellai ir modelio {model} teikėjui. stella jo nesaugo.",
       "localMissing": "Norėdami transkribuoti šiame kompiuteryje, atsisiųskite kalbos modelį skiltyje Nustatymai, Diktavimas.",
       "localMissingCloud": "Atsisiųskite kalbos modelį skiltyje Nustatymai, Diktavimas, arba transkribuokite naudodami stella AI.",
-      "retainsData": "{provider} saugo visų šiam modeliui siunčiamų įrašų garsą ir transkripciją. Netranskribuokite juo konfidencialių ar klientų įrašų arba pasirinkite kitą modelį skiltyje Nustatymai, Diktavimas.",
+      "retainsData": "Atkreipkite dėmesį į {provider} duomenų tvarkymo sąlygas.",
       "modelFailed": "Nepavyko nuskaityti stella AI modelio, todėl stella AI dabar negali transkribuoti. Bandykite dar kartą arba transkribuokite šiame kompiuteryje."
     },
     "matter": {
@@ -1160,7 +1164,8 @@
       "saveFailed": "Nepavyko nukopijuoti ar išsaugoti transkripcijos. Bandykite dar kartą.",
       "noSpeech": "Šiame įraše kalbos nerasta.",
       "fileName": "{title} – transkripcija.txt",
-      "documentTitle": "{title} – transkripcija"
+      "documentTitle": "{title} – transkripcija",
+      "transcriptTitle": "Transkripcija"
     },
     "progress": {
       "running": "Transkribuojama {done, number} iš {total, number} min.",
@@ -1169,6 +1174,28 @@
       "stopped": "Sustabdyta po {done, number} min. Iki šiol gautas tekstas išlieka.",
       "done": "Transkribuota {total, number} min.",
       "another": "Transkribuoti kitą įrašą"
+    },
+    "cleaned": {
+      "title": "Sutvarkytas tekstas",
+      "running": "Tvarkoma…",
+      "waiting": "Kiekviena dalis sutvarkoma iškart, kai tik ji transkribuojama.",
+      "instructionsTitle": "Nurodymai diktavime · ne teksto dalis",
+      "instructionsLabel": "Nurodymai:",
+      "partFailed": "Šios dalies sutvarkyti nepavyko, todėl ji rodoma taip, kaip transkribuota.",
+      "failedCount": "{count, plural, one {# dalis nesutvarkyta} few {# dalys nesutvarkytos} other {# dalių nesutvarkyta}}",
+      "saveMarkdown": "Formatuotas tekstas (.md)",
+      "saveText": "Paprastas tekstas (.txt)",
+      "fileNameMarkdown": "{title} sutvarkytas.md",
+      "fileNameText": "{title} sutvarkytas.txt",
+      "offerTitle": "Sutvarkyti transkripciją su DI",
+      "offerDescription": "Šis įrašas transkribuotas šiame kompiuteryje, o DI tvarkymas Nustatymuose išjungtas. Tvarkant jūsų organizacijos DI modeliui siunčiamas tekstas, niekada ne garsas.",
+      "offerStart": "Sutvarkyti"
+    },
+    "copyMenu": {
+      "label": "Kopijavimo parinktys",
+      "formatted": "Su formatavimu",
+      "plain": "Kaip paprastą tekstą",
+      "hint": "Su formatavimu į Word ar Outlook įklijuojamos antraštės, paryškinimai ir sąrašai. Jūsų pasirinkimas įsimenamas."
     }
   }
 }

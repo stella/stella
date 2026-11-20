@@ -16,6 +16,7 @@ import {
   schedulerJobs,
 } from "@/api/db/schema";
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
+import { DEFAULT_STATEMENT_CEILING } from "@/api/lib/db/statement-ceiling";
 import {
   CORPUS_INDEX_MANIFESTS,
   corpusIndexManifestDigest,
@@ -284,7 +285,7 @@ test("a decision's new content hash advances its states, and a refused compare-a
   ]);
 });
 
-const runTombstoneTask = async () => {
+const runTombstoneTask = async (database = db) => {
   const job = (
     await db
       .select()
@@ -297,7 +298,7 @@ const runTombstoneTask = async () => {
   }
   await backfillCaseLawRedactionTombstones(
     asTestRaw<SchedulerTaskContext>({
-      db,
+      db: database,
       job,
       payload: job.payload,
       dueAt: DueSlot.of(job),
@@ -386,4 +387,74 @@ test("the redaction tombstone backfill projects every decision it tombstones as 
       { generation: "case_law_v6", action: "erase" },
     ]);
   }
+});
+
+test("a full redaction tombstone page across two sources fits the scheduler's default statement ceiling", async () => {
+  const otherSourceId = toSafeId<"caseLawSource">(
+    "0198e331-e578-7000-8000-000000000503",
+  );
+  await db.insert(caseLawSources).values({
+    id: otherSourceId,
+    adapterKey: "projectability-other",
+    name: "Projectability other",
+  });
+  // More audited decisions than one page holds, across two sources; the
+  // first source alone exceeds one projection batch.
+  const audited = Array.from({ length: 80 }, (_, index) => index + 1);
+  await db.insert(caseLawDecisions).values(
+    audited.map((n) => ({
+      id: decisionId(n),
+      sourceId: n <= 40 ? CASE_LAW_SOURCE_ID : otherSourceId,
+      caseNumber: `${String(n)} As 1/2020`,
+      court: "Nejvyšší správní soud",
+      country: "CZE",
+      language: "cs",
+      contentHash: HASH,
+    })),
+  );
+  await register("case_law_v5");
+  await register("case_law_v6");
+  await db.insert(caseLawIndexJobs).values(
+    audited.map((n) => ({
+      decisionId: decisionId(n),
+      generation: "case_law_v1",
+      operation: "redact" as const,
+      status: "succeeded" as const,
+    })),
+  );
+  await db.insert(schedulerJobs).values({
+    description: "redaction tombstone statement ceiling test",
+    id: JOB_ID,
+    ...heldSchedulerLease(LEASE),
+    nextRunAt: new Date("2026-08-01T00:00:00.000Z"),
+    schedule: { type: "interval", everyMs: 60_000 },
+    task: BACKFILL_CASE_LAW_REDACTION_TOMBSTONES_TASK,
+  });
+  let statements = 0;
+  const counted = drizzle({
+    client,
+    logger: {
+      logQuery: () => {
+        statements += 1;
+      },
+    },
+  });
+
+  await runTombstoneTask(counted);
+
+  const tombstoned = await db
+    .select({ id: caseLawDecisions.id })
+    .from(caseLawDecisions)
+    .where(sql`${caseLawDecisions.redactedAt} IS NOT NULL`)
+    .orderBy(caseLawDecisions.id);
+  expect(tombstoned.length).toBeGreaterThan(40);
+  expect(tombstoned.length).toBeLessThan(audited.length);
+  for (const { id } of tombstoned) {
+    expect(await statesOf(id)).toEqual([
+      { generation: "case_law_v5", action: "erase" },
+      { generation: "case_law_v6", action: "erase" },
+    ]);
+  }
+  // The ceiling also counts the page's one transaction round trip.
+  expect(statements + 1).toBeLessThanOrEqual(DEFAULT_STATEMENT_CEILING);
 });

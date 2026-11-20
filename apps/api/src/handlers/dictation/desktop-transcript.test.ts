@@ -9,6 +9,7 @@ import { env } from "@/api/env";
 import { createHttpApp } from "@/api/http/app";
 import { routes } from "@/api/http/route";
 import { toSafeId } from "@/api/lib/branded-types";
+import { CALLER_AUTHORIZED } from "@/api/lib/entities/buffer-write-authority";
 import { buildFeatureAccessSnapshot } from "@/api/lib/feature-access/snapshot";
 import { errorBoundary } from "@/api/lib/observability/request-lifecycle";
 import {
@@ -221,6 +222,8 @@ test("a transcript is filed in the matter as a Word document named after the rec
   });
   const created = createEntity.mock.calls.at(0)?.[0];
   expect(created).toMatchObject({
+    // The request authorized the write; the create does not recheck it.
+    authority: CALLER_AUTHORIZED,
     fileName: "Memo to file 2026-11-14 transcript.docx",
     workspaceId: MATTER_ID,
     parentId: null,

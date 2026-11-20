@@ -763,7 +763,8 @@ const readDecisionBlocks = async (
     decision,
     key: decision.astS3Key,
     step: "researchAnswers.corpusAst",
-    read: readCorpusAst,
+    read: async (key) =>
+      await readCorpusAst(key, { report: { documentId: decision.id } }),
     fallback: () => parsePersistedCorpusAst(decision.documentAst),
   });
   const ast = stored === null ? null : parseCachedDecisionAst(stored);

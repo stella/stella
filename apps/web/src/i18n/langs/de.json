@@ -165,7 +165,7 @@
     "invitation": {
       "declined": "Einladung abgelehnt",
       "declinedDescription": "Sie sind dieser Organisation nicht beigetreten.",
-      "description": "Sie wurden von {inviterEmail} als {role} zu {organizationName} eingeladen.",
+      "description": "Sie wurden von {inviterEmail}{role, select, owner { als Eigentümer} admin { als Administrator} member { als Mitglied} intern { als Praktikant} external { als externer Mitarbeiter} other {}} zu {organizationName} eingeladen.",
       "goToWorkspaces": "Zu Akten",
       "title": "Einladung zur Organisation",
       "verifyEmailHint": "Um {email} zu bestätigen, melden Sie sich ab und mit einem Einmalcode an, den wir an diese Adresse senden.",
@@ -1795,7 +1795,6 @@
       "searchAllPastChatsQuestion": "Alle Ihre Chats durchsuchen?",
       "uploadedDocumentPlaceholder": "(hochgeladenes Dokument)"
     },
-    "askAnything": "Beliebige Frage stellen",
     "askUser": {
       "custom": "Eigene Antwort",
       "edit": "Antworten bearbeiten",
@@ -1953,6 +1952,7 @@
     "historyTrimmed": "Ältere Nachrichten konnten nicht zusammengefasst werden. Diese Antwort berücksichtigt daher nur den jüngsten Teil der Unterhaltung.",
     "improvePrompt": "Prompt verbessern",
     "improvePromptDraftChanged": "Der Entwurf wurde geändert, daher wurde die Verbesserung nicht übernommen.",
+    "improvePromptEmpty": "Geben Sie einen Prompt ein, um ihn zu verbessern.",
     "improvePromptPlainTextOnly": "Prompts können nur als Klartext verbessert werden.",
     "improvePromptUnavailableAnonymized": "Im anonymisierten Modus können Prompts nicht verbessert werden.",
     "improvingPrompt": "Prompt wird verbessert…",
@@ -2312,6 +2312,7 @@
     "sendErrorToolsUnsupported": "Dieses Modell kann keine Tools verwenden und daher keine Fragen zu Ihrer Akte beantworten. Wechseln Sie zu einem Modell, das Tools unterstützt.",
     "sendErrorTurnTooLarge": "Diese Antwort ist zu umfangreich geworden, um vollständig übermittelt zu werden. Senden Sie eine neue Nachricht, um fortzufahren.",
     "sendPrompt": "Nachricht senden",
+    "sendPromptEmpty": "Geben Sie eine Nachricht ein, um sie zu senden.",
     "sendQueuedMessageNow": "Jetzt senden",
     "sendWithoutAnonymization": "Ohne Anonymisierung senden",
     "signInToChat": "Melden Sie sich an, um über dieses Dokument zu chatten",
@@ -2356,6 +2357,10 @@
     "stopResponse": "Stoppen",
     "stopped": "Gestoppt",
     "stopping": "Wird angehalten…",
+    "subagentRun": {
+      "browseWeb": "Websites werden besucht",
+      "generic": "Teilaufgabe wird bearbeitet"
+    },
     "suggestTitle": "Titel vorschlagen",
     "suggestTitleUnavailableAnonymized": "Für anonymisierte Konversationen sind keine Titelvorschläge verfügbar.",
     "suggestingTitle": "Titel wird vorgeschlagen…",
@@ -5397,6 +5402,7 @@
       "defaultModel": "Standard: {model}",
       "defaultModelOption": "Standard",
       "defaultRationale": {
+        "browse": "Für die Arbeit auf Websites im Browser.",
         "chat": "Für Gespräche und alltägliche Fragen.",
         "fast": "Für kurze Routineaufgaben.",
         "pdf": "Zum Lesen und Analysieren von PDF-Dokumenten.",
@@ -5410,6 +5416,11 @@
       "googleKeyRestricted": "Prüfen Sie die API-, IP-Adress- und Referrer-Einschränkungen dieses Schlüssels in Google Cloud. Lassen Sie die benötigte API und Anfragen Ihres Servers zu und versuchen Sie es erneut.",
       "keepSavedKey": "Gespeicherten Schlüssel behalten",
       "keyFormatHint": "Dieser Schlüssel hat ein ungewöhnliches Format für {provider}. Speichern Sie ihn, um ihn beim Anbieter zu prüfen.",
+      "keyNeed": {
+        "builtIn": "Optional. Ohne eigenen Schlüssel nutzt die KI in dieser Organisation von stella bereitgestellte Modelle.",
+        "keyRequired": "Die KI in dieser Organisation braucht einen Anbieter-Schlüssel. Fügen Sie einen hinzu, um die KI einzuschalten.",
+        "ownKeys": "Die KI in dieser Organisation nutzt die Schlüssel unten."
+      },
       "modelForRole": "Modell für {role}",
       "modelIdPlaceholder": "Modelle suchen",
       "modelsDescription": "Wählen Sie für jede KI-Kategorie einen Anbieter und ein angebotenes multimodales Modell.",
@@ -5417,6 +5428,7 @@
       "newApiKey": "Neuer API-Schlüssel",
       "newApiKeyDescription": "Er ersetzt den gespeicherten Schlüssel beim Speichern.",
       "noModelResults": "Keine passenden angebotenen Modelle",
+      "noProviders": "Noch keine Anbieter-Schlüssel hinzugefügt.",
       "openaiInsufficientQuota": "Prüfen Sie das Budget Ihres OpenAI-Projekts und die API-Abrechnung. Laden Sie Guthaben auf oder erhöhen Sie das betreffende Limit und versuchen Sie es erneut.",
       "openaiProjectOrganizationMismatch": "Verwenden Sie einen API-Schlüssel aus dem vorgesehenen OpenAI-Projekt und der vorgesehenen Organisation. Prüfen Sie deren Zugriffseinstellungen und versuchen Sie es erneut.",
       "openrouterNoCredits": "Laden Sie in der OpenRouter-Abrechnung Guthaben auf und versuchen Sie es erneut.",
@@ -5439,6 +5451,8 @@
       "providerForRole": "Provider für {role}",
       "providerKeyInvalid": "{provider} hat den Schlüssel abgelehnt. Bitte überprüfen Sie ihn.",
       "providerKeyInvalidShort": "Ungültig",
+      "providerModes": "Verwendet für: {modes}",
+      "providerModesNone": "Für keinen Modus verwendet. Weisen Sie ihn unter Erweitert einem Modus zu.",
       "providerSetupConsole": "Anbietereinstellungen öffnen",
       "providersDescription": "Fügen Sie die Provider-Zugangsdaten hinzu, die stella verwenden soll.",
       "providersPanel": "Provider",
@@ -5448,6 +5462,7 @@
       "replaceKey": "Schlüssel ersetzen",
       "roleUnavailable": "{provider} unterstützt diese Rolle nicht.",
       "roles": {
+        "browse": "Browsen",
         "chat": "Chat",
         "fast": "Schnell",
         "pdf": "PDF",
@@ -5510,7 +5525,7 @@
     "members": {
       "billingAccess": "Zugriff auf Abrechnungsdaten",
       "changeRole": "Rolle ändern",
-      "confirmRoleChangeDescription": "Die Rolle von {email} wird von {oldRole} zu {newRole} geändert.",
+      "confirmRoleChangeDescription": "Die Rolle von {email} wird {oldRole, select, owner {von Eigentümer} admin {von Administrator} member {von Mitglied} intern {von Praktikant} external {von externem Mitarbeiter} other {}} {newRole, select, owner {auf Eigentümer} admin {auf Administrator} member {auf Mitglied} intern {auf Praktikant} external {auf externen Mitarbeiter} other {}} geändert.",
       "confirmRoleChangeTitle": "Rolle ändern",
       "joined": "Beigetreten",
       "noMembersFound": "Keine Mitglieder gefunden",
@@ -5536,6 +5551,13 @@
     "startOverDescription": "Die ursprüngliche Anfrage hat möglicherweise bereits eine Organisation erstellt. Prüfen Sie Ihre Organisationen, bevor Sie neu beginnen; eine neue Anfrage könnte eine weitere Organisation erstellen.",
     "startOverTitle": "Eine neue Erstellungsanfrage starten?",
     "switchOrganization": "Organisation wechseln"
+  },
+  "organizationSetup": {
+    "aiAction": "KI einrichten",
+    "aiOptional": "Eigene Schlüssel für KI-Anbieter sind optional: Ohne sie nutzt die KI von stella bereitgestellte Modelle.",
+    "aiRequired": "Die KI in dieser Organisation braucht einen Anbieter-Schlüssel, bevor jemand sie nutzen kann.",
+    "invite": "Laden Sie Kolleginnen und Kollegen ein, damit sie hier mit Ihnen arbeiten können.",
+    "title": "Neue Organisation einrichten"
   },
   "publicTools": {
     "addSkill": "Skill hinzufügen",
@@ -5976,7 +5998,7 @@
     "organization": {
       "activeMembers": "Aktive Mitglieder",
       "ai": "KI-Konfiguration",
-      "aiDescription": "Verbinden Sie Ihre eigenen API-Schlüssel für KI-Anbieter.",
+      "aiDescription": "Legen Sie fest, wie KI in dieser Organisation arbeitet.",
       "anonymization": {
         "addPlaceholder": "Immer zu maskierender Begriff (z. B. Teamname)",
         "deleteAction": "Begriff löschen",
@@ -7231,6 +7253,7 @@
         "title": "Word-Vorlagenverknüpfungen entfernen?",
         "unknownLocation": "Vorlagenspeicherort: eine Adresse, die stella nicht prüfen kann"
       },
+      "checkingFiles": "Dateien werden geprüft…",
       "desktopEdit": {
         "accountRequiredTitle": "Verbinden Sie stella desktop mit Ihrem Konto",
         "action": "Im Desktop bearbeiten",
@@ -7274,6 +7297,14 @@
       "downloadPdf": "Als PDF herunterladen",
       "downloadSearchablePdf": "Durchsuchbare PDF",
       "downloadWithComments": "Mit Kommentaren herunterladen",
+      "duplicateUpload": {
+        "description": "{count, plural, one {# Datei ist mit einem Dokument identisch, das diese Akte bereits enthält.} other {# Dateien sind mit Dokumenten identisch, die diese Akte bereits enthält.}} Wählen Sie für jede Datei aus, was geschehen soll.",
+        "matchedDocument": "Identisch mit <bdi>{documentName}</bdi>",
+        "skip": "Diese Datei überspringen",
+        "skipAll": "Duplikate überspringen",
+        "title": "Bereits in dieser Akte vorhanden",
+        "uploadAnyway": "Trotzdem hochladen"
+      },
       "emptyFile": "Die Datei ist leer.",
       "fileTooLarge": "Die Datei ist größer als {limit, number} MB.",
       "includeReferenceNumber": "Aktenzeichen einfügen",

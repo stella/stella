@@ -2132,6 +2132,7 @@ const config = defineConfig({
     // The package's plugins load through local re-exports; the modules say why.
     "./scripts/oxlint-presets/stella-lowercase-plugin.mjs",
     "./.oxlint-plugins/no-raw-cache-control.ts",
+    "./.oxlint-plugins/no-raw-cloudfront-viewer-header.ts",
     "./.oxlint-plugins/confine-sql-close.ts",
     "./.oxlint-plugins/confine-online-ddl.ts",
     "./.oxlint-plugins/raw-hash-from-source-fingerprint.ts",
@@ -2402,6 +2403,7 @@ const config = defineConfig({
     "./.oxlint-plugins/icon-button-requires-tooltip.ts",
     "./.oxlint-plugins/semantic-controls.ts",
     "./.oxlint-plugins/no-disabled-tooltip-trigger.ts",
+    "./.oxlint-plugins/disabled-control-needs-reason.ts",
     "./.oxlint-plugins/no-button-whitespace-normal.ts",
     "./.oxlint-plugins/no-dialog-trigger-menu-item.ts",
     "./.oxlint-plugins/no-decorated-search-input.ts",
@@ -2508,7 +2510,8 @@ const config = defineConfig({
         "apps/landing/src/components/ProductPage.astro",
         "apps/landing/src/pages/security.astro",
         "apps/landing/src/pages/support.astro",
-        "apps/web/src/routes/tools/-components/public-tools-index.tsx",
+        "apps/web/src/routes/tools/-index.page.tsx",
+        "apps/web/src/routes/tools/-index.pending.tsx",
         ".oxlint-plugins/__fixtures__/narrative-prose-component.fixture.tsx",
       ],
       rules: {
@@ -2724,7 +2727,7 @@ const config = defineConfig({
         "no-direct-status-set/no-direct-status-set": [
           "error",
           {
-            owner: STATUS_TRANSITION_OWNERSHIP.owner[0],
+            owners: STATUS_TRANSITION_OWNERSHIP.owner,
             columns: STATUS_TRANSITION_OWNERSHIP.enforcement.columns,
           },
         ],
@@ -2748,7 +2751,7 @@ const config = defineConfig({
         "no-direct-status-set/no-direct-status-set": [
           "error",
           {
-            owner: STATUS_TRANSITION_OWNERSHIP.owner[0],
+            owners: STATUS_TRANSITION_OWNERSHIP.owner,
             columns: STATUS_TRANSITION_OWNERSHIP.enforcement.columns,
           },
         ],
@@ -4422,6 +4425,20 @@ const config = defineConfig({
       ],
       rules: {
         "no-disabled-tooltip-trigger/no-disabled-tooltip-trigger": "error",
+      },
+    },
+    {
+      // A disabled Button must say why it cannot act (`disabledReason`).
+      // Enforced on its fixture only while the existing sites burn down: the
+      // `disabled-control-without-reason` ratchet in scripts/ratchet.ts holds
+      // their count and lets it only fall. The PR that reaches zero widens
+      // these files to the ratchet's scope (web `.tsx` under apps/* and
+      // packages/*, not apps/mobile or `*.native.tsx`) and drops the ratchet.
+      files: [
+        ".oxlint-plugins/__fixtures__/disabled-control-needs-reason.fixture.tsx",
+      ],
+      rules: {
+        "disabled-control-needs-reason/disabled-control-needs-reason": "error",
       },
     },
     {
@@ -7157,6 +7174,25 @@ const config = defineConfig({
       ],
       rules: {
         "no-raw-cache-control/no-raw-cache-control": "error",
+      },
+    },
+    {
+      // CloudFront viewer headers are read only behind the origin proof, by
+      // the modules the rule names as owners.
+      files: [
+        "apps/*/src/**/*.{ts,tsx}",
+        "packages/*/src/**/*.{ts,tsx}",
+        ".oxlint-plugins/__fixtures__/no-raw-cloudfront-viewer-header.fixture.ts",
+      ],
+      excludeFiles: [
+        "**/*.test.ts",
+        "**/*.test.tsx",
+        "apps/api/src/tests/**/*.ts",
+        "**/__tests__/**",
+      ],
+      rules: {
+        "no-raw-cloudfront-viewer-header/no-raw-cloudfront-viewer-header":
+          "error",
       },
     },
     {

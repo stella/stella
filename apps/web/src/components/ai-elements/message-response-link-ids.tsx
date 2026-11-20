@@ -57,12 +57,22 @@ export const AnswerTreeIds = ({
   prefix: string | undefined;
 }) => <AnswerTreeContext value={prefix}>{children}</AnswerTreeContext>;
 
-/** Streamdown's block, naming the links of the block it renders. */
-export const AnswerBlock = (props: BlockProps) => {
+/**
+ * Streamdown's block, naming the links of the block it renders.
+ *
+ * A streamed answer resolves each block's direction on its own (`dir="auto"`),
+ * and Streamdown carries it on a `display: contents` wrapper. Margins do not
+ * apply to such a box, so the answer's block gap (`space-y-*` on the root)
+ * vanished while the answer streamed and only appeared once it settled into
+ * one tree. The direction goes on a real block here instead, which takes the
+ * gap the way a settled block does.
+ */
+export const AnswerBlock = ({ dir, ...props }: BlockProps) => {
   const prefix = answerTreeIdPrefix(props.index, props.content);
+  const block = <Block {...props} />;
   return (
     <AnswerTreeContext value={prefix}>
-      <Block {...props} />
+      {dir === undefined ? block : <div dir={dir}>{block}</div>}
     </AnswerTreeContext>
   );
 };

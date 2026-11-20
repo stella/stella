@@ -16320,14 +16320,6 @@
         "job": "measure-2"
       }
     },
-    "src/lib/detected-country.test.ts": {
-      "peakMb": 196,
-      "baselineMb": 196,
-      "source": {
-        "runId": "43667897818",
-        "job": "measure-3"
-      }
-    },
     "src/lib/dev-origins.test.ts": {
       "peakMb": 182,
       "baselineMb": 182,

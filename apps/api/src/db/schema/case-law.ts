@@ -1108,7 +1108,7 @@ export const caseLawDecisions = p.pgTable(
     ),
     p.check(
       "case_law_decisions_redacted_payload_erased",
-      sql`${t.redactedAt} IS NULL OR (${t.fulltext} IS NULL AND ${t.sections} IS NULL AND ${t.documentAst} IS NULL AND ${t.contentHash} IS NULL)`,
+      sql`${t.redactedAt} IS NULL OR (${t.fulltext} IS NULL AND ${t.sections} IS NULL AND ${t.documentAst} IS NULL AND ${t.contentHash} IS NULL AND ${t.sourceRaw} IS NULL)`,
     ),
     // The bounds `canonicalDecisionDate` enforces on the write path,
     // enforced at the table as well; both derive from `DECISION_DATE_BOUNDS`,
@@ -1137,16 +1137,12 @@ export const caseLawDecisions = p.pgTable(
       }),
     ),
     // Publisher ids identify documents; fallback keys include court and decision
-    // evidence. The obsolete docket-only index is removed by the contract migration.
+    // evidence; weak cohort members are distinguished by published content.
     p
       .uniqueIndex("case_law_decisions_source_document_idx")
       .on(t.sourceId, t.sourceDocumentId)
       .where(isNotNull(t.sourceDocumentId)),
     ...fallbackDecisionIdentityIndexes(t),
-    p
-      .uniqueIndex("case_law_decisions_source_case_lang_null_idx")
-      .on(t.sourceId, t.caseNumber, t.language)
-      .where(isNull(t.sourceDocumentId)),
     p
       .uniqueIndex("case_law_decisions_slug_uidx")
       .on(t.slug)

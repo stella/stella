@@ -9,7 +9,6 @@ import { getAresLegalFormName } from "@stll/business-registries/ares/legal-forms
 import { sanitizeHref } from "@stll/decision-reader/sanitize-href";
 import { Button } from "@stll/ui/button";
 import { ExternalLinkIcon } from "@stll/ui/icons";
-import { Skeleton } from "@stll/ui/skeleton";
 import {
   Table,
   TableBody,
@@ -20,6 +19,10 @@ import {
 
 import { registryDetailLabel } from "@/components/company-registry-labels";
 import { parseRegistryCalendarDate } from "@/components/company-registry-preview.logic";
+import {
+  CompanyRegistryPreviewFrame,
+  CompanyRegistryPreviewPending,
+} from "@/components/company-registry-preview.pending";
 import { CompanySpecification } from "@/components/company-specification";
 import { RegistryCredentialSetup } from "@/components/registry-credential-setup";
 import type { RegistryHit } from "@/components/templates/registry-autofill";
@@ -54,7 +57,7 @@ export const CompanyRegistryPreview = ({
     }),
   );
   if (isPending) {
-    return <CompanyRegistryPreviewSkeleton />;
+    return <CompanyRegistryPreviewPending />;
   }
 
   if (data?.type === "name-search-not-found") {
@@ -141,7 +144,7 @@ export const CompanyRegistryPreview = ({
   }
 
   return (
-    <div className="h-full space-y-6 overflow-y-auto overscroll-contain p-5">
+    <CompanyRegistryPreviewFrame className="overflow-y-auto overscroll-contain">
       <CompanyIdentity hit={hit} registry={registry} />
       <CompanySpecification
         companyId={hit.id}
@@ -149,7 +152,7 @@ export const CompanyRegistryPreview = ({
         registry={registry}
       />
       {hit.details ? <RegistryDetails details={hit.details} /> : null}
-    </div>
+    </CompanyRegistryPreviewFrame>
   );
 };
 
@@ -510,15 +513,3 @@ const RegistryDetailLabel = ({
 
 const registryDetailEntries = (value: object): [string, unknown][] =>
   Object.entries(value);
-
-const CompanyRegistryPreviewSkeleton = () => (
-  <div className="space-y-4 p-5">
-    <Skeleton className="h-6 w-2/3" />
-    <Skeleton className="h-3 w-28" />
-    <Skeleton className="h-16 w-full" />
-    <div className="grid grid-cols-2 gap-3">
-      <Skeleton className="h-16" />
-      <Skeleton className="h-16" />
-    </div>
-  </div>
-);

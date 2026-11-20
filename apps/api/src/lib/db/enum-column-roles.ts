@@ -360,6 +360,9 @@ export const ENUM_COLUMN_ROLES = {
     entity_feature_gate: ATTRIBUTE,
     severity: ATTRIBUTE,
   },
+  email_delivery_failures: {
+    reason: ATTRIBUTE,
+  },
   entities: {
     agenda_kind: ATTRIBUTE,
     agenda_source: ATTRIBUTE,
@@ -595,6 +598,10 @@ export const ENUM_COLUMN_ROLES = {
   },
   organization_data_exports: {
     version_scope: ATTRIBUTE,
+  },
+  // Either requirement may follow the other at any time.
+  organization_sso_policy: {
+    requirement: ATTRIBUTE,
   },
   organization_settings: {
     ai_billing_drafts_mode: ATTRIBUTE,

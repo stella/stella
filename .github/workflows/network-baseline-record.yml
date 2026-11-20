@@ -138,7 +138,7 @@ jobs:
         uses: ./.github/actions/flaky-test-quarantine
 
       - name: Record network baseline
-        timeout-minutes: 6
+        timeout-minutes: 8
         env:
           E2E_EXECUTION_PROFILE: network-baseline
           E2E_EXPECT_DEV_ROUTES: "false"

@@ -29,6 +29,7 @@ import type { CreateAutoApplySuggestChangesToolsProps } from "@/api/handlers/cha
 import { SUGGEST_CHANGES_TOOL_NAME } from "@/api/handlers/chat/tools/folio-agent-tools";
 import type { SafeId } from "@/api/lib/branded-types";
 import { toSafeId } from "@/api/lib/branded-types";
+import { CALLER_AUTHORIZED } from "@/api/lib/entities/buffer-write-authority";
 import { createEntityVersionFromBuffer as createEntityVersionFromBufferWithDependencies } from "@/api/lib/entity-versions/create-entity-version-from-buffer";
 import type { CreateEntityVersionFromBufferDependencies } from "@/api/lib/entity-versions/create-entity-version-from-buffer";
 import { writeFileVersion } from "@/api/lib/entity-versions/write-file-version";
@@ -413,6 +414,7 @@ describe("createAutoApplySuggestChangesTools", () => {
     const { safeDb } = createScopedDbMock(tx);
 
     const result = await createEntityVersionFromBuffer({
+      authority: CALLER_AUTHORIZED,
       safeDb,
       organizationId,
       workspaceId,

@@ -58,6 +58,9 @@ mod dictation_models;
 mod dictation_notice;
 mod dictation_pauses;
 mod dictation_preview;
+#[cfg(dictation)]
+mod dictation_sounds;
+mod dictation_spelling;
 mod dictation_trace;
 mod dictation_words;
 #[cfg(dictation)]
@@ -97,6 +100,7 @@ mod permissions;
 mod pkcs11_module_setting;
 mod pkcs11_signing;
 mod presence;
+mod recording_cleanup;
 mod registry;
 mod relaunch;
 mod runner_protocol;
@@ -107,6 +111,7 @@ mod sse;
 mod test_child_processes;
 mod time_entry_commands;
 mod time_entry_submit;
+mod transcribe_history;
 mod transcribe_recording;
 mod transcribe_save;
 mod transcribe_window;
@@ -241,6 +246,7 @@ pub fn run() {
     .manage(clipboard_window::ClipboardStartupTrace::default())
     .manage(dictation::DictationState::load())
     .manage(transcribe_recording::TranscribeState::default())
+    .manage(transcribe_history::TranscribeHistoryState::default())
     .manage(dictation_notice::DictationNotice::default())
     .manage(dictation_microphone::MicrophoneTest::default())
     .manage(dictation_preview::PreviewState::new())
@@ -326,6 +332,7 @@ pub fn run() {
       chatgpt_auth_commands::manage(&handle);
       claude_code_auth_commands::manage(&handle);
       activity::start(handle.clone(), Arc::clone(&activity_manager));
+      transcribe_history::start_retention_sweep(handle.clone());
       {
         let manager = Arc::clone(&manager);
         feature_access::start(

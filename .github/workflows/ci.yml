@@ -1593,6 +1593,8 @@ jobs:
         name: Cancel merge group after failure in this job
         if: failure() && github.event_name == 'merge_group'
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        env:
+          JOB_STATUS: ${{ job.status }}
         with:
           retries: 0
           script: &merge_group_cancel_script |
@@ -1600,6 +1602,8 @@ jobs:
             let failureSummary = "failed-step lookup unavailable";
             let evidenceTimer;
             let ownJob;
+            const failedHere = process.env.JOB_STATUS === "failure";
+            const failed = (step) => step.conclusion === "failure";
             try {
               const jobs = await Promise.race([
                 github.paginate(
@@ -1616,21 +1620,19 @@ jobs:
                   evidenceTimer = setTimeout(() => reject(new Error("Failed-step lookup timed out")), 10000);
                 }),
               ]);
+              ownJob = jobs.find((job) => job.status === "in_progress" && job.runner_name === process.env.RUNNER_NAME);
               const failures = jobs.flatMap((job) => (job.steps || [])
-                .filter((step) => step.conclusion === "failure")
+                .filter(failed)
                 .map((step) => `${job.name} / ${step.number}: ${step.name} (${job.html_url})`));
-              // A lost runner leaves a failed job whose step ended cancelled (or that never ran a step); with no failed
-              // step and no such evidence the jobs API may still be catching up, so cancel as before.
+              if (failedHere && !ownJob?.steps?.some(failed)) failures.push(`${ownJob?.name || context.job}: failed step not yet listed`);
               const lost = jobs.filter((job) => job.conclusion === "failure"
-                && !(job.steps || []).some((step) => step.conclusion === "failure")
+                && !(job.steps || []).some(failed)
                 && (job.steps || []).every((step) => !step.status || step.status === "completed")
                 && (!(job.steps || []).length || job.steps.some((step) => step.conclusion === "cancelled")));
               if (!failures.length && lost.length) {
                 core.notice(`${lost.map((job) => job.name).join(", ")}: the runner was lost before any step failed; the run continues.`);
                 return;
               }
-              // A runner runs one job at a time, so its name identifies this job.
-              ownJob = jobs.find((job) => job.status === "in_progress" && job.runner_name === process.env.RUNNER_NAME);
               failureSummary = failures.length ? failures.join("; ") : "failed steps not yet available from the jobs API";
               diagnostic = `${context.job}: cancelling failed merge group; failed steps: ${failures.length ? failures.join("; ") : "not yet available from the jobs API"}`;
             } catch {
@@ -1645,7 +1647,7 @@ jobs:
             } catch {
               core.error(`${context.job}: cancellation step summary could not be written`);
             }
-            if (ownJob && (ownJob.steps || []).some((step) => step.conclusion === "failure")) {
+            if (ownJob && (failedHere || ownJob.steps?.some(failed))) {
               try {
                 await github.rest.actions.createWorkflowDispatch({
                   ...context.repo,
@@ -3838,6 +3840,8 @@ jobs:
             let failureSummary = "failed-step lookup unavailable";
             let evidenceTimer;
             let ownJob;
+            const failedHere = process.env.JOB_STATUS === "failure";
+            const failed = (step) => step.conclusion === "failure";
             try {
               const jobs = await Promise.race([
                 github.paginate(
@@ -3854,21 +3858,19 @@ jobs:
                   evidenceTimer = setTimeout(() => reject(new Error("Failed-step lookup timed out")), 10000);
                 }),
               ]);
+              ownJob = jobs.find((job) => job.status === "in_progress" && job.runner_name === process.env.RUNNER_NAME);
               const failures = jobs.flatMap((job) => (job.steps || [])
-                .filter((step) => step.conclusion === "failure")
+                .filter(failed)
                 .map((step) => `${job.name} / ${step.number}: ${step.name} (${job.html_url})`));
-              // A lost runner leaves a failed job whose step ended cancelled (or that never ran a step); with no failed
-              // step and no such evidence the jobs API may still be catching up, so cancel as before.
+              if (failedHere && !ownJob?.steps?.some(failed)) failures.push(`${ownJob?.name || context.job}: failed step not yet listed`);
               const lost = jobs.filter((job) => job.conclusion === "failure"
-                && !(job.steps || []).some((step) => step.conclusion === "failure")
+                && !(job.steps || []).some(failed)
                 && (job.steps || []).every((step) => !step.status || step.status === "completed")
                 && (!(job.steps || []).length || job.steps.some((step) => step.conclusion === "cancelled")));
               if (!failures.length && lost.length) {
                 core.notice(`${lost.map((job) => job.name).join(", ")}: the runner was lost before any step failed; the run continues.`);
                 return;
               }
-              // A runner runs one job at a time, so its name identifies this job.
-              ownJob = jobs.find((job) => job.status === "in_progress" && job.runner_name === process.env.RUNNER_NAME);
               failureSummary = failures.length ? failures.join("; ") : "failed steps not yet available from the jobs API";
               diagnostic = `${context.job}: cancelling the pull request run after a code quality failure; failed steps: ${failures.length ? failures.join("; ") : "not yet available from the jobs API"}`;
             } catch {
@@ -3883,7 +3885,7 @@ jobs:
             } catch {
               core.error(`${context.job}: cancellation step summary could not be written`);
             }
-            if (ownJob && (ownJob.steps || []).some((step) => step.conclusion === "failure")) {
+            if (ownJob && (failedHere || ownJob.steps?.some(failed))) {
               try {
                 await github.rest.actions.createWorkflowDispatch({
                   ...context.repo,
@@ -5020,15 +5022,17 @@ jobs:
           if-no-files-found: error
           retention-days: 1
 
+      - name: Startup gate base
+        timeout-minutes: 5
+        env:
+          BASE_SHA: ${{ needs.ci-plan.outputs.target_base_sha }}
+        run: bash scripts/startup-gate-base.sh
+
       - name: Startup bundle gates
-        # Blocking: the initial chunks' gzip against the committed budget, the
-        # eager pending views, page code in the initial chunks, and pages a
-        # route loads outside its preloads (scripts/bundle-startup-gates.ts).
-        # Reads the build above and its hidden sourcemaps; writes a table to
-        # the job summary.
+        # Blocking: the startup graph's gates (scripts/bundle-startup-gates.ts).
         run: |
           bun scripts/bundle-baseline.ts --self-test
-          bun --preload ./scripts/offline-network-preload.ts scripts/bundle-baseline.ts --check
+          bun --preload ./scripts/offline-network-preload.ts scripts/bundle-baseline.ts --check --base-dir "$STARTUP_GATE_BASE_DIR"
 
       - name: Bundle duplicate content guard
         # Blocking: a chunk that repeats a large block of identical content
@@ -5405,7 +5409,7 @@ jobs:
       - name: Check route network baseline
         if: ${{ !cancelled() && steps.checkout.outcome == 'success' }}
         continue-on-error: ${{ github.event_name == 'merge_group' }}
-        timeout-minutes: 6
+        timeout-minutes: 8
         id: network-baseline
         env:
           PLAYWRIGHT_JSON_OUTPUT_FILE: ${{ github.workspace }}/.cache/playwright-timings/check-route-network-baseline.json
@@ -6159,6 +6163,8 @@ jobs:
     steps:
       - name: Cancel merge group after failure in this job
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        env:
+          JOB_STATUS: ${{ job.status }}
         with:
           retries: 0
           script: *merge_group_cancel_script

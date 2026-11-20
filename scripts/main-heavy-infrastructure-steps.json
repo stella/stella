@@ -590,6 +590,7 @@
       "Prod-deps web boot smoke",
       "Setup Bun",
       "Startup bundle gates",
+      "Startup gate base",
       "Upload failed Bun install logs",
       "Upload production E2E web build"
     ],

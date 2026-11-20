@@ -76,6 +76,9 @@ export const MembersTableRow = ({
   </TableRow>
 );
 
+/** Spanned by the row that replaces members when none match. */
+export const MEMBER_COLUMN_COUNT = MEMBER_COLUMNS.length;
+
 type MembersSortFaceOptions = {
   className: string | undefined;
   label: ReactNode;

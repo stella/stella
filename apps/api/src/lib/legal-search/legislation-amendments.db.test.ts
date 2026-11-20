@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import {
   afterAll,
   beforeAll,
@@ -8,7 +8,15 @@ import {
   setSystemTime,
   test,
 } from "bun:test";
-import { eq, getTableName, sql, TransactionRollbackError } from "drizzle-orm";
+import {
+  Column,
+  eq,
+  getColumns,
+  getTableName,
+  is,
+  sql,
+  TransactionRollbackError,
+} from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
@@ -50,6 +58,7 @@ import { PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION } from "@/api/lib/public-law-relat
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   createTestPglite,
+  grantedPublicLawColumns,
   withPublicLawReaderRole,
 } from "@/api/tests/pglite-test-db";
 
@@ -577,13 +586,23 @@ describe("publisher amendment snapshots", () => {
   test("public reads tolerate the pre-grant schema and expose amendments after the grant", async () => {
     await sync(snapshot("2026-10-16T11:00:00Z", [relation]));
     const amendmentRelations = [
-      getTableName(legislationAmendmentSnapshots),
-      getTableName(legislationAmendments),
+      legislationAmendmentSnapshots,
+      legislationAmendments,
     ] as const;
     const setAmendmentGrants = async (action: "GRANT" | "REVOKE") => {
-      for (const table of amendmentRelations) {
-        const columns = Object.keys(
+      for (const definition of amendmentRelations) {
+        const table = getTableName(definition);
+        const columns = grantedPublicLawColumns(
+          table,
           PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION[table],
+          new Set(
+            Object.values(getColumns(definition)).map((column) => {
+              if (!is(column, Column)) {
+                return panic(`Expected a table column in ${table}`);
+              }
+              return column.name;
+            }),
+          ),
         );
         const direction = action === "GRANT" ? "TO" : "FROM";
         await db.execute(
@@ -614,8 +633,8 @@ describe("publisher amendment snapshots", () => {
     // Pending changes are those effective after the legal day; pin the day
     // before the fixture's 2027-01-01 effective date.
     setSystemTime(new Date("2026-10-18T10:00:00.000Z"));
-    await setAmendmentGrants("REVOKE");
     try {
+      await setAmendmentGrants("REVOKE");
       const beforeGrant = await readBoth();
       expect(beforeGrant.statute).toMatchObject({ pendingChanges: null });
       expect(beforeGrant.versions).toMatchObject({

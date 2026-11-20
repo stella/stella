@@ -59,4 +59,49 @@ describe("selection action placement", () => {
       }
     }
   });
+
+  describe("with the selection's extent", () => {
+    const offset = SELECTION_TOOLBAR_OFFSET_PX;
+    const overlaps = (top: number, height: number, from: number, to: number) =>
+      top < to && top + height > from;
+
+    test("opens below the last selected line, not below the pointer", () => {
+      // Three selected lines (200-260); the pointer let go on the middle one.
+      expect(
+        selectionToolbarPosition({
+          anchor: { left: 300, right: 300, top: 220, bottom: 240 },
+          barWidth: 120,
+          barHeight: 36,
+          bounds,
+          extent: { top: 200, bottom: 260 },
+        }).top,
+      ).toBe(260 + offset);
+    });
+
+    test("opens above the first selected line when there is no room below", () => {
+      // The composer leaves no room under a selection ending at 380; flipping
+      // above the pointer's line (340-360) would cover the line before it.
+      const top = selectionToolbarPosition({
+        anchor: { left: 300, right: 300, top: 340, bottom: 360 },
+        barWidth: 120,
+        barHeight: 36,
+        bounds,
+        extent: { top: 320, bottom: 380 },
+      }).top;
+      expect(top).toBe(320 - offset - 36);
+      expect(overlaps(top, 36, 320, 380)).toBe(false);
+    });
+
+    test("falls back to the anchor's line when the selection fills the room", () => {
+      expect(
+        selectionToolbarPosition({
+          anchor: { left: 300, right: 300, top: 200, bottom: 220 },
+          barWidth: 120,
+          barHeight: 36,
+          bounds,
+          extent: { top: 90, bottom: 390 },
+        }).top,
+      ).toBe(220 + offset);
+    });
+  });
 });

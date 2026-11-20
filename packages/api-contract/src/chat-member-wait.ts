@@ -193,8 +193,57 @@ export const memberWaitsOf = (
   if (outcome !== undefined && outcome !== "awaiting-user") {
     return [];
   }
-  return message.parts.flatMap((part) => {
+  return waitingParts(message.parts).flatMap((part) => {
     const wait = memberWaitOfPart(part);
     return wait === null ? [] : [wait];
   });
 };
+
+/**
+ * The parts of a suspended sub-agent run's child, or null for any other part.
+ * The SDK resumes only a suspended child, so a call inside a running,
+ * finished or failed run waits on nothing.
+ */
+const suspendedSubagentParts = (part: unknown): readonly unknown[] | null => {
+  if (
+    typeof part !== "object" ||
+    part === null ||
+    Reflect.get(part, "type") !== "subagent"
+  ) {
+    return null;
+  }
+  const subagent: unknown = Reflect.get(part, "subagent");
+  if (
+    typeof subagent !== "object" ||
+    subagent === null ||
+    Reflect.get(subagent, "status") !== "suspended"
+  ) {
+    return null;
+  }
+  const messages: unknown = Reflect.get(subagent, "messages");
+  if (!isList(messages)) {
+    return [];
+  }
+  return messages.flatMap((child) => {
+    const parts: unknown =
+      typeof child === "object" && child !== null
+        ? Reflect.get(child, "parts")
+        : undefined;
+    return isList(parts) ? parts : [];
+  });
+};
+
+const isList = (value: unknown): value is readonly unknown[] =>
+  Array.isArray(value);
+
+/**
+ * `parts` in order, each suspended sub-agent run among them replaced by its
+ * child's parts, at every depth: a child stopped on its calls waits on the
+ * member as the message's own calls do, and the next run resumes it with
+ * the answers.
+ */
+const waitingParts = (parts: readonly unknown[]): unknown[] =>
+  parts.flatMap((part) => {
+    const childParts = suspendedSubagentParts(part);
+    return childParts === null ? [part] : waitingParts(childParts);
+  });

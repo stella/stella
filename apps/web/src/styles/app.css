@@ -32,6 +32,13 @@
 
 @source "../../../../packages/decision-reader/src/**/*.{ts,tsx}";
 
+/* The browser's selection blue is the loudest thing in a chat answer once the
+ * selection bar opens over it; a tint of the theme's own ink marks the words
+ * without shouting (the clause editor's selection uses the same mix). */
+[data-chat-message-id] ::selection {
+  background-color: color-mix(in srgb, var(--color-primary) 20%, transparent);
+}
+
 .auth-gradient {
   background: linear-gradient(
     to bottom,

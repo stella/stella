@@ -226,7 +226,7 @@ describe("public tools security invariants", () => {
   });
 
   test.each([
-    "apps/web/src/routes/tools/$slug.tsx",
+    "apps/web/src/routes/tools/-detail.page.tsx",
     "apps/web/src/routes/knowledge/-public/public-tool-detail.tsx",
   ])(
     "the install affordance in %s is a client-only lazy import, never static",

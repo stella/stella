@@ -7,7 +7,6 @@ import {
   SHAREPOINT_OAUTH_CALLBACK_REASONS,
   type SharepointOAuthCallbackReason,
 } from "@stll/api-contract/sharepoint";
-import { Loader } from "@stll/ui/loader";
 import { stellaToast } from "@stll/ui/toast";
 
 import { sharepointKeys } from "@/features/sharepoint/sharepoint-queries";
@@ -18,6 +17,7 @@ import { notifyUserProblem } from "@/lib/errors/user-toast";
 import { pageTitle } from "@/lib/page-title";
 import { routeSearchSchema } from "@/route-search-params";
 import { APP_FRAME_SCOPE } from "@/routes/-app-frame-scope";
+import { redirectRouteComponent } from "@/routes/-route-pending-view";
 
 /** What the member reads when Microsoft consent did not end in a connection. */
 const OAUTH_REASON_KEYS = {
@@ -49,14 +49,18 @@ export const Route = createFileRoute("/sharepoint/oauth-callback")({
   head: () => ({
     meta: [{ title: pageTitle("settings.connections.title") }],
   }),
-  component: SharepointOAuthCallbackPage,
+  // While it reports the outcome it shows the connections' pending view.
+  component: redirectRouteComponent({
+    navigator: SharepointOAuthCallbackNavigator,
+    to: "/settings/account/connections",
+  }),
 });
 
 /**
  * Where Microsoft consent ends: report the outcome and return the member to
  * their connections, where the SharePoint row shows the new state.
  */
-function SharepointOAuthCallbackPage() {
+function SharepointOAuthCallbackNavigator() {
   const t = useTranslations();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -81,9 +85,5 @@ function SharepointOAuthCallbackPage() {
     );
   });
 
-  return (
-    <div className="flex flex-1 items-center justify-center p-6">
-      <Loader label={t("common.loading")} />
-    </div>
-  );
+  return null;
 }

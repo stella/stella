@@ -43,6 +43,7 @@ import {
   documentWriteRefusalHandlerError,
   DocumentWriteRefusedError,
 } from "@/api/lib/entities/authorize-document-write";
+import { CALLER_AUTHORIZED } from "@/api/lib/entities/buffer-write-authority";
 import { createEntityFromBuffer } from "@/api/lib/entities/create-from-buffer";
 import { HandlerError, unreachable } from "@/api/lib/errors/tagged-errors";
 import { isFeatureEnabled } from "@/api/lib/feature-access/policy";
@@ -316,6 +317,8 @@ export const createDesktopDictationTranscriptEndpoint = ({
           parentId: SafeId<"entity"> | null;
         }) =>
           await createEntity({
+            // The request authorized the member's create access above.
+            authority: CALLER_AUTHORIZED,
             scopedDb: account.scopedDb,
             organizationId: account.organizationId,
             workspaceId,

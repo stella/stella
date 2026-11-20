@@ -624,6 +624,10 @@
       "cleanup": "Revisão",
       "thisComputer": "Neste computador"
     },
+    "sounds": {
+      "title": "Sons",
+      "description": "Tocar um som curto e discreto quando a gravação começa e quando termina."
+    },
     "cleanup": {
       "title": "Revisar com IA",
       "description": "Corrige erros de reconhecimento e a formatação ditada, como “nova linha” ou “negrito”, e adapta o texto ao aplicativo, como e-mail. Só o texto, não o áudio, é enviado pela stella ao provedor de IA da sua organização; a stella não o armazena.",
@@ -666,7 +670,7 @@
     "customWords": {
       "group": "Palavras próprias",
       "title": "Palavras e nomes que a stella deve escrever corretamente",
-      "description": "Por exemplo, nomes de clientes ou termos em inglês que você usa ao falar outro idioma. Ficam guardados neste computador para esta conta e são enviados apenas com o seu ditado, para a transcrição pela stella AI e para a revisão com IA. O modelo de fala deste computador não os usa.",
+      "description": "Por exemplo, nomes de clientes ou termos em inglês que você usa ao falar outro idioma. Ficam guardados neste computador para esta conta e são enviados apenas com o seu ditado, para a transcrição pela stella AI e para a revisão com IA. Quando o modelo de fala deste computador transcreve e a revisão com IA está desativada, a stella corrige a grafia deles neste computador.",
       "count": "{count, number} de {limit, number}",
       "input": "Adicionar uma palavra ou um nome",
       "add": "Adicionar",
@@ -1111,7 +1115,7 @@
       "cloudDescriptionModel": "O áudio é enviado para a stella e para o provedor de {model} para ser transcrito. A stella não o armazena.",
       "localMissing": "Baixe o modelo de voz em Configurações, em Ditado, para transcrever neste computador.",
       "localMissingCloud": "Baixe o modelo de voz em Configurações, em Ditado, ou transcreva com a stella AI.",
-      "retainsData": "{provider} guarda o áudio e a transcrição de tudo o que é enviado a este modelo. Não transcreva com ele gravações confidenciais ou de clientes, ou escolha outro modelo em Configurações, em Ditado.",
+      "retainsData": "Observe os termos de processamento da {provider}.",
       "modelFailed": "Não foi possível ler o modelo do stella AI, então o stella AI não pode transcrever agora. Tente novamente ou transcreva neste computador."
     },
     "matter": {
@@ -1160,7 +1164,8 @@
       "saveFailed": "Não foi possível copiar nem salvar a transcrição. Tente novamente.",
       "noSpeech": "Nenhuma fala foi encontrada nesta gravação.",
       "fileName": "{title} - transcrição.txt",
-      "documentTitle": "{title} - transcrição"
+      "documentTitle": "{title} - transcrição",
+      "transcriptTitle": "Transcrição"
     },
     "progress": {
       "running": "Transcrevendo {done, number} de {total, number} min",
@@ -1169,6 +1174,28 @@
       "stopped": "Parado após {done, number} min. O texto obtido até agora foi mantido.",
       "done": "{total, number} min transcritos.",
       "another": "Transcrever outra gravação"
+    },
+    "cleaned": {
+      "title": "Texto revisado",
+      "running": "Revisando…",
+      "waiting": "Cada parte é revisada assim que é transcrita.",
+      "instructionsTitle": "Instruções no ditado · não fazem parte do texto",
+      "instructionsLabel": "Instruções:",
+      "partFailed": "Não foi possível revisar esta parte, então ela aparece como foi transcrita.",
+      "failedCount": "{count, plural, one {# parte não revisada} other {# partes não revisadas}}",
+      "saveMarkdown": "Texto formatado (.md)",
+      "saveText": "Texto simples (.txt)",
+      "fileNameMarkdown": "{title} revisado.md",
+      "fileNameText": "{title} revisado.txt",
+      "offerTitle": "Revisar a transcrição com IA",
+      "offerDescription": "Esta gravação foi transcrita neste computador e a revisão por IA está desativada nas Configurações. A revisão envia o texto, nunca o áudio, ao modelo de IA da sua organização.",
+      "offerStart": "Revisar"
+    },
+    "copyMenu": {
+      "label": "Opções de cópia",
+      "formatted": "Com formatação",
+      "plain": "Como texto simples",
+      "hint": "Com formatação, títulos, negrito e listas são colados no Word ou no Outlook. Sua escolha fica salva."
     }
   }
 }

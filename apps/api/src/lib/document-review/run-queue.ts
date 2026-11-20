@@ -13,6 +13,8 @@ import { Result } from "better-result";
  */
 import { and, asc, eq, lt, or, sql } from "drizzle-orm";
 
+import type { PermissionInput } from "@stll/permissions";
+
 import type { rootDb, Transaction } from "@/api/db/root";
 import { documentReviewRuns } from "@/api/db/schema";
 import { isAiExtractablePropertyContent } from "@/api/db/schema-validators";
@@ -24,6 +26,10 @@ import type { SafeId } from "@/api/lib/branded-types";
 import type { RequeueableQueue } from "@/api/lib/bullmq-requeue";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";
+import {
+  hasCurrentActiveWorkspaceMemberPermission,
+  requireCurrentActiveWorkspaceMemberPermission,
+} from "@/api/lib/db/member-authority";
 import {
   buildDocumentReviewFindingRow,
   recountDocumentReviewFindingProgress,
@@ -37,7 +43,10 @@ import { extractAskContents } from "@/api/lib/document-review/review-extract";
 import type { ReviewAsk } from "@/api/lib/document-review/review-extract";
 import { buildFindings } from "@/api/lib/document-review/review-grade";
 import type { ReviewFinding } from "@/api/lib/document-review/review-grade";
-import { DOCUMENT_REVIEW_RUN_EXECUTOR } from "@/api/lib/document-review/run-contract";
+import {
+  DOCUMENT_REVIEW_RUN_EXECUTOR,
+  PLAYBOOK_PIN_PROVENANCE,
+} from "@/api/lib/document-review/run-contract";
 import type {
   DocumentReviewFindingPayload,
   DocumentReviewRunBasis,
@@ -56,6 +65,7 @@ import type { ReviewRunPlan } from "@/api/lib/document-review/run-plan";
 import { DocumentTooLargeError } from "@/api/lib/errors/tagged-errors";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import {
+  MEMBER_RUN_AUTHORITY_REVOKED,
   RECONCILE_SCAN_PAGE_SIZE,
   reconcileCursorTimestamp,
 } from "@/api/lib/queue-reconcile-scan";
@@ -215,6 +225,49 @@ const readQueuedPage = async (
 type DocumentReviewRunActor = RootRunActor<"documentReviewRun">;
 type RunActor = DocumentReviewRunActor;
 
+const REVIEW_RUN_PERMISSIONS = {
+  workspace: ["read"],
+  entity: ["update"],
+} as const satisfies PermissionInput;
+
+const PLAYBOOK_REVIEW_RUN_PERMISSIONS = {
+  workspace: ["read"],
+  entity: ["update"],
+  playbook: ["apply"],
+} as const satisfies PermissionInput;
+
+const requiredReviewRunPermissions = (
+  basis: DocumentReviewRunBasis,
+): PermissionInput =>
+  basis.playbook.provenance === PLAYBOOK_PIN_PROVENANCE.EPHEMERAL &&
+  basis.playbook.definitionId === null
+    ? REVIEW_RUN_PERMISSIONS
+    : PLAYBOOK_REVIEW_RUN_PERMISSIONS;
+
+const requireRunAuthority = async (
+  actor: RunActor,
+  basis: DocumentReviewRunBasis,
+  tx: Transaction,
+): Promise<void> => {
+  await requireCurrentActiveWorkspaceMemberPermission({
+    db: tx,
+    organizationId: actor.organizationId,
+    userId: actor.userId,
+    workspaceId: actor.workspaceId,
+    permissions: requiredReviewRunPermissions(basis),
+  });
+};
+
+const authorizedWrite = async <T>(
+  actor: RunActor,
+  basis: DocumentReviewRunBasis,
+  write: (tx: Transaction) => T | Promise<T>,
+): Promise<T> =>
+  await actor.writeDb(async (tx) => {
+    await requireRunAuthority(actor, basis, tx);
+    return await write(tx);
+  });
+
 const brandActor = (data: DocumentRunJobData): RunActor =>
   createRootRunActor(data, brandPersistedDocumentReviewRunId);
 
@@ -232,7 +285,9 @@ type ClaimedRun = {
  * UPDATE, so two deliveries of the same job cannot both proceed: the loser
  * updates zero rows and returns nothing.
  */
-const claimRun = async (actor: RunActor): Promise<ClaimedRun | null> => {
+const claimRun = async (
+  actor: RunActor,
+): Promise<ClaimedRun | typeof MEMBER_RUN_AUTHORITY_REVOKED | null> => {
   const claimed = await actor.writeDb(async (tx) => {
     // audit: skip — lifecycle bookkeeping on the run row audited at create.
     const rows = await tx
@@ -252,7 +307,21 @@ const claimRun = async (actor: RunActor): Promise<ClaimedRun | null> => {
         entityVersionId: documentReviewRuns.entityVersionId,
         contentSha256: documentReviewRuns.contentSha256,
       });
-    return rows.at(0);
+    const row = rows.at(0);
+    if (!row) {
+      return null;
+    }
+    const authorized = await hasCurrentActiveWorkspaceMemberPermission({
+      db: tx,
+      organizationId: actor.organizationId,
+      userId: actor.userId,
+      workspaceId: actor.workspaceId,
+      permissions: requiredReviewRunPermissions(row.basis),
+    });
+    if (authorized) {
+      return row;
+    }
+    return MEMBER_RUN_AUTHORITY_REVOKED;
   });
   return claimed ?? null;
 };
@@ -367,7 +436,9 @@ const executeRun = async ({
 
   const configResult = await Result.tryPromise({
     try: async () => {
-      const settings = await actor.writeDb(
+      const settings = await authorizedWrite(
+        actor,
+        run.basis,
         async (tx) => await loadOrgAISettings(tx, actor),
       );
       if (Result.isError(settings)) {
@@ -406,7 +477,9 @@ const executeRun = async ({
     return "ai_unavailable";
   }
 
-  await actor.writeDb(
+  await authorizedWrite(
+    actor,
+    run.basis,
     async (tx) =>
       await recordDocumentReviewRunModel({
         tx,
@@ -437,6 +510,9 @@ const executeRun = async ({
     },
     workspaceId: actor.workspaceId,
   };
+  const authorizeModelDispatch = async (): Promise<void> => {
+    await authorizedWrite(actor, run.basis, () => undefined);
+  };
 
   const gradingOutcome = await runGradingPass({
     actor,
@@ -446,8 +522,11 @@ const executeRun = async ({
     run,
     target: preparedTarget,
     targetFile: resolved.files.slice(0, 1),
+    authorizeModelDispatch,
   });
-  await actor.writeDb(
+  await authorizedWrite(
+    actor,
+    run.basis,
     async (tx) =>
       await recountDocumentReviewFindingProgress({
         tx,
@@ -483,6 +562,7 @@ const runGradingPass = async ({
   run,
   target,
   targetFile,
+  authorizeModelDispatch,
 }: {
   actor: RunActor;
   passageTextById: ReadonlyMap<string, string>;
@@ -491,6 +571,7 @@ const runGradingPass = async ({
   run: ClaimedRun;
   target: PreparedDocxFile;
   targetFile: ResolvedFile[];
+  authorizeModelDispatch: () => Promise<void>;
 }): Promise<DocumentReviewRunErrorCode | null> => {
   if (plan.positions.length === 0) {
     return null;
@@ -520,7 +601,9 @@ const runGradingPass = async ({
   }
 
   const positions = plan.positions.map((planned) => planned.position);
-  const clauseSnapshots = await actor.writeDb(
+  const clauseSnapshots = await authorizedWrite(
+    actor,
+    run.basis,
     async (tx) =>
       await loadClauseSnapshots(tx, actor.organizationId, positions),
   );
@@ -554,6 +637,7 @@ const runGradingPass = async ({
   const extraction = await extractAskContents({
     asks,
     resolvedFiles: targetFile,
+    authorizeModelDispatch,
     ...deps,
   });
   if (Result.isError(extraction)) {
@@ -599,14 +683,15 @@ const runGradingPass = async ({
     // Each model call's findings are committed as it returns, so the run's
     // `completed` moves through a long review instead of jumping at the end.
     onGraded: async (findings) => {
-      await upsertFindings(actor, toRows(findings));
+      await upsertFindings(actor, run.basis, toRows(findings));
     },
+    authorizeModelDispatch,
     ...deps,
   });
 
   // The whole set, once: the positions decided without a model are in no
   // batch, and the upsert converges on rows a batch already wrote.
-  await upsertFindings(actor, toRows(graded));
+  await upsertFindings(actor, run.basis, toRows(graded));
   return null;
 };
 
@@ -641,9 +726,12 @@ const buildFindingRow = ({
  *  share. The run completes once, after the pass, in `finalizeRun`. */
 const upsertFindings = async (
   actor: RunActor,
+  basis: DocumentReviewRunBasis,
   rows: readonly FindingRow[],
 ): Promise<void> => {
-  await actor.writeDb(
+  await authorizedWrite(
+    actor,
+    basis,
     async (tx) =>
       await writeReviewFindingBatch({
         tx,
@@ -667,6 +755,9 @@ const finalizeRun = async (
 ): Promise<DocumentReviewRunErrorCode | null> => {
   const finalized = await finalizeWorkerRun({
     actor,
+    authorize: async (tx) => {
+      await requireRunAuthority(actor, run.basis, tx);
+    },
     basis: run.basis,
     entityId: run.entityId,
     fileFieldId: run.fileFieldId,
@@ -711,7 +802,15 @@ export const documentReviewRunQueue = createDocumentRunQueue({
   limits: STANDARD_DOCUMENT_RUN_LIMITS,
   workerContext: undefined,
   actor: brandActor,
-  claim: async ({ actor }) => await claimRun(actor),
+  claim: async ({ actor }) => {
+    const claimed = await claimRun(actor);
+    if (claimed === MEMBER_RUN_AUTHORITY_REVOKED) {
+      // The requester no longer holds the run's permissions: close it here.
+      await setRunFailed(actor, "internal");
+      return null;
+    }
+    return claimed;
+  },
   execute: executeRun,
   fail: async ({ actor, errorCode }) => await setRunFailed(actor, errorCode),
   readQueuedPage,

@@ -18,6 +18,7 @@ import { createWorkspaceHandler } from "@/api/handlers/workspaces/create";
 import type { SafeId } from "@/api/lib/branded-types";
 import { DEFAULT_MANAGED_AI_RESIDENCY } from "@/api/lib/chat/ai-data-policy";
 import { ensureDefaultDocumentTypes } from "@/api/lib/document-types/defaults";
+import { CALLER_AUTHORIZED } from "@/api/lib/entities/buffer-write-authority";
 import { createEntityFromBuffer } from "@/api/lib/entities/create-from-buffer";
 import { scanUploadForHandler } from "@/api/lib/file-scan/scan-upload-handler";
 import { serverBuiltFileEncryption } from "@/api/lib/files/detect-file-encryption";
@@ -200,6 +201,7 @@ const seedDocuments = async ({
         return bytes;
       }
       const created = await createEntityFromBuffer({
+        authority: CALLER_AUTHORIZED,
         scopedDb: actor.scopedDb,
         organizationId: actor.organizationId,
         workspaceId,

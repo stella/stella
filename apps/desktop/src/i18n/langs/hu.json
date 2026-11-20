@@ -624,6 +624,10 @@
       "cleanup": "Javítás",
       "thisComputer": "Ezen a számítógépen"
     },
+    "sounds": {
+      "title": "Hangok",
+      "description": "Rövid, halk hang lejátszása, amikor a felvétel elindul, és amikor véget ér."
+    },
     "cleanup": {
       "title": "Javítás AI-jal",
       "description": "Kijavítja a felismerési hibákat és a kimondott formázást, például „új sor” vagy „félkövér”, és az alkalmazáshoz igazítja a szöveget, például e-mailhez. Csak a szöveg – nem a hang – kerül a stellán keresztül a szervezete AI-szolgáltatójához; a stella nem tárolja.",
@@ -666,7 +670,7 @@
     "customWords": {
       "group": "Saját szavak",
       "title": "Szavak és nevek, amelyeket a stella helyesen írjon",
-      "description": "Például ügyfelek nevei vagy angol kifejezések, amelyeket más nyelven beszélve használ. Ezen a számítógépen tárolódnak ehhez a fiókhoz, és csak a diktálással együtt kerülnek elküldésre: a stella AI átíráshoz és az AI-jal végzett javításhoz. A számítógép beszédmodellje nem használja őket.",
+      "description": "Például ügyfelek nevei vagy angol kifejezések, amelyeket más nyelven beszélve használ. Ezen a számítógépen tárolódnak ehhez a fiókhoz, és csak a diktálással együtt kerülnek elküldésre: a stella AI átíráshoz és az AI-jal végzett javításhoz. Ha a számítógép beszédmodellje ír át, és az AI-jal végzett javítás ki van kapcsolva, a stella ezen a számítógépen javítja a helyesírásukat.",
       "count": "{count, number} / {limit, number}",
       "input": "Szó vagy név hozzáadása",
       "add": "Hozzáadás",
@@ -1111,7 +1115,7 @@
       "cloudDescriptionModel": "A hangot átírásra elküldjük a stellának és a(z) {model} modell szolgáltatójának. A stella nem tárolja.",
       "localMissing": "Ha ezen a számítógépen szeretne átírni, töltse le a beszédmodellt a Beállítások Diktálás részében.",
       "localMissingCloud": "Töltse le a beszédmodellt a Beállítások Diktálás részében, vagy írjon át a stella AI-jal.",
-      "retainsData": "A(z) {provider} megőrzi minden ennek a modellnek küldött felvétel hangját és átiratát. Ne írjon át vele bizalmas vagy ügyfélfelvételeket, vagy válasszon másik modellt a Beállítások Diktálás részében.",
+      "retainsData": "Kérjük, vegye figyelembe a(z) {provider} adatkezelési feltételeit.",
       "modelFailed": "A stella AI modelljét nem sikerült beolvasni, ezért a stella AI most nem tud átírni. Próbálja újra, vagy írja át ezen a számítógépen."
     },
     "matter": {
@@ -1160,7 +1164,8 @@
       "saveFailed": "Az átiratot nem sikerült másolni vagy menteni. Próbálja újra.",
       "noSpeech": "Ebben a felvételben nem található beszéd.",
       "fileName": "{title} – átirat.txt",
-      "documentTitle": "{title} – átirat"
+      "documentTitle": "{title} – átirat",
+      "transcriptTitle": "Átirat"
     },
     "progress": {
       "running": "Átírás: {done, number} / {total, number} perc",
@@ -1169,6 +1174,28 @@
       "stopped": "Leállítva {done, number} perc után. Az eddigi szöveg megmarad.",
       "done": "{total, number} perc átírva.",
       "another": "Másik felvétel átírása"
+    },
+    "cleaned": {
+      "title": "Javított szöveg",
+      "running": "Javítás…",
+      "waiting": "Minden rész javítása az átírás után azonnal elindul.",
+      "instructionsTitle": "Utasítások a diktálásban · nem részei a szövegnek",
+      "instructionsLabel": "Utasítások:",
+      "partFailed": "Ezt a részt nem sikerült javítani, ezért az átírt formájában látható.",
+      "failedCount": "{count, plural, one {# rész nincs javítva} other {# rész nincs javítva}}",
+      "saveMarkdown": "Formázott szöveg (.md)",
+      "saveText": "Egyszerű szöveg (.txt)",
+      "fileNameMarkdown": "{title} javított.md",
+      "fileNameText": "{title} javított.txt",
+      "offerTitle": "Átirat javítása MI-vel",
+      "offerDescription": "Ezt a felvételt ezen a számítógépen írták át, és az MI-javítás ki van kapcsolva a Beállításokban. A javítás a szöveget küldi el, soha a hangot, a szervezete MI-modelljének.",
+      "offerStart": "Javítás"
+    },
+    "copyMenu": {
+      "label": "Másolási beállítások",
+      "formatted": "Formázással",
+      "plain": "Egyszerű szövegként",
+      "hint": "Formázással a címsorok, a félkövér és a listák is bekerülnek a Wordbe vagy az Outlookba. A választását megjegyezzük."
     }
   }
 }

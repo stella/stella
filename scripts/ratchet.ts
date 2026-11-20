@@ -35,6 +35,7 @@ import { analyse } from "scslre";
 
 import { compareCodeUnit } from "@stll/collation";
 
+import { disabledAttributeWithoutReason } from "../.oxlint-plugins/disabled-control-needs-reason.logic.ts";
 import { GRADED_HANDLER_CODE_REASON } from "../apps/api/src/lib/errors/graded-handler-codes";
 import {
   type CallExpression,
@@ -1372,6 +1373,29 @@ const countCallsTo =
     });
     return total;
   };
+
+/**
+ * Disabled Buttons with no `disabledReason`, by the predicate the
+ * `disabled-control-needs-reason` oxlint rule reports with, so the count and
+ * the rule agree site for site. Read from the syntax tree: a disabled Button
+ * in a comment or a string is not a control.
+ */
+const countDisabledControlsWithoutReason: FileCounter = (content, { file }) => {
+  if (!file.endsWith(".tsx")) {
+    return 0;
+  }
+  const { program } = parseSyntax({ fileName: file, text: content });
+  let total = 0;
+  walk(program, (node) => {
+    if (
+      node.type === "JSXOpeningElement" &&
+      disabledAttributeWithoutReason(node) !== null
+    ) {
+      total += 1;
+    }
+  });
+  return total;
+};
 
 // Direct `isRedistributable(x)` calls: the shape the gate replaced.
 const countDirectRedistributableCalls = countCallsTo("isRedistributable");
@@ -3319,6 +3343,20 @@ export const RATCHET_METRICS: readonly RatchetMetric[] = [
   },
   {
     scope: "file",
+    id: "disabled-control-without-reason",
+    description:
+      "disabled `Button`s with no `disabledReason`: a reader reaches for them and nothing says why they cannot act. Burning down to zero, after which the `disabled-control-needs-reason` lint rule enforces it repo-wide and this metric goes",
+    include: ["apps/*/src/**/*.tsx", "packages/*/src/**/*.tsx"],
+    // Native builds have no hover to show a reason on, and the mobile app
+    // also mounts platform Buttons (`@expo/ui`) that take no such prop.
+    exclude: (file) =>
+      isExcludedSource(file) ||
+      file.startsWith("apps/mobile/") ||
+      file.endsWith(".native.tsx"),
+    count: countDisabledControlsWithoutReason,
+  },
+  {
+    scope: "file",
     id: "barrel-index-files",
     description:
       "index.ts/index.tsx barrel files under apps/{api,web}/src (packages entry points and TanStack route index files excluded)",
@@ -4978,6 +5016,22 @@ const SELF_TEST_NULLISH = `${NULLISH_FIXTURE_LINES.join("\n")}\n`;
 // Expected: a(1) + b(1) + d(2) + h(1) = 5; `?? {}`, the comment, and the
 // string/template false positives (e, f, g) are excluded.
 const EXPECTED_NULLISH = 5;
+
+// Two disabled Buttons that say nothing (the bare flag, and one with only a
+// tooltip); a reasoned one, a never-disabled one, another control, and the
+// same text in a comment and a string do not count.
+const SELF_TEST_DISABLED_WITHOUT_REASON = `import { Button } from "@stll/ui/button";
+const isEmpty = true;
+export const A = () => <Button disabled>Send</Button>;
+export const B = () => <Button disabled={isEmpty} tooltip="Send" />;
+export const C = () => <Button disabled={isEmpty} disabledReason="Type first" />;
+export const D = () => <Button disabled={false} />;
+export const E = () => <MenuItem disabled />;
+// <Button disabled />
+export const F = "<Button disabled />";
+`;
+
+const EXPECTED_DISABLED_WITHOUT_REASON = 2;
 
 const LEGACY_REALTIME_INVALIDATION_FIXTURE_LINES = [
   'const direct = { type: "invalidate-query", data: ["entities"] };',
@@ -6762,6 +6816,11 @@ const runSelfTest = (): number => {
     writeFixture(root, "apps/web/src/nullish.ts", SELF_TEST_NULLISH);
     writeFixture(
       root,
+      "apps/web/src/disabled-without-reason.tsx",
+      SELF_TEST_DISABLED_WITHOUT_REASON,
+    );
+    writeFixture(
+      root,
       "apps/api/src/legacy-realtime-invalidations.ts",
       SELF_TEST_LEGACY_REALTIME_INVALIDATIONS,
     );
@@ -7155,6 +7214,18 @@ const runSelfTest = (): number => {
     if (nullishMetric.count !== EXPECTED_NULLISH) {
       failures.push(
         `nullish-array-fallback counted ${nullishMetric.count}, expected ${EXPECTED_NULLISH}`,
+      );
+    }
+
+    const disabledWithoutReasonMetric = requireSnapshot(
+      snapshot,
+      "disabled-control-without-reason",
+    );
+    if (
+      disabledWithoutReasonMetric.count !== EXPECTED_DISABLED_WITHOUT_REASON
+    ) {
+      failures.push(
+        `disabled-control-without-reason counted ${disabledWithoutReasonMetric.count}, expected ${EXPECTED_DISABLED_WITHOUT_REASON}`,
       );
     }
 
