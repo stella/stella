@@ -371,6 +371,21 @@ type UserMessageEditFormProps = {
  * paragraphs, line breaks, bold text and chips load as the composer holds
  * them, and sending writes the markup a new message would carry.
  */
+const sendDisabledKey = ({
+  sending,
+  isGenerating,
+}: {
+  sending: boolean;
+  isGenerating: boolean;
+}) => {
+  if (sending) {
+    return "common.sending";
+  }
+  return isGenerating
+    ? "chat.answerEdit.waitForAnswer"
+    : "chat.composer.addMessageContent";
+};
+
 const UserMessageEditForm = ({
   draft,
   isGenerating,
@@ -692,6 +707,7 @@ const UserMessageEditForm = ({
         </Button>
         <Button
           disabled={!canSend}
+          disabledReason={t(sendDisabledKey({ sending, isGenerating }))}
           onClick={() => {
             submitFrom(editor);
           }}
