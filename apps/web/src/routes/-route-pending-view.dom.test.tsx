@@ -1,3 +1,5 @@
+import { renderToStaticMarkup } from "react-dom/server";
+
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import type { RouteComponent } from "@tanstack/react-router";
 import { afterAll, afterEach, expect, test } from "bun:test";
@@ -277,4 +279,24 @@ test("the frame's nav keeps the timesheets entry this browser last had", async (
   expect(pendingNavIds(scope)).toContain("timesheets");
   await remember(false);
   expect(pendingNavIds()).not.toContain("timesheets");
+});
+
+// The jump this guards is in the server's paint, which renders with the
+// stores' server snapshots: the frame must take the cookie's answer there.
+test("the server's paint of the frame's nav follows the presentation cookie", () => {
+  const serverNav = (timeBillingHint: boolean) => {
+    const prefs = { ...prefsSync.getSnapshot(), timeBillingHint };
+    return renderToStaticMarkup(
+      <PresentationPrefsProvider
+        initialPrefs={prefs}
+        sync={createTestPresentationPrefsSync(prefs)}
+      >
+        <IntlProvider locale="en" messages={messages} timeZone="UTC">
+          <ProtectedPendingSkeleton />
+        </IntlProvider>
+      </PresentationPrefsProvider>,
+    );
+  };
+  expect(serverNav(true)).toContain('data-nav-item="timesheets"');
+  expect(serverNav(false)).not.toContain('data-nav-item="timesheets"');
 });
