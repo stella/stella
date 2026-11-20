@@ -165,7 +165,7 @@
     "invitation": {
       "declined": "Invitación rechazada",
       "declinedDescription": "No te has unido a esta organización.",
-      "description": "{inviterEmail} le ha invitado a unirse a {organizationName} como {role}.",
+      "description": "{inviterEmail} le ha invitado a unirse a {organizationName}{role, select, owner { como propietario} admin { como administrador} member { como miembro} intern { como pasante} external { como colaborador externo} other {}}.",
       "goToWorkspaces": "Ir a asuntos",
       "title": "Invitación a la organización",
       "verifyEmailHint": "Para verificar {email}, cierre sesión e inicie sesión con un código de un solo uso que enviaremos a esa dirección.",

@@ -137,7 +137,7 @@
   "auth.invalidEmailOrPassword": "Incorrect email or password.",
   "auth.invitation.declined": "Invitation declined",
   "auth.invitation.declinedDescription": "You did not join this organization.",
-  "auth.invitation.description": "You've been invited to join {organizationName} by {inviterEmail} as {role}.",
+  "auth.invitation.description": "You've been invited to join {organizationName} by {inviterEmail}{role, select, owner { as an owner} admin { as an admin} member { as a member} intern { as an intern} external { as an external collaborator} other {}}.",
   "auth.invitation.goToWorkspaces": "Go to matters",
   "auth.invitation.title": "Organization invitation",
   "auth.invitation.verifyEmailHint": "To verify {email}, sign out, then sign in with a one-time code sent to that address.",

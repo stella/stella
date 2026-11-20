@@ -165,7 +165,7 @@
     "invitation": {
       "declined": "Einladung abgelehnt",
       "declinedDescription": "Sie sind dieser Organisation nicht beigetreten.",
-      "description": "Sie wurden von {inviterEmail} als {role} zu {organizationName} eingeladen.",
+      "description": "Sie wurden von {inviterEmail}{role, select, owner { als Eigentümer} admin { als Administrator} member { als Mitglied} intern { als Praktikant} external { als externer Mitarbeiter} other {}} zu {organizationName} eingeladen.",
       "goToWorkspaces": "Zu Akten",
       "title": "Einladung zur Organisation",
       "verifyEmailHint": "Um {email} zu bestätigen, melden Sie sich ab und mit einem Einmalcode an, den wir an diese Adresse senden.",

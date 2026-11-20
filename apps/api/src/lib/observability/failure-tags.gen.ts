@@ -162,7 +162,6 @@ export const FAILURE_TAGS = [
   "CourtListenerRecordRejectedError",
   "CoverageError",
   "CredentialNotFoundError",
-  "CzIsirAnonymizationError",
   "CzIsirFeedParseError",
   "CzIsirParseError",
   "CzNsSbirkaParseError",

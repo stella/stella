@@ -165,7 +165,7 @@
     "invitation": {
       "declined": "Invitation declined",
       "declinedDescription": "You did not join this organization.",
-      "description": "You've been invited to join {organizationName} by {inviterEmail} as {role}.",
+      "description": "You've been invited to join {organizationName} by {inviterEmail}{role, select, owner { as an owner} admin { as an admin} member { as a member} intern { as an intern} external { as an external collaborator} other {}}.",
       "goToWorkspaces": "Go to matters",
       "title": "Organization invitation",
       "verifyEmailHint": "To verify {email}, sign out, then sign in with a one-time code sent to that address.",

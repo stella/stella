@@ -670,7 +670,7 @@
     "customWords": {
       "group": "Savi žodžiai",
       "title": "Žodžiai ir vardai, kuriuos stella turi rašyti teisingai",
-      "description": "Pavyzdžiui, klientų vardai ar angliški terminai, kuriuos vartojate kalbėdami kita kalba. Jie saugomi šiame kompiuteryje šiai paskyrai ir siunčiami tik su jūsų diktavimu: pavertimui naudojant stella AI ir taisymui su DI. Šio kompiuterio kalbos modelis jų nenaudoja.",
+      "description": "Pavyzdžiui, klientų vardai ar angliški terminai, kuriuos vartojate kalbėdami kita kalba. Jie saugomi šiame kompiuteryje šiai paskyrai ir siunčiami tik su jūsų diktavimu: pavertimui naudojant stella AI ir taisymui su DI. Kai verčia šio kompiuterio kalbos modelis, o taisymas su DI išjungtas, stella jų rašybą pataiso šiame kompiuteryje.",
       "count": "{count, number} iš {limit, number}",
       "input": "Pridėti žodį ar vardą",
       "add": "Pridėti",

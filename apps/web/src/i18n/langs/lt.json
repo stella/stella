@@ -165,7 +165,7 @@
     "invitation": {
       "declined": "Kvietimas atmestas",
       "declinedDescription": "Neprisijungėte prie šios organizacijos.",
-      "description": "{inviterEmail} pakvietė jus prisijungti prie {organizationName} kaip {role}.",
+      "description": "{inviterEmail} pakvietė jus prisijungti prie {organizationName}{role, select, owner { su savininko role} admin { su administratoriaus role} member { su nario role} intern { su praktikanto role} external { su išorinio bendradarbio role} other {}}.",
       "goToWorkspaces": "Eiti į bylas",
       "title": "Kvietimas į organizaciją",
       "verifyEmailHint": "Kad patvirtintumėte adresą {email}, atsijunkite ir prisijunkite vienkartiniu kodu, kurį išsiųsime šiuo adresu.",

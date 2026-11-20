@@ -1140,11 +1140,12 @@ test("a full list of custom words takes no more", async () => {
   ).toBe(true);
 });
 
-test("custom words are offered only while stella AI transcribes or cleanup runs", async () => {
+test("custom words are offered with the speech model on this computer and cleanup off, which spell with them", async () => {
   const { queryByText } = await renderSetting({
     ...ENABLED_SNAPSHOT,
     cleanup: false,
+    destination: "local",
   });
 
-  expect(queryByText(customWords.title)).toBeNull();
+  expect(queryByText(customWords.title)).not.toBeNull();
 });

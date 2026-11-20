@@ -670,7 +670,7 @@
     "customWords": {
       "group": "Palavras próprias",
       "title": "Palavras e nomes que a stella deve escrever corretamente",
-      "description": "Por exemplo, nomes de clientes ou termos em inglês que você usa ao falar outro idioma. Ficam guardados neste computador para esta conta e são enviados apenas com o seu ditado, para a transcrição pela stella AI e para a revisão com IA. O modelo de fala deste computador não os usa.",
+      "description": "Por exemplo, nomes de clientes ou termos em inglês que você usa ao falar outro idioma. Ficam guardados neste computador para esta conta e são enviados apenas com o seu ditado, para a transcrição pela stella AI e para a revisão com IA. Quando o modelo de fala deste computador transcreve e a revisão com IA está desativada, a stella corrige a grafia deles neste computador.",
       "count": "{count, number} de {limit, number}",
       "input": "Adicionar uma palavra ou um nome",
       "add": "Adicionar",
