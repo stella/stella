@@ -30,6 +30,7 @@ export const LocalSkillFoldersSection = ({
   renderGroup: (content: React.JSX.Element) => React.JSX.Element;
 }) => {
   const t = useTranslations("localSkills");
+  const tDialog = useTranslations("dialog");
   const [folders, refresh] = useNativeStatus({
     read: readSkillFolders,
     event: LOCAL_SKILL_FOLDERS_CHANGED_EVENT,
@@ -60,6 +61,7 @@ export const LocalSkillFoldersSection = ({
         </p>
         <Button
           disabled={picking}
+          disabledReason={tDialog("waitingForFolderSelection")}
           onClick={() => {
             setPicking(true);
             void send(async () => invoke("local_skill_folders_pick")).then(
