@@ -41,6 +41,13 @@ export const answerTreeIdPrefix = (index: number, text: string): string =>
 
 const AnswerTreeContext = createContext<string | undefined>(undefined);
 
+/**
+ * The id prefix of the tree being rendered, or undefined outside an answer
+ * (or where a second rendering takes generated ids).
+ */
+export const useAnswerTreeIdPrefix = (): string | undefined =>
+  use(AnswerTreeContext);
+
 /** Names the links of a tree rendered outside Streamdown's blocks. */
 export const AnswerTreeIds = ({
   children,

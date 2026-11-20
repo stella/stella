@@ -1740,6 +1740,18 @@
       "verified": "Patikrinta citata",
       "verifiedHint": "Pažodžiui: {source}"
     },
+    "answerTable": {
+      "copy": "Kopijuoti lentelę",
+      "copyAs": "Kopijuoti kaip {format}",
+      "download": "Atsisiųsti lentelę",
+      "downloadAs": "Atsisiųsti kaip {format}",
+      "fullscreen": "Atidaryti visame ekrane",
+      "fullscreenTitle": "Lentelė visame ekrane",
+      "singleLine": "Vienoje eilutėje",
+      "size": "{rows, plural, one {# eilutė} few {# eilutės} many {# eilutės} other {# eilučių}} · {columns, plural, one {# stulpelis} few {# stulpeliai} many {# stulpelio} other {# stulpelių}}",
+      "textMode": "Langelių tekstas",
+      "wrap": "Laužyti tekstą"
+    },
     "applyMode": {
       "description": "Word įrašo, kas atliko kiekvieną pakeitimą. Įsiminsime jūsų pasirinkimą.",
       "direct": "Ne, taikyti tiesiogiai",
@@ -2354,6 +2366,11 @@
     "suggestionStatus": {
       "accepted": "Pritaikyta",
       "rejected": "Atmesta"
+    },
+    "switcher": {
+      "allChats": "Visi pokalbiai",
+      "searchPlaceholder": "Rasti pokalbį…",
+      "trigger": "Pakeisti pokalbį"
     },
     "tableChart": {
       "bar": "Stulpelinė",
@@ -6291,6 +6308,14 @@
     "reconnectRequired": "Prisijungimas nebegalioja",
     "title": "SharePoint ir OneDrive"
   },
+  "signedFile": {
+    "layer": "Parašų sluoksnis {number, number}",
+    "noReadableContent": "Nėra skaitomo turinio, kurį būtų galima peržiūrėti.",
+    "pdfUnavailable": "PDF peržiūra nepasiekiama.",
+    "unknownSigner": "Nežinomas pasirašęs asmuo",
+    "unreadable": "Nepavyko perskaityti pasirašyto failo.",
+    "unverified": "Parašai nepatikrinti."
+  },
   "skillHistory": {
     "acceptStale": "Priimti ir perrašyti naujesnius pakeitimus",
     "backToCurrent": "Grįžti į dabartinę versiją",
@@ -7938,7 +7963,6 @@
         "endDate": "Pabaigos data",
         "month": "Mėnuo",
         "quarter": "Ketvirtis",
-        "showTable": "Rodyti lentelę",
         "startDate": "Pradžios data",
         "week": "Savaitė"
       },

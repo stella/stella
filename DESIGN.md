@@ -365,13 +365,14 @@ it, and add it here in the same change that adds it to `packages/ui`.
 - `DetailsGrid` `variant`: `list`, `sheet`
 - `DetailsItem` `span`: `wide`
 - `DialogContent`, `DialogPopup` `size`: `default`, `lg`, `sm`, `xl`
-- `DocumentMark` `kind`: `csv`, `dataBox`, `excel`, `markdown`, `openDocumentSheet`, `openDocumentText`, `pdf`, `powerpoint`, `rtf`, `word`
+- `DocumentMark` `kind`: `cades`, `csv`, `dataBox`, `excel`, `markdown`, `openDocumentSheet`, `openDocumentText`, `pdf`, `powerpoint`, `rtf`, `word`
 - `DropdownMenuCheckboxItem`, `MenuCheckboxItem` `variant`: `default`, `switch`
 - `DropdownMenuItem`, `MenuItem` `variant`: `default`, `destructive`
 - `DropdownMenuRadioItem`, `MenuRadioItem` `indicator`: `check`, `none`
 - `DropdownMenuTrigger`, `MenuTrigger`, `PopoverTrigger` `appearance`: `caption`, `default`
 - `Form` `density`: `compact`, `default`, `snug`
 - `Form` `layout`: `inline`, `stack`
+- `FrameTitle` `tone`: `default`, `destructive`
 - `HighlightedTextarea` `dir`: `ltr`, `rtl`
 - `InlineDropIndicator` `position`: `after`, `before`
 - `InputGroupAddon` `align`: `block-end`, `block-start`, `inline-end`, `inline-start`
@@ -428,8 +429,9 @@ it, and add it here in the same change that adds it to `packages/ui`.
 - `StatusMark` `status`: `done`, `failed`, `pending`, `running`
 - `Step` `status`: `completed`, `current`, `upcoming`
 - `Steps` `variant`: `compact`, `default`, `progress`
-- `Switch`, `SwitchField` `size`: `default`, `sm`
-- `Table` `density`: `compact`, `default`
+- `Switch`, `SwitchFace`, `SwitchField` `size`: `default`, `sm`
+- `Table` `cellText`: `single-line`, `wrap`
+- `Table` `density`: `compact`, `default`, `prose`
 - `Table` `inset`: `card`, `default`
 - `Table` `scroll`: `parent`, `self`
 - `TableChart` `kind`: `bar`, `line`, `pie`, `scatter`

@@ -29,6 +29,7 @@ export const TAGGED_FAILURE_REASON = {
   ActionCostReportError: "tagged_failure",
   ActionPeriodBudgetError: "tagged_failure",
   ActionSizeError: "tagged_failure",
+  AcpRequestError: "tagged_failure",
   AdapterFetchError: "tagged_failure",
   AggregateLockBusy: "tagged_failure",
   AggregateLockUpgradeRefused: "tagged_failure",
@@ -312,6 +313,7 @@ export const TAGGED_FAILURE_REASON = {
   InfoSoudSyncIncomplete: "tagged_failure",
   IngestDocumentTooLargeError: "tagged_failure",
   IngestedAstRejectedError: "tagged_failure",
+  IngestionFailureEvidenceError: "tagged_failure",
   IngestionStallError: "tagged_failure",
   InvalidCompactUuidError: "tagged_failure",
   InvalidLegalSearchCursorError: "tagged_failure",
@@ -388,6 +390,7 @@ export const TAGGED_FAILURE_REASON = {
   OrganizationStorageTeardownStateError: "tagged_failure",
   OutputUploadFailed: "tagged_failure",
   OwnerAccessLostError: "tagged_failure",
+  P7mParseError: "request_invalid",
   ParameterStoreError: "tagged_failure",
   ParseXmlError: "tagged_failure",
   PartnerClientOperatorError: "tagged_failure",
@@ -586,6 +589,7 @@ export const TAGGED_FAILURE_REASON = {
   publisher_request_aborted: "tagged_failure",
   publisher_target_refused: "tagged_failure",
   robots_disallowed: "tagged_failure",
+  court_unrecognized: "tagged_failure",
   robots_unavailable: "tagged_failure",
 } as const satisfies Record<FailureTag, FailureReason>;
 

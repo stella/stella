@@ -1,20 +1,15 @@
 import {
   BanknoteIcon,
-  BrainIcon,
   BuildingIcon,
   ClockIcon,
   CpuIcon,
   EyeOffIcon,
   FileTextIcon,
-  FlaskConicalIcon,
   GaugeIcon,
   HashIcon,
   HistoryIcon,
   LandmarkIcon,
   ListOrderedIcon,
-  MonitorIcon,
-  PlugIcon,
-  UserIcon,
   UsersIcon,
   WrenchIcon,
 } from "@stll/ui/icons";
@@ -22,6 +17,7 @@ import {
 import type { Role } from "@/lib/auth-client";
 import { isBillingSettingsAccessible } from "@/lib/organization/billing-settings.logic";
 import { hasOrganizationManagementAccess } from "@/lib/organization/role-assignment.logic";
+import { ACCOUNT_SECTION } from "@/routes/_protected.settings/-components/settings-shell/settings-shell.pending";
 
 /** Per-member conditions that hide a navigation item. */
 type SettingsNavGate = "memory" | "beta" | "timeBilling" | "billing" | "usage";
@@ -38,44 +34,11 @@ export type SettingsNavAccess = {
   usage: boolean;
 };
 
+// The account section lives with the shell's chrome
+// (./settings-shell.pending.tsx), which its pending phase draws too; the
+// organization's sections only ever render in the live shell.
 // Literal keys keep t() from demanding ICU values a widened
 // TranslationKey would require.
-const ACCOUNT_SECTION = {
-  id: "account",
-  labelKey: "settings.account.title",
-  items: [
-    {
-      to: "/settings/account/profile",
-      labelKey: "common.profile",
-      icon: UserIcon,
-    },
-    {
-      to: "/settings/account/desktop",
-      labelKey: "settings.account.desktop",
-      icon: MonitorIcon,
-    },
-    {
-      to: "/settings/account/connections",
-      labelKey: "settings.connections.title",
-      icon: PlugIcon,
-    },
-    {
-      // Personal + firm + matter memory in one panel. RLS scopes what each
-      // member sees; firm-library creation is gated inside the panel.
-      to: "/settings/account/memory",
-      labelKey: "memory.pageTitle",
-      icon: BrainIcon,
-      gate: "memory",
-    },
-    {
-      to: "/settings/account/beta",
-      labelKey: "settings.account.beta",
-      icon: FlaskConicalIcon,
-      gate: "beta",
-    },
-  ],
-} as const;
-
 const ORGANIZATION_SECTIONS = [
   {
     id: "organization",

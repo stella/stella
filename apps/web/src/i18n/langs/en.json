@@ -1740,6 +1740,18 @@
       "verified": "Verified citation",
       "verifiedHint": "Word for word in {source}"
     },
+    "answerTable": {
+      "copy": "Copy table",
+      "copyAs": "Copy as {format}",
+      "download": "Download table",
+      "downloadAs": "Download as {format}",
+      "fullscreen": "Open full screen",
+      "fullscreenTitle": "Full-screen table",
+      "singleLine": "Single line",
+      "size": "{rows, plural, one {# row} other {# rows}} · {columns, plural, one {# column} other {# columns}}",
+      "textMode": "Cell text",
+      "wrap": "Wrap text"
+    },
     "applyMode": {
       "description": "Word stores who made each change. We'll remember your choice.",
       "direct": "No, apply directly",
@@ -2354,6 +2366,11 @@
     "suggestionStatus": {
       "accepted": "Applied",
       "rejected": "Rejected"
+    },
+    "switcher": {
+      "allChats": "All chats",
+      "searchPlaceholder": "Find a chat…",
+      "trigger": "Switch chat"
     },
     "tableChart": {
       "bar": "Bar",
@@ -6291,6 +6308,14 @@
     "reconnectRequired": "Sign-in expired",
     "title": "SharePoint and OneDrive"
   },
+  "signedFile": {
+    "layer": "Signature layer {number, number}",
+    "noReadableContent": "No readable content is available for preview.",
+    "pdfUnavailable": "The PDF preview is unavailable.",
+    "unknownSigner": "Unknown signer",
+    "unreadable": "The signed file could not be read.",
+    "unverified": "The signatures have not been verified."
+  },
   "skillHistory": {
     "acceptStale": "Accept and overwrite newer edits",
     "backToCurrent": "Back to current",
@@ -7938,7 +7963,6 @@
         "endDate": "End date",
         "month": "Month",
         "quarter": "Quarter",
-        "showTable": "Show table",
         "startDate": "Start date",
         "week": "Week"
       },

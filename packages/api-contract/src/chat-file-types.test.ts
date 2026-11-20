@@ -6,6 +6,7 @@ import {
   chatFileSource,
   runOutputMimeTypeOf,
 } from "./chat-file-types";
+import { resolveDataBoxMessageMimeType } from "./data-box";
 import { legalFileFormat } from "./document-format";
 import { LEGAL_FILE_FORMATS } from "./legal-file-formats";
 
@@ -32,10 +33,14 @@ test.each(LEGAL_FILE_FORMATS)(
     );
     for (const [name, mime] of [
       ["export", format.mimeType],
+      ...format.mimeAliases.map((alias) => ["export", alias] as const),
       [`export${format.extension.toUpperCase()}`, "application/octet-stream"],
       [`export${format.extension}`, "text/plain"],
     ] as const) {
       expect(legalFileFormat(mime, name)).toBe(format);
+      expect(
+        resolveDataBoxMessageMimeType({ fileName: name, mimeType: mime }),
+      ).toBe(format.kind === "dataBox" ? format.mimeType : null);
       expect(chatFileMimeType(name, mime)).toBe(format.mimeType);
       expect(chatFileSource(format.mimeType)).toBe("extracted-text");
     }

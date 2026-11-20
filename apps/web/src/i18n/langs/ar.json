@@ -1740,6 +1740,18 @@
       "verified": "اقتباس موثَّق",
       "verifiedHint": "حرفيًا في {source}"
     },
+    "answerTable": {
+      "copy": "نسخ الجدول",
+      "copyAs": "نسخ بتنسيق {format}",
+      "download": "تنزيل الجدول",
+      "downloadAs": "تنزيل بتنسيق {format}",
+      "fullscreen": "فتح بملء الشاشة",
+      "fullscreenTitle": "الجدول بملء الشاشة",
+      "singleLine": "سطر واحد",
+      "size": "{rows, plural, zero {لا صفوف} one {صف واحد} two {صفان} few {# صفوف} many {# صفًا} other {# صف}} · {columns, plural, zero {لا أعمدة} one {عمود واحد} two {عمودان} few {# أعمدة} many {# عمودًا} other {# عمود}}",
+      "textMode": "نص الخلايا",
+      "wrap": "التفاف النص"
+    },
     "applyMode": {
       "description": "يُخزّن Word مَن أجرى كل تغيير. وسنتذكّر اختيارك.",
       "direct": "لا، طبّق مباشرةً",
@@ -2354,6 +2366,11 @@
     "suggestionStatus": {
       "accepted": "مُطبَّق",
       "rejected": "مرفوض"
+    },
+    "switcher": {
+      "allChats": "كل الدردشات",
+      "searchPlaceholder": "ابحث عن دردشة…",
+      "trigger": "تبديل الدردشة"
     },
     "tableChart": {
       "bar": "أعمدة",
@@ -6291,6 +6308,14 @@
     "reconnectRequired": "انتهت صلاحية تسجيل الدخول",
     "title": "SharePoint وOneDrive"
   },
+  "signedFile": {
+    "layer": "طبقة التوقيعات {number, number}",
+    "noReadableContent": "لا يتوفر محتوى قابل للقراءة للمعاينة.",
+    "pdfUnavailable": "معاينة ملف PDF غير متاحة.",
+    "unknownSigner": "موقّع مجهول",
+    "unreadable": "تعذّرت قراءة الملف الموقّع.",
+    "unverified": "لم يُتحقق من التوقيعات."
+  },
   "skillHistory": {
     "acceptStale": "قبول واستبدال التعديلات الأحدث",
     "backToCurrent": "العودة إلى النسخة الحالية",
@@ -7938,7 +7963,6 @@
         "endDate": "تاريخ الانتهاء",
         "month": "الشهر",
         "quarter": "الربع",
-        "showTable": "عرض الجدول",
         "startDate": "تاريخ البدء",
         "week": "الأسبوع"
       },

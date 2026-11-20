@@ -618,6 +618,13 @@
     "dictationCleanup": "Popraw za pomocą AI",
     "dictationCleanupHint": "Poprawia błędy rozpoznawania i wypowiedziane formatowanie, takie jak „nowa linia”. Tylko tekst, nie dźwięk, trafia przez stella do dostawcy AI Twojej organizacji; stella go nie przechowuje."
   },
+  "signedFile": {
+    "layer": "Warstwa podpisów {number, number}",
+    "noReadableContent": "Brak czytelnej zawartości do wyświetlenia w podglądzie.",
+    "unknownSigner": "Nieznany podpisujący",
+    "unreadable": "Nie udało się odczytać podpisanego pliku.",
+    "unverified": "Podpisy nie zostały zweryfikowane."
+  },
   "header": {
     "search": "Szukaj"
   },

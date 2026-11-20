@@ -42,6 +42,7 @@ const SHELL_WINDOW_MODULES: Record<string, readonly string[]> = {
   "src-tauri/capabilities/default.json": [
     "src/mainview/App.tsx",
     "src/mainview/DictationInputFix.tsx",
+    "src/mainview/DictationMicrophone.tsx",
     "src/mainview/AgentSubscriptionsSection.tsx",
     "src/mainview/KeepAwakeSection.tsx",
     "src/mainview/LocalSkillFoldersSection.tsx",
@@ -68,6 +69,9 @@ const SHELL_WINDOW_MODULES: Record<string, readonly string[]> = {
     "src/onboarding/OnboardingApp.tsx",
     "src/onboarding/ConnectStep.tsx",
     "src/onboarding/use-dictation.ts",
+    "src/mainview/DictationDestination.tsx",
+    "src/mainview/DictationInputFix.tsx",
+    "src/mainview/DictationMicrophone.tsx",
     "src/onboarding/HowItWorksStep.tsx",
     "src/onboarding/PermissionsStep.tsx",
     "src/onboarding/TryItStep.tsx",
