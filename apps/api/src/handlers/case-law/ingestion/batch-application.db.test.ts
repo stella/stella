@@ -1008,7 +1008,6 @@ describe("crawl cancellation", () => {
     }
   });
 
-
   test("an admission pause holds the page without recording failures", async () => {
     const sourceId = await crawlSource();
     const sourceLease = await leaseFor(sourceId);
