@@ -27,8 +27,13 @@ import type {
   ContactPhone,
 } from "@/api/db/schema-validators";
 import { arrayOrEmpty } from "@/api/lib/array";
+import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { ArtefactProvenanceDecodeError } from "@/api/lib/chat/artefact-provenance";
+import {
+  withAggregateLock,
+  withAggregateSavepoint,
+} from "@/api/lib/db/aggregate-lock";
 import { lockForWrite } from "@/api/lib/db/lock-for-write";
 import { withOwnerOrganizationScope } from "@/api/lib/db/owner-organization-scope";
 import { escapeLike } from "@/api/lib/escape-like";
@@ -67,6 +72,8 @@ import {
   buildSearchPreviewPassages,
   buildSearchPreviewPassageValueRows,
 } from "@/api/lib/search/preview-passages";
+import { lockCurrentSearchProjectionRepair } from "@/api/lib/search/projection-repair-fence";
+import type { SearchProjectionRepairFence } from "@/api/lib/search/projection-repair-fence";
 import {
   buildSearchCandidateTsQuery,
   buildSearchTsQuery,
@@ -1581,6 +1588,45 @@ type SearchDocumentDatabase = Pick<
   "query" | "select" | "transaction"
 >;
 
+type SupplementalProjectionPublication =
+  | { type: "direct" }
+  | {
+      type: "repair";
+      fence: SearchProjectionRepairFence<"contact" | "workspace">;
+    };
+
+/**
+ * A contact edit locks the contact row before it re-marks the repair, so a
+ * repair publication takes the same order: contact first, then its fence.
+ * The projection insert's key check would otherwise wait on the contact while
+ * the fence blocks the edit.
+ */
+const lockContactRepair = async (
+  tx: Transaction,
+  fence: SearchProjectionRepairFence<"contact" | "workspace">,
+  projections: readonly {
+    contact: { id: SafeId<"contact">; organizationId: SafeId<"organization"> };
+  }[],
+): Promise<boolean> => {
+  const [projection, ...rest] = projections;
+  if (projection === undefined || rest.length > 0) {
+    return panic("A contact repair publishes exactly one contact");
+  }
+  const source = await withAggregateLock({
+    aggregate: "contact",
+    id: {
+      id: projection.contact.id,
+      organizationId: projection.contact.organizationId,
+    },
+    mode: "key share",
+    tx,
+  });
+  return (
+    source.status === "locked" &&
+    (await lockCurrentSearchProjectionRepair(tx, fence))
+  );
+};
+
 // Contact and matter projections are rebuilt in batches of at most
 // `REINDEX_BATCH_SIZE` sources. A batch is one read of the sources and their
 // relations, then one transaction: parent locks, the projection upsert,
@@ -1592,6 +1638,7 @@ type SearchDocumentDatabase = Pick<
 const writeContactProjections = async (
   contactIds: readonly SafeId<"contact">[],
   database: SearchDocumentDatabase,
+  publication: SupplementalProjectionPublication,
 ): Promise<void> => {
   if (contactIds.length === 0) {
     return;
@@ -1652,7 +1699,7 @@ const writeContactProjections = async (
   });
   const previewGeneration = Bun.randomUUIDv7();
 
-  await database.transaction(async (tx) => {
+  await withAggregateSavepoint(database, async (tx) => {
     const parents = await lockForWrite(tx, {
       organizationIds: builtProjections.map(
         ({ contact }) => contact.organizationId,
@@ -1662,6 +1709,12 @@ const writeContactProjections = async (
       parents.organizationIds.has(contact.organizationId),
     );
     if (projections.length === 0) {
+      return;
+    }
+    if (
+      publication.type === "repair" &&
+      !(await lockContactRepair(tx, publication.fence, projections))
+    ) {
       return;
     }
     const ids = projections.map(({ contact }) => contact.id);
@@ -1728,6 +1781,7 @@ const writeContactProjections = async (
 const writeWorkspaceProjections = async (
   workspaceIds: readonly SafeId<"workspace">[],
   database: SearchDocumentDatabase,
+  publication: SupplementalProjectionPublication,
 ): Promise<void> => {
   if (workspaceIds.length === 0) {
     return;
@@ -1829,7 +1883,7 @@ const writeWorkspaceProjections = async (
   });
   const previewGeneration = Bun.randomUUIDv7();
 
-  await database.transaction(async (tx) => {
+  await withAggregateSavepoint(database, async (tx) => {
     const parents = await lockForWrite(tx, {
       organizationIds: builtProjections.map(
         ({ workspace }) => workspace.organizationId,
@@ -1842,6 +1896,12 @@ const writeWorkspaceProjections = async (
         parents.workspaceIds.has(workspace.id),
     );
     if (projections.length === 0) {
+      return;
+    }
+    if (
+      publication.type === "repair" &&
+      !(await lockCurrentSearchProjectionRepair(tx, publication.fence))
+    ) {
       return;
     }
     const ids = projections.map(({ workspace }) => workspace.id);
@@ -1910,7 +1970,18 @@ export const upsertContactSearchDocument = async (
   contactId: SafeId<"contact">,
   database: SearchDocumentDatabase,
 ): Promise<void> => {
-  await writeContactProjections([contactId], database);
+  await writeContactProjections([contactId], database, { type: "direct" });
+};
+
+export const repairContactSearchDocument = async (
+  fence: SearchProjectionRepairFence<"contact">,
+  database: SearchDocumentDatabase,
+): Promise<void> => {
+  await writeContactProjections(
+    [toSafeId<"contact">(fence.sourceId)],
+    database,
+    { fence, type: "repair" },
+  );
 };
 
 export const upsertWorkspaceSearchDocuments = async (
@@ -1922,7 +1993,7 @@ export const upsertWorkspaceSearchDocuments = async (
   // deadlocking.
   const pending = [...new Set(workspaceIds)].toSorted(compareCodeUnit);
   for (const itemBatch of chunkItems(pending, REINDEX_BATCH_SIZE)) {
-    await writeWorkspaceProjections(itemBatch, database);
+    await writeWorkspaceProjections(itemBatch, database, { type: "direct" });
   }
 };
 
@@ -1930,7 +2001,18 @@ export const upsertWorkspaceSearchDocument = async (
   workspaceId: SafeId<"workspace">,
   database: SearchDocumentDatabase,
 ): Promise<void> => {
-  await writeWorkspaceProjections([workspaceId], database);
+  await writeWorkspaceProjections([workspaceId], database, { type: "direct" });
+};
+
+export const repairWorkspaceSearchDocument = async (
+  fence: SearchProjectionRepairFence<"workspace">,
+  database: SearchDocumentDatabase,
+): Promise<void> => {
+  await writeWorkspaceProjections(
+    [toSafeId<"workspace">(fence.sourceId)],
+    database,
+    { fence, type: "repair" },
+  );
 };
 
 type SearchActivityDatabase = {
@@ -2036,6 +2118,7 @@ const rebuildContactPage = async (
     await writeContactProjections(
       page.map(({ id }) => id),
       pageDatabase,
+      { type: "direct" },
     );
     return {
       last: page.at(-1)?.id ?? after,
@@ -2067,6 +2150,7 @@ const rebuildWorkspacePage = async (
     await writeWorkspaceProjections(
       page.map(({ id }) => id),
       pageDatabase,
+      { type: "direct" },
     );
     return {
       last: page.at(-1)?.id ?? after,

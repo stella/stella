@@ -143,10 +143,6 @@ const EXCEPTIONS = new Map([
     "Deletes generated account-export archives, not the retained matter sources from which they were generated.",
   ],
   [
-    "handlers/style-sets/delete.ts",
-    "Style package object deletion delegates to the guarded organization-file deletion owner.",
-  ],
-  [
     "handlers/style-sets/storage.ts",
     "Style package rollback and replacement delegate to the guarded organization-file deletion owner.",
   ],
@@ -229,6 +225,10 @@ const EXCEPTIONS = new Map([
   [
     "mcp/file-comparison-run.ts",
     "Comparison staging object cleanup delegates to the guarded organization-file deletion owner.",
+  ],
+  [
+    "handlers/reports/report-export-queue.ts",
+    "Deletes a generated report export its writer left unpublished (exports/ keys), not the retained matter sources it was generated from; the key has no organization prefix, so no hold applies.",
   ],
 ]);
 

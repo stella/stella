@@ -13,9 +13,10 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { displayNameSchema } from "@/api/lib/custom-schema";
-import { withAggregateLock } from "@/api/lib/db/aggregate-lock";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
+
+import { lockRateTableWorkspace } from "./rate-table-lock";
 
 const createRateTableBodySchema = v.object({
   name: displayNameSchema(),
@@ -43,11 +44,7 @@ export const createRateTableHandler = async function* ({
   const txResult = yield* Result.await(
     abortableTx(safeDb, async (tx) => {
       // Row locks cannot serialize the first table in an empty matter.
-      await withAggregateLock({
-        aggregate: "rateTableWorkspace",
-        id: { workspaceId },
-        tx,
-      });
+      await lockRateTableWorkspace(tx, workspaceId);
       // Every rate-table write in the matter holds the lock above, so this
       // read stays current until the insert commits.
       const lockedRows = await tx

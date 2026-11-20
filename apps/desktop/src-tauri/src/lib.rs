@@ -58,6 +58,9 @@ mod dictation_models;
 mod dictation_notice;
 mod dictation_pauses;
 mod dictation_preview;
+#[cfg(dictation)]
+mod dictation_sounds;
+mod dictation_spelling;
 mod dictation_trace;
 mod dictation_words;
 #[cfg(dictation)]
@@ -97,6 +100,7 @@ mod permissions;
 mod pkcs11_module_setting;
 mod pkcs11_signing;
 mod presence;
+mod recording_cleanup;
 mod registry;
 mod relaunch;
 mod runner_protocol;

@@ -1,19 +1,15 @@
 import type { CSSProperties, ReactNode } from "react";
 
-import { Skeleton } from "@stll/ui/skeleton";
 import { cn } from "@stll/ui/utils";
 
 import { MobileTableOrientationGate } from "@/components/workspaces/table/mobile-table-orientation-gate";
 import {
-  WorkspaceGridCell,
-  WorkspaceGridFillerCell,
   WorkspaceGridHead,
   WorkspaceGridRow,
 } from "@/components/workspaces/table/workspace-grid";
-import {
-  SKELETON_ROW_KEYS,
-  tableSkeletonRowCount,
-} from "@/components/workspaces/table/workspace-table/skeleton-rows.logic";
+import type { GridColumnGeometry } from "@/components/workspaces/table/workspace-table/internals-helpers";
+import { WorkspaceTableSkeletonRows } from "@/components/workspaces/table/workspace-table/skeleton-rows";
+import { tableSkeletonRowCount } from "@/components/workspaces/table/workspace-table/skeleton-rows.logic";
 
 // The results table's frame and its loading face. A route's pending view draws
 // the face, the grid with its headers and waiting rows; the page's table sits
@@ -41,6 +37,7 @@ export const PublicLawTableFrame = ({
         "border-border/45 bg-background/60 flex min-h-64 flex-1 flex-col overflow-hidden rounded-md border transition-opacity duration-200",
         isRefreshing && "opacity-56",
       )}
+      data-slot="public-law-table-frame"
     >
       {children}
     </div>
@@ -78,6 +75,16 @@ export const PublicLawTableSkeleton = ({
     "--workspace-table-columns": `${columns.map((column) => `${String(column.size)}px`).join(" ")} minmax(0, 1fr)`,
     minWidth: width,
   };
+  const renderColumns = columns.map(
+    ({ id, size }) =>
+      ({
+        id,
+        getSize: () => size,
+        getIsPinned: () => false,
+        getStart: () => 0,
+        getIsLastColumn: () => false,
+      }) satisfies GridColumnGeometry,
+  );
   const filler = { gridColumn: `${String(columns.length + 1)} / -1` };
 
   return (
@@ -112,28 +119,10 @@ export const PublicLawTableSkeleton = ({
             </WorkspaceGridRow>
           </div>
           <div className="flex flex-1 flex-col">
-            {SKELETON_ROW_KEYS.slice(
-              0,
-              tableSkeletonRowCount(expectedRowCount),
-            ).map((rowKey) => (
-              <WorkspaceGridRow
-                className="pointer-events-none"
-                key={rowKey}
-                role="presentation"
-              >
-                {columns.map((column, index) => (
-                  <WorkspaceGridCell
-                    className="flex items-center"
-                    key={column.id}
-                    role="presentation"
-                    style={{ gridColumn: index + 1 }}
-                  >
-                    <Skeleton className="h-3.5 w-3/5" />
-                  </WorkspaceGridCell>
-                ))}
-                <WorkspaceGridFillerCell style={filler} />
-              </WorkspaceGridRow>
-            ))}
+            <WorkspaceTableSkeletonRows
+              renderColumns={renderColumns}
+              rowCount={tableSkeletonRowCount(expectedRowCount)}
+            />
           </div>
         </div>
       </div>
@@ -150,7 +139,7 @@ export const PublicLawTableHeaderFace = ({
   label,
 }: {
   icon: ReactNode;
-  label: string;
+  label: ReactNode;
 }) => (
   <span className="flex h-full w-full min-w-0 items-center gap-1.5 px-[calc(--spacing(2.5)-1px)] text-sm font-medium sm:text-xs [&_svg]:shrink-0 [&_svg]:opacity-80">
     {icon}

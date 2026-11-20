@@ -9,6 +9,7 @@ import {
   SELECTION_TOOLBAR_EDGE_MARGIN_PX,
   selectionToolbarPosition,
 } from "@/components/selection-toolbar.logic";
+import type { SelectionToolbarExtent } from "@/components/selection-toolbar.logic";
 import { useMountEffect } from "@/hooks/use-effect";
 
 type SelectionToolbarProps = {
@@ -17,6 +18,9 @@ type SelectionToolbarProps = {
   anchorRect: DOMRect;
   /** Intersection of the scroll container and the visible viewport. */
   boundaryRect: DOMRect;
+  /** The visible selected lines the bar keeps clear of, when the host has
+   *  them (see `SelectionToolbarAnchor.extent`). */
+  anchorExtent?: SelectionToolbarExtent | undefined;
   /** Names the bar for assistive technology. */
   ariaLabel?: string | undefined;
   children: ReactNode;
@@ -41,6 +45,7 @@ type SelectionToolbarProps = {
  */
 export const SelectionToolbar = ({
   anchorRect,
+  anchorExtent,
   boundaryRect,
   ariaLabel,
   children,
@@ -82,6 +87,7 @@ export const SelectionToolbar = ({
     barWidth: barSize.width,
     barHeight: barSize.height,
     bounds: boundaryRect,
+    extent: anchorExtent,
   });
 
   // `w-max`: a fixed box without a width shrinks to the room between its

@@ -57,6 +57,10 @@ const platform = (module: string, reason: string) =>
   }) as const satisfies SchedulerTaskAuthorityEntry;
 
 export const SCHEDULER_TASK_AUTHORITY = {
+  "caseLaw.reconcileClaimedErasures": platform(
+    "case-law-publisher-removals.ts",
+    "Completes accepted erasures in the public legal corpus.",
+  ),
   "caseLaw.reconcilePublisherRemovals": platform(
     "case-law-publisher-removals.ts",
     "Reconciles publisher removals in the public legal corpus.",
@@ -344,7 +348,7 @@ export const SCHEDULER_TASK_AUTHORITY = {
   ),
   "styleSets.reconcilePackageCleanups": platform(
     "style-set-package-cleanup-reconcile.ts",
-    "Hands pending package cleanups to their queue.",
+    "Hands pending replacement cleanups to their queue and consumes deletion tombstones.",
   ),
   "agentSkills.cleanOriginalObjects": platform(
     "agent-skill-original-cleanup.ts",

@@ -65,6 +65,7 @@ import {
   writeScaleViolations,
 } from "./measurement";
 import { QUERY_PERF_PROFILES } from "./profiles";
+import { seedRedactionTombstoneScenario } from "./redaction-tombstone-seed";
 import {
   CORPUS_STATEMENT_BUDGET_IDS,
   corpusStatementRegistry,
@@ -96,6 +97,8 @@ const describeScheduledScenario = (scenario: ScheduledJobScenario) => {
     case "data-exports":
     case "request-receipts":
       return `${scenario.type}:${scenario.cohort}:${scenario.rows}`;
+    case "redaction-tombstones":
+      return `redaction:${scenario.cohort}:${scenario.rows}`;
     default:
       scenario satisfies never;
       return panic("Unknown scheduled measurement scenario", scenario);
@@ -760,6 +763,14 @@ describe.skipIf(!enabled)("read budgets on PostgreSQL", () => {
               break;
             case "request-receipts":
               await seedRequestReceiptScenario(db, scenario);
+              break;
+            case "redaction-tombstones":
+              // A phase of its own: the reseed, not the measured page,
+              // decides how much of the profile deadline this scenario spends.
+              await deadline.run(
+                `seed ${describeScheduledScenario(scenario)}`,
+                async () => await seedRedactionTombstoneScenario(db, scenario),
+              );
               break;
             default:
               scenario satisfies never;

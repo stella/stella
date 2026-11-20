@@ -172,7 +172,7 @@
     "invitation": {
       "declined": "تم رفض الدعوة",
       "declinedDescription": "لم تنضم إلى هذه المؤسسة.",
-      "description": "تمت دعوتك للانضمام إلى {organizationName} من قِبل {inviterEmail} بصفة {role}.",
+      "description": "تمت دعوتك للانضمام إلى {organizationName} من قِبل {inviterEmail}{role, select, owner { بصفة مالك} admin { بصفة مسؤول} member { بصفة عضو} intern { بصفة متدرب} external { بصفة متعاون خارجي} other {}}.",
       "goToWorkspaces": "الانتقال إلى الملفات القانونية",
       "title": "دعوة المؤسسة",
       "verifyEmailHint": "لتأكيد {email}، سجّل الخروج، ثم سجّل الدخول برمز لمرة واحدة سنرسله إلى هذا العنوان.",
@@ -1802,7 +1802,6 @@
       "searchAllPastChatsQuestion": "هل تريد البحث في جميع دردشاتك؟",
       "uploadedDocumentPlaceholder": "(مستند مرفوع)"
     },
-    "askAnything": "اسأل عن أي شيء",
     "askUser": {
       "custom": "اكتب إجابتك الخاصة",
       "edit": "تعديل الإجابات",
@@ -1960,6 +1959,7 @@
     "historyTrimmed": "تعذّر تلخيص الرسائل السابقة، لذا تراعي هذه الإجابة الجزء الأحدث من المحادثة فقط.",
     "improvePrompt": "تحسين الطلب",
     "improvePromptDraftChanged": "تغيّرت المسودة، لذلك لم يُطبّق التحسين.",
+    "improvePromptEmpty": "اكتب طلبًا لتحسينه.",
     "improvePromptPlainTextOnly": "تحسين الطلب متاح للنص العادي فقط.",
     "improvePromptUnavailableAnonymized": "تحسين الطلب غير متاح في وضع إخفاء الهوية.",
     "improvingPrompt": "جارٍ تحسين الطلب…",
@@ -2319,6 +2319,7 @@
     "sendErrorToolsUnsupported": "لا يستطيع هذا النموذج استخدام الأدوات، لذا لا يمكنه الإجابة عن أسئلة تخص ملفك القانوني. انتقل إلى نموذج يدعم الأدوات.",
     "sendErrorTurnTooLarge": "أصبح هذا الردّ أكبر من أن يُرسَل كاملاً. أرسل رسالة جديدة للمتابعة.",
     "sendPrompt": "إرسال الرسالة",
+    "sendPromptEmpty": "اكتب رسالة لإرسالها.",
     "sendQueuedMessageNow": "إرسال الآن",
     "sendWithoutAnonymization": "إرسال دون تجهيل",
     "signInToChat": "سجّل الدخول للدردشة حول هذا المستند",
@@ -2363,6 +2364,10 @@
     "stopResponse": "إيقاف",
     "stopped": "متوقف",
     "stopping": "جارٍ الإيقاف…",
+    "subagentRun": {
+      "browseWeb": "تصفح الويب",
+      "generic": "العمل على مهمة فرعية"
+    },
     "suggestTitle": "اقتراح عنوان",
     "suggestTitleUnavailableAnonymized": "اقتراح العناوين غير متاح للمحادثات التي تم إخفاء هويتها.",
     "suggestingTitle": "جارٍ اقتراح عنوان…",
@@ -2410,6 +2415,8 @@
       "boe_search_legislation": "البحث في تشريعات BOE",
       "borme_get_summary": "ملخّص BORME اليومي",
       "business_registry_lookup": "البحث في السجل التجاري",
+      "calendar_free_busy": "التحقق من التوفر في التقويم",
+      "calendar_list_events": "قراءة أحداث التقويم",
       "command_execution": "تشغيل أمر",
       "compare_versions": "مقارنة الإصدارات",
       "configure_template_fields": "ضبط حقول القالب",
@@ -5402,6 +5409,7 @@
       "defaultModel": "الافتراضي: {model}",
       "defaultModelOption": "الافتراضي",
       "defaultRationale": {
+        "browse": "للعمل على المواقع الإلكترونية في المتصفح.",
         "chat": "للمحادثات والأسئلة اليومية.",
         "fast": "للمهام القصيرة والروتينية.",
         "pdf": "لقراءة مستندات PDF وتحليلها.",
@@ -5415,6 +5423,11 @@
       "googleKeyRestricted": "تحقق من قيود API وعناوين IP والمواقع المُحيلة لهذا المفتاح في Google Cloud. اسمح باستخدام API المطلوب وبطلبات خادمك، ثم حاول مرة أخرى.",
       "keepSavedKey": "الاحتفاظ بالمفتاح المحفوظ",
       "keyFormatHint": "تنسيق هذا المفتاح غير معتاد لمزود {provider}. احفظه للتحقق منه لدى المزود.",
+      "keyNeed": {
+        "builtIn": "اختياري. من دون مفتاح خاص بك، يعمل الذكاء الاصطناعي في هذه المؤسسة على نماذج توفرها stella.",
+        "keyRequired": "يحتاج الذكاء الاصطناعي في هذه المؤسسة إلى مفتاح مزوّد. أضف مفتاحًا لتشغيله.",
+        "ownKeys": "يعمل الذكاء الاصطناعي في هذه المؤسسة على المفاتيح أدناه."
+      },
       "modelForRole": "نموذج {role}",
       "modelIdPlaceholder": "البحث عن النماذج",
       "modelsDescription": "اختر مزوّدًا ونموذجًا متعدد الوسائط واحدًا معروضًا لكل فئة من فئات الذكاء الاصطناعي.",
@@ -5422,6 +5435,7 @@
       "newApiKey": "مفتاح API جديد",
       "newApiKeyDescription": "سيحل هذا محل المفتاح المحفوظ عند حفظ التغييرات.",
       "noModelResults": "لا توجد نماذج معروضة مطابقة",
+      "noProviders": "لم تُضف أي مفاتيح مزوّدين بعد.",
       "openaiInsufficientQuota": "تحقق من ميزانية مشروع OpenAI وفوترة API. أضف رصيدًا أو ارفع الحد المعني، ثم حاول مرة أخرى.",
       "openaiProjectOrganizationMismatch": "استخدم مفتاح API من مشروع OpenAI والمؤسسة المطلوبين. تحقق من إعدادات الوصول إليهما، ثم حاول مرة أخرى.",
       "openrouterNoCredits": "أضف رصيدًا في قسم الفوترة في OpenRouter، ثم حاول مرة أخرى.",
@@ -5444,6 +5458,8 @@
       "providerForRole": "مزوّد {role}",
       "providerKeyInvalid": "رفض {provider} المفتاح. تحقق منه مرة أخرى قبل الحفظ.",
       "providerKeyInvalidShort": "غير صالح",
+      "providerModes": "يُستخدم في: {modes}",
+      "providerModesNone": "لا يُستخدم في أي وضع. عيّنه لوضع من الخيارات المتقدمة.",
       "providerSetupConsole": "فتح إعدادات مزود الخدمة",
       "providersDescription": "أضف بيانات اعتماد المزوّد التي تريد أن تستخدمها stella.",
       "providersPanel": "المزوّدون",
@@ -5453,6 +5469,7 @@
       "replaceKey": "استبدال المفتاح",
       "roleUnavailable": "لا يدعم {provider} هذا الدور.",
       "roles": {
+        "browse": "التصفح",
         "chat": "دردشة",
         "fast": "سريع",
         "pdf": "PDF",
@@ -5515,7 +5532,7 @@
     "members": {
       "billingAccess": "الاطلاع على بيانات الفوترة",
       "changeRole": "تغيير الدور",
-      "confirmRoleChangeDescription": "سيتغير دور {email} من {oldRole} إلى {newRole}.",
+      "confirmRoleChangeDescription": "سيتغير دور {email} من {oldRole, select, owner {مالك} admin {مسؤول} member {عضو} intern {متدرب} external {متعاون خارجي} other {}} إلى {newRole, select, owner {مالك} admin {مسؤول} member {عضو} intern {متدرب} external {متعاون خارجي} other {}}.",
       "confirmRoleChangeTitle": "تغيير الدور",
       "joined": "تاريخ الانضمام",
       "noMembersFound": "لم يُعثر على أعضاء",
@@ -5541,6 +5558,13 @@
     "startOverDescription": "ربما أنشأ الطلب الأصلي مؤسسة بالفعل. تحقق من مؤسساتك قبل البدء من جديد؛ فقد يؤدي طلب جديد إلى إنشاء مؤسسة أخرى.",
     "startOverTitle": "هل تريد بدء طلب إنشاء جديد؟",
     "switchOrganization": "تبديل المؤسسة"
+  },
+  "organizationSetup": {
+    "aiAction": "إعداد الذكاء الاصطناعي",
+    "aiOptional": "مفاتيح مزوّدي الذكاء الاصطناعي الخاصة بك اختيارية: من دونها يعمل الذكاء الاصطناعي على نماذج توفرها stella.",
+    "aiRequired": "يحتاج الذكاء الاصطناعي في هذه المؤسسة إلى مفتاح مزوّد قبل أن يتمكن أي أحد من استخدامه.",
+    "invite": "ادعُ زملاءك ليعملوا معك هنا.",
+    "title": "أعدّ مؤسستك الجديدة"
   },
   "publicTools": {
     "addSkill": "إضافة مهارة",
@@ -5981,7 +6005,7 @@
     "organization": {
       "activeMembers": "الأعضاء النشطون",
       "ai": "إعدادات الذكاء الاصطناعي",
-      "aiDescription": "اربط مفاتيحك الخاصة لمزوّدي الذكاء الاصطناعي.",
+      "aiDescription": "اختر طريقة عمل الذكاء الاصطناعي في هذه المؤسسة.",
       "anonymization": {
         "addPlaceholder": "مصطلح لإخفائه دائمًا (مثل اسم الفريق)",
         "deleteAction": "حذف المصطلح",
@@ -7236,6 +7260,7 @@
         "title": "هل تريد إزالة روابط قوالب Word؟",
         "unknownLocation": "موقع القالب: عنوان لا تستطيع stella التحقق منه"
       },
+      "checkingFiles": "جارٍ فحص الملفات…",
       "desktopEdit": {
         "accountRequiredTitle": "اربط stella desktop بحسابك",
         "action": "التحرير في تطبيق سطح المكتب",
@@ -7279,6 +7304,14 @@
       "downloadPdf": "تنزيل بصيغة PDF",
       "downloadSearchablePdf": "ملف PDF قابل للبحث",
       "downloadWithComments": "تنزيل مع التعليقات",
+      "duplicateUpload": {
+        "description": "{count, plural, zero {لا توجد ملفات مطابقة لمستندات في هذا الملف القانوني.} one {ملف واحد مطابق لمستند موجود مسبقًا في هذا الملف القانوني.} two {ملفان مطابقان لمستندين موجودين مسبقًا في هذا الملف القانوني.} few {# ملفات مطابقة لمستندات موجودة مسبقًا في هذا الملف القانوني.} many {# ملفًا مطابقًا لمستندات موجودة مسبقًا في هذا الملف القانوني.} other {# ملف مطابق لمستندات موجودة مسبقًا في هذا الملف القانوني.}} اختر ما تريد فعله بكل منها.",
+        "matchedDocument": "مطابق لـ <bdi>{documentName}</bdi>",
+        "skip": "تخطي هذا الملف",
+        "skipAll": "تخطي الملفات المكررة",
+        "title": "موجود مسبقًا في هذا الملف القانوني",
+        "uploadAnyway": "الرفع على أي حال"
+      },
       "emptyFile": "الملف فارغ.",
       "fileTooLarge": "الملف أكبر من {limit, number} ميغابايت.",
       "includeReferenceNumber": "تضمين الرقم المرجعي",

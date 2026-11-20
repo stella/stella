@@ -172,7 +172,7 @@
     "invitation": {
       "declined": "Meghívó elutasítva",
       "declinedDescription": "Nem csatlakozott ehhez a szervezethez.",
-      "description": "{inviterEmail} meghívta Önt a(z) {organizationName} szervezetbe {role} szerepkörrel.",
+      "description": "{inviterEmail} meghívta Önt a(z) {organizationName} szervezetbe{role, select, owner { tulajdonos szerepkörrel} admin { adminisztrátor szerepkörrel} member { tag szerepkörrel} intern { gyakornok szerepkörrel} external { külső együttműködő szerepkörrel} other {}}.",
       "goToWorkspaces": "Ügyekhez",
       "title": "Szervezeti meghívó",
       "verifyEmailHint": "A(z) {email} cím megerősítéséhez jelentkezzen ki, majd jelentkezzen be az erre a címre küldött egyszer használatos kóddal.",
@@ -1802,7 +1802,6 @@
       "searchAllPastChatsQuestion": "Keresés az összes csevegésében?",
       "uploadedDocumentPlaceholder": "(feltöltött dokumentum)"
     },
-    "askAnything": "Kérdezzen bármit",
     "askUser": {
       "custom": "Saját válasz",
       "edit": "Válaszok szerkesztése",
@@ -1960,6 +1959,7 @@
     "historyTrimmed": "A korábbi üzeneteket nem sikerült összefoglalni, ezért ez a válasz csak a beszélgetés legutóbbi részét veszi figyelembe.",
     "improvePrompt": "Prompt javítása",
     "improvePromptDraftChanged": "A piszkozat megváltozott, ezért a javítás nem lett alkalmazva.",
+    "improvePromptEmpty": "Írjon egy promptot a javításhoz.",
     "improvePromptPlainTextOnly": "A prompt javítása csak egyszerű szövegnél érhető el.",
     "improvePromptUnavailableAnonymized": "A prompt javítása anonimizált módban nem érhető el.",
     "improvingPrompt": "Prompt javítása…",
@@ -2319,6 +2319,7 @@
     "sendErrorToolsUnsupported": "Ez a modell nem tud eszközöket használni, ezért nem tud válaszolni az ügyével kapcsolatos kérdésekre. Váltson olyan modellre, amely támogatja az eszközöket.",
     "sendErrorTurnTooLarge": "Ez a válasz túl nagyra nőtt ahhoz, hogy teljes egészében megérkezzen. A folytatáshoz küldjön új üzenetet.",
     "sendPrompt": "Üzenet küldése",
+    "sendPromptEmpty": "Írjon egy üzenetet a küldéshez.",
     "sendQueuedMessageNow": "Küldés most",
     "sendWithoutAnonymization": "Küldés anonimizálás nélkül",
     "signInToChat": "Jelentkezzen be, hogy erről a dokumentumról csevegjen",
@@ -2363,6 +2364,10 @@
     "stopResponse": "Leállítás",
     "stopped": "Leállítva",
     "stopping": "Leállítás…",
+    "subagentRun": {
+      "browseWeb": "Böngészés az interneten",
+      "generic": "Részfeladat feldolgozása"
+    },
     "suggestTitle": "Cím javaslata",
     "suggestTitleUnavailableAnonymized": "Anonimizált beszélgetésekhez nem érhető el címjavaslat.",
     "suggestingTitle": "Cím javaslása…",
@@ -2410,6 +2415,8 @@
       "boe_search_legislation": "BOE jogszabálykeresés",
       "borme_get_summary": "BORME napi összefoglaló",
       "business_registry_lookup": "Keresés a cégnyilvántartásban",
+      "calendar_free_busy": "Szabad időpontok ellenőrzése",
+      "calendar_list_events": "Naptáresemények olvasása",
       "command_execution": "Parancs futtatása",
       "compare_versions": "Verziók összehasonlítása",
       "configure_template_fields": "Sablonmezők beállítása",
@@ -5402,6 +5409,7 @@
       "defaultModel": "Alapértelmezett: {model}",
       "defaultModelOption": "Alapértelmezett",
       "defaultRationale": {
+        "browse": "Weboldalakon végzett munkához a böngészőben.",
         "chat": "Beszélgetésekhez és mindennapi kérdésekhez.",
         "fast": "Rövid, rutinszerű feladatokhoz.",
         "pdf": "PDF-dokumentumok olvasásához és elemzéséhez.",
@@ -5415,6 +5423,11 @@
       "googleKeyRestricted": "Ellenőrizze a kulcs API-, IP-cím- és hivatkozówebhely-korlátozásait a Google Cloudban. Engedélyezze a szükséges API-t és a kiszolgáló kéréseit, majd próbálja újra.",
       "keepSavedKey": "Mentett kulcs megtartása",
       "keyFormatHint": "Ez a kulcs a(z) {provider} esetében szokatlan formátumú. Mentse a szolgáltatónál történő ellenőrzéshez.",
+      "keyNeed": {
+        "builtIn": "Nem kötelező. Saját kulcs nélkül a szervezet AI-funkciói a stella által biztosított modelleket használják.",
+        "keyRequired": "A szervezet AI-funkcióihoz szolgáltatói kulcs kell. Adjon meg egyet az AI bekapcsolásához.",
+        "ownKeys": "A szervezet AI-funkciói az alábbi kulcsokat használják."
+      },
       "modelForRole": "{role} modellje",
       "modelIdPlaceholder": "Modellek keresése",
       "modelsDescription": "Válasszon szolgáltatót és egy felkínált multimodális modellt minden AI-kategóriához.",
@@ -5422,6 +5435,7 @@
       "newApiKey": "Új API-kulcs",
       "newApiKeyDescription": "Mentéskor lecseréli a mentett kulcsot.",
       "noModelResults": "Nincs egyező felkínált modell",
+      "noProviders": "Még nincs szolgáltatói kulcs megadva.",
       "openaiInsufficientQuota": "Ellenőrizze az OpenAI-projekt költségkeretét és az API számlázását. Töltse fel az egyenleget vagy emelje meg az érintett korlátot, majd próbálja újra.",
       "openaiProjectOrganizationMismatch": "A kívánt OpenAI-projekthez és szervezethez tartozó API-kulcsot használjon. Ellenőrizze a hozzáférési beállításaikat, majd próbálja újra.",
       "openrouterNoCredits": "Töltsön fel egyenleget az OpenRouter számlázási részében, majd próbálja újra.",
@@ -5444,6 +5458,8 @@
       "providerForRole": "{role} szolgáltatója",
       "providerKeyInvalid": "A {provider} elutasította a kulcsot. Kérjük, ellenőrizze.",
       "providerKeyInvalidShort": "Érvénytelen",
+      "providerModes": "Ezekhez használja: {modes}",
+      "providerModesNone": "Egyik módhoz sincs használatban. Rendelje hozzá egy módhoz a Speciális részben.",
       "providerSetupConsole": "Szolgáltatói beállítások megnyitása",
       "providersDescription": "Adja meg azoknak a szolgáltatóknak a hitelesítő adatait, amelyeket stella használ.",
       "providersPanel": "Szolgáltatók",
@@ -5453,6 +5469,7 @@
       "replaceKey": "Kulcs cseréje",
       "roleUnavailable": "A(z) {provider} nem támogatja ezt a szerepkört.",
       "roles": {
+        "browse": "Böngészés",
         "chat": "Csevegés",
         "fast": "Gyors",
         "pdf": "PDF",
@@ -5515,7 +5532,7 @@
     "members": {
       "billingAccess": "Számlázási adatok megtekintése",
       "changeRole": "Szerepkör módosítása",
-      "confirmRoleChangeDescription": "{email} szerepköre erről: {oldRole} erre módosul: {newRole}.",
+      "confirmRoleChangeDescription": "{email} szerepköre {oldRole, select, owner {tulajdonosról} admin {adminisztrátorról} member {tagról} intern {gyakornokról} external {külső együttműködőről} other {}} {newRole, select, owner {tulajdonosra} admin {adminisztrátorra} member {tagra} intern {gyakornokra} external {külső együttműködőre} other {}} módosul.",
       "confirmRoleChangeTitle": "Szerepkör módosítása",
       "joined": "Csatlakozott",
       "noMembersFound": "Nincsenek tagok",
@@ -5541,6 +5558,13 @@
     "startOverDescription": "Előfordulhat, hogy az eredeti kérés már létrehozott egy szervezetet. Az újrakezdés előtt ellenőrizze a szervezeteit; egy új kérés újabb szervezetet hozhat létre.",
     "startOverTitle": "Új létrehozási kérést indít?",
     "switchOrganization": "Szervezet váltása"
+  },
+  "organizationSetup": {
+    "aiAction": "AI beállítása",
+    "aiOptional": "A saját AI-szolgáltatói kulcsok nem kötelezők: nélkülük az AI a stella által biztosított modelleket használja.",
+    "aiRequired": "A szervezet AI-funkcióihoz szolgáltatói kulcs kell, különben senki sem használhatja őket.",
+    "invite": "Hívja meg kollégáit, hogy itt dolgozhassanak Önnel.",
+    "title": "Állítsa be az új szervezetet"
   },
   "publicTools": {
     "addSkill": "Készség hozzáadása",
@@ -5981,7 +6005,7 @@
     "organization": {
       "activeMembers": "Aktív tagok",
       "ai": "AI-konfiguráció",
-      "aiDescription": "Csatlakoztassa saját AI-szolgáltatói kulcsait.",
+      "aiDescription": "Adja meg, hogyan működjön az AI ebben a szervezetben.",
       "anonymization": {
         "addPlaceholder": "Mindig maszkolandó kifejezés (pl. csapat neve)",
         "deleteAction": "Kifejezés törlése",
@@ -7236,6 +7260,7 @@
         "title": "Eltávolítja a Word-sablonok hivatkozásait?",
         "unknownLocation": "A sablon helye: a stella által nem ellenőrizhető cím"
       },
+      "checkingFiles": "Fájlok ellenőrzése…",
       "desktopEdit": {
         "accountRequiredTitle": "Csatlakoztassa a stella desktop alkalmazást a fiókjához",
         "action": "Szerkesztés az asztali alkalmazásban",
@@ -7279,6 +7304,14 @@
       "downloadPdf": "Letöltés PDF-ként",
       "downloadSearchablePdf": "Kereshető PDF",
       "downloadWithComments": "Letöltés megjegyzésekkel",
+      "duplicateUpload": {
+        "description": "{count, plural, one {# fájl megegyezik egy dokumentummal, amely már szerepel ebben az ügyben.} other {# fájl megegyezik olyan dokumentumokkal, amelyek már szerepelnek ebben az ügyben.}} Válassza ki, mi történjen mindegyikkel.",
+        "matchedDocument": "Megegyezik ezzel: <bdi>{documentName}</bdi>",
+        "skip": "A fájl kihagyása",
+        "skipAll": "Ismétlődések kihagyása",
+        "title": "Már szerepel ebben az ügyben",
+        "uploadAnyway": "Feltöltés mindenképp"
+      },
       "emptyFile": "A fájl üres.",
       "fileTooLarge": "A fájl nagyobb, mint {limit, number} MB.",
       "includeReferenceNumber": "Hivatkozási szám hozzáadása",

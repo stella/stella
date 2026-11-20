@@ -44,6 +44,7 @@ import {
 import { DECISION_ROW_WRITE_STATUS } from "@/api/handlers/case-law/ingestion/pipeline/types";
 import type { DecisionRowWriteStatus } from "@/api/handlers/case-law/ingestion/pipeline/types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { caseNumberKeysMatch } from "@/api/lib/case-law/case-number-match-key";
 import { writeDecisionAnchorRedirectsTx } from "@/api/lib/case-law/decision-anchor-redirects";
 import {
   DECISION_IDENTIFIER_CLAIM,
@@ -592,6 +593,7 @@ const reopenMovedIdentityTx = async (
       (key) => key !== null,
     ),
   );
+  // One per identity: two year forms of a docket reopen the same citations.
   const affectedIdentifiers = [
     ...replacedState.identifiers,
     ...identifierRows,
@@ -600,7 +602,10 @@ const reopenMovedIdentityTx = async (
       all.findIndex(
         (candidate) =>
           candidate.type === identifier.type &&
-          candidate.normalizedValue === identifier.normalizedValue,
+          caseNumberKeysMatch(
+            candidate.normalizedValue,
+            identifier.normalizedValue,
+          ),
       ) === index,
   );
   const announced = await announceDecisionIdentifiers(

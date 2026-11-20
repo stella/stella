@@ -60,6 +60,7 @@ import {
   documentAnnotationScalingScenarios,
   markedPdfDownloadScalingScenario,
 } from "./document-annotations";
+import { fileContentScalingScenario } from "./file-content";
 import { graphToolsScalingScenarios } from "./graph-tools";
 import { invoicePaymentScalingScenarios } from "./invoice-payments";
 import { invoiceSendScalingScenarios } from "./invoice-sends";
@@ -87,6 +88,7 @@ import {
 } from "./scenario-membership";
 import { readScalingScenarios } from "./scenarios";
 import { sharepointBrowseScalingScenarios } from "./sharepoint-browse";
+import { sharepointCapabilitiesScalingScenario } from "./sharepoint-capabilities";
 import { skillExportScalingScenarios } from "./skill-export";
 import {
   softLawReadScalingScenario,
@@ -122,6 +124,7 @@ const measuredApiScenarios = [
   memberBillingScalingScenario,
   exactIconScalingScenario,
   decisionSummaryScalingScenario,
+  fileContentScalingScenario,
   decisionAnchorRedirectsScalingScenario,
   decisionFilterValidationScalingScenario,
   browseCalendarScalingScenario,
@@ -164,6 +167,7 @@ const measuredApiScenarios = [
   memberCandidatesScalingScenario,
   mobileUpdateScalingScenario,
   ...invoicePaymentScalingScenarios,
+  sharepointCapabilitiesScalingScenario,
   ...invoiceSendScalingScenarios,
   ...outboundActionScalingScenarios,
   ...legalHoldScalingScenarios,

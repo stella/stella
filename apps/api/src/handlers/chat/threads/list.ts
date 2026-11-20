@@ -15,11 +15,7 @@ import {
 import { numberFromString } from "@stll/api-contract/http-input";
 import { classifyFailure } from "@stll/errors";
 
-import {
-  chatMessages,
-  chatThreads,
-  workspaces as workspacesTable,
-} from "@/api/db/schema";
+import { chatThreads, workspaces as workspacesTable } from "@/api/db/schema";
 import { resolveChatScope } from "@/api/handlers/chat/chat-scope";
 import {
   chatThreadListCursorCodec,
@@ -32,6 +28,7 @@ import {
   readChatThreadContexts,
 } from "@/api/handlers/chat/threads/list-context";
 import type { ChatThreadContext } from "@/api/handlers/chat/threads/list-context";
+import { chatThreadHasMessages } from "@/api/handlers/chat/threads/list-visibility";
 import {
   LATEST_ANSWER,
   UNREAD_BESIDE_LATEST_ANSWER,
@@ -362,11 +359,7 @@ export const createGetThreads = ({
         ${chatThreads.workspaceId} IS NULL
         OR ${workspacesTable.status} <> 'deleting'
       )`,
-        sql`exists (
-        select 1
-        from ${chatMessages}
-        where ${chatMessages.threadId} = ${chatThreads.id}
-      )`,
+        chatThreadHasMessages,
       ];
       // The matter filter goes through the same access check as every other
       // matter-scoped chat call, so a matter the caller cannot open (or one

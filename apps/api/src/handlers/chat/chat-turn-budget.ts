@@ -107,8 +107,39 @@ export const createChatTurnBudget = ({
     },
   };
 
+  /**
+   * The middleware a sub-agent child of this turn runs with. The child's
+   * model calls and tool calls are the turn's autonomous work too, so they
+   * count toward the same caps, and the child's loop ends at its first step
+   * boundary once a cap is reached. The pause itself is the turn's: the main
+   * loop settles it at its next boundary (the step that ran the child).
+   */
+  const childMiddleware: ChatMiddleware = {
+    name: "stella-chat-turn-budget-child",
+    onChunk: (_ctx, chunk) => {
+      if (chunk.type === EventType.TOOL_CALL_START) {
+        toolCallIds.add(chunk.toolCallId);
+      }
+    },
+    onToolPhaseComplete: (_ctx, info) => {
+      for (const call of info.toolCalls) {
+        toolCallIds.add(call.id);
+      }
+    },
+    onUsage: (_ctx, usage) => {
+      promptTokens += usage.promptTokens;
+    },
+    onShouldContinue: (_ctx, state) =>
+      state.lastTurnToolCallCount === 0 ||
+      exhaustedCap({ budget, promptTokens, toolCalls: toolCallIds.size }) ===
+        null
+        ? undefined
+        : false,
+  };
+
   return {
     budget,
+    childMiddleware,
     middleware,
     /** The pause the loop ended on, or null when no cap ended it. */
     pause: (): ChatTurnPause | null => pause,

@@ -13,6 +13,7 @@ import type { Identity as ChatStoredContentEgressIdentity } from "./chatStoredCo
 import type { Identity as ChatThreadIdentity } from "./chatThread";
 import type { Identity as ChatToolGrantsIdentity } from "./chatToolGrants";
 import type { Identity as ChatTurnIdentity } from "./chatTurn";
+import type { Identity as ContactIdentity } from "./contact";
 import type { Identity as ContactCapacityIdentity } from "./contactCapacity";
 import type { Identity as CorpusProjectionOfflineRequestIdentity } from "./corpusProjectionOfflineRequest";
 import type { Identity as CorrespondenceIdentity } from "./correspondence";
@@ -56,6 +57,7 @@ import type { Identity as SchedulerClaimIdentity } from "./schedulerClaim";
 import type { Identity as ScoutCensusIdentity } from "./scoutCensus";
 import type { Identity as SearchHistoryIdentity } from "./searchHistory";
 import type { Identity as SearchProjectionRepairIdentity } from "./searchProjectionRepair";
+import type { Identity as SharepointConnectionIdentity } from "./sharepointConnection";
 import type { Identity as SignalIdentity } from "./signal";
 import type { Identity as SigningSessionIdentity } from "./signingSession";
 import type { Identity as WorkspaceIdentity } from "./workspace";
@@ -76,6 +78,7 @@ export type AggregateIdentities = {
   "chatThread": ChatThreadIdentity;
   "chatToolGrants": ChatToolGrantsIdentity;
   "chatTurn": ChatTurnIdentity;
+  "contact": ContactIdentity;
   "contactCapacity": ContactCapacityIdentity;
   "corpusProjectionOfflineRequest": CorpusProjectionOfflineRequestIdentity;
   "correspondence": CorrespondenceIdentity;
@@ -119,6 +122,7 @@ export type AggregateIdentities = {
   "scoutCensus": ScoutCensusIdentity;
   "searchHistory": SearchHistoryIdentity;
   "searchProjectionRepair": SearchProjectionRepairIdentity;
+  "sharepointConnection": SharepointConnectionIdentity;
   "signal": SignalIdentity;
   "signingSession": SigningSessionIdentity;
   "workspace": WorkspaceIdentity;

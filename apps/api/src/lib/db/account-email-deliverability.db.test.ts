@@ -206,8 +206,9 @@ describe("account email deliverability", () => {
     // No transport is configured here: reaching it would throw.
     await sendNewDeviceLoginEmail({
       email: account.email,
-      device: "Firefox on Linux",
-      ipAddress: "192.0.2.1",
+      device: { type: "browserOnOs", browser: "Firefox", os: "Linux" },
+      ipAddress: { type: "known", address: "192.0.2.1" },
+      location: { type: "unknown" },
       time: "26 October 2026, 04:37",
       sessionsUrl: "https://app.example.test/settings/sessions",
       lang: "en",

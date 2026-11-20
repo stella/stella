@@ -1,4 +1,4 @@
-import { panic, Result } from "better-result";
+import { panic, Result, TaggedError } from "better-result";
 import * as v from "valibot";
 
 import type { FeedbackReportInput } from "@stll/api-contract/feedback";
@@ -16,9 +16,15 @@ import { subject as productFeedbackSubject } from "@stll/transactional/emails/pr
 import * as ReportExportStatus from "@stll/transactional/emails/report-export-status";
 import type { ReportExportEmailStatus } from "@stll/transactional/emails/report-export-status";
 import { subject as reportExportStatusSubject } from "@stll/transactional/emails/report-export-status-subject";
+import {
+  LOCATION_MAP_CONTENT_TYPE,
+  type MapPlace,
+  renderLocationMap,
+} from "@stll/transactional/map/location-map";
 import { renderEmail } from "@stll/transactional/render";
 
 import { env } from "@/api/env";
+import type { ViewerLocation } from "@/api/lib/auth/viewer-location";
 import {
   emailAddressSchema,
   normalizeEmail,
@@ -38,7 +44,7 @@ import { isEmailTransportConfigComplete } from "./config";
 import { formatTransactionalEmailFrom } from "./from";
 import { createSESTransport } from "./ses";
 import { createSMTPTransport } from "./smtp";
-import type { EmailTransport } from "./transport";
+import type { EmailTransport, InlineImage } from "./transport";
 
 export const isTransactionalEmailConfigured = () =>
   isEmailTransportConfigComplete({
@@ -204,8 +210,9 @@ export const sendOTPEmail = async ({
 
 type SendNewDeviceLoginEmailProps = {
   email: string;
-  device: string;
-  ipAddress: string;
+  device: NewDeviceLogin.SignInDevice;
+  ipAddress: NewDeviceLogin.SignInAddress;
+  location: ViewerLocation;
   time: string;
   sessionsUrl: string;
   lang: SupportedLang;
@@ -215,15 +222,34 @@ export const sendNewDeviceLoginEmail = async ({
   email,
   device,
   ipAddress,
+  location,
   time,
   sessionsUrl,
   lang,
 }: SendNewDeviceLoginEmailProps) => {
+  const map =
+    location.type === "known" && location.coordinates !== null
+      ? await renderSignInLocationMap({
+          point: location.coordinates,
+          countryCode: location.countryCode,
+        })
+      : null;
   const node = (
     <NewDeviceLogin.Email
       device={device}
       ipAddress={ipAddress}
       lang={lang}
+      location={
+        location.type === "known"
+          ? {
+              type: "known",
+              city: location.city,
+              region: location.region,
+              countryCode: location.countryCode,
+              map: map === null ? null : { contentId: map.contentId },
+            }
+          : { type: "unknown" }
+      }
       sessionsUrl={sessionsUrl}
       time={time}
     />
@@ -236,7 +262,56 @@ export const sendNewDeviceLoginEmail = async ({
     subject: newDeviceLoginSubject(lang),
     html,
     text,
+    ...(map === null ? {} : { inlineImages: [map] }),
   });
+};
+
+const SIGN_IN_LOCATION_MAP_CONTENT_ID = "sign-in-location-map";
+
+// The notice still goes out without the map; a map that fails to render is
+// observed, never fatal to the send.
+const locationMapUnrendered = failureSink({
+  event: "email.new_device_login.location_map_unrendered",
+  expected: [],
+});
+
+// A country code the map cannot find is a defect in its country table; the
+// map is still sent, with no country shaded.
+const locationMapCountryUnresolved = failureSink({
+  event: "email.new_device_login.location_map_country_unresolved",
+  expected: [],
+});
+
+class LocationMapCountryUnresolvedError extends TaggedError(
+  "LocationMapCountryUnresolvedError",
+)<{ message: string; countryCode: string }> {}
+
+const renderSignInLocationMap = async (
+  place: MapPlace,
+): Promise<InlineImage | null> => {
+  const rendered = await Result.tryPromise(
+    async () => await renderLocationMap(place),
+  );
+  if (rendered.isErr()) {
+    observeFailure(rendered.error, { sink: locationMapUnrendered });
+    return null;
+  }
+  const { png, highlight } = rendered.value;
+  if (highlight.type === "unresolved") {
+    observeFailure(
+      new LocationMapCountryUnresolvedError({
+        message: "The location map has no feature for the reported country",
+        countryCode: highlight.countryCode,
+      }),
+      { sink: locationMapCountryUnresolved },
+    );
+  }
+  return {
+    contentId: SIGN_IN_LOCATION_MAP_CONTENT_ID,
+    filename: "sign-in-location.png",
+    contentType: LOCATION_MAP_CONTENT_TYPE,
+    content: png,
+  };
 };
 
 type SendOrganizationInvitationProps = {

@@ -1,6 +1,8 @@
 import type { MessagePart, UIMessage } from "@tanstack/ai-client";
 import { replaceEqualDeep } from "@tanstack/react-query";
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
+
+import { chatToolResultRetention } from "@stll/api-contract/chat-tool-result-retention";
 
 const TOOL_CALL_PROGRESS = {
   "awaiting-input": 0,
@@ -46,7 +48,42 @@ const SUBAGENT_PROGRESS = {
 const sameJsonValue = (shown: unknown, replayed: unknown): boolean =>
   replaceEqualDeep(shown, replayed) === shown;
 
+const parseJsonContent = (content: string): unknown => {
+  const parsed = Result.try((): unknown => JSON.parse(content));
+  return Result.isError(parsed) ? undefined : parsed.value;
+};
+
+/**
+ * Whether `replayed` is the projection the tool's declared result retention
+ * keeps of the `shown` output. The server stores and replays a result a newer
+ * one superseded (an earlier page read) as that projection, while the page
+ * still shows the result it ran, so the replay has caught up to it.
+ */
+const isRetainedProjection = ({
+  replayed,
+  shown,
+  toolName,
+}: {
+  replayed: unknown;
+  shown: unknown;
+  toolName: string | undefined;
+}): boolean => {
+  if (toolName === undefined || shown === undefined) {
+    return false;
+  }
+  const projection = chatToolResultRetention(toolName)?.supersede(shown);
+  return (
+    projection !== undefined &&
+    projection !== null &&
+    sameJsonValue(projection, replayed)
+  );
+};
+
 type RejoinPartComparison<Part = MessagePart> = { shown: Part; replayed: Part };
+
+/** The tool each call id in one message's parts names, for results whose
+ *  part does not carry it. */
+type ToolNamesByCallId = ReadonlyMap<string, string>;
 
 const hasCaughtUpToolCall = ({
   shown,
@@ -75,7 +112,12 @@ const hasCaughtUpToolCall = ({
     (TOOL_CALL_PROGRESS[shown.state] < TOOL_CALL_PROGRESS.complete ||
       replayed.state === shown.state) &&
     (shown.output === undefined ||
-      sameJsonValue(shown.output, replayed.output)) &&
+      sameJsonValue(shown.output, replayed.output) ||
+      isRetainedProjection({
+        replayed: replayed.output,
+        shown: shown.output,
+        toolName: shown.name,
+      })) &&
     (shown.approval === undefined ||
       (replayed.approval?.id === shown.approval.id &&
         replayed.approval.needsApproval === shown.approval.needsApproval &&
@@ -108,7 +150,8 @@ const hasCaughtUpStructuredOutput = ({
 const hasCaughtUpPart = ({
   shown,
   replayed,
-}: RejoinPartComparison): boolean => {
+  toolNames,
+}: RejoinPartComparison & { toolNames: ToolNamesByCallId }): boolean => {
   switch (shown.type) {
     case "text":
     case "thinking":
@@ -129,7 +172,13 @@ const hasCaughtUpPart = ({
         (shown.state === "streaming" || replayed.state === shown.state) &&
         (typeof shown.content === "string"
           ? typeof replayed.content === "string" &&
-            replayed.content.startsWith(shown.content)
+            (replayed.content.startsWith(shown.content) ||
+              (shown.state !== "streaming" &&
+                isRetainedProjection({
+                  replayed: parseJsonContent(replayed.content),
+                  shown: parseJsonContent(shown.content),
+                  toolName: shown.name ?? toolNames.get(shown.toolCallId),
+                })))
           : sameJsonValue(shown.content, replayed.content))
       );
     case "structured-output":
@@ -179,14 +228,20 @@ type RejoinPartsComparison = {
 const hasCaughtUpParts = ({
   shown,
   replayed,
-}: RejoinPartsComparison): boolean =>
-  shown.every((part, index) => {
+}: RejoinPartsComparison): boolean => {
+  const toolNames = new Map(
+    shown.flatMap((part) =>
+      part.type === "tool-call" ? [[part.id, part.name] as const] : [],
+    ),
+  );
+  return shown.every((part, index) => {
     const candidate = replayed.at(index);
     return (
       candidate !== undefined &&
-      hasCaughtUpPart({ shown: part, replayed: candidate })
+      hasCaughtUpPart({ shown: part, replayed: candidate, toolNames })
     );
   });
+};
 
 /** Keep the assistant's displayed parts until replay has caught up to all of
  * them. Equal or progressed tool states then replace the held message. */

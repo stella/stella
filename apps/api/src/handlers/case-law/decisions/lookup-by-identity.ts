@@ -62,6 +62,7 @@ import type {
   CaseLawPublicReadDb,
   CaseLawPublicReadTransaction,
 } from "@/api/lib/case-law-public-read-db";
+import { caseNumberKeyAmongSql } from "@/api/lib/case-law/case-number-match-key";
 import {
   courtPresentation,
   readCourtRegistry,
@@ -288,13 +289,17 @@ const identifierRowDecisionIds = ({
   rows: ReturnType<typeof identifierRowKeysOf>;
   tx: Pick<CaseLawPublicReadTransaction, "select">;
 }) => {
+  // A stored key matches in either year form: `caseNumberMatchKey`.
   const conditions = rows.map(({ type, keys }) => {
-    const [onlyKey] = keys;
+    const [firstKey, ...otherKeys] = keys;
     return and(
       eq(caseLawDecisionIdentifiers.type, type),
-      keys.length === 1 && onlyKey !== undefined
-        ? eq(caseLawDecisionIdentifiers.normalizedValue, onlyKey)
-        : inArray(caseLawDecisionIdentifiers.normalizedValue, keys),
+      firstKey === undefined
+        ? sql`false`
+        : caseNumberKeyAmongSql(caseLawDecisionIdentifiers.normalizedValue, [
+            firstKey,
+            ...otherKeys,
+          ]),
     );
   });
   const [onlyCondition] = conditions;
@@ -395,7 +400,10 @@ const ownColumnCondition = (own: OwnColumnKeys | null) => {
   }
   switch (own.column) {
     case "citation-key":
-      return inArray(publishedCaseLawDecisions.citationKey, [...own.keys]);
+      return caseNumberKeyAmongSql(
+        publishedCaseLawDecisions.citationKey,
+        own.keys,
+      );
     case "ecli-folded":
       return and(
         isNotNull(publishedCaseLawDecisions.ecli),

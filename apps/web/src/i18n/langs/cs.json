@@ -172,7 +172,7 @@
     "invitation": {
       "declined": "Pozvánka odmítnuta",
       "declinedDescription": "K této organizaci jste se nepřipojili.",
-      "description": "{inviterEmail} vás pozval/a do organizace {organizationName} jako {role}.",
+      "description": "{inviterEmail} vás pozval/a do organizace {organizationName}{role, select, owner { jako vlastníka} admin { jako administrátora} member { jako člena} intern { jako stážistu} external { jako externího spolupracovníka} other {}}.",
       "goToWorkspaces": "Přejít na spisy",
       "title": "Pozvánka do organizace",
       "verifyEmailHint": "Chcete-li ověřit adresu {email}, odhlaste se a přihlaste se jednorázovým kódem, který na ni odešleme.",
@@ -1802,7 +1802,6 @@
       "searchAllPastChatsQuestion": "Prohledat všechny vaše chaty?",
       "uploadedDocumentPlaceholder": "(nahraný dokument)"
     },
-    "askAnything": "Zeptejte se na cokoli",
     "askUser": {
       "custom": "Napsat vlastní",
       "edit": "Upravit odpovědi",
@@ -1960,6 +1959,7 @@
     "historyTrimmed": "Starší zprávy se nepodařilo shrnout, a tak tato odpověď vychází jen z poslední části konverzace.",
     "improvePrompt": "Vylepšit zadání",
     "improvePromptDraftChanged": "Zadání se změnilo, takže vylepšení nebylo použito.",
+    "improvePromptEmpty": "Napište zadání, které chcete vylepšit.",
     "improvePromptPlainTextOnly": "Vylepšení zadání je dostupné pouze pro prostý text.",
     "improvePromptUnavailableAnonymized": "Vylepšení zadání není dostupné v anonymizovaném režimu.",
     "improvingPrompt": "Vylepšuji zadání…",
@@ -2319,6 +2319,7 @@
     "sendErrorToolsUnsupported": "Tento model neumí používat nástroje, takže nemůže odpovídat na otázky k vašemu spisu. Přepněte na model, který nástroje podporuje.",
     "sendErrorTurnTooLarge": "Tato odpověď je příliš velká na to, aby se dala doručit celá. Pokračujte novou zprávou.",
     "sendPrompt": "Odeslat zprávu",
+    "sendPromptEmpty": "Napište zprávu, kterou chcete odeslat.",
     "sendQueuedMessageNow": "Odeslat hned",
     "sendWithoutAnonymization": "Odeslat bez anonymizace",
     "signInToChat": "Přihlaste se a chatujte o tomto dokumentu",
@@ -2363,6 +2364,10 @@
     "stopResponse": "Zastavit",
     "stopped": "Zastaveno",
     "stopping": "Zastavuji…",
+    "subagentRun": {
+      "browseWeb": "Procházení webu",
+      "generic": "Práce na dílčím úkolu"
+    },
     "suggestTitle": "Navrhnout název",
     "suggestTitleUnavailableAnonymized": "Návrhy názvu nejsou dostupné pro anonymizované konverzace.",
     "suggestingTitle": "Navrhuji název…",
@@ -2410,6 +2415,8 @@
       "boe_search_legislation": "Vyhledávání v BOE",
       "borme_get_summary": "Denní souhrn BORME",
       "business_registry_lookup": "Vyhledávání v obchodním rejstříku",
+      "calendar_free_busy": "Zjištění dostupnosti v kalendáři",
+      "calendar_list_events": "Čtení událostí kalendáře",
       "command_execution": "Spouštění příkazu",
       "compare_versions": "Porovnávání verzí",
       "configure_template_fields": "Nastavit pole vzoru",
@@ -4720,10 +4727,10 @@
       "dropPack": "Přetáhněte sem .zip/.skill nebo SKILL.md a dovednost se naimportuje",
       "editSkill": "Upravit dovednost",
       "enableSkill": "Zapnout dovednost",
-      "exportAsSkill": "Exportovat jako .skill",
-      "exportAsZip": "Exportovat jako .zip",
-      "exportFailed": "Dovednost se nepodařilo exportovat",
-      "exportSkill": "Exportovat dovednost",
+      "exportAsSkill": "Uložit jako .skill",
+      "exportAsZip": "Uložit jako .zip",
+      "exportFailed": "Dovednost se nepodařilo uložit do souboru",
+      "exportSkill": "Uložit dovednost do souboru",
       "fileExists": "Soubor s touto cestou již existuje",
       "howItRuns": "Jak se spouští",
       "importFailureFetch": "Zdroj dovednosti se nepodařilo načíst.",
@@ -5402,6 +5409,7 @@
       "defaultModel": "Výchozí: {model}",
       "defaultModelOption": "Výchozí",
       "defaultRationale": {
+        "browse": "Pro práci s webovými stránkami v prohlížeči.",
         "chat": "Pro konverzaci a běžné otázky.",
         "fast": "Pro krátké, rutinní úkoly.",
         "pdf": "Pro čtení a analýzu dokumentů PDF.",
@@ -5415,6 +5423,11 @@
       "googleKeyRestricted": "V Google Cloud zkontrolujte omezení klíče podle API, IP adres a odkazujících webů. Povolte potřebné API a požadavky svého serveru a zkuste to znovu.",
       "keepSavedKey": "Ponechat uložený klíč",
       "keyFormatHint": "Tento klíč má pro {provider} neobvyklý formát. Uložením jej ověříte u poskytovatele.",
+      "keyNeed": {
+        "builtIn": "Nepovinné. Bez vlastního klíče běží AI v této organizaci na modelech, které poskytuje stella.",
+        "keyRequired": "AI v této organizaci potřebuje klíč poskytovatele. Přidejte ho a AI se zapne.",
+        "ownKeys": "AI v této organizaci běží na klíčích níže."
+      },
       "modelForRole": "Model pro roli {role}",
       "modelIdPlaceholder": "Hledat modely",
       "modelsDescription": "Pro každou kategorii AI vyberte poskytovatele a jeden nabízený multimodální model.",
@@ -5422,6 +5435,7 @@
       "newApiKey": "Nový API klíč",
       "newApiKeyDescription": "Po uložení změn nahradí uložený klíč.",
       "noModelResults": "Žádné odpovídající nabízené modely",
+      "noProviders": "Zatím nejsou přidané žádné klíče poskytovatelů.",
       "openaiInsufficientQuota": "Zkontrolujte rozpočet projektu OpenAI a fakturaci API. Doplňte kredit nebo zvyšte příslušný limit a zkuste to znovu.",
       "openaiProjectOrganizationMismatch": "Použijte API klíč z požadovaného projektu a organizace OpenAI. Zkontrolujte jejich nastavení přístupu a zkuste to znovu.",
       "openrouterNoCredits": "Doplňte kredit ve fakturaci OpenRouter a zkuste to znovu.",
@@ -5444,6 +5458,8 @@
       "providerForRole": "Poskytovatel pro {role}",
       "providerKeyInvalid": "{provider} odmítl klíč. Zkontrolujte ho před uložením.",
       "providerKeyInvalidShort": "Neplatný",
+      "providerModes": "Používá se pro: {modes}",
+      "providerModesNone": "Nepoužívá se pro žádný mód. Přiřaďte ho módu v části Pokročilé.",
       "providerSetupConsole": "Otevřít nastavení poskytovatele",
       "providersDescription": "Přidejte přihlašovací údaje poskytovatelů, které má stella používat.",
       "providersPanel": "Poskytovatelé",
@@ -5453,6 +5469,7 @@
       "replaceKey": "Nahradit klíč",
       "roleUnavailable": "{provider} tuto roli nepodporuje.",
       "roles": {
+        "browse": "Prohlížení webu",
         "chat": "Chat",
         "fast": "Rychlost",
         "pdf": "PDF",
@@ -5515,7 +5532,7 @@
     "members": {
       "billingAccess": "Přístup k fakturačním údajům",
       "changeRole": "Změnit roli",
-      "confirmRoleChangeDescription": "Role uživatele {email} se změní z {oldRole} na {newRole}.",
+      "confirmRoleChangeDescription": "Role uživatele {email} se změní {oldRole, select, owner {z vlastníka} admin {z administrátora} member {z člena} intern {ze stážisty} external {z externího spolupracovníka} other {}} {newRole, select, owner {na vlastníka} admin {na administrátora} member {na člena} intern {na stážistu} external {na externího spolupracovníka} other {}}.",
       "confirmRoleChangeTitle": "Změnit roli",
       "joined": "Připojil/a se",
       "noMembersFound": "Nebyli nalezeni žádní členové",
@@ -5541,6 +5558,13 @@
     "startOverDescription": "Původní požadavek už mohl organizaci vytvořit. Než začnete znovu, zkontrolujte své organizace; nový požadavek by mohl vytvořit další organizaci.",
     "startOverTitle": "Zahájit nový požadavek na vytvoření?",
     "switchOrganization": "Přepnout organizaci"
+  },
+  "organizationSetup": {
+    "aiAction": "Nastavit AI",
+    "aiOptional": "Vlastní klíče poskytovatelů AI jsou nepovinné: bez nich běží AI na modelech, které poskytuje stella.",
+    "aiRequired": "AI v této organizaci potřebuje klíč poskytovatele, jinak ji nikdo nemůže používat.",
+    "invite": "Pozvěte kolegy, aby tu mohli pracovat s vámi.",
+    "title": "Nastavte novou organizaci"
   },
   "publicTools": {
     "addSkill": "Přidat dovednost",
@@ -5981,7 +6005,7 @@
     "organization": {
       "activeMembers": "Aktivní členové",
       "ai": "Nastavení AI",
-      "aiDescription": "Připojte vlastní klíče poskytovatelů AI.",
+      "aiDescription": "Nastavte, jak v této organizaci funguje AI.",
       "anonymization": {
         "addPlaceholder": "Pojem, který se má vždy maskovat (např. název týmu)",
         "deleteAction": "Smazat pojem",
@@ -7236,6 +7260,7 @@
         "title": "Odebrat odkazy na vzory Wordu?",
         "unknownLocation": "Umístění vzoru: adresa, kterou stella nedokáže ověřit"
       },
+      "checkingFiles": "Kontrola souborů…",
       "desktopEdit": {
         "accountRequiredTitle": "Připojte stella desktop ke svému účtu",
         "action": "Upravit v desktopu",
@@ -7279,6 +7304,14 @@
       "downloadPdf": "Stáhnout jako PDF",
       "downloadSearchablePdf": "Prohledávatelné PDF",
       "downloadWithComments": "Stáhnout s komentáři",
+      "duplicateUpload": {
+        "description": "{count, plural, one {# soubor je totožný s dokumentem, který tento spis již obsahuje.} few {# soubory jsou totožné s dokumenty, které tento spis již obsahuje.} many {# souboru je totožných s dokumenty, které tento spis již obsahuje.} other {# souborů je totožných s dokumenty, které tento spis již obsahuje.}} Vyberte, co s každým z nich udělat.",
+        "matchedDocument": "Totožné s dokumentem <bdi>{documentName}</bdi>",
+        "skip": "Přeskočit tento soubor",
+        "skipAll": "Přeskočit duplicity",
+        "title": "Již ve spisu",
+        "uploadAnyway": "Přesto nahrát"
+      },
       "emptyFile": "Soubor je prázdný.",
       "fileTooLarge": "Soubor je větší než {limit, number} MB.",
       "includeReferenceNumber": "Přidat referenční číslo",
