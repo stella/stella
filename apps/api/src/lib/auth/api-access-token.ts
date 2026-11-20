@@ -61,7 +61,7 @@ export const API_OAUTH_ROUTES = {
   },
   // The phone app's dictation: the models its picker offers, labelled where
   // they leave the region or keep the audio, and the cleanup of a dictated
-  // transcript. Each sends only the request's own text to a model and
+  // transcript or of a part of a recording's transcript. Each sends only the request's own text to a model and
   // stores nothing; they are app plumbing, not agent capabilities.
   "GET /v1/dictation/models": {
     scope: "stella:chat",
@@ -72,6 +72,12 @@ export const API_OAUTH_ROUTES = {
   "POST /v1/dictation/cleanup": {
     scope: "stella:chat",
     handler: "apps/api/src/handlers/dictation/member-cleanup.ts",
+    uncataloged: "native_tool_ui",
+    client: "mobile",
+  },
+  "POST /v1/dictation/recording-cleanup": {
+    scope: "stella:chat",
+    handler: "apps/api/src/handlers/dictation/member-recording-cleanup.ts",
     uncataloged: "native_tool_ui",
     client: "mobile",
   },

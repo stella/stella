@@ -7,12 +7,10 @@ import {
 
 import { cleanUpDictation } from "@/api/handlers/dictation/cleanup";
 import type { DictationCleanupGeneration } from "@/api/handlers/dictation/cleanup";
-import { consumeDictationLimit } from "@/api/handlers/dictation/limits";
-import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
-import { storedAIConfigUnreadableError } from "@/api/lib/ai-config-response";
+import type { consumeDictationLimit } from "@/api/handlers/dictation/limits";
+import { runMemberDictationModelAction } from "@/api/handlers/dictation/model-endpoint";
 import {
   ACCOUNT_ACCESS,
-  configuredModelAdmission,
   createSafeRootHandler,
   safeHandlerResponseSchemas,
 } from "@/api/lib/api-handlers";
@@ -46,48 +44,28 @@ type MemberDictationCleanupOptions = DictationCleanupGeneration & {
  */
 export const createMemberDictationCleanupEndpoint = ({
   admit,
-  limit = consumeDictationLimit,
+  limit,
   ...generation
 }: MemberDictationCleanupOptions = {}) =>
   createSafeRootHandler(
     config,
-    async function* ({
-      actionSignal,
-      body,
-      managedAIResidency,
-      modelAdmission,
-      orgAIConfig,
-      orgAIConfigStatus,
-      promptCachingEnabled,
-      request,
-      safeDb,
-      session,
-      user,
-    }) {
-      if (orgAIConfigStatus === ORG_AI_CONFIG_STATUS.unreadable) {
-        return Result.err(storedAIConfigUnreadableError());
-      }
-      const organizationId = session.activeOrganizationId;
-      yield* Result.await(
-        limit({ organizationId, userId: user.id, operation: "cleanup" }),
-      );
-      const segments = yield* Result.await(
-        cleanUpDictation({
-          caller: {
-            organizationId,
-            userId: user.id,
-            safeDb,
-            orgAIConfig,
-            managedAIResidency,
-            promptCachingEnabled,
-          },
-          body,
-          modelAdmission: configuredModelAdmission({ modelAdmission }),
-          actionSignal: actionSignal ?? request.signal,
-          ...generation,
-        }),
-      );
-      return Result.ok(segments);
+    async function* (ctx) {
+      return yield* runMemberDictationModelAction({
+        ctx,
+        limit,
+        async *run({ caller, modelAdmission, actionSignal }) {
+          const segments = yield* Result.await(
+            cleanUpDictation({
+              caller,
+              body: ctx.body,
+              modelAdmission,
+              actionSignal,
+              ...generation,
+            }),
+          );
+          return Result.ok(segments);
+        },
+      });
     },
     admit === undefined ? undefined : { admit },
   );
