@@ -166,6 +166,7 @@ function ManageUsageButton() {
   return (
     <Button
       disabled={pending}
+      disabledReason={t("common.preparing")}
       onClick={() => mutation.mutate()}
       variant="ghost"
     >
