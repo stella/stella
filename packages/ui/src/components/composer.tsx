@@ -83,6 +83,14 @@ type ComposerStatusRowProps = {
 };
 
 /**
+ * The rendered status row is the `composer-status` container: the same row
+ * renders under the wide main chat and in a narrow side pane, so a control
+ * that compacts itself queries the row's width (`@max-xl/composer-status:`),
+ * not the viewport's. A loading view's row draws no such control.
+ */
+const COMPOSER_STATUS_CONTAINER_CLASS = "@container/composer-status";
+
+/**
  * The slim status row rendered beneath a composer box: a `text-xs` row with
  * a start cluster and an end slot pinned to the far edge. Shared by every
  * surface so the shell can never drift. Renders nothing when both slots are
@@ -100,7 +108,13 @@ export const ComposerStatusRow = ({
 
   if (center !== undefined) {
     return (
-      <div className={cn(COMPOSER_STATUS_ROW_CENTERED_CLASS, className)}>
+      <div
+        className={cn(
+          COMPOSER_STATUS_ROW_CENTERED_CLASS,
+          COMPOSER_STATUS_CONTAINER_CLASS,
+          className,
+        )}
+      >
         <div className="flex min-w-0 items-center">{start}</div>
         <div className="flex items-center justify-center">{center}</div>
         <div className="flex min-w-0 items-center justify-end">{end}</div>
@@ -109,7 +123,13 @@ export const ComposerStatusRow = ({
   }
 
   return (
-    <div className={cn(COMPOSER_STATUS_ROW_CLASS, className)}>
+    <div
+      className={cn(
+        COMPOSER_STATUS_ROW_CLASS,
+        COMPOSER_STATUS_CONTAINER_CLASS,
+        className,
+      )}
+    >
       {start}
       {end !== undefined && <div className="ms-auto min-w-0">{end}</div>}
     </div>
