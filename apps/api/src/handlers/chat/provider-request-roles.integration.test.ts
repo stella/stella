@@ -1,3 +1,4 @@
+import { runAgentStream } from "@tanstack/ai";
 import type { ModelMessage } from "@tanstack/ai";
 import { panic, Result } from "better-result";
 import { afterAll, describe, expect, test } from "bun:test";
@@ -19,6 +20,7 @@ import { createSafeDb, createScopedDb } from "@/api/db/scoped";
 import { env } from "@/api/env";
 import { createBrowseWebAgent } from "@/api/handlers/chat/browse-web-agent";
 import { toPersistedChatMessageContentV3 } from "@/api/handlers/chat/chat-message-parts";
+import { createChatTurnBudget } from "@/api/handlers/chat/chat-turn-budget";
 import {
   compactChatMessagesForModel,
   compactModelMessagesForModel,
@@ -477,12 +479,15 @@ const TASK_REQUESTS = {
         tenantWorkspaceIds: [],
         thirdPartyBoundary: boundaryOf(run),
         threadId: toSafeId<"chatThread">(Bun.randomUUIDv7()),
+        turnBudget: createChatTurnBudget({ owningMessage: undefined })
+          .childMiddleware,
         usageLane: undefined,
         userId: ids.userA1,
         workspaceId: null,
       });
       const subagentRunId = Bun.randomUUIDv7();
-      for await (const _chunk of await agent.run({
+      // Run as the SDK spawns a child: it builds the run's context.
+      for await (const _chunk of runAgentStream(agent, {
         input: { task: "Find the termination clause on example.cz." },
         messages: [],
         parentRunId: "parent-run",
