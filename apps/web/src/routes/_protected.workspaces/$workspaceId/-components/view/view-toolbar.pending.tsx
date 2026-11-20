@@ -31,6 +31,7 @@ import { FilterChipsFace } from "@/components/workspaces/view-toolbar-filters.pe
 import type { TranslationKey } from "@/i18n/types";
 import type { ViewLayout, WorkspaceView } from "@/lib/types";
 import type { TableContentMode } from "@/lib/workspaces/table-store";
+import { unreachableViewLayout } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-layout-unreachable.logic";
 
 /*
  * The matter view toolbar's faces and the pieces its controls share with
@@ -359,10 +360,9 @@ const LayoutControlsFace = ({ layout }: { layout: ViewLayout }) => {
     case "avt":
     case "correspondence":
       return null;
+    default:
+      return unreachableViewLayout(layout);
   }
-  // Every layout is a case above (the exhaustiveness rule holds the list);
-  // this return only gives the function one shape for every path.
-  return null;
 };
 
 /**
