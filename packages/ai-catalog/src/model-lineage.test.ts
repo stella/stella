@@ -67,16 +67,18 @@ const behindMakerGeneration = (
   return Math.floor(own.version) < newestMajor;
 };
 
-/**
- * Defaults that may stay behind, each with the reason. The provider offers no
- * newer model of the same product line.
- */
+/** Defaults that may stay behind, each with the reason. */
 const REVIEWED_STALE_DEFAULTS: ReadonlyMap<string, string> = new Map([
   [
     "bedrock:us.anthropic.claude-sonnet-4-5-20250929-v1:0",
     "Bedrock offers no newer Sonnet or Opus model yet.",
   ],
 ]);
+
+const isOfferedProvider = (provider: string): provider is BYOKProvider =>
+  Object.hasOwn(BYOK_MODEL_OPTIONS, provider);
+const BYOK_PROVIDERS =
+  Object.keys(BYOK_MODEL_OPTIONS).filter(isOfferedProvider);
 
 const offeredPool = (provider: BYOKProvider) => {
   const offered: readonly string[] = BYOK_MODEL_OPTIONS[provider];
@@ -85,8 +87,7 @@ const offeredPool = (provider: BYOKProvider) => {
 
 const staleLedgerDefaults = () =>
   MODEL_TASKS.flatMap((task) =>
-    Object.keys(BYOK_MODEL_OPTIONS).flatMap((key) => {
-      const provider = key as BYOKProvider;
+    BYOK_PROVIDERS.flatMap((provider) => {
       const entry = MODEL_DEFAULTS_LEDGER[task][provider];
       if (entry.kind !== "candidate") {
         return [];
