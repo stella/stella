@@ -312,7 +312,8 @@ struct LevelEvent {
   device: Option<String>,
 }
 
-/// Sent to the Settings window about 25 times a second while a test runs.
+/// Sent to the window that started the test (Settings or setup) about 25
+/// times a second while it runs.
 const LEVEL_EVENT: &str = "dictation-microphone-level";
 /// Payload-free: the test stopped, on its own or when asked.
 const ENDED_EVENT: &str = "dictation-microphone-test-ended";
@@ -328,6 +329,7 @@ pub fn stop_test(app: &tauri::AppHandle) {
 #[cfg(dictation)]
 fn run_test(
   app: &tauri::AppHandle,
+  target: &str,
   choice: Option<Choice>,
   stopped: &std::sync::mpsc::Receiver<()>,
 ) {
@@ -335,12 +337,11 @@ fn run_test(
 
   use tauri::Emitter;
 
-  let settings = crate::SETTINGS_WINDOW_LABEL;
   let Some(recorder) = crate::dictation_engine::Recorder::start(choice) else {
     let reading = LevelMeter::default().push(&[], SILENCE_LIMIT);
     crate::logging::best_effort(
       app.emit_to(
-        settings,
+        target,
         LEVEL_EVENT,
         LevelEvent {
           reading,
@@ -350,7 +351,7 @@ fn run_test(
       "microphone level was not sent",
     );
     crate::logging::best_effort(
-      app.emit_to(settings, ENDED_EVENT, ()),
+      app.emit_to(target, ENDED_EVENT, ()),
       "test end was not sent",
     );
     return;
@@ -363,7 +364,7 @@ fn run_test(
     let reading = meter.push(&mono, started.elapsed());
     crate::logging::best_effort(
       app.emit_to(
-        settings,
+        target,
         LEVEL_EVENT,
         LevelEvent {
           reading,
@@ -378,17 +379,18 @@ fn run_test(
   }
   drop(recorder);
   crate::logging::best_effort(
-    app.emit_to(settings, ENDED_EVENT, ()),
+    app.emit_to(target, ENDED_EVENT, ()),
     "test end was not sent",
   );
 }
 
-/// Listens to `id`, or the system default, and sends its level to Settings
-/// until it is stopped or `TEST_LIMIT` passes. Refused while a dictation
-/// records.
+/// Listens to `id`, or the system default, and sends its level to the
+/// window that asked until it is stopped or `TEST_LIMIT` passes. Refused
+/// while a dictation records.
 #[tauri::command]
 pub async fn dictation_test_microphone_start(
   app: tauri::AppHandle,
+  window: tauri::WebviewWindow,
   id: Option<String>,
 ) -> Result<(), String> {
   use tauri::Manager;
@@ -404,9 +406,10 @@ pub async fn dictation_test_microphone_start(
     let (stop, stopped) = std::sync::mpsc::channel();
     app.state::<MicrophoneTest>().replace(Some(stop));
     let test_app = app.clone();
+    let target = window.label().to_string();
     std::thread::Builder::new()
       .name("dictation-microphone-test".to_string())
-      .spawn(move || run_test(&test_app, choice, &stopped))
+      .spawn(move || run_test(&test_app, &target, choice, &stopped))
       .map(|_| ())
       .map_err(crate::logging::with_cause_logged(
         "the microphone test could not start",
@@ -414,7 +417,7 @@ pub async fn dictation_test_microphone_start(
   }
   #[cfg(not(dictation))]
   {
-    let _ = (app.state::<MicrophoneTest>(), id);
+    let _ = (app.state::<MicrophoneTest>(), window, id);
     Err("dictation is not available on this computer".to_string())
   }
 }
