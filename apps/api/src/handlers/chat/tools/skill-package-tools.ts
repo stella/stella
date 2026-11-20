@@ -5,9 +5,13 @@ import * as v from "valibot";
 import { SKILL_FILE_NAME, SKILL_PACKAGE_LIMITS } from "@stll/skills/format";
 import { normalizeUnicode } from "@stll/text-normalize";
 
-import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
+import type { SafeDb, SafeDbError, ScopedDb } from "@/api/db/safe-db";
 import { AGENT_SKILL_SCOPES } from "@/api/db/schema";
 import { raiseChatToolError } from "@/api/handlers/chat/tools/tool-failure";
+import {
+  findSkillDraftNames,
+  type SkillDraftName,
+} from "@/api/lib/agent-skills/draft-names";
 import {
   blockingSkillPackageDiagnostics,
   checkSkillPackage,
@@ -109,7 +113,8 @@ const VALIDATE_DESCRIPTION =
   "install uses. Takes save_skill_package's arguments: no skillId checks " +
   "skillMd and resources as a new skill; skillId checks that saved skill " +
   "after the given changes. Returns status, diagnostics with fixes, " +
-  "frontmatter, file sizes and missingReferences.";
+  "frontmatter, file sizes, missingReferences, and warnings naming people " +
+  "or organizations the sent text holds.";
 
 const SAVE_DESCRIPTION =
   "Save a skill package (SKILL.md plus text files such as references/*.md) " +
@@ -120,9 +125,8 @@ const SAVE_DESCRIPTION =
   `for the user to enable in Knowledge. ${LIMITS_SENTENCE}`;
 
 /** Read the input the way both tools do: one meaning per combination. */
-const readPackageInput = (
-  raw: v.InferInput<typeof packageInputSchema>,
-): Result<
+/** A new package, or changes to a saved skill. */
+type PackageTarget =
   | {
       type: "new";
       resources: SkillPackageChanges["resources"];
@@ -133,9 +137,11 @@ const readPackageInput = (
       type: "saved";
       changes: SkillPackageChanges;
       skillId: SafeId<"agentSkill">;
-    },
-  ChatToolError
-> => {
+    };
+
+const readPackageInput = (
+  raw: v.InferInput<typeof packageInputSchema>,
+): Result<PackageTarget, ChatToolError> => {
   // The model's arguments are read here, where the id brands.
   const parsed = v.safeParse(packageInputSchema, raw);
   if (!parsed.success) {
@@ -230,6 +236,52 @@ const unwrap = <T>(result: Result<T, HandlerError | SafeDbError>): T =>
 const skillUrl = (skillId: SafeId<"agentSkill">) =>
   `${getAppBaseUrl()}/knowledge/tools/${skillId}`;
 
+/**
+ * What a call should know but need not fix: names of people and
+ * organizations its text holds, found the way a skill draft is checked
+ * before it is stored. They never block: a skill may need a name (a court,
+ * a statute's author), and the author decides before sharing it.
+ */
+type SkillPackageWarning =
+  | { type: "names_found"; names: SkillDraftName[]; message: string }
+  | { type: "names_unchecked"; message: string };
+
+/** The texts a call sends, each one a name could sit in. */
+export const packageTexts = (target: PackageTarget): string[] => {
+  const resources =
+    target.type === "new" ? target.resources : target.changes.resources;
+  const skillMd =
+    target.type === "new" ? target.skillMd : target.changes.skillMd;
+  return [
+    ...(skillMd === undefined ? [] : [skillMd]),
+    ...resources.flatMap(({ content, path }) => [path, content]),
+  ];
+};
+
+export const toNameWarnings = (
+  scan: Result<SkillDraftName[], unknown>,
+): SkillPackageWarning[] => {
+  if (Result.isError(scan)) {
+    return [
+      {
+        type: "names_unchecked",
+        message:
+          "The text could not be checked for names of people and organizations; review it for client or party names before sharing the skill.",
+      },
+    ];
+  }
+  return scan.value.length === 0
+    ? []
+    : [
+        {
+          type: "names_found",
+          names: scan.value,
+          message:
+            "These names of people or organizations appear in the text this call sent. Replace client and party names with neutral placeholders unless the skill needs them.",
+        },
+      ];
+};
+
 const nextStep = (check: SkillPackageCheck): string => {
   const blocking = blockingSkillPackageDiagnostics(check);
   if (blocking.length > 0) {
@@ -259,6 +311,8 @@ type CreateSkillPackageToolsProps = {
   /** Bound to approved mutations; absent offers only the check. */
   recordAuditEvent: AuditRecorder | undefined;
   safeDb: SafeDb;
+  /** Reads the organization's anonymizer catalogs for the name scan. */
+  scopedDb: ScopedDb;
   userId: SafeId<"user">;
 };
 
@@ -273,9 +327,21 @@ export const createSkillPackageTools = ({
   organizationId,
   recordAuditEvent,
   safeDb,
+  scopedDb,
   userId,
 }: CreateSkillPackageToolsProps) => {
   const access = { memberRole, organizationId, userId };
+  const nameWarnings = async (
+    target: PackageTarget,
+  ): Promise<SkillPackageWarning[]> =>
+    toNameWarnings(
+      await findSkillDraftNames({
+        organizationId,
+        scopedDb,
+        texts: packageTexts(target),
+        workspaceId: null,
+      }),
+    );
 
   const validate = toolDefinition({
     name: VALIDATE_SKILL_PACKAGE_TOOL_NAME,
@@ -286,6 +352,7 @@ export const createSkillPackageTools = ({
     const target = Result.isError(read)
       ? raiseChatToolError(read.error)
       : read.value;
+    const warnings = await nameWarnings(target);
     switch (target.type) {
       case "new": {
         const check = checkSkillPackage({
@@ -296,7 +363,7 @@ export const createSkillPackageTools = ({
           })),
           skillMd: target.skillMd,
         });
-        return { ...check, skillId: null, next: nextStep(check) };
+        return { ...check, skillId: null, warnings, next: nextStep(check) };
       }
       case "saved": {
         const { check, skill } = unwrap(
@@ -309,7 +376,7 @@ export const createSkillPackageTools = ({
             }),
           ),
         );
-        return { ...check, skillId: skill.id, next: nextStep(check) };
+        return { ...check, skillId: skill.id, warnings, next: nextStep(check) };
       }
       default:
         target satisfies never;
@@ -334,6 +401,7 @@ export const createSkillPackageTools = ({
     const target = Result.isError(read)
       ? raiseChatToolError(read.error)
       : read.value;
+    const warnings = await nameWarnings(target);
     switch (target.type) {
       case "new": {
         const outcome = unwrap(
@@ -348,12 +416,13 @@ export const createSkillPackageTools = ({
         );
         switch (outcome.type) {
           case "rejected":
-            return rejected(outcome.check);
+            return rejected(outcome.check, warnings);
           case "name-taken":
             return {
               status: "name_taken" as const,
               skillId: outcome.skill.id,
               name: outcome.skill.name,
+              warnings,
               next: "A skill with this name exists already and nothing was written. To continue it, call save_skill_package with this skillId; for a separate skill, change the name in SKILL.md.",
             };
           case "saved":
@@ -363,6 +432,7 @@ export const createSkillPackageTools = ({
               deleted: [],
               skill: outcome.skill,
               updated: [],
+              warnings,
             });
           default:
             outcome satisfies never;
@@ -382,8 +452,8 @@ export const createSkillPackageTools = ({
           ),
         );
         return outcome.type === "rejected"
-          ? rejected(outcome.check)
-          : saved(outcome);
+          ? rejected(outcome.check, warnings)
+          : saved({ ...outcome, warnings });
       }
       default:
         target satisfies never;
@@ -410,10 +480,14 @@ export const createSkillPackageTools = ({
   };
 };
 
-const rejected = (check: SkillPackageCheck) => ({
+const rejected = (
+  check: SkillPackageCheck,
+  warnings: SkillPackageWarning[],
+) => ({
   status: "rejected" as const,
   diagnostics: blockingSkillPackageDiagnostics(check),
   missingReferences: check.missingReferences,
+  warnings,
   next: "Nothing was written. Fix each diagnostic (validate_skill_package checks without saving) and call again.",
 });
 
@@ -423,12 +497,14 @@ const saved = ({
   deleted,
   skill,
   updated,
+  warnings,
 }: {
   check: SkillPackageCheck;
   created: string[];
   deleted: string[];
   skill: { id: SafeId<"agentSkill">; name: string; scope: string };
   updated: string[];
+  warnings: SkillPackageWarning[];
 }) => ({
   status: "saved" as const,
   skillId: skill.id,
@@ -441,5 +517,6 @@ const saved = ({
   complete: check.missingReferences.length === 0,
   missingReferences: check.missingReferences,
   totals: check.totals,
+  warnings,
   next: nextStep(check),
 });

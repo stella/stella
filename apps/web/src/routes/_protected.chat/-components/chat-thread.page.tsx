@@ -54,6 +54,7 @@ import { McpReconnectNotice } from "@/components/chat/mcp-reconnect-notice";
 import { PromptSuggestions } from "@/components/chat/prompt-suggestions";
 import { useChatComposerModels } from "@/components/chat/use-chat-composer-models";
 import { useUserMessageEditActions } from "@/components/chat/user-message-edit";
+import { INSPECTOR_FOCUS_INTENT } from "@/components/inspector/inspector-store-types";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { MoveToSideButton } from "@/components/inspector/move-to-side-button";
 import { RenderStormRegion } from "@/components/render-storm-canary";
@@ -64,7 +65,6 @@ import { useUsageLimit } from "@/components/usage/use-usage-limit";
 import { env } from "@/env";
 import { ChatActiveSkillIntro } from "@/features/chat/components/chat-active-skill-intro";
 import { ChatActiveSkillLabel } from "@/features/chat/components/chat-active-skill-label";
-import { SuggestedFollowupChips } from "@/features/chat/components/suggested-followup-chips";
 import { useChatSession } from "@/features/chat/hooks/use-chat-session";
 import { useChatThreadRuntime } from "@/features/chat/hooks/use-chat-thread-runtime";
 import { useChatUserContext } from "@/features/chat/hooks/use-chat-user-context";
@@ -406,11 +406,10 @@ export const ChatThreadPage = ({
 
   const sentMessageHistory = getUserMessageHistory(messages);
 
-  // Suggested follow-up prompts for Tab-to-ask (editor) and chips display.
+  // Suggested follow-up prompts, drawn under the answer they follow.
   const {
     handleAskUserEditingChange,
     lastMessageId,
-    suggestedFollowupPrompt,
     suggestedPrompts: suggestedFollowupPrompts,
   } = useSuggestedFollowupPrompts({
     activeOrganizationId,
@@ -466,9 +465,7 @@ export const ChatThreadPage = ({
     }
   };
   const controller = useChatEditor({
-    followupAnalytics: { surface: "chat-thread" },
     sentMessageHistory,
-    suggestedFollowupPrompt,
     threadRef,
   });
 
@@ -496,6 +493,7 @@ export const ChatThreadPage = ({
         id: threadRef.threadId,
         workspaceId: threadRef.workspaceId,
         contextMatterIds: selectedContextMatterIds,
+        focus: INSPECTOR_FOCUS_INTENT.claim,
       });
       detached(
         navigate({
@@ -509,6 +507,7 @@ export const ChatThreadPage = ({
     openInspectorChat({
       id: threadRef.threadId,
       contextMatterIds: selectedContextMatterIds,
+      focus: INSPECTOR_FOCUS_INTENT.claim,
     });
     detached(navigate({ to: "/chat" }), "chat-thread-page.navigate");
   };
@@ -528,11 +527,10 @@ export const ChatThreadPage = ({
     await resendLatestMessage({ sendMode: CHAT_SEND_MODE.rawOverride });
   });
 
-  // Dock new-chat: same destination as the header's labeled "New chat"
-  // button (which stays as the primary affordance); the dock icon keeps
-  // the status row uniform across chat surfaces. Abort any live stream
-  // first — `chatThreadOptions` keeps the in-flight Chat alive in the
-  // query cache, so navigating away would leave it streaming.
+  // The composer (+) menu's New chat: same destination as the header's
+  // labelled New chat button. Abort any live stream first:
+  // `chatThreadOptions` keeps the in-flight Chat alive in the query cache,
+  // so navigating away would leave it streaming.
   const startNewThread = () => {
     leave();
     if (threadRef.scope === "workspace") {
@@ -838,6 +836,36 @@ export const ChatThreadPage = ({
                               threadRef,
                             }}
                             error={error}
+                            followUps={{
+                              analyticsSurface: "chat-thread",
+                              messageId: lastMessageId,
+                              onSelect: (prompt) => {
+                                controller.setContent(
+                                  composerStoredMarkdown(prompt),
+                                );
+                                detached(
+                                  controller.submit(async (draft) => {
+                                    composerModels.openDesktopForSend();
+                                    if (!(await ensureAIAvailable())) {
+                                      return CHAT_SEND_KEPT;
+                                    }
+                                    const message =
+                                      await buildChatRequestMessage(draft);
+                                    if (message.isErr()) {
+                                      notifyUserError(
+                                        message.error,
+                                        t("chat.sendErrorMessageEmpty"),
+                                      );
+                                      return CHAT_SEND_KEPT;
+                                    }
+                                    return await sendMessage(message.value);
+                                  }),
+                                  "chat-thread-page.submit",
+                                );
+                              },
+                              prompts: suggestedFollowupPrompts,
+                              threadId: threadRef.threadId,
+                            }}
                             hasOlderMessages={olderCursor !== null}
                             isGenerating={isGenerating}
                             isLoadingOlder={isLoadingOlder}
@@ -931,39 +959,6 @@ export const ChatThreadPage = ({
               composerBlockRef={observeComposerBlock}
               aboveComposer={
                 <>
-                  {/* `px-2` mirrors the tray's `p-2` so the first chip
-                      starts on the composer box's leading edge; `pb-0`
-                      because the tray padding alone separates the chips
-                      from the box here. */}
-                  <SuggestedFollowupChips
-                    analyticsSurface="chat-thread"
-                    className="px-2 pb-0"
-                    onSelect={(prompt) => {
-                      controller.setContent(composerStoredMarkdown(prompt));
-                      detached(
-                        controller.submit(async (draft) => {
-                          composerModels.openDesktopForSend();
-                          if (!(await ensureAIAvailable())) {
-                            return CHAT_SEND_KEPT;
-                          }
-                          const message = await buildChatRequestMessage(draft);
-                          if (message.isErr()) {
-                            notifyUserError(
-                              message.error,
-                              t("chat.sendErrorMessageEmpty"),
-                            );
-                            return CHAT_SEND_KEPT;
-                          }
-                          return await sendMessage(message.value);
-                        }),
-                        "chat-thread-page.submit",
-                      );
-                    }}
-                    prompts={suggestedFollowupPrompts}
-                    messageId={lastMessageId}
-                    surface="floating"
-                    threadId={threadRef.threadId}
-                  />
                   {env.VITE_FEATURE_USAGE && <UsageFallbackNotice />}
                   <McpReconnectNotice editor={controller.editor} />
                 </>
@@ -1017,7 +1012,10 @@ export const ChatThreadPage = ({
                           />
                         </>
                       }
-                      onNewThread={messages.length > 0 ? startNewThread : null}
+                      // The header's labelled New chat is this page's one
+                      // way to start a chat; the bar under the composer
+                      // does not repeat it.
+                      onNewThread={null}
                       status="ready"
                       threadRef={threadRef}
                     />

@@ -1,5 +1,11 @@
 import { panic } from "better-result";
-import { existsSync, readdirSync, statSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  readdirSync,
+  readFileSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
 import path from "node:path";
 import * as v from "valibot";
 
@@ -1041,6 +1047,13 @@ export const FAKE_SCENARIOS = {
     item("completed", agentMessage("m-3", "Both answers received.")),
     completed(),
   ],
+  /**
+   * A first launch too slow to answer `initialize`; a later launch in the
+   * same log runs `text` (`LATER_LAUNCH`).
+   */
+  slow_first_start: [{ sleep: 60_000 }],
+  /** A first launch that never opens the thread; later ones run `text`. */
+  slow_first_thread: [...handshake(), { sleep: 60_000 }],
   /** Never answers and outlives SIGTERM; says when it is ready to. */
   unresponsive: [
     { ignoreTerm: true },
@@ -1580,6 +1593,22 @@ export type FakeScenario = keyof typeof FAKE_SCENARIOS;
 export const isScenario = (name: string): name is FakeScenario =>
   Object.hasOwn(FAKE_SCENARIOS, name);
 
+/** What a scenario runs once the log already holds a launch. */
+const LATER_LAUNCH: Partial<Record<FakeScenario, readonly FakeStep[]>> = {
+  slow_first_start: FAKE_SCENARIOS.text,
+  slow_first_thread: FAKE_SCENARIOS.text,
+};
+
+/** How many launches the log recorded before this one. */
+const launchesLogged = () => {
+  const logPath = process.env["FAKE_HARNESS_LOG"] ?? "";
+  return existsSync(logPath)
+    ? readFileSync(logPath, "utf-8")
+        .split("\n")
+        .filter((line) => line.startsWith('{"startup":')).length
+    : 0;
+};
+
 /** The decision ids that let an approval request's action go ahead. */
 const APPROVING_DECISIONS = ["accept", "acceptForSession"] as const;
 
@@ -2051,6 +2080,7 @@ export const run = async (
 
 if (import.meta.main) {
   const scenario = process.argv[2] ?? "";
+  const earlierLaunches = launchesLogged();
   const log = fakeHarnessLog();
   log({
     startup: {
@@ -2078,6 +2108,7 @@ if (import.meta.main) {
     log({ unknownScenario: scenario });
     process.exit(98);
   }
-  await run(FAKE_SCENARIOS[scenario], log);
+  const later = earlierLaunches > 0 ? LATER_LAUNCH[scenario] : undefined;
+  await run(later ?? FAKE_SCENARIOS[scenario], log);
   process.exit(0);
 }

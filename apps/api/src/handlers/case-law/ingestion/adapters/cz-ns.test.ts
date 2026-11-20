@@ -12,7 +12,9 @@ import { isReadRefusal } from "@/api/lib/errors/read-outcome";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import {
   decodeSourceRawEnvelope,
+  encodeSourceRawEnvelope,
   type IngestionResult,
+  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
   type StoredRawReparseInput,
 } from "@/api/lib/legal-search/ingestion-types";
 import { createTestFetch } from "@/api/tests/helpers/test-fetch";
@@ -120,6 +122,82 @@ describe("decision pages the publisher did not serve", () => {
   const UNID = "0123456789abcdef0123456789abcdef";
   const ROW = { unid: UNID, caseNumber: "1 Cdo 1/2026" };
   const PAGE = "<html><body><p>Rozhodnutí soudu.</p></body></html>";
+
+  test("stored document build serializes detail then print and stops after refusal", async () => {
+    const recover = czNsAdapter.buildStoredDocument;
+    if (recover === undefined) {
+      throw new TypeError("NS recovery required");
+    }
+    const stored = {
+      raw: new TextEncoder().encode(
+        encodeSourceRawEnvelope({ listing: JSON.stringify(ROW) }),
+      ),
+      contentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+      caseNumber: ROW.caseNumber,
+      sourceDocumentId: UNID,
+      language: "cs",
+      court: "Nejvyšší soud",
+      ecli: null,
+      decisionDate: null,
+      decisionType: null,
+      sourceUrl: null,
+      documentUrl: null,
+      metadata: {},
+    } satisfies StoredRawReparseInput;
+    for (const refused of [false, true]) {
+      const paths: string[] = [];
+      let active = 0;
+      testFetchState.set(
+        asFetchMock(async (input: string | URL | Request) => {
+          const url = new URL(
+            input instanceof Request ? input.url : String(input),
+          );
+          expect(active).toBe(0);
+          active++;
+          await Promise.resolve();
+          paths.push(url.pathname);
+          active--;
+          return new Response(PAGE, { status: refused ? 403 : 200 });
+        }),
+      );
+      const outcome = await recover({
+        stored,
+        reference: ROW.caseNumber,
+        signal: AbortSignal.timeout(5000),
+      });
+      expect(paths).toEqual(
+        refused
+          ? [`/Judikatura/judikatura_ns.nsf/WebSearch/${UNID}`]
+          : [
+              `/Judikatura/judikatura_ns.nsf/WebSearch/${UNID}`,
+              `/Judikatura/judikatura_ns.nsf/WebPrint/${UNID}`,
+            ],
+      );
+      expect(outcome.type).toBe(refused ? "detail-unavailable" : "built");
+    }
+    for (const detail of [
+      "<tr><td><b><font>Spisová značka:</font></b></td><td><b><font>2 Cdo 2/2026</font></b></td></tr>",
+      '<tr><td class="left-part">Spisová značka:</td><td>2 Cdo 2/2026</td></tr>',
+    ]) {
+      testFetchState.set(
+        asFetchMock(async (input: string | URL | Request) => {
+          const url = String(input instanceof Request ? input.url : input);
+          return url.includes("WebPrint")
+            ? new Response("", { status: 404 })
+            : new Response(detail);
+        }),
+      );
+      expect(
+        (
+          await recover({
+            stored,
+            reference: ROW.caseNumber,
+            signal: AbortSignal.timeout(5000),
+          })
+        ).type,
+      ).toBe("incomplete-locator");
+    }
+  });
 
   /** Answers that fail a read without stating that the page is absent. */
   const READ_FAILURES = {

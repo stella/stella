@@ -15,6 +15,10 @@ import {
 } from "../../../../../scripts/ledger-membership.ts";
 import { accountExportDownloadScalingScenario } from "./account-exports";
 import apiLedger from "./api-scaling-ledger.json";
+import {
+  browseCalendarScalingScenario,
+  browseCourtsScalingScenario,
+} from "./case-law-browse-hubs";
 import { chatActiveRunsScalingScenario } from "./chat-active-runs";
 import { chatBackgroundTasksScalingScenario } from "./chat-background-tasks";
 import { browserSiteGrantsScalingScenario } from "./chat-browser-site-grants";
@@ -78,6 +82,7 @@ import {
 } from "./scenario-membership";
 import { readScalingScenarios } from "./scenarios";
 import { sharepointBrowseScalingScenarios } from "./sharepoint-browse";
+import { skillExportScalingScenario } from "./skill-export";
 import {
   softLawReadScalingScenario,
   softLawSearchScalingScenario,
@@ -112,6 +117,8 @@ const measuredApiScenarios = [
   decisionSummaryScalingScenario,
   decisionAnchorRedirectsScalingScenario,
   decisionFilterValidationScalingScenario,
+  browseCalendarScalingScenario,
+  browseCourtsScalingScenario,
   accountExportDownloadScalingScenario,
   desktopRunnerUpgradeScalingScenario,
   chatLocalRunnersScalingScenario,
@@ -158,6 +165,7 @@ const measuredApiScenarios = [
   softLawSearchScalingScenario,
   softLawReadScalingScenario,
   ...sharepointBrowseScalingScenarios,
+  skillExportScalingScenario,
 ];
 const measuredApiReads = apiApp.routes
   .filter(({ definition }) =>

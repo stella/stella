@@ -13,9 +13,9 @@ import {
 } from "@/features/chat/use-chat-turn-notifications";
 import { detached } from "@/lib/detached";
 import {
-  CHAT_NOTIFICATIONS_TOGGLE_ROW_CLASS,
-  ChatNotificationsCardFrame,
-} from "@/routes/_protected.settings/-components/account/chat-notifications-card.pending";
+  SETTINGS_SWITCH_ROW_CLASS,
+  SettingsSwitchCard,
+} from "@/routes/_protected.settings/-components/settings-card.pending";
 
 const noopSubscribe = (_onStoreChange: () => void) => () => undefined;
 
@@ -42,11 +42,14 @@ export const ChatNotificationsCard = () => {
   };
 
   return (
-    <ChatNotificationsCardFrame>
+    <SettingsSwitchCard
+      description="settings.account.chatNotificationsDescription"
+      title="settings.account.chatNotifications"
+    >
       {/* The description belongs to the field, so it is announced with
           the switch; a browser without notifications explains why here. */}
       <Field className="gap-2">
-        <div className={CHAT_NOTIFICATIONS_TOGGLE_ROW_CLASS}>
+        <div className={SETTINGS_SWITCH_ROW_CLASS}>
           <Switch
             checked={enabled}
             disabled={!supported}
@@ -65,6 +68,6 @@ export const ChatNotificationsCard = () => {
           </FieldDescription>
         )}
       </Field>
-    </ChatNotificationsCardFrame>
+    </SettingsSwitchCard>
   );
 };

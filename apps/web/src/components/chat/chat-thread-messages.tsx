@@ -77,6 +77,7 @@ import { AnonymizedSpan } from "@/components/chat/anonymized-span";
 import { AskUserCard } from "@/components/chat/ask-user-card";
 import { AttachmentChip } from "@/components/chat/attachment-chip";
 import type { AttachmentChipOpen } from "@/components/chat/attachment-chip";
+import { chatAppOrigins } from "@/components/chat/chat-app-origins";
 import { useChatApproval } from "@/components/chat/chat-approval-context";
 import { ChatAnswerDecisionProvider } from "@/components/chat/chat-decision-citation";
 import { ChatAttachmentChip } from "@/components/chat/chat-draft-attachment-chips";
@@ -155,13 +156,17 @@ import { NeedsMatterCard } from "@/components/chat/needs-matter-card";
 import type { CreateDocumentDestination } from "@/components/chat/needs-matter-card";
 import { rehypeAnonSpans } from "@/components/chat/rehype-anon-spans";
 import { RequestSecretCard } from "@/components/chat/request-secret-card";
+import { collectSourceChipEntries } from "@/components/chat/source-chips.logic";
 import { SpawnSubagentsCard } from "@/components/chat/spawn-subagents-card";
 import { StreamdownMentionLink } from "@/components/chat/streamdown-mention-link";
 import {
   PendingToolApprovalCard,
   ToolApprovalCard,
 } from "@/components/chat/tool-approval-card";
-import { ToolCallCard } from "@/components/chat/tool-call-card";
+import {
+  ToolCallCard,
+  toolFailureLabelKey,
+} from "@/components/chat/tool-call-card";
 import {
   advanceToolCallTiming,
   createToolCallTiming,
@@ -195,6 +200,8 @@ import {
 } from "@/features/chat/chat-queue.logic";
 import { chatErrorTranslationKey } from "@/features/chat/chat-request-error";
 import type { ChatActivitySession } from "@/features/chat/chat-runtime";
+import { SuggestedFollowups } from "@/features/chat/components/suggested-followups";
+import type { SuggestedFollowupsProps } from "@/features/chat/components/suggested-followups";
 import type { ChatComputerWait } from "@/features/chat/desktop-launch.logic";
 import { useDesktopLaunch } from "@/features/chat/use-desktop-launch";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
@@ -392,6 +399,7 @@ const ActiveTurnStatus = memo(
                     getToolCallTitleKey({
                       input: "input" in part ? part.input : undefined,
                       name: part.name,
+                      output: part.output,
                     }),
                   ),
                 ),
@@ -411,6 +419,7 @@ export const ChatThreadMessages = ({
   approvalPendingMessageId,
   branchSource,
   error,
+  followUps,
   hasOlderMessages = false,
   isGenerating = false,
   isLoadingOlder = false,
@@ -482,6 +491,7 @@ export const ChatThreadMessages = ({
       return null;
     }
     const canFork = answerCanFork({ generationActive, message, messages });
+    const turnRunning = activeTurnMessageIds.has(message.id);
     return (
       <ChatRenderErrorBoundary
         fallback={<MessageRenderFallback message={message} />}
@@ -550,11 +560,7 @@ export const ChatThreadMessages = ({
                             }
                             onOpenCreatedDocument={onOpenCreatedDocument}
                             onOpenPlaybook={onOpenPlaybook}
-                            turnStatus={
-                              activeTurnMessageIds.has(message.id)
-                                ? "running"
-                                : "finished"
-                            }
+                            turnStatus={turnRunning ? "running" : "finished"}
                             shouldShowToolCalls={shouldShowToolCalls}
                             streamdownComponents={streamdownComponents}
                             workspaceId={workspaceId}
@@ -573,11 +579,14 @@ export const ChatThreadMessages = ({
                                 messageId: message.id,
                                 messages,
                               })}
+                              endedUnfinished={
+                                !turnRunning && endedAtFailedStep(message.parts)
+                              }
                               message={message}
                               onResend={onResend}
                               threadRef={threadRef}
                             />
-                            {!activeTurnMessageIds.has(message.id) && (
+                            {!turnRunning && (
                               <ChatTurnDuration
                                 timing={message.metadata?.turnTiming}
                               />
@@ -593,6 +602,9 @@ export const ChatThreadMessages = ({
                               onAnswerEdited={onAnswerEdited}
                             />
                           </AnswerFooter>
+                          {followUps?.messageId === message.id && (
+                            <SuggestedFollowups {...followUps} />
+                          )}
                         </ChatAnswerDecisionProvider>
                       );
                     case "text":
@@ -1623,6 +1635,7 @@ const PausedTurnNotice = ({
 const AssistantMessageActions = ({
   canFork: forkOffered,
   canRetry: retryOffered,
+  endedUnfinished,
   message,
   onResend,
   threadRef,
@@ -1631,6 +1644,8 @@ const AssistantMessageActions = ({
   canFork: boolean;
   /** `canRetryAssistantMessage`. */
   canRetry: boolean;
+  /** The turn settled at a failed step without an answer. */
+  endedUnfinished: boolean;
   message: PersistedChatMessage;
   onResend?:
     ((options?: ChatResendOptions) => void | PromiseLike<void>) | undefined;
@@ -1646,7 +1661,9 @@ const AssistantMessageActions = ({
   const stoppedByUser =
     outcome?.type === "cancelled" && outcome.reason === "user-stop";
 
-  if (!text && !canRetry && !canFork && !stoppedByUser) {
+  const unfinished = endedUnfinished && !stoppedByUser;
+
+  if (!text && !canRetry && !canFork && !stoppedByUser && !unfinished) {
     return null;
   }
 
@@ -1655,6 +1672,13 @@ const AssistantMessageActions = ({
       {stoppedByUser && (
         <span className="text-muted-foreground px-1.5 text-xs" role="status">
           {t("chat.stopped")}
+        </span>
+      )}
+      {/* The one place a turn that ended at a failed step says so: its
+          steps stay calm, and Retry sits beside this line. */}
+      {unfinished && (
+        <span className="text-muted-foreground px-1.5 text-xs" role="status">
+          {t("chat.answerNotFinished")}
         </span>
       )}
       {text && (
@@ -1711,6 +1735,12 @@ type ChatThreadMessagesProps = {
   /** Compact prose is reserved for constrained overlays over a document. */
   assistantTextDensity?: "compact" | "default" | undefined;
   approvalPendingMessageId: string | null;
+  /**
+   * What to ask next, drawn at the end of the answer it follows
+   * (`followUps.messageId`), after that answer's actions. The one place
+   * suggestions appear: never over the answer, never in the composer.
+   */
+  followUps?: SuggestedFollowupsProps | undefined;
   /**
    * The chat this transcript is, for branching from a selection: when
    * present, words selected in a message can be asked about in a new
@@ -2259,6 +2289,7 @@ const getProcessStepTitleKey = (
     return getToolCallTitleKey({
       input: "input" in part ? part.input : undefined,
       name: part.name,
+      output: part.output,
     });
   }
   return null;
@@ -2428,6 +2459,14 @@ const AssistantMessageParts = ({
   const thinkingDisplayState =
     !hasAnswerContent && isTurnActive ? "expanded" : "folded";
   const streamingEntryIndex = isTurnActive ? renderEntries.length - 1 : -1;
+  // What the settled answer cites, so an opened step can say which of its
+  // finds the answer used; a streaming answer has not settled what it cites.
+  const answerCitations = isTurnActive
+    ? undefined
+    : collectSourceChipEntries({
+        appOrigins: chatAppOrigins(),
+        parts: message.parts,
+      }).citations;
   // A coding agent's subagent shows as one group holding the steps it took.
   const toolCallEntries = toToolCallRenderEntries(renderEntries);
   const subagentGroups = toLocalRunSubagentGroups(toolCallEntries);
@@ -2506,6 +2545,7 @@ const AssistantMessageParts = ({
       return (
         <ToolCallCard
           activeOrganizationId={activeOrganizationId}
+          answerCitations={answerCitations}
           key={part.id}
           failureOutcome={failureOutcome}
           part={part}
@@ -2614,6 +2654,7 @@ const AssistantMessageParts = ({
         <ToolCallCard
           action={action}
           activeOrganizationId={activeOrganizationId}
+          answerCitations={answerCitations}
           key={part.id}
           failureOutcome={failureOutcome}
           part={part}
@@ -2792,7 +2833,7 @@ const AssistantProcessGroup = ({
     <div
       data-slot="chat-step-list"
       className={cn(
-        "max-w-[min(44rem,100%)] rounded-md",
+        "rounded-md",
         isOpen && "border-border/70 bg-muted/20 border",
         appearedLive && "motion-safe:animate-text-fade",
       )}
@@ -2846,6 +2887,22 @@ const getReasoningTokenCount = (
   return count !== undefined && count > 0 ? count : null;
 };
 
+/**
+ * Whether a settled turn ended at a failed step: it holds a step that failed
+ * and no answer. The steps stay calm; the answer's footer says it once.
+ */
+const endedAtFailedStep = (parts: readonly ChatPart[]): boolean =>
+  !hasAssistantAnswerContent(parts) &&
+  parts.some(
+    (part) =>
+      part.type === "tool-call" &&
+      toolFailureLabelKey({
+        name: part.name,
+        output: part.output,
+        state: part.state,
+      }) === "chat.toolCall.failed",
+  );
+
 const hasAssistantAnswerContent = (parts: readonly ChatPart[]): boolean => {
   for (const part of parts) {
     if (part.type === "text" && part.content.trim()) {
@@ -2898,7 +2955,7 @@ const AssistantThinkingPart = ({
   // time, and a trailing chevron that shows on hover, so every step in a
   // run lines up and reads at one size.
   return (
-    <div className="group/reasoning border-border/60 max-w-xl border-s text-sm leading-5">
+    <div className="group/reasoning border-border/60 border-s text-sm leading-5">
       <Collapsible onOpenChange={setIsOpen} open={isOpen}>
         <CollapsibleTrigger
           render={<Button className="flex w-full" variant="plain" />}

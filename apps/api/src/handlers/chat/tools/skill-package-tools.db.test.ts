@@ -2,9 +2,9 @@ import { panic } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { and, eq, inArray } from "drizzle-orm";
 
-import type { SafeDb } from "@/api/db/safe-db";
+import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import { agentSkillResources, agentSkills } from "@/api/db/schema";
-import { createSafeDb } from "@/api/db/scoped";
+import { createSafeDb, createScopedDb } from "@/api/db/scoped";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -68,6 +68,7 @@ const runTool = async ({
     organizationId: ids.orgA,
     recordAuditEvent,
     safeDb: asTestRaw<SafeDb>(createSafeDb(testDb, [], ids.orgA, userId)),
+    scopedDb: asTestRaw<ScopedDb>(createScopedDb(testDb, [], ids.orgA, userId)),
     userId,
   });
   const tool = asTestExecutable<Record<string, unknown>, ToolOutput>(
@@ -128,6 +129,8 @@ describe("save_skill_package", () => {
       missingReferences: ["references/remedies.md"],
     });
     const skillId = skillIdOf(first);
+    // The name scan reports, never blocks.
+    expect(Array.isArray(first["warnings"])).toBe(true);
     expect(first["url"]).toEndWith(`/knowledge/tools/${skillId}`);
     const [row] = await testDb
       .select({ enabled: agentSkills.enabled })

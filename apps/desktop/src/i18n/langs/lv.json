@@ -36,7 +36,11 @@
     "sessionOpeningInOffice": "Tiek atvērts Office",
     "sessionSavingDraft": "Tiek saglabāts melnraksts",
     "reconnectAccount": "Atkārtoti savienot ar stella web…",
-    "transcribeRecording": "Transkribēt ierakstu…"
+    "transcribeRecording": "Transkribēt ierakstu…",
+    "dictation": "Diktēšana",
+    "dictationHint": "Lai diktētu, turiet {key}",
+    "dictationSettings": "Diktēšanas iestatījumi…",
+    "dictationTurnOn": "Ieslēgt diktēšanu…"
   },
   "notification": {
     "checkpointDelayedBody": "{fileName}: izmaiņas paliek lokālas un tiks automātiski mēģinātas vēlreiz",
@@ -697,7 +701,8 @@
       "focusUnconfirmed": "stella nevarēja pārliecināties, kurā lietotnē ir fokuss, tāpēc nekas netika ievadīts. Mēģiniet vēlreiz.",
       "shortcutHeld": "Atlaidiet īsinājumtaustiņus, lai varētu ievadīt tekstu. Nekas netika ievadīts; mēģiniet vēlreiz.",
       "passwordField": "Ir atlasīts paroles lauks, tāpēc diktētais netika saglabāts vai ievadīts.",
-      "cloudTranscription": "stella AI neizdevās pārvērst šo diktātu tekstā, un runas modeļa šajā datorā nav. Mēģiniet vēlreiz vai pie “Pārvērst ar” izvēlieties “Šo datoru” un lejupielādējiet modeli."
+      "cloudTranscription": "stella AI neizdevās pārvērst šo diktātu tekstā, un runas modeļa šajā datorā nav. Mēģiniet vēlreiz vai pie “Pārvērst ar” izvēlieties “Šo datoru” un lejupielādējiet modeli.",
+      "nothingHeard": "stella nedzirdēja runu. Pārbaudiet ievades ierīci skaņas iestatījumos."
     },
     "failureKeptInHistory": "Teksts ir starpliktuves vēsturē.",
     "transcribeRecording": {
@@ -705,6 +710,21 @@
       "description": "Līdz 4 stundām garu diktofona failu, balss piezīmi vai sanāksmes ierakstu pārvērš tekstā.",
       "open": "Atvērt",
       "failed": "Neizdevās atvērt logu. Mēģiniet vēlreiz."
+    },
+    "notice": {
+      "title": "stella nedzird jūsu mikrofonu",
+      "allowBody": "Atļaujiet piekļuvi mikrofonam un mēģiniet vēlreiz.",
+      "checkBodyMac": "Pārbaudiet piekļuvi mikrofonam sistēmas iestatījumos un mēģiniet vēlreiz.",
+      "checkBodyPc": "Pārbaudiet piekļuvi mikrofonam Windows iestatījumos un mēģiniet vēlreiz.",
+      "allow": "Atļaut mikrofonu",
+      "openSettingsMac": "Atvērt sistēmas iestatījumus",
+      "openSettingsPc": "Atvērt iestatījumus",
+      "dismiss": "Aizvērt",
+      "nothingTitle": "stella nedzirdēja runu",
+      "nothingBody": "Runājiet, kamēr turat taustiņu, vai skaņas iestatījumos izvēlieties citu ievadi.",
+      "inputDevice": "Ievade: {device}",
+      "openSoundMac": "Atvērt skaņas iestatījumus",
+      "openSoundPc": "Atvērt skaņas iestatījumus"
     },
     "preview": {
       "label": "Līdz šim diktētais teksts",
@@ -809,8 +829,8 @@
     "permissionsTitlePc": "Iestatiet šo datoru",
     "permissionsBody": "Katra atļauja ir jūsu izvēle. Vēlāk tās varat mainīt iestatījumos.",
     "neverRequested": "Nekad netiek pieprasīts:",
-    "tryTitle": "Izmēģiniet tagad",
-    "tryBody": "Nokopējiet jebkādu tekstu, tad nospiediet {shortcut}.",
+    "tryTitle": "Izmēģiniet starpliktuves vēsturi",
+    "tryBody": "Nokopējiet jebkādu tekstu, tad nospiediet {shortcut}, lai atvērtu starpliktuves vēsturi.",
     "tryWaiting": "Gaida īsinājumtaustiņu",
     "tryKeepGoing": "Turpiniet…",
     "tryExtraModifier": "Tas ir {pressed}. Izmantojiet {shortcut}.",

@@ -20,6 +20,7 @@ import type {
   KnowledgeActions,
   KnowledgeSource,
 } from "@/features/knowledge/views/knowledge-seam";
+import { PlaybooksPageFrame } from "@/features/knowledge/views/playbooks/playbooks-page-shape";
 import type {
   KnowledgePlaybook,
   KnowledgePlaybookStarter,
@@ -52,7 +53,7 @@ export const PlaybooksPageView = ({
 
   return (
     <div className="min-h-0 flex-1 overflow-y-auto">
-      <div className="mx-auto flex w-full max-w-6xl flex-col gap-9 px-5 py-7 sm:px-7 sm:py-9">
+      <PlaybooksPageFrame>
         <header className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
           <div>
             <h1 className="text-2xl font-semibold tracking-tight">
@@ -172,7 +173,7 @@ export const PlaybooksPageView = ({
             )}
           </section>
         )}
-      </div>
+      </PlaybooksPageFrame>
     </div>
   );
 };
@@ -447,43 +448,3 @@ const PlaybookRow = ({
     </li>
   );
 };
-
-const PLAYBOOK_ROW_KEYS = ["a", "b", "c", "d", "e", "f"];
-
-// Mirrors the playbooks page (header, ready-made cards, list rows) so the page
-// keeps its shape while the playbooks load.
-export const PlaybooksPageSkeleton = () => (
-  <div className="min-h-0 flex-1 overflow-y-auto">
-    <div className="mx-auto flex w-full max-w-6xl flex-col gap-9 px-5 py-7 sm:px-7 sm:py-9">
-      <div className="flex items-center justify-between gap-4">
-        <div className="space-y-2">
-          <Skeleton className="h-7 w-36" />
-          <Skeleton className="h-4 w-96 max-w-full" />
-        </div>
-        <Skeleton className="h-11 w-36 rounded-md" />
-      </div>
-      <div>
-        <Skeleton className="mb-3 h-5 w-44" />
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-          {["starter-a", "starter-b", "starter-c", "starter-d"].map((key) => (
-            <Skeleton className="h-44 rounded-xl" key={key} />
-          ))}
-        </div>
-      </div>
-      <div>
-        <Skeleton className="mb-3 h-5 w-28" />
-        <ul className="divide-y rounded-xl border">
-          {PLAYBOOK_ROW_KEYS.map((key) => (
-            <li className="flex min-h-16 items-center gap-3 px-4" key={key}>
-              <Skeleton className="size-9 shrink-0 rounded-lg" />
-              <div className="min-w-0 flex-1 space-y-1.5">
-                <Skeleton className="h-4 w-48" />
-                <Skeleton className="h-3 w-32" />
-              </div>
-            </li>
-          ))}
-        </ul>
-      </div>
-    </div>
-  </div>
-);

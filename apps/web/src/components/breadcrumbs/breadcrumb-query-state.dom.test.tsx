@@ -162,8 +162,8 @@ const cases = [
   },
   {
     name: "skill",
-    path: "/knowledge/tools_/$entry",
-    url: "/knowledge/tools_/11111111-1111-4111-8111-111111111111",
+    path: "/knowledge/tools_/skills/$skillId",
+    url: "/knowledge/tools_/skills/11111111-1111-4111-8111-111111111111",
     key: skillDetailOptions(
       user.activeOrganizationId,
       user.id,

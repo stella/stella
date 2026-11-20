@@ -1,8 +1,11 @@
 import { infiniteQueryOptions } from "@tanstack/react-query";
 
+import { RESOURCE_TYPE } from "@stll/api-contract";
+
 import { api } from "@/lib/api";
 import { unwrapApiResponse } from "@/lib/errors/api";
 import { stringCursorSeed } from "@/lib/infinite-query";
+import { resourceQueryOptions } from "@/lib/workspace-realtime";
 
 /** The API's largest page: a week of one person's entries usually fits in one. */
 const MY_TIME_ENTRIES_PAGE_SIZE = 200;
@@ -57,10 +60,16 @@ export const myTimeEntriesInfiniteOptions = (
   userId: string,
   range: MyTimeEntriesRange,
 ) =>
-  infiniteQueryOptions({
-    queryKey: myTimeEntriesKeys.range(organizationId, userId, range),
-    initialPageParam: stringCursorSeed(),
-    queryFn: async ({ pageParam, signal }) =>
-      await fetchMyTimeEntriesPage({ range, cursor: pageParam, signal }),
-    getNextPageParam: (page) => page.nextCursor ?? undefined,
-  });
+  resourceQueryOptions(
+    infiniteQueryOptions({
+      queryKey: myTimeEntriesKeys.range(organizationId, userId, range),
+      initialPageParam: stringCursorSeed(),
+      queryFn: async ({ pageParam, signal }) =>
+        await fetchMyTimeEntriesPage({ range, cursor: pageParam, signal }),
+      getNextPageParam: (page) => page.nextCursor ?? undefined,
+    }),
+    {
+      resources: [RESOURCE_TYPE.TIME_ENTRY],
+      scope: { type: "organization", organizationId, userId },
+    },
+  );

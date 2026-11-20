@@ -37,7 +37,7 @@ afterAll(async () => {
 
 const withIntl = (node: ReactNode) => (
   <IntlProvider locale="en" messages={messages}>
-    <PendingTextIntlScope>{node}</PendingTextIntlScope>
+    <PendingTextIntlScope formattingLocale="en">{node}</PendingTextIntlScope>
   </IntlProvider>
 );
 
@@ -118,6 +118,7 @@ describe("the account pages' pending views", () => {
       messages.common.displayName,
       messages.settings.account.timezone,
       messages.settings.account.chatNotifications,
+      messages.settings.account.chatTechnicalDetails,
       messages.settings.account.twoFactor.title,
       messages.common.sessions,
       messages.settings.account.personalDataExportTitle,

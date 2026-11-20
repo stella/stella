@@ -1233,6 +1233,13 @@
       "treatment": "المعالجة اللاحقة"
     },
     "analyzing": "جارٍ التحليل...",
+    "browse": {
+      "courtDescription": "{court} ({country}): أحكام في قاعدة stella القانونية العامة، حسب السنة والشهر.",
+      "courts": "المحاكم",
+      "days": "الأيام",
+      "jurisdictionDescription": "{country}: أحكام قضائية في قاعدة stella القانونية العامة، حسب المحكمة والسنة والشهر.",
+      "periodDescription": "{court} ({country})، {period}: أحكام في قاعدة stella القانونية العامة."
+    },
     "chat": {
       "prompts": {
         "facts": {
@@ -1725,6 +1732,7 @@
       "unorderedList": "قائمة نقطية",
       "wholeBlockRequired": "حدد فقرة أو قائمة بالكامل لتغيير نمطها."
     },
+    "answerNotFinished": "لم تتمكن stella من إكمال هذه الإجابة.",
     "answerQuote": {
       "showInDecision": "عرض في القرار",
       "unverified": "تعذّر التحقق من الاقتباس",
@@ -2124,6 +2132,7 @@
     },
     "newChat": "دردشة جديدة",
     "newChatInSidePanel": "الدردشة الجديدة متاحة في اللوحة الجانبية",
+    "nextSteps": "الخطوات التالية",
     "noPromptPresetOnly": "لا توجد رسالة، الإعداد المُسبق فقط",
     "noThreads": "لا توجد محادثات بعد",
     "officeCitationUnavailable": "لم يعد هذا الاستشهاد متاحًا.",
@@ -2240,6 +2249,8 @@
       "localPlace": "حاسوبك، {harness}",
       "localSelection": "حاسوبك · {harness}",
       "placeState": "{place}. {state}",
+      "startedInCloud": "بدأت هذه الدردشة الجديدة في السحابة لأن {harness} غير متاح على حاسوبك ({state})",
+      "startedInCloudCheckFailed": "بدأت هذه الدردشة الجديدة في السحابة لأنه تعذّر التحقق من حاسوبك",
       "stepsCheck": "جارٍ فتح stella desktop. إن لم يُفتح، فافتحه على حاسوبك وتحقّق من {harness} في الإعدادات › عام › اشتراكات الذكاء الاصطناعي.",
       "stepsInstall": "جارٍ فتح stella desktop. إن لم يُفتح، فافتحه على حاسوبك، ثم اختر في الإعدادات › عام زر تثبيت بجوار {harness}.",
       "stepsSignInClaudeCode": "جارٍ فتح stella desktop لتسجيل الدخول. إن لم يُفتح، فافتحه واختر الإعدادات › عام › تسجيل الدخول باستخدام Claude.",
@@ -2306,13 +2317,26 @@
       "title": "رسالتك في قائمة الانتظار حتى ينتهي الوكيل",
       "turnNotRunning": "الوكيل لا يعمل الآن."
     },
+    "stepDigest": {
+      "decisionsFound": "{found, plural, zero {لم يُعثر على أي قرار} one {عُثر على قرار واحد} two {عُثر على قرارين} few {عُثر على # قرارات} many {عُثر على # قرارًا} other {عُثر على # قرار}}",
+      "decisionsFoundUsed": "{found, plural, zero {لم يُعثر على أي قرار} one {عُثر على قرار واحد} two {عُثر على قرارين} few {عُثر على # قرارات} many {عُثر على # قرارًا} other {عُثر على # قرار}}، {used, plural, zero {لم يُستخدم أي منها في الإجابة} one {استُخدم واحد في الإجابة} two {استُخدم اثنان في الإجابة} few {استُخدم # في الإجابة} many {استُخدم # في الإجابة} other {استُخدم # في الإجابة}}",
+      "filterAsOf": "حتى تاريخ {date}",
+      "legislationFound": "{count, plural, zero {# تشريع أو حكم} one {تشريع أو حكم واحد} two {تشريعان أو حكمان} few {# تشريعات وأحكام} many {# تشريعًا وحكمًا} other {# تشريع وحكم}}",
+      "lookupDidNotGoThrough": "لم يكتمل هذا البحث.",
+      "moreFound": "{count, plural, zero {لا يوجد المزيد} one {واحد آخر غير معروض} two {اثنان آخران غير معروضين} few {# أخرى غير معروضة} many {# أخرى غير معروضة} other {# أخرى غير معروضة}}",
+      "moreLookups": "{count, plural, zero {لا توجد استعلامات أخرى} one {استعلام آخر غير معروض} two {استعلامان آخران غير معروضين} few {# استعلامات أخرى غير معروضة} many {# استعلامًا آخر غير معروض} other {# استعلام آخر غير معروض}}",
+      "notRecorded": "نُفذت هذه الخطوة قبل أن تبدأ stella بتسجيل ما تبحث عنه كل خطوة.",
+      "nothingFound": "لا توجد نتائج مطابقة.",
+      "technicalDetails": "التفاصيل التقنية",
+      "usedInAnswer": "مستخدم في الإجابة",
+      "versionFrom": "الصيغة السارية منذ {date}"
+    },
     "stopFailed": "تعذّر إيقاف الإجابة. حاول مرة أخرى.",
     "stopResponse": "إيقاف",
     "stopped": "متوقف",
     "stopping": "جارٍ الإيقاف…",
     "suggestTitle": "اقتراح عنوان",
     "suggestTitleUnavailableAnonymized": "اقتراح العناوين غير متاح للمحادثات التي تم إخفاء هويتها.",
-    "suggestedFollowupsLabel": "أسئلة متابعة مقترحة",
     "suggestingTitle": "جارٍ اقتراح عنوان…",
     "suggestionSeverity": {
       "style": "أسلوب",
@@ -2323,7 +2347,6 @@
       "accepted": "مُطبَّق",
       "rejected": "مرفوض"
     },
-    "tabToAsk": "→ للسؤال: «{prompt}»",
     "tableChart": {
       "bar": "أعمدة",
       "kind": "نوع الرسم البياني",
@@ -5750,6 +5773,9 @@
       "chatNotificationsDescription": "تلقَّ إشعارًا من هذا المتصفح عند اكتمال رد في الدردشة بينما تعمل stella في الخلفية.",
       "chatNotificationsToggle": "أعلمني عندما يكون الرد جاهزًا أو يحتاج إلى مدخلاتي",
       "chatNotificationsUnsupported": "لا يدعم هذا المتصفح الإشعارات.",
+      "chatTechnicalDetails": "التفاصيل التقنية في الدردشة",
+      "chatTechnicalDetailsDescription": "تعرض كل خطوة في الدردشة ما بحثت عنه وما وجدته. فعّل هذا الخيار لترى أيضًا الشيفرة والنتائج الخام وراءها.",
+      "chatTechnicalDetailsToggle": "إظهار التفاصيل التقنية في الدردشة",
       "confirmDelete": "تأكيد حذف الحساب",
       "dangerZone": "منطقة الخطر",
       "dangerZoneDescription": "احذف الوصول إلى حسابك وبيانات الحساب الخاصة نهائيًا.",

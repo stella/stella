@@ -36,7 +36,11 @@
     "sessionOpeningInOffice": "Ouverture dans Office",
     "sessionSavingDraft": "Enregistrement du brouillon",
     "reconnectAccount": "Se reconnecter à stella web…",
-    "transcribeRecording": "Transcrire un enregistrement…"
+    "transcribeRecording": "Transcrire un enregistrement…",
+    "dictation": "Dictée",
+    "dictationHint": "Maintenez {key} pour dicter",
+    "dictationSettings": "Réglages de la dictée…",
+    "dictationTurnOn": "Activer la dictée…"
   },
   "notification": {
     "checkpointDelayedBody": "{fileName} : les modifications restent locales et seront réessayées automatiquement",
@@ -697,7 +701,8 @@
       "focusUnconfirmed": "stella n’a pas pu confirmer quelle application est au premier plan, rien n’a donc été saisi. Réessayez.",
       "shortcutHeld": "Relâchez les touches du raccourci pour saisir le texte. Rien n’a été saisi ; réessayez.",
       "passwordField": "Un champ de mot de passe est actif : la dictée n'a été ni conservée ni saisie.",
-      "cloudTranscription": "stella AI n’a pas pu transcrire cette dictée et le modèle vocal n’est pas sur cet ordinateur. Réessayez, ou choisissez « Cet ordinateur » pour « Transcrire avec » et téléchargez le modèle."
+      "cloudTranscription": "stella AI n’a pas pu transcrire cette dictée et le modèle vocal n’est pas sur cet ordinateur. Réessayez, ou choisissez « Cet ordinateur » pour « Transcrire avec » et téléchargez le modèle.",
+      "nothingHeard": "stella n'a entendu aucune parole. Vérifiez le périphérique d'entrée dans les réglages Son."
     },
     "failureKeptInHistory": "Le texte se trouve dans l’historique du presse-papiers.",
     "transcribeRecording": {
@@ -705,6 +710,21 @@
       "description": "Convertit en texte un fichier de dictaphone, un mémo vocal ou l’enregistrement d’une réunion jusqu’à 4 heures.",
       "open": "Ouvrir",
       "failed": "Impossible d’ouvrir la fenêtre. Réessayez."
+    },
+    "notice": {
+      "title": "stella n'entend pas votre micro",
+      "allowBody": "Autorisez l'accès au micro, puis réessayez.",
+      "checkBodyMac": "Vérifiez l'accès au micro dans les Réglages Système, puis réessayez.",
+      "checkBodyPc": "Vérifiez l'accès au micro dans les Paramètres Windows, puis réessayez.",
+      "allow": "Autoriser le micro",
+      "openSettingsMac": "Ouvrir les Réglages Système",
+      "openSettingsPc": "Ouvrir les Paramètres",
+      "dismiss": "Fermer",
+      "nothingTitle": "stella n'a entendu aucune parole",
+      "nothingBody": "Parlez en maintenant la touche, ou choisissez une autre entrée dans les réglages Son.",
+      "inputDevice": "Entrée : {device}",
+      "openSoundMac": "Ouvrir les réglages Son",
+      "openSoundPc": "Ouvrir les paramètres de son"
     },
     "preview": {
       "label": "Ce que vous avez dicté jusqu’ici",
@@ -809,8 +829,8 @@
     "permissionsTitlePc": "Configurer ce PC",
     "permissionsBody": "Chaque autorisation est votre choix. Vous pourrez les modifier plus tard dans les Réglages.",
     "neverRequested": "Jamais demandé :",
-    "tryTitle": "Essayez maintenant",
-    "tryBody": "Copiez un texte, puis appuyez sur {shortcut}.",
+    "tryTitle": "Essayez l'historique du presse-papiers",
+    "tryBody": "Copiez un texte, puis appuyez sur {shortcut} pour ouvrir l'historique du presse-papiers.",
     "tryWaiting": "En attente du raccourci",
     "tryKeepGoing": "Continuez…",
     "tryExtraModifier": "C'est {pressed}. Utilisez {shortcut}.",

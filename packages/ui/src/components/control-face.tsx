@@ -123,12 +123,15 @@ type InputFaceProps = {
   children?: ReactNode;
   className?: string | undefined;
   size?: ControlSize;
+  /** Classes for the line the placeholder sits on (the field's own box). */
+  fieldClassName?: string | undefined;
 };
 
 /** A text field's face: its box and the placeholder. */
 export const InputFace = ({
   children,
   className,
+  fieldClassName,
   icon,
   size = CONTROL_SIZE.default,
 }: InputFaceProps) => (
@@ -153,6 +156,7 @@ export const InputFace = ({
         INPUT_SIZE_CLASS_NAMES[size],
         "text-foreground-placeholder flex items-center overflow-hidden whitespace-nowrap",
         icon !== undefined && "ps-8",
+        fieldClassName,
       )}
     >
       {children}

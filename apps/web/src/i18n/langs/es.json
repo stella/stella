@@ -1233,6 +1233,13 @@
       "treatment": "Tratamiento posterior"
     },
     "analyzing": "Analizando...",
+    "browse": {
+      "courtDescription": "{court} ({country}): resoluciones en la base jurídica pública de stella, por año y mes.",
+      "courts": "Tribunales",
+      "days": "Días",
+      "jurisdictionDescription": "{country}: resoluciones judiciales en la base jurídica pública de stella, por tribunal, año y mes.",
+      "periodDescription": "{court} ({country}), {period}: resoluciones en la base jurídica pública de stella."
+    },
     "chat": {
       "prompts": {
         "facts": {
@@ -1725,6 +1732,7 @@
       "unorderedList": "Lista con viñetas",
       "wholeBlockRequired": "Seleccione un párrafo o una lista completos para cambiar su estilo."
     },
+    "answerNotFinished": "stella no pudo terminar esta respuesta.",
     "answerQuote": {
       "showInDecision": "Ver en la resolución",
       "unverified": "Cita no verificada",
@@ -2124,6 +2132,7 @@
     },
     "newChat": "Nuevo chat",
     "newChatInSidePanel": "El chat nuevo está disponible en el panel lateral",
+    "nextSteps": "Próximos pasos",
     "noPromptPresetOnly": "Sin mensaje, solo preajuste",
     "noThreads": "Aún no hay conversaciones",
     "officeCitationUnavailable": "Esta cita ya no está disponible.",
@@ -2240,6 +2249,8 @@
       "localPlace": "Tu ordenador, {harness}",
       "localSelection": "Tu ordenador · {harness}",
       "placeState": "{place}. {state}",
+      "startedInCloud": "Este chat nuevo se ha iniciado en la nube porque {harness} no está disponible en tu ordenador ({state})",
+      "startedInCloudCheckFailed": "Este chat nuevo se ha iniciado en la nube porque no se ha podido comprobar tu ordenador",
       "stepsCheck": "Abriendo stella desktop. Si no se abre, ábrelo en tu ordenador y revisa {harness} en Configuración › General › Suscripciones de IA.",
       "stepsInstall": "Abriendo stella desktop. Si no se abre, ábrelo en tu ordenador y, en Configuración › General, elige Instalar para {harness}.",
       "stepsSignInClaudeCode": "Abriendo stella desktop para iniciar sesión. Si no se abre, ábrelo y elige Configuración › General › Iniciar sesión con Claude.",
@@ -2306,13 +2317,26 @@
       "title": "Tu mensaje queda en cola hasta que el agente termine",
       "turnNotRunning": "El agente no está trabajando ahora."
     },
+    "stepDigest": {
+      "decisionsFound": "{found, plural, one {# resolución encontrada} many {# resoluciones encontradas} other {# resoluciones encontradas}}",
+      "decisionsFoundUsed": "{found, plural, one {# resolución encontrada} many {# resoluciones encontradas} other {# resoluciones encontradas}}, {used, plural, one {# usada en la respuesta} many {# usadas en la respuesta} other {# usadas en la respuesta}}",
+      "filterAsOf": "A {date}",
+      "legislationFound": "{count, plural, one {# norma o disposición} many {# normas y disposiciones} other {# normas y disposiciones}}",
+      "lookupDidNotGoThrough": "Esta búsqueda no se completó.",
+      "moreFound": "{count, plural, one {# más sin mostrar} many {# más sin mostrar} other {# más sin mostrar}}",
+      "moreLookups": "{count, plural, one {# consulta más sin mostrar} many {# consultas más sin mostrar} other {# consultas más sin mostrar}}",
+      "notRecorded": "Este paso se ejecutó antes de que stella registrara lo que consulta cada paso.",
+      "nothingFound": "Sin resultados.",
+      "technicalDetails": "Detalles técnicos",
+      "usedInAnswer": "Usada en la respuesta",
+      "versionFrom": "Versión desde {date}"
+    },
     "stopFailed": "No se pudo detener la respuesta. Inténtalo de nuevo.",
     "stopResponse": "Detener",
     "stopped": "Detenido",
     "stopping": "Deteniendo…",
     "suggestTitle": "Sugerir un título",
     "suggestTitleUnavailableAnonymized": "Las sugerencias de título no están disponibles para conversaciones anonimizadas.",
-    "suggestedFollowupsLabel": "Sugerencias de preguntas de seguimiento",
     "suggestingTitle": "Sugiriendo un título…",
     "suggestionSeverity": {
       "style": "Estilo",
@@ -2323,7 +2347,6 @@
       "accepted": "Aplicado",
       "rejected": "Rechazado"
     },
-    "tabToAsk": "→ para preguntar: \"{prompt}\"",
     "tableChart": {
       "bar": "Barras",
       "kind": "Tipo de gráfico",
@@ -5750,6 +5773,9 @@
       "chatNotificationsDescription": "Recibe una notificación de este navegador cuando una respuesta del chat termine mientras stella está en segundo plano.",
       "chatNotificationsToggle": "Avisarme cuando una respuesta esté lista o necesite mi intervención",
       "chatNotificationsUnsupported": "Este navegador no admite notificaciones.",
+      "chatTechnicalDetails": "Detalles técnicos en el chat",
+      "chatTechnicalDetailsDescription": "Cada paso del chat muestra qué consultó y qué encontró. Si lo activas, también verás el código y los resultados sin procesar.",
+      "chatTechnicalDetailsToggle": "Mostrar detalles técnicos en el chat",
       "confirmDelete": "Confirmar eliminación de cuenta",
       "dangerZone": "Zona de peligro",
       "dangerZoneDescription": "Eliminar permanentemente el acceso a su cuenta y los datos privados de la cuenta.",

@@ -14,6 +14,7 @@ import {
   writeDecisionPassage,
 } from "@/components/chat-decision-passage";
 import { useOptionalChatEditorManager } from "@/components/chat-editor-provider";
+import { INSPECTOR_FOCUS_INTENT } from "@/components/inspector/inspector-store-types";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import type { SelectionAnchor } from "@/components/legal-reader/annotations/selection-anchor";
 import { openPublicLawChat } from "@/components/public-law-ask";
@@ -180,6 +181,7 @@ export const askAboutReaderPassage = ({
         activeLegalKey: documentKey,
         id: threadId,
         label: target.caseNumber,
+        focus: INSPECTOR_FOCUS_INTENT.claim,
       });
       return;
     }

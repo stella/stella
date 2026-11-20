@@ -14,6 +14,7 @@ const answering = (
   respondError: () => undefined,
   pid: 0,
   exited: Promise.withResolvers<never>().promise,
+  missedDeadline: () => false,
   closeInput: () => undefined,
   kill: async () => ({ exitCode: 0, signal: null }),
 });

@@ -30,6 +30,7 @@ import {
 import {
   CORPUS_INDEX_MANIFESTS,
   corpusIndexConfigFromManifest,
+  corpusIndexDecisionTerms,
   corpusIndexManifestDigest,
 } from "@/api/lib/legal-search/corpus-index-manifest";
 import { buildCaseLawProjectionDocuments } from "@/api/lib/legal-search/corpus-index-projection-builder";
@@ -115,6 +116,15 @@ const FIXTURES = {
   ]),
   /** None of the words. */
   unrelated: fixture("27 Cdo 3/2026", ["Nájemní vztah skončil výpovědí."]),
+  /**
+   * A decision whose decision field the projection cut to its opening
+   * passage: "zástava" stands in the kept prefix, "hypotéka" only in the cut
+   * tail, which its passages still hold.
+   */
+  cut: fixture("27 Cdo 4/2026", [
+    "Zástava nemovitosti byla zřízena.",
+    "Hypotéka byla splacena včas.",
+  ]),
   /**
    * An English judgment of the European index: the inflected word a reader
    * types ("abandoning") is held only as its stem, and only in the body.
@@ -257,8 +267,8 @@ describe.skipIf(!runEngineTests)(
             fixtures.map(({ id }) => id),
           ),
       );
-      const documents = fixtures.flatMap((entry) =>
-        buildCaseLawProjectionDocuments({
+      const documents = fixtures.flatMap((entry) => {
+        const built = buildCaseLawProjectionDocuments({
           manifest: MANIFEST,
           input: {
             family: "case_law",
@@ -285,8 +295,30 @@ describe.skipIf(!runEngineTests)(
           },
           payload: { text: entry.text, ast: null },
           revision: entry.revision,
-        }),
-      );
+        });
+        if (entry.id !== FIXTURES.cut.id) {
+          return built;
+        }
+        // What the projection writes when a decision's terms do not fit the
+        // opening passage: a prefix of them, marked partial. Here the prefix
+        // is the opening passage's own stems.
+        const decisionTerms =
+          corpusIndexDecisionTerms(MANIFEST) ??
+          panic("v11 maps decision terms");
+        return built.map((document) =>
+          document.is_opening
+            ? {
+                ...document,
+                [decisionTerms.field]: String(document.text_stem),
+                [decisionTerms.partialField]: true,
+              }
+            : document,
+        );
+      });
+      expect(
+        documents.filter(({ document_id }) => document_id === FIXTURES.cut.id)
+          .length,
+      ).toBeGreaterThan(1);
       // The case the search exists for: the words are spread over passages.
       expect(
         documents.filter(
@@ -441,6 +473,25 @@ describe.skipIf(!runEngineTests)(
           expect(hit?.missingTerms).toEqual([]);
           expect(hit?.match).toBe("all_terms");
         }
+      },
+      ENGINE_TIMEOUT_MS,
+    );
+
+    // timeout: one search is real engine round trips plus PGlite reads.
+    test(
+      "a cut decision is never reported missing a word its cut tail holds",
+      async () => {
+        const result = await search(false, {
+          query: "zástava hypotéka leasing",
+        });
+        const hit = result.hits.find(
+          ({ decisionId }) => decisionId === FIXTURES.cut.id,
+        );
+        // Found by the word its kept prefix holds; the tail's word is read
+        // off its passages; a word no passage holds stays missing.
+        expect(hit?.matchedTerms).toEqual(["zástava", "hypotéka"]);
+        expect(hit?.missingTerms).toEqual(["leasing"]);
+        expect(hit?.match).toBe("some_terms");
       },
       ENGINE_TIMEOUT_MS,
     );

@@ -2,6 +2,7 @@ import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
+import { createSafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
   CORPUS_INDEX_MANIFESTS,
@@ -21,6 +22,7 @@ import {
   pageWordsRefusal,
   planRankedSearch,
   rankedCursorTarget,
+  rankedHitTerms,
   rankedSearchShape,
 } from "./search-ranked";
 
@@ -209,6 +211,70 @@ describe("a ranked plan with no language to stem under", () => {
       'decision_terms:"abandoning"',
       `decision_terms:"${stemLegalTerm("abandoning", "en")}"`,
     ]);
+  });
+});
+
+describe("a decision whose decision field the projection cut", () => {
+  const shaped = shapeOf({ text: "zástava hypotéka", jurisdiction: "CZE" });
+  const shape =
+    shaped.type === "ranked" ? shaped : panic("expected a ranked shape");
+  const plan = planRankedSearch(shape, {
+    fields: caseLawCorpusQueryFields({
+      generation: "case_law_v11",
+      jurisdiction: "CZE",
+      language: undefined,
+    }),
+    legalAlternatives: null,
+    filterClauses: [],
+  });
+  const revision = createSafeId<"corpusIndexProjectionIntent">();
+  const read = (held: readonly number[]) =>
+    new Map([["cut", { revision, held: new Set(held) }]]);
+
+  test("its passages are asked for each word, typed and stemmed", () => {
+    expect(plan.partialQuery).toBe(
+      "is_opening:true AND decision_terms_partial:true",
+    );
+    // Under every language Czech decisions are declared in.
+    const leaves = [
+      ...new Set([
+        '"hypotéka"',
+        `text_stem:"${stemLegalTerm("hypotéka", "cs")}"`,
+        `text_stem:"${stemLegalTerm("hypotéka", "en")}"`,
+      ]),
+    ];
+    expect(plan.passageWordQuery(1)).toBe(`(${leaves.join(" OR ")})`);
+    // Not scoped to the opening passage: the cut words are on the others.
+    expect(plan.passageWordQuery(1)).not.toContain("is_opening");
+  });
+
+  test("a word its passages hold is matched though its decision field lacks it", () => {
+    const terms = rankedHitTerms({
+      plan,
+      words: { decisionField: read([0]), cutDecisions: read([1]) },
+      pinnedIds: new Set(),
+    })("cut", revision);
+    expect(terms).toEqual({
+      matchedTerms: ["zástava", "hypotéka"],
+      missingTerms: [],
+    });
+  });
+
+  test("a word neither holds stays missing, and an uncut decision answers from its field alone", () => {
+    expect(
+      rankedHitTerms({
+        plan,
+        words: { decisionField: read([0]), cutDecisions: read([]) },
+        pinnedIds: new Set(),
+      })("cut", revision),
+    ).toEqual({ matchedTerms: ["zástava"], missingTerms: ["hypotéka"] });
+    expect(
+      rankedHitTerms({
+        plan,
+        words: { decisionField: read([0]), cutDecisions: new Map() },
+        pinnedIds: new Set(),
+      })("cut", revision),
+    ).toEqual({ matchedTerms: ["zástava"], missingTerms: ["hypotéka"] });
   });
 });
 

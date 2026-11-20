@@ -5,11 +5,13 @@ import {
   FieldTriggerFace,
   InputFace,
   LabelFace,
+  SwitchFace,
 } from "@stll/ui/control-face";
 import {
   Frame,
   FrameDescription,
   FrameHeader,
+  FramePanel,
   FrameTitle,
 } from "@stll/ui/frame";
 import { cn } from "@stll/ui/utils";
@@ -102,6 +104,61 @@ export const SettingsCardPending = ({
   >
     {children}
   </SettingsCard>
+);
+
+/** A switch setting's row: the switch, then its caption, at touch height. */
+export const SETTINGS_SWITCH_ROW_CLASS =
+  "flex min-h-11 flex-row items-center gap-2";
+
+type SettingsSwitchCardProps = {
+  title: PendingTextKey;
+  description: PendingTextKey;
+  /** The switch's field (a `Field` holding the row and its line). */
+  children: ReactNode;
+};
+
+/**
+ * A card that holds one switch (a per-browser or per-member opt-in): the
+ * header over one panel. Both phases render it; the live card puts the
+ * switch's `Field` in, the pending phase `SettingsSwitchCardPending`'s face.
+ */
+export const SettingsSwitchCard = ({
+  children,
+  description,
+  title,
+}: SettingsSwitchCardProps) => (
+  <SettingsCardPending description={description} title={title}>
+    <FramePanel>
+      <div className="p-4">{children}</div>
+    </FramePanel>
+  </SettingsCardPending>
+);
+
+/**
+ * A switch card in its pending phase: the switch's face, off, beside its
+ * caption (the setting's value is read once the page mounts).
+ */
+export const SettingsSwitchCardPending = ({
+  description,
+  label,
+  title,
+}: {
+  title: PendingTextKey;
+  description: PendingTextKey;
+  /** The switch's caption. */
+  label: PendingTextKey;
+}) => (
+  <SettingsSwitchCard description={description} title={title}>
+    {/* The live `Field`'s column (`flex-col items-start`, `gap-2`). */}
+    <div className="flex flex-col items-start gap-2">
+      <div className={SETTINGS_SWITCH_ROW_CLASS}>
+        <SwitchFace />
+        <LabelFace>
+          <PendingText barClassName="w-40" id={label} />
+        </LabelFace>
+      </div>
+    </div>
+  </SettingsSwitchCard>
 );
 
 type FormFieldProps = {

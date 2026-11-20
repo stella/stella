@@ -1,0 +1,15 @@
+{
+  "identifier": "dictation-notice",
+  "description": "Panel that says dictation could not hear the microphone",
+  "windows": ["dictation-notice"],
+  "permissions": [
+    "core:event:allow-listen",
+    "core:event:allow-unlisten",
+    "allow-get-desktop-language",
+    "allow-set-desktop-language",
+    "allow-account-record-use",
+    "allow-desktop-report-error",
+    "allow-dictation-notice-get-state",
+    "allow-dictation-notice-respond"
+  ]
+}

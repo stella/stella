@@ -36,7 +36,11 @@
     "sessionOpeningInOffice": "Otwieranie w Office",
     "sessionSavingDraft": "Zapisywanie wersji roboczej",
     "reconnectAccount": "Połącz ponownie ze stella web…",
-    "transcribeRecording": "Transkrybuj nagranie…"
+    "transcribeRecording": "Transkrybuj nagranie…",
+    "dictation": "Dyktowanie",
+    "dictationHint": "Przytrzymaj {key}, aby dyktować",
+    "dictationSettings": "Ustawienia dyktowania…",
+    "dictationTurnOn": "Włącz dyktowanie…"
   },
   "notification": {
     "checkpointDelayedBody": "{fileName}: zmiany pozostają lokalne i zostaną automatycznie ponowione",
@@ -697,7 +701,8 @@
       "focusUnconfirmed": "stella nie mogła potwierdzić, która aplikacja jest aktywna, więc nic nie zostało wpisane. Spróbuj ponownie.",
       "shortcutHeld": "Puść klawisze skrótu, aby można było wpisać tekst. Nic nie zostało wpisane; spróbuj ponownie.",
       "passwordField": "Aktywne jest pole hasła, więc dyktowany tekst nie został zachowany ani wpisany.",
-      "cloudTranscription": "stella AI nie przetworzyła tego dyktowania, a modelu mowy nie ma na tym komputerze. Spróbuj ponownie albo w „Przetwarzaj za pomocą” wybierz „Ten komputer” i pobierz model."
+      "cloudTranscription": "stella AI nie przetworzyła tego dyktowania, a modelu mowy nie ma na tym komputerze. Spróbuj ponownie albo w „Przetwarzaj za pomocą” wybierz „Ten komputer” i pobierz model.",
+      "nothingHeard": "stella nie usłyszała mowy. Sprawdź urządzenie wejściowe w ustawieniach Dźwięku."
     },
     "failureKeptInHistory": "Tekst jest w historii schowka.",
     "transcribeRecording": {
@@ -705,6 +710,21 @@
       "description": "Zamienia na tekst plik z dyktafonu, notatkę głosową lub nagranie spotkania o długości do 4 godzin.",
       "open": "Otwórz",
       "failed": "Nie udało się otworzyć okna. Spróbuj ponownie."
+    },
+    "notice": {
+      "title": "stella nie słyszy mikrofonu",
+      "allowBody": "Zezwól na dostęp do mikrofonu i spróbuj ponownie.",
+      "checkBodyMac": "Sprawdź dostęp do mikrofonu w Ustawieniach systemowych i spróbuj ponownie.",
+      "checkBodyPc": "Sprawdź dostęp do mikrofonu w Ustawieniach systemu Windows i spróbuj ponownie.",
+      "allow": "Zezwól na mikrofon",
+      "openSettingsMac": "Otwórz Ustawienia systemowe",
+      "openSettingsPc": "Otwórz Ustawienia",
+      "dismiss": "Zamknij",
+      "nothingTitle": "stella nie usłyszała mowy",
+      "nothingBody": "Mów, trzymając klawisz, albo wybierz inne wejście w ustawieniach Dźwięku.",
+      "inputDevice": "Wejście: {device}",
+      "openSoundMac": "Otwórz ustawienia Dźwięku",
+      "openSoundPc": "Otwórz ustawienia dźwięku"
     },
     "preview": {
       "label": "Dotychczas podyktowany tekst",
@@ -809,8 +829,8 @@
     "permissionsTitlePc": "Skonfiguruj ten komputer",
     "permissionsBody": "Każde uprawnienie to Twój wybór. Możesz je później zmienić w Ustawieniach.",
     "neverRequested": "Aplikacja nigdy nie prosi o:",
-    "tryTitle": "Wypróbuj teraz",
-    "tryBody": "Skopiuj dowolny tekst, a potem naciśnij {shortcut}.",
+    "tryTitle": "Wypróbuj historię schowka",
+    "tryBody": "Skopiuj dowolny tekst, a potem naciśnij {shortcut}, aby otworzyć historię schowka.",
     "tryWaiting": "Czekam na skrót",
     "tryKeepGoing": "Dalej…",
     "tryExtraModifier": "To jest {pressed}. Użyj {shortcut}.",

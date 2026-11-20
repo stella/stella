@@ -1233,6 +1233,13 @@
       "treatment": "Traitement ultérieur"
     },
     "analyzing": "Analyse en cours...",
+    "browse": {
+      "courtDescription": "{court} ({country}) : décisions dans la base juridique publique de stella, par année et par mois.",
+      "courts": "Juridictions",
+      "days": "Jours",
+      "jurisdictionDescription": "{country} : décisions de justice dans la base juridique publique de stella, par juridiction, année et mois.",
+      "periodDescription": "{court} ({country}), {period} : décisions dans la base juridique publique de stella."
+    },
     "chat": {
       "prompts": {
         "facts": {
@@ -1725,6 +1732,7 @@
       "unorderedList": "Liste à puces",
       "wholeBlockRequired": "Sélectionnez un paragraphe ou une liste entière pour changer son style."
     },
+    "answerNotFinished": "stella n’a pas pu terminer cette réponse.",
     "answerQuote": {
       "showInDecision": "Afficher dans la décision",
       "unverified": "Citation non vérifiée",
@@ -2124,6 +2132,7 @@
     },
     "newChat": "Nouvelle conversation",
     "newChatInSidePanel": "La nouvelle conversation est disponible dans le panneau latéral",
+    "nextSteps": "Prochaines étapes",
     "noPromptPresetOnly": "Aucun message, préréglage uniquement",
     "noThreads": "Aucune conversation",
     "officeCitationUnavailable": "Cette citation n’est plus disponible.",
@@ -2240,6 +2249,8 @@
       "localPlace": "Votre ordinateur, {harness}",
       "localSelection": "Votre ordinateur · {harness}",
       "placeState": "{place}. {state}",
+      "startedInCloud": "Cette nouvelle conversation a démarré dans le cloud, car {harness} n’est pas disponible sur votre ordinateur ({state})",
+      "startedInCloudCheckFailed": "Cette nouvelle conversation a démarré dans le cloud, car votre ordinateur n’a pas pu être vérifié",
       "stepsCheck": "Ouverture de stella desktop. S’il ne s’ouvre pas, ouvrez-le sur votre ordinateur et vérifiez {harness} dans Paramètres › Général › Abonnements IA.",
       "stepsInstall": "Ouverture de stella desktop. S’il ne s’ouvre pas, ouvrez-le sur votre ordinateur et, dans Paramètres › Général, choisissez Installer pour {harness}.",
       "stepsSignInClaudeCode": "Ouverture de stella desktop pour vous connecter. S’il ne s’ouvre pas, ouvrez-le et choisissez Paramètres › Général › Se connecter avec Claude.",
@@ -2306,13 +2317,26 @@
       "title": "Votre message attend que l’agent ait terminé",
       "turnNotRunning": "L’agent ne travaille pas en ce moment."
     },
+    "stepDigest": {
+      "decisionsFound": "{found, plural, one {# décision trouvée} many {# décisions trouvées} other {# décisions trouvées}}",
+      "decisionsFoundUsed": "{found, plural, one {# décision trouvée} many {# décisions trouvées} other {# décisions trouvées}}, {used, plural, one {# utilisée dans la réponse} many {# utilisées dans la réponse} other {# utilisées dans la réponse}}",
+      "filterAsOf": "Au {date}",
+      "legislationFound": "{count, plural, one {# texte ou disposition} many {# textes et dispositions} other {# textes et dispositions}}",
+      "lookupDidNotGoThrough": "Cette recherche n’a pas abouti.",
+      "moreFound": "{count, plural, one {# de plus non affiché} many {# de plus non affichés} other {# de plus non affichés}}",
+      "moreLookups": "{count, plural, one {# requête de plus non affichée} many {# requêtes de plus non affichées} other {# requêtes de plus non affichées}}",
+      "notRecorded": "Cette étape a eu lieu avant que stella n’enregistre ce que chaque étape consulte.",
+      "nothingFound": "Aucun résultat.",
+      "technicalDetails": "Détails techniques",
+      "usedInAnswer": "Utilisée dans la réponse",
+      "versionFrom": "Version en vigueur depuis le {date}"
+    },
     "stopFailed": "Impossible d'arrêter la réponse. Réessayez.",
     "stopResponse": "Arrêter",
     "stopped": "Arrêté",
     "stopping": "Arrêt en cours…",
     "suggestTitle": "Suggérer un titre",
     "suggestTitleUnavailableAnonymized": "Les suggestions de titre ne sont pas disponibles pour les conversations anonymisées.",
-    "suggestedFollowupsLabel": "Suggestions de questions de suivi",
     "suggestingTitle": "Suggestion d'un titre…",
     "suggestionSeverity": {
       "style": "Style",
@@ -2323,7 +2347,6 @@
       "accepted": "Appliqué",
       "rejected": "Rejeté"
     },
-    "tabToAsk": "→ pour demander : « {prompt} »",
     "tableChart": {
       "bar": "Barres",
       "kind": "Type de graphique",
@@ -5750,6 +5773,9 @@
       "chatNotificationsDescription": "Recevez une notification de ce navigateur lorsqu’une réponse dans une conversation se termine pendant que stella est en arrière-plan.",
       "chatNotificationsToggle": "M’avertir quand une réponse est prête ou attend mon intervention",
       "chatNotificationsUnsupported": "Ce navigateur ne prend pas en charge les notifications.",
+      "chatTechnicalDetails": "Détails techniques dans les conversations",
+      "chatTechnicalDetailsDescription": "Chaque étape d’une conversation indique ce qu’elle a consulté et ce qu’elle a trouvé. Activez cette option pour voir aussi le code et les résultats bruts.",
+      "chatTechnicalDetailsToggle": "Afficher les détails techniques dans les conversations",
       "confirmDelete": "Confirmer la suppression du compte",
       "dangerZone": "Zone de danger",
       "dangerZoneDescription": "Supprimer définitivement votre accès au compte et les données privées du compte.",
