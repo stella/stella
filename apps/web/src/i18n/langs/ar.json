@@ -1795,7 +1795,6 @@
       "searchAllPastChatsQuestion": "هل تريد البحث في جميع دردشاتك؟",
       "uploadedDocumentPlaceholder": "(مستند مرفوع)"
     },
-    "askAnything": "اسأل عن أي شيء",
     "askUser": {
       "custom": "اكتب إجابتك الخاصة",
       "edit": "تعديل الإجابات",
@@ -1953,6 +1952,7 @@
     "historyTrimmed": "تعذّر تلخيص الرسائل السابقة، لذا تراعي هذه الإجابة الجزء الأحدث من المحادثة فقط.",
     "improvePrompt": "تحسين الطلب",
     "improvePromptDraftChanged": "تغيّرت المسودة، لذلك لم يُطبّق التحسين.",
+    "improvePromptEmpty": "اكتب طلبًا لتحسينه.",
     "improvePromptPlainTextOnly": "تحسين الطلب متاح للنص العادي فقط.",
     "improvePromptUnavailableAnonymized": "تحسين الطلب غير متاح في وضع إخفاء الهوية.",
     "improvingPrompt": "جارٍ تحسين الطلب…",
@@ -2312,6 +2312,7 @@
     "sendErrorToolsUnsupported": "لا يستطيع هذا النموذج استخدام الأدوات، لذا لا يمكنه الإجابة عن أسئلة تخص ملفك القانوني. انتقل إلى نموذج يدعم الأدوات.",
     "sendErrorTurnTooLarge": "أصبح هذا الردّ أكبر من أن يُرسَل كاملاً. أرسل رسالة جديدة للمتابعة.",
     "sendPrompt": "إرسال الرسالة",
+    "sendPromptEmpty": "اكتب رسالة لإرسالها.",
     "sendQueuedMessageNow": "إرسال الآن",
     "sendWithoutAnonymization": "إرسال دون تجهيل",
     "signInToChat": "سجّل الدخول للدردشة حول هذا المستند",

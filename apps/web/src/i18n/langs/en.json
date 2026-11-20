@@ -1795,7 +1795,6 @@
       "searchAllPastChatsQuestion": "Search all your chats?",
       "uploadedDocumentPlaceholder": "(uploaded document)"
     },
-    "askAnything": "Ask anything",
     "askUser": {
       "custom": "Write your own",
       "edit": "Edit answers",
@@ -1953,6 +1952,7 @@
     "historyTrimmed": "Earlier messages could not be summarized, so this answer only took the most recent part of the conversation into account.",
     "improvePrompt": "Improve prompt",
     "improvePromptDraftChanged": "Draft changed, so the improvement wasn't applied.",
+    "improvePromptEmpty": "Type a prompt to improve it.",
     "improvePromptPlainTextOnly": "Prompt improvement is available for plain text only.",
     "improvePromptUnavailableAnonymized": "Prompt improvement is unavailable in anonymized mode.",
     "improvingPrompt": "Improving prompt…",
@@ -2312,6 +2312,7 @@
     "sendErrorToolsUnsupported": "This model cannot use tools, so it cannot answer questions about your matter. Switch to a model that supports tools.",
     "sendErrorTurnTooLarge": "This reply grew too large to deliver in full. Send a new message to continue.",
     "sendPrompt": "Send message",
+    "sendPromptEmpty": "Type a message to send it.",
     "sendQueuedMessageNow": "Send now",
     "sendWithoutAnonymization": "Send without anonymization",
     "signInToChat": "Sign in to chat about this document",

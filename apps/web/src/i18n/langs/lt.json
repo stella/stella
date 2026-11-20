@@ -1795,7 +1795,6 @@
       "searchAllPastChatsQuestion": "Ieškoti visuose jūsų pokalbiuose?",
       "uploadedDocumentPlaceholder": "(įkeltas dokumentas)"
     },
-    "askAnything": "Klauskite bet ko",
     "askUser": {
       "custom": "Rašyti savo",
       "edit": "Redaguoti atsakymus",
@@ -1953,6 +1952,7 @@
     "historyTrimmed": "Ankstesnių žinučių nepavyko apibendrinti, todėl šiame atsakyme atsižvelgta tik į naujausią pokalbio dalį.",
     "improvePrompt": "Patobulinti užklausą",
     "improvePromptDraftChanged": "Juodraštis pasikeitė, todėl patobulinimas nebuvo pritaikytas.",
+    "improvePromptEmpty": "Įveskite užklausą, kad galėtumėte ją patobulinti.",
     "improvePromptPlainTextOnly": "Užklausą galima tobulinti tik kaip paprastą tekstą.",
     "improvePromptUnavailableAnonymized": "Anonimizuotu režimu užklausos tobulinti negalima.",
     "improvingPrompt": "Užklausa tobulinama…",
@@ -2312,6 +2312,7 @@
     "sendErrorToolsUnsupported": "Šis modelis negali naudoti įrankių, todėl negali atsakyti į klausimus apie jūsų bylą. Perjunkite į modelį, kuris palaiko įrankius.",
     "sendErrorTurnTooLarge": "Šis atsakymas tapo per didelis, kad būtų pateiktas visas. Norėdami tęsti, išsiųskite naują žinutę.",
     "sendPrompt": "Siųsti pranešimą",
+    "sendPromptEmpty": "Įveskite pranešimą, kad galėtumėte jį išsiųsti.",
     "sendQueuedMessageNow": "Siųsti dabar",
     "sendWithoutAnonymization": "Siųsti be anonimizavimo",
     "signInToChat": "Prisijunkite, kad galėtumėte kalbėtis apie šį dokumentą",

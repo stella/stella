@@ -146,6 +146,29 @@ type ChatInputSurfaceProps = {
   mcpOrganizationId?: string | undefined;
 };
 
+/**
+ * What the disabled Send and Improve prompt buttons say instead of their
+ * labels. Only the empty draft is this surface's to explain; a caller that
+ * disables input or sending owns that message. `t` is typed to the keys it
+ * reads, so the full message tree is not re-instantiated here.
+ */
+const composerDisabledReasons = ({
+  canSubmit,
+  inputDisabled,
+  isBlank,
+  submitDisabled,
+  t,
+}: {
+  canSubmit: boolean;
+  inputDisabled: boolean;
+  isBlank: boolean;
+  submitDisabled: boolean;
+  t: (key: "chat.improvePromptEmpty" | "chat.sendPromptEmpty") => string;
+}) => ({
+  improve: !inputDisabled && isBlank ? t("chat.improvePromptEmpty") : undefined,
+  send: !submitDisabled && !canSubmit ? t("chat.sendPromptEmpty") : undefined,
+});
+
 export const ChatInputSurface = ({
   autoFocus,
   className,
@@ -237,6 +260,13 @@ export const ChatInputSurface = ({
   };
 
   const isBlank = isEmpty && attachments.length === 0;
+  const disabledReasons = composerDisabledReasons({
+    canSubmit,
+    inputDisabled,
+    isBlank,
+    submitDisabled,
+    t,
+  });
   // Compact rows seat every control in the shared slot so it centres on the
   // text line; the large variant lays its controls out in a plain action row.
   const ControlGroup = variant === "compact" ? ComposerControlSlot : "div";
@@ -376,6 +406,7 @@ export const ChatInputSurface = ({
                     anonymized={anonymized}
                     controller={controller}
                     disabled={inputDisabled || isBlank}
+                    disabledReason={disabledReasons.improve}
                   />
                 </span>
                 {/* The single primary affordance morphs in place: the button
@@ -388,6 +419,7 @@ export const ChatInputSurface = ({
                 />
                 <ChatComposerActionButton
                   canSend={canSend}
+                  disabledReason={disabledReasons.send}
                   guideAnchorsEnabled={guideAnchorsEnabled}
                   isGenerating={isGenerating}
                   onSend={() => {

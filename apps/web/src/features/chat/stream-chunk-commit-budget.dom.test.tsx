@@ -428,7 +428,10 @@ const createStreamingServer = (
             const stop = testing.screen.queryByRole("button", {
               name: translations.chat.stopResponse,
             });
-            burst.stopEnabled = stop !== null && !stop.hasAttribute("disabled");
+            burst.stopEnabled =
+              stop !== null &&
+              !stop.hasAttribute("disabled") &&
+              stop.getAttribute("aria-disabled") !== "true";
             burst.before = probe.snapshot();
           }
           if (index === lastKindIndex + 1) {
