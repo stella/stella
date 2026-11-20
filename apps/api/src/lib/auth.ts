@@ -278,6 +278,7 @@ import { readCurrentLiveSseSessions } from "@/api/lib/auth/sse-session-liveness-
 import {
   createSsoOrganizationGuardPlugin,
   refuseConsentUnlessSsoAdmits,
+  refuseSignedAccessTokenUnlessSsoAdmits,
   refuseTokenUnlessSsoAdmits,
 } from "@/api/lib/auth/sso-organization-guard";
 import {
@@ -2777,6 +2778,27 @@ export const createAuth = (
             {
               claims: {
                 accessToken: async (input) => {
+                  // Opaque access and refresh tokens decide SSO when their
+                  // rows are written; a signed access token has no row, so
+                  // the grant that signs one decides here. A refresh always
+                  // writes the rotated refresh token, which decides in the
+                  // transaction that ends the presented one, so a refused
+                  // refresh leaves the grant ended. Introspection re-derives
+                  // an opaque token's claims with no grant type.
+                  if (
+                    input.grantType !== undefined &&
+                    input.grantType !== "refresh_token" &&
+                    input.user &&
+                    input.referenceId !== undefined
+                  ) {
+                    await refuseSignedAccessTokenUnlessSsoAdmits({
+                      organizationId: brandPersistedOrganizationId(
+                        input.referenceId,
+                      ),
+                      userId: brandPersistedUserId(input.user.id),
+                      sessionId: input.sessionId ?? null,
+                    });
+                  }
                   const claims = await getServiceOAuthClaims(input);
                   if (Result.isError(claims)) {
                     const error = new APIError("FORBIDDEN", {

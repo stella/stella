@@ -361,10 +361,10 @@ export const recordLegalResolveAudit = async (options: LegalResolveAudit) =>
   );
 
 /**
- * The SSO decision for the auth framework's organization endpoints and for
- * OAuth consent. Both run before any request transaction exists, so the
- * decision reads on this connection; callers receive the answer, never the
- * handle.
+ * The SSO decision for the auth framework's organization endpoints, for
+ * OAuth consent and for signed access tokens. Each runs outside any request
+ * transaction, so the decision reads on this connection; callers receive the
+ * answer, never the handle.
  */
 export const readOrganizationRequestSsoRefusal = async (
   lookup: SsoRequestLookup,
@@ -372,6 +372,13 @@ export const readOrganizationRequestSsoRefusal = async (
 export const readConsentSsoAccess = async (
   lookup: Omit<Parameters<typeof readSessionSsoAccess>[1], "session">,
 ) => await readSessionSsoAccess(rootDb, { ...lookup, session: "live" });
+/**
+ * The SSO decision for a signed access token, which no row records: it is
+ * decided when the token is signed, against the session the grant recorded.
+ */
+export const readSignedAccessTokenSsoAccess = async (
+  lookup: Omit<Parameters<typeof readSessionSsoAccess>[1], "session">,
+) => await readSessionSsoAccess(rootDb, { ...lookup, session: "recorded" });
 
 type ReadOAuthGrantAdmissionOptions = {
   clientId: string;

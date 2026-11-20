@@ -10,6 +10,7 @@ import { SSO_SIGN_IN_REQUIRED_CODE } from "@stll/api-contract/sso";
 import {
   readConsentSsoAccess,
   readOrganizationRequestSsoRefusal,
+  readSignedAccessTokenSsoAccess,
 } from "@/api/db/root";
 import type { Transaction } from "@/api/db/root";
 import type { getAuth } from "@/api/lib/auth";
@@ -19,7 +20,7 @@ import {
   readSessionSsoAccess,
   SSO_ACCESS_STATUS,
 } from "@/api/lib/db/sso-access";
-import type { SsoRequestLookup } from "@/api/lib/db/sso-access";
+import type { SsoAccess, SsoRequestLookup } from "@/api/lib/db/sso-access";
 import {
   brandPersistedOrganizationId,
   brandPersistedUserId,
@@ -29,10 +30,10 @@ import { isRecord } from "@/api/lib/type-guards";
 /**
  * The SSO refusals better-auth's own endpoints raise: the organization
  * endpoints, OAuth consent and OAuth token issuance. Each asks the shared
- * decision in `sso-access.ts`. The organization endpoints and consent run
- * outside any request transaction and ask the owner connection's decision
- * operations; token issuance decides inside the transaction that issues the
- * token.
+ * decision in `sso-access.ts`. The organization endpoints, consent and
+ * signed access tokens run outside any request transaction and ask the owner
+ * connection's decision operations; a stored token decides inside the
+ * transaction that writes it.
  */
 
 const ORGANIZATION_PATH_PREFIX = "/organization/";
@@ -239,24 +240,37 @@ export const refuseConsentUnlessSsoAdmits = async (
   }
 };
 
-/**
- * Every organization token, first issue and refresh alike, carries the SSO
- * provenance of the browser session that granted it: an organization that
- * requires SSO refuses a token whose session no provider of its created, or
- * whose session row is gone.
- */
-export const refuseTokenUnlessSsoAdmits = async (
-  tx: SsoGuardDatabase,
-  lookup: SessionGrantLookup,
-): Promise<void> => {
-  const access = await readSessionSsoAccess(tx, {
-    ...lookup,
-    session: "recorded",
-  });
+const refuseGrantUnlessSsoAdmits = (access: SsoAccess): void => {
   if (access.status === SSO_ACCESS_STATUS.signInRequired) {
     throw new APIError("BAD_REQUEST", {
       error: "invalid_grant",
       error_description: SSO_SIGN_IN_REQUIRED_MESSAGE,
     });
   }
+};
+
+/**
+ * Every organization token, first issue and refresh alike, carries the SSO
+ * provenance of the browser session that granted it: an organization that
+ * requires SSO refuses a token whose session no provider of its created, or
+ * whose session row is gone. A stored token decides inside the transaction
+ * that writes it.
+ */
+export const refuseTokenUnlessSsoAdmits = async (
+  tx: SsoGuardDatabase,
+  lookup: SessionGrantLookup,
+): Promise<void> => {
+  refuseGrantUnlessSsoAdmits(
+    await readSessionSsoAccess(tx, { ...lookup, session: "recorded" }),
+  );
+};
+
+/**
+ * The same refusal for a signed access token, which no row records, before
+ * the provider signs it.
+ */
+export const refuseSignedAccessTokenUnlessSsoAdmits = async (
+  lookup: SessionGrantLookup,
+): Promise<void> => {
+  refuseGrantUnlessSsoAdmits(await readSignedAccessTokenSsoAccess(lookup));
 };

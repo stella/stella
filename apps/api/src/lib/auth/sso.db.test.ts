@@ -2,7 +2,10 @@ import { symmetricEncrypt } from "better-auth/crypto";
 import { panic } from "better-result";
 import { afterAll, describe, expect, setDefaultTimeout, test } from "bun:test";
 import { and, eq, sql } from "drizzle-orm";
+import { decodeJwt } from "jose";
+import * as v from "valibot";
 
+import { MCP_DEFAULT_RESOURCE_SCOPES } from "@stll/api-contract";
 import { SSO_SIGN_IN_REQUIRED_CODE } from "@stll/api-contract/sso";
 import { rejectionOf } from "@stll/property-testing/rejection";
 import { createTestState } from "@stll/test-state";
@@ -36,6 +39,12 @@ import {
   initAgentAuthTestDb,
   releaseAgentAuthTestDb,
 } from "@/api/tests/helpers/mock-agent-auth-db";
+import {
+  authorizeOAuthClient,
+  consentOAuthClient,
+  registerOAuthClient,
+  requestOAuthCodeExchange,
+} from "@/api/tests/helpers/oauth-grant";
 import {
   addMember,
   CLIENT_ID,
@@ -175,6 +184,15 @@ const errorCodeOf = async (response: Response): Promise<unknown> => {
     ? body.code
     : undefined;
 };
+
+const tokenErrorSchema = v.looseObject({
+  error: v.string(),
+  error_description: v.string(),
+});
+const signedAccessTokenSchema = v.looseObject({
+  access_token: v.string(),
+  refresh_token: v.optional(v.string()),
+});
 
 describe("organization SSO", () => {
   test("is hidden while the deployment switch is off, and decides nothing", async () => {
@@ -915,6 +933,52 @@ describe("organization SSO", () => {
     );
     expect(strangerRead.status).toBe(403);
     expect(await errorCodeOf(strangerRead)).not.toBe(SSO_SIGN_IN_REQUIRED_CODE);
+  });
+
+  test("decides SSO before signing an access token that no stored row records", async () => {
+    testState.setConfig("FEATURE_ENTERPRISE_SSO", true);
+    const owner = await signInHuman(`sso-jwt-owner-${unique()}@stella.dev`);
+    const organization = await createOrganization(owner, "jwt");
+    await owner.setActiveOrganization(organization.id);
+    // Without `offline_access` the grant issues a signed access token alone:
+    // no access or refresh token row is written.
+    const consentToGrant = async () => {
+      const client = await registerOAuthClient();
+      const { codeVerifier, redirect } = await authorizeOAuthClient(
+        owner,
+        client,
+        MCP_DEFAULT_RESOURCE_SCOPES.join(" "),
+      );
+      const codeRedirect = await consentOAuthClient({
+        browser: owner,
+        consentPage: redirect,
+      });
+      return async () =>
+        await requestOAuthCodeExchange({
+          client,
+          codeVerifier,
+          redirect: codeRedirect,
+        });
+    };
+
+    const admittedExchange = await consentToGrant();
+    const admitted = await admittedExchange();
+    expect(admitted.status).toBe(200);
+    const issued = v.parse(signedAccessTokenSchema, await admitted.json());
+    expect(issued.refresh_token).toBeUndefined();
+    expect(decodeJwt(issued.access_token)).toMatchObject({
+      org_id: organization.id,
+    });
+
+    // Consent was given while the organization did not require SSO; the
+    // code is exchanged after it does.
+    const refusedExchange = await consentToGrant();
+    await setSsoRequirement(testDb, organization.id, "required");
+    const refused = await refusedExchange();
+    expect(refused.status).toBe(400);
+    expect(v.parse(tokenErrorSchema, await refused.json())).toMatchObject({
+      error: "invalid_grant",
+    });
   });
 
   test("classifies every mounted organization endpoint for the SSO decision", () => {
