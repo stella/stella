@@ -6,6 +6,7 @@ import { declareFingerprintFields } from "@stll/errors";
 import {
   CMS_DATA_OID,
   hasCmsSignedDataHeader,
+  OUTER_CMS_LAYER_ID,
   readCmsSignedData,
 } from "./cms-signed-data";
 
@@ -43,19 +44,24 @@ export const parseP7m = (bytes: Uint8Array) => {
   }
   const layers = [];
   let documentBytes = bytes;
+  // Each layer wraps the next, so a layer's id is its nesting path.
+  let layerId = OUTER_CMS_LAYER_ID;
   for (let depth = 0; depth < P7M_LIMITS.maxLayers; depth++) {
-    const layer = readCmsSignedData(documentBytes);
+    if (depth > 0) {
+      layerId = `${layerId}.${depth}`;
+    }
+    const layer = readCmsSignedData(documentBytes, layerId);
     if (layer.isErr()) {
       return failure(layer.error);
     }
-    const { contentType, content, signers } = layer.value;
+    const { id, contentType, content, signers } = layer.value;
     if (signers.length === 0) {
       return failure("not_signed_data");
     }
     if (contentType !== CMS_DATA_OID) {
       return failure("unsupported_content");
     }
-    layers.push({ signers });
+    layers.push({ id, signers });
     documentBytes = content;
     if (!hasCmsSignedDataHeader(documentBytes)) {
       return Result.ok({ bytes: documentBytes, layers });

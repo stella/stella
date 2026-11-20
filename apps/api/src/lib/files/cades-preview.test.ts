@@ -52,6 +52,12 @@ describe("CAdES file reading", () => {
       ["Example first signer", "Example second signer"],
       ["Example first signer"],
     ]);
+    expect(
+      preview.layers.map(({ id, signers }) => [id, signers.map((s) => s.id)]),
+    ).toEqual([
+      ["layer-0", ["layer-0.signer-0", "layer-0.signer-1"]],
+      ["layer-0.1", ["layer-0.1.signer-0"]],
+    ]);
   });
 
   test("extracts UTF-8 payloads for preview and search without trusting a PDF filename", async () => {
@@ -87,7 +93,12 @@ describe("CAdES file reading", () => {
       fileName: "unknown.bin",
       mimeType: "application/octet-stream",
       text: "",
-      layers: [{ signers: [{ name: "Example first signer" }] }],
+      layers: [
+        {
+          id: "layer-0",
+          signers: [{ id: "layer-0.signer-0", name: "Example first signer" }],
+        },
+      ],
     });
   });
 
