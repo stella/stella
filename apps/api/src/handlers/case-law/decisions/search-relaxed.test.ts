@@ -237,7 +237,7 @@ describe("relaxedTopUpOutcome", () => {
         budgetMs: 4000,
         error: failure,
       }),
-    ).toEqual({ type: "degraded", reason: "budget_exhausted", budgetMs: 4000 });
+    ).toEqual({ type: "degraded", reason: "budget_exhausted" });
   });
 
   test.each([

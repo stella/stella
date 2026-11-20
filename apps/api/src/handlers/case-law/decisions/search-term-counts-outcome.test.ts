@@ -47,7 +47,6 @@ describe("per-word decision counts that did not finish", () => {
       settledTermDecisionCounts({
         type: "degraded",
         reason: "budget_exhausted",
-        budgetMs: 4000,
       }),
     ).toBeNull();
     expect(incomplete()).toEqual([
@@ -103,7 +102,7 @@ describe("the ranked path's counts under their budget", () => {
         budgetMs: 4000,
         error: budgetCut,
       }),
-    ).toEqual({ type: "degraded", reason: "budget_exhausted", budgetMs: 4000 });
+    ).toEqual({ type: "degraded", reason: "budget_exhausted" });
     expect(
       rankedCountsOutcome({ status: "complete", value: Result.err(budgetCut) }),
     ).toEqual({ type: "skipped", error: budgetCut });

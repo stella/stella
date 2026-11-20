@@ -199,7 +199,7 @@ export const hitTermsFromCoverage = (
  */
 export type RelaxedTopUpOutcome<T> =
   | { type: "read"; value: T }
-  | { type: "degraded"; reason: "budget_exhausted"; budgetMs: number }
+  | { type: "degraded"; reason: "budget_exhausted" }
   | { type: "skipped"; error: unknown };
 
 /**
@@ -216,11 +216,7 @@ export const relaxedTopUpOutcome = <T>(
         ? { type: "read", value: step.value.value }
         : { type: "skipped", error: step.value.error };
     case "degraded":
-      return {
-        type: "degraded",
-        reason: step.reason,
-        budgetMs: step.budgetMs,
-      };
+      return { type: "degraded", reason: step.reason };
     case "failed":
       return { type: "skipped", error: step.error };
     default:
