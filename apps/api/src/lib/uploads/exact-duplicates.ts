@@ -6,8 +6,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 
 export type ExactDuplicate = {
   sha256Hex: string;
-  entityId: SafeId<"entity">;
-  entityName: string | null;
+  entityName: string;
 };
 
 type FindExactDuplicatesOptions = {
@@ -35,7 +34,6 @@ export const findExactDuplicates = async ({
   return await tx
     .selectDistinctOn([fileSha256Hex], {
       sha256Hex: fileSha256Hex,
-      entityId: entities.id,
       entityName: entities.name,
     })
     .from(fields)
@@ -44,6 +42,9 @@ export const findExactDuplicates = async ({
       and(
         eq(entities.currentVersionId, fields.entityVersionId),
         eq(entities.workspaceId, workspaceId),
+        // A task carries files too, but its attachment is not a document the
+        // upload could duplicate.
+        eq(entities.kind, "document"),
       ),
     )
     .where(

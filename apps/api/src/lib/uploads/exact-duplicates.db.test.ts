@@ -31,21 +31,24 @@ const propertyIds = new Map<SafeId<"workspace">, SafeId<"property">>();
 const CURRENT = "a".repeat(64);
 const SUPERSEDED = "b".repeat(64);
 const OTHER_MATTER_ONLY = "c".repeat(64);
+const TASK_ATTACHMENT = "e".repeat(64);
 
 type SeedDocumentOptions = {
   workspaceId: SafeId<"workspace">;
+  kind?: "document" | "task";
   name: string;
-  docSequence: number;
+  docSequence: number | null;
   versionHashes: readonly string[];
 };
 
-/** A document with one file version per hash; the last is the current one. */
+/** An entity with one file version per hash; the last is the current one. */
 const seedDocument = async ({
   workspaceId,
+  kind = "document",
   name,
   docSequence,
   versionHashes,
-}: SeedDocumentOptions): Promise<SafeId<"entity">> => {
+}: SeedDocumentOptions): Promise<void> => {
   const entityId = createSafeId<"entity">();
   const propertyId = propertyIds.get(workspaceId);
   if (propertyId === undefined) {
@@ -60,7 +63,7 @@ const seedDocument = async ({
   await db.insert(entities).values({
     id: entityId,
     workspaceId,
-    kind: "document",
+    kind,
     name,
     docSequence,
   });
@@ -95,8 +98,6 @@ const seedDocument = async ({
     .update(entities)
     .set({ currentVersionId: versions.at(-1)?.id })
     .where(eq(entities.id, entityId));
-
-  return entityId;
 };
 
 type FindOptions = {
@@ -114,8 +115,6 @@ const find = async ({ access, workspaceId, sha256Hexes }: FindOptions) => {
   );
   return result.unwrap();
 };
-
-let contractId: SafeId<"entity">;
 
 beforeAll(async () => {
   db = await getTestDb();
@@ -148,7 +147,7 @@ beforeAll(async () => {
       kinds: ["document"],
     });
   }
-  contractId = await seedDocument({
+  await seedDocument({
     workspaceId: matterId,
     name: "Contract.pdf",
     docSequence: 1,
@@ -159,6 +158,13 @@ beforeAll(async () => {
     name: "Elsewhere.pdf",
     docSequence: 1,
     versionHashes: [OTHER_MATTER_ONLY],
+  });
+  await seedDocument({
+    workspaceId: matterId,
+    kind: "task",
+    name: "Review the contract",
+    docSequence: null,
+    versionHashes: [TASK_ATTACHMENT],
   });
 });
 
@@ -175,9 +181,17 @@ test("a file with the bytes of a matter's current document is a duplicate", asyn
       workspaceId: matterId,
       sha256Hexes: [CURRENT, "d".repeat(64)],
     }),
-  ).toEqual([
-    { sha256Hex: CURRENT, entityId: contractId, entityName: "Contract.pdf" },
-  ]);
+  ).toEqual([{ sha256Hex: CURRENT, entityName: "Contract.pdf" }]);
+});
+
+test("a file only a task holds is not a duplicate document", async () => {
+  expect(
+    await find({
+      access: [matterId],
+      workspaceId: matterId,
+      sha256Hexes: [TASK_ATTACHMENT],
+    }),
+  ).toEqual([]);
 });
 
 test("bytes only a superseded version holds are not a duplicate", async () => {
