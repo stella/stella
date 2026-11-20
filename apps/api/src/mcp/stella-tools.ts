@@ -23,6 +23,7 @@ import { publicCountryUnavailable } from "@stll/api-contract/public-country-capa
 import {
   caseLawHitGroup,
   type CaseLawHitOrder,
+  type CaseLawSearchWarningCode,
   SEARCH_PAGE_END,
   SEARCH_PAGINATION_COMPLETE,
   SEARCH_PAGINATION_TRUNCATED_EXCLUSION_BUDGET,
@@ -98,8 +99,8 @@ import {
 import {
   type AgentCaseLawSearchWarning,
   manyRequiredTermsWarning,
-  partialMatchesAppendedWarning,
   partialMatchesUnreadWarning,
+  partialMatchesWarning,
   phrasingTimedOutWarning,
   provisionCitedWidelyWarning,
   provisionScopeUnreadWarning,
@@ -2084,9 +2085,10 @@ const mergeCaseLawSearchHits = (
   // is an opaque key, and all the order has to be is total and stable.
   return [...merged.values()].toSorted(
     (left, right) =>
-      // Partial matches follow every full match: within one query they are
-      // appended after it, and ranks of different queries are not comparable
-      // across that line.
+      // Under `all_words_first` partial matches follow every full match:
+      // within one query they are appended after it, and ranks of different
+      // queries are not comparable across that line. Under `score` both
+      // matches share one group and rank decides.
       caseLawHitGroup(left.match, order) -
         caseLawHitGroup(right.match, order) ||
       left.rank - right.rank ||
@@ -2543,19 +2545,30 @@ const manyRequiredTermsWarnings = ({
       ];
 };
 
+/** The codes a phrasing's partial matches are told under, in either order. */
+const PARTIAL_MATCH_WARNING_CODES: ReadonlySet<string> = new Set([
+  "partial_matches_appended",
+  "partial_matches_ranked",
+] satisfies readonly CaseLawSearchWarningCode[]);
+
 type PartialMatchWarningOptions = {
   merged: readonly MergedCaseLawHit[];
+  /** The order the merged page is in, which decides the warning's wording. */
+  order: CaseLawHitOrder;
   queryIndex: number;
   countsStrictSet: boolean;
 };
 
 /**
- * `partial_matches_appended` for a phrasing, counted on the merged response
+ * The partial-match warning for a phrasing, counted on the merged response
  * the caller reads: a hit another phrasing matched in full is returned as
- * `all_terms`, so it is not counted here.
+ * `all_terms`, so it is not counted here. Worded from the merged page's own
+ * order, so it never says partial hits follow the full ones on a page that
+ * ranks them together.
  */
 const partialMatchWarnings = ({
   merged,
+  order,
   queryIndex,
   countsStrictSet,
 }: PartialMatchWarningOptions): AgentCaseLawSearchWarning[] => {
@@ -2566,7 +2579,7 @@ const partialMatchWarnings = ({
   ).length;
   return partial === 0
     ? []
-    : [partialMatchesAppendedWarning({ partial, countsStrictSet })];
+    : [partialMatchesWarning({ partial, countsStrictSet, order })];
 };
 
 const preferredLanguageOf = ({
@@ -3177,6 +3190,7 @@ const answeredPhrasingWarnings = ({
   page,
   slots,
   merged,
+  order,
   queryIndex,
   countsStrictSet,
 }: AnsweredPhrasingWarningsOptions): AgentCaseLawSearchWarning[] => [
@@ -3184,7 +3198,7 @@ const answeredPhrasingWarnings = ({
     ? [partialMatchesUnreadWarning({ query })]
     : []),
   ...manyRequiredTermsWarnings({ subCursor, page, slots }),
-  ...partialMatchWarnings({ merged, queryIndex, countsStrictSet }),
+  ...partialMatchWarnings({ merged, order, queryIndex, countsStrictSet }),
 ];
 
 type SearchCaseLawArgs = v.InferOutput<typeof searchCaseLawArgs>;
@@ -3546,9 +3560,10 @@ const searchCaseLawWork = async ({
   }
   const { pages } = read;
 
+  const mergedOrder = mergedCaseLawHitOrder(pages);
   const merged = mergeCaseLawSearchHits(
     pages.map((outcome) => (outcome.type === "page" ? outcome.page.hits : [])),
-    mergedCaseLawHitOrder(pages),
+    mergedOrder,
   );
 
   // Facets describe the first phrasing, without double-counting overlapping
@@ -3602,7 +3617,7 @@ const searchCaseLawWork = async ({
           // Recount partial matches after deduplication: another phrasing
           // may have promoted a partial hit to a full match.
           ...outcome.page.warnings
-            .filter(({ code }) => code !== "partial_matches_appended")
+            .filter(({ code }) => !PARTIAL_MATCH_WARNING_CODES.has(code))
             .map((warning) => withFacetValues(warning, values)),
           ...answeredPhrasingWarnings({
             query,
@@ -3610,6 +3625,7 @@ const searchCaseLawWork = async ({
             page: outcome.page,
             slots: perQueryLimit,
             merged,
+            order: mergedOrder,
             queryIndex: index,
             countsStrictSet: single !== undefined,
           }),

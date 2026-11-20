@@ -1375,8 +1375,11 @@ for (const language of ["en", "ar"] as const) {
         { settings: true },
       );
       await page.goto("/#general");
+      // The sidebar names the state too; the badge is the General page's.
       await expect(
-        page.getByText(messages.settings.connectionExpired, { exact: true }),
+        page
+          .locator("[data-slot=settings-page]")
+          .getByText(messages.settings.connectionExpired, { exact: true }),
       ).toBeVisible();
       await expect(
         page.getByText(withHost(messages.settings.reconnectHostDescription), {
@@ -1451,10 +1454,14 @@ for (const language of ["en", "ar"] as const) {
           }
           const area = surface === "welcome" ? page.getByRole("dialog") : page;
           if (surface === "settings") {
+            // The sidebar names the state too; the badge is the General
+            // page's.
             await expect(
-              page.getByText(messages.settings.reconnectNeeded, {
-                exact: true,
-              }),
+              page
+                .locator("[data-slot=settings-page]")
+                .getByText(messages.settings.reconnectNeeded, {
+                  exact: true,
+                }),
             ).toBeVisible();
           }
           await area

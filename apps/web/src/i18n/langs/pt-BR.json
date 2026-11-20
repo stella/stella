@@ -1233,6 +1233,13 @@
       "treatment": "Tratamento posterior"
     },
     "analyzing": "Analisando...",
+    "browse": {
+      "courtDescription": "{court} ({country}): decisões na base jurídica pública da stella, por ano e mês.",
+      "courts": "Tribunais",
+      "days": "Dias",
+      "jurisdictionDescription": "{country}: decisões judiciais na base jurídica pública da stella, por tribunal, ano e mês.",
+      "periodDescription": "{court} ({country}), {period}: decisões na base jurídica pública da stella."
+    },
     "chat": {
       "prompts": {
         "facts": {
@@ -1494,6 +1501,10 @@
       "title": "A pesquisa está temporariamente indisponível"
     },
     "searchWarnings": {
+      "collectionCitationUnresolved": {
+        "hint": "Pesquise pelo número do processo ou pelo ECLI da decisão, se souber.",
+        "message": "Nenhuma decisão correspondente exatamente a esta referência de coletânea foi encontrada."
+      },
       "noHits": {
         "hint": "Tente menos palavras ou outras: os termos que uma decisão usaria, não a frase em que se faz uma pergunta.",
         "message": "Nada corresponde às palavras exigidas por esta pesquisa."
@@ -1721,12 +1732,25 @@
       "unorderedList": "Lista com marcadores",
       "wholeBlockRequired": "Selecione um parágrafo ou uma lista inteira para alterar seu estilo."
     },
+    "answerNotFinished": "A stella não conseguiu concluir esta resposta.",
     "answerQuote": {
       "showInDecision": "Ver na decisão",
       "unverified": "Citação não verificada",
       "unverifiedHint": "As decisões citadas não contêm este texto palavra por palavra",
       "verified": "Citação verificada",
       "verifiedHint": "Palavra por palavra em {source}"
+    },
+    "answerTable": {
+      "copy": "Copiar tabela",
+      "copyAs": "Copiar como {format}",
+      "download": "Baixar tabela",
+      "downloadAs": "Baixar como {format}",
+      "fullscreen": "Abrir em tela cheia",
+      "fullscreenTitle": "Tabela em tela cheia",
+      "singleLine": "Linha única",
+      "size": "{rows, plural, one {# linha} many {# linhas} other {# linhas}} · {columns, plural, one {# coluna} many {# colunas} other {# colunas}}",
+      "textMode": "Texto das células",
+      "wrap": "Quebrar texto"
     },
     "applyMode": {
       "description": "O Word armazena quem fez cada alteração. Lembraremos da sua escolha.",
@@ -2120,6 +2144,7 @@
     },
     "newChat": "Novo chat",
     "newChatInSidePanel": "O novo chat está disponível no painel lateral",
+    "nextSteps": "Próximos passos",
     "noPromptPresetOnly": "Sem mensagem, apenas predefinição",
     "noThreads": "Ainda não há conversas",
     "officeCitationUnavailable": "Esta citação não está mais disponível.",
@@ -2226,7 +2251,6 @@
       "chipLabel": "Executa em: {place}",
       "cloud": "Nuvem",
       "cloudDescription": "Roda na nuvem. Funciona de qualquer lugar.",
-      "harnessModels": "Modelos do {harness}",
       "hintCheck": "Verifique-o no stella desktop",
       "hintInstall": "Instale pelo stella desktop",
       "hintOffline": "Abra o stella desktop no seu computador",
@@ -2236,8 +2260,9 @@
       "localFolderSelection": "Seu computador · {harness} · {folder}",
       "localPlace": "Seu computador, {harness}",
       "localSelection": "Seu computador · {harness}",
-      "modelDefault": "Padrão (recomendado)",
       "placeState": "{place}. {state}",
+      "startedInCloud": "Este novo chat começou na nuvem porque o {harness} não está disponível no seu computador ({state})",
+      "startedInCloudCheckFailed": "Este novo chat começou na nuvem porque não foi possível verificar seu computador",
       "stepsCheck": "Abrindo o stella desktop. Se ele não abrir, abra-o no seu computador e verifique o {harness} em Configurações › Geral › Assinaturas de IA.",
       "stepsInstall": "Abrindo o stella desktop. Se ele não abrir, abra-o no seu computador e, em Configurações › Geral, escolha Instalar para o {harness}.",
       "stepsSignInClaudeCode": "Abrindo o stella desktop para entrar. Se ele não abrir, abra-o e escolha Configurações › Geral › Entrar com o Claude.",
@@ -2304,13 +2329,26 @@
       "title": "Sua mensagem fica na fila até o agente terminar",
       "turnNotRunning": "O agente não está trabalhando agora."
     },
+    "stepDigest": {
+      "decisionsFound": "{found, plural, one {# decisão encontrada} many {# decisões encontradas} other {# decisões encontradas}}",
+      "decisionsFoundUsed": "{found, plural, one {# decisão encontrada} many {# decisões encontradas} other {# decisões encontradas}}, {used, plural, one {# usada na resposta} many {# usadas na resposta} other {# usadas na resposta}}",
+      "filterAsOf": "Em {date}",
+      "legislationFound": "{count, plural, one {# norma ou dispositivo} many {# normas e dispositivos} other {# normas e dispositivos}}",
+      "lookupDidNotGoThrough": "Esta pesquisa não foi concluída.",
+      "moreFound": "{count, plural, one {mais # não exibido} many {mais # não exibidos} other {mais # não exibidos}}",
+      "moreLookups": "{count, plural, one {Mais # consulta não exibida} many {Mais # consultas não exibidas} other {Mais # consultas não exibidas}}",
+      "notRecorded": "Esta etapa foi executada antes de a stella registrar o que cada etapa consulta.",
+      "nothingFound": "Nenhum resultado.",
+      "technicalDetails": "Detalhes técnicos",
+      "usedInAnswer": "Usada na resposta",
+      "versionFrom": "Versão desde {date}"
+    },
     "stopFailed": "Não foi possível interromper a resposta. Tente novamente.",
     "stopResponse": "Parar",
     "stopped": "Interrompido",
     "stopping": "Parando…",
     "suggestTitle": "Sugerir um título",
     "suggestTitleUnavailableAnonymized": "Sugestões de título não estão disponíveis para conversas anonimizadas.",
-    "suggestedFollowupsLabel": "Sugestões de perguntas de acompanhamento",
     "suggestingTitle": "Sugerindo um título…",
     "suggestionSeverity": {
       "style": "Estilo",
@@ -2321,7 +2359,6 @@
       "accepted": "Aplicado",
       "rejected": "Rejeitado"
     },
-    "tabToAsk": "→ para perguntar: \"{prompt}\"",
     "tableChart": {
       "bar": "Barras",
       "kind": "Tipo de gráfico",
@@ -2412,6 +2449,7 @@
       "save_document": "Salvar documento",
       "save_matter": "Salvar caso",
       "save_playbook": "Salvar playbook",
+      "save_skill_package": "Salvar habilidade",
       "save_task": "Salvar tarefa",
       "save_template": "Salvar modelo",
       "save_time_entry": "Salvar entrada de tempo",
@@ -2440,6 +2478,7 @@
       "use-browser": "Usando seu navegador",
       "use_connector_secret": "Usando a credencial do conector",
       "user_message": "Enviado enquanto o agente trabalhava",
+      "validate_skill_package": "Verificar habilidade",
       "web_search": "Pesquisando na web"
     },
     "toolCall": {
@@ -4049,6 +4088,12 @@
     "versionCreatedDescription": "A versão {versionNumber} foi criada. Todos podem continuar editando.",
     "versionCreatedTitle": "Versão criada",
     "viewOnly": "Somente leitura"
+  },
+  "guidance": {
+    "notCaseLaw": "Orientação emitida por um órgão regulador. Não é uma decisão judicial.",
+    "openAtPublisher": "Abrir no site do editor",
+    "source": "Fonte: {attribution}",
+    "textUnavailable": "O texto deste documento não está disponível aqui. Leia-o no site do editor."
   },
   "guides": {
     "action": {
@@ -5740,6 +5785,9 @@
       "chatNotificationsDescription": "Receba uma notificação deste navegador quando uma resposta do chat terminar enquanto a stella estiver em segundo plano.",
       "chatNotificationsToggle": "Avisar quando uma resposta estiver pronta ou precisar de mim",
       "chatNotificationsUnsupported": "Este navegador não oferece suporte a notificações.",
+      "chatTechnicalDetails": "Detalhes técnicos no chat",
+      "chatTechnicalDetailsDescription": "Cada etapa do chat mostra o que consultou e o que encontrou. Ative para ver também o código e os resultados brutos.",
+      "chatTechnicalDetailsToggle": "Mostrar detalhes técnicos no chat",
       "confirmDelete": "Confirmar exclusão de conta",
       "dangerZone": "Zona de perigo",
       "dangerZoneDescription": "Excluir permanentemente o acesso à conta e os dados privados da conta.",
@@ -7903,7 +7951,6 @@
         "endDate": "Data de término",
         "month": "Mês",
         "quarter": "Trimestre",
-        "showTable": "Mostrar tabela",
         "startDate": "Data de início",
         "week": "Semana"
       },

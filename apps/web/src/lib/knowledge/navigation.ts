@@ -10,15 +10,25 @@ import {
 } from "@stll/ui/icons";
 
 import type { TranslationKey } from "@/i18n/types";
+import { KNOWLEDGE_CATALOGUE_PATHS } from "@/lib/knowledge/knowledge-catalogues";
+import type { KnowledgeCataloguePath } from "@/lib/knowledge/knowledge-catalogues";
 
-export type KnowledgeSection = {
+type KnowledgeSectionAccess =
+  | {
+      /** A visitor without an account reads the section's catalogue. */
+      publicAccess: "catalogue";
+      /** The catalogue's own address: `to` is the organization's page. */
+      catalogueTo: KnowledgeCataloguePath;
+    }
+  | {
+      /** A card that asks for an account, or no card at all. */
+      publicAccess: "account" | "unavailable";
+    };
+
+export type KnowledgeSection = KnowledgeSectionAccess & {
   key: "templates" | "styles" | "clauses" | "playbooks" | "workflows" | "tools";
   icon: ComponentType<SVGProps<SVGSVGElement>>;
-  /**
-   * What a visitor without an account gets: the catalogue, a card that asks
-   * for an account, or no card at all.
-   */
-  publicAccess: "catalogue" | "account" | "unavailable";
+  /** The organization's own page. */
   to:
     | "/knowledge/templates"
     | "/knowledge/styles"
@@ -43,6 +53,7 @@ export const knowledgeSections: readonly KnowledgeSection[] = [
   {
     key: "tools",
     publicAccess: "catalogue",
+    catalogueTo: KNOWLEDGE_CATALOGUE_PATHS.tools,
     icon: PackageIcon,
     to: "/knowledge/tools",
     titleKey: "knowledge.sections.tools.title",
@@ -50,6 +61,7 @@ export const knowledgeSections: readonly KnowledgeSection[] = [
   {
     key: "templates",
     publicAccess: "catalogue",
+    catalogueTo: KNOWLEDGE_CATALOGUE_PATHS.templates,
     icon: LayoutTemplateIcon,
     to: "/knowledge/templates",
     titleKey: "knowledge.sections.templates.title",
@@ -71,6 +83,7 @@ export const knowledgeSections: readonly KnowledgeSection[] = [
   {
     key: "playbooks",
     publicAccess: "catalogue",
+    catalogueTo: KNOWLEDGE_CATALOGUE_PATHS.playbooks,
     icon: ClipboardCheckIcon,
     to: "/knowledge/playbooks",
     titleKey: "common.playbooks",
@@ -83,3 +96,8 @@ export const knowledgeSections: readonly KnowledgeSection[] = [
     titleKey: "common.workflows",
   },
 ];
+
+/** Where a visitor without an account opens the section: its catalogue, or
+ *  the organization's page that asks for an account. */
+export const publicSectionPath = (section: KnowledgeSection) =>
+  section.publicAccess === "catalogue" ? section.catalogueTo : section.to;

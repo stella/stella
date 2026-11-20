@@ -20,6 +20,9 @@ test("unregistered authorities cannot enter the sync contract", () => {
   expectTypeOf<"sk-uoou">().toExtend<RegisteredSoftLawAuthority>();
   expectTypeOf<"cz-uoou">().toExtend<RegisteredSoftLawAuthority>();
   expectTypeOf<"cz-suip">().toExtend<RegisteredSoftLawAuthority>();
+  expectTypeOf<"cz-gfr">().toExtend<RegisteredSoftLawAuthority>();
+  expectTypeOf<"cz-mf">().toExtend<RegisteredSoftLawAuthority>();
+  expectTypeOf<"cz-mv-psmv">().toExtend<RegisteredSoftLawAuthority>();
 });
 
 test("every registered adapter belongs to its authority; pending kinds are refused", () => {
@@ -37,6 +40,9 @@ test("every registered adapter belongs to its authority; pending kinds are refus
     ["eu-edps", null],
     ["de-bfdi", "recommendation"],
     ["sk-uoou", "annual_report"],
+    ["cz-gfr", "guideline"],
+    ["cz-mf", "guideline"],
+    ["cz-mv-psmv", "opinion"],
   ] as const) {
     for (const kind of GUIDANCE_KINDS) {
       const metadata = {

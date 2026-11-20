@@ -34,6 +34,26 @@ describe("selectAppFrame", () => {
     ).toBe("checking");
   });
 
+  test("a frameless route that only redirects into the app shows the member frame's skeleton", () => {
+    const ROOT = ["__root__", "/"];
+    const frameFor = (
+      redirectScope:
+        (typeof APP_FRAME_SCOPE)[keyof typeof APP_FRAME_SCOPE] | undefined,
+    ) =>
+      selectAppFrame({
+        scope: APP_FRAME_SCOPE.none,
+        routeIds: ROOT,
+        hasRouteUser: false,
+        publicKnowledge: true,
+        redirectScope,
+      });
+    expect(frameFor(APP_FRAME_SCOPE.member)).toBe("neutral");
+    // A page of its own, or a redirect to a frameless page, adds nothing.
+    expect(frameFor(undefined)).toBe("none");
+    expect(frameFor(APP_FRAME_SCOPE.none)).toBe("none");
+    expect(frameFor(APP_FRAME_SCOPE.knowledge)).toBe("none");
+  });
+
   test("signed-in routes ignore the session state", () => {
     for (const audience of [
       "checking",

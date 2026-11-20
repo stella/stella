@@ -1233,6 +1233,13 @@
       "treatment": "Spätere Rezeption"
     },
     "analyzing": "Analyse läuft...",
+    "browse": {
+      "courtDescription": "{court} ({country}): Entscheidungen in der öffentlichen Rechtsdatenbank von stella, nach Jahr und Monat.",
+      "courts": "Gerichte",
+      "days": "Tage",
+      "jurisdictionDescription": "{country}: Gerichtsentscheidungen in der öffentlichen Rechtsdatenbank von stella, nach Gericht, Jahr und Monat.",
+      "periodDescription": "{court} ({country}), {period}: Entscheidungen in der öffentlichen Rechtsdatenbank von stella."
+    },
     "chat": {
       "prompts": {
         "facts": {
@@ -1494,6 +1501,10 @@
       "title": "Die Suche ist vorübergehend nicht verfügbar"
     },
     "searchWarnings": {
+      "collectionCitationUnresolved": {
+        "hint": "Suchen Sie nach dem Aktenzeichen oder der ECLI der Entscheidung, sofern bekannt.",
+        "message": "Zu dieser Fundstelle wurde keine genau passende Entscheidung gefunden."
+      },
       "noHits": {
         "hint": "Versuchen Sie weniger oder andere Wörter: die Begriffe, die eine Entscheidung verwenden würde, nicht den Satz, in dem eine Frage gestellt wird.",
         "message": "Nichts entspricht den Wörtern, die diese Suche verlangt hat."
@@ -1721,12 +1732,25 @@
       "unorderedList": "Aufzählung",
       "wholeBlockRequired": "Wählen Sie einen ganzen Absatz oder eine ganze Liste aus, um den Stil zu ändern."
     },
+    "answerNotFinished": "stella konnte diese Antwort nicht fertigstellen.",
     "answerQuote": {
       "showInDecision": "In der Entscheidung zeigen",
       "unverified": "Zitat nicht verifiziert",
       "unverifiedHint": "Die zitierten Entscheidungen enthalten diesen Text nicht wörtlich",
       "verified": "Verifiziertes Zitat",
       "verifiedHint": "Wörtlich in {source}"
+    },
+    "answerTable": {
+      "copy": "Tabelle kopieren",
+      "copyAs": "Als {format} kopieren",
+      "download": "Tabelle herunterladen",
+      "downloadAs": "Als {format} herunterladen",
+      "fullscreen": "Im Vollbild öffnen",
+      "fullscreenTitle": "Tabelle im Vollbild",
+      "singleLine": "Einzeilig",
+      "size": "{rows, plural, one {# Zeile} other {# Zeilen}} · {columns, plural, one {# Spalte} other {# Spalten}}",
+      "textMode": "Zellentext",
+      "wrap": "Text umbrechen"
     },
     "applyMode": {
       "description": "Word speichert, wer welche Änderung vorgenommen hat. Wir merken uns Ihre Auswahl.",
@@ -2120,6 +2144,7 @@
     },
     "newChat": "Neuer Chat",
     "newChatInSidePanel": "Der neue Chat ist in der Seitenleiste verfügbar",
+    "nextSteps": "Nächste Schritte",
     "noPromptPresetOnly": "Keine Nachricht, nur Vorlage",
     "noThreads": "Noch keine Konversationen",
     "officeCitationUnavailable": "Diese Fundstelle ist nicht mehr verfügbar.",
@@ -2226,7 +2251,6 @@
       "chipLabel": "Läuft auf: {place}",
       "cloud": "Cloud",
       "cloudDescription": "Läuft in der Cloud. Funktioniert überall.",
-      "harnessModels": "{harness}-Modelle",
       "hintCheck": "Prüfen Sie es in stella desktop",
       "hintInstall": "Installieren Sie es in stella desktop",
       "hintOffline": "Öffnen Sie stella desktop auf Ihrem Computer",
@@ -2236,8 +2260,9 @@
       "localFolderSelection": "Ihr Computer · {harness} · {folder}",
       "localPlace": "Ihr Computer, {harness}",
       "localSelection": "Ihr Computer · {harness}",
-      "modelDefault": "Standard (empfohlen)",
       "placeState": "{place}. {state}",
+      "startedInCloud": "Dieser neue Chat wurde in der Cloud gestartet, weil {harness} auf Ihrem Computer nicht verfügbar ist ({state})",
+      "startedInCloudCheckFailed": "Dieser neue Chat wurde in der Cloud gestartet, weil Ihr Computer nicht geprüft werden konnte",
       "stepsCheck": "stella desktop wird geöffnet. Falls es sich nicht öffnet, öffnen Sie es auf Ihrem Computer und prüfen Sie {harness} unter Einstellungen › Allgemein › KI-Abonnements.",
       "stepsInstall": "stella desktop wird geöffnet. Falls es sich nicht öffnet, öffnen Sie es auf Ihrem Computer und wählen Sie unter Einstellungen › Allgemein bei {harness} Installieren.",
       "stepsSignInClaudeCode": "stella desktop wird zur Anmeldung geöffnet. Falls es sich nicht öffnet, öffnen Sie es und wählen Sie Einstellungen › Allgemein › Mit Claude anmelden.",
@@ -2304,13 +2329,26 @@
       "title": "Ihre Nachricht wartet, bis der Agent fertig ist",
       "turnNotRunning": "Der Agent arbeitet gerade nicht."
     },
+    "stepDigest": {
+      "decisionsFound": "{found, plural, one {# Entscheidung gefunden} other {# Entscheidungen gefunden}}",
+      "decisionsFoundUsed": "{found, plural, one {# Entscheidung gefunden} other {# Entscheidungen gefunden}}, {used, plural, one {# in der Antwort verwendet} other {# in der Antwort verwendet}}",
+      "filterAsOf": "Stand {date}",
+      "legislationFound": "{count, plural, one {# Rechtsvorschrift oder Bestimmung} other {# Rechtsvorschriften und Bestimmungen}}",
+      "lookupDidNotGoThrough": "Diese Suche hat nicht geklappt.",
+      "moreFound": "{count, plural, one {# weiteres nicht angezeigt} other {# weitere nicht angezeigt}}",
+      "moreLookups": "{count, plural, one {# weitere Abfrage nicht angezeigt} other {# weitere Abfragen nicht angezeigt}}",
+      "notRecorded": "Dieser Schritt lief, bevor stella festgehalten hat, was jeder Schritt nachschlägt.",
+      "nothingFound": "Keine Treffer.",
+      "technicalDetails": "Technische Details",
+      "usedInAnswer": "In der Antwort verwendet",
+      "versionFrom": "Fassung ab {date}"
+    },
     "stopFailed": "Die Antwort konnte nicht gestoppt werden. Versuchen Sie es erneut.",
     "stopResponse": "Stoppen",
     "stopped": "Gestoppt",
     "stopping": "Wird angehalten…",
     "suggestTitle": "Titel vorschlagen",
     "suggestTitleUnavailableAnonymized": "Für anonymisierte Konversationen sind keine Titelvorschläge verfügbar.",
-    "suggestedFollowupsLabel": "Vorgeschlagene Folgefragen",
     "suggestingTitle": "Titel wird vorgeschlagen…",
     "suggestionSeverity": {
       "style": "Stil",
@@ -2321,7 +2359,6 @@
       "accepted": "Angewendet",
       "rejected": "Abgelehnt"
     },
-    "tabToAsk": "→ zum Fragen: „{prompt}“",
     "tableChart": {
       "bar": "Balken",
       "kind": "Diagrammtyp",
@@ -2412,6 +2449,7 @@
       "save_document": "Dokument speichern",
       "save_matter": "Akte speichern",
       "save_playbook": "Playbook speichern",
+      "save_skill_package": "Skill speichern",
       "save_task": "Aufgabe speichern",
       "save_template": "Vorlage speichern",
       "save_time_entry": "Zeiteintrag speichern",
@@ -2440,6 +2478,7 @@
       "use-browser": "Ihren Browser verwenden",
       "use_connector_secret": "Zugangsdaten des Connectors verwenden",
       "user_message": "Während der Arbeit des Agenten gesendet",
+      "validate_skill_package": "Skill prüfen",
       "web_search": "Web wird durchsucht"
     },
     "toolCall": {
@@ -4049,6 +4088,12 @@
     "versionCreatedDescription": "Version {versionNumber} wurde erstellt. Alle können weiterarbeiten.",
     "versionCreatedTitle": "Version erstellt",
     "viewOnly": "Nur Ansicht"
+  },
+  "guidance": {
+    "notCaseLaw": "Von einer Aufsichtsbehörde herausgegebene Leitlinie. Dies ist keine Gerichtsentscheidung.",
+    "openAtPublisher": "Beim Herausgeber öffnen",
+    "source": "Quelle: {attribution}",
+    "textUnavailable": "Der Text dieses Dokuments ist hier nicht verfügbar. Lesen Sie ihn beim Herausgeber."
   },
   "guides": {
     "action": {
@@ -5740,6 +5785,9 @@
       "chatNotificationsDescription": "Erhalten Sie eine Benachrichtigung von diesem Browser, wenn eine Chat-Antwort fertig ist, während stella im Hintergrund läuft.",
       "chatNotificationsToggle": "Benachrichtigen, wenn eine Antwort fertig ist oder meine Eingabe braucht",
       "chatNotificationsUnsupported": "Dieser Browser unterstützt keine Benachrichtigungen.",
+      "chatTechnicalDetails": "Technische Details im Chat",
+      "chatTechnicalDetailsDescription": "Jeder Schritt im Chat zeigt, was er nachgeschlagen und gefunden hat. Eingeschaltet sehen Sie auch den Code und die Rohergebnisse dahinter.",
+      "chatTechnicalDetailsToggle": "Technische Details im Chat anzeigen",
       "confirmDelete": "Konto löschen bestätigen",
       "dangerZone": "Gefahrenbereich",
       "dangerZoneDescription": "Löschen Sie Ihren Kontozugriff und private Kontodaten dauerhaft.",
@@ -7903,7 +7951,6 @@
         "endDate": "Enddatum",
         "month": "Monat",
         "quarter": "Quartal",
-        "showTable": "Tabelle anzeigen",
         "startDate": "Startdatum",
         "week": "Woche"
       },

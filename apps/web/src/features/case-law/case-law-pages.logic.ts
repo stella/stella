@@ -4,7 +4,7 @@ import { SEARCH_PAGE_END } from "@stll/api-contract/search";
 
 import { PUBLIC_LAW_PAGE_REST } from "@/components/public-law-table/public-law-pagination.logic";
 import type { PublicLawPageRest } from "@/components/public-law-table/public-law-pagination.logic";
-import type { PublicLawRowsPhase } from "@/components/public-law-table/public-law-results-state.logic";
+import type { RouteRowsPhase } from "@/lib/query-view.logic";
 
 export * from "@/features/case-law/case-law-route-pages.logic";
 
@@ -15,7 +15,7 @@ type CaseLawPageAnswer = {
 type CaseLawPageRestInput = {
   /** The page query's data; it may still be another page's while one loads. */
   page: CaseLawPageAnswer | undefined;
-  rows: PublicLawRowsPhase;
+  rows: RouteRowsPhase;
 };
 
 /**

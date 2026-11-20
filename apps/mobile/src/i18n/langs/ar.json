@@ -186,6 +186,7 @@
       "save_document": "حفظ المستند",
       "save_matter": "حفظ الملف القانوني",
       "save_playbook": "حفظ دليل المراجعة",
+      "save_skill_package": "حفظ المهارة",
       "save_task": "حفظ المهمة",
       "save_template": "حفظ القالب",
       "save_time_entry": "حفظ إدخال الوقت",
@@ -208,7 +209,13 @@
       "update_reader_annotation": "تعديل التمييز أو التعليق",
       "use-browser": "استخدام متصفحك",
       "use_connector_secret": "استخدام بيانات اعتماد الموصل",
+      "validate_skill_package": "التحقق من المهارة",
       "web_search": "البحث على الويب"
+    },
+    "toolResearch": {
+      "caseLaw": "جارٍ البحث في الاجتهاد القضائي",
+      "legislation": "جارٍ قراءة التشريعات",
+      "legislationAndCaseLaw": "جارٍ البحث في التشريعات والاجتهاد القضائي"
     },
     "localRun": {
       "title": {

@@ -1,0 +1,36 @@
+Response terminal events retain provider stop evidence, and incomplete
+responses retain reported usage. Missing-terminal handling is upstream.
+Regression: apps/api/src/lib/tanstack-ai-provider-wire.test.ts.
+
+diff --git a/dist/esm/adapters/responses-text.js b/dist/esm/adapters/responses-text.js
+--- a/dist/esm/adapters/responses-text.js
++++ b/dist/esm/adapters/responses-text.js
+@@ -1195,7 +1195,7 @@
+ 					const usage = this.responsesTokenUsage(chunk.response.usage, chunk.response);
+ 					yield {
+ 						type: EventType.RUN_ERROR,
+-						metadata: this.sourceMetadata(options.model),
++						metadata: { ...this.sourceMetadata(options.model), providerStopReason: chunk.response.incomplete_details?.reason ?? chunk.response.status ?? null },
+ 						model: chunk.response.model,
+ 						timestamp: Date.now(),
+ 						message: errorMessage,
+@@ -1575,8 +1575,10 @@
+ 					}
+ 					if (unendedUserCalls.size > 0) {
+ 						const message = `Response completed with user tool calls still in progress: ${[...unendedUserCalls].join(", ")}`;
++						const usage = this.responsesTokenUsage(chunk.response.usage, chunk.response);
+ 						yield {
+ 							type: EventType.RUN_ERROR,
++							...usage && { usage },
+ 							metadata: this.sourceMetadata(options.model),
+ 							model: model || options.model,
+ 							timestamp: Date.now(),
+@@ -1612,7 +1614,7 @@
+ 					yield {
+ 						type: EventType.RUN_FINISHED,
+ 						...responseId ? { responseId } : {},
+-						...Object.keys(tanstack).length > 0 ? { metadata: { tanstack } } : {},
++						metadata: { tanstack, providerStopReason: chunk.response.incomplete_details?.reason ?? chunk.response.status ?? null },
+ 						runId: aguiState.runId,
+ 						threadId: aguiState.threadId,
+ 						model: model || options.model,

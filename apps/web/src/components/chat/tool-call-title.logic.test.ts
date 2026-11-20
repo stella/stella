@@ -1,15 +1,34 @@
 import { describe, expect, test } from "bun:test";
 
+import { summarizeCodeToolSource } from "@stll/api-contract/chat-code-step";
+import {
+  CHAT_STEP_LEDGER_KEY,
+  type ChatStepLedger,
+} from "@stll/api-contract/chat-step-ledger";
+
 import { getChatToolTitleKey } from "@/components/chat/chat-ui-tools";
 
-import {
-  getToolCallTitleKey,
-  summarizeCodeToolSource,
-} from "./tool-call-title.logic";
+import { getToolCallTitleKey } from "./tool-call-title.logic";
 
-const codeCall = (typescriptCode: string) => ({
+const codeCall = (typescriptCode: string, ledger?: ChatStepLedger) => ({
   input: { typescriptCode },
   name: "execute_typescript",
+  output:
+    ledger === undefined
+      ? undefined
+      : { success: true, [CHAT_STEP_LEDGER_KEY]: ledger },
+});
+
+const ledgerOf = (tools: readonly string[]): ChatStepLedger => ({
+  calls: tools.map((tool) => ({
+    tool,
+    queries: [],
+    filters: [],
+    outcome: "ok",
+    found: [],
+    foundOmitted: 0,
+  })),
+  callsOmitted: 0,
 });
 
 describe("a code-mode step's title names the research its script does", () => {
@@ -57,8 +76,12 @@ describe("a code-mode step's title names the research its script does", () => {
     for (const call of [
       codeCall("await external_not_a_tool({});"),
       codeCall("return 1 + 1;"),
-      { input: { typescriptCode: 42 }, name: "execute_typescript" },
-      { input: undefined, name: "execute_typescript" },
+      {
+        input: { typescriptCode: 42 },
+        name: "execute_typescript",
+        output: undefined,
+      },
+      { input: undefined, name: "execute_typescript", output: undefined },
     ]) {
       expect(getToolCallTitleKey(call)).toBe(
         getChatToolTitleKey("execute_typescript"),
@@ -71,8 +94,27 @@ describe("a code-mode step's title names the research its script does", () => {
       getToolCallTitleKey({
         input: { toolNames: ["external_search_case_law"] },
         name: "discover_tools",
+        output: undefined,
       }),
     ).toBe(getChatToolTitleKey("discover_tools"));
+  });
+
+  test("the reads a step's ledger records decide its title over its script", () => {
+    // The script names a statute read through a helper the scan cannot
+    // see; the ledger records what actually ran.
+    const script =
+      "const read = external_read_statute_provisions; await read({items: []});";
+    expect(getToolCallTitleKey(codeCall(script))).toBe(
+      getChatToolTitleKey("execute_typescript"),
+    );
+    expect(
+      getToolCallTitleKey(
+        codeCall(script, ledgerOf(["search_case_law", "read_statute"])),
+      ),
+    ).toBe("chat.toolCall.searchingLegislationAndCaseLaw");
+    expect(
+      getToolCallTitleKey(codeCall(script, ledgerOf(["list_matters"]))),
+    ).toBe(getChatToolTitleKey("execute_typescript"));
   });
 });
 

@@ -8,6 +8,7 @@ import type {
   DesktopAccountSnapshot,
 } from "../../../src/shared/rpc";
 import type { ClipboardShortcutSnapshot } from "../../../src/shared/shortcut-keys";
+import type { MicrophonesSnapshot } from "../../../src/mainview/dictation-microphone";
 
 /**
  * What the native side answers the settings and setup windows in the
@@ -43,6 +44,9 @@ export const SETUP_PERMISSIONS = {
 export const DICTATION_READY = {
   available: true,
   cleanup: true,
+  cloudAvailable: true,
+  cloudModel: null,
+  customWords: [],
   destination: "local",
   enabled: true,
   failure: null,
@@ -51,17 +55,21 @@ export const DICTATION_READY = {
   model: { status: "ready" },
   modelBytes: 740_363_168,
   phase: "idle",
+  shareTextBeforeCursor: false,
+  shareWindowTitle: false,
   shortcutTaken: false,
+  textBeforeCursorAvailable: true,
 } as const satisfies DictationSnapshot;
 
 /** Dictation in Settings at its tallest: stella AI with a model whose
- *  provider keeps the audio, cleanup with both context switches, and the
- *  speech model still on this computer. */
+ *  provider keeps the audio, cleanup with both context switches, custom
+ *  words, and the speech model still on this computer. */
 export const SETTINGS_DICTATION = {
   available: true,
   cleanup: true,
   cloudAvailable: true,
   cloudModel: "elevenlabs-direct/scribe-v3",
+  customWords: ["Libeňská", "custom terms list", "22 Cdo 120/2026"],
   destination: "cloud",
   enabled: true,
   failure: null,
@@ -182,3 +190,18 @@ export const ACTIVITY_SETTINGS = {
   ],
   sourceAppVisuals: [],
 } satisfies ActivitySettingsSnapshot;
+
+/** The microphones Settings lists: the built-in one and a Bluetooth headset. */
+export const MICROPHONES: MicrophonesSnapshot = {
+  chosen: null,
+  chosenMissing: null,
+  defaultName: "AirPods Pro 3",
+  devices: [
+    {
+      bluetooth: false,
+      id: "coreaudio:BuiltInMicrophoneDevice",
+      name: "Built-in Microphone",
+    },
+    { bluetooth: true, id: "coreaudio:AA-BB-CC:input", name: "AirPods Pro 3" },
+  ],
+};

@@ -40,6 +40,7 @@ use crate::{
   dictation_context::{self, Sharing},
   dictation_hold_key::{self, Action, Gesture, HoldChoice},
   dictation_language::{self, Choice, LanguageSnapshot},
+  dictation_words,
   feature_gate::{DesktopFeature, FeatureGates},
   http_client::{DesktopHttpClient, HttpClientOptions},
 };
@@ -77,6 +78,14 @@ const MODEL_URL: &str = "https://huggingface.co/handy-computer/parakeet-ultra-gg
 const MODEL_BYTES: u64 = 740_363_168;
 const MODEL_SHA256: &str =
   "007a59761e9258779f189df396b50d12b83bb5b79e66df4b955c230d2f2a0a59";
+/// The speech model's name in the local log: its file name without the
+/// extension.
+pub fn local_model_id() -> &'static str {
+  MODEL_FILE_NAME
+    .strip_suffix(".gguf")
+    .unwrap_or(MODEL_FILE_NAME)
+}
+
 /// Enough progress events to look alive, few enough to stay cheap.
 const PROGRESS_STEP_BYTES: u64 = MODEL_BYTES / 100;
 
@@ -129,6 +138,9 @@ pub enum Failure {
   /// A password field had focus at the press or before typing: the
   /// dictation was neither kept nor typed.
   PasswordField,
+  /// The microphone delivered sound but no speech came of it: nothing
+  /// loud enough, or a model that heard no words.
+  NothingHeard,
 }
 
 /// A dictation that went wrong, and whether its text is in stella's
@@ -165,6 +177,9 @@ pub struct DictationSnapshot {
   /// user paused it or the organization turned it off.
   keeps_in_history: bool,
   language: LanguageSnapshot,
+  /// The speaker's custom words, kept on this computer for the dictation
+  /// account.
+  custom_words: Vec<String>,
   /// Whether the server enables stella AI transcription for this account;
   /// without it the window offers no choice of destination.
   cloud_available: bool,
@@ -296,6 +311,7 @@ impl DictationState {
       text_before_cursor_available: dictation_context::TEXT_BEFORE_CURSOR_SUPPORTED,
       keeps_in_history,
       language: LanguageSnapshot::new(&inner.language, inferred),
+      custom_words: Vec::new(),
       cloud_available,
       destination: inner.destination.effective(cloud_available),
       cloud_model: inner.cloud_model.clone(),
@@ -368,6 +384,83 @@ const fn stored_switch(enabled: bool) -> &'static str {
   } else {
     DISABLED_VALUE
   }
+}
+
+/// The microphone the speaker chose; `None` for the system default.
+pub fn microphone_choice() -> Option<crate::dictation_microphone::Choice> {
+  crate::dictation_microphone::Choice::parse(
+    DevicePreference::in_app_data(crate::dictation_microphone::PREFERENCE_FILE_NAME)
+      .read()
+      .as_deref(),
+  )
+}
+
+/// The chosen microphone was not connected at the press; `using` records.
+pub fn report_missing_microphone(
+  app: &AppHandle,
+  missing: &str,
+  using: Option<String>,
+) {
+  tracing::info!(
+    "dictation chose the system default: the chosen microphone is not connected"
+  );
+  crate::dictation_notice::on_missing_microphone(app, missing, using);
+}
+
+#[tauri::command]
+pub async fn dictation_get_microphones(
+  app: AppHandle,
+) -> Result<crate::dictation_microphone::MicrophonesSnapshot, String> {
+  if !available(&app) {
+    return Err("dictation is not available on this computer".to_string());
+  }
+  tauri::async_runtime::spawn_blocking(crate::dictation_microphone::list)
+    .await
+    .map_err(crate::logging::with_cause_logged(
+      "microphones could not be listed",
+    ))
+}
+
+/// Records from `id` from the next press; `None` for the system default.
+#[tauri::command]
+pub async fn dictation_set_microphone(
+  app: AppHandle,
+  id: Option<String>,
+) -> Result<crate::dictation_microphone::MicrophonesSnapshot, String> {
+  if !available(&app) {
+    return Err("dictation is not available on this computer".to_string());
+  }
+  tauri::async_runtime::spawn_blocking(move || {
+    crate::dictation_microphone::choose(id.as_deref())
+  })
+  .await
+  .map_err(crate::logging::with_cause_logged(
+    "the microphone could not be chosen",
+  ))?
+}
+
+/// Whether a dictation is recording now: the microphone test waits.
+pub fn recording(app: &AppHandle) -> bool {
+  app
+    .state::<DictationState>()
+    .update(|inner| inner.phase == Phase::Recording)
+}
+
+/// What the tray offers for dictation: `None` wherever the Settings window
+/// shows no Dictation page.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct TrayDictation {
+  pub enabled: bool,
+  pub hold_key: HoldChoice,
+}
+
+pub fn tray_state(app: &AppHandle) -> Option<TrayDictation> {
+  available(app).then(|| {
+    app.state::<DictationState>().update(|inner| TrayDictation {
+      enabled: inner.enabled,
+      hold_key: inner.hold_key,
+    })
+  })
 }
 
 /// A build that can run the model, for an account the server enabled.
@@ -471,6 +564,11 @@ pub fn apply_cloud_gate(app: &AppHandle) {
   change(app, |_inner| ());
 }
 
+/// The key dictation listens for.
+pub fn hold_key(app: &AppHandle) -> HoldChoice {
+  app.state::<DictationState>().update(|inner| inner.hold_key)
+}
+
 /// Whether a finished dictation goes through AI cleanup before it is typed.
 pub fn cleanup_enabled(app: &AppHandle) -> bool {
   app.state::<DictationState>().update(|inner| inner.cleanup)
@@ -508,9 +606,21 @@ pub fn context_sharing(app: &AppHandle) -> Sharing {
   })
 }
 
+/// Records the failure for Settings → Dictation and, where the speaker would
+/// otherwise see nothing, tells them at once.
 pub fn report_failure(app: &AppHandle, failed: impl Into<Failed>) {
+  report_input_failure(app, failed, None);
+}
+
+/// `report_failure`, naming the input device the dictation listened to.
+pub fn report_input_failure(
+  app: &AppHandle,
+  failed: impl Into<Failed>,
+  input_device: Option<String>,
+) {
   let failed = failed.into();
   change(app, |inner| inner.failure = Some(failed));
+  crate::dictation_notice::on_failure(app, failed.failure, input_device);
 }
 
 pub fn clear_failure(app: &AppHandle) {
@@ -710,6 +820,8 @@ pub fn apply_feature_gate(app: &AppHandle, enabled: bool) {
     stop(app);
   }
   change(app, |_inner| ());
+  // The tray's Dictation entry follows the same decision.
+  crate::activity::refresh_tray(app);
 }
 
 /// The snapshot a window reads, with the languages inferred right now.
@@ -720,12 +832,16 @@ fn read_snapshot(app: &AppHandle, state: &DictationState) -> DictationSnapshot {
   } else {
     Vec::new()
   };
-  state.snapshot(
+  let mut snapshot = state.snapshot(
     available,
     cloud_available(app),
     inferred,
     crate::clipboard::keeps_dictations(app),
-  )
+  );
+  if available {
+    snapshot.custom_words = dictation_words::words(app);
+  }
+  snapshot
 }
 
 #[tauri::command]
@@ -761,6 +877,7 @@ pub fn dictation_set_enabled(
     } else {
       stop(&app);
     }
+    crate::activity::refresh_tray(&app);
   }
   Ok(read_snapshot(&app, &state))
 }
@@ -849,6 +966,23 @@ pub fn dictation_set_language(
   Ok(read_snapshot(&app, &state))
 }
 
+/// The speaker's custom words for the dictation account, replacing the
+/// list stored before; refused whole when a word or the list is beyond what
+/// stella AI accepts.
+#[tauri::command]
+pub fn dictation_set_custom_words(
+  app: AppHandle,
+  state: State<'_, DictationState>,
+  words: Vec<String>,
+) -> Result<DictationSnapshot, String> {
+  if !available(&app) {
+    return Err("dictation is not available on this computer".to_string());
+  }
+  dictation_words::store(&app, &words)?;
+  publish(&app);
+  Ok(read_snapshot(&app, &state))
+}
+
 #[tauri::command]
 pub fn dictation_set_destination(
   app: AppHandle,
@@ -905,6 +1039,8 @@ pub fn dictation_set_hold_key(
       send_command(&app, Command::Cancel);
       listen(&app);
     }
+    // The tray names the key to hold.
+    crate::activity::refresh_tray(&app);
   }
   Ok(read_snapshot(&app, &state))
 }
@@ -1131,6 +1267,7 @@ mod tests {
       (Failure::ShortcutHeld, "shortcutHeld"),
       (Failure::PasswordField, "passwordField"),
       (Failure::CloudTranscription, "cloudTranscription"),
+      (Failure::NothingHeard, "nothingHeard"),
     ] {
       assert_eq!(
         serde_json::to_value(failure).unwrap(),

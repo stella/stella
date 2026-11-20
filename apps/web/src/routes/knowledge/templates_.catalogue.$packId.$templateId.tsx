@@ -12,6 +12,7 @@ import { KnowledgeStatusMessage } from "@/features/knowledge/views/knowledge-sta
 import { TemplateCatalogueDetailView } from "@/features/knowledge/views/templates/template-catalogue-detail-view";
 import { detached } from "@/lib/detached";
 import { templateIntentSearchSchema } from "@/lib/knowledge/catalogue-intent";
+import { KNOWLEDGE_CATALOGUE_PATHS } from "@/lib/knowledge/knowledge-catalogues";
 import {
   isPublicKnowledgeCrawlAllowed,
   isPublicKnowledgeEnabled,
@@ -67,7 +68,7 @@ export const Route = createFileRoute(
       {
         type: "label",
         labelKey: "knowledge.sections.templates.title",
-        to: "/knowledge/templates",
+        to: KNOWLEDGE_CATALOGUE_PATHS.templates,
       },
     ),
   },

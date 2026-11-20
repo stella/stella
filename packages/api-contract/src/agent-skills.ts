@@ -38,6 +38,17 @@ export const SKILL_FROM_CHAT_REFUSAL_CODE = {
 } as const;
 
 /**
+ * A skill package request (a chat package tool, a skill export) named a
+ * skill the caller cannot reach: absent, in another organization, or not
+ * theirs to read or edit.
+ */
+export const SKILL_PACKAGE_SKILL_NOT_FOUND_CODE =
+  "skill_package_skill_not_found";
+
+/** A skill holds more than one archive download may carry. */
+export const SKILL_EXPORT_TOO_LARGE_CODE = "skill_export_too_large";
+
+/**
  * The kinds of name a skill draft is checked for before it is stored. A name
  * in a skill reaches everyone the skill is shared with, so the author approves
  * each one.

@@ -36,7 +36,11 @@
     "sessionOpeningInOffice": "Wird in Office geöffnet",
     "sessionSavingDraft": "Entwurf wird gespeichert",
     "reconnectAccount": "Erneut mit stella web verbinden…",
-    "transcribeRecording": "Aufnahme transkribieren…"
+    "transcribeRecording": "Aufnahme transkribieren…",
+    "dictation": "Diktieren",
+    "dictationHint": "Zum Diktieren {key} gedrückt halten",
+    "dictationSettings": "Diktiereinstellungen…",
+    "dictationTurnOn": "Diktieren einschalten…"
   },
   "notification": {
     "checkpointDelayedBody": "{fileName}: Änderungen bleiben lokal und werden automatisch erneut versucht",
@@ -654,10 +658,22 @@
     },
     "language": {
       "title": "Diktiersprache",
-      "description": "Automatisch verwendet die Sprachen der Anzeige und Tastaturen dieses Computers.",
+      "description": "Automatisch verwendet die Sprachen der Anzeige und Tastaturen dieses Computers. Sind es mehrere, wird jedes Wort in der Sprache erkannt, in der Sie es sprechen.",
       "automatic": "Automatisch",
       "automaticWith": "Automatisch ({languages})",
       "noResults": "Keine Sprachen gefunden"
+    },
+    "customWords": {
+      "group": "Eigene Wörter",
+      "title": "Wörter und Namen, die stella richtig schreiben soll",
+      "description": "Etwa Namen von Mandanten oder englische Begriffe, die Sie in einer anderen Sprache verwenden. Sie werden auf diesem Computer für dieses Konto gespeichert und nur mit Ihrem Diktat gesendet, an die Umwandlung mit stella AI und an die Überarbeitung mit KI. Das Sprachmodell auf diesem Computer verwendet sie nicht.",
+      "count": "{count, number} von {limit, number}",
+      "input": "Wort oder Namen hinzufügen",
+      "add": "Hinzufügen",
+      "remove": "{word} entfernen",
+      "duplicate": "Dieses Wort steht schon in der Liste.",
+      "full": "Die Liste fasst höchstens {limit, number} Wörter. Entfernen Sie eines, um ein weiteres hinzuzufügen.",
+      "failed": "Die Liste konnte nicht gespeichert werden. Versuchen Sie es erneut."
     },
     "modelNeeded": "Das Sprachmodell läuft auf diesem Computer.",
     "speechModel": "Sprachmodell",
@@ -685,7 +701,8 @@
       "focusUnconfirmed": "stella konnte nicht feststellen, welche App den Fokus hat, daher wurde nichts eingegeben. Versuchen Sie es erneut.",
       "shortcutHeld": "Lassen Sie die Tasten des Tastenkürzels los, damit getippt werden kann. Es wurde nichts eingegeben; versuchen Sie es erneut.",
       "passwordField": "Ein Passwortfeld ist ausgewählt, daher wurde das Diktat weder behalten noch eingegeben.",
-      "cloudTranscription": "stella AI konnte dieses Diktat nicht umwandeln, und das Sprachmodell ist nicht auf diesem Computer. Versuchen Sie es erneut, oder wählen Sie bei „Umwandeln mit“ die Option „Diesem Computer“ und laden Sie das Modell herunter."
+      "cloudTranscription": "stella AI konnte dieses Diktat nicht umwandeln, und das Sprachmodell ist nicht auf diesem Computer. Versuchen Sie es erneut, oder wählen Sie bei „Umwandeln mit“ die Option „Diesem Computer“ und laden Sie das Modell herunter.",
+      "nothingHeard": "stella hat keine Sprache gehört. Prüfen Sie das Eingabegerät in den Ton-Einstellungen."
     },
     "failureKeptInHistory": "Der Text ist im Zwischenablageverlauf.",
     "transcribeRecording": {
@@ -693,6 +710,43 @@
       "description": "Wandelt eine Diktiergerätdatei, ein Sprachmemo oder eine Besprechungsaufnahme von bis zu 4 Stunden in Text um.",
       "open": "Öffnen",
       "failed": "Das Fenster konnte nicht geöffnet werden. Versuchen Sie es erneut."
+    },
+    "notice": {
+      "title": "stella kann Ihr Mikrofon nicht hören",
+      "allowBody": "Erlauben Sie den Mikrofonzugriff und versuchen Sie es dann erneut.",
+      "checkBodyMac": "Prüfen Sie den Mikrofonzugriff in den Systemeinstellungen und versuchen Sie es dann erneut.",
+      "checkBodyPc": "Prüfen Sie den Mikrofonzugriff in den Windows-Einstellungen und versuchen Sie es dann erneut.",
+      "allow": "Mikrofon erlauben",
+      "openSettingsMac": "Systemeinstellungen öffnen",
+      "openSettingsPc": "Einstellungen öffnen",
+      "dismiss": "Schließen",
+      "nothingTitle": "stella hat keine Sprache gehört",
+      "nothingBody": "Sprechen Sie, während Sie die Taste halten, oder wählen Sie in den Ton-Einstellungen einen anderen Eingang.",
+      "inputDevice": "Eingang: {device}",
+      "openSoundMac": "Ton-Einstellungen öffnen",
+      "openSoundPc": "Soundeinstellungen öffnen",
+      "missingTitle": "{missing} ist nicht verbunden",
+      "missingBody": "Das Diktieren verwendet stattdessen {device}.",
+      "chooseMicrophone": "Mikrofon auswählen …"
+    },
+    "microphone": {
+      "title": "Mikrofon",
+      "hint": "Bluetooth-Headsets brauchen einen Moment, um auf ihr Mikrofon umzuschalten, und nehmen in geringerer Qualität auf. Das eingebaute Mikrofon ist meist klarer.",
+      "systemDefault": "Systemstandard",
+      "systemDefaultNamed": "Systemstandard ({name})",
+      "bluetoothDevice": "{name} · Bluetooth",
+      "notConnected": "{name} (nicht verbunden)",
+      "test": "Mikrofon testen",
+      "stopTest": "Stopp",
+      "level": "Eingangspegel",
+      "hearing": "Wir hören Sie.",
+      "noSound": "Kein Ton von {device}.",
+      "checkAccess": "Mikrofonzugriff prüfen"
+    },
+    "preview": {
+      "label": "Bisher Diktiertes",
+      "listening": "Hört zu…",
+      "finishing": "Wird abgeschlossen…"
     }
   },
   "shortcut": {
@@ -792,8 +846,8 @@
     "permissionsTitlePc": "Diesen PC einrichten",
     "permissionsBody": "Jede Berechtigung ist Ihre Entscheidung. Sie können sie später in den Einstellungen ändern.",
     "neverRequested": "Nie angefragt:",
-    "tryTitle": "Jetzt ausprobieren",
-    "tryBody": "Kopieren Sie einen beliebigen Text und drücken Sie dann {shortcut}.",
+    "tryTitle": "Verlauf der Zwischenablage ausprobieren",
+    "tryBody": "Kopieren Sie einen beliebigen Text und drücken Sie dann {shortcut}, um den Verlauf der Zwischenablage zu öffnen.",
     "tryWaiting": "Warte auf das Tastenkürzel",
     "tryKeepGoing": "Weiter so…",
     "tryExtraModifier": "Das ist {pressed}. Verwenden Sie {shortcut}.",
@@ -815,18 +869,60 @@
     "introduceActivityTitle": "Neu: Aktivitätsübersicht",
     "introduceActivityBody": "Aktivität ist jetzt für Ihr Konto verfügbar. Nichts wird aufgezeichnet, bis Sie sie im Aktivitätsfenster starten.",
     "openActivity": "Aktivität öffnen",
-    "dictationModel": "Das Sprachmodell ({size} MB) wird einmal geladen und läuft auf diesem Computer.",
-    "dictationTurnOn": "Einschalten und laden",
     "dictationDownloadContinues": "Sie können weitermachen. Der Download läuft im Hintergrund weiter.",
-    "dictationReady": "Diktieren ist eingeschaltet und bereit.",
-    "dictationTryLabel": "Hier diktieren",
-    "dictationTryPlaceholder": "Hier klicken, {shortcut} gedrückt halten und einen Satz sagen.",
-    "dictationListening": "Hört zu…",
-    "dictationTranscribing": "Schreibt auf, was Sie gesagt haben…",
     "dictationMicrophone": "Damit hört stella Sie, solange Sie das Tastenkürzel halten.",
     "dictationAccessibility": "Damit schreibt stella das Gesagte in die App, die Sie gerade verwenden.",
     "dictationFailed": "stella desktop konnte das Diktieren nicht einschalten. Versuchen Sie es erneut.",
     "introduceDictationTitle": "Neu: Diktieren",
+    "dictationSetup": {
+      "progress": "Schritt {current} von {total}",
+      "skipRest": "Rest überspringen",
+      "screens": {
+        "microphone": "Mikrofon",
+        "transcription": "Transkription",
+        "app": "Überarbeitung",
+        "context": "Kontext",
+        "words": "Wörter"
+      },
+      "microphone": {
+        "title": "Damit stella Sie hört",
+        "body": "Halten Sie {shortcut} gedrückt und sprechen Sie, dann erscheint der Text dort, wo Sie schreiben. Erlauben Sie zuerst das Mikrofon, damit stella Sie hört.",
+        "bodyMac": "Halten Sie {shortcut} gedrückt und sprechen Sie, dann erscheint der Text dort, wo Sie schreiben. Erlauben Sie zuerst das Mikrofon, damit stella Sie hört, und die Bedienungshilfen, damit stella den Text eintippen kann.",
+        "choose": "Mikrofon zum Diktieren"
+      },
+      "transcription": {
+        "title": "Wo soll Ihre Sprache transkribiert werden?",
+        "body": "Sie können das später in den Einstellungen ändern.",
+        "titleLocal": "Ihre Sprache wird auf diesem Computer transkribiert",
+        "bodyLocal": "Das Sprachmodell läuft hier, daher funktioniert das Diktieren auch offline.",
+        "localTitle": "Auf diesem Computer",
+        "localBody": "Funktioniert offline. Ihr Audio verlässt diesen Computer nie.",
+        "localModel": "Benötigt das Sprachmodell ({size} MB), das einmal heruntergeladen wird.",
+        "cloudTitle": "stella AI",
+        "cloudBody": "Kein Download. Ihr Audio wird an stella und über den KI-Anbieter von stella an den Anbieter des gewählten Modells gesendet. stella speichert es nicht."
+      },
+      "app": {
+        "title": "Text passend zur App",
+        "body": "Die KI-Überarbeitung kann für die App schreiben, in die Sie diktieren: Eine E-Mail liest sich dann wie eine E-Mail und eine Chatnachricht wie eine Chatnachricht.",
+        "sentAppKind": "Sie erfährt die Art der App, etwa E-Mail, Chat oder Dokument, nicht den Namen der App.",
+        "notStored": "stella speichert nichts davon.",
+        "off": "Ohne Überarbeitung wird der Text so eingetippt, wie er transkribiert wurde, und nichts geht an die KI-Überarbeitung."
+      },
+      "context": {
+        "title": "Mehr Kontext für die Überarbeitung",
+        "body": "Optional und aus, bis Sie es einschalten. Es wird nur beim Start eines Diktats gelesen und geht nur an die KI-Überarbeitung. stella speichert nichts davon."
+      },
+      "words": {
+        "title": "Bringen Sie stella Ihre Wörter bei",
+        "body": "Fügen Sie Namen und Begriffe hinzu, die stella so schreiben soll wie Sie, etwa Ihre Kanzlei, Ihre Mandanten oder Begriffe aus einer anderen Sprache. Ihre Liste ist zu Beginn leer.",
+        "examplesLabel": "Ideen:",
+        "examples": {
+          "firm": "Name Ihrer Kanzlei",
+          "client": "Name eines Mandanten",
+          "term": "Ein Begriff, den Sie verwenden"
+        }
+      }
+    },
     "guideWaiting": "Schalten Sie stella desktop in der Liste oben ein, um Bedienungshilfen zu erlauben.",
     "guideAllowed": "stella desktop ist erlaubt",
     "never": {
@@ -971,6 +1067,14 @@
       "protected": "Dieser Ordner enthält die eigenen Daten von stella oder einen Skill-Ordner, daher kann der Agent darin nicht arbeiten.",
       "unreadable": "Dieser Ordner konnte nicht gelesen werden."
     }
+  },
+  "keepAwake": {
+    "title": "Wach halten",
+    "enabled": "Diesen Computer wach halten, während Agenten arbeiten",
+    "description": "Solange ein Coding-Agent auf diesem Computer arbeitet, geht er bei Inaktivität nicht in den Ruhezustand, damit lange Aufgaben weiterlaufen. Der Bildschirm kann sich weiterhin ausschalten. Ein Mac-Notebook schläft trotzdem ein, wenn Sie den Deckel schließen.",
+    "onBattery": "Auch im Akkubetrieb",
+    "onBatteryDescription": "Ist dies aus, geht der Computer im Akkubetrieb wie gewohnt in den Ruhezustand, auch während ein Agent arbeitet.",
+    "errorSave": "Diese Einstellung konnte nicht gespeichert werden. Versuchen Sie es erneut."
   },
   "transcribe": {
     "title": "Aufnahme transkribieren",

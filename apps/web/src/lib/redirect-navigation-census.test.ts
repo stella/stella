@@ -65,7 +65,7 @@ describe("navigation to a sign-in destination", () => {
       expect.arrayContaining([
         "routes/auth/organization.tsx",
         "routes/auth/professional-use.tsx",
-        "routes/auth/-components/professional-use-panel.tsx",
+        "routes/auth/-professional-use.page.tsx",
       ]),
     );
   });

@@ -1233,6 +1233,13 @@
       "treatment": "Vėlesnis vertinimas"
     },
     "analyzing": "Analizuojama...",
+    "browse": {
+      "courtDescription": "{court} ({country}): sprendimai viešoje stella teisės duomenų bazėje pagal metus ir mėnesį.",
+      "courts": "Teismai",
+      "days": "Dienos",
+      "jurisdictionDescription": "{country}: teismų sprendimai viešoje stella teisės duomenų bazėje pagal teismą, metus ir mėnesį.",
+      "periodDescription": "{court} ({country}), {period}: sprendimai viešoje stella teisės duomenų bazėje."
+    },
     "chat": {
       "prompts": {
         "facts": {
@@ -1494,6 +1501,10 @@
       "title": "Paieška laikinai nepasiekiama"
     },
     "searchWarnings": {
+      "collectionCitationUnresolved": {
+        "hint": "Ieškokite pagal bylos numerį arba sprendimo ECLI, jei jį žinote.",
+        "message": "Nerasta sprendimo, tiksliai atitinkančio šią rinkinio nuorodą."
+      },
       "noHits": {
         "hint": "Pabandykite mažiau arba kitų žodžių: terminų, kuriuos vartotų teismo sprendimas, o ne sakinio, kuriuo užduodamas klausimas.",
         "message": "Niekas neatitiko žodžių, kurių reikalavo ši paieška."
@@ -1721,12 +1732,25 @@
       "unorderedList": "Ženklintas sąrašas",
       "wholeBlockRequired": "Norėdami pakeisti stilių, pažymėkite visą pastraipą arba sąrašą."
     },
+    "answerNotFinished": "stella negalėjo užbaigti šio atsakymo.",
     "answerQuote": {
       "showInDecision": "Rodyti sprendime",
       "unverified": "Citatos patikrinti nepavyko",
       "unverifiedHint": "Cituojamuose sprendimuose šio teksto pažodžiui nėra",
       "verified": "Patikrinta citata",
       "verifiedHint": "Pažodžiui: {source}"
+    },
+    "answerTable": {
+      "copy": "Kopijuoti lentelę",
+      "copyAs": "Kopijuoti kaip {format}",
+      "download": "Atsisiųsti lentelę",
+      "downloadAs": "Atsisiųsti kaip {format}",
+      "fullscreen": "Atidaryti visame ekrane",
+      "fullscreenTitle": "Lentelė visame ekrane",
+      "singleLine": "Vienoje eilutėje",
+      "size": "{rows, plural, one {# eilutė} few {# eilutės} many {# eilutės} other {# eilučių}} · {columns, plural, one {# stulpelis} few {# stulpeliai} many {# stulpelio} other {# stulpelių}}",
+      "textMode": "Langelių tekstas",
+      "wrap": "Laužyti tekstą"
     },
     "applyMode": {
       "description": "Word įrašo, kas atliko kiekvieną pakeitimą. Įsiminsime jūsų pasirinkimą.",
@@ -2120,6 +2144,7 @@
     },
     "newChat": "Naujas pokalbis",
     "newChatInSidePanel": "Naujas pokalbis pasiekiamas šoniniame skydelyje",
+    "nextSteps": "Tolesni žingsniai",
     "noPromptPresetOnly": "Pranešimo nėra, tik išankstinis nustatymas",
     "noThreads": "Pokalbių dar nėra",
     "officeCitationUnavailable": "Ši citata nebepasiekiama.",
@@ -2226,7 +2251,6 @@
       "chipLabel": "Kur veikia: {place}",
       "cloud": "Debesis",
       "cloudDescription": "Veikia debesyje. Pasiekiama iš bet kur.",
-      "harnessModels": "{harness} modeliai",
       "hintCheck": "Patikrinkite jį per stella desktop",
       "hintInstall": "Įdiekite jį per stella desktop",
       "hintOffline": "Atidarykite stella desktop savo kompiuteryje",
@@ -2236,8 +2260,9 @@
       "localFolderSelection": "Jūsų kompiuteris · {harness} · {folder}",
       "localPlace": "Jūsų kompiuteris, {harness}",
       "localSelection": "Jūsų kompiuteris · {harness}",
-      "modelDefault": "Numatytasis (rekomenduojamas)",
       "placeState": "{place}. {state}",
+      "startedInCloud": "Šis naujas pokalbis pradėtas debesyje, nes {harness} jūsų kompiuteryje nepasiekiamas ({state})",
+      "startedInCloudCheckFailed": "Šis naujas pokalbis pradėtas debesyje, nes nepavyko patikrinti jūsų kompiuterio",
       "stepsCheck": "Atidaroma stella desktop. Jei programa neatsidaro, atidarykite ją savo kompiuteryje ir patikrinkite agentą {harness} skiltyje Nustatymai › Bendra › DI prenumeratos.",
       "stepsInstall": "Atidaroma stella desktop. Jei programa neatsidaro, atidarykite ją savo kompiuteryje ir skiltyje Nustatymai › Bendra prie agento {harness} pasirinkite Įdiegti.",
       "stepsSignInClaudeCode": "Atidaroma stella desktop prisijungimui. Jei programa neatsidaro, atidarykite ją ir pasirinkite Nustatymai › Bendra › Prisijungti su Claude.",
@@ -2304,13 +2329,26 @@
       "title": "Jūsų žinutė laukia eilėje, kol agentas baigs",
       "turnNotRunning": "Agentas šiuo metu nedirba."
     },
+    "stepDigest": {
+      "decisionsFound": "{found, plural, one {Rastas # sprendimas} few {Rasti # sprendimai} many {Rasta # sprendimo} other {Rasta # sprendimų}}",
+      "decisionsFoundUsed": "{found, plural, one {Rastas # sprendimas} few {Rasti # sprendimai} many {Rasta # sprendimo} other {Rasta # sprendimų}}, {used, plural, one {# panaudotas atsakyme} few {# panaudoti atsakyme} many {# panaudota atsakyme} other {# panaudota atsakyme}}",
+      "filterAsOf": "{date} būklė",
+      "legislationFound": "{count, plural, one {# teisės aktas ar nuostata} few {# teisės aktai ir nuostatos} many {# teisės akto ir nuostatos} other {# teisės aktų ir nuostatų}}",
+      "lookupDidNotGoThrough": "Ši paieška nepavyko.",
+      "moreFound": "{count, plural, one {dar # nerodomas} few {dar # nerodomi} many {dar # nerodoma} other {dar # nerodoma}}",
+      "moreLookups": "{count, plural, one {Dar # užklausa nerodoma} few {Dar # užklausos nerodomos} many {Dar # užklausos nerodoma} other {Dar # užklausų nerodoma}}",
+      "notRecorded": "Šis žingsnis atliktas anksčiau, nei stella pradėjo įrašyti, ko ieško kiekvienas žingsnis.",
+      "nothingFound": "Nieko nerasta.",
+      "technicalDetails": "Techninė informacija",
+      "usedInAnswer": "Panaudota atsakyme",
+      "versionFrom": "Redakcija nuo {date}"
+    },
     "stopFailed": "Nepavyko sustabdyti atsakymo. Bandykite dar kartą.",
     "stopResponse": "Stabdyti",
     "stopped": "Sustabdyta",
     "stopping": "Stabdoma…",
     "suggestTitle": "Pasiūlyti pavadinimą",
     "suggestTitleUnavailableAnonymized": "Anonimizuotiems pokalbiams pavadinimų pasiūlymai negalimi.",
-    "suggestedFollowupsLabel": "Siūlomi tęstiniai klausimai",
     "suggestingTitle": "Siūlomas pavadinimas…",
     "suggestionSeverity": {
       "style": "Stilius",
@@ -2321,7 +2359,6 @@
       "accepted": "Pritaikyta",
       "rejected": "Atmesta"
     },
-    "tabToAsk": "→, kad paklaustumėte: „{prompt}“",
     "tableChart": {
       "bar": "Stulpelinė",
       "kind": "Diagramos tipas",
@@ -2412,6 +2449,7 @@
       "save_document": "Išsaugoti dokumentą",
       "save_matter": "Išsaugoti bylą",
       "save_playbook": "Išsaugoti peržiūros vadovą",
+      "save_skill_package": "Išsaugoti įgūdį",
       "save_task": "Išsaugoti užduotį",
       "save_template": "Išsaugoti šabloną",
       "save_time_entry": "Išsaugoti laiko įrašą",
@@ -2440,6 +2478,7 @@
       "use-browser": "Jūsų naršyklės naudojimas",
       "use_connector_secret": "Naudojami jungties prisijungimo duomenys",
       "user_message": "Išsiųsta agentui dirbant",
+      "validate_skill_package": "Patikrinti įgūdį",
       "web_search": "Ieškoma internete"
     },
     "toolCall": {
@@ -4049,6 +4088,12 @@
     "versionCreatedDescription": "Sukurta {versionNumber} versija. Visi gali toliau redaguoti.",
     "versionCreatedTitle": "Versija sukurta",
     "viewOnly": "Tik peržiūra"
+  },
+  "guidance": {
+    "notCaseLaw": "Reguliavimo institucijos paskelbtos gairės. Tai nėra teismo sprendimas.",
+    "openAtPublisher": "Atidaryti leidėjo svetainėje",
+    "source": "Šaltinis: {attribution}",
+    "textUnavailable": "Šio dokumento teksto čia nėra. Perskaitykite jį leidėjo svetainėje."
   },
   "guides": {
     "action": {
@@ -5740,6 +5785,9 @@
       "chatNotificationsDescription": "Gaukite pranešimą iš šios naršyklės, kai pokalbio atsakymas baigiamas, kol stella veikia fone.",
       "chatNotificationsToggle": "Pranešti, kai atsakymas paruoštas arba laukia mano veiksmo",
       "chatNotificationsUnsupported": "Ši naršyklė nepalaiko pranešimų.",
+      "chatTechnicalDetails": "Techninė informacija pokalbyje",
+      "chatTechnicalDetailsDescription": "Kiekvienas pokalbio žingsnis rodo, ko ieškojo ir ką rado. Įjungę matysite ir už jo esantį kodą bei neapdorotus rezultatus.",
+      "chatTechnicalDetailsToggle": "Rodyti techninę informaciją pokalbyje",
       "confirmDelete": "Patvirtinti paskyros ištrynimą",
       "dangerZone": "Pavojinga zona",
       "dangerZoneDescription": "Visam laikui ištrinti paskyros prieigą ir privačius paskyros duomenis.",
@@ -7903,7 +7951,6 @@
         "endDate": "Pabaigos data",
         "month": "Mėnuo",
         "quarter": "Ketvirtis",
-        "showTable": "Rodyti lentelę",
         "startDate": "Pradžios data",
         "week": "Savaitė"
       },

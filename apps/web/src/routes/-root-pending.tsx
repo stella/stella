@@ -1,4 +1,4 @@
-import { useRouterState } from "@tanstack/react-router";
+import { useRouter, useRouterState } from "@tanstack/react-router";
 
 import {
   DefaultPendingComponent,
@@ -7,8 +7,13 @@ import {
 import { isPublicKnowledgeEnabled } from "@/lib/knowledge/public-knowledge-launch";
 import { matchedAppFrameScope } from "@/routes/-app-frame-scope";
 import { selectAppFrame } from "@/routes/-app-frame.logic";
+import { AuthFrameShell } from "@/routes/-auth-frame.pending";
 import { ProtectedPendingSkeleton } from "@/routes/-protected-pending-skeleton";
-import { useLeafPendingView } from "@/routes/-route-pending-view";
+import {
+  leafRedirectFrameScope,
+  PendingViewOf,
+  useLeafPendingView,
+} from "@/routes/-route-pending-view";
 
 /**
  * The root's pending view: what a cold load paints before the app mounts,
@@ -16,11 +21,11 @@ import { useLeafPendingView } from "@/routes/-route-pending-view";
  * resolved from the URL before any loader runs, so a page in the member frame
  * paints that frame here already, with the page's own pending view as its
  * body, and the frame host's skeleton that follows has the same shape.
- * Elsewhere the generic full-width skeleton stands, as the page brings its
- * own shell.
+ * Auth pages share their header and form column with the mounted auth frame.
  */
 export function RootPendingComponent() {
-  const memberFrame = useRouterState({
+  const router = useRouter();
+  const frame = useRouterState({
     select: (state) =>
       selectAppFrame({
         scope: matchedAppFrameScope(state.matches),
@@ -29,10 +34,24 @@ export function RootPendingComponent() {
         // shows while the session is read.
         hasRouteUser: false,
         publicKnowledge: isPublicKnowledgeEnabled(),
-      }) === "checking",
+        redirectScope: leafRedirectFrameScope(router.routesById, state.matches),
+      }),
   });
-  const leafPendingView = useLeafPendingView();
-  if (!memberFrame) {
+  const pagePending = useLeafPendingView();
+  if (frame === "auth") {
+    return (
+      <div {...PENDING_STATUS_PROPS}>
+        <AuthFrameShell>
+          {pagePending ? (
+            <PendingViewOf view={pagePending} />
+          ) : (
+            <DefaultPendingComponent announce={false} />
+          )}
+        </AuthFrameShell>
+      </div>
+    );
+  }
+  if (frame !== "checking" && frame !== "neutral") {
     return <DefaultPendingComponent className="h-dvh" />;
   }
   return (
@@ -41,7 +60,7 @@ export function RootPendingComponent() {
     // client hydrates this paint before it restores the account's locale, so
     // its labels are bars until the frame host's skeleton takes over.
     <div {...PENDING_STATUS_PROPS} className="flex h-dvh w-full flex-col">
-      <ProtectedPendingSkeleton body={leafPendingView} />
+      <ProtectedPendingSkeleton body={pagePending} />
     </div>
   );
 }

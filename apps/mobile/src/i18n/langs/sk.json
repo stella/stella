@@ -186,6 +186,7 @@
       "save_document": "Uložiť dokument",
       "save_matter": "Uložiť spis",
       "save_playbook": "Uložiť playbook",
+      "save_skill_package": "Uložiť zručnosť",
       "save_task": "Uložiť úlohu",
       "save_template": "Uložiť vzor",
       "save_time_entry": "Uložiť časový záznam",
@@ -208,7 +209,13 @@
       "update_reader_annotation": "Upraviť zvýraznenie alebo komentár",
       "use-browser": "Používanie vášho prehliadača",
       "use_connector_secret": "Použitie prístupového údaja konektora",
+      "validate_skill_package": "Skontrolovať zručnosť",
       "web_search": "Vyhľadávanie na webe"
+    },
+    "toolResearch": {
+      "caseLaw": "Hľadám v judikatúre",
+      "legislation": "Čítam predpisy",
+      "legislationAndCaseLaw": "Hľadám v predpisoch a judikatúre"
     },
     "localRun": {
       "title": {
