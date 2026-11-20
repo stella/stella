@@ -48,7 +48,7 @@ const cachedSessionCaller = (
 ): { organizationId: string; userId: string } | undefined => {
   const session: unknown = newestCachedData(
     queryClient,
-    queryClient.getQueriesData<unknown>({
+    queryClient.getQueriesData({
       exact: true,
       queryKey: rootKeys.session,
     }),

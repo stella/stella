@@ -3,8 +3,8 @@ import { describe, expect, test } from "bun:test";
 
 import type { PermissionInput } from "@stll/permissions";
 
+import { rootKeys } from "@/lib/account/auth-query-keys.logic";
 import { roleOptions } from "@/lib/auth-queries";
-import { sessionOptions } from "@/lib/auth-query-options";
 import {
   cachedCallerFeatureEnabled,
   cachedRoleGrants,
@@ -64,7 +64,7 @@ const CALLER = { organizationId: "org-a", userId: "user-a" };
 // A client holding the session the caller's settings were read for.
 const signedInClient = (caller = CALLER) => {
   const queryClient = new QueryClient();
-  queryClient.setQueryData(sessionOptions.queryKey, {
+  queryClient.setQueryData(rootKeys.session, {
     user: { id: caller.userId },
     session: { activeOrganizationId: caller.organizationId },
   });
