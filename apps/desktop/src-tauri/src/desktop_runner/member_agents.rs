@@ -104,28 +104,38 @@ fn read_version(executable: &Path) -> Option<String> {
     command.creation_flags(CREATE_NO_WINDOW);
   }
   let mut child = command.spawn().ok()?;
-  let started = Instant::now();
-  loop {
+  let deadline = Instant::now() + VERSION_TIMEOUT;
+  // Read on a thread of its own, so a child that leaves something holding
+  // its output open cannot hold this past the deadline.
+  let stdout = child.stdout.take()?;
+  let (sender, output) = std::sync::mpsc::channel();
+  std::thread::spawn(move || {
+    let mut stdout = stdout;
+    let mut text = String::new();
+    let read = std::io::Read::read_to_string(&mut stdout, &mut text).map(|_| text);
+    // The receiver has given up when the deadline passed.
+    crate::logging::best_effort(
+      sender.send(read),
+      "agent version came after its deadline",
+    );
+  });
+  let succeeded = loop {
     match child.try_wait() {
-      Ok(Some(status)) => {
-        if !status.success() {
-          return None;
-        }
-        let mut output = String::new();
-        let mut stdout = child.stdout.take()?;
-        std::io::Read::read_to_string(&mut stdout, &mut output).ok()?;
-        return parse_version(&output);
-      }
-      Ok(None) if started.elapsed() < VERSION_TIMEOUT => {
-        std::thread::sleep(VERSION_POLL)
-      }
+      Ok(Some(status)) => break status.success(),
+      Ok(None) if Instant::now() < deadline => std::thread::sleep(VERSION_POLL),
       _ => {
         crate::logging::best_effort(child.kill(), "agent version probe was not killed");
         crate::logging::best_effort(child.wait(), "agent version probe was not reaped");
         return None;
       }
     }
+  };
+  let remaining = deadline.saturating_duration_since(Instant::now());
+  let text = output.recv_timeout(remaining).ok()?.ok()?;
+  if !succeeded {
+    return None;
   }
+  parse_version(&text)
 }
 
 /// What identifies an executable on disk between two looks at it.
@@ -147,7 +157,7 @@ fn stamp(path: &Path) -> Option<FileStamp> {
 
 /// The last version read, kept while the executable is unchanged, so the
 /// regular probe and every run start do not run `--version` again.
-static VERSIONS: Mutex<Option<(FileStamp, Option<String>)>> = Mutex::new(None);
+static VERSIONS: Mutex<Option<(FileStamp, String)>> = Mutex::new(None);
 
 /// The Antigravity CLI on this computer and its version; `None` when it is
 /// not installed or does not say its version.
@@ -165,16 +175,20 @@ pub(crate) fn antigravity() -> Option<(PathBuf, String)> {
       .filter(|(seen, _)| *seen == current)
       .map(|(_, version)| version.clone())
   };
-  // Read without holding the lock: `--version` may take seconds.
-  let version = cached.unwrap_or_else(|| {
-    let version = read_version(&executable);
-    *VERSIONS
-      .lock()
-      .unwrap_or_else(std::sync::PoisonError::into_inner) =
-      Some((current, version.clone()));
-    version
-  });
-  version.map(|version| (executable, version))
+  // Read without holding the lock: `--version` may take seconds. Only a
+  // version is kept: a failed read is tried again on the next look.
+  let version = match cached {
+    Some(version) => version,
+    None => {
+      let version = read_version(&executable)?;
+      *VERSIONS
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner) =
+        Some((current, version.clone()));
+      version
+    }
+  };
+  Some((executable, version))
 }
 
 fn dirs_home() -> Option<PathBuf> {
@@ -239,8 +253,10 @@ mod tests {
   #[test]
   fn a_file_that_is_not_executable_is_not_the_cli() {
     let root = TempDir::new();
-    file(&root.path().join("agy"), "not a program", false);
-    let path_var = std::env::join_paths([root.path()]).unwrap();
-    assert_eq!(find_antigravity(Some(&path_var), None), None);
+    let agy = root.path().join("agy");
+    file(&agy, "not a program", false);
+    // Discovery also looks in the computer's own install directories, so
+    // the file is judged on its own.
+    assert!(!is_executable_file(&agy));
   }
 }

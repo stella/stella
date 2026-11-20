@@ -290,6 +290,17 @@ describe("ACP adapter over a stdio agent", () => {
     );
   });
 
+  test("an installed agent that does not say its version is unavailable, never started", async () => {
+    const harness = harnessFor("probe", {
+      minimumVersion: { version: "1.5.0", read: async () => null },
+    });
+    const probed = await harness.adapter.probe();
+    expect(Result.isError(probed) && probed.error.reason).toBe(
+      "harness_unavailable",
+    );
+    expect(existsSync(harness.logPath)).toBe(false);
+  });
+
   test("probe reports a signed-out agent without models", async () => {
     const probed = await harnessFor("probe_signed_out").adapter.probe();
     expect(Result.isOk(probed) && probed.value.auth).toEqual({

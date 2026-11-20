@@ -209,10 +209,10 @@ export const useHarnessHint = () => {
       case "needs_login":
       case "not_installed":
       case "unsupported":
+      case "unavailable":
         return memberSetup
           ? t(MEMBER_SETUP_HINT_KEY)
           : t(UNAVAILABLE_HINT_KEY[option.state]);
-      case "unavailable":
       case "offline":
         return t(UNAVAILABLE_HINT_KEY[option.state]);
       default:

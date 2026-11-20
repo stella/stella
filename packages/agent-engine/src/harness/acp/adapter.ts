@@ -551,10 +551,17 @@ const tooOldVersion = async (
     );
   }
   const version = read.value;
+  if (version === null) {
+    // Without its version it cannot be known to serve ACP.
+    return Result.err(
+      new HarnessProbeError({
+        reason: "harness_unavailable",
+        message: `${options.definition.displayName} did not report its version.`,
+      }),
+    );
+  }
   return Result.ok(
-    version !== null && Bun.semver.satisfies(version, `<${minimum.version}`)
-      ? version
-      : null,
+    Bun.semver.satisfies(version, `<${minimum.version}`) ? version : null,
   );
 };
 
