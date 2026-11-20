@@ -5,7 +5,6 @@ import { useTranslations } from "use-intl";
 
 import { Checkbox } from "@stll/ui/checkbox";
 import { Field, FieldLabel } from "@stll/ui/field";
-import { Frame, FramePanel } from "@stll/ui/frame";
 
 import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
@@ -14,6 +13,11 @@ import { organizationSettingsOptions } from "@/queries/organization-settings";
 
 import { AISettingsSectionFeedback } from "./ai-settings-section";
 import type { ToggleSettingsSectionProps } from "./ai-settings-section";
+import {
+  AIToggleCardFrame,
+  AIToggleCardPending,
+  DOCUMENT_PROCESSING_CARD,
+} from "./ai-toggle-card.pending";
 
 const SEARCHABLE_TEXT_MODE = "searchable-text";
 
@@ -36,6 +40,9 @@ export const DocumentProcessingCard = ({
   const settings =
     settingsView.type === "items" ? settingsView.items : undefined;
 
+  if (settingsView.type === "pending") {
+    return <AIToggleCardPending {...DOCUMENT_PROCESSING_CARD} />;
+  }
   if (!settings) {
     return <QueryViewFeedback view={settingsView} />;
   }
@@ -43,30 +50,25 @@ export const DocumentProcessingCard = ({
   const enabled =
     value ?? settings.documentProcessingMode === SEARCHABLE_TEXT_MODE;
   return (
-    <Frame>
-      <QueryViewFeedback view={settingsView} />
-      <FramePanel>
-        <div className="flex flex-col gap-3 p-1">
-          <h2 className="text-sm font-medium">
-            {t("settings.organization.documentProcessing.title")}
-          </h2>
-          <p className="text-muted-foreground text-xs">
-            {t("settings.organization.documentProcessing.description")}
-          </p>
-          <Field className="flex-row items-center gap-2">
-            <Checkbox
-              checked={enabled}
-              disabled={disabled}
-              id={checkboxId}
-              onCheckedChange={onChange}
-            />
-            <FieldLabel htmlFor={checkboxId}>
-              {t("settings.organization.documentProcessing.toggleLabel")}
-            </FieldLabel>
-          </Field>
-          <AISettingsSectionFeedback feedback={feedback} />
-        </div>
-      </FramePanel>
-    </Frame>
+    <AIToggleCardFrame
+      description={DOCUMENT_PROCESSING_CARD.description}
+      notice={<QueryViewFeedback view={settingsView} />}
+      title={DOCUMENT_PROCESSING_CARD.title}
+      toggle={
+        <Field className="flex-row items-center gap-2">
+          <Checkbox
+            checked={enabled}
+            disabled={disabled}
+            id={checkboxId}
+            onCheckedChange={onChange}
+          />
+          <FieldLabel htmlFor={checkboxId}>
+            {t(DOCUMENT_PROCESSING_CARD.label)}
+          </FieldLabel>
+        </Field>
+      }
+    >
+      <AISettingsSectionFeedback feedback={feedback} />
+    </AIToggleCardFrame>
   );
 };

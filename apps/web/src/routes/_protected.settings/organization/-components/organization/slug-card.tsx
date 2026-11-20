@@ -17,13 +17,13 @@ import {
 } from "@stll/ui/dialog";
 import { Field, FieldLabel } from "@stll/ui/field";
 import { Form } from "@stll/ui/form";
-import { Frame, FramePanel } from "@stll/ui/frame";
 import { Input } from "@stll/ui/input";
 
 import { api } from "@/lib/api";
 import { invokeCapability } from "@/lib/capabilities/capability-request";
 import { APIError, unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { IdentifierPanel } from "@/routes/_protected.settings/organization/-components/organization/identifier-panel.pending";
 
 type OrganizationSlugCardProps = {
   slug: string;
@@ -67,31 +67,25 @@ export const OrganizationSlugCard = ({
 
   return (
     <>
-      <Frame>
-        <FramePanel>
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className="flex min-w-0 flex-col gap-1">
-              <h2 className="text-sm font-medium">
-                {t("settings.organization.slug.title")}
-              </h2>
-              <bdi className="font-mono text-sm break-all">{slug}</bdi>
-            </div>
-            {canChange && (
-              <Button
-                onClick={() => {
-                  setValue(slug);
-                  setMode("explicit");
-                  mutation.reset();
-                  setOpen(true);
-                }}
-                variant="outline"
-              >
-                {t("settings.organization.slug.change")}
-              </Button>
-            )}
-          </div>
-        </FramePanel>
-      </Frame>
+      <IdentifierPanel
+        action={
+          canChange && (
+            <Button
+              onClick={() => {
+                setValue(slug);
+                setMode("explicit");
+                mutation.reset();
+                setOpen(true);
+              }}
+              variant="outline"
+            >
+              {t("settings.organization.slug.change")}
+            </Button>
+          )
+        }
+        title={t("settings.organization.slug.title")}
+        value={slug}
+      />
       <Dialog
         open={open}
         onOpenChange={(next) => {

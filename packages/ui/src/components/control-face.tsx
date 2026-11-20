@@ -14,6 +14,10 @@ import {
 } from "./button-classes";
 import type { ButtonTokenVariant } from "./button.shared";
 import {
+  FIELD_CLASS_NAME,
+  FIELD_DESCRIPTION_CLASS_NAME,
+} from "./field-classes";
+import {
   INPUT_CONTROL_CLASS_NAME,
   INPUT_ELEMENT_CLASS_NAME,
   INPUT_SIZE_CLASS_NAMES,
@@ -241,6 +245,62 @@ export const LabelFace = ({
   >
     {children}
   </span>
+);
+
+/**
+ * How a field's face lays out its parts, as the live `Field` is laid out:
+ * - `stack`: the caption over the control over its lines (the field's column);
+ * - `snug`: that column with its parts a step closer (a checkbox row over its
+ *   line);
+ * - `inline`: a checkbox or switch beside its caption, on one line.
+ */
+type FieldFaceLayout = "stack" | "snug" | "inline";
+
+const FIELD_FACE_LAYOUT_CLASS_NAMES = {
+  stack: "",
+  snug: "gap-1",
+  inline: "flex-row items-center",
+} as const satisfies Record<FieldFaceLayout, string>;
+
+/**
+ * A form field's face, as `Field` draws it: the caption, the control's face
+ * and the quiet lines a pending view puts in, in the field's own box.
+ */
+export const FieldFace = ({
+  children,
+  className,
+  layout = "stack",
+}: {
+  children: ReactNode;
+  className?: string | undefined;
+  layout?: FieldFaceLayout | undefined;
+}) => (
+  <div
+    className={cn(
+      FIELD_CLASS_NAME,
+      FIELD_FACE_LAYOUT_CLASS_NAMES[layout],
+      className,
+    )}
+    data-slot="field-face"
+  >
+    {children}
+  </div>
+);
+
+/** A field's quiet line, as `FieldDescription` draws it. */
+export const FieldDescriptionFace = ({
+  children,
+  className,
+}: {
+  children: ReactNode;
+  className?: string | undefined;
+}) => (
+  <p
+    className={cn(FIELD_DESCRIPTION_CLASS_NAME, className)}
+    data-slot="field-description-face"
+  >
+    {children}
+  </p>
 );
 
 /**
