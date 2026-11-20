@@ -1,10 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 
 import { getAnalytics } from "@/lib/analytics/provider";
-import {
-  aiAvailabilityOptions,
-  aiConfigOptions,
-} from "@/lib/organization/ai-config-queries";
+import { aiConfigOptions } from "@/lib/organization/ai-config-queries";
 import { pageTitle } from "@/lib/page-title";
 import { ensureRouteQueryData, prefetchRouteQuery } from "@/lib/react-query";
 import { organizationSettingsOptions } from "@/queries/organization-settings";
@@ -30,24 +27,6 @@ export const Route = createFileRoute("/_protected/settings/organization/ai")({
       ensureRouteQueryData(
         context.queryClient,
         aiConfigOptions({ organizationId: context.user.activeOrganizationId }),
-      ),
-      // Whether the organization needs a key at all; the providers' line
-      // stays generic until it is read.
-      prefetchRouteQuery(
-        context.queryClient,
-        aiAvailabilityOptions({
-          organizationId: context.user.activeOrganizationId,
-        }),
-        (error) => {
-          getAnalytics().captureError(error, {
-            fingerprintKey: "admin.ai.loader:availability-failure",
-            scope: {
-              type: "request",
-              method: "GET",
-              routeTemplate: "/_protected/settings/organization/ai",
-            },
-          });
-        },
       ),
       prefetchRouteQuery(
         context.queryClient,
