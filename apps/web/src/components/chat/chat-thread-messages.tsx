@@ -2840,7 +2840,11 @@ const AssistantMessageParts = ({
   );
 };
 
-/** A step of a run, or a coding agent's subagent with the steps it took. */
+/**
+ * A step of a run, or a coding agent's subagent with the steps it took. A
+ * step renders synchronously: `Awaited` keeps React 19's promise member out
+ * of the type, so the functions that render steps stay plain ones.
+ */
 const renderRunStep = ({
   activeOrganizationId,
   entry,
@@ -2853,11 +2857,14 @@ const renderRunStep = ({
   activeOrganizationId: string;
   entry: AssistantPartRenderEntry;
   index: number;
-  renderEntry: (entry: AssistantPartRenderEntry, index: number) => ReactNode;
+  renderEntry: (
+    entry: AssistantPartRenderEntry,
+    index: number,
+  ) => Awaited<ReactNode>;
   subagentGroups: ReturnType<typeof toLocalRunSubagentGroups>;
   threadId: string | undefined;
   toolCallEntries: readonly ToolCallRenderEntry[];
-}): ReactNode => {
+}): Awaited<ReactNode> => {
   const subagent = toolCallEntries.find((call) => call.entry === entry);
   const stepIds =
     subagent === undefined
