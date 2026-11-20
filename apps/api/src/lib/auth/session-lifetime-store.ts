@@ -7,13 +7,15 @@ import { session } from "@/api/db/auth-schema";
 import { revokeUserSessionById } from "@/api/lib/auth-artifacts";
 import {
   isPendingRotation,
-  SESSION_ABSOLUTE_AGE_MS,
   SESSION_PRIOR_TOKEN_CONFIRMED_GRACE_MS,
   SESSION_PRIOR_TOKEN_RECOVERY_MS,
 } from "@/api/lib/auth/session-lifetime";
 import type { SessionLifetimeStore } from "@/api/lib/auth/session-lifetime";
-import { liveSessionPredicate } from "@/api/lib/auth/session-liveness";
 import { hashSessionToken } from "@/api/lib/auth/session-token";
+import {
+  liveSessionPredicate,
+  SESSION_ABSOLUTE_AGE_MS,
+} from "@/api/lib/db/session-liveness";
 
 const SESSION_ACTIVITY_WRITE_INTERVAL_MS = 5 * 60 * 1000;
 

@@ -11,6 +11,7 @@ import { eq } from "drizzle-orm";
 
 import { user } from "@/api/db/auth-schema";
 import { rootDb } from "@/api/db/root";
+import { emailDeliveryFailures } from "@/api/db/schema";
 import {
   markAccountEmailsUndeliverable,
   readAccountEmailUndeliverable,
@@ -189,7 +190,7 @@ describe("account email deliverability", () => {
     ).toBe(0);
   });
 
-  test("a send to a refused address is skipped with its reason and no address", async () => {
+  test("a send to a refused address is skipped, logged with its reason and no address, and recorded as a failure", async () => {
     const account = await newAccount();
     await markAccountEmailsUndeliverable({
       database: rootDb,
@@ -207,6 +208,7 @@ describe("account email deliverability", () => {
       email: account.email,
       device: "Firefox on Linux",
       ipAddress: "192.0.2.1",
+      location: { type: "unknown" },
       time: "26 October 2026, 04:37",
       sessionsUrl: "https://app.example.test/settings/sessions",
       lang: "en",
@@ -224,5 +226,12 @@ describe("account email deliverability", () => {
     );
     expect(JSON.stringify(skipped)).toContain("hard_bounce");
     expect(JSON.stringify(records)).not.toContain(account.email);
+    // The sign-in screen reads the dropped send like a suppression bounce.
+    expect(
+      await rootDb
+        .select({ reason: emailDeliveryFailures.reason })
+        .from(emailDeliveryFailures)
+        .where(eq(emailDeliveryFailures.address, account.email)),
+    ).toEqual([{ reason: "suppressed" }]);
   });
 });

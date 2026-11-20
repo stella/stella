@@ -666,7 +666,7 @@
     "customWords": {
       "group": "Vlastní slova",
       "title": "Slova a jména, která má stella psát správně",
-      "description": "Například jména klientů nebo anglické výrazy, které používáte v češtině. Ukládají se v tomto počítači pro tento účet a odesílají se jen s diktátem, k převodu přes stella AI a k úpravě pomocí AI. Model řeči v tomto počítači je nepoužívá.",
+      "description": "Například jména klientů nebo anglické výrazy, které používáte v češtině. Ukládají se v tomto počítači pro tento účet a odesílají se jen s diktátem, k převodu přes stella AI a k úpravě pomocí AI. Když přepisuje model řeči v tomto počítači a úprava pomocí AI je vypnutá, stella opraví jejich pravopis přímo v tomto počítači.",
       "count": "{count, number} z {limit, number}",
       "input": "Přidat slovo nebo jméno",
       "add": "Přidat",
@@ -1096,7 +1096,7 @@
       "cloudDescriptionModel": "Zvuk se k přepisu odešle do stella AI a poskytovateli modelu {model}. stella ho neukládá.",
       "localMissing": "Abyste mohli přepisovat v tomto počítači, stáhněte si v Nastavení v části Diktování řečový model.",
       "localMissingCloud": "Stáhněte si v Nastavení v části Diktování řečový model, nebo přepisujte pomocí stella AI.",
-      "retainsData": "{provider} uchovává zvuk i přepis všeho, co tomuto modelu pošlete. Nepřepisujte s ním důvěrné nahrávky ani nahrávky klientů, nebo v Nastavení v části Diktování vyberte jiný model.",
+      "retainsData": "Berte prosím na vědomí podmínky zpracování společnosti {provider}.",
       "modelFailed": "Model stella AI se nepodařilo načíst, takže stella AI teď nemůže přepisovat. Zkuste to znovu, nebo přepisujte na tomto počítači."
     },
     "matter": {

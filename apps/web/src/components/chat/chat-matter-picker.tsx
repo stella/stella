@@ -207,7 +207,7 @@ const MatterCheckboxItem = ({
   return (
     <MenuCheckboxItem
       checked={checked}
-      className={TRUNCATING_ITEM_CLASS}
+      className={cn(TRUNCATING_ITEM_CLASS, "group/matter-row")}
       closeOnClick={false}
       onClick={onToggle}
     >
@@ -221,10 +221,13 @@ const MatterCheckboxItem = ({
         </TruncatedText>
         {/* No tooltip: a tooltip's popup would portal its pointer events
             through this menu item and toggle the matter. The label names
-            the link. */}
+            the link. Shown only on the row under the pointer or keyboard
+            highlight (and its own focus), so a long list reads as names
+            rather than a column of buttons; it keeps its space so names
+            never reflow, and stays visible where there is no hover. */}
         <Button
           aria-label={t("common.openInNewTab")}
-          className="ms-auto"
+          className="ms-auto opacity-0 transition-opacity group-hover/matter-row:opacity-100 group-data-highlighted/matter-row:opacity-100 focus-visible:opacity-100 pointer-coarse:opacity-100"
           onClick={(e) => {
             e.stopPropagation();
           }}

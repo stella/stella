@@ -16,6 +16,11 @@ export const brand = {
   backgroundPage: "#f6f9fc",
   backgroundCard: "#ffffff",
   backgroundCodeBlock: "#f3f4f6",
+  mapWater: "#d6e4f0",
+  mapLand: "#f4f5f7",
+  /** The country a located point falls in. */
+  mapHome: "#e1e7ef",
+  mapBorder: "#a3aebd",
   fontFamily:
     '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
 } as const;

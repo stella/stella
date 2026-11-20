@@ -16,6 +16,7 @@ export const MODEL_OPERATION_MODULES = [
   "apps/api/src/handlers/chat/messages/revisions/span-edit.ts",
   "apps/api/src/handlers/chat/stream-chat.ts",
   "apps/api/src/handlers/chat/subagent-runner.ts",
+  "apps/api/src/handlers/chat/browse-web-agent.ts",
   "apps/api/src/handlers/legal-reader/answers/model.ts",
   "apps/api/src/handlers/chat/suggest-thread-title.ts",
   "apps/api/src/handlers/chat/thread-recap.ts",

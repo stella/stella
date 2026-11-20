@@ -31,7 +31,7 @@ import { panic } from "better-result";
 import { and, eq, gt, lte, sql } from "drizzle-orm";
 import * as v from "valibot";
 
-import type { ModelTask } from "@stll/ai-catalog";
+import type { ModelOverrideGroup, ModelTask } from "@stll/ai-catalog";
 import { Temporal } from "@stll/time";
 
 import {
@@ -341,7 +341,8 @@ type RecordUsageEventInput = {
   workspaceId: SafeId<"workspace"> | null;
   userId: string;
   actionType: UsageActionType;
-  modelTask: ModelTask | "decision" | "transcription";
+  /** The task, or the admin-chosen role (`browse`), the model ran for. */
+  modelTask: ModelTask | ModelOverrideGroup | "decision" | "transcription";
   unitsConsumed: number;
   serviceTier: UsageServiceTier;
   isByok: boolean;

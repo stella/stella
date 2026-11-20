@@ -91,6 +91,11 @@ export default {
           "A subagent's brief, messages and tools pass through the parent turn's boundary.",
       },
       {
+        path: "apps/api/src/handlers/chat/browse-web-agent.ts",
+        reason:
+          "The browsing child's task, its suspended run's messages and its tool pass through the parent turn's boundary.",
+      },
+      {
         path: "apps/api/src/handlers/chat/compaction.ts",
         reason:
           "In-turn compaction: the transcript passes through the turn's boundary, or is already the boundary's output inside the run.",

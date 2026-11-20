@@ -4845,6 +4845,9 @@ test("shipped web source plans production shards on a fast PR", () => {
     "apps/web/src/routes/index.tsx",
     "apps/web/src/components/breadcrumbs/chat-switcher.tsx",
     "apps/web/src/i18n/langs/en.json",
+    // Workspace packages the web build bundles.
+    "packages/ui/src/button.tsx",
+    "packages/html/src/load.ts",
   ]) {
     expect(runSelector([file], ["e2e_production_required"]), file).toEqual([
       "true",
@@ -4854,6 +4857,8 @@ test("shipped web source plans production shards on a fast PR", () => {
     "apps/web/src/components/breadcrumbs/chat-breadcrumb.dom.test.tsx",
     "apps/web/src/lib/react-query.test.ts",
     "apps/web/src/i18n/TERMINOLOGY.md",
+    "packages/ui/src/button.stories.tsx",
+    "packages/playwright-tools/src/index.ts",
   ]) {
     expect(runSelector([file], ["e2e_production_required"]), file).toEqual([
       "false",
@@ -4864,7 +4869,7 @@ test("shipped web source plans production shards on a fast PR", () => {
 test("production shards keep full-depth core coverage and exclude unrelated fast PRs", () => {
   for (const file of [
     "apps/api/src/handlers/tasks/get.ts",
-    "packages/ui/src/button.tsx",
+    "packages/cli/src/index.ts",
   ]) {
     expect(runSelector([file], ["e2e_production_required"])).toEqual(["false"]);
     expect(

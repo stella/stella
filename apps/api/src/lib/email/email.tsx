@@ -16,14 +16,23 @@ import { subject as productFeedbackSubject } from "@stll/transactional/emails/pr
 import * as ReportExportStatus from "@stll/transactional/emails/report-export-status";
 import type { ReportExportEmailStatus } from "@stll/transactional/emails/report-export-status";
 import { subject as reportExportStatusSubject } from "@stll/transactional/emails/report-export-status-subject";
+import {
+  type GeoPoint,
+  LOCATION_MAP_CONTENT_TYPE,
+  renderLocationMap,
+} from "@stll/transactional/map/location-map";
 import { renderEmail } from "@stll/transactional/render";
 
 import { env } from "@/api/env";
+import type { ViewerLocation } from "@/api/lib/auth/viewer-location";
 import {
   emailAddressSchema,
   normalizeEmail,
 } from "@/api/lib/email/normalized-email";
-import { readRecipientRefusal } from "@/api/lib/email/recipient-deliverability";
+import {
+  readRecipientRefusal,
+  recordRecipientFailures,
+} from "@/api/lib/email/recipient-deliverability";
 import type { SupportedLang } from "@/api/lib/locale";
 import { failureSink } from "@/api/lib/observability/failure";
 import { logger } from "@/api/lib/observability/logger";
@@ -35,7 +44,7 @@ import { isEmailTransportConfigComplete } from "./config";
 import { formatTransactionalEmailFrom } from "./from";
 import { createSESTransport } from "./ses";
 import { createSMTPTransport } from "./smtp";
-import type { EmailTransport } from "./transport";
+import type { EmailTransport, InlineImage } from "./transport";
 
 export const isTransactionalEmailConfigured = () =>
   isEmailTransportConfigComplete({
@@ -98,6 +107,12 @@ const deliverabilityUnread = failureSink({
   expected: [],
 });
 
+// A dropped send whose failure is not recorded is observed, never fatal.
+const skippedSendUnrecorded = failureSink({
+  event: "email.send.skip_unrecorded",
+  expected: [],
+});
+
 /**
  * Whether the provider has refused this recipient's account address, so a
  * send would only be dropped. A failed read sends anyway: the provider still
@@ -122,6 +137,18 @@ const isRefusedRecipient = async (to: string): Promise<boolean> => {
     "user.id": refusal.value.userId,
     "delivery.refusal_reason": refusal.value.reason,
   });
+  // A dropped send fails like a provider suppression-list bounce, so the
+  // sign-in screen explains it the same way, account or not.
+  const recorded = await Result.tryPromise(
+    async () =>
+      await recordRecipientFailures(
+        [{ email: normalizeEmail(address.output), reason: "suppressed" }],
+        new Date(),
+      ),
+  );
+  if (recorded.isErr()) {
+    observeFailure(recorded.error, { sink: skippedSendUnrecorded });
+  }
   return true;
 };
 
@@ -185,6 +212,7 @@ type SendNewDeviceLoginEmailProps = {
   email: string;
   device: string;
   ipAddress: string;
+  location: ViewerLocation;
   time: string;
   sessionsUrl: string;
   lang: SupportedLang;
@@ -194,15 +222,31 @@ export const sendNewDeviceLoginEmail = async ({
   email,
   device,
   ipAddress,
+  location,
   time,
   sessionsUrl,
   lang,
 }: SendNewDeviceLoginEmailProps) => {
+  const map =
+    location.type === "known" && location.coordinates !== null
+      ? await renderSignInLocationMap(location.coordinates)
+      : null;
   const node = (
     <NewDeviceLogin.Email
       device={device}
       ipAddress={ipAddress}
       lang={lang}
+      location={
+        location.type === "known"
+          ? {
+              type: "known",
+              city: location.city,
+              region: location.region,
+              countryCode: location.countryCode,
+              map: map === null ? null : { contentId: map.contentId },
+            }
+          : { type: "unknown" }
+      }
       sessionsUrl={sessionsUrl}
       time={time}
     />
@@ -215,7 +259,35 @@ export const sendNewDeviceLoginEmail = async ({
     subject: newDeviceLoginSubject(lang),
     html,
     text,
+    ...(map === null ? {} : { inlineImages: [map] }),
   });
+};
+
+const SIGN_IN_LOCATION_MAP_CONTENT_ID = "sign-in-location-map";
+
+// The notice still goes out without the map; a map that fails to render is
+// observed, never fatal to the send.
+const locationMapUnrendered = failureSink({
+  event: "email.new_device_login.location_map_unrendered",
+  expected: [],
+});
+
+const renderSignInLocationMap = async (
+  coordinates: GeoPoint,
+): Promise<InlineImage | null> => {
+  const rendered = await Result.tryPromise(
+    async () => await renderLocationMap(coordinates),
+  );
+  if (rendered.isErr()) {
+    observeFailure(rendered.error, { sink: locationMapUnrendered });
+    return null;
+  }
+  return {
+    contentId: SIGN_IN_LOCATION_MAP_CONTENT_ID,
+    filename: "sign-in-location.png",
+    contentType: LOCATION_MAP_CONTENT_TYPE,
+    content: rendered.value,
+  };
 };
 
 type SendOrganizationInvitationProps = {

@@ -165,7 +165,7 @@
     "invitation": {
       "declined": "Kvietimas atmestas",
       "declinedDescription": "Neprisijungėte prie šios organizacijos.",
-      "description": "{inviterEmail} pakvietė jus prisijungti prie {organizationName} kaip {role}.",
+      "description": "{inviterEmail} pakvietė jus prisijungti prie {organizationName}{role, select, owner { su savininko role} admin { su administratoriaus role} member { su nario role} intern { su praktikanto role} external { su išorinio bendradarbio role} other {}}.",
       "goToWorkspaces": "Eiti į bylas",
       "title": "Kvietimas į organizaciją",
       "verifyEmailHint": "Kad patvirtintumėte adresą {email}, atsijunkite ir prisijunkite vienkartiniu kodu, kurį išsiųsime šiuo adresu.",
@@ -2356,6 +2356,10 @@
     "stopResponse": "Stabdyti",
     "stopped": "Sustabdyta",
     "stopping": "Stabdoma…",
+    "subagentRun": {
+      "browseWeb": "Naršoma internete",
+      "generic": "Atliekama dalinė užduotis"
+    },
     "suggestTitle": "Pasiūlyti pavadinimą",
     "suggestTitleUnavailableAnonymized": "Anonimizuotiems pokalbiams pavadinimų pasiūlymai negalimi.",
     "suggestingTitle": "Siūlomas pavadinimas…",
@@ -5397,6 +5401,7 @@
       "defaultModel": "Numatytasis: {model}",
       "defaultModelOption": "Numatytasis",
       "defaultRationale": {
+        "browse": "Darbui su svetainėmis naršyklėje.",
         "chat": "Pokalbiams ir kasdieniams klausimams.",
         "fast": "Trumpoms, įprastoms užduotims.",
         "pdf": "PDF dokumentams skaityti ir analizuoti.",
@@ -5410,6 +5415,11 @@
       "googleKeyRestricted": "Patikrinkite šio rakto API, IP adresų ir nukreipiančių svetainių apribojimus Google Cloud. Leiskite reikiamą API ir savo serverio užklausas, tada bandykite dar kartą.",
       "keepSavedKey": "Palikti išsaugotą raktą",
       "keyFormatHint": "Šio rakto formatas neįprastas teikėjui {provider}. Išsaugokite, kad teikėjas jį patikrintų.",
+      "keyNeed": {
+        "builtIn": "Neprivaloma. Be savo rakto šios organizacijos DI naudoja stella teikiamus modelius.",
+        "keyRequired": "Šios organizacijos DI reikia teikėjo rakto. Pridėkite jį, kad įjungtumėte DI.",
+        "ownKeys": "Šios organizacijos DI naudoja toliau nurodytus raktus."
+      },
       "modelForRole": "{role} modelis",
       "modelIdPlaceholder": "Ieškoti modelių",
       "modelsDescription": "Kiekvienai DI kategorijai pasirinkite teikėją ir vieną siūlomą multimodalinį modelį.",
@@ -5417,6 +5427,7 @@
       "newApiKey": "Naujas API raktas",
       "newApiKeyDescription": "Išsaugojus pakeitimus jis pakeis išsaugotą raktą.",
       "noModelResults": "Nėra atitinkančių siūlomų modelių",
+      "noProviders": "Teikėjų raktų dar nepridėta.",
       "openaiInsufficientQuota": "Patikrinkite OpenAI projekto biudžetą ir API atsiskaitymo nustatymus. Papildykite kreditų likutį arba padidinkite atitinkamą limitą ir bandykite dar kartą.",
       "openaiProjectOrganizationMismatch": "Naudokite reikiamo OpenAI projekto ir organizacijos API raktą. Patikrinkite jų prieigos nustatymus ir bandykite dar kartą.",
       "openrouterNoCredits": "Papildykite kreditų likutį OpenRouter atsiskaitymo skiltyje ir bandykite dar kartą.",
@@ -5439,6 +5450,8 @@
       "providerForRole": "{role} teikėjas",
       "providerKeyInvalid": "{provider} atmetė raktą. Prieš išsaugodami patikrinkite.",
       "providerKeyInvalidShort": "Negaliojantis",
+      "providerModes": "Naudojamas režimams: {modes}",
+      "providerModesNone": "Nenaudojamas jokiam režimui. Priskirkite jį režimui skiltyje Išplėstiniai nustatymai.",
       "providerSetupConsole": "Atidaryti teikėjo nustatymus",
       "providersDescription": "Pridėkite teikėjų prisijungimo duomenis, kuriuos stella turėtų naudoti.",
       "providersPanel": "Teikėjai",
@@ -5448,6 +5461,7 @@
       "replaceKey": "Pakeisti raktą",
       "roleUnavailable": "{provider} nepalaiko šio vaidmens.",
       "roles": {
+        "browse": "Naršymas",
         "chat": "Pokalbis",
         "fast": "Greitas",
         "pdf": "PDF",
@@ -5536,6 +5550,13 @@
     "startOverDescription": "Pradinė užklausa galėjo jau sukurti organizaciją. Prieš pradėdami iš naujo patikrinkite savo organizacijas; nauja užklausa gali sukurti dar vieną organizaciją.",
     "startOverTitle": "Siųsti naują kūrimo užklausą?",
     "switchOrganization": "Pakeisti organizaciją"
+  },
+  "organizationSetup": {
+    "aiAction": "Nustatyti DI",
+    "aiOptional": "Savi DI teikėjų raktai neprivalomi: be jų DI naudoja stella teikiamus modelius.",
+    "aiRequired": "Šios organizacijos DI reikia teikėjo rakto, kad kas nors galėtų jį naudoti.",
+    "invite": "Pakvieskite kolegas, kad jie galėtų čia dirbti kartu su jumis.",
+    "title": "Nustatykite naują organizaciją"
   },
   "publicTools": {
     "addSkill": "Pridėkite įgūdį",
@@ -5976,7 +5997,7 @@
     "organization": {
       "activeMembers": "Aktyvūs nariai",
       "ai": "DI konfigūracija",
-      "aiDescription": "Prijunkite savo DI paslaugų teikėjų raktus.",
+      "aiDescription": "Pasirinkite, kaip DI veikia šioje organizacijoje.",
       "anonymization": {
         "addPlaceholder": "Visada maskuotinas terminas (pvz., komandos pavadinimas)",
         "deleteAction": "Pašalinti terminą",
@@ -7231,6 +7252,7 @@
         "title": "Pašalinti „Word“ šablonų saitus?",
         "unknownLocation": "Šablono vieta: adresas, kurio stella negali patikrinti"
       },
+      "checkingFiles": "Tikrinami failai…",
       "desktopEdit": {
         "accountRequiredTitle": "Prijunkite stella desktop prie savo paskyros",
         "action": "Redaguoti darbalaukio programoje",
@@ -7274,6 +7296,14 @@
       "downloadPdf": "Atsisiųsti kaip PDF",
       "downloadSearchablePdf": "PDF su paieškos tekstu",
       "downloadWithComments": "Atsisiųsti su komentarais",
+      "duplicateUpload": {
+        "description": "{count, plural, one {# failas sutampa su dokumentu, kuris jau yra šioje byloje.} few {# failai sutampa su dokumentais, kurie jau yra šioje byloje.} many {# failo sutampa su dokumentais, kurie jau yra šioje byloje.} other {# failų sutampa su dokumentais, kurie jau yra šioje byloje.}} Pasirinkite, ką daryti su kiekvienu.",
+        "matchedDocument": "Sutampa su dokumentu <bdi>{documentName}</bdi>",
+        "skip": "Praleisti šį failą",
+        "skipAll": "Praleisti dublikatus",
+        "title": "Jau yra šioje byloje",
+        "uploadAnyway": "Vis tiek įkelti"
+      },
       "emptyFile": "Failas tuščias.",
       "fileTooLarge": "Failas didesnis nei {limit, number} MB.",
       "includeReferenceNumber": "Įtraukti nuorodos numerį",
