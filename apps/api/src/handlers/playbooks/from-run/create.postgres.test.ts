@@ -5,6 +5,7 @@ import { and, eq } from "drizzle-orm";
 import { member, organization, user } from "@/api/db/auth-schema";
 import {
   documentReviewRuns,
+  entities,
   playbookDefinitions,
   workspaceMembers,
   workspaces,
@@ -71,11 +72,19 @@ describe.skipIf(!enabled)("playbook source access on PostgreSQL", () => {
           reference: workspaceId,
         });
         await db.insert(workspaceMembers).values({ workspaceId, userId });
+        // A review run belongs to the document it reviewed.
+        const reviewedEntityId = createSafeId<"entity">();
+        await db.insert(entities).values({
+          id: reviewedEntityId,
+          workspaceId,
+          name: "Reviewed document",
+          createdBy: userId,
+        });
         await db.insert(documentReviewRuns).values({
           id: runId,
           organizationId,
           workspaceId,
-          entityId: createSafeId<"entity">(),
+          entityId: reviewedEntityId,
           fileFieldId: createSafeId<"field">(),
           entityVersionId: createSafeId<"entityVersion">(),
           contentSha256: "d".repeat(64),

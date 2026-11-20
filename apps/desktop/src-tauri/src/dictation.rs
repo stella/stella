@@ -61,6 +61,9 @@ const SHARE_WINDOW_TITLE_PREFERENCE_FILE_NAME: &str = "dictation-share-window-ti
 /// cursor.
 const SHARE_TEXT_BEFORE_CURSOR_PREFERENCE_FILE_NAME: &str =
   "dictation-share-text-before-cursor";
+/// On unless the user turned it off: a short sound when dictation starts
+/// and stops listening.
+const SOUNDS_PREFERENCE_FILE_NAME: &str = "dictation-sounds";
 /// The key dictation listens for; absent: this computer's default.
 const HOLD_KEY_PREFERENCE_FILE_NAME: &str = "dictation-hold-key";
 const MAX_MODEL_ID_BYTES: usize = 128;
@@ -166,6 +169,8 @@ pub struct DictationSnapshot {
   available: bool,
   enabled: bool,
   cleanup: bool,
+  /// Whether a short sound marks the start and the end of listening.
+  sounds: bool,
   /// Whether cleanup also gets the focused window's title.
   share_window_title: bool,
   /// Whether cleanup also gets the text before the cursor.
@@ -218,6 +223,7 @@ enum Listening {
 struct Inner {
   enabled: bool,
   cleanup: bool,
+  sounds: bool,
   share_window_title: bool,
   share_text_before_cursor: bool,
   language: Choice,
@@ -242,6 +248,10 @@ impl DictationState {
     let preference = DevicePreference::in_app_data(PREFERENCE_FILE_NAME);
     let enabled = SUPPORTED && preference.read().as_deref() == Some(ENABLED_VALUE);
     let cleanup = DevicePreference::in_app_data(CLEANUP_PREFERENCE_FILE_NAME)
+      .read()
+      .as_deref()
+      != Some(DISABLED_VALUE);
+    let sounds = DevicePreference::in_app_data(SOUNDS_PREFERENCE_FILE_NAME)
       .read()
       .as_deref()
       != Some(DISABLED_VALUE);
@@ -272,6 +282,7 @@ impl DictationState {
     Self(Mutex::new(Inner {
       enabled,
       cleanup,
+      sounds,
       share_window_title,
       share_text_before_cursor,
       language,
@@ -305,6 +316,7 @@ impl DictationState {
       available,
       enabled: inner.enabled,
       cleanup: inner.cleanup,
+      sounds: inner.sounds,
       share_window_title: inner.share_window_title,
       share_text_before_cursor: inner.share_text_before_cursor
         && dictation_context::TEXT_BEFORE_CURSOR_SUPPORTED,
@@ -572,6 +584,11 @@ pub fn hold_key(app: &AppHandle) -> HoldChoice {
 /// Whether a finished dictation goes through AI cleanup before it is typed.
 pub fn cleanup_enabled(app: &AppHandle) -> bool {
   app.state::<DictationState>().update(|inner| inner.cleanup)
+}
+
+/// Whether a short sound marks the start and the end of listening.
+pub fn sounds_enabled(app: &AppHandle) -> bool {
+  app.state::<DictationState>().update(|inner| inner.sounds)
 }
 
 /// Starts a dictation: marks it recording and reads the speech model under
@@ -896,6 +913,25 @@ pub fn dictation_set_cleanup(
     CLEANUP_PREFERENCE_FILE_NAME,
     stored_switch(enabled),
     |inner| inner.cleanup = enabled,
+  )?;
+  Ok(read_snapshot(&app, &state))
+}
+
+/// Whether a short sound marks the start and the end of listening.
+#[tauri::command]
+pub fn dictation_set_sounds(
+  app: AppHandle,
+  state: State<'_, DictationState>,
+  enabled: bool,
+) -> Result<DictationSnapshot, String> {
+  if !available(&app) {
+    return Err("dictation is not available on this computer".to_string());
+  }
+  change_preference(
+    &app,
+    SOUNDS_PREFERENCE_FILE_NAME,
+    stored_switch(enabled),
+    |inner| inner.sounds = enabled,
   )?;
   Ok(read_snapshot(&app, &state))
 }
@@ -1280,6 +1316,7 @@ mod tests {
     DictationState(Mutex::new(Inner {
       enabled: true,
       cleanup,
+      sounds: true,
       share_window_title: false,
       share_text_before_cursor: false,
       language: Choice::Automatic,
@@ -1398,6 +1435,7 @@ mod tests {
       serde_json::to_value(state.snapshot(true, false, Vec::new(), true)).unwrap();
     assert_eq!(snapshot["shareWindowTitle"], false);
     assert_eq!(snapshot["shareTextBeforeCursor"], false);
+    assert_eq!(snapshot["sounds"], true);
     assert_eq!(
       snapshot["textBeforeCursorAvailable"],
       dictation_context::TEXT_BEFORE_CURSOR_SUPPORTED

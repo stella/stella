@@ -52,6 +52,10 @@ export const withActiveUpload = async <T>(
   }
 };
 
+// A Blob's bytes never change, and the duplicate check hashes a file before
+// its upload does: the second caller must not read the file again.
+const hashes = new WeakMap<Blob, string>();
+
 /**
  * Hash one file in bounded chunks while the reload guard counts the read.
  * Every upload hashes here first, so a size the API refuses fails without
@@ -60,7 +64,13 @@ export const withActiveUpload = async <T>(
 export const hashActiveUploadFile = async (file: Blob): Promise<string> =>
   await withActiveUpload(async () => {
     readQueryResult(validateUploadFileSize(file.size));
-    return await sha256Hex(file);
+    const known = hashes.get(file);
+    if (known !== undefined) {
+      return known;
+    }
+    const hash = await sha256Hex(file);
+    hashes.set(file, hash);
+    return hash;
   });
 
 /** Test seam. Production batches release themselves. */

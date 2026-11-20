@@ -24,7 +24,6 @@ import { databaseRelations } from "@/api/db/database-relations";
 import type { rootDb } from "@/api/db/root";
 import {
   createSessionLifetime,
-  SESSION_ABSOLUTE_AGE_MS,
   SESSION_LIFETIME_FIELDS,
   SESSION_PRIOR_TOKEN_RECOVERY_MS,
 } from "@/api/lib/auth/session-lifetime";
@@ -34,6 +33,7 @@ import {
   queryCountLogger,
   runWithQueryCounter,
 } from "@/api/lib/db-query-counter";
+import { SESSION_ABSOLUTE_AGE_MS } from "@/api/lib/db/session-liveness";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 import { mintAuthProviderIdValue } from "@/api/tests/helpers/auth-provider-id";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";

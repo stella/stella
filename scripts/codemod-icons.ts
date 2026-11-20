@@ -57,8 +57,7 @@ const SEMANTIC_REWRITES: Readonly<Record<string, SemanticRewrite>> = {
     byFile: {
       "apps/web/src/components/workspace-primary-nav.ts": "CaseLawIcon",
       "apps/web/src/routes/law/index.tsx": "CaseLawIcon",
-      "apps/web/src/routes/tools/-components/public-tools-index.tsx":
-        "CaseLawIcon",
+      "apps/web/src/routes/tools/-index.pending.tsx": "CaseLawIcon",
     },
   },
 };

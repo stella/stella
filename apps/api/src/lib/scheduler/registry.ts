@@ -121,7 +121,7 @@ import {
 } from "@/api/lib/scheduler/tasks/data-invariants";
 import {
   EXPIRE_DESKTOP_EDIT_SESSIONS_TASK,
-  expireDesktopEditSessions,
+  expireDesktopEditSessionsTask,
 } from "@/api/lib/scheduler/tasks/desktop-edit-session-expiry";
 import {
   RECOVER_DOCUMENT_DEADLINE_SCOUTS_TASK,
@@ -303,7 +303,7 @@ const SCHEDULER_TASKS = {
   [RECEIVE_INBOUND_MAIL_TASK]: receiveInboundMail,
   [REFRESH_SANCTIONS_SOURCES_TASK]: refreshSanctionsSourcesTask,
   [SEND_CHAT_LIMIT_REMINDERS_TASK]: sendChatLimitReminders,
-  [EXPIRE_DESKTOP_EDIT_SESSIONS_TASK]: expireDesktopEditSessions,
+  [EXPIRE_DESKTOP_EDIT_SESSIONS_TASK]: expireDesktopEditSessionsTask,
   [DISPATCH_DOCUMENT_OCR_TASK]: dispatchDocumentOcr,
   [DISPATCH_NATIVE_EXTRACTION_TASK]: dispatchNativeExtraction,
   [FLOW_RUN_TASK]: runScheduledFlow,

@@ -35,6 +35,7 @@ const ENABLED_SNAPSHOT = {
   },
   shareWindowTitle: false,
   shareTextBeforeCursor: false,
+  sounds: true,
   textBeforeCursorAvailable: true,
   failure: null,
   failureKeptInHistory: false,
@@ -389,6 +390,31 @@ test.each([
     expect(calls).toEqual([{ enabled: true }]);
   },
 );
+
+test("turning the sounds off asks the native side and shows its answer", async () => {
+  const calls: unknown[] = [];
+  const { getByRole } = await renderSetting(
+    ENABLED_SNAPSHOT,
+    (called, payload) => {
+      if (called !== "dictation_set_sounds") {
+        return undefined;
+      }
+      calls.push(payload);
+      return { ...ENABLED_SNAPSHOT, sounds: false };
+    },
+  );
+  const toggle = getByRole("switch", {
+    name: defaultMessages.dictation.sounds.title,
+  });
+  expect(toggle.getAttribute("aria-checked")).toBe("true");
+
+  fireEvent.click(toggle);
+
+  await waitFor(() => {
+    expect(toggle.getAttribute("aria-checked")).toBe("false");
+  });
+  expect(calls).toEqual([{ enabled: false }]);
+});
 
 test("an unread focus is not reported as switching apps", () => {
   expect(defaultMessages.dictation.failure.focusUnconfirmed).not.toBe(
@@ -1114,11 +1140,12 @@ test("a full list of custom words takes no more", async () => {
   ).toBe(true);
 });
 
-test("custom words are offered only while stella AI transcribes or cleanup runs", async () => {
+test("custom words are offered with the speech model on this computer and cleanup off, which spell with them", async () => {
   const { queryByText } = await renderSetting({
     ...ENABLED_SNAPSHOT,
     cleanup: false,
+    destination: "local",
   });
 
-  expect(queryByText(customWords.title)).toBeNull();
+  expect(queryByText(customWords.title)).not.toBeNull();
 });

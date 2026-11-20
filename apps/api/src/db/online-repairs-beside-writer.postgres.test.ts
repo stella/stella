@@ -71,6 +71,24 @@ const BLOCKED_PROJECTION_STATE_INSERT = `INSERT INTO corpus_index_projection_sta
 const POLARITY_FORM_RULE_INSERT = `INSERT INTO case_law_polarity_rules (id, pattern, polarity, language, kind) VALUES ('${ID}', 'fixture', 'neutral', 'cs', 'form')`;
 /** A citation carrying every classifier provenance column at a valid value. */
 const CLASSIFIED_CITATION_INSERT = `INSERT INTO case_law_citations (id, citing_decision_id, citation_text, polarity_source, polarity_evidence_windows, polarity_confidence, cited_part) VALUES ('${ID}', '${ID_2}', '1 Test 1/2026', 'rule', '[{"start":0,"end":5}]'::jsonb, 0.5, 'majority')`;
+/** A pending comparison input: no claim, its declared checksum present. */
+const FILE_COMPARISON_UPLOAD_INSERT = `INSERT INTO file_comparison_uploads (id, organization_id, user_id, kind, declared_name, declared_size, declared_sha256, expires_at) VALUES ('${ID}', 'org', 'user', 'input', 'smlouva.docx', 1, repeat('a', 64), now() + interval '1 hour')`;
+/** An ephemeral-playbook review basis with no positions or references. */
+const DOCUMENT_REVIEW_BASIS = JSON.stringify({
+  playbook: {
+    definitionId: null,
+    versionId: null,
+    provenance: "ephemeral",
+    definitionSnapshot: {
+      name: "Writer fixture",
+      positions: { version: 3, items: [] },
+    },
+  },
+  perspective: { type: "neutral" },
+  references: [],
+});
+/** The organization file object the contending writer holds. */
+const FILE_OBJECT_WRITER_KEY = "org/pending/writer";
 const READER_ANNOTATION_INSERT = `INSERT INTO legal_reader_annotations (id, organization_id, user_id, target_type, target_id, kind, visibility, color, style, block_anchor_id, start_offset, end_offset, quote) VALUES ('${ID}', 'org', 'user', 'statute', '${ID_2}', 'highlight', 'private', 'yellow', 'highlight', 'p-1', 0, 5, 'words')`;
 
 if (enabled && templateDatabase === undefined) {
@@ -1166,6 +1184,82 @@ const SEEDS = {
     CORRESPONDENCE_DATA_BOX,
     { parents: withFixtureEntity, scoped: true },
   ),
+  style_sets_deletion_cleanup_attempt_count_nonnegative_check: noRowSeed(
+    "style_sets",
+    "style_sets_deletion_cleanup_attempt_count_nonnegative_check",
+    `INSERT INTO style_sets (id, organization_id, name, file_name, s3_key, size_bytes, created_by) VALUES ('${ID}', 'org', 'House style', 'house.dotx', 'org/style-sets/house.dotx', 1, 'user')`,
+  ),
+  file_comparison_uploads_status_check: noRowSeed(
+    "file_comparison_uploads",
+    "file_comparison_uploads_status_check",
+    FILE_COMPARISON_UPLOAD_INSERT,
+  ),
+  file_comparison_uploads_claim_check: noRowSeed(
+    "file_comparison_uploads",
+    "file_comparison_uploads_claim_check",
+    FILE_COMPARISON_UPLOAD_INSERT,
+  ),
+  bilingual_translation_runs_entity_workspace_fk: noRowSeed(
+    "bilingual_translation_runs",
+    "bilingual_translation_runs_entity_workspace_fk",
+    `INSERT INTO bilingual_translation_runs (id, organization_id, workspace_id, entity_id, file_field_id, entity_version_id, source_lang, target_lang, glossary) VALUES ('${ID}', 'org', '${WORKSPACE_ID}', '${ENTITY_ID}', '${ID_2}', '${ID_3}', 'en', 'cs', '[]')`,
+    { parents: withFixtureEntity },
+  ),
+  document_review_runs_entity_workspace_fk: noRowSeed(
+    "document_review_runs",
+    "document_review_runs_entity_workspace_fk",
+    `INSERT INTO document_review_runs (id, organization_id, workspace_id, entity_id, file_field_id, entity_version_id, content_sha256, basis, total) VALUES ('${ID}', 'org', '${WORKSPACE_ID}', '${ENTITY_ID}', '${ID_2}', '${ID_3}', repeat('b', 64), '${DOCUMENT_REVIEW_BASIS}', 1)`,
+    { parents: withFixtureEntity },
+  ),
+  "file-object-reconciliation": {
+    kind: "row-work",
+    ...repairedWhen(
+      "file-object-reconciliation",
+      "SELECT reconcile_after IS NOT NULL AS repaired FROM organization_file_objects WHERE object_key = $1",
+    ),
+    seed: async (client) => {
+      await client.unsafe(FIXTURE_ORGANIZATION);
+      // Write rows recorded before the reconciliation columns: a write
+      // identity and no schedule, under the checks the migration adds NOT
+      // VALID. The fill trigger, a user trigger, pauses while they are written.
+      const writeUnscheduledRows = async () => {
+        await withoutFixtureGuards(
+          client,
+          ["organization_file_objects"],
+          async () => {
+            await client.unsafe(
+              `INSERT INTO organization_file_objects (organization_id, object_key, size_bytes, status, write_id, reservation_started_at, updated_at) VALUES ('org', '${FILE_OBJECT_WRITER_KEY}', 0, 'reserved', 'write-1', now(), now() - interval '1 hour'), ('org', 'org/pending/repair', 0, 'reserved', 'write-2', now(), now() - interval '1 hour')`,
+            );
+          },
+        );
+      };
+      await invalidateConstraint(
+        client,
+        "organization_file_objects",
+        "organization_file_objects_reconciliation_lifecycle",
+        async () => {
+          await invalidateConstraint(
+            client,
+            "organization_file_objects",
+            "organization_file_objects_reconciliation_state_domain",
+            async () => {
+              await invalidateConstraint(
+                client,
+                "organization_file_objects",
+                "organization_file_objects_reconciliation_attempt_nonnegative",
+                writeUnscheduledRows,
+              );
+            },
+          );
+        },
+      );
+    },
+    writerLock: {
+      column: "object_key",
+      id: FILE_OBJECT_WRITER_KEY,
+      table: "organization_file_objects",
+    },
+  },
   desktop_runner_commands_kind_check: noRowSeed(
     "desktop_runner_commands",
     "desktop_runner_commands_kind_check",

@@ -38,6 +38,19 @@
   scroll-padding-block-end: 10rem;
 }
 
+/* The docked composer stack paints above the document (overlay chrome band),
+ * so a horizontal scrollbar pinned to the viewer's bottom edge ends up under
+ * the composer's veil, where it can be neither read nor grabbed. The stack
+ * publishes the height it occludes as --document-panel-bottom-inset on this
+ * host; the PDF viewport's horizontal bar rests on top of it instead. Base UI
+ * positions the bar with an inline `bottom`, hence the !important. The DOCX
+ * viewer's own bar reads the same inset in file-viewer-with-ai.tsx. */
+[data-file-viewer-ai]
+  [data-pdf-viewport]
+  > [data-slot="scroll-area-scrollbar"][data-orientation="horizontal"] {
+  bottom: var(--document-panel-bottom-inset, 0px) !important;
+}
+
 /* A legal reader scrolls its own paper rather than Folio's viewport. Reserve
  * the same trailing space so the last paragraph can clear the composer stack
  * instead of resting under it. Box-sizing keeps the reserve inside the paper's

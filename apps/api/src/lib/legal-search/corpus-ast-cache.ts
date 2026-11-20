@@ -11,6 +11,7 @@ import type { SizedCorpusAst } from "@/api/lib/legal-search/corpus-storage";
 import type { CorpusTombstoneReader } from "@/api/lib/legal-search/corpus-tombstones";
 import { deepFreeze } from "@/api/lib/legal-search/deep-freeze";
 import type { EmptyAst } from "@/api/lib/legal-search/document-types";
+import type { StoredAstReportContext } from "@/api/lib/legal-search/stored-ast-outcome";
 import { recordReadWork } from "@/api/lib/observability/request-work";
 
 /**
@@ -22,19 +23,28 @@ const HEAP_BYTES_PER_DECODED_CHAR = 3;
 
 type CachedAst = DocumentAst | EmptyAst | null;
 
+/** What the cache keeps of a read; the read reports its own outcome. */
+type CacheableCorpusAst = Pick<SizedCorpusAst, "ast" | "decodedLength">;
+
 type CorpusAstCacheOptions = {
   /** Ceiling on the estimated heap the cached ASTs hold together. */
   maxHeapBytes: number;
   read: (
     storedKey: string,
     readTombstones?: CorpusTombstoneReader,
-  ) => Promise<SizedCorpusAst>;
+    report?: StoredAstReportContext,
+  ) => Promise<CacheableCorpusAst>;
 };
 
 export type CorpusAstCache = {
+  /**
+   * `report` names the document for the read's one report; a hit reads
+   * nothing and reports nothing, so a document is reported once per load.
+   */
   read: (
     storedKey: string,
     readTombstones?: CorpusTombstoneReader,
+    report?: StoredAstReportContext,
   ) => Promise<CachedAst>;
   /** Estimated heap held. Exposed for the bound's tests. */
   heapBytes: () => number;
@@ -67,7 +77,10 @@ export const createCorpusAstCache = ({
   const inFlight = new Map<string, Promise<CachedAst>>();
   let heldBytes = 0;
 
-  const admit = (storedKey: string, { ast, decodedLength }: SizedCorpusAst) => {
+  const admit = (
+    storedKey: string,
+    { ast, decodedLength }: CacheableCorpusAst,
+  ) => {
     const heapBytes = decodedLength * HEAP_BYTES_PER_DECODED_CHAR;
     // One payload past the whole budget would evict everything and still not
     // fit, so it is served without being kept.
@@ -88,8 +101,9 @@ export const createCorpusAstCache = ({
   const load = async (
     storedKey: string,
     readTombstones?: CorpusTombstoneReader,
+    report?: StoredAstReportContext,
   ): Promise<CachedAst> => {
-    const sized = await read(storedKey, readTombstones);
+    const sized = await read(storedKey, readTombstones, report);
     const ast = deepFreeze(sized.ast);
     admit(storedKey, { ast, decodedLength: sized.decodedLength });
     return ast;
@@ -98,6 +112,7 @@ export const createCorpusAstCache = ({
   const readThrough = async (
     storedKey: string,
     readTombstones?: CorpusTombstoneReader,
+    report?: StoredAstReportContext,
   ): Promise<CachedAst> => {
     const hit = entries.get(storedKey);
     if (hit !== undefined) {
@@ -113,7 +128,7 @@ export const createCorpusAstCache = ({
       return await pending;
     }
     // A failed read is not kept, so the next request retries it.
-    const loading = load(storedKey, readTombstones).finally(() => {
+    const loading = load(storedKey, readTombstones, report).finally(() => {
       inFlight.delete(storedKey);
     });
     inFlight.set(storedKey, loading);
@@ -121,21 +136,22 @@ export const createCorpusAstCache = ({
   };
 
   return {
-    read: async (storedKey, readTombstones) => {
+    read: async (storedKey, readTombstones, report) => {
       const location = parseCorpusLocation(storedKey);
       switch (location.type) {
         case "object":
-          return await readThrough(storedKey, readTombstones);
+          return await readThrough(storedKey, readTombstones, report);
         case "packed": {
           // A caller that can revalidate erasure on every read may reuse the
           // immutable payload. Readers without that gate still read through.
           if (readTombstones === undefined) {
-            return (await read(storedKey)).ast;
+            return (await read(storedKey, undefined, report)).ast;
           }
           const admitted = await withReadableCorpusMember({
             location,
             readTombstones,
-            read: async () => await readThrough(storedKey, readTombstones),
+            read: async () =>
+              await readThrough(storedKey, readTombstones, report),
           });
           return unwrapPackedMemberRead(admitted);
         }

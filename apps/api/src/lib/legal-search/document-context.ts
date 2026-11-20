@@ -75,7 +75,10 @@ export const loadDocumentContext = async (
               documentId: decisionId,
               key: astS3Key,
               step: "documentContext.corpusAst",
-              read: async () => await readCorpusAst(astS3Key),
+              read: async () =>
+                await readCorpusAst(astS3Key, {
+                  report: { documentId: decisionId },
+                }),
               fallback: () => parsePersistedCorpusAst(decision.documentAst),
             })
           : parsePersistedCorpusAst(decision.documentAst),
