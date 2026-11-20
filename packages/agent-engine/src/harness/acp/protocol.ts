@@ -31,7 +31,13 @@ export const AcpJsonRpcMessageSchema = v.union([
       data: v.optional(v.unknown()),
     }),
   }),
-  v.object({ id: RequestId, result: v.optional(v.unknown()) }),
+  // An answer carries a result, `null` included; one with neither a result
+  // nor a well-formed error is not an answer.
+  v.pipe(
+    v.looseObject({ id: RequestId, result: v.unknown() }),
+    v.check((message) => Object.hasOwn(message, "result")),
+    v.transform(({ id, result }) => ({ id, result })),
+  ),
   v.object({ method: v.string(), params: v.optional(v.unknown()) }),
 ]);
 

@@ -1,6 +1,13 @@
 import type { AgentHarness } from "@stll/api-contract/agent-harness";
 import type { DesktopRunnerApprovalMode } from "@stll/api-contract/desktop-runner";
 
+/**
+ * The approval modes an ACP agent can run in. Full auto is not one: without
+ * an OS sandbox an agent's commands are only as bounded as the permission
+ * requests it chooses to send.
+ */
+export type AcpApprovalMode = Exclude<DesktopRunnerApprovalMode, "full_auto">;
+
 /** What a definition's environment is built from, per process. */
 type AcpLaunchContext = {
   /**
@@ -43,19 +50,13 @@ export type AcpAgentDefinition = {
   ) => Readonly<Record<string, string>>;
   /** Inherited variables the agent must not see (credentials of its own). */
   readonly removedEnvironment: readonly string[];
-  /**
-   * The approval modes stella runs the agent in. Without an OS sandbox an
-   * agent never runs in full auto: its commands are only as bounded as the
-   * permission requests it chooses to send.
-   */
-  readonly approvalModes: readonly DesktopRunnerApprovalMode[];
+  /** The approval modes stella runs the agent in. */
+  readonly approvalModes: readonly AcpApprovalMode[];
   /**
    * The agent's session mode for each approval mode it runs in, set with
    * `session/set_mode` when the agent offers it; absent keeps its default.
    */
-  readonly sessionModes: Readonly<
-    Partial<Record<DesktopRunnerApprovalMode, string>>
-  >;
+  readonly sessionModes: Readonly<Partial<Record<AcpApprovalMode, string>>>;
   /** `null`: the agent says itself, on `session/new`, when it is signed out. */
   readonly storedSignIn: AcpStoredSignIn | null;
   /**

@@ -1,4 +1,7 @@
 import { describe, expect, test } from "bun:test";
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
 
 import { HARNESS_TOOL_NAMES } from "../tool-parts";
 import {
@@ -150,7 +153,8 @@ describe("permission answers", () => {
   const call = (kind: string, paths: readonly string[]): AcpToolCallState => ({
     ...started,
     kind,
-    locations: paths.map((path) => ({ path })),
+    rawInput: undefined,
+    locations: paths.map((file) => ({ path: file })),
   });
   const disposition = (
     candidate: AcpToolCallState,
@@ -161,6 +165,7 @@ describe("permission answers", () => {
       policy: { ...policy, approvals },
       workspaceDir,
       unreadablePaths: ["/runs", "/secrets"],
+      mcpNames: NAMES,
     });
 
   test("reads inside the run's folder are allowed", () => {
@@ -183,9 +188,47 @@ describe("permission answers", () => {
     expect(disposition(call("fetch", []), "auto")).toBe("allow");
   });
 
+  test("a read that names no path, or an MCP tool, asks", () => {
+    expect(disposition(call("read", []))).toBe("ask");
+    expect(
+      disposition({
+        ...call("read", ["notes.md"]),
+        title: "mcp__stella__read_document",
+      }),
+    ).toBe("ask");
+  });
+
+  test("a read's path in its input counts like its locations", () => {
+    expect(
+      disposition({ ...call("read", []), rawInput: { path: "/secrets/key" } }),
+    ).toBe("deny");
+  });
+
   test("commands and steps outside the folder always ask", () => {
     expect(disposition(call("execute", []), "auto")).toBe("ask");
     expect(disposition(call("read", ["/etc/hosts"]), "auto")).toBe("ask");
     expect(disposition(call("edit", []), "auto")).toBe("ask");
+  });
+
+  test("a link in the folder is judged by where it leads", () => {
+    const root = mkdtempSync(path.join(tmpdir(), "stella-acp-link-"));
+    try {
+      const chat = path.join(root, "chat-1");
+      const other = path.join(root, "chat-2");
+      mkdirSync(chat);
+      mkdirSync(other);
+      symlinkSync(other, path.join(chat, "elsewhere"));
+      expect(
+        permissionDisposition({
+          call: call("read", [path.join(chat, "elsewhere", "secret.txt")]),
+          policy,
+          workspaceDir: chat,
+          unreadablePaths: [root],
+          mcpNames: NAMES,
+        }),
+      ).toBe("deny");
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
   });
 });
