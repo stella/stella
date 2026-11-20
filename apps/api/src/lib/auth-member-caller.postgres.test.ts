@@ -19,7 +19,6 @@ import {
   mintAuthProviderId,
   mintAuthProviderIdValue,
 } from "@/api/tests/helpers/auth-provider-id";
-import { CREDENTIAL_AUTHENTICATION } from "@/api/tests/helpers/member-authorization";
 import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 
 // The member lookup and the member's connections read through the root
@@ -110,7 +109,7 @@ if (!databaseUrl || !enabled) {
 
         const authorization = await resolveMemberAuthorization(
           {
-            authentication: CREDENTIAL_AUTHENTICATION,
+            authentication: { kind: "browser_session", sessionId },
             organizationId,
             userId,
             workspaceId: undefined,
