@@ -15,7 +15,6 @@ import * as NewDeviceLogin from "../emails/new-device-login";
 import * as OrganizationInvitation from "../emails/organization-invitation";
 import * as ProductFeedback from "../emails/product-feedback";
 import * as ReportExportStatus from "../emails/report-export-status";
-import { getTranslator } from "../i18n/translate";
 import { EmailMarkupError, toPlainText } from "./plain-text";
 import { renderEmail } from "./render";
 
@@ -112,6 +111,13 @@ describe("plain text of the real templates", () => {
         device="Chrome on macOS"
         ipAddress="203.0.113.42"
         lang="en"
+        location={{
+          type: "known",
+          city: "Brno",
+          region: "South Moravian",
+          countryCode: "CZ",
+          map: null,
+        }}
         sessionsUrl="https://app.stella.test/account/sessions"
         time="Mar 6, 2026, 2:30 PM UTC"
       />,
@@ -122,7 +128,11 @@ describe("plain text of the real templates", () => {
         "",
         "IP address: 203.0.113.42",
         "",
+        "Approximate location: Brno, South Moravian, Czechia",
+        "",
         "Time: Mar 6, 2026, 2:30 PM UTC",
+        "",
+        "The location is estimated from the IP address and may be inaccurate.",
         "",
         "Review sessions https://app.stella.test/account/sessions",
         "",
@@ -190,55 +200,48 @@ describe("plain text of the real templates", () => {
 
   test("every template in every locale converts without markup leaking into the text", () => {
     for (const lang of UI_LOCALES) {
-      const t = getTranslator(lang);
-      // Each email with its closing paragraph: the brand footer, or the
-      // translated notice for the email that has no footer.
-      const emails: [React.ReactElement, string][] = [
-        [
-          <BetterAuthOTP.Email
-            key="otp"
-            lang={lang}
-            otp="123456"
-            type="sign-in"
-          />,
-          BRAND_FOOTER_TEXT,
-        ],
-        [
-          <NewDeviceLogin.Email
-            key="device"
-            device="Chrome on macOS"
-            ipAddress="203.0.113.42"
-            lang={lang}
-            sessionsUrl="https://app.stella.test/account/sessions"
-            time="Mar 6, 2026, 2:30 PM UTC"
-          />,
-          t("newDeviceLogin.ignore"),
-        ],
-        [
-          <OrganizationInvitation.Email
-            key="invitation"
-            invitedByUsername="Jane Doe"
-            inviteLink="https://app.stella.test/accept/tok"
-            lang={lang}
-            organizationName="Acme Inc"
-          />,
-          BRAND_FOOTER_TEXT,
-        ],
-        [
-          <ReportExportStatus.Email
-            key="export"
-            appUrl="https://app.stella.test/workspaces"
-            lang={lang}
-            status="completed"
-          />,
-          BRAND_FOOTER_TEXT,
-        ],
+      // Every email closes with the brand footer.
+      const emails: React.ReactElement[] = [
+        <BetterAuthOTP.Email
+          key="otp"
+          lang={lang}
+          otp="123456"
+          type="sign-in"
+        />,
+        <NewDeviceLogin.Email
+          key="device"
+          device="Chrome on macOS"
+          ipAddress="203.0.113.42"
+          lang={lang}
+          location={{
+            type: "known",
+            city: "Brno",
+            region: null,
+            countryCode: "CZ",
+            map: { contentId: "map" },
+          }}
+          sessionsUrl="https://app.stella.test/account/sessions"
+          time="Mar 6, 2026, 2:30 PM UTC"
+        />,
+        <OrganizationInvitation.Email
+          key="invitation"
+          invitedByUsername="Jane Doe"
+          inviteLink="https://app.stella.test/accept/tok"
+          lang={lang}
+          organizationName="Acme Inc"
+        />,
+        <ReportExportStatus.Email
+          key="export"
+          appUrl="https://app.stella.test/workspaces"
+          lang={lang}
+          status="completed"
+        />,
       ];
-      for (const [email, closing] of emails) {
+      for (const email of emails) {
         const { text } = renderEmail(email);
         expect(text).not.toMatch(/[<>]|&#?\w+;|mso/u);
         expect(text.split("\n")).toContain(DIVIDER);
-        expect(text.split("\n").at(-1)).toBe(closing);
+        expect(text.split("\n").at(-1)).toBe(BRAND_FOOTER_TEXT);
       }
     }
   });

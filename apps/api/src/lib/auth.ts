@@ -279,6 +279,7 @@ import { unlinkAccountWithConfirmation } from "@/api/lib/auth/unlink-account-run
 import { AUTH_USER_ADDITIONAL_FIELDS } from "@/api/lib/auth/user-additional-fields";
 import { validateUserLocale } from "@/api/lib/auth/user-locale";
 import { createUserProjectionUpdateHook } from "@/api/lib/auth/user-projection-updates";
+import { readViewerLocation } from "@/api/lib/auth/viewer-location";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
@@ -353,6 +354,7 @@ import { observeFailure } from "@/api/lib/observability/observe-failure";
 import {
   enrichRequestContext,
   getRequestContext,
+  sealedRequestClientAddress,
 } from "@/api/lib/observability/request-context";
 import { observedStatus } from "@/api/lib/observability/server-error-answer";
 import { createOrganizationLifecycleHooks } from "@/api/lib/organization-lifecycle-hooks";
@@ -2998,6 +3000,10 @@ export const createAuth = (
                   email,
                   device,
                   ipAddress,
+                  location: readViewerLocation({
+                    request: ctx.request,
+                    clientAddress: sealedRequestClientAddress(),
+                  }),
                   time: formattedTime,
                   sessionsUrl: `${env.FRONTEND_URL}${ACTIVE_SESSIONS_FRONTEND_PATH}`,
                   lang,
