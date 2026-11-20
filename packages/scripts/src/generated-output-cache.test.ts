@@ -297,6 +297,33 @@ test("git-ignored build output written during generation is not a source", async
   };
   try {
     git("init", "--quiet");
+    // An embedded repository recorded as a gitlink, as a submodule is: its
+    // files are under the input globs but are not paths of this repository.
+    await mkdir(path.join(root, "packages/content"), { recursive: true });
+    await writeFile(path.join(root, "packages/content/CODEOWNERS"), "owners");
+    const inner = (...args: string[]) => {
+      const result = Bun.spawnSync(["git", ...args], {
+        cwd: path.join(root, "packages/content"),
+        stdout: "pipe",
+        stderr: "pipe",
+      });
+      if (result.exitCode !== 0) {
+        panic(`git ${args.join(" ")} failed: ${result.stderr.toString()}`);
+      }
+    };
+    inner("init", "--quiet");
+    inner("add", "CODEOWNERS");
+    inner(
+      "-c",
+      "user.name=fixture",
+      "-c",
+      "user.email=fixture@example.invalid",
+      "commit",
+      "--quiet",
+      "-m",
+      "content",
+    );
+    git("add", "packages/content");
     await mkdir(path.join(root, "packages/a/src"), { recursive: true });
     await mkdir(path.join(root, "packages/engine/target/debug"), {
       recursive: true,
