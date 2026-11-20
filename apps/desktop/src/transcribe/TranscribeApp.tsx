@@ -6,6 +6,13 @@ import { Result } from "better-result";
 import { useTranslations } from "use-intl";
 
 import type { DesktopMatter } from "@stll/api-contract/desktop-time-entries";
+import {
+  blocksToHtml,
+  blocksToText,
+  cleanedMarkdown,
+  escapeHtmlText,
+  paragraphsToHtml,
+} from "@stll/transcript/cleanup";
 import { Button } from "@stll/ui/button";
 import { InfoIcon, TriangleAlertIcon, WavesIcon } from "@stll/ui/icons";
 import { ScrollArea } from "@stll/ui/scroll-area";
@@ -21,13 +28,6 @@ import {
   DESKTOP_TELEMETRY_WINDOWS,
   reportDesktopError,
 } from "../telemetry/desktop-telemetry";
-import {
-  blocksToHtml,
-  blocksToText,
-  cleanedMarkdown,
-  escapeHtmlText,
-  paragraphsToHtml,
-} from "./cleaned-text";
 import {
   afterRefusedStart,
   formatTimestamp,

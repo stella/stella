@@ -1,19 +1,20 @@
-import type { Paragraph } from "./transcribe-logic";
+/** A transcript paragraph: when it starts and what was said. */
+export type TranscriptParagraph = { startMs: number; text: string };
 
 /**
  * The cleaned-up text of a recording: the Markdown subset the API returns
  * (paragraphs, three heading levels, bold, italic, bulleted and numbered
- * lists) read into blocks the window renders as elements, never as HTML,
+ * lists) read into blocks each app renders as elements, never as HTML,
  * and written back out as HTML or plain text for copying. Anything outside
  * the subset is shown as the text it is.
  */
 
-export type Inline = { text: string; bold: boolean; italic: boolean };
+export type CleanedRun = { text: string; bold: boolean; italic: boolean };
 
-export type Block =
-  | { kind: "heading"; level: 1 | 2 | 3; inline: Inline[] }
-  | { kind: "paragraph"; inline: Inline[] }
-  | { kind: "list"; ordered: boolean; start: number; items: Inline[][] };
+export type CleanedBlock =
+  | { kind: "heading"; level: 1 | 2 | 3; inline: CleanedRun[] }
+  | { kind: "paragraph"; inline: CleanedRun[] }
+  | { kind: "list"; ordered: boolean; start: number; items: CleanedRun[][] };
 
 const isSpace = (character: string | undefined): boolean =>
   character === " " || character === "\t";
@@ -121,8 +122,8 @@ const italicEnd = (
 };
 
 /** Bold (`**`) and italic (`*` or `_`) runs; unmatched marks stay text. */
-export const parseInline = (source: string): Inline[] => {
-  const runs: Inline[] = [];
+export const parseCleanedInline = (source: string): CleanedRun[] => {
+  const runs: CleanedRun[] = [];
   const push = (text: string, bold: boolean, italic: boolean) => {
     if (text === "") {
       return;
@@ -143,7 +144,7 @@ export const parseInline = (source: string): Inline[] => {
       if (close > at + 2) {
         push(plain, false, false);
         plain = "";
-        for (const inner of parseInline(source.slice(at + 2, close))) {
+        for (const inner of parseCleanedInline(source.slice(at + 2, close))) {
           push(inner.text, true, inner.italic);
         }
         at = close + 2;
@@ -168,14 +169,14 @@ export const parseInline = (source: string): Inline[] => {
   return runs;
 };
 
-export const parseMarkdown = (markdown: string): Block[] => {
-  const blocks: Block[] = [];
+export const parseCleanedMarkdown = (markdown: string): CleanedBlock[] => {
+  const blocks: CleanedBlock[] = [];
   let paragraph: string[] = [];
   const flush = () => {
     if (paragraph.length > 0) {
       blocks.push({
         kind: "paragraph",
-        inline: parseInline(paragraph.join(" ")),
+        inline: parseCleanedInline(paragraph.join(" ")),
       });
       paragraph = [];
     }
@@ -194,7 +195,7 @@ export const parseMarkdown = (markdown: string): Block[] => {
       blocks.push({
         kind: "heading",
         level: heading.level,
-        inline: parseInline(heading.text),
+        inline: parseCleanedInline(heading.text),
       });
       continue;
     }
@@ -203,7 +204,7 @@ export const parseMarkdown = (markdown: string): Block[] => {
       flush();
       const ordered = numbered !== null;
       const last = blocks.at(-1);
-      const inline = parseInline(item);
+      const inline = parseCleanedInline(item);
       if (last?.kind === "list" && last.ordered === ordered) {
         last.items.push(inline);
       } else {
@@ -233,7 +234,7 @@ const ESCAPES: Record<string, string> = {
 export const escapeHtmlText = (text: string): string =>
   text.replaceAll(/[&<>"']/gu, (character) => ESCAPES[character] ?? character);
 
-const inlineHtml = (inline: readonly Inline[]): string =>
+const inlineHtml = (inline: readonly CleanedRun[]): string =>
   inline
     .map(({ text, bold, italic }) => {
       let html = escapeHtmlText(text);
@@ -244,10 +245,10 @@ const inlineHtml = (inline: readonly Inline[]): string =>
     })
     .join("");
 
-const inlineText = (inline: readonly Inline[]): string =>
+const inlineText = (inline: readonly CleanedRun[]): string =>
   inline.map(({ text }) => text).join("");
 
-export const blocksToHtml = (blocks: readonly Block[]): string =>
+export const blocksToHtml = (blocks: readonly CleanedBlock[]): string =>
   blocks
     .map((block) => {
       switch (block.kind) {
@@ -272,7 +273,7 @@ export const blocksToHtml = (blocks: readonly Block[]): string =>
     })
     .join("\n");
 
-export const blocksToText = (blocks: readonly Block[]): string =>
+export const blocksToText = (blocks: readonly CleanedBlock[]): string =>
   blocks
     .map((block) => {
       switch (block.kind) {
@@ -294,7 +295,7 @@ export const blocksToText = (blocks: readonly Block[]): string =>
 
 /** Raw transcript paragraphs as HTML, each with its timestamp. */
 export const paragraphsToHtml = (
-  paragraphs: readonly Paragraph[],
+  paragraphs: readonly TranscriptParagraph[],
   timestamp: (ms: number) => string,
 ): string =>
   paragraphs
@@ -348,7 +349,7 @@ export const nextCleanupPart = ({
   first,
   maxCharacters,
 }: {
-  paragraphs: readonly Paragraph[];
+  paragraphs: readonly TranscriptParagraph[];
   from: number;
   finished: boolean;
   first: boolean;
