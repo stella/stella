@@ -794,6 +794,7 @@ test.each(composerAvailabilityCases)(
     await settle();
     expect(sends.length).toBe(state.type === "available" ? 1 : 0);
     if (state.type !== "available") {
+      expect(send.getAttribute("aria-disabled")).toBe("true");
       expect(textbox.textContent).toContain("Which clauses need revision?");
       unavailableReason = "provider_not_configured";
       availabilityStatus = 200;
@@ -830,10 +831,10 @@ test("the real chat textbox mounts during a pending availability read", async ()
       ?.setContent(composerText("Which clauses need revision?"));
   });
   expect(
-    isDisabledControl(
-      screen.getByRole("button", { name: messages.chat.sendPrompt }),
-    ),
-  ).toBe(true);
+    screen
+      .getByRole("button", { name: messages.chat.sendPrompt })
+      .getAttribute("aria-disabled"),
+  ).toBe("true");
   expect(textbox.getAttribute("contenteditable")).toBe("true");
   // The wait shows in the composer row (send unavailable), not as a line
   // added above the page that moves it when it goes.
