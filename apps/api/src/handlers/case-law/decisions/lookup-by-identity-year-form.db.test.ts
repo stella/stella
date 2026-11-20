@@ -194,7 +194,7 @@ test("the exact filter keeps the decision the lookup read in the other year form
     grammar: DECISION_DOCKET_GRAMMARS.CZE,
   });
   if (intent.type !== "identifier") {
-    return panic("The two-digit docket is not read as an identifier");
+    panic("The two-digit docket is not read as an identifier");
   }
   const rows = await lookupDecisionsByIdentity({
     caseLawDb,
