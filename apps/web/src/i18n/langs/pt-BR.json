@@ -1111,6 +1111,7 @@
       "rateCount": "{count, plural, one {# taxa} many {# taxas} other {# taxas}}",
       "rateEntries": "Entradas de taxas",
       "rateResolved": "Taxa resolvida",
+      "rateTableNoLongerAvailable": "Esta tabela de taxas não está mais disponível. Volte e escolha outra tabela.",
       "rateTables": "Tabelas de taxas",
       "rates": "Valores",
       "setAsDefault": "Definir como padrão",

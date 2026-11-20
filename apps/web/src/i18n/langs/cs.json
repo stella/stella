@@ -1111,6 +1111,7 @@
       "rateCount": "{count, plural, one {# sazba} few {# sazby} other {# sazeb} many {# sazby}}",
       "rateEntries": "Položky sazeb",
       "rateResolved": "Sazba určena",
+      "rateTableNoLongerAvailable": "Tato tabulka sazeb už není dostupná. Vraťte se zpět a vyberte jinou tabulku.",
       "rateTables": "Tabulky sazeb",
       "rates": "Sazby",
       "setAsDefault": "Nastavit jako výchozí",

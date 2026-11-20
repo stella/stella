@@ -1111,6 +1111,7 @@
       "rateCount": "{count, plural, zero {لا أسعار} one {سعر واحد} two {سعران} few {# أسعار} many {# سعرًا} other {# سعر}}",
       "rateEntries": "إدخالات الأسعار",
       "rateResolved": "السعر المُحدَّد",
+      "rateTableNoLongerAvailable": "جدول الأسعار هذا لم يعد متاحًا. ارجع واختر جدولًا آخر.",
       "rateTables": "جداول الأسعار",
       "rates": "الأسعار",
       "setAsDefault": "تعيين كافتراضي",

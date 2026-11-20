@@ -1111,6 +1111,7 @@
       "rateCount": "{count, plural, one {# stawka} few {# stawki} many {# stawek} other {# stawki}}",
       "rateEntries": "Wpisy stawek",
       "rateResolved": "Stawka ustalona",
+      "rateTableNoLongerAvailable": "Ta tabela stawek jest już niedostępna. Wróć i wybierz inną tabelę.",
       "rateTables": "Tabele stawek",
       "rates": "Stawki",
       "setAsDefault": "Ustaw jako domyślną",

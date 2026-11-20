@@ -875,6 +875,7 @@
   "billing.rates.rateCount": "{count, plural, one {# rate} other {# rates}}",
   "billing.rates.rateEntries": "Rate entries",
   "billing.rates.rateResolved": "Rate resolved",
+  "billing.rates.rateTableNoLongerAvailable": "This rate table is no longer available. Go back and choose another table.",
   "billing.rates.rateTables": "Rate tables",
   "billing.rates.rates": "Rates",
   "billing.rates.setAsDefault": "Set as default",

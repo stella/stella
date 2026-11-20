@@ -1111,6 +1111,7 @@
       "rateCount": "{count, plural, one {# tarifa} other {# tarifas} many {# tarifas}}",
       "rateEntries": "Entradas de tarifa",
       "rateResolved": "Tarifa resuelta",
+      "rateTableNoLongerAvailable": "Esta tabla de tarifas ya no está disponible. Vuelva atrás y elija otra tabla.",
       "rateTables": "Tablas de tarifas",
       "rates": "Tarifas",
       "setAsDefault": "Establecer como predeterminada",

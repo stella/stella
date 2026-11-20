@@ -1111,6 +1111,7 @@
       "rateCount": "{count, plural, one {# rate} other {# rates}}",
       "rateEntries": "Rate entries",
       "rateResolved": "Rate resolved",
+      "rateTableNoLongerAvailable": "This rate table is no longer available. Go back and choose another table.",
       "rateTables": "Rate tables",
       "rates": "Rates",
       "setAsDefault": "Set as default",

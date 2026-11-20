@@ -1111,6 +1111,7 @@
       "rateCount": "{count, plural, one {# määr} other {# määra}}",
       "rateEntries": "Määrakanded",
       "rateResolved": "Määr leitud",
+      "rateTableNoLongerAvailable": "See määratabel ei ole enam saadaval. Minge tagasi ja valige teine tabel.",
       "rateTables": "Määratabelid",
       "rates": "Määrad",
       "setAsDefault": "Määra vaikimisi",

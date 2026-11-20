@@ -1111,6 +1111,7 @@
       "rateCount": "{count, plural, one {# sadzba} few {# sadzby} other {# sadzieb} many {# sadzby}}",
       "rateEntries": "Záznamy sadzieb",
       "rateResolved": "Sadzba určená",
+      "rateTableNoLongerAvailable": "Táto tabuľka sadzieb už nie je dostupná. Vráťte sa späť a vyberte inú tabuľku.",
       "rateTables": "Tabuľky sadzieb",
       "rates": "Sadzby",
       "setAsDefault": "Nastaviť ako predvolenú",

@@ -1111,6 +1111,7 @@
       "rateCount": "{count, plural, zero {# likmes} one {# likme} other {# likmes}}",
       "rateEntries": "Likmju ieraksti",
       "rateResolved": "Likme noteikta",
+      "rateTableNoLongerAvailable": "Šī likmju tabula vairs nav pieejama. Atgriezieties un atlasiet citu tabulu.",
       "rateTables": "Likmju tabulas",
       "rates": "Likmes",
       "setAsDefault": "Iestatīt kā noklusējumu",

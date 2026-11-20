@@ -1111,6 +1111,7 @@
       "rateCount": "{count, plural, one {# díjtétel} other {# díjtétel}}",
       "rateEntries": "Díjtételek",
       "rateResolved": "Díjszabás meghatározva",
+      "rateTableNoLongerAvailable": "Ez a díjtáblázat már nem érhető el. Lépjen vissza, és válasszon másik táblázatot.",
       "rateTables": "Díjtáblázatok",
       "rates": "Díjszabások",
       "setAsDefault": "Beállítás alapértelmezettként",

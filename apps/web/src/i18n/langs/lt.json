@@ -1111,6 +1111,7 @@
       "rateCount": "{count, plural, one {# įkainis} few {# įkainiai} many {# įkainio} other {# įkainių}}",
       "rateEntries": "Įkainių įrašai",
       "rateResolved": "Įkainis nustatytas",
+      "rateTableNoLongerAvailable": "Ši įkainių lentelė nebepasiekiama. Grįžkite ir pasirinkite kitą lentelę.",
       "rateTables": "Įkainių lentelės",
       "rates": "Įkainiai",
       "setAsDefault": "Nustatyti kaip numatytąjį",
