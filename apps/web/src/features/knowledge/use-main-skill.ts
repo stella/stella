@@ -16,12 +16,11 @@ import { useQueryViewError } from "@/lib/use-query-view";
  * skill's detail (the editor's own query) has loaded.
  */
 export const useMainSkill = (): ActiveSkillChatContext | undefined => {
-  const match = useMatch({
-    from: "/knowledge/tools_/$entry",
+  const skillId = useMatch({
+    from: "/knowledge/tools_/skills/$skillId",
     shouldThrow: false,
+    select: (match) => match.params.skillId,
   });
-  const skillId =
-    match?.loaderData?.page === "skill" ? match.loaderData.skillId : undefined;
   const { activeOrganizationId, id: userId } = useAuthenticatedUser();
   const detailQuery = useQuery({
     ...skillDetailOptions(activeOrganizationId, userId, skillId ?? ""),

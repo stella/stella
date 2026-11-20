@@ -6,6 +6,8 @@ import { cn } from "../lib/utils";
 import { ToggleGroup, ToggleGroupItem } from "./toggle-group";
 
 type SegmentedIconToggleOption<T extends string> = {
+  /** A fixed id for the option, where generated ones would differ per mount. */
+  id?: string | undefined;
   value: T;
   icon: ComponentType<{ className?: string }>;
   /** Already-translated label; shown as a tooltip and the accessible name. */
@@ -54,6 +56,7 @@ export const SegmentedIconToggle = <T extends string>({
               "[@media(any-pointer:coarse)]:h-11 [@media(any-pointer:coarse)]:w-11",
           )}
           data-control-value={option.value}
+          id={option.id}
           key={option.value}
           size="icon-xs"
           value={option.value}

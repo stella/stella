@@ -22,31 +22,11 @@ const dateOnlyEpoch = (value: string): number =>
 const instantEpoch = (value: string): number =>
   Result.try(() => Temporal.Instant.from(value).epochMilliseconds).unwrapOr(0);
 
-type InternalColId = "select" | "add-property";
-
-export const getInternalColId = (col: InternalColId): InternalColId => col;
-
-// -- Internal property IDs (metadata columns stored in view config) --
-
-const INTERNAL_PROPERTIES = [
-  "name",
-  "created-by",
-  "updated-at",
-  "version",
-  "kind",
-  "list-item-type",
-  "status",
-  "priority",
-  "due-date",
-  "assignee",
-] as const;
-
-type InternalProperty = (typeof INTERNAL_PROPERTIES)[number];
-export type InternalPropertyId = `_${InternalProperty}`;
-
-export const getInternalPropertyId = (
-  p: InternalProperty,
-): InternalPropertyId => `_${p}`;
+export {
+  getInternalColId,
+  getInternalPropertyId,
+} from "@/components/workspaces/internal-ids.logic";
+export type { InternalPropertyId } from "@/components/workspaces/internal-ids.logic";
 
 export const getFieldValue = (field: WorkspaceField | undefined) => {
   if (!field) {

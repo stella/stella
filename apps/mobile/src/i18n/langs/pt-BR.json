@@ -189,6 +189,7 @@
       "save_document": "Salvar documento",
       "save_matter": "Salvar caso",
       "save_playbook": "Salvar playbook",
+      "save_skill_package": "Salvar habilidade",
       "save_task": "Salvar tarefa",
       "save_template": "Salvar modelo",
       "save_time_entry": "Salvar entrada de tempo",
@@ -211,7 +212,13 @@
       "update_reader_annotation": "Editar destaque ou comentário",
       "use-browser": "Usando seu navegador",
       "use_connector_secret": "Usando a credencial do conector",
+      "validate_skill_package": "Verificar habilidade",
       "web_search": "Pesquisando na web"
+    },
+    "toolResearch": {
+      "caseLaw": "Pesquisando jurisprudência",
+      "legislation": "Lendo a legislação",
+      "legislationAndCaseLaw": "Pesquisando legislação e jurisprudência"
     },
     "localRun": {
       "title": {

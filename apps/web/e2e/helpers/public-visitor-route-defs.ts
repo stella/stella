@@ -47,4 +47,20 @@ export const PUBLIC_VISITOR_ROUTE_DEFS = [
       level: 1,
     }),
   },
+  {
+    template: "/knowledge/playbooks/catalogue",
+    resolve: () => ({
+      path: "/knowledge/playbooks/catalogue",
+      heading: messages.common.playbooks,
+      level: 1,
+    }),
+  },
+  {
+    template: "/knowledge/tools/catalogue",
+    resolve: () => ({
+      path: "/knowledge/tools/catalogue",
+      heading: messages.knowledge.sections.tools.title,
+      level: 1,
+    }),
+  },
 ] as const satisfies readonly VisitorRoute[];

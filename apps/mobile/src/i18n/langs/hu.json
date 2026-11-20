@@ -189,6 +189,7 @@
       "save_document": "Dokumentum mentése",
       "save_matter": "Ügy mentése",
       "save_playbook": "Playbook mentése",
+      "save_skill_package": "Készség mentése",
       "save_task": "Feladat mentése",
       "save_template": "Sablon mentése",
       "save_time_entry": "Időbejegyzés mentése",
@@ -211,7 +212,13 @@
       "update_reader_annotation": "Kiemelés vagy megjegyzés szerkesztése",
       "use-browser": "A böngésző használata",
       "use_connector_secret": "A csatlakozó hitelesítő adatának használata",
+      "validate_skill_package": "Készség ellenőrzése",
       "web_search": "Keresés az interneten"
+    },
+    "toolResearch": {
+      "caseLaw": "Keresés az ítélkezési gyakorlatban",
+      "legislation": "Jogszabályok olvasása",
+      "legislationAndCaseLaw": "Keresés a jogszabályokban és az ítélkezési gyakorlatban"
     },
     "localRun": {
       "title": {

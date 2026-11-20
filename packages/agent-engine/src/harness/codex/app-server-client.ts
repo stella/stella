@@ -84,6 +84,8 @@ export type AppServerClient = {
   pid: number;
   /** Settles when the process has exited, however that happened. */
   exited: Promise<HarnessExit>;
+  /** A request went unanswered past its deadline, which ended the server. */
+  missedDeadline: () => boolean;
   /** Ends stdin, which asks the server to flush its state and exit. */
   closeInput: () => void;
   /** SIGTERM, then SIGKILL once the termination deadline passes. */
@@ -188,6 +190,7 @@ export const startAppServer = ({
       server.write({ id, error: { code, message } });
     },
     exited: server.exited,
+    missedDeadline: server.missedDeadline,
     closeInput: server.closeInput,
     kill: server.kill,
   });

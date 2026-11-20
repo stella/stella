@@ -1233,6 +1233,13 @@
       "treatment": "Vēlākā judikatūra"
     },
     "analyzing": "Analizē...",
+    "browse": {
+      "courtDescription": "{court} ({country}): nolēmumi stella publiskajā tiesību datubāzē pa gadiem un mēnešiem.",
+      "courts": "Tiesas",
+      "days": "Dienas",
+      "jurisdictionDescription": "{country}: tiesu nolēmumi stella publiskajā tiesību datubāzē pa tiesām, gadiem un mēnešiem.",
+      "periodDescription": "{court} ({country}), {period}: nolēmumi stella publiskajā tiesību datubāzē."
+    },
     "chat": {
       "prompts": {
         "facts": {
@@ -1494,6 +1501,10 @@
       "title": "Meklēšana īslaicīgi nav pieejama"
     },
     "searchWarnings": {
+      "collectionCitationUnresolved": {
+        "hint": "Meklējiet pēc lietas numura vai nolēmuma ECLI, ja tas ir zināms.",
+        "message": "Šai krājuma atsaucei precīzi atbilstošs nolēmums netika atrasts."
+      },
       "noHits": {
         "hint": "Mēģiniet mazāk vai citus vārdus: jēdzienus, ko lietotu nolēmums, nevis teikumu, kādā tiek uzdots jautājums.",
         "message": "Nekas neatbilst vārdiem, ko pieprasīja šī meklēšana."
@@ -1721,12 +1732,25 @@
       "unorderedList": "Aizzīmju saraksts",
       "wholeBlockRequired": "Lai mainītu stilu, atlasiet visu rindkopu vai sarakstu."
     },
+    "answerNotFinished": "stella nevarēja pabeigt šo atbildi.",
     "answerQuote": {
       "showInDecision": "Rādīt nolēmumā",
       "unverified": "Citātu neizdevās pārbaudīt",
       "unverifiedHint": "Citētajos nolēmumos šis teksts vārds vārdā nav atrodams",
       "verified": "Pārbaudīts citāts",
       "verifiedHint": "Vārds vārdā: {source}"
+    },
+    "answerTable": {
+      "copy": "Kopēt tabulu",
+      "copyAs": "Kopēt kā {format}",
+      "download": "Lejupielādēt tabulu",
+      "downloadAs": "Lejupielādēt kā {format}",
+      "fullscreen": "Atvērt pilnekrāna režīmā",
+      "fullscreenTitle": "Tabula pilnekrāna režīmā",
+      "singleLine": "Vienā rindā",
+      "size": "{rows, plural, zero {# rindu} one {# rinda} other {# rindas}} · {columns, plural, zero {# kolonnu} one {# kolonna} other {# kolonnas}}",
+      "textMode": "Šūnu teksts",
+      "wrap": "Aplauzt tekstu"
     },
     "applyMode": {
       "description": "Word saglabā, kurš veica katru izmaiņu. Mēs atcerēsimies jūsu izvēli.",
@@ -2120,6 +2144,7 @@
     },
     "newChat": "Jauna tērzēšana",
     "newChatInSidePanel": "Jaunā tērzēšana ir pieejama sānu panelī",
+    "nextSteps": "Nākamie soļi",
     "noPromptPresetOnly": "Nav ziņojuma, tikai sākotnējais iestatījums",
     "noThreads": "Sarunu vēl nav",
     "officeCitationUnavailable": "Šī atsauce vairs nav pieejama.",
@@ -2226,7 +2251,6 @@
       "chipLabel": "Darbojas: {place}",
       "cloud": "Mākonis",
       "cloudDescription": "Darbojas mākonī. Pieejams no jebkuras vietas.",
-      "harnessModels": "{harness} modeļi",
       "hintCheck": "Pārbaudiet to lietotnē stella desktop",
       "hintInstall": "Instalējiet to no stella desktop",
       "hintOffline": "Atveriet stella desktop savā datorā",
@@ -2236,8 +2260,9 @@
       "localFolderSelection": "Jūsu dators · {harness} · {folder}",
       "localPlace": "Jūsu dators, {harness}",
       "localSelection": "Jūsu dators · {harness}",
-      "modelDefault": "Noklusējuma (ieteicams)",
       "placeState": "{place}. {state}",
+      "startedInCloud": "Šī jaunā tērzēšana sākās mākonī, jo {harness} jūsu datorā nav pieejams ({state})",
+      "startedInCloudCheckFailed": "Šī jaunā tērzēšana sākās mākonī, jo neizdevās pārbaudīt jūsu datoru",
       "stepsCheck": "Notiek stella desktop atvēršana. Ja lietotne neatveras, atveriet to savā datorā un pārbaudiet aģentu {harness} sadaļā Iestatījumi › Vispārīgi › AI abonementi.",
       "stepsInstall": "Notiek stella desktop atvēršana. Ja lietotne neatveras, atveriet to savā datorā un sadaļā Iestatījumi › Vispārīgi pie aģenta {harness} izvēlieties Instalēt.",
       "stepsSignInClaudeCode": "Notiek stella desktop atvēršana, lai pierakstītos. Ja lietotne neatveras, atveriet to un izvēlieties Iestatījumi › Vispārīgi › Pierakstīties ar Claude.",
@@ -2304,13 +2329,26 @@
       "title": "Jūsu ziņa gaida rindā, līdz aģents beigs darbu",
       "turnNotRunning": "Aģents pašlaik nestrādā."
     },
+    "stepDigest": {
+      "decisionsFound": "{found, plural, zero {Atrasti # nolēmumi} one {Atrasts # nolēmums} other {Atrasti # nolēmumi}}",
+      "decisionsFoundUsed": "{found, plural, zero {Atrasti # nolēmumi} one {Atrasts # nolēmums} other {Atrasti # nolēmumi}}, {used, plural, zero {# izmantoti atbildē} one {# izmantots atbildē} other {# izmantoti atbildē}}",
+      "filterAsOf": "Uz {date}",
+      "legislationFound": "{count, plural, zero {# tiesību aktu un normu} one {# tiesību akts vai norma} other {# tiesību akti un normas}}",
+      "lookupDidNotGoThrough": "Šī meklēšana neizdevās.",
+      "moreFound": "{count, plural, zero {vēl # nav parādīti} one {vēl # nav parādīts} other {vēl # nav parādīti}}",
+      "moreLookups": "{count, plural, zero {Vēl # vaicājumi nav parādīti} one {Vēl # vaicājums nav parādīts} other {Vēl # vaicājumi nav parādīti}}",
+      "notRecorded": "Šis solis tika veikts, pirms stella sāka saglabāt, ko meklē katrs solis.",
+      "nothingFound": "Nekas neatbilst.",
+      "technicalDetails": "Tehniskā informācija",
+      "usedInAnswer": "Izmantots atbildē",
+      "versionFrom": "Redakcija no {date}"
+    },
     "stopFailed": "Neizdevās apturēt atbildi. Mēģiniet vēlreiz.",
     "stopResponse": "Apturēt",
     "stopped": "Apturēts",
     "stopping": "Aptur…",
     "suggestTitle": "Ieteikt nosaukumu",
     "suggestTitleUnavailableAnonymized": "Anonimizētām sarunām nosaukuma ieteikumi nav pieejami.",
-    "suggestedFollowupsLabel": "Ieteiktie papildjautājumi",
     "suggestingTitle": "Notiek nosaukuma ieteikšana…",
     "suggestionSeverity": {
       "style": "Stils",
@@ -2321,7 +2359,6 @@
       "accepted": "Lietots",
       "rejected": "Noraidīts"
     },
-    "tabToAsk": "→, lai jautātu: “{prompt}”",
     "tableChart": {
       "bar": "Stabiņu",
       "kind": "Diagrammas veids",
@@ -2412,6 +2449,7 @@
       "save_document": "Saglabāt dokumentu",
       "save_matter": "Saglabāt lietu",
       "save_playbook": "Saglabāt pārbaudes ceļvedi",
+      "save_skill_package": "Saglabāt prasmi",
       "save_task": "Saglabāt uzdevumu",
       "save_template": "Saglabāt veidni",
       "save_time_entry": "Saglabāt laika ierakstu",
@@ -2440,6 +2478,7 @@
       "use-browser": "Jūsu pārlūkprogrammas izmantošana",
       "use_connector_secret": "Izmanto savienotāja piekļuves informāciju",
       "user_message": "Nosūtīts aģenta darba laikā",
+      "validate_skill_package": "Pārbaudīt prasmi",
       "web_search": "Meklēšana tīmeklī"
     },
     "toolCall": {
@@ -4050,6 +4089,12 @@
     "versionCreatedDescription": "Versija {versionNumber} ir izveidota. Visi var turpināt rediģēšanu.",
     "versionCreatedTitle": "Versija izveidota",
     "viewOnly": "Tikai skatīšana"
+  },
+  "guidance": {
+    "notCaseLaw": "Regulatora izdotas vadlīnijas. Tas nav tiesas nolēmums.",
+    "openAtPublisher": "Atvērt izdevēja vietnē",
+    "source": "Avots: {attribution}",
+    "textUnavailable": "Šī dokumenta teksts šeit nav pieejams. Izlasiet to izdevēja vietnē."
   },
   "guides": {
     "action": {
@@ -5741,6 +5786,9 @@
       "chatNotificationsDescription": "Saņemiet paziņojumu no šīs pārlūkprogrammas, kad tērzēšanas atbilde ir pabeigta, kamēr stella darbojas fonā.",
       "chatNotificationsToggle": "Paziņot, kad atbilde ir gatava vai gaida manu rīcību",
       "chatNotificationsUnsupported": "Šī pārlūkprogramma neatbalsta paziņojumus.",
+      "chatTechnicalDetails": "Tehniskā informācija tērzēšanā",
+      "chatTechnicalDetailsDescription": "Katrs tērzēšanas solis parāda, ko tas meklēja un ko atrada. Ieslēdzot redzēsiet arī kodu un neapstrādātos rezultātus.",
+      "chatTechnicalDetailsToggle": "Rādīt tehnisko informāciju tērzēšanā",
       "confirmDelete": "Apstiprināt konta dzēšanu",
       "dangerZone": "Bīstamā zona",
       "dangerZoneDescription": "Neatgriezeniski dzēst konta piekļuvi un privātos konta datus.",
@@ -7907,7 +7955,6 @@
         "endDate": "Beigu datums",
         "month": "Mēnesis",
         "quarter": "Ceturksnis",
-        "showTable": "Rādīt tabulu",
         "startDate": "Sākuma datums",
         "week": "Nedēļa"
       },

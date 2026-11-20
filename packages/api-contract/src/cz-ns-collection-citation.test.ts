@@ -20,6 +20,8 @@ describe("Supreme Court collection citations", () => {
   test("each spelling commentaries and the court use reads as its part, number and year", () => {
     const cases: [string, string][] = [
       ["R 9/1971", "R 9/1971"],
+      ["R 9/1971 Sb. rozh.", "R 9/1971"],
+      ["R 9/1971 Sb. rozh. tr.", "Rt 9/1971"],
       ["R 9 / 1971", "R 9/1971"],
       ["Rc 45/2012", "Rc 45/2012"],
       ["Rc. 45/2012", "Rc 45/2012"],
@@ -156,5 +158,45 @@ describe("Supreme Court collection citations", () => {
     expect(parseDecisionQuery("Rc 9/1971", { reporters: null })).not.toEqual(
       stated,
     );
+  });
+});
+
+describe("Czech reporter identity", () => {
+  const reporters = decisionReporterGrammarForJurisdiction("CZE");
+  test.each(["č. 3216/2020 Sb. NSS", "c. 3216 / 2020 Sb.NSS"])(
+    "reads the administrative court's published reference %s",
+    (entry) => {
+      expect(parseDecisionQuery(entry, { reporters })).toEqual({
+        type: "identifier",
+        kind: "reporter",
+        value: "č. 3216/2020 Sb. NSS",
+      });
+    },
+  );
+
+  test("a colliding index key cannot substitute for a well-formed reporter identifier", () => {
+    const intent = parseDecisionQuery("Rc 17/2015", { reporters });
+    if (intent.type !== "identifier") {
+      throw new Error("Expected a reporter identifier");
+    }
+    const hit = (type: string, value: string) => ({
+      caseNumber: "Rc 17/2015",
+      ecli: null,
+      identifiers: [{ type, value }],
+    });
+    const civil = hit("reporter-citation", "č. 17/2015 Sb. rozh. obč.");
+    expect(
+      exactDecisionMatches(
+        intent,
+        [
+          hit("case-number", "Rc 17/2015"),
+          hit("reporter-citation", "R-c 17/2015"),
+          hit("reporter-citation", "Rt 17/2015"),
+          hit("reporter-citation", "č. 17/2015 Sb. NSS"),
+          civil,
+        ],
+        { reporters },
+      ),
+    ).toEqual([civil]);
   });
 });

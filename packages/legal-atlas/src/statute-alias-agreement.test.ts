@@ -3,7 +3,10 @@ import { describe, expect, test } from "bun:test";
 import { STATUTE_ACTS } from "@stll/api-contract/statute-acts";
 import { resolveStatuteAlias } from "@stll/api-contract/statute-aliases";
 import { statuteGazetteEliCollection } from "@stll/api-contract/statute-gazette";
-import { readStatuteQueryScope } from "@stll/api-contract/statute-query-capability";
+import {
+  isStatuteGazetteCountry,
+  readStatuteQueryScope,
+} from "@stll/api-contract/statute-query-capability";
 import { foldStatuteQuery } from "@stll/api-contract/statute-query-intent";
 
 import type {
@@ -41,6 +44,12 @@ describe("statute box aliases and citation-reader profiles", () => {
         continue;
       }
       const { country } = scope;
+      if (!isStatuteGazetteCountry(country)) {
+        divergences.push(
+          `${profile.jurisdiction}: statute box reads gazette designations, not aliases`,
+        );
+        continue;
+      }
       for (const entry of [...profile.aliases, ...profile.titles]) {
         // An entry with an end date is a historical reading, not today's.
         if (entry.citedUntil !== undefined) {

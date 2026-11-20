@@ -349,7 +349,7 @@ pub fn open_settings(app: &AppHandle, permission: Permission) -> Result<(), Stri
 }
 
 /// Asks the OS where it can ask, and otherwise opens the settings page.
-fn request(app: &AppHandle, permission: Permission) -> Result<(), String> {
+pub(crate) fn request(app: &AppHandle, permission: Permission) -> Result<(), String> {
   match permission {
     Permission::OpenAtLogin => crate::autostart::enable(app),
     Permission::Notifications => {

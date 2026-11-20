@@ -18,6 +18,7 @@ import { cn } from "@stll/ui/utils";
 
 import type { ProviderValue } from "@/components/ai-config-role-models.logic";
 import { AIProviderIcon } from "@/components/ai-provider-icons";
+import { ChatComposerChipsPending } from "@/components/chat/chat-composer-dock.pending";
 import {
   ChatModelOptionsMenu,
   chatRunOnTarget,
@@ -26,10 +27,12 @@ import {
 import { EFFORT_LABEL_KEY } from "@/components/chat/chat-model-options-menu.logic";
 import {
   ChatRunTargetMenu,
+  useCloudStartLabel,
   useLocalRunTargetStateLabel,
 } from "@/components/chat/chat-run-target-menu";
 import {
   CHAT_LOCAL_HARNESS_NAMES,
+  type ChatCloudStart,
   localRunModelLabel,
   localRunTargetState,
 } from "@/components/chat/chat-run-target-menu.logic";
@@ -46,12 +49,21 @@ type ChatModelSelectorProps = {
   models: ComposerModelsMenuProps;
 };
 
-type TriggerView = {
-  label: string;
-  icon: React.ReactNode;
-  /** An explicit choice reads as one; Auto stays quiet. */
-  chosen: boolean;
-};
+/**
+ * What the model chip shows: the choice, or `pending` while the label that
+ * names it cannot be known yet (the stored choice, or the names the coding
+ * agent or stella give its model, are still being read). A pending chip
+ * holds the chip's box with a bar, so it never shows a label it then swaps.
+ */
+type TriggerView =
+  | { type: "pending" }
+  | {
+      type: "ready";
+      label: string;
+      icon: React.ReactNode;
+      /** An explicit choice reads as one; Auto stays quiet. */
+      chosen: boolean;
+    };
 
 /**
  * The composer bar's two choices, from the composer's one choice owner:
@@ -63,7 +75,18 @@ type TriggerView = {
 export const ChatComposerChips = ({
   disabled = false,
   models,
-}: ChatModelSelectorProps) => (
+}: ChatModelSelectorProps) =>
+  // Until the stored choice is read, neither chip can say what it is.
+  models.state === "loading" ? (
+    <ChatComposerChipsPending />
+  ) : (
+    <ChatComposerChipsReady disabled={disabled} models={models} />
+  );
+
+const ChatComposerChipsReady = ({
+  disabled,
+  models,
+}: Required<ChatModelSelectorProps>) => (
   <>
     {models.runTarget.type === "choice" && (
       <ChatRunOnChip
@@ -71,6 +94,7 @@ export const ChatComposerChips = ({
         disabled={disabled || models.state === "loading"}
         onSelect={models.runTarget.select}
         selected={models.runTarget.selected}
+        startedInCloud={models.runTarget.startedInCloud}
       />
     )}
     <ChatModelSelector disabled={disabled} models={models} />
@@ -82,13 +106,15 @@ type ChatRunOnChipProps = {
   disabled: boolean;
   selected: ChatRunTarget;
   onSelect: (target: ChatRunTarget) => void;
+  startedInCloud: ChatCloudStart | null;
 };
 
 /**
  * Where the chat runs: [Cloud], or [Your computer · Codex], with the linked
  * folder's name when the chat works in one, and why the computer or folder
  * cannot take a turn now when it says so (offline, signed out, or stella
- * desktop opening). Its
+ * desktop opening). A new chat that started in the cloud although the
+ * member last chose their computer says why in its name and tooltip. Its
  * name for assistive technology says the place in full ("Runs on: Your
  * computer, Codex").
  */
@@ -97,9 +123,11 @@ const ChatRunOnChip = ({
   disabled,
   selected,
   onSelect,
+  startedInCloud,
 }: ChatRunOnChipProps) => {
   const t = useTranslations();
   const stateLabel = useLocalRunTargetStateLabel();
+  const cloudStartLabel = useCloudStartLabel();
   const desktop = useDesktopLaunch(activeOrganizationId);
   const [open, setOpen] = useState(false);
   const runnersView = queryView(
@@ -122,7 +150,13 @@ const ChatRunOnChip = ({
       const place = t("chat.runOn.cloud");
       return {
         label: place,
-        name: place,
+        name:
+          startedInCloud === null
+            ? place
+            : t("chat.runOn.placeState", {
+                place,
+                state: cloudStartLabel(startedInCloud),
+              }),
         icon: <CloudIcon aria-hidden="true" className="size-3.5" />,
       };
     }
@@ -201,6 +235,7 @@ const ChatRunOnChip = ({
           key={open ? "open" : "closed"}
           onSelect={onSelect}
           selected={selected}
+          startedInCloud={startedInCloud}
         />
       </MenuPopup>
     </Menu>
@@ -230,6 +265,20 @@ export const ChatModelSelector = ({
       (open || detailsRequested || models.selectedModel !== null),
   );
   const trigger = localTrigger ?? cloudTrigger;
+  const approval = selectedTarget.kind === "local" && (
+    <LocalFolderApproval
+      activeOrganizationId={models.activeOrganizationId}
+      target={selectedTarget}
+    />
+  );
+  if (trigger.type === "pending") {
+    return (
+      <>
+        <ChatComposerChipsPending />
+        {approval}
+      </>
+    );
+  }
 
   return (
     <>
@@ -273,12 +322,7 @@ export const ChatModelSelector = ({
           />
         </MenuPopup>
       </Menu>
-      {selectedTarget.kind === "local" && (
-        <LocalFolderApproval
-          activeOrganizationId={models.activeOrganizationId}
-          target={selectedTarget}
-        />
-      )}
+      {approval}
     </>
   );
 };
@@ -303,6 +347,11 @@ const useLocalModelTrigger = (
   if (target === null) {
     return null;
   }
+  // The agent names its model once the member's computers are read; the
+  // stored id until then would be a label the chip takes back.
+  if (runnersView.type === "pending") {
+    return { type: "pending" };
+  }
   const readiness =
     runnersView.type === "items" ? runnersView.items : undefined;
   const modelLabel = localRunModelLabel(readiness, target) ?? target.model;
@@ -317,6 +366,7 @@ const useLocalModelTrigger = (
     readiness !== undefined &&
     localRunTargetState(readiness, target).type === "model_unavailable";
   return {
+    type: "ready",
     label: gone
       ? t("chat.localRun.selectionStateLabel", {
           selection: model,
@@ -349,9 +399,11 @@ const useCloudModelTrigger = (
           (option) => option.value === selectedModel,
         )
       : undefined;
-  const label = (() => {
-    if (selectedOption) {
-      return modelSelectionLabel({
+  const chosen = selectedModel !== null;
+  if (selectedOption) {
+    return {
+      type: "ready",
+      label: modelSelectionLabel({
         defaultEffortLabel: t(
           "chat.modelSelector.effortValues.providerDefault",
         ),
@@ -361,31 +413,38 @@ const useCloudModelTrigger = (
         providerDefaultEffort: selectedOption.defaultReasoningEffort,
         reasoningEffort: selectedReasoningEffort,
         translateEffort: (effort) => t(EFFORT_LABEL_KEY[effort]),
-      });
-    }
-    if (selectedModel === null) {
-      return t("chat.modelSelector.autoLabel");
-    }
-    switch (modelsView.type) {
-      case "pending":
-        return t("common.loading");
-      case "error":
-        return t("common.somethingWentWrong");
-      case "empty":
-      case "items":
-        return selectedModel;
-      default:
-        modelsView satisfies never;
-        return panic("Unhandled model selector query state");
-    }
-  })();
-  return {
-    label,
-    icon: selectedOption ? (
-      <ModelTriggerIcon provider={selectedOption.iconProvider} />
-    ) : null,
-    chosen: selectedModel !== null,
-  };
+      }),
+      icon: <ModelTriggerIcon provider={selectedOption.iconProvider} />,
+      chosen,
+    };
+  }
+  if (selectedModel === null) {
+    return {
+      type: "ready",
+      label: t("chat.modelSelector.autoLabel"),
+      icon: null,
+      chosen,
+    };
+  }
+  switch (modelsView.type) {
+    // An explicit model is named once stella's models are read; until then
+    // the chip holds its box rather than saying "Loading".
+    case "pending":
+      return { type: "pending" };
+    case "error":
+      return {
+        type: "ready",
+        label: t("common.somethingWentWrong"),
+        icon: null,
+        chosen,
+      };
+    case "empty":
+    case "items":
+      return { type: "ready", label: selectedModel, icon: null, chosen };
+    default:
+      modelsView satisfies never;
+      return panic("Unhandled model selector query state");
+  }
 };
 
 const ModelTriggerIcon = ({ provider }: { provider: ProviderValue }) => (

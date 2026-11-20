@@ -7,6 +7,7 @@ import {
   createCaseLawDecisionRouteParams,
 } from "@stll/api-contract/case-law-decision-route";
 
+import { publicCaseLawHubPathFor } from "@/features/case-law/browse-hub-path";
 import {
   publicCaseLawCountryFromParam,
   toCaseLawCountryParam,
@@ -98,6 +99,7 @@ export const Route = createFileRoute("/law/")({
     const path = createLawHomePath(match.search);
 
     return createPublicLawHead({
+      canonicalPath: publicCaseLawHubPathFor(match.search.country),
       description,
       jsonLd: createLegalCollectionJsonLd({
         t,

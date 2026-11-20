@@ -3,29 +3,23 @@
 import { lazy, Suspense } from "react";
 import type { HTMLAttributes, ReactNode } from "react";
 
-import type { UIMessage } from "@tanstack/ai-client";
-
 import { SKILL_REF_HREF_PREFIX } from "@stll/api-contract";
 import { cn } from "@stll/ui/utils";
 
 import type { MessageResponseProps } from "@/components/ai-elements/message-response";
+import {
+  MESSAGE_CONTENT_CLASS,
+  type MessageAuthor,
+  messageClassName,
+} from "@/components/ai-elements/message.pending";
 import { ReferenceChip } from "@/components/references/reference-chip";
 
 type MessageProps = HTMLAttributes<HTMLDivElement> & {
-  from: UIMessage["role"] | "system";
+  from: MessageAuthor;
 };
 
 export const Message = ({ className, from, ...props }: MessageProps) => (
-  <div
-    className={cn(
-      "group flex w-full flex-col gap-2",
-      from === "user" && "is-user",
-      from === "assistant" && "is-assistant",
-      from === "system" && "is-system mx-auto",
-      className,
-    )}
-    {...props}
-  />
+  <div className={cn(messageClassName(from), className)} {...props} />
 );
 
 type MessageContentProps = HTMLAttributes<HTMLDivElement>;
@@ -35,30 +29,7 @@ export const MessageContent = ({
   className,
   ...props
 }: MessageContentProps) => (
-  <div
-    className={cn(
-      "flex w-fit max-w-full min-w-0 flex-col gap-2",
-      "overflow-hidden text-sm",
-      // A sent message is a bubble that hugs its text at the end of the
-      // reading column, so the answer below it keeps the column to itself.
-      // It stays unclipped: its edit action sits just outside its start edge.
-      "group-[.is-user]:relative group-[.is-user]:ms-auto group-[.is-user]:max-w-[85%]",
-      "group-[.is-user]:overflow-visible group-[.is-user]:wrap-break-word",
-      "group-[.is-user]:bg-secondary group-[.is-user]:rounded-2xl",
-      "group-[.is-user]:px-4 group-[.is-user]:py-2.5",
-      "group-[.is-user]:text-foreground group-[.is-user]:text-base/6",
-      // Editing in place needs the column's width, not the text's.
-      "group-[.is-user]:has-data-chat-message-edit:w-full group-[.is-user]:has-data-chat-message-edit:max-w-full",
-      "group-[.is-assistant]:text-foreground",
-      "group-[.is-system]:w-full group-[.is-system]:rounded-lg",
-      "group-[.is-system]:border group-[.is-system]:border-dashed",
-      "group-[.is-system]:bg-muted/50 group-[.is-system]:px-3",
-      "group-[.is-system]:py-2 group-[.is-system]:text-xs",
-      "group-[.is-system]:text-muted-foreground",
-      className,
-    )}
-    {...props}
-  >
+  <div className={cn(MESSAGE_CONTENT_CLASS, className)} {...props}>
     {children}
   </div>
 );

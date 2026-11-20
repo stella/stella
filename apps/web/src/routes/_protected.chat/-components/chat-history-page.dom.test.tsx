@@ -34,7 +34,7 @@ const { noopAnalytics } = await import("@/lib/analytics/noop");
 const { workspacesNavigationOptions } =
   await import("@/lib/workspaces/queries");
 const { RenderLoopGuard } = await import("@/testing/render-loop-guard");
-const { ChatHistoryPage } = await import("./chat-history-page");
+const { ChatHistoryPage } = await import("./chat-history.page");
 
 type ChatHistorySearch = Parameters<typeof ChatHistoryPage>[0]["search"];
 type ThreadsPage = WebApiRoutes["chat"]["threads"]["get"]["response"][200];

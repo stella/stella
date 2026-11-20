@@ -36,7 +36,10 @@ import { isTerminalFlowRunStatus } from "@/components/flows/flow-meta";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { StatCard } from "@/components/overview-stat-card";
 import { PersonMentionLabel } from "@/components/person-mention-label";
-import { QueryViewFeedback } from "@/components/query-view-feedback";
+import {
+  QueryViewFeedback,
+  SettledQueryViewFeedback,
+} from "@/components/query-view-feedback";
 import { UserIdentity } from "@/components/user-avatar";
 import { EntityKindIcon } from "@/components/workspaces/entity-kind-icon";
 import { getWeekStart, toISODate } from "@/components/workspaces/entity-utils";
@@ -69,6 +72,10 @@ import {
 } from "@/lib/workspaces/queries/time-entries";
 import { viewsOptions } from "@/lib/workspaces/queries/views";
 import { ActivityPanel } from "@/routes/_protected.workspaces/$workspaceId/-components/activity/activity-panel";
+import {
+  OVERVIEW_STATS_GRID_CLASS,
+  OVERVIEW_VIEW_CLASS,
+} from "@/routes/_protected.workspaces/$workspaceId/-components/overview-view.pending";
 
 import { resolveNextDeadline } from "./overview-next-deadline.logic";
 import type { NextDeadline } from "./overview-next-deadline.logic";
@@ -348,13 +355,13 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
   const totalTeamHoursThisWeek = (teamTimeSummary?.totalTeamMinutes ?? 0) / 60;
 
   return (
-    <div className="@container flex flex-1 flex-col gap-6 overflow-y-auto p-4 tabular-nums sm:p-6">
+    <div className={OVERVIEW_VIEW_CLASS}>
       <OverviewQueryFeedback
         flowRunsView={flowRunsDataView}
         viewsView={viewsView}
       />
       {/* Stats grid */}
-      <div className="grid gap-3 @sm:grid-cols-2 @3xl:grid-cols-4">
+      <div className={OVERVIEW_STATS_GRID_CLASS}>
         <StatCard
           icon={<FolderTreeIcon className="size-4" />}
           label="workspaces.overview.totalDocuments"
@@ -860,7 +867,9 @@ const OverviewQueryFeedback = ({
   viewsView,
 }: OverviewQueryFeedbackProps) => (
   <>
-    <QueryViewFeedback view={viewsView} />
+    {/* A read still on its way has nothing to say above the page: the
+        stat cards stand in for what it fills. */}
+    <SettledQueryViewFeedback view={viewsView} />
     {flowRunsView.type !== "pending" && (
       <QueryViewFeedback view={flowRunsView} />
     )}

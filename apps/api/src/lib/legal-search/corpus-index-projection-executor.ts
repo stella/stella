@@ -195,6 +195,12 @@ export type CorpusProjectionAppendCycleResult = {
   unread: number;
   retryScheduled: number;
   blocked: number;
+  /**
+   * Revisions written with their decision's terms cut to a prefix because the
+   * whole did not fit the opening passage. Expected to stay 0: no stored
+   * decision comes near the ceiling, so any count is a decision to look at.
+   */
+  decisionTermsPartial: number;
   requestCount: number;
   /** The proof cycle this append cycle ran before it reserved. */
   proof: CorpusProjectionProofCycleResult;
@@ -223,12 +229,14 @@ const emptyResult = ({
   unread: 0,
   retryScheduled: 0,
   blocked: 0,
+  decisionTermsPartial: 0,
   requestCount: 0,
 });
 
 type PreparedProjectionEntry = {
   material: CorpusProjectionMaterial;
   documentCount: number;
+  decisionTerms: CorpusProjectionRevisionBlock["decisionTerms"];
   indexId: string;
   ndjson: string;
   ndjsonBytes: number;
@@ -425,9 +433,11 @@ const planProjectionRevisionRequest = ({
   material,
   documentCount,
   parts,
+  decisionTerms,
 }: CorpusProjectionRevisionBlock): PreparedProjectionEntry => ({
   material,
   documentCount,
+  decisionTerms,
   indexId: material.lease.indexId,
   ndjson: parts[0],
   ndjsonBytes: Buffer.byteLength(parts[0], "utf-8") + 1,
@@ -1209,6 +1219,14 @@ const processPreparedStream = async ({
     const entries: PreparedProjectionEntry[] = [];
     if (prepared.isOk()) {
       entries.push(prepared.value);
+      if (prepared.value.decisionTerms === "prefix") {
+        result.decisionTermsPartial += 1;
+        logger.error("corpus_projection.decision_terms_partial", {
+          entity: material.lease.entityId,
+          generation: material.lease.generation,
+          indexId: material.lease.indexId,
+        });
+      }
     } else {
       if (prepared.error.kind === "payload_unavailable") {
         result.unread += 1;

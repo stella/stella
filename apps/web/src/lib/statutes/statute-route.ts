@@ -16,6 +16,7 @@ import type { useFormatter } from "@/i18n/formatting-context";
 export const STATUTE_COUNTRIES = {
   cze: { region: "CZ" },
   svk: { region: "SK" },
+  hun: { region: "HU" },
 } as const satisfies Record<StatuteQueryCountry, { region: string }>;
 
 export type StatuteCountry = keyof typeof STATUTE_COUNTRIES;
@@ -26,9 +27,8 @@ export type StatuteCountry = keyof typeof STATUTE_COUNTRIES;
  * MCP only. Declared, so admitting a jurisdiction leaves the browser a stated
  * decision.
  */
-export const STATUTE_BROWSER_PENDING_COUNTRIES = [
-  "HUN",
-] as const satisfies readonly PublicCountry[];
+export const STATUTE_BROWSER_PENDING_COUNTRIES =
+  [] as const satisfies readonly PublicCountry[];
 
 const isStatuteCountry = (value: string): value is StatuteCountry =>
   Object.hasOwn(STATUTE_COUNTRIES, value);

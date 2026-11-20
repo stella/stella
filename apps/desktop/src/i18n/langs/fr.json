@@ -36,7 +36,11 @@
     "sessionOpeningInOffice": "Ouverture dans Office",
     "sessionSavingDraft": "Enregistrement du brouillon",
     "reconnectAccount": "Se reconnecter à stella web…",
-    "transcribeRecording": "Transcrire un enregistrement…"
+    "transcribeRecording": "Transcrire un enregistrement…",
+    "dictation": "Dictée",
+    "dictationHint": "Maintenez {key} pour dicter",
+    "dictationSettings": "Réglages de la dictée…",
+    "dictationTurnOn": "Activer la dictée…"
   },
   "notification": {
     "checkpointDelayedBody": "{fileName} : les modifications restent locales et seront réessayées automatiquement",
@@ -654,10 +658,22 @@
     },
     "language": {
       "title": "Langue de dictée",
-      "description": "Automatique utilise les langues d’affichage et de clavier de cet ordinateur.",
+      "description": "Automatique utilise les langues d’affichage et de clavier de cet ordinateur. S’il y en a plusieurs, chaque mot est reconnu dans la langue où vous le prononcez.",
       "automatic": "Automatique",
       "automaticWith": "Automatique ({languages})",
       "noResults": "Aucune langue trouvée"
+    },
+    "customWords": {
+      "group": "Mots personnalisés",
+      "title": "Mots et noms que stella doit écrire correctement",
+      "description": "Par exemple des noms de clients, ou des termes anglais que vous employez en parlant une autre langue. Ils sont conservés sur cet ordinateur pour ce compte et envoyés uniquement avec votre dictée, à la transcription par stella AI et à la correction par IA. Le modèle vocal de cet ordinateur ne les utilise pas.",
+      "count": "{count, number} sur {limit, number}",
+      "input": "Ajouter un mot ou un nom",
+      "add": "Ajouter",
+      "remove": "Retirer {word}",
+      "duplicate": "Ce mot figure déjà dans la liste.",
+      "full": "La liste contient au plus {limit, number} mots. Retirez-en un pour en ajouter un autre.",
+      "failed": "La liste n’a pas pu être enregistrée. Réessayez."
     },
     "modelNeeded": "Le modèle vocal s'exécute sur cet ordinateur.",
     "speechModel": "Modèle vocal",
@@ -685,7 +701,8 @@
       "focusUnconfirmed": "stella n’a pas pu confirmer quelle application est au premier plan, rien n’a donc été saisi. Réessayez.",
       "shortcutHeld": "Relâchez les touches du raccourci pour saisir le texte. Rien n’a été saisi ; réessayez.",
       "passwordField": "Un champ de mot de passe est actif : la dictée n'a été ni conservée ni saisie.",
-      "cloudTranscription": "stella AI n’a pas pu transcrire cette dictée et le modèle vocal n’est pas sur cet ordinateur. Réessayez, ou choisissez « Cet ordinateur » pour « Transcrire avec » et téléchargez le modèle."
+      "cloudTranscription": "stella AI n’a pas pu transcrire cette dictée et le modèle vocal n’est pas sur cet ordinateur. Réessayez, ou choisissez « Cet ordinateur » pour « Transcrire avec » et téléchargez le modèle.",
+      "nothingHeard": "stella n'a entendu aucune parole. Vérifiez le périphérique d'entrée dans les réglages Son."
     },
     "failureKeptInHistory": "Le texte se trouve dans l’historique du presse-papiers.",
     "transcribeRecording": {
@@ -693,6 +710,43 @@
       "description": "Convertit en texte un fichier de dictaphone, un mémo vocal ou l’enregistrement d’une réunion jusqu’à 4 heures.",
       "open": "Ouvrir",
       "failed": "Impossible d’ouvrir la fenêtre. Réessayez."
+    },
+    "notice": {
+      "title": "stella n'entend pas votre micro",
+      "allowBody": "Autorisez l'accès au micro, puis réessayez.",
+      "checkBodyMac": "Vérifiez l'accès au micro dans les Réglages Système, puis réessayez.",
+      "checkBodyPc": "Vérifiez l'accès au micro dans les Paramètres Windows, puis réessayez.",
+      "allow": "Autoriser le micro",
+      "openSettingsMac": "Ouvrir les Réglages Système",
+      "openSettingsPc": "Ouvrir les Paramètres",
+      "dismiss": "Fermer",
+      "nothingTitle": "stella n'a entendu aucune parole",
+      "nothingBody": "Parlez en maintenant la touche, ou choisissez une autre entrée dans les réglages Son.",
+      "inputDevice": "Entrée : {device}",
+      "openSoundMac": "Ouvrir les réglages Son",
+      "openSoundPc": "Ouvrir les paramètres de son",
+      "missingTitle": "{missing} n'est pas connecté",
+      "missingBody": "La dictée utilise {device} à la place.",
+      "chooseMicrophone": "Choisir le micro…"
+    },
+    "microphone": {
+      "title": "Micro",
+      "hint": "Les casques Bluetooth mettent un moment à passer sur leur micro et enregistrent en qualité moindre. Le micro intégré est généralement plus clair.",
+      "systemDefault": "Par défaut du système",
+      "systemDefaultNamed": "Par défaut du système ({name})",
+      "bluetoothDevice": "{name} · Bluetooth",
+      "notConnected": "{name} (non connecté)",
+      "test": "Tester le micro",
+      "stopTest": "Arrêter",
+      "level": "Niveau d'entrée",
+      "hearing": "Nous vous entendons.",
+      "noSound": "Aucun son de {device}.",
+      "checkAccess": "Vérifier l'accès au micro"
+    },
+    "preview": {
+      "label": "Ce que vous avez dicté jusqu’ici",
+      "listening": "Écoute…",
+      "finishing": "Finalisation…"
     }
   },
   "shortcut": {
@@ -792,8 +846,8 @@
     "permissionsTitlePc": "Configurer ce PC",
     "permissionsBody": "Chaque autorisation est votre choix. Vous pourrez les modifier plus tard dans les Réglages.",
     "neverRequested": "Jamais demandé :",
-    "tryTitle": "Essayez maintenant",
-    "tryBody": "Copiez un texte, puis appuyez sur {shortcut}.",
+    "tryTitle": "Essayez l'historique du presse-papiers",
+    "tryBody": "Copiez un texte, puis appuyez sur {shortcut} pour ouvrir l'historique du presse-papiers.",
     "tryWaiting": "En attente du raccourci",
     "tryKeepGoing": "Continuez…",
     "tryExtraModifier": "C'est {pressed}. Utilisez {shortcut}.",
@@ -815,18 +869,60 @@
     "introduceActivityTitle": "Nouveau : chronologie d'activité",
     "introduceActivityBody": "L'activité est maintenant disponible pour votre compte. Rien n'est enregistré tant que vous ne la lancez pas dans la fenêtre d'activité.",
     "openActivity": "Ouvrir l'activité",
-    "dictationModel": "Le modèle vocal ({size} Mo) est téléchargé une fois et fonctionne sur cet ordinateur.",
-    "dictationTurnOn": "Activer et télécharger",
     "dictationDownloadContinues": "Vous pouvez continuer. Le téléchargement se poursuit en arrière-plan.",
-    "dictationReady": "La dictée est activée et prête.",
-    "dictationTryLabel": "Dictez ici",
-    "dictationTryPlaceholder": "Cliquez ici, maintenez {shortcut} et dites une phrase.",
-    "dictationListening": "À l'écoute…",
-    "dictationTranscribing": "Transcription de vos paroles…",
     "dictationMicrophone": "Permet à stella de vous entendre tant que vous maintenez le raccourci.",
     "dictationAccessibility": "Permet à stella de saisir vos paroles dans l'application que vous utilisez.",
     "dictationFailed": "stella desktop n'a pas pu activer la dictée. Réessayez.",
     "introduceDictationTitle": "Nouveau : dictée",
+    "dictationSetup": {
+      "progress": "Étape {current} sur {total}",
+      "skipRest": "Passer la suite",
+      "screens": {
+        "microphone": "Microphone",
+        "transcription": "Transcription",
+        "app": "Correction",
+        "context": "Contexte",
+        "words": "Mots"
+      },
+      "microphone": {
+        "title": "Laissez stella vous entendre",
+        "body": "Maintenez {shortcut} et parlez : le texte apparaît là où vous écrivez. D’abord, autorisez le microphone pour que stella vous entende.",
+        "bodyMac": "Maintenez {shortcut} et parlez : le texte apparaît là où vous écrivez. D’abord, autorisez le microphone pour que stella vous entende, et l’Accessibilité pour qu’elle puisse saisir le texte.",
+        "choose": "Microphone pour dicter"
+      },
+      "transcription": {
+        "title": "Où votre voix doit-elle être transcrite ?",
+        "body": "Vous pourrez le modifier plus tard dans les Réglages.",
+        "titleLocal": "Votre voix est transcrite sur cet ordinateur",
+        "bodyLocal": "Le modèle vocal tourne ici, la dictée fonctionne donc aussi hors ligne.",
+        "localTitle": "Sur cet ordinateur",
+        "localBody": "Fonctionne hors ligne. Votre audio ne quitte jamais cet ordinateur.",
+        "localModel": "Nécessite le modèle vocal ({size} Mo), téléchargé une seule fois.",
+        "cloudTitle": "stella AI",
+        "cloudBody": "Rien à télécharger. Votre audio est envoyé à stella puis, via le fournisseur d’IA de stella, au fournisseur du modèle choisi. stella ne le conserve pas."
+      },
+      "app": {
+        "title": "Un texte adapté à l’application",
+        "body": "La correction par l’IA peut écrire pour l’application dans laquelle vous dictez : un e-mail ressemble à un e-mail, un message de chat à un message de chat.",
+        "sentAppKind": "Elle connaît le type d’application, par exemple e-mail, chat ou document, pas son nom.",
+        "notStored": "stella n’en conserve rien.",
+        "off": "Sans correction, le texte est saisi tel qu’il a été transcrit et rien n’est envoyé à la correction par l’IA."
+      },
+      "context": {
+        "title": "Plus de contexte pour la correction",
+        "body": "Facultatif, et désactivé tant que vous ne l’activez pas. Lu uniquement au début d’une dictée, il ne va qu’à la correction par l’IA. stella n’en conserve rien."
+      },
+      "words": {
+        "title": "Apprenez vos mots à stella",
+        "body": "Ajoutez les noms et les termes que stella doit écrire à votre façon, comme votre cabinet, vos clients ou des termes d’une autre langue. Votre liste est vide au départ.",
+        "examplesLabel": "Idées :",
+        "examples": {
+          "firm": "Le nom de votre cabinet",
+          "client": "Le nom d’un client",
+          "term": "Un terme que vous utilisez"
+        }
+      }
+    },
     "guideWaiting": "Activez stella desktop dans la liste ci-dessus pour autoriser l'Accessibilité.",
     "guideAllowed": "stella desktop est autorisé",
     "never": {
@@ -971,6 +1067,14 @@
       "protected": "Ce dossier contient les données de stella ou un dossier de compétences : l'agent ne peut donc pas y travailler.",
       "unreadable": "Ce dossier n'a pas pu être lu."
     }
+  },
+  "keepAwake": {
+    "title": "Maintenir éveillé",
+    "enabled": "Maintenir cet ordinateur éveillé pendant que les agents travaillent",
+    "description": "Tant qu'un agent travaille sur cet ordinateur, celui-ci ne se met pas en veille par inactivité, pour que les longues tâches continuent. L'écran peut toujours s'éteindre. Un Mac portable se met tout de même en veille quand vous fermez son écran.",
+    "onBattery": "Aussi sur batterie",
+    "onBatteryDescription": "Si cette option est désactivée, l'ordinateur se met en veille comme d'habitude sur batterie, même pendant qu'un agent travaille.",
+    "errorSave": "Impossible d'enregistrer ce réglage. Réessayez."
   },
   "transcribe": {
     "title": "Transcrire un enregistrement",

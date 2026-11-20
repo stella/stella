@@ -6,6 +6,7 @@ import {
 } from "@stll/api-contract";
 import { DOCX_SUGGESTION_SURFACE } from "@stll/api-contract/chat-docx-suggestions";
 import type { DocxSuggestionSurface } from "@stll/api-contract/chat-docx-suggestions";
+import { readSkillRequiredTools } from "@stll/skills";
 import type { SkillMetadata } from "@stll/skills/frontmatter";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
@@ -76,6 +77,7 @@ import {
 } from "@/api/handlers/chat/tools/show-app-tool";
 import type { TurnAppLedger } from "@/api/handlers/chat/tools/show-app-tool";
 import { createShowVisualTools } from "@/api/handlers/chat/tools/show-visual-tools";
+import { createSkillPackageTools } from "@/api/handlers/chat/tools/skill-package-tools";
 import {
   businessRegistryCallScope,
   restrictChatToolsToSourceScope,
@@ -339,6 +341,7 @@ type WorkspaceTools = ReturnType<typeof createWorkspaceTools>;
 type OrgTools = ReturnType<typeof createOrgTools>;
 type ChatExecutionTools = ChatCodeModeToolMap;
 type SkillTools = ReturnType<typeof createSkillTools>;
+type SkillPackageTools = ReturnType<typeof createSkillPackageTools>;
 type BusinessRegistryTools = ReturnType<typeof createBusinessRegistryTools>;
 type CounterpartyCheckTools = ReturnType<typeof createCounterpartyCheckTools>;
 type BoeTools = ReturnType<typeof createBoeTools>;
@@ -406,6 +409,7 @@ type BuiltInChatTools = OrgTools &
   ConnectorTools &
   ChatExecutionTools &
   SkillTools &
+  SkillPackageTools &
   CurrentSkillEditTools &
   BusinessRegistryTools &
   CounterpartyCheckTools &
@@ -628,6 +632,13 @@ export type GetChatToolsProps = {
   registryDispatch: Record<BusinessRegistrySlug, RegistryHandler>;
   skillMetadata?: ModelOfferedSkills<SkillMetadata> | undefined;
   /**
+   * Which skill-gated tools (the skill package tools) the set registers:
+   * `turn`, the default, those the turn's skills declare in
+   * `stella-required-tools`; `every`, all the caller may have, for the
+   * tool-name set skill availability is decided over.
+   */
+  skillGatedTools?: SkillGatedTools | undefined;
+  /**
    * Where the turn may use a bound skill. Absent (validation and tool-name
    * sets, which never run a skill read) means unbound skills only.
    */
@@ -835,6 +846,37 @@ true satisfies Exclude<
   ? true
   : never;
 
+export const SKILL_GATED_TOOLS = {
+  every: "every",
+  turn: "turn",
+} as const;
+type SkillGatedTools =
+  (typeof SKILL_GATED_TOOLS)[keyof typeof SKILL_GATED_TOOLS];
+
+/**
+ * Every tool the turn's skills require: the active skill's, and each skill
+ * the model is offered this turn (an `auto` skill, or one the user invoked),
+ * which may be loaded mid-turn and so needs its tools from the start.
+ */
+const skillDeclaredToolNames = ({
+  activeSkillContext,
+  skills,
+}: {
+  activeSkillContext: ActiveChatSkillContext | null | undefined;
+  skills: ModelOfferedSkills<SkillMetadata> | undefined;
+}): ReadonlySet<string> => {
+  const names = new Set(activeSkillContext?.requiredTools);
+  // Absent when the caller loaded no catalog.
+  if (skills !== undefined) {
+    for (const skill of skills) {
+      for (const name of readSkillRequiredTools(skill.metadata)) {
+        names.add(name);
+      }
+    }
+  }
+  return names;
+};
+
 /**
  * The active skill's chat declarations as a turn's tool set honours them. The
  * streaming set applies both; the validation set ignores both, since neither
@@ -1018,6 +1060,7 @@ const buildChatTools = (props: GetChatToolsProps): ChatToolMap => {
     editApplyMode = DEFAULT_CHAT_EDIT_APPLY_MODE,
     docxEditRepresentation = DEFAULT_DOCX_EDIT_REPRESENTATION,
     purpose = CHAT_TOOL_SET_PURPOSE.run,
+    skillGatedTools = SKILL_GATED_TOOLS.turn,
     createAIAbortSignal = () => AbortSignal.timeout(120_000),
     promptCachingEnabled = false,
     usageLane,
@@ -1122,6 +1165,24 @@ const buildChatTools = (props: GetChatToolsProps): ChatToolMap => {
     recordReadAuditEvent,
     safeDb,
     skills: skillMetadata,
+    userId,
+  });
+  const skillPackageTools = createSkillPackageTools({
+    memberRole,
+    offer:
+      forValidation || skillGatedTools === SKILL_GATED_TOOLS.every
+        ? { type: "every" }
+        : {
+            type: "declared",
+            names: skillDeclaredToolNames({
+              activeSkillContext,
+              skills: skillMetadata,
+            }),
+          },
+    organizationId,
+    recordAuditEvent,
+    safeDb,
+    scopedDb,
     userId,
   });
   // Unified business-registry tool: register once with a dynamic
@@ -1482,6 +1543,7 @@ const buildChatTools = (props: GetChatToolsProps): ChatToolMap => {
       ...connectorTools,
       ...executionTools,
       ...skillTools,
+      ...skillPackageTools,
       ...businessRegistryTools,
       ...counterpartyCheckTools,
       ...boeTools,

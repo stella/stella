@@ -1233,6 +1233,13 @@
       "treatment": "Neskoršia judikatúra"
     },
     "analyzing": "Analyzujem...",
+    "browse": {
+      "courtDescription": "{court} ({country}): rozhodnutia vo verejnej právnej databáze stelly podľa roka a mesiaca.",
+      "courts": "Súdy",
+      "days": "Dni",
+      "jurisdictionDescription": "{country}: súdne rozhodnutia vo verejnej právnej databáze stelly podľa súdu, roka a mesiaca.",
+      "periodDescription": "{court} ({country}), {period}: rozhodnutia vo verejnej právnej databáze stelly."
+    },
     "chat": {
       "prompts": {
         "facts": {
@@ -1494,6 +1501,10 @@
       "title": "Vyhľadávanie je dočasne nedostupné"
     },
     "searchWarnings": {
+      "collectionCitationUnresolved": {
+        "hint": "Ak poznáte spisovú značku alebo ECLI rozhodnutia, vyhľadajte ho podľa nich.",
+        "message": "Pre túto citáciu zbierky sa nenašlo presne zodpovedajúce rozhodnutie."
+      },
       "noHits": {
         "hint": "Skúste menej slov alebo iné: výrazy, ktoré by použilo rozhodnutie, nie vetu, ktorou sa otázka kladie.",
         "message": "Slovám, ktoré hľadanie vyžadovalo, nič nezodpovedá."
@@ -1721,12 +1732,25 @@
       "unorderedList": "Zoznam s odrážkami",
       "wholeBlockRequired": "Na zmenu štýlu vyberte celý odsek alebo zoznam."
     },
+    "answerNotFinished": "stella túto odpoveď nedokončila.",
     "answerQuote": {
       "showInDecision": "Zobraziť v rozhodnutí",
       "unverified": "Citáciu sa nepodarilo overiť",
       "unverifiedHint": "Citované rozhodnutia tento text doslovne neobsahujú",
       "verified": "Overená citácia",
       "verifiedHint": "Doslovne v {source}"
+    },
+    "answerTable": {
+      "copy": "Kopírovať tabuľku",
+      "copyAs": "Kopírovať ako {format}",
+      "download": "Stiahnuť tabuľku",
+      "downloadAs": "Stiahnuť ako {format}",
+      "fullscreen": "Otvoriť na celú obrazovku",
+      "fullscreenTitle": "Tabuľka na celú obrazovku",
+      "singleLine": "Na jeden riadok",
+      "size": "{rows, plural, one {# riadok} few {# riadky} many {# riadka} other {# riadkov}} · {columns, plural, one {# stĺpec} few {# stĺpce} many {# stĺpca} other {# stĺpcov}}",
+      "textMode": "Text buniek",
+      "wrap": "Zalamovať text"
     },
     "applyMode": {
       "description": "Word ukladá, kto urobil každú zmenu. Vašu voľbu si zapamätáme.",
@@ -2120,6 +2144,7 @@
     },
     "newChat": "Nový chat",
     "newChatInSidePanel": "Nový chat je dostupný v bočnom paneli",
+    "nextSteps": "Ďalšie kroky",
     "noPromptPresetOnly": "Bez správy, iba predvoľba",
     "noThreads": "Zatiaľ žiadne konverzácie",
     "officeCitationUnavailable": "Táto citácia už nie je dostupná.",
@@ -2226,7 +2251,6 @@
       "chipLabel": "Kde beží: {place}",
       "cloud": "Cloud",
       "cloudDescription": "Beží v cloude. Funguje odkiaľkoľvek.",
-      "harnessModels": "Modely {harness}",
       "hintCheck": "Skontrolujte ho v stella desktop",
       "hintInstall": "Nainštalujte ho v stella desktop",
       "hintOffline": "Otvorte stella desktop vo svojom počítači",
@@ -2236,8 +2260,9 @@
       "localFolderSelection": "Váš počítač · {harness} · {folder}",
       "localPlace": "Váš počítač, {harness}",
       "localSelection": "Váš počítač · {harness}",
-      "modelDefault": "Predvolený (odporúčaný)",
       "placeState": "{place}. {state}",
+      "startedInCloud": "Nový chat sa spustil v cloude, pretože {harness} na vašom počítači nie je k dispozícii ({state})",
+      "startedInCloudCheckFailed": "Nový chat sa spustil v cloude, pretože sa nepodarilo skontrolovať váš počítač",
       "stepsCheck": "Otvára sa stella desktop. Ak sa neotvorí, otvorte ho vo svojom počítači a skontrolujte agenta {harness} v časti Nastavenia › Všeobecné › Predplatné AI.",
       "stepsInstall": "Otvára sa stella desktop. Ak sa neotvorí, otvorte ho vo svojom počítači a v časti Nastavenia › Všeobecné zvoľte pri agentovi {harness} Nainštalovať.",
       "stepsSignInClaudeCode": "Otvára sa stella desktop na prihlásenie. Ak sa neotvorí, otvorte ho a zvoľte Nastavenia › Všeobecné › Prihlásiť sa cez Claude.",
@@ -2304,13 +2329,26 @@
       "title": "Správa čaká v poradí, kým agent neskončí",
       "turnNotRunning": "Agent práve nepracuje."
     },
+    "stepDigest": {
+      "decisionsFound": "{found, plural, one {# rozhodnutie nájdené} few {# rozhodnutia nájdené} many {# rozhodnutia nájdeného} other {# rozhodnutí nájdených}}",
+      "decisionsFoundUsed": "{found, plural, one {# rozhodnutie nájdené} few {# rozhodnutia nájdené} many {# rozhodnutia nájdeného} other {# rozhodnutí nájdených}}, {used, plural, one {# použité v odpovedi} few {# použité v odpovedi} many {# použitého v odpovedi} other {# použitých v odpovedi}}",
+      "filterAsOf": "K {date}",
+      "legislationFound": "{count, plural, one {# predpis alebo ustanovenie} few {# predpisy a ustanovenia} many {# predpisu a ustanovenia} other {# predpisov a ustanovení}}",
+      "lookupDidNotGoThrough": "Toto hľadanie neprešlo.",
+      "moreFound": "{count, plural, one {a # ďalší} few {a # ďalšie} many {a # ďalšieho} other {a # ďalších}}",
+      "moreLookups": "{count, plural, one {# ďalší dopyt sa nezobrazuje} few {# ďalšie dopyty sa nezobrazujú} many {# ďalšieho dopytu sa nezobrazuje} other {# ďalších dopytov sa nezobrazuje}}",
+      "notRecorded": "Tento krok prebehol skôr, ako stella začala zaznamenávať, čo ktorý krok hľadá.",
+      "nothingFound": "Nič nezodpovedá.",
+      "technicalDetails": "Technické detaily",
+      "usedInAnswer": "Použité v odpovedi",
+      "versionFrom": "Znenie od {date}"
+    },
     "stopFailed": "Odpoveď sa nepodarilo zastaviť. Skúste to znova.",
     "stopResponse": "Zastaviť",
     "stopped": "Zastavené",
     "stopping": "Zastavujem…",
     "suggestTitle": "Navrhnúť názov",
     "suggestTitleUnavailableAnonymized": "Návrhy názvu nie sú dostupné pre anonymizované konverzácie.",
-    "suggestedFollowupsLabel": "Navrhované nadväzujúce otázky",
     "suggestingTitle": "Navrhujem názov…",
     "suggestionSeverity": {
       "style": "Štýl",
@@ -2321,7 +2359,6 @@
       "accepted": "Použité",
       "rejected": "Odmietnuté"
     },
-    "tabToAsk": "→ pre otázku: \"{prompt}\"",
     "tableChart": {
       "bar": "Stĺpcový",
       "kind": "Typ grafu",
@@ -2412,6 +2449,7 @@
       "save_document": "Uložiť dokument",
       "save_matter": "Uložiť spis",
       "save_playbook": "Uložiť playbook",
+      "save_skill_package": "Uložiť zručnosť",
       "save_task": "Uložiť úlohu",
       "save_template": "Uložiť vzor",
       "save_time_entry": "Uložiť časový záznam",
@@ -2440,6 +2478,7 @@
       "use-browser": "Používanie vášho prehliadača",
       "use_connector_secret": "Použitie prístupového údaja konektora",
       "user_message": "Odoslané počas práce agenta",
+      "validate_skill_package": "Skontrolovať zručnosť",
       "web_search": "Vyhľadávanie na webe"
     },
     "toolCall": {
@@ -4050,6 +4089,12 @@
     "versionCreatedDescription": "Bola vytvorená verzia {versionNumber}. Všetci môžu pokračovať v úpravách.",
     "versionCreatedTitle": "Verzia vytvorená",
     "viewOnly": "Len na čítanie"
+  },
+  "guidance": {
+    "notCaseLaw": "Metodický dokument vydaný regulátorom. Nejde o súdne rozhodnutie.",
+    "openAtPublisher": "Otvoriť u vydavateľa",
+    "source": "Zdroj: {attribution}",
+    "textUnavailable": "Text tohto dokumentu tu nie je k dispozícii. Prečítajte si ho u vydavateľa."
   },
   "guides": {
     "action": {
@@ -5741,6 +5786,9 @@
       "chatNotificationsDescription": "Dostanete upozornenie z tohto prehliadača, keď sa odpoveď v chate dokončí, kým je stella na pozadí.",
       "chatNotificationsToggle": "Upozorniť ma, keď je odpoveď hotová alebo potrebuje môj vstup",
       "chatNotificationsUnsupported": "Tento prehliadač upozornenia nepodporuje.",
+      "chatTechnicalDetails": "Technické detaily v chate",
+      "chatTechnicalDetailsDescription": "Každý krok v chate ukazuje, čo hľadal a čo našiel. Po zapnutí uvidíte aj kód a nespracované výsledky za ním.",
+      "chatTechnicalDetailsToggle": "Zobrazovať technické detaily v chate",
       "confirmDelete": "Potvrdiť vymazanie účtu",
       "dangerZone": "Nebezpečná zóna",
       "dangerZoneDescription": "Natrvalo vymazať prístup k účtu a súkromné údaje účtu.",
@@ -7907,7 +7955,6 @@
         "endDate": "Dátum ukončenia",
         "month": "Mesiac",
         "quarter": "Štvrťrok",
-        "showTable": "Zobraziť tabuľku",
         "startDate": "Dátum začiatku",
         "week": "Týždeň"
       },

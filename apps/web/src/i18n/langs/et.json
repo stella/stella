@@ -1233,6 +1233,13 @@
       "treatment": "Hilisem käsitlus"
     },
     "analyzing": "Analüüsin...",
+    "browse": {
+      "courtDescription": "{court} ({country}): lahendid stella avalikus õigusandmebaasis aasta ja kuu kaupa.",
+      "courts": "Kohtud",
+      "days": "Päevad",
+      "jurisdictionDescription": "{country}: kohtulahendid stella avalikus õigusandmebaasis kohtu, aasta ja kuu kaupa.",
+      "periodDescription": "{court} ({country}), {period}: lahendid stella avalikus õigusandmebaasis."
+    },
     "chat": {
       "prompts": {
         "facts": {
@@ -1494,6 +1501,10 @@
       "title": "Otsing pole ajutiselt saadaval"
     },
     "searchWarnings": {
+      "collectionCitationUnresolved": {
+        "hint": "Kui teate kohtuasja numbrit või lahendi ECLI-t, otsige selle järgi.",
+        "message": "Sellele kogumikuviitele täpselt vastavat kohtulahendit ei leitud."
+      },
       "noHits": {
         "hint": "Proovige vähem või teisi sõnu: mõisteid, mida kasutaks kohtulahend, mitte lauset, millega küsimus esitatakse.",
         "message": "Miski ei vasta sõnadele, mida see otsing nõudis."
@@ -1721,12 +1732,25 @@
       "unorderedList": "Täpploend",
       "wholeBlockRequired": "Stiili muutmiseks valige terve lõik või loend."
     },
+    "answerNotFinished": "stella ei saanud seda vastust lõpetada.",
     "answerQuote": {
       "showInDecision": "Näita lahendis",
       "unverified": "Tsitaati ei õnnestunud kontrollida",
       "unverifiedHint": "Viidatud lahendid ei sisalda seda teksti sõna-sõnalt",
       "verified": "Kontrollitud tsitaat",
       "verifiedHint": "Sõna-sõnalt: {source}"
+    },
+    "answerTable": {
+      "copy": "Kopeeri tabel",
+      "copyAs": "Kopeeri {format}-vormingus",
+      "download": "Laadi tabel alla",
+      "downloadAs": "Laadi alla {format}-vormingus",
+      "fullscreen": "Ava täisekraanil",
+      "fullscreenTitle": "Tabel täisekraanil",
+      "singleLine": "Ühel real",
+      "size": "{rows, plural, one {# rida} other {# rida}} · {columns, plural, one {# veerg} other {# veergu}}",
+      "textMode": "Lahtrite tekst",
+      "wrap": "Murra tekst"
     },
     "applyMode": {
       "description": "Word salvestab, kes iga muudatuse tegi. Jätame sinu valiku meelde.",
@@ -2120,6 +2144,7 @@
     },
     "newChat": "Uus vestlus",
     "newChatInSidePanel": "Uus vestlus on külgpaneelis saadaval",
+    "nextSteps": "Järgmised sammud",
     "noPromptPresetOnly": "Sõnum puudub, ainult eelseadistus",
     "noThreads": "Vestlusi pole veel",
     "officeCitationUnavailable": "See viide pole enam saadaval.",
@@ -2226,7 +2251,6 @@
       "chipLabel": "Töötab: {place}",
       "cloud": "Pilv",
       "cloudDescription": "Töötab pilves. Kasutatav kõikjalt.",
-      "harnessModels": "{harness} mudelid",
       "hintCheck": "Kontrolli seda stella desktopis",
       "hintInstall": "Paigalda see stella desktopist",
       "hintOffline": "Ava oma arvutis stella desktop",
@@ -2236,8 +2260,9 @@
       "localFolderSelection": "Sinu arvuti · {harness} · {folder}",
       "localPlace": "Sinu arvuti, {harness}",
       "localSelection": "Sinu arvuti · {harness}",
-      "modelDefault": "Vaikimisi (soovitatud)",
       "placeState": "{place}. {state}",
+      "startedInCloud": "See uus vestlus algas pilves, sest {harness} pole sinu arvutis saadaval ({state})",
+      "startedInCloudCheckFailed": "See uus vestlus algas pilves, sest sinu arvutit ei õnnestunud kontrollida",
       "stepsCheck": "stella desktop avaneb. Kui see ei avane, ava see oma arvutis ja vaata jaotises Seaded › Üldine › AI-tellimused rida {harness}.",
       "stepsInstall": "stella desktop avaneb. Kui see ei avane, ava see oma arvutis ja vali jaotises Seaded › Üldine rea {harness} juures Installi.",
       "stepsSignInClaudeCode": "stella desktop avaneb sisselogimiseks. Kui see ei avane, ava see ja vali Seaded › Üldine › Logi sisse Claude’iga.",
@@ -2304,13 +2329,26 @@
       "title": "Sinu sõnum ootab järjekorras, kuni agent lõpetab",
       "turnNotRunning": "Agent praegu ei tööta."
     },
+    "stepDigest": {
+      "decisionsFound": "{found, plural, one {Leiti # lahend} other {Leiti # lahendit}}",
+      "decisionsFoundUsed": "{found, plural, one {Leiti # lahend} other {Leiti # lahendit}}, {used, plural, one {vastuses kasutati #} other {vastuses kasutati #}}",
+      "filterAsOf": "Seisuga {date}",
+      "legislationFound": "{count, plural, one {# õigusakt või säte} other {# õigusakti ja sätet}}",
+      "lookupDidNotGoThrough": "See otsing ei õnnestunud.",
+      "moreFound": "{count, plural, one {veel # pole näidatud} other {veel # pole näidatud}}",
+      "moreLookups": "{count, plural, one {Veel # päringut pole näidatud} other {Veel # päringut pole näidatud}}",
+      "notRecorded": "See samm tehti enne, kui stella hakkas salvestama, mida iga samm otsib.",
+      "nothingFound": "Vasteid ei leitud.",
+      "technicalDetails": "Tehnilised üksikasjad",
+      "usedInAnswer": "Kasutati vastuses",
+      "versionFrom": "Redaktsioon alates {date}"
+    },
     "stopFailed": "Vastust ei õnnestunud peatada. Proovige uuesti.",
     "stopResponse": "Peata",
     "stopped": "Peatatud",
     "stopping": "Peatamine…",
     "suggestTitle": "Paku pealkiri",
     "suggestTitleUnavailableAnonymized": "Anonüümitud vestluste puhul pole pealkirjasoovitused saadaval.",
-    "suggestedFollowupsLabel": "Soovitatud jätkuküsimused",
     "suggestingTitle": "Pealkirja pakkumine…",
     "suggestionSeverity": {
       "style": "Stiil",
@@ -2321,7 +2359,6 @@
       "accepted": "Rakendatud",
       "rejected": "Tagasi lükatud"
     },
-    "tabToAsk": "→ küsimiseks: \"{prompt}\"",
     "tableChart": {
       "bar": "Tulpdiagramm",
       "kind": "Diagrammi tüüp",
@@ -2412,6 +2449,7 @@
       "save_document": "Salvesta dokument",
       "save_matter": "Salvesta toimik",
       "save_playbook": "Salvesta playbook",
+      "save_skill_package": "Salvesta oskus",
       "save_task": "Salvesta ülesanne",
       "save_template": "Salvesta mall",
       "save_time_entry": "Salvesta ajakirje",
@@ -2440,6 +2478,7 @@
       "use-browser": "Teie brauseri kasutamine",
       "use_connector_secret": "Konnektori mandaadi kasutamine",
       "user_message": "Saadetud agendi töö ajal",
+      "validate_skill_package": "Kontrolli oskust",
       "web_search": "Veebist otsimine"
     },
     "toolCall": {
@@ -4050,6 +4089,12 @@
     "versionCreatedDescription": "Versioon {versionNumber} loodi. Kõik saavad redigeerimist jätkata.",
     "versionCreatedTitle": "Versioon loodud",
     "viewOnly": "Ainult vaatamiseks"
+  },
+  "guidance": {
+    "notCaseLaw": "Järelevalveasutuse välja antud juhend. See ei ole kohtulahend.",
+    "openAtPublisher": "Ava väljaandja juures",
+    "source": "Allikas: {attribution}",
+    "textUnavailable": "Selle dokumendi tekst ei ole siin saadaval. Lugege seda väljaandja juures."
   },
   "guides": {
     "action": {
@@ -5741,6 +5786,9 @@
       "chatNotificationsDescription": "Saate sellest brauserist teavituse, kui vestluse vastus valmib ajal, mil stella on taustal.",
       "chatNotificationsToggle": "Teavita mind, kui vastus on valmis või vajab minu sisendit",
       "chatNotificationsUnsupported": "See brauser ei toeta teavitusi.",
+      "chatTechnicalDetails": "Tehnilised üksikasjad vestluses",
+      "chatTechnicalDetailsDescription": "Iga vestluse samm näitab, mida see otsis ja mida leidis. Sisse lülitatuna näete ka selle taga olevat koodi ja töötlemata tulemusi.",
+      "chatTechnicalDetailsToggle": "Näita vestluses tehnilisi üksikasju",
       "confirmDelete": "Kinnita konto kustutamine",
       "dangerZone": "Ohutsoon",
       "dangerZoneDescription": "Kustuta konto juurdepääs ja konto privaatsed andmed jäädavalt.",
@@ -7907,7 +7955,6 @@
         "endDate": "Lõppkuupäev",
         "month": "Kuu",
         "quarter": "Kvartal",
-        "showTable": "Näita tabelit",
         "startDate": "Alguskuupäev",
         "week": "Nädal"
       },

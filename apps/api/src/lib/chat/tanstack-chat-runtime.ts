@@ -27,6 +27,7 @@ import {
 } from "@stll/api-contract/chat";
 
 import { arrayOrEmpty } from "@/api/lib/array";
+import { stepLedgerProviderMiddleware } from "@/api/lib/chat/step-ledger-provider-copy";
 import { isRecord } from "@/api/lib/type-guards";
 
 /** Internal snapshot evidence, consumed before persistence and client delivery. */
@@ -298,6 +299,8 @@ export const streamChatChunks = async function* (
       }
     },
   });
+  // Last, so it reads the provider copy every middleware before it settled.
+  middleware.push(stepLedgerProviderMiddleware);
   for await (const chunk of chat({
     ...options,
     promptCache: "none",

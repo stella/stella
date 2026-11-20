@@ -1,0 +1,1101 @@
+import { Suspense, useState } from "react";
+
+import { useForm, useSelector } from "@tanstack/react-form";
+import {
+  useMutation,
+  useQueryClient,
+  useSuspenseQuery,
+} from "@tanstack/react-query";
+import { getRouteApi, Link, useNavigate } from "@tanstack/react-router";
+import { useTranslations } from "use-intl";
+import * as v from "valibot";
+
+import { CURRENCY_CODE_LENGTH } from "@stll/api-contract";
+import { applyMarkupCents, timeEntryAmount } from "@stll/money";
+import { Temporal } from "@stll/time";
+import { Button } from "@stll/ui/button";
+import { Dialog, DialogPopup } from "@stll/ui/dialog";
+import { Field, FieldError } from "@stll/ui/field";
+import { Form } from "@stll/ui/form";
+import {
+  CheckIcon,
+  EditIcon,
+  SendIcon,
+  Trash2Icon,
+  UndoIcon,
+  XCircleIcon,
+} from "@stll/ui/icons";
+import { Input } from "@stll/ui/input";
+import { Label } from "@stll/ui/label";
+import { MatterIcon } from "@stll/ui/matter-icon";
+import { ScrollArea } from "@stll/ui/scroll-area";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@stll/ui/table";
+import { Textarea } from "@stll/ui/textarea";
+
+import { formatCurrencyAmount } from "@/components/billing/format-currency";
+import {
+  MEDIUM_DATE,
+  plainDateEpoch,
+} from "@/components/billing/format-plain-date";
+import { InvoicePdfDownloadButton } from "@/components/billing/invoice-pdf-download-button";
+import { DatePickerPopover } from "@/components/date-picker-popover";
+import { usePermissions } from "@/hooks/use-permissions";
+import { useFormatter } from "@/i18n/formatting-context";
+import { api } from "@/lib/api";
+import { invokeCapability } from "@/lib/capabilities/capability-request";
+import { detached } from "@/lib/detached";
+import { toAPIError, unwrapApiResponse } from "@/lib/errors/api";
+import { notifyUserError } from "@/lib/errors/user-toast";
+import {
+  CallerFeatureGate,
+  useCallerFeatureAdmission,
+} from "@/lib/organization/feature-access/access";
+import type { FeatureAdmission } from "@/lib/organization/feature-access/access";
+import { CALLER_FEATURE } from "@/lib/organization/feature-access/surfaces";
+import { toSafeId } from "@/lib/safe-id";
+import {
+  schemaFormOptions,
+  toFormErrors,
+  trimmedStringSchema,
+} from "@/lib/schema";
+import { resourceMutation } from "@/lib/workspace-realtime";
+import {
+  invoiceByIdOptions,
+  invoicesKeys,
+} from "@/lib/workspaces/queries/invoices";
+import type { InvoiceStatus } from "@/lib/workspaces/queries/invoices";
+import { timeEntriesKeys } from "@/lib/workspaces/queries/time-entries";
+import { ConfirmAction } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/confirm-action";
+import { InvoiceExportMenu } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/invoice-export-menu";
+import { InvoiceLineEditor } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/invoice-line-editor";
+import {
+  InvoicePaymentsSection,
+  RecordPaymentDialog,
+} from "@/routes/_protected.workspaces/$workspaceId/-components/billing/invoice-payments";
+import {
+  invoiceTakesPayments,
+  isPartiallyPaid,
+} from "@/routes/_protected.workspaces/$workspaceId/-components/billing/invoice-payments.logic";
+import {
+  InvoiceSendsSection,
+  SendInvoiceForm,
+} from "@/routes/_protected.workspaces/$workspaceId/-components/billing/invoice-sends";
+import { InvoiceStatusBadge } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/invoice-status-badge";
+
+import {
+  InfoCell,
+  InvoiceDetailBackIcon,
+  InvoiceDetailBody,
+  InvoiceDetailInfo,
+  InvoiceDetailShell,
+  InvoiceDetailSkeleton,
+  InvoiceEntrySection,
+  InvoiceEntryTable,
+} from "./-invoice-detail.pending";
+
+const routeApi = getRouteApi(
+  "/_protected/workspaces/$workspaceId/invoices/$invoiceId",
+);
+
+export function InvoiceDetailPage() {
+  const t = useTranslations();
+  const { workspaceId, invoiceId } = routeApi.useParams({
+    select: (p) => ({
+      workspaceId: p.workspaceId,
+      invoiceId: p.invoiceId,
+    }),
+  });
+
+  return (
+    <InvoiceDetailShell
+      back={
+        <Link params={{ workspaceId }} to="/workspaces/$workspaceId/invoices">
+          <Button aria-label={t("common.back")} size="icon" variant="ghost">
+            <InvoiceDetailBackIcon />
+          </Button>
+        </Link>
+      }
+    >
+      <Suspense fallback={<InvoiceDetailSkeleton />}>
+        <InvoiceDetail invoiceId={invoiceId} workspaceId={workspaceId} />
+      </Suspense>
+    </InvoiceDetailShell>
+  );
+}
+
+const showErrorToast = (error: unknown, title: string) => {
+  notifyUserError(error, title);
+};
+
+const InvoiceDetail = ({
+  workspaceId,
+  invoiceId,
+}: {
+  workspaceId: string;
+  invoiceId: string;
+}) => {
+  const t = useTranslations();
+  const format = useFormatter();
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const [editOpen, setEditOpen] = useState(false);
+  const [sendDialog, setSendDialog] = useState<SendDialogState>({
+    type: "closed",
+  });
+  const [recordPaymentOpen, setRecordPaymentOpen] = useState(false);
+  const canUpdateInvoice = usePermissions({ invoice: ["update"] });
+
+  const { data: invoice } = useSuspenseQuery(
+    invoiceByIdOptions(workspaceId, invoiceId),
+  );
+
+  const invalidateAll = () => {
+    detached(
+      queryClient.invalidateQueries({
+        queryKey: invoicesKeys.all(workspaceId),
+      }),
+      "invoices.invalidate",
+    );
+    detached(
+      queryClient.invalidateQueries({
+        queryKey: timeEntriesKeys.all(workspaceId),
+      }),
+      "invoices.invalidate",
+    );
+  };
+
+  type TransitionAction = "finalize" | "send" | "void" | "revert_to_draft";
+
+  const transitionMutation = useMutation({
+    mutationFn: resourceMutation({
+      mutation: "transitionInvoice",
+      queryClient,
+      mutationFn: async ({
+        action,
+        workspaceId: mutationWorkspaceId,
+      }: {
+        action: TransitionAction;
+        workspaceId: string;
+      }) =>
+        await invokeCapability("invoices.transition", async (request) =>
+          unwrapApiResponse(
+            await api
+              .invoices({
+                workspaceId: toSafeId<"workspace">(mutationWorkspaceId),
+              })({
+                invoiceId: toSafeId<"invoice">(invoiceId),
+              })
+              .transition.post({ action }, request),
+          ),
+        ),
+    }),
+    onSuccess: () => {
+      invalidateAll();
+    },
+    onError: (error) => {
+      showErrorToast(error, t("common.somethingWentWrong"));
+    },
+  });
+
+  const endpoint = api.invoices({
+    workspaceId: toSafeId<"workspace">(workspaceId),
+  })({
+    invoiceId: toSafeId<"invoice">(invoiceId),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async () =>
+      await invokeCapability("invoices.delete", async (request) =>
+        unwrapApiResponse(await endpoint.delete({}, request)),
+      ),
+    onSuccess: async () => {
+      invalidateAll();
+      await navigate({
+        to: "/workspaces/$workspaceId/invoices",
+        params: { workspaceId },
+      });
+    },
+    onError: (error) => {
+      showErrorToast(error, t("common.somethingWentWrong"));
+    },
+  });
+
+  const removeEntryMutation = useMutation({
+    mutationFn: async (timeEntryId: string) =>
+      await invokeCapability("invoices.entries.remove", async (request) =>
+        unwrapApiResponse(
+          await endpoint.entries.delete(
+            {
+              timeEntryIds: [toSafeId<"timeEntry">(timeEntryId)],
+            },
+            request,
+          ),
+        ),
+      ),
+    onSuccess: () => {
+      invalidateAll();
+    },
+    onError: (error) => {
+      showErrorToast(error, t("common.somethingWentWrong"));
+    },
+  });
+
+  const removeExpenseMutation = useMutation({
+    mutationFn: async (expenseId: string) =>
+      await invokeCapability("invoices.entries.remove", async (request) =>
+        unwrapApiResponse(
+          await endpoint.entries.delete(
+            {
+              expenseIds: [toSafeId<"expense">(expenseId)],
+            },
+            request,
+          ),
+        ),
+      ),
+    onSuccess: () => {
+      invalidateAll();
+    },
+    onError: (error) => {
+      showErrorToast(error, t("common.somethingWentWrong"));
+    },
+  });
+
+  const invoiceStatus: InvoiceStatus = invoice.status;
+
+  return (
+    <InvoiceDetailBody>
+      {/* Header */}
+      <div className="flex items-start justify-between">
+        <div className="flex flex-col gap-1">
+          <div className="flex items-center gap-3">
+            <h2 className="text-lg font-semibold">
+              {invoice.invoiceNumber ?? t("billing.invoices.statuses.draft")}
+            </h2>
+            <InvoiceStatusBadge
+              partiallyPaid={isPartiallyPaid(invoice)}
+              settlement={invoice.settlement}
+              status={invoiceStatus}
+            />
+          </div>
+          {(invoiceTakesPayments(invoiceStatus) ||
+            invoiceStatus === "paid") && (
+            <p className="text-muted-foreground text-sm tabular-nums">
+              {t("billing.invoices.payments.outstandingAmount", {
+                amount: formatCurrencyAmount(
+                  invoice.outstandingAmount,
+                  invoice.currency,
+                ),
+              })}
+            </p>
+          )}
+          {invoice.settlement.kind === "overpaid" && (
+            <p className="text-muted-foreground text-sm tabular-nums">
+              {t("billing.invoices.payments.refundAmount", {
+                amount: formatCurrencyAmount(
+                  invoice.settlement.refundAmount,
+                  invoice.currency,
+                ),
+              })}
+            </p>
+          )}
+          {invoice.reference && (
+            <p className="text-muted-foreground text-sm">{invoice.reference}</p>
+          )}
+        </div>
+        <div className="flex items-center gap-2">
+          <InvoicePdfDownloadButton
+            invoiceId={invoiceId}
+            workspaceId={workspaceId}
+          />
+          {invoice.status !== "draft" && invoice.status !== "void" && (
+            <InvoiceExportMenu
+              invoiceId={invoiceId}
+              workspaceId={workspaceId}
+            />
+          )}
+          <InvoiceActions
+            invoiceStatus={invoiceStatus}
+            onDelete={() => deleteMutation.mutate()}
+            onEdit={() => setEditOpen(true)}
+            onSend={() => setSendDialog({ type: "open", recipients: null })}
+            onTransition={(action) =>
+              transitionMutation.mutate({ action, workspaceId })
+            }
+          />
+        </div>
+      </div>
+
+      {/* Info grid */}
+      <InvoiceDetailInfo>
+        <InfoCell
+          label={t("billing.invoices.invoiceDate")}
+          value={format.dateTime(
+            plainDateEpoch(invoice.invoiceDate),
+            MEDIUM_DATE,
+          )}
+        />
+        <InfoCell
+          label={t("billing.invoices.dueDate")}
+          value={
+            invoice.dueDate === null
+              ? "—"
+              : format.dateTime(plainDateEpoch(invoice.dueDate), MEDIUM_DATE)
+          }
+        />
+        <InfoCell
+          label={t("billing.invoices.totalAmount")}
+          value={formatCurrencyAmount(invoice.totalAmount, invoice.currency)}
+        />
+        {invoice.paidAt && (
+          <InfoCell
+            label={t("billing.invoices.paidAt")}
+            value={format.dateTime(
+              Temporal.Instant.from(invoice.paidAt).epochMilliseconds,
+            )}
+          />
+        )}
+      </InvoiceDetailInfo>
+
+      {(invoiceTakesPayments(invoiceStatus) ||
+        invoiceStatus === "paid" ||
+        invoice.payments.length > 0) && (
+        <InvoicePaymentsSection
+          canUpdate={canUpdateInvoice}
+          invoice={invoice}
+          invoiceId={invoiceId}
+          onRecord={() => setRecordPaymentOpen(true)}
+          workspaceId={workspaceId}
+        />
+      )}
+      <RecordPaymentDialog
+        currency={invoice.currency}
+        invoiceId={invoiceId}
+        onOpenChange={setRecordPaymentOpen}
+        open={recordPaymentOpen}
+        outstandingAmount={invoice.outstandingAmount}
+        workspaceId={workspaceId}
+      />
+
+      {/* Notes */}
+      {invoice.notes && (
+        <div className="rounded-lg border p-4">
+          <p className="text-muted-foreground mb-1 text-xs font-medium">
+            {t("common.notes")}
+          </p>
+          <p className="text-sm whitespace-pre-wrap">{invoice.notes}</p>
+        </div>
+      )}
+
+      {invoice.lines.length > 0 && (
+        <InvoiceMatterLines
+          canUpdateInvoice={canUpdateInvoice}
+          invoice={invoice}
+          invoiceId={invoiceId}
+        />
+      )}
+
+      {invoice.lines.length === 0 && (
+        <InvoiceLegacyEntries
+          invoice={invoice}
+          onRemoveEntry={removeEntryMutation.mutate}
+          onRemoveExpense={removeExpenseMutation.mutate}
+        />
+      )}
+
+      <InvoiceLinkControls
+        canUpdateInvoice={canUpdateInvoice}
+        invoiceId={invoiceId}
+        invoiceNumber={invoice.invoiceNumber}
+        invoiceStatus={invoiceStatus}
+        sendDialog={sendDialog}
+        setSendDialog={setSendDialog}
+        workspaceId={workspaceId}
+      />
+
+      {/* Edit dialog */}
+      <Dialog onOpenChange={setEditOpen} open={editOpen}>
+        <DialogPopup className="max-w-md">
+          <div className="p-4">
+            <EditInvoiceForm
+              currency={invoice.currency}
+              dueDate={invoice.dueDate ?? ""}
+              invoiceDate={invoice.invoiceDate}
+              invoiceId={invoiceId}
+              invoiceNumber={invoice.invoiceNumber ?? ""}
+              notes={invoice.notes ?? ""}
+              onClose={() => setEditOpen(false)}
+              reference={invoice.reference ?? ""}
+              workspaceId={workspaceId}
+            />
+          </div>
+        </DialogPopup>
+      </Dialog>
+    </InvoiceDetailBody>
+  );
+};
+
+type InvoiceData = Awaited<
+  ReturnType<NonNullable<ReturnType<typeof invoiceByIdOptions>["queryFn"]>>
+>;
+
+const InvoiceMatterLines = ({
+  canUpdateInvoice,
+  invoice,
+  invoiceId,
+}: {
+  canUpdateInvoice: boolean;
+  invoice: InvoiceData;
+  invoiceId: string;
+}) => {
+  const t = useTranslations();
+  const format = useFormatter();
+  const matterGroups = new Map<string, typeof invoice.lines>();
+  for (const line of invoice.lines) {
+    const group = matterGroups.get(line.workspaceId);
+    if (group) {
+      group.push(line);
+    } else {
+      matterGroups.set(line.workspaceId, [line]);
+    }
+  }
+
+  return (
+    <div className="flex flex-col gap-4">
+      {invoice.workspaceId === null && (
+        <p className="text-muted-foreground text-sm">
+          {t("billing.clientComposer.visibility")}
+        </p>
+      )}
+      {[...matterGroups].map(([matterId, lines]) => {
+        const matter = lines.at(0)?.workspace;
+        const amount = lines.reduce((sum, line) => sum + line.grossAmount, 0);
+        const share =
+          invoice.totalAmount === 0 ? 0 : amount / invoice.totalAmount;
+        return (
+          <section className="rounded-lg border" key={matterId}>
+            <div className="flex items-center gap-2 border-b px-4 py-3">
+              <MatterIcon
+                className="size-5"
+                matter={{ id: matterId, color: matter?.color ?? null }}
+              />
+              <h3 className="text-sm font-medium" dir="auto">
+                {matter?.name ?? t("common.matter")}
+              </h3>
+            </div>
+            <div className="text-muted-foreground hidden gap-2 px-4 pt-3 text-xs sm:grid sm:grid-cols-[1fr_7rem_9rem_9rem]">
+              <span>{t("common.description")}</span>
+              <span>{t("billing.invoices.lineOverrides.quantity")}</span>
+              <span>{t("billing.invoiceComposer.rate")}</span>
+              <span className="text-end">{t("billing.amount")}</span>
+            </div>
+            {lines.map((line) => (
+              <InvoiceLineEditor
+                key={`${line.id}:${line.description}:${line.quantity}:${line.unitPrice}`}
+                line={line}
+                workspaceId={line.workspaceId}
+                invoiceId={invoiceId}
+                currency={invoice.currency}
+                editable={
+                  invoice.status === "draft" &&
+                  invoice.finalizedAt === null &&
+                  canUpdateInvoice
+                }
+              />
+            ))}
+            <div className="flex flex-col gap-2 px-4 py-3">
+              <p className="text-muted-foreground text-end text-xs tabular-nums">
+                {t("billing.clientComposer.matterSubtotal", {
+                  amount: formatCurrencyAmount(amount, invoice.currency),
+                  share: format.number(share, {
+                    style: "percent",
+                    maximumFractionDigits: 1,
+                  }),
+                })}
+              </p>
+              <div className="bg-muted h-1 overflow-hidden rounded-full">
+                <div
+                  className="bg-foreground h-full"
+                  style={{
+                    width: `${Math.max(0, Math.min(100, share * 100))}%`,
+                  }}
+                />
+              </div>
+            </div>
+          </section>
+        );
+      })}
+    </div>
+  );
+};
+
+const InvoiceLegacyEntries = ({
+  invoice,
+  onRemoveEntry,
+  onRemoveExpense,
+}: {
+  invoice: InvoiceData;
+  onRemoveEntry: (id: string) => void;
+  onRemoveExpense: (id: string) => void;
+}) => {
+  const t = useTranslations();
+  const format = useFormatter();
+  const invoiceStatus = invoice.status;
+
+  return (
+    <>
+      {/* Time entries */}
+      <InvoiceEntrySection
+        summary={t("billing.invoices.totalEntries", {
+          count: invoice.timeEntries.length,
+        })}
+      >
+        {invoice.timeEntries.length === 0 ? (
+          <div className="text-muted-foreground py-6 text-center text-sm">
+            {t("billing.invoices.noEntries")}
+          </div>
+        ) : (
+          <InvoiceEntryTable editable={invoiceStatus === "draft"}>
+            {invoice.timeEntries.map((entry) => (
+              <TableRow key={entry.id}>
+                <TableCell className="whitespace-normal">
+                  <span className="leading-5">
+                    {entry.workItem?.name ?? t("common.matter")}
+                  </span>
+                </TableCell>
+                <TableCell align="start" numeric>
+                  {format.dateTime(
+                    plainDateEpoch(entry.dateWorked),
+                    MEDIUM_DATE,
+                  )}
+                </TableCell>
+                <TableCell className="max-w-xs" truncate>
+                  {entry.invoiceNarrative ?? entry.narrative}
+                </TableCell>
+                <TableCell align="end" numeric>
+                  {format.number(entry.billedMinutes / 60, {
+                    style: "unit",
+                    unit: "hour",
+                    unitDisplay: "short",
+                    minimumFractionDigits: 1,
+                    maximumFractionDigits: 1,
+                  })}
+                </TableCell>
+                <TableCell align="end" numeric>
+                  {formatCurrencyAmount(timeEntryAmount(entry), entry.currency)}
+                </TableCell>
+                {invoiceStatus === "draft" && (
+                  <TableCell>
+                    <Button
+                      aria-label={t("common.remove")}
+                      onClick={() => onRemoveEntry(entry.id)}
+                      size="icon-xs"
+                      variant="ghost"
+                    >
+                      <XCircleIcon className="text-muted-foreground size-3.5" />
+                    </Button>
+                  </TableCell>
+                )}
+              </TableRow>
+            ))}
+          </InvoiceEntryTable>
+        )}
+      </InvoiceEntrySection>
+
+      {/* Expenses */}
+      {invoice.expenses.length > 0 && (
+        <div className="rounded-lg border">
+          <div className="flex items-center justify-between border-b px-4 py-3">
+            <h3 className="text-sm font-medium">
+              {t("billing.invoices.linkedExpenses")}
+            </h3>
+          </div>
+          <ScrollArea className="h-auto">
+            <Table inset="card" scroll="parent">
+              <TableHeader>
+                <TableRow>
+                  <TableHead>{t("common.matter")}</TableHead>
+                  <TableHead>{t("common.date")}</TableHead>
+                  <TableHead>{t("common.description")}</TableHead>
+                  <TableHead align="end">{t("billing.amount")}</TableHead>
+                  {invoiceStatus === "draft" && <TableHead className="w-10" />}
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {invoice.expenses.map((expense) => (
+                  <TableRow key={expense.id}>
+                    <TableCell className="whitespace-normal">
+                      <span className="leading-5">
+                        {expense.matter?.name ?? "—"}
+                      </span>
+                    </TableCell>
+                    <TableCell align="start" numeric>
+                      {format.dateTime(
+                        plainDateEpoch(expense.dateIncurred),
+                        MEDIUM_DATE,
+                      )}
+                    </TableCell>
+                    <TableCell className="max-w-xs" truncate>
+                      {expense.invoiceDescription ?? expense.description}
+                    </TableCell>
+                    <TableCell align="end" numeric>
+                      {formatCurrencyAmount(
+                        applyMarkupCents({
+                          amountCents: expense.amount,
+                          markupPercent: expense.markup,
+                        }),
+                        expense.currency,
+                      )}
+                    </TableCell>
+                    {invoiceStatus === "draft" && (
+                      <TableCell>
+                        <Button
+                          aria-label={t("common.remove")}
+                          onClick={() => onRemoveExpense(expense.id)}
+                          size="icon-xs"
+                          variant="ghost"
+                        >
+                          <XCircleIcon className="text-muted-foreground size-3.5" />
+                        </Button>
+                      </TableCell>
+                    )}
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </ScrollArea>
+        </div>
+      )}
+    </>
+  );
+};
+
+type SendDialogState =
+  { type: "closed" } | { type: "open"; recipients: readonly string[] | null };
+
+type InvoiceLinkControlsProps = {
+  canUpdateInvoice: boolean;
+  invoiceId: string;
+  invoiceNumber: string | null;
+  invoiceStatus: InvoiceStatus;
+  sendDialog: SendDialogState;
+  setSendDialog: (state: SendDialogState) => void;
+  workspaceId: string;
+};
+
+function InvoiceLinkControls({
+  canUpdateInvoice,
+  invoiceId,
+  invoiceNumber,
+  invoiceStatus,
+  sendDialog,
+  setSendDialog,
+  workspaceId,
+}: InvoiceLinkControlsProps) {
+  const admission = useCallerFeatureAdmission(CALLER_FEATURE.invoiceLinks);
+  if (!canUpdateInvoice) {
+    return null;
+  }
+  return (
+    <>
+      {invoiceStatus !== "draft" && (
+        <InvoiceSendsSection
+          sendControl={
+            admission !== undefined && invoiceStatus !== "void"
+              ? {
+                  type: "available",
+                  admission,
+                  onSendAgain: (recipients) =>
+                    setSendDialog({ type: "open", recipients }),
+                }
+              : { type: "hidden" }
+          }
+          invoiceId={invoiceId}
+          workspaceId={workspaceId}
+        />
+      )}
+
+      <Dialog
+        onOpenChange={(open) => {
+          if (!open) {
+            setSendDialog({ type: "closed" });
+          }
+        }}
+        open={admission !== undefined && sendDialog.type === "open"}
+      >
+        <DialogPopup className="max-w-md">
+          {admission !== undefined &&
+          sendDialog.type === "open" &&
+          invoiceNumber !== null ? (
+            <SendInvoiceForm
+              admission={admission}
+              invoiceId={invoiceId}
+              invoiceNumber={invoiceNumber}
+              onClose={() => setSendDialog({ type: "closed" })}
+              recipients={sendDialog.recipients}
+              workspaceId={workspaceId}
+            />
+          ) : null}
+        </DialogPopup>
+      </Dialog>
+    </>
+  );
+}
+
+const InvoiceActions = ({
+  invoiceStatus,
+  onTransition,
+  onEdit,
+  onDelete,
+  onSend,
+}: {
+  invoiceStatus: InvoiceStatus;
+  onTransition: (
+    action: "finalize" | "send" | "void" | "revert_to_draft",
+  ) => void;
+  onEdit: () => void;
+  onDelete: () => void;
+  onSend: () => void;
+}) => {
+  const t = useTranslations("billing.invoices");
+  const rootT = useTranslations();
+  const canUpdateInvoice = usePermissions({ invoice: ["update"] });
+  const canDeleteInvoice = usePermissions({ invoice: ["delete"] });
+
+  switch (invoiceStatus) {
+    case "draft":
+      return (
+        <>
+          {canUpdateInvoice && (
+            <Button onClick={onEdit} size="sm" variant="outline">
+              <EditIcon className="size-3.5" />
+              {t("editInvoice")}
+            </Button>
+          )}
+          {canUpdateInvoice && (
+            <Button
+              onClick={() => onTransition("finalize")}
+              size="sm"
+              variant="outline"
+            >
+              <CheckIcon className="size-3.5" />
+              {t("finalize")}
+            </Button>
+          )}
+          {canDeleteInvoice && (
+            <ConfirmAction
+              description={t("confirmDelete")}
+              onConfirm={onDelete}
+            >
+              <Button size="sm" variant="destructive">
+                <Trash2Icon className="size-3.5" />
+                {rootT("common.delete")}
+              </Button>
+            </ConfirmAction>
+          )}
+        </>
+      );
+    case "finalized":
+      return (
+        <>
+          {canUpdateInvoice && (
+            <CallerFeatureGate feature={CALLER_FEATURE.invoiceLinks}>
+              {(admission) => (
+                <SendInvoiceButton
+                  admission={admission}
+                  onSend={onSend}
+                  variant="outline"
+                  label={t("send")}
+                />
+              )}
+            </CallerFeatureGate>
+          )}
+          {canUpdateInvoice && (
+            <Button
+              onClick={() => onTransition("send")}
+              size="sm"
+              variant="ghost"
+            >
+              <CheckIcon className="size-3.5" />
+              {t("markSent")}
+            </Button>
+          )}
+          {canUpdateInvoice && (
+            <Button
+              onClick={() => onTransition("revert_to_draft")}
+              size="sm"
+              variant="ghost"
+            >
+              <UndoIcon className="size-3.5" />
+              {rootT("billing.revertToDraft")}
+            </Button>
+          )}
+          {canUpdateInvoice && (
+            <ConfirmAction
+              description={t("confirmVoid")}
+              onConfirm={() => onTransition("void")}
+            >
+              <Button size="sm" variant="destructive">
+                <XCircleIcon className="size-3.5" />
+                {t("void")}
+              </Button>
+            </ConfirmAction>
+          )}
+        </>
+      );
+    // Payments are recorded in the payments section; paid follows from them.
+    case "sent":
+    case "paid":
+      return canUpdateInvoice ? (
+        <>
+          <CallerFeatureGate feature={CALLER_FEATURE.invoiceLinks}>
+            {(admission) => (
+              <SendInvoiceButton
+                admission={admission}
+                onSend={onSend}
+                variant="ghost"
+                label={t("sendByEmail")}
+              />
+            )}
+          </CallerFeatureGate>
+          <ConfirmAction
+            description={t("confirmVoid")}
+            onConfirm={() => onTransition("void")}
+          >
+            <Button size="sm" variant="destructive">
+              <XCircleIcon className="size-3.5" />
+              {t("void")}
+            </Button>
+          </ConfirmAction>
+        </>
+      ) : null;
+    case "void":
+      return null;
+    default:
+      return null;
+  }
+};
+
+const INVOICE_NUMBER_MAX_LENGTH = 64;
+
+const editInvoiceSchema = v.strictObject({
+  invoiceNumber: v.pipe(
+    trimmedStringSchema(),
+    v.maxLength(INVOICE_NUMBER_MAX_LENGTH),
+  ),
+  invoiceDate: v.pipe(v.string(), v.isoDate()),
+  dueDate: v.union([v.literal(""), v.pipe(v.string(), v.isoDate())]),
+  reference: trimmedStringSchema(),
+  currency: v.pipe(trimmedStringSchema(), v.toUpperCase(), v.length(3)),
+  notes: trimmedStringSchema(),
+});
+
+const EditInvoiceForm = ({
+  workspaceId,
+  invoiceId,
+  invoiceNumber: initialNumber,
+  invoiceDate: initialDate,
+  dueDate: initialDueDate,
+  reference: initialReference,
+  currency: initialCurrency,
+  notes: initialNotes,
+  onClose,
+}: {
+  workspaceId: string;
+  invoiceId: string;
+  invoiceNumber: string;
+  invoiceDate: string;
+  dueDate: string;
+  reference: string;
+  currency: string;
+  notes: string;
+  onClose: () => void;
+}) => {
+  const t = useTranslations();
+  const queryClient = useQueryClient();
+
+  const form = useForm(
+    schemaFormOptions({
+      schema: editInvoiceSchema,
+      defaultValues: {
+        invoiceNumber: initialNumber,
+        invoiceDate: initialDate,
+        dueDate: initialDueDate,
+        reference: initialReference,
+        currency: initialCurrency,
+        notes: initialNotes,
+      },
+      submitValues: "schema-output",
+      onSubmit: async ({ value }) => {
+        await invokeCapability("invoices.update", async (request) => {
+          const response = await api
+            .invoices({ workspaceId: toSafeId<"workspace">(workspaceId) })({
+              invoiceId: toSafeId<"invoice">(invoiceId),
+            })
+            .patch(
+              {
+                invoiceNumber: value.invoiceNumber || null,
+                invoiceDate: value.invoiceDate,
+                dueDate: value.dueDate || null,
+                reference: value.reference || null,
+                currency: value.currency,
+                notes: value.notes || null,
+              },
+              request,
+            );
+          if (response.error) {
+            showErrorToast(
+              toAPIError(response.error),
+              t("billing.failedToSave"),
+            );
+            return;
+          }
+          detached(
+            queryClient.invalidateQueries({
+              queryKey: invoicesKeys.all(workspaceId),
+            }),
+            "invoices.invalidate",
+          );
+          onClose();
+        });
+      },
+    }),
+  );
+
+  const { formErrors, dirty } = useSelector(form.store, (s) => ({
+    formErrors: toFormErrors(s.fieldMeta),
+    dirty: !s.isDefaultValue,
+  }));
+
+  return (
+    <Form
+      dirty={dirty}
+      onDiscard={() => form.reset()}
+      className="flex flex-col gap-4"
+      errors={formErrors}
+      onSubmit={(e) => {
+        e.preventDefault();
+        detached(form.handleSubmit(), "invoices.submit");
+      }}
+    >
+      <h2 className="text-sm font-semibold">
+        {t("billing.invoices.editInvoice")}
+      </h2>
+      <form.Field name="invoiceNumber">
+        {(field) => (
+          <Field name={field.name}>
+            <Label>{t("billing.invoices.invoiceNumber")}</Label>
+            <Input
+              onBlur={field.handleBlur}
+              onChange={(e) => field.handleChange(e.target.value)}
+              value={field.state.value}
+            />
+            <FieldError />
+          </Field>
+        )}
+      </form.Field>
+      <div className="grid grid-cols-2 gap-3">
+        <form.Field name="invoiceDate">
+          {(field) => (
+            <Field name={field.name}>
+              <Label>{t("billing.invoices.invoiceDate")}</Label>
+              <DatePickerPopover
+                onChange={(val) => field.handleChange(val ?? "")}
+                value={field.state.value}
+              />
+              <FieldError />
+            </Field>
+          )}
+        </form.Field>
+        <form.Field name="dueDate">
+          {(field) => (
+            <Field name={field.name}>
+              <Label>{t("billing.invoices.dueDate")}</Label>
+              <DatePickerPopover
+                onChange={(val) => field.handleChange(val ?? "")}
+                value={field.state.value}
+              />
+              <FieldError />
+            </Field>
+          )}
+        </form.Field>
+      </div>
+      <form.Field name="reference">
+        {(field) => (
+          <Field name={field.name}>
+            <Label>{t("common.reference")}</Label>
+            <Input
+              onBlur={field.handleBlur}
+              onChange={(e) => field.handleChange(e.target.value)}
+              value={field.state.value}
+            />
+            <FieldError />
+          </Field>
+        )}
+      </form.Field>
+      <form.Field name="currency">
+        {(field) => (
+          <Field name={field.name}>
+            <Label>{t("common.currency")}</Label>
+            <Input
+              dir="ltr"
+              maxLength={CURRENCY_CODE_LENGTH}
+              onBlur={field.handleBlur}
+              onChange={(e) => field.handleChange(e.target.value.toUpperCase())}
+              value={field.state.value}
+            />
+            <FieldError />
+          </Field>
+        )}
+      </form.Field>
+      <form.Field name="notes">
+        {(field) => (
+          <Field name={field.name}>
+            <Label>{t("common.notes")}</Label>
+            <Textarea
+              onBlur={field.handleBlur}
+              onChange={(e) => field.handleChange(e.target.value)}
+              rows={3}
+              value={field.state.value}
+            />
+            <FieldError />
+          </Field>
+        )}
+      </form.Field>
+      <div className="flex justify-end gap-2">
+        <Button onClick={onClose} type="button" variant="ghost">
+          {t("common.cancel")}
+        </Button>
+        <form.Subscribe selector={(s) => s.isSubmitting}>
+          {(isSubmitting) => (
+            <Button loading={isSubmitting} type="submit">
+              {t("common.save")}
+            </Button>
+          )}
+        </form.Subscribe>
+      </div>
+    </Form>
+  );
+};
+
+const SendInvoiceButton = ({
+  onSend,
+  variant,
+  label,
+}: {
+  admission: FeatureAdmission<"invoice-links">;
+  onSend: () => void;
+  variant: "outline" | "ghost";
+  label: string;
+}) => (
+  <Button onClick={onSend} size="sm" variant={variant}>
+    <SendIcon className="size-3.5" />
+    {label}
+  </Button>
+);
