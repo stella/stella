@@ -309,6 +309,7 @@ for (const locale of ["en", "cs"] as const) {
         await cold.context().addCookies([presentationCookie(baseURL, locale)]);
         const client = await page.context().newPage();
         const stopTrackingClient = browserErrors.trackPage(client);
+        const requestWaits = new AbortController();
         const session = Promise.withResolvers<undefined>();
         const initialData = Promise.withResolvers<undefined>();
         const navigationData = Promise.withResolvers<undefined>();
@@ -330,12 +331,14 @@ for (const locale of ["en", "cs"] as const) {
           if (flow.path === "/consent") {
             await loadConsentFixture(page, initialData.promise);
           }
-          const sessionRequested = page.waitForRequest(
-            (request) =>
-              new URL(request.url()).pathname === "/api/auth/get-session",
-          );
-          await page.goto(flow.href, { waitUntil: "commit" });
-          await sessionRequested;
+          await Promise.all([
+            page.waitForRequest(
+              (request) =>
+                new URL(request.url()).pathname === "/api/auth/get-session",
+              { signal: requestWaits.signal },
+            ),
+            page.goto(flow.href, { waitUntil: "commit" }),
+          ]);
           const pending = await readLandmarks(page, flow.landmarks);
           session.resolve(undefined);
           initialData.resolve(undefined);
@@ -365,11 +368,13 @@ for (const locale of ["en", "cs"] as const) {
           await expect(
             client.locator('[data-slot="frame-panel"] button'),
           ).toBeVisible();
-          const navigationRequest = client.waitForRequest(
-            (request) => new URL(request.url()).pathname === flow.waitOn,
-          );
-          await pushRouterPath(client, flow.href);
-          await navigationRequest;
+          await Promise.all([
+            client.waitForRequest(
+              (request) => new URL(request.url()).pathname === flow.waitOn,
+              { signal: requestWaits.signal },
+            ),
+            pushRouterPath(client, flow.href),
+          ]);
           if (flow.path === "/consent") {
             await expect(
               client.getByText(organizationName, { exact: true }),
@@ -409,6 +414,7 @@ for (const locale of ["en", "cs"] as const) {
           }
           browserErrors.assertEmpty(flow.path);
         } finally {
+          requestWaits.abort();
           session.resolve(undefined);
           initialData.resolve(undefined);
           navigationData.resolve(undefined);
