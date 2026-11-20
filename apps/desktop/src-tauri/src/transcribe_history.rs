@@ -256,6 +256,11 @@ impl Summary {
 #[serde(rename_all = "camelCase")]
 struct Index {
   entries: Vec<Summary>,
+  /// Transcripts being updated: named here before their file changes, so
+  /// an update cut short before the index caught up is read again from
+  /// the transcript, which is the truth.
+  #[serde(default)]
+  updating: Vec<String>,
 }
 
 /// Where one account's history lives: encrypted files, or memory alone.
@@ -354,25 +359,36 @@ impl Vault for DiskVault {
       Err(error) if not_found(&error) => return Ok(Vec::new()),
       Err(error) => return Err(format!("{LABEL} listing failed: {error}")),
     };
-    let mut ids = Vec::new();
-    for item in listing.flatten() {
-      let name = item.file_name();
-      let Some(name) = name.to_str() else { continue };
-      if let Some(id) = name.strip_suffix(".json")
-        && let Ok(parsed) = parse_id(id)
-        && parsed == id
-      {
-        ids.push(parsed);
-      } else if name.ends_with(".tmp") {
-        // A write cut short; every write here holds the store's lock.
-        crate::logging::best_effort(
-          local_store::remove_private(&item.path()),
-          "transcript history leftover was not removed",
-        );
-      }
-    }
-    Ok(ids)
+    stored_entry_ids(listing.map(|item| item.map(|item| item.path())))
   }
+}
+
+/// The transcript ids among the files of an entries directory. A listing
+/// that fails partway is an error, never a shorter list: the index is
+/// matched to it, and an id missing from it would read as a transcript gone.
+fn stored_entry_ids(
+  files: impl Iterator<Item = std::io::Result<PathBuf>>,
+) -> Result<Vec<String>, String> {
+  let mut ids = Vec::new();
+  for file in files {
+    let path = file.map_err(|error| format!("{LABEL} listing failed: {error}"))?;
+    let Some(name) = path.file_name().and_then(|name| name.to_str()) else {
+      continue;
+    };
+    if let Some(id) = name.strip_suffix(".json")
+      && let Ok(parsed) = parse_id(id)
+      && parsed == id
+    {
+      ids.push(parsed);
+    } else if name.ends_with(".tmp") {
+      // A write cut short; every write here holds the store's lock.
+      crate::logging::best_effort(
+        local_store::remove_private(&path),
+        "transcript history leftover was not removed",
+      );
+    }
+  }
+  Ok(ids)
 }
 
 /// A history kept for this run only: a debug build, or a keychain that
@@ -595,6 +611,27 @@ impl<'v> History<'v> {
       }
       changed = true;
     }
+    for id in std::mem::take(&mut self.index.updating) {
+      changed = true;
+      if !stored.contains(&id) {
+        continue;
+      }
+      match self.vault.load_entry(&id) {
+        Ok(Some(entry)) if entry.id == id => {
+          self.index.entries.retain(|summary| summary.id != id);
+          self.index.entries.push(Summary::of(&entry));
+        }
+        Ok(_)
+        | Err(
+          EncryptedReadError::Unreadable(_) | EncryptedReadError::Incompatible(_),
+        ) => {
+          tracing::warn!("an unreadable kept transcript was deleted");
+          self.vault.remove_entry(&id)?;
+          self.index.entries.retain(|summary| summary.id != id);
+        }
+        Err(EncryptedReadError::Unavailable(error)) => return Err(error),
+      }
+    }
     if changed {
       newest_first(&mut self.index.entries);
     }
@@ -632,6 +669,7 @@ impl<'v> History<'v> {
       .index
       .entries
       .retain(|summary| !dropped.contains(&summary.id));
+    self.index.updating.retain(|id| !dropped.contains(id));
     Ok(true)
   }
 
@@ -662,6 +700,7 @@ impl<'v> History<'v> {
   fn forget(&mut self, id: &str) -> Result<(), String> {
     self.vault.remove_entry(id)?;
     self.index.entries.retain(|summary| summary.id != id);
+    self.index.updating.retain(|updating| updating != id);
     self.vault.save_index(&self.index)
   }
 
@@ -692,6 +731,7 @@ impl<'v> History<'v> {
       return Ok(None);
     }
     let transcript = normalized(request.transcript)?;
+    let updates = request.id.is_some();
     let entry = match request.id {
       Some(id) => {
         let id = parse_id(&id)?;
@@ -713,9 +753,16 @@ impl<'v> History<'v> {
         transcript,
       },
     };
+    if updates {
+      // The index names the update before the transcript changes: one cut
+      // short is repaired from the transcript when the history next opens.
+      self.index.updating.push(entry.id.clone());
+      self.vault.save_index(&self.index)?;
+    }
     self.vault.save_entry(&entry)?;
     let summary = Summary::of(&entry);
     self.index.entries.retain(|kept| kept.id != entry.id);
+    self.index.updating.retain(|id| *id != entry.id);
     self.index.entries.push(summary);
     newest_first(&mut self.index.entries);
     self.prune(now)?;
@@ -840,103 +887,253 @@ fn delete_key(namespace: &str) -> Result<(), String> {
   crate::keychain::delete_local_data_key(LocalDataKey::TranscribeHistory(namespace))
 }
 
-/// Each account's history in memory, for a run that keeps nothing on disk.
+/// How a history reaches its keychain key; tests stand in for the keychain.
+trait HistoryKeys {
+  fn resolve(&self, namespace: &str, data_exists: bool) -> StoreKey;
+  fn delete(&self, namespace: &str) -> Result<(), String>;
+}
+
+struct Keychain;
+
+impl HistoryKeys for Keychain {
+  fn resolve(&self, namespace: &str, data_exists: bool) -> StoreKey {
+    local_store::resolve_key(LocalDataKey::TranscribeHistory(namespace), data_exists)
+  }
+
+  fn delete(&self, namespace: &str) -> Result<(), String> {
+    delete_key(namespace)
+  }
+}
+
+/// Where the histories live: encrypted files under `root`, or memory alone.
+#[derive(Clone, Copy)]
+enum Storage<'a> {
+  Memory,
+  Disk {
+    root: &'a Path,
+    keys: &'a dyn HistoryKeys,
+  },
+}
+
+impl<'a> Storage<'a> {
+  fn of(root: Option<&'a Path>) -> Self {
+    root.map_or(Self::Memory, |root| Self::Disk {
+      root,
+      keys: &Keychain,
+    })
+  }
+}
+
+/// The directory histories live under, or none for a run that keeps nothing
+/// on disk.
+fn storage_root() -> Option<PathBuf> {
+  (!memory_only()).then(history_root).flatten()
+}
+
+#[derive(Default)]
+struct Stores {
+  /// Each account's history in memory: a run that keeps nothing on disk, or
+  /// a keychain that could not hold the key yet.
+  memory: HashMap<String, MemoryVault>,
+  /// The feature-gate generation each disconnected account was erased at. A
+  /// request bound to the account at that generation or before was queued
+  /// for the account that left, and never writes its history back.
+  disconnected: HashMap<String, u64>,
+}
+
 #[derive(Default)]
 pub struct TranscribeHistoryState {
-  memory: Mutex<HashMap<String, MemoryVault>>,
+  stores: Mutex<Stores>,
+}
+
+/// Moves a history kept in memory to disk once the keychain holds its key:
+/// the retention choice first, so keeping less is never lost, then the
+/// transcripts it still keeps, then their index.
+fn move_to_disk(
+  from: &mut MemoryVault,
+  to: &mut dyn Vault,
+  now: i64,
+) -> Result<(), String> {
+  let (settings, index) = {
+    let history = History::open(&mut *from, now)?;
+    (history.settings, history.index)
+  };
+  if from.settings.is_some() {
+    to.save_settings(&settings)?;
+  }
+  for summary in &index.entries {
+    if let Some(entry) = from.entries.get(&summary.id) {
+      to.save_entry(entry)?;
+    }
+  }
+  if !index.entries.is_empty() {
+    to.save_index(&index)?;
+  }
+  Ok(())
+}
+
+/// Opens the history of `namespace` and runs `apply` on it; the caller holds
+/// the store's lock.
+fn open_locked<T>(
+  stores: &mut Stores,
+  storage: Storage<'_>,
+  namespace: &str,
+  now: i64,
+  apply: impl FnOnce(&mut History<'_>) -> Result<T, String>,
+) -> Result<T, String> {
+  let Storage::Disk { root, keys } = storage else {
+    let vault = stores.memory.entry(namespace.to_string()).or_default();
+    return apply(&mut History::open(vault, now)?);
+  };
+  let directory = root.join(namespace);
+  if directory.join(ERASE_MARKER).exists() {
+    finish_erasure(&directory, || keys.delete(namespace))?;
+  }
+  match keys.resolve(namespace, has_data(&directory)) {
+    StoreKey::Key(key) => {
+      let mut vault = DiskVault {
+        directory,
+        namespace: namespace.to_string(),
+        key,
+      };
+      // The keychain answered again: what this run kept in memory meanwhile
+      // moves to disk before the memory copy goes.
+      if let Some(kept) = stores.memory.get_mut(namespace) {
+        move_to_disk(kept, &mut vault, now)?;
+        stores.memory.remove(namespace);
+      }
+      apply(&mut History::open(&mut vault, now)?)
+    }
+    StoreKey::MemoryOnly => {
+      let vault = stores.memory.entry(namespace.to_string()).or_default();
+      apply(&mut History::open(vault, now)?)
+    }
+    StoreKey::DeletionOnly => Err(LOCKED.to_string()),
+  }
+}
+
+fn erase_locked(
+  stores: &mut Stores,
+  storage: Storage<'_>,
+  namespace: &str,
+) -> Result<(), String> {
+  stores.memory.remove(namespace);
+  match storage {
+    Storage::Disk { root, keys } => {
+      erase_directory(&root.join(namespace), || keys.delete(namespace))
+    }
+    Storage::Memory => Ok(()),
+  }
 }
 
 impl TranscribeHistoryState {
-  /// Runs `apply` on the history of `namespace`, holding the store's lock
-  /// throughout.
+  fn lock(&self) -> std::sync::MutexGuard<'_, Stores> {
+    self.stores.lock().unwrap_or_else(PoisonError::into_inner)
+  }
+
+  /// Runs `apply` on the history of the account bound at the feature-gate
+  /// `generation`, holding the store's lock throughout. A request bound
+  /// before that account was disconnected is refused.
   #[allow(
     clippy::significant_drop_tightening,
     reason = "the lock serializes every read and write of the store"
   )]
   fn with_history<T>(
     &self,
+    storage: Storage<'_>,
     namespace: &str,
+    generation: u64,
     now: i64,
     apply: impl FnOnce(&mut History<'_>) -> Result<T, String>,
   ) -> Result<T, String> {
-    let mut memory = self.memory.lock().unwrap_or_else(PoisonError::into_inner);
-    let root = (!memory_only()).then(history_root).flatten();
-    let Some(root) = root else {
-      let vault = memory.entry(namespace.to_string()).or_default();
-      return apply(&mut History::open(vault, now)?);
-    };
-    let directory = root.join(namespace);
-    if directory.join(ERASE_MARKER).exists() {
-      finish_erasure(&directory, || delete_key(namespace))?;
+    let mut stores = self.lock();
+    if stores
+      .disconnected
+      .get(namespace)
+      .is_some_and(|&erased| generation <= erased)
+    {
+      return Err(NO_ACCOUNT.to_string());
     }
-    match local_store::resolve_key(
-      LocalDataKey::TranscribeHistory(namespace),
-      has_data(&directory),
-    ) {
-      StoreKey::Key(key) => {
-        memory.remove(namespace);
-        let mut vault = DiskVault {
-          directory,
-          namespace: namespace.to_string(),
-          key,
-        };
-        apply(&mut History::open(&mut vault, now)?)
-      }
-      StoreKey::MemoryOnly => {
-        let vault = memory.entry(namespace.to_string()).or_default();
-        apply(&mut History::open(vault, now)?)
-      }
-      StoreKey::DeletionOnly => Err(LOCKED.to_string()),
-    }
+    open_locked(&mut stores, storage, namespace, now, apply)
   }
 
+  fn erase(&self, storage: Storage<'_>, namespace: &str) -> Result<(), String> {
+    erase_locked(&mut self.lock(), storage, namespace)
+  }
+
+  /// Erases the history of an account being disconnected. Requests bound to
+  /// it at `generation` or before are refused from now on, so one queued
+  /// behind this erasure never writes the history back.
   #[allow(
     clippy::significant_drop_tightening,
     reason = "the lock serializes every read and write of the store"
   )]
-  fn erase(&self, namespace: &str) -> Result<(), String> {
-    let mut memory = self.memory.lock().unwrap_or_else(PoisonError::into_inner);
-    memory.remove(namespace);
-    match (!memory_only()).then(history_root).flatten() {
-      Some(root) => erase_directory(&root.join(namespace), || delete_key(namespace)),
-      None => Ok(()),
+  fn erase_disconnected(
+    &self,
+    storage: Storage<'_>,
+    namespace: &str,
+    generation: u64,
+  ) -> Result<(), String> {
+    let mut stores = self.lock();
+    let erased = stores
+      .disconnected
+      .entry(namespace.to_string())
+      .or_insert(generation);
+    *erased = (*erased).max(generation);
+    erase_locked(&mut stores, storage, namespace)
+  }
+
+  /// Runs retention on one history that exists; never creates one.
+  #[allow(
+    clippy::significant_drop_tightening,
+    reason = "the lock serializes every read and write of the store"
+  )]
+  fn sweep_one(
+    &self,
+    storage: Storage<'_>,
+    namespace: &str,
+    now: i64,
+  ) -> Result<(), String> {
+    let mut stores = self.lock();
+    let on_disk = match storage {
+      Storage::Disk { root, .. } => root.join(namespace).exists(),
+      Storage::Memory => false,
+    };
+    if !on_disk && !stores.memory.contains_key(namespace) {
+      return Ok(());
     }
+    open_locked(&mut stores, storage, namespace, now, |_history| Ok(()))
   }
 
   /// Deletes expired transcripts of every account on this computer, and
   /// finishes erasures cut short.
-  fn sweep(&self, now: i64) {
-    let namespaces: Vec<String> = {
-      let memory = self.memory.lock().unwrap_or_else(PoisonError::into_inner);
-      memory.keys().cloned().collect()
+  fn sweep(&self, storage: Storage<'_>, now: i64) {
+    let namespaces: Vec<String> = self.lock().memory.keys().cloned().collect();
+    let on_disk: Vec<String> = match storage {
+      Storage::Disk { root, .. } => fs::read_dir(root)
+        .into_iter()
+        .flatten()
+        .flatten()
+        .filter_map(|item| item.file_name().to_str().map(str::to_string))
+        .filter(|name| is_namespace(name))
+        .collect(),
+      Storage::Memory => Vec::new(),
     };
-    let on_disk: Vec<String> = history_root()
-      .filter(|_| !memory_only())
-      .and_then(|root| fs::read_dir(root).ok())
-      .into_iter()
-      .flatten()
-      .flatten()
-      .filter_map(|item| item.file_name().to_str().map(str::to_string))
-      .filter(|name| is_namespace(name))
-      .collect();
     let all: HashSet<String> = namespaces.into_iter().chain(on_disk).collect();
     for namespace in all {
-      if self
-        .with_history(&namespace, now, |_history| Ok(()))
-        .is_err()
-      {
+      if self.sweep_one(storage, &namespace, now).is_err() {
         tracing::warn!("transcript history retention could not run for an account");
       }
     }
   }
 }
 
-/// The account the window transcribes for, by its local data namespace.
-fn namespace(app: &AppHandle) -> Result<String, String> {
+/// The account the window transcribes for: the feature-gate generation it
+/// is bound at, and its local data namespace.
+fn binding(app: &AppHandle) -> Result<(u64, String), String> {
   app
     .try_state::<FeatureGates>()
     .and_then(|gates| gates.account_binding(DesktopFeature::Dictation))
-    .map(|(_, namespace)| namespace)
     .ok_or_else(|| NO_ACCOUNT.to_string())
 }
 
@@ -945,12 +1142,17 @@ async fn run<T: Send + 'static>(
   app: AppHandle,
   apply: impl FnOnce(&mut History<'_>, i64) -> Result<T, String> + Send + 'static,
 ) -> Result<T, String> {
-  let namespace = namespace(&app)?;
+  let (generation, namespace) = binding(&app)?;
   tauri::async_runtime::spawn_blocking(move || {
     let now = now_ms();
-    app
-      .state::<TranscribeHistoryState>()
-      .with_history(&namespace, now, |history| apply(history, now))
+    let root = storage_root();
+    app.state::<TranscribeHistoryState>().with_history(
+      Storage::of(root.as_deref()),
+      &namespace,
+      generation,
+      now,
+      |history| apply(history, now),
+    )
   })
   .await
   .map_err(|_error| format!("{LABEL} is unavailable"))?
@@ -960,7 +1162,8 @@ fn sweep_now(app: &AppHandle) {
   let app = app.clone();
   tauri::async_runtime::spawn_blocking(move || {
     if let Some(state) = app.try_state::<TranscribeHistoryState>() {
-      state.sweep(now_ms());
+      let root = storage_root();
+      state.sweep(Storage::of(root.as_deref()), now_ms());
     }
   });
 }
@@ -983,11 +1186,20 @@ pub(crate) fn window_opened(app: &AppHandle) {
 
 /// Deletes the history of an account being disconnected.
 pub(crate) async fn erase_account(app: &AppHandle, namespace: String) {
+  // Read while the account is still bound: every request bound to it so far
+  // is refused once its history is erased. Unreadable gates refuse all.
+  let generation = app
+    .try_state::<FeatureGates>()
+    .and_then(|gates| gates.generation())
+    .unwrap_or(u64::MAX);
   let app = app.clone();
   let erased = tauri::async_runtime::spawn_blocking(move || {
+    let root = storage_root();
     app
       .try_state::<TranscribeHistoryState>()
-      .map_or(Ok(()), |state| state.erase(&namespace))
+      .map_or(Ok(()), |state| {
+        state.erase_disconnected(Storage::of(root.as_deref()), &namespace, generation)
+      })
   })
   .await;
   if !matches!(erased, Ok(Ok(()))) {
@@ -1062,10 +1274,13 @@ pub async fn transcribe_history_set_retention(
   require(&app, &window)?;
   if days == 0 {
     // Choosing to keep nothing also clears a history whose key is lost.
-    let namespace = namespace(&app)?;
+    let (_generation, namespace) = binding(&app)?;
     let erasing = app.clone();
     tauri::async_runtime::spawn_blocking(move || {
-      erasing.state::<TranscribeHistoryState>().erase(&namespace)
+      let root = storage_root();
+      erasing
+        .state::<TranscribeHistoryState>()
+        .erase(Storage::of(root.as_deref()), &namespace)
     })
     .await
     .map_err(|_error| format!("{LABEL} is unavailable"))??;
@@ -1464,6 +1679,257 @@ mod tests {
     assert!(!directory.exists());
     assert!(erase_directory(&directory, || Ok(())).is_ok());
     fs::remove_dir(root).unwrap();
+  }
+
+  /// A keychain that holds the test key once `available`, and none before.
+  #[derive(Default)]
+  struct TestKeys {
+    available: std::cell::Cell<bool>,
+  }
+
+  impl HistoryKeys for TestKeys {
+    fn resolve(&self, _namespace: &str, data_exists: bool) -> StoreKey {
+      if self.available.get() {
+        StoreKey::Key([7; 32])
+      } else if data_exists {
+        StoreKey::DeletionOnly
+      } else {
+        StoreKey::MemoryOnly
+      }
+    }
+
+    fn delete(&self, _namespace: &str) -> Result<(), String> {
+      Ok(())
+    }
+  }
+
+  /// A vault whose listing fails, or that stops writing the index once a
+  /// transcript is written: a process cut short at that point.
+  struct Faulty<'v> {
+    inner: &'v mut dyn Vault,
+    listing_fails: bool,
+    stops_after_entry: bool,
+    entry_written: bool,
+  }
+
+  impl Vault for Faulty<'_> {
+    fn load_settings(&self) -> Result<Option<Settings>, EncryptedReadError> {
+      self.inner.load_settings()
+    }
+
+    fn save_settings(&mut self, settings: &Settings) -> Result<(), String> {
+      self.inner.save_settings(settings)
+    }
+
+    fn load_index(&self) -> Result<Option<Index>, EncryptedReadError> {
+      self.inner.load_index()
+    }
+
+    fn save_index(&mut self, index: &Index) -> Result<(), String> {
+      if self.stops_after_entry && self.entry_written {
+        return Err("stopped".to_string());
+      }
+      self.inner.save_index(index)
+    }
+
+    fn load_entry(&self, id: &str) -> Result<Option<Entry>, EncryptedReadError> {
+      self.inner.load_entry(id)
+    }
+
+    fn save_entry(&mut self, entry: &Entry) -> Result<(), String> {
+      self.entry_written = true;
+      self.inner.save_entry(entry)
+    }
+
+    fn remove_entry(&mut self, id: &str) -> Result<(), String> {
+      self.inner.remove_entry(id)
+    }
+
+    fn entry_ids(&self) -> Result<Vec<String>, String> {
+      if self.listing_fails {
+        return Err("listing failed".to_string());
+      }
+      self.inner.entry_ids()
+    }
+  }
+
+  #[test]
+  fn a_request_queued_before_disconnect_never_writes_the_history_back() {
+    let root = temp_directory();
+    let keys = TestKeys::default();
+    keys.available.set(true);
+    let storage = Storage::Disk {
+      root: &root,
+      keys: &keys,
+    };
+    let state = TranscribeHistoryState::default();
+    let namespace = "a".repeat(64);
+    let bound_at = 4;
+    state
+      .with_history(storage, &namespace, bound_at, NOW, |history| {
+        history.put(new(transcript("a.wav", "a")), NOW)
+      })
+      .unwrap()
+      .unwrap();
+    // Disconnect erases the history while a put bound to the account still
+    // waits for the store's lock; that put then runs.
+    state
+      .erase_disconnected(storage, &namespace, bound_at)
+      .unwrap();
+    let stale = state.with_history(storage, &namespace, bound_at, NOW, |history| {
+      history.put(new(transcript("b.wav", "b")), NOW)
+    });
+    assert_eq!(stale, Err(NO_ACCOUNT.to_string()));
+    assert!(!root.join(&namespace).exists());
+    // The retention sweep never brings an erased history back either.
+    state.sweep(storage, NOW);
+    assert!(!root.join(&namespace).exists());
+
+    // Linked again, the account is bound at a later generation.
+    state
+      .with_history(storage, &namespace, bound_at + 1, NOW, |history| {
+        history.put(new(transcript("c.wav", "c")), NOW)
+      })
+      .unwrap()
+      .unwrap();
+    assert!(root.join(&namespace).exists());
+    fs::remove_dir_all(root).unwrap();
+  }
+
+  #[test]
+  fn a_listing_that_fails_partway_never_rewrites_the_index() {
+    let directory = temp_directory();
+    let mut vault = disk(&directory, "a");
+    put(&mut vault, transcript("a.wav", "a"), NOW);
+    put(&mut vault, transcript("b.wav", "b"), NOW + 1);
+    let index = fs::read(directory.join(INDEX_FILE)).unwrap();
+
+    let files = vec![
+      Ok(directory.join("x.json")),
+      Err(std::io::Error::other("device gone")),
+    ];
+    assert!(stored_entry_ids(files.into_iter()).is_err());
+
+    let mut faulty = Faulty {
+      inner: &mut vault,
+      listing_fails: true,
+      stops_after_entry: false,
+      entry_written: false,
+    };
+    assert!(History::open(&mut faulty, NOW + 2).is_err());
+    assert_eq!(fs::read(directory.join(INDEX_FILE)).unwrap(), index);
+    assert_eq!(ids(&mut vault, NOW + 2).len(), 2);
+    fs::remove_dir_all(directory).unwrap();
+  }
+
+  #[test]
+  fn a_key_the_keychain_gives_later_keeps_what_memory_held() {
+    let root = temp_directory();
+    let keys = TestKeys::default();
+    let storage = Storage::Disk {
+      root: &root,
+      keys: &keys,
+    };
+    let state = TranscribeHistoryState::default();
+    let namespace = "b".repeat(64);
+    let kept = state
+      .with_history(storage, &namespace, 1, NOW, |history| {
+        history.set_retention(7, NOW)?;
+        history.put(new(transcript("a.wav", "a")), NOW)
+      })
+      .unwrap()
+      .unwrap();
+    assert!(!root.join(&namespace).exists());
+
+    keys.available.set(true);
+    let view = state
+      .with_history(storage, &namespace, 1, NOW + 1, |history| {
+        history.get(&kept.id)
+      })
+      .unwrap();
+    assert_eq!(view.expires_at, NOW + 7 * DAY_MS);
+    let mut on_disk = disk(&root.join(&namespace), &namespace);
+    assert_eq!(ids(&mut on_disk, NOW + 2), vec![kept.id]);
+    assert_eq!(
+      History::open(&mut on_disk, NOW + 2).unwrap().retention(),
+      Retention { days: 7 }
+    );
+
+    // A choice to keep nothing survives the move; no transcript does.
+    let namespace = "c".repeat(64);
+    keys.available.set(false);
+    state
+      .with_history(storage, &namespace, 1, NOW, |history| {
+        history.put(new(transcript("a.wav", "a")), NOW)?;
+        history.set_retention(0, NOW)
+      })
+      .unwrap();
+    keys.available.set(true);
+    assert_eq!(
+      state
+        .with_history(storage, &namespace, 1, NOW, |history| Ok(
+          history.retention()
+        ))
+        .unwrap(),
+      Retention { days: 0 }
+    );
+    let mut on_disk = disk(&root.join(&namespace), &namespace);
+    assert!(ids(&mut on_disk, NOW).is_empty());
+    assert_eq!(
+      on_disk.load_settings().unwrap(),
+      Some(Settings { retention_days: 0 })
+    );
+    fs::remove_dir_all(root).unwrap();
+  }
+
+  #[test]
+  fn an_update_cut_short_before_the_index_is_repaired_from_the_transcript() {
+    let directory = temp_directory();
+    let mut vault = disk(&directory, "a");
+    let first = put(&mut vault, transcript("memo.mp3", "Dobrý den."), NOW);
+    let mut cleaned = transcript("memo.mp3", "Dobrý den.");
+    cleaned.cleaned = Some(Cleaned {
+      markdown: "# Memo\n\nDobrý den.".to_string(),
+      instructions: Vec::new(),
+    });
+    // The process stops after the transcript is written, before the index
+    // catches up.
+    let mut faulty = Faulty {
+      inner: &mut vault,
+      listing_fails: false,
+      stops_after_entry: true,
+      entry_written: false,
+    };
+    let update = History::open(&mut faulty, NOW + 1).unwrap().put(
+      PutRequest {
+        id: Some(first.id.clone()),
+        transcript: cleaned.clone(),
+      },
+      NOW + 1,
+    );
+    assert!(update.is_err());
+    assert_eq!(
+      History::open(&mut vault, NOW + 2)
+        .unwrap()
+        .get(&first.id)
+        .unwrap()
+        .entry
+        .transcript,
+      cleaned
+    );
+
+    let history = History::open(&mut vault, NOW + 2).unwrap();
+    let list = history.list();
+    assert_eq!(list.len(), 1);
+    assert!(list[0].cleaned);
+    assert!(history.index.updating.is_empty());
+    let bytes = history.index.entries[0].bytes;
+    drop(history);
+    assert_eq!(
+      bytes,
+      Summary::of(&vault.load_entry(&first.id).unwrap().unwrap()).bytes
+    );
+    fs::remove_dir_all(directory).unwrap();
   }
 
   #[test]
