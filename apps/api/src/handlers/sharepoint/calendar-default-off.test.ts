@@ -48,10 +48,10 @@ test("the capability policy route is mounted only behind the SharePoint deployme
     (route) =>
       route.method === "PUT" && route.path.endsWith("/sharepoint/capabilities"),
   );
-  if (!entry) {
-    return panic("Expected the capability policy route");
-  }
-  expect(entry.middleware.map(classifyRouteGate)).toContainEqual({
+  const gates = (
+    entry ?? panic("Expected the capability policy route")
+  ).middleware.map(classifyRouteGate);
+  expect(gates).toContainEqual({
     kind: "deployment-feature",
     flag: "FEATURE_SHAREPOINT",
   });
