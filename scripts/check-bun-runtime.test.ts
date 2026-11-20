@@ -20,12 +20,12 @@ import {
 
 const ROOT = path.resolve(import.meta.dir, "..");
 const context = {
-  executables: new Set(["vite", "playwright", "tsdown"]),
-  scripts: new Set(["build", "generate"]),
+  executables: new Set(["vite", "playwright", "tsdown", "knip"]),
+  scripts: new Set(["build", "generate", "knip"]),
 };
 
-const node = (program: string): Launch => ({ program, runtime: "node" });
-const bun = (program: string): Launch => ({ program, runtime: "bun" });
+const node = (program: string): Launch => ({ program, runs: "node" });
+const bun = (program: string): Launch => ({ program, runs: "bun" });
 const cases: [string, Launch[]][] = [
   ["vite dev", [node("vite")]],
   ["bun --bun vite dev", [bun("vite")]],
@@ -46,6 +46,9 @@ const cases: [string, Launch[]][] = [
   ],
   ['echo "$(vite --version)"', [node("vite")]],
   ["bun run build", []],
+  ["bun run knip", []],
+  ["bun --bun knip", [{ program: "knip", runs: "script" }]],
+  ["bunx --bun knip", [bun("knip")]],
   ["bun --filter @stll/web vite", []],
   ["bun run --cwd ../web vite", []],
   ["bun --preload ./setup.ts scripts/run.ts", []],
@@ -99,18 +102,21 @@ test("finds scripts that start package executables on Node, with their lines", (
           line: 5,
           script: "build",
           program: "vite",
+          runs: "node",
         },
         {
           file: "apps/web/package.json",
           line: 6,
           script: "cli",
           program: "own-cli",
+          runs: "node",
         },
         {
           file: "packages/tool/package.json",
           line: 8,
           script: "start",
           program: "own-cli",
+          runs: "node",
         },
       ],
       unusedExceptions: [],
@@ -148,9 +154,9 @@ test("the web dev server starts on the runtime the web image serves on", () => {
     executables: packageExecutables(ROOT),
     scripts: new Set(Object.keys(scripts)),
   });
-  expect(
-    dev.map(({ program, runtime: started }) => [program, started]),
-  ).toEqual([["vite", runtime]]);
+  expect(dev.map(({ program, runs }) => [program, runs])).toEqual([
+    ["vite", runtime],
+  ]);
 });
 
 test("the image runtime is read from the last exec-form CMD", () => {

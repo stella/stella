@@ -32,12 +32,19 @@ const BUN_RUNTIME_FLAGS = new Set(["--bun", "-b"]);
  */
 export const NODE_RUNTIME_EXCEPTIONS: Readonly<Record<string, string>> = {};
 
-export type Runtime = typeof BUN | typeof NODE;
+const SCRIPT = "script";
+
+/**
+ * What a command runs for a program name: the executable on Bun or on Node,
+ * or, for `bun --bun <name>`, a package script of that name, which Bun
+ * prefers over the executable.
+ */
+export type Runner = typeof BUN | typeof NODE | typeof SCRIPT;
 
 export type Launch = {
-  /** The executable or program the command starts. */
+  /** The executable or program the command names. */
   program: string;
-  runtime: Runtime;
+  runs: Runner;
 };
 
 const SHEBANG = /^#!.*\bnode\b/u;
@@ -108,9 +115,7 @@ const bunxLaunch = (words: readonly string[]): Launch[] => {
   const program = (forced ? words.slice(1) : words).find(
     (word) => !word.startsWith("-"),
   );
-  return program === undefined
-    ? []
-    : [{ program, runtime: forced ? BUN : NODE }];
+  return program === undefined ? [] : [{ program, runs: forced ? BUN : NODE }];
 };
 
 /** Bun flags that take the next word as their value. */
@@ -137,7 +142,8 @@ type LaunchContext = {
 /**
  * `bun [run] <name>` runs the package script `<name>` when one exists, and
  * otherwise the executable, on the runtime its shebang names unless `--bun`
- * precedes it.
+ * precedes it. `bun --bun <name>` where a script shadows the executable
+ * runs that script instead, which recurses when it is the script itself.
  */
 const bunLaunch = (
   args: readonly string[],
@@ -156,9 +162,13 @@ const bunLaunch = (
     } else if (arg === "x" && index === 0) {
       return bunxLaunch(args.slice(1));
     } else if (arg !== "run" && !arg.startsWith("-")) {
-      return executables.has(arg) && !scripts.has(arg)
-        ? [{ program: arg, runtime: forced ? BUN : NODE }]
-        : [];
+      if (!executables.has(arg)) {
+        return [];
+      }
+      if (scripts.has(arg)) {
+        return forced ? [{ program: arg, runs: SCRIPT }] : [];
+      }
+      return [{ program: arg, runs: forced ? BUN : NODE }];
     }
   }
   return [];
@@ -178,7 +188,7 @@ export const launches = (command: string, context: LaunchContext): Launch[] =>
       return [];
     }
     if (NODE_PROGRAMS.has(program)) {
-      return [{ program, runtime: NODE }];
+      return [{ program, runs: NODE }];
     }
     if (program === "bunx") {
       return bunxLaunch(args);
@@ -186,15 +196,14 @@ export const launches = (command: string, context: LaunchContext): Launch[] =>
     if (program === BUN) {
       return bunLaunch(args, context);
     }
-    return context.executables.has(program) ? [{ program, runtime: NODE }] : [];
+    return context.executables.has(program) ? [{ program, runs: NODE }] : [];
   });
 
 export type Finding = {
   file: string;
   line: number;
   script: string;
-  program: string;
-};
+} & Launch;
 
 const scriptLine = (source: string, name: string): number => {
   const scripts = source.indexOf('"scripts"');
@@ -226,11 +235,11 @@ export const scanPackageScripts = (
       if (typeof command !== "string") {
         continue;
       }
-      for (const { program, runtime } of launches(command, context)) {
-        if (runtime === BUN) {
+      for (const { program, runs } of launches(command, context)) {
+        if (runs === BUN) {
           continue;
         }
-        if (Object.hasOwn(exceptions, program)) {
+        if (runs === NODE && Object.hasOwn(exceptions, program)) {
           usedExceptions.add(program);
           continue;
         }
@@ -239,6 +248,7 @@ export const scanPackageScripts = (
           line: scriptLine(source, script),
           script,
           program,
+          runs,
         });
       }
     }
@@ -271,10 +281,24 @@ if (import.meta.main) {
   const enforced = findings.filter(({ file, line }) =>
     guardEnforcesLine({ guard: GUARD, file, line }),
   );
-  for (const { file, line, script, program } of enforced) {
-    console.error(
-      `${file}:${line}: scripts.${script} starts ${program} on Node; run it as \`bun --bun ${program}\``,
-    );
+  for (const { file, line, script, program, runs } of enforced) {
+    switch (runs) {
+      case NODE:
+        console.error(
+          `${file}:${line}: scripts.${script} starts ${program} on Node; run it as \`bun --bun ${program}\``,
+        );
+        break;
+      case SCRIPT:
+        console.error(
+          `${file}:${line}: scripts.${script} runs the package script ${program}, not the executable; run it as \`bunx --bun ${program}\``,
+        );
+        break;
+      case BUN:
+        break;
+      default:
+        runs satisfies never;
+        panic(`unknown runner ${String(runs)}`);
+    }
   }
   for (const program of unusedExceptions) {
     console.error(
