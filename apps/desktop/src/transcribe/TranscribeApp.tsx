@@ -734,6 +734,62 @@ const FAILURE_MESSAGES = {
   tooLong: "failure.tooLong",
 } as const satisfies Record<TranscribeFailure, string>;
 
+type TranscriptActionReasonOptions = {
+  hasText: boolean;
+  running: boolean;
+  saving: Saving;
+  cleanup: Pick<
+    ReturnType<typeof useRecordingCleanup>,
+    "busy" | "parts" | "running" | "started"
+  >;
+};
+
+const transcriptActionReasons = (
+  { hasText, running, saving, cleanup }: TranscriptActionReasonOptions,
+  t: (
+    key:
+      | "progress.transcribing"
+      | "result.noSpeech"
+      | "result.savingToMatter"
+      | "result.alreadySaved"
+      | "cleaned.running"
+      | "cleaned.offerTitle",
+  ) => string,
+) => {
+  const noTranscriptReason = t(
+    running ? "progress.transcribing" : "result.noSpeech",
+  );
+  const raw = hasText ? undefined : noTranscriptReason;
+  const save = (() => {
+    if (running) {
+      return t("progress.transcribing");
+    }
+    if (saving.status === "saving") {
+      return t("result.savingToMatter");
+    }
+    if (saving.status === "saved") {
+      return t("result.alreadySaved");
+    }
+    return raw;
+  })();
+  const cleaned = (() => {
+    if (!cleanup.running && cleanup.parts.length > 0) {
+      return undefined;
+    }
+    if (cleanup.busy) {
+      return t("cleaned.running");
+    }
+    if (!hasText) {
+      return raw;
+    }
+    if (!cleanup.started) {
+      return t("cleaned.offerTitle");
+    }
+    return t(running ? "progress.transcribing" : "cleaned.running");
+  })();
+  return { raw, save, cleaned };
+};
+
 const ResultScreen = ({
   session,
   pieces,
@@ -755,18 +811,6 @@ const ResultScreen = ({
   }
   const running = outcome === null;
   const hasText = paragraphs.length > 0;
-  const saveDisabledReason = (() => {
-    if (running) {
-      return t("progress.transcribing");
-    }
-    if (saving.status === "saving") {
-      return t("result.savingToMatter");
-    }
-    if (saving.status === "saved") {
-      return t("result.alreadySaved");
-    }
-    return hasText ? undefined : t("result.noSpeech");
-  })();
   const title = recordingTitle(session.file.name);
   const meta = [
     session.file.durationMs === null
@@ -788,7 +832,10 @@ const ResultScreen = ({
   });
   const [copyFormat, setCopyFormat] = useCopyFormat();
   const cleanedBlocks = cleanup.blocks;
-  const cleanedReady = !cleanup.running && cleanup.parts.length > 0;
+  const reasons = transcriptActionReasons(
+    { hasText, running, saving, cleanup },
+    t,
+  );
   const save = async (
     text: string,
     fileName: string,
@@ -871,8 +918,8 @@ const ResultScreen = ({
         </div>
         {session.matter === null ? null : (
           <Button
-            disabled={saveDisabledReason !== undefined}
-            disabledReason={saveDisabledReason}
+            disabled={reasons.save !== undefined}
+            disabledReason={reasons.save}
             onClick={() => {
               void saveToMatter();
             }}
@@ -898,7 +945,7 @@ const ResultScreen = ({
             </h2>
             <PaneActions
               copyFormat={copyFormat}
-              disabled={!hasText}
+              disabledReason={reasons.raw}
               onCopy={async (format) =>
                 await copy(
                   transcriptText(paragraphs, { timestamps: true }),
@@ -976,7 +1023,7 @@ const ResultScreen = ({
             </div>
             <PaneActions
               copyFormat={copyFormat}
-              disabled={!cleanedReady}
+              disabledReason={reasons.cleaned}
               onCopy={async (format) =>
                 await copy(
                   cleanedPlain,

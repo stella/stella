@@ -231,6 +231,38 @@ for (const scheme of ["light", "dark"] as const) {
   });
 }
 
+test("the empty transcript explains why its copy and save menus cannot open", async ({
+  page,
+}) => {
+  await open(page, "light");
+  const t = en.transcribe;
+  await page.getByRole("button", { name: t.drop.choose }).click();
+
+  const tooltip = page.locator('[data-slot="tooltip-popup"][data-open]');
+  for (const name of [t.copyMenu.label, t.result.saveAs]) {
+    const triggers = page.getByRole("button", { name, exact: true });
+    await expect(triggers).toHaveCount(2);
+    for (const trigger of await triggers.all()) {
+      await expect(trigger).toBeDisabled();
+      await trigger.focus();
+      await expect(trigger).toBeFocused();
+      await trigger.hover();
+      await expect(trigger).toHaveAttribute("data-popup-open");
+      await expect(tooltip).toHaveText(t.progress.transcribing);
+
+      await page.keyboard.press("ArrowDown");
+      await expect(trigger).toHaveAttribute("aria-expanded", "false");
+      await expect(page.getByRole("menu")).toHaveCount(0);
+
+      await trigger.click({ force: true });
+      await expect(trigger).toHaveAttribute("aria-expanded", "false");
+      await expect(page.getByRole("menu")).toHaveCount(0);
+    }
+  }
+
+  expect(await unexpectedTauriCalls(page)).toEqual([]);
+});
+
 test("a dropped DS2 file is refused with the export note", async ({ page }) => {
   await open(page, "light");
   await expect(page.getByText(en.transcribe.drop.title)).toBeVisible();
