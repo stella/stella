@@ -1,5 +1,8 @@
 import { Result } from "better-result";
 
+import { parseIntegerToken } from "@stll/agent-input/numeric-token";
+
+import type { DocumentPackageError } from "@/api/lib/files/document-archive";
 import {
   createDocumentText,
   documentPackageError,
@@ -17,11 +20,8 @@ const isCharacterBoundary = (text: string, offset: number): boolean => {
 };
 
 const unsignedInteger = (value: string | undefined): number => {
-  if (value === undefined || !/^\d+$/u.test(value)) {
-    return Number.NaN;
-  }
-  const number = Number(value);
-  return Number.isSafeInteger(number) ? number : Number.NaN;
+  const parsed = parseIntegerToken(value, { sign: "unsigned" });
+  return parsed.isOk() ? parsed.value : Number.NaN;
 };
 
 const blockChildren = new Set(["paragraph", "table", "page-break"]);
@@ -41,7 +41,7 @@ const isLayoutContainer = (name: string): name is keyof typeof layoutChildren =>
 export const readUyapDocument = (
   readXml: DocumentXmlReader,
   maxChars: number,
-) => {
+): Result<{ text: string; truncated: boolean }, DocumentPackageError> => {
   const parsed = readXml(UYAP_CONTENT_PATH);
   if (parsed.isErr()) {
     return Result.err(parsed.error);

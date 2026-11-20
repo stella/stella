@@ -82,7 +82,7 @@ function collectTextRuns(container: DocumentXmlNode, runs: string[]): void {
         // GB/T 33190-2016 §11.2 defines backslash escapes for character codes.
         const value = code.text
           .replace(/\\([\da-f]{4})/giu, (_, hex: string) =>
-            String.fromCodePoint(Number.parseInt(hex, 16)),
+            String.fromCodePoint(Buffer.from(hex, "hex").readUInt16BE(0)),
           )
           .toWellFormed();
         if (value.trim()) {

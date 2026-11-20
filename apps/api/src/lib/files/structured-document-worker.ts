@@ -25,7 +25,7 @@ export const extractStructuredDocument = async ({
   fileBytes: Uint8Array;
   mimeType: string;
   maxChars: number;
-}) => {
+}): Promise<ReturnType<typeof readOfdDocument>> => {
   const format = STRUCTURED_DOCUMENT_FORMATS.find(
     (entry) => entry.mimeType === mimeType,
   );
