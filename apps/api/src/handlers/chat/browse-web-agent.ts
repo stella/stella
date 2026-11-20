@@ -234,7 +234,7 @@ const readPages = ({
     ),
     ...(resume === undefined
       ? []
-      : resume.flatMap((item) =>
+      : resume.flatMap((item): unknown[] =>
           item.status === "resolved" ? [item.payload] : [],
         )),
   ];
@@ -281,7 +281,7 @@ type RunFinishedChunk = Extract<StreamChunk, { type: EventType.RUN_FINISHED }>;
  */
 const withoutUsage = (chunk: RunFinishedChunk): RunFinishedChunk => {
   const { usage: _usage, ...rest } = chunk;
-  const tanstack: unknown = rest.metadata?.["tanstack"];
+  const tanstack: unknown = rest.metadata?.tanstack;
   if (!isRecord(tanstack) || !Object.hasOwn(tanstack, "usage")) {
     return rest;
   }

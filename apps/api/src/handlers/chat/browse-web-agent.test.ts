@@ -95,7 +95,7 @@ const recordingModel = (turns: readonly ScriptedTurn[]) => {
         {
           index: current,
           model,
-          runId: runId ?? "run",
+          runId,
           threadId: threadId ?? THREAD,
         },
       );
@@ -253,7 +253,7 @@ const browseScenario = (caps: ChatTurnBudget = CHAT_TURN_BUDGET) => {
       userId: USER,
     });
     if (Result.isError(accepted)) {
-      return panic(accepted.error.message);
+      panic(accepted.error.message);
     }
     processor.setMessages([
       ...processor.getMessages().slice(0, -1),
@@ -395,8 +395,10 @@ describe("the browsing sub-agent through the SDK runtime", () => {
         (message) =>
           message.role === "tool" && message.toolCallId === BROWSE_CALL,
       );
-    expect(String(browseResult?.content)).toContain("Filing fee: 10 EUR.");
-    expect(String(browseResult?.content)).toContain(PAGE_URL);
+    expect(JSON.stringify(browseResult?.content)).toContain(
+      "Filing fee: 10 EUR.",
+    );
+    expect(JSON.stringify(browseResult?.content)).toContain(PAGE_URL);
     expect(awaited(scenario.answer())).toEqual([]);
   });
 
@@ -645,7 +647,7 @@ describe("answering a call inside a suspended browsing run", () => {
       },
     ]);
     if (Result.isError(accepted)) {
-      return panic(accepted.error.message);
+      panic(accepted.error.message);
     }
     expect(childCallOf(accepted.value.message.parts)).toMatchObject({
       approval: { approved: true },
@@ -682,7 +684,7 @@ describe("answering a call inside a suspended browsing run", () => {
       { interruptId: second, payload: { approved: false }, status: "resolved" },
     ]);
     if (Result.isError(accepted)) {
-      return panic(accepted.error.message);
+      panic(accepted.error.message);
     }
     const calls = accepted.value.message.parts.flatMap((part) =>
       part.type === "subagent"
@@ -761,6 +763,12 @@ describe("answering a call inside a suspended browsing run", () => {
   });
 });
 
+/** A tool message's text content, as the main model reads it. */
+const contentOf = (message: ModelMessage | undefined): string =>
+  typeof message?.content === "string"
+    ? message.content
+    : panic("The tool message holds no text");
+
 describe("the main model's view of a browsing result", () => {
   const call = (id: string, name: string): ModelMessage => ({
     content: null,
@@ -781,7 +789,7 @@ describe("the main model's view of a browsing result", () => {
       result("other", { result: "unchanged" }),
     ];
     const view = browseWebResultsForModel(messages);
-    expect(JSON.parse(String(view.at(1)?.content))).toEqual({
+    expect(JSON.parse(contentOf(view.at(1)))).toEqual({
       contentTrust: BROWSER_CONTROL_CONTENT_TRUST.untrustedWebContent,
       note: expect.any(String),
       text: "Fee: 10 EUR.",
@@ -803,7 +811,7 @@ describe("the main model's view of a browsing result", () => {
       call("browse", BROWSE_WEB_TOOL_NAME),
       result("browse", { result: page, subagentRunId: "run" }),
     ]);
-    const read: unknown = JSON.parse(String(view.at(1)?.content));
+    const read: unknown = JSON.parse(contentOf(view.at(1)));
     expect(read).toMatchObject({
       contentTrust: BROWSER_CONTROL_CONTENT_TRUST.untrustedWebContent,
       text: "a".repeat(BROWSE_WEB_RESULT_MAX_CHARS - 1),
@@ -815,8 +823,6 @@ describe("the main model's view of a browsing result", () => {
       call("browse", BROWSE_WEB_TOOL_NAME),
       result("browse", { result: "Fee: 10 EUR.", subagentRunId: "run" }),
     ]);
-    expect(JSON.parse(String(short.at(1)?.content))).not.toHaveProperty(
-      "truncated",
-    );
+    expect(JSON.parse(contentOf(short.at(1)))).not.toHaveProperty("truncated");
   });
 });

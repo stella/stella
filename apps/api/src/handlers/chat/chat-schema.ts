@@ -1051,26 +1051,24 @@ const withNestedTransitions = (
   part: ChatSubagentPart,
   validatedCallsById: ReadonlyMap<string, ValidatedContinuationToolCall>,
 ): ChatSubagentPart => {
-  let moved = false;
   const messages = part.subagent.messages.map((message) => ({
     ...message,
     parts: message.parts.map((child) => {
       if (child.type === "subagent") {
-        const next = withNestedTransitions(child, validatedCallsById);
-        moved ||= next !== child;
-        return next;
+        return withNestedTransitions(child, validatedCallsById);
       }
       if (child.type !== "tool-call") {
         return child;
       }
       const validated = validatedCallsById.get(child.id);
-      if (validated?.type !== "transitioned") {
-        return child;
-      }
-      moved = true;
-      return validated.call;
+      return validated?.type === "transitioned" ? validated.call : child;
     }),
   }));
+  const moved = messages.some((message, index) =>
+    message.parts.some(
+      (child, at) => child !== part.subagent.messages.at(index)?.parts.at(at),
+    ),
+  );
   return moved ? { ...part, subagent: { ...part.subagent, messages } } : part;
 };
 
