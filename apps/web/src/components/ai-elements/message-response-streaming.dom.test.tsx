@@ -731,7 +731,7 @@ const blocksWithoutMargins = (root: HTMLElement): string[] =>
 describe("block spacing while an answer streams", () => {
   test("every streamed block takes the gap a settled block takes", async () => {
     await assertProperty(
-      "streamed answer blocks take the block gap",
+      "every streamed block takes the gap a settled block takes",
       fc.asyncProperty(streamedChatAnswerArbitrary, async ({ prefixes }) => {
         const view = await mountAnswer(prefixes.at(0) ?? "", {
           isAnimating: true,
