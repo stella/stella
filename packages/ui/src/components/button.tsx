@@ -289,24 +289,25 @@ type ButtonProps = Omit<ButtonContract, "children" | "disabled"> & {
   "data-accessible-disabled"?: "";
 } & useRender.ComponentProps<"button">;
 
-function Button({
-  className,
-  variant: variantProp,
-  size,
-  render,
-  layout,
-  loading,
-  icon,
-  children,
-  disabled,
-  disabledReason,
-  tooltip,
-  selected,
-  focusRing = "outside",
-  shape = "box",
-  "data-accessible-disabled": accessibleDisabled,
-  ...props
-}: ButtonProps) {
+function Button(buttonProps: ButtonProps) {
+  const {
+    className,
+    variant: variantProp,
+    size,
+    render,
+    layout,
+    loading,
+    icon,
+    children,
+    disabled,
+    disabledReason,
+    tooltip,
+    selected,
+    focusRing = "outside",
+    shape = "box",
+    "data-accessible-disabled": accessibleDisabled,
+    ...props
+  } = buttonProps;
   // An inline action with no variant reads as a link in its sentence; the
   // filled default would paint a box the line does not have.
   const variant = variantProp ?? (size === "inline" ? "link" : undefined);
@@ -382,6 +383,7 @@ function Button({
   return renderTooltipTrigger({
     tooltip: tooltipContent,
     trigger: button,
+    keepTriggerMounted: Object.hasOwn(buttonProps, "disabledReason"),
   });
 }
 
@@ -488,7 +490,10 @@ type ButtonTextRunProps = Omit<
   className?: string | undefined;
   /** `link` unless the run holds a text mark that draws its own line. */
   variant?: ButtonTextRunVariant | undefined;
-};
+} & (
+    | { disabled?: false | undefined }
+    | { disabledReason: NonNullable<ReactNode> }
+  );
 
 /**
  * A long run of prose that acts as one button: a citation or a
@@ -502,8 +507,6 @@ type ButtonTextRunProps = Omit<
 const ButtonTextRun = ({
   children,
   className,
-  disabled,
-  disabledReason,
   variant = "link",
   ...props
 }: ButtonTextRunProps) => (
@@ -520,8 +523,6 @@ const ButtonTextRun = ({
     <Button
       {...props}
       className={BUTTON_TEXT_RUN_TARGET_CLASS}
-      disabled={disabled}
-      disabledReason={disabledReason}
       focusRing="outside"
       icon={undefined}
       loading={false}

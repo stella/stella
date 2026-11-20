@@ -94,3 +94,22 @@ test("labels that wrap, sit in a sentence or lay out their own content are not c
     expect(button.classList.contains("max-w-full")).toBe(true);
   }
 });
+
+test("focus stays on a button as its disabled reason appears and clears", () => {
+  const action = (disabled: boolean) => (
+    <Button
+      disabled={disabled}
+      disabledReason={disabled ? "Saving changes…" : undefined}
+    >
+      Save changes
+    </Button>
+  );
+  const view = render(action(false));
+  const button = view.getByRole("button", { name: "Save changes" });
+  button.focus();
+  for (const disabled of [true, false]) {
+    view.rerender(action(disabled));
+    expect(document.activeElement).toBe(button);
+    expect(button.getAttribute("aria-disabled")).toBe(disabled ? "true" : null);
+  }
+});
