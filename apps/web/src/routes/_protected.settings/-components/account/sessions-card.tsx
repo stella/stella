@@ -245,6 +245,7 @@ const RevokeAllDialog = () => {
         render={
           <Button
             disabled={revokeOtherSessions.isPending}
+            disabledReason={t("settings.account.revokingSessions")}
             size="sm"
             variant="outline"
           />

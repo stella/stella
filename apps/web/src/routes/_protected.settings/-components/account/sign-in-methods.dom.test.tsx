@@ -154,8 +154,8 @@ test("shows linked methods and prevents disconnecting the last one", () => {
   expect(
     screen
       .getByRole("button", { name: messages.common.disconnect })
-      .hasAttribute("disabled"),
-  ).toBe(true);
+      .getAttribute("aria-disabled"),
+  ).toBe("true");
 });
 
 test("connects only a configured provider and sends its provider id", async () => {

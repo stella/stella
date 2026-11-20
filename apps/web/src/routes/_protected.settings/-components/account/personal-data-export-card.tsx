@@ -67,6 +67,7 @@ export const PersonalDataExportCard = () => {
   const requestButton = (label: string) => (
     <Button
       disabled={requestExport.isPending}
+      disabledReason={t("common.preparing")}
       loading={requestExport.isPending}
       onClick={() => requestExport.mutate()}
       size="sm"
@@ -175,6 +176,7 @@ const PersonalDataExportStatus = ({
           actions={
             <Button
               disabled={requestPending}
+              disabledReason={t("common.preparing")}
               loading={requestPending}
               onClick={onRequest}
               size="sm"
@@ -193,6 +195,7 @@ const PersonalDataExportStatus = ({
           </p>
           <Button
             disabled={requestPending}
+            disabledReason={t("common.preparing")}
             loading={requestPending}
             onClick={onRequest}
             size="sm"
