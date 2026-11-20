@@ -11,10 +11,14 @@
  * text gives unrelated signatures in two organizations and signatures are
  * never comparable across them.
  *
- * Candidates are found with 16 bands of 8 rows: two documents share a band
- * key with probability 1 - (1 - s^8)^16, which crosses 50% near s = 0.71 and
- * is about 95% at the 0.8 threshold, while documents below 0.5 collide less
- * than 7% of the time.
+ * Candidates are found with 21 bands of 6 rows (126 of the 128 slots): two
+ * documents share a band key with probability 1 - (1 - s^6)^21, which is
+ * about 93% at the 0.7 threshold, 99.8% at 0.8 and 0.5% at 0.25.
+ *
+ * The values were tuned on the license corpus in `corpus.test.ts`, whose
+ * report gives the measured numbers. Unrelated documents of one type stay
+ * below 0.25 there for any shingle size from 3 to 7 words, while one license
+ * under two copyright holders sits near 0.8; 0.7 keeps both margins wide.
  */
 
 /* oxlint-disable no-bitwise -- 32-bit hashing is the algorithm. */
@@ -23,13 +27,13 @@ import { foldSearchMatchText } from "@stll/text-normalize";
 
 export const SHINGLE_WORDS = 5;
 export const SIGNATURE_LENGTH = 128;
-export const LSH_BANDS = 16;
-const LSH_ROWS = SIGNATURE_LENGTH / LSH_BANDS;
+export const LSH_BANDS = 21;
+const LSH_ROWS = 6;
 
 /** Shorter texts share too much boilerplate to call a match meaningful. */
 export const MIN_WORDS = 50;
 
-export const NEAR_DUPLICATE_THRESHOLD = 0.8;
+export const NEAR_DUPLICATE_THRESHOLD = 0.7;
 
 const WORD_RE = /[\p{L}\p{N}]+/gu;
 

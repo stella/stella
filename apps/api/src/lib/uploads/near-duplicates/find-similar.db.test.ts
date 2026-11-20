@@ -14,7 +14,10 @@ import { createSafeDb } from "@/api/db/scoped";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { findSimilarDocuments } from "@/api/lib/uploads/near-duplicates/find-similar";
-import { NEAR_DUPLICATE_THRESHOLD } from "@/api/lib/uploads/near-duplicates/minhash";
+import {
+  LSH_BANDS,
+  NEAR_DUPLICATE_THRESHOLD,
+} from "@/api/lib/uploads/near-duplicates/minhash";
 import { recordNearDuplicateSignature } from "@/api/lib/uploads/near-duplicates/record-signature";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
@@ -195,7 +198,7 @@ test("a redelivered extraction leaves one signature and its band keys", async ()
     .select()
     .from(entityVersionMinhashBands)
     .where(eq(entityVersionMinhashBands.entityVersionId, entityVersionId));
-  expect(bands).toHaveLength(16);
+  expect(bands).toHaveLength(LSH_BANDS);
 });
 
 test("deleting a version deletes its signature and band keys", async () => {
