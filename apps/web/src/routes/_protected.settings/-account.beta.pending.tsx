@@ -20,7 +20,7 @@ import { SettingsPagePending } from "@/routes/_protected.settings/-components/se
 export type BetaFeature = "workflows" | "timeBilling" | "localAgents" | "inbox";
 
 /** The previews in order, by name and line; the toggles are the page's. */
-const BETA_FEATURES = {
+export const BETA_FEATURES = {
   workflows: {
     title: "common.workflows",
     description: "knowledge.sections.workflows.description",
@@ -48,24 +48,26 @@ export const betaFeatureRowId = (feature: BetaFeature) =>
 
 type BetaFeatureRowProps = {
   feature: BetaFeature;
+  /** The preview's name and line: translated on the page, through
+   *  `PendingText` in the pending phase. */
+  title: ReactNode;
+  description: ReactNode;
   /** The checkbox, or its face. */
   children: ReactNode;
 };
 
 /** One preview's row: its name and its line, then its checkbox. */
-export const BetaFeatureRow = ({ children, feature }: BetaFeatureRowProps) => (
+export const BetaFeatureRow = ({
+  children,
+  description,
+  feature,
+  title,
+}: BetaFeatureRowProps) => (
   <SettingsRow
-    description={
-      <PendingText
-        barClassName="w-72 max-w-full"
-        id={BETA_FEATURES[feature].description}
-      />
-    }
+    description={description}
     id={betaFeatureRowId(feature)}
     interaction="label"
-    title={
-      <PendingText barClassName="w-28" id={BETA_FEATURES[feature].title} />
-    }
+    title={title}
   >
     {children}
   </SettingsRow>
@@ -73,7 +75,18 @@ export const BetaFeatureRow = ({ children, feature }: BetaFeatureRowProps) => (
 
 /** A preview's row with its checkbox's face (the choice waits on data). */
 const BetaFeatureRowPending = ({ feature }: { feature: BetaFeature }) => (
-  <BetaFeatureRow feature={feature}>
+  <BetaFeatureRow
+    description={
+      <PendingText
+        barClassName="w-72 max-w-full"
+        id={BETA_FEATURES[feature].description}
+      />
+    }
+    feature={feature}
+    title={
+      <PendingText barClassName="w-28" id={BETA_FEATURES[feature].title} />
+    }
+  >
     <CheckboxFace />
   </BetaFeatureRow>
 );

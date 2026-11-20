@@ -9,6 +9,7 @@ import { detached } from "@/lib/detached";
 import { useDevStore } from "@/lib/dev-store";
 import { useFeatureEnrolment } from "@/queries/feature-enrolments";
 import {
+  BETA_FEATURES,
   BetaFeatureRow,
   betaFeatureRowId,
   BetaPageShell,
@@ -30,9 +31,15 @@ const BetaFeatureToggle = ({
   feature,
   onCheckedChange,
 }: BetaFeatureToggleProps) => {
+  const t = useTranslations();
   const ids = settingsRowIds(betaFeatureRowId(feature));
+  const { description, title } = BETA_FEATURES[feature];
   return (
-    <BetaFeatureRow feature={feature}>
+    <BetaFeatureRow
+      description={t(description)}
+      feature={feature}
+      title={t(title)}
+    >
       <Checkbox
         aria-describedby={ids.description}
         aria-labelledby={ids.label}
