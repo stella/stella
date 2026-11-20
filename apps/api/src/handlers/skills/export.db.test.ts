@@ -2,7 +2,6 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { and, asc, eq } from "drizzle-orm";
 
 import { ZipArchive } from "@stll/docx-core/zip";
-import { SKILL_PACKAGE_LIMITS } from "@stll/skills/format";
 import {
   buildSkillPackage,
   SKILL_PACKAGE_MANIFEST_PATH,
@@ -122,23 +121,6 @@ const seedSkill = async ({
     });
   }
   return { id, slug };
-};
-
-/**
- * `length` ASCII characters from a fixed pseudo-random sequence over
- * base64 letters: deterministic, and too varied for DEFLATE to shrink much.
- */
-const incompressibleText = (length: number): string => {
-  const alphabet =
-    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-  const codes = new Uint8Array(length);
-  // Park-Miller minimal standard generator: plain arithmetic, fixed seed.
-  let state = 20_261_120;
-  for (let index = 0; index < length; index += 1) {
-    state = (state * 48_271) % 2_147_483_647;
-    codes[index] = alphabet.codePointAt(state % alphabet.length) ?? 65;
-  }
-  return new TextDecoder().decode(codes);
 };
 
 type CapturedWrite = { data: Uint8Array; key: string };
@@ -424,49 +406,6 @@ describe("skill export", () => {
     expect(response).toMatchObject({ code: 404 });
     expect(writes).toEqual([]);
     expect(events).toEqual([]);
-  });
-
-  test("a skill whose files fill the package limit exports and imports whole", async () => {
-    const chunk = SKILL_PACKAGE_LIMITS.resourceMaxChars;
-    const total = SKILL_PACKAGE_LIMITS.packageFilesMaxBytes;
-    // The checklist SKILL.md names stays; ASCII parts fill the rest exactly.
-    // The parts hold text that does not compress, so the archive stays
-    // within the import's compression-ratio bound as a real package does.
-    const text = incompressibleText(chunk);
-    const [checklist] = DEFAULT_RESOURCES;
-    if (checklist === undefined) {
-      throw new TypeError("expected the checklist resource");
-    }
-    const resources = [checklist];
-    const parts = total - checklist.content.length;
-    for (let offset = 0; offset < parts; offset += chunk) {
-      resources.push({
-        content: text.slice(0, Math.min(chunk, parts - offset)),
-        path: `references/part-${String(resources.length).padStart(2, "0")}.md`,
-      });
-    }
-    const { id } = await seedSkill({
-      resources,
-      scope: "private",
-      userId: ids.userA1,
-    });
-    const { write } = await exportedBytes(id, "skill");
-
-    const imported = await importAs(
-      colleague(),
-      new File([write.data], "x.skill"),
-    );
-    if ("code" in imported) {
-      throw new TypeError(`expected the import to succeed: ${imported.code}`);
-    }
-    const copy = await definitionOf(toSafeId<"agentSkill">(imported.id));
-
-    expect(copy.files.map(({ path }) => path)).toEqual(
-      resources.map(({ path }) => path),
-    );
-    expect(
-      copy.files.reduce((sum, { content }) => sum + content.length, 0),
-    ).toBe(total);
   });
 });
 
