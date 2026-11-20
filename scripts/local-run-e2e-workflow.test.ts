@@ -77,12 +77,15 @@ const retryPolicy = async (
   env: Record<string, unknown>,
 ): Promise<RetryPolicy> => {
   const script = await Bun.file(RETRY_URL).text();
-  const attempts = Number(
-    env["RETRY_ATTEMPTS"] ?? retryDefault(script, "RETRY_ATTEMPTS"),
-  );
-  const delays = String(
-    env["RETRY_DELAYS_SECONDS"] ?? retryDefault(script, "RETRY_DELAYS_SECONDS"),
-  )
+  // A step override wins over retry.sh's default, as it does at run time.
+  const setting = (name: string): string => {
+    const value = env[name];
+    return typeof value === "string" || typeof value === "number"
+      ? String(value)
+      : retryDefault(script, name);
+  };
+  const attempts = Number(setting("RETRY_ATTEMPTS"));
+  const delays = setting("RETRY_DELAYS_SECONDS")
     .trim()
     .split(/\s+/u)
     .map(Number);
