@@ -109,6 +109,67 @@ const versionManifestPlugin = (): Plugin => ({
   },
 });
 
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+/**
+ * package.json `imports` entries whose server (`default`) target is another
+ * package, keyed by the `#` specifier.
+ */
+export const serverPackageImports = (
+  manifest: unknown,
+): ReadonlyMap<string, string> => {
+  const imports = isRecord(manifest) ? manifest["imports"] : undefined;
+  if (!isRecord(imports)) {
+    return new Map();
+  }
+  return new Map(
+    Object.entries(imports).flatMap(([specifier, target]) => {
+      const server = isRecord(target) ? target["default"] : target;
+      return typeof server === "string" && !server.startsWith(".")
+        ? [[specifier, server]]
+        : [];
+    }),
+  );
+};
+
+/** Rewrites `#` import specifiers in module source to their package names. */
+export const rewritePackageImports = (
+  code: string,
+  targets: ReadonlyMap<string, string>,
+): string =>
+  code.replace(
+    /(?<=\b(?:from|import)\s*\(?\s*)(["'])(#[\w/-]+)\1/gu,
+    (literal, quote: string, specifier: string) => {
+      const target = targets.get(specifier);
+      return target === undefined ? literal : `${quote}${target}${quote}`;
+    },
+  );
+
+// The dev server's module runner externalizes a dependency only when the
+// import specifier itself is a package name, and it ignores `external` from
+// plugins. A `#` import that package.json maps to a package is therefore
+// inlined: the napi-rs packages behind `#aho-corasick` and `#regex-set` then
+// evaluate their CommonJS binding loader as ESM and fail on `require`.
+// Importing the package by name in the server environment lets the runtime
+// load it natively, as the production server bundle does.
+const serverPackageImportsPlugin = (): Plugin => {
+  const targets = serverPackageImports(
+    JSON.parse(readFileSync(path.resolve(APP_ROOT, "package.json"), "utf-8")),
+  );
+  return {
+    name: "stella-server-package-imports",
+    apply: "serve",
+    applyToEnvironment: (environment) =>
+      environment.config.consumer === "server",
+    transform(code) {
+      return [...targets.keys()].some((specifier) => code.includes(specifier))
+        ? rewritePackageImports(code, targets)
+        : null;
+    },
+  };
+};
+
 // Publish the canonical stella logo from @stll/api-contract at
 // `/stella-logo-512.png`, the URL MCP metadata advertises. The package owns the
 // only copy; the API serves the same bytes as its favicon.
@@ -354,6 +415,7 @@ export default defineConfig(({ mode, command }) => {
   const plugins: PluginOption[] = [
     stllAhoCorasickWasm(),
     stllRegexSetWasm(),
+    serverPackageImportsPlugin(),
     logCapPlugin(),
     ensurePluginOption(
       devtools({ consolePiping: { enabled: false } }),

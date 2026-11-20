@@ -9,6 +9,8 @@ import config, {
   capViteLogger,
   REACT_PLUGIN_EXCLUDE,
   rewriteBrowserApiPath,
+  rewritePackageImports,
+  serverPackageImports,
 } from "./vite.config";
 
 const PRAGMATIC_IMPORT_PREFIX = "@atlaskit/pragmatic-";
@@ -314,3 +316,44 @@ const hasName = (value: unknown): value is { name: string } => {
 
   return typeof value.name === "string";
 };
+
+describe("server package imports", () => {
+  const targets = serverPackageImports(
+    JSON.parse(
+      readFileSync(path.resolve(import.meta.dirname, "package.json"), "utf-8"),
+    ),
+  );
+
+  test("maps every `#` import whose server target is a package", () => {
+    expect(targets).toEqual(
+      new Map([
+        ["#aho-corasick", "@stll/aho-corasick"],
+        ["#regex-set", "@stll/regex-set"],
+      ]),
+    );
+    expect(
+      serverPackageImports({
+        imports: { "#local": { default: "./src/local.ts" }, "#plain": "pkg" },
+      }),
+    ).toEqual(new Map([["#plain", "pkg"]]));
+  });
+
+  test("rewrites import specifiers and leaves other text alone", () => {
+    const source = [
+      'import { AhoCorasick } from "#aho-corasick";',
+      "export { RegexSet } from '#regex-set';",
+      'const lazy = import("#aho-corasick");',
+      'import "#unmapped";',
+      'const text = "#aho-corasick";',
+    ].join("\n");
+    expect(rewritePackageImports(source, targets)).toBe(
+      [
+        'import { AhoCorasick } from "@stll/aho-corasick";',
+        "export { RegexSet } from '@stll/regex-set';",
+        'const lazy = import("@stll/aho-corasick");',
+        'import "#unmapped";',
+        'const text = "#aho-corasick";',
+      ].join("\n"),
+    );
+  });
+});
