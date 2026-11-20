@@ -174,6 +174,10 @@ export const TABLE_RETENTION = {
   organization_file_usage: {
     boundedBy: "Organization-owned file accounting and deletion.",
   },
+  email_delivery_failures: {
+    ttlColumn: "failed_at",
+    sweeper: "emailDeliverability.receive",
+  },
   kept_transcript_deletions: {
     boundedBy:
       "One provider id per transcript still kept at the provider, deleted once the provider confirms its delete; dictation.deleteKeptTranscripts retries the rest and reports any kept past an hour.",

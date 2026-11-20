@@ -429,6 +429,7 @@ export const ENUM_COLUMNS = {
   ],
   document_translation_units: ["entity_feature_gate"],
   docx_suggestions: ["applied_mode", "entity_feature_gate", "severity"],
+  email_delivery_failures: ["reason"],
   entities: [
     "agenda_kind",
     "agenda_source",

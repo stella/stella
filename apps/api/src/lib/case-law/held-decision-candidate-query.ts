@@ -18,6 +18,7 @@ import {
   caseLawSources,
 } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
+import { ecliKeyAmongSql } from "@/api/lib/case-law/case-number-match-key";
 import { canonicalDecisionIdSql } from "@/api/lib/case-law/decision-alias";
 import { ecliPublisherSpellings } from "@/api/lib/case-law/ecli-spellings";
 import {
@@ -200,7 +201,7 @@ export const readHeldDecisionCandidates = async (
       ? sql`${caseLawDecisions.id} IN (
       SELECT ${caseLawDecisionIdentifiers.decisionId} FROM ${caseLawDecisionIdentifiers}
       WHERE ${caseLawDecisionIdentifiers.type} = ${DECISION_IDENTIFIER_TYPES.ECLI}
-        AND ${inArray(caseLawDecisionIdentifiers.normalizedValue, [...path.keys])}
+        AND ${ecliKeyAmongSql(caseLawDecisionIdentifiers.normalizedValue, path.keys)}
       UNION
       SELECT primary_ecli.id FROM ${caseLawDecisions} primary_ecli
       WHERE primary_ecli.ecli IS NOT NULL

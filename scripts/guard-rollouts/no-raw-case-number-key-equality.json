@@ -1,0 +1,18 @@
+{
+  "id": "no-raw-case-number-key-equality",
+  "rules": ["no-raw-case-number-key-equality/no-raw-case-number-key-equality"],
+  "type": "changed-lines",
+  "expiresAt": "2026-11-26T00:00:00.000Z",
+  "check": [
+    "bun",
+    "--bun",
+    "oxlint",
+    "-c",
+    "oxlint.config.ts",
+    "--allow",
+    "all",
+    "--deny",
+    "no-raw-case-number-key-equality/no-raw-case-number-key-equality",
+    "apps/api/src"
+  ]
+}

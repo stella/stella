@@ -11,8 +11,8 @@
  * with no slash before the year keep their spelling.
  *
  * Only comparisons read the match key; every stored key keeps its printed
- * form. The SQL rendering of the same function, which the expression indexes
- * on the key columns are built from, is
+ * form. The SQL rendering of the same function, which every database
+ * comparison and the indexes that serve them are built from, is
  * `caseNumberMatchKeySql` in `apps/api/src/lib/case-law/case-number-match-key.ts`,
  * and `case-number-match-key.db.test.ts` there holds the two renderings to one
  * answer. A cross-century collision ("/1918" and "/2018") is left to what a
@@ -34,3 +34,7 @@ const FULL_YEAR_TAIL = new RegExp(CASE_NUMBER_FULL_YEAR_TAIL_PATTERN, "u");
 /** A key as it is compared: its trailing full year read as two digits. */
 export const caseNumberMatchKey = (key: string): string =>
   key.replace(FULL_YEAR_TAIL, "/$1$2");
+
+/** Whether two keys name the same case under the match key. */
+export const caseNumberKeysMatch = (left: string, right: string): boolean =>
+  caseNumberMatchKey(left) === caseNumberMatchKey(right);
