@@ -28,8 +28,15 @@ type AcpLaunchContext = {
  */
 type AcpStoredSignIn = {
   methodId: string;
-  /** Whether the agent's stored sign-in is there. */
-  signedIn: (configDir: string) => boolean;
+  /**
+   * Whether the agent's stored sign-in is there, in its state directory or,
+   * for an agent the member installed, where `environment` (the one the
+   * agent runs with) puts its home.
+   */
+  signedIn: (
+    configDir: string,
+    environment: Readonly<Record<string, string>>,
+  ) => boolean;
 };
 
 /**
@@ -89,4 +96,15 @@ export type AcpAgentDefinition = {
    */
   readonly discardSession:
     ((configDir: string, sessionId: string) => void) | null;
+  /**
+   * For an agent the member installed themselves, which may predate its ACP
+   * server: the oldest version that serves ACP, and how to read the
+   * installed version without starting it. An older one is reported by its
+   * version and never started; `null` when every installed version serves.
+   */
+  readonly minimumVersion: {
+    version: string;
+    /** Rejects when the executable cannot be run at all. */
+    read: (executable: string) => Promise<string | null>;
+  } | null;
 };

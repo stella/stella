@@ -74,7 +74,7 @@ const UNGATED_ORGANIZATION_ROWS = ORGANIZATION_SECTIONS.flatMap(({ items }) =>
 describe("a settings page's pending view", () => {
   test("drawn before the shell mounts, it brings the settings chrome around the page", () => {
     const view = testing.render(
-      <SettingsPagePending>
+      <SettingsPagePending area="account">
         <p data-testid="page" />
       </SettingsPagePending>,
     );
@@ -113,7 +113,7 @@ describe("a settings page's pending view", () => {
   test("inside the live shell, it is the page alone", () => {
     const view = testing.render(
       <SettingsChromeScope>
-        <SettingsPagePending>
+        <SettingsPagePending area="account">
           <p data-testid="page" />
         </SettingsPagePending>
       </SettingsChromeScope>,

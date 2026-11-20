@@ -47,36 +47,21 @@ const redirectTargetOf = (routeModule: unknown): unknown => {
     : undefined;
 };
 
-// The forms this layout's pending view leads to; the tables follow with
-// their own pages.
-const FORM_PAGES: readonly string[] = [
-  "ai",
-  "anonymization",
-  "catalogue",
-  "general",
-  "index",
-  "matter-numbering",
-  "time-policy",
-];
-
 describe("legacy admin pages", () => {
-  test("the matrix holds every form page", () => {
-    for (const page of FORM_PAGES) {
-      expect(adminPages).toContain(page);
-    }
+  test("the matrix holds the forms and the tables", () => {
+    expect(adminPages).toContain("general");
+    expect(adminPages).toContain("members");
+    expect(adminPages.length).toBeGreaterThan(2);
   });
 
+  // While the layout's redirect runs, its pending view is the target page's,
+  // which it finds through the target each page names.
   for (const page of adminPages) {
     test(`/admin/${page} names the page its layout redirects to`, async () => {
       const pathname = page === "index" ? "/admin/" : `/admin/${page}`;
       const target = redirectTargetOf(
         await import(path.join(adminDirectory, `${page}.tsx`)),
       );
-      if (target === undefined) {
-        // Only a page this wave has not reached may still name none.
-        expect(FORM_PAGES).not.toContain(page);
-        return;
-      }
       expect(target).toBe(organizationSettingsDestination(pathname, {}).to);
     });
   }

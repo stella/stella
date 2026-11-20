@@ -364,12 +364,12 @@ export const SettingsChromeScope = ({ children }: { children: ReactNode }) => (
  * yet (the cold-load frame), so the page sits in the same column either way.
  */
 export const SettingsPagePending = ({
-  area = "account",
+  area,
   children,
 }: {
   /** The page's part of the settings area: which sections its navigation
-   *  draws. */
-  area?: SettingsArea | undefined;
+   *  draws. Every page names it, so none draws the wrong navigation. */
+  area: SettingsArea;
   children: ReactElement;
 }): ReactElement =>
   use(SettingsChromeContext) ? (

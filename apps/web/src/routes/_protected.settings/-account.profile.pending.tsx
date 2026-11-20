@@ -164,7 +164,7 @@ const SaveButtonPending = () => (
 const LOCALE_PREFERENCE_ROWS = Object.values(LOCALE_PREFERENCE_LABELS);
 
 const ProfilePendingView = () => (
-  <SettingsPagePending>
+  <SettingsPagePending area="account">
     <ProfilePageShell
       accountCards={
         <>

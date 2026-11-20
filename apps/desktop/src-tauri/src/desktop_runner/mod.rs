@@ -13,6 +13,7 @@ mod awaited_steps;
 mod client;
 mod harness;
 mod journal;
+mod member_agents;
 mod read_limits;
 mod run_folders;
 mod sidecar_host;
@@ -438,6 +439,23 @@ struct ManagedHarnesses {
   app: AppHandle,
 }
 
+impl ManagedHarnesses {
+  /// The member's own Antigravity CLI, with a stella-owned folder for what
+  /// stella keeps about it; its sign-in stays the CLI's own.
+  fn member_antigravity(&self) -> Option<InstalledHarness> {
+    let (executable, version) = member_agents::antigravity()?;
+    let installation = self.app.try_state::<HarnessInstallation>()?;
+    let config_dir = installation.member_agent_dir("antigravity").ok()?;
+    Some(InstalledHarness {
+      version,
+      executable,
+      config_dir,
+      tool_path: Vec::new(),
+      lease: Box::new(()),
+    })
+  }
+}
+
 impl LocalHarnesses for ManagedHarnesses {
   fn skill_folders(&self) -> Vec<SkillFolderRef> {
     crate::local_skill_folders::SkillFolders::for_this_computer().for_run()
@@ -486,8 +504,9 @@ impl LocalHarnesses for ManagedHarnesses {
     let managed = match harness {
       Harness::Codex => ManagedHarness::Codex,
       Harness::ClaudeCode => ManagedHarness::ClaudeCode,
-      // Not installed by this desktop yet.
-      Harness::Opencode | Harness::Antigravity => return None,
+      Harness::Antigravity => return self.member_antigravity(),
+      // Not run by this desktop.
+      Harness::Opencode => return None,
     };
     let installation = self.app.try_state::<HarnessInstallation>()?;
     let lease = installation.acquire(managed).ok()?;

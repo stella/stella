@@ -10,18 +10,23 @@ import { isOwnKey } from "./own-key";
  * script's source.
  */
 
-type ScriptReadArea = "caseLaw" | "legislation" | "other";
+/**
+ * What a stella read reaches: a body of law, the workspace's documents or
+ * the rest of its matters, a public register, or anything else.
+ */
+export type ScriptReadArea =
+  "caseLaw" | "documents" | "legislation" | "matters" | "other" | "registers";
 
 /**
- * Which body of law a stella read reaches when a code-mode script calls it.
- * Total over every registry tool, so a new tool decides whether its step
- * reads as legal research before it typechecks.
+ * Which area a stella read reaches when a code-mode script calls it. Total
+ * over every registry tool, so a new tool decides whether its step reads as
+ * legal research, and how a run's summary names it, before it typechecks.
  */
 const SCRIPT_READ_AREA = {
   add_matter_member: "other",
   case_law_coverage: "caseLaw",
-  check_counterparty: "other",
-  compare_documents: "other",
+  check_counterparty: "registers",
+  compare_documents: "documents",
   configure_template_fields: "other",
   create_organization: "other",
   create_reader_annotation: "other",
@@ -42,17 +47,17 @@ const SCRIPT_READ_AREA = {
   list_capabilities: "other",
   list_case_law_courts: "caseLaw",
   list_clauses: "other",
-  list_contacts: "other",
-  list_documents: "other",
+  list_contacts: "matters",
+  list_documents: "documents",
   list_invoices: "other",
-  list_matters: "other",
+  list_matters: "matters",
   list_playbooks: "other",
   list_properties: "other",
   list_reader_annotations: "other",
-  list_tasks: "other",
+  list_tasks: "matters",
   list_templates: "other",
-  list_time_entries: "other",
-  lookup_business_registry: "other",
+  list_time_entries: "matters",
+  lookup_business_registry: "registers",
   mint_web_handoff: "other",
   open_case_law_decision: "caseLaw",
   open_document_version_upload: "other",
@@ -66,9 +71,9 @@ const SCRIPT_READ_AREA = {
   read_case_law_citations: "caseLaw",
   read_case_law_decision: "caseLaw",
   read_case_law_decision_blocks: "caseLaw",
-  read_contact: "other",
-  read_content_across_matters: "other",
-  read_document: "other",
+  read_contact: "matters",
+  read_content_across_matters: "documents",
+  read_document: "documents",
   read_guidance: "other",
   read_provision_history: "legislation",
   read_statute: "legislation",
@@ -87,7 +92,7 @@ const SCRIPT_READ_AREA = {
   save_task: "other",
   save_time_entry: "other",
   search: "other",
-  search_across_matters: "other",
+  search_across_matters: "documents",
   search_boe_legislation: "legislation",
   search_case_law: "caseLaw",
   search_guidance: "other",
@@ -191,7 +196,10 @@ const findTopic = (source: string): string | undefined => {
 const researchOf = (
   areas: ReadonlySet<ScriptReadArea>,
 ): CodeToolResearch | undefined => {
-  if (areas.size === 0 || areas.has("other")) {
+  if (
+    areas.size === 0 ||
+    [...areas].some((area) => area !== "legislation" && area !== "caseLaw")
+  ) {
     return undefined;
   }
   if (areas.has("legislation") && areas.has("caseLaw")) {
@@ -264,4 +272,50 @@ export const codeStepResearch = (call: {
   return source === undefined
     ? undefined
     : summarizeCodeToolSource(source).research;
+};
+
+type CodeStepReads = {
+  /** The area of each read that went through. */
+  areas: ReadonlySet<ScriptReadArea>;
+  /** How many reads went through, those the ledger only counted included. */
+  lookups: number;
+};
+
+/**
+ * What a settled code step read, for its run's summary. Its ledger says
+ * which reads went through; a read that failed is left out, as a failed
+ * step is. A step stored before ledgers is read from its script's calls,
+ * which only a step that succeeded is taken to have made. Undefined for any
+ * other step.
+ */
+export const codeStepReads = (call: {
+  input: unknown;
+  name: string;
+  output: unknown;
+  succeeded: boolean;
+}): CodeStepReads | undefined => {
+  if (!isCodeToolName(call.name)) {
+    return undefined;
+  }
+  const ledger = readChatStepLedger(call.output);
+  if (ledger !== null) {
+    const done = ledger.calls.filter(({ outcome }) => outcome === "ok");
+    return {
+      areas: new Set(done.map(({ tool }) => scriptReadArea(tool))),
+      lookups: done.length + ledger.callsOmitted,
+    };
+  }
+  const source = getCodeToolSource(call);
+  if (source === undefined || !call.succeeded) {
+    return { areas: new Set(), lookups: 0 };
+  }
+  const areas = new Set<ScriptReadArea>();
+  let lookups = 0;
+  for (const [, toolName = ""] of source
+    .slice(0, MAX_SCANNED_SOURCE_LENGTH)
+    .matchAll(SCRIPT_CALL_PATTERN)) {
+    lookups += 1;
+    areas.add(scriptReadArea(toolName));
+  }
+  return { areas, lookups };
 };

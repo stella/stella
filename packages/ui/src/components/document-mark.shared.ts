@@ -247,38 +247,42 @@ const openDocumentMark = ({
   };
 };
 
+const signedDocumentMark = {
+  viewBox: "0 0 24 24",
+  gradients: [],
+  shapes: [
+    {
+      tag: "path",
+      attrs: {
+        d: "M5 1h9l5 5v15a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V3a2 2 0 0 1 2-2z",
+        fill: "#566275",
+      },
+    },
+    {
+      tag: "path",
+      attrs: {
+        d: "M14 1v5h5",
+        fill: "#c2c9d2",
+      },
+    },
+    {
+      tag: "path",
+      attrs: {
+        d: "M7 11h8m-8 3h5m1 4 2 2 4-5",
+        fill: "none",
+        stroke: "#fff",
+        strokeWidth: "1.4",
+        strokeLinecap: "round",
+        strokeLinejoin: "round",
+      },
+    },
+  ],
+} satisfies DocumentMarkArtwork;
+
 export const DOCUMENT_MARKS = {
-  cades: {
-    viewBox: "0 0 24 24",
-    gradients: [],
-    shapes: [
-      {
-        tag: "path",
-        attrs: {
-          d: "M5 1h9l5 5v15a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V3a2 2 0 0 1 2-2z",
-          fill: "#566275",
-        },
-      },
-      {
-        tag: "path",
-        attrs: {
-          d: "M14 1v5h5",
-          fill: "#c2c9d2",
-        },
-      },
-      {
-        tag: "path",
-        attrs: {
-          d: "M7 11h8m-8 3h5m1 4 2 2 4-5",
-          fill: "none",
-          stroke: "#fff",
-          strokeWidth: "1.4",
-          strokeLinecap: "round",
-          strokeLinejoin: "round",
-        },
-      },
-    ],
-  },
+  asicE: signedDocumentMark,
+  asicS: signedDocumentMark,
+  cades: signedDocumentMark,
   dataBox: {
     viewBox: "0 0 24 24",
     gradients: [],
