@@ -46,6 +46,7 @@ const { QueryClient } = await import("@tanstack/react-query");
 const { PendingCacheScope } = await import("@/components/pending-cache");
 const { organizationSettingsKeys } =
   await import("@/queries/organization-settings");
+const { sessionOptions } = await import("@/lib/auth-query-options");
 
 afterEach(() => {
   testing.cleanup();
@@ -219,6 +220,10 @@ describe("the AI page's pending view and the organization's features", () => {
 
   const renderWithCache = (featureIds: readonly string[] | null) => {
     const client = new QueryClient();
+    client.setQueryData(sessionOptions.queryKey, {
+      user: { id: "user-a" },
+      session: { activeOrganizationId: "org-a" },
+    });
     if (featureIds !== null) {
       client.setQueryData(
         organizationSettingsKeys.byCaller({

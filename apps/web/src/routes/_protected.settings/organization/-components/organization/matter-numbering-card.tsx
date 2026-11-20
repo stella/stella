@@ -71,7 +71,9 @@ export const MatterNumberingCard = () => {
     <>
       <QueryViewFeedback view={settingsView} />
       <MatterNumberingCardBody
-        key={`${settings.matterNumberPattern}|${settings.matterNumberPadding}`}
+        // A new organization mounts a new body, so its preview never starts
+        // from the last organization's number.
+        key={`${activeOrganizationId}|${settings.matterNumberPattern}|${settings.matterNumberPadding}`}
         settings={settings}
       />
     </>
@@ -120,7 +122,8 @@ const MatterNumberingCardBody = ({
         ),
       ),
     // A new pattern keeps the last number in the chip until its own
-    // preview arrives, so typing never empties the row.
+    // preview arrives, so typing never empties the row. The body is keyed by
+    // organization, so the number kept is always this organization's.
     placeholderData: keepPreviousData,
   });
   const previewView = queryView(previewQuery);

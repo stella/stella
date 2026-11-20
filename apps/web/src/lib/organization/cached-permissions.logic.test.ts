@@ -4,6 +4,7 @@ import { describe, expect, test } from "bun:test";
 import type { PermissionInput } from "@stll/permissions";
 
 import { roleOptions } from "@/lib/auth-queries";
+import { sessionOptions } from "@/lib/auth-query-options";
 import {
   cachedCallerFeatureEnabled,
   cachedRoleGrants,
@@ -60,9 +61,19 @@ const settingsAdmitting = (
 
 const CALLER = { organizationId: "org-a", userId: "user-a" };
 
+// A client holding the session the caller's settings were read for.
+const signedInClient = (caller = CALLER) => {
+  const queryClient = new QueryClient();
+  queryClient.setQueryData(sessionOptions.queryKey, {
+    user: { id: caller.userId },
+    session: { activeOrganizationId: caller.organizationId },
+  });
+  return queryClient;
+};
+
 describe("a loading view's reading of the cached organization features", () => {
   test("admits a feature the cached settings enable", () => {
-    const queryClient = new QueryClient();
+    const queryClient = signedInClient();
     queryClient.setQueryData(
       organizationSettingsKeys.byCaller(CALLER),
       settingsAdmitting([CALLER_FEATURE.aiMemory.id]),
@@ -72,7 +83,7 @@ describe("a loading view's reading of the cached organization features", () => {
   });
 
   test("admits a feature only with the features it requires", () => {
-    const queryClient = new QueryClient();
+    const queryClient = signedInClient();
     const key = organizationSettingsKeys.byCaller(CALLER);
     queryClient.setQueryData(
       key,
@@ -90,13 +101,44 @@ describe("a loading view's reading of the cached organization features", () => {
   });
 
   test("admits nothing before the settings are cached", () => {
-    expect(cachedCallerFeatureEnabled(new QueryClient(), "aiMemory")).toBe(
+    expect(cachedCallerFeatureEnabled(signedInClient(), "aiMemory")).toBe(
+      false,
+    );
+  });
+
+  test("admits nothing without a cached session to name the caller", () => {
+    const queryClient = new QueryClient();
+    queryClient.setQueryData(
+      organizationSettingsKeys.byCaller(CALLER),
+      settingsAdmitting([CALLER_FEATURE.aiMemory.id]),
+    );
+    expect(cachedCallerFeatureEnabled(queryClient, "aiMemory")).toBe(false);
+  });
+
+  test("never counts another organization's cached settings", () => {
+    const queryClient = signedInClient();
+    const other = { organizationId: "org-b", userId: CALLER.userId };
+    queryClient.setQueryData(
+      organizationSettingsKeys.byCaller(CALLER),
+      settingsAdmitting([]),
+    );
+    // Read after the active organization's, so it is the newest entry.
+    const activeRead = queryClient.getQueryState(
+      organizationSettingsKeys.byCaller(CALLER),
+    );
+    queryClient.setQueryData(
+      organizationSettingsKeys.byCaller(other),
+      settingsAdmitting([CALLER_FEATURE.aiMemory.id]),
+      { updatedAt: (activeRead?.dataUpdatedAt ?? 0) + 1000 },
+    );
+    expect(cachedCallerFeatureEnabled(queryClient, "aiMemory")).toBe(false);
+    expect(cachedCallerFeatureEnabled(signedInClient(other), "aiMemory")).toBe(
       false,
     );
   });
 
   test("admits nothing when the settings' last read failed", () => {
-    const queryClient = new QueryClient();
+    const queryClient = signedInClient();
     const key = organizationSettingsKeys.byCaller(CALLER);
     queryClient.setQueryData(
       key,
