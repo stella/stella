@@ -70,6 +70,11 @@ import {
 import { SelectColorIcon } from "@/components/workspaces/properties/shared";
 import { WORK_TYPES } from "@/components/workspaces/tasks/task-detail-constants";
 import { filterFieldsByLabel } from "@/components/workspaces/view-toolbar-filters.logic";
+import {
+  ADVANCED_FILTER_ICON_CLASS,
+  FILTER_CHIP_FIELD_CLASS,
+  FILTER_CHIP_SUMMARY_CLASS,
+} from "@/components/workspaces/view-toolbar-filters.pending";
 import type { TranslationKey } from "@/i18n/types";
 import type { WorkspaceProperty } from "@/lib/types";
 
@@ -234,11 +239,11 @@ const FilterChip = ({
     <Popover onOpenChange={onOpenChange} open={open}>
       <PopoverTrigger render={<ViewFilterChip />}>
         <FieldTypeIcon field={field} />
-        <span className="text-foreground">{field.label}</span>
+        <span className={FILTER_CHIP_FIELD_CLASS}>{field.label}</span>
         {valueColor !== undefined && (
           <SelectColorIcon className="size-3.5" color={valueColor} />
         )}
-        <span className="text-muted-foreground">
+        <span className={FILTER_CHIP_SUMMARY_CLASS}>
           {chipSummary({
             field,
             node,
@@ -470,9 +475,9 @@ const AdvancedFilterChip = ({
   return (
     <Popover onOpenChange={onOpenChange} open={open}>
       <PopoverTrigger render={<ViewFilterChip />}>
-        <SlidersHorizontalIcon className="size-3.5" />
-        <span className="text-foreground">{t("common.advanced")}</span>
-        <span className="text-muted-foreground">
+        <SlidersHorizontalIcon className={ADVANCED_FILTER_ICON_CLASS} />
+        <span className={FILTER_CHIP_FIELD_CLASS}>{t("common.advanced")}</span>
+        <span className={FILTER_CHIP_SUMMARY_CLASS}>
           {t("workspaces.views.advancedFilterCount", {
             count: node.children.length,
           })}

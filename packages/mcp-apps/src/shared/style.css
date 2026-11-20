@@ -59,6 +59,7 @@
 @source "../../../ui/src/components/prose.tsx";
 @source "../../../ui/src/components/scroll-area.tsx";
 @source "../../../ui/src/components/search-field.tsx";
+@source "../../../ui/src/components/select-classes.ts";
 @source "../../../ui/src/components/select.tsx";
 @source "../../../ui/src/components/skeleton.tsx";
 @source "../../../ui/src/components/stella-mark.shared.ts";
@@ -69,6 +70,7 @@
 @source "../../../ui/src/components/table.tsx";
 @source "../../../ui/src/components/textarea.tsx";
 @source "../../../ui/src/components/time-field.tsx";
+@source "../../../ui/src/components/toggle-group-classes.ts";
 @source "../../../ui/src/components/tooltip-trigger-helper.tsx";
 @source "../../../ui/src/components/tooltip.tsx";
 @source "../../../ui/src/components/truncated-text-face.tsx";

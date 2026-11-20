@@ -2,8 +2,13 @@
 
 import type { ComponentType } from "react";
 
-import { cn } from "../lib/utils";
 import { ToggleGroup, ToggleGroupItem } from "./toggle-group";
+import {
+  SEGMENTED_ICON_TOGGLE_ICON_CLASS_NAME,
+  segmentedIconToggleClassName,
+  segmentedIconToggleItemClassName,
+} from "./toggle-group-classes";
+import type { SegmentedIconToggleSize } from "./toggle-group-classes";
 
 type SegmentedIconToggleOption<T extends string> = {
   value: T;
@@ -16,7 +21,7 @@ type SegmentedIconToggleProps<T extends string> = {
   value: T;
   options: readonly SegmentedIconToggleOption<T>[];
   onChange: (value: T) => void;
-  size?: "compact" | "touch";
+  size?: SegmentedIconToggleSize;
 };
 
 /** Compact segmented control of icon buttons (e.g. table row wrap, list
@@ -30,10 +35,7 @@ export const SegmentedIconToggle = <T extends string>({
   size = "compact",
 }: SegmentedIconToggleProps<T>) => (
   <ToggleGroup<T>
-    className={cn(
-      "rounded-md",
-      size === "touch" ? "h-7 [@media(any-pointer:coarse)]:h-12" : "h-7",
-    )}
+    className={segmentedIconToggleClassName(size)}
     data-slot="segmented-icon-toggle"
     onValueChange={(next) => {
       const [chosen] = next;
@@ -48,17 +50,13 @@ export const SegmentedIconToggle = <T extends string>({
       return (
         <ToggleGroupItem<T>
           aria-label={option.label}
-          className={cn(
-            "h-6 w-7 rounded-sm sm:h-6",
-            size === "touch" &&
-              "[@media(any-pointer:coarse)]:h-11 [@media(any-pointer:coarse)]:w-11",
-          )}
+          className={segmentedIconToggleItemClassName(size)}
           data-control-value={option.value}
           key={option.value}
           size="icon-xs"
           value={option.value}
         >
-          <Icon className="size-3.5" />
+          <Icon className={SEGMENTED_ICON_TOGGLE_ICON_CLASS_NAME} />
         </ToggleGroupItem>
       );
     })}

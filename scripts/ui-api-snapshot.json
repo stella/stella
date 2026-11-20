@@ -1044,6 +1044,8 @@
       "SPLIT_BUTTON_PRIMARY_CLASS",
       "SPLIT_BUTTON_ROOT_CLASS",
       "SPLIT_BUTTON_TRIGGER_CLASS",
+      "SegmentedIconToggleFace",
+      "SelectTriggerFace",
       "SplitButtonChevron",
       "SplitButtonFace",
       "buttonFaceClassName"
@@ -1977,7 +1979,12 @@
       "ViewFilterChip",
       "ViewToolbarChrome"
     ],
-    "./view-toolbar-shell": ["ViewChromeBar", "ViewToolbarChrome"],
+    "./view-toolbar-shell": [
+      "ViewChromeBar",
+      "ViewFilterButtonFace",
+      "ViewFilterChipFace",
+      "ViewToolbarChrome"
+    ],
     "./week": ["getFirstWeekday", "getLocaleWeekInfo", "getWeekendDays"],
     "./workspace-shell": ["WorkspaceEndRail", "WorkspaceShell"]
   },
@@ -2293,6 +2300,7 @@
     "RunStateMark.state": ["needs-you", "working"],
     "ScrollArea.axis": ["both", "vertical"],
     "SegmentedIconToggle.size": ["compact", "touch"],
+    "SegmentedIconToggleFace.size": ["compact", "touch"],
     "SelectTrigger.align": ["center", "start"],
     "SheetContent.side": [
       "block-end",

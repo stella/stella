@@ -1,8 +1,9 @@
-import type { ReactNode } from "react";
+import type { ComponentType, ReactNode } from "react";
 
-import { ChevronDownIcon } from "../icons";
+import { ChevronDownIcon, ChevronsUpDownIcon } from "../icons";
 import { CONTROL_SIZE } from "../lib/control-size";
 import type { ControlSize } from "../lib/control-size";
+import { FIELD_TRIGGER_CLASS_NAME } from "../lib/field-trigger";
 import { cn } from "../lib/utils";
 import {
   BUTTON_BASE_CLASS,
@@ -17,11 +18,25 @@ import {
   INPUT_ELEMENT_CLASS_NAME,
   INPUT_SIZE_CLASS_NAMES,
 } from "./input-control";
+import {
+  SELECT_TRIGGER_ICON_CLASS_NAME,
+  SELECT_TRIGGER_SIZE_CLASS_NAMES,
+  SELECT_VALUE_CLASS_NAME,
+} from "./select-classes";
 import { InlineSkeleton } from "./skeleton";
+import {
+  SEGMENTED_ICON_TOGGLE_ICON_CLASS_NAME,
+  segmentedIconToggleClassName,
+  segmentedIconToggleItemClassName,
+  TOGGLE_GROUP_CLASS_NAME,
+  TOGGLE_GROUP_ITEM_CLASS_NAME,
+} from "./toggle-group-classes";
+import type { SegmentedIconToggleSize } from "./toggle-group-classes";
 
 /*
  * The faces of controls a loading view draws before the page mounts: a
- * button, a text field and a split button with no behaviour, from the same
+ * button, a text field, a select trigger, a segmented toggle and a split
+ * button with no behaviour, from the same
  * classes the real controls are built from, so the control that replaces a
  * face lands in its box. A face takes no focus and no click, says nothing to
  * assistive technology, and reads as unavailable, which it is until the page
@@ -146,6 +161,86 @@ export const InputFace = ({
     >
       {children}
     </span>
+  </span>
+);
+
+type SelectTriggerFaceProps = {
+  /** The chosen value's text, or a bar while it waits on data. */
+  children?: ReactNode;
+  className?: string | undefined;
+  size?: ControlSize;
+};
+
+/** A select trigger's face: its box, the chosen value and the chevrons. */
+export const SelectTriggerFace = ({
+  children,
+  className,
+  size = CONTROL_SIZE.default,
+}: SelectTriggerFaceProps) => (
+  <span
+    aria-hidden="true"
+    className={cn(
+      FIELD_TRIGGER_CLASS_NAME,
+      SELECT_TRIGGER_SIZE_CLASS_NAMES[size],
+      FACE_UNAVAILABLE_CLASS,
+      className,
+    )}
+    data-slot="select-trigger-face"
+  >
+    <span className={SELECT_VALUE_CLASS_NAME}>{children}</span>
+    {/* The span Base UI's `Select.Icon` draws around the chevrons. */}
+    <span>
+      <ChevronsUpDownIcon className={SELECT_TRIGGER_ICON_CLASS_NAME} />
+    </span>
+  </span>
+);
+
+type SegmentedIconToggleFaceProps<T extends string> = {
+  options: readonly {
+    value: T;
+    icon: ComponentType<{ className?: string }>;
+  }[];
+  /** The chosen option, or none while the choice is not read yet. */
+  value?: T | undefined;
+  size?: SegmentedIconToggleSize;
+};
+
+/**
+ * A segmented icon toggle's face (./segmented-icon-toggle.tsx): the tray and
+ * its icon items, the chosen one raised as the toggle raises it.
+ */
+export const SegmentedIconToggleFace = <T extends string>({
+  options,
+  size = "compact",
+  value,
+}: SegmentedIconToggleFaceProps<T>) => (
+  <span
+    aria-hidden="true"
+    className={cn(
+      TOGGLE_GROUP_CLASS_NAME,
+      segmentedIconToggleClassName(size),
+      FACE_UNAVAILABLE_CLASS,
+    )}
+    data-slot="segmented-icon-toggle-face"
+  >
+    {options.map((option) => {
+      const Icon = option.icon;
+      return (
+        <span
+          className={cn(
+            BUTTON_BASE_CLASS,
+            BUTTON_FACE_SIZE_CLASS_NAMES["icon-xs"],
+            BUTTON_VARIANT_CLASS_NAMES.muted,
+            TOGGLE_GROUP_ITEM_CLASS_NAME,
+            segmentedIconToggleItemClassName(size),
+          )}
+          data-pressed={option.value === value ? "" : undefined}
+          key={option.value}
+        >
+          <Icon className={SEGMENTED_ICON_TOGGLE_ICON_CLASS_NAME} />
+        </span>
+      );
+    })}
   </span>
 );
 
