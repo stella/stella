@@ -320,18 +320,13 @@ export const createSessionSignInStore = ({
         .where(ownLiveSession(scope, now()))
         .limit(1);
       const row = rows.at(0);
-      if (
-        row === undefined ||
-        row.countryCode === null ||
-        row.latitude === null ||
-        row.longitude === null
-      ) {
+      const countryCode = row?.countryCode ?? null;
+      const latitude = row?.latitude ?? null;
+      const longitude = row?.longitude ?? null;
+      if (countryCode === null || latitude === null || longitude === null) {
         return null;
       }
-      return {
-        countryCode: row.countryCode,
-        point: { latitude: row.latitude, longitude: row.longitude },
-      };
+      return { countryCode, point: { latitude, longitude } };
     }),
 });
 
