@@ -207,11 +207,18 @@ const activateConsentOrganization = async (
   expect(jurisdiction.ok(), await jurisdiction.text()).toBe(true);
 };
 
-const readLandmarks = async (page: Page, selectors: readonly string[]) => {
+const readLandmarks = async (
+  page: Page,
+  selectors: readonly string[],
+  sampling?: Parameters<typeof waitForStableGeometry>[2],
+) => {
   const landmarks = selectors.map((selector) =>
     page.locator(selector).filter({ visible: true }).first(),
   );
-  await waitForStableGeometry(page, landmarks);
+  for (const landmark of landmarks) {
+    await expect(landmark).toBeVisible();
+  }
+  await waitForStableGeometry(page, landmarks, sampling);
   return await Promise.all(
     landmarks.map(
       async (landmark) =>
@@ -308,7 +315,11 @@ for (const locale of ["en", "cs"] as const) {
         try {
           await cold.goto(flow.href);
           await expect(cold.locator("html")).toHaveAttribute("lang", locale);
-          const server = await readLandmarks(cold, flow.landmarks);
+          const server = await readLandmarks(
+            cold,
+            flow.landmarks,
+            "driver-polls",
+          );
           await page.route(
             (url) => url.pathname === "/api/auth/get-session",
             async (route) => {
