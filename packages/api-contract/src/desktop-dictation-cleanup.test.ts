@@ -13,6 +13,7 @@ import {
   desktopDictationCleanupResponseSchema,
   desktopDictationRecordingCleanupRequestSchema,
   desktopDictationRecordingCleanupResponseSchema,
+  DICTATION_RECORDING_CLEANUP_PATH,
 } from "./desktop-dictation-cleanup";
 import fixture from "./desktop-dictation-cleanup.fixture.json";
 import contract from "./desktop-dictation-cleanup.json";
@@ -50,6 +51,9 @@ test("the native contract file matches the typed cleanup contract", () => {
   expect(
     DESKTOP_DICTATION_RECORDING_CLEANUP_PATH.startsWith("/v1/desktop/"),
   ).toBe(true);
+  expect(
+    DESKTOP_DICTATION_RECORDING_CLEANUP_PATH.replace("/desktop/", "/"),
+  ).toBe(DICTATION_RECORDING_CLEANUP_PATH);
 });
 
 test("formatting commands and correction markers are distinct phrases", () => {

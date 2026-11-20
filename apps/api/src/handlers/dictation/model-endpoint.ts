@@ -10,6 +10,11 @@ import { consumeDictationLimit } from "@/api/handlers/dictation/limits";
 import { resolveCaching } from "@/api/lib/ai-config";
 import { loadOrgAISettings } from "@/api/lib/ai-config-loader";
 import type { OrgAISettings } from "@/api/lib/ai-config-loader";
+import {
+  ORG_AI_CONFIG_STATUS,
+  type OrgAIConfigStatus,
+} from "@/api/lib/ai-config-loader-core";
+import { storedAIConfigUnreadableError } from "@/api/lib/ai-config-response";
 import { aiHandlerError } from "@/api/lib/ai-error";
 import {
   generateArtefact,
@@ -19,6 +24,7 @@ import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack
 import {
   admitFiniteAction,
   authorizeHandlerUsage,
+  configuredModelAdmission,
   type SafeHandlerGenerator,
   type SafeHandlerLogContext,
 } from "@/api/lib/api-handlers";
@@ -329,4 +335,64 @@ export const runDesktopDictationModelAction = async function* <
         });
       }),
   );
+};
+
+/** What a signed-in member's cleanup reads from its root handler context. */
+type MemberDictationContext = OrgAISettings & {
+  orgAIConfigStatus: OrgAIConfigStatus;
+  safeDb: SafeDb;
+  session: { activeOrganizationId: SafeId<"organization"> };
+  user: { id: SafeId<"user"> };
+  request: Request;
+  actionSignal?: AbortSignal | undefined;
+  modelAdmission?: ModelDispatchAdmission | undefined;
+};
+
+/**
+ * Runs one model-backed cleanup for a signed-in member, after the root
+ * handler has checked the role, usage and the "dictation.cleanup" action
+ * admission: the organization's stored AI settings must be readable and the
+ * cleanup budget is consumed before `run` reaches the model.
+ */
+export const runMemberDictationModelAction = async function* <
+  TResult extends NonNullable<unknown>,
+>({
+  ctx: {
+    actionSignal,
+    managedAIResidency,
+    modelAdmission,
+    orgAIConfig,
+    orgAIConfigStatus,
+    promptCachingEnabled,
+    request,
+    safeDb,
+    session,
+    user,
+  },
+  limit = consumeDictationLimit,
+  run,
+}: {
+  ctx: MemberDictationContext;
+  limit?: typeof consumeDictationLimit | undefined;
+  run: (admitted: AdmittedDictationContext) => SafeHandlerGenerator<TResult>;
+}): SafeHandlerGenerator<TResult> {
+  if (orgAIConfigStatus === ORG_AI_CONFIG_STATUS.unreadable) {
+    return Result.err(storedAIConfigUnreadableError());
+  }
+  const organizationId = session.activeOrganizationId;
+  yield* Result.await(
+    limit({ organizationId, userId: user.id, operation: "cleanup" }),
+  );
+  return yield* run({
+    caller: {
+      organizationId,
+      userId: user.id,
+      safeDb,
+      orgAIConfig,
+      managedAIResidency,
+      promptCachingEnabled,
+    },
+    modelAdmission: configuredModelAdmission({ modelAdmission }),
+    actionSignal: actionSignal ?? request.signal,
+  });
 };
