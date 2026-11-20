@@ -128,6 +128,9 @@ fn joined(pieces: &[Piece<'_>]) -> String {
     .collect()
 }
 
+/// How close a custom word is: fewer edits first, then more words.
+type Rank = (usize, Reverse<usize>);
+
 /// The custom word the words at the start of `pieces` are a close miss of,
 /// and how many pieces it covers; the closest wins, then the longest phrase.
 /// `None` when none is close, when two are equally close, or when the words
@@ -136,7 +139,7 @@ fn best_match<'t>(
   pieces: &[Piece<'_>],
   targets: &'t [Target<'t>],
 ) -> Option<(&'t Target<'t>, usize)> {
-  let mut best: Option<(&Target, usize, (usize, Reverse<usize>))> = None;
+  let mut best: Option<(&Target, usize, Rank)> = None;
   let mut tied = false;
   for target in targets {
     let Some((words, taken)) = leading_words(pieces, target.folded.len()) else {
