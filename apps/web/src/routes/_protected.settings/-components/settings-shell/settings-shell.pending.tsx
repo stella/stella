@@ -120,13 +120,6 @@ export const SettingsContent = ({ children }: { children: ReactNode }) => (
   </section>
 );
 
-// The account rows every member sees; gated rows, and the organization's
-// sections, depend on the member's role and the organization's features,
-// which the frame does not know yet.
-const UNGATED_ACCOUNT_ITEMS = ACCOUNT_SECTION.items.filter(
-  (item) => !("gate" in item),
-);
-
 /** The navigation before the member is known: the account rows all see. */
 const SettingsNavPending = () => (
   <div className={SETTINGS_NAV_CLASS}>
@@ -134,7 +127,10 @@ const SettingsNavPending = () => (
       <div className={SETTINGS_NAV_SECTION_LABEL_CLASS}>
         <PendingText barClassName="w-16" id={ACCOUNT_SECTION.labelKey} />
       </div>
-      {UNGATED_ACCOUNT_ITEMS.map((item) => {
+      {ACCOUNT_SECTION.items.map((item) => {
+        if ("gate" in item) {
+          return null;
+        }
         const Icon = item.icon;
         return (
           <span className={SETTINGS_NAV_ITEM_CLASS} key={item.to}>
