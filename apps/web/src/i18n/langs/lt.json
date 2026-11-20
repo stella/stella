@@ -2251,6 +2251,7 @@
       "chipLabel": "Kur veikia: {place}",
       "cloud": "Debesis",
       "cloudDescription": "Veikia debesyje. Pasiekiama iš bet kur.",
+      "hintAntigravity": "Įdiekite Antigravity 1.5 ar naujesnę versiją ir prisijunkite joje",
       "hintCheck": "Patikrinkite jį per stella desktop",
       "hintInstall": "Įdiekite jį per stella desktop",
       "hintOffline": "Atidarykite stella desktop savo kompiuteryje",

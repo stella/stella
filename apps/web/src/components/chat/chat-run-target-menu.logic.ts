@@ -48,10 +48,16 @@ export const LOCAL_RUN_PERMISSION_KEYS = {
   { label: TranslationKey; description: TranslationKey }
 >;
 
+/** Agents the member installs and signs in to outside stella desktop. */
+const MEMBER_INSTALLED_HARNESSES: ReadonlySet<ChatLocalRunHarness> = new Set([
+  "antigravity",
+]);
+
 /** Product names of the harnesses, shown as they are in every locale. */
 export const CHAT_LOCAL_HARNESS_NAMES = {
   codex: "Codex",
   "claude-code": "Claude Code",
+  antigravity: "Antigravity",
 } as const satisfies Record<ChatLocalRunHarness, string>;
 
 type HarnessState = ChatLocalHarnessReadiness["state"];
@@ -123,17 +129,24 @@ export const chatLocalHarnessOptions = (
     return null;
   }
   const connected = readiness.runners.filter((runner) => runner.connected);
-  return CHAT_LOCAL_RUN_HARNESSES.map((harness) => {
-    if (connected.length === 0) {
-      return { harness, state: "offline" };
-    }
+  return CHAT_LOCAL_RUN_HARNESSES.flatMap((harness) => {
     const reports = connected.flatMap((runner) =>
       runner.harnesses.filter((report) => report.id === harness),
     );
-    return optionOf(
-      harness,
-      reports.find((report) => report.state === "ready") ?? reports.at(0),
-    );
+    // An agent the member installs themselves is listed only where a
+    // computer looks for it; stella desktop installs the others.
+    if (MEMBER_INSTALLED_HARNESSES.has(harness) && reports.length === 0) {
+      return [];
+    }
+    if (connected.length === 0) {
+      return [{ harness, state: "offline" }];
+    }
+    return [
+      optionOf(
+        harness,
+        reports.find((report) => report.state === "ready") ?? reports.at(0),
+      ),
+    ];
   });
 };
 

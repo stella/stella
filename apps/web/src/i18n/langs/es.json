@@ -2251,6 +2251,7 @@
       "chipLabel": "Se ejecuta en: {place}",
       "cloud": "Nube",
       "cloudDescription": "Se ejecuta en la nube. Funciona desde cualquier sitio.",
+      "hintAntigravity": "Instala Antigravity 1.5 o posterior e inicia sesión en él",
       "hintCheck": "Revísalo en stella desktop",
       "hintInstall": "Instálalo desde stella desktop",
       "hintOffline": "Abre stella desktop en tu ordenador",

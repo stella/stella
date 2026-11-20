@@ -2251,6 +2251,7 @@
       "chipLabel": "Kde beží: {place}",
       "cloud": "Cloud",
       "cloudDescription": "Beží v cloude. Funguje odkiaľkoľvek.",
+      "hintAntigravity": "Nainštalujte Antigravity 1.5 alebo novšie a prihláste sa v ňom",
       "hintCheck": "Skontrolujte ho v stella desktop",
       "hintInstall": "Nainštalujte ho v stella desktop",
       "hintOffline": "Otvorte stella desktop vo svojom počítači",

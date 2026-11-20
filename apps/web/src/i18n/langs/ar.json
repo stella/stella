@@ -2251,6 +2251,7 @@
       "chipLabel": "مكان التشغيل: {place}",
       "cloud": "السحابة",
       "cloudDescription": "يعمل في السحابة. متاح من أي مكان.",
+      "hintAntigravity": "ثبّت Antigravity 1.5 أو أحدث، ثم سجّل الدخول منه",
       "hintCheck": "تحقّق منه في stella desktop",
       "hintInstall": "ثبّته من stella desktop",
       "hintOffline": "افتح stella desktop على حاسوبك",

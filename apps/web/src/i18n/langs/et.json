@@ -2251,6 +2251,7 @@
       "chipLabel": "Töötab: {place}",
       "cloud": "Pilv",
       "cloudDescription": "Töötab pilves. Kasutatav kõikjalt.",
+      "hintAntigravity": "Paigaldage Antigravity 1.5 või uuem ja logige selles sisse",
       "hintCheck": "Kontrolli seda stella desktopis",
       "hintInstall": "Paigalda see stella desktopist",
       "hintOffline": "Ava oma arvutis stella desktop",

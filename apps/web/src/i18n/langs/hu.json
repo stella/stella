@@ -2251,6 +2251,7 @@
       "chipLabel": "Futás helye: {place}",
       "cloud": "Felhő",
       "cloudDescription": "A felhőben fut. Bárhonnan elérhető.",
+      "hintAntigravity": "Telepítse az Antigravity 1.5-ös vagy újabb verzióját, majd jelentkezzen be benne",
       "hintCheck": "Ellenőrizze a stella desktopban",
       "hintInstall": "Telepítse a stella desktopból",
       "hintOffline": "Nyissa meg a stella desktopot a számítógépén",
