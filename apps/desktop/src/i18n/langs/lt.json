@@ -624,6 +624,10 @@
       "cleanup": "Taisymas",
       "thisComputer": "Šiame kompiuteryje"
     },
+    "sounds": {
+      "title": "Garsai",
+      "description": "Groti trumpą tylų garsą, kai įrašymas prasideda ir kai baigiasi."
+    },
     "cleanup": {
       "title": "Taisyti su DI",
       "description": "Ištaiso atpažinimo klaidas ir padiktuotą formatavimą, pavyzdžiui, „nauja eilutė“ arba „paryškinti“, ir pritaiko tekstą programai, pavyzdžiui, el. paštui. Per stella jūsų organizacijos DI teikėjui siunčiamas tik tekstas, ne garsas; stella jo nesaugo.",
