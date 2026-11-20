@@ -767,7 +767,7 @@ export const installPgliteOrganizationDeleteOwnerGuard = async (
 
 const SSO_OIDC_FOUNDATION_MIGRATION_PATH = nodePath.join(
   DRIZZLE_DIR,
-  "20261120170700_sso_oidc_foundation",
+  "20261120190800_sso_oidc_foundation",
   "migration.sql",
 );
 
