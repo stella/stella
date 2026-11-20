@@ -4470,6 +4470,10 @@
       "lastUpdatedBy": "Paskutinį kartą atnaujino",
       "matterColumnsHeading": "Bylos duomenys",
       "noMatterColumns": "Apie šį dokumentą dar nieko neįrašyta",
+      "similarDocuments": {
+        "heading": "Panašūs dokumentai",
+        "similarity": "{percent} panašumas"
+      },
       "stellaHeading": "Saugoma Stelloje",
       "versionCurrent": "v{version} (dabartinė)"
     },

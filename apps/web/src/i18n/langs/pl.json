@@ -4470,6 +4470,10 @@
       "lastUpdatedBy": "Ostatnio zaktualizował(a)",
       "matterColumnsHeading": "Dane w sprawie",
       "noMatterColumns": "Do tego dokumentu nie wprowadzono jeszcze żadnych danych",
+      "similarDocuments": {
+        "heading": "Podobne dokumenty",
+        "similarity": "{percent} podobieństwa"
+      },
       "stellaHeading": "Zapisane w stelli",
       "versionCurrent": "v{version} (bieżąca)"
     },

@@ -4470,6 +4470,10 @@
       "lastUpdatedBy": "Atualizado pela última vez por",
       "matterColumnsHeading": "Dados do caso",
       "noMatterColumns": "Nada registrado sobre este documento ainda",
+      "similarDocuments": {
+        "heading": "Documentos semelhantes",
+        "similarity": "{percent} de semelhança"
+      },
       "stellaHeading": "Armazenado no stella",
       "versionCurrent": "v{version} (atual)"
     },

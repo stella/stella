@@ -4470,6 +4470,10 @@
       "lastUpdatedBy": "Naposledy upravil(a)",
       "matterColumnsHeading": "Údaje v spise",
       "noMatterColumns": "K tomuto dokumentu zatiaľ nie sú vyplnené žiadne údaje",
+      "similarDocuments": {
+        "heading": "Podobné dokumenty",
+        "similarity": "zhoda {percent}"
+      },
       "stellaHeading": "Uložené v stelle",
       "versionCurrent": "v{version} (aktuálna)"
     },

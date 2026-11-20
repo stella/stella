@@ -3704,6 +3704,8 @@
   "inspector.metadata.lastUpdatedBy": "Last updated by",
   "inspector.metadata.matterColumnsHeading": "Matter information",
   "inspector.metadata.noMatterColumns": "Nothing recorded about this document yet",
+  "inspector.metadata.similarDocuments.heading": "Similar documents",
+  "inspector.metadata.similarDocuments.similarity": "{percent} similar",
   "inspector.metadata.stellaHeading": "Stored in stella",
   "inspector.metadata.versionCurrent": "v{version} (current)",
   "inspector.moveToMain": "Move to main view",
