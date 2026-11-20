@@ -42,7 +42,10 @@ import { PageAnonymization } from "@/components/pdf/page-anonymization";
 import { PageCitation } from "@/components/pdf/page-citation";
 import { PdfSelectionActions } from "@/components/pdf/pdf-selection-actions";
 import { PDF_SELECTION_CHAT } from "@/components/pdf/pdf-selection-toolbar";
-import { PdfColorModeIcon } from "@/components/pdf/pdf-viewer.pending";
+import {
+  PDF_COLOR_MODE_ICONS,
+  PdfColorModeIcon,
+} from "@/components/pdf/pdf-viewer.pending";
 import { resolvePendingPdfCitationPageId } from "@/components/pdf/peek/pdf-citation-navigation.logic";
 import {
   fetchPrintPdf,

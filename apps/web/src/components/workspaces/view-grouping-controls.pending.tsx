@@ -41,8 +41,7 @@ export const groupByChoiceLabelKey = (
 };
 
 /** The group-by select's box: narrow on a phone, sized to its value from sm. */
-export const GROUP_BY_TRIGGER_CLASS =
-  "h-7 min-h-0 w-28 sm:h-6 sm:w-auto sm:min-w-24";
+const GROUP_BY_TRIGGER_CLASS = "h-7 min-h-0 w-28 sm:h-6 sm:w-auto sm:min-w-24";
 
 /**
  * The group-by control's row: its label (from `sm`, or none) and the select.

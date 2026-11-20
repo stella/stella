@@ -1,10 +1,12 @@
 import type { ReactNode } from "react";
 
 import { TruncatedText } from "../components/truncated-text";
+import { cn } from "../lib/utils";
 import {
   KANBAN_COLUMN_NAME_CLASS,
-  KanbanColumnHeaderShell,
+  KanbanColumnTitleSlot,
 } from "./column-header-shell";
+import { KANBAN_CHROME_ROW_HEIGHT } from "./layout-tokens";
 
 export type KanbanColumnHeaderProps = {
   /** Colour swatch, or the control that changes it. */
@@ -41,19 +43,27 @@ export const KanbanColumnHeader = ({
   actions,
   className,
 }: KanbanColumnHeaderProps) => (
-  <KanbanColumnHeaderShell
-    actions={actions}
-    calculation={calculation}
-    className={className}
-    dragHandle={dragHandle}
-    name={
-      <TruncatedText className={KANBAN_COLUMN_NAME_CLASS}>
-        {title}
-        {meta !== undefined && (
-          <span className="text-muted-foreground text-xs">{meta}</span>
-        )}
-      </TruncatedText>
-    }
-    swatch={swatch}
-  />
+  <div
+    className={cn(
+      "flex items-center gap-2 px-3",
+      KANBAN_CHROME_ROW_HEIGHT,
+      className,
+    )}
+    data-kanban-column-header=""
+  >
+    <KanbanColumnTitleSlot
+      name={
+        <TruncatedText className={KANBAN_COLUMN_NAME_CLASS}>
+          {title}
+          {meta !== undefined && (
+            <span className="text-muted-foreground text-xs">{meta}</span>
+          )}
+        </TruncatedText>
+      }
+      swatch={swatch}
+    />
+    {calculation}
+    {dragHandle}
+    {actions}
+  </div>
 );

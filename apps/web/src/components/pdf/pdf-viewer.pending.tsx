@@ -25,7 +25,7 @@ import type { PDFColorMode } from "@/lib/pdf/pdf-color-mode";
  * same classes, so the viewer that replaces a loading face lands in its box.
  */
 
-const PDF_COLOR_MODE_ICONS = {
+export const PDF_COLOR_MODE_ICONS = {
   light: SunIcon,
   dark: MoonIcon,
   system: MonitorIcon,

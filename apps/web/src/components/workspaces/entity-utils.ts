@@ -19,7 +19,6 @@ export {
   getInternalColId,
   getInternalPropertyId,
 } from "@/components/workspaces/internal-ids.logic";
-export type { InternalPropertyId } from "@/components/workspaces/internal-ids.logic";
 export { resolveKanbanGroupBy } from "@/components/workspaces/kanban/kanban-grouping.logic";
 
 export const getFieldValue = (field: WorkspaceField | undefined) => {

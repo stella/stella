@@ -11,7 +11,6 @@ import { dropTargetForExternal } from "@atlaskit/pragmatic-drag-and-drop/adapter
 import { containsFiles } from "@atlaskit/pragmatic-drag-and-drop/utils/contains-files";
 import { getFiles } from "@atlaskit/pragmatic-drag-and-drop/utils/get-files";
 import {
-  keepPreviousData,
   useQuery,
   useQueryClient,
   useSuspenseQuery,
@@ -65,6 +64,7 @@ import { resolvePdfSignTarget } from "@/components/inspector/pdf-signing.logic";
 import { PlaybookFacet } from "@/components/inspector/playbook-facet";
 import PdfViewer, { PDFSuspenseFallback } from "@/components/pdf/pdf-viewer";
 import { PdfLoadingShell } from "@/components/pdf/pdf-viewer.pending";
+import { DefaultErrorComponent } from "@/components/route-components";
 import { RouteDocumentTitle } from "@/components/route-document-title";
 import { TranslateDocumentDialog } from "@/components/translate-document-dialog";
 import { RecoverableViewerBoundary } from "@/components/viewer/recoverable-viewer-boundary";
@@ -819,14 +819,25 @@ function RouteComponentInner({
 
           if (filePreviewState === "error") {
             const error = versionDataQuery.error;
-            if (error instanceof Error) {
-              throw error;
-            }
-            throw new ClientOperationError({
-              action: "load_document_version_metadata",
-              message: "Failed to load document version metadata",
-              cause: error,
-            });
+            return (
+              <DefaultErrorComponent
+                error={
+                  error instanceof Error
+                    ? error
+                    : new ClientOperationError({
+                        action: "load_document_version_metadata",
+                        message: "Failed to load document version metadata",
+                        cause: error,
+                      })
+                }
+                reset={() => {
+                  detached(
+                    versionDataQuery.refetch(),
+                    "document.version-metadata-retry",
+                  );
+                }}
+              />
+            );
           }
 
           if (filePreviewState === "loading") {
@@ -1042,7 +1053,7 @@ const DocumentDisplayUnavailable = ({ entityId }: { entityId: string }) => {
         onClick={() => {
           detached(
             (async () => {
-              try {
+              const opened = await Result.tryPromise(async () => {
                 await navigate({
                   to: "/workspaces/$workspaceId/$viewId",
                   params: { viewId, workspaceId },
@@ -1055,7 +1066,9 @@ const DocumentDisplayUnavailable = ({ entityId }: { entityId: string }) => {
                   label: "",
                   workspaceId,
                 });
-              } catch (openError) {
+              });
+              if (Result.isError(opened)) {
+                const openError = opened.error;
                 getAnalytics().captureError(openError, {
                   fingerprintKey: "DocumentDisplayUnavailable:openError",
                   scope: {
@@ -1087,23 +1100,17 @@ const FullscreenDocxViewer = ({
   fieldId: string;
   scaleOffset: number;
 }) => {
-  const fileQuery = useQuery({
-    ...fileOptions({ workspaceId, fieldId, purpose: "native-display" }),
-    placeholderData: keepPreviousData,
-  });
-
-  if (fileQuery.error) {
-    throw fileQuery.error;
-  }
-
-  if (!fileQuery.data) {
-    return <DocxLoadingShell scaleOffset={scaleOffset} />;
-  }
+  // The viewer mounts under its own Suspense and error boundary, keyed by the
+  // field: the Suspense fallback is the sheet while the file loads, and a
+  // failed read reaches the boundary's recovery.
+  const { data: file } = useSuspenseQuery(
+    fileOptions({ workspaceId, fieldId, purpose: "native-display" }),
+  );
 
   return (
     <ReadOnlyDocxDocumentViewer
-      documentBuffer={fileQuery.data.buffer}
-      fileName={fileQuery.data.fileName}
+      documentBuffer={file.buffer}
+      fileName={file.fileName}
       scaleOffset={scaleOffset}
     />
   );

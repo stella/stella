@@ -52,7 +52,7 @@ export const CALENDAR_SHOW_BY_LABEL_CLASS = "text-muted-foreground shrink-0";
 export const TIMELINE_DATE_LABEL_CLASS = "text-muted-foreground";
 
 /** The select of a calendar's or timeline's date property. */
-export const DATE_PROPERTY_TRIGGER_CLASS = "h-6 min-h-0 min-w-24";
+const DATE_PROPERTY_TRIGGER_CLASS = "h-6 min-h-0 min-w-24";
 
 /** A row of buttons that pick one value (the calendar's mode, the zoom). */
 export const TOOLBAR_CHOICE_ROW_CLASS = "flex items-center gap-0.5 text-xs";

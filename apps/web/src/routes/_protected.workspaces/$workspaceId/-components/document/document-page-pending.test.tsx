@@ -15,6 +15,7 @@ import { toSafeId } from "@/lib/safe-id";
 import type { EntityField } from "@/lib/types";
 import { entityDetailKey } from "@/lib/workspaces/queries/entity-keys.logic";
 import { cachedDocumentPageSheet } from "@/routes/_protected.workspaces/$workspaceId/-components/document/document-page-pending.logic";
+import type { DocumentPageSheet } from "@/routes/_protected.workspaces/$workspaceId/-components/document/document-page-pending.logic";
 
 const workspaceId = "workspace-1";
 const entityId = "entity-1";
@@ -85,7 +86,7 @@ describe("the document page's loading sheet", () => {
   });
 
   test("is not claimed where the cache cannot say, or the pane depends on loaded data", () => {
-    const unknown = { type: "unknown" };
+    const unknown: DocumentPageSheet = { type: "unknown" };
     expect(cachedDocumentPageSheet(null, workspaceId, search)).toEqual(unknown);
     expect(
       cachedDocumentPageSheet(cacheWith(null), workspaceId, search),

@@ -129,7 +129,7 @@ const getPropertyOptions = (
   );
 };
 
-export type WorkspaceKanbanSchemaParams = {
+type WorkspaceKanbanSchemaParams = {
   properties: readonly WorkspaceProperty[];
   statusLabels: TaskStatusLabels;
   entityKindLabels: EntityKindLabels;

@@ -36,7 +36,6 @@ import {
 import type {
   WorkspaceKanbanGrouping,
   WorkspaceKanbanSchema,
-  WorkspaceKanbanSchemaParams,
 } from "@/components/workspaces/kanban/kanban-grouping.logic";
 import { getFormattingLocale } from "@/i18n/i18n-store";
 import type { WorkspaceEntity, WorkspaceView } from "@/lib/types";
@@ -47,11 +46,7 @@ export {
   resolveWorkspaceKanbanGrouping,
   workspaceKanbanSchema,
 };
-export type {
-  WorkspaceKanbanGrouping,
-  WorkspaceKanbanSchema,
-  WorkspaceKanbanSchemaParams,
-};
+export type { WorkspaceKanbanGrouping, WorkspaceKanbanSchema };
 
 /** A subgroup is opt-in and can never repeat the primary grouping. */
 export const resolveWorkspaceKanbanSubgroup = (

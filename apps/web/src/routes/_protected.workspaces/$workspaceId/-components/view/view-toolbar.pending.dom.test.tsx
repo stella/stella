@@ -202,10 +202,12 @@ const FOCUSABLE = "button, input, a, select, textarea, [tabindex]";
 // column" (behind the matter's column count).
 const TABLE_GATED_TAIL = 2;
 
-for (const { gatedTail, view } of [
+const CASES: readonly { gatedTail: number; view: WorkspaceView }[] = [
   { view: boardView, gatedTail: 0 },
   { view: tableView, gatedTail: TABLE_GATED_TAIL },
-]) {
+];
+
+for (const { gatedTail, view } of CASES) {
   test(`a ${view.layout.type} view's face lays out the loaded toolbar's controls, none of them usable`, async () => {
     const face = await renderInApp(
       <ViewToolbarChrome aria-hidden="true" data-slot="toolbar-face">

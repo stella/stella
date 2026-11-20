@@ -263,7 +263,7 @@ export const NO_NATIVE_UI_REGISTRY = {
   "kanban-column-header-shell": noNative(
     "a board column header's row, without its cut text",
   ),
-  "kanban-grouping": notComponent("how a board resolves its columns"),
+  "kanban-grouping": noNative("how a board resolves its columns"),
   kbd: noNative(
     "key caps; a rule for raw <kbd> follows once the existing key hints " +
       "render through Kbd, so it lands without a backlog",
