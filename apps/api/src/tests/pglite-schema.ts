@@ -1839,7 +1839,7 @@ export const installPgliteCaseLawLegacyRedactionFence = async (
     ).filter((statement) => executableSql(statement).startsWith(prefix));
   const statements = [
     ...statementsFrom(
-      "20261108083700_case_law_redacted_inline_raw",
+      "20261120110700_case_law_redacted_inline_raw",
       "CREATE OR REPLACE FUNCTION fence_legacy_case_law_redaction()",
     ),
     ...statementsFrom(
