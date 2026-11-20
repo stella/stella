@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import {
   afterAll,
   beforeAll,
@@ -9,9 +9,11 @@ import {
   test,
 } from "bun:test";
 import {
+  Column,
   eq,
   getColumns,
   getTableName,
+  is,
   sql,
   TransactionRollbackError,
 } from "drizzle-orm";
@@ -594,7 +596,12 @@ describe("publisher amendment snapshots", () => {
           table,
           PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION[table],
           new Set(
-            Object.values(getColumns(definition)).map(({ name }) => name),
+            Object.values(getColumns(definition)).map((column) => {
+              if (!is(column, Column)) {
+                return panic(`Expected a table column in ${table}`);
+              }
+              return column.name;
+            }),
           ),
         );
         const direction = action === "GRANT" ? "TO" : "FROM";
