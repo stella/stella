@@ -1149,7 +1149,8 @@
       "saveFailed": "Transkriptsiooni ei õnnestunud kopeerida ega salvestada. Proovige uuesti.",
       "noSpeech": "Selles salvestises kõnet ei leitud.",
       "fileName": "{title} – transkriptsioon.txt",
-      "documentTitle": "{title} – transkriptsioon"
+      "documentTitle": "{title} – transkriptsioon",
+      "transcriptTitle": "Transkriptsioon"
     },
     "progress": {
       "running": "Transkribeerimine: {done, number} / {total, number} min",
@@ -1158,6 +1159,28 @@
       "stopped": "Peatatud {done, number} min järel. Seni saadud tekst jääb alles.",
       "done": "Transkribeeritud {total, number} min.",
       "another": "Transkribeeri järgmine salvestis"
+    },
+    "cleaned": {
+      "title": "Puhastatud tekst",
+      "running": "Puhastan…",
+      "waiting": "Iga osa puhastatakse kohe, kui see on transkribeeritud.",
+      "instructionsTitle": "Juhised dikteeringus · ei kuulu teksti",
+      "instructionsLabel": "Juhised:",
+      "partFailed": "Seda osa ei õnnestunud puhastada, seega kuvatakse see transkribeeritud kujul.",
+      "failedCount": "{count, plural, one {# osa puhastamata} other {# osa puhastamata}}",
+      "saveMarkdown": "Vormindatud tekst (.md)",
+      "saveText": "Lihttekst (.txt)",
+      "fileNameMarkdown": "{title} puhastatud.md",
+      "fileNameText": "{title} puhastatud.txt",
+      "offerTitle": "Puhasta transkriptsioon tehisintellektiga",
+      "offerDescription": "See salvestis transkribeeriti selles arvutis ja tehisintellekti puhastus on seadetes välja lülitatud. Puhastamine saadab teie organisatsiooni tehisintellekti mudelile teksti, mitte kunagi heli.",
+      "offerStart": "Puhasta"
+    },
+    "copyMenu": {
+      "label": "Kopeerimise valikud",
+      "formatted": "Vormindusega",
+      "plain": "Lihttekstina",
+      "hint": "Vormindusega kleebitakse Wordi või Outlooki ka pealkirjad, paks kiri ja loendid. Teie valik jäetakse meelde."
     }
   }
 }

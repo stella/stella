@@ -8,7 +8,7 @@ import {
 } from "./tauri-ipc";
 
 /** The window's native size (`transcribe_window.rs`). */
-const SIZE = { width: 760, height: 600 } as const;
+const SIZE = { width: 1120, height: 720 } as const;
 const MAC_USER_AGENT =
   "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko)";
 const SCREENSHOTS = process.env["TRANSCRIBE_SCREENSHOTS"];
@@ -88,6 +88,23 @@ const open = async (
           };
         },
         transcribe_clear_file: () => null,
+        // A stand-in for the organization's model: the part comes back
+        // formatted, with an instruction for whoever files it.
+        transcribe_clean_up: ({ request }) => {
+          const transcript =
+            typeof request === "object" && request !== null
+              ? String(Reflect.get(request, "transcript"))
+              : "";
+          const [first = "", ...rest] = transcript.split("\n\n");
+          return {
+            instructions: ["File it in the matter."],
+            markdown: [
+              "## Memo to file",
+              first.replace("opposing counsel", "**opposing counsel**"),
+              ...rest.map((paragraph) => `- ${paragraph}`),
+            ].join("\n\n"),
+          };
+        },
         transcribe_search_matters: () => [matter],
         transcribe_choose_file: () => {
           ipc.emit("transcribe-file", {
@@ -120,6 +137,7 @@ const open = async (
               provider: "ElevenLabs",
               retainsData: false,
             },
+            autoCleanup: true,
           };
         },
       };
@@ -198,6 +216,17 @@ for (const scheme of ["light", "dark"] as const) {
     await expect(
       page.getByRole("button", { name: t.result.saveToMatter }),
     ).toBeEnabled();
+    // Once transcription ends, the rest is cleaned up beside the transcript.
+    await expect(
+      page.getByRole("heading", { name: "Memo to file" }),
+    ).toBeVisible();
+    await expect(page.getByText("File it in the matter.")).toBeVisible();
+    await expect(
+      page.getByText("opposing counsel", { exact: true }),
+    ).toBeVisible();
+    if (SCREENSHOTS) {
+      await page.screenshot({ path: `${SCREENSHOTS}/cleaned-${scheme}.png` });
+    }
     expect(await unexpectedTauriCalls(page)).toEqual([]);
   });
 }
@@ -262,7 +291,7 @@ test("a stella AI file a start refused waits until the model is shown again", as
   await expect(start).toBeEnabled();
   await start.click();
   await expect(
-    page.getByRole("button", { name: t.result.saveAs }),
+    page.getByRole("button", { name: t.result.saveAs }).first(),
   ).toBeVisible();
   expect(await unexpectedTauriCalls(page)).toEqual([]);
 });

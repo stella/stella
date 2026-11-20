@@ -1149,7 +1149,8 @@
       "saveFailed": "Impossible de copier ou d’enregistrer la transcription. Réessayez.",
       "noSpeech": "Aucune parole n’a été trouvée dans cet enregistrement.",
       "fileName": "{title} - transcription.txt",
-      "documentTitle": "{title} - transcription"
+      "documentTitle": "{title} - transcription",
+      "transcriptTitle": "Transcription"
     },
     "progress": {
       "running": "Transcription : {done, number} sur {total, number} min",
@@ -1158,6 +1159,28 @@
       "stopped": "Arrêté après {done, number} min. Le texte obtenu jusqu’ici est conservé.",
       "done": "{total, number} min transcrites.",
       "another": "Transcrire un autre enregistrement"
+    },
+    "cleaned": {
+      "title": "Texte nettoyé",
+      "running": "Nettoyage…",
+      "waiting": "Chaque partie est nettoyée dès qu’elle est transcrite.",
+      "instructionsTitle": "Consignes dans la dictée · hors du texte",
+      "instructionsLabel": "Consignes :",
+      "partFailed": "Cette partie n’a pas pu être nettoyée ; elle est affichée telle que transcrite.",
+      "failedCount": "{count, plural, one {# partie non nettoyée} other {# parties non nettoyées}}",
+      "saveMarkdown": "Texte formaté (.md)",
+      "saveText": "Texte brut (.txt)",
+      "fileNameMarkdown": "{title} nettoyé.md",
+      "fileNameText": "{title} nettoyé.txt",
+      "offerTitle": "Nettoyer la transcription avec l’IA",
+      "offerDescription": "Cet enregistrement a été transcrit sur cet ordinateur et le nettoyage par IA est désactivé dans les paramètres. Le nettoyage envoie le texte, jamais l’audio, au modèle d’IA de votre organisation.",
+      "offerStart": "Nettoyer"
+    },
+    "copyMenu": {
+      "label": "Options de copie",
+      "formatted": "Avec la mise en forme",
+      "plain": "En texte brut",
+      "hint": "Avec la mise en forme, les titres, le gras et les listes se collent dans Word ou Outlook. Votre choix est mémorisé."
     }
   }
 }
