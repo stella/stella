@@ -44,14 +44,6 @@ import {
 import { useDesktopLaunch } from "@/features/chat/use-desktop-launch";
 import { queryView } from "@/lib/query-view.logic";
 
-/**
- * A button never shrinks by default, so the model chip's truncating label
- * could not take effect and a narrow status row overflowed its column
- * instead. The chip's icon keeps its size (the button exempts its svg from
- * shrinking).
- */
-const STATUS_ROW_CHIP_SHRINK_CLASS = "min-w-0 shrink";
-
 type ChatModelSelectorProps = {
   disabled?: boolean;
   models: ComposerModelsMenuProps;
@@ -222,10 +214,10 @@ const ChatRunOnChip = ({
         render={
           <Button
             aria-label={name}
-            // The chip keeps its width while its menu opens: in a narrow
-            // status row (a side pane) it shows its icon alone instead of
-            // shrinking, and the model chip takes the squeeze. The aria-label
-            // and tooltip still name the place.
+            // In a narrow status row (a side pane) the chip shows its icon
+            // alone rather than shrinking with the row, so its width stays
+            // put while its menu is open. The aria-label and tooltip still
+            // name the place.
             data-composer-chip="run-on"
             // Until the stored choice is known, nothing can be picked on it.
             disabled={disabled}
@@ -303,7 +295,6 @@ export const ChatModelSelector = ({
             <Button
               aria-label={trigger.label}
               className={cn(
-                STATUS_ROW_CHIP_SHRINK_CLASS,
                 trigger.chosen
                   ? "bg-accent text-accent-foreground hover:text-accent-foreground gap-1.5"
                   : "text-muted-foreground hover:text-foreground gap-1.5",
@@ -320,7 +311,14 @@ export const ChatModelSelector = ({
           tooltip={trigger.label}
         >
           {trigger.icon}
-          <TruncatedText className="max-w-36" render={<BidiText as="span" />}>
+          {/* A fixed cap, narrower in a narrow status row (a side pane),
+              rather than a chip that shrinks with the row: a menu trigger
+              whose width follows the row re-renders its open menu's
+              positioning as the row settles. */}
+          <TruncatedText
+            className="max-w-36 @max-xl/composer-status:max-w-20"
+            render={<BidiText as="span" />}
+          >
             {trigger.label}
           </TruncatedText>
         </MenuTrigger>
