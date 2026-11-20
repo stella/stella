@@ -1,6 +1,7 @@
 import { Result } from "better-result";
 import type { Err } from "better-result";
 
+import { classifyFailure } from "@stll/errors";
 import { sha256HexToBase64 } from "@stll/sha256";
 
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
@@ -104,11 +105,15 @@ export const reservePresignedUpload = async function* ({
   });
   if (Result.isError(presign)) {
     return Result.err(
-      new HandlerError({
-        status: 500,
-        message: "Failed to issue upload URL",
-        cause: presign.error,
-      }),
+      // The signer's own tagged error says what failed.
+      classifyFailure(
+        new HandlerError({
+          status: 500,
+          message: "Failed to issue upload URL",
+          cause: presign.error,
+        }),
+        "tagged_failure",
+      ),
     );
   }
 
