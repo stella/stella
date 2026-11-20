@@ -11,6 +11,7 @@ import type { consumeDictationLimit } from "@/api/handlers/dictation/limits";
 import { runMemberDictationModelAction } from "@/api/handlers/dictation/model-endpoint";
 import {
   ACCOUNT_ACCESS,
+  configuredModelAdmission,
   createSafeRootHandler,
   safeHandlerResponseSchemas,
 } from "@/api/lib/api-handlers";
@@ -52,6 +53,9 @@ export const createMemberDictationCleanupEndpoint = ({
     async function* (ctx) {
       return yield* runMemberDictationModelAction({
         ctx,
+        modelAdmission: configuredModelAdmission({
+          modelAdmission: ctx.modelAdmission,
+        }),
         limit,
         async *run({ caller, modelAdmission, actionSignal }) {
           const segments = yield* Result.await(

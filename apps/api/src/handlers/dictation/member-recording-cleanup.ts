@@ -13,6 +13,7 @@ import {
 import { cleanUpRecordingPart } from "@/api/handlers/dictation/recording-cleanup";
 import {
   ACCOUNT_ACCESS,
+  configuredModelAdmission,
   createSafeRootHandler,
   safeHandlerResponseSchemas,
 } from "@/api/lib/api-handlers";
@@ -55,6 +56,9 @@ export const createMemberRecordingCleanupEndpoint = ({
     async function* (ctx) {
       return yield* runMemberDictationModelAction({
         ctx,
+        modelAdmission: configuredModelAdmission({
+          modelAdmission: ctx.modelAdmission,
+        }),
         limit,
         async *run({ caller, modelAdmission, actionSignal }) {
           const cleaned = yield* Result.await(
