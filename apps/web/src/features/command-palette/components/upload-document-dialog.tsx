@@ -1,6 +1,7 @@
 import { useState } from "react";
 
 import { useQuery } from "@tanstack/react-query";
+import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { BidiText } from "@stll/ui/bidi-text";
@@ -197,6 +198,9 @@ const uploadBlockedReason = ({
       return workflowView.refetchError === undefined
         ? t("workspaces.files.uploadBlockedByWorkflow")
         : t("common.loadFailed");
+    default:
+      workflowView satisfies never;
+      return panic("Unhandled upload workflow view");
   }
 };
 

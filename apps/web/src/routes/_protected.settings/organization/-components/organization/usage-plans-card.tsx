@@ -1,6 +1,7 @@
 import { useState } from "react";
 
 import { useMutation, useQuery } from "@tanstack/react-query";
+import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { toMajorUnits } from "@stll/money";
@@ -137,6 +138,9 @@ const checkoutBlocker = (
       return t("settings.organization.usageCheckoutProviderUnavailable");
     case "policy_unavailable":
       return t("settings.organization.usagePlanCheckoutUnavailable");
+    default:
+      checkout.reason satisfies never;
+      return panic("Unhandled checkout blocker");
   }
 };
 

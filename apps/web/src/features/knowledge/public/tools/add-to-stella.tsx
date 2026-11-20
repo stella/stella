@@ -1,6 +1,7 @@
 import { lazy, Suspense, useState } from "react";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
 import type { LoadedCatalogueEntry } from "@stll/catalogue";
@@ -78,6 +79,9 @@ const installDisabledReasonKey = ({
     case "role-error":
     case "sign-in":
       return undefined;
+    default:
+      state satisfies never;
+      return panic("Unhandled catalogue install state");
   }
 };
 

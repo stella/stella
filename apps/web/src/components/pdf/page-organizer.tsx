@@ -765,6 +765,9 @@ const pdfOrganizerBusyReason = ({
       return tCommon("saving");
     case "idle":
       return undefined;
+    default:
+      operation satisfies never;
+      return panic("Unhandled page organizer operation");
   }
 };
 
