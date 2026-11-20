@@ -2517,6 +2517,61 @@
     "title": "organization-settings.deepl-availability.get"
   },
   {
+    "access": "write",
+    "command": [
+      "capability",
+      "organization-settings",
+      "dictation-vocabulary-add"
+    ],
+    "description": "Add words to the organization's dictation list, which every member's dictation uses to spell names and terms. A word already listed (in any case) is skipped. The request is refused whole when the new words would take the list over its limit.",
+    "name": "capability:organization-settings.dictation-vocabulary.add",
+    "title": "organization-settings.dictation-vocabulary.add"
+  },
+  {
+    "access": "read",
+    "command": [
+      "capability",
+      "organization-settings",
+      "dictation-vocabulary-check"
+    ],
+    "description": "Check words before adding them to the organization's dictation list: how many the list already holds (in any case) and how many words it holds now. Nothing is stored.",
+    "name": "capability:organization-settings.dictation-vocabulary.check",
+    "title": "organization-settings.dictation-vocabulary.check"
+  },
+  {
+    "access": "destructive",
+    "command": [
+      "capability",
+      "organization-settings",
+      "dictation-vocabulary-delete"
+    ],
+    "description": "Delete words from the organization's dictation list by id. Ids not in the list are ignored. Returns how many were deleted and how many words the list still holds.",
+    "name": "capability:organization-settings.dictation-vocabulary.delete",
+    "title": "organization-settings.dictation-vocabulary.delete"
+  },
+  {
+    "access": "read",
+    "command": [
+      "capability",
+      "organization-settings",
+      "dictation-vocabulary-export"
+    ],
+    "description": "Every word of the organization's dictation list, in alphabetical order, for export or backup.",
+    "name": "capability:organization-settings.dictation-vocabulary.export",
+    "title": "organization-settings.dictation-vocabulary.export"
+  },
+  {
+    "access": "read",
+    "command": [
+      "capability",
+      "organization-settings",
+      "dictation-vocabulary-list"
+    ],
+    "description": "List the organization's dictation words in alphabetical order, a page at a time, optionally only those containing a search text (case insensitive). Also returns how many words the list holds, how many match, and the most it may hold.",
+    "name": "capability:organization-settings.dictation-vocabulary.list",
+    "title": "organization-settings.dictation-vocabulary.list"
+  },
+  {
     "access": "read",
     "command": [
       "capability",

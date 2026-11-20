@@ -19,37 +19,38 @@ import entry17 from "./deadlineEmission";
 import entry18 from "./desktopBatch";
 import entry19 from "./desktopRenewal";
 import entry20 from "./desktopRunnerCapacity";
-import entry21 from "./documentSource";
-import entry22 from "./existing";
-import entry23 from "./expenseCapacity";
-import entry24 from "./fileComparisonCapacity";
-import entry25 from "./flowEffect";
-import entry26 from "./flowSchedule";
-import entry27 from "./folioPublication";
-import entry28 from "./invoiceSends";
-import entry29 from "./legislationAmendments";
-import entry30 from "./mcpOAuthState";
-import entry31 from "./memberPrefix";
-import entry32 from "./memory";
-import entry33 from "./organizationDataBoxes";
-import entry34 from "./organizationObjectIntentLifecycle";
-import entry35 from "./organizationObjectIntentWriter";
-import entry36 from "./organizationSettings";
-import entry37 from "./outboundAction";
-import entry38 from "./personalCatalog";
-import entry39 from "./professionalUseAcceptance";
-import entry40 from "./rateTableWorkspace";
-import entry41 from "./readerAnnotation";
-import entry42 from "./readerAnswer";
-import entry43 from "./requestReceipt";
-import entry44 from "./sampleCase";
-import entry45 from "./savedSearch";
-import entry46 from "./scoutRun";
-import entry47 from "./searchHistory";
-import entry48 from "./searchProjectionRepair";
-import entry49 from "./sharepointConsent";
-import entry50 from "./signal";
-import entry51 from "./signingSession";
+import entry21 from "./dictationVocabularyCapacity";
+import entry22 from "./documentSource";
+import entry23 from "./existing";
+import entry24 from "./expenseCapacity";
+import entry25 from "./fileComparisonCapacity";
+import entry26 from "./flowEffect";
+import entry27 from "./flowSchedule";
+import entry28 from "./folioPublication";
+import entry29 from "./invoiceSends";
+import entry30 from "./legislationAmendments";
+import entry31 from "./mcpOAuthState";
+import entry32 from "./memberPrefix";
+import entry33 from "./memory";
+import entry34 from "./organizationDataBoxes";
+import entry35 from "./organizationObjectIntentLifecycle";
+import entry36 from "./organizationObjectIntentWriter";
+import entry37 from "./organizationSettings";
+import entry38 from "./outboundAction";
+import entry39 from "./personalCatalog";
+import entry40 from "./professionalUseAcceptance";
+import entry41 from "./rateTableWorkspace";
+import entry42 from "./readerAnnotation";
+import entry43 from "./readerAnswer";
+import entry44 from "./requestReceipt";
+import entry45 from "./sampleCase";
+import entry46 from "./savedSearch";
+import entry47 from "./scoutRun";
+import entry48 from "./searchHistory";
+import entry49 from "./searchProjectionRepair";
+import entry50 from "./sharepointConsent";
+import entry51 from "./signal";
+import entry52 from "./signingSession";
 
 export default {
   "accountDeletionRequest": entry0,
@@ -73,35 +74,36 @@ export default {
   "desktopBatch": entry18,
   "desktopRenewal": entry19,
   "desktopRunnerCapacity": entry20,
-  "documentSource": entry21,
-  "existing": entry22,
-  "expenseCapacity": entry23,
-  "fileComparisonCapacity": entry24,
-  "flowEffect": entry25,
-  "flowSchedule": entry26,
-  "folioPublication": entry27,
-  "invoiceSends": entry28,
-  "legislationAmendments": entry29,
-  "mcpOAuthState": entry30,
-  "memberPrefix": entry31,
-  "memory": entry32,
-  "organizationDataBoxes": entry33,
-  "organizationObjectIntentLifecycle": entry34,
-  "organizationObjectIntentWriter": entry35,
-  "organizationSettings": entry36,
-  "outboundAction": entry37,
-  "personalCatalog": entry38,
-  "professionalUseAcceptance": entry39,
-  "rateTableWorkspace": entry40,
-  "readerAnnotation": entry41,
-  "readerAnswer": entry42,
-  "requestReceipt": entry43,
-  "sampleCase": entry44,
-  "savedSearch": entry45,
-  "scoutRun": entry46,
-  "searchHistory": entry47,
-  "searchProjectionRepair": entry48,
-  "sharepointConsent": entry49,
-  "signal": entry50,
-  "signingSession": entry51,
+  "dictationVocabularyCapacity": entry21,
+  "documentSource": entry22,
+  "existing": entry23,
+  "expenseCapacity": entry24,
+  "fileComparisonCapacity": entry25,
+  "flowEffect": entry26,
+  "flowSchedule": entry27,
+  "folioPublication": entry28,
+  "invoiceSends": entry29,
+  "legislationAmendments": entry30,
+  "mcpOAuthState": entry31,
+  "memberPrefix": entry32,
+  "memory": entry33,
+  "organizationDataBoxes": entry34,
+  "organizationObjectIntentLifecycle": entry35,
+  "organizationObjectIntentWriter": entry36,
+  "organizationSettings": entry37,
+  "outboundAction": entry38,
+  "personalCatalog": entry39,
+  "professionalUseAcceptance": entry40,
+  "rateTableWorkspace": entry41,
+  "readerAnnotation": entry42,
+  "readerAnswer": entry43,
+  "requestReceipt": entry44,
+  "sampleCase": entry45,
+  "savedSearch": entry46,
+  "scoutRun": entry47,
+  "searchHistory": entry48,
+  "searchProjectionRepair": entry49,
+  "sharepointConsent": entry50,
+  "signal": entry51,
+  "signingSession": entry52,
 } as const;
