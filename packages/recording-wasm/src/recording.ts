@@ -19,8 +19,9 @@ export class RecordingRefusedError extends TaggedError(
   "RecordingRefusedError",
 )<{ refusal: RecordingRefusal; message: string }> {}
 
+const REFUSALS: ReadonlySet<string> = new Set(RECORDING_REFUSALS);
 const isRefusal = (value: string): value is RecordingRefusal =>
-  (RECORDING_REFUSALS as readonly string[]).includes(value);
+  REFUSALS.has(value);
 
 const refusalOf = (error: unknown): RecordingRefusedError => {
   const code = error instanceof Error ? error.message : "";

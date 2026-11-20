@@ -1,0 +1,5 @@
+{
+  "metric": "duplicate-token-blocks",
+  "delta": 2,
+  "reason": "recording-wasm's check-wasm.ts compares its committed bindings with a fresh build exactly as scan-engine's does; each package's drift job runs its own copy against its own generated directory. Sharing one script is worth it once a third WebAssembly package needs it."
+}
