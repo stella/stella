@@ -1,7 +1,6 @@
 import { Result } from "better-result";
 import type * as v from "valibot";
 
-import type { ModelTask } from "@stll/ai-catalog";
 import type { DesktopFeatureId } from "@stll/api-contract/desktop-feature-access";
 import { classifyFailure } from "@stll/errors";
 
@@ -43,6 +42,10 @@ import { generateTanStackObjectForTask } from "@/api/lib/tanstack-ai-generate";
 const GENERATOR = "apps/api/src/handlers/dictation/model-endpoint.ts";
 const REQUIRED_FEATURE_ID = "desktop-dictation" satisfies DesktopFeatureId;
 
+/** The model tasks the dictation cleanups run: the fast model for a short
+ *  dictation, the chat model for a part of a recording. */
+type DictationModelTask = "short-text" | "chat";
+
 /** Who a cleanup runs for, with the organization's AI settings. */
 export type DictationModelCaller = OrgAISettings & {
   readonly organizationId: SafeId<"organization">;
@@ -67,7 +70,7 @@ type DictationAnswerOptions<
   /** The analytics feature, and the name failures carry. */
   feature: string;
   failureName: string;
-  task: ModelTask;
+  task: DictationModelTask;
   deadlineMs: number;
   outputTokenBudget: number;
   system: string;
@@ -242,7 +245,7 @@ export const runDesktopDictationModelAction = async function* <
   handler,
 }: {
   ctx: SafeHandlerLogContext;
-  modelTask: ModelTask;
+  modelTask: DictationModelTask;
   gate: DesktopDictationGate;
   handler: ((
     admitted: AdmittedDictationContext,
@@ -288,7 +291,11 @@ export const runDesktopDictationModelAction = async function* <
     yield* aiSettings;
   const authorization = yield* Result.await(
     authorizeHandlerUsage({
-      metering: { actionType: "chat", modelTask },
+      metering: {
+        actionType: "chat",
+        // Each task spelled out, so the admission census reads a literal.
+        modelTask: modelTask === "chat" ? "chat" : "short-text",
+      },
       organizationId: account.organizationId,
       userId: account.userId,
       safeDb,

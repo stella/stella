@@ -278,23 +278,26 @@ const writtenText = (allowLineFeed: boolean) =>
  * images, HTML, code, tables, block quotes or rules; the server removes
  * them. Lines end in `\n` only.
  */
+/** A code-point bound, with the UTF-16 bound it implies (two units per code
+ *  point at most) stated too, so the published schema carries a length. */
+const boundedText = (limit: number) =>
+  v.pipe(v.string(), v.maxLength(limit * 2), maxCodePoints(limit));
+
 export const desktopDictationRecordingCleanupResponseSchema = v.strictObject({
   instructions: v.pipe(
     v.array(
       v.pipe(
-        v.string(),
-        v.minLength(1),
-        maxCodePoints(
+        boundedText(
           DESKTOP_DICTATION_RECORDING_CLEANUP_LIMITS.instructionLength,
         ),
+        v.minLength(1),
         writtenText(false),
       ),
     ),
     v.maxLength(DESKTOP_DICTATION_RECORDING_CLEANUP_LIMITS.instructions),
   ),
   markdown: v.pipe(
-    v.string(),
-    maxCodePoints(DESKTOP_DICTATION_RECORDING_CLEANUP_LIMITS.markdownLength),
+    boundedText(DESKTOP_DICTATION_RECORDING_CLEANUP_LIMITS.markdownLength),
     writtenText(true),
   ),
 });

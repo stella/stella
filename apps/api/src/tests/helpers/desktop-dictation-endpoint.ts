@@ -81,7 +81,7 @@ export const dictationLimit = (limited: boolean) =>
   );
 
 /** One model call as the endpoint made it. */
-export type RecordedModelCall = {
+type RecordedModelCall = {
   system: string;
   prompt: string;
   schema: unknown;
