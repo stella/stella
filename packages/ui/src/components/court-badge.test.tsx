@@ -98,6 +98,22 @@ describe("CourtBadge legibility", () => {
     expect(classes).toContain("font-mono");
   });
 
+  test("inside running text the badge takes the text's face, not a column's", () => {
+    const markup = renderToStaticMarkup(
+      <CourtBadge abbreviation="NS" size="prose" weight="tinted" />,
+    );
+    const classes = /class="([^"]*)"/u.exec(markup)?.at(1)?.split(" ") ?? [];
+
+    expect(classes).not.toContain("font-mono");
+    expect(classes).not.toContain("tracking-wide");
+    expect(classes).toContain("tabular-nums");
+    expect(classes).toContain("whitespace-nowrap");
+    // Same diacritic room as the default size, without the padding that
+    // would make the line taller.
+    expect(classes).toContain("leading-4");
+    expect(classes).not.toContain("py-0.5");
+  });
+
   test("the abbreviation is written as given, in an LTR isolate", () => {
     const markup = renderToStaticMarkup(
       <CourtBadge abbreviation="ÚS" weight="solid" />,

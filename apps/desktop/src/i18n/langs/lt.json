@@ -35,7 +35,12 @@
     "sessionNeedsAttention": "Reikia dėmesio",
     "sessionOpeningInOffice": "Atidaroma Office programoje",
     "sessionSavingDraft": "Išsaugomas juodraštis",
-    "reconnectAccount": "Iš naujo prisijungti prie stella web…"
+    "reconnectAccount": "Iš naujo prisijungti prie stella web…",
+    "transcribeRecording": "Transkribuoti įrašą…",
+    "dictation": "Diktavimas",
+    "dictationHint": "Norėdami diktuoti, laikykite {key}",
+    "dictationSettings": "Diktavimo nustatymai…",
+    "dictationTurnOn": "Įjungti diktavimą…"
   },
   "notification": {
     "checkpointDelayedBody": "{fileName}: pakeitimai lieka vietiniai ir bus automatiškai bandomi iš naujo",
@@ -614,9 +619,14 @@
     "descriptionCloud": "Laikykite {shortcut} ir kalbėkite. Tekstas atsiras programoje, kurią naudojate. Kalbą paverčia tekstu stella AI, o stella jos nesaugo.",
     "lede": "Laikykite <key>{shortcut}</key> ir kalbėkite. Tekstas atsiras ten, kur rašote.",
     "groups": {
+      "shortcut": "Spartusis klavišas",
       "transcription": "Perrašymas",
       "cleanup": "Taisymas",
       "thisComputer": "Šiame kompiuteryje"
+    },
+    "sounds": {
+      "title": "Garsai",
+      "description": "Groti trumpą tylų garsą, kai įrašymas prasideda ir kai baigiasi."
     },
     "cleanup": {
       "title": "Taisyti su DI",
@@ -652,10 +662,22 @@
     },
     "language": {
       "title": "Diktavimo kalba",
-      "description": "Automatinis naudoja šio kompiuterio ekrano ir klaviatūrų kalbas.",
+      "description": "Automatinis naudoja šio kompiuterio ekrano ir klaviatūrų kalbas. Jei jų kelios, kiekvienas žodis atpažįstamas ta kalba, kuria jį ištariate.",
       "automatic": "Automatiškai",
       "automaticWith": "Automatiškai ({languages})",
       "noResults": "Kalbų nerasta"
+    },
+    "customWords": {
+      "group": "Savi žodžiai",
+      "title": "Žodžiai ir vardai, kuriuos stella turi rašyti teisingai",
+      "description": "Pavyzdžiui, klientų vardai ar angliški terminai, kuriuos vartojate kalbėdami kita kalba. Jie saugomi šiame kompiuteryje šiai paskyrai ir siunčiami tik su jūsų diktavimu: pavertimui naudojant stella AI ir taisymui su DI. Kai verčia šio kompiuterio kalbos modelis, o taisymas su DI išjungtas, stella jų rašybą pataiso šiame kompiuteryje.",
+      "count": "{count, number} iš {limit, number}",
+      "input": "Pridėti žodį ar vardą",
+      "add": "Pridėti",
+      "remove": "Pašalinti {word}",
+      "duplicate": "Šis žodis jau yra sąraše.",
+      "full": "Sąraše telpa daugiausia {limit, number} žodžių. Norėdami pridėti kitą, vieną pašalinkite.",
+      "failed": "Sąrašo išsaugoti nepavyko. Bandykite dar kartą."
     },
     "modelNeeded": "Kalbos modelis veikia šiame kompiuteryje.",
     "speechModel": "Kalbos modelis",
@@ -667,6 +689,13 @@
     "downloadFailed": "Kalbos modelio atsisiųsti nepavyko.",
     "modelAttribution": "Speech model: Parakeet Ultra by Moondream, based on NVIDIA Parakeet TDT 0.6B v3, converted to GGUF by handy-computer. CC BY 4.0.",
     "shortcutTaken": "{shortcut} naudoja kita programa.",
+    "holdKey": {
+      "title": "Laikomas klavišas",
+      "description": "Laikykite tik jį, kad diktuotumėte. Trumpas paspaudimas ar jį naudojantis spartusis klavišas nieko nedaro.",
+      "right": "Dešinysis {key}",
+      "waiting": "stella aptiks {shortcut}, kai gaus pritaikymo neįgaliesiems prieigą.",
+      "unavailable": "stella šiame kompiuteryje negali stebėti {shortcut}. Pasirinkite kitą klavišą."
+    },
     "failure": {
       "accessibility": "Leiskite prieigą prie pritaikymo neįgaliesiems funkcijų, kad „stella“ galėtų rašyti kitose programose.",
       "microphone": "„stella“ negirdi mikrofono. Patikrinkite prieigą prie mikrofono sistemos nustatymuose.",
@@ -675,9 +704,54 @@
       "focusChanged": "Perjungėte į kitą programą, kol tekstas dar nebuvo paruoštas, todėl nieko nebuvo įvesta. Bandykite dar kartą.",
       "focusUnconfirmed": "stella negalėjo patvirtinti, kuri programa yra aktyvi, todėl nieko nebuvo įvesta. Bandykite dar kartą.",
       "shortcutHeld": "Atleiskite sparčiųjų klavišų mygtukus, kad būtų galima įvesti tekstą. Nieko nebuvo įvesta; bandykite dar kartą.",
-      "cloudTranscription": "stella AI nepavyko paversti šio diktavimo tekstu, o kalbos modelio šiame kompiuteryje nėra. Bandykite dar kartą arba ties „Paversti naudojant“ pasirinkite „Šį kompiuterį“ ir atsisiųskite modelį."
+      "passwordField": "Pasirinktas slaptažodžio laukas, todėl diktuotas tekstas nebuvo išsaugotas ar įvestas.",
+      "cloudTranscription": "stella AI nepavyko paversti šio diktavimo tekstu, o kalbos modelio šiame kompiuteryje nėra. Bandykite dar kartą arba ties „Paversti naudojant“ pasirinkite „Šį kompiuterį“ ir atsisiųskite modelį.",
+      "nothingHeard": "„stella“ negirdėjo jokios kalbos. Patikrinkite įvesties įrenginį garso nustatymuose."
     },
-    "failureKeptInHistory": "Tekstas yra iškarpinės istorijoje."
+    "failureKeptInHistory": "Tekstas yra iškarpinės istorijoje.",
+    "transcribeRecording": {
+      "title": "Įrašo transkribavimas",
+      "description": "Iki 4 valandų trukmės diktofono failą, balso pastabą ar susitikimo įrašą paverčia tekstu.",
+      "open": "Atidaryti",
+      "failed": "Nepavyko atidaryti lango. Bandykite dar kartą."
+    },
+    "notice": {
+      "title": "„stella“ negirdi mikrofono",
+      "allowBody": "Leiskite prieigą prie mikrofono ir bandykite dar kartą.",
+      "checkBodyMac": "Patikrinkite prieigą prie mikrofono sistemos nustatymuose ir bandykite dar kartą.",
+      "checkBodyPc": "Patikrinkite prieigą prie mikrofono „Windows“ nustatymuose ir bandykite dar kartą.",
+      "allow": "Leisti mikrofoną",
+      "openSettingsMac": "Atidaryti sistemos nustatymus",
+      "openSettingsPc": "Atidaryti nustatymus",
+      "dismiss": "Uždaryti",
+      "nothingTitle": "„stella“ negirdėjo jokios kalbos",
+      "nothingBody": "Kalbėkite laikydami klavišą arba garso nustatymuose pasirinkite kitą įvestį.",
+      "inputDevice": "Įvestis: {device}",
+      "openSoundMac": "Atidaryti garso nustatymus",
+      "openSoundPc": "Atidaryti garso nustatymus",
+      "missingTitle": "{missing} neprijungta",
+      "missingBody": "Diktuojant vietoje jo naudojama {device}.",
+      "chooseMicrophone": "Pasirinkti mikrofoną…"
+    },
+    "microphone": {
+      "title": "Mikrofonas",
+      "hint": "„Bluetooth“ ausinėms reikia akimirkos persijungti į mikrofoną, be to, jos įrašo prastesne kokybe. Įtaisytasis mikrofonas paprastai girdisi aiškiau.",
+      "systemDefault": "Numatytasis sistemos",
+      "systemDefaultNamed": "Numatytasis sistemos ({name})",
+      "bluetoothDevice": "{name} · Bluetooth",
+      "notConnected": "{name} (neprijungta)",
+      "test": "Išbandyti mikrofoną",
+      "stopTest": "Sustabdyti",
+      "level": "Įvesties lygis",
+      "hearing": "Jus girdime.",
+      "noSound": "Iš {device} negaunama garso.",
+      "checkAccess": "Patikrinti prieigą prie mikrofono"
+    },
+    "preview": {
+      "label": "Iki šiol padiktuotas tekstas",
+      "listening": "Klausomasi…",
+      "finishing": "Baigiama…"
+    }
   },
   "shortcut": {
     "title": "Iškarpinės spartusis klavišas",
@@ -776,8 +850,8 @@
     "permissionsTitlePc": "Nustatykite šį kompiuterį",
     "permissionsBody": "Kiekvienas leidimas yra jūsų pasirinkimas. Vėliau galėsite juos pakeisti nustatymuose.",
     "neverRequested": "Niekada neprašoma:",
-    "tryTitle": "Išbandykite dabar",
-    "tryBody": "Nukopijuokite bet kokį tekstą, tada paspauskite {shortcut}.",
+    "tryTitle": "Išbandykite iškarpinės istoriją",
+    "tryBody": "Nukopijuokite bet kokį tekstą, tada paspauskite {shortcut}, kad atidarytumėte iškarpinės istoriją.",
     "tryWaiting": "Laukiama sparčiojo klavišo",
     "tryKeepGoing": "Tęskite…",
     "tryExtraModifier": "Tai {pressed}. Naudokite {shortcut}.",
@@ -799,24 +873,67 @@
     "introduceActivityTitle": "Nauja: veiklos laiko juosta",
     "introduceActivityBody": "Veikla dabar pasiekiama jūsų paskyroje. Niekas neįrašoma, kol jos nepaleisite veiklos lange.",
     "openActivity": "Atidaryti veiklą",
-    "dictationModel": "Kalbos modelis ({size} MB) atsisiunčiamas vieną kartą ir veikia šiame kompiuteryje.",
-    "dictationTurnOn": "Įjungti ir atsisiųsti",
     "dictationDownloadContinues": "Galite tęsti. Atsisiuntimas vyks fone.",
-    "dictationReady": "Diktavimas įjungtas ir paruoštas.",
-    "dictationTryLabel": "Diktuokite čia",
-    "dictationTryPlaceholder": "Spustelėkite čia, laikykite {shortcut} ir pasakykite sakinį.",
-    "dictationListening": "Klausausi…",
-    "dictationTranscribing": "Užrašau, ką pasakėte…",
     "dictationMicrophone": "Taip stella jus girdi, kol laikote spartųjį klavišą.",
     "dictationAccessibility": "Taip stella įrašo, ką pasakėte, į programą, kurią naudojate.",
     "dictationFailed": "stella desktop nepavyko įjungti diktavimo. Bandykite dar kartą.",
     "introduceDictationTitle": "Nauja: diktavimas",
+    "dictationSetup": {
+      "progress": "{current} veiksmas iš {total}",
+      "skipRest": "Praleisti likusius",
+      "screens": {
+        "microphone": "Mikrofonas",
+        "transcription": "Perrašymas",
+        "app": "Taisymas",
+        "context": "Kontekstas",
+        "words": "Žodžiai"
+      },
+      "microphone": {
+        "title": "Leiskite stella jus girdėti",
+        "body": "Laikykite {shortcut} ir kalbėkite, o tekstas atsiras ten, kur rašote. Pirmiausia leiskite naudoti mikrofoną, kad stella jus girdėtų.",
+        "bodyMac": "Laikykite {shortcut} ir kalbėkite, o tekstas atsiras ten, kur rašote. Pirmiausia leiskite naudoti mikrofoną, kad stella jus girdėtų, ir Pritaikymą neįgaliesiems, kad ji galėtų įvesti tekstą.",
+        "choose": "Mikrofonas diktavimui"
+      },
+      "transcription": {
+        "title": "Kur perrašyti jūsų kalbą?",
+        "body": "Vėliau tai galėsite pakeisti nustatymuose.",
+        "titleLocal": "Jūsų kalba perrašoma šiame kompiuteryje",
+        "bodyLocal": "Kalbos modelis veikia čia, todėl diktavimas veikia ir be interneto.",
+        "localTitle": "Šiame kompiuteryje",
+        "localBody": "Veikia be interneto. Jūsų garsas niekada nepalieka šio kompiuterio.",
+        "localModel": "Reikia kalbos modelio ({size} MB), atsisiunčiamo vieną kartą.",
+        "cloudTitle": "stella AI",
+        "cloudBody": "Nieko nereikia atsisiųsti. Jūsų garsas siunčiamas į stella, o per stella DI paslaugų teikėją – pasirinkto modelio teikėjui. stella jo nesaugo."
+      },
+      "app": {
+        "title": "Programai pritaikytas tekstas",
+        "body": "Taisymas su DI gali rašyti programai, kurioje diktuojate: el. laiškas skamba kaip el. laiškas, o pokalbio žinutė – kaip pokalbio žinutė.",
+        "sentAppKind": "Jam nurodoma programos rūšis, pavyzdžiui, el. paštas, pokalbiai ar dokumentas, ne programos pavadinimas.",
+        "notStored": "stella nieko iš to nesaugo.",
+        "off": "Be taisymo tekstas įvedamas toks, koks buvo perrašytas, ir niekas nesiunčiama taisymui su DI."
+      },
+      "context": {
+        "title": "Daugiau konteksto taisymui",
+        "body": "Neprivaloma ir išjungta, kol neįjungsite. Nuskaitoma tik pradedant diktuoti ir siunčiama tik taisymui su DI. stella nieko iš to nesaugo."
+      },
+      "words": {
+        "title": "Išmokykite stella savo žodžių",
+        "body": "Pridėkite vardų ir terminų, kuriuos stella turėtų rašyti taip, kaip jūs, pavyzdžiui, savo kontoros, klientų pavadinimus ar kitos kalbos terminus. Sąrašas iš pradžių tuščias.",
+        "examplesLabel": "Idėjos:",
+        "examples": {
+          "firm": "Jūsų kontoros pavadinimas",
+          "client": "Kliento vardas",
+          "term": "Jūsų vartojamas terminas"
+        }
+      }
+    },
     "guideWaiting": "Įjunkite stella desktop sąraše aukščiau, kad leistumėte pritaikymą neįgaliesiems.",
     "guideAllowed": "stella desktop leidžiama",
     "never": {
       "screenRecording": "Ekrano įrašymas",
       "camera": "Kamera",
       "keystrokes": "Klavišų paspaudimai",
+      "keystrokesWithoutHoldKey": "Klavišų paspaudimai, nebent pasirinksite laikomą klavišą",
       "fullDiskAccess": "Visa prieiga prie disko",
       "administrator": "Administratoriaus teisės"
     }
@@ -953,6 +1070,117 @@
       "network_folder": "Šis aplankas yra tinklo bendrinimo vietoje. Susiekite aplanką iš šio kompiuterio disko.",
       "protected": "Šiame aplanke yra pačios stella duomenys arba įgūdžių aplankas, todėl agentas jame dirbti negali.",
       "unreadable": "Nepavyko perskaityti šio aplanko."
+    }
+  },
+  "keepAwake": {
+    "title": "Neužmigdyti",
+    "enabled": "Neužmigdyti šio kompiuterio, kol dirba agentai",
+    "description": "Kol šiame kompiuteryje dirba agentas, kompiuteris neužmiega dėl neveiklumo, todėl ilgos užduotys vykdomos toliau. Ekranas vis tiek gali išsijungti. „Mac“ nešiojamasis kompiuteris vis tiek užmigs uždarius dangtį.",
+    "onBattery": "Taip pat naudojant akumuliatorių",
+    "onBatteryDescription": "Kai ši parinktis išjungta, naudojant akumuliatorių kompiuteris užmiega kaip įprasta, net kai dirba agentas.",
+    "errorSave": "Nepavyko išsaugoti šio nustatymo. Bandykite dar kartą."
+  },
+  "transcribe": {
+    "title": "Įrašo transkribavimas",
+    "retry": "Bandyti dar kartą",
+    "drop": {
+      "title": "Nuvilkite įrašą čia",
+      "release": "Atleiskite, kad transkribuotumėte",
+      "description": "Diktofono failai, balso pastabos, balso žinutės, susitikimų įrašai arba vaizdo įrašo garsas.",
+      "choose": "Pasirinkti failą",
+      "formats": "WAV, MP3, M4A, AAC, FLAC, Ogg, Opus, AIFF, WMA, AMR ir MP4 arba MOV vaizdo įrašai. Iki 4 valandų.",
+      "formatsMac": "WAV, MP3, M4A, AAC, FLAC, Ogg, Opus, AIFF, AMR ir MP4 arba MOV vaizdo įrašai. Iki 4 valandų."
+    },
+    "destination": {
+      "title": "Transkribuoti naudojant",
+      "thisComputer": "Šį kompiuterį",
+      "cloud": "stella AI",
+      "localDescription": "Įrašas lieka šiame kompiuteryje.",
+      "cloudDescription": "Garsas transkribuoti siunčiamas stellai ir diktavimo nustatymuose pasirinkto modelio teikėjui. stella jo nesaugo.",
+      "cloudDescriptionModel": "Garsas transkribuoti siunčiamas stellai ir modelio {model} teikėjui. stella jo nesaugo.",
+      "localMissing": "Norėdami transkribuoti šiame kompiuteryje, atsisiųskite kalbos modelį skiltyje Nustatymai, Diktavimas.",
+      "localMissingCloud": "Atsisiųskite kalbos modelį skiltyje Nustatymai, Diktavimas, arba transkribuokite naudodami stella AI.",
+      "retainsData": "Atkreipkite dėmesį į {provider} duomenų tvarkymo sąlygas.",
+      "modelFailed": "Nepavyko nuskaityti stella AI modelio, todėl stella AI dabar negali transkribuoti. Bandykite dar kartą arba transkribuokite šiame kompiuteryje."
+    },
+    "matter": {
+      "title": "Byla",
+      "description": "Jos vardai ir bylų numeriai parašomi teisingai, o tekstą galite išsaugoti joje.",
+      "none": "Nėra",
+      "search": "Ieškoti bylų",
+      "clearSearch": "Išvalyti paiešką",
+      "searching": "Ieškoma…",
+      "noMatters": "Bylų nerasta",
+      "failed": "Nepavyko įkelti bylų. Bandykite dar kartą."
+    },
+    "note": "Philips arba Olympus diktofonų DSS ir DS2 failus pirmiausia išsaugokite WAV formatu programoje SpeechExec arba ODMS.",
+    "refused": {
+      "unsupported": "stella negali perskaityti {name}. Pasirinkite įrašą vienu iš aukščiau nurodytų formatų.",
+      "tooLong": "{name} ilgesnis nei 4 valandos. Pirmiausia padalykite jį į trumpesnius įrašus.",
+      "unreadable": "Nepavyko perskaityti {name}. Failas gali būti sugadintas; eksportuokite jį dar kartą ir bandykite iš naujo."
+    },
+    "kept": {
+      "ready": "{name} paruoštas. Patikrinkite aukščiau, kaip jis bus transkribuotas, tada pradėkite.",
+      "start": "Pradėti transkribuoti"
+    },
+    "failure": {
+      "start": "Nepavyko pradėti transkribavimo. Bandykite dar kartą.",
+      "load": "Šio lango nepavyko įkelti. Bandykite dar kartą.",
+      "modelMissing": "Kalbos modelio šiame kompiuteryje nėra. Atsisiųskite jį skiltyje Nustatymai, Diktavimas.",
+      "thisComputer": "Šio kompiuterio kalbos modelis nepajėgė transkribuoti dalies įrašo. Iki šiol gautas tekstas išlieka.",
+      "cloud": "stella AI nepajėgė transkribuoti dalies įrašo. Iki šiol gautas tekstas išlieka; bandykite vėliau.",
+      "unreadable": "Įrašo nepavyko perskaityti iki galo. Iki šiol gautas tekstas išlieka.",
+      "tooLong": "Įrašas ilgesnis nei 4 valandos. Iki šiol gautas tekstas išlieka."
+    },
+    "result": {
+      "minutes": "{minutes, number} min.",
+      "thisComputer": "Šis kompiuteris",
+      "cloud": "stella AI, {model}",
+      "matter": "byla {name}",
+      "copy": "Kopijuoti",
+      "copied": "Nukopijuota",
+      "saveAs": "Išsaugoti kaip",
+      "saveWithTimestamps": "Tekstas su laiko žymomis (.txt)",
+      "saveWithoutTimestamps": "Tekstas be laiko žymų (.txt)",
+      "saveToMatter": "Išsaugoti byloje",
+      "savingToMatter": "Išsaugoma…",
+      "savedToMatter": "Išsaugota byloje {matter} kaip {fileName}.",
+      "saveToMatterFailed": "Nepavyko išsaugoti transkripcijos byloje. Bandykite dar kartą.",
+      "saveFailed": "Nepavyko nukopijuoti ar išsaugoti transkripcijos. Bandykite dar kartą.",
+      "noSpeech": "Šiame įraše kalbos nerasta.",
+      "fileName": "{title} – transkripcija.txt",
+      "documentTitle": "{title} – transkripcija",
+      "transcriptTitle": "Transkripcija"
+    },
+    "progress": {
+      "running": "Transkribuojama {done, number} iš {total, number} min.",
+      "runningUnknown": "Transkribuojama: kol kas {done, number} min.",
+      "stop": "Sustabdyti",
+      "stopped": "Sustabdyta po {done, number} min. Iki šiol gautas tekstas išlieka.",
+      "done": "Transkribuota {total, number} min.",
+      "another": "Transkribuoti kitą įrašą"
+    },
+    "cleaned": {
+      "title": "Sutvarkytas tekstas",
+      "running": "Tvarkoma…",
+      "waiting": "Kiekviena dalis sutvarkoma iškart, kai tik ji transkribuojama.",
+      "instructionsTitle": "Nurodymai diktavime · ne teksto dalis",
+      "instructionsLabel": "Nurodymai:",
+      "partFailed": "Šios dalies sutvarkyti nepavyko, todėl ji rodoma taip, kaip transkribuota.",
+      "failedCount": "{count, plural, one {# dalis nesutvarkyta} few {# dalys nesutvarkytos} other {# dalių nesutvarkyta}}",
+      "saveMarkdown": "Formatuotas tekstas (.md)",
+      "saveText": "Paprastas tekstas (.txt)",
+      "fileNameMarkdown": "{title} sutvarkytas.md",
+      "fileNameText": "{title} sutvarkytas.txt",
+      "offerTitle": "Sutvarkyti transkripciją su DI",
+      "offerDescription": "Šis įrašas transkribuotas šiame kompiuteryje, o DI tvarkymas Nustatymuose išjungtas. Tvarkant jūsų organizacijos DI modeliui siunčiamas tekstas, niekada ne garsas.",
+      "offerStart": "Sutvarkyti"
+    },
+    "copyMenu": {
+      "label": "Kopijavimo parinktys",
+      "formatted": "Su formatavimu",
+      "plain": "Kaip paprastą tekstą",
+      "hint": "Su formatavimu į Word ar Outlook įklijuojamos antraštės, paryškinimai ir sąrašai. Jūsų pasirinkimas įsimenamas."
     }
   }
 }

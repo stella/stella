@@ -1,4 +1,7 @@
 {
+  "common": {
+    "previewTruncated": "Úplný text není v tomto náhledu dostupný."
+  },
   "tabs": {
     "chat": "Chat",
     "close": "Zavřít",
@@ -127,6 +130,8 @@
       "boe_search_legislation": "Vyhledávání v BOE",
       "borme_get_summary": "Denní souhrn BORME",
       "business_registry_lookup": "Vyhledávání v obchodním rejstříku",
+      "calendar_free_busy": "Zjištění dostupnosti v kalendáři",
+      "calendar_list_events": "Čtení událostí kalendáře",
       "command_execution": "Spouštění příkazu",
       "compare_versions": "Porovnávání verzí",
       "configure_template_fields": "Nastavit pole vzoru",
@@ -143,10 +148,10 @@
       "delete_reader_annotation": "Smazat zvýraznění nebo komentář",
       "delete_task": "Smazat úkol",
       "delete_time_entry": "Smazat časový záznam",
-      "describe-stella-api": "Připravuji vyhledání dat",
-      "describe-stella-function": "Připravuji vyhledání dat",
+      "describe-stella-api": "Vybírám, kde hledat",
+      "describe-stella-function": "Vybírám, kde hledat",
       "describe_template": "Čtení polí vzoru",
-      "discover_tools": "Připravuji vyhledání dat",
+      "discover_tools": "Vybírám, kde hledat",
       "execute-typescript": "Čtu data spisu",
       "execute_typescript": "Čtu data spisu",
       "expand-chat-history": "Čtení historie chatu",
@@ -186,6 +191,7 @@
       "save_document": "Uložit dokument",
       "save_matter": "Uložit spis",
       "save_playbook": "Uložit playbook",
+      "save_skill_package": "Uložit dovednost",
       "save_task": "Uložit úkol",
       "save_template": "Uložit vzor",
       "save_time_entry": "Uložit časový záznam",
@@ -208,7 +214,13 @@
       "update_reader_annotation": "Upravit zvýraznění nebo komentář",
       "use-browser": "Používání vašeho prohlížeče",
       "use_connector_secret": "Použití přístupového údaje konektoru",
+      "validate_skill_package": "Zkontrolovat dovednost",
       "web_search": "Vyhledávání na webu"
+    },
+    "toolResearch": {
+      "caseLaw": "Hledám v judikatuře",
+      "legislation": "Čtu předpisy",
+      "legislationAndCaseLaw": "Hledám v předpisech a judikatuře"
     },
     "localRun": {
       "title": {
@@ -264,9 +276,18 @@
       "sourcesChecked": "{count, plural, one {# prověřený zdroj} few {# prověřené zdroje} other {# prověřených zdrojů} many {# prověřeného zdroje}}",
       "documentEdits": "{count, plural, one {# úprava dokumentu} few {# úpravy dokumentu} other {# úprav dokumentu} many {# úpravy dokumentu}}",
       "changesSaved": "{count, plural, one {# uložená změna} few {# uložené změny} other {# uložených změn} many {# uložené změny}}",
-      "analyses": "{count, plural, one {# analýza} few {# analýzy} other {# analýz} many {# analýzy}}"
+      "searchedLegislation": "Prohledány předpisy",
+      "searchedCaseLaw": "Prohledána judikatura",
+      "searchedLegislationAndCaseLaw": "Prohledány předpisy a judikatura",
+      "readDocument": "Přečten dokument",
+      "readDocuments": "Přečteny dokumenty",
+      "searchedMatters": "Prohledány spisy",
+      "checkedRegisters": "Ověřeny veřejné rejstříky",
+      "searchedWeb": "Prohledán web",
+      "searchedChats": "Prohledána historie chatu"
     },
     "stepCount": "{count, plural, one {# krok} few {# kroky} many {# kroku} other {# kroků}}",
+    "lookupCount": "{count, plural, one {# dotaz} few {# dotazy} many {# dotazu} other {# dotazů}}",
     "reasoning": "Uvažování",
     "historyTrimmed": "Starší zprávy se nepodařilo shrnout, a tak tato odpověď vychází jen z poslední části konverzace.",
     "failure": {
@@ -524,6 +545,7 @@
     "title": "Dokument",
     "failedTitle": "Dokument nelze otevřít",
     "failure": {
+      "dataBoxUnreadable": "Soubor se nepodařilo přečíst jako datovou zprávu ani jako doručenku.",
       "offline": "Jste offline. Připojte se k internetu a zkuste to znovu.",
       "noFile": "Tento dokument zatím nemá soubor.",
       "failed": "Při otevírání se něco pokazilo. Zkuste to za chvíli znovu.",
@@ -531,6 +553,7 @@
       "android": "V aplikaci pro Android zatím dokumenty otevřít nelze."
     },
     "retry": "Zkusit znovu",
+    "openOriginal": "Otevřít originál",
     "preview": "Otevřít náhled",
     "previewDescription": "Tento soubor se otevře v systémovém náhledu.",
     "unrendered": "Tento dokument zde nelze zobrazit, systémový náhled ho ale možná otevře.",
@@ -588,7 +611,28 @@
     "signOutFailed": "Odhlášení se nepodařilo dokončit. Zkuste to znovu.",
     "lockScreenTitle": "Zamčená obrazovka",
     "timerDetails": "Podrobnosti časovače",
-    "timerDetailsHint": "Když se časovač změní na jiném zařízení, doručí jeho popis a spis na zamčenou obrazovku služba oznámení Apple. Po vypnutí se zobrazí jen čas, dokud aplikaci neotevřete."
+    "timerDetailsHint": "Když se časovač změní na jiném zařízení, doručí jeho popis a spis na zamčenou obrazovku služba oznámení Apple. Po vypnutí se zobrazí jen čas, dokud aplikaci neotevřete.",
+    "dictationTitle": "Diktování",
+    "dictationModelDefault": "Výchozí",
+    "dictationModelDefaultNamed": "Výchozí ({model})",
+    "dictationModelOutsideRegion": "Mimo váš region",
+    "dictationModelRetainsData": "Uchovává váš zvuk",
+    "dictationModelRetainsWarning": "Tento model běží na účtu bez nulového uchovávání dat. {provider} ukládá zvuk i přepis všeho, co nadiktujete, podle vlastních podmínek a mimo kontrolu stella. Nediktujte s ním důvěrné ani klientské informace.",
+    "dictationModelHint": "Model, který z diktátu udělá text. stella zvuk neukládá.",
+    "dictationModelsUnavailable": "Modely se nepodařilo načíst. Diktování použije model, který jste vybrali, nebo výchozí, pokud ho server už nenabízí.",
+    "dictationCleanup": "Upravit pomocí AI",
+    "dictationCleanupHint": "Opraví chyby rozpoznávání a vyslovené formátování, například „nový řádek“. Jen text, ne zvuk, jde přes stella k poskytovateli AI vaší organizace; stella ho neukládá."
+  },
+  "signedFile": {
+    "layer": "Vrstva podpisů {number, number}",
+    "noReadableContent": "Pro náhled není k dispozici žádný čitelný obsah.",
+    "unknownSigner": "Neznámý podepisující",
+    "unreadable": "Podepsaný soubor se nepodařilo přečíst.",
+    "unverified": "Podpisy nebyly ověřeny."
+  },
+  "structuredDocument": {
+    "noReadableContent": "Pro náhled není k dispozici čitelný text.",
+    "textOnly": "Textový náhled bez rozvržení stránky a obrázků."
   },
   "header": {
     "search": "Hledat"

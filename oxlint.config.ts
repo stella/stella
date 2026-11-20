@@ -954,6 +954,20 @@ const browserSurfaceFiles = [
   "packages/ui/src/**/*.{ts,tsx}",
 ] as const;
 
+// Sources bundled for a browser, webview or React Native host, where
+// `import.meta.url` is not a `file:` URL. Their tests run in Bun.
+const browserBundleFiles = [
+  ...browserSurfaceFiles,
+  "apps/extension/src/**/*.{ts,tsx}",
+  "apps/mobile/src/**/*.{ts,tsx}",
+  "apps/outlook/src/**/*.{ts,tsx}",
+  "apps/visual-preview/browser/**/*.{ts,tsx}",
+  "packages/browser-page/src/**/*.{ts,tsx}",
+  "packages/chat/src/**/*.{ts,tsx}",
+  "packages/mcp-apps/src/**/*.{ts,tsx}",
+  "packages/workspace-ui/src/**/*.{ts,tsx}",
+] as const;
+
 // Shared `no-restricted-imports` entries.
 //
 // Oxlint resolves overrides by replacement, not by merge: for a given file the
@@ -1411,7 +1425,7 @@ const bunNativeFiles = [
   "apps/api/src/handlers/legal-resolve/authorization.test.ts",
   "apps/api/src/handlers/legislation/search-relaxed.contract.test.ts",
   "apps/api/src/handlers/lists/verifications/get.db.test.ts",
-  "apps/api/src/handlers/sharepoint/graph-oauth.ts",
+  "apps/api/src/lib/auth/microsoft365/graph-oauth.ts",
   "apps/api/src/handlers/soft-law/adapters/edpb.test.ts",
   "apps/api/src/handlers/soft-law/adapters/edpb.ts",
   "apps/api/src/handlers/soft-law/adapters/wp29.test.ts",
@@ -1876,7 +1890,9 @@ const config = defineConfig({
       {
         routeFiles: [
           "apps/web/src/routes/knowledge/tools.tsx",
+          "apps/web/src/routes/knowledge/-member/tools.page.tsx",
           "apps/web/src/routes/knowledge/-member/member-tools-page.tsx",
+          "apps/web/src/routes/knowledge/-components/catalogue/tool-detail-inspector-registration.tsx",
         ],
       },
     ],
@@ -2116,6 +2132,7 @@ const config = defineConfig({
     // The package's plugins load through local re-exports; the modules say why.
     "./scripts/oxlint-presets/stella-lowercase-plugin.mjs",
     "./.oxlint-plugins/no-raw-cache-control.ts",
+    "./.oxlint-plugins/no-raw-cloudfront-viewer-header.ts",
     "./.oxlint-plugins/confine-sql-close.ts",
     "./.oxlint-plugins/confine-online-ddl.ts",
     "./.oxlint-plugins/raw-hash-from-source-fingerprint.ts",
@@ -2236,6 +2253,7 @@ const config = defineConfig({
     "./.oxlint-plugins/no-raw-router-invalidation.ts",
     "./.oxlint-plugins/no-optional-mutation-command.ts",
     "./.oxlint-plugins/no-beforeload-redirect.ts",
+    "./.oxlint-plugins/route-pending-component.ts",
     "./.oxlint-plugins/require-safe-route-handlers.ts",
     "./.oxlint-plugins/require-workspace-handler-config.ts",
     "./.oxlint-plugins/require-write-contract.ts",
@@ -2293,6 +2311,7 @@ const config = defineConfig({
     "./.oxlint-plugins/decision-shaped-output-schema.ts",
     "./.oxlint-plugins/require-complete-compaction-generation.ts",
     "./.oxlint-plugins/no-model-timeout-abort-signal.ts",
+    "./.oxlint-plugins/no-module-url-pathname.ts",
     "./.oxlint-plugins/require-audit-on-mutation.ts",
     "./.oxlint-plugins/require-running-entry-guard.ts",
     "./.oxlint-plugins/require-worker-database-login-posture.ts",
@@ -2384,6 +2403,7 @@ const config = defineConfig({
     "./.oxlint-plugins/icon-button-requires-tooltip.ts",
     "./.oxlint-plugins/semantic-controls.ts",
     "./.oxlint-plugins/no-disabled-tooltip-trigger.ts",
+    "./.oxlint-plugins/disabled-control-needs-reason.ts",
     "./.oxlint-plugins/no-button-whitespace-normal.ts",
     "./.oxlint-plugins/no-dialog-trigger-menu-item.ts",
     "./.oxlint-plugins/no-decorated-search-input.ts",
@@ -2410,6 +2430,7 @@ const config = defineConfig({
     "./.oxlint-plugins/no-raw-path-relative.ts",
     "./.oxlint-plugins/no-direct-unicode-normalize.ts",
     "./.oxlint-plugins/no-adhoc-email-fold.ts",
+    "./.oxlint-plugins/no-raw-case-number-key-equality.ts",
     "./.oxlint-plugins/no-local-letter-spacing.ts",
     "./.oxlint-plugins/no-local-paragraph-label.ts",
     "./.oxlint-plugins/no-ambient-dev-docker.ts",
@@ -2489,7 +2510,8 @@ const config = defineConfig({
         "apps/landing/src/components/ProductPage.astro",
         "apps/landing/src/pages/security.astro",
         "apps/landing/src/pages/support.astro",
-        "apps/web/src/routes/tools/-components/public-tools-index.tsx",
+        "apps/web/src/routes/tools/-index.page.tsx",
+        "apps/web/src/routes/tools/-index.pending.tsx",
         ".oxlint-plugins/__fixtures__/narrative-prose-component.fixture.tsx",
       ],
       rules: {
@@ -2705,7 +2727,7 @@ const config = defineConfig({
         "no-direct-status-set/no-direct-status-set": [
           "error",
           {
-            owner: STATUS_TRANSITION_OWNERSHIP.owner[0],
+            owners: STATUS_TRANSITION_OWNERSHIP.owner,
             columns: STATUS_TRANSITION_OWNERSHIP.enforcement.columns,
           },
         ],
@@ -2729,7 +2751,7 @@ const config = defineConfig({
         "no-direct-status-set/no-direct-status-set": [
           "error",
           {
-            owner: STATUS_TRANSITION_OWNERSHIP.owner[0],
+            owners: STATUS_TRANSITION_OWNERSHIP.owner,
             columns: STATUS_TRANSITION_OWNERSHIP.enforcement.columns,
           },
         ],
@@ -2880,6 +2902,12 @@ const config = defineConfig({
             allowedFiles: [
               {
                 path: "packages/ui/src/components/select.tsx",
+                reason:
+                  "Base UI's Select.Value renders the chosen label itself; the open list shows it in full.",
+                utilities: ["truncate"],
+              },
+              {
+                path: "packages/ui/src/components/select-classes.ts",
                 reason:
                   "Base UI's Select.Value renders the chosen label itself; the open list shows it in full.",
                 utilities: ["truncate"],
@@ -3168,6 +3196,31 @@ const config = defineConfig({
       ],
       rules: {
         "no-beforeload-redirect/no-beforeload-redirect": "error",
+      },
+    },
+    {
+      files: [
+        ".oxlint-plugins/__fixtures__/route-pending-component.fixture.tsx",
+      ],
+      rules: {
+        "route-pending-component/route-pending-component": "error",
+      },
+    },
+    {
+      files: [
+        ".oxlint-plugins/__fixtures__/route-pending-component.fixture.shell.pending.fixture.tsx",
+      ],
+      rules: {
+        "route-pending-component/pending-module-imports": "error",
+      },
+    },
+    {
+      files: [
+        ".oxlint-plugins/__fixtures__/route-pending-component.fixture.shell.page.fixture.tsx",
+        ".oxlint-plugins/__fixtures__/route-pending-component.fixture.unpaired.page.fixture.tsx",
+      ],
+      rules: {
+        "route-pending-component/page-module-shell": "error",
       },
     },
     {
@@ -3648,6 +3701,28 @@ const config = defineConfig({
       rules: { "no-raw-path-relative/no-raw-path-relative": "error" },
     },
     {
+      // A module URL is a file: URL wherever code runs from a filesystem
+      // (tooling, servers, the CLI, Bun tests); its pathname is not a native
+      // path. In browser bundles it is an http URL whose pathname is a URL
+      // path, so their sources are out of scope.
+      files: [
+        "apps/**/*.{js,jsx,mjs,cjs,ts,tsx,mts,cts}",
+        "packages/**/*.{js,jsx,mjs,cjs,ts,tsx,mts,cts}",
+        "scripts/**/*.{js,jsx,mjs,cjs,ts,tsx,mts,cts}",
+        ".oxlint-plugins/**/*.{js,jsx,mjs,cjs,ts,tsx,mts,cts}",
+      ],
+      excludeFiles: [...browserBundleFiles],
+      rules: { "no-module-url-pathname/no-module-url-pathname": "error" },
+    },
+    {
+      // Tests, browser bundle tests included, run in Bun, where
+      // import.meta.url is a file: URL; suites that run in a real browser
+      // stay out of scope.
+      files: ["apps/**/*.test.{ts,tsx}", "packages/**/*.test.{ts,tsx}"],
+      excludeFiles: ["**/*.browser.test.{ts,tsx}"],
+      rules: { "no-module-url-pathname/no-module-url-pathname": "error" },
+    },
+    {
       // Pre-install tooling cannot import the workspace path owner before dependencies exist.
       files: [...CI_INSTALL_PREINSTALL_FILES],
       rules: { "no-raw-path-relative/no-raw-path-relative": "off" },
@@ -3712,6 +3787,31 @@ const config = defineConfig({
       ],
       rules: {
         "no-local-paragraph-label/no-local-paragraph-label": "error",
+      },
+    },
+    {
+      // Case-number keys are compared through
+      // apps/api/src/lib/case-law/case-number-match-key.ts, which reads a key
+      // printed with a four-digit year and one printed with two as one case.
+      // Excepted: the case-law review tables, keyed by the copy a review row
+      // keeps of its citation's own key and compared byte for byte with it
+      // (polarity/reviews.ts); one-off maintenance scripts, which run once
+      // against the keys of their day; and tests, which state expected rows
+      // independently of the owner.
+      files: [
+        "apps/api/src/**/*.ts",
+        ".oxlint-plugins/__fixtures__/no-raw-case-number-key-equality.fixture.ts",
+      ],
+      excludeFiles: [
+        "apps/api/src/lib/case-law/case-number-match-key.ts",
+        "apps/api/src/handlers/case-law/polarity/reviews.ts",
+        "apps/api/src/scripts/**",
+        "apps/api/src/tests/**",
+        "apps/api/src/**/*.test.ts",
+      ],
+      rules: {
+        "no-raw-case-number-key-equality/no-raw-case-number-key-equality":
+          "error",
       },
     },
     {
@@ -4325,6 +4425,20 @@ const config = defineConfig({
       ],
       rules: {
         "no-disabled-tooltip-trigger/no-disabled-tooltip-trigger": "error",
+      },
+    },
+    {
+      // A disabled Button must say why it cannot act (`disabledReason`).
+      // Enforced on its fixture only while the existing sites burn down: the
+      // `disabled-control-without-reason` ratchet in scripts/ratchet.ts holds
+      // their count and lets it only fall. The PR that reaches zero widens
+      // these files to the ratchet's scope (web `.tsx` under apps/* and
+      // packages/*, not apps/mobile or `*.native.tsx`) and drops the ratchet.
+      files: [
+        ".oxlint-plugins/__fixtures__/disabled-control-needs-reason.fixture.tsx",
+      ],
+      rules: {
+        "disabled-control-needs-reason/disabled-control-needs-reason": "error",
       },
     },
     {
@@ -5928,6 +6042,21 @@ const config = defineConfig({
         "no-beforeload-redirect/no-beforeload-redirect": "error",
         "no-raw-route-query-client/no-raw-route-query-client": "error",
         "require-loader-prefetch/require-loader-prefetch": "error",
+        "route-pending-component/route-pending-component": "error",
+      },
+    },
+    {
+      // A route's pending half ships in the entry chunk and renders before
+      // any provider: its imports are closed (see the rule's policy file).
+      files: ["apps/web/src/**/*.pending.tsx"],
+      rules: {
+        "route-pending-component/pending-module-imports": "error",
+      },
+    },
+    {
+      files: ["apps/web/src/**/*.page.tsx"],
+      rules: {
+        "route-pending-component/page-module-shell": "error",
       },
     },
     {
@@ -5987,6 +6116,7 @@ const config = defineConfig({
               "apps/api/src/env-eu-completion.ts",
               "apps/api/src/env-parsed-input-state-backfill.ts",
               "apps/api/src/env-ingestion.ts",
+              "apps/api/src/env-soft-law.ts",
               "apps/api/src/env-schema.ts",
               "apps/api/src/env-document-processing-worker.ts",
               "apps/api/src/env-file-derivative-worker.ts",
@@ -7047,6 +7177,25 @@ const config = defineConfig({
       },
     },
     {
+      // CloudFront viewer headers are read only behind the origin proof, by
+      // the modules the rule names as owners.
+      files: [
+        "apps/*/src/**/*.{ts,tsx}",
+        "packages/*/src/**/*.{ts,tsx}",
+        ".oxlint-plugins/__fixtures__/no-raw-cloudfront-viewer-header.fixture.ts",
+      ],
+      excludeFiles: [
+        "**/*.test.ts",
+        "**/*.test.tsx",
+        "apps/api/src/tests/**/*.ts",
+        "**/__tests__/**",
+      ],
+      rules: {
+        "no-raw-cloudfront-viewer-header/no-raw-cloudfront-viewer-header":
+          "error",
+      },
+    },
+    {
       // A case-law adapter's rawHash decides whether a re-fetched decision is
       // written, so it comes from `sourceFingerprint` over the stored source.
       // Files that predate the owner are listed, shrink-only, in
@@ -7975,7 +8124,7 @@ const config = defineConfig({
         "apps/web/src/components/auth/password-sign-in-form.tsx",
         "apps/web/src/components/auth/sign-in-panel.tsx",
         "apps/web/src/components/organization/invite-member-dialog.tsx",
-        "apps/web/src/routes/auth/-components/social-recovery-panel.tsx",
+        "apps/web/src/routes/auth/-error.page.tsx",
       ],
       rules: {
         "require-valibot-message/require-valibot-message": "error",

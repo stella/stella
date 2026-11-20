@@ -1,4 +1,7 @@
 {
+  "common": {
+    "previewTruncated": "Der vollständige Text ist in dieser Vorschau nicht verfügbar."
+  },
   "tabs": {
     "chat": "Chat",
     "close": "Schließen",
@@ -127,6 +130,8 @@
       "boe_search_legislation": "BOE-Gesetzessuche",
       "borme_get_summary": "BORME-Tageszusammenfassung",
       "business_registry_lookup": "Handelsregister durchsuchen",
+      "calendar_free_busy": "Verfügbarkeit im Kalender prüfen",
+      "calendar_list_events": "Kalendertermine lesen",
       "command_execution": "Befehl wird ausgeführt",
       "compare_versions": "Versionen vergleichen",
       "configure_template_fields": "Vorlagenfelder konfigurieren",
@@ -143,10 +148,10 @@
       "delete_reader_annotation": "Hervorhebung oder Kommentar löschen",
       "delete_task": "Aufgabe löschen",
       "delete_time_entry": "Zeiteintrag löschen",
-      "describe-stella-api": "Datensuche vorbereiten",
-      "describe-stella-function": "Datensuche vorbereiten",
+      "describe-stella-api": "Quellen auswählen",
+      "describe-stella-function": "Quellen auswählen",
       "describe_template": "Vorlagenfelder lesen",
-      "discover_tools": "Datensuche vorbereiten",
+      "discover_tools": "Quellen auswählen",
       "execute-typescript": "Akten-Daten lesen",
       "execute_typescript": "Akten-Daten lesen",
       "expand-chat-history": "Chatverlauf lesen",
@@ -186,6 +191,7 @@
       "save_document": "Dokument speichern",
       "save_matter": "Akte speichern",
       "save_playbook": "Playbook speichern",
+      "save_skill_package": "Skill speichern",
       "save_task": "Aufgabe speichern",
       "save_template": "Vorlage speichern",
       "save_time_entry": "Zeiteintrag speichern",
@@ -208,7 +214,13 @@
       "update_reader_annotation": "Hervorhebung oder Kommentar bearbeiten",
       "use-browser": "Ihren Browser verwenden",
       "use_connector_secret": "Zugangsdaten des Connectors verwenden",
+      "validate_skill_package": "Skill prüfen",
       "web_search": "Web wird durchsucht"
+    },
+    "toolResearch": {
+      "caseLaw": "Rechtsprechung durchsuchen",
+      "legislation": "Rechtsvorschriften lesen",
+      "legislationAndCaseLaw": "Rechtsvorschriften und Rechtsprechung durchsuchen"
     },
     "localRun": {
       "title": {
@@ -264,9 +276,18 @@
       "sourcesChecked": "{count, plural, one {# Quelle geprüft} other {# Quellen geprüft}}",
       "documentEdits": "{count, plural, one {# Dokumentänderung} other {# Dokumentänderungen}}",
       "changesSaved": "{count, plural, one {# Änderung gespeichert} other {# Änderungen gespeichert}}",
-      "analyses": "{count, plural, one {# Analyse} other {# Analysen}}"
+      "searchedLegislation": "Rechtsvorschriften durchsucht",
+      "searchedCaseLaw": "Rechtsprechung durchsucht",
+      "searchedLegislationAndCaseLaw": "Rechtsvorschriften und Rechtsprechung durchsucht",
+      "readDocument": "Dokument gelesen",
+      "readDocuments": "Dokumente gelesen",
+      "searchedMatters": "Akten durchgesehen",
+      "checkedRegisters": "Öffentliche Register geprüft",
+      "searchedWeb": "Web durchsucht",
+      "searchedChats": "Chatverlauf durchsucht"
     },
     "stepCount": "{count, plural, one {# Schritt} other {# Schritte}}",
+    "lookupCount": "{count, plural, one {# Abfrage} other {# Abfragen}}",
     "reasoning": "Argumentation",
     "historyTrimmed": "Ältere Nachrichten konnten nicht zusammengefasst werden. Diese Antwort berücksichtigt daher nur den jüngsten Teil der Unterhaltung.",
     "failure": {
@@ -524,6 +545,7 @@
     "title": "Dokument",
     "failedTitle": "Dieses Dokument konnte nicht geöffnet werden",
     "failure": {
+      "dataBoxUnreadable": "Die Datei konnte weder als Databox-Nachricht noch als Zustellnachweis gelesen werden.",
       "offline": "Sie sind offline. Stellen Sie eine Internetverbindung her und versuchen Sie es erneut.",
       "noFile": "Dieses Dokument hat noch keine Datei.",
       "failed": "Beim Öffnen ist ein Fehler aufgetreten. Versuchen Sie es gleich noch einmal.",
@@ -531,6 +553,7 @@
       "android": "In der Android-App lassen sich Dokumente noch nicht öffnen."
     },
     "retry": "Erneut versuchen",
+    "openOriginal": "Original öffnen",
     "preview": "Vorschau öffnen",
     "previewDescription": "Diese Datei wird in der Systemvorschau geöffnet.",
     "unrendered": "Dieses Dokument kann hier nicht angezeigt werden, die Systemvorschau kann es aber eventuell öffnen.",
@@ -588,7 +611,28 @@
     "signOutFailed": "Die Abmeldung konnte nicht abgeschlossen werden. Versuchen Sie es erneut.",
     "lockScreenTitle": "Sperrbildschirm",
     "timerDetails": "Timer-Details",
-    "timerDetailsHint": "Ändert sich ein Timer auf einem anderen Gerät, bringt Apples Mitteilungsdienst seine Beschreibung und Akte auf den Sperrbildschirm. Ausgeschaltet zeigt er nur die Zeit, bis Sie die App öffnen."
+    "timerDetailsHint": "Ändert sich ein Timer auf einem anderen Gerät, bringt Apples Mitteilungsdienst seine Beschreibung und Akte auf den Sperrbildschirm. Ausgeschaltet zeigt er nur die Zeit, bis Sie die App öffnen.",
+    "dictationTitle": "Diktieren",
+    "dictationModelDefault": "Standard",
+    "dictationModelDefaultNamed": "Standard ({model})",
+    "dictationModelOutsideRegion": "Außerhalb deiner Region",
+    "dictationModelRetainsData": "Speichert deine Aufnahmen",
+    "dictationModelRetainsWarning": "Dieses Modell läuft über ein Konto ohne Zero Data Retention. {provider} speichert Audio und Transkript von allem, was du diktierst, nach eigenen Bedingungen und außerhalb der Kontrolle von stella. Diktiere damit keine vertraulichen Informationen oder Mandantendaten.",
+    "dictationModelHint": "Das Modell, das aus deinem Diktat Text macht. stella speichert das Audio nicht.",
+    "dictationModelsUnavailable": "Die Modelle konnten nicht geladen werden. Diktieren nutzt das gewählte Modell oder das Standardmodell, wenn der Server das gewählte nicht mehr anbietet.",
+    "dictationCleanup": "Mit KI überarbeiten",
+    "dictationCleanupHint": "Behebt Erkennungsfehler und gesprochene Formatierung wie „neue Zeile“. Nur der Text, nicht das Audio, geht über stella an den KI-Anbieter deiner Organisation; stella speichert ihn nicht."
+  },
+  "signedFile": {
+    "layer": "Signaturebene {number, number}",
+    "noReadableContent": "Für die Vorschau sind keine lesbaren Inhalte verfügbar.",
+    "unknownSigner": "Unbekannte unterzeichnende Person",
+    "unreadable": "Die signierte Datei konnte nicht gelesen werden.",
+    "unverified": "Die Signaturen wurden nicht geprüft."
+  },
+  "structuredDocument": {
+    "noReadableContent": "Für die Vorschau ist kein lesbarer Text verfügbar.",
+    "textOnly": "Textvorschau ohne Seitenlayout und Bilder."
   },
   "header": {
     "search": "Suchen"

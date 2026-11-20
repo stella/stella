@@ -1,5 +1,4 @@
 import { useState } from "react";
-import type { PropsWithChildren } from "react";
 
 import {
   useMutation,
@@ -19,8 +18,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@stll/ui/dialog";
-import { Frame, FrameHeader, FramePanel, FrameTitle } from "@stll/ui/frame";
-import { Skeleton } from "@stll/ui/skeleton";
+import { FramePanel } from "@stll/ui/frame";
 import {
   Table,
   TableBody,
@@ -42,6 +40,10 @@ import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { toAuthClientError } from "@/lib/errors/auth";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { formatFullTimestamp, formatRelativeTime } from "@/lib/relative-time";
+import {
+  SessionsCardFrame,
+  SessionsCardPending,
+} from "@/routes/_protected.settings/-components/account/sessions-card.pending";
 
 const MISSING_VALUE = "-";
 
@@ -54,37 +56,10 @@ export const SessionsCard = () => (
   <QuerySuspenseBoundary
     area="account-sessions"
     errorFallback={({ reset }) => <SessionsCardError onRetry={reset} />}
-    suspenseFallback={<SessionsCardSkeleton />}
+    suspenseFallback={<SessionsCardPending />}
   >
     <SessionsCardContent />
   </QuerySuspenseBoundary>
-);
-
-const SessionsCardFrame = ({ children }: PropsWithChildren) => {
-  const t = useTranslations();
-  return (
-    <Frame>
-      <FrameHeader>
-        <FrameTitle>{t("common.sessions")}</FrameTitle>
-      </FrameHeader>
-      {children}
-    </Frame>
-  );
-};
-
-const SessionsCardSkeleton = () => (
-  <SessionsCardFrame>
-    <FramePanel className="flex flex-col gap-3 p-4">
-      {["a", "b", "c"].map((key) => (
-        <div className="flex items-center justify-between gap-4" key={key}>
-          <Skeleton className="h-4 w-40" />
-          <Skeleton className="h-4 w-24" />
-          <Skeleton className="h-4 w-20" />
-          <Skeleton className="h-5 w-16 rounded-md" />
-        </div>
-      ))}
-    </FramePanel>
-  </SessionsCardFrame>
 );
 
 const SessionsCardError = ({ onRetry }: { onRetry: () => void }) => {
@@ -114,10 +89,7 @@ const SessionsCardContent = () => {
   const hasOtherSessions = sessions.some((s) => s.id !== currentSessionId);
 
   return (
-    <Frame>
-      <FrameHeader>
-        <FrameTitle>{t("common.sessions")}</FrameTitle>
-      </FrameHeader>
+    <SessionsCardFrame>
       {/* `p-0`: FramePanel pads by 5 for prose-style panels, which would inset
           the table. The rows carry their own cell padding, so the panel only
           needs to supply the card surface. */}
@@ -200,7 +172,7 @@ const SessionsCardContent = () => {
           </TableBody>
         </Table>
       </FramePanel>
-    </Frame>
+    </SessionsCardFrame>
   );
 };
 

@@ -114,6 +114,9 @@ const STATUTE_PROVISIONS_FIXTURE = v.parse(READ_STATUTE_PROVISIONS_PROJECTION, {
       truncated: false,
       versionValidFrom: "2020-01-01",
       versionValidTo: "2020-12-31",
+      expressionKind: "consolidation",
+      windowDisposition: "effective",
+      windowDispositionBasis: null,
     },
     {
       eli: "cz:act:2012:89",

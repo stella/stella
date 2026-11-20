@@ -7,12 +7,14 @@ import {
   deleteKeptTranscript,
   elevenLabsServes,
   normalizeElevenLabsResponse,
+  settleKeptTranscript,
   transcribeWithElevenLabs,
 } from "@/api/handlers/dictation/elevenlabs-provider";
 import {
   deleteElevenLabsTranscript,
   fetchElevenLabsTranscription,
 } from "@/api/lib/chat/provider-data-policy";
+import { deleteKeptTranscriptAt } from "@/api/lib/dictation/kept-transcript-delete";
 import { NO_ORGANIZATION_MODEL_DISPATCH } from "@/api/lib/rate-limit/model-dispatch-admission";
 
 const MODEL = "elevenlabs-direct/scribe-v3";
@@ -217,19 +219,30 @@ describe("ElevenLabs kept transcripts", () => {
   const transcribeKept = async (
     deployment: typeof KEPT | typeof DEPLOYMENT,
     answer: unknown,
+    { recordFails = false }: { recordFails?: boolean } = {},
   ) => {
+    const recordedIds: string[] = [];
     const deleted: string[] = [];
+    const deletedRecorded: boolean[] = [];
     const result = await transcribeWithElevenLabs({
       audio: audio(),
       modelId: MODEL,
       deployment,
       scope: scope(),
       fetch: async () => Response.json(answer),
-      deleteKept: ({ transcriptionId }) => {
+      recordKept: async ({ environment, transcriptionId }) => {
+        if (recordFails) {
+          throw new TypeError("fixture store unavailable");
+        }
+        recordedIds.push(`${environment}:${transcriptionId}`);
+        await Promise.resolve();
+      },
+      deleteKept: ({ transcriptionId, recorded }) => {
         deleted.push(transcriptionId);
+        deletedRecorded.push(recorded);
       },
     });
-    return { result, deleted };
+    return { result, deleted, recordedIds, deletedRecorded };
   };
 
   test("without zero retention the transcript ElevenLabs kept is deleted, even when its answer is unusable", async () => {
@@ -238,7 +251,9 @@ describe("ElevenLabs kept transcripts", () => {
       transcription_id: "mkIIQ7dqfmic6Mpb0fWR",
     });
     expect(usable.result.isOk()).toBe(true);
+    expect(usable.recordedIds).toEqual(["default:mkIIQ7dqfmic6Mpb0fWR"]);
     expect(usable.deleted).toEqual(["mkIIQ7dqfmic6Mpb0fWR"]);
+    expect(usable.deletedRecorded).toEqual([true]);
 
     const unusable = await transcribeKept(KEPT, {
       transcription_id: "kept-but-unusable",
@@ -247,14 +262,38 @@ describe("ElevenLabs kept transcripts", () => {
     expect(unusable.deleted).toEqual(["kept-but-unusable"]);
 
     const unnamed = await transcribeKept(KEPT, { text: "Dobrý den" });
+    expect(unnamed.recordedIds).toEqual([]);
     expect(unnamed.deleted).toEqual([]);
   });
 
-  test("with zero retention nothing is kept, so nothing is deleted", async () => {
-    const { deleted } = await transcribeKept(DEPLOYMENT, {
+  test("a transcript the store could not record is still deleted by the request", async () => {
+    const { result, recordedIds, deleted, deletedRecorded } =
+      await transcribeKept(
+        KEPT,
+        { text: "Dobrý den", transcription_id: "mkIIQ7dqfmic6Mpb0fWR" },
+        { recordFails: true },
+      );
+    expect(result.isOk()).toBe(true);
+    expect(recordedIds).toEqual([]);
+    expect(deleted).toEqual(["mkIIQ7dqfmic6Mpb0fWR"]);
+    expect(deletedRecorded).toEqual([false]);
+  });
+
+  test("an id ElevenLabs would not issue is not recorded", async () => {
+    const { recordedIds, deletedRecorded } = await transcribeKept(KEPT, {
+      text: "Dobrý den",
+      transcription_id: "../escape",
+    });
+    expect(recordedIds).toEqual([]);
+    expect(deletedRecorded).toEqual([false]);
+  });
+
+  test("with zero retention nothing is kept, so nothing is recorded or deleted", async () => {
+    const { deleted, recordedIds } = await transcribeKept(DEPLOYMENT, {
       text: "Dobrý den",
       transcription_id: "mkIIQ7dqfmic6Mpb0fWR",
     });
+    expect(recordedIds).toEqual([]);
     expect(deleted).toEqual([]);
   });
 
@@ -263,15 +302,22 @@ describe("ElevenLabs kept transcripts", () => {
       url: string;
       init: Parameters<typeof deleteElevenLabsTranscript>[1];
     }>();
+    const forgotten = Promise.withResolvers<string>();
     deleteKeptTranscript({
       deployment: { ...KEPT, environment: "eu" },
       transcriptionId: "mkIIQ7dqfmic6Mpb0fWR",
+      recorded: true,
       fetch: async (url, init) => {
         sent.resolve({ url: String(url), init });
         return new Response(null, { status: 200 });
       },
+      forget: async ({ transcriptionId }) => {
+        forgotten.resolve(transcriptionId);
+        await Promise.resolve();
+      },
     });
     const { url, init } = await sent.promise;
+    expect(await forgotten.promise).toBe("mkIIQ7dqfmic6Mpb0fWR");
     expect(url).toBe(
       "https://api.eu.residency.elevenlabs.io/v1/speech-to-text/transcripts/mkIIQ7dqfmic6Mpb0fWR",
     );
@@ -279,6 +325,38 @@ describe("ElevenLabs kept transcripts", () => {
     expect(new Headers(init.headers).get("xi-api-key")).toBe(
       "elevenlabs-fixture",
     );
+  });
+
+  test("a refused delete leaves the recorded transcript for the deletion task, and one already gone is dropped", async () => {
+    const forgotten: string[] = [];
+    const settle = async (status: number) =>
+      await settleKeptTranscript({
+        deployment: KEPT,
+        transcriptionId: "mkIIQ7dqfmic6Mpb0fWR",
+        recorded: true,
+        fetch: async () =>
+          await Promise.resolve(new Response(null, { status })),
+        forget: async ({ transcriptionId }) => {
+          forgotten.push(transcriptionId);
+          await Promise.resolve();
+        },
+      });
+    expect(await settle(503)).toEqual({ type: "failed", code: "http_503" });
+    expect(forgotten).toEqual([]);
+    expect(await settle(404)).toEqual({ type: "deleted" });
+    expect(forgotten).toEqual(["mkIIQ7dqfmic6Mpb0fWR"]);
+  });
+
+  test("a key never deletes in another environment", async () => {
+    const outcome = await deleteKeptTranscriptAt({
+      deployment: KEPT,
+      environment: "eu",
+      transcriptionId: "mkIIQ7dqfmic6Mpb0fWR",
+      fetch: async () => {
+        throw new TypeError("no request is expected");
+      },
+    });
+    expect(outcome).toEqual({ type: "failed", code: "environment_changed" });
   });
 
   test("deletes go only to a transcript URL of a known environment", async () => {

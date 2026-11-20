@@ -79,6 +79,22 @@ const ALWAYS_ON_ROUTE_PREFIXES: ReadonlyMap<string, string> = new Map([
     "The caller's private saved searches support search on every deployment",
   ],
   [
+    "/v1/files/:workspaceId/structured-document",
+    "Court document previews use matter file read permissions on every deployment",
+  ],
+  [
+    "/v1/files/:workspaceId/asic",
+    "ASiC previews use matter file read permissions on every deployment",
+  ],
+  [
+    "/v1/files/:workspaceId/cades",
+    "Signed document previews use the matter file read permission on every deployment",
+  ],
+  [
+    "/v1/files/:workspaceId/data-box",
+    "Data-box previews use the matter file read permission on every deployment",
+  ],
+  [
     "/v1/organization-settings/correspondence/data-boxes",
     "Organization data-box settings support matter correspondence on every deployment",
   ],
@@ -103,8 +119,20 @@ const ALWAYS_ON_ROUTE_PREFIXES: ReadonlyMap<string, string> = new Map([
     "Storing a reviewed skill draft is a private skill create under the skill create permission on every deployment",
   ],
   [
+    "/v1/skills/:skillId/export",
+    "Downloading a skill the caller may read as an Agent Skills archive is available on every deployment",
+  ],
+  [
     "/v1/dictation/transcribe",
     "Authenticated dictation is available on every deployment and enforces its dictation kill switch, provider availability and usage admission",
+  ],
+  [
+    "/v1/dictation/models",
+    "Authenticated dictation lists the region's transcription models on every deployment, and a model whose provider keeps the audio only to a member whose feature decision grants it",
+  ],
+  [
+    "/v1/dictation/cleanup",
+    "Authenticated dictation cleanup is available on every deployment and enforces its dictation kill switch, model availability and usage admission",
   ],
   [
     "/v1/organizations/audit-export",
@@ -132,7 +160,7 @@ const ALWAYS_ON_ROUTE_PREFIXES: ReadonlyMap<string, string> = new Map([
   ],
   [
     "/v1/desktop/matters",
-    "Desktop billing routes enforce authenticated activity and billing feature decisions on every deployment",
+    "Desktop matter search enforces the caller's activity or dictation feature decision and matter access on every deployment",
   ],
   [
     "/v1/chat/runs/active",
@@ -199,6 +227,10 @@ const ALWAYS_ON_ROUTE_PREFIXES: ReadonlyMap<string, string> = new Map([
     "Personal search history is available on every deployment",
   ],
   [
+    "/v1/file-content",
+    "Redeems a short-lived file grant that a gated or ungated file route issued; the grant carries the issuing decision",
+  ],
+  [
     "/v1/me/data-exports",
     "A personal data export is available to every account on every deployment",
   ],
@@ -240,8 +272,16 @@ const ALWAYS_ON_ROUTE_PREFIXES: ReadonlyMap<string, string> = new Map([
     "Desktop dictation lists the region's transcription models only for a caller whose cloud dictation feature decision is enabled, on every deployment",
   ],
   [
+    "/v1/desktop/dictation/recording-cleanup",
+    "Desktop recording cleanup enforces the caller's dictation feature decision, its dictation kill switch, model availability and usage admission on every deployment",
+  ],
+  [
     "/v1/desktop/dictation/transcribe",
     "Desktop dictation transcription enforces the caller's cloud dictation feature decision, its dictation kill switch, provider availability and usage admission on every deployment",
+  ],
+  [
+    "/v1/desktop/dictation/transcripts",
+    "Filing a transcribed recording enforces the caller's dictation feature decision, matter access and document create permission on every deployment",
   ],
   [
     "/v1/files/:workspaceId/marked",

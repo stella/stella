@@ -57,6 +57,7 @@ export const SHAREPOINT_OAUTH_CALLBACK_REASONS = [
   "not-configured",
   "token-exchange",
   "invalid-secret",
+  "capability-not-granted",
   "unexpected",
 ] as const;
 

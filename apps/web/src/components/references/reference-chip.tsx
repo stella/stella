@@ -1,10 +1,11 @@
 import type { ReactNode } from "react";
 import { createContext, Fragment, isValidElement, use } from "react";
 
-import { skipToken, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useRouter } from "@tanstack/react-router";
 import { panic } from "better-result";
 
+import { RESOURCE_TYPE } from "@stll/api-contract";
 import { referenceFromHref } from "@stll/api-contract/chat-reference-href";
 import type { ChatReference } from "@stll/api-contract/chat-reference-href";
 import {
@@ -44,6 +45,7 @@ import { detached } from "@/lib/detached";
 import { organizationOptions } from "@/lib/organization/queries";
 import { queryView } from "@/lib/query-view.logic";
 import { useQueryViewError } from "@/lib/use-query-view";
+import { resourceQueryOptions } from "@/lib/workspace-realtime";
 import { workspacesNavigationOptions } from "@/lib/workspaces/queries";
 import { entityOptions } from "@/lib/workspaces/queries/entities";
 import { navigateToWorkspaceFolder } from "@/lib/workspaces/reveal-navigation";
@@ -104,22 +106,44 @@ const useReferenceFacts = (reference: ChatReference): ReferenceLiveFacts => {
       : null;
   const matterId = referenceMatterId(reference);
   const userId = reference.type === "user" ? reference.userId : null;
+  const owner = {
+    organizationId: organizationId ?? "",
+    userId: user?.id ?? SIGNED_OUT_QUERY_OWNER,
+  };
 
   // staleTime Infinity: one read per entity; later chips and the click
   // handler share it, so a thread full of mentions stays cheap.
-  const entityQuery = useQuery({
-    ...(entity === null
-      ? {
-          queryKey: ["chat-reference-entity-disabled"] as const,
-          queryFn: skipToken,
-        }
-      : entityOptions(entity.matterId, entity.entityId)),
-    enabled: entity !== null,
-    staleTime: Number.POSITIVE_INFINITY,
-  });
+  const entityQuery = useQuery(
+    resourceQueryOptions(
+      {
+        // Without a matter there is nothing to read: the read stays off.
+        ...entityOptions(entity?.matterId ?? "", entity?.entityId ?? ""),
+        enabled: entity !== null,
+        staleTime: Number.POSITIVE_INFINITY,
+      },
+      {
+        resources: [RESOURCE_TYPE.ENTITY],
+        // A disabled read names no matter and is never refreshed.
+        scope: { type: "workspace", workspaceId: entity?.matterId ?? "" },
+      },
+    ),
+  );
+  // The hint is what the transcript carried about the entity, seeded into
+  // the cache as messages arrive; an entity write marks it stale with the
+  // entity read beside it.
   const hintQuery = useQuery(
-    referenceHintOptions(
-      reference.type === "entity" ? reference.entityId : null,
+    resourceQueryOptions(
+      referenceHintOptions(
+        reference.type === "entity" ? reference.entityId : null,
+      ),
+      {
+        resources: [RESOURCE_TYPE.ENTITY],
+        scope: {
+          type: "organization",
+          organizationId: owner.organizationId,
+          userId: owner.userId,
+        },
+      },
     ),
   );
   const hintQueryView = queryView(hintQuery);
@@ -127,9 +151,13 @@ const useReferenceFacts = (reference: ChatReference): ReferenceLiveFacts => {
   // The navigation list is already in flight on every chat surface, so the
   // matter colour is a cache read rather than a fetch.
   const mattersQuery = useQuery({
-    ...workspacesNavigationOptions({
-      organizationId: organizationId ?? "",
-      userId: user?.id ?? SIGNED_OUT_QUERY_OWNER,
+    ...resourceQueryOptions(workspacesNavigationOptions(owner), {
+      resources: [RESOURCE_TYPE.WORKSPACE],
+      scope: {
+        type: "organization",
+        organizationId: owner.organizationId,
+        userId: owner.userId,
+      },
     }),
     enabled: matterId !== null && organizationId !== undefined,
   });
@@ -304,6 +332,28 @@ const ReferenceChipView = ({
 };
 
 /**
+ * Whether the viewer may open a document or matter reference now, read from
+ * the same authorized reads a chip's facts come from: the entity read of its
+ * matter, and the viewer's own matter list. For a list that names items the
+ * viewer may since have lost (what a chat step found), which offers only
+ * what they can still open and names the rest by the text they already saw.
+ */
+export const useReferenceAvailability = (
+  reference: Extract<ChatReference, { type: "entity" | "matter" }>,
+): LiveFact<unknown>["status"] => {
+  const facts = useReferenceFacts(reference);
+  switch (reference.type) {
+    case "entity":
+      return facts.entity.status;
+    case "matter":
+      return facts.matter.status;
+    default:
+      reference satisfies never;
+      return panic(`Unhandled reference: ${String(reference)}`);
+  }
+};
+
+/**
  * What clicking a reference does, for a control that lists references in its
  * own shell (the open chat's file list) and must open them as a chip does.
  */
@@ -445,6 +495,22 @@ export const ReferenceChip = ({
   ) : (
     <StaticReferenceChip {...props} />
   );
+
+/**
+ * Every matter the reader can open, as one chip: a chat that drew on all of
+ * them says so instead of naming each. It is a scope, not a reference to
+ * open, so it never takes a click. The caller passes the translated label.
+ */
+export const AllMattersChip = ({ label }: { label: string }) => (
+  <InlinePill leadingIcon={<AllMattersIcon />} truncate>
+    <bdi>{label}</bdi>
+  </InlinePill>
+);
+
+/** The "All matters" glyph, for a list of references in its own shell. */
+export const AllMattersIcon = () => (
+  <MatterIcon className={GLYPH_CLASS} variant="all" />
+);
 
 /**
  * A reference's glyph alone, by the same rule as the chip, for a control that

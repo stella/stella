@@ -158,6 +158,7 @@ export const NO_NATIVE_UI_REGISTRY = {
     nativeRuleId("menu"),
     "a context menu is a menu opened by the pointer",
   ),
+  "control-face": noNative("unavailable faces of controls for loading views"),
   "control-size": notComponent("control size tokens"),
   "copy-button": noNative(
     "a Button with clipboard feedback; its markup is the button rule's",
@@ -196,6 +197,9 @@ export const NO_NATIVE_UI_REGISTRY = {
   "details-grid": native("DetailsGrid from @stll/ui/details-grid", {
     elements: ["dl", "dt", "dd"],
   }),
+  "details-list-face": noNative(
+    "the fixed horizontal detail list and row used during loading",
+  ),
   dialog: native("Dialog from @stll/ui/dialog", {
     elements: ["dialog"],
     roles: ["dialog"],
@@ -255,18 +259,26 @@ export const NO_NATIVE_UI_REGISTRY = {
   "input-otp": native("InputOTP from @stll/ui/input-otp", {
     attributes: [{ name: "autoComplete", values: ["one-time-code"] }],
   }),
+  "input-otp-face": noNative("presentational one-time code group and slots"),
   inspector: noNative("the inspector panel layout"),
   kanban: noNative("a board layout"),
+  "kanban-card-shell": noNative("a board card's frame"),
+  "kanban-column-header-shell": noNative(
+    "a board column header's row, without its cut text",
+  ),
+  "kanban-grouping": noNative("how a board resolves its columns"),
   kbd: noNative(
     "key caps; a rule for raw <kbd> follows once the existing key hints " +
       "render through Kbd, so it lands without a backlog",
   ),
   label: native("Label from @stll/ui/label", { elements: ["label"] }),
   landing: noNative("landing page sections"),
+  "landing-shell": noNative("the landing layout and its pending pieces"),
   "layout-tokens": notComponent("inspector layout tokens"),
   list: noNative(
     "grouped settings rows; a plain <ul> or <ol> is ordinary markup",
   ),
+  "list-shell": noNative("the grouped list's shell and its pending rows"),
   loader: owned(LOADER_RULE, "hand-rolled spinners are reported there"),
   "matter-colors": notComponent("matter colour tokens"),
   "matter-icon": owned(
@@ -292,6 +304,9 @@ export const NO_NATIVE_UI_REGISTRY = {
     inputTypes: ["number"],
   }),
   "option-color": notComponent("option colour tokens"),
+  "outcome-screen-face": noNative(
+    "the shared first-paint layout for a callback result",
+  ),
   "outcome-screen": noNative(
     "the screen a finished flow ends on; a hand-built one is " +
       "no-adhoc-outcome-screen's",
@@ -398,6 +413,10 @@ export const NO_NATIVE_UI_REGISTRY = {
     ],
   }),
   "table-chart": noNative("a chart drawn from table data"),
+  "table-shell": owned(
+    nativeRuleId("table"),
+    "native table markup is reported by the table rule",
+  ),
   tabs: native("Tabs from @stll/ui/tabs", {
     roles: ["tablist", "tab", "tabpanel"],
   }),
@@ -450,6 +469,9 @@ export const NO_NATIVE_UI_REGISTRY = {
     nativeRuleId("tooltip"),
     "a title on truncated text is reported by the tooltip rule",
   ),
+  "truncated-text-face": noNative(
+    "cut text's box without its hint, for loading views",
+  ),
   "typed-character": notComponent("keystroke classification"),
   "use-contained-handler": notComponent("a React hook"),
   "use-content-dir": notComponent("a React hook"),
@@ -460,6 +482,9 @@ export const NO_NATIVE_UI_REGISTRY = {
   utils: notComponent("class name helpers"),
   "view-toolbar": noNative(
     "a view's filter row; ARIA toolbars have no general @stll/ui primitive",
+  ),
+  "view-toolbar-shell": noNative(
+    "the view chrome's rows without their controls, for loading views",
   ),
   week: notComponent("week arithmetic"),
   "workspace-shell": noNative("the workspace page layout"),
@@ -561,6 +586,9 @@ export const NO_NATIVE_UI_REACT_NATIVE = {
   "context-menu": webOnly(
     "a phone opens a context menu through the platform (expo-router Link.Menu)",
   ),
+  "control-face": webOnly(
+    "faces for the web's server-painted loading views; the app has none",
+  ),
   "copy-button": webOnly(
     "a Button with clipboard feedback the app does not offer yet",
   ),
@@ -579,6 +607,9 @@ export const NO_NATIVE_UI_REACT_NATIVE = {
   ),
   "destructive-confirm-dialog": webOnly(
     "a phone confirms through the platform's own alert",
+  ),
+  "details-list-face": webOnly(
+    "the phone presents account details in native rows",
   ),
   "details-grid": webOnly(
     "a phone stacks labelled values as rows, not a definition grid",
@@ -626,17 +657,25 @@ export const NO_NATIVE_UI_REACT_NATIVE = {
   "input-otp": webOnly(
     "the app signs in through the browser, not a code field",
   ),
+  "input-otp-face": webOnly("the app opens the web sign-in flow in a browser"),
   inspector: webOnly(
     "the web's docked inspector; a phone shows details on their own screen",
   ),
   kanban: webOnly("a phone has no room for a board"),
+  "kanban-card-shell": webOnly("a phone has no room for a board"),
+  "kanban-column-header-shell": webOnly("a phone has no room for a board"),
+  "kanban-grouping": webOnly("a phone has no room for a board"),
   kbd: webOnly("a phone has no keyboard shortcuts to show"),
   label: webOnly(
     "React Native has no label element; Text names the control above it",
   ),
   landing: webOnly("marketing sections for the website"),
+  "landing-shell": webOnly("the landing layout of the web home screens"),
   list: webOnly(
     'the app\'s lists are FlatList rows of Button size="row" divided by Separator',
+  ),
+  "list-shell": webOnly(
+    "the web list's shell for loading views; the app's lists are FlatList rows",
   ),
   loader: renderer("Loader from @stll/ui/loader", ["ActivityIndicator"]),
   "matter-icon": renderer("MatterIcon from @stll/ui/matter-icon", []),
@@ -648,6 +687,9 @@ export const NO_NATIVE_UI_REACT_NATIVE = {
     'React Native truncates a line natively (numberOfLines with ellipsizeMode "middle")',
   ),
   "number-input": webOnly("the app enters no numbers yet"),
+  "outcome-screen-face": webOnly(
+    "the browser renders the callback progress and result",
+  ),
   "outcome-screen": webOnly(
     "the web's end-of-flow screen; no app flow ends on one yet",
   ),
@@ -702,6 +744,7 @@ export const NO_NATIVE_UI_REACT_NATIVE = {
   switch: renderer("Switch from @stll/ui/switch", ["Switch"]),
   table: webOnly("a phone lists records in rows, not a table"),
   "table-chart": webOnly("the app draws no charts"),
+  "table-shell": webOnly("a phone lists records in rows, not a table"),
   tabs: webOnly("a phone switches sections with the platform's tab bar"),
   text: renderer("Text from @stll/ui/text", ["Text"]),
   "text-mark": webOnly("the app highlights no text"),
@@ -725,8 +768,14 @@ export const NO_NATIVE_UI_REACT_NATIVE = {
   "truncated-text": webOnly(
     "reveals the full text in a hover tooltip; a phone has no hover and caps lines with Text's numberOfLines",
   ),
+  "truncated-text-face": webOnly(
+    "the web's cut-text box for loading views; a phone caps lines with Text's numberOfLines",
+  ),
   "view-toolbar": webOnly(
     "the web's view filter row; the app filters from the header",
+  ),
+  "view-toolbar-shell": webOnly(
+    "the web view chrome's rows for loading views; the app filters from the header",
   ),
   "workspace-shell": webOnly(
     "the web's page layout; screens lay out with the platform's navigation",

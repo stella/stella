@@ -139,6 +139,13 @@ const UNPROJECTED_AGENT_SKILL_RESOURCE_COLUMNS = [
   "skillId",
   // Written together with the skill; the skill's own timestamps date it.
   "createdAt",
+  // The stored original's object and digest stay server-side: the export
+  // hands back its bytes, and a binary file's `content` already says what
+  // it is.
+  "originalMediaType",
+  "originalS3Key",
+  "originalSha256",
+  "originalSizeBytes",
 ] as const satisfies readonly (keyof AgentSkillResourceRow)[];
 
 type MissingProjectedAgentSkillResourceColumn = UnprojectedColumns<

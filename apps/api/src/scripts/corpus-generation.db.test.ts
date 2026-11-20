@@ -20,6 +20,8 @@ import {
 import { eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
+import { rejectionOf } from "@stll/property-testing/rejection";
+
 import { createScriptBackfillRuntime } from "@/api/db/backfill-runtime";
 import type { Transaction } from "@/api/db/root";
 import {
@@ -240,6 +242,7 @@ const run = async ({
         }),
       // A held page stops the run at once instead of waiting.
       maxWaitMs: 0,
+      maxLockWaitMs: 0,
     },
     searchEndpoint: () => searchEndpoint,
     retireEngine: () => retireEngine,
@@ -1106,5 +1109,77 @@ describe("retire", () => {
     expect(applied.code).toBe(15);
     expect(await statusOf("case_law_v6")).toBe("retired");
     expect(await historyOf("case_law_v6")).toEqual({ states: 0, intents: 0 });
+  });
+  test("--defer-cleanup retires and deletes the indexes but leaves the history, which takes no writes, for a later run", async () => {
+    await registerRow("case_law_v7", "serving");
+    await registerRow("case_law_v6", "building");
+    await seedConvergedProjection("case_law_v7");
+    await seedConvergedProjection("case_law_v6");
+    const engine = retireEngineWith(["case_law_v6_cs_sk", "case_law_v7_cs_sk"]);
+
+    const report = await run({
+      args: caseLaw("retire", "case_law_v6", "--defer-cleanup"),
+      retireEngine: engine,
+    });
+    expect(report.code).toBe(0);
+    expect(report.out).toContain(
+      "plan: leave its projection history for a later run of retire (--defer-cleanup)",
+    );
+    expect(await statusOf("case_law_v6")).toBe("building");
+
+    const deferred = await run({
+      args: caseLaw("retire", "case_law_v6", "--defer-cleanup", ...APPLY),
+      retireEngine: engine,
+    });
+    expect(deferred.err).toBe("");
+    expect(deferred.code).toBe(0);
+    expect(deferred.out).toContain(
+      "Deferred: history cleanup of case_law/case_law_v6 is left for a later run",
+    );
+    expect(await statusOf("case_law_v6")).toBe("retired");
+    expect([...engine.indexes]).toEqual(["case_law_v7_cs_sk"]);
+    expect(await historyOf("case_law_v6")).toEqual({ states: 1, intents: 1 });
+    // The history it left takes no write.
+    expect(
+      await rejectionOf(
+        db
+          .update(corpusIndexProjectionStates)
+          .set({ retryNotBefore: NOW })
+          .where(eq(corpusIndexProjectionStates.generation, "case_law_v6")),
+      ),
+    ).toMatchObject({
+      cause: expect.objectContaining({
+        message: expect.stringContaining(
+          "case_law/case_law_v6 is retired and takes no projection writes",
+        ),
+      }),
+    });
+    expect(await retireAuditCounts()).toEqual([
+      { retired: 1, deletedIndexes: 0, deletedStates: 0, deletedIntents: 0 },
+      { retired: 0, deletedIndexes: 1, deletedStates: 0, deletedIntents: 0 },
+    ]);
+
+    const cleaned = await run({
+      args: caseLaw("retire", "case_law_v6", ...APPLY),
+      retireEngine: engine,
+    });
+    expect(cleaned.code).toBe(0);
+    expect(cleaned.out).toContain("checked: already retired at");
+    expect(await historyOf("case_law_v6")).toEqual({ states: 0, intents: 0 });
+    expect(await historyOf("case_law_v7")).toEqual({ states: 1, intents: 1 });
+    expect((await retireAuditCounts()).at(-1)).toEqual({
+      retired: 0,
+      deletedIndexes: 0,
+      deletedStates: 1,
+      deletedIntents: 1,
+    });
+  });
+
+  test("--defer-cleanup belongs to retire", async () => {
+    const refused = await run({
+      args: caseLaw("seed", "case_law_v6", "--defer-cleanup"),
+    });
+    expect(refused.code).toBe(1);
+    expect(refused.err).toContain("--defer-cleanup belongs to retire.");
   });
 });

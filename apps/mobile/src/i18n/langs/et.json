@@ -1,4 +1,7 @@
 {
+  "common": {
+    "previewTruncated": "Täistekst ei ole selles eelvaates saadaval."
+  },
   "tabs": {
     "chat": "Vestlus",
     "close": "Sulge",
@@ -127,6 +130,8 @@
       "boe_search_legislation": "BOE seaduste otsing",
       "borme_get_summary": "BORME päevane kokkuvõte",
       "business_registry_lookup": "Äriregistrist otsimine",
+      "calendar_free_busy": "Vaba aja kontrollimine kalendris",
+      "calendar_list_events": "Kalendrisündmuste lugemine",
       "command_execution": "Käsu käivitamine",
       "compare_versions": "Versioonide võrdlemine",
       "configure_template_fields": "Seadista malli väljad",
@@ -143,10 +148,10 @@
       "delete_reader_annotation": "Kustuta esiletõst või kommentaar",
       "delete_task": "Kustuta ülesanne",
       "delete_time_entry": "Kustuta ajakirje",
-      "describe-stella-api": "Andmepäringu ettevalmistamine",
-      "describe-stella-function": "Andmepäringu ettevalmistamine",
+      "describe-stella-api": "Allikate valimine",
+      "describe-stella-function": "Allikate valimine",
       "describe_template": "Malli väljade lugemine",
-      "discover_tools": "Andmepäringu ettevalmistamine",
+      "discover_tools": "Allikate valimine",
       "execute-typescript": "Toimiku andmete lugemine",
       "execute_typescript": "Toimiku andmete lugemine",
       "expand-chat-history": "Vestlusajaloo lugemine",
@@ -186,6 +191,7 @@
       "save_document": "Salvesta dokument",
       "save_matter": "Salvesta toimik",
       "save_playbook": "Salvesta playbook",
+      "save_skill_package": "Salvesta oskus",
       "save_task": "Salvesta ülesanne",
       "save_template": "Salvesta mall",
       "save_time_entry": "Salvesta ajakirje",
@@ -208,7 +214,13 @@
       "update_reader_annotation": "Muuda esiletõstu või kommentaari",
       "use-browser": "Teie brauseri kasutamine",
       "use_connector_secret": "Konnektori mandaadi kasutamine",
+      "validate_skill_package": "Kontrolli oskust",
       "web_search": "Veebist otsimine"
+    },
+    "toolResearch": {
+      "caseLaw": "Otsing kohtupraktikast",
+      "legislation": "Õigusaktide lugemine",
+      "legislationAndCaseLaw": "Otsing õigusaktidest ja kohtupraktikast"
     },
     "localRun": {
       "title": {
@@ -264,9 +276,18 @@
       "sourcesChecked": "{count, plural, one {# kontrollitud allikas} other {# kontrollitud allikat}}",
       "documentEdits": "{count, plural, one {# dokumendi muudatus} other {# dokumendi muudatust}}",
       "changesSaved": "{count, plural, one {# salvestatud muudatus} other {# salvestatud muudatust}}",
-      "analyses": "{count, plural, one {# analüüs} other {# analüüsi}}"
+      "searchedLegislation": "Õigusaktidest otsitud",
+      "searchedCaseLaw": "Kohtupraktikast otsitud",
+      "searchedLegislationAndCaseLaw": "Õigusaktidest ja kohtupraktikast otsitud",
+      "readDocument": "Dokument loetud",
+      "readDocuments": "Dokumendid loetud",
+      "searchedMatters": "Toimikud läbi vaadatud",
+      "checkedRegisters": "Avalikud registrid kontrollitud",
+      "searchedWeb": "Veebist otsitud",
+      "searchedChats": "Vestlusajaloost otsitud"
     },
     "stepCount": "{count, plural, one {# samm} other {# sammu}}",
+    "lookupCount": "{count, plural, one {# päring} other {# päringut}}",
     "reasoning": "Arutlus",
     "historyTrimmed": "Varasemaid sõnumeid ei õnnestunud kokku võtta, seega arvestab see vastus ainult vestluse viimast osa.",
     "failure": {
@@ -524,6 +545,7 @@
     "title": "Dokument",
     "failedTitle": "Dokumenti ei õnnestunud avada",
     "failure": {
+      "dataBoxUnreadable": "Faili ei saanud lugeda andmepostkasti sõnumi ega kättetoimetamistõendina.",
       "offline": "Olete võrguühenduseta. Looge internetiühendus ja proovige uuesti.",
       "noFile": "Sellel dokumendil pole veel faili.",
       "failed": "Avamisel läks midagi valesti. Proovige hetke pärast uuesti.",
@@ -531,6 +553,7 @@
       "android": "Androidi rakenduses ei saa dokumente veel avada."
     },
     "retry": "Proovi uuesti",
+    "openOriginal": "Ava originaal",
     "preview": "Ava eelvaade",
     "previewDescription": "See fail avaneb süsteemi eelvaates.",
     "unrendered": "Seda dokumenti ei saa siin kuvada, kuid süsteemi eelvaade võib selle avada.",
@@ -588,7 +611,28 @@
     "signOutFailed": "Väljalogimist ei saanud lõpule viia. Proovige uuesti.",
     "lockScreenTitle": "Lukustuskuva",
     "timerDetails": "Taimeri üksikasjad",
-    "timerDetailsHint": "Kui taimer muutub teises seadmes, toob Apple'i teavitusteenus selle kirjelduse ja asja lukustuskuvale. Väljalülitatuna näidatakse ainult aega, kuni rakenduse avate."
+    "timerDetailsHint": "Kui taimer muutub teises seadmes, toob Apple'i teavitusteenus selle kirjelduse ja asja lukustuskuvale. Väljalülitatuna näidatakse ainult aega, kuni rakenduse avate.",
+    "dictationTitle": "Dikteerimine",
+    "dictationModelDefault": "Vaikimisi",
+    "dictationModelDefaultNamed": "Vaikimisi ({model})",
+    "dictationModelOutsideRegion": "Väljaspool teie piirkonda",
+    "dictationModelRetainsData": "Säilitab teie heli",
+    "dictationModelRetainsWarning": "See mudel töötab kontol, millel puudub andmete nullsäilitus. {provider} talletab kõige dikteeritu heli ja transkriptsiooni oma tingimustel, väljaspool stella kontrolli. Ärge dikteerige sellega konfidentsiaalset teavet ega kliendiandmeid.",
+    "dictationModelHint": "Mudel, mis muudab dikteeritu tekstiks. stella heli ei talleta.",
+    "dictationModelsUnavailable": "Mudeleid ei õnnestunud laadida. Dikteerimine kasutab valitud mudelit või vaikimisi mudelit, kui server seda enam ei paku.",
+    "dictationCleanup": "Paranda tehisintellektiga",
+    "dictationCleanupHint": "Parandab tuvastusvead ja dikteeritud vormingu, näiteks „uus rida“. Ainult tekst, mitte heli, läheb stella kaudu teie organisatsiooni tehisintellekti teenusepakkujale; stella seda ei talleta."
+  },
+  "signedFile": {
+    "layer": "Allkirjakiht {number, number}",
+    "noReadableContent": "Eelvaateks pole loetavat sisu saadaval.",
+    "unknownSigner": "Tundmatu allkirjastaja",
+    "unreadable": "Allkirjastatud faili ei õnnestunud lugeda.",
+    "unverified": "Allkirju ei ole kontrollitud."
+  },
+  "structuredDocument": {
+    "noReadableContent": "Eelvaates kuvamiseks pole loetavat teksti.",
+    "textOnly": "Teksti eelvaade ilma leheküljekujunduse ja piltideta."
   },
   "header": {
     "search": "Otsing"

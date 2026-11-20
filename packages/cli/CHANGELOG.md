@@ -1,5 +1,55 @@
 # @stll/cli
 
+## 7.2.0
+
+### Minor Changes
+
+- [#8967](https://github.com/stella/stella/pull/8967) [`1f75117`](https://github.com/stella/stella/commit/1f7511718e3a1245aa182763633d57979dc9b4c5) Thanks [@jan-kubica](https://github.com/jan-kubica)! - The capability catalog lists `skills.export`, which downloads a skill as an Agent Skills archive (a ZIP with one folder named after the skill, holding `SKILL.md` and every resource file). It returns file bytes, so the generic `stella capability` transport does not run it; `skills get` covers the skill as JSON.
+
+### Patch Changes
+
+- [#8858](https://github.com/stella/stella/pull/8858) [`70ed5d3`](https://github.com/stella/stella/commit/70ed5d37580192e843944dc55a1247fc628cbf5a) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `case-law ingestion-get` states, per source, whether it is parked: failing the same way for so long that it asks its publisher once a day, since when, and when it asks next.
+
+- [#8941](https://github.com/stella/stella/pull/8941) [`ebad08f`](https://github.com/stella/stella/commit/ebad08f97010ad9f165d09b4d498233c6e6c1b76) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `case-law search` describes `strict` as every word, not necessarily adjacent, and a page ranked by score reports its partial matches as `partial_matches_ranked` instead of saying they were appended after the full ones.
+
+- [#8951](https://github.com/stella/stella/pull/8951) [`5109f95`](https://github.com/stella/stella/commit/5109f956c059f63355803964a4261bde2e866735) Thanks [@jan-kubica](https://github.com/jan-kubica)! - The `guidance search` and `guidance read` descriptions name the tax and administrative authorities the guidance corpus covers, and the authority filter's example names `cz-gfr`.
+
+- [#8918](https://github.com/stella/stella/pull/8918) [`7c25f4c`](https://github.com/stella/stella/commit/7c25f4c58aae936df826a758d3f14554ac3d198f) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Tool output schemas admit fields they do not list and publish their known values as examples, so a result that gains a field or a value still validates against a tool list fetched before it.
+
+- [#8896](https://github.com/stella/stella/pull/8896) [`ae28909`](https://github.com/stella/stella/commit/ae289095a92f756251d9e3aad516cb8e267261c7) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Statute reads answer a work held only as published with that text, labelled `expressionKind: promulgated`. Provision reads carry `expressionKind` and `windowDisposition`.
+
+- [#8934](https://github.com/stella/stella/pull/8934) [`f6360bf`](https://github.com/stella/stella/commit/f6360bff82e3a13fcaa16dc85db2097f1300c9c9) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Content reads of a data-box file list its filed attachments as `attachments`, each with its one-based `position` in the envelope and its `entityId`.
+
+- [#8969](https://github.com/stella/stella/pull/8969) [`5da16af`](https://github.com/stella/stella/commit/5da16af851eec5616bbeda3484c04572e3b42855) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Resolve exact stored docket identities with complete bounded candidate evidence and mark truncated candidate sets explicitly.
+- Updated dependencies [[`f1d0195`](https://github.com/stella/stella/commit/f1d019508fa4bdcd2160b4f90d555ce0ed99cc10)]:
+  - @stll/agent-input@0.5.0
+
+## 7.1.0
+
+### Minor Changes
+
+- [#7360](https://github.com/stella/stella/pull/7360) [`f0fd35c`](https://github.com/stella/stella/commit/f0fd35cdd1f2ea9dd4f7432b16945c944e86339f) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Email an issued invoice as a secure link with `invoices sends-create`, list its sends with `invoices sends-list` and withdraw a link with `invoices sends-revoke`. Seller profiles take an `email` that receives the replies.
+
+- [#7613](https://github.com/stella/stella/pull/7613) [`a739024`](https://github.com/stella/stella/commit/a739024d926e4f530d1e397518d20d6ae87c3867) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add standalone native installation, checksum-verified self updates, and installation diagnostics. Check the server protocol and minimum CLI version before API operations, using a fresh cached contract when available.
+
+### Patch Changes
+
+- [#8854](https://github.com/stella/stella/pull/8854) [`af74f9f`](https://github.com/stella/stella/commit/af74f9f00b5503a2d90983ab006af94c7e9eced7) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Statute `amendedBy` and `pendingChanges` show an instruction the publisher restates under several links once, naming every link in `duplicatePublisherIds`. Provision reads document `governingText`, `governingTextTruncated` and reading an annex by its number.
+
+- [#8822](https://github.com/stella/stella/pull/8822) [`02e421a`](https://github.com/stella/stella/commit/02e421ae319b02973c148ee6e18dcb084c869bab) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `search_case_law` says which query words each decision holds, how many decisions hold each word when few hold them all, and gives a cursor that runs a phrasing again when its partial matches went unread.
+
+- [#8851](https://github.com/stella/stella/pull/8851) [`3aa0b3e`](https://github.com/stella/stella/commit/3aa0b3ec0b76d1240a5024c03071ce3d233771de) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `dictation.transcribe` describes its optional `labels` field: sent as `1` only when the client showed which models leave the organization's region or keep the audio.
+
+- [#7360](https://github.com/stella/stella/pull/7360) [`f0fd35c`](https://github.com/stella/stella/commit/f0fd35cdd1f2ea9dd4f7432b16945c944e86339f) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Sending invoice links requires the organization's invoice-links invitation grant and time-billing access. History and revocation remain available through normal invoice access without an invitation or personal enrolment.
+
+- [#8835](https://github.com/stella/stella/pull/8835) [`693e387`](https://github.com/stella/stella/commit/693e387fe6c57ac4075dd1aa052c78e4dae65101) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `read_statute_provisions` and `read_provision_history` return `governingText` beside a subdivision's text: the lead-in and closing wording of every unit it is nested in, so a letter is never read without the sentence that qualifies it.
+
+- [#8814](https://github.com/stella/stella/pull/8814) [`85406ec`](https://github.com/stella/stella/commit/85406ec1d179cca1acd00118247f5fbcb3935c8a) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `resolve_case_law_decision` answers a decision it does not find with what the reconciled publisher listings say about it.
+
+- [#8803](https://github.com/stella/stella/pull/8803) [`d1159d8`](https://github.com/stella/stella/commit/d1159d8d2f578700fda1bf7c45e6126d088176bd) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `save_contact` describes its registration, tax and VAT fields as a business's numbers.
+
+- [#8836](https://github.com/stella/stella/pull/8836) [`e96cbe2`](https://github.com/stella/stella/commit/e96cbe2cda938d3a4e364f899bc5ff86136c1e31) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Statute reads accept an annex by its number in any spelling (`priloha_3`, `příloha č. 3`), `read_statute` keeps every annex in a bounded outline, and a missing annex lists the annex anchors the consolidation carries.
+
 ## 7.0.0
 
 ### Major Changes

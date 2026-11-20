@@ -1,3 +1,5 @@
+import type { ComponentProps } from "react";
+
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
@@ -21,6 +23,8 @@ const { IntlProvider } = await import("use-intl");
 const { FormattingProvider } = await import("@/i18n/formatting-context");
 const { Streamdown } = await import("streamdown");
 const { ChatTableChart } = await import("./chat-table-chart");
+const { messageComponents } =
+  await import("@/components/ai-elements/message-response-components");
 const { getWorkspaceReconnectQueryActions } =
   await import("@/lib/workspace-realtime");
 const { applyResourceQueryActions } =
@@ -55,7 +59,18 @@ const mount = (
   sourceMarkdown = markdown,
 ) => {
   const client = new QueryClient();
-  const view = render(
+  // Built once, so a rerender keeps the same table instance and its state.
+  const components: ComponentProps<typeof Streamdown>["components"] = {
+    ...messageComponents,
+    table: (props) => (
+      <ChatTableChart
+        {...props}
+        cacheScope={["org-a", "user-a"]}
+        requestPlan={requestPlan}
+      />
+    ),
+  };
+  const element = (source: string) => (
     <QueryClientProvider client={client}>
       <IntlProvider
         locale={locale}
@@ -63,25 +78,16 @@ const mount = (
         timeZone="UTC"
       >
         <FormattingProvider locale={locale} timeZone="UTC">
-          <Streamdown
-            mode="static"
-            components={{
-              table: (props) => (
-                <ChatTableChart
-                  {...props}
-                  cacheScope={["org-a", "user-a"]}
-                  requestPlan={requestPlan}
-                />
-              ),
-            }}
-          >
-            {sourceMarkdown}
+          <Streamdown mode="static" components={components}>
+            {source}
           </Streamdown>
         </FormattingProvider>
       </IntlProvider>
-    </QueryClientProvider>,
+    </QueryClientProvider>
   );
-  return { ...view, client };
+  const view = render(element(sourceMarkdown));
+  const update = (source: string) => view.rerender(element(source));
+  return { ...view, client, update };
 };
 
 test("requests no decision until clicked, switches kind, returns to table and reuses the session decision", async () => {
@@ -91,11 +97,13 @@ test("requests no decision until clicked, switches kind, returns to table and re
     return ready;
   });
   expect(view.getByRole("table")).toBeDefined();
+  const toggle = view.getByRole("button", { name: "Show as chart" });
+  expect(toggle.getAttribute("aria-pressed")).toBe("false");
+  // The chart toggle lives in the table's one header strip, not above it.
+  expect(toggle.closest('[data-slot="answer-table-header"]')).not.toBeNull();
   expect(
-    view
-      .getByRole("button", { name: "Show as chart" })
-      .getAttribute("aria-pressed"),
-  ).toBe("false");
+    view.container.querySelectorAll('[data-slot="answer-table-header"]'),
+  ).toHaveLength(1);
   expect(calls).toBe(0);
   fireEvent.click(view.getByRole("button", { name: "Show as chart" }));
   const image = await view.findByRole("img", { name: "Hours" });
@@ -126,11 +134,46 @@ test("requests no decision until clicked, switches kind, returns to table and re
       }),
     );
   });
-  fireEvent.click(view.getByRole("button", { name: "Show table" }));
+  fireEvent.click(view.getByRole("button", { name: "Show as chart" }));
   expect(view.getByRole("table")).toBeDefined();
   fireEvent.click(view.getByRole("button", { name: "Show as chart" }));
   await view.findByRole("img", { name: "Hours" });
   expect(calls).toBe(1);
+});
+
+test("a chart chosen for content that has since changed does not replace the new content's choice", async () => {
+  const pending: ((response: TableChartResponse) => void)[] = [];
+  const view = mount(
+    async () =>
+      await new Promise<TableChartResponse>((resolve) => {
+        pending.push(resolve);
+      }),
+  );
+  fireEvent.click(view.getByRole("button", { name: "Show as chart" }));
+  await waitFor(() => {
+    expect(pending).toHaveLength(1);
+  });
+  // The table streams on while its first chart is being chosen.
+  view.update(`${markdown}\n| August | 5 |`);
+  fireEvent.click(view.getByRole("button", { name: "Show as chart" }));
+  await waitFor(() => {
+    expect(pending).toHaveLength(2);
+  });
+  await act(async () => {
+    pending[0]?.(ready);
+    await Promise.resolve();
+  });
+  // The first answer belongs to the old content: the new one is still
+  // being chosen.
+  expect(view.getByRole("button", { name: "Choosing a chart…" })).toBeDefined();
+  expect(view.queryByRole("img", { name: "Hours" })).toBeNull();
+  await act(async () => {
+    pending[1]?.(ready);
+    await Promise.resolve();
+  });
+  const image = await view.findByRole("img", { name: "Hours" });
+  expect(image).toBeDefined();
+  expect(view.container.textContent).toContain("August: 5");
 });
 
 test("a table without a numeric column offers no chart", () => {
@@ -145,6 +188,11 @@ test("a table without a numeric column offers no chart", () => {
   );
   expect(view.getByRole("table")).toBeDefined();
   expect(view.queryByRole("button", { name: "Show as chart" })).toBeNull();
+  // The table keeps its header strip and its own actions.
+  expect(
+    view.container.querySelector('[data-slot="answer-table-header"]'),
+  ).not.toBeNull();
+  expect(view.getByRole("button", { name: "Copy table" })).toBeDefined();
   expect(calls).toBe(0);
 });
 
@@ -215,8 +263,8 @@ test("Arabic controls and chart summary use translated text and local number for
   await view.findByRole("img", { name: "Hours" });
   expect(view.container.textContent).toContain("١٢");
   expect(
-    view.getByRole("button", {
-      name: arabic.workspaces.views.timeline.showTable,
-    }),
-  ).toBeDefined();
+    view
+      .getByRole("button", { name: arabic.chat.tableChart.showChart })
+      .getAttribute("aria-pressed"),
+  ).toBe("true");
 });

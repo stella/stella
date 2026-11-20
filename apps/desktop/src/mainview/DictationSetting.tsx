@@ -1,6 +1,7 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { invoke } from "@tauri-apps/api/core";
+import type { InvokeArgs } from "@tauri-apps/api/core";
 import { panic, Result } from "better-result";
 import { useLocale, useTranslations } from "use-intl";
 
@@ -16,18 +17,29 @@ import {
   ComboboxPopup,
 } from "@stll/ui/combobox";
 import { Kbd } from "@stll/ui/kbd";
+import {
+  Select,
+  SelectItem,
+  SelectPopup,
+  SelectTrigger,
+  SelectValue,
+} from "@stll/ui/select";
 import { Switch } from "@stll/ui/switch";
 import { Tooltip, TooltipFactTrigger, TooltipPopup } from "@stll/ui/tooltip";
 
 import { subscribeDesktopEvent } from "../shared/desktop-events";
-import { formatShortcut } from "../shared/shortcut-keys";
+import { formatHoldKey, isHoldKey } from "../shared/hold-key";
+import type { HoldKey } from "../shared/hold-key";
 import type { ShortcutKeys } from "../shared/shortcut-keys";
 import {
   DESKTOP_PLATFORM,
   useKeyboardLayout,
 } from "../shared/use-clipboard-shortcut";
+import { DictationCustomWords } from "./DictationCustomWords";
 import { DictationDestination } from "./DictationDestination";
 import type { DictationDestinationValue } from "./DictationDestination";
+import { DictationInputFix } from "./DictationInputFix";
+import { DictationMicrophoneRow } from "./DictationMicrophone";
 import {
   SettingsGroup,
   SettingsPageHeader,
@@ -59,6 +71,9 @@ export type DictationSnapshot = {
   cloudAvailable: boolean;
   /** The stella AI model the user picked; null: the region's default. */
   cloudModel: string | null;
+  /** The speaker's custom words, kept on this computer for the dictation
+   *  account. */
+  customWords: string[];
   /** Where speech is transcribed: always this computer while stella AI is
    *  not available. */
   destination: DictationDestinationValue;
@@ -69,6 +84,8 @@ export type DictationSnapshot = {
   language: DictationLanguage;
   /** Whether cleanup also gets the focused window's title. */
   shareWindowTitle: boolean;
+  /** Whether a short sound marks the start and the end of listening. */
+  sounds: boolean;
   /** Whether cleanup also gets the text before the cursor. */
   shareTextBeforeCursor: boolean;
   /** Whether this computer can read the text before the cursor; without it
@@ -81,11 +98,20 @@ export type DictationSnapshot = {
     | "focusUnconfirmed"
     | "microphone"
     | "modelMissing"
+    | "nothingHeard"
+    | "passwordField"
     | "shortcutHeld"
     | "transcription"
     | null;
   /** Whether the failed dictation's text is in clipboard history. */
   failureKeptInHistory: boolean;
+  /** The key dictation listens for, and what this computer offers. */
+  holdKey: HoldKey;
+  holdKeys: HoldKey[];
+  /** The hold key cannot be heard yet: on a Mac, until stella has
+   *  Accessibility access. */
+  holdKeyWaiting: boolean;
+  /** Control, Option (Alt) and Space: the `combination` choice. */
   keys: ShortcutKeys;
   model: DictationModel;
   modelBytes: number;
@@ -103,6 +129,26 @@ const languageHasEffect = (snapshot: DictationSnapshot): boolean =>
   snapshot.cleanup ||
   snapshot.destination === "cloud" ||
   (snapshot.model.status === "ready" && snapshot.language.supported.length > 0);
+
+/** Orders the snapshots the native side answers with. Each read or change
+ *  takes a ticket as it starts; an answer is shown only when no answer to a
+ *  later one is shown already, so a read that started before a change can
+ *  never bring back what the change replaced. */
+type SnapshotOrder = { shown: number; started: number };
+
+const takeTicket = (order: SnapshotOrder): number => {
+  order.started += 1;
+  return order.started;
+};
+
+/** Whether the answer to `ticket` is the latest; if so, it is now shown. */
+const isLatest = (order: SnapshotOrder, ticket: number): boolean => {
+  if (ticket <= order.shown) {
+    return false;
+  }
+  order.shown = ticket;
+  return true;
+};
 
 const isDictationSnapshot = (value: unknown): value is DictationSnapshot =>
   typeof value === "object" &&
@@ -163,12 +209,17 @@ export const useDictationAvailability = () => {
 /** The Dictation page: the switch, where speech is transcribed, AI cleanup,
  *  the speech model and what went wrong. Renders nothing for an account
  *  without the feature. */
-export const DictationSetting = () => {
+export const DictationSetting = ({
+  focus = null,
+  onFocusShown = ignoreFocusShown,
+}: Partial<DictationFocus>) => {
   // Reading again after a failure starts the page afresh.
   const [attempt, setAttempt] = useState(0);
   return (
     <DictationPage
+      focus={focus}
       key={attempt}
+      onFocusShown={onFocusShown}
       onRetry={() => {
         setAttempt((current) => current + 1);
       }}
@@ -176,7 +227,19 @@ export const DictationSetting = () => {
   );
 };
 
-const DictationPage = ({ onRetry }: { onRetry: () => void }) => {
+const ignoreFocusShown = () => undefined;
+
+type DictationFocus = {
+  /** Where a link that opened the page points: the microphone choice. */
+  focus: "microphone" | null;
+  onFocusShown: () => void;
+};
+
+const DictationPage = ({
+  focus,
+  onFocusShown,
+  onRetry,
+}: DictationFocus & { onRetry: () => void }) => {
   const t = useTranslations("dictation");
   const tDestination = useTranslations("dictation.destination");
   const locale = useLocale();
@@ -186,14 +249,16 @@ const DictationPage = ({ onRetry }: { onRetry: () => void }) => {
   // empty until the next change event.
   const [read, setRead] = useState<"pending" | "failed" | "done">("pending");
   const [removeFailed, setRemoveFailed] = useState(false);
+  const order = useRef<SnapshotOrder>({ shown: 0, started: 0 });
 
   useEffect(() => {
     let disposed = false;
     const refresh = async () => {
+      const ticket = takeTicket(order.current);
       const result = await Result.tryPromise(async () =>
         invoke<unknown>("dictation_get_snapshot"),
       );
-      if (disposed) {
+      if (disposed || !isLatest(order.current, ticket)) {
         return;
       }
       const next =
@@ -228,29 +293,44 @@ const DictationPage = ({ onRetry }: { onRetry: () => void }) => {
     return null;
   }
 
-  const shortcut = formatShortcut({
-    keys: snapshot.keys,
-    layout,
-    locale,
-    platform: DESKTOP_PLATFORM,
-  });
+  const holdKeyLabel = (holdKey: HoldKey) =>
+    formatHoldKey({
+      holdKey,
+      keys: snapshot.keys,
+      layout,
+      locale,
+      platform: DESKTOP_PLATFORM,
+      right: (key) => t("holdKey.right", { key }),
+    });
+  const shortcut = holdKeyLabel(snapshot.holdKey);
 
-  const setEnabled = async (enabled: boolean) => {
+  /** Asks the native side for a change and shows the snapshot it answers
+   *  with, unless an answer to a later read or change is already shown.
+   *  Resolves to whether the native side made the change. */
+  const change = async (
+    command: string,
+    args?: InvokeArgs,
+  ): Promise<boolean> => {
+    const ticket = takeTicket(order.current);
     const result = await Result.tryPromise(async () =>
-      invoke<DictationSnapshot>("dictation_set_enabled", { enabled }),
+      invoke<DictationSnapshot>(command, args),
     );
-    if (Result.isOk(result)) {
+    if (Result.isOk(result) && isLatest(order.current, ticket)) {
       setSnapshot(result.value);
     }
+    return Result.isOk(result);
+  };
+
+  const setHoldKey = async (holdKey: HoldKey) => {
+    await change("dictation_set_hold_key", { holdKey });
+  };
+
+  const setEnabled = async (enabled: boolean) => {
+    await change("dictation_set_enabled", { enabled });
   };
 
   const setCleanup = async (cleanup: boolean) => {
-    const result = await Result.tryPromise(async () =>
-      invoke<DictationSnapshot>("dictation_set_cleanup", { enabled: cleanup }),
-    );
-    if (Result.isOk(result)) {
-      setSnapshot(result.value);
-    }
+    await change("dictation_set_cleanup", { enabled: cleanup });
   };
 
   const setShare = async (
@@ -259,58 +339,31 @@ const DictationPage = ({ onRetry }: { onRetry: () => void }) => {
       | "dictation_set_share_window_title",
     enabled: boolean,
   ) => {
-    const result = await Result.tryPromise(async () =>
-      invoke<DictationSnapshot>(command, { enabled }),
-    );
-    if (Result.isOk(result)) {
-      setSnapshot(result.value);
-    }
+    await change(command, { enabled });
   };
 
   const setLanguage = async (language: string) => {
-    const result = await Result.tryPromise(async () =>
-      invoke<DictationSnapshot>("dictation_set_language", { language }),
-    );
-    if (Result.isOk(result)) {
-      setSnapshot(result.value);
-    }
+    await change("dictation_set_language", { language });
   };
 
   const setDestination = async (destination: DictationDestinationValue) => {
-    const result = await Result.tryPromise(async () =>
-      invoke<DictationSnapshot>("dictation_set_destination", { destination }),
-    );
-    if (Result.isOk(result)) {
-      setSnapshot(result.value);
-    }
+    await change("dictation_set_destination", { destination });
   };
 
   const setCloudModel = async (modelId: string) => {
-    const result = await Result.tryPromise(async () =>
-      invoke<DictationSnapshot>("dictation_set_cloud_model", { modelId }),
-    );
-    if (Result.isOk(result)) {
-      setSnapshot(result.value);
-    }
+    await change("dictation_set_cloud_model", { modelId });
   };
 
+  const setCustomWords = async (words: string[]) =>
+    await change("dictation_set_custom_words", { words });
+
   const download = async () => {
-    const result = await Result.tryPromise(async () =>
-      invoke<DictationSnapshot>("dictation_download_model"),
-    );
-    if (Result.isOk(result)) {
-      setSnapshot(result.value);
-    }
+    await change("dictation_download_model");
   };
 
   const removeModel = async () => {
-    const result = await Result.tryPromise(async () =>
-      invoke<DictationSnapshot>("dictation_remove_model"),
-    );
-    setRemoveFailed(Result.isError(result));
-    if (Result.isOk(result)) {
-      setSnapshot(result.value);
-    }
+    const removed = await change("dictation_remove_model");
+    setRemoveFailed(!removed);
   };
 
   const cleanupIds = settingsRowIds("dictation-cleanup");
@@ -343,6 +396,13 @@ const DictationPage = ({ onRetry }: { onRetry: () => void }) => {
           {t("shortcutTaken", { shortcut })}
         </p>
       )}
+      {snapshot.enabled && snapshot.holdKeyWaiting && (
+        <p className="text-destructive-foreground text-sm" role="status">
+          {DESKTOP_PLATFORM === "mac"
+            ? t("holdKey.waiting", { shortcut })
+            : t("holdKey.unavailable", { shortcut })}
+        </p>
+      )}
       {snapshot.failure !== null && (
         <p className="text-destructive-foreground text-sm" role="status">
           {t(`failure.${snapshot.failure}`)}
@@ -350,8 +410,36 @@ const DictationPage = ({ onRetry }: { onRetry: () => void }) => {
           {snapshot.failureKeptInHistory && ` ${t("failureKeptInHistory")}`}
         </p>
       )}
+      {(snapshot.failure === "microphone" ||
+        snapshot.failure === "nothingHeard") && (
+        // Keyed by the failure, so a new one reads its action afresh.
+        <DictationInputFix key={snapshot.failure} />
+      )}
+      <TranscribeRecordingGroup />
       {snapshot.enabled && (
         <>
+          <SettingsGroup title={t("groups.shortcut")}>
+            {snapshot.holdKeys.length > 1 && (
+              <DictationHoldKeyRow
+                holdKey={snapshot.holdKey}
+                holdKeys={snapshot.holdKeys}
+                label={holdKeyLabel}
+                onChange={(holdKey) => {
+                  void setHoldKey(holdKey);
+                }}
+              />
+            )}
+            <DictationMicrophoneRow
+              focused={focus === "microphone"}
+              onFocused={onFocusShown}
+            />
+            <DictationSoundsRow
+              checked={snapshot.sounds}
+              onChange={(sounds) => {
+                void change("dictation_set_sounds", { enabled: sounds });
+              }}
+            />
+          </SettingsGroup>
           <SettingsGroup title={t("groups.transcription")}>
             {snapshot.cloudAvailable ? (
               <DictationDestination
@@ -436,6 +524,12 @@ const DictationPage = ({ onRetry }: { onRetry: () => void }) => {
               />
             )}
           </SettingsGroup>
+          {/* stella AI and cleanup take the words; without either, the
+              text from the speech model here is spelled with them. */}
+          <DictationCustomWords
+            onChange={setCustomWords}
+            words={snapshot.customWords}
+          />
           {/* With stella AI the model is not needed, but a downloaded one
               can still be removed. */}
           {(snapshot.destination === "local" ||
@@ -466,6 +560,45 @@ const DictationPage = ({ onRetry }: { onRetry: () => void }) => {
   );
 };
 
+/** Where a recording on disk is transcribed: its own window, offered
+ *  wherever dictation is, whether or not the shortcut is on. */
+const TranscribeRecordingGroup = () => {
+  const t = useTranslations("dictation.transcribeRecording");
+  const [openFailed, setOpenFailed] = useState(false);
+  const open = async () => {
+    const result = await Result.tryPromise(async () =>
+      invoke("transcribe_open"),
+    );
+    setOpenFailed(Result.isError(result));
+  };
+  return (
+    <SettingsGroup>
+      <SettingsRow
+        description={t("description")}
+        id="dictation-transcribe-recording"
+        title={t("title")}
+      >
+        <Button
+          onClick={() => {
+            void open();
+          }}
+          variant="outline"
+        >
+          {t("open")}
+        </Button>
+      </SettingsRow>
+      {openFailed ? (
+        <li
+          className="text-destructive-foreground px-4 pb-3 text-xs"
+          role="alert"
+        >
+          {t("failed")}
+        </li>
+      ) : null}
+    </SettingsGroup>
+  );
+};
+
 /** The page's title, what failed and the one action that reads again. */
 const DictationReadFailed = ({ onRetry }: { onRetry: () => void }) => {
   const t = useTranslations("dictation");
@@ -482,6 +615,77 @@ const DictationReadFailed = ({ onRetry }: { onRetry: () => void }) => {
         </Button>
       </div>
     </div>
+  );
+};
+
+/** Which key dictation listens for, from what this computer offers. */
+const DictationHoldKeyRow = ({
+  holdKey,
+  holdKeys,
+  label,
+  onChange,
+}: {
+  holdKey: HoldKey;
+  holdKeys: readonly HoldKey[];
+  label: (holdKey: HoldKey) => string;
+  onChange: (holdKey: HoldKey) => void;
+}) => {
+  const t = useTranslations("dictation.holdKey");
+  const ids = settingsRowIds("dictation-hold-key");
+  return (
+    <SettingsRow
+      description={t("description")}
+      id="dictation-hold-key"
+      title={t("title")}
+    >
+      <Select
+        onValueChange={(value) => {
+          if (isHoldKey(value)) {
+            onChange(value);
+          }
+        }}
+        value={holdKey}
+      >
+        <SelectTrigger aria-labelledby={ids.label} className="w-44">
+          <SelectValue>
+            {(value: unknown) => (isHoldKey(value) ? label(value) : null)}
+          </SelectValue>
+        </SelectTrigger>
+        <SelectPopup>
+          {holdKeys.map((value) => (
+            <SelectItem key={value} value={value}>
+              {label(value)}
+            </SelectItem>
+          ))}
+        </SelectPopup>
+      </Select>
+    </SettingsRow>
+  );
+};
+
+/** Whether a short sound marks the start and the end of recording. */
+const DictationSoundsRow = ({
+  checked,
+  onChange,
+}: {
+  checked: boolean;
+  onChange: (enabled: boolean) => void;
+}) => {
+  const t = useTranslations("dictation.sounds");
+  const ids = settingsRowIds("dictation-sounds");
+  return (
+    <SettingsRow
+      description={t("description")}
+      id="dictation-sounds"
+      title={t("title")}
+    >
+      <Switch
+        aria-describedby={ids.description}
+        aria-labelledby={ids.label}
+        checked={checked}
+        onCheckedChange={onChange}
+      />
+    </SettingsRow>
   );
 };
 

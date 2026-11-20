@@ -166,6 +166,9 @@ export const ENUM_COLUMN_ROLES = {
   case_law_research_answers: {
     failure_reason: ATTRIBUTE,
   },
+  case_law_ingestion_failure_evidence: {
+    identity_kind: ATTRIBUTE,
+  },
   case_law_sources: {
     ingestion_lease_purpose: ATTRIBUTE,
   },
@@ -357,6 +360,9 @@ export const ENUM_COLUMN_ROLES = {
     entity_feature_gate: ATTRIBUTE,
     severity: ATTRIBUTE,
   },
+  email_delivery_failures: {
+    reason: ATTRIBUTE,
+  },
   entities: {
     agenda_kind: ATTRIBUTE,
     agenda_source: ATTRIBUTE,
@@ -439,6 +445,9 @@ export const ENUM_COLUMN_ROLES = {
   },
   justifications: {
     entity_feature_gate: ATTRIBUTE,
+  },
+  kept_transcript_deletions: {
+    environment: ATTRIBUTE,
   },
   legal_graph_edges: {
     confidence: ATTRIBUTE,

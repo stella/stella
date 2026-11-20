@@ -24,6 +24,7 @@ import { notifyUserError } from "@/lib/errors/user-toast";
 import { emailSchema, schemaFormOptions, toFormErrors } from "@/lib/schema";
 
 import { LastUsedFieldBadge } from "./last-used-sign-in";
+import { SIGN_IN_CREDENTIAL_INPUT_SIZE } from "./sign-in-panel-face.pending";
 import { SIGN_IN_METHOD, signInMethodVariant } from "./sign-in-panel.logic";
 import type { SignInMethod } from "./sign-in-panel.logic";
 
@@ -60,7 +61,7 @@ export const EmailCredentialField = ({
         onBlur={field.handleBlur}
         onChange={(e) => field.handleChange(e.target.value)}
         placeholder={t("auth.emailPlaceholder")}
-        size="lg"
+        size={SIGN_IN_CREDENTIAL_INPUT_SIZE}
         type="email"
         value={field.state.value}
       />
@@ -88,7 +89,7 @@ export const SecretCredentialField = ({
       onBlur={field.handleBlur}
       onChange={(e) => field.handleChange(e.target.value)}
       placeholder={placeholder}
-      size="lg"
+      size={SIGN_IN_CREDENTIAL_INPUT_SIZE}
       value={field.state.value}
     />
     <FieldError />

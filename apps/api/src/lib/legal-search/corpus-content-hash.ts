@@ -1,3 +1,4 @@
+import { hasUsableAst } from "@stll/legal-ast/document-ast";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 import { createSha256 } from "@stll/sha256/bun";
 
@@ -12,6 +13,14 @@ export type CorpusPayload = {
   sections: DecisionSection[] | null;
   ast: DocumentAst | EmptyAst | null;
 };
+
+/** Metadata in an AST envelope does not make its empty document readable. */
+export const payloadCarriesDocument = ({
+  text,
+  sections,
+  ast,
+}: CorpusPayload): boolean =>
+  (text ?? "") !== "" || hasUsableAst(ast) || (sections?.length ?? 0) > 0;
 
 /**
  * Separates the payload's fields inside the hash, so a document whose
@@ -55,16 +64,15 @@ export const corpusContentHash = ({
  * with the constant empty AST shapes (the `EMPTY_AST` placeholder, or
  * none at all). A structurally valid AST with no blocks is deliberately
  * NOT here — its envelope carries per-document metadata, so its hash is
- * row-specific and no constant can name it; those rows are recognised
- * structurally instead (see stored-payload.ts).
+ * row-specific and no constant can name it. The write planner classifies
+ * payloads structurally before persisting any corpus pointers.
  */
 const EMPTY_SECTION_SHAPES: readonly (DecisionSection[] | null)[] = [null, []];
 // A full `DocumentAst` with an empty `blocks` array is NOT representable
 // here: it carries per-document `source`/`metadata`, so its hash is
-// row-specific and no constant can name it. Such a row (empty text, empty
-// blocks, populated envelope) is judged by the Postgres-side structural
-// predicate instead; the hash constants cover every payload whose empty
-// shape is content-independent.
+// row-specific and no constant can name it. The write planner refuses such
+// a payload structurally; these hashes identify only content-independent
+// empty shapes already recorded by older writers.
 const EMPTY_AST_SHAPES: readonly (DocumentAst | EmptyAst | null)[] = [
   EMPTY_AST,
   null,

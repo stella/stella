@@ -411,6 +411,8 @@ process.exit(0);`,
     }
   },
   // This test exports and regenerates the real handler graph, cold once per
-  // route table change; one run took 70 s on a loaded workstation.
-  180_000,
+  // route table change. It matches the CI check's --timeout: a hosted runner
+  // takes it from about 96 s to past 180 s, and a lower budget here would
+  // override the check's own.
+  400_000,
 );

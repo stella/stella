@@ -13,9 +13,10 @@ import { detached } from "@/lib/detached";
 import type { ResolvedDocumentReference } from "@/lib/files/document-reference-queries";
 import { resolveFileDocumentReference } from "@/lib/files/document-reference-queries";
 import {
+  DUPLICATE_CHECK,
   REFERENCE_CHECK,
-  useCreateFileEntities,
-} from "@/lib/workspaces/mutations/use-create-file-entities";
+} from "@/lib/workspaces/mutations/create-file-entities-input.logic";
+import { useCreateFileEntities } from "@/lib/workspaces/mutations/use-create-file-entities";
 import { useUploadVersion } from "@/lib/workspaces/mutations/use-upload-version";
 import type { VersionOrNewFileDialogProps } from "@/routes/_protected.workspaces/$workspaceId/-components/version-or-new-file-dialog";
 import type { VersionOrNewFileChoice } from "@/routes/_protected.workspaces/$workspaceId/-components/version-or-new-file-dialog.logic";
@@ -179,8 +180,10 @@ export const useVersionOrNewFileDrop = ({
         createFileEntities({
           files: [drop.file],
           parentId: entity.parentId ?? null,
-          // This dialog just asked; the batch prompt must not ask again.
+          // This dialog just asked, and the user chose a new document: neither
+          // batch prompt may ask again, or confirming it would undo the choice.
           referenceCheck: REFERENCE_CHECK.skip,
+          duplicateCheck: DUPLICATE_CHECK.skip,
         });
         closeDialog();
         return;

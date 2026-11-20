@@ -35,7 +35,12 @@
     "sessionNeedsAttention": "Necesita atención",
     "sessionOpeningInOffice": "Abriendo en Office",
     "sessionSavingDraft": "Guardando borrador",
-    "reconnectAccount": "Volver a conectar con stella web…"
+    "reconnectAccount": "Volver a conectar con stella web…",
+    "transcribeRecording": "Transcribir una grabación…",
+    "dictation": "Dictado",
+    "dictationHint": "Mantenga pulsado {key} para dictar",
+    "dictationSettings": "Ajustes de dictado…",
+    "dictationTurnOn": "Activar el dictado…"
   },
   "notification": {
     "checkpointDelayedBody": "{fileName}: los cambios permanecen locales y se reintentarán automáticamente",
@@ -614,9 +619,14 @@
     "descriptionCloud": "Mantenga pulsado {shortcut} y hable. El texto aparece en la aplicación que está usando. stella AI transcribe la voz y stella no la guarda.",
     "lede": "Mantén pulsado <key>{shortcut}</key> y habla. El texto aparece donde estás escribiendo.",
     "groups": {
+      "shortcut": "Atajo",
       "transcription": "Transcripción",
       "cleanup": "Corrección",
       "thisComputer": "En este ordenador"
+    },
+    "sounds": {
+      "title": "Sonidos",
+      "description": "Reproducir un sonido breve y suave cuando empieza la grabación y cuando termina."
     },
     "cleanup": {
       "title": "Corregir con IA",
@@ -652,10 +662,22 @@
     },
     "language": {
       "title": "Idioma del dictado",
-      "description": "Automático usa los idiomas de la pantalla y los teclados de este ordenador.",
+      "description": "Automático usa los idiomas de la pantalla y los teclados de este ordenador. Si hay varios, cada palabra se reconoce en el idioma en que la pronuncia.",
       "automatic": "Automático",
       "automaticWith": "Automático ({languages})",
       "noResults": "No se encontraron idiomas"
+    },
+    "customWords": {
+      "group": "Palabras propias",
+      "title": "Palabras y nombres que stella debe escribir correctamente",
+      "description": "Por ejemplo, nombres de clientes o términos en inglés que usa al hablar otro idioma. Se guardan en este ordenador para esta cuenta y solo se envían con su dictado, a la transcripción con stella AI y a la corrección con IA. Cuando transcribe el modelo de voz de este ordenador y la corrección con IA está desactivada, stella corrige su ortografía en este ordenador.",
+      "count": "{count, number} de {limit, number}",
+      "input": "Añadir una palabra o un nombre",
+      "add": "Añadir",
+      "remove": "Quitar {word}",
+      "duplicate": "Esta palabra ya está en la lista.",
+      "full": "La lista admite como máximo {limit, number} palabras. Quite una para añadir otra.",
+      "failed": "No se ha podido guardar la lista. Inténtelo de nuevo."
     },
     "modelNeeded": "El modelo de voz se ejecuta en este ordenador.",
     "speechModel": "Modelo de voz",
@@ -667,6 +689,13 @@
     "downloadFailed": "No se pudo descargar el modelo de voz.",
     "modelAttribution": "Speech model: Parakeet Ultra by Moondream, based on NVIDIA Parakeet TDT 0.6B v3, converted to GGUF by handy-computer. CC BY 4.0.",
     "shortcutTaken": "Otra aplicación está usando {shortcut}.",
+    "holdKey": {
+      "title": "Tecla para mantener",
+      "description": "Mantenla pulsada sola para dictar. Una pulsación breve o un atajo que la use no hace nada.",
+      "right": "{key} derecha",
+      "waiting": "stella detecta {shortcut} en cuanto tiene acceso a Accesibilidad.",
+      "unavailable": "stella no puede detectar {shortcut} en este ordenador. Elige otra tecla."
+    },
     "failure": {
       "accessibility": "Permite el acceso a Accesibilidad para que stella pueda escribir en otras aplicaciones.",
       "microphone": "stella no oye tu micrófono. Comprueba el acceso al micrófono en Ajustes del Sistema.",
@@ -675,9 +704,54 @@
       "focusChanged": "Cambió a otra aplicación antes de que el texto estuviera listo, así que no se escribió nada. Inténtelo de nuevo.",
       "focusUnconfirmed": "stella no pudo confirmar qué aplicación tiene el foco, así que no se escribió nada. Inténtalo de nuevo.",
       "shortcutHeld": "Suelta las teclas del atajo para escribir. No se escribió nada; inténtalo de nuevo.",
-      "cloudTranscription": "stella AI no pudo transcribir este dictado y el modelo de voz no está en este ordenador. Vuelve a intentarlo o, en «Transcribir con», elige «Este ordenador» y descarga el modelo."
+      "passwordField": "Hay un campo de contraseña seleccionado, así que el dictado no se guardó ni se escribió.",
+      "cloudTranscription": "stella AI no pudo transcribir este dictado y el modelo de voz no está en este ordenador. Vuelve a intentarlo o, en «Transcribir con», elige «Este ordenador» y descarga el modelo.",
+      "nothingHeard": "stella no oyó ninguna voz. Comprueba el dispositivo de entrada en los ajustes de Sonido."
     },
-    "failureKeptInHistory": "El texto está en el historial del portapapeles."
+    "failureKeptInHistory": "El texto está en el historial del portapapeles.",
+    "transcribeRecording": {
+      "title": "Transcribir una grabación",
+      "description": "Convierte en texto un archivo de dictáfono, una nota de voz o la grabación de una reunión de hasta 4 horas.",
+      "open": "Abrir",
+      "failed": "No se pudo abrir la ventana. Inténtalo de nuevo."
+    },
+    "notice": {
+      "title": "stella no oye tu micrófono",
+      "allowBody": "Permite el acceso al micrófono y vuelve a intentarlo.",
+      "checkBodyMac": "Comprueba el acceso al micrófono en Ajustes del Sistema y vuelve a intentarlo.",
+      "checkBodyPc": "Comprueba el acceso al micrófono en la Configuración de Windows y vuelve a intentarlo.",
+      "allow": "Permitir el micrófono",
+      "openSettingsMac": "Abrir Ajustes del Sistema",
+      "openSettingsPc": "Abrir Configuración",
+      "dismiss": "Cerrar",
+      "nothingTitle": "stella no oyó ninguna voz",
+      "nothingBody": "Habla mientras mantienes la tecla, o elige otra entrada en los ajustes de Sonido.",
+      "inputDevice": "Entrada: {device}",
+      "openSoundMac": "Abrir ajustes de Sonido",
+      "openSoundPc": "Abrir configuración de sonido",
+      "missingTitle": "{missing} no está conectado",
+      "missingBody": "El dictado usa {device} en su lugar.",
+      "chooseMicrophone": "Elegir micrófono…"
+    },
+    "microphone": {
+      "title": "Micrófono",
+      "hint": "Los auriculares Bluetooth tardan un momento en cambiar a su micrófono y graban con menos calidad. El micrófono integrado suele oírse mejor.",
+      "systemDefault": "Predeterminado del sistema",
+      "systemDefaultNamed": "Predeterminado del sistema ({name})",
+      "bluetoothDevice": "{name} · Bluetooth",
+      "notConnected": "{name} (no conectado)",
+      "test": "Probar el micrófono",
+      "stopTest": "Detener",
+      "level": "Nivel de entrada",
+      "hearing": "Te oímos.",
+      "noSound": "No llega sonido de {device}.",
+      "checkAccess": "Comprobar el acceso al micrófono"
+    },
+    "preview": {
+      "label": "Lo que ha dictado hasta ahora",
+      "listening": "Escuchando…",
+      "finishing": "Terminando…"
+    }
   },
   "shortcut": {
     "title": "Atajo del portapapeles",
@@ -776,8 +850,8 @@
     "permissionsTitlePc": "Configure este ordenador",
     "permissionsBody": "Cada permiso es decisión suya. Puede cambiarlos más tarde en Ajustes.",
     "neverRequested": "Nunca se solicita:",
-    "tryTitle": "Pruébelo ahora",
-    "tryBody": "Copie cualquier texto y pulse {shortcut}.",
+    "tryTitle": "Pruebe el historial del portapapeles",
+    "tryBody": "Copie cualquier texto y pulse {shortcut} para abrir el historial del portapapeles.",
     "tryWaiting": "Esperando el atajo",
     "tryKeepGoing": "Siga…",
     "tryExtraModifier": "Eso es {pressed}. Use {shortcut}.",
@@ -799,24 +873,67 @@
     "introduceActivityTitle": "Novedad: cronología de actividad",
     "introduceActivityBody": "La actividad ya está disponible para su cuenta. No se registra nada hasta que la inicie en la ventana de actividad.",
     "openActivity": "Abrir actividad",
-    "dictationModel": "El modelo de voz ({size} MB) se descarga una vez y funciona en este ordenador.",
-    "dictationTurnOn": "Activar y descargar",
     "dictationDownloadContinues": "Puede continuar. La descarga sigue en segundo plano.",
-    "dictationReady": "El dictado está activado y listo.",
-    "dictationTryLabel": "Dicte aquí",
-    "dictationTryPlaceholder": "Haga clic aquí, mantenga {shortcut} y diga una frase.",
-    "dictationListening": "Escuchando…",
-    "dictationTranscribing": "Escribiendo lo que ha dicho…",
     "dictationMicrophone": "Permite que stella le oiga mientras mantiene el atajo.",
     "dictationAccessibility": "Permite que stella escriba lo que ha dicho en la app que está usando.",
     "dictationFailed": "stella desktop no pudo activar el dictado. Inténtelo de nuevo.",
     "introduceDictationTitle": "Novedad: dictado",
+    "dictationSetup": {
+      "progress": "Paso {current} de {total}",
+      "skipRest": "Omitir el resto",
+      "screens": {
+        "microphone": "Micrófono",
+        "transcription": "Transcripción",
+        "app": "Corrección",
+        "context": "Contexto",
+        "words": "Palabras"
+      },
+      "microphone": {
+        "title": "Que stella le oiga",
+        "body": "Mantenga {shortcut} y hable, y el texto aparece donde está escribiendo. Primero, permita el micrófono para que stella pueda oírle.",
+        "bodyMac": "Mantenga {shortcut} y hable, y el texto aparece donde está escribiendo. Primero, permita el micrófono para que stella pueda oírle, y Accesibilidad para que pueda escribir el texto.",
+        "choose": "Micrófono para dictar"
+      },
+      "transcription": {
+        "title": "¿Dónde quiere que se transcriba su voz?",
+        "body": "Puede cambiarlo más tarde en Ajustes.",
+        "titleLocal": "Su voz se transcribe en este ordenador",
+        "bodyLocal": "El modelo de voz se ejecuta aquí, así que el dictado también funciona sin conexión.",
+        "localTitle": "En este ordenador",
+        "localBody": "Funciona sin conexión. Su audio nunca sale de este ordenador.",
+        "localModel": "Necesita el modelo de voz ({size} MB), que se descarga una vez.",
+        "cloudTitle": "stella AI",
+        "cloudBody": "Sin descargas. Su audio se envía a stella y, a través del proveedor de IA de stella, al proveedor del modelo que elija. stella no lo guarda."
+      },
+      "app": {
+        "title": "Un texto a la medida de la aplicación",
+        "body": "La corrección con IA puede escribir para la aplicación en la que dicta, de modo que un correo suene a correo y un mensaje de chat a mensaje de chat.",
+        "sentAppKind": "Se le indica el tipo de aplicación, como correo, chat o documento, no su nombre.",
+        "notStored": "stella no guarda nada de ello.",
+        "off": "Sin corrección, el texto se escribe tal como se transcribió y nada se envía a la corrección con IA."
+      },
+      "context": {
+        "title": "Más contexto para la corrección",
+        "body": "Opcional y desactivado hasta que lo active. Solo se lee al empezar un dictado y solo va a la corrección con IA. stella no guarda nada de ello."
+      },
+      "words": {
+        "title": "Enseñe a stella sus palabras",
+        "body": "Añada nombres y términos que stella deba escribir a su manera, como su despacho, sus clientes o términos en otro idioma. Su lista empieza vacía.",
+        "examplesLabel": "Ideas:",
+        "examples": {
+          "firm": "El nombre de su despacho",
+          "client": "El nombre de un cliente",
+          "term": "Un término que use"
+        }
+      }
+    },
     "guideWaiting": "Active stella desktop en la lista de arriba para permitir Accesibilidad.",
     "guideAllowed": "stella desktop tiene permiso",
     "never": {
       "screenRecording": "Grabación de pantalla",
       "camera": "Cámara",
       "keystrokes": "Pulsaciones de teclas",
+      "keystrokesWithoutHoldKey": "Pulsaciones de teclas, salvo que elija una tecla para mantener",
       "fullDiskAccess": "Acceso total al disco",
       "administrator": "Derechos de administrador"
     }
@@ -953,6 +1070,117 @@
       "network_folder": "Esta carpeta está en una unidad de red. Vincule una carpeta del disco de este ordenador.",
       "protected": "Esta carpeta contiene datos propios de stella o una carpeta de habilidades, así que el agente no puede trabajar en ella.",
       "unreadable": "No se ha podido leer esta carpeta."
+    }
+  },
+  "keepAwake": {
+    "title": "Mantener activo",
+    "enabled": "Mantener este ordenador activo mientras trabajan los agentes",
+    "description": "Mientras un agente trabaja en este ordenador, no entra en reposo por inactividad, así que las tareas largas siguen en marcha. La pantalla puede seguir apagándose. Un portátil Mac entra en reposo de todos modos al cerrar la tapa.",
+    "onBattery": "También con batería",
+    "onBatteryDescription": "Si está desactivado, el ordenador entra en reposo como siempre cuando funciona con batería, aunque un agente esté trabajando.",
+    "errorSave": "No se ha podido guardar este ajuste. Inténtelo de nuevo."
+  },
+  "transcribe": {
+    "title": "Transcribir una grabación",
+    "retry": "Intentar de nuevo",
+    "drop": {
+      "title": "Suelta aquí una grabación",
+      "release": "Suéltala para transcribirla",
+      "description": "Archivos de dictáfono, notas de voz, mensajes de voz, grabaciones de reuniones o el sonido de un vídeo.",
+      "choose": "Elegir un archivo",
+      "formats": "WAV, MP3, M4A, AAC, FLAC, Ogg, Opus, AIFF, WMA, AMR y vídeo MP4 o MOV. Hasta 4 horas.",
+      "formatsMac": "WAV, MP3, M4A, AAC, FLAC, Ogg, Opus, AIFF, AMR y vídeo MP4 o MOV. Hasta 4 horas."
+    },
+    "destination": {
+      "title": "Transcribir con",
+      "thisComputer": "Este ordenador",
+      "cloud": "stella AI",
+      "localDescription": "La grabación se queda en este ordenador.",
+      "cloudDescription": "El audio se envía a stella y al proveedor del modelo elegido en la configuración de Dictado para transcribirlo. stella no lo guarda.",
+      "cloudDescriptionModel": "El audio se envía a stella y al proveedor de {model} para transcribirlo. stella no lo guarda.",
+      "localMissing": "Descarga el modelo de voz en Configuración, en Dictado, para transcribir en este ordenador.",
+      "localMissingCloud": "Descarga el modelo de voz en Configuración, en Dictado, o transcribe con stella AI.",
+      "retainsData": "Ten en cuenta las condiciones de tratamiento de {provider}.",
+      "modelFailed": "No se pudo leer el modelo de stella AI, así que stella AI no puede transcribir ahora. Inténtelo de nuevo o transcriba en este ordenador."
+    },
+    "matter": {
+      "title": "Asunto",
+      "description": "Sus nombres y números de expediente se escriben bien, y puedes guardar el texto en él.",
+      "none": "Ninguno",
+      "search": "Buscar asuntos",
+      "clearSearch": "Borrar búsqueda",
+      "searching": "Buscando…",
+      "noMatters": "No se encontraron asuntos",
+      "failed": "No se pudieron cargar los asuntos. Inténtalo de nuevo."
+    },
+    "note": "Archivos DSS y DS2 de grabadoras Philips u Olympus: guárdalos primero como WAV en SpeechExec u ODMS.",
+    "refused": {
+      "unsupported": "stella no puede leer {name}. Elige una grabación en uno de los formatos indicados arriba.",
+      "tooLong": "{name} dura más de 4 horas. Divídela primero en grabaciones más cortas.",
+      "unreadable": "No se pudo leer {name}. Puede estar dañado; expórtalo de nuevo e inténtalo otra vez."
+    },
+    "kept": {
+      "ready": "{name} está listo. Compruebe arriba cómo se transcribirá y luego empiece.",
+      "start": "Empezar a transcribir"
+    },
+    "failure": {
+      "start": "No se pudo iniciar la transcripción. Inténtalo de nuevo.",
+      "load": "No se pudo cargar esta ventana. Inténtelo de nuevo.",
+      "modelMissing": "El modelo de voz no está en este ordenador. Descárgalo en Configuración, en Dictado.",
+      "thisComputer": "El modelo de voz de este ordenador no pudo transcribir parte de la grabación. Se conserva el texto obtenido hasta ahora.",
+      "cloud": "stella AI no pudo transcribir parte de la grabación. Se conserva el texto obtenido hasta ahora; inténtalo más tarde.",
+      "unreadable": "La grabación no se pudo leer hasta el final. Se conserva el texto obtenido hasta ahora.",
+      "tooLong": "La grabación dura más de 4 horas. Se conserva el texto obtenido hasta ahora."
+    },
+    "result": {
+      "minutes": "{minutes, number} min",
+      "thisComputer": "Este ordenador",
+      "cloud": "stella AI, {model}",
+      "matter": "asunto {name}",
+      "copy": "Copiar",
+      "copied": "Copiado",
+      "saveAs": "Guardar como",
+      "saveWithTimestamps": "Texto con marcas de tiempo (.txt)",
+      "saveWithoutTimestamps": "Texto sin marcas de tiempo (.txt)",
+      "saveToMatter": "Guardar en el asunto",
+      "savingToMatter": "Guardando…",
+      "savedToMatter": "Guardado en {matter} como {fileName}.",
+      "saveToMatterFailed": "No se pudo guardar la transcripción en el asunto. Inténtalo de nuevo.",
+      "saveFailed": "No se pudo copiar ni guardar la transcripción. Inténtalo de nuevo.",
+      "noSpeech": "No se encontró voz en esta grabación.",
+      "fileName": "{title} - transcripción.txt",
+      "documentTitle": "{title} - transcripción",
+      "transcriptTitle": "Transcripción"
+    },
+    "progress": {
+      "running": "Transcribiendo {done, number} de {total, number} min",
+      "runningUnknown": "Transcribiendo: {done, number} min hasta ahora",
+      "stop": "Detener",
+      "stopped": "Detenido tras {done, number} min. Se conserva el texto obtenido hasta ahora.",
+      "done": "{total, number} min transcritos.",
+      "another": "Transcribir otra grabación"
+    },
+    "cleaned": {
+      "title": "Texto depurado",
+      "running": "Depurando…",
+      "waiting": "Cada parte se depura en cuanto se transcribe.",
+      "instructionsTitle": "Instrucciones del dictado · no forman parte del texto",
+      "instructionsLabel": "Instrucciones:",
+      "partFailed": "Esta parte no se pudo depurar, así que se muestra tal como se transcribió.",
+      "failedCount": "{count, plural, one {# parte sin depurar} other {# partes sin depurar}}",
+      "saveMarkdown": "Texto con formato (.md)",
+      "saveText": "Texto sin formato (.txt)",
+      "fileNameMarkdown": "{title} depurado.md",
+      "fileNameText": "{title} depurado.txt",
+      "offerTitle": "Depurar la transcripción con IA",
+      "offerDescription": "Esta grabación se transcribió en este ordenador y la depuración con IA está desactivada en Configuración. Al depurarla se envía el texto, nunca el audio, al modelo de IA de tu organización.",
+      "offerStart": "Depurar"
+    },
+    "copyMenu": {
+      "label": "Opciones de copia",
+      "formatted": "Con formato",
+      "plain": "Como texto sin formato",
+      "hint": "Con formato se pegan títulos, negritas y listas en Word u Outlook. Se recuerda tu elección."
     }
   }
 }

@@ -30,7 +30,9 @@ import {
   MODEL_TEMPERATURE_POLICIES,
 } from "./capabilities.gen";
 import {
+  DEFAULT_RATIONALE_BY_GROUP,
   MODEL_DEFAULTS_LEDGER,
+  MODEL_OVERRIDE_GROUP_TASK,
   MODEL_TASK_OVERRIDE_GROUP,
   resolveDefaultModel,
 } from "./model-defaults-ledger";
@@ -50,6 +52,7 @@ export {
   MODEL_OVERRIDE_GROUPS,
   MODEL_TASK_OVERRIDE_GROUP,
   MODEL_OVERRIDE_GROUP_TASK,
+  inheritedOverrideGroup,
   resolveDefaultModel,
   resolveDefaultOverrideModels,
 } from "./model-defaults-ledger";
@@ -260,6 +263,23 @@ const defaultPresentation = <TModelId extends string>(entry: {
   rationaleKey: entry.rationale.rationaleKey,
 });
 
+/**
+ * A role without defaults of its own shows the default of the task it
+ * inherits (`MODEL_OVERRIDE_GROUP_TASK`), explained in its own words.
+ */
+const inheritedRolePresentation = <TModelId extends string>(
+  group: ModelOverrideGroup,
+  inherited: {
+    candidate: { modelId: TModelId };
+    rationale: ModelDefaultRationale;
+  },
+) => ({
+  ...defaultPresentation(inherited),
+  rationaleKey: DEFAULT_RATIONALE_BY_GROUP[group].rationaleKey,
+});
+
+const BROWSE_DEFAULTS = MODEL_DEFAULTS_LEDGER[MODEL_OVERRIDE_GROUP_TASK.browse];
+
 /** Default labels in the override editor derive from the task ledger. */
 export const BYOK_DEFAULT_MODELS = {
   google: {
@@ -267,36 +287,42 @@ export const BYOK_DEFAULT_MODELS = {
     chat: defaultPresentation(MODEL_DEFAULTS_LEDGER.chat.google),
     reasoning: defaultPresentation(MODEL_DEFAULTS_LEDGER.reasoning.google),
     pdf: defaultPresentation(MODEL_DEFAULTS_LEDGER.pdf.google),
+    browse: inheritedRolePresentation("browse", BROWSE_DEFAULTS.google),
   },
   openrouter: {
     fast: defaultPresentation(MODEL_DEFAULTS_LEDGER["short-text"].openrouter),
     chat: defaultPresentation(MODEL_DEFAULTS_LEDGER.chat.openrouter),
     reasoning: defaultPresentation(MODEL_DEFAULTS_LEDGER.reasoning.openrouter),
     pdf: defaultPresentation(MODEL_DEFAULTS_LEDGER.pdf.openrouter),
+    browse: inheritedRolePresentation("browse", BROWSE_DEFAULTS.openrouter),
   },
   openai: {
     fast: defaultPresentation(MODEL_DEFAULTS_LEDGER["short-text"].openai),
     chat: defaultPresentation(MODEL_DEFAULTS_LEDGER.chat.openai),
     reasoning: defaultPresentation(MODEL_DEFAULTS_LEDGER.reasoning.openai),
     pdf: defaultPresentation(MODEL_DEFAULTS_LEDGER.pdf.openai),
+    browse: inheritedRolePresentation("browse", BROWSE_DEFAULTS.openai),
   },
   anthropic: {
     fast: defaultPresentation(MODEL_DEFAULTS_LEDGER["short-text"].anthropic),
     chat: defaultPresentation(MODEL_DEFAULTS_LEDGER.chat.anthropic),
     reasoning: defaultPresentation(MODEL_DEFAULTS_LEDGER.reasoning.anthropic),
     pdf: defaultPresentation(MODEL_DEFAULTS_LEDGER.pdf.anthropic),
+    browse: inheritedRolePresentation("browse", BROWSE_DEFAULTS.anthropic),
   },
   bedrock: {
     fast: defaultPresentation(MODEL_DEFAULTS_LEDGER["short-text"].bedrock),
     chat: defaultPresentation(MODEL_DEFAULTS_LEDGER.chat.bedrock),
     reasoning: defaultPresentation(MODEL_DEFAULTS_LEDGER.reasoning.bedrock),
     pdf: defaultPresentation(MODEL_DEFAULTS_LEDGER.pdf.bedrock),
+    browse: inheritedRolePresentation("browse", BROWSE_DEFAULTS.bedrock),
   },
   mistral: {
     fast: defaultPresentation(MODEL_DEFAULTS_LEDGER["short-text"].mistral),
     chat: defaultPresentation(MODEL_DEFAULTS_LEDGER.chat.mistral),
     reasoning: defaultPresentation(MODEL_DEFAULTS_LEDGER.reasoning.mistral),
     pdf: { kind: MODEL_DEFAULTS_LEDGER.pdf.mistral.kind },
+    browse: inheritedRolePresentation("browse", BROWSE_DEFAULTS.mistral),
   },
 } as const satisfies Record<
   TanStackAIProvider,
@@ -315,6 +341,7 @@ export const BYOK_DEFAULT_MODELS = {
  */
 export const BYOK_MODEL_OPTIONS = {
   google: [
+    "gemini-4-neon",
     "gemini-4-hydrogen",
     "gemini-4-carbon",
     "gemini-4-argon",
@@ -357,6 +384,7 @@ export const BYOK_MODEL_OPTIONS = {
     ...GPT_61_OPENROUTER_MODEL_IDS,
     ...GPT_6_OPENROUTER_MODEL_IDS,
     ...GPT_56_OPENROUTER_MODEL_IDS,
+    "google/gemini-4-neon",
     "google/gemini-4-hydrogen",
     "google/gemini-4-carbon",
     "google/gemini-4-argon",
@@ -437,7 +465,7 @@ export const RECOMMENDED_CHAT_MODELS = [
   GPT_62_MODEL_IDS.sol.openai,
   // GPT-6.1 has no fast tier yet; GPT-6 Luna is the newest one.
   GPT_6_MODEL_IDS.luna.openai,
-  "gemini-3.8-flash",
+  "gemini-4-hydrogen",
 ] as const satisfies readonly OfferedBYOKModelId[];
 
 /**
@@ -447,6 +475,10 @@ export const RECOMMENDED_CHAT_MODELS = [
  * creator's icon while their routing provider remains available separately.
  */
 export const MODEL_DISPLAY_METADATA = {
+  "gemini-4-neon": {
+    displayName: "Gemini 4 Neon",
+    iconProvider: "google",
+  },
   "gemini-4-hydrogen": {
     displayName: "Gemini 4 Hydrogen",
     iconProvider: "google",
@@ -664,6 +696,10 @@ export const MODEL_DISPLAY_METADATA = {
     displayName: "GPT-5.6 Terra",
     iconProvider: "openai",
     supersededBy: GPT_61_MODEL_IDS.terra.openrouter,
+  },
+  "google/gemini-4-neon": {
+    displayName: "Gemini 4 Neon",
+    iconProvider: "google",
   },
   "google/gemini-4-hydrogen": {
     displayName: "Gemini 4 Hydrogen",
@@ -1105,6 +1141,7 @@ export const MODEL_STREAMING_TOOL_USE = {
   "anthropic/claude-haiku-5.5": "supported",
   "us.anthropic.claude-haiku-5-5": "supported",
   "claude-haiku-5-5": "supported",
+  "gemini-4-neon": "supported",
   "gemini-4-hydrogen": "supported",
   "gemini-4-carbon": "supported",
   "gemini-4-argon": "supported",
@@ -1125,6 +1162,7 @@ export const MODEL_STREAMING_TOOL_USE = {
   "openai/gpt-5.6-sol": "supported",
   "openai/gpt-5.6-terra": "supported",
   "openai/gpt-5.6-luna": "supported",
+  "google/gemini-4-neon": "supported",
   "google/gemini-4-hydrogen": "supported",
   "google/gemini-4-carbon": "supported",
   "google/gemini-4-argon": "supported",
@@ -1354,6 +1392,7 @@ export const CONTEXT_WINDOW_TOKENS = {
   "gemini-3.6-flash": 1_048_576,
   "gemini-3.7-flash": 1_048_576,
   "gemini-3.8-flash": 1_048_576,
+  "gemini-4-neon": 1_048_576,
   "gemini-4-hydrogen": 1_048_576,
   "gemini-4-carbon": 1_048_576,
   "gemini-4-argon": 1_048_576,
@@ -1398,6 +1437,7 @@ export const CONTEXT_WINDOW_TOKENS = {
   "mistral-medium-3-5": 128_000,
   "magistral-small-latest": 128_000,
   // OpenRouter provider-prefixed slugs mirror their upstream windows.
+  "google/gemini-4-neon": 1_048_576,
   "google/gemini-4-hydrogen": 1_048_576,
   "google/gemini-4-carbon": 1_048_576,
   "google/gemini-4-argon": 1_048_576,

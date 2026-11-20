@@ -1,3 +1,4 @@
+// parser-output-unchanged: the Finanční správa and Ministry of the Interior gate entries are new; existing adapters read only their own keys, so their parsed output is unchanged.
 // parser-output-unchanged: the cz-ns-sbirka adapter entry is new; existing adapters read only their own keys, so their parsed output is unchanged.
 // parser-output-unchanged: the br-tjdft adapter entry is new; existing adapters read only their own keys, so their parsed output is unchanged.
 // parser-output-unchanged: the TST adapter entry is new; existing adapters read only their own keys, so their parsed output is unchanged.
@@ -66,6 +67,25 @@ export const PUBLISHER_GATES = {
    * A full walk is about 120 requests.
    */
   "suip-cz": { publisher: "SÚIP", intervalMs: 5000, hosts: ["suip.gov.cz"] },
+  /**
+   * financnisprava.gov.cz states no limit; robots.txt disallows only search,
+   * view-mode switches and form folders. A full walk of both pokyn series is
+   * about 45 year pages and 450 documents; a 2 s gap keeps it near 16 minutes.
+   */
+  "financnisprava-cz": {
+    publisher: "Finanční správa",
+    intervalMs: 2000,
+    hosts: ["financnisprava.gov.cz"],
+  },
+  /**
+   * mv.gov.cz states no limit and its robots.txt disallows nothing. A listing
+   * walk is one page; with full texts, one request per závěr.
+   */
+  "mv-cz": {
+    publisher: "Ministerstvo vnitra",
+    intervalMs: 5000,
+    hosts: ["mv.gov.cz"],
+  },
   "bfdi-de": {
     publisher: "BfDI",
     intervalMs: 30_000,
@@ -170,6 +190,18 @@ export const PUBLISHER_GATES = {
     publisher: "Nejvyšší soud",
     intervalMs: 1000,
     hosts: ["sbirka.nsoud.cz"],
+  },
+  /**
+   * The insolvency register's public web service and its document servlet.
+   * Its operating terms let the Ministry block a user sending more than
+   * 3,000 requests a day or 50 a minute; forty seconds apart is 2,160 a day.
+   * Register lookups spend the rest through their own budget
+   * (`lib/business-registries/isir-lookup-budget.ts`).
+   */
+  "isir-justice-cz": {
+    publisher: "Ministerstvo spravedlnosti",
+    intervalMs: 40_000,
+    hosts: ["isir.justice.cz"],
   },
   /** NSS search portal and the court's original-document registry. */
   "nssoud-cz": {

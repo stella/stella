@@ -21,10 +21,10 @@ import type {
   RefObject,
 } from "react";
 
+import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { CHAT_MEMBER_SEND_ACTION } from "@stll/api-contract/chat-send-intent";
-import { resolveChatComposerAction } from "@stll/chat/composer";
 import type {
   AISuggestion,
   AISuggestionPreset,
@@ -50,7 +50,6 @@ import {
 } from "@stll/ui/icons";
 import { Loader } from "@stll/ui/loader";
 import { OVERLAY_LAYER_CLASS_NAMES } from "@stll/ui/overlay-layer";
-import { Tooltip, TooltipPopup, TooltipTrigger } from "@stll/ui/tooltip";
 import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
@@ -64,9 +63,9 @@ import { ChatComposerActionButton } from "@/components/chat/chat-composer-action
 import { ChatDraftAttachmentChips } from "@/components/chat/chat-draft-attachment-chips";
 import type { ComposerEditModeMenuProps } from "@/components/chat/chat-edit-mode-menu";
 import type { ComposerModelsMenuProps } from "@/components/chat/chat-model-options-menu";
-import { ComposerControlSlot } from "@/components/chat/composer-control-slot";
 import { ComposerPlusMenu } from "@/components/chat/composer-plus-menu";
 import type { ComposerContextMenuProps } from "@/components/chat/composer-plus-menu";
+import { ComposerControlSlot } from "@/components/chat/composer-row.pending";
 import {
   DOCKED_CHAT_COLUMN_SLOT,
   DockedChatSurface,
@@ -258,13 +257,6 @@ type PromptBarProps = {
    * forget — a control. Omit on surfaces with no status row.
    */
   dock?: ReactNode | undefined;
-  /**
-   * Follow-up-prompt chips stacked above the bar (typically
-   * `SuggestedFollowupChips`). Routed through `DockedComposer` so the
-   * chip offset stays owned in one place instead of each surface
-   * hand-positioning it. Omit on surfaces without follow-up chips.
-   */
-  followupChips?: ReactNode | undefined;
   /**
    * Opt in to the shared (+) composer menu on the left (attach files via
    * the controller's picker). Only surfaces that thread `files` through
@@ -550,7 +542,6 @@ export const PromptBar = (props: PromptBarProps) => {
     sendDisabledReason,
     queueWhileGenerating = false,
     dock,
-    followupChips,
     attachmentsEnabled = false,
     models,
     onNewThread,
@@ -577,7 +568,6 @@ export const PromptBar = (props: PromptBarProps) => {
 
   const {
     busy,
-    composerActionMode,
     composerSubmitDisabled,
     inputDisabled,
     isGenerating,
@@ -588,10 +578,14 @@ export const PromptBar = (props: PromptBarProps) => {
     isEmpty,
     onRetry,
     sendDisabled,
-    onStop,
     queueWhileGenerating,
     sendDisabledReason,
     status,
+  });
+  const sendDisabledText = resolveSendDisabledText({
+    canSubmit,
+    sendDisabledReason,
+    t,
   });
   // With queuing enabled the composer keeps accepting input while a
   // response streams: `useChatSession` holds submitted drafts until the
@@ -963,69 +957,72 @@ export const PromptBar = (props: PromptBarProps) => {
         />
       </div>
 
-      <Tooltip>
-        <TooltipTrigger
-          render={
-            // The control slot mirrors the (+) menu's seating: the shell
-            // is items-end, so the slot rides the bottom text line as the
-            // editor grows.
-            <ComposerControlSlot>
-              <ChatComposerActionButton
-                canSend={!composerSubmitDisabled && canSubmit}
-                isGenerating={isGenerating}
-                onRetry={retryOffer}
-                onSend={() => {
-                  detached(
-                    submitDraft(CHAT_MEMBER_SEND_ACTION.send),
-                    "ai-suggestions-host.submit-draft",
-                  );
-                }}
-                onStop={onStop}
-                stopping={stopping}
-              />
-            </ComposerControlSlot>
-          }
+      {/* The control slot mirrors the (+) menu's seating: the shell is
+          items-end, so the slot rides the bottom text line as the editor
+          grows. The button owns its tooltip: its action when it can act,
+          and why not when it cannot. */}
+      <ComposerControlSlot>
+        <ChatComposerActionButton
+          canSend={!composerSubmitDisabled && canSubmit}
+          disabledReason={sendDisabledText}
+          isGenerating={isGenerating}
+          onRetry={retryOffer}
+          onSend={() => {
+            detached(
+              submitDraft(CHAT_MEMBER_SEND_ACTION.send),
+              "ai-suggestions-host.submit-draft",
+            );
+          }}
+          onStop={onStop}
+          stopping={stopping}
         />
-        <TooltipPopup side="top">
-          {/* Labels the same state the button resolves internally —
-              `composerActionMode` comes from the button module's own
-              resolver, so the tooltip cannot drift from the morph. */}
-          {(() => {
-            if (composerActionMode === "stop") {
-              return t("chat.stopResponse");
-            }
-            if (composerActionMode === "retry") {
-              return t("common.retry");
-            }
-            if (canSubmit) {
-              return t("chat.sendPrompt");
-            }
-            return t("chat.askAnything");
-          })()}
-        </TooltipPopup>
-      </Tooltip>
+      </ComposerControlSlot>
     </PromptBarShell>
   );
 
   // One docked layout for every surface: `DockedComposer` owns the bar's
-  // position, width, the follow-up-chip offset, and the status-row
+  // position, width, and the status-row
   // placement, so the inspector chat and the file-overlay chat are
   // positionally identical by construction. Surface-specific features
   // (preset chips, the pending badge, the thread-toggle chevron) stay
   // gated on props above; only geometry is unified here.
   return (
-    <DockedComposer
-      bar={shell}
-      {...(followupChips === undefined ? {} : { chips: followupChips })}
-      {...(dock === undefined ? {} : { dock })}
-    />
+    <DockedComposer bar={shell} {...(dock === undefined ? {} : { dock })} />
   );
+};
+
+/**
+ * What the send button says while it cannot act: the editor or a save holding
+ * it reads as that, and an empty draft says what to do. `t` is typed to the
+ * keys it reads, so the full message tree is not re-instantiated here.
+ */
+const resolveSendDisabledText = ({
+  canSubmit,
+  sendDisabledReason,
+  t,
+}: {
+  canSubmit: boolean;
+  sendDisabledReason: PromptBarProps["sendDisabledReason"];
+  t: (
+    key: "chat.editorLoading" | "chat.sendPromptEmpty" | "folio.savingDocument",
+  ) => string;
+}): string | undefined => {
+  switch (sendDisabledReason) {
+    case "editor-loading":
+      return t("chat.editorLoading");
+    case "draft-saving":
+      return t("folio.savingDocument");
+    case undefined:
+      return canSubmit ? undefined : t("chat.sendPromptEmpty");
+    default:
+      sendDisabledReason satisfies never;
+      return panic(`Unhandled send block: ${String(sendDisabledReason)}`);
+  }
 };
 
 const getPromptBarAvailability = ({
   isEmpty,
   onRetry,
-  onStop,
   queueWhileGenerating,
   sendDisabledReason,
   sendDisabled = false,
@@ -1033,7 +1030,6 @@ const getPromptBarAvailability = ({
 }: {
   isEmpty: boolean;
   onRetry: PromptBarProps["onRetry"];
-  onStop: PromptBarProps["onStop"];
   queueWhileGenerating: boolean;
   sendDisabledReason: PromptBarProps["sendDisabledReason"];
   sendDisabled: PromptBarProps["sendDisabled"];
@@ -1047,11 +1043,6 @@ const getPromptBarAvailability = ({
     onRetry !== undefined && isEmpty && !submitDisabled ? onRetry : undefined;
   return {
     busy,
-    composerActionMode: resolveChatComposerAction({
-      isGenerating,
-      onStop,
-      onRetry: retryOffer,
-    }),
     composerSubmitDisabled: queueWhileGenerating
       ? status === "applying" || isSendBlocked || sendDisabled
       : submitDisabled,

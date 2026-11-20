@@ -14,9 +14,6 @@
 import { notInArray, sql } from "drizzle-orm";
 import type { Column, SQL } from "drizzle-orm";
 
-import { hasUsableAst } from "@stll/legal-ast/document-ast";
-
-import type { CorpusPayload } from "@/api/lib/legal-search/corpus-storage";
 import {
   EMPTY_CORPUS_CONTENT_HASHES,
   storedCorpusWriteIsCompleteSql,
@@ -99,19 +96,6 @@ export const publicRowHoldsDocumentFor = (
     and ${notInArray(table.contentHash, [...EMPTY_CORPUS_CONTENT_HASHES])}
   )
 )`;
-
-/**
- * The same question as `pgPayloadCarriesDocument`, asked of a payload
- * already in hand rather than of a row. The two must agree: this one
- * judges what the trim is about to delete, that one filters rows the
- * trim and the ingestion refresh never load.
- */
-export const payloadCarriesDocument = ({
-  text,
-  sections,
-  ast,
-}: CorpusPayload): boolean =>
-  (text ?? "") !== "" || hasUsableAst(ast) || (sections?.length ?? 0) > 0;
 
 /**
  * Whether a content hash names the payload a metadata-first ingest

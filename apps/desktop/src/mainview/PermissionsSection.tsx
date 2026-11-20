@@ -34,6 +34,7 @@ export const PermissionsSection = ({
   /** What each permission is for, where one feature asks for it. */
   descriptions?: Partial<Record<Permission, string>>;
   media?: PermissionRowMedia;
+  /** The rows to show, in this order; all of them when absent. */
   only?: readonly Permission[];
   window: DesktopTelemetryWindow;
 }) => {
@@ -123,8 +124,10 @@ export const PermissionsSection = ({
       snapshot={
         snapshot && only
           ? {
-              rows: snapshot.rows.filter(({ permission }) =>
-                only.includes(permission),
+              // In the order asked for, such as the microphone before the
+              // Accessibility that types what it heard.
+              rows: only.flatMap((permission) =>
+                snapshot.rows.filter((row) => row.permission === permission),
               ),
             }
           : snapshot

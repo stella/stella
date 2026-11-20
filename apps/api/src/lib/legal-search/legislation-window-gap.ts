@@ -7,6 +7,7 @@ import { legislationDocuments, legislationSources } from "@/api/db/schema";
 import { inconsistentVersionColumns } from "@/api/lib/legal-search/legislation-expression-label";
 import {
   isInconsistentWindowGapAt,
+  isPromulgatedOnlyTextAt,
   legislationVersionRow,
   versionSortKey,
 } from "@/api/lib/legal-search/legislation-validity-window";
@@ -50,3 +51,34 @@ export const selectInconsistentWindowVersions = async (
       desc(legislationDocuments.id),
     )
     .limit(INCONSISTENT_VERSIONS_MAX);
+
+/** The row predicate for `legislation_documents` itself. */
+const isPromulgatedOnlyTextOn = (asOf: SQLWrapper): SQL =>
+  isPromulgatedOnlyTextAt(legislationVersionRow(legislationDocuments), asOf);
+
+/**
+ * The text as promulgated a read at `asOf` falls back to, within the Work the
+ * conditions select, when that Work holds no version of an applicable kind;
+ * null otherwise. Read only after no eligible version answered, so it never
+ * replaces a text in force.
+ */
+export const selectPromulgatedOnlyVersion = async (
+  tx: LegislationReadTransaction,
+  { conditions, asOf }: { conditions: readonly SQL[]; asOf: SQLWrapper },
+) => {
+  const [version] = await tx
+    .select({ id: legislationDocuments.id })
+    .from(legislationDocuments)
+    .innerJoin(
+      legislationSources,
+      eq(legislationSources.id, legislationDocuments.sourceId),
+    )
+    .where(and(...conditions, isPromulgatedOnlyTextOn(asOf)))
+    .orderBy(
+      desc(versionSortKey(legislationDocuments.versionValidFrom)),
+      asc(legislationDocuments.language),
+      desc(legislationDocuments.id),
+    )
+    .limit(1);
+  return version?.id ?? null;
+};

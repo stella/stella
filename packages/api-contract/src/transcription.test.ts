@@ -10,6 +10,7 @@ import {
   MAX_TRANSCRIPTION_PROVIDER_BODY_BYTES,
   MAX_TRANSCRIPTION_VOCABULARY_TERM_LENGTH,
   MAX_TRANSCRIPTION_VOCABULARY_TERMS,
+  TRANSCRIPTION_LABELS_SHOWN_FIELD,
 } from "./transcription";
 
 const largestVocabulary = Array.from(
@@ -89,6 +90,7 @@ test("transcription multipart maximum fits full vocabulary and maximum audio", a
   form.set("language", "cs");
   form.set("vocabulary", JSON.stringify(largestVocabulary));
   form.set("matterId", "00000000-0000-4000-8000-000000000001");
+  form.set(TRANSCRIPTION_LABELS_SHOWN_FIELD, "1");
   const request = new Request("http://localhost/transcriptions", {
     method: "POST",
     body: form,

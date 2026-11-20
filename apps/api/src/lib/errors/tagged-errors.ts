@@ -37,7 +37,6 @@ import {
   FetchBoundaryError,
 } from "@stll/errors";
 import { isConnectionFailure } from "@stll/fetch";
-import type { PersistedAstDegradation } from "@stll/legal-ast/document-ast";
 import {
   INGESTION_STOP_KIND,
   type IngestionStopKind,
@@ -424,19 +423,18 @@ export class CorpusMemberDigestMismatchError extends TaggedError(
 }> {}
 
 /**
- * A stored document AST carried vocabulary this reader does not declare
- * (a block role, a block kind, or an inline kind) or head matter after the
- * body. The read served the document with those degraded (see
- * `persistedAstDegradations` and `headMatterOrderDegradations` in
- * `@stll/legal-ast/document-ast`); this is telemetry only, so the row is
- * visible: either a writer newer than this reader, or a row written past
- * the ingestion boundary that needs repair.
+ * A stored document AST was served other than as written: degraded without
+ * loss (vocabulary this reader does not declare, repeated identities, head
+ * matter after the body; see `persistedAstDegradations`) or stored without
+ * structure. Telemetry only, so the row stays visible until a reparse
+ * repairs it; `reportStoredAstOutcome` in `stored-ast-outcome.ts` is its one
+ * reporter, and the record it writes carries the counts, never the content.
  */
 export class StoredAstDegradedError extends TaggedError(
   "StoredAstDegradedError",
 )<{
   message: string;
-  degradations: readonly PersistedAstDegradation[];
+  outcome: "degraded" | "structureless";
 }> {}
 
 export const STORED_CORPUS_VALIDATION_CODE = "stored_corpus_invalid";

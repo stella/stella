@@ -10,6 +10,7 @@ import {
   MAX_TRANSCRIPTION_MODEL_ID_LENGTH,
   MAX_TRANSCRIPTION_VOCABULARY_TERM_LENGTH,
   MAX_TRANSCRIPTION_VOCABULARY_TERMS,
+  TRANSCRIPTION_LABELS_SHOWN_FIELD,
 } from "@stll/api-contract/transcription";
 import { LANGUAGES } from "@stll/locales";
 
@@ -45,11 +46,19 @@ export const dictationBodySchema = v.strictObject({
     ),
   ),
   matterId: v.optional(resourceIdSchema("workspace")),
+  /** Present: the caller showed the models list's `outsideRegion` and
+   *  `retainsData` labels where the model was chosen. */
+  [TRANSCRIPTION_LABELS_SHOWN_FIELD]: v.optional(v.literal("1")),
 });
 
-/** What a linked desktop uploads: the audio chunk, a model and a language.
- *  It names no matter and sends no vocabulary. */
-export const desktopDictationBodySchema = v.omit(dictationBodySchema, [
-  "matterId",
-  "vocabulary",
-]);
+/** What a linked desktop uploads: the audio chunk, a model, a language,
+ *  the speaker's own custom words as vocabulary (only to a model the list
+ *  marks `takesVocabulary`) and, for a recording filed under a matter, that
+ *  matter, whose names the API adds. Its route always knows the desktop
+ *  labels its models, so it sends no labels flag. A recording's piece names
+ *  itself the same way on every attempt, so a retry after a lost answer is
+ *  counted once. */
+export const desktopDictationBodySchema = v.strictObject({
+  ...v.omit(dictationBodySchema, [TRANSCRIPTION_LABELS_SHOWN_FIELD]).entries,
+  pieceId: v.optional(v.pipe(v.string(), v.uuid())),
+});

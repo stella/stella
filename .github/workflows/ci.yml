@@ -413,7 +413,7 @@ jobs:
       # merge group validates the queued tree, so it needs no patch identity.
       - name: Checkout patch-id inputs
         if: (github.event_name == 'pull_request' && github.event.action != 'enqueued') || github.event_name == 'merge_group'
-        uses: stella/.github/actions/partial-clone-checkout@41fbea3b521bfc57b791003918de97f153d790a7
+        uses: stella/.github/actions/partial-clone-checkout@2664e46f02aea7164ba71bcdd485a686166993a4
         with:
           ref: ${{ (inputs.heavy_only == true || inputs.pr_depth_only == true) && inputs.sha || '' }}
           fetch-depth: 0
@@ -921,7 +921,7 @@ jobs:
         # are enough to list changed paths, and git fetches any other blob a
         # step reads (a `git show <base>:<file>`, say) on first access. Jobs
         # that never look past HEAD keep the default shallow checkout.
-        uses: stella/.github/actions/partial-clone-checkout@41fbea3b521bfc57b791003918de97f153d790a7
+        uses: stella/.github/actions/partial-clone-checkout@2664e46f02aea7164ba71bcdd485a686166993a4
         with:
           fetch-depth: 0
           persist-credentials: false
@@ -1791,7 +1791,7 @@ jobs:
       &quick-checks-steps # parser-version-guard reads Git history, so the checkout is full.
       - name: Checkout
         id: checkout
-        uses: stella/.github/actions/partial-clone-checkout@41fbea3b521bfc57b791003918de97f153d790a7
+        uses: stella/.github/actions/partial-clone-checkout@2664e46f02aea7164ba71bcdd485a686166993a4
         with:
           fetch-depth: 0
           persist-credentials: false
@@ -1842,6 +1842,10 @@ jobs:
           path: ${{ runner.temp }}/bun-install/*.log
           retention-days: 7
           if-no-files-found: ignore
+
+      - name: Check script test declarations
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: &script_test_declarations bun scripts/run-unlisted-script-tests.ts --check-declarations
 
       # Workflow job classifications fail more red pull requests than any
       # other check and take seconds, so they run here, before the heavy
@@ -2203,7 +2207,7 @@ jobs:
     steps:
       - name: Checkout
         id: checkout
-        uses: stella/.github/actions/partial-clone-checkout@41fbea3b521bfc57b791003918de97f153d790a7
+        uses: stella/.github/actions/partial-clone-checkout@2664e46f02aea7164ba71bcdd485a686166993a4
         with:
           fetch-depth: 0
           persist-credentials: false
@@ -2503,7 +2507,7 @@ jobs:
           CI_CHECK_KIND: CONTEXTUAL
           CI_CHECK_CONTEXT: "Operational checkout, installation, preparation, reporting or cancellation; depends on runner state or workflow execution."
         id: checkout
-        uses: stella/.github/actions/partial-clone-checkout@41fbea3b521bfc57b791003918de97f153d790a7
+        uses: stella/.github/actions/partial-clone-checkout@2664e46f02aea7164ba71bcdd485a686166993a4
         with:
           fetch-depth: 0
           persist-credentials: false
@@ -2694,7 +2698,7 @@ jobs:
           CI_CHECK_KIND: CONTEXTUAL
           CI_CHECK_CONTEXT: "Operational checkout, installation, preparation, reporting or cancellation; depends on runner state or workflow execution."
         id: checkout
-        uses: stella/.github/actions/partial-clone-checkout@41fbea3b521bfc57b791003918de97f153d790a7
+        uses: stella/.github/actions/partial-clone-checkout@2664e46f02aea7164ba71bcdd485a686166993a4
         with:
           fetch-depth: 0
           persist-credentials: false
@@ -2799,7 +2803,7 @@ jobs:
           CI_CHECK_CONTEXT: "Uses event target or Git base/merge-base rather than only the current input tree."
         if: ${{ !cancelled() && steps.checkout.outcome == 'success' && (github.event_name == 'pull_request') && steps.policy.outcome == 'success' }}
         # The repository owner publishes this versioned shared contract.
-        uses: stella/.github/.github/actions/changeset-policy@41fbea3b521bfc57b791003918de97f153d790a7 # v1.8.0
+        uses: stella/.github/.github/actions/changeset-policy@2664e46f02aea7164ba71bcdd485a686166993a4 # v1.8.0
         with:
           release-paths: ${{ steps.policy.outputs.release_paths }}
           generated-paths: ${{ steps.policy.outputs.generated_paths }}
@@ -2924,6 +2928,14 @@ jobs:
           CI_CHECK_CONTEXT: "Operational checkout, installation, preparation, reporting or cancellation; depends on runner state or workflow execution."
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         run: bun scripts/ci-generated-sources.ts restore "$RUNNER_TEMP/generated-sources"
+
+      - name: Check script test declarations
+        env:
+          CI_CHECK_KIND: STATIC
+          CI_CHECK_INPUTS: tracked-tree+generated-inputs
+        id: script_test_declarations
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') && (github.event_name == 'merge_group' || steps.static_receipts.outputs.reuse_script_test_declarations != 'true') }}
+        run: *script_test_declarations
 
       - name: Prepare route network manifest
         env:
@@ -3450,7 +3462,7 @@ jobs:
       - &full_checkout_input_sha
         id: checkout
         name: Checkout
-        uses: stella/.github/actions/partial-clone-checkout@41fbea3b521bfc57b791003918de97f153d790a7
+        uses: stella/.github/actions/partial-clone-checkout@2664e46f02aea7164ba71bcdd485a686166993a4
         with:
           fetch-depth: 0
           persist-credentials: false
@@ -3720,7 +3732,7 @@ jobs:
       CI_GENERATED_SOURCES_MANIFEST: ${{ github.workspace }}/.cache/ci-generated-sources/manifest.json
     steps:
       - name: Checkout
-        uses: stella/.github/actions/partial-clone-checkout@41fbea3b521bfc57b791003918de97f153d790a7
+        uses: stella/.github/actions/partial-clone-checkout@2664e46f02aea7164ba71bcdd485a686166993a4
         with:
           fetch-depth: 0
           persist-credentials: false
@@ -3917,7 +3929,7 @@ jobs:
       CI_GENERATED_SOURCES_MANIFEST: ${{ github.workspace }}/.cache/ci-generated-sources/manifest.json
     steps:
       - name: Checkout
-        uses: stella/.github/actions/partial-clone-checkout@41fbea3b521bfc57b791003918de97f153d790a7
+        uses: stella/.github/actions/partial-clone-checkout@2664e46f02aea7164ba71bcdd485a686166993a4
         with:
           fetch-depth: 0
           persist-credentials: false
@@ -4464,7 +4476,7 @@ jobs:
           persist-credentials: false
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@41fbea3b521bfc57b791003918de97f153d790a7
+        uses: stella/.github/actions/setup-bun-cached@2664e46f02aea7164ba71bcdd485a686166993a4
         with:
           save: ${{ github.ref == 'refs/heads/main' }}
 
@@ -4549,7 +4561,7 @@ jobs:
           persist-credentials: false
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@41fbea3b521bfc57b791003918de97f153d790a7
+        uses: stella/.github/actions/setup-bun-cached@2664e46f02aea7164ba71bcdd485a686166993a4
         with:
           save: ${{ github.ref == 'refs/heads/main' }}
 
@@ -5008,14 +5020,21 @@ jobs:
           if-no-files-found: error
           retention-days: 1
 
-      - name: Bundle size report
+      - name: Startup gate base
+        timeout-minutes: 5
+        env:
+          BASE_SHA: ${{ needs.ci-plan.outputs.target_base_sha }}
+        run: bash scripts/startup-gate-base.sh
+
+      - name: Startup bundle gates
+        # Blocking: the startup graph's gates (scripts/bundle-startup-gates.ts).
         run: |
           bun scripts/bundle-baseline.ts --self-test
-          bun --preload ./scripts/offline-network-preload.ts scripts/bundle-baseline.ts --check
+          bun --preload ./scripts/offline-network-preload.ts scripts/bundle-baseline.ts --check --base-dir "$STARTUP_GATE_BASE_DIR"
 
       - name: Bundle duplicate content guard
-        # Blocking, unlike the warning-only size report above: a chunk that
-        # repeats a large block of identical content is a build defect.
+        # Blocking: a chunk that repeats a large block of identical content
+        # is a build defect.
         run: bun scripts/bundle-baseline.ts --check-duplicates
 
       - name: Prod-deps web boot smoke
@@ -5099,7 +5118,7 @@ jobs:
       - *ci_image_mirror_login
       - &setup_bun_cached
         name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@41fbea3b521bfc57b791003918de97f153d790a7
+        uses: stella/.github/actions/setup-bun-cached@2664e46f02aea7164ba71bcdd485a686166993a4
         with:
           bun-version-file: package.json
           save: ${{ github.ref == 'refs/heads/main' }}
@@ -5184,7 +5203,9 @@ jobs:
       )
       )
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    # Passing runs take 7 to 9 min (the three bundles about 5 to 7); 20 min
+    # allows about 2.5x contention headroom for a slow hosted runner.
+    timeout-minutes: 20
     permissions:
       contents: read
       actions: write
@@ -5386,7 +5407,7 @@ jobs:
       - name: Check route network baseline
         if: ${{ !cancelled() && steps.checkout.outcome == 'success' }}
         continue-on-error: ${{ github.event_name == 'merge_group' }}
-        timeout-minutes: 6
+        timeout-minutes: 8
         id: network-baseline
         env:
           PLAYWRIGHT_JSON_OUTPUT_FILE: ${{ github.workspace }}/.cache/playwright-timings/check-route-network-baseline.json
@@ -6439,7 +6460,7 @@ jobs:
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
         with:
-          toolchain: 1.99.1
+          toolchain: 1.100.0
           targets: ${{ matrix.target }}
 
       - name: Resolve Windows build toolchain
@@ -6618,7 +6639,7 @@ jobs:
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
         with:
-          toolchain: 1.99.1
+          toolchain: 1.100.0
           targets: wasm32-unknown-unknown
 
       - name: Restore Rust build cache
@@ -6752,7 +6773,7 @@ jobs:
         name: Setup Rust
         uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
         with:
-          toolchain: 1.99.1
+          toolchain: 1.100.0
           targets: ${{ matrix.target }}
           components: clippy
 
@@ -6949,7 +6970,7 @@ jobs:
           persist-credentials: false
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@41fbea3b521bfc57b791003918de97f153d790a7
+        uses: stella/.github/actions/setup-bun-cached@2664e46f02aea7164ba71bcdd485a686166993a4
         with:
           save: ${{ github.ref == 'refs/heads/main' }}
           bun-version-file: "package.json"
@@ -8237,7 +8258,7 @@ jobs:
       # Reporting only: the verdict above is unchanged.
       - name: Setup Bun for the failure digest
         if: failure() && steps.outcome.outcome == 'failure'
-        uses: stella/.github/actions/setup-bun-cached@41fbea3b521bfc57b791003918de97f153d790a7
+        uses: stella/.github/actions/setup-bun-cached@2664e46f02aea7164ba71bcdd485a686166993a4
         with:
           save: ${{ github.ref == 'refs/heads/main' }}
           bun-version-file: .workflow-tooling/package.json

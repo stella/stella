@@ -1,4 +1,4 @@
-import { DOCX_MIME, getNativeOfficeViewerFormat, PDF_MIME } from "@/lib/consts";
+import { nativeFilePreviewKind } from "@/lib/files/preview-kind";
 
 export const FILE_OPEN_TARGET = {
   /** The full-screen `/workspaces/$workspaceId/$viewId/document` route. */
@@ -28,15 +28,11 @@ export type FileOpenTarget =
  */
 export const resolveFileOpenTarget = (
   mimeType: string | null,
-): FileOpenTarget => {
-  if (mimeType === null) {
-    return FILE_OPEN_TARGET.workspaceInspector;
-  }
-  const rendersFullScreenFromMime =
-    mimeType === PDF_MIME ||
-    mimeType === DOCX_MIME ||
-    getNativeOfficeViewerFormat(mimeType) !== null;
-  return rendersFullScreenFromMime
+): FileOpenTarget =>
+  hasFullScreenViewer(nativeFilePreviewKind({ mimeType }))
     ? FILE_OPEN_TARGET.documentRoute
     : FILE_OPEN_TARGET.workspaceInspector;
-};
+
+export const hasFullScreenViewer = (
+  kind: ReturnType<typeof nativeFilePreviewKind>,
+) => kind === "pdf" || kind === "docx" || kind === "xlsx" || kind === "pptx";

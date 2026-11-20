@@ -1,13 +1,12 @@
 import { useState } from "react";
 
-import { useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { useDebounce } from "use-debounce";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
 import { Checkbox } from "@stll/ui/checkbox";
 import { Field, FieldDescription, FieldLabel } from "@stll/ui/field";
-import { Frame, FramePanel } from "@stll/ui/frame";
 import { Input } from "@stll/ui/input";
 import {
   Select,
@@ -17,7 +16,10 @@ import {
   SelectValue,
 } from "@stll/ui/select";
 
-import { QueryViewFeedback } from "@/components/query-view-feedback";
+import {
+  QueryViewFeedback,
+  SettledQueryViewFeedback,
+} from "@/components/query-view-feedback";
 import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { unwrapApiResponse } from "@/lib/errors/api";
@@ -26,6 +28,13 @@ import {
   organizationSettingsOptions,
 } from "@/lib/organization/settings-queries";
 import { queryView } from "@/lib/query-view.logic";
+import {
+  MATTER_NUMBERING_TOGGLE_ROW_CLASS,
+  MatterNumberingCardFrame,
+  MatterNumberingCardPending,
+  MatterNumberPreview,
+  MatterNumberPreviewPending,
+} from "@/routes/_protected.settings/organization/-components/organization/matter-numbering-card.pending";
 import { useSettingsMutation } from "@/routes/_protected.settings/organization/-hooks/use-settings-mutation";
 
 const PATTERN_PRESETS = [
@@ -51,6 +60,9 @@ export const MatterNumberingCard = () => {
   const settings =
     settingsView.type === "items" ? settingsView.items : undefined;
 
+  if (settingsView.type === "pending") {
+    return <MatterNumberingCardPending />;
+  }
   if (!settings) {
     return <QueryViewFeedback view={settingsView} />;
   }
@@ -59,7 +71,9 @@ export const MatterNumberingCard = () => {
     <>
       <QueryViewFeedback view={settingsView} />
       <MatterNumberingCardBody
-        key={`${settings.matterNumberPattern}|${settings.matterNumberPadding}`}
+        // A new organization mounts a new body, so its preview never starts
+        // from the last organization's number.
+        key={`${activeOrganizationId}|${settings.matterNumberPattern}|${settings.matterNumberPadding}`}
         settings={settings}
       />
     </>
@@ -107,6 +121,10 @@ const MatterNumberingCardBody = ({
           { fetch: { signal } },
         ),
       ),
+    // A new pattern keeps the last number in the chip until its own
+    // preview arrives, so typing never empties the row. The body is keyed by
+    // organization, so the number kept is always this organization's.
+    placeholderData: keepPreviousData,
   });
   const previewView = queryView(previewQuery);
   const previewData =
@@ -150,123 +168,134 @@ const MatterNumberingCardBody = ({
     PATTERN_PRESETS.find((p) => p.value === pattern)?.value ?? "custom";
 
   return (
-    <Frame>
-      <FramePanel>
-        <div className="flex flex-col gap-3 p-1">
-          {/* Inside the field so the checkbox is described by it. */}
-          <Field className="gap-1">
-            <div className="flex items-center gap-2">
-              <Checkbox
-                checked={settings.matterNumberingEnabled}
-                disabled={numberingToggle.isPending}
-                onCheckedChange={(checked) => {
-                  if (typeof checked !== "boolean") {
-                    return;
-                  }
-                  numberingToggle.mutate(checked);
-                }}
-              />
-              <FieldLabel>
-                {t("organization.matterNumber.showInTitle")}
-              </FieldLabel>
-            </div>
-            <FieldDescription>
-              {t("organization.matterNumber.showInTitleDescription")}
-            </FieldDescription>
-          </Field>
-          <Field>
-            <FieldLabel>{t("organization.matterNumber.pattern")}</FieldLabel>
-            <Select
-              onValueChange={(val) => {
-                if (!val) {
+    <MatterNumberingCardFrame
+      numberingToggle={
+        /* Inside the field so the checkbox is described by it. */
+        <Field className="gap-1">
+          <div className={MATTER_NUMBERING_TOGGLE_ROW_CLASS}>
+            <Checkbox
+              checked={settings.matterNumberingEnabled}
+              disabled={numberingToggle.isPending}
+              onCheckedChange={(checked) => {
+                if (typeof checked !== "boolean") {
                   return;
                 }
-
-                if (val === "custom") {
-                  setIsCustom(true);
-                  return;
-                }
-
-                setIsCustom(false);
-                setPattern(val);
+                numberingToggle.mutate(checked);
               }}
-              value={selectedPreset}
-            >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectPopup alignItemWithTrigger={false}>
-                {[
-                  ...PATTERN_PRESETS.map((p) => (
-                    <SelectItem key={p.value} value={p.value}>
-                      {t(`organization.matterNumber.presets.${p.key}`)}
-                    </SelectItem>
-                  )),
-                  <SelectItem key="custom" value="custom">
-                    {t("common.custom")}
-                  </SelectItem>,
-                ]}
-              </SelectPopup>
-            </Select>
-          </Field>
-          {isCustom && (
-            <Field>
-              <Input
-                onChange={(e) => setPattern(e.target.value)}
-                placeholder="{YYYY}/{SEQ}"
-                value={pattern}
-              />
-              <p className="text-muted-foreground text-xs">
-                {t("organization.matterNumber.tokenHelp")}
-              </p>
-            </Field>
-          )}
-          <Field>
-            <FieldLabel>{t("organization.matterNumber.padding")}</FieldLabel>
-            <Select
-              onValueChange={(val) => {
-                if (val) {
-                  setPadding(Number(val));
-                }
-              }}
-              value={String(padding)}
-            >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectPopup alignItemWithTrigger={false}>
-                {PADDING_OPTIONS.map((p) => (
-                  <SelectItem key={p} value={String(p)}>
-                    {p}
+            />
+            <FieldLabel>
+              {t("organization.matterNumber.showInTitle")}
+            </FieldLabel>
+          </div>
+          <FieldDescription>
+            {t("organization.matterNumber.showInTitleDescription")}
+          </FieldDescription>
+        </Field>
+      }
+      pattern={
+        <Field>
+          <FieldLabel>{t("organization.matterNumber.pattern")}</FieldLabel>
+          <Select
+            onValueChange={(val) => {
+              if (!val) {
+                return;
+              }
+
+              if (val === "custom") {
+                setIsCustom(true);
+                return;
+              }
+
+              setIsCustom(false);
+              setPattern(val);
+            }}
+            value={selectedPreset}
+          >
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectPopup alignItemWithTrigger={false}>
+              {[
+                ...PATTERN_PRESETS.map((p) => (
+                  <SelectItem key={p.value} value={p.value}>
+                    {t(`organization.matterNumber.presets.${p.key}`)}
                   </SelectItem>
-                ))}
-              </SelectPopup>
-            </Select>
+                )),
+                <SelectItem key="custom" value="custom">
+                  {t("common.custom")}
+                </SelectItem>,
+              ]}
+            </SelectPopup>
+          </Select>
+        </Field>
+      }
+      customPattern={
+        isCustom && (
+          <Field>
+            <Input
+              onChange={(e) => setPattern(e.target.value)}
+              placeholder="{YYYY}/{SEQ}"
+              value={pattern}
+            />
             <p className="text-muted-foreground text-xs">
-              {t("organization.matterNumber.paddingDescription")}
+              {t("organization.matterNumber.tokenHelp")}
             </p>
           </Field>
-          <QueryViewFeedback view={previewView} />
-          {preview && (
-            <div className="flex items-center gap-2">
-              <span className="text-muted-foreground text-xs">
-                {t("organization.matterNumber.nextPreview")}
-              </span>
-              <span className="bg-muted rounded-sm border px-2 py-1 font-mono text-sm">
-                {preview}
-              </span>
-            </div>
-          )}
-          <Button
-            className="self-start"
-            loading={updateMutation.isPending}
-            onClick={() => updateMutation.mutate()}
-            size="sm"
+        )
+      }
+      padding={
+        <Field>
+          <FieldLabel>{t("organization.matterNumber.padding")}</FieldLabel>
+          <Select
+            onValueChange={(val) => {
+              if (val) {
+                setPadding(Number(val));
+              }
+            }}
+            value={String(padding)}
           >
-            {t("common.saveChanges")}
-          </Button>
-        </div>
-      </FramePanel>
-    </Frame>
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectPopup alignItemWithTrigger={false}>
+              {PADDING_OPTIONS.map((p) => (
+                <SelectItem key={p} value={String(p)}>
+                  {p}
+                </SelectItem>
+              ))}
+            </SelectPopup>
+          </Select>
+          <p className="text-muted-foreground text-xs">
+            {t("organization.matterNumber.paddingDescription")}
+          </p>
+        </Field>
+      }
+      preview={
+        <>
+          {previewView.type === "pending" ? (
+            <MatterNumberPreviewPending />
+          ) : (
+            preview && (
+              <MatterNumberPreview
+                label={t("organization.matterNumber.nextPreview")}
+              >
+                {preview}
+              </MatterNumberPreview>
+            )
+          )}
+          <SettledQueryViewFeedback view={previewView} />
+        </>
+      }
+      save={
+        <Button
+          className="self-start"
+          loading={updateMutation.isPending}
+          onClick={() => updateMutation.mutate()}
+          size="sm"
+        >
+          {t("common.saveChanges")}
+        </Button>
+      }
+    />
   );
 };

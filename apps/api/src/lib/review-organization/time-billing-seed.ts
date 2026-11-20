@@ -44,10 +44,12 @@ const ensureDefaultRateTable = async ({
   actor,
   workspaceId,
   counts,
-}: MatterStep): Promise<Result<SafeId<"rateTable">, ReviewSeedError>> => {
+}: MatterStep): Promise<
+  Result<{ id: SafeId<"rateTable">; currency: string }, ReviewSeedError>
+> => {
   const existing = await actor.safeDb((tx) =>
     tx
-      .select({ id: rateTables.id })
+      .select({ id: rateTables.id, currency: rateTables.currency })
       .from(rateTables)
       .where(
         and(
@@ -63,7 +65,7 @@ const ensureDefaultRateTable = async ({
   const table = existing.value.at(0);
   if (table !== undefined) {
     counts.rateTables.existing += 1;
-    return Result.ok(table.id);
+    return Result.ok(table);
   }
   const created = await Result.gen(() =>
     createRateTableHandler({
@@ -82,7 +84,10 @@ const ensureDefaultRateTable = async ({
     return Result.err(seedError("rate table", created.error));
   }
   counts.rateTables.created += 1;
-  return Result.ok(created.value.id);
+  return Result.ok({
+    id: created.value.id,
+    currency: SAMPLE_RATE_TABLE.currency,
+  });
 };
 
 /**
@@ -99,7 +104,7 @@ const seedRateTable = async (
   if (Result.isError(table)) {
     return table;
   }
-  const rateTableId = table.value;
+  const { id: rateTableId, currency } = table.value;
   const fallback = await actor.safeDb((tx) =>
     tx
       .select({ id: rateEntries.id })
@@ -127,6 +132,7 @@ const seedRateTable = async (
       session: { activeOrganizationId: actor.organizationId },
       params: { rateTableId },
       body: {
+        currency,
         hourlyRate: SAMPLE_RATE_TABLE.hourlyRateMinor,
         effectiveFrom: SAMPLE_RATE_TABLE.effectiveFrom,
       },

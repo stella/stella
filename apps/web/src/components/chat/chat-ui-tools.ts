@@ -35,6 +35,15 @@ import { isOwnKey } from "@stll/api-contract/own-key";
 import { FOLIO_AGENT_TOOL_NAMES } from "@stll/folio-agents";
 import type { FolioAgentToolName } from "@stll/folio-agents";
 
+import {
+  withSubagentRunParts,
+  withWaitingSubagentRunParts,
+} from "@/components/chat/chat-subagent-parts.logic";
+import type {
+  ChatPartAtAnyDepth,
+  SubagentChatPart,
+  SubagentChildPart,
+} from "@/components/chat/chat-subagent-parts.logic";
 import { withLocalRunLimitResetsAt } from "@/features/chat/chat-local-run-limit";
 import type { TranslationKey } from "@/i18n/types";
 import type { WebApiRoutes } from "@/lib/api";
@@ -339,6 +348,8 @@ export const isNonPersistentGrantChatToolName = (toolName: string): boolean =>
  * renders the write summary before it typechecks.
  */
 const REGISTRY_WRITE_SUMMARY_TOOL_NAMES = {
+  calendar_list_events: false,
+  calendar_free_busy: false,
   add_comment: false,
   boe_find_related_laws: false,
   boe_get_law: false,
@@ -371,6 +382,7 @@ const REGISTRY_WRITE_SUMMARY_TOOL_NAMES = {
   run_playbook: true,
   save_clause: true,
   save_playbook: true,
+  save_skill_package: true,
   save_contact: true,
   save_document: true,
   save_matter: true,
@@ -615,7 +627,7 @@ export const hasApprovalResponseAwaitingModelStep = ({
     return false;
   }
 
-  return message.parts.some(isApprovalRespondedPart);
+  return withSubagentRunParts(message.parts).some(isApprovalRespondedPart);
 };
 
 export const isRunningToolPart = (part: unknown): boolean => {
@@ -660,7 +672,8 @@ export const hasRunningToolCallInLatestAssistantMessage = ({
 
   // Server execution belongs to an active response stream. A ready runtime
   // with complete server input is waiting behind a gate, not still running.
-  return message.parts.some(
+  // A sub-agent run's client call runs on this page like a top-level one.
+  return withSubagentRunParts(message.parts).some(
     (part) =>
       isRunningToolPart(part) &&
       !(
@@ -673,19 +686,26 @@ export const hasRunningToolCallInLatestAssistantMessage = ({
 
 type PersistedChatPart = PersistedChatMessage["parts"][number];
 
-export const isApprovalRequestPart = (part: PersistedChatPart): boolean =>
+export const isApprovalRequestPart = (part: ChatPartAtAnyDepth): boolean =>
   part.type === "tool-call" && part.state === "approval-requested";
 
+/** Whether `parts`, a suspended sub-agent run's included, hold a card only
+ *  the member can answer (`isMemberAnsweredPart`). */
+export const hasUserAnswerablePart = (
+  parts: readonly ChatPartAtAnyDepth[],
+): boolean => withWaitingSubagentRunParts(parts).some(isMemberAnsweredPart);
+
 /**
- * The latest assistant message, if it holds a part `isAwaitedPart` accepts
- * and no later user message supersedes its turn: the runtime appends that
+ * The latest assistant message, if it holds a part `isAwaitedPart` accepts,
+ * directly or inside a suspended sub-agent run, and no later user message supersedes
+ * its turn: the runtime appends that
  * message before the new stream starts, and the server cancels the awaited
  * interaction when it accepts it, so the cards stop being answerable at the
  * same moment their answers stop being accepted.
  */
 const findAwaitedAssistantMessage = (
   messages: readonly PersistedChatMessage[],
-  isAwaitedPart: (part: PersistedChatPart) => boolean,
+  isAwaitedPart: (part: ChatPartAtAnyDepth) => boolean,
 ): PersistedChatMessage | null => {
   for (let index = messages.length - 1; index >= 0; index -= 1) {
     const message = messages.at(index);
@@ -695,7 +715,9 @@ const findAwaitedAssistantMessage = (
     if (message.role !== "assistant") {
       continue;
     }
-    return message.parts.some(isAwaitedPart) ? message : null;
+    return withWaitingSubagentRunParts(message.parts).some(isAwaitedPart)
+      ? message
+      : null;
   }
   return null;
 };
@@ -737,7 +759,7 @@ export const openMemberWaitKeys = ({
   return [
     ...(awaited === null
       ? []
-      : awaited.parts.flatMap((part) =>
+      : withWaitingSubagentRunParts(awaited.parts).flatMap((part) =>
           part.type === "tool-call" && isMemberAnsweredPart(part)
             ? [`part:${part.id}`]
             : [],
@@ -904,6 +926,55 @@ const toTerminalIfRunningToolPart = (part: ChatPart): ChatPart => {
   return { ...part, state: INTERRUPTED_TOOL_CALL_STATE };
 };
 
+/** A server call of a turn that waits on the user: the server runs it once
+ *  the user answers, so hydration leaves it as stored. */
+const isHeldServerCall = (
+  part: ChatPartAtAnyDepth,
+  awaitingUser: boolean,
+): boolean =>
+  awaitingUser &&
+  part.type === "tool-call" &&
+  part.state === "input-complete" &&
+  !isBrowserResolvedChatToolCall(part);
+
+const toTerminalIfRunningChildPart = (
+  part: SubagentChildPart,
+  awaitingUser: boolean,
+): SubagentChildPart => {
+  if (part.type === "subagent") {
+    return toTerminalIfRunningSubagentRun(part, awaitingUser);
+  }
+  if (
+    part.type !== "tool-call" ||
+    isHeldServerCall(part, awaitingUser) ||
+    !isRunningToolPart(part)
+  ) {
+    return part;
+  }
+  return { ...part, state: INTERRUPTED_TOOL_CALL_STATE };
+};
+
+/** A sub-agent run with its dead running calls settled the same way, at every
+ *  depth. An unchanged run is returned by reference. */
+const toTerminalIfRunningSubagentRun = (
+  part: SubagentChatPart,
+  awaitingUser: boolean,
+): SubagentChatPart => {
+  const messages = part.subagent.messages.map((message) => {
+    const parts = message.parts.map((child) =>
+      toTerminalIfRunningChildPart(child, awaitingUser),
+    );
+    return parts.every((child, index) => child === message.parts[index])
+      ? message
+      : { ...message, parts };
+  });
+  return messages.every(
+    (message, index) => message === part.subagent.messages[index],
+  )
+    ? part
+    : { ...part, subagent: { ...part.subagent, messages } };
+};
+
 /**
  * Rewrite running tool-call parts that can no longer complete into a
  * terminal errored state, clearing `isRunningToolPart` — and therefore
@@ -918,9 +989,10 @@ const toTerminalIfRunningToolPart = (part: ChatPart): ChatPart => {
  *
  * `ask-user` and approval-flow parts are user-owned and excluded by
  * `isRunningToolPart`. A complete `create-document` input is resumable by the
- * client and remains live until the draft result is returned. Messages and
- * parts left unchanged are returned by reference so downstream memoization
- * stays stable.
+ * client and remains live until the draft result is returned. A sub-agent
+ * run's calls settle by the same rule, since they keep the turn in flight
+ * the same way. Messages and parts left unchanged are returned by reference
+ * so downstream memoization stays stable.
  */
 export const sanitizeRunningToolCalls = (
   messages: readonly PersistedChatMessage[],
@@ -929,14 +1001,16 @@ export const sanitizeRunningToolCalls = (
     if (message.role !== "assistant") {
       return message;
     }
-    const parts = message.parts.map((part) =>
-      message.metadata?.turnOutcome?.type === "awaiting-user" &&
-      part.type === "tool-call" &&
-      part.state === "input-complete" &&
-      !isBrowserResolvedChatToolCall(part)
+    const awaitingUser =
+      message.metadata?.turnOutcome?.type === "awaiting-user";
+    const parts = message.parts.map((part) => {
+      if (part.type === "subagent") {
+        return toTerminalIfRunningSubagentRun(part, awaitingUser);
+      }
+      return isHeldServerCall(part, awaitingUser)
         ? part
-        : toTerminalIfRunningToolPart(part),
-    );
+        : toTerminalIfRunningToolPart(part);
+    });
     const partsChanged = parts.some(
       (part, index) => part !== message.parts[index],
     );
@@ -1146,8 +1220,32 @@ export const isOpaquePersistedChatToolCallPart = (
   return !isKnownChatToolName(value.name) && !isExternalMcpToolName(value.name);
 };
 
+type ToolCallPartShape = {
+  type: "tool-call";
+  id: string;
+  name: string;
+  arguments: string;
+  state: ChatToolCallPart["state"];
+  input?: unknown;
+};
+
+const isToolCallPartShape = (value: unknown): value is ToolCallPartShape =>
+  typeof value === "object" &&
+  value !== null &&
+  "type" in value &&
+  value.type === "tool-call" &&
+  "id" in value &&
+  typeof value.id === "string" &&
+  "name" in value &&
+  typeof value.name === "string" &&
+  "arguments" in value &&
+  typeof value.arguments === "string" &&
+  "state" in value &&
+  typeof value.state === "string" &&
+  isChatToolCallState(value.state);
+
 const isCanonicalBuiltInToolCall = (
-  value: TanStackChatToolCallPart,
+  value: Pick<ToolCallPartShape, "input" | "name" | "state">,
 ): value is BuiltInChatToolCallPart => {
   if (!isKnownChatToolName(value.name)) {
     return false;
@@ -1176,6 +1274,30 @@ const isCanonicalChatUIPart = (part: PersistedChatPart): boolean =>
   isExternalMcpToolName(part.name) ||
   isOpaquePersistedChatToolCallPart(part) ||
   isCanonicalBuiltInToolCall(part);
+
+/**
+ * A sub-agent run's part as the thread renders it, or `null` for one that
+ * fails the check a message's own part passes. The run's messages carry no
+ * registered tool types, so a call's name and input are checked here before
+ * it reaches a card typed by its tool.
+ */
+export const toSubagentChildUIPart = (
+  part: SubagentChildPart,
+): ChatUIPart | null => {
+  if (part.type !== "tool-call") {
+    return part;
+  }
+  if (isOpaquePersistedChatToolCallPart(part)) {
+    return part;
+  }
+  return isRegisteredChatUIToolCallPart(part) ? part : null;
+};
+
+const isRegisteredChatUIToolCallPart = (
+  value: unknown,
+): value is RegisteredChatUIToolCallPart =>
+  isToolCallPartShape(value) &&
+  (isExternalMcpToolName(value.name) || isCanonicalBuiltInToolCall(value));
 
 /** Whether every part of `message` is canonical, checked afresh. */
 export const isCanonicalChatUIMessage = (

@@ -2,8 +2,13 @@ import { panic } from "better-result";
 
 import type { GuidanceKind } from "@stll/legal-ast/document-kind";
 
+import { readSoftLawFullTextPermittedSources } from "@/api/env-soft-law";
 import { isCapabilityRoute } from "@/api/lib/capability-route";
 
+import {
+  SOFT_LAW_PERMISSION_GATED_AUTHORITIES,
+  type SoftLawPermissionGatedAuthority,
+} from "./soft-law-permission-gated";
 import type { SoftLawAuthority } from "./soft-law-types";
 
 /** How far a source's documents may be served to people. */
@@ -40,26 +45,35 @@ type SoftLawAttribution = {
   summaryDisclaimer: string | null;
 };
 
+type SoftLawFullServingSetting = {
+  serve: typeof SOFT_LAW_SERVE_MODE.full;
+  ai: SoftLawAiUse;
+  attribution: SoftLawAttribution;
+  /** Kinds withheld from every surface until a personal-data check clears them. */
+  withheldKinds: readonly GuidanceKind[];
+};
+
 export type SoftLawServingSetting =
   | { serve: typeof SOFT_LAW_SERVE_MODE.none }
   | {
       serve: typeof SOFT_LAW_SERVE_MODE.metadataLink;
       attribution: SoftLawAttribution;
     }
-  | {
-      serve: typeof SOFT_LAW_SERVE_MODE.full;
-      ai: SoftLawAiUse;
-      attribution: SoftLawAttribution;
-      /** Kinds withheld from every surface until a personal-data check clears them. */
-      withheldKinds: readonly GuidanceKind[];
-    };
+  | SoftLawFullServingSetting;
 
 const notServed = {
   serve: SOFT_LAW_SERVE_MODE.none,
 } as const satisfies SoftLawServingSetting;
 
+const MV_PSMV_PAGE =
+  "https://mv.gov.cz/zavery-poradniho-sboru-ministra-vnitra-ke-spravnimu-radu-a-spravnimu-trestani";
+/** The page asks citers to name a závěr by its form, number and date of issue. */
+const MV_PSMV_CITATION_CONDITION =
+  "V případě citací uveřejněných závěrů je prosím označte jejich formou, číslem a dnem vydání.";
+
 /**
- * One reviewed decision per source. The read path consults only this map:
+ * One reviewed decision per source. The read path consults only this map
+ * and, for a permission-gated source, `SOFT_LAW_FULL_TEXT_ON_PERMISSION`:
  * the descriptor stored on `soft_law_sources` records what a sync registered
  * and never grants access. A key for a source no adapter serves yet (a held
  * entry) is the decision waiting for that adapter.
@@ -86,6 +100,43 @@ export const SOFT_LAW_SERVING_SETTINGS = {
       summaryDisclaimer: null,
     },
     withheldKinds: ["inspection_report", "other"],
+  },
+  "cz-gfr": {
+    serve: SOFT_LAW_SERVE_MODE.full,
+    ai: SOFT_LAW_AI_USE.generation,
+    attribution: {
+      text: "Generální finanční ředitelství, financnisprava.gov.cz",
+      termsUrl: null,
+      conditions: [],
+      summaryDisclaimer: null,
+    },
+    withheldKinds: [],
+  },
+  "cz-mf": {
+    serve: SOFT_LAW_SERVE_MODE.full,
+    ai: SOFT_LAW_AI_USE.generation,
+    attribution: {
+      text: "Ministerstvo financí, financnisprava.gov.cz",
+      termsUrl: null,
+      conditions: [],
+      summaryDisclaimer: null,
+    },
+    withheldKinds: [],
+  },
+  // The page restricts the published závěry to non-commercial use; the
+  // listing is served until the Ministry permits more. See
+  // SOFT_LAW_FULL_TEXT_ON_PERMISSION.
+  "cz-mv-psmv": {
+    serve: SOFT_LAW_SERVE_MODE.metadataLink,
+    attribution: {
+      text: "Ministerstvo vnitra, mv.gov.cz",
+      termsUrl: MV_PSMV_PAGE,
+      conditions: [
+        "Uveřejněné závěry lze volně užívat pouze k nekomerčním účelům.",
+        MV_PSMV_CITATION_CONDITION,
+      ],
+      summaryDisclaimer: null,
+    },
   },
   "eu-edpb": {
     serve: SOFT_LAW_SERVE_MODE.full,
@@ -160,6 +211,43 @@ export const SOFT_LAW_SERVING_SETTINGS = {
   "be-comitep": notServed,
 } as const satisfies Record<SoftLawAuthority, SoftLawServingSetting>;
 
+/**
+ * The reviewed full-text setting of each permission-gated source. It replaces
+ * the source's listing setting only in a deployment that names the source in
+ * `SOFT_LAW_FULL_TEXT_PERMITTED_SOURCES`, recording the publisher's
+ * permission; a sync there also acquires the full texts. Adjust the
+ * attribution here if the permission attaches conditions of its own.
+ */
+export const SOFT_LAW_FULL_TEXT_ON_PERMISSION = {
+  "cz-mv-psmv": {
+    serve: SOFT_LAW_SERVE_MODE.full,
+    ai: SOFT_LAW_AI_USE.generation,
+    attribution: {
+      text: "Ministerstvo vnitra, mv.gov.cz",
+      termsUrl: MV_PSMV_PAGE,
+      conditions: [MV_PSMV_CITATION_CONDITION],
+      summaryDisclaimer: null,
+    },
+    withheldKinds: [],
+  },
+} as const satisfies Record<
+  SoftLawPermissionGatedAuthority,
+  SoftLawFullServingSetting
+>;
+
+const isPermissionGated = (
+  authority: SoftLawAuthority,
+): authority is SoftLawPermissionGatedAuthority =>
+  SOFT_LAW_PERMISSION_GATED_AUTHORITIES.some((gated) => gated === authority);
+
+const effectiveSoftLawSetting = (
+  authority: SoftLawAuthority,
+): SoftLawServingSetting =>
+  isPermissionGated(authority) &&
+  readSoftLawFullTextPermittedSources().includes(authority)
+    ? SOFT_LAW_FULL_TEXT_ON_PERMISSION[authority]
+    : SOFT_LAW_SERVING_SETTINGS[authority];
+
 export const hasSoftLawSetting = (
   authority: string,
 ): authority is SoftLawAuthority =>
@@ -173,9 +261,7 @@ export const hasSoftLawSetting = (
 export const softLawServingSettingOf = (
   authority: string,
 ): SoftLawServingSetting =>
-  hasSoftLawSetting(authority)
-    ? SOFT_LAW_SERVING_SETTINGS[authority]
-    : notServed;
+  hasSoftLawSetting(authority) ? effectiveSoftLawSetting(authority) : notServed;
 
 /** Whether a source may reach this surface with text, metadata only, or not at all. */
 export const SOFT_LAW_READ_SURFACE = {
@@ -261,11 +347,11 @@ export const softLawSurfaceEntries = (
   surface: SoftLawReadSurface,
 ): readonly SoftLawSurfaceEntry[] => {
   const entries: SoftLawSurfaceEntry[] = [];
-  // Widened on purpose: no source uses every mode today, and the switch must
-  // still decide each one.
-  const settings: Record<string, SoftLawServingSetting> =
-    SOFT_LAW_SERVING_SETTINGS;
-  for (const [authority, setting] of Object.entries(settings)) {
+  for (const authority of Object.keys(SOFT_LAW_SERVING_SETTINGS)) {
+    if (!hasSoftLawSetting(authority)) {
+      return panic("Soft-law serving settings name an unknown authority");
+    }
+    const setting = effectiveSoftLawSetting(authority);
     switch (setting.serve) {
       case SOFT_LAW_SERVE_MODE.none:
         break;

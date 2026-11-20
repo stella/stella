@@ -1,0 +1,822 @@
+import { useId, useRef, useState } from "react";
+
+import {
+  keepPreviousData,
+  useInfiniteQuery,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
+import { getRouteApi, Link } from "@tanstack/react-router";
+import { useDebouncedCallback } from "use-debounce";
+import { useNow, useTimeZone, useTranslations } from "use-intl";
+
+import {
+  CHAT_THREAD_PIN_STATE,
+  CHAT_THREAD_READ_STATE,
+} from "@stll/api-contract/chat";
+import { SEARCH_QUERY_MAX_LENGTH } from "@stll/api-contract/limits";
+import { Temporal } from "@stll/time";
+import {
+  AlertDialog,
+  AlertDialogClose,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogPopup,
+  AlertDialogTitle,
+} from "@stll/ui/alert-dialog";
+import { BidiText } from "@stll/ui/bidi-text";
+import { Button } from "@stll/ui/button";
+import { EntityActions, EntityActionsButton } from "@stll/ui/entity-actions";
+import type { EntityAction } from "@stll/ui/entity-actions";
+import {
+  CheckCheckIcon,
+  MailIcon,
+  NewChatIcon,
+  PinIcon,
+  PinOffIcon,
+  TrashIcon,
+} from "@stll/ui/icons";
+import { Label } from "@stll/ui/label";
+import {
+  List,
+  ListGroup,
+  ListGroupHeader,
+  ListGroupHeading,
+  ListGroupTitle,
+  ListItem,
+  ListItemActions,
+} from "@stll/ui/list";
+import { ScrollArea } from "@stll/ui/scroll-area";
+import { SearchField } from "@stll/ui/search-field";
+import { TruncatedText } from "@stll/ui/truncated-text";
+import { cn } from "@stll/ui/utils";
+
+import {
+  ChatThreadDecisionLabel,
+  drawableChatThreadDecision,
+  useOpenChatThreadDecision,
+} from "@/components/chat/chat-thread-decision";
+import { ChatThreadOriginPrefix } from "@/components/chat/chat-thread-origin-prefix";
+import { QueryViewFeedback } from "@/components/query-view-feedback";
+import Tooltip from "@/components/tooltip";
+import {
+  MatterCombobox,
+  toMatterOption,
+} from "@/components/workspaces/matter-combobox";
+import type { MatterOption } from "@/components/workspaces/matter-combobox";
+import {
+  ChatTitleRename,
+  ChatTitleSuggestButton,
+} from "@/features/chat/components/chat-title-rename";
+import {
+  groupedChatThreadsOptions,
+  invalidateChatThreadLists,
+  listChatHistoryItems,
+  mergeGroupedChatThreadPages,
+} from "@/features/chat/queries";
+import type { ChatHistoryItem } from "@/features/chat/queries";
+import {
+  useSetChatThreadPinState,
+  useSetChatThreadReadState,
+} from "@/features/chat/thread-reader-state";
+import { useFormatter, useRelativeTime } from "@/i18n/formatting-context";
+import type { TranslationKey } from "@/i18n/types";
+import { api } from "@/lib/api";
+import type { ChatThreadRef } from "@/lib/chat-thread-ref";
+import { toChatThreadId } from "@/lib/chat-thread-ref";
+import { isPlaceholderThreadTitle } from "@/lib/chat-thread-title";
+import { detached } from "@/lib/detached";
+import { unwrapApiResponse } from "@/lib/errors/api";
+import { notifyUserError } from "@/lib/errors/user-toast";
+import { queryView } from "@/lib/query-view.logic";
+import { MEDIUM_DATE_SHORT_TIME_FORMAT } from "@/lib/relative-time";
+import { toSafeId } from "@/lib/safe-id";
+import { useQueryViewError } from "@/lib/use-query-view";
+import { workspacesNavigationOptions } from "@/lib/workspaces/queries";
+
+import {
+  CHAT_HISTORY_PERIOD,
+  groupChatHistoryByPeriod,
+  hasChatHistoryFilter,
+  initialSearchFieldState,
+  isMatterUnavailable,
+  isStaleSearchWrite,
+  syncSearchField,
+} from "./chat-history.logic";
+import type {
+  ChatHistoryPeriod,
+  ChatHistorySearch,
+} from "./chat-history.logic";
+import {
+  CHAT_HISTORY_MATTER_FIELD_CLASS,
+  ChatHistoryRowsPending,
+  ChatHistoryShell,
+} from "./chat-history.pending";
+import { ThreadContextLine, ThreadContextTooltip } from "./thread-context-line";
+import { layoutThreadContext } from "./thread-context-line.logic";
+
+const SEARCH_DEBOUNCE_MS = 250;
+
+const PERIOD_LABEL = {
+  [CHAT_HISTORY_PERIOD.today]: "common.today",
+  [CHAT_HISTORY_PERIOD.previous7Days]: "chat.history.previous7Days",
+  [CHAT_HISTORY_PERIOD.older]: "chat.history.older",
+} as const satisfies Record<ChatHistoryPeriod, TranslationKey>;
+
+const protectedRouteApi = getRouteApi("/_protected");
+const historyRouteApi = getRouteApi("/_protected/chat/history");
+
+/** The page at `/chat/history`, its search and matter filter in the URL. */
+export const ChatHistoryRoutePage = () => {
+  const q = historyRouteApi.useSearch({ select: (search) => search.q });
+  const matter = historyRouteApi.useSearch({
+    select: (search) => search.matter,
+  });
+  const navigate = historyRouteApi.useNavigate();
+
+  const onSearchChange = (search: ChatHistorySearch) => {
+    // Refining a filter replaces the entry, so Back leaves the page instead
+    // of replaying every keystroke.
+    detached(navigate({ search, replace: true }), "chat-history.search");
+  };
+
+  return (
+    <ChatHistoryPage onSearchChange={onSearchChange} search={{ matter, q }} />
+  );
+};
+
+type ChatHistoryPageProps = {
+  search: ChatHistorySearch;
+  onSearchChange: (search: ChatHistorySearch) => void;
+};
+
+type DeleteDialog =
+  { type: "closed" } | { type: "confirm"; thread: ChatHistoryItem };
+
+/**
+ * Every chat the reader has started: the ones they pinned first, then the
+ * rest newest first, grouped by when each was last active. Search (title,
+ * matter, pinned matters) and the matter filter (chats that live in that
+ * matter) both run on the server, before paging, on both lists.
+ */
+export const ChatHistoryPage = ({
+  search,
+  onSearchChange,
+}: ChatHistoryPageProps) => {
+  const t = useTranslations();
+  const matterFieldId = useId();
+  const activeOrganizationId = protectedRouteApi.useRouteContext({
+    select: (ctx) => ctx.user.activeOrganizationId,
+  });
+  const userId = protectedRouteApi.useRouteContext({
+    select: (ctx) => ctx.user.id,
+  });
+  const [searchField, setSearchField] = useState(() =>
+    initialSearchFieldState(search.q),
+  );
+  // A query that reaches the URL from elsewhere (Back, Forward, a link)
+  // replaces the field's text, adjusted during render rather than in an
+  // effect; the field's own debounced write is recognised and left alone.
+  const syncedSearchField = syncSearchField({
+    state: searchField,
+    urlQuery: search.q,
+  });
+  if (syncedSearchField !== searchField) {
+    setSearchField(syncedSearchField);
+  }
+  // Each write remembers how many outside queries the field had seen when it
+  // was typed; the debounced callback reads the latest field state, so a
+  // write that an outside query has overtaken is dropped instead of undoing
+  // that navigation.
+  const commitQuery = useDebouncedCallback(
+    (q: string, scheduledAfter: number) => {
+      if (isStaleSearchWrite({ scheduledAfter, state: syncedSearchField })) {
+        return;
+      }
+      const nextQuery = q.trim().length > 0 ? q : undefined;
+      setSearchField((field) => ({
+        ...field,
+        pending: { status: "sent", query: nextQuery },
+      }));
+      onSearchChange({ ...search, q: nextQuery });
+    },
+    SEARCH_DEBOUNCE_MS,
+  );
+  const [deleteDialog, setDeleteDialog] = useState<DeleteDialog>({
+    type: "closed",
+  });
+
+  const pinnedThreadsQuery = useInfiniteQuery({
+    ...groupedChatThreadsOptions({
+      activeOrganizationId,
+      pinState: CHAT_THREAD_PIN_STATE.pinned,
+      search: search.q,
+      userId,
+      workspaceId: search.matter,
+    }),
+    placeholderData: keepPreviousData,
+  });
+  const pinnedThreadsView = queryView(pinnedThreadsQuery);
+  useQueryViewError(pinnedThreadsView, "ChatHistoryPage:query-pinned");
+  // Every chat, the list the sidebar already holds; pinned ones are dropped
+  // from it below, since the pinned list above shows them all.
+  const threadsQuery = useInfiniteQuery({
+    ...groupedChatThreadsOptions({
+      activeOrganizationId,
+      search: search.q,
+      userId,
+      workspaceId: search.matter,
+    }),
+    // Typing refines the list in place instead of blanking it per keystroke.
+    placeholderData: keepPreviousData,
+  });
+  const threadsView = queryView(threadsQuery);
+  useQueryViewError(threadsView, "ChatHistoryPage:query");
+  const matterUnavailable =
+    threadsView.type === "error" &&
+    isMatterUnavailable({ error: threadsView.error, matter: search.matter });
+  // The combobox owns this list's loading and error states; the page only
+  // resolves the URL's matter id to a name for it.
+  const mattersQuery = useQuery(
+    workspacesNavigationOptions({
+      organizationId: activeOrganizationId,
+      userId,
+    }),
+  );
+  const mattersView = queryView(mattersQuery);
+  useQueryViewError(mattersView, "ChatHistoryPage:query-2");
+  const matters = mattersView.type === "items" ? mattersView.items : undefined;
+  // Base UI compares combobox props by identity; hand it one value object per
+  // selection rather than a fresh copy on every render.
+  const selectedMatter = matterOption(matters?.workspaces, search.matter);
+
+  const clearFilters = () => {
+    commitQuery.cancel();
+    setSearchField((field) => ({
+      ...field,
+      pending: { status: "sent", query: undefined },
+      value: "",
+    }));
+    onSearchChange({});
+  };
+
+  return (
+    <ScrollArea axis="vertical" className="min-h-0 w-full flex-1">
+      <ChatHistoryShell
+        toolbar={
+          <>
+            <SearchField
+              aria-label={t("common.search")}
+              clearLabel={t("common.clearSearch")}
+              maxLength={SEARCH_QUERY_MAX_LENGTH}
+              groupClassName="sm:flex-1"
+              onValueChange={(value) => {
+                setSearchField((field) => ({ ...field, value }));
+                commitQuery(value, syncedSearchField.externalChanges);
+              }}
+              placeholder={t("common.search")}
+              value={syncedSearchField.value}
+            />
+            <div className={CHAT_HISTORY_MATTER_FIELD_CLASS}>
+              <Label className="sr-only" htmlFor={matterFieldId}>
+                {t("common.matter")}
+              </Label>
+              <MatterCombobox
+                activeOrganizationId={activeOrganizationId}
+                id={matterFieldId}
+                // Remounts once the matter named in the URL resolves, so the
+                // field opens showing it.
+                key={matters === undefined ? "pending" : "ready"}
+                onChange={(matter) => {
+                  onSearchChange({ ...search, matter: matter?.id });
+                }}
+                userId={userId}
+                value={selectedMatter}
+              />
+            </div>
+            {hasChatHistoryFilter(search) ? (
+              <Button onClick={clearFilters} variant="ghost">
+                {t("common.clearFilters")}
+              </Button>
+            ) : null}
+          </>
+        }
+      >
+        {threadsView.type === "pending" ? <ChatHistorySkeleton /> : null}
+        {matterUnavailable ? (
+          <div
+            className="text-muted-foreground flex flex-col items-start gap-2.5 px-1 text-sm"
+            role="status"
+          >
+            {t("chat.history.matterUnavailable")}
+            <Button
+              onClick={() => onSearchChange({ ...search, matter: undefined })}
+              size="sm"
+              variant="outline"
+            >
+              {t("workspaces.filters.clear")}
+            </Button>
+          </div>
+        ) : null}
+        {threadsView.type !== "pending" && !matterUnavailable ? (
+          <QueryViewFeedback view={threadsView} />
+        ) : null}
+        {/* Both lists fail alike under one filter; one error says so once. */}
+        {threadsView.type !== "pending" &&
+        threadsView.type !== "error" &&
+        !matterUnavailable ? (
+          <QueryViewFeedback view={pinnedThreadsView} />
+        ) : null}
+        {threadsView.type === "items" && pinnedThreadsView.type === "items" ? (
+          <ChatHistoryResults
+            accessibleMatterCount={matters?.workspaces.length}
+            hasFilter={hasChatHistoryFilter(search)}
+            items={listChatHistoryItems(
+              mergeGroupedChatThreadPages(threadsView.items.pages),
+            ).filter(
+              (thread) => thread.pinState === CHAT_THREAD_PIN_STATE.unpinned,
+            )}
+            onClearFilters={clearFilters}
+            onDelete={(thread) => setDeleteDialog({ type: "confirm", thread })}
+            pinnedItems={listChatHistoryItems(
+              mergeGroupedChatThreadPages(pinnedThreadsView.items.pages),
+            )}
+          />
+        ) : null}
+        {pinnedThreadsQuery.hasNextPage ? (
+          <Button
+            className="self-center"
+            disabled={pinnedThreadsQuery.isFetchingNextPage}
+            onClick={() => {
+              detached(
+                pinnedThreadsQuery.fetchNextPage(),
+                "chat-history.fetch-next-pinned-page",
+              );
+            }}
+            variant="ghost"
+          >
+            {pinnedThreadsQuery.isFetchingNextPage
+              ? t("common.loading")
+              : t("common.loadMore")}
+          </Button>
+        ) : null}
+        {threadsQuery.hasNextPage ? (
+          <Button
+            className="self-center"
+            disabled={threadsQuery.isFetchingNextPage}
+            onClick={() => {
+              detached(
+                threadsQuery.fetchNextPage(),
+                "chat-history.fetch-next-page",
+              );
+            }}
+            variant="ghost"
+          >
+            {threadsQuery.isFetchingNextPage
+              ? t("common.loading")
+              : t("common.loadMore")}
+          </Button>
+        ) : null}
+      </ChatHistoryShell>
+      <DeleteChatDialog
+        dialog={deleteDialog}
+        onOpenChange={(open) => {
+          if (!open) {
+            setDeleteDialog({ type: "closed" });
+          }
+        }}
+      />
+    </ScrollArea>
+  );
+};
+
+type NavigationMatter = Parameters<typeof toMatterOption>[0];
+
+/** The selected matter as the combobox expects it, from the URL's id. */
+function matterOption(
+  matters: readonly NavigationMatter[] | undefined,
+  matterId: string | undefined,
+): MatterOption | null {
+  if (matterId === undefined || matters === undefined) {
+    return null;
+  }
+  const matter = matters.find(({ id }) => id === matterId);
+  return matter === undefined ? null : toMatterOption(matter);
+}
+
+type ChatHistoryResultsProps = {
+  /** How many matters the reader can open; unknown while their list loads. */
+  accessibleMatterCount: number | undefined;
+  hasFilter: boolean;
+  items: ChatHistoryItem[];
+  onClearFilters: () => void;
+  onDelete: (thread: ChatHistoryItem) => void;
+  /** The reader's pinned chats, listed above the rest. */
+  pinnedItems: ChatHistoryItem[];
+};
+
+function ChatHistoryResults({
+  accessibleMatterCount,
+  hasFilter,
+  items,
+  onClearFilters,
+  onDelete,
+  pinnedItems,
+}: ChatHistoryResultsProps) {
+  const t = useTranslations();
+  const now = useNow();
+  const timeZone = useTimeZone() ?? Temporal.Now.timeZoneId();
+
+  if (items.length === 0 && pinnedItems.length === 0) {
+    return hasFilter ? (
+      <div className="text-muted-foreground flex flex-col items-start gap-2.5 px-1 text-sm">
+        {t("common.noResults")}
+        <Button onClick={onClearFilters} size="sm" variant="outline">
+          {t("common.clearFilters")}
+        </Button>
+      </div>
+    ) : (
+      <div className="text-muted-foreground flex flex-col items-start gap-2.5 px-1 text-sm">
+        {t("chat.noThreads")}
+        <Button render={<Link to="/chat" />} size="sm" variant="outline">
+          <NewChatIcon className="size-4" />
+          {t("chat.newChat")}
+        </Button>
+      </div>
+    );
+  }
+
+  const groups = groupChatHistoryByPeriod({
+    items,
+    now: Temporal.Instant.fromEpochMilliseconds(now.getTime()),
+    timeZone,
+  });
+  return (
+    <div className="flex flex-col gap-6">
+      {pinnedItems.length > 0 ? (
+        <ListGroup>
+          <ListGroupHeader>
+            <ListGroupHeading>
+              <ListGroupTitle>{t("navigation.pinned")}</ListGroupTitle>
+            </ListGroupHeading>
+          </ListGroupHeader>
+          <List>
+            {pinnedItems.map((thread) => (
+              <ChatHistoryRow
+                accessibleMatterCount={accessibleMatterCount}
+                key={thread.id}
+                onDelete={() => onDelete(thread)}
+                thread={thread}
+              />
+            ))}
+          </List>
+        </ListGroup>
+      ) : null}
+      {groups.map((group) => (
+        <ListGroup key={group.period}>
+          <ListGroupHeader>
+            <ListGroupHeading>
+              <ListGroupTitle>{t(PERIOD_LABEL[group.period])}</ListGroupTitle>
+            </ListGroupHeading>
+          </ListGroupHeader>
+          <List>
+            {group.items.map((thread) => (
+              <ChatHistoryRow
+                accessibleMatterCount={accessibleMatterCount}
+                key={thread.id}
+                onDelete={() => onDelete(thread)}
+                thread={thread}
+              />
+            ))}
+          </List>
+        </ListGroup>
+      ))}
+    </div>
+  );
+}
+
+type ChatHistoryRowProps = {
+  accessibleMatterCount: number | undefined;
+  onDelete: () => void;
+  thread: ChatHistoryItem;
+};
+
+/**
+ * One chat: the title links to it, the line below names where it came from
+ * and what it drew on, and the trailing date says when it was last active.
+ * A dot and a stronger title mark an answer the reader has not seen yet.
+ * Rename, the actions menu and delete stay visible on narrow screens; where
+ * there is room they take the date's place on hover or focus. Right-click
+ * opens the same actions.
+ */
+function ChatHistoryRow({
+  accessibleMatterCount,
+  onDelete,
+  thread,
+}: ChatHistoryRowProps) {
+  const t = useTranslations();
+  const setReadState = useSetChatThreadReadState();
+  const setPinState = useSetChatThreadPinState();
+  const format = useFormatter();
+  const relativeTime = useRelativeTime();
+  const openChatThreadDecision = useOpenChatThreadDecision();
+  const decision = drawableChatThreadDecision(thread);
+  const threadRef = chatHistoryThreadRef(thread);
+  const hasContext = layoutThreadContext(thread.context).hasContext;
+  const committedTitle = isPlaceholderThreadTitle(thread.title)
+    ? ""
+    : thread.title;
+  const updatedAt = new Date(thread.updatedAt);
+  // The link spans the row, so its tooltip sits under the chips it explains
+  // rather than at the middle of the row.
+  const contextLineRef = useRef<HTMLSpanElement>(null);
+  const contextLine = (
+    <span
+      className="text-muted-foreground flex min-w-0 items-center gap-1.5 overflow-hidden text-xs font-normal whitespace-nowrap"
+      ref={contextLineRef}
+    >
+      <ChatThreadOriginPrefix origin={thread.origin} />
+      {decision === null ? null : (
+        <ChatThreadDecisionLabel decision={decision} />
+      )}
+      <ThreadContextLine
+        accessibleMatterCount={accessibleMatterCount}
+        context={thread.context}
+      />
+    </span>
+  );
+  const revealClass =
+    "md:hidden md:group-focus-within:inline-flex md:group-hover:inline-flex";
+  const unread = thread.readState === CHAT_THREAD_READ_STATE.unread;
+  const pinned = thread.pinState === CHAT_THREAD_PIN_STATE.pinned;
+  const actions: EntityAction[] = [
+    pinned
+      ? {
+          icon: <PinOffIcon />,
+          label: t("common.unpin"),
+          onClick: () =>
+            setPinState.mutate({
+              pinState: CHAT_THREAD_PIN_STATE.unpinned,
+              threadRef,
+            }),
+        }
+      : {
+          icon: <PinIcon />,
+          label: t("common.pin"),
+          onClick: () =>
+            setPinState.mutate({
+              pinState: CHAT_THREAD_PIN_STATE.pinned,
+              threadRef,
+            }),
+        },
+    unread
+      ? {
+          icon: <CheckCheckIcon />,
+          label: t("common.markAsRead"),
+          onClick: () =>
+            setReadState.mutate({
+              readState: CHAT_THREAD_READ_STATE.read,
+              threadRef,
+            }),
+        }
+      : {
+          icon: <MailIcon />,
+          label: t("common.markAsUnread"),
+          onClick: () =>
+            setReadState.mutate({
+              readState: CHAT_THREAD_READ_STATE.unread,
+              threadRef,
+            }),
+        },
+    {
+      icon: <TrashIcon />,
+      label: t("chat.deleteThread"),
+      onClick: onDelete,
+      separatorBefore: true,
+      variant: "destructive",
+    },
+  ];
+
+  return (
+    <EntityActions actions={actions} label={t("common.actions")}>
+      <ListItem className="group">
+        <ChatTitleRename
+          editClassName="min-w-0 flex-1 gap-0.5 text-sm font-medium"
+          editDescription={contextLine}
+          hasMessages
+          ownsRenameCommand={false}
+          renderView={({
+            displayTitle,
+            isSuggesting,
+            startEditingWithSuggestion,
+          }) => (
+            <>
+              <Tooltip
+                align="start"
+                anchor={contextLineRef}
+                content={
+                  hasContext ? (
+                    <ThreadContextTooltip
+                      accessibleMatterCount={accessibleMatterCount}
+                      context={thread.context}
+                    />
+                  ) : null
+                }
+                side="bottom"
+                render={
+                  <Link
+                    className="focus-visible:ring-ring flex min-w-0 flex-1 flex-col gap-0.5 overflow-hidden rounded-md text-start outline-none focus-visible:ring-2"
+                    onClick={(event) => {
+                      openChatThreadDecision(event, thread);
+                    }}
+                    {...(threadRef.scope === "global"
+                      ? {
+                          to: "/chat/$threadId",
+                          params: { threadId: threadRef.threadId },
+                        }
+                      : {
+                          to: "/chat/workspaces/$workspaceId/$threadId",
+                          params: {
+                            threadId: threadRef.threadId,
+                            workspaceId: threadRef.workspaceId,
+                          },
+                        })}
+                  />
+                }
+              >
+                <span className="flex min-w-0 items-center gap-1.5">
+                  {unread ? (
+                    <span
+                      aria-hidden="true"
+                      className="bg-info size-2 shrink-0 rounded-full"
+                    />
+                  ) : null}
+                  <TruncatedText
+                    className={cn(
+                      "text-foreground text-sm",
+                      unread ? "font-semibold" : "font-medium",
+                    )}
+                    render={<BidiText as="span" />}
+                  >
+                    {displayTitle}
+                  </TruncatedText>
+                  {unread ? (
+                    <span className="sr-only">{t("common.unread")}</span>
+                  ) : null}
+                </span>
+                {contextLine}
+              </Tooltip>
+              <Tooltip
+                content={format.dateTime(
+                  updatedAt,
+                  MEDIUM_DATE_SHORT_TIME_FORMAT,
+                )}
+                render={
+                  <time
+                    className="text-muted-foreground shrink-0 text-xs tabular-nums md:group-focus-within:hidden md:group-hover:hidden"
+                    dateTime={updatedAt.toISOString()}
+                  />
+                }
+              >
+                {relativeTime(updatedAt)}
+              </Tooltip>
+              <ChatTitleSuggestButton
+                className={revealClass}
+                hasMessages
+                isPending={isSuggesting}
+                onTrigger={startEditingWithSuggestion}
+                usedAnonymization={thread.usedAnonymization}
+              />
+            </>
+          )}
+          threadRef={threadRef}
+          title={committedTitle}
+          usedAnonymization={thread.usedAnonymization}
+        />
+        <ListItemActions>
+          <span className={revealClass}>
+            <EntityActionsButton />
+          </span>
+          <Button
+            aria-label={t("chat.deleteThread")}
+            className={revealClass}
+            onClick={onDelete}
+            size="icon-sm"
+            variant="ghost"
+          >
+            <TrashIcon />
+          </Button>
+        </ListItemActions>
+      </ListItem>
+    </EntityActions>
+  );
+}
+
+function chatHistoryThreadRef(thread: ChatHistoryItem): ChatThreadRef {
+  return thread.scope === "workspace"
+    ? {
+        scope: thread.scope,
+        threadId: toChatThreadId(thread.id),
+        workspaceId: thread.workspaceId,
+      }
+    : { scope: thread.scope, threadId: toChatThreadId(thread.id) };
+}
+
+type DeleteChatDialogProps = {
+  dialog: DeleteDialog;
+  onOpenChange: (open: boolean) => void;
+};
+
+function DeleteChatDialog({ dialog, onOpenChange }: DeleteChatDialogProps) {
+  const t = useTranslations();
+  const queryClient = useQueryClient();
+  const deleteThread = useMutation({
+    mutationFn: async (thread: ChatHistoryItem) => {
+      const response = await api.chat
+        .threads({ threadId: toChatThreadId(thread.id) })
+        .delete(
+          {},
+          {
+            query:
+              thread.scope === "workspace"
+                ? { workspaceId: toSafeId<"workspace">(thread.workspaceId) }
+                : {},
+          },
+        );
+      unwrapApiResponse(response);
+    },
+    onError: (error) => {
+      notifyUserError(error, t("errors.actionFailed"));
+    },
+    onSettled: async (_data, _error, thread) => {
+      await invalidateChatThreadLists({
+        queryClient,
+        workspaceId:
+          thread.scope === "workspace" ? thread.workspaceId : undefined,
+      });
+    },
+    onSuccess: () => {
+      onOpenChange(false);
+    },
+  });
+  const thread = dialog.type === "confirm" ? dialog.thread : null;
+  const name =
+    thread === null || isPlaceholderThreadTitle(thread.title)
+      ? t("chat.newChat")
+      : thread.title;
+
+  return (
+    <AlertDialog
+      onOpenChange={(open) => {
+        if (!open && !deleteThread.isPending) {
+          onOpenChange(false);
+        }
+      }}
+      open={thread !== null}
+    >
+      <AlertDialogPopup>
+        <AlertDialogHeader>
+          <AlertDialogTitle>{t("chat.deleteThread")}</AlertDialogTitle>
+          <AlertDialogDescription>
+            {t("common.deleteConfirmDescription", { name })}
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogClose
+            disabled={deleteThread.isPending}
+            render={
+              <Button disabled={deleteThread.isPending} variant="ghost" />
+            }
+          >
+            {t("common.cancel")}
+          </AlertDialogClose>
+          <Button
+            loading={deleteThread.isPending}
+            onClick={() => {
+              if (thread !== null) {
+                deleteThread.mutate(thread);
+              }
+            }}
+            variant="destructive"
+          >
+            {t("common.delete")}
+          </Button>
+        </AlertDialogFooter>
+      </AlertDialogPopup>
+    </AlertDialog>
+  );
+}
+
+function ChatHistorySkeleton() {
+  const t = useTranslations();
+  return (
+    <>
+      <span className="sr-only" role="status">
+        {t("common.loading")}
+      </span>
+      <ChatHistoryRowsPending />
+    </>
+  );
+}

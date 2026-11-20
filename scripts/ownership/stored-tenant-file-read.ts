@@ -14,6 +14,11 @@ export default {
     names: ["readTenantS3ArrayBuffer"],
     allowed: [
       {
+        path: "apps/api/src/lib/agent-skills/skill-export.ts",
+        reason:
+          "Loads a skill file's stored original for the package export; the bytes are checked against the recorded digest and archived, never parsed.",
+      },
+      {
         path: "apps/api/src/handlers/contacts/extract-procuracao.ts",
         reason: "Loads an authorized document for contact extraction.",
       },

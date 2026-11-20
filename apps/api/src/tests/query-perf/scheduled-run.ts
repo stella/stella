@@ -696,6 +696,7 @@ export const measureScheduledJobRun = async ({
             readVerdict: async () => await Promise.resolve(admission),
           }),
       }),
+      noopTask,
       dataExportMaintenance === undefined ? {} : { dataExportMaintenance },
     ).get(job.task) ?? panic(`No registered task ${job.task} for ${jobId}`);
   // The search configuration is cached for 60 s, and the scheduled jobs run
@@ -703,19 +704,25 @@ export const measureScheduledJobRun = async ({
   // too, instead of depending on what an earlier run left in the cache.
   resetPublicCaseLawConfigForTesting();
   resetLocalCaseLawConfigForTesting();
+  const persistedJob = await database.query.schedulerJobs.findFirst({
+    where: { id: { eq: job.id } },
+  });
   const measured = await measureJobStatements({
     database,
     run: async (db) =>
       await task(
         asTestRaw<SchedulerTaskContext>({
           db,
-          job: createLeasedSchedulerJobFixture({
-            id: job.id,
-            task: job.task,
-            nextRunAt: now,
-            payload: "payload" in job ? job.payload : null,
-          }),
-          payload: "payload" in job ? job.payload : null,
+          job:
+            persistedJob ??
+            createLeasedSchedulerJobFixture({
+              id: job.id,
+              task: job.task,
+              nextRunAt: now,
+              payload: "payload" in job ? job.payload : null,
+            }),
+          payload:
+            persistedJob?.payload ?? ("payload" in job ? job.payload : null),
           dueAt: DueSlot.of({ nextRunAt: now, lockedAt: now }),
           runId: createSafeId<"schedulerJobRun">(),
           signal: new AbortController().signal,

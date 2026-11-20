@@ -26,9 +26,9 @@ import {
   TableHeader,
   TableRow,
 } from "@stll/ui/table";
+import { TableSkeletonRows } from "@stll/workspace-ui/table-skeleton-rows";
 
 import { ContactReadError } from "@/components/contact-read-error";
-import { TableSkeletonRows } from "@/components/table-skeleton-rows";
 import { useFormatter } from "@/i18n/formatting-context";
 import { detached } from "@/lib/detached";
 import { MEDIUM_DATE_SHORT_TIME_FORMAT } from "@/lib/relative-time";

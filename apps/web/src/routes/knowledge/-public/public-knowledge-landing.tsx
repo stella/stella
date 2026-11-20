@@ -7,6 +7,7 @@ import { usePublicSignInRequest } from "@/components/public-sign-in-request";
 import { publicKnowledgeSource } from "@/features/knowledge/public/public-knowledge";
 import { KnowledgeLandingView } from "@/features/knowledge/views/knowledge-landing-view";
 import type { KnowledgeLandingCard } from "@/features/knowledge/views/knowledge-landing-view";
+import { knowledgeSectionDescriptionKey } from "@/features/knowledge/views/knowledge-landing.pending";
 import { useMountEffect } from "@/hooks/use-effect";
 import { knowledgeSections } from "@/lib/knowledge/navigation";
 import { normalizeRedirectTo } from "@/lib/redirect";
@@ -45,13 +46,10 @@ export const PublicKnowledgeLanding = ({
       key: section.key,
       icon: section.icon,
       title: t(section.titleKey),
-      description:
-        section.key === "styles"
-          ? t("styleSets.description")
-          : t(`knowledge.sections.${section.key}.description`),
+      description: t(knowledgeSectionDescriptionKey(section.key)),
     };
     if (section.publicAccess === "catalogue") {
-      cards.push({ ...content, to: section.to });
+      cards.push({ ...content, to: section.catalogueTo });
     } else if (section.publicAccess === "account" && requestSignIn !== null) {
       cards.push({
         ...content,

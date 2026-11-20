@@ -5,6 +5,7 @@ import { and, eq } from "drizzle-orm";
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
 import type { ChatSendMode } from "@stll/anonymize-chat";
 import {
+  API_FILE_SECURITY_REJECTED_ERROR_CODE,
   BROWSER_CONTROL_PROTOCOL_VERSION,
   CHAT_INPUT_REFUSAL_CODE,
   CHAT_TURN_ID_HEADER,
@@ -36,6 +37,7 @@ import {
   type ActiveFileModelBinding,
   type ActiveFileSourceForModel,
   getActiveFileModelBinding,
+  getActiveFileSourceForModel,
 } from "@/api/handlers/chat/active-file-model-source";
 import {
   type ActiveChatSkillContext,
@@ -185,10 +187,15 @@ import {
   uploadMessageFilesWithRollback,
 } from "@/api/handlers/chat/send-message-side-effects";
 import {
+  adoptEmptyThread,
   loadThread,
   readThreadValidationState,
 } from "@/api/handlers/chat/send-message-thread";
 import type { ChatThreadState } from "@/api/handlers/chat/send-message-thread";
+import {
+  CHAT_SEND_CONTEXT_IGNORED_EVENT,
+  ignoredSendThreadFields,
+} from "@/api/handlers/chat/send-thread-fields";
 import { enforceLoadedSkillHistoryBindings } from "@/api/handlers/chat/skill-history-binding";
 import {
   hydrateMessages,
@@ -209,6 +216,10 @@ import {
   resolveToolWorkspaceIds,
 } from "@/api/handlers/chat/tools/authorized-workspace-ids";
 import { hasSuggestChangesApprovalResponse } from "@/api/handlers/chat/tools/auto-apply-suggest-changes-tools";
+import {
+  createCalendarTools,
+  loadCalendarTools,
+} from "@/api/handlers/chat/tools/calendar-tools";
 import { resolveChatDocumentClients } from "@/api/handlers/chat/tools/chat-document-clients";
 import {
   applyChatToolGrants,
@@ -278,6 +289,7 @@ import { attachVerifiedEntityMentionKinds } from "@/api/handlers/chat/verified-m
 import { createVisualResourceOrigin } from "@/api/handlers/visual-sandbox/resource-origin";
 import { createVisualStore } from "@/api/handlers/visual-sandbox/store";
 import type { ResponseHeaders } from "@/api/http/context";
+import { HTTP_FAILURE } from "@/api/http/errors";
 import { resolveSkillBindingScope } from "@/api/lib/agent-skills/binding";
 import type { SkillBindingScope } from "@/api/lib/agent-skills/binding";
 import type { ModelOfferedSkills } from "@/api/lib/agent-skills/invocation";
@@ -336,7 +348,9 @@ import type { UserDispatchSource } from "@/api/lib/db/audit-recording";
 import type { LocalRunAttachment } from "@/api/lib/desktop-runner/control";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { FeatureAccessSnapshot } from "@/api/lib/feature-access/policy";
+import { FileScanRejectedError } from "@/api/lib/file-scan/scan-upload";
 import { readStoredFile } from "@/api/lib/file-scan/stored-file";
+import { lockLiveVersionField } from "@/api/lib/files/live-version-field";
 import { createFileKey } from "@/api/lib/files/utils";
 import { FILE_SIZE_LIMIT_BYTES, LIMITS } from "@/api/lib/limits";
 import { getAppBaseUrl } from "@/api/lib/mcp-connectors/app-urls";
@@ -345,6 +359,7 @@ import { loadConnectableMcpConnectorsForUser } from "@/api/lib/mcp-upstream/conn
 import { resolveMemorySourceWorkspaceIds } from "@/api/lib/memory/memory-provenance";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { failureSink } from "@/api/lib/observability/failure";
+import { logger } from "@/api/lib/observability/logger";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { sanitizeForPrompt, untrustedText } from "@/api/lib/prompt-safety";
 import {
@@ -355,7 +370,10 @@ import { startExecutionAdmission } from "@/api/lib/rate-limit/execution-admissio
 import type { ExecutionAdmission } from "@/api/lib/rate-limit/execution-admission";
 import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
 import { brandPersistedChatMessageId } from "@/api/lib/safe-id-boundaries";
-import { extractFileTextResult } from "@/api/lib/search/extract-content";
+import {
+  extractFileTextResult,
+  resolveExtractionMimeType,
+} from "@/api/lib/search/extract-content";
 import { upsertChatThreadSearchDocument } from "@/api/lib/search/index-chat";
 import { memberSessionStreamBinding } from "@/api/lib/sse";
 import {
@@ -453,6 +471,32 @@ const usableWorkspaceIds = (
     }
   }
   return ids;
+};
+
+/**
+ * One warning for a send that carried context its thread does not run with: a
+ * thread that holds a message keeps its own skill and subject decision. Names
+ * the fields only, never what they carried.
+ */
+const warnIgnoredSendContext = ({
+  body,
+  thread,
+}: {
+  body: Pick<ChatSendRequest, "activeDecision" | "activeSkill">;
+  thread: ChatThreadState;
+}): void => {
+  const ignoredFields = ignoredSendThreadFields({
+    request: {
+      activeSkill: body.activeSkill,
+      subjectDecisionId: body.activeDecision?.decisionId ?? null,
+    },
+    resolved: thread.data.sendFields,
+  });
+  if (ignoredFields.length > 0) {
+    logger.warn(CHAT_SEND_CONTEXT_IGNORED_EVENT, {
+      "chat.send.ignored_fields": ignoredFields,
+    });
+  }
 };
 
 const validateActiveDraftContext = async ({
@@ -2001,6 +2045,16 @@ const prepareValidatedIncomingMessage = async ({
     // still honor thread/org gates for tools whose presence is an
     // explicit user or administrator opt-in.
     const validationTools = getChatValidationTools({
+      // Validation never executes tools. Keep the schema available for
+      // persisted calls even after this user's calendar grant is revoked.
+      calendarTools: createCalendarTools({
+        safeDb,
+        recordAuditEvent,
+        organizationId,
+        userId,
+        createAbortSignal: () =>
+          panic("Validation-only calendar tools must not execute"),
+      }),
       featureAccessSnapshot,
       organizationId,
       memberRole,
@@ -2095,7 +2149,9 @@ const prepareValidatedIncomingMessage = async ({
           activeDraftContext === null
             ? []
             : activeDraftContext.originDataWorkspaceIds,
-        initialContextMatterIds: requestedContextMatterIds,
+        // The pins as sent (validated with `requestedContextMatterIds`);
+        // undefined when the send names none.
+        initialContextMatterIds: body.contextMatterIds,
         initialActiveSkill: body.activeSkill,
         organizationId,
         recordAuditEvent,
@@ -2111,31 +2167,31 @@ const prepareValidatedIncomingMessage = async ({
     // enclosing finally is the sole rollback boundary for every later
     // return, error, or SDK short-circuit before that persistence succeeds.
     lifecycle.adoptThread(thread);
+    warnIgnoredSendContext({ body, thread });
 
     const activeDraft = body.activeDraft;
     if (activeDraft !== undefined) {
-      const hasPersistedContext =
-        thread.type === "created"
-          ? false
-          : yield* Result.await(
-              safeDb(async (tx) =>
-                hasPersistedGeneratedDocumentActiveDraftContext({
-                  generatedDraft: {
-                    originChatMessageId: activeDraft.originChatMessageId,
-                    originChatThreadId: activeDraft.originChatThreadId,
-                    toolCallId: activeDraft.toolCallId,
-                  },
-                  organizationId,
-                  threadId: thread.data.id,
-                  tx,
-                  userId,
-                }),
-              ),
-            );
+      const hasPersistedContext = thread.data.firstSend
+        ? false
+        : yield* Result.await(
+            safeDb(async (tx) =>
+              hasPersistedGeneratedDocumentActiveDraftContext({
+                generatedDraft: {
+                  originChatMessageId: activeDraft.originChatMessageId,
+                  originChatThreadId: activeDraft.originChatThreadId,
+                  toolCallId: activeDraft.toolCallId,
+                },
+                organizationId,
+                threadId: thread.data.id,
+                tx,
+                userId,
+              }),
+            ),
+          );
       if (
         !canUseChatThreadForGeneratedDocumentDraft({
+          firstSend: thread.data.firstSend,
           hasPersistedContext,
-          threadType: thread.type,
         })
       ) {
         return Result.err(
@@ -2156,10 +2212,11 @@ const prepareValidatedIncomingMessage = async ({
       }),
     };
 
-    // Existing-thread pin changes are durable side effects, so stop before
-    // applying them when any earlier validation or thread read observed a
-    // client disconnect. Created threads still need their rollback token
-    // cleaned up on this exit path.
+    // Existing-thread pin changes and the adoption of a thread stored before
+    // its first message are durable side effects, so stop before applying
+    // them when any earlier validation or thread read observed a client
+    // disconnect. Created threads still need their rollback token cleaned up
+    // on this exit path.
     if (isClientConnectionAborted()) {
       return Result.err(
         new HandlerError({
@@ -2168,6 +2225,16 @@ const prepareValidatedIncomingMessage = async ({
         }),
       );
     }
+    yield* Result.await(
+      adoptEmptyThread({
+        organizationId,
+        recordAuditEvent,
+        safeDb,
+        thread,
+        userId,
+        workspaceId,
+      }),
+    );
 
     // The thread's persisted chat-model override wins over the org/instance
     // default, but the dev-only body override still wins over everything
@@ -2366,6 +2433,9 @@ const assembleTurnSystemPrompt = ({
 
 export type SendMessageDependencies = {
   caseLawDb?: Parameters<typeof buildChatSystemPromptParts>[0]["caseLawDb"];
+  legislationDb?: Parameters<
+    typeof buildChatSystemPromptParts
+  >[0]["legislationDb"];
   startAdmission?: typeof startExecutionAdmission;
   compactMessagesForContext: typeof compactMessagesForContext;
   createRefRegistry: typeof createChatRefRegistry;
@@ -3248,7 +3318,17 @@ export const createSendMessage = (
             workspaceId,
           }),
         };
+        const calendarTools = yield* Result.await(
+          loadCalendarTools({
+            safeDb,
+            recordAuditEvent,
+            organizationId: session.activeOrganizationId,
+            userId: user.id,
+            createAbortSignal: createMeteredAIAbortSignal,
+          }),
+        );
         const chatToolContext = {
+          calendarTools,
           visualTools,
           appTools: { origin: visualOrigin },
           featureAccessSnapshot,
@@ -3347,6 +3427,7 @@ export const createSendMessage = (
         }
         const chatContextResult = await prepareChatContext({
           caseLawDb: dependencies.caseLawDb,
+          legislationDb: dependencies.legislationDb,
           copiesFilesToComputer: turnCopiesFiles(localRun, body.sendMode),
           promptTarget: promptTarget.value,
           recordAuditEvent,
@@ -3590,7 +3671,11 @@ export const createSendMessage = (
           }
 
           if (
-            thread.type === "created" &&
+            // A thread stored before its first message (a setting chosen
+            // first) is titled like one this send created, unless its title
+            // was already set some other way.
+            thread.data.firstSend &&
+            thread.data.title === initialThreadTitle &&
             body.sendMode !== CHAT_SEND_MODE.anonymized
           ) {
             const title = async () =>
@@ -3893,6 +3978,7 @@ const turnRunModeOf = (
 
 type PrepareChatContextProps = {
   caseLawDb?: SendMessageDependencies["caseLawDb"];
+  legislationDb?: SendMessageDependencies["legislationDb"];
   copiesFilesToComputer: boolean;
   promptTarget: ChatPromptTarget;
   recordAuditEvent: AuditRecorder;
@@ -3999,6 +4085,7 @@ const auditedLocalRunAttachments = async ({
 
 const prepareChatContext = async ({
   caseLawDb,
+  legislationDb,
   copiesFilesToComputer,
   promptTarget,
   recordAuditEvent,
@@ -4045,6 +4132,7 @@ const prepareChatContext = async ({
     const promptAndMessagesResult = await Result.allAsync([
       buildChatSystemPromptParts({
         ...(caseLawDb === undefined ? {} : { caseLawDb }),
+        ...(legislationDb === undefined ? {} : { legislationDb }),
         featureAccessContext: { featureAccessSnapshot, organizationId, userId },
         activeDecision,
         activeDraft,
@@ -4107,6 +4195,7 @@ const prepareChatContext = async ({
         activeFile,
         hydratedMessages,
         organizationId,
+        recordAuditEvent,
         safeDb,
         sendMode,
         workspaceId,
@@ -4144,6 +4233,7 @@ type AttachActiveFileFallbackWhenExtractionIsEmptyProps = {
   activeFile: IncomingActiveFile | undefined;
   hydratedMessages: ChatMessage[];
   organizationId: SafeId<"organization">;
+  recordAuditEvent: AuditRecorder;
   safeDb: SafeDb;
   sendMode: ChatSendMode;
   workspaceId: SafeId<"workspace"> | null;
@@ -4153,11 +4243,12 @@ const attachActiveFileFallbackWhenExtractionIsEmpty = async ({
   activeFile,
   hydratedMessages,
   organizationId,
+  recordAuditEvent,
   safeDb,
   sendMode,
   workspaceId,
 }: AttachActiveFileFallbackWhenExtractionIsEmptyProps): Promise<
-  Result<ChatMessage[], HandlerError<422 | 500> | SafeDbError>
+  Result<ChatMessage[], HandlerError<404 | 422 | 500> | SafeDbError>
 > =>
   await Result.gen(async function* () {
     if (activeFile === undefined) {
@@ -4179,10 +4270,11 @@ const attachActiveFileFallbackWhenExtractionIsEmpty = async ({
       return Result.ok(hydratedMessages);
     }
 
+    const fieldId = activeFile.fileFieldId;
     const activeFileBinding = yield* Result.await(
       resolveActiveFileModelBinding({
         activeFile,
-        fileFieldId: activeFile.fileFieldId,
+        fileFieldId: fieldId,
         safeDb,
         workspaceId,
       }),
@@ -4202,6 +4294,39 @@ const attachActiveFileFallbackWhenExtractionIsEmpty = async ({
         workspaceId,
       }),
     );
+    // A withdrawal during storage access or parsing must fence the model delivery too.
+    const delivered = yield* Result.await(
+      safeDb(async (tx) => {
+        const live = await lockLiveVersionField(tx, fieldId, workspaceId);
+        if (
+          live?.content.type !== "file" ||
+          live.entityId !== activeFile.entityId ||
+          getActiveFileSourceForModel(live.content)?.fileId !==
+            activeFileBinding.source.fileId ||
+          (activeFileBinding.version === "current" &&
+            live.currentVersionId !== live.versionId)
+        ) {
+          return false;
+        }
+        await recordAuditEvent(tx, {
+          action: CONTENT_DELIVERY_AUDIT_ACTION.inline,
+          resourceType: AUDIT_RESOURCE_TYPE.ENTITY,
+          resourceId: live.entityId,
+          workspaceId,
+          metadata: { fieldId, destination: "chat", disposition: "inline" },
+        });
+        return true;
+      }),
+    );
+    if (!delivered) {
+      return Result.err(
+        new HandlerError({
+          status: 404,
+          code: HTTP_FAILURE.notFound,
+          message: "The selected file version is no longer available",
+        }),
+      );
+    }
     const nextMessages = [...hydratedMessages];
     const latestUserMessage = hydratedMessages.at(latestUserIndex);
     if (!latestUserMessage) {
@@ -4399,14 +4524,28 @@ const readActiveFileFallbackForModel = async ({
     }
 
     if (source.type === "extracted-text") {
-      const extracted = await extractFileTextResult(storedSource);
+      const mimeType = resolveExtractionMimeType(source);
+      const extracted = await extractFileTextResult(
+        storedSource.withMimeType(mimeType),
+        {
+          includeContainerAttachments: true,
+        },
+      );
       if (Result.isError(extracted)) {
         return Result.err(
-          new HandlerError({
-            status: 500,
-            message: "Failed to extract active file for AI context",
-            cause: extracted.error,
-          }),
+          new HandlerError(
+            extracted.error.workerErrorClass === FileScanRejectedError.name
+              ? {
+                  status: 422,
+                  code: API_FILE_SECURITY_REJECTED_ERROR_CODE,
+                  message: "An embedded file was rejected by the security scan",
+                }
+              : {
+                  status: 500,
+                  message: "Failed to extract active file for AI context",
+                  cause: extracted.error,
+                },
+          ),
         );
       }
       if (extracted.value === null) {

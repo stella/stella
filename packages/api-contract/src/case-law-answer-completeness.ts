@@ -31,6 +31,7 @@ export const CASE_LAW_INCOMPLETE_REASON = {
     "rehydration_row_dropped",
     "relaxed_top_up_skipped",
     "snippet_missing",
+    "term_decision_counts_skipped",
   ],
 } as const satisfies Record<CaseLawAnswerSurface, readonly string[]>;
 

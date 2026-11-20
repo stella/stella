@@ -1,4 +1,7 @@
 {
+  "common": {
+    "previewTruncated": "A teljes szöveg nem érhető el ebben az előnézetben."
+  },
   "tabs": {
     "chat": "Csevegés",
     "close": "Bezárás",
@@ -127,6 +130,8 @@
       "boe_search_legislation": "BOE jogszabálykeresés",
       "borme_get_summary": "BORME napi összefoglaló",
       "business_registry_lookup": "Keresés a cégnyilvántartásban",
+      "calendar_free_busy": "Szabad időpontok ellenőrzése",
+      "calendar_list_events": "Naptáresemények olvasása",
       "command_execution": "Parancs futtatása",
       "compare_versions": "Verziók összehasonlítása",
       "configure_template_fields": "Sablonmezők beállítása",
@@ -143,10 +148,10 @@
       "delete_reader_annotation": "Kiemelés vagy megjegyzés törlése",
       "delete_task": "Feladat törlése",
       "delete_time_entry": "Időbejegyzés törlése",
-      "describe-stella-api": "Adatlekérés előkészítése",
-      "describe-stella-function": "Adatlekérés előkészítése",
+      "describe-stella-api": "Források kiválasztása",
+      "describe-stella-function": "Források kiválasztása",
       "describe_template": "Sablonmezők olvasása",
-      "discover_tools": "Adatlekérés előkészítése",
+      "discover_tools": "Források kiválasztása",
       "execute-typescript": "Ügyadatok olvasása",
       "execute_typescript": "Ügyadatok olvasása",
       "expand-chat-history": "Csevegési előzmények olvasása",
@@ -186,6 +191,7 @@
       "save_document": "Dokumentum mentése",
       "save_matter": "Ügy mentése",
       "save_playbook": "Playbook mentése",
+      "save_skill_package": "Készség mentése",
       "save_task": "Feladat mentése",
       "save_template": "Sablon mentése",
       "save_time_entry": "Időbejegyzés mentése",
@@ -208,7 +214,13 @@
       "update_reader_annotation": "Kiemelés vagy megjegyzés szerkesztése",
       "use-browser": "A böngésző használata",
       "use_connector_secret": "A csatlakozó hitelesítő adatának használata",
+      "validate_skill_package": "Készség ellenőrzése",
       "web_search": "Keresés az interneten"
+    },
+    "toolResearch": {
+      "caseLaw": "Keresés az ítélkezési gyakorlatban",
+      "legislation": "Jogszabályok olvasása",
+      "legislationAndCaseLaw": "Keresés a jogszabályokban és az ítélkezési gyakorlatban"
     },
     "localRun": {
       "title": {
@@ -264,9 +276,18 @@
       "sourcesChecked": "{count, plural, one {# ellenőrzött forrás} other {# ellenőrzött forrás}}",
       "documentEdits": "{count, plural, one {# dokumentummódosítás} other {# dokumentummódosítás}}",
       "changesSaved": "{count, plural, one {# mentett módosítás} other {# mentett módosítás}}",
-      "analyses": "{count, plural, one {# elemzés} other {# elemzés}}"
+      "searchedLegislation": "Jogszabályok átnézve",
+      "searchedCaseLaw": "Ítélkezési gyakorlat átnézve",
+      "searchedLegislationAndCaseLaw": "Jogszabályok és ítélkezési gyakorlat átnézve",
+      "readDocument": "Dokumentum elolvasva",
+      "readDocuments": "Dokumentumok elolvasva",
+      "searchedMatters": "Ügyek átnézve",
+      "checkedRegisters": "Nyilvános nyilvántartások ellenőrizve",
+      "searchedWeb": "Internet átkeresve",
+      "searchedChats": "Csevegési előzmények átnézve"
     },
     "stepCount": "{count, plural, one {# lépés} other {# lépés}}",
+    "lookupCount": "{count, plural, one {# lekérdezés} other {# lekérdezés}}",
     "reasoning": "Érvelés",
     "historyTrimmed": "A korábbi üzeneteket nem sikerült összefoglalni, ezért ez a válasz csak a beszélgetés legutóbbi részét veszi figyelembe.",
     "failure": {
@@ -524,6 +545,7 @@
     "title": "Dokumentum",
     "failedTitle": "A dokumentumot nem sikerült megnyitni",
     "failure": {
+      "dataBoxUnreadable": "A fájl sem adatfiók-üzenetként, sem kézbesítési igazolásként nem olvasható.",
       "offline": "Nincs internetkapcsolat. Csatlakozzon az internethez, és próbálja újra.",
       "noFile": "Ehhez a dokumentumhoz még nincs fájl.",
       "failed": "Hiba történt a megnyitáskor. Próbálja újra egy kis idő múlva.",
@@ -531,6 +553,7 @@
       "android": "Az Android-alkalmazásban még nem lehet dokumentumokat megnyitni."
     },
     "retry": "Újra",
+    "openOriginal": "Eredeti megnyitása",
     "preview": "Előnézet megnyitása",
     "previewDescription": "Ez a fájl a rendszer előnézetében nyílik meg.",
     "unrendered": "Ez a dokumentum itt nem jeleníthető meg, de a rendszer előnézete talán meg tudja nyitni.",
@@ -588,7 +611,28 @@
     "signOutFailed": "A kijelentkezést nem sikerült befejezni. Próbálja újra.",
     "lockScreenTitle": "Zárolási képernyő",
     "timerDetails": "Időzítő részletei",
-    "timerDetailsHint": "Ha egy időzítő egy másik eszközön változik, az Apple értesítési szolgáltatása viszi a leírását és az ügyét a zárolási képernyőre. Kikapcsolva csak az idő látszik, amíg meg nem nyitja az appot."
+    "timerDetailsHint": "Ha egy időzítő egy másik eszközön változik, az Apple értesítési szolgáltatása viszi a leírását és az ügyét a zárolási képernyőre. Kikapcsolva csak az idő látszik, amíg meg nem nyitja az appot.",
+    "dictationTitle": "Diktálás",
+    "dictationModelDefault": "Alapértelmezett",
+    "dictationModelDefaultNamed": "Alapértelmezett ({model})",
+    "dictationModelOutsideRegion": "A régiódon kívül",
+    "dictationModelRetainsData": "Megőrzi a hangfelvételt",
+    "dictationModelRetainsWarning": "Ez a modell nulla adatmegőrzés nélküli fiókon fut. A(z) {provider} saját feltételei szerint, a stella ellenőrzésén kívül tárolja mindannak a hangját és átiratát, amit diktálsz. Ne diktálj vele bizalmas vagy ügyféladatokat.",
+    "dictationModelHint": "A modell, amely a diktálásodból szöveget készít. A stella nem tárolja a hangot.",
+    "dictationModelsUnavailable": "A modelleket nem sikerült betölteni. A diktálás a választott modellt használja, vagy az alapértelmezettet, ha a szerver már nem kínálja.",
+    "dictationCleanup": "Javítás AI-jal",
+    "dictationCleanupHint": "Kijavítja a felismerési hibákat és a kimondott formázást, például „új sor”. Csak a szöveg, nem a hang megy a stellán keresztül a szervezeted AI-szolgáltatójához; a stella nem tárolja."
+  },
+  "signedFile": {
+    "layer": "{number, number}. aláírási réteg",
+    "noReadableContent": "Nincs megjeleníthető olvasható tartalom.",
+    "unknownSigner": "Ismeretlen aláíró",
+    "unreadable": "Az aláírt fájl nem olvasható.",
+    "unverified": "Az aláírásokat nem ellenőriztük."
+  },
+  "structuredDocument": {
+    "noReadableContent": "Nincs megjeleníthető szöveg az előnézethez.",
+    "textOnly": "Szöveges előnézet az oldalelrendezés és a képek nélkül."
   },
   "header": {
     "search": "Keresés"

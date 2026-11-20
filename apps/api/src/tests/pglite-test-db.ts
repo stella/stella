@@ -1,7 +1,15 @@
 import { PGlite } from "@electric-sql/pglite";
 import { pg_trgm } from "@electric-sql/pglite/contrib/pg_trgm";
 import { panic } from "better-result";
-import { getColumns, getTableName, isTable, sql } from "drizzle-orm";
+import {
+  Column,
+  getColumns,
+  getTableName,
+  is,
+  isTable,
+  SQL,
+  sql,
+} from "drizzle-orm";
 import type { SQLWrapper } from "drizzle-orm";
 import { getViewConfig, isPgView, PgDialect } from "drizzle-orm/pg-core";
 import { drizzle } from "drizzle-orm/pglite";
@@ -14,10 +22,14 @@ import type { ScopedDb } from "@/api/db/safe-db";
 import * as schema from "@/api/db/schema";
 import type { AnyDrizzle } from "@/api/db/scoped";
 import {
-  CASE_LAW_DECISION_VIEWS,
+  CASE_LAW_SITEMAP_RANGE_COLUMN_GRANTS_BY_RELATION,
   caseLawDecisionViewGrantStatement,
   CITATION_POLARITY_EVIDENCE_COLUMN_GRANTS_BY_RELATION,
+  COLLECTION_BODY_COLUMN_GRANTS_BY_RELATION,
+  COLLECTION_OBSERVATION_COLUMN_GRANTS_BY_RELATION,
+  COLLECTION_PART_COLUMN_GRANTS_BY_RELATION,
   PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION,
+  type PublicLawColumnGrant,
   publicLawColumnPairs,
   ROLLOUT_CASE_LAW_SOURCE_COLUMNS,
   ROLLOUT_CASE_LAW_SOURCE_RELATION,
@@ -57,6 +69,7 @@ import {
   installPgliteDecisionDocketFilingYear,
   installPgliteDesktopPresenceRls,
   installPgliteEntityFeatureGateMaintenance,
+  installPgliteFileObjectReconciliationFill,
   installPgliteFindingDecisionHistory,
   installPgliteFlowTransitions,
   installPgliteInvoiceLinks,
@@ -78,6 +91,7 @@ import {
   installPgliteSchemaPrerequisites,
   installPgliteSearchHistoryClearFence,
   installPgliteServiceClientCredentialCascade,
+  installPgliteSharepointPolicyFence,
   installPgliteStatuteCitationCounts,
   installPgliteSyntheticMembershipTrigger,
   installPgliteTimeEntryTimerSignals,
@@ -355,38 +369,76 @@ const CORPUS_PROJECTION_REVISION_TABLE_SQL = quoteSqlIdentifier(
  */
 const PUBLIC_LAW_COLUMNS_GRANTED_IN_A_LATER_RELEASE: ReadonlySet<string> =
   new Set(
-    publicLawColumnPairs(
+    [
       CITATION_POLARITY_EVIDENCE_COLUMN_GRANTS_BY_RELATION,
-    ).map(({ relation, column }) => `${relation}.${column}`),
+      CASE_LAW_SITEMAP_RANGE_COLUMN_GRANTS_BY_RELATION,
+      COLLECTION_BODY_COLUMN_GRANTS_BY_RELATION,
+      COLLECTION_OBSERVATION_COLUMN_GRANTS_BY_RELATION,
+      COLLECTION_PART_COLUMN_GRANTS_BY_RELATION,
+    ]
+      .flatMap(publicLawColumnPairs)
+      .map(({ relation, column }) => `${relation}.${column}`),
   );
 
-const decisionColumnNames = new Set(
-  Object.values(getColumns(schema.caseLawDecisions)).map(({ name }) => name),
+const installedSchemaColumns = new Map(
+  Object.values(schema).flatMap((relation) => {
+    if (!isTable(relation) && !isPgView(relation)) {
+      return [];
+    }
+    const name = isTable(relation)
+      ? getTableName(relation)
+      : getViewConfig(relation).name;
+    const columns = new Set(
+      Object.values(getColumns(relation)).map((column) => {
+        if (is(column, Column)) {
+          return column.name;
+        }
+        if (is(column, SQL.Aliased)) {
+          return column.fieldAlias;
+        }
+        return panic(
+          `Unsupported fixture column in public-law relation ${name}`,
+        );
+      }),
+    );
+    return [[name, columns] as const];
+  }),
 );
-const decisionRelationNames = new Set<string>(CASE_LAW_DECISION_VIEWS);
 
-const grantedPublicLawColumns = (
+export const grantedPublicLawColumns = (
   relation: string,
-  columns: Readonly<Record<string, unknown>>,
+  columns: Readonly<Record<string, PublicLawColumnGrant>>,
+  installedColumns: ReadonlySet<string> | undefined,
 ) =>
-  Object.keys(columns).filter(
-    (column) =>
-      (!decisionRelationNames.has(relation) ||
-        decisionColumnNames.has(column)) &&
-      !PUBLIC_LAW_COLUMNS_GRANTED_IN_A_LATER_RELEASE.has(
-        `${relation}.${column}`,
-      ),
-  );
+  Object.entries(columns).flatMap(([column, grant]) => {
+    switch (grant) {
+      case "required":
+        if (!installedColumns?.has(column)) {
+          return panic(
+            `Required public-law fixture column is absent: ${relation}.${column}`,
+          );
+        }
+        break;
+      case "permitted":
+        if (!installedColumns?.has(column)) {
+          return [];
+        }
+        break;
+      default:
+        grant satisfies never;
+        return panic("Unhandled public-law fixture column grant");
+    }
+    return PUBLIC_LAW_COLUMNS_GRANTED_IN_A_LATER_RELEASE.has(
+      `${relation}.${column}`,
+    )
+      ? []
+      : [column];
+  });
 
 // Expansion releases may declare permitted grants before their relations exist.
 // The harness pushes only this checkout's schema, so it cannot grant those yet.
-export const availableSchemaRelationNames = new Set<string>(
-  Object.values(schema).flatMap((relation) => {
-    if (isTable(relation)) {
-      return [getTableName(relation)];
-    }
-    return isPgView(relation) ? [getViewConfig(relation).name] : [];
-  }),
+export const availableSchemaRelationNames = new Set(
+  installedSchemaColumns.keys(),
 );
 
 /**
@@ -514,6 +566,7 @@ export const ROLE_GRANT_STATEMENTS = [
       "case_law_decision_fallback_identities",
       "case_law_decision_supplements",
       "case_law_held_decision_attachments",
+      "case_law_ingestion_failure_evidence",
       "case_law_search_document_preview_passages",
       "case_law_citation_resolution_census",
       "case_law_citation_resolution_census_runs",
@@ -734,13 +787,20 @@ export const ROLE_GRANT_STATEMENTS = [
   ...Object.entries(PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION)
     .filter(
       ([relation, columns]) =>
-        availableSchemaRelationNames.has(relation) &&
         relation !== getTableName(schema.caseLawDecisionAliases) &&
-        grantedPublicLawColumns(relation, columns).length > 0,
+        grantedPublicLawColumns(
+          relation,
+          columns,
+          installedSchemaColumns.get(relation),
+        ).length > 0,
     )
     .map(
       ([relation, columns]) => `
-      GRANT SELECT (${grantedPublicLawColumns(relation, columns)
+      GRANT SELECT (${grantedPublicLawColumns(
+        relation,
+        columns,
+        installedSchemaColumns.get(relation),
+      )
         .map(quoteSqlIdentifier)
         .join(", ")})
         ON TABLE ${quoteSqlIdentifier(relation)}
@@ -923,6 +983,7 @@ export const buildFullTestPglite = async (): Promise<PGlite> => {
   });
   await installPgliteAgentSkillRevisionTrigger(db);
   await installPgliteSyntheticMembershipTrigger(db);
+  await installPgliteSharepointPolicyFence(db);
   await installPgliteUserFileOrganizationKeyGuard(db);
   await installPgliteConflictCheckRoutines(db);
   await installPgliteAiMemoryActiveUserGuard(db);
@@ -969,6 +1030,7 @@ export const buildFullTestPglite = async (): Promise<PGlite> => {
   }
   await installPgliteTimeEntryTimerSignals(db);
   await installPgliteChatStoredContentEgress(db);
+  await installPgliteFileObjectReconciliationFill(db);
   await installPgliteSanctionsMonitoringTriggers(db);
   await installPgliteSearchHistoryClearFence(db);
   await installPgliteChatTurnOrdinal(db);

@@ -1,9 +1,11 @@
-import { TaggedError } from "better-result";
+import { panic, TaggedError } from "better-result";
 import { expect, test } from "bun:test";
 
 import {
   BackfillFailedError,
   BackfillHeldError,
+  BackfillLockWaitError,
+  type BackfillWaitRecord,
   runBackfillPass,
 } from "./backfill-pass";
 
@@ -338,4 +340,97 @@ test("an operator retry retains its failure cause while waiting for a durable ho
   ]);
   expect(failure.cause).toBe(cause);
   expect(failure.cause).toMatchObject({ code: "57014" });
+});
+
+/** A pass whose steps follow `script`: "lock" loses a lock wait, "batch" and "last" commit one. */
+const runScripted = async (
+  script: readonly ("lock" | "batch" | "last")[],
+  options: { maxLockWaitMs: number; holdPolicy?: "wait" | "propagate" },
+) => {
+  let now = 0;
+  let index = 0;
+  const steps: string[] = [];
+  const records: BackfillWaitRecord[] = [];
+  const lockWait = new BackfillLockWaitError({
+    message: "batch waited on a lock on case_law_sources",
+    relation: "case_law_sources",
+    cause: { code: "55P03" },
+  });
+  const result = await runBackfillPass({
+    ...options,
+    clock: () => now,
+    step: async () => {
+      const next = script[index] ?? panic("the pass stepped past its script");
+      index += 1;
+      steps.push(next);
+      // Each lost wait spends the lock timeout before it fails.
+      now += 200;
+      if (next === "lock") {
+        throw lockWait;
+      }
+      return { done: next === "last", sleepMs: 0, value: next };
+    },
+    sleep: async (milliseconds) => {
+      now += milliseconds;
+      steps.push(`sleep:${String(milliseconds)}`);
+    },
+    log: (record) => {
+      records.push(record);
+    },
+  });
+  return { result, steps, records, lockWait };
+};
+
+test("lost lock waits back off doubling, start over after a committed batch, and the pass completes", async () => {
+  const { result, steps, records } = await runScripted(
+    ["lock", "lock", "batch", "lock", "last"],
+    { maxLockWaitMs: 60_000 },
+  );
+  expect(result.isOk() && result.value.status).toBe("complete");
+  expect(steps).toEqual([
+    "lock",
+    "sleep:1000",
+    "lock",
+    "sleep:2000",
+    "batch",
+    "lock",
+    "sleep:1000",
+    "last",
+  ]);
+  expect(
+    records.map((record) =>
+      record.reason === "lock_wait"
+        ? `${record.action}:${String(record.relation)}:${String(record.waitedMs)}`
+        : record.reason,
+    ),
+  ).toEqual([
+    "wait:case_law_sources:0",
+    "wait:case_law_sources:1200",
+    "wait:case_law_sources:0",
+  ]);
+});
+
+test("lock waits that outlast the patience stop the pass with the lock wait, before another sleep", async () => {
+  const { result, steps, records, lockWait } = await runScripted(
+    ["lock", "lock", "lock"],
+    { maxLockWaitMs: 3000 },
+  );
+  // 0 + 1000 fits, 1200 + 2000 does not: the second loss ends the pass.
+  expect(result.isErr() && result.error).toBe(lockWait);
+  expect(steps).toEqual(["lock", "sleep:1000", "lock"]);
+  expect(records.at(-1)).toMatchObject({
+    action: "stopped",
+    reason: "lock_wait",
+    relation: "case_law_sources",
+    waitedMs: 1200,
+  });
+});
+
+test("a pass that propagates holds hands a lost lock wait to its caller at once", async () => {
+  const { result, steps, lockWait } = await runScripted(["lock"], {
+    maxLockWaitMs: 60_000,
+    holdPolicy: "propagate",
+  });
+  expect(result.isErr() && result.error).toBe(lockWait);
+  expect(steps).toEqual(["lock"]);
 });

@@ -61,6 +61,20 @@ const tokensSchema = v.looseObject({
   scope: v.string(),
 });
 
+/**
+ * Better Auth sweeps expired verification rows during a verification lookup,
+ * at most once a minute per auth instance. Where that sweep lands depends on
+ * the clock, so trigger it with a lookup for an identifier no flow uses just
+ * before a measured window: the window then counts only its own queries. The
+ * lookup reads no client, consent or token row, so the grant stays cold.
+ */
+const settleVerificationSweep = async () => {
+  const { internalAdapter } = await getAuth().$context;
+  await internalAdapter.findVerificationValue(
+    `public-refresh-sweep-${Bun.randomUUIDv7()}`,
+  );
+};
+
 const fixture = async (
   registration: "dynamic" | "metadata" | "confidential",
 ) => {
@@ -69,6 +83,7 @@ const fixture = async (
     orgName: "Public refresh",
     orgSlugPrefix: "public-refresh",
   });
+  await settleVerificationSweep();
   const client = await runWithQueryCounter(async (counter) => {
     const registered =
       registration !== "metadata"
@@ -83,6 +98,7 @@ const fixture = async (
     expect(counter.count).toBeLessThanOrEqual(REGISTRATION_QUERY_BUDGET);
     return registered;
   });
+  await settleVerificationSweep();
   const grant = await runWithQueryCounter(async (counter) => {
     const granted = await grantOAuthClient(browser, client);
     expect(counter.count).toBeGreaterThan(0);
@@ -134,6 +150,7 @@ describe("resource-bound refresh grants", () => {
       let refreshToken = grant.refreshToken;
       for (let round = 0; round < rotations; round += 1) {
         const tokenForRound = refreshToken;
+        await settleVerificationSweep();
         const response = await runWithQueryCounter(async (counter) => {
           const refreshed = await refreshOAuthGrant({
             client,

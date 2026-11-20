@@ -11,6 +11,7 @@ import { documentAstSchema } from "@stll/legal-ast/document-ast";
 import { GOVERNING_WORDING_POSITIONS } from "@stll/legal-ast/provision-preview";
 import type { StatuteChangeCounts } from "@stll/legal-ast/statute-compare";
 
+import { PROVISION_WORDING_CHANGES } from "@/api/handlers/legislation/provision-wording-change";
 import type { provisionPreviewOutput } from "@/api/lib/chat/decision-reader-projections";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
 import {
@@ -273,13 +274,22 @@ export const statuteReaderSuccessResponseSchema = v.object({
   fulltext: v.union([v.string(), v.null()]),
 });
 
-const provisionHistoryItemSchema = v.object({
+const provisionHistoryVersionFields = {
   country: boundedString(readerTextBytes.country),
   slug: nullableBoundedString(readerTextBytes.slug),
   sourceUrl: nullableBoundedString(readerTextBytes.sourceUrl),
   documentId: resourceIdSchema("legislationDocument"),
   allowsDerivedAi: v.boolean(),
   ...windowFields,
+};
+const foundProvisionHistoryItemSchema = v.object({
+  ...provisionHistoryVersionFields,
+  status: v.literal("found"),
+  /**
+   * How this wording relates to the consolidation just before it, compared
+   * on the full text; see `PROVISION_WORDING_CHANGES`.
+   */
+  wordingChange: v.picklist(PROVISION_WORDING_CHANGES),
   text: boundedString(readerTextBytes.provisionText),
   /**
    * Wording outside the read subdivision that governs it; see
@@ -298,6 +308,15 @@ const provisionHistoryItemSchema = v.object({
   /** Present when governing wording past the bound was left out. */
   governingTextTruncated: v.optional(v.literal(true)),
 });
+/** A consolidation whose structure could not be read: no wording, no claim. */
+const unavailableProvisionHistoryItemSchema = v.object({
+  ...provisionHistoryVersionFields,
+  status: v.literal("unavailable"),
+});
+const provisionHistoryItemSchema = v.variant("status", [
+  foundProvisionHistoryItemSchema,
+  unavailableProvisionHistoryItemSchema,
+]);
 export const provisionHistorySuccessResponseSchema = v.object({
   items: v.pipe(
     v.array(provisionHistoryItemSchema),
@@ -413,7 +432,13 @@ export const projectStatuteReader = (row: ReaderRow): Reader => {
 };
 
 type HistoryItem = v.InferOutput<typeof provisionHistoryItemSchema>;
-export const projectProvisionHistoryItem = (row: HistoryItem): HistoryItem => ({
+type FoundHistoryItem = v.InferOutput<typeof foundProvisionHistoryItemSchema>;
+export const projectProvisionHistoryItem = (row: HistoryItem): HistoryItem =>
+  row.status === "found"
+    ? projectFoundProvisionHistoryItem(row)
+    : { ...projectHistoryVersion(row), status: row.status };
+
+const projectHistoryVersion = (row: HistoryItem) => ({
   country: truncateTextBytes(row.country, readerTextBytes.country),
   slug: nullableText(row.slug, readerTextBytes.slug),
   sourceUrl: nullableText(row.sourceUrl, readerTextBytes.sourceUrl),
@@ -430,6 +455,14 @@ export const projectProvisionHistoryItem = (row: HistoryItem): HistoryItem => ({
     row.versionValidTo,
     readerTextBytes.versionValidTo,
   ),
+});
+
+const projectFoundProvisionHistoryItem = (
+  row: FoundHistoryItem,
+): FoundHistoryItem => ({
+  ...projectHistoryVersion(row),
+  status: row.status,
+  wordingChange: row.wordingChange,
   text: truncateTextBytes(row.text, readerTextBytes.provisionText),
   ...(row.governingTextTruncated === true ||
   row.governingText.length > LIMITS.legislationGoverningTextMax

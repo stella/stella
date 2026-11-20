@@ -1,5 +1,17 @@
 # @stll/ai-catalog
 
+## 0.16.0
+
+### Minor Changes
+
+- [#8903](https://github.com/stella/stella/pull/8903) [`0cf5be6`](https://github.com/stella/stella/commit/0cf5be6003a6796bb5f1dbbe937704027f79897b) Thanks [@stella-provenance-updater](https://github.com/apps/stella-provenance-updater)! - Offer Gemini 4 Neon on the Google and OpenRouter routes with its upstream rates, context window and generated capabilities. The offered model id types and option lists change with it, so code that matches them exhaustively has to handle the new id.
+
+## 0.15.0
+
+### Minor Changes
+
+- [#8829](https://github.com/stella/stella/pull/8829) [`f2d9c52`](https://github.com/stella/stella/commit/f2d9c5236e757123bc254e2783d60414c6b7db91) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Offer GPT-6.2 Astra and GPT-6.2 Sol. The offered model id types and option lists change with them, so code that matches them exhaustively has to handle the new ids.
+
 ## 0.14.0
 
 ### Minor Changes

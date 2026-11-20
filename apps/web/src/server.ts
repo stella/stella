@@ -8,13 +8,12 @@ import { createStartHandler, StartServer } from "@tanstack/react-start/server";
 import handler, { createServerEntry } from "@tanstack/react-start/server-entry";
 
 import { env } from "@/env";
+import { loadServerDocumentPresentation } from "@/i18n/document-presentation";
 import { withRequestI18n } from "@/i18n/request-i18n.server";
+import { readRequestPresentationPrefs } from "@/lib/account/presentation-prefs/server";
 import { getAnalytics } from "@/lib/analytics/provider";
-import {
-  browserApiBaseUrl,
-  browserApiRootUrl,
-  externalApiOrigin,
-} from "@/lib/api-origins";
+import { browserApiBaseUrl, externalApiOrigin } from "@/lib/api-origins";
+import { frameSandboxUrls } from "@/lib/api-url";
 import { SSR_CACHE_CLASS_HEADER } from "@/route-response-policy";
 import { withContentSecurityPolicy } from "@/security/content-security-policy.server";
 import {
@@ -69,7 +68,7 @@ export default createServerEntry({
             documentsBucket: env.VITE_DOCUMENTS_BUCKET,
             documentsEndpoint: env.VITE_DOCUMENTS_ENDPOINT,
             posthogHost: env.VITE_POSTHOG_HOST,
-            sandboxUrl: browserApiRootUrl("/v1/visual-sandbox/browser"),
+            sandboxUrls: frameSandboxUrls(),
           },
           fetchResponse: async () => {
             const response = isSsrDocumentRequest(request)
@@ -79,6 +78,16 @@ export default createServerEntry({
                     await createStartHandler(
                       defineHandlerCallback(
                         async ({ router, responseHeaders }) => {
+                          // A client-only route can opt in to request-local
+                          // labels before its root loader runs in the browser.
+                          if (
+                            router.state.matches.at(-1)?.staticData
+                              .pendingText === "request-locale"
+                          ) {
+                            await loadServerDocumentPresentation(
+                              readRequestPresentationPrefs(),
+                            );
+                          }
                           const rendered = await renderSsrResponse({
                             request: renderRequest,
                             rendererSignal,

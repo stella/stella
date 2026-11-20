@@ -10,6 +10,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import * as v from "valibot";
 
 import { loadChangesetPolicy } from "./changeset-guard";
@@ -117,7 +118,7 @@ describe("publish package selection", () => {
   test("published packages do not depend on private workspace packages", async () => {
     const packageNames = [
       ...new Bun.Glob("*/package.json").scanSync({
-        cwd: new URL("../packages", import.meta.url).pathname,
+        cwd: fileURLToPath(new URL("../packages", import.meta.url)),
       }),
     ].map((file) => file.slice(0, -"/package.json".length));
     const manifests = await Promise.all(packageNames.map(packageManifest));

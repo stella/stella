@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import { fileURLToPath } from "node:url";
 
 // timeout: Turbo resolves the whole workspace task graph for its dry run; the
 // test awaits that process, no sleeps.
@@ -17,7 +18,7 @@ test("landing compiler tasks consume committed documentation without API generat
       "--dry=json",
     ],
     {
-      cwd: new URL("../../../", import.meta.url).pathname,
+      cwd: fileURLToPath(new URL("../../../", import.meta.url)),
       stdout: "pipe",
       stderr: "pipe",
     },

@@ -1,7 +1,9 @@
-import { createFileRoute, Navigate } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
+
+import { redirectRouteComponent } from "@/routes/-route-pending-view";
 
 export const Route = createFileRoute(
   "/_protected/settings/organization/catalogue",
 )({
-  component: () => <Navigate replace to="/knowledge/tools" />,
+  component: redirectRouteComponent({ to: "/knowledge/tools" }),
 });

@@ -191,6 +191,15 @@ export const USER_STORAGE_FAMILIES: readonly UserStorageFamily[] = [
     // The chosen default only; the per-chat modes name one user's chats.
     legacy: { keys: "bare", adopt: keepPersistedFields(["defaultSendMode"]) },
   },
+  // Whether answer tables wrap cell text or keep it on one line: a layout
+  // preference.
+  {
+    area: "local",
+    prefix: "stella.answerTable.textMode",
+    restoration: "layout",
+    owner: "scoped",
+    retention: "kept-for-owner",
+  },
   // The last Run on choice a new chat starts from: a preference.
   {
     area: "local",
@@ -230,6 +239,15 @@ export const USER_STORAGE_FAMILIES: readonly UserStorageFamily[] = [
     restoration: "data",
     owner: "scoped",
     retention: "cleared",
+  },
+  // Organizations the user created here and has not closed the setup prompt
+  // for: a reminder for the creator alone.
+  {
+    area: "local",
+    prefix: "stella:organization-setup:",
+    restoration: "data",
+    owner: "scoped",
+    retention: "kept-for-owner",
   },
   // Tools the user approved for every chat: a standing grant.
   {

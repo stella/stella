@@ -11,6 +11,7 @@ import {
   caseLawHeldDecisionAttachments,
   caseLawSources,
 } from "@/api/db/schema";
+import { ecliKeysMatchSql } from "@/api/lib/case-law/case-number-match-key";
 import { canonicalDecisionIdSql } from "@/api/lib/case-law/decision-alias";
 import { readCappedByGroup } from "@/api/lib/db/read-bounded";
 import {
@@ -68,6 +69,9 @@ type HeldDecisionReviewFinding = {
 /** The bases a parked record of each review is stored under. */
 const REVIEW_BASES = {
   [HELD_DECISION_REVIEW.SEVERAL_HELD]: HELD_DECISION_ATTACHING_BASES,
+  [HELD_DECISION_REVIEW.SOURCE_POLICY]: [
+    HELD_DECISION_MATCH_BASIS.SOURCE_POLICY,
+  ],
   [HELD_DECISION_REVIEW.DOCKET_HELD_OTHER_DATE]: [
     HELD_DECISION_MATCH_BASIS.COURT_DOCKET_OTHER_DATE,
   ],
@@ -166,7 +170,7 @@ const censusOf = async (
         hostEcli,
         and(
           eq(hostEcli.type, DECISION_IDENTIFIER_TYPES.ECLI),
-          eq(hostEcli.normalizedValue, ownEcli.normalizedValue),
+          ecliKeysMatchSql(hostEcli.normalizedValue, ownEcli.normalizedValue),
           ne(hostEcli.decisionId, caseLawDecisions.id),
         ),
       )
@@ -214,6 +218,9 @@ const censusOf = async (
     return { count, sample };
   };
   const review = {
+    [HELD_DECISION_REVIEW.SOURCE_POLICY]: await reviewOf(
+      HELD_DECISION_REVIEW.SOURCE_POLICY,
+    ),
     [HELD_DECISION_REVIEW.SEVERAL_HELD]: await reviewOf(
       HELD_DECISION_REVIEW.SEVERAL_HELD,
     ),

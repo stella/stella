@@ -67,7 +67,7 @@ const normalizeDecisionCaseNumber = (value: string): string =>
   comparable(value).text;
 
 /** Text content of Markdown link children, including inline formatting. */
-const citationNodeText = (node: ReactNode): string => {
+export const citationNodeText = (node: ReactNode): string => {
   if (typeof node === "string" || typeof node === "number") {
     return String(node);
   }

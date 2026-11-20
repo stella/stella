@@ -71,6 +71,9 @@ const routePath = (host: DockedChatHost, world: DockedChatWorld): string => {
     packId: "general-legal",
     templateId: "mutual-nda",
     entry: "contract-review-anthropic",
+    skillId: world.skillId,
+    // No guidance is served in the e2e world; the reader shows its not-found page.
+    guidanceId: "019a0000-0000-7000-8000-000000000002",
   };
   return host.template.replaceAll(/\$([A-Za-z]+)/gu, (_, parameter: string) => {
     const value = values[parameter];

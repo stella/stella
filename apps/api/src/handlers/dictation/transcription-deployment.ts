@@ -7,13 +7,11 @@ import type {
   TranscriptionServed,
 } from "@stll/ai-catalog/transcription";
 
-import {
-  elevenLabsServes,
-  readElevenLabsDeployment,
-} from "@/api/handlers/dictation/elevenlabs-provider";
-import type { ElevenLabsDeployment } from "@/api/handlers/dictation/elevenlabs-provider";
+import { elevenLabsServes } from "@/api/handlers/dictation/elevenlabs-provider";
 import type { OrgSettingsForAuth } from "@/api/lib/ai-config-loader";
 import { getManagedOpenRouterConfiguration } from "@/api/lib/chat/openrouter-credential";
+import { readElevenLabsDeployment } from "@/api/lib/dictation/elevenlabs-deployment";
+import type { ElevenLabsDeployment } from "@/api/lib/dictation/elevenlabs-deployment";
 import { MANAGED_MODEL_TIER } from "@/api/lib/usage/managed-model-tier";
 
 /** The transcription providers this deployment has credentials for. */

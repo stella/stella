@@ -24,10 +24,24 @@
     "action": "Skontrolovať relácie",
     "body": "Do vášho účtu sa niekto prihlásil z nového zariadenia alebo miesta.",
     "device": "Zariadenie",
+    "deviceName": {
+      "browserOnOs": "{browser} v systéme {os}",
+      "unknown": "Neznáme zariadenie"
+    },
     "heading": "Zistené nové prihlásenie",
     "ignore": "Ak ste to boli vy, nie je potrebné nič robiť. Ak túto aktivitu nespoznávate, skontrolujte svoje aktívne relácie a zrušte tie, ktoré nespoznávate.",
     "ipAddress": "IP adresa",
+    "ipAddressUnknown": "Neznáma",
+    "location": "Približné miesto",
+    "locationNote": "Miesto je odhadnuté podľa IP adresy a nemusí byť presné.",
+    "mapAlt": "Mapa s približným miestom prihlásenia: {location}",
+    "place": {
+      "cityCountry": "{city}, {country}",
+      "cityRegionCountry": "{city}, {region}, {country}",
+      "regionCountry": "{region}, {country}"
+    },
     "preview": "Nové prihlásenie z {device}",
+    "previewUnknownDevice": "Nové prihlásenie z neznámeho zariadenia",
     "subject": "Nové prihlásenie do vášho účtu stella",
     "time": "Čas"
   },

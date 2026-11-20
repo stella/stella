@@ -29,6 +29,29 @@ const appendVary = (headers: Headers, ...fields: readonly string[]): void => {
   }
 };
 
+/**
+ * Adds `names` to the comma-separated `Access-Control-Expose-Headers` value,
+ * keeping the names a handler already exposed (a library answering with a
+ * challenge exposes `WWW-Authenticate` itself).
+ */
+const appendExposedHeaders = (
+  headers: Headers,
+  names: readonly string[],
+): void => {
+  const exposed = (headers.get("access-control-expose-headers") ?? "")
+    .split(",")
+    .map((name) => name.trim())
+    .filter((name) => name !== "");
+  const present = new Set(exposed.map((name) => name.toLowerCase()));
+  for (const name of names) {
+    if (!present.has(name.toLowerCase())) {
+      exposed.push(name);
+      present.add(name.toLowerCase());
+    }
+  }
+  headers.set("access-control-expose-headers", exposed.join(", "));
+};
+
 const isPreflight = (request: Request): boolean =>
   request.method === "OPTIONS" &&
   request.headers.has("access-control-request-method");
@@ -41,7 +64,6 @@ const isPreflight = (request: Request): boolean =>
 export const cors = (policy: CorsPolicy): Middleware => {
   const allowMethods = policy.methods.join(", ");
   const allowHeaders = policy.allowedHeaders.join(", ");
-  const exposedHeaders = policy.exposedHeaders.join(", ");
   // A preflight's answer is the same for every allowed origin but the origin
   // itself, so its headers are built once.
   const preflightVary =
@@ -77,7 +99,7 @@ export const cors = (policy: CorsPolicy): Middleware => {
     if (allowed) {
       headers.set("access-control-allow-origin", origin);
       headers.set("access-control-allow-credentials", "true");
-      headers.set("access-control-expose-headers", exposedHeaders);
+      appendExposedHeaders(headers, policy.exposedHeaders);
     }
     return response;
   };

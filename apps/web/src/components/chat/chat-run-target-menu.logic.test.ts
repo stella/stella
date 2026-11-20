@@ -20,7 +20,6 @@ import {
   localRunTargetFor,
   localRunTargetState,
   permissionView,
-  reasoningEffortChoices,
   runTargetValue,
   sameRunTarget,
   withRunFolder,
@@ -64,7 +63,9 @@ describe("the Run on choices", () => {
   test("every harness a turn can run on is listed, by its product name", () => {
     const options = chatLocalHarnessOptions({
       status: "enabled",
-      runners: [runner([READY_CODEX])],
+      runners: [
+        runner([READY_CODEX, { id: "antigravity", state: "not_installed" }]),
+      ],
       maxApprovals: NO_LIMIT,
     });
     expect(options?.map(({ harness }) => harness)).toEqual([
@@ -75,16 +76,17 @@ describe("the Run on choices", () => {
     );
   });
 
-  test("without a connected computer every harness reads as offline", () => {
+  test("without a connected computer every harness stella desktop installs reads as offline", () => {
     for (const runners of [[], [runner([READY_CODEX], false)]]) {
       const options = chatLocalHarnessOptions({
         status: "enabled",
         runners,
         maxApprovals: NO_LIMIT,
       });
-      expect(options?.map(({ state }) => state)).toEqual(
-        CHAT_LOCAL_RUN_HARNESSES.map(() => "offline"),
-      );
+      expect(options).toEqual([
+        { harness: "codex", state: "offline" },
+        { harness: "claude-code", state: "offline" },
+      ]);
     }
   });
 
@@ -126,6 +128,27 @@ describe("the Run on choices", () => {
       resetsAt: "2026-11-03T12:00:00.000Z",
     });
     expect(stateOf(options, "claude-code")).toBe("not_installed");
+  });
+
+  test("an agent the member installs is listed only where a computer reports it", () => {
+    const options = chatLocalHarnessOptions({
+      status: "enabled",
+      runners: [
+        runner([
+          { id: "codex", state: "unavailable", reason: "harness_failed" },
+          { id: "antigravity", state: "needs_login", version: "1.5.0" },
+        ]),
+      ],
+      maxApprovals: NO_LIMIT,
+    });
+    expect(stateOf(options, "antigravity")).toBe("needs_login");
+    expect(
+      chatLocalHarnessOptions({
+        status: "enabled",
+        runners: [runner([{ id: "codex", state: "not_installed" }])],
+        maxApprovals: NO_LIMIT,
+      })?.map(({ harness }) => harness),
+    ).toEqual(["codex", "claude-code"]);
   });
 
   test("a harness its computer could not check reads as unavailable, never as unsupported", () => {
@@ -275,23 +298,6 @@ describe("the reasoning effort choice", () => {
       { id: "haiku", label: "Haiku", reasoningEfforts: [] },
     ],
   } as const satisfies Extract<ChatLocalHarnessOption, { state: "ready" }>;
-
-  test("offers the selected model's efforts, and nothing for a model without a choice, a cloud turn or a harness that cannot run", () => {
-    expect(reasoningEffortChoices(CLAUDE, [withEfforts])).toEqual([
-      "low",
-      "high",
-      "max",
-    ]);
-    expect(
-      reasoningEffortChoices({ ...CLAUDE, model: "haiku" }, [withEfforts]),
-    ).toBeNull();
-    expect(reasoningEffortChoices({ kind: "cloud" }, [withEfforts])).toBeNull();
-    expect(
-      reasoningEffortChoices(CLAUDE, [
-        { harness: "claude-code", state: "offline" },
-      ]),
-    ).toBeNull();
-  });
 
   test("a picked model keeps the effort it offers, and leaves one it lacks to the harness", () => {
     const pick = (
@@ -605,18 +611,19 @@ describe("a linked folder", () => {
     };
     const target = inFolder(folderComputer);
 
-    expect(
-      reasoningEffortChoices(
-        target,
-        chatLocalHarnessOptionsFor(both, target) ?? [],
-      ),
-    ).toEqual(["low"]);
-    expect(
-      reasoningEffortChoices(
-        LOCAL,
-        chatLocalHarnessOptionsFor(both, LOCAL) ?? [],
-      ),
-    ).toEqual(["low", "high"]);
+    // The model picker lists the efforts of the options read here.
+    const effortsOf = (options: ChatLocalHarnessOption[] | null) => {
+      const codex = options?.find(({ harness }) => harness === "codex");
+      return codex?.state === "ready"
+        ? codex.models.map(({ reasoningEfforts }) => reasoningEfforts)
+        : null;
+    };
+    expect(effortsOf(chatLocalHarnessOptionsFor(both, target))).toEqual([
+      ["low"],
+    ]);
+    expect(effortsOf(chatLocalHarnessOptionsFor(both, LOCAL))).toEqual([
+      ["low", "high"],
+    ]);
   });
 
   test("stays with the chat when another model is picked, and differs from the chat's own folder", () => {

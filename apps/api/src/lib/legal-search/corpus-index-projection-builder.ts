@@ -39,6 +39,7 @@ import {
   type CorpusIndexPublisherFields,
   corpusIndexPublisherFields,
   corpusIndexRankingSignals,
+  type CorpusIndexStemFields,
   corpusIndexStemFields,
 } from "@/api/lib/legal-search/corpus-index-manifest";
 import {
@@ -51,7 +52,11 @@ import {
   CORPUS_PROJECTION_APPEND_MAX_SINGLE_REVISION_BYTES,
 } from "@/api/lib/legal-search/corpus-index-projection-engine";
 import { corpusTokens } from "@/api/lib/legal-search/corpus-tokens";
-import { documentMorphologyLanguage } from "@/api/lib/legal-search/morphology/corpus-language";
+import {
+  type CaseLawDocumentLanguageUndeclaredError,
+  caseLawDocumentStemLanguage,
+} from "@/api/lib/legal-search/morphology/corpus-language";
+import type { MorphologyLanguage } from "@/api/lib/legal-search/morphology/stem";
 import { stemCorpusText } from "@/api/lib/legal-search/morphology/stem-text";
 import { LIMITS } from "@/api/lib/limits";
 
@@ -439,6 +444,33 @@ const decisionTermsCollector = (field: CorpusIndexDecisionTerms | null) => {
   };
 };
 
+/**
+ * The stem fields a decision writes and the language it stems them under, or
+ * null where the generation maps none or the language has no stemmer.
+ *
+ * Stems come from the decision's own language, not its jurisdiction: an
+ * index group spans several countries and the European index holds 24
+ * languages. The language must be one its jurisdiction declares, because the
+ * read side asks each jurisdiction's documents in those languages only. The
+ * public builder refuses one it does not declare with the typed error the
+ * revision build blocks under its own failure kind, before building, so here
+ * it is a caller's defect. A language with no stemmer writes no stem fields
+ * at all, rather than a copy of the surface text under a stem name.
+ */
+const caseLawProjectionStemming = (
+  manifest: BuildCaseLawOptions["manifest"],
+  input: BuildCaseLawOptions["input"],
+): { fields: CorpusIndexStemFields; language: MorphologyLanguage } | null => {
+  const declared = caseLawDocumentStemLanguage(input);
+  if (declared.isErr()) {
+    return panic(declared.error.message, declared.error);
+  }
+  const fields = corpusIndexStemFields(manifest);
+  return fields === null || declared.value === null
+    ? null
+    : { fields, language: declared.value };
+};
+
 /** A case-law decision's documents and how its terms were written. */
 export const buildCaseLawProjection = ({
   manifest,
@@ -475,16 +507,7 @@ export const buildCaseLawProjection = ({
     documentAst: ast,
     metadata: input.metadata,
   });
-  // Stems come from the decision's own language, not its jurisdiction: an
-  // index group spans several countries and a court may publish in more than
-  // one language. A language with no stemmer writes no stem fields at all,
-  // rather than a copy of the surface text under a stem name.
-  const stemFields = corpusIndexStemFields(manifest);
-  const stemLanguage = documentMorphologyLanguage(input.language);
-  const stemmed =
-    stemFields === null || stemLanguage === null
-      ? null
-      : { fields: stemFields, language: stemLanguage };
+  const stemmed = caseLawProjectionStemming(manifest, input);
   const summaryStem =
     stemmed === null || publisher.summary === null
       ? null
@@ -686,9 +709,16 @@ export const buildLegislationV2ProjectionDocuments = ({
 
 export const buildCorpusProjectionDocuments = (
   options: BuildCorpusProjectionDocumentsOptions,
-): Result<Record<string, unknown>[], ChunkBudgetError> => {
+): Result<
+  Record<string, unknown>[],
+  ChunkBudgetError | CaseLawDocumentLanguageUndeclaredError
+> => {
   switch (options.family) {
-    case "case_law":
+    case "case_law": {
+      const language = caseLawDocumentStemLanguage(options.input);
+      if (language.isErr()) {
+        return Result.err(language.error);
+      }
       return Result.try({
         try: () =>
           buildCaseLawProjectionDocuments({
@@ -704,6 +734,7 @@ export const buildCorpusProjectionDocuments = (
           return panic("Case-law projection builder failed unexpectedly");
         },
       });
+    }
     case "legislation":
       return buildLegislationV2ProjectionDocuments({
         input: options.input,

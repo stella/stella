@@ -1,10 +1,9 @@
-import { useState } from "react";
-import type { ComponentProps, ReactNode } from "react";
+import { useContext, useState } from "react";
+import type { ComponentType } from "react";
 
 import { useQueryClient } from "@tanstack/react-query";
 import { Result } from "better-result";
-import type { Element } from "hast";
-import { defaultComponents } from "streamdown";
+import { StreamdownContext } from "streamdown";
 import { useTranslations } from "use-intl";
 import * as v from "valibot";
 
@@ -19,22 +18,37 @@ import {
   tableChartResponseSchema,
 } from "@stll/api-contract/table-chart";
 import { sha256Hex } from "@stll/sha256/browser";
-import { Button } from "@stll/ui/button";
+import {
+  ChartColumnIcon,
+  ChartLineIcon,
+  ChartNoAxesColumnIcon,
+  ChartPieIcon,
+  ChartScatterIcon,
+} from "@stll/ui/icons";
+import { SegmentedIconToggle } from "@stll/ui/segmented-icon-toggle";
 import { TableChart } from "@stll/ui/table-chart";
+import { Toggle } from "@stll/ui/toggle";
 
+import {
+  AnswerTable,
+  answerTableControlId,
+  useAnswerTableIdBase,
+} from "@/components/ai-elements/answer-table";
+import type { MarkdownTableProps } from "@/components/ai-elements/answer-table";
 import {
   chartTableFromNode,
   tableChartPoints,
+  tableChartValueLabel,
 } from "@/components/chat/table-chart.logic";
 import { useFormatter, useFormattingLocale } from "@/i18n/formatting-context";
+import type { TranslationKey } from "@/i18n/types";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
 import { unwrapApiResponse } from "@/lib/errors/api";
 import { resourceQueryOptions } from "@/lib/workspace-realtime";
 
-export type ChatTableChartProps = ComponentProps<"table"> & {
-  node?: Element | undefined;
+export type ChatTableChartProps = MarkdownTableProps & {
   cacheScope: readonly [organizationId: string, userId: string];
   requestPlan?: (table: TableChartRequest) => Promise<TableChartResponse>;
 };
@@ -45,6 +59,10 @@ const requestTableChart = async (table: TableChartRequest) =>
     unwrapApiResponse(await api.chat["table-chart"].post(table)),
   );
 
+/**
+ * A chat answer's table: the shared answer table, with a chart toggle in its
+ * header strip when the table has a numeric column.
+ */
 export const ChatTableChart = ({
   node,
   cacheScope,
@@ -52,50 +70,85 @@ export const ChatTableChart = ({
   ...props
 }: ChatTableChartProps) => {
   const table = chartTableFromNode(node);
-  const SourceTable = defaultComponents.table;
   // A table without a numeric column has no chart, so it offers none.
-  if (table === null || !isTableChartable(table)) {
-    return <SourceTable {...props} />;
-  }
-  // A streaming content change starts a new presentation instead of applying an old plan.
+  const chartable = table !== null && isTableChartable(table) ? table : null;
   return (
-    <ChartableTable
-      key={JSON.stringify([cacheScope, table])}
-      table={table}
-      source={<SourceTable {...props} />}
+    <ChartableAnswerTable
       cacheScope={cacheScope}
+      node={node}
       requestPlan={requestPlan}
+      table={chartable}
+      {...props}
     />
   );
 };
 
-type ChartableTableProps = {
-  table: TableChartRequest;
-  source: ReactNode;
-  cacheScope: ChatTableChartProps["cacheScope"];
+type ChartableAnswerTableProps = Omit<ChatTableChartProps, "requestPlan"> & {
   requestPlan: NonNullable<ChatTableChartProps["requestPlan"]>;
+  table: TableChartRequest | null;
 };
+
 type Presentation =
   | { status: "table" }
   | { status: "loading" }
   | { status: "unavailable" }
   | { status: "chart"; plan: TableChartPlan };
 
-const ChartableTable = ({
-  table,
-  source,
+type TableChartKind = TableChartPlan["kind"];
+
+const KIND_OPTIONS = {
+  bar: { icon: ChartColumnIcon, labelKey: "chat.tableChart.bar" },
+  line: { icon: ChartLineIcon, labelKey: "chat.tableChart.line" },
+  pie: { icon: ChartPieIcon, labelKey: "chat.tableChart.pie" },
+  scatter: { icon: ChartScatterIcon, labelKey: "chat.tableChart.scatter" },
+} as const satisfies Record<
+  TableChartKind,
+  { icon: ComponentType<{ className?: string }>; labelKey: TranslationKey }
+>;
+
+// One element whatever the table holds, so a table that becomes chartable
+// while it streams keeps its shell (and its scroll position) as it is.
+const ChartableAnswerTable = ({
   cacheScope,
   requestPlan,
-}: ChartableTableProps) => {
+  table,
+  ...props
+}: ChartableAnswerTableProps) => {
   const t = useTranslations();
   const formatter = useFormatter();
   const locale = useFormattingLocale();
   const queryClient = useQueryClient();
-  const [presentation, setPresentation] = useState<Presentation>({
-    status: "table",
-  });
+  const { isAnimating } = useContext(StreamdownContext);
+  const idBase = useAnswerTableIdBase(props.node);
+  // A presentation belongs to the content it was chosen for: a streamed
+  // change starts over from the table instead of applying an old plan.
+  const contentKey = JSON.stringify([cacheScope, table]);
+  const [chosen, setChosen] = useState<{
+    contentKey: string;
+    presentation: Presentation;
+  }>({ contentKey, presentation: { status: "table" } });
+  const presentation: Presentation =
+    chosen.contentKey === contentKey
+      ? chosen.presentation
+      : { status: "table" };
+  const present = (next: Presentation) =>
+    setChosen({ contentKey, presentation: next });
+
+  if (table === null) {
+    return <AnswerTable {...props} />;
+  }
+
   const showChart = async () => {
-    setPresentation({ status: "loading" });
+    present({ status: "loading" });
+    // The answer is for the content it was asked about: once the choice has
+    // moved on to newer content, a late answer leaves that choice alone.
+    const requestKey = contentKey;
+    const settle = (next: Presentation) =>
+      setChosen((current) =>
+        current.contentKey === requestKey
+          ? { contentKey: requestKey, presentation: next }
+          : current,
+      );
     const result = await Result.tryPromise(async () => {
       const hash = await sha256Hex(JSON.stringify(table));
       // The loader is bound to the complete source whose digest owns the cache entry.
@@ -118,37 +171,25 @@ const ChartableTable = ({
         fingerprintKey: "ChartableTable:showChart",
         scope: { type: "handler", handlerId: "chat.table-chart.show-chart" },
       });
-      setPresentation({ status: "unavailable" });
+      settle({ status: "unavailable" });
       return;
     }
     const response = result.value;
     switch (response.status) {
       case "unavailable":
-        setPresentation({ status: "unavailable" });
+        settle({ status: "unavailable" });
         return;
       case "ready":
-        setPresentation(
+        settle(
           isTableChartPlanUsable(response.plan, table)
             ? { status: "chart", plan: response.plan }
             : { status: "unavailable" },
         );
     }
   };
-  const kindLabels = {
-    bar: t("chat.tableChart.bar"),
-    line: t("chat.tableChart.line"),
-    pie: t("chat.tableChart.pie"),
-    scatter: t("chat.tableChart.scatter"),
-  };
   const chart = presentation.status === "chart" ? presentation.plan : null;
+  const loading = presentation.status === "loading";
   const points = chart ? tableChartPoints({ table, plan: chart, locale }) : [];
-  let toggleLabel = t("chat.tableChart.showChart");
-  if (presentation.status === "loading") {
-    toggleLabel = t("chat.tableChart.loading");
-  }
-  if (chart) {
-    toggleLabel = t("workspaces.views.timeline.showTable");
-  }
   let keyPoints = points;
   if (points.length > 6) {
     const sortedPoints = points.toSorted((a, b) => b.y - a.y);
@@ -167,40 +208,41 @@ const ChartableTable = ({
         ),
       ].join(" ")
     : "";
+  const toggleLabel = loading
+    ? t("chat.tableChart.loading")
+    : t("chat.tableChart.showChart");
+  const axis = chart?.columns.find(
+    ({ role }) => role === "x" || role === "label",
+  );
+
   return (
-    <div className="my-3 min-w-0" data-slot="chat-table-chart">
-      <div className="mb-2 flex flex-wrap items-center gap-2">
-        <Button
-          size="xs"
-          variant="ghost"
-          disabled={presentation.status === "loading"}
-          aria-pressed={chart !== null}
-          onClick={() => {
-            if (chart) {
-              setPresentation({ status: "table" });
-              return;
-            }
-            detached(showChart(), "chat-table-chart.choose");
-          }}
-        >
-          {toggleLabel}
-        </Button>
-        {chart && (
-          <div
-            className="flex flex-wrap gap-1"
-            role="group"
-            aria-label={t("chat.tableChart.kind")}
+    <AnswerTable
+      {...props}
+      actions={
+        <>
+          <Toggle
+            aria-label={toggleLabel}
+            id={answerTableControlId(idBase, "chart")}
+            disabled={isAnimating || loading}
+            onPressedChange={(pressed) => {
+              if (!pressed) {
+                present({ status: "table" });
+                return;
+              }
+              detached(showChart(), "chat-table-chart.choose");
+            }}
+            pressed={chart !== null}
+            size="icon-xs"
+            tooltip={toggleLabel}
+            variant="ghost"
           >
-            {TABLE_CHART_KINDS.filter((kind) =>
-              isTableChartPlanUsable({ ...chart, kind }, table),
-            ).map((kind) => (
-              <Button
-                key={kind}
-                size="xs"
-                variant="ghost"
-                aria-pressed={chart.kind === kind}
-                onClick={() =>
-                  setPresentation({
+            <ChartNoAxesColumnIcon aria-hidden="true" />
+          </Toggle>
+          {chart && (
+            <div role="group" aria-label={t("chat.tableChart.kind")}>
+              <SegmentedIconToggle
+                onChange={(kind) =>
+                  present({
                     status: "chart",
                     plan: {
                       kind,
@@ -210,47 +252,51 @@ const ChartableTable = ({
                     },
                   })
                 }
-              >
-                {kindLabels[kind]}
-              </Button>
-            ))}
-          </div>
-        )}
-      </div>
-      {presentation.status === "unavailable" && (
-        <p role="status" className="text-muted-foreground mb-2 text-sm">
-          {t("chat.tableChart.unavailable")}
-        </p>
-      )}
-      {chart && (
-        <TableChart
-          kind={chart.kind}
-          points={points}
-          title={
-            chart.title ||
-            table.headers
-              .join(" / ")
-              .slice(0, TABLE_CHART_LIMITS.titleCharacters)
-          }
-          summary={summary}
-          xMode={
-            chart.columns.find(({ role }) => role === "x" || role === "label")
-              ?.role === "label"
-              ? "category"
-              : "numeric"
-          }
-          xLabel={table.headers.at(
-            chart.columns.find(({ role }) => role === "x" || role === "label")
-              ?.index ?? 0,
+                options={TABLE_CHART_KINDS.filter((kind) =>
+                  isTableChartPlanUsable({ ...chart, kind }, table),
+                ).map((kind) => ({
+                  id: answerTableControlId(idBase, `chart-${kind}`),
+                  value: kind,
+                  icon: KIND_OPTIONS[kind].icon,
+                  label: t(KIND_OPTIONS[kind].labelKey),
+                }))}
+                value={chart.kind}
+              />
+            </div>
           )}
-          yLabel={chart.columns
-            .filter(({ role }) => role === "y")
-            .map(({ index }) => table.headers.at(index))
-            .join(" / ")}
-          formatNumber={(value) => formatter.number(value)}
-        />
-      )}
-      <div hidden={chart !== null}>{source}</div>
-    </div>
+        </>
+      }
+      notice={
+        presentation.status === "unavailable" ? (
+          <p
+            className="text-muted-foreground border-b px-3 py-2 text-sm"
+            role="status"
+          >
+            {t("chat.tableChart.unavailable")}
+          </p>
+        ) : null
+      }
+      view={
+        chart ? (
+          <div className="p-3">
+            <TableChart
+              kind={chart.kind}
+              points={points}
+              title={
+                chart.title ||
+                table.headers
+                  .join(" / ")
+                  .slice(0, TABLE_CHART_LIMITS.titleCharacters)
+              }
+              summary={summary}
+              xMode={axis?.role === "label" ? "category" : "numeric"}
+              xLabel={table.headers.at(axis?.index ?? 0)}
+              yLabel={tableChartValueLabel({ table, plan: chart })}
+              formatNumber={(value) => formatter.number(value)}
+            />
+          </div>
+        ) : null
+      }
+    />
   );
 };

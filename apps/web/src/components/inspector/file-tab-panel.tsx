@@ -211,35 +211,6 @@ const getFileTabEditorState = ({
   };
 };
 
-const getFileTabChromeState = ({
-  isEditingNativeDocx,
-  isEmailDisplay,
-  isMarkdownDisplay,
-  isOfficeDisplay,
-  isPlainTextDisplay,
-  tab,
-}: {
-  isEditingNativeDocx: boolean;
-  isEmailDisplay: boolean;
-  isMarkdownDisplay: boolean;
-  isOfficeDisplay: boolean;
-  isPlainTextDisplay: boolean;
-  tab: FileTabPanelProps["tab"];
-}) => {
-  const isPreviewFacet = (tab.facet ?? "preview") === "preview";
-  return {
-    canOpenFullView: !isEmailDisplay && !isMarkdownDisplay,
-    isPreviewFacet,
-    isPreviewOverlayVisible:
-      isPreviewFacet &&
-      !isEditingNativeDocx &&
-      !isEmailDisplay &&
-      !isMarkdownDisplay &&
-      !isOfficeDisplay &&
-      !isPlainTextDisplay,
-  };
-};
-
 export const FileTabPanel = ({
   activeId,
   canUpdateEntity,
@@ -383,7 +354,10 @@ export const FileTabPanel = ({
     isNativeDocxDisplay,
     isOfficeDisplay,
     isPdfDisplay,
-    isTextDisplay: isMarkdownDisplay || isPlainTextDisplay,
+    isTextDisplay:
+      isMarkdownDisplay ||
+      isPlainTextDisplay ||
+      display.nativePreviewKind === "dataBox",
     readsDocumentInInspector,
     tab,
   });
@@ -392,15 +366,12 @@ export const FileTabPanel = ({
   // into a locked DOCX unlocks it. The header carries only the exit — Save
   // or Create version — while editing. It is gated on the Preview facet
   // because switching facets unmounts the editor.
-  const { canOpenFullView, isPreviewFacet, isPreviewOverlayVisible } =
-    getFileTabChromeState({
-      isEditingNativeDocx,
-      isEmailDisplay,
-      isMarkdownDisplay,
-      isOfficeDisplay,
-      isPlainTextDisplay,
-      tab,
-    });
+  const { canOpenFullView } = display;
+  const isPreviewFacet = (tab.facet ?? "preview") === "preview";
+  const isPreviewOverlayVisible =
+    isPreviewFacet &&
+    !isEditingNativeDocx &&
+    (requiresPdfMeasurement || isNativeDocxDisplay);
   const editExit = isMarkdownDisplay ? (
     <MarkdownDraftActions draft={markdown} />
   ) : (

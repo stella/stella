@@ -64,7 +64,6 @@ import {
   getFirstFile,
   getInternalPropertyId,
 } from "@/components/workspaces/entity-utils";
-import type { InternalPropertyId } from "@/components/workspaces/entity-utils";
 import { flashElement } from "@/components/workspaces/hooks/use-inspector-flash";
 import { RowActions } from "@/components/workspaces/row-actions";
 import type { TableTreeNode } from "@/components/workspaces/table/types";
@@ -79,11 +78,7 @@ import {
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { UTC_CALENDAR_DATE_FORMAT } from "@/lib/relative-time";
 import { toSafeId } from "@/lib/safe-id";
-import type {
-  WorkspaceEntity,
-  WorkspaceProperty,
-  WorkspaceView,
-} from "@/lib/types";
+import type { WorkspaceEntity, WorkspaceView } from "@/lib/types";
 import { useEffectiveHotkey } from "@/lib/use-effective-shortcuts";
 import { ENTITY_DRAG_TYPE } from "@/lib/workspaces/drag-constants";
 import {
@@ -108,10 +103,36 @@ import { EmptyState } from "@/routes/_protected.workspaces/$workspaceId/-compone
 import { calculateFolderStatistics } from "@/routes/_protected.workspaces/$workspaceId/-components/filesystem/folder-statistics.logic";
 import type { FolderStatistics } from "@/routes/_protected.workspaces/$workspaceId/-components/filesystem/folder-statistics.logic";
 import {
+  buildGridTemplate,
+  DEFAULT_EXTRA_WIDTH_PX,
+  FILESYSTEM_CREATED_BY_ID,
+  FILESYSTEM_METADATA_LABEL_IDS,
+  FILESYSTEM_ROW_HEIGHT_PX,
+  FILESYSTEM_UPDATED_AT_ID,
+  FILESYSTEM_VERSION_ID,
+  filesystemRowContentStyle,
+  NAME_COL_ID,
+  resolveExtraColumns,
+} from "@/routes/_protected.workspaces/$workspaceId/-components/filesystem/tree-view-columns.logic";
+import type { ExtraColumn } from "@/routes/_protected.workspaces/$workspaceId/-components/filesystem/tree-view-columns.logic";
+import {
   getFileRowClickIntent,
   getFolderClickIntent,
   orderSelectedIds,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/filesystem/tree-view-selection.logic";
+import {
+  FILESYSTEM_BREADCRUMB_ROW_CLASS,
+  FILESYSTEM_COLUMN_HEAD_CLASS,
+  FILESYSTEM_COLUMN_HEADER_CLASS,
+  FILESYSTEM_COLUMN_LABEL_CLASS,
+  FILESYSTEM_CONTENT_CLASS,
+  FILESYSTEM_EXTRA_CELL_CLASS,
+  FILESYSTEM_FOOTER_CLASS,
+  FILESYSTEM_ROW_GRID_CLASS,
+  FILESYSTEM_ROWS_CLASS,
+  FILESYSTEM_SCROLL_CLASS,
+  FILESYSTEM_VIEW_CLASS,
+} from "@/routes/_protected.workspaces/$workspaceId/-components/filesystem/tree-view.pending";
 import {
   flattenFilesystemRows,
   planFilesystemReveal,
@@ -126,33 +147,7 @@ import { useVersionOrNewFileDrop } from "@/routes/_protected.workspaces/$workspa
 
 import { useColumnWidths } from "./use-column-widths";
 
-const FILESYSTEM_ROW_HEIGHT_PX = 36;
 const FILESYSTEM_ROW_OVERSCAN = 16;
-const FILESYSTEM_CREATED_BY_ID = "_created-by" satisfies InternalPropertyId;
-const FILESYSTEM_UPDATED_AT_ID = "_updated-at" satisfies InternalPropertyId;
-const FILESYSTEM_VERSION_ID = "_version" satisfies InternalPropertyId;
-const FILESYSTEM_METADATA_IDS = [
-  FILESYSTEM_CREATED_BY_ID,
-  FILESYSTEM_UPDATED_AT_ID,
-  FILESYSTEM_VERSION_ID,
-] as const;
-
-// -- Column descriptors --
-
-type FilesystemMetadataId = (typeof FILESYSTEM_METADATA_IDS)[number];
-
-type ExtraColumn =
-  | { type: "property"; id: string; label: string; property: WorkspaceProperty }
-  | {
-      type: "metadata";
-      id: FilesystemMetadataId;
-      label: string;
-    };
-
-const ACTIONS_COL_RE = / 2rem$/u;
-
-const isFilesystemMetadataId = (id: string): id is FilesystemMetadataId =>
-  FILESYSTEM_METADATA_IDS.some((metadataId) => metadataId === id);
 
 const isStringArray = (value: unknown): value is string[] =>
   Array.isArray(value) && value.every((item) => typeof item === "string");
@@ -188,64 +183,6 @@ const getDragEntityIds = (
 ): string[] | null => {
   const entityIds = data["entityIds"];
   return isStringArray(entityIds) ? entityIds : null;
-};
-
-const resolveExtraColumns = (
-  hiddenProperties: string[],
-  properties: WorkspaceProperty[],
-  metadataLabels: Record<string, string>,
-): ExtraColumn[] => {
-  const propertyById = new Map(
-    properties.map((property) => [property.id, property]),
-  );
-  const ids = [
-    ...FILESYSTEM_METADATA_IDS,
-    ...properties.map((p) => p.id),
-  ].filter((id) => !hiddenProperties.includes(id));
-
-  const cols: ExtraColumn[] = [];
-
-  for (const id of ids) {
-    if (isFilesystemMetadataId(id)) {
-      cols.push({
-        type: "metadata",
-        id,
-        label: metadataLabels[id] ?? id,
-      });
-    } else {
-      const prop = propertyById.get(id);
-      // Skip file-type properties — the Name column already
-      // shows the filename, so a "Documents" column is redundant.
-      if (prop && prop.content.type !== "file") {
-        cols.push({
-          type: "property",
-          id: prop.id,
-          label: prop.name,
-          property: prop,
-        });
-      }
-    }
-  }
-
-  return cols;
-};
-
-// -- Grid template helpers --
-
-const NAME_COL_ID = "__name__";
-const DEFAULT_EXTRA_WIDTH_PX = 128;
-
-const buildGridTemplate = (
-  extraColumns: ExtraColumn[],
-  widths: Record<string, number>,
-): string => {
-  const nameWidth = widths[NAME_COL_ID];
-  const nameTrack =
-    nameWidth !== undefined ? `${nameWidth}px` : "minmax(20rem, 1fr)";
-  const extraTracks = extraColumns
-    .map((col) => `${widths[col.id] ?? DEFAULT_EXTRA_WIDTH_PX}px`)
-    .join(" ");
-  return `${nameTrack}${extraTracks ? ` ${extraTracks}` : ""} 2rem`;
 };
 
 // -- Component --
@@ -536,9 +473,15 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
 
   const metadataLabels = useMemo(
     () => ({
-      [FILESYSTEM_CREATED_BY_ID]: t("common.author"),
-      [FILESYSTEM_UPDATED_AT_ID]: t("common.lastUpdated"),
-      [FILESYSTEM_VERSION_ID]: t("common.version"),
+      [FILESYSTEM_CREATED_BY_ID]: t(
+        FILESYSTEM_METADATA_LABEL_IDS[FILESYSTEM_CREATED_BY_ID],
+      ),
+      [FILESYSTEM_UPDATED_AT_ID]: t(
+        FILESYSTEM_METADATA_LABEL_IDS[FILESYSTEM_UPDATED_AT_ID],
+      ),
+      [FILESYSTEM_VERSION_ID]: t(
+        FILESYSTEM_METADATA_LABEL_IDS[FILESYSTEM_VERSION_ID],
+      ),
     }),
     [t],
   );
@@ -784,7 +727,7 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
   return (
     // oxlint-disable-next-line jsx-a11y/no-static-element-interactions, jsx-a11y/click-events-have-key-events -- layout container; click-empty-to-deselect is a mouse convenience, keyboard deselect is the Escape hotkey
     <div
-      className="flex h-full flex-1 flex-col overflow-hidden p-2"
+      className={FILESYSTEM_VIEW_CLASS}
       onClick={(e) => {
         // Clear selection when clicking empty background
         // (not inside a row).
@@ -797,7 +740,7 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
       }}
       onContextMenu={handleBgContextMenu}
     >
-      <div className="mb-2 px-2">
+      <div className={FILESYSTEM_BREADCRUMB_ROW_CLASS}>
         <div className="min-w-0">
           {currentFolderId && (
             <Breadcrumb>
@@ -906,10 +849,10 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
         <EntityKindIcon className="size-3.5" kind="folder" />
         {t("workspaces.filesystem.moveToRoot")}
       </div>
-      <div className="mt-1 min-h-0 flex-1 overflow-auto" ref={rowsViewportRef}>
-        <div className="w-max min-w-full">
+      <div className={FILESYSTEM_SCROLL_CLASS} ref={rowsViewportRef}>
+        <div className={FILESYSTEM_CONTENT_CLASS}>
           <div
-            className="text-muted-foreground bg-background sticky top-0 z-10 grid w-full items-center gap-x-4 border-b px-2 pb-1 text-xs font-medium"
+            className={FILESYSTEM_COLUMN_HEADER_CLASS}
             style={{ gridTemplateColumns: gridTemplate }}
           >
             <ColumnHeaderCell
@@ -936,7 +879,7 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
             <span />
           </div>
           <div
-            className="relative mt-1"
+            className={FILESYSTEM_ROWS_CLASS}
             style={{ height: rowVirtualizer.getTotalSize() }}
           >
             {virtualRows.map((virtualRow) => {
@@ -1022,7 +965,7 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
           </div>
         </div>
       </div>
-      <div className="mt-2 shrink-0 px-2">
+      <div className={FILESYSTEM_FOOTER_CLASS}>
         <AddEntityMenu
           onFolderCreated={setEditingEntityId}
           parentId={currentFolderId}
@@ -1126,7 +1069,7 @@ const ColumnHeaderCell = ({
   return (
     <div
       className={cn(
-        "group/column relative flex min-w-0 items-center",
+        FILESYSTEM_COLUMN_HEAD_CLASS,
         align === "end" ? "justify-end" : "justify-start",
       )}
       onContextMenu={containedEventHandler(handleContextMenu)}
@@ -1142,7 +1085,7 @@ const ColumnHeaderCell = ({
       >
         <span
           className={cn(
-            "hover:text-foreground flex min-w-0 items-center gap-1 rounded-sm py-0.5",
+            FILESYSTEM_COLUMN_LABEL_CLASS,
             align === "end"
               ? "justify-end text-end"
               : "justify-start text-start",
@@ -1570,7 +1513,7 @@ export const FilesystemRow = ({
             />
           );
         }
-        if (file?.mimeType) {
+        if (file) {
           return (
             <DocumentIcon
               className="size-4 shrink-0"
@@ -1633,16 +1576,13 @@ export const FilesystemRow = ({
   );
 
   const extraCells = extraColumns.map((col) => (
-    <span
-      className="text-muted-foreground flex h-full min-w-0 items-center justify-end overflow-hidden text-end text-xs whitespace-nowrap"
-      key={col.id}
-    >
+    <span className={FILESYSTEM_EXTRA_CELL_CLASS} key={col.id}>
       <ExtraColumnCell column={col} entity={node} />
     </span>
   ));
 
   const gridCls = cn(
-    "hover:bg-muted grid h-full w-full items-center gap-x-4 rounded-sm px-2 text-start text-sm",
+    FILESYSTEM_ROW_GRID_CLASS,
     (isFolderDropTarget || isExternalDropTarget) && "bg-accent",
     isSelected && "bg-accent",
   );
@@ -1651,14 +1591,7 @@ export const FilesystemRow = ({
 
   // Content area: Name + Type + extras (interactive, clickable)
   // gridColumn spans all content columns (excluding the actions column)
-  const contentSpanStyle = {
-    gridColumn: "1 / -2",
-    display: "grid",
-    gridTemplateColumns: gridTemplate.replace(ACTIONS_COL_RE, ""),
-    alignItems: "center",
-    alignSelf: "stretch",
-    columnGap: "1rem",
-  } as const;
+  const contentSpanStyle = filesystemRowContentStyle(gridTemplate);
   const contentCells = (
     <>
       {nameCell}
@@ -1764,6 +1697,24 @@ export const FilesystemRow = ({
           onNavigateToFolder(node.entityId);
         } else {
           onToggleFolder(node.entityId);
+        }
+      }}
+      onKeyDown={(event) => {
+        if (
+          isFolder ||
+          event.defaultPrevented ||
+          event.key !== "Enter" ||
+          event.shiftKey ||
+          event.metaKey ||
+          event.ctrlKey ||
+          event.altKey
+        ) {
+          return;
+        }
+        event.preventDefault();
+        if (!event.repeat) {
+          dblClickSelectionRef.current = undefined;
+          openInInspector();
         }
       }}
       onDoubleClick={() => {

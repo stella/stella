@@ -1039,6 +1039,13 @@ describe("chat prompt builders", () => {
     // The rules every turn follows stay.
     expect(local).toContain("TRUTHFULNESS:");
     expect(local).toContain("DECISION CITATIONS:");
+    // Both write the one sentence the chat shows above the turn's steps,
+    // in the user's language, before the first tool call.
+    for (const prompt of [cloud, local]) {
+      expect(prompt).toContain(
+        "PLAN LINE: When you will use tools to answer, first write one short sentence in the user's language",
+      );
+    }
   });
 
   test("a turn on the member's computer is told how its web search runs at the permission level", () => {

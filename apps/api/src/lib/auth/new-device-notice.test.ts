@@ -72,6 +72,45 @@ describe("new-device notices", () => {
     expect(notices).toHaveLength(0);
   });
 
+  test.each([
+    {
+      userAgent: newSession.session.userAgent,
+      ipAddress: "203.0.113.2",
+      device: { type: "browserOnOs", browser: "Chrome", os: "macOS" },
+      address: { type: "known", address: "203.0.113.2" },
+    },
+    {
+      userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
+      ipAddress: null,
+      device: { type: "os", os: "Windows" },
+      address: { type: "unknown" },
+    },
+    {
+      userAgent: "curl/8.7.1",
+      ipAddress: "203.0.113.2",
+      device: { type: "unknown" },
+      address: { type: "known", address: "203.0.113.2" },
+    },
+  ])(
+    "describes the device and address as data, leaving wording to the email: $device",
+    async ({ userAgent, ipAddress, device, address }) => {
+      const { dependencies, notices } = createDependencies();
+
+      await sendNewDeviceNotice({
+        path: "/two-factor/verify-totp",
+        newSession: {
+          ...newSession,
+          session: { ...newSession.session, userAgent, ipAddress },
+        },
+        dependencies,
+      });
+
+      expect(notices).toEqual([
+        expect.objectContaining({ device, ipAddress: address }),
+      ]);
+    },
+  );
+
   test("sends for email sign-in but not for a non-session path", async () => {
     const emailSignIn = createDependencies();
     await sendNewDeviceNotice({

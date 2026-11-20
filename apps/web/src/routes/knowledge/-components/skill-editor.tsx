@@ -49,6 +49,8 @@ import { FileDropZone } from "@/components/file-drop-zone";
 import { FileTree } from "@/components/file-tree/file-tree";
 import type { FileTreeNode } from "@/components/file-tree/file-tree";
 import { FolderExpandToggle } from "@/components/file-tree/folder-expand-toggle";
+import { skillEditorChatSkill } from "@/components/inspector/inspector-active-skill";
+import { INSPECTOR_FOCUS_INTENT } from "@/components/inspector/inspector-store-types";
 import {
   buildSkillResourceTabId,
   useInspectorTabsStore,
@@ -71,6 +73,8 @@ import type { NonEmptyPatch } from "@/lib/mutation-command";
 import { toSafeId } from "@/lib/safe-id";
 
 import { SkillAvailabilitySummary } from "./skill-availability-field";
+import { SkillFilesPending } from "./skill-detail.pending";
+import { SkillExportMenu } from "./skill-export-menu";
 import {
   rebaseSkillMetadataDraft,
   skillMetadataDraft,
@@ -300,6 +304,7 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
         ? MARKDOWN_MIME
         : "text/plain",
       content: resource.content,
+      focus: INSPECTOR_FOCUS_INTENT.claim,
     });
   };
 
@@ -323,6 +328,7 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
         label: SKILL_BODY_FILE_NAME,
         mimeType: MARKDOWN_MIME,
         content: bodyContent,
+        focus: INSPECTOR_FOCUS_INTENT.claim,
       });
       return;
     }
@@ -648,13 +654,16 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
               label: SKILL_BODY_FILE_NAME,
               mimeType: MARKDOWN_MIME,
               content: detail.data.body,
+              // Landing on the editor opens SKILL.md beside what the
+              // inspector already shows, never in its place.
+              focus: INSPECTOR_FOCUS_INTENT.ifIdle,
             });
           }}
         />
       )}
       {/* Identity, status, and how the skill runs. The files below are the main
           surface; editing happens in the inspector. */}
-      <div className="border-b p-4">
+      <div className="border-b p-4" data-slot="skill-editor-identity">
         {/* Name + description read as a title/summary; the status controls sit
             in the top-right corner, the identity stays a readable width. */}
         <div className="flex items-start gap-4">
@@ -695,12 +704,13 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
                 aria-label={t("chat.newChat")}
                 onClick={() =>
                   openChat({
-                    activeSkill: {
-                      skillDisplayName: detail.data.name,
+                    activeSkill: skillEditorChatSkill({
+                      name: detail.data.name,
                       skillId,
-                      skillName: detail.data.slug,
-                    },
+                      slug: detail.data.slug,
+                    }),
                     label: detail.data.name,
+                    focus: INSPECTOR_FOCUS_INTENT.claim,
                   })
                 }
                 size="icon-sm"
@@ -709,6 +719,7 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
                 <NewChatIcon className="size-4" />
               </Button>
             )}
+            <SkillExportMenu skillId={skillId} />
             {detail.data && (
               <span className="text-muted-foreground rounded-md border px-1.5 py-0.5 text-xs">
                 {detail.data.scope === "team"
@@ -817,7 +828,10 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
         }}
       >
         <div className="mb-2 flex items-center gap-1 px-1">
-          <p className="text-muted-foreground me-auto text-xs font-semibold tracking-wider uppercase">
+          <p
+            className="text-muted-foreground me-auto text-xs font-semibold tracking-wider uppercase"
+            data-slot="skill-editor-files"
+          >
             {t("common.files")}
           </p>
           {allFolderIds.size > 0 && (
@@ -828,11 +842,7 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
             />
           )}
         </div>
-        {detail.isLoading && (
-          <p className="text-muted-foreground px-1 text-xs">
-            {t("common.loading")}
-          </p>
-        )}
+        {detail.isLoading && <SkillFilesPending />}
         {detail.error && (
           <p className="text-destructive px-1 text-sm">
             {userErrorFromThrown(detail.error, t("common.unexpectedError"))}

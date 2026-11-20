@@ -7,9 +7,19 @@ export const SELECTION_TOOLBAR_EDGE_MARGIN_PX = 8;
 
 type ToolbarRect = Pick<DOMRect, "left" | "top" | "right" | "bottom">;
 
+/** The block extent of the visible selected lines, clipped to the bounds. */
+export type SelectionToolbarExtent = { top: number; bottom: number };
+
 export type SelectionToolbarAnchor = {
   rect: DOMRect;
   bounds: DOMRect;
+  /**
+   * The visible selection's top and bottom. A bar placed by its anchor alone
+   * (the selection's end, or the pointer) flips above that point when there
+   * is no room below, which puts it over the selection's own earlier lines;
+   * with the extent it clears every selected line it can.
+   */
+  extent?: SelectionToolbarExtent | undefined;
 };
 
 const clips = (overflow: string): boolean => overflow !== "visible";
@@ -101,14 +111,24 @@ export const selectionToolbarAnchor = ({
     return null;
   }
   let lastVisible: DOMRect | null = null;
+  let extentTop = Number.POSITIVE_INFINITY;
+  let extentBottom = Number.NEGATIVE_INFINITY;
+  const lines: DOMRect[] = [];
   for (const rect of range.getClientRects()) {
     if (rect.height > 0 && visible(rect, bounds)) {
       lastVisible = rect;
+      lines.push(rect);
+      extentTop = Math.min(extentTop, rect.top);
+      extentBottom = Math.max(extentBottom, rect.bottom);
     }
   }
   if (lastVisible === null) {
     return null;
   }
+  const extent: SelectionToolbarExtent = {
+    top: Math.max(bounds.top, extentTop),
+    bottom: Math.min(bounds.bottom, extentBottom),
+  };
   if (
     pointer !== undefined &&
     pointer.x >= bounds.left &&
@@ -116,13 +136,25 @@ export const selectionToolbarAnchor = ({
     pointer.y >= bounds.top &&
     pointer.y <= bounds.bottom
   ) {
-    return { rect: new DOMRect(pointer.x, pointer.y, 0, 0), bounds };
+    // The pointer picks the bar's column; its line, not the bare point, is
+    // what the bar keeps clear of when nothing better fits.
+    const line = lines.find(
+      (rect) => pointer.y >= rect.top && pointer.y <= rect.bottom,
+    );
+    return {
+      rect:
+        line === undefined
+          ? new DOMRect(pointer.x, pointer.y, 0, 0)
+          : new DOMRect(pointer.x, line.top, 0, line.height),
+      bounds,
+      extent,
+    };
   }
   const end = range.cloneRange();
   end.collapse(false);
   const endRect = end.getClientRects().item(0);
   if (endRect !== null && endRect.height > 0 && visible(endRect, bounds)) {
-    return { rect: endRect, bounds };
+    return { rect: endRect, bounds, extent };
   }
   const parent = range.endContainer.parentElement ?? root;
   const rtl =
@@ -133,7 +165,7 @@ export const selectionToolbarAnchor = ({
     : Math.min(bounds.right, lastVisible.right);
   const top = Math.max(bounds.top, lastVisible.top);
   const bottom = Math.min(bounds.bottom, lastVisible.bottom);
-  return { rect: new DOMRect(x, top, 0, bottom - top), bounds };
+  return { rect: new DOMRect(x, top, 0, bottom - top), bounds, extent };
 };
 
 type SelectionToolbarPositionOptions = {
@@ -141,6 +173,38 @@ type SelectionToolbarPositionOptions = {
   barWidth: number;
   barHeight: number;
   bounds: ToolbarRect;
+  /** The visible selection's lines; see `SelectionToolbarAnchor.extent`. */
+  extent?: SelectionToolbarExtent | undefined;
+};
+
+/**
+ * The bar's top: below the whole selection, else above it, so it never sits
+ * on a selected line. A selection taller than the room on either side falls
+ * back to the anchor's own line, below it when it fits and above otherwise.
+ */
+const preferredToolbarTop = ({
+  anchor,
+  barHeight,
+  bounds,
+  extent,
+}: Omit<SelectionToolbarPositionOptions, "barWidth">): number => {
+  const margin = SELECTION_TOOLBAR_EDGE_MARGIN_PX;
+  const offset = SELECTION_TOOLBAR_OFFSET_PX;
+  const fitsBelow = (edge: number) =>
+    edge + offset + barHeight <= bounds.bottom - margin;
+  const fitsAbove = (edge: number) =>
+    edge - offset - barHeight >= bounds.top + margin;
+  if (extent !== undefined) {
+    if (fitsBelow(extent.bottom)) {
+      return extent.bottom + offset;
+    }
+    if (fitsAbove(extent.top)) {
+      return extent.top - offset - barHeight;
+    }
+  }
+  return fitsBelow(anchor.bottom)
+    ? anchor.bottom + offset
+    : anchor.top - offset - barHeight;
 };
 
 /** Left is the centre (the shared bar translates by half its measured width). */
@@ -149,16 +213,18 @@ export const selectionToolbarPosition = ({
   barWidth,
   barHeight,
   bounds,
+  extent,
 }: SelectionToolbarPositionOptions): { left: number; top: number } => {
   const margin = SELECTION_TOOLBAR_EDGE_MARGIN_PX;
   const halfBar = barWidth / 2;
   const minLeft = bounds.left + margin + halfBar;
   const maxLeft = Math.max(minLeft, bounds.right - margin - halfBar);
-  const below = anchor.bottom + SELECTION_TOOLBAR_OFFSET_PX;
-  const preferredTop =
-    below + barHeight <= bounds.bottom - margin
-      ? below
-      : anchor.top - SELECTION_TOOLBAR_OFFSET_PX - barHeight;
+  const preferredTop = preferredToolbarTop({
+    anchor,
+    barHeight,
+    bounds,
+    extent,
+  });
   const minTop = bounds.top + margin;
   const maxTop = Math.max(minTop, bounds.bottom - margin - barHeight);
   return {

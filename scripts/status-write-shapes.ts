@@ -1,6 +1,7 @@
 import { panic } from "better-result";
 import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 import { orderedReplayOptions } from "../.oxlint-plugins/utils.ts";
 import {
@@ -452,7 +453,9 @@ const schemaReplayColumns = () => {
   if (automaticReplayColumns !== undefined) {
     return automaticReplayColumns;
   }
-  const directory = path.resolve(import.meta.dir, "../apps/api/src/db/schema");
+  const directory = fileURLToPath(
+    new URL("../apps/api/src/db/schema", import.meta.url),
+  );
   const result = new Map<string, readonly string[]>();
   for (const file of readdirSync(directory).filter((name) =>
     name.endsWith(".ts"),

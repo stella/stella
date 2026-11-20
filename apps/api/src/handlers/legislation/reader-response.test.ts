@@ -163,6 +163,8 @@ test("provision history pages keep each preview wording inside its byte budget",
         expressionKind: "consolidation",
         windowDisposition: "effective",
         windowDispositionBasis: null,
+        status: "found",
+        wordingChange: "changed",
         text,
       } as const;
       const count = LIMITS.legislationProvisionHistoryPageSizeMax;
@@ -288,12 +290,17 @@ test("reader plain text keeps literal markup and entities as text", () => {
           expressionKind: "consolidation",
           windowDisposition: "effective",
           windowDispositionBasis: null,
+          status: "found",
+          wordingChange: "unchanged",
           text,
           governingText: [],
-        }).text;
+        });
+        if (history.status !== "found") {
+          throw new Error("Expected a found history item");
+        }
         for (const [projected, maxBytes] of [
           [preview, readerTextBytes.previewText],
-          [history, readerTextBytes.provisionText],
+          [history.text, readerTextBytes.provisionText],
         ] as const) {
           expect(text.startsWith(projected ?? "")).toBe(true);
           expect(Buffer.byteLength(projected ?? "")).toBeLessThanOrEqual(
