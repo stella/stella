@@ -1,16 +1,14 @@
 import { defineConfig } from "tsdown";
 
-import { resolvePackageBinary } from "../../scripts/resolve-package-binary.ts";
-
 export default defineConfig({
   entry: ["src/index.ts", "src/path.ts"],
   format: ["esm"],
   platform: "neutral",
   // tsrs keeps the doc comments on union members in the declarations.
   dts: {
-    generator: "tsgo",
-    tsgo: {
-      path: resolvePackageBinary(import.meta.url, "tsrs"),
+    generator: "tsrs",
+    tsrs: {
+      moduleUrl: import.meta.resolve("tsrs"),
     },
   },
   outDir: "dist",

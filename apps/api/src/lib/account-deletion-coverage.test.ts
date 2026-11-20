@@ -1,5 +1,6 @@
+import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
-import { is } from "drizzle-orm";
+import { getColumnTable, is } from "drizzle-orm";
 import { getTableConfig, PgTable } from "drizzle-orm/pg-core";
 import nodePath from "node:path";
 
@@ -10,6 +11,7 @@ import {
   ACCOUNT_DELETION_MANUAL_TABLES,
   ACCOUNT_DELETION_NON_FK_OWNERSHIP,
 } from "@/api/lib/account-deletion-steps";
+import { RETAINED_USER_ATTRIBUTION_COLUMNS } from "@/api/tests/helpers/user-attribution-retention";
 
 // ── Account-deletion FK coverage guard ──────────────────────────────────
 //
@@ -148,19 +150,24 @@ const ACCOUNT_DELETION_KNOWN_GAPS: readonly KnownGap[] = [
       ["anonymization_blacklist_entries", "created_by", "set null"],
       ["anonymization_blacklist_entries", "updated_by", "set null"],
       ["bilingual_translation_runs", "requested_by", "set null"],
-      ["billing_draft_user_settings", "user_id", "cascade"],
       ["case_law_research_columns", "created_by", "set null"],
       ["cell_metadata", "created_by", "set null"],
       ["cell_metadata", "updated_by", "set null"],
+      ["chat_browser_site_grants", "user_id", "cascade"],
+      ["chat_command_receipts", "user_id", "cascade"],
+      ["chat_limit_reminders", "user_id", "cascade"],
       ["chat_message_revisions", "created_by", "set null"],
       ["chat_messages", "user_id", "cascade"],
+      ["chat_queue_holds", "user_id", "cascade"],
+      ["chat_queued_messages", "user_id", "cascade"],
       ["chat_secrets", "user_id", "cascade"],
       ["chat_tool_grants", "user_id", "cascade"],
       ["chat_turns", "user_id", "cascade"],
+      ["conflict_checks", "decided_by", "set null"],
+      ["conflict_checks", "run_by", "set null"],
       ["contact_extraction_uploads", "user_id", "cascade"],
       ["contact_import_requests", "user_id", "cascade"],
       ["desktop_presence", "user_id", "cascade"],
-      ["desktop_runners", "user_id", "cascade"],
       ["desktop_time_entry_batches", "user_id", "cascade"],
       ["document_processing_runs", "requested_by", "set null"],
       ["document_review_finding_decisions", "actor_id", "set null"],
@@ -175,10 +182,10 @@ const ACCOUNT_DELETION_KNOWN_GAPS: readonly KnownGap[] = [
       ["expenses", "user_id", "set null"],
       ["extraction_runs", "requested_by", "set null"],
       ["feature_enrolments", "user_id", "cascade"],
-      ["feedback_reports", "user_id", "set null"],
       ["flow_definitions", "created_by_user_id", "set null"],
       ["folio_collab_contributions", "user_id", "cascade"],
       ["infosoud_tracked_cases", "created_by", "set null"],
+      ["invoice_sends", "sent_by_user_id", "set null"],
       ["legal_list_claim_review_events", "actor_id", "set null"],
       ["legal_list_fact_details", "updated_by", "set null"],
       ["legal_list_generation_runs", "requested_by", "set null"],
@@ -188,14 +195,15 @@ const ACCOUNT_DELETION_KNOWN_GAPS: readonly KnownGap[] = [
       ["legal_list_item_sources", "created_by", "set null"],
       ["legal_list_item_sources", "verified_by", "set null"],
       ["legal_list_items", "added_by", "set null"],
+      ["legal_list_source_documents", "updated_by", "set null"],
       ["legal_list_verification_read_receipts", "user_id", "cascade"],
       ["legal_list_verification_runs", "requested_by", "set null"],
       ["legal_lists", "created_by", "set null"],
-      ["legal_reader_annotations", "user_id", "cascade"],
       ["matter_inbound_addresses", "created_by", "set null"],
       ["matter_inbound_addresses", "revoked_by", "set null"],
       ["notifications", "user_id", "cascade"],
       ["oauth_grant_revocations", "user_id", "cascade"],
+      ["organization_data_exports", "requested_by", "set null"],
       [
         "organization_professional_use_acceptances",
         "accepted_by_user_id",
@@ -206,13 +214,10 @@ const ACCOUNT_DELETION_KNOWN_GAPS: readonly KnownGap[] = [
       ["report_exports", "requested_by", "set null"],
       ["request_idempotency_receipts", "user_id", "cascade"],
       ["sanctions_contact_matches", "reviewed_by", "set null"],
-      ["saved_searches", "user_id", "cascade"],
-      ["saved_time_narratives", "user_id", "cascade"],
       ["signal_events", "actor_user_id", "set null"],
       ["signals", "assignee_user_id", "set null"],
       ["signals", "created_by_user_id", "set null"],
       ["template_chat_threads", "user_id", "cascade"],
-      ["template_lookup_format_user_defaults", "user_id", "cascade"],
       ["template_persistence_requests", "user_id", "cascade"],
       ["time_entries", "approver_user_id", "set null"],
       ["time_entries", "user_id", "set null"],
@@ -223,7 +228,6 @@ const ACCOUNT_DELETION_KNOWN_GAPS: readonly KnownGap[] = [
       ["usage_allocations", "allocated_by_user_id", "set null"],
       ["usage_lane_counters", "user_id", "cascade"],
       ["usage_seat_assignments", "assigned_by_user_id", "set null"],
-      ["user_professional_use_acceptances", "user_id", "cascade"],
       ["work_obligation_events", "actor_user_id", "set null"],
     ] as const
   ).map(([table, column, onDelete]) => ({
@@ -368,6 +372,37 @@ describe("account deletion FK coverage", () => {
         (fk) => fk.tableName === "session" && fk.columnName === "user_id",
       ),
     ).toBe(true);
+  });
+
+  test("retained historical attribution columns remain in the schema outside account cleanup", () => {
+    const tables = Object.values(allSchemaExports).filter(isPgTable);
+    const manualTables = new Set<PgTable>(ACCOUNT_DELETION_MANUAL_TABLES);
+    const userForeignKeys = findUserForeignKeys();
+    const keys = new Set<string>();
+    for (const { column, reason } of RETAINED_USER_ATTRIBUTION_COLUMNS) {
+      const table = getColumnTable(column);
+      if (!isPgTable(table)) {
+        panic("Retained attribution must belong to a PostgreSQL table");
+      }
+      const config = getTableConfig(table);
+      const key = gapKey(config.name, column.name);
+      expect(keys.has(key)).toBe(false);
+      keys.add(key);
+      expect(tables).toContain(table);
+      expect(config.columns).toContain(column);
+      expect(column.dataType).toBe(authSchema.user.id.dataType);
+      expect(column.getSQLType()).toBe(authSchema.user.id.getSQLType());
+      expect(reason.length).toBeGreaterThan(0);
+      // A cleanup step deleting or reassigning rows on this table would erase attribution.
+      expect(manualTables.has(table)).toBe(false);
+      expect(
+        userForeignKeys.some(
+          (foreignKey) =>
+            foreignKey.tableName === config.name &&
+            foreignKey.columnName === column.name,
+        ),
+      ).toBe(false);
+    }
   });
 
   test("every direct FK to the soft-retained user table is handled or tracked", () => {

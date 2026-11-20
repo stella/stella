@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 
 import { SKILL_RESOURCE_PATH_PATTERN } from "@stll/api-contract";
+import { SKILL_RESOURCE_UPLOAD_MAX_BYTES } from "@stll/api-contract/limits";
 import { compareByLocale } from "@stll/collation";
 import { Button } from "@stll/ui/button";
 import { DocumentMark } from "@stll/ui/document-mark";
@@ -40,6 +41,7 @@ import {
   SelectValue,
 } from "@stll/ui/select";
 import { Textarea } from "@stll/ui/textarea";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { contentDir } from "@stll/ui/use-content-dir";
 import { cn } from "@stll/ui/utils";
 
@@ -47,6 +49,8 @@ import { FileDropZone } from "@/components/file-drop-zone";
 import { FileTree } from "@/components/file-tree/file-tree";
 import type { FileTreeNode } from "@/components/file-tree/file-tree";
 import { FolderExpandToggle } from "@/components/file-tree/folder-expand-toggle";
+import { skillEditorChatSkill } from "@/components/inspector/inspector-active-skill";
+import { INSPECTOR_FOCUS_INTENT } from "@/components/inspector/inspector-store-types";
 import {
   buildSkillResourceTabId,
   useInspectorTabsStore,
@@ -68,6 +72,7 @@ import { catalogueKeys } from "@/lib/knowledge/queries/catalogue";
 import type { NonEmptyPatch } from "@/lib/mutation-command";
 import { toSafeId } from "@/lib/safe-id";
 
+import { SkillArchiveDownloadButton } from "./skill-archive-download";
 import { SkillAvailabilitySummary } from "./skill-availability-field";
 import {
   rebaseSkillMetadataDraft,
@@ -86,8 +91,6 @@ const SKILL_BODY_FILE_NAME = "SKILL.md";
 // translated default would fail validation.
 const NEW_FOLDER_BASE = "new-folder";
 
-const UPLOAD_MAX_BYTES_TEXT = 100_000;
-const UPLOAD_MAX_BYTES_BINARY = 5 * 1024 * 1024;
 const DOCX_MIME =
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
 const PDF_MIME = "application/pdf";
@@ -300,6 +303,7 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
         ? MARKDOWN_MIME
         : "text/plain",
       content: resource.content,
+      focus: INSPECTOR_FOCUS_INTENT.claim,
     });
   };
 
@@ -323,6 +327,7 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
         label: SKILL_BODY_FILE_NAME,
         mimeType: MARKDOWN_MIME,
         content: bodyContent,
+        focus: INSPECTOR_FOCUS_INTENT.claim,
       });
       return;
     }
@@ -567,8 +572,7 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
   // drop, so identically named files get distinct paths instead of colliding.
   const handleUpload = async (file: File, takenPaths: Set<string>) => {
     const binary = isBinaryUpload(file);
-    const maxBytes = binary ? UPLOAD_MAX_BYTES_BINARY : UPLOAD_MAX_BYTES_TEXT;
-    if (file.size > maxBytes) {
+    if (file.size > SKILL_RESOURCE_UPLOAD_MAX_BYTES) {
       notifyUserProblem(t("common.unexpectedError"), {
         description: tSkills("uploadHelp"),
       });
@@ -649,6 +653,9 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
               label: SKILL_BODY_FILE_NAME,
               mimeType: MARKDOWN_MIME,
               content: detail.data.body,
+              // Landing on the editor opens SKILL.md beside what the
+              // inspector already shows, never in its place.
+              focus: INSPECTOR_FOCUS_INTENT.ifIdle,
             });
           }}
         />
@@ -696,12 +703,13 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
                 aria-label={t("chat.newChat")}
                 onClick={() =>
                   openChat({
-                    activeSkill: {
-                      skillDisplayName: detail.data.name,
+                    activeSkill: skillEditorChatSkill({
+                      name: detail.data.name,
                       skillId,
-                      skillName: detail.data.slug,
-                    },
+                      slug: detail.data.slug,
+                    }),
                     label: detail.data.name,
+                    focus: INSPECTOR_FOCUS_INTENT.claim,
                   })
                 }
                 size="icon-sm"
@@ -710,6 +718,7 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
                 <NewChatIcon className="size-4" />
               </Button>
             )}
+            <SkillArchiveDownloadButton skillId={skillId} />
             {detail.data && (
               <span className="text-muted-foreground rounded-md border px-1.5 py-0.5 text-xs">
                 {detail.data.scope === "team"
@@ -1146,9 +1155,7 @@ function SkillFileTree({
           );
         }
         return (
-          <span className="overflow-hidden text-ellipsis whitespace-pre">
-            {node.name}
-          </span>
+          <TruncatedText className="whitespace-pre">{node.name}</TruncatedText>
         );
       }}
       selectedId={selectedId}

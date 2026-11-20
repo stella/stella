@@ -2,10 +2,12 @@ import { createFileRoute, redirect } from "@tanstack/react-router";
 import * as v from "valibot";
 
 import { socialProviderSchema } from "@/components/auth/access-reset.logic";
-import { TwoFactorPanel } from "@/components/auth/two-factor-panel";
 import { redirectToSchema } from "@/lib/redirect";
 import { optionalFlagSearchSchema } from "@/lib/schema";
 import { routeSearchSchema } from "@/route-search-params";
+
+import { TwoFactorPage } from "./-two-factor.page";
+import { TwoFactorPending } from "./-two-factor.pending";
 
 const searchSchema = routeSearchSchema({
   linkProvider: v.optional(socialProviderSchema),
@@ -39,9 +41,6 @@ export const Route = createFileRoute("/auth/two-factor")({
       );
     }
   },
-  component: TwoFactor,
+  component: TwoFactorPage,
+  pendingComponent: TwoFactorPending,
 });
-
-function TwoFactor() {
-  return <TwoFactorPanel />;
-}

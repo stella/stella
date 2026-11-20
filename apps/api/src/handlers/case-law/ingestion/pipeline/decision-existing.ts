@@ -23,12 +23,11 @@ import type {
 import { unreadOutcomeOf } from "@/api/handlers/case-law/ingestion/pipeline/unread-items";
 import { shouldSkipRefresh } from "@/api/handlers/case-law/ingestion/refresh-policy";
 import type { PlainTextMetadataValue } from "@/api/lib/case-law/plain-text";
-import {
-  corpusCarriesDocument,
-  payloadCarriesDocument,
-} from "@/api/lib/case-law/stored-payload";
+import { replayWrite } from "@/api/lib/case-law/replay-write";
+import { corpusCarriesDocument } from "@/api/lib/case-law/stored-payload";
 import { errorTag } from "@/api/lib/errors/error-tag";
 import { READ_OUTCOME_METADATA_KEY } from "@/api/lib/errors/read-outcome";
+import { payloadCarriesDocument } from "@/api/lib/legal-search/corpus-content-hash";
 import {
   lockActiveCorpusProjectionSourceTx,
   synchronizeLockedCorpusProjectionDesiredStateTx,
@@ -173,14 +172,12 @@ const unchangedReadOutcomeMetadata = (
 ) => {
   const unreadOutcome = unreadOutcomeOf(result);
   if (unreadOutcome !== undefined) {
-    return { metadata: recordReadOutcome(unreadOutcome) };
+    return recordReadOutcome(unreadOutcome);
   }
   if (existing.metadata?.[READ_OUTCOME_METADATA_KEY] !== undefined) {
-    return {
-      metadata: sql`${caseLawDecisions.metadata} - ${READ_OUTCOME_METADATA_KEY}::text`,
-    };
+    return sql`${caseLawDecisions.metadata} - ${READ_OUTCOME_METADATA_KEY}::text`;
   }
-  return {};
+  return undefined;
 };
 
 /**
@@ -202,23 +199,24 @@ const advancePartialObservationWatermark = async ({
       entityId: existing.id,
     });
     const unreadOutcome = unreadOutcomeOf(result);
+    const write = replayWrite(caseLawDecisions, {
+      sourceObservedAt: observedAt,
+      sourceObservationOrder: observationOrder,
+      sourceObservationHash: result.rawHash,
+      metadata:
+        unreadOutcome === undefined
+          ? undefined
+          : recordReadOutcome(unreadOutcome),
+      updatedAt: sql`${caseLawDecisions.updatedAt}`,
+    });
     // audit: skip — background case-law observation watermark; public data
     const advanced = (
       await tx
         .update(caseLawDecisions)
-        .set({
-          sourceObservedAt: observedAt,
-          sourceObservationOrder: observationOrder,
-          sourceObservationHash: result.rawHash,
-          ...(unreadOutcome === undefined
-            ? {}
-            : {
-                metadata: recordReadOutcome(unreadOutcome),
-              }),
-          updatedAt: sql`${caseLawDecisions.updatedAt}`,
-        })
+        .set(write.set)
         .where(
           and(
+            write.setWhere,
             eq(caseLawDecisions.id, existing.id),
             storedObservationPrecedes({ order: observationOrder }),
             isNull(caseLawDecisions.redactedAt),
@@ -258,23 +256,25 @@ const advanceUnchangedObservationWatermark = async ({
       family: "case_law",
       entityId: existing.id,
     });
+    const write = replayWrite(caseLawDecisions, {
+      sourceObservedAt: observedAt,
+      sourceObservationOrder: observationOrder,
+      sourceObservationHash: result.rawHash,
+      sourceHash: result.rawHash,
+      sourceHashVersion: sourceFingerprintVersion,
+      metadata: unchangedReadOutcomeMetadata(existing, result),
+      // Drizzle applies the schema's on-update value unless this column is
+      // explicit. A watermark-only replay is not a content modification.
+      updatedAt: sql`${caseLawDecisions.updatedAt}`,
+    });
     // audit: skip — background case-law ingestion ordering metadata; public case-law data, not user actions
     const advanced = (
       await tx
         .update(caseLawDecisions)
-        .set({
-          sourceObservedAt: observedAt,
-          sourceObservationOrder: observationOrder,
-          sourceObservationHash: result.rawHash,
-          sourceHash: result.rawHash,
-          sourceHashVersion: sourceFingerprintVersion,
-          ...unchangedReadOutcomeMetadata(existing, result),
-          // Drizzle applies the schema's on-update value unless this column is
-          // explicit. A watermark-only replay is not a content modification.
-          updatedAt: sql`${caseLawDecisions.updatedAt}`,
-        })
+        .set(write.set)
         .where(
           and(
+            write.setWhere,
             eq(caseLawDecisions.id, existing.id),
             storedObservationPrecedes({ order: observationOrder }),
             isNull(caseLawDecisions.redactedAt),
@@ -443,6 +443,9 @@ export const resolveExistingDecisionPolicy = async ({
       storedPartialObservation.detail !== OBSERVATION_DETAIL.LISTING_ONLY &&
       !corpusCarriesDocument(existing.contentHash)
     ) &&
+    (result.ecli === undefined || existing.ecli === result.ecli) &&
+    (result.sheetNumber === undefined ||
+      existing.sheetNumber === result.sheetNumber) &&
     existing.caseNumber === result.caseNumber &&
     existing.caseNumberType ===
       parsePrimaryReferenceType(result.caseNumberType);

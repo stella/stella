@@ -4,7 +4,7 @@ import { useTranslations } from "use-intl";
 
 import { Frame, FramePanel } from "@stll/ui/frame";
 
-import { CopyActionButton } from "@/components/copy-action-button";
+import { CopyControl } from "@/components/copy-control";
 import { usePermissions } from "@/hooks/use-permissions";
 import { refreshAuthQueries } from "@/lib/auth-queries";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
@@ -15,7 +15,7 @@ import {
 import { pageTitle } from "@/lib/page-title";
 import { ensureRouteQueryData } from "@/lib/react-query";
 import { routePresentation } from "@/routes/-route-presentation";
-import { SettingsPageHeader } from "@/routes/_protected.settings/-components/settings-page-header";
+import { SettingsPageHeader } from "@/routes/_protected.settings/-components/settings-page-header.pending";
 import { OrganizationDangerZone } from "@/routes/_protected.settings/organization/-components/organization-danger-zone";
 import { OrganizationDataBoxesCard } from "@/routes/_protected.settings/organization/-components/organization/data-boxes-card";
 import { OrganizationJurisdictionsCard } from "@/routes/_protected.settings/organization/-components/organization/jurisdictions-card";
@@ -84,7 +84,7 @@ function OrganizationGeneralPage() {
                 {organization.id}
               </bdi>
             </div>
-            <CopyActionButton text={organization.id} variant="outline" />
+            <CopyControl text={organization.id} variant="outline" />
           </div>
         </FramePanel>
       </Frame>

@@ -23,7 +23,11 @@ import {
   sourceImportClosure,
 } from "./detect-route-smoke-changes";
 import { planServiceSuites } from "./detect-service-suite-changes";
-import { landingDeployAffected } from "./landing-deploy-scope";
+import {
+  deployAffected,
+  type DeployRange,
+  LANDING_PACKAGE,
+} from "./landing-deploy-scope";
 import { productionE2eChanged } from "./production-e2e-inputs.mjs";
 
 const TRUE = "true";
@@ -60,9 +64,7 @@ export type ChangedFileScopeDetectors = {
   landingBuild: (
     options: Parameters<typeof requiresLandingBuild>[0],
   ) => unknown;
-  landingDeploy: (
-    options: Parameters<typeof landingDeployAffected>[0],
-  ) => unknown;
+  landingDeploy: (range: DeployRange) => unknown;
   desktopBrowser: (
     options: Parameters<typeof requiresDesktopBrowser>[0],
   ) => unknown;
@@ -71,7 +73,8 @@ export type ChangedFileScopeDetectors = {
 export const DEFAULT_DETECTORS = {
   packageChecks: requiresPackageChecks,
   landingBuild: requiresLandingBuild,
-  landingDeploy: landingDeployAffected,
+  landingDeploy: (range) =>
+    deployAffected({ ...range, packageName: LANDING_PACKAGE }),
   desktopBrowser: requiresDesktopBrowser,
 } satisfies ChangedFileScopeDetectors;
 
@@ -249,6 +252,7 @@ export const DESKTOP_WINDOWS_DRY_RUN_INPUTS = [
   "apps/desktop/*",
   "packages/agent-engine/package.json",
   "packages/agent-engine/scripts/build-sidecar.ts",
+  "apps/desktop/scripts/build-pkcs11-helper.ts",
   "scripts/desktop-*",
   "scripts/*tauri*",
   "scripts/detect-desktop-*",
@@ -333,6 +337,7 @@ const desktopRustRequired = (files: readonly string[]) =>
     "apps/desktop/src/i18n/langs/*",
     "apps/desktop/src/activity/preview-apps.json",
     "apps/desktop/src/clipboard/clipboard-types.ts",
+    "packages/api-contract/src/desktop-account-link.fixtures.json",
     "packages/api-contract/src/desktop-account-policy.json",
     "packages/api-contract/src/desktop-feature-access.json",
     "packages/api-contract/src/desktop-handoff.ts",
@@ -343,6 +348,7 @@ const desktopRustRequired = (files: readonly string[]) =>
     "packages/api-contract/src/desktop-edit-file-types.ts",
     "packages/api-contract/src/desktop-registry.ts",
     "packages/api-contract/src/desktop-rpc.gen.ts",
+    "packages/api-contract/src/chat-local-run-step-content.fixtures.json",
   ]);
 
 const wideScope = (input: ChangedFileScopeInput): Record<string, string> => {
@@ -601,8 +607,13 @@ const deriveNormalScopeFacts = (
     "apps/web/*",
     "packages/*",
     "patches/*",
+    // The bundle gates run in web-build. A pull request builds the web app
+    // only when browser specs or armed route smoke select it
+    // (web_build_pr_required); these inputs select web-build for the merge
+    // queue and main, where the gates block a regression before it lands.
     "scripts/bundle-baseline.ts",
     "scripts/bundle-baseline.json",
+    "scripts/bundle-startup-*",
     "VERSION",
     "bun.lock",
     "bunfig.toml",
@@ -968,6 +979,7 @@ export const OUTPUT_RULES = {
           "*/Cargo.lock",
           "Cargo.toml",
           "*/Cargo.toml",
+          ".cargo/config.toml",
           "scripts/check-lockfile-release-ages.ts",
           "scripts/check-lockfile-release-ages.test.ts",
           "scripts/check-stll-quarantine-excludes.ts",

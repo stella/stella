@@ -17,6 +17,7 @@ import { cn } from "@stll/ui/utils";
 import type { DecisionCitationMetadata } from "@/components/references/decision-citation-chip.logic";
 import { DECISION_CITATION_PRESENTATION } from "@/components/references/decision-citation-presentation.logic";
 import type { DecisionCitationPresentation } from "@/components/references/decision-citation-presentation.logic";
+import { UNDERLINED_CITATION_CLASS_NAME } from "@/components/references/underlined-citation";
 import { env } from "@/env";
 import { useFormatter } from "@/i18n/formatting-context";
 import { formatDecisionDate } from "@/lib/decision-date";
@@ -121,9 +122,17 @@ const DecisionCitationLabel = ({
         </span>
       );
     case DECISION_CITATION_PRESENTATION.inline:
+      // Inside a line of prose: the badge takes the text's face, and the
+      // case number never breaks across lines.
       return (
-        <span className="inline-flex items-center gap-1">
-          {badge}
+        <span className="inline-flex items-center gap-1 whitespace-nowrap tabular-nums">
+          <DocumentIdentityBadge
+            identity={{
+              kind: "decision",
+              courtAbbreviation: decision.courtShortCode,
+            }}
+            size="prose"
+          />
           <BidiText as="span">{decision.caseNumber}</BidiText>
           {paragraph}
         </span>
@@ -136,9 +145,6 @@ const DecisionCitationLabel = ({
   }
 };
 
-const UNDERLINED_TRIGGER_CLASS =
-  "decoration-foreground-placeholder hover:decoration-foreground-muted data-[popup-open]:decoration-foreground-muted rounded-xs underline decoration-dotted underline-offset-2 transition-[text-decoration-color] duration-150";
-
 /** How the trigger sits in its line, by what it draws. */
 const triggerShapeClassName = ({
   sourceText,
@@ -148,7 +154,7 @@ const triggerShapeClassName = ({
   sourceText: ReactNode;
 }): string => {
   if (sourceText !== undefined || label !== undefined) {
-    return UNDERLINED_TRIGGER_CLASS;
+    return UNDERLINED_CITATION_CLASS_NAME;
   }
   if (citingText !== undefined) {
     // Inline, so a long reference still wraps with the prose.

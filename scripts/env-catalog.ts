@@ -48,7 +48,6 @@ export type EnvOwner = (typeof ENV_OWNER)[keyof typeof ENV_OWNER];
 export type EnvCatalogEntry = {
   credentialKind: (typeof ENV_CREDENTIAL_KIND)[keyof typeof ENV_CREDENTIAL_KIND];
   description: string;
-  documented: boolean;
   example: string | undefined;
   exposure: EnvExposure;
   name: string;
@@ -70,6 +69,8 @@ const INTERNAL_SERVER_KEYS = new Set([
   "EMAIL_EVENTS_TOPIC_ARN",
   "LIST_VERIFICATION_ACTIVE_RUNS_MAX",
   "LIST_VERIFICATION_DAILY_STARTS_MAX",
+  "DOCUMENT_REVIEW_ACTIVE_RUNS_MAX",
+  "DOCUMENT_REVIEW_DAILY_STARTS_MAX",
   "UNUSED_CLIENT_RETENTION_DAYS",
   "AGENT_REGISTRATION_DAILY_LIMIT",
   "OPEN_CLIENT_REGISTRATION_DAILY_LIMIT",
@@ -92,6 +93,7 @@ const INTERNAL_SERVER_KEYS = new Set([
   "DATA_INVARIANT_CASE_LAW_CANARIES",
   "DATA_INVARIANT_CASE_LAW_DAILY_BANDS",
   "AGENT_CLIENT_STORAGE_V1_ENABLED",
+  "SOFT_LAW_SYNC_ENABLED",
   "AGENT_SANDBOX_DOCKER_NETWORK",
   "AGENT_SANDBOX_DOCKER_SOCKET",
   "AGENT_SANDBOX_HARNESS_BASE_URL",
@@ -117,7 +119,6 @@ const INTERNAL_SERVER_KEYS = new Set([
   "AZURE_RESOURCE_NAME",
   "BETTER_AUTH_COOKIE_PREFIX",
   "BETTER_AUTH_URL",
-  "CASE_LAW_DATABASE_POOL_MAX",
   "CASE_LAW_PARSED_INPUT_STATE_BACKFILL_KILL_SWITCH",
   "CASE_LAW_EU_COMPLETION_ENABLED",
   "CASE_LAW_EU_COMPLETION_KILL_SWITCH",
@@ -126,6 +127,7 @@ const INTERNAL_SERVER_KEYS = new Set([
   "CASE_LAW_REPLAY_ENABLED",
   "CASE_LAW_REPLAY_KILL_SWITCH",
   "CASE_LAW_REPLAY_DISABLED_SOURCES",
+  "SOFT_LAW_FULL_TEXT_PERMITTED_SOURCES",
   "KILL_SWITCHES",
   "PUBLIC_LAW_DATABASE_POOL_MAX",
   "PUBLIC_CORPUS_RESERVED_CONNECTIONS",
@@ -163,14 +165,18 @@ const INTERNAL_SERVER_KEYS = new Set([
   "E2E_DISABLE_AUTH_RATE_LIMIT",
   "SCHEDULED_JOBS_MODE",
   "EXTENSION_ORIGIN",
+  "OUTLOOK_ADDIN_ORIGIN",
   "FEATURE_ACTION_ADMISSION",
   "FEATURE_AGENT_ID_JAG",
   "FEATURE_AI_MEMORY",
+  "FEATURE_CHAT_TURN_HANDOVER",
+  "FEATURE_CONFLICT_CHECK",
   "FEATURE_FILE_USAGE_LIMITS",
   "FEATURE_FREE_TIER",
   "FEATURE_GOVERNED_WORKFLOW",
   "FEATURE_GENERATED_VIEWS",
   "FEATURE_INBOX_DOCUMENT_SCOUTS",
+  "FEATURE_INVOICE_LINKS",
   "FEATURE_LEGAL_LISTS",
   "FEATURE_MANAGED_PROVIDER_CHECKS",
   "FEATURE_MCP_READ_FENCE",
@@ -350,9 +356,13 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
   VISUAL_PREVIEW_FUNCTION_NAME:
     "Optional Lambda function name for generated-view previews. Publishing remains available when previews are not configured.",
   LIST_VERIFICATION_ACTIVE_RUNS_MAX:
-    "Maximum queued and running document verifications per organization (1–100; default 2).",
+    "Maximum queued and running list AI runs (document verifications and fact extractions) per organization (1–100; default 2).",
   LIST_VERIFICATION_DAILY_STARTS_MAX:
-    "Maximum document verification starts per organization per Europe/Prague day (1–1000; default 20).",
+    "Maximum list AI run starts (document verifications and fact extractions) per organization per Europe/Prague day (1–1000; default 20).",
+  DOCUMENT_REVIEW_ACTIVE_RUNS_MAX:
+    "Maximum queued and running document reviews a person started, per organization (1–100; default 2). Playbook runs over a table are not counted.",
+  DOCUMENT_REVIEW_DAILY_STARTS_MAX:
+    "Maximum document review starts per organization per Europe/Prague day (1–1000; default 20). Playbook runs over a table are not counted.",
   CASE_LAW_DERIVED_AI:
     'Model calls for case-law derived layers: "on" generates a missing decision analysis when a reader opens it and refreshes its significance from the citation graph; "off" (the default) serves stored analyses only, so local, seeded and CI stacks never reach a model by serving a decision.',
   CASE_LAW_PARSED_INPUT_STATE_BACKFILL_KILL_SWITCH:
@@ -371,6 +381,8 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
     "Stop background case-law replay at the next batch boundary. Defaults to false.",
   CASE_LAW_REPLAY_DISABLED_SOURCES:
     "Comma-separated adapter keys excluded from background case-law replay.",
+  SOFT_LAW_FULL_TEXT_PERMITTED_SOURCES:
+    "Comma-separated regulator guidance sources whose publisher has permitted full-text reuse; each must be a source served as a listing pending that permission.",
   KILL_SWITCHES:
     'Operator kill-switch overrides: a JSON object of switch id to "on" or "off", such as {"chat":"off"}. A switched-off feature refuses new work with a typed "turned off" refusal; restarting the running build applies a change. Switch ids live in apps/api/src/lib/kill-switches/registry.ts; an unknown id or state refuses startup.',
   UNUSED_CLIENT_RETENTION_DAYS:
@@ -383,6 +395,8 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
     "Retention in days for completed provider event details; unset disables redaction.",
   AGENT_CLIENT_STORAGE_V1_ENABLED:
     "Enable the shared agent client storage format.",
+  SOFT_LAW_SYNC_ENABLED:
+    "Enable the daily regulator guidance sync for sources with a serving decision.",
   ACTION_LIMIT_CONTACT_URL:
     "Public http(s) contact link shown when an action is paused or not enabled.",
   AGENT_SANDBOX_DOCKER_NETWORK:
@@ -493,6 +507,12 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
     "Batch mode: the document-processing worker exits once its queue has stayed empty this many minutes. Unset keeps it long-running.",
   EDGAR_USER_AGENT:
     "Identifying SEC EDGAR contact string. Unset disables the adapter because the SEC requires one.",
+  ELEVENLABS_API_KEY:
+    "ElevenLabs API key for stella AI transcription straight to ElevenLabs (Scribe v3). Requests ask for zero retention unless ELEVENLABS_ZERO_RETENTION is 0. Unset offers no direct ElevenLabs model.",
+  ELEVENLABS_ENVIRONMENT:
+    'ElevenLabs environment the key belongs to: "default" or "us" (US region) or "eu" (EU data residency). Organizations outside it see the model as outside their region.',
+  ELEVENLABS_ZERO_RETENTION:
+    '"1" (default) when the ElevenLabs account has zero retention (an ElevenLabs enterprise feature), so every request asks for it. "0" offers Scribe v3 only to desktops that warn that ElevenLabs keeps the audio and transcript, never as a default and never on the web.',
   EMAIL_PROVIDER:
     'Transactional email transport: "ses" or "smtp". Leave unset when email is not configured.',
   EMAIL_EVENTS_QUEUE_URL:
@@ -511,10 +531,14 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
     "S3 bucket the SES receipt rule stores raw messages in, in S3_REGION.",
   INBOUND_MAIL_KEY_PREFIX:
     "Object key prefix of the SES receipt rule's S3 action, for example mail/.",
+  FEATURE_CHAT_TURN_HANDOVER:
+    "Release each local chat turn to another API task when this one stops, instead of ending it. Defaults off; enable only once every task runs a release that adopts released turns.",
   FEATURE_AI_MEMORY:
     "Enable tenant-scoped AI memory APIs, prompt retrieval, tools, and workers.",
   FEATURE_INBOX_DOCUMENT_SCOUTS:
     "Enable model-backed inbox producers that read processed documents and review runs.",
+  FEATURE_INVOICE_LINKS:
+    "Kill switch for sending and opening invoice links. Off by default, including local development; also requires the organization invoice-links invitation grant and time-billing access. History and revocation use normal invoice access.",
   FEATURE_GOVERNED_WORKFLOW:
     "Enable governed work obligations and task workflow semantics.",
   FEATURE_LEGAL_LISTS:
@@ -522,7 +546,7 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
   API_FEATURE_ACCESS_GRANTS_SSM_PARAMETER_NAME:
     "Parameter Store name holding API_FEATURE_ACCESS_GRANTS. When set, the API checks the parameter version every minute and reloads the grants only when it changed; unset keeps the grants read at startup.",
   API_FEATURE_ACCESS_GRANTS:
-    "Operator-owned JSON object keyed by registered feature id. Member grants specify type, organizationId, and email; organization grants specify type and organizationId. Both require current membership and verified email. Unknown feature ids reject startup; empty grants hide invitation features.",
+    "Operator-owned JSON object keyed by registered feature id. Member grants specify type, organizationId, and email; organization grants specify type and organizationId. Authenticated decisions require current membership and verified email. Invoice-links accepts only organization grants and requires its deployment flag; public recipients use the invoice organization decision. Unknown feature ids are dropped with an error count; empty grants hide invitation features.",
   FEATURE_ORG_ACCESS_STATE:
     "Enforce the per-organization access state before a model call falls back to the instance provider.",
   FEATURE_FREE_TIER:
@@ -559,8 +583,12 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
     "owner/repo that filed feedback is posted to as an issue. Requires FEEDBACK_GITHUB_TOKEN; unset disables GitHub delivery.",
   FEEDBACK_GITHUB_TOKEN:
     "Token used to file feedback issues in FEEDBACK_GITHUB_REPO. Needs issue-write scope only; unset disables GitHub delivery.",
+  SKILL_IMPORT_GITHUB_TOKEN:
+    "GitHub token for skill sources a person links. Grant public repositories read-only and no other access; never reuse GITHUB_TOKEN. Unset sends these requests without a token.",
   FRONTEND_URL:
     "Web app origin used for absolute transactional-email links, document verification links, and trusted redirects.",
+  OUTLOOK_ADDIN_ORIGIN:
+    "https origin serving the Outlook add-in's task pane, without a path. Set, the API publishes the add-in's OAuth client and accepts its sign-in callback and browser requests from this origin; unset, the add-in cannot sign in.",
   APPLE_AUTH_CLIENT_ID:
     "Sign in with Apple Services ID used as the OAuth client ID; required when the matching web login flag is enabled.",
   APPLE_AUTH_KEY_ID: "Key ID of the Sign in with Apple private key.",
@@ -782,6 +810,8 @@ export const ENV_CREDENTIAL_CLASSIFICATION = {
   ),
   LIST_VERIFICATION_ACTIVE_RUNS_MAX: ENV_CREDENTIAL_KIND.notCredential,
   LIST_VERIFICATION_DAILY_STARTS_MAX: ENV_CREDENTIAL_KIND.notCredential,
+  DOCUMENT_REVIEW_ACTIVE_RUNS_MAX: ENV_CREDENTIAL_KIND.notCredential,
+  DOCUMENT_REVIEW_DAILY_STARTS_MAX: ENV_CREDENTIAL_KIND.notCredential,
   ACTION_ADMISSION_BACKGROUND_ORG_CONCURRENCY:
     ENV_CREDENTIAL_KIND.notCredential,
   ACTION_ADMISSION_BACKGROUND_USER_CONCURRENCY:
@@ -800,6 +830,7 @@ export const ENV_CREDENTIAL_CLASSIFICATION = {
   ACTION_REQUEST_MAX_BYTES: ENV_CREDENTIAL_KIND.notCredential,
   ACTION_RESPONSE_MAX_BYTES: ENV_CREDENTIAL_KIND.notCredential,
   AGENT_CLIENT_STORAGE_V1_ENABLED: ENV_CREDENTIAL_KIND.notCredential,
+  SOFT_LAW_SYNC_ENABLED: ENV_CREDENTIAL_KIND.notCredential,
   AGENT_REGISTRATION_DAILY_LIMIT: ENV_CREDENTIAL_KIND.notCredential,
   AGENT_SANDBOX_DOCKER_NETWORK: ENV_CREDENTIAL_KIND.notCredential,
   AGENT_SANDBOX_DOCKER_SOCKET: ENV_CREDENTIAL_KIND.notCredential,
@@ -827,7 +858,6 @@ export const ENV_CREDENTIAL_CLASSIFICATION = {
   DEPLOY_ENVIRONMENT: ENV_CREDENTIAL_KIND.notCredential,
   BETTER_AUTH_SECRET: ENV_CREDENTIAL_KIND.credential,
   BETTER_AUTH_URL: ENV_CREDENTIAL_KIND.notCredential,
-  CASE_LAW_DATABASE_POOL_MAX: ENV_CREDENTIAL_KIND.notCredential,
   CASE_LAW_DERIVED_AI: ENV_CREDENTIAL_KIND.notCredential,
   CASE_LAW_PARSED_INPUT_STATE_BACKFILL_KILL_SWITCH:
     ENV_CREDENTIAL_KIND.notCredential,
@@ -838,7 +868,6 @@ export const ENV_CREDENTIAL_CLASSIFICATION = {
   CASE_LAW_EU_COMPLETION_KILL_SWITCH: ENV_CREDENTIAL_KIND.notCredential,
   CASE_LAW_EU_COMPLETION_MAX_ROWS: ENV_CREDENTIAL_KIND.notCredential,
   CASE_LAW_EU_COMPLETION_MODE: ENV_CREDENTIAL_KIND.notCredential,
-  CASE_LAW_DATABASE_URL: ENV_CREDENTIAL_KIND.notCredential,
   COMPANIES_HOUSE_API_KEY: ENV_CREDENTIAL_KIND.credential,
   CONTENT_ENCRYPTION_KEY: ENV_CREDENTIAL_KIND.credential,
   CORPUS_INDEX_Q09_ENDPOINT: ENV_CREDENTIAL_KIND.notCredential,
@@ -886,20 +915,24 @@ export const ENV_CREDENTIAL_CLASSIFICATION = {
   EDGAR_USER_AGENT: ENV_CREDENTIAL_KIND.notCredential,
   EMAIL_PROVIDER: ENV_CREDENTIAL_KIND.notCredential,
   EXTENSION_ORIGIN: ENV_CREDENTIAL_KIND.notCredential,
+  OUTLOOK_ADDIN_ORIGIN: ENV_CREDENTIAL_KIND.notCredential,
   API_FEATURE_ACCESS_GRANTS: ENV_CREDENTIAL_KIND.notCredential,
   KILL_SWITCHES: ENV_CREDENTIAL_KIND.notCredential,
   API_FEATURE_ACCESS_GRANTS_SSM_PARAMETER_NAME:
     ENV_CREDENTIAL_KIND.notCredential,
   FEATURE_ACTION_ADMISSION: ENV_CREDENTIAL_KIND.notCredential,
+  FEATURE_CHAT_TURN_HANDOVER: ENV_CREDENTIAL_KIND.notCredential,
   FEATURE_ACTION_COST_RECORDS: ENV_CREDENTIAL_KIND.notCredential,
   FEATURE_AGENT_ID_JAG: ENV_CREDENTIAL_KIND.notCredential,
   FEATURE_AI_MEMORY: ENV_CREDENTIAL_KIND.notCredential,
   FEATURE_CONFIGURED_ACCESS: ENV_CREDENTIAL_KIND.notCredential,
+  FEATURE_CONFLICT_CHECK: ENV_CREDENTIAL_KIND.notCredential,
   FEATURE_FILE_USAGE_LIMITS: ENV_CREDENTIAL_KIND.notCredential,
   FEATURE_FREE_TIER: ENV_CREDENTIAL_KIND.notCredential,
   FEATURE_GOVERNED_WORKFLOW: ENV_CREDENTIAL_KIND.notCredential,
   FEATURE_GENERATED_VIEWS: ENV_CREDENTIAL_KIND.notCredential,
   FEATURE_INBOX_DOCUMENT_SCOUTS: ENV_CREDENTIAL_KIND.notCredential,
+  FEATURE_INVOICE_LINKS: ENV_CREDENTIAL_KIND.notCredential,
   FEATURE_LEGAL_LISTS: ENV_CREDENTIAL_KIND.notCredential,
   FEATURE_MANAGED_PROVIDER_CHECKS: ENV_CREDENTIAL_KIND.notCredential,
   FEATURE_MCP_READ_FENCE: ENV_CREDENTIAL_KIND.notCredential,
@@ -918,6 +951,7 @@ export const ENV_CREDENTIAL_CLASSIFICATION = {
   FEEDBACK_GITHUB_TOKEN: ENV_CREDENTIAL_KIND.credential,
   FRONTEND_URL: ENV_CREDENTIAL_KIND.notCredential,
   GITHUB_TOKEN: ENV_CREDENTIAL_KIND.credential,
+  SKILL_IMPORT_GITHUB_TOKEN: ENV_CREDENTIAL_KIND.credential,
   GOOGLE_AI_API_KEY_CH: ENV_CREDENTIAL_KIND.credential,
   GOOGLE_AI_API_KEY_EU: ENV_CREDENTIAL_KIND.credential,
   APPLE_AUTH_CLIENT_ID: ENV_CREDENTIAL_KIND.notCredential,
@@ -968,6 +1002,9 @@ export const ENV_CREDENTIAL_CLASSIFICATION = {
   MICROSOFT_AUTH_TENANT_ID: ENV_CREDENTIAL_KIND.notCredential,
   MICROSOFT_REQUIRE_VERIFIED_EMAIL_CLAIM: ENV_CREDENTIAL_KIND.notCredential,
   MISTRAL_API_KEY: ENV_CREDENTIAL_KIND.credential,
+  ELEVENLABS_API_KEY: ENV_CREDENTIAL_KIND.credential,
+  ELEVENLABS_ENVIRONMENT: ENV_CREDENTIAL_KIND.notCredential,
+  ELEVENLABS_ZERO_RETENTION: ENV_CREDENTIAL_KIND.notCredential,
   ONLINE_INDEX_CLIENT_CHECK_MS: ENV_CREDENTIAL_KIND.notCredential,
   ONLINE_INDEX_IDLE_HOLDER_MS: ENV_CREDENTIAL_KIND.notCredential,
   ONLINE_INDEX_LONG_HOLDER_MS: ENV_CREDENTIAL_KIND.notCredential,
@@ -1046,6 +1083,7 @@ export const ENV_CREDENTIAL_CLASSIFICATION = {
   SMTP_PASSWORD: ENV_CREDENTIAL_KIND.credential,
   SMTP_PORT: ENV_CREDENTIAL_KIND.notCredential,
   SMTP_USERNAME: ENV_CREDENTIAL_KIND.notCredential,
+  SOFT_LAW_FULL_TEXT_PERMITTED_SOURCES: ENV_CREDENTIAL_KIND.notCredential,
   STELLA_ANNOUNCEMENT_OPERATOR_USER_IDS: ENV_CREDENTIAL_KIND.notCredential,
   STELLA_API_PORT: ENV_CREDENTIAL_KIND.notCredential,
   STELLA_API_URL: ENV_CREDENTIAL_KIND.notCredential,
@@ -1157,11 +1195,6 @@ const ACTIVE_EXAMPLE_KEYS = new Set([
   "VITE_DOCUMENTS_ENDPOINT",
   "VITE_POSTHOG_KEY",
   "VITE_PUBLIC_APP_URL",
-]);
-
-const HIDDEN_SCHEMA_KEYS = new Set([
-  "CASE_LAW_DATABASE_POOL_MAX",
-  "CASE_LAW_DATABASE_URL",
 ]);
 
 const humanizeEnvName = (name: string) => {
@@ -1297,7 +1330,6 @@ const createCatalogEntries = ({ owner, schema }: CreateCatalogEntriesOptions) =>
     return {
       credentialKind,
       description: DESCRIPTION_OVERRIDES[name] ?? humanizeEnvName(name),
-      documented: !HIDDEN_SCHEMA_KEYS.has(name),
       example: EXAMPLE_VALUES[name],
       exposure: exposureFor({ name, owner, schema: entrySchema }),
       name,
@@ -1393,9 +1425,26 @@ export const MANUAL_SCHEMA_KEYS = new Set([
   "HOME",
   "MAX_CONCURRENT_ADAPTER_CYCLES",
   "MAX_CONCURRENT_DB_WRITES",
+  "PROD",
   "RECONCILIATION_FETCH_DELAY_MS",
   "SK_DOCUMENT_BACKFILL_ENABLED",
   "SK_DOCUMENT_FETCH_DELAY_MS",
+  // Desktop agent sidecar, local only: `redacted` writes the redacted
+  // harness and sidecar protocol log to holder.log; unset or `off` (the
+  // default) writes none. packages/agent-engine/src/sidecar/env.ts reads it.
+  "STELLA_AGENT_PROTOCOL_LOG",
+  // Extension ids besides the store's that may start the harness holder's
+  // browser host (an unpacked development build has its own), separated by
+  // commas. packages/agent-engine/src/sidecar/env.ts reads it.
+  "STELLA_BROWSER_EXTENSION_IDS",
+  // Development switch, local only: `1` lets local runs use the stella
+  // browser when no extension is connected; unset is off.
+  // packages/agent-engine/src/sidecar/env.ts reads it.
+  "STELLA_BROWSER_DEV_HOST",
+  // The stella browser's test hooks (its executable, the fixture site's
+  // resolver rules and certificate, a method log) apply only with `1`; the
+  // sidecar build replaces it with "0", so release builds have none.
+  "STELLA_BROWSER_TEST_HOOKS",
   "STELLA_API_KEY",
   "STELLA_DESKTOP_ALLOWED_API_BASE_URLS",
   "STELLA_DESKTOP_ALLOWED_ORIGINS",
@@ -1489,14 +1538,27 @@ export const TOOLING_ENV_KEYS = new Set([
 
   // Dated guard-rollout healing requests full scope before removing the temporary scope.
   "STELLA_GUARD_SCOPE",
+  // scripts/lint.ts prints the linter command instead of running it.
+  "STELLA_LINT_DRY_RUN",
   // Release-only secret: the short-lived federated Chrome Web Store access token.
   "CHROME_WEB_STORE_ACCESS_TOKEN",
   // The mobile app's Expo config reads its variant and signing from the build.
   "APP_VARIANT",
+  // The desktop build script derives the largest editable document from the
+  // API contract's limits and hands it to the crate at compile time.
+  "STELLA_EDITABLE_DOCUMENT_MAX_BYTES",
   "APPLE_TEAM_ID",
+  // The release workflow's Developer ID; the desktop's PKCS #11 helper build
+  // signs the helper with it before Tauri bundles the app.
+  "APPLE_SIGNING_IDENTITY",
+  // The ignored SoftHSM2 test of the PKCS #11 helper names the module to load.
+  "SOFTHSM2_MODULE",
+  // The desktop transcribe-window browser test saves its screenshots here when set.
+  "TRANSCRIBE_SCREENSHOTS",
   "MOBILE_BUILD_NUMBER",
   "MOBILE_PROFILE_UUID",
   "MOBILE_WIDGETS_PROFILE_UUID",
+  "MOBILE_SHARE_PROFILE_UUID",
   "MOBILE_RUNTIME_VERSION",
   // The fake harness CLIs log how they started and what they receive to the
   // file their tests name; the fake Codex app server also logs its CODEX_HOME.
@@ -1504,9 +1566,28 @@ export const TOOLING_ENV_KEYS = new Set([
   "CODEX_HOME",
   // The skill folder the fake harness CLIs' `reads_skill` scenario touches.
   "FAKE_SKILL_PATH",
+  // The pause between a paced fake Codex scenario's outputs.
+  "FAKE_CODEX_PACE_MS",
+  // The run folder and an unreadable folder the fake ACP agent names in the
+  // paths of its tool calls and permission requests.
+  "FAKE_ACP_WORKSPACE",
+  "FAKE_ACP_UNREADABLE",
+  // The local stack's stand-in computer (`agent:up -- --local-runner`) logs
+  // at the level this filter names.
+  "RUST_LOG",
+  // The fixture page the fake harness CLIs' `browse` scenario opens first.
+  "FAKE_BROWSER_START",
+  // `read` makes the `browse` scenario only open and read pages, for a
+  // browser that cannot click or type.
+  "FAKE_BROWSER_SCENARIO",
+  // The browser the stella browser's end-to-end leg runs; unset skips it.
+  "STELLA_BROWSER_E2E_EXECUTABLE",
   // The desktop's stand-in harness holder (a re-run of its own test binary)
   // takes its folder, socket and log file from the test that starts it.
   "STAND_IN_DIR",
+  // The pre-push signature check reads the registered signing keys from this
+  // folder instead of the GitHub account (its tests).
+  "SIGNING_KEYS_DIR",
   "STAND_IN_ENDPOINT",
   "FAKE_SIDECAR_LOG",
   // Invocation-local handoff values are removed before test/native entry points run.
@@ -1564,6 +1645,10 @@ export const TOOLING_ENV_KEYS = new Set([
   // The merge group's base revision.
   "BRIDGE_BASE_SHA",
   "MERGE_GROUP_BASE_SHA",
+  // The CLI contract guard compares the base and head generated capability
+  // catalogs.
+  "CLI_CONTRACT_BASE_CATALOG",
+  "CLI_CONTRACT_HEAD_CATALOG",
   // The scan engine drift check builds into a scratch directory and compares it.
   "SCAN_ENGINE_WASM_OUT_DIR",
   // The manual checks workflow passes its inputs and result files to its scripts.
@@ -1721,11 +1806,19 @@ export const TOOLING_ENV_KEYS = new Set([
   "SERVED_MCP_API_PORT",
   "HEAD_SHA",
   "HEAVY_ONLY",
-  // Scheduled journey checks: endpoint overrides and bounded request/retry timing.
+  // The dispatched cancel-after-job run: the failed job it waits for.
+  "JOB_ID",
+  // Scheduled journey checks: endpoint overrides, bounded request/retry timing,
+  // and the clock and busy windows file the coverage check reads (fixtures pin them).
+  "JOURNEY_BUSY_WINDOWS_FILE",
   "JOURNEY_CLI_URL",
   "JOURNEY_MAIN_REF",
   "JOURNEY_MCP_URL",
+  "JOURNEY_NOW_EPOCH",
   "JOURNEY_NPM_REGISTRY_URL",
+  "JOURNEY_PROBE_RUN_SECONDS",
+  "JOURNEY_PROBE_SLOT",
+  "JOURNEY_PROBE_TIMEOUT_SECONDS",
   "JOURNEY_REGISTRY_TIMEOUT_MS",
   "JOURNEY_RELEASES_API_URL",
   "JOURNEY_RETRY_PAUSE_SECONDS",
@@ -1751,6 +1844,7 @@ export const TOOLING_ENV_KEYS = new Set([
   "MCP_CANARY_ENVIRONMENT",
   "MCP_CANARY_FRONTEND_URL",
   "MCP_CANARY_MODE",
+  "MCP_CANARY_RELEASE_LOAD",
   "MCP_CANARY_REQUIRE_CREDENTIALS",
   "MCP_CANARY_THIRD_PARTY_FETCHES",
   "MCP_CANARY_TOKEN",
@@ -1855,9 +1949,13 @@ export const TOOLING_ENV_KEYS = new Set([
   "RETRY_PASSTHROUGH_EXIT_CODES",
   // Credential used only by the restricted account canary.
   "REVIEW_ACCOUNT_PASSWORD",
+  // The dispatched cancel-after-job run: the run attempt whose job failed.
+  "RUN_ATTEMPT",
   "RUN_ID",
   // Nightly issue reporter: workflow run linked from the failure issue.
   "RUN_URL",
+  // The script test runner's scan preload logs directory scans here.
+  "SCRIPT_TEST_SCAN_LOG",
   "SHA",
   "SMOKE_AI_JOURNEY",
   "SMOKE_AI_OPENAI_API_KEY",
@@ -1873,7 +1971,15 @@ export const TOOLING_ENV_KEYS = new Set([
   "STELLA_COLLAB_TEST_REDIS_CONTAINER_ID",
   "STELLA_COLLAB_TEST_REDIS_URL",
   // Private loopback endpoint passed to the isolated corpus-suite preload.
+  "STELLA_COLD_SEARCH_CONTAINER",
+  "STELLA_COLD_SEARCH_DROP_PAGE_CACHE",
+  "STELLA_COLD_SEARCH_MODE",
+  // The engine container and loopback Postgres metastore of a corpus suite
+  // whose engine keeps its metastore in Postgres, and that metastore's image.
+  "STELLA_CORPUS_ENGINE_TEST_CONTAINER",
   "STELLA_CORPUS_ENGINE_TEST_ENDPOINT",
+  "STELLA_CORPUS_METASTORE_IMAGE",
+  "STELLA_CORPUS_METASTORE_TEST_URL",
   "STELLA_DESKTOP_DOWNLOAD_BASE_URL",
   "STELLA_DESKTOP_NOW_EPOCH",
   "STELLA_DESKTOP_RELEASE_API_PATH",
@@ -1898,6 +2004,8 @@ export const TOOLING_ENV_KEYS = new Set([
   "STELLA_SEED_ORG_ID",
   "STELLA_SEED_USER_ID",
   "STELLA_TEST_LATEST_TAG",
+  // Runner-owned migrated database cloned by isolated PostgreSQL suites.
+  "STELLA_TEST_TEMPLATE_DATABASE",
   "STELLA_TEST_OMIT_ASSET",
   "STELLA_TEST_RELEASE_NUMBERS",
   "STELLA_UPDATE_PLAN_CONTRACTS",
@@ -1942,6 +2050,8 @@ export const TOOLING_ENV_KEYS = new Set([
   "CI_INSTALL_CACHE_RESTORED",
   "CI_POSTGRES_TEST_SELECTION_ENCODED",
   "CI_POSTGRES_TEST_SHARD",
+  // Immutable migrated template used when a native suite clones its database.
+  "STELLA_POSTGRES_TEST_TEMPLATE_URL",
   "POSTGRES_TEST_DURATIONS_FILE",
   "POSTGRES_JUNIT_FILE",
   "CHANGED_MARKDOWN",
@@ -1972,6 +2082,19 @@ export const TOOLING_ENV_KEYS = new Set([
   "TEST_RESOLVER_ERROR",
   "TEST_UPSTREAM_BLOCKED",
   "WXT_STELLA_ORIGINS",
+  // The Outlook add-in build bakes these origins, the provider name, support
+  // link and version into its bundle and manifest
+  // (apps/outlook/scripts/render-manifest.ts), records the release's upload
+  // and frame-ancestor origins, and its local server reads its port.
+  "STELLA_API_ORIGIN",
+  "STELLA_OUTLOOK_FRAME_ANCESTORS",
+  "STELLA_OUTLOOK_PORT",
+  "STELLA_OUTLOOK_VERSION",
+  "STELLA_PROVIDER_NAME",
+  "STELLA_SUPPORT_URL",
+  "STELLA_TASKPANE_ORIGIN",
+  "STELLA_UPLOAD_ORIGIN",
+  "STELLA_WEB_ORIGIN",
 ]);
 
 export const AMBIENT_ENV_KEYS = new Set([

@@ -17,6 +17,10 @@ import { setSharedTransactionTimeouts } from "@/api/db/shared-pool-timeouts";
 import type { SafeId } from "@/api/lib/branded-types";
 import { runDecisionWriteExtension } from "@/api/lib/case-law/decision-write-extension";
 import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
+import {
+  lockCaseLawProjectabilitySourcesTx,
+  projectCaseLawDecisionsTx,
+} from "@/api/lib/legal-search/corpus-projectability-write";
 import type { SchedulerTask } from "@/api/lib/scheduler/types";
 
 export const BACKFILL_CASE_LAW_REDACTION_TOMBSTONES_TASK =
@@ -108,6 +112,12 @@ export const backfillCaseLawRedactionTombstones: SchedulerTask = async ({
       return { status: "complete" as const, repaired: 0 };
     }
 
+    // The sources first, then the rows: the desired writers' lock order, so
+    // the tombstone below projects each decision in this transaction.
+    const projectionLock = await lockCaseLawProjectabilitySourcesTx(
+      tx,
+      decisionIds,
+    );
     const repairRows = await tx
       .select({
         astKey: caseLawDecisions.astS3Key,
@@ -208,6 +218,15 @@ export const backfillCaseLawRedactionTombstones: SchedulerTask = async ({
               ),
             )
             .returning({ id: caseLawDecisions.id });
+    // The tombstone settles each decision and redacts it, both projection
+    // inputs: project every one (as an erasure) in this transaction.
+    if (projectionLock !== null) {
+      await projectCaseLawDecisionsTx(
+        tx,
+        projectionLock,
+        repaired.map(({ id }) => id),
+      );
+    }
 
     // v1/v2 already tombstoned the derived payload and corpus pointers. v3
     // also erases the inline publisher payload those versions left behind.

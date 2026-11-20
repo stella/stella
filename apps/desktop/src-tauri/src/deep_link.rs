@@ -24,6 +24,7 @@ enum DeepLinkAction {
   ConnectAccount {
     api_base_url: String,
     web_origin: String,
+    intent: crate::account::LinkIntent,
   },
   CompleteAccount {
     correlation_id: String,
@@ -35,6 +36,7 @@ enum DeepLinkAction {
     web_origin: String,
   },
   Ping,
+  OpenAgentSettings(crate::AgentSettingsFocus),
   OpenDesktopEdit {
     api_base_url: String,
     handoff_token: String,
@@ -90,6 +92,26 @@ pub fn set_self_host_connect_response(approved: bool) {
   }
 }
 
+/// `stella://settings/agents`, optionally with exactly one `harness` naming
+/// a managed agent. Anything else, an extra or repeated parameter included,
+/// opens nothing, so the window only ever receives one of its own ids.
+fn parse_agent_settings(url: &reqwest::Url) -> Option<crate::AgentSettingsFocus> {
+  if url.path() != "/agents" || url.fragment().is_some() {
+    return None;
+  }
+  let mut pairs = url.query_pairs();
+  match (pairs.next(), pairs.next()) {
+    (None, _) => Some(crate::AgentSettingsFocus::All),
+    (Some((key, value)), None) if key == "harness" => {
+      crate::harness_release::ManagedHarness::ALL
+        .into_iter()
+        .find(|harness| harness.id() == value)
+        .map(crate::AgentSettingsFocus::Harness)
+    }
+    _ => None,
+  }
+}
+
 fn parse_deep_link(raw_url: &str) -> Option<DeepLinkAction> {
   let url = reqwest::Url::parse(raw_url).ok()?;
   if url.scheme() != "stella" {
@@ -108,6 +130,7 @@ fn parse_deep_link(raw_url: &str) -> Option<DeepLinkAction> {
           .ok()?,
           web_origin: config::normalize_self_host_web_origin(params.get("webOrigin")?)
             .ok()?,
+          intent: crate::account::LinkIntent::parse(params.get("intent")?)?,
         });
       }
       "/complete" => {
@@ -137,6 +160,10 @@ fn parse_deep_link(raw_url: &str) -> Option<DeepLinkAction> {
 
   if url.host_str() == Some("ping") {
     return Some(DeepLinkAction::Ping);
+  }
+
+  if url.host_str() == Some("settings") {
+    return parse_agent_settings(&url).map(DeepLinkAction::OpenAgentSettings);
   }
 
   if url.host_str() == Some("self-host") && url.path() == "/connect" {
@@ -222,6 +249,7 @@ pub fn handle_url(
     Some(DeepLinkAction::ConnectAccount {
       api_base_url,
       web_origin,
+      intent,
     }) => {
       tauri::async_runtime::spawn(async move {
         let static_pair = config::resolve_trusted_api_base_urls()
@@ -243,6 +271,7 @@ pub fn handle_url(
           &app_handle,
           &api_base_url,
           &web_origin,
+          intent,
         )
         .await
         {
@@ -266,7 +295,11 @@ pub fn handle_url(
         )
         .await
         {
-          tracing::warn!(error = %error, "desktop account connection could not complete");
+          tracing::warn!(
+            error = %error,
+            reason = error.reason.as_str(),
+            "desktop account connection could not complete"
+          );
           tracing::warn!(target: crate::logging::TRAIL_TARGET, event = "account.link_failed");
           return;
         }
@@ -321,6 +354,12 @@ pub fn handle_url(
             tracing::debug!("deep link updater check skipped: updates are managed");
           }
         }
+      });
+    }
+    Some(DeepLinkAction::OpenAgentSettings(focus)) => {
+      tracing::info!("agent settings deep link received");
+      tauri::async_runtime::spawn(async move {
+        crate::show_settings(&app_handle, crate::SettingsView::Agents(focus));
       });
     }
     Some(DeepLinkAction::OpenDesktopEdit {
@@ -614,7 +653,12 @@ impl crate::handoff::ConnectionHost for DesktopConnectionHost<'_> {
     api_base_url: &str,
     web_origin: &str,
   ) -> Result<Self::Prepared, String> {
-    crate::account::prepare_browser_connection(api_base_url, web_origin).await
+    crate::account::prepare_browser_connection(
+      api_base_url,
+      web_origin,
+      crate::account::LinkIntent::Connect,
+    )
+    .await
   }
 
   fn open(
@@ -728,6 +772,12 @@ pub(crate) enum ConnectionConfirmation<'a> {
     email: &'a str,
     organization_name: &'a str,
   },
+  /// Replacing the linked account; Cancel is the default answer.
+  Switch {
+    current_email: &'a str,
+    email: &'a str,
+    organization_name: &'a str,
+  },
 }
 
 pub(crate) async fn show_connection_confirmation(
@@ -816,6 +866,22 @@ pub(crate) async fn show_connection_confirmation(
         percent_encode(organization_name)
       ),
       "dialog.accountWindowTitle",
+    ),
+    ConnectionConfirmation::Switch {
+      current_email,
+      email,
+      organization_name,
+    } => (
+      format!(
+        "mode=switch&message={}&accountEmail={}&organizationName={}",
+        percent_encode(&crate::i18n::t_fmt(
+          "dialog.switchSubtitle",
+          &[("currentEmail", current_email), ("email", email)],
+        )),
+        percent_encode(email),
+        percent_encode(organization_name)
+      ),
+      "dialog.switchWindowTitle",
     ),
   };
   let hash = format!(
@@ -1133,6 +1199,85 @@ mod tests {
 
   const TOKEN: &str =
     "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+
+  const ACCOUNT_LINK_CONTRACT: &str = include_str!(
+    "../../../../packages/api-contract/src/desktop-account-link.fixtures.json"
+  );
+
+  #[test]
+  fn connect_links_carry_the_intent_the_page_asked_for() {
+    let contract: serde_json::Value =
+      serde_json::from_str(ACCOUNT_LINK_CONTRACT).unwrap();
+    let mut intents = Vec::new();
+    for link in contract["connectLinks"].as_array().unwrap() {
+      let intent =
+        crate::account::LinkIntent::parse(link["intent"].as_str().unwrap()).unwrap();
+      assert_eq!(
+        parse_deep_link(link["url"].as_str().unwrap()),
+        Some(DeepLinkAction::ConnectAccount {
+          api_base_url: link["apiBaseUrl"].as_str().unwrap().into(),
+          web_origin: link["webOrigin"].as_str().unwrap().into(),
+          intent,
+        })
+      );
+      intents.push(intent);
+    }
+    assert_eq!(
+      intents,
+      [
+        crate::account::LinkIntent::Connect,
+        crate::account::LinkIntent::Switch
+      ]
+    );
+  }
+
+  #[test]
+  fn settings_links_open_only_a_known_agent_focus() {
+    let contract: serde_json::Value =
+      serde_json::from_str(ACCOUNT_LINK_CONTRACT).unwrap();
+    let links = &contract["settingsLinks"];
+    let valid = links["valid"].as_array().unwrap();
+    let mut focuses = Vec::new();
+    for link in valid {
+      let focus = match link["harness"].as_str() {
+        None => crate::AgentSettingsFocus::All,
+        Some(id) => crate::AgentSettingsFocus::Harness(
+          crate::harness_release::ManagedHarness::ALL
+            .into_iter()
+            .find(|harness| harness.id() == id)
+            .unwrap(),
+        ),
+      };
+      assert_eq!(
+        parse_deep_link(link["url"].as_str().unwrap()),
+        Some(DeepLinkAction::OpenAgentSettings(focus))
+      );
+      focuses.push(focus);
+    }
+    // Every focus once, in whatever order the fixture lists them.
+    assert_eq!(focuses.len(), crate::AgentSettingsFocus::ALL.len());
+    for focus in crate::AgentSettingsFocus::ALL {
+      assert!(focuses.contains(&focus), "{focus:?} has no settings link");
+    }
+    let rejected = links["rejected"].as_array().unwrap();
+    assert!(!rejected.is_empty());
+    for url in rejected {
+      let url = url.as_str().unwrap();
+      assert_eq!(parse_deep_link(url), None, "{url}");
+    }
+  }
+
+  #[test]
+  fn a_connect_link_without_a_known_intent_does_nothing() {
+    let base = "stella://account/connect?apiBaseUrl=https%3A%2F%2Fapi.stll.app&webOrigin=https%3A%2F%2Fmy.stll.app";
+    for url in [
+      base.to_string(),
+      format!("{base}&intent=replace"),
+      format!("{base}&intent=Switch"),
+    ] {
+      assert_eq!(parse_deep_link(&url), None);
+    }
+  }
 
   #[test]
   fn account_links_accept_provider_ids_and_require_a_uuid_correlation() {

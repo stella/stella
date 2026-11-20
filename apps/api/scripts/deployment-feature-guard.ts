@@ -30,11 +30,10 @@
 import { panic } from "better-result";
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
-import { pathToFileURL } from "node:url";
 
 import { compareCodeUnit } from "@stll/collation";
 
-import { readCapabilityCatalog } from "../../../packages/cli/src/capability-catalog-data";
+import { buildCapabilityCatalog } from "./export-capability-catalog";
 import { deriveCapabilityId } from "./lib/capability-catalog";
 import type {
   Finding,
@@ -59,7 +58,6 @@ import {
 } from "./lib/enumerate-safe-handlers";
 
 const BASELINE_FILE = "apps/api/deployment-feature-routes-baseline.json";
-const CATALOG_DIRECTORY = "packages/cli/capabilities";
 
 /**
  * Path prefixes that serve an always-on surface: no deployment flag may gate
@@ -69,16 +67,72 @@ const CATALOG_DIRECTORY = "packages/cli/capabilities";
  */
 const ALWAYS_ON_ROUTE_PREFIXES: ReadonlyMap<string, string> = new Map([
   [
+    "/v1/invoices/:workspaceId/:invoiceId/sends",
+    "cleanup of live invoice links must work after the firm leaves time billing; invoice:update required",
+  ],
+  [
+    "/v1/outbound-actions",
+    "Authenticated confirmation of a user's prepared outbound actions is available on every deployment",
+  ],
+  [
+    "/v1/saved-searches",
+    "The caller's private saved searches support search on every deployment",
+  ],
+  [
+    "/v1/files/:workspaceId/structured-document",
+    "Court document previews use matter file read permissions on every deployment",
+  ],
+  [
+    "/v1/files/:workspaceId/asic",
+    "ASiC previews use matter file read permissions on every deployment",
+  ],
+  [
+    "/v1/files/:workspaceId/cades",
+    "Signed document previews use the matter file read permission on every deployment",
+  ],
+  [
+    "/v1/files/:workspaceId/data-box",
+    "Data-box previews use the matter file read permission on every deployment",
+  ],
+  [
     "/v1/organization-settings/correspondence/data-boxes",
     "Organization data-box settings support matter correspondence on every deployment",
+  ],
+  [
+    "/smoke/scheduled-jobs",
+    "Release-proof route gated by the smoke secret and the staging deployment origin, not by a feature flag",
   ],
   [
     "/v1/organizations",
     "Authenticated account holders can create organizations on every deployment",
   ],
   [
+    "/v1/ai",
+    "The Outlook add-in's email summary and reply draft are available on every deployment and enforce their email-assist kill switch, model availability and usage admission",
+  ],
+  [
+    "/v1/skills/from-chat",
+    "Drafting a skill from the caller's own chat is available on every deployment and enforces the skills kill switch, model availability and usage admission",
+  ],
+  [
+    "/v1/skills/save-draft",
+    "Storing a reviewed skill draft is a private skill create under the skill create permission on every deployment",
+  ],
+  [
+    "/v1/skills/:skillId/export",
+    "Downloading a skill the caller may read as an Agent Skills archive is available on every deployment",
+  ],
+  [
     "/v1/dictation/transcribe",
     "Authenticated dictation is available on every deployment and enforces its dictation kill switch, provider availability and usage admission",
+  ],
+  [
+    "/v1/dictation/models",
+    "Authenticated dictation lists the region's transcription models on every deployment, and a model whose provider keeps the audio only to a member whose feature decision grants it",
+  ],
+  [
+    "/v1/dictation/cleanup",
+    "Authenticated dictation cleanup is available on every deployment and enforces its dictation kill switch, model availability and usage admission",
   ],
   [
     "/v1/organizations/audit-export",
@@ -93,28 +147,76 @@ const ALWAYS_ON_ROUTE_PREFIXES: ReadonlyMap<string, string> = new Map([
     "Matter vocabulary uses the normal matter read permission on every deployment",
   ],
   [
+    "/v1/workspaces/matter-numbering",
+    "The matter-number convention is read under the normal matter read permission on every deployment",
+  ],
+  [
+    "/v1/workspaces/member-candidates",
+    "The organization's people a matter can be shared with are listed under the normal matter read permission on every deployment",
+  ],
+  [
     "/v1/desktop/matter-candidates",
     "Desktop billing routes enforce authenticated activity and billing feature decisions on every deployment",
   ],
   [
     "/v1/desktop/matters",
-    "Desktop billing routes enforce authenticated activity and billing feature decisions on every deployment",
+    "Desktop matter search enforces the caller's activity or dictation feature decision and matter access on every deployment",
   ],
   [
     "/v1/chat/runs/active",
     "The member's own unfinished chat runs are readable on every deployment that serves chat",
   ],
   [
+    "/v1/chat/threads/:threadId/read-state",
+    "A member's own read marks on their chats are set on every deployment that serves chat",
+  ],
+  [
+    "/v1/chat/threads/:threadId/pin-state",
+    "A member's own pins on their chats are set on every deployment that serves chat",
+  ],
+  [
+    "/v1/chat/browser-site-grants",
+    "A member's standing website approvals for chat's browser actions are listed, added and removed on every deployment that serves chat; the browser tool itself needs the member's paired extension",
+  ],
+  [
     "/v1/chat/local-runners",
     "The chat computer list is mounted on every deployment and answers hidden unless the member's local-agents feature decision is enabled",
+  ],
+  [
+    "/v1/chat/threads/:threadId/messages/:messageId/local-files",
+    "Undoing the file changes made since a message is mounted on every deployment; there is something to undo only once the member's local-agents feature let a run of the chat start",
+  ],
+  [
+    "/v1/chat/threads/:threadId/background-tasks",
+    "A chat's background task count is mounted on every deployment; it is above 0 only once the member's local-agents feature let a run start on their computer",
+  ],
+  [
+    "/v1/chat/threads/:threadId/queue",
+    "A member's queue of messages for their own chat is mounted on every deployment that serves chat; a queued message is sent through the send's own checks",
+  ],
+  [
+    "/v1/chat/threads/:threadId/local-run-steps",
+    "Reading what a step of a local run produced is mounted on every deployment; there is content only once the member's local-agents feature let a run start on their computer",
   ],
   [
     "/v1/chat/local-runs",
     "A run's output upload authenticates the run's agent token on every deployment; a run exists only once the member's local-agents feature let it start",
   ],
   [
+    "/v1/chat/threads/:threadId/limit-reminder",
+    "A chat limit reminder is mounted on every deployment; it can be set only for a turn the member's local-agents feature let run",
+  ],
+  [
+    "/v1/organization-settings/local-runs",
+    "An administrator's limit on local run permissions is settable on every deployment; it only narrows turns the member's local-agents feature lets start",
+  ],
+  [
     "/v1/desktop/time-entries",
     "Desktop billing routes enforce authenticated activity and billing feature decisions on every deployment",
+  ],
+  [
+    "/public/invoice-links",
+    "Invoice links have no member to enrol; their token verifier requires FEATURE_INVOICE_LINKS and time billing, answering disabled deployments like dead links",
   ],
   [
     "/v1/contacts",
@@ -133,8 +235,17 @@ const ALWAYS_ON_ROUTE_PREFIXES: ReadonlyMap<string, string> = new Map([
     "A personal data export is available to every account on every deployment",
   ],
   [
+    "/v1/data-exports",
+    "Organization data export (data portability) is available on every deployment",
+  ],
+  [
     "/v1/chat/threads/:threadId/connectors/:toolCallId",
     "Authenticated chat connector receipts are available on every deployment",
+  ],
+  ["/v1/me/role", "A member reads their own role on every deployment"],
+  [
+    "/v1/chat/threads/:threadId/turns/:turnId/steer",
+    "Steering a turn is mounted on every deployment and reaches only a run the member's local-agents feature let start; any other turn answers unavailable",
   ],
   [
     "/v1/me/push-devices",
@@ -153,6 +264,22 @@ const ALWAYS_ON_ROUTE_PREFIXES: ReadonlyMap<string, string> = new Map([
     "Desktop account presence supports handoff on every deployment",
   ],
   [
+    "/v1/desktop/dictation/cleanup",
+    "Desktop dictation cleanup enforces the caller's dictation feature decision, its dictation kill switch, model availability and usage admission on every deployment",
+  ],
+  [
+    "/v1/desktop/dictation/models",
+    "Desktop dictation lists the region's transcription models only for a caller whose cloud dictation feature decision is enabled, on every deployment",
+  ],
+  [
+    "/v1/desktop/dictation/transcribe",
+    "Desktop dictation transcription enforces the caller's cloud dictation feature decision, its dictation kill switch, provider availability and usage admission on every deployment",
+  ],
+  [
+    "/v1/desktop/dictation/transcripts",
+    "Filing a transcribed recording enforces the caller's dictation feature decision, matter access and document create permission on every deployment",
+  ],
+  [
     "/v1/files/:workspaceId/marked",
     "A PDF downloads with the reader's highlights on every deployment, as the uploaded bytes do",
   ],
@@ -167,6 +294,10 @@ const ALWAYS_ON_ROUTE_PREFIXES: ReadonlyMap<string, string> = new Map([
   [
     "/v1/mcp/oauth/mobile-client-metadata.json",
     "The mobile app's client identity is published by every deployment it can sign in to",
+  ],
+  [
+    "/v1/mcp/oauth/outlook-client-metadata.json",
+    "The Outlook add-in's client identity is published by every deployment that configures its task-pane origin; others answer 404",
   ],
   ["/favicon.ico", "The API host's icon is served by every deployment"],
   [
@@ -185,6 +316,14 @@ const ALWAYS_ON_ROUTE_PREFIXES: ReadonlyMap<string, string> = new Map([
   [
     "/v1/entities/:workspaceId/entity/:entityId/field/:fieldId/annotations",
     "Highlights and comments on a matter document are available on every deployment",
+  ],
+  [
+    "/v1/workspaces/:workspaceId/legal-holds",
+    "Legal holds preserve matter evidence on every deployment; placing or releasing one needs the legal hold permission, a reason and explicit approval",
+  ],
+  [
+    "/v1/entities/:workspaceId/entity/:entityId/legal-holds",
+    "Legal holds preserve matter evidence on every deployment; placing or releasing one needs the legal hold permission, a reason and explicit approval",
   ],
   [
     "/synthetic",
@@ -212,11 +351,11 @@ const readRecord = (file: string): SourceRecord => ({
   source: readFileSync(path.join(REPO_ROOT, file), "utf-8"),
 });
 
-const readCatalogFeatures = (): Map<string, string | undefined> => {
+const readCatalogFeatures = async (): Promise<
+  Map<string, string | undefined>
+> => {
   const features = new Map<string, string | undefined>();
-  const entries = readCapabilityCatalog(
-    pathToFileURL(`${path.join(REPO_ROOT, CATALOG_DIRECTORY)}/`),
-  );
+  const entries = await buildCapabilityCatalog();
   for (const entry of entries) {
     if (!isRecord(entry) || typeof entry["id"] !== "string") {
       return panic("deployment-feature-guard: malformed catalog entry");
@@ -281,7 +420,7 @@ export const loadRealInput = async (): Promise<ScanInput> => {
   const allFiles = new Set(scanFiles(["apps/api/src/**/*.{ts,tsx}"]));
   const withFlagText = (files: readonly string[]) =>
     files.map(readRecord).filter(({ source }) => source.includes("FEATURE_"));
-  const catalogFeatures = readCatalogFeatures();
+  const catalogFeatures = await readCatalogFeatures();
   return {
     ownerSource: readRecord(DEPLOYMENT_FEATURE_OWNER_FILE).source,
     readerFiles: withFlagText([...allFiles]),

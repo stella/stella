@@ -27,7 +27,11 @@ import {
 } from "@stll/api-contract/chat";
 
 import { arrayOrEmpty } from "@/api/lib/array";
+import { stepLedgerProviderMiddleware } from "@/api/lib/chat/step-ledger-provider-copy";
 import { isRecord } from "@/api/lib/type-guards";
+
+/** Internal snapshot evidence, consumed before persistence and client delivery. */
+export const SNAPSHOT_OWNERS_METADATA_KEY = "__stellaSnapshotOwners";
 
 /**
  * Top-level keys `normalizeStreamChunk` takes off an engine-emitted chunk, per
@@ -176,9 +180,9 @@ export const toolCallEndOutputOf = (chunk: PublicToolCallEndChunk): unknown =>
   readEngineField(chunk, "output");
 
 /**
- * `TOOL_CALL_START` carries the tool name as the spec key `toolCallName`, with
- * `toolName` as the alias the engine folds into it. `TOOL_CALL_END` carries
- * neither, so `metadata.tanstack.toolName` is the only place a name appears.
+ * `TOOL_CALL_START` carries the spec key `toolCallName`. Older synthetic
+ * events and `TOOL_CALL_END` may carry `toolName` at the top level or in
+ * `metadata.tanstack`; keep that read at this compatibility boundary.
  */
 export const toolCallNameOf = (
   chunk: PublicToolCallStartChunk | PublicToolCallEndChunk,
@@ -204,7 +208,13 @@ export const toolCallNameOf = (
 // No middleware in this repository declares one, and the pair that has to
 // travel together (the sandbox adapter and its capability) is returned as a
 // pair by its owner rather than assembled at the call site.
-type ChatOptions = Omit<Parameters<typeof chat>[0], "middleware"> & {
+// Stella's cache policy owns native markers and scoped keys. TanStack v1's
+// automatic cache defaults would otherwise re-enable caching for disabled
+// requests and move markers across conversation prefixes.
+type ChatOptions = Omit<
+  Parameters<typeof chat>[0],
+  "middleware" | "promptCache"
+> & {
   middleware?: ChatMiddleware[];
 };
 
@@ -289,8 +299,11 @@ export const streamChatChunks = async function* (
       }
     },
   });
+  // Last, so it reads the provider copy every middleware before it settled.
+  middleware.push(stepLedgerProviderMiddleware);
   for await (const chunk of chat({
     ...options,
+    promptCache: "none",
     messages,
     toolExecution: "sequential",
     middleware,
@@ -369,7 +382,7 @@ export type ChatObjectOptions = StreamChatChunksOptions & {
  */
 export const generateChatObject = async (
   options: ChatObjectOptions,
-): Promise<unknown> => await chat(options);
+): Promise<unknown> => await chat({ ...options, promptCache: "none" });
 
 type StructuredOutputStreamChunk =
   StructuredOutputStream extends AsyncIterable<infer TChunk> ? TChunk : never;
@@ -384,4 +397,4 @@ export type PublicStructuredOutputChunk =
 export const streamChatObject = (
   options: ChatObjectOptions,
 ): AsyncIterable<PublicStructuredOutputChunk> =>
-  chat({ ...options, stream: true });
+  chat({ ...options, promptCache: "none", stream: true });

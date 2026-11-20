@@ -1,3 +1,4 @@
+import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
 import { status } from "@/api/http/status";
 import type { AuditRecorder } from "@/api/lib/audit-log";
@@ -6,6 +7,11 @@ import { auditedPresignDownload } from "@/api/lib/audited-download";
 import type { SafeId } from "@/api/lib/branded-types";
 import { loadCurrentOcrExport } from "@/api/lib/document-content-provenance";
 import { createOcrSearchablePdfKey } from "@/api/lib/file-key";
+import {
+  LIVE_VERSION_DELIVERY,
+  lockLiveVersionField,
+  recordLiveVersionDelivery,
+} from "@/api/lib/files/live-version-field";
 import { getS3 } from "@/api/lib/s3";
 import type { SignedDownloadSource } from "@/api/lib/s3-presign";
 import { sanitizeFilenamePreservingExtension } from "@/api/lib/sanitize-filename";
@@ -15,7 +21,9 @@ import { withTimeout } from "@/api/lib/with-timeout";
 import { authorizedWorkspaceIds } from "@/api/lib/workspaces/authorized-workspace-ids";
 
 const OCR_EXPORT_STORAGE_READ_TIMEOUT_MS = 30 * 1000;
-const OCR_EXPORT_URL_EXPIRY_SECONDS = 15 * 60;
+// The searchable PDF is answered with a redirect the client follows at once,
+// so the signed URL only has to outlive that hop.
+const OCR_EXPORT_URL_EXPIRY_SECONDS = 60;
 export const OCR_EXPORT_FORMATS = ["searchable-pdf", "text"] as const;
 type OcrExportFormat = (typeof OCR_EXPORT_FORMATS)[number];
 
@@ -48,7 +56,7 @@ export const readOcrExport = async ({
   scopedDb,
   workspaceId,
 }: ReadOcrExportOptions) => {
-  const row = await scopedDb(async (tx) => {
+  const loadExport = async (tx: Transaction) => {
     const authorizedIds = (
       await authorizedWorkspaceIds(tx, {
         organizationId,
@@ -62,7 +70,8 @@ export const readOcrExport = async ({
       organizationId,
       workspaceId,
     });
-  });
+  };
+  const row = await scopedDb(loadExport);
   if (!row || row.content.type !== "file" || row.ocrRunId === null) {
     return status(404);
   }
@@ -81,39 +90,58 @@ export const readOcrExport = async ({
     if (!exists) {
       return status(404);
     }
-    const url = await scopedDb(
-      async (tx) =>
-        await auditedPresignDownload({
-          readSessionAuthority,
-          tx,
-          recordAuditEvent,
-          resourceType: AUDIT_RESOURCE_TYPE.ENTITY,
-          resourceId: row.entityId,
-          userId,
-          source,
-          s3Key,
-          expiresInSeconds: OCR_EXPORT_URL_EXPIRY_SECONDS,
-          fileName,
-          organizationId,
-          workspaceId,
-          metadata: { fieldId, format },
-        }),
-    );
+    // The storage lookup runs between the two reads, so the export is read
+    // again where the URL is signed: a link is issued only while the version
+    // and its OCR run are still current. The version's share lock keeps a
+    // tombstone from committing until the link is signed and audited.
+    const url = await scopedDb(async (tx) => {
+      const locked = await lockLiveVersionField(tx, fieldId, workspaceId);
+      if (locked === null) {
+        return null;
+      }
+      const current = await loadExport(tx);
+      if (current?.ocrRunId !== row.ocrRunId) {
+        return null;
+      }
+      return await auditedPresignDownload({
+        readSessionAuthority,
+        versionLock: locked.lock,
+        recordAuditEvent,
+        resourceType: AUDIT_RESOURCE_TYPE.ENTITY,
+        userId,
+        source,
+        s3Key,
+        expiresInSeconds: OCR_EXPORT_URL_EXPIRY_SECONDS,
+        fileName,
+        organizationId,
+        workspaceId,
+        metadata: { fieldId, format },
+      });
+    });
+    if (url === null) {
+      return status(404);
+    }
     return Response.redirect(url, 302);
   }
 
   const text = await row.readText();
   const bytes = new TextEncoder().encode(text);
   const fileName = replaceExtension(row.content.fileName, ".txt");
-  await scopedDb(
-    async (tx) =>
+  const delivery = await recordLiveVersionDelivery({
+    scopedDb,
+    fieldId,
+    workspaceId,
+    record: async (tx) =>
       await recordAuditEvent(tx, {
         action: AUDIT_ACTION.DOWNLOAD,
         resourceType: AUDIT_RESOURCE_TYPE.ENTITY,
         resourceId: row.entityId,
         metadata: { fieldId, format },
       }),
-  );
+  });
+  if (delivery === LIVE_VERSION_DELIVERY.withdrawn) {
+    return status(404);
+  }
   return secureDocumentResponse({
     body: bytes,
     contentLength: bytes.byteLength,

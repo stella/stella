@@ -84,14 +84,17 @@ const installCorpusTables = async (
     caseLawSources.storedTotalWarnedSlot,
   ];
   const refreshGrant = (
-    await db.execute(sql`SELECT bool_and(
+    await db.execute(
+      sql`SELECT bool_and(
     has_column_privilege('stella_ingestion', 'public.case_law_sources', column_name, 'UPDATE')
   ) AS granted FROM information_schema.columns
     WHERE table_schema = 'public' AND table_name = 'case_law_sources'
       AND column_name IN (${sql.join(
         refreshColumns.map((column) => sql`${column.name}`),
         sql`, `,
-      )})`)
+      )})`,
+      "objects",
+    )
   ).at(0);
   if (refreshGrant?.["granted"] !== true) {
     // The host can predate these columns; the fresh database already has their canonical DDL.
@@ -247,9 +250,9 @@ describe.skipIf(!enabled)(
                 }),
               },
             );
-            const owner = (await client`SELECT current_user AS owner`).at(0)?.[
-              "owner"
-            ];
+            const owner = (
+              await client<{ owner: unknown }[]>`SELECT current_user AS owner`
+            ).at(0)?.owner;
             if (typeof owner !== "string") {
               panic("Fixture login omitted its role name");
             }

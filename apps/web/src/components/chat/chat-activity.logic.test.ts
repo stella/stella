@@ -1,13 +1,17 @@
 import { describe, expect, test } from "bun:test";
 
 import {
-  countProcessWork,
   getChatToolActivityCategory,
+  summarizeProcessRun,
+} from "@stll/api-contract/chat-tool-activity";
+import type { KnownChatToolName } from "@stll/api-contract/chat-tool-activity";
+
+import {
   getLatestCompletedResearchPartIndex,
   resolveChatActivityIndicatorState,
 } from "@/components/chat/chat-activity.logic";
 import { projectCanonicalChatUIMessages } from "@/components/chat/chat-ui-tools";
-import type { ChatMessage } from "@/components/chat/chat-ui-tools";
+import type { ChatMessage, ChatUITools } from "@/components/chat/chat-ui-tools";
 
 // Fixtures cross the same projection boundary the thread renders through.
 const projectParts = (parts: ChatMessage["parts"]) =>
@@ -16,6 +20,16 @@ const projectParts = (parts: ChatMessage["parts"]) =>
   ]).flatMap((message) => message.parts);
 
 describe("chat tool activity", () => {
+  test("knows every tool the web's messages carry", () => {
+    // Typecheck refuses this record while a registered tool has no shared
+    // kind and title, which would leave its steps reading "Unknown tool".
+    const unlabelled: Record<
+      Exclude<keyof ChatUITools, KnownChatToolName>,
+      true
+    > = {};
+    expect(Object.keys(unlabelled)).toEqual([]);
+  });
+
   test("classifies evidence gathering as research", () => {
     for (const toolName of [
       "web_search",
@@ -62,7 +76,7 @@ describe("chat tool activity", () => {
 });
 
 describe("process summary", () => {
-  test("counts landed work by kind and leaves out failures, waits and reasoning", () => {
+  test("names landed work in plain phrases and leaves out failures, waits and reasoning", () => {
     const parts = [
       { type: "thinking" as const, content: "Check clause 11." },
       {
@@ -111,12 +125,10 @@ describe("process summary", () => {
       },
     ] satisfies ChatMessage["parts"];
 
-    expect(countProcessWork(projectParts(parts))).toEqual(
-      new Map([
-        ["research", 1],
-        ["artifact", 1],
-      ]),
-    );
+    expect(summarizeProcessRun(projectParts(parts), { stepCount: 5 })).toEqual([
+      { phrase: "readDocument", count: 1 },
+      { phrase: "documentEdits", count: 1 },
+    ]);
   });
 });
 

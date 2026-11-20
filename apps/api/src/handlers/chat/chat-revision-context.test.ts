@@ -11,8 +11,8 @@ import {
 import type { ChatRevisionContextChange } from "@/api/handlers/chat/chat-revision-context";
 import { computeThreadContextUsage } from "@/api/handlers/chat/compaction";
 import { NO_SKILL_BINDING_SCOPE } from "@/api/lib/agent-skills/binding";
+import { estimateTextTokens } from "@/api/lib/ai-generation/token-estimate";
 import { toSafeId } from "@/api/lib/branded-types";
-import { estimateTextTokens } from "@/api/lib/chat/compaction-tokens";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 

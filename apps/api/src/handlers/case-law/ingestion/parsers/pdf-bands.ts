@@ -33,6 +33,7 @@ import { panic } from "better-result";
 // parser-output-unchanged: imports the document AST from its package owner
 import { parseIntegerToken } from "@stll/agent-input/numeric-token";
 import type { Inline } from "@stll/legal-ast/document-ast";
+import { AUTHORITY_PARAGRAPH_NUMBER_RE } from "@stll/legal-ast/printed-paragraph-labels";
 import { collapseSpacedLetters } from "@stll/text-normalize";
 
 import {
@@ -41,7 +42,7 @@ import {
   opensBlockParagraph,
   POINT_MARKERS,
   type PointMarkers,
-} from "@/api/handlers/case-law/ingestion/parsers/pl-printed-lines";
+} from "@/api/lib/legal-search/parsers/hard-wrapped-lines";
 import {
   buildFontStyleRanges,
   normalizeSpanText,
@@ -435,11 +436,9 @@ const rightEdgeOf = (lines: readonly ExtractedLine[]): number | undefined => {
   return edge;
 };
 
-/** The number an authority sets before each paragraph: `(12)`, `[12]`. */
-const PARAGRAPH_NUMBER = /^(?:\(\d{1,3}\)|\[\d{1,3}\])\s/u;
 const NUMBERED_PARAGRAPH_MARKERS: PointMarkers = {
   ...POINT_MARKERS,
-  paragraphNumber: PARAGRAPH_NUMBER,
+  paragraphNumber: AUTHORITY_PARAGRAPH_NUMBER_RE,
 };
 
 /** Read one page's lines, keeping blanks and the indent decision. */
@@ -1305,6 +1304,12 @@ const isPageNumber = (text: string, pageNumber: number): boolean => {
 };
 
 /**
+ * A line's trailing page count after its words: `… soutěže 2/13`,
+ * `… 2 z 13`. The words before it are what repeats from page to page.
+ */
+const PAGE_COUNT_SUFFIX = / (?<count>(?<page>\d{1,4}) ?(?:\/|z) ?\d{1,4})$/u;
+
+/**
  * On how many of a document's pages a letterhead line has to sit at the same
  * place to be one: most of them. Never fewer than two, since one page states
  * no repetition.
@@ -1519,6 +1524,16 @@ const withoutRepeatedFurniture = (
       ?.groups?.["number"];
     if (labeledPage === String(page + 1)) {
       return text.slice(0, -labeledPage.length).trim();
+    }
+    // A footer that counts its pages (`Úřad pro ochranu hospodářské soutěže
+    // 2/13`, `… 2 z 13`) prints this page's number against the total.
+    const counted = PAGE_COUNT_SUFFIX.exec(text);
+    const words = counted === null ? "" : text.slice(0, counted.index).trim();
+    if (
+      counted?.groups?.["page"] === String(page + 1) &&
+      /\p{L}/u.test(words)
+    ) {
+      return words;
     }
     const contact =
       text.includes("@") || text.includes("www.") || text.includes("://");

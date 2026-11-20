@@ -1,3 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router";
 
-export const Route = createFileRoute("/_protected/admin/audit-logs")({});
+import { redirectRouteComponent } from "@/routes/-route-pending-view";
+
+export const Route = createFileRoute("/_protected/admin/audit-logs")({
+  component: redirectRouteComponent({
+    to: "/settings/organization/audit-logs",
+  }),
+});

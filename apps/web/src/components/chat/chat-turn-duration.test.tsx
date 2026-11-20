@@ -56,7 +56,12 @@ const renderLiveStatus = (
     <IntlProvider locale="en" messages={messages} now={NOW} timeZone="UTC">
       <FormattingProvider locale="en" timeZone="UTC">
         <ChatTurnStatus
-          turn={{ state: "streaming", phase: { type: "writing" }, timing }}
+          turn={{
+            state: "streaming",
+            phase: { type: "writing" },
+            timing,
+            sentAt: null,
+          }}
         />
       </FormattingProvider>
     </IntlProvider>,
@@ -105,7 +110,7 @@ describe("assistant turn duration", () => {
     expect(renderDuration(runningTiming)).toBe("");
     const live = renderLiveStatus(runningTiming);
     expect(live).toContain("data-turn-live-status");
-    expect(live).toContain("134s");
+    expect(live).toContain("2 min");
     expect(live).not.toContain("Worked for");
 
     const finished = renderDuration({

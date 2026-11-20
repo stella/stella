@@ -1,7 +1,10 @@
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
+import nodePath from "node:path";
+import { fileURLToPath } from "node:url";
 
 import { STELLA_API_VERSION_PREFIX } from "@stll/api-contract";
+import { createTestState } from "@stll/test-state";
 
 import { apiRoutes } from "@/api/api-routes";
 import { env } from "@/api/env";
@@ -25,6 +28,8 @@ import { serveForTest } from "@/api/tests/helpers/test-server";
 
 import { createPublicCorpusRateLimitComposition } from "./public-corpus-rate-limit-composition";
 import { createPublicCorpusAddressRateLimitOptions } from "./public-corpus-rate-limits";
+
+const testState = createTestState({ file: import.meta.path, config: env });
 
 const searchPath = `${STELLA_API_VERSION_PREFIX}/law/statutes/search`;
 const searchKey = scopedGenerator("public-corpus-search");
@@ -58,7 +63,7 @@ const loopbackAddressOf = (scope: string, keys: readonly string[]): string => {
 
 describe("public corpus search request budget", () => {
   test("public search counter scopes belong only to the class policy helper", async () => {
-    const sourceRoot = new URL("../../", import.meta.url).pathname;
+    const sourceRoot = fileURLToPath(new URL("../../", import.meta.url));
     const violations: string[] = [];
     for await (const path of new Bun.Glob("**/*.ts").scan(sourceRoot)) {
       if (
@@ -67,7 +72,7 @@ describe("public corpus search request budget", () => {
       ) {
         continue;
       }
-      const source = await Bun.file(`${sourceRoot}${path}`).text();
+      const source = await Bun.file(nodePath.join(sourceRoot, path)).text();
       if (/["'`]public[-\w]*search(?::[^"'`]*)?["'`]/u.test(source)) {
         violations.push(path);
       }
@@ -75,9 +80,8 @@ describe("public corpus search request budget", () => {
     expect(violations).toEqual([]);
   });
   test("the shared development bypass skips class and ordinary HTTP budgets", async () => {
-    const previous = env.E2E_DISABLE_AUTH_RATE_LIMIT;
     const { server, searchKeys, sharedKeys, kill } = createBudgetApp();
-    env.E2E_DISABLE_AUTH_RATE_LIMIT = true;
+    testState.setConfig("E2E_DISABLE_AUTH_RATE_LIMIT", true);
     try {
       for (const path of [searchPath, "/v1/other"]) {
         for (let index = 0; index <= 30; index += 1) {
@@ -89,7 +93,6 @@ describe("public corpus search request budget", () => {
       expect(searchKeys).toEqual([]);
       expect(sharedKeys).toEqual([]);
     } finally {
-      env.E2E_DISABLE_AUTH_RATE_LIMIT = previous;
       await kill();
     }
   });

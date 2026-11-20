@@ -12,11 +12,14 @@ import {
   caseLawDecisions,
   caseLawProvisionExtractionScopes,
   caseLawSitemapChanges,
+  caseLawSources,
   corpusIndexGenerations,
 } from "@/api/db/schema";
 import type { TransactionOf } from "@/api/db/scoped";
+import { servableCandidateRevisionsStatement } from "@/api/handlers/case-law/decisions/search";
 import { decisionDocketColumns } from "@/api/handlers/case-law/ingestion/pipeline/decision-docket-columns";
 import { type SafeId, toSafeId } from "@/api/lib/branded-types";
+import type { CaseLawPublicReadTransaction } from "@/api/lib/case-law-public-read-db";
 import {
   CASE_LAW_POPULATION_FOLD_BATCH_LIMIT,
   CASE_LAW_POPULATION_MAINTENANCE_HIGH_WATER,
@@ -37,6 +40,7 @@ import type {
   GatedTestClientScope,
   GatedTestDb,
 } from "@/api/tests/gated-test-database";
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 import { coverageIndexBuildSql } from "./coverage-indexes";
 import { withSeededTableMaintenance } from "./seeded-tables";
@@ -59,8 +63,10 @@ import { withSeededTableMaintenance } from "./seeded-tables";
  *   table written over months.
  */
 const CORPUS_SCENARIO_ROWS = 60_000;
+// Outside the 00c2 coverage-source range and the provision (00c3) and replay
+// (00c4) sources, so no other scenario counts these rows as its own.
 const COMPLETION_SOURCE_ID = toSafeId<"caseLawSource">(
-  "01990000-00c2-7000-8000-000000000001",
+  "01990000-00c6-7000-8000-000000000001",
 );
 const COMPLETION_ROWS = 100_000;
 /**
@@ -139,6 +145,12 @@ const SCENARIO_GENERATIONS = [
   kind: "quiet" | "busy";
   rows: number;
 }[];
+
+/** The quiet generation an indexed case-law search's candidates are held in. */
+export const CASE_LAW_SEARCH_GENERATION = "case_law_v5";
+/** One scan round's candidates, as the corpus index returns them. */
+export const CASE_LAW_SEARCH_CANDIDATE_COUNT = 300;
+const CASE_LAW_SEARCH_SOURCE_ID = "01990000-00a5-7000-8000-000000000001";
 
 export const LEGISLATION_GENERATION = "legislation_v2";
 const LEGISLATION_INDEX_ID = "legislation_v2_cze";
@@ -531,8 +543,9 @@ export const serveCaseLaw = async (
  * small specialised court to a large court system, so the facet table holds
  * thousands of rows and a source's facets are read the way they are served.
  */
+// Source adapter keys are unique; cz-ns belongs to the provision scenario.
 const FACET_SOURCE_KEYS = [
-  ADAPTER_KEYS.CZ_NS,
+  ADAPTER_KEYS.AT_COURTS,
   ADAPTER_KEYS.CZ_NSS,
   ADAPTER_KEYS.CZ_US,
   ADAPTER_KEYS.SK_COURTS,
@@ -568,8 +581,7 @@ const seedBrowseFacetCounts = async (database: GatedTestDb) => {
   } of FACET_SOURCES) {
     // db-await-in-loop: six fixed sources, each with its own facet rows.
     await database.execute(sql`INSERT INTO case_law_sources (id, adapter_key, name, enabled)
-      VALUES (${sourceId}::uuid, ${adapterKey}, ${`Facet fixture ${String(index + 1)}`}, false)
-      ON CONFLICT (id) DO NOTHING`);
+      VALUES (${sourceId}::uuid, ${adapterKey}, ${`Facet fixture ${String(index + 1)}`}, false)`);
     // db-await-in-loop: the source's facets follow the source row they reference.
     await database.execute(sql`INSERT INTO case_law_browse_facet_counts
       (kind, country, source_id, value, total)
@@ -666,7 +678,7 @@ export const seedCorpusReadBudgets = async (database: GatedTestDb) =>
       }
     }
     await database.execute(sql`INSERT INTO case_law_sources (id, adapter_key, name, enabled)
-    VALUES (${COMPLETION_SOURCE_ID}, 'query-perf-completion', 'Completion query fixture', false)`);
+    VALUES (${COMPLETION_SOURCE_ID}, ${ADAPTER_KEYS.EU_ECJ}, 'Completion query fixture', false)`);
     for (const chunk of chunks(COMPLETION_ROWS)) {
       await withoutTriggers(database, async (tx) => {
         await tx.execute(sql`INSERT INTO case_law_decisions
@@ -737,9 +749,67 @@ export const seedCorpusReadBudgets = async (database: GatedTestDb) =>
         `01990000-00a2-7000-8000-${(work * LEGISLATION_VERSIONS_PER_WORK).toString(16).padStart(12, "0")}`,
       ),
     );
+    // One scan round of an indexed case-law search: published decisions the
+    // quiet generation holds an applied copy of, spread over its states as a
+    // common term's hits are.
+    await database.execute(sql`INSERT INTO case_law_sources (id, adapter_key, name, enabled)
+      VALUES (${CASE_LAW_SEARCH_SOURCE_ID}::uuid, 'query-perf-search', 'Search candidate fixture', false)`);
+    const searchStates = Array.from(
+      { length: CASE_LAW_SEARCH_CANDIDATE_COUNT },
+      (_, index) => ((index * 197) % CORPUS_SCENARIO_ROWS) + 1,
+    );
+    await database.execute(sql`INSERT INTO case_law_decisions
+      (id, source_id, case_number, country, court, language)
+      SELECT ${sql.raw(uuidOf(`8${generationPrefix(CASE_LAW_SEARCH_GENERATION).slice(1)}`, "i"))},
+        ${CASE_LAW_SEARCH_SOURCE_ID}::uuid, 'search-' || i::text, 'CZE', 'Nejvyšší soud', 'cs'
+      FROM unnest(${sql.raw(`ARRAY[${searchStates.join(",")}]`)}::integer[]) AS i`);
+    const caseLawSearchCandidateIds = searchStates.map((state) =>
+      toSafeId<"caseLawDecision">(
+        `01990000-8${generationPrefix(CASE_LAW_SEARCH_GENERATION).slice(1)}-7000-8000-${state.toString(16).padStart(12, "0")}`,
+      ),
+    );
+    // The measurement reads one row per requested id whether or not it is
+    // admitted; the fixture is only meaningful if the read admits every one.
+    const admitted = await servableCandidateRevisionsStatement(
+      asTestRaw<CaseLawPublicReadTransaction>(database),
+      {
+        body: { country: "CZE" },
+        generation: CASE_LAW_SEARCH_GENERATION,
+        ids: caseLawSearchCandidateIds,
+      },
+    );
+    if (
+      admitted.filter(({ row }) => (row?.appliedRevision ?? null) !== null)
+        .length !== CASE_LAW_SEARCH_CANDIDATE_COUNT
+    ) {
+      panic("The search candidate fixture must be admitted in full");
+    }
+    const quoteSourceId = toSafeId<"caseLawSource">(
+      "01990000-00a3-7000-8000-000000000001",
+    );
+    const quoteDecisionId = toSafeId<"caseLawDecision">(
+      "01990000-00a4-7000-8000-000000000001",
+    );
+    await database.insert(caseLawSources).values({
+      id: quoteSourceId,
+      name: "Quote budget fixture",
+      adapterKey: QUOTE_FIXTURE_ADAPTER_KEY,
+      enabled: false,
+    });
+    await database.insert(caseLawDecisions).values({
+      id: quoteDecisionId,
+      sourceId: quoteSourceId,
+      country: "CZE",
+      court: "Nejvyšší soud",
+      language: "cs",
+      caseNumber: "1 Test 1/2026",
+      fulltext: "Stored decision text.",
+    });
     return {
       candidateIds,
+      caseLawSearchCandidateIds,
       completionSourceId: COMPLETION_SOURCE_ID,
+      quoteDecisionId,
       replaySourceId: REPLAY_SOURCE_ID,
     };
   });
@@ -756,6 +826,9 @@ type SeedSitemapReadBudgetOptions = {
 
 /** The sitemap fixture's source; any registered adapter serves, its rows are synthetic. */
 const SITEMAP_FIXTURE_ADAPTER_KEY = ADAPTER_KEYS.CZ_REGIONAL;
+
+/** The quote fixture's source; no other fixture uses this adapter. */
+const QUOTE_FIXTURE_ADAPTER_KEY = ADAPTER_KEYS.UK_FCL;
 
 /** One available dirty month beside a growing backlog held by another run. */
 export const seedSitemapReadBudget = async ({

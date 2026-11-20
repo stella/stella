@@ -1,7 +1,10 @@
-import { createElement, lazy, Suspense, useMemo, useRef } from "react";
+import { createElement, lazy, Suspense, useRef } from "react";
 
+import type { AppRendererProps } from "@mcp-ui/client";
+import { useQuery } from "@tanstack/react-query";
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
+import * as v from "valibot";
 
 import {
   CHAT_RICH_PART_LIMITS,
@@ -9,13 +12,35 @@ import {
   MCP_APP_FRAME_TITLE_HASH_PARAM,
   MCP_APP_RESOURCE_MIME_TYPE,
 } from "@stll/api-contract";
+import {
+  readStellaMcpAppCall,
+  stellaMcpAppBundleSchema,
+  stellaMcpAppPartSchema,
+} from "@stll/api-contract/stella-mcp-app";
 
 import { ChatRenderErrorBoundary } from "@/components/chat/chat-render-error-boundary";
 import type { ChatPart } from "@/components/chat/chat-ui-tools";
+import {
+  createStellaAppToolCaller,
+  openStellaAppLink,
+  STELLA_APP_HOST_CAPABILITIES,
+  stellaAppDirectory,
+  stellaAppHostContext,
+  stellaAppToolResult,
+} from "@/components/chat/stella-mcp-app-bridge";
 import { uiResourceRenderer } from "@/components/chat/ui-resource-renderer";
-import { useExternalSyncEffect } from "@/hooks/use-effect";
+import { useTheme } from "@/components/theme-provider";
+import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
+import { useMessageLocale } from "@/i18n/message-locale";
+import { useAnalytics } from "@/lib/analytics/provider";
+import { api } from "@/lib/api";
 import { mcpAppSandboxUrl } from "@/lib/api-url";
+import { invokeAppOnlyWrite } from "@/lib/capabilities/capability-request";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
+import { unwrapApiResponse } from "@/lib/errors/api";
+import { ClientTelemetryError } from "@/lib/errors/telemetry";
+import { openIsolatedWindow } from "@/lib/open-isolated-window";
+import { toSafeId } from "@/lib/safe-id";
 import { getUserFileContentUrl } from "@/lib/user-files";
 
 export type RichChatPart = Extract<
@@ -25,10 +50,24 @@ export type RichChatPart = Extract<
 type MediaChatPart = Extract<RichChatPart, { type: "audio" | "video" }>;
 type UiResourcePart = Extract<RichChatPart, { type: "ui-resource" }>;
 
-const LazyMcpAppResource = lazy(async () => {
-  const { MCPAppResource } = await import("@tanstack/ai-react/mcp-apps");
-  return { default: MCPAppResource };
+const LazyAppRenderer = lazy(async () => {
+  const { AppRenderer } = await import("@mcp-ui/client");
+  return { default: AppRenderer };
 });
+
+/**
+ * What a host answers an app with. Omitted, the app is display-only: a call
+ * or link it asks for is refused, as for an inline MCP App resource.
+ */
+type McpAppBridge = Pick<
+  AppRendererProps,
+  | "toolInput"
+  | "toolResult"
+  | "hostContext"
+  | "hostCapabilities"
+  | "onCallTool"
+  | "onOpenLink"
+>;
 
 const LazyGeneratedVisual = lazy(async () => {
   const { GeneratedVisual } =
@@ -169,6 +208,62 @@ const RichContentStatus = ({ loading = false }: { loading?: boolean }) => {
   );
 };
 
+/**
+ * Why the host would not show a rich part. A part reaches the thread because
+ * a writer meant it to show, so every refusal is a defect to find: each one
+ * names itself here and is reported, never a quiet placeholder. A render
+ * failure is not listed; the error boundary that catches it reports it.
+ */
+const RICH_CONTENT_REFUSALS = Object.freeze({
+  "media-source": "A media part has no source the browser may play",
+  "resource-contract": "An MCP App resource breaks its contract",
+  "sandbox-origin": "The app sandbox shares the page's origin",
+  renderer: "No renderer shows this resource type",
+  "app-part-contract": "A stella app part breaks its contract",
+  "app-thread": "A stella app part is shown outside a thread",
+  "app-bundle": "The stella app's document did not load",
+  "app-bundle-uri": "The stella app's document is for another app",
+  "visual-thread": "A generated visual is shown outside a thread",
+} as const satisfies Record<string, string>);
+
+type RichContentRefusal = keyof typeof RICH_CONTENT_REFUSALS;
+
+const richContentRefusalReport = (
+  refusal: RichContentRefusal,
+  cause?: unknown,
+) =>
+  ({
+    error: new ClientTelemetryError({
+      area: "chat-rich-content",
+      message: `[Chat rich content] ${RICH_CONTENT_REFUSALS[refusal]}`,
+      ...(cause === undefined ? {} : { cause }),
+    }),
+    options: {
+      fingerprintKey: `ChatRichContent.refused:${refusal}`,
+      scope: {
+        type: "handler",
+        handlerId: `ChatRichContent.refused:${refusal}`,
+      },
+      context: { type: "detached", operation: "chat.rich-content.render" },
+    },
+  }) as const;
+
+/** The placeholder for a refused part, reported once per mount. */
+const RichContentRefused = ({
+  refusal,
+  cause,
+}: {
+  refusal: RichContentRefusal;
+  cause?: unknown;
+}) => {
+  const analytics = useAnalytics();
+  useMountEffect(() => {
+    const report = richContentRefusalReport(refusal, cause);
+    analytics.captureError(report.error, report.options);
+  });
+  return <RichContentStatus />;
+};
+
 export const withMcpAppFrameTitle = (
   sandboxUrl: URL,
   frameTitle: string,
@@ -190,15 +285,40 @@ export const applyMcpAppFrameTitle = (
 };
 
 const McpAppFrame = ({
+  bridge,
   frameTitle,
-  normalized,
+  html,
   sandboxUrl,
+  toolCallId,
+  toolName,
+  uri,
 }: {
+  bridge?: McpAppBridge | undefined;
   frameTitle: string;
-  normalized: UiResourcePart;
+  html: string;
   sandboxUrl: URL;
+  toolCallId: string;
+  toolName: string;
+  uri: string;
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
+  const analytics = useAnalytics();
+  // The renderer shows its own error text in the frame (a sandbox that never
+  // answered, a bridge that failed); the report is what makes it visible.
+  const reportFrameFailure = (error: Error) => {
+    analytics.captureError(
+      new ClientTelemetryError({
+        area: "chat-rich-content",
+        message: "[Chat rich content] The app frame failed",
+        cause: error,
+      }),
+      {
+        fingerprintKey: "ChatRichContent.frame:failed",
+        scope: { type: "handler", handlerId: "ChatRichContent.frame:failed" },
+        context: { type: "detached", operation: "chat.rich-content.frame" },
+      },
+    );
+  };
   useExternalSyncEffect(() => {
     const container = containerRef.current;
     if (!container) {
@@ -224,10 +344,17 @@ const McpAppFrame = ({
       <ChatRenderErrorBoundary
         surface="chat-rich-content"
         fallback={<RichContentStatus />}
-        key={`${normalized.toolCallId}:${normalized.resource.uri}`}
+        key={`${toolCallId}:${uri}`}
       >
         <Suspense fallback={<RichContentStatus loading />}>
-          <LazyMcpAppResource part={normalized} sandbox={{ url: sandboxUrl }} />
+          <LazyAppRenderer
+            html={html}
+            sandbox={{ url: sandboxUrl }}
+            toolName={toolName}
+            toolResourceUri={uri}
+            onError={reportFrameFailure}
+            {...bridge}
+          />
         </Suspense>
       </ChatRenderErrorBoundary>
     </div>
@@ -238,7 +365,7 @@ const MediaPart = ({ part }: { part: MediaChatPart }) => {
   const t = useTranslations();
   const source = toRenderableMediaSource(part);
   if (!source) {
-    return <RichContentStatus />;
+    return <RichContentRefused refusal="media-source" />;
   }
   const mimeType = part.source.mimeType;
   if (part.type === "audio") {
@@ -268,17 +395,14 @@ const MediaPart = ({ part }: { part: MediaChatPart }) => {
 const UiResource = ({ part }: { part: UiResourcePart }) => {
   const t = useTranslations();
   const frameTitle = t("chat.richContentTitle");
-  const sandboxUrl = useMemo(
-    () => withMcpAppFrameTitle(mcpAppSandboxUrl(), frameTitle),
-    [frameTitle],
-  );
+  const sandboxUrl = withMcpAppFrameTitle(mcpAppSandboxUrl(), frameTitle);
   const normalized = normalizeUiResourcePart(part);
   if (!normalized) {
-    return <RichContentStatus />;
+    return <RichContentRefused refusal="resource-contract" />;
   }
   const isServerRender = typeof window === "undefined";
   if (!isServerRender && sandboxUrl.origin === window.location.origin) {
-    return <RichContentStatus />;
+    return <RichContentRefused refusal="sandbox-origin" />;
   }
 
   if (isServerRender) {
@@ -292,10 +416,128 @@ const UiResource = ({ part }: { part: UiResourcePart }) => {
   return (
     <McpAppFrame
       frameTitle={frameTitle}
-      normalized={normalized}
+      html={normalized.resource.text ?? ""}
       sandboxUrl={sandboxUrl}
+      toolCallId={normalized.toolCallId}
+      toolName={normalized.toolName}
+      uri={normalized.resource.uri}
     />
   );
+};
+
+type StellaAppPart = v.InferOutput<typeof stellaMcpAppPartSchema>;
+
+/**
+ * One of stella's own apps, for the call the server ran. The document is the
+ * server's bundle; the app is handed the call's arguments and result, and
+ * its tool calls go back to the server, which holds them to the app's
+ * manifest and runs them as this member.
+ */
+const StellaAppFrame = ({
+  part,
+  threadRef,
+}: {
+  part: StellaAppPart;
+  threadRef: ChatThreadRef;
+}) => {
+  const t = useTranslations();
+  const locale = useMessageLocale();
+  const { resolvedTheme } = useTheme();
+  const frameTitle = t("chat.richContentTitle");
+  const sandboxUrl = withMcpAppFrameTitle(mcpAppSandboxUrl(), frameTitle);
+  const directory = stellaAppDirectory(part.resource.uri) ?? "";
+  const bundle = useQuery({
+    queryKey: ["stella-mcp-app-bundle", directory],
+    queryFn: async ({ signal }) =>
+      v.parse(
+        stellaMcpAppBundleSchema,
+        unwrapApiResponse(
+          await api.chat["mcp-apps"]({ app: directory }).get({
+            fetch: { signal },
+          }),
+        ),
+      ),
+    staleTime: 5 * 60 * 1000,
+    retry: false,
+  });
+  const bridge = ((): McpAppBridge => {
+    const call = readStellaMcpAppCall(part);
+    const thread = api.chat.threads({
+      threadId: toSafeId<"chatThread">(threadRef.threadId),
+    });
+    const appCalls = thread["mcp-apps"]({ toolCallId: part.toolCallId });
+    // An app's tool call is a read the server runs for the app; it is not
+    // an automation capability of its own.
+    const callTool = createStellaAppToolCaller(
+      async (request) =>
+        await invokeAppOnlyWrite("chat.mcp-apps.call", async () =>
+          unwrapApiResponse(await appCalls.call.post(request)),
+        ),
+    );
+    return {
+      toolInput: call.input,
+      toolResult: stellaAppToolResult(call),
+      hostContext: stellaAppHostContext({ theme: resolvedTheme, locale }),
+      hostCapabilities: STELLA_APP_HOST_CAPABILITIES,
+      onCallTool: callTool,
+      onOpenLink: async ({ url }) =>
+        await Promise.resolve(openStellaAppLink(url, openIsolatedWindow)),
+    };
+  })();
+  if (bundle.isPending) {
+    return (
+      <div className="min-h-32 w-full overflow-hidden rounded-md border">
+        <RichContentStatus loading />
+      </div>
+    );
+  }
+  if (bundle.isError) {
+    return <RichContentRefused refusal="app-bundle" cause={bundle.error} />;
+  }
+  if (bundle.data.uri !== part.resource.uri) {
+    return <RichContentRefused refusal="app-bundle-uri" />;
+  }
+  return (
+    <McpAppFrame
+      bridge={bridge}
+      frameTitle={frameTitle}
+      html={bundle.data.html}
+      sandboxUrl={sandboxUrl}
+      toolCallId={part.toolCallId}
+      toolName={part.toolName}
+      uri={part.resource.uri}
+    />
+  );
+};
+
+const StellaAppResource = ({
+  part,
+  threadRef,
+}: {
+  part: UiResourcePart;
+  threadRef: ChatThreadRef | undefined;
+}) => {
+  const parsed = v.safeParse(stellaMcpAppPartSchema, part);
+  if (!parsed.success) {
+    return <RichContentRefused refusal="app-part-contract" />;
+  }
+  if (threadRef === undefined) {
+    return <RichContentRefused refusal="app-thread" />;
+  }
+  // The frame needs the browser; the server renders the place it loads into.
+  if (typeof window === "undefined") {
+    return (
+      <div className="min-h-32 w-full overflow-hidden rounded-md border">
+        <RichContentStatus loading />
+      </div>
+    );
+  }
+  // Checked before the app's document is fetched: a sandbox on the page's
+  // own origin is refused by the sandbox itself.
+  if (mcpAppSandboxUrl().origin === window.location.origin) {
+    return <RichContentRefused refusal="sandbox-origin" />;
+  }
+  return <StellaAppFrame part={parsed.output} threadRef={threadRef} />;
 };
 
 type ChatRichMessagePartProps = {
@@ -318,9 +560,18 @@ export const ChatRichMessagePart = ({
       switch (renderer) {
         case "mcp-app":
           return <UiResource part={part} />;
+        case "stella-app":
+          return (
+            <ChatRenderErrorBoundary
+              surface="chat-rich-content"
+              fallback={<RichContentStatus />}
+            >
+              <StellaAppResource part={part} threadRef={threadRef} />
+            </ChatRenderErrorBoundary>
+          );
         case "generated-visual":
           if (organizationId === undefined || threadRef === undefined) {
-            return <RichContentStatus />;
+            return <RichContentRefused refusal="visual-thread" />;
           }
           return (
             <ChatRenderErrorBoundary
@@ -337,7 +588,7 @@ export const ChatRichMessagePart = ({
             </ChatRenderErrorBoundary>
           );
         case null:
-          return <RichContentStatus />;
+          return <RichContentRefused refusal="renderer" />;
         default:
           renderer satisfies never;
           return panic("Unhandled UI resource renderer");

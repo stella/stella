@@ -17,11 +17,13 @@ import {
   deleteChatThreadsAndFileLinks,
   deleteConnectedCredentialsAndOAuthState,
   deleteDesktopEditSessionsAndHandoffs,
+  deleteDesktopRunners,
   deleteFileComparisonUploads,
   deletePdfSigningSessions,
   deletePendingUploads,
   deletePersonalAiMemories,
   deletePersonalBillingRates,
+  deletePersonalRecords,
   deletePersonalWorkspaceViewTemplatesAndAgentSkills,
   deletePrivateLegalReaderAnswers,
   deletePushDevices,
@@ -49,6 +51,7 @@ import { tryLockAccountMemberCleanup } from "@/api/lib/member-assignment-offboar
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { logger } from "@/api/lib/observability/logger";
 import { announceContactSetChanged } from "@/api/lib/resource-realtime";
+import { heldMatterIdsForAccount } from "@/api/lib/workspaces/legal-holds/holds";
 
 export { ACCOUNT_DELETION_ERROR_CODE };
 
@@ -278,6 +281,7 @@ export const verifyAndDeleteUser = async (
     try: async () => {
       const deletionRequestId = createSafeId<"accountDeletionRequest">();
       const s3KeysToDelete: string[] = [];
+      let retainedWorkspaceIds: SafeId<"workspace">[] = [];
       const memberOfOrganizationIds: SafeId<"organization">[] = [];
 
       // The code is consumed inside the deletion transaction, after every
@@ -296,6 +300,13 @@ export const verifyAndDeleteUser = async (
         },
         beforeConsume: async (tx) => {
           await lockAccountRow(tx, currentUserId);
+          const { organizationIds } =
+            await collectUserOrganizationAndWorkspaceIds(tx, currentUserId);
+          retainedWorkspaceIds = await heldMatterIdsForAccount({
+            tx,
+            organizationIds,
+            userId: currentUserId,
+          });
           // Ownership check with SELECT FOR UPDATE locks on owner rows.
           await assertUserIsNotSoleOrgOwner(tx, currentUserId);
           // Organization membership -> every affected matter, without waiting.
@@ -319,7 +330,11 @@ export const verifyAndDeleteUser = async (
           await revokeOAuthTokensAndGrants(tx, currentUserId);
           await deleteConnectedCredentialsAndOAuthState(tx, currentUserId);
           await clearWorkspaceLeadRole(tx, currentUserId);
-          await resetFolioCollabUserState(tx, currentUserId);
+          await resetFolioCollabUserState({
+            tx,
+            currentUserId,
+            retainedWorkspaceIds,
+          });
 
           const taskReassignmentCount =
             await reassignActiveTaskAssignmentsAndDropMemberships({
@@ -333,9 +348,19 @@ export const verifyAndDeleteUser = async (
             tx,
             currentUserId,
             s3KeysToDelete,
+            retainedWorkspaceIds,
           });
-          await deletePdfSigningSessions(tx, currentUserId);
-          await deletePendingUploads({ tx, currentUserId, s3KeysToDelete });
+          await deletePdfSigningSessions({
+            tx,
+            currentUserId,
+            retainedWorkspaceIds,
+          });
+          await deletePendingUploads({
+            tx,
+            currentUserId,
+            s3KeysToDelete,
+            retainedWorkspaceIds,
+          });
           await deleteFileComparisonUploads({
             tx,
             currentUserId,
@@ -345,10 +370,19 @@ export const verifyAndDeleteUser = async (
             tx,
             currentUserId,
             s3KeysToDelete,
+            retainedWorkspaceIds,
           });
-          await deleteChatThreadsAndFileLinks(tx, currentUserId);
+          await deleteChatThreadsAndFileLinks({
+            tx,
+            currentUserId,
+            retainedWorkspaceIds,
+          });
           await deletePrivateLegalReaderAnswers(tx, currentUserId);
-          await deletePersonalAiMemories(tx, currentUserId);
+          await deletePersonalAiMemories({
+            tx,
+            currentUserId,
+            retainedWorkspaceIds,
+          });
           await deletePersonalWorkspaceViewTemplatesAndAgentSkills(
             tx,
             currentUserId,
@@ -356,6 +390,8 @@ export const verifyAndDeleteUser = async (
           await deletePersonalBillingRates(tx, currentUserId);
           await deleteSearchHistory(tx, currentUserId);
           await deletePushDevices(tx, currentUserId);
+          await deleteDesktopRunners(tx, currentUserId);
+          await deletePersonalRecords(tx, currentUserId);
 
           await recordAccountDeletionRequest({
             tx,
@@ -366,6 +402,7 @@ export const verifyAndDeleteUser = async (
             taskReassignmentCount,
             s3KeysToDelete,
             storageCleanupNotBefore,
+            retainedWorkspaceIds,
           });
 
           await anonymizeDeletedAccountRow(tx, currentUserId);

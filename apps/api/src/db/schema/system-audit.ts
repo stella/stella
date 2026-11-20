@@ -1,3 +1,4 @@
+import { stellaIngestion } from "@/api/db/rls";
 import type { SystemRunActor } from "@/api/lib/system-audit/actors";
 
 import { jsonb, p, sql, stella, timestamptz } from "./common";
@@ -55,6 +56,11 @@ export const systemAuditRuns = p.pgTable.withRLS(
     p.pgPolicy("system_audit_runs_stella_insert", {
       for: "insert",
       to: stella,
+      withCheck: sql`true`,
+    }),
+    p.pgPolicy("system_audit_runs_ingestion_insert", {
+      for: "insert",
+      to: stellaIngestion,
       withCheck: sql`true`,
     }),
     p.pgPolicy("system_audit_runs_no_update", {

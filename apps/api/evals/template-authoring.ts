@@ -1727,6 +1727,7 @@ const runModelTurn = async ({
     timeoutMs: MODEL_TURN_TIMEOUT_MS,
     chat: (abortController) =>
       streamChatChunks({
+        threadId: Bun.randomUUIDv7(),
         abortController,
         adapter: model.adapter,
         messages: [{ role: "user", content: prompt }],

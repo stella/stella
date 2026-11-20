@@ -6,8 +6,7 @@ import { useTranslations } from "use-intl";
 import { PUBLIC_LAW_PAGE_SIZES } from "@stll/api-contract/limits";
 import { SEARCH_TOTAL_TYPE } from "@stll/api-contract/search";
 import { Button } from "@stll/ui/button";
-import { ChevronLeftIcon, ChevronRightIcon } from "@stll/ui/icons";
-import { Label } from "@stll/ui/label";
+import { ChevronRightIcon } from "@stll/ui/icons";
 import {
   Select,
   SelectItem,
@@ -16,6 +15,13 @@ import {
   SelectValue,
 } from "@stll/ui/select";
 
+import {
+  PublicLawCurrentPage,
+  PublicLawPagerFrame,
+  PublicLawPagerStepDisabled,
+  PublicLawPagerStepLabel,
+  PublicLawPageSizeLabel,
+} from "@/components/public-law-table/public-law-pager.pending";
 import type {
   PublicLawNumberedPagerModel,
   PublicLawPageCount,
@@ -88,97 +94,98 @@ export const PublicLawPager = ({
       : navigation.model.items;
 
   return (
-    <nav
-      aria-label={t("caseLaw.pagination.label")}
-      className="flex flex-wrap items-center justify-between gap-2"
-    >
-      <div className="flex flex-wrap items-center gap-1">
-        <StepLink
-          label={t("common.previous")}
-          onPageRequest={onPageRequest}
-          page={model.previousPage}
-          pageLink={pageLink}
-          placement="previous"
-        />
-
-        <PageList
-          currentPage={model.currentPage}
-          items={items}
-          onPageRequest={onPageRequest}
-          pageLink={pageLink}
-        />
-
-        {navigation.type === "chain" &&
-        navigation.model.nextPage !== null &&
-        navigation.model.nextPage > navigation.model.pages.length ? (
-          <Button
-            aria-busy={navigation.isWalking}
-            className="h-7 min-h-0"
-            disabled={navigation.isWalking}
-            onClick={navigation.onWalkForward}
-            size="sm"
-            variant="ghost"
-          >
-            {navigation.isWalking ? t("caseLaw.loadingMore") : t("common.next")}
-            <ChevronRightIcon
-              aria-hidden="true"
-              className="size-3.5 rtl:rotate-180"
+    <PublicLawPagerFrame
+      position={
+        <>
+          {navigation.type === "numbered" ? (
+            <PagePosition
+              currentPage={navigation.model.currentPage}
+              pageCount={navigation.model.pageCount}
             />
-          </Button>
-        ) : (
-          <StepLink
-            label={t("common.next")}
-            onPageRequest={onPageRequest}
-            page={model.nextPage}
-            pageLink={pageLink}
-            placement="next"
-          />
-        )}
-      </div>
-
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-        {navigation.type === "numbered" ? (
-          <PagePosition
-            currentPage={navigation.model.currentPage}
-            pageCount={navigation.model.pageCount}
-          />
-        ) : null}
-        {navigation.type === "numbered" && navigation.model.beyondReach ? (
-          <p className="text-muted-foreground text-xs">
-            {t("caseLaw.pagination.refineForMore")}
-          </p>
-        ) : null}
-        <Label variant="muted">
-          {t("caseLaw.pagination.perPage")}
-          <Select
-            onValueChange={(value: string | null) => {
-              const next = PUBLIC_LAW_PAGE_SIZES.find(
-                (size) => String(size) === value,
-              );
-              if (next !== undefined) {
-                onPageSizeChange(next);
-              }
-            }}
-            value={String(pageSize)}
-          >
-            <SelectTrigger
-              aria-label={t("caseLaw.pagination.perPage")}
-              className="h-7 min-h-0 w-auto min-w-16"
-              size="sm"
+          ) : null}
+          {navigation.type === "numbered" && navigation.model.beyondReach ? (
+            <p className="text-muted-foreground text-xs">
+              {t("caseLaw.pagination.refineForMore")}
+            </p>
+          ) : null}
+          <PublicLawPageSizeLabel>
+            <Select
+              onValueChange={(value: string | null) => {
+                const next = PUBLIC_LAW_PAGE_SIZES.find(
+                  (size) => String(size) === value,
+                );
+                if (next !== undefined) {
+                  onPageSizeChange(next);
+                }
+              }}
+              value={String(pageSize)}
             >
-              <SelectValue>{String(pageSize)}</SelectValue>
-            </SelectTrigger>
-            <SelectPopup>
-              {PUBLIC_LAW_PAGE_SIZES.map((size) => (
-                <SelectItem key={size} value={String(size)}>
-                  {String(size)}
-                </SelectItem>
-              ))}
-            </SelectPopup>
-          </Select>
-        </Label>
-      </div>
-    </nav>
+              <SelectTrigger
+                aria-label={t("caseLaw.pagination.perPage")}
+                className="h-7 min-h-0 w-auto min-w-16"
+                size="sm"
+              >
+                <SelectValue>{String(pageSize)}</SelectValue>
+              </SelectTrigger>
+              <SelectPopup>
+                {PUBLIC_LAW_PAGE_SIZES.map((size) => (
+                  <SelectItem key={size} value={String(size)}>
+                    {String(size)}
+                  </SelectItem>
+                ))}
+              </SelectPopup>
+            </Select>
+          </PublicLawPageSizeLabel>
+        </>
+      }
+      steps={
+        <>
+          <StepLink
+            label={t("common.previous")}
+            onPageRequest={onPageRequest}
+            page={model.previousPage}
+            pageLink={pageLink}
+            placement="previous"
+          />
+
+          <PageList
+            currentPage={model.currentPage}
+            items={items}
+            onPageRequest={onPageRequest}
+            pageLink={pageLink}
+          />
+
+          {navigation.type === "chain" &&
+          navigation.model.nextPage !== null &&
+          navigation.model.nextPage > navigation.model.pages.length ? (
+            <Button
+              aria-busy={navigation.isWalking}
+              className="h-7 min-h-0"
+              disabled={navigation.isWalking}
+              onClick={navigation.onWalkForward}
+              size="sm"
+              variant="ghost"
+            >
+              {navigation.isWalking
+                ? t("caseLaw.loadingMore")
+                : t("common.next")}
+              <ChevronRightIcon
+                aria-hidden="true"
+                className="size-3.5 rtl:rotate-180"
+              />
+            </Button>
+          ) : (
+            <StepLink
+              label={t("common.next")}
+              onPageRequest={onPageRequest}
+              page={model.nextPage}
+              pageLink={pageLink}
+              placement="next"
+            />
+          )}
+        </>
+      }
+    />
   );
 };
 
@@ -220,12 +227,9 @@ const PageList = ({
             return (
               <li key={item.page}>
                 {item.page === currentPage ? (
-                  <span
-                    aria-current="page"
-                    className="border-border bg-muted/60 text-foreground inline-flex h-7 min-w-7 items-center justify-center rounded-md border px-1.5 text-xs tabular-nums"
-                  >
+                  <PublicLawCurrentPage>
                     {format.number(item.page)}
-                  </span>
+                  </PublicLawCurrentPage>
                 ) : (
                   <PageLink
                     className="h-7 min-h-0 min-w-7 px-1.5 tabular-nums"
@@ -342,34 +346,8 @@ const StepLink = ({
   pageLink: PublicLawPageLink;
   placement: "previous" | "next";
 }) => {
-  const icon =
-    placement === "previous" ? (
-      <ChevronLeftIcon aria-hidden="true" className="size-3.5 rtl:rotate-180" />
-    ) : (
-      <ChevronRightIcon
-        aria-hidden="true"
-        className="size-3.5 rtl:rotate-180"
-      />
-    );
-  const body =
-    placement === "previous" ? (
-      <>
-        {icon}
-        {label}
-      </>
-    ) : (
-      <>
-        {label}
-        {icon}
-      </>
-    );
-
   if (page === null) {
-    return (
-      <Button className="h-7 min-h-0" disabled size="sm" variant="ghost">
-        {body}
-      </Button>
-    );
+    return <PublicLawPagerStepDisabled label={label} placement={placement} />;
   }
   return (
     <PageLink
@@ -379,7 +357,7 @@ const StepLink = ({
       page={page}
       pageLink={pageLink}
     >
-      {body}
+      <PublicLawPagerStepLabel label={label} placement={placement} />
     </PageLink>
   );
 };

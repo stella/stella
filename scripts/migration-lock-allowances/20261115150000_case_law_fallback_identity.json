@@ -1,0 +1,7 @@
+{
+  "add-column": "Nullable fallback identity columns have no defaults and rewrite no existing decision rows. ACCESS EXCLUSIVE covers catalog changes under 1s lock_timeout and 5s statement_timeout.",
+  "replace-view": "Appending the fallback identity columns refreshes the existing published and unredacted view projections without changing their row predicates or scanning stored decisions. Catalog locks are bounded by 1s lock_timeout and 5s statement_timeout.",
+  "create-table-references": "The new alias table is empty, so its source foreign key validates no existing rows. Referenced-table locks are bounded by 1s lock_timeout and 5s statement_timeout.",
+  "row-level-security": "RLS is enabled on the new empty alias table before its ingestion grant. The metadata-only change is bounded by 1s lock_timeout and 5s statement_timeout.",
+  "create-policy": "The ingestion policy is installed on the new empty alias table before privileges are granted; catalog work is bounded by 1s lock_timeout and 5s statement_timeout."
+}

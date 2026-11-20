@@ -97,7 +97,7 @@ const createClient = () => {
   const timeZone = parseTimeZoneId("UTC") ?? panic("Fixture UTC must exist");
   const settings = {
     declaredFeatureIds: [],
-    deploymentFeatures: { legalLists: true },
+    deploymentFeatures: { legalLists: true, invoiceLinks: true },
     capabilities: {},
     documentProcessingMode: "off",
     matterNumberPattern: "{year}/{number}",
@@ -105,8 +105,11 @@ const createClient = () => {
     matterNumberingEnabled: true,
     practiceJurisdictions: [],
     promptCachingEnabled: true,
+    aiInstructions: "",
+    aiInstructionsMaxLength: 3000,
     managedAIResidency: "eu",
     memoryExtractionEnabled: false,
+    localRunMaxApprovalMode: "full_auto",
     timeMinimumUnitMinutes: 1,
     timeEditWindowDays: 30,
     timeLockedThroughMonth: null,
@@ -166,6 +169,7 @@ const ComposerSubmitButton = ({
       type="button"
       onClick={() =>
         submit.mutate({
+          workspaceId,
           issue: true,
           body: {
             invoiceDate: "2026-10-27",

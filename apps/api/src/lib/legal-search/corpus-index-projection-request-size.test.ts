@@ -9,7 +9,9 @@
  *
  * The other reason a tail flushes, the lease start margin, is a property of
  * the clock rather than the tail, and the cycle stops on it; that behaviour is
- * driven end to end in corpus-index-projection-margin-stop.db.test.ts.
+ * covered in corpus-index-projection-executor.test.ts, and the cycle's lease
+ * keeps it from applying before a request fills
+ * (corpus-index-projection-long-commit-window.db.test.ts).
  */
 
 import { describe, expect, test } from "bun:test";

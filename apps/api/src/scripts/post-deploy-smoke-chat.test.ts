@@ -2,6 +2,8 @@ import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
+import { CHAT_TOOL_DECLINED_ERROR } from "@stll/api-contract/chat";
+
 import type { ApiRouteKey } from "@/api/http/api-route-types";
 import { createSafeId } from "@/api/lib/branded-types";
 import {
@@ -39,10 +41,12 @@ const pendingCall = {
   approval: { id: "approval-1", needsApproval: true },
 };
 
+/** A declined call as the thread serves it (`declineToolCall`). */
 const declinedCall = {
   ...pendingCall,
-  state: "approval-responded",
+  state: "error",
   approval: { id: "approval-1", needsApproval: true, approved: false },
+  output: { error: CHAT_TOOL_DECLINED_ERROR },
 };
 
 const delegationCall = {
@@ -351,6 +355,24 @@ describe("evaluateDeclinedTurn", () => {
         metadata: completed,
       }).detail,
     ).toBe("declined call is approval-responded (approved: true)");
+  });
+
+  test("fails a declined call stored in a second shape, without its settled error", () => {
+    expect(
+      settle({
+        id: "a1",
+        role: "assistant",
+        parts: [
+          {
+            ...pendingCall,
+            approval: { ...pendingCall.approval, approved: false },
+            state: "approval-responded",
+          },
+          { type: "text", content: "OK" },
+        ],
+        metadata: completed,
+      }).detail,
+    ).toBe("declined call is approval-responded (approved: false)");
   });
 
   test("fails a call still waiting on its answer", () => {

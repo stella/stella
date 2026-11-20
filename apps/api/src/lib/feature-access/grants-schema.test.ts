@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import { fileURLToPath } from "node:url";
 import * as v from "valibot";
 
 import { createFeatureAccessGrantsEnvSchema } from "@/api/lib/feature-access/grants-schema";
@@ -117,7 +118,7 @@ test("feature grants boot logs only the discarded count and exposes known grants
       ],
     ]),
   );
-  const envPath = new URL("../../env.ts", import.meta.url).pathname;
+  const envPath = fileURLToPath(new URL("../../env.ts", import.meta.url));
   const child = Bun.spawnSync(
     [
       process.execPath,
@@ -155,7 +156,7 @@ test("feature grants boot logs only the discarded count and exposes known grants
     .toString()
     .trim()
     .split("\n")
-    .map((line) => JSON.parse(line));
+    .map((line): unknown => JSON.parse(line));
   expect(records).toEqual([
     {
       severity: "ERROR",
@@ -168,7 +169,7 @@ test("feature grants boot logs only the discarded count and exposes known grants
 
 for (const raw of ["not-json", "null", '{"unknown-feature":{}}']) {
   test(`feature grants boot rejects malformed configuration ${raw}`, () => {
-    const envPath = new URL("../../env.ts", import.meta.url).pathname;
+    const envPath = fileURLToPath(new URL("../../env.ts", import.meta.url));
     const child = Bun.spawnSync(
       [process.execPath, "-e", `await import(${JSON.stringify(envPath)});`],
       {
@@ -191,3 +192,55 @@ for (const raw of ["not-json", "null", '{"unknown-feature":{}}']) {
     );
   });
 }
+
+test("invoice organization grants are registered while unknown ids retain count-only rejection", () => {
+  const result = v.parse(
+    createFeatureAccessGrantsEnvSchema(FEATURE_REGISTRY),
+    JSON.stringify({
+      "invoice-links": [{ type: "organization", organizationId: "org-a" }],
+      "unknown-invoice-feature": [
+        { type: "organization", organizationId: "org-a" },
+      ],
+    }),
+  );
+  expect(result).toEqual({
+    grants: {
+      "invoice-links": [{ type: "organization", organizationId: "org-a" }],
+    },
+    unknownGrantCount: 1,
+  });
+});
+
+test("organization-scoped features reject member grants without exposing their identities", () => {
+  const organizationFeatures = Object.entries(FEATURE_REGISTRY).filter(
+    // "organization" is the only grant scope the registry type allows.
+    ([, definition]) => "grantScope" in definition,
+  );
+  expect(organizationFeatures.length).toBeGreaterThan(0);
+  for (const [featureId] of organizationFeatures) {
+    const memberGrant = {
+      type: "member",
+      organizationId: "org-sensitive",
+      email: "sensitive@example.test",
+    };
+    for (const grants of [
+      [memberGrant],
+      [{ type: "organization", organizationId: "org-a" }, memberGrant],
+    ]) {
+      const result = v.safeParse(
+        createFeatureAccessGrantsEnvSchema(FEATURE_REGISTRY),
+        JSON.stringify({ [featureId]: grants }),
+      );
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        expect(JSON.stringify(result.issues)).not.toContain(
+          memberGrant.organizationId,
+        );
+        expect(JSON.stringify(result.issues)).not.toContain(memberGrant.email);
+        expect(result.issues.at(0)?.message).toBe(
+          "API_FEATURE_ACCESS_GRANTS contains a grant scope unsupported by its feature",
+        );
+      }
+    }
+  }
+});

@@ -137,6 +137,10 @@ export const SCHEDULER_TASK_AUTHORITY = {
     "case-law-population-seed.ts",
     "Seeds public legal corpus population counts under the load governor.",
   ),
+  "caseLaw.foldSitemapTouches": platform(
+    "case-law-sitemap-touch-fold.ts",
+    "Folds public legal corpus sitemap touches under the load governor.",
+  ),
   "caseLaw.refreshSitemapShards": platform(
     "case-law-sitemap-shard-refresh.ts",
     "Public legal corpus sitemap.",
@@ -159,9 +163,17 @@ export const SCHEDULER_TASK_AUTHORITY = {
     "chat-turn-reaper.ts",
     "Ends chat turns whose lease expired; reads no content.",
   ),
+  "chat.sendLimitReminders": platform(
+    "chat-limit-reminders.ts",
+    "Files the reminders members asked for when their agent's usage limit resets; reads ids and times only.",
+  ),
   "chat.purgeSecrets": platform(
     "chat-secret-retention.ts",
     "Clears expired encrypted chat payloads while retaining request receipts.",
+  ),
+  "chat.sweepCommandReceipts": platform(
+    "chat-command-receipt-retention.ts",
+    "Retention sweep of chat command receipts; reads ids and times only.",
   ),
   "chat.sweepRunLogs": platform(
     "chat-run-log-retention.ts",
@@ -174,6 +186,10 @@ export const SCHEDULER_TASK_AUTHORITY = {
   "desktopEditSessions.expire": platform(
     "desktop-edit-session-expiry.ts",
     "Expires sessions past their token lifetime, recorded as a service.",
+  ),
+  "dictation.deleteKeptTranscripts": platform(
+    "kept-transcript-deletion.ts",
+    "Deletes transcripts a transcription provider kept; reads provider ids only.",
   ),
   "documentProcessing.dispatchOcr": platform(
     "document-processing-ocr.ts",
@@ -189,7 +205,7 @@ export const SCHEDULER_TASK_AUTHORITY = {
   ),
   "documentReviews.reconcileQueuedRuns": platform(
     "document-review-run-reconcile.ts",
-    "Hands queued runs back to their queue, whose worker resolves the requester's run actor.",
+    "Fails stuck runs and hands queued runs back to their queue, whose worker resolves the requester's run actor.",
   ),
   "entityBuffers.reconcileIntents": platform(
     "buffer-intent-reconciliation.ts",
@@ -275,6 +291,10 @@ export const SCHEDULER_TASK_AUTHORITY = {
     "review-organization-reset.ts",
     "Resets the configured restricted review organization; each run first proves its only member is the configured review account.",
   ),
+  "dataExports.maintain": platform(
+    "data-export-maintenance.ts",
+    "Marks exports past their expiry as expired (the bucket lifecycle deletes their files) and resumes or fails stalled runs; queued exports are handed back to their queue, whose worker reads as the requester's membership.",
+  ),
   "reportExports.reconcileQueued": platform(
     "report-export-reconcile.ts",
     "Recovers stuck exports and hands queued ones back to their queue, whose worker resolves the requester's run actor.",
@@ -291,6 +311,10 @@ export const SCHEDULER_TASK_AUTHORITY = {
     "sanctions-monitoring.ts",
     "Processes organization-scoped contact screening marks without a member run.",
   ),
+  "softLaw.sync": platform(
+    "soft-law-sync.ts",
+    "Syncs public regulator guidance from served sources.",
+  ),
   "sanctions.refreshSources": platform(
     "sanctions-refresh.ts",
     "Refreshes public sanctions lists.",
@@ -300,10 +324,10 @@ export const SCHEDULER_TASK_AUTHORITY = {
     "Reports overdue scheduler operator pauses.",
   ),
   "scheduler.dispatchBullMq": {
-    authority: "unclassified",
+    authority: "org-automation",
     module: "apps/api/src/lib/scheduler/bullmq.ts",
     reason:
-      "Forwards to whichever queue a stored job names; the code does not fix the target queue, so the authority depends on data.",
+      "Dispatches only to registered org-automation queues; refuses member-run and unknown queues before enqueueing.",
   },
   "scheduler.noop": {
     authority: "org-automation",
@@ -325,6 +349,10 @@ export const SCHEDULER_TASK_AUTHORITY = {
   "styleSets.reconcilePackageCleanups": platform(
     "style-set-package-cleanup-reconcile.ts",
     "Hands pending replacement cleanups to their queue and consumes deletion tombstones.",
+  ),
+  "agentSkills.cleanOriginalObjects": platform(
+    "agent-skill-original-cleanup.ts",
+    "Erases stored originals of deleted or replaced skill files.",
   ),
   "templates.cleanDeletionObjects": platform(
     "template-deletion-cleanup.ts",

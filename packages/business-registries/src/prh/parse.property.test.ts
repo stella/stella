@@ -14,7 +14,7 @@ import {
   forEachRegistryMutation,
   registryExtras,
   registryString,
-} from "../shared/property-test-helpers.test.js";
+} from "../shared/tests/test-helpers.js";
 import { lookupByBusinessId } from "./client.js";
 import { parseAddress, parseCompany, parseSearchEntry } from "./parse.js";
 import type { PrhRawAddress, PrhRawCompany } from "./types.js";

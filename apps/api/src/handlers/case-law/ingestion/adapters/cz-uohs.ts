@@ -1,3 +1,4 @@
+// parser-output-unchanged: adds an explicit exact-document recovery capability; standing crawl and stored replay outputs are unchanged.
 // parser-output-unchanged: A null list now reads as empty; records that parsed before keep their exact output.
 // parser-output-unchanged: a page states whether the publisher was asked; parsed decision output is unchanged.
 // parser-output-unchanged: imports ingestion bindings directly from their existing owner.
@@ -5,8 +6,26 @@
 import { panic, Result } from "better-result";
 import * as v from "valibot";
 
-import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
-import type { Block, DocumentAst } from "@stll/legal-ast/document-ast";
+import { caseLawSectionHeading } from "@stll/legal-ast/case-law-heading";
+import {
+  CZ_JUDGE_NAME_RE,
+  czechAuthorityHeadRoles,
+  isCzechAuthorityDecisionTitle,
+  isCzechAuthoritySignatureLine,
+  isCzechInstructionHeading,
+  isCzechReasonsHeading,
+} from "@stll/legal-ast/czech-document-roles";
+import {
+  DECISION_IDENTIFIER_TYPES,
+  isDecisionIdentifier,
+} from "@stll/legal-ast/decision-identifier";
+import type {
+  Block,
+  DocumentAst,
+  HeadingLevel,
+  Inline,
+  ParagraphRole,
+} from "@stll/legal-ast/document-ast";
 import { CZ_PROFILE } from "@stll/legal-atlas/cz-provision-citation-profile";
 import {
   printedDateOf,
@@ -22,7 +41,6 @@ import {
   unreadPublisherError,
 } from "@/api/handlers/case-law/ingestion/adapters/publisher-read";
 import { adapterCatch } from "@/api/handlers/case-law/ingestion/adapters/utils";
-import { normalizeDecisionIdentifierValue } from "@/api/handlers/case-law/ingestion/citation-extractor";
 import {
   assemblePdfParagraphs,
   extractPdfBodyAndNotes,
@@ -80,8 +98,20 @@ import { isRecord } from "@/api/lib/type-guards";
 const LISTING_URL = "https://uohs.gov.cz/opendata/rozhodnuti.jsonld";
 const ORIGIN = "https://uohs.gov.cz";
 const HOST_POLICY = { type: "exact-origin", origins: [ORIGIN] } as const;
-const PAGE_SIZE = 20;
+// parser-output-unchanged: request deadlines only; no parsed record changes.
+export const CZ_UOHS_PAGE_SIZE = 20;
+const PAGE_SIZE = CZ_UOHS_PAGE_SIZE;
 const CURSOR_VERSION = 1;
+
+/** Ceiling for one decision document read. */
+export const CZ_UOHS_DOCUMENT_TIMEOUT_MS = 120_000;
+
+/**
+ * The pipeline's deadline for one crawl page. A page reads every document of
+ * its records inline, one gated request at a time, so the deadline leaves room
+ * for a full page of documents at the publisher's pace plus one slow read.
+ */
+const CZ_UOHS_PAGE_TIMEOUT_MS = 300_000;
 
 export const CZ_UOHS_COLLECTIONS = [
   "hospodarska-soutez",
@@ -151,7 +181,8 @@ const publisherReadOptions = (
 ) => ({
   adapterKey: ADAPTER_KEYS.CZ_UOHS,
   fetchStage: stage,
-  timeoutMs: stage === "document" ? 120_000 : ADAPTER_TIMEOUT.LIST,
+  timeoutMs:
+    stage === "document" ? CZ_UOHS_DOCUMENT_TIMEOUT_MS : ADAPTER_TIMEOUT.LIST,
   signal,
   redirect: "error" as const,
 });
@@ -205,8 +236,14 @@ const FILE_NUMBER_TAIL = /^\/\d{4}(?:\/\p{Lu}+)?/u;
 
 /**
  * The decision's citable identifiers: the file number, then the reference
- * number of this one decision. Both are lookup keys, never display text; the
- * displayed docket is `czUohsFileNumber`.
+ * number of this one decision, each as the office prints it. The pipeline
+ * keys them for lookup (`normalized_value`); a value stays the printed
+ * spelling a reader is shown.
+ *
+ * The reference number of a joined proceeding lists every joined file and
+ * can run past the identifier storage bound. It is a secondary lookup key,
+ * so one the corpus cannot hold is left out rather than truncated; the file
+ * number stays the decision's identity.
  */
 export const czUohsDecisionIdentifiers = (
   record: Pick<CzUohsRecord, "spisová_značka" | "číslo_jednací">,
@@ -214,14 +251,14 @@ export const czUohsDecisionIdentifiers = (
   const identifier = (printed: string) =>
     ({
       type: DECISION_IDENTIFIER_TYPES.AUTHORITY_DECISION_NUMBER,
-      value: normalizeDecisionIdentifierValue(
-        DECISION_IDENTIFIER_TYPES.AUTHORITY_DECISION_NUMBER,
-        printed,
-      ),
+      value: printed,
     }) as const;
+  const reference = identifier(
+    `ÚOHS-${record.číslo_jednací.replace(/^ÚOHS-/u, "")}`,
+  );
   return [
     identifier(czUohsFileNumber(record)),
-    identifier(`ÚOHS-${record.číslo_jednací.replace(/^ÚOHS-/u, "")}`),
+    ...(isDecisionIdentifier(reference) ? [reference] : []),
   ] as const;
 };
 
@@ -274,6 +311,100 @@ type CzUohsDocumentInput = {
  * The decision as a document: one paragraph block per printed paragraph, with
  * the office's own "N." numbering moved into the block by the shared reader.
  */
+/**
+ * The Office's document identifier printed as a barcode and its caption at
+ * the head of the first page (`*UOHSX00BKPME*`): the filing system's, not
+ * the decision's words.
+ */
+const DOCUMENT_BARCODE_RE = /^\*?UOHSX[0-9A-Z]{7}\*?$/u;
+
+/**
+ * Roles by the decision's own parts: the head matter and the operative part
+ * through the Czech grammar of an authority's decision, the barcode as
+ * apparatus, and the signature under the office the decision is signed
+ * under, with the name printed above it. A decision printing no lead-in or
+ * no reasons heading keeps the operative part up to its first numbered
+ * paragraph of reasons.
+ */
+const czUohsParagraphRoles = (
+  texts: readonly string[],
+): (ParagraphRole | undefined)[] => {
+  const head = czechAuthorityHeadRoles(texts);
+  const numberedReasoningStart = texts.findIndex((text) =>
+    /^1\.\s+\p{Lu}/u.test(text),
+  );
+  return texts.map((text, index): ParagraphRole | undefined => {
+    if (DOCUMENT_BARCODE_RE.test(text)) {
+      return "apparatus";
+    }
+    if (head !== undefined) {
+      const role = head[index];
+      if (role !== undefined) {
+        return role;
+      }
+    } else if (
+      numberedReasoningStart !== -1 &&
+      index < numberedReasoningStart
+    ) {
+      return "holding";
+    }
+    const next = texts[index + 1];
+    return isCzechAuthoritySignatureLine(text) ||
+      (next !== undefined &&
+        isCzechAuthoritySignatureLine(next) &&
+        CZ_JUDGE_NAME_RE.test(text) &&
+        text.length < 80)
+      ? "signature"
+      : undefined;
+  });
+};
+
+type CzUohsHeading = {
+  level: HeadingLevel;
+  role?: "decision-title" | "section-heading";
+};
+
+/**
+ * The decision's own headings: its title in the head matter, the reasons
+ * and instruction headings, and the reasons' Roman section titles between
+ * the two. Each
+ * keeps the anchor its paragraph had, so a heading only changes the type.
+ */
+const czUohsHeadings = (
+  texts: readonly string[],
+  roles: readonly (ParagraphRole | undefined)[],
+): (CzUohsHeading | undefined)[] => {
+  let reasoned = false;
+  let titled = false;
+  return texts.map((text, index): CzUohsHeading | undefined => {
+    if (isCzechReasonsHeading(text)) {
+      reasoned = true;
+      return { level: 2, role: "section-heading" };
+    }
+    if (isCzechInstructionHeading(text)) {
+      // The instruction closes the reasons: what follows is the signature
+      // and the distribution, never a section of the reasons.
+      reasoned = false;
+      titled = true;
+      return { level: 2, role: "section-heading" };
+    }
+    if (
+      !titled &&
+      !reasoned &&
+      roles[index] === "intro" &&
+      isCzechAuthorityDecisionTitle(text)
+    ) {
+      titled = true;
+      return { level: 1, role: "decision-title" };
+    }
+    const section =
+      reasoned && roles[index] !== "signature"
+        ? caseLawSectionHeading(text)
+        : null;
+    return section === null ? undefined : { level: section.level };
+  });
+};
+
 export const czUohsDocumentAst = ({
   paragraphs,
   notes,
@@ -292,19 +423,36 @@ export const czUohsDocumentAst = ({
       .map(({ text }) => text)
       .join("")
       .trim();
-  const numberedReasoningStart = paragraphs.findIndex((runs) =>
-    /^1\.\s+\p{Lu}/u.test(textOf(runs)),
-  );
-  const blocks: Block[] = paragraphs.map((runs, index) => ({
-    id: `b${index + 1}`,
-    anchorId: `p-${index + 1}`,
-    type: "paragraph",
-    ...(numberedReasoningStart !== -1 && index < numberedReasoningStart
-      ? { role: "holding" as const }
-      : {}),
-    inlines: pdfRunInlines(runs),
-    plainText: textOf(runs),
-  }));
+  const texts = paragraphs.map(textOf);
+  const roles = czUohsParagraphRoles(texts);
+  const headings = czUohsHeadings(texts, roles);
+  const blocks: Block[] = paragraphs.map((runs, index): Block => {
+    const id = `b${index + 1}`;
+    const anchorId = `p-${index + 1}`;
+    const inlines: Inline[] = pdfRunInlines(runs);
+    const plainText = texts[index] ?? "";
+    const heading = headings[index];
+    if (heading !== undefined) {
+      return {
+        id,
+        anchorId,
+        type: "heading",
+        level: heading.level,
+        ...(heading.role === undefined ? {} : { role: heading.role }),
+        inlines,
+        plainText,
+      };
+    }
+    const role = roles[index];
+    return {
+      id,
+      anchorId,
+      type: "paragraph",
+      ...(role === undefined ? {} : { role }),
+      inlines,
+      plainText,
+    };
+  });
   for (const { label, noteId, runs } of notes) {
     const plainText = textOf(runs);
     blocks.push({
@@ -756,12 +904,19 @@ const reparseCzUohsStoredRaw = async (
       detail: "the stored record names no document object",
     };
   }
+  const result = await assembleCzUohsDecision({
+    record: parsed.output,
+    read: { type: "stored", documents },
+  });
+  // The row is the publisher document (its IRI), which the envelope proved
+  // above; a file number an earlier release spelled otherwise (a lowercased
+  // lookup key) is that row's older spelling, never another decision.
   return {
     type: "parsed",
-    result: await assembleCzUohsDecision({
-      record: parsed.output,
-      read: { type: "stored", documents },
-    }),
+    result,
+    ...(result.caseNumber === stored.caseNumber
+      ? {}
+      : { legacyCaseNumber: stored.caseNumber }),
   };
 };
 
@@ -862,6 +1017,7 @@ export const czUohsAdapter = defineSourceAdapter({
   key: ADAPTER_KEYS.CZ_UOHS,
   reparseStoredRaw: reparseCzUohsStoredRaw,
   documentStage: "inline",
+  pageTimeoutMs: CZ_UOHS_PAGE_TIMEOUT_MS,
   language: "cs",
   minRequestIntervalMs: publisherRequestIntervalMs(ADAPTER_KEYS.CZ_UOHS),
   sourceSurfaces: {
@@ -977,6 +1133,27 @@ export const czUohsAdapter = defineSourceAdapter({
     return listing.error.httpStatus === undefined
       ? sourceTotalProbeFailed(SOURCE_TOTAL_PROBE_FAILURE.UNREADABLE_PAYLOAD)
       : sourceTotalProbeFailed(SOURCE_TOTAL_PROBE_FAILURE.HTTP_STATUS);
+  },
+  buildStoredDocument: async ({ stored, signal }) => {
+    const read = readStoredRawListing({
+      stored,
+      part: "listing",
+      identityOf: (listing) =>
+        typeof listing["iri"] === "string" ? listing["iri"] : undefined,
+    });
+    if (read.type === "rejected") {
+      return { type: "incomplete-locator", detail: read.detail };
+    }
+    const parsed = v.safeParse(recordSchema, read.listing);
+    return parsed.success
+      ? {
+          type: "built",
+          decision: await buildCzUohsDecision(parsed.output, signal),
+        }
+      : {
+          type: "incomplete-locator",
+          detail: "Stored listing is not a complete ÚOHS record",
+        };
   },
   reconciliation: {
     // The publisher exposes one atomic listing, so its one slice contains

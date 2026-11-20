@@ -7,6 +7,7 @@ import { runWithQueryCounter } from "@/api/lib/db-query-counter";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import { openGatedTestDatabase } from "@/api/tests/gated-test-database";
 
+import { classifyMeasuredStatement } from "./scheduled-run";
 import { measureJobStatements } from "./statement-measurement";
 
 const fixture = pgTable("measurement_writer_fixture", {
@@ -103,6 +104,47 @@ describe.skipIf(!enabled)(
           ),
         ),
       ).toEqual([]);
+    });
+    test("classified writes match PostgreSQL returning rows across conflicts and init plans", async () => {
+      await db.execute(
+        sql`CREATE TEMP TABLE measured_row_counts (id integer PRIMARY KEY)`,
+      );
+      await db.execute(sql`INSERT INTO measured_row_counts VALUES (1)`);
+      const measured = await measureJobStatements({
+        database: db,
+        run: async (database) => [
+          executedRows(
+            await database.execute(
+              sql`INSERT INTO measured_row_counts VALUES (1), (2) ON CONFLICT DO NOTHING RETURNING id`,
+            ),
+          ),
+          executedRows(
+            await database.execute(
+              sql`INSERT INTO measured_row_counts VALUES (1) ON CONFLICT DO NOTHING RETURNING id`,
+            ),
+          ),
+          executedRows(
+            await database.execute(
+              sql`INSERT INTO measured_row_counts VALUES (1), (3) ON CONFLICT (id) DO UPDATE SET id = excluded.id WHERE false RETURNING id`,
+            ),
+          ),
+          executedRows(
+            await database.execute(
+              sql`INSERT INTO measured_row_counts SELECT (SELECT 4) + n FROM generate_series(0, 2) n RETURNING id`,
+            ),
+          ),
+        ],
+      });
+      expect(measured.value.map((rows) => rows.length)).toEqual([1, 0, 1, 3]);
+      expect(
+        measured.statements.map(
+          ({ query, plan }) =>
+            classifyMeasuredStatement({
+              statement: query.text,
+              plan: plan.Plan,
+            }).writtenRows,
+        ),
+      ).toEqual(measured.value.map((rows) => rows.length));
     });
   },
 );

@@ -1,7 +1,10 @@
 import { queryOptions } from "@tanstack/react-query";
 
+import { RESOURCE_TYPE } from "@stll/api-contract";
+
 import { api } from "@/lib/api";
 import { unwrapApiResponse } from "@/lib/errors/api";
+import { resourceQueryOptions } from "@/lib/workspace-realtime";
 
 type MyTimeSuggestionsRange = {
   startDate: string;
@@ -43,7 +46,14 @@ export const myTimeSuggestionsOptions = (
   userId: string,
   range: MyTimeSuggestionsRange,
 ) =>
-  queryOptions({
-    queryKey: myTimeSuggestionsKeys.range(organizationId, userId, range),
-    queryFn: async ({ signal }) => await fetchMyTimeSuggestions(range, signal),
-  });
+  resourceQueryOptions(
+    queryOptions({
+      queryKey: myTimeSuggestionsKeys.range(organizationId, userId, range),
+      queryFn: async ({ signal }) =>
+        await fetchMyTimeSuggestions(range, signal),
+    }),
+    {
+      resources: [RESOURCE_TYPE.TIME_ENTRY],
+      scope: { type: "organization", organizationId, userId },
+    },
+  );

@@ -156,7 +156,7 @@ describe("parseNssDecisionHtml", () => {
         documentAst.blocks.find(
           (block) => block.plainText === "JMÉNEM REPUBLIKY",
         ),
-      ).toMatchObject({ type: "paragraph", role: "intro" });
+      ).toMatchObject({ type: "paragraph", role: "opening-formula" });
     });
   });
 
@@ -920,7 +920,7 @@ describe("parseNssDecisionHtml", () => {
 
       expect(republicTitle).toMatchObject({
         type: "paragraph",
-        role: "intro",
+        role: "opening-formula",
       });
       expect(holding?.plainText).toContain("se zrušuje");
       expect(holding?.inlines).toContainEqual({

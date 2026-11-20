@@ -1,6 +1,9 @@
+// parser-output-unchanged: adds an explicit exact-document recovery capability; standing crawl and stored replay outputs are unchanged.
+// parser-output-unchanged: [sk-us] locating a stored row in its month's listing changes no parsed decision.
 // parser-output-unchanged: source-fields-sk: Inventory targets describe already retained source values without changing parsed decisions.
 // parser-output-unchanged: source-exclusion-contract: Publisher schemas, raw retention and coverage checks do not change parsed decision projections.
 // parser-output-unchanged: a page states whether the publisher was asked; parsed decision output is unchanged.
+// parser-output-unchanged: Reconciliation exposes the existing numFound count for the census; decision parsing and listed identities are unchanged.
 // parser-output-unchanged: imports ingestion bindings directly from their existing owner.
 // parser-output-unchanged: Stored-object replay reuses the ingestion XHTML parser; PDF bytes are retained and verified without adding a PDF parser.
 // parser-output-unchanged: This change only redacts query parameters from error output and does not change parser output.
@@ -10,6 +13,7 @@
 // parser-output-unchanged: Reconciliation revision projections classify listing inputs without changing parsed decision output.
 // parser-output-unchanged: Publisher availability uses the shared contract without changing parsed values.
 // parser-output-unchanged: [sk-us] failed and refused publisher reads are typed outcomes; served and 404 reads build the same decision.
+// parser-output-unchanged: [sk-us] a search row with no usable document id was never stored; keyed rows only gain a repair alias, which identity resolution reads and no stored field holds.
 import { panic, Result } from "better-result";
 import * as v from "valibot";
 
@@ -51,8 +55,10 @@ import { backoffDelay } from "@stll/concurrency/backoff-delay";
 import { classifyFailure } from "@stll/errors";
 // parser-output-unchanged: imports the document AST from its package owner
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
+import { stripDangerousChars } from "@stll/legal-ast/text-sanitize";
 import type { DocumentFetchStage } from "@stll/legal-atlas/document-fetch-diagnostics";
 import { decodeDeclared } from "@stll/mojibake/declared-charset";
+import { sha256Hex } from "@stll/sha256/bun";
 // parser-output-unchanged: SHA-256 ownership changes preserve input bytes, serialization and update order, so stored hashes and parser output remain identical.
 import { Temporal } from "@stll/time";
 
@@ -895,6 +901,100 @@ const skUsIdentityFields = (
   return { caseNumber, documentId };
 };
 
+/** The court every decision this adapter stores is a decision of. */
+const SK_US_COURT = "Ústavný súd SR";
+
+/** Every audit identity of a search row stored without a usable document id. */
+const SK_US_QUARANTINE_PREFIX = "sk-us-quarantine:";
+
+/** Why such a row is stored listing-only, under `listedOnlyReason`. */
+const SK_US_QUARANTINE_REASON = "no_usable_document_id";
+
+/**
+ * A stated string, without the characters ingestion strips from the stored
+ * raw, so an identity read off it is read off the raw again on replay; empty,
+ * absent, null and every other type state nothing.
+ */
+const statedSkUsString = (value: unknown): string | undefined => {
+  if (typeof value !== "string") {
+    return undefined;
+  }
+  const stated = stripDangerousChars(value);
+  return stated.trim().length > 0 ? stated : undefined;
+};
+
+/**
+ * The audit identity of a search row, read off the fields the DMS states for
+ * the record each time it lists it, whether or not it states the document id
+ * with them: the corpus, the docket, the registry number, the decision date,
+ * the decision form, the document type and the kind of separate opinion.
+ * Together they tell apart the decision one docket publishes on one day, its
+ * corrections and its separate opinions of each kind. Two documents of one
+ * type on one docket and day, such as two separate opinions of one kind,
+ * state nothing apart but the document id and the result index, so they
+ * share an identity: no field the row states tells which of them an id-less
+ * listing is, and whichever is first keyed takes over the row (the store
+ * adopts a row only while it is the one row stored under the identity).
+ *
+ * Left out: the document id itself and the ECLI, which can come back with it,
+ * the result index (a listing position), the title (the document type again,
+ * as rendered), and the publication and legal-force dates, which can be
+ * filled in between two listings of the same record. A row stating neither a
+ * docket nor a registry number has no field that names it and no identity.
+ *
+ * The field order is part of the digest stored rows carry.
+ */
+const skUsQuarantineId = (doc: SearchDocument): string | undefined => {
+  const docket = statedSkUsString(doc.mkRSAPNumberOfFile);
+  const registryNumber = statedSkUsString(doc.mkRVPNumberOfFile);
+  if (docket === undefined && registryNumber === undefined) {
+    return undefined;
+  }
+  const stableFields = [
+    ["docType", statedSkUsString(doc.docType)],
+    ["mkRSAPNumberOfFile", docket],
+    ["mkRVPNumberOfFile", registryNumber],
+    ["mkDateOfDecision", statedSkUsString(doc.mkDateOfDecision)],
+    ["mkFormOfDecision", statedSkUsString(doc.mkFormOfDecision)],
+    ["mkDocumentType", statedSkUsString(doc.mkDocumentType)],
+    ["mkDifferentView", statedSkUsString(doc.mkDifferentView)],
+  ].map(([key, value]) => [key, value ?? null]);
+  return `${SK_US_QUARANTINE_PREFIX}${sha256Hex(JSON.stringify(stableFields))}`;
+};
+
+const isSkUsQuarantineId = (sourceDocumentId: string): boolean =>
+  sourceDocumentId.startsWith(SK_US_QUARANTINE_PREFIX);
+
+/**
+ * How a search row is keyed and stored: by its document id and docket, or,
+ * where it states no document id the decision column can hold, listing-only
+ * under its audit identity (case-law AGENTS.md: a counted row exposing no
+ * publisher identity is quarantined, never dropped). A row with a usable
+ * document id and no docket stays unkeyable, as before.
+ */
+type SkUsRecordIdentity =
+  | { type: "document"; caseNumber: string; documentId: string }
+  | { type: "quarantined"; sourceDocumentId: string }
+  | { type: "unkeyable" };
+
+const skUsRecordIdentity = (doc: SearchDocument): SkUsRecordIdentity => {
+  const fields = skUsIdentityFields(doc);
+  if (fields !== null) {
+    return { type: "document", ...fields };
+  }
+  const { documentId } = doc;
+  if (
+    typeof documentId === "string" &&
+    isPersistableSourceDocumentId(documentId)
+  ) {
+    return { type: "unkeyable" };
+  }
+  const sourceDocumentId = skUsQuarantineId(doc);
+  return sourceDocumentId === undefined
+    ? { type: "unkeyable" }
+    : { type: "quarantined", sourceDocumentId };
+};
+
 /**
  * The identity the ingest would store for this listing item.
  *
@@ -911,11 +1011,26 @@ const skUsIdentityFields = (
  * would read stored decisions as missing and re-fetch them forever.
  */
 export const skUsListingIdentity = (doc: SearchDocument): ListingIdentity => {
-  const fields = skUsIdentityFields(doc);
-  return fields === null
-    ? { type: "unidentifiable" }
-    : { type: "document", sourceDocumentId: fields.documentId };
+  const identity = skUsRecordIdentity(doc);
+  switch (identity.type) {
+    case "document":
+      return { type: "document", sourceDocumentId: identity.documentId };
+    case "quarantined":
+      return { type: "document", sourceDocumentId: identity.sourceDocumentId };
+    case "unkeyable":
+      return { type: "unidentifiable" };
+    default:
+      identity satisfies never;
+      return panic(`Unhandled SK ÚS identity: ${String(identity)}`);
+  }
 };
+
+/**
+ * A quarantined row is complete as its search row: the text, the file and
+ * the docket documents are all addressed by the document id it lacks.
+ */
+const skUsHeldWithoutDetail = (identity: ListingIdentity): boolean =>
+  identity.type === "document" && isSkUsQuarantineId(identity.sourceDocumentId);
 
 export type SkUsListingFetchOutcome =
   | { type: "listing"; listing: string }
@@ -1110,7 +1225,10 @@ export const fetchSkUsListing = async ({
  */
 export type SkUsBuildResult =
   | { type: "built"; decision: IngestionResult }
-  /** No docket or no document id to key on; nothing can store this item. */
+  /**
+   * A usable document id without a docket, or neither a document id nor a
+   * docket or registry number; nothing can store this item.
+   */
   | { type: "unkeyable" }
   /** The court served no document for the id the listing states. */
   | { type: "detail-unavailable"; decision: IngestionResult }
@@ -1220,12 +1338,17 @@ const skUsRapporteurs = (doc: SearchDocument): string[] =>
  */
 const NO_LEGAL_SENTENCE = "- bez právnej vety -";
 
+const trimmedSkUsText = (value: unknown): string | undefined =>
+  typeof value === "string" ? value.trim() : undefined;
+
 const skUsTextFields = (
   doc: SearchDocument,
 ): RawIngestionResult["textFields"] => {
   const absent = absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED);
-  const headnote = doc.mkClauseTitle?.trim();
-  const legalSentence = doc.mkClauseText?.trim();
+  // The DMS changes field types without notice, and only a string states a
+  // text: a value of another type reads as absent instead of failing the row.
+  const headnote = trimmedSkUsText(doc.mkClauseTitle);
+  const legalSentence = trimmedSkUsText(doc.mkClauseText);
   const fields = {
     ...absent,
     ...(headnote === undefined || headnote.length === 0
@@ -1590,7 +1713,7 @@ const assembleSkUsDecision = ({
   const decisionDate = parseApiDate(doc.mkDateOfDecision);
   const decisionType = doc.mkFormOfDecision ?? undefined;
   const ecli = doc.mkECLI ?? undefined;
-  const court = "Ústavný súd SR";
+  const court = SK_US_COURT;
   const documentUrl = `${DOC_DOWNLOAD_URL}/${documentId}`;
   const collection = skUsCollectionMatch({ doc, collectionJson, facetsJson });
   const rapporteurs = skUsRapporteurs(doc);
@@ -1657,9 +1780,16 @@ const assembleSkUsDecision = ({
           },
         };
 
+  const quarantineId = skUsQuarantineId(doc);
   const decision: IngestionResult = plainTextIngestionResult({
     caseNumber,
     sourceDocumentId: documentId,
+    // The row a listing of this record without its document id was stored
+    // under, which this keyed observation takes over instead of inserting a
+    // second row beside it.
+    ...(quarantineId === undefined
+      ? {}
+      : { sourceDocumentIdRepairAliases: [quarantineId] }),
     // What every row this adapter wrote before it stated an id was stored
     // under: one row per docket, carrying the download URL of whichever of the
     // docket's documents was written last. The URL names one document exactly,
@@ -1705,6 +1835,50 @@ const assembleSkUsDecision = ({
 };
 
 /**
+ * The listing-only row of a search row stated without a usable document id:
+ * its verbatim search row as the raw, the labels and legal sentences that row
+ * states, and no further request.
+ */
+const quarantinedSkUsDecision = (
+  doc: SearchDocument,
+  sourceDocumentId: string,
+): IngestionResult => {
+  const docket = statedSkUsString(doc.mkRSAPNumberOfFile);
+  const sourceRaw = encodeSourceRawEnvelope({ listing: JSON.stringify(doc) });
+  return plainTextIngestionResult({
+    // A row stating only its registry number is labelled by its own identity,
+    // marked a placeholder so no citation is ever matched against it.
+    caseNumber: docket ?? sourceDocumentId,
+    ...(docket === undefined ? { caseNumberIsPlaceholder: true } : {}),
+    isListingOnly: true,
+    sourceDocumentId,
+    ecli: statedSkUsString(doc.mkECLI),
+    court: SK_US_COURT,
+    country: ADAPTER_MANIFESTS[ADAPTER_KEYS.SK_US].country,
+    language: SK_US_LANGUAGE,
+    decisionDate: parseApiDate(statedSkUsString(doc.mkDateOfDecision)),
+    decisionType: statedSkUsString(doc.mkFormOfDecision),
+    textFields: skUsTextFields(doc),
+    metadata: checkedDecisionMetadata({
+      ...skUsMetadata({
+        doc,
+        facetsJson: undefined,
+        header: undefined,
+        collection: { status: "unresolved", reason: "unavailable" },
+      }),
+      identityQuarantined: true,
+      listedOnly: true,
+      listedOnlyReason: SK_US_QUARANTINE_REASON,
+    }),
+    rawHash: sourceFingerprint({ sourceRaw }),
+    parserVersion: PARSER_VERSIONS[ADAPTER_KEYS.SK_US],
+    documentAst: EMPTY_AST,
+    sourceRaw,
+    sourceRawContentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+  });
+};
+
+/**
  * Build one decision from a search-listing item, fetching every other
  * response the service serves for it. Shared by the crawl and the
  * reconciliation walk so neither can key, parse or enrich an item
@@ -1719,11 +1893,29 @@ export const buildSkUsDecision = async (
   doc: SearchDocument,
   { context, signal }: BuildSkUsDecisionOptions = {},
 ): Promise<SkUsBuildResult> => {
-  const fields = skUsIdentityFields(doc);
-  if (fields === null) {
-    return { type: "unkeyable" };
+  const identity = skUsRecordIdentity(doc);
+  switch (identity.type) {
+    case "document":
+      break;
+    // Complete as its search row, so it is `built`: `detail-unavailable`
+    // would have the reconciliation refuse a row no later read can complete.
+    case "quarantined":
+      logger.warn("case_law.ingestion.record_quarantined", {
+        adapterKey: ADAPTER_KEYS.SK_US,
+        sourceDocumentId: identity.sourceDocumentId,
+        reason: SK_US_QUARANTINE_REASON,
+      });
+      return {
+        type: "built",
+        decision: quarantinedSkUsDecision(doc, identity.sourceDocumentId),
+      };
+    case "unkeyable":
+      return { type: "unkeyable" };
+    default:
+      identity satisfies never;
+      return panic(`Unhandled SK ÚS identity: ${String(identity)}`);
   }
-  const { caseNumber, documentId } = fields;
+  const { caseNumber, documentId } = identity;
   const page = context ?? createSkUsPageContext();
 
   const decisionDate = parseApiDate(doc.mkDateOfDecision);
@@ -2305,24 +2497,22 @@ const listSkUsSlicePage = async ({
       }
     }),
     totalPages: Math.ceil(numFound / LISTING_PAGE_SIZE),
+    publisherCount: numFound,
   };
 };
 
 /**
  * Validate a payload the loop stored verbatim well enough to key it.
  *
- * Deliberately as lenient as {@link isSearchResponse}, and for the same
- * reason: the DMS adds fields and changes their types without notice, and all
- * of it lands in JSONB. Only the two fields the identity is made of are
- * checked, so a parked payload that no longer states them is reported rather
- * than parsed on faith.
+ * Exactly as lenient as {@link isSearchResponse}, and for the same reason:
+ * the DMS adds fields and changes their types without notice, and all of it
+ * lands in JSONB. The identity is read type-checked by
+ * {@link skUsRecordIdentity}, so a parked payload whose document id is null or
+ * changed type is keyed the way the crawl keys the same row, quarantined,
+ * rather than refused here; one that states no identity is still unkeyable.
  */
 const isSearchDocument = (value: unknown): value is SearchDocument =>
-  isRecord(value) &&
-  (value["documentId"] === undefined ||
-    typeof value["documentId"] === "string") &&
-  (value["mkRSAPNumberOfFile"] === undefined ||
-    typeof value["mkRSAPNumberOfFile"] === "string");
+  isRecord(value);
 
 const buildSkUsFromPayload = async (
   payload: unknown,
@@ -2821,8 +3011,24 @@ const reparseStoredRaw = async (
     };
   }
 
-  const fields = skUsIdentityFields(listing);
-  if (fields === null) {
+  const fields = skUsRecordIdentity(listing);
+  // Rebuilt from its search row alone, which is all it was built from; only
+  // for a row stored under that identity, since replay never moves a row.
+  if (fields.type === "quarantined") {
+    const quarantined = quarantinedSkUsDecision(
+      listing,
+      fields.sourceDocumentId,
+    );
+    return stored.sourceDocumentId === fields.sourceDocumentId &&
+      quarantined.caseNumber === stored.caseNumber
+      ? { type: "parsed", result: quarantined }
+      : {
+          type: "rejected",
+          rejection: STORED_RAW_REPARSE_REJECTION.IDENTITY_MISMATCH,
+          detail: `stored payload states ${quarantined.caseNumber}`,
+        };
+  }
+  if (fields.type === "unkeyable") {
     return {
       type: "rejected",
       rejection: STORED_RAW_REPARSE_REJECTION.INCOMPLETE_METADATA,
@@ -2873,6 +3079,55 @@ const reparseStoredRaw = async (
       }),
     },
   };
+};
+
+// ── Locating a stored row in the listing ─────────────────
+
+const DECISION_MONTH = /^(\d{4}-\d{2})-\d{2}$/u;
+
+/**
+ * The month the search lists a stored row under: the listing is ranged by the
+ * decision date, which every row this adapter wrote states.
+ */
+const skUsLookupOf = (stored: StoredRawReparseInput): string | null =>
+  stored.decisionDate === null
+    ? null
+    : (DECISION_MONTH.exec(stored.decisionDate)?.[1] ?? null);
+
+/**
+ * The publisher's document id a stored row is keyed by: the id it holds, or
+ * for a row written before it held one, the id its `docDownload/{id}` URL
+ * names (the same rule `legacySourceUrls` re-keys such rows by). A row whose
+ * ids disagree names no single document, so it is keyed by none.
+ */
+const storedSkUsDocumentId = (
+  stored: StoredRawReparseInput,
+): string | undefined => {
+  const prefix = `${DOC_DOWNLOAD_URL}/`;
+  const named = [stored.documentUrl, stored.sourceUrl]
+    .filter((candidate) => candidate?.startsWith(prefix) === true)
+    .map((url) => url?.slice(prefix.length) ?? "")
+    .filter((id) => id.length > 0 && !id.includes("/"));
+  const ids = new Set(
+    stored.sourceDocumentId === null
+      ? named
+      : [stored.sourceDocumentId, ...named],
+  );
+  const [only] = ids;
+  return ids.size === 1 ? only : undefined;
+};
+
+/** A listed item is the stored row when it states the row's document id. */
+const skUsMatchesStored = (
+  { identity }: ReconciliationListingItem,
+  stored: StoredRawReparseInput,
+): boolean => {
+  const held = storedSkUsDocumentId(stored);
+  return (
+    held !== undefined &&
+    identity.type === "document" &&
+    identity.sourceDocumentId === held
+  );
 };
 
 // ── Adapter ──────────────────────────────────────────────
@@ -2999,6 +3254,28 @@ export const skUsAdapter = defineSourceAdapter({
    * answerable without the crawl cursor ever reaching it: list the month, key
    * each item the way the ingest would, and compare against what is held.
    */
+  buildStoredDocument: async ({ stored, signal }) => {
+    const parts = skUsStoredRawParts(
+      new TextDecoder().decode(stored.raw),
+      stored.contentType,
+    );
+    const rawListing = parts?.["listing"];
+    const parsed =
+      rawListing === undefined
+        ? undefined
+        : Result.try({
+            try: (): unknown => JSON.parse(rawListing),
+            catch: () => null,
+          }).unwrapOr(null);
+    if (!isRecord(parsed) || parsed["documentId"] !== stored.sourceDocumentId) {
+      return {
+        type: "incomplete-locator",
+        detail:
+          "Stored payload does not retain this complete DMS listing document",
+      };
+    }
+    return await buildSkUsFromPayload(parsed, signal);
+  },
   reconciliation: {
     // Publisher identity and content fields exclude listing position, query decoration, and repair aliases.
     revisionOf: (payload) =>
@@ -3065,6 +3342,9 @@ export const skUsAdapter = defineSourceAdapter({
     // by one rather than through a representative, and a sibling whose PDF
     // failed no longer hides behind one that succeeded.
     heldRequiresDetail: true,
+    // Except a quarantined row: it holds everything its search row states,
+    // and nothing it lacks can be read without the document id.
+    heldWithoutDetail: skUsHeldWithoutDetail,
     // A row built without a part the service refused (the vocabularies, the
     // facets, the collection entry or the docket file) holds its document and
     // counts as held; it is read again on each walk of its month until a
@@ -3072,6 +3352,14 @@ export const skUsAdapter = defineSourceAdapter({
     recheckHeld: {
       metadataKey: SK_US_PART_READ_METADATA_KEY,
       values: [SK_US_PART_READ_STATE.WITHHELD],
+    },
+    // A row stored as the document file alone holds no search row and no
+    // rendition this adapter reads text from, so it is located in its month
+    // and re-observed rather than upgraded from the bytes it holds.
+    recapture: {
+      lookupOf: skUsLookupOf,
+      listLookup: listSkUsSlicePage,
+      matchesStored: skUsMatchesStored,
     },
     listSlicePage: listSkUsSlicePage,
     buildDecision: buildSkUsFromPayload,

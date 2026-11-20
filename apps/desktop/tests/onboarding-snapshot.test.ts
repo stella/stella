@@ -9,6 +9,8 @@ import {
 const nativeSnapshot = (trayLocation: unknown): unknown => ({
   activityAvailable: false,
   activityPermissions: [],
+  dictationAvailable: false,
+  dictationPermissions: [],
   documentApp: null,
   linked: false,
   mode: { type: "tour" },

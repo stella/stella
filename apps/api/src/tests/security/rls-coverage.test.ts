@@ -219,6 +219,7 @@ const isInvoiceAccessPredicate = (expression: string | null): boolean =>
 const INVOICE_CHILD_TABLES: ReadonlySet<string> = new Set([
   "invoice_lines",
   "invoice_payments",
+  "invoice_sends",
 ]);
 
 const isCompleteInvoiceFence = (policy: RestrictivePolicy): boolean =>
@@ -503,6 +504,10 @@ describe("policy coverage", () => {
 
   // Tables exempt from RLS
   const EXEMPT = new Set([
+    // Skill original erasure queue: owner-only forced RLS with a deny-all
+    // request-role policy; an owner-run trigger writes it and the scheduler
+    // drains it, so tenant CRUD policies do not apply.
+    "agent_skill_original_cleanup_requests",
     "invitation", // auth table, no RLS
     "member", // auth table, no RLS
     // The anonymization catalog tables carry a nullable workspace_id
@@ -558,13 +563,14 @@ describe("policy coverage", () => {
     // on the owner connection and deny the request role entirely
     // (asserted in rls-table-grants.test.ts).
     "organization_professional_use_acceptances",
-    // Desktop runner sockets and runs are served on the owner connection:
-    // every row is bound to an account, organization, installation and device
-    // key the socket proved, and the request role is denied outright
-    // (owner-only policies, privileges revoked; asserted in
+    // Desktop runner sockets, runs and folder restores are served on the
+    // owner connection: every row is bound to an account, organization,
+    // installation and device key the socket proved, and the request role is
+    // denied outright (owner-only policies, privileges revoked; asserted in
     // rls-table-grants.test.ts).
     "desktop_runners",
     "desktop_runner_runs",
+    "desktop_runner_folder_restores",
     // Account-owned creation receipts exist before membership; organization_id
     // is a cascade pointer. Owner-only RLS and revoked request-role grants are
     // asserted in rls-table-grants.test.ts instead of tenant CRUD policies.
@@ -605,6 +611,17 @@ describe("policy coverage", () => {
     // workspace policies would hide exactly the rows the check exists to
     // find. Organization is the real boundary and the org policies pin it.
     "document_reference_counters",
+    // An invoice's email sends are visible exactly when their invoice is: a
+    // restrictive policy reads invoices under their own row security, and the
+    // rows leave only with the invoice, so the app role has no DELETE.
+    // invoice-links.integration.test.ts asserts that boundary.
+    "invoice_sends",
+    // A legal hold is an organization record: an item hold carries no
+    // workspace_id, so workspace policies would hide it from the deletion
+    // checks that must see it. The request role places and releases holds but
+    // never deletes one (no DELETE grant or policy); the dedicated assertion
+    // below covers that boundary.
+    "legal_holds",
   ]);
   const APPEND_ONLY = new Set([
     "audit_logs",
@@ -1061,6 +1078,33 @@ describe("policy coverage", () => {
     }
   });
 
+  test("outbound actions inherit thread scope and permit select, insert and update", async () => {
+    const policies = (await fetchStellaPolicies(testDb)).filter(
+      (policy) => policy.table_name === "outbound_actions",
+    );
+    expect(policies).toHaveLength(4);
+    for (const policy of policies) {
+      if (policy.command === "d") {
+        expect(policy.permissive).toBe(false);
+        expect(policy.using_expr).toBe("false");
+        continue;
+      }
+      const expression =
+        policy.command === "a" ? policy.check_expr : policy.using_expr;
+      expect(expression).toContain("chat_threads");
+      expect(expression).toContain("data_workspace_ids");
+      expect(expression).toContain(SETTING_USER_ID);
+      expect(expression).toContain(SETTING_ORGANIZATION_ID);
+      expect(expression).toContain(WORKSPACE_ACCESS_VIEW_NAME);
+    }
+    expect(
+      privilegesForTable(
+        await fetchStellaTablePrivileges(testDb),
+        "outbound_actions",
+      ),
+    ).toEqual(["INSERT", "SELECT", "UPDATE"]);
+  });
+
   test("daily targets require the active organization and owner or organization management", async () => {
     const policies = (await fetchStellaPolicies(testDb)).filter(
       (policy) => policy.table_name === "time_daily_targets",
@@ -1074,6 +1118,31 @@ describe("policy coverage", () => {
       expect(expression).toContain("owner");
       expect(expression).toContain("admin");
     }
+  });
+
+  test("legal holds pin the organization and the request role never deletes one", async () => {
+    const policies = (await fetchStellaPolicies(testDb)).filter(
+      (policy) =>
+        policy.table_name === "legal_holds" &&
+        policy.policy_name !== "legal_holds_owner_access",
+    );
+    expect(policies.map(({ command }) => command).toSorted()).toEqual([
+      "a",
+      "r",
+      "w",
+    ]);
+    for (const policy of policies) {
+      const expr =
+        policy.command === "a" ? policy.check_expr : policy.using_expr;
+      expect(expr).toContain("organization_id");
+      expect(expr).toContain(SETTING_ORGANIZATION_ID);
+    }
+    expect(
+      privilegesForTable(
+        await fetchStellaTablePrivileges(testDb),
+        "legal_holds",
+      ),
+    ).not.toContain("DELETE");
   });
 
   test("chat tables have user + optional workspace policies", async () => {

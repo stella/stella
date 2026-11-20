@@ -638,7 +638,7 @@ export const ecjKeywordSpacingNeedsVerbatim = (html: string): boolean => {
 
 // ── Block building ─────────────────────────────────────────
 
-type Zone = "header" | "body" | "operative" | "footnotes";
+type Zone = "header" | "body" | "operative" | "footnotes" | "contents";
 
 /**
  * Which of the publisher's two markups the document is in.
@@ -725,6 +725,11 @@ const roleOf = (zone: Zone, signature = false): { role?: ParagraphRole } => {
   }
   if (zone === "operative") {
     return { role: "holding" };
+  }
+  if (zone === "contents") {
+    // The converter's table of contents, appended after the signatures:
+    // publisher navigation printed after the decision, never head matter.
+    return { role: "publisher-note" };
   }
   return {};
 };
@@ -908,6 +913,23 @@ const foldTitleLine = (
   return true;
 };
 
+/** A table-of-contents entry, `coj-NTOC2`, `coj-NTOC3`, …, at any depth. */
+const CONTENTS_ENTRY_CLASS = /^NTOC\d+$/u;
+
+/** A table whose every paragraph is a contents entry. */
+const isContentsTable = (
+  $: cheerio.CheerioAPI,
+  $el: cheerio.Cheerio<AnyNode>,
+): boolean => {
+  const paragraphs = $el.find("p").toArray();
+  return (
+    paragraphs.length > 0 &&
+    paragraphs.every((paragraph) =>
+      classListOf($(paragraph)).some((name) => CONTENTS_ENTRY_CLASS.test(name)),
+    )
+  );
+};
+
 type VisitChildOptions = {
   $: cheerio.CheerioAPI;
   builder: BlockBuilder;
@@ -939,6 +961,18 @@ const visitChild = ({
   const sectionZone = node === undefined ? undefined : sectionAnchorZone(node);
   if (sectionZone !== undefined) {
     builder.zone = sectionZone;
+    return;
+  }
+
+  if (tag === "table" && isContentsTable($, $el)) {
+    // The table of contents the converter appends after the signatures
+    // lists the headings above; it neither opens nor continues the
+    // operative part, so the zone it interrupts resumes after it.
+    const resumed = builder.zone;
+    builder.zone = "contents";
+    visitTable($, builder, $el);
+    builder.zone = resumed;
+    builder.inTitleRun = false;
     return;
   }
 

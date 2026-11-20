@@ -9,6 +9,7 @@ export type FileTab = {
   fileName: string;
   mimeType?: string | undefined;
   pdfFileId: string | null;
+  encrypted?: boolean | undefined;
   workspaceId: string;
   justificationFieldId?: string | undefined;
   propertyId?: string | undefined;

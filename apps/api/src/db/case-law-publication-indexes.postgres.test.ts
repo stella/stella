@@ -34,23 +34,12 @@ describe.skipIf(!enabled)(
         const { db } = openClient({ max: 1 });
         await db.execute(sql`CREATE SCHEMA ${schema}`);
         try {
+          // The real table's columns and types, so an index expression reads
+          // its columns as production does (a varchar key gains a text cast
+          // inside a text function; a text fixture column would not).
           await db.execute(sql`
-            CREATE TABLE ${schema}.publication_index_fixture (
-              id uuid NOT NULL,
-              country text NOT NULL,
-              court text NOT NULL,
-              decision_date date,
-              citation_key text,
-              source_id uuid NOT NULL,
-              created_at timestamptz NOT NULL,
-              updated_at timestamptz NOT NULL,
-              decision_type text,
-              language text NOT NULL,
-              citation_authority double precision NOT NULL,
-              language_group_key text,
-              redacted_at timestamptz,
-              metadata jsonb NOT NULL
-            )
+            CREATE TABLE ${schema}.publication_index_fixture
+              (LIKE public.case_law_decisions)
           `);
 
           for (const definition of definitions) {

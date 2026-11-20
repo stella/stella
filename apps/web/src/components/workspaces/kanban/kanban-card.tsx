@@ -10,6 +10,7 @@ import {
   registerKanbanCardDrag,
   selectKanbanCardFieldIds,
 } from "@stll/ui/kanban";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import { withDragAnnouncementData } from "@/components/drag-and-drop-live-region.logic";
@@ -33,6 +34,10 @@ import {
   getKanbanCardRenameInitialValue,
   toKanbanCardDragItem,
 } from "@/components/workspaces/kanban/kanban-card.logic";
+import {
+  KANBAN_CARD_CONTENT_CLASS,
+  KANBAN_CARD_NAME_ROW_CLASS,
+} from "@/components/workspaces/kanban/kanban-card.pending";
 import { useIsKanbanCardSelected } from "@/components/workspaces/kanban/kanban-selection";
 import type { KanbanSelection } from "@/components/workspaces/kanban/kanban-selection";
 import { buildKanbanCardDragData } from "@/components/workspaces/kanban/kanban-selection.logic";
@@ -220,9 +225,7 @@ export const KanbanCard = ({
         value={rename.state.draft}
       />
     ) : (
-      <span className="overflow-hidden text-ellipsis whitespace-pre">
-        {name}
-      </span>
+      <TruncatedText className="whitespace-pre">{name}</TruncatedText>
     );
 
   const isTask = entity.kind === "task";
@@ -258,8 +261,8 @@ export const KanbanCard = ({
   const showFooter = showAuthor || showUpdatedAt || showVersion;
 
   const content = (
-    <div className="flex flex-col gap-2 pe-5">
-      <span className="flex min-w-0 items-center gap-1.5 text-sm leading-snug font-medium">
+    <div className={KANBAN_CARD_CONTENT_CLASS}>
+      <span className={KANBAN_CARD_NAME_ROW_CLASS}>
         {icon}
         {nameElement}
         {entity.activeEditBy && (
@@ -462,7 +465,7 @@ const KanbanEntityMetadataBadges = ({
               )}
             />
           )}
-          <span className="truncate">{statusLabel}</span>
+          <TruncatedText>{statusLabel}</TruncatedText>
         </span>
       )}
       {priority && priority !== "none" && (
@@ -475,13 +478,13 @@ const KanbanEntityMetadataBadges = ({
               )}
             />
           )}
-          <span className="truncate">{priorityLabel}</span>
+          <TruncatedText>{priorityLabel}</TruncatedText>
         </span>
       )}
       {dueDate && (
         <span className="bg-muted/60 flex max-w-full min-w-0 items-center gap-1 rounded-sm px-1.5 py-0.5">
           <CalendarIcon className="size-3 shrink-0" />
-          <span className="truncate">
+          <TruncatedText>
             {format.dateTime(
               Temporal.PlainDate.from(dueDate).toZonedDateTime({
                 plainTime: Temporal.PlainTime.from("00:00"),
@@ -494,7 +497,7 @@ const KanbanEntityMetadataBadges = ({
                 timeZone: "UTC",
               },
             )}
-          </span>
+          </TruncatedText>
         </span>
       )}
     </div>

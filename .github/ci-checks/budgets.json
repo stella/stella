@@ -98,6 +98,11 @@
       "p99Seconds": 1,
       "peakRssMiB": 71
     },
+    "Workspace test gating ledger": {
+      "minutes": 30,
+      "samples": 0,
+      "peakRssMiB": 4096
+    },
     "Sparse checkout script dependencies": {
       "minutes": 5,
       "samples": 17,
@@ -111,6 +116,13 @@
       "p95Seconds": 51,
       "p99Seconds": 51,
       "peakRssMiB": 6569
+    },
+    "Startup bundle ledger": {
+      "minutes": 5,
+      "samples": 0,
+      "p95Seconds": 0,
+      "p99Seconds": 0,
+      "peakRssMiB": 4096
     },
     "Custom lint rule coverage": {
       "minutes": 13,
@@ -201,6 +213,11 @@
       "p99Seconds": 142,
       "peakRssMiB": 2453
     },
+    "Test CLI contract changeset guard over derived catalogs": {
+      "minutes": 30,
+      "samples": 0,
+      "peakRssMiB": 4096
+    },
     "Generated files manifest guard": {
       "minutes": 49,
       "samples": 19,
@@ -237,7 +254,7 @@
       "peakRssMiB": 127
     },
     "Test CLI runtime package parity": {
-      "minutes": 5,
+      "minutes": 10,
       "samples": 19,
       "p95Seconds": 35,
       "p99Seconds": 35,
@@ -335,18 +352,23 @@
       "peakRssMiB": 47
     },
     "Release CLI coupling guard": {
-      "minutes": 5,
+      "minutes": 10,
       "samples": 19,
       "p95Seconds": 0,
       "p99Seconds": 0,
       "peakRssMiB": 48
     },
     "CLI contract changeset guard": {
-      "minutes": 5,
+      "minutes": 10,
       "samples": 19,
       "p95Seconds": 0,
       "p99Seconds": 0,
       "peakRssMiB": 47
+    },
+    "MCP released surface compatibility": {
+      "minutes": 15,
+      "samples": 0,
+      "peakRssMiB": 4096
     },
     "SQL performance suppression summary": {
       "minutes": 5,
@@ -640,6 +662,11 @@
       "p99Seconds": 1,
       "peakRssMiB": 48
     },
+    "Capability file-transport ledger": {
+      "minutes": 30,
+      "samples": 0,
+      "peakRssMiB": 4096
+    },
     "MCP coverage guard": {
       "minutes": 5,
       "samples": 18,
@@ -695,6 +722,11 @@
       "p95Seconds": 0,
       "p99Seconds": 0,
       "peakRssMiB": 61
+    },
+    "Patched dependencies apply": {
+      "minutes": 5,
+      "samples": 0,
+      "peakRssMiB": 128
     },
     "Test release-channel script": {
       "minutes": 5,
@@ -1102,6 +1134,13 @@
       "p99Seconds": 0,
       "peakRssMiB": 58
     },
+    "Check grant release order against the production release": {
+      "minutes": 5,
+      "samples": 0,
+      "p95Seconds": 0,
+      "p99Seconds": 0,
+      "peakRssMiB": 512
+    },
     "Test dead-columns reference matching": {
       "minutes": 5,
       "samples": 18,
@@ -1144,6 +1183,13 @@
       "p99Seconds": 0,
       "peakRssMiB": 50
     },
+    "Tailwind sources cover class-shipping dependencies": {
+      "minutes": 5,
+      "samples": 0,
+      "p95Seconds": 3,
+      "p99Seconds": 3,
+      "peakRssMiB": 84
+    },
     "Test staging proof readiness": {
       "minutes": 30,
       "samples": 0,
@@ -1152,6 +1198,13 @@
     "Test depth repository scripts": {
       "minutes": 30,
       "samples": 0,
+      "peakRssMiB": 4096
+    },
+    "Action commit pins": {
+      "minutes": 5,
+      "samples": 0,
+      "p95Seconds": 0,
+      "p99Seconds": 0,
       "peakRssMiB": 4096
     }
   },

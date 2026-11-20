@@ -10,6 +10,7 @@ import type { SafeDb } from "@/api/db/safe-db";
 import { BUFFER_OBJECT_CLEANUP_INTENT_STATUS } from "@/api/db/schema";
 import { toSafeId } from "@/api/lib/branded-types";
 import { OrganizationFileUsageError } from "@/api/lib/files/organization-file-usage";
+import { isRecord } from "@/api/lib/type-guards";
 import { aggregateExecutionRows } from "@/api/tests/fixtures/aggregate-lock-order";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
@@ -26,6 +27,7 @@ const {
   reconcileBufferObjectCleanupIntents,
   reconcileStaleBufferIntentsGlobally,
   releaseObjectCleanupIntentsForLifecycle,
+  reserveObjectCleanupIntentsForKey,
   reserveObjectCleanupIntents,
   settleObjectCleanupIntentsAfterWriterInTransaction,
 } = await import("@/api/lib/buffer-intent-reconciliation");
@@ -105,13 +107,25 @@ beforeEach(() => {
 /** Advisory lock statements return the physical key the lock owner checks. */
 const advisoryLockRows = (statement: SQL) => {
   const query = new PgDialect().sqlToQuery(statement);
-  if (query.sql.includes("AS key1")) {
+  // The previous build's one-key fence, still taken during a rolling deploy:
+  // it rides in the registered lock's statement, evaluated after that lock.
+  if (query.params.includes(`buffer-object:${organizationId}`)) {
+    const legacy =
+      /(pg_advisory_xact_lock(?:_shared)?)\(hashtext\(\$\d+\)\) AS alongside/u.exec(
+        query.sql,
+      );
+    const afterRegistered =
+      query.sql.includes("AS key1") &&
+      query.sql.indexOf("AS acquired") < query.sql.indexOf("AS alongside");
+    legacyFenceLocks.push(
+      legacy?.[1] !== undefined && afterRegistered
+        ? `${legacy[1]} after the registered lock`
+        : query.sql,
+    );
     return aggregateExecutionRows(statement);
   }
-  // The previous build's one-key fence, still taken during a rolling deploy.
-  if (query.params.includes(`buffer-object:${organizationId}`)) {
-    legacyFenceLocks.push(query.sql);
-    return [];
+  if (query.sql.includes("AS key1")) {
+    return aggregateExecutionRows(statement);
   }
   return null;
 };
@@ -210,7 +224,7 @@ test("reserves multi-workspace ownership under one ordered lock", async () => {
       }),
   );
 
-  const result = await reserveObjectCleanupIntents({
+  const result = await reserveObjectCleanupIntentsForKey({
     objectKey: `${organizationId}/shared-object`,
     organizationId,
     safeDb,
@@ -224,13 +238,105 @@ test("reserves multi-workspace ownership under one ordered lock", async () => {
   // one ordered read.
   expect(lockQueries).toBe(0);
   expect(legacyFenceLocks).toEqual([
-    "SELECT pg_advisory_xact_lock_shared(hashtext($1))",
+    "pg_advisory_xact_lock_shared after the registered lock",
   ]);
   expect(matterLocks).toEqual(["share"]);
   expect(insertedRows).toEqual([
     expect.objectContaining({ workspaceId }),
     expect.objectContaining({ workspaceId: otherWorkspaceId }),
   ]);
+});
+
+test("reserves several objects in one transaction, each under every owner", async () => {
+  let transactions = 0;
+  let advisoryLocks = 0;
+  let workspaceReads = 0;
+  const inserts: unknown[][] = [];
+  const tx = asTestRaw<Transaction>({
+    execute: async (statement: SQL) => {
+      const advisory = advisoryLockRows(statement);
+      if (advisory === null) {
+        throw new Error("Unexpected statement while reserving intents");
+      }
+      advisoryLocks += 1;
+      return advisory;
+    },
+    insert: () => ({
+      values: async (rows: unknown[]) => {
+        inserts.push(rows);
+      },
+    }),
+    select: () => ({
+      from: () => ({
+        where: () => ({
+          orderBy: () => ({
+            limit: () => ({
+              for: async () => {
+                workspaceReads += 1;
+                return [
+                  { id: workspaceId, status: "active" },
+                  { id: otherWorkspaceId, status: "active" },
+                ];
+              },
+            }),
+          }),
+        }),
+      }),
+    }),
+  });
+  const safeDb = asTestRaw<SafeDb>(
+    async <T>(run: (transaction: Transaction) => Promise<T>) => {
+      transactions += 1;
+      return await Result.tryPromise({
+        try: async () => await run(tx),
+        catch: (cause) => cause,
+      });
+    },
+  );
+  const file = `${organizationId}/scan.png`;
+  const thumbnail = `${organizationId}/scan.thumbnail.webp`;
+
+  const result = await reserveObjectCleanupIntents({
+    objectKeys: [file, thumbnail],
+    organizationId,
+    safeDb,
+    workspaceIds: [otherWorkspaceId, workspaceId],
+  });
+
+  if (Result.isError(result)) {
+    throw result.error;
+  }
+  // One transaction, one organization fence statement (the registered lock
+  // and the previous build's key), one check and one insert for both objects.
+  expect({ transactions, advisoryLocks, workspaceReads }).toEqual({
+    transactions: 1,
+    advisoryLocks: 1,
+    workspaceReads: 1,
+  });
+  expect(legacyFenceLocks).toEqual([
+    "pg_advisory_xact_lock_shared after the registered lock",
+  ]);
+  expect(inserts).toHaveLength(1);
+  const rows = inserts[0] ?? [];
+  expect(rows).toEqual([
+    expect.objectContaining({ objectKey: file, workspaceId }),
+    expect.objectContaining({ objectKey: file, workspaceId: otherWorkspaceId }),
+    expect.objectContaining({ objectKey: thumbnail, workspaceId }),
+    expect.objectContaining({
+      objectKey: thumbnail,
+      workspaceId: otherWorkspaceId,
+    }),
+  ]);
+  // Each key answers exactly the intents inserted for it.
+  const idsOf = (objectKey: string) =>
+    rows.flatMap((row) =>
+      isRecord(row) && row["objectKey"] === objectKey ? [row["id"]] : [],
+    );
+  for (const objectKey of [file, thumbnail]) {
+    expect(result.value.get(objectKey)?.map(String)).toEqual(
+      idsOf(objectKey).map(String),
+    );
+  }
 });
 
 test("reserves organization-scoped ownership without inventing a matter", async () => {
@@ -259,7 +365,7 @@ test("reserves organization-scoped ownership without inventing a matter", async 
       }),
   );
 
-  const result = await reserveObjectCleanupIntents({
+  const result = await reserveObjectCleanupIntentsForKey({
     objectKey: "user-id/global-chat-file",
     organizationId,
     safeDb,
@@ -311,7 +417,7 @@ test("reserves chat ownership for archived scope while deletion stays fenced", a
       }),
   );
 
-  const result = await reserveObjectCleanupIntents({
+  const result = await reserveObjectCleanupIntentsForKey({
     objectKey: "user-id/archived-chat-file",
     organizationId,
     safeDb,

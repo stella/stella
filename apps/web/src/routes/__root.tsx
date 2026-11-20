@@ -16,25 +16,36 @@ import {
 } from "@tanstack/react-router";
 import { panic } from "better-result";
 
+import { cn } from "@stll/ui/utils";
+
 import { AppProviders } from "@/app-providers";
 import { ApiVersionMismatchProvider } from "@/components/api-version-mismatch-refresh";
 import {
   DefaultErrorComponent,
   DefaultNotFoundComponent,
-  DefaultPendingComponent,
 } from "@/components/route-components";
 import { RouteProviderScopeBoundary } from "@/components/route-provider-scope/route-provider-scope";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
-import { getLangDir, useI18nStore } from "@/i18n/i18n-store";
+import { ClientDocumentPresentationBoot } from "@/i18n/client-document-presentation-boot";
+import { loadDocumentPresentation } from "@/i18n/document-presentation";
+import {
+  getLangDir,
+  RenderedI18nStoreProvider,
+  useI18nStore,
+} from "@/i18n/i18n-store";
+import "@/fonts.css";
 import {
   applyDocumentLanguage,
   pageDocumentLanguage,
   resolveDocumentLanguage,
 } from "@/i18n/page-language";
 import { loadMcpHandoff, pendingHandoffPath } from "@/lib/account/mcp-handoff";
+import type { PresentationPrefs } from "@/lib/account/presentation-prefs/preferences";
+import {
+  getBrowserPresentationPrefs,
+  PresentationPrefsProvider,
+} from "@/lib/account/presentation-prefs/provider";
 import type { AnalyticsValue } from "@/lib/analytics/provider";
-import "@/fonts.css";
-import { readSidebarStateAttribute } from "@/components/sidebar/sidebar-state";
 import type { RouteErrorLifecycleController } from "@/lib/analytics/route-error-lifecycle";
 import { RouteErrorLifecycleProvider } from "@/lib/analytics/route-error-lifecycle-context";
 import { detached } from "@/lib/detached";
@@ -53,6 +64,7 @@ import { AppFrameHost } from "@/routes/-app-frame-host";
 import { APP_FRAME_SCOPE } from "@/routes/-app-frame-scope";
 import { requireProfessionalUseForSignedInRoute } from "@/routes/-auth-context";
 import { createRootHead } from "@/routes/-root-head";
+import { RootPendingComponent } from "@/routes/-root-pending";
 import "@/styles/app.css";
 import "@/styles/print.css";
 
@@ -64,6 +76,7 @@ const DevRoot = isDev
 export const Route = createRootRouteWithContext<{
   analyticsValue: AnalyticsValue;
   queryClient: QueryClient;
+  presentationPrefs: PresentationPrefs;
   routeErrorLifecycle: RouteErrorLifecycleController;
 }>()({
   staticData: { appFrame: APP_FRAME_SCOPE.none },
@@ -78,16 +91,21 @@ export const Route = createRootRouteWithContext<{
     // Public SSR has no browser session. Caching its anonymous response would
     // keep signed-in member actions hidden after hydration.
     if (import.meta.env.SSR) {
-      return;
+      return {
+        presentationPrefs: await loadDocumentPresentation(context.queryClient),
+      };
     }
     // Development fixtures supply their own auth providers without an API.
     if (isDev && location.pathname === "/dev") {
-      return;
+      return { presentationPrefs: getBrowserPresentationPrefs() };
     }
     await requireProfessionalUseForSignedInRoute({
       queryClient: context.queryClient,
       location,
     });
+    return {
+      presentationPrefs: await loadDocumentPresentation(context.queryClient),
+    };
   },
   shellComponent: RootDocument,
   component: RootComponent,
@@ -104,7 +122,7 @@ export const Route = createRootRouteWithContext<{
         toolsBasePath: publicToolsBasePath(),
       },
     }),
-  pendingComponent: () => <DefaultPendingComponent className="h-dvh" />,
+  pendingComponent: RootPendingComponent,
   errorComponent: RootErrorComponent,
   notFoundComponent: RootNotFoundComponent,
 });
@@ -146,6 +164,9 @@ function RootErrorComponent(props: ErrorComponentProps) {
 }
 
 function RootComponent() {
+  const pathname = useRouterState({
+    select: (state) => state.location.pathname,
+  });
   const navigate = useNavigate();
   const router = useRouter();
   // Public documents reuse server route context during hydration. Re-enter
@@ -174,7 +195,7 @@ function RootComponent() {
       );
     }
   });
-  const appContext = Route.useRouteContext({
+  const { analyticsValue, queryClient } = Route.useRouteContext({
     select: (context) => ({
       analyticsValue: context.analyticsValue,
       queryClient: context.queryClient,
@@ -182,10 +203,10 @@ function RootComponent() {
   });
 
   return (
-    <AppProviders
-      analyticsValue={appContext.analyticsValue}
-      queryClient={appContext.queryClient}
-    >
+    <AppProviders analyticsValue={analyticsValue} queryClient={queryClient}>
+      {!(isDev && pathname === "/dev") && (
+        <ClientDocumentPresentationBoot queryClient={queryClient} />
+      )}
       <RootApp />
     </AppProviders>
   );
@@ -195,6 +216,9 @@ function RootDocument({ children }: Readonly<{ children: ReactNode }>) {
   const nonce = useRouter().options.ssr?.nonce;
   const routeErrorLifecycle = Route.useRouteContext({
     select: (context) => context.routeErrorLifecycle,
+  });
+  const prefs = Route.useRouteContext({
+    select: (context) => context.presentationPrefs,
   });
   const interfaceLocale = useI18nStore((s) => s.loadedLang);
   const hasLoadedOnce = useI18nStore((s) => s.hasLoadedOnce);
@@ -207,10 +231,7 @@ function RootDocument({ children }: Readonly<{ children: ReactNode }>) {
   });
   const dir = getLangDir(interfaceLocale);
 
-  // Hydration keeps the attributes the server (or prepaint-init.js) put on
-  // the element, so later locale loads and navigations are written here.
-  // Until the first locale has loaded, the server markup and the prepaint
-  // guess stand.
+  // Synchronize later language changes and navigations with the document.
   useExternalSyncEffect(() => {
     if (!hasLoadedOnce) {
       return;
@@ -218,36 +239,38 @@ function RootDocument({ children }: Readonly<{ children: ReactNode }>) {
     applyDocumentLanguage({ dir, lang });
   }, [dir, hasLoadedOnce, lang]);
 
+  // The system colour scheme alone depends on browser media queries.
   return (
-    // prepaint-init.js mutates the html element's class, and for RTL
-    // locales its lang/dir, before React hydrates the document, so the
-    // attribute set never matches the server markup; suppress the
-    // per-element warning rather than letting every SSR page log a
-    // recovered hydration error. The server renders the document's own
-    // language on pages that show one, and the interface locale otherwise;
-    // data-lang-source tells prepaint-init.js to keep a document language.
-    // data-sidebar-state carries the sidebar's stored state from the server
-    // render to the browser (see components/sidebar/sidebar-state.ts).
-    <html
-      lang={lang}
-      dir={dir}
-      data-lang-source={langSource}
-      data-sidebar-state={readSidebarStateAttribute()}
-      suppressHydrationWarning
-    >
-      <head>
-        <HeadContent />
+    <RenderedI18nStoreProvider>
+      <html
+        className={cn(
+          prefs.theme === "dark" && "dark",
+          prefs.palette !== "neutral" && `palette-${prefs.palette}`,
+        )}
+        data-theme={prefs.theme}
+        lang={lang}
+        dir={dir}
+        data-lang-source={langSource}
+        suppressHydrationWarning
+      >
+        <head>
+          <HeadContent />
 
-        <script nonce={nonce} src="/handoff-init.js" />
-        <script nonce={nonce} src="/prepaint-init.js" />
-      </head>
-      <body>
-        <RouteErrorLifecycleProvider controller={routeErrorLifecycle}>
-          <RouteProviderScopeBoundary>{children}</RouteProviderScopeBoundary>
-        </RouteErrorLifecycleProvider>
-        <Scripts />
-      </body>
-    </html>
+          <script nonce={nonce} src="/handoff-init.js" />
+          <script nonce={nonce} src="/prepaint-init.js" />
+        </head>
+        <body>
+          <RouteErrorLifecycleProvider controller={routeErrorLifecycle}>
+            <RouteProviderScopeBoundary>
+              <PresentationPrefsProvider initialPrefs={prefs}>
+                {children}
+              </PresentationPrefsProvider>
+            </RouteProviderScopeBoundary>
+          </RouteErrorLifecycleProvider>
+          <Scripts />
+        </body>
+      </html>
+    </RenderedI18nStoreProvider>
   );
 }
 

@@ -6,9 +6,11 @@ import { isPlainPrimaryClick } from "@stll/decision-reader/citation-click";
 import { BidiText } from "@stll/ui/bidi-text";
 import { DocumentIdentityBadge } from "@stll/ui/document-identity-badge";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "@stll/ui/tooltip";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { useIsMobile } from "@stll/ui/use-mobile";
 
 import { createCaseDecisionViewTab } from "@/components/inspector/case-decision-view";
+import { INSPECTOR_FOCUS_INTENT } from "@/components/inspector/inspector-store-types";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { decisionChatKey } from "@/features/chat/legal-document-chat-key";
 import type { ChatHistoryItem } from "@/features/chat/queries";
@@ -88,7 +90,7 @@ export const ChatThreadDecisionLabel = ({
           <TooltipPopup>{decision.court}</TooltipPopup>
         </Tooltip>
       )}
-      <BidiText className="min-w-0 truncate">{decision.caseNumber}</BidiText>
+      <TruncatedText render={<BidiText />}>{decision.caseNumber}</TruncatedText>
       {date === null ? null : (
         <span className="shrink-0">
           {"· "}
@@ -146,6 +148,7 @@ export const useOpenChatThreadDecision = () => {
       id: toChatThreadId(chat.id),
       label: chat.title,
       ...(chat.scope === "workspace" ? { workspaceId: chat.workspaceId } : {}),
+      focus: INSPECTOR_FOCUS_INTENT.claim,
     });
     return true;
   };

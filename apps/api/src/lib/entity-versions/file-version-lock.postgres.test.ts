@@ -1,10 +1,13 @@
 import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 
+import { ORGANIZATION_ROLE_NAMES } from "@stll/auth-model";
+import { compareCodeUnit } from "@stll/collation";
 import { withTimeout } from "@stll/concurrency/with-timeout";
+import { roleAllows } from "@stll/permissions";
 
-import { organization, user } from "@/api/db/auth-schema";
+import { member, organization, user } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
 import {
@@ -13,15 +16,23 @@ import {
   entityVersions,
   fields,
   folioCollabRooms,
+  ORGANIZATION_ACCESS_STATE,
+  organizationAccessStates,
   pendingUploads,
   properties,
   timeEntries,
+  timeTimers,
+  workspaceMembers,
   workspaces,
 } from "@/api/db/schema";
+import { createSafeDb, createScopedDb, markRlsDatabase } from "@/api/db/scoped";
 import { finalizeEntityVersion } from "@/api/handlers/uploads/entity-version";
 import { archiveWorkspaceHandler } from "@/api/handlers/workspaces/archive";
 import { createSafeId } from "@/api/lib/branded-types";
-import { withAggregateLock } from "@/api/lib/db/aggregate-lock";
+import {
+  lockWorkspaceLifecycle,
+  withAggregateLock,
+} from "@/api/lib/db/aggregate-lock";
 import { UPLOAD_DOCUMENT_SOURCE } from "@/api/lib/document-source";
 import { CALLER_AUTHORIZED } from "@/api/lib/entities/buffer-write-authority";
 import { lockWorkspaceForEntityCreate } from "@/api/lib/entity-cap-lock";
@@ -73,6 +84,22 @@ const seedFixture = async (db: GatedTestDb) => {
     organizationId,
     name: "Version matter",
     reference: workspaceId,
+  });
+  await db.insert(organizationAccessStates).values({
+    organizationId,
+    state: ORGANIZATION_ACCESS_STATE.selfManagedKeys,
+  });
+  await db.insert(member).values({
+    id: Bun.randomUUIDv7(),
+    organizationId,
+    userId,
+    role: "member",
+    createdAt: checkpointUpdatedAt,
+  });
+  await db.insert(workspaceMembers).values({
+    id: createSafeId<"workspaceMember">(),
+    workspaceId,
+    userId,
   });
   await db.insert(entities).values({
     id: entityId,
@@ -177,12 +204,14 @@ type BarrierOptions = {
   run: (tx: Transaction, fixture: Fixture) => Promise<void>;
   workspaceMode?: "update";
   prepareFixture?: (db: GatedTestDb, fixture: Fixture) => Promise<void>;
+  acquireParent?: (tx: Transaction, fixture: Fixture) => Promise<void>;
 };
 
 const againstCap = async ({
   run,
   workspaceMode,
   prepareFixture,
+  acquireParent,
 }: BarrierOptions) => {
   const url = databaseUrl ?? panic("Postgres test requires DATABASE_URL");
   await withGatedTestClients(url, async ({ openClient }) => {
@@ -209,10 +238,14 @@ const againstCap = async ({
     let writerWork: Promise<void> | undefined;
     try {
       capWork = cap.db.transaction(async (tx) => {
-        await lockWorkspaceForEntityCreate(
-          asTestRaw<Transaction>(tx),
-          fixture.workspaceId,
-        );
+        if (acquireParent === undefined) {
+          await lockWorkspaceForEntityCreate(
+            asTestRaw<Transaction>(tx),
+            fixture.workspaceId,
+          );
+        } else {
+          await acquireParent(asTestRaw<Transaction>(tx), fixture);
+        }
         capReady.resolve(undefined);
         await releaseCap.promise;
         // These are the rows downstream callers acquire. NOWAIT proves that
@@ -297,12 +330,49 @@ const transactionSafeDb =
   async (operation) =>
     Result.ok(await operation(tx));
 
+const archiveSafeDbIn = (
+  tx: Transaction,
+  fixture: Awaited<ReturnType<typeof seedFixture>>,
+): SafeDb =>
+  createSafeDb(
+    markRlsDatabase(tx),
+    [fixture.workspaceId],
+    fixture.organizationId,
+    fixture.userId,
+  );
+
 if (!databaseUrl || !enabled) {
   describe.skip("file version parent order (postgres)", () => {
     test("requires STELLA_RUN_POSTGRES_TESTS=true and DATABASE_URL", () => {});
   });
 } else {
   describe("file version parent order (postgres)", () => {
+    test("timer presence permission snapshot matches canonical matter-update roles", async () => {
+      await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+        const { db } = openClient();
+        const [routine] = await db
+          .select({ source: sql<string>`prosrc` })
+          .from(sql`pg_catalog.pg_proc`)
+          .where(
+            sql`oid = 'public.stella_matter_has_running_timers(uuid)'::regprocedure`,
+          );
+        const roles = routine?.source.match(
+          /allowed_workspace_update_roles constant text\[\] := ARRAY\[(?<roles>[^\]]+)\]/u,
+        )?.groups?.["roles"];
+        expect(roles).toBeDefined();
+        const installed = [...(roles ?? "").matchAll(/'(?<role>[^']+)'/gu)].map(
+          (match) =>
+            match.groups?.["role"] ?? panic("Matched role capture must exist"),
+        );
+        const allowed = ORGANIZATION_ROLE_NAMES.filter((role) =>
+          roleAllows(role, { workspace: ["update"] }),
+        );
+        expect(installed.toSorted(compareCodeUnit)).toEqual(
+          allowed.toSorted(compareCodeUnit),
+        );
+      });
+    });
+
     test("does not archive while OCR has an active dispatch claim", async () => {
       await withGatedTestClients(databaseUrl, async ({ openClient }) => {
         const db = openClient().db;
@@ -325,7 +395,7 @@ if (!databaseUrl || !enabled) {
             async (tx) =>
               await Result.gen(() =>
                 archiveWorkspaceHandler({
-                  safeDb: transactionSafeDb(asTestRaw<Transaction>(tx)),
+                  safeDb: archiveSafeDbIn(asTestRaw<Transaction>(tx), fixture),
                   workspaceId: fixture.workspaceId,
                   recordAuditEvent,
                 }),
@@ -370,7 +440,7 @@ if (!databaseUrl || !enabled) {
             async (tx) =>
               await Result.gen(() =>
                 archiveWorkspaceHandler({
-                  safeDb: transactionSafeDb(asTestRaw<Transaction>(tx)),
+                  safeDb: archiveSafeDbIn(asTestRaw<Transaction>(tx), fixture),
                   workspaceId: fixture.workspaceId,
                   recordAuditEvent,
                 }),
@@ -394,6 +464,208 @@ if (!databaseUrl || !enabled) {
         } finally {
           await fixture.cleanup();
         }
+      });
+    });
+
+    test.each([
+      { state: "running", matter: "same", timerOwner: "actor", blocked: true },
+      {
+        state: "running",
+        matter: "same",
+        timerOwner: "colleague",
+        blocked: true,
+      },
+      {
+        state: "paused",
+        matter: "same",
+        timerOwner: "colleague",
+        blocked: false,
+      },
+      {
+        state: "running",
+        matter: "other",
+        timerOwner: "colleague",
+        blocked: false,
+      },
+      {
+        state: "running",
+        matter: "unassigned",
+        timerOwner: "colleague",
+        blocked: false,
+      },
+    ] as const)(
+      "archive handles a $state current timer owned by $timerOwner assigned to $matter matter",
+      async ({ state, matter, timerOwner, blocked }) => {
+        await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+          const db = openClient().db;
+          const fixture = await seedFixture(db);
+          const colleagueId = mintAuthProviderId<"user">();
+          try {
+            await db.insert(user).values({
+              id: colleagueId,
+              name: "Timer colleague",
+              email: `${colleagueId}@example.test`,
+            });
+            const startedAt = new Date("2026-10-11T09:00:00.000Z");
+            await db.insert(member).values({
+              id: Bun.randomUUIDv7(),
+              organizationId: fixture.organizationId,
+              userId: colleagueId,
+              role: "member",
+              createdAt: startedAt,
+            });
+            await db.insert(workspaceMembers).values({
+              id: createSafeId<"workspaceMember">(),
+              workspaceId: fixture.workspaceId,
+              userId: colleagueId,
+            });
+            const otherWorkspaceId = createSafeId<"workspace">();
+            if (matter === "other") {
+              await db.insert(workspaces).values({
+                id: otherWorkspaceId,
+                organizationId: fixture.organizationId,
+                name: "Other timer matter",
+                reference: otherWorkspaceId,
+              });
+              await db.insert(workspaceMembers).values({
+                id: createSafeId<"workspaceMember">(),
+                workspaceId: otherWorkspaceId,
+                userId: colleagueId,
+              });
+            }
+            const timerId = createSafeId<"timeTimer">();
+            const ownerUserId =
+              timerOwner === "actor" ? fixture.userId : colleagueId;
+            const timerDb = createScopedDb(
+              markRlsDatabase(db),
+              [
+                fixture.workspaceId,
+                ...(matter === "other" ? [otherWorkspaceId] : []),
+              ],
+              fixture.organizationId,
+              ownerUserId,
+            );
+            const archiverDb = createSafeDb(
+              markRlsDatabase(db),
+              [fixture.workspaceId],
+              fixture.organizationId,
+              fixture.userId,
+            );
+            await timerDb(
+              async (tx) =>
+                await tx.insert(timeTimers).values({
+                  id: timerId,
+                  organizationId: fixture.organizationId,
+                  userId: ownerUserId,
+                  workspaceId: {
+                    same: fixture.workspaceId,
+                    other: otherWorkspaceId,
+                    unassigned: null,
+                  }[matter],
+                  state,
+                  startedAt,
+                  lastResumedAt: state === "running" ? startedAt : null,
+                }),
+            );
+            const beforeTimer = await timerDb(
+              async (tx) =>
+                await tx.query.timeTimers.findFirst({
+                  where: { id: { eq: timerId } },
+                }),
+            );
+            expect(beforeTimer?.state).toBe(state);
+            expect(
+              await db
+                .select()
+                .from(timeEntries)
+                .where(eq(timeEntries.workspaceId, fixture.workspaceId)),
+            ).toHaveLength(0);
+            let auditCount = 0;
+            const result = await Result.gen(() =>
+              archiveWorkspaceHandler({
+                safeDb: archiverDb,
+                workspaceId: fixture.workspaceId,
+                recordAuditEvent: async () => {
+                  auditCount += 1;
+                },
+              }),
+            );
+            expect(Result.isError(result)).toBe(blocked);
+            if (blocked) {
+              expect(result).toMatchObject({
+                error: {
+                  status: 409,
+                  message: "Stop active timers before archiving this matter",
+                },
+              });
+            }
+            const workspace = await db.query.workspaces.findFirst({
+              where: { id: { eq: fixture.workspaceId } },
+            });
+            expect(workspace?.status).toBe(blocked ? "active" : "archived");
+            expect(auditCount).toBe(blocked ? 0 : 1);
+            expect(
+              await timerDb(
+                async (tx) =>
+                  await tx.query.timeTimers.findFirst({
+                    where: { id: { eq: timerId } },
+                  }),
+              ),
+            ).toEqual(beforeTimer);
+          } finally {
+            await fixture.cleanup();
+            await db.delete(user).where(eq(user.id, colleagueId));
+          }
+        });
+      },
+    );
+
+    test("archive sees a timer committed while it waits on the lifecycle fence", async () => {
+      await againstCap({
+        acquireParent: async (tx, fixture) => {
+          await lockWorkspaceLifecycle(tx, fixture.workspaceId);
+          await createScopedDb(
+            markRlsDatabase(tx),
+            [fixture.workspaceId],
+            fixture.organizationId,
+            fixture.userId,
+          )(async (timerTx) => {
+            const startedAt = new Date("2026-10-11T09:00:00.000Z");
+            await timerTx.insert(timeTimers).values({
+              id: createSafeId<"timeTimer">(),
+              organizationId: fixture.organizationId,
+              userId: fixture.userId,
+              workspaceId: fixture.workspaceId,
+              state: "running",
+              startedAt,
+              lastResumedAt: startedAt,
+            });
+          });
+        },
+        run: async (tx, fixture) => {
+          let auditCount = 0;
+          const result = await Result.gen(() =>
+            archiveWorkspaceHandler({
+              safeDb: archiveSafeDbIn(tx, fixture),
+              workspaceId: fixture.workspaceId,
+              recordAuditEvent: async () => {
+                auditCount += 1;
+              },
+            }),
+          );
+          expect(result).toMatchObject({
+            error: {
+              status: 409,
+              message: "Stop active timers before archiving this matter",
+            },
+          });
+          expect(auditCount).toBe(0);
+          expect(
+            await tx.query.workspaces.findFirst({
+              where: { id: { eq: fixture.workspaceId } },
+            }),
+          ).toMatchObject({ status: "active" });
+        },
       });
     });
 
@@ -539,7 +811,7 @@ if (!databaseUrl || !enabled) {
         run: async (tx, fixture) => {
           const result = await Result.gen(() =>
             archiveWorkspaceHandler({
-              safeDb: transactionSafeDb(tx),
+              safeDb: archiveSafeDbIn(tx, fixture),
               workspaceId: fixture.workspaceId,
               recordAuditEvent,
             }),

@@ -9,7 +9,9 @@ import {
   type CaseLawDecisionRouteParams,
   extractCaseLawDecisionIdFromIdRouteParam,
   isCaseLawDecisionId,
+  pickCaseLawDecisionHit,
 } from "@stll/api-contract/case-law-decision-route";
+import type { ChatDecisionLocator } from "@stll/api-contract/chat-reference-href";
 
 import { openPublicLawLink } from "@/components/chat/public-law-open";
 import { publicCaseLawPageCountryFromParam } from "@/features/case-law/case-law-jurisdiction";
@@ -19,18 +21,9 @@ import { api } from "@/lib/api";
 import {
   decodeCaseLawDecisionRef,
   defaultCaseLawCountryForLocale,
-  pickCaseLawDecisionHit,
 } from "@/lib/case-law-route";
 import { unwrapPublicLawResponse } from "@/lib/public-law-api";
 import { toSafeId } from "@/lib/safe-id";
-
-/**
- * How a chat link names a decision: by the id or docket a `#stella-decision=`
- * href carries, or by the route params of the decision page's own URL.
- */
-export type CaseLawDecisionLocator =
-  | { type: "ref"; ref: string }
-  | { type: "route"; params: CaseLawDecisionRouteParams };
 
 type OpenCaseLawDecisionOptions = {
   /** A passage of the decision to open at, rather than its beginning. */
@@ -178,7 +171,7 @@ const openResolution = async (
 };
 
 const resolveCaseLawDecision = async (
-  locator: CaseLawDecisionLocator,
+  locator: ChatDecisionLocator,
 ): Promise<Resolution | null> => {
   switch (locator.type) {
     case "ref":
@@ -197,7 +190,7 @@ const resolveCaseLawDecision = async (
  * where there is an inspector, the decision's own page on a phone.
  */
 export const openCaseLawDecision = async (
-  locator: CaseLawDecisionLocator,
+  locator: ChatDecisionLocator,
   open: (target: DecisionTabTarget) => void,
   { anchorId }: OpenCaseLawDecisionOptions = {},
 ) =>

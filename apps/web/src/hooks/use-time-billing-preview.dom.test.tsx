@@ -18,7 +18,7 @@ globalThis.fetch = Object.assign(async () => Response.json(null), {
 const React = await import("react");
 const { QueryClient, QueryClientProvider } =
   await import("@tanstack/react-query");
-const { act, cleanup, fireEvent, render, waitFor } =
+const { act, cleanup, fireEvent, render, waitFor, within } =
   await import("@testing-library/react");
 const { IntlProvider } = await import("use-intl");
 const { FormattingProvider } = await import("@/i18n/formatting-context");
@@ -165,11 +165,8 @@ const renderShell = (queryClient: InstanceType<typeof QueryClient>) =>
     React.createElement(
       QueryClientProvider,
       { client: queryClient },
-      React.createElement(IntlProvider, {
-        locale: "en",
-        messages,
-        timeZone: "UTC",
-        children: React.createElement(
+      <IntlProvider locale="en" messages={messages} timeZone="UTC">
+        {React.createElement(
           AuthenticatedUserProvider,
           {
             user: {
@@ -190,8 +187,8 @@ const renderShell = (queryClient: InstanceType<typeof QueryClient>) =>
             React.createElement(GlobalTimer),
             React.createElement(BetaPage),
           ),
-        ),
-      }),
+        )}
+      </IntlProvider>,
     ),
   );
 
@@ -403,13 +400,16 @@ describe("time billing access follows the caller's server decision", () => {
     expect(paths).not.toContain(TIME_TIMERS_PATH);
     expectNoDeploymentFeaturesRequest(paths);
     expect(view.queryAllByText(messages.common.timeBilling)).toHaveLength(0);
+    // The failure and the retry that recovers it stand together in place.
     await waitFor(() =>
-      expect(view.getByRole("alert").textContent).toBe(
+      expect(view.getByRole("alert").querySelector("p")?.textContent).toBe(
         messages.errors.actionFailed,
       ),
     );
     expect(
-      view.getByRole("button", { name: messages.common.retry }),
+      within(view.getByRole("alert")).getByRole("button", {
+        name: messages.common.retry,
+      }),
     ).toBeDefined();
   });
 });

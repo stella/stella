@@ -295,11 +295,11 @@ describe("agent skill history RLS", () => {
       throw new Error("expected the insert trigger to seed revision 1");
     }
 
-    const error = await scopedQuery(
-      [ids.wsA1],
-      ids.orgA,
-      async (tx) =>
-        await tryCatch(async () => {
+    const error = await tryCatch(async () =>
+      scopedQuery(
+        [ids.wsA1],
+        ids.orgA,
+        async (tx) => {
           await tx.insert(agentSkillProposals).values({
             id: testId<"agentSkillProposal">(),
             organizationId: ids.orgA,
@@ -308,8 +308,9 @@ describe("agent skill history RLS", () => {
             body: "cross-org proposal",
             authorId: ids.userA1,
           });
-        }),
-      ids.userA1,
+        },
+        ids.userA1,
+      ),
     );
 
     expect(isPgError(error, PG_ERROR.INSUFFICIENT_PRIVILEGE)).toBe(true);

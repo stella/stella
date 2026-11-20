@@ -1,5 +1,6 @@
 import type { CSSProperties, ReactNode } from "react";
 
+import { TruncatedText } from "../components/truncated-text";
 import { cn } from "../lib/utils";
 
 /**
@@ -34,13 +35,7 @@ export type KanbanStickyTopStyle = CSSProperties & {
  */
 export const KANBAN_CARD_STICKY_TOP_VAR = "--kanban-card-sticky-top" as const;
 
-/**
- * Sticks a card's identity row under everything pinned above it. The fallback
- * keeps the row usable inside a card rendered outside a cell that publishes the
- * offset, where nothing is pinned above it at all.
- */
-export const KANBAN_CARD_STICKY_TOP_CLASS =
-  "top-(--kanban-card-sticky-top,0px)";
+export { KANBAN_CARD_STICKY_TOP_CLASS } from "./layout-tokens";
 
 export type KanbanCardStickyTopStyle = CSSProperties & {
   [KANBAN_CARD_STICKY_TOP_VAR]?: string;
@@ -103,9 +98,9 @@ export const KanbanCollapsedBandCaption = ({
   >
     {/* The band's own name, at the weight the open caption sets it in: a
         folded band still names the columns it stands for. */}
-    <span className="max-h-40 truncate font-semibold [writing-mode:vertical-rl]">
+    <TruncatedText className="max-h-40 font-semibold [writing-mode:vertical-rl]">
       {label}
-    </span>
+    </TruncatedText>
     <span className="tabular-nums">{meta}</span>
   </div>
 );

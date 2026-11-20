@@ -9,6 +9,7 @@ import { createAuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId, SafeIdType } from "@/api/lib/branded-types";
 import { toSafeId } from "@/api/lib/branded-types";
 import { namespaceSkillToolName } from "@/api/lib/mcp-upstream/namespace";
+import { AGENT_RUN_DEFAULT_SCOPES } from "@/api/mcp/agent-run-token";
 import { dispatchGatewayToolCall } from "@/api/mcp/gateway/dispatch-call";
 import {
   getSkillPrompt,
@@ -16,6 +17,7 @@ import {
   UnknownSkillPromptError,
 } from "@/api/mcp/gateway/skill-prompts";
 import {
+  loadServedSkillTools,
   loadVisibleSkillTools,
   readSkillTool,
   resolveSkillTool,
@@ -49,11 +51,17 @@ const insertSkill = async ({
   body,
   slug,
   userId,
+  ...row
 }: {
   body: string;
   slug: string;
   userId: SafeId<"user">;
-}) => {
+} & Partial<
+  Pick<
+    typeof agentSkills.$inferInsert,
+    "boundWorkspaceId" | "enabled" | "invocation" | "metadata" | "scope"
+  >
+>) => {
   const skillId = testId<"agentSkill">();
   await testDb.insert(agentSkills).values({
     id: skillId,
@@ -68,6 +76,7 @@ const insertSkill = async ({
     contentHash: "0".repeat(64),
     body,
     enabled: true,
+    ...row,
   });
   return skillId;
 };
@@ -193,9 +202,11 @@ describe("MCP skill tools against the database", () => {
     expect(resourceRead.isError).toBeUndefined();
     expect(resourceRead.structuredContent).toEqual({
       type: "resource",
+      charCount: "1. Parties\n2. Term".length,
       content: "1. Parties\n2. Term",
       id: skillId,
       name: slug,
+      nextCursor: null,
       path: "references/checklist.md",
     });
 
@@ -515,5 +526,220 @@ describe("MCP skill tools against the database", () => {
         "Unknown prompt: skill__does_not_exist",
       );
     }
+  });
+});
+
+describe("skill tools for an agent run on the default surface", () => {
+  const agentRunContext = (userId: SafeId<"user">) => {
+    const recording = createRecordingContext(userId);
+    return {
+      ...recording,
+      context: asTestRaw<AuthorizedMcpRequestContext>({
+        ...recording.context,
+        grantedScopes: [...AGENT_RUN_DEFAULT_SCOPES],
+        sessionCredentialType: "agent_run",
+      }),
+    };
+  };
+
+  test("serves the caller's auto skills and stella's own, and nothing it may not use", async () => {
+    const run = Bun.randomUUIDv7();
+    const slugs = {
+      team: `team-${run}`,
+      shadowed: `shadowed-${run}`,
+      disabled: `disabled-${run}`,
+      othersPrivate: `others-${run}`,
+      manual: `manual-${run}`,
+      bound: `bound-${run}`,
+      missingTool: `missing-tool-${run}`,
+    };
+    await insertSkill({
+      body: "team",
+      scope: "team",
+      slug: slugs.team,
+      userId: ids.userA2,
+    });
+    await insertSkill({
+      body: "team copy",
+      scope: "team",
+      slug: slugs.shadowed,
+      userId: ids.userA2,
+    });
+    const privateCopy = await insertSkill({
+      body: "private copy",
+      slug: slugs.shadowed,
+      userId: ids.userA1,
+    });
+    await insertSkill({
+      body: "disabled",
+      enabled: false,
+      slug: slugs.disabled,
+      userId: ids.userA1,
+    });
+    await insertSkill({
+      body: "someone else's",
+      slug: slugs.othersPrivate,
+      userId: ids.userA2,
+    });
+    await insertSkill({
+      body: "manual",
+      invocation: "manual",
+      slug: slugs.manual,
+      userId: ids.userA1,
+    });
+    await insertSkill({
+      body: "bound",
+      boundWorkspaceId: ids.wsA1,
+      slug: slugs.bound,
+      userId: ids.userA1,
+    });
+    await insertSkill({
+      body: "needs a tool",
+      metadata: { "stella-required-tools": "no_such_tool" },
+      slug: slugs.missingTool,
+      userId: ids.userA1,
+    });
+
+    const { context } = agentRunContext(ids.userA1);
+    const served = await loadServedSkillTools({
+      context,
+      mode: "default",
+      scopes: AGENT_RUN_DEFAULT_SCOPES,
+    });
+    const byName = new Map(served.map((skill) => [skill.name, skill]));
+
+    expect(byName.get(slugs.team)?.exposedName).toBe(
+      namespaceSkillToolName(slugs.team),
+    );
+    expect(byName.get(slugs.shadowed)).toMatchObject({
+      id: privateCopy,
+      source: "installed",
+    });
+    expect(served.filter(({ name }) => name === slugs.shadowed)).toHaveLength(
+      1,
+    );
+    for (const hidden of [
+      slugs.disabled,
+      slugs.othersPrivate,
+      slugs.manual,
+      slugs.bound,
+      slugs.missingTool,
+    ]) {
+      expect(byName.has(hidden)).toBe(false);
+    }
+    // The skills shipped with stella are tools too, for an agent run only.
+    expect(served.some(({ source }) => source === "built-in")).toBe(true);
+    const advanced = await loadServedSkillTools({
+      context: asTestRaw<AuthorizedMcpRequestContext>({
+        ...context,
+        sessionCredentialType: "oauth_client",
+      }),
+      mode: "advanced",
+      scopes: AGENT_RUN_DEFAULT_SCOPES,
+    });
+    expect(advanced.some(({ source }) => source === "built-in")).toBe(false);
+    expect(advanced.find(({ name }) => name === slugs.team)?.exposedName).toBe(
+      byName.get(slugs.team)?.exposedName,
+    );
+
+    // Any other credential on the default surface gets none.
+    for (const sessionCredentialType of [
+      "oauth_client",
+      "delegated_user",
+      undefined,
+    ] as const) {
+      expect(
+        await loadServedSkillTools({
+          context: asTestRaw<AuthorizedMcpRequestContext>({
+            ...context,
+            sessionCredentialType,
+          }),
+          mode: "default",
+          scopes: AGENT_RUN_DEFAULT_SCOPES,
+        }),
+      ).toEqual([]);
+    }
+    // Nor does an agent run without the skills scope.
+    expect(
+      await loadServedSkillTools({ context, mode: "default", scopes: [] }),
+    ).toEqual([]);
+  });
+
+  test("a call audits the read, and a skill disabled after listing is an unknown tool", async () => {
+    const slug = `agent-run-${Bun.randomUUIDv7()}`;
+    const skillId = await insertSkill({
+      body: `body of ${slug}`,
+      slug,
+      userId: ids.userA1,
+    });
+    const { context } = agentRunContext(ids.userA1);
+    const toolName = namespaceSkillToolName(slug);
+    const served = await loadServedSkillTools({
+      context,
+      mode: "default",
+      scopes: AGENT_RUN_DEFAULT_SCOPES,
+    });
+    expect(served.map((skill) => skill.exposedName)).toContain(toolName);
+
+    const read = await handleMcpToolCall({
+      args: {},
+      context,
+      mode: "default",
+      toolName,
+    });
+    expect(read.isError).toBeUndefined();
+    expect(read.structuredContent).toMatchObject({
+      body: `body of ${slug}`,
+      type: "skill",
+    });
+    const audited = await testDb
+      .select({ metadata: auditLogs.metadata })
+      .from(auditLogs)
+      .where(eq(auditLogs.resourceId, skillId));
+    expect(audited.map(({ metadata }) => metadata)).toEqual([
+      expect.objectContaining({ outcome: "success", surface: "mcp" }),
+    ]);
+
+    await testDb
+      .update(agentSkills)
+      .set({ enabled: false })
+      .where(eq(agentSkills.id, skillId));
+    const afterDisable = await dispatchGatewayToolCall({
+      args: {},
+      context,
+      mode: "default",
+      toolName,
+    });
+    expect(afterDisable).toMatchObject({
+      result: { error: { code: "unknown_tool" }, status: "error" },
+      type: "internal",
+    });
+  });
+
+  test("stella's own skills are readable as tools by an agent run", async () => {
+    const { context } = agentRunContext(ids.userA1);
+    const builtIn = (
+      await loadServedSkillTools({
+        context,
+        mode: "default",
+        scopes: AGENT_RUN_DEFAULT_SCOPES,
+      })
+    ).find(({ source }) => source === "built-in");
+    if (builtIn === undefined) {
+      throw new TypeError("expected a built-in skill tool");
+    }
+    const read = await handleMcpToolCall({
+      args: {},
+      context,
+      mode: "default",
+      toolName: builtIn.exposedName,
+    });
+    expect(read.isError).toBeUndefined();
+    expect(read.structuredContent).toMatchObject({
+      id: null,
+      name: builtIn.name,
+      origin: "built-in",
+      type: "skill",
+    });
   });
 });

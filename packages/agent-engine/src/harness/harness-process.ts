@@ -1,5 +1,10 @@
 import { Result } from "better-result";
 
+import {
+  type ProtocolChannel,
+  type ProtocolLog,
+  protocolTap,
+} from "../protocol-log";
 import { createLineReader } from "./json-lines";
 import {
   type HarnessSpawnError,
@@ -23,6 +28,12 @@ export type HarnessProcessDeadlines = {
   /** How long a request waits for its answer before the process is ended. */
   requestMs: number;
   /**
+   * How long a startup request waits instead (the first launch, connecting
+   * stella's MCP server): a slow computer is not a hung harness. `requestMs`
+   * when unset.
+   */
+  startupRequestMs?: number | undefined;
+  /**
    * How long the process, and every process it started, gets to exit on
    * SIGTERM before SIGKILL.
    */
@@ -37,6 +48,8 @@ type StartHarnessProcessOptions<TError> = {
   deadlines: HarnessProcessDeadlines;
   /** Names the process in detached failures, e.g. `claude-cli`. */
   name: string;
+  /** Which protocol the process speaks, and where its lines are logged. */
+  protocol: { channel: ProtocolChannel; log: ProtocolLog };
   /** The failure of a request the harness can no longer answer. */
   unanswered: (reason: "closed" | "timed_out", message: string) => TError;
   /** One JSON value the harness wrote. */
@@ -55,15 +68,19 @@ type HarnessProcess<TId, TError> = {
    * Writes `message` as the request `id` and waits for `settle` with that id,
    * the deadline, or the process's exit, whichever comes first.
    */
+  /** `timeoutMs` overrides the process's request deadline for this one. */
   request: (
     id: TId,
     label: string,
     message: object,
+    timeoutMs?: number,
   ) => Promise<Result<unknown, TError>>;
   /** Answers the pending request `id`; false when none is pending. */
   settle: (id: TId, result: Result<unknown, TError>) => boolean;
   /** Settles when the process has exited, however that happened. */
   exited: Promise<HarnessExit>;
+  /** A request went unanswered past its deadline, which ended the process. */
+  missedDeadline: () => boolean;
   /** Ends stdin, which asks the harness to finish and exit. */
   closeInput: () => void;
   /**
@@ -81,6 +98,7 @@ export const startHarnessProcess = <TId, TError>({
   detached,
   deadlines,
   name,
+  protocol,
   unanswered,
   message,
   violation,
@@ -100,8 +118,12 @@ export const startHarnessProcess = <TId, TError>({
   }
   const tree = spawned.value;
   const { child } = tree;
+  const tap = protocolTap(protocol.log, {
+    channel: protocol.channel,
+    source: `pid=${String(child.pid)}`,
+  });
   const pending = new Map<TId, (result: Result<unknown, TError>) => void>();
-  const state = { closed: false, terminating: false };
+  const state = { closed: false, terminating: false, missedDeadline: false };
 
   /**
    * The one way the process is ended: SIGTERM to it and everything it
@@ -134,10 +156,9 @@ export const startHarnessProcess = <TId, TError>({
       return;
     }
     onInput(() => {
-      detached(
-        child.stdin.write(`${JSON.stringify(outgoing)}\n`),
-        `${name}.write`,
-      );
+      const line = JSON.stringify(outgoing);
+      tap("out", line);
+      detached(child.stdin.write(`${line}\n`), `${name}.write`);
       detached(child.stdin.flush(), `${name}.flush`);
     });
   };
@@ -146,12 +167,22 @@ export const startHarnessProcess = <TId, TError>({
     if (line.trim() === "") {
       return;
     }
+    tap("in", line);
     const json = Result.try((): unknown => JSON.parse(line));
     if (Result.isError(json)) {
       violation("The harness wrote a line that is not JSON.");
       return;
     }
-    message(json.value);
+    // A message stella cannot handle fails the turn and ends the process: a
+    // throw left here would stop the reading, and the harness would block on
+    // a full pipe with the turn waiting on it.
+    const handled = Result.try(() => {
+      message(json.value);
+    });
+    if (Result.isError(handled)) {
+      violation("Stella could not handle a message from the harness.");
+      terminate();
+    }
   };
 
   const readStdout = async () => {
@@ -197,7 +228,7 @@ export const startHarnessProcess = <TId, TError>({
   return Result.ok({
     pid: child.pid,
     write,
-    request: async (id, label, outgoing) => {
+    request: async (id, label, outgoing, timeoutMs) => {
       if (state.closed) {
         return Result.err(unanswered("closed", "The harness is not running."));
       }
@@ -217,8 +248,9 @@ export const startHarnessProcess = <TId, TError>({
           ),
         );
         // A harness that stops answering cannot be trusted with the session.
+        state.missedDeadline = true;
         terminate();
-      }, deadlines.requestMs);
+      }, timeoutMs ?? deadlines.requestMs);
       write(outgoing);
       const result = await promise;
       clearTimeout(deadline);
@@ -234,6 +266,7 @@ export const startHarnessProcess = <TId, TError>({
       return true;
     },
     exited,
+    missedDeadline: () => state.missedDeadline,
     closeInput: () => {
       if (!state.closed) {
         onInput(() => {

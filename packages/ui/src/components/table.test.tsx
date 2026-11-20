@@ -64,8 +64,16 @@ describe("Table", () => {
 
     expect(markup).toMatch(/<tr class="[^"]*text-muted-foreground/u);
     expect(markup).toContain("tabular-nums");
-    expect(markup).toMatch(
-      /<td class="[^"]*text-muted-foreground[^"]*truncate/u,
+    const cell = /<td class="(?<classes>[^"]*)"[^>]*>A long narrative/u.exec(
+      markup,
+    )?.groups?.["classes"];
+    expect(cell?.split(" ")).toEqual(
+      expect.arrayContaining([
+        "table-cell",
+        "text-muted-foreground",
+        "truncate",
+        "max-w-full",
+      ]),
     );
   });
 
@@ -129,7 +137,15 @@ describe("Table", () => {
     expect(markup).toContain('aria-sort="ascending"');
     expect(markup).toContain('data-slot="button"');
     expect(markup).toContain('type="button"');
-    expect(markup).toContain("-ms-3");
+    // The button cancels the head's own padding (px-2.5) and no more, so it
+    // stays inside the first column instead of reaching past the table edge.
+    const buttonClasses =
+      /<button[^>]*class="(?<classes>[^"]*)"/u
+        .exec(markup)
+        ?.groups?.["classes"]?.split(" ") ?? [];
+    expect(buttonClasses).toContain("px-2.5");
+    expect(buttonClasses).toContain("-ms-2.5");
+    expect(markup).not.toContain("-ms-3");
     expect(markup).not.toContain("flex-row-reverse");
   });
 
@@ -142,11 +158,11 @@ describe("Table", () => {
 
     expect(markup).toContain('aria-sort="none"');
     expect(markup).toMatch(/<th class="[^"]*text-end[^"]*tabular-nums/u);
-    expect(markup).toContain("-me-3 flex-row-reverse");
+    expect(markup).toContain("-me-2.5 flex-row-reverse");
   });
 });
 
-const matrix = (density?: "compact") =>
+const matrix = (density?: "compact" | "prose") =>
   renderToStaticMarkup(
     <Table {...(density === undefined ? {} : { density })}>
       <TableHeader>
@@ -182,5 +198,16 @@ describe("Table density", () => {
     );
     expect(markup.match(/<th\b/gu)).toHaveLength(3);
     expect(markup).toContain('scope="row"');
+  });
+
+  test("a prose table in wrap mode lets long tokens narrow their column", () => {
+    const markup = matrix("prose");
+    expect(markup).toContain('data-cell-text="wrap"');
+    // `anywhere`, unlike `break-word`, lowers a cell's min-content width, so
+    // an unbroken token cannot push the table past its box.
+    expect(markup).toContain(
+      "in-data-[cell-text=wrap]:in-data-[density=prose]:wrap-anywhere",
+    );
+    expect(markup).not.toContain("wrap-break-word");
   });
 });

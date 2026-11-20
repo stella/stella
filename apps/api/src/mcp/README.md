@@ -31,11 +31,11 @@ instructions, because an orchestrator picks tools from the names it was handed:
 - `/mcp-documents`: the least-privilege document surface. Document tools plus
   the version-upload lifecycle through `write_capability`, whose capability IDs
   are allowlisted for that surface.
-- `/mcp-law`: the public legal corpus. Exactly 13 read tools (`search`,
+- `/mcp-law`: the public legal corpus. Exactly 16 read tools (`search`,
   `fetch`, `search_case_law`, `resolve_case_law_decision`, `resolve_law_citation`, `read_case_law_decision`,
-  `read_case_law_citations`, `open_case_law_decision`, `case_law_coverage`,
+  `read_case_law_citations`, `open_case_law_decision`, `verify_quote`, `case_law_coverage`,
   `search_legislation`, `read_statute`, `read_statute_provisions`,
-  `read_provision_history`). Resolution uses `stella:law_read` (also implied by
+  `read_provision_history`, `search_guidance`, `read_guidance`). Resolution uses `stella:law_read` (also implied by
   `stella:read`); the other tools use `stella:search` or `stella:read`. The
   decision reader app also calls two app-only tools there; `tools/list` keeps
   them for the host, which hides them from the model, and they are not
@@ -192,8 +192,9 @@ with `isError` set. `hint`, `retryable`, and `retryAfterMs` are omitted when abs
 with `structuredErrorResult` (or the `notFoundResult` shorthand) in
 `tool-utils.ts`; the arg parsers there already emit `validation_error`. The
 `code` set is closed and defined in [`error-codes.ts`](./error-codes.ts).
-Verification active and daily run limits preserve their distinct codes from
-`@stll/api-contract/verification-run-caps`. Agents branch on `code`; `hint` states the
+An organization's active and daily model run limits (list verifications, fact
+extractions, document reviews) answer with the two codes in
+`@stll/api-contract/model-run-caps`. Agents branch on `code`; `hint` states the
 next step (e.g. `missing_scope` tells the client to re-run OAuth consent). The
 CLI keys its exit codes off `error.code` (e.g. `feature_disabled` -> exit 5), so
 the string values are a stable contract. `internal_error` never leaks internals:
@@ -319,6 +320,32 @@ windowing, the error envelope shape, the confirm guardrail, and where static
 resources live. Terse and factual, under hard character budgets asserted in
 `instructions.test.ts` (the anonymized and law variants drop the feedback
 pointer, because neither surface carries the tools).
+
+## Verify a reported tool failure
+
+Run the verifier before escalating a tool failure or schema mismatch. Set
+`MCP_CANARY_TOKEN` to a bearer token for the target API. The command lists the
+tools afresh and executes the requested call once, so use a read-only
+reproduction when possible.
+
+```sh
+bun run incident:verify --tool search_case_law --args '{"query":"náhrada škody"}'
+```
+
+The target defaults to `https://api.stll.app`. To use `--base-url` for another
+deployment, set `MCP_CANARY_CONFIGURED_BASE_URL` to that API origin and use its
+credential. Pass `--stale-list path/to/tools-list.json` to compare against the
+reporter's saved list. Relative paths start at the repository root. Otherwise
+the command looks for the prior stable tag's registry snapshot in local Git. A missing snapshot leaves only the fresh
+result available. The evidence includes the server version and commit, schema
+verdicts, and the latest canary run if `gh` can read it.
+
+| Classification        | Exit | Meaning                                                                               |
+| --------------------- | ---- | ------------------------------------------------------------------------------------- |
+| `ALL CLIENTS BROKEN`  | 1    | The fresh probe could not list the tool or its result failed the advertised schema.   |
+| `STALE SESSIONS ONLY` | 2    | The fresh response passes and the earlier schema rejects that same result.            |
+| `NOT REPRODUCED`      | 0    | The fresh call works, and no mismatch was found against the available earlier schema. |
+| `SERVER ERROR`        | 3    | The call returned an error or setup prevented the probe.                              |
 
 ## Surface size
 

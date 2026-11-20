@@ -19,7 +19,7 @@ import { suggestTemplateFieldsOrEmpty } from "@/api/lib/templates/suggest-templa
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
 const prepareBodySchema = v.object({
-  file: fileSchema({ maxBytes: FILE_SIZE_LIMIT_BYTES.document }),
+  file: fileSchema({ maxBytes: FILE_SIZE_LIMIT_BYTES.multipartDocument }),
 });
 
 const config = {

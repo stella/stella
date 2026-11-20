@@ -58,13 +58,6 @@ import type {
 import { copyFileObject, resolveEntityName } from "./copy-utils";
 import { createDuplicateEntity } from "./duplicate";
 
-beforeEach(() => {
-  enqueueDocumentProcessingRunMock.mockClear();
-  enqueueEntitySearchRepairsMock.mockClear();
-  flushEntitySearchRepairsMock.mockClear();
-  requestNativeExtractionRunsMock.mockClear();
-});
-
 const requestNativeExtractionRunsMock = mock(
   async ({ requests }: { requests: readonly unknown[] }) =>
     requests.map((_, index) =>
@@ -224,6 +217,10 @@ afterAll(async () => {
 beforeEach(() => {
   lockCopyPublicationIntentsMock.mockClear();
   retirePublishedCopyIntentsMock.mockClear();
+  enqueueDocumentProcessingRunMock.mockClear();
+  enqueueEntitySearchRepairsMock.mockClear();
+  flushEntitySearchRepairsMock.mockClear();
+  requestNativeExtractionRunsMock.mockClear();
   fake = startFakeS3();
   fake.put(envBase.S3_BUCKET, sourceKey, sourceBytes, fileContent.mimeType);
   fake.put(

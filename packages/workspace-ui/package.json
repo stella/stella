@@ -1,6 +1,6 @@
 {
   "name": "@stll/workspace-ui",
-  "version": "0.16.0",
+  "version": "0.19.0",
   "description": "Reusable workspace presentation components and view helpers for Stella.",
   "keywords": [
     "calculations",
@@ -44,10 +44,13 @@
     "./property-icon": "./src/property-icon.tsx",
     "./responsive-action-toolbar": "./src/responsive-action-toolbar.tsx",
     "./sorts": "./src/sorts.tsx",
+    "./sorts-face": "./src/sorts-face.tsx",
     "./table-skeleton-rows": "./src/table-skeleton-rows.tsx",
     "./task-status": "./src/task-status.ts",
     "./types": "./src/types.ts",
     "./view-switcher": "./src/view-switcher.tsx",
+    "./view-strip": "./src/view-strip.tsx",
+    "./view-switcher-face": "./src/view-switcher-face.tsx",
     "./workspace-frame": "./src/workspace-frame.tsx"
   },
   "publishConfig": {
@@ -59,8 +62,8 @@
     "pack:dry-run": "bun pm pack --dry-run",
     "test": "bun test src",
     "typecheck": "bun check --no-pretty --all --project=tsconfig.json",
-    "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --type-aware --type-check packages/workspace-ui",
-    "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix packages/workspace-ui",
+    "lint": "cd ../.. && bun scripts/lint.ts packages/workspace-ui",
+    "lint:fix": "cd ../.. && bun scripts/lint.ts --fix packages/workspace-ui",
     "prepack": "bun run build",
     "test:property": "bun test --preload @stll/property-testing/preload $(grep -rlE 'fc\\.assert|assertProperty' src --include='*.test.ts')"
   },

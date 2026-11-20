@@ -174,8 +174,10 @@ const createContext = ({
     recordAuditEvent: async () => {},
     request: new Request("http://localhost/v1/chat"),
     route: "/v1/chat" satisfies ApiRoutePath,
+    headers: {},
     safeDb,
     scopedDb,
+    set: { headers: {}, status: 200 },
     session: { activeOrganizationId: ids.orgA },
     user: { id: ids.userA1 },
   });

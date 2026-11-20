@@ -7,13 +7,10 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
 import { authorizedMcpContextForTest } from "@/api/tests/helpers/authorized-mcp-context";
+import { repositoryCapabilityCatalog } from "@/api/tests/helpers/repository-capability-catalog";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { enrolledTimeBillingSnapshot } from "@/api/tests/helpers/time-billing-enrolment";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
-
-beforeEach(() => {
-  loadOrgSettingsMock.mockClear();
-});
 
 /**
  * A known LLM-client behavior (Stripe's agent toolkit tests for it explicitly)
@@ -114,11 +111,9 @@ const loadOrgSettingsMock = mock(async () => ({
   promptCachingEnabled: false,
 }));
 const { handleMcpToolCall } = await import("@/api/mcp/tools");
-const { readCapabilityCatalog } =
-  await import("@stll/cli/capability-catalog-data");
 const { parseCapabilityCatalog } =
   await import("../../../../packages/cli/src/capability-catalog-load");
-const capabilityCatalog = parseCapabilityCatalog(readCapabilityCatalog());
+const capabilityCatalog = parseCapabilityCatalog(repositoryCapabilityCatalog);
 if (capabilityCatalog === null) {
   throw new TypeError("Invalid capability catalog");
 }
@@ -201,6 +196,7 @@ const invokeValidateOnly = async (
   });
 
 beforeEach(() => {
+  loadOrgSettingsMock.mockClear();
   loadOrgSettingsMock.mockClear();
 });
 

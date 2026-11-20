@@ -16,6 +16,10 @@ import {
   type StatedEcliIdentity,
 } from "@/api/lib/legal-search/adapter-manifest";
 import {
+  type HeldDecisionAttachment,
+  heldDecisionAttachmentForAdapter,
+} from "@/api/lib/legal-search/held-decision-attachment";
+import {
   IMPORT_SOURCE_KEYS,
   type ImportSourceKey,
   SOURCE_FINGERPRINT_VERSIONS,
@@ -28,6 +32,8 @@ export type SourceContract = {
   sourceFingerprintVersion: number;
   statedEcliIdentity: StatedEcliIdentity;
   retention: SourceRetention;
+  /** Whether this source's records may enrich a decision another source holds. */
+  heldDecisionAttachment: HeldDecisionAttachment<string> | null;
 };
 
 const isImportSourceKey = (key: string): key is ImportSourceKey =>
@@ -65,6 +71,7 @@ export const sourceContractForAdapter = (
     sourceFingerprintVersion,
     statedEcliIdentity: statedEcliIdentityForAdapter(adapterKey),
     retention: sourceRetentionForAdapter(adapterKey),
+    heldDecisionAttachment: heldDecisionAttachmentForAdapter(adapterKey),
   };
 };
 

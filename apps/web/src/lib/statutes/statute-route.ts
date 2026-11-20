@@ -2,6 +2,7 @@ import {
   isPublicLegislationCountry,
   isPublicLegislationPageCountry,
 } from "@stll/api-contract/legislation-publication";
+import type { PublicCountry } from "@stll/api-contract/public-country-capability";
 import type { StatuteQueryCountry } from "@stll/api-contract/statute-query-capability";
 import { createStatuteRouteParams } from "@stll/api-contract/statute-route";
 import type { StatuteRouteInput } from "@stll/api-contract/statute-route";
@@ -15,9 +16,19 @@ import type { useFormatter } from "@/i18n/formatting-context";
 export const STATUTE_COUNTRIES = {
   cze: { region: "CZ" },
   svk: { region: "SK" },
+  hun: { region: "HU" },
 } as const satisfies Record<StatuteQueryCountry, { region: string }>;
 
 export type StatuteCountry = keyof typeof STATUTE_COUNTRIES;
+
+/**
+ * Statute jurisdictions the statutes browser does not open yet, even once
+ * their acts are admitted: those are searched and read through the API and
+ * MCP only. Declared, so admitting a jurisdiction leaves the browser a stated
+ * decision.
+ */
+export const STATUTE_BROWSER_PENDING_COUNTRIES =
+  [] as const satisfies readonly PublicCountry[];
 
 const isStatuteCountry = (value: string): value is StatuteCountry =>
   Object.hasOwn(STATUTE_COUNTRIES, value);

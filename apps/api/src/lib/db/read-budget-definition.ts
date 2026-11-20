@@ -1,7 +1,5 @@
-export type ReadBudget = {
+type BudgetMetadata = {
   surface: "scheduled-job" | "statement";
-  /** Shared buffers (hit plus read) per call or per run. */
-  pages: number;
   reason: string;
   /**
    * Set only while a measured statement or job is over its budget and a change to
@@ -14,3 +12,30 @@ export type ReadBudget = {
   /** Wall-clock work budget; the job stops at its next durable boundary. */
   runBudgetMs?: number;
 };
+
+type StatementReadBudget = BudgetMetadata & {
+  surface: "statement";
+  /** Shared buffers (hit plus read) per call. */
+  pages: number;
+};
+
+/**
+ * One run of a scheduled job. Each measured statement is a read or a write;
+ * reads and writes are budgeted separately, so a job's write volume cannot
+ * hide a read regression and the other way around.
+ */
+type ScheduledJobBudget = BudgetMetadata & {
+  surface: "scheduled-job";
+  /** Shared buffers (hit plus read) the run's reading statements touch. */
+  reads: { pages: number };
+  /** An existing whole-run envelope retained across read/write classification. */
+  combinedPagesPerRun?: number;
+  /** Required exactly when the measured run writes rows or write pages. */
+  writes?: {
+    pagesPerWrittenRow: number;
+    ceilingPagesPerRun: number;
+    reason: string;
+  };
+};
+
+export type ReadBudget = StatementReadBudget | ScheduledJobBudget;

@@ -2,6 +2,7 @@ import { Temporal } from "@stll/time";
 
 import { runWithStatementCeiling } from "@/api/lib/db/statement-ceiling";
 import { createBullMqDispatchTask } from "@/api/lib/scheduler/bullmq";
+import { FLOW_RUN_TASK } from "@/api/lib/scheduler/flow-schedule-identity";
 import {
   SWEEP_ACTION_COSTS_TASK,
   sweepActionCostRecords,
@@ -10,6 +11,10 @@ import {
   BACKFILL_AGENT_CLIENT_STORAGE_TASK,
   backfillAgentClientStorage,
 } from "@/api/lib/scheduler/tasks/agent-client-storage-backfill";
+import {
+  CLEAN_AGENT_SKILL_ORIGINAL_OBJECTS_TASK,
+  cleanAgentSkillOriginalObjects,
+} from "@/api/lib/scheduler/tasks/agent-skill-original-cleanup";
 import {
   BACKFILL_HEARTBEAT_TASK,
   emitBackfillHeartbeats,
@@ -74,9 +79,21 @@ import {
   refreshCaseLawSitemapShardsTask,
 } from "@/api/lib/scheduler/tasks/case-law-sitemap-shard-refresh";
 import {
+  FOLD_CASE_LAW_SITEMAP_TOUCHES_TASK,
+  foldCaseLawSitemapTouchesTask,
+} from "@/api/lib/scheduler/tasks/case-law-sitemap-touch-fold";
+import {
   REFRESH_CASE_LAW_SOURCE_ARRIVALS_TASK,
   refreshCaseLawSourceArrivalsTask,
 } from "@/api/lib/scheduler/tasks/case-law-source-arrivals-refresh";
+import {
+  SWEEP_CHAT_COMMAND_RECEIPTS_TASK,
+  sweepChatCommandReceipts,
+} from "@/api/lib/scheduler/tasks/chat-command-receipt-retention";
+import {
+  SEND_CHAT_LIMIT_REMINDERS_TASK,
+  sendChatLimitReminders,
+} from "@/api/lib/scheduler/tasks/chat-limit-reminders";
 import {
   SWEEP_CHAT_RUN_LOGS_TASK,
   sweepChatRunLogs,
@@ -95,12 +112,18 @@ import {
   backfillCorpusIndexJobDetail,
 } from "@/api/lib/scheduler/tasks/corpus-index-job-detail-backfill";
 import {
+  createMaintainDataExportsTask,
+  type DataExportMaintenanceDependencies,
+  MAINTAIN_DATA_EXPORTS_TASK,
+  maintainDataExports,
+} from "@/api/lib/scheduler/tasks/data-export-maintenance";
+import {
   CHECK_DATA_INVARIANTS_TASK,
   checkDataInvariants,
 } from "@/api/lib/scheduler/tasks/data-invariants";
 import {
   EXPIRE_DESKTOP_EDIT_SESSIONS_TASK,
-  expireDesktopEditSessions,
+  expireDesktopEditSessionsTask,
 } from "@/api/lib/scheduler/tasks/desktop-edit-session-expiry";
 import {
   RECOVER_DOCUMENT_DEADLINE_SCOUTS_TASK,
@@ -130,10 +153,7 @@ import {
   REPAIR_FILE_DERIVATIVES_TASK,
   repairFileDerivatives,
 } from "@/api/lib/scheduler/tasks/file-derivative-repair";
-import {
-  FLOW_RUN_TASK,
-  runScheduledFlow,
-} from "@/api/lib/scheduler/tasks/flow-run";
+import { runScheduledFlow } from "@/api/lib/scheduler/tasks/flow-run";
 import {
   RECONCILE_FLOW_RUN_ORPHANS_TASK,
   reconcileFlowRunOrphans,
@@ -155,6 +175,10 @@ import {
   INFO_SOUD_SYNC_TRACKED_CASES_TASK,
   syncInfoSoudTrackedCases,
 } from "@/api/lib/scheduler/tasks/infosoud";
+import {
+  DELETE_KEPT_TRANSCRIPTS_TASK,
+  deleteKeptTranscripts,
+} from "@/api/lib/scheduler/tasks/kept-transcript-deletion";
 import {
   BACKFILL_LEGISLATION_EXPRESSION_IDS_TASK,
   backfillLegislationExpressionIds,
@@ -227,6 +251,7 @@ import {
   REPAIR_SEARCH_SEMANTIC_TIMESTAMPS_TASK,
   repairSearchSemanticTimestampsTask,
 } from "@/api/lib/scheduler/tasks/search-semantic-timestamps";
+import { SYNC_SOFT_LAW_TASK } from "@/api/lib/scheduler/tasks/soft-law-sync";
 import {
   REFRESH_STATUTE_SITEMAP_SHARDS_TASK,
   refreshStatuteSitemapShardsTask,
@@ -263,6 +288,7 @@ const noopTask: SchedulerTask = ({ logger }) => {
 
 const SCHEDULER_TASKS = {
   [ERASE_HOSTED_CUSTOMERS_TASK]: eraseHostedCustomers,
+  [DELETE_KEPT_TRANSCRIPTS_TASK]: deleteKeptTranscripts,
   [SWEEP_REQUEST_RECEIPTS_TASK]: sweepRequestReceipts,
   [RECONCILE_CLAIMED_ERASURES_TASK]: reconcileClaimedErasuresTask,
   [RECONCILE_PUBLISHER_REMOVALS_TASK]: reconcilePublisherRemovalsTask,
@@ -279,7 +305,8 @@ const SCHEDULER_TASKS = {
   [RECEIVE_EMAIL_DELIVERABILITY_TASK]: receiveEmailDeliverability,
   [RECEIVE_INBOUND_MAIL_TASK]: receiveInboundMail,
   [REFRESH_SANCTIONS_SOURCES_TASK]: refreshSanctionsSourcesTask,
-  [EXPIRE_DESKTOP_EDIT_SESSIONS_TASK]: expireDesktopEditSessions,
+  [SEND_CHAT_LIMIT_REMINDERS_TASK]: sendChatLimitReminders,
+  [EXPIRE_DESKTOP_EDIT_SESSIONS_TASK]: expireDesktopEditSessionsTask,
   [DISPATCH_DOCUMENT_OCR_TASK]: dispatchDocumentOcr,
   [DISPATCH_NATIVE_EXTRACTION_TASK]: dispatchNativeExtraction,
   [FLOW_RUN_TASK]: runScheduledFlow,
@@ -293,6 +320,7 @@ const SCHEDULER_TASKS = {
   [RECONCILE_CASE_LAW_RAW_ROWS_TASK]: reconcileCaseLawRawRowsTask,
   [CENSUS_CASE_LAW_RAW_OBJECTS_TASK]: censusCaseLawRawObjectsTask,
   [REFRESH_CASE_LAW_SITEMAP_SHARDS_TASK]: refreshCaseLawSitemapShardsTask,
+  [FOLD_CASE_LAW_SITEMAP_TOUCHES_TASK]: foldCaseLawSitemapTouchesTask,
   [FOLD_CASE_LAW_POPULATION_COUNTS_TASK]: foldCaseLawPopulationCountsTask,
   [SEED_CASE_LAW_POPULATION_COUNTS_TASK]: seedCaseLawPopulationCountsTask,
   [REPORT_CASE_LAW_FRESHNESS_TASK]: reportCaseLawFreshnessTask,
@@ -306,6 +334,7 @@ const SCHEDULER_TASKS = {
   [REPAIR_CHAT_SEARCH_INDEX_TASK]: repairChatSearchIndex,
   [REPAIR_SEARCH_PROJECTIONS_TASK]: repairSearchProjections,
   [CHAT_THREAD_COMPACTOR_TASK]: compactChatThreads,
+  [SWEEP_CHAT_COMMAND_RECEIPTS_TASK]: sweepChatCommandReceipts,
   [SWEEP_CHAT_RUN_LOGS_TASK]: sweepChatRunLogs,
   [PURGE_CHAT_SECRETS_TASK]: purgeChatSecrets,
   [SWEEP_ACTION_COSTS_TASK]: sweepActionCostRecords,
@@ -328,6 +357,7 @@ const SCHEDULER_TASKS = {
   // Ungated: its time-billing sample data admits itself on the feature.
   [RESET_REVIEW_ORGANIZATION_TASK]: resetReviewOrganizationTask,
   [CLEAN_TEMPLATE_DELETION_OBJECTS_TASK]: cleanTemplateDeletionObjects,
+  [CLEAN_AGENT_SKILL_ORIGINAL_OBJECTS_TASK]: cleanAgentSkillOriginalObjects,
   [REPAIR_FILE_DERIVATIVES_TASK]: repairFileDerivatives,
   [RECONCILE_FLOW_RUN_ORPHANS_TASK]: reconcileFlowRunOrphans,
   [RECONCILE_DOCUMENT_REVIEW_RUNS_TASK]: reconcileDocumentReviewRuns,
@@ -338,6 +368,7 @@ const SCHEDULER_TASKS = {
   [RECONCILE_BILINGUAL_RUNS_TASK]: reconcileBilingualRuns,
   [RECONCILE_STYLE_SET_PACKAGE_CLEANUPS_TASK]: reconcileStyleSetPackageCleanups,
   [RECONCILE_REPORT_EXPORTS_TASK]: reconcileReportExports,
+  [MAINTAIN_DATA_EXPORTS_TASK]: maintainDataExports,
   [RECOVER_DOCUMENT_DEADLINE_SCOUTS_TASK]: recoverDocumentDeadlineScouts,
 } as const satisfies Record<
   string,
@@ -349,15 +380,27 @@ type SchedulerTaskRegistryOptions = {
     typeof runHostedCustomerErasures
   >[1];
   resetReviewOrganization?: SchedulerTask;
+  dataExportMaintenance?: DataExportMaintenanceDependencies;
 };
 
+/*
+ * Tasks whose work lives in a handler slice arrive as parameters: the
+ * composition root builds them, so scheduler code keeps its dependencies
+ * pointing from handlers to lib.
+ */
 const schedulerTasks = (
   reapOwnerlessChatTurns: SchedulerTask,
   refreshCaseLawCoverage: SchedulerTask,
+  syncSoftLaw: SchedulerTask,
+  options: SchedulerTaskRegistryOptions = {},
 ) => ({
   ...SCHEDULER_TASKS,
+  [MAINTAIN_DATA_EXPORTS_TASK]: createMaintainDataExportsTask(
+    options.dataExportMaintenance,
+  ),
   [REAP_OWNERLESS_CHAT_TURNS_TASK]: reapOwnerlessChatTurns,
   [REFRESH_CASE_LAW_COVERAGE_TASK]: refreshCaseLawCoverage,
+  [SYNC_SOFT_LAW_TASK]: syncSoftLaw,
 });
 
 export type RegisteredSchedulerTaskName = keyof ReturnType<
@@ -369,17 +412,23 @@ export type RegisteredSchedulerTaskName = keyof ReturnType<
  * persisted rows whose task no build code answers for anymore.
  */
 export const REGISTERED_SCHEDULER_TASK_NAMES: ReadonlySet<string> = new Set(
-  Object.keys(schedulerTasks(noopTask, noopTask)),
+  Object.keys(schedulerTasks(noopTask, noopTask, noopTask)),
 );
 
 export const createSchedulerTaskRegistry = (
   reapOwnerlessChatTurns: SchedulerTask,
   refreshCaseLawCoverage: SchedulerTask,
+  syncSoftLaw: SchedulerTask,
   options: SchedulerTaskRegistryOptions = {},
 ): SchedulerTaskRegistry =>
   new Map(
     Object.entries(
-      schedulerTasks(reapOwnerlessChatTurns, refreshCaseLawCoverage),
+      schedulerTasks(
+        reapOwnerlessChatTurns,
+        refreshCaseLawCoverage,
+        syncSoftLaw,
+        options,
+      ),
     ).map(([name, registered]) => {
       const entry =
         name === RESET_REVIEW_ORGANIZATION_TASK

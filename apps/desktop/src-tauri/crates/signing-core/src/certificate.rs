@@ -87,6 +87,44 @@ pub(crate) struct CertificateFacts {
   pub(crate) issuer_name: Option<String>,
 }
 
+/// A certificate's issuer and subject names as encoded (the contents of each
+/// `Name`), for matching a certificate to the one that issued it: RFC 5280
+/// chains by name, and byte equality is the comparison every store uses.
+#[derive(Debug, Eq, PartialEq)]
+pub(crate) struct CertificateNames<'a> {
+  pub(crate) issuer: &'a [u8],
+  pub(crate) subject: &'a [u8],
+}
+
+/// The issuer and subject names, or `None` for anything that is not a
+/// well-formed certificate as far as these fields go.
+pub(crate) fn certificate_names(
+  certificate_der: &[u8],
+) -> Option<CertificateNames<'_>> {
+  let certificate = read_tagged(certificate_der, TAG_SEQUENCE)?;
+  let tbs = read_tagged(certificate.contents, TAG_SEQUENCE)?;
+  let after_version = match read_element(tbs.contents) {
+    Some(element) if element.tag == TAG_CONTEXT_0 => element.rest,
+    _ => tbs.contents,
+  };
+  let after_serial = read_tagged(after_version, TAG_INTEGER)?.rest;
+  let issuer = read_tagged(skip(after_serial)?, TAG_SEQUENCE)?;
+  let validity = read_tagged(issuer.rest, TAG_SEQUENCE)?;
+  let subject = read_tagged(validity.rest, TAG_SEQUENCE)?;
+  Some(CertificateNames {
+    issuer: issuer.contents,
+    subject: subject.contents,
+  })
+}
+
+/// The subject's common name, or its organization when it has none: what a
+/// picker shows for a certificate whose store offers no summary of its own
+/// (a PKCS #11 token's labels are whatever the card was personalised with).
+#[must_use]
+pub fn subject_display_name(certificate_der: &[u8]) -> Option<String> {
+  display_name(certificate_names(certificate_der)?.subject)
+}
+
 /// Read the facts, or `None` for anything that is not a well-formed
 /// certificate as far as these fields go.
 pub(crate) fn certificate_facts(certificate_der: &[u8]) -> Option<CertificateFacts> {
@@ -110,7 +148,7 @@ pub(crate) fn certificate_facts(certificate_der: &[u8]) -> Option<CertificateFac
     not_after: parse_time(not_after.tag, not_after.contents)?,
     key_usage: None,
     extended_key_usages: None,
-    issuer_name: issuer_name(issuer.contents),
+    issuer_name: display_name(issuer.contents),
   };
 
   // issuerUniqueID [1] and subjectUniqueID [2] may precede the extensions.
@@ -180,7 +218,7 @@ pub(crate) fn iso_date(unix_seconds: i64) -> String {
   format!("{year:04}-{month:02}-{day:02}")
 }
 
-fn issuer_name(name: &[u8]) -> Option<String> {
+fn display_name(name: &[u8]) -> Option<String> {
   let mut common_name = None;
   let mut organization = None;
   let mut sets = name;
@@ -344,6 +382,28 @@ mod tests {
       certificate_facts(SIGNING).unwrap().issuer_name.as_deref(),
       Some("Test Issuing CA")
     );
+  }
+
+  #[test]
+  fn names_the_subject_by_its_common_name() {
+    assert_eq!(
+      subject_display_name(SIGNING).as_deref(),
+      Some("Jane Counsel")
+    );
+    assert_eq!(subject_display_name(b"not der"), None);
+  }
+
+  #[test]
+  fn reads_the_issuer_and_subject_names_as_encoded() {
+    let names = certificate_names(SIGNING).unwrap();
+    assert_eq!(
+      display_name(names.issuer).as_deref(),
+      Some("Test Issuing CA")
+    );
+    assert_ne!(names.issuer, names.subject);
+    // A self-signed certificate names itself as its issuer.
+    let self_signed = certificate_names(NO_EXTENSIONS).unwrap();
+    assert_eq!(self_signed.issuer, self_signed.subject);
   }
 
   #[test]

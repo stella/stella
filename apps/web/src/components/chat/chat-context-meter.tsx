@@ -12,6 +12,11 @@ import {
 } from "@stll/ui/popover";
 import { cn } from "@stll/ui/utils";
 
+import {
+  CHAT_CONTEXT_METER_BOX_CLASS,
+  ChatContextMeterPending,
+  ContextRing,
+} from "@/components/chat/chat-context-meter.pending";
 import { useFormatter } from "@/i18n/formatting-context";
 
 /** Model-context estimate for a chat thread's next send, as returned by the
@@ -52,9 +57,6 @@ type ChatContextMeterProps =
 const WARNING_THRESHOLD = 80;
 const DANGER_THRESHOLD = 95;
 
-const RING_RADIUS = 6;
-const RING_CIRCUMFERENCE = 2 * Math.PI * RING_RADIUS;
-
 type ContextTone = "muted" | "warning" | "danger";
 
 const TONE_TEXT_CLASS: Record<ContextTone, string> = {
@@ -85,15 +87,7 @@ export const ChatContextMeter = (props: ChatContextMeterProps) => {
   const format = useFormatter();
 
   if (props.status === "pending") {
-    return (
-      <span
-        aria-hidden="true"
-        className="text-muted-foreground inline-flex size-6 items-center justify-center"
-        data-status="pending"
-      >
-        <ContextRing percent={0} />
-      </span>
-    );
+    return <ChatContextMeterPending />;
   }
 
   const { usage } = props;
@@ -104,7 +98,7 @@ export const ChatContextMeter = (props: ChatContextMeterProps) => {
     return (
       <span
         aria-label={t("triggerLabel", { percent: format.number(0) })}
-        className="text-muted-foreground inline-flex size-6 items-center justify-center"
+        className={CHAT_CONTEXT_METER_BOX_CLASS}
         role="status"
       >
         <ContextRing percent={0} />
@@ -299,37 +293,6 @@ const contextTone = (percent: number): ContextTone => {
     return "warning";
   }
   return "muted";
-};
-
-const ContextRing = ({ percent }: { percent: number }) => {
-  const filled = (RING_CIRCUMFERENCE * percent) / 100;
-
-  return (
-    <svg
-      aria-hidden="true"
-      className="size-3.5 -rotate-90"
-      data-slot="chat-context-ring"
-      fill="none"
-      viewBox="0 0 16 16"
-    >
-      <circle
-        className="stroke-current opacity-20"
-        cx="8"
-        cy="8"
-        r={RING_RADIUS}
-        strokeWidth="2"
-      />
-      <circle
-        className="stroke-current"
-        cx="8"
-        cy="8"
-        r={RING_RADIUS}
-        strokeDasharray={`${filled} ${RING_CIRCUMFERENCE}`}
-        strokeLinecap="round"
-        strokeWidth="2"
-      />
-    </svg>
-  );
 };
 
 type ContextBarProps = {

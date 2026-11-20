@@ -1463,8 +1463,7 @@ export const CS_SEED_CONTENT = {
       },
       // Label-first so the counts read grammatically for any number
       // ("protistrany: 4", never "4 protistran").
-      statDetail:
-        "protistrany: {counterparties} · dokumenty: {documents} · {share} hodnoty",
+      statDetail: "protistrany: {counterparties} · {share} hodnoty",
       splitLabel: "Podíl na hodnotě smluv podle dopadu změny kontroly",
       columns: [
         "Protistrana",
@@ -1472,7 +1471,6 @@ export const CS_SEED_CONTENT = {
         "Dokumenty",
         "Hodnota smluv",
         "Riziko",
-        "Změna kontroly",
       ],
     },
     agreementLabel: (documentType, year) => `${documentType} ${year}`,

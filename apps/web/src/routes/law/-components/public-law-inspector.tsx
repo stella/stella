@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 
 import { useTranslations } from "use-intl";
 
+import { DirectionalIcon } from "@stll/ui/directional-icon";
 import { PanelRightIcon } from "@stll/ui/icons";
 import { InspectorRailIconButton, InspectorRailTab } from "@stll/ui/inspector";
 import { WorkspaceEndRail } from "@stll/ui/workspace-shell";
@@ -11,6 +12,7 @@ import type { WorkspaceEndRailChatAction } from "@stll/ui/workspace-shell";
 import { useMainLegalDocument } from "@/components/ai-suggestions/use-main-legal-document";
 import { useRequireAccount } from "@/components/auth/use-require-account";
 import { railChatOpenArgs } from "@/components/inspector/inspector-rail-chat.logic";
+import { INSPECTOR_FOCUS_INTENT } from "@/components/inspector/inspector-store-types";
 import {
   isGenericInspectorTab,
   useInspectorTabsStore,
@@ -125,7 +127,7 @@ const PublicLawRail = ({
             />
           }
         >
-          <PanelRightIcon className="size-4" />
+          <DirectionalIcon className="size-4" icon={PanelRightIcon} />
         </Tooltip>
       }
     >
@@ -153,7 +155,10 @@ const SessionRailPlaceholder = () => {
         chatAction={{
           label: t("chat.newChat"),
           onActivate: () => {
-            openChat(railChatOpenArgs({ legalDocument }));
+            openChat({
+              ...railChatOpenArgs({ legalDocument }),
+              focus: INSPECTOR_FOCUS_INTENT.claim,
+            });
           },
           status: "enabled",
         }}

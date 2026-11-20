@@ -36,6 +36,7 @@ import {
 } from "@/routes/_protected.workspaces/$workspaceId/-components/empty-state";
 import { useEntityRowHost } from "@/routes/_protected.workspaces/$workspaceId/-components/table/entity-row-host";
 import { GroupedTableLayout } from "@/routes/_protected.workspaces/$workspaceId/-components/table/grouped-table-layout";
+import { isGroupedTableView } from "@/routes/_protected.workspaces/$workspaceId/-components/table/pending-table-columns.logic";
 import { useTableColumns } from "@/routes/_protected.workspaces/$workspaceId/-components/table/table-columns";
 import { includesListItems } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-kind-filters";
 import { useSyncSelectedEntities } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-sync-selected-entities";
@@ -77,10 +78,7 @@ export const TableLayout = ({ workspaceId, view }: TableLayoutProps) => {
     openIfAIUnavailable();
   });
 
-  if (
-    view.layout.groupByPropertyId &&
-    !includesListItems(view.layout.filters)
-  ) {
+  if (isGroupedTableView(view)) {
     return (
       <GroupedTableLayout
         key={tableKey}
@@ -118,14 +116,10 @@ const FlatTableLayout = ({ workspaceId, view }: TableLayoutProps) => {
       view: { workspaceId, viewId: view.id },
     }),
   );
-  const fieldIds = useMemo(
-    () =>
-      visibleEntityFieldIds({
-        hiddenProperties: view.layout.hiddenProperties,
-        properties,
-      }),
-    [properties, view.layout.hiddenProperties],
-  );
+  const fieldIds = visibleEntityFieldIds({
+    hiddenProperties: view.layout.hiddenProperties,
+    properties,
+  });
 
   const { data, fetchNextPage, hasNextPage, isFetchingNextPage } =
     useSuspenseInfiniteQuery(
@@ -141,6 +135,7 @@ const FlatTableLayout = ({ workspaceId, view }: TableLayoutProps) => {
       }),
     );
 
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- load-bearing, without this memo boundary the React Compiler does not cache this value
   const treeData = useMemo(
     () =>
       toTableEntities(
@@ -154,10 +149,8 @@ const FlatTableLayout = ({ workspaceId, view }: TableLayoutProps) => {
       ),
     [data.pages, showListItems],
   );
-  const justificationEntityIdChunks = useMemo(
-    () =>
-      data.pages.map((page) => page.entities.map((entity) => entity.entityId)),
-    [data.pages],
+  const justificationEntityIdChunks = data.pages.map((page) =>
+    page.entities.map((entity) => entity.entityId),
   );
   useSyncJustificationChunks({
     workspaceId,

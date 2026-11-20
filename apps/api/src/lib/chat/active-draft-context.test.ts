@@ -31,17 +31,26 @@ describe("generated document draft chat binding", () => {
     ).not.toEqual(activeDraftContext);
   });
 
-  test("rejects an existing owned chat without the persisted draft binding", () => {
+  test("rejects a chat with history that does not bind the draft", () => {
     expect(
       canUseChatThreadForGeneratedDocumentDraft({
+        firstSend: false,
         hasPersistedContext: false,
-        threadType: "existing",
       }),
     ).toBe(false);
     expect(
       canUseChatThreadForGeneratedDocumentDraft({
+        firstSend: false,
+        hasPersistedContext: true,
+      }),
+    ).toBe(true);
+  });
+
+  test("accepts the send that writes a chat's first message", () => {
+    expect(
+      canUseChatThreadForGeneratedDocumentDraft({
+        firstSend: true,
         hasPersistedContext: false,
-        threadType: "created",
       }),
     ).toBe(true);
   });

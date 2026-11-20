@@ -1,4 +1,5 @@
 import { describe, expect, setDefaultTimeout, test } from "bun:test";
+import { fileURLToPath } from "node:url";
 import * as slimdom from "slimdom";
 
 import { ZipArchive } from "@stll/docx-core/zip";
@@ -39,10 +40,9 @@ const authorFieldMarkers = async (
 // SPA fixture is ~177KB; template filling needs time.
 setDefaultTimeout(15_000);
 
-const SPA_FIXTURE = new URL(
-  "fixtures/spa-template-with-placeholders.docx",
-  import.meta.url,
-).pathname;
+const SPA_FIXTURE = fileURLToPath(
+  new URL("fixtures/spa-template-with-placeholders.docx", import.meta.url),
+);
 
 const spaFixture = async (): Promise<ScannedFile> =>
   testDocxFile(await Bun.file(SPA_FIXTURE).arrayBuffer());

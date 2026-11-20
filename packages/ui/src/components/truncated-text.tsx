@@ -9,6 +9,10 @@ import { containedEventHandler } from "../hooks/use-contained-handler";
 import { cn } from "../lib/utils";
 import { Popover, PopoverPopup } from "./popover";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "./tooltip";
+import {
+  TRUNCATED_TEXT_LINES_CLASS,
+  type TruncatedTextLines,
+} from "./truncated-text-face";
 
 /**
  * Text that ends in an ellipsis when it does not fit, and shows the whole of
@@ -26,6 +30,7 @@ import { Tooltip, TooltipPopup, TooltipTrigger } from "./tooltip";
 const TruncatedText = ({
   children,
   className,
+  hint = true,
   lines = 1,
   render,
   side = "top",
@@ -44,8 +49,14 @@ const TruncatedText = ({
       return;
     }
     const element = ref.current;
-    // A tap focuses the text before it clicks; the popover answers taps.
-    if (element === null || LAST_POINTER_TYPE.get(element) === "touch") {
+    // A tap focuses the text before it clicks; the popover answers taps. A
+    // tooltip around the text already answers the pointer, and two at once
+    // cover each other.
+    if (
+      element === null ||
+      LAST_POINTER_TYPE.get(element) === "touch" ||
+      isInsideTooltipTrigger(element)
+    ) {
       return;
     }
     if (isTextOverflowing(element)) {
@@ -76,6 +87,10 @@ const TruncatedText = ({
     ref,
     render,
   });
+
+  if (!hint) {
+    return text;
+  }
 
   // The trigger merges its handlers into the text element, chaining any
   // handler the caller passed, and keeps the element's ref.
@@ -114,10 +129,14 @@ const TruncatedText = ({
 
 type TruncatedTextSurface = "tooltip" | "popover";
 
-/** How many lines the text may take before it is cut. */
-type TruncatedTextLines = 1 | 2 | 3;
-
 type TruncatedTextProps = useRender.ComponentProps<"span"> & {
+  /**
+   * Whether cut text shows its whole self on hover, focus or tap. Pass false
+   * only where something around the text already shows it (a tooltip on the
+   * row, a title the text sits in); the text stays inside its container
+   * either way.
+   */
+  hint?: boolean;
   lines?: TruncatedTextLines;
   side?: React.ComponentProps<typeof TooltipPopup>["side"];
   /**
@@ -147,12 +166,6 @@ function forgetPointerType(event: React.FocusEvent<HTMLElement>): void {
   LAST_POINTER_TYPE.delete(event.currentTarget);
 }
 
-const TRUNCATED_TEXT_LINES_CLASS = {
-  1: "block min-w-0 truncate",
-  2: "line-clamp-2 min-w-0 wrap-anywhere",
-  3: "line-clamp-3 min-w-0 wrap-anywhere",
-} as const satisfies Record<TruncatedTextLines, string>;
-
 /** Whether the element's text is cut by its box, in either direction. */
 function isTextOverflowing(
   element: Pick<
@@ -171,6 +184,14 @@ function isTextOverflowing(
 
 const CONTROL_SELECTOR =
   "a[href], button, label, summary, [role=button], [role=link], [role=menuitem], [role=option], [role=tab]";
+
+/** Whether a tooltip around the element already opens on its pointer. */
+function isInsideTooltipTrigger(element: HTMLElement): boolean {
+  const parent = element.parentElement;
+  return (
+    parent !== null && parent.closest('[data-slot="tooltip-trigger"]') !== null
+  );
+}
 
 /** Whether a tap on the element already belongs to a control around it. */
 function isInsideControl(element: HTMLElement): boolean {

@@ -15,6 +15,7 @@ import {
   fields,
   workspaces,
 } from "@/api/db/schema";
+import { envBase } from "@/api/env-base";
 import { status } from "@/api/http/status";
 import { captureError, detached } from "@/api/lib/analytics/capture";
 import {
@@ -31,6 +32,8 @@ import {
   retirePublishedObjectCleanupIntentsInTransaction,
 } from "@/api/lib/buffer-intent-reconciliation";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
+import { TRANSITIONS } from "@/api/lib/db/transition-specs";
+import { transition } from "@/api/lib/db/transitions";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { desktopEditMimeTypeForFileType } from "@/api/lib/desktop-edit-file-types";
 import { closeSessionConnections } from "@/api/lib/desktop-edit-session-notifications";
@@ -69,6 +72,7 @@ import {
 } from "@/api/lib/files/organization-file-usage";
 import { storedDocumentBytes } from "@/api/lib/files/stored-document-bytes";
 import { createFileKey } from "@/api/lib/files/utils";
+import { FILE_SIZE_LIMIT_BYTES } from "@/api/lib/limits";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
@@ -76,7 +80,8 @@ import { observedStatus } from "@/api/lib/observability/server-error-answer";
 import { broadcastWorkspaceResourceUpdated } from "@/api/lib/resource-realtime";
 import {
   getS3,
-  readS3ArrayBuffer,
+  OBJECT_READ_TIMEOUT_MS,
+  readS3ObjectBounded,
   S3_OBJECT_WRITE_CERTAINTY,
   writeS3ObjectWithRetry,
 } from "@/api/lib/s3";
@@ -353,23 +358,36 @@ export const finalizeDesktopEditSessionHandler = async ({
         editSession.checkpointSizeBytes === null ||
         editSession.checkpointUpdatedAt === null
       ) {
-        await tx
-          .update(desktopEditSessions)
-          .set({
-            closedAt: new Date(),
-            status: "cancelled",
-          })
-          .where(eq(desktopEditSessions.id, editSession.id));
-
-        await recordAuditEvent(tx, {
-          action: AUDIT_ACTION.UPDATE,
-          resourceType: AUDIT_RESOURCE_TYPE.DESKTOP_EDIT_SESSION,
-          resourceId: editSession.id,
-          changes: {
-            status: { old: editSession.status, new: "cancelled" },
+        const closed = await transition({
+          tx,
+          spec: TRANSITIONS.desktopEditSessions,
+          id: editSession.id,
+          options: {
+            from: ["open"],
+            to: "cancelled",
+            set: { closedAt: new Date() },
           },
-          metadata: { reason: "no_checkpoint" },
+          recordTransitionAuditEvent: async (auditTx) => {
+            await recordAuditEvent(auditTx, {
+              action: AUDIT_ACTION.UPDATE,
+              resourceType: AUDIT_RESOURCE_TYPE.DESKTOP_EDIT_SESSION,
+              resourceId: editSession.id,
+              changes: {
+                status: { old: editSession.status, new: "cancelled" },
+              },
+              metadata: { reason: "no_checkpoint" },
+            });
+          },
         });
+        switch (closed.type) {
+          case "transitioned":
+            break;
+          case "stale":
+            return panic("Locked desktop edit session failed to close");
+          default:
+            closed satisfies never;
+            return panic("Unhandled desktop edit session transition");
+        }
 
         return {
           outcome: "no_changes",
@@ -410,23 +428,36 @@ export const finalizeDesktopEditSessionHandler = async ({
       });
 
       if (entity.currentVersionId !== editSession.baseVersionId) {
-        await tx
-          .update(desktopEditSessions)
-          .set({
-            closedAt: new Date(),
-            status: "cancelled",
-          })
-          .where(eq(desktopEditSessions.id, editSession.id));
-
-        await recordAuditEvent(tx, {
-          action: AUDIT_ACTION.UPDATE,
-          resourceType: AUDIT_RESOURCE_TYPE.DESKTOP_EDIT_SESSION,
-          resourceId: editSession.id,
-          changes: {
-            status: { old: editSession.status, new: "cancelled" },
+        const closed = await transition({
+          tx,
+          spec: TRANSITIONS.desktopEditSessions,
+          id: editSession.id,
+          options: {
+            from: ["open"],
+            to: "cancelled",
+            set: { closedAt: new Date() },
           },
-          metadata: { reason: "base_version_diverged" },
+          recordTransitionAuditEvent: async (auditTx) => {
+            await recordAuditEvent(auditTx, {
+              action: AUDIT_ACTION.UPDATE,
+              resourceType: AUDIT_RESOURCE_TYPE.DESKTOP_EDIT_SESSION,
+              resourceId: editSession.id,
+              changes: {
+                status: { old: editSession.status, new: "cancelled" },
+              },
+              metadata: { reason: "base_version_diverged" },
+            });
+          },
         });
+        switch (closed.type) {
+          case "transitioned":
+            break;
+          case "stale":
+            return panic("Locked desktop edit session failed to close");
+          default:
+            closed satisfies never;
+            return panic("Unhandled desktop edit session transition");
+        }
 
         checkpointKeyToDelete = checkpointKey;
 
@@ -479,23 +510,36 @@ export const finalizeDesktopEditSessionHandler = async ({
       if (
         editSession.checkpointSha256Hex === baseFileTarget.fileContent.sha256Hex
       ) {
-        await tx
-          .update(desktopEditSessions)
-          .set({
-            closedAt: new Date(),
-            status: "cancelled",
-          })
-          .where(eq(desktopEditSessions.id, editSession.id));
-
-        await recordAuditEvent(tx, {
-          action: AUDIT_ACTION.UPDATE,
-          resourceType: AUDIT_RESOURCE_TYPE.DESKTOP_EDIT_SESSION,
-          resourceId: editSession.id,
-          changes: {
-            status: { old: editSession.status, new: "cancelled" },
+        const closed = await transition({
+          tx,
+          spec: TRANSITIONS.desktopEditSessions,
+          id: editSession.id,
+          options: {
+            from: ["open"],
+            to: "cancelled",
+            set: { closedAt: new Date() },
           },
-          metadata: { reason: "checkpoint_matches_base" },
+          recordTransitionAuditEvent: async (auditTx) => {
+            await recordAuditEvent(auditTx, {
+              action: AUDIT_ACTION.UPDATE,
+              resourceType: AUDIT_RESOURCE_TYPE.DESKTOP_EDIT_SESSION,
+              resourceId: editSession.id,
+              changes: {
+                status: { old: editSession.status, new: "cancelled" },
+              },
+              metadata: { reason: "checkpoint_matches_base" },
+            });
+          },
         });
+        switch (closed.type) {
+          case "transitioned":
+            break;
+          case "stale":
+            return panic("Locked desktop edit session failed to close");
+          default:
+            closed satisfies never;
+            return panic("Unhandled desktop edit session transition");
+        }
 
         checkpointKeyToDelete = checkpointKey;
 
@@ -504,10 +548,21 @@ export const finalizeDesktopEditSessionHandler = async ({
         } as const;
       }
 
-      const checkpointBuffer = await readS3ArrayBuffer(
-        checkpointKey,
-        request.signal,
-      );
+      const checkpointBytes = await readS3ObjectBounded({
+        bucket: envBase.S3_BUCKET,
+        key: checkpointKey,
+        maxBytes: FILE_SIZE_LIMIT_BYTES.multipartDocument,
+        signal: AbortSignal.any([
+          request.signal,
+          AbortSignal.timeout(OBJECT_READ_TIMEOUT_MS),
+        ]),
+      });
+      const checkpointBuffer =
+        checkpointBytes.buffer instanceof ArrayBuffer &&
+        checkpointBytes.byteOffset === 0 &&
+        checkpointBytes.byteLength === checkpointBytes.buffer.byteLength
+          ? checkpointBytes.buffer
+          : checkpointBytes.slice().buffer;
 
       const validation = await validateDesktopEditFileBuffer({
         buffer: checkpointBuffer,
@@ -615,134 +670,161 @@ export const finalizeDesktopEditSessionHandler = async ({
         workspaceId: authorizedSession.value.workspaceId,
       });
 
-      const clonedFields = cloneFieldsForRevision({
-        currentFields: baseVersion.fields,
-        entityVersionId: nextVersionId,
-        propertyId: editSession.propertyId,
-        replacementContent: fileContentWithMintedObject({
-          encryption,
-          fileName: editSession.fileName,
-          id: sourceFileId,
-          mimeType: canonicalMimeType,
-          pdfFileId: null,
-          pdfDerivative: pdfDerivativeStateForFile({
-            encrypted: encryption.encrypted,
+      const completeFinalization = async (auditTx: typeof tx) => {
+        const clonedFields = cloneFieldsForRevision({
+          currentFields: baseVersion.fields,
+          entityVersionId: nextVersionId,
+          propertyId: editSession.propertyId,
+          replacementContent: fileContentWithMintedObject({
+            encryption,
+            fileName: editSession.fileName,
+            id: sourceFileId,
             mimeType: canonicalMimeType,
+            pdfFileId: null,
+            pdfDerivative: pdfDerivativeStateForFile({
+              encrypted: encryption.encrypted,
+              mimeType: canonicalMimeType,
+            }),
+            sha256Hex: storedSha256Hex,
+            sizeBytes: storedSizeBytes,
+            type: "file",
+            version: 1,
+            ...(editSession.checkpointScanWarnings !== null && {
+              scanWarnings: editSession.checkpointScanWarnings,
+            }),
           }),
-          sha256Hex: storedSha256Hex,
-          sizeBytes: storedSizeBytes,
-          type: "file",
-          version: 1,
-          ...(editSession.checkpointScanWarnings !== null && {
-            scanWarnings: editSession.checkpointScanWarnings,
-          }),
-        }),
-        workspaceId: authorizedSession.value.workspaceId,
-      });
+          workspaceId: authorizedSession.value.workspaceId,
+        });
 
-      const insertedFields = await tx
-        .insert(fields)
-        .values(clonedFields)
-        .returning({ id: fields.id, propertyId: fields.propertyId });
-      // A cell a member locked stays locked across the edit; the edited
-      // file's own cell describes new bytes.
-      const companions = await planCellCompanions({
-        tx,
-        kind: "desktop-edit",
-        sourceWorkspaceId: authorizedSession.value.workspaceId,
-        targetWorkspaceId: authorizedSession.value.workspaceId,
-        versions: [
+        const insertedFields = await auditTx
+          .insert(fields)
+          .values(clonedFields)
+          .returning({ id: fields.id, propertyId: fields.propertyId });
+        // A cell a member locked stays locked across the edit; the edited
+        // file's own cell describes new bytes.
+        const companions = await planCellCompanions({
+          tx: auditTx,
+          kind: "desktop-edit",
+          sourceWorkspaceId: authorizedSession.value.workspaceId,
+          targetWorkspaceId: authorizedSession.value.workspaceId,
+          versions: [
+            {
+              sourceVersionId: editSession.baseVersionId,
+              targetVersionId: nextVersionId,
+            },
+          ],
+          replacedPropertyIds: [editSession.propertyId],
+        });
+        for (const rows of chunkItems(
+          companions.metadata,
+          CELL_COMPANION_BATCH,
+        )) {
+          await auditTx.insert(cellMetadata).values(rows);
+        }
+
+        const nextField = insertedFields.find(
+          (field) => field.propertyId === editSession.propertyId,
+        );
+
+        await auditTx
+          .update(entities)
+          .set({
+            lastEditedBy: authorizedSession.value.userId,
+            currentVersionId: nextVersionId,
+            updatedAt: new Date(),
+          })
+          .where(eq(entities.id, editSession.entityId));
+
+        await auditTx
+          .update(workspaces)
+          .set({ lastActivityAt: new Date() })
+          .where(eq(workspaces.id, authorizedSession.value.workspaceId));
+
+        await requestNativeExtractionRun({
+          entityId: editSession.entityId,
+          tx: auditTx,
+        });
+
+        await recordAuditEvent(auditTx, [
           {
-            sourceVersionId: editSession.baseVersionId,
-            targetVersionId: nextVersionId,
+            action: AUDIT_ACTION.CREATE,
+            resourceType: AUDIT_RESOURCE_TYPE.ENTITY_VERSION,
+            resourceId: nextVersionId,
+            changes: {
+              created: {
+                old: null,
+                new: {
+                  entityId: editSession.entityId,
+                  versionNumber: nextVersionNumber,
+                  fileName: editSession.fileName,
+                  fileType: editSession.fileType,
+                  sha256Hex: storedSha256Hex,
+                  sizeBytes: storedSizeBytes,
+                },
+              },
+            },
+            metadata: {
+              source: "desktop_edit_session",
+              desktopEditSessionId: editSession.id,
+              fileType: editSession.fileType,
+            },
           },
-        ],
-        replacedPropertyIds: [editSession.propertyId],
-      });
-      for (const rows of chunkItems(
-        companions.metadata,
-        CELL_COMPANION_BATCH,
-      )) {
-        await tx.insert(cellMetadata).values(rows);
-      }
-
-      const nextField = insertedFields.find(
-        (field) => field.propertyId === editSession.propertyId,
-      );
-
-      await tx
-        .update(entities)
-        .set({
-          lastEditedBy: authorizedSession.value.userId,
-          currentVersionId: nextVersionId,
-          updatedAt: new Date(),
-        })
-        .where(eq(entities.id, editSession.entityId));
-
-      await tx
-        .update(workspaces)
-        .set({ lastActivityAt: new Date() })
-        .where(eq(workspaces.id, authorizedSession.value.workspaceId));
-
-      await tx
-        .update(desktopEditSessions)
-        .set({
-          closedAt: new Date(),
-          finalizedVersionId: nextVersionId,
-          status: "finalized",
-        })
-        .where(eq(desktopEditSessions.id, editSession.id));
-
-      await requestNativeExtractionRun({
-        entityId: editSession.entityId,
-        tx,
-      });
-
-      await recordAuditEvent(tx, [
-        {
-          action: AUDIT_ACTION.CREATE,
-          resourceType: AUDIT_RESOURCE_TYPE.ENTITY_VERSION,
-          resourceId: nextVersionId,
-          changes: {
-            created: {
-              old: null,
-              new: {
-                entityId: editSession.entityId,
-                versionNumber: nextVersionNumber,
-                fileName: editSession.fileName,
-                fileType: editSession.fileType,
-                sha256Hex: storedSha256Hex,
-                sizeBytes: storedSizeBytes,
+          {
+            action: AUDIT_ACTION.UPDATE,
+            resourceType: AUDIT_RESOURCE_TYPE.ENTITY,
+            resourceId: editSession.entityId,
+            changes: {
+              currentVersionId: {
+                old: editSession.baseVersionId,
+                new: nextVersionId,
               },
             },
           },
-          metadata: {
-            source: "desktop_edit_session",
-            desktopEditSessionId: editSession.id,
-            fileType: editSession.fileType,
-          },
-        },
-        {
-          action: AUDIT_ACTION.UPDATE,
-          resourceType: AUDIT_RESOURCE_TYPE.ENTITY,
-          resourceId: editSession.entityId,
-          changes: {
-            currentVersionId: {
-              old: editSession.baseVersionId,
-              new: nextVersionId,
+          {
+            action: AUDIT_ACTION.UPDATE,
+            resourceType: AUDIT_RESOURCE_TYPE.DESKTOP_EDIT_SESSION,
+            resourceId: editSession.id,
+            changes: {
+              status: { old: editSession.status, new: "finalized" },
+              finalizedVersionId: { old: null, new: nextVersionId },
             },
           },
+        ]);
+
+        return (
+          nextField?.id ??
+          panic("Finalized desktop edit session field was not inserted")
+        );
+      };
+      let finalizedFieldId:
+        Awaited<ReturnType<typeof completeFinalization>> | undefined;
+
+      const finalized = await transition({
+        tx,
+        spec: TRANSITIONS.desktopEditSessions,
+        id: editSession.id,
+        options: {
+          from: ["open"],
+          to: "finalized",
+          set: { closedAt: new Date(), finalizedVersionId: nextVersionId },
         },
-        {
-          action: AUDIT_ACTION.UPDATE,
-          resourceType: AUDIT_RESOURCE_TYPE.DESKTOP_EDIT_SESSION,
-          resourceId: editSession.id,
-          changes: {
-            status: { old: editSession.status, new: "finalized" },
-            finalizedVersionId: { old: null, new: nextVersionId },
-          },
+        recordTransitionAuditEvent: async (auditTx) => {
+          finalizedFieldId = await completeFinalization(auditTx);
         },
-      ]);
+      });
+      switch (finalized.type) {
+        case "transitioned":
+          break;
+        case "stale":
+          return panic("Locked desktop edit session failed to finalize");
+        default:
+          finalized satisfies never;
+          return panic("Unhandled desktop edit session transition");
+      }
+
+      const finalizedFileFieldId =
+        finalizedFieldId ??
+        panic("Finalized desktop edit session did not complete its field");
 
       await retirePublishedObjectCleanupIntentsInTransaction({
         tx,
@@ -752,9 +834,7 @@ export const finalizeDesktopEditSessionHandler = async ({
 
       return {
         entityId: editSession.entityId,
-        fieldId:
-          nextField?.id ??
-          panic("Finalized desktop edit session field was not inserted"),
+        fieldId: finalizedFileFieldId,
         fileType: editSession.fileType,
         outcome: "finalized",
         versionId: nextVersionId,

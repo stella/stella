@@ -23,7 +23,7 @@ const { cleanup, fireEvent, render, waitFor } =
 const { IntlProvider, useTranslations } = await import("use-intl");
 const messages = (await import("@/i18n/langs/en.json")).default;
 const arabicMessages = (await import("@/i18n/langs/ar.json")).default;
-const { SocialRecoveryPanel } = await import("./social-recovery-panel");
+const { SocialRecoveryPanel } = await import("../-error.page");
 const clients: InstanceType<typeof QueryClient>[] = [];
 afterEach(() => {
   cleanup();

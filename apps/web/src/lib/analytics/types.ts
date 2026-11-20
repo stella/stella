@@ -106,7 +106,8 @@ type FollowupShownProperties = FollowupProperties & {
 
 type FollowupSelectedProperties = FollowupProperties & {
   index: number;
-  via: "chip" | "ghost-tab";
+  /** A suggestion row under the answer is the one way to pick one. */
+  via: "row";
 };
 
 export type DocumentTimingSurface = "full-view" | "inspector";

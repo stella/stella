@@ -4,6 +4,7 @@ import type { OnlineMigrationEntry } from "../online-migration-entry";
 export default {
   id: "repairs-client-invoice-backfill",
   revision: 960,
+  lifecycle: "finalized",
   type: "repairs",
   values: [CLIENT_INVOICE_BACKFILL],
 } satisfies OnlineMigrationEntry;

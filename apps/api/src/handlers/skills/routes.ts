@@ -7,7 +7,10 @@ import createSkill from "@/api/handlers/skills/create";
 import deleteSkill from "@/api/handlers/skills/delete";
 import discoverSkillUrl from "@/api/handlers/skills/discover";
 import generateSkillDraft from "@/api/handlers/skills/drafts/generate";
+import saveSkillDraft from "@/api/handlers/skills/drafts/save";
+import exportSkill from "@/api/handlers/skills/export";
 import fromBlueprint from "@/api/handlers/skills/from-blueprint/create";
+import draftSkillFromChat from "@/api/handlers/skills/from-chat/draft";
 import importSkillFromUrl from "@/api/handlers/skills/from-url/import";
 import getSkill from "@/api/handlers/skills/get";
 import importSkillsFromUrls from "@/api/handlers/skills/import";
@@ -47,9 +50,12 @@ export const skillsRoute = mount(
       "/": { GET: listSkills, POST: createSkill },
       "/commands": { GET: listSkillCommands },
       "/:skillId": { GET: getSkill, PATCH: updateSkill, DELETE: deleteSkill },
+      "/:skillId/export": { GET: exportSkill },
       "/from-blueprint": { POST: fromBlueprint },
+      "/from-chat": { POST: draftSkillFromChat },
       "/upload": { POST: uploadSkill },
       "/generate-draft": { POST: generateSkillDraft },
+      "/save-draft": { POST: saveSkillDraft },
       "/:skillId/resources": {
         PATCH: updateSkillResource,
         POST: createSkillResource,

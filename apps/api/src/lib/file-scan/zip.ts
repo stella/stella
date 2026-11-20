@@ -1,3 +1,6 @@
+import { ASIC_FILE_FORMATS } from "@stll/api-contract/asic-file-formats";
+import { STRUCTURED_DOCUMENT_FORMATS } from "@stll/api-contract/structured-document-formats";
+
 import {
   type ScanMediaType,
   scanMediaTypeSet,
@@ -24,6 +27,8 @@ export const ZIP_BASED_MEDIA_TYPES: ReadonlySet<ScanMediaType> =
     "application/vnd.ms-powerpoint.addin.macroEnabled.12",
     "application/zip",
     "application/x-zip-compressed",
+    ...STRUCTURED_DOCUMENT_FORMATS.map(({ mimeType }) => mimeType),
+    ...ASIC_FILE_FORMATS.map(({ mimeType }) => mimeType),
   ]);
 
 export const hasZipMagic = (buffer: Uint8Array): boolean => {
@@ -57,6 +62,9 @@ export type ZipEntry = {
   /** Compression method: 0 is stored, 8 is deflate. */
   method: number;
   uncompressedSize: number;
+  crc32: number;
+  externalAttributes: number;
+  extraFields: { local: Uint8Array; central: Uint8Array };
   /** The entry's stored (possibly compressed) bytes. */
   data: Uint8Array;
 };
@@ -88,6 +96,13 @@ export const readZipIndex = (bytes: Uint8Array): ZipIndex => {
   }
 
   const entryCount = view.getUint16(eocd + 10, true);
+  if (
+    view.getUint16(eocd + 4, true) !== 0 ||
+    view.getUint16(eocd + 6, true) !== 0 ||
+    view.getUint16(eocd + 8, true) !== entryCount
+  ) {
+    return { type: "malformed" };
+  }
   const entries: ZipEntry[] = [];
   const centralStart = view.getUint32(eocd + 16, true);
   const spans: { start: number; end: number }[] = [];
@@ -103,47 +118,74 @@ export const readZipIndex = (bytes: Uint8Array): ZipIndex => {
     const extraLength = view.getUint16(offset + 30, true);
     const commentLength = view.getUint16(offset + 32, true);
     const compressedSize = view.getUint32(offset + 20, true);
+    const flags = view.getUint16(offset + 8, true);
+    const method = view.getUint16(offset + 10, true);
+    const crc32 = view.getUint32(offset + 16, true);
+    const uncompressedSize = view.getUint32(offset + 24, true);
     const localOffset = view.getUint32(offset + 42, true);
     const nameStart = offset + CENTRAL_HEADER_BYTES;
     if (
-      nameStart + nameLength > length ||
+      nameStart + nameLength + extraLength + commentLength > eocd ||
+      view.getUint16(offset + 34, true) !== 0 ||
       localOffset + LOCAL_HEADER_BYTES > length ||
       view.getUint32(localOffset, true) !== LOCAL_FILE_HEADER
     ) {
       return { type: "malformed" };
     }
+    const localNameStart = localOffset + LOCAL_HEADER_BYTES;
     const dataStart =
-      localOffset +
-      LOCAL_HEADER_BYTES +
-      view.getUint16(localOffset + 26, true) +
-      view.getUint16(localOffset + 28, true);
-    if (dataStart + compressedSize > length) {
+      localNameStart + nameLength + view.getUint16(localOffset + 28, true);
+    const nameEnd = nameStart + nameLength;
+    const name = Buffer.from(bytes.subarray(nameStart, nameEnd));
+    if (
+      dataStart + compressedSize > centralStart ||
+      view.getUint16(localOffset + 6, true) !== flags ||
+      view.getUint16(localOffset + 8, true) !== method ||
+      view.getUint16(localOffset + 26, true) !== nameLength ||
+      !name.every(
+        (byte, nameIndex) => byte === bytes[localNameStart + nameIndex],
+      )
+    ) {
       return { type: "malformed" };
     }
-    const flags = view.getUint16(offset + 8, true);
     let end = dataStart + compressedSize;
     if (Math.floor(flags / 8) % 2 === 1) {
       if (end + 12 > centralStart) {
         return { type: "malformed" };
       }
-      const descriptor =
-        view.getUint32(end, true) === 0x08_07_4b_50 ? end + 4 : end;
-      if (
-        descriptor + 12 > centralStart ||
-        view.getUint32(descriptor + 4, true) !== compressedSize ||
-        view.getUint32(descriptor + 8, true) !==
-          view.getUint32(offset + 24, true)
-      ) {
+      // A descriptor can omit the signature. Its CRC may itself equal the
+      // signature, so match the complete tuple for both permitted layouts.
+      const descriptor = [end, end + 4].find(
+        (at) =>
+          at + 12 <= centralStart &&
+          (at === end || view.getUint32(end, true) === 0x08_07_4b_50) &&
+          view.getUint32(at, true) === crc32 &&
+          view.getUint32(at + 4, true) === compressedSize &&
+          view.getUint32(at + 8, true) === uncompressedSize,
+      );
+      if (descriptor === undefined) {
         return { type: "malformed" };
       }
       end = descriptor + 12;
+    } else if (
+      view.getUint32(localOffset + 14, true) !== crc32 ||
+      view.getUint32(localOffset + 18, true) !== compressedSize ||
+      view.getUint32(localOffset + 22, true) !== uncompressedSize
+    ) {
+      return { type: "malformed" };
     }
     spans.push({ start: localOffset, end });
     entries.push({
-      name: Buffer.from(bytes.subarray(nameStart, nameStart + nameLength)),
-      flags: view.getUint16(offset + 8, true),
-      method: view.getUint16(offset + 10, true),
-      uncompressedSize: view.getUint32(offset + 24, true),
+      name,
+      flags,
+      method,
+      uncompressedSize,
+      crc32,
+      externalAttributes: view.getUint32(offset + 38, true),
+      extraFields: {
+        local: bytes.subarray(localNameStart + nameLength, dataStart),
+        central: bytes.subarray(nameEnd, nameEnd + extraLength),
+      },
       data: bytes.subarray(dataStart, dataStart + compressedSize),
     });
     offset = nameStart + nameLength + extraLength + commentLength;
@@ -158,6 +200,7 @@ export const readZipIndex = (bytes: Uint8Array): ZipIndex => {
   if (
     nextLocal !== centralStart ||
     offset !== eocd ||
+    view.getUint32(eocd + 12, true) !== eocd - centralStart ||
     eocd + EOCD_BYTES + view.getUint16(eocd + 20, true) !== length
   ) {
     return { type: "malformed" };

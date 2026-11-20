@@ -9,6 +9,7 @@ import {
 } from "@/api/db/schema";
 import type { CitationGraphTransaction } from "@/api/handlers/case-law/citation-graph-transaction";
 import { reopenCitationsForDecisionIdentifiers } from "@/api/handlers/case-law/citation-resolution";
+import type { ReopenedCitations } from "@/api/handlers/case-law/citation-resolution";
 import type { ObservationShape } from "@/api/handlers/case-law/ingestion/pipeline/decision-existing";
 import type {
   DecisionIdentity,
@@ -20,20 +21,29 @@ import type {
   SourceRawArtifact,
 } from "@/api/handlers/case-law/ingestion/pipeline/decision-raw";
 import type { CaseLawJudgeDependencies } from "@/api/handlers/case-law/ingestion/pipeline/dependencies";
+import type { OwnCollectionPart } from "@/api/handlers/case-law/ingestion/pipeline/held-decision-attachment";
 import type { DecisionInputProvenance } from "@/api/handlers/case-law/ingestion/pipeline/types";
 import type { StoredSupplement } from "@/api/handlers/case-law/ingestion/supplement-composition";
 import type { SafeId } from "@/api/lib/branded-types";
 import { synchronizeLockedCorpusProjectionDesiredStateTx } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
 import type { ActiveCorpusProjectionSourceLock } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
+import type { HeldDecisionAttachment } from "@/api/lib/legal-search/held-decision-attachment";
 import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import { logger } from "@/api/lib/observability/logger";
 import type { S3CredentialRefreshOptions } from "@/api/lib/s3/credential-guard";
 
 /** Everything one decision's row write reads, decided before it runs. */
 export type DecisionRowWrite = Omit<DecisionIdentity, "decisionId"> &
-  Pick<ObservedDecision, "persistedDecisionDate"> & {
+  Pick<ObservedDecision, "persistedDecisionDate" | "storageIdentity"> & {
     signal?: AbortSignal;
     s3Policy?: S3CredentialRefreshOptions;
+    ownCollectionPart?: OwnCollectionPart | undefined;
+    heldDecisionCheck?:
+      | {
+          declaration: HeldDecisionAttachment<string>;
+          observation: ObservedDecision;
+        }
+      | undefined;
     sourceId: SafeId<"caseLawSource">;
     decisionId: SafeId<"caseLawDecision">;
     /** The observation composed with the supplements its document takes in. */
@@ -67,15 +77,18 @@ type DecisionIdentifierLookup = Pick<
  *
  * Only when the identifier set is genuinely new to this row: a metadata
  * refresh under the same identities changes nothing about who can be cited.
+ *
+ * Returns what it reopened, for the write to settle once the decision's row
+ * and identifiers are stored (`settleReopenedCitations`).
  */
 export const announceDecisionIdentifiers = async (
   tx: CitationGraphTransaction<Transaction>,
   { result, persistedDecisionDate }: DecisionRowWrite,
   id: SafeId<"caseLawDecision">,
   identifiers: readonly DecisionIdentifierLookup[],
-): Promise<void> => {
+): Promise<ReopenedCitations> => {
   if (identifiers.length === 0) {
-    return;
+    return { reopened: 0, citationIds: [] };
   }
   if (!isCaseLawJurisdiction(result.country)) {
     // A stored country nobody declares a resolution policy for. Loud rather
@@ -84,9 +97,9 @@ export const announceDecisionIdentifiers = async (
     logger.error("case_law.citation_resolution.undeclared_jurisdiction", {
       jurisdiction: result.country,
     });
-    return;
+    return { reopened: 0, citationIds: [] };
   }
-  await reopenCitationsForDecisionIdentifiers(tx, {
+  return await reopenCitationsForDecisionIdentifiers(tx, {
     identifiers,
     decisionId: id,
     jurisdiction: result.country,

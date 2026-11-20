@@ -1,10 +1,11 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { createMemoryHistory, createRouter } from "@tanstack/react-router";
 import { plugin } from "bun";
-import { afterAll, expect, test } from "bun:test";
+import { afterAll, afterEach, expect, test } from "bun:test";
 
 import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
+import { defaultPresentationPrefs } from "@/lib/account/presentation-prefs/preferences";
 import { createAnalyticsValue } from "@/lib/analytics/provider";
 import { createRouteErrorLifecycleController } from "@/lib/analytics/route-error-lifecycle";
 import { createAppQueryClient } from "@/lib/react-query";
@@ -13,6 +14,11 @@ import { WEB_ROUTE_TEMPLATES } from "@/route-templates.gen";
 import { organizationSettingsDestination } from "@/routes/-organization-settings-route";
 
 const EMPTY_SEARCH = {};
+/** The route fields this test reads or clears before navigating. */
+type StrippableRoute = {
+  id: string;
+  options: { beforeLoad?: unknown; loader?: unknown };
+};
 
 GlobalRegistrator.register({ url: "http://localhost:3000" });
 afterAll(async () => await unregisterDomEnvironment());
@@ -29,6 +35,23 @@ plugin({
 
 const { routeTree } = await import("@/routeTree.gen");
 
+// The route objects are module singletons other test files also drive, so
+// every option switched off here is put back after each test.
+type RouteOptionsSlot = {
+  options: { beforeLoad?: unknown; loader?: unknown };
+};
+const originalRouteOptions = new Map<
+  RouteOptionsSlot,
+  { beforeLoad: unknown; loader: unknown }
+>();
+afterEach(() => {
+  for (const [route, { beforeLoad, loader }] of originalRouteOptions) {
+    route.options.beforeLoad = beforeLoad;
+    route.options.loader = loader;
+  }
+  originalRouteOptions.clear();
+});
+
 const createTestRouter = (from: string) => {
   const analyticsValue = createAnalyticsValue(WEB_ROUTE_TEMPLATES);
   const router = createRouter({
@@ -38,6 +61,7 @@ const createTestRouter = (from: string) => {
       routeErrorLifecycle: createRouteErrorLifecycleController(
         analyticsValue.analytics,
       ),
+      presentationPrefs: defaultPresentationPrefs,
     },
     history: createMemoryHistory({ initialEntries: [from] }),
     parseSearch: parseRouteSearch,
@@ -45,7 +69,12 @@ const createTestRouter = (from: string) => {
     stringifySearch: stringifyRouteSearch,
   });
 
-  for (const route of Object.values(router.routesById)) {
+  const routes: StrippableRoute[] = Object.values(router.routesById);
+  for (const route of routes) {
+    if (!originalRouteOptions.has(route)) {
+      const { beforeLoad, loader } = route.options;
+      originalRouteOptions.set(route, { beforeLoad, loader });
+    }
     if (
       route.id !== "/_protected/admin" &&
       route.id !== "/_protected/settings/organization/"

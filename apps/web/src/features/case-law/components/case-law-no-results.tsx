@@ -2,7 +2,7 @@ import { useTranslations } from "use-intl";
 
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
-import { Tooltip, TooltipPopup, TooltipTrigger } from "@stll/ui/tooltip";
+import { TruncatedText } from "@stll/ui/truncated-text";
 
 import {
   PublicLawAskInChat,
@@ -135,18 +135,13 @@ export const RewrittenSearchLine = ({
 
   return (
     <div className="text-muted-foreground flex max-w-full min-w-0 flex-wrap items-baseline gap-x-2 text-xs">
-      <Tooltip>
-        <TooltipTrigger render={<p className="min-w-0 truncate" />}>
-          {t.rich("caseLaw.rewritten.line", {
-            bdi: (chunks) => <BidiText>{chunks}</BidiText>,
-            original,
-            query: rewritten,
-          })}
-        </TooltipTrigger>
-        <TooltipPopup>
-          <BidiText>{rewritten}</BidiText>
-        </TooltipPopup>
-      </Tooltip>
+      <TruncatedText render={<p />} tooltip={<BidiText>{rewritten}</BidiText>}>
+        {t.rich("caseLaw.rewritten.line", {
+          bdi: (chunks) => <BidiText>{chunks}</BidiText>,
+          original,
+          query: rewritten,
+        })}
+      </TruncatedText>
       <Button onClick={onSearchOriginal} size="xs" variant="link">
         {t("caseLaw.rewritten.searchOriginal")}
       </Button>

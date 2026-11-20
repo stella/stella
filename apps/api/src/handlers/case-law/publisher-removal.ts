@@ -7,6 +7,7 @@ import {
   caseLawDecisionAliases,
   caseLawDecisions,
   caseLawDecisionSourceIdentities,
+  caseLawHeldDecisionAttachments,
 } from "@/api/db/schema";
 import { runCitationGraphTransaction } from "@/api/handlers/case-law/citation-graph-transaction";
 import { redactCaseLawDecisionWithSupplementHolders } from "@/api/handlers/case-law/ingestion/supplement-erasure";
@@ -86,6 +87,17 @@ export const removePublisherDecision = async ({
         })
         .from(caseLawDecisionSourceIdentities)
         .where(inArray(caseLawDecisionSourceIdentities.decisionId, ids));
+      // A copy another source held as an attachment to this decision is
+      // the same decision: its listed payloads go with it.
+      identities.push(
+        ...(await tx
+          .select({
+            sourceId: caseLawHeldDecisionAttachments.sourceId,
+            sourceDocumentId: caseLawHeldDecisionAttachments.sourceDocumentId,
+          })
+          .from(caseLawHeldDecisionAttachments)
+          .where(inArray(caseLawHeldDecisionAttachments.hostDecisionId, ids))),
+      );
       for (const row of rows) {
         if (row.redactedAt === null) {
           panic("Publisher removal requires a fenced decision");

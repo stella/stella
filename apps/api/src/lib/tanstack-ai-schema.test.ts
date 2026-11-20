@@ -4,7 +4,10 @@ import * as v from "valibot";
 
 import { safeIdSchema } from "@stll/api-contract/safe-id";
 
-import { toTanStackValibotSchema } from "./tanstack-ai-schema";
+import {
+  projectSchemaInputJsonSchema,
+  toTanStackValibotSchema,
+} from "./tanstack-ai-schema";
 
 describe("tool validation projection", () => {
   test("omits only the explicitly selected validation action", async () => {
@@ -101,5 +104,76 @@ describe("tool validation projection", () => {
         toTanStackValibotSchema(canonical, { omitValidationActions: [] }),
       ),
     ).toEqual(expected);
+  });
+  test("projects a frozen nested schema without changing its source or explicit object policy", () => {
+    const rawSchema = Object.freeze({
+      type: "object",
+      properties: Object.freeze({
+        rows: Object.freeze({
+          type: "array",
+          items: Object.freeze({
+            type: "object",
+            properties: Object.freeze({
+              label: Object.freeze({ type: "string" }),
+            }),
+          }),
+        }),
+        choice: Object.freeze({
+          anyOf: Object.freeze([
+            Object.freeze({ type: "object", additionalProperties: true }),
+            Object.freeze({ type: "null" }),
+          ]),
+        }),
+        closed: Object.freeze({ type: "object", additionalProperties: false }),
+      }),
+      required: Object.freeze(["rows", "choice"]),
+    });
+    const before = JSON.stringify(rawSchema);
+    const canonical = toTanStackValibotSchema(
+      v.object({
+        rows: v.array(v.object({ label: v.string() })),
+        choice: v.nullable(v.looseObject({})),
+        closed: v.optional(v.strictObject({})),
+      }),
+    );
+    const projected = projectSchemaInputJsonSchema(
+      {
+        "~standard": {
+          ...canonical["~standard"],
+          jsonSchema: { input: () => rawSchema, output: () => rawSchema },
+        },
+      },
+      { nullUnionStrategy: "json-schema" },
+    );
+    const output = convertSchemaToJsonSchema(projected);
+    const expected = {
+      type: "object",
+      properties: {
+        rows: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: { label: { type: "string" } },
+            additionalProperties: false,
+          },
+        },
+        choice: {
+          anyOf: [
+            { type: "object", additionalProperties: true },
+            { type: "null" },
+          ],
+        },
+        closed: { type: "object", additionalProperties: false },
+      },
+      required: ["rows", "choice"],
+      additionalProperties: false,
+    };
+    expect(output).toEqual(expected);
+    expect(JSON.stringify(output)).toBe(JSON.stringify(expected));
+    expect(JSON.stringify(rawSchema)).toBe(before);
+    expect(projected).toHaveProperty(
+      "~standard.validate",
+      canonical["~standard"].validate,
+    );
   });
 });

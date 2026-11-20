@@ -179,9 +179,19 @@ const approveFor = async (
     asTestRaw<ApproveCtx>({ ...context(actor, role), body: { ids: selected } }),
   );
 
-const queueFor = async (actor: SafeId<"user">, role: Role = "member") =>
+const queueFor = async (
+  actor: SafeId<"user">,
+  {
+    role = "member",
+    billingAccess = false,
+  }: { role?: Role; billingAccess?: boolean } = {},
+) =>
   await list.handler(
-    asTestRaw<ListCtx>({ ...context(actor, role), query: {} }),
+    asTestRaw<ListCtx>({
+      ...context(actor, role),
+      memberRole: sessionMemberRole(role, billingAccess),
+      query: {},
+    }),
   );
 
 const byEntryId = (a: { id: string }, b: { id: string }) =>
@@ -284,6 +294,10 @@ describe("submitting a week", () => {
 // Runs `edit` in the submit's own transaction just before its guarded write,
 // as a concurrent edit committed between the submit's read and its write
 // would look to that write.
+/** Narrows a proxied member to a callable that can be bound to its owner. */
+const isCallable = (value: unknown): value is (...args: unknown[]) => unknown =>
+  typeof value === "function";
+
 const safeDbEditingBeforeWrite = (
   actor: SafeId<"user">,
   edit: (tx: TestDatabaseTransaction) => Promise<unknown>,
@@ -305,7 +319,7 @@ const safeDbEditingBeforeWrite = (
             new Proxy(tx, {
               get: (target, property) => {
                 const value: unknown = Reflect.get(target, property, target);
-                if (typeof value !== "function") {
+                if (!isCallable(value)) {
                   return value;
                 }
                 if (property !== "execute") {
@@ -316,7 +330,10 @@ const safeDbEditingBeforeWrite = (
                     pending = false;
                     await edit(target);
                   }
-                  return await Reflect.apply(value, target, [query]);
+                  const executed: unknown = await Reflect.apply(value, target, [
+                    query,
+                  ]);
+                  return executed;
                 };
               },
             }),
@@ -364,7 +381,7 @@ describe("a draft edited between the submit's read and its write", () => {
 });
 
 describe("the approval queue", () => {
-  test("lists submitted entries only, with names, rate and a pending count", async () => {
+  test("lists submitted entries and shows rates only with billing access", async () => {
     const submitted = await seedEntry({ status: "submitted" });
     await seedEntry({ narrative: "Still being written" });
     const queue = await queueFor(ids.userA2);
@@ -376,9 +393,12 @@ describe("the approval queue", () => {
     expect(queue.items[0]).toMatchObject({
       status: "submitted",
       matterName: "WS A2",
-      rateAtEntry: 120_000,
+      rateAtEntry: null,
       currency: "USD",
       timekeeperName: expect.any(String),
+    });
+    expect(await queueFor(ids.userA2, { billingAccess: true })).toMatchObject({
+      items: [{ id: submitted, rateAtEntry: 120_000 }],
     });
   });
 });

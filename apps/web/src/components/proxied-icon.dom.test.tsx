@@ -56,7 +56,7 @@ test("icon paths on the same host use distinct proxies and blob images", async (
       </>,
     );
     await waitFor(() =>
-      expect(view.container.querySelectorAll("img")).toHaveLength(2),
+      expect(view.container.querySelectorAll("img").length).toBe(2),
     );
     const sources = [...view.container.querySelectorAll("img")].map((image) =>
       image.getAttribute("src"),
@@ -88,7 +88,7 @@ test("catalogue remote fallbacks render only API-fetched blob URLs", async () =>
   try {
     const view = renderWithQuery(<CatalogueEntryIcon iconUrl={remote} />);
     await waitFor(() =>
-      expect(view.container.querySelector("img")).not.toBeNull(),
+      expect(view.container.querySelector("img") === null).toBe(false),
     );
     const src = view.container.querySelector("img")?.getAttribute("src");
     expect(src?.startsWith("blob:")).toBe(true);

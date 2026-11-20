@@ -15,9 +15,13 @@ import type { Block, HeadingBlock } from "./document-ast.js";
 import {
   anchorContinuesSubsection,
   anchorWithin,
+  provisionAncestorAnchors,
+  unfiledAnchor,
+  wordingOwnerAnchor,
 } from "./statute-anchor-scheme.js";
 import type {
   StatuteAnchorNesting,
+  StatuteAnchorScheme,
   StatuteBlocks,
 } from "./statute-anchor-scheme.js";
 
@@ -51,6 +55,10 @@ const blocksOwnedByHeading = (
  * contiguously, so the range ends at the first block that is neither — a
  * cited paragraph therefore runs from its number up to the next paragraph,
  * with its closing line, and a cited letter stops before that line.
+ *
+ * Unfiled wording (a bare `frag_…`) that sits between two blocks the cited
+ * unit owns is the cited unit's own text, so the range runs through it rather
+ * than ending there and dropping every block after it.
  */
 export const blocksNestedUnder = <T extends Pick<Block, "anchorId">>(
   { blocks, scheme }: StatuteBlocks<T>,
@@ -61,21 +69,43 @@ export const blocksNestedUnder = <T extends Pick<Block, "anchorId">>(
     return [cited];
   }
 
+  const owns = (block: T) =>
+    anchorWithin(scheme, {
+      ancestor: cited.anchorId,
+      anchor: block.anchorId,
+    }) ||
+    anchorContinuesSubsection(scheme, {
+      anchor: block.anchorId,
+      subsection: cited.anchorId,
+    });
+
   const owned: T[] = [cited];
-  for (const block of blocks.slice(start + 1)) {
-    if (
-      !anchorWithin(scheme, {
-        ancestor: cited.anchorId,
-        anchor: block.anchorId,
-      }) &&
-      !anchorContinuesSubsection(scheme, {
-        anchor: block.anchorId,
-        subsection: cited.anchorId,
-      })
-    ) {
+  let index = start + 1;
+  while (index < blocks.length) {
+    const block = blocks[index] ?? panic("Block index out of range");
+    if (owns(block)) {
+      owned.push(block);
+      index += 1;
+      continue;
+    }
+    if (!unfiledAnchor(scheme, block.anchorId)) {
       break;
     }
-    owned.push(block);
+    // A run of unfiled wording belongs to the cited unit only when the unit
+    // carries on after it.
+    let end = index;
+    while (
+      end < blocks.length &&
+      unfiledAnchor(scheme, (blocks[end] ?? panic("Block index")).anchorId)
+    ) {
+      end += 1;
+    }
+    const next = blocks[end];
+    if (next === undefined || !owns(next)) {
+      break;
+    }
+    owned.push(...blocks.slice(index, end));
+    index = end;
   }
   return owned;
 };
@@ -204,4 +234,161 @@ export const provisionHeadingChain = (
   }
 
   return chain.toReversed();
+};
+
+type UnfiledGoverningOptions = {
+  provision: readonly Block[];
+  scheme: StatuteAnchorScheme;
+  inRange: ReadonlySet<Block>;
+  rangeEnd: number;
+  ancestors: ReadonlySet<string>;
+};
+
+/**
+ * Bare `frag_…` wording, which states no owner, read by where it stands: a
+ * run right after an ancestor's own block leads that ancestor in; a run
+ * right after the cited unit's range, or after the last block an ancestor
+ * owns, closes it.
+ */
+const unfiledGoverningWording = ({
+  provision,
+  scheme,
+  inRange,
+  rangeEnd,
+  ancestors,
+}: UnfiledGoverningOptions): Map<Block, GoverningWordingPosition> => {
+  const governing = new Map<Block, GoverningWordingPosition>();
+  const blockAt = (at: number) =>
+    provision[at] ?? panic("Block index out of range");
+  const unfiledOutsideRange = (block: Block) =>
+    !inRange.has(block) && unfiledAnchor(scheme, block.anchorId);
+  const withinAncestor = (block: Block, ancestor: string) =>
+    block.anchorId === ancestor ||
+    anchorWithin(scheme, { ancestor, anchor: block.anchorId });
+
+  let index = 1;
+  while (index < provision.length) {
+    if (!unfiledOutsideRange(blockAt(index))) {
+      index += 1;
+      continue;
+    }
+    let end = index;
+    while (end < provision.length && unfiledOutsideRange(blockAt(end))) {
+      end += 1;
+    }
+    const before = blockAt(index - 1);
+    const after = provision[end];
+    const leadsIn =
+      before === provision[0] ||
+      (ancestors.has(before.anchorId) && before.type !== "heading");
+    const closesCited = index - 1 === rangeEnd;
+    const closesAncestor = [...ancestors].some(
+      (ancestor) =>
+        withinAncestor(before, ancestor) &&
+        (after === undefined || !withinAncestor(after, ancestor)),
+    );
+    if (leadsIn || closesCited || closesAncestor) {
+      for (const block of provision.slice(index, end)) {
+        governing.set(block, leadsIn && !closesCited ? "lead-in" : "closing");
+      }
+    }
+    index = end;
+  }
+  return governing;
+};
+
+/** Where governing wording sits against the unit it governs. */
+export const GOVERNING_WORDING_POSITIONS = ["lead-in", "closing"] as const;
+
+export type GoverningWordingPosition =
+  (typeof GOVERNING_WORDING_POSITIONS)[number];
+
+export type GoverningWording<T> = {
+  block: T;
+  position: GoverningWordingPosition;
+};
+
+type GoverningWordingTarget = {
+  provisionAnchorId: string;
+  citedAnchorId: string;
+};
+
+/**
+ * The wording outside a cited subdivision that governs it: the lead-in of
+ * every unit it is nested in (`(1) Přestupku se dopustí ten, kdo`, `Pro účely
+ * tohoto zákona se rozumí`) and the closing text after their lists (`Pro
+ * posouzení … není podstatná délka výkonu`). A read of one letter that
+ * returned only the letter would state a rule its parent qualifies, so every
+ * read of a subdivision carries this beside its own text, and no wording a
+ * parent files around the cited unit is left out silently.
+ *
+ * Wording is matched to the units it governs by the path the publisher files
+ * it under: an ancestor's own block, and unnumbered wording filed under an
+ * ancestor (`par_5-frag_6062863`). Rows parsed before that filing existed
+ * carry bare `frag_…` anchors, which state no owner; a run of them is read by
+ * where it stands instead: right after an ancestor's own block it is that
+ * ancestor's lead-in, right after the cited unit's range or after the last
+ * block an ancestor owns it is closing text. Empty for a whole provision,
+ * which already holds all of its wording.
+ */
+export const governingWording = (
+  statute: StatuteBlocks<Block>,
+  { provisionAnchorId, citedAnchorId }: GoverningWordingTarget,
+): GoverningWording<Block>[] => {
+  const provision = provisionBlocks(statute, provisionAnchorId);
+  if (provision === null) {
+    return [];
+  }
+  const owned = { blocks: provision, scheme: statute.scheme };
+  const cited = resolveDocumentAnchor(owned, citedAnchorId);
+  if (cited === null || cited.anchorId === provision.at(0)?.anchorId) {
+    return [];
+  }
+  const range =
+    cited.type === "heading"
+      ? (blocksOwnedByHeading(provision, cited) ?? [cited])
+      : blocksNestedUnder(owned, cited);
+  const inRange = new Set<Block>(range);
+  const citedAt = provision.indexOf(cited);
+  const rangeEnd = citedAt + range.length - 1;
+  const ancestors = new Set(
+    provisionAncestorAnchors(statute.scheme, {
+      anchor: cited.anchorId,
+      provision: provisionAnchorId,
+    }),
+  );
+  const { scheme } = statute;
+
+  const governing = new Map<Block, GoverningWordingPosition>();
+  const positionOf = (index: number): GoverningWordingPosition =>
+    index < citedAt ? "lead-in" : "closing";
+
+  for (const [index, block] of provision.entries()) {
+    if (inRange.has(block) || block.type === "heading") {
+      continue;
+    }
+    if (ancestors.has(block.anchorId)) {
+      governing.set(block, "lead-in");
+      continue;
+    }
+    const owner = wordingOwnerAnchor(scheme, block.anchorId);
+    if (owner !== null && ancestors.has(owner)) {
+      governing.set(block, positionOf(index));
+    }
+  }
+
+  for (const [block, position] of unfiledGoverningWording({
+    provision,
+    scheme,
+    inRange,
+    rangeEnd,
+    ancestors,
+  })) {
+    governing.set(block, position);
+  }
+
+  return provision.flatMap((block) => {
+    const position = governing.get(block);
+    return position === undefined ? [] : [{ block, position }];
+  });
 };

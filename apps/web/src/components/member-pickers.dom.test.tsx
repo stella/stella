@@ -66,9 +66,13 @@ const { ContactOwnersEditor } =
 const { RateManagementDialog } =
   await import("@/routes/_protected.workspaces/$workspaceId/-components/billing/rate-management-dialog");
 const { toSafeId } = await import("@/lib/safe-id");
+const { roleOptions, sessionOptions } = await import("@/lib/auth-queries");
+const { MEMBER_SESSION } =
+  await import("@/lib/account/auth-session.test-fixtures");
 const { DeletionTaskReassignments } =
   await import("@/routes/_protected.settings/-components/account/deletion-task-reassignments");
 
+const USER_ID = "00000000-0000-7000-8000-0000000000ff";
 const ORGANIZATION = "00000000-0000-7000-8000-00000000f001";
 const WORKSPACE = "00000000-0000-7000-8000-00000000f002";
 const TASK = "00000000-0000-7000-8000-00000000f003";
@@ -142,6 +146,16 @@ const mount = async (children: () => ReactNode) => {
     },
   });
   clients.push(client);
+  const signedInSession = {
+    ...MEMBER_SESSION,
+    user: { ...MEMBER_SESSION.user, id: USER_ID },
+    session: {
+      ...MEMBER_SESSION.session,
+      userId: USER_ID,
+      activeOrganizationId: ORGANIZATION,
+    },
+  } satisfies typeof MEMBER_SESSION;
+  client.setQueryData(sessionOptions.queryKey, signedInSession);
   const root = router.createRootRoute({ component: router.Outlet });
   const protectedRoute = router.createRoute({
     getParentRoute: () => root,
@@ -167,7 +181,7 @@ const mount = async (children: () => ReactNode) => {
             user={{
               activeOrganizationId: ORGANIZATION,
               email: "owner@kancelar.example",
-              id: "00000000-0000-7000-8000-0000000000ff",
+              id: USER_ID,
               image: null,
               name: "Owner",
               preferredName: null,
@@ -202,7 +216,7 @@ const choose = async (input: HTMLInputElement, search: string) => {
     });
   });
   await testing.waitFor(() =>
-    expect(testing.screen.getAllByRole("option")).toHaveLength(1),
+    expect(testing.screen.getAllByRole("option").length).toBe(1),
   );
   await testing.act(async () => {
     testing.fireEvent.keyDown(input, { key: "ArrowDown" });
@@ -344,6 +358,54 @@ describe("member pickers save the chosen member", () => {
       taskId: TASK,
       userId: DVORAK.id,
     });
+  });
+
+  /**
+   * Shows the role the query cache holds. It renders in the same commit as
+   * the picker's permission check, so finding the role proves the picker has
+   * seen it rather than a pending role, which also hides the controls.
+   */
+  const AppliedRole = () => (
+    <span>{`role: ${query.useQuery(roleOptions).data ?? "pending"}`}</span>
+  );
+  const mountAssigneesAs = async (role: string) => {
+    reads = [{ ...roleRead, body: { role } }, matterMembersRead(PEOPLE)];
+    await mount(() => (
+      <>
+        <AppliedRole />
+        <AssigneePicker
+          assignees={[{ user: DVORAK }]}
+          taskId={TASK}
+          workspaceId={WORKSPACE}
+        />
+      </>
+    ));
+    await testing.screen.findByText(DVORAK.name);
+    await testing.screen.findByText(`role: ${role}`);
+  };
+
+  test("task assignee: a role that can update entities changes assignees", async () => {
+    await mountAssigneesAs("member");
+
+    expect(
+      testing.screen.getByRole("button", { name: messages.tasks.addAssignee }),
+    ).toBeTruthy();
+    expect(
+      testing.screen.getByRole("button", { name: messages.common.remove }),
+    ).toBeTruthy();
+  });
+
+  test("task assignee: a role without entity update cannot change assignees", async () => {
+    await mountAssigneesAs("intern");
+
+    expect(
+      testing.screen.queryByRole("button", {
+        name: messages.tasks.addAssignee,
+      }),
+    ).toBeNull();
+    expect(
+      testing.screen.queryByRole("button", { name: messages.common.remove }),
+    ).toBeNull();
   });
 
   test("correspondence assignee, and the unassigned row", async () => {

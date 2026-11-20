@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { fileURLToPath } from "node:url";
 
 import { type Node, parseSource, walk } from "@stll/scripts/src/syntax-tree";
 
@@ -47,7 +48,7 @@ describe("action admission flag readers", () => {
   test("only the admission owner and listed non-counting paths read admission flags", async () => {
     const reads: Record<string, number> = {};
     for (const file of new Bun.Glob("**/*.ts").scanSync({
-      cwd: srcRoot.pathname,
+      cwd: fileURLToPath(srcRoot),
     })) {
       if (file.includes(".test.") || file.startsWith("tests/")) {
         continue;

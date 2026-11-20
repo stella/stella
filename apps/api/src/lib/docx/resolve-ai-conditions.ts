@@ -197,7 +197,12 @@ export const resolveAiConditions = async ({
       });
       continue;
     }
-    resolved[field.path] = decision.value;
+    Object.defineProperty(resolved, field.path, {
+      value: decision.value,
+      enumerable: true,
+      configurable: true,
+      writable: true,
+    });
     conditions.push(
       decision.decidedBy === "decision_model"
         ? {

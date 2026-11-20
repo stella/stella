@@ -5,6 +5,7 @@ import type { ReadBudgetId } from "@/api/lib/db/read-budgets";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
 
 import type { seedSitemapReadBudget, ServedCaseLaw } from "./corpus-seed";
+import type { DataExportScenario } from "./data-export-seed";
 import type { measureHostedErasureHistory } from "./hosted-erasure-run";
 import type { RedactionTombstoneScenario } from "./redaction-tombstone-seed";
 import type { RequestReceiptScenario } from "./request-receipt-seed";
@@ -25,6 +26,7 @@ export type CorpusStatementMeasurement = {
 export type ScheduledJobScenario =
   | { type: "case-law"; served: ServedCaseLaw }
   | RequestReceiptScenario
+  | DataExportScenario
   | RedactionTombstoneScenario;
 export type ScheduledJobMeasurement = {
   prepare?: typeof seedSitemapReadBudget;

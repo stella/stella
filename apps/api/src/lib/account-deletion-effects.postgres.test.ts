@@ -40,6 +40,7 @@ describe.skipIf(!enabled)("account deletion storage deadlines", () => {
         await db.transaction(async (tx) => {
           await recordAccountDeletionRequest({
             tx,
+            retainedWorkspaceIds: [],
             deletionRequestId: requestId,
             currentUserId: userId,
             organizationIds: [],

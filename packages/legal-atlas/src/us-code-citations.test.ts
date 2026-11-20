@@ -39,7 +39,9 @@ const expectCases = (cases: readonly Case[]): void => {
  * `U.S.C.` and `C.F.R.` entries of reporters-db's `laws.json`, and the U.S.C.
  * strings of eyecite's `test_FindTest.py`. See `us-code-citations.LICENSE`.
  */
-const FREE_LAW_PROJECT_CASES = [
+// Annotated rather than `as const`: a deep literal table of this size is a
+// union the type checker cannot represent.
+const FREE_LAW_PROJECT_CASES: readonly Case[] = [
   ["1 U.S.C. § 1", [["1 U.S.C. 1", "1 U.S.C. § 1"]]],
   ["1 U.S.C.A. § 1", [["1 U.S.C. 1", "1 U.S.C.A. § 1"]]],
   ["1 U.S.C.S. § 1", [["1 U.S.C. 1", "1 U.S.C.S. § 1"]]],
@@ -97,10 +99,10 @@ const FREE_LAW_PROJECT_CASES = [
     "42 U.S.C. § 405(r)(2) (2019)",
     [["42 U.S.C. 405(r)(2)", "42 U.S.C. § 405(r)(2)"]],
   ],
-] as const satisfies readonly Case[];
+];
 
 /** How opinions, statutes and regulations print the two codes. */
-const FORMS = [
+const FORMS: readonly Case[] = [
   [
     "We have jurisdiction under 28 U.S.C. § 1291, and we reverse.",
     [["28 U.S.C. 1291", "28 U.S.C. § 1291"]],
@@ -373,7 +375,7 @@ const FORMS = [
   ],
   // The Department of Justice's regulations open with part 0.
   ["28 C.F.R. § 0.85(a)", [["28 C.F.R. 0.85(a)", "28 C.F.R. § 0.85(a)"]]],
-] as const satisfies readonly Case[];
+];
 
 /** Text that is not a citation of a section of either code. */
 const NOT_SECTIONS = [

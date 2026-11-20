@@ -1,6 +1,7 @@
 // parser-output-unchanged: source-fields-sk: Inventory targets describe already retained source values without changing parsed decisions.
 // parser-output-unchanged: source-exclusion-contract: Publisher schemas, raw retention and coverage checks do not change parsed decision projections.
 // parser-output-unchanged: a page states whether the publisher was asked; parsed decision output is unchanged.
+// parser-output-unchanged: Reconciliation exposes the existing listing total for the census; decision parsing and listed identities are unchanged.
 // parser-output-unchanged: imports ingestion bindings directly from their existing owner.
 // parser-output-unchanged: legacy wrappers nested by deferred capture produce the same metadata as their original raw shape; existing raw shapes are unchanged.
 // parser-output-unchanged: Deferred document raw storage is declared without changing metadata or document parsing.
@@ -58,6 +59,8 @@ import {
   toOptionalValue,
 } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import { sourceFingerprint } from "@/api/handlers/case-law/ingestion/source-fingerprint";
+// parser-output-unchanged: Census court evidence is carried beside listing identity and payload; parsed decisions and persisted reconciliation keys are unchanged.
+import { observedCensusCourt } from "@/api/lib/case-law/census-listing-identity";
 import {
   absentDecisionTextFields,
   checkedDecisionMetadata,
@@ -1523,11 +1526,24 @@ const listSkCourtsSlicePage = async ({
     signal,
   });
   return {
-    items: listed.map((item) => ({
-      identity: skCourtsListingIdentity(item),
-      payload: item,
-    })),
+    items: listed.map((item) => {
+      const identity = skCourtsListingIdentity(item);
+      return {
+        identity,
+        payload: item,
+        ...(identity.type === "case-number"
+          ? {
+              censusCourtEvidence: observedCensusCourt(
+                isSkApiItem(item)
+                  ? skCourtsIdentityFields(item)?.court
+                  : undefined,
+              ),
+            }
+          : {}),
+      };
+    }),
     totalPages: Math.ceil(total / LISTING_PAGE_SIZE),
+    publisherCount: total,
   };
 };
 

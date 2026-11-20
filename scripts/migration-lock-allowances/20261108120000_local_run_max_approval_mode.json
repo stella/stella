@@ -1,0 +1,4 @@
+{
+  "add-column": "One text column with a constant default on organization_settings, one row per organization: a catalog-only change that rewrites no rows, under 1s lock_timeout and 5s statement_timeout.",
+  "add-constraint": "The mode domain CHECK is added NOT VALID, enforcing new writes without scanning existing rows; the catalog addition is bounded by the 1s lock_timeout and 5s statement_timeout."
+}

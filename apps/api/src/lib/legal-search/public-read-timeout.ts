@@ -46,8 +46,9 @@ export const runPublicReadRequest = <T>(
 
 const PUBLIC_READ_TIMEOUT_MESSAGE = "Public read timed out. Please try again.";
 
+// Repeating comes first: narrowing gives up coverage an unchanged repeat keeps.
 export const PUBLIC_READ_TIMEOUT_HINT =
-  "Retry with a narrower query or a smaller selection of public-law documents.";
+  "Repeat the identical request once before changing it. If it times out again, narrow the query or select fewer public-law documents.";
 
 /** The typed, retryable 503 a public read that ran out of time answers with. */
 export const publicReadTimeoutRefusal = (cause: unknown): HandlerError<503> =>

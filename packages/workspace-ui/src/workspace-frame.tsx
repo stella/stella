@@ -32,6 +32,7 @@ import {
   useSidebar,
 } from "@stll/ui/sidebar";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "@stll/ui/tooltip";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { useIsMobile } from "@stll/ui/use-mobile";
 import { cn } from "@stll/ui/utils";
 import { WorkspaceEndRail, WorkspaceShell } from "@stll/ui/workspace-shell";
@@ -135,6 +136,9 @@ export type WorkspaceFrameProps = {
       topBar: ComponentProps<typeof WorkspaceShell>["topBar"];
       /** Omitted when the host has nothing for the inline-end edge. */
       endDock?: ReactElement | undefined;
+      skipToContentLabel?: ComponentProps<
+        typeof WorkspaceShell
+      >["skipToContentLabel"];
     }
 );
 
@@ -172,6 +176,7 @@ export const WorkspaceFrame = (props: WorkspaceFrameProps) => {
       <WorkspaceShell
         endDock={props.endDock}
         navigation={props.navigation}
+        skipToContentLabel={props.skipToContentLabel}
         topBar={props.topBar}
       >
         {props.children}
@@ -414,7 +419,7 @@ const DescribedSidebar = ({
                     onClick={item.onActivate}
                   >
                     {item.icon}
-                    <span className="truncate">{item.label}</span>
+                    <TruncatedText hint={false}>{item.label}</TruncatedText>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
               ))}

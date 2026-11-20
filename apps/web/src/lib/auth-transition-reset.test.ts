@@ -112,7 +112,7 @@ describe("auth transition cache policy", () => {
     }
   });
 
-  test("initial population retains declared prefixes", async () => {
+  test("initial population drops unbound role values and retains session and public prefixes", async () => {
     const queryClient = new QueryClient();
     queryClient.setQueryData(rootKeys.session, null);
     const { reloads, uninstall } = installGuard(queryClient, true);
@@ -135,13 +135,7 @@ describe("auth transition cache policy", () => {
           .getQueryCache()
           .getAll()
           .map((query) => query.queryKey),
-      ).toEqual([
-        rootKeys.session,
-        sessionChild,
-        rootKeys.role,
-        roleChild,
-        catalogueKey,
-      ]);
+      ).toEqual([rootKeys.session, sessionChild, catalogueKey]);
       expect(reloads).toEqual([]);
     } finally {
       uninstall();
@@ -230,13 +224,7 @@ describe("auth transition cache policy", () => {
           .map((query) => query.queryKey);
         expect(survivors).toEqual(
           transition.keepPrefixes
-            ? [
-                rootKeys.session,
-                sessionChild,
-                rootKeys.role,
-                roleChild,
-                catalogueKey,
-              ]
+            ? [rootKeys.session, sessionChild, catalogueKey]
             : [rootKeys.session, catalogueKey],
         );
         expect(queryClient.getQueryState(rootKeys.session)?.data).toEqual(

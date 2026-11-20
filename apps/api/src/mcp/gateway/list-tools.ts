@@ -34,9 +34,12 @@ import type {
   ExternalGatewayDependencies,
   ResolvedExternalMcpTool,
 } from "@/api/mcp/gateway/external-tools";
-import { modeAllowsGatewayTools } from "@/api/mcp/gateway/mode-policy";
 import {
-  loadVisibleSkillTools,
+  modeAllowsGatewayTools,
+  modeAllowsSkillTools,
+} from "@/api/mcp/gateway/mode-policy";
+import {
+  loadServedSkillTools,
   resolveSkillTool,
 } from "@/api/mcp/gateway/skills";
 import type { ResolvedSkillTool } from "@/api/mcp/gateway/skills";
@@ -183,15 +186,14 @@ export const listGatewayMcpToolDefinitions = async ({
   // Restricted surfaces are pure static projections. Dynamic
   // connector discovery runs only on the advanced surface, so a
   // restricted client never discovers a tool its dispatcher rejects and never
-  // receives tenant-specific connector metadata.
-  if (!modeAllowsGatewayTools(mode)) {
+  // receives tenant-specific connector metadata. Skill tools also reach an
+  // agent run on the default surface (`modeAllowsSkillTools`).
+  const allowsConnectors = modeAllowsGatewayTools(mode);
+  if (!allowsConnectors && !modeAllowsSkillTools(mode, context)) {
     return definitions;
   }
 
-  if (
-    modeAllowsGatewayTools(mode) &&
-    hasGrantedScope(scopes, "stella:external_mcps")
-  ) {
+  if (allowsConnectors && hasGrantedScope(scopes, "stella:external_mcps")) {
     for (const tool of await listGatewayExternalMcpTools({
       context,
       ...(externalGatewayDependencies === undefined
@@ -202,14 +204,8 @@ export const listGatewayMcpToolDefinitions = async ({
     }
   }
 
-  if (hasGrantedScope(scopes, "stella:skills")) {
-    for (const skill of await loadVisibleSkillTools({
-      context,
-      mode,
-      scopes,
-    })) {
-      definitions.push(skillToolDefinition(skill));
-    }
+  for (const skill of await loadServedSkillTools({ context, mode, scopes })) {
+    definitions.push(skillToolDefinition(skill));
   }
 
   return definitions
@@ -264,7 +260,6 @@ export const getGatewayMcpToolDefinition = async ({
       : undefined;
   }
   if (
-    !modeAllowsGatewayTools(mode) ||
     !isMcpDescriptorFeatureEnabled({ context, kind: "tools", id: toolName })
   ) {
     return undefined;
@@ -289,7 +284,7 @@ export const getGatewayMcpToolDefinition = async ({
       : externalToolDefinition(externalTool);
   }
 
-  if (!isSkillToolName(toolName)) {
+  if (!isSkillToolName(toolName) || !modeAllowsSkillTools(mode, context)) {
     return undefined;
   }
 

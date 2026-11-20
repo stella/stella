@@ -2,6 +2,8 @@ import { describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
 import { toSafeId } from "@/api/lib/branded-types";
+import type { SafeId } from "@/api/lib/branded-types";
+import type { PlaybookVersionForPin } from "@/api/lib/document-review/resolve-playbook-pin";
 import type { PlaybookScope } from "@/api/lib/workflow/playbook-positions";
 import { playbookScopeSchema } from "@/api/lib/workflow/playbook-positions";
 import {
@@ -9,6 +11,7 @@ import {
   filterPlaybooksByPresentLabels,
   playbookTrigger,
   selectRoutablePlaybooks,
+  withPinnedScopes,
 } from "@/api/lib/workflow/route-playbooks";
 
 // ── An absent trigger is never invented ────────────────────────────────
@@ -77,6 +80,86 @@ describe("selectRoutablePlaybooks", () => {
 });
 
 // ── Applicability: workspace-wide vs doc-type present ──────────────────
+// ── Pinned scope: an edit after approval must not re-route a run ────────
+// A playbook approved scoped to NDA, then edited to Lease without
+// re-approval, still applies as an NDA playbook: it runs over the matter's
+// NDAs, never over its leases, until it is approved again.
+describe("withPinnedScopes", () => {
+  const routable = (
+    id: string,
+    scope: PlaybookScope | null,
+  ): {
+    id: SafeId<"playbookDefinition">;
+    name: string;
+    positions: { version: 3; items: [] };
+    scope: PlaybookScope | null;
+  } => ({
+    id: toSafeId<"playbookDefinition">(id),
+    name: id,
+    positions: { version: 3, items: [] },
+    scope,
+  });
+
+  const approvedVersion = (
+    id: string,
+    scope: PlaybookScope | null,
+  ): PlaybookVersionForPin => ({
+    id: toSafeId<"playbookDefinitionVersion">(`${id}-v1`),
+    name: id,
+    positions: { version: 3, items: [] },
+    scope,
+  });
+
+  test("an approved playbook routes on its approved scope, not the edited live one", () => {
+    const edited = routable("pb_nda", {
+      trigger: "onClassified",
+      documentTypeKey: "lease",
+    });
+    const pinned = withPinnedScopes({
+      playbooks: [edited],
+      approvedVersions: new Map([
+        [edited.id, approvedVersion("pb_nda", { documentTypeKey: "nda" })],
+      ]),
+    });
+
+    expect(pinned).toHaveLength(1);
+    expect(pinned.at(0)?.scope).toEqual({ documentTypeKey: "nda" });
+    // And that pinned scope is what applicability then reads: the matter
+    // holds NDAs, not leases, so the playbook applies.
+    const labelByKey = new Map([["nda", "NDA"]]);
+    expect(
+      filterPlaybooksByPresentLabels({
+        playbooks: pinned,
+        labelByKey,
+        presentLabels: new Set(["NDA"]),
+      }).map((p) => p.id),
+    ).toEqual([edited.id]);
+    expect(
+      filterPlaybooksByPresentLabels({
+        playbooks: pinned,
+        labelByKey,
+        presentLabels: new Set(["Lease"]),
+      }),
+    ).toHaveLength(0);
+  });
+
+  test("a never-approved playbook keeps its live scope", () => {
+    const draft = routable("pb_draft", {
+      trigger: "onClassified",
+      documentTypeKey: "lease",
+    });
+    const pinned = withPinnedScopes({
+      playbooks: [draft],
+      approvedVersions: new Map(),
+    });
+
+    expect(pinned.at(0)?.scope).toEqual({
+      trigger: "onClassified",
+      documentTypeKey: "lease",
+    });
+  });
+});
+
 describe("filterPlaybooksByPresentLabels", () => {
   const labelByKey = new Map([["nda", "NDA"]]);
 

@@ -29,6 +29,15 @@ export const POLARITY = {
   UNKNOWN: "unknown",
 } as const satisfies ConstantMap<Polarity>;
 
+export const POLARITY_RULE_KINDS = ["stance", "form"] as const;
+
+export type PolarityRuleKind = (typeof POLARITY_RULE_KINDS)[number];
+
+export const POLARITY_RULE_KIND = {
+  STANCE: "stance",
+  FORM: "form",
+} as const satisfies ConstantMap<PolarityRuleKind>;
+
 /**
  * Polarities the pipeline derives, which no single reading may emit.
  *
@@ -284,3 +293,5 @@ export const phraseToPattern = (phrase: string): string => {
 
 /** Named capture whose span declares a reported party submission. */
 export const REPORTED_PARTY_SUBMISSION_GROUP = "reportedPartySubmission";
+
+export const POLARITY_CLASSIFIER_VERSION = "citation-polarity-v2";

@@ -3,6 +3,7 @@ import {
   RESOURCE_MUTATION_ID_HEADER,
 } from "@stll/api-contract";
 import { CAPABILITY_REQUEST_HEADER } from "@stll/api-contract/capability-request";
+import { CHAT_COMMAND_ID_HEADER } from "@stll/api-contract/chat-command";
 
 import { env } from "@/api/env";
 import { mcpTransportMethodRefusal } from "@/api/handlers/mcp/routes-core";
@@ -29,6 +30,7 @@ import {
 import { runWithStatementCeiling } from "@/api/lib/db/statement-ceiling";
 import { DEV_INSPECTOR_ORIGINS, frontendOrigins } from "@/api/lib/dev-origins";
 import { httpError } from "@/api/lib/errors/http-error";
+import { corpusRetryAfter } from "@/api/lib/legal-search/corpus-retry-after";
 import {
   extractLangFromRequest,
   FORMATTING_LOCALE_HEADER,
@@ -75,6 +77,9 @@ const allowedBrowserOrigins = (): (string | RegExp)[] => {
   }
   if (env.EXTENSION_ORIGIN) {
     origins.push(env.EXTENSION_ORIGIN);
+  }
+  if (env.OUTLOOK_ADDIN_ORIGIN) {
+    origins.push(env.OUTLOOK_ADDIN_ORIGIN);
   }
   return origins;
 };
@@ -197,10 +202,14 @@ export const apiPipeline: readonly Middleware[] = [
       TANSTACK_RUN_ID_HEADER,
       CAPABILITY_REQUEST_HEADER,
       RESOURCE_MUTATION_ID_HEADER,
+      // A chat send or answer names the member's command for its retries.
+      CHAT_COMMAND_ID_HEADER,
     ],
     exposedHeaders: CORS_EXPOSED_HEADERS,
     maxAgeSeconds: CORS_PREFLIGHT_MAX_AGE_SECONDS,
   }),
+  // Outside the error boundary, so a refusal it renders gets the header too.
+  corpusRetryAfter,
   errorBoundary,
   clientTooOld,
   browserOriginGuard,

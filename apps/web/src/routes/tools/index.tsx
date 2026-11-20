@@ -3,7 +3,7 @@ import * as v from "valibot";
 
 import { getTranslator } from "@/i18n/i18n-store";
 import { getAnalytics } from "@/lib/analytics/provider";
-import { publicToolsBasePath } from "@/lib/knowledge/public-tools-path";
+import { publicToolsCataloguePath } from "@/lib/knowledge/public-tools-path";
 import { pageTitle } from "@/lib/page-title";
 import { createPublicToolsHead } from "@/lib/public-tools-seo";
 import {
@@ -32,7 +32,7 @@ export const Route = createFileRoute("/tools/")({
     const t = getTranslator();
     return createPublicToolsHead({
       description: t("publicTools.metaDescription"),
-      path: publicToolsBasePath(),
+      path: publicToolsCataloguePath(),
       title: pageTitle("knowledge.sections.tools.title"),
       type: "website",
     });

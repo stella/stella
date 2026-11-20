@@ -4,11 +4,15 @@ import { Link, useRouterState } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
 import { Separator } from "@stll/ui/separator";
+import { TruncatedText } from "@stll/ui/truncated-text";
 
 import { PublicWorkspaceShell } from "@/components/public-workspace-shell";
 import { SidebarTrigger, useSidebar } from "@/components/sidebar";
 import { publicKnowledgeSource } from "@/features/knowledge/public/public-knowledge";
-import { knowledgeSections } from "@/lib/knowledge/navigation";
+import {
+  knowledgeSections,
+  publicSectionPath,
+} from "@/lib/knowledge/navigation";
 
 /** Knowledge for a visitor without an account: the public shell with a
  *  Knowledge breadcrumb in its top bar. */
@@ -50,6 +54,7 @@ const KnowledgePublicTopBar = () => {
   const section = visibleSections.find(
     ({ to }) => pathname === to || pathname.startsWith(`${to}/`),
   );
+  const sectionTo = section === undefined ? null : publicSectionPath(section);
 
   return (
     <header className="bg-sidebar border-sidebar-border flex h-12 shrink-0 items-center gap-2 overflow-hidden border-b px-4">
@@ -69,12 +74,12 @@ const KnowledgePublicTopBar = () => {
         >
           {t("navigation.knowledge")}
         </Link>
-        {section !== undefined && (
+        {section !== undefined && sectionTo !== null && (
           <>
             <span className="text-foreground-placeholder">/</span>
             <Link
               className="text-muted-foreground hover:text-foreground shrink-0"
-              to={section.to}
+              to={sectionTo}
             >
               {t(section.titleKey)}
             </Link>
@@ -83,9 +88,9 @@ const KnowledgePublicTopBar = () => {
         {entryName !== null && (
           <>
             <span className="text-foreground-placeholder">/</span>
-            <span className="text-foreground truncate font-medium" dir="auto">
+            <TruncatedText className="text-foreground font-medium" dir="auto">
               {entryName}
-            </span>
+            </TruncatedText>
           </>
         )}
       </nav>

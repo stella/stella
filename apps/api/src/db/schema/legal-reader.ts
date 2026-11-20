@@ -12,6 +12,7 @@ import {
 } from "@stll/api-contract/legal-reader-annotations";
 import { READER_TEXT_QUOTE_CONTEXT_LENGTH } from "@stll/legal-ast/reader-text-quote";
 
+import { accountErasureOwnerPolicies } from "../account-erasure-policies";
 import { reviewResetOwnerPolicies } from "../review-reset-policies";
 import {
   SETTING_ACCOUNT_EXPORT_ORGANIZATION_ID,
@@ -321,6 +322,8 @@ export const legalReaderAnnotations = p.pgTable(
         AND ${t.userId} = nullif(current_setting('${sql.raw(SETTING_ACCOUNT_EXPORT_USER_ID)}', true), '')`,
     }),
     ...reviewResetOwnerPolicies(LEGAL_READER_ANNOTATIONS),
+    // Account deletion removes the author's private notes; shared ones stay.
+    ...accountErasureOwnerPolicies(LEGAL_READER_ANNOTATIONS),
     // The claim-cleanup trigger runs as the owner and removes every author's
     // comments on the claims a statement deleted, only during trigger execution.
     p.pgPolicy("claim_cleanup_owner_select", {

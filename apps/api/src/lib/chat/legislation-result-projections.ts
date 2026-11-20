@@ -5,6 +5,7 @@ import {
   LEGISLATION_WINDOW_DISPOSITION_BASES,
   LEGISLATION_WINDOW_DISPOSITIONS,
 } from "@stll/api-contract/legislation-expression";
+import type { GoverningWordingPosition } from "@stll/legal-ast/provision-preview";
 
 import {
   PROVISION_ABSENCE_STATUSES,
@@ -40,6 +41,32 @@ const provisionEntrySubject = {
 const provisionCitation = { citation: v.optional(v.string()) } as const;
 
 /**
+ * Wording outside a read subdivision that governs it: the lead-in of each
+ * unit it is nested in and the closing text after their lists, with the
+ * anchor each is filed under. Empty for a whole provision and on a
+ * continuation window of the same text. Source of truth: `governingWording`
+ * (`@stll/legal-ast/provision-preview`).
+ */
+// Spelled here rather than imported: this module is loaded where only type
+// imports of the AST package resolve. The `satisfies` keeps the two in step.
+const GOVERNING_POSITIONS = [
+  "lead-in",
+  "closing",
+] as const satisfies readonly GoverningWordingPosition[];
+
+const governingText = {
+  governingText: v.array(
+    v.strictObject({
+      anchor: passthroughId(),
+      position: v.picklist(GOVERNING_POSITIONS),
+      text: v.string(),
+    }),
+  ),
+  // Present when governing wording past the bound was left out.
+  governingTextTruncated: v.optional(v.literal(true)),
+} as const;
+
+/**
  * read_statute_provisions. Source of truth:
  * `handleReadStatuteProvisionsTool` (`legislation-tools.ts`). One entry per
  * requested item, in input order: a batch read reports per entry rather than
@@ -59,10 +86,12 @@ export const READ_STATUTE_PROVISIONS_PROJECTION = v.strictObject({
           resourceName: passthroughId(),
           status: v.literal(PROVISION_STATUS.found),
           text: v.string(),
+          ...governingText,
           nextTextCursor: v.nullable(passthroughId()),
           truncated: v.boolean(),
           versionValidFrom: v.nullable(v.string()),
           versionValidTo: v.nullable(v.string()),
+          ...statuteExpressionLabel,
         }),
       ),
       ...PROVISION_ABSENCE_STATUSES.map((status) =>
@@ -108,8 +137,9 @@ const statuteProvisionVersion = {
 /**
  * read_provision_history. Source of truth: `handleReadProvisionHistoryTool`
  * (`legislation-tools.ts`) over `readProvisionHistoryHandler`. A version in
- * which the anchor is absent is dropped by that handler, so every item here
- * has an occurrence; whether its wording travels is a separate publisher
+ * which the anchor is absent is dropped by that handler, and one whose
+ * structure could not be read by the tool, so every item here has an
+ * occurrence; whether its wording travels is a separate publisher
  * permission, so the items are discriminated on the same `status` vocabulary
  * the batch provision read answers in.
  */
@@ -122,6 +152,7 @@ export const READ_PROVISION_HISTORY_PROJECTION = v.strictObject({
           ...statuteProvisionVersion,
           status: v.literal(PROVISION_STATUS.found),
           text: v.string(),
+          ...governingText,
           nextTextCursor: v.nullable(passthroughId()),
           truncated: v.boolean(),
         }),

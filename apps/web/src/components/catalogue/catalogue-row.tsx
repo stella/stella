@@ -1,6 +1,7 @@
 import { useTranslations } from "use-intl";
 
 import { ContextMenu, type ContextMenuAction } from "@stll/ui/context-menu";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import {
@@ -125,12 +126,13 @@ export const CatalogueRow = ({
             <div className="ms-auto flex items-center gap-2">{actions}</div>
           </div>
           {description.length > 0 && (
-            <p
-              className="text-muted-foreground line-clamp-1 text-xs"
+            <TruncatedText
+              className="text-muted-foreground text-xs"
               dir="auto"
+              render={<p />}
             >
               {description}
-            </p>
+            </TruncatedText>
           )}
           {notice !== undefined && (
             <p className="text-muted-foreground text-xs" dir="auto">

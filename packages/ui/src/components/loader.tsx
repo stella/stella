@@ -4,6 +4,7 @@ import { LoaderCircleIcon } from "../icons";
 import { cn } from "../lib/utils";
 import type { LoaderSize } from "./loader.shared";
 import { StellaMark } from "./stella-mark";
+import { TruncatedText } from "./truncated-text";
 
 /**
  * The indeterminate loading indicator for a control or a row: a plain
@@ -64,9 +65,12 @@ const LoaderState = ({ label, detail, hint, className }: LoaderStateProps) => (
     <div className="space-y-1">
       <p className="text-foreground text-sm font-medium">{label}</p>
       {detail !== undefined && (
-        <p className="text-muted-foreground truncate text-xs tabular-nums">
+        <TruncatedText
+          className="text-muted-foreground text-xs tabular-nums"
+          render={<p />}
+        >
           {detail}
-        </p>
+        </TruncatedText>
       )}
       {hint !== undefined && (
         <p className="text-muted-foreground text-2xs text-pretty">{hint}</p>

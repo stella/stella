@@ -4,6 +4,7 @@ import type { OnlineMigrationEntry } from "../online-migration-entry";
 export default {
   id: "constraints-case-law-parsed-source-constraint",
   revision: 1240,
+  lifecycle: "finalized",
   type: "constraints",
   values: [CASE_LAW_PARSED_SOURCE_CONSTRAINT],
 } satisfies OnlineMigrationEntry;

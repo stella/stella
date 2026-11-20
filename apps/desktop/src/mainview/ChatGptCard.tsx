@@ -2,7 +2,11 @@ import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
 
-import type { ChatGptFailure, ChatGptStatus } from "./chatgpt-status";
+import type {
+  ChatGptFailure,
+  ChatGptSignIn,
+  ChatGptStatus,
+} from "./chatgpt-status";
 import { ChatGptPasteCallback } from "./ChatGptPasteCallback";
 
 /** The ChatGPT connection: its state, and what the user can do next. */
@@ -98,9 +102,6 @@ export const ChatGptCard = ({
     </div>
   );
 };
-
-/** Which account a sign-in is for: the saved one, a new one, or `account`. */
-type ChatGptSignIn = { newAccount: boolean; account?: string };
 
 export type ChatGptNotice =
   "actionFailed" | "pasteRejected" | "revocationUnconfirmed";

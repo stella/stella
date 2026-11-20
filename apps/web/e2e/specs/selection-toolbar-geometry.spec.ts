@@ -3,12 +3,16 @@ import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
+import { respond, staticBody } from "../helpers/route-mock";
 import {
   expect,
   stableBoundingBox,
   test,
   waitForStableGeometry,
 } from "../helpers/stable-geometry";
+
+// DOMRect.toJSON() is typed any; these are the fields the assertions read.
+type RectJson = Pick<DOMRect, "bottom" | "height" | "left" | "right" | "top">;
 
 const directory = mkdtempSync(path.join(tmpdir(), "selection-toolbar-"));
 const fixture = { bundle: "" };
@@ -132,10 +136,13 @@ for (const [name, selectionCase] of Object.entries(cases)) {
     ).href;
     await stylesheetPage.close();
     await page.route(fixtureUrl, async (route) => {
-      await route.fulfill({
-        contentType: "text/html",
-        body: `<!doctype html><head>${styles}</head><body><div id="fixture"></div></body>`,
-      });
+      await respond(
+        route,
+        staticBody({
+          contentType: "text/html",
+          body: `<!doctype html><head>${styles}</head><body><div id="fixture"></div></body>`,
+        }),
+      );
     });
     await page.goto(fixtureUrl, { waitUntil: "domcontentloaded" });
     await expect
@@ -247,8 +254,8 @@ for (const [name, selectionCase] of Object.entries(cases)) {
       const end = visibleLines.at(-1);
       const y = usePointer ? bounds.top + 110 : end?.bottom;
       return {
-        pane: bounds.toJSON(),
-        toolbar: bar.toJSON(),
+        pane: bounds.toJSON() as RectJson,
+        toolbar: bar.toJSON() as RectJson,
         y,
         selectionEnd: range?.getBoundingClientRect().bottom,
         headerBottom: window.document

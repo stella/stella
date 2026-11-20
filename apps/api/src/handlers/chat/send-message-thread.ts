@@ -1,25 +1,38 @@
 import { Result } from "better-result";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, notExists, sql } from "drizzle-orm";
 
 import type { ReasoningEffort } from "@stll/ai-catalog";
 import type { ChatSendRequest } from "@stll/api-contract/chat";
-import type { ChatLocalRunTarget } from "@stll/api-contract/chat-run-target";
+import {
+  CHAT_CLOUD_RUN_TARGET,
+  type ChatLocalRunTarget,
+  type ChatRunTarget,
+} from "@stll/api-contract/chat-run-target";
 
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
-import { chatThreads } from "@/api/db/schema";
+import { chatMessages, chatThreads } from "@/api/db/schema";
 import {
   EMPTY_CHAT_HISTORY_SNAPSHOT,
   loadWindowedThreadHistory,
 } from "@/api/handlers/chat/history-window";
 import type { ChatHistorySnapshot } from "@/api/handlers/chat/history-window";
-import { shouldRefreshEmptyThreadTitle } from "@/api/handlers/chat/thread-title";
+import {
+  resolveSendThreadFields,
+  resolveSendThreadSkill,
+  type SendThreadFields,
+  sendThreadFieldsAuditChanges,
+  sendThreadFieldsChanged,
+  type SendThreadFieldsRequest,
+} from "@/api/handlers/chat/send-thread-fields";
 import type {
   ChatMessage,
   PersistedChatMessageContent,
 } from "@/api/handlers/chat/types";
+import { shouldRefreshEmptyThreadTitle } from "@/api/lib/ai-generation/thread-title";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
+import { chatRunTargetOf } from "@/api/lib/chat/run-target";
 import {
   type ChatThreadNamesRead,
   EMPTY_CHAT_THREAD_NAMES_READ,
@@ -28,6 +41,19 @@ import {
 import { readChatCopyProjection } from "@/api/lib/chat/withdrawn-copies";
 import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
 import { PG_ERROR, pgErrorFields } from "@/api/lib/pg-error";
+
+/** The send-decided fields a stored thread row holds. */
+const storedSendThreadFieldsOf = (row: {
+  activeSkill: SendThreadFields["activeSkill"];
+  contextMatterIds: SafeId<"workspace">[];
+  dataWorkspaceIds: SafeId<"workspace">[];
+  subjectDecisionId: SafeId<"caseLawDecision"> | null;
+}): SendThreadFields => ({
+  activeSkill: row.activeSkill,
+  contextMatterIds: row.contextMatterIds,
+  dataWorkspaceIds: row.dataWorkspaceIds,
+  subjectDecisionId: row.subjectDecisionId,
+});
 
 type ReadThreadValidationStateProps = {
   caseLawDb?: Parameters<typeof readChatCopyProjection>[0]["caseLawDb"];
@@ -41,12 +67,18 @@ type ReadThreadValidationStateProps = {
 };
 
 type ThreadValidationState = {
-  /** Existing threads use their stored skill, including an ordinary-chat null. */
+  /**
+   * The skill the send runs with, decided by `resolveSendThreadFields`: a
+   * thread that holds a message keeps its stored skill (an ordinary-chat null
+   * included); a missing or still empty one takes the send's.
+   */
   activeSkill: ChatSendRequest["activeSkill"];
   persistedMessage: {
     content: PersistedChatMessageContent;
     role: ChatMessage["role"];
   } | null;
+  /** Where the thread runs its turns; cloud for a thread the send creates. */
+  runTarget: ChatRunTarget;
   /** Every name the thread's history holds. */
   threadNames: ChatThreadNamesRead;
   webSearchEnabled: boolean;
@@ -75,8 +107,16 @@ export const readThreadValidationState = async ({
           },
           columns: {
             activeSkill: true,
+            chatLocalRunTarget: true,
+            contextMatterIds: true,
+            dataWorkspaceIds: true,
+            subjectDecisionId: true,
             workspaceId: true,
             webSearchEnabled: true,
+          },
+          extras: {
+            hasMessages: (table) =>
+              sql<boolean>`exists (select 1 from ${chatMessages} where ${chatMessages.threadId} = ${table.id})`,
           },
           with: {
             messages: {
@@ -97,6 +137,7 @@ export const readThreadValidationState = async ({
           caseLawDb,
         });
         return {
+          hasMessages: thread.hasMessages,
           thread: {
             ...thread,
             messages: thread.messages.map((row) =>
@@ -108,15 +149,22 @@ export const readThreadValidationState = async ({
       }),
     );
 
+    // Validation knows only the send's skill, which the rest of what the send
+    // carries never changes.
     if (read === null) {
       return Result.ok({
-        activeSkill: initialActiveSkill,
+        activeSkill:
+          resolveSendThreadSkill({
+            activeSkill: initialActiveSkill,
+            stored: null,
+          }) ?? undefined,
         persistedMessage: null,
+        runTarget: CHAT_CLOUD_RUN_TARGET,
         threadNames: EMPTY_CHAT_THREAD_NAMES_READ,
         webSearchEnabled: false,
       });
     }
-    const { thread, threadNames } = read;
+    const { hasMessages, thread, threadNames } = read;
 
     const persistedWorkspaceId = thread.workspaceId ?? null;
     if (persistedWorkspaceId !== workspaceId) {
@@ -129,8 +177,12 @@ export const readThreadValidationState = async ({
     }
 
     const persistedMessage = thread.messages.at(0);
+    const activeSkill = resolveSendThreadSkill({
+      activeSkill: initialActiveSkill,
+      stored: { fields: storedSendThreadFieldsOf(thread), hasMessages },
+    });
     return Result.ok({
-      activeSkill: thread.activeSkill ?? undefined,
+      activeSkill: activeSkill ?? undefined,
       persistedMessage:
         persistedMessage === undefined
           ? null
@@ -138,6 +190,7 @@ export const readThreadValidationState = async ({
               content: persistedMessage.content,
               role: persistedMessage.role,
             },
+      runTarget: chatRunTargetOf(thread.chatLocalRunTarget),
       threadNames,
       webSearchEnabled: thread.webSearchEnabled,
     });
@@ -145,6 +198,16 @@ export const readThreadValidationState = async ({
 
 type ChatThreadRecord = {
   id: SafeId<"chatThread">;
+  /**
+   * This send writes the thread's first message: it created the thread, or
+   * the thread held no message yet (a setting chosen before the first
+   * message stores the row early).
+   */
+  firstSend: boolean;
+  /** The thread's title once this send loaded it. */
+  title: string;
+  /** The fields this send runs the thread with (`resolveSendThreadFields`). */
+  sendFields: SendThreadFields;
   workspaceId: SafeId<"workspace"> | null;
   contextMatterIds: SafeId<"workspace">[];
   dataWorkspaceIds: SafeId<"workspace">[];
@@ -172,14 +235,15 @@ type LoadThreadProps = {
    * message is durable, so its thread must start with the origin's RLS scope.
    */
   initialDataWorkspaceIds: readonly SafeId<"workspace">[];
-  initialContextMatterIds: SafeId<"workspace">[];
+  /** The send's pins; undefined when it names none. */
+  initialContextMatterIds: readonly SafeId<"workspace">[] | undefined;
   organizationId: SafeId<"organization">;
   recordAuditEvent: AuditRecorder;
   safeDb: SafeDb;
   /**
    * The decision a new thread is about, from the send's active decision.
-   * Written only when this send creates the thread; an existing thread keeps
-   * the decision it was created with.
+   * Written when this send writes the thread's first message; a thread that
+   * already holds one keeps its decision.
    */
   subjectDecisionId: SafeId<"caseLawDecision"> | null;
   threadId: SafeId<"chatThread">;
@@ -188,16 +252,92 @@ type LoadThreadProps = {
   workspaceId: SafeId<"workspace"> | null;
 };
 
+/**
+ * What a send stores when it adopts a thread stored before its first message
+ * (`adoptEmptyThread`): the fields its first message decides and, while the
+ * title is still the placeholder, the send's title.
+ */
+type EmptyThreadAdoption = {
+  fields: SendThreadFields;
+  stored: SendThreadFields;
+  title: string | null;
+};
+
 export type ChatThreadState =
   | {
       type: "existing";
       data: ChatThreadRecord;
+      /** Null when the thread holds a message or nothing would change. */
+      adoption: EmptyThreadAdoption | null;
     }
   | {
       type: "created";
       data: ChatThreadRecord;
       rollbackToken: string;
     };
+
+type ExistingChatThreadState = Extract<ChatThreadState, { type: "existing" }>;
+
+/**
+ * Stores what `loadThread` planned for a thread stored before its first
+ * message. The send calls it after its last disconnect check before durable
+ * changes, so a disconnected send changes nothing. The write is guarded on
+ * the thread still holding no message: when a concurrent send's message
+ * landed first, the thread keeps what that send stored.
+ */
+export const adoptEmptyThread = async ({
+  organizationId,
+  recordAuditEvent,
+  safeDb,
+  thread,
+  userId,
+  workspaceId,
+}: {
+  organizationId: SafeId<"organization">;
+  recordAuditEvent: AuditRecorder;
+  safeDb: SafeDb;
+  thread: ChatThreadState;
+  userId: SafeId<"user">;
+  workspaceId: SafeId<"workspace"> | null;
+}): Promise<Result<void, SafeDbError>> => {
+  if (thread.type === "created" || thread.adoption === null) {
+    return Result.ok(undefined);
+  }
+  const { fields, stored, title } = thread.adoption;
+  const threadId = thread.data.id;
+  return await safeDb(async (tx) => {
+    const adopted = await tx
+      .update(chatThreads)
+      .set({ ...fields, ...(title === null ? {} : { title }) })
+      .where(
+        and(
+          eq(chatThreads.id, threadId),
+          eq(chatThreads.organizationId, organizationId),
+          eq(chatThreads.userId, userId),
+          notExists(
+            tx
+              .select({ id: chatMessages.id })
+              .from(chatMessages)
+              .where(eq(chatMessages.threadId, threadId)),
+          ),
+        ),
+      )
+      .returning({ id: chatThreads.id });
+    if (adopted.length === 0) {
+      return;
+    }
+    await recordAuditEvent(tx, {
+      action: AUDIT_ACTION.UPDATE,
+      resourceType: AUDIT_RESOURCE_TYPE.CHAT_THREAD,
+      resourceId: threadId,
+      workspaceId,
+      changes: {
+        ...(title === null ? {} : { titleChanged: { old: false, new: true } }),
+        ...sendThreadFieldsAuditChanges(stored, fields),
+      },
+    });
+  });
+};
 
 type LoadThreadError = HandlerError<400 | 404 | 409> | SafeDbError;
 
@@ -238,13 +378,30 @@ const loadThreadAttempt = async ({
       id: SafeId<"chatThread">;
       title: string;
       workspaceId: SafeId<"workspace"> | null;
+      activeSkill: SendThreadFields["activeSkill"];
       contextMatterIds: SafeId<"workspace">[];
       dataWorkspaceIds: SafeId<"workspace">[];
+      subjectDecisionId: SafeId<"caseLawDecision"> | null;
       webSearchEnabled: boolean;
       chatModel: string | null;
       chatReasoningEffort: ReasoningEffort | null;
       chatLocalRunTarget: ChatLocalRunTarget | null;
       rollbackToken: string | null;
+    };
+
+    // Workspace-scoped chats embed at minimum their own workspace's content.
+    // Global chats start with no embedded workspace data; subsequent messages
+    // widen this set via expandThreadDataScope when they reference workspace
+    // assets (mentions, source-document parts).
+    const sendDataWorkspaceIds = [...initialDataWorkspaceIds];
+    if (workspaceId !== null && !sendDataWorkspaceIds.includes(workspaceId)) {
+      sendDataWorkspaceIds.unshift(workspaceId);
+    }
+    const sendRequest: SendThreadFieldsRequest = {
+      activeSkill: initialActiveSkill,
+      contextMatterIds: initialContextMatterIds,
+      dataWorkspaceIds: sendDataWorkspaceIds,
+      subjectDecisionId,
     };
 
     const lookup = async () =>
@@ -259,8 +416,10 @@ const loadThreadAttempt = async ({
             id: true,
             title: true,
             workspaceId: true,
+            activeSkill: true,
             contextMatterIds: true,
             dataWorkspaceIds: true,
+            subjectDecisionId: true,
             webSearchEnabled: true,
             chatModel: true,
             chatReasoningEffort: true,
@@ -278,7 +437,7 @@ const loadThreadAttempt = async ({
     // unfindable.
     const buildExisting = (
       existing: ExistingThreadRow,
-    ): Result<ChatThreadState, HandlerError<400>> => {
+    ): Result<ExistingChatThreadState, HandlerError<400>> => {
       const persistedWorkspaceId = existing.workspaceId ?? null;
       if (persistedWorkspaceId !== workspaceId) {
         return Result.err(
@@ -288,10 +447,14 @@ const loadThreadAttempt = async ({
           }),
         );
       }
-      return Result.ok<ChatThreadState>({
+      return Result.ok<ExistingChatThreadState>({
         type: "existing",
+        adoption: null,
         data: {
           id: existing.id,
+          firstSend: false,
+          title: existing.title,
+          sendFields: storedSendThreadFieldsOf(existing),
           workspaceId: existing.workspaceId,
           contextMatterIds: existing.contextMatterIds,
           dataWorkspaceIds: existing.dataWorkspaceIds,
@@ -343,6 +506,46 @@ const loadThreadAttempt = async ({
       return Result.ok(claimResult.value.length > 0);
     };
 
+    // A claimed row that holds no message yet was stored before the first
+    // send (a setting chosen in a new chat's composer, an empty chat a surface
+    // opened). This send writes its first message, so it decides the thread's
+    // send fields and its placeholder title exactly as if it had created the
+    // row. Nothing is written here: the send stores the adoption with
+    // `adoptEmptyThread` once it knows its client is still connected.
+    const planEmptyThreadAdoption = (
+      existing: ExistingThreadRow,
+      state: ExistingChatThreadState,
+    ): void => {
+      // A non-empty thread always includes at least its first-kept message in
+      // the window, so window length === 0 iff the thread is empty.
+      if (state.data.messages.length > 0) {
+        return;
+      }
+      const storedFields = storedSendThreadFieldsOf(existing);
+      const fields = resolveSendThreadFields({
+        request: sendRequest,
+        stored: { fields: storedFields, hasMessages: false },
+      });
+      const refreshTitle = shouldRefreshEmptyThreadTitle({
+        messageCount: 0,
+        title: existing.title,
+      });
+      state.data.firstSend = true;
+      state.data.sendFields = fields;
+      state.data.contextMatterIds = fields.contextMatterIds;
+      state.data.dataWorkspaceIds = fields.dataWorkspaceIds;
+      if (refreshTitle) {
+        state.data.title = title;
+      }
+      if (refreshTitle || sendThreadFieldsChanged(storedFields, fields)) {
+        state.adoption = {
+          fields,
+          stored: storedFields,
+          title: refreshTitle ? title : null,
+        };
+      }
+    };
+
     const retryAfterClaimRace = async (): Promise<
       Result<ChatThreadState, LoadThreadError>
     > => {
@@ -371,85 +574,58 @@ const loadThreadAttempt = async ({
       });
     };
 
+    // Claims a stored row, reads its history window and, while it holds no
+    // message, plans its adoption by this send. Null means rollback won the
+    // claim race and the attempt must be retried.
+    const openExisting = async (
+      existing: ExistingThreadRow,
+    ): Promise<Result<ChatThreadState | null, LoadThreadError>> =>
+      await Result.gen(async function* () {
+        const existingResult = buildExisting(existing);
+        if (Result.isError(existingResult)) {
+          return Result.err(existingResult.error);
+        }
+        const claimed = yield* Result.await(claimExisting(existing));
+        if (!claimed) {
+          return Result.ok(null);
+        }
+        const history = yield* Result.await(
+          loadWindowedThreadHistory({ safeDb, threadId, caseLawDb }),
+        );
+        const state = existingResult.value;
+        state.data.messages = history.messages;
+        state.data.historySnapshot = history.snapshot;
+        planEmptyThreadAdoption(existing, state);
+        return Result.ok(state);
+      });
+
     const thread = yield* Result.await(lookup());
     if (thread) {
-      const existingResult = buildExisting(thread);
-      if (Result.isError(existingResult)) {
-        return Result.err(existingResult.error);
-      }
-      const claimed = yield* Result.await(claimExisting(thread));
-      if (!claimed) {
+      const opened = yield* Result.await(openExisting(thread));
+      if (opened === null) {
         const retried = yield* Result.await(retryAfterClaimRace());
         return Result.ok(retried);
       }
-      const history = yield* Result.await(
-        loadWindowedThreadHistory({ safeDb, threadId, caseLawDb }),
-      );
-      existingResult.value.data.messages = history.messages;
-      existingResult.value.data.historySnapshot = history.snapshot;
-      if (
-        shouldRefreshEmptyThreadTitle({
-          // A non-empty thread always includes at least its first-kept
-          // message in the window, so window length === 0 iff the thread is
-          // empty — the only thing this check needs to know.
-          messageCount: history.messages.length,
-          title: thread.title,
-        })
-      ) {
-        yield* Result.await(
-          safeDb(async (tx) => {
-            await tx
-              .update(chatThreads)
-              .set({ title })
-              .where(
-                and(
-                  eq(chatThreads.id, threadId),
-                  eq(chatThreads.organizationId, organizationId),
-                  eq(chatThreads.userId, userId),
-                ),
-              );
-
-            await recordAuditEvent(tx, {
-              action: AUDIT_ACTION.UPDATE,
-              resourceType: AUDIT_RESOURCE_TYPE.CHAT_THREAD,
-              resourceId: threadId,
-              workspaceId,
-              changes: {
-                titleChanged: { old: false, new: true },
-              },
-            });
-          }),
-        );
-      }
-      return Result.ok(existingResult.value);
+      return Result.ok(opened);
     }
 
-    const initialThreadDataWorkspaceIds = [...initialDataWorkspaceIds];
-    if (
-      workspaceId !== null &&
-      !initialThreadDataWorkspaceIds.includes(workspaceId)
-    ) {
-      initialThreadDataWorkspaceIds.unshift(workspaceId);
-    }
+    const fields = resolveSendThreadFields({
+      request: sendRequest,
+      stored: null,
+    });
     const rollbackToken = Bun.randomUUIDv7();
 
     const insertResult = await safeDb(async (tx) => {
+      // The one insert a send makes: the fields its first message decides
+      // come from `resolveSendThreadFields`, as when it adopts an empty row.
       await tx.insert(chatThreads).values({
         id: threadId,
         organizationId,
         title,
         userId,
         workspaceId,
-        contextMatterIds: initialContextMatterIds,
-        activeSkill: initialActiveSkill ?? null,
         rollbackToken,
-        subjectDecisionId,
-        // Workspace-scoped chats embed at minimum their own
-        // workspace's content. Global chats start with no
-        // embedded workspace data; subsequent messages widen
-        // this set via expandThreadDataScope when they reference
-        // workspace assets (mentions, source-document parts).
-        dataWorkspaceIds: initialThreadDataWorkspaceIds,
+        ...fields,
       });
 
       await recordAuditEvent(tx, {
@@ -485,21 +661,12 @@ const loadThreadAttempt = async ({
       // Re-run the lookup under current RLS to disambiguate.
       const recovered = yield* Result.await(lookup());
       if (recovered) {
-        const recoveredResult = buildExisting(recovered);
-        if (Result.isError(recoveredResult)) {
-          return Result.err(recoveredResult.error);
-        }
-        const claimed = yield* Result.await(claimExisting(recovered));
-        if (!claimed) {
+        const opened = yield* Result.await(openExisting(recovered));
+        if (opened === null) {
           const retried = yield* Result.await(retryAfterClaimRace());
           return Result.ok(retried);
         }
-        const recoveredHistory = yield* Result.await(
-          loadWindowedThreadHistory({ safeDb, threadId, caseLawDb }),
-        );
-        recoveredResult.value.data.messages = recoveredHistory.messages;
-        recoveredResult.value.data.historySnapshot = recoveredHistory.snapshot;
-        return Result.ok(recoveredResult.value);
+        return Result.ok(opened);
       }
       return Result.err(
         new HandlerError({
@@ -514,9 +681,12 @@ const loadThreadAttempt = async ({
       rollbackToken,
       data: {
         id: threadId,
+        firstSend: true,
+        title,
+        sendFields: fields,
         workspaceId,
-        contextMatterIds: initialContextMatterIds,
-        dataWorkspaceIds: initialThreadDataWorkspaceIds,
+        contextMatterIds: fields.contextMatterIds,
+        dataWorkspaceIds: fields.dataWorkspaceIds,
         webSearchEnabled: false,
         chatModel: null,
         chatReasoningEffort: null,

@@ -10,6 +10,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { fileSchema } from "@/api/lib/custom-schema";
 import { isTemplateData } from "@/api/lib/docx/types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { scanErrorForHandler } from "@/api/lib/file-scan/scan-upload-handler";
 import { convertToPdf } from "@/api/lib/files/gotenberg";
 import { FILE_SIZE_LIMIT_BYTES } from "@/api/lib/limits";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
@@ -32,7 +33,7 @@ import { isRecord } from "@/api/lib/type-guards";
 import { DOCX_MIME_TYPE, OCTET_STREAM_MIME_TYPE } from "@/api/mime-types";
 
 const fillBodySchema = v.object({
-  file: fileSchema({ maxBytes: FILE_SIZE_LIMIT_BYTES.document }),
+  file: fileSchema({ maxBytes: FILE_SIZE_LIMIT_BYTES.multipartDocument }),
   values: v.pipe(v.string(), v.description("Map of field path to value.")),
 });
 
@@ -54,10 +55,8 @@ const TEMPLATE_FILL_FAILED = failureSink({
   expected: [],
 });
 
-/** Serialize a preflight `HandlerError` to the same JSON body the framework
- *  preflight returns (message plus the 402 usage detail), for this route's
- *  raw-Response download path. */
-const usageRejectionResponse = (error: HandlerError): Response =>
+/** Serialize a handler refusal through the observed raw download boundary. */
+const handlerRejectionResponse = (error: HandlerError): Response =>
   observedResponse(
     { sink: TEMPLATE_FILL_FAILED, cause: error },
     JSON.stringify({
@@ -171,7 +170,7 @@ export const fillHandler = async ({
     );
   }
   if ("usageRejection" in result) {
-    return usageRejectionResponse(result.usageRejection);
+    return handlerRejectionResponse(result.usageRejection);
   }
   if ("error" in result) {
     return new Response(JSON.stringify({ error: result.error }), {
@@ -221,7 +220,15 @@ export const fillHandler = async ({
       buffer: new Uint8Array(result.file.bytes),
       fileName: sourceName,
     });
-    if (scannedOutput === null) {
+    if (Result.isError(scannedOutput)) {
+      return handlerRejectionResponse(
+        scanErrorForHandler(
+          scannedOutput.error,
+          "Retry the template PDF export.",
+        ),
+      );
+    }
+    if (scannedOutput.value === null) {
       return new Response(
         JSON.stringify({ error: "Template output invalid" }),
         {
@@ -230,7 +237,7 @@ export const fillHandler = async ({
         },
       );
     }
-    const pdfResult = await convertToPdf(scannedOutput);
+    const pdfResult = await convertToPdf(scannedOutput.value);
     if (Result.isError(pdfResult)) {
       return observedResponse(
         { sink: TEMPLATE_FILL_FAILED, cause: pdfResult.error },

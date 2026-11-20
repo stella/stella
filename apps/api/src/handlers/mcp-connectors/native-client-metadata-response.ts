@@ -1,6 +1,7 @@
 import * as v from "valibot";
 
 import type { MobileClientMetadataDocument } from "@stll/api-contract/mobile-client";
+import type { OutlookClientMetadataDocument } from "@stll/api-contract/outlook-client";
 import type { CliClientMetadataDocument } from "@stll/cli/client-metadata-document";
 
 const URL_MAX_LENGTH = 2048;
@@ -9,7 +10,7 @@ const URL_MAX_LENGTH = 2048;
 export const nativeClientMetadataResponseSchema = v.object({
   client_id: v.pipe(v.string(), v.maxLength(URL_MAX_LENGTH)),
   client_name: v.pipe(v.string(), v.maxLength(256)),
-  application_type: v.literal("native"),
+  application_type: v.picklist(["native", "web"]),
   grant_types: v.pipe(
     v.array(v.picklist(["authorization_code", "refresh_token"])),
     v.maxLength(2),
@@ -26,7 +27,10 @@ export const nativeClientMetadataResponseSchema = v.object({
 // The schema's static type takes mutable arrays; the shared documents are
 // readonly.
 export const toNativeClientMetadataResponse = (
-  document: CliClientMetadataDocument | MobileClientMetadataDocument,
+  document:
+    | CliClientMetadataDocument
+    | MobileClientMetadataDocument
+    | OutlookClientMetadataDocument,
 ): v.InferOutput<typeof nativeClientMetadataResponseSchema> => ({
   ...document,
   grant_types: [...document.grant_types],

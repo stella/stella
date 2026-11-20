@@ -24,6 +24,7 @@ import {
 } from "@/api/lib/db/aggregate-lock";
 import { recordOrganizationFileMismatchTransitions } from "@/api/lib/db/file-object-transitions";
 import type { MaintenanceDb } from "@/api/lib/db/maintenance-db";
+import { deleteOrganizationFilesWithSignal } from "@/api/lib/files/delete-organization-file";
 import {
   commitOrganizationFilesBytes,
   FILE_RESERVATION_ABANDON_DELAY_MS,
@@ -188,116 +189,59 @@ const matchesReferencedReservation = async ({
     : Result.ok(read.value === expectedSha256Hex);
 };
 
-type ClaimReconciliationCandidatesArgs = {
+type DueCandidateSelectionArgs = {
   candidates: Awaited<
     ReturnType<typeof organizationFileReservationCandidatesQuery>
   >;
-  db: ReconcileOptions["db"];
   now: Date;
-  recoveryWriteId: string;
   staleBefore: Date;
 };
 
-/** Lease the still-due candidates to this sweep under their organizations' locks. */
-const claimReconciliationCandidates = async ({
+/** The columns and predicate that re-read candidates still due for a lease. */
+const dueCandidateSelection = ({
   candidates,
-  db,
   now,
-  recoveryWriteId,
   staleBefore,
-}: ClaimReconciliationCandidatesArgs) =>
-  candidates.length === 0
-    ? []
-    : await withAggregateTransaction(db, async (tx) => {
-        const organizationIds = [
-          ...new Set(
-            candidates.map((candidate) =>
-              brandPersistedOrganizationId(candidate.organizationId),
-            ),
-          ),
-        ];
-        await lockOrganizationFileCounters({ organizationIds, tx });
-        const locked = await withAggregateParentBatch({
-          mode: "update",
-          organizationIds,
-          tx,
-        });
-        if (locked.organizationIds.size !== organizationIds.length) {
-          return panic(
-            "Organization disappeared during reservation reconciliation",
-          );
-        }
-        const current = await tx
-          .select({
-            objectKey: organizationFileObjects.objectKey,
-            organizationId: organizationFileObjects.organizationId,
-            status: organizationFileObjects.status,
-            sizeBytes: organizationFileObjects.sizeBytes,
-            pendingSizeBytes: organizationFileObjects.pendingSizeBytes,
-            expectedSha256Hex: organizationFileObjects.expectedSha256Hex,
-            reservationStartedAt: organizationFileObjects.reservationStartedAt,
-            reconciliationAttemptCount:
-              organizationFileObjects.reconciliationAttemptCount,
-            referenced: sql<boolean>`${sqlCaseFragment({
-              branches: candidates.map(
-                (candidate) =>
-                  sql`WHEN ${organizationFileObjects.objectKey} = ${candidate.objectKey} THEN ${durableReferenceExpression(candidate.organizationId, candidate.objectKey)}`,
-              ),
-              fallback: sql`FALSE`,
-            })}`,
-          })
-          .from(organizationFileObjects)
-          .where(
-            and(
-              unsettledObject,
-              or(
-                ...candidates.map((candidate) =>
-                  and(
-                    eq(organizationFileObjects.objectKey, candidate.objectKey),
-                    eq(
-                      organizationFileObjects.writeId,
-                      candidate.writeId ?? "",
-                    ),
-                  ),
-                ),
-              ),
-              lte(
-                organizationFileObjects.reservationStartedAt,
-                sql`${staleBefore}::timestamptz`,
-              ),
-              eq(
-                organizationFileObjects.reconciliationState,
-                FILE_USAGE_RECONCILIATION_STATE.ACTIVE,
-              ),
-              lte(
-                organizationFileObjects.reconcileAfter,
-                sql`${now}::timestamptz`,
-              ),
-            ),
-          );
-        if (current.length !== 0) {
-          await tx
-            .update(organizationFileObjects)
-            .set({
-              reconcileAfter: sql`NOW() + LEAST(
-                POWER(2, LEAST(
-                  ${organizationFileObjects.reconciliationAttemptCount},
-                  8
-                )) * ${RETRY_DELAY_MS} * interval '1 millisecond',
-                interval '24 hours'
-              )`,
-              writeId: recoveryWriteId,
-              updatedAt: now,
-            })
-            .where(
-              inArray(
-                organizationFileObjects.objectKey,
-                current.map((row) => row.objectKey),
-              ),
-            );
-        }
-        return current;
-      });
+}: DueCandidateSelectionArgs) => ({
+  fields: {
+    objectKey: organizationFileObjects.objectKey,
+    organizationId: organizationFileObjects.organizationId,
+    status: organizationFileObjects.status,
+    sizeBytes: organizationFileObjects.sizeBytes,
+    pendingSizeBytes: organizationFileObjects.pendingSizeBytes,
+    expectedSha256Hex: organizationFileObjects.expectedSha256Hex,
+    reservationStartedAt: organizationFileObjects.reservationStartedAt,
+    reconciliationAttemptCount:
+      organizationFileObjects.reconciliationAttemptCount,
+    referenced: sql<boolean>`${sqlCaseFragment({
+      branches: candidates.map(
+        (candidate) =>
+          sql`WHEN ${organizationFileObjects.objectKey} = ${candidate.objectKey} THEN ${durableReferenceExpression(candidate.organizationId, candidate.objectKey)}`,
+      ),
+      fallback: sql`FALSE`,
+    })}`,
+  },
+  where: and(
+    unsettledObject,
+    or(
+      ...candidates.map((candidate) =>
+        and(
+          eq(organizationFileObjects.objectKey, candidate.objectKey),
+          eq(organizationFileObjects.writeId, candidate.writeId ?? ""),
+        ),
+      ),
+    ),
+    lte(
+      organizationFileObjects.reservationStartedAt,
+      sql`${staleBefore}::timestamptz`,
+    ),
+    eq(
+      organizationFileObjects.reconciliationState,
+      FILE_USAGE_RECONCILIATION_STATE.ACTIVE,
+    ),
+    lte(organizationFileObjects.reconcileAfter, sql`${now}::timestamptz`),
+  ),
+});
 
 /** A bounded sweep settles old fresh-key writes without relying on a retry of the same key. */
 export const reconcileAbandonedOrganizationFileReservations = async ({
@@ -331,19 +275,63 @@ export const reconcileAbandonedOrganizationFileReservations = async ({
         }),
     );
     const { headObject } = await import("@/api/lib/s3-presign");
-    const { deleteS3ObjectWithSignal, isMissingS3ObjectError } =
-      await import("@/api/lib/s3");
+    const { isMissingS3ObjectError } = await import("@/api/lib/s3");
     const recoveryWriteId = Bun.randomUUIDv7();
-    const claims = await claimReconciliationCandidates({
-      candidates,
-      db,
-      now,
-      recoveryWriteId,
-      staleBefore,
-    });
+    // Lease the still-due candidates to this sweep under their organizations' locks.
+    const claims =
+      candidates.length === 0
+        ? []
+        : await withAggregateTransaction(db, async (tx) => {
+            const organizationIds = [
+              ...new Set(
+                candidates.map((candidate) =>
+                  brandPersistedOrganizationId(candidate.organizationId),
+                ),
+              ),
+            ];
+            await lockOrganizationFileCounters({ organizationIds, tx });
+            const locked = await withAggregateParentBatch({
+              mode: "update",
+              organizationIds,
+              tx,
+            });
+            if (locked.organizationIds.size !== organizationIds.length) {
+              return panic(
+                "Organization disappeared during reservation reconciliation",
+              );
+            }
+            const due = dueCandidateSelection({ candidates, now, staleBefore });
+            const current = await tx
+              .select(due.fields)
+              .from(organizationFileObjects)
+              .where(due.where);
+            if (current.length !== 0) {
+              await tx
+                .update(organizationFileObjects)
+                .set({
+                  reconcileAfter: sql`NOW() + LEAST(
+                POWER(2, LEAST(
+                  ${organizationFileObjects.reconciliationAttemptCount},
+                  8
+                )) * ${RETRY_DELAY_MS} * interval '1 millisecond',
+                interval '24 hours'
+              )`,
+                  writeId: recoveryWriteId,
+                  updatedAt: now,
+                })
+                .where(
+                  inArray(
+                    organizationFileObjects.objectKey,
+                    current.map((row) => row.objectKey),
+                  ),
+                );
+            }
+            return current;
+          });
     const toCommit = [];
     const toRelease = [];
     const mismatchedObjectKeys: string[] = [];
+    const toDelete = [];
     let committed = 0;
     let deleted = 0;
     let released = 0;
@@ -388,12 +376,17 @@ export const reconcileAbandonedOrganizationFileReservations = async ({
         committed += 1;
         continue;
       }
-      await deleteS3ObjectWithSignal(
-        candidate.objectKey,
+      toDelete.push(reservation);
+    }
+    // One fenced, chunked deletion for every abandoned object of the sweep.
+    if (toDelete.length > 0) {
+      yield* await deleteOrganizationFilesWithSignal(
+        toDelete.map(({ objectKey }) => objectKey),
         signal ?? AbortSignal.timeout(30_000),
+        { fileUsageDb: db },
       );
-      toRelease.push(reservation);
-      deleted += 1;
+      toRelease.push(...toDelete);
+      deleted += toDelete.length;
     }
     if (mismatchedObjectKeys.length > 0) {
       yield* await Result.tryPromise({

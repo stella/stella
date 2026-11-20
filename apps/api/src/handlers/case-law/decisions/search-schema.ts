@@ -9,11 +9,13 @@ import {
   DECISION_TEXT_WITHHELD_REASON,
 } from "@stll/api-contract/case-law-text-field";
 import {
+  CASE_LAW_HIT_ORDERS,
   CASE_LAW_SEARCH_FACET_NAMES,
   CASE_LAW_SEARCH_WARNING_CODES,
   DECISION_SEARCH_MATCHES,
   FACET_COUNT_TYPE,
   SEARCH_PAGE_REACH,
+  SEARCH_PAGINATION_TRUNCATED_PARTIAL_MATCHES_BUDGET,
 } from "@stll/api-contract/search";
 import {
   DECISION_IDENTIFIER_MAX_COUNT,
@@ -53,6 +55,22 @@ import { searchTotalSchema } from "@/api/lib/search/total-schema";
 
 import { CASE_SEARCH_TEXT_BYTES as bytes } from "./search-response-limits";
 
+/** Query words as `queryUsed` spells them, a phrase in its quotes. */
+const searchTermsSchema = v.pipe(
+  v.array(boundedString(bytes.queryUsed)),
+  v.maxLength(LIMITS.caseLawSearchTermsMax),
+);
+
+const caseLawSearchPaginationOutcomeSchema = v.union([
+  searchPaginationOutcomeSchema,
+  v.object({
+    type: v.literal(SEARCH_PAGINATION_TRUNCATED_PARTIAL_MATCHES_BUDGET.type),
+    reason: v.literal(
+      SEARCH_PAGINATION_TRUNCATED_PARTIAL_MATCHES_BUDGET.reason,
+    ),
+  }),
+]);
+
 export const searchDecisionsBodySchema = v.object({
   query: v.pipe(
     v.string(),
@@ -84,6 +102,16 @@ export const searchDecisionsBodySchema = v.object({
     ),
   ),
   category: v.optional(v.pipe(v.string(), v.minLength(1), v.maxLength(128))),
+  docketRegisters: v.optional(
+    v.pipe(
+      v.array(v.pipe(v.string(), v.minLength(1), v.maxLength(16))),
+      v.minLength(1),
+      v.maxLength(8),
+    ),
+  ),
+  senate: v.optional(
+    v.pipe(v.number(), v.integer(), v.minValue(1), v.maxValue(999)),
+  ),
   hasLegalSentence: v.optional(v.boolean()),
   // Decisions whose recorded provision links cite this provision. Applied to
   // live rows within the bounded candidate scan, like the metadata filters.
@@ -271,6 +299,15 @@ export const searchDecisionsSuccessResponseSchema = v.object({
         // of them: a short first page is topped up with the latter, after
         // every hit of the former.
         match: v.picklist([...DECISION_SEARCH_MATCHES]),
+        /**
+         * The words of `queryUsed` this decision holds, a quoted phrase as
+         * one entry in its quotes, in the query's order. A typed word counts
+         * as held when the decision holds it, its stem or an alternative the
+         * search added for it.
+         */
+        matchedTerms: searchTermsSchema,
+        /** The words of `queryUsed` this decision does not hold. */
+        missingTerms: searchTermsSchema,
         createdAt: boundedString(bytes.date),
       }),
     ),
@@ -290,12 +327,42 @@ export const searchDecisionsSuccessResponseSchema = v.object({
     v.null(),
   ]),
   total: searchTotalSchema,
+  /** The order `hits` are in, which a reader merging pages keeps. */
+  hitOrder: v.picklist([...CASE_LAW_HIT_ORDERS]),
   /** Hits on this page appended by the any-word phase, outside `total`. */
   relaxedHitCount: v.pipe(v.number(), v.integer(), v.minValue(0)),
+  /**
+   * Set on a first page where fewer decisions than the page holds contain
+   * every word: how many decisions contain each word on its own, under the
+   * same filters, and how many contain them all. Says which word is the rare
+   * one. Null everywhere else, and when the counts could not be read.
+   */
+  termDecisionCounts: v.union([
+    v.object({
+      allTerms: v.pipe(v.number(), v.integer(), v.minValue(0)),
+      terms: v.pipe(
+        v.array(
+          v.object({
+            term: boundedString(bytes.queryUsed),
+            count: v.pipe(v.number(), v.integer(), v.minValue(0)),
+          }),
+        ),
+        v.maxLength(LIMITS.caseLawSearchTermCountsMax),
+      ),
+      /** Per-word counts come from a distinct-count sketch. */
+      countType: v.literal(FACET_COUNT_TYPE.ESTIMATE),
+    }),
+    v.null(),
+  ]),
   nextCursor: nullableBoundedString(
     CORPUS_SEARCH_CURSOR_WITH_GROUPS_MAX_LENGTH,
   ),
-  paginationOutcome: searchPaginationOutcomeSchema,
+  /**
+   * `truncated` with `partial_matches_budget` when the phase for decisions
+   * holding only some of the words was due and did not finish: the page is
+   * not the whole answer, and repeating the search reads them.
+   */
+  paginationOutcome: caseLawSearchPaginationOutcomeSchema,
   /**
    * Whether a page addressed by offset was placed. `scan_budget` means the
    * scan stopped before ranking every result in front of the page: its

@@ -12,6 +12,7 @@
 
 /** Each run actor with the counts one of its runs reports. */
 export const SYSTEM_RUN_ACTOR_COUNTS = {
+  "system:data-export-maintenance": ["checkpointedJobs"],
   "system:monitoring-session-revoke": [
     "revokedControls",
     "deletedSessions",
@@ -42,6 +43,7 @@ export const SYSTEM_RUN_ACTOR_COUNTS = {
   "system:case-law-population-fold": ["deltas"],
   "system:case-law-population-seed": ["projectedDecisions"],
   "system:legislation-facet-refresh": ["buckets"],
+  "system:legislation-version-changes": ["summaries"],
   "system:case-law-source-arrivals-refresh": ["sources"],
   "system:case-law-raw-storage": [
     "sweptPrefixes",
@@ -69,7 +71,15 @@ export const SYSTEM_RUN_ACTOR_COUNTS = {
   "system:corpus-index-job-detail-backfill": ["movedJobs"],
   "system:case-law-parsed-input-state-backfill": ["updatedDecisions"],
   "system:legislation-expression-id-backfill": ["claimedDocuments"],
+  "system:search-history-country-repair": ["classified", "unclassifiable"],
   "system:audit-retention": ["deletedRuns"],
+  "system:case-law-review-reconcile": [
+    "removedReviews",
+    "writtenReviews",
+    "resolvedReviews",
+    "extractionVersions",
+  ],
+  "system:case-law-citation-form-repair": ["attempted", "applied", "skipped"],
   "system:case-law-background-replay": [
     "attempted",
     "applied",
@@ -105,6 +115,12 @@ export const SYSTEM_RUN_ACTOR_COUNTS = {
   ],
   "system:eu-soft-law-ingestion": ["sourcesRegistered"],
   "system:corpus-generation-operator": ["registered", "promoted", "demoted"],
+  "system:corpus-generation-retire": [
+    "retired",
+    "deletedIndexes",
+    "deletedStates",
+    "deletedIntents",
+  ],
   "system:partner-client-operator": ["created", "rotated", "disabled"],
 } as const satisfies Record<`system:${string}`, readonly string[]>;
 

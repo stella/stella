@@ -5,6 +5,7 @@ import { afterAll, afterEach, describe, expect, test } from "bun:test";
 
 import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
+import { INSPECTOR_FOCUS_INTENT } from "@/components/inspector/inspector-store-types";
 import { browserStorage } from "@/lib/account/browser-storage";
 
 const DECISION_HREF = "/law/cze/cases/ns/27-cdo-59-2022";
@@ -172,6 +173,7 @@ const openDecisionPage = () => {
   store.openChat({
     activeLegalKey: decisionChatKey(DECISION_ID),
     pane: INSPECTOR_PANE_INTENT.keep,
+    focus: INSPECTOR_FOCUS_INTENT.claim,
   });
 };
 

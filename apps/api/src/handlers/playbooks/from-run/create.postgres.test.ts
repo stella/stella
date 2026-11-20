@@ -132,6 +132,7 @@ describe.skipIf(!enabled)("playbook source access on PostgreSQL", () => {
                     },
                   ],
                 },
+                scope: null,
               },
             },
           },

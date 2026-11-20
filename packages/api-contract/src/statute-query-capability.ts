@@ -4,13 +4,16 @@ import type { PublicCountry } from "./public-country-capability";
 type StatuteCapabilityCountry = Lowercase<PublicCountry>;
 
 /**
- * Whether the statute box can read act references for a country. A supported
- * country has a number grammar (with the collection a bare number belongs
- * to), aliases and gazette spellings; every other public country searches
- * titles only.
+ * Whether the statute box can read act references for a country, and with
+ * which grammar. A `gazette_number` country has a number grammar (with the
+ * collection a bare number belongs to), aliases and gazette spellings; a
+ * `magyar_kozlony` country reads the gazette's act designations
+ * (`magyar-kozlony-designation`); every other public country searches titles
+ * only.
  */
 type StatuteQueryCapability =
-  | { type: "supported"; defaultCollection: string }
+  | { type: "supported"; grammar: "gazette_number"; defaultCollection: string }
+  | { type: "supported"; grammar: "magyar_kozlony" }
   | { type: "unsupported"; reason: "no_query_grammar" };
 
 const NO_QUERY_GRAMMAR = {
@@ -21,19 +24,25 @@ const NO_QUERY_GRAMMAR = {
 /** Every public country, classified; the key set is the public country list. */
 export const STATUTE_QUERY_CAPABILITIES = {
   aut: NO_QUERY_GRAMMAR,
-  cze: { type: "supported", defaultCollection: "sb" },
+  bra: NO_QUERY_GRAMMAR,
+  cze: {
+    type: "supported",
+    grammar: "gazette_number",
+    defaultCollection: "sb",
+  },
   eu: NO_QUERY_GRAMMAR,
   gbr: NO_QUERY_GRAMMAR,
-  hun: NO_QUERY_GRAMMAR,
+  hun: { type: "supported", grammar: "magyar_kozlony" },
   pol: NO_QUERY_GRAMMAR,
-  svk: { type: "supported", defaultCollection: "zz" },
+  svk: {
+    type: "supported",
+    grammar: "gazette_number",
+    defaultCollection: "zz",
+  },
   usa: NO_QUERY_GRAMMAR,
 } as const satisfies Record<StatuteCapabilityCountry, StatuteQueryCapability>;
 
-/**
- * Countries with a statute query grammar. The alias, gazette and act tables
- * are keyed by exactly this set, so a country cannot be half-supported.
- */
+/** Countries with a statute query grammar of any kind. */
 export type StatuteQueryCountry = {
   [
     Country in StatuteCapabilityCountry
@@ -44,9 +53,30 @@ export type StatuteQueryCountry = {
     : never;
 }[StatuteCapabilityCountry];
 
-/** The ELI collection a bare `57/2008` belongs to in a supported country. */
-export type StatuteDefaultCollection<Country extends StatuteQueryCountry> =
+/**
+ * Countries whose acts are numbered in a gazette collection (`89/2012 Sb.`).
+ * The alias, gazette and act tables are keyed by exactly this set, so a
+ * country cannot be half-supported.
+ */
+export type StatuteGazetteCountry = {
+  [
+    Country in StatuteQueryCountry
+  ]: (typeof STATUTE_QUERY_CAPABILITIES)[Country] extends {
+    grammar: "gazette_number";
+  }
+    ? Country
+    : never;
+}[StatuteQueryCountry];
+
+/** The ELI collection a bare `57/2008` belongs to in a gazette country. */
+export type StatuteDefaultCollection<Country extends StatuteGazetteCountry> =
   (typeof STATUTE_QUERY_CAPABILITIES)[Country]["defaultCollection"];
+
+/** Whether a supported country reads gazette numbers (`89/2012 Sb.`). */
+export const isStatuteGazetteCountry = (
+  country: StatuteQueryCountry,
+): country is StatuteGazetteCountry =>
+  STATUTE_QUERY_CAPABILITIES[country].grammar === "gazette_number";
 
 /**
  * What the statute box can do for a country code as a caller holds it.

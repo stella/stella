@@ -1,3 +1,10 @@
+import {
+  formatReadableInputValue,
+  getReadableInputRows,
+  humanizeIdentifier,
+  truncateReadableValue,
+} from "@stll/api-contract/chat-tool-input-rows";
+import type { ReadableInputRow } from "@stll/api-contract/chat-tool-input-rows";
 import { READER_ANNOTATION_KINDS } from "@stll/api-contract/legal-reader-annotations";
 import type { ReaderAnnotationKind } from "@stll/api-contract/legal-reader-annotations";
 
@@ -5,166 +12,11 @@ import type { ApprovalToolName } from "@/components/chat/chat-ui-tools";
 
 /**
  * Pure (no-React) helpers that turn a chat tool's approval input into readable
- * key/value rows for `ToolApprovalCard`. Kept free of React so the row logic is
- * unit-testable (apps/web has no DOM test framework); the card only renders the
+ * key/value rows for `ToolApprovalCard`, on top of the generic rows every
+ * approval surface shares (`@stll/api-contract/chat-tool-input-rows`). Kept
+ * free of React so the row logic is unit-testable; the card only renders the
  * rows these produce.
  */
-
-export type ReadableInputRow = {
-  key: string;
-  label: string;
-  value: string;
-};
-
-/** Longer string values are truncated in the approval summary. */
-const MAX_VALUE_CHARS = 200;
-
-export const humanizeIdentifier = (value: string): string =>
-  value
-    .replaceAll(/[_-]+/gu, " ")
-    .replaceAll(/\s+/gu, " ")
-    .trim()
-    .replace(/^\p{L}/u, (match) => match.toLocaleUpperCase());
-
-const truncate = (value: string): string =>
-  value.length > MAX_VALUE_CHARS
-    ? `${value.slice(0, MAX_VALUE_CHARS)}…`
-    : value;
-
-export const formatReadableInputValue = ({
-  emptyLabel,
-  value,
-}: {
-  emptyLabel: string;
-  value: unknown;
-}): string => {
-  if (value === null || value === undefined) {
-    return emptyLabel;
-  }
-
-  if (typeof value === "string") {
-    return truncate(value);
-  }
-
-  if (typeof value === "number" || typeof value === "boolean") {
-    return String(value);
-  }
-
-  if (Array.isArray(value)) {
-    return truncate(
-      value
-        .map((child) => formatReadableInputValue({ emptyLabel, value: child }))
-        .join(", "),
-    );
-  }
-
-  const parts: string[] = [];
-  for (const [key, child] of Object.entries(value)) {
-    parts.push(
-      `${humanizeIdentifier(key)}: ${formatReadableInputValue({
-        emptyLabel,
-        value: child,
-      })}`,
-    );
-  }
-  return truncate(parts.join("; "));
-};
-
-export const getReadableInputRows = ({
-  emptyLabel,
-  input,
-  requestLabel,
-}: {
-  emptyLabel: string;
-  input: unknown;
-  requestLabel: string;
-}): ReadableInputRow[] => {
-  if (input === undefined || input === null || typeof input !== "object") {
-    return [
-      {
-        key: "request",
-        label: requestLabel,
-        value: formatReadableInputValue({ emptyLabel, value: input }),
-      },
-    ];
-  }
-
-  if (Array.isArray(input)) {
-    return input.map((value, index) => ({
-      key: String(index),
-      label: String(index + 1),
-      value: formatReadableInputValue({ emptyLabel, value }),
-    }));
-  }
-
-  const rows: ReadableInputRow[] = [];
-  for (const [key, value] of Object.entries(input)) {
-    rows.push({
-      key,
-      label: humanizeIdentifier(key),
-      value: formatReadableInputValue({ emptyLabel, value }),
-    });
-  }
-
-  return rows;
-};
-
-/**
- * Approval rows for a credential-backed connector operation. These values
- * are the exact payload sent after approval, so the review surface must not
- * shorten a nested argument or omit a suffix the connector will receive.
- */
-export const getCompleteConnectorInputRows = ({
-  emptyLabel,
-  input,
-  requestLabel,
-}: {
-  emptyLabel: string;
-  input: unknown;
-  requestLabel: string;
-}): ReadableInputRow[] => {
-  if (input === undefined || input === null) {
-    return [
-      {
-        key: "request",
-        label: requestLabel,
-        value: emptyLabel,
-      },
-    ];
-  }
-  if (typeof input !== "object") {
-    const value =
-      typeof input === "string" ||
-      typeof input === "number" ||
-      typeof input === "boolean" ||
-      typeof input === "bigint"
-        ? String(input)
-        : emptyLabel;
-    return [
-      {
-        key: "request",
-        label: requestLabel,
-        value,
-      },
-    ];
-  }
-
-  return Object.entries(input).map(([key, value]) => {
-    let readableValue: string;
-    if (value === undefined || value === null) {
-      readableValue = emptyLabel;
-    } else if (typeof value === "object") {
-      readableValue = JSON.stringify(value, null, 2);
-    } else {
-      readableValue = String(value);
-    }
-    return {
-      key,
-      label: humanizeIdentifier(key),
-      value: readableValue,
-    };
-  });
-};
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
@@ -230,6 +82,9 @@ export const buildRegistryWriteSummaryRows = ({
   if (toolName === "save_playbook") {
     return buildSavePlaybookRows({ emptyLabel, input });
   }
+  if (toolName === "save_skill_package") {
+    return buildSaveSkillPackageRows(input);
+  }
 
   const rows: ReadableInputRow[] = [];
   for (const [key, value] of Object.entries(input)) {
@@ -290,17 +145,80 @@ const buildSavePlaybookRows = ({
         Array.isArray(removed) && removed.length > 0 ? `${removed.length}` : "",
     },
   ];
+  // Untruncated: the approver must see every position the call touches.
   for (const { key, value } of changes) {
     if (value.length === 0) {
       continue;
     }
-    rows.push({
-      key,
-      label: humanizeIdentifier(key),
-      value: formatReadableInputValue({ emptyLabel, value }),
-    });
+    rows.push({ key, label: humanizeIdentifier(key), value });
   }
   return rows;
+};
+
+/**
+ * The `name` a SKILL.md's frontmatter gives, read the way a host reads it:
+ * a `name:` line between the opening and closing `---`.
+ */
+export const skillMdName = (skillMd: unknown): string | null => {
+  if (typeof skillMd !== "string") {
+    return null;
+  }
+  const lines = skillMd.split("\n").map((line) => line.trimEnd());
+  if (lines[0] !== "---") {
+    return null;
+  }
+  for (const line of lines.slice(1)) {
+    if (line === "---") {
+      return null;
+    }
+    if (line.startsWith("name:")) {
+      const value = line.slice("name:".length).trim();
+      const quote = value.at(0);
+      return (quote === '"' || quote === "'") && value.endsWith(quote)
+        ? value.slice(1, -1)
+        : value;
+    }
+  }
+  return null;
+};
+
+/**
+ * `save_skill_package` can carry a whole skill. The approver needs which
+ * skill, its scope, and every file the call writes or removes, never the
+ * file texts.
+ */
+const buildSaveSkillPackageRows = (
+  input: Record<string, unknown>,
+): ReadableInputRow[] => {
+  const paths = (value: unknown): string[] =>
+    (Array.isArray(value) ? value : []).flatMap((item: unknown) => {
+      if (typeof item === "string") {
+        return [item];
+      }
+      return isRecord(item) && typeof item["path"] === "string"
+        ? [item["path"]]
+        : [];
+    });
+  const name = skillMdName(input["skillMd"]);
+  const scope = input["scope"];
+  const rows = [
+    { key: "skill", value: name ?? "" },
+    {
+      key: "skill_id",
+      value: typeof input["skillId"] === "string" ? input["skillId"] : "",
+    },
+    { key: "scope", value: typeof scope === "string" ? scope : "" },
+    {
+      key: "skill_md",
+      value: typeof input["skillMd"] === "string" ? "SKILL.md" : "",
+    },
+    // Untruncated: the approver must see every file the call touches.
+    { key: "files", value: paths(input["resources"]).join("; ") },
+    { key: "delete_paths", value: paths(input["deletePaths"]).join("; ") },
+  ];
+  return rows
+    .filter(({ value }) => value.length > 0)
+    .map(({ key, value }) => ({ key, label: humanizeIdentifier(key), value }));
 };
 
 /** The display name of a host file reference, when it carries one. */
@@ -525,14 +443,14 @@ const buildReaderAnnotationRows = ({
     {
       key: "quote",
       label: labels.passage[mark.kind],
-      value: truncate(mark.quote),
+      value: truncateReadableValue(mark.quote),
     },
   ];
   if (mark.body !== null) {
     rows.push({
       key: "body",
       label: labels.commentText,
-      value: truncate(mark.body),
+      value: truncateReadableValue(mark.body),
     });
   }
   for (const [key, value] of Object.entries(input)) {

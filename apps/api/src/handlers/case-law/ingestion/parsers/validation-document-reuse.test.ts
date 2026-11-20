@@ -1,5 +1,6 @@
 import { Glob } from "bun";
 import { afterEach, describe, expect, mock, spyOn, test } from "bun:test";
+import { fileURLToPath } from "node:url";
 
 import { load } from "@stll/html";
 
@@ -85,7 +86,9 @@ const validationResultsMatch = (call: CapturedValidation): boolean => {
 describe("validation document reuse", () => {
   test("matches a fresh parse for every whole-document ECJ fixture", async () => {
     const directory = new URL("eu-ecj/", FIXTURES);
-    for await (const name of new Glob("*.html.gz").scan(directory.pathname)) {
+    for await (const name of new Glob("*.html.gz").scan(
+      fileURLToPath(directory),
+    )) {
       const html = await gunzip(new URL(name, directory));
       const source = ecjDocumentHtml(html);
       if (source.boundary !== "document") {

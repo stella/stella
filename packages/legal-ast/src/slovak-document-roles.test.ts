@@ -3,6 +3,8 @@ import { describe, expect, test } from "bun:test";
 import {
   isSkOpeningFormula,
   isSkPortalMetadataRow,
+  isSkStateLine,
+  isSkVerdictFormulaLine,
   skSectionHeading,
   skTitleFormulaStart,
 } from "./slovak-document-roles";
@@ -67,6 +69,21 @@ describe("the Slovak opening formula", () => {
     expect(isSkOpeningFormula(text)).toBe(true);
   });
 
+  test.each(["SLOVENSKÁ REPUBLIKA", "S L O V E N S K Á   R E P U B L I K A"])(
+    "%j is the state line, not the formula",
+    (text) => {
+      expect(isSkStateLine(text)).toBe(true);
+      expect(isSkOpeningFormula(text)).toBe(false);
+    },
+  );
+
+  test.each([
+    "Slovenská republika, zastúpená ministerstvom",
+    "Ústavný súd Slovenskej republiky",
+  ])("%j is no state line", (text) => {
+    expect(isSkStateLine(text)).toBe(false);
+  });
+
   test("is read off a title it runs on from", () => {
     expect(skTitleFormulaStart("ROZSUDOK V MENE SLOVENSKEJ REPUBLIKY")).toBe(9);
     expect(
@@ -97,6 +114,25 @@ describe("the portal's metadata box", () => {
     "%j is not",
     (text) => {
       expect(isSkPortalMetadataRow(text)).toBe(false);
+    },
+  );
+});
+
+describe("a Slovak criminal verdict's formula lines", () => {
+  test.each([
+    "uznáva sa za vinného, že",
+    "teda",
+    "čím spáchal",
+    "pričom obžalovaný A. D. sa takéhoto konania dopustil",
+    "Za to mu súd ukladá",
+  ])("%p is a formula line", (line) => {
+    expect(isSkVerdictFormulaLine(line)).toBe(true);
+  });
+
+  test.each(["tedaže", "Žalobca uviedol, že", "pričomž"])(
+    "%p is not",
+    (line) => {
+      expect(isSkVerdictFormulaLine(line)).toBe(false);
     },
   );
 });

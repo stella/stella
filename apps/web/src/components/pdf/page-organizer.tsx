@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import type { KeyboardEvent } from "react";
 
 import { attachClosestEdge } from "@atlaskit/pragmatic-drag-and-drop-hitbox/closest-edge/attach-closest-edge";
@@ -782,14 +782,14 @@ const LoadedPDFPageOrganizer = ({
     maxPages: format.number(MAX_PAGE_EDITOR_PAGES),
     maxSources: format.number(MAX_PAGE_EDITOR_SOURCES),
   });
-  const pageInfoBySource = useMemo(() => {
+  const pageInfoBySource = (() => {
     const bySource = new Map<string, readonly PageInfo[]>();
     bySource.set(ORIGINAL_SOURCE_ID, [...sourceDocument.pages.values()]);
     for (const source of addedSources) {
       bySource.set(source.id, [...source.document.pages.values()]);
     }
     return bySource;
-  }, [addedSources, sourceDocument]);
+  })();
   const baseName = safePDFBaseName(fileName);
   const isUnsupported =
     sourceDocument.isXfa ||

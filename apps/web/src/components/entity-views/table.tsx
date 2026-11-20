@@ -1,4 +1,4 @@
-import { createContext, use, useMemo, useRef, useState } from "react";
+import { createContext, use, useRef, useState } from "react";
 import type { ComponentType, ReactNode, RefObject } from "react";
 
 import { flexRender, useTable } from "@tanstack/react-table";
@@ -21,6 +21,7 @@ import {
 } from "@stll/ui/icons";
 import { MattersNavIcon } from "@stll/ui/matter-icon";
 import { ReviewStatusBadge } from "@stll/ui/review-status-badge";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 import type { SortableProperty } from "@stll/workspace-ui/sorts";
 
@@ -55,8 +56,10 @@ import {
   WorkspaceGridRow,
 } from "@/components/workspaces/table/workspace-grid";
 import { getOrderedCells } from "@/components/workspaces/table/workspace-grid-order";
-import { RowEndFillerCell } from "@/components/workspaces/table/workspace-table/end-fillers";
-import { PinnedBoundary } from "@/components/workspaces/table/workspace-table/internals";
+import {
+  PinnedBoundary,
+  RowEndFillerCell,
+} from "@/components/workspaces/table/workspace-table/internals";
 import {
   getGridPinningStyles,
   isPinnedBoundaryColumn,
@@ -236,45 +239,41 @@ export const EntityViewTable = ({
     },
   });
   // TanStack's controlled table requires stable definitions between state updates.
-  const columns = useMemo(
-    () =>
-      Object.entries(COLUMN_MODEL).map(
-        ([column, model]): TableColumnDef<EntityViewRow> => {
-          if (!isCollectionColumn(column)) {
-            return panic(`Unknown collection column: ${column}`);
-          }
-          const columnId = column;
-          return {
-            id: columnId,
-            size: model.size,
-            minSize: DEFAULT_TABLE_COLUMN_MIN_SIZE,
-            enableSorting: ENTITY_VIEW_COLUMNS[columnId].sortable,
-            accessorFn: ({ entry }) =>
+  const columns = Object.entries(COLUMN_MODEL).map(
+    ([column, model]): TableColumnDef<EntityViewRow> => {
+      if (!isCollectionColumn(column)) {
+        return panic(`Unknown collection column: ${column}`);
+      }
+      const columnId = column;
+      return {
+        id: columnId,
+        size: model.size,
+        minSize: DEFAULT_TABLE_COLUMN_MIN_SIZE,
+        enableSorting: ENTITY_VIEW_COLUMNS[columnId].sortable,
+        accessorFn: ({ entry }) =>
+          isEntityViewSortColumn(columnId)
+            ? entityViewSortValues[columnId](entry)
+            : null,
+        enableHiding: true,
+        enablePinning: true,
+        enableResizing: true,
+        header: ({ header }) => (
+          <MetadataPopover
+            column={header.column}
+            icon={model.icon}
+            label={t(model.label)}
+            sort={
               isEntityViewSortColumn(columnId)
-                ? entityViewSortValues[columnId](entry)
-                : null,
-            enableHiding: true,
-            enablePinning: true,
-            enableResizing: true,
-            header: ({ header }) => (
-              <MetadataPopover
-                column={header.column}
-                icon={model.icon}
-                label={t(model.label)}
-                sort={
-                  isEntityViewSortColumn(columnId)
-                    ? orderedColumn(ENTITY_VIEW_SORT_KINDS[columnId])
-                    : UNORDERED_COLUMN
-                }
-              />
-            ),
-            cell: ({ row }) => (
-              <CollectionCell column={columnId} entry={row.original.entry} />
-            ),
-          };
-        },
-      ),
-    [t],
+                ? orderedColumn(ENTITY_VIEW_SORT_KINDS[columnId])
+                : UNORDERED_COLUMN
+            }
+          />
+        ),
+        cell: ({ row }) => (
+          <CollectionCell column={columnId} entry={row.original.entry} />
+        ),
+      };
+    },
   );
   const scrollRef = useRef<HTMLDivElement>(null);
   const groups = useEntityTableGroups(rows, layout.groupByPropertyId);
@@ -502,11 +501,11 @@ const CollectionCell = ({ column, entry }: CollectionCellProps) => {
               }
             />
           )}
-          <UserText className="truncate font-medium">
+          <TruncatedText className="font-medium" render={<UserText />}>
             {entry.type === "entity"
               ? getEntityName(entry.entity)
               : entry.signal.title}
-          </UserText>
+          </TruncatedText>
           {entry.type === "proposal" && (
             <ReviewStatusBadge tone="neutral">
               {t("flows.status.awaitingReview")}
@@ -548,7 +547,7 @@ const CollectionCell = ({ column, entry }: CollectionCellProps) => {
         case "document":
           return t("common.document");
         case "folder":
-          return t("search.kinds.folder");
+          return t("common.folder");
         case null:
           return null;
         case "message":

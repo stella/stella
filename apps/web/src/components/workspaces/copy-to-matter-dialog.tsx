@@ -122,17 +122,19 @@ export const CopyToMatterDialog = ({
     let firstErrorMessage: string | null = null;
     for (const { entityId } of transferEntities) {
       const result = await Result.tryPromise(async () => {
+        const entitiesApi = api.entities({
+          workspaceId: toSafeId<"workspace">(sourceWorkspaceId),
+        });
+
         // oxlint-disable-next-line no-network-await-in-loop/no-network-await-in-loop -- sequential bulk copy/move: a partial failure leaves a deterministic prefix transferred, and the run continues to report the first error and the count
-        const { data, error } = await api
-          .entities({ workspaceId: toSafeId<"workspace">(sourceWorkspaceId) })
-          ["copy-to-workspace"].post({
-            entityId: toSafeId<"entity">(entityId),
-            targetWorkspaceId: toSafeId<"workspace">(targetWorkspaceId),
-            targetParentId: targetParentId
-              ? toSafeId<"entity">(targetParentId)
-              : null,
-            deleteSource: mode === "move",
-          });
+        const { data, error } = await entitiesApi["copy-to-workspace"].post({
+          entityId: toSafeId<"entity">(entityId),
+          targetWorkspaceId: toSafeId<"workspace">(targetWorkspaceId),
+          targetParentId: targetParentId
+            ? toSafeId<"entity">(targetParentId)
+            : null,
+          deleteSource: mode === "move",
+        });
         return { data, error };
       });
 

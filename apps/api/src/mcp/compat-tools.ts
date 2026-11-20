@@ -1,12 +1,19 @@
 import { panic, Result } from "better-result";
 import * as v from "valibot";
 
-import { readEntityByIdHandler } from "@/api/handlers/entities/get";
+import { SEARCH_PAGINATION_TRUNCATED_TIME_BUDGET } from "@stll/api-contract/search";
+
 import type { SafeId } from "@/api/lib/branded-types";
 import {
+  loadAgentDocumentSources,
   loadCurrentExtractedContents,
-  loadCurrentExtractedSources,
 } from "@/api/lib/document-content-provenance";
+import {
+  ActionAdmissionError,
+  actionAdmissionRefusal,
+} from "@/api/lib/errors/action-admission-error";
+import { LEGAL_FILE_READERS } from "@/api/lib/files/read-legal-file";
+import { getPublicReadSignal } from "@/api/lib/legal-search/public-read-timeout-context";
 import { LIMITS } from "@/api/lib/limits";
 import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import {
@@ -28,7 +35,7 @@ import {
   EMPTY_CORPUS_CURSORS,
   hasMoreCorpusPages,
   resolveCompatCorpusCountries,
-  searchCompatCorpus,
+  waitForCompatCorpus,
 } from "@/api/mcp/compat-corpus";
 import {
   COMPAT_ID_HINT,
@@ -50,6 +57,8 @@ import {
 } from "@/api/mcp/compat-shared";
 import type { McpRequestResources } from "@/api/mcp/context";
 import { cursorInput, nullAsAbsent } from "@/api/mcp/input-schemas";
+import { legalFileReadError } from "@/api/mcp/legal-file-read-error";
+import { underFleetCallerSlot } from "@/api/mcp/public-read-continuation";
 import { isMcpToolFeatureEnabled } from "@/api/mcp/tool-feature";
 import type {
   McpCompatSearchResult,
@@ -58,6 +67,7 @@ import type {
 } from "@/api/mcp/tool-types";
 import { defineMcpToolSet } from "@/api/mcp/tool-types";
 import {
+  bindWorkspaceRecorder,
   buildDocumentUrl,
   buildMatterUrl,
   DEFAULT_COMPAT_SEARCH_LIMIT,
@@ -66,6 +76,7 @@ import {
   internalFailureResult,
   MCP_CONTENT_MAX_CHARS,
   notFoundResult,
+  structuredErrorResult,
   validationErrorResult,
 } from "@/api/mcp/tool-utils";
 import {
@@ -80,14 +91,6 @@ type CompatToolName = "fetch" | "search";
 type FetchableEntity = {
   entityId: string;
   fieldId: string | null;
-  workspaceId: SafeId<"workspace">;
-};
-
-type CompatFetchPayload = {
-  charCount: number | null;
-  text: string;
-  title: string;
-  truncated: boolean;
   workspaceId: SafeId<"workspace">;
 };
 
@@ -141,7 +144,7 @@ const getFetchableEntityMap = async ({
   const loaded = await readAuthorizedMatterContent(
     context,
     async (tx, workspaceIds) =>
-      await loadCurrentExtractedSources(tx, {
+      await loadAgentDocumentSources(tx, {
         entityIds: safeEntityIds,
         organizationId: context.organizationId,
         workspaceIds,
@@ -228,64 +231,6 @@ const mapCompatSearchResults = ({
       },
     ];
   });
-
-const getCompatFetchPayload = ({
-  entityId,
-  result,
-}: {
-  entityId: string;
-  result: unknown;
-}): CompatFetchPayload | null => {
-  const workspaceId =
-    typeof result === "object" &&
-    result !== null &&
-    "workspaceId" in result &&
-    typeof result.workspaceId === "string"
-      ? brandPersistedWorkspaceId(result.workspaceId)
-      : null;
-  const title =
-    typeof result === "object" &&
-    result !== null &&
-    "name" in result &&
-    typeof result.name === "string" &&
-    result.name.length > 0
-      ? result.name
-      : entityId;
-  const text =
-    typeof result === "object" &&
-    result !== null &&
-    "text" in result &&
-    typeof result.text === "string"
-      ? result.text
-      : null;
-
-  if (workspaceId === null || text === null) {
-    return null;
-  }
-
-  const charCount =
-    typeof result === "object" &&
-    result !== null &&
-    "charCount" in result &&
-    typeof result.charCount === "number"
-      ? result.charCount
-      : null;
-  const truncated =
-    typeof result === "object" &&
-    result !== null &&
-    "truncated" in result &&
-    typeof result.truncated === "boolean"
-      ? result.truncated
-      : false;
-
-  return {
-    charCount,
-    text,
-    title,
-    truncated,
-    workspaceId,
-  };
-};
 
 const compatSearchArgsSchema = nullAsAbsent(
   v.strictObject({
@@ -515,13 +460,22 @@ const handleCompatSearchTool: McpToolHandler<
   const matterResult =
     position.matter === null
       ? Result.ok(EXHAUSTED_MATTER_PAGE)
-      : await searchMatterKnowledge({
+      : // The slot covers this read alone: holding it through the corpus wait
+        // would queue the continued read behind its own caller.
+        await underFleetCallerSlot({
           context,
-          cursor: position.matter,
-          query,
+          signal: getPublicReadSignal() ?? new AbortController().signal,
+          run: async () =>
+            await searchMatterKnowledge({
+              context,
+              cursor: position.matter ?? undefined,
+              query,
+            }),
         });
   if (matterResult.isErr()) {
-    return internalFailureResult(matterResult.error, "mcp.compatSearch.matter");
+    return ActionAdmissionError.is(matterResult.error)
+      ? structuredErrorResult(actionAdmissionRefusal(matterResult.error))
+      : internalFailureResult(matterResult.error, "mcp.compatSearch.matter");
   }
   const matter = matterResult.value;
 
@@ -533,7 +487,7 @@ const handleCompatSearchTool: McpToolHandler<
     };
   }
 
-  const corpus = await searchCompatCorpus({
+  const corpus = await waitForCompatCorpus({
     context,
     countries: await resolveCompatCorpusCountries(context),
     cursors: position.corpus,
@@ -541,6 +495,19 @@ const handleCompatSearchTool: McpToolHandler<
   });
   if (corpus.type === "failed") {
     return corpus.result;
+  }
+  if (corpus.type === "still_running") {
+    // Nothing here says "running", so the page says it is cut short and its
+    // cursor runs the same corpus page again.
+    return {
+      egress: "compatSearch",
+      paginationOutcome: SEARCH_PAGINATION_TRUNCATED_TIME_BUDGET,
+      nextCursor: encodeCompatSearchCursor({
+        matter: matter.nextCursor ?? null,
+        corpus: position.corpus,
+      }),
+      results: matter.results,
+    };
   }
 
   // Matter hits first, then decisions, then statutes: a caller asking this
@@ -620,71 +587,72 @@ const handleCompatFetchTool: McpToolHandler<
 
   const loaded = await readAuthorizedMatterContent(
     context,
-    async (tx, workspaceIds) =>
-      await loadCurrentExtractedContents(tx, {
+    async (tx, workspaceIds) => {
+      const options = {
         entityIds: [entityId],
         organizationId: context.organizationId,
         workspaceIds,
-      }),
+      };
+      const source = (await loadAgentDocumentSources(tx, options)).at(0);
+      if (!source) {
+        return null;
+      }
+      if (source.legalFormat) {
+        return { kind: "legal", source, format: source.legalFormat } as const;
+      }
+      const extracted = (await loadCurrentExtractedContents(tx, options)).at(0);
+      if (
+        !extracted ||
+        extracted.currentVersionId !== source.currentVersionId ||
+        extracted.sourceFieldId !== source.sourceFieldId
+      ) {
+        return null;
+      }
+      return { kind: "extracted", source, text: extracted.text } as const;
+    },
   );
   if (loaded.isErr()) {
     return internalFailureResult(loaded.error, "mcp.compatFetch.matter");
   }
-  const row = loaded.value.at(0);
-
-  if (!row) {
+  const doc = loaded.value;
+  if (!doc) {
     return errorResult("Document content is unavailable");
   }
-
-  const text = row.text;
-  // Keep the full decrypted text here; windowing happens in the egress
-  // pipeline so anonymized fetches anonymize the whole document before slicing
-  // (slicing raw text first could split an entity name across the window
-  // boundary and leak its prefix).
-  const result = {
-    charCount: row.charCount,
-    name: row.name,
-    text,
-    truncated: false,
-    workspaceId: row.workspaceId,
-  };
-
-  const fetchPayload = getCompatFetchPayload({ entityId: rawEntityId, result });
-  if (!fetchPayload) {
-    return errorResult("Document content is unavailable");
-  }
-
-  const workspaceAccess = ensureWorkspaceAccess({
+  const workspaceId = ensureWorkspaceAccess({
     context,
-    workspaceId: fetchPayload.workspaceId,
+    workspaceId: doc.source.workspaceId,
   });
-  if (!workspaceAccess) {
+  if (!workspaceId) {
     return notFoundResult("Matter not found or not accessible");
   }
-
-  const entityResult = await Result.gen(() =>
-    readEntityByIdHandler({
-      safeDb: context.safeDb,
-      workspaceId: workspaceAccess,
-      entityId,
-    }),
-  );
-
-  let url = buildMatterUrl(fetchPayload.workspaceId);
-  if (Result.isOk(entityResult)) {
-    const entity = entityResult.value;
-    const fileField = entity.fields.find(
-      (field: { content: { type: string } }) => field.content.type === "file",
-    );
-    if (fileField) {
-      url = buildDocumentUrl({
-        entityId: rawEntityId,
-        fieldId: fileField.id,
-        workspaceId: workspaceAccess,
+  let text: string;
+  switch (doc.kind) {
+    case "legal": {
+      const preview = await LEGAL_FILE_READERS[doc.format.kind]({
+        purpose: "standalone",
+        scopedDb: context.scopedDb,
+        organizationId: context.organizationId,
+        fieldId: doc.source.sourceFieldId,
+        workspaceId,
+        recordAuditEvent: bindWorkspaceRecorder(context, workspaceId),
       });
+      if (preview.isErr()) {
+        return legalFileReadError(preview.error, "mcp.compatFetch.legal_file");
+      }
+      text = preview.value.text;
+      break;
     }
+    case "extracted":
+      text = doc.text;
+      break;
+    default:
+      return panic(doc satisfies never);
   }
-
+  const url = buildDocumentUrl({
+    entityId: rawEntityId,
+    fieldId: doc.source.sourceFieldId,
+    workspaceId,
+  });
   // Hand the full document to the egress pipeline: it anonymizes title + text
   // (anonymized mode) before windowing, then serializes. No mode branch here.
   return {
@@ -692,9 +660,9 @@ const handleCompatFetchTool: McpToolHandler<
     cursor,
     id: rawId,
     maxChars: MCP_CONTENT_MAX_CHARS,
-    subject: { kind: "document", workspaceId: fetchPayload.workspaceId },
-    text: fetchPayload.text,
-    title: fetchPayload.title,
+    subject: { kind: "document", workspaceId },
+    text,
+    title: doc.source.name || rawEntityId,
     url,
   };
 };

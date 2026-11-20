@@ -2,19 +2,21 @@ import { describe, expect, test } from "bun:test";
 
 import {
   entityDisplayLabel,
+  referenceFromHref,
+  UNRESOLVED_REFERENCE_HREF,
+} from "@stll/api-contract/chat-reference-href";
+import type { ChatReference } from "@stll/api-contract/chat-reference-href";
+
+import {
+  decisionReferenceHref,
   entityReferenceHref,
   mentionAttrsToHref,
   mentionTagAttrs,
   referenceFromDecisionRoute,
-  referenceFromHref,
   referenceFromMentionAttrs,
   resolveReferenceVisual,
-  UNRESOLVED_REFERENCE_HREF,
 } from "@/components/references/reference.logic";
-import type {
-  ChatReference,
-  ReferenceLiveFacts,
-} from "@/components/references/reference.logic";
+import type { ReferenceLiveFacts } from "@/components/references/reference.logic";
 
 const MATTER_ID = "0dc54d0c-10d7-501d-897e-e801dbd0998c";
 const OTHER_MATTER_ID = "4e919658-a448-5354-8e3a-e99911214d2c";
@@ -161,6 +163,7 @@ describe("one reference, every source", () => {
         category: "decision",
       }),
     ).toBe("#stella-decision=dec-1");
+    expect(decisionReferenceHref("dec-1")).toBe("#stella-decision=dec-1");
     expect(
       entityReferenceHref({ entityId: TASK_ID, matterId: MATTER_ID }),
     ).toBe(`#stella-entity=${MATTER_ID}:${TASK_ID}`);
@@ -497,6 +500,10 @@ describe("registry and connector scope chips", () => {
       type: "unresolved",
     });
     expect(referenceFromHref("#stella-connector=Bad Slug", "x")).toEqual({
+      type: "unresolved",
+    });
+    // A skill link that names no skill reads as its label too.
+    expect(referenceFromHref("#stella-skill-ref=", "x")).toEqual({
       type: "unresolved",
     });
     expect(

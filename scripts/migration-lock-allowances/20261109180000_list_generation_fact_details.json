@@ -1,0 +1,5 @@
+{
+  "add-column": "Nullable columns and one constant-default column on legal_list_generation_runs and legal_list_generation_candidates, catalog-only changes that rewrite no rows, under 1s lock_timeout and 5s statement_timeout.",
+  "add-constraint": "Checks added NOT VALID, so no rows are scanned under the lock; they only constrain the new columns and are validated online after deployment.",
+  "add-foreign-key": "The run-to-workspace organization key is added NOT VALID, so neither table is scanned under the brief lock on workspaces; it is validated online after deployment."
+}

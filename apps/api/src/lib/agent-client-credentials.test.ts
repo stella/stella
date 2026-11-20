@@ -1,5 +1,8 @@
 import { Result } from "better-result";
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { beforeEach, describe, expect, test } from "bun:test";
+import { fileURLToPath } from "node:url";
+
+import { createTestState } from "@stll/test-state";
 
 import {
   encryptAgentClientCredential,
@@ -14,13 +17,10 @@ import {
   setLogSinkForTesting,
 } from "@/api/lib/observability/logger";
 
-let priorStorageSetting = false;
+const testState = createTestState({ file: import.meta.path, config: env });
+
 beforeEach(() => {
-  priorStorageSetting = env.AGENT_CLIENT_STORAGE_V1_ENABLED;
-  env.AGENT_CLIENT_STORAGE_V1_ENABLED = true;
-});
-afterEach(() => {
-  env.AGENT_CLIENT_STORAGE_V1_ENABLED = priorStorageSetting;
+  testState.setConfig("AGENT_CLIENT_STORAGE_V1_ENABLED", true);
 });
 
 const credential = Buffer.alloc(32, 0x2a).toHex();
@@ -30,7 +30,7 @@ describe("stored agent credential reads", () => {
   test("selects the configured write format and accepts both read formats", async () => {
     const envelope = (await encryptAgentClientCredential(credential)).unwrap();
     for (const enabled of [false, true]) {
-      env.AGENT_CLIENT_STORAGE_V1_ENABLED = enabled;
+      testState.setConfig("AGENT_CLIENT_STORAGE_V1_ENABLED", enabled);
       const stored = (await prepareAgentClientCredential(credential)).unwrap();
       if (enabled) {
         expect(stored).toStartWith("stella-agent:v1:");
@@ -118,7 +118,7 @@ describe("stored agent credential reads", () => {
           }
         `,
       ],
-      cwd: new URL("../../", import.meta.url).pathname,
+      cwd: fileURLToPath(new URL("../../", import.meta.url)),
       env: {
         ...process.env,
         CONTENT_ENCRYPTION_KEY:
@@ -168,7 +168,7 @@ describe("stored agent credential reads", () => {
           }
         `,
       ],
-      cwd: new URL("../../", import.meta.url).pathname,
+      cwd: fileURLToPath(new URL("../../", import.meta.url)),
       env: {
         ...process.env,
         CONTENT_ENCRYPTION_KEY: "",

@@ -1,7 +1,14 @@
 import { GUIDANCE_KINDS } from "@stll/legal-ast/document-kind";
 
-import { caseLawIngestionOnlyPolicies } from "@/api/db/rls";
+import {
+  caseLawIngestionOnlyPolicies,
+  publicLawReaderPolicies,
+} from "@/api/db/rls";
 import type { CorpusSourceDescriptor } from "@/api/lib/legal-search/corpus-source";
+import {
+  softLawBodyVector,
+  softLawTitleVector,
+} from "@/api/lib/legal-search/soft-law-search-sql";
 import type {
   SoftLawMetadata,
   SoftLawRawObject,
@@ -28,7 +35,7 @@ const values = (items: readonly string[]) =>
     sql.raw(","),
   );
 
-/** Global ingestion state; ordinary application roles have no access. */
+/** Global ingestion state; served documents are read through the public-law reader only. */
 export const softLawSources = p.pgTable.withRLS(
   "soft_law_sources",
   {
@@ -108,10 +115,14 @@ export const softLawDocuments = p.pgTable.withRLS(
   },
   (t) => [
     ...caseLawIngestionOnlyPolicies(),
+    ...publicLawReaderPolicies(),
     p
       .unique("soft_law_documents_identity_unique")
       .on(t.sourceId, t.identityKey),
     p.index("soft_law_documents_run_idx").on(t.sourceId, t.lastSeenRun),
+    p
+      .index("soft_law_documents_title_search_idx")
+      .using("gin", softLawTitleVector(t.title)),
     p.foreignKey({
       name: "soft_law_documents_source_fk",
       columns: [t.sourceId],
@@ -165,12 +176,17 @@ export const softLawDocumentVersions = p.pgTable.withRLS(
   },
   (t) => [
     ...caseLawIngestionOnlyPolicies(),
+    ...publicLawReaderPolicies(),
     p.unique("soft_law_versions_sequence_unique").on(t.documentId, t.sequence),
     p.foreignKey({
       name: "soft_law_versions_document_fk",
       columns: [t.documentId],
       foreignColumns: [softLawDocuments.id],
     }),
+    p
+      .index("soft_law_versions_body_search_idx")
+      .using("gin", softLawBodyVector(t.extractedText))
+      .where(sql`${t.observedTo} IS NULL`),
     p
       .uniqueIndex("soft_law_versions_open_unique")
       .on(t.documentId)
@@ -205,6 +221,7 @@ export const softLawDocumentLocators = p.pgTable.withRLS(
   },
   (t) => [
     ...caseLawIngestionOnlyPolicies(),
+    ...publicLawReaderPolicies(),
     p.check(
       "soft_law_locators_state_check",
       sql`${t.state} IN (${values(SOFT_LAW_LOCATOR_STATES)})`,

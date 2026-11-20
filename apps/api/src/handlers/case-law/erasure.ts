@@ -16,6 +16,7 @@ import {
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { runDecisionWriteExtension } from "@/api/lib/case-law/decision-write-extension";
+import { parkAttachmentsOfErasedDecisionTx } from "@/api/lib/case-law/held-attachment-erasure";
 import { replayWrite } from "@/api/lib/case-law/replay-write";
 import {
   lockCaseLawDecisionRows,
@@ -544,6 +545,10 @@ export const redactCaseLawDecision = async ({
             .where(
               eq(caseLawCitationDoctrineReviews.citingDecisionId, decision.id),
             );
+          // Another publisher's copy of this decision goes with the same
+          // takedown. Covered by this fence's redaction exemption, recorded
+          // in case_law_index_jobs below.
+          await parkAttachmentsOfErasedDecisionTx(tx, decision.id);
           const supplementRawKeys = erasedSupplements.flatMap(({ key }) =>
             key !== null &&
             classifyCaseLawRawKey(key, {

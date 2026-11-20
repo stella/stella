@@ -81,6 +81,10 @@ const parentOf = async (categoryId: SafeId<"templateCategory">) =>
       .limit(1)
   ).at(0)?.parentId;
 
+/** Narrows a proxied member to a callable that can be bound to its owner. */
+const isCallable = (value: unknown): value is (...args: unknown[]) => unknown =>
+  typeof value === "function";
+
 const category = (
   id: SafeId<"templateCategory">,
   name: string,
@@ -209,8 +213,8 @@ test("a cycle check that cannot read its answer refuses rather than allowing", a
           if (property === "execute") {
             return async () => ({ unexpected: true });
           }
-          const value = Reflect.get(target, property);
-          return typeof value === "function" ? value.bind(target) : value;
+          const value: unknown = Reflect.get(target, property);
+          return isCallable(value) ? value.bind(target) : value;
         },
       });
       return await callback(asTestRaw<Transaction>(proxied));
@@ -266,8 +270,8 @@ test("a loop the pre-check misses is refused by the database with the same 400",
                 ? { rows: [{ cycle: false }] }
                 : await target.execute(query);
           }
-          const value = Reflect.get(target, property);
-          return typeof value === "function" ? value.bind(target) : value;
+          const value: unknown = Reflect.get(target, property);
+          return isCallable(value) ? value.bind(target) : value;
         },
       });
       return await callback(asTestRaw<Transaction>(proxied));

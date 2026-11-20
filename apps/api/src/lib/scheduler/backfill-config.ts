@@ -21,6 +21,7 @@ export const SCHEDULER_BACKFILL_IDS = {
   claimedErasures: "caseLaw.reconcileClaimedErasures.minutely",
   coverage: "caseLaw.refreshCoverage.fiveMinute",
   populationCounts: "caseLaw.foldPopulationCounts.minutely",
+  sitemapTouches: "caseLaw.foldSitemapTouches.minutely",
   decisionIdentifiers: "caseLaw.reconcileDecisionIdentifiers.minutely",
   provisionState: "caseLaw.backfillProvisionState.minutely",
   parsedInputState: "caseLaw.backfillParsedInputState.fiveMinute",

@@ -81,19 +81,27 @@ const paragraphToNode = (
 const listDepthOf = (p: ClauseParagraph): number =>
   p.listKind ? Math.max(0, p.numbering?.ilvl ?? 0) : 0;
 
+type BuildListOptions = {
+  body: readonly ClauseParagraph[];
+  start: number;
+  level: number;
+  kind: ClauseListKind;
+  override?: ParagraphContentOverride | undefined;
+};
+
 /**
  * Build the TipTap list node(s) for one run of consecutive list paragraphs
  * (all sharing `start.listKind` at the current level), nesting deeper levels as
  * child lists inside the preceding `listItem`. Returns the list node plus the
  * number of paragraphs it consumed, so the caller can resume after the run.
  */
-const buildList = (
-  body: readonly ClauseParagraph[],
-  start: number,
-  level: number,
-  kind: ClauseListKind,
-  override?: ParagraphContentOverride,
-): { node: JSONContent; consumed: number } => {
+const buildList = ({
+  body,
+  start,
+  level,
+  kind,
+  override,
+}: BuildListOptions): { node: JSONContent; consumed: number } => {
   const items: JSONContent[] = [];
   let i = start;
 
@@ -109,7 +117,13 @@ const buildList = (
     if (pLevel > level) {
       // A deeper item with no own-level parent: nest it under the last item,
       // or open a fresh item so the structure stays well-formed.
-      const child = buildList(body, i, pLevel, p.listKind, override);
+      const child = buildList({
+        body,
+        start: i,
+        level: pLevel,
+        kind: p.listKind,
+        override,
+      });
       const lastItem = items.at(-1);
       if (lastItem?.content) {
         lastItem.content.push(child.node);
@@ -127,13 +141,13 @@ const buildList = (
     // Pull any immediately-following deeper items into this item as a sub-list.
     const next = body[i];
     if (next?.listKind && listDepthOf(next) > level) {
-      const child = buildList(
+      const child = buildList({
         body,
-        i,
-        listDepthOf(next),
-        next.listKind,
+        start: i,
+        level: listDepthOf(next),
+        kind: next.listKind,
         override,
-      );
+      });
       itemContent.push(child.node);
       i += child.consumed;
     }
@@ -167,7 +181,13 @@ export const clauseBodyToTipTap = (
       continue;
     }
     if (p.listKind) {
-      const built = buildList(body, i, listDepthOf(p), p.listKind, override);
+      const built = buildList({
+        body,
+        start: i,
+        level: listDepthOf(p),
+        kind: p.listKind,
+        override,
+      });
       content.push(built.node);
       i += built.consumed;
       continue;

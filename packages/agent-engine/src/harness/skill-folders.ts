@@ -25,6 +25,8 @@ const SKILL_FILE = "SKILL.md";
 /**
  * The `SKILL.md` read below is a member's own file on their computer, never a
  * Markdown file of this repository, so it is no CI input.
+ * Read as source metadata by scripts/ci-package-scope.ts.
+ * @public
  */
 export const CI_MARKDOWN_READER_INPUTS = [] as const;
 const LOOK_BUDGET_MS = 2000;

@@ -35,6 +35,7 @@ import {
 import {
   corpusContentHash,
   EMPTY_CORPUS_CONTENT_HASHES,
+  payloadCarriesDocument,
 } from "@/api/lib/legal-search/corpus-content-hash";
 import type { CorpusPayload } from "@/api/lib/legal-search/corpus-content-hash";
 import {
@@ -240,6 +241,18 @@ const reportStoredCorpusValidation = (
   });
 };
 
+/** The corpus operations a timeout names, each its own telemetry label. */
+const CORPUS_IO_TIMEOUT_LABEL = {
+  "corpus-delete": "corpus-delete",
+  "corpus-read-ast": "corpus-read-ast",
+  "corpus-read-sections": "corpus-read-sections",
+  "corpus-read-text": "corpus-read-text",
+  "corpus-write-ast": "corpus-write-ast",
+  "corpus-write-sections": "corpus-write-sections",
+  "corpus-write-text": "corpus-write-text",
+} as const;
+type CorpusIoLabel = keyof typeof CORPUS_IO_TIMEOUT_LABEL;
+
 /**
  * The single bounded boundary for every corpus object read/write/delete.
  * Bun's S3 convenience methods (`.file(key).bytes()`, `.write`, `.delete`)
@@ -250,7 +263,7 @@ const reportStoredCorpusValidation = (
  * is safe to retry.
  */
 const boundedCorpusIo = async <T>(
-  label: string,
+  label: CorpusIoLabel,
   operation: (signal: AbortSignal) => Promise<T>,
   {
     signal,
@@ -258,7 +271,7 @@ const boundedCorpusIo = async <T>(
   }: { signal?: AbortSignal; timeoutMs?: number } = {},
 ): Promise<T> =>
   await withTimeout(operation, {
-    label,
+    label: CORPUS_IO_TIMEOUT_LABEL[label],
     ...(signal === undefined ? {} : { signal }),
     timeoutMs,
   });
@@ -325,7 +338,7 @@ type SettleCancellableCorpusIoGroupOptions = {
  * cleanup deleted it.
  */
 const startCancellableCorpusIo = <T>(
-  label: string,
+  label: CorpusIoLabel,
   operation: (signal: AbortSignal) => Promise<T>,
   options: CorpusIoOptions,
 ): StartedCorpusIo<T> => {
@@ -449,10 +462,10 @@ type PlannedCorpusWrite =
  * from the S3 I/O so it stays a pure unit and a test double can fake only
  * the PUTs while keeping the real decision.
  *
- * A payload whose hash is one of the empty shapes stores nothing: a
- * metadata-first ingest would otherwise PUT the same constant
- * zero-information objects under a fresh key per row. A payload whose
- * derived keys and hash equal the write the row already records stores
+ * A payload with no text, sections or AST blocks stores nothing, including
+ * an empty AST envelope carrying decision metadata. Hashes cannot classify
+ * that envelope: its metadata makes the hash specific to the decision.
+ * A payload whose derived keys and hash equal the write the row already records stores
  * nothing either — a settled record proves those exact objects were
  * confirmed. The comparison is over the keys, not the hash alone, because
  * the keys also carry the jurisdiction partition: an equal payload under a
@@ -467,7 +480,7 @@ export const planCorpusDocumentWrite = ({
   stored,
 }: WriteCorpusInput): PlannedCorpusWrite => {
   const contentHash = corpusContentHash({ text, sections, ast });
-  if (EMPTY_CORPUS_CONTENT_HASHES.includes(contentHash)) {
+  if (!payloadCarriesDocument({ text, sections, ast })) {
     return { type: "skipped-empty", written: null, contentHash };
   }
   const written = {

@@ -47,6 +47,8 @@ const scopedDb: ScopedDb = async (callback) =>
 
 const busyId = createSafeId<"caseLawSource">();
 const quietId = createSafeId<"caseLawSource">();
+const parkedId = createSafeId<"caseLawSource">();
+const briefFailureId = createSafeId<"caseLawSource">();
 
 const FIXED_NOW = new Date("2026-09-28T12:00:00.000Z");
 const minutesAgo = (minutes: number) =>
@@ -98,6 +100,21 @@ beforeAll(async () => {
       storedTotalAsOf: minutesAgo(90),
     },
     { id: quietId, adapterKey: ADAPTER_KEYS.CZ_NS, name: "quiet source" },
+    // Counted, so the fleet total below still depends on the quiet source alone.
+    {
+      id: parkedId,
+      adapterKey: ADAPTER_KEYS.PL_SN,
+      name: "parked source",
+      storedTotal: 0,
+      storedTotalAsOf: minutesAgo(5),
+    },
+    {
+      id: briefFailureId,
+      adapterKey: ADAPTER_KEYS.PL_COURTS,
+      name: "briefly failing source",
+      storedTotal: 0,
+      storedTotalAsOf: minutesAgo(5),
+    },
   ]);
 
   await db
@@ -139,6 +156,33 @@ beforeAll(async () => {
       startedAt: minutesAgo(10),
       finishedAt: minutesAgo(9),
     },
+  ]);
+
+  const failedCycle = (
+    sourceId: SafeId<"caseLawSource">,
+    finishedMinutesAgo: number,
+  ) => ({
+    sourceId,
+    status: "failed" as const,
+    durationMs: 1,
+    errorMessage: "Page fetch failed: the same refusal",
+    startedAt: minutesAgo(finishedMinutesAgo),
+    finishedAt: minutesAgo(finishedMinutesAgo),
+  });
+  await db.insert(caseLawIngestionEvents).values([
+    // A run the park reads from: it began after the last cycle that worked,
+    // failed the same way six times across seven hours, last 30 minutes ago.
+    {
+      sourceId: parkedId,
+      status: "completed",
+      inserted: 3,
+      durationMs: 1,
+      startedAt: minutesAgo(600),
+      finishedAt: minutesAgo(600),
+    },
+    ...[450, 300, 200, 120, 60, 30].map((ago) => failedCycle(parkedId, ago)),
+    // The same failure, but for 20 minutes: never a park, however it fails.
+    ...[20, 10, 5].map((ago) => failedCycle(briefFailureId, ago)),
   ]);
 
   await db.insert(caseLawIngestionFailures).values([
@@ -237,6 +281,34 @@ test("the fleet total is the sum once every source is counted", async () => {
   expect(status.totalDecisions).toBe(3);
 });
 
+test("a parked source says since when it fails and when it asks again", async () => {
+  const status = await readStatus();
+  const park = (name: string) =>
+    status.sources.find((source) => source.name === name)?.park;
+
+  expect(park("parked source")).toEqual({
+    failingSince: minutesAgo(450).toISOString(),
+    sameFailureCycles: 6,
+    nextAttemptAt: new Date(
+      minutesAgo(30).getTime() + 24 * 60 * 60 * 1000,
+    ).toISOString(),
+  });
+  // A failed last event alone is not a park, and neither is a working source.
+  expect(park("briefly failing source")).toBeNull();
+  expect(park("busy source")).toBeNull();
+  expect(park("quiet source")).toBeNull();
+});
+
+test("a park ends once its daily attempt is due", async () => {
+  const status = await getIngestionStatus(scopedDb, {
+    now: new Date(minutesAgo(30).getTime() + 24 * 60 * 60 * 1000),
+  });
+
+  expect(
+    status.sources.find((source) => source.name === "parked source")?.park,
+  ).toBeNull();
+});
+
 test("the last event is the source's own newest run", async () => {
   const status = await readStatus();
 
@@ -282,7 +354,8 @@ test("the fleet event estimate is labelled and follows table statistics", async 
   await db.execute(sql`ANALYZE case_law_ingestion_events`);
   const report = await readStatus();
 
-  expect(report.estimatedTotalEvents).toBe(3);
+  // Three runs for the busy and quiet sources, seven and three for the failing ones.
+  expect(report.estimatedTotalEvents).toBe(13);
   expect(report).not.toHaveProperty("totalEvents");
 });
 

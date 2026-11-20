@@ -263,7 +263,7 @@ beforeAll(async () => {
       const tx = new Proxy(roleTx, {
         get: (target, property, receiver) => {
           if (property !== "execute") {
-            return Reflect.get(target, property, receiver);
+            return Reflect.get(target, property, receiver) as unknown;
           }
           return async (...args: Parameters<typeof roleTx.execute>) =>
             (await roleTx.execute(...args)).rows;
@@ -336,7 +336,11 @@ describe("a version's status is read from its window on today's date", () => {
         const queries: string[] = [];
         const scan = spyOn(corpusClient, "scoredSearch").mockImplementation(
           async (options) => {
-            queries.push(options.query);
+            queries.push(
+              typeof options.query === "string"
+                ? options.query
+                : JSON.stringify(options.query.query),
+            );
             return Result.ok({
               numHits: SEEDS.length,
               hits: SEEDS.map((version, index) => ({

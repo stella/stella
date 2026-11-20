@@ -1,7 +1,5 @@
 import { defineConfig } from "tsdown";
 
-import { resolvePackageBinary } from "../../scripts/resolve-package-binary.ts";
-
 export default defineConfig({
   entry: [
     "src/index.ts",
@@ -14,9 +12,9 @@ export default defineConfig({
   platform: "neutral",
   // Many exports rely on inferred types, so tsrs emits the declarations.
   dts: {
-    generator: "tsgo",
-    tsgo: {
-      path: resolvePackageBinary(import.meta.url, "tsrs"),
+    generator: "tsrs",
+    tsrs: {
+      moduleUrl: import.meta.resolve("tsrs"),
     },
   },
   outDir: "dist",

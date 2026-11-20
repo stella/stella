@@ -405,7 +405,10 @@ describe.skipIf(!runEngineTests)(
         searchCalls.push({
           observer: options.observer,
           indexId: options.indexId,
-          query: options.query,
+          query:
+            typeof options.query === "string"
+              ? options.query
+              : JSON.stringify(options.query.query),
           maxHits: options.size,
           startOffset: options.from,
         });
@@ -579,12 +582,14 @@ describe.skipIf(!runEngineTests)(
     test("strict and relaxed scan rounds never fetch whole statutes through the native endpoint", async () => {
       const nativeStart = nativeScanQueries.length;
       const callStart = searchCalls.length;
+      // A limit no other test here asks for: a repeated search is answered
+      // from the coalescer and reaches no engine.
       await search({
         query: "závazek pohledávka",
         jurisdiction: "CZE",
-        limit: 3,
+        limit: 7,
       });
-      await search({ query: QUERY, jurisdiction: "CZE", limit: 3 });
+      await search({ query: QUERY, jurisdiction: "CZE", limit: 7 });
       expect(searchCalls.length).toBeGreaterThan(callStart);
       expect(nativeScanQueries.slice(nativeStart)).toEqual([]);
     });

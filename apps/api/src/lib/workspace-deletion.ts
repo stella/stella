@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { and, eq, not } from "drizzle-orm";
+import { and, eq, not, sql } from "drizzle-orm";
 
 import {
   WORKSPACE_STATUS,
@@ -18,6 +18,7 @@ import {
   lockMatterAccessAssignments,
   lockMatterAccessWorkspaceRows,
   lockMemberAccessRow,
+  lockOrganizationObjectIntentsForLifecycle,
   lockWorkspaceLifecycle,
   withAggregateTransaction,
 } from "@/api/lib/db/aggregate-lock";
@@ -35,6 +36,11 @@ import { hasCurrentMemberPermission } from "@/api/lib/permission-authorization";
 import { getPgErrorCode, PG_ERROR } from "@/api/lib/pg-error";
 import { flushWorkspaceSearchRepairs } from "@/api/lib/search/projection-repair-flush";
 import { memberReachesMatterSql } from "@/api/lib/workspaces/authorized-workspace-ids";
+import type { LegalHoldActiveError } from "@/api/lib/workspaces/legal-holds/errors";
+import {
+  lockLegalHoldOrganization,
+  requireNoHold,
+} from "@/api/lib/workspaces/legal-holds/holds";
 
 const WORKSPACE_DELETION_DEADLOCK_RETRIES = 2;
 
@@ -70,7 +76,8 @@ type TransactionWorkspaceDeletionOutcome =
   | {
       cleanupRequestIds: SafeId<"entityDeletionCleanupRequest">[];
       status: "deleted";
-    };
+    }
+  | { error: LegalHoldActiveError; status: "legal-hold" };
 
 const lockAuthorizedActorRole = async ({
   actorUserId,
@@ -169,6 +176,8 @@ export const executeAuthorizedWorkspaceDeletion = async (
   ): Promise<TransactionWorkspaceDeletionOutcome> => {
     try {
       return await withAggregateTransaction(database, async (tx) => {
+        await lockOrganizationObjectIntentsForLifecycle(tx, organizationId);
+        await lockLegalHoldOrganization({ tx, organizationId });
         const actorRole = await lockAuthorizedActorRole({
           actorUserId,
           organizationId,
@@ -219,12 +228,24 @@ export const executeAuthorizedWorkspaceDeletion = async (
         if (!authorized) {
           return { status: "not-authorized" } as const;
         }
+        const hold = await requireNoHold({
+          tx,
+          organizationId,
+          target: { type: "matter", workspaceId },
+        });
+        if (hold.isErr()) {
+          // Refused before any write: the locks taken so far end with the
+          // transaction.
+          return { error: hold.error, status: "legal-hold" } as const;
+        }
         if (!workspaceAcceptsWrites(workspace.status)) {
           return { status: "workspace-unavailable" } as const;
         }
 
-        const runningOcrRuns = await tx
-          .select({ id: documentProcessingRuns.id })
+        // A running OCR run or AI flow may still write into the matter; one
+        // statement finds either.
+        const runningWork = await tx
+          .select({ running: sql<number>`1`.as("running") })
           .from(documentProcessingRuns)
           .where(
             and(
@@ -232,22 +253,19 @@ export const executeAuthorizedWorkspaceDeletion = async (
               eq(documentProcessingRuns.status, "running"),
             ),
           )
-          .limit(1);
-        if (runningOcrRuns.length > 0) {
-          return { status: "document-processing-running" } as const;
-        }
-
-        const runningFlowRuns = await tx
-          .select({ id: flowRuns.id })
-          .from(flowRuns)
-          .where(
-            and(
-              eq(flowRuns.workspaceId, workspaceId),
-              eq(flowRuns.status, "running"),
-            ),
+          .unionAll(
+            tx
+              .select({ running: sql<number>`1`.as("running") })
+              .from(flowRuns)
+              .where(
+                and(
+                  eq(flowRuns.workspaceId, workspaceId),
+                  eq(flowRuns.status, "running"),
+                ),
+              ),
           )
           .limit(1);
-        if (runningFlowRuns.length > 0) {
+        if (runningWork.length > 0) {
           return { status: "document-processing-running" } as const;
         }
 
@@ -307,6 +325,9 @@ export const executeAuthorizedWorkspaceDeletion = async (
     return Result.err(transactionResult.error);
   }
 
+  if (transactionResult.value.status === "legal-hold") {
+    return Result.err(transactionResult.value.error);
+  }
   if (transactionResult.value.status !== "deleted") {
     return Result.ok(transactionResult.value);
   }

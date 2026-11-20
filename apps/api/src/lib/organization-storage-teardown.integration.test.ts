@@ -33,7 +33,7 @@ import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   lockObjectCleanupIntentsForWriter,
-  reserveObjectCleanupIntents,
+  reserveObjectCleanupIntentsForKey,
 } from "@/api/lib/buffer-intent-reconciliation";
 import {
   createUserFileKey,
@@ -511,7 +511,7 @@ beforeAll(async () => {
   const scopedSafeDb = asTestRaw<SafeDb>(
     createSafeDb(testDb, [], organizationId, userId),
   );
-  const organizationWriterIntent = await reserveObjectCleanupIntents({
+  const organizationWriterIntent = await reserveObjectCleanupIntentsForKey({
     chatThreadId: globalAttachment.threadId,
     objectKey: organizationWriterKey,
     organizationId,
@@ -565,7 +565,7 @@ beforeAll(async () => {
   if (Result.isError(writerLock)) {
     throw writerLock.error;
   }
-  const foreignOrganizationWriter = await reserveObjectCleanupIntents({
+  const foreignOrganizationWriter = await reserveObjectCleanupIntentsForKey({
     chatThreadId: globalAttachment.threadId,
     objectKey: `another-user/${uuid()}.txt`,
     organizationId,

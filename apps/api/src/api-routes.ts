@@ -8,6 +8,7 @@ import {
 } from "@/api/handlers/agent-auth/routes";
 import { aiAutocompleteRoute } from "@/api/handlers/ai-autocomplete/routes";
 import { aiConfigPublicRoute } from "@/api/handlers/ai-config/routes";
+import { emailAIRoute } from "@/api/handlers/ai/routes";
 import { apiKeysRoute } from "@/api/handlers/api-keys/routes";
 import { auditLogsRoute } from "@/api/handlers/audit-logs/routes";
 import {
@@ -19,20 +20,29 @@ import { bilingualTranslationsRoute } from "@/api/handlers/bilingual-translation
 import { billingCodesRoute } from "@/api/handlers/billing-codes/routes";
 import { caseLawRoute } from "@/api/handlers/case-law/routes";
 import { catalogueRoute } from "@/api/handlers/catalogue/routes";
+import { chatMcpAppsRoute } from "@/api/handlers/chat/mcp-apps/routes";
 import { chatRoute } from "@/api/handlers/chat/routes";
-import { chatRunOutputsRoute } from "@/api/handlers/chat/run-outputs/routes";
+import {
+  chatRunOutputsRoute,
+  desktopRunnerAwaitedStepsRoute,
+} from "@/api/handlers/chat/run-outputs/routes";
 import {
   clauseCategoriesRoute,
   clausesRoute,
 } from "@/api/handlers/clauses/routes";
 import { clientInvoicesRoute } from "@/api/handlers/client-invoices/routes";
+import { conflictChecksRoute } from "@/api/handlers/conflict-checks/routes";
 import { contactsRoute } from "@/api/handlers/contacts/routes";
+import { dataExportsRoute } from "@/api/handlers/data-exports/routes";
 import { desktopFeatureAccessRoute } from "@/api/handlers/desktop-feature-access/routes";
 import { desktopPresenceRoute } from "@/api/handlers/desktop-presence/routes";
 import { desktopRegistryRoute } from "@/api/handlers/desktop-registry/routes";
 import { desktopRunnerRoute } from "@/api/handlers/desktop-runner/routes";
 import { desktopTimeEntriesRoute } from "@/api/handlers/desktop-time-entries/routes";
-import { dictationRoute } from "@/api/handlers/dictation/routes";
+import {
+  desktopDictationRoute,
+  dictationRoute,
+} from "@/api/handlers/dictation/routes";
 import { documentReviewPassagesRoute } from "@/api/handlers/document-reviews/passages-routes";
 import { documentReviewsRoute } from "@/api/handlers/document-reviews/routes";
 import { documentTranslationsRoute } from "@/api/handlers/document-translations/routes";
@@ -50,12 +60,13 @@ import {
   feedbackRoute,
 } from "@/api/handlers/feedback/routes";
 import { fieldsRoute } from "@/api/handlers/fields/routes";
-import { fileContentRoute, filesRoute } from "@/api/handlers/files/routes";
+import { fileContentRoute, filesRoute } from "@/api/handlers/files/route-table";
 import { flowsRoute } from "@/api/handlers/flows/routes";
 import { flowRunsRoute } from "@/api/handlers/flows/run-route";
 import { folioCollabRoute } from "@/api/handlers/folio-collab/routes";
 import { healthRoute } from "@/api/handlers/health/routes";
 import { hostedUsageWebhookRoute } from "@/api/handlers/hosted-usage-webhook/routes";
+import { invoiceLinksRoute } from "@/api/handlers/invoice-links/routes";
 import { invoicesRoute } from "@/api/handlers/invoices/routes";
 import { legalReaderRoute } from "@/api/handlers/legal-reader/routes";
 import { legalResolveRoute } from "@/api/handlers/legal-resolve/routes";
@@ -74,6 +85,7 @@ import { numberSeriesRoute } from "@/api/handlers/number-series/routes";
 import { operatorRoute } from "@/api/handlers/operator/routes";
 import { organizationSettingsRoute } from "@/api/handlers/organization-settings/routes";
 import { organizationsRoute } from "@/api/handlers/organizations/routes";
+import { outboundActionsRoute } from "@/api/handlers/outbound-actions/routes";
 import { playbooksRoute } from "@/api/handlers/playbooks/routes";
 import { playbookRunsRoute } from "@/api/handlers/playbooks/run-route";
 import { propertiesRoute } from "@/api/handlers/properties/routes";
@@ -90,6 +102,7 @@ import { sharepointRoute } from "@/api/handlers/sharepoint/routes";
 import { signalsRoute } from "@/api/handlers/signals/routes";
 import { skillsRoute } from "@/api/handlers/skills/routes";
 import { smokeRoute } from "@/api/handlers/smoke/routes";
+import { softLawRoute } from "@/api/handlers/soft-law/routes";
 import { styleSetsRoute } from "@/api/handlers/style-sets/routes";
 import { syntheticRoute } from "@/api/handlers/synthetic/routes";
 import { myTasksRoute, tasksRoute } from "@/api/handlers/tasks/routes";
@@ -191,12 +204,14 @@ export const apiRoutes = mount([
   visualSandboxRoute,
   aiAutocompleteRoute,
   feedbackPublicRoute,
+  invoiceLinksRoute,
   memoriesRoute,
   notificationsRoute,
   timeApprovalQueueRoute,
   internalTimeEntriesRoute,
   myTimeEntriesRoute,
   timeEntryReportRoute,
+  conflictChecksRoute,
   memberTimeTargetsRoute,
   timeTimersRoute,
   servedIfLoaded(localDevRoutes?.devPublicRoute),
@@ -248,6 +263,7 @@ export const apiRoutes = mount([
       externalPreviewRoute,
       mcpConnectorsRoute,
       sharepointRoute,
+      outboundActionsRoute,
       catalogueRoute,
       organizationSettingsRoute,
       organizationsRoute,
@@ -259,6 +275,7 @@ export const apiRoutes = mount([
       contactsRoute,
       legislationRoute,
       legislationCorpusRoute,
+      softLawRoute,
       publicLegislationRoute,
       publicSanctionsRoute,
       mobileUpdatesRoute,
@@ -272,8 +289,11 @@ export const apiRoutes = mount([
       legalReaderRoute,
       legalResolveRoute,
       chatRoute,
+      chatMcpAppsRoute,
       chatRunOutputsRoute,
+      desktopRunnerAwaitedStepsRoute,
       dictationRoute,
+      emailAIRoute,
       userFilesRoute,
       skillsRoute,
       usageRoute,
@@ -286,6 +306,7 @@ export const apiRoutes = mount([
       workObligationsRoute,
       myWorkRoute,
       accountExportsRoute,
+      dataExportsRoute,
       meRoute,
       servedIfLoaded(localDevRoutes?.devRoute),
       verifyAuthRoute,
@@ -305,5 +326,6 @@ export const apiRoutes = mount([
   desktopPresenceRoute,
   desktopFeatureAccessRoute,
   desktopTimeEntriesRoute,
+  desktopDictationRoute,
   desktopRunnerRoute,
 ]);

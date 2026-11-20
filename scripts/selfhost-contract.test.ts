@@ -2,6 +2,7 @@ import { describe, expect, setDefaultTimeout, test } from "bun:test";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 import { ENV_CATALOG, ENV_OWNER } from "./env-catalog";
 import {
@@ -118,8 +119,7 @@ describe("self-host production environment", () => {
     expect(example).not.toMatch(/^SMTP_HOST=/mu);
 
     for (const entry of ENV_CATALOG.filter(
-      ({ documented, owner }) =>
-        documented && owner !== ENV_OWNER.web && owner !== ENV_OWNER.collab,
+      ({ owner }) => owner !== ENV_OWNER.web && owner !== ENV_OWNER.collab,
     )) {
       expect(
         example.match(new RegExp(`^#? ?${entry.name}=`, "gmu")),
@@ -217,11 +217,11 @@ describe("self-host production environment", () => {
       cmd: [
         process.execPath,
         "--no-env-file",
-        new URL("selfhost-tool.ts", import.meta.url).pathname,
+        fileURLToPath(new URL("selfhost-tool.ts", import.meta.url)),
         "doctor",
         envPath,
       ],
-      cwd: new URL("..", import.meta.url).pathname,
+      cwd: fileURLToPath(new URL("..", import.meta.url)),
       env: isolatedEnvironment,
       stderr: "pipe",
       stdout: "pipe",
@@ -233,7 +233,9 @@ describe("self-host production environment", () => {
         "--env-file",
         envPath,
         "-f",
-        new URL("../docker-compose.selfhost.yml", import.meta.url).pathname,
+        fileURLToPath(
+          new URL("../docker-compose.selfhost.yml", import.meta.url),
+        ),
         "config",
         "--quiet",
       ],

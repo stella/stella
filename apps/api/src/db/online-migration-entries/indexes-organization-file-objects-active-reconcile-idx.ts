@@ -3,6 +3,7 @@ import type { OnlineMigrationEntry } from "../online-migration-entry";
 export default {
   id: "indexes-organization-file-objects-active-reconcile-idx",
   revision: 763,
+  lifecycle: "pending",
   type: "indexes",
   values: [
     {
@@ -11,7 +12,7 @@ export default {
       definitionBody:
         "ON public.organization_file_objects USING btree (reconcile_after, object_key) WHERE ((write_id IS NOT NULL) AND (reconciliation_state = 'active'::text))",
       isUnique: false,
-      introducedBy: "20261108083300_file_reservation_reconciliation_state",
+      introducedBy: "20261120110300_file_reservation_reconciliation_state",
       name: "organization_file_objects_active_reconcile_idx",
       tableName: "organization_file_objects",
     },

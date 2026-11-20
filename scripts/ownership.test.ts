@@ -180,6 +180,7 @@ test("independent row additions merge cleanly and pass the production check", ()
       'export const tableName = "metadata";\n',
     );
     write("apps/api/src/lib/db/transitions.ts", "export {};\n");
+    write("apps/api/src/lib/db/file-object-transitions.ts", "export {};\n");
     write(".gitignore", "node_modules\n");
     symlinkSync(
       path.join(repoRoot, "node_modules"),
@@ -1192,6 +1193,11 @@ test("generated artefact provenance declares exactly its module and table proper
       reason: expect.stringMatching(/\S/u),
     },
     {
+      type: "module",
+      file: "apps/api/src/lib/chat/artefact-provenance.ts",
+      reason: expect.stringMatching(/\S/u),
+    },
+    {
       type: "table-definition",
       file: "apps/api/src/db/schema/chat.ts",
       table: "chat_threads",
@@ -1327,13 +1333,15 @@ test("generated artefact provenance rejects new consumers and transition growth 
     const check = () => checkArtefactProvenance({ root, base: "HEAD" });
     expect(check()).toEqual([]);
     const unknown = "apps/api/src/unregistered.ts";
-    write(
-      unknown,
+    for (const source of [
       'import { generateArtefact } from "@/api/lib/ai-generation/provenance"; generateArtefact({ generator: "example", sources: { decisionIds: [], inputs: [] }, generate: () => "text" });',
-    );
-    expect(
-      check().some((error) => error.includes("unregistered model generator")),
-    ).toBe(true);
+      'import * as p from "@/api/lib/ai-generation/provenance"; p.generateArtefact({ generator: "example", sources: { decisionIds: [], inputs: [] }, generate: () => "text" });',
+    ]) {
+      write(unknown, source);
+      expect(
+        check().some((error) => error.includes("unregistered model generator")),
+      ).toBe(true);
+    }
     rmSync(path.join(root, unknown));
     const known = operations.owner[0];
     write(

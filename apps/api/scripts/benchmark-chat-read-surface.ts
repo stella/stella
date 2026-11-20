@@ -898,6 +898,7 @@ const runBenchTask = async ({
     scopeKey: null,
   });
   const stream = streamChatChunks({
+    threadId: Bun.randomUUIDv7(),
     adapter: model.adapter,
     messages: [
       {

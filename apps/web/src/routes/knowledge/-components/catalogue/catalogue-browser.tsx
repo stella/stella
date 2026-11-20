@@ -174,8 +174,8 @@ const CatalogueBrowser = ({
     onSkillSheetChanged();
     detached(
       navigate({
-        to: "/knowledge/tools/$entry",
-        params: { entry: skill.id },
+        to: "/knowledge/tools/skills/$skillId",
+        params: { skillId: skill.id },
       }),
       "catalogue-browser.navigate",
     );
@@ -187,8 +187,8 @@ const CatalogueBrowser = ({
     }
     detached(
       navigate({
-        to: "/knowledge/tools/$entry",
-        params: { entry: entry.installedSkillId },
+        to: "/knowledge/tools/skills/$skillId",
+        params: { skillId: entry.installedSkillId },
       }),
       "catalogue-browser.navigate",
     );
@@ -242,7 +242,7 @@ const CatalogueBrowser = ({
                         onClick={() => setImportSkillOpen(true)}
                       >
                         <FileDownIcon className="size-4" />
-                        {t("knowledge.agentSkills.importSkill")}
+                        {t("knowledge.agentSkills.importTitle")}
                       </MenuItem>
                     );
                   default: {

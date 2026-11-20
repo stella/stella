@@ -1,31 +1,61 @@
-import { View } from "react-native";
+import { use } from "react";
+import type { PropsWithChildren } from "react";
+
+import { panic } from "better-result";
+import { Share, View } from "react-native";
 import { useTranslations } from "use-intl";
 
+import type { AIErrorKind } from "@stll/api-contract/ai-errors";
+import type { ChatContextNotice } from "@stll/api-contract/chat-context-notice";
+import { MOBILE_REDIRECT_SCHEMES } from "@stll/api-contract/mobile-client";
+import { Button } from "@stll/ui/button";
 import { Text } from "@stll/ui/text";
 
+import {
+  AnswerIntent,
+  AnswerSteps,
+  AnswerSubagent,
+} from "@/components/answer-steps";
 import { ChatAttachmentChip } from "@/components/chat-attachment-chip";
+import {
+  LimitResetChoice,
+  LimitResetMessage,
+} from "@/components/chat-limit-reset";
 import { MarkdownView } from "@/components/markdown-view";
+import { ThreadMatter } from "@/components/thread-matter";
+import { APP_VARIANT } from "@/env";
 import type { SentFile } from "@/state/chat-attachments";
+import { CHAT_FAILURE_KEYS, chatFailureStepsKey } from "@/state/chat-failure";
 import type { ChatEntry } from "@/state/chat-messages";
+import { plainText } from "@/state/markdown";
 
 /**
  * One message. What the person wrote sits in a quiet bubble on the right,
- * under the files they attached; the assistant's answer runs the full width
- * as a document, with the tools it used on the way as quiet one-line notes
- * above it. `uploading` marks the files of a message still going up.
+ * under the files they attached, drawn from its markdown so a mention reads
+ * as the chip of what it names; the assistant's answer runs the full width
+ * as a document, its texts in order with a summary of each run of steps the
+ * model took between them, under what its context left out, if anything,
+ * and why it failed when it did. `uploading` marks the files of a message
+ * still going up; `live` an answer still arriving, whose last run says the
+ * step it is on; `onRetry` answers the message a failed answer was for again;
+ * `onLongPress` opens what a message of the person's offers, such as editing it.
  */
 export const ChatMessage = ({
   entry,
+  live = false,
+  onLongPress,
+  onRetry,
   uploading = false,
 }: {
   entry: ChatEntry;
+  live?: boolean;
+  onLongPress?: (() => void) | undefined;
+  onRetry?: (() => void) | undefined;
   uploading?: boolean;
 }) => {
-  const t = useTranslations("chat");
-
   if (entry.role === "user") {
     return (
-      <View className="items-end gap-1.5">
+      <UserMessage onLongPress={onLongPress}>
         {keyedFiles(entry.files).map(({ file, key }) => (
           <ChatAttachmentChip
             status={uploading ? "busy" : "idle"}
@@ -36,27 +66,192 @@ export const ChatMessage = ({
         ))}
         {entry.text === "" ? null : (
           <View className="bg-secondary max-w-[85%] rounded-2xl rounded-br-md px-3.5 py-2.5">
-            <Text selectable>{entry.text}</Text>
+            <MarkdownView markdown={entry.text} variant="message" />
           </View>
         )}
-      </View>
+      </UserMessage>
     );
   }
 
+  const last = entry.blocks.at(-1);
   return (
-    <View className="gap-1.5 py-1">
-      {entry.tools.map((tool, index) => (
-        <Text
-          // oxlint-disable-next-line react/no-array-index-key -- the same tool can run twice in one answer.
-          key={`${index}:${tool}`}
-          numberOfLines={1}
-          variant="caption"
-        >
-          {t("toolUsed", { tool: tool.replaceAll("_", " ") })}
-        </Text>
-      ))}
-      {entry.text === "" ? null : <MarkdownView markdown={entry.text} />}
+    <View className="gap-2.5 py-1">
+      {entry.contextNotice === null ? null : (
+        <ContextNotice notice={entry.contextNotice} />
+      )}
+      {entry.blocks.map((block) => {
+        switch (block.type) {
+          case "text":
+            return (
+              <MarkdownView
+                key={`text:${block.key}`}
+                markdown={block.markdown}
+              />
+            );
+          case "intent":
+            return (
+              <AnswerIntent key={`intent:${block.key}`} text={block.text} />
+            );
+          case "steps":
+            return (
+              <AnswerSteps
+                block={block}
+                key={`steps:${block.key}`}
+                live={live && block === last}
+              />
+            );
+          case "subagent":
+            return <AnswerSubagent block={block} key={block.key} />;
+          case "steered":
+            return <SteeredMessage key={block.key} text={block.text} />;
+          default:
+            block satisfies never;
+            return panic("Unhandled answer block");
+        }
+      })}
+      {entry.failure === undefined ? null : (
+        <FailedAnswer
+          failure={entry.failure}
+          limitResetsAt={entry.limitResetsAt}
+          onRetry={onRetry}
+        />
+      )}
+      {entry.ranOnModel === undefined ? null : (
+        <RanOnModel model={entry.ranOnModel} />
+      )}
+      {live || entry.text === "" ? null : <ShareAnswer text={entry.text} />}
     </View>
+  );
+};
+
+/**
+ * A message of the person's on the right; a long press, or the screen
+ * reader's action of the same name, opens what it offers.
+ */
+const UserMessage = ({
+  children,
+  onLongPress,
+}: PropsWithChildren<{
+  onLongPress: (() => void) | undefined;
+}>) => {
+  const t = useTranslations("chat");
+  if (onLongPress === undefined) {
+    return <View className="items-end gap-1.5">{children}</View>;
+  }
+  return (
+    <Button
+      accessibilityActions={[{ name: "longpress", label: t("edit.action") }]}
+      className="items-end gap-1.5"
+      onAccessibilityAction={({ nativeEvent }) => {
+        if (nativeEvent.actionName === "longpress") {
+          onLongPress();
+        }
+      }}
+      onLongPress={onLongPress}
+      variant="plain"
+    >
+      {children}
+    </Button>
+  );
+};
+
+/**
+ * Why an answer failed (for a usage limit, when it resets), where to fix it
+ * when that is in stella desktop, and a way to ask again when the thread
+ * offers one. The thread's latest answer stopped by a limit also offers to
+ * continue by itself, or notify, once the limit resets.
+ */
+const FailedAnswer = ({
+  failure,
+  limitResetsAt,
+  onRetry,
+}: {
+  failure: AIErrorKind;
+  limitResetsAt: string | undefined;
+  onRetry: (() => void) | undefined;
+}) => {
+  const t = useTranslations("chat");
+  const steps = chatFailureStepsKey(failure);
+  return (
+    <View className="items-start gap-2">
+      {limitResetsAt === undefined ? (
+        <Text variant="error">
+          {t(`failure.${CHAT_FAILURE_KEYS[failure]}`)}
+        </Text>
+      ) : (
+        <LimitResetMessage resetsAt={limitResetsAt} />
+      )}
+      {steps === null ? null : (
+        <Text variant="caption">{t(`localRun.${steps}`)}</Text>
+      )}
+      {onRetry === undefined ? null : (
+        <Button onPress={onRetry} variant="outline">
+          {t("resend")}
+        </Button>
+      )}
+      {limitResetsAt === undefined || onRetry === undefined ? null : (
+        <LimitResetChoice />
+      )}
+    </View>
+  );
+};
+
+/** The model a coding agent's answer ran on after the harness rerouted it. */
+const RanOnModel = ({ model }: { model: string }) => {
+  const t = useTranslations("chat");
+  return <Text variant="caption">{t("localRun.ranOnModel", { model })}</Text>;
+};
+
+/**
+ * A message the person sent while a coding agent worked, inside the answer
+ * where the agent took it, as their own words rather than a step.
+ */
+const SteeredMessage = ({ text }: { text: string }) => {
+  const t = useTranslations("chat");
+  return (
+    <View className="bg-secondary gap-1 rounded-lg px-2.5 py-2">
+      <Text variant="caption">{t("localRun.steered")}</Text>
+      <Text>{text}</Text>
+    </View>
+  );
+};
+
+/** What the answer's context left out, in the words the web uses. */
+const ContextNotice = ({ notice }: { notice: ChatContextNotice }) => {
+  const t = useTranslations("chat");
+  switch (notice.type) {
+    case "history-trimmed":
+      return <Text variant="caption">{t("historyTrimmed")}</Text>;
+    case "session-not-resumed":
+      return <Text variant="caption">{t("localRun.sessionNotResumed")}</Text>;
+    default:
+      notice satisfies never;
+      return panic("Unhandled context notice");
+  }
+};
+
+/**
+ * Hands a finished answer to the system's share sheet, which copies it too,
+ * as the text a person reads: each mention as its name, no markdown.
+ */
+const ShareAnswer = ({ text }: { text: string }) => {
+  const t = useTranslations("link");
+  const matterId = use(ThreadMatter);
+  return (
+    <Button
+      className="self-start"
+      onPress={() => {
+        const message = plainText(text, {
+          appScheme: MOBILE_REDIRECT_SCHEMES[APP_VARIANT],
+          matterId,
+        });
+        void Share.share({ message });
+      }}
+      size="inline"
+      variant="muted"
+    >
+      <Text variant="caption">{t("share")}</Text>
+    </Button>
   );
 };
 

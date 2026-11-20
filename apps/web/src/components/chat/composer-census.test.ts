@@ -25,8 +25,8 @@ components/ai-suggestions/file-chat-overlay.tsx
 components/ai-suggestions/host.tsx
 components/chat-input-surface.tsx
 components/inspector/chat-tab-panel.tsx
-routes/_protected.chat/-components/chat-thread-page.tsx
-routes/_protected.chat/index.tsx
+routes/_protected.chat/-components/chat-index.page.tsx
+routes/_protected.chat/-components/chat-thread.page.tsx
 routes/dev/-components/chat-composer-reference-playground.tsx
 routes/dev/-components/chat-long-paste-playground.tsx
 routes/knowledge/-components/template-studio-chat.tsx`;
@@ -67,11 +67,13 @@ const sendEntryPoints = {
     controllerSubmit: 1,
     promptBar: 1,
   },
-  "routes/_protected.chat/-components/chat-thread-page.tsx": {
+  "routes/_protected.chat/-components/chat-thread.page.tsx": {
     chatInputSurface: 1,
     controllerSubmit: 1,
   },
-  "routes/_protected.chat/index.tsx": { chatInputSurface: 1 },
+  "routes/_protected.chat/-components/chat-index.page.tsx": {
+    chatInputSurface: 1,
+  },
   "routes/dev/-components/chat-composer-reference-playground.tsx": {
     chatInputSurface: 1,
   },
@@ -84,9 +86,37 @@ const sendEntryPoints = {
   Partial<Record<keyof typeof sendEntryPatterns, number>>
 >;
 
+// Every composer states its model menu, Run on included (the props are
+// required). These are the places that decline the menu or Run on, each
+// saying why where it does: a new one is added here once its surface really
+// cannot run turns on the member's computer.
+const runOnPatterns = {
+  cloudOnly: /\brunOn: "cloud_only"/gu,
+  noModels: /\bmodels=\{null\}/gu,
+  // A `/new` handoff that starts its thread on stella.
+  newThreadOnStella: /\bgetRunTarget: undefined\b/gu,
+};
+const runOnDeclines = {
+  // The file chat edits the open document through the page's review queue.
+  "components/ai-suggestions/file-chat-overlay.tsx": {
+    cloudOnly: 1,
+    newThreadOnStella: 1,
+  },
+  // Ask AI from search has no composer to choose in.
+  "components/search-dialog.tsx": { newThreadOnStella: 1 },
+  // The placeholder shown until the live panel has read its thread.
+  "components/inspector/chat-tab-panel.tsx": { noModels: 1 },
+  "routes/dev/-components/chat-composer-reference-playground.tsx": {
+    noModels: 1,
+  },
+  "routes/dev/-components/chat-long-paste-playground.tsx": { noModels: 1 },
+  // The Studio places fields through its own editor bridge.
+  "routes/knowledge/-components/template-studio-chat.tsx": { noModels: 2 },
+} satisfies Record<string, Partial<Record<keyof typeof runOnPatterns, number>>>;
+
 const followupSurfaces = `components/ai-suggestions/file-chat-overlay.tsx
 components/inspector/chat-tab-panel.tsx
-routes/_protected.chat/-components/chat-thread-page.tsx`;
+routes/_protected.chat/-components/chat-thread.page.tsx`;
 
 describe("chat composer census", () => {
   test("pins every chat editor module", () => {
@@ -145,29 +175,77 @@ describe("chat composer census", () => {
     expect(discovered).toEqual(sendEntryPoints);
   });
 
-  test("every follow-up chip surface gives its editor the same follow-up", () => {
+  test("pins every composer that offers no Run on choice", () => {
+    const discovered: Record<string, Record<string, number>> = {};
+    for (const file of sourceModules) {
+      const source = sourceOf(file);
+      for (const [kind, pattern] of Object.entries(runOnPatterns)) {
+        const count = source.match(pattern)?.length ?? 0;
+        if (count > 0) {
+          discovered[file] = { ...discovered[file], [kind]: count };
+        }
+      }
+    }
+
+    expect(discovered).toEqual(runOnDeclines);
+  });
+
+  test("every composer bar shows where its chat runs and its model as two chips from one owner", () => {
+    // The dock is the composer bar of every surface (the new chat, the
+    // thread page, the inspector tab, the file chat); its models come from
+    // `useChatComposerModels`, which owns both choices.
+    const chipRenderers = sourceModules.filter((file) =>
+      /<ChatComposerChips\b/u.test(sourceOf(file)),
+    );
+    expect(chipRenderers).toEqual(["components/chat/chat-composer-dock.tsx"]);
+    const chips = sourceOf("components/chat/chat-model-selector.tsx");
+    expect(chips).toMatch(/<ChatRunOnChip\b/u);
+    expect(chips).toMatch(/<ChatModelSelector\b/u);
+    // Neither chip, nor the where menu, renders anywhere else.
+    const strays = sourceModules.filter(
+      (file) =>
+        file !== "components/chat/chat-model-selector.tsx" &&
+        /<(?:ChatRunOnChip|ChatModelSelector|ChatRunTargetMenu)\b/u.test(
+          sourceOf(file),
+        ),
+    );
+    expect(strays).toEqual([]);
+    for (const surface of [
+      "routes/_protected.chat/-components/chat-index.page.tsx",
+      "routes/_protected.chat/-components/chat-thread.page.tsx",
+      "components/inspector/chat-tab-panel.tsx",
+    ]) {
+      const source = sourceOf(surface);
+      expect(source).toMatch(/\buseChatComposerModels\(/u);
+      expect(source).toMatch(
+        /<ChatComposerDock\b[\s\S]*?models=\{composerModels\.models\}/u,
+      );
+    }
+  });
+
+  test("follow-ups appear only under the answer they follow", () => {
+    // Every surface that fetches suggestions hands them to the transcript,
+    // which draws them after the answer's actions; none draws its own row
+    // over the answer or beside the composer.
     const discovered = sourceModules.filter((file) =>
-      /<SuggestedFollowupChips\b/u.test(sourceOf(file)),
+      /\buseSuggestedFollowupPrompts\s*\(/u.test(sourceOf(file)),
     );
     expect(discovered.join("\n")).toBe(followupSurfaces);
 
     const failures: string[] = [];
     for (const file of discovered) {
-      const source = sourceOf(file);
-      const sharesFollowupSource =
-        /const\s*\{[\s\S]*?suggestedFollowupPrompt[\s\S]*?\}\s*=\s*useSuggestedFollowupPrompts\s*\(/u.test(
-          source,
-        );
-      const givesFollowupToEditor =
-        /useChatEditor\s*\(\s*\{[\s\S]*?suggestedFollowupPrompt[\s\S]*?\}\s*\)/u.test(
-          source,
-        );
-      if (!sharesFollowupSource || !givesFollowupToEditor) {
+      if (!/<ChatThreadMessages\b[\s\S]*?followUps=\{/u.test(sourceOf(file))) {
         failures.push(
-          `${file} renders SuggestedFollowupChips but its shared composer does not pass suggestedFollowupPrompt to useChatEditor`,
+          `${file} fetches follow-ups but does not give them to ChatThreadMessages`,
         );
       }
     }
     expect(failures).toEqual([]);
+    const drawers = sourceModules.filter(
+      (file) =>
+        file !== "features/chat/components/suggested-followups.tsx" &&
+        /<SuggestedFollowups\b/u.test(sourceOf(file)),
+    );
+    expect(drawers).toEqual(["components/chat/chat-thread-messages.tsx"]);
   });
 });

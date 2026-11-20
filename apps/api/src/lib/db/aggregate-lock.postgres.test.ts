@@ -23,6 +23,7 @@ import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-del
 import { withInterleaving } from "@/api/tests/helpers/transaction-interleaving";
 
 import {
+  lockOrganizationObjectIntentFence,
   withAggregateLock,
   withAggregateRowQuery,
   withAggregateSavepoint,
@@ -140,6 +141,12 @@ const advisoryAcquisitions = () => {
         id: "global",
         tx,
       }),
+    corpusProjectionOfflineRequest: async (tx: AggregateAcquireTransaction) =>
+      await withAggregateLock({
+        aggregate: "corpusProjectionOfflineRequest",
+        id: "0198e331-e578-7000-8000-0000000000b7",
+        tx,
+      }),
     legislationAmendmentWork: async (tx: AggregateAcquireTransaction) =>
       await withAggregateLock({
         aggregate: "legislationAmendmentWork",
@@ -188,6 +195,12 @@ const advisoryAcquisitions = () => {
       await withAggregateLock({
         aggregate: "automatedFlowRunCap",
         id: definitionId,
+        tx,
+      }),
+    invoiceSendCapacity: async (tx: AggregateAcquireTransaction) =>
+      await withAggregateLock({
+        aggregate: "invoiceSendCapacity",
+        id: { organizationId },
         tx,
       }),
     contactCapacity: async (tx: AggregateAcquireTransaction) =>
@@ -289,14 +302,17 @@ const advisoryCases = () => {
       tryLegacy: (tx: LockTransaction) =>
         tx.execute(
           sql`SELECT pg_try_advisory_xact_lock(hashtext('contact_capacity'), hashtext(${organizationId})) AS acquired`,
+          "objects",
         ),
       acquireLegacy: (tx: LockTransaction) =>
         tx.execute(
           sql`SELECT pg_advisory_xact_lock(hashtext('contact_capacity'), hashtext(${organizationId}))`,
+          "objects",
         ),
       legacyMetadata: (tx: LockTransaction) =>
         tx.execute(
           sql`SELECT hashtext('contact_capacity') AS key1, hashtext(${organizationId}) AS key2`,
+          "objects",
         ),
     },
     {
@@ -316,14 +332,17 @@ const advisoryCases = () => {
       tryLegacy: (tx: LockTransaction) =>
         tx.execute(
           sql`SELECT pg_try_advisory_xact_lock(hashtext(${organizationId}), hashtext(${userId})) AS acquired`,
+          "objects",
         ),
       acquireLegacy: (tx: LockTransaction) =>
         tx.execute(
           sql`SELECT pg_advisory_xact_lock(hashtext(${organizationId}), hashtext(${userId}))`,
+          "objects",
         ),
       legacyMetadata: (tx: LockTransaction) =>
         tx.execute(
           sql`SELECT hashtext(${organizationId}) AS key1, hashtext(${userId}) AS key2`,
+          "objects",
         ),
     },
   ];
@@ -460,7 +479,7 @@ if (!databaseUrl || !enabled) {
                       });
                       expect(
                         executedRows(
-                          await tx.execute(sql`SELECT 1 AS healthy`),
+                          await tx.execute(sql`SELECT 1 AS healthy`, "objects"),
                         ).at(0),
                       ).toEqual({ healthy: 1 });
                     },
@@ -565,6 +584,7 @@ if (!databaseUrl || !enabled) {
               ).toEqual({ status: "locked" });
               const state = await tx.execute(
                 sql`SELECT status FROM public.workspaces WHERE id = ${workspaceId}::uuid`,
+                "objects",
               );
               expect(state.at(0)?.["status"]).toBe("archived");
               expect(
@@ -756,6 +776,7 @@ if (!databaseUrl || !enabled) {
           await tx.execute(sql`INSERT INTO savepoint_no_locks VALUES (4)`);
           const rows = await tx.execute(
             sql`SELECT id FROM savepoint_no_locks ORDER BY id`,
+            "objects",
           );
           expect(rows.map((row) => row["id"])).toEqual([1, 4]);
         });
@@ -798,6 +819,7 @@ if (!databaseUrl || !enabled) {
           );
           const parent = await tx.execute(
             sql`SELECT id FROM released_savepoint_effects ORDER BY id`,
+            "objects",
           );
           expect(parent.map((row) => row["id"])).toEqual([2]);
         });
@@ -838,6 +860,39 @@ if (!databaseUrl || !enabled) {
       });
     });
 
+    test("the object-intent fence holds the registered and the previous build's lock after one statement", async () => {
+      await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+        const statements: string[] = [];
+        const { db } = openClient({
+          logger: {
+            logQuery: (query) => {
+              statements.push(query);
+            },
+          },
+        });
+        const organizationId = mintAuthProviderId<"organization">();
+        for (const mode of ["shared", "exclusive"] as const) {
+          await db.transaction(async (tx) => {
+            const before = statements.length;
+            await lockOrganizationObjectIntentFence(tx, organizationId, mode);
+            expect(statements.length - before).toBe(1);
+            const held = executedRows(
+              await tx.execute(
+                sql`SELECT objsubid, mode FROM pg_locks WHERE locktype = 'advisory' AND pid = pg_backend_pid() AND granted ORDER BY objsubid`,
+              ),
+            );
+            const lockMode = mode === "shared" ? "ShareLock" : "ExclusiveLock";
+            // objsubid 1: the previous build's one-key lock; 2: the
+            // registered two-key aggregate lock.
+            expect(held).toEqual([
+              { objsubid: 1, mode: lockMode },
+              { objsubid: 2, mode: lockMode },
+            ]);
+          });
+        }
+      });
+    });
+
     test("every advisory aggregate derives a key PostgreSQL accepts", async () => {
       await withGatedTestClients(databaseUrl, async ({ openClient }) => {
         const { db } = openClient();
@@ -864,7 +919,7 @@ if (!databaseUrl || !enabled) {
           await holder.db.transaction(async (tx) => {
             const captured: unknown[] = [];
             const execute = async (statement: SQL) => {
-              const result = await tx.execute(statement);
+              const result = await tx.execute(statement, "objects");
               captured.push(result);
               return result;
             };

@@ -276,6 +276,18 @@ const PROVIDER_CALL_ERROR_RETRYABILITY = {
   local_runner_limit_reached: false,
   local_runner_unavailable: false,
   local_runner_turn_too_large: false,
+  // Named by the chat turn's delivery log, never by a provider call here.
+  turn_too_large: false,
+  local_runner_not_reached: false,
+  local_runner_relinked: false,
+  local_runner_restoring: false,
+  local_runner_folder_unavailable: false,
+  local_runner_no_computer: false,
+  local_runner_harness_unavailable: false,
+  local_runner_model_unavailable: false,
+  local_runner_reasoning_effort_unavailable: false,
+  local_runner_approvals_unavailable: false,
+  local_runner_folder_not_approved: false,
   unknown: false,
 } as const satisfies Record<AIErrorKind, boolean>;
 
@@ -1501,6 +1513,7 @@ const runToolProbe = async ({
   };
 
   const stream = streamChatChunks({
+    threadId: Bun.randomUUIDv7(),
     adapter: model.adapter,
     abortController: abortControllerFromSignal(signal),
     agentLoopStrategy: maxIterations(2),
