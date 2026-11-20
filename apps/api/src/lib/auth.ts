@@ -2450,8 +2450,12 @@ export const createAuth = (
             const data = accountPolicy?.data ?? session;
             const lifetime = decidePinnedSessionLifetime(data);
             // Every session is created with its SSO provenance decided:
-            // the verified provider on its own callback, null elsewhere.
-            const provenance = await ssoSessionProvenance(ctx);
+            // the verified provider on its own callback, the signed-in
+            // session's when it replaces that session, null elsewhere.
+            const provenance = await ssoSessionProvenance(
+              ctx,
+              toSafeId<"user">(session.userId),
+            );
             return { data: { ...data, ...lifetime, ...provenance } };
           },
           // Aborting here, before Better Auth sets any cookie, issues neither

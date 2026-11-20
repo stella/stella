@@ -1,3 +1,4 @@
+import { symmetricEncrypt } from "better-auth/crypto";
 import { panic } from "better-result";
 import { afterAll, describe, expect, setDefaultTimeout, test } from "bun:test";
 import { and, eq, sql } from "drizzle-orm";
@@ -21,6 +22,7 @@ import { getAuthEndpointUrl } from "@/api/lib/auth/auth-paths";
 import type { MemberAuthentication } from "@/api/lib/auth/member-authorization";
 import { ORGANIZATION_ENDPOINT_SSO } from "@/api/lib/auth/sso-organization-guard";
 import { sealText } from "@/api/lib/db/sealed-text";
+import { readDevOtp } from "@/api/lib/dev-otp-store";
 import { defineEndpoint } from "@/api/lib/endpoints";
 import { errorBoundary } from "@/api/lib/observability/request-lifecycle";
 import { isPgConstraintError, isPgError, PG_ERROR } from "@/api/lib/pg-error";
@@ -97,6 +99,49 @@ const providerFixture = async (name: string) => {
   const provider = await registerProvider(testDb, organization.id, [domain]);
   return { owner, organization, domain, provider };
 };
+
+/** The cookies a response sets, as the next request's cookie header. */
+const cookieHeaderOf = (response: Response): string =>
+  response.headers
+    .getSetCookie()
+    .map((cookie) => cookie.split(";").at(0) ?? "")
+    .join("; ");
+
+/** The SSO provenance stored on the session a cookie header carries. */
+const storedProvenance = async (cookieHeader: string) => {
+  const current = await sessionOf(cookieHeader);
+  return await testDb
+    .select({ ssoProviderId: session.ssoProviderId })
+    .from(session)
+    .where(eq(session.id, current?.session.id ?? panic("no session")));
+};
+
+/** An email-code sign-in from a browser that may already hold a session. */
+const signInWithEmailCode = async (email: string, cookieHeader: string) => {
+  await getAuth().api.sendVerificationOTP({ body: { email, type: "sign-in" } });
+  return await getAuth().api.signInEmailOTP({
+    body: {
+      email,
+      otp: readDevOtp(email) ?? panic("dev OTP not stashed"),
+    },
+    headers: new Headers({ cookie: cookieHeader }),
+    asResponse: true,
+  });
+};
+
+/** A browser posting an authenticator code, as the web client does. */
+const verifyTotp = async (cookieHeader: string, code: string) =>
+  await getAuth().handler(
+    new Request(getAuthEndpointUrl("two-factor/verify-totp"), {
+      method: "POST",
+      headers: {
+        cookie: cookieHeader,
+        "content-type": "application/json",
+        origin: new URL(env.FRONTEND_URL).origin,
+      },
+      body: JSON.stringify({ code }),
+    }),
+  );
 
 describe("organization SSO", () => {
   test("is hidden while the deployment switch is off, and decides nothing", async () => {
@@ -413,6 +458,72 @@ describe("organization SSO", () => {
       .from(user)
       .where(eq(user.id, signedIn.userId ?? panic("the sign-in was refused")));
     expect(created).toEqual([{ email, emailVerified: true }]);
+  });
+
+  test("keeps an SSO session's provenance when local two-factor enrollment replaces it, and starts every new sign-in without it", async () => {
+    testState.setConfig("FEATURE_ENTERPRISE_SSO", true);
+    const idp = await createIdentityProvider();
+    const { organization, provider, domain } = await providerFixture("enroll");
+    const email = `enroll-${unique()}@${domain}`;
+    const viaSso = await signInWithSso(
+      idp,
+      provider.providerId,
+      verifiedClaims(`enroll-${unique()}`, email),
+    );
+    const userId = viaSso.userId ?? panic("the sign-in was refused");
+    await addMember(testDb, organization.id, userId);
+    await setSsoRequirement(testDb, organization.id, "required");
+    expect(await storedProvenance(viaSso.cookieHeader())).toEqual([
+      { ssoProviderId: provider.id },
+    ]);
+
+    // Another sign-in method, from the browser that holds the SSO session,
+    // authenticates anew.
+    const viaCode = await signInWithEmailCode(email, viaSso.cookieHeader());
+    expect(viaCode.status).toBe(200);
+    expect(await storedProvenance(cookieHeaderOf(viaCode))).toEqual([
+      { ssoProviderId: null },
+    ]);
+
+    // Enrollment pending, as `/two-factor/enable` leaves it; verifying the
+    // first code replaces the signed-in SSO session.
+    const secret = `enroll-totp-${unique()}`;
+    const key = (await getAuth().$context).secretConfig;
+    await testDb.insert(twoFactor).values({
+      id: Bun.randomUUIDv7(),
+      userId,
+      secret: await symmetricEncrypt({ key, data: secret }),
+      backupCodes: await symmetricEncrypt({ key, data: "[]" }),
+      verified: false,
+    });
+    const totp = async () =>
+      (await getAuth().api.generateTOTP({ body: { secret } })).code;
+    const original = await sessionOf(viaSso.cookieHeader());
+    const enrolled = await verifyTotp(viaSso.cookieHeader(), await totp());
+    expect(enrolled.status).toBe(200);
+    const replacement = await sessionOf(cookieHeaderOf(enrolled));
+    expect(replacement?.session.id).toBeString();
+    expect(replacement?.session.id).not.toBe(original?.session.id);
+    expect(await storedProvenance(cookieHeaderOf(enrolled))).toEqual([
+      { ssoProviderId: provider.id },
+    ]);
+    expect(
+      await ssoAccessFor(
+        organization.id,
+        userId,
+        browserSession(replacement?.session.id),
+      ),
+    ).toBe("satisfied");
+
+    // A sign-in whose first factor was not SSO stays without provenance
+    // through its second factor.
+    const pending = await signInWithEmailCode(email, "");
+    expect(pending.status).toBe(200);
+    const completed = await verifyTotp(cookieHeaderOf(pending), await totp());
+    expect(completed.status).toBe(200);
+    expect(await storedProvenance(cookieHeaderOf(completed))).toEqual([
+      { ssoProviderId: null },
+    ]);
   });
 
   test("a provider recreated under the same id does not inherit the earlier provider's identities or sessions", async () => {

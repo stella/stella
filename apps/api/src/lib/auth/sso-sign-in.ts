@@ -1,7 +1,11 @@
-import type { BetterAuthPlugin } from "@better-auth/core";
+import type {
+  BetterAuthPlugin,
+  GenericEndpointContext,
+} from "@better-auth/core";
 import { createAuthMiddleware } from "@better-auth/core/api";
 import {
   defineRequestState,
+  getCurrentAdapter,
   tryGetCurrentAuthEndpointContext,
 } from "@better-auth/core/context";
 import { APIError } from "@better-auth/core/error";
@@ -13,10 +17,13 @@ import type {
   SSOUserResolutionInput,
 } from "@better-auth/sso";
 import { sso } from "@better-auth/sso";
+import { getSessionFromCtx } from "better-auth/api";
 import { panic } from "better-result";
 import * as v from "valibot";
 
 import { SSO_PROVIDER_ID_PATTERN } from "@/api/db/auth-schema";
+import { isSessionCreatingAuthPath } from "@/api/lib/auth/session-path-classification";
+import type { SafeId } from "@/api/lib/branded-types";
 import { isEnterpriseSsoDeployed } from "@/api/lib/db/sso-access";
 import { normalizeEmail } from "@/api/lib/email/normalized-email";
 import { isRecord } from "@/api/lib/type-guards";
@@ -258,19 +265,46 @@ const resolveSsoUser = async (
 };
 
 /**
- * The `sso_provider_id` a session is created with: the provider row the
- * request's callback verified, on that provider's callback only, and null on
- * every other endpoint whatever the data says. A callback whose verified
- * provider is missing or differs refuses the session.
+ * The `sso_provider_id` a session is created with, whatever the data says:
+ *
+ * - on a provider's callback, the provider row the callback verified; a
+ *   callback whose verified provider is missing or differs refuses the
+ *   session;
+ * - on any other sign-in endpoint, null: it authenticates anew, whatever
+ *   session the request already carries;
+ * - elsewhere, the stored provenance of the session the request is signed in
+ *   with, when the new session is that user's: Better Auth replaces the
+ *   signed-in session when it enrolls or removes a second factor, and the
+ *   replacement authenticates no differently. Null when the request carries
+ *   no session, as on a pending sign-in's second step.
  */
 export const ssoSessionProvenance = async (
-  ctx: SsoEndpoint | null | undefined,
+  ctx: GenericEndpointContext | null,
+  userId: SafeId<"user">,
 ): Promise<{ ssoProviderId: string | null }> => {
   const callbackProviderId = ssoCallbackProviderId(ctx);
-  if (callbackProviderId === undefined) {
+  if (callbackProviderId !== undefined) {
+    return { ssoProviderId: await verifiedProviderRecord(callbackProviderId) };
+  }
+  if (ctx === null || isSessionCreatingAuthPath(ctx.path)) {
     return { ssoProviderId: null };
   }
-  return { ssoProviderId: await verifiedProviderRecord(callbackProviderId) };
+  const signedIn = await getSessionFromCtx(ctx);
+  if (signedIn === null || signedIn.user.id !== userId) {
+    return { ssoProviderId: null };
+  }
+  // The stored row, read in the auth layer's current transaction: the
+  // provenance is never returned, so the session object does not carry it.
+  const adapter = await getCurrentAdapter(ctx.context.adapter);
+  const stored = await adapter.findOne<{ ssoProviderId: string | null }>({
+    model: "session",
+    where: [
+      { field: "id", value: signedIn.session.id },
+      { field: "userId", value: userId },
+    ],
+    select: ["ssoProviderId"],
+  });
+  return { ssoProviderId: stored?.ssoProviderId ?? null };
 };
 
 /**
