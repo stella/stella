@@ -6,7 +6,6 @@ ignore = []
 [licenses]
 allow = [
   "Apache-2.0",
-  "BSD-3-Clause",
   "MIT",
   "MPL-2.0",
   "Unicode-3.0",

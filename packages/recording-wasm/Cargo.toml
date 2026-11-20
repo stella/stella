@@ -32,6 +32,6 @@ incremental = false
 # The reader is the desktop's own crate, so a recording is cut into the same
 # pieces wherever it is transcribed.
 [dependencies]
-stella-desktop-recording = { path = "../../apps/desktop/src-tauri/crates/recording" }
+stella-desktop-recording = { version = "=0.0.1", path = "../../apps/desktop/src-tauri/crates/recording" }
 symphonia-core = { version = "=0.6.1", default-features = false }
 wasm-bindgen = "=0.2.130"
