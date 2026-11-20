@@ -5,10 +5,7 @@
 import { describe, expect, test } from "bun:test";
 import { and, eq, sql } from "drizzle-orm";
 
-import {
-  DECISION_IDENTIFIER_TYPES,
-  normalizeStructuredDecisionIdentifier,
-} from "@stll/legal-ast/decision-identifier";
+import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 
 import type { ScopedDb } from "@/api/db/safe-db";
@@ -1232,16 +1229,11 @@ if (!databaseUrl || !runPostgresTests) {
         language: "cs",
         fulltext: "host decision",
       });
-      const declared = ["3 VSPH 1361/2023-B-24", "3 VSPH 1361/2023-B-25"].map(
-        (value) => ({
-          type: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
-          value,
-          normalizedValue: normalizeStructuredDecisionIdentifier({
-            type: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
-            value,
-          }),
-        }),
-      );
+      const declared = ["R 12/2024", "R 13/2024"].map((value) => ({
+        type: DECISION_IDENTIFIER_TYPES.REPORTER_CITATION,
+        value,
+        normalizedValue: value.toLocaleLowerCase("cs"),
+      }));
       await db.insert(caseLawDecisionIdentifiers).values(
         declared.map((identifier) => ({
           decisionId: hostId,
@@ -1299,7 +1291,7 @@ if (!databaseUrl || !runPostgresTests) {
         .select({ value: caseLawDecisionIdentifiers.value })
         .from(caseLawDecisionIdentifiers)
         .where(eq(caseLawDecisionIdentifiers.decisionId, hostId));
-      expect(identifiers).toEqual([{ value: "3 VSPH 1361/2023-B-25" }]);
+      expect(identifiers).toEqual([{ value: "R 13/2024" }]);
       expect(deleted).toEqual([`case-law/raw/${hostId}/65350048`]);
       await db
         .delete(caseLawHeldDecisionAttachments)

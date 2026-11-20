@@ -313,6 +313,7 @@ export const FAILURE_TAGS = [
   "InvalidScopeInputError",
   "InvalidUuidError",
   "InvoicingInputError",
+  "IsirLookupBudgetError",
   "JustificationDataError",
   "JustificationTextError",
   "KsefError",

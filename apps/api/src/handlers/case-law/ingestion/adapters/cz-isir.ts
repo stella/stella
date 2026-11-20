@@ -129,6 +129,7 @@ import {
   CZ_ISIR_METADATA_KEY,
   type CzIsirDecisionMetadata,
 } from "@/api/lib/legal-search/cz-isir-decision";
+import { EMPTY_AST } from "@/api/lib/legal-search/document-types";
 import {
   ADAPTER_KEYS,
   ADAPTER_TIMEOUT,
@@ -594,7 +595,7 @@ export const buildCzIsirDecision = ({
 }: {
   action: CzIsirAction;
   paragraphs: readonly CzIsirParagraph[];
-}): CzIsirDecisionRead => {
+}): Exclude<CzIsirDecisionRead, { type: "unread" }> => {
   const documentId = action.documentId;
   if (documentId === null) {
     return panic("A decision action without a document reached the build");
@@ -716,6 +717,7 @@ export const czIsirListingOnlyDecision = (
       }),
       rawHash: sourceFingerprint({ sourceRaw }),
       parserVersion: PARSER_VERSIONS[ADAPTER_KEYS.CZ_ISIR],
+      documentAst: EMPTY_AST,
       sourceRaw,
       sourceRawContentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
     }),

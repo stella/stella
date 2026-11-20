@@ -328,6 +328,9 @@ export const TAGGED_FAILURE_REASON = {
   InvalidScopeInputError: "tagged_failure",
   InvalidUuidError: "tagged_failure",
   InvoicingInputError: "tagged_failure",
+  // A lookup the register's request budget cannot pay for: the register is
+  // not asked, and the caller is told it is unavailable for now.
+  IsirLookupBudgetError: "upstream_unavailable",
   JustificationDataError: "tagged_failure",
   JustificationTextError: "tagged_failure",
   KsefError: "tagged_failure",
