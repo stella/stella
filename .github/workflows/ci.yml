@@ -5020,15 +5020,17 @@ jobs:
           if-no-files-found: error
           retention-days: 1
 
+      - name: Startup gate base
+        timeout-minutes: 5
+        env:
+          BASE_SHA: ${{ needs.ci-plan.outputs.target_base_sha }}
+        run: bash scripts/startup-gate-base.sh
+
       - name: Startup bundle gates
-        # Blocking: the initial chunks' gzip against the committed budget, the
-        # eager pending views, page code in the initial chunks, and pages a
-        # route loads outside its preloads (scripts/bundle-startup-gates.ts).
-        # Reads the build above and its hidden sourcemaps; writes a table to
-        # the job summary.
+        # Blocking: the startup graph's gates (scripts/bundle-startup-gates.ts).
         run: |
           bun scripts/bundle-baseline.ts --self-test
-          bun --preload ./scripts/offline-network-preload.ts scripts/bundle-baseline.ts --check
+          bun --preload ./scripts/offline-network-preload.ts scripts/bundle-baseline.ts --check --base-dir "$STARTUP_GATE_BASE_DIR"
 
       - name: Bundle duplicate content guard
         # Blocking: a chunk that repeats a large block of identical content
@@ -5405,7 +5407,7 @@ jobs:
       - name: Check route network baseline
         if: ${{ !cancelled() && steps.checkout.outcome == 'success' }}
         continue-on-error: ${{ github.event_name == 'merge_group' }}
-        timeout-minutes: 6
+        timeout-minutes: 8
         id: network-baseline
         env:
           PLAYWRIGHT_JSON_OUTPUT_FILE: ${{ github.workspace }}/.cache/playwright-timings/check-route-network-baseline.json

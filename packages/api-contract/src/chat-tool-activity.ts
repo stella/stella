@@ -27,6 +27,8 @@ type ChatToolDisplay = {
 
 /** Every tool the chat registers today. */
 const BUILT_IN_CHAT_TOOL_DISPLAY = {
+  calendar_list_events: { category: "research", label: "calendar_list_events" },
+  calendar_free_busy: { category: "research", label: "calendar_free_busy" },
   show_visual: { category: "artifact", label: "show_visual" },
   show_app: { category: "artifact", label: "show_app" },
   add_comment: { category: "mutation", label: "add_comment" },
@@ -463,6 +465,9 @@ const RESEARCH_TOOL_READ_AREA = {
   boe_search_legislation: "legislation",
   borme_get_summary: "registers",
   business_registry_lookup: "registers",
+  // The caller's own Outlook calendar is neither legal research nor a document.
+  calendar_free_busy: "other",
+  calendar_list_events: "other",
   compare_versions: "openDocument",
   counterparty_check: "registers",
   "describe-stella-api": null,

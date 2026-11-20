@@ -11,6 +11,7 @@ import { DECISION_PARAGRAPH_RANGE_RUNTIME_ONLY_CHECKS } from "@stll/api-contract
 import { DISPLAY_NAME_RUNTIME_ONLY_ACTIONS } from "@stll/api-contract/display-name";
 import { wireValueOf } from "@stll/api-contract/http-input";
 import { keepUnicodePatternSource } from "@stll/api-contract/json-schema-regex";
+import { MICROSOFT365_CALENDAR_RUNTIME_ONLY_CHECKS } from "@stll/api-contract/microsoft365";
 import { RECORD_CELL_RUNTIME_ONLY_CHECKS } from "@stll/api-contract/record-cell";
 import { RECORD_SCHEMA_RUNTIME_ONLY_CHECKS } from "@stll/api-contract/record-schema";
 import { UUID_RUNTIME_ONLY_ACTIONS } from "@stll/api-contract/uuid";
@@ -81,6 +82,7 @@ const RUNTIME_ONLY_ACTIONS: ReadonlySet<unknown> = new Set([
   ...ANALYSIS_RUNTIME_ONLY_CHECKS,
   ...DECISION_IDENTIFIER_RUNTIME_ONLY_CHECKS,
   ...DECISION_PARAGRAPH_RANGE_RUNTIME_ONLY_CHECKS,
+  ...MICROSOFT365_CALENDAR_RUNTIME_ONLY_CHECKS,
   ...DOCUMENT_AST_RUNTIME_ONLY_ACTIONS,
   ...DISPLAY_NAME_RUNTIME_ONLY_ACTIONS,
   ...RECORD_CELL_RUNTIME_ONLY_CHECKS,
@@ -93,6 +95,7 @@ const RUNTIME_ONLY_CHECK_REQUIREMENTS: ReadonlySet<unknown> = new Set(
     ...ANALYSIS_RUNTIME_ONLY_CHECKS,
     ...DECISION_IDENTIFIER_RUNTIME_ONLY_CHECKS,
     ...DECISION_PARAGRAPH_RANGE_RUNTIME_ONLY_CHECKS,
+    ...MICROSOFT365_CALENDAR_RUNTIME_ONLY_CHECKS,
     ...RECORD_CELL_RUNTIME_ONLY_CHECKS,
     ...RECORD_SCHEMA_RUNTIME_ONLY_CHECKS,
   ].map(({ requirement }) => requirement),

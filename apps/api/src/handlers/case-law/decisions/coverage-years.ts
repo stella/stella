@@ -104,6 +104,11 @@ const COVERAGE_SLICE_GRAMMAR = {
     type: "year-prefix",
     undated: [CZ_NS_SBIRKA_VAZNY_SLICE],
   },
+  [ADAPTER_KEYS.CZ_ISIR]: {
+    type: "not-reconciled",
+    reason:
+      "The register's feed is partitioned into action-id blocks, not calendar years.",
+  },
 } as const satisfies Record<AdapterKey, CoverageSliceGrammar>;
 
 const COVERAGE_SLICE_GRAMMAR_BY_KEY: ReadonlyMap<string, CoverageSliceGrammar> =

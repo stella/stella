@@ -2403,6 +2403,8 @@
       "boe_search_legislation": "BOE teisės aktų paieška",
       "borme_get_summary": "BORME dienos suvestinė",
       "business_registry_lookup": "Ieškoma įmonių registre",
+      "calendar_free_busy": "Tikrinti laisvą laiką kalendoriuje",
+      "calendar_list_events": "Skaityti kalendoriaus įvykius",
       "command_execution": "Vykdoma komanda",
       "compare_versions": "Lyginamos versijos",
       "configure_template_fields": "Konfigūruoti šablono laukus",
@@ -5408,6 +5410,11 @@
       "googleKeyRestricted": "Patikrinkite šio rakto API, IP adresų ir nukreipiančių svetainių apribojimus Google Cloud. Leiskite reikiamą API ir savo serverio užklausas, tada bandykite dar kartą.",
       "keepSavedKey": "Palikti išsaugotą raktą",
       "keyFormatHint": "Šio rakto formatas neįprastas teikėjui {provider}. Išsaugokite, kad teikėjas jį patikrintų.",
+      "keyNeed": {
+        "builtIn": "Neprivaloma. Be savo rakto šios organizacijos DI naudoja stella teikiamus modelius.",
+        "keyRequired": "Šios organizacijos DI reikia teikėjo rakto. Pridėkite jį, kad įjungtumėte DI.",
+        "ownKeys": "Šios organizacijos DI naudoja toliau nurodytus raktus."
+      },
       "modelForRole": "{role} modelis",
       "modelIdPlaceholder": "Ieškoti modelių",
       "modelsDescription": "Kiekvienai DI kategorijai pasirinkite teikėją ir vieną siūlomą multimodalinį modelį.",
@@ -5415,6 +5422,7 @@
       "newApiKey": "Naujas API raktas",
       "newApiKeyDescription": "Išsaugojus pakeitimus jis pakeis išsaugotą raktą.",
       "noModelResults": "Nėra atitinkančių siūlomų modelių",
+      "noProviders": "Teikėjų raktų dar nepridėta.",
       "openaiInsufficientQuota": "Patikrinkite OpenAI projekto biudžetą ir API atsiskaitymo nustatymus. Papildykite kreditų likutį arba padidinkite atitinkamą limitą ir bandykite dar kartą.",
       "openaiProjectOrganizationMismatch": "Naudokite reikiamo OpenAI projekto ir organizacijos API raktą. Patikrinkite jų prieigos nustatymus ir bandykite dar kartą.",
       "openrouterNoCredits": "Papildykite kreditų likutį OpenRouter atsiskaitymo skiltyje ir bandykite dar kartą.",
@@ -5437,6 +5445,8 @@
       "providerForRole": "{role} teikėjas",
       "providerKeyInvalid": "{provider} atmetė raktą. Prieš išsaugodami patikrinkite.",
       "providerKeyInvalidShort": "Negaliojantis",
+      "providerModes": "Naudojamas režimams: {modes}",
+      "providerModesNone": "Nenaudojamas jokiam režimui. Priskirkite jį režimui skiltyje Išplėstiniai nustatymai.",
       "providerSetupConsole": "Atidaryti teikėjo nustatymus",
       "providersDescription": "Pridėkite teikėjų prisijungimo duomenis, kuriuos stella turėtų naudoti.",
       "providersPanel": "Teikėjai",
@@ -5462,6 +5472,7 @@
       "title": "Organizacijos nurodymai",
       "tooLong": "Nurodymuose gali būti ne daugiau kaip {maxLength} simbolių."
     },
+    "createdSwitchPrompt": "Organizacija <bdi>{name}</bdi> sukurta. Persijunkite į ją, kad galėtumėte ją nustatyti ir pakviesti narius.",
     "creationEvaluationLimitReached": "Išnaudojote visus {limit} organizacijų bandomuosius laikotarpius. Ištrynus organizaciją, bandomasis laikotarpis neatkuriamas. Naudokite esamą organizaciją arba kreipkitės į pagalbos tarnybą dėl mokamos prieigos.",
     "creationInvalidName": "Įveskite tinkamą organizacijos pavadinimą (iki {maxLength} simbolių).",
     "creationNotAllowed": "Ši paskyra negali kurti organizacijų.",
@@ -5533,6 +5544,13 @@
     "startOverDescription": "Pradinė užklausa galėjo jau sukurti organizaciją. Prieš pradėdami iš naujo patikrinkite savo organizacijas; nauja užklausa gali sukurti dar vieną organizaciją.",
     "startOverTitle": "Siųsti naują kūrimo užklausą?",
     "switchOrganization": "Pakeisti organizaciją"
+  },
+  "organizationSetup": {
+    "aiAction": "Nustatyti DI",
+    "aiOptional": "Savi DI teikėjų raktai neprivalomi: be jų DI naudoja stella teikiamus modelius.",
+    "aiRequired": "Šios organizacijos DI reikia teikėjo rakto, kad kas nors galėtų jį naudoti.",
+    "invite": "Pakvieskite kolegas, kad jie galėtų čia dirbti kartu su jumis.",
+    "title": "Nustatykite naują organizaciją"
   },
   "publicTools": {
     "addSkill": "Pridėkite įgūdį",
@@ -5973,7 +5991,7 @@
     "organization": {
       "activeMembers": "Aktyvūs nariai",
       "ai": "DI konfigūracija",
-      "aiDescription": "Prijunkite savo DI paslaugų teikėjų raktus.",
+      "aiDescription": "Pasirinkite, kaip DI veikia šioje organizacijoje.",
       "anonymization": {
         "addPlaceholder": "Visada maskuotinas terminas (pvz., komandos pavadinimas)",
         "deleteAction": "Pašalinti terminą",
@@ -6139,7 +6157,7 @@
         "title": "DI atsiskaitymo juodraščiai"
       },
       "dataBoxes": {
-        "description": "Pranešimas, išsiųstas iš vienos iš šių dėžučių, registruojamas kaip siunčiamas, o joms išsiųstas – kaip gaunamas. Kiekvienas pakeitimas iš naujo nustato jau užregistruotų pranešimų kryptį bylose, prie kurių turite prieigą.",
+        "description": "Pranešimai, išsiųsti iš šių dėžučių, registruojami kaip siunčiami, o joms išsiųsti – kaip gaunami. Pakeitimai taikomi ir jau užregistruotiems pranešimams.",
         "invalid": "Duomenų dėžutės ID sudaro septynios raidės arba skaitmenys.",
         "remove": "Pašalinti duomenų dėžutę {address}",
         "title": "Organizacijos duomenų dėžutės"
@@ -6172,6 +6190,7 @@
         "title": "Atminties išgavimas",
         "toggleLabel": "Fone siūlyti atminties įrašus iš pokalbių istorijos"
       },
+      "organizationIdHint": "Nuolatinis ID, kuris niekada nesikeičia. Naudokite jį kreipdamiesi į pagalbos tarnybą arba nustatydami integracijas.",
       "pastInvitations": "Ankstesni kvietimai",
       "pendingInvitations": "Laukiantys kvietimai",
       "practiceJurisdictions": "Jurisdikcijos",
@@ -6185,11 +6204,12 @@
       "renameTitle": "Pervadinti organizaciją",
       "renameTypeToConfirm": "Norėdami patvirtinti, įveskite naują pavadinimą: {name}",
       "slug": {
-        "change": "Keisti identifikatorių",
-        "conflict": "Šį identifikatorių jau naudoja kita organizacija.",
-        "description": "Pasirinkite naują identifikatorių arba sugeneruokite atsitiktinį. Ankstesnis identifikatorius nebeveiks.",
-        "opaque": "Sugeneruoti atsitiktinį identifikatorių",
-        "title": "Organizacijos identifikatorius"
+        "change": "Keisti trumpąjį pavadinimą",
+        "conflict": "Šį trumpąjį pavadinimą jau naudoja kita organizacija.",
+        "description": "Pasirinkite naują trumpąjį pavadinimą arba sugeneruokite atsitiktinį. Ankstesnis trumpasis pavadinimas nebeveiks.",
+        "hint": "Unikalus šios organizacijos trumpasis pavadinimas, nepriklausomas nuo rodomo pavadinimo.",
+        "opaque": "Sugeneruoti atsitiktinį trumpąjį pavadinimą",
+        "title": "Organizacijos trumpasis pavadinimas"
       },
       "timePolicy": {
         "description": "Nustatykite laiko apvalinimą, redagavimo terminus ir mėnesių užrakinimą.",

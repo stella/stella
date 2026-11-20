@@ -10,6 +10,8 @@ import type { RoutePresentation } from "@/routes/-route-presentation";
 declare module "@tanstack/react-router" {
   // oxlint-disable-next-line typescript/consistent-type-definitions -- router static data uses declaration merging
   interface StaticDataRouteOption {
+    /** Standalone first paint uses the request locale to preserve text layout. */
+    pendingText?: "request-locale";
     appFrame?: AppFrameScope;
     providerScopes?: readonly ProviderScope[];
     organizationSettingsAdmission?: "time-billing";

@@ -2403,6 +2403,8 @@
       "boe_search_legislation": "BOE-Gesetzessuche",
       "borme_get_summary": "BORME-Tageszusammenfassung",
       "business_registry_lookup": "Handelsregister durchsuchen",
+      "calendar_free_busy": "Verfügbarkeit im Kalender prüfen",
+      "calendar_list_events": "Kalendertermine lesen",
       "command_execution": "Befehl wird ausgeführt",
       "compare_versions": "Versionen vergleichen",
       "configure_template_fields": "Vorlagenfelder konfigurieren",
@@ -5408,6 +5410,11 @@
       "googleKeyRestricted": "Prüfen Sie die API-, IP-Adress- und Referrer-Einschränkungen dieses Schlüssels in Google Cloud. Lassen Sie die benötigte API und Anfragen Ihres Servers zu und versuchen Sie es erneut.",
       "keepSavedKey": "Gespeicherten Schlüssel behalten",
       "keyFormatHint": "Dieser Schlüssel hat ein ungewöhnliches Format für {provider}. Speichern Sie ihn, um ihn beim Anbieter zu prüfen.",
+      "keyNeed": {
+        "builtIn": "Optional. Ohne eigenen Schlüssel nutzt die KI in dieser Organisation von stella bereitgestellte Modelle.",
+        "keyRequired": "Die KI in dieser Organisation braucht einen Anbieter-Schlüssel. Fügen Sie einen hinzu, um die KI einzuschalten.",
+        "ownKeys": "Die KI in dieser Organisation nutzt die Schlüssel unten."
+      },
       "modelForRole": "Modell für {role}",
       "modelIdPlaceholder": "Modelle suchen",
       "modelsDescription": "Wählen Sie für jede KI-Kategorie einen Anbieter und ein angebotenes multimodales Modell.",
@@ -5415,6 +5422,7 @@
       "newApiKey": "Neuer API-Schlüssel",
       "newApiKeyDescription": "Er ersetzt den gespeicherten Schlüssel beim Speichern.",
       "noModelResults": "Keine passenden angebotenen Modelle",
+      "noProviders": "Noch keine Anbieter-Schlüssel hinzugefügt.",
       "openaiInsufficientQuota": "Prüfen Sie das Budget Ihres OpenAI-Projekts und die API-Abrechnung. Laden Sie Guthaben auf oder erhöhen Sie das betreffende Limit und versuchen Sie es erneut.",
       "openaiProjectOrganizationMismatch": "Verwenden Sie einen API-Schlüssel aus dem vorgesehenen OpenAI-Projekt und der vorgesehenen Organisation. Prüfen Sie deren Zugriffseinstellungen und versuchen Sie es erneut.",
       "openrouterNoCredits": "Laden Sie in der OpenRouter-Abrechnung Guthaben auf und versuchen Sie es erneut.",
@@ -5437,6 +5445,8 @@
       "providerForRole": "Provider für {role}",
       "providerKeyInvalid": "{provider} hat den Schlüssel abgelehnt. Bitte überprüfen Sie ihn.",
       "providerKeyInvalidShort": "Ungültig",
+      "providerModes": "Verwendet für: {modes}",
+      "providerModesNone": "Für keinen Modus verwendet. Weisen Sie ihn unter Erweitert einem Modus zu.",
       "providerSetupConsole": "Anbietereinstellungen öffnen",
       "providersDescription": "Fügen Sie die Provider-Zugangsdaten hinzu, die stella verwenden soll.",
       "providersPanel": "Provider",
@@ -5462,6 +5472,7 @@
       "title": "Organisationsanweisungen",
       "tooLong": "Die Anweisungen dürfen höchstens {maxLength} Zeichen enthalten."
     },
+    "createdSwitchPrompt": "Die Organisation <bdi>{name}</bdi> wurde erstellt. Wechseln Sie zu ihr, um sie einzurichten und Mitglieder einzuladen.",
     "creationEvaluationLimitReached": "Sie haben alle {limit} Testzeiträume für Organisationen genutzt. Durch das Löschen einer Organisation wird kein Testzeitraum wieder verfügbar. Nutzen Sie eine bestehende Organisation oder wenden Sie sich für einen kostenpflichtigen Zugang an den Support.",
     "creationInvalidName": "Geben Sie einen gültigen Organisationsnamen ein (höchstens {maxLength} Zeichen).",
     "creationNotAllowed": "Mit diesem Konto können keine Organisationen erstellt werden.",
@@ -5533,6 +5544,13 @@
     "startOverDescription": "Die ursprüngliche Anfrage hat möglicherweise bereits eine Organisation erstellt. Prüfen Sie Ihre Organisationen, bevor Sie neu beginnen; eine neue Anfrage könnte eine weitere Organisation erstellen.",
     "startOverTitle": "Eine neue Erstellungsanfrage starten?",
     "switchOrganization": "Organisation wechseln"
+  },
+  "organizationSetup": {
+    "aiAction": "KI einrichten",
+    "aiOptional": "Eigene Schlüssel für KI-Anbieter sind optional: Ohne sie nutzt die KI von stella bereitgestellte Modelle.",
+    "aiRequired": "Die KI in dieser Organisation braucht einen Anbieter-Schlüssel, bevor jemand sie nutzen kann.",
+    "invite": "Laden Sie Kolleginnen und Kollegen ein, damit sie hier mit Ihnen arbeiten können.",
+    "title": "Neue Organisation einrichten"
   },
   "publicTools": {
     "addSkill": "Skill hinzufügen",
@@ -5973,7 +5991,7 @@
     "organization": {
       "activeMembers": "Aktive Mitglieder",
       "ai": "KI-Konfiguration",
-      "aiDescription": "Verbinden Sie Ihre eigenen API-Schlüssel für KI-Anbieter.",
+      "aiDescription": "Legen Sie fest, wie KI in dieser Organisation arbeitet.",
       "anonymization": {
         "addPlaceholder": "Immer zu maskierender Begriff (z. B. Teamname)",
         "deleteAction": "Begriff löschen",
@@ -6139,7 +6157,7 @@
         "title": "KI-Abrechnungsentwürfe"
       },
       "dataBoxes": {
-        "description": "Eine von einer dieser Databoxen gesendete Nachricht wird als ausgehend abgelegt, eine an sie gesendete als eingehend. Jede Änderung leitet die Richtung bereits abgelegter Nachrichten in den Akten, auf die Sie zugreifen können, neu ab.",
+        "description": "Nachrichten, die von diesen Databoxen gesendet werden, werden als ausgehend abgelegt, Nachrichten an sie als eingehend. Änderungen gelten auch für bereits abgelegte Nachrichten.",
         "invalid": "Eine Databox-ID besteht aus sieben Buchstaben oder Ziffern.",
         "remove": "Databox {address} entfernen",
         "title": "Databoxen der Organisation"
@@ -6172,6 +6190,7 @@
         "title": "Gedächtnis-Extraktion",
         "toggleLabel": "Im Hintergrund Erinnerungen aus dem Chatverlauf vorschlagen"
       },
+      "organizationIdHint": "Dauerhafte ID, die sich nie ändert. Verwenden Sie sie für Supportanfragen und beim Einrichten von Integrationen.",
       "pastInvitations": "Frühere Einladungen",
       "pendingInvitations": "Ausstehende Einladungen",
       "practiceJurisdictions": "Jurisdiktionen",
@@ -6185,11 +6204,12 @@
       "renameTitle": "Organisation umbenennen",
       "renameTypeToConfirm": "Geben Sie zur Bestätigung den neuen Namen ein: {name}",
       "slug": {
-        "change": "Kennung ändern",
-        "conflict": "Diese Kennung wird bereits von einer anderen Organisation verwendet.",
-        "description": "Wählen Sie eine neue Kennung oder lassen Sie eine zufällige erstellen. Die bisherige Kennung funktioniert danach nicht mehr.",
-        "opaque": "Zufällige Kennung erstellen",
-        "title": "Organisationskennung"
+        "change": "Kurznamen ändern",
+        "conflict": "Dieser Kurzname wird bereits von einer anderen Organisation verwendet.",
+        "description": "Wählen Sie einen neuen Kurznamen oder lassen Sie einen zufälligen erstellen. Der bisherige Kurzname funktioniert danach nicht mehr.",
+        "hint": "Ein eindeutiger Kurzname für diese Organisation, unabhängig von ihrem Anzeigenamen.",
+        "opaque": "Zufälligen Kurznamen erstellen",
+        "title": "Kurzname der Organisation"
       },
       "timePolicy": {
         "description": "Legen Sie Zeitrundung, Bearbeitungsfristen und Monatssperren fest.",

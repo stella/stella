@@ -98,6 +98,13 @@ const renderAt = async (
       to: "/chat",
     }),
   });
+  const standaloneRoute = router.createRoute({
+    getParentRoute: () => rootRoute,
+    path: "/standalone",
+    staticData: { appFrame: APP_FRAME_SCOPE.none },
+    component: Page,
+    pendingComponent: PagePending,
+  });
   const layoutRoute = router.createRoute({
     getParentRoute: () => memberRoute,
     path: "/section",
@@ -115,6 +122,7 @@ const renderAt = async (
     isServer: false,
     routeTree: rootRoute.addChildren([
       framelessRedirectRoute,
+      standaloneRoute,
       memberRoute.addChildren([
         chatRoute,
         plainRoute,
@@ -175,6 +183,16 @@ test("the root pending paints the member frame around the page's view", async ()
   expect(
     view.container.querySelector('[data-slot="pending-sidebar"]')?.textContent,
   ).toBe("");
+});
+
+test("the root paints a standalone page in its own pending view", async () => {
+  const view = await renderAt("/standalone", RootPendingComponent);
+  expect(
+    view.getByRole("status").contains(view.getByTestId("page-pending")),
+  ).toBe(true);
+  expect(
+    view.container.querySelector('[data-slot="pending-sidebar"]'),
+  ).toBeNull();
 });
 
 test("a redirect that runs its own navigation shows its target's pending view meanwhile", async () => {
