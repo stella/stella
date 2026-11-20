@@ -10,7 +10,7 @@ import {
   parseInline,
   parseMarkdown,
   PART_CHARACTERS,
-} from "../src/transcribe/cleaned-text";
+} from "./cleanup";
 
 const LETTER = `Ahoj Petře,
 

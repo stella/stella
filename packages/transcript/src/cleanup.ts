@@ -1,9 +1,10 @@
-import type { Paragraph } from "./transcribe-logic";
+/** A transcript paragraph: when it starts and what was said. */
+export type Paragraph = { startMs: number; text: string };
 
 /**
  * The cleaned-up text of a recording: the Markdown subset the API returns
  * (paragraphs, three heading levels, bold, italic, bulleted and numbered
- * lists) read into blocks the window renders as elements, never as HTML,
+ * lists) read into blocks each app renders as elements, never as HTML,
  * and written back out as HTML or plain text for copying. Anything outside
  * the subset is shown as the text it is.
  */

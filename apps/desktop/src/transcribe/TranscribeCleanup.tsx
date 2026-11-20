@@ -4,6 +4,8 @@ import { invoke } from "@tauri-apps/api/core";
 import { Result } from "better-result";
 import { useTranslations } from "use-intl";
 
+import { nextCleanupPart, parseMarkdown } from "@stll/transcript/cleanup";
+import type { Block, Inline } from "@stll/transcript/cleanup";
 import { Button } from "@stll/ui/button";
 import { CopyButton } from "@stll/ui/copy-button";
 import { ChevronDownIcon, InfoIcon } from "@stll/ui/icons";
@@ -18,8 +20,6 @@ import {
 } from "@stll/ui/menu";
 import { Skeleton } from "@stll/ui/skeleton";
 
-import { nextCleanupPart, parseMarkdown } from "./cleaned-text";
-import type { Block, Inline } from "./cleaned-text";
 import type { Paragraph } from "./transcribe-logic";
 
 /** The longest part one cleanup request carries, in characters; the API
