@@ -23,8 +23,10 @@ import { TableCell, TableRow } from "@stll/ui/table";
 import Tooltip from "@/components/tooltip";
 import { useFormatter } from "@/i18n/formatting-context";
 import type { Role } from "@/lib/auth-client";
+import { roleTranslationKeys } from "@/lib/organization/consts";
 
 import {
+  INVITATION_COLUMN_COUNT,
   InvitationsTableFrame,
   InvitationsTableRow,
   PendingInvitationsSection,
@@ -171,7 +173,7 @@ function InvitationsTable({
           <InvitationsTableRow
             cells={{
               email: <BidiText direction="ltr">{invitation.email}</BidiText>,
-              role: t(`organization.roles.${invitation.role}`),
+              role: t(roleTranslationKeys[invitation.role].labelKey),
               status: t(`organization.invitations.statuses.${status}`),
               invited: formatMemberDate(invitation.createdAt),
               expires: formatMemberDate(invitation.expiresAt),
@@ -220,7 +222,11 @@ function InvitationsTable({
       })}
       {invitations.length === 0 && (
         <TableRow>
-          <TableCell className="text-muted-foreground text-center" colSpan={6}>
+          <TableCell
+            align="center"
+            colSpan={INVITATION_COLUMN_COUNT}
+            tone="muted"
+          >
             {t("organization.invitations.noInvitationsFound")}
           </TableCell>
         </TableRow>

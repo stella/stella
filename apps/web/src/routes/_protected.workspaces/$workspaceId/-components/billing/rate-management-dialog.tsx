@@ -50,6 +50,7 @@ import { fieldIssueOrToast, notifyUserError } from "@/lib/errors/user-toast";
 import { useIdempotentMutation } from "@/lib/idempotency/use-idempotent-mutation";
 import { localISODate } from "@/lib/local-iso-date";
 import type { NonEmptyPatch } from "@/lib/mutation-command";
+import { roleTranslationKeys } from "@/lib/organization/consts";
 import { organizationOptions } from "@/lib/organization/queries";
 import { queryView } from "@/lib/query-view.logic";
 import { toSafeId } from "@/lib/safe-id";
@@ -940,7 +941,7 @@ const RateRoleSelect = ({
           <SelectItem value="none">{t("common.none")}</SelectItem>
           {ORGANIZATION_ROLE_NAMES.map((role) => (
             <SelectItem key={role} value={role}>
-              {t(`organization.roles.${role}`)}
+              {t(roleTranslationKeys[role].labelKey)}
             </SelectItem>
           ))}
         </SelectPopup>
@@ -1021,7 +1022,7 @@ const RateEntryDetails = ({
         <div className="flex items-center gap-2">
           <span className="text-sm font-medium">
             {entry.role
-              ? t(`organization.roles.${entry.role}`)
+              ? t(roleTranslationKeys[entry.role].labelKey)
               : t("billing.rates.defaultRate")}
           </span>
           <span className="text-sm tabular-nums">

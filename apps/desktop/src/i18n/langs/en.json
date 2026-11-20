@@ -666,7 +666,7 @@
     "customWords": {
       "group": "Custom words",
       "title": "Words and names stella should spell correctly",
-      "description": "Such as client names, or English terms you use while speaking another language. They are kept on this computer for this account and sent only with your dictation, to stella AI transcription and to AI cleanup. The speech model on this computer does not use them.",
+      "description": "Such as client names, or English terms you use while speaking another language. They are kept on this computer for this account and sent only with your dictation, to stella AI transcription and to AI cleanup. When the speech model on this computer transcribes and AI cleanup is off, stella corrects their spelling on this computer.",
       "count": "{count, number} of {limit, number}",
       "input": "Add a word or name",
       "add": "Add",
@@ -1096,7 +1096,7 @@
       "cloudDescriptionModel": "The audio is sent to stella and to the provider of {model} for transcription. stella does not store it.",
       "localMissing": "Download the speech model in Settings, under Dictation, to transcribe on this computer.",
       "localMissingCloud": "Download the speech model in Settings, under Dictation, or transcribe with stella AI.",
-      "retainsData": "{provider} keeps the audio and transcript of everything sent to this model. Don’t transcribe confidential or client recordings with it, or choose another model in Settings, under Dictation.",
+      "retainsData": "Please note the terms of processing of {provider}.",
       "modelFailed": "The stella AI model could not be read, so stella AI cannot transcribe right now. Try again, or transcribe on this computer."
     },
     "matter": {

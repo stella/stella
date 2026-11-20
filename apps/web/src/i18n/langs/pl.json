@@ -165,7 +165,7 @@
     "invitation": {
       "declined": "Zaproszenie odrzucone",
       "declinedDescription": "Nie dołączono do tej organizacji.",
-      "description": "{inviterEmail} zaprosił/a Cię do organizacji {organizationName} jako {role}.",
+      "description": "{inviterEmail} zaprosił/a Cię do organizacji {organizationName}{role, select, owner { jako właściciela} admin { jako administratora} member { jako członka} intern { jako praktykanta} external { jako współpracownika zewnętrznego} other {}}.",
       "goToWorkspaces": "Przejdź do spraw",
       "title": "Zaproszenie do organizacji",
       "verifyEmailHint": "Aby zweryfikować adres {email}, wyloguj się, a następnie zaloguj się kodem jednorazowym, który wyślemy na ten adres.",
@@ -7246,6 +7246,7 @@
         "title": "Usunąć łącza do szablonów programu Word?",
         "unknownLocation": "Lokalizacja szablonu: adres, którego stella nie może zweryfikować"
       },
+      "checkingFiles": "Sprawdzanie plików…",
       "desktopEdit": {
         "accountRequiredTitle": "Połącz stella desktop ze swoim kontem",
         "action": "Edytuj w aplikacji desktopowej",
@@ -7289,6 +7290,14 @@
       "downloadPdf": "Pobierz jako PDF",
       "downloadSearchablePdf": "Przeszukiwalny PDF",
       "downloadWithComments": "Pobierz z komentarzami",
+      "duplicateUpload": {
+        "description": "{count, plural, one {# plik jest identyczny z dokumentem, który ta sprawa już zawiera.} few {# pliki są identyczne z dokumentami, które ta sprawa już zawiera.} many {# plików jest identycznych z dokumentami, które ta sprawa już zawiera.} other {# pliku jest identycznych z dokumentami, które ta sprawa już zawiera.}} Wybierz, co zrobić z każdym z nich.",
+        "matchedDocument": "Identyczny z dokumentem <bdi>{documentName}</bdi>",
+        "skip": "Pomiń ten plik",
+        "skipAll": "Pomiń duplikaty",
+        "title": "Już w tej sprawie",
+        "uploadAnyway": "Prześlij mimo to"
+      },
       "emptyFile": "Plik jest pusty.",
       "fileTooLarge": "Plik jest większy niż {limit, number} MB.",
       "includeReferenceNumber": "Dołącz numer referencyjny",
