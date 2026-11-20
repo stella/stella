@@ -124,10 +124,7 @@ export const skillExportScalingScenarios = [
             route: "/v1/skills/:skillId/export",
             safeDb: fixture.safeDb,
             scopedDb: fixture.scopedDb,
-            session: {
-              activeOrganizationId: fixture.organizationId,
-              id: Bun.randomUUIDv7(),
-            },
+            session: { activeOrganizationId: fixture.organizationId },
             user: { email: fixture.email, id: fixture.userId },
           }),
         );

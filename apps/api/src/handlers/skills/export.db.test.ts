@@ -157,12 +157,12 @@ const exportAs = async ({
 }) => {
   const writes: CapturedWrite[] = [];
   const events: AuditEvent[] = [];
-  const handler = createSkillExport(async (object) => {
+  const handler = createSkillExport(async (object, ownership) => {
     if (!(object.data instanceof Uint8Array)) {
       throw new TypeError("the export stored no bytes");
     }
     writes.push({ data: object.data, key: object.key });
-    return await storeObject(object);
+    return await storeObject(object, ownership);
   }, readObject);
   const response = await handler.handler(
     createTestHandlerContext<Parameters<typeof handler.handler>[0]>({
@@ -289,7 +289,7 @@ describe("skill export", () => {
       );
       expect(copy.skill).toEqual(original.skill);
       expect(copy.files).toEqual([
-        original.files[0],
+        ...original.files.slice(0, 1),
         // Extracted text travels as the Markdown it is.
         {
           content: "# Precedent\n\nClause 4.2 ...\n",
