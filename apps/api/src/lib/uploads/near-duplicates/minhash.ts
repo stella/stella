@@ -25,7 +25,7 @@
 
 import { foldSearchMatchText } from "@stll/text-normalize";
 
-export const SHINGLE_WORDS = 5;
+const SHINGLE_WORDS = 5;
 export const SIGNATURE_LENGTH = 128;
 export const LSH_BANDS = 21;
 const LSH_ROWS = 6;

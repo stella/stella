@@ -63,49 +63,13 @@ export const findSimilarDocuments = async ({
   }
   const signature = signatureFromBytes(own.signature);
 
-  const ranked = tx
-    .select({ entityVersionId: entityVersionMinhashBands.entityVersionId })
-    .from(entityVersionMinhashBands)
-    .innerJoin(
-      entities,
-      and(
-        eq(
-          entities.currentVersionId,
-          entityVersionMinhashBands.entityVersionId,
-        ),
-        eq(entities.workspaceId, workspaceId),
-        eq(entities.kind, "document"),
-        ne(entities.id, entityId),
-      ),
-    )
-    .where(
-      and(
-        eq(entityVersionMinhashBands.workspaceId, workspaceId),
-        inArray(entityVersionMinhashBands.bandKey, lshBandKeys(signature)),
-      ),
-    )
-    .groupBy(entityVersionMinhashBands.entityVersionId)
-    .orderBy(desc(count()), asc(entityVersionMinhashBands.entityVersionId))
-    .limit(MAX_CANDIDATES)
-    .as("ranked");
-
   const candidates = await tx
     .select({
       entityId: entities.id,
       entityName: entities.name,
       signature: entityVersionMinhashSignatures.signature,
     })
-    .from(ranked)
-    .innerJoin(
-      entityVersionMinhashSignatures,
-      and(
-        eq(
-          entityVersionMinhashSignatures.entityVersionId,
-          ranked.entityVersionId,
-        ),
-        eq(entityVersionMinhashSignatures.workspaceId, workspaceId),
-      ),
-    )
+    .from(entityVersionMinhashSignatures)
     .innerJoin(
       entities,
       and(
@@ -116,7 +80,46 @@ export const findSimilarDocuments = async ({
         eq(entities.workspaceId, workspaceId),
       ),
     )
-    .limit(MAX_CANDIDATES);
+    .where(
+      and(
+        eq(entityVersionMinhashSignatures.workspaceId, workspaceId),
+        inArray(
+          entityVersionMinhashSignatures.entityVersionId,
+          tx
+            .select({
+              entityVersionId: entityVersionMinhashBands.entityVersionId,
+            })
+            .from(entityVersionMinhashBands)
+            .innerJoin(
+              entities,
+              and(
+                eq(
+                  entities.currentVersionId,
+                  entityVersionMinhashBands.entityVersionId,
+                ),
+                eq(entities.workspaceId, workspaceId),
+                eq(entities.kind, "document"),
+                ne(entities.id, entityId),
+              ),
+            )
+            .where(
+              and(
+                eq(entityVersionMinhashBands.workspaceId, workspaceId),
+                inArray(
+                  entityVersionMinhashBands.bandKey,
+                  lshBandKeys(signature),
+                ),
+              ),
+            )
+            .groupBy(entityVersionMinhashBands.entityVersionId)
+            .orderBy(
+              desc(count()),
+              asc(entityVersionMinhashBands.entityVersionId),
+            )
+            .limit(MAX_CANDIDATES),
+        ),
+      ),
+    );
 
   return candidates
     .map((candidate) => ({

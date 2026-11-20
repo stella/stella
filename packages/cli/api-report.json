@@ -118,6 +118,7 @@
         "./capabilities/entities.ocr.create.json",
         "./capabilities/entities.placements.suggest.json",
         "./capabilities/entities.rename.json",
+        "./capabilities/entities.similar.list.json",
         "./capabilities/entities.stamps.check.json",
         "./capabilities/entities.summaries.count.json",
         "./capabilities/entities.summaries.list.json",

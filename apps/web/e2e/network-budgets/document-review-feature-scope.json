@@ -1,6 +1,6 @@
 {
   "route": "/workspaces/$workspaceId/$viewId/document",
-  "reason": "Resolve live feature visibility in each bounded document-review transaction; load professional-use acceptance before protected route data. The sidebar's Time link reads the approval queue's bounded count of submitted time waiting for the signed-in person (one request, limit 1); the sidebar shows each matter's working and waiting chats, read once per page from one bounded list. The document viewer reads the file's bytes once through its signed file-content grant (approved 2026-11-20).",
+  "reason": "Resolve live feature visibility in each bounded document-review transaction; load professional-use acceptance before protected route data. The sidebar's Time link reads the approval queue's bounded count of submitted time waiting for the signed-in person (one request, limit 1); the sidebar shows each matter's working and waiting chats, read once per page from one bounded list. The document viewer reads the file's bytes once through its signed file-content grant (approved 2026-11-20). The document inspector lists similar documents in the matter once, from one bounded lookup of at most 50 candidates.",
   "budget": {
     "depth": 9,
     "requests": [
@@ -15,6 +15,7 @@
       "GET /v1/desktop/presence",
       "GET /v1/docx-suggestions/:id/entity/:id",
       "GET /v1/entities/:id/entity/:id",
+      "GET /v1/entities/:id/entity/:id/similar",
       "GET /v1/entities/:id/entity/:id/versions",
       "GET /v1/file-content/:grant",
       "GET /v1/files/:id/document-properties/:id",
@@ -57,6 +58,7 @@
       "GET /v1/desktop/presence": 1,
       "GET /v1/docx-suggestions/:id/entity/:id": 1,
       "GET /v1/entities/:id/entity/:id": 1,
+      "GET /v1/entities/:id/entity/:id/similar": 1,
       "GET /v1/entities/:id/entity/:id/versions": 1,
       "GET /v1/file-content/:grant": 1,
       "GET /v1/files/:id/document-properties/:id": 1,
@@ -98,6 +100,7 @@
       "GET /v1/desktop/presence": 5,
       "GET /v1/docx-suggestions/:id/entity/:id": 7,
       "GET /v1/entities/:id/entity/:id": 8,
+      "GET /v1/entities/:id/entity/:id/similar": 8,
       "GET /v1/entities/:id/entity/:id/versions": 11,
       "GET /v1/files/:id/document-properties/:id": 9,
       "GET /v1/files/:id/url/:id": 9,
@@ -138,6 +141,7 @@
       "GET /v1/desktop/presence": 1024,
       "GET /v1/docx-suggestions/:id/entity/:id": 1024,
       "GET /v1/entities/:id/entity/:id": 1024,
+      "GET /v1/entities/:id/entity/:id/similar": 1024,
       "GET /v1/entities/:id/entity/:id/versions": 1024,
       "GET /v1/files/:id/document-properties/:id": 1024,
       "GET /v1/files/:id/url/:id": 1024,

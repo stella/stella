@@ -1247,6 +1247,13 @@
   },
   {
     "access": "read",
+    "command": ["capability", "entities", "similar-list"],
+    "description": "List the other documents in the matter whose current text is nearly the same as this document's current text, most similar first, each with an estimated similarity between 0 and 1. Other versions of the same document are not listed.",
+    "name": "capability:entities.similar.list",
+    "title": "entities.similar.list"
+  },
+  {
+    "access": "read",
     "command": ["capability", "entities", "summaries-count"],
     "description": "Count all documents, folders, and tasks in a matter. The companion total for entities.summaries.list, whose pages carry no count of their own.",
     "name": "capability:entities.summaries.count",
@@ -2780,7 +2787,7 @@
   {
     "access": "write",
     "command": ["capability", "rates", "entries-create"],
-    "description": "Add one rate line to a rate table: an hourly rate in integer minor currency units, naming the table currency those units use, effective from a date and optionally until another. Pass userId for a person-specific rate, role for an organization-role rate, or omit both for the table fallback. Set at most one person or role; optionally pass activityCodeId for an activity-only or person/role plus activity rate. Refused when dates overlap a line for the same selector or userId is not an organization member, or when the table is at its line limit. A stale currency is refused; call rates.list and retry with the table's current currency.",
+    "description": "Add one rate line to a rate table: an hourly rate in integer minor currency units, effective from a date and optionally until another. Pass userId for a person-specific rate, role for an organization-role rate, or omit both for the table fallback. Set at most one person or role; optionally pass activityCodeId for an activity-only or person/role plus activity rate. Refused when dates overlap a line for the same selector or userId is not an organization member, or when the table is at its line limit.",
     "name": "capability:rates.entries.create",
     "title": "rates.entries.create"
   },
@@ -2801,7 +2808,7 @@
   {
     "access": "write",
     "command": ["capability", "rates", "entries-update"],
-    "description": "Change one rate line's hourly rate or effective dates in a rate table, naming the table currency its minor units use. Changing the dates re-checks for overlap against the other lines for the same person, role, or table default and is refused on a conflict; the selector a line applies to cannot be changed here. A stale currency is refused; call rates.list and retry with the table's current currency.",
+    "description": "Change one rate line's hourly rate or effective dates in a rate table. Changing the dates re-checks for overlap against the other lines for the same person, role, or table default and is refused on a conflict; the selector a line applies to cannot be changed here.",
     "name": "capability:rates.entries.update",
     "title": "rates.entries.update"
   },
