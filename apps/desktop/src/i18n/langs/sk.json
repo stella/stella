@@ -36,7 +36,11 @@
     "sessionOpeningInOffice": "Otváranie v Office",
     "sessionSavingDraft": "Ukladanie konceptu",
     "reconnectAccount": "Znova pripojiť k stella web…",
-    "transcribeRecording": "Prepísať nahrávku…"
+    "transcribeRecording": "Prepísať nahrávku…",
+    "dictation": "Diktovanie",
+    "dictationHint": "Na diktovanie podržte {key}",
+    "dictationSettings": "Nastavenia diktovania…",
+    "dictationTurnOn": "Zapnúť diktovanie…"
   },
   "notification": {
     "checkpointDelayedBody": "{fileName}: zmeny zostávajú lokálne a budú automaticky zopakované",
@@ -697,7 +701,8 @@
       "focusUnconfirmed": "stella nemohla overiť, ktorá aplikácia je aktívna, takže sa nič nenapísalo. Skúste to znova.",
       "shortcutHeld": "Pustite klávesy skratky, aby sa text mohol napísať. Nič sa nenapísalo, skúste to znova.",
       "passwordField": "Je vybrané pole na heslo, preto sa diktát neuložil ani nenapísal.",
-      "cloudTranscription": "stella AI tento diktát nepreviedla a rečový model v tomto počítači nie je. Skúste to znova alebo pri „Prevádzať pomocou“ zvoľte „Tento počítač“ a model stiahnite."
+      "cloudTranscription": "stella AI tento diktát nepreviedla a rečový model v tomto počítači nie je. Skúste to znova alebo pri „Prevádzať pomocou“ zvoľte „Tento počítač“ a model stiahnite.",
+      "nothingHeard": "stella nepočula žiadnu reč. Skontrolujte vstupné zariadenie v nastaveniach Zvuku."
     },
     "failureKeptInHistory": "Text nájdete v histórii schránky.",
     "transcribeRecording": {
@@ -705,6 +710,38 @@
       "description": "Súbor z diktafónu, hlasovú poznámku alebo záznam z rokovania do 4 hodín prevedie na text.",
       "open": "Otvoriť",
       "failed": "Okno sa nepodarilo otvoriť. Skúste to znova."
+    },
+    "notice": {
+      "title": "stella nepočuje váš mikrofón",
+      "allowBody": "Povoľte prístup k mikrofónu a skúste to znova.",
+      "checkBodyMac": "Skontrolujte prístup k mikrofónu v Systémových nastaveniach a skúste to znova.",
+      "checkBodyPc": "Skontrolujte prístup k mikrofónu v Nastaveniach Windows a skúste to znova.",
+      "allow": "Povoliť mikrofón",
+      "openSettingsMac": "Otvoriť Systémové nastavenia",
+      "openSettingsPc": "Otvoriť Nastavenia",
+      "dismiss": "Zavrieť",
+      "nothingTitle": "stella nepočula žiadnu reč",
+      "nothingBody": "Hovorte, kým držíte kláves, alebo v nastaveniach Zvuku vyberte iný vstup.",
+      "inputDevice": "Vstup: {device}",
+      "openSoundMac": "Otvoriť nastavenia Zvuku",
+      "openSoundPc": "Otvoriť nastavenia zvuku",
+      "missingTitle": "{missing} nie je pripojené",
+      "missingBody": "Diktovanie namiesto toho používa {device}.",
+      "chooseMicrophone": "Vybrať mikrofón…"
+    },
+    "microphone": {
+      "title": "Mikrofón",
+      "hint": "Bluetooth slúchadlá chvíľu prepínajú na mikrofón a nahrávajú v nižšej kvalite. Vstavaný mikrofón býva zreteľnejší.",
+      "systemDefault": "Predvolený systémový",
+      "systemDefaultNamed": "Predvolený systémový ({name})",
+      "bluetoothDevice": "{name} · Bluetooth",
+      "notConnected": "{name} (nepripojené)",
+      "test": "Vyskúšať mikrofón",
+      "stopTest": "Zastaviť",
+      "level": "Úroveň vstupu",
+      "hearing": "Počujeme vás.",
+      "noSound": "Zo zariadenia {device} nejde žiadny zvuk.",
+      "checkAccess": "Skontrolovať prístup k mikrofónu"
     },
     "preview": {
       "label": "Čo ste zatiaľ nadiktovali",
@@ -809,8 +846,8 @@
     "permissionsTitlePc": "Nastavte tento počítač",
     "permissionsBody": "Každé povolenie je na vás. Neskôr ich môžete zmeniť v Nastaveniach.",
     "neverRequested": "Nikdy nevyžadované:",
-    "tryTitle": "Vyskúšajte to",
-    "tryBody": "Skopírujte ľubovoľný text a stlačte {shortcut}.",
+    "tryTitle": "Vyskúšajte históriu schránky",
+    "tryBody": "Skopírujte ľubovoľný text a stlačením {shortcut} otvorte históriu schránky.",
     "tryWaiting": "Čakám na skratku",
     "tryKeepGoing": "Pokračujte…",
     "tryExtraModifier": "To je {pressed}. Použite {shortcut}.",
@@ -832,18 +869,60 @@
     "introduceActivityTitle": "Novinka: prehľad aktivity",
     "introduceActivityBody": "Aktivita je teraz pre váš účet dostupná. Nič sa nezaznamenáva, kým ju nespustíte v okne aktivity.",
     "openActivity": "Otvoriť aktivitu",
-    "dictationModel": "Rečový model ({size} MB) sa stiahne len raz a beží na tomto počítači.",
-    "dictationTurnOn": "Zapnúť a stiahnuť",
     "dictationDownloadContinues": "Môžete pokračovať. Sťahovanie pobeží na pozadí.",
-    "dictationReady": "Diktovanie je zapnuté a pripravené.",
-    "dictationTryLabel": "Diktujte sem",
-    "dictationTryPlaceholder": "Kliknite sem, podržte {shortcut} a povedzte nejakú vetu.",
-    "dictationListening": "Počúvam…",
-    "dictationTranscribing": "Prepisujem, čo ste povedali…",
     "dictationMicrophone": "stella vás bude počuť, kým držíte skratku.",
     "dictationAccessibility": "stella napíše, čo ste povedali, do aplikácie, ktorú práve používate.",
     "dictationFailed": "stella desktop nemohol zapnúť diktovanie. Skúste to znova.",
     "introduceDictationTitle": "Novinka: diktovanie",
+    "dictationSetup": {
+      "progress": "Krok {current} z {total}",
+      "skipRest": "Preskočiť zvyšok",
+      "screens": {
+        "microphone": "Mikrofón",
+        "transcription": "Prepis",
+        "app": "Úprava",
+        "context": "Kontext",
+        "words": "Slová"
+      },
+      "microphone": {
+        "title": "Nech vás stella počuje",
+        "body": "Podržte {shortcut} a hovorte, text sa objaví tam, kde píšete. Najprv povoľte mikrofón, aby vás stella počula.",
+        "bodyMac": "Podržte {shortcut} a hovorte, text sa objaví tam, kde píšete. Najprv povoľte mikrofón, aby vás stella počula, a Prístupnosť, aby mohla text napísať.",
+        "choose": "Mikrofón na diktovanie"
+      },
+      "transcription": {
+        "title": "Kde sa má vaša reč prepisovať?",
+        "body": "Neskôr to môžete zmeniť v Nastaveniach.",
+        "titleLocal": "Vaša reč sa prepisuje na tomto počítači",
+        "bodyLocal": "Rečový model beží tu, takže diktovanie funguje aj offline.",
+        "localTitle": "Na tomto počítači",
+        "localBody": "Funguje offline. Zvuk nikdy neopustí tento počítač.",
+        "localModel": "Potrebuje rečový model ({size} MB), ktorý sa stiahne raz.",
+        "cloudTitle": "stella AI",
+        "cloudBody": "Nič sa nesťahuje. Zvuk sa posiela do stelly a cez poskytovateľa AI stelly k poskytovateľovi zvoleného modelu. stella ho neukladá."
+      },
+      "app": {
+        "title": "Text prispôsobený aplikácii",
+        "body": "Úprava pomocou AI vie písať pre aplikáciu, do ktorej diktujete, takže e-mail znie ako e-mail a správa v chate ako správa v chate.",
+        "sentAppKind": "Dozvie sa druh aplikácie, napríklad e-mail, chat alebo dokument, nie jej názov.",
+        "notStored": "stella nič z toho neukladá.",
+        "off": "Bez úpravy sa text napíše tak, ako bol prepísaný, a nič nejde na úpravu pomocou AI."
+      },
+      "context": {
+        "title": "Viac kontextu pre úpravu",
+        "body": "Voliteľné a vypnuté, kým to nezapnete. Číta sa len pri začatí diktovania a ide len na úpravu pomocou AI. stella nič z toho neukladá."
+      },
+      "words": {
+        "title": "Naučte stellu svoje slová",
+        "body": "Pridajte mená a výrazy, ktoré má stella písať po vašom, napríklad názov vašej kancelárie, klientov alebo výrazy z iného jazyka. Zoznam začína prázdny.",
+        "examplesLabel": "Nápady:",
+        "examples": {
+          "firm": "Názov vašej kancelárie",
+          "client": "Meno klienta",
+          "term": "Výraz, ktorý používate"
+        }
+      }
+    },
     "guideWaiting": "Zapnite stella desktop v zozname vyššie a povoľte tak Prístupnosť.",
     "guideAllowed": "stella desktop má povolenie",
     "never": {

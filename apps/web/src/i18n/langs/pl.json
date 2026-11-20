@@ -1732,12 +1732,25 @@
       "unorderedList": "Lista punktowana",
       "wholeBlockRequired": "Aby zmienić styl, zaznacz cały akapit lub listę."
     },
+    "answerNotFinished": "stella nie dokończyła tej odpowiedzi.",
     "answerQuote": {
       "showInDecision": "Pokaż w orzeczeniu",
       "unverified": "Cytat niezweryfikowany",
       "unverifiedHint": "Cytowane orzeczenia nie zawierają tego tekstu dosłownie",
       "verified": "Zweryfikowany cytat",
       "verifiedHint": "Dosłownie w {source}"
+    },
+    "answerTable": {
+      "copy": "Kopiuj tabelę",
+      "copyAs": "Kopiuj jako {format}",
+      "download": "Pobierz tabelę",
+      "downloadAs": "Pobierz jako {format}",
+      "fullscreen": "Otwórz na pełnym ekranie",
+      "fullscreenTitle": "Tabela na pełnym ekranie",
+      "singleLine": "W jednym wierszu",
+      "size": "{rows, plural, one {# wiersz} few {# wiersze} many {# wierszy} other {# wiersza}} · {columns, plural, one {# kolumna} few {# kolumny} many {# kolumn} other {# kolumny}}",
+      "textMode": "Tekst komórek",
+      "wrap": "Zawijaj tekst"
     },
     "applyMode": {
       "description": "Word zapisuje, kto wprowadził każdą zmianę. Zapamiętamy Twój wybór.",
@@ -2248,6 +2261,8 @@
       "localPlace": "Twój komputer, {harness}",
       "localSelection": "Twój komputer · {harness}",
       "placeState": "{place}. {state}",
+      "startedInCloud": "Nowy czat uruchomiono w chmurze, ponieważ {harness} na Twoim komputerze jest niedostępny ({state})",
+      "startedInCloudCheckFailed": "Nowy czat uruchomiono w chmurze, ponieważ nie udało się sprawdzić Twojego komputera",
       "stepsCheck": "Otwieranie stella desktop. Jeśli aplikacja się nie otworzy, otwórz ją na swoim komputerze i sprawdź agenta {harness} w sekcji Ustawienia › Ogólne › Subskrypcje AI.",
       "stepsInstall": "Otwieranie stella desktop. Jeśli aplikacja się nie otworzy, otwórz ją na swoim komputerze i w sekcji Ustawienia › Ogólne wybierz Zainstaluj przy agencie {harness}.",
       "stepsSignInClaudeCode": "Otwieranie stella desktop, aby się zalogować. Jeśli aplikacja się nie otworzy, otwórz ją i wybierz Ustawienia › Ogólne › Zaloguj się przez Claude.",
@@ -2313,6 +2328,20 @@
       "runFull": "Agent nie przyjmie teraz kolejnych wiadomości.",
       "title": "Twoja wiadomość czeka w kolejce, aż agent skończy",
       "turnNotRunning": "Agent w tej chwili nie pracuje."
+    },
+    "stepDigest": {
+      "decisionsFound": "{found, plural, one {Znaleziono # orzeczenie} few {Znaleziono # orzeczenia} many {Znaleziono # orzeczeń} other {Znaleziono # orzeczenia}}",
+      "decisionsFoundUsed": "{found, plural, one {Znaleziono # orzeczenie} few {Znaleziono # orzeczenia} many {Znaleziono # orzeczeń} other {Znaleziono # orzeczenia}}, {used, plural, one {# użyte w odpowiedzi} few {# użyte w odpowiedzi} many {# użytych w odpowiedzi} other {# użytego w odpowiedzi}}",
+      "filterAsOf": "Na dzień {date}",
+      "legislationFound": "{count, plural, one {# akt lub przepis} few {# akty i przepisy} many {# aktów i przepisów} other {# aktu i przepisu}}",
+      "lookupDidNotGoThrough": "To wyszukiwanie się nie powiodło.",
+      "moreFound": "{count, plural, one {i # więcej} few {i # więcej} many {i # więcej} other {i # więcej}}",
+      "moreLookups": "{count, plural, one {Nie pokazano # zapytania} few {Nie pokazano # zapytań} many {Nie pokazano # zapytań} other {Nie pokazano # zapytania}}",
+      "notRecorded": "Ten krok został wykonany, zanim stella zaczęła zapisywać, czego szuka każdy krok.",
+      "nothingFound": "Brak wyników.",
+      "technicalDetails": "Szczegóły techniczne",
+      "usedInAnswer": "Użyte w odpowiedzi",
+      "versionFrom": "Wersja od {date}"
     },
     "stopFailed": "Nie udało się zatrzymać odpowiedzi. Spróbuj ponownie.",
     "stopResponse": "Zatrzymaj",
@@ -5756,6 +5785,9 @@
       "chatNotificationsDescription": "Otrzymuj powiadomienie z tej przeglądarki, gdy odpowiedź na czacie zakończy się, a stella działa w tle.",
       "chatNotificationsToggle": "Powiadamiaj mnie, gdy odpowiedź jest gotowa lub wymaga mojej reakcji",
       "chatNotificationsUnsupported": "Ta przeglądarka nie obsługuje powiadomień.",
+      "chatTechnicalDetails": "Szczegóły techniczne na czacie",
+      "chatTechnicalDetailsDescription": "Każdy krok na czacie pokazuje, czego szukał i co znalazł. Po włączeniu zobaczysz też kod i surowe wyniki.",
+      "chatTechnicalDetailsToggle": "Pokazuj szczegóły techniczne na czacie",
       "confirmDelete": "Potwierdź usunięcie konta",
       "dangerZone": "Strefa zagrożenia",
       "dangerZoneDescription": "Trwale usuń dostęp do konta i prywatne dane konta.",
@@ -7910,7 +7942,6 @@
         "endDate": "Data zakończenia",
         "month": "Miesiąc",
         "quarter": "Kwartał",
-        "showTable": "Pokaż tabelę",
         "startDate": "Data rozpoczęcia",
         "week": "Tydzień"
       },

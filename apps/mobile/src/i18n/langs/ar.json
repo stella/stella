@@ -212,6 +212,11 @@
       "validate_skill_package": "التحقق من المهارة",
       "web_search": "البحث على الويب"
     },
+    "toolResearch": {
+      "caseLaw": "جارٍ البحث في الاجتهاد القضائي",
+      "legislation": "جارٍ قراءة التشريعات",
+      "legislationAndCaseLaw": "جارٍ البحث في التشريعات والاجتهاد القضائي"
+    },
     "localRun": {
       "title": {
         "sign_in": "سجّل الدخول للمتابعة",

@@ -4,6 +4,10 @@ import path from "node:path";
 import * as v from "valibot";
 
 import { AI_ERROR_KINDS } from "@stll/api-contract/ai-errors";
+import {
+  CODE_TOOL_RESEARCHES,
+  type CodeToolResearch,
+} from "@stll/api-contract/chat-code-step";
 import { CHAT_TOOL_LABELS } from "@stll/api-contract/chat-tool-activity";
 import { UI_LOCALES } from "@stll/locales";
 
@@ -41,6 +45,14 @@ const WEB_TITLE_KEYS: Readonly<Record<string, readonly string[]>> = {
   show_visual: ["chat", "generatedView"],
   "skill-edit": ["common", "edit"],
 };
+
+/** Where the web keeps the title of each research a code step does
+ *  (`CODE_TOOL_RESEARCH_TITLE_KEYS` in `tool-call-title.logic.ts`). */
+const WEB_RESEARCH_TITLE_KEYS = {
+  caseLaw: ["chat", "toolCall", "searchingCaseLaw"],
+  legislation: ["chat", "toolCall", "readingLegislation"],
+  legislationAndCaseLaw: ["chat", "toolCall", "searchingLegislationAndCaseLaw"],
+} as const satisfies Record<CodeToolResearch, readonly string[]>;
 
 /**
  * Where the web keeps each phrase of a coding agent's own steps: the title
@@ -188,6 +200,14 @@ describe("an answer's steps", () => {
         title: at(web, WEB_TITLE_KEYS[label] ?? ["chat", "tool", label]),
       }).toEqual({ label, title });
     }
+    // A code step is titled by the research it does, from the same rules
+    // the web uses (`codeStepResearch`), in the web's words.
+    expect(Object.keys(chat.toolResearch).toSorted()).toEqual(
+      [...CODE_TOOL_RESEARCHES].toSorted(),
+    );
+    expect(webMessages(web, WEB_RESEARCH_TITLE_KEYS)).toEqual(
+      chat.toolResearch,
+    );
     expect(at(web, ["chat", "processSummary"])).toEqual(chat.processSummary);
     expect(at(web, ["common", "stepCount"])).toBe(chat.stepCount);
     expect(at(web, ["chat", "reasoning"])).toBe(chat.reasoning);

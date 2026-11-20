@@ -19,6 +19,16 @@ export const publicRouteExceptions: Record<string, string> = {
     "The handoff confirmation route requires root-loader state captured from an MCP handoff; its panel is covered separately.",
   "/sharepoint/oauth-callback":
     "The SharePoint OAuth callback reports the outcome and navigates to the connections settings on mount; it has no stable leaf body. The destination route is covered separately.",
+  "/knowledge/templates:anonymous":
+    "An organization's templates send a visitor to the published catalogue (`/knowledge/templates/catalogue`, covered separately) before the page body mounts.",
+  "/knowledge/playbooks:anonymous":
+    "An organization's playbooks send a visitor to the ready-made ones (`/knowledge/playbooks/catalogue`, covered separately) before the page body mounts.",
+  "/knowledge/tools:anonymous":
+    "An organization's tools send a visitor to the published list (`/knowledge/tools/catalogue`, covered separately) before the page body mounts.",
+  "/knowledge/tools_/skills/$skillId:member":
+    "The skill editor needs a browser editing surface (EditContext, execCommand) the DOM fixture lacks; agent-skills.spec.ts drives it in a browser.",
+  "/knowledge/tools_/skills/$skillId:anonymous":
+    "A skill belongs to an organization: a visitor gets the not-found page, not the editor.",
   "/knowledge/clauses:anonymous":
     "KnowledgeMemberOnly redirects anonymous visitors to the Knowledge landing before its page body mounts.",
   "/knowledge/styles:anonymous":

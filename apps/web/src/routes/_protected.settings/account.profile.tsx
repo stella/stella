@@ -76,6 +76,7 @@ import { TimeZonePicker } from "@/lib/time-zone-picker";
 import { organizationSettingsOptions } from "@/queries/organization-settings";
 import { routePresentation } from "@/routes/-route-presentation";
 import { ChatNotificationsCard } from "@/routes/_protected.settings/-components/account/chat-notifications-card";
+import { ChatTechnicalDetailsCard } from "@/routes/_protected.settings/-components/account/chat-technical-details-card";
 import { DeletionTaskReassignments } from "@/routes/_protected.settings/-components/account/deletion-task-reassignments";
 import type { DeletionTaskGroup } from "@/routes/_protected.settings/-components/account/deletion-task-reassignments";
 import { PersonalDataExportCard } from "@/routes/_protected.settings/-components/account/personal-data-export-card";
@@ -607,6 +608,8 @@ function ProfilePageBody() {
       <LocalePreferences />
 
       <ChatNotificationsCard />
+
+      <ChatTechnicalDetailsCard />
 
       <SignInMethods />
       <TwoFactorCard />

@@ -212,6 +212,11 @@
       "validate_skill_package": "Patikrinti įgūdį",
       "web_search": "Ieškoma internete"
     },
+    "toolResearch": {
+      "caseLaw": "Ieškoma teismų praktikoje",
+      "legislation": "Skaitomi teisės aktai",
+      "legislationAndCaseLaw": "Ieškoma teisės aktuose ir teismų praktikoje"
+    },
     "localRun": {
       "title": {
         "sign_in": "Prisijunkite, kad tęstumėte",
