@@ -129,7 +129,7 @@ type HeldDecisionAttachmentDisposition =
   | {
       type: "review";
       review: HeldDecisionReview;
-      evidence?: HeldDecisionMatchEvidence;
+      evidence?: Exclude<HeldDecisionMatchEvidence, { status: "matched" }>;
       basis: HeldDecisionMatchBasis;
       candidateDecisionIds: SafeId<"caseLawDecision">[];
     }
@@ -157,12 +157,7 @@ type HostDecision = {
 type HostMatch =
   | { type: "none" }
   | { type: "one"; basis: HeldDecisionAttachingBasis; host: HostDecision }
-  | {
-      type: "review";
-      review: HeldDecisionReview;
-      basis: HeldDecisionMatchBasis;
-      candidateDecisionIds: SafeId<"caseLawDecision">[];
-    };
+  | Extract<HeldDecisionAttachmentDisposition, { type: "review" }>;
 
 export type AttachToHeldDecisionOptions = {
   declaration: HeldDecisionAttachment<string>;
@@ -609,7 +604,6 @@ const attachmentParkReason = (match: HostMatch, ownershipConflict: boolean) => {
             "The matched publisher is outside this collection's attachment policy",
         };
       case "conflict":
-      case "matched":
       case undefined:
         break;
       default:
