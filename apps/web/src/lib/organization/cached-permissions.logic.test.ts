@@ -55,7 +55,7 @@ const settingsAdmitting = (
   capabilities: Object.fromEntries(
     featureIds.map((id) => [id, { status: "enabled" as const }]),
   ),
-  deploymentFeatures: {},
+  deploymentFeatures: { legalLists: false, invoiceLinks: false },
 });
 
 const CALLER = { organizationId: "org-a", userId: "user-a" };
