@@ -12,6 +12,10 @@ import { isRecord } from "@/api/lib/type-guards";
  *   local email, name or picture of the account it signs in.
  * - `pkce` is on: the authorization code is bound to the sign-in that asked
  *   for it.
+ * - `allowIdpInitiated` is never on: a sign-in starts here, so its state
+ *   carries the nonce the ID token must repeat. The plugin restarts an
+ *   identity-provider-initiated callback without that nonce, so it could
+ *   never complete.
  */
 export const admitSsoOidcConfig = (
   json: string,
@@ -48,6 +52,17 @@ export const admitSsoOidcConfig = (
     return Result.err(
       new ConfigurationError({
         message: "SSO provider configuration must require PKCE",
+      }),
+    );
+  }
+  if (
+    config["allowIdpInitiated"] !== undefined &&
+    config["allowIdpInitiated"] !== false
+  ) {
+    return Result.err(
+      new ConfigurationError({
+        message:
+          "SSO provider configuration may not allow identity-provider-initiated sign-in",
       }),
     );
   }

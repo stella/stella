@@ -466,6 +466,10 @@ describe("organization SSO", () => {
   test.each([
     { name: "overrides user profiles", config: { overrideUserInfo: true } },
     { name: "does not require PKCE", config: { pkce: false } },
+    {
+      name: "allows identity-provider-initiated sign-in",
+      config: { allowIdpInitiated: true },
+    },
   ])(
     "refuses to store a provider configuration that $name",
     async ({ config }) => {
