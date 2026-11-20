@@ -163,7 +163,7 @@
       "other": "No pudimos entregar el correo electrónico a <email>{emailAddress}</email>. Inténtelo de nuevo más tarde o use otra dirección de correo electrónico.",
       "tlsRequired": "No podemos entregar correos electrónicos a <domain>{domainName}</domain>: su servidor de correo no acepta correo cifrado. Pida a su departamento de TI que active TLS (STARTTLS) en el servidor de correo o use otra dirección de correo electrónico."
     },
-    "emailPlaceholder": "usted@example.com",
+    "emailPlaceholder": "tu@example.com",
     "enterBootstrapCredentials": "Introduzca una dirección de correo válida, su contraseña y el token de configuración.",
     "enterEmailAndPassword": "Introduzca una dirección de correo válida y su contraseña.",
     "error": {
@@ -296,7 +296,7 @@
       "overrideVerdict": "Cambiar resultado",
       "recordConflict": {
         "confirmGoverningRecord": "Confirmar como determinante",
-        "description": "Dos hechos de referencia tratan el mismo punto (<strong>{subject}</strong>), pero discrepan. Ambos proceden de fuentes de <strong>alta confianza</strong>, por lo que no es un problema de fiabilidad: el propio registro es incoherente. AVT no emite un resultado ni puntúa la afirmación, porque decidir qué registro prevalece es una valoración que usted debe realizar y dejar registrada; la herramienta no debe hacerla en silencio.",
+        "description": "Dos hechos de referencia tratan el mismo punto (<strong>{subject}</strong>), pero discrepan. Ambos proceden de fuentes de <strong>alta confianza</strong>, por lo que no es un problema de fiabilidad: el propio registro es incoherente. AVT no emite un resultado ni puntúa la afirmación, porque decidir qué registro prevalece es una valoración que debes realizar y dejar registrada; la herramienta no debe hacerla en silencio.",
         "escalatedNotice": "Marcado para el equipo de pruebas. El conflicto del registro permanece abierto y se contabiliza hasta que se elija un registro prevalente.",
         "flagForEvidenceTeam": "Marcar para el equipo de pruebas",
         "governed": "<strong>{value}</strong> prevalece: la afirmación se valora frente a este registro. El otro registro permanece archivado.",
@@ -345,7 +345,7 @@
       "contradicted": "El registro difiere de esta afirmación. Hace falta una decisión humana antes de dar por válido el resultado.",
       "nocover": "Ningún hecho de la lista cubre todavía esta afirmación.",
       "notverifiable": "Reservada como no verificable; la aprobación es opcional. Reábrala abajo si realmente puede comprobarse.",
-      "recordconflict": "Dos documentos del registro discrepan. Resuelva arriba cuál prevalece o avise al equipo de pruebas; la herramienta no decidirá por usted.",
+      "recordconflict": "Dos documentos del registro discrepan. Resuelve arriba cuál prevalece o avisa al equipo de pruebas; la herramienta no decidirá por ti.",
       "restsOnHeld": "Un hecho en el que se basa este resultado está retenido para revisión; confirme que el resultado se sostiene sin él o vuelva a verificar la afirmación cuando el hecho esté resuelto.",
       "scopeMismatch": "Un hecho citado tiene un alcance distinto del de la afirmación. Valore si la resuelve tal como está redactada antes de que el resultado se mantenga.",
       "supported": "El registro lo confirma. Su aprobación confirma que la herramienta lo ha interpretado correctamente; no se requiere una valoración.",
@@ -371,7 +371,7 @@
     "extraction": {
       "busy": "Termine primero la extracción en curso y su revisión.",
       "confirmStart": "{units, plural, one {Iniciar, # unidad} many {Iniciar, # unidades} other {Iniciar, # unidades}}",
-      "dialogDescription": "Usted acepta o rechaza cada hecho antes de que entre en el registro.",
+      "dialogDescription": "Aceptas o rechazas cada hecho antes de que entre en el registro.",
       "dialogTitle": "Extraer hechos de documentos",
       "documentsChosen": "{count, plural, one {# elegido, hasta {max}} many {# elegidos, hasta {max}} other {# elegidos, hasta {max}}}",
       "documentsLabel": "Documentos que leer",
@@ -834,7 +834,7 @@
         "travel": "Desplazamiento"
       },
       "dateIncurred": "Fecha de gasto",
-      "descriptionPlaceholder": "Describa el gasto...",
+      "descriptionPlaceholder": "Describa el gasto…",
       "invoiceDescription": "Descripción en factura",
       "markup": "Margen (%)",
       "noExpenses": "Sin gastos para este período"
@@ -1035,14 +1035,14 @@
       "totalEntries": "{count, plural, one {# registro} other {# registros} many {# registros}}",
       "void": "Anular"
     },
-    "loading": "Cargando...",
+    "loading": "Cargando…",
     "markBillableSelected": "Marcar como facturable",
     "markNonBillableSelected": "Marcar como no facturable",
     "matterRequired": "Seleccione un asunto",
     "minutes": "Minutos",
     "moveEntryHint": "Al guardar, el registro pasa a este asunto y se valora con sus tarifas.",
     "narrative": "Descripción",
-    "narrativePlaceholder": "Describa el trabajo realizado...",
+    "narrativePlaceholder": "Describa el trabajo realizado…",
     "noActiveTimer": "Sin temporizador activo",
     "noEntries": "No hay registros de tiempo para este período",
     "nonBillable": "No facturable",
@@ -1123,7 +1123,7 @@
       "save": "Guardar descripción",
       "title": "Descripciones guardadas"
     },
-    "selectMatter": "Seleccione un asunto...",
+    "selectMatter": "Seleccione un asunto…",
     "selectMatterToStart": "Seleccione un asunto para iniciar el temporizador",
     "sellerProfiles": {
       "add": "Añadir perfil de vendedor",
@@ -1271,7 +1271,7 @@
       "topics": "Temas",
       "treatment": "Tratamiento posterior"
     },
-    "analyzing": "Analizando...",
+    "analyzing": "Analizando…",
     "browse": {
       "courtDescription": "{court} ({country}): resoluciones en la base jurídica pública de stella, por año y mes.",
       "courts": "Tribunales",
@@ -1424,7 +1424,7 @@
       "matchedIn": "Coincidencia en {language}"
     },
     "linkedPassageGone": "El pasaje enlazado ya no está en este texto.",
-    "loadingMore": "Cargando más...",
+    "loadingMore": "Cargando más…",
     "marginFilter": {
       "label": "Filtro de disposiciones citadas",
       "paragraph": "{count, plural, one {# disposición citada en el ¶{paragraph}} many {# de disposiciones citadas en el ¶{paragraph}} other {# disposiciones citadas en el ¶{paragraph}}}",
@@ -1892,7 +1892,7 @@
       "referenceMatter": "Hacer referencia a este asunto",
       "searchFiles": "Buscar archivos",
       "searchMatters": "Buscar asuntos",
-      "searchMcpServers": "Buscar servidores MCP...",
+      "searchMcpServers": "Buscar servidores MCP…",
       "searchSkills": "Buscar habilidades",
       "skillNeeds": {
         "browserExtension": "Conecta la extensión del navegador para usar esta habilidad",
@@ -1978,7 +1978,7 @@
     "emptyThreadDescription": "Pregunta sobre este asunto, redacta texto o pide una breve nota de investigación.",
     "emptyThreadTitle": "Iniciar conversación",
     "enterAuthorName": "Introduzca el nombre que se usará en el control de cambios.",
-    "extractingContent": "Extrayendo contenido...",
+    "extractingContent": "Extrayendo contenido…",
     "fileThreadRebound": "El chat de este archivo ya se inició en otra sesión. Tu mensaje se ha conservado; envíalo de nuevo.",
     "fileTooLarge": "El archivo supera el límite de {maxSize}",
     "focusSuggestion": "Enfocar sugerencia: {topic}",
@@ -2708,8 +2708,8 @@
     "saveFailed": "Error al guardar",
     "saveFailedLeaveDescription": "No se han podido guardar tus cambios. Puedes seguir editando o salir y descartarlos.",
     "saveVersionAndLeave": "Guardar versión y salir",
-    "searchClauses": "Buscar cláusulas...",
-    "searchPlaceholder": "Buscar cláusulas...",
+    "searchClauses": "Buscar cláusulas…",
+    "searchPlaceholder": "Buscar cláusulas…",
     "selectClauseToLink": "Seleccione una cláusula para vincularla.",
     "selectVersionToCompare": "Seleccione una versión para comparar con la actual",
     "slotCustom": "Nombre de espacio personalizado…",
@@ -3091,7 +3091,7 @@
     "scopeThisPage": "(esta página)",
     "scrollToBottom": "Ir abajo",
     "scrollToTop": "Ir arriba",
-    "search": "Buscar...",
+    "search": "Buscar…",
     "searchIn": "Buscar en",
     "searchMembers": "Buscar miembros…",
     "selectAMatter": "Selecciona un asunto",
@@ -3280,7 +3280,7 @@
       "emails": "Correos electrónicos",
       "invalidDataBox": "El ID del buzón de datos debe tener 7 letras o dígitos.",
       "invalidEmail": "Introduzca una dirección de correo electrónico válida.",
-      "phonePlaceholder": "+34...",
+      "phonePlaceholder": "+34…",
       "phones": "Teléfonos",
       "title": "Comunicación"
     },
@@ -3481,7 +3481,7 @@
       "year": "Solo el año"
     },
     "saved": "Se guardaron los datos del contacto.",
-    "search": "Buscar contactos...",
+    "search": "Buscar contactos…",
     "searchCountries": "Buscar países",
     "selectContact": "Seleccionar {name}",
     "title": "Clientes",
@@ -3868,7 +3868,7 @@
     "confirmDeleteVersion": "Esto eliminará de forma permanente la versión {version}. Esta acción no se puede deshacer.",
     "current": "Actual",
     "deleteVersion": "Eliminar versión",
-    "descriptionPlaceholder": "Agregar una nota sobre esta versión...",
+    "descriptionPlaceholder": "Agregar una nota sobre esta versión…",
     "displayFailed": "No se pudo mostrar este archivo.",
     "downloadRedline": "Descargar redline",
     "dropToUploadVersion": "Suelte aquí para subir como nueva versión",
@@ -4101,7 +4101,7 @@
     "collaborationSnapshotRecovered": "No se pudo volver a abrir la copia de colaboración almacenada. La sala se restauró a partir del último documento guardado; es posible que se hayan perdido los cambios no guardados.",
     "comment": "Comentario",
     "comments": {
-      "addPlaceholder": "Añadir comentario...",
+      "addPlaceholder": "Añadir comentario…",
       "cancel": "Cancelar",
       "hideAll": "Ocultar comentarios",
       "moreReplies": "{count} respuestas más",
@@ -4154,7 +4154,7 @@
     "findReplace": {
       "close": "Cerrar búsqueda",
       "findAndReplace": "Buscar y reemplazar",
-      "findPlaceholder": "Buscar en el documento...",
+      "findPlaceholder": "Buscar en el documento…",
       "findText": "Texto a buscar",
       "matchCase": "Coincidir mayúsculas",
       "matchCounter": "{current} / {total}",
@@ -4163,7 +4163,7 @@
       "previousShortcut": "Coincidencia anterior (Shift+Enter)",
       "replaceAll": "Reemplazar todo",
       "replaceCurrent": "Reemplazar coincidencia actual",
-      "replacePlaceholder": "Texto de reemplazo...",
+      "replacePlaceholder": "Texto de reemplazo…",
       "replaceText": "Texto de reemplazo",
       "wholeWords": "Palabras completas"
     },
@@ -4187,7 +4187,7 @@
     "listFormatting": "Formato de lista",
     "listsGroup": "Listas",
     "loadingDocument": "Cargando el documento…",
-    "loadingEditor": "Cargando editor...",
+    "loadingEditor": "Cargando editor…",
     "lockFile": "Bloquear archivo",
     "markupView": {
       "allMarkup": "Todas las revisiones",
@@ -4214,7 +4214,7 @@
     "saveEditorUnavailableTitle": "El editor no está listo",
     "saveSerializeFailedDescription": "Folio no pudo generar un archivo DOCX seguro a partir de la edición actual. Tu sesión sigue abierta.",
     "saveSerializeFailedTitle": "No se pudo crear el DOCX",
-    "savingDocument": "Guardando...",
+    "savingDocument": "Guardando…",
     "showDetails": "Mostrar detalles",
     "somethingWentWrong": "Algo salió mal. Inténtalo de nuevo o recarga la página si vuelve a ocurrir.",
     "synced": "Sincronizado",
@@ -5390,7 +5390,7 @@
     "sources": {
       "extracted": "Extraído",
       "tool": "Herramienta",
-      "user": "Añadido por usted"
+      "user": "Añadido por ti"
     },
     "suggestions": {
       "reviewing": "Registrando su decisión…"
@@ -5922,7 +5922,7 @@
     "noResults": "Sin resultados para \"{query}\".",
     "noUpcomingDeadlines": "No hay próximos plazos",
     "openMatter": "Abrir asunto <bdi>{name}</bdi>",
-    "placeholder": "Buscar en todos los asuntos...",
+    "placeholder": "Buscar en todos los asuntos…",
     "previewUnavailable": "Vista previa no disponible",
     "recentDocuments": "Documentos recientes",
     "recentSearches": "Búsquedas recientes",
@@ -5965,7 +5965,7 @@
     "searchRegistries": "Buscar en registros",
     "summaryAction": "Resumir mejores resultados",
     "summaryError": "Resumen no disponible",
-    "summaryLoading": "Resumiendo resultados...",
+    "summaryLoading": "Resumiendo resultados…",
     "summaryPrompt": "Usa los mejores resultados y su contenido para redactar una respuesta breve.",
     "summaryRetry": "Haga clic para intentarlo de nuevo.",
     "timeFilterCustom": "Rango personalizado",
@@ -6009,9 +6009,9 @@
       "deleteAccountConfirmationPhrase": "La eliminación es irreversible.",
       "deleteAccountOtpDescription": "Hemos enviado un código de verificación de 6 dígitos a su correo electrónico. Ingréselo a continuación para confirmar la eliminación.",
       "deleteAccountSuccess": "Su cuenta ha sido eliminada con éxito.",
-      "deleteAccountTaskBulkReassign": "Transferir todas las tareas activas de este espacio de trabajo...",
+      "deleteAccountTaskBulkReassign": "Transferir todas las tareas activas de este espacio de trabajo…",
       "deleteAccountTaskReassignNone": "No hay otros miembros en este espacio de trabajo",
-      "deleteAccountTaskReassignPlaceholder": "Seleccionar un miembro...",
+      "deleteAccountTaskReassignPlaceholder": "Seleccionar un miembro…",
       "deleteAccountTasksDescription": "Tiene tareas activas asignadas. Transfiéralas a otros miembros del espacio de trabajo para que el trabajo continúe.",
       "deleteAccountTasksTitle": "Transferir tareas activas",
       "deleteAccountTasksUnassignedNotice": "Las tareas sin un miembro seleccionado permanecerán en su espacio de trabajo sin persona asignada.",
@@ -6028,7 +6028,7 @@
       "desktopCardMissingDetail": "Instálalo, o conéctalo si ya está instalado en este equipo.",
       "desktopCardMissingTitle": "stella desktop aún no está vinculado",
       "desktopCardOpeningDetail": "Vinculando este equipo a <bdi>{identity}</bdi> en {host}. Si el navegador lo pide, permite que abra stella desktop.",
-      "desktopCardOpeningTitle": "Abriendo stella desktop...",
+      "desktopCardOpeningTitle": "Abriendo stella desktop…",
       "desktopCardOutdatedDetail": "La versión {version} está vinculada a <bdi>{identity}</bdi>. Instala la última versión para que los documentos y la actividad sigan funcionando.",
       "desktopCardOutdatedTitle": "stella desktop necesita una actualización",
       "desktopClipboardDescription": "Abre, busca, organiza y reutiliza texto copiado desde cualquier aplicación.",
@@ -6203,9 +6203,9 @@
       "auditLogsExport": "Exportar registros",
       "auditLogsExportFailed": "No se pudo exportar el registro de actividad.",
       "auditLogsExportTooLarge": "La exportación contiene demasiadas filas. Limita los filtros e inténtalo de nuevo.",
-      "auditLogsExporting": "Exportando...",
+      "auditLogsExporting": "Exportando…",
       "auditLogsFrom": "Desde",
-      "auditLogsLoading": "Cargando registros...",
+      "auditLogsLoading": "Cargando registros…",
       "auditLogsMoreChanges": "+{count, plural, one {# más} other {# más} many {# más}}",
       "auditLogsNoChanges": "No se registraron cambios en los campos.",
       "auditLogsPerformer": "Realizado por",
@@ -6369,7 +6369,7 @@
       "pastInvitations": "Invitaciones anteriores",
       "pendingInvitations": "Invitaciones pendientes",
       "practiceJurisdictions": "Jurisdicciones",
-      "practiceJurisdictionsDescription": "Seleccione las jurisdicciones relevantes para usted.",
+      "practiceJurisdictionsDescription": "Selecciona las jurisdicciones relevantes para ti.",
       "promptCaching": {
         "description": "Cuando está activado, stella añade marcadores de caché para que las solicitudes de IA repetidas sobre el mismo documento o hilo cuesten ~10× menos y terminen más rápido. Los prompts en caché permanecen con el proveedor de IA hasta 5 minutos, limitados a tu organización. Al desactivarlo, stella deja de enviar marcadores de caché, pero los proveedores pueden seguir cacheando oportunísticamente; solo un contrato de Zero Data Retention con el proveedor desactiva por completo el cacheo del lado del servidor.",
         "title": "Caché de prompts"
@@ -7011,7 +7011,7 @@
     "fillFailed": "No se pudo generar el documento",
     "fillForm": "Rellenar plantilla",
     "generate": "Generar documento",
-    "generating": "Generando...",
+    "generating": "Generando…",
     "inputTypes": {
       "boolean": "Sí / No",
       "company": "ID de empresa",
@@ -7052,7 +7052,7 @@
     "prefillTitle": "Prerrellenar desde documentos",
     "previewEmpty": "Sin contenido para previsualizar",
     "previewFailed": "Error al generar la vista previa",
-    "previewFillLoading": "Generando vista previa...",
+    "previewFillLoading": "Generando vista previa…",
     "previewFillTitle": "Vista previa de cumplimentación",
     "previewSectionBody": "Cuerpo",
     "previewSectionFooter": "Pie de página",
@@ -7419,7 +7419,7 @@
     },
     "entitiesCount": "{count, plural, one {# elemento} other {# elementos} many {# elementos}}",
     "fields": {
-      "calculating": "Calculando...",
+      "calculating": "Calculando…",
       "errored": "Error",
       "formatNotSupported": "Formato no compatible",
       "recordChoose": "{count, plural, one {Confirmar # coincidencia} many {Elegir entre # coincidencias} other {Elegir entre # coincidencias}}",
@@ -7458,7 +7458,7 @@
         "sentDescription": "Esperando a que <bdi>{application}</bdi> abra la copia local.",
         "sentTitle": "Enviado a stella desktop",
         "takeoverWaiting": "Esperando respuesta",
-        "takeoverWaitingDescription": "Pidiendo a {name} que libere el bloqueo...",
+        "takeoverWaitingDescription": "Pidiendo a {name} que libere el bloqueo…",
         "unavailableDescription": "Inicia stella desktop y mantenlo abierto antes de usar la edición de escritorio.",
         "unavailableTitle": "stella desktop no está disponible.",
         "updateRequiredDescription": "stella desktop necesita una actualización. Se actualizará automáticamente cuando terminen las ediciones de escritorio activas; inténtalo de nuevo después de que se reinicie.",
@@ -7580,7 +7580,7 @@
       "versionOrNewFile": {
         "addAsVersion": "Añadir como versión {version, number}",
         "addAsVersionThere": "Añadir allí como versión {version, number}",
-        "checkingReference": "Comprobando la referencia del archivo...",
+        "checkingReference": "Comprobando la referencia del archivo…",
         "createNewOption": "Crear nuevo archivo",
         "description": "Soltaste \"{fileName}\" sobre un documento existente.",
         "extensionMismatch": "Extensión no coincide: esperado {expected}, recibido {actual}",
@@ -7653,7 +7653,7 @@
       },
       "to": "Hasta"
     },
-    "generatingCitations": "Generando citas...",
+    "generatingCitations": "Generando citas…",
     "importOrganizer": {
       "action": "Organizar archivos",
       "actionSelected": "Organizar seleccionados ({count, number})",
@@ -7667,7 +7667,7 @@
       "expandFolder": "Expandir carpeta",
       "failed": "Error al organizar",
       "generateAi": "Generar sugerencias de IA",
-      "generating": "Generando sugerencias de IA...",
+      "generating": "Generando sugerencias de IA…",
       "instructionsEmpty": "Sin instrucciones personalizadas",
       "instructionsPlaceholder": "p. ej. Usar nombres de carpetas en español, agrupar por contraparte, anteponer el año a las fechas.",
       "instructionsTitle": "Instrucciones de IA",
@@ -7873,7 +7873,7 @@
       "recentClients": "Clientes recientes",
       "removeClient": "Eliminar cliente",
       "removeParty": "Eliminar parte",
-      "searchContacts": "Buscar contactos..."
+      "searchContacts": "Buscar contactos…"
     },
     "pdf": {
       "adjustForDarkMode": "Ajustar páginas para modo oscuro",

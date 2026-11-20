@@ -834,7 +834,7 @@
         "travel": "Ceļojums"
       },
       "dateIncurred": "Rašanās datums",
-      "descriptionPlaceholder": "Aprakstiet izdevumu...",
+      "descriptionPlaceholder": "Aprakstiet izdevumu…",
       "invoiceDescription": "Rēķina apraksts",
       "markup": "Uzcenojums (%)",
       "noExpenses": "Nav izdevumu šajā periodā"
@@ -1035,14 +1035,14 @@
       "totalEntries": "{count, plural, zero {# ierakstu} one {# ieraksts} other {# ieraksti}}",
       "void": "Anulēt"
     },
-    "loading": "Ielādē...",
+    "loading": "Ielādē…",
     "markBillableSelected": "Atzīmēt kā apmaksājamus",
     "markNonBillableSelected": "Atzīmēt kā neapmaksājamus",
     "matterRequired": "Lūdzu, izvēlieties lietu",
     "minutes": "Minūtes",
     "moveEntryHint": "Saglabājot ieraksts tiek pārvietots uz šo lietu un novērtēts pēc tās likmēm.",
     "narrative": "Apraksts",
-    "narrativePlaceholder": "Aprakstiet veikto darbu...",
+    "narrativePlaceholder": "Aprakstiet veikto darbu…",
     "noActiveTimer": "Nav aktīva taimeris",
     "noEntries": "Šim periodam nav laika ierakstu",
     "nonBillable": "Neapmaksājams",
@@ -1123,7 +1123,7 @@
       "save": "Saglabāt aprakstu",
       "title": "Saglabātie apraksti"
     },
-    "selectMatter": "Izvēlieties lietu...",
+    "selectMatter": "Izvēlieties lietu…",
     "selectMatterToStart": "Atlasiet lietu, lai sāktu laika uzskaiti",
     "sellerProfiles": {
       "add": "Pievienot pārdevēja profilu",
@@ -1271,7 +1271,7 @@
       "topics": "Tēmas",
       "treatment": "Vēlākā judikatūra"
     },
-    "analyzing": "Analizē...",
+    "analyzing": "Analizē…",
     "browse": {
       "courtDescription": "{court} ({country}): nolēmumi stella publiskajā tiesību datubāzē pa gadiem un mēnešiem.",
       "courts": "Tiesas",
@@ -1424,7 +1424,7 @@
       "matchedIn": "Atbilstība valodā: {language}"
     },
     "linkedPassageGone": "Saistītā fragmenta šajā tekstā vairs nav.",
-    "loadingMore": "Ielādē vairāk...",
+    "loadingMore": "Ielādē vairāk…",
     "marginFilter": {
       "label": "Citēto normu filtrs",
       "paragraph": "{count, plural, one {¶{paragraph} citēta # norma} zero {¶{paragraph} citētas # normu} other {¶{paragraph} citētas # normas}}",
@@ -1892,7 +1892,7 @@
       "referenceMatter": "Atsaukties uz šo lietu",
       "searchFiles": "Meklēt failus",
       "searchMatters": "Meklēt lietas",
-      "searchMcpServers": "Meklēt MCP serverus...",
+      "searchMcpServers": "Meklēt MCP serverus…",
       "searchSkills": "Meklēt prasmes",
       "skillNeeds": {
         "browserExtension": "Lai izmantotu šo prasmi, pievienojiet pārlūka paplašinājumu",
@@ -1978,7 +1978,7 @@
     "emptyThreadDescription": "Jautājiet par šo lietu, sagatavojiet tekstu vai pieprasiet īsu izpētes piezīmi.",
     "emptyThreadTitle": "Sākt sarunu",
     "enterAuthorName": "Ievadiet vārdu, ko izmantot izmaiņu reģistrēšanai.",
-    "extractingContent": "Satura izgūšana...",
+    "extractingContent": "Satura izgūšana…",
     "fileThreadRebound": "Šī faila tērzēšana jau ir sākta citā sesijā. Jūsu ziņojums tika saglabāts; nosūtiet to vēlreiz.",
     "fileTooLarge": "Fails pārsniedz {maxSize} ierobežojumu",
     "focusSuggestion": "Fokusēt ieteikumu: {topic}",
@@ -2607,10 +2607,10 @@
       "viewImage": "Attēla skatīšana"
     },
     "turnNotification": {
-      "failedBody": "stellas tērzēšanas atbilde netika pabeigta.",
+      "failedBody": "Lietotnes stella tērzēšanas atbilde netika pabeigta.",
       "failedTitle": "Atbilde neizdevās",
       "needsInputBody": "Tērzēšana gaida jūsu apstiprinājumu vai atbildi.",
-      "needsInputTitle": "stellai vajadzīga jūsu rīcība",
+      "needsInputTitle": "Lietotnei stella vajadzīga jūsu rīcība",
       "replyReadyBody": "stella pabeidza atbildēt jūsu tērzēšanā.",
       "replyReadyTitle": "Atbilde gatava"
     },
@@ -2708,8 +2708,8 @@
     "saveFailed": "Neizdevās saglabāt",
     "saveFailedLeaveDescription": "Neizdevās saglabāt izmaiņas. Varat turpināt rediģēšanu vai aiziet un tās atmest.",
     "saveVersionAndLeave": "Saglabāt versiju un iziet",
-    "searchClauses": "Meklēt klauzulas...",
-    "searchPlaceholder": "Meklēt klauzulas...",
+    "searchClauses": "Meklēt klauzulas…",
+    "searchPlaceholder": "Meklēt klauzulas…",
     "selectClauseToLink": "Atlasiet klauzulu, ko piesaistīt.",
     "selectVersionToCompare": "Atlasiet versiju, ko salīdzināt ar pašreizējo",
     "slotCustom": "Pielāgots slota nosaukums…",
@@ -3091,7 +3091,7 @@
     "scopeThisPage": "(šī lapa)",
     "scrollToBottom": "Ritināt uz leju",
     "scrollToTop": "Ritināt uz augšu",
-    "search": "Meklēt...",
+    "search": "Meklēt…",
     "searchIn": "Meklēt",
     "searchMembers": "Meklēt dalībniekus…",
     "selectAMatter": "Izvēlieties lietu",
@@ -3280,7 +3280,7 @@
       "emails": "E-pasti",
       "invalidDataBox": "Datu pastkastes ID jābūt 7 burtiem vai cipariem.",
       "invalidEmail": "Ievadiet derīgu e-pasta adresi.",
-      "phonePlaceholder": "+371...",
+      "phonePlaceholder": "+371…",
       "phones": "Tālruņi",
       "title": "Saziņa"
     },
@@ -3481,7 +3481,7 @@
       "year": "Tikai gads"
     },
     "saved": "Kontaktinformācija saglabāta.",
-    "search": "Meklēt kontaktos...",
+    "search": "Meklēt kontaktos…",
     "searchCountries": "Meklēt valstis",
     "selectContact": "Atlasīt {name}",
     "title": "Klienti",
@@ -3868,7 +3868,7 @@
     "confirmDeleteVersion": "Tas neatgriezeniski izdzēsīs versiju {version}. Šo darbību nevar atsaukt.",
     "current": "Pašreizējā",
     "deleteVersion": "Dzēst versiju",
-    "descriptionPlaceholder": "Pievienot piezīmi par šo versiju...",
+    "descriptionPlaceholder": "Pievienot piezīmi par šo versiju…",
     "displayFailed": "Šo failu neizdevās parādīt.",
     "downloadRedline": "Lejupielādēt redline",
     "dropToUploadVersion": "Nometiet, lai augšupielādētu kā jaunu versiju",
@@ -4187,7 +4187,7 @@
     "listFormatting": "Saraksta formatēšana",
     "listsGroup": "Saraksti",
     "loadingDocument": "Ielādē dokumentu…",
-    "loadingEditor": "Ielādē redaktoru...",
+    "loadingEditor": "Ielādē redaktoru…",
     "lockFile": "Bloķēt failu",
     "markupView": {
       "allMarkup": "Visas atzīmes",
@@ -4214,7 +4214,7 @@
     "saveEditorUnavailableTitle": "Redaktors nav gatavs",
     "saveSerializeFailedDescription": "Folio nevarēja no pašreizējās rediģēšanas izveidot drošu DOCX failu. Jūsu sesija joprojām ir atvērta.",
     "saveSerializeFailedTitle": "Neizdevās izveidot DOCX",
-    "savingDocument": "Saglabā...",
+    "savingDocument": "Saglabā…",
     "showDetails": "Rādīt detaļas",
     "somethingWentWrong": "Kaut kas nogāja greizi. Mēģiniet vēlreiz vai, ja tas atkārtojas, pārlādējiet lapu.",
     "synced": "Sinhronizēts",
@@ -4375,7 +4375,7 @@
         "description": "Iegūstiet atbildes no daudziem failiem vienlaikus",
         "steps": {
           "addColumn": {
-            "body": "Jauna kolonna atver kolonnas redaktoru. Piešķiriet kolonnai skaidru, jautājuma formā izteiktu nosaukumu un precīzi norādiet stellai, ko meklēt; viens un tas pats norādījums tiek izpildīts katrai dokumenta rindai.",
+            "body": "Jauna kolonna atver kolonnas redaktoru. Piešķiriet kolonnai skaidru, jautājuma formā izteiktu nosaukumu un precīzi norādiet lietotnei stella, ko meklēt; viens un tas pats norādījums tiek izpildīts katrai dokumenta rindai.",
             "title": "Uzdot vienu jautājumu par katru dokumentu",
             "when": "Katram atbildes veidam, ko vēlaties salīdzināt, filtrēt, kārtot vai eksportēt, izveidojiet atsevišķu kolonnu. Saistīto kontekstu iekļaujiet uzvednē, nevis apvienojiet vairākas atbildes vienā šūnā."
           },
@@ -4608,7 +4608,7 @@
       "lastUpdatedBy": "Pēdējoreiz atjaunināja",
       "matterColumnsHeading": "Lietas dati",
       "noMatterColumns": "Par šo dokumentu vēl nekas nav ierakstīts",
-      "stellaHeading": "Saglabāts Stellā",
+      "stellaHeading": "Saglabāts lietotnē stella",
       "versionCurrent": "v{version} (pašreizējā)"
     },
     "moveToMain": "Pārvietot uz galveno skatu",
@@ -5922,7 +5922,7 @@
     "noResults": "Nav rezultātu meklēšanai \"{query}\".",
     "noUpcomingDeadlines": "Nav gaidāmu termiņu",
     "openMatter": "Atvērt lietu <bdi>{name}</bdi>",
-    "placeholder": "Meklēt visās lietās...",
+    "placeholder": "Meklēt visās lietās…",
     "previewUnavailable": "Priekšskatījums nav pieejams",
     "recentDocuments": "Nesenie dokumenti",
     "recentSearches": "Nesenie meklējumi",
@@ -5965,7 +5965,7 @@
     "searchRegistries": "Meklēt reģistros",
     "summaryAction": "Apkopot labākos rezultātus",
     "summaryError": "Kopsavilkums nav pieejams",
-    "summaryLoading": "Rezultātu apkopošana...",
+    "summaryLoading": "Rezultātu apkopošana…",
     "summaryPrompt": "Izmanto labākos rezultātus un to saturu īsai atbildei.",
     "summaryRetry": "Noklikšķiniet, lai mēģinātu vēlreiz.",
     "timeFilterCustom": "Pielāgots diapazons",
@@ -5994,7 +5994,7 @@
       "betaLocalAgentsDescription": "Palaist tērzēšanas ar Codex vai Claude Code jūsu datorā, izmantojot stella desktop",
       "betaTimeBillingDescription": "Rādīt laika uzskaiti, rēķinus un izdevumus",
       "chatNotifications": "Tērzēšanas paziņojumi",
-      "chatNotificationsBlocked": "stellas paziņojumi šajā pārlūkprogrammā ir bloķēti. Atļaujiet tos pārlūkprogrammas vietnes iestatījumos.",
+      "chatNotificationsBlocked": "Lietotnes stella paziņojumi šajā pārlūkprogrammā ir bloķēti. Atļaujiet tos pārlūkprogrammas vietnes iestatījumos.",
       "chatNotificationsDescription": "Saņemiet paziņojumu no šīs pārlūkprogrammas, kad tērzēšanas atbilde ir pabeigta, kamēr stella darbojas fonā.",
       "chatNotificationsUnsupported": "Šī pārlūkprogramma neatbalsta paziņojumus.",
       "chatTechnicalDetails": "Tehniskā informācija tērzēšanā",
@@ -6009,9 +6009,9 @@
       "deleteAccountConfirmationPhrase": "Dzēšana ir neatgriezeniska.",
       "deleteAccountOtpDescription": "Mēs nosūtījām 6 ciparu apstiprinājuma kodu uz jūsu e-pastu. Ievadiet to zemāk, lai apstiprinātu dzēšanu.",
       "deleteAccountSuccess": "Jūsu konts ir veiksmīgi dzēsts.",
-      "deleteAccountTaskBulkReassign": "Nodot visus aktīvos uzdevumus šajā darba vietā...",
+      "deleteAccountTaskBulkReassign": "Nodot visus aktīvos uzdevumus šajā darba vietā…",
       "deleteAccountTaskReassignNone": "Šajā darba vietā nav citu dalībnieku",
-      "deleteAccountTaskReassignPlaceholder": "Izvēlēties dalībnieku...",
+      "deleteAccountTaskReassignPlaceholder": "Izvēlēties dalībnieku…",
       "deleteAccountTasksDescription": "Jums ir piešķirti aktīvi uzdevumi. Nododiet tos citiem darba vietas dalībniekiem, lai darbs turpinātos.",
       "deleteAccountTasksTitle": "Nodot aktīvos uzdevumus",
       "deleteAccountTasksUnassignedNotice": "Uzdevumi bez izvēlēta dalībnieka paliks darba vietā bez atbildīgās personas.",
@@ -6028,7 +6028,7 @@
       "desktopCardMissingDetail": "Instalējiet to vai savienojiet, ja tas jau ir instalēts šajā datorā.",
       "desktopCardMissingTitle": "stella desktop vēl nav sasaistīts",
       "desktopCardOpeningDetail": "Šis dators tiek saistīts ar <bdi>{identity}</bdi> serverī {host}. Ja pārlūks jautā, atļaujiet tam atvērt stella desktop.",
-      "desktopCardOpeningTitle": "Notiek stella desktop atvēršana...",
+      "desktopCardOpeningTitle": "Notiek stella desktop atvēršana…",
       "desktopCardOutdatedDetail": "Versija {version} ir saistīta ar <bdi>{identity}</bdi>. Instalējiet jaunāko versiju, lai dokumenti un aktivitāte turpinātu darboties.",
       "desktopCardOutdatedTitle": "stella desktop jāatjaunina",
       "desktopClipboardDescription": "Atveriet, meklējiet, kārtojiet un atkārtoti izmantojiet tekstu, kas kopēts no jebkuras lietotnes.",
@@ -6203,9 +6203,9 @@
       "auditLogsExport": "Eksportēt žurnālus",
       "auditLogsExportFailed": "Neizdevās eksportēt darbību žurnālu.",
       "auditLogsExportTooLarge": "Eksportā ir pārāk daudz rindu. Sašauriniet filtrus un mēģiniet vēlreiz.",
-      "auditLogsExporting": "Eksportē...",
+      "auditLogsExporting": "Eksportē…",
       "auditLogsFrom": "Datums no",
-      "auditLogsLoading": "Ielādē žurnālus...",
+      "auditLogsLoading": "Ielādē žurnālus…",
       "auditLogsMoreChanges": "+{count, plural, zero {# citu} one {# cits} other {# citi}}",
       "auditLogsNoChanges": "Lauku izmaiņas nav reģistrētas.",
       "auditLogsPerformer": "Izpildītājs",
@@ -7011,7 +7011,7 @@
     "fillFailed": "Neizdevās ģenerēt dokumentu",
     "fillForm": "Aizpildīt veidni",
     "generate": "Ģenerēt dokumentu",
-    "generating": "Ģenerē...",
+    "generating": "Ģenerē…",
     "inputTypes": {
       "boolean": "Jā / Nē",
       "company": "Uzņēmuma ID",
@@ -7052,7 +7052,7 @@
     "prefillTitle": "Priekšaizpildīt no dokumentiem",
     "previewEmpty": "Nav satura priekšskatīšanai",
     "previewFailed": "Neizdevās ģenerēt priekšskatījumu",
-    "previewFillLoading": "Ģenerē priekšskatījumu...",
+    "previewFillLoading": "Ģenerē priekšskatījumu…",
     "previewFillTitle": "Aizpildīšanas priekšskatījums",
     "previewSectionBody": "Saturs",
     "previewSectionFooter": "Kājene",
@@ -7419,7 +7419,7 @@
     },
     "entitiesCount": "{count, plural, zero {# vienumu} one {# vienums} other {# vienumi}}",
     "fields": {
-      "calculating": "Aprēķina...",
+      "calculating": "Aprēķina…",
       "errored": "Kļūda",
       "formatNotSupported": "Formāts netiek atbalstīts",
       "recordChoose": "{count, plural, zero {Izvēlieties no # atbilstībām} one {Apstipriniet # atbilstību} other {Izvēlieties no # atbilstībām}}",
@@ -7458,7 +7458,7 @@
         "sentDescription": "Gaida, līdz <bdi>{application}</bdi> atvērs lokālo kopiju.",
         "sentTitle": "Nosūtīts uz stella desktop",
         "takeoverWaiting": "Gaida atbildi",
-        "takeoverWaitingDescription": "Lūdzam {name} atbrīvot bloķēšanu...",
+        "takeoverWaitingDescription": "Lūdzam {name} atbrīvot bloķēšanu…",
         "unavailableDescription": "Pirms rediģēšanas datora lietotnē palaidiet stella desktop un atstājiet to ieslēgtu.",
         "unavailableTitle": "stella desktop nav pieejams.",
         "updateRequiredDescription": "stella desktop ir jāatjaunina. Tas atjaunināsies automātiski, kad aktīvie darbvirsmas labojumi būs pabeigti; mēģiniet vēlreiz pēc restartēšanas.",
@@ -7580,7 +7580,7 @@
       "versionOrNewFile": {
         "addAsVersion": "Pievienot kā {version, number}. versiju",
         "addAsVersionThere": "Pievienot tur kā {version, number}. versiju",
-        "checkingReference": "Tiek pārbaudīts faila atsauces numurs...",
+        "checkingReference": "Tiek pārbaudīts faila atsauces numurs…",
         "createNewOption": "Izveidot jaunu failu",
         "description": "Jūs nometāt \"{fileName}\" uz esoša dokumenta.",
         "extensionMismatch": "Paplašinājums nesakrīt: gaidīts {expected}, saņemts {actual}",
@@ -7653,7 +7653,7 @@
       },
       "to": "Līdz"
     },
-    "generatingCitations": "Ģenerē atsauces...",
+    "generatingCitations": "Ģenerē atsauces…",
     "importOrganizer": {
       "action": "Sakārtot failus",
       "actionSelected": "Sakārtot atlasītos ({count, number})",
@@ -7667,7 +7667,7 @@
       "expandFolder": "Izvērst mapi",
       "failed": "Sakārtošana neizdevās",
       "generateAi": "Ģenerēt AI ieteikumus",
-      "generating": "Ģenerē AI ieteikumus...",
+      "generating": "Ģenerē AI ieteikumus…",
       "instructionsEmpty": "Nav pielāgotu norādījumu",
       "instructionsPlaceholder": "piem., izmanto latviešu mapju nosaukumus, grupē pēc pretpuses, datumus sāc ar gadu.",
       "instructionsTitle": "AI norādījumi",
@@ -7873,7 +7873,7 @@
       "recentClients": "Nesenie klienti",
       "removeClient": "Noņemt klientu",
       "removeParty": "Noņemt pusi",
-      "searchContacts": "Meklēt kontaktus..."
+      "searchContacts": "Meklēt kontaktus…"
     },
     "pdf": {
       "adjustForDarkMode": "Pielāgot lapas tumšajam režīmam",

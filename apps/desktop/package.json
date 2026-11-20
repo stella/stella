@@ -20,7 +20,11 @@
     "test:property": "bun test --preload @stll/property-testing/preload $(grep -rlE 'fc\\.assert|assertProperty' src tests --include='*.test.ts' --include='*.test.tsx')",
     "test:browser": "bun --bun playwright test --config playwright.config.ts",
     "test:native": "cargo test --manifest-path src-tauri/Cargo.toml --workspace --test panel_lifecycle --locked",
-    "typecheck": "bun check --no-pretty --all --project=tsconfig.json && bun check --no-pretty --all --project=tsconfig.test.json"
+    "typecheck": "bun check --no-pretty --all --project=tsconfig.json && bun check --no-pretty --all --project=tsconfig.test.json",
+    "i18n:accept": "bun ../../packages/scripts/src/i18n-check.ts src/i18n/langs --accept",
+    "i18n:brief": "bun ../../packages/scripts/src/i18n-brief.ts src/i18n/langs --glossary=../web/src/i18n/glossary.json --usage-in=src --memory=../web/src/i18n/langs",
+    "i18n:check": "bun ../../packages/scripts/src/i18n-check.ts src/i18n/langs && bun ../../packages/scripts/src/i18n-lint.ts src/i18n/langs --glossary=../web/src/i18n/glossary.json",
+    "i18n:sync": "bun ../../packages/scripts/src/i18n-check.ts src/i18n/langs --sync"
   },
   "dependencies": {
     "@atlaskit/pragmatic-drag-and-drop": "catalog:",

@@ -16,8 +16,13 @@ import {
   findInternalIdArguments,
   findMissingPluralCategories,
   findPlaceholderMismatch,
+  hasAsciiEllipsis,
+  hasBareUngrammaticalStella,
   hasEmDash,
+  hasFirstPersonAppVoice,
+  hasInflectedStella,
   hasInvalidCapitalizedStella,
+  hasRegisterDrift,
   isBareErrorMessage,
   isSuppressed,
 } from "./i18n-lint";
@@ -47,7 +52,10 @@ describe("findPlaceholderMismatch", () => {
   test("tracks rich-text tag names (t.rich), not just their children", () => {
     expect(
       findPlaceholderMismatch("<terms>Terms</terms>", "<link>Podmínky</link>"),
-    ).toEqual({ missing: ["<terms>"], extra: ["<link>"] });
+    ).toEqual({
+      missing: ["<terms>"],
+      extra: ["<link>"],
+    });
   });
 
   test("counts the plural argument, not the # placeholder", () => {
@@ -88,6 +96,75 @@ describe("em dash in catalogue copy", () => {
     expect(hasEmDash("Draft (not sent)")).toBe(false);
     expect(hasEmDash("\u2014")).toBe(false);
     expect(hasEmDash(" \u2014 ")).toBe(true);
+  });
+});
+
+describe("ASCII ellipsis in catalogue copy", () => {
+  test("flags three ASCII dots and allows the Unicode horizontal ellipsis", () => {
+    expect(hasAsciiEllipsis("Loading...")).toBe(true);
+    expect(hasAsciiEllipsis("Načítání...")).toBe(true);
+    expect(hasAsciiEllipsis("Loading…")).toBe(false);
+    expect(hasAsciiEllipsis("Done.")).toBe(false);
+  });
+});
+
+describe("stella brand form across inflected locales", () => {
+  test("flags inflected stella in cs, sk, pl, hu, et, lt, lv and ignores German Stelle", () => {
+    expect(hasInflectedStella("Přidat do stelly", "cs")).toBe(true);
+    expect(hasInflectedStella("Otevřít stellu", "cs")).toBe(true);
+    expect(hasInflectedStella("Otvoriť stellu", "sk")).toBe(true);
+    expect(hasInflectedStella("Otwórz ze stelli", "pl")).toBe(true);
+    expect(hasInflectedStella("Nyissa meg a stellát", "hu")).toBe(true);
+    expect(hasInflectedStella("Lisa stellasse", "et")).toBe(true);
+    expect(hasInflectedStella("Pridėti į stellą", "lt")).toBe(true);
+    expect(hasInflectedStella("Atvērt stellā", "lv")).toBe(true);
+    expect(hasInflectedStella("Přidat do aplikace stella", "cs")).toBe(false);
+    expect(hasInflectedStella("Nyissa meg a stella alkalmazást", "hu")).toBe(
+      false,
+    );
+    expect(hasInflectedStella("an der genauen Stelle öffnen", "de")).toBe(
+      false,
+    );
+  });
+
+  test("flags bare ungrammatical preposition/verb + stella in cs and sk while allowing compound names", () => {
+    expect(hasBareUngrammaticalStella("Přidat do stella", "cs")).toBe(true);
+    expect(hasBareUngrammaticalStella("Otevřít stella", "cs")).toBe(true);
+    expect(hasBareUngrammaticalStella("Otvoriť stella", "sk")).toBe(true);
+    expect(hasBareUngrammaticalStella("Přidat do aplikace stella", "cs")).toBe(
+      false,
+    );
+    expect(hasBareUngrammaticalStella("Otevřít stella desktop", "cs")).toBe(
+      false,
+    );
+    expect(hasBareUngrammaticalStella("Vytvořit ze stella Style", "cs")).toBe(
+      false,
+    );
+  });
+});
+
+describe("first-person app voice", () => {
+  test("flags anthropomorphic 1st-person progress verbs in cs, sk, de and allows impersonal forms", () => {
+    expect(hasFirstPersonAppVoice("Analyzuji…", "cs")).toBe(true);
+    expect(hasFirstPersonAppVoice("Pracujem…", "sk")).toBe(true);
+    expect(hasFirstPersonAppVoice("Ich lade das Dokument…", "de")).toBe(true);
+    expect(hasFirstPersonAppVoice("Analyzuje se…", "cs")).toBe(false);
+    expect(hasFirstPersonAppVoice("Prebieha spracovanie…", "sk")).toBe(false);
+    expect(hasFirstPersonAppVoice("Dokument wird geladen…", "de")).toBe(false);
+  });
+});
+
+describe("register drift", () => {
+  test("flags pronouns that break the locale's established register", () => {
+    expect(hasRegisterDrift("Dein Konto ist bereit", "de")).toBe(true);
+    expect(hasRegisterDrift("Ihr Konto ist bereit", "de")).toBe(false);
+    expect(hasRegisterDrift("Tvůj účet je připraven", "cs")).toBe(true);
+    expect(hasRegisterDrift("Váš účet je připraven", "cs")).toBe(false);
+    expect(hasRegisterDrift("Tvoj účet je pripravený", "sk")).toBe(true);
+    expect(hasRegisterDrift("Si fue usted, ignore esto", "es")).toBe(true);
+    expect(hasRegisterDrift("Si fuiste tú, ignora esto", "es")).toBe(false);
+    expect(hasRegisterDrift("Neked küldtük", "hu")).toBe(true);
+    expect(hasRegisterDrift("Önnek küldtük", "hu")).toBe(false);
   });
 });
 
