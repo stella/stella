@@ -205,8 +205,10 @@ test("without a number series the review step is not ready and names where to se
       .getAttribute("href"),
   ).toBe("/settings/organization/number-series");
   expect(
-    button(messages.billing.invoiceComposer.issueInvoice).disabled,
-  ).toBeTrue();
+    button(messages.billing.invoiceComposer.issueInvoice).getAttribute(
+      "aria-disabled",
+    ),
+  ).toBe("true");
   // The work is not lost: a draft still saves.
   expect(button(messages.billing.invoiceComposer.saveDraft).disabled).toBe(
     false,
@@ -226,8 +228,10 @@ test("without a seller the review step links to the billing profiles", async () 
       .getAttribute("href"),
   ).toBe("/settings/organization/billing");
   expect(
-    button(messages.billing.invoiceComposer.issueInvoice).disabled,
-  ).toBeTrue();
+    button(messages.billing.invoiceComposer.issueInvoice).getAttribute(
+      "aria-disabled",
+    ),
+  ).toBe("true");
 });
 
 test("a refused issue shows the reason its code names, and that the draft was kept", async () => {
