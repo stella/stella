@@ -831,6 +831,13 @@ export const envApiServerSchema = {
   FEATURE_AGENT_ID_JAG: featureFlagSchema,
 
   /**
+   * Dark-launch gate for organization single sign-on (OIDC). Off: the SSO
+   * sign-in endpoints are not mounted and no organization's SSO
+   * requirement is evaluated, so access is decided exactly as without SSO.
+   */
+  FEATURE_ENTERPRISE_SSO: featureFlagSchema,
+
+  /**
    * Web search backend. Only Tavily is wired today; add a new
    * picklist entry alongside its WebSearchProvider implementation.
    * Leave unset to disable the tool even when FEATURE_WEB_SEARCH=true.

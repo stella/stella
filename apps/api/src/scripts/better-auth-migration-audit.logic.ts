@@ -281,6 +281,18 @@ export const AUTH_TABLE_AUDIT_POLICY = {
     preservedColumns: columnNames(authSchema.session),
     tableName: getTableName(authSchema.session),
   },
+  ssoProvider: {
+    foreignKeys: [
+      {
+        column: "organization_id",
+        referencedColumn: "id",
+        referencedModel: "organization",
+      },
+      { column: "user_id", referencedColumn: "id", referencedModel: "user" },
+    ],
+    preservedColumns: columnNames(authSchema.ssoProvider),
+    tableName: getTableName(authSchema.ssoProvider),
+  },
   twoFactor: {
     foreignKeys: [
       { column: "user_id", referencedColumn: "id", referencedModel: "user" },
@@ -323,6 +335,7 @@ const AUTH_BASELINE_DISPOSITION = {
   oauthResource: "introduced",
   organization: "preserve",
   session: "preserve",
+  ssoProvider: "introduced",
   twoFactor: "preserve",
   user: "preserve",
   verification: "preserve",
@@ -499,6 +512,17 @@ const AUTH_ACCESS_POLICY = {
       },
     ],
     tableName: AUTH_TABLE_AUDIT_POLICY.session.tableName,
+  },
+  ssoProvider: {
+    access: "denied",
+    policies: [
+      {
+        command: "ALL",
+        name: "auth_no_stella_access",
+        predicate: "deny",
+      },
+    ],
+    tableName: AUTH_TABLE_AUDIT_POLICY.ssoProvider.tableName,
   },
   twoFactor: {
     access: "denied",

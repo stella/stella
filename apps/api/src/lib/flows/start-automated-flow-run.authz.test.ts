@@ -150,7 +150,10 @@ describe("startAutomatedFlowRun authorization gate", () => {
             columns: { id: true, name: true, steps: true, enabled: true },
           }),
         resolveAuthorization: async (args) =>
-          await resolveMemberAuthorization(args, authorizationDatabase),
+          await resolveMemberAuthorization(
+            { ...args, authentication: { kind: "credential" } },
+            authorizationDatabase,
+          ),
         insertWithinCap: async (input) =>
           await insertAutomatedFlowRunWithinCap({
             ...input,

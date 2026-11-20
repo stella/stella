@@ -70,6 +70,7 @@ import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import { signInHuman } from "@/api/tests/helpers/human-session";
+import { CREDENTIAL_AUTHENTICATION } from "@/api/tests/helpers/member-authorization";
 import { testModelAdmission } from "@/api/tests/helpers/model-dispatch-admission";
 import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 import { insertOwnerContacts } from "@/api/tests/helpers/owner-contacts";
@@ -1345,6 +1346,7 @@ if (!databaseUrl || !runPostgresTests) {
         expect(
           await resolveMemberAuthorization(
             {
+              authentication: CREDENTIAL_AUTHENTICATION,
               organizationId,
               userId: brandPersistedUserId(leaver.userId),
               workspaceId,

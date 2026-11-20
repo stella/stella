@@ -91,6 +91,7 @@ import {
   installPgliteSearchHistoryClearFence,
   installPgliteServiceClientCredentialCascade,
   installPgliteSharepointPolicyFence,
+  installPgliteSsoProviderIdentityGuard,
   installPgliteStatuteCitationCounts,
   installPgliteSyntheticMembershipTrigger,
   installPgliteTimeEntryTimerSignals,
@@ -1021,6 +1022,7 @@ export const buildFullTestPglite = async (): Promise<PGlite> => {
   await installPgliteSchedulerJobPauseLog(db);
   await installPgliteTreeParentGuards(db);
   await installPgliteOrganizationDeleteOwnerGuard(db);
+  await installPgliteSsoProviderIdentityGuard(db);
 
   await applyStellaTablePrivileges(client);
   for (const statement of ROLE_GRANT_STATEMENTS) {

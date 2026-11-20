@@ -78,6 +78,11 @@ import type {
   ChangeServiceOAuthClientOptions,
   CreateServiceOAuthClientOptions,
 } from "@/api/lib/db/service-client-operator";
+import {
+  readSessionSsoAccess,
+  ssoRefusesSessionInAny,
+} from "@/api/lib/db/sso-access";
+import type { SsoRequestLookup } from "@/api/lib/db/sso-access";
 import { abortTransaction } from "@/api/lib/db/transaction-abort";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { fingerprintRequest } from "@/api/lib/idempotency/request-receipts";
@@ -354,6 +359,26 @@ export const recordLegalResolveAudit = async (options: LegalResolveAudit) =>
     async (tx) =>
       await recordLegalResolveAuditInTransaction({ ...options, tx }),
   );
+
+/**
+ * The SSO decision for the auth framework's organization endpoints, for
+ * OAuth consent and for signed access tokens. Each runs outside any request
+ * transaction, so the decision reads on this connection; callers receive the
+ * answer, never the handle.
+ */
+export const readOrganizationRequestSsoRefusal = async (
+  lookup: SsoRequestLookup,
+) => await ssoRefusesSessionInAny(rootDb, lookup);
+export const readConsentSsoAccess = async (
+  lookup: Omit<Parameters<typeof readSessionSsoAccess>[1], "session">,
+) => await readSessionSsoAccess(rootDb, { ...lookup, session: "live" });
+/**
+ * The SSO decision for a signed access token, which no row records: it is
+ * decided when the token is signed, against the session the grant recorded.
+ */
+export const readSignedAccessTokenSsoAccess = async (
+  lookup: Omit<Parameters<typeof readSessionSsoAccess>[1], "session">,
+) => await readSessionSsoAccess(rootDb, { ...lookup, session: "recorded" });
 
 type ReadOAuthGrantAdmissionOptions = {
   clientId: string;

@@ -1,6 +1,7 @@
 import type { MicrosoftEntraIDProfile } from "@better-auth/core/social-providers";
 import type { BetterAuthOptions } from "better-auth";
 
+import { isResolvedSsoSignIn } from "@/api/lib/auth/sso-sign-in";
 import { normalizeEmail } from "@/api/lib/email/normalized-email";
 
 const MICROSOFT_CONSUMER_TENANT_ID = "9188040d-6c67-4c5b-b112-36a304b66dad";
@@ -115,7 +116,7 @@ export const createSocialIdentityValidation =
     requireMicrosoftVerifiedEmailClaim,
     warn,
   }: SocialIdentityValidationOptions): IdentityValidation =>
-  ({ user, source }) => {
+  async ({ user, source }) => {
     if (
       source.method !== "oauth" &&
       source.method !== "sso-oidc" &&
@@ -128,6 +129,15 @@ export const createSocialIdentityValidation =
       error: "identity_not_allowed",
       errorDescription: "Sign-in is unavailable for this account.",
     };
+    if (source.method === "sso-oidc") {
+      // The plugin takes the address's verification from the unsigned
+      // user-info response when the provider has one, which may omit it.
+      // The SSO user resolution admits a sign-in only for an address the
+      // signed ID token verifies, so its verdict decides.
+      return (await isResolvedSsoSignIn(source.sso?.providerId))
+        ? undefined
+        : denial;
+    }
     if (source.oauth?.providerId !== "microsoft") {
       return user.emailVerified === true ? undefined : denial;
     }

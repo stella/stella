@@ -1,0 +1,7 @@
+{
+  "add-column": "Adds one nullable sso_provider_id column without a default to session and one to account; neither rewrites rows, and each catalog lock is bounded by 1s lock_timeout and 5s statement_timeout.",
+  "create-table-references": "Creates two new empty tables whose foreign keys reference organization and user; the reference takes a short catalog lock on each parent, bounded by 1s lock_timeout and 5s statement_timeout.",
+  "create-trigger": "Creates an update guard on the new, empty sso_provider table; no other table is touched.",
+  "row-level-security": "Enables (and on the policy table forces) row-level security on the two new, empty tables before any application reads them.",
+  "create-policy": "Creates owner-only and request-role deny policies on the two new, empty tables."
+}

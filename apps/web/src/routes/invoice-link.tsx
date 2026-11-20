@@ -4,6 +4,7 @@ import { pageTitle } from "@/lib/page-title";
 import { APP_FRAME_SCOPE } from "@/routes/-app-frame-scope";
 
 import { InvoiceLinkPage } from "./-invoice-link.page";
+import { InvoiceLinkPending } from "./-invoice-link.pending";
 
 /**
  * The page an invoice email links to. The link's token rides in the URL
@@ -12,7 +13,10 @@ import { InvoiceLinkPage } from "./-invoice-link.page";
  */
 export const Route = createFileRoute("/invoice-link")({
   ssr: false,
-  staticData: { appFrame: APP_FRAME_SCOPE.none },
+  staticData: {
+    appFrame: APP_FRAME_SCOPE.none,
+    pendingText: "request-locale",
+  },
   head: () => ({
     meta: [
       { title: pageTitle("billing.numberSeries.invoice") },
@@ -21,4 +25,5 @@ export const Route = createFileRoute("/invoice-link")({
     ],
   }),
   component: InvoiceLinkPage,
+  pendingComponent: InvoiceLinkPending,
 });
