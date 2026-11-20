@@ -165,9 +165,21 @@ checks:
     # that needs this — its trigger (any non-workflow file changes)
     # is a superset of web-build, landing-build, db-migrations, and
     # nightly-typecheck, so coverage is identical to running it in
-    # each install. The Bun runtime guard compares changed lines against the
-    # merge base, so it runs here rather than in the install lifecycle.
-    run: bun run lint:ws && bun run check:bun-runtime
+    # each install.
+    run: bun run lint:ws
+
+  - name: Bun runtime guard
+    id: static_check_132
+    env:
+      CI_CHECK_KIND: STATIC
+      CI_CHECK_INPUTS: tracked-tree+generated-inputs
+    if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') && (needs.ci-plan.outputs.root_checks == '' || contains(fromJSON(needs.ci-plan.outputs.root_checks || '[]'), 'ci-checks-rest/Bun runtime guard')) && (github.event_name == 'merge_group' || steps.static_receipts.outputs.reuse_static_check_132 != 'true') }}
+    # Package scripts start their executables on Bun. Changed lines are
+    # compared with the merge base, so this stays out of the install
+    # lifecycle that runs `lint:ws`.
+    run: |
+      bun test scripts/check-bun-runtime.test.ts
+      bun run check:bun-runtime
 
   - name: Lockfile workspace-version guard
     id: static_check_017
