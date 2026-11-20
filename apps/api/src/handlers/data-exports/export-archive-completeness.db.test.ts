@@ -305,6 +305,7 @@ const TABLE_CLASSIFICATIONS = {
   documentTranslationUnits: FORMAT_SCOPE_EXCLUSION,
   documentTypes: FORMAT_SCOPE_EXCLUSION,
   docxSuggestions: FORMAT_SCOPE_EXCLUSION,
+  emailDeliveryFailures: FORMAT_SCOPE_EXCLUSION,
   entities: "included",
   entityDeletionCleanupRequests: FORMAT_SCOPE_EXCLUSION,
   entityDeletionEffectChunks: FORMAT_SCOPE_EXCLUSION,

@@ -1,9 +1,12 @@
-import type { ComponentProps, ComponentType, ReactNode } from "react";
-
-import { useTranslations } from "use-intl";
+import type { ComponentType, ReactNode } from "react";
 
 import type { TableContentMode } from "@stll/api-contract/public-law-table";
-import { Button } from "@stll/ui/button";
+import {
+  ButtonFace,
+  FaceLabelPending,
+  SegmentedIconToggleFace,
+  SelectTriggerFace,
+} from "@stll/ui/control-face";
 import {
   AlignJustifyIcon,
   EyeIcon,
@@ -11,10 +14,8 @@ import {
   SlidersHorizontalIcon,
   WrapTextIcon,
 } from "@stll/ui/icons";
-import { SegmentedIconToggle } from "@stll/ui/segmented-icon-toggle";
-import { Skeleton } from "@stll/ui/skeleton";
 
-import { useFormatter } from "@/i18n/formatting-context";
+import { PendingText } from "@/components/pending-text";
 import type { TranslationKey } from "@/i18n/types";
 
 // The results toolbar's frame and the faces of its controls. A route's pending
@@ -119,120 +120,70 @@ export const PublicLawResultsToolbarFace = ({
 /** The hairline between two groups of controls. */
 const ToolbarDivider = () => <span className="bg-border mx-1 h-4 w-px" />;
 
-/**
- * How much of a prose cell a row shows. The same two modes, icons and words as
- * the workspace table's own density control; the state is the page's, because
- * a public results table has no view to hang it on.
- */
-export const PublicLawContentModeToggle = ({
-  onChange,
-  value,
-}: {
-  onChange: (contentMode: TableContentMode) => void;
-  value: TableContentMode;
-}) => {
-  const t = useTranslations();
-
-  return (
-    <SegmentedIconToggle
-      onChange={onChange}
-      options={TABLE_CONTENT_MODE_OPTIONS.map((option) => ({
-        value: option.mode,
-        icon: option.icon,
-        label: t(option.labelKey),
-      }))}
-      value={value}
-    />
-  );
-};
-
-const TABLE_CONTENT_MODE_OPTIONS = [
+export const TABLE_CONTENT_MODE_OPTIONS = [
   {
-    mode: "tight",
+    value: "tight",
     icon: AlignJustifyIcon,
     labelKey: "workspaces.table.tightContent",
   },
   {
-    mode: "fit-content",
+    value: "fit-content",
     icon: WrapTextIcon,
     labelKey: "workspaces.table.wrapContent",
   },
 ] as const satisfies readonly {
-  mode: TableContentMode;
+  value: TableContentMode;
   icon: ComponentType<{ className?: string }>;
   labelKey: TranslationKey;
 }[];
 
 // Every mode is offered, always: a control that silently dropped one would be
 // a mode the reader cannot get back to.
-type OfferedContentMode = (typeof TABLE_CONTENT_MODE_OPTIONS)[number]["mode"];
+type OfferedContentMode = (typeof TABLE_CONTENT_MODE_OPTIONS)[number]["value"];
 true satisfies TableContentMode extends OfferedContentMode ? true : never;
-
-/**
- * The filter popover's button. The popover renders it as its trigger; the
- * pending view draws it alone, so the button stands where it will open.
- */
-export const PublicLawFiltersButton = (
-  props: Omit<ComponentProps<typeof Button>, "className" | "size" | "variant">,
-) => <Button {...props} className="shrink-0" size="sm" variant="outline" />;
 
 /** What the filter button says, with how many filters are on. */
 export const PublicLawFiltersLabel = ({
-  activeFilterCount,
+  children,
+  badge,
 }: {
-  activeFilterCount: number;
-}) => {
-  const t = useTranslations();
-  const format = useFormatter();
+  children: ReactNode;
+  /** The caller formats the active filter count in its locale. */
+  badge: string | null;
+}) => (
+  <>
+    <SlidersHorizontalIcon aria-hidden="true" className="size-3.5" />
+    {children}
+    {badge !== null && (
+      <span className="bg-primary text-primary-foreground text-3xs inline-flex min-w-4 items-center justify-center rounded-full px-1 leading-4 font-medium tabular-nums">
+        {badge}
+      </span>
+    )}
+  </>
+);
 
-  return (
-    <>
-      <SlidersHorizontalIcon aria-hidden="true" className="size-3.5" />
-      {t("common.filters")}
-      {activeFilterCount > 0 && (
-        <span className="bg-primary text-primary-foreground text-3xs inline-flex min-w-4 items-center justify-center rounded-full px-1 leading-4 font-medium tabular-nums">
-          {format.number(activeFilterCount)}
-        </span>
-      )}
-    </>
-  );
-};
-
-/**
- * The filter button before the page is there. Which filters are on lives in
- * the address, which only the page reads, so the face counts none.
- */
+/** The filter button holds its place while its popover loads. */
 export const PublicLawFiltersFace = () => (
-  <PublicLawFiltersButton>
-    <PublicLawFiltersLabel activeFilterCount={0} />
-  </PublicLawFiltersButton>
+  <ButtonFace className="shrink-0" size="sm" variant="outline">
+    <PublicLawFiltersLabel badge={null}>
+      <PendingText barClassName="w-9" id="common.filters" />
+    </PublicLawFiltersLabel>
+  </ButtonFace>
 );
 
 /** The find bar's closed face: the bare icon its trigger shows. */
-export const PublicLawFindFace = () => {
-  const t = useTranslations();
-
-  return (
-    <Button
-      aria-label={t("workspaces.views.findInTable")}
-      size="icon-xs"
-      variant="ghost"
-    >
-      <SearchIcon className="size-3.5" />
-    </Button>
-  );
-};
+export const PublicLawFindFace = () => (
+  <ButtonFace size="icon-xs" variant="ghost">
+    <SearchIcon className="size-3.5" />
+  </ButtonFace>
+);
 
 /** The column chooser's face: the icon its menu opens from. */
-export const PublicLawColumnsFace = () => {
-  const t = useTranslations();
-
-  return (
-    <Button aria-label={t("common.columns")} size="icon-xs" variant="ghost">
-      <EyeIcon className="size-3.5" />
-    </Button>
-  );
-};
+export const PublicLawColumnsFace = () => (
+  <ButtonFace size="icon-xs" variant="ghost">
+    <EyeIcon className="size-3.5" />
+  </ButtonFace>
+);
 
 /** A toolbar choice's caption, drawn beside the control from `sm` up. */
 export const PublicLawToolbarSelectLabel = ({
@@ -249,17 +200,16 @@ export const PublicLawToolbarSelectLabel = ({
  * A toolbar choice (an order, an excerpt length) before its page is there:
  * the caption reads, and the value the address holds waits in place.
  */
-export const PublicLawToolbarSelectFace = ({ label }: { label: string }) => (
+export const PublicLawToolbarSelectFace = ({ label }: { label: ReactNode }) => (
   <>
     <PublicLawToolbarSelectLabel>{label}</PublicLawToolbarSelectLabel>
-    <Skeleton className="h-7 w-28 rounded-md" />
+    <SelectTriggerFace className="h-7 min-h-0 w-auto min-w-28" size="sm">
+      <FaceLabelPending className="w-14" />
+    </SelectTriggerFace>
   </>
 );
 
 /** The density toggle before the page is there, at the default density. */
 export const PublicLawContentModeFace = () => (
-  <PublicLawContentModeToggle onChange={ignoreContentMode} value="tight" />
+  <SegmentedIconToggleFace options={TABLE_CONTENT_MODE_OPTIONS} value="tight" />
 );
-
-/** The face's density stays put: the page that owns the choice is not there yet. */
-const ignoreContentMode = (_contentMode: TableContentMode) => undefined;

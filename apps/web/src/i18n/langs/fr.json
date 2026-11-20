@@ -165,7 +165,7 @@
     "invitation": {
       "declined": "Invitation refusée",
       "declinedDescription": "Vous n’avez pas rejoint cette organisation.",
-      "description": "Vous avez été invité à rejoindre {organizationName} par {inviterEmail} en tant que {role}.",
+      "description": "Vous avez été invité à rejoindre {organizationName} par {inviterEmail}{role, select, owner { en tant que propriétaire} admin { en tant qu'administrateur} member { en tant que membre} intern { en tant que stagiaire} external { en tant que collaborateur externe} other {}}.",
       "goToWorkspaces": "Accéder aux dossiers",
       "title": "Invitation à l'organisation",
       "verifyEmailHint": "Pour vérifier {email}, déconnectez-vous, puis connectez-vous avec un code à usage unique envoyé à cette adresse.",
@@ -2356,6 +2356,10 @@
     "stopResponse": "Arrêter",
     "stopped": "Arrêté",
     "stopping": "Arrêt en cours…",
+    "subagentRun": {
+      "browseWeb": "Navigation sur le web",
+      "generic": "Traitement d'une sous-tâche"
+    },
     "suggestTitle": "Suggérer un titre",
     "suggestTitleUnavailableAnonymized": "Les suggestions de titre ne sont pas disponibles pour les conversations anonymisées.",
     "suggestingTitle": "Suggestion d'un titre…",
@@ -5397,6 +5401,7 @@
       "defaultModel": "Par défaut : {model}",
       "defaultModelOption": "Par défaut",
       "defaultRationale": {
+        "browse": "Pour travailler sur des sites web dans le navigateur.",
         "chat": "Pour les conversations et les questions du quotidien.",
         "fast": "Pour les tâches courtes et courantes.",
         "pdf": "Pour lire et analyser des documents PDF.",
@@ -5410,6 +5415,11 @@
       "googleKeyRestricted": "Vérifiez les restrictions d’API, d’adresses IP et de sites référents de cette clé dans Google Cloud. Autorisez l’API requise et les requêtes de votre serveur, puis réessayez.",
       "keepSavedKey": "Conserver la clé enregistrée",
       "keyFormatHint": "Le format de cette clé est inhabituel pour {provider}. Enregistrez-la pour la vérifier auprès du fournisseur.",
+      "keyNeed": {
+        "builtIn": "Facultatif. Sans clé propre, l’IA de cette organisation utilise des modèles fournis par stella.",
+        "keyRequired": "L’IA de cette organisation a besoin d’une clé de fournisseur. Ajoutez-en une pour activer l’IA.",
+        "ownKeys": "L’IA de cette organisation utilise les clés ci-dessous."
+      },
       "modelForRole": "Modèle pour {role}",
       "modelIdPlaceholder": "Rechercher des modèles",
       "modelsDescription": "Choisissez un fournisseur et un modèle multimodal proposé pour chaque catégorie IA.",
@@ -5417,6 +5427,7 @@
       "newApiKey": "Nouvelle clé API",
       "newApiKeyDescription": "Elle remplacera la clé enregistrée lors de l’enregistrement.",
       "noModelResults": "Aucun modèle proposé correspondant",
+      "noProviders": "Aucune clé de fournisseur ajoutée.",
       "openaiInsufficientQuota": "Vérifiez le budget de votre projet OpenAI et la facturation de l’API. Ajoutez des crédits ou augmentez la limite concernée, puis réessayez.",
       "openaiProjectOrganizationMismatch": "Utilisez une clé API du projet et de l’organisation OpenAI souhaités. Vérifiez leurs paramètres d’accès, puis réessayez.",
       "openrouterNoCredits": "Ajoutez des crédits dans la rubrique de facturation OpenRouter, puis réessayez.",
@@ -5439,6 +5450,8 @@
       "providerForRole": "Fournisseur pour {role}",
       "providerKeyInvalid": "{provider} a rejeté la clé. Vérifiez-la avant d'enregistrer.",
       "providerKeyInvalidShort": "Invalide",
+      "providerModes": "Utilisée pour : {modes}",
+      "providerModesNone": "Utilisée pour aucun mode. Attribuez-la à un mode dans Avancé.",
       "providerSetupConsole": "Ouvrir les paramètres du fournisseur",
       "providersDescription": "Ajoutez les identifiants des fournisseurs que stella doit utiliser.",
       "providersPanel": "Fournisseurs",
@@ -5448,6 +5461,7 @@
       "replaceKey": "Remplacer la clé",
       "roleUnavailable": "{provider} ne prend pas en charge ce rôle.",
       "roles": {
+        "browse": "Navigation",
         "chat": "Conversation",
         "fast": "Rapide",
         "pdf": "PDF",
@@ -5510,7 +5524,7 @@
     "members": {
       "billingAccess": "Accès aux données de facturation",
       "changeRole": "Modifier le rôle",
-      "confirmRoleChangeDescription": "Le rôle de {email} passera de {oldRole} à {newRole}.",
+      "confirmRoleChangeDescription": "Le rôle de {email} passera {oldRole, select, owner {de propriétaire} admin {d'administrateur} member {de membre} intern {de stagiaire} external {de collaborateur externe} other {}} {newRole, select, owner {à propriétaire} admin {à administrateur} member {à membre} intern {à stagiaire} external {à collaborateur externe} other {}}.",
       "confirmRoleChangeTitle": "Changer le rôle",
       "joined": "Membre depuis",
       "noMembersFound": "Aucun membre trouvé",
@@ -5536,6 +5550,13 @@
     "startOverDescription": "La demande initiale a peut-être déjà créé une organisation. Vérifiez vos organisations avant de recommencer ; une nouvelle demande pourrait créer une organisation supplémentaire.",
     "startOverTitle": "Lancer une nouvelle demande de création ?",
     "switchOrganization": "Changer d'organisation"
+  },
+  "organizationSetup": {
+    "aiAction": "Configurer l’IA",
+    "aiOptional": "Vos propres clés de fournisseurs d’IA sont facultatives : sans elles, l’IA utilise des modèles fournis par stella.",
+    "aiRequired": "L’IA de cette organisation a besoin d’une clé de fournisseur avant que quiconque puisse l’utiliser.",
+    "invite": "Invitez vos collègues pour qu’ils travaillent ici avec vous.",
+    "title": "Configurez votre nouvelle organisation"
   },
   "publicTools": {
     "addSkill": "Ajouter une compétence",
@@ -5976,7 +5997,7 @@
     "organization": {
       "activeMembers": "Membres actifs",
       "ai": "Configuration de l’IA",
-      "aiDescription": "Connectez vos propres clés de fournisseurs d’IA.",
+      "aiDescription": "Choisissez comment l’IA fonctionne dans cette organisation.",
       "anonymization": {
         "addPlaceholder": "Terme à toujours masquer (ex. nom de l’équipe)",
         "deleteAction": "Supprimer le terme",
@@ -7269,6 +7290,7 @@
         "title": "Supprimer les liens vers des modèles Word ?",
         "unknownLocation": "Emplacement du modèle : une adresse que stella ne peut pas vérifier"
       },
+      "checkingFiles": "Vérification des fichiers…",
       "desktopEdit": {
         "accountRequiredTitle": "Connectez stella desktop à votre compte",
         "action": "Modifier dans l’app de bureau",
@@ -7312,6 +7334,14 @@
       "downloadPdf": "Télécharger en PDF",
       "downloadSearchablePdf": "PDF avec texte recherchable",
       "downloadWithComments": "Télécharger avec les commentaires",
+      "duplicateUpload": {
+        "description": "{count, plural, one {# fichier est identique à un document que ce dossier contient déjà.} other {# fichiers sont identiques à des documents que ce dossier contient déjà.} many {# fichiers sont identiques à des documents que ce dossier contient déjà.}} Choisissez quoi faire pour chacun.",
+        "matchedDocument": "Identique à <bdi>{documentName}</bdi>",
+        "skip": "Ignorer ce fichier",
+        "skipAll": "Ignorer les doublons",
+        "title": "Déjà dans ce dossier",
+        "uploadAnyway": "Importer quand même"
+      },
       "emptyFile": "Le fichier est vide.",
       "fileTooLarge": "Le fichier dépasse {limit, number} Mo.",
       "includeReferenceNumber": "Inclure le numéro de référence",

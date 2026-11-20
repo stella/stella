@@ -16,7 +16,7 @@ import {
 } from "@stll/scripts/src/syntax-tree";
 
 const apiRoot = path.resolve(import.meta.dir, "../../..");
-const OWNER = "src/lib/auth/session-liveness.ts";
+const OWNER = "src/lib/db/session-liveness.ts";
 const STORE = "src/lib/auth/session-lifetime-store.ts";
 
 type SourceFile = { fileName: string; program: Program };

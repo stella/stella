@@ -2,7 +2,7 @@ import { and, inArray } from "drizzle-orm";
 
 import { session } from "@/api/db/auth-schema";
 import type { RootDatabase } from "@/api/db/root";
-import { liveSessionPredicate } from "@/api/lib/auth/session-liveness";
+import { liveSessionPredicate } from "@/api/lib/db/session-liveness";
 import type { SseSessionLivenessReader } from "@/api/lib/sse";
 
 /**

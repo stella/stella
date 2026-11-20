@@ -505,7 +505,7 @@ export const QuestionColumnControls = ({
 
   switch (surface.type) {
     case "pending":
-      return <QuestionColumnControlsPending />;
+      return <QuestionColumnControlsPending label={t("common.loading")} />;
     case "error":
       return <QuestionReadError retry={surface.retry} />;
     case "hidden":

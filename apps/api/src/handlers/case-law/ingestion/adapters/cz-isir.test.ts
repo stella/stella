@@ -2,10 +2,8 @@
  * cz-isir's walk over a feed page, its document reads, its stored payload and
  * its removal probe, through a stubbed transport.
  *
- * The transport and its documents are `tests/helpers/cz-isir-fixture.ts`'s.
- * Anonymisation itself is covered by `cz-isir-anonymization.test.ts`; the walk
- * here runs with a pass-through anonymiser over text that holds no personal
- * data, so what it asserts is the reading and the storing.
+ * The transport and its documents are `tests/helpers/cz-isir-fixture.ts`'s;
+ * every name and date in them is synthetic.
  */
 import { PDF } from "@libpdf/core";
 import { Result } from "better-result";
@@ -18,11 +16,6 @@ import {
   encodeCzIsirCursor,
   readCzIsirDocumentParagraphs,
 } from "@/api/handlers/case-law/ingestion/adapters/cz-isir";
-import {
-  CZ_ISIR_ANONYMIZATION_FAILURE,
-  CzIsirAnonymizationError,
-  type CzIsirAnonymizer,
-} from "@/api/handlers/case-law/ingestion/adapters/cz-isir-anonymization";
 import { CZ_ISIR_FEED_URL } from "@/api/handlers/case-law/ingestion/adapters/cz-isir-feed";
 import { probeCzIsirRemoval } from "@/api/handlers/case-law/ingestion/adapters/cz-isir-removal";
 import { CZ_ISIR_METADATA_KEY } from "@/api/lib/legal-search/cz-isir-decision";
@@ -33,7 +26,6 @@ import {
 import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import {
   CZ_ISIR_FIXTURE_CURSOR,
-  CZ_ISIR_PASS_THROUGH,
   czIsirDecisionParagraphs,
   czIsirFixtureDocuments,
   type CzIsirServedDocuments,
@@ -55,12 +47,7 @@ const serve = async (documents: CzIsirServedDocuments) => {
 
 const walk = async (documents: CzIsirServedDocuments) => {
   const requested = await serve(documents);
-  const page = await czIsirFetchPage(
-    CZ_ISIR_FIXTURE_CURSOR,
-    {},
-    undefined,
-    CZ_ISIR_PASS_THROUGH,
-  );
+  const page = await czIsirFetchPage(CZ_ISIR_FIXTURE_CURSOR, {});
   if (Result.isError(page)) {
     throw page.error;
   }
@@ -192,7 +179,7 @@ describe("czIsirFetchPage", () => {
     );
   });
 
-  test("stores the anonymised text and the action, never the document", async () => {
+  test("stores the text and the action, never the document", async () => {
     const { page } = await walk(await documents());
     const decision = byDocument(page.decisions, "65350048");
     expect(decision?.sourceRawContentType).toBe(
@@ -234,39 +221,29 @@ describe("czIsirFetchPage", () => {
     }
   });
 
-  test("stores no text of a document that cannot be anonymised", async () => {
-    await serve(await documents());
-    const refusing: CzIsirAnonymizer = {
-      anonymize: () =>
-        Result.err(
-          new CzIsirAnonymizationError({
-            reason: CZ_ISIR_ANONYMIZATION_FAILURE.NAME_LEFT,
-            message: "refused",
-          }),
-        ),
-    };
-    const page = await czIsirFetchPage(
-      encodeCzIsirCursor({ version: 1, after: 65_000_400 }),
-      {},
-      undefined,
-      refusing,
-    );
-    // The listings are kept; nothing of the documents' text is.
-    expect(
-      Result.isOk(page) &&
-        page.value.decisions.map(({ isListingOnly, fulltext, sourceRaw }) => ({
-          isListingOnly,
-          text: fulltext ?? "",
-          parts: Object.keys(decodeSourceRawEnvelope(sourceRaw ?? "") ?? {}),
-        })),
-    ).toEqual([
-      { isListingOnly: true, text: "", parts: ["action"] },
-      { isListingOnly: true, text: "", parts: ["action"] },
-    ]);
-    expect(Result.isOk(page) && page.value.itemBuildFailures).toEqual({
-      type: "item_build_failed",
-      count: 2,
+  test("stores a decision's text as the register publishes it", async () => {
+    // A synthetic party block: the register's documents name parties in full,
+    // and the stored text keeps them as published.
+    const party =
+      "Jan Vzorový, narozený 1. 1. 1970, bytem Vzorová 1, 110 00 Praha 1";
+    const paragraphs = await czIsirDecisionParagraphs("65350048");
+    const { page } = await walk({
+      ...(await documents()),
+      "65350048": await typesetCzIsirDocument([
+        ...paragraphs.slice(0, 3),
+        { text: party, bold: false },
+        ...paragraphs.slice(3),
+      ]),
     });
+    const decision = byDocument(page.decisions, "65350048");
+    expect(decision?.isListingOnly).not.toBe(true);
+    const parts = decodeSourceRawEnvelope(decision?.sourceRaw ?? "");
+    const stored = v.parse(
+      paragraphsSchema,
+      JSON.parse(parts?.["text"] ?? "[]"),
+    );
+    expect(stored.map(({ text }) => text)).toContain(party);
+    expect(String(decision?.fulltext)).toContain(party);
   });
 });
 

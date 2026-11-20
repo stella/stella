@@ -200,6 +200,7 @@
     "./provision-link-status": "./src/provision-link-status.ts",
     "./property-policy": "./src/property-policy.ts",
     "./safe-id": "./src/safe-id.ts",
+    "./email-delivery": "./src/email-delivery.ts",
     "./uuid": "./src/uuid.ts",
     "./public-country-capability": "./src/public-country-capability.ts",
     "./public-country-legal-day": "./src/public-country-legal-day.ts",

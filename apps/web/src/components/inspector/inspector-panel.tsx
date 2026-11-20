@@ -29,6 +29,7 @@ import {
   InspectorTabHeader,
   MatterOriginLink,
 } from "@/components/inspector/inspector-tab-header";
+import { resolveInspectorMatterColor } from "@/components/inspector/inspector-tab-workspace";
 import {
   isGenericInspectorTab,
   useInspectorTabsStore,
@@ -69,6 +70,14 @@ type InspectorPanelProps = {
    * button) hide themselves.
    */
   workspaceId?: string | undefined;
+  /**
+   * The tint of the route the pane sits beside, for a tab that belongs to no
+   * matter (a statute, a decision). `workspaceId` can be borrowed from another
+   * open tab, so painting its tint would dress a matter-free reader in a
+   * matter it has nothing to do with. Omitted, such a tab keeps
+   * `workspaceId`'s tint.
+   */
+  routeMatterColor?: string | null | undefined;
 };
 
 type InspectorWorkspaceOrigin = {
@@ -86,7 +95,10 @@ const isInspectorWorkspaceOrigin = (
   "color" in value &&
   (typeof value.color === "string" || value.color === null);
 
-export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
+export const InspectorPanel = ({
+  routeMatterColor,
+  workspaceId,
+}: InspectorPanelProps) => {
   const t = useTranslations();
   const canUpdateEntity = usePermissions({ entity: ["update"] });
   const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
@@ -218,12 +230,11 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
     workspaceId === undefined
       ? null
       : resolveMatterColor(workspaceId, workspace?.color ?? null);
-  // The inspector paints its own matter's tint, not the route's: a tab from
-  // another matter keeps that matter's ground on its rail, header, and panes.
-  const inspectorMatterColor =
-    activeTab?.type === "matter"
-      ? resolveMatterColor(activeTab.workspaceId, activeTab.color ?? null)
-      : workspaceMatterColor;
+  const inspectorMatterColor = resolveInspectorMatterColor({
+    activeTab,
+    routeMatterColor,
+    workspaceMatterColor,
+  });
 
   const {
     handleResetZoom,

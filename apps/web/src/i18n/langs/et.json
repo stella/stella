@@ -165,7 +165,7 @@
     "invitation": {
       "declined": "Kutse tagasi lükatud",
       "declinedDescription": "Te ei liitunud selle organisatsiooniga.",
-      "description": "{inviterEmail} kutsus teid organisatsiooni {organizationName} liikmeks rolliga {role}.",
+      "description": "{inviterEmail} kutsus teid organisatsiooni {organizationName}{role, select, owner { omanikuks} admin { administraatoriks} member { liikmeks} intern { praktikandiks} external { väliseks koostööpartneriks} other {}}.",
       "goToWorkspaces": "Mine toimikutesse",
       "title": "Kutse organisatsiooni",
       "verifyEmailHint": "Aadressi {email} kinnitamiseks logige välja ja logige sisse ühekordse koodiga, mille sellele aadressile saadame.",
@@ -2356,6 +2356,10 @@
     "stopResponse": "Peata",
     "stopped": "Peatatud",
     "stopping": "Peatamine…",
+    "subagentRun": {
+      "browseWeb": "Veebi sirvimine",
+      "generic": "Alamülesande täitmine"
+    },
     "suggestTitle": "Paku pealkiri",
     "suggestTitleUnavailableAnonymized": "Anonüümitud vestluste puhul pole pealkirjasoovitused saadaval.",
     "suggestingTitle": "Pealkirja pakkumine…",
@@ -5397,6 +5401,7 @@
       "defaultModel": "Vaikimisi: {model}",
       "defaultModelOption": "Vaikimisi",
       "defaultRationale": {
+        "browse": "Veebisaitidega töötamiseks brauseris.",
         "chat": "Vestlusteks ja igapäevasteks küsimusteks.",
         "fast": "Lühikesteks tavapärasteks ülesanneteks.",
         "pdf": "PDF-dokumentide lugemiseks ja analüüsimiseks.",
@@ -5410,6 +5415,11 @@
       "googleKeyRestricted": "Kontrollige Google Cloudis selle võtme API-, IP-aadressi- ja viitavate veebisaitide piiranguid. Lubage vajalik API ja oma serveri päringud ning proovige uuesti.",
       "keepSavedKey": "Hoia salvestatud võti alles",
       "keyFormatHint": "Selle võtme vorming on teenusepakkuja {provider} puhul ebatavaline. Salvestage võti, et seda teenusepakkujaga kontrollida.",
+      "keyNeed": {
+        "builtIn": "Valikuline. Oma võtmeta kasutab selle organisatsiooni tehisintellekt stella pakutavaid mudeleid.",
+        "keyRequired": "Selle organisatsiooni tehisintellekt vajab teenusepakkuja võtit. Lisa võti, et tehisintellekt sisse lülitada.",
+        "ownKeys": "Selle organisatsiooni tehisintellekt kasutab allolevaid võtmeid."
+      },
       "modelForRole": "Rolli {role} mudel",
       "modelIdPlaceholder": "Otsi mudeleid",
       "modelsDescription": "Vali iga AI-kategooria jaoks teenusepakkuja ja üks pakutud multimodaalne mudel.",
@@ -5417,6 +5427,7 @@
       "newApiKey": "Uus API võti",
       "newApiKeyDescription": "See asendab salvestatud võtme muudatuste salvestamisel.",
       "noModelResults": "Sobivaid pakutud mudeleid ei leitud",
+      "noProviders": "Teenusepakkujate võtmeid pole veel lisatud.",
       "openaiInsufficientQuota": "Kontrollige oma OpenAI projekti eelarvet ja API arveldust. Lisage krediiti või suurendage vastavat limiiti ja proovige uuesti.",
       "openaiProjectOrganizationMismatch": "Kasutage soovitud OpenAI projekti ja organisatsiooni API-võtit. Kontrollige nende juurdepääsuseadeid ja proovige uuesti.",
       "openrouterNoCredits": "Lisage OpenRouteri arveldusjaotises krediiti ja proovige uuesti.",
@@ -5439,6 +5450,8 @@
       "providerForRole": "{role} teenusepakkuja",
       "providerKeyInvalid": "{provider} keeldus võtmest. Kontrollige seda enne salvestamist.",
       "providerKeyInvalidShort": "Vigane",
+      "providerModes": "Kasutatakse režiimides: {modes}",
+      "providerModesNone": "Ei kasutata üheski režiimis. Määra see režiimile jaotises Täpsemad seaded.",
       "providerSetupConsole": "Ava teenusepakkuja seaded",
       "providersDescription": "Lisa nende teenusepakkujate mandaadid, mida stella peaks kasutama.",
       "providersPanel": "Teenusepakkujad",
@@ -5448,6 +5461,7 @@
       "replaceKey": "Asenda võti",
       "roleUnavailable": "{provider} ei toeta seda rolli.",
       "roles": {
+        "browse": "Sirvimine",
         "chat": "Vestlus",
         "fast": "Kiire",
         "pdf": "PDF",
@@ -5510,7 +5524,7 @@
     "members": {
       "billingAccess": "Arveldusandmete vaatamine",
       "changeRole": "Muuda rolli",
-      "confirmRoleChangeDescription": "Kasutaja {email} roll muutub: {oldRole} → {newRole}.",
+      "confirmRoleChangeDescription": "Kasutaja {email} roll muutub: {oldRole, select, owner {omanikust} admin {administraatorist} member {liikmest} intern {praktikandist} external {välisest koostööpartnerist} other {}} saab {newRole, select, owner {omanik} admin {administraator} member {liige} intern {praktikant} external {väline koostööpartner} other {}}.",
       "confirmRoleChangeTitle": "Muuda rolli",
       "joined": "Liitunud",
       "noMembersFound": "Liikmeid ei leitud",
@@ -5536,6 +5550,13 @@
     "startOverDescription": "Algne päring võis organisatsiooni juba luua. Enne uuesti alustamist kontrolli oma organisatsioone; uus päring võib luua veel ühe organisatsiooni.",
     "startOverTitle": "Kas saata uus loomispäring?",
     "switchOrganization": "Vaheta organisatsiooni"
+  },
+  "organizationSetup": {
+    "aiAction": "Seadista tehisintellekt",
+    "aiOptional": "Oma tehisintellekti teenusepakkujate võtmed on valikulised: ilma nendeta kasutab tehisintellekt stella pakutavaid mudeleid.",
+    "aiRequired": "Selle organisatsiooni tehisintellekt vajab teenusepakkuja võtit, enne kui keegi saab seda kasutada.",
+    "invite": "Kutsu kolleegid, et nad saaksid siin sinuga koos töötada.",
+    "title": "Seadista uus organisatsioon"
   },
   "publicTools": {
     "addSkill": "Lisa oskus",
@@ -5976,7 +5997,7 @@
     "organization": {
       "activeMembers": "Aktiivsed liikmed",
       "ai": "AI seadistus",
-      "aiDescription": "Ühendage oma tehisintellekti teenusepakkujate võtmed.",
+      "aiDescription": "Vali, kuidas tehisintellekt selles organisatsioonis töötab.",
       "anonymization": {
         "addPlaceholder": "Termin, mida alati maskeerida (nt meeskonna nimi)",
         "deleteAction": "Kustuta termin",
@@ -7269,6 +7290,7 @@
         "title": "Kas eemaldada Wordi mallide lingid?",
         "unknownLocation": "Malli asukoht: aadress, mida stella ei saa kontrollida"
       },
+      "checkingFiles": "Faile kontrollitakse…",
       "desktopEdit": {
         "accountRequiredTitle": "Ühenda stella desktop oma kontoga",
         "action": "Muuda töölauarakenduses",
@@ -7312,6 +7334,14 @@
       "downloadPdf": "Laadi alla PDF-ina",
       "downloadSearchablePdf": "Otsitav PDF",
       "downloadWithComments": "Laadi alla koos kommentaaridega",
+      "duplicateUpload": {
+        "description": "{count, plural, one {# fail on identne dokumendiga, mis on selles toimikus juba olemas.} other {# faili on identsed dokumentidega, mis on selles toimikus juba olemas.}} Valige, mida igaühega teha.",
+        "matchedDocument": "Identne dokumendiga <bdi>{documentName}</bdi>",
+        "skip": "Jäta see fail vahele",
+        "skipAll": "Jäta duplikaadid vahele",
+        "title": "Juba selles toimikus olemas",
+        "uploadAnyway": "Laadi siiski üles"
+      },
       "emptyFile": "Fail on tühi.",
       "fileTooLarge": "Fail on suurem kui {limit, number} MB.",
       "includeReferenceNumber": "Lisa viitenumber",
