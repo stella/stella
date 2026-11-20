@@ -1,7 +1,8 @@
 //! Which apps are capturing from a microphone right now, from CoreAudio's
 //! per-process objects (macOS 14 and later; earlier systems report none).
 //! Only each capturing process's bundle identifier is read: never audio,
-//! devices or levels, and no permission prompt is involved.
+//! devices or levels, and no permission prompt is involved. Also how an
+//! audio device is connected, read from its CoreAudio properties.
 
 use std::{ffi::c_void, mem::size_of, ptr};
 
@@ -25,6 +26,13 @@ const SYSTEM_OBJECT: u32 = 1;
 const PROCESS_OBJECT_LIST: u32 = four_char_code(b"prs#");
 const PROCESS_BUNDLE_ID: u32 = four_char_code(b"pbid");
 const PROCESS_IS_RUNNING_INPUT: u32 = four_char_code(b"piri");
+const TRANSLATE_UID_TO_DEVICE: u32 = four_char_code(b"uidd");
+const DEVICE_TRANSPORT_TYPE: u32 = four_char_code(b"tran");
+const TRANSPORT_BUILT_IN: u32 = four_char_code(b"bltn");
+const TRANSPORT_BLUETOOTH: u32 = four_char_code(b"blue");
+const TRANSPORT_BLUETOOTH_LE: u32 = four_char_code(b"blea");
+/// What CoreAudio answers for a UID no device has.
+const UNKNOWN_OBJECT: u32 = 0;
 const SCOPE_GLOBAL: u32 = four_char_code(b"glob");
 const ELEMENT_MAIN: u32 = 0;
 /// More capturing processes than this is not a call worth attributing.
@@ -57,6 +65,59 @@ pub fn microphone_input_bundle_ids() -> Vec<String> {
     .filter(|&object| is_running_input(object))
     .filter_map(bundle_id)
     .collect()
+}
+
+/// How an audio device is connected to this Mac.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AudioTransport {
+  /// Part of the Mac itself, such as its microphone.
+  BuiltIn,
+  /// A Bluetooth or Bluetooth LE device, such as a headset.
+  Bluetooth,
+  /// USB, Thunderbolt, a virtual device or anything else.
+  Other,
+}
+
+/// How the audio device with CoreAudio UID `uid` is connected; `None` when
+/// no connected device has that UID.
+pub fn audio_device_transport(uid: &str) -> Option<AudioTransport> {
+  let uid = CFString::new(uid);
+  let uid_ref = uid.as_concrete_TypeRef();
+  let mut device = UNKNOWN_OBJECT;
+  let mut size = size_of::<u32>() as u32;
+  // SAFETY: the qualifier is a valid CFStringRef that `uid` keeps alive, its
+  // size is given, and the answer is an AudioObjectID written to a u32.
+  let status = unsafe {
+    AudioObjectGetPropertyData(
+      SYSTEM_OBJECT,
+      &address(TRANSLATE_UID_TO_DEVICE),
+      size_of::<CFStringRef>() as u32,
+      (&raw const uid_ref).cast(),
+      &mut size,
+      (&raw mut device).cast(),
+    )
+  };
+  if status != 0 || device == UNKNOWN_OBJECT {
+    return None;
+  }
+  let mut transport = 0u32;
+  let mut size = size_of::<u32>() as u32;
+  // SAFETY: the property is a UInt32 and `transport` is a writable u32.
+  let status = unsafe {
+    AudioObjectGetPropertyData(
+      device,
+      &address(DEVICE_TRANSPORT_TYPE),
+      0,
+      ptr::null(),
+      &mut size,
+      (&raw mut transport).cast(),
+    )
+  };
+  (status == 0).then(|| match transport {
+    TRANSPORT_BUILT_IN => AudioTransport::BuiltIn,
+    TRANSPORT_BLUETOOTH | TRANSPORT_BLUETOOTH_LE => AudioTransport::Bluetooth,
+    _ => AudioTransport::Other,
+  })
 }
 
 fn address(selector: u32) -> AudioObjectPropertyAddress {
@@ -164,6 +225,11 @@ mod tests {
       )
     };
     (status == 0).then_some(pid)
+  }
+
+  #[test]
+  fn an_unknown_device_has_no_transport() {
+    assert_eq!(audio_device_transport("stella-no-such-audio-device"), None);
   }
 
   /// The selectors and struct layout above are written by hand; this proves
