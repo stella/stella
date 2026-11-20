@@ -47,7 +47,7 @@ import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-sto
 import type { InspectorTab } from "@/components/inspector/inspector-tabs-store";
 import { newChatMatterScope } from "@/components/inspector/new-chat-scope";
 import { useSharedInspectorPaneWidth } from "@/components/inspector/pane-width-storage";
-import { useRouteReservesInspectorPane } from "@/components/inspector/route-inspector-entry";
+import { useLeafRouteInspectorEntry } from "@/components/inspector/route-inspector-entry";
 import { useInspectorTabPersistence } from "@/components/inspector/use-inspector-tab-persistence";
 import { useRouteWorkspaceId } from "@/components/inspector/use-route-workspace-id";
 import { KeyboardShortcutsDialog } from "@/components/keyboard-shortcuts-dialog";
@@ -239,8 +239,15 @@ export const ProtectedAppFrame = ({
     organizationId: inspectorBroadcastOrganizationId,
     userId: inspectorBroadcastUserId,
   });
-  const reserveRoutePane = useRouteReservesInspectorPane();
-  const reserveInspectorPane = reserveRestoredPane || reserveRoutePane;
+  // A page that opens the pane on entry has it reserved until the inspector
+  // holds a tab (the page opens its own after mounting); from then on the
+  // tabs, and the member minimizing them, decide as anywhere else.
+  const routeOpensInspector = useLeafRouteInspectorEntry() === "opens-page-tab";
+  const hasInspectorTabs = useInspectorTabsStore(
+    (state) => state.tabs.length > 0,
+  );
+  const reserveInspectorPane =
+    reserveRestoredPane || (routeOpensInspector && !hasInspectorTabs);
   const inspectorPaneOpen = useInspectorTabsStore(
     (state) => state.tabs.length > 0 && !state.minimized,
   );

@@ -18,19 +18,3 @@ export const useLeafRouteInspectorEntry = (): RouteInspectorEntry | undefined =>
   useRouterState({
     select: ({ matches }) => matches.at(-1)?.staticData.inspector,
   });
-
-/**
- * Whether the member frame, which stays up once the page renders, keeps the
- * pane's room: until the entered route's page renders, after which the
- * page's own tab (or the member closing it) decides.
- */
-export const useRouteReservesInspectorPane = (): boolean =>
-  useRouterState({
-    select: ({ matches }) => {
-      const leaf = matches.at(-1);
-      return (
-        leaf?.staticData.inspector === "opens-page-tab" &&
-        leaf.status !== "success"
-      );
-    },
-  });

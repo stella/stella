@@ -69,11 +69,7 @@ import { RouteDocumentTitle } from "@/components/route-document-title";
 import { TranslateDocumentDialog } from "@/components/translate-document-dialog";
 import { RecoverableViewerBoundary } from "@/components/viewer/recoverable-viewer-boundary";
 import { useSyncJustifications } from "@/components/workspaces/hooks/use-sync-justifications";
-import {
-  useExternalSyncEffect,
-  useMountEffect,
-  useMountLayoutEffect,
-} from "@/hooks/use-effect";
+import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { usePermissions } from "@/hooks/use-permissions";
 import { useUnsavedWork } from "@/hooks/use-unsaved-work";
@@ -224,10 +220,7 @@ const InspectorFileOpenLifecycle = ({
   workspaceId,
 }: InspectorFileOpenLifecycleProps) => {
   const openFileForEntity = useInspectorTabsStore((s) => s.openFileForEntity);
-  // Before paint: the frame stops reserving the pane once this page renders
-  // (the route opens the inspector on entry), so the tab must be in the store
-  // by the first frame the page paints, or the pane closes for that frame.
-  useMountLayoutEffect(() => {
+  useMountEffect(() => {
     openFileForEntity({
       id: fieldId,
       entityId,
