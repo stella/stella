@@ -2249,6 +2249,8 @@
       "localPlace": "Jūsu dators, {harness}",
       "localSelection": "Jūsu dators · {harness}",
       "placeState": "{place}. {state}",
+      "startedInCloud": "Šī jaunā tērzēšana sākās mākonī, jo {harness} jūsu datorā nav pieejams ({state})",
+      "startedInCloudCheckFailed": "Šī jaunā tērzēšana sākās mākonī, jo neizdevās pārbaudīt jūsu datoru",
       "stepsCheck": "Notiek stella desktop atvēršana. Ja lietotne neatveras, atveriet to savā datorā un pārbaudiet aģentu {harness} sadaļā Iestatījumi › Vispārīgi › AI abonementi.",
       "stepsInstall": "Notiek stella desktop atvēršana. Ja lietotne neatveras, atveriet to savā datorā un sadaļā Iestatījumi › Vispārīgi pie aģenta {harness} izvēlieties Instalēt.",
       "stepsSignInClaudeCode": "Notiek stella desktop atvēršana, lai pierakstītos. Ja lietotne neatveras, atveriet to un izvēlieties Iestatījumi › Vispārīgi › Pierakstīties ar Claude.",

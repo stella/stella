@@ -2249,6 +2249,8 @@
       "localPlace": "حاسوبك، {harness}",
       "localSelection": "حاسوبك · {harness}",
       "placeState": "{place}. {state}",
+      "startedInCloud": "بدأت هذه الدردشة الجديدة في السحابة لأن {harness} غير متاح على حاسوبك ({state})",
+      "startedInCloudCheckFailed": "بدأت هذه الدردشة الجديدة في السحابة لأنه تعذّر التحقق من حاسوبك",
       "stepsCheck": "جارٍ فتح stella desktop. إن لم يُفتح، فافتحه على حاسوبك وتحقّق من {harness} في الإعدادات › عام › اشتراكات الذكاء الاصطناعي.",
       "stepsInstall": "جارٍ فتح stella desktop. إن لم يُفتح، فافتحه على حاسوبك، ثم اختر في الإعدادات › عام زر تثبيت بجوار {harness}.",
       "stepsSignInClaudeCode": "جارٍ فتح stella desktop لتسجيل الدخول. إن لم يُفتح، فافتحه واختر الإعدادات › عام › تسجيل الدخول باستخدام Claude.",

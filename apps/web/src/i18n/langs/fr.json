@@ -2249,6 +2249,8 @@
       "localPlace": "Votre ordinateur, {harness}",
       "localSelection": "Votre ordinateur · {harness}",
       "placeState": "{place}. {state}",
+      "startedInCloud": "Cette nouvelle conversation a démarré dans le cloud, car {harness} n’est pas disponible sur votre ordinateur ({state})",
+      "startedInCloudCheckFailed": "Cette nouvelle conversation a démarré dans le cloud, car votre ordinateur n’a pas pu être vérifié",
       "stepsCheck": "Ouverture de stella desktop. S’il ne s’ouvre pas, ouvrez-le sur votre ordinateur et vérifiez {harness} dans Paramètres › Général › Abonnements IA.",
       "stepsInstall": "Ouverture de stella desktop. S’il ne s’ouvre pas, ouvrez-le sur votre ordinateur et, dans Paramètres › Général, choisissez Installer pour {harness}.",
       "stepsSignInClaudeCode": "Ouverture de stella desktop pour vous connecter. S’il ne s’ouvre pas, ouvrez-le et choisissez Paramètres › Général › Se connecter avec Claude.",

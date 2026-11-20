@@ -2249,6 +2249,8 @@
       "localPlace": "Váš počítač, {harness}",
       "localSelection": "Váš počítač · {harness}",
       "placeState": "{place}. {state}",
+      "startedInCloud": "Nový chat sa spustil v cloude, pretože {harness} na vašom počítači nie je k dispozícii ({state})",
+      "startedInCloudCheckFailed": "Nový chat sa spustil v cloude, pretože sa nepodarilo skontrolovať váš počítač",
       "stepsCheck": "Otvára sa stella desktop. Ak sa neotvorí, otvorte ho vo svojom počítači a skontrolujte agenta {harness} v časti Nastavenia › Všeobecné › Predplatné AI.",
       "stepsInstall": "Otvára sa stella desktop. Ak sa neotvorí, otvorte ho vo svojom počítači a v časti Nastavenia › Všeobecné zvoľte pri agentovi {harness} Nainštalovať.",
       "stepsSignInClaudeCode": "Otvára sa stella desktop na prihlásenie. Ak sa neotvorí, otvorte ho a zvoľte Nastavenia › Všeobecné › Prihlásiť sa cez Claude.",

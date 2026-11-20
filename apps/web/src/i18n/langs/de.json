@@ -2249,6 +2249,8 @@
       "localPlace": "Ihr Computer, {harness}",
       "localSelection": "Ihr Computer · {harness}",
       "placeState": "{place}. {state}",
+      "startedInCloud": "Dieser neue Chat wurde in der Cloud gestartet, weil {harness} auf Ihrem Computer nicht verfügbar ist ({state})",
+      "startedInCloudCheckFailed": "Dieser neue Chat wurde in der Cloud gestartet, weil Ihr Computer nicht geprüft werden konnte",
       "stepsCheck": "stella desktop wird geöffnet. Falls es sich nicht öffnet, öffnen Sie es auf Ihrem Computer und prüfen Sie {harness} unter Einstellungen › Allgemein › KI-Abonnements.",
       "stepsInstall": "stella desktop wird geöffnet. Falls es sich nicht öffnet, öffnen Sie es auf Ihrem Computer und wählen Sie unter Einstellungen › Allgemein bei {harness} Installieren.",
       "stepsSignInClaudeCode": "stella desktop wird zur Anmeldung geöffnet. Falls es sich nicht öffnet, öffnen Sie es und wählen Sie Einstellungen › Allgemein › Mit Claude anmelden.",
