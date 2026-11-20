@@ -401,6 +401,7 @@ export const ReaderView = ({
               <Button
                 variant="outline"
                 disabled={state.requestStatus === "loading"}
+                disabledReason={messages.loading}
                 onClick={() =>
                   host.bridge.detached(
                     host.loadNext(),
