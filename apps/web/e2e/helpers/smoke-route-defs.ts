@@ -178,9 +178,9 @@ export const SMOKE_ROUTE_DEFS: readonly SmokeRouteDef[] = [
     path: (world) => `/workspaces/${world.workspace.id}/invoices`,
   },
   {
-    // Lists is shown only to callers with list access; the smoke caller has
-    // none, so the route answers the shared not-found page in place, the same
-    // as an unknown link. Granted rendering is covered by the route gate tests.
+    // The baseline caller has no list grant, so the route answers the shared
+    // not-found page in place, the same as an unknown link. Granted rendering is
+    // covered by the route gate tests.
     template: "/workspaces/$workspaceId/lists",
     path: (world) => `/workspaces/${world.workspace.id}/lists`,
     expectation: { kind: "rendersInPlace" },
@@ -254,6 +254,7 @@ export const SMOKE_ROUTE_DEFS: readonly SmokeRouteDef[] = [
   staticRoute("/time/report"),
 ];
 
+/** The validated scale fixture grants lists to both measured organizations. */
 // These routes need richer domain setup than cheap route smoke should own.
 // Keeping them explicit means a newly added authenticated route fails the
 // coverage assertion until it is either smoked or deliberately placed here.
