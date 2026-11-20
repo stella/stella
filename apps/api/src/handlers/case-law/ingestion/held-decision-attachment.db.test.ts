@@ -489,6 +489,7 @@ if (!databaseUrl || !runPostgresTests) {
       );
       expect(census.at(0)?.review).toEqual({
         [HELD_DECISION_REVIEW.SEVERAL_HELD]: { count: 0, sample: [] },
+        [HELD_DECISION_REVIEW.SOURCE_POLICY]: { count: 0, sample: [] },
         [HELD_DECISION_REVIEW.DOCKET_HELD_OTHER_DATE]: {
           count: 1,
           sample: [
@@ -740,6 +741,7 @@ if (!databaseUrl || !runPostgresTests) {
           },
           review: {
             [HELD_DECISION_REVIEW.SEVERAL_HELD]: { count: 0, sample: [] },
+            [HELD_DECISION_REVIEW.SOURCE_POLICY]: { count: 0, sample: [] },
             [HELD_DECISION_REVIEW.DOCKET_HELD_OTHER_DATE]: {
               count: 0,
               sample: [],

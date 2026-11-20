@@ -68,6 +68,9 @@ type HeldDecisionReviewFinding = {
 /** The bases a parked record of each review is stored under. */
 const REVIEW_BASES = {
   [HELD_DECISION_REVIEW.SEVERAL_HELD]: HELD_DECISION_ATTACHING_BASES,
+  [HELD_DECISION_REVIEW.SOURCE_POLICY]: [
+    HELD_DECISION_MATCH_BASIS.SOURCE_POLICY,
+  ],
   [HELD_DECISION_REVIEW.DOCKET_HELD_OTHER_DATE]: [
     HELD_DECISION_MATCH_BASIS.COURT_DOCKET_OTHER_DATE,
   ],
@@ -214,6 +217,9 @@ const censusOf = async (
     return { count, sample };
   };
   const review = {
+    [HELD_DECISION_REVIEW.SOURCE_POLICY]: await reviewOf(
+      HELD_DECISION_REVIEW.SOURCE_POLICY,
+    ),
     [HELD_DECISION_REVIEW.SEVERAL_HELD]: await reviewOf(
       HELD_DECISION_REVIEW.SEVERAL_HELD,
     ),
