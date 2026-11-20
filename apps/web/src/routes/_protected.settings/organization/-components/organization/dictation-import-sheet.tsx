@@ -55,13 +55,10 @@ const DictationImportSheetBody = ({
 }: DictationImportSheetProps) => {
   const t = useTranslations();
   const [text, setText] = useState("");
-  const [lineFormat, setLineFormat] = useState<"lines" | "csv">("lines");
   const [review, setReview] = useState<Review | null>(null);
   const check = useMutation({
     mutationFn: async (): Promise<Review> => {
-      const read = readDictationTermImport(
-        dictationImportLines(text, lineFormat),
-      );
+      const read = readDictationTermImport(dictationImportLines(text, "lines"));
       const { listed, total } =
         read.terms.length === 0
           ? { listed: 0, total: 0 }
@@ -93,15 +90,17 @@ const DictationImportSheetBody = ({
       notifyUserError(error, t("errors.actionFailed"));
     },
   });
-  const edit = (next: string, nextFormat: "lines" | "csv") => {
+  const edit = (next: string) => {
     setText(next);
-    setLineFormat(nextFormat);
     setReview(null);
   };
+  // A CSV shows only its first cells, so what is edited is what is added.
   const readFile = async (file: File) => {
+    const content = await file.text();
     edit(
-      await file.text(),
-      file.name.toLowerCase().endsWith(".csv") ? "csv" : "lines",
+      file.name.toLowerCase().endsWith(".csv")
+        ? dictationImportLines(content, "csv").join("\n")
+        : content,
     );
   };
 
@@ -117,9 +116,11 @@ const DictationImportSheetBody = ({
           </p>
           <Textarea
             aria-label={t("settings.organization.dictation.pasteLabel")}
+            // The review answers for the text it read; editing waits for it.
+            disabled={check.isPending}
             maxRows={16}
             onChange={(event) => {
-              edit(event.target.value, "lines");
+              edit(event.target.value);
             }}
             placeholder={t("settings.organization.dictation.pastePlaceholder")}
             rows={8}
@@ -127,6 +128,7 @@ const DictationImportSheetBody = ({
           />
           <div>
             <Button
+              disabled={check.isPending}
               onClick={() => {
                 openFilePicker({
                   accept: ".txt,.csv,text/plain,text/csv",
