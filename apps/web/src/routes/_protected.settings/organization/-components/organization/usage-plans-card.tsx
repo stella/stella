@@ -32,15 +32,12 @@ import {
  * seeded catalog the empty list renders nothing at all.
  */
 export function UsagePlansCard({
-  packsPurchasable,
+  packCheckoutDisabledReason,
 }: {
   /**
-   * Whether the organisation can buy add-on packs right now (a
-   * consumable hosted entitlement exists). The server enforces this
-   * on setup; the flag keeps the button honest instead of letting a
-   * click round-trip into a rejection.
+   * Add-on checkout requires a consumable hosted entitlement.
    */
-  packsPurchasable: boolean;
+  packCheckoutDisabledReason: string | undefined;
 }) {
   const t = useTranslations();
   const { data, isLoading, isError, refetch } = useQuery(usagePoliciesOptions);
@@ -88,7 +85,7 @@ export function UsagePlansCard({
       {subscriptions.length > 0 && (
         <UsagePlanSection kind="subscription">
           {subscriptions.map((policy) => (
-            <PolicyRow key={policy.id} policy={policy} purchasable withSeats />
+            <PolicyRow key={policy.id} policy={policy} withSeats />
           ))}
         </UsagePlanSection>
       )}
@@ -98,7 +95,7 @@ export function UsagePlansCard({
             <PolicyRow
               key={policy.id}
               policy={policy}
-              purchasable={packsPurchasable}
+              entitlementBlocker={packCheckoutDisabledReason}
               withSeats={false}
             />
           ))}
@@ -111,13 +108,45 @@ export function UsagePlansCard({
 const MIN_SEATS = 1;
 const MAX_SEATS = 1000;
 
+type CheckoutBlockerOptions = {
+  pending: boolean;
+  entitlementBlocker: string | undefined;
+  checkout: UsagePolicyEntry["hostedCheckout"];
+};
+
+const checkoutBlocker = (
+  { pending, entitlementBlocker, checkout }: CheckoutBlockerOptions,
+  t: (
+    key:
+      | "common.preparing"
+      | "settings.organization.usageCheckoutProviderUnavailable"
+      | "settings.organization.usagePlanCheckoutUnavailable",
+  ) => string,
+) => {
+  if (pending) {
+    return t("common.preparing");
+  }
+  if (entitlementBlocker !== undefined) {
+    return entitlementBlocker;
+  }
+  if (checkout.status === "available") {
+    return undefined;
+  }
+  switch (checkout.reason) {
+    case "provider_unavailable":
+      return t("settings.organization.usageCheckoutProviderUnavailable");
+    case "policy_unavailable":
+      return t("settings.organization.usagePlanCheckoutUnavailable");
+  }
+};
+
 function PolicyRow({
   policy,
-  purchasable,
+  entitlementBlocker,
   withSeats,
 }: {
   policy: UsagePolicyEntry;
-  purchasable: boolean;
+  entitlementBlocker?: string | undefined;
   withSeats: boolean;
 }) {
   const t = useTranslations();
@@ -126,6 +155,10 @@ function PolicyRow({
   const [pending, setPending] = useState(false);
   const perSeat = policy.price?.basis === "per_seat";
   const seatsInputId = `usage-plan-seats-${policy.id}`;
+  const disabledReason = checkoutBlocker(
+    { pending, entitlementBlocker, checkout: policy.hostedCheckout },
+    t,
+  );
 
   const checkout = useMutation({
     mutationFn: async () => {
@@ -175,11 +208,8 @@ function PolicyRow({
             </>
           )}
           <Button
-            disabled={
-              pending ||
-              !purchasable ||
-              policy.hostedCheckout.status !== "available"
-            }
+            disabled={disabledReason !== undefined}
+            disabledReason={disabledReason}
             onClick={() => checkout.mutate()}
           >
             {t("settings.organization.usagePlanCheckout")}
