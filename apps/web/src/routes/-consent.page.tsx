@@ -1,4 +1,5 @@
 import { useState } from "react";
+import type { ComponentProps } from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { getRouteApi, Link, useLocation } from "@tanstack/react-router";
@@ -182,10 +183,11 @@ export function ConsentPage() {
   };
 
   const handleConsent = async (accept: boolean) => {
+    const approved = { identity, organizationName, scopes };
     setSubmission({ status: "pending" });
 
     const outcome = await Result.tryPromise(
-      async () => await submitOAuthConsent(accept),
+      async () => await submitOAuthConsent(accept, bridgedQuery),
     );
     if (outcome.isErr()) {
       setSubmission({ status: "error" });
@@ -209,15 +211,18 @@ export function ConsentPage() {
     const completion = consentCompletion({
       accept,
       redirectUrl,
-      client: identity,
-      organizationName,
+      client: approved.identity,
+      organizationName: approved.organizationName,
     });
     switch (completion.status) {
       case "redirect":
         window.location.assign(completion.redirectUrl);
         return;
       case "connected":
-        setSubmission(completion);
+        setSubmission({
+          status: "connected",
+          receipt: { ...approved, redirectUrl: completion.redirectUrl },
+        });
         return;
       default:
         completion satisfies never;
@@ -226,14 +231,7 @@ export function ConsentPage() {
   };
 
   if (submission.status === "connected") {
-    return (
-      <ConsentSuccess
-        identity={identity}
-        organizationName={organizationName}
-        redirectUrl={submission.redirectUrl}
-        scopes={scopes}
-      />
-    );
+    return <ConsentSuccess {...submission.receipt} />;
   }
 
   return (
@@ -327,4 +325,4 @@ type ConsentSubmission =
   | { status: "idle" }
   | { status: "pending" }
   | { status: "error" }
-  | { status: "connected"; redirectUrl: string };
+  | { status: "connected"; receipt: ComponentProps<typeof ConsentSuccess> };

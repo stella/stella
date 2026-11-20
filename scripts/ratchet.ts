@@ -3389,6 +3389,7 @@ export const RATCHET_METRICS: readonly RatchetMetric[] = [
         "apps/web/src/routes/dev/-components/ui-playground.tsx",
         "apps/web/src/components/ai-suggestions/review-panel.impl.tsx",
       ].includes(file),
+    perFile: true,
     count: countRawUserAvatarPrimitive,
   },
   {

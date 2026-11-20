@@ -389,11 +389,7 @@ for (const locale of ["en", "cs"] as const) {
           });
           expect(pending).toEqual(server);
           measureDelivery({ flow, pending: server, loaded });
-          measureDelivery({
-            flow,
-            pending: navigationPending,
-            loaded: navigationLoaded,
-          });
+          expect(navigationPending).toEqual(navigationLoaded);
           expect(navigationLoaded).toEqual(loaded);
           if (flow.variant === "common permissions") {
             expect(loaded).toEqual(server);
