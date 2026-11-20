@@ -30,6 +30,7 @@ import {
   brandPersistedOrganizationId,
   brandPersistedUserId,
 } from "@/api/lib/safe-id-boundaries";
+import type { HumanBrowser } from "@/api/tests/helpers/human-session";
 import { signInHuman } from "@/api/tests/helpers/human-session";
 import {
   initAgentAuthTestDb,
@@ -142,6 +143,38 @@ const verifyTotp = async (cookieHeader: string, code: string) =>
       body: JSON.stringify({ code }),
     }),
   );
+
+const organizationEndpoint = async (
+  browser: HumanBrowser,
+  path: string,
+  init: { query?: Record<string, string>; body?: object } = {},
+) => {
+  const url = new URL(getAuthEndpointUrl(path));
+  url.search = new URLSearchParams(init.query).toString();
+  return await getAuth().handler(
+    new Request(
+      url.toString(),
+      init.body === undefined
+        ? { headers: browser.headers() }
+        : {
+            method: "POST",
+            headers: {
+              cookie: browser.cookieHeader(),
+              "content-type": "application/json",
+              origin: new URL(env.FRONTEND_URL).origin,
+            },
+            body: JSON.stringify(init.body),
+          },
+    ),
+  );
+};
+
+const errorCodeOf = async (response: Response): Promise<unknown> => {
+  const body: unknown = await response.json();
+  return typeof body === "object" && body !== null && "code" in body
+    ? body.code
+    : undefined;
+};
 
 describe("organization SSO", () => {
   test("is hidden while the deployment switch is off, and decides nothing", async () => {
@@ -829,6 +862,59 @@ describe("organization SSO", () => {
         ),
       );
     expect(rows).toEqual([]);
+  });
+
+  test("decides each organization endpoint on the organization it acts on, and only for its members", async () => {
+    testState.setConfig("FEATURE_ENTERPRISE_SSO", true);
+    const owner = await signInHuman(`sso-scope-owner-${unique()}@stella.dev`);
+    const required = await createOrganization(owner, "scope-required");
+    const open = await createOrganization(owner, "scope-open");
+    await setSsoRequirement(testDb, required.id, "required");
+    await owner.setActiveOrganization(required.id);
+
+    // Naming another organization reads that one, whatever the active one
+    // requires.
+    const named = await organizationEndpoint(
+      owner,
+      "organization/get-full-organization",
+      { query: { organizationId: open.id } },
+    );
+    expect(named.status).toBe(200);
+    // Naming none reads the active one.
+    const unnamed = await organizationEndpoint(
+      owner,
+      "organization/get-full-organization",
+    );
+    expect(unnamed.status).toBe(403);
+    expect(await errorCodeOf(unnamed)).toBe(SSO_SIGN_IN_REQUIRED_CODE);
+    // An endpoint that always acts on the active organization, or reads the
+    // name from its body only, is decided on that, whatever else the
+    // request names.
+    for (const response of [
+      await organizationEndpoint(owner, "organization/get-active-member", {
+        query: { organizationId: open.id },
+      }),
+      await organizationEndpoint(owner, "organization/has-permission", {
+        query: { organizationId: open.id },
+        body: { permissions: { organization: ["update"] } },
+      }),
+    ]) {
+      expect(response.status).toBe(403);
+      expect(await errorCodeOf(response)).toBe(SSO_SIGN_IN_REQUIRED_CODE);
+    }
+
+    // A non-member learns nothing about the organization's requirement: the
+    // endpoint's own membership check answers.
+    const stranger = await signInHuman(
+      `sso-scope-other-${unique()}@stella.dev`,
+    );
+    const strangerRead = await organizationEndpoint(
+      stranger,
+      "organization/get-full-organization",
+      { query: { organizationId: required.id } },
+    );
+    expect(strangerRead.status).toBe(403);
+    expect(await errorCodeOf(strangerRead)).not.toBe(SSO_SIGN_IN_REQUIRED_CODE);
   });
 
   test("classifies every mounted organization endpoint for the SSO decision", () => {

@@ -3,6 +3,7 @@ import { createAuthMiddleware } from "@better-auth/core/api";
 import { APIError } from "@better-auth/core/error";
 import type { getEndpoints } from "better-auth/api";
 import { getSessionFromCtx } from "better-auth/api";
+import { panic } from "better-result";
 
 import { SSO_SIGN_IN_REQUIRED_CODE } from "@stll/api-contract/sso";
 
@@ -49,16 +50,21 @@ type OrganizationEndpointPath = Extract<
   Exclude<RegisteredAuthApi[keyof RegisteredAuthApi]["path"], undefined>,
   `/organization/${string}`
 >;
-type OrganizationEndpointSso = "organization" | "recovery";
+type OrganizationEndpointSso = "body" | "query" | "active" | "recovery";
 
 /**
- * How each organization endpoint meets the SSO decision. `organization`:
- * the endpoint reads or changes an organization, so every organization the
- * request names, and the session's active one, must admit the session.
- * `recovery`: the endpoint is how a refused session finds its way back
- * (listing its organizations, switching the active one, answering an
- * invitation), so it stays open. A path missing here is held to
- * `organization`.
+ * Which organization each organization endpoint acts on, as Better Auth
+ * resolves it, so the SSO decision asks that organization only:
+ *
+ * - `body` / `query`: the one the request names there (by id, by slug or
+ *   through an invitation), or the session's active one when it names none;
+ * - `active`: the session's active one, whatever the request names;
+ * - `recovery`: the endpoint is how a refused session finds its way back
+ *   (listing its organizations, switching the active one, answering an
+ *   invitation), so it stays open.
+ *
+ * A path missing here is held to every organization the request names and
+ * the active one.
  */
 export const ORGANIZATION_ENDPOINT_SSO = {
   "/organization/set-active": "recovery",
@@ -69,63 +75,96 @@ export const ORGANIZATION_ENDPOINT_SSO = {
   "/organization/get-invitation": "recovery",
   "/organization/list-user-invitations": "recovery",
   "/organization/create": "recovery",
-  "/organization/update": "organization",
-  "/organization/delete": "organization",
-  "/organization/get-organization": "organization",
-  "/organization/get-full-organization": "organization",
-  "/organization/invite-member": "organization",
-  "/organization/cancel-invitation": "organization",
-  "/organization/list-invitations": "organization",
-  "/organization/get-active-member": "organization",
-  "/organization/get-active-member-role": "organization",
-  "/organization/remove-member": "organization",
-  "/organization/update-member-role": "organization",
-  "/organization/list-members": "organization",
-  "/organization/has-permission": "organization",
-  "/organization/leave": "organization",
+  "/organization/update": "body",
+  "/organization/delete": "body",
+  "/organization/get-organization": "query",
+  "/organization/get-full-organization": "query",
+  "/organization/invite-member": "body",
+  "/organization/cancel-invitation": "body",
+  "/organization/list-invitations": "query",
+  "/organization/get-active-member": "active",
+  "/organization/get-active-member-role": "query",
+  "/organization/remove-member": "body",
+  "/organization/update-member-role": "body",
+  "/organization/list-members": "query",
+  "/organization/has-permission": "body",
+  "/organization/leave": "body",
 } as const satisfies Record<OrganizationEndpointPath, OrganizationEndpointSso>;
 
 const ENDPOINT_SSO_BY_PATH: ReadonlyMap<string, OrganizationEndpointSso> =
   new Map(Object.entries(ORGANIZATION_ENDPOINT_SSO));
-
-const isRecoveryEndpoint = (path: string): boolean =>
-  ENDPOINT_SSO_BY_PATH.get(path) === "recovery";
 
 const stringField = (source: unknown, field: string): string | undefined => {
   const value = isRecord(source) ? source[field] : undefined;
   return typeof value === "string" && value !== "" ? value : undefined;
 };
 
-/**
- * Every organization the request can act on: those it names by id, by slug
- * or through an invitation, and the session's active organization, which
- * several endpoints use whatever the request names.
- */
-const requestOrganizations = (
-  input: { body: unknown; query: unknown },
-  activeOrganizationId: string | undefined,
-): Pick<
+type DecidedOrganizations = Pick<
   SsoRequestLookup,
   "organizationIds" | "organizationSlugs" | "invitationIds"
-> => {
-  const present = (values: (string | undefined)[]): string[] => [
-    ...new Set(values.filter((value) => value !== undefined)),
-  ];
-  return {
-    organizationIds: present([
-      stringField(input.body, "organizationId"),
-      stringField(input.query, "organizationId"),
-      activeOrganizationId,
-    ]).map((id) => brandPersistedOrganizationId(id)),
-    organizationSlugs: present([
-      stringField(input.body, "organizationSlug"),
-      stringField(input.query, "organizationSlug"),
-    ]),
-    invitationIds: present([
-      stringField(input.body, "invitationId"),
-      stringField(input.query, "invitationId"),
-    ]),
+>;
+
+const present = (values: (string | undefined)[]): string[] => [
+  ...new Set(values.filter((value) => value !== undefined)),
+];
+
+/** The organizations a request names in its body or query. */
+const namedOrganizations = (sources: unknown[]): DecidedOrganizations => ({
+  organizationIds: present(
+    sources.map((source) => stringField(source, "organizationId")),
+  ).map((id) => brandPersistedOrganizationId(id)),
+  organizationSlugs: present(
+    sources.map((source) => stringField(source, "organizationSlug")),
+  ),
+  invitationIds: present(
+    sources.map((source) => stringField(source, "invitationId")),
+  ),
+});
+
+const namesNone = ({
+  organizationIds,
+  organizationSlugs,
+  invitationIds,
+}: DecidedOrganizations): boolean =>
+  organizationIds.length + organizationSlugs.length + invitationIds.length ===
+  0;
+
+/** The organizations the SSO decision asks about for one request. */
+const decidedOrganizations = (
+  endpoint: Exclude<OrganizationEndpointSso, "recovery"> | undefined,
+  request: { body: unknown; query: unknown },
+  activeOrganizationId: string | undefined,
+): DecidedOrganizations => {
+  const active: DecidedOrganizations = {
+    organizationIds:
+      activeOrganizationId === undefined
+        ? []
+        : [brandPersistedOrganizationId(activeOrganizationId)],
+    organizationSlugs: [],
+    invitationIds: [],
   };
+  const namedOrActive = (named: DecidedOrganizations) =>
+    namesNone(named) ? active : named;
+  switch (endpoint) {
+    case "body":
+      return namedOrActive(namedOrganizations([request.body]));
+    case "query":
+      return namedOrActive(namedOrganizations([request.query]));
+    case "active":
+      return active;
+    case undefined: {
+      const named = namedOrganizations([request.body, request.query]);
+      return {
+        ...named,
+        organizationIds: [
+          ...new Set([...named.organizationIds, ...active.organizationIds]),
+        ],
+      };
+    }
+    default:
+      endpoint satisfies never;
+      return panic(`Unhandled organization endpoint SSO: ${String(endpoint)}`);
+  }
 };
 
 /**
@@ -146,7 +185,8 @@ export const createSsoOrganizationGuardPlugin = () =>
             if (!isEnterpriseSsoDeployed()) {
               return;
             }
-            if (isRecoveryEndpoint(ctx.path)) {
+            const endpoint = ENDPOINT_SSO_BY_PATH.get(ctx.path);
+            if (endpoint === "recovery") {
               return;
             }
             const current = await getSessionFromCtx(ctx);
@@ -155,7 +195,8 @@ export const createSsoOrganizationGuardPlugin = () =>
             }
             const active: unknown = current.session["activeOrganizationId"];
             const refused = await readOrganizationRequestSsoRefusal({
-              ...requestOrganizations(
+              ...decidedOrganizations(
+                endpoint,
                 { body: ctx.body, query: ctx.query },
                 typeof active === "string" && active !== ""
                   ? active

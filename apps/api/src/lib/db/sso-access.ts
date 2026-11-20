@@ -194,7 +194,10 @@ export type SsoRequestLookup = Omit<
 
 /**
  * Whether any organization the request names, by id, by slug or through an
- * invitation, requires SSO and refuses the session, in one statement.
+ * invitation, requires SSO and refuses the session, in one statement. Only an
+ * organization the user is a member of refuses: for any other the endpoint's
+ * own membership check answers, so the refusal never tells a non-member
+ * that an organization exists or requires SSO.
  */
 export const ssoRefusesSessionInAny = async (
   db: SsoDecisionDb,
@@ -228,6 +231,11 @@ export const ssoRefusesSessionInAny = async (
       select 1
       from requested
       where ${organizationRequiresSso(requested)}
+        and exists (
+          select 1 from ${member}
+          where ${member.organizationId} = ${requested}
+            and ${member.userId} = ${userId}
+        )
         and not exists (
           select 1 from ${session}
           where ${session.id} = ${sessionId}
