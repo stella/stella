@@ -36,7 +36,11 @@
     "sessionOpeningInOffice": "جارٍ الفتح في Office",
     "sessionSavingDraft": "حفظ المسودة",
     "reconnectAccount": "إعادة الاتصال بـ stella web…",
-    "transcribeRecording": "تحويل تسجيل إلى نص…"
+    "transcribeRecording": "تحويل تسجيل إلى نص…",
+    "dictation": "الإملاء",
+    "dictationHint": "اضغط مع الاستمرار على {key} للإملاء",
+    "dictationSettings": "إعدادات الإملاء…",
+    "dictationTurnOn": "تشغيل الإملاء…"
   },
   "notification": {
     "checkpointDelayedBody": "{fileName}: تبقى التغييرات محلية وستُعاد المحاولة تلقائياً",
@@ -697,7 +701,8 @@
       "focusUnconfirmed": "تعذّر على stella التأكد من التطبيق النشط، لذلك لم تُكتب أي كلمة. حاول مرة أخرى.",
       "shortcutHeld": "حرّر مفاتيح الاختصار ليُكتب النص. لم تُكتب أي كلمة؛ حاول مرة أخرى.",
       "passwordField": "حقل كلمة مرور محدد، لذلك لم يُحفظ الإملاء ولم يُكتب.",
-      "cloudTranscription": "تعذّر على stella AI تحويل هذا الإملاء إلى نص، ونموذج الكلام غير موجود على هذا الكمبيوتر. حاول مرة أخرى، أو اختر «هذا الكمبيوتر» في «التحويل باستخدام» ونزّل النموذج."
+      "cloudTranscription": "تعذّر على stella AI تحويل هذا الإملاء إلى نص، ونموذج الكلام غير موجود على هذا الكمبيوتر. حاول مرة أخرى، أو اختر «هذا الكمبيوتر» في «التحويل باستخدام» ونزّل النموذج.",
+      "nothingHeard": "لم تسمع stella أي كلام. تحقق من جهاز الإدخال في إعدادات الصوت."
     },
     "failureKeptInHistory": "النص موجود في سجل الحافظة.",
     "transcribeRecording": {
@@ -705,6 +710,21 @@
       "description": "يحوّل ملف جهاز إملاء أو مذكرة صوتية أو تسجيل اجتماع حتى 4 ساعات إلى نص.",
       "open": "فتح",
       "failed": "تعذّر فتح النافذة. حاول مرة أخرى."
+    },
+    "notice": {
+      "title": "تعذّر على stella سماع الميكروفون",
+      "allowBody": "اسمح بالوصول إلى الميكروفون، ثم حاول مرة أخرى.",
+      "checkBodyMac": "تحقق من الوصول إلى الميكروفون في إعدادات النظام، ثم حاول مرة أخرى.",
+      "checkBodyPc": "تحقق من الوصول إلى الميكروفون في إعدادات Windows، ثم حاول مرة أخرى.",
+      "allow": "السماح بالميكروفون",
+      "openSettingsMac": "فتح إعدادات النظام",
+      "openSettingsPc": "فتح الإعدادات",
+      "dismiss": "إغلاق",
+      "nothingTitle": "لم تسمع stella أي كلام",
+      "nothingBody": "تحدث أثناء الضغط على المفتاح، أو اختر إدخالًا آخر في إعدادات الصوت.",
+      "inputDevice": "الإدخال: {device}",
+      "openSoundMac": "فتح إعدادات الصوت",
+      "openSoundPc": "فتح إعدادات الصوت"
     },
     "preview": {
       "label": "ما أمليته حتى الآن",
@@ -809,8 +829,8 @@
     "permissionsTitlePc": "إعداد هذا الحاسوب",
     "permissionsBody": "كل إذن خيارك. يمكنك تغييرها لاحقاً في الإعدادات.",
     "neverRequested": "لا يُطلب أبداً:",
-    "tryTitle": "جرّبه الآن",
-    "tryBody": "انسخ أي نص، ثم اضغط {shortcut}.",
+    "tryTitle": "جرّب سجل الحافظة",
+    "tryBody": "انسخ أي نص، ثم اضغط {shortcut} لفتح سجل الحافظة.",
     "tryWaiting": "في انتظار الاختصار",
     "tryKeepGoing": "تابع…",
     "tryExtraModifier": "هذا {pressed}. استخدم {shortcut}.",

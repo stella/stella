@@ -45,6 +45,8 @@
     "allow-permissions-get-snapshot",
     "allow-permissions-request",
     "allow-permissions-open-settings",
+    "allow-dictation-notice-get-state",
+    "allow-dictation-notice-respond",
     "allow-chatgpt-auth-get-status",
     "allow-chatgpt-auth-start",
     "allow-chatgpt-auth-cancel",

@@ -45,6 +45,8 @@ const WORKER_IDLE: Duration = Duration::from_secs(300);
 /// How often captured audio is checked for a pause while the key is down.
 const LISTEN: Duration = Duration::from_millis(100);
 const MAX_RECORDING_SECONDS: usize = 600;
+/// A shorter hold that heard nothing is a tap, not a dictation that failed.
+const MIN_NOTICED_HOLD: Duration = Duration::from_millis(500);
 #[cfg(target_os = "windows")]
 const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 /// The speaker waits on every request, so a busy machine must not starve it.
@@ -127,7 +129,10 @@ fn run(app: &AppHandle, commands: &Receiver<Command>) {
               });
             }
             Err(failure) => {
-              dictation::report_failure(app, failure);
+              let device = (failure == Failure::Microphone)
+                .then(default_input_name)
+                .flatten();
+              dictation::report_input_failure(app, failure, device);
               dictation::set_phase(app, Phase::Idle);
               end(app, &trace, Outcome::Failed(failure.into()), None);
             }
@@ -157,6 +162,7 @@ fn run(app: &AppHandle, commands: &Receiver<Command>) {
           dictation::set_phase(app, Phase::Transcribing);
           trace.release();
           dictation_preview::release(app);
+          let device = capture.recorder.device.clone();
           let mut moved = None;
           let outcome = match finish(
             app,
@@ -171,7 +177,7 @@ fn run(app: &AppHandle, commands: &Receiver<Command>) {
             Ok(Delivered::Empty) => Outcome::Empty,
             Ok(Delivered::Cancelled) => Outcome::Cancelled,
             Err(failed) => {
-              dictation::report_failure(app, failed);
+              dictation::report_input_failure(app, failed, device);
               Outcome::Failed(failed)
             }
           };
@@ -411,7 +417,8 @@ fn finish(
   };
   let text = text.trim();
   if text.is_empty() {
-    return Ok(Delivered::Empty);
+    // A hold that heard nothing is told unless it was a tap.
+    return heard_nothing(held).map(|()| Delivered::Empty);
   }
   let ((cleaned, cleanup), cleanup_took) = dictation_trace::timed(|| {
     if dictation::cleanup_enabled(app) {
@@ -466,6 +473,16 @@ fn deliver(
     kept_in_history,
   });
   (result, focus_read, kept_in_history)
+}
+
+/// A dictation that recorded sound and produced no words: a failure the
+/// speaker is told about, unless the hold was a tap.
+fn heard_nothing(held: Duration) -> Result<(), Failed> {
+  if held < MIN_NOTICED_HOLD {
+    Ok(())
+  } else {
+    Err(Failure::NothingHeard.into())
+  }
 }
 
 /// Drops a dictation's transcription and keeps its worker.
@@ -688,6 +705,8 @@ struct Recorder {
   tape: Shared,
   channels: usize,
   rate: u32,
+  /// The input device's name, as the OS shows it.
+  device: Option<String>,
 }
 
 impl Recorder {
@@ -698,13 +717,14 @@ impl Recorder {
       .name("dictation-capture".to_string())
       .spawn(move || capture(&ready, &stopped))
       .ok()?;
-    let (tape, channels, rate) = started.recv().ok().flatten()?;
+    let (tape, channels, rate, device) = started.recv().ok().flatten()?;
     Some(Self {
       stop,
       thread,
       tape,
       channels,
       rate,
+      device,
     })
   }
 
@@ -737,13 +757,13 @@ impl Recorder {
 }
 
 /// What the capture thread hands over once its stream plays.
-type Opened = (Shared, usize, u32);
+type Opened = (Shared, usize, u32, Option<String>);
 
 fn capture(ready: &Sender<Option<Opened>>, stopped: &Receiver<()>) {
   let opened = open_stream().filter(|(stream, ..)| stream.play().is_ok());
-  let handed = opened
-    .as_ref()
-    .map(|(_, tape, channels, rate)| (Arc::clone(tape), *channels, *rate));
+  let handed = opened.as_ref().map(|(_, tape, channels, rate, device)| {
+    (Arc::clone(tape), *channels, *rate, device.clone())
+  });
   if ready.send(handed).is_err() {
     return;
   }
@@ -755,7 +775,19 @@ fn capture(ready: &Sender<Option<Opened>>, stopped: &Receiver<()>) {
   drop(stream);
 }
 
-fn open_stream() -> Option<(cpal::Stream, Shared, usize, u32)> {
+/// The name of the input device dictation would listen to.
+fn default_input_name() -> Option<String> {
+  device_name(&cpal::default_host().default_input_device()?)
+}
+
+fn device_name(device: &cpal::Device) -> Option<String> {
+  device
+    .description()
+    .ok()
+    .map(|description| description.name().to_string())
+}
+
+fn open_stream() -> Option<(cpal::Stream, Shared, usize, u32, Option<String>)> {
   let device = cpal::default_host().default_input_device()?;
   let config = device.default_input_config().ok()?;
   let channels = usize::from(config.channels());
@@ -770,7 +802,7 @@ fn open_stream() -> Option<(cpal::Stream, Shared, usize, u32)> {
     SampleFormat::U16 => build::<u16>(&device, &stream_config, &tape, limit),
     _ => None,
   }?;
-  Some((stream, tape, channels, rate))
+  Some((stream, tape, channels, rate, device_name(&device)))
 }
 
 fn build<T>(
@@ -807,6 +839,24 @@ where
 #[cfg(test)]
 mod tests {
   use super::*;
+
+  #[test]
+  fn a_hold_that_heard_nothing_is_reported_unless_it_was_a_tap() {
+    assert_eq!(heard_nothing(Duration::from_millis(200)), Ok(()));
+    assert_eq!(
+      heard_nothing(MIN_NOTICED_HOLD - Duration::from_millis(1)),
+      Ok(())
+    );
+    assert_eq!(
+      heard_nothing(MIN_NOTICED_HOLD),
+      Err(Failure::NothingHeard.into())
+    );
+    // A headset still switching profile sends silence for a second or so.
+    assert_eq!(
+      heard_nothing(Duration::from_millis(1_500)),
+      Err(Failure::NothingHeard.into())
+    );
+  }
 
   #[test]
   fn only_whole_frames_are_taken_and_the_rest_waits() {

@@ -36,7 +36,11 @@
     "sessionOpeningInOffice": "Opening in Office",
     "sessionSavingDraft": "Saving draft",
     "reconnectAccount": "Reconnect to stella web…",
-    "transcribeRecording": "Transcribe a recording…"
+    "transcribeRecording": "Transcribe a recording…",
+    "dictation": "Dictation",
+    "dictationHint": "Hold {key} to dictate",
+    "dictationSettings": "Dictation settings…",
+    "dictationTurnOn": "Turn on dictation…"
   },
   "notification": {
     "checkpointDelayedBody": "{fileName}: Changes stay local and will retry automatically",
@@ -697,7 +701,8 @@
       "focusUnconfirmed": "stella could not confirm which app has focus, so nothing was typed. Try again.",
       "shortcutHeld": "Release the shortcut keys to type. Nothing was typed; try again.",
       "passwordField": "A password field has focus, so the dictation was not kept or typed.",
-      "cloudTranscription": "stella AI could not transcribe this dictation, and the speech model is not on this computer. Try again, or set “Transcribe with” to “This computer” and download the model."
+      "cloudTranscription": "stella AI could not transcribe this dictation, and the speech model is not on this computer. Try again, or set “Transcribe with” to “This computer” and download the model.",
+      "nothingHeard": "stella did not hear any speech. Check the input device in Sound settings."
     },
     "failureKeptInHistory": "The text is in clipboard history.",
     "transcribeRecording": {
@@ -705,6 +710,21 @@
       "description": "Turn a dictaphone file, voice memo or meeting recording of up to 4 hours into text.",
       "open": "Open",
       "failed": "The window could not be opened. Try again."
+    },
+    "notice": {
+      "title": "stella could not hear your microphone",
+      "allowBody": "Allow microphone access, then try again.",
+      "checkBodyMac": "Check Microphone access in System Settings, then try again.",
+      "checkBodyPc": "Check microphone access in Windows Settings, then try again.",
+      "allow": "Allow microphone",
+      "openSettingsMac": "Open System Settings",
+      "openSettingsPc": "Open Settings",
+      "dismiss": "Dismiss",
+      "nothingTitle": "stella did not hear any speech",
+      "nothingBody": "Speak while you hold the key, or choose another input in Sound settings.",
+      "inputDevice": "Input: {device}",
+      "openSoundMac": "Open Sound settings",
+      "openSoundPc": "Open sound settings"
     },
     "preview": {
       "label": "What you have said so far",
@@ -809,8 +829,8 @@
     "permissionsTitlePc": "Set up this PC",
     "permissionsBody": "Each permission is your choice. You can change them later in Settings.",
     "neverRequested": "Never requested:",
-    "tryTitle": "Try it now",
-    "tryBody": "Copy any text, then press {shortcut}.",
+    "tryTitle": "Try clipboard history",
+    "tryBody": "Copy any text, then press {shortcut} to open your clipboard history.",
     "tryWaiting": "Waiting for the shortcut",
     "tryKeepGoing": "Keep going…",
     "tryExtraModifier": "That is {pressed}. Use {shortcut}.",
