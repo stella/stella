@@ -18,6 +18,7 @@ import { Button } from "@stll/ui/button";
 import { EllipsisVerticalIcon } from "@stll/ui/icons";
 import { ListGroupCount } from "@stll/ui/list";
 import { Menu, MenuItem, MenuPopup, MenuTrigger } from "@stll/ui/menu";
+import { TableCell, TableRow } from "@stll/ui/table";
 
 import Tooltip from "@/components/tooltip";
 import { useFormatter } from "@/i18n/formatting-context";
@@ -25,7 +26,7 @@ import type { Role } from "@/lib/auth-client";
 import { roleTranslationKeys } from "@/lib/organization/consts";
 
 import {
-  InvitationsEmptyRow,
+  INVITATION_COLUMN_COUNT,
   InvitationsTableFrame,
   InvitationsTableRow,
   PendingInvitationsSection,
@@ -220,9 +221,15 @@ function InvitationsTable({
         );
       })}
       {invitations.length === 0 && (
-        <InvitationsEmptyRow>
-          {t("organization.invitations.noInvitationsFound")}
-        </InvitationsEmptyRow>
+        <TableRow>
+          <TableCell
+            align="center"
+            colSpan={INVITATION_COLUMN_COUNT}
+            tone="muted"
+          >
+            {t("organization.invitations.noInvitationsFound")}
+          </TableCell>
+        </TableRow>
       )}
     </InvitationsTableFrame>
   );

@@ -76,14 +76,8 @@ export const MembersTableRow = ({
   </TableRow>
 );
 
-/** The row in place of members when none match, across every column. */
-export const MembersEmptyRow = ({ children }: { children: ReactNode }) => (
-  <TableRow>
-    <TableCellFace align="center" colSpan={MEMBER_COLUMNS.length} tone="muted">
-      {children}
-    </TableCellFace>
-  </TableRow>
-);
+/** Spanned by the row that replaces members when none match. */
+export const MEMBER_COLUMN_COUNT = MEMBER_COLUMNS.length;
 
 type MembersSortFaceOptions = {
   className: string | undefined;

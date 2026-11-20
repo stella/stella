@@ -66,18 +66,8 @@ export const InvitationsTableRow = ({
   </TableRow>
 );
 
-/** The row in place of invitations when none match, across every column. */
-export const InvitationsEmptyRow = ({ children }: { children: ReactNode }) => (
-  <TableRow>
-    <TableCellFace
-      align="center"
-      colSpan={INVITATION_COLUMNS.length}
-      tone="muted"
-    >
-      {children}
-    </TableCellFace>
-  </TableRow>
-);
+/** Spanned by the row that replaces invitations when none match. */
+export const INVITATION_COLUMN_COUNT = INVITATION_COLUMNS.length;
 
 export const InvitationsTableFrame = ({
   label,
