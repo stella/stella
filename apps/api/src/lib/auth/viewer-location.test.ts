@@ -218,9 +218,10 @@ describe("viewer-sent location headers", () => {
         fc.array(fc.boolean(), { minLength: 40, maxLength: 40 }),
         fc.nat({ max: ORDINARY_VIEWER_HEADERS.length }),
         (name, upper, position) => {
-          const cased = [...name]
-            .map((char, index) => (upper[index] ? char.toUpperCase() : char))
-            .join("");
+          // Header names are ASCII: one character per letter.
+          const cased = Array.from(name, (char, index) =>
+            upper[index] ? char.toUpperCase() : char,
+          ).join("");
           const names: string[] = [...ORDINARY_VIEWER_HEADERS];
           names.splice(position, 0, cased);
           return (

@@ -1,6 +1,9 @@
 import { Result } from "better-result";
 
-import { parseDecimalToken } from "@stll/agent-input/numeric-token";
+import {
+  parseDecimalToken,
+  parseIntegerToken,
+} from "@stll/agent-input/numeric-token";
 import { type CountryCode, isCountryCode } from "@stll/country-codes";
 import type { GeoPoint } from "@stll/transactional/map/location-map";
 
@@ -37,7 +40,6 @@ const VIEWER_HEADER_LIST_HEADERS = {
 } as const;
 
 const VIEWER_HEADER_PREFIX = "cloudfront-viewer-";
-const HEADER_COUNT = /^\d+$/u;
 
 /**
  * Where a request came from, as approximate as IP geolocation is. Held only
@@ -89,13 +91,16 @@ export const readViewerLocation = ({
  */
 const viewerSentNoViewerHeader = (headers: Headers): boolean => {
   const order = headers.get(VIEWER_HEADER_LIST_HEADERS.order);
-  const count = headers.get(VIEWER_HEADER_LIST_HEADERS.count)?.trim();
-  if (order === null || count === undefined || !HEADER_COUNT.test(count)) {
+  const count = parseIntegerToken(
+    headers.get(VIEWER_HEADER_LIST_HEADERS.count)?.trim(),
+    { sign: "unsigned" },
+  );
+  if (order === null || Result.isError(count)) {
     return false;
   }
   const names = order.trim() === "" ? [] : order.split(":");
   return (
-    names.length === Number(count) &&
+    names.length === count.value &&
     !names.some((name) =>
       name.trim().toLowerCase().startsWith(VIEWER_HEADER_PREFIX),
     )
