@@ -38,6 +38,21 @@ export const CHAT_LOCAL_RUN_HARNESSES = [
 ] as const satisfies readonly AgentHarness[];
 export type ChatLocalRunHarness = (typeof CHAT_LOCAL_RUN_HARNESSES)[number];
 
+/**
+ * Harnesses stella desktop installs and signs in to, each at its own card in
+ * the app's Settings; any other the member sets up in the agent itself.
+ */
+export const DESKTOP_SET_UP_HARNESSES = [
+  "codex",
+  "claude-code",
+] as const satisfies readonly ChatLocalRunHarness[];
+export type DesktopSetUpHarness = (typeof DESKTOP_SET_UP_HARNESSES)[number];
+
+export const isDesktopSetUpHarness = (
+  harness: ChatLocalRunHarness,
+): harness is DesktopSetUpHarness =>
+  DESKTOP_SET_UP_HARNESSES.some((candidate) => candidate === harness);
+
 export const isChatLocalRunHarness = (
   harness: AgentHarness,
 ): harness is ChatLocalRunHarness =>
