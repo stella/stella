@@ -469,7 +469,11 @@ export const createApprovalHarness = ({
       userId: executionUserId,
     }) => {
       const authorization = await resolveMemberAuthorization(
-        { organizationId, userId: executionUserId },
+        {
+          organizationId,
+          userId: executionUserId,
+          authentication: { kind: "credential" },
+        },
         testDb,
       );
       if (authorization === null) {

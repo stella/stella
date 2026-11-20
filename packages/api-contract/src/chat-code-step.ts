@@ -250,9 +250,22 @@ const scriptReadArea = (toolName: string): ScriptReadArea =>
   isOwnKey(SCRIPT_READ_AREA, toolName) ? SCRIPT_READ_AREA[toolName] : "other";
 
 /**
- * The research a code step does: from the reads its ledger records, else
- * from the reads its script calls. Undefined for any other step, and for a
- * step that reads anything besides legislation and case law.
+ * The area a stella registry tool reads, or undefined for any other name. A
+ * coding agent on the member's computer calls stella's tools directly, under
+ * their registry names (`mcpToolCallName` in `@stll/agent-engine`), so such
+ * a step reaches the same area the tool does inside a code-mode script.
+ */
+export const stellaToolReadArea = (
+  toolName: string,
+): ScriptReadArea | undefined =>
+  isOwnKey(SCRIPT_READ_AREA, toolName) ? SCRIPT_READ_AREA[toolName] : undefined;
+
+/**
+ * The research a step does when that is all it reads: a code step, from the
+ * reads its ledger records, else from the reads its script calls; a direct
+ * call to a stella legislation or case-law tool, from that tool. Undefined
+ * for any other step, and for a code step that reads anything besides
+ * legislation and case law.
  */
 export const codeStepResearch = (call: {
   input: unknown;
@@ -260,7 +273,8 @@ export const codeStepResearch = (call: {
   output: unknown;
 }): CodeToolResearch | undefined => {
   if (!isCodeToolName(call.name)) {
-    return undefined;
+    const area = stellaToolReadArea(call.name);
+    return area === undefined ? undefined : researchOf(new Set([area]));
   }
   const ledger = readChatStepLedger(call.output);
   if (ledger !== null && ledger.calls.length > 0) {

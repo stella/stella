@@ -335,7 +335,9 @@ const nonDatabaseMethodReceiver = (source: ts.SourceFile) => {
     const name = (declaration.propertyName ?? declaration.name).text;
     const specifier = declaration.parent.parent.parent.moduleSpecifier.text;
     return (
-      (name === "createHash" && specifier === "node:crypto") ||
+      // A hash and a cipher take their input through `update`.
+      (["createHash", "createCipheriv", "createDecipheriv"].includes(name) &&
+        specifier === "node:crypto") ||
       (name === "createSha256" &&
         ["@stll/sha256/bun", "@stll/sha256/node"].includes(specifier))
     );

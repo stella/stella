@@ -65,6 +65,8 @@ export const effectiveGeneratorInputs = (generator: Generator) => [
 
 const TRANSITIVE_GENERATOR_INPUTS = {
   "account-export-tables": [
+    "apps/api/src/lib/db/sealed-text.ts",
+    "apps/api/src/lib/db/sso-provider-config.ts",
     "apps/api/src/lib/imports/external-ref-limits.ts",
     "apps/api/src/*",
     "apps/api/src/db/*",
@@ -810,6 +812,8 @@ const TRANSITIVE_GENERATOR_INPUTS = {
     "scripts/generated-source-hash.ts",
   ],
   "status-tables": [
+    "apps/api/src/lib/db/sealed-text.ts",
+    "apps/api/src/lib/db/sso-provider-config.ts",
     "apps/api/src/lib/imports/external-ref-limits.ts",
     "apps/api/src/*",
     "apps/api/src/db/*",
@@ -927,6 +931,8 @@ const TRANSITIVE_GENERATOR_INPUTS = {
     "scripts/oxlint-presets/*",
   ],
   "transition-triggers": [
+    "apps/api/src/lib/db/sealed-text.ts",
+    "apps/api/src/lib/db/sso-provider-config.ts",
     "apps/api/src/lib/imports/external-ref-limits.ts",
     "apps/api/src/*",
     "apps/api/src/db/*",
@@ -1993,6 +1999,7 @@ const GENERATOR_DECLARATIONS = [
       "packages/mcp-apps/scripts/build-mcp-apps.ts",
       "packages/mcp-apps/scripts/lib/mcp-app-html-guard.ts",
       "packages/mcp-apps/scripts/lib/mcp-reader-ui-guard.ts",
+      "packages/mcp-apps/scripts/lib/metafile-path.ts",
       "packages/mcp-apps/scripts/lib/namespace-members.ts",
       "packages/mcp-apps/scripts/lib/precompiled-messages.ts",
       "packages/mcp-apps/scripts/style-sources.ts",

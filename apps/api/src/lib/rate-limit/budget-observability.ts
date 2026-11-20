@@ -44,6 +44,8 @@ export const BUDGET_NAMES = [
   "auth.otp.send.address",
   "auth.social.address",
   "auth.social.user",
+  "auth.sso.address",
+  "auth.sso.user",
   "mcp.transport.bearer",
   "mcp.transport.address",
   "mcp.authentication.address",

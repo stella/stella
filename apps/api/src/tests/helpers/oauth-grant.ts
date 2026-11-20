@@ -194,31 +194,23 @@ export const authorizeOAuthClient = async (
   return { codeVerifier, redirect: new URL(authorized.url) };
 };
 
-type ConsentAndExchangeOptions = {
+type ConsentOptions = {
   browser: HumanBrowser;
-  client: RegisteredOAuthClient;
-  codeVerifier: string;
   consentPage: URL;
-  /** The callback the authorization used, when not the default one. */
-  redirectUri?: string;
 };
 
-/** Accept on the consent page the provider sent the browser to, then exchange the code. */
-export const consentAndExchange = async ({
+/** Accept on the consent page the provider sent the browser to; the redirect carries the code. */
+export const consentOAuthClient = async ({
   browser,
-  client,
-  codeVerifier,
   consentPage,
-  redirectUri = REDIRECT_URI,
-}: ConsentAndExchangeOptions): Promise<OAuthGrant> => {
-  const auth = getAuth();
+}: ConsentOptions): Promise<URL> => {
   if (consentPage.pathname !== OAUTH_CONSENT_PAGE_PATH) {
     panic(`expected the consent page, got ${consentPage.pathname}`);
   }
   const signedQuery = readSignedQuery(consentPage);
   const address = nextClientAddress();
   const consented = await readJson(
-    await auth.handler(
+    await getAuth().handler(
       new Request(getAuthEndpointUrl("oauth2/consent"), {
         method: "POST",
         headers: {
@@ -235,14 +227,30 @@ export const consentAndExchange = async ({
     ),
     redirectSchema,
   );
+  return new URL(consented.url);
+};
 
-  return await exchangeOAuthCode({
+type ConsentAndExchangeOptions = ConsentOptions & {
+  client: RegisteredOAuthClient;
+  codeVerifier: string;
+  /** The callback the authorization used, when not the default one. */
+  redirectUri?: string;
+};
+
+/** Accept on the consent page the provider sent the browser to, then exchange the code. */
+export const consentAndExchange = async ({
+  browser,
+  client,
+  codeVerifier,
+  consentPage,
+  redirectUri = REDIRECT_URI,
+}: ConsentAndExchangeOptions): Promise<OAuthGrant> =>
+  await exchangeOAuthCode({
     client,
     codeVerifier,
-    redirect: new URL(consented.url),
+    redirect: await consentOAuthClient({ browser, consentPage }),
     redirectUri,
   });
-};
 
 type ExchangeOAuthCodeOptions = {
   client: RegisteredOAuthClient;
@@ -252,27 +260,33 @@ type ExchangeOAuthCodeOptions = {
   redirectUri?: string;
 };
 
-/** Exchange the code a redirect back to the client carries. */
-export const exchangeOAuthCode = async ({
+/** Present the code a redirect back to the client carries; returns the raw response. */
+export const requestOAuthCodeExchange = async ({
   client,
   codeVerifier,
   redirect,
   redirectUri = REDIRECT_URI,
-}: ExchangeOAuthCodeOptions): Promise<OAuthGrant> => {
+}: ExchangeOAuthCodeOptions): Promise<Response> =>
+  await getAuth().handler(
+    formRequest("oauth2/token", {
+      client_id: client.clientId,
+      ...(client.clientSecret === undefined
+        ? {}
+        : { client_secret: client.clientSecret }),
+      code: readCode(redirect.href),
+      code_verifier: codeVerifier,
+      grant_type: "authorization_code",
+      redirect_uri: redirectUri,
+      resource: getMcpResourceUrl(),
+    }),
+  );
+
+/** Exchange the code a redirect back to the client carries. */
+export const exchangeOAuthCode = async (
+  options: ExchangeOAuthCodeOptions,
+): Promise<OAuthGrant> => {
   const tokens = await readJson(
-    await getAuth().handler(
-      formRequest("oauth2/token", {
-        client_id: client.clientId,
-        ...(client.clientSecret === undefined
-          ? {}
-          : { client_secret: client.clientSecret }),
-        code: readCode(redirect.href),
-        code_verifier: codeVerifier,
-        grant_type: "authorization_code",
-        redirect_uri: redirectUri,
-        resource: getMcpResourceUrl(),
-      }),
-    ),
+    await requestOAuthCodeExchange(options),
     tokenSchema,
   );
   return {
