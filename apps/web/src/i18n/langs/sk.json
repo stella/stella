@@ -3178,7 +3178,7 @@
     "canRead": "Môže čítať",
     "clientDetailsRequired": "Počkajte na načítanie údajov o aplikácii a účte. Ak sa nenačítajú, obnovte stránku.",
     "completeSetup": "Dokončiť nastavenie",
-    "connectTitle": "Pripojiť {clientName} k aplikácii stella",
+    "connectTitle": "Prepojiť {clientName} a stella",
     "connectedTitle": "Pripojené k aplikácii {clientName}",
     "connectionDuration": "Zostane pripojená, kým ju neodpojíte v Nastaveniach › Pripojenia",
     "defaultClientName": "Aplikácia",
