@@ -21,7 +21,7 @@ import citationsBackfillMatchKey from "../../db/online-migration-entries/indexes
 import citationsReopenableIdentifierMatchKey from "../../db/online-migration-entries/indexes-case-law-citations-reopenable-identifier-match-key-idx";
 import citationsReopenableMatchKey from "../../db/online-migration-entries/indexes-case-law-citations-reopenable-match-key-idx";
 import identifiersMatchKey from "../../db/online-migration-entries/indexes-case-law-decision-identifiers-match-key-idx";
-import decisionsMatchKey from "../../db/online-migration-entries/indexes-case-law-decisions-citation-match-key-idx";
+import decisionsMatchKey from "../../db/online-migration-entries/indexes-case-law-decisions-citation-match-key-all-idx";
 import decisionsPublishedMatchKey from "../../db/online-migration-entries/indexes-case-law-decisions-citation-match-key-published-idx";
 
 /**
@@ -164,7 +164,7 @@ test("the resolver's holder join reads the decisions match-key index", async () 
        WHERE ${caseNumberKeysMatchSql(sql.raw("h.citation_key"), sql`${PRINTED}::varchar`)}
          AND h.country = 'CZE'
     `),
-  ).toEqual(["case_law_decisions_citation_match_key_idx"]);
+  ).toEqual(["case_law_decisions_citation_match_key_all_idx"]);
 });
 
 test("the reopen and backfill paths read the citation match-key indexes", async () => {
