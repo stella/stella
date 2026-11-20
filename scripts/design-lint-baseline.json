@@ -274,7 +274,7 @@
     "apps/web/src/components/conditions/formula-editor.tsx": 2,
     "apps/web/src/components/docx/docx-loading-shell.tsx": 1,
     "apps/web/src/components/docx/evidence-references.tsx": 1,
-    "apps/web/src/components/entity-views/entity-views.pending.tsx": 2,
+    "apps/web/src/components/entity-views/entity-view-body.pending.tsx": 2,
     "apps/web/src/components/entity-views/table.tsx": 1,
     "apps/web/src/components/inspector/anonymization-facet.tsx": 1,
     "apps/web/src/components/inspector/compare-versions-panel.tsx": 2,

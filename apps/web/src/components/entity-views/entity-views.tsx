@@ -67,8 +67,8 @@ import {
   isUnsavedViewId,
   selectEntityView,
 } from "./defaults.logic";
+import { EntityViewBodyPending } from "./entity-view-body.pending";
 import {
-  EntityViewBodyPending,
   EntityViewsChromeFieldset,
   EntityViewsFrame,
   EntityViewsPending,
