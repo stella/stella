@@ -170,14 +170,16 @@ test("pending changes disable editing, cancellation and duplicate submissions", 
   const save = within(dialog).getByRole("button", {
     name: messages.common.saveChanges,
   });
-  expect(save).toHaveProperty("disabled", true);
+  expect(save.getAttribute("aria-disabled")).toBe("true");
   expect(within(dialog).getByRole("textbox")).toHaveProperty("disabled", true);
   expect(
     within(dialog).getByRole("checkbox").getAttribute("aria-disabled"),
   ).toBe("true");
   expect(
-    within(dialog).getByRole("button", { name: messages.common.cancel }),
-  ).toHaveProperty("disabled", true);
+    within(dialog)
+      .getByRole("button", { name: messages.common.cancel })
+      .getAttribute("aria-disabled"),
+  ).toBe("true");
   fireEvent.click(save);
   expect(requests).toHaveLength(1);
   resolve(Response.json({ slug: "new-firm" }));
