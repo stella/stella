@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
 import {
@@ -49,6 +49,7 @@ describe("readCzIsirActionPage", () => {
       createdAt: "2024-02-28T13:59:00.000+01:00",
       publishedAt: "2024-02-28T13:59:00.000+01:00",
       documentId: "65350048",
+      documentReference: "document",
       fileMark: "INS 10782/2023",
       courtCode: "MSPHAAB",
       eventType: 373,
@@ -141,6 +142,33 @@ describe("czIsirDecisionAction", () => {
     });
   });
 
+  test("a decision whose document address names no document id is not a decision without one", async () => {
+    const decision =
+      (await fixturePage()).actions.find(({ id }) => id === 65_000_689) ??
+      panic("fixture action missing");
+    expect(
+      czIsirDecisionAction(
+        { ...decision, documentId: null, documentReference: "malformed" },
+        CZ_ISIR_DECISION_SCOPE.APPELLATE,
+        CZ_ISIR_INSOLVENCY_COURT_DECISION_EVENTS,
+      ),
+    ).toEqual({
+      type: "skip",
+      reason: CZ_ISIR_ACTION_SKIP.MALFORMED_DOCUMENT_REFERENCE,
+    });
+    const page = readCzIsirActionPage(
+      (await Bun.file(FIXTURE).text()).replace(
+        "idDokument=65350048",
+        "idDokument=not-a-number",
+      ),
+    );
+    expect(
+      Result.isOk(page) &&
+        page.value.actions.find(({ id }) => id === 65_000_689)
+          ?.documentReference,
+    ).toBe("malformed");
+  });
+
   test("skips side documents, final-date updates and every other event", async () => {
     expect(await select(65_000_401)).toEqual({
       type: "skip",
@@ -183,6 +211,7 @@ describe("czIsirStruckOffOnPage", () => {
     createdAt: null,
     publishedAt: null,
     documentId: null,
+    documentReference: "none",
     fileMark,
     courtCode,
     eventType,

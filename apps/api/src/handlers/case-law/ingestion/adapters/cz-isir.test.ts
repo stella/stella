@@ -125,11 +125,64 @@ describe("czIsirFetchPage", () => {
     ]);
   });
 
-  test("skips a document the register no longer serves", async () => {
+  test("a 404 is no withdrawal: the document is unread and asked for again, the page keeps what it built", async () => {
     const { page } = await walk({ ...(await documents()), "65350048": null });
     expect(
       page.decisions.map(({ sourceDocumentId }) => sourceDocumentId),
     ).toEqual(["81161847"]);
+    expect(page.unreadItems).toEqual([
+      {
+        listing: expect.objectContaining({
+          sourceDocumentId: "65350048",
+          isListingOnly: true,
+          caseNumberIsPlaceholder: true,
+        }),
+        outcome: {
+          type: "unavailable",
+          cause: { kind: "status", status: 404 },
+        },
+      },
+    ]);
+  });
+
+  test("a document the server cannot answer for is unread, and the page goes on", async () => {
+    const { page } = await walk({ ...(await documents()), "65350048": 503 });
+    expect(
+      page.decisions.map(({ sourceDocumentId }) => sourceDocumentId),
+    ).toEqual(["81161847"]);
+    expect(page.unreadItems?.map(({ outcome }) => outcome.type)).toEqual([
+      "unavailable",
+    ]);
+  });
+
+  test("skips a document the register states gone", async () => {
+    const { page } = await walk({ ...(await documents()), "65350048": 410 });
+    expect(
+      page.decisions.map(({ sourceDocumentId }) => sourceDocumentId),
+    ).toEqual(["81161847"]);
+    expect(page.unreadItems).toBeUndefined();
+  });
+
+  test("a document that reads but does not parse keeps its listing, without text", async () => {
+    const { page } = await walk({
+      ...(await documents()),
+      "65350048": await typesetCzIsirDocument([
+        { text: "Text bez záhlaví a data.", bold: false },
+      ]),
+    });
+    const listing = byDocument(page.decisions, "65350048");
+    expect(listing).toMatchObject({
+      isListingOnly: true,
+      caseNumberIsPlaceholder: true,
+    });
+    expect(listing?.fulltext ?? "").toBe("");
+    expect(
+      Object.keys(decodeSourceRawEnvelope(listing?.sourceRaw ?? "") ?? {}),
+    ).toEqual(["action"]);
+    expect(page.itemBuildFailures).toEqual({
+      type: "item_build_failed",
+      count: 1,
+    });
   });
 
   test("moves the cursor to the page's last action, and stands still past the end", async () => {
@@ -181,7 +234,7 @@ describe("czIsirFetchPage", () => {
     }
   });
 
-  test("stores nothing of a document that cannot be anonymised", async () => {
+  test("stores no text of a document that cannot be anonymised", async () => {
     await serve(await documents());
     const refusing: CzIsirAnonymizer = {
       anonymize: () =>
@@ -198,7 +251,18 @@ describe("czIsirFetchPage", () => {
       undefined,
       refusing,
     );
-    expect(Result.isOk(page) && page.value.decisions).toEqual([]);
+    // The listings are kept; nothing of the documents' text is.
+    expect(
+      Result.isOk(page) &&
+        page.value.decisions.map(({ isListingOnly, fulltext, sourceRaw }) => ({
+          isListingOnly,
+          text: fulltext ?? "",
+          parts: Object.keys(decodeSourceRawEnvelope(sourceRaw ?? "") ?? {}),
+        })),
+    ).toEqual([
+      { isListingOnly: true, text: "", parts: ["action"] },
+      { isListingOnly: true, text: "", parts: ["action"] },
+    ]);
     expect(Result.isOk(page) && page.value.itemBuildFailures).toEqual({
       type: "item_build_failed",
       count: 2,
@@ -248,6 +312,25 @@ describe("readCzIsirDocumentParagraphs", () => {
 });
 
 describe("reconciliation", () => {
+  test("walks to the tip the feed answers, past the estimate, and stops there", async () => {
+    const feed = await Bun.file(
+      new URL("__fixtures__/cz-isir-feed-page.xml", import.meta.url),
+    ).text();
+    // The register has published past the estimated tip: the last page of
+    // block 989 is answered with an action of block 990.
+    testFetchState.set(
+      await czIsirTransport(
+        await documents(),
+        [],
+        feed.replace("<id>81530365</id>", "<id>99000005</id>"),
+      ),
+    );
+    const { reconciliation } = czIsirAdapter;
+    await reconciliation.listSlicePage({ slice: "00989", page: 99 });
+    expect(reconciliation.nextSlice("00989")).toBe("00990");
+    expect(reconciliation.nextSlice("00990")).toBeNull();
+  });
+
   test("a stored action whose document id is not one is unkeyable, and nothing is requested", async () => {
     const requested = await serve(await documents());
     const outcome = await czIsirAdapter.reconciliation.buildDecision({
@@ -255,6 +338,7 @@ describe("reconciliation", () => {
       createdAt: null,
       publishedAt: null,
       documentId: "../65350048",
+      documentReference: "document",
       fileMark: "INS 10782/2023",
       courtCode: "MSPHAAB",
       eventType: 373,

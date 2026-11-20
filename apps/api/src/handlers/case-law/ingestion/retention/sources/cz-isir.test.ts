@@ -25,9 +25,16 @@ describe("czIsirRetention", () => {
     });
   });
 
-  test("names a payload without its text, or one that is not the envelope", async () => {
+  test("a listing kept without its document holds no text", async () => {
+    expect(await project(encodeSourceRawEnvelope({ action: "{}" }))).toEqual({
+      type: "no-text",
+      reason: "not-published",
+    });
+  });
+
+  test("names a payload without its text or action, or one that is not the envelope", async () => {
     expect(
-      await project(encodeSourceRawEnvelope({ action: "{}" })),
+      await project(encodeSourceRawEnvelope({ unrelated: "{}" })),
     ).toMatchObject({ type: "unreadable", reason: "missing-text-part" });
     expect(await project("not an envelope")).toMatchObject({
       type: "unreadable",

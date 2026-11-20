@@ -18,8 +18,9 @@ import {
 } from "@/api/handlers/case-law/ingestion/retention/retention-policy";
 import { decodeSourceRawEnvelope } from "@/api/lib/legal-search/source-raw-envelope";
 
-/** The envelope part the adapter stores the anonymised paragraphs under. */
+/** The envelope parts the adapter stores the anonymised paragraphs and the action under. */
 const TEXT_PART = "text";
+const ACTION_PART = "action";
 
 const paragraphsSchema = v.array(
   v.strictObject({ text: v.string(), bold: v.boolean() }),
@@ -38,10 +39,14 @@ const projectCzIsir = (sourceRaw: string): RetentionProjection => {
   }
   const text = parts[TEXT_PART];
   if (text === undefined) {
-    return {
-      type: "unreadable",
-      reason: RETENTION_PROJECTION_FAILURE.MISSING_TEXT_PART,
-    };
+    // A listing kept while its document could not be read stores the action
+    // alone: a decision without text, not an unreadable one.
+    return parts[ACTION_PART] === undefined
+      ? {
+          type: "unreadable",
+          reason: RETENTION_PROJECTION_FAILURE.MISSING_TEXT_PART,
+        }
+      : { type: "no-text", reason: RETENTION_TEXT_ABSENCE.NOT_PUBLISHED };
   }
   const parsed = v.safeParse(paragraphsSchema, parsedJson(text));
   if (!parsed.success) {

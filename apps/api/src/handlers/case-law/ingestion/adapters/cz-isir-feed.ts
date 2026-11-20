@@ -79,6 +79,19 @@ const CZ_ISIR_STRIKE_OFF_EVENT = 636;
 
 const YES = "T";
 
+/** What an action's `dokumentUrl` names. */
+export const CZ_ISIR_DOCUMENT_REFERENCE = {
+  /** No `dokumentUrl`: an update of the event, such as its final date. */
+  NONE: "none",
+  /** A document id the servlet serves. */
+  DOCUMENT: "document",
+  /** A `dokumentUrl` that names no document id this reader accepts. */
+  MALFORMED: "malformed",
+} as const;
+
+export type CzIsirDocumentReference =
+  (typeof CZ_ISIR_DOCUMENT_REFERENCE)[keyof typeof CZ_ISIR_DOCUMENT_REFERENCE];
+
 /**
  * One action, reduced to the fields the corpus may hold. Every field the
  * service states for an action is listed in `CZ_ISIR_ACTION_FIELDS`, kept or
@@ -90,6 +103,8 @@ export type CzIsirAction = {
   readonly publishedAt: string | null;
   /** The document id the action's `dokumentUrl` names; null without one. */
   readonly documentId: string | null;
+  /** Whether `dokumentUrl` was absent, a document, or unreadable. */
+  readonly documentReference: CzIsirDocumentReference;
   /** The insolvency file, e.g. `INS 10782/2023`. */
   readonly fileMark: string;
   /** The court's organisation code (`idOsobyPuvodce`), e.g. `MSPHAAB`. */
@@ -400,11 +415,21 @@ export const readCzIsirActionPage = (
     }
     const { courtCode, ...event } = note.value;
     const documentUrl = textOrNull(fields.get("dokumentUrl"));
+    const documentId =
+      documentUrl === null ? null : czIsirDocumentIdOf(documentUrl);
+    let documentReference: CzIsirDocumentReference =
+      CZ_ISIR_DOCUMENT_REFERENCE.DOCUMENT;
+    if (documentUrl === null) {
+      documentReference = CZ_ISIR_DOCUMENT_REFERENCE.NONE;
+    } else if (documentId === null) {
+      documentReference = CZ_ISIR_DOCUMENT_REFERENCE.MALFORMED;
+    }
     actions.push({
       id,
       createdAt: textOrNull(fields.get("datumZalozeniUdalosti")),
       publishedAt: textOrNull(fields.get("datumZverejneniUdalosti")),
-      documentId: documentUrl === null ? null : czIsirDocumentIdOf(documentUrl),
+      documentId,
+      documentReference,
       fileMark,
       courtCode,
       eventType,
@@ -471,6 +496,11 @@ export type CzIsirDecisionScope =
 export const CZ_ISIR_ACTION_SKIP = {
   NOT_A_DECISION: "not-a-decision",
   NO_DOCUMENT: "no-document",
+  /**
+   * A decision whose `dokumentUrl` names no readable document id: listed,
+   * but not readable, so it is counted as a failed item, never as no document.
+   */
+  MALFORMED_DOCUMENT_REFERENCE: "malformed-document-reference",
   SIDE_DOCUMENT: "side-document",
   CANCELLED: "cancelled",
 } as const;
@@ -507,9 +537,16 @@ export const czIsirDecisionAction = (
   if (action.note.sideDocument) {
     return { type: "skip", reason: CZ_ISIR_ACTION_SKIP.SIDE_DOCUMENT };
   }
-  return action.documentId === null
-    ? { type: "skip", reason: CZ_ISIR_ACTION_SKIP.NO_DOCUMENT }
-    : { type: "decision", documentId: action.documentId };
+  if (action.documentId !== null) {
+    return { type: "decision", documentId: action.documentId };
+  }
+  return {
+    type: "skip",
+    reason:
+      action.documentReference === CZ_ISIR_DOCUMENT_REFERENCE.MALFORMED
+        ? CZ_ISIR_ACTION_SKIP.MALFORMED_DOCUMENT_REFERENCE
+        : CZ_ISIR_ACTION_SKIP.NO_DOCUMENT,
+  };
 };
 
 /** The proceeding an action belongs to: its court, where stated, and its file. */

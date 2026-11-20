@@ -38,10 +38,10 @@ export const czIsirDecisionMetadataSchema = v.strictObject({
   section: nullableString,
   sectionNumber: v.nullable(v.pipe(v.number(), v.integer())),
   publishedAt: nullableString,
-  instance: v.picklist([
-    CZ_ISIR_INSTANCE.APPELLATE,
-    CZ_ISIR_INSTANCE.INSOLVENCY_COURT,
-  ]),
+  /** Null on a listing kept while its document could not be read. */
+  instance: v.nullable(
+    v.picklist([CZ_ISIR_INSTANCE.APPELLATE, CZ_ISIR_INSTANCE.INSOLVENCY_COURT]),
+  ),
   /** The insolvency file as the decision's header states it. */
   insolvencyFile: nullableString,
   /** The file position its docket's suffix names (`B-24`). */

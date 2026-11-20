@@ -77,7 +77,9 @@ import {
   type CzIsirAnonymizer,
 } from "@/api/handlers/case-law/ingestion/adapters/cz-isir-anonymization";
 import {
+  CZ_ISIR_ACTION_SKIP,
   CZ_ISIR_DECISION_SCOPE,
+  CZ_ISIR_DOCUMENT_REFERENCE,
   CZ_ISIR_FEED_PAGE_SIZE,
   CZ_ISIR_FEED_START_ID,
   CZ_ISIR_FEED_URL,
@@ -156,6 +158,8 @@ import type {
   StoredRawReparseInput,
   StoredRawReparseOutcome,
   SyncPage,
+  UnreadListedItem,
+  UnreadOutcome,
 } from "@/api/lib/legal-search/ingestion-types";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { logger } from "@/api/lib/observability/logger";
@@ -299,14 +303,29 @@ const feedRead = async (
       );
 };
 
+/**
+ * The highest action id the feed has answered in this process. A page asked
+ * for after an id answers the next actions whatever block they fall in, so a
+ * reconciliation listing of a block's last page sees past the block when the
+ * register has published past it: this, not the estimate, is where a walk
+ * stops.
+ */
+const OBSERVED_TIP: { id: number | null } = { id: null };
+
+const observeTip = (id: number | null) => {
+  if (id !== null && (OBSERVED_TIP.id === null || id > OBSERVED_TIP.id)) {
+    OBSERVED_TIP.id = id;
+  }
+};
+
 /** The actions after `afterId`. */
 const readActions = async (
   afterId: number,
   cursor: string | null,
   signal: AbortSignal | undefined,
 ) =>
-  (await feedRead(czIsirActionsRequest(afterId), cursor, signal)).andThen(
-    (xml) =>
+  (await feedRead(czIsirActionsRequest(afterId), cursor, signal))
+    .andThen((xml) =>
       readCzIsirActionPage(xml).mapError(
         (cause) =>
           new AdapterFetchError({
@@ -316,11 +335,17 @@ const readActions = async (
             cause,
           }),
       ),
-  );
+    )
+    .tap((page) => {
+      observeTip(page.lastId);
+    });
 
 /** Why a decision action produced no decision. */
 export const CZ_ISIR_UNBUILT = {
-  /** The register no longer serves the document (struck off, or withdrawn). */
+  /**
+   * The register states the document is gone (410). A 404 is not this: the
+   * register answers 404 for its own database errors too.
+   */
   WITHDRAWN: "withdrawn",
   /** The proceeding is struck off on the same page. */
   STRUCK_OFF: "struck-off",
@@ -347,7 +372,15 @@ export type CzIsirDecisionRead =
       type: "unbuilt";
       reason: CzIsirUnbuilt;
       detail?: CzIsirAnonymizationFailure | CzIsirParseFailure | undefined;
-    };
+    }
+  /** The document could not be read now; it is asked for again. */
+  | { type: "unread"; outcome: UnreadOutcome };
+
+/** Unbuilt for a reason that is no failure: nothing is kept of it. */
+const isDeliberateSkip = (reason: CzIsirUnbuilt): boolean =>
+  reason === CZ_ISIR_UNBUILT.WITHDRAWN ||
+  reason === CZ_ISIR_UNBUILT.STRUCK_OFF ||
+  reason === CZ_ISIR_UNBUILT.NOT_APPELLATE;
 
 /**
  * The register's stamp of its electronic signature, printed on each page of
@@ -523,6 +556,7 @@ const storedActionSchema = v.object({
   createdAt: nullableText,
   publishedAt: nullableText,
   documentId: v.nullable(v.pipe(v.string(), v.regex(DOCUMENT_ID))),
+  documentReference: v.picklist(Object.values(CZ_ISIR_DOCUMENT_REFERENCE)),
   fileMark: v.string(),
   courtCode: nullableText,
   eventType: v.pipe(v.number(), v.integer()),
@@ -636,6 +670,60 @@ export const buildCzIsirDecision = ({
   };
 };
 
+/**
+ * The row a listed decision keeps while its document cannot be read or
+ * built: the action's allowlisted coordinates, keyed by the document id, and
+ * no text. Its docket and court are the document's own, so they wait for it;
+ * reconciliation builds the decision once the document reads.
+ */
+export const czIsirListingOnlyDecision = (
+  action: CzIsirAction,
+  documentId: string,
+): UnreadListedItem["listing"] => {
+  const sourceUrl = czIsirDocumentUrl(documentId);
+  const metadata: CzIsirDecisionMetadata = {
+    documentId,
+    actionId: action.id,
+    eventType: action.eventType,
+    eventDescription: action.eventDescription,
+    courtCode: action.courtCode,
+    fileMark: action.fileMark,
+    section: action.section,
+    sectionNumber: action.sectionNumber,
+    publishedAt: action.publishedAt,
+    instance: null,
+    insolvencyFile: null,
+    filePosition: null,
+  };
+  const sourceRaw = encodeSourceRawEnvelope({
+    [RAW_PART.ACTION]: actionRow(action),
+  });
+  return {
+    ...plainTextIngestionResult({
+      caseNumber: documentId,
+      caseNumberIsPlaceholder: true,
+      sourceDocumentId: documentId,
+      court: "",
+      country: MANIFEST.country,
+      language: LANGUAGE,
+      isListingOnly: true,
+      sourceUrl,
+      documentUrl: sourceUrl,
+      textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
+      metadata: checkedDecisionMetadata({
+        [CZ_ISIR_METADATA_KEY]: metadata,
+        ecliAvailability: { status: "not_published" },
+      }),
+      rawHash: sourceFingerprint({ sourceRaw }),
+      parserVersion: PARSER_VERSIONS[ADAPTER_KEYS.CZ_ISIR],
+      sourceRaw,
+      sourceRawContentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+    }),
+    sourceDocumentId: documentId,
+    isListingOnly: true,
+  };
+};
+
 const anonymizer = createCzIsirAnonymizer(
   async () => await createPipeline({ language: LANGUAGE }),
 );
@@ -650,7 +738,8 @@ type ReadDecisionOptions = {
 
 /**
  * Read, anonymise and build one decision. A document that could not be read
- * is an error: the crawl stops rather than skip a decision nobody has seen.
+ * is `unread`, so the page keeps what it built and the pipeline asks for the
+ * document again; only a refusal of the whole source stops the page.
  */
 export const readCzIsirDecision = async ({
   action,
@@ -678,17 +767,33 @@ export const readCzIsirDecision = async ({
     case "present":
       break;
     case "absent":
-      return Result.ok({ type: "unbuilt", reason: CZ_ISIR_UNBUILT.WITHDRAWN });
-    case "refused":
-    case "unavailable":
-      return Result.err(
-        unreadPublisherError({
-          outcome: read,
-          message: `Insolvency register document ${documentId} could not be read`,
-          adapterKey: KEY,
-          cursor,
-        }),
+      // The register answers 404 for its database errors as well as for a
+      // document it no longer serves; only a 410 states the document gone.
+      return Result.ok(
+        read.evidence === "http-410"
+          ? { type: "unbuilt", reason: CZ_ISIR_UNBUILT.WITHDRAWN }
+          : {
+              type: "unread",
+              outcome: {
+                type: "unavailable",
+                cause: { kind: "status", status: 404 },
+              },
+            },
       );
+    case "refused":
+      if (read.scope === "source") {
+        return Result.err(
+          unreadPublisherError({
+            outcome: read,
+            message: `Insolvency register refused document ${documentId}`,
+            adapterKey: KEY,
+            cursor,
+          }),
+        );
+      }
+      return Result.ok({ type: "unread", outcome: read });
+    case "unavailable":
+      return Result.ok({ type: "unread", outcome: read });
     default:
       read satisfies never;
       return panic("Unhandled insolvency register document read");
@@ -740,6 +845,7 @@ const crawlPage = async ({
   }
   const isStruckOff = czIsirStruckOffOnPage(page.value.actions);
   const decisions: IngestionResult[] = [];
+  const unreadItems: UnreadListedItem[] = [];
   let failed = 0;
   for (const action of page.value.actions) {
     const selected = czIsirDecisionAction(
@@ -748,6 +854,17 @@ const crawlPage = async ({
       CZ_ISIR_INSOLVENCY_COURT_DECISION_EVENTS,
     );
     if (selected.type === "skip") {
+      if (
+        selected.reason === CZ_ISIR_ACTION_SKIP.MALFORMED_DOCUMENT_REFERENCE
+      ) {
+        // A listed decision the reader cannot address: counted, never
+        // taken for an update without a document.
+        failed += 1;
+        logger.warn("case_law.ingestion.cz_isir_document_reference_malformed", {
+          adapterKey: KEY,
+          actionId: action.id,
+        });
+      }
       continue;
     }
     if (isStruckOff(action)) {
@@ -767,12 +884,18 @@ const crawlPage = async ({
       decisions.push(read.value.decision);
       continue;
     }
-    // Nothing of an unbuilt document is stored; the reason is counted.
-    if (
-      read.value.reason !== CZ_ISIR_UNBUILT.WITHDRAWN &&
-      read.value.reason !== CZ_ISIR_UNBUILT.NOT_APPELLATE
-    ) {
+    if (read.value.type === "unread") {
+      unreadItems.push({
+        listing: czIsirListingOnlyDecision(action, selected.documentId),
+        outcome: read.value.outcome,
+      });
+      continue;
+    }
+    // A failed build keeps the listing, never the document; the reason is
+    // counted and logged, and reconciliation builds it again.
+    if (!isDeliberateSkip(read.value.reason)) {
       failed += 1;
+      decisions.push(czIsirListingOnlyDecision(action, selected.documentId));
     }
     logger.info("case_law.ingestion.cz_isir_decision_unbuilt", {
       adapterKey: KEY,
@@ -785,6 +908,7 @@ const crawlPage = async ({
   return Result.ok({
     decisions,
     itemBuildFailures: { type: "item_build_failed", count: failed },
+    ...(unreadItems.length === 0 ? {} : { unreadItems }),
     publisherRequest: PUBLISHER_REQUEST.ANSWERED,
     // At the feed's end the cursor stays: the next cycle asks for what was
     // published since.
@@ -830,7 +954,8 @@ const sliceName = (index: number): string => String(index).padStart(5, "0");
  * The feed states no date for an id, so the tip is estimated from a
  * measured rate: action 81,548,356 was the last published on 2026-11-19, and
  * the register published about 16,400 actions a day over the year before.
- * An estimate past the real tip only lists empty pages.
+ * The estimate schedules the tip window; a walk stops at the tip the feed
+ * answered ({@link OBSERVED_TIP}), and only before any answer at the estimate.
  */
 const MEASURED_TIP = { id: 81_548_356, on: "2026-11-19" } as const;
 const ACTIONS_PER_DAY = 16_400;
@@ -861,9 +986,14 @@ const sliceOf = (now: Date): string => {
   return sliceName(Math.floor(id / SLICE_IDS));
 };
 
+const tipSliceIndex = (): number =>
+  OBSERVED_TIP.id === null
+    ? sliceIndexOf(sliceOf(new Date()))
+    : Math.floor(OBSERVED_TIP.id / SLICE_IDS);
+
 const nextSlice = (slice: string): string | null => {
   const next = sliceIndexOf(slice) + 1;
-  return next > sliceIndexOf(sliceOf(new Date())) ? null : sliceName(next);
+  return next > tipSliceIndex() ? null : sliceName(next);
 };
 
 const previousSlice = (slice: string): string | null => {
@@ -926,9 +1056,22 @@ const buildFromPayload = async (
   if (Result.isError(read)) {
     return await Promise.reject(read.error);
   }
-  return read.value.type === "built"
-    ? { type: "built", decision: read.value.decision }
-    : { type: "unkeyable" };
+  switch (read.value.type) {
+    case "built":
+      return { type: "built", decision: read.value.decision };
+    case "unread":
+      return { type: "detail-unavailable" };
+    case "unbuilt":
+      return isDeliberateSkip(read.value.reason)
+        ? { type: "unkeyable" }
+        : {
+            type: "built",
+            decision: czIsirListingOnlyDecision(payload, payload.documentId),
+          };
+    default:
+      read.value satisfies never;
+      return panic("Unhandled insolvency register reconciliation read");
+  }
 };
 
 // ── Replay ───────────────────────────────────────────────
@@ -1051,17 +1194,19 @@ const NO_COUNT: SourceTotalCount = { type: "no-count-endpoint" };
 
 /** The last published action id; the walk's distance to the tip. */
 export const readCzIsirTipId = async (signal: AbortSignal) =>
-  (await feedRead(CZ_ISIR_LAST_ID_REQUEST, null, signal)).andThen((xml) =>
-    readCzIsirLastId(xml).mapError(
-      (cause) =>
-        new AdapterFetchError({
-          message: cause.message,
-          adapterKey: KEY,
-          cursor: null,
-          cause,
-        }),
-    ),
-  );
+  (await feedRead(CZ_ISIR_LAST_ID_REQUEST, null, signal))
+    .andThen((xml) =>
+      readCzIsirLastId(xml).mapError(
+        (cause) =>
+          new AdapterFetchError({
+            message: cause.message,
+            adapterKey: KEY,
+            cursor: null,
+            cause,
+          }),
+      ),
+    )
+    .tap(observeTip);
 
 export const czIsirAdapter = defineSourceAdapter({
   key: KEY,

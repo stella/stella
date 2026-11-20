@@ -139,15 +139,18 @@ export const czIsirFixtureDocuments = async (): Promise<
   ),
 });
 
-/** Documents by id; null answers 404, an absent id 404 too. */
-export type CzIsirServedDocuments = Readonly<Record<string, Uint8Array | null>>;
+/** Documents by id; null answers 404, an absent id 404 too, a number that status. */
+export type CzIsirServedDocuments = Readonly<
+  Record<string, Uint8Array | number | null>
+>;
 
-/** The register's transport: the feed page for every feed call, each document by id. */
+/** The register's transport: the feed page (the recorded one unless given) for every feed call, each document by id. */
 export const czIsirTransport = async (
   documents: CzIsirServedDocuments,
   requested: string[] = [],
+  feedXml?: string,
 ): Promise<typeof fetch> => {
-  const feed = await Bun.file(FEED).text();
+  const feed = feedXml ?? (await Bun.file(FEED).text());
   return asFetchMock(async (input, init) => {
     let url: string;
     if (typeof input === "string") {
@@ -167,6 +170,9 @@ export const czIsirTransport = async (
     }
     const id = new URL(url).searchParams.get("idDokument") ?? "";
     const document = documents[id];
+    if (typeof document === "number") {
+      return await Promise.resolve(new Response("", { status: document }));
+    }
     return await Promise.resolve(
       document === undefined || document === null
         ? new Response("", { status: 404 })
