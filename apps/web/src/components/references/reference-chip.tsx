@@ -5,6 +5,7 @@ import { skipToken, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useRouter } from "@tanstack/react-router";
 import { panic } from "better-result";
 
+import { RESOURCE_TYPE } from "@stll/api-contract";
 import { referenceFromHref } from "@stll/api-contract/chat-reference-href";
 import type { ChatReference } from "@stll/api-contract/chat-reference-href";
 import {
@@ -44,6 +45,7 @@ import { detached } from "@/lib/detached";
 import { organizationOptions } from "@/lib/organization/queries";
 import { queryView } from "@/lib/query-view.logic";
 import { useQueryViewError } from "@/lib/use-query-view";
+import { resourceQueryOptions } from "@/lib/workspace-realtime";
 import { workspacesNavigationOptions } from "@/lib/workspaces/queries";
 import { entityOptions } from "@/lib/workspaces/queries/entities";
 import { navigateToWorkspaceFolder } from "@/lib/workspaces/reveal-navigation";
@@ -107,29 +109,51 @@ const useReferenceFacts = (reference: ChatReference): ReferenceLiveFacts => {
 
   // staleTime Infinity: one read per entity; later chips and the click
   // handler share it, so a thread full of mentions stays cheap.
-  const entityQuery = useQuery({
-    ...(entity === null
-      ? {
-          queryKey: ["chat-reference-entity-disabled"] as const,
-          queryFn: skipToken,
-        }
-      : entityOptions(entity.matterId, entity.entityId)),
-    enabled: entity !== null,
-    staleTime: Number.POSITIVE_INFINITY,
-  });
+  const entityQuery = useQuery(
+    resourceQueryOptions(
+      {
+        ...(entity === null
+          ? {
+              queryKey: ["chat-reference-entity-disabled"] as const,
+              queryFn: skipToken,
+            }
+          : entityOptions(entity.matterId, entity.entityId)),
+        enabled: entity !== null,
+        staleTime: Number.POSITIVE_INFINITY,
+      },
+      {
+        resources: [RESOURCE_TYPE.ENTITY],
+        // A disabled read names no matter and is never refreshed.
+        scope: { type: "workspace", workspaceId: entity?.matterId ?? "" },
+      },
+    ),
+  );
+  // The hint is what the transcript itself carried, seeded into the cache as
+  // messages arrive and never fetched; no write of this client changes it.
   const hintQuery = useQuery(
-    referenceHintOptions(
-      reference.type === "entity" ? reference.entityId : null,
+    resourceQueryOptions(
+      referenceHintOptions(
+        reference.type === "entity" ? reference.entityId : null,
+      ),
+      { type: "independent" },
     ),
   );
   const hintQueryView = queryView(hintQuery);
   useQueryViewError(hintQueryView, "useReferenceFacts:query");
   // The navigation list is already in flight on every chat surface, so the
   // matter colour is a cache read rather than a fetch.
+  const navigationOwner = {
+    organizationId: organizationId ?? "",
+    userId: user?.id ?? SIGNED_OUT_QUERY_OWNER,
+  };
   const mattersQuery = useQuery({
-    ...workspacesNavigationOptions({
-      organizationId: organizationId ?? "",
-      userId: user?.id ?? SIGNED_OUT_QUERY_OWNER,
+    ...resourceQueryOptions(workspacesNavigationOptions(navigationOwner), {
+      resources: [RESOURCE_TYPE.WORKSPACE],
+      scope: {
+        type: "organization",
+        organizationId: navigationOwner.organizationId,
+        userId: navigationOwner.userId,
+      },
     }),
     enabled: matterId !== null && organizationId !== undefined,
   });
