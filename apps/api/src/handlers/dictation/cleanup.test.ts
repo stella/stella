@@ -1,5 +1,4 @@
-import { Result } from "better-result";
-import { afterAll, beforeEach, expect, mock, test } from "bun:test";
+import { afterAll, beforeEach, expect, test } from "bun:test";
 import * as v from "valibot";
 
 import {
@@ -10,27 +9,25 @@ import { createTestState } from "@stll/test-state";
 
 import { safeDbFromScoped } from "@/api/db/safe-db";
 import { env } from "@/api/env";
-import { createHttpApp } from "@/api/http/app";
-import { routes } from "@/api/http/route";
 import { HttpStatusResponse } from "@/api/http/status";
-import type { loadOrgAISettings } from "@/api/lib/ai-config-loader";
-import { toSafeId } from "@/api/lib/branded-types";
-import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { buildFeatureAccessSnapshot } from "@/api/lib/feature-access/snapshot";
-import { errorBoundary } from "@/api/lib/observability/request-lifecycle";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
-import type { withActionAdmission } from "@/api/lib/rate-limit/action-admission";
 import type { generateTanStackObjectForTask } from "@/api/lib/tanstack-ai-generate";
 import {
-  claimFixtureDeviceProof,
-  createDesktopDeviceSigner,
-} from "@/api/tests/helpers/desktop-device-proof";
-import { runDispatchCheck } from "@/api/tests/helpers/dispatch-check";
+  admitInline,
+  DICTATING_EMAIL as EMAIL,
+  DICTATING_ORGANIZATION_ID as ORGANIZATION_ID,
+  DICTATING_USER_ID as USER_ID,
+  dictationLimit,
+  exerciseDesktopDictationEndpoint,
+  grantDesktopDictation,
+  recordingModel,
+  testDesktopDictationGate,
+} from "@/api/tests/helpers/desktop-dictation-endpoint";
 import {
   createTestHandlerContext,
   NO_AUDIT,
 } from "@/api/tests/helpers/handler-context";
-import { serveForTest, type TestServer } from "@/api/tests/helpers/test-server";
+import type { TestServer } from "@/api/tests/helpers/test-server";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
@@ -50,17 +47,10 @@ afterAll(async () => {
   await Promise.all(servers.map(async (server) => await server.stop()));
 });
 
-const USER_ID = toSafeId<"user">("dictating-member");
-const ORGANIZATION_ID = toSafeId<"organization">("dictating-firm");
-const EMAIL = "dictation@example.test";
 const TRANSCRIPT = "a tedy nový řádek se rozhodl odejít za tučně 24 dní";
 
 beforeEach(() => {
-  testState.setConfig("API_FEATURE_ACCESS_GRANTS", {
-    "desktop-dictation": [
-      { type: "member", organizationId: ORGANIZATION_ID, email: EMAIL },
-    ],
-  });
+  grantDesktopDictation(testState);
 });
 
 const CLEANED: DictationCleanupModelOutput = {
@@ -83,105 +73,17 @@ type ExerciseOptions = {
 
 const exercise = async ({
   input = { transcript: TRANSCRIPT, locale: "cs", languages: ["cs", "en"] },
-  granted = true,
-  role = "member",
-  limited = false,
   answer = () => CLEANED,
-}: ExerciseOptions = {}) => {
-  if (!granted) {
-    testState.setConfig("API_FEATURE_ACCESS_GRANTS", {});
-  }
-  const calls: { system: string; prompt: string; schema: unknown }[] = [];
-  const { scopedDb } = createScopedDbMock({});
-  const generate = mock(
-    async (options: Parameters<typeof generateTanStackObjectForTask>[0]) => {
-      await runDispatchCheck(options.beforeEachDispatch);
-      calls.push({
-        system: options.system ?? "",
-        prompt: options.prompt ?? "",
-        schema: options.outputSchema,
-      });
-      return await Promise.resolve(answer());
-    },
-  );
-  const limit = mock(
-    async (_options: Parameters<typeof consumeDictationLimit>[0]) =>
-      await Promise.resolve(
-        limited
-          ? Result.err(
-              new HandlerError({
-                status: 429,
-                code: "rate_limited",
-                message: "Too many dictation cleanup requests",
-              }),
-            )
-          : Result.ok(undefined),
-      ),
-  );
-  const endpoint = createDictationCleanupEndpoint({
-    authorizeAccount: async (request) => {
-      const device = await createDesktopDeviceSigner();
-      return Result.ok({
-        featureAccessSnapshot: buildFeatureAccessSnapshot({
-          organizationId: ORGANIZATION_ID,
-          userId: USER_ID,
-          identity: { email: EMAIL, emailVerified: true },
-          enrolments: [],
-        }),
-        consumedProof: await claimFixtureDeviceProof({
-          request: await device.signRequest({
-            request,
-            credential: "dictation-cleanup-fixture",
-          }),
-          deviceJkt: device.deviceJkt,
-          keyId: "linked-desktop",
-          credential: "dictation-cleanup-fixture",
-        }),
-        organizationId: ORGANIZATION_ID,
-        userId: USER_ID,
-        keyId: "linked-desktop",
-        memberRole: sessionMemberRole(role),
-        scopedDb,
-      });
-    },
-    loadAISettings: asTestRaw<typeof loadOrgAISettings>(
-      async () =>
-        await Promise.resolve(
-          Result.ok({
-            orgAIConfig: null,
-            promptCachingEnabled: false,
-            managedAIResidency: "eu",
-          }),
-        ),
-    ),
-    limit: asTestRaw<typeof consumeDictationLimit>(limit),
-    generateObjectForTask:
-      asTestRaw<typeof generateTanStackObjectForTask>(generate),
-    admit: asTestRaw<typeof withActionAdmission>(
-      async ({ run }: Parameters<typeof withActionAdmission>[0]) =>
-        Result.ok(
-          await run(new AbortController().signal, {
-            reservePeriod: async () => Result.ok(undefined),
-          }),
-        ),
-    ),
+  ...options
+}: ExerciseOptions = {}) =>
+  await exerciseDesktopDictationEndpoint({
+    createEndpoint: createDictationCleanupEndpoint,
+    testState,
+    servers,
+    input,
+    answer,
+    ...options,
   });
-  const server = serveForTest(
-    createHttpApp({
-      middleware: [errorBoundary],
-      routes: routes({ "/cleanup": { POST: endpoint } }),
-    }),
-  );
-  servers.push(server);
-  const response = await server.fetch(
-    new Request("http://localhost/cleanup", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(input),
-    }),
-  );
-  return { response, calls, generate, limit };
-};
 
 test("a granted desktop gets the model's segments for its transcript text", async () => {
   const { response, calls, limit } = await exercise();
@@ -208,77 +110,50 @@ test("a granted desktop gets the model's segments for its transcript text", asyn
   expect(limit.mock.calls.at(0)?.[0]).toMatchObject({ operation: "cleanup" });
 });
 
-test("an account without the dictation decision is refused before any model call", async () => {
-  const { response, generate, limit } = await exercise({ granted: false });
-  expect(response.status).toBe(403);
-  expect(generate).not.toHaveBeenCalled();
-  expect(limit).not.toHaveBeenCalled();
-});
-
-test("a role that may not use AI is refused before any model call", async () => {
-  const { response, generate } = await exercise({ role: "external" });
-  expect(response.status).toBe(403);
-  expect(generate).not.toHaveBeenCalled();
-});
-
-test("an exhausted cleanup budget refuses before any model call", async () => {
-  const { response, generate } = await exercise({ limited: true });
-  expect(response.status).toBe(429);
-  expect(generate).not.toHaveBeenCalled();
-});
-
-test.each([
-  [
-    "a transcript over the limit",
-    {
-      transcript: "x".repeat(
-        DESKTOP_DICTATION_CLEANUP_LIMITS.transcriptLength + 1,
-      ),
-    },
-  ],
-  ["an empty transcript", { transcript: "" }],
-  ["audio instead of text", { transcript: "ok", audio: "UklGRg==" }],
-  ["a locale that is not a language tag", { transcript: "ok", locale: "a b" }],
-  [
-    "a window title over the limit",
-    {
-      transcript: "ok",
-      context: {
-        appKind: "document",
-        windowTitle: "x".repeat(
-          DESKTOP_DICTATION_CLEANUP_LIMITS.windowTitleLength + 1,
+testDesktopDictationGate({
+  exercise,
+  transcript: TRANSCRIPT,
+  invalidInputs: [
+    [
+      "a transcript over the limit",
+      {
+        transcript: "x".repeat(
+          DESKTOP_DICTATION_CLEANUP_LIMITS.transcriptLength + 1,
         ),
       },
-    },
-  ],
-  [
-    "text before the cursor over the limit",
-    {
-      transcript: "ok",
-      context: {
-        appKind: "document",
-        textBeforeCursor: "x".repeat(
-          DESKTOP_DICTATION_CLEANUP_LIMITS.textBeforeCursorLength + 1,
-        ),
+    ],
+    ["an empty transcript", { transcript: "" }],
+    ["audio instead of text", { transcript: "ok", audio: "UklGRg==" }],
+    [
+      "a locale that is not a language tag",
+      { transcript: "ok", locale: "a b" },
+    ],
+    [
+      "a window title over the limit",
+      {
+        transcript: "ok",
+        context: {
+          appKind: "document",
+          windowTitle: "x".repeat(
+            DESKTOP_DICTATION_CLEANUP_LIMITS.windowTitleLength + 1,
+          ),
+        },
       },
-    },
+    ],
+    [
+      "text before the cursor over the limit",
+      {
+        transcript: "ok",
+        context: {
+          appKind: "document",
+          textBeforeCursor: "x".repeat(
+            DESKTOP_DICTATION_CLEANUP_LIMITS.textBeforeCursorLength + 1,
+          ),
+        },
+      },
+    ],
+    ["an unknown app kind", { transcript: "ok", context: { appKind: "word" } }],
   ],
-  ["an unknown app kind", { transcript: "ok", context: { appKind: "word" } }],
-])("%s is refused before any model call", async (_case, input) => {
-  const { response, generate } = await exercise({ input });
-  expect(response.status).toBeGreaterThanOrEqual(400);
-  expect(response.status).toBeLessThan(500);
-  expect(generate).not.toHaveBeenCalled();
-});
-
-test("a failed model call answers a bounded error without the transcript", async () => {
-  const { response } = await exercise({
-    answer: () => {
-      throw new TypeError(`provider echoed ${TRANSCRIPT}`);
-    },
-  });
-  expect(response.status).toBeGreaterThanOrEqual(500);
-  expect(await response.text()).not.toContain("rozhodl");
 });
 
 test("an answer that adds content is refused rather than typed", async () => {
@@ -358,47 +233,15 @@ test("where the text goes reaches the model as its own field, and the answer is 
   expect(await echoed.response.text()).not.toContain("Kupní cena");
 });
 
-const admitInline = asTestRaw<typeof withActionAdmission>(
-  async ({ run }: Parameters<typeof withActionAdmission>[0]) =>
-    Result.ok(
-      await run(new AbortController().signal, {
-        reservePeriod: async () => Result.ok(undefined),
-      }),
-    ),
-);
-
 /** The member route: a signed-in member's session, no desktop decision. */
 const exerciseMember = async ({
   role = "member",
   limited = false,
 }: { role?: "member" | "external"; limited?: boolean } = {}) => {
   testState.setConfig("API_FEATURE_ACCESS_GRANTS", {});
-  const calls: { system: string; prompt: string }[] = [];
+  const { calls, generate } = recordingModel(() => CLEANED);
   const { scopedDb } = createScopedDbMock({});
-  const generate = mock(
-    async (options: Parameters<typeof generateTanStackObjectForTask>[0]) => {
-      await runDispatchCheck(options.beforeEachDispatch);
-      calls.push({
-        system: options.system ?? "",
-        prompt: options.prompt ?? "",
-      });
-      return await Promise.resolve(CLEANED);
-    },
-  );
-  const limit = mock(
-    async (_options: Parameters<typeof consumeDictationLimit>[0]) =>
-      await Promise.resolve(
-        limited
-          ? Result.err(
-              new HandlerError({
-                status: 429,
-                code: "rate_limited",
-                message: "Too many dictation cleanup requests",
-              }),
-            )
-          : Result.ok(undefined),
-      ),
-  );
+  const limit = dictationLimit(limited);
   const endpoint = createMemberDictationCleanupEndpoint({
     admit: admitInline,
     limit: asTestRaw<typeof consumeDictationLimit>(limit),

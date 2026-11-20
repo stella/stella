@@ -108,8 +108,8 @@ describe("plain text of the real templates", () => {
   test("bold labels stay inline with their values, one detail per paragraph", () => {
     const { text } = renderEmail(
       <NewDeviceLogin.Email
-        device="Chrome on macOS"
-        ipAddress="203.0.113.42"
+        device={{ type: "browserOnOs", browser: "Chrome", os: "macOS" }}
+        ipAddress={{ type: "known", address: "203.0.113.42" }}
         lang="en"
         location={{
           type: "known",
@@ -210,8 +210,8 @@ describe("plain text of the real templates", () => {
         />,
         <NewDeviceLogin.Email
           key="device"
-          device="Chrome on macOS"
-          ipAddress="203.0.113.42"
+          device={{ type: "browserOnOs", browser: "Chrome", os: "macOS" }}
+          ipAddress={{ type: "known", address: "203.0.113.42" }}
           lang={lang}
           location={{
             type: "known",

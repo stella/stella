@@ -166,3 +166,58 @@ describe("what a turn waits on", () => {
     }
   });
 });
+
+describe("what a turn's sub-agent run waits on", () => {
+  const run = (status: string, parts: readonly unknown[]) => ({
+    type: "subagent",
+    subagent: {
+      id: `run-${status}`,
+      name: "browse_web",
+      status,
+      parentToolCallId: "call-browse",
+      messages: [{ id: "child-1", role: "assistant", parts }],
+    },
+  });
+  const approval = WAITING_CALL.approval;
+  const clientCall = call({
+    executor: "client",
+    name: "use-browser",
+    state: "input-complete",
+  });
+
+  test("a suspended run's child calls wait like the message's own, in order", () => {
+    expect(
+      memberWaitsOf(assistant([run("suspended", [approval, clientCall])])),
+    ).toEqual([
+      { type: "approval", toolCallId: approval.id },
+      { type: "client-tool", toolCallId: clientCall.id },
+    ]);
+  });
+
+  test("a run nested in a suspended run waits too", () => {
+    expect(
+      memberWaitsOf(
+        assistant([run("suspended", [run("suspended", [approval])])]),
+      ),
+    ).toEqual([{ type: "approval", toolCallId: approval.id }]);
+  });
+
+  test("a run that cannot resume waits on nothing, whatever its child holds", () => {
+    for (const status of ["running", "finished", "error"]) {
+      expect(memberWaitsOf(assistant([run(status, [approval])]))).toEqual([]);
+      expect(
+        memberWaitsOf(assistant([run("suspended", [run(status, [approval])])])),
+      ).toEqual([]);
+    }
+  });
+
+  test("a malformed run waits on nothing", () => {
+    for (const part of [
+      { type: "subagent" },
+      { type: "subagent", subagent: { status: "suspended" } },
+      { type: "subagent", subagent: { status: "suspended", messages: [{}] } },
+    ]) {
+      expect(waitOf(part)).toBeNull();
+    }
+  });
+});

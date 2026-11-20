@@ -1,3 +1,7 @@
+import { panic } from "better-result";
+
+import { isOrganizationRoleName } from "@stll/permissions/role-grants";
+
 import { authClient } from "@/lib/auth-client";
 
 /** The two answers where the next step is signing in differently. */
@@ -31,6 +35,14 @@ export const loadInvitationView = async (invitationId: string) => {
 
   if (data?.status !== "pending") {
     return { type: "missing" } as const;
+  }
+
+  // The client types the role without validating the response; the sentence
+  // naming it has a branch per known role only.
+  if (!isOrganizationRoleName(data.role)) {
+    return panic(
+      `Invitation carries an unknown organization role: ${String(data.role)}`,
+    );
   }
 
   return { type: "invitation", invitation: data } as const;

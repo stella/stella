@@ -1,6 +1,3 @@
-import { useTranslations } from "use-intl";
-
-import { STATUTE_COLUMN_IDS } from "@stll/api-contract/public-law-table";
 import type { StatuteColumnId } from "@stll/api-contract/public-law-table";
 import {
   CalendarClockIcon,
@@ -13,13 +10,15 @@ import {
 } from "@stll/ui/icons";
 import type { LucideIcon } from "@stll/ui/icons";
 
+import { PendingText } from "@/components/pending-text";
 import {
   PublicLawTableHeaderFace,
   PublicLawTableSkeleton,
 } from "@/components/public-law-table/public-law-table.pending";
 import type { PublicLawSkeletonColumn } from "@/components/public-law-table/public-law-table.pending";
-import { SELECT_COLUMN_SIZE } from "@/components/workspaces/table/table-schema";
+import { SELECT_COLUMN_SIZE } from "@/components/workspaces/table/workspace-grid";
 import {
+  STATUTE_COLUMN_IDS,
   STATUTE_COLUMN_LABEL_KEYS,
   STATUTE_COLUMN_MODEL,
 } from "@/features/statutes/statute-columns.logic";
@@ -58,7 +57,6 @@ export const StatuteTableSkeleton = ({
 }: {
   expectedRowCount?: number | undefined;
 }) => {
-  const t = useTranslations();
   const columns: PublicLawSkeletonColumn[] = [
     { id: "row-number", header: null, size: SELECT_COLUMN_SIZE },
     ...STATUTE_COLUMN_IDS.map((column) => ({
@@ -66,7 +64,12 @@ export const StatuteTableSkeleton = ({
       header: (
         <PublicLawTableHeaderFace
           icon={<StatuteColumnIcon column={column} />}
-          label={t(STATUTE_COLUMN_LABEL_KEYS[column])}
+          label={
+            <PendingText
+              barClassName="w-16 max-w-full"
+              id={STATUTE_COLUMN_LABEL_KEYS[column]}
+            />
+          }
         />
       ),
       size: STATUTE_COLUMN_MODEL[column].size,

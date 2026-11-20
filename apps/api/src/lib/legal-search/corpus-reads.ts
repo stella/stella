@@ -7,6 +7,7 @@ import {
   readSizedCorpusAst as readSizedAstWithDenial,
 } from "@/api/lib/legal-search/corpus-storage";
 import type {
+  CorpusAstReadOptions,
   CorpusByteSourceSeams,
   SizedCorpusAst,
 } from "@/api/lib/legal-search/corpus-storage";
@@ -57,6 +58,9 @@ export const readCorpusTombstones: CorpusTombstoneReader = async (
 /** The seams a caller may still replace; the denial reader is bound here. */
 type BoundReadOptions = Omit<CorpusByteSourceSeams, "readTombstones">;
 
+/** An AST read also names its document, for the read's one report. */
+type BoundAstReadOptions = Omit<CorpusAstReadOptions, "readTombstones">;
+
 export const readCorpusText = async (
   storedKey: string,
   options: BoundReadOptions & { timeoutMs?: number } = {},
@@ -77,7 +81,7 @@ export const readCorpusSections = async (
 
 export const readCorpusAst = async (
   storedKey: string,
-  options: BoundReadOptions = {},
+  options: BoundAstReadOptions = {},
 ): Promise<DocumentAst | EmptyAst | null> =>
   await readAstWithDenial(storedKey, {
     readTombstones: readCorpusTombstones,
@@ -86,7 +90,7 @@ export const readCorpusAst = async (
 
 export const readSizedCorpusAst = async (
   storedKey: string,
-  options: BoundReadOptions = {},
+  options: BoundAstReadOptions = {},
 ): Promise<SizedCorpusAst> =>
   await readSizedAstWithDenial(storedKey, {
     readTombstones: readCorpusTombstones,

@@ -133,15 +133,21 @@ const hydratingPayloadSource = async (
   return {
     readText: async (storedKey) =>
       await readCorpusText(storedKey, { readTombstones }),
-    readAst: async (storedKey) =>
-      (
+    readAst: async (storedKey) => {
+      const documentId =
+        documentByAstKey.get(storedKey) ??
+        panic("Passage AST pointer has no document");
+      return (
         await readCorpusForRecovery({
-          documentId:
-            documentByAstKey.get(storedKey) ??
-            panic("Passage AST pointer has no document"),
-          read: async () => await readCorpusAst(storedKey, { readTombstones }),
+          documentId,
+          read: async () =>
+            await readCorpusAst(storedKey, {
+              readTombstones,
+              report: { documentId },
+            }),
         })
-      ).unwrapOr(null),
+      ).unwrapOr(null);
+    },
   };
 };
 

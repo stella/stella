@@ -1,0 +1,19 @@
+{
+  "id": "no-raw-cloudfront-viewer-header",
+  "rules": ["no-raw-cloudfront-viewer-header/no-raw-cloudfront-viewer-header"],
+  "type": "changed-lines",
+  "expiresAt": "2026-11-27T00:00:00.000Z",
+  "check": [
+    "bun",
+    "--bun",
+    "oxlint",
+    "-c",
+    "oxlint.config.ts",
+    "--allow",
+    "all",
+    "--deny",
+    "no-raw-cloudfront-viewer-header/no-raw-cloudfront-viewer-header",
+    "apps",
+    "packages"
+  ]
+}

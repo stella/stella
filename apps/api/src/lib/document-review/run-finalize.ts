@@ -317,6 +317,8 @@ export const recordRunWithheldSources = async (
 
 type FinalizeWorkerRunArgs = {
   actor: RootRunActor<"documentReviewRun">;
+  /** Re-checks the requester's authority inside the completing transaction. */
+  authorize?: ((tx: Transaction) => Promise<void>) | undefined;
   basis: DocumentReviewRunBasis;
   entityId: SafeId<"entity">;
   fileFieldId: SafeId<"field">;
@@ -334,6 +336,7 @@ type FinalizeWorkerRunArgs = {
  */
 export const finalizeWorkerRun = async ({
   actor,
+  authorize,
   basis,
   entityId,
   fileFieldId,
@@ -347,6 +350,7 @@ export const finalizeWorkerRun = async ({
   );
   const writeDb = sourcesDb ?? actor.writeDb;
   return await writeDb(async (tx) => {
+    await authorize?.(tx);
     const sourcesStand =
       sourcesDb !== null &&
       (await holdLiveSourceWorkspaces({

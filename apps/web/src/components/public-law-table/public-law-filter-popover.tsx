@@ -24,10 +24,7 @@ import type {
   FacetItem,
   FacetSourceBucket,
 } from "@/components/public-law-table/public-law-facets.logic";
-import {
-  PublicLawFiltersButton,
-  PublicLawFiltersLabel,
-} from "@/components/public-law-table/public-law-results-toolbar.pending";
+import { PublicLawFiltersLabel } from "@/components/public-law-table/public-law-results-toolbar.pending";
 import { useFormatter } from "@/i18n/formatting-context";
 
 type PublicLawFilterPopoverProps = {
@@ -52,11 +49,20 @@ export const PublicLawFilterPopover = ({
   children,
 }: PublicLawFilterPopoverProps) => {
   const t = useTranslations();
+  const format = useFormatter();
 
   return (
     <Popover>
-      <PopoverTrigger render={<PublicLawFiltersButton />}>
-        <PublicLawFiltersLabel activeFilterCount={activeFilterCount} />
+      <PopoverTrigger
+        render={<Button className="shrink-0" size="sm" variant="outline" />}
+      >
+        <PublicLawFiltersLabel
+          badge={
+            activeFilterCount > 0 ? format.number(activeFilterCount) : null
+          }
+        >
+          {t("common.filters")}
+        </PublicLawFiltersLabel>
       </PopoverTrigger>
       <PopoverPanel
         align="start"

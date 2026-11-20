@@ -259,10 +259,15 @@ const SORT_ICON_SLOT_CLASS = "inline-flex w-3 shrink-0 justify-center";
  * head's, pulled back by a negative margin so the label lines up with the
  * cells and the button never reaches past the table's edge. In an
  * end-aligned (numeric) column the arrow sits before the label.
+ *
+ * The head's content box shrink-wraps the button's margin box, which the
+ * negative margin makes one padding narrower than the button. A button capped
+ * at `max-w-full` of that box would cut its label by that padding however
+ * wide the column is, so the cap adds the padding back.
  */
 const sortableHeadButtonClassName = (endAligned: boolean): string =>
   cn(
-    "min-w-0 gap-1 px-2.5",
+    "max-w-[calc(100%+--spacing(2.5))] min-w-0 gap-1 px-2.5",
     endAligned ? "-me-2.5 flex-row-reverse" : "-ms-2.5",
   );
 
