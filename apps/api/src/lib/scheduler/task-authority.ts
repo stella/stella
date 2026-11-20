@@ -344,7 +344,7 @@ export const SCHEDULER_TASK_AUTHORITY = {
   ),
   "styleSets.reconcilePackageCleanups": platform(
     "style-set-package-cleanup-reconcile.ts",
-    "Hands pending package cleanups to their queue.",
+    "Hands pending replacement cleanups to their queue and consumes deletion tombstones.",
   ),
   "agentSkills.cleanOriginalObjects": platform(
     "agent-skill-original-cleanup.ts",

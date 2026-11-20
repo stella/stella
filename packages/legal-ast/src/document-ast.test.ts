@@ -9,6 +9,7 @@ import {
   headMatterPrecedesBody,
   isApparatusRole,
   isDocumentAst,
+  isUnreadBlock,
   omitDerivablePlainText,
   PARAGRAPH_ROLES,
   parseDocumentAst,
@@ -966,14 +967,98 @@ describe("persisted kinds outside the declared sets", () => {
     );
   });
 
-  test("an unknown block is dropped, the rest of the document served", () => {
+  test("an unknown block is kept as an unread paragraph with its text and identity", () => {
     const parsed = parseDocumentAst(
       astWith([
-        { id: "x1", anchorId: "x-1", type: "sidebar", body: "aside" },
+        {
+          id: "x1",
+          anchorId: "x-1",
+          type: "sidebar",
+          inlines: [
+            { type: "text", text: "Poznámka " },
+            { type: "small-caps", text: "SÚDU" },
+          ],
+        },
         documentAst.blocks[1],
       ]),
     );
-    expect(parsed?.blocks.map((block) => block.id)).toEqual(["p1"]);
+    const kept = parsed?.blocks.at(0);
+    expect(kept).toEqual({
+      id: "x1",
+      anchorId: "x-1",
+      type: "paragraph",
+      role: "unknown",
+      storedType: "sidebar",
+      inlines: [{ type: "text", text: "Poznámka SÚDU" }],
+      plainText: "Poznámka SÚDU",
+    });
+    expect(kept === undefined ? false : isUnreadBlock(kept)).toBe(true);
+    expect(parsed?.blocks.map((block) => block.id)).toEqual(["x1", "p1"]);
+    // What the reader keeps is a document a writer could persist as is.
+    expect(parsed === null ? false : isDocumentAst(parsed)).toBe(true);
+  });
+
+  test("an unknown block's text is read from cells, nested parts or a string", () => {
+    const parsed = parseDocumentAst(
+      astWith([
+        {
+          id: "g1",
+          anchorId: "g-1",
+          type: "grid",
+          rows: [
+            [
+              { inlines: [{ type: "text", text: "Sud" }] },
+              { plainText: "Krajský súd" },
+            ],
+            [{ inlines: [{ type: "text", text: "Rok" }] }, { text: "2021" }],
+          ],
+        },
+        {
+          id: "l1",
+          anchorId: "l-1",
+          type: "list",
+          items: [
+            { inlines: [{ type: "text", text: "a) prvý" }] },
+            { children: [{ plainText: "b) druhý" }] },
+          ],
+        },
+        { anchorId: "s-1", type: "sidebar", plainText: "Bočný text" },
+        { type: "rule" },
+      ]),
+    );
+    expect(
+      parsed?.blocks.map(({ anchorId, id, plainText }) => [
+        id,
+        anchorId,
+        plainText,
+      ]),
+    ).toEqual([
+      ["g1", "g-1", "Sud\tKrajský súd\nRok\t2021"],
+      ["l1", "l-1", "a) prvý\nb) druhý"],
+      ["s-1", "s-1", "Bočný text"],
+      ["unread-4", "unread-4", ""],
+    ]);
+  });
+
+  test("a kept unknown block that repeats an identity is re-keyed like any block", () => {
+    const parsed = parseDocumentAst(
+      astWith([
+        { ...paragraphWith([{ type: "text", text: "first" }]) },
+        { id: "p1", anchorId: "p-1", type: "sidebar", text: "second" },
+      ]),
+    );
+    expect(parsed?.blocks.map(({ anchorId, id }) => [id, anchorId])).toEqual([
+      ["p1", "p-1"],
+      ["p1-2", "p-1-2"],
+    ]);
+  });
+
+  test("a malformed block of a declared type is still a parse failure", () => {
+    expect(
+      parseDocumentAst(
+        astWith([{ id: "h1", anchorId: "h-1", type: "heading" }]),
+      ),
+    ).toBe(null);
   });
 
   test("the canonical guard rejects both, so a writer cannot persist them", () => {

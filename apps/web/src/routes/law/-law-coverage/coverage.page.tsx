@@ -1,4 +1,4 @@
-import { type PropsWithChildren, useId, useState } from "react";
+import { useId, useState } from "react";
 
 import { useQuery } from "@tanstack/react-query";
 import { Link, useLocation, useNavigate } from "@tanstack/react-router";
@@ -43,6 +43,16 @@ import {
   UTC_CALENDAR_DATE_FORMAT,
 } from "@/lib/relative-time";
 import {
+  CompletenessLabel,
+  COUNTRY_NAVIGATION_HEIGHT,
+  CountryCard,
+  CoverageTable,
+  SOURCE_COLUMN_COUNT,
+  SOURCE_COLUMNS,
+  SourcesTableHeadFace,
+  TableColumns,
+} from "@/routes/law/-law-coverage/coverage-country.pending";
+import {
   CASE_LAW_COVERAGE_AVAILABILITY_LABEL_KEYS,
   CASE_LAW_COVERAGE_AVAILABILITY_TONES,
   type CaseLawCoverageCountry,
@@ -54,18 +64,15 @@ import {
 } from "@/routes/law/-law-coverage/coverage.logic";
 import {
   CaseLawCoveragePending,
-  CompletenessLabel,
-  COUNTRY_NAVIGATION_HEIGHT,
-  CountryCard,
+  COUNTRY_NAVIGATION_ITEM_CLASS_NAME,
+  CoverageCountryNavigation,
+  CoverageGeneratedAt,
   CoverageHeading,
+  CoverageHero,
   CoverageLayout,
-  CoverageTable,
-  Headline,
-  Hero,
-  SOURCE_COLUMN_COUNT,
-  SOURCE_COLUMNS,
-  SourcesTableHeadFace,
-  TableColumns,
+  CoverageLegend,
+  CoverageLegendRow,
+  HeaderFigure,
 } from "@/routes/law/-law-coverage/coverage.pending";
 
 /** Where a figure stands that the corpus states no number for. */
@@ -173,7 +180,7 @@ export const CaseLawCoveragePage = ({
   if (!("countries" in coverage)) {
     return (
       <CoverageLayout>
-        <CoverageHeading />
+        <CoverageHeading title={t("caseLaw.coverage.title")} />
         <p className="text-muted-foreground text-sm">
           {t("caseLaw.coverage.unavailable")}
         </p>
@@ -189,31 +196,27 @@ export const CaseLawCoveragePage = ({
 
   return (
     <CoverageLayout>
-      <CoverageHeading>
-        <p className="text-muted-foreground text-xs wrap-break-word">
+      <CoverageHeading title={t("caseLaw.coverage.title")}>
+        <CoverageGeneratedAt>
           {t("caseLaw.coverage.generatedAt", {
             date: observedInstant(coverage.generatedAt, format),
           })}
-        </p>
+        </CoverageGeneratedAt>
       </CoverageHeading>
 
-      <Hero>
-        <div className="flex flex-col gap-5">
-          <div>
-            <Headline>
-              {coverage.totals.searchable === null
-                ? NO_VALUE
-                : format.number(coverage.totals.searchable)}
-            </Headline>
-            <p className="text-muted-foreground mt-2 text-sm">
-              {t("caseLaw.coverage.decisionsAcross", {
-                count: countries.filter(
-                  (country) => country.availability === "searchable",
-                ).length,
-              })}
-            </p>
-          </div>
-          <div className="flex flex-wrap gap-x-8 gap-y-3">
+      <CoverageHero
+        headline={
+          coverage.totals.searchable === null
+            ? NO_VALUE
+            : format.number(coverage.totals.searchable)
+        }
+        scope={t("caseLaw.coverage.decisionsAcross", {
+          count: countries.filter(
+            (country) => country.availability === "searchable",
+          ).length,
+        })}
+        figures={
+          <>
             <HeaderFigure label={t("caseLaw.corpusStatus.newLast7Days")}>
               <Delta value={coverage.totals.addedLastWeek} />
             </HeaderFigure>
@@ -229,75 +232,76 @@ export const CaseLawCoveragePage = ({
                 ),
               })}
             </HeaderFigure>
-          </div>
-        </div>
-        <CoverageLegend countries={coverage.countries} />
-      </Hero>
+          </>
+        }
+        legend={<CoverageLegendValues countries={coverage.countries} />}
+      />
 
-      <nav
+      <CoverageCountryNavigation
         ref={measureCountryNavigation}
-        aria-label={t("caseLaw.coverage.countryNavigation")}
-        className="bg-background sticky top-0 z-10 border-b py-2"
-      >
-        <Select<string>
-          onValueChange={(anchor) => {
-            const country = countries.find(
-              (candidate) =>
-                caseLawCoverageAnchor(candidate.country) === anchor,
-            );
-            if (country === undefined) {
-              return;
+        label={t("caseLaw.coverage.countryNavigation")}
+        phone={
+          <Select<string>
+            onValueChange={(anchor) => {
+              const country = countries.find(
+                (candidate) =>
+                  caseLawCoverageAnchor(candidate.country) === anchor,
+              );
+              if (country === undefined) {
+                return;
+              }
+              expandCountry(country.country);
+              detached(
+                navigate({
+                  to: "/law/coverage",
+                  hash: caseLawCoverageAnchor(country.country),
+                }),
+                "law-coverage.navigate-country",
+              );
+            }}
+            value={
+              countries.some(
+                (country) => caseLawCoverageAnchor(country.country) === hash,
+              )
+                ? hash
+                : null
             }
-            expandCountry(country.country);
-            detached(
-              navigate({
-                to: "/law/coverage",
-                hash: caseLawCoverageAnchor(country.country),
-              }),
-              "law-coverage.navigate-country",
-            );
-          }}
-          value={
-            countries.some(
-              (country) => caseLawCoverageAnchor(country.country) === hash,
-            )
-              ? hash
-              : null
-          }
-        >
-          <SelectTrigger
-            aria-label={t("caseLaw.coverage.countryNavigation")}
-            className="min-h-11 w-full sm:hidden"
           >
-            <SelectValue
-              placeholder={t("caseLaw.coverage.countryNavigation")}
-            />
-          </SelectTrigger>
-          <SelectPopup>
-            {countries.map((country) => (
-              <SelectItem
-                key={country.country}
-                value={caseLawCoverageAnchor(country.country)}
-              >
-                {caseLawCountryName(format, country.country)}
-              </SelectItem>
-            ))}
-          </SelectPopup>
-        </Select>
-        <div className="hidden flex-wrap gap-x-1 sm:flex">
-          {countries.map((country) => (
-            <Link
-              className="hover:bg-muted focus-visible:ring-ring inline-flex min-h-11 items-center rounded-md px-3 text-sm focus-visible:ring-2"
-              hash={caseLawCoverageAnchor(country.country)}
-              key={country.country}
-              onClick={() => expandCountry(country.country)}
-              to="/law/coverage"
+            <SelectTrigger
+              aria-label={t("caseLaw.coverage.countryNavigation")}
+              className="min-h-11 w-full sm:hidden"
             >
-              {caseLawCountryName(format, country.country)}
-            </Link>
-          ))}
-        </div>
-      </nav>
+              <SelectValue
+                placeholder={t("caseLaw.coverage.countryNavigation")}
+              />
+            </SelectTrigger>
+            <SelectPopup>
+              {countries.map((country) => (
+                <SelectItem
+                  key={country.country}
+                  value={caseLawCoverageAnchor(country.country)}
+                >
+                  {caseLawCountryName(format, country.country)}
+                </SelectItem>
+              ))}
+            </SelectPopup>
+          </Select>
+        }
+        links={countries.map((country) => (
+          <Link
+            className={cn(
+              COUNTRY_NAVIGATION_ITEM_CLASS_NAME,
+              "hover:bg-muted focus-visible:ring-ring focus-visible:ring-2",
+            )}
+            hash={caseLawCoverageAnchor(country.country)}
+            key={country.country}
+            onClick={() => expandCountry(country.country)}
+            to="/law/coverage"
+          >
+            {caseLawCountryName(format, country.country)}
+          </Link>
+        ))}
+      />
       {countries.map((country) => (
         <CountrySection
           country={country}
@@ -359,7 +363,7 @@ const CountryLink = ({
   );
 };
 
-const CoverageLegend = ({
+const CoverageLegendValues = ({
   countries,
 }: {
   countries: readonly CaseLawCoverageCountry[];
@@ -371,26 +375,21 @@ const CoverageLegend = ({
   const ordered = countries.toSorted((a, b) => count(b) - count(a));
   const maximum = Math.max(1, ...ordered.map(count));
   return (
-    <ul className="flex flex-col gap-3 text-sm">
+    <CoverageLegend>
       {ordered.map((country) => (
-        <li
-          className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-1.5"
+        <CoverageLegendRow
           key={country.country}
-        >
-          <span className="font-medium">
+          name={
             <CountryLink country={country}>
               {caseLawCountryName(format, country.country)}
             </CountryLink>
-          </span>
-          <span className="text-muted-foreground tabular-nums">
-            {country.availability === "searchable"
+          }
+          value={
+            country.availability === "searchable"
               ? format.number(country.searchable)
-              : t("caseLaw.coverage.inPreparation")}
-          </span>
-          <span
-            aria-hidden="true"
-            className="bg-muted col-span-2 h-1 overflow-hidden rounded-full"
-          >
+              : t("caseLaw.coverage.inPreparation")
+          }
+          bar={
             <span
               className="block h-full rounded-full"
               style={{
@@ -398,10 +397,10 @@ const CoverageLegend = ({
                 backgroundColor: COLOR_BY_JURISDICTION[country.country],
               }}
             />
-          </span>
-        </li>
+          }
+        />
       ))}
-    </ul>
+    </CoverageLegend>
   );
 };
 
@@ -578,20 +577,6 @@ const CountryFreshness = ({
   );
 };
 
-/**
- * A figure on the card's rim, beside the name: the sources' rows below carry
- * each one's health, so the rim states only the country's totals.
- */
-const HeaderFigure = ({
-  children,
-  label,
-}: PropsWithChildren<{ label: string }>) => (
-  <span className="inline-flex items-baseline gap-1.5 text-sm">
-    <span className="text-muted-foreground">{label}</span>
-    <span className="font-medium tabular-nums">{children}</span>
-  </span>
-);
-
 /** The span the index covers, omitted where the index states no year at all. */
 const DecisionYearsFigure = ({
   from,
@@ -624,22 +609,31 @@ const SourcesTableHead = () => {
 
   return (
     <SourcesTableHeadFace
-      completeness={
-        <Tooltip>
-          <TooltipTrigger
-            render={
-              <Button
-                className="min-h-11 max-w-full"
-                size="inline"
-                variant="muted"
-              />
-            }
-          >
-            <CompletenessLabel />
-          </TooltipTrigger>
-          <TooltipPopup>{t("caseLaw.coverage.completenessHelp")}</TooltipPopup>
-        </Tooltip>
-      }
+      labels={{
+        source: t("common.source"),
+        decisions: t("common.decisions"),
+        newLastWeek: t("caseLaw.corpusStatus.newLast7Days"),
+        completeness: (
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <Button
+                  className="min-h-11 max-w-full"
+                  size="inline"
+                  variant="muted"
+                />
+              }
+            >
+              <CompletenessLabel>
+                {t("caseLaw.coverage.completeness")}
+              </CompletenessLabel>
+            </TooltipTrigger>
+            <TooltipPopup>
+              {t("caseLaw.coverage.completenessHelp")}
+            </TooltipPopup>
+          </Tooltip>
+        ),
+      }}
     />
   );
 };

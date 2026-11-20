@@ -1524,6 +1524,34 @@ describe("observeFailure channels", () => {
     expect(analytics.exceptions()).toHaveLength(1);
   });
 
+  test("a measure is a reviewed key with a count, and nothing else rides on one", () => {
+    const measures: Record<string, unknown> = {
+      astBlockType: 2,
+      parserVersion: 7,
+      astBlockRole: -1,
+      astInlineType: 1.5,
+      astBlockIdentity: "3",
+      "failure.grade": 1,
+    };
+    observeFailure(codedError("EACCES"), {
+      sink: SINK,
+      measures,
+    });
+
+    const [record] = logs.records;
+    expect(record?.attributes).toMatchObject({
+      "measure.astBlockType": 2,
+      "measure.parserVersion": 7,
+      "failure.grade": "defect",
+      "failure.ctx_rejected": 4,
+    });
+    expect(
+      Object.keys(record?.attributes ?? {}).filter((key) =>
+        key.startsWith("measure."),
+      ),
+    ).toEqual(["measure.astBlockType", "measure.parserVersion"]);
+  });
+
   test("the aggregate counts every observation before capture suppression", () => {
     const error = codedError("EACCES");
     for (let index = 0; index < 5; index++) {

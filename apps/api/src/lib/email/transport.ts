@@ -18,6 +18,19 @@ type EmailMessage = {
   text: string;
   /** Where replies go when the sender address is the platform's own. */
   replyTo?: string;
+  /**
+   * Images the HTML shows through `cid:` references, sent as inline parts of
+   * the message so the mail client fetches nothing to display them.
+   */
+  inlineImages?: readonly InlineImage[];
+};
+
+export type InlineImage = {
+  /** The id the HTML references as `cid:<contentId>`. */
+  contentId: string;
+  filename: string;
+  contentType: string;
+  content: Uint8Array;
 };
 
 export type EmailTransport = {

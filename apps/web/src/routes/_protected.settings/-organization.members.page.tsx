@@ -31,6 +31,7 @@ import { filterOrganizationLists } from "@/routes/_protected.settings/organizati
 
 import {
   INITIAL_MEMBERS_SORT,
+  MEMBER_COLUMN_COUNT,
   MembersShell,
   MembersTableRow,
 } from "./-organization.members.pending";
@@ -195,7 +196,7 @@ export const MembersPage = () => {
       })}
       {filteredMembers.length === 0 && (
         <TableRow>
-          <TableCell className="text-muted-foreground text-center" colSpan={4}>
+          <TableCell align="center" colSpan={MEMBER_COLUMN_COUNT} tone="muted">
             {t("organization.members.noMembersFound")}
           </TableCell>
         </TableRow>

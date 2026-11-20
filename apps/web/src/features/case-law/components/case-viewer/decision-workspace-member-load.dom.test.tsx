@@ -84,7 +84,7 @@ const { ActionCapabilitiesProvider } =
   await import("@/lib/organization/feature-access/capability-actions");
 const { resolveActionCapabilities } =
   await import("@/lib/organization/feature-access/action-capabilities.logic");
-const { PublicDecisionViewer } = await import("@/routes/law/-case-detail");
+const { PublicDecisionViewer } = await import("@/routes/law/-case-detail.page");
 const { dockedChatLegalPayloads } =
   await import("../../../../../e2e/helpers/docked-chat-legal-payloads");
 const { DECISION_AI_MODE } = await import("./decision-ai-mode");
