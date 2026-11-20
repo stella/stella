@@ -276,6 +276,11 @@ const VerifyAgain = ({
     <>
       <Button
         disabled={!canVerify || verification.startingFor !== null}
+        disabledReason={
+          canVerify
+            ? t("avt.documents.starting")
+            : t("avt.documents.permissionRequired")
+        }
         loading={verification.startingFor !== null}
         onClick={() => {
           detached(verification.start(target), "avt.verify-again");
