@@ -22,16 +22,16 @@ import {
 import { Popover, PopoverPopup, PopoverTrigger } from "@stll/ui/popover";
 import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
+import {
+  ResponsiveActionToolbar,
+  ResponsiveActionToolbarItem,
+} from "@stll/workspace-ui/responsive-action-toolbar";
 
 import {
   nativeToolDescriptionKey,
   nativeToolLabelKey,
 } from "@/components/catalogue/native-tool-label";
 import { McpIcon } from "@/components/mcp-icon";
-import {
-  ResponsiveActionToolbar,
-  ResponsiveActionToolbarItem,
-} from "@/components/responsive-action-toolbar";
 import { TOOLS_CATALOGUE_KIND_LABEL_KEYS } from "@/features/knowledge/views/tools/tools-catalogue-kinds.logic";
 import { filterToolsCatalogueEntries } from "@/features/knowledge/views/tools/tools-catalogue-search.logic";
 import type {

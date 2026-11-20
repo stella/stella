@@ -32,7 +32,9 @@ afterAll(async () => {
 const cardSections = (root: ParentNode) =>
   [
     ...root.querySelectorAll('[data-slot="knowledge-section-card-pending"]'),
-  ].map((card) => (card instanceof HTMLElement ? card.dataset.section : null));
+  ].map((card) =>
+    card instanceof HTMLElement ? card.dataset["section"] : null,
+  );
 
 /** A member's cache: their session, and the role read when one has
  *  settled, as the protected shell leaves them. */

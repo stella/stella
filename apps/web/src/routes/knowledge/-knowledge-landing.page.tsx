@@ -1,9 +1,18 @@
+import { lazy, Suspense } from "react";
+
 import { getRouteApi } from "@tanstack/react-router";
 
 import { KnowledgeAudienceGate } from "@/routes/knowledge/-knowledge-audience-gate";
 import { KnowledgeLandingPending } from "@/routes/knowledge/-knowledge-landing.pending";
-import { MemberKnowledgeLanding } from "@/routes/knowledge/-member/member-knowledge-landing";
 import { PublicKnowledgeLanding } from "@/routes/knowledge/-public/public-knowledge-landing";
+
+// A member's landing reads their role; a visitor without an account never
+// loads it, so it loads only once a member is known.
+const LazyMemberKnowledgeLanding = lazy(async () => {
+  const module =
+    await import("@/routes/knowledge/-member/member-knowledge-landing");
+  return { default: module.MemberKnowledgeLanding };
+});
 
 const routeApi = getRouteApi("/knowledge/");
 
@@ -15,7 +24,11 @@ export const KnowledgeLandingPage = () => {
     <KnowledgeAudienceGate
       anonymous={() => <PublicKnowledgeLanding from={from} />}
       checking={<KnowledgeLandingPending />}
-      member={() => <MemberKnowledgeLanding />}
+      member={() => (
+        <Suspense fallback={<KnowledgeLandingPending />}>
+          <LazyMemberKnowledgeLanding />
+        </Suspense>
+      )}
     />
   );
 };

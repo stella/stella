@@ -22,7 +22,7 @@ import type { TemplateDensity } from "@/features/knowledge/views/templates/templ
 export const TEMPLATE_DENSITY_OPTIONS = [
   { value: "compact", icon: Rows3Icon },
   { value: "comfortable", icon: Rows2Icon },
-] as const satisfies readonly { value: TemplateDensity }[];
+] as const satisfies readonly { value: TemplateDensity; icon: unknown }[];
 
 /** A template row's padding and alignment, per density. */
 export const TEMPLATE_ROW_SPACING = {

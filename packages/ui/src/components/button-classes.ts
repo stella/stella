@@ -4,7 +4,7 @@
 // pending view and the button that replaces it share one box.
 
 import { TOOLBAR_ROW_HEIGHT } from "../inspector/layout-tokens";
-import { MENU_ROW_CLASS_NAME } from "../lib/menu-row";
+import { MENU_ROW_CLASS_NAME } from "../lib/list-row-metric";
 import {
   BUTTON_VARIANT_TOKENS,
   type ButtonSize,

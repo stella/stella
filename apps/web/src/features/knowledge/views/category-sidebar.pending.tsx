@@ -56,7 +56,7 @@ export const CategoryMobileFilterBarFrame = ({
 );
 
 /** Which fixed filter the section opens on, if any. */
-export type CategoryPendingSelection = "all" | "uncategorized" | "category";
+type CategoryPendingSelection = "all" | "uncategorized" | "category";
 
 type CategorySidebarPendingProps = {
   /** The "all" filter's label, as the section names it. */
