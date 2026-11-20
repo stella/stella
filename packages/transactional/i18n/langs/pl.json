@@ -24,9 +24,14 @@
     "action": "Sprawdź sesje",
     "body": "Na Twoje konto zalogowano się z nowego urządzenia lub lokalizacji.",
     "device": "Urządzenie",
+    "deviceName": {
+      "browserOnOs": "{browser} w systemie {os}",
+      "unknown": "Nieznane urządzenie"
+    },
     "heading": "Wykryto nowe logowanie",
     "ignore": "Jeśli to byłeś Ty, nie musisz nic robić. Jeśli nie rozpoznajesz tej aktywności, sprawdź swoje aktywne sesje i unieważnij te, których nie rozpoznajesz.",
     "ipAddress": "Adres IP",
+    "ipAddressUnknown": "Nieznany",
     "location": "Przybliżona lokalizacja",
     "locationNote": "Lokalizacja jest szacowana na podstawie adresu IP i może być niedokładna.",
     "mapAlt": "Mapa z przybliżoną lokalizacją logowania: {location}",
@@ -36,6 +41,7 @@
       "regionCountry": "{region}, {country}"
     },
     "preview": "Nowe logowanie z {device}",
+    "previewUnknownDevice": "Nowe logowanie z nieznanego urządzenia",
     "subject": "Nowe logowanie na Twoje konto stella",
     "time": "Czas"
   },

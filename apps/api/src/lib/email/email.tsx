@@ -210,8 +210,8 @@ export const sendOTPEmail = async ({
 
 type SendNewDeviceLoginEmailProps = {
   email: string;
-  device: string;
-  ipAddress: string;
+  device: NewDeviceLogin.SignInDevice;
+  ipAddress: NewDeviceLogin.SignInAddress;
   location: ViewerLocation;
   time: string;
   sessionsUrl: string;

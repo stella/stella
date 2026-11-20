@@ -24,9 +24,14 @@
     "action": "Pārskatīt sesijas",
     "body": "Jūsu kontā tika pieteicies no jaunas ierīces vai atrašanās vietas.",
     "device": "Ierīce",
+    "deviceName": {
+      "browserOnOs": "{browser} operētājsistēmā {os}",
+      "unknown": "Nezināma ierīce"
+    },
     "heading": "Konstatēta jauna pieteikšanās",
     "ignore": "Ja tas bijāt jūs, nekāda darbība nav nepieciešama. Ja neatpazīstat šo darbību, pārskatiet savas aktīvās sesijas un atsauciet tās, kuras neatpazīstat.",
     "ipAddress": "IP adrese",
+    "ipAddressUnknown": "Nezināma",
     "location": "Aptuvenā atrašanās vieta",
     "locationNote": "Atrašanās vieta ir noteikta pēc IP adreses un var būt neprecīza.",
     "mapAlt": "Karte ar aptuveno pieteikšanās vietu: {location}",
@@ -36,6 +41,7 @@
       "regionCountry": "{region}, {country}"
     },
     "preview": "Jauna pieteikšanās no {device}",
+    "previewUnknownDevice": "Jauna pieteikšanās no nezināmas ierīces",
     "subject": "Jauna pieteikšanās jūsu stella kontā",
     "time": "Laiks"
   },
