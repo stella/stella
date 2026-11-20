@@ -3,6 +3,7 @@ import {
   type ReactNode,
   type RefObject,
   useCallback,
+  useDeferredValue,
   useLayoutEffect,
   useMemo,
   useRef,
@@ -57,6 +58,7 @@ import type { HorizontalScrollMetrics } from "@/components/workspaces/table/work
 import {
   ADD_PROPERTY_RAIL_ACTIVE_CLASS_NAME,
   TABLE_ROW_ESTIMATE_PX,
+  TABLE_ROW_FIRST_PAINT_OVERSCAN,
   TABLE_ROW_OVERSCAN,
 } from "@/components/workspaces/table/workspace-table/internals";
 import type {
@@ -294,6 +296,12 @@ export const WorkspaceTable = <TRow extends TableRowData = TableTreeNode>({
     (index: number) => rowModel.rows.at(index)?.id ?? `table-row-${index}`,
     [rowModel.rows],
   );
+  // React's initial value: the first commit mounts the rows on screen, and
+  // the scroll buffer mounts in a background render after that paint.
+  const overscan = useDeferredValue(
+    TABLE_ROW_OVERSCAN,
+    TABLE_ROW_FIRST_PAINT_OVERSCAN,
+  );
   const rowVirtualizer = useVirtualizer({
     count: rowModel.rows.length,
     getScrollElement: () => {
@@ -308,7 +316,7 @@ export const WorkspaceTable = <TRow extends TableRowData = TableTreeNode>({
     estimateSize: () => TABLE_ROW_ESTIMATE_PX,
     getItemKey: getVirtualRowKey,
     measureElement: measureFlowRow,
-    overscan: TABLE_ROW_OVERSCAN,
+    overscan,
     scrollMargin: inlineFlow ? scrollMargin : 0,
     ...(inlineFlow && { scrollToFn: noopScrollTo }),
   });
