@@ -15,6 +15,7 @@ const { act, cleanup, fireEvent, render, screen, waitFor } =
 const { IntlProvider } = await import("use-intl");
 const { createProviderCredentialDraft } =
   await import("@/components/ai-config-role-models.logic");
+const { FormattingProvider } = await import("@/i18n/formatting-context");
 const { AIProviderRows } = await import("./ai-provider-rows");
 const labels = messages.organization.aiConfig;
 const VALID_KEY = `sk-or-v1-${"a".repeat(32)}1234`;
@@ -30,11 +31,15 @@ type MountOptions = {
   initial?: ProviderCredentialDraft[];
   disabled?: boolean;
   setupErrorCode?: string;
+  keyNeed?: Parameters<typeof AIProviderRows>[0]["keyNeed"];
+  roleSelections?: Parameters<typeof AIProviderRows>[0]["roleSelections"];
 };
 const mount = ({
   initial = [createProviderCredentialDraft("openrouter")],
   disabled = false,
   setupErrorCode,
+  keyNeed = "unknown",
+  roleSelections = null,
 }: MountOptions = {}) => {
   const changes: ProviderCredentialDraft[][] = [];
   const removed: ProviderCredentialDraft[] = [];
@@ -45,6 +50,8 @@ const mount = ({
         providers={providers}
         storedProviders={initial}
         disabled={disabled}
+        keyNeed={keyNeed}
+        roleSelections={roleSelections}
         setupErrorCode={setupErrorCode}
         onChange={(next) => {
           changes.push(next);
@@ -63,7 +70,9 @@ const mount = ({
   };
   const view = render(
     <IntlProvider locale="en" messages={messages} timeZone="UTC">
-      <Harness />
+      <FormattingProvider locale="en" timeZone="UTC">
+        <Harness />
+      </FormattingProvider>
     </IntlProvider>,
   );
   return { changes, removed, view };
@@ -235,5 +244,61 @@ describe("BYOK provider rows", () => {
     expect(screen.queryByLabelText(labels.anthropicWorkspaceId)).toBeNull();
     enterKey("sk-ant-usr-recordedfixture1234567890");
     expect(screen.getByLabelText(labels.anthropicWorkspaceId)).toBeDefined();
+  });
+  test("an organization without keys shows no blank row, only how AI runs without one", () => {
+    mount({ initial: [], keyNeed: "builtIn" });
+    expect(screen.queryByLabelText(labels.apiKey)).toBeNull();
+    expect(screen.queryByLabelText(labels.provider)).toBeNull();
+    expect(screen.getByText(labels.noProviders)).toBeDefined();
+    expect(screen.getByText(labels.keyNeed.builtIn)).toBeDefined();
+    expect(screen.queryByText(labels.providersDescription)).toBeNull();
+  });
+  test("an organization that needs a key says so", () => {
+    mount({ initial: [], keyNeed: "keyRequired" });
+    expect(screen.getByText(labels.keyNeed.keyRequired)).toBeDefined();
+  });
+  test("the generic line stays while the need is unknown", () => {
+    mount({ initial: [] });
+    expect(screen.getByText(labels.providersDescription)).toBeDefined();
+  });
+  test("each saved key names the modes it serves", () => {
+    const saved = (provider: "openrouter" | "anthropic") => ({
+      ...createProviderCredentialDraft(provider),
+      apiKeyMasked: MASKED_KEY,
+      replacingKey: false,
+    });
+    mount({
+      initial: [saved("openrouter"), saved("anthropic")],
+      keyNeed: "ownKeys",
+      roleSelections: {
+        chat: { provider: "openrouter", modelId: "chat-model" },
+        fast: null,
+        reasoning: null,
+        pdf: { provider: "openrouter", modelId: "pdf-model" },
+      },
+    });
+    expect(screen.getByText(labels.keyNeed.ownKeys)).toBeDefined();
+    expect(
+      screen.getByText(
+        labels.providerModes.replace("{modes}", () =>
+          new Intl.ListFormat("en").format([
+            labels.roles.chat,
+            labels.roles.pdf,
+          ]),
+        ),
+      ),
+    ).toBeDefined();
+    expect(screen.getByText(labels.providerModesNone)).toBeDefined();
+  });
+  test("a row being edited does not claim modes", () => {
+    mount({
+      roleSelections: {
+        chat: { provider: "openrouter", modelId: "chat-model" },
+        fast: null,
+        reasoning: null,
+        pdf: null,
+      },
+    });
+    expect(screen.queryByText(/Used for/u)).toBeNull();
   });
 });
