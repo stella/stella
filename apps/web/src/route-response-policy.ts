@@ -94,6 +94,7 @@ export const ROUTE_CACHE_CLASSES = {
   "/settings/organization/billing": "private-no-store",
   "/admin/anonymization": "private-no-store",
   "/settings/organization/anonymization": "private-no-store",
+  "/settings/organization/dictation": "private-no-store",
   "/admin/audit-logs": "private-no-store",
   "/settings/organization/audit-logs": "private-no-store",
   "/admin/catalogue": "private-no-store",

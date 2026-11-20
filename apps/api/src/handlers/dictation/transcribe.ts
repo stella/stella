@@ -7,7 +7,10 @@ import {
   TRANSCRIPTION_MODELS,
   transcriptionEndpointFor,
 } from "@stll/ai-catalog/transcription";
-import type { TranscriptionEndpoint } from "@stll/ai-catalog/transcription";
+import type {
+  TranscriptionEndpoint,
+  TranscriptionModelId,
+} from "@stll/ai-catalog/transcription";
 import type { DesktopFeatureId } from "@stll/api-contract/desktop-feature-access";
 import {
   MAX_TRANSCRIPTION_AUDIO_SECONDS,
@@ -26,6 +29,7 @@ import { consumeDictationLimit } from "@/api/handlers/dictation/limits";
 import {
   transcribeAudio,
   transcriptionResultSchema,
+  VOCABULARY_STATUS,
 } from "@/api/handlers/dictation/provider";
 import type { TranscriptionResult } from "@/api/handlers/dictation/provider";
 import { dictationBodySchema } from "@/api/handlers/dictation/schema";
@@ -51,12 +55,15 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { getManagedOpenRouterCredential } from "@/api/lib/chat/openrouter-credential";
 import { managedProviderUnavailable } from "@/api/lib/chat/provider-data-policy";
 import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
+import { readTranscriptionVocabulary } from "@/api/lib/dictation/organization-vocabulary";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
   isFeatureAccessSnapshotForPrincipal,
   isFeatureEnabled,
 } from "@/api/lib/feature-access/policy";
 import type { FeatureAccessSnapshot } from "@/api/lib/feature-access/policy";
+import { failureSink } from "@/api/lib/observability/failure";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { emitTranscriptionDurationMismatchMetric } from "@/api/lib/observability/request-metrics";
 import type { withActionAdmission } from "@/api/lib/rate-limit/action-admission";
 import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
@@ -285,6 +292,7 @@ const settleUsage = async ({
 
 type DictationDependencies = {
   transcribe: typeof transcribeAudio;
+  organizationVocabulary: typeof readTranscriptionVocabulary;
   transcribeElevenLabs: typeof transcribeWithElevenLabs;
   deployment: typeof readTranscriptionDeployment;
   credential: typeof getManagedOpenRouterCredential;
@@ -301,6 +309,51 @@ type DictationContext = DictationCaller & {
 };
 
 export type { DictationDependencies };
+
+const ORGANIZATION_VOCABULARY_READ_FAILED = failureSink({
+  event: "dictation.organization_vocabulary.read_failed",
+  expected: [],
+});
+
+type RequestVocabularyOptions = {
+  safeDb: SafeDb;
+  organizationId: SafeId<"organization">;
+  modelId: TranscriptionModelId;
+  /** The request's own words: the speaker's, then its matter's. */
+  own: readonly string[] | undefined;
+  read: typeof readTranscriptionVocabulary;
+};
+
+/**
+ * The vocabulary a chunk is sent with. A model that applies vocabulary gets
+ * the request's own words, then the organization's dictation words up to
+ * the limit; any other model gets the request's words as before. The
+ * organization's words only help: when they cannot be read, the chunk is
+ * transcribed with the request's words and the failure is reported.
+ */
+const requestVocabulary = async ({
+  safeDb,
+  organizationId,
+  modelId,
+  own,
+  read,
+}: RequestVocabularyOptions): Promise<readonly string[] | undefined> => {
+  if (
+    VOCABULARY_STATUS[TRANSCRIPTION_MODELS[modelId].vocabularyMechanism] !==
+    "applied"
+  ) {
+    return own;
+  }
+  const words = await read({ safeDb, organizationId, first: own ?? [] });
+  if (words.isErr()) {
+    observeFailure(words.error, {
+      sink: ORGANIZATION_VOCABULARY_READ_FAILED,
+      ctx: { operation: "dictation.transcribe" },
+    });
+    return own;
+  }
+  return words.value.length === 0 ? own : words.value;
+};
 
 export const executeDictation = async (
   ctx: DictationContext,
@@ -460,7 +513,13 @@ export const executeDictation = async (
           audio: body.file,
           modelId,
           language: body.language,
-          vocabulary: body.vocabulary,
+          vocabulary: await requestVocabulary({
+            safeDb: ctx.safeDb,
+            organizationId: session.activeOrganizationId,
+            modelId,
+            own: body.vocabulary,
+            read: dependencies.organizationVocabulary,
+          }),
           apiKey:
             ownKey ??
             (yield* Result.await(dependencies.credential(admission.modelTier)))
@@ -495,6 +554,7 @@ export const executeDictation = async (
 
 export const DEFAULT_DICTATION_DEPENDENCIES = {
   transcribe: transcribeAudio,
+  organizationVocabulary: readTranscriptionVocabulary,
   transcribeElevenLabs: transcribeWithElevenLabs,
   deployment: readTranscriptionDeployment,
   credential: getManagedOpenRouterCredential,
@@ -506,6 +566,7 @@ export const DEFAULT_DICTATION_DEPENDENCIES = {
 export const createDictationTranscribeEndpoint = ({
   admit,
   transcribe = transcribeAudio,
+  organizationVocabulary = readTranscriptionVocabulary,
   transcribeElevenLabs = transcribeWithElevenLabs,
   deployment = readTranscriptionDeployment,
   credential = getManagedOpenRouterCredential,
@@ -536,6 +597,7 @@ export const createDictationTranscribeEndpoint = ({
             : ctx,
           {
             transcribe,
+            organizationVocabulary,
             transcribeElevenLabs,
             deployment,
             credential,

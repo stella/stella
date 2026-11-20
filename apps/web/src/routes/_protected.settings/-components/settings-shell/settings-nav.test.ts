@@ -46,6 +46,7 @@ describe("settingsNavSections", () => {
         [
           "/settings/organization/ai",
           "/settings/organization/anonymization",
+          "/settings/organization/dictation",
           "/settings/organization/tools",
         ],
       ],

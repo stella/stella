@@ -30,8 +30,11 @@ import {
 import type { SafeId } from "@/api/lib/branded-types";
 import { authorizeDesktopAccount } from "@/api/lib/business-registries/desktop/auth";
 import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
+import { readCleanupVocabulary } from "@/api/lib/dictation/organization-vocabulary";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { isFeatureEnabled } from "@/api/lib/feature-access/policy";
+import { failureSink } from "@/api/lib/observability/failure";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { hasMemberPermission } from "@/api/lib/permission-authorization";
 import type { withActionAdmission } from "@/api/lib/rate-limit/action-admission";
 import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
@@ -50,6 +53,10 @@ const REQUIRED_FEATURE_ID = "desktop-dictation" satisfies DesktopFeatureId;
  *  transcript; a generation that outlives it would only spend usage. */
 const CLEANUP_DEADLINE_MS = 5000;
 const CLEANUP_OUTPUT_TOKENS = 8000;
+const ORGANIZATION_VOCABULARY_READ_FAILED = failureSink({
+  event: "dictation.organization_vocabulary.read_failed",
+  expected: [],
+});
 
 /** Who a cleanup runs for, with the organization's AI settings. */
 type DictationCleanupCaller = OrgAISettings & {
@@ -65,6 +72,38 @@ type DictationCleanupOptions = {
   modelAdmission: ModelDispatchAdmission;
   actionSignal: AbortSignal;
   generateObjectForTask?: typeof generateTanStackObjectForTask;
+  readVocabulary?: typeof readCleanupVocabulary;
+};
+
+/**
+ * The words the model is told to spell: the speaker's own, then the
+ * organization's words this transcript seems to mention. They only help,
+ * so when the organization's cannot be read the cleanup runs with the
+ * speaker's and the failure is reported.
+ */
+const cleanupVocabulary = async ({
+  caller: { safeDb, organizationId },
+  body: { transcript, vocabulary },
+  readVocabulary,
+}: {
+  caller: DictationCleanupCaller;
+  body: DictationCleanupOptions["body"];
+  readVocabulary: typeof readCleanupVocabulary;
+}): Promise<string[] | undefined> => {
+  const words = await readVocabulary({
+    safeDb,
+    organizationId,
+    transcript,
+    personal: vocabulary,
+  });
+  if (words.isErr()) {
+    observeFailure(words.error, {
+      sink: ORGANIZATION_VOCABULARY_READ_FAILED,
+      ctx: { operation: "dictation.cleanup" },
+    });
+    return vocabulary;
+  }
+  return words.value;
 };
 
 /**
@@ -79,6 +118,7 @@ export const cleanUpDictation = async ({
   modelAdmission,
   actionSignal,
   generateObjectForTask = generateTanStackObjectForTask,
+  readVocabulary = readCleanupVocabulary,
 }: DictationCleanupOptions) =>
   await Result.gen(async function* () {
     const {
@@ -105,6 +145,11 @@ export const cleanUpDictation = async ({
         serviceTier: "standard",
         workspaceId: null,
       },
+    });
+    const vocabulary = await cleanupVocabulary({
+      caller,
+      body,
+      readVocabulary,
     });
     const generated = await Result.tryPromise({
       try: async () =>
@@ -134,7 +179,9 @@ export const cleanUpDictation = async ({
               deadlineMs: CLEANUP_DEADLINE_MS,
               systemPromptOrigin: "server-built",
               system: DICTATION_CLEANUP_SYSTEM_PROMPT,
-              prompt: buildDictationCleanupPrompt(body),
+              prompt: buildDictationCleanupPrompt(
+                vocabulary === undefined ? body : { ...body, vocabulary },
+              ),
               outputSchema: dictationCleanupModelOutputSchema,
               outputTokenBudget: CLEANUP_OUTPUT_TOKENS,
             }),
@@ -180,7 +227,7 @@ export const cleanUpDictation = async ({
 /** The model call a test puts in place of the organization's model. */
 export type DictationCleanupGeneration = Pick<
   DictationCleanupOptions,
-  "generateObjectForTask"
+  "generateObjectForTask" | "readVocabulary"
 >;
 
 type DictationCleanupEndpointOptions = DictationCleanupGeneration & {

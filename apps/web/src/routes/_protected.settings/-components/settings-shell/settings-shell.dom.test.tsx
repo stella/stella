@@ -159,6 +159,7 @@ test.each(
       "/settings/organization/audit-logs",
       "/settings/organization/ai",
       "/settings/organization/anonymization",
+      "/settings/organization/dictation",
       "/settings/organization/tools",
       "/settings/organization/matter-numbering",
       "/settings/organization/document-types",

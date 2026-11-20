@@ -179,3 +179,4 @@ export * from "./schema/desktop-runner";
 export * from "./schema/mcp-web-handoff";
 
 export * from "./schema/case-law-withdrawal-status";
+export * from "./schema/dictation-vocabulary";

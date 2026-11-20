@@ -1454,6 +1454,14 @@ const organizationKeyed = ({
   second: sql`hashtext(${id.organizationId})`,
   order: [aggregate, id.organizationId],
 });
+/** An organization's capacity lock under a fixed, literal namespace name. */
+const organizationCapacity = (
+  name: string,
+  options: { aggregate: AggregateName; id: { organizationId: string } },
+) => ({
+  first: sql`hashtext(${sql.raw(`'${name}'`)})`,
+  ...organizationKeyed(options),
+});
 const advisoryResource = (options: AdvisoryIdentityOptions) => {
   switch (options.aggregate) {
     case "organizationObjectIntent":
@@ -1528,6 +1536,8 @@ const advisoryResource = (options: AdvisoryIdentityOptions) => {
         first: sql`hashtext('contact_capacity')`,
         ...organizationKeyed(options),
       };
+    case "dictationVocabularyCapacity":
+      return organizationCapacity("dictation-vocabulary-capacity", options);
     case "chatToolGrants":
       return {
         first: sql`hashtext('chat.tool-grants')`,
