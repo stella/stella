@@ -183,7 +183,8 @@
     "handoffServerMismatch": "Stella Desktop ir savienots ar {linkedServer}, taču šim dokumentam nepieciešams {requestedServer}. Iestatījumos atvienojiet pašreizējo kontu un pēc tam savienojieties ar {requestedServer}, lai atvērtu dokumentu.",
     "handoffAccountChanged": "Dokumenta atvēršanas laikā mainījās stella desktop konts. Sāciet no jauna stella.",
     "handoffAlreadyOpen": "Jau ir atvērts cits parakstīšanas logs. Pabeidziet vai aizveriet to un mēģiniet vēlreiz.",
-    "handoffExpired": "Dokumenta saites derīgums beidzās, pirms stella desktop tika pievienots. Sāciet no jauna stella."
+    "handoffExpired": "Dokumenta saites derīgums beidzās, pirms stella desktop tika pievienots. Sāciet no jauna stella.",
+    "waitingForFolderSelection": "Atlasiet mapi vai aizveriet failu atlasītāju."
   },
   "settings": {
     "accountLinked": "Saistīts",
@@ -290,7 +291,10 @@
     "recoveryOpenFolder": "Atvērt atkopšanas mapi",
     "recoveryOpenUnassigned": "Atvērt nepiešķirtās izmaiņas",
     "recoveryFilePending": "Gaida atlikšanu",
-    "recoveryError": "Neizdevās atvērt atkopšanas mapi. Mēģiniet vēlreiz."
+    "recoveryError": "Neizdevās atvērt atkopšanas mapi. Mēģiniet vēlreiz.",
+    "openingRecoveryFolder": "Notiek atkopšanas mapes atvēršana…",
+    "refreshingRecovery": "Notiek atkopjamo labojumu pārbaude…",
+    "loadingAccount": "Notiek konta savienojuma pārbaude…"
   },
   "clipboard": {
     "registryUnavailable": "Jūsu prakses jurisdikcijām nav iespējotu reģistru.",
@@ -435,7 +439,14 @@
     "welcomeShortcutTitle": "Atveriet to jebkur.",
     "welcomeStart": "Sākt kopēšanu",
     "welcomeTitle": "Iepazīstiet savu starpliktuvi",
-    "registryIdentifierSearchHint": "Ievadiet {identifiers}."
+    "registryIdentifierSearchHint": "Ievadiet {identifiers}.",
+    "enterGroupName": "Ievadiet grupas nosaukumu.",
+    "savingChanges": "Notiek izmaiņu saglabāšana…",
+    "creatingGroup": "Notiek grupas izveide…",
+    "groupLimitReached": "Varat izveidot līdz {max} grupām.",
+    "loadingAutostart": "Notiek pārbaude, vai starpliktuve tiek palaista pierakstoties…",
+    "savingAutostart": "Notiek palaišanas preferences saglabāšana…",
+    "registryFormatting": "Notiek reģistra rezultāta formatēšana…"
   },
   "activity": {
     "title": "Darbība",
@@ -621,7 +632,15 @@
     "aiStructureMove": "stella AI iesaka pārvietot {duration} uz lietu {matter}",
     "aiStructureCreate": "{count, plural, zero {Izveidot # ierakstus} one {Izveidot # ierakstu} other {Izveidot # ierakstus}}",
     "aiStructureMoveAccept": "Pārvietot",
-    "aiFlagSplit": "Sadalīt ierakstu"
+    "aiFlagSplit": "Sadalīt ierakstu",
+    "creatingDrafts": "Notiek melnrakstu izveide…",
+    "earliestDayReached": "Jūs skatāt agrāko pieejamo dienu.",
+    "latestDayReached": "Jūs skatāt jaunāko pieejamo dienu.",
+    "savingCapturePreference": "Notiek ierakstīšanas preferences saglabāšana…",
+    "writeDescription": "Ievadiet šī ieraksta aprakstu.",
+    "chooseMatterForEntry": "Izvēlieties lietu šim ierakstam.",
+    "entryNeedsDuration": "Izvēlieties laika intervālu, kura ilgumu var iekļaut rēķinā.",
+    "enterRefinement": "Ievadiet norādījumu apraksta labošanai."
   },
   "dictation": {
     "title": "Diktēšana",
@@ -761,7 +780,8 @@
       "label": "Līdz šim diktētais teksts",
       "listening": "Klausās…",
       "finishing": "Tiek pabeigts…"
-    }
+    },
+    "dictationInProgress": "Pirms modeļa noņemšanas pabeidziet pašreizējo diktēšanu."
   },
   "shortcut": {
     "title": "Starpliktuves īsinājumtaustiņš",
@@ -802,7 +822,8 @@
       "windowMenu": "Loga izvēlne",
       "start": "Sākt",
       "taskManager": "Uzdevumu pārvaldnieks"
-    }
+    },
+    "saving": "Notiek īsinājumtaustiņa saglabāšana…"
   },
   "onboarding": {
     "back": "Atpakaļ",
@@ -946,7 +967,8 @@
       "keystrokesWithoutHoldKey": "Taustiņsitieni, ja vien neizvēlaties turamo taustiņu",
       "fullDiskAccess": "Pilna piekļuve diskam",
       "administrator": "Administratora tiesības"
-    }
+    },
+    "enablingDictation": "Notiek diktēšanas ieslēgšana…"
   },
   "agentSubscriptions": {
     "title": "AI abonementi",
@@ -1022,7 +1044,9 @@
         "verification": "Neizdevās pārbaudīt {name}, tāpēc tas netika instalēts.",
         "storage": "Neizdevās saglabāt {name} šajā datorā. Pārbaudiet, vai diskā ir brīva vieta."
       }
-    }
+    },
+    "finishingSignIn": "Notiek pierakstīšanās pabeigšana…",
+    "enterCallbackAddress": "Ielīmējiet pilnu adresi no pārlūka pierakstīšanās cilnes."
   },
   "localSkills": {
     "title": "Lokālās prasmes",
@@ -1111,7 +1135,9 @@
       "localMissing": "Lai transkribētu šajā datorā, lejupielādējiet runas modeli sadaļā Iestatījumi, Diktēšana.",
       "localMissingCloud": "Lejupielādējiet runas modeli sadaļā Iestatījumi, Diktēšana, vai transkribējiet ar stella AI.",
       "retainsData": "Lūdzu, ņemiet vērā {provider} apstrādes noteikumus.",
-      "modelFailed": "stella AI modeli neizdevās nolasīt, tāpēc stella AI pašlaik nevar transkribēt. Mēģiniet vēlreiz vai transkribējiet šajā datorā."
+      "modelFailed": "stella AI modeli neizdevās nolasīt, tāpēc stella AI pašlaik nevar transkribēt. Mēģiniet vēlreiz vai transkribējiet šajā datorā.",
+      "loadingModel": "Notiek stella AI transkripcijas modeļa pārbaude…",
+      "useLocal": "Izvēlieties šo datoru, lai transkribētu ierakstu."
     },
     "matter": {
       "title": "Lieta",
@@ -1160,7 +1186,8 @@
       "noSpeech": "Šajā ierakstā runa netika atrasta.",
       "fileName": "{title} – transkripcija.txt",
       "documentTitle": "{title} – transkripcija",
-      "transcriptTitle": "Transkripcija"
+      "transcriptTitle": "Transkripcija",
+      "alreadySaved": "Transkripcija jau ir saglabāta lietā."
     },
     "progress": {
       "running": "Transkribē {done, number} no {total, number} min",
@@ -1168,7 +1195,9 @@
       "stop": "Apturēt",
       "stopped": "Apturēts pēc {done, number} min. Līdz šim iegūtais teksts paliek.",
       "done": "Transkribētas {total, number} min.",
-      "another": "Transkribēt citu ierakstu"
+      "another": "Transkribēt citu ierakstu",
+      "transcribing": "Notiek ieraksta transkribēšana…",
+      "stopping": "Notiek transkribēšanas apturēšana…"
     },
     "cleaned": {
       "title": "Sakārtots teksts",
@@ -1191,6 +1220,7 @@
       "formatted": "Ar formatējumu",
       "plain": "Kā vienkāršu tekstu",
       "hint": "Ar formatējumu programmā Word vai Outlook tiek ielīmēti virsraksti, treknraksts un saraksti. Jūsu izvēle tiek atcerēta."
-    }
+    },
+    "waitingForFileSelection": "Atlasiet ierakstu vai aizveriet failu atlasītāju."
   }
 }

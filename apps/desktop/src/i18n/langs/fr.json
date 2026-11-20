@@ -183,7 +183,8 @@
     "handoffServerMismatch": "Stella Desktop est connecté à {linkedServer}, mais ce document nécessite {requestedServer}. Déconnectez le compte actuel dans les paramètres, puis connectez-vous à {requestedServer} pour ouvrir le document.",
     "handoffAccountChanged": "Le compte stella desktop a changé pendant l'ouverture du document. Recommencez depuis stella.",
     "handoffAlreadyOpen": "Une autre fenêtre de signature est déjà ouverte. Terminez-la ou fermez-la, puis réessayez.",
-    "handoffExpired": "Le lien du document a expiré avant la connexion de stella desktop. Recommencez depuis stella."
+    "handoffExpired": "Le lien du document a expiré avant la connexion de stella desktop. Recommencez depuis stella.",
+    "waitingForFolderSelection": "Sélectionnez un dossier ou fermez le sélecteur de fichiers."
   },
   "settings": {
     "accountLinked": "Associé",
@@ -290,7 +291,10 @@
     "recoveryOpenFolder": "Ouvrir le dossier de récupération",
     "recoveryOpenUnassigned": "Ouvrir les modifications non attribuées",
     "recoveryFilePending": "En attente de mise de côté",
-    "recoveryError": "Impossible d’ouvrir le dossier de récupération. Réessayez."
+    "recoveryError": "Impossible d’ouvrir le dossier de récupération. Réessayez.",
+    "openingRecoveryFolder": "Ouverture du dossier de récupération…",
+    "refreshingRecovery": "Vérification des modifications à récupérer…",
+    "loadingAccount": "Vérification de la connexion de votre compte…"
   },
   "clipboard": {
     "registryUnavailable": "Aucun registre n’est activé pour vos juridictions d’exercice.",
@@ -435,7 +439,14 @@
     "welcomeShortcutTitle": "Ouvrez-le partout.",
     "welcomeStart": "Commencer à copier",
     "welcomeTitle": "Découvrez votre presse-papiers",
-    "registryIdentifierSearchHint": "Saisissez {identifiers}."
+    "registryIdentifierSearchHint": "Saisissez {identifiers}.",
+    "enterGroupName": "Saisissez un nom de groupe.",
+    "savingChanges": "Enregistrement des modifications…",
+    "creatingGroup": "Création du groupe…",
+    "groupLimitReached": "Vous pouvez créer jusqu’à {max} groupes.",
+    "loadingAutostart": "Vérification du démarrage du presse-papiers à la connexion…",
+    "savingAutostart": "Enregistrement de la préférence de démarrage à la connexion…",
+    "registryFormatting": "Mise en forme du résultat du registre…"
   },
   "activity": {
     "title": "Activité",
@@ -621,7 +632,15 @@
     "aiStructureMove": "stella AI propose de déplacer {duration} vers {matter}",
     "aiStructureCreate": "{count, plural, one {Créer # entrée} other {Créer # entrées}}",
     "aiStructureMoveAccept": "Déplacer",
-    "aiFlagSplit": "Diviser l’entrée"
+    "aiFlagSplit": "Diviser l’entrée",
+    "creatingDrafts": "Création des brouillons…",
+    "earliestDayReached": "Vous consultez le premier jour disponible.",
+    "latestDayReached": "Vous consultez le dernier jour disponible.",
+    "savingCapturePreference": "Enregistrement de votre préférence de suivi…",
+    "writeDescription": "Saisissez une description pour cette saisie.",
+    "chooseMatterForEntry": "Choisissez un dossier pour cette saisie.",
+    "entryNeedsDuration": "Choisissez un intervalle de temps dont la durée est facturable.",
+    "enterRefinement": "Saisissez une consigne pour modifier la description."
   },
   "dictation": {
     "title": "Dictée",
@@ -761,7 +780,8 @@
       "label": "Ce que vous avez dicté jusqu’ici",
       "listening": "Écoute…",
       "finishing": "Finalisation…"
-    }
+    },
+    "dictationInProgress": "Terminez la dictée en cours avant de supprimer le modèle."
   },
   "shortcut": {
     "title": "Raccourci du presse-papiers",
@@ -802,7 +822,8 @@
       "windowMenu": "Menu de la fenêtre",
       "start": "Démarrer",
       "taskManager": "Gestionnaire des tâches"
-    }
+    },
+    "saving": "Enregistrement du raccourci…"
   },
   "onboarding": {
     "back": "Retour",
@@ -946,7 +967,8 @@
       "keystrokesWithoutHoldKey": "Frappes au clavier, sauf si vous choisissez une touche à maintenir",
       "fullDiskAccess": "Accès complet au disque",
       "administrator": "Droits d'administrateur"
-    }
+    },
+    "enablingDictation": "Activation de la dictée…"
   },
   "agentSubscriptions": {
     "title": "Abonnements IA",
@@ -1022,7 +1044,9 @@
         "verification": "Impossible de vérifier {name} : il n’a donc pas été installé.",
         "storage": "Impossible d’enregistrer {name} sur cet ordinateur. Vérifiez qu’il reste de l’espace libre sur le disque."
       }
-    }
+    },
+    "finishingSignIn": "Finalisation de la connexion…",
+    "enterCallbackAddress": "Collez l’adresse complète depuis l’onglet de connexion du navigateur."
   },
   "localSkills": {
     "title": "Compétences locales",
@@ -1111,7 +1135,9 @@
       "localMissing": "Téléchargez le modèle vocal dans Paramètres, sous Dictée, pour transcrire sur cet ordinateur.",
       "localMissingCloud": "Téléchargez le modèle vocal dans Paramètres, sous Dictée, ou transcrivez avec stella AI.",
       "retainsData": "Veuillez prendre connaissance des conditions de traitement de {provider}.",
-      "modelFailed": "Le modèle de stella AI n’a pas pu être lu : stella AI ne peut pas transcrire pour le moment. Réessayez ou transcrivez sur cet ordinateur."
+      "modelFailed": "Le modèle de stella AI n’a pas pu être lu : stella AI ne peut pas transcrire pour le moment. Réessayez ou transcrivez sur cet ordinateur.",
+      "loadingModel": "Vérification du modèle de transcription de stella AI…",
+      "useLocal": "Choisissez cet ordinateur pour transcrire l’enregistrement."
     },
     "matter": {
       "title": "Dossier",
@@ -1160,7 +1186,8 @@
       "noSpeech": "Aucune parole n’a été trouvée dans cet enregistrement.",
       "fileName": "{title} - transcription.txt",
       "documentTitle": "{title} - transcription",
-      "transcriptTitle": "Transcription"
+      "transcriptTitle": "Transcription",
+      "alreadySaved": "La transcription est déjà enregistrée dans le dossier."
     },
     "progress": {
       "running": "Transcription : {done, number} sur {total, number} min",
@@ -1168,7 +1195,9 @@
       "stop": "Arrêter",
       "stopped": "Arrêté après {done, number} min. Le texte obtenu jusqu’ici est conservé.",
       "done": "{total, number} min transcrites.",
-      "another": "Transcrire un autre enregistrement"
+      "another": "Transcrire un autre enregistrement",
+      "transcribing": "Transcription de l’enregistrement…",
+      "stopping": "Arrêt de la transcription…"
     },
     "cleaned": {
       "title": "Texte nettoyé",
@@ -1191,6 +1220,7 @@
       "formatted": "Avec la mise en forme",
       "plain": "En texte brut",
       "hint": "Avec la mise en forme, les titres, le gras et les listes se collent dans Word ou Outlook. Votre choix est mémorisé."
-    }
+    },
+    "waitingForFileSelection": "Sélectionnez un enregistrement ou fermez le sélecteur de fichiers."
   }
 }

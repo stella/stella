@@ -183,7 +183,8 @@
     "handoffServerMismatch": "Stella Desktop prijungta prie {linkedServer}, tačiau šiam dokumentui reikia {requestedServer}. Nustatymuose atjunkite dabartinę paskyrą, tada prisijunkite prie {requestedServer}, kad atvertumėte dokumentą.",
     "handoffAccountChanged": "Atidarant dokumentą pasikeitė stella desktop paskyra. Pradėkite iš naujo stella.",
     "handoffAlreadyOpen": "Jau atidarytas kitas pasirašymo langas. Užbaikite arba uždarykite jį ir bandykite dar kartą.",
-    "handoffExpired": "Dokumento nuoroda nebegalioja, nes stella desktop nebuvo laiku prijungtas. Pradėkite iš naujo stella."
+    "handoffExpired": "Dokumento nuoroda nebegalioja, nes stella desktop nebuvo laiku prijungtas. Pradėkite iš naujo stella.",
+    "waitingForFolderSelection": "Pasirinkite aplanką arba užverkite failų parinkiklį."
   },
   "settings": {
     "accountLinked": "Susieta",
@@ -290,7 +291,10 @@
     "recoveryOpenFolder": "Atidaryti atkūrimo aplanką",
     "recoveryOpenUnassigned": "Atidaryti nepriskirtus pakeitimus",
     "recoveryFilePending": "Laukiama atidėjimo",
-    "recoveryError": "Nepavyko atidaryti atkūrimo aplanko. Bandykite dar kartą."
+    "recoveryError": "Nepavyko atidaryti atkūrimo aplanko. Bandykite dar kartą.",
+    "openingRecoveryFolder": "Atveriamas atkūrimo aplankas…",
+    "refreshingRecovery": "Tikrinami atkurtini pakeitimai…",
+    "loadingAccount": "Tikrinamas jūsų paskyros ryšys…"
   },
   "clipboard": {
     "registryUnavailable": "Jūsų praktikos jurisdikcijose nėra įjungtų registrų.",
@@ -435,7 +439,14 @@
     "welcomeShortcutTitle": "Atidarykite bet kur.",
     "welcomeStart": "Pradėti kopijuoti",
     "welcomeTitle": "Susipažinkite su iškarpine",
-    "registryIdentifierSearchHint": "Įveskite {identifiers}."
+    "registryIdentifierSearchHint": "Įveskite {identifiers}.",
+    "enterGroupName": "Įveskite grupės pavadinimą.",
+    "savingChanges": "Išsaugomi pakeitimai…",
+    "creatingGroup": "Kuriama grupė…",
+    "groupLimitReached": "Galite sukurti ne daugiau kaip {max} grupių.",
+    "loadingAutostart": "Tikrinama, ar iškarpinė paleidžiama prisijungus…",
+    "savingAutostart": "Išsaugoma paleidimo prisijungus nuostata…",
+    "registryFormatting": "Formatuojamas registro rezultatas…"
   },
   "activity": {
     "title": "Veikla",
@@ -621,7 +632,15 @@
     "aiStructureMove": "stella AI siūlo perkelti {duration} į bylą {matter}",
     "aiStructureCreate": "{count, plural, one {Sukurti # įrašą} few {Sukurti # įrašus} other {Sukurti # įrašų}}",
     "aiStructureMoveAccept": "Perkelti",
-    "aiFlagSplit": "Padalyti įrašą"
+    "aiFlagSplit": "Padalyti įrašą",
+    "creatingDrafts": "Kuriami juodraščiai…",
+    "earliestDayReached": "Peržiūrite anksčiausią pasiekiamą dieną.",
+    "latestDayReached": "Peržiūrite vėliausią pasiekiamą dieną.",
+    "savingCapturePreference": "Išsaugoma jūsų įrašymo nuostata…",
+    "writeDescription": "Įveskite šio įrašo aprašymą.",
+    "chooseMatterForEntry": "Pasirinkite bylą šiam įrašui.",
+    "entryNeedsDuration": "Pasirinkite apmokestinamos trukmės laikotarpį.",
+    "enterRefinement": "Įveskite nurodymą, kaip pataisyti aprašymą."
   },
   "dictation": {
     "title": "Diktavimas",
@@ -761,7 +780,8 @@
       "label": "Iki šiol padiktuotas tekstas",
       "listening": "Klausomasi…",
       "finishing": "Baigiama…"
-    }
+    },
+    "dictationInProgress": "Prieš pašalindami modelį užbaikite vykstantį diktavimą."
   },
   "shortcut": {
     "title": "Iškarpinės spartusis klavišas",
@@ -802,7 +822,8 @@
       "windowMenu": "Lango meniu",
       "start": "Pradžia",
       "taskManager": "Užduočių tvarkytuvė"
-    }
+    },
+    "saving": "Išsaugomas spartusis klavišas…"
   },
   "onboarding": {
     "back": "Atgal",
@@ -946,7 +967,8 @@
       "keystrokesWithoutHoldKey": "Klavišų paspaudimai, nebent pasirinksite laikomą klavišą",
       "fullDiskAccess": "Visa prieiga prie disko",
       "administrator": "Administratoriaus teisės"
-    }
+    },
+    "enablingDictation": "Įjungiamas diktavimas…"
   },
   "agentSubscriptions": {
     "title": "DI prenumeratos",
@@ -1022,7 +1044,9 @@
         "verification": "Nepavyko patikrinti {name}, todėl jis neįdiegtas.",
         "storage": "Nepavyko išsaugoti {name} šiame kompiuteryje. Patikrinkite, ar diske yra laisvos vietos."
       }
-    }
+    },
+    "finishingSignIn": "Baigiama prisijungti…",
+    "enterCallbackAddress": "Įklijuokite visą adresą iš naršyklės prisijungimo kortelės."
   },
   "localSkills": {
     "title": "Vietiniai įgūdžiai",
@@ -1111,7 +1135,9 @@
       "localMissing": "Norėdami transkribuoti šiame kompiuteryje, atsisiųskite kalbos modelį skiltyje Nustatymai, Diktavimas.",
       "localMissingCloud": "Atsisiųskite kalbos modelį skiltyje Nustatymai, Diktavimas, arba transkribuokite naudodami stella AI.",
       "retainsData": "Atkreipkite dėmesį į {provider} duomenų tvarkymo sąlygas.",
-      "modelFailed": "Nepavyko nuskaityti stella AI modelio, todėl stella AI dabar negali transkribuoti. Bandykite dar kartą arba transkribuokite šiame kompiuteryje."
+      "modelFailed": "Nepavyko nuskaityti stella AI modelio, todėl stella AI dabar negali transkribuoti. Bandykite dar kartą arba transkribuokite šiame kompiuteryje.",
+      "loadingModel": "Tikrinamas stella AI transkribavimo modelis…",
+      "useLocal": "Pasirinkite šį kompiuterį įrašui transkribuoti."
     },
     "matter": {
       "title": "Byla",
@@ -1160,7 +1186,8 @@
       "noSpeech": "Šiame įraše kalbos nerasta.",
       "fileName": "{title} – transkripcija.txt",
       "documentTitle": "{title} – transkripcija",
-      "transcriptTitle": "Transkripcija"
+      "transcriptTitle": "Transkripcija",
+      "alreadySaved": "Transkripcija jau išsaugota byloje."
     },
     "progress": {
       "running": "Transkribuojama {done, number} iš {total, number} min.",
@@ -1168,7 +1195,9 @@
       "stop": "Sustabdyti",
       "stopped": "Sustabdyta po {done, number} min. Iki šiol gautas tekstas išlieka.",
       "done": "Transkribuota {total, number} min.",
-      "another": "Transkribuoti kitą įrašą"
+      "another": "Transkribuoti kitą įrašą",
+      "transcribing": "Transkribuojamas įrašas…",
+      "stopping": "Stabdomas transkribavimas…"
     },
     "cleaned": {
       "title": "Sutvarkytas tekstas",
@@ -1191,6 +1220,7 @@
       "formatted": "Su formatavimu",
       "plain": "Kaip paprastą tekstą",
       "hint": "Su formatavimu į Word ar Outlook įklijuojamos antraštės, paryškinimai ir sąrašai. Jūsų pasirinkimas įsimenamas."
-    }
+    },
+    "waitingForFileSelection": "Pasirinkite įrašą arba užverkite failų parinkiklį."
   }
 }

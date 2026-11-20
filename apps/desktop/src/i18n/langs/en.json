@@ -183,7 +183,8 @@
     "handoffServerMismatch": "Stella Desktop is connected to {linkedServer}, but this document requires {requestedServer}. Disconnect the current account in Settings, then connect to {requestedServer} to open this document.",
     "handoffAccountChanged": "The stella desktop account changed while the document was opening. Start again from stella.",
     "handoffAlreadyOpen": "Another signing dialog is already open. Finish or close it, then try again.",
-    "handoffExpired": "The document link expired before stella desktop was connected. Start again from stella."
+    "handoffExpired": "The document link expired before stella desktop was connected. Start again from stella.",
+    "waitingForFolderSelection": "Select a folder or close the file picker."
   },
   "settings": {
     "accountLinked": "Linked",
@@ -290,7 +291,10 @@
     "recoveryOpenFolder": "Open recovery folder",
     "recoveryOpenUnassigned": "Open unassigned edits",
     "recoveryFilePending": "Waiting to be set aside",
-    "recoveryError": "The recovery folder did not open. Try again."
+    "recoveryError": "The recovery folder did not open. Try again.",
+    "openingRecoveryFolder": "Opening the recovery folder…",
+    "refreshingRecovery": "Checking edits in recovery…",
+    "loadingAccount": "Checking your account connection…"
   },
   "clipboard": {
     "registryUnavailable": "No registries are enabled for your practice jurisdictions.",
@@ -435,7 +439,14 @@
     "welcomeShortcutTitle": "Open it anywhere.",
     "welcomeStart": "Start copying",
     "welcomeTitle": "Meet your clipboard",
-    "registryIdentifierSearchHint": "Enter {identifiers}."
+    "registryIdentifierSearchHint": "Enter {identifiers}.",
+    "enterGroupName": "Enter a group name.",
+    "savingChanges": "Saving changes…",
+    "creatingGroup": "Creating the group…",
+    "groupLimitReached": "You can create up to {max} groups.",
+    "loadingAutostart": "Checking whether the clipboard starts at sign-in…",
+    "savingAutostart": "Saving the start-at-sign-in preference…",
+    "registryFormatting": "Formatting the registry result…"
   },
   "activity": {
     "title": "Activity",
@@ -621,7 +632,15 @@
     "aiStructureMove": "stella AI suggests moving {duration} to {matter}",
     "aiStructureCreate": "{count, plural, one {Create # entry} other {Create # entries}}",
     "aiStructureMoveAccept": "Move",
-    "aiFlagSplit": "Split entry"
+    "aiFlagSplit": "Split entry",
+    "creatingDrafts": "Creating drafts…",
+    "earliestDayReached": "You are viewing the earliest day available.",
+    "latestDayReached": "You are viewing the latest day available.",
+    "savingCapturePreference": "Saving your recording preference…",
+    "writeDescription": "Enter a description for this entry.",
+    "chooseMatterForEntry": "Choose a matter for this entry.",
+    "entryNeedsDuration": "Choose a time range that has a billable duration.",
+    "enterRefinement": "Enter an instruction to revise the description."
   },
   "dictation": {
     "title": "Dictation",
@@ -761,7 +780,8 @@
       "label": "What you have said so far",
       "listening": "Listening…",
       "finishing": "Finishing…"
-    }
+    },
+    "dictationInProgress": "Finish the current dictation before removing the model."
   },
   "shortcut": {
     "title": "Clipboard shortcut",
@@ -802,7 +822,8 @@
       "windowMenu": "Window Menu",
       "start": "Start",
       "taskManager": "Task Manager"
-    }
+    },
+    "saving": "Saving the shortcut…"
   },
   "onboarding": {
     "back": "Back",
@@ -946,7 +967,8 @@
       "keystrokesWithoutHoldKey": "Keystrokes, unless you choose a key to hold",
       "fullDiskAccess": "Full Disk Access",
       "administrator": "Administrator rights"
-    }
+    },
+    "enablingDictation": "Turning on dictation…"
   },
   "agentSubscriptions": {
     "title": "AI subscriptions",
@@ -1022,7 +1044,9 @@
         "verification": "{name} could not be verified, so it was not installed.",
         "storage": "{name} could not be saved on this computer. Check that the disk has free space."
       }
-    }
+    },
+    "finishingSignIn": "Finishing sign-in…",
+    "enterCallbackAddress": "Paste the full address from the sign-in browser tab."
   },
   "localSkills": {
     "title": "Local skills",
@@ -1111,7 +1135,9 @@
       "localMissing": "Download the speech model in Settings, under Dictation, to transcribe on this computer.",
       "localMissingCloud": "Download the speech model in Settings, under Dictation, or transcribe with stella AI.",
       "retainsData": "Please note the terms of processing of {provider}.",
-      "modelFailed": "The stella AI model could not be read, so stella AI cannot transcribe right now. Try again, or transcribe on this computer."
+      "modelFailed": "The stella AI model could not be read, so stella AI cannot transcribe right now. Try again, or transcribe on this computer.",
+      "loadingModel": "Checking the stella AI transcription model…",
+      "useLocal": "Choose this computer to transcribe the recording."
     },
     "matter": {
       "title": "Matter",
@@ -1160,7 +1186,8 @@
       "noSpeech": "No speech was found in this recording.",
       "fileName": "{title} transcript.txt",
       "documentTitle": "{title} transcript",
-      "transcriptTitle": "Transcript"
+      "transcriptTitle": "Transcript",
+      "alreadySaved": "The transcript has already been saved to the matter."
     },
     "progress": {
       "running": "Transcribing {done, number} of {total, number} min",
@@ -1168,7 +1195,9 @@
       "stop": "Stop",
       "stopped": "Stopped after {done, number} min. The text so far is kept.",
       "done": "Transcribed {total, number} min.",
-      "another": "Transcribe another recording"
+      "another": "Transcribe another recording",
+      "transcribing": "Transcribing the recording…",
+      "stopping": "Stopping transcription…"
     },
     "cleaned": {
       "title": "Cleaned up",
@@ -1191,6 +1220,7 @@
       "formatted": "With formatting",
       "plain": "As plain text",
       "hint": "With formatting pastes headings, bold and lists into Word or Outlook. Copy remembers your choice."
-    }
+    },
+    "waitingForFileSelection": "Select a recording or close the file picker."
   }
 }
