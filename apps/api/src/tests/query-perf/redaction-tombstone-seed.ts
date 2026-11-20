@@ -49,7 +49,6 @@ const populationIds = ({ rows, cohort }: RedactionTombstoneScenario) => {
     .padStart(4, "0");
   return {
     decisionPrefix: `01890000-00d4-7000-${group}-`,
-    citationPrefix: `01890000-00d9-7000-${group}-`,
     controlId: toSafeId<"caseLawDecision">(
       `01890000-00d5-7000-${group}-000000000001`,
     ),
@@ -83,8 +82,7 @@ export const seedRedactionTombstoneScenario = async (
   scenario: RedactionTombstoneScenario,
 ) => {
   const { rows, cohort } = scenario;
-  const { decisionPrefix, citationPrefix, controlId, pageEnd } =
-    populationIds(scenario);
+  const { decisionPrefix, controlId, pageEnd } = populationIds(scenario);
   await seedStep(
     "delete scheduler rows",
     async () =>
@@ -181,7 +179,7 @@ export const seedRedactionTombstoneScenario = async (
         await tx.execute(sql`INSERT INTO case_law_provision_citations
       (id, decision_id, jurisdiction, work_identifier, work_number, work_year, work_collection,
        unit, section, work_eli, anchor, span_start, span_end, sentence_text, confidence)
-      SELECT (${citationPrefix} || right(id::text, 12))::uuid, id, 'CZE', '89/2012 Sb.', 89, 2012, 'Sb.',
+      SELECT ('01890000-d9' || substr(id::text, 12))::uuid, id, 'CZE', '89/2012 Sb.', 89, 2012, 'Sb.',
         'section', 1, '/eli/cz/sb/2012/89', 's1', 0, 5, 'Citation', 1
       FROM case_law_decisions WHERE source_id = ${SOURCE_ID}`);
         await tx.execute(
