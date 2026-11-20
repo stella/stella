@@ -48,6 +48,8 @@ type ExecutionOptions = {
   summaryFails?: boolean;
   runnerName?: string;
   dispatchFails?: boolean;
+  /** The job's own status, as the step's JOB_STATUS env passes it. */
+  jobStatus?: string;
 };
 
 const execute = async ({
@@ -58,6 +60,7 @@ const execute = async ({
   summaryFails = false,
   runnerName = "fixture-runner",
   dispatchFails = false,
+  jobStatus,
 }: ExecutionOptions = {}) => {
   const dispatches: unknown[] = [];
   const annotations: string[] = [];
@@ -85,7 +88,13 @@ const execute = async ({
       runId: 42,
       job: "ci-tests",
     },
-    process: { env: { GITHUB_RUN_ATTEMPT: "3", RUNNER_NAME: runnerName } },
+    process: {
+      env: {
+        GITHUB_RUN_ATTEMPT: "3",
+        RUNNER_NAME: runnerName,
+        ...(jobStatus === undefined ? {} : { JOB_STATUS: jobStatus }),
+      },
+    },
     core: {
       notice: (message: string) => {
         annotations.push(message);
@@ -365,6 +374,105 @@ test("a refused hand-off, a helper job and an unknown runner cancel the run at o
   });
   expect(unknown.events).not.toContain("dispatch");
   expect(unknown.cancellations).toHaveLength(1);
+});
+
+// The jobs API can list this job before the step that failed it: the failed
+// step is still running or has no conclusion yet.
+const ownUnlistedJob = (runner: string): Job => ({
+  ...ownFailedJob(runner),
+  steps: [
+    { number: 17, name: "Test web", conclusion: "" },
+    {
+      number: 18,
+      name: "Cancel merge group after failure in this job",
+      conclusion: "",
+    },
+  ],
+});
+
+test("a job that failed itself hands off and is named while the jobs API lags behind its failed step", async () => {
+  const result = await execute({
+    runnerName: "runner-7",
+    jobStatus: "failure",
+    jobs: [[ownUnlistedJob("runner-7")]],
+  });
+  expect(result.cancellations).toEqual([]);
+  expect(result.dispatches).toEqual([
+    {
+      owner: "fixture-owner",
+      repo: "fixture-repo",
+      workflow_id: CANCEL_AFTER_JOB_WORKFLOW,
+      ref: "main",
+      inputs: { run_id: "42", run_attempt: "3", job_id: "77" },
+    },
+  ]);
+  expect(result.annotations.at(0)).toBe(
+    "ci-tests: cancelling failed merge group; failed steps: ci-tests (rest-web): failed step not yet listed",
+  );
+  expect(result.summaries.at(0)).toStartWith(
+    "Merge group failed: ci-tests (rest-web): failed step not yet listed. Other jobs were cancelled to free runners.",
+  );
+  expect(result.annotations.at(-1)).toContain("keeps its failure conclusion");
+
+  // Steps other jobs failed are named too, and this job is not left out.
+  const alongside = await execute({
+    runnerName: "runner-7",
+    jobStatus: "failure",
+    jobs: [[ownUnlistedJob("runner-7")], ...pages],
+  });
+  expect(alongside.dispatches).toHaveLength(1);
+  expect(alongside.annotations.at(0)).toEndWith(
+    "Screenshots / capture / 3: Capture screenshot (https://example.test/jobs/12); ci-tests (rest-web): failed step not yet listed",
+  );
+});
+
+test("a job that failed itself is named even when its record is not found, and cancels at once", async () => {
+  const result = await execute({
+    runnerName: "runner-9",
+    jobStatus: "failure",
+    jobs: [[ownUnlistedJob("runner-7")]],
+  });
+  expect(result.dispatches).toEqual([]);
+  expect(result.annotations.at(0)).toBe(
+    "ci-tests: cancelling failed merge group; failed steps: ci-tests: failed step not yet listed",
+  );
+  expect(result.cancellations).toHaveLength(1);
+});
+
+test("a lost runner elsewhere does not keep a job that failed itself from cancelling", async () => {
+  const lost: Job = {
+    id: 79,
+    name: "ci-tests (api-2)",
+    html_url: "https://example.test/jobs/79",
+    status: "completed",
+    conclusion: "failure",
+    steps: [
+      {
+        number: 4,
+        name: "Run API tests",
+        conclusion: "cancelled",
+        status: "completed",
+      },
+    ],
+  };
+  const result = await execute({
+    runnerName: "runner-7",
+    jobStatus: "failure",
+    jobs: [[ownUnlistedJob("runner-7"), lost]],
+  });
+  expect(result.annotations.join("\n")).not.toContain("runner was lost");
+  expect(result.dispatches).toHaveLength(1);
+
+  // A helper job, whose own status is success, still lets the run continue.
+  const helper = await execute({
+    runnerName: "runner-8",
+    jobStatus: "success",
+    jobs: [[lost]],
+  });
+  expect(helper.annotations).toEqual([
+    "ci-tests (api-2): the runner was lost before any step failed; the run continues.",
+  ]);
+  expect(helper.cancellations).toEqual([]);
 });
 
 type AfterJobOptions = {
