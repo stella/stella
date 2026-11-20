@@ -93,15 +93,18 @@ const HTML_COMMENT = /<!--[\s\S]*?(?:-->|$)/gu;
 const CODE_FENCE = /^\s*(?:`{3,}|~{3,})/u;
 const THEMATIC_BREAK = /^\s*([-*_=])(?:\s*\1){2,}\s*$/u;
 const LINK_DEFINITION = /^\s*\[[^\]\n]+\]:\s*\S/u;
-const TABLE_DELIMITER_ROW = /^\s*\|?\s*:?-+:?\s*(?:\|\s*:?-+:?\s*)+\|?\s*$/u;
+// Linear patterns only: the text is a model's answer, and a pattern that
+// backtracks super-linearly would let one answer stall the request.
+const TABLE_DELIMITER_CHARACTERS = /^[ \t|:-]+$/u;
 const BLOCK_QUOTE = /^\s*(?:>\s?)+/u;
-const HEADING = /^\s*(#{1,6})\s+(.*?)(?:\s+#+)?\s*$/u;
+const HEADING_OPENING = /^\s*(#{1,6})[ \t]/u;
+const HEADING_CLOSING = /[ \t]#+$/u;
 const LIST_ITEM = /^( *)(?:([-*+])|(\d{1,9})[.)])\s+(\S.*)$/u;
 const EMPTY_LIST_ITEM = /^\s*(?:[-*+]|\d{1,9}[.)])\s*$/u;
 
 const IMAGE = /!\[([^\]\n]*)\]\([^)\n]*\)/gu;
-const INLINE_LINK = /\[([^\]\n]+)\]\([^)\n]*\)/gu;
-const REFERENCE_LINK = /\[([^\]\n]+)\]\[[^\]\n]*\]/gu;
+const INLINE_LINK = /\[([^[\]\n]+)\]\([^()[\]\n]*\)/gu;
+const REFERENCE_LINK = /\[([^[\]\n]+)\]\[[^[\]\n]*\]/gu;
 const AUTOLINK = /<((?:https?|mailto):[^<>\s]+)>/giu;
 const HTML_TAG = /<\/?[A-Za-z][\w-]*(?:\s[^<>]*)?\/?>/gu;
 const BACKTICKS = /`+/gu;
@@ -128,6 +131,12 @@ const inlineSubset = (text: string): string =>
     .replaceAll(RUNS_OF_SPACES, " ")
     .trim();
 
+/** A table's delimiter row (`|---|:--:|`): pipes, dashes and colons only. */
+const isTableDelimiterRow = (line: string): boolean =>
+  TABLE_DELIMITER_CHARACTERS.test(line) &&
+  line.includes("|") &&
+  line.includes("-");
+
 const MAX_HEADING_LEVEL = 3;
 const NESTED_INDENT = 2;
 
@@ -151,7 +160,7 @@ export const recordingMarkdownSubset = (markdown: string): string => {
       CODE_FENCE.test(raw) ||
       THEMATIC_BREAK.test(raw) ||
       LINK_DEFINITION.test(raw) ||
-      TABLE_DELIMITER_ROW.test(raw)
+      isTableDelimiterRow(raw)
     ) {
       continue;
     }
@@ -163,10 +172,14 @@ export const recordingMarkdownSubset = (markdown: string): string => {
     if (EMPTY_LIST_ITEM.test(line)) {
       continue;
     }
-    const heading = HEADING.exec(line);
+    const heading = HEADING_OPENING.exec(line);
     if (heading !== null) {
       listMarkerWidth = null;
-      const text = inlineSubset(heading[2] ?? "");
+      const title = line.slice(heading[0].length).trimEnd();
+      const closing = HEADING_CLOSING.exec(title);
+      const text = inlineSubset(
+        closing === null ? title : title.slice(0, closing.index),
+      );
       if (text !== "") {
         const level = Math.min(heading[1]?.length ?? 1, MAX_HEADING_LEVEL);
         lines.push(`${"#".repeat(level)} ${text}`);
