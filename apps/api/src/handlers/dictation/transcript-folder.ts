@@ -43,7 +43,7 @@ const noteRun = (text: string, bold: boolean): Run => ({
  * from the text: the label, then each instruction on its own line, all in
  * grey italics.
  */
-export const instructionsNote = (
+const instructionsNote = (
   label: string,
   instructions: readonly string[],
 ): Paragraph => ({
@@ -88,11 +88,6 @@ export const cleanedTranscriptDocx = async ({
       }),
   });
 
-export type CreatedTranscriptFolder = {
-  folderId: SafeId<"entity">;
-  folderName: string;
-};
-
 /**
  * Creates the transcript's folder at the matter's root, named after the
  * recording, under the matter's tree lock and entity cap, and records it.
@@ -113,7 +108,7 @@ export const createTranscriptFolder = async ({
   /** The folder and everything the desktop files in it. */
   entityCount: number;
   recordAuditEvent: AuditRecorder;
-}): Promise<Result<CreatedTranscriptFolder, HandlerError>> => {
+}) => {
   const created = await resultTx(safeDbFromScoped(scopedDb), async (tx) => {
     // The tree lock comes first, as in every folder create.
     await lockTree(tx, { tree: "entities", scopeId: workspaceId });
@@ -182,15 +177,7 @@ export const createTranscriptFolder = async ({
     return Result.ok({ folderId, folderName: name });
   });
   if (Result.isError(created)) {
-    return Result.err(
-      HandlerError.is(created.error)
-        ? created.error
-        : new HandlerError({
-            status: 500,
-            message: "The transcript's folder could not be created",
-            cause: created.error,
-          }),
-    );
+    return created;
   }
   broadcastWorkspaceResourceUpdated(
     workspaceId,

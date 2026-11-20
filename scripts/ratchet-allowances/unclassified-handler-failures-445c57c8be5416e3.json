@@ -1,0 +1,6 @@
+{
+  "metric": "unclassified-handler-failures",
+  "file": "apps/api/src/lib/uploads/reserve-presigned-upload.ts",
+  "delta": 1,
+  "reason": "Moved unchanged with the presign reservation from apps/api/src/handlers/uploads/create.ts, which drops by the same 1: a failure to sign the upload URL is an internal defect that should keep alerting as unclassified."
+}

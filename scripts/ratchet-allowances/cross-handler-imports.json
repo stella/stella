@@ -1,0 +1,5 @@
+{
+  "metric": "cross-handler-imports",
+  "delta": 1,
+  "reason": "The desktop transcripts route finalizes the recording it uploaded into a transcript's folder through finalizeOwnPendingUpload, the same claim, scan and finalize core the upload route runs; moving that state machine out of handlers/uploads/update.ts is a separate refactor."
+}

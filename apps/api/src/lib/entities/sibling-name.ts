@@ -21,7 +21,7 @@ export type ResolvedSiblingName = v.InferOutput<
 
 /** How a taken name is numbered: `Name_1`, `Name_2`, as uploads are, or
  *  `Name (2)`, `Name (3)`, as a file manager numbers a copy. */
-export const SIBLING_NUMBERING = ["underscore", "parenthesized"] as const;
+const SIBLING_NUMBERING = ["underscore", "parenthesized"] as const;
 export type SiblingNumbering = (typeof SIBLING_NUMBERING)[number];
 
 const numberSuffix = (numbering: SiblingNumbering, number: number): string => {

@@ -20,7 +20,6 @@ import type { DesktopFeatureId } from "@stll/api-contract/desktop-feature-access
 import { classifyFailure } from "@stll/errors";
 
 import { safeDbFromScoped } from "@/api/db/safe-db";
-import { authorizeUploadPurpose } from "@/api/handlers/uploads/permissions";
 import {
   finalizeOwnPendingUpload,
   UPLOAD_NOT_FOUND_CODE,
@@ -201,7 +200,8 @@ type ReserveAudioInput = {
 };
 
 /** Reserves the recording's upload into the folder: a new document under
- *  the matter's file column, signed against its size and checksum. */
+ *  the matter's file column, signed against its size and checksum. The
+ *  caller has authorized the member to create documents in the matter. */
 const reserveAudioUpload = async ({
   account,
   matterId,
@@ -209,13 +209,6 @@ const reserveAudioUpload = async ({
   audio,
 }: ReserveAudioInput) =>
   await Result.gen(async function* () {
-    const authorization = authorizeUploadPurpose({
-      memberRole: account.memberRole,
-      purpose: "entity_create",
-    });
-    if (Result.isError(authorization)) {
-      return Result.err(authorization.error);
-    }
     const safeDb = safeDbFromScoped(account.scopedDb);
     const properties = yield* Result.await(
       safeDb(

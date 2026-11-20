@@ -361,14 +361,10 @@ test("a recording larger than a matter document is left out and the documents ar
     { body },
   );
   expect(response.status).toBe(200);
-  const saved = (await response.json()) as Record<string, unknown>;
-  expect(saved["audio"]).toEqual({
-    status: "too_large",
-    maxBytes: UPLOAD_DOCUMENT_MAX_BYTES,
+  expect(await response.json()).toMatchObject({
+    audio: { status: "too_large", maxBytes: UPLOAD_DOCUMENT_MAX_BYTES },
+    files: [{ kind: "transcript", fileName: `${FOLDER.transcriptName}.docx` }],
   });
-  expect(saved["files"]).toEqual([
-    { kind: "transcript", fileName: `${FOLDER.transcriptName}.docx` },
-  ]);
   expect(createEntity).toHaveBeenCalledTimes(1);
   expect(reserveAudio).not.toHaveBeenCalled();
   expect(createFolder.mock.calls.at(0)?.[0]).toMatchObject({ entityCount: 3 });

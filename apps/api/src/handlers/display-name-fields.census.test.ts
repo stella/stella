@@ -37,6 +37,9 @@ const chatSendFields = (paths: readonly string[]): string[] =>
 /** `entities.name` has its own stricter owner, `normalizeEntityName`. */
 const ENTITY_NAMES = [
   "POST /v1/uploads/:workspaceId/presign body.name",
+  "POST /v1/desktop/dictation/transcripts body.audio.name",
+  "POST /v1/desktop/dictation/transcripts body.folder.cleanedName",
+  "POST /v1/desktop/dictation/transcripts body.folder.transcriptName",
   "POST /v1/uploads/:workspaceId/entity-create/tree body.directories[].name",
   "POST /v1/uploads/:workspaceId/entity-create/tree body.files[].name",
   "POST /v1/entities/:workspaceId/upload body.name",

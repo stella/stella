@@ -35,14 +35,14 @@ export type PresignPurposeData =
   | Exclude<PendingUploadPurposeData, { type: "entity_create" }>;
 
 /** What a client declared about the file it is about to PUT. */
-export type DeclaredUploadFile = {
+type DeclaredUploadFile = {
   name: string;
   mimeType: string;
   size: number;
   sha256Hex: string;
 };
 
-export type ReservedUpload = {
+type ReservedUpload = {
   uploadId: SafeId<"pendingUpload">;
   url: string;
   expiresAt: string;
