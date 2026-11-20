@@ -102,3 +102,32 @@ test("only absence on both paths and publisher classes permits an own row", () =
     resolveHeldDecisionCandidates({ hosts: none, collections: none }),
   ).toEqual({ status: "absent" });
 });
+
+test("only complete absence permits allocation across every bounded path state", () => {
+  const states = [
+    read(),
+    read("one"),
+    read("two"),
+    read("one", "two"),
+    { type: "overflow", cap: 8 },
+  ] as const;
+  const paths = states.flatMap((ecli) =>
+    states.map((courtDocketDate) => ({ ecli, courtDocketDate })),
+  );
+  const inputs = paths.flatMap((hosts) =>
+    paths.map((collections) => ({ hosts, collections })),
+  );
+  for (const input of inputs) {
+    const completeAbsence = [
+      input.hosts.ecli,
+      input.hosts.courtDocketDate,
+      input.collections.ecli,
+      input.collections.courtDocketDate,
+    ].every(
+      (outcome) => outcome.type === "complete" && outcome.rows.length === 0,
+    );
+    expect(resolveHeldDecisionCandidates(input).status === "absent").toBe(
+      completeAbsence,
+    );
+  }
+});
