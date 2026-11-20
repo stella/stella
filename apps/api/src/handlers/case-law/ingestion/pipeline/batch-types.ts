@@ -1,7 +1,6 @@
 import { panic, Result, TaggedError } from "better-result";
 
 import { declareFingerprintFields } from "@stll/errors";
-import { createSha256 } from "@stll/sha256/bun";
 
 import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
 
@@ -237,25 +236,15 @@ type AdmittedPart = {
   admitted: AdmittedDecisions;
 };
 
+// A decision record names no identity of its own: the failure ledger takes
+// its publisher document id, else its captured input's hash
+// (`ingestionFailureRecordIdentity`), which bounds the column and makes a
+// replay land on the same row.
 const decisionBatchRecord = (
   decision: IngestionResult,
 ): Extract<CaseLawIngestionBatchRecord, { type: "decision" }> => ({
   type: "decision",
   decision,
-  // The source id scopes the ledger's unique index. Hash the remaining
-  // publisher identity so malformed upstream text can never exceed the
-  // record_identity column, and a replay of the same observation is a fixed
-  // point even when persistence rejects the record before normalization.
-  recordIdentity: `decision:${createSha256()
-    .update(
-      JSON.stringify([
-        decision.country,
-        decision.sourceDocumentId ?? null,
-        decision.rawHash,
-        decision.caseNumber,
-      ]),
-    )
-    .digest("hex")}`,
 });
 
 const boundedRecordLimit = (recordLimit: number): number => {

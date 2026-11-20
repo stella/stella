@@ -1069,7 +1069,7 @@ describe("runIngestionPipeline — failure records", () => {
       });
       expect(state.insertedRows).toHaveLength(1);
       const [row] = state.insertedRows;
-      expect(row?.recordIdentity).toMatch(/^decision:[0-9a-f]{64}$/u);
+      expect(row?.recordIdentity).toMatch(/^input:[0-9a-f]{64}$/u);
       expect(row?.caseNumber).toBe(
         input.caseNumber.slice(0, CITATION_STORAGE_WIDTHS.caseNumber),
       );

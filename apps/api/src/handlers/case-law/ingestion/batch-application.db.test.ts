@@ -1644,17 +1644,6 @@ describe("source-rejected batch records", () => {
     if (Result.isError(first) || Result.isError(replay)) {
       throw new TypeError("fixture batch refused");
     }
-    const firstRecord = first.value.batchRecords.at(0);
-    const replayRecord = replay.value.batchRecords.at(0);
-    if (firstRecord?.type !== "decision" || replayRecord?.type !== "decision") {
-      throw new TypeError("expected decision records");
-    }
-    if (firstRecord.recordIdentity === undefined) {
-      throw new TypeError("expected a derived decision identity");
-    }
-    expect(firstRecord.recordIdentity).toMatch(/^decision:[0-9a-f]{64}$/u);
-    expect(replayRecord.recordIdentity).toBe(firstRecord.recordIdentity);
-
     const { corpus } = landingTransfer();
     for (const batch of [first.value, replay.value]) {
       const applied = await applyPrepared({ sourceId, batch, corpus });
@@ -1663,12 +1652,14 @@ describe("source-rejected batch records", () => {
       );
     }
 
-    expect(
-      await db
-        .select({ recordIdentity: caseLawIngestionFailures.recordIdentity })
-        .from(caseLawIngestionFailures)
-        .where(eq(caseLawIngestionFailures.sourceId, sourceId)),
-    ).toEqual([{ recordIdentity: firstRecord.recordIdentity }]);
+    // The replay lands on the first run's row: one ledger row, keyed by the
+    // captured input's hash because the publisher id is over its bound.
+    const rows = await db
+      .select({ recordIdentity: caseLawIngestionFailures.recordIdentity })
+      .from(caseLawIngestionFailures)
+      .where(eq(caseLawIngestionFailures.sourceId, sourceId));
+    expect(rows).toHaveLength(1);
+    expect(rows.at(0)?.recordIdentity).toMatch(/^input:[0-9a-f]{64}$/u);
   });
 
   test("unwritten failures outrank rejected records, with no decision identity", async () => {
