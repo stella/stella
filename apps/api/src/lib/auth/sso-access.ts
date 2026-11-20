@@ -3,7 +3,9 @@ import { sql } from "drizzle-orm";
 import type { SQL, SQLWrapper } from "drizzle-orm";
 
 import {
+  invitation,
   member,
+  organization,
   organizationSsoPolicy,
   session,
   ssoProvider,
@@ -165,29 +167,54 @@ export const readSessionSsoAccess = async (
     : ssoAccessOf(status);
 };
 
+/** The organizations one request can act on, as it names them. */
+export type SsoRequestLookup = Omit<
+  SessionSsoLookup,
+  "organizationId" | "session"
+> & {
+  /** Named by id, including the session's active organization. */
+  organizationIds: readonly SafeId<"organization">[];
+  /** Named by slug. */
+  organizationSlugs: readonly string[];
+  /** Named through an invitation the request answers or cancels. */
+  invitationIds: readonly string[];
+};
+
 /**
- * Whether any of `organizationIds` requires SSO and refuses the session, in
- * one statement: the organization endpoints act on every organization a
- * request names.
+ * Whether any organization the request names, by id, by slug or through an
+ * invitation, requires SSO and refuses the session, in one statement.
  */
 export const ssoRefusesSessionInAny = async (
   db: SsoDecisionDb,
   {
     organizationIds,
+    organizationSlugs,
+    invitationIds,
     userId,
     sessionId,
-  }: Omit<SessionSsoLookup, "organizationId" | "session"> & {
-    organizationIds: readonly SafeId<"organization">[];
-  },
+  }: SsoRequestLookup,
 ): Promise<boolean> => {
-  if (!isEnterpriseSsoDeployed() || organizationIds.length === 0) {
+  if (
+    !isEnterpriseSsoDeployed() ||
+    organizationIds.length + organizationSlugs.length + invitationIds.length ===
+      0
+  ) {
     return false;
   }
   const requested = sql`requested.organization_id`;
   const rows = await db.execute<{ refused: boolean }>(sql`
+    with requested(organization_id) as (
+      select unnest(${typedPgArray(organizationIds, "text")})
+      union
+      select ${organization.id} from ${organization}
+      where ${organization.slug} = any(${typedPgArray(organizationSlugs, "text")})
+      union
+      select ${invitation.organizationId} from ${invitation}
+      where ${invitation.id} = any(${typedPgArray(invitationIds, "text")})
+    )
     select exists (
       select 1
-      from unnest(${typedPgArray(organizationIds, "text")}) as requested(organization_id)
+      from requested
       where ${organizationRequiresSso(requested)}
         and not exists (
           select 1 from ${session}

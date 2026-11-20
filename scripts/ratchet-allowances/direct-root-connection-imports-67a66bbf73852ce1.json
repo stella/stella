@@ -1,6 +1,0 @@
-{
-  "metric": "direct-root-connection-imports",
-  "file": "apps/api/src/lib/auth/sso-organization-guard.ts",
-  "delta": 1,
-  "reason": "The organization SSO guard answers the auth framework's organization endpoints and OAuth consent, which run before any request transaction exists. It reads only the SSO requirement, the organization's provider and the session's provenance, never matter data, so it owns its owner-connection reads here rather than widening the auth module's owner-connection sites."
-}

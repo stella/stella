@@ -21,6 +21,11 @@ import { createDatabase, createSqlClient } from "@/api/db/sql-client";
 import { envBase } from "@/api/env-base";
 import type { getAuth } from "@/api/lib/auth";
 import { AUTH_DATABASE_ADAPTER_OPTIONS } from "@/api/lib/auth-adapter-options";
+import {
+  readSessionSsoAccess,
+  ssoRefusesSessionInAny,
+} from "@/api/lib/auth/sso-access";
+import type { SsoRequestLookup } from "@/api/lib/auth/sso-access";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   instrumentSqlTransactionCounts,
@@ -354,6 +359,19 @@ export const recordLegalResolveAudit = async (options: LegalResolveAudit) =>
     async (tx) =>
       await recordLegalResolveAuditInTransaction({ ...options, tx }),
   );
+
+/**
+ * The SSO decision for the auth framework's organization endpoints and for
+ * OAuth consent. Both run before any request transaction exists, so the
+ * decision reads on this connection; callers receive the answer, never the
+ * handle.
+ */
+export const readOrganizationRequestSsoRefusal = async (
+  lookup: SsoRequestLookup,
+) => await ssoRefusesSessionInAny(rootDb, lookup);
+export const readConsentSsoAccess = async (
+  lookup: Omit<Parameters<typeof readSessionSsoAccess>[1], "session">,
+) => await readSessionSsoAccess(rootDb, { ...lookup, session: "live" });
 
 type ReadOAuthGrantAdmissionOptions = {
   clientId: string;
