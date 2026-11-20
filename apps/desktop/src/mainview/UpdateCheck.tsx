@@ -135,7 +135,7 @@ const CheckOutcome = ({
 
 /** What `check_for_updates` and `install_update` answer
  *  (`updater::SettingsCheck`); a failure is the command's error. */
-export type UpdateCheck =
+type UpdateCheck =
   | { status: "up_to_date" }
   | { status: "available"; version: string }
   | { status: "deferred"; version: string }
@@ -150,7 +150,7 @@ type CheckState =
 
 const VERSIONED_STATUSES = new Set(["available", "deferred", "installing"]);
 
-export const isUpdateCheck = (value: unknown): value is UpdateCheck => {
+const isUpdateCheck = (value: unknown): value is UpdateCheck => {
   if (typeof value !== "object" || value === null || !("status" in value)) {
     return false;
   }
