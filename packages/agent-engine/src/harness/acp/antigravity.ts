@@ -45,11 +45,13 @@ const LOST_THINKING_SIGNATURE =
 /** Every launch unpacks the server, so a probe's answer is kept this long. */
 const PROBE_CACHE_MS = 6 * 60 * 60 * 1000;
 
-const removeQuietly = (target: string) => {
-  Result.try(() => {
-    rmSync(target, { recursive: true, force: true });
-  });
-};
+/** Whether `target` is gone; one the system still holds stays for later. */
+const removeQuietly = (target: string): boolean =>
+  Result.isOk(
+    Result.try(() => {
+      rmSync(target, { recursive: true, force: true });
+    }),
+  );
 
 export const ANTIGRAVITY: AcpAgentDefinition = {
   harness: "antigravity",
