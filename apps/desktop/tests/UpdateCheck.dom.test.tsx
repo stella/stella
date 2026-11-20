@@ -133,6 +133,16 @@ test("an available update is offered and installs through the updater", async ()
     ),
   ).toBeDefined();
   expect(view.commands).toEqual(["check_for_updates", "install_update"]);
+
+  // While installing, the check button stays reachable and says why it
+  // cannot act; clicking it starts nothing.
+  const checkButton = view.getByRole("button", {
+    name: defaultMessages.tray.checkForUpdates,
+  });
+  expect(checkButton.getAttribute("aria-disabled")).toBe("true");
+  fireEvent.click(checkButton);
+  await act(nextMacrotask);
+  expect(view.commands).toEqual(["check_for_updates", "install_update"]);
 });
 
 test("an install held for open documents says when it will happen", async () => {
