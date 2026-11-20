@@ -4506,7 +4506,7 @@
           }
         },
         "candidateSet": {
-          "enum": ["truncated"],
+          "examples": ["truncated"],
           "description": "More candidates exist. Refine the identifier with a court, ECLI or full published reference.",
           "type": "string"
         },
@@ -4878,7 +4878,7 @@
           }
         },
         "candidateSet": {
-          "enum": ["truncated"],
+          "examples": ["truncated"],
           "description": "More candidates exist. Refine the identifier with a court, ECLI or full published reference.",
           "type": "string"
         },
