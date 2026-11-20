@@ -3,8 +3,7 @@ import type { QueryClient } from "@tanstack/react-query";
 import { DOCUMENT_PANE } from "@/components/inspector/document-pane";
 import { newestCachedData } from "@/components/pending-cache-reads.logic";
 import { DOCX_MIME, getNativeOfficeViewerFormat, PDF_MIME } from "@/lib/consts";
-import { fileMetadataQueryKey } from "@/lib/files/file-metadata-query.logic";
-import { PDF_COLOR_MODES } from "@/lib/pdf/pdf-color-mode";
+import { hasPDFColorControl, PDF_COLOR_MODES } from "@/lib/pdf/pdf-color-mode";
 import type { PDFColorMode } from "@/lib/pdf/pdf-color-mode";
 import type { EntityField } from "@/lib/types";
 import {
@@ -102,25 +101,6 @@ const cachedFileMimeType = (
   return undefined;
 };
 
-// The colour-mode control sits in the PDF toolbar for a PDF that was not
-// made from an image; its file's metadata says which. Without it cached, a
-// PDF is taken to be one the control applies to, which most are.
-const pdfColorControl = (
-  queryClient: QueryClient,
-  { fieldId, workspaceId }: { fieldId: string; workspaceId: string },
-): boolean => {
-  const metadata = newestCachedData(
-    queryClient,
-    queryClient.getQueriesData<{ originalMimeType: string }>({
-      exact: true,
-      queryKey: fileMetadataQueryKey({ fieldId, workspaceId }),
-    }),
-  );
-  return (
-    metadata === undefined || !metadata.originalMimeType.startsWith("image/")
-  );
-};
-
 /**
  * The sheet the document page draws for the file the URL opens, read from
  * the cached entity, by the rules the page itself decides with.
@@ -156,12 +136,9 @@ export const cachedDocumentPageSheet = (
   if (mimeType === PDF_MIME && search.pdfMode === "organize") {
     return UNKNOWN;
   }
-  const colorControl =
-    !mimeType.startsWith("image/") &&
-    pdfColorControl(queryClient, { fieldId, workspaceId });
   return {
     type: "pdf",
-    colorMode: colorControl
+    colorMode: hasPDFColorControl(mimeType)
       ? (PDF_COLOR_MODES.find((mode) => mode === search.pdfColorMode) ??
         "system")
       : undefined,

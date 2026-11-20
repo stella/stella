@@ -1,9 +1,9 @@
 import type { CSSProperties } from "react";
 
 import {
+  DOCX_EDITOR_FIT_PAGE_WIDTH_CSS,
   DOCX_PAGE_HEIGHT,
   DOCX_PAGE_WIDTH,
-  docxFitPageWidthCss,
   useDocxFitZoom,
 } from "@/components/docx-preview-zoom";
 
@@ -12,12 +12,13 @@ type DocxLoadingShellProps = {
   zoom?: number | undefined;
 };
 
-/** The largest zoom the loading sheet fits the page to on its own. */
-const DOCX_LOADING_MAX_AUTO_ZOOM = 0.85;
-
-/** The scroll surface the sheet's page sits in. */
+/**
+ * The scroll surface the sheet's page sits in, as the editor's viewport is:
+ * the page centred with no side padding (the fit leaves the room beside it)
+ * and the viewport's top padding above it.
+ */
 const DOCX_LOADING_SURFACE_CLASS =
-  "folio-docx-preview flex min-h-0 flex-1 justify-center overflow-auto px-4 py-6";
+  "folio-docx-preview flex min-h-0 flex-1 justify-center overflow-auto py-6";
 
 const DocxLoadingPage = ({ style }: { style: CSSProperties }) => (
   <div
@@ -46,8 +47,8 @@ export const DocxLoadingShell = ({
   zoom,
 }: DocxLoadingShellProps) => {
   const { containerRef, fitZoom } = useDocxFitZoom({
+    fit: { type: "editor" },
     scaleOffset,
-    maxAutoZoom: DOCX_LOADING_MAX_AUTO_ZOOM,
   });
   const effectiveZoom = zoom ?? fitZoom;
 
@@ -74,7 +75,7 @@ export const DocxLoadingSheetPending = () => (
       <DocxLoadingPage
         style={{
           aspectRatio: `${String(DOCX_PAGE_WIDTH)} / ${String(DOCX_PAGE_HEIGHT)}`,
-          width: docxFitPageWidthCss(DOCX_LOADING_MAX_AUTO_ZOOM),
+          width: DOCX_EDITOR_FIT_PAGE_WIDTH_CSS,
         }}
       />
     </div>
