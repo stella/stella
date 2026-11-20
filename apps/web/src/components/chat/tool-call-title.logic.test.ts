@@ -2,11 +2,11 @@ import { describe, expect, test } from "bun:test";
 
 import { summarizeCodeToolSource } from "@stll/api-contract/chat-code-step";
 import { CHAT_LOCAL_RUN_TOOL_NAMES } from "@stll/api-contract/chat-local-run-tool";
-import { STELLA_MCP_TOOL_NAMES } from "@stll/api-contract/mcp-tool-names";
 import {
   CHAT_STEP_LEDGER_KEY,
   type ChatStepLedger,
 } from "@stll/api-contract/chat-step-ledger";
+import { STELLA_MCP_TOOL_NAMES } from "@stll/api-contract/mcp-tool-names";
 
 import { getChatToolTitleKey } from "@/components/chat/chat-ui-tools";
 

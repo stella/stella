@@ -2360,8 +2360,7 @@ const isVisibleProcessEntry = (entry: AssistantPartRenderEntry): boolean =>
   // Finished searches and fetches show in the sources tray instead.
   isVisibleProcessStep(entry.part, { searchesShownApart: true });
 
-type ProcessStepTitle =
-  ToolCallTitle | { type: "key"; key: "chat.reasoning" };
+type ProcessStepTitle = ToolCallTitle | { type: "key"; key: "chat.reasoning" };
 
 const REASONING_STEP_TITLE = {
   type: "key",

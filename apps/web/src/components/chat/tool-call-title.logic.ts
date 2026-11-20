@@ -48,8 +48,7 @@ export const getToolCallTitleKey = (call: ToolCall): ToolCallTitleKey => {
  * nothing about which of several steps is which.
  */
 export type ToolCallTitle =
-  | { type: "key"; key: ToolCallTitleKey }
-  | { type: "name"; name: string };
+  { type: "key"; key: ToolCallTitleKey } | { type: "name"; name: string };
 
 /** `mcp__<server>__<tool>` names its tool by the part after the server. */
 const ownToolName = (name: string): string =>
