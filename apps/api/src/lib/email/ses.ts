@@ -1,4 +1,8 @@
-import { SendEmailCommand, SESv2Client } from "@aws-sdk/client-sesv2";
+import {
+  AttachmentContentDisposition,
+  SendEmailCommand,
+  SESv2Client,
+} from "@aws-sdk/client-sesv2";
 
 import type { EmailTransport } from "@/api/lib/email/transport";
 import { ConfigurationError } from "@/api/lib/errors/tagged-errors";
@@ -44,7 +48,7 @@ export const createSESTransport = (
   });
 
   return {
-    async send({ from, to, subject, html, text, replyTo }) {
+    async send({ from, to, subject, html, text, replyTo, inlineImages }) {
       await client.send(
         new SendEmailCommand({
           FromEmailAddress: from,
@@ -60,6 +64,17 @@ export const createSESTransport = (
                 Html: { Data: html, Charset: SES_CHARSET },
                 Text: { Data: text, Charset: SES_CHARSET },
               },
+              ...(inlineImages === undefined
+                ? {}
+                : {
+                    Attachments: inlineImages.map((image) => ({
+                      RawContent: image.content,
+                      FileName: image.filename,
+                      ContentType: image.contentType,
+                      ContentId: image.contentId,
+                      ContentDisposition: AttachmentContentDisposition.INLINE,
+                    })),
+                  }),
             },
           },
         }),

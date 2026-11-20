@@ -163,7 +163,6 @@ export const FAILURE_TAGS = [
   "CoverageError",
   "CredentialNotFoundError",
   "CurrentWorkspaceMemberPermissionError",
-  "CzIsirAnonymizationError",
   "CzIsirFeedParseError",
   "CzIsirParseError",
   "CzNsSbirkaParseError",

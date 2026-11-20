@@ -11,19 +11,17 @@ import {
 import { parseUserOutput } from "better-auth/db";
 import * as v from "valibot";
 
+import { hashSessionToken } from "@/api/lib/auth/session-token";
+import type { SafeId } from "@/api/lib/branded-types";
 import {
   liveSessionAdapterWhere,
   SESSION_ABSOLUTE_AGE_MS,
-} from "@/api/lib/auth/session-liveness";
-import { hashSessionToken } from "@/api/lib/auth/session-token";
-import type { SafeId } from "@/api/lib/branded-types";
+} from "@/api/lib/db/session-liveness";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 import {
   SYNTHETIC_SESSION_LIFETIME_MS,
   SYNTHETIC_SESSION_PREFIX,
 } from "@/api/lib/synthetic-principal/constants";
-
-export { SESSION_ABSOLUTE_AGE_MS } from "@/api/lib/auth/session-liveness";
 
 export const SESSION_PRIOR_TOKEN_RECOVERY_MS = 10 * 60 * 1000;
 // Requests already in flight with the old cookie when the replacement is first

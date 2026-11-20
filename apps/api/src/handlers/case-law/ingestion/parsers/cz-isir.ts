@@ -1,13 +1,12 @@
 /**
  * A court decision the insolvency register (isir.justice.cz) publishes, read
- * from its anonymised paragraphs.
+ * from its stored paragraphs.
  *
  * The register serves each decision as the court's own PDF; the adapter reads
- * its paragraphs (`pdf-bands.ts`), anonymises them and stores that text, and
- * this parser reads only what was stored. Its input is therefore never the
- * publisher's bytes: the identity below is read from text in which personal
- * data has already been replaced, and every field it reads (dockets, dates,
- * the court, the decision's kind) survives anonymisation by construction.
+ * its paragraphs (`pdf-bands.ts`) and stores that text, and this parser reads
+ * only what was stored. Its input is therefore never the publisher's bytes:
+ * the identity below (dockets, dates, the court, the decision's kind) is read
+ * from the stored paragraphs.
  *
  * What a decision states, in print order:
  *
@@ -396,7 +395,7 @@ const blocksOf = (paragraphs: readonly CzIsirParagraph[]): Block[] =>
           };
     });
 
-/** The decision a stored, anonymised document is; or why it is none. */
+/** The decision a stored document is; or why it is none. */
 export const parseCzIsirDecision = (
   paragraphs: readonly CzIsirParagraph[],
   { documentId, sourceUrl }: { documentId: string; sourceUrl: string },
