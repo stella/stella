@@ -63,6 +63,7 @@ beforeAll(async () => {
       refreshTokenEncrypted: enc(),
       refreshTokenIv: iv(),
       status: "connected",
+      scope: "Files.Read.All Sites.Read.All",
     },
     {
       id: createSafeId<"sharepointConnection">(),
@@ -71,6 +72,7 @@ beforeAll(async () => {
       accessTokenEncrypted: enc(),
       accessTokenIv: iv(),
       status: "connected",
+      scope: "Files.Read.All Sites.Read.All",
     },
     {
       id: createSafeId<"sharepointConnection">(),
@@ -79,6 +81,7 @@ beforeAll(async () => {
       accessTokenEncrypted: enc(),
       accessTokenIv: iv(),
       status: "connected",
+      scope: "Files.Read.All Sites.Read.All",
     },
   ]);
 

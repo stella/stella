@@ -31,6 +31,7 @@ const seedCapabilityWrite = async (db: GatedTestDb, size: number) => {
       accessTokenEncrypted: Buffer.alloc(32),
       accessTokenIv: Buffer.alloc(12),
       status: "connected" as const,
+      scope: "Files.Read.All Sites.Read.All",
     })),
   );
   const safeDb: SafeDb = async (work) =>

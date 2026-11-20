@@ -57,6 +57,7 @@ beforeAll(async () => {
       accessTokenEncrypted: enc(),
       accessTokenIv: iv(),
       status: "connected",
+      scope: "Files.Read.All Sites.Read.All",
     },
     {
       id: connOrgBUserB1,
@@ -65,6 +66,7 @@ beforeAll(async () => {
       accessTokenEncrypted: enc(),
       accessTokenIv: iv(),
       status: "connected",
+      scope: "Files.Read.All Sites.Read.All",
     },
   ]);
 
