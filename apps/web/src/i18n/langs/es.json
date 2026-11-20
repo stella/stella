@@ -1442,6 +1442,11 @@
       "subsection": "apdo. {value}"
     },
     "reader": {
+      "collectionPartialText": "Se muestran las secciones publicadas; no se ha establecido que el texto esté completo.",
+      "collectionProvenanceOmitted": "Registros de publicación omitidos: {omittedCount, number} de {totalCount, number}.",
+      "collectionSourceAttribution": "Publicación de la colección: <link>{source}</link>. Consultada el {date}.",
+      "collectionSourceAttributionUnknownDate": "Publicación de la colección: <link>{source}</link>. Fecha de consulta desconocida.",
+      "collectionUnclassifiedText": "Se desconoce la extensión de este texto de la colección.",
       "documentUpdated": "El documento se ha actualizado.",
       "expandProvisions": "Ampliar disposiciones",
       "headMatter": "Información del caso",

@@ -15,6 +15,7 @@ import { REVIEW_COLUMN_GRANTS_BY_RELATION } from "./case-law/review-column-grant
 export const PUBLIC_LAW_RELATION_BY_SCHEMA_IMPORT = {
   caseLawCitationDoctrineReviews: "case_law_citation_doctrine_reviews",
   caseLawCitations: "case_law_citations",
+  caseLawCollectionBodies: "case_law_collection_bodies",
   caseLawCompletenessCensus: "case_law_completeness_census",
   caseLawWithdrawalStatus: "case_law_withdrawal_status",
   caseLawCorpusTombstones: "case_law_corpus_tombstones",
@@ -474,14 +475,27 @@ export const PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION = {
   },
   [CASE_LAW_DECISION_VIEWS[0]]: {
     ...CASE_LAW_DECISION_VIEW_COLUMN_GRANTS,
-    ...COLLECTION_BODY_COLUMN_GRANTS_BY_RELATION.case_law_published_decisions,
-    ...COLLECTION_OBSERVATION_COLUMN_GRANTS_BY_RELATION.case_law_published_decisions,
+    normalized_s3_key: "required",
+    source_observed_at: "required",
   },
   [CASE_LAW_DECISION_VIEWS[1]]: CASE_LAW_DECISION_VIEW_COLUMN_GRANTS,
   case_law_collection_bodies: {
-    ...COLLECTION_BODY_COLUMN_GRANTS_BY_RELATION.case_law_collection_bodies,
-    ...COLLECTION_PART_COLUMN_GRANTS_BY_RELATION.case_law_collection_bodies,
-  },
+    host_decision_id: "required",
+    collection_source_id: "required",
+    collection_document_id: "required",
+    source_url: "required",
+    retrieved_at: "required",
+    detail_raw_s3_key: "required",
+    detail_raw_content_type: "required",
+    document_part: "required",
+    document_body_s3_key: "required",
+    document_body_sha256: "required",
+    origin: "required",
+  } satisfies Record<
+    | keyof typeof COLLECTION_BODY_COLUMN_GRANTS_BY_RELATION.case_law_collection_bodies
+    | keyof typeof COLLECTION_PART_COLUMN_GRANTS_BY_RELATION.case_law_collection_bodies,
+    "required"
+  >,
   case_law_decision_citation_stats: {
     decision_id: "required",
     direction: "required",

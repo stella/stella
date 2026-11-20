@@ -1442,6 +1442,11 @@
       "subsection": "al. {value}"
     },
     "reader": {
+      "collectionPartialText": "Les sections publiées sont affichées ; leur exhaustivité n’a pas été établie.",
+      "collectionProvenanceOmitted": "Références de publication omises : {omittedCount, number} sur {totalCount, number}.",
+      "collectionSourceAttribution": "Publication du recueil : <link>{source}</link>. Consultée le {date}.",
+      "collectionSourceAttributionUnknownDate": "Publication du recueil : <link>{source}</link>. Date de consultation inconnue.",
+      "collectionUnclassifiedText": "L’étendue de ce texte du recueil est inconnue.",
       "documentUpdated": "Le document a été mis à jour.",
       "expandProvisions": "Développer les dispositions",
       "headMatter": "Informations sur l’affaire",

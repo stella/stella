@@ -11,6 +11,10 @@ export const READER_MESSAGE_KEYS = {
   "folio.comment": "folio.comment",
   "legalReader.annotations.highlight": "legalReader.annotations.highlight",
   "caseLaw.reader.headMatter": "caseLaw.reader.headMatter",
+  "caseLaw.reader.collectionPartialText":
+    "caseLaw.reader.collectionPartialText",
+  "caseLaw.reader.collectionUnclassifiedText":
+    "caseLaw.reader.collectionUnclassifiedText",
   "caseLaw.notesFilter.ai": "caseLaw.notesFilter.ai",
   "common.court": "common.court",
   "statutes.wordingVersionUnknown": "statutes.wordingVersionUnknown",
@@ -28,6 +32,9 @@ export const READER_TEMPLATE_KEYS = [
   "caseLaw.viewer.textUnavailable",
   "caseLaw.reader.documentUpdated",
   "caseLaw.reader.sourceAttribution",
+  "caseLaw.reader.collectionSourceAttribution",
+  "caseLaw.reader.collectionSourceAttributionUnknownDate",
+  "caseLaw.reader.collectionProvenanceOmitted",
   "caseLaw.viewer.dissentByline",
   "statutes.provisionEffectiveFrom",
   "statutes.provisionPartTextUnavailable",

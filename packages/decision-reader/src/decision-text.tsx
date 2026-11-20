@@ -1,6 +1,8 @@
 import { Fragment } from "react";
 import type { ReactElement, ReactNode, Ref } from "react";
 
+import { panic } from "better-result";
+
 import type { ProvisionPlacementFailure } from "@stll/api-contract/provision-placement";
 import {
   firstDissentBlock,
@@ -153,12 +155,96 @@ const attributionLabel = (href: string): string =>
  * `data-reader-chrome` keeps it out of a quotation taken from the last
  * paragraph. Find matches come from the search pieces, which it is not in.
  */
-const DecisionSourceAttribution = ({ url }: { url: string | null }) => {
+const DecisionSourceAttribution = ({
+  decision,
+}: {
+  decision: ReaderDecision;
+}) => {
   const messages = useReaderMessages();
-  const href = sanitizeHref(url);
-
-  if (href === undefined) {
-    return null;
+  const bodySource = decision.bodySource;
+  let attribution: ReactNode;
+  switch (bodySource?.textSource) {
+    case undefined:
+    case "host": {
+      const href = sanitizeHref(decision.sourceAttributionUrl);
+      if (href === undefined) {
+        return null;
+      }
+      attribution = messages.sourceAttribution(
+        attributionLabel(href),
+        (chunks) => (
+          <a
+            className="hover:text-foreground underline underline-offset-2"
+            href={href}
+            rel="noopener noreferrer"
+            target="_blank"
+          >
+            <BidiText>{chunks}</BidiText>
+          </a>
+        ),
+      );
+      break;
+    }
+    case "collection": {
+      const extentText = {
+        complete: null,
+        section: messages["caseLaw.reader.collectionPartialText"],
+        unclassified: messages["caseLaw.reader.collectionUnclassifiedText"],
+      }[bodySource.extent];
+      attribution = (
+        <>
+          {extentText === null ? null : <p>{extentText}</p>}
+          <ul className="list-none space-y-1">
+            {bodySource.provenance.records.map((publication) => {
+              const href = sanitizeHref(publication.sourceUrl);
+              const label =
+                publication.sourceDocumentId === null
+                  ? publication.source.name
+                  : `${publication.source.name} (${publication.sourceDocumentId})`;
+              const date =
+                publication.retrievedAt === null
+                  ? null
+                  : (messages.formatValidityDate(publication.retrievedAt) ??
+                    publication.retrievedAt);
+              return (
+                <li
+                  key={JSON.stringify([
+                    publication.source.id,
+                    publication.sourceDocumentId,
+                    publication.sourceUrl,
+                  ])}
+                >
+                  {messages.collectionSourceAttribution(
+                    label,
+                    date,
+                    (chunks) =>
+                      href === undefined ? (
+                        <BidiText>{chunks}</BidiText>
+                      ) : (
+                        <a
+                          className="hover:text-foreground underline underline-offset-2"
+                          href={href}
+                          rel="noopener noreferrer"
+                          target="_blank"
+                        >
+                          <BidiText>{chunks}</BidiText>
+                        </a>
+                      ),
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+          {bodySource.provenance.coverage === "truncated" ? (
+            <p>{messages.collectionProvenanceOmitted(bodySource.provenance)}</p>
+          ) : null}
+        </>
+      );
+      break;
+    }
+    default:
+      bodySource satisfies never;
+      return panic("Unhandled decision body provenance");
   }
 
   return (
@@ -166,16 +252,7 @@ const DecisionSourceAttribution = ({ url }: { url: string | null }) => {
       className="reader-chrome text-muted-foreground border-border/50 mt-10 border-t pt-3 text-[calc(0.6875rem*var(--reader-text-scale))] leading-snug"
       data-reader-chrome=""
     >
-      {messages.sourceAttribution(attributionLabel(href), (chunks) => (
-        <a
-          className="hover:text-foreground underline underline-offset-2"
-          href={sanitizeHref(href)}
-          rel="noopener noreferrer"
-          target="_blank"
-        >
-          <BidiText>{chunks}</BidiText>
-        </a>
-      ))}
+      {attribution}
     </footer>
   );
 };
@@ -1426,7 +1503,9 @@ export const DecisionText = ({
   return (
     <SourceLinkPolicyProvider
       urls={[
-        decision.sourceAttributionUrl,
+        decision.bodySource?.textSource === "collection"
+          ? decision.bodySource.sourceUrl
+          : decision.sourceAttributionUrl,
         ast?.source.webUrl,
         ast?.source.printUrl,
       ]}
@@ -1436,7 +1515,7 @@ export const DecisionText = ({
         {trailingNotes.map(([anchorId, note]) => (
           <Fragment key={anchorId}>{note}</Fragment>
         ))}
-        <DecisionSourceAttribution url={decision.sourceAttributionUrl} />
+        <DecisionSourceAttribution decision={decision} />
       </div>
     </SourceLinkPolicyProvider>
   );

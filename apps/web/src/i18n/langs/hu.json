@@ -1442,6 +1442,11 @@
       "subsection": "({value}) bekezdés"
     },
     "reader": {
+      "collectionPartialText": "A közzétett részek láthatók; a teljesség nem igazolt.",
+      "collectionProvenanceOmitted": "Kihagyott közzétételi rekordok: {omittedCount, number} / {totalCount, number}.",
+      "collectionSourceAttribution": "Gyűjteménybeli közlés: <link>{source}</link>. Lekérve: {date}.",
+      "collectionSourceAttributionUnknownDate": "Gyűjteménybeli közlés: <link>{source}</link>. A lekérés dátuma ismeretlen.",
+      "collectionUnclassifiedText": "E gyűjteménybeli szöveg terjedelme ismeretlen.",
       "documentUpdated": "A dokumentum frissült.",
       "expandProvisions": "Rendelkezések kibontása",
       "headMatter": "Az ügy adatai",

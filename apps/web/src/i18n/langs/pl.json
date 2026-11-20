@@ -1442,6 +1442,11 @@
       "subsection": "ust. {value}"
     },
     "reader": {
+      "collectionPartialText": "Wyświetlono opublikowane części; kompletność nie została ustalona.",
+      "collectionProvenanceOmitted": "Pominięte rekordy publikacji: {omittedCount, number} z {totalCount, number}.",
+      "collectionSourceAttribution": "Publikacja w zbiorze: <link>{source}</link>. Pobrano {date}.",
+      "collectionSourceAttributionUnknownDate": "Publikacja w zbiorze: <link>{source}</link>. Data pobrania nieznana.",
+      "collectionUnclassifiedText": "Zakres tego tekstu ze zbioru jest nieznany.",
       "documentUpdated": "Dokument został zaktualizowany.",
       "expandProvisions": "Rozwiń przepisy",
       "headMatter": "Informacje o sprawie",

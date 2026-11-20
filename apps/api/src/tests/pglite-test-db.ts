@@ -18,9 +18,6 @@ import {
   CASE_LAW_SITEMAP_RANGE_COLUMN_GRANTS_BY_RELATION,
   caseLawDecisionViewGrantStatement,
   CITATION_POLARITY_EVIDENCE_COLUMN_GRANTS_BY_RELATION,
-  COLLECTION_BODY_COLUMN_GRANTS_BY_RELATION,
-  COLLECTION_OBSERVATION_COLUMN_GRANTS_BY_RELATION,
-  COLLECTION_PART_COLUMN_GRANTS_BY_RELATION,
   PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION,
   publicLawColumnPairs,
   ROLLOUT_CASE_LAW_SOURCE_COLUMNS,
@@ -362,9 +359,6 @@ const PUBLIC_LAW_COLUMNS_GRANTED_IN_A_LATER_RELEASE: ReadonlySet<string> =
     [
       CITATION_POLARITY_EVIDENCE_COLUMN_GRANTS_BY_RELATION,
       CASE_LAW_SITEMAP_RANGE_COLUMN_GRANTS_BY_RELATION,
-      COLLECTION_BODY_COLUMN_GRANTS_BY_RELATION,
-      COLLECTION_OBSERVATION_COLUMN_GRANTS_BY_RELATION,
-      COLLECTION_PART_COLUMN_GRANTS_BY_RELATION,
     ]
       .flatMap(publicLawColumnPairs)
       .map(({ relation, column }) => `${relation}.${column}`),
@@ -841,7 +835,14 @@ const installTestPublicLawViews = async (
     if (query === undefined) {
       panic(`Public-law view ${config.name} has no query`);
     }
-    if (config.with !== undefined) {
+    if (
+      config.with !== undefined &&
+      !(
+        config.name === "case_law_collection_bodies" &&
+        config.with.securityBarrier === true &&
+        Object.keys(config.with).length === 1
+      )
+    ) {
       panic(
         `Public-law fixture view ${config.name} must use plain view semantics`,
       );
@@ -852,6 +853,7 @@ const installTestPublicLawViews = async (
     }
     await db.execute(sql`
       CREATE VIEW ${sql.identifier(config.schema ?? "public")}.${sql.identifier(config.name)}
+      ${config.with?.securityBarrier === true ? sql`WITH (security_barrier = true)` : sql``}
       AS (${sql.raw(rendered.sql)})
     `);
   }
