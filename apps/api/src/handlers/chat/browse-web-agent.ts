@@ -144,6 +144,44 @@ const headOf = (text: string, max: number): string => {
 /** The line a run's answer ends with, before the pages it read. */
 const SOURCES_HEADING = "Sources:";
 
+/** What sets the pages a run read apart from its answer. */
+const SOURCES_SEPARATOR = `\n\n${SOURCES_HEADING}\n`;
+
+/** The lines of `text` from its start that fit in `max`, each whole. */
+const wholeLinesOf = (text: string, max: number): string => {
+  let kept = "";
+  for (const [index, line] of text.split("\n").entries()) {
+    const next = index === 0 ? line : `${kept}\n${line}`;
+    if (next.length > max) {
+      break;
+    }
+    kept = next;
+  }
+  return kept;
+};
+
+/**
+ * An over-long answer cut to the browsing result limit with the pages it read
+ * kept: the source list goes after the answer (`sourcesText`), so a plain
+ * prefix would cut it first. The list keeps whole lines (a cut URL cites
+ * nothing) and, when both are long, at most half the limit.
+ */
+const boundedAnswer = (result: string): string => {
+  const at = result.lastIndexOf(SOURCES_SEPARATOR);
+  if (at === -1) {
+    return headOf(result, BROWSE_WEB_RESULT_MAX_CHARS);
+  }
+  const answer = result.slice(0, at);
+  const sources = wholeLinesOf(
+    result.slice(at),
+    Math.max(
+      BROWSE_WEB_RESULT_MAX_CHARS - answer.length,
+      BROWSE_WEB_RESULT_MAX_CHARS / 2,
+    ),
+  );
+  return headOf(answer, BROWSE_WEB_RESULT_MAX_CHARS - sources.length) + sources;
+};
+
 /**
  * What the main model reads in place of a `browse_web` result: the child's
  * text, marked as web-derived and untrusted. A failed run passes its error.
@@ -168,7 +206,7 @@ const browseWebModelResult = (output: unknown): unknown => {
   return {
     contentTrust: BROWSER_CONTROL_CONTENT_TRUST.untrustedWebContent,
     note: `${note} The answer was longer than the browsing result limit and is cut short.`,
-    text: headOf(result, BROWSE_WEB_RESULT_MAX_CHARS),
+    text: boundedAnswer(result),
     truncated: true,
   };
 };
@@ -255,12 +293,12 @@ const readPages = ({
 };
 
 const sourcesText = (pages: ReadonlyMap<string, string>): string =>
-  [
-    `\n\n${SOURCES_HEADING}`,
-    ...[...pages].map(([url, title]) =>
+  SOURCES_SEPARATOR +
+  [...pages]
+    .map(([url, title]) =>
       title.length > 0 ? `- ${title}: ${url}` : `- ${url}`,
-    ),
-  ].join("\n");
+    )
+    .join("\n");
 
 /** Text chunks that append `text` to the child's answer as its own message. */
 const textChunks = (messageId: string, text: string): StreamChunk[] => {

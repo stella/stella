@@ -134,7 +134,10 @@ const persistedPart = (part: UIMessage["parts"][number]) => {
     : panic(`The ${decision.partType} part was dropped`);
 };
 
-const browseScenario = (caps: ChatTurnBudget = CHAT_TURN_BUDGET) => {
+const browseScenario = ({
+  caps = CHAT_TURN_BUDGET,
+  childAnswer = "Filing fee: 10 EUR.",
+}: { caps?: ChatTurnBudget; childAnswer?: string } = {}) => {
   const parent = recordingModel([
     {
       arguments: JSON.stringify({ task: "Find the filing fee on example.cz." }),
@@ -160,7 +163,7 @@ const browseScenario = (caps: ChatTurnBudget = CHAT_TURN_BUDGET) => {
     },
     {
       finishReason: "stop",
-      text: "Filing fee: 10 EUR.",
+      text: childAnswer,
       type: "text",
       usage: CHILD_ANSWER_USAGE,
     },
@@ -502,9 +505,11 @@ describe("the browsing sub-agent through the SDK runtime", () => {
     // the page, so the child's own steps end at that pause; the main model
     // is not called again once the run returns.
     const scenario = browseScenario({
-      ...CHAT_TURN_BUDGET,
-      maxPromptTokens:
-        PARENT_CALL_USAGE.promptTokens + CHILD_STEP_USAGE.promptTokens,
+      caps: {
+        ...CHAT_TURN_BUDGET,
+        maxPromptTokens:
+          PARENT_CALL_USAGE.promptTokens + CHILD_STEP_USAGE.promptTokens,
+      },
     });
     await browseThrough(scenario);
     expect(scenario.parent.requests).toHaveLength(1);
@@ -512,6 +517,29 @@ describe("the browsing sub-agent through the SDK runtime", () => {
       reason: "prompt-tokens",
       type: "paused",
     });
+  });
+
+  test("an answer cut to the browsing result limit keeps the pages it read", async () => {
+    // A child that relays a whole page: its answer alone exceeds the limit,
+    // and the run lists the page after it.
+    const scenario = browseScenario({
+      childAnswer: "a".repeat(BROWSE_WEB_RESULT_MAX_CHARS),
+    });
+    await browseThrough(scenario);
+    const view = browseWebResultsForModel(
+      scenario.parent.requests.at(-1) ?? panic("The main model was not called"),
+    );
+    const browseResult = view.find(
+      (message) =>
+        message.role === "tool" && message.toolCallId === BROWSE_CALL,
+    );
+    const read = asTestRaw<{ text: string; truncated?: boolean }>(
+      JSON.parse(contentOf(browseResult)),
+    );
+    expect(read.truncated).toBe(true);
+    expect(read.text).toMatch(/^a+\n\nSources:\n- .+$/u);
+    expect(read.text).toContain(PAGE_URL);
+    expect(read.text.length).toBeLessThanOrEqual(BROWSE_WEB_RESULT_MAX_CHARS);
   });
 
   test("a stopped turn closes the child's pending approval and stops the child", async () => {
