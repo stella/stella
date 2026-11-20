@@ -875,6 +875,17 @@ const answerLinkTexts = (
   return texts;
 };
 
+/** The act a provision's link text names ("§ 106 odst. 4 ZP" names "ZP"). */
+const actNameInLinkText = (text: string): string | null => {
+  const prefix = PROVISION_PREFIX.exec(text)?.[0];
+  const name = prefix === undefined ? "" : text.slice(prefix.length).trim();
+  return name.length > 0 &&
+    name.length <= ACT_NAME_MAX_LENGTH &&
+    /\p{L}/u.test(name)
+    ? name
+    : null;
+};
+
 /**
  * The name the answer gives an act, read from how it cites the act's
  * provisions ("§ 106 odst. 4 písm. e) ZP" names it "ZP"); the most used
@@ -893,20 +904,17 @@ const actNameInAnswer = (
     const urls = [entry.source.url, entry.source.sourceUrl].flatMap((url) =>
       url === undefined ? [] : [citationUrlKey(url, appOrigins)],
     );
-    // A source the answer never links has no words to read a name from.
-    const written = urls.flatMap((url) => {
-      const linked = texts.get(url);
-      return linked === undefined ? [] : linked;
-    });
-    for (const text of written) {
-      const prefix = PROVISION_PREFIX.exec(text)?.[0];
-      const name = prefix === undefined ? "" : text.slice(prefix.length).trim();
-      if (
-        name.length > 0 &&
-        name.length <= ACT_NAME_MAX_LENGTH &&
-        /\p{L}/u.test(name)
-      ) {
-        counts.set(name, (counts.get(name) ?? 0) + 1);
+    for (const url of urls) {
+      // A source the answer never links has no words to read a name from.
+      const written = texts.get(url);
+      if (written === undefined) {
+        continue;
+      }
+      for (const text of written) {
+        const name = actNameInLinkText(text);
+        if (name !== null) {
+          counts.set(name, (counts.get(name) ?? 0) + 1);
+        }
       }
     }
   }
