@@ -200,22 +200,9 @@ const visualLoaders = {
   },
   "chat-matter-reads": {
     load: async () => {
-      const [
-        { ChatCitationsPlayground },
-        { CHAT_MATTER_READS_CASSETTE, CHAT_MATTER_READS_VIEWER },
-        { AuthenticatedUserProvider },
-      ] = await Promise.all([
-        import("./-components/chat-citations-playground"),
-        import("./-components/chat-matter-reads-cassette"),
-        import("@/lib/authenticated-user-context"),
-      ]);
-      return {
-        default: () => (
-          <AuthenticatedUserProvider user={CHAT_MATTER_READS_VIEWER}>
-            <ChatCitationsPlayground cassette={CHAT_MATTER_READS_CASSETTE} />
-          </AuthenticatedUserProvider>
-        ),
-      };
+      const { ChatMatterReadsPlayground } =
+        await import("./-components/chat-matter-reads-playground");
+      return { default: ChatMatterReadsPlayground };
     },
   },
   "chat-answer-typography": {
