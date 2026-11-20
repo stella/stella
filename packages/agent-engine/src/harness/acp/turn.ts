@@ -1,4 +1,5 @@
 import { panic, Result } from "better-result";
+import { realpathSync } from "node:fs";
 import path from "node:path";
 import * as v from "valibot";
 
@@ -52,8 +53,10 @@ import {
   harnessToolCall,
   harnessToolResult,
   isFinished,
+  mcpToolOfTitle,
   mergeToolCall,
   toolCallChanged,
+  toolCallPaths,
 } from "./tool-calls";
 
 /** The name a plan step is shown under; ACP gives plans no tool of their own. */
@@ -66,6 +69,32 @@ const DECISION_OF_OPTION: Readonly<Record<string, ApprovalDecision>> = {
   allow_once: "approve",
   allow_always: "approve_for_session",
   reject_once: "deny",
+};
+
+/**
+ * `file` with every link resolved: the real path of its nearest existing
+ * ancestor, then the rest as written, so a file not made yet resolves too.
+ */
+const existingRealPath = (file: string): string | null => {
+  const real = Result.try(() => realpathSync.native(file));
+  return Result.isOk(real) ? real.value : null;
+};
+
+const realPathOf = (file: string): string => {
+  const rest: string[] = [];
+  let current = path.resolve(file);
+  for (;;) {
+    const real = existingRealPath(current);
+    if (real !== null) {
+      return path.join(real, ...rest.toReversed());
+    }
+    const parent = path.dirname(current);
+    if (parent === current) {
+      return path.resolve(file);
+    }
+    rest.push(path.basename(current));
+    current = parent;
+  }
 };
 
 /** What stella does with a permission request before the member sees it. */
@@ -86,32 +115,42 @@ export const permissionDisposition = ({
   policy,
   workspaceDir,
   unreadablePaths,
+  mcpNames,
 }: {
   call: AcpToolCallState;
   policy: HarnessRunPolicy;
   workspaceDir: string;
   unreadablePaths: readonly string[];
+  mcpNames: AcpMcpNames;
 }): PermissionDisposition => {
-  const paths = call.locations.map((location) => location.path);
-  const resolved = paths.map((file) =>
-    path.isAbsolute(file) ? file : path.resolve(workspaceDir, file),
+  // Where each path really is, through any link on the way, so a link in
+  // the folder to somewhere else is judged by where it leads.
+  const workspace = realPathOf(workspaceDir);
+  const unreadable = unreadablePaths.map(realPathOf);
+  const resolved = toolCallPaths(call).map((file) =>
+    realPathOf(path.isAbsolute(file) ? file : path.resolve(workspaceDir, file)),
   );
   if (
     resolved.some((file) =>
-      unreadablePaths.some(
-        (unreadable) =>
-          isPathInside(unreadable, file) && !isPathInside(workspaceDir, file),
+      unreadable.some(
+        (root) => isPathInside(root, file) && !isPathInside(workspace, file),
       ),
     )
   ) {
     return "deny";
   }
-  const inside = resolved.every((file) => isPathInside(workspaceDir, file));
+  // An MCP tool's own kind is the agent's guess; the member decides.
+  if (mcpToolOfTitle(call.title, mcpNames) !== null) {
+    return "ask";
+  }
+  const inside =
+    resolved.length > 0 &&
+    resolved.every((file) => isPathInside(workspace, file));
   const kind = call.kind ?? "other";
   if (READ_KINDS.has(kind) && inside) {
     return "allow";
   }
-  if (WRITE_KINDS.has(kind) && inside && resolved.length > 0) {
+  if (WRITE_KINDS.has(kind) && inside) {
     return policy.approvals === "auto" ? "allow" : "ask";
   }
   if (kind === "fetch" && resolved.length === 0) {
@@ -210,6 +249,11 @@ export class AcpTurnSession {
   private steering = false;
   /** The answer of the last prompt sent; settled before any was sent. */
   private promptAnswer: Promise<unknown> = Promise.resolve();
+  /** Steering messages not settled yet, by the prompt that carries them. */
+  private readonly steeringInputs = new Map<
+    number,
+    { inputId: string; during: number }
+  >();
   /** The prompt whose answer ends the turn: the last one sent. */
   private latestPrompt = 0;
   /** What every answered prompt of the turn used, steered ones included. */
@@ -300,6 +344,25 @@ export class AcpTurnSession {
         this.promptUsage.push(parsed.output.usage);
       }
     }
+    // The prompt a steering message was sent during has ended: the agent
+    // took the message into the turn.
+    for (const [steered, steer] of this.steeringInputs) {
+      if (steer.during === prompt) {
+        this.steeringInputs.delete(steered);
+        this.lifecycle.settleInput(steer.inputId, "accepted");
+      }
+    }
+    const steer = this.steeringInputs.get(prompt);
+    if (steer !== undefined && Result.isError(answer)) {
+      // Refused while the earlier prompt runs on: the message is not this
+      // turn's, and the earlier prompt still ends the turn.
+      this.steeringInputs.delete(prompt);
+      this.lifecycle.settleInput(steer.inputId, "rejected");
+      if (this.latestPrompt === prompt) {
+        this.latestPrompt = steer.during;
+      }
+      return;
+    }
     if (prompt === this.latestPrompt) {
       this.finish(answer);
     }
@@ -317,13 +380,19 @@ export class AcpTurnSession {
       return;
     }
     this.flushText();
+    const during = this.latestPrompt;
     this.prompted(
       client.request("session/prompt", {
         sessionId: this.sessionId,
         prompt: [{ type: "text", text: input.text }],
       }),
     );
-    this.lifecycle.settleInput(input.inputId, "accepted");
+    // Settled once the agent hands the turn over (the earlier prompt ends)
+    // or refuses the message.
+    this.steeringInputs.set(this.latestPrompt, {
+      inputId: input.inputId,
+      during,
+    });
   }
 
   turn(): HarnessTurn {
@@ -580,6 +649,7 @@ export class AcpTurnSession {
       policy: this.options.policy,
       workspaceDir: this.options.workspaceDir,
       unreadablePaths: this.options.unreadablePaths,
+      mcpNames: this.options.mcpNames,
     });
     if (disposition !== "ask") {
       const optionId =

@@ -51,6 +51,7 @@ import {
   markSessionBroken,
   probeKey,
   readCachedProbe,
+  recordTempDirOwner,
   removeTempDir,
   sweepTempDirs,
   tempEnvironment,
@@ -128,11 +129,14 @@ const agentEnvironment = (
   options: AcpHarnessAdapterOptions,
   extra: Readonly<Record<string, string>>,
 ): Record<string, string> => {
-  const removed = new Set(options.definition.removedEnvironment);
+  // Windows reads variable names without regard to case.
+  const key = (name: string) =>
+    options.platform === "win32" ? name.toUpperCase() : name;
+  const removed = new Set(options.definition.removedEnvironment.map(key));
   return {
     ...Object.fromEntries(
       Object.entries(options.environment).filter(
-        ([name]) => !removed.has(name),
+        ([name]) => !removed.has(key(name)),
       ),
     ),
     ...extra,
@@ -193,6 +197,7 @@ const connect = async ({
   }
   const client = started.value;
   if (tempDir !== null) {
+    recordTempDirOwner(tempDir, client.pid);
     detached(
       (async () => {
         await client.exited;
@@ -201,10 +206,11 @@ const connect = async ({
       "acp-agent.temp",
     );
   }
-  if (
-    options.onProcess !== undefined &&
-    !(await options.onProcess(client.pid))
-  ) {
+  const authorized =
+    options.onProcess === undefined
+      ? Result.ok(true)
+      : await Result.tryPromise(async () => options.onProcess?.(client.pid));
+  if (Result.isError(authorized) || authorized.value !== true) {
     await client.kill();
     return Result.err({
       reason: "harness_unavailable",
@@ -374,16 +380,33 @@ const sessionModels = (
 };
 
 /** A probe session's folder, made and removed by the probe. */
-const probeFolder = (configDir: string) => {
-  mkdirSync(configDir, { recursive: true });
-  return mkdtempSync(path.join(configDir, "probe-"));
-};
+const probeFolder = (configDir: string) =>
+  Result.try(() => {
+    mkdirSync(configDir, { recursive: true });
+    return mkdtempSync(path.join(configDir, "probe-"));
+  });
+
+const removeProbeFolder = (dir: string) =>
+  Result.isOk(
+    Result.try(() => {
+      rmSync(dir, { recursive: true, force: true });
+    }),
+  );
 
 const probeAgent = async (
   options: AcpHarnessAdapterOptions,
 ): Promise<Result<HarnessProbe, HarnessProbeError>> => {
   const holder: { client: AcpClient | null } = { client: null };
-  const cwd = probeFolder(options.configDir);
+  const folder = probeFolder(options.configDir);
+  if (Result.isError(folder)) {
+    return Result.err(
+      new HarnessProbeError({
+        reason: "harness_unavailable",
+        message: "The agent's state directory cannot be written.",
+      }),
+    );
+  }
+  const cwd = folder.value;
   const connected = await connect({
     options,
     cwd,
@@ -402,7 +425,7 @@ const probeAgent = async (
     },
   });
   if (Result.isError(connected)) {
-    rmSync(cwd, { recursive: true, force: true });
+    removeProbeFolder(cwd);
     return Result.err(new HarnessProbeError(connected.error));
   }
   const { client, agent } = connected.value;
@@ -480,7 +503,7 @@ const probeAgent = async (
     } satisfies HarnessProbe);
   })();
   await close(client, options.gracePeriodMs);
-  rmSync(cwd, { recursive: true, force: true });
+  removeProbeFolder(cwd);
   if (probeSession.id !== null) {
     options.definition.discardSession?.(options.configDir, probeSession.id);
   }
@@ -661,24 +684,89 @@ const openSession = async ({
     );
   }
   const state = v.safeParse(AcpOpenedSessionResponseSchema, reopened.value);
+  if (!state.success) {
+    return Result.err(
+      new HarnessStartError({
+        reason: "protocol_violation",
+        message: `The agent answered ${method} with an unexpected shape.`,
+      }),
+    );
+  }
   return Result.ok({
     sessionId,
-    state: state.success ? state.output : null,
+    state: state.output,
     continuation: { type: "resumed" },
   });
 };
 
 /** The turn's mode, model and effort, where the session offers them. */
+/** The session's settings after a change, when the agent reported them. */
+const ConfigOptionsAnswerSchema = v.object({
+  configOptions: v.array(v.unknown()),
+});
+
+const rejectedStart = (message: string) =>
+  Result.err(new HarnessStartError({ reason: "start_rejected", message }));
+
+/**
+ * The turn's mode, model and effort, where the session offers them. A
+ * setting is changed through the session's settings (`config_option`), or
+ * the older mode and model methods where the agent lists only those.
+ */
 const configure = async (
   client: AcpClient,
   options: AcpHarnessAdapterOptions,
   input: HarnessTurnInput,
   opened: OpenedSession,
 ): Promise<Result<void, HarnessStartError>> => {
-  const { sessionId, state } = opened;
-  const modeId = options.definition.sessionModes[input.policy.approvals];
-  const modes = state?.modes ?? null;
-  if (
+  const { sessionId } = opened;
+  const session = { state: opened.state };
+  const setOption = async (configId: string, value: string) => {
+    const set = await client.request("session/set_config_option", {
+      sessionId,
+      configId,
+      value,
+    });
+    if (Result.isOk(set)) {
+      // A change may change what else is offered (a model's efforts).
+      const answered = v.safeParse(ConfigOptionsAnswerSchema, set.value);
+      const state = answered.success
+        ? v.safeParse(AcpOpenedSessionResponseSchema, {
+            configOptions: answered.output.configOptions,
+          })
+        : null;
+      if (
+        state?.success === true &&
+        state.output !== null &&
+        state.output !== undefined
+      ) {
+        session.state = {
+          ...session.state,
+          configOptions: state.output.configOptions,
+        };
+      }
+    }
+    return set;
+  };
+
+  const { approvals } = input.policy;
+  const modeId =
+    approvals === "full_auto"
+      ? undefined
+      : options.definition.sessionModes[approvals];
+  const modeSetting = configOf(session.state, "mode");
+  const modes = session.state?.modes ?? null;
+  if (modeId !== undefined && modeSetting !== null) {
+    if (
+      modeSetting.currentValue !== modeId &&
+      selectValues(modeSetting).some(({ value }) => value === modeId)
+    ) {
+      const set = await setOption(modeSetting.id, modeId);
+      if (Result.isError(set)) {
+        return rejectedStart(set.error.message);
+      }
+    }
+  } else if (
     modeId !== undefined &&
     modes !== null &&
     modes.currentModeId !== modeId &&
@@ -686,62 +774,39 @@ const configure = async (
   ) {
     const set = await client.request("session/set_mode", { sessionId, modeId });
     if (Result.isError(set)) {
-      return Result.err(
-        new HarnessStartError({
-          reason: "start_rejected",
-          message: set.error.message,
-        }),
-      );
+      return rejectedStart(set.error.message);
     }
   }
-  const listed = state?.models;
-  const modelSetting = configOf(state, "model");
-  const setModel = async () => {
-    if (listed !== null && listed !== undefined) {
-      return listed.currentModelId === input.model
-        ? null
-        : client.request("session/set_model", {
-            sessionId,
-            modelId: input.model,
-          });
+
+  const modelSetting = configOf(session.state, "model");
+  const listed = session.state?.models ?? null;
+  if (modelSetting !== null) {
+    if (modelSetting.currentValue !== input.model) {
+      const set = await setOption(modelSetting.id, input.model);
+      if (Result.isError(set)) {
+        return rejectedStart(set.error.message);
+      }
     }
-    if (modelSetting !== null && modelSetting.currentValue !== input.model) {
-      return client.request("session/set_config_option", {
-        sessionId,
-        configId: modelSetting.id,
-        value: input.model,
-      });
+  } else if (listed !== null && listed.currentModelId !== input.model) {
+    const set = await client.request("session/set_model", {
+      sessionId,
+      modelId: input.model,
+    });
+    if (Result.isError(set)) {
+      return rejectedStart(set.error.message);
     }
-    return null;
-  };
-  const modelSet = await setModel();
-  if (modelSet !== null && Result.isError(modelSet)) {
-    return Result.err(
-      new HarnessStartError({
-        reason: "start_rejected",
-        message: modelSet.error.message,
-      }),
-    );
   }
-  const thought = configOf(state, "thought_level");
+
+  const thought = configOf(session.state, "thought_level");
   if (
     input.reasoningEffort !== null &&
     thought !== null &&
     thought.currentValue !== input.reasoningEffort &&
     selectValues(thought).some(({ value }) => value === input.reasoningEffort)
   ) {
-    const set = await client.request("session/set_config_option", {
-      sessionId,
-      configId: thought.id,
-      value: input.reasoningEffort,
-    });
+    const set = await setOption(thought.id, input.reasoningEffort);
     if (Result.isError(set)) {
-      return Result.err(
-        new HarnessStartError({
-          reason: "start_rejected",
-          message: set.error.message,
-        }),
-      );
+      return rejectedStart(set.error.message);
     }
   }
   return Result.ok();
@@ -768,7 +833,11 @@ const startTurn = async (
   options: AcpHarnessAdapterOptions,
   input: HarnessTurnInput,
 ): Promise<Result<HarnessTurn, HarnessStartError>> => {
-  if (!options.definition.approvalModes.includes(input.policy.approvals)) {
+  const approvals = input.policy.approvals;
+  if (
+    approvals === "full_auto" ||
+    !options.definition.approvalModes.includes(approvals)
+  ) {
     return Result.err(
       new HarnessStartError({
         reason: "start_rejected",

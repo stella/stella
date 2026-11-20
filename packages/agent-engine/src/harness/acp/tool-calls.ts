@@ -199,6 +199,15 @@ const URL_KEYS = ["url", "Url", "uri"];
 /** A title wrapped in backticks, as agents title a command. */
 const unquoted = (title: string) => title.replace(/^`([^`]*)`$/u, "$1").trim();
 
+/** Every path a call names: its locations and the path its input gives. */
+export const toolCallPaths = (call: AcpToolCallState): string[] => {
+  const input = stringField(call.rawInput, PATH_KEYS);
+  const located = call.locations.map((location) => location.path);
+  return input === null || located.includes(input)
+    ? located
+    : [...located, input];
+};
+
 const firstPath = (call: AcpToolCallState): string | null =>
   call.locations[0]?.path ?? stringField(call.rawInput, PATH_KEYS);
 

@@ -57,7 +57,33 @@ export const removeTempDir = (dir: string): boolean =>
     }),
   );
 
-/** Remove temporary directories a process left behind (a crash, a kill). */
+const OWNER_FILE = "stella-owner.pid";
+
+/** Name the process a temporary directory belongs to, for `sweepTempDirs`. */
+export const recordTempDirOwner = (dir: string, pid: number): boolean =>
+  Result.isOk(
+    Result.try(() => {
+      writeFileSync(path.join(dir, OWNER_FILE), String(pid));
+    }),
+  );
+
+/** Whether the process a temporary directory names still runs. */
+const ownerRuns = (dir: string): boolean => {
+  const text = Result.try(() =>
+    readFileSync(path.join(dir, OWNER_FILE), "utf-8"),
+  );
+  const pid = Result.isOk(text) ? Number.parseInt(text.value, 10) : Number.NaN;
+  if (!Number.isSafeInteger(pid) || pid <= 0) {
+    return false;
+  }
+  // Signal 0 only asks whether the process exists.
+  return Result.isOk(Result.try(() => process.kill(pid, 0)));
+};
+
+/**
+ * Remove temporary directories a process left behind (a crash, a kill):
+ * old ones whose process no longer runs.
+ */
 export const sweepTempDirs = (configDir: string, nowMs: number) => {
   const root = path.join(configDir, TEMP_FOLDER);
   const entries = Result.try(() => readdirSync(root));
@@ -67,7 +93,11 @@ export const sweepTempDirs = (configDir: string, nowMs: number) => {
   for (const entry of entries.value) {
     const dir = path.join(root, entry);
     const stat = Result.try(() => statSync(dir));
-    if (Result.isOk(stat) && nowMs - stat.value.mtimeMs > TEMP_LEFTOVER_MS) {
+    if (
+      Result.isOk(stat) &&
+      nowMs - stat.value.mtimeMs > TEMP_LEFTOVER_MS &&
+      !ownerRuns(dir)
+    ) {
       removeTempDir(dir);
     }
   }

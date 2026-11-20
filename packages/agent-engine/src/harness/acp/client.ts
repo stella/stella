@@ -131,8 +131,12 @@ export const startAcpAgent = ({
       return;
     }
     if (message.id === null) {
-      // An error about a message the agent could not read: nothing waits on
-      // it, and the request it failed to read times out on its own.
+      // An error about a message the agent could not read. A request with a
+      // deadline times out on its own; a prompt has none, so one waiting
+      // may be the message it could not read, and the turn cannot go on.
+      if (unbounded.size > 0) {
+        handlers.violation("The agent could not read a message stella sent.");
+      }
       return;
     }
     const answer: AcpAnswer =
