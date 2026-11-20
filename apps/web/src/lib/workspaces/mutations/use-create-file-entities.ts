@@ -683,10 +683,28 @@ const useUploadAfterDuplicateCheck = ({
 /** How long a file check runs before the "checking files" notice appears. */
 const CHECKING_FILES_NOTICE_DELAY_MS = 400;
 
+/** Runs a file check, naming the wait once it is long enough to notice. */
+const withCheckingFilesNotice = async <T>(
+  label: string,
+  check: () => Promise<T>,
+): Promise<T> => {
+  const notice: { toastId?: string } = {};
+  const showNotice = setTimeout(() => {
+    notice.toastId = stellaToast.loading(label);
+  }, CHECKING_FILES_NOTICE_DELAY_MS);
+  try {
+    return await check();
+  } finally {
+    clearTimeout(showNotice);
+    if (notice.toastId !== undefined) {
+      stellaToast.close(notice.toastId);
+    }
+  }
+};
+
 /**
  * Counts the hashing and lookups that run before an upload starts, so the
- * caller's controls stay disabled until the upload itself takes over, and
- * names the wait once it is long enough to notice.
+ * caller's controls stay disabled until the upload itself takes over.
  */
 const useCheckingFiles = () => {
   const t = useTranslations();
@@ -694,19 +712,12 @@ const useCheckingFiles = () => {
 
   const whileCheckingFiles = async <T>(check: () => Promise<T>): Promise<T> => {
     setCheckingCount((count) => count + 1);
-    let toastId: string | null = null;
-    const notice = setTimeout(() => {
-      toastId = stellaToast.loading(t("workspaces.files.checkingFiles"));
-    }, CHECKING_FILES_NOTICE_DELAY_MS);
-    try {
-      return await check();
-    } finally {
-      clearTimeout(notice);
-      if (toastId !== null) {
-        stellaToast.close(toastId);
-      }
+    return await withCheckingFilesNotice(
+      t("workspaces.files.checkingFiles"),
+      check,
+    ).finally(() => {
       setCheckingCount((count) => count - 1);
-    }
+    });
   };
 
   return [checkingCount > 0, whileCheckingFiles] as const;

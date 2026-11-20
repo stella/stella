@@ -18,7 +18,7 @@ export type DuplicateFile = {
 };
 
 /** A document the matter holds whose current file has one of the hashes. */
-export type ExactDuplicateMatch = {
+type ExactDuplicateMatch = {
   sha256Hex: string;
   entityName: string;
 };

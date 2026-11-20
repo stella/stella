@@ -84,7 +84,9 @@ describe("resolveExactDuplicates", () => {
       files: [fileWithHash("aaa")],
       hashFile: hashByName,
       lookup: async () => await Promise.reject(new Error("network down")),
-      onError: (error) => reported.push(error),
+      onError: (error) => {
+        reported.push(error);
+      },
     });
 
     expect(duplicates).toEqual([]);
@@ -101,7 +103,9 @@ describe("resolveExactDuplicates", () => {
         await Promise.reject(
           new APIError({ status: 400, message: "Entities limit reached" }),
         ),
-      onError: (error) => reported.push(error),
+      onError: (error) => {
+        reported.push(error);
+      },
     });
 
     expect(duplicates).toEqual([]);
@@ -122,7 +126,9 @@ describe("resolveExactDuplicates", () => {
             message: "Invalid body",
           }),
         ),
-      onError: (error) => reported.push(error),
+      onError: (error) => {
+        reported.push(error);
+      },
     });
 
     expect(reported).toHaveLength(1);

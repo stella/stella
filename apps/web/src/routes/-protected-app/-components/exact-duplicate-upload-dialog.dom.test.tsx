@@ -28,7 +28,9 @@ const ask = () => {
   act(() => {
     useExactDuplicateUploadStore.getState().ask({
       duplicates: [{ file: duplicate, entityName: "Contract.pdf" }],
-      onResolved: (uploadAnywayFiles) => resolutions.push(uploadAnywayFiles),
+      onResolved: (uploadAnywayFiles) => {
+        resolutions.push(uploadAnywayFiles);
+      },
     });
   });
   return { resolutions };
