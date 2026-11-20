@@ -8,6 +8,7 @@ import { Form } from "@stll/ui/form";
 import { PlusIcon, Trash2Icon } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
 
+import { DetailSection } from "@/components/detail-section.pending";
 import { normalizeOptionalArray } from "@/lib/arrays";
 import { detached } from "@/lib/detached";
 import { notifyUserProblem } from "@/lib/errors/user-toast";
@@ -99,10 +100,10 @@ export const ContactCustomFieldsEditor = ({
   };
 
   return (
-    <section className="rounded-lg border p-4 md:col-span-2">
-      <h2 className="text-muted-foreground mb-3 text-sm font-medium">
-        {t("contacts.customFields.title")}
-      </h2>
+    <DetailSection
+      className="md:col-span-2"
+      title={t("contacts.customFields.title")}
+    >
       <div className="space-y-3">
         {customFields.map((field) => {
           const handleSave = async (patch: ContactCustomField) =>
@@ -149,7 +150,7 @@ export const ContactCustomFieldsEditor = ({
           />
         </Form>
       </div>
-    </section>
+    </DetailSection>
   );
 };
 

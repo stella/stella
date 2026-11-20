@@ -5,6 +5,7 @@ import { useTranslations } from "use-intl";
 import { Button } from "@stll/ui/button";
 import { stellaToast } from "@stll/ui/toast";
 
+import { DetailSection } from "@/components/detail-section.pending";
 import { useMountEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { useUpdateContact } from "@/lib/contacts/mutations";
@@ -79,10 +80,7 @@ export const ContactPersonDetailsEditor = ({
   useMountEffect(() => () => flush());
 
   return (
-    <section className="rounded-lg border p-4">
-      <h2 className="text-muted-foreground mb-3 text-sm font-medium">
-        {t("contacts.personalDetails")}
-      </h2>
+    <DetailSection title={t("contacts.personalDetails")}>
       <PersonDetailsFields
         birthDate={birthDate}
         nationalityCodes={nationalityCodes}
@@ -106,6 +104,6 @@ export const ContactPersonDetailsEditor = ({
           </Button>
         </div>
       )}
-    </section>
+    </DetailSection>
   );
 };

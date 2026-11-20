@@ -1392,10 +1392,6 @@
     "reason": "Existing PROCURACAO_REVIEW_FIELDS domain; contract ownership pending migration."
   },
   {
-    "id": "apps/web/src/routes/_protected.contacts/import.tsx::STEP_KEYS::domain:[\"contacts.importStudio.stepUpload\",\"contacts.importStudio.stepMap\",\"knowledge.playbooks.review.run\",\"common.done\"]::1",
-    "reason": "Existing STEP_KEYS domain; contract ownership pending migration."
-  },
-  {
     "id": "apps/web/src/routes/_protected.settings/-account.profile.page.tsx::ProfilePageBody::maxLength:120::1",
     "reason": "Existing ProfilePageBody UI validation or presentation bound; contract migration pending."
   },
@@ -1552,7 +1548,7 @@
     "reason": "Existing ZOOM_OPTIONS domain; contract ownership pending migration."
   },
   {
-    "id": "apps/web/src/routes/_protected.workspaces/$workspaceId/correspondence/$correspondenceId.tsx::CorrespondenceDetailPage::domain:[\"spf\",\"dkim\",\"dmarc\"]::1",
+    "id": "apps/web/src/routes/_protected.workspaces/$workspaceId/correspondence/-correspondence-detail.page.tsx::CorrespondenceDetailPage::domain:[\"spf\",\"dkim\",\"dmarc\"]::1",
     "reason": "Existing CorrespondenceDetailPage domain; contract ownership pending migration."
   },
   {
