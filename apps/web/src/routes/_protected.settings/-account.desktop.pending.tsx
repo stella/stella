@@ -132,7 +132,7 @@ export const DesktopPageShell = ({
 );
 
 const DesktopPendingView = () => (
-  <SettingsPagePending>
+  <SettingsPagePending area="account">
     <DesktopPageShell
       connectionCard={<DesktopConnectionCardPending />}
       // Which keys depend on the computer, read once the page mounts.

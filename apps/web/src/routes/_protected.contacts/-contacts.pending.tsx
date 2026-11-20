@@ -2,7 +2,12 @@ import type { ReactNode } from "react";
 
 import type { ContactType } from "@stll/api-contract";
 import { ButtonFace, InputFace } from "@stll/ui/control-face";
-import { DownloadIcon, PlusIcon, UploadIcon } from "@stll/ui/icons";
+import {
+  DownloadIcon,
+  EllipsisVerticalIcon,
+  PlusIcon,
+  UploadIcon,
+} from "@stll/ui/icons";
 import { Skeleton } from "@stll/ui/skeleton";
 import {
   Table,
@@ -30,7 +35,7 @@ export type ContactColumnId =
   "select" | "icon" | "name" | "email" | "phone" | "matters" | "actions";
 
 /** How a column's cell looks while its rows load. */
-type ContactSkeletonShape = "box" | "count" | "bar" | "none";
+type ContactSkeletonShape = "box" | "count" | "bar" | "action";
 
 /**
  * One column of the contacts table, as data: its id, its heading and how its
@@ -56,7 +61,7 @@ const CONTACT_COLUMNS: readonly ContactColumn[] = [
   { id: "email", label: "common.email", skeleton: "bar" },
   { id: "phone", label: "contacts.columns.phone", skeleton: "bar" },
   { id: "matters", label: "common.matters", align: "end", skeleton: "count" },
-  { id: "actions", label: null, skeleton: "none" },
+  { id: "actions", label: null, skeleton: "action" },
 ];
 
 const CONTACT_COLUMNS_WITHOUT_SELECT = CONTACT_COLUMNS.filter(
@@ -173,7 +178,16 @@ const CONTACT_SKELETON_CELLS = {
   box: <Skeleton className="size-4 rounded-sm" />,
   count: <Skeleton className="ms-auto h-4 w-6" />,
   bar: <Skeleton className="h-4 w-3/5" />,
-  none: null,
+  // The row's actions trigger, which the loaded row keeps hidden until the
+  // pointer is over it: its box sets the row's height, so it stays here,
+  // hidden the same way.
+  action: (
+    <span className="invisible flex justify-end">
+      <ButtonFace size="icon-xs" variant="ghost">
+        <EllipsisVerticalIcon />
+      </ButtonFace>
+    </span>
+  ),
 } as const satisfies Record<ContactSkeletonShape, ReactNode>;
 
 /** Loading rows, one placeholder cell per column, in the columns' order. */
