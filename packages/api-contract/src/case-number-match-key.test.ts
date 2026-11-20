@@ -7,7 +7,10 @@ import {
   propertyTestTimeout,
 } from "@stll/property-testing";
 
-import { caseNumberMatchKey } from "./case-number-match-key";
+import {
+  caseNumberKeysMatch,
+  caseNumberMatchKey,
+} from "./case-number-match-key";
 
 describe("caseNumberMatchKey", () => {
   test.each([
@@ -45,6 +48,14 @@ describe("caseNumberMatchKey", () => {
     expect(caseNumberMatchKey(key)).toBe(matchKey);
   });
 
+  test("two printings of one case match, two cases do not", () => {
+    expect(caseNumberKeysMatch("c-679/2018", "c-679/18")).toBe(true);
+    expect(caseNumberKeysMatch("ivús452/11", "ivús452/2011")).toBe(true);
+    expect(caseNumberKeysMatch("c-679/2018", "c-697/18")).toBe(false);
+    expect(caseNumberKeysMatch("c-679/2018", "c-679/19")).toBe(false);
+    expect(caseNumberKeysMatch("c-679/2018-1", "c-679/18-2")).toBe(false);
+  });
+
   const prefix = fc.stringMatching(/^[a-zà-ž0-9.\-/ ]{0,24}$/u);
   const fullYear = fc.integer({ min: 1900, max: 2099 });
   const sheet = fc.option(fc.integer({ min: 0, max: 99_999 }), {
@@ -62,6 +73,7 @@ describe("caseNumberMatchKey", () => {
           const short = `${head}/${String(year).slice(2)}${tail}`;
           expect(caseNumberMatchKey(full)).toBe(short);
           expect(caseNumberMatchKey(short)).toBe(short);
+          expect(caseNumberKeysMatch(full, short)).toBe(true);
         }),
         { seed: propertySeed() },
       );

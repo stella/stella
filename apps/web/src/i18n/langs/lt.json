@@ -5537,6 +5537,13 @@
     "startOverTitle": "Siųsti naują kūrimo užklausą?",
     "switchOrganization": "Pakeisti organizaciją"
   },
+  "organizationSetup": {
+    "aiAction": "Nustatyti DI",
+    "aiOptional": "Savi DI teikėjų raktai neprivalomi: be jų DI naudoja stella teikiamus modelius.",
+    "aiRequired": "Šios organizacijos DI reikia teikėjo rakto, kad kas nors galėtų jį naudoti.",
+    "invite": "Pakvieskite kolegas, kad jie galėtų čia dirbti kartu su jumis.",
+    "title": "Nustatykite naują organizaciją"
+  },
   "publicTools": {
     "addSkill": "Pridėkite įgūdį",
     "addToStella": "Pridėti prie stella",

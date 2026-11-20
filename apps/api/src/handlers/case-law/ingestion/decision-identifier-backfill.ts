@@ -39,6 +39,10 @@ import {
   normalizeDecisionIdentifierValue,
 } from "@/api/handlers/case-law/ingestion/citation-extractor";
 import type { SafeId } from "@/api/lib/branded-types";
+import {
+  caseNumberKeysMatchSql,
+  sameStoredCaseNumberKeySql,
+} from "@/api/lib/case-law/case-number-match-key";
 import { assertCitationStorageField } from "@/api/lib/case-law/citation-storage-bounds";
 import { DECISION_IDENTIFIER_CLAIM } from "@/api/lib/case-law/decision-identifier-claims";
 import type { CaseLawRootHandle } from "@/api/lib/case-law/maintenance-lane";
@@ -597,7 +601,10 @@ const projectDecisionPage = async (
           SELECT 1 FROM expected
           WHERE expected.decision_id = stored.decision_id
             AND expected.type = stored.type
-            AND expected.normalized_value = stored.normalized_value
+            AND ${sameStoredCaseNumberKeySql(
+              sql.raw("expected.normalized_value"),
+              sql.raw("stored.normalized_value"),
+            )}
         )
       RETURNING stored.decision_id, stored.type, stored.normalized_value
     ), inserted AS (
@@ -617,7 +624,8 @@ const projectDecisionPage = async (
       -- Who answers a citation changes only with an identity. A new spelling
       -- of a stored identity changes nobody's answer, and neither does
       -- recording the docket the decision already answers under through its
-      -- citation key. Reopening for those would discard links that still hold.
+      -- citation key, in either year form. Reopening for those would discard
+      -- links that still hold.
       SELECT moved.type, moved.normalized_value
       FROM (
         SELECT decision_id, type, normalized_value FROM deleted
@@ -627,7 +635,11 @@ const projectDecisionPage = async (
       JOIN case_law_decisions holder ON holder.id = moved.decision_id
       WHERE NOT (
         moved.type = ${DECISION_IDENTIFIER_TYPES.CASE_NUMBER}
-        AND holder.citation_key IS NOT DISTINCT FROM moved.normalized_value
+        AND holder.citation_key IS NOT NULL
+        AND ${caseNumberKeysMatchSql(
+          sql.raw("holder.citation_key"),
+          sql.raw("moved.normalized_value"),
+        )}
       )
     ), reopened AS (
       UPDATE case_law_citations citation
@@ -642,9 +654,12 @@ const projectDecisionPage = async (
           WHERE changed.type = ${effectiveCitationIdentifierTypeSql(
             sql.raw("citation.identifier_type"),
           )}
-            AND changed.normalized_value = ${effectiveCitationIdentifierValueSql(
-              sql.raw("citation.normalized_identifier_value"),
-              sql.raw("citation.citation_key"),
+            AND ${caseNumberKeysMatchSql(
+              sql.raw("changed.normalized_value"),
+              effectiveCitationIdentifierValueSql(
+                sql.raw("citation.normalized_identifier_value"),
+                sql.raw("citation.citation_key"),
+              ),
             )}
         )
       RETURNING citation.id
@@ -752,6 +767,12 @@ const projectCitationPage = async (
       return { id: row.id, type, normalized_value: checked.value };
     }),
   );
+  // The citation's own stored value against its projection: a rewrite of the
+  // row, which keeps its outcome only where the stored bytes stay.
+  const storedIdentityUnchanged = sameStoredCaseNumberKeySql(
+    sql.raw("citation.normalized_identifier_value"),
+    sql.raw("projected.normalized_value"),
+  );
   await tx.execute(sql`
     WITH projected AS (
       SELECT * FROM jsonb_to_recordset(${projected}::text::jsonb) AS row(
@@ -766,7 +787,7 @@ const projectCitationPage = async (
             AND projected.type = ${DECISION_IDENTIFIER_TYPES.CASE_NUMBER}
             THEN citation.resolution_status
           WHEN citation.identifier_type = projected.type
-            AND citation.normalized_identifier_value = projected.normalized_value
+            AND ${storedIdentityUnchanged}
             THEN citation.resolution_status
           ELSE ${CITATION_RESOLUTION_STATUS.PENDING} END,
         resolution_rule_id = CASE
@@ -774,7 +795,7 @@ const projectCitationPage = async (
             AND projected.type = ${DECISION_IDENTIFIER_TYPES.CASE_NUMBER}
             THEN citation.resolution_rule_id
           WHEN citation.identifier_type = projected.type
-            AND citation.normalized_identifier_value = projected.normalized_value
+            AND ${storedIdentityUnchanged}
             THEN citation.resolution_rule_id
           ELSE NULL END,
         resolution_attempted_at = CASE
@@ -782,7 +803,7 @@ const projectCitationPage = async (
             AND projected.type = ${DECISION_IDENTIFIER_TYPES.CASE_NUMBER}
             THEN citation.resolution_attempted_at
           WHEN citation.identifier_type = projected.type
-            AND citation.normalized_identifier_value = projected.normalized_value
+            AND ${storedIdentityUnchanged}
             THEN citation.resolution_attempted_at
           ELSE NULL END
     FROM projected
