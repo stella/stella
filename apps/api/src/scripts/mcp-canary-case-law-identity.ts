@@ -46,6 +46,9 @@ export type CallCaseLawTool = (
   args: Record<string, unknown>,
 ) => Promise<CaseLawToolOutcome>;
 
+/** How the probe waits before following a running search. */
+type WaitFor = (milliseconds: number) => Promise<void>;
+
 type CaseLawIdentityProbeOutcome =
   | { status: "passed"; detail: string }
   | { status: "failed"; detail: string }
@@ -161,6 +164,7 @@ const resolutionFailure = async (
 
 const searchOf = async (
   callTool: CallCaseLawTool,
+  wait: WaitFor,
   args: Record<string, unknown>,
 ): Promise<v.InferOutput<typeof searchPayloadSchema> | string> => {
   let callArgs = args;
@@ -174,12 +178,16 @@ const searchOf = async (
       const parsed = v.safeParse(searchPayloadSchema, outcome.payload);
       return parsed.success ? parsed.output : "unreadable search payload";
     }
+    if (attempt === SEARCH_CONTINUATIONS_MAX) {
+      // No follow-up comes after the last one, so its wait is not spent.
+      break;
+    }
     // The same arguments plus the token collect the work already running.
     callArgs = {
       ...args,
       continuation_token: running.output.continuationToken,
     };
-    await sleep(
+    await wait(
       Math.min(
         Math.max(0, running.output.retryAfterMs),
         SEARCH_CONTINUATION_WAIT_MAX_MS,
@@ -196,10 +204,11 @@ const SEARCH_CLOSED: CaseLawIdentityProbeOutcome = {
 
 const probeCountry = async (
   callTool: CallCaseLawTool,
+  wait: WaitFor,
   country: ProbeCountry,
 ): Promise<CaseLawIdentityProbeOutcome> => {
   // Facets are opt-in: a search that does not name them returns none.
-  const seeded = await searchOf(callTool, {
+  const seeded = await searchOf(callTool, wait, {
     country,
     facets: ["court"],
     limit: 1,
@@ -225,7 +234,7 @@ const probeCountry = async (
     limit: TOOL_CALL_CONCURRENCY,
     operation: async (court) => ({
       court,
-      sample: await searchOf(callTool, {
+      sample: await searchOf(callTool, wait, {
         country,
         court,
         limit: 1,
@@ -293,6 +302,7 @@ const probeCountry = async (
  */
 export const sampleCaseLawIdentities = async (
   callTool: CallCaseLawTool,
+  { wait = sleep }: { wait?: WaitFor } = {},
 ): Promise<{ country: ProbeCountry; outcome: CaseLawIdentityProbeOutcome }[]> =>
   await Promise.all(
     CASE_LAW_IDENTITY_PROBE_COUNTRIES.map(async (country) => ({
@@ -300,7 +310,7 @@ export const sampleCaseLawIdentities = async (
       outcome: PUBLIC_COUNTRY_SURFACE_OPEN.search[
         PUBLIC_COUNTRY_CAPABILITIES[country].caseLaw
       ]
-        ? await probeCountry(callTool, country)
+        ? await probeCountry(callTool, wait, country)
         : SEARCH_CLOSED,
     })),
   );
