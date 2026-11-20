@@ -81,7 +81,7 @@ const AGENT_SKILL_ANCHOR_LOCK_MIGRATION_PATH = nodePath.join(
 );
 const AGENT_SKILL_PACKAGE_SIZE_GUARD_MIGRATION_PATH = nodePath.join(
   DRIZZLE_DIR,
-  "20261119220000_agent_skill_package_size_guard",
+  "20261120031000_agent_skill_package_size_guard",
   "migration.sql",
 );
 const SYNTHETIC_SESSION_MIGRATION_PATH = nodePath.join(
