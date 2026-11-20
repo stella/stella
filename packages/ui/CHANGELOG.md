@@ -1,5 +1,11 @@
 # @stll/ui
 
+## 0.77.1
+
+### Patch Changes
+
+- [#9071](https://github.com/stella/stella/pull/9071) [`d35cd3c`](https://github.com/stella/stella/commit/d35cd3ce9faba8a766dfd58b1e71681838cc10b0) Thanks [@jan-kubica](https://github.com/jan-kubica)! - The composer status row declares the `composer-status` container, so controls in it can compact by the row's width, and its end slot can shrink instead of overflowing.
+
 ## 0.77.0
 
 ### Minor Changes
