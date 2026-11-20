@@ -133,7 +133,7 @@ const namesNone = ({
 /** The organizations the SSO decision asks about for one request. */
 const decidedOrganizations = (
   endpoint: Exclude<OrganizationEndpointSso, "recovery"> | undefined,
-  request: { body: unknown; query: unknown },
+  input: { body: unknown; query: unknown },
   activeOrganizationId: string | undefined,
 ): DecidedOrganizations => {
   const active: DecidedOrganizations = {
@@ -148,13 +148,13 @@ const decidedOrganizations = (
     namesNone(named) ? active : named;
   switch (endpoint) {
     case "body":
-      return namedOrActive(namedOrganizations([request.body]));
+      return namedOrActive(namedOrganizations([input.body]));
     case "query":
-      return namedOrActive(namedOrganizations([request.query]));
+      return namedOrActive(namedOrganizations([input.query]));
     case "active":
       return active;
     case undefined: {
-      const named = namedOrganizations([request.body, request.query]);
+      const named = namedOrganizations([input.body, input.query]);
       return {
         ...named,
         organizationIds: [
