@@ -5534,6 +5534,13 @@
     "startOverTitle": "Wysłać nowe żądanie utworzenia?",
     "switchOrganization": "Przełącz organizację"
   },
+  "organizationSetup": {
+    "aiAction": "Skonfiguruj AI",
+    "aiOptional": "Własne klucze dostawców AI są opcjonalne: bez nich AI działa na modelach udostępnianych przez stellę.",
+    "aiRequired": "AI w tej organizacji potrzebuje klucza dostawcy, zanim ktokolwiek będzie mógł z niej korzystać.",
+    "invite": "Zaproś współpracowników, aby mogli tu z Tobą pracować.",
+    "title": "Skonfiguruj nową organizację"
+  },
   "publicTools": {
     "addSkill": "Dodaj umiejętność",
     "addToStella": "Dodaj do stella",

@@ -5534,6 +5534,13 @@
     "startOverTitle": "Začať novú požiadavku na vytvorenie?",
     "switchOrganization": "Prepnúť organizáciu"
   },
+  "organizationSetup": {
+    "aiAction": "Nastaviť AI",
+    "aiOptional": "Vlastné kľúče poskytovateľov AI sú nepovinné: bez nich beží AI na modeloch, ktoré poskytuje stella.",
+    "aiRequired": "AI v tejto organizácii potrebuje kľúč poskytovateľa, inak ju nikto nemôže používať.",
+    "invite": "Pozvite kolegov, aby tu mohli pracovať s vami.",
+    "title": "Nastavte novú organizáciu"
+  },
   "publicTools": {
     "addSkill": "Pridať zručnosť",
     "addToStella": "Pridať do stella",

@@ -5534,6 +5534,13 @@
     "startOverTitle": "Új létrehozási kérést indít?",
     "switchOrganization": "Szervezet váltása"
   },
+  "organizationSetup": {
+    "aiAction": "AI beállítása",
+    "aiOptional": "A saját AI-szolgáltatói kulcsok nem kötelezők: nélkülük az AI a stella által biztosított modelleket használja.",
+    "aiRequired": "A szervezet AI-funkcióihoz szolgáltatói kulcs kell, különben senki sem használhatja őket.",
+    "invite": "Hívja meg kollégáit, hogy itt dolgozhassanak Önnel.",
+    "title": "Állítsa be az új szervezetet"
+  },
   "publicTools": {
     "addSkill": "Készség hozzáadása",
     "addToStella": "Hozzáadás a stella alkalmazáshoz",

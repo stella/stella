@@ -5534,6 +5534,13 @@
     "startOverTitle": "Sākt jaunu izveides pieprasījumu?",
     "switchOrganization": "Mainīt organizāciju"
   },
+  "organizationSetup": {
+    "aiAction": "Iestatīt AI",
+    "aiOptional": "Savas AI pakalpojumu sniedzēju atslēgas nav obligātas: bez tām AI izmanto stella nodrošinātos modeļus.",
+    "aiRequired": "Šīs organizācijas AI ir vajadzīga pakalpojumu sniedzēja atslēga, pirms kāds to var izmantot.",
+    "invite": "Uzaiciniet kolēģus, lai viņi varētu šeit strādāt kopā ar jums.",
+    "title": "Iestatiet jauno organizāciju"
+  },
   "publicTools": {
     "addSkill": "Pievienot prasmi",
     "addToStella": "Pievienot stella",

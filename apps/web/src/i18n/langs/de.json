@@ -5534,6 +5534,13 @@
     "startOverTitle": "Eine neue Erstellungsanfrage starten?",
     "switchOrganization": "Organisation wechseln"
   },
+  "organizationSetup": {
+    "aiAction": "KI einrichten",
+    "aiOptional": "Eigene Schlüssel für KI-Anbieter sind optional: Ohne sie nutzt die KI von stella bereitgestellte Modelle.",
+    "aiRequired": "Die KI in dieser Organisation braucht einen Anbieter-Schlüssel, bevor jemand sie nutzen kann.",
+    "invite": "Laden Sie Kolleginnen und Kollegen ein, damit sie hier mit Ihnen arbeiten können.",
+    "title": "Neue Organisation einrichten"
+  },
   "publicTools": {
     "addSkill": "Skill hinzufügen",
     "addToStella": "Zu stella hinzufügen",
