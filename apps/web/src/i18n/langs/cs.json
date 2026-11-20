@@ -2323,7 +2323,7 @@
       }
     },
     "sourceChips": {
-      "alsoConsulted": "Také konzultováno ({count, number})"
+      "moreConsulted": "{count, plural, one {+# další prověřený} few {+# další prověřené} many {+# dalšího prověřeného} other {+# dalších prověřených}}"
     },
     "sourcePlaceholder": "Chatovat o {title}",
     "sourcePlaceholderAction": "Chatovat o",
@@ -4713,6 +4713,10 @@
       "dropPack": "Přetáhněte sem .zip/.skill nebo SKILL.md a dovednost se naimportuje",
       "editSkill": "Upravit dovednost",
       "enableSkill": "Zapnout dovednost",
+      "exportAsSkill": "Exportovat jako .skill",
+      "exportAsZip": "Exportovat jako .zip",
+      "exportFailed": "Dovednost se nepodařilo exportovat",
+      "exportSkill": "Exportovat dovednost",
       "fileExists": "Soubor s touto cestou již existuje",
       "howItRuns": "Jak se spouští",
       "importFailureFetch": "Zdroj dovednosti se nepodařilo načíst.",

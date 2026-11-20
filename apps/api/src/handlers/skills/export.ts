@@ -1,170 +1,175 @@
 import { Result } from "better-result";
-import { and, asc, eq, sum } from "drizzle-orm";
 import * as v from "valibot";
 
 import {
-  SKILL_EXPORT_TOO_LARGE_CODE,
-  SKILL_PACKAGE_SKILL_NOT_FOUND_CODE,
-} from "@stll/api-contract";
-import { createZipStream } from "@stll/docx-core/zip/stream";
-import { SKILL_FILE_NAME, SKILL_PACKAGE_LIMITS } from "@stll/skills/format";
+  SKILL_PACKAGE_FILE_TYPES,
+  SKILL_PACKAGE_FORMATS,
+  skillPackageFileName,
+} from "@stll/skills/package";
+import { Temporal } from "@stll/time";
 
-import { agentSkillResources, agentSkills } from "@/api/db/schema";
 import {
-  renderSkillFile,
-  skillFileName,
-} from "@/api/lib/agent-skills/skill-file";
+  loadSkillPackageSource,
+  readStoredSkillOriginal,
+  type SkillOriginalReader,
+  withSkillOriginals,
+  writeSkillPackageArchive,
+} from "@/api/lib/agent-skills/skill-export";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import { AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import { auditedPresignDownload } from "@/api/lib/audited-download";
+import { ownerSyntheticSessionAuthorityReader } from "@/api/lib/auth";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
-import { readBounded } from "@/api/lib/db/read-bounded";
+import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { sanitizeFilename } from "@/api/lib/sanitize-filename";
-import { secureDocumentResponse } from "@/api/lib/secure-document-response";
+import { noResourceSetUpdates } from "@/api/lib/resource-set-realtime";
+import { writeS3ObjectWithRetry } from "@/api/lib/s3";
+import { callerDownloadSource } from "@/api/lib/s3-presign";
+
+/** The download URL is handed straight to the client to fetch, not kept. */
+const SKILL_EXPORT_URL_TTL_SECONDS = 300;
 
 const config = {
   contract: "patch",
+  contentDelivery: { type: "audited" },
   description:
-    "Download one agent skill as a standard Agent Skills archive: a ZIP " +
-    "with one folder named after the skill, holding SKILL.md (frontmatter " +
-    "and instructions) and every resource file at its path, ready for any " +
-    "host that reads Agent Skills. Readable by whoever may read the skill " +
-    "(skills.get); the download is recorded in the audit trail.",
+    "Export one agent skill the caller can read as a portable skill package: " +
+    "a folder named after the skill's slug holding SKILL.md (frontmatter " +
+    "with its settings, then the instructions), every file of the skill (an " +
+    "uploaded or imported file byte for byte as it was stored, text kept " +
+    "from a PDF or DOCX without its original as .md), and " +
+    ".stella/manifest.json (format version, display name, slash command, and " +
+    "a SHA-256 per file). `format` is `zip` or `skill`: the same archive under " +
+    "a .zip or .skill file name, which skills.upload imports again. A skill " +
+    "bound to a matter or client exports without that binding. Returns a " +
+    "short-lived downloadUrl, fileName and expiresAt; hand the URL to the " +
+    "user without reading the archive bytes.",
   permissions: { chat: ["create"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
-  contentDelivery: { type: "audited" },
-  access: "read",
+  // Writes the archive and its download audit row; the skill is only read.
+  access: "write",
   mcp: {
     type: "capability",
-    readClass: "tenant",
     reason: "agent_tool_authoring",
     consumesServices: false,
   },
-  transport: {
-    type: "file-response",
-    response: { mediaTypes: ["application/zip"] },
-    alternative: {
-      type: "partial",
-      via: ["skills.get"],
-      limitation:
-        "returns the skill as JSON (instructions and each resource) rather than a SKILL.md package another host can install",
-    },
-  },
   params: v.object({ skillId: resourceIdSchema("agentSkill") }),
+  query: v.object({
+    format: v.pipe(
+      v.picklist(SKILL_PACKAGE_FORMATS),
+      v.description(
+        "zip or skill: the same skill package archive, named .zip or .skill",
+      ),
+    ),
+  }),
+  realtime: noResourceSetUpdates(
+    "Stores a temporary export download; nothing a web view lists changes.",
+  ),
 } satisfies HandlerConfig;
 
-const exportSkill = createSafeRootHandler(
-  config,
-  async function* ({ params, recordAuditEvent, safeDb, session }) {
-    const rows = yield* Result.await(
-      safeDb((tx) =>
-        tx
-          .select({
-            body: agentSkills.body,
-            compatibility: agentSkills.compatibility,
-            description: agentSkills.description,
-            invocation: agentSkills.invocation,
-            license: agentSkills.license,
-            metadata: agentSkills.metadata,
-            name: agentSkills.name,
-            version: agentSkills.version,
-          })
-          .from(agentSkills)
-          .where(
-            and(
-              eq(agentSkills.id, params.skillId),
-              eq(agentSkills.organizationId, session.activeOrganizationId),
+export const createSkillExport = (
+  writeObject = writeS3ObjectWithRetry,
+  readObject: SkillOriginalReader = readStoredSkillOriginal,
+) =>
+  createSafeRootHandler(
+    config,
+    async function* ({
+      params: { skillId },
+      query: { format },
+      recordAuditEvent,
+      safeDb,
+      session,
+      user,
+    }) {
+      const organizationId = session.activeOrganizationId;
+      // The transaction answers with the load's own outcome: a skill the
+      // caller cannot read is a 404, not a database failure.
+      const read = yield* Result.await(
+        safeDb(
+          async (tx) =>
+            await loadSkillPackageSource(tx, {
+              organizationId,
+              skillId,
+              userId: user.id,
+            }),
+        ),
+      );
+      const loaded = yield* read;
+      // Originals are read after the transaction: object storage is no part
+      // of it.
+      const source = yield* Result.await(
+        withSkillOriginals({ loaded, organizationId, readObject }),
+      );
+      const archive = await writeSkillPackageArchive(source);
+      const fileName = skillPackageFileName(source.slug, format);
+      // `exports/` leads the key for object-lifecycle cleanup; the signer
+      // receives the matching exports keyspace and the organization scope.
+      const key = `exports/${organizationId}/skills/${skillId}/${Bun.randomUUIDv7()}.${SKILL_PACKAGE_FILE_TYPES[format].extension}`;
+      yield* Result.await(
+        Result.tryPromise({
+          try: async () =>
+            await writeObject(
+              {
+                contentType: SKILL_PACKAGE_FILE_TYPES[format].mediaType,
+                data: archive,
+                key,
+              },
+              { type: "lifecycle-prefix", prefix: "exports/" },
             ),
-          )
-          .limit(1),
-      ),
-    );
-    const skill = rows.at(0);
-    if (skill === undefined) {
-      return Result.err(
-        new HandlerError({
-          code: SKILL_PACKAGE_SKILL_NOT_FOUND_CODE,
-          status: 404,
-          message: "Skill not found",
+          catch: (cause) =>
+            new HandlerError({
+              status: 503,
+              code: "upstream_unavailable",
+              message:
+                "The skill package could not be stored. Retry the export.",
+              cause,
+            }),
         }),
       );
-    }
-    const [size] = yield* Result.await(
-      safeDb((tx) =>
-        tx
-          .select({ bytes: sum(agentSkillResources.sizeBytes).mapWith(Number) })
-          .from(agentSkillResources)
-          .where(eq(agentSkillResources.skillId, params.skillId)),
-      ),
-    );
-    // The archive is built in memory; an upload could not hold more.
-    if ((size?.bytes ?? 0) > SKILL_PACKAGE_LIMITS.archiveUncompressedMaxBytes) {
-      return Result.err(
-        new HandlerError({
-          code: SKILL_EXPORT_TOO_LARGE_CODE,
-          status: 413,
-          message: "Skill is too large to download as one archive",
-        }),
+      const downloadUrl = yield* Result.await(
+        safeDb(
+          async (tx) =>
+            await auditedPresignDownload({
+              readSessionAuthority: ownerSyntheticSessionAuthorityReader,
+              tx,
+              recordAuditEvent,
+              resourceType: AUDIT_RESOURCE_TYPE.AGENT_SKILL,
+              resourceId: skillId,
+              userId: user.id,
+              source: callerDownloadSource(session),
+              s3Key: key,
+              s3Keyspace: "exports",
+              expiresInSeconds: SKILL_EXPORT_URL_TTL_SECONDS,
+              fileName,
+              organizationId,
+              workspaceId: null,
+              metadata: {
+                fileCount: loaded.resourceCount,
+                format,
+                sizeBytes: archive.byteLength,
+                slug: source.slug,
+              },
+            }),
+        ),
       );
-    }
-    const read = yield* Result.await(
-      safeDb(
-        async (tx) =>
-          await readBounded(
-            tx
-              .select({
-                content: agentSkillResources.content,
-                path: agentSkillResources.path,
-              })
-              .from(agentSkillResources)
-              .where(eq(agentSkillResources.skillId, params.skillId))
-              .orderBy(asc(agentSkillResources.path)),
-            SKILL_PACKAGE_LIMITS.resourcesPerSkillMax,
-          ),
-      ),
-    );
-    // A skill cannot be saved with more files; an archive must not drop any.
-    if (read.type === "overflow") {
-      return Result.err(
-        new HandlerError({
-          code: SKILL_EXPORT_TOO_LARGE_CODE,
-          status: 413,
-          message: "Skill has too many files to download as one archive",
-        }),
-      );
-    }
-    const resources = read.rows;
-    yield* Result.await(
-      safeDb(
-        async (tx) =>
-          await recordAuditEvent(tx, {
-            action: AUDIT_ACTION.DOWNLOAD,
-            resourceType: AUDIT_RESOURCE_TYPE.AGENT_SKILL,
-            resourceId: params.skillId,
-            metadata: { archiveType: "zip", resourceCount: resources.length },
-          }),
-      ),
-    );
-    const folder = skillFileName(skill.name);
-    return Result.ok(
-      secureDocumentResponse({
-        body: createZipStream([
-          {
-            path: `${folder}/${SKILL_FILE_NAME}`,
-            data: renderSkillFile(skill),
-          },
-          ...resources.map(({ content, path }) => ({
-            path: `${folder}/${path}`,
-            data: content,
-          })),
-        ]),
-        contentType: "application/zip",
-        disposition: "attachment",
-        fileName: sanitizeFilename(`${folder}.zip`),
-      }),
-    );
-  },
-);
+      return Result.ok({
+        downloadUrl,
+        expiresAt: Temporal.Now.instant()
+          .add({ seconds: SKILL_EXPORT_URL_TTL_SECONDS })
+          .toString(),
+        fileName,
+        format,
+      });
+    },
+  );
+
+const exportSkill = createSkillExport();
+
+declareAggregateMutation(exportSkill, {
+  type: "independent",
+  reason:
+    "Reads one skill and writes only a temporary export object and its download audit event; no skill row changes.",
+});
 
 export default exportSkill;

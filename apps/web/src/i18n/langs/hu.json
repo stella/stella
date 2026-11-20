@@ -2323,7 +2323,7 @@
       }
     },
     "sourceChips": {
-      "alsoConsulted": "Szintén áttekintve ({count, number})"
+      "moreConsulted": "+{count, number} további átnézett"
     },
     "sourcePlaceholder": "Csevegés erről: {title}",
     "sourcePlaceholderAction": "Csevegés erről:",
@@ -4713,6 +4713,10 @@
       "dropPack": "Húzzon ide egy .zip/.skill vagy SKILL.md fájlt a készség importálásához",
       "editSkill": "Készség szerkesztése",
       "enableSkill": "Készség bekapcsolása",
+      "exportAsSkill": "Exportálás .skill fájlként",
+      "exportAsZip": "Exportálás .zip fájlként",
+      "exportFailed": "A készséget nem sikerült exportálni",
+      "exportSkill": "Készség exportálása",
       "fileExists": "Ezen az útvonalon már létezik fájl",
       "howItRuns": "Működés",
       "importFailureFetch": "A készség forrását nem sikerült betölteni.",

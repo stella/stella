@@ -14,7 +14,11 @@ import * as v from "valibot";
 
 import { compareCodeUnit } from "@stll/collation";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
-import { INGESTION_STOP_KIND } from "@stll/legal-atlas/ingestion-cycle";
+import {
+  CYCLE_OUTCOME,
+  INGESTION_PAUSE_REASON,
+  INGESTION_STOP_KIND,
+} from "@stll/legal-atlas/ingestion-cycle";
 import { assertProperty, propertyTestTimeout } from "@stll/property-testing";
 
 import { authRelationsPart } from "@/api/db/auth-schema";
@@ -920,6 +924,87 @@ describe("crawl cancellation", () => {
       }
     },
   );
+
+  test("a mid-page decision allowance pauses durably and resumes the same page", async () => {
+    const sourceId = await crawlSource();
+    const sourceLease = await leaseFor(sourceId);
+    const decisions = records(3);
+    czNsAdapter.fetchPage = async () =>
+      Result.ok({
+        decisions,
+        nextCursor: "next-page",
+        publisherRequest: PUBLISHER_REQUEST.ANSWERED,
+      });
+    try {
+      const paused = await runIngestionPipeline({
+        source: sourceLease.source,
+        sourceLease,
+        scopedDb,
+        corpus: landingTransfer().corpus,
+        maxDecisions: 1,
+        maxPages: 1,
+        acquireStoredTotalAdmission: async () => "held",
+      });
+      expect(paused.outcome).toBe(CYCLE_OUTCOME.PAUSED);
+      expect(paused.pauseReason).toBe(
+        INGESTION_PAUSE_REASON.DECISION_ALLOWANCE_EXHAUSTED,
+      );
+      expect(paused.stopKind).toBeUndefined();
+      expect(paused.inserted).toBe(1);
+      expect(paused.pagesProcessed).toBe(0);
+      expect(paused.nextCursor).toBe(sourceLease.source.syncCursor);
+      expect(await sourceCursor(sourceId)).toBe(sourceLease.source.syncCursor);
+      expect(await ledgerRows(sourceId)).toEqual([]);
+      const resumed = await runIngestionPipeline({
+        source: sourceLease.source,
+        sourceLease,
+        scopedDb,
+        corpus: landingTransfer().corpus,
+        maxPages: 1,
+        acquireStoredTotalAdmission: async () => "held",
+      });
+      expect(resumed.outcome).toBe(CYCLE_OUTCOME.COMPLETED);
+      expect(await sourceCursor(sourceId)).toBe("next-page");
+      expect(
+        await db
+          .select()
+          .from(caseLawDecisions)
+          .where(eq(caseLawDecisions.sourceId, sourceId)),
+      ).toHaveLength(3);
+    } finally {
+      await sourceLease.release();
+    }
+  });
+
+  test("a decision allowance cannot mask a failed corpus write", async () => {
+    const sourceId = await crawlSource();
+    const sourceLease = await leaseFor(sourceId);
+    czNsAdapter.fetchPage = async () =>
+      Result.ok({
+        decisions: records(3),
+        nextCursor: "next-page",
+        publisherRequest: PUBLISHER_REQUEST.ANSWERED,
+      });
+    try {
+      const result = await runIngestionPipeline({
+        source: sourceLease.source,
+        sourceLease,
+        scopedDb,
+        corpus: failingTransfer(),
+        maxDecisions: 1,
+        maxPages: 1,
+        acquireStoredTotalAdmission: async () => "held",
+      });
+      expect(result.outcome).toBe(CYCLE_OUTCOME.FAILED);
+      expect(result.stopKind).toBe(INGESTION_STOP_KIND.INTERNAL_ERROR);
+      expect(result.pauseReason).toBeUndefined();
+      expect(result.s3UploadFailures).toBeGreaterThan(0);
+      expect(result.nextCursor).toBe(sourceLease.source.syncCursor);
+      expect(await sourceCursor(sourceId)).toBe(sourceLease.source.syncCursor);
+    } finally {
+      await sourceLease.release();
+    }
+  });
 
   test("an admission pause holds the page without recording failures", async () => {
     const sourceId = await crawlSource();

@@ -2323,7 +2323,7 @@
       }
     },
     "sourceChips": {
-      "alsoConsulted": "تمت مراجعتها أيضًا ({count, number})"
+      "moreConsulted": "{count, plural, zero {+# مصادر أخرى تمت مراجعتها} one {+مصدر آخر تمت مراجعته} two {+مصدران آخران تمت مراجعتهما} few {+# مصادر أخرى تمت مراجعتها} many {+# مصدرًا آخر تمت مراجعته} other {+# مصدر آخر تمت مراجعته}}"
     },
     "sourcePlaceholder": "تحدّث عن {title}",
     "sourcePlaceholderAction": "تحدّث عن",
@@ -4713,6 +4713,10 @@
       "dropPack": "أفلِت ملف .zip/.skill أو SKILL.md هنا لاستيراد المهارة",
       "editSkill": "تعديل المهارة",
       "enableSkill": "تفعيل المهارة",
+      "exportAsSkill": "تصدير كملف .skill",
+      "exportAsZip": "تصدير كملف .zip",
+      "exportFailed": "تعذّر تصدير المهارة",
+      "exportSkill": "تصدير المهارة",
       "fileExists": "يوجد ملف بهذا المسار بالفعل",
       "howItRuns": "كيفية تشغيلها",
       "importFailureFetch": "تعذر تحميل مصدر المهارة.",

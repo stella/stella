@@ -106,6 +106,9 @@ export const SettingsCardPending = ({
   </SettingsCard>
 );
 
+/** A `Form`'s column (`@stll/ui/form`, `stack`), for a form's stand-in. */
+export const FORM_STACK_CLASS = "flex w-full flex-col gap-4";
+
 /** A switch setting's row: the switch, then its caption, at touch height. */
 export const SETTINGS_SWITCH_ROW_CLASS =
   "flex min-h-11 flex-row items-center gap-2";

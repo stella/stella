@@ -15,6 +15,7 @@ import { SessionsCardPending } from "@/routes/_protected.settings/-components/ac
 import { SignInMethodsPending } from "@/routes/_protected.settings/-components/account/sign-in-methods.pending";
 import { TwoFactorCardPending } from "@/routes/_protected.settings/-components/account/two-factor-card.pending";
 import {
+  FORM_STACK_CLASS,
   FormFieldSkeleton,
   SettingsCardPending,
   SettingsSwitchCardPending,
@@ -29,9 +30,6 @@ import { SettingsPagePending } from "@/routes/_protected.settings/-components/se
  * slots with the live forms and cards; the pending phase with the fields'
  * and cards' faces, so each card that loads lands in its own box.
  */
-
-/** A `Form`'s column (`@stll/ui/form`, `stack`), for a form's stand-in. */
-const FORM_STACK_CLASS = "flex w-full flex-col gap-4";
 
 /** The width of the display name and the preferred name fields. */
 export const PROFILE_NAME_FIELD_CLASS = "max-w-lg";
@@ -166,7 +164,7 @@ const SaveButtonPending = () => (
 const LOCALE_PREFERENCE_ROWS = Object.values(LOCALE_PREFERENCE_LABELS);
 
 const ProfilePendingView = () => (
-  <SettingsPagePending>
+  <SettingsPagePending area="account">
     <ProfilePageShell
       accountCards={
         <>

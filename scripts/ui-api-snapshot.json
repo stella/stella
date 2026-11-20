@@ -1041,6 +1041,8 @@
       "ButtonFace",
       "CheckboxFace",
       "FaceLabelPending",
+      "FieldDescriptionFace",
+      "FieldFace",
       "FieldTriggerFace",
       "InputFace",
       "LabelFace",
@@ -1578,6 +1580,7 @@
     "./kanban-card-shell": ["KanbanCardShell"],
     "./kanban-column-header-shell": [
       "KANBAN_COLUMN_NAME_CLASS",
+      "KANBAN_COLUMN_WIDTH_CLASS",
       "KanbanColumnHeaderShell",
       "KanbanColumnNameFace",
       "KanbanColumnTitleSlot"
@@ -2224,6 +2227,8 @@
     "DropdownMenuTrigger.appearance": ["caption", "default"],
     "EntityActionsButton.align": ["center", "end", "start"],
     "EntityActionsButton.side": ["bottom", "left", "right", "top"],
+    "FieldFace.density": ["default", "snug"],
+    "FieldFace.layout": ["inline", "stack"],
     "Form.density": ["compact", "default", "snug"],
     "Form.layout": ["inline", "stack"],
     "FrameTitle.tone": ["default", "destructive"],
