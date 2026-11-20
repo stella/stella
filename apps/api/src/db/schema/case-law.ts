@@ -776,9 +776,10 @@ const citationCandidateIndexes = (
       sql`${isNotNull(t.citationKey)} AND ${publishedCaseLawDecisionFor(t)}`,
     ),
   p
-    .index("case_law_decisions_citation_match_key_idx")
-    .on(caseNumberMatchKeySql(t.citationKey), t.country, t.decisionDate, t.id)
-    .where(isNotNull(t.citationKey)),
+    // Full, not partial: the match-key expression's statistics come only
+    // from a non-partial index.
+    .index("case_law_decisions_citation_match_key_all_idx")
+    .on(caseNumberMatchKeySql(t.citationKey), t.country, t.decisionDate, t.id),
   p
     .index("case_law_decisions_citation_match_key_published_idx")
     .on(caseNumberMatchKeySql(t.citationKey), t.country, t.decisionDate, t.id)
