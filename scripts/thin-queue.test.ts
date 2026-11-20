@@ -968,6 +968,7 @@ test("unset and full preserve historical predicates except declared PR, Postgres
         "desktop-rust-lint",
         "query-perf",
         "scan-engine-wasm-drift",
+        "recording-wasm-drift",
         "dependency-audit",
         "dependency-review",
         "database-migrations-check",

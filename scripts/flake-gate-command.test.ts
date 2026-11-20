@@ -133,6 +133,11 @@ test("the generic parser records unsupported shell shapes independently of dedic
       {
         "command": "bun run test:bun && cargo test",
         "reason": "shell-syntax",
+        "script": "packages/recording-wasm/package.json:test",
+      },
+      {
+        "command": "bun run test:bun && cargo test",
+        "reason": "shell-syntax",
         "script": "packages/scan-engine/package.json:test",
       },
       {

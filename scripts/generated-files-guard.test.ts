@@ -727,6 +727,7 @@ test("rejects unchanged checks that no CI step proves", () => {
 // "false" exactly when no path of the family changed.
 const UNCHANGED_SCOPES = new Map<string, ScopeOutput>([
   ["scan-engine-wasm", "scan_engine_wasm_required"],
+  ["recording-wasm", "recording_wasm_required"],
 ]);
 
 test("Guard B skips a family as unchanged only when the plan proves it untouched", () => {
