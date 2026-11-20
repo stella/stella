@@ -6,7 +6,7 @@ const originalMigration = new URL(
   import.meta.url,
 );
 const calendarMigration = new URL(
-  "../../drizzle/20261116180000_sharepoint_calendar_capability/migration.sql",
+  "../../drizzle/20261120134500_sharepoint_calendar_capability/migration.sql",
   import.meta.url,
 );
 
