@@ -1,5 +1,14 @@
 import { panic, Result } from "better-result";
-import { and, desc, eq, gt, isNotNull, isNull, lte } from "drizzle-orm";
+import {
+  and,
+  desc,
+  eq,
+  gt,
+  inArray,
+  isNotNull,
+  isNull,
+  lte,
+} from "drizzle-orm";
 import * as v from "valibot";
 
 import { INGESTION_STOP_KIND } from "@stll/legal-atlas/ingestion-cycle";
@@ -373,6 +382,35 @@ const readRemovalDecision = async ({
       };
 };
 
+/** Each listed decision's redaction state, read in one statement. */
+const readRemovalRedactions = async ({
+  scopedDb,
+  sourceId,
+  decisionIds,
+}: Pick<ProcessRemovalDecisionOptions, "scopedDb" | "sourceId"> & {
+  decisionIds: readonly SafeId<"caseLawDecision">[];
+}): Promise<ReadonlyMap<SafeId<"caseLawDecision">, Date | null>> => {
+  if (decisionIds.length === 0) {
+    return new Map();
+  }
+  const rows = await scopedDb(
+    async (tx) =>
+      await tx
+        .select({
+          id: caseLawDecisions.id,
+          redactedAt: caseLawDecisions.redactedAt,
+        })
+        .from(caseLawDecisions)
+        .where(
+          and(
+            inArray(caseLawDecisions.id, [...decisionIds]),
+            eq(caseLawDecisions.sourceId, sourceId),
+          ),
+        ),
+  );
+  return new Map(rows.map(({ id, redactedAt }) => [id, redactedAt]));
+};
+
 /** Every item-local failure is an explicit durable disposition, never an enumeration stop. */
 const processRemovalDecision = async ({
   scopedDb,
@@ -516,7 +554,7 @@ const processRemovalDecision = async ({
         scopedDb,
         decisionId,
         evidence,
-        retryItem: mode.type === "retry" ? mode.item : undefined,
+        retryItem: mode.item,
       });
       if (removed.isErr()) {
         captureError(
@@ -918,6 +956,18 @@ const retryPublisherRemovals = async ({
       : {}),
     acceptedOnly: mode === "claimed-erasures",
   });
+  // A paused publisher still settles accepted erasures; their redaction
+  // state is read once for the whole due set.
+  const redactions = await readRemovalRedactions({
+    scopedDb,
+    sourceId,
+    decisionIds: items
+      .filter(
+        ({ payload }) =>
+          payload.type === "pending" && payload.operation === "erase",
+      )
+      .map(({ decisionId }) => decisionId),
+  });
   let retried = 0;
   for (const item of items) {
     if (clock() >= deadline) {
@@ -941,13 +991,8 @@ const retryPublisherRemovals = async ({
         continue;
       }
       // A publisher pause cannot prevent accepted cleanup, or authorize a new erasure.
-      const decision = await readRemovalDecision({
-        scopedDb,
-        sourceId,
-        decisionId: item.decisionId,
-      });
       if (
-        decision?.redactedAt === null &&
+        redactions.get(item.decisionId) === null &&
         !isClaimedErasureRetry(item.payload)
       ) {
         continue;
