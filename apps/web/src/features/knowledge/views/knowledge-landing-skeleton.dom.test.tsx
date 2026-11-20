@@ -101,7 +101,9 @@ test("a cold paint claims no cards, then hydrates to the kept ones without a mis
   let root: ReturnType<typeof hydrateRoot> | undefined;
   await act(async () => {
     root = hydrateRoot(host, view, {
-      onRecoverableError: (error) => errors.push(error),
+      onRecoverableError: (error) => {
+        errors.push(error);
+      },
     });
     await Promise.resolve();
   });

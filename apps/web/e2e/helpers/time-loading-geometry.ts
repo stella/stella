@@ -164,6 +164,10 @@ const KNOWLEDGE_SURFACES = [
   },
 ] as const satisfies readonly LoadingSurface[];
 
+/** The fixed surfaces a set measures (the contacts set builds its own). */
+const surfaceSet = (set: "time-admin" | "knowledge") =>
+  set === "knowledge" ? KNOWLEDGE_SURFACES : SURFACES;
+
 const captureLandmarks = async (
   page: Page,
   landmarks: Readonly<Record<string, string>>,
@@ -236,12 +240,10 @@ export const measureLoadingGeometry = async ({
             }),
           )
         : null;
-    let surfaces: readonly LoadingSurface[] = SURFACES;
-    if (contact !== null) {
-      surfaces = contactSurfaces(contact.id);
-    } else if (set === "knowledge") {
-      surfaces = KNOWLEDGE_SURFACES;
-    }
+    const surfaces =
+      contact === null
+        ? surfaceSet(set === "knowledge" ? "knowledge" : "time-admin")
+        : contactSurfaces(contact.id);
     const evidence = [];
     try {
       for (const { locale, browserLocale, messages } of LANGUAGES) {

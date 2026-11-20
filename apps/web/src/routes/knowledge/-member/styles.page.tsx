@@ -183,7 +183,8 @@ const MemberStyleSetsPage = () => {
         response.error,
         t(UNEXPECTED_ERROR_TRANSLATION_KEY),
       );
-      throw toAPIError(response.error);
+      // The dialog stays open for another try.
+      return "keep-open" as const;
     }
     setDeleteTarget(null);
     await invalidate();

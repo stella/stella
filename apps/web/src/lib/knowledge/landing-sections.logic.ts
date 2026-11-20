@@ -49,9 +49,9 @@ export const pendingKnowledgeAudience = (
   }
   // Read by its key alone, as `cachedRoleGrants` reads the role, so the
   // view loads no auth client.
-  const session = newestCachedData<unknown>(
+  const session = newestCachedData(
     cache,
-    cache.getQueriesData<unknown>({ exact: true, queryKey: rootKeys.session }),
+    cache.getQueriesData({ exact: true, queryKey: rootKeys.session }),
   );
   if (session === null) {
     return "public";
