@@ -205,6 +205,25 @@ const useWeekData = ({
   };
 };
 
+type WeekSubmitDisabledReasonOptions = {
+  ready: boolean;
+  failed: boolean;
+  t: (key: "timesheets.week.noDraftEntries") => string;
+  tCommon: (key: "loadFailed" | "loading") => string;
+};
+
+const weekSubmitDisabledReason = ({
+  ready,
+  failed,
+  t,
+  tCommon,
+}: WeekSubmitDisabledReasonOptions) => {
+  if (ready) {
+    return t("timesheets.week.noDraftEntries");
+  }
+  return failed ? tCommon("loadFailed") : tCommon("loading");
+};
+
 export const MyWeek = ({
   organizationId,
   userId,
@@ -245,6 +264,12 @@ export const MyWeek = ({
   >(() => new Map());
 
   const matterId = dialogMatterId(dialog);
+  const submitDisabledReason = weekSubmitDisabledReason({
+    ready,
+    failed,
+    t,
+    tCommon,
+  });
   const refusalNotes = new Map(
     [...refusals].map(([id, reason]) => [id, t(SUBMIT_REFUSAL_KEYS[reason])]),
   );
@@ -315,6 +340,7 @@ export const MyWeek = ({
             <SubmitWeekActions
               canApproveOwn={canApprove}
               canSubmit={ready && canSubmitWeek}
+              disabledReason={submitDisabledReason}
               onRefusals={setRefusals}
               submit={actions.submitWeek}
               submitting={actions.submitting}
@@ -390,6 +416,7 @@ export const MyWeek = ({
           <div className="flex justify-center pb-4">
             <Button
               disabled={entriesQuery.isFetchingNextPage}
+              disabledReason={t("common.loading")}
               onClick={() =>
                 detached(
                   (async () => {
