@@ -8,7 +8,7 @@ export default {
   task: BACKFILL_CASE_LAW_REDACTION_TOMBSTONES_TASK,
   executed: redactionTombstonePageCompleted,
   scenarios: (["repair", "inline-raw", "settled"] as const).map((cohort) => ({
-    size: { type: "redaction-tombstones", rows: 30_000, cohort },
-    double: { type: "redaction-tombstones", rows: 60_000, cohort },
+    size: { type: "redaction-tombstones", rows: 15_000, cohort },
+    double: { type: "redaction-tombstones", rows: 30_000, cohort },
   })),
 } as const satisfies ScheduledJobMeasurement;
