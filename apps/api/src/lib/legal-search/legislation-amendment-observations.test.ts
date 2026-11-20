@@ -83,7 +83,7 @@ test("incompatible publisher claims stay explicitly conflicting", () => {
 
 test("effect resolution is invariant under observation permutations and duplicate evidence", async () => {
   await assertProperty(
-    "legislation amendment channel effect order",
+    "effect resolution is invariant under observation permutations and duplicate evidence",
     fc.property(
       fc.array(
         fc.constantFrom(

@@ -345,16 +345,21 @@ const projectAmendmentEffect = (
       return { type: "date", on: effect.on };
     case "not-stated":
       return { type: "not-stated", text: nullableText(effect.text, 8192) };
-    case "conditional":
+    case "conditional": {
+      const text = truncateTextBytes(effect.condition.text, 8192);
       return {
         type: "conditional",
         condition: {
-          text: truncateTextBytes(effect.condition.text, 8192),
+          text:
+            text.trim().length === 0
+              ? truncateTextBytes(effect.condition.text.trimStart(), 8192)
+              : text,
           label: nullableText(effect.condition.label, 8192),
         },
         workingDate: effect.workingDate,
         actualDate: effect.actualDate,
       };
+    }
     default:
       effect satisfies never;
       return panic("Unhandled amendment effect");

@@ -107,7 +107,12 @@ test("amendment channels affect revision identity while observation times do not
   const hash = (channel: string | undefined, observedAt: string) =>
     new LegislationRevision({
       ...input,
-      amendments: { ...amendments, relations: [], channel, observedAt },
+      amendments: {
+        ...amendments,
+        relations: [],
+        ...(channel === undefined ? {} : { channel }),
+        observedAt,
+      },
     }).sourceHash(EFFECTIVE_CONSOLIDATION);
   expect(hash("bulk", amendments.observedAt)).not.toBe(
     hash("sparql", amendments.observedAt),

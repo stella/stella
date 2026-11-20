@@ -615,7 +615,7 @@ describe("publisher amendment snapshots", () => {
         actualDate: null,
       },
     } satisfies LegislationAmendmentRelation;
-    const write = (
+    const write = async (
       day: number,
       effective: LegislationAmendmentRelation["effective"],
     ) =>
@@ -1250,10 +1250,13 @@ describe("publisher amendment snapshots", () => {
     expect(refreshed.items).toEqual(
       rows.items.map((row) => ({
         ...row,
-        observations: row.observations?.map((observation) => ({
-          ...observation,
-          observedAt: "2026-10-16T11:00:00Z",
-        })),
+        observations:
+          row.observations === null
+            ? null
+            : row.observations.map((observation) => ({
+                ...observation,
+                observedAt: "2026-10-16T11:00:00Z",
+              })),
       })),
     );
     expect(await sync(snapshot("2026-10-16T10:30:00Z", []))).toBe("superseded");

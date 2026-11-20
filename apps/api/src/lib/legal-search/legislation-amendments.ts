@@ -480,7 +480,6 @@ const retainAmendmentContributions = ({
     retained.set(row.publisherId, next);
   }
   for (const relation of snapshot.relations) {
-    const observations = retained.get(relation.publisherId) ?? [];
     const old = previousById
       .get(relation.publisherId)
       ?.observations?.find((item) => item.channel === channel);
@@ -490,31 +489,35 @@ const retainAmendmentContributions = ({
       priorEvidence,
       relation,
     );
-    observations.push({
+    const observation = {
       status: status === "historical" ? "historical" : "present",
       channel,
       observedAt: snapshot.observedAt,
       relation,
       ...(retainedConditional === undefined ? {} : { retainedConditional }),
-    });
-    retained.set(relation.publisherId, observations);
+    } satisfies LegislationAmendmentChannelObservation;
+    const existing = retained.get(relation.publisherId);
+    if (existing === undefined) {
+      retained.set(relation.publisherId, [observation]);
+    } else {
+      existing.push(observation);
+    }
   }
   for (const observations of retained.values()) {
     for (const report of channels) {
       if (
-        report.status !== "active" ||
-        report.channel === LEGISLATION_AMENDMENT_LEGACY_CHANNEL ||
-        report.coverage.type !== "complete" ||
-        observations.some((item) => item.channel === report.channel)
+        report.status === "active" &&
+        report.channel !== LEGISLATION_AMENDMENT_LEGACY_CHANNEL &&
+        report.coverage.type === "complete" &&
+        !observations.some((item) => item.channel === report.channel)
       ) {
-        continue;
+        observations.push({
+          status: "absent",
+          channel: report.channel,
+          observedAt: report.observedAt,
+          lastPositive: null,
+        });
       }
-      observations.push({
-        status: "absent",
-        channel: report.channel,
-        observedAt: report.observedAt,
-        lastPositive: null,
-      });
     }
   }
   return retained;
