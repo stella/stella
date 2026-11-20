@@ -22,8 +22,8 @@
  * `no-raw-case-number-key-equality` keeps every other module from comparing
  * the key columns directly.
  */
-import type { SQL, SQLWrapper } from "drizzle-orm";
-import { sql } from "drizzle-orm";
+import type { Column, SQL, SQLWrapper } from "drizzle-orm";
+import { inArray, sql } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
 
 import {
@@ -89,3 +89,15 @@ export const caseNumberKeyAmongSql = (
         sql`, `,
       )}]::text[])`;
 };
+
+/**
+ * Two ECLI identifier keys name the same decision. An ECLI carries no
+ * slash-year tail, so its stored key is its identity, compared byte for byte
+ * as the plain index on the identifier keys serves it.
+ */
+export const ecliKeysMatchSql = (left: Column, right: Column): SQL =>
+  sql`${left} = ${right}`;
+
+/** An ECLI identifier key is one of the given ECLI keys, byte for byte. */
+export const ecliKeyAmongSql = (key: Column, keys: readonly string[]): SQL =>
+  inArray(key, [...keys]);

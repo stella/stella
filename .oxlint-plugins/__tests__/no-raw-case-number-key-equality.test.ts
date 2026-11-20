@@ -51,6 +51,8 @@ test("accepts the owner's fragments, writes and other columns", async () => {
   const source = [
     "sql`AND ${caseNumberKeysMatchSql(sql`${holder}.citation_key`, citationKey)}`;",
     "caseNumberKeyAmongSql(caseLawDecisionIdentifiers.normalizedValue, keys);",
+    "ecliKeyAmongSql(caseLawDecisionIdentifiers.normalizedValue, keys);",
+    "ecliKeysMatchSql(hostEcli.normalizedValue, ownEcli.normalizedValue);",
     "sql`UPDATE c SET citation_key = ${key}, normalized_identifier_value = ${value}`;",
     "sql`SET identifier_type = projected.type,\n normalized_identifier_value = projected.normalized_value`;",
     "sql`ON CONFLICT (decision_id) DO UPDATE SET citation_key = EXCLUDED.citation_key`;",
