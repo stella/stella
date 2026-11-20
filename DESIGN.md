@@ -429,7 +429,8 @@ it, and add it here in the same change that adds it to `packages/ui`.
 - `Step` `status`: `completed`, `current`, `upcoming`
 - `Steps` `variant`: `compact`, `default`, `progress`
 - `Switch`, `SwitchField` `size`: `default`, `sm`
-- `Table` `density`: `compact`, `default`
+- `Table` `cellText`: `single-line`, `wrap`
+- `Table` `density`: `compact`, `default`, `prose`
 - `Table` `inset`: `card`, `default`
 - `Table` `scroll`: `parent`, `self`
 - `TableChart` `kind`: `bar`, `line`, `pie`, `scatter`

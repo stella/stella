@@ -162,7 +162,7 @@ describe("Table", () => {
   });
 });
 
-const matrix = (density?: "compact") =>
+const matrix = (density?: "compact" | "prose") =>
   renderToStaticMarkup(
     <Table {...(density === undefined ? {} : { density })}>
       <TableHeader>
@@ -198,5 +198,16 @@ describe("Table density", () => {
     );
     expect(markup.match(/<th\b/gu)).toHaveLength(3);
     expect(markup).toContain('scope="row"');
+  });
+
+  test("a prose table in wrap mode lets long tokens narrow their column", () => {
+    const markup = matrix("prose");
+    expect(markup).toContain('data-cell-text="wrap"');
+    // `anywhere`, unlike `break-word`, lowers a cell's min-content width, so
+    // an unbroken token cannot push the table past its box.
+    expect(markup).toContain(
+      "in-data-[cell-text=wrap]:in-data-[density=prose]:wrap-anywhere",
+    );
+    expect(markup).not.toContain("wrap-break-word");
   });
 });

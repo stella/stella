@@ -1740,6 +1740,18 @@
       "verified": "Verifiziertes Zitat",
       "verifiedHint": "Wörtlich in {source}"
     },
+    "answerTable": {
+      "copy": "Tabelle kopieren",
+      "copyAs": "Als {format} kopieren",
+      "download": "Tabelle herunterladen",
+      "downloadAs": "Als {format} herunterladen",
+      "fullscreen": "Im Vollbild öffnen",
+      "fullscreenTitle": "Tabelle im Vollbild",
+      "singleLine": "Einzeilig",
+      "size": "{rows, plural, one {# Zeile} other {# Zeilen}} · {columns, plural, one {# Spalte} other {# Spalten}}",
+      "textMode": "Zellentext",
+      "wrap": "Text umbrechen"
+    },
     "applyMode": {
       "description": "Word speichert, wer welche Änderung vorgenommen hat. Wir merken uns Ihre Auswahl.",
       "direct": "Nein, direkt anwenden",
@@ -7930,7 +7942,6 @@
         "endDate": "Enddatum",
         "month": "Monat",
         "quarter": "Quartal",
-        "showTable": "Tabelle anzeigen",
         "startDate": "Startdatum",
         "week": "Woche"
       },
