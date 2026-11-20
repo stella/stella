@@ -350,7 +350,7 @@ impl DictationState {
   }
 }
 
-fn publish(app: &AppHandle) {
+pub(crate) fn publish(app: &AppHandle) {
   if let Err(error) = app.emit(CHANGED_EVENT, ()) {
     tracing::warn!(%error, "dictation change event failed");
   }

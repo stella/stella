@@ -134,21 +134,23 @@ struct SeedFiles {
 /// Puts the organization's name into an account's list unless that list was
 /// seeded before; a name the list does not take still counts as seeded. The
 /// list is written before the seeding is remembered, so a failure never
-/// marks a list seeded that lacks the name.
-fn seed_once(files: &SeedFiles, name: &str, limits: Limits) -> Result<(), String> {
+/// marks a list seeded that lacks the name. Says whether the list changed.
+fn seed_once(files: &SeedFiles, name: &str, limits: Limits) -> Result<bool, String> {
   if files.seeded.read_stored()?.is_some() {
-    return Ok(());
+    return Ok(false);
   }
   let words = match files.words.read_stored()? {
     Some(stored) => read_back(&stored, limits),
     None => Vec::new(),
   };
-  if let Some(seeded) = with_organization_name(&words, name, limits) {
+  let seeded = with_organization_name(&words, name, limits);
+  if let Some(seeded) = &seeded {
     let stored =
-      serde_json::to_string(&seeded).map_err(|_error| TOO_MANY.to_string())?;
+      serde_json::to_string(seeded).map_err(|_error| TOO_MANY.to_string())?;
     files.words.write(&stored)?;
   }
-  files.seeded.write(SEEDED_ORGANIZATION_NAME)
+  files.seeded.write(SEEDED_ORGANIZATION_NAME)?;
+  Ok(seeded.is_some())
 }
 
 /// Seeds the custom words of the linked account with its organization's
@@ -160,6 +162,7 @@ pub fn seed_organization_name(app: &AppHandle) {
     return;
   };
   let state = std::sync::Arc::clone(&state);
+  let app = app.clone();
   tauri::async_runtime::spawn(async move {
     let Ok(Some(request)) = crate::account::request_account(&state).await else {
       return;
@@ -192,10 +195,13 @@ pub fn seed_organization_name(app: &AppHandle) {
       seeded: seeded_preference(&namespace),
     };
     // The error names a limit or a file, never a word.
-    if let Err(error) =
-      seed_once(&files, &name, crate::dictation_cloud::vocabulary_limits())
-    {
-      tracing::warn!(error = %error, "dictation words were not seeded");
+    match seed_once(&files, &name, crate::dictation_cloud::vocabulary_limits()) {
+      // An open settings or onboarding screen reads the list again.
+      Ok(true) => crate::dictation::publish(&app),
+      Ok(false) => {}
+      Err(error) => {
+        tracing::warn!(error = %error, "dictation words were not seeded");
+      }
     }
   });
 }
@@ -299,7 +305,7 @@ mod tests {
   #[test]
   fn the_organization_name_is_seeded_once_and_stays_removed() {
     let (root, files) = seed_files();
-    seed_once(&files, " Acme Law ", LIMITS).unwrap();
+    assert!(seed_once(&files, " Acme Law ", LIMITS).unwrap());
     assert_eq!(stored(&files), list(&["Acme Law"]));
 
     // The speaker removes it; seeding again leaves it out.
@@ -307,7 +313,7 @@ mod tests {
       .words
       .write(&serde_json::to_string(&list(&["NDA"])).unwrap())
       .unwrap();
-    seed_once(&files, "Acme Law", LIMITS).unwrap();
+    assert!(!seed_once(&files, "Acme Law", LIMITS).unwrap());
     assert_eq!(stored(&files), list(&["NDA"]));
     std::fs::remove_dir_all(root).unwrap();
   }
@@ -319,7 +325,7 @@ mod tests {
       .words
       .write(&serde_json::to_string(&list(&["NDA", "acme law"])).unwrap())
       .unwrap();
-    seed_once(&files, "Acme Law", LIMITS).unwrap();
+    assert!(!seed_once(&files, "Acme Law", LIMITS).unwrap());
     assert_eq!(stored(&files), list(&["NDA", "acme law"]));
     std::fs::remove_dir_all(root).unwrap();
 
@@ -340,7 +346,7 @@ mod tests {
   #[test]
   fn a_name_that_cannot_be_seeded_still_counts_as_seeded() {
     let (root, files) = seed_files();
-    seed_once(&files, &"x".repeat(11), LIMITS).unwrap();
+    assert!(!seed_once(&files, &"x".repeat(11), LIMITS).unwrap());
     assert_eq!(
       files.seeded.read().as_deref(),
       Some(SEEDED_ORGANIZATION_NAME)
