@@ -386,9 +386,7 @@ export const useCopyFormat = (): [CopyFormat, (next: CopyFormat) => void] => {
       localStorage.setItem(COPY_FORMAT_KEY, next);
     });
     // Without storage the choice lasts only while the window is open.
-    if (Result.isError(stored)) {
-      return;
-    }
+    return Result.isOk(stored);
   }, []);
   return [format, choose];
 };

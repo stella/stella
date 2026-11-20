@@ -241,9 +241,10 @@ mod tests {
 
   #[test]
   fn an_answer_is_read_or_refused() {
-    let part =
-      parse(br#"{"instructions":["Reply to Petr."],"markdown":"Hi,\n\n**ok**","extra":1}"#)
-        .unwrap();
+    let part = parse(
+      br#"{"instructions":["Reply to Petr."],"markdown":"Hi,\n\n**ok**","extra":1}"#,
+    )
+    .unwrap();
     assert_eq!(part.instructions, ["Reply to Petr."]);
     assert_eq!(part.markdown, "Hi,\n\n**ok**");
     for body in [
