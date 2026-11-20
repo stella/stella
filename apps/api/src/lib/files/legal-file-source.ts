@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { Result, UnhandledException } from "better-result";
 
 import { PREVIEW_UNAVAILABLE_ERROR_CODE } from "@stll/api-contract";
 import { legalFileFormat } from "@stll/api-contract/document-format";
@@ -106,11 +106,21 @@ export const loadLegalFileSource = async (
     ...(isArchive ? { maxBytes: DOCUMENT_ARCHIVE_MAX_BYTES } : {}),
   }).then(
     (file) => Result.ok(file),
-    (error: unknown) =>
-      isArchive &&
-      (S3ObjectBudgetError.is(error) || BodyByteLimitError.is(error))
-        ? archiveTooLarge()
-        : Promise.reject(error),
+    async (error: unknown) => {
+      // Only an archive's own read budget becomes a preview refusal.
+      if (
+        isArchive &&
+        (S3ObjectBudgetError.is(error) || BodyByteLimitError.is(error))
+      ) {
+        return archiveTooLarge();
+      }
+      // Other read failures keep their rejection path and Error identity.
+      return await Promise.reject(
+        error instanceof Error
+          ? error
+          : new UnhandledException({ cause: error }),
+      );
+    },
   );
   if (source.isErr()) {
     return Result.err(source.error);
