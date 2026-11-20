@@ -15,6 +15,7 @@ import {
 import { cn } from "@stll/ui/utils";
 
 import { PendingText } from "@/components/pending-text";
+import type { RouteRowsPhase } from "@/lib/query-view.logic";
 import { framePendingView } from "@/routes/-pending-view.logic";
 import { SettingsPageHeader } from "@/routes/_protected.settings/-components/settings-page-header";
 import { SettingsPagePending } from "@/routes/_protected.settings/-components/settings-shell/settings-shell.pending";
@@ -141,17 +142,17 @@ const AuditLogFilterFaces = () => (
 );
 
 export const AuditLogShell = ({
-  busy,
   exportAction,
   filters,
   next,
+  phase,
   previous,
   rows,
 }: {
-  busy: boolean;
   exportAction: ReactNode;
   filters: ReactNode;
   next: ReactNode;
+  phase: RouteRowsPhase;
   previous: ReactNode;
   rows: ReactNode;
 }) => (
@@ -172,7 +173,12 @@ export const AuditLogShell = ({
       <FramePanel>
         <div className="flex flex-col gap-6">
           {filters}
-          <div className="rounded-md border">
+          <div
+            className={cn(
+              "rounded-md border",
+              phase === "stale" && "opacity-56",
+            )}
+          >
             <Table>
               <TableHeader>
                 <TableRow>
@@ -190,7 +196,9 @@ export const AuditLogShell = ({
                   ))}
                 </TableRow>
               </TableHeader>
-              <TableBody aria-busy={busy || undefined}>{rows}</TableBody>
+              <TableBody aria-busy={phase !== "rows" || undefined}>
+                {rows}
+              </TableBody>
             </Table>
           </div>
           <div className="flex items-center justify-between px-2">
@@ -206,7 +214,6 @@ export const AuditLogShell = ({
 export const AuditLogsPending = framePendingView(() => (
   <SettingsPagePending>
     <AuditLogShell
-      busy
       exportAction={
         <ButtonFace size="default" variant="outline">
           <PendingText id="settings.organization.auditLogsExport" />
@@ -218,6 +225,7 @@ export const AuditLogsPending = framePendingView(() => (
           <PendingText id="common.next" />
         </ButtonFace>
       }
+      phase="skeleton"
       previous={
         <ButtonFace size="default" variant="outline">
           <PendingText id="common.previous" />

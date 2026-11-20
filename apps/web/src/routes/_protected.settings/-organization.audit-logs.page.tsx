@@ -347,7 +347,6 @@ export function AuditLogsPage() {
 
   return (
     <AuditLogShell
-      busy={phase !== "rows"}
       exportAction={
         <Button
           disabled={exporting}
@@ -455,6 +454,7 @@ export function AuditLogsPage() {
           {t("common.next")}
         </Button>
       }
+      phase={phase}
       previous={
         <Button
           disabled={cursors.length === 0 || pagingDisabled}
