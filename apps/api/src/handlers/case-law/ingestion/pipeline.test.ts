@@ -966,16 +966,18 @@ describe("runIngestionPipeline — failure records", () => {
                 selection !== null &&
                 "polarity" in selection)
                 ? async () => await Promise.resolve([])
-                : () => ({
-                    for: () => ({ limit: async () => [] }),
-                    limit: async () =>
-                      table === caseLawSources &&
-                      typeof selection === "object" &&
-                      selection !== null &&
-                      "adapterKey" in selection
-                        ? [{ adapterKey: ADAPTER_KEYS.CZ_NS }]
-                        : [],
-                  }),
+                : // oxlint-disable-next-line typescript/promise-function-async -- returns awaitable rows with for/limit chains; async would discard those methods
+                  () =>
+                    Object.assign(Promise.resolve([]), {
+                      for: () => ({ limit: async () => [] }),
+                      limit: async () =>
+                        table === caseLawSources &&
+                        typeof selection === "object" &&
+                        selection !== null &&
+                        "adapterKey" in selection
+                          ? [{ adapterKey: ADAPTER_KEYS.CZ_NS }]
+                          : [],
+                    }),
           }),
         }),
         insert: (table: unknown) => ({
