@@ -167,6 +167,7 @@ const renderModels = (selected: ChatLocalRunTarget) => {
                     select: (next) => {
                       chosen.push(next);
                     },
+                    startedInCloud: null,
                   },
                 }}
                 open
