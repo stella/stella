@@ -17,7 +17,7 @@ import { panic } from "better-result";
 import * as v from "valibot";
 
 import { SSO_PROVIDER_ID_PATTERN } from "@/api/db/auth-schema";
-import { isEnterpriseSsoDeployed } from "@/api/lib/auth/sso-access";
+import { isEnterpriseSsoDeployed } from "@/api/lib/db/sso-access";
 import { normalizeEmail } from "@/api/lib/email/normalized-email";
 import { isRecord } from "@/api/lib/type-guards";
 

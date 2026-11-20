@@ -179,7 +179,6 @@ import type {
   MemberAuthorization,
   MemberAuthorizationLookup,
 } from "@/api/lib/auth/member-authorization";
-import { SSO_ACCESS_STATUS } from "@/api/lib/auth/member-authorization";
 import type {
   MemberCaller,
   SessionMemberCaller,
@@ -277,11 +276,6 @@ import {
 import { socialTokenExchangePlugin } from "@/api/lib/auth/social-token-exchange";
 import { readCurrentLiveSseSessions } from "@/api/lib/auth/sse-session-liveness-reader";
 import {
-  ssoAccessColumn,
-  ssoAccessOf,
-  ssoAdmitsSession,
-} from "@/api/lib/auth/sso-access";
-import {
   createSsoOrganizationGuardPlugin,
   refuseConsentUnlessSsoAdmits,
   refuseTokenUnlessSsoAdmits,
@@ -331,6 +325,12 @@ import {
   liveSessionAdapterWhere,
   liveSessionPredicate,
 } from "@/api/lib/db/session-liveness";
+import {
+  SSO_ACCESS_STATUS,
+  ssoAccessColumn,
+  ssoAccessOf,
+  ssoAdmitsSession,
+} from "@/api/lib/db/sso-access";
 import { getDemoAccountOtpOverride } from "@/api/lib/demo-account-otp";
 import { DEV_INSPECTOR_ORIGINS, frontendOrigins } from "@/api/lib/dev-origins";
 import { stashDevOtp } from "@/api/lib/dev-otp-store";

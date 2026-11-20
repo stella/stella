@@ -11,13 +11,9 @@ import {
   ssoProvider,
 } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
-import type {
-  MemberAuthentication,
-  SsoAccess,
-} from "@/api/lib/auth/member-authorization";
-import { SSO_ACCESS_STATUS } from "@/api/lib/auth/member-authorization";
-import { liveSessionPredicate } from "@/api/lib/auth/session-liveness";
+import type { MemberAuthentication } from "@/api/lib/auth/member-authorization";
 import type { SafeId } from "@/api/lib/branded-types";
+import { liveSessionPredicate } from "@/api/lib/db/session-liveness";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { typedPgArray } from "@/api/lib/search/sql";
 
@@ -32,6 +28,22 @@ import { typedPgArray } from "@/api/lib/search/sql";
  * trigger refuses it), so the session's provider row id names one provider
  * generation: deleting or replacing a provider ends what its sessions reach.
  */
+
+export const SSO_ACCESS_STATUS = {
+  /** The organization does not require SSO, or SSO is not deployed. */
+  notRequired: "not_required",
+  /** One of the organization's providers created this browser session. */
+  satisfied: "satisfied",
+  /** The organization requires SSO and none of its providers created the session. */
+  signInRequired: "sign_in_required",
+  /** A credential the requirement is not evaluated for yet. */
+  notEvaluated: "not_evaluated",
+} as const;
+
+/** Whether the organization's SSO requirement admits this caller. */
+export type SsoAccess = {
+  status: (typeof SSO_ACCESS_STATUS)[keyof typeof SSO_ACCESS_STATUS];
+};
 
 /** Whether organization SSO is deployed; read per call like every flag. */
 export const isEnterpriseSsoDeployed = (): boolean =>

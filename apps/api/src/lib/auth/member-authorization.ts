@@ -1,6 +1,7 @@
 import type { AccessibleWorkspace } from "@/api/lib/auth/accessible-workspace";
 import type { UserProfessionalUseState } from "@/api/lib/auth/professional-use";
 import type { SafeId } from "@/api/lib/branded-types";
+import type { SsoAccess } from "@/api/lib/db/sso-access";
 
 /**
  * How the caller proved who they are, which decides whether an
@@ -29,22 +30,6 @@ export type CredentialMemberAuthorizationLookup = Omit<
   MemberAuthorizationLookup,
   "authentication"
 >;
-
-export const SSO_ACCESS_STATUS = {
-  /** The organization does not require SSO, or SSO is not deployed. */
-  notRequired: "not_required",
-  /** One of the organization's providers created this browser session. */
-  satisfied: "satisfied",
-  /** The organization requires SSO and none of its providers created the session. */
-  signInRequired: "sign_in_required",
-  /** A credential the requirement is not evaluated for yet. */
-  notEvaluated: "not_evaluated",
-} as const;
-
-/** Whether the organization's SSO requirement admits this caller. */
-export type SsoAccess = {
-  status: (typeof SSO_ACCESS_STATUS)[keyof typeof SSO_ACCESS_STATUS];
-};
 
 export type MemberAuthorization = {
   memberId: string;

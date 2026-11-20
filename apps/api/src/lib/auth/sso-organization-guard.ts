@@ -12,13 +12,13 @@ import {
 } from "@/api/db/root";
 import type { Transaction } from "@/api/db/root";
 import type { getAuth } from "@/api/lib/auth";
-import { SSO_ACCESS_STATUS } from "@/api/lib/auth/member-authorization";
+import type { SafeId } from "@/api/lib/branded-types";
 import {
   isEnterpriseSsoDeployed,
   readSessionSsoAccess,
-} from "@/api/lib/auth/sso-access";
-import type { SsoRequestLookup } from "@/api/lib/auth/sso-access";
-import type { SafeId } from "@/api/lib/branded-types";
+  SSO_ACCESS_STATUS,
+} from "@/api/lib/db/sso-access";
+import type { SsoRequestLookup } from "@/api/lib/db/sso-access";
 import {
   brandPersistedOrganizationId,
   brandPersistedUserId,

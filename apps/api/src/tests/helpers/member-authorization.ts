@@ -5,7 +5,7 @@ import {
 } from "@stll/api-contract/professional-use";
 
 import type { MemberAuthentication } from "@/api/lib/auth/member-authorization";
-import { SSO_ACCESS_STATUS } from "@/api/lib/auth/member-authorization";
+import { SSO_ACCESS_STATUS } from "@/api/lib/db/sso-access";
 
 /**
  * The authentication a member lookup outside a browser session names, for

@@ -21,11 +21,6 @@ import { createDatabase, createSqlClient } from "@/api/db/sql-client";
 import { envBase } from "@/api/env-base";
 import type { getAuth } from "@/api/lib/auth";
 import { AUTH_DATABASE_ADAPTER_OPTIONS } from "@/api/lib/auth-adapter-options";
-import {
-  readSessionSsoAccess,
-  ssoRefusesSessionInAny,
-} from "@/api/lib/auth/sso-access";
-import type { SsoRequestLookup } from "@/api/lib/auth/sso-access";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   instrumentSqlTransactionCounts,
@@ -83,6 +78,11 @@ import type {
   ChangeServiceOAuthClientOptions,
   CreateServiceOAuthClientOptions,
 } from "@/api/lib/db/service-client-operator";
+import {
+  readSessionSsoAccess,
+  ssoRefusesSessionInAny,
+} from "@/api/lib/db/sso-access";
+import type { SsoRequestLookup } from "@/api/lib/db/sso-access";
 import { abortTransaction } from "@/api/lib/db/transaction-abort";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { fingerprintRequest } from "@/api/lib/idempotency/request-receipts";
