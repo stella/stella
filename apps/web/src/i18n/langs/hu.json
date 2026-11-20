@@ -5518,7 +5518,7 @@
     "members": {
       "billingAccess": "Számlázási adatok megtekintése",
       "changeRole": "Szerepkör módosítása",
-      "confirmRoleChangeDescription": "{email} szerepköre erről: {oldRole} erre módosul: {newRole}.",
+      "confirmRoleChangeDescription": "{email} szerepköre {oldRole, select, owner {tulajdonosról} admin {adminisztrátorról} member {tagról} intern {gyakornokról} external {külső együttműködőről} other {}} {newRole, select, owner {tulajdonosra} admin {adminisztrátorra} member {tagra} intern {gyakornokra} external {külső együttműködőre} other {}} módosul.",
       "confirmRoleChangeTitle": "Szerepkör módosítása",
       "joined": "Csatlakozott",
       "noMembersFound": "Nincsenek tagok",

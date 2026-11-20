@@ -5518,7 +5518,7 @@
     "members": {
       "billingAccess": "Arveldusandmete vaatamine",
       "changeRole": "Muuda rolli",
-      "confirmRoleChangeDescription": "Kasutaja {email} roll muutub: {oldRole} → {newRole}.",
+      "confirmRoleChangeDescription": "Kasutaja {email} roll muutub: {oldRole, select, owner {omanikust} admin {administraatorist} member {liikmest} intern {praktikandist} external {välisest koostööpartnerist} other {}} saab {newRole, select, owner {omanik} admin {administraator} member {liige} intern {praktikant} external {väline koostööpartner} other {}}.",
       "confirmRoleChangeTitle": "Muuda rolli",
       "joined": "Liitunud",
       "noMembersFound": "Liikmeid ei leitud",
