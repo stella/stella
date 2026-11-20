@@ -634,6 +634,10 @@
       "cleanup": "Corrección",
       "thisComputer": "En este ordenador"
     },
+    "sounds": {
+      "title": "Sonidos",
+      "description": "Reproducir un sonido breve y suave cuando empieza la grabación y cuando termina."
+    },
     "cleanup": {
       "title": "Corregir con IA",
       "description": "Corrige errores de reconocimiento y el formato dictado, como «nueva línea» o «negrita», y adapta el texto a la aplicación, como el correo. Solo el texto, no el audio, se envía a través de stella al proveedor de IA de tu organización; stella no lo guarda.",
@@ -676,7 +680,7 @@
     "customWords": {
       "group": "Palabras propias",
       "title": "Palabras y nombres que stella debe escribir correctamente",
-      "description": "Por ejemplo, nombres de clientes o términos en inglés que usa al hablar otro idioma. Se guardan en este ordenador para esta cuenta y solo se envían con su dictado, a la transcripción con stella AI y a la corrección con IA. El modelo de voz de este ordenador no los usa.",
+      "description": "Por ejemplo, nombres de clientes o términos en inglés que usa al hablar otro idioma. Se guardan en este ordenador para esta cuenta y solo se envían con su dictado, a la transcripción con stella AI y a la corrección con IA. Cuando transcribe el modelo de voz de este ordenador y la corrección con IA está desactivada, stella corrige su ortografía en este ordenador.",
       "count": "{count, number} de {limit, number}",
       "input": "Añadir una palabra o un nombre",
       "add": "Añadir",
@@ -1106,7 +1110,7 @@
       "cloudDescriptionModel": "El audio se envía a stella y al proveedor de {model} para transcribirlo. stella no lo guarda.",
       "localMissing": "Descarga el modelo de voz en Configuración, en Dictado, para transcribir en este ordenador.",
       "localMissingCloud": "Descarga el modelo de voz en Configuración, en Dictado, o transcribe con stella AI.",
-      "retainsData": "{provider} guarda el audio y la transcripción de todo lo que se envía a este modelo. No transcribas con él grabaciones confidenciales ni de clientes, o elige otro modelo en Configuración, en Dictado.",
+      "retainsData": "Ten en cuenta las condiciones de tratamiento de {provider}.",
       "modelFailed": "No se pudo leer el modelo de stella AI, así que stella AI no puede transcribir ahora. Inténtelo de nuevo o transcriba en este ordenador."
     },
     "matter": {
@@ -1155,7 +1159,8 @@
       "saveFailed": "No se pudo copiar ni guardar la transcripción. Inténtalo de nuevo.",
       "noSpeech": "No se encontró voz en esta grabación.",
       "fileName": "{title} - transcripción.txt",
-      "documentTitle": "{title} - transcripción"
+      "documentTitle": "{title} - transcripción",
+      "transcriptTitle": "Transcripción"
     },
     "progress": {
       "running": "Transcribiendo {done, number} de {total, number} min",
@@ -1164,6 +1169,28 @@
       "stopped": "Detenido tras {done, number} min. Se conserva el texto obtenido hasta ahora.",
       "done": "{total, number} min transcritos.",
       "another": "Transcribir otra grabación"
+    },
+    "cleaned": {
+      "title": "Texto depurado",
+      "running": "Depurando…",
+      "waiting": "Cada parte se depura en cuanto se transcribe.",
+      "instructionsTitle": "Instrucciones del dictado · no forman parte del texto",
+      "instructionsLabel": "Instrucciones:",
+      "partFailed": "Esta parte no se pudo depurar, así que se muestra tal como se transcribió.",
+      "failedCount": "{count, plural, one {# parte sin depurar} other {# partes sin depurar}}",
+      "saveMarkdown": "Texto con formato (.md)",
+      "saveText": "Texto sin formato (.txt)",
+      "fileNameMarkdown": "{title} depurado.md",
+      "fileNameText": "{title} depurado.txt",
+      "offerTitle": "Depurar la transcripción con IA",
+      "offerDescription": "Esta grabación se transcribió en este ordenador y la depuración con IA está desactivada en Configuración. Al depurarla se envía el texto, nunca el audio, al modelo de IA de tu organización.",
+      "offerStart": "Depurar"
+    },
+    "copyMenu": {
+      "label": "Opciones de copia",
+      "formatted": "Con formato",
+      "plain": "Como texto sin formato",
+      "hint": "Con formato se pegan títulos, negritas y listas en Word u Outlook. Se recuerda tu elección."
     }
   }
 }

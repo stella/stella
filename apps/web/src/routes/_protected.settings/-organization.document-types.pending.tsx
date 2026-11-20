@@ -29,7 +29,7 @@ export function DocumentTypesShell({ children }: { children: ReactNode }) {
 }
 
 export const DocumentTypesPending = framePendingView(() => (
-  <SettingsPagePending>
+  <SettingsPagePending area="organization">
     <DocumentTypesShell>
       <DocumentTypesCardPending />
     </DocumentTypesShell>

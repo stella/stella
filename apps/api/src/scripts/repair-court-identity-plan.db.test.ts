@@ -8,12 +8,13 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
+import type { Transaction } from "@/api/db/root";
 import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";
+import { assignDecisionCourtIdsTx } from "@/api/lib/case-law/decision-court-assignment";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import {
-  assignCourtIdsStatement,
   COURT_IDENTITY_REPAIR_OUTCOMES,
   type CourtIdentityAssignment,
   type CourtIdentityCursor,
@@ -26,6 +27,7 @@ import {
   revertCourtIdentityStatement,
   selectCourtIdentityPageStatement,
 } from "@/api/scripts/repair-court-identity-plan";
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
 let client: Awaited<ReturnType<typeof createTestPglite>>;
@@ -223,7 +225,19 @@ describe("repair-court-identity statements", () => {
       COURT_IDENTITY_REPAIR_OUTCOMES.ASSIGN_ID,
     ]);
     expect(
-      executedRows(await db.execute(assignCourtIdsStatement(idOnly))).length,
+      (
+        await db.transaction(
+          async (tx) =>
+            await assignDecisionCourtIdsTx(asTestRaw<Transaction>(tx), {
+              sourceId: regionalSourceId,
+              assignments: idOnly.map(({ row, to, courtId }) => ({
+                decisionId: row.id,
+                court: to,
+                courtId,
+              })),
+            }),
+        )
+      ).length,
     ).toBe(2);
     expect((await stored(official.id)).courtId).toBe("KSHKPA");
     expect((await stored(benesov.id)).courtId).toBe("OSBN");

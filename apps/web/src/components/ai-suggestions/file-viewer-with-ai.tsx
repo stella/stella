@@ -344,7 +344,7 @@ const DocxHorizontalScrollbar = () => {
     <div
       ref={trackRef}
       aria-hidden="true"
-      className="absolute inset-x-1 bottom-1 z-[100] h-1.5 cursor-pointer"
+      className="absolute inset-x-1 bottom-[calc(var(--document-panel-bottom-inset,0px)+0.25rem)] z-[100] h-1.5 cursor-pointer"
       dir="ltr"
       hidden
     >

@@ -11,6 +11,8 @@ import { and, eq } from "drizzle-orm";
 import { RESOURCE_TYPE, resourceRef } from "@stll/api-contract";
 import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 
+import { member } from "@/api/db/auth-schema";
+import type { Transaction } from "@/api/db/root";
 import { pdfSigningSessions } from "@/api/db/schema";
 import type {
   PdfSigningKeyType,
@@ -20,7 +22,9 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { ThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import type { SafeId } from "@/api/lib/branded-types";
+import { holdMemberAccessOnTx } from "@/api/lib/db/member-access-hold";
 import type { DocumentSource } from "@/api/lib/document-source";
+import { canWriteWorkspaceEntities } from "@/api/lib/entities/workspace-entity-write-access";
 import { createEntityVersionFromBuffer } from "@/api/lib/entity-versions/create-entity-version-from-buffer";
 import type { EntityVersionTargetErrorCode } from "@/api/lib/entity-versions/create-entity-version-from-buffer";
 import { HandlerError, TimeoutError } from "@/api/lib/errors/tagged-errors";
@@ -72,6 +76,40 @@ export const certificateRevokedError = () =>
 type FinalizedSignature = {
   versionId: SafeId<"entityVersion">;
   versionNumber: number;
+};
+
+/** Hold the creator's current write authority through the version commit. */
+export const holdCurrentPdfSigningWriteAuthority = async (
+  tx: Transaction,
+  session: AuthorizedPdfSigningSession,
+): Promise<boolean> => {
+  const access = await holdMemberAccessOnTx(tx, {
+    organizationId: session.organizationId,
+    userId: session.userId,
+    workspaceIds: [session.workspaceId],
+  });
+  if (
+    access.type !== "held" ||
+    !access.workspaceIds.includes(session.workspaceId)
+  ) {
+    return false;
+  }
+  const organizationRole = (
+    await tx
+      .select({ role: member.role })
+      .from(member)
+      .where(
+        and(
+          eq(member.organizationId, session.organizationId),
+          eq(member.userId, session.userId),
+        ),
+      )
+      .limit(1)
+  ).at(0)?.role;
+  return canWriteWorkspaceEntities({
+    organizationRole: organizationRole ?? null,
+    reachesMatter: true,
+  });
 };
 
 /** The hint every retryable answer carries; the desktop acts on the 503. */
@@ -243,6 +281,18 @@ const writeSignedVersion = async (
   await Result.tryPromise(
     async () =>
       await createEntityVersionFromBuffer({
+        // Authorization and publication share this transaction, and the hold
+        // comes first, before the version writer's document and matter locks:
+        // membership removal or role downgrade either commits before it and
+        // refuses the version, or waits until the signed version commits.
+        authority: {
+          type: "current-member",
+          authorize: async (tx) => {
+            if (!(await holdCurrentPdfSigningWriteAuthority(tx, session))) {
+              tx.rollback();
+            }
+          },
+        },
         buffer: applied.bytes,
         entityId: session.entityId,
         fileName,

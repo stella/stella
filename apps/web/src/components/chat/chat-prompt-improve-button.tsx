@@ -28,6 +28,9 @@ type ChatPromptImproveButtonProps = {
   anonymized: boolean;
   controller: ChatEditorController;
   disabled: boolean;
+  /** Why the button is disabled, shown in place of its label (as the
+   *  anonymized case already does) so hovering it says what to do. */
+  disabledReason?: string | undefined;
 };
 
 const PROMPT_IMPROVEMENT_OPTIONS = [
@@ -69,6 +72,7 @@ export const ChatPromptImproveButton = ({
   anonymized,
   controller,
   disabled,
+  disabledReason,
 }: ChatPromptImproveButtonProps) => {
   const t = useTranslations();
   const [isPending, setIsPending] = useState(false);
@@ -137,6 +141,9 @@ export const ChatPromptImproveButton = ({
   };
 
   let label = t("chat.improvePrompt");
+  if (disabled && disabledReason !== undefined) {
+    label = disabledReason;
+  }
   if (anonymized) {
     label = t("chat.improvePromptUnavailableAnonymized");
   }

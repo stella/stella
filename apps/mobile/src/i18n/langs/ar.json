@@ -130,6 +130,8 @@
       "boe_search_legislation": "البحث في تشريعات BOE",
       "borme_get_summary": "ملخّص BORME اليومي",
       "business_registry_lookup": "البحث في السجل التجاري",
+      "calendar_free_busy": "التحقق من التوفر في التقويم",
+      "calendar_list_events": "قراءة أحداث التقويم",
       "command_execution": "تشغيل أمر",
       "compare_versions": "مقارنة الإصدارات",
       "configure_template_fields": "ضبط حقول القالب",

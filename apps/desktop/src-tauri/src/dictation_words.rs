@@ -3,7 +3,8 @@
 //! speech. They stay on this computer, one list for each linked account, and
 //! go only where dictation already sends text: with each chunk stella AI
 //! transcribes, for a model that reads vocabulary, and to AI cleanup as the
-//! spellings to use. The speech model on this computer takes none. Like the
+//! spellings to use. The speech model on this computer takes none; without
+//! cleanup, its text is spelled with them on this computer instead. Like the
 //! other dictation preferences they are the speaker's data: never logged, and
 //! never sent anywhere else.
 
@@ -94,7 +95,7 @@ fn preference(namespace: &str) -> DevicePreference {
 }
 
 /// The account dictation runs for, by its local data namespace.
-fn dictation_namespace(app: &AppHandle) -> Option<String> {
+pub(crate) fn dictation_namespace(app: &AppHandle) -> Option<String> {
   app
     .try_state::<FeatureGates>()?
     .account_binding(DesktopFeature::Dictation)

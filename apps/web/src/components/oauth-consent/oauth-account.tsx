@@ -1,13 +1,11 @@
-import type { ReactNode } from "react";
-
 import { useQueryClient } from "@tanstack/react-query";
 import { Result } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
-import { DetailsGrid, DetailsItem } from "@stll/ui/details-grid";
 import { TruncatedText } from "@stll/ui/truncated-text";
 
+import { OAuthAccountRowFace } from "@/components/oauth-consent/consent-control-faces.pending";
 import { signOutAndRelease } from "@/hooks/use-sign-out";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { sessionOptions } from "@/lib/auth-queries";
@@ -50,11 +48,6 @@ export const useOAuthAccountSwitch = () => {
   };
 };
 
-/** The term list the OAuth steps use to say who is signed in. */
-export const OAuthAccountList = ({ children }: { children: ReactNode }) => (
-  <DetailsGrid variant="list">{children}</DetailsGrid>
-);
-
 type OAuthAccountRowProps = {
   disabled: boolean;
   email: string;
@@ -70,11 +63,9 @@ export const OAuthAccountRow = ({
   const t = useTranslations("consent");
   const tAccount = useTranslations("settings.account");
   return (
-    <DetailsItem
-      className="items-start sm:items-center"
+    <OAuthAccountRowFace
       label={tAccount("title")}
-    >
-      <div className="flex min-w-0 flex-col items-start gap-x-3">
+      email={
         <TruncatedText
           className="max-w-full"
           render={<bdi />}
@@ -82,6 +73,8 @@ export const OAuthAccountRow = ({
         >
           {email}
         </TruncatedText>
+      }
+      switchAccount={
         <Button
           variant="link"
           size="xs"
@@ -91,7 +84,7 @@ export const OAuthAccountRow = ({
         >
           {t("useAnotherAccount")}
         </Button>
-      </div>
-    </DetailsItem>
+      }
+    />
   );
 };

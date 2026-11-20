@@ -136,6 +136,8 @@ describe.skipIf(!runPostgresTests)(
               workspaceId,
               correspondenceId,
               "Route smoke correspondence",
+              DEFAULT_ORG_ID,
+              "test@stella.dev",
             ],
             cwd: path.resolve(import.meta.dir, ".."),
             env: {

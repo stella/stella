@@ -634,6 +634,10 @@
       "cleanup": "Parandamine",
       "thisComputer": "Selles arvutis"
     },
+    "sounds": {
+      "title": "Helid",
+      "description": "Esita lühike vaikne heli, kui salvestamine algab ja kui see lõpeb."
+    },
     "cleanup": {
       "title": "Paranda tehisintellektiga",
       "description": "Parandab tuvastusvead ja dikteeritud vormingu, näiteks „uus rida“ või „paks“, ning sobitab teksti rakendusega, näiteks e-postiga. stella kaudu saadetakse teie organisatsiooni tehisintellekti teenusepakkujale ainult tekst, mitte heli; stella seda ei salvesta.",
@@ -676,7 +680,7 @@
     "customWords": {
       "group": "Omad sõnad",
       "title": "Sõnad ja nimed, mida stella peab õigesti kirjutama",
-      "description": "Näiteks klientide nimed või ingliskeelsed terminid, mida kasutate teises keeles rääkides. Need hoitakse selles arvutis selle konto jaoks ja saadetakse ainult koos dikteerimisega: stella AI abil teisendamiseks ja tehisintellektiga parandamiseks. Selle arvuti kõnemudel neid ei kasuta.",
+      "description": "Näiteks klientide nimed või ingliskeelsed terminid, mida kasutate teises keeles rääkides. Need hoitakse selles arvutis selle konto jaoks ja saadetakse ainult koos dikteerimisega: stella AI abil teisendamiseks ja tehisintellektiga parandamiseks. Kui teisendab selle arvuti kõnemudel ja tehisintellektiga parandamine on välja lülitatud, parandab stella nende õigekirja selles arvutis.",
       "count": "{count, number} / {limit, number}",
       "input": "Lisa sõna või nimi",
       "add": "Lisa",
@@ -1106,7 +1110,7 @@
       "cloudDescriptionModel": "Heli saadetakse transkribeerimiseks stellale ja mudeli {model} pakkujale. stella seda ei salvesta.",
       "localMissing": "Selles arvutis transkribeerimiseks laadige seadetes jaotises Dikteerimine alla kõnemudel.",
       "localMissingCloud": "Laadige seadetes jaotises Dikteerimine alla kõnemudel või transkribeerige stella AI abil.",
-      "retainsData": "{provider} säilitab kõigi sellele mudelile saadetud salvestiste heli ja transkriptsiooni. Ärge transkribeerige sellega konfidentsiaalseid ega klientide salvestisi või valige seadetes jaotises Dikteerimine muu mudel.",
+      "retainsData": "Palun arvestage {provider} töötlemistingimustega.",
       "modelFailed": "stella AI mudelit ei õnnestunud lugeda, seega ei saa stella AI praegu transkribeerida. Proovige uuesti või transkribeerige selles arvutis."
     },
     "matter": {
@@ -1155,7 +1159,8 @@
       "saveFailed": "Transkriptsiooni ei õnnestunud kopeerida ega salvestada. Proovige uuesti.",
       "noSpeech": "Selles salvestises kõnet ei leitud.",
       "fileName": "{title} – transkriptsioon.txt",
-      "documentTitle": "{title} – transkriptsioon"
+      "documentTitle": "{title} – transkriptsioon",
+      "transcriptTitle": "Transkriptsioon"
     },
     "progress": {
       "running": "Transkribeerimine: {done, number} / {total, number} min",
@@ -1164,6 +1169,28 @@
       "stopped": "Peatatud {done, number} min järel. Seni saadud tekst jääb alles.",
       "done": "Transkribeeritud {total, number} min.",
       "another": "Transkribeeri järgmine salvestis"
+    },
+    "cleaned": {
+      "title": "Puhastatud tekst",
+      "running": "Puhastan…",
+      "waiting": "Iga osa puhastatakse kohe, kui see on transkribeeritud.",
+      "instructionsTitle": "Juhised dikteeringus · ei kuulu teksti",
+      "instructionsLabel": "Juhised:",
+      "partFailed": "Seda osa ei õnnestunud puhastada, seega kuvatakse see transkribeeritud kujul.",
+      "failedCount": "{count, plural, one {# osa puhastamata} other {# osa puhastamata}}",
+      "saveMarkdown": "Vormindatud tekst (.md)",
+      "saveText": "Lihttekst (.txt)",
+      "fileNameMarkdown": "{title} puhastatud.md",
+      "fileNameText": "{title} puhastatud.txt",
+      "offerTitle": "Puhasta transkriptsioon tehisintellektiga",
+      "offerDescription": "See salvestis transkribeeriti selles arvutis ja tehisintellekti puhastus on seadetes välja lülitatud. Puhastamine saadab teie organisatsiooni tehisintellekti mudelile teksti, mitte kunagi heli.",
+      "offerStart": "Puhasta"
+    },
+    "copyMenu": {
+      "label": "Kopeerimise valikud",
+      "formatted": "Vormindusega",
+      "plain": "Lihttekstina",
+      "hint": "Vormindusega kleebitakse Wordi või Outlooki ka pealkirjad, paks kiri ja loendid. Teie valik jäetakse meelde."
     }
   }
 }

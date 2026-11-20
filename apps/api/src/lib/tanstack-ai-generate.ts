@@ -26,6 +26,7 @@ import {
   getOutputTokenLimit,
 } from "@stll/ai-catalog";
 import type {
+  ModelOverrideGroup,
   ModelTask,
   ReasoningEffort,
   TanStackAIProvider,
@@ -35,10 +36,12 @@ import { TimeoutError, withTimeout } from "@stll/concurrency/with-timeout";
 import { classifyFailure } from "@stll/errors";
 import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 
-import type {
-  AIRequestServiceTier,
-  CachingDecision,
-  OrgAIConfig,
+import {
+  type AIRequestServiceTier,
+  type CachingDecision,
+  type ModelLookup,
+  modelLookupTask,
+  type OrgAIConfig,
 } from "@/api/lib/ai-config";
 import {
   type AIErrorKind,
@@ -128,9 +131,10 @@ import type { LayeredSystemPrompt } from "@/api/lib/tanstack-ai-caching";
 import {
   getStructuredOutputFallbackModelId,
   getTanStackTextModelById,
+  getTanStackTextModelForOverrideGroup,
   getTanStackTextModelForTask,
   getTanStackTextModelInfoById,
-  getTanStackTextModelInfoForTask,
+  getTanStackTextModelInfoForLookup,
   isMockTextAdapter,
   mockAnswersForOrganization,
 } from "@/api/lib/tanstack-ai-models";
@@ -276,8 +280,12 @@ type ResolveTextModelOptions = {
   modelId?: string | undefined;
   orgAIConfig: OrgAIConfig | null | undefined;
   reasoningEffort?: ReasoningEffort | undefined;
-  task: ModelTask;
-} & AIRequestPolicy &
+} & (
+  | { overrideGroup?: undefined; task: ModelTask }
+  /** A role an admin picks a model for (`browse`); never with `modelId`. */
+  | { modelId?: undefined; overrideGroup: ModelOverrideGroup; task?: undefined }
+) &
+  AIRequestPolicy &
   ModelDispatchScope;
 
 const CANCELLED_GENERATION_MESSAGE = "AI generation was cancelled";
@@ -2230,8 +2238,11 @@ export const resolveTanStackTextModel = async (
     orgAIConfig,
     reasoningEffort,
     task,
+    overrideGroup,
     ...policy
   } = options;
+  const lookup: ModelLookup =
+    overrideGroup === undefined ? { task } : { overrideGroup };
   // Every inference path (chat, subagents, field generators, workflow
   // batches) resolves its model here, so this is the one seam where a
   // request is classified `ai` for the split latency SLO — a new AI
@@ -2242,11 +2253,13 @@ export const resolveTanStackTextModel = async (
   let managedOpenRouterCredential: ManagedOpenRouterCredential | undefined;
   if (!orgAIConfig && !mockAnswersForOrganization(orgAIConfig)) {
     const info = modelId
-      ? getTanStackTextModelInfoById(modelId, orgAIConfig, task, {
-          dataClass: policy.dataClass,
-          modelTier,
-        })
-      : getTanStackTextModelInfoForTask(task, orgAIConfig, {
+      ? getTanStackTextModelInfoById(
+          modelId,
+          orgAIConfig,
+          modelLookupTask(lookup),
+          { dataClass: policy.dataClass, modelTier },
+        )
+      : getTanStackTextModelInfoForLookup(lookup, orgAIConfig, {
           organizationId,
           modelTier,
           ...policy,
@@ -2278,6 +2291,14 @@ export const resolveTanStackTextModel = async (
     }
   }
 
+  if (overrideGroup !== undefined) {
+    return getTanStackTextModelForOverrideGroup(overrideGroup, orgAIConfig, {
+      organizationId,
+      modelTier,
+      managedOpenRouterCredential,
+      ...policy,
+    });
+  }
   return modelId
     ? getTanStackTextModelById(modelId, orgAIConfig, {
         task,

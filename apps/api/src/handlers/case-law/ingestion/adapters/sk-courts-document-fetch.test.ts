@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { afterEach, expect, mock, test } from "bun:test";
 
 import {
@@ -82,9 +82,14 @@ test("document downloads identify the client and preserve the caller's abort and
     new URL("https://obcan.justice.sk/content/public/item/fixture-document"),
     { signal: controller.signal },
   );
-  const downloaded = read.type === "present" ? read.value : read;
-  expect(downloaded).toBeInstanceOf(Response);
-  expect(downloaded).toMatchObject({ status: response.status });
+  if (read.type !== "present") {
+    panic(`Expected the document, got ${read.type}`);
+  }
+  // The body streams through the publisher byte ceiling unchanged.
+  expect(read.value.headers.get("content-type")).toBe(
+    "application/octet-stream",
+  );
+  expect(await read.value.text()).toBe("%PDF-");
   expect(fetch).toHaveBeenCalledTimes(1);
   const call = fetch.mock.calls.at(0);
   expect(call).toBeDefined();

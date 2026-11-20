@@ -15,6 +15,10 @@ export default {
         path: "apps/api/src/lib/files/office-evidence.ts",
         reason: "Office evidence extraction holds the heavy-sidecar pool.",
       },
+      {
+        path: "apps/api/src/lib/file-scan/scan-upload.ts",
+        reason: "Upload security scans hold the file-scan pool.",
+      },
     ],
   },
 } as const satisfies OwnershipEntry;

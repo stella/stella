@@ -634,6 +634,10 @@
       "cleanup": "Überarbeitung",
       "thisComputer": "Auf diesem Computer"
     },
+    "sounds": {
+      "title": "Töne",
+      "description": "Einen kurzen, leisen Ton abspielen, wenn die Aufnahme beginnt und wenn sie endet."
+    },
     "cleanup": {
       "title": "Mit KI überarbeiten",
       "description": "Korrigiert Erkennungsfehler und gesprochene Formatierungen wie „neue Zeile“ oder „fett“ und passt den Text an die App an, etwa an E-Mail. Nur der Text, nicht der Ton, wird über stella an den KI-Anbieter Ihrer Organisation gesendet; stella speichert ihn nicht.",
@@ -676,7 +680,7 @@
     "customWords": {
       "group": "Eigene Wörter",
       "title": "Wörter und Namen, die stella richtig schreiben soll",
-      "description": "Etwa Namen von Mandanten oder englische Begriffe, die Sie in einer anderen Sprache verwenden. Sie werden auf diesem Computer für dieses Konto gespeichert und nur mit Ihrem Diktat gesendet, an die Umwandlung mit stella AI und an die Überarbeitung mit KI. Das Sprachmodell auf diesem Computer verwendet sie nicht.",
+      "description": "Etwa Namen von Mandanten oder englische Begriffe, die Sie in einer anderen Sprache verwenden. Sie werden auf diesem Computer für dieses Konto gespeichert und nur mit Ihrem Diktat gesendet, an die Umwandlung mit stella AI und an die Überarbeitung mit KI. Wenn das Sprachmodell auf diesem Computer umwandelt und die Überarbeitung mit KI aus ist, korrigiert stella ihre Schreibweise auf diesem Computer.",
       "count": "{count, number} von {limit, number}",
       "input": "Wort oder Namen hinzufügen",
       "add": "Hinzufügen",
@@ -1106,7 +1110,7 @@
       "cloudDescriptionModel": "Der Ton wird zur Transkription an stella und an den Anbieter von {model} gesendet. stella speichert ihn nicht.",
       "localMissing": "Laden Sie das Sprachmodell in den Einstellungen unter Diktieren herunter, um auf diesem Computer zu transkribieren.",
       "localMissingCloud": "Laden Sie das Sprachmodell in den Einstellungen unter Diktieren herunter, oder transkribieren Sie mit stella AI.",
-      "retainsData": "{provider} speichert Ton und Transkript von allem, was an dieses Modell gesendet wird. Transkribieren Sie damit keine vertraulichen Aufnahmen oder Aufnahmen von Mandanten, oder wählen Sie in den Einstellungen unter Diktieren ein anderes Modell.",
+      "retainsData": "Bitte beachten Sie die Verarbeitungsbedingungen von {provider}.",
       "modelFailed": "Das Modell von stella AI konnte nicht gelesen werden, daher kann stella AI gerade nicht transkribieren. Versuchen Sie es erneut oder transkribieren Sie auf diesem Computer."
     },
     "matter": {
@@ -1155,7 +1159,8 @@
       "saveFailed": "Das Transkript konnte nicht kopiert oder gespeichert werden. Versuchen Sie es erneut.",
       "noSpeech": "In dieser Aufnahme wurde keine Sprache gefunden.",
       "fileName": "{title} – Transkript.txt",
-      "documentTitle": "{title} – Transkript"
+      "documentTitle": "{title} – Transkript",
+      "transcriptTitle": "Transkript"
     },
     "progress": {
       "running": "Transkription: {done, number} von {total, number} Min.",
@@ -1164,6 +1169,28 @@
       "stopped": "Nach {done, number} Min. gestoppt. Der bisherige Text bleibt erhalten.",
       "done": "{total, number} Min. transkribiert.",
       "another": "Weitere Aufnahme transkribieren"
+    },
+    "cleaned": {
+      "title": "Bereinigt",
+      "running": "Wird bereinigt…",
+      "waiting": "Jeder Teil wird bereinigt, sobald er transkribiert ist.",
+      "instructionsTitle": "Anweisungen im Diktat · nicht Teil des Textes",
+      "instructionsLabel": "Anweisungen:",
+      "partFailed": "Dieser Teil konnte nicht bereinigt werden und wird daher wie transkribiert angezeigt.",
+      "failedCount": "{count, plural, one {# Teil nicht bereinigt} other {# Teile nicht bereinigt}}",
+      "saveMarkdown": "Formatierter Text (.md)",
+      "saveText": "Nur Text (.txt)",
+      "fileNameMarkdown": "{title} bereinigt.md",
+      "fileNameText": "{title} bereinigt.txt",
+      "offerTitle": "Transkript mit KI bereinigen",
+      "offerDescription": "Diese Aufnahme wurde auf diesem Computer transkribiert und die KI-Bereinigung ist in den Einstellungen aus. Beim Bereinigen wird der Text, nie der Ton, an das KI-Modell Ihrer Organisation gesendet.",
+      "offerStart": "Bereinigen"
+    },
+    "copyMenu": {
+      "label": "Kopieroptionen",
+      "formatted": "Mit Formatierung",
+      "plain": "Als reiner Text",
+      "hint": "Mit Formatierung werden Überschriften, Fettdruck und Listen in Word oder Outlook eingefügt. Ihre Wahl wird gespeichert."
     }
   }
 }

@@ -792,7 +792,7 @@ const resolveAst = async ({
         readStore: async () =>
           astS3Key === null
             ? null
-            : await readCachedDecisionAst(astS3Key, readTombstones),
+            : await readCachedDecisionAst(astS3Key, readTombstones, decisionId),
       }),
     decisionId,
   );

@@ -634,6 +634,10 @@
       "cleanup": "Úprava",
       "thisComputer": "Na tomto počítači"
     },
+    "sounds": {
+      "title": "Zvuky",
+      "description": "Přehrát krátký tichý zvuk, když nahrávání začne a když skončí."
+    },
     "cleanup": {
       "title": "Upravit pomocí AI",
       "description": "Opraví chyby rozpoznávání a vyslovené formátování, například „nový řádek“ nebo „tučně“, a přizpůsobí text aplikaci, například e-mailu. Přes stellu se poskytovateli AI vaší organizace odešle jen text, ne zvuk; stella ho neukládá.",
@@ -676,7 +680,7 @@
     "customWords": {
       "group": "Vlastní slova",
       "title": "Slova a jména, která má stella psát správně",
-      "description": "Například jména klientů nebo anglické výrazy, které používáte v češtině. Ukládají se v tomto počítači pro tento účet a odesílají se jen s diktátem, k převodu přes stella AI a k úpravě pomocí AI. Model řeči v tomto počítači je nepoužívá.",
+      "description": "Například jména klientů nebo anglické výrazy, které používáte v češtině. Ukládají se v tomto počítači pro tento účet a odesílají se jen s diktátem, k převodu přes stella AI a k úpravě pomocí AI. Když přepisuje model řeči v tomto počítači a úprava pomocí AI je vypnutá, stella opraví jejich pravopis přímo v tomto počítači.",
       "count": "{count, number} z {limit, number}",
       "input": "Přidat slovo nebo jméno",
       "add": "Přidat",
@@ -1106,7 +1110,7 @@
       "cloudDescriptionModel": "Zvuk se k přepisu odešle do stella AI a poskytovateli modelu {model}. stella ho neukládá.",
       "localMissing": "Abyste mohli přepisovat v tomto počítači, stáhněte si v Nastavení v části Diktování řečový model.",
       "localMissingCloud": "Stáhněte si v Nastavení v části Diktování řečový model, nebo přepisujte pomocí stella AI.",
-      "retainsData": "{provider} uchovává zvuk i přepis všeho, co tomuto modelu pošlete. Nepřepisujte s ním důvěrné nahrávky ani nahrávky klientů, nebo v Nastavení v části Diktování vyberte jiný model.",
+      "retainsData": "Berte prosím na vědomí podmínky zpracování společnosti {provider}.",
       "modelFailed": "Model stella AI se nepodařilo načíst, takže stella AI teď nemůže přepisovat. Zkuste to znovu, nebo přepisujte na tomto počítači."
     },
     "matter": {
@@ -1155,7 +1159,8 @@
       "saveFailed": "Přepis se nepodařilo zkopírovat ani uložit. Zkuste to znovu.",
       "noSpeech": "V nahrávce nebyla nalezena žádná řeč.",
       "fileName": "{title} – přepis.txt",
-      "documentTitle": "{title} – přepis"
+      "documentTitle": "{title} – přepis",
+      "transcriptTitle": "Přepis"
     },
     "progress": {
       "running": "Přepisuje se {done, number} z {total, number} min",
@@ -1164,6 +1169,28 @@
       "stopped": "Zastaveno po {done, number} min. Dosavadní text zůstává.",
       "done": "Přepsáno {total, number} min.",
       "another": "Přepsat další nahrávku"
+    },
+    "cleaned": {
+      "title": "Upravený text",
+      "running": "Upravuji…",
+      "waiting": "Každá část se upraví hned, jak je přepsaná.",
+      "instructionsTitle": "Pokyny v diktátu · nejsou součástí textu",
+      "instructionsLabel": "Pokyny:",
+      "partFailed": "Tuto část se nepodařilo upravit, proto je zobrazena tak, jak byla přepsána.",
+      "failedCount": "{count, plural, one {# část neupravena} few {# části neupraveny} other {# částí neupraveno}}",
+      "saveMarkdown": "Formátovaný text (.md)",
+      "saveText": "Prostý text (.txt)",
+      "fileNameMarkdown": "{title} upravený text.md",
+      "fileNameText": "{title} upravený text.txt",
+      "offerTitle": "Upravit přepis pomocí AI",
+      "offerDescription": "Tato nahrávka byla přepsána na tomto počítači a úprava pomocí AI je v Nastavení vypnutá. Úprava pošle text, nikdy zvuk, AI modelu vaší organizace.",
+      "offerStart": "Upravit"
+    },
+    "copyMenu": {
+      "label": "Možnosti kopírování",
+      "formatted": "Včetně formátování",
+      "plain": "Jako prostý text",
+      "hint": "S formátováním se do Wordu nebo Outlooku vloží nadpisy, tučné písmo i seznamy. Kopírování si vaši volbu zapamatuje."
     }
   }
 }

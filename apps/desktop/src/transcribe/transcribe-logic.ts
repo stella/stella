@@ -45,7 +45,12 @@ export type RecordingModel = {
  *  back by: native code knows the model and account the ticket stands for. */
 export type ShownModel = RecordingModel & { ticket: number };
 
-export type Started = { job: number; model: RecordingModel | null };
+export type Started = {
+  job: number;
+  model: RecordingModel | null;
+  /** Older native code leaves it out: cleanup then waits to be asked. */
+  autoCleanup?: boolean;
+};
 
 export type PieceText = {
   job: number;

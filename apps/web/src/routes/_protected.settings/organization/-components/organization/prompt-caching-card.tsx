@@ -3,7 +3,6 @@ import { useTranslations } from "use-intl";
 
 import { Checkbox } from "@stll/ui/checkbox";
 import { Field, FieldLabel } from "@stll/ui/field";
-import { Frame, FramePanel } from "@stll/ui/frame";
 
 import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
@@ -12,6 +11,11 @@ import { queryView } from "@/lib/query-view.logic";
 
 import { AISettingsSectionFeedback } from "./ai-settings-section";
 import type { ToggleSettingsSectionProps } from "./ai-settings-section";
+import {
+  AIToggleCardFrame,
+  AIToggleCardPending,
+  PROMPT_CACHING_CARD,
+} from "./ai-toggle-card.pending";
 
 export const PromptCachingCard = ({
   value,
@@ -31,6 +35,9 @@ export const PromptCachingCard = ({
   const settings =
     settingsView.type === "items" ? settingsView.items : undefined;
 
+  if (settingsView.type === "pending") {
+    return <AIToggleCardPending {...PROMPT_CACHING_CARD} />;
+  }
   if (!settings) {
     return <QueryViewFeedback view={settingsView} />;
   }
@@ -38,29 +45,22 @@ export const PromptCachingCard = ({
   const enabled = value ?? settings.promptCachingEnabled;
 
   return (
-    <Frame>
-      <QueryViewFeedback view={settingsView} />
-      <FramePanel>
-        <div className="flex flex-col gap-3 p-1">
-          <h2 className="text-sm font-medium">
-            {t("settings.organization.promptCaching.title")}
-          </h2>
-          <p className="text-muted-foreground text-xs">
-            {t("settings.organization.promptCaching.description")}
-          </p>
-          <Field className="flex-row items-center gap-2">
-            <Checkbox
-              checked={enabled}
-              disabled={disabled}
-              onCheckedChange={onChange}
-            />
-            <FieldLabel>
-              {t("settings.organization.promptCaching.toggleLabel")}
-            </FieldLabel>
-          </Field>
-          <AISettingsSectionFeedback feedback={feedback} />
-        </div>
-      </FramePanel>
-    </Frame>
+    <AIToggleCardFrame
+      description={PROMPT_CACHING_CARD.description}
+      notice={<QueryViewFeedback view={settingsView} />}
+      title={PROMPT_CACHING_CARD.title}
+      toggle={
+        <Field className="flex-row items-center gap-2">
+          <Checkbox
+            checked={enabled}
+            disabled={disabled}
+            onCheckedChange={onChange}
+          />
+          <FieldLabel>{t(PROMPT_CACHING_CARD.label)}</FieldLabel>
+        </Field>
+      }
+    >
+      <AISettingsSectionFeedback feedback={feedback} />
+    </AIToggleCardFrame>
   );
 };

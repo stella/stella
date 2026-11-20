@@ -137,7 +137,8 @@ export const readDecisionAnalysisAst = async (
         documentId: id,
         key: astS3Key,
         step: "analysis.readDecisionAst",
-        read: async () => await readCachedDecisionAst(astS3Key, readTombstones),
+        read: async () =>
+          await readCachedDecisionAst(astS3Key, readTombstones, id),
         fallback: readRowAst,
       });
       return parseCachedDecisionAst(stored);

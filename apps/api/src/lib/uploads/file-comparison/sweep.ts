@@ -1,5 +1,5 @@
 import { panic, Result, TaggedError } from "better-result";
-import { and, asc, inArray, lte } from "drizzle-orm";
+import { and, asc, inArray, lte, ne, or } from "drizzle-orm";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import { fileComparisonUploads } from "@/api/db/schema";
@@ -93,6 +93,14 @@ export const sweepExpiredFileComparisonUploads = async ({
   signal,
 }: SweepOptions): Promise<Result<SweepSummary, FileComparisonSweepError>> => {
   const summary = { scanned: 0, sweptUploads: 0, failed: 0 };
+  const cutoff = new Date();
+  const sweepable = and(
+    lte(fileComparisonUploads.expiresAt, cutoff),
+    or(
+      ne(fileComparisonUploads.status, "processing"),
+      lte(fileComparisonUploads.claimExpiresAt, cutoff),
+    ),
+  );
   const expired = await safeDb(
     async (tx) =>
       await tx
@@ -101,7 +109,7 @@ export const sweepExpiredFileComparisonUploads = async ({
           organizationId: fileComparisonUploads.organizationId,
         })
         .from(fileComparisonUploads)
-        .where(lte(fileComparisonUploads.expiresAt, new Date()))
+        .where(sweepable)
         .orderBy(
           asc(fileComparisonUploads.expiresAt),
           asc(fileComparisonUploads.id),
@@ -178,12 +186,7 @@ export const sweepExpiredFileComparisonUploads = async ({
     async (tx) =>
       await tx
         .delete(fileComparisonUploads)
-        .where(
-          and(
-            inArray(fileComparisonUploads.id, clearedIds),
-            lte(fileComparisonUploads.expiresAt, new Date()),
-          ),
-        )
+        .where(and(inArray(fileComparisonUploads.id, clearedIds), sweepable))
         .returning({ id: fileComparisonUploads.id }),
   );
   if (Result.isError(removed)) {

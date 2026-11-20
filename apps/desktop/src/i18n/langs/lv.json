@@ -634,6 +634,10 @@
       "cleanup": "Labošana",
       "thisComputer": "Šajā datorā"
     },
+    "sounds": {
+      "title": "Skaņas",
+      "description": "Atskaņot īsu, klusu skaņu, kad ieraksts sākas un kad tas beidzas."
+    },
     "cleanup": {
       "title": "Labot ar MI",
       "description": "Izlabo atpazīšanas kļūdas un diktēto formatējumu, piemēram, “jauna rinda” vai “treknraksts”, un pielāgo tekstu lietotnei, piemēram, e-pastam. Caur stella jūsu organizācijas MI pakalpojumu sniedzējam tiek nosūtīts tikai teksts, ne audio; stella to nesaglabā.",
@@ -676,7 +680,7 @@
     "customWords": {
       "group": "Savi vārdi",
       "title": "Vārdi un nosaukumi, kas stella jāraksta pareizi",
-      "description": "Piemēram, klientu vārdi vai angļu termini, ko lietojat, runājot citā valodā. Tie tiek glabāti šajā datorā šim kontam un nosūtīti tikai kopā ar diktātu: pārvēršanai ar stella AI un labošanai ar MI. Šī datora runas modelis tos neizmanto.",
+      "description": "Piemēram, klientu vārdi vai angļu termini, ko lietojat, runājot citā valodā. Tie tiek glabāti šajā datorā šim kontam un nosūtīti tikai kopā ar diktātu: pārvēršanai ar stella AI un labošanai ar MI. Kad pārvērš šī datora runas modelis un labošana ar MI ir izslēgta, stella izlabo to rakstību šajā datorā.",
       "count": "{count, number} no {limit, number}",
       "input": "Pievienot vārdu vai nosaukumu",
       "add": "Pievienot",
@@ -1106,7 +1110,7 @@
       "cloudDescriptionModel": "Skaņa transkribēšanai tiek nosūtīta stella un modeļa {model} nodrošinātājam. stella to neglabā.",
       "localMissing": "Lai transkribētu šajā datorā, lejupielādējiet runas modeli sadaļā Iestatījumi, Diktēšana.",
       "localMissingCloud": "Lejupielādējiet runas modeli sadaļā Iestatījumi, Diktēšana, vai transkribējiet ar stella AI.",
-      "retainsData": "{provider} glabā visu šim modelim nosūtīto ierakstu skaņu un transkripciju. Netranskribējiet ar to konfidenciālus vai klientu ierakstus vai izvēlieties citu modeli sadaļā Iestatījumi, Diktēšana.",
+      "retainsData": "Lūdzu, ņemiet vērā {provider} apstrādes noteikumus.",
       "modelFailed": "stella AI modeli neizdevās nolasīt, tāpēc stella AI pašlaik nevar transkribēt. Mēģiniet vēlreiz vai transkribējiet šajā datorā."
     },
     "matter": {
@@ -1155,7 +1159,8 @@
       "saveFailed": "Neizdevās nokopēt vai saglabāt transkripciju. Mēģiniet vēlreiz.",
       "noSpeech": "Šajā ierakstā runa netika atrasta.",
       "fileName": "{title} – transkripcija.txt",
-      "documentTitle": "{title} – transkripcija"
+      "documentTitle": "{title} – transkripcija",
+      "transcriptTitle": "Transkripcija"
     },
     "progress": {
       "running": "Transkribē {done, number} no {total, number} min",
@@ -1164,6 +1169,28 @@
       "stopped": "Apturēts pēc {done, number} min. Līdz šim iegūtais teksts paliek.",
       "done": "Transkribētas {total, number} min.",
       "another": "Transkribēt citu ierakstu"
+    },
+    "cleaned": {
+      "title": "Sakārtots teksts",
+      "running": "Kārto…",
+      "waiting": "Katra daļa tiek sakārtota, tiklīdz tā ir transkribēta.",
+      "instructionsTitle": "Norādījumi diktātā · nav teksta daļa",
+      "instructionsLabel": "Norādījumi:",
+      "partFailed": "Šo daļu neizdevās sakārtot, tāpēc tā parādīta, kā transkribēta.",
+      "failedCount": "{count, plural, zero {# daļas nav sakārtotas} one {# daļa nav sakārtota} other {# daļas nav sakārtotas}}",
+      "saveMarkdown": "Formatēts teksts (.md)",
+      "saveText": "Vienkāršs teksts (.txt)",
+      "fileNameMarkdown": "{title} sakārtots.md",
+      "fileNameText": "{title} sakārtots.txt",
+      "offerTitle": "Sakārtot transkripciju ar MI",
+      "offerDescription": "Šis ieraksts tika transkribēts šajā datorā, un MI kārtošana iestatījumos ir izslēgta. Kārtošana nosūta jūsu organizācijas MI modelim tekstu, nekad ne skaņu.",
+      "offerStart": "Sakārtot"
+    },
+    "copyMenu": {
+      "label": "Kopēšanas iespējas",
+      "formatted": "Ar formatējumu",
+      "plain": "Kā vienkāršu tekstu",
+      "hint": "Ar formatējumu programmā Word vai Outlook tiek ielīmēti virsraksti, treknraksts un saraksti. Jūsu izvēle tiek atcerēta."
     }
   }
 }

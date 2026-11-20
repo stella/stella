@@ -74,27 +74,31 @@ const workerState = testState.forConfig(envDocumentProcessingWorker);
 // fixture deliberately does not stand up; the handler takes it as an injectable
 // boundary so the fork's own behaviour is what these tests observe.
 const indexChatThreadMock = mock(async () => await Promise.resolve());
-const forkThread = createForkThread({ indexChatThread: indexChatThreadMock });
+let forkThread = createForkThread({ indexChatThread: indexChatThreadMock });
 
 // SAFETY: the test database exposes the same Drizzle query and transaction
 // APIs as the owner connection the step content store runs on.
 const runnerDb = () => asTestRaw<DesktopRunnerDb>(testDb);
 /** How many of the next step content copies fail before one is made. */
 const stepCopy = { failuresLeft: 0 };
+/** Copies stored step content on the test database. */
+const stepContentControl: NonNullable<
+  Parameters<typeof createForkThread>[0]
+>["control"] = () => ({
+  copyStepContents: async (options) => {
+    if (stepCopy.failuresLeft > 0) {
+      stepCopy.failuresLeft -= 1;
+      return Result.err(
+        new DatabaseError({ message: "The step content store is away" }),
+      );
+    }
+    return Result.ok(await copyStepContents(runnerDb(), options));
+  },
+});
 /** The fork with stored step content copied on the test database. */
-const forkThreadWithSteps = createForkThread({
+let forkThreadWithSteps = createForkThread({
   indexChatThread: indexChatThreadMock,
-  control: () => ({
-    copyStepContents: async (options) => {
-      if (stepCopy.failuresLeft > 0) {
-        stepCopy.failuresLeft -= 1;
-        return Result.err(
-          new DatabaseError({ message: "The step content store is away" }),
-        );
-      }
-      return Result.ok(await copyStepContents(runnerDb(), options));
-    },
-  }),
+  control: stepContentControl,
 });
 
 // Exercises the fork endpoint against PGlite and an in-process object store:
@@ -131,10 +135,31 @@ const scopedFor = ({
     ),
   );
 
+const rootSafeDb = () =>
+  asTestRaw<SafeDb>(
+    async (run: Parameters<SafeDb>[0]) =>
+      await Result.tryPromise(
+        async () => await testDb.transaction(asTestRaw(run)),
+      ),
+  );
+
 testState.beforeAll(async () => {
   const fixture = await getRlsFixture();
   testDb = fixture.testDb;
   ids = fixture.ids;
+  const fileUsageDb =
+    asTestRaw<NonNullable<Parameters<typeof copyOrganizationFile>[0]["db"]>>(
+      testDb,
+    );
+  forkThread = createForkThread({
+    fileUsageDb,
+    indexChatThread: indexChatThreadMock,
+  });
+  forkThreadWithSteps = createForkThread({
+    control: stepContentControl,
+    fileUsageDb,
+    indexChatThread: indexChatThreadMock,
+  });
   safeDb = scopedFor({
     organizationId: ids.orgA,
     userId: ids.userA1,
@@ -290,7 +315,7 @@ const seedThread = async ({
 };
 
 const forkContext = ({
-  db = safeDb,
+  db = rootSafeDb(),
   newThreadId,
   organizationId,
   threadId,

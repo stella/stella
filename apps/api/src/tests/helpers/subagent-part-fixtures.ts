@@ -23,7 +23,7 @@ export type SubagentStatus = ChatSubagentPart["subagent"]["status"];
 export const SUBAGENT_PARENT_CALL_ID = "call-browse-1";
 
 /** A page snapshot whose text names `label`, so a stored copy is findable. */
-const pageResult = (label: string): BrowserControlResult =>
+export const pageResult = (label: string): BrowserControlResult =>
   v.parse(browserControlResultSchema, {
     protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
     snapshot: {

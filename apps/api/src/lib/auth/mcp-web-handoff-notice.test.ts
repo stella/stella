@@ -59,8 +59,8 @@ test("a handoff session on a new device sends the account notice", async () => {
     expect(notice).toHaveBeenCalledWith(
       expect.objectContaining({
         email: "account@example.test",
-        ipAddress: "192.0.2.2",
-        device: expect.stringContaining("Windows"),
+        ipAddress: { type: "known", address: "192.0.2.2" },
+        device: { type: "browserOnOs", browser: "Chrome", os: "Windows" },
         sessionsUrl: expect.stringContaining("/account"),
       }),
     );

@@ -31,6 +31,8 @@ export const scanCadesPayload = async (
     ownership: "transfer",
     declaredMimeType: mimeType,
     fileName,
+    // This worker runs outside the API's work pools, under its spawn timeout.
+    admission: "subprocess",
   });
   if (scanned.isErr()) {
     return Result.err(scanned.error);
