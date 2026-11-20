@@ -59,6 +59,11 @@ export const SortProperty = <TRow extends TableRowData = TableTreeNode>({
               aria-pressed={isActive}
               className="justify-start font-normal"
               disabled={!canSort || availability.type === "unavailable"}
+              disabledReason={
+                availability.type === "unavailable"
+                  ? availability.reason
+                  : t("workspaces.properties.sortPermissionRequired")
+              }
               onClick={() => {
                 column.toggleSorting(direction === "desc", false);
               }}
