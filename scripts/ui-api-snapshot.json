@@ -2210,11 +2210,13 @@
       "dataBox",
       "excel",
       "markdown",
+      "ofd",
       "openDocumentSheet",
       "openDocumentText",
       "pdf",
       "powerpoint",
       "rtf",
+      "uyap",
       "word"
     ],
     "DropdownMenuCheckboxItem.variant": ["default", "switch"],

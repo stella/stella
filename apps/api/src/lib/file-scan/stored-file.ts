@@ -12,8 +12,7 @@ type ReadStoredFileInput = {
   mimeType: string;
   fileName?: string;
 } & (
-  | { scope?: undefined; signal?: AbortSignal; maxBytes?: undefined }
-  | { scope?: undefined; signal: AbortSignal; maxBytes: number }
+  | { scope?: undefined; signal?: AbortSignal; maxBytes?: number }
   /** Read through the tenant client, refusing keys outside this scope. */
   | { scope: S3SigningScope; signal: AbortSignal; maxBytes?: undefined }
 );
@@ -27,23 +26,16 @@ const readBytes = async (input: ReadStoredFileInput): Promise<ArrayBuffer> => {
     });
   }
   let bytes: Uint8Array;
-  if (input.maxBytes !== undefined) {
-    bytes = await readS3ObjectBounded({
-      bucket: envBase.S3_BUCKET,
-      key: input.key,
-      maxBytes: input.maxBytes,
-      signal: input.signal,
-    });
-  } else if (input.signal === undefined) {
+  if (input.signal === undefined) {
     bytes = await readS3BytesBounded({
       key: input.key,
-      maxBytes: FILE_SIZE_LIMIT_BYTES.document,
+      maxBytes: input.maxBytes ?? FILE_SIZE_LIMIT_BYTES.document,
     });
   } else {
     bytes = await readS3ObjectBounded({
       bucket: envBase.S3_BUCKET,
       key: input.key,
-      maxBytes: FILE_SIZE_LIMIT_BYTES.document,
+      maxBytes: input.maxBytes ?? FILE_SIZE_LIMIT_BYTES.document,
       signal: input.signal,
     });
   }

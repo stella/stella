@@ -1,4 +1,5 @@
 import { ASIC_FILE_FORMATS } from "@stll/api-contract/asic-file-formats";
+import { STRUCTURED_DOCUMENT_FORMATS } from "@stll/api-contract/structured-document-formats";
 
 import {
   type ScanMediaType,
@@ -26,6 +27,7 @@ export const ZIP_BASED_MEDIA_TYPES: ReadonlySet<ScanMediaType> =
     "application/vnd.ms-powerpoint.addin.macroEnabled.12",
     "application/zip",
     "application/x-zip-compressed",
+    ...STRUCTURED_DOCUMENT_FORMATS.map(({ mimeType }) => mimeType),
     ...ASIC_FILE_FORMATS.map(({ mimeType }) => mimeType),
   ]);
 

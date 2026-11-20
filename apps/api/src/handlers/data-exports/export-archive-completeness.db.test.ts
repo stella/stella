@@ -133,6 +133,7 @@ const TABLE_CLASSIFICATIONS = {
   actionCostCalls: FORMAT_SCOPE_EXCLUSION,
   actionCostRecords: FORMAT_SCOPE_EXCLUSION,
   agentSkillComments: FORMAT_SCOPE_EXCLUSION,
+  agentSkillOriginalCleanupRequests: FORMAT_SCOPE_EXCLUSION,
   agentSkillProposals: FORMAT_SCOPE_EXCLUSION,
   agentSkillResources: FORMAT_SCOPE_EXCLUSION,
   agentSkillRevisions: FORMAT_SCOPE_EXCLUSION,

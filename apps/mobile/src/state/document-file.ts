@@ -5,6 +5,7 @@ import { asicPreviewSchema } from "@stll/api-contract/asic";
 import { cadesPreviewSchema } from "@stll/api-contract/cades";
 import { DATA_BOX_DOCUMENT_KINDS } from "@stll/api-contract/data-box";
 import { legalFileFormat } from "@stll/api-contract/document-format";
+import { structuredDocumentPreviewSchema } from "@stll/api-contract/structured-document";
 
 import type { Fetch } from "@/connection/http";
 import type { AccessTokenSource } from "@/connection/session";
@@ -124,8 +125,21 @@ type AsicDocumentFile = {
   readonly preview: Result<v.InferOutput<typeof asicPreviewSchema>, ApiError>;
 };
 
+type StructuredDocumentFile = {
+  readonly viewer: "structured-document";
+  readonly fileName: string;
+  readonly fieldId: string;
+  readonly preview: Result<
+    v.InferOutput<typeof structuredDocumentPreviewSchema>,
+    ApiError
+  >;
+};
+
 export type LegalDocumentFile =
-  AsicDocumentFile | CadesDocumentFile | DataBoxDocumentFile;
+  | AsicDocumentFile
+  | CadesDocumentFile
+  | DataBoxDocumentFile
+  | StructuredDocumentFile;
 
 export type DocumentFile = NativeDocumentFile | LegalDocumentFile;
 
@@ -257,6 +271,21 @@ export const readDocumentFile = async ({
           schema: dataBoxPreviewSchema,
         });
         return Result.ok({ viewer: kind, fileName, fieldId, preview });
+      }
+      case "ofd":
+      case "uyap": {
+        const preview = await requestApi({
+          fetch,
+          source,
+          path: `/v1/files/${encodeURIComponent(workspaceId)}/structured-document/${encodeURIComponent(fieldId)}`,
+          schema: structuredDocumentPreviewSchema,
+        });
+        return Result.ok({
+          viewer: "structured-document",
+          fileName,
+          fieldId,
+          preview,
+        } satisfies StructuredDocumentFile);
       }
       case undefined:
         break;

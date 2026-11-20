@@ -29,6 +29,7 @@ import {
   groupProcessParts,
   isProcessPart,
   isVisibleProcessStep,
+  narratedIntentIndex,
   summarizeProcessRun,
 } from "@stll/api-contract/chat-tool-activity";
 import type { ProcessSummaryPiece } from "@stll/api-contract/chat-tool-activity";
@@ -432,7 +433,10 @@ const LiveTurnStatusContext = createContext<ReactNode>(null);
  */
 const endsInDrawnStepRun = (message: ChatUIMessage): boolean => {
   const entries = toAssistantPartRenderEntries(message.parts);
-  const last = toAssistantPartRenderGroups(entries).at(-1);
+  const last = toAssistantPartRenderGroups(
+    entries,
+    narratedIntentIndex(message.parts),
+  ).at(-1);
   if (
     last?.kind !== "process" ||
     last.startIndex + last.items.length !== entries.length
@@ -2415,9 +2419,19 @@ const toLocalRunSubagentGroups = (toolCalls: readonly ToolCallRenderEntry[]) =>
 // Chunks render entries into runs of consecutive process parts so a
 // multi-step turn packs its reasoning/tool rows tightly instead of
 // spreading them across the message's standard part gap.
+// The message's narrated intent (`narratedIntentIndex`) joins the run it
+// introduces, so the run reads its plan above its steps and its reasoning
+// stays one of those steps.
 const toAssistantPartRenderGroups = (
   entries: readonly AssistantPartRenderEntry[],
-) => groupProcessParts(entries, isProcessRenderEntry);
+  intentIndex: number | null,
+) => {
+  const intent = intentIndex === null ? undefined : entries[intentIndex];
+  return groupProcessParts(
+    entries,
+    (entry) => entry === intent || isProcessRenderEntry(entry),
+  );
+};
 
 /**
  * Renders the body of an assistant message. Splitting this out of
@@ -2554,7 +2568,10 @@ const AssistantMessageParts = ({
     isTurnActive || isAwaitingUser || hasAnswerContent
       ? "recovered"
       : "terminal";
-  const renderGroups = toAssistantPartRenderGroups(renderEntries);
+  const intentIndex = narratedIntentIndex(message.parts);
+  const intentEntry =
+    intentIndex === null ? undefined : renderEntries[intentIndex];
+  const renderGroups = toAssistantPartRenderGroups(renderEntries, intentIndex);
   // Start open while this message is actively streaming its reasoning (no
   // answer text yet), but always render the same disclosure so the user can
   // collapse it immediately. Once the stream settles it folds unless the user
@@ -2775,43 +2792,26 @@ const AssistantMessageParts = ({
         if (group.kind === "standard") {
           return renderEntry(group.item, group.index);
         }
-        const visibleEntries = group.items.filter(isVisibleProcessEntry);
+        // The run's plan reads above it, never as one of its steps.
+        const stepEntries = group.items.filter((item) => item !== intentEntry);
+        const visibleEntries = stepEntries.filter(isVisibleProcessEntry);
         // A run whose steps all show inside a subagent's group draws nothing
         // of its own.
         if (visibleEntries.every(isShownInSubagent)) {
           return null;
         }
-        const renderStep = (entry: AssistantPartRenderEntry, index: number) => {
-          if (isShownInSubagent(entry)) {
-            return null;
-          }
-          const subagent = toolCallEntries.find((call) => call.entry === entry);
-          if (subagent === undefined) {
-            return renderEntry(entry, index);
-          }
-          const stepIds = subagentGroups.stepsOf.get(subagent.part.id);
-          if (stepIds === undefined) {
-            return renderEntry(entry, index);
-          }
-          const steps = toolCallEntries.filter(({ part }) =>
-            stepIds.includes(part.id),
-          );
-          return (
-            <LocalRunSubagentGroup
-              conversation={localRunSubagentConversation({
+        const renderStep = (entry: AssistantPartRenderEntry, index: number) =>
+          isShownInSubagent(entry) || entry === intentEntry
+            ? null
+            : renderRunStep({
                 activeOrganizationId,
-                part: subagent.part,
+                entry,
+                index,
+                renderEntry,
+                subagentGroups,
                 threadId: threadRef?.threadId,
-              })}
-              key={subagent.part.id}
-              part={subagent.part}
-              rows={steps
-                .filter((step) => isShownInSubagent(step.entry))
-                .map((step) => renderEntry(step.entry, step.index))}
-              steps={steps.map(({ part }) => part)}
-            />
-          );
-        };
+                toolCallEntries,
+              });
         // A run that is still receiving parts at the end of a streaming
         // message relays its current step in the collapsed summary.
         const isLiveGroup =
@@ -2822,6 +2822,17 @@ const AssistantMessageParts = ({
         return (
           <AssistantProcessGroup
             defaultOpen={shouldShowToolCalls}
+            intent={
+              intentEntry?.type === "standard" &&
+              intentEntry.part.type === "text" &&
+              group.items.includes(intentEntry) ? (
+                <NarratedIntent
+                  components={streamdownComponents}
+                  restorationPairs={restorationPairs}
+                  text={intentEntry.part.content}
+                />
+              ) : null
+            }
             isLive={isLiveGroup}
             turnStatus={turnStatus}
             key={`${message.id}-process-${group.startIndex}`}
@@ -2833,7 +2844,7 @@ const AssistantMessageParts = ({
             // Read over every entry: completed web searches and fetches
             // render in the sources tray, not as steps, but are still work.
             summary={summarizeProcessRun(
-              group.items.map((entry) => entry.part),
+              stepEntries.map((entry) => entry.part),
               { stepCount: visibleEntries.length },
             )}
           >
@@ -2850,10 +2861,63 @@ const AssistantMessageParts = ({
   );
 };
 
+/**
+ * A step of a run, or a coding agent's subagent with the steps it took. A
+ * step renders synchronously: `Awaited` keeps React 19's promise member out
+ * of the type, so the functions that render steps stay plain ones.
+ */
+const renderRunStep = ({
+  activeOrganizationId,
+  entry,
+  index,
+  renderEntry,
+  subagentGroups,
+  threadId,
+  toolCallEntries,
+}: {
+  activeOrganizationId: string;
+  entry: AssistantPartRenderEntry;
+  index: number;
+  renderEntry: (
+    entry: AssistantPartRenderEntry,
+    index: number,
+  ) => Awaited<ReactNode>;
+  subagentGroups: ReturnType<typeof toLocalRunSubagentGroups>;
+  threadId: string | undefined;
+  toolCallEntries: readonly ToolCallRenderEntry[];
+}): Awaited<ReactNode> => {
+  const subagent = toolCallEntries.find((call) => call.entry === entry);
+  const stepIds =
+    subagent === undefined
+      ? undefined
+      : subagentGroups.stepsOf.get(subagent.part.id);
+  if (subagent === undefined || stepIds === undefined) {
+    return renderEntry(entry, index);
+  }
+  const steps = toolCallEntries.filter(({ part }) => stepIds.includes(part.id));
+  return (
+    <LocalRunSubagentGroup
+      conversation={localRunSubagentConversation({
+        activeOrganizationId,
+        part: subagent.part,
+        threadId,
+      })}
+      key={subagent.part.id}
+      part={subagent.part}
+      rows={steps
+        .filter((step) => subagentGroups.rowIn.has(step.part.id))
+        .map((step) => renderEntry(step.entry, step.index))}
+      steps={steps.map(({ part }) => part)}
+    />
+  );
+};
+
 type AssistantProcessGroupProps = {
   children: ReactNode;
   /** Open the step list initially on development surfaces. */
   defaultOpen: boolean;
+  /** The plan the model wrote for this run, read above its line. */
+  intent: ReactNode;
   /** The run is still receiving parts at the end of a streaming message. */
   isLive: boolean;
   /** Title of the run's current step while it is still streaming. */
@@ -2868,6 +2932,7 @@ const LIVE_STEP_MIN_DWELL_MS = 1500;
 const AssistantProcessGroup = ({
   children,
   defaultOpen,
+  intent,
   isLive,
   liveStepKey,
   summary,
@@ -2916,6 +2981,7 @@ const AssistantProcessGroup = ({
       data-slot="chat-step-list"
       className={cn(appearedLive && "motion-safe:animate-text-fade")}
     >
+      {intent}
       <Collapsible onOpenChange={setIsOpen} open={isOpen}>
         <CollapsibleTrigger
           render={<Button className="max-w-full" variant="plain" />}
@@ -2982,6 +3048,36 @@ const ProcessSummaryLabel = ({
   </span>
 );
 
+/**
+ * The plan the model wrote before its first step, in the user's language:
+ * quiet prose above the run's line, no box, cut at three lines. Its
+ * reasoning, where it shows any, stays behind the run's "Reasoning" step.
+ */
+const NarratedIntent = ({
+  components,
+  restorationPairs,
+  text,
+}: {
+  components: ChatThreadMessagesProps["streamdownComponents"];
+  restorationPairs: readonly ChatAnonRestoration[];
+  text: string;
+}) => (
+  <TruncatedText
+    className="text-muted-foreground mb-0.5 text-sm text-pretty"
+    data-chat-narrated-intent
+    lines={3}
+    render={<div />}
+  >
+    <AssistantTextPart
+      className="[&_p]:my-0"
+      components={components}
+      isStreaming={false}
+      restorationPairs={restorationPairs}
+      text={text}
+    />
+  </TruncatedText>
+);
+
 const getFirstThinkingPartIndex = (parts: readonly ChatPart[]): number =>
   parts.findIndex(
     (part) => part.type === "thinking" && part.content.trim().length > 0,
@@ -3012,8 +3108,10 @@ const endedAtFailedStep = (parts: readonly ChatPart[]): boolean =>
   );
 
 const hasAssistantAnswerContent = (parts: readonly ChatPart[]): boolean => {
-  for (const part of parts) {
-    if (part.type === "text" && part.content.trim()) {
+  // The plan written before the steps is not the answer.
+  const intentIndex = narratedIntentIndex(parts);
+  for (const [index, part] of parts.entries()) {
+    if (part.type === "text" && part.content.trim() && index !== intentIndex) {
       return true;
     }
     if (isRichChatPart(part) || isChatAttachmentPart(part)) {

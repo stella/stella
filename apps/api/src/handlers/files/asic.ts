@@ -5,7 +5,7 @@ import { ASIC_FILE_KINDS } from "@stll/api-contract/legal-file-formats";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { resourceIdSchema, workspaceParams } from "@/api/lib/custom-schema";
-import { readAsicPreview } from "@/api/lib/files/asic-preview";
+import { readAsicPreview } from "@/api/lib/files/archive-preview";
 import { readLegalFilePreview } from "@/api/lib/files/read-legal-file-preview";
 
 const config = {

@@ -693,3 +693,59 @@ export const groupProcessParts = <TItem>(
   }
   return groups;
 };
+
+/**
+ * The longest text still read as the plan above a turn's steps; longer text
+ * before the first step is the answer's own.
+ */
+const NARRATED_INTENT_MAX_LENGTH = 400;
+// A paragraph break, heading, list item, quote or table row: the shape of
+// an answer, not of the sentence or two the chat prompt asks for.
+const ANSWER_SHAPE_PATTERN =
+  /\n[ \t]*\n|^[ \t]*(?:#|[-*+>|][ \t]|\d+[.)][ \t])/mu;
+
+const writtenText = (part: ChatActivityPart): string | null =>
+  part.type === "text" &&
+  typeof part.content === "string" &&
+  part.content.trim() !== ""
+    ? part.content.trim()
+    : null;
+
+/**
+ * Which part of a message is its narrated intent: the short plan the model
+ * writes in the user's language before its first step ("Dohledám znění
+ * § 240 o. s. ř. a judikaturu Nejvyššího soudu k počátku běhu lhůty."),
+ * shown as quiet prose above the steps rather than as the answer. It is the
+ * message's first written text, with only reasoning before it and a step
+ * after it (reasoning between them aside), and it reads as a sentence or
+ * two, not as an answer. Null when the message has none: a turn answered
+ * without steps, a model that wrote no plan, or a text still streaming with
+ * no step after it yet (it becomes the intent once one follows). A surface
+ * groups it with the run of steps it introduces.
+ */
+export const narratedIntentIndex = (
+  parts: readonly ChatActivityPart[],
+): number | null => {
+  const index = parts.findIndex((part) => writtenText(part) !== null);
+  const text = index === -1 ? null : writtenText(parts[index] ?? { type: "" });
+  if (
+    text === null ||
+    text.length > NARRATED_INTENT_MAX_LENGTH ||
+    ANSWER_SHAPE_PATTERN.test(text) ||
+    // Before it only reasoning, or a text a stream opened with no word yet.
+    !parts
+      .slice(0, index)
+      .every((part) => part.type === "thinking" || part.type === "text")
+  ) {
+    return null;
+  }
+  const next = parts
+    .slice(index + 1)
+    .find(
+      (part) =>
+        part.type !== "thinking" &&
+        part.type !== "tool-result" &&
+        !(part.type === "text" && writtenText(part) === null),
+    );
+  return next?.type === "tool-call" && isProcessPart(next) ? index : null;
+};
