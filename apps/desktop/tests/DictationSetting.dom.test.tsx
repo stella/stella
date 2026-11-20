@@ -867,8 +867,8 @@ test("the model cannot be removed while a dictation runs", async () => {
   expect(
     getByRole("button", {
       name: defaultMessages.dictation.removeModel,
-    }).hasAttribute("disabled"),
-  ).toBe(true);
+    }).getAttribute("aria-disabled"),
+  ).toBe("true");
 });
 
 test("the retention warning shows only while the chosen model keeps the audio", async () => {

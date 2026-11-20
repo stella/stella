@@ -148,16 +148,19 @@ const DocumentRecovery = ({
 }) => {
   const t = useTranslations("settings");
   const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
+  const [recoveryAction, setRecoveryAction] = useState<
+    RecoveryTarget | "retry" | null
+  >(null);
+  const busy = recoveryAction !== null;
   const act = async (target: RecoveryTarget | "retry") => {
-    setBusy(true);
+    setRecoveryAction(target);
     const result = await Result.tryPromise(async () =>
       target === "retry"
         ? invoke<AppSnapshot>("get_state").then(() => onRefresh())
         : invoke("open_recovery_folder", { target }),
     );
     setError(result.isErr() ? t("recoveryError") : null);
-    setBusy(false);
+    setRecoveryAction(null);
   };
   if (
     !recovery.edits.length &&
@@ -186,6 +189,11 @@ const DocumentRecovery = ({
               </ul>
               <Button
                 disabled={busy}
+                disabledReason={
+                  recoveryAction === "retry"
+                    ? t("refreshingRecovery")
+                    : t("openingRecoveryFolder")
+                }
                 onClick={() => {
                   void act("account");
                 }}
@@ -203,6 +211,11 @@ const DocumentRecovery = ({
               <p className="text-muted-foreground">{t("recoveryUnassigned")}</p>
               <Button
                 disabled={busy}
+                disabledReason={
+                  recoveryAction === "retry"
+                    ? t("refreshingRecovery")
+                    : t("openingRecoveryFolder")
+                }
                 onClick={() => {
                   void act("unassigned");
                 }}
@@ -217,6 +230,11 @@ const DocumentRecovery = ({
               <p className="text-muted-foreground">{t("recoveryPending")}</p>
               <Button
                 disabled={busy}
+                disabledReason={
+                  recoveryAction === "retry"
+                    ? t("refreshingRecovery")
+                    : t("openingRecoveryFolder")
+                }
                 onClick={() => {
                   void act("retry");
                 }}
@@ -467,6 +485,7 @@ const AccountRow = ({
       )}
       <Button
         disabled={presentation.status === "loading"}
+        disabledReason={t("loadingAccount")}
         onClick={onAction}
         variant={presentation.actionVariant}
       >
