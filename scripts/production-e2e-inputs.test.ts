@@ -9,6 +9,7 @@ import {
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
+import * as v from "valibot";
 
 import { repoRelativePath } from "@stll/portable-path";
 
@@ -127,18 +128,23 @@ test("bundled workspace package source changes the production suite; tooling and
   }
 });
 
+const PackageManifest = v.object({
+  name: v.string(),
+  dependencies: v.optional(v.record(v.string(), v.string())),
+  devDependencies: v.optional(v.record(v.string(), v.string())),
+});
+
 test("bundled packages are the web app's transitive runtime workspace dependencies", () => {
   const manifest = (packageDirectory: string) =>
-    JSON.parse(
-      readFileSync(
-        path.join(repositoryRoot, packageDirectory, "package.json"),
-        "utf-8",
+    v.parse(
+      PackageManifest,
+      JSON.parse(
+        readFileSync(
+          path.join(repositoryRoot, packageDirectory, "package.json"),
+          "utf-8",
+        ),
       ),
-    ) as {
-      name: string;
-      dependencies?: Record<string, string>;
-      devDependencies?: Record<string, string>;
-    };
+    );
   const web = manifest("apps/web");
   const shipped = productionWebPackages();
   const names = new Set(shipped.map((entry) => manifest(entry.directory).name));
