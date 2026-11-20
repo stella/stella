@@ -62,7 +62,11 @@ const SOURCE_ID = toSafeId<"legislationSource">(
 );
 const EPOCH = 3n;
 const ENTITIES_PER_RUN = 3;
-const PAYLOAD = { text: "A published act.", ast: null } as const;
+const PAYLOAD = {
+  text: "A published act.",
+  ast: null,
+  storedAst: { type: "absent" },
+} as const;
 
 let client: Awaited<ReturnType<typeof createTestPglite>>;
 let db: ReturnType<typeof drizzle>;

@@ -624,6 +624,10 @@
       "cleanup": "Labošana",
       "thisComputer": "Šajā datorā"
     },
+    "sounds": {
+      "title": "Skaņas",
+      "description": "Atskaņot īsu, klusu skaņu, kad ieraksts sākas un kad tas beidzas."
+    },
     "cleanup": {
       "title": "Labot ar MI",
       "description": "Izlabo atpazīšanas kļūdas un diktēto formatējumu, piemēram, “jauna rinda” vai “treknraksts”, un pielāgo tekstu lietotnei, piemēram, e-pastam. Caur stella jūsu organizācijas MI pakalpojumu sniedzējam tiek nosūtīts tikai teksts, ne audio; stella to nesaglabā.",

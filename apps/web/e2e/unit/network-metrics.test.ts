@@ -69,6 +69,16 @@ describe("normalizeApiPath", () => {
   test("matches uppercase hex", () => {
     expect(normalizeApiPath(`/v1/files/${UUID_UPPER}`)).toBe("/v1/files/:id");
   });
+
+  test("replaces a file-content grant with its endpoint parameter", () => {
+    const grant = `fc1.eyJleHBpcmVzQXQiOjE3OTUxNzkxODA1Mjd9.${"a".repeat(43)}`;
+    expect(normalizeApiPath(`/v1/file-content/${grant}`)).toBe(
+      "/v1/file-content/:grant",
+    );
+    expect(normalizeApiPath("/v1/file-content/fc1")).toBe(
+      "/v1/file-content/fc1",
+    );
+  });
 });
 
 describe("duplicate resource reads", () => {

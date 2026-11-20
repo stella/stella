@@ -624,6 +624,10 @@
       "cleanup": "Parandamine",
       "thisComputer": "Selles arvutis"
     },
+    "sounds": {
+      "title": "Helid",
+      "description": "Esita lühike vaikne heli, kui salvestamine algab ja kui see lõpeb."
+    },
     "cleanup": {
       "title": "Paranda tehisintellektiga",
       "description": "Parandab tuvastusvead ja dikteeritud vormingu, näiteks „uus rida“ või „paks“, ning sobitab teksti rakendusega, näiteks e-postiga. stella kaudu saadetakse teie organisatsiooni tehisintellekti teenusepakkujale ainult tekst, mitte heli; stella seda ei salvesta.",

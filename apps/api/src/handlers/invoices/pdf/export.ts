@@ -18,7 +18,9 @@ import {
 } from "@/api/lib/billing/invoice-pdf/document";
 import type { InvoicePdfRenderer } from "@/api/lib/billing/invoice-pdf/document";
 import { renderInvoiceWithTypst } from "@/api/lib/billing/invoice-pdf/typst/render-typst";
+import type { SafeId } from "@/api/lib/branded-types";
 import { resourceIdSchema, workspaceParams } from "@/api/lib/custom-schema";
+import { holdMemberAccessOnTx } from "@/api/lib/db/member-access-hold";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { noResourceSetUpdates } from "@/api/lib/resource-set-realtime";
 import { writeS3ObjectWithRetry } from "@/api/lib/s3";
@@ -26,6 +28,27 @@ import { callerDownloadSource } from "@/api/lib/s3-presign";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
 
 const EXPORT_URL_TTL_SECONDS = 300;
+
+/** Hold the requester's matter access for the rest of the download write. */
+const holdsInvoiceMatter = async (
+  tx: Parameters<typeof holdMemberAccessOnTx>[0],
+  {
+    organizationId,
+    userId,
+    workspaceId,
+  }: {
+    organizationId: SafeId<"organization">;
+    userId: SafeId<"user">;
+    workspaceId: SafeId<"workspace">;
+  },
+): Promise<boolean> => {
+  const access = await holdMemberAccessOnTx(tx, {
+    organizationId,
+    userId,
+    workspaceIds: [workspaceId],
+  });
+  return access.type === "held" && access.workspaceIds.includes(workspaceId);
+};
 
 const config = {
   moneyResponse: moneyExportSchema,
@@ -76,7 +99,11 @@ export const createInvoicePdfExport = (
       );
       if (!loaded) {
         return Result.err(
-          new HandlerError({ status: 404, message: "Invoice not found" }),
+          new HandlerError({
+            status: 404,
+            code: "not_found",
+            message: "Invoice not found",
+          }),
         );
       }
       const unavailable = invoiceDocumentError(loaded);
@@ -112,26 +139,42 @@ export const createInvoicePdfExport = (
         }),
       );
       const downloadUrl = yield* Result.await(
-        safeDb(
-          async (tx) =>
-            await auditedPresignDownload({
-              readSessionAuthority: ownerSyntheticSessionAuthorityReader,
-              tx,
-              recordAuditEvent,
-              resourceType: AUDIT_RESOURCE_TYPE.INVOICE,
-              resourceId: loaded.invoice.id,
-              userId: user.id,
-              source: callerDownloadSource(session),
-              s3Key: key,
-              s3Keyspace: "exports",
-              expiresInSeconds: EXPORT_URL_TTL_SECONDS,
-              fileName,
-              organizationId: session.activeOrganizationId,
-              workspaceId,
-              metadata: { format: "pdf" },
-            }),
-        ),
+        safeDb(async (tx) => {
+          const holdsMatter = await holdsInvoiceMatter(tx, {
+            organizationId: session.activeOrganizationId,
+            userId: user.id,
+            workspaceId,
+          });
+          if (!holdsMatter) {
+            return null;
+          }
+          return await auditedPresignDownload({
+            readSessionAuthority: ownerSyntheticSessionAuthorityReader,
+            tx,
+            recordAuditEvent,
+            resourceType: AUDIT_RESOURCE_TYPE.INVOICE,
+            resourceId: loaded.invoice.id,
+            userId: user.id,
+            source: callerDownloadSource(session),
+            s3Key: key,
+            s3Keyspace: "exports",
+            expiresInSeconds: EXPORT_URL_TTL_SECONDS,
+            fileName,
+            organizationId: session.activeOrganizationId,
+            workspaceId,
+            metadata: { format: "pdf" },
+          });
+        }),
       );
+      if (downloadUrl === null) {
+        return Result.err(
+          new HandlerError({
+            status: 404,
+            code: "not_found",
+            message: "Invoice not found",
+          }),
+        );
+      }
       return Result.ok({
         downloadUrl,
         fileName,

@@ -2357,6 +2357,10 @@
     "stopResponse": "Detener",
     "stopped": "Detenido",
     "stopping": "Deteniendo…",
+    "subagentRun": {
+      "browseWeb": "Navegando por la web",
+      "generic": "Trabajando en una subtarea"
+    },
     "suggestTitle": "Sugerir un título",
     "suggestTitleUnavailableAnonymized": "Las sugerencias de título no están disponibles para conversaciones anonimizadas.",
     "suggestingTitle": "Sugiriendo un título…",
@@ -5398,6 +5402,7 @@
       "defaultModel": "Predeterminado: {model}",
       "defaultModelOption": "Predeterminado",
       "defaultRationale": {
+        "browse": "Para trabajar con sitios web en el navegador.",
         "chat": "Para conversar y responder preguntas cotidianas.",
         "fast": "Para tareas breves y rutinarias.",
         "pdf": "Para leer y analizar documentos PDF.",
@@ -5457,6 +5462,7 @@
       "replaceKey": "Sustituir clave",
       "roleUnavailable": "{provider} no admite esta función.",
       "roles": {
+        "browse": "Navegación",
         "chat": "Chat",
         "fast": "Rápido",
         "pdf": "PDF",
@@ -5519,7 +5525,7 @@
     "members": {
       "billingAccess": "Acceso a datos de facturación",
       "changeRole": "Cambiar rol",
-      "confirmRoleChangeDescription": "El rol de {email} cambiará de {oldRole} a {newRole}.",
+      "confirmRoleChangeDescription": "El rol de {email} cambiará {oldRole, select, owner {de propietario} admin {de administrador} member {de miembro} intern {de pasante} external {de colaborador externo} other {}} {newRole, select, owner {a propietario} admin {a administrador} member {a miembro} intern {a pasante} external {a colaborador externo} other {}}.",
       "confirmRoleChangeTitle": "Cambiar rol",
       "joined": "Se unió",
       "noMembersFound": "No se encontraron miembros",

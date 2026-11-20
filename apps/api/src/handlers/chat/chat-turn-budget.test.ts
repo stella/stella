@@ -379,4 +379,32 @@ describe("an assistant turn's budget", () => {
       promptTokens: 300,
     });
   });
+  test("a sub-agent child spends the turn's budget and stops at its cap, leaving the pause to the turn", async () => {
+    const turnBudget = createChatTurnBudget({
+      budget: { maxToolCalls: 200, maxPromptTokens: 250 },
+      owningMessage: undefined,
+    });
+    const { adapter, modelCalls } = searchForeverAdapter({
+      callIdPrefix: "child",
+      promptTokens: 100,
+    });
+    const { executed, tool } = grantedSearchTool();
+    for await (const _chunk of chat({
+      adapter,
+      agentLoopStrategy: CHAT_TURN_LOOP_STRATEGY,
+      messages: [{ role: "user", content: "Find the court fees" }],
+      middleware: [turnBudget.childMiddleware],
+      threadId: "thread-1",
+      tools: [tool],
+    })) {
+      // Drained: the child's run as its sub-agent streams it.
+    }
+
+    // 100, 200, then 300 reaches the cap of 250: no fourth model call.
+    expect(modelCalls()).toBe(3);
+    expect(executed).toEqual(["child-1", "child-2", "child-3"]);
+    expect(turnBudget.spend()).toEqual({ promptTokens: 300 });
+    // The main loop settles the pause at its next boundary.
+    expect(turnBudget.pause()).toBeNull();
+  });
 });

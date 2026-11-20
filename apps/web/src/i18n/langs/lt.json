@@ -2357,6 +2357,10 @@
     "stopResponse": "Stabdyti",
     "stopped": "Sustabdyta",
     "stopping": "Stabdoma…",
+    "subagentRun": {
+      "browseWeb": "Naršoma internete",
+      "generic": "Atliekama dalinė užduotis"
+    },
     "suggestTitle": "Pasiūlyti pavadinimą",
     "suggestTitleUnavailableAnonymized": "Anonimizuotiems pokalbiams pavadinimų pasiūlymai negalimi.",
     "suggestingTitle": "Siūlomas pavadinimas…",
@@ -5398,6 +5402,7 @@
       "defaultModel": "Numatytasis: {model}",
       "defaultModelOption": "Numatytasis",
       "defaultRationale": {
+        "browse": "Darbui su svetainėmis naršyklėje.",
         "chat": "Pokalbiams ir kasdieniams klausimams.",
         "fast": "Trumpoms, įprastoms užduotims.",
         "pdf": "PDF dokumentams skaityti ir analizuoti.",
@@ -5457,6 +5462,7 @@
       "replaceKey": "Pakeisti raktą",
       "roleUnavailable": "{provider} nepalaiko šio vaidmens.",
       "roles": {
+        "browse": "Naršymas",
         "chat": "Pokalbis",
         "fast": "Greitas",
         "pdf": "PDF",
@@ -5519,7 +5525,7 @@
     "members": {
       "billingAccess": "Prieiga prie atsiskaitymo duomenų",
       "changeRole": "Keisti rolę",
-      "confirmRoleChangeDescription": "{email} vaidmuo bus pakeistas iš {oldRole} į {newRole}.",
+      "confirmRoleChangeDescription": "{email} vaidmuo bus pakeistas {oldRole, select, owner {iš savininko vaidmens} admin {iš administratoriaus vaidmens} member {iš nario vaidmens} intern {iš praktikanto vaidmens} external {iš išorinio bendradarbio vaidmens} other {}} {newRole, select, owner {į savininko vaidmenį} admin {į administratoriaus vaidmenį} member {į nario vaidmenį} intern {į praktikanto vaidmenį} external {į išorinio bendradarbio vaidmenį} other {}}.",
       "confirmRoleChangeTitle": "Keisti vaidmenį",
       "joined": "Prisijungė",
       "noMembersFound": "Narių nerasta",

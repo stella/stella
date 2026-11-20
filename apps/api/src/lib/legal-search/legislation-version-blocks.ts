@@ -188,7 +188,8 @@ export const readVersionText = async ({
  */
 const versionAstCache = createCorpusAstCache({
   maxHeapBytes: LIMITS.legislationAstCacheMaxHeapBytes,
-  read: async (storedKey) => await readSizedCorpusAst(storedKey),
+  read: async (storedKey, _readTombstones, report) =>
+    await readSizedCorpusAst(storedKey, report === undefined ? {} : { report }),
 });
 
 export type ReadVersionAstOptions = {
@@ -231,7 +232,10 @@ const readVersionAstPayload = async ({
         documentId: row.id,
         key: source.key,
         step,
-        read: async () => await versionAstCache.read(source.key),
+        read: async () =>
+          await versionAstCache.read(source.key, undefined, {
+            documentId: row.id,
+          }),
         fallback: async () => parsePersistedCorpusAst(await readStoredAst()),
       });
     default: {

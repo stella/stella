@@ -683,11 +683,19 @@ export const createNetworkCollector = (
 const UUID_SEGMENT =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu;
 
+// A file-content grant (`fc1.<payload>.<signature>`) is a fresh signed token
+// per read; budgets name the endpoint, not the token.
+const FILE_CONTENT_GRANT_SEGMENT = /^fc1\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/u;
+
+const normalizeSegment = (segment: string): string => {
+  if (UUID_SEGMENT.test(segment)) {
+    return ":id";
+  }
+  return FILE_CONTENT_GRANT_SEGMENT.test(segment) ? ":grant" : segment;
+};
+
 export const normalizeApiPath = (pathname: string): string =>
-  pathname
-    .split("/")
-    .map((segment) => (UUID_SEGMENT.test(segment) ? ":id" : segment))
-    .join("/");
+  pathname.split("/").map(normalizeSegment).join("/");
 
 export const requestKey = ({
   method,

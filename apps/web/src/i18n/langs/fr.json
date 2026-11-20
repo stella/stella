@@ -2357,6 +2357,10 @@
     "stopResponse": "Arrêter",
     "stopped": "Arrêté",
     "stopping": "Arrêt en cours…",
+    "subagentRun": {
+      "browseWeb": "Navigation sur le web",
+      "generic": "Traitement d'une sous-tâche"
+    },
     "suggestTitle": "Suggérer un titre",
     "suggestTitleUnavailableAnonymized": "Les suggestions de titre ne sont pas disponibles pour les conversations anonymisées.",
     "suggestingTitle": "Suggestion d'un titre…",
@@ -5398,6 +5402,7 @@
       "defaultModel": "Par défaut : {model}",
       "defaultModelOption": "Par défaut",
       "defaultRationale": {
+        "browse": "Pour travailler sur des sites web dans le navigateur.",
         "chat": "Pour les conversations et les questions du quotidien.",
         "fast": "Pour les tâches courtes et courantes.",
         "pdf": "Pour lire et analyser des documents PDF.",
@@ -5457,6 +5462,7 @@
       "replaceKey": "Remplacer la clé",
       "roleUnavailable": "{provider} ne prend pas en charge ce rôle.",
       "roles": {
+        "browse": "Navigation",
         "chat": "Conversation",
         "fast": "Rapide",
         "pdf": "PDF",
@@ -5519,7 +5525,7 @@
     "members": {
       "billingAccess": "Accès aux données de facturation",
       "changeRole": "Modifier le rôle",
-      "confirmRoleChangeDescription": "Le rôle de {email} passera de {oldRole} à {newRole}.",
+      "confirmRoleChangeDescription": "Le rôle de {email} passera {oldRole, select, owner {de propriétaire} admin {d'administrateur} member {de membre} intern {de stagiaire} external {de collaborateur externe} other {}} {newRole, select, owner {à propriétaire} admin {à administrateur} member {à membre} intern {à stagiaire} external {à collaborateur externe} other {}}.",
       "confirmRoleChangeTitle": "Changer le rôle",
       "joined": "Membre depuis",
       "noMembersFound": "Aucun membre trouvé",

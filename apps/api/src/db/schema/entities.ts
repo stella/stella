@@ -1447,6 +1447,16 @@ export const bufferObjectCleanupIntents = p.pgTable(
           AND (t.s3_key = ${table.objectKey} OR t.id::text || '.docx' = pg_catalog.split_part(${table.objectKey}, '/', 3))
       )
     )`;
+    const reportExportWriteAccess = sql`(
+      ${table.chatThreadId} IS NULL
+      AND ${table.workspaceId} IS NOT NULL
+      AND ${workspaceCheck}
+      AND pg_catalog.split_part(${table.objectKey}, '/', 1) = 'exports'
+      AND pg_catalog.split_part(${table.objectKey}, '/', 2) = ${table.organizationId}
+      AND pg_catalog.split_part(${table.objectKey}, '/', 3) = ${table.workspaceId}::text
+      AND pg_catalog.split_part(${table.objectKey}, '/', 4) ~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}[.](docx|pdf)$'
+      AND pg_catalog.array_length(pg_catalog.string_to_array(${table.objectKey}, '/'), 1) = 4
+    )`;
     // Skill file writers reserve only fresh original keys that no stored
     // file names yet, so an intent can never claim (and later erase) another
     // file's bytes.
@@ -1489,7 +1499,7 @@ export const bufferObjectCleanupIntents = p.pgTable(
       p.pgPolicy("buffer_object_cleanup_insert", {
         for: "insert",
         to: stella,
-        withCheck: sql`${organizationCheck} AND ${writerSettlementAccess} AND (${ownerScopeAccess} OR ${templateWriteAccess} OR ${templateCreationAccess} OR ${skillOriginalWriteAccess})`,
+        withCheck: sql`${organizationCheck} AND ${writerSettlementAccess} AND (${ownerScopeAccess} OR ${templateWriteAccess} OR ${templateCreationAccess} OR ${reportExportWriteAccess} OR ${skillOriginalWriteAccess})`,
       }),
       p.pgPolicy("buffer_object_cleanup_select", {
         for: "select",

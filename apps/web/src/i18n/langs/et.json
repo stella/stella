@@ -2357,6 +2357,10 @@
     "stopResponse": "Peata",
     "stopped": "Peatatud",
     "stopping": "Peatamine…",
+    "subagentRun": {
+      "browseWeb": "Veebi sirvimine",
+      "generic": "Alamülesande täitmine"
+    },
     "suggestTitle": "Paku pealkiri",
     "suggestTitleUnavailableAnonymized": "Anonüümitud vestluste puhul pole pealkirjasoovitused saadaval.",
     "suggestingTitle": "Pealkirja pakkumine…",
@@ -5398,6 +5402,7 @@
       "defaultModel": "Vaikimisi: {model}",
       "defaultModelOption": "Vaikimisi",
       "defaultRationale": {
+        "browse": "Veebisaitidega töötamiseks brauseris.",
         "chat": "Vestlusteks ja igapäevasteks küsimusteks.",
         "fast": "Lühikesteks tavapärasteks ülesanneteks.",
         "pdf": "PDF-dokumentide lugemiseks ja analüüsimiseks.",
@@ -5457,6 +5462,7 @@
       "replaceKey": "Asenda võti",
       "roleUnavailable": "{provider} ei toeta seda rolli.",
       "roles": {
+        "browse": "Sirvimine",
         "chat": "Vestlus",
         "fast": "Kiire",
         "pdf": "PDF",
@@ -5519,7 +5525,7 @@
     "members": {
       "billingAccess": "Arveldusandmete vaatamine",
       "changeRole": "Muuda rolli",
-      "confirmRoleChangeDescription": "Kasutaja {email} roll muutub: {oldRole} → {newRole}.",
+      "confirmRoleChangeDescription": "Kasutaja {email} roll muutub: {oldRole, select, owner {omanikust} admin {administraatorist} member {liikmest} intern {praktikandist} external {välisest koostööpartnerist} other {}} saab {newRole, select, owner {omanik} admin {administraator} member {liige} intern {praktikant} external {väline koostööpartner} other {}}.",
       "confirmRoleChangeTitle": "Muuda rolli",
       "joined": "Liitunud",
       "noMembersFound": "Liikmeid ei leitud",

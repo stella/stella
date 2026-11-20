@@ -73,6 +73,7 @@ import type { NonEmptyPatch } from "@/lib/mutation-command";
 import { toSafeId } from "@/lib/safe-id";
 
 import { SkillAvailabilitySummary } from "./skill-availability-field";
+import { SkillFilesPending } from "./skill-detail.pending";
 import { SkillExportMenu } from "./skill-export-menu";
 import {
   rebaseSkillMetadataDraft,
@@ -662,7 +663,7 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
       )}
       {/* Identity, status, and how the skill runs. The files below are the main
           surface; editing happens in the inspector. */}
-      <div className="border-b p-4">
+      <div className="border-b p-4" data-slot="skill-editor-identity">
         {/* Name + description read as a title/summary; the status controls sit
             in the top-right corner, the identity stays a readable width. */}
         <div className="flex items-start gap-4">
@@ -827,7 +828,10 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
         }}
       >
         <div className="mb-2 flex items-center gap-1 px-1">
-          <p className="text-muted-foreground me-auto text-xs font-semibold tracking-wider uppercase">
+          <p
+            className="text-muted-foreground me-auto text-xs font-semibold tracking-wider uppercase"
+            data-slot="skill-editor-files"
+          >
             {t("common.files")}
           </p>
           {allFolderIds.size > 0 && (
@@ -838,11 +842,7 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
             />
           )}
         </div>
-        {detail.isLoading && (
-          <p className="text-muted-foreground px-1 text-xs">
-            {t("common.loading")}
-          </p>
-        )}
+        {detail.isLoading && <SkillFilesPending />}
         {detail.error && (
           <p className="text-destructive px-1 text-sm">
             {userErrorFromThrown(detail.error, t("common.unexpectedError"))}
