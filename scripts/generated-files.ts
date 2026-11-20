@@ -228,6 +228,7 @@ const TRANSITIVE_GENERATOR_INPUTS = {
     "packages/agent-engine/src/*",
     "packages/agent-engine/src/bun-docker/*",
     "packages/agent-engine/src/harness/*",
+    "packages/agent-engine/src/harness/acp/*",
     "packages/agent-engine/src/harness/claude-code/*",
     "packages/agent-engine/src/harness/codex/*",
     "packages/agent-engine/src/sidecar/protocol.ts",

@@ -780,5 +780,11 @@
     "parserVersion": 19,
     "type": "pending-enrolment-wave",
     "wave": "stored-document-objects-dry-run"
+  },
+  {
+    "source": "cz-ns-sbirka",
+    "parserVersion": 2,
+    "type": "pending-enrolment-wave",
+    "wave": "stored-collection-report-editions"
   }
 ]
