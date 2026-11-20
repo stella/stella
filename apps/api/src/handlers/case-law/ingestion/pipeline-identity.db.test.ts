@@ -30,6 +30,7 @@ import { createCaseLawDecisionSlugCandidate } from "@/api/handlers/case-law/deci
 import { czUsAdapter } from "@/api/handlers/case-law/ingestion/adapters/cz-us";
 import { bareCitationKey } from "@/api/handlers/case-law/ingestion/citation-extractor";
 import { processDecision } from "@/api/handlers/case-law/ingestion/pipeline/decision";
+import { PROCESS_DECISION_STATUS } from "@/api/handlers/case-law/ingestion/pipeline/outcomes";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";
 import {
@@ -207,19 +208,25 @@ if (!databaseUrl || !runPostgresTests) {
         enabled: false,
       });
       let observationOrder = 0n;
-      const write = async (court: string, decisionDate: string) =>
-        await processDecision({
-          input: {
-            ...decisionAt(court, undefined),
-            decisionDate,
-            fulltext: `${court} ${decisionDate}`,
-            rawHash: `${court}:${decisionDate}`,
-          },
-          observationOrder: ++observationOrder,
-          sourceId: scopedSourceId,
-          scopedDb,
-          observedAt: new Date("2026-07-31T12:00:00.000Z"),
-        });
+      const write = async (court: string, decisionDate: string) => {
+        const outcome = (
+          await processDecision({
+            input: {
+              ...decisionAt(court, undefined),
+              decisionDate,
+              fulltext: `${court} ${decisionDate}`,
+              rawHash: `${court}:${decisionDate}`,
+            },
+            observationOrder: ++observationOrder,
+            sourceId: scopedSourceId,
+            scopedDb,
+            observedAt: new Date("2026-07-31T12:00:00.000Z"),
+          })
+        ).unwrap();
+        // A refused or deferred write leaves the rows unchanged, so the
+        // row comparisons alone would accept it.
+        expect(outcome.status).toBe(PROCESS_DECISION_STATUS.COMPLETE);
+      };
       const stored = async () =>
         await db
           .select({

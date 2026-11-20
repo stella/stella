@@ -1791,12 +1791,17 @@ describe("online migrations", () => {
       harness.statements,
       `DROP INDEX CONCURRENTLY IF EXISTS public."${LEGACY_SOURCE_CASE_INDEX}"`,
     );
-    expect(dropOffset).toBeGreaterThan(
-      indexOfStatement(harness.statements, SOURCE_DOCUMENT_INDEX),
-    );
-    expect(dropOffset).toBeGreaterThan(
-      indexOfStatement(harness.statements, FALLBACK_IDENTITY_INDEX_NAME),
-    );
+    for (const replacement of [
+      SOURCE_DOCUMENT_INDEX,
+      FALLBACK_IDENTITY_INDEX_NAME,
+    ]) {
+      const replacementOffset = indexOfStatement(
+        harness.statements,
+        replacement,
+      );
+      expect(replacementOffset).toBeGreaterThan(-1);
+      expect(dropOffset).toBeGreaterThan(replacementOffset);
+    }
   });
 
   test("retires the docket-only fallback index after both decision replacements validate", async () => {
@@ -1806,12 +1811,17 @@ describe("online migrations", () => {
       harness.statements,
       `DROP INDEX CONCURRENTLY IF EXISTS public."${PREVIOUS_FALLBACK_DECISION_INDEX}"`,
     );
-    expect(dropOffset).toBeGreaterThan(
-      indexOfStatement(harness.statements, FALLBACK_IDENTITY_INDEX_NAME),
-    );
-    expect(dropOffset).toBeGreaterThan(
-      indexOfStatement(harness.statements, FALLBACK_CONTENT_INDEX_NAME),
-    );
+    for (const replacement of [
+      FALLBACK_IDENTITY_INDEX_NAME,
+      FALLBACK_CONTENT_INDEX_NAME,
+    ]) {
+      const replacementOffset = indexOfStatement(
+        harness.statements,
+        replacement,
+      );
+      expect(replacementOffset).toBeGreaterThan(-1);
+      expect(dropOffset).toBeGreaterThan(replacementOffset);
+    }
   });
 
   test("retires the broad document index only after its exact replacement validates", async () => {
