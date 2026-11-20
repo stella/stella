@@ -37,6 +37,7 @@ import {
 } from "@/api/lib/legal-search/public-read-timeout";
 import { searchIndexUnavailableResponse } from "@/api/lib/legal-search/search-index-unavailable";
 import { LIMITS } from "@/api/lib/limits";
+import type { BoundedRequestStep } from "@/api/lib/load/request-latency-budget";
 import { failureSink } from "@/api/lib/observability/failure";
 
 import {
@@ -46,6 +47,7 @@ import {
   readTermDecisionCounts,
   readWordsAtCopies,
   type RelaxedTopUpOutcome,
+  relaxedTopUpOutcome,
   spelledTerm,
   type TermDecisionCounts,
   wordsHeldAt,
@@ -571,12 +573,24 @@ export const readRankedTermDecisionCounts = async ({
   }));
 };
 
-/** The counts' outcome in the shape the partial-pass steps settle in. */
+/**
+ * The counts' outcome in the shape the partial-pass steps settle in: none when
+ * enough decisions hold every word, degraded when the step's budget ran out.
+ */
 export const rankedCountsOutcome = (
-  read: Result<TermDecisionCounts | null, unknown>,
+  step: BoundedRequestStep<Result<TermDecisionCounts | null, unknown>>,
 ): RelaxedTopUpOutcome<TermDecisionCounts> | null => {
-  if (Result.isError(read)) {
-    return { type: "skipped", error: read.error };
+  const outcome = relaxedTopUpOutcome(step);
+  switch (outcome.type) {
+    case "read":
+      return outcome.value === null
+        ? null
+        : { type: "read", value: outcome.value };
+    case "degraded":
+    case "skipped":
+      return outcome;
+    default:
+      outcome satisfies never;
+      return panic("Unhandled ranked term counts outcome");
   }
-  return read.value === null ? null : { type: "read", value: read.value };
 };
