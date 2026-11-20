@@ -80,19 +80,17 @@ struct Active {
   trace: Trace,
   /// How often the panel checks for a password field between results.
   password_watch: dictation_preview::PasswordWatch,
-  /// Whether the start sound played, so the stop sound plays too.
-  sounded: bool,
 }
 
 impl Active {
   /// Sounds the start once the hold is long enough to be a dictation, not
   /// a tap, when the speaker wants sounds.
   fn sound_start(&mut self, app: &AppHandle) {
-    if !self.sounded
+    if !self.capture.sounded
       && self.trace.since_press() >= MINIMUM_HOLD
       && dictation::sounds_enabled(app)
     {
-      self.sounded = true;
+      self.capture.sounded = true;
       dictation_sounds::play(Cue::Start);
     }
   }
@@ -149,7 +147,6 @@ fn run(app: &AppHandle, commands: &Receiver<Command>) {
                 context,
                 trace,
                 password_watch: dictation_preview::PasswordWatch::default(),
-                sounded: false,
               });
             }
             Err(failure) => {
@@ -181,7 +178,6 @@ fn run(app: &AppHandle, commands: &Receiver<Command>) {
           focus,
           context,
           mut trace,
-          sounded,
           ..
         }) = active.take()
         {
@@ -189,9 +185,6 @@ fn run(app: &AppHandle, commands: &Receiver<Command>) {
           trace.release();
           dictation_preview::release(app);
           thread::sleep(release_tail(trace.held()));
-          if sounded {
-            dictation_sounds::play(Cue::Stop);
-          }
           let device = capture.recorder.device.clone();
           let mut moved = None;
           let outcome = match finish(
@@ -302,6 +295,8 @@ struct Capture {
   language: SpeakerLanguage,
   /// Mono samples taken so far, for the local log.
   recorded: usize,
+  /// Whether the start sound played, so the stop sound plays too.
+  sounded: bool,
 }
 
 impl Capture {
@@ -375,6 +370,7 @@ fn begin(
     live,
     language,
     recorded: 0,
+    sounded: false,
   })
 }
 
@@ -403,6 +399,7 @@ fn finish(
     mut live,
     language,
     recorded,
+    sounded,
   } = capture;
   let channels = recorder.channels;
   let rate = recorder.rate;
@@ -421,6 +418,10 @@ fn finish(
     rate,
     stretches,
   );
+  // Only once the microphone is closed, so the transcript cannot hear it.
+  if sounded {
+    dictation_sounds::play(Cue::Stop);
+  }
   for stretch in segmenter.push(&to_mono(&last, channels)) {
     live.send(stretch);
   }
