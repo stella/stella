@@ -386,6 +386,14 @@ export type CorpusProjectionOfflineBuildProgress = {
     lastPassStarted: number;
   };
   reserved: number;
+  /** Current desired states rejected because their canonical input differs. */
+  canonicalInputMismatch: {
+    revisions: number;
+    /** Pages containing at least one mismatch, including mixed pages. */
+    pages: number;
+    /** Successive pages wholly mismatched and successfully canceled. */
+    consecutivePages: number;
+  };
   /**
    * The most built blocks held at once for a later shard of their class: at
    * most one reservation page, since a page is reserved only while none wait.
@@ -491,6 +499,10 @@ export type CorpusProjectionOfflineBuildOutcome = {
    *   (`progress.outstanding`). The caller runs the build again later; that
    *   run, or the append cycle, settles them. Nothing is lost meanwhile.
    * - `no_progress`: a full pass reserved work but started none of it.
+   * - `canonical_input_mismatch`: consecutive pages named current desired
+   *   states whose authoritative inputs disagree. Canceled reservations stay
+   *   eligible; the reported cursor precedes the rejected streak for repair
+   *   and resume. Previously started shards still settle and prove.
    * - `walk_pass_limit`: the run walked the queue its most times and the
    *   last pass still found work.
    * - `rate_too_slow`: a shard was killed too large and half of it no longer
@@ -501,6 +513,7 @@ export type CorpusProjectionOfflineBuildOutcome = {
     | "drained"
     | "awaiting_proof"
     | "no_progress"
+    | "canonical_input_mismatch"
     | "walk_pass_limit"
     | "deadline_reached"
     | "lock_held"
@@ -659,6 +672,7 @@ const emptyProgress = (
   cursor,
   walk: { passes: 1, lastPassReserved: 0, lastPassStarted: 0 },
   reserved: 0,
+  canonicalInputMismatch: { revisions: 0, pages: 0, consecutivePages: 0 },
   waitingPeak: 0,
   notStarted: {
     cancelled: 0,
@@ -737,6 +751,9 @@ type PendingProof = {
    */
   fault: CorpusIndexAppendFault;
 };
+
+/** Stop an unproductive scan before traversing an arbitrarily large route. */
+export const CORPUS_PROJECTION_OFFLINE_CANONICAL_MISMATCH_PAGE_LIMIT = 8;
 
 type Stop = Exclude<CorpusProjectionOfflineBuildOutcome["status"], "drained">;
 
@@ -870,6 +887,7 @@ class OfflineRouteBuild<Family extends CorpusFamily> {
   #passReserved = 0;
   #passStarted = 0;
   #stop: Stop | null = null;
+  #beforeMismatchPages: CorpusProjectionOfflineBuildProgress["cursor"] = null;
   #shardsSinceSweep = 0;
   /** Bytes and count of every block built so far: the page size's guide. */
   #builtBytes = 0;
@@ -1606,6 +1624,7 @@ class OfflineRouteBuild<Family extends CorpusFamily> {
   async #reserveAndBuildPage(limit: number): Promise<CarriedBlock[]> {
     const { runInTransaction, family, generation, indexId, policy } =
       this.#options;
+    const beforePage = this.#progress.cursor;
     const testNow = await this.#testNow();
     const reserved = await this.#admit(
       { phase: "reserve", revisions: limit },
@@ -1672,6 +1691,36 @@ class OfflineRouteBuild<Family extends CorpusFamily> {
     this.#progress.notStarted.leaseLost += rejected.leaseLost;
     this.#progress.notStarted.retryScheduled += rejected.retryScheduled;
     this.#progress.notStarted.blocked += rejected.blocked;
+    const mismatches = materials.rejected.filter(
+      ({ status }) => status === "canonical_input_mismatch",
+    ).length;
+    const diagnostic = this.#progress.canonicalInputMismatch;
+    diagnostic.revisions += mismatches;
+    if (mismatches > 0) {
+      diagnostic.pages += 1;
+    }
+    if (
+      page.leases.length > 0 &&
+      mismatches === page.leases.length &&
+      rejected.cancelled === page.leases.length
+    ) {
+      if (diagnostic.consecutivePages === 0) {
+        this.#beforeMismatchPages = beforePage;
+      }
+      diagnostic.consecutivePages += 1;
+      if (
+        diagnostic.consecutivePages >=
+        CORPUS_PROJECTION_OFFLINE_CANONICAL_MISMATCH_PAGE_LIMIT
+      ) {
+        this.#stop ??= "canonical_input_mismatch";
+        // Canceled inputs remain eligible. Resume before the whole rejected
+        // streak so a repaired canonical state is not skipped on retry.
+        this.#progress.cursor = this.#beforeMismatchPages;
+      }
+    } else {
+      diagnostic.consecutivePages = 0;
+      this.#beforeMismatchPages = null;
+    }
 
     const payloadReader =
       this.#options.testing?.payloadReader ?? loadCorpusProjectionPayload;
@@ -2045,7 +2094,11 @@ class OfflineRouteBuild<Family extends CorpusFamily> {
         if (entries.length === 1) {
           const judgement = corpusProjectionOfflineLoneKillJudgement(
             this.#plan,
-            { ingested: this.#ingested, bytes: shard.bytes, killAfterMs },
+            {
+              ingested: this.#ingested,
+              bytes: shard.bytes,
+              killAfterMs,
+            },
           );
           switch (judgement) {
             case "revision": {

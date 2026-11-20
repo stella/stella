@@ -35,8 +35,10 @@ import {
 } from "@/api/lib/legal-search/corpus-index-projection-contract";
 import { deriveCorpusIndexProjectionDescriptor } from "@/api/lib/legal-search/corpus-index-projection-descriptor";
 import { legislationProjectionInputFromCanonical } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
+import { readReservedCorpusProjectionMaterialsTx } from "@/api/lib/legal-search/corpus-index-projection-materials";
 import {
   buildCorpusProjectionRouteOffline,
+  CORPUS_PROJECTION_OFFLINE_CANONICAL_MISMATCH_PAGE_LIMIT,
   type CorpusProjectionOfflineAdmission,
   type CorpusProjectionOfflineBuildLock,
   type CorpusProjectionOfflineBuildLockHold,
@@ -59,6 +61,7 @@ import {
   CORPUS_PROJECTION_OFFLINE_INDEXER_END_MARGIN_MS,
   CORPUS_PROJECTION_OFFLINE_START_WINDOW_MS,
 } from "@/api/lib/legal-search/corpus-index-projection-publish-fence";
+import { settleRejectedCorpusProjectionMaterials } from "@/api/lib/legal-search/corpus-index-projection-revision-block";
 import {
   CORPUS_PROJECTION_APPEND_UNKNOWN_ATTEMPT_LIMIT,
   CORPUS_PROJECTION_OFFLINE_LONE_KILL_MESSAGE,
@@ -1239,6 +1242,223 @@ const tally = () => {
 };
 
 describe("offline route build", () => {
+  test("distinguishes current canonical mismatch from supersession, removal and a moved lease", async () => {
+    const model = await newModel(4);
+    const leases = await transactionRunner(model)(
+      async (tx) =>
+        await reserveCorpusProjectionIntentsTx(tx, {
+          ...TARGET,
+          limit: 4,
+          leaseMs: PLAN.leaseMs,
+        }),
+    );
+    expect(leases).toHaveLength(4);
+    const [mismatch, superseded, removed, lost] = leases;
+    if (
+      mismatch === undefined ||
+      superseded === undefined ||
+      removed === undefined ||
+      lost === undefined
+    ) {
+      return panic("Expected four reserved canonical inputs");
+    }
+    await db
+      .update(legislationDocuments)
+      .set({ contentHash: "e".repeat(64) })
+      .where(
+        eq(
+          legislationDocuments.id,
+          toSafeId<"legislationDocument">(mismatch.entityId),
+        ),
+      );
+    await changeDesired(superseded.entityId);
+    await db
+      .update(legislationDocuments)
+      .set({ contentHash: null })
+      .where(
+        eq(
+          legislationDocuments.id,
+          toSafeId<"legislationDocument">(removed.entityId),
+        ),
+      );
+    await db
+      .update(corpusIndexProjectionIntents)
+      .set({ leaseToken: "0198e331-e578-7000-8003-000000000001" })
+      .where(eq(corpusIndexProjectionIntents.id, lost.intentId));
+    const materials = await transactionRunner(model)(
+      async (tx) =>
+        await readReservedCorpusProjectionMaterialsTx(tx, { leases }),
+    );
+    expect(materials.ready).toEqual([]);
+    expect(materials.rejected.map(({ status }) => status)).toEqual([
+      "canonical_input_mismatch",
+      "stale",
+      "stale",
+      "lease_lost",
+    ]);
+    expect(
+      await settleRejectedCorpusProjectionMaterials({
+        runInTransaction: transactionRunner(model),
+        rejected: materials.rejected,
+        policy: POLICY,
+      }),
+    ).toMatchObject({ cancelled: 3, leaseLost: 1 });
+    expect(
+      (await readIntents(model.entityIds))
+        .filter(({ status }) => status === "reserved")
+        .map(({ leaseToken }) => leaseToken),
+    ).toEqual(["0198e331-e578-7000-8003-000000000001"]);
+  });
+
+  test("bounds consecutive current-state mismatch pages and resumes repaired inputs without lost leases", async () => {
+    const rejectedCount =
+      CORPUS_PROJECTION_OFFLINE_CANONICAL_MISMATCH_PAGE_LIMIT * SHARD_REVISIONS;
+    const model = await newModel(rejectedCount + SHARD_REVISIONS * 2);
+    const mismatchedIds = model.entityIds
+      .slice(SHARD_REVISIONS)
+      .map((id) => toSafeId<"legislationDocument">(id));
+    await db
+      .update(legislationDocuments)
+      .set({ contentHash: "e".repeat(64) })
+      .where(inArray(legislationDocuments.id, mismatchedIds));
+    const stopped = await runBuild(model, QUIET_RUN);
+    expect(stopped?.status).toBe("canonical_input_mismatch");
+    expect(stopped?.progress).toMatchObject({
+      reserved: rejectedCount + SHARD_REVISIONS,
+      started: SHARD_REVISIONS,
+      proved: SHARD_REVISIONS,
+      canonicalInputMismatch: {
+        revisions: rejectedCount,
+        pages: CORPUS_PROJECTION_OFFLINE_CANONICAL_MISMATCH_PAGE_LIMIT,
+        consecutivePages:
+          CORPUS_PROJECTION_OFFLINE_CANONICAL_MISMATCH_PAGE_LIMIT,
+      },
+      notStarted: { cancelled: rejectedCount, leaseLost: 0 },
+      outstanding: 0,
+    });
+    expect(stopped?.progress.cursor?.entityId).toBe(
+      model.entityIds.at(SHARD_REVISIONS - 1),
+    );
+    expect(model.deliveries).toHaveLength(1);
+    expect(
+      (await readIntents(model.entityIds)).every(
+        ({ status, leaseToken }) =>
+          (status === "cancelled" || status === "applied") &&
+          leaseToken === null,
+      ),
+    ).toBe(true);
+    expect(
+      (await readStates(model.entityIds)).filter(
+        ({ appliedRevision }) => appliedRevision !== null,
+      ),
+    ).toHaveLength(SHARD_REVISIONS);
+    await db
+      .update(legislationDocuments)
+      .set({ contentHash: "d".repeat(64) })
+      .where(eq(legislationDocuments.sourceId, SOURCE_ID));
+    const resumed = await runBuild(model, QUIET_RUN, stopped?.progress.cursor);
+    expect(resumed?.status).toBe("drained");
+    expect(resumed?.progress.proved).toBe(mismatchedIds.length);
+    expect(
+      (await readIntents(model.entityIds)).every(
+        ({ status }) => status === "cancelled" || status === "applied",
+      ),
+    ).toBe(true);
+    expect(
+      (await readStates(model.entityIds)).every(
+        ({ appliedRevision }) => appliedRevision !== null,
+      ),
+    ).toBe(true);
+  });
+
+  test("mixed pages and an isolated canonical mismatch still settle healthy revisions", async () => {
+    const model = await newModel(
+      CORPUS_PROJECTION_OFFLINE_CANONICAL_MISMATCH_PAGE_LIMIT *
+        SHARD_REVISIONS +
+        1,
+    );
+    const first =
+      model.entityIds.at(0) ?? panic("Expected a canonical mismatch fixture");
+    await db
+      .update(legislationDocuments)
+      .set({ contentHash: "e".repeat(64) })
+      .where(
+        eq(legislationDocuments.id, toSafeId<"legislationDocument">(first)),
+      );
+    const stopped = await runBuild(model, QUIET_RUN);
+    expect(stopped?.status).toBe("no_progress");
+    expect(stopped?.progress.proved).toBe(model.entityIds.length - 1);
+    expect(
+      stopped?.progress.canonicalInputMismatch.consecutivePages,
+    ).toBeLessThan(CORPUS_PROJECTION_OFFLINE_CANONICAL_MISMATCH_PAGE_LIMIT);
+    expect(stopped?.progress.notStarted.leaseLost).toBe(0);
+    expect(
+      (await readIntents(model.entityIds)).every(
+        ({ status }) => status === "cancelled" || status === "applied",
+      ),
+    ).toBe(true);
+    await db
+      .update(legislationDocuments)
+      .set({ contentHash: "d".repeat(64) })
+      .where(
+        eq(legislationDocuments.id, toSafeId<"legislationDocument">(first)),
+      );
+    const resumed = await runBuild(model, QUIET_RUN, stopped?.progress.cursor);
+    expect(resumed?.status).toBe("drained");
+    expect(resumed?.progress.proved).toBe(1);
+  });
+
+  test("healthy pages reset the mismatch streak while transient pages repair and replay", async () => {
+    const groups = CORPUS_PROJECTION_OFFLINE_CANONICAL_MISMATCH_PAGE_LIMIT + 1;
+    const model = await newModel(groups * SHARD_REVISIONS * 2);
+    const mismatched = model.entityIds.filter(
+      (_id, index) => index % (SHARD_REVISIONS * 2) < SHARD_REVISIONS,
+    );
+    await db
+      .update(legislationDocuments)
+      .set({ contentHash: "e".repeat(64) })
+      .where(
+        inArray(
+          legislationDocuments.id,
+          mismatched.map((id) => toSafeId<"legislationDocument">(id)),
+        ),
+      );
+    let delivered = 0;
+    const outcome = await runBuild(model, {
+      ...QUIET_RUN,
+      onDelivery: async () => {
+        const repaired = mismatched.slice(
+          delivered * SHARD_REVISIONS,
+          (delivered + 1) * SHARD_REVISIONS,
+        );
+        delivered += 1;
+        if (repaired.length > 0) {
+          await db
+            .update(legislationDocuments)
+            .set({ contentHash: "d".repeat(64) })
+            .where(
+              inArray(
+                legislationDocuments.id,
+                repaired.map((id) => toSafeId<"legislationDocument">(id)),
+              ),
+            );
+        }
+      },
+    });
+    expect(outcome?.status).toBe("drained");
+    expect(outcome?.progress.canonicalInputMismatch.pages).toBe(groups);
+    expect(outcome?.progress.proved).toBe(model.entityIds.length);
+    expect(outcome?.progress.notStarted).toMatchObject({
+      cancelled: mismatched.length,
+      leaseLost: 0,
+    });
+    expect(
+      (await readIntents(model.entityIds)).every(
+        ({ status }) => status === "cancelled" || status === "applied",
+      ),
+    ).toBe(true);
+  });
+
   test(
     "an offline route build converges under a crash at any step with no cleanup",
     async () => {
