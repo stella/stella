@@ -190,8 +190,17 @@ export const hitTermsFromCoverage = (
   };
 };
 
+/**
+ * How an optional step of a search ended. `degraded` is the step's design
+ * working: its budget, or the request's, ran out and the answer goes without
+ * it. `skipped` is a failure the step could not absorb. The two are reported
+ * apart, so a budget that runs out is counted as an incomplete answer and
+ * never reads as an error.
+ */
 export type RelaxedTopUpOutcome<T> =
-  { type: "read"; value: T } | { type: "skipped"; error: unknown };
+  | { type: "read"; value: T }
+  | { type: "degraded"; reason: "budget_exhausted"; budgetMs: number }
+  | { type: "skipped"; error: unknown };
 
 /**
  * How the top-up step ended. It is optional and starts with a strict page
@@ -207,6 +216,11 @@ export const relaxedTopUpOutcome = <T>(
         ? { type: "read", value: step.value.value }
         : { type: "skipped", error: step.value.error };
     case "degraded":
+      return {
+        type: "degraded",
+        reason: step.reason,
+        budgetMs: step.budgetMs,
+      };
     case "failed":
       return { type: "skipped", error: step.error };
     default:

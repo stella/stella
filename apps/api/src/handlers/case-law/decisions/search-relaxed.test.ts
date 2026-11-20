@@ -229,16 +229,21 @@ describe("relaxedTopUpOutcome", () => {
     ).toEqual({ type: "read", value: ["hit"] });
   });
 
+  test("a step its budget cut is degraded, carrying no error to observe", () => {
+    expect(
+      relaxedTopUpOutcome({
+        status: "degraded",
+        reason: "budget_exhausted",
+        budgetMs: 4000,
+        error: failure,
+      }),
+    ).toEqual({ type: "degraded", reason: "budget_exhausted", budgetMs: 4000 });
+  });
+
   test.each([
     { status: "complete", value: Result.err(failure) },
-    {
-      status: "degraded",
-      reason: "budget_exhausted",
-      budgetMs: 1,
-      error: failure,
-    },
     { status: "failed", error: failure },
-  ] as const)("answers without the top-up when it ended %#", (step) => {
+  ] as const)("a step that failed is skipped with its error %#", (step) => {
     expect(relaxedTopUpOutcome(step)).toEqual({
       type: "skipped",
       error: failure,
