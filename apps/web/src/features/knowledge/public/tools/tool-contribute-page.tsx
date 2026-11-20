@@ -42,7 +42,6 @@ import { ToggleChip } from "@/features/knowledge/public/tools/toggle-chip";
 import {
   ContributeFormShell,
   DEFAULT_SKILL_LICENSE,
-  ToolContributeShell,
 } from "@/features/knowledge/public/tools/tool-contribute-shell.pending";
 import {
   CATALOGUE_CONTRIBUTING_URL,
@@ -86,13 +85,7 @@ const INITIAL_FORM: ContributeFormState = {
 
 type CommitStatus = "idle" | "loading" | "error";
 
-/** How to add a tool to the published catalogue. */
-export const ContributePage = () => (
-  <ToolContributeShell>
-    <ToolContributeContent />
-  </ToolContributeShell>
-);
-
+/** How to add a tool to the published catalogue, inside the route's shell. */
 export const ToolContributeContent = () => {
   const t = useTranslations();
 

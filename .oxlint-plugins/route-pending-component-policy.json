@@ -6,6 +6,7 @@
     "@stll/ui/calendar-primitives",
     "@stll/ui/composer-tokens",
     "@stll/ui/control-face",
+    "@stll/ui/details-grid",
     "@stll/ui/details-list-face",
     "@stll/ui/directional-icon",
     "@stll/ui/field-trigger",

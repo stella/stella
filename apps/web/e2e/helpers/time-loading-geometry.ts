@@ -4,7 +4,7 @@ import * as v from "valibot";
 
 import cs from "../../src/i18n/langs/cs.json" with { type: "json" };
 import en from "../../src/i18n/langs/en.json" with { type: "json" };
-import { apiDelete, apiPut, E2E_API_ORIGIN } from "./api";
+import { apiDelete, apiPost, apiPut, E2E_API_ORIGIN } from "./api";
 import { setPresentationPrefs } from "./presentation-prefs";
 import { captureLandmarks } from "./stable-geometry";
 import { createBrowserErrorCollector } from "./test";
@@ -129,6 +129,24 @@ const contactSurfaces = (contactId: string): readonly LoadingSurface[] => [
 ];
 
 /**
+ * An organization skill's page, recorded as evidence beside the others: the
+ * editor's identity block, how the skill runs and its files, on a skill the
+ * measurement creates.
+ */
+const skillSurfaces = (skillId: string): readonly LoadingSurface[] => [
+  {
+    type: "steady",
+    path: `/knowledge/tools/skills/${skillId}`,
+    busy: "[data-slot=file-tree-row-pending]",
+    landmarks: {
+      heading: "[data-slot=skill-editor-identity]",
+      runs: "[data-slot=skill-editor-identity] .grid",
+      files: "[data-slot=skill-editor-files]",
+    },
+  },
+];
+
+/**
  * The Knowledge sections, recorded as evidence beside the others: the
  * landing, whose cold paint leaves its cards to the sections this browser
  * last saw, the clause library and the house styles.
@@ -173,9 +191,9 @@ type MeasureLoadingGeometryOptions = {
   browser: Browser;
   baseURL: string;
   storageState: string;
-  /** Which surfaces to measure: time and admin, inbox and contacts, or
-   *  the Knowledge sections. */
-  set?: "time-admin" | "contacts" | "knowledge" | undefined;
+  /** Which surfaces to measure: time and admin, inbox and contacts, the
+   *  Knowledge sections, or a Knowledge skill's page. */
+  set?: "time-admin" | "contacts" | "knowledge" | "knowledge-skill" | undefined;
 };
 
 export const measureLoadingGeometry = async ({
@@ -216,10 +234,31 @@ export const measureLoadingGeometry = async ({
             }),
           )
         : null;
+    const skill =
+      set === "knowledge-skill"
+        ? v.parse(
+            v.object({ id: v.string() }),
+            await apiPost(account.request, "/skills", {
+              scope: "private",
+              name: "Geometry fixture skill",
+              description: "Geometry fixture",
+              body: "Fixture instructions.",
+            }),
+          )
+        : null;
+    // The fixture's own surfaces, where the set made one.
+    const fixtureSurfaces = (): readonly LoadingSurface[] | null => {
+      if (contact !== null) {
+        return contactSurfaces(contact.id);
+      }
+      if (skill !== null) {
+        return skillSurfaces(skill.id);
+      }
+      return null;
+    };
     const surfaces =
-      contact === null
-        ? surfaceSet(set === "knowledge" ? "knowledge" : "time-admin")
-        : contactSurfaces(contact.id);
+      fixtureSurfaces() ??
+      surfaceSet(set === "knowledge" ? "knowledge" : "time-admin");
     const evidence = [];
     try {
       for (const { locale, browserLocale, messages } of LANGUAGES) {
@@ -345,6 +384,9 @@ export const measureLoadingGeometry = async ({
       await setLocale(original.user.locale);
       if (contact !== null) {
         await apiDelete(account.request, `/contacts/${contact.id}`);
+      }
+      if (skill !== null) {
+        await apiDelete(account.request, `/skills/${skill.id}`);
       }
     }
   } finally {
