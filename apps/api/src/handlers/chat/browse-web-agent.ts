@@ -47,6 +47,10 @@ import {
   type OrgAIConfig,
   resolveCaching,
 } from "@/api/lib/ai-config";
+import {
+  generateArtefact,
+  readUnsourcedArtefact,
+} from "@/api/lib/ai-generation/provenance";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
@@ -76,6 +80,8 @@ import { isRecord } from "@/api/lib/type-guards";
 // approval cards and per-site grants the main model used to, and the main
 // model reads back only the child's final text, marked as untrusted web
 // content. Page snapshots never enter the main conversation.
+
+const GENERATOR = "apps/api/src/handlers/chat/browse-web-agent.ts";
 
 /** Model steps one browsing run may take before it must answer. */
 const BROWSE_WEB_MAX_STEPS = 24;
@@ -564,48 +570,59 @@ const runBrowseWeb = async function* (
       : AbortSignal.any([ctx.abortSignal, options.admission.signal]),
   );
 
-  const stream = streamTanStackChatRun({
-    userId: options.admission.userId,
-    admission: options.admission,
-    model,
-    adapter: model.adapter,
-    messages,
-    agentLoopStrategy: maxIterations(BROWSE_WEB_MAX_STEPS),
-    abortController,
-    threadId: ctx.threadId,
-    runId: ctx.runId,
-    parentRunId: ctx.parentRunId,
-    subagentRunId: ctx.subagentRunId,
-    ...(ctx.resume === undefined ? {} : { resume: ctx.resume }),
-    ...chatRequestOptions({
-      caching: resolveCaching({
-        promptCachingEnabled: false,
-        task,
-        scopeKey: null,
+  // The child's answer is read by the main model, never stored as an
+  // artefact of its own, and no stored decision feeds it.
+  const generated = await generateArtefact({
+    generator: GENERATOR,
+    sources: { decisionIds: [], inputs: [] },
+    generate: () =>
+      streamTanStackChatRun({
+        userId: options.admission.userId,
+        admission: options.admission,
+        model,
+        adapter: model.adapter,
+        messages,
+        agentLoopStrategy: maxIterations(BROWSE_WEB_MAX_STEPS),
+        abortController,
+        threadId: ctx.threadId,
+        runId: ctx.runId,
+        parentRunId: ctx.parentRunId,
+        subagentRunId: ctx.subagentRunId,
+        ...(ctx.resume === undefined ? {} : { resume: ctx.resume }),
+        ...chatRequestOptions({
+          caching: resolveCaching({
+            promptCachingEnabled: false,
+            task,
+            scopeKey: null,
+          }),
+          maxOutputTokens: undefined,
+          model,
+          modelTools,
+          serviceTier: "standard",
+          system: guardModelSystemPrompt({
+            system: BROWSE_WEB_SYSTEM_PROMPT,
+            workspaceIds: options.tenantWorkspaceIds,
+          }),
+          temperature: getTemperatureForTask(task),
+        }),
+        middleware: [
+          meter(options, model),
+          options.turnBudget,
+          {
+            name: "stella-browse-web-retention",
+            // The child, too, reads only its newest page whole.
+            onConfig: (middlewareCtx, config) =>
+              middlewareCtx.phase === "beforeModel"
+                ? { messages: retainToolResultsForModel(config.messages) }
+                : undefined,
+          },
+        ],
       }),
-      maxOutputTokens: undefined,
-      model,
-      modelTools,
-      serviceTier: "standard",
-      system: guardModelSystemPrompt({
-        system: BROWSE_WEB_SYSTEM_PROMPT,
-        workspaceIds: options.tenantWorkspaceIds,
-      }),
-      temperature: getTemperatureForTask(task),
-    }),
-    middleware: [
-      meter(options, model),
-      options.turnBudget,
-      {
-        name: "stella-browse-web-retention",
-        // The child, too, reads only its newest page whole.
-        onConfig: (middlewareCtx, config) =>
-          middlewareCtx.phase === "beforeModel"
-            ? { messages: retainToolResultsForModel(config.messages) }
-            : undefined,
-      },
-    ],
   });
+  if (Result.isError(generated)) {
+    panic("A browsing run has no sources to exceed a limit");
+  }
+  const stream = readUnsourcedArtefact(generated.value);
 
   const pages = readPages({ history, resume: ctx.resume });
   // The run's last terminal is held back, so the pages it read can be added

@@ -95,8 +95,8 @@ const recordingModel = (turns: readonly ScriptedTurn[]) => {
         {
           index: current,
           model,
-          runId,
-          threadId: threadId ?? THREAD,
+          runId: runId ?? "run",
+          threadId,
         },
       );
     },
