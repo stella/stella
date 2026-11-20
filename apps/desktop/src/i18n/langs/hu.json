@@ -666,7 +666,7 @@
     "customWords": {
       "group": "Saját szavak",
       "title": "Szavak és nevek, amelyeket a stella helyesen írjon",
-      "description": "Például ügyfelek nevei vagy angol kifejezések, amelyeket más nyelven beszélve használ. Ezen a számítógépen tárolódnak ehhez a fiókhoz, és csak a diktálással együtt kerülnek elküldésre: a stella AI átíráshoz és az AI-jal végzett javításhoz. A számítógép beszédmodellje nem használja őket.",
+      "description": "Például ügyfelek nevei vagy angol kifejezések, amelyeket más nyelven beszélve használ. Ezen a számítógépen tárolódnak ehhez a fiókhoz, és csak a diktálással együtt kerülnek elküldésre: a stella AI átíráshoz és az AI-jal végzett javításhoz. Ha a számítógép beszédmodellje ír át, és az AI-jal végzett javítás ki van kapcsolva, a stella ezen a számítógépen javítja a helyesírásukat.",
       "count": "{count, number} / {limit, number}",
       "input": "Szó vagy név hozzáadása",
       "add": "Hozzáadás",

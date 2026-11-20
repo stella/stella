@@ -666,7 +666,7 @@
     "customWords": {
       "group": "Savi vārdi",
       "title": "Vārdi un nosaukumi, kas stella jāraksta pareizi",
-      "description": "Piemēram, klientu vārdi vai angļu termini, ko lietojat, runājot citā valodā. Tie tiek glabāti šajā datorā šim kontam un nosūtīti tikai kopā ar diktātu: pārvēršanai ar stella AI un labošanai ar MI. Šī datora runas modelis tos neizmanto.",
+      "description": "Piemēram, klientu vārdi vai angļu termini, ko lietojat, runājot citā valodā. Tie tiek glabāti šajā datorā šim kontam un nosūtīti tikai kopā ar diktātu: pārvēršanai ar stella AI un labošanai ar MI. Kad pārvērš šī datora runas modelis un labošana ar MI ir izslēgta, stella izlabo to rakstību šajā datorā.",
       "count": "{count, number} no {limit, number}",
       "input": "Pievienot vārdu vai nosaukumu",
       "add": "Pievienot",

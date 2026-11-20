@@ -666,7 +666,7 @@
     "customWords": {
       "group": "Vlastní slova",
       "title": "Slova a jména, která má stella psát správně",
-      "description": "Například jména klientů nebo anglické výrazy, které používáte v češtině. Ukládají se v tomto počítači pro tento účet a odesílají se jen s diktátem, k převodu přes stella AI a k úpravě pomocí AI. Model řeči v tomto počítači je nepoužívá.",
+      "description": "Například jména klientů nebo anglické výrazy, které používáte v češtině. Ukládají se v tomto počítači pro tento účet a odesílají se jen s diktátem, k převodu přes stella AI a k úpravě pomocí AI. Když přepisuje model řeči v tomto počítači a úprava pomocí AI je vypnutá, stella opraví jejich pravopis přímo v tomto počítači.",
       "count": "{count, number} z {limit, number}",
       "input": "Přidat slovo nebo jméno",
       "add": "Přidat",

@@ -666,7 +666,7 @@
     "customWords": {
       "group": "Eigene Wörter",
       "title": "Wörter und Namen, die stella richtig schreiben soll",
-      "description": "Etwa Namen von Mandanten oder englische Begriffe, die Sie in einer anderen Sprache verwenden. Sie werden auf diesem Computer für dieses Konto gespeichert und nur mit Ihrem Diktat gesendet, an die Umwandlung mit stella AI und an die Überarbeitung mit KI. Das Sprachmodell auf diesem Computer verwendet sie nicht.",
+      "description": "Etwa Namen von Mandanten oder englische Begriffe, die Sie in einer anderen Sprache verwenden. Sie werden auf diesem Computer für dieses Konto gespeichert und nur mit Ihrem Diktat gesendet, an die Umwandlung mit stella AI und an die Überarbeitung mit KI. Wenn das Sprachmodell auf diesem Computer umwandelt und die Überarbeitung mit KI aus ist, korrigiert stella ihre Schreibweise auf diesem Computer.",
       "count": "{count, number} von {limit, number}",
       "input": "Wort oder Namen hinzufügen",
       "add": "Hinzufügen",
