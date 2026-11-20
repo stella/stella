@@ -10,6 +10,11 @@
     "reason": "CJK font subset embedded in signature stamps at runtime; produced by apps/api/src/scripts/subset-stamp-fonts.ts."
   },
   {
+    "path": "packages/recording-wasm/generated/recording_bg.wasm",
+    "maxBytes": 2097152,
+    "reason": "The desktop's recording reader (Symphonia decoders, Opus, resampler) built for the API; committed because its canonical build needs the pinned x86_64 Linux toolchain, and recording-wasm-drift proves it matches its source."
+  },
+  {
     "path": "provenance/projects/root/sbom.cdx.json",
     "maxBytes": 3145728,
     "reason": "CycloneDX SBOM committed by the provenance refresh (docs/policies/asset-management.md). Its size follows the dependency set, so the ceiling leaves headroom for scheduled refreshes."

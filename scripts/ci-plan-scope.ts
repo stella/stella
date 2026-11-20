@@ -417,6 +417,7 @@ const wideScope = (input: ChangedFileScopeInput): Record<string, string> => {
     release_typecheck_required: bool(releaseTypecheck),
     route_tree_required: TRUE,
     scan_engine_wasm_required: TRUE,
+    recording_wasm_required: TRUE,
     stack_redaction_browsers_required: TRUE,
     web_api_types_required: TRUE,
     web_build_required: TRUE,
@@ -503,6 +504,7 @@ const deriveScopeFacts = (
         route_smoke_required: FALSE,
         route_tree_required: FALSE,
         scan_engine_wasm_required: FALSE,
+        recording_wasm_required: FALSE,
         stack_redaction_browsers_required: FALSE,
         web_api_types_required: FALSE,
         web_build_required: FALSE,
@@ -774,6 +776,7 @@ export const OUTPUT_ORDER = [
   "route_smoke_required",
   "route_tree_required",
   "scan_engine_wasm_required",
+  "recording_wasm_required",
   "stack_redaction_browsers_required",
   "web_api_types_required",
   "web_build_required",
@@ -1085,6 +1088,18 @@ export const OUTPUT_RULES = {
   route_tree_required: (facts) =>
     scopeRule(facts, "route_tree_required", ({ full, p }) =>
       bool(full || p(ROUTE_TREE_INPUTS)),
+    ),
+  recording_wasm_required: (facts) =>
+    scopeRule(facts, "recording_wasm_required", ({ p }) =>
+      bool(
+        p([
+          "packages/recording-wasm/*",
+          "apps/desktop/src-tauri/crates/recording/*",
+          ".github/actions/cargo-deny/*",
+          "bun.lock",
+          ".github/workflows/ci.yml",
+        ]),
+      ),
     ),
   scan_engine_wasm_required: (facts) =>
     scopeRule(facts, "scan_engine_wasm_required", ({ p }) =>

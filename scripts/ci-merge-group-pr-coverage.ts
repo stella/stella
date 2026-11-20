@@ -67,6 +67,7 @@ export type MergeGroupJob =
   | "desktop-windows-dry-run"
   | "windows-scripts"
   | "scan-engine-wasm-drift"
+  | "recording-wasm-drift"
   | "desktop-rust-tests"
   | "desktop-rust-lint"
   | "dependency-audit"
@@ -126,6 +127,7 @@ export const MERGE_GROUP_PR_COVERAGE = {
   "desktop-windows-dry-run": runs("desktop_windows_dry_run_required"),
   "windows-scripts": runs("windows_scripts_required"),
   "scan-engine-wasm-drift": runs("scan_engine_wasm_required"),
+  "recording-wasm-drift": runs("recording_wasm_required"),
   "desktop-rust-tests": runs("desktop_rust_checks_required"),
   "desktop-rust-lint": runs("desktop_rust_checks_required"),
   "dependency-audit": runs("dependency_changes_required"),

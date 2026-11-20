@@ -1446,6 +1446,17 @@
         "oxc-parser": "catalog:",
       },
     },
+    "packages/recording-wasm": {
+      "name": "@stll/recording-wasm",
+      "version": "0.0.0",
+      "dependencies": {
+        "better-result": "catalog:",
+      },
+      "devDependencies": {
+        "@stll/typescript-config": "workspace:*",
+        "bun-types": "catalog:",
+      },
+    },
     "packages/redis-config": {
       "name": "@stll/redis-config",
       "version": "0.0.0",
@@ -3553,6 +3564,8 @@
     "@stll/portable-path": ["@stll/portable-path@workspace:packages/portable-path"],
 
     "@stll/property-testing": ["@stll/property-testing@workspace:packages/property-testing"],
+
+    "@stll/recording-wasm": ["@stll/recording-wasm@workspace:packages/recording-wasm"],
 
     "@stll/redis-config": ["@stll/redis-config@workspace:packages/redis-config"],
 
