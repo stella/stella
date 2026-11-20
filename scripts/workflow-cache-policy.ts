@@ -79,10 +79,16 @@ const UNSTORED_BUN_JOBS: Record<string, string> = {
     "its filtered API/CLI install (8-13 s in run 38089283216) is cheaper than a store restore",
   ".github/workflows/fetch-public-documents.yml#fetch": "installs nothing",
   ".github/workflows/journey-canary.yml#journeys": "installs nothing",
+  ".github/workflows/merge-group-hold.yml#dequeue-held-pull-request":
+    "runs one dependency-free script from the default branch; installs nothing",
+  ".github/workflows/merge-group-hold.yml#merge-group-hold":
+    "runs one dependency-free script from the target branch; installs nothing",
   ".github/workflows/mobile-fingerprint-check.yml#fingerprint":
     "installs the mobile closure of both the merge result and its base",
   ".github/workflows/mobile-fingerprint-check.yml#fingerprint-macos":
     "installs the mobile closure of the merge result on macOS",
+  ".github/workflows/pr-lint.yml#pr-body-log-lines":
+    "checks the pull request body with one dependency-free script; installs nothing",
 };
 
 const setsBunNoCache = (step: unknown) =>

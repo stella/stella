@@ -236,6 +236,7 @@ jobs:
         timeout-minutes: 2
         with:
           bun-version-file: .gh-retry/package.json
+          no-cache: true
 
       - name: Classify main-heavy infrastructure failures
         id: classification
