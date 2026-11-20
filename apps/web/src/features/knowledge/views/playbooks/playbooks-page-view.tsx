@@ -162,6 +162,7 @@ export const PlaybooksPageView = ({
                 <Button
                   className="min-h-11"
                   disabled={library.isFetchingNextPage}
+                  disabledReason={t("common.loading")}
                   onClick={actions.loadMore}
                   variant="ghost"
                 >
@@ -226,6 +227,7 @@ const BuildWithAiCard = ({ onStart, disabled }: BuildWithAiCardProps) => {
       <Button
         className="group/plain flex h-full min-h-44 w-full"
         disabled={disabled}
+        disabledReason={t("knowledge.playbooks.creatingFromStarter")}
         onClick={onStart}
         variant="plain"
       >
@@ -293,6 +295,7 @@ const PlaybookStarterCards = ({
             <Button
               className="group/plain flex h-full min-h-44 w-full"
               disabled={anyPending}
+              disabledReason={t("knowledge.playbooks.creatingFromStarter")}
               onClick={() => onStart(starter)}
               variant="plain"
             >
