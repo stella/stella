@@ -50,11 +50,12 @@ export const makeProcessTempDir = (configDir: string): string => {
  * Remove a process's temporary directory once it exited. A file the system
  * still holds (Windows) leaves it for `sweepTempDirs`.
  */
-export const removeTempDir = (dir: string) => {
-  Result.try(() => {
-    rmSync(dir, { recursive: true, force: true, maxRetries: 3 });
-  });
-};
+export const removeTempDir = (dir: string): boolean =>
+  Result.isOk(
+    Result.try(() => {
+      rmSync(dir, { recursive: true, force: true, maxRetries: 3 });
+    }),
+  );
 
 /** Remove temporary directories a process left behind (a crash, a kill). */
 export const sweepTempDirs = (configDir: string, nowMs: number) => {
@@ -158,14 +159,16 @@ export const writeCachedProbe = ({
   key: string;
   nowMs: number;
   probe: HarnessProbe;
-}) => {
-  Result.try(() => {
-    writeFileSync(
-      path.join(configDir, PROBE_FILE),
-      JSON.stringify({ key, at: nowMs, probe }),
-    );
-  });
-};
+}): boolean =>
+  // A cache that cannot be written only means the next probe asks again.
+  Result.isOk(
+    Result.try(() => {
+      writeFileSync(
+        path.join(configDir, PROBE_FILE),
+        JSON.stringify({ key, at: nowMs, probe }),
+      );
+    }),
+  );
 
 const BROKEN_FILE = "stella-broken-sessions.json";
 /** The newest sessions kept as broken; an older one is long out of use. */
@@ -185,18 +188,26 @@ const readBroken = (configDir: string): string[] => {
   return parsed?.success === true ? parsed.output : [];
 };
 
-/** A session whose saved state the agent can no longer continue. */
-export const markSessionBroken = (configDir: string, sessionId: string) => {
+/**
+ * A session whose saved state the agent can no longer continue. `false`
+ * when it could not be recorded: the next turn then tries to resume it.
+ */
+export const markSessionBroken = (
+  configDir: string,
+  sessionId: string,
+): boolean => {
   const kept = [
     ...readBroken(configDir).filter((id) => id !== sessionId),
     sessionId,
   ];
-  Result.try(() => {
-    writeFileSync(
-      path.join(configDir, BROKEN_FILE),
-      JSON.stringify(kept.slice(-BROKEN_KEPT)),
-    );
-  });
+  return Result.isOk(
+    Result.try(() => {
+      writeFileSync(
+        path.join(configDir, BROKEN_FILE),
+        JSON.stringify(kept.slice(-BROKEN_KEPT)),
+      );
+    }),
+  );
 };
 
 export const isSessionBroken = (configDir: string, sessionId: string) =>
