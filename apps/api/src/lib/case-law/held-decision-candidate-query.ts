@@ -25,6 +25,7 @@ import {
   heldDocketStrings,
 } from "@/api/lib/case-law/held-decision-docket-predicate";
 import { republishedRulingCourtPredicate } from "@/api/lib/case-law/ruling-identity-match";
+import { readBounded } from "@/api/lib/db/read-bounded";
 import { HELD_DECISION_AMBIGUOUS_CANDIDATES_MAX } from "@/api/lib/legal-search/held-decision-attachment-values";
 
 /** A placeholder or prose containing an ECLI cannot supply a ruling identity. */
@@ -91,9 +92,9 @@ type HeldDecisionCandidateQueryOptions = {
 
 /**
  * Every identity lookup shares this candidate owner. Match indexed historical
- * rows first, then collapse approved aliases before the caller applies a cap.
+ * rows first, then collapse approved aliases before checking the candidate cap.
  */
-export const heldDecisionCandidateQuery = (
+export const readHeldDecisionCandidates = (
   tx: Transaction,
   {
     country,
@@ -156,28 +157,30 @@ export const heldDecisionCandidateQuery = (
           path.primaryValues.map((value) => value.toLocaleUpperCase("und")),
         )})`
       : docket;
-  return tx
-    .selectDistinct({
-      id: canonical.id,
-      sourceId: canonical.sourceId,
-      redactedAt: canonical.redactedAt,
-      ecli: canonical.ecli,
-      adapterKey: publisher.adapterKey,
-    })
-    .from(caseLawDecisions)
-    .innerJoin(
-      canonical,
-      eq(canonical.id, canonicalDecisionIdSql(caseLawDecisions.id)),
-    )
-    .innerJoin(publisher, eq(publisher.id, canonical.sourceId))
-    .where(
-      and(
-        eq(caseLawDecisions.country, country),
-        eq(canonical.country, country),
-        role === "host" ? sourceIsHost : sourceIsCollection,
-        identity,
-      ),
-    )
-    .orderBy(canonical.id)
-    .limit(HELD_DECISION_AMBIGUOUS_CANDIDATES_MAX + 1);
+  return readBounded(
+    tx
+      .selectDistinct({
+        id: canonical.id,
+        sourceId: canonical.sourceId,
+        redactedAt: canonical.redactedAt,
+        ecli: canonical.ecli,
+        adapterKey: publisher.adapterKey,
+      })
+      .from(caseLawDecisions)
+      .innerJoin(
+        canonical,
+        eq(canonical.id, canonicalDecisionIdSql(caseLawDecisions.id)),
+      )
+      .innerJoin(publisher, eq(publisher.id, canonical.sourceId))
+      .where(
+        and(
+          eq(caseLawDecisions.country, country),
+          eq(canonical.country, country),
+          role === "host" ? sourceIsHost : sourceIsCollection,
+          identity,
+        ),
+      )
+      .orderBy(canonical.id),
+    HELD_DECISION_AMBIGUOUS_CANDIDATES_MAX,
+  );
 };

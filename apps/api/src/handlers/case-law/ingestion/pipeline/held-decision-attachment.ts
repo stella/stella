@@ -51,12 +51,11 @@ import {
 import type { SafeId } from "@/api/lib/branded-types";
 import { canonicalDecisionIdSql } from "@/api/lib/case-law/decision-alias";
 import {
-  heldDecisionCandidateQuery,
   heldDecisionEcliIdentity,
+  readHeldDecisionCandidates,
 } from "@/api/lib/case-law/held-decision-candidate-query";
 import { replayWrite } from "@/api/lib/case-law/replay-write";
 import { lockCaseLawDecisionRows } from "@/api/lib/db/aggregate-lock";
-import { readBounded } from "@/api/lib/db/read-bounded";
 import {
   UNPERSISTABLE_DECISION_FIELDS,
   UnpersistableDecisionFieldError,
@@ -239,36 +238,30 @@ export const matchHostDecisionsTx = async (
     ecli:
       ecliKeys.length === 0
         ? { type: "complete" as const, rows: [] }
-        : await readBounded(
-            heldDecisionCandidateQuery(tx, {
-              ...queryOptions,
-              role,
-              path: {
-                basis: "ecli",
-                keys: ecliKeys,
-                primaryValues: primaryEcliValues,
-              },
-            }),
-            HELD_DECISION_AMBIGUOUS_CANDIDATES_MAX,
-          ),
+        : await readHeldDecisionCandidates(tx, {
+            ...queryOptions,
+            role,
+            path: {
+              basis: "ecli",
+              keys: ecliKeys,
+              primaryValues: primaryEcliValues,
+            },
+          }),
     courtDocketDate:
       persistedDecisionDate === null ||
       persistedDecisionDate === undefined ||
       observed.caseNumber.length === 0
         ? { type: "complete" as const, rows: [] }
-        : await readBounded(
-            heldDecisionCandidateQuery(tx, {
-              ...queryOptions,
-              role,
-              path: {
-                basis: "court-docket-date",
-                decisionDate: persistedDecisionDate,
-                docketKeys,
-                caseNumber: observed.caseNumber,
-              },
-            }),
-            HELD_DECISION_AMBIGUOUS_CANDIDATES_MAX,
-          ),
+        : await readHeldDecisionCandidates(tx, {
+            ...queryOptions,
+            role,
+            path: {
+              basis: "court-docket-date",
+              decisionDate: persistedDecisionDate,
+              docketKeys,
+              caseNumber: observed.caseNumber,
+            },
+          }),
   });
   const hosts = await readPaths("host");
   const collections = await readPaths("collection");
@@ -332,18 +325,15 @@ export const matchHostDecisionsTx = async (
   ) {
     return { type: "none" };
   }
-  const otherDates = await readBounded(
-    heldDecisionCandidateQuery(tx, {
-      ...queryOptions,
-      role: "host",
-      path: {
-        basis: "court-docket-other-date",
-        docketKeys,
-        caseNumber: observed.caseNumber,
-      },
-    }),
-    HELD_DECISION_AMBIGUOUS_CANDIDATES_MAX,
-  );
+  const otherDates = await readHeldDecisionCandidates(tx, {
+    ...queryOptions,
+    role: "host",
+    path: {
+      basis: "court-docket-other-date",
+      docketKeys,
+      caseNumber: observed.caseNumber,
+    },
+  });
   if (otherDates.type === "complete" && otherDates.rows.length === 0) {
     return { type: "none" };
   }

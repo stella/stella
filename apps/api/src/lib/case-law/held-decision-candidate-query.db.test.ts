@@ -24,11 +24,12 @@ import {
   TEXT_ABSENCE_REASON,
 } from "@/api/lib/case-law/decision-text";
 import {
-  heldDecisionCandidateQuery,
   heldDecisionEcliIdentity,
+  readHeldDecisionCandidates,
 } from "@/api/lib/case-law/held-decision-candidate-query";
 import { EMPTY_AST } from "@/api/lib/legal-search/document-types";
 import type { HeldDecisionAttachment } from "@/api/lib/legal-search/held-decision-attachment";
+import type { RawIngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import {
   createIngestionRoleScopedDb,
@@ -67,7 +68,7 @@ const fixture = async (index: number) => {
     declaredIdentifierTypes: [DECISION_IDENTIFIER_TYPES.REPORTER_CITATION],
     docketHeldUnderOtherDate: "park-for-review",
   } as const satisfies HeldDecisionAttachment<string>;
-  const input = plainTextIngestionResult({
+  const input = {
     country: "USA",
     language: "en",
     court: usaCourt.name,
@@ -80,7 +81,7 @@ const fixture = async (index: number) => {
     documentAst: EMPTY_AST,
     textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
     metadata: { collectionEntry: {} },
-  });
+  } satisfies RawIngestionResult;
   const host = async (
     fields: Partial<typeof caseLawDecisions.$inferInsert> = {},
   ) => {
@@ -101,12 +102,12 @@ const fixture = async (index: number) => {
     return id;
   };
   const match = async (
-    observedInput = input,
+    observedInput: RawIngestionResult = input,
     policy: HeldDecisionAttachment<string> = declaration,
   ) => {
     const observation = observeDecision({
       sourceId: collection.id,
-      input: observedInput,
+      input: plainTextIngestionResult(observedInput),
       heldDecisionAttachment: policy,
     }).unwrap();
     return await createIngestionRoleScopedDb(db)(
@@ -261,11 +262,12 @@ test.each([
     const identity =
       heldDecisionEcliIdentity("EU", incoming) ??
       panic("European fixture ECLI invalid");
-    const rows = await createIngestionRoleScopedDb(db)(
+    const result = await createIngestionRoleScopedDb(db)(
       async (tx) =>
-        await heldDecisionCandidateQuery(tx, {
+        await readHeldDecisionCandidates(tx, {
           country: "EU",
           court: "Court of Justice",
+          courtId: undefined,
           sourceId: f.collection.id,
           collectionAdapterKeys: [f.collection.adapterKey],
           role: "host",
@@ -276,6 +278,6 @@ test.each([
           },
         }),
     );
-    expect(rows.map((row) => row.id)).toEqual([id]);
+    expect(result).toMatchObject({ type: "complete", rows: [{ id }] });
   },
 );
