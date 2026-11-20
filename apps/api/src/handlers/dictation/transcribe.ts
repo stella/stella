@@ -344,7 +344,7 @@ const requestVocabulary = async ({
   ) {
     return own;
   }
-  const words = await read({ safeDb, organizationId, first: own ?? [] });
+  const words = await read({ safeDb, organizationId, first: own });
   if (words.isErr()) {
     observeFailure(words.error, {
       sink: ORGANIZATION_VOCABULARY_READ_FAILED,

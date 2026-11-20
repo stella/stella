@@ -324,7 +324,10 @@ const addTo = (map: Map<string, number[]>, key: string, termIndex: number) => {
 };
 
 const readWords = (text: string): string[] =>
-  normalizeUnicode(text, "NFC").toLowerCase().match(WORD) ?? [];
+  Array.from(
+    normalizeUnicode(text, "NFC").toLowerCase().matchAll(WORD),
+    ([word]) => word,
+  );
 
 /**
  * The index of an organization's words, newest first: the order breaks
@@ -379,6 +382,13 @@ export const buildVocabularyIndex = (
     windowSizes: [...windowSizes].toSorted((left, right) => left - right),
   };
 };
+
+/** The words a key names; a key no word has names none. */
+const postings = (
+  map: ReadonlyMap<string, readonly number[]>,
+  key: string,
+): readonly number[] => map.get(key) ?? NO_POSTINGS;
+const NO_POSTINGS: readonly number[] = [];
 
 type Candidate = { score: number; hits: number };
 
@@ -455,15 +465,15 @@ export const selectVocabulary = (
       return known;
     }
     const near = new Set<number>();
-    for (const termIndex of index.byNearSound.get(skeleton) ?? []) {
+    for (const termIndex of postings(index.byNearSound, skeleton)) {
       near.add(termIndex);
     }
     if (skeleton.length >= MIN_NEAR_SOUND_LENGTH) {
       for (const variant of deletions(skeleton)) {
-        for (const termIndex of index.bySound.get(variant) ?? []) {
+        for (const termIndex of postings(index.bySound, variant)) {
           near.add(termIndex);
         }
-        for (const termIndex of index.byNearSound.get(variant) ?? []) {
+        for (const termIndex of postings(index.byNearSound, variant)) {
           near.add(termIndex);
         }
       }
@@ -500,14 +510,14 @@ export const selectVocabulary = (
         break;
       }
       if (letters.length >= MIN_LETTERS) {
-        for (const termIndex of index.byLetters.get(letters) ?? []) {
+        for (const termIndex of postings(index.byLetters, letters)) {
           consider(termIndex, "letters", letters);
         }
       }
       const distinct = new Set([skeletons.slavic, skeletons.english]);
       for (const skeleton of distinct) {
         if (skeleton.length >= MIN_SOUND_LENGTH) {
-          for (const termIndex of index.bySound.get(skeleton) ?? []) {
+          for (const termIndex of postings(index.bySound, skeleton)) {
             consider(termIndex, "sound", letters);
           }
         }

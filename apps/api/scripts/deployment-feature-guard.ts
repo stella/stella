@@ -207,6 +207,10 @@ const ALWAYS_ON_ROUTE_PREFIXES: ReadonlyMap<string, string> = new Map([
     "A chat limit reminder is mounted on every deployment; it can be set only for a turn the member's local-agents feature let run",
   ],
   [
+    "/v1/organization-settings/dictation-vocabulary",
+    "The organization's dictation words are managed on every deployment; dictation itself stays behind the members' dictation feature decisions",
+  ],
+  [
     "/v1/organization-settings/local-runs",
     "An administrator's limit on local run permissions is settable on every deployment; it only narrows turns the member's local-agents feature lets start",
   ],

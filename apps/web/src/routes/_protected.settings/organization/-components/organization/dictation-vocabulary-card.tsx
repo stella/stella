@@ -5,7 +5,7 @@ import {
   useMutation,
   useQueryClient,
 } from "@tanstack/react-query";
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import { useDebounce } from "use-debounce";
 import { useTranslations } from "use-intl";
 
@@ -40,11 +40,11 @@ import { detached } from "@/lib/detached";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { queryView } from "@/lib/query-view.logic";
 import { downloadFile } from "@/lib/utils";
+import { resourceMutation } from "@/lib/workspace-realtime";
 import { DictationImportSheet } from "@/routes/_protected.settings/organization/-components/organization/dictation-import-sheet";
 import {
   addDictationTerms,
   deleteDictationTerms,
-  dictationVocabularyKeys,
   dictationVocabularyOptions,
   exportDictationTerms,
 } from "@/routes/_protected.settings/organization/-queries/dictation-vocabulary";
@@ -72,41 +72,47 @@ export const DictationVocabularyCard = () => {
     dictationVocabularyOptions(activeOrganizationId, serverSearch),
   );
   const firstPage = list.data?.pages.at(0);
-  const words = list.data?.pages.flatMap(({ items }) => items) ?? [];
-  const refresh = async () => {
-    setSelected(new Set());
-    await queryClient.invalidateQueries({
-      queryKey: dictationVocabularyKeys.all(activeOrganizationId),
-    });
-  };
+  const words =
+    list.data === undefined
+      ? []
+      : list.data.pages.flatMap(({ items }) => items);
+  // The words' resource contracts refresh the list after every write.
   const remove = useMutation({
-    mutationFn: async (ids: readonly DictationVocabularyTerm["id"][]) =>
-      await deleteDictationTerms(ids),
-    onSuccess: async ({ deleted }) => {
+    mutationFn: resourceMutation({
+      mutation: "deleteDictationVocabulary",
+      queryClient,
+      scope: { type: "organization" },
+      mutationFn: deleteDictationTerms,
+    }),
+    onSuccess: ({ deleted }) => {
+      setSelected(new Set());
       stellaToast.add({
         title: t("settings.organization.dictation.deletedToast", {
           count: deleted,
         }),
         type: "success",
       });
-      await refresh();
     },
     onError: (error) => {
       notifyUserError(error, t("errors.actionFailed"));
     },
   });
-  const download = useMutation({
-    mutationFn: exportDictationTerms,
-    onSuccess: (terms) => {
-      downloadFile(
-        new Blob([terms.join("\n")], { type: "text/plain;charset=utf-8" }),
-        t("settings.organization.dictation.exportFileName"),
-      );
-    },
-    onError: (error) => {
-      notifyUserError(error, t("errors.actionFailed"));
-    },
-  });
+  const [exporting, setExporting] = useState(false);
+  const download = async () => {
+    setExporting(true);
+    const exported = await Result.tryPromise(exportDictationTerms);
+    setExporting(false);
+    if (exported.isErr()) {
+      notifyUserError(exported.error, t("errors.actionFailed"));
+      return;
+    }
+    downloadFile(
+      new Blob([exported.value.join("\n")], {
+        type: "text/plain;charset=utf-8",
+      }),
+      t("settings.organization.dictation.exportFileName"),
+    );
+  };
   const toggle = (id: DictationVocabularyTerm["id"], checked: boolean) => {
     setSelected((current) => {
       const next = new Set(current);
@@ -150,9 +156,9 @@ export const DictationVocabularyCard = () => {
           </Button>
           <Button
             disabled={total === 0}
-            loading={download.isPending}
+            loading={exporting}
             onClick={() => {
-              download.mutate();
+              detached(download(), "dictation-vocabulary-card.export");
             }}
             size="sm"
             variant="ghost"
@@ -162,7 +168,7 @@ export const DictationVocabularyCard = () => {
           </Button>
         </ListGroupAction>
       </ListGroupHeader>
-      <AddWordForm full={max !== undefined && total >= max} onAdded={refresh} />
+      <AddWordForm full={max !== undefined && total >= max} />
       <div className="flex flex-wrap items-center gap-2">
         <SearchField
           aria-label={t("settings.organization.dictation.searchPlaceholder")}
@@ -262,38 +268,32 @@ export const DictationVocabularyCard = () => {
           number: String(selected.size),
         })}
         loading={remove.isPending}
-        onConfirm={async () => {
-          await remove.mutateAsync([...selected]);
-        }}
+        onConfirm={() => remove.mutateAsync([...selected])}
         onOpenChange={setConfirmingDelete}
         open={confirmingDelete}
         title={t("settings.organization.dictation.deleteSelectedTitle", {
           count: selected.size,
         })}
       />
-      <DictationImportSheet
-        onAdded={refresh}
-        onOpenChange={setImporting}
-        open={importing}
-      />
+      <DictationImportSheet onOpenChange={setImporting} open={importing} />
     </ListGroup>
   );
 };
 
 /** One word typed in, checked against the same rules the list keeps. */
-const AddWordForm = ({
-  full,
-  onAdded,
-}: {
-  full: boolean;
-  onAdded: () => Promise<void>;
-}) => {
+const AddWordForm = ({ full }: { full: boolean }) => {
   const t = useTranslations();
+  const queryClient = useQueryClient();
   const [draft, setDraft] = useState("");
   const reading = readDictationTerm(draft);
   const add = useMutation({
-    mutationFn: async (term: string) => await addDictationTerms([term]),
-    onSuccess: async ({ added }, term) => {
+    mutationFn: resourceMutation({
+      mutation: "addDictationVocabulary",
+      queryClient,
+      scope: { type: "organization" },
+      mutationFn: async (term: string) => await addDictationTerms([term]),
+    }),
+    onSuccess: ({ added }, term) => {
       setDraft("");
       stellaToast.add({
         title:
@@ -304,7 +304,6 @@ const AddWordForm = ({
             : t("settings.organization.dictation.addedToast", { word: term }),
         type: "success",
       });
-      await onAdded();
     },
     onError: (error) => {
       notifyUserError(error, t("errors.actionFailed"));

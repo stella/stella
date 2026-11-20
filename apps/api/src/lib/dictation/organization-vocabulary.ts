@@ -179,7 +179,7 @@ export const readCleanupVocabulary = async ({
 
 type TranscriptionVocabularyOptions = OrganizationVocabularyOptions & {
   /** The request's own words (the speaker's, then its matter's). */
-  first: readonly string[];
+  first?: readonly string[] | undefined;
 };
 
 /**
@@ -192,7 +192,7 @@ type TranscriptionVocabularyOptions = OrganizationVocabularyOptions & {
 export const readTranscriptionVocabulary = async ({
   safeDb,
   organizationId,
-  first,
+  first = [],
 }: TranscriptionVocabularyOptions): Promise<Result<string[], SafeDbError>> => {
   const kept = mergeDictationTerms([first], MAX_TRANSCRIPTION_VOCABULARY_TERMS);
   const room = MAX_TRANSCRIPTION_VOCABULARY_TERMS - kept.length;

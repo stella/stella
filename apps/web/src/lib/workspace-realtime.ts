@@ -413,6 +413,27 @@ export const RESOURCE_MUTATION_CONTRACTS = {
     ],
     resources: [RESOURCE_TYPE.ORGANIZATION],
   },
+  // The organization's dictation words: one list, read by its settings page.
+  addDictationVocabulary: {
+    writes: [
+      {
+        type: "handler-route",
+        method: "POST",
+        route: "/organization-settings/dictation-vocabulary",
+      },
+    ],
+    resources: [RESOURCE_TYPE.ORGANIZATION],
+  },
+  deleteDictationVocabulary: {
+    writes: [
+      {
+        type: "handler-route",
+        method: "DELETE",
+        route: "/organization-settings/dictation-vocabulary",
+      },
+    ],
+    resources: [RESOURCE_TYPE.ORGANIZATION],
+  },
   updateOrganization: {
     writes: [
       {

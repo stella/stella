@@ -96,19 +96,19 @@ const readCursor = (cursor: string | undefined) => {
     return Result.ok(null);
   }
   const parts = decodePaginationCursor(cursor);
-  const [key, id] = parts ?? [];
-  if (
-    parts?.length !== 2 ||
-    typeof key !== "string" ||
-    !isUuidPaginationCursorPart(id)
-  ) {
-    return Result.err(
-      new HandlerError({
-        status: 400,
-        code: "invalid_cursor",
-        message: "Invalid cursor",
-      }),
-    );
+  const refused = Result.err(
+    new HandlerError({
+      status: 400,
+      code: "invalid_cursor",
+      message: "Invalid cursor",
+    }),
+  );
+  if (parts?.length !== 2) {
+    return refused;
+  }
+  const [key, id] = parts;
+  if (typeof key !== "string" || !isUuidPaginationCursorPart(id)) {
+    return refused;
   }
   return Result.ok({ key, id });
 };

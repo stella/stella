@@ -1,10 +1,13 @@
 import { infiniteQueryOptions } from "@tanstack/react-query";
 
+import { RESOURCE_TYPE } from "@stll/api-contract";
 import { MAX_DICTATION_TERMS_PER_REQUEST } from "@stll/api-contract/dictation-vocabulary";
 
 import { api } from "@/lib/api";
+import { invokeCapability } from "@/lib/capabilities/capability-request";
 import { unwrapApiResponse } from "@/lib/errors/api";
 import { stringCursorSeed } from "@/lib/infinite-query";
+import { resourceQueryOptions } from "@/lib/workspace-realtime";
 
 export const dictationVocabularyKeys = {
   all: (organizationId: string) =>
@@ -31,7 +34,7 @@ const listPage = async (
     }),
   );
 
-export type DictationVocabularyPage = Awaited<ReturnType<typeof listPage>>;
+type DictationVocabularyPage = Awaited<ReturnType<typeof listPage>>;
 export type DictationVocabularyTerm = DictationVocabularyPage["items"][number];
 
 /** The organization's words matching a search, a page at a time. */
@@ -39,71 +42,101 @@ export const dictationVocabularyOptions = (
   organizationId: string,
   search: string,
 ) =>
-  infiniteQueryOptions({
-    queryKey: dictationVocabularyKeys.list(organizationId, search),
-    initialPageParam: stringCursorSeed(),
-    queryFn: async ({ pageParam, signal }) =>
-      await listPage(search, pageParam, signal),
-    getNextPageParam: (page) => page.nextCursor ?? undefined,
-  });
+  resourceQueryOptions(
+    infiniteQueryOptions({
+      queryKey: dictationVocabularyKeys.list(organizationId, search),
+      initialPageParam: stringCursorSeed(),
+      queryFn: async ({ pageParam, signal }) =>
+        await listPage(search, pageParam, signal),
+      getNextPageParam: (page) => page.nextCursor ?? undefined,
+    }),
+    {
+      resources: [RESOURCE_TYPE.ORGANIZATION],
+      scope: { type: "organization", organizationId },
+    },
+  );
 
-/** Requests of at most the API's batch size, in order. */
-const batches = <T>(items: readonly T[]): T[][] => {
-  const result: T[][] = [];
-  for (
-    let start = 0;
-    start < items.length;
-    start += MAX_DICTATION_TERMS_PER_REQUEST
-  ) {
-    result.push(items.slice(start, start + MAX_DICTATION_TERMS_PER_REQUEST));
+/** Requests of at most the API's batch size. */
+const batches = <T>(items: readonly T[]): T[][] =>
+  Array.from(
+    { length: Math.ceil(items.length / MAX_DICTATION_TERMS_PER_REQUEST) },
+    (_, index) =>
+      items.slice(
+        index * MAX_DICTATION_TERMS_PER_REQUEST,
+        (index + 1) * MAX_DICTATION_TERMS_PER_REQUEST,
+      ),
+  );
+
+const sum = (values: readonly number[]): number => {
+  let total = 0;
+  for (const value of values) {
+    total += value;
   }
-  return result;
+  return total;
 };
 
 /** How many of the words the list already holds, and how many it holds. */
 export const checkDictationTerms = async (terms: readonly string[]) => {
-  let listed = 0;
-  let total = 0;
-  for (const batch of batches(terms)) {
-    const response =
-      // oxlint-disable-next-line no-network-await-in-loop/no-network-await-in-loop -- ordered batches, so the first failure stops the rest
-      await api["organization-settings"]["dictation-vocabulary"].check.post({
-        terms: batch,
-      });
-    const checked = unwrapApiResponse(response);
-    listed += checked.listed;
-    total = checked.total;
-  }
-  return { listed, total };
+  const checked = await Promise.all(
+    batches(terms).map(
+      async (batch) =>
+        await invokeCapability(
+          "organization-settings.dictation-vocabulary.check",
+          async (request) =>
+            unwrapApiResponse(
+              await api["organization-settings"][
+                "dictation-vocabulary"
+              ].check.post({ terms: batch }, request),
+            ),
+        ),
+    ),
+  );
+  return {
+    listed: sum(checked.map(({ listed }) => listed)),
+    total: Math.max(0, ...checked.map(({ total }) => total)),
+  };
 };
 
-/** Adds the words batch by batch; returns how many were added. */
+/** Adds the words a batch at a time (the API takes each under the list's
+ *  lock, so the limit holds); returns how many were added. */
 export const addDictationTerms = async (terms: readonly string[]) => {
-  let added = 0;
-  for (const batch of batches(terms)) {
-    const response =
-      // oxlint-disable-next-line no-network-await-in-loop/no-network-await-in-loop -- ordered batches: each add checks the list's limit against the batches before it, and the first failure stops the rest
-      await api["organization-settings"]["dictation-vocabulary"].post({
-        terms: batch,
-      });
-    added += unwrapApiResponse(response).added;
-  }
-  return { added };
+  const added = await Promise.all(
+    batches(terms).map(
+      async (batch) =>
+        await invokeCapability(
+          "organization-settings.dictation-vocabulary.add",
+          async (request) =>
+            unwrapApiResponse(
+              await api["organization-settings"]["dictation-vocabulary"].post(
+                { terms: batch },
+                request,
+              ),
+            ),
+        ),
+    ),
+  );
+  return { added: sum(added.map((result) => result.added)) };
 };
 
 export const deleteDictationTerms = async (
   ids: readonly DictationVocabularyTerm["id"][],
 ) => {
-  let deleted = 0;
-  for (const batch of batches(ids)) {
-    const response =
-      // oxlint-disable-next-line no-network-await-in-loop/no-network-await-in-loop -- ordered batches, so the first failure stops the rest
-      await api["organization-settings"]["dictation-vocabulary"].delete({
-        ids: batch,
-      });
-    deleted += unwrapApiResponse(response).deleted;
-  }
-  return { deleted };
+  const deleted = await Promise.all(
+    batches(ids).map(
+      async (batch) =>
+        await invokeCapability(
+          "organization-settings.dictation-vocabulary.delete",
+          async (request) =>
+            unwrapApiResponse(
+              await api["organization-settings"]["dictation-vocabulary"].delete(
+                { ids: batch },
+                request,
+              ),
+            ),
+        ),
+    ),
+  );
+  return { deleted: sum(deleted.map((result) => result.deleted)) };
 };
 
 export const exportDictationTerms = async () =>
