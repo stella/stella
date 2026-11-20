@@ -211,4 +211,52 @@ describe("the case-law identity canary", () => {
   test("a country whose search is closed has nothing to sample", async () => {
     expect((await outcomeFor(exact, "AUT"))?.status).toBe("not_applicable");
   });
+
+  test("a search still running is followed by its continuation token", async () => {
+    const correct = deployment(exact);
+    const followed: Record<string, unknown>[] = [];
+    const outcome = (
+      await sampleCaseLawIdentities(async (name, args) => {
+        if (name !== "search_case_law" || args["court"] === undefined) {
+          return await correct(name, args);
+        }
+        if (args["continuation_token"] === undefined) {
+          return {
+            type: "ok",
+            payload: {
+              status: "running",
+              continuationToken: `token-${String(args["court"])}`,
+              retryAfterMs: 0,
+            },
+          };
+        }
+        followed.push(args);
+        return await correct(name, args);
+      })
+    ).find((entry) => entry.country === "CZE")?.outcome;
+    expect(outcome?.status).toBe("passed");
+    expect(new Set(followed.map((args) => args["continuation_token"]))).toEqual(
+      new Set([`token-${CONSTITUTIONAL}`, `token-${SUPREME}`]),
+    );
+  });
+
+  test("a search that never finishes fails instead of reading as unreadable", async () => {
+    const correct = deployment(exact);
+    const outcome = (
+      await sampleCaseLawIdentities(async (name, args) =>
+        name === "search_case_law" && args["court"] === SUPREME
+          ? {
+              type: "ok",
+              payload: {
+                status: "running",
+                continuationToken: "token",
+                retryAfterMs: 0,
+              },
+            }
+          : await correct(name, args),
+      )
+    ).find((entry) => entry.country === "CZE")?.outcome;
+    expect(outcome?.status).toBe("failed");
+    expect(outcome?.detail).toContain(`${SUPREME}: search still running after`);
+  });
 });

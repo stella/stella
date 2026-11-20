@@ -12,6 +12,7 @@ import {
   PUBLIC_COUNTRY_SURFACE_OPEN,
 } from "@stll/api-contract/public-country-capability";
 import { mapWithConcurrency } from "@stll/concurrency";
+import { sleep } from "@stll/concurrency/sleep";
 
 /** The jurisdictions whose courts the probe samples. */
 const CASE_LAW_IDENTITY_PROBE_COUNTRIES = ["CZE", "SVK", "AUT"] as const;
@@ -31,6 +32,10 @@ const FACET_SEED_QUERY = {
 
 const TOOL_CALL_CONCURRENCY = 4;
 const FAILURES_REPORTED_MAX = 5;
+/** How many times one search follows its continuation before giving up. */
+const SEARCH_CONTINUATIONS_MAX = 10;
+/** The longest a follow-up waits, whatever retryAfterMs asks. */
+const SEARCH_CONTINUATION_WAIT_MAX_MS = 5000;
 
 type CaseLawToolOutcome =
   { type: "ok"; payload: unknown } | { type: "error"; detail: string };
@@ -62,6 +67,13 @@ const searchPayloadSchema = v.object({
     }),
   ),
   results: v.array(searchHitSchema),
+});
+
+/** A search the deployment is still running: follow it, it is not an answer. */
+const runningSearchSchema = v.object({
+  status: v.literal("running"),
+  continuationToken: v.string(),
+  retryAfterMs: v.number(),
 });
 
 const resolvePayloadSchema = v.variant("status", [
@@ -151,12 +163,30 @@ const searchOf = async (
   callTool: CallCaseLawTool,
   args: Record<string, unknown>,
 ): Promise<v.InferOutput<typeof searchPayloadSchema> | string> => {
-  const outcome = await callTool("search_case_law", args);
-  if (outcome.type === "error") {
-    return outcome.detail;
+  let callArgs = args;
+  for (let attempt = 0; attempt <= SEARCH_CONTINUATIONS_MAX; attempt++) {
+    const outcome = await callTool("search_case_law", callArgs);
+    if (outcome.type === "error") {
+      return outcome.detail;
+    }
+    const running = v.safeParse(runningSearchSchema, outcome.payload);
+    if (!running.success) {
+      const parsed = v.safeParse(searchPayloadSchema, outcome.payload);
+      return parsed.success ? parsed.output : "unreadable search payload";
+    }
+    // The same arguments plus the token collect the work already running.
+    callArgs = {
+      ...args,
+      continuation_token: running.output.continuationToken,
+    };
+    await sleep(
+      Math.min(
+        Math.max(0, running.output.retryAfterMs),
+        SEARCH_CONTINUATION_WAIT_MAX_MS,
+      ),
+    );
   }
-  const parsed = v.safeParse(searchPayloadSchema, outcome.payload);
-  return parsed.success ? parsed.output : "unreadable search payload";
+  return `search still running after ${String(SEARCH_CONTINUATIONS_MAX)} continuations`;
 };
 
 const SEARCH_CLOSED: CaseLawIdentityProbeOutcome = {
