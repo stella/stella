@@ -2507,7 +2507,8 @@ const config = defineConfig({
         "apps/landing/src/components/ProductPage.astro",
         "apps/landing/src/pages/security.astro",
         "apps/landing/src/pages/support.astro",
-        "apps/web/src/routes/tools/-components/public-tools-index.tsx",
+        "apps/web/src/routes/tools/-index.page.tsx",
+        "apps/web/src/routes/tools/-index.pending.tsx",
         ".oxlint-plugins/__fixtures__/narrative-prose-component.fixture.tsx",
       ],
       rules: {

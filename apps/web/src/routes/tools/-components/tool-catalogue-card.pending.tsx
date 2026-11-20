@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import type { ReactElement, ReactNode } from "react";
 
 import { DirectionalIcon } from "@stll/ui/directional-icon";
 import { ArrowRightIcon } from "@stll/ui/icons";
@@ -8,7 +8,7 @@ type ToolCatalogueCardFaceProps = {
   badges: ReactNode;
   description: ReactNode;
   icon: ReactNode;
-  render?: (props: { children: ReactNode; className: string }) => ReactNode;
+  render?: (props: { children: ReactNode; className: string }) => ReactElement;
   title: ReactNode;
 };
 

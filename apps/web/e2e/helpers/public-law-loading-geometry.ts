@@ -96,29 +96,72 @@ const navigate = async (page: Page, href: string) =>
     await router.navigate({ href: path });
   }, href);
 
+const waitForHydration = async (page: Page) =>
+  await page.waitForFunction(() => {
+    const router = window.__TSR_ROUTER__;
+    return router !== undefined && router.state.matches.length > 0;
+  });
+
 const holdRead = async (page: Page, surface: Surface) => {
   const gate = Promise.withResolvers<undefined>();
   const isRead = (url: URL) => url.pathname === surface.apiPath;
+  let requested = false;
   await page.route(isRead, async (route) => {
-    await gate.promise;
+    if (route.request().method() === "GET") {
+      requested = true;
+      await gate.promise;
+    }
     await route.continue();
   });
   return {
+    requested: () => requested,
     release: () => gate.resolve(undefined),
     remove: async () => await page.unroute(isRead),
   };
 };
 
+const settledLandmarks = async (page: Page, surface: Surface) => {
+  await expect(page.locator(surface.pending)).toHaveCount(0);
+  await expect(page.locator(surface.ready)).toBeVisible();
+  await page.evaluate(async () => {
+    await document.fonts.ready;
+  });
+  return await captureLandmarks(page, surface.landmarks);
+};
+
+const observeNavigation = async (page: Page, surface: Surface) => {
+  await page.goto(surface.entryPath);
+  await waitForHydration(page);
+  await page.evaluate(async () => {
+    await document.fonts.ready;
+  });
+  const read = await holdRead(page, surface);
+  const navigation = navigate(page, surface.path);
+  try {
+    await expect.poll(read.requested).toBe(true);
+    await expect(page.locator(surface.pending)).toBeVisible();
+    const pending = await captureLandmarks(page, surface.landmarks);
+    read.release();
+    await navigation;
+    const loaded = await settledLandmarks(page, surface);
+    return { pending, loaded };
+  } finally {
+    read.release();
+    await navigation;
+    await read.remove();
+  }
+};
+
+type Landmarks = Awaited<ReturnType<typeof captureLandmarks>>;
+
 const compareOrigins = ({
   surface,
-  server,
-  pending,
+  phases,
   loaded,
 }: {
   surface: Surface;
-  server: Awaited<ReturnType<typeof captureLandmarks>>;
-  pending: Awaited<ReturnType<typeof captureLandmarks>>;
-  loaded: Awaited<ReturnType<typeof captureLandmarks>>;
+  phases: Record<"server" | "pending" | "hydrated", Landmarks>;
+  loaded: Landmarks;
 }) => {
   for (const [name, box] of Object.entries(loaded)) {
     const exception = surface.exception;
@@ -130,12 +173,11 @@ const compareOrigins = ({
     }
     expect.soft(box, `${surface.path} loaded ${name}`).not.toBeNull();
     const origin = { top: box?.top, left: box?.left };
-    expect
-      .soft(server[name], `${surface.path} server ${name}`)
-      .toMatchObject(origin);
-    expect
-      .soft(pending[name], `${surface.path} pending ${name}`)
-      .toMatchObject(origin);
+    for (const [phase, landmarks] of Object.entries(phases)) {
+      expect
+        .soft(landmarks[name], `${surface.path} ${phase} ${name}`)
+        .toMatchObject(origin);
+    }
   }
 };
 
@@ -194,38 +236,20 @@ export const measurePublicLawGeometry = async ({
         });
         const server = await captureLandmarks(serverPage, surface.landmarks);
 
-        await page.goto(surface.entryPath);
-        await page.waitForFunction(() => {
-          const router = window.__TSR_ROUTER__;
-          return router !== undefined && router.state.matches.length > 0;
+        const { pending, loaded } = await observeNavigation(page, surface);
+        const response = await page.goto(surface.path);
+        expect(response?.ok()).toBe(true);
+        await waitForHydration(page);
+        const hydrated = await settledLandmarks(page, surface);
+        await expect(page.locator("html")).toHaveAttribute("lang", locale);
+        const phases = { server, pending, hydrated };
+        evidence.push({
+          route: surface.path,
+          exception: surface.exception,
+          ...phases,
+          loaded,
         });
-        await page.evaluate(async () => {
-          await document.fonts.ready;
-        });
-        const read = await holdRead(page, surface);
-        const navigation = navigate(page, surface.path);
-        try {
-          await expect(page.locator(surface.pending)).toBeVisible();
-          const pending = await captureLandmarks(page, surface.landmarks);
-          read.release();
-          await navigation;
-          await expect(page.locator(surface.pending)).toHaveCount(0);
-          await expect(page.locator(surface.ready)).toBeVisible();
-          await expect(page.locator("html")).toHaveAttribute("lang", locale);
-          const loaded = await captureLandmarks(page, surface.landmarks);
-          evidence.push({
-            route: surface.path,
-            exception: surface.exception,
-            server,
-            pending,
-            loaded,
-          });
-          compareOrigins({ surface, server, pending, loaded });
-        } finally {
-          read.release();
-          await navigation;
-          await read.remove();
-        }
+        compareOrigins({ surface, phases, loaded });
       }
       errors.assertEmpty(
         `unexpected browser errors with ${locale} public law loading views`,

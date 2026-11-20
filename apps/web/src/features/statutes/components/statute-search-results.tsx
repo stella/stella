@@ -7,7 +7,8 @@ import { DocumentIdentityBadge } from "@stll/ui/document-identity-badge";
 import { SEARCH_HIT_MARK, TextMark } from "@stll/ui/text-mark";
 
 import {
-  StatuteSearchResultRow,
+  STATUTE_SEARCH_RESULT_ROW_CLASS,
+  StatuteSearchResultHeading,
   StatuteSearchResultsPending,
   StatuteSearchResultsSection,
 } from "@/features/statutes/components/statute-search-results.pending";
@@ -106,23 +107,18 @@ export const StatuteSearchResults = ({
     <StatuteSearchResultsSection
       busy={isFetchingNextPage}
       rows={hits.map((hit) => (
-        <StatuteSearchResultRow
-          key={hit.documentId}
-          heading={
-            <>
-              <DocumentIdentityBadge
-                identity={statuteDocumentIdentity(hit.eli)}
-                title={hit.title}
-              />
-              {titleLink(hit)}
-            </>
-          }
-          snippet={
-            hit.headline === null ? null : (
-              <StatuteSearchSnippet headline={hit.headline} />
-            )
-          }
-        />
+        <li className={STATUTE_SEARCH_RESULT_ROW_CLASS} key={hit.documentId}>
+          <StatuteSearchResultHeading>
+            <DocumentIdentityBadge
+              identity={statuteDocumentIdentity(hit.eli)}
+              title={hit.title}
+            />
+            {titleLink(hit)}
+          </StatuteSearchResultHeading>
+          {hit.headline !== null && (
+            <StatuteSearchSnippet headline={hit.headline} />
+          )}
+        </li>
       ))}
       trailing={
         hasNextPage && (

@@ -43,6 +43,16 @@ import {
   UTC_CALENDAR_DATE_FORMAT,
 } from "@/lib/relative-time";
 import {
+  CompletenessLabel,
+  COUNTRY_NAVIGATION_HEIGHT,
+  CountryCard,
+  CoverageTable,
+  SOURCE_COLUMN_COUNT,
+  SOURCE_COLUMNS,
+  SourcesTableHeadFace,
+  TableColumns,
+} from "@/routes/law/-law-coverage/coverage-country.pending";
+import {
   CASE_LAW_COVERAGE_AVAILABILITY_LABEL_KEYS,
   CASE_LAW_COVERAGE_AVAILABILITY_TONES,
   type CaseLawCoverageCountry,
@@ -54,10 +64,7 @@ import {
 } from "@/routes/law/-law-coverage/coverage.logic";
 import {
   CaseLawCoveragePending,
-  CompletenessLabel,
-  COUNTRY_NAVIGATION_HEIGHT,
   COUNTRY_NAVIGATION_ITEM_CLASS_NAME,
-  CountryCard,
   CoverageCountryNavigation,
   CoverageGeneratedAt,
   CoverageHeading,
@@ -65,12 +72,7 @@ import {
   CoverageLayout,
   CoverageLegend,
   CoverageLegendRow,
-  CoverageTable,
   HeaderFigure,
-  SOURCE_COLUMN_COUNT,
-  SOURCE_COLUMNS,
-  SourcesTableHeadFace,
-  TableColumns,
 } from "@/routes/law/-law-coverage/coverage.pending";
 
 /** Where a figure stands that the corpus states no number for. */

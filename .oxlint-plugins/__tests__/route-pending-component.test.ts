@@ -150,6 +150,7 @@ test("a listed module that marks a frame view is told to leave the list", async 
 
 test("a route's pending view is marked for the frame unless its module is listed", async () => {
   const listedStem = LISTED_PENDING.replace(/\.pending\.tsx$/u, "");
+  const listedRoute = `${path.dirname(LISTED_PENDING)}/lint-fixture-route.tsx`;
   const results = await lintRuleAcrossFiles(
     "route-pending-component",
     {
@@ -166,7 +167,7 @@ test("a route's pending view is marked for the frame unless its module is listed
         'createFileRoute("/x")({ component: XPage, pendingComponent: XPending });',
       ].join("\n"),
       "unmarked/x.pending.tsx": "export const XPending = () => null;",
-      [`${path.dirname(LISTED_PENDING)}/route.tsx`]: [
+      [listedRoute]: [
         `import { XPage } from "./${path.basename(listedStem)}.page";`,
         `import { XPending } from "./${path.basename(listedStem)}.pending";`,
         'createFileRoute("/x")({ component: XPage, pendingComponent: XPending });',
@@ -177,7 +178,7 @@ test("a route's pending view is marked for the frame unless its module is listed
   );
   expect(results["marked/route.tsx"]).toEqual([]);
   expect(results["unmarked/route.tsx"]).toEqual([3]);
-  expect(results[`${path.dirname(LISTED_PENDING)}/route.tsx`]).toEqual([]);
+  expect(results[listedRoute]).toEqual([]);
 });
 
 test("a pending half imports only pending-safe modules", async () => {

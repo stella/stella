@@ -1,4 +1,4 @@
-import type { ReactNode, Ref } from "react";
+import type { ReactElement, ReactNode, Ref } from "react";
 
 import { useSearch } from "@tanstack/react-router";
 
@@ -61,7 +61,7 @@ type PublicToolsIndexShellProps = {
     icon: ReactNode;
     label: ReactNode;
     task: PublicToolTask;
-  }) => ReactNode;
+  }) => ReactElement;
   resultsActions: ReactNode;
   resultsRef?: Ref<HTMLElement>;
   search: ReactNode;
