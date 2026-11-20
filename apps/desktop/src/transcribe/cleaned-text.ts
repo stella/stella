@@ -26,15 +26,18 @@ const isWordCharacter = (character: string | undefined): boolean =>
   character !== undefined && WORD_CHARACTER.test(character);
 
 /** `# Title` to `### Title`: the level and the title, or null. */
+const HEADING_LEVELS = [1, 2, 3] as const;
+
 const headingOf = (line: string): { level: 1 | 2 | 3; text: string } | null => {
-  let level = 0;
-  while (line[level] === "#") {
-    level += 1;
+  let marks = 0;
+  while (line[marks] === "#") {
+    marks += 1;
   }
-  if (level < 1 || level > 3 || !isSpace(line[level])) {
+  const level = HEADING_LEVELS[marks - 1];
+  if (level === undefined || !isSpace(line[marks])) {
     return null;
   }
-  return { level: level as 1 | 2 | 3, text: line.slice(level).trim() };
+  return { level, text: line.slice(marks).trim() };
 };
 
 /** `- item`, `* item` or `• item`: the item, or null. */
@@ -51,7 +54,9 @@ const bulletOf = (line: string): string | null => {
 const numberedOf = (line: string): { number: number; text: string } | null => {
   const trimmed = line.trimStart();
   let digits = 0;
+  let number = 0;
   while (digits < 4 && isDigit(trimmed[digits])) {
+    number = number * 10 + (trimmed.codePointAt(digits) ?? 48) - 48;
     digits += 1;
   }
   const mark = trimmed[digits];
@@ -60,7 +65,7 @@ const numberedOf = (line: string): { number: number; text: string } | null => {
     (mark === "." || mark === ")") &&
     isSpace(trimmed[digits + 1])
     ? {
-        number: Number.parseInt(trimmed.slice(0, digits), 10),
+        number,
         text: trimmed.slice(digits + 2).trim(),
       }
     : null;
