@@ -116,6 +116,7 @@ export const USER_OWNED_TABLE_NAMES = [
   "sharepoint_oauth_state",
   "signal_events",
   "signals",
+  "sso_provider",
   "style_sets",
   "task_assignees",
   "template_chat_threads",
