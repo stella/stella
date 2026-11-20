@@ -6140,7 +6140,7 @@
         "title": "AI návrhy výkazů práce"
       },
       "dataBoxes": {
-        "description": "Datová zpráva odeslaná z některé z těchto schránek se založí jako odchozí, zpráva do nich jako příchozí. Každá změna znovu odvodí směr zpráv již založených ve spisech, ke kterým máte přístup.",
+        "description": "Zprávy odeslané z těchto schránek se zakládají jako odchozí, zprávy do nich jako příchozí. Změny se projeví i u již založených zpráv.",
         "invalid": "ID datové schránky má sedm písmen nebo číslic.",
         "remove": "Odebrat datovou schránku {address}",
         "title": "Datové schránky organizace"
@@ -6173,6 +6173,7 @@
         "title": "Extrakce paměti",
         "toggleLabel": "Navrhovat záznamy do paměti z historie chatů na pozadí"
       },
+      "organizationIdHint": "Trvalé ID, které se nikdy nemění. Použijte ho při kontaktu s podporou nebo při nastavování integrací.",
       "pastInvitations": "Dřívější pozvánky",
       "pendingInvitations": "Čekající pozvánky",
       "practiceJurisdictions": "Jurisdikce",
@@ -6186,11 +6187,12 @@
       "renameTitle": "Přejmenovat organizaci",
       "renameTypeToConfirm": "Pro potvrzení napište nový název: {name}",
       "slug": {
-        "change": "Změnit identifikátor",
-        "conflict": "Tento identifikátor již používá jiná organizace.",
-        "description": "Zvolte nový identifikátor nebo vygenerujte náhodný. Původní identifikátor přestane fungovat.",
-        "opaque": "Vygenerovat náhodný identifikátor",
-        "title": "Identifikátor organizace"
+        "change": "Změnit krátký název",
+        "conflict": "Tento krátký název již používá jiná organizace.",
+        "description": "Zvolte nový krátký název nebo vygenerujte náhodný. Původní krátký název přestane fungovat.",
+        "hint": "Jedinečný krátký název organizace, nezávislý na jejím zobrazovaném názvu.",
+        "opaque": "Vygenerovat náhodný krátký název",
+        "title": "Krátký název organizace"
       },
       "timePolicy": {
         "description": "Nastavte zaokrouhlování času, omezení úprav a uzamykání měsíců.",

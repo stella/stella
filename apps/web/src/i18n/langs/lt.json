@@ -6140,7 +6140,7 @@
         "title": "DI atsiskaitymo juodraščiai"
       },
       "dataBoxes": {
-        "description": "Pranešimas, išsiųstas iš vienos iš šių dėžučių, registruojamas kaip siunčiamas, o joms išsiųstas – kaip gaunamas. Kiekvienas pakeitimas iš naujo nustato jau užregistruotų pranešimų kryptį bylose, prie kurių turite prieigą.",
+        "description": "Pranešimai, išsiųsti iš šių dėžučių, registruojami kaip siunčiami, o joms išsiųsti – kaip gaunami. Pakeitimai taikomi ir jau užregistruotiems pranešimams.",
         "invalid": "Duomenų dėžutės ID sudaro septynios raidės arba skaitmenys.",
         "remove": "Pašalinti duomenų dėžutę {address}",
         "title": "Organizacijos duomenų dėžutės"
@@ -6173,6 +6173,7 @@
         "title": "Atminties išgavimas",
         "toggleLabel": "Fone siūlyti atminties įrašus iš pokalbių istorijos"
       },
+      "organizationIdHint": "Nuolatinis ID, kuris niekada nesikeičia. Naudokite jį kreipdamiesi į pagalbos tarnybą arba nustatydami integracijas.",
       "pastInvitations": "Ankstesni kvietimai",
       "pendingInvitations": "Laukiantys kvietimai",
       "practiceJurisdictions": "Jurisdikcijos",
@@ -6186,11 +6187,12 @@
       "renameTitle": "Pervadinti organizaciją",
       "renameTypeToConfirm": "Norėdami patvirtinti, įveskite naują pavadinimą: {name}",
       "slug": {
-        "change": "Keisti identifikatorių",
-        "conflict": "Šį identifikatorių jau naudoja kita organizacija.",
-        "description": "Pasirinkite naują identifikatorių arba sugeneruokite atsitiktinį. Ankstesnis identifikatorius nebeveiks.",
-        "opaque": "Sugeneruoti atsitiktinį identifikatorių",
-        "title": "Organizacijos identifikatorius"
+        "change": "Keisti trumpąjį pavadinimą",
+        "conflict": "Šį trumpąjį pavadinimą jau naudoja kita organizacija.",
+        "description": "Pasirinkite naują trumpąjį pavadinimą arba sugeneruokite atsitiktinį. Ankstesnis trumpasis pavadinimas nebeveiks.",
+        "hint": "Unikalus šios organizacijos trumpasis pavadinimas, nepriklausomas nuo rodomo pavadinimo.",
+        "opaque": "Sugeneruoti atsitiktinį trumpąjį pavadinimą",
+        "title": "Organizacijos trumpasis pavadinimas"
       },
       "timePolicy": {
         "description": "Nustatykite laiko apvalinimą, redagavimo terminus ir mėnesių užrakinimą.",

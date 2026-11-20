@@ -9,9 +9,8 @@ import {
 } from "@stll/api-contract/data-box";
 import { Button } from "@stll/ui/button";
 import { Form } from "@stll/ui/form";
-import { Trash2Icon } from "@stll/ui/icons";
+import { PlusIcon, Trash2Icon } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
-import { Label } from "@stll/ui/label";
 
 import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { usePermissions } from "@/hooks/use-permissions";
@@ -39,7 +38,7 @@ import {
  */
 export const OrganizationDataBoxesCard = () => {
   const t = useTranslations();
-  const inputId = useId();
+  const errorId = useId();
   const queryClient = useQueryClient();
   const { activeOrganizationId } = useAuthenticatedUser();
   const canEdit = usePermissions({ organizationSettings: ["update"] });
@@ -144,7 +143,8 @@ export const OrganizationDataBoxesCard = () => {
       )}
       {canEdit && (
         <Form
-          className="flex flex-wrap items-end gap-2"
+          density="compact"
+          layout="inline"
           onSubmit={(event) => {
             event.preventDefault();
             const boxId = draft.trim().toLowerCase();
@@ -155,30 +155,28 @@ export const OrganizationDataBoxesCard = () => {
             }
           }}
         >
-          <div className="flex flex-col gap-1">
-            <Label htmlFor={inputId}>
-              {t("contacts.communication.dataBoxPlaceholder")}
-            </Label>
-            <Input
-              aria-invalid={invalid}
-              className="w-32 font-mono"
-              dir="ltr"
-              id={inputId}
-              maxLength={DATA_BOX_ID_LENGTH}
-              onChange={(event) => {
-                setDraft(event.target.value);
-                setInvalid(false);
-              }}
-              value={draft}
-            />
-          </div>
-          <Button className="min-h-11" disabled={pending} type="submit">
+          <Input
+            aria-describedby={invalid ? errorId : undefined}
+            aria-invalid={invalid}
+            aria-label={t("contacts.communication.dataBoxPlaceholder")}
+            className="max-w-48 font-mono"
+            dir="ltr"
+            maxLength={DATA_BOX_ID_LENGTH}
+            onChange={(event) => {
+              setDraft(event.target.value);
+              setInvalid(false);
+            }}
+            placeholder={t("contacts.communication.dataBoxPlaceholder")}
+            value={draft}
+          />
+          <Button disabled={pending} type="submit">
+            <PlusIcon />
             {t("common.add")}
           </Button>
         </Form>
       )}
       {invalid && (
-        <p className="text-destructive text-xs">
+        <p className="text-destructive text-xs" id={errorId}>
           {t("settings.organization.dataBoxes.invalid")}
         </p>
       )}

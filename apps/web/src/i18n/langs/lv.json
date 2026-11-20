@@ -6140,7 +6140,7 @@
         "title": "AI norēķinu melnraksti"
       },
       "dataBoxes": {
-        "description": "Ziņa, kas nosūtīta no kādas no šīm pastkastēm, tiek reģistrēta kā izejošā, bet ziņa, kas nosūtīta uz tām, tiek reģistrēta kā ienākošā. Katra izmaiņa no jauna nosaka jau reģistrēto ziņu virzienu lietās, kurām jums ir piekļuve.",
+        "description": "Ziņas, kas nosūtītas no šīm pastkastēm, tiek reģistrētas kā izejošās, bet uz tām nosūtītās – kā ienākošās. Izmaiņas attiecas arī uz jau reģistrētajām ziņām.",
         "invalid": "Datu pastkastes ID ir septiņi burti vai cipari.",
         "remove": "Noņemt datu pastkasti {address}",
         "title": "Organizācijas datu pastkastes"
@@ -6173,6 +6173,7 @@
         "title": "Atmiņas iegūšana",
         "toggleLabel": "Fonā ieteikt atmiņas ierakstus no tērzēšanas vēstures"
       },
+      "organizationIdHint": "Pastāvīgs ID, kas nekad nemainās. Izmantojiet to, sazinoties ar atbalsta dienestu vai iestatot integrācijas.",
       "pastInvitations": "Iepriekšējie uzaicinājumi",
       "pendingInvitations": "Gaidošie uzaicinājumi",
       "practiceJurisdictions": "Jurisdikcijas",
@@ -6186,11 +6187,12 @@
       "renameTitle": "Pārdēvēt organizāciju",
       "renameTypeToConfirm": "Lai apstiprinātu, ievadiet jauno nosaukumu: {name}",
       "slug": {
-        "change": "Mainīt identifikatoru",
-        "conflict": "Šo identifikatoru jau izmanto cita organizācija.",
-        "description": "Izvēlieties jaunu identifikatoru vai ģenerējiet nejaušu. Iepriekšējais identifikators vairs nedarbosies.",
-        "opaque": "Ģenerēt nejaušu identifikatoru",
-        "title": "Organizācijas identifikators"
+        "change": "Mainīt īso nosaukumu",
+        "conflict": "Šo īso nosaukumu jau izmanto cita organizācija.",
+        "description": "Izvēlieties jaunu īso nosaukumu vai ģenerējiet nejaušu. Iepriekšējais īsais nosaukums vairs nedarbosies.",
+        "hint": "Unikāls šīs organizācijas īsais nosaukums, kas nav atkarīgs no tās attēlotā nosaukuma.",
+        "opaque": "Ģenerēt nejaušu īso nosaukumu",
+        "title": "Organizācijas īsais nosaukums"
       },
       "timePolicy": {
         "description": "Iestatiet laika noapaļošanu, rediģēšanas termiņus un mēnešu bloķēšanu.",
