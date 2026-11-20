@@ -308,13 +308,11 @@ describe("local Quickwit generation", () => {
     const q09Environment = recordField(q09, "environment");
     const rustfsSetupEnvironment = recordField(rustfsSetup, "environment");
 
-    // One engine service, and it is the one the manifest declares.
+    // One engine service, and it runs the one declared engine image.
     expect(
       Object.keys(services).filter((name) => name.startsWith("quickwit")),
     ).toEqual(["quickwit09-postgres-setup", "quickwit09"]);
-    expect(stringField(q09, "image")).toStartWith(
-      `quickwit/quickwit:${QUICKWIT_V09_RUNTIME.version}@sha256:`,
-    );
+    expect(stringField(q09, "image")).toBe(QUICKWIT_V09_RUNTIME.image);
     // A patch release of the line that built the generations reads their splits.
     const line = (version: string) => version.split(".").slice(0, 2).join(".");
     expect(line(QUICKWIT_V09_RUNTIME.version)).toBe(
@@ -388,6 +386,7 @@ describe("local Quickwit generation", () => {
     if (image === undefined) {
       throw new TypeError("CI image inventory must declare Quickwit");
     }
-    expect(image.source).toBe(`docker.io/${composeImage}`);
+    expect(image.source).toBe(composeImage);
+    expect(image.source).toBe(QUICKWIT_V09_RUNTIME.image);
   });
 });

@@ -39,7 +39,7 @@ const engineLabel = () =>
       version === QUICKWIT_V09_RUNTIME.version &&
       commit === QUICKWIT_V09_RUNTIME.commit,
   )
-    ? `stock ${QUICKWIT_V09_RUNTIME.version}`
+    ? `pinned ${QUICKWIT_V09_RUNTIME.version} (${QUICKWIT_V09_RUNTIME.commit.slice(0, 7)})`
     : "recorded engine build";
 const engineBuilds: {
   endpoint: string;
@@ -421,7 +421,7 @@ test("synthetic decision coverage includes split passages and rejects cross-deci
 });
 
 let created = false;
-describe.skipIf(!RUN_ENGINE)("query features on stock 0.9.0", () => {
+describe.skipIf(!RUN_ENGINE)("query features on the pinned engine", () => {
   beforeAll(async () => {
     for (const base of new Set([mutationBase(), searchBase()])) {
       const raw = await request(`${base}/api/v1/version`);

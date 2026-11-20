@@ -20,7 +20,8 @@ concurrency:
 
 jobs:
   cold-search:
-    runs-on: ubuntu-24.04
+    # The corpus engine image is arm64 only (QUICKWIT_V09_RUNTIME).
+    runs-on: ubuntu-24.04-arm
     timeout-minutes: 45
     permissions:
       contents: read
