@@ -3255,13 +3255,13 @@ const SubagentRunCard = ({
               }
               return (
                 <AssistantMessageParts
+                  key={entry.message.id}
                   {...partsProps}
                   isLatestAssistantMessage={
                     partsProps.isLatestAssistantMessage &&
                     isRunActive &&
                     index === messages.length - 1
                   }
-                  key={entry.message.id}
                   message={entry.message}
                 />
               );
