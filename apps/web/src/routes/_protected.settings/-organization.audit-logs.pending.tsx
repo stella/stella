@@ -212,7 +212,7 @@ export const AuditLogShell = ({
 );
 
 export const AuditLogsPending = framePendingView(() => (
-  <SettingsPagePending>
+  <SettingsPagePending area="organization">
     <AuditLogShell
       exportAction={
         <ButtonFace size="default" variant="outline">

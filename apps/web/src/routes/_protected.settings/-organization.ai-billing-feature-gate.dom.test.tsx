@@ -24,6 +24,7 @@ const router = await import("@tanstack/react-router");
 const { act, cleanup, render } = await import("@testing-library/react");
 const { IntlProvider } = await import("use-intl");
 const { FormattingProvider } = await import("@/i18n/formatting-context");
+const { PendingTextIntlScope } = await import("@/components/pending-text");
 const { AuthenticatedUserProvider } =
   await import("@/lib/authenticated-user-context");
 const { roleOptions } = await import("@/lib/auth-queries");
@@ -141,9 +142,11 @@ const mount = async (timeBilling: boolean) => {
     <QueryClientProvider client={client}>
       <AuthenticatedUserProvider user={USER}>
         <IntlProvider locale="en" messages={messages} timeZone="UTC">
-          <FormattingProvider locale="en" timeZone="UTC">
-            <router.RouterProvider router={appRouter} />
-          </FormattingProvider>
+          <PendingTextIntlScope formattingLocale="en">
+            <FormattingProvider locale="en" timeZone="UTC">
+              <router.RouterProvider router={appRouter} />
+            </FormattingProvider>
+          </PendingTextIntlScope>
         </IntlProvider>
       </AuthenticatedUserProvider>
     </QueryClientProvider>,
