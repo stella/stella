@@ -41,7 +41,7 @@ describe("sealed text", () => {
     const sealed = sealText(scope, secret).unwrap();
     const [version, keyId, iv, payload] = sealed.split(".");
     if (payload === undefined || iv === undefined || keyId === undefined) {
-      return panic("sealed text has four parts");
+      panic("sealed text has four parts");
     }
     const tampered = flipByteAt(Buffer.from(payload, "base64url"), 0);
     const cases = [

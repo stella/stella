@@ -155,7 +155,7 @@ export const createSsoOrganizationGuardPlugin = () =>
           matcher: (ctx) =>
             ctx.path?.startsWith(ORGANIZATION_PATH_PREFIX) ?? false,
           handler: createAuthMiddleware(async (ctx) => {
-            if (!isEnterpriseSsoDeployed() || ctx.path === undefined) {
+            if (!isEnterpriseSsoDeployed()) {
               return;
             }
             if (isRecoveryEndpoint(ctx.path)) {

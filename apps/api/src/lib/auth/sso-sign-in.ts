@@ -173,7 +173,7 @@ const resolveSsoUser = async (
   const email = verifiedIdTokenEmail(input.verifiedIdTokenClaims);
   if (
     email === undefined ||
-    input.providerUser.emailVerified !== true ||
+    !input.providerUser.emailVerified ||
     normalizeEmail(input.providerUser.email) !== email
   ) {
     return reject(SSO_REJECTION_CODE.emailUnverified);
@@ -346,6 +346,7 @@ const SSO_OPTIONS = {
   resolveUser: resolveSsoUser,
   // The resolver admits an address only when the signed ID token verifies
   // it; this lets the shared identity policy see that verification too.
+  // oxlint-disable-next-line typescript/no-deprecated -- the resolver never relies on the provider flag alone: it requires the signed ID token to verify the same address in one of the provider's verified domains
   trustEmailVerified: true,
   // Membership follows the organization's own invitation and provisioning
   // rules; the plugin never adds members by provider or by domain.
@@ -401,7 +402,7 @@ const bindAuthorizationNonce = createAuthMiddleware(async (ctx) => {
   const returned: unknown = await Promise.resolve(ctx.context.returned);
   const redirect = v.safeParse(authorizationRedirectSchema, returned);
   if (!redirect.success) {
-    return;
+    return undefined;
   }
   const url = new URL(redirect.output.url);
   const state = url.searchParams.get("state");
@@ -423,7 +424,9 @@ const publishCallbackError = createAuthMiddleware(async (ctx) => {
   if (!isAPIError(returned)) {
     return;
   }
-  const location = new Headers(returned.headers).get("location");
+  // A redirect the framework raises carries the context's Headers.
+  const headers: unknown = returned.headers;
+  const location = headers instanceof Headers ? headers.get("location") : null;
   if (location === null) {
     return;
   }
