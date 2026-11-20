@@ -23,7 +23,10 @@ import {
   emailAddressSchema,
   normalizeEmail,
 } from "@/api/lib/email/normalized-email";
-import { readRecipientRefusal } from "@/api/lib/email/recipient-deliverability";
+import {
+  readRecipientRefusal,
+  recordRecipientFailures,
+} from "@/api/lib/email/recipient-deliverability";
 import type { SupportedLang } from "@/api/lib/locale";
 import { failureSink } from "@/api/lib/observability/failure";
 import { logger } from "@/api/lib/observability/logger";
@@ -98,6 +101,12 @@ const deliverabilityUnread = failureSink({
   expected: [],
 });
 
+// A dropped send whose failure is not recorded is observed, never fatal.
+const skippedSendUnrecorded = failureSink({
+  event: "email.send.skip_unrecorded",
+  expected: [],
+});
+
 /**
  * Whether the provider has refused this recipient's account address, so a
  * send would only be dropped. A failed read sends anyway: the provider still
@@ -122,6 +131,18 @@ const isRefusedRecipient = async (to: string): Promise<boolean> => {
     "user.id": refusal.value.userId,
     "delivery.refusal_reason": refusal.value.reason,
   });
+  // A dropped send fails like a provider suppression-list bounce, so the
+  // sign-in screen explains it the same way, account or not.
+  const recorded = await Result.tryPromise(
+    async () =>
+      await recordRecipientFailures(
+        [{ email: normalizeEmail(address.output), reason: "suppressed" }],
+        new Date(),
+      ),
+  );
+  if (recorded.isErr()) {
+    observeFailure(recorded.error, { sink: skippedSendUnrecorded });
+  }
   return true;
 };
 
