@@ -36,7 +36,7 @@ use crate::{
   dictation_live::{Ended, Live, Transcribe, Transcription},
   dictation_microphone::{self, Choice, InputDevice},
   dictation_pauses::Segmenter,
-  dictation_preview,
+  dictation_preview, dictation_spelling,
   dictation_trace::{self, Cleanup, GlobeKey, Line, Outcome, Trace},
   dictation_worker::{self, Response},
 };
@@ -413,6 +413,9 @@ fn finish(
   }
   live.send(rest.samples);
   let (ended, engines, tally) = live.finish_tallied().ok_or(Failure::Transcription)?;
+  // Some stretches went to the speech model on this computer, which takes
+  // no custom words.
+  let transcribed_here = engines.destination == Destination::Local || tally.fell_back;
   Line::Transcribe {
     duration: trace.since_release(),
     destination: engines.destination,
@@ -439,8 +442,18 @@ fn finish(
     // A hold that heard nothing is told unless it was a tap.
     return heard_nothing(held).map(|()| Delivered::Empty);
   }
+  let cleanup_enabled = dictation::cleanup_enabled(app);
+  // Cleanup spells the custom words itself; without it, the words the speech
+  // model here missed are spelled on this computer.
+  let respelled;
+  let text = if transcribed_here && !cleanup_enabled {
+    respelled = dictation_spelling::respell(text, &crate::dictation_words::words(app));
+    respelled.as_str()
+  } else {
+    text
+  };
   let ((cleaned, cleanup), cleanup_took) = dictation_trace::timed(|| {
-    if dictation::cleanup_enabled(app) {
+    if cleanup_enabled {
       let words = crate::dictation_words::words(app);
       dictation_cleanup::clean_up(app, text, &language.speaker, &words, context)
     } else {

@@ -666,7 +666,7 @@
     "customWords": {
       "group": "Omad sõnad",
       "title": "Sõnad ja nimed, mida stella peab õigesti kirjutama",
-      "description": "Näiteks klientide nimed või ingliskeelsed terminid, mida kasutate teises keeles rääkides. Need hoitakse selles arvutis selle konto jaoks ja saadetakse ainult koos dikteerimisega: stella AI abil teisendamiseks ja tehisintellektiga parandamiseks. Selle arvuti kõnemudel neid ei kasuta.",
+      "description": "Näiteks klientide nimed või ingliskeelsed terminid, mida kasutate teises keeles rääkides. Need hoitakse selles arvutis selle konto jaoks ja saadetakse ainult koos dikteerimisega: stella AI abil teisendamiseks ja tehisintellektiga parandamiseks. Kui teisendab selle arvuti kõnemudel ja tehisintellektiga parandamine on välja lülitatud, parandab stella nende õigekirja selles arvutis.",
       "count": "{count, number} / {limit, number}",
       "input": "Lisa sõna või nimi",
       "add": "Lisa",

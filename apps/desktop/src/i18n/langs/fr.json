@@ -666,7 +666,7 @@
     "customWords": {
       "group": "Mots personnalisés",
       "title": "Mots et noms que stella doit écrire correctement",
-      "description": "Par exemple des noms de clients, ou des termes anglais que vous employez en parlant une autre langue. Ils sont conservés sur cet ordinateur pour ce compte et envoyés uniquement avec votre dictée, à la transcription par stella AI et à la correction par IA. Le modèle vocal de cet ordinateur ne les utilise pas.",
+      "description": "Par exemple des noms de clients, ou des termes anglais que vous employez en parlant une autre langue. Ils sont conservés sur cet ordinateur pour ce compte et envoyés uniquement avec votre dictée, à la transcription par stella AI et à la correction par IA. Lorsque le modèle vocal de cet ordinateur transcrit et que la correction par IA est désactivée, stella corrige leur orthographe sur cet ordinateur.",
       "count": "{count, number} sur {limit, number}",
       "input": "Ajouter un mot ou un nom",
       "add": "Ajouter",
