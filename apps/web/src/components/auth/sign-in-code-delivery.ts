@@ -75,6 +75,10 @@ export const signInCodeDeliveryOptions = ({
           ? false
           : SIGN_IN_CODE_DELIVERY_POLL_MS,
       retry: false,
+      // A focus or reconnect refetch could replace a reported failure with
+      // an outage's answer; only the poll above asks again.
+      refetchOnWindowFocus: false,
+      refetchOnReconnect: false,
     }),
     { type: "independent" },
   );
