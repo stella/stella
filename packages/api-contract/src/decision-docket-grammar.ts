@@ -542,6 +542,10 @@ export const polishConstitutionalDocketKey = (
  */
 const CZE_NUMERIC_SENATE_COMPONENT_DIGITS_MAX = 3;
 const CZE_OPTIONAL_NUMERIC_SENATE_COMPONENTS_MAX = 1;
+const CZE_OPTIONAL_NUMERIC_SENATE_COMPONENT_SOURCE = Array.from(
+  { length: CZE_OPTIONAL_NUMERIC_SENATE_COMPONENTS_MAX },
+  () => String.raw`(?:\d{1,${CZE_NUMERIC_SENATE_COMPONENT_DIGITS_MAX}} ?)?`,
+).join("");
 
 /** All-zero numeric prefixes accepted by the Czech grammar, including absence. */
 export const CZE_ZERO_SENATE_PREFIXES = Object.freeze(
@@ -575,7 +579,7 @@ export const CZE_ZERO_SENATE_PREFIX_SPELLINGS = Object.freeze(
 export const CZE_SHEET_NUMBER_SOURCE = String.raw`\d{1,5}`;
 const CZE_SHEET_SUFFIX_RE = new RegExp(`-${CZE_SHEET_NUMBER_SOURCE}$`, "u");
 const CZE_SENATE_DOCKET_RE = new RegExp(
-  String.raw`^(?:(?:pl|i|ii|iii|iv)\.? ?|\d{1,${CZE_NUMERIC_SENATE_COMPONENT_DIGITS_MAX}} ?)(?:\d{1,${CZE_NUMERIC_SENATE_COMPONENT_DIGITS_MAX}} ?){0,${CZE_OPTIONAL_NUMERIC_SENATE_COMPONENTS_MAX}}\p{L}{1,7}\.? \d{1,6}\/(?<year>\d{2}(?:\d{2})?)(?:-${CZE_SHEET_NUMBER_SOURCE})?$`,
+  String.raw`^(?:(?:pl|i|ii|iii|iv)\.? ?|\d{1,${CZE_NUMERIC_SENATE_COMPONENT_DIGITS_MAX}} ?)${CZE_OPTIONAL_NUMERIC_SENATE_COMPONENT_SOURCE}\p{L}{1,7}\.? \d{1,6}\/(?<year>\d{2}(?:\d{2})?)(?:-${CZE_SHEET_NUMBER_SOURCE})?$`,
   "iu",
 );
 
