@@ -776,17 +776,11 @@ The role sets live in `packages/legal-ast/src/document-ast.ts`
 (`HEADING_ROLES`, `PARAGRAPH_ROLES`, `TABLE_ROLES`); add a role there
 and nowhere else. Writers validate against the strict schema; the
 persisted reader degrades vocabulary it does not declare instead of
-failing the document, and never drops text: a role becomes the declared
-fallback, an unknown inline kind collapses to the text its children
-carried, an unknown block kind is kept as an unread paragraph (role
-`unknown`, its text, identity and `storedType`), and repeated block
-identities are re-keyed by `withUniqueBlockIdentities`. Every read names its
-outcome (`stored-ast-outcome.ts`: read, absent, structureless for the empty
-AST, degraded with per-kind counts), and a degraded or structureless read is
-one `case_law.stored_ast_degraded` record per document, graded
-`stored_ast_degraded` (anticipated: the row needs a reparse). The projection
-batch counts the outcomes in its progress (`storedAst`), a refused AST
-beside usable text as `unreadable`. The same persisted schema is used by the writer's
+failing the document — a role becomes the declared fallback, an unknown
+inline kind collapses to the text its children carried, an unknown block
+kind is dropped, and repeated block identities are re-keyed by
+`withUniqueBlockIdentities`, reporting each degradation through
+`StoredAstDegradedError`. The same persisted schema is used by the writer's
 `prepareCorpusAst` owner, so a repaired document reads as it was written.
 Malformed stored payloads retain `StoredCorpusValidationError` with its stable
 code and path-only diagnostics. A reader chooses recovery through the typed
