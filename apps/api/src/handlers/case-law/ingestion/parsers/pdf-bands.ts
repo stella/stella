@@ -1307,8 +1307,7 @@ const isPageNumber = (text: string, pageNumber: number): boolean => {
  * A line's trailing page count after its words: `… soutěže 2/13`,
  * `… 2 z 13`. The words before it are what repeats from page to page.
  */
-const PAGE_COUNT_SUFFIX =
-  /\p{L}\S* (?<count>(?<page>\d{1,4}) ?(?:\/|z) ?(?<total>\d{1,4}))$/u;
+const PAGE_COUNT_SUFFIX = / (?<count>(?<page>\d{1,4}) ?(?:\/|z) ?\d{1,4})$/u;
 
 /**
  * On how many of a document's pages a letterhead line has to sit at the same
@@ -1528,13 +1527,13 @@ const withoutRepeatedFurniture = (
     }
     // A footer that counts its pages (`Úřad pro ochranu hospodářské soutěže
     // 2/13`, `… 2 z 13`) prints this page's number against the total.
-    const counted = PAGE_COUNT_SUFFIX.exec(text)?.groups;
+    const counted = PAGE_COUNT_SUFFIX.exec(text);
+    const words = counted === null ? "" : text.slice(0, counted.index).trim();
     if (
-      counted !== undefined &&
-      counted["page"] === String(page + 1) &&
-      Number(counted["total"]) >= page + 1
+      counted?.groups?.["page"] === String(page + 1) &&
+      /\p{L}/u.test(words)
     ) {
-      return text.slice(0, -(counted["count"] ?? "").length).trim();
+      return words;
     }
     const contact =
       text.includes("@") || text.includes("www.") || text.includes("://");
