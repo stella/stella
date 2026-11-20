@@ -375,6 +375,9 @@ export const NO_NATIVE_UI_REGISTRY = {
     elements: ["hr"],
     roles: ["separator"],
   }),
+  settings: noNative(
+    "settings sections and rows; their grouped list has no native counterpart",
+  ),
   sheet: owned(
     nativeRuleId("dialog"),
     "a sheet is an edge-anchored dialog; native dialogs are the dialog rule's",
@@ -727,6 +730,9 @@ export const NO_NATIVE_UI_REACT_NATIVE = {
     "a phone picks from a list on its own screen or sheet, not a dropdown",
   ),
   separator: renderer("Separator from @stll/ui/separator", []),
+  settings: webOnly(
+    "the web and desktop settings pages; the app's settings are native screens",
+  ),
   sheet: renderer("Sheet from @stll/ui/sheet", ["Modal"]),
   sidebar: webOnly(
     "the web's navigation chrome; the app navigates with the platform's tab bar",
