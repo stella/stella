@@ -107,7 +107,6 @@ const measureCountryNavigation = (node: HTMLElement | null) => {
   const measure = () => {
     container.style.setProperty(
       COUNTRY_NAVIGATION_HEIGHT,
-      COUNTRY_NAVIGATION_ITEM_CLASS_NAME,
       `${node.getBoundingClientRect().height}px`,
     );
   };
