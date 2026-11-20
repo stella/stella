@@ -29,6 +29,7 @@ import {
 import { detached } from "@/lib/detached";
 import { toAuthClientError } from "@/lib/errors/auth";
 import { transformUnknownError } from "@/lib/errors/client";
+import { readQueryResult } from "@/lib/errors/query-result";
 import { notifyUserError, notifyUserProblem } from "@/lib/errors/user-toast";
 import {
   getOauthRedirectUrl,
@@ -111,7 +112,7 @@ export function ConsentPage() {
       });
 
       if (result.error) {
-        throw toAuthClientError(result.error);
+        return readQueryResult(Result.err(toAuthClientError(result.error)));
       }
 
       return v.parse(oauthConsentInfoSchema, result.data);

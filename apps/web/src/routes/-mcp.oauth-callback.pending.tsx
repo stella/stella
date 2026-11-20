@@ -3,7 +3,8 @@ import type { ComponentProps } from "react";
 import { useSearch } from "@tanstack/react-router";
 
 import { ButtonFace } from "@stll/ui/control-face";
-import { OutcomeScreen, OutcomeScreenPending } from "@stll/ui/outcome-screen";
+import type { OutcomeScreen } from "@stll/ui/outcome-screen";
+import { OutcomeScreenPending } from "@stll/ui/outcome-screen";
 import { cn } from "@stll/ui/utils";
 
 import { PendingText, useIntlMounted } from "@/components/pending-text";
@@ -26,18 +27,22 @@ export const MCP_OAUTH_OUTCOME_LABELS = {
   { title: string; description: string; tone: "success" | "error" }
 >;
 
-type McpOAuthCallbackShellProps =
-  | { phase: "loaded"; screen: ComponentProps<typeof OutcomeScreen> }
-  | { phase: "pending"; screen: ComponentProps<typeof OutcomeScreenPending> };
+type LoadedScreen = ComponentProps<typeof OutcomeScreen>;
+type PendingScreen = ComponentProps<typeof OutcomeScreenPending>;
 
-export const McpOAuthCallbackShell = (props: McpOAuthCallbackShellProps) => {
-  switch (props.phase) {
-    case "loaded":
-      return <OutcomeScreen {...props.screen} />;
-    case "pending":
-      return <OutcomeScreenPending {...props.screen} />;
-  }
-};
+type McpOAuthCallbackShellProps =
+  | { screen: PendingScreen; Screen?: undefined }
+  | { screen: LoadedScreen; Screen: typeof OutcomeScreen };
+
+export const McpOAuthCallbackShell = ({
+  screen,
+  Screen,
+}: McpOAuthCallbackShellProps) =>
+  Screen === undefined ? (
+    <OutcomeScreenPending {...screen} />
+  ) : (
+    <Screen {...screen} />
+  );
 
 const RetryActionsPending = ({ slug }: { slug: string | undefined }) => (
   <>
@@ -82,24 +87,19 @@ const OutcomeDescriptionPending = ({
 };
 
 export const McpOAuthCallbackPending = framePendingView(() => {
-  const status = useSearch({
+  const { connected, slug } = useSearch({
     strict: false,
-    select: (search) => (search.status === "connected" ? "connected" : "error"),
+    select: (search) => ({
+      connected: search.status === "connected",
+      slug: typeof search.slug === "string" ? search.slug : undefined,
+    }),
   });
-  const slug = useSearch({
-    strict: false,
-    select: (search) =>
-      typeof search.slug === "string" ? search.slug : undefined,
-  });
+  const status = connected ? "connected" : "error";
   const { title, tone } = MCP_OAUTH_OUTCOME_LABELS[status];
   return (
     <McpOAuthCallbackShell
-      phase="pending"
       screen={{
-        actions:
-          status === "connected" ? undefined : (
-            <RetryActionsPending slug={slug} />
-          ),
+        actions: connected ? undefined : <RetryActionsPending slug={slug} />,
         description: <OutcomeDescriptionPending status={status} />,
         title: <PendingText barClassName="w-56 max-w-full" id={title} />,
         tone,

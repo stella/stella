@@ -1,5 +1,7 @@
 import { getRouteApi, useNavigate } from "@tanstack/react-router";
 
+import { OutcomeScreen } from "@stll/ui/outcome-screen";
+
 import { detached } from "@/lib/detached";
 import type { McpOAuthOutcome } from "@/lib/mcp-oauth-channel";
 import { broadcastMcpOAuthOutcome } from "@/lib/mcp-oauth-channel";
@@ -42,5 +44,5 @@ export function McpOAuthCallbackPage() {
     },
   });
 
-  return <McpOAuthCallbackShell phase="loaded" screen={screen} />;
+  return <McpOAuthCallbackShell Screen={OutcomeScreen} screen={screen} />;
 }

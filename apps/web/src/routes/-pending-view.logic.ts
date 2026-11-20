@@ -1,13 +1,5 @@
 import type { RouteComponent } from "@tanstack/react-router";
 
-declare module "@tanstack/react-router" {
-  // oxlint-disable-next-line typescript/consistent-type-definitions -- router static data uses declaration merging
-  interface StaticDataRouteOption {
-    /** The standalone pending frame needs translated labels to match its layout. */
-    pendingText?: "request-locale";
-  }
-}
-
 const FRAME_SAFE: unique symbol = Symbol("frame-safe pending view");
 
 /**

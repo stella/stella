@@ -129,6 +129,23 @@ const LANDING_GREETING_MODULES: ReadonlySet<string> = new Set([
   "@stll/ui/landing-shell",
 ]);
 
+// These marks identify the OAuth service and brand the onboarding sidebar
+// preview. Each belongs to page content in both loading and loaded views.
+const PAGE_CONTENT_MARKS = [
+  {
+    file: "components/oauth-consent/consent-card-shell.pending.tsx",
+    component: "ConsentClientTilePair",
+    module: "@stll/ui/stella-mark",
+    symbol: "StellaMark",
+  },
+  {
+    file: "routes/onboarding/-components/sidebar-preview.pending.tsx",
+    component: "OnboardingSidebarPending",
+    module: "@stll/ui/stella-wordmark",
+    symbol: "StellaWordmarkLatin",
+  },
+] as const;
+
 class FallbackSymbols {
   private readonly modules = new Map<string, Module>();
   private readonly srcDirectory: string;
@@ -512,10 +529,22 @@ class FallbackSymbols {
     if (this.isInlineLoader(file, node)) {
       return [];
     }
-    // Only the shared greeting: a local component of the same name is
-    // inspected like any other.
     const name = this.text(file, node.name);
-    const binding = this.load(file).imports.get(name);
+    const source = this.load(file);
+    const binding = source.imports.get(name);
+    const mark = PAGE_CONTENT_MARKS.find(
+      (entry) =>
+        binding?.name === entry.symbol &&
+        binding.module === entry.module &&
+        path.join(this.srcDirectory, entry.file) === file,
+    );
+    const owner = mark && source.definitions.get(mark.component);
+    if (owner && owner.start <= node.start && node.end <= owner.end) {
+      return node.attributes.flatMap((attr) =>
+        this.inspectNode(file, attr, visited, locals),
+      );
+    }
+    // Only the canonical greeting owns its icon slot.
     if (
       name !== "LandingGreeting" ||
       binding?.name !== "LandingGreeting" ||

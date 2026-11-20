@@ -220,30 +220,35 @@ const completeOrganizationFlow = async ({
   redirectTo: string;
   status: "created" | "selected";
 }) => {
-  // This route redirects once the refreshed session exposes an active
-  // organization. Refresh the auth caches without invalidating the current
-  // route; self-invalidation can leave that redirect transition pending.
-  await refreshAuthQueries(queryClient);
+  const completion = await Result.tryPromise({
+    try: async () => {
+      // Refresh the auth caches without invalidating this route, which exits
+      // when the session exposes an active organization.
+      await refreshAuthQueries(queryClient);
+      if (!isOauthPostLogin) {
+        await navigate(destinationNavigation(redirectTo));
+        return Result.ok(undefined);
+      }
 
-  if (!isOauthPostLogin) {
-    await navigate(destinationNavigation(redirectTo));
-    return;
-  }
+      const result = await authClient.oauth2.continue({
+        ...(status === "created" ? { created: true } : { selected: true }),
+        postLogin: true,
+      });
+      if (result.error) {
+        return Result.err(toAuthClientError(result.error));
+      }
 
-  const result = await authClient.oauth2.continue({
-    ...(status === "created" ? { created: true } : { selected: true }),
-    postLogin: true,
+      const redirectUrl = getOauthRedirectUrl(result.data);
+      if (!redirectUrl) {
+        panic("Missing OAuth continuation redirect URL");
+      }
+
+      window.location.href = redirectUrl;
+      return Result.ok(undefined);
+    },
+    catch: transformUnknownError,
   });
-  if (result.error) {
-    return readQueryResult(Result.err(toAuthClientError(result.error)));
-  }
-
-  const redirectUrl = getOauthRedirectUrl(result.data);
-  if (!redirectUrl) {
-    panic("Missing OAuth continuation redirect URL");
-  }
-
-  window.location.href = redirectUrl;
+  return completion.isErr() ? completion : completion.value;
 };
 
 const OrganizationList = ({
@@ -264,25 +269,22 @@ const OrganizationList = ({
       });
 
       if (error) {
-        notifyUserError(toAuthClientError(error), t("errors.actionFailed"));
-        return readQueryResult(Result.err(toAuthClientError(error)));
+        const authError = toAuthClientError(error);
+        notifyUserError(authError, t("errors.actionFailed"));
+        return readQueryResult(Result.err(authError));
       }
 
-      const refreshed = await Result.tryPromise({
-        try: async () =>
-          await completeOrganizationFlow({
-            isOauthPostLogin,
-            navigate,
-            queryClient,
-            redirectTo,
-            status: "selected",
-          }),
-        catch: transformUnknownError,
+      const refreshed = await completeOrganizationFlow({
+        isOauthPostLogin,
+        navigate,
+        queryClient,
+        redirectTo,
+        status: "selected",
       });
       if (refreshed.isErr()) {
         notifyUserError(refreshed.error, t("errors.actionFailed"));
       }
-      readQueryResult(refreshed);
+      return readQueryResult(refreshed);
     },
     onError: (error) => {
       analytics.captureError(error, {
@@ -416,23 +418,22 @@ const CreateOrganizationForm = ({
           return;
         }
 
-        try {
-          await completeOrganizationFlow({
-            isOauthPostLogin,
-            navigate,
-            queryClient,
-            redirectTo,
-            status: "created",
-          });
-        } catch (error) {
-          analytics.captureError(error, {
+        const completion = await completeOrganizationFlow({
+          isOauthPostLogin,
+          navigate,
+          queryClient,
+          redirectTo,
+          status: "created",
+        });
+        if (completion.isErr()) {
+          analytics.captureError(completion.error, {
             fingerprintKey: "CreateOrganizationForm.onSubmit:failure-4",
             scope: {
               type: "handler",
               handlerId: "CreateOrganizationForm.onSubmit:failure-4",
             },
           });
-          notifyUserError(error, t("errors.actionFailed"));
+          notifyUserError(completion.error, t("errors.actionFailed"));
         }
       },
     }),

@@ -99,7 +99,13 @@ const consentDesktopGeometryException = {
 
 type GeometryCase = (typeof cases)[number];
 
-const geometryExceptionFor = ({ path, viewport }: GeometryCase) =>
+const geometryExceptionFor = ({
+  path,
+  viewport,
+}: {
+  path: GeometryCase["path"];
+  viewport: { width: number; height: number };
+}) =>
   path === consentDesktopGeometryException.route &&
   viewport.width === consentDesktopGeometryException.viewport.width &&
   viewport.height === consentDesktopGeometryException.viewport.height
@@ -207,11 +213,12 @@ const readLandmarks = async (page: Page, selectors: readonly string[]) => {
   );
   await waitForStableGeometry(page, landmarks);
   return await Promise.all(
-    landmarks.map((landmark) =>
-      landmark.evaluate((node) => {
-        const { left, top, right, bottom } = node.getBoundingClientRect();
-        return { left, top, right, bottom };
-      }),
+    landmarks.map(
+      async (landmark) =>
+        await landmark.evaluate((node) => {
+          const { left, top, right, bottom } = node.getBoundingClientRect();
+          return { left, top, right, bottom };
+        }),
     ),
   );
 };
