@@ -181,11 +181,12 @@ describe("model lineage", () => {
   test("every reviewed stale default is still a default", () => {
     const defaults = new Set(
       MODEL_TASKS.flatMap((task) =>
-        Object.entries(MODEL_DEFAULTS_LEDGER[task]).map(([provider, entry]) =>
-          entry.kind === "candidate"
+        BYOK_PROVIDERS.map((provider) => {
+          const entry = MODEL_DEFAULTS_LEDGER[task][provider];
+          return entry.kind === "candidate"
             ? `${provider}:${entry.candidate.modelId}`
-            : "",
-        ),
+            : "";
+        }),
       ),
     );
     expect(
