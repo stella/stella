@@ -738,6 +738,7 @@ const DecisionRow = ({
       <DecisionStatus review={review} />
       <ReviewDecisionActions
         acceptLabel={acceptLabel}
+        applyingReason={t("common.applying")}
         disabledReason={disabledReason}
         emphasis={emphasis}
         onAccept={() => onStatus("reviewed")}

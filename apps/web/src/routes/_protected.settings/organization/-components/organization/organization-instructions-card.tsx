@@ -119,7 +119,7 @@ const OrganizationInstructionsEditor = ({
     }
     if (tooLong) {
       return t("organization.aiInstructions.tooLong", {
-        max: settings.aiInstructionsMaxLength,
+        maxLength: format.number(settings.aiInstructionsMaxLength),
       });
     }
     return t("common.noChangesToSave");

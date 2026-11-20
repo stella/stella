@@ -1406,6 +1406,7 @@ const StepsSection = ({
   onAdd: (kind: FlowStepKind) => void;
 }) => {
   const t = useTranslations();
+  const format = useFormatter();
   const atLimit = steps.length >= MAX_FLOW_STEPS;
 
   return (
@@ -1448,7 +1449,7 @@ const StepsSection = ({
             <Button
               disabled={atLimit}
               disabledReason={t("flows.validation.tooManySteps", {
-                max: MAX_FLOW_STEPS,
+                max: format.number(MAX_FLOW_STEPS),
               })}
               key={kind}
               onClick={() => onAdd(kind)}
