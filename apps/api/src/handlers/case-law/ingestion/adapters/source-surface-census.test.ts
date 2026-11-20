@@ -56,6 +56,7 @@ import {
   type AtRisFixtureAdapter,
   brTjdftFixture,
   brTstAcordaoFixture,
+  czIsirFixture,
   czNsFixture,
   czNsSbirkaFixture,
   czNssFixture,
@@ -189,6 +190,7 @@ const SURFACE_EVIDENCE = {
   ],
   [ADAPTER_KEYS.BR_TJDFT]: [{ kind: "built", fixture: brTjdftFixture }],
   [ADAPTER_KEYS.CZ_NS_SBIRKA]: [{ kind: "built", fixture: czNsSbirkaFixture }],
+  [ADAPTER_KEYS.CZ_ISIR]: [{ kind: "built", fixture: czIsirFixture }],
 } as const satisfies Record<SourceRegistrationKey, readonly SurfaceEvidence[]>;
 
 // ── Reading a stored raw back into part names ────────────
