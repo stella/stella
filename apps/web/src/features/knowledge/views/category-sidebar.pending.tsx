@@ -23,7 +23,12 @@ export const CategorySidebarFrame = ({
   children: ReactNode;
   className?: string | undefined;
 }) => (
-  <div className={cn("flex w-48 shrink-0 flex-col", className)}>{children}</div>
+  <div
+    className={cn("flex w-48 shrink-0 flex-col", className)}
+    data-slot="category-sidebar"
+  >
+    {children}
+  </div>
 );
 
 /** The sidebar's list of filters: all, uncategorized, then the categories. */

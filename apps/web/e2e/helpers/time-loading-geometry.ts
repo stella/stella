@@ -148,7 +148,7 @@ const KNOWLEDGE_SURFACES = [
     busy: "[data-slot=knowledge-rows-pending]",
     landmarks: {
       heading: "[data-slot=clause-list-toolbar]",
-      sidebar: "nav",
+      sidebar: "[data-slot=category-sidebar]",
       body: "[data-slot=clause-list-body]",
     },
   },
