@@ -477,8 +477,7 @@ const placeLiveTurnStatus = ({
   ) : null;
   const inRun =
     line !== null &&
-    assistant !== undefined &&
-    assistant.id === latestAssistantId &&
+    assistant?.id === latestAssistantId &&
     endsInDrawnStepRun(assistant);
   return {
     afterTurn: inRun ? null : line,
