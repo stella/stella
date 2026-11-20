@@ -260,6 +260,7 @@
     "apps/desktop/src/clipboard/ClipboardApp.tsx": 2,
     "apps/desktop/src/clipboard/ClipboardEditor.tsx": 1,
     "apps/desktop/src/registry/RegistrySearch.tsx": 2,
+    "apps/web/src/components/ai-elements/answer-table.tsx": 2,
     "apps/web/src/components/ai-prompt-input/ai-prompt-input.tsx": 1,
     "apps/web/src/components/ai-suggestions/host.tsx": 1,
     "apps/web/src/components/ai-suggestions/review-margin-notes.tsx": 1,

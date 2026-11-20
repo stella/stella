@@ -20,10 +20,26 @@ const PANEL_INSET = 12;
 const AIRPODS = "AirPods Pro 3";
 
 const NOTICES = [
-  { fix: "request", inputDevice: null, kind: "microphone" },
-  { fix: "openSettings", inputDevice: AIRPODS, kind: "microphone" },
-  { fix: null, inputDevice: null, kind: "microphone" },
-  { fix: "openSound", inputDevice: AIRPODS, kind: "nothingHeard" },
+  { fix: "request", inputDevice: null, kind: "microphone", missing: null },
+  {
+    fix: "openSettings",
+    inputDevice: AIRPODS,
+    kind: "microphone",
+    missing: null,
+  },
+  { fix: null, inputDevice: null, kind: "microphone", missing: null },
+  {
+    fix: "openSound",
+    inputDevice: AIRPODS,
+    kind: "nothingHeard",
+    missing: null,
+  },
+  {
+    fix: "chooseMicrophone",
+    inputDevice: AIRPODS,
+    kind: "microphoneMissing",
+    missing: "Desk Microphone",
+  },
 ] as const;
 
 const responses = async (page: Parameters<typeof tauriInvocations>[0]) =>
@@ -39,10 +55,11 @@ for (const notice of NOTICES) {
       await openDictationNoticeWindow(page, notice, variant);
 
       expect(await windowGeometryViolations(page, PANEL_INSET)).toEqual([]);
-      // The fix and the dismissal, or the dismissal alone.
-      await expect(page.getByRole("button")).toHaveCount(
-        notice.fix === null ? 1 : 2,
-      );
+      // The fix, the microphone choice (unless that is the fix) and the
+      // dismissal.
+      const fixes = notice.fix === null ? 0 : 1;
+      const choice = notice.fix === "chooseMicrophone" ? 0 : 1;
+      await expect(page.getByRole("button")).toHaveCount(fixes + choice + 1);
     });
   }
 }
@@ -84,4 +101,27 @@ test("a dictation without speech names the input and opens Sound settings", asyn
   await page.getByRole("button", { name: "Open Sound settings" }).click();
 
   await expect.poll(async () => responses(page)).toEqual([{ action: "fix" }]);
+});
+
+test("a missing microphone names both devices and opens the choice", async ({
+  page,
+}) => {
+  await openDictationNoticeWindow(page, NOTICES[4], WINDOW_VARIANTS[0]);
+  const alert = page.getByRole("alert");
+  await expect(alert).toContainText("Desk Microphone is not connected");
+  await expect(alert).toContainText(`Dictation is using ${AIRPODS} instead.`);
+
+  await page.getByRole("button", { name: "Choose microphone…" }).click();
+
+  await expect.poll(async () => responses(page)).toEqual([{ action: "fix" }]);
+});
+
+test("a failure notice also offers the microphone choice", async ({ page }) => {
+  await openDictationNoticeWindow(page, NOTICES[3], WINDOW_VARIANTS[0]);
+
+  await page.getByRole("button", { name: "Choose microphone…" }).click();
+
+  await expect
+    .poll(async () => responses(page))
+    .toEqual([{ action: "chooseMicrophone" }]);
 });

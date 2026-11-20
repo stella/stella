@@ -724,7 +724,24 @@
       "nothingBody": "Sprechen Sie, während Sie die Taste halten, oder wählen Sie in den Ton-Einstellungen einen anderen Eingang.",
       "inputDevice": "Eingang: {device}",
       "openSoundMac": "Ton-Einstellungen öffnen",
-      "openSoundPc": "Soundeinstellungen öffnen"
+      "openSoundPc": "Soundeinstellungen öffnen",
+      "missingTitle": "{missing} ist nicht verbunden",
+      "missingBody": "Das Diktieren verwendet stattdessen {device}.",
+      "chooseMicrophone": "Mikrofon auswählen …"
+    },
+    "microphone": {
+      "title": "Mikrofon",
+      "hint": "Bluetooth-Headsets brauchen einen Moment, um auf ihr Mikrofon umzuschalten, und nehmen in geringerer Qualität auf. Das eingebaute Mikrofon ist meist klarer.",
+      "systemDefault": "Systemstandard",
+      "systemDefaultNamed": "Systemstandard ({name})",
+      "bluetoothDevice": "{name} · Bluetooth",
+      "notConnected": "{name} (nicht verbunden)",
+      "test": "Mikrofon testen",
+      "stopTest": "Stopp",
+      "level": "Eingangspegel",
+      "hearing": "Wir hören Sie.",
+      "noSound": "Kein Ton von {device}.",
+      "checkAccess": "Mikrofonzugriff prüfen"
     },
     "preview": {
       "label": "Bisher Diktiertes",

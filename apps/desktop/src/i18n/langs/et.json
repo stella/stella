@@ -724,7 +724,24 @@
       "nothingBody": "Rääkige klahvi all hoides või valige heliseadetes muu sisend.",
       "inputDevice": "Sisend: {device}",
       "openSoundMac": "Ava heliseaded",
-      "openSoundPc": "Ava heliseaded"
+      "openSoundPc": "Ava heliseaded",
+      "missingTitle": "{missing} pole ühendatud",
+      "missingBody": "Dikteerimine kasutab selle asemel seadet {device}.",
+      "chooseMicrophone": "Vali mikrofon…"
+    },
+    "microphone": {
+      "title": "Mikrofon",
+      "hint": "Bluetooth-peakomplektid vajavad mikrofonile lülitumiseks hetke ja salvestavad madalama kvaliteediga. Sisseehitatud mikrofon on tavaliselt selgem.",
+      "systemDefault": "Süsteemi vaikimisi",
+      "systemDefaultNamed": "Süsteemi vaikimisi ({name})",
+      "bluetoothDevice": "{name} · Bluetooth",
+      "notConnected": "{name} (pole ühendatud)",
+      "test": "Testi mikrofoni",
+      "stopTest": "Peata",
+      "level": "Sisendi tase",
+      "hearing": "Kuuleme teid.",
+      "noSound": "Seadmest {device} ei tule heli.",
+      "checkAccess": "Kontrolli mikrofoni juurdepääsu"
     },
     "preview": {
       "label": "Seni dikteeritud tekst",

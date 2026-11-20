@@ -724,7 +724,24 @@
       "nothingBody": "Mów, trzymając klawisz, albo wybierz inne wejście w ustawieniach Dźwięku.",
       "inputDevice": "Wejście: {device}",
       "openSoundMac": "Otwórz ustawienia Dźwięku",
-      "openSoundPc": "Otwórz ustawienia dźwięku"
+      "openSoundPc": "Otwórz ustawienia dźwięku",
+      "missingTitle": "{missing} nie jest podłączone",
+      "missingBody": "Dyktowanie używa zamiast tego {device}.",
+      "chooseMicrophone": "Wybierz mikrofon…"
+    },
+    "microphone": {
+      "title": "Mikrofon",
+      "hint": "Słuchawki Bluetooth potrzebują chwili, by przełączyć się na mikrofon, i nagrywają w niższej jakości. Wbudowany mikrofon jest zwykle wyraźniejszy.",
+      "systemDefault": "Domyślny systemowy",
+      "systemDefaultNamed": "Domyślny systemowy ({name})",
+      "bluetoothDevice": "{name} · Bluetooth",
+      "notConnected": "{name} (niepodłączone)",
+      "test": "Przetestuj mikrofon",
+      "stopTest": "Zatrzymaj",
+      "level": "Poziom wejścia",
+      "hearing": "Słyszymy cię.",
+      "noSound": "Brak dźwięku z {device}.",
+      "checkAccess": "Sprawdź dostęp do mikrofonu"
     },
     "preview": {
       "label": "Dotychczas podyktowany tekst",

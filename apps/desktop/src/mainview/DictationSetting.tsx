@@ -39,6 +39,7 @@ import { DictationCustomWords } from "./DictationCustomWords";
 import { DictationDestination } from "./DictationDestination";
 import type { DictationDestinationValue } from "./DictationDestination";
 import { DictationInputFix } from "./DictationInputFix";
+import { DictationMicrophoneRow } from "./DictationMicrophone";
 import {
   SettingsGroup,
   SettingsPageHeader,
@@ -211,12 +212,17 @@ export const useDictationAvailability = () => {
 /** The Dictation page: the switch, where speech is transcribed, AI cleanup,
  *  the speech model and what went wrong. Renders nothing for an account
  *  without the feature. */
-export const DictationSetting = () => {
+export const DictationSetting = ({
+  focus = null,
+  onFocusShown = ignoreFocusShown,
+}: Partial<DictationFocus>) => {
   // Reading again after a failure starts the page afresh.
   const [attempt, setAttempt] = useState(0);
   return (
     <DictationPage
+      focus={focus}
       key={attempt}
+      onFocusShown={onFocusShown}
       onRetry={() => {
         setAttempt((current) => current + 1);
       }}
@@ -224,7 +230,19 @@ export const DictationSetting = () => {
   );
 };
 
-const DictationPage = ({ onRetry }: { onRetry: () => void }) => {
+const ignoreFocusShown = () => undefined;
+
+type DictationFocus = {
+  /** Where a link that opened the page points: the microphone choice. */
+  focus: "microphone" | null;
+  onFocusShown: () => void;
+};
+
+const DictationPage = ({
+  focus,
+  onFocusShown,
+  onRetry,
+}: DictationFocus & { onRetry: () => void }) => {
   const t = useTranslations("dictation");
   const tDestination = useTranslations("dictation.destination");
   const locale = useLocale();
@@ -402,8 +420,8 @@ const DictationPage = ({ onRetry }: { onRetry: () => void }) => {
       )}
       {snapshot.enabled && (
         <>
-          {snapshot.holdKeys.length > 1 && (
-            <SettingsGroup title={t("groups.shortcut")}>
+          <SettingsGroup title={t("groups.shortcut")}>
+            {snapshot.holdKeys.length > 1 && (
               <DictationHoldKeyRow
                 holdKey={snapshot.holdKey}
                 holdKeys={snapshot.holdKeys}
@@ -412,8 +430,12 @@ const DictationPage = ({ onRetry }: { onRetry: () => void }) => {
                   void setHoldKey(holdKey);
                 }}
               />
-            </SettingsGroup>
-          )}
+            )}
+            <DictationMicrophoneRow
+              focused={focus === "microphone"}
+              onFocused={onFocusShown}
+            />
+          </SettingsGroup>
           <SettingsGroup title={t("groups.transcription")}>
             {snapshot.cloudAvailable ? (
               <DictationDestination

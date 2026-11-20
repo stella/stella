@@ -142,6 +142,7 @@ export {
 } from "./table-shell";
 export type {
   TableAlign,
+  TableCellText,
   TableDensity,
   TableHeadProps,
   TableHeaderProps,
