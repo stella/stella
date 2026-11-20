@@ -304,6 +304,7 @@
     "scripts/migration-rehearsal-startup-refusal.test.ts": ["**"],
     "scripts/migration-rehearsal-writer-gap.test.ts": ["**"],
     "scripts/migration-restamp.test.ts": ["**"],
+    "scripts/migration-stamp-early-warning.test.ts": ["**"],
     "scripts/model-catalog-check.test.ts": ["**"],
     "scripts/mutation-query-census.test.ts": ["**"],
     "scripts/network-baseline-comparison.test.ts": ["**"],

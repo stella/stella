@@ -4713,6 +4713,10 @@
       "dropPack": "Suelte un .zip/.skill o SKILL.md para importar la habilidad",
       "editSkill": "Editar habilidad",
       "enableSkill": "Activar habilidad",
+      "exportAsSkill": "Exportar como .skill",
+      "exportAsZip": "Exportar como .zip",
+      "exportFailed": "No se pudo exportar la habilidad",
+      "exportSkill": "Exportar habilidad",
       "fileExists": "Ya existe un archivo con esta ruta",
       "howItRuns": "Cómo se ejecuta",
       "importFailureFetch": "No se pudo cargar la fuente de la habilidad.",
@@ -5458,6 +5462,7 @@
       "title": "Instrucciones de la organización",
       "tooLong": "Las instrucciones deben tener como máximo {maxLength} caracteres."
     },
+    "createdSwitchPrompt": "La organización <bdi>{name}</bdi> se ha creado. Cambia a ella para configurarla e invitar a miembros.",
     "creationEvaluationLimitReached": "Ha utilizado los {limit} periodos de prueba de organizaciones. Eliminar una organización no permite recuperar un periodo de prueba. Utilice una organización existente o contacte con el soporte para obtener acceso de pago.",
     "creationInvalidName": "Introduce un nombre de organización válido (hasta {maxLength} caracteres).",
     "creationNotAllowed": "Esta cuenta no puede crear organizaciones.",
@@ -6135,7 +6140,7 @@
         "title": "Borradores de facturación con IA"
       },
       "dataBoxes": {
-        "description": "Un mensaje enviado desde uno de estos buzones se archiva como saliente; uno enviado a ellos, como entrante. Cada cambio vuelve a determinar la dirección de los mensajes ya archivados en los asuntos a los que tiene acceso.",
+        "description": "Los mensajes enviados desde estos buzones se archivan como salientes; los enviados a ellos, como entrantes. Los cambios también se aplican a los mensajes ya archivados.",
         "invalid": "Un ID de buzón de datos tiene siete letras o dígitos.",
         "remove": "Quitar el buzón de datos {address}",
         "title": "Buzones de datos de la organización"
@@ -6168,6 +6173,7 @@
         "title": "Extracción de memoria",
         "toggleLabel": "Sugerir memorias del historial de chat en segundo plano"
       },
+      "organizationIdHint": "ID permanente que nunca cambia. Úsalo al contactar con soporte o al configurar integraciones.",
       "pastInvitations": "Invitaciones anteriores",
       "pendingInvitations": "Invitaciones pendientes",
       "practiceJurisdictions": "Jurisdicciones",
@@ -6181,11 +6187,12 @@
       "renameTitle": "Cambiar nombre de la organización",
       "renameTypeToConfirm": "Escribe el nuevo nombre para confirmar: {name}",
       "slug": {
-        "change": "Cambiar identificador",
-        "conflict": "Otra organización ya utiliza este identificador.",
-        "description": "Elige un nuevo identificador o genera uno aleatorio. El identificador anterior dejará de funcionar.",
-        "opaque": "Generar un identificador aleatorio",
-        "title": "Identificador de la organización"
+        "change": "Cambiar nombre corto",
+        "conflict": "Otra organización ya utiliza este nombre corto.",
+        "description": "Elige un nuevo nombre corto o genera uno aleatorio. El nombre corto anterior dejará de funcionar.",
+        "hint": "Un nombre corto único para esta organización, distinto de su nombre visible.",
+        "opaque": "Generar un nombre corto aleatorio",
+        "title": "Nombre corto de la organización"
       },
       "timePolicy": {
         "description": "Configura el redondeo del tiempo, los límites de edición y los bloqueos mensuales.",

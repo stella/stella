@@ -1,0 +1,61 @@
+name: Migration stamp order
+
+# database-migrations-check compares a pull request's new migrations with
+# main as it was when the run started. When main gains a newer migration
+# afterwards, the pull request stays green and fails only in the merge group.
+# This re-checks the stamps against the current main whenever the pull
+# request changes, is armed or enters the queue, and prints the re-stamp
+# command. It reports only: it never pushes a re-stamp.
+on:
+  pull_request:
+    types:
+      [
+        opened,
+        synchronize,
+        reopened,
+        ready_for_review,
+        auto_merge_enabled,
+        enqueued,
+      ]
+    paths:
+      - "apps/api/drizzle/**"
+      - "scripts/migration-stamp-early-warning.sh"
+      - ".github/workflows/migration-stamp-order.yml"
+
+concurrency:
+  group: ${{ github.workflow }}-pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions: {}
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  migration-stamp-order:
+    name: migration-stamp-order
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      # Commits only: the check reads trees on demand and no file contents.
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          filter: tree:0
+          persist-credentials: false
+          sparse-checkout: |
+            /scripts/migration-stamp-early-warning.sh
+            /scripts/retry.sh
+          sparse-checkout-cone-mode: false
+
+      - name: Fetch current main
+        timeout-minutes: 2
+        run: bash scripts/retry.sh git fetch --no-tags --filter=tree:0 origin "+refs/heads/main:refs/remotes/origin/main"
+
+      - name: Compare new migration stamps with main
+        timeout-minutes: 2
+        run: bash scripts/migration-stamp-early-warning.sh origin/main HEAD

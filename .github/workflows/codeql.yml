@@ -67,7 +67,7 @@ jobs:
       required: ${{ steps.changes.outputs.required }}
     steps:
       - name: Checkout
-        uses: stella/.github/actions/partial-clone-checkout@ba1d8b5e67dd5b252f6d3edd0c9fa047c5d386fc
+        uses: stella/.github/actions/partial-clone-checkout@2664e46f02aea7164ba71bcdd485a686166993a4
         with:
           fetch-depth: 0
           persist-credentials: false

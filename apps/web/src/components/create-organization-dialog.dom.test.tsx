@@ -138,6 +138,7 @@ globalThis.fetch = Object.assign(
             : {
                 ...CREATED_ORGANIZATION,
                 organizationId: "019a0000-0000-7000-8000-000000000604",
+                name: "New firm 2",
                 slug: "new-firm-2",
               };
         serverReceipts.set(key, organization);
@@ -362,7 +363,22 @@ const switchOrganization = async (button: HTMLElement) => {
 };
 
 const expectCreated = async (messages: typeof en | typeof ar) => {
-  expect(await screen.findByText(CREATED_ORGANIZATION.slug)).toBeTruthy();
+  const dialog = screen.getByRole("dialog", {
+    name: messages.organization.newOrganization,
+  });
+  const created = await within(dialog).findByRole("status");
+  // The created state names the organization and asks for the switch; the
+  // generated slug means nothing to the user here and stays out of view.
+  expect(created.textContent).toBe(
+    messages.organization.createdSwitchPrompt.replace(
+      "<bdi>{name}</bdi>",
+      () => CREATED_ORGANIZATION.name,
+    ),
+  );
+  expect(created.querySelector("bdi")?.textContent).toBe(
+    CREATED_ORGANIZATION.name,
+  );
+  expect(within(dialog).queryByText(CREATED_ORGANIZATION.slug)).toBeNull();
   expect(
     screen
       .getByRole("textbox", { name: messages.common.organizationName })
@@ -919,7 +935,7 @@ test("starting over after an unknown outcome requires confirmation and preserves
   expect(input.getAttribute("value")).toBe(exactDraft);
   createOutcome = "created";
   createOrganization(messages);
-  expect(await screen.findByText("new-firm-2")).toBeTruthy();
+  expect(await screen.findByText("New firm 2")).toBeTruthy();
   expect(creationKeys).toHaveLength(3);
   expect(creationKeys.at(2)).not.toBe(creationKeys.at(0));
   expect(serverReceipts.size).toBe(2);

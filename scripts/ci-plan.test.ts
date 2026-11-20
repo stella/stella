@@ -4840,10 +4840,30 @@ test("a selected leg planned only for a hosted browser suite skips the web run",
   expect(runs("full", "[]", "[]")).toBe(true);
 });
 
+test("shipped web source plans production shards on a fast PR", () => {
+  for (const file of [
+    "apps/web/src/routes/index.tsx",
+    "apps/web/src/components/breadcrumbs/chat-switcher.tsx",
+    "apps/web/src/i18n/langs/en.json",
+  ]) {
+    expect(runSelector([file], ["e2e_production_required"]), file).toEqual([
+      "true",
+    ]);
+  }
+  for (const file of [
+    "apps/web/src/components/breadcrumbs/chat-breadcrumb.dom.test.tsx",
+    "apps/web/src/lib/react-query.test.ts",
+    "apps/web/src/i18n/TERMINOLOGY.md",
+  ]) {
+    expect(runSelector([file], ["e2e_production_required"]), file).toEqual([
+      "false",
+    ]);
+  }
+});
+
 test("production shards keep full-depth core coverage and exclude unrelated fast PRs", () => {
   for (const file of [
     "apps/api/src/handlers/tasks/get.ts",
-    "apps/web/src/routes/index.tsx",
     "packages/ui/src/button.tsx",
   ]) {
     expect(runSelector([file], ["e2e_production_required"])).toEqual(["false"]);

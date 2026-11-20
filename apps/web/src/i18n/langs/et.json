@@ -4713,6 +4713,10 @@
       "dropPack": "Lohistage siia .zip/.skill või SKILL.md, et oskus importida",
       "editSkill": "Muuda oskust",
       "enableSkill": "Luba oskus",
+      "exportAsSkill": "Ekspordi .skill-failina",
+      "exportAsZip": "Ekspordi .zip-failina",
+      "exportFailed": "Oskust ei õnnestunud eksportida",
+      "exportSkill": "Ekspordi oskus",
       "fileExists": "Selle teega fail on juba olemas",
       "howItRuns": "Kuidas see käitub",
       "importFailureFetch": "Oskuse allikat ei saanud laadida.",
@@ -5458,6 +5462,7 @@
       "title": "Organisatsiooni juhised",
       "tooLong": "Juhised võivad sisaldada kuni {maxLength} märki."
     },
+    "createdSwitchPrompt": "Organisatsioon <bdi>{name}</bdi> on loodud. Vaheta sellele, et see seadistada ja liikmeid kutsuda.",
     "creationEvaluationLimitReached": "Olete kasutanud ära kõik {limit} organisatsioonide prooviperioodi. Organisatsiooni kustutamine ei taasta prooviperioodi. Kasutage olemasolevat organisatsiooni või võtke tasulise ligipääsu saamiseks ühendust klienditoega.",
     "creationInvalidName": "Sisesta sobiv organisatsiooni nimi (kuni {maxLength} märki).",
     "creationNotAllowed": "Selle kontoga ei saa organisatsioone luua.",
@@ -6135,7 +6140,7 @@
         "title": "Tehisintellekti arveldusmustandid"
       },
       "dataBoxes": {
-        "description": "Ühest neist postkastidest saadetud sõnum registreeritakse väljaminevana, neile saadetud sõnum sissetulevana. Iga muudatus määrab uuesti juba registreeritud sõnumite suuna toimikutes, millele teil on juurdepääs.",
+        "description": "Nendest postkastidest saadetud sõnumid registreeritakse väljaminevatena, neile saadetud sõnumid sissetulevatena. Muudatused kehtivad ka juba registreeritud sõnumitele.",
         "invalid": "Andmepostkasti ID koosneb seitsmest tähest või numbrist.",
         "remove": "Eemalda andmepostkast {address}",
         "title": "Organisatsiooni andmepostkastid"
@@ -6168,6 +6173,7 @@
         "title": "Mälu ekstraktimine",
         "toggleLabel": "Paku taustal mälukirjeid vestluste ajaloost"
       },
+      "organizationIdHint": "Püsiv ID, mis ei muutu kunagi. Kasutage seda toega ühendust võttes või liidestuste seadistamisel.",
       "pastInvitations": "Varasemad kutsed",
       "pendingInvitations": "Ootel kutsed",
       "practiceJurisdictions": "Jurisdiktsioonid",
@@ -6181,11 +6187,12 @@
       "renameTitle": "Nimeta organisatsioon ümber",
       "renameTypeToConfirm": "Kinnitamiseks sisesta uus nimi: {name}",
       "slug": {
-        "change": "Muuda tunnust",
-        "conflict": "See tunnus on juba teise organisatsiooni kasutusel.",
-        "description": "Valige uus tunnus või looge juhuslik tunnus. Senine tunnus ei ole enam kasutatav.",
-        "opaque": "Loo juhuslik tunnus",
-        "title": "Organisatsiooni tunnus"
+        "change": "Muuda lühinime",
+        "conflict": "See lühinimi on juba teise organisatsiooni kasutusel.",
+        "description": "Valige uus lühinimi või looge juhuslik. Senine lühinimi ei ole enam kasutatav.",
+        "hint": "Organisatsiooni unikaalne lühinimi, kuvatavast nimest eraldi.",
+        "opaque": "Loo juhuslik lühinimi",
+        "title": "Organisatsiooni lühinimi"
       },
       "timePolicy": {
         "description": "Määrake aja ümardamine, muutmise tähtajad ja kuude lukustamine.",

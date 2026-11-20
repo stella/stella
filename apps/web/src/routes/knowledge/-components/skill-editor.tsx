@@ -72,8 +72,8 @@ import { catalogueKeys } from "@/lib/knowledge/queries/catalogue";
 import type { NonEmptyPatch } from "@/lib/mutation-command";
 import { toSafeId } from "@/lib/safe-id";
 
-import { SkillArchiveDownloadButton } from "./skill-archive-download";
 import { SkillAvailabilitySummary } from "./skill-availability-field";
+import { SkillExportMenu } from "./skill-export-menu";
 import {
   rebaseSkillMetadataDraft,
   skillMetadataDraft,
@@ -718,7 +718,7 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
                 <NewChatIcon className="size-4" />
               </Button>
             )}
-            <SkillArchiveDownloadButton skillId={skillId} />
+            <SkillExportMenu skillId={skillId} />
             {detail.data && (
               <span className="text-muted-foreground rounded-md border px-1.5 py-0.5 text-xs">
                 {detail.data.scope === "team"
