@@ -1732,6 +1732,7 @@
       "unorderedList": "Aizzīmju saraksts",
       "wholeBlockRequired": "Lai mainītu stilu, atlasiet visu rindkopu vai sarakstu."
     },
+    "answerNotFinished": "stella nevarēja pabeigt šo atbildi.",
     "answerQuote": {
       "showInDecision": "Rādīt nolēmumā",
       "unverified": "Citātu neizdevās pārbaudīt",
@@ -2313,6 +2314,20 @@
       "runFull": "Aģents pašlaik nevar pieņemt vairāk ziņu.",
       "title": "Jūsu ziņa gaida rindā, līdz aģents beigs darbu",
       "turnNotRunning": "Aģents pašlaik nestrādā."
+    },
+    "stepDigest": {
+      "decisionsFound": "{found, plural, zero {Atrasti # nolēmumi} one {Atrasts # nolēmums} other {Atrasti # nolēmumi}}",
+      "decisionsFoundUsed": "{found, plural, zero {Atrasti # nolēmumi} one {Atrasts # nolēmums} other {Atrasti # nolēmumi}}, {used, plural, zero {# izmantoti atbildē} one {# izmantots atbildē} other {# izmantoti atbildē}}",
+      "filterAsOf": "Uz {date}",
+      "legislationFound": "{count, plural, zero {# tiesību aktu un normu} one {# tiesību akts vai norma} other {# tiesību akti un normas}}",
+      "lookupDidNotGoThrough": "Šī meklēšana neizdevās.",
+      "moreFound": "{count, plural, zero {vēl # nav parādīti} one {vēl # nav parādīts} other {vēl # nav parādīti}}",
+      "moreLookups": "{count, plural, zero {Vēl # vaicājumi nav parādīti} one {Vēl # vaicājums nav parādīts} other {Vēl # vaicājumi nav parādīti}}",
+      "notRecorded": "Šis solis tika veikts, pirms stella sāka saglabāt, ko meklē katrs solis.",
+      "nothingFound": "Nekas neatbilst.",
+      "technicalDetails": "Tehniskā informācija",
+      "usedInAnswer": "Izmantots atbildē",
+      "versionFrom": "Redakcija no {date}"
     },
     "stopFailed": "Neizdevās apturēt atbildi. Mēģiniet vēlreiz.",
     "stopResponse": "Apturēt",
@@ -5756,6 +5771,9 @@
       "chatNotificationsDescription": "Saņemiet paziņojumu no šīs pārlūkprogrammas, kad tērzēšanas atbilde ir pabeigta, kamēr stella darbojas fonā.",
       "chatNotificationsToggle": "Paziņot, kad atbilde ir gatava vai gaida manu rīcību",
       "chatNotificationsUnsupported": "Šī pārlūkprogramma neatbalsta paziņojumus.",
+      "chatTechnicalDetails": "Tehniskā informācija tērzēšanā",
+      "chatTechnicalDetailsDescription": "Katrs tērzēšanas solis parāda, ko tas meklēja un ko atrada. Ieslēdzot redzēsiet arī kodu un neapstrādātos rezultātus.",
+      "chatTechnicalDetailsToggle": "Rādīt tehnisko informāciju tērzēšanā",
       "confirmDelete": "Apstiprināt konta dzēšanu",
       "dangerZone": "Bīstamā zona",
       "dangerZoneDescription": "Neatgriezeniski dzēst konta piekļuvi un privātos konta datus.",
