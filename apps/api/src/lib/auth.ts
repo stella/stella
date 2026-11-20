@@ -245,10 +245,6 @@ import {
 } from "@/api/lib/auth/session-lifetime";
 import { createDatabaseSessionLifetimeStore } from "@/api/lib/auth/session-lifetime-store";
 import {
-  liveSessionAdapterWhere,
-  liveSessionPredicate,
-} from "@/api/lib/auth/session-liveness";
-import {
   isSecondFactorAuthSessionPath,
   isSessionCreatingAuthPath,
 } from "@/api/lib/auth/session-path-classification";
@@ -306,6 +302,10 @@ import {
   resolveWorkspaceMemberAuthority,
 } from "@/api/lib/db/member-authority";
 import { readBounded } from "@/api/lib/db/read-bounded";
+import {
+  liveSessionAdapterWhere,
+  liveSessionPredicate,
+} from "@/api/lib/db/session-liveness";
 import { getDemoAccountOtpOverride } from "@/api/lib/demo-account-otp";
 import { detectedCountryFromRequestContext } from "@/api/lib/detected-country";
 import { DEV_INSPECTOR_ORIGINS, frontendOrigins } from "@/api/lib/dev-origins";

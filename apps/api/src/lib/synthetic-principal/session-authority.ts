@@ -3,7 +3,7 @@ import { and, eq, like } from "drizzle-orm";
 import { session } from "@/api/db/auth-schema";
 import type { RootDatabase } from "@/api/db/root";
 import { syntheticSessionControl } from "@/api/db/schema";
-import { liveSessionPredicate } from "@/api/lib/auth/session-liveness";
+import { liveSessionPredicate } from "@/api/lib/db/session-liveness";
 import { escapeLike } from "@/api/lib/escape-like";
 
 import {
