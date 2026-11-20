@@ -1,7 +1,8 @@
 //! Cuts a recording into stretches of speech while it is still going on, so
 //! each stretch can be transcribed as soon as the speaker pauses. A pause is
-//! [`PAUSE_MILLIS`] of frames below the level at which any window counts as
-//! speech, a steady offset aside; a stretch is cut in the middle of its pause.
+//! [`PAUSE_MILLIS`] of frames below the speech level, or on a quiet microphone
+//! not clearly above the noise heard so far, a steady offset aside; a stretch
+//! is cut in the middle of its pause.
 //! A stretch that grows to the length of one stella AI chunk is cut at its
 //! quietest moment, the same cut an upload makes.
 //!
@@ -16,7 +17,7 @@
 
 use crate::{
   dictation_audio::{
-    FRAME_MILLIS, LEAD_MILLIS, MIN_STRETCH_MILLIS, PAUSE_MILLIS, quiet, samples_in,
+    FRAME_MILLIS, FrameGate, LEAD_MILLIS, MIN_STRETCH_MILLIS, PAUSE_MILLIS, samples_in,
   },
   dictation_cloud,
 };
@@ -39,6 +40,8 @@ pub struct Segmenter {
   quiet_since: Option<usize>,
   /// Whether any sample at all was not exactly zero.
   signal: bool,
+  /// Which frames are sound, against the noise heard so far.
+  gate: FrameGate,
 }
 
 /// What is left once recording stops.
@@ -63,6 +66,7 @@ impl Segmenter {
       heard: false,
       quiet_since: None,
       signal: false,
+      gate: FrameGate::default(),
     }
   }
 
@@ -74,7 +78,7 @@ impl Segmenter {
     while self.judged + self.frame <= self.pending.len() {
       let start = self.judged;
       self.judged += self.frame;
-      if quiet(&self.pending[start..self.judged]) {
+      if self.gate.quiet(&self.pending[start..self.judged]) {
         self.on_quiet(start, &mut stretches);
       } else {
         self.on_loud(start);
