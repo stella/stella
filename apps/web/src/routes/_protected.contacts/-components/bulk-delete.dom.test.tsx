@@ -127,7 +127,7 @@ test("disables deletion above the API limit without sending a request", async ()
   });
 
   const action = screen.getByRole("button", { name: "Delete 501 contacts" });
-  expect(action.hasAttribute("disabled")).toBe(true);
+  expect(action.getAttribute("aria-disabled")).toBe("true");
   expect(
     screen.getByText("Select no more than 500 contacts to delete at once."),
   ).toBeTruthy();
@@ -150,8 +150,8 @@ test("enables deletion at the API limit", async () => {
   expect(
     screen
       .getByRole("button", { name: "Delete 500 contacts" })
-      .hasAttribute("disabled"),
-  ).toBe(false);
+      .getAttribute("aria-disabled"),
+  ).toBeNull();
   expect(
     screen.queryByText("Select no more than 500 contacts to delete at once."),
   ).toBeNull();
