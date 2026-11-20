@@ -1,3 +1,4 @@
+// parser-output-unchanged: Failure identity kinds classify retained ingestion evidence; adapter parser inputs and output are unchanged.
 export const INGESTION_FAILURE_IDENTITY_KIND = {
   SOURCE_DOCUMENT: "source-document",
   PROVIDED_RECORD: "provided-record",
