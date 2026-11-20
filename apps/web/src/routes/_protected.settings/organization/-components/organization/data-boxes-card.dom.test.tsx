@@ -131,9 +131,10 @@ test("data-box settings validate IDs and declare writes while refreshing corresp
   const add = view.getByRole("button", { name: messages.common.add });
   fireEvent.change(input, { target: { value: "inv!lid" } });
   fireEvent.click(add);
-  expect(
-    view.getByText(messages.settings.organization.dataBoxes.invalid),
-  ).toBeDefined();
+  const error = view.getByText(
+    messages.settings.organization.dataBoxes.invalid,
+  );
+  expect(input.getAttribute("aria-describedby")).toBe(error.id);
   expect(writes).toEqual([]);
   fireEvent.change(input, { target: { value: "NEWBOX1" } });
   fireEvent.click(add);

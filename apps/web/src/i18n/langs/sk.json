@@ -5462,6 +5462,7 @@
       "title": "Pokyny organizácie",
       "tooLong": "Pokyny môžu obsahovať najviac {maxLength} znakov."
     },
+    "createdSwitchPrompt": "Organizácia <bdi>{name}</bdi> bola vytvorená. Prepnite sa do nej, aby ste ju mohli nastaviť a pozvať členov.",
     "creationEvaluationLimitReached": "Využili ste všetky {limit} skúšobné obdobia organizácií. Odstránením organizácie sa skúšobné obdobie neobnoví. Použite existujúcu organizáciu alebo kontaktujte podporu a dohodnite si platený prístup.",
     "creationInvalidName": "Zadajte platný názov organizácie (najviac {maxLength} znakov).",
     "creationNotAllowed": "Tento účet nemôže vytvárať organizácie.",
@@ -6139,7 +6140,7 @@
         "title": "AI návrhy výkazov práce"
       },
       "dataBoxes": {
-        "description": "Dátová správa odoslaná z niektorej z týchto schránok sa založí ako odchádzajúca, správa do nich ako prichádzajúca. Každá zmena znovu odvodí smer správ už založených v spisoch, ku ktorým máte prístup.",
+        "description": "Správy odoslané z týchto schránok sa zakladajú ako odchádzajúce, správy do nich ako prichádzajúce. Zmeny sa prejavia aj pri už založených správach.",
         "invalid": "ID dátovej schránky má sedem písmen alebo číslic.",
         "remove": "Odobrať dátovú schránku {address}",
         "title": "Dátové schránky organizácie"
@@ -6172,6 +6173,7 @@
         "title": "Extrakcia pamäte",
         "toggleLabel": "Navrhovať záznamy do pamäte z histórie chatov na pozadí"
       },
+      "organizationIdHint": "Trvalé ID, ktoré sa nikdy nemení. Použite ho pri kontakte s podporou alebo pri nastavovaní integrácií.",
       "pastInvitations": "Predchádzajúce pozvánky",
       "pendingInvitations": "Čakajúce pozvánky",
       "practiceJurisdictions": "Jurisdikcie",
@@ -6185,11 +6187,12 @@
       "renameTitle": "Premenovať organizáciu",
       "renameTypeToConfirm": "Pre potvrdenie napíšte nový názov: {name}",
       "slug": {
-        "change": "Zmeniť identifikátor",
-        "conflict": "Tento identifikátor už používa iná organizácia.",
-        "description": "Zvoľte nový identifikátor alebo vygenerujte náhodný. Pôvodný identifikátor prestane fungovať.",
-        "opaque": "Vygenerovať náhodný identifikátor",
-        "title": "Identifikátor organizácie"
+        "change": "Zmeniť krátky názov",
+        "conflict": "Tento krátky názov už používa iná organizácia.",
+        "description": "Zvoľte nový krátky názov alebo vygenerujte náhodný. Pôvodný krátky názov prestane fungovať.",
+        "hint": "Jedinečný krátky názov organizácie, nezávislý od jej zobrazovaného názvu.",
+        "opaque": "Vygenerovať náhodný krátky názov",
+        "title": "Krátky názov organizácie"
       },
       "timePolicy": {
         "description": "Nastavte zaokrúhľovanie času, obmedzenia úprav a uzamykanie mesiacov.",

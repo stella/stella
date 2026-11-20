@@ -1445,6 +1445,7 @@ const GENERATOR_DECLARATIONS = [
       "scripts/generate-mobile-ui-theme.ts",
       "scripts/generated-artifacts.ts",
       "packages/scripts/src/generated-artifact-format.ts",
+      "packages/ui/src/components/outcome-screen-core.tsx",
       "packages/ui/src/components/outcome-screen-view.tsx",
       "packages/ui/src/components/stella-mark.tsx",
       "packages/ui/src/components/stella-mark.shared.ts",

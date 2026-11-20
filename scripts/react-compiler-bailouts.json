@@ -253,7 +253,7 @@
       "(BuildHIR::lowerStatement) Handle TryStatement with a finalizer ('finally') clause"
     ]
   },
-  "apps/web/src/routes/auth/organization.tsx::OrganizationList": {
+  "apps/web/src/routes/auth/-organization.page.tsx::OrganizationList": {
     "memos": 0,
     "reasons": ["Cannot access refs during render"]
   },

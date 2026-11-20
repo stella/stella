@@ -820,6 +820,9 @@ export const isSharedPlaygroundHarness = (file: string): boolean => {
     normalized === METADATA ||
     normalized === REGISTRY ||
     normalized === "apps/web/src/routes/dev.tsx" ||
+    normalized === "apps/web/src/routes/dev/-dev.page.tsx" ||
+    normalized === "apps/web/src/routes/dev/-dev.pending.tsx" ||
+    normalized === "apps/web/src/routes/dev/-visual-search.ts" ||
     normalized.startsWith("apps/web/e2e/helpers/") ||
     normalized.startsWith("packages/ui/src/styles/")
   ) {

@@ -436,6 +436,7 @@ const ROOT_CHECK_READER_MODULES: Readonly<Record<string, readonly string[]>> = {
     "scripts/e2e-runner-inputs.ts",
     "scripts/e2e-spec-shards-core.ts",
     "scripts/e2e-spec-shards.test.ts",
+    "scripts/production-e2e-inputs.mjs",
     "scripts/ui-playground-selection.ts",
   ],
   "ci-checks-rest/Test geometry shard plan": [

@@ -5462,6 +5462,7 @@
       "title": "Instruções da organização",
       "tooLong": "As instruções devem ter no máximo {maxLength} caracteres."
     },
+    "createdSwitchPrompt": "A organização <bdi>{name}</bdi> foi criada. Mude para ela para configurá-la e convidar membros.",
     "creationEvaluationLimitReached": "Você já utilizou todos os {limit} períodos de avaliação de organizações. Excluir uma organização não restaura um período de avaliação. Use uma organização existente ou entre em contato com o suporte para obter acesso pago.",
     "creationInvalidName": "Digite um nome de organização válido (até {maxLength} caracteres).",
     "creationNotAllowed": "Esta conta não pode criar organizações.",
@@ -6139,7 +6140,7 @@
         "title": "Rascunhos de faturamento com IA"
       },
       "dataBoxes": {
-        "description": "Uma mensagem enviada de uma destas caixas é arquivada como enviada; uma enviada para elas, como recebida. Cada alteração recalcula a direção das mensagens já arquivadas nos casos a que você tem acesso.",
+        "description": "As mensagens enviadas destas caixas são arquivadas como enviadas; as enviadas para elas, como recebidas. As alterações também valem para mensagens já arquivadas.",
         "invalid": "Um ID de caixa de dados tem sete letras ou dígitos.",
         "remove": "Remover a caixa de dados {address}",
         "title": "Caixas de dados da organização"
@@ -6172,6 +6173,7 @@
         "title": "Extração de memória",
         "toggleLabel": "Sugerir memórias do histórico de chat em segundo plano"
       },
+      "organizationIdHint": "ID permanente que nunca muda. Use-o ao entrar em contato com o suporte ou ao configurar integrações.",
       "pastInvitations": "Convites anteriores",
       "pendingInvitations": "Convites pendentes",
       "practiceJurisdictions": "Jurisdições",
@@ -6185,11 +6187,12 @@
       "renameTitle": "Renomear organização",
       "renameTypeToConfirm": "Digite o novo nome para confirmar: {name}",
       "slug": {
-        "change": "Alterar identificador",
-        "conflict": "Este identificador já está sendo usado por outra organização.",
-        "description": "Escolha um novo identificador ou gere um aleatório. O identificador anterior deixará de funcionar.",
-        "opaque": "Gerar um identificador aleatório",
-        "title": "Identificador da organização"
+        "change": "Alterar nome curto",
+        "conflict": "Este nome curto já está sendo usado por outra organização.",
+        "description": "Escolha um novo nome curto ou gere um aleatório. O nome curto anterior deixará de funcionar.",
+        "hint": "Um nome curto exclusivo para esta organização, diferente do nome exibido.",
+        "opaque": "Gerar um nome curto aleatório",
+        "title": "Nome curto da organização"
       },
       "timePolicy": {
         "description": "Defina o arredondamento do tempo, os limites de edição e os bloqueios mensais.",

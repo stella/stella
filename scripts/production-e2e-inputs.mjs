@@ -101,8 +101,29 @@ export const productionE2eInputs = (configPath) => {
   return { testDirectory, files };
 };
 
+const WEB_SOURCE_ROOT = "apps/web/src/";
+// Unit tests, stories and docs beside the web source stay out of the
+// production bundle.
+const NOT_SHIPPED = /\.(?:test|spec|stories)\.[cm]?[jt]sx?$|\.mdx?$/u;
+
+/**
+ * Whether a repository-relative path is web source the production build
+ * ships. The specs drive the built app, so they import none of it: a component
+ * change reaches no spec's import graph and needs the whole production suite.
+ * @param {string} file Path relative to the repository root.
+ */
+export const productionWebSource = (file) => {
+  const normalized = path.posix.normalize(file.replaceAll("\\", "/"));
+  return (
+    normalized.startsWith(WEB_SOURCE_ROOT) && !NOT_SHIPPED.test(normalized)
+  );
+};
+
 /** @param {readonly string[]} changedFiles Paths relative to the repository root. */
 export const productionE2eChanged = (changedFiles) => {
+  if (changedFiles.some(productionWebSource)) {
+    return true;
+  }
   const root = path.dirname(CONFIG_PATH);
   const absoluteFiles = changedFiles.map((file) =>
     path.resolve(REPOSITORY_ROOT, file),

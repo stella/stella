@@ -289,30 +289,30 @@ an `overflow-hidden` container where an outside ring would be clipped.
 When a screen needs a look the components lack, add it once here and in
 `packages/ui`, under these names:
 
-| Concept                                                            | API                                                                                    |
-| ------------------------------------------------------------------ | -------------------------------------------------------------------------------------- |
-| Box-less click target (card, cell, image)                          | `Button variant="plain"` (+ `shape`, `focusRing`)                                      |
-| Action inside running text                                         | `Button size="inline"` (`variant="link"` underlined by default)                        |
-| Long reference that wraps with running text                        | `ButtonTextRun`                                                                        |
-| Current choice in a set                                            | `Button selected`, or a `ToggleGroup` for exclusive options                            |
-| Filter tabs, view modes, density                                   | `ToggleGroup` + `ToggleGroupItem` (a segmented tray)                                   |
-| Full-width inspector action row                                    | `Button size="inspector-row" variant="ghost"`                                          |
-| Quiet caption that opens a menu or popover                         | `MenuTrigger` / `PopoverTrigger` `appearance="caption"`                                |
-| A button that stays pressed                                        | `Toggle`                                                                               |
-| Setting row with a switch                                          | `SwitchField` (`label`, `description`); `Switch size="sm"`                             |
-| Keyboard shortcut                                                  | `Kbd keys={["mod", "K"]}` (platform spelling); `MenuShortcut`, `TooltipPopup shortcut` |
-| Menu row that navigates                                            | `MenuLinkItem` (an `<a>`)                                                              |
-| Fact with no value                                                 | `DetailsItem` with empty children (draws a dash)                                       |
-| Quiet disclosure line                                              | `AccordionTrigger variant="muted"`                                                     |
-| Disclosure inside a dialog or card                                 | `AccordionTrigger`/`AccordionPanel` `size="sm"`                                        |
-| Choice row or card around a radio                                  | `Label variant="choice"` / `"choice-card"`                                             |
-| Short label and value record                                       | `DetailsGrid variant="list"` (+ `orientation`)                                         |
-| Small muted caption in a filter bar or dense form                  | `Label variant="muted"`                                                                |
-| One-line or compact form                                           | `Form layout="inline"`, `density="snug" \| "compact"`                                  |
-| Borderless field in a line of text                                 | `Input inline`, `Textarea inline` (one class: `INLINE_FIELD_CLASS_NAME`)               |
-| Fixed-height text area in a row or cell                            | `Textarea fieldSizing="fixed"`                                                         |
-| Number with a unit; stepping number                                | `NumberInput suffix`; it reads as a spin button with its bounds                        |
-| Screen a finished flow ends on (connected, signed in, declined)    | `OutcomeScreen` (`tone`, `counterpart`, `details`); never a hand-built page            |
+| Concept                                                            | API                                                                                            |
+| ------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------- |
+| Box-less click target (card, cell, image)                          | `Button variant="plain"` (+ `shape`, `focusRing`)                                              |
+| Action inside running text                                         | `Button size="inline"` (`variant="link"` underlined by default)                                |
+| Long reference that wraps with running text                        | `ButtonTextRun`                                                                                |
+| Current choice in a set                                            | `Button selected`, or a `ToggleGroup` for exclusive options                                    |
+| Filter tabs, view modes, density                                   | `ToggleGroup` + `ToggleGroupItem` (a segmented tray)                                           |
+| Full-width inspector action row                                    | `Button size="inspector-row" variant="ghost"`                                                  |
+| Quiet caption that opens a menu or popover                         | `MenuTrigger` / `PopoverTrigger` `appearance="caption"`                                        |
+| A button that stays pressed                                        | `Toggle`                                                                                       |
+| Setting row with a switch                                          | `SwitchField` (`label`, `description`); `Switch size="sm"`                                     |
+| Keyboard shortcut                                                  | `Kbd keys={["mod", "K"]}` (platform spelling); `MenuShortcut`, `TooltipPopup shortcut`         |
+| Menu row that navigates                                            | `MenuLinkItem` (an `<a>`)                                                                      |
+| Fact with no value                                                 | `DetailsItem` with empty children (draws a dash)                                               |
+| Quiet disclosure line                                              | `AccordionTrigger variant="muted"`                                                             |
+| Disclosure inside a dialog or card                                 | `AccordionTrigger`/`AccordionPanel` `size="sm"`                                                |
+| Choice row or card around a radio                                  | `Label variant="choice"` / `"choice-card"`                                                     |
+| Short label and value record                                       | `DetailsGrid variant="list"` (+ `orientation`), or `DetailsListFace` for fixed horizontal rows |
+| Small muted caption in a filter bar or dense form                  | `Label variant="muted"`                                                                        |
+| One-line or compact form                                           | `Form layout="inline"`, `density="snug" \| "compact"`                                          |
+| Borderless field in a line of text                                 | `Input inline`, `Textarea inline` (one class: `INLINE_FIELD_CLASS_NAME`)                       |
+| Fixed-height text area in a row or cell                            | `Textarea fieldSizing="fixed"`                                                                 |
+| Number with a unit; stepping number                                | `NumberInput suffix`; it reads as a spin button with its bounds                                |
+| Screen a finished flow ends on (connected, signed in, declined)    | `OutcomeScreen` (`tone`, `counterpart`, `details`), with `OutcomeScreenFace` while loading     |
 | A small control renders small type itself; do not add `text-xs` to |
 | a `sm` button, select, or input.                                   |
 
@@ -360,6 +360,7 @@ it, and add it here in the same change that adds it to `packages/ui`.
 - `CourtBadge` `weight`: `dashed`, `outline`, `solid`, `tinted`
 - `DatePickerPopover`, `DateRangeFilter`, `SegmentedIconToggle`, `SegmentedIconToggleFace` `size`: `compact`, `touch`
 - `DatePickerPopover`, `DateRangeFilter` `variant`: `field`, `inline`
+- `DetailsGrid` `density`: `compact`, `default`
 - `DetailsGrid` `labelWidth`: `auto`, `lg`, `md`, `sm`
 - `DetailsGrid` `orientation`: `auto`, `horizontal`, `vertical`
 - `DetailsGrid` `variant`: `list`, `sheet`
