@@ -1004,7 +1004,8 @@ test("a computer that offers one key shows no choice", async () => {
   const { queryByText } = await renderSetting(ENABLED_SNAPSHOT);
 
   expect(queryByText(defaultMessages.dictation.holdKey.title)).toBeNull();
-  expect(queryByText(defaultMessages.dictation.groups.shortcut)).toBeNull();
+  // The group stays for the microphone choice.
+  expect(queryByText(defaultMessages.dictation.groups.shortcut)).not.toBeNull();
 });
 
 test("a key that cannot be heard yet says so", async () => {

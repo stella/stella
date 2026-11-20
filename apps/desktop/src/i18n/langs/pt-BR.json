@@ -724,7 +724,24 @@
       "nothingBody": "Fale enquanto segura a tecla ou escolha outra entrada nos ajustes de Som.",
       "inputDevice": "Entrada: {device}",
       "openSoundMac": "Abrir ajustes de Som",
-      "openSoundPc": "Abrir configurações de som"
+      "openSoundPc": "Abrir configurações de som",
+      "missingTitle": "{missing} não está conectado",
+      "missingBody": "O ditado está usando {device} no lugar.",
+      "chooseMicrophone": "Escolher microfone…"
+    },
+    "microphone": {
+      "title": "Microfone",
+      "hint": "Fones Bluetooth levam um momento para mudar para o microfone e gravam com qualidade menor. O microfone integrado costuma ser mais nítido.",
+      "systemDefault": "Padrão do sistema",
+      "systemDefaultNamed": "Padrão do sistema ({name})",
+      "bluetoothDevice": "{name} · Bluetooth",
+      "notConnected": "{name} (não conectado)",
+      "test": "Testar microfone",
+      "stopTest": "Parar",
+      "level": "Nível de entrada",
+      "hearing": "Estamos ouvindo você.",
+      "noSound": "Nenhum som de {device}.",
+      "checkAccess": "Verificar acesso ao microfone"
     },
     "preview": {
       "label": "O que você ditou até agora",

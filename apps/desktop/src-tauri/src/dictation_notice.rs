@@ -35,8 +35,8 @@ const NOTIFICATION_ID: i32 = 0x5d1c_7a7e;
 /// Payload-free: the panel re-reads its state.
 const CHANGED_EVENT: &str = "dictation-notice-changed";
 
-const WIDTH: f64 = 420.0;
-const HEIGHT: f64 = 156.0;
+const WIDTH: f64 = 460.0;
+const HEIGHT: f64 = 160.0;
 /// Room left above the bottom of the work area, clear of the Dock or taskbar.
 const BOTTOM_GAP: f64 = 48.0;
 /// Another failure of the same kind this soon after its notice shows
@@ -69,6 +69,8 @@ pub enum NoticeKind {
   Microphone,
   /// Sound arrived, but no words came of it.
   NothingHeard,
+  /// The chosen microphone was not connected; the system default records.
+  MicrophoneMissing,
 }
 
 impl NoticeKind {
@@ -92,6 +94,7 @@ impl NoticeKind {
     match self {
       Self::Microphone => 0,
       Self::NothingHeard => 1,
+      Self::MicrophoneMissing => 2,
     }
   }
 }
@@ -100,14 +103,19 @@ impl NoticeKind {
 /// handed in by the caller, so the rule is tested without a clock.
 #[derive(Debug, Default)]
 pub struct NoticeGate {
-  last_shown: [Option<Duration>; 2],
+  last_shown: [Option<Duration>; 3],
 }
 
 impl NoticeGate {
   /// The notice a dictation that failed with `failure` at `now` shows: one
   /// per failed attempt, at most once per `REPEAT_WINDOW` for each kind.
+  #[cfg(test)]
   pub fn admit(&mut self, failure: Failure, now: Duration) -> Option<NoticeKind> {
-    let kind = NoticeKind::of(failure)?;
+    self.admit_kind(NoticeKind::of(failure)?, now)
+  }
+
+  /// `admit` for a notice that is not a failure.
+  pub fn admit_kind(&mut self, kind: NoticeKind, now: Duration) -> Option<NoticeKind> {
     let last = &mut self.last_shown[kind.index()];
     let due = last.is_none_or(|last| now.saturating_sub(last) >= REPEAT_WINDOW);
     if due {
@@ -122,6 +130,8 @@ impl NoticeGate {
 struct Shown {
   kind: NoticeKind,
   input_device: Option<String>,
+  /// The chosen microphone that was not connected.
+  missing: Option<String>,
 }
 
 /// The gate, the start of its clock, and the notice on screen, kept for the
@@ -143,13 +153,13 @@ impl Default for DictationNotice {
 }
 
 impl DictationNotice {
-  fn admit(&self, failure: Failure) -> Option<NoticeKind> {
+  fn admit(&self, kind: NoticeKind) -> Option<NoticeKind> {
     let now = self.epoch.elapsed();
     self
       .gate
       .lock()
       .unwrap_or_else(|error| error.into_inner())
-      .admit(failure, now)
+      .admit_kind(kind, now)
   }
 
   fn set_shown(&self, shown: Shown) {
@@ -175,6 +185,8 @@ pub enum NoticeFix {
   OpenSettings,
   /// Open the sound input settings, where the input device is chosen.
   OpenSound,
+  /// Open Settings → Dictation on its microphone choice.
+  ChooseMicrophone,
 }
 
 /// What the panel offers: `None` where this OS has nowhere to send the user.
@@ -189,6 +201,7 @@ pub const fn fix_for(
     }
     (NoticeKind::Microphone, _) if has_settings_page => Some(NoticeFix::OpenSettings),
     (NoticeKind::NothingHeard, _) if has_settings_page => Some(NoticeFix::OpenSound),
+    (NoticeKind::MicrophoneMissing, _) => Some(NoticeFix::ChooseMicrophone),
     _ => None,
   }
 }
@@ -200,12 +213,16 @@ pub struct NoticeSnapshot {
   fix: Option<NoticeFix>,
   /// The input device the dictation listened to, as the OS names it.
   input_device: Option<String>,
+  /// The chosen microphone that was not connected.
+  missing: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum NoticeAction {
   Fix,
+  /// Open Settings → Dictation on its microphone choice.
+  ChooseMicrophone,
   Dismiss,
 }
 
@@ -220,6 +237,10 @@ pub const fn notice_text(
       "dictation.notice.nothingTitle",
       "dictation.notice.nothingBody",
     ),
+    (NoticeKind::MicrophoneMissing, _) => (
+      "dictation.notice.missingTitle",
+      "dictation.notice.missingBody",
+    ),
     (NoticeKind::Microphone, PermissionStatus::NotDetermined) => {
       ("dictation.notice.title", "dictation.notice.allowBody")
     }
@@ -232,7 +253,13 @@ pub const fn notice_text(
   }
 }
 
-/// Opens Settings → Dictation when this notice's notification is clicked.
+/// Settings → Dictation, focused on the microphone choice.
+fn choose_microphone(app: &AppHandle) {
+  crate::show_settings(app, crate::SettingsView::Microphone);
+}
+
+/// Opens Settings → Dictation on the microphone choice when this notice's
+/// notification is clicked.
 pub fn listen_for_clicks(app: &AppHandle) {
   use tauri_plugin_notification::NotificationExt;
 
@@ -240,7 +267,7 @@ pub fn listen_for_clicks(app: &AppHandle) {
   crate::logging::best_effort(
     app.notification().on_action(move |performed| {
       if performed.notification().map(|shown| shown.id()) == Some(NOTIFICATION_ID) {
-        crate::ensure_main_window(&handle, crate::PreferencesTab::Dictation);
+        choose_microphone(&handle);
       }
     }),
     "dictation notice clicks are not heard",
@@ -249,30 +276,37 @@ pub fn listen_for_clicks(app: &AppHandle) {
 
 /// Shows the notice as a system notification; false where notifications
 /// are off or could not be shown.
-fn notify(app: &AppHandle, kind: NoticeKind, input_device: Option<&str>) -> bool {
+fn notify(app: &AppHandle, shown: &Shown) -> bool {
   use tauri_plugin_notification::NotificationExt;
 
   if permissions::status(app, Permission::Notifications) != PermissionStatus::Granted {
     return false;
   }
   let (title, body) = notice_text(
-    kind,
+    shown.kind,
     permissions::status(app, Permission::Microphone),
     cfg!(target_os = "macos"),
   );
-  let mut text = crate::i18n::t(body).to_string();
-  if let Some(device) = input_device {
+  let device = shown.input_device.as_deref().unwrap_or_default();
+  let missing = shown.missing.as_deref().unwrap_or_default();
+  // A fallback whose device has no name still says where it went.
+  let using = if device.is_empty() {
+    crate::i18n::t("dictation.microphone.systemDefault")
+  } else {
+    device
+  };
+  let vars = [("device", using), ("missing", missing)];
+  let title = crate::i18n::t_fmt(title, &vars);
+  let mut text = crate::i18n::t_fmt(body, &vars);
+  if shown.kind != NoticeKind::MicrophoneMissing && !device.is_empty() {
     text.push('\n');
-    text.push_str(&crate::i18n::t_fmt(
-      "dictation.notice.inputDevice",
-      &[("device", device)],
-    ));
+    text.push_str(&crate::i18n::t_fmt("dictation.notice.inputDevice", &vars));
   }
   app
     .notification()
     .builder()
     .id(NOTIFICATION_ID)
-    .title(crate::i18n::t(title))
+    .title(title)
     .body(text)
     .show()
     .inspect_err(|error| tracing::warn!(%error, "dictation notice was not notified"))
@@ -283,12 +317,38 @@ fn notify(app: &AppHandle, kind: NoticeKind, input_device: Option<&str>) -> bool
 /// admits it: a notification, else the panel, or an open panel brought up to
 /// date.
 pub fn on_failure(app: &AppHandle, failure: Failure, input_device: Option<String>) {
+  if let Some(kind) = NoticeKind::of(failure) {
+    tell(
+      app,
+      Shown {
+        kind,
+        input_device,
+        missing: None,
+      },
+    );
+  }
+}
+
+/// Called when the chosen microphone was not connected at the press and
+/// `using`, the system default, records instead.
+pub fn on_missing_microphone(app: &AppHandle, missing: &str, using: Option<String>) {
+  tell(
+    app,
+    Shown {
+      kind: NoticeKind::MicrophoneMissing,
+      input_device: using,
+      missing: Some(missing.to_string()),
+    },
+  );
+}
+
+fn tell(app: &AppHandle, shown: Shown) {
   let notice = app.state::<DictationNotice>();
-  let Some(kind) = notice.admit(failure) else {
+  if notice.admit(shown.kind).is_none() {
     return;
-  };
-  let notified = notify(app, kind, input_device.as_deref());
-  notice.set_shown(Shown { kind, input_device });
+  }
+  let notified = notify(app, &shown);
+  notice.set_shown(shown);
   if notified {
     return;
   }
@@ -342,11 +402,15 @@ fn close(app: &AppHandle) {
 pub async fn dictation_notice_get_state(
   app: AppHandle,
 ) -> Result<NoticeSnapshot, String> {
-  let Shown { kind, input_device } =
-    app.state::<DictationNotice>().shown().unwrap_or(Shown {
-      kind: NoticeKind::Microphone,
-      input_device: None,
-    });
+  let Shown {
+    kind,
+    input_device,
+    missing,
+  } = app.state::<DictationNotice>().shown().unwrap_or(Shown {
+    kind: NoticeKind::Microphone,
+    input_device: None,
+    missing: None,
+  });
   Ok(NoticeSnapshot {
     kind,
     fix: fix_for(
@@ -355,6 +419,7 @@ pub async fn dictation_notice_get_state(
       HAS_SETTINGS_PAGE,
     ),
     input_device,
+    missing,
   })
 }
 
@@ -364,8 +429,13 @@ pub async fn dictation_notice_respond(
   action: NoticeAction,
 ) -> Result<(), String> {
   close(&app);
-  if action == NoticeAction::Dismiss {
-    return Ok(());
+  match action {
+    NoticeAction::Dismiss => return Ok(()),
+    NoticeAction::ChooseMicrophone => {
+      choose_microphone(&app);
+      return Ok(());
+    }
+    NoticeAction::Fix => {}
   }
   let kind = app
     .state::<DictationNotice>()
@@ -375,6 +445,10 @@ pub async fn dictation_notice_respond(
   tauri::async_runtime::spawn_blocking(move || match kind {
     NoticeKind::Microphone => permissions::request(&fix_app, Permission::Microphone),
     NoticeKind::NothingHeard => open_sound_input_settings(),
+    NoticeKind::MicrophoneMissing => {
+      choose_microphone(&fix_app);
+      Ok(())
+    }
   })
   .await
   .map_err(crate::logging::with_cause_logged(
@@ -506,6 +580,27 @@ mod tests {
   }
 
   #[test]
+  fn a_missing_microphone_is_told_once_and_leads_to_the_choice() {
+    let mut gate = NoticeGate::default();
+    let missing = NoticeKind::MicrophoneMissing;
+    assert_eq!(gate.admit_kind(missing, at(100)), Some(missing));
+    assert_eq!(gate.admit_kind(missing, at(110)), None);
+    // A failure of the same dictation is still told.
+    assert!(gate.admit(Failure::NothingHeard, at(110)).is_some());
+    assert_eq!(
+      fix_for(missing, PermissionStatus::Granted, false),
+      Some(NoticeFix::ChooseMicrophone)
+    );
+    assert_eq!(
+      notice_text(missing, PermissionStatus::Granted, true),
+      (
+        "dictation.notice.missingTitle",
+        "dictation.notice.missingBody"
+      )
+    );
+  }
+
+  #[test]
   fn each_notice_says_what_happened_and_what_to_check() {
     assert_eq!(
       notice_text(
@@ -542,6 +637,9 @@ mod tests {
       "dictation.notice.nothingTitle",
       "dictation.notice.nothingBody",
       "dictation.notice.inputDevice",
+      "dictation.notice.missingTitle",
+      "dictation.notice.missingBody",
+      "dictation.notice.chooseMicrophone",
     ] {
       assert!(
         crate::i18n::locales_missing(key).is_empty(),
@@ -557,12 +655,14 @@ mod tests {
         kind: NoticeKind::NothingHeard,
         fix: Some(NoticeFix::OpenSound),
         input_device: Some("AirPods Pro 3".to_string()),
+        missing: None,
       })
       .unwrap(),
       serde_json::json!({
         "kind": "nothingHeard",
         "fix": "openSound",
         "inputDevice": "AirPods Pro 3",
+        "missing": null,
       })
     );
     assert_eq!(
