@@ -7,6 +7,7 @@ import { Result } from "better-result";
 import { useTranslations } from "use-intl";
 import * as v from "valibot";
 
+import type { EmailDeliveryFailureReason } from "@stll/api-contract/email-delivery";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { Form } from "@stll/ui/form";
@@ -14,6 +15,7 @@ import { Input } from "@stll/ui/input";
 
 import { socialProviderName } from "@/components/auth/access-reset.logic";
 import type { SocialProvider } from "@/components/auth/access-reset.logic";
+import { readEmailDeliveryStatus } from "@/components/auth/email-delivery.logic";
 import { OTPPanel } from "@/components/auth/otp-panel";
 import { useMountEffect } from "@/hooks/use-effect";
 import { useAnalytics } from "@/lib/analytics/provider";
@@ -62,7 +64,11 @@ const renderProvider = (chunks: ReactNode) => (
 
 type RecoveryStep =
   | { type: "email" }
-  | { type: "otp"; email: string }
+  | {
+      type: "otp";
+      email: string;
+      deliveryFailure: EmailDeliveryFailureReason | undefined;
+    }
   | { type: "connect"; provider: SocialProvider };
 
 export const SocialRecoveryPanel = ({
@@ -110,7 +116,13 @@ export const SocialRecoveryPanel = ({
           ? Result.err(toAuthClientError(result.error))
           : Result.ok(undefined),
       );
-      setStep({ type: "otp", email: parsed });
+      const delivery = readEmailDeliveryStatus(result.data);
+      setStep({
+        type: "otp",
+        email: parsed,
+        deliveryFailure:
+          delivery?.type === "failed" ? delivery.reason : undefined,
+      });
     },
     onError,
   });
@@ -141,6 +153,7 @@ export const SocialRecoveryPanel = ({
   if (error === "account_not_linked" && step.type === "otp") {
     return (
       <OTPPanel
+        deliveryFailure={step.deliveryFailure}
         email={step.email}
         redirectTo={redirectTo}
         linkProvider={provider ?? undefined}

@@ -1,4 +1,6 @@
-import { lt, sql } from "drizzle-orm";
+import { eq, lt, sql } from "drizzle-orm";
+
+import type { EmailDeliveryFailureReason } from "@stll/api-contract/email-delivery";
 
 import { rootDb } from "@/api/db/root";
 import { emailDeliveryFailures } from "@/api/db/schema";
@@ -85,4 +87,30 @@ export const pruneRecipientFailures = async (): Promise<number> => {
     )
     .returning({ address: emailDeliveryFailures.address });
   return pruned.length;
+};
+
+/**
+ * Why mail recently failed to reach this address, or undefined when no
+ * failure is recorded. Rows past retention are pruned with each provider
+ * event run, so every stored failure is recent.
+ */
+export const readRecipientFailure = async (
+  email: NormalizedEmail,
+): Promise<EmailDeliveryFailureReason | undefined> => {
+  const rows = await rootDb
+    .select({ reason: emailDeliveryFailures.reason })
+    .from(emailDeliveryFailures)
+    .where(eq(emailDeliveryFailures.address, email))
+    .limit(1);
+  return rows.at(0)?.reason;
+};
+
+/** Drops the failure recorded for an address that mail has since reached. */
+export const forgetRecipientFailure = async (
+  email: NormalizedEmail,
+): Promise<void> => {
+  // audit: skip - A sign-in code reached this address; the failure bookkeeping no longer applies.
+  await rootDb
+    .delete(emailDeliveryFailures)
+    .where(eq(emailDeliveryFailures.address, email));
 };

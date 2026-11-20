@@ -152,6 +152,13 @@
     "createFreeAccount": "Sukurti nemokamą paskyrą",
     "createOrganization": "Sukurti organizaciją",
     "createOrganizationButton": "Sukurti organizaciją",
+    "emailDelivery": {
+      "mailboxMissing": "Negalime pristatyti el. laiškų adresu <email>{emailAddress}</email>: pašto serveris praneša, kad tokios pašto dėžutės nėra. Patikrinkite adresą arba naudokite kitą el. pašto adresą.",
+      "mailboxUnavailable": "Šiuo metu negalime pristatyti el. laiškų adresu <email>{emailAddress}</email>: pašto dėžutė pilna arba laikinai nepasiekiama. Bandykite dar kartą vėliau arba naudokite kitą el. pašto adresą.",
+      "other": "Nepavyko pristatyti el. laiško adresu <email>{emailAddress}</email>. Bandykite dar kartą vėliau arba naudokite kitą el. pašto adresą.",
+      "suppressed": "Nebesiunčiame el. laiškų adresu <email>{emailAddress}</email>, nes ankstesnių laiškų nepavyko pristatyti. Naudokite kitą el. pašto adresą.",
+      "tlsRequired": "Negalime pristatyti el. laiškų į domeną <domain>{domainName}</domain>: jo pašto serveris nepriima šifruotų laiškų. Paprašykite savo IT skyriaus pašto serveryje įjungti TLS (STARTTLS) arba naudokite kitą el. pašto adresą."
+    },
     "emailPlaceholder": "jus@example.com",
     "error": {
       "generic": "Prijungiant kažkas nepavyko. Bandykite dar kartą.",

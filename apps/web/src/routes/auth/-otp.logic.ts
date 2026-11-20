@@ -1,5 +1,7 @@
 import * as v from "valibot";
 
+import { emailDeliveryFailureReasonSchema } from "@stll/api-contract/email-delivery";
+
 import { SIGN_IN_MODE } from "@/components/auth/sign-in-mode";
 import type { SignInMode } from "@/components/auth/sign-in-mode";
 import { afterSignInNavigation, redirectToSchema } from "@/lib/redirect";
@@ -13,6 +15,8 @@ export const otpSearchSchema = routeSearchSchema({
   ),
   email: v.optional(emailSchema("Invalid email address")),
   redirectTo: redirectToSchema,
+  /** Why mail to `email` recently failed, from the code request. */
+  deliveryFailure: v.optional(emailDeliveryFailureReasonSchema),
 });
 
 type OtpSessionNavigationOptions = {

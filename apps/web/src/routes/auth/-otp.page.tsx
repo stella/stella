@@ -11,8 +11,12 @@ const route = getRouteApi("/auth/otp");
 
 export function OTPPage() {
   const navigate = useNavigate();
-  const { redirectTo, mode } = route.useSearch({
-    select: (s) => ({ redirectTo: s.redirectTo, mode: s.mode }),
+  const { redirectTo, mode, deliveryFailure } = route.useSearch({
+    select: (s) => ({
+      redirectTo: s.redirectTo,
+      mode: s.mode,
+      deliveryFailure: s.deliveryFailure,
+    }),
   });
   const email = route.useRouteContext({ select: (c) => c.otpEmail });
   const devOtp = route.useLoaderData({ select: (d) => d.devOtp });
@@ -32,6 +36,7 @@ export function OTPPage() {
   return (
     <OTPRouteShell>
       <OTPPanelBody
+        deliveryFailure={deliveryFailure}
         email={email}
         initialOtp={devOtp ?? undefined}
         onUseDifferentEmail={() =>

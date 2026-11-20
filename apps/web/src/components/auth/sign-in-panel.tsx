@@ -8,6 +8,7 @@ import { Result } from "better-result";
 import { useTranslations } from "use-intl";
 import * as v from "valibot";
 
+import type { EmailDeliveryFailureReason } from "@stll/api-contract/email-delivery";
 import {
   PROFESSIONAL_USE_DISPLAYED_VERSION_FIELD,
   PROFESSIONAL_USE_STATEMENT_VERSION,
@@ -37,6 +38,7 @@ import { isAcceptInvitationRedirect } from "@/lib/redirect";
 import { emailSchema, schemaFormOptions, toFormErrors } from "@/lib/schema";
 
 import type { SocialProvider } from "./access-reset.logic";
+import { readEmailDeliveryStatus } from "./email-delivery.logic";
 import {
   LAST_USED_BADGE_PILL_CLASS_NAME,
   LAST_USED_BADGE_POSITION_CLASS_NAME,
@@ -87,6 +89,7 @@ type SignInPanelProps = {
     email: string;
     redirectTo: string;
     mode: SignInMode;
+    deliveryFailure: EmailDeliveryFailureReason | undefined;
   }) => void;
 };
 
@@ -169,15 +172,18 @@ const SignInOptionsPanel = ({
   const openPasswordEntry = (email: string) =>
     setPasswordEntry({ type: "open", email });
 
-  const handleOtpSent = async (email: string) => {
+  const handleOtpSent = async (
+    email: string,
+    deliveryFailure: EmailDeliveryFailureReason | undefined,
+  ) => {
     if (onOtpSent) {
-      onOtpSent({ email, redirectTo, mode });
+      onOtpSent({ email, redirectTo, mode, deliveryFailure });
       return;
     }
 
     await navigate({
       to: "/auth/otp",
-      search: { email, redirectTo, mode },
+      search: { email, redirectTo, mode, deliveryFailure },
     });
   };
 
@@ -382,7 +388,11 @@ const EmailCodeSignInForm = ({
 }: {
   autoFocus: boolean;
   lastUsed: SignInMethod | null;
-  onCodeSent: (email: string) => Promise<void>;
+  /** The code was requested; `deliveryFailure` says mail there recently failed. */
+  onCodeSent: (
+    email: string,
+    deliveryFailure: EmailDeliveryFailureReason | undefined,
+  ) => Promise<void>;
   /** The server sends this address no code: it signs in with a password. */
   onPasswordRequired: (email: string) => void;
   /** Opens the password form with the address typed so far, where offered. */
@@ -396,7 +406,7 @@ const EmailCodeSignInForm = ({
       defaultValues: { email: "" },
       submitValues: "schema-output",
       onSubmit: async ({ value }) => {
-        const { error } = await authClient.emailOtp.sendVerificationOtp({
+        const { data, error } = await authClient.emailOtp.sendVerificationOtp({
           email: value.email,
           type: "sign-in",
         });
@@ -419,7 +429,11 @@ const EmailCodeSignInForm = ({
           return;
         }
 
-        await onCodeSent(value.email);
+        const delivery = readEmailDeliveryStatus(data);
+        await onCodeSent(
+          value.email,
+          delivery?.type === "failed" ? delivery.reason : undefined,
+        );
       },
     }),
   );

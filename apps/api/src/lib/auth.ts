@@ -154,6 +154,7 @@ import {
   createDemoSessionFilter,
   warnDemoAccountConfiguration,
 } from "@/api/lib/auth/demo-account-policy";
+import { createEmailDeliveryStatusPlugin } from "@/api/lib/auth/email-delivery-status";
 import {
   EMAIL_OTP_ALLOWED_ATTEMPTS,
   emailOtpPromotionEmail,
@@ -317,6 +318,10 @@ import {
   sendOrganizationInvitation,
   sendOTPEmail,
 } from "@/api/lib/email/email";
+import {
+  forgetRecipientFailure,
+  readRecipientFailure,
+} from "@/api/lib/email/recipient-deliverability";
 import { handoffCommittedEntityDeletionCleanupBatch } from "@/api/lib/entity-deletion-cleanup-handoff";
 import { enqueueEntityDeletionCleanup } from "@/api/lib/entity-deletion-cleanup-queue";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -2659,6 +2664,10 @@ export const createAuth = (
         createAuthMiddleware,
         () => new Date(),
       ),
+      createEmailDeliveryStatusPlugin(createAuthMiddleware, {
+        readFailure: readRecipientFailure,
+        forgetFailure: forgetRecipientFailure,
+      }),
       createOAuthConsentInfoPlugin([env.FRONTEND_URL, getAuthIssuerUrl()]),
       createStellaOAuthProvider(
         {

@@ -202,3 +202,124 @@ test("OTP verification refreshes the existing session before the two-factor rout
     globalThis.fetch = originalFetch;
   }
 });
+
+const otpContent = (
+  props: Partial<Parameters<typeof OTPPanelContent>[0]> = {},
+) => (
+  <OTPPanelContent
+    email="new.member@example.test"
+    isBare
+    isOtpComplete={false}
+    isOtpPulsing={false}
+    onOtpChange={noop}
+    onResend={noop}
+    onSubmit={noop}
+    onUseDifferentEmail={noop}
+    otp=""
+    resendPending={false}
+    verifyPending={false}
+    {...props}
+  />
+);
+
+test("a recipient server without STARTTLS is explained with its domain, and no code is claimed sent", () => {
+  const ui = withIntl(otpContent({ deliveryFailure: "tls_required" }));
+
+  expect(ui.getByRole("alert").textContent).toBe(
+    "We can't deliver email to example.test: its mail server doesn't accept encrypted email. Ask your IT to enable TLS (STARTTLS) on the mail server, or use a different email address.",
+  );
+  expect(ui.queryByText(/We sent a code/u)).toBeNull();
+  // The code can still be entered, sent again, or the address changed.
+  expect(ui.getByRole("button", { name: /Send code again/u })).toBeTruthy();
+  expect(
+    ui.getByRole("button", { name: messages.auth.useDifferentEmail }),
+  ).toBeTruthy();
+});
+
+test.each([
+  ["mailbox_missing", "this mailbox doesn't exist"],
+  ["mailbox_unavailable", "full or temporarily unavailable"],
+  ["suppressed", "We no longer send email to"],
+  ["other", "We couldn't deliver email to"],
+] as const)(
+  "a %s failure names the address and what to do",
+  (reason, phrase) => {
+    const ui = withIntl(otpContent({ deliveryFailure: reason }));
+
+    const alert = ui.getByRole("alert");
+    expect(alert.textContent).toContain(phrase);
+    expect(alert.textContent).toContain("new.member@example.test");
+    expect(alert.textContent).toMatch(/use a different email address\.$/iu);
+    expect(ui.queryByText(/We sent a code/u)).toBeNull();
+  },
+);
+
+test("without a known failure the panel says a code was sent and shows no alert", () => {
+  const ui = withIntl(otpContent());
+
+  expect(ui.queryByRole("alert")).toBeNull();
+  expect(ui.getByText(/We sent a code to/u)).toBeTruthy();
+});
+
+test("sending the code again shows a failure the server reports, and clears it once none is recorded", async () => {
+  const { QueryClient, QueryClientProvider } =
+    await import("@tanstack/react-query");
+  const router = await import("@tanstack/react-router");
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
+  const statuses = [
+    { type: "failed", reason: "tls_required" },
+    { type: "none_recorded" },
+  ];
+  globalThis.fetch = Object.assign(
+    async (input: string | URL | Request) => {
+      const url = input instanceof Request ? input.url : input.toString();
+      if (url.includes("email-otp/send-verification-otp")) {
+        return Response.json({
+          success: true,
+          emailDelivery: statuses.shift(),
+        });
+      }
+      return Response.json(null);
+    },
+    { preconnect: () => undefined },
+  );
+  const root = router.createRootRoute({ component: router.Outlet });
+  const otp = router.createRoute({
+    getParentRoute: () => root,
+    path: "/auth/otp",
+    component: () => (
+      <OTPPanel email="new.member@example.test" redirectTo="/account" />
+    ),
+  });
+  const appRouter = router.createRouter({
+    routeTree: root.addChildren([otp]),
+    history: router.createMemoryHistory({ initialEntries: ["/auth/otp"] }),
+    isServer: false,
+  });
+  try {
+    await appRouter.load();
+    const ui = render(
+      <QueryClientProvider client={client}>
+        <IntlProvider locale="en" messages={messages}>
+          <router.RouterProvider router={appRouter} />
+        </IntlProvider>
+      </QueryClientProvider>,
+    );
+    expect(ui.queryByRole("alert")).toBeNull();
+
+    fireEvent.click(ui.getByRole("button", { name: /Send code again/u }));
+    expect((await ui.findByRole("alert")).textContent).toContain(
+      "its mail server doesn't accept encrypted email",
+    );
+    expect(ui.queryByText(/We sent a code to/u)).toBeNull();
+
+    fireEvent.click(ui.getByRole("button", { name: /Send code again/u }));
+    await ui.findByText(/We sent a code to/u);
+    expect(ui.queryByRole("alert")).toBeNull();
+  } finally {
+    client.clear();
+    globalThis.fetch = originalFetch;
+  }
+});

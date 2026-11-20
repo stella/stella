@@ -152,6 +152,13 @@
     "createFreeAccount": "Utwórz bezpłatne konto",
     "createOrganization": "Utwórz organizację",
     "createOrganizationButton": "Utwórz organizację",
+    "emailDelivery": {
+      "mailboxMissing": "Nie możemy dostarczać e-maili na adres <email>{emailAddress}</email>: według serwera pocztowego ta skrzynka nie istnieje. Sprawdź adres albo użyj innego adresu e-mail.",
+      "mailboxUnavailable": "Nie możemy teraz dostarczyć e-maila na adres <email>{emailAddress}</email>: skrzynka jest pełna lub chwilowo niedostępna. Spróbuj ponownie później albo użyj innego adresu e-mail.",
+      "other": "Nie udało się dostarczyć e-maila na adres <email>{emailAddress}</email>. Spróbuj ponownie później albo użyj innego adresu e-mail.",
+      "suppressed": "Nie wysyłamy już e-maili na adres <email>{emailAddress}</email>, ponieważ wcześniejszych wiadomości nie udało się dostarczyć. Użyj innego adresu e-mail.",
+      "tlsRequired": "Nie możemy dostarczać e-maili do domeny <domain>{domainName}</domain>: jej serwer pocztowy nie przyjmuje szyfrowanej poczty. Poproś dział IT o włączenie TLS (STARTTLS) na serwerze pocztowym albo użyj innego adresu e-mail."
+    },
     "emailPlaceholder": "ty@example.com",
     "error": {
       "generic": "Coś poszło nie tak podczas logowania. Spróbuj ponownie.",

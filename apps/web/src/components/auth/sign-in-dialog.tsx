@@ -3,6 +3,7 @@ import { useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
+import type { EmailDeliveryFailureReason } from "@stll/api-contract/email-delivery";
 import {
   Dialog,
   DialogHeader,
@@ -25,7 +26,12 @@ type SignInDialogProps = {
 
 type SignInDialogStep =
   | { status: "sign-in" }
-  | { status: "otp"; email: string; devOtp: string | null };
+  | {
+      status: "otp";
+      email: string;
+      devOtp: string | null;
+      deliveryFailure: EmailDeliveryFailureReason | undefined;
+    };
 
 export const SignInDialog = ({
   onOpenChange,
@@ -46,15 +52,23 @@ export const SignInDialog = ({
     }
   };
 
-  const showOtpStep = async (email: string) => {
+  const showOtpStep = async (
+    email: string,
+    deliveryFailure: EmailDeliveryFailureReason | undefined,
+  ) => {
     // Transition immediately; the dev OTP fills in once it arrives so a slow or
     // unreachable dev API never blocks the OTP screen. The panel is keyed by the
     // code, so it remounts and picks up the prefill when it lands.
-    setStep({ status: "otp", email, devOtp: null });
+    setStep({ status: "otp", email, devOtp: null, deliveryFailure });
     const devOtp = await fetchDevOtp(email);
     setStep((prev) =>
       prev.status === "otp" && prev.email === email
-        ? { status: "otp", email, devOtp }
+        ? {
+            status: "otp",
+            email,
+            devOtp,
+            deliveryFailure: prev.deliveryFailure,
+          }
         : prev,
     );
   };
@@ -74,13 +88,17 @@ export const SignInDialog = ({
             <SignInPanel
               redirectTo={redirectTo}
               showHeading={false}
-              onOtpSent={({ email }) => {
-                detached(showOtpStep(email), "sign-in-dialog.show-otp-step");
+              onOtpSent={({ email, deliveryFailure }) => {
+                detached(
+                  showOtpStep(email, deliveryFailure),
+                  "sign-in-dialog.show-otp-step",
+                );
               }}
             />
           ) : (
             <OTPPanel
               key={step.devOtp ?? "empty"}
+              deliveryFailure={step.deliveryFailure}
               email={step.email}
               initialOtp={step.devOtp ?? undefined}
               redirectTo={redirectTo}

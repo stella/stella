@@ -152,6 +152,13 @@
     "createFreeAccount": "Izveidot bezmaksas kontu",
     "createOrganization": "Izveidot organizāciju",
     "createOrganizationButton": "Izveidot organizāciju",
+    "emailDelivery": {
+      "mailboxMissing": "Mēs nevaram piegādāt e-pastus uz <email>{emailAddress}</email>: pasta serveris ziņo, ka šādas pastkastes nav. Pārbaudiet adresi vai izmantojiet citu e-pasta adresi.",
+      "mailboxUnavailable": "Pašlaik mēs nevaram piegādāt e-pastus uz <email>{emailAddress}</email>: pastkaste ir pilna vai īslaicīgi nepieejama. Mēģiniet vēlāk vai izmantojiet citu e-pasta adresi.",
+      "other": "Mums neizdevās piegādāt e-pastu uz <email>{emailAddress}</email>. Mēģiniet vēlāk vai izmantojiet citu e-pasta adresi.",
+      "suppressed": "Mēs vairs nesūtām e-pastus uz <email>{emailAddress}</email>, jo iepriekšējos ziņojumus neizdevās piegādāt. Izmantojiet citu e-pasta adresi.",
+      "tlsRequired": "Mēs nevaram piegādāt e-pastus uz domēnu <domain>{domainName}</domain>: tā pasta serveris nepieņem šifrētus e-pastus. Lūdziet savai IT nodaļai pasta serverī ieslēgt TLS (STARTTLS) vai izmantojiet citu e-pasta adresi."
+    },
     "emailPlaceholder": "jus@example.com",
     "error": {
       "generic": "Pieslēdzoties kaut kas nogāja greizi. Lūdzu, mēģiniet vēlreiz.",

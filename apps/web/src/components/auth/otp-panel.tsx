@@ -5,6 +5,7 @@ import { useNavigate } from "@tanstack/react-router";
 import { Result, TaggedError } from "better-result";
 import { useTranslations } from "use-intl";
 
+import type { EmailDeliveryFailureReason } from "@stll/api-contract/email-delivery";
 import {
   PROFESSIONAL_USE_DISPLAYED_VERSION_FIELD,
   PROFESSIONAL_USE_STATEMENT_VERSION,
@@ -43,12 +44,17 @@ import {
   AuthCodeSlots,
   AuthCodeVerification,
 } from "./code-verification-face.pending";
+import { readEmailDeliveryStatus } from "./email-delivery.logic";
 import {
   OTPPanelFrame,
   OTPPanelLayout,
   OTPProfessionalUseStatement,
 } from "./otp-panel-face.pending";
-import { OTPEmailText, renderEmail } from "./otp-panel-text";
+import {
+  EmailDeliveryFailureText,
+  OTPEmailText,
+  renderEmail,
+} from "./otp-panel-text";
 
 type OTPPanelProps = {
   className?: string;
@@ -61,6 +67,12 @@ type OTPPanelProps = {
   onUseDifferentEmail?: () => void;
   onVerified?: () => void | Promise<void>;
   linkProvider?: SocialProvider | undefined;
+  /**
+   * Why mail to `email` recently failed, as the code request that opened
+   * this panel reported it; the panel then explains the failure instead of
+   * saying a code was sent.
+   */
+  deliveryFailure?: EmailDeliveryFailureReason | undefined;
 };
 
 const OTP_EXPIRED_MESSAGE = "OTP expired";
@@ -99,12 +111,16 @@ export const OTPPanelBody = ({
   onUseDifferentEmail,
   onVerified,
   linkProvider,
+  deliveryFailure: initialDeliveryFailure,
 }: Omit<OTPPanelProps, "className">) => {
   const t = useTranslations();
   const analytics = useAnalytics();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const [otp, setOtp] = useState(initialOtp ?? "");
+  const [deliveryFailure, setDeliveryFailure] = useState(
+    initialDeliveryFailure,
+  );
   const [resetConfirmation, setResetConfirmation] = useState<{
     otp: string;
     providers: string[];
@@ -150,7 +166,7 @@ export const OTPPanelBody = ({
 
   const resendOtp = useMutation({
     mutationFn: async () => {
-      const { error } = await authClient.emailOtp.sendVerificationOtp({
+      const { data, error } = await authClient.emailOtp.sendVerificationOtp({
         email,
         type: "sign-in",
       });
@@ -169,6 +185,16 @@ export const OTPPanelBody = ({
       }
 
       setOtp("");
+      const delivery = readEmailDeliveryStatus(data);
+      if (delivery?.type === "failed") {
+        // Mail to this address is known to fail: the panel says why, and
+        // nothing claims a code is on its way.
+        setDeliveryFailure(delivery.reason);
+        return;
+      }
+      if (delivery?.type === "none_recorded") {
+        setDeliveryFailure(undefined);
+      }
       stellaToast.add({
         description: t("auth.checkSpamHint"),
         title: t("auth.codeSentAgain"),
@@ -340,6 +366,7 @@ export const OTPPanelBody = ({
         </div>
       ) : (
         <OTPPanelContent
+          deliveryFailure={deliveryFailure}
           email={email}
           isOtpComplete={isOtpComplete}
           isOtpPulsing={isOtpPulsing}
@@ -364,6 +391,7 @@ export const OTPPanelBody = ({
 };
 
 export const OTPPanelContent = ({
+  deliveryFailure,
   email,
   isOtpComplete,
   isOtpPulsing,
@@ -376,6 +404,7 @@ export const OTPPanelContent = ({
   onSubmit,
   onUseDifferentEmail,
 }: {
+  deliveryFailure?: EmailDeliveryFailureReason | undefined;
   email: string;
   isOtpComplete: boolean;
   isOtpPulsing: boolean;
@@ -427,7 +456,16 @@ export const OTPPanelContent = ({
       }
       description={
         <>
-          <OTPEmailText email={email} id="auth.weSentCodeTo" />
+          {deliveryFailure === undefined ? (
+            <OTPEmailText email={email} id="auth.weSentCodeTo" />
+          ) : (
+            <span className="text-destructive" role="alert">
+              <EmailDeliveryFailureText
+                email={email}
+                reason={deliveryFailure}
+              />
+            </span>
+          )}
           {" · "}
           <Button
             disabled={verifyPending || resendPending}

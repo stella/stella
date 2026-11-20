@@ -152,6 +152,13 @@
     "createFreeAccount": "Crear cuenta gratuita",
     "createOrganization": "Crear una organización",
     "createOrganizationButton": "Crear organización",
+    "emailDelivery": {
+      "mailboxMissing": "No podemos entregar correos electrónicos a <email>{emailAddress}</email>: según el servidor de correo, este buzón no existe. Revise la dirección o use otra dirección de correo electrónico.",
+      "mailboxUnavailable": "Ahora mismo no podemos entregar correos electrónicos a <email>{emailAddress}</email>: el buzón está lleno o no está disponible temporalmente. Inténtelo de nuevo más tarde o use otra dirección de correo electrónico.",
+      "other": "No pudimos entregar el correo electrónico a <email>{emailAddress}</email>. Inténtelo de nuevo más tarde o use otra dirección de correo electrónico.",
+      "suppressed": "Ya no enviamos correos electrónicos a <email>{emailAddress}</email> porque no se pudieron entregar los mensajes anteriores. Use otra dirección de correo electrónico.",
+      "tlsRequired": "No podemos entregar correos electrónicos a <domain>{domainName}</domain>: su servidor de correo no acepta correo cifrado. Pida a su departamento de TI que active TLS (STARTTLS) en el servidor de correo o use otra dirección de correo electrónico."
+    },
     "emailPlaceholder": "usted@example.com",
     "error": {
       "generic": "Algo salió mal al iniciar tu sesión. Inténtalo de nuevo.",

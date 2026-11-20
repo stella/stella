@@ -18,6 +18,11 @@ export default {
     specifiers: ["@/api/lib/email/recipient-deliverability"],
     allowed: [
       {
+        path: "apps/api/src/lib/auth.ts",
+        reason:
+          "A sign-in code request reads the address's recent failure for the sign-in screen, and a code sign-in drops it.",
+      },
+      {
         path: "apps/api/src/lib/email/email.tsx",
         reason:
           "Every transactional send checks its recipient before it reaches the transport, and records a dropped send as a failure.",
