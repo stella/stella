@@ -19,8 +19,6 @@ export const COLLECTION_DOCUMENT_EXTENT = {
   COMPLETE: "complete",
   UNCLASSIFIED: "unclassified",
 } as const;
-export const COLLECTION_DOCUMENT_BODY_CONTENT_TYPE =
-  "application/vnd.stella.collection-document-body+json";
 const COLLECTION_DOCUMENT_BODY_MAX_BYTES =
   LIMITS.corpusPayloadMaxDecompressedBytes;
 

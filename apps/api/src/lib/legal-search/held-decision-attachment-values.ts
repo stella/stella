@@ -46,9 +46,6 @@ export const HELD_DECISION_ATTACHING_BASES = [
   HELD_DECISION_MATCH_BASIS.COURT_DOCKET_DATE,
 ] as const satisfies readonly HeldDecisionMatchBasis[];
 
-export type HeldDecisionAttachingBasis =
-  (typeof HELD_DECISION_ATTACHING_BASES)[number];
-
 /** Why a parked record waits for a reader instead of attaching or being written. */
 export const HELD_DECISION_REVIEW = {
   /** Several held decisions match it, by ECLI or by court, docket and date. */
