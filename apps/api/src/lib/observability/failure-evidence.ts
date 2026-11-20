@@ -632,6 +632,7 @@ const readNode = (state: ReadState, value: object): ReadNodeResult => {
           typeof constructorValue === "function"
             ? readKey(state, constructorValue, "name")
             : undefined,
+        prototype: prototypes[0],
       })
     : undefined;
   const isTimeoutError =
