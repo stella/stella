@@ -491,7 +491,7 @@ const settingsSectionQueries = (title: string) => {
       : (heading.closest('[data-slot="settings-row"]') ??
         heading.closest('[data-slot="list-group"]') ??
         heading.parentElement);
-  if (!section) {
+  if (!(section instanceof HTMLElement)) {
     panic("Settings section must contain its heading");
   }
   return within(section);
