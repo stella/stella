@@ -118,6 +118,19 @@ const AddressCard = ({ workspaceId }: { workspaceId: string }) => {
     );
   }
 
+  const resolveAddressChangeDisabledReason = () => {
+    if (rotate.isPending || revoke.isPending) {
+      return t("common.saving");
+    }
+    if (isPending) {
+      return t("common.loading");
+    }
+    if (isError) {
+      return t("common.loadFailed");
+    }
+    return t("correspondence.addressNotConfigured");
+  };
+
   return (
     <section className="flex flex-wrap items-center justify-between gap-3 rounded-lg border p-4">
       <div className="min-w-0">
@@ -146,6 +159,7 @@ const AddressCard = ({ workspaceId }: { workspaceId: string }) => {
               isError ||
               data.status === "unconfigured"
             }
+            disabledReason={resolveAddressChangeDisabledReason()}
             onClick={() => rotate.mutate({ workspaceId })}
             size="sm"
             variant="outline"
@@ -160,6 +174,7 @@ const AddressCard = ({ workspaceId }: { workspaceId: string }) => {
           <Button
             className="min-h-11"
             disabled={revoke.isPending || rotate.isPending}
+            disabledReason={t("common.saving")}
             onClick={() => revoke.mutate({ workspaceId })}
             size="sm"
             variant="ghost"
@@ -274,6 +289,7 @@ const CorrespondenceList = ({ workspaceId }: { workspaceId: string }) => {
           <Button
             className="min-h-11"
             disabled={isFetchingNextPage}
+            disabledReason={t("common.loading")}
             onClick={() =>
               detached(fetchNextPage(), "correspondence.fetch-next-page")
             }
