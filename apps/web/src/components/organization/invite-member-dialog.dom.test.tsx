@@ -30,27 +30,39 @@ const { roleOptions } = await import("@/lib/auth-queries");
 const { createAppQueryClient } = await import("@/lib/react-query");
 const { InviteMemberDialog } = await import("./invite-member-dialog");
 
-const renderDialog = () => {
+const renderDialog = (suggestedEmail?: string) => {
   const queryClient = createAppQueryClient();
   queryClient.setQueryData(roleOptions.queryKey, "owner");
   return render(
     <QueryClientProvider client={queryClient}>
       <AnalyticsContext value={noopAnalytics}>
         <IntlProvider locale="en" messages={englishMessages} timeZone="UTC">
-          <InviteMemberDialog />
+          <InviteMemberDialog suggestedEmail={suggestedEmail} />
         </IntlProvider>
       </AnalyticsContext>
     </QueryClientProvider>,
   );
 };
 
-const submitInvite = async (view: ReturnType<typeof renderDialog>) => {
+const openDialog = async (view: ReturnType<typeof renderDialog>) => {
   await act(async () => {
     fireEvent.click(
       view.getByRole("button", { name: englishMessages.common.invite }),
     );
   });
   await view.findByRole("dialog");
+};
+
+const addressField = (view: ReturnType<typeof renderDialog>) => {
+  const field = view.getByRole("textbox");
+  if (!(field instanceof HTMLInputElement)) {
+    throw new TypeError("Expected the address field to be an input");
+  }
+  return field;
+};
+
+const submitInvite = async (view: ReturnType<typeof renderDialog>) => {
+  await openDialog(view);
   fireEvent.change(view.getByRole("textbox"), {
     target: { value: "person@example.com" },
   });
@@ -148,4 +160,70 @@ test("an address already invited says where to resend, without a toast", async (
     ).toBe(1);
   });
   expect(addToast).not.toHaveBeenCalled();
+});
+
+test.each([
+  ["  person@example.com ", "person@example.com"],
+  ["Person@Example.com", "person@example.com"],
+  ["person", ""],
+  ["", ""],
+])(
+  "the search text %p opens the dialog with the address %p",
+  async (search, expected) => {
+    const view = renderDialog(search);
+
+    await openDialog(view);
+
+    expect(addressField(view).value).toBe(expected);
+  },
+);
+
+test("a prefilled address closes without asking to discard it", async () => {
+  const view = renderDialog("person@example.com");
+
+  await openDialog(view);
+  await act(async () => {
+    fireEvent.click(
+      view.getByRole("button", { name: englishMessages.common.cancel }),
+    );
+  });
+
+  await waitFor(() => {
+    expect(view.queryByRole("dialog") === null).toBe(true);
+  });
+});
+
+test("each opening takes the search text of that moment", async () => {
+  const view = renderDialog("first@example.com");
+  await openDialog(view);
+  fireEvent.change(addressField(view), {
+    target: { value: "typed@example.com" },
+  });
+  for (const closeAttempt of ["holds", "discards"]) {
+    const close = view
+      .getAllByRole("button", { name: englishMessages.common.cancel })
+      .at(-1);
+    if (close === undefined) {
+      throw new TypeError(`Expected a close button: ${closeAttempt}`);
+    }
+    await act(async () => {
+      fireEvent.click(close);
+    });
+  }
+  await waitFor(() => {
+    expect(view.queryByRole("dialog") === null).toBe(true);
+  });
+
+  view.rerender(
+    <QueryClientProvider client={createAppQueryClient()}>
+      <AnalyticsContext value={noopAnalytics}>
+        <IntlProvider locale="en" messages={englishMessages} timeZone="UTC">
+          <InviteMemberDialog suggestedEmail="second@example.com" />
+        </IntlProvider>
+      </AnalyticsContext>
+    </QueryClientProvider>,
+  );
+  await openDialog(view);
+
+  expect(addressField(view).value).toBe("second@example.com");
 });

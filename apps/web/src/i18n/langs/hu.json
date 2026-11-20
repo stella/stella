@@ -165,7 +165,7 @@
     "invitation": {
       "declined": "Meghívó elutasítva",
       "declinedDescription": "Nem csatlakozott ehhez a szervezethez.",
-      "description": "{inviterEmail} meghívta Önt a(z) {organizationName} szervezetbe {role} szerepkörrel.",
+      "description": "{inviterEmail} meghívta Önt a(z) {organizationName} szervezetbe{role, select, owner { tulajdonos szerepkörrel} admin { adminisztrátor szerepkörrel} member { tag szerepkörrel} intern { gyakornok szerepkörrel} external { külső együttműködő szerepkörrel} other {}}.",
       "goToWorkspaces": "Ügyekhez",
       "title": "Szervezeti meghívó",
       "verifyEmailHint": "A(z) {email} cím megerősítéséhez jelentkezzen ki, majd jelentkezzen be az erre a címre küldött egyszer használatos kóddal.",
@@ -7246,6 +7246,7 @@
         "title": "Eltávolítja a Word-sablonok hivatkozásait?",
         "unknownLocation": "A sablon helye: a stella által nem ellenőrizhető cím"
       },
+      "checkingFiles": "Fájlok ellenőrzése…",
       "desktopEdit": {
         "accountRequiredTitle": "Csatlakoztassa a stella desktop alkalmazást a fiókjához",
         "action": "Szerkesztés az asztali alkalmazásban",
@@ -7289,6 +7290,14 @@
       "downloadPdf": "Letöltés PDF-ként",
       "downloadSearchablePdf": "Kereshető PDF",
       "downloadWithComments": "Letöltés megjegyzésekkel",
+      "duplicateUpload": {
+        "description": "{count, plural, one {# fájl megegyezik egy dokumentummal, amely már szerepel ebben az ügyben.} other {# fájl megegyezik olyan dokumentumokkal, amelyek már szerepelnek ebben az ügyben.}} Válassza ki, mi történjen mindegyikkel.",
+        "matchedDocument": "Megegyezik ezzel: <bdi>{documentName}</bdi>",
+        "skip": "A fájl kihagyása",
+        "skipAll": "Ismétlődések kihagyása",
+        "title": "Már szerepel ebben az ügyben",
+        "uploadAnyway": "Feltöltés mindenképp"
+      },
       "emptyFile": "A fájl üres.",
       "fileTooLarge": "A fájl nagyobb, mint {limit, number} MB.",
       "includeReferenceNumber": "Hivatkozási szám hozzáadása",

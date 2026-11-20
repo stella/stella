@@ -1,7 +1,9 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
+import { isPanic } from "better-result";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
 import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
+import { rejectionOf } from "@stll/property-testing/rejection";
 
 import { createWebTestEnvironment } from "../../../tests/environment.test-fixtures";
 
@@ -105,6 +107,37 @@ test("an invitation that does not exist stays not found", async () => {
   });
 
   expect(await loadInvitationView("invitation-1")).toEqual({ type: "missing" });
+});
+
+const pendingInvitation = (role: string) => ({
+  id: "invitation-1",
+  organizationId: "organization-1",
+  email: "person@example.test",
+  role,
+  status: "pending",
+  inviterId: "user-1",
+  expiresAt: "2030-01-01T00:00:00.000Z",
+  createdAt: "2026-01-01T00:00:00.000Z",
+  organizationName: "Harbour Legal",
+  organizationSlug: "harbour-legal",
+  inviterEmail: "inviter@example.test",
+});
+
+test("a pending invitation for a known role is shown", async () => {
+  answerInvitationWith(200, pendingInvitation("member"));
+
+  expect(await loadInvitationView("invitation-1")).toMatchObject({
+    type: "invitation",
+    invitation: { role: "member" },
+  });
+});
+
+test("a role the app has no words for is a defect, not a sentence", async () => {
+  answerInvitationWith(200, pendingInvitation("partner"));
+
+  expect(isPanic(await rejectionOf(loadInvitationView("invitation-1")))).toBe(
+    true,
+  );
 });
 
 test("the wrong account sees whose session this is and can sign out", async () => {

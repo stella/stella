@@ -163,6 +163,7 @@ type PendingTextMessageKey =
   | "catalogue.cost.free"
   | "catalogue.filter.skills"
   | "catalogue.setup.none"
+  | "caseLaw.viewer.appealReviews.title"
   | "chat.composerMenu.context"
   | "chat.greeting"
   | "chat.landing.recentChats"

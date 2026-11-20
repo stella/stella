@@ -165,7 +165,7 @@
     "invitation": {
       "declined": "Convite recusado",
       "declinedDescription": "Você não entrou nesta organização.",
-      "description": "Você foi convidado para participar do {organizationName} por {inviterEmail} como {role}.",
+      "description": "Você foi convidado para participar do {organizationName} por {inviterEmail}{role, select, owner { como proprietário} admin { como administrador} member { como membro} intern { como estagiário} external { como colaborador externo} other {}}.",
       "goToWorkspaces": "Ir para casos",
       "title": "Convite da organização",
       "verifyEmailHint": "Para verificar {email}, saia e faça login com um código único enviado para esse endereço.",
@@ -7246,6 +7246,7 @@
         "title": "Remover links para modelos do Word?",
         "unknownLocation": "Local do modelo: um endereço que a stella não consegue verificar"
       },
+      "checkingFiles": "Verificando arquivos…",
       "desktopEdit": {
         "accountRequiredTitle": "Conecte o stella desktop à sua conta",
         "action": "Editar no desktop",
@@ -7289,6 +7290,14 @@
       "downloadPdf": "Baixar como PDF",
       "downloadSearchablePdf": "PDF pesquisável",
       "downloadWithComments": "Baixar com comentários",
+      "duplicateUpload": {
+        "description": "{count, plural, one {# arquivo é idêntico a um documento que este caso já contém.} other {# arquivos são idênticos a documentos que este caso já contém.} many {# arquivos são idênticos a documentos que este caso já contém.}} Escolha o que fazer com cada um.",
+        "matchedDocument": "Idêntico a <bdi>{documentName}</bdi>",
+        "skip": "Ignorar este arquivo",
+        "skipAll": "Ignorar duplicados",
+        "title": "Já está neste caso",
+        "uploadAnyway": "Enviar mesmo assim"
+      },
       "emptyFile": "O arquivo está vazio.",
       "fileTooLarge": "O arquivo é maior que {limit, number} MB.",
       "includeReferenceNumber": "Incluir número de referência",

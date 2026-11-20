@@ -128,11 +128,6 @@ const languageHasEffect = (snapshot: DictationSnapshot): boolean =>
   snapshot.destination === "cloud" ||
   (snapshot.model.status === "ready" && snapshot.language.supported.length > 0);
 
-/** Custom words reach stella AI transcription and AI cleanup only; with
- *  neither they change nothing, so they are hidden. */
-const customWordsHaveEffect = (snapshot: DictationSnapshot): boolean =>
-  snapshot.cleanup || snapshot.destination === "cloud";
-
 /** Orders the snapshots the native side answers with. Each read or change
  *  takes a ticket as it starts; an answer is shown only when no answer to a
  *  later one is shown already, so a read that started before a change can
@@ -418,6 +413,7 @@ const DictationPage = ({
         // Keyed by the failure, so a new one reads its action afresh.
         <DictationInputFix key={snapshot.failure} />
       )}
+      <TranscribeRecordingGroup />
       {snapshot.enabled && (
         <>
           <SettingsGroup title={t("groups.shortcut")}>
@@ -520,12 +516,12 @@ const DictationPage = ({
               />
             )}
           </SettingsGroup>
-          {customWordsHaveEffect(snapshot) && (
-            <DictationCustomWords
-              onChange={setCustomWords}
-              words={snapshot.customWords}
-            />
-          )}
+          {/* stella AI and cleanup take the words; without either, the
+              text from the speech model here is spelled with them. */}
+          <DictationCustomWords
+            onChange={setCustomWords}
+            words={snapshot.customWords}
+          />
           {/* With stella AI the model is not needed, but a downloaded one
               can still be removed. */}
           {(snapshot.destination === "local" ||
@@ -552,7 +548,6 @@ const DictationPage = ({
           )}
         </>
       )}
-      <TranscribeRecordingGroup />
     </div>
   );
 };
