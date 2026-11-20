@@ -165,8 +165,9 @@ checks:
     # that needs this — its trigger (any non-workflow file changes)
     # is a superset of web-build, landing-build, db-migrations, and
     # nightly-typecheck, so coverage is identical to running it in
-    # each install.
-    run: bun run lint:ws
+    # each install. The Bun runtime guard compares changed lines against the
+    # merge base, so it runs here rather than in the install lifecycle.
+    run: bun run lint:ws && bun run check:bun-runtime
 
   - name: Lockfile workspace-version guard
     id: static_check_017
