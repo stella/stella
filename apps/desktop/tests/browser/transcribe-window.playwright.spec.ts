@@ -137,6 +137,7 @@ const open = async (
               provider: "ElevenLabs",
               retainsData: false,
             },
+            autoCleanup: true,
           };
         },
       };

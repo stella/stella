@@ -94,7 +94,7 @@ fn preference(namespace: &str) -> DevicePreference {
 }
 
 /// The account dictation runs for, by its local data namespace.
-fn dictation_namespace(app: &AppHandle) -> Option<String> {
+pub(crate) fn dictation_namespace(app: &AppHandle) -> Option<String> {
   app
     .try_state::<FeatureGates>()?
     .account_binding(DesktopFeature::Dictation)

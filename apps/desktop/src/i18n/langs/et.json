@@ -1167,7 +1167,10 @@
       "saveMarkdown": "Vormindatud tekst (.md)",
       "saveText": "Lihttekst (.txt)",
       "fileNameMarkdown": "{title} puhastatud.md",
-      "fileNameText": "{title} puhastatud.txt"
+      "fileNameText": "{title} puhastatud.txt",
+      "offerTitle": "Puhasta transkriptsioon tehisintellektiga",
+      "offerDescription": "See salvestis transkribeeriti selles arvutis ja tehisintellekti puhastus on seadetes välja lülitatud. Puhastamine saadab teie organisatsiooni tehisintellekti mudelile teksti, mitte kunagi heli.",
+      "offerStart": "Puhasta"
     },
     "copyMenu": {
       "label": "Kopeerimise valikud",

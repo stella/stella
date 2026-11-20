@@ -1167,7 +1167,10 @@
       "saveMarkdown": "Formatēts teksts (.md)",
       "saveText": "Vienkāršs teksts (.txt)",
       "fileNameMarkdown": "{title} sakārtots.md",
-      "fileNameText": "{title} sakārtots.txt"
+      "fileNameText": "{title} sakārtots.txt",
+      "offerTitle": "Sakārtot transkripciju ar MI",
+      "offerDescription": "Šis ieraksts tika transkribēts šajā datorā, un MI kārtošana iestatījumos ir izslēgta. Kārtošana nosūta jūsu organizācijas MI modelim tekstu, nekad ne skaņu.",
+      "offerStart": "Sakārtot"
     },
     "copyMenu": {
       "label": "Kopēšanas iespējas",

@@ -60,6 +60,7 @@ import type {
 } from "./transcribe-logic";
 import {
   CleanedText,
+  CleanupOffer,
   PaneActions,
   useCopyFormat,
   useRecordingCleanup,
@@ -75,6 +76,8 @@ type Session = {
   file: ReadyFile;
   model: RecordingModel | null;
   matter: DesktopMatter | null;
+  /** Cleanup starts on its own; otherwise the speaker asks for it. */
+  autoCleanup: boolean;
 };
 
 type Saving =
@@ -254,6 +257,7 @@ const TranscribeApp = () => {
         file,
         model: result.value.model,
         matter: chosen.matter,
+        autoCleanup: result.value.autoCleanup === true,
       });
     };
     startFile.current = start;
@@ -747,6 +751,7 @@ const ResultScreen = ({
     job: session.job,
     paragraphs,
     finished: !running,
+    autoStart: session.autoCleanup,
   });
   const [copyFormat, setCopyFormat] = useCopyFormat();
   const cleanedBlocks = parseMarkdown(cleanup.markdown);
@@ -982,8 +987,11 @@ const ResultScreen = ({
           </div>
           <ScrollArea className="min-h-0 flex-1">
             <div className="px-7 pt-5 pb-6">
-              {hasText ? (
+              {hasText && cleanup.started ? (
                 <CleanedText cleanup={cleanup} transcribing={running} />
+              ) : null}
+              {hasText && !cleanup.started ? (
+                <CleanupOffer onStart={cleanup.start} />
               ) : null}
             </div>
           </ScrollArea>

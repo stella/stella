@@ -1167,7 +1167,10 @@
       "saveMarkdown": "Texto con formato (.md)",
       "saveText": "Texto sin formato (.txt)",
       "fileNameMarkdown": "{title} depurado.md",
-      "fileNameText": "{title} depurado.txt"
+      "fileNameText": "{title} depurado.txt",
+      "offerTitle": "Depurar la transcripción con IA",
+      "offerDescription": "Esta grabación se transcribió en este ordenador y la depuración con IA está desactivada en Configuración. Al depurarla se envía el texto, nunca el audio, al modelo de IA de tu organización.",
+      "offerStart": "Depurar"
     },
     "copyMenu": {
       "label": "Opciones de copia",

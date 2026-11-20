@@ -149,6 +149,11 @@ pub struct Started {
   job: u64,
   /// The stella AI model, when the recording goes there.
   model: Option<RecordingModel>,
+  /// Whether the window cleans the text up with AI on its own: when the
+  /// audio already goes to stella AI, or the speaker turned AI cleanup on.
+  /// A recording kept on this computer with cleanup off waits for the
+  /// speaker to ask.
+  auto_cleanup: bool,
 }
 
 /// One transcribed piece, in the order spoken.
@@ -226,6 +231,9 @@ struct Inner {
   holds_result: bool,
   /// The stella AI model the window was last shown, under its ticket.
   shown_model: Option<(u64, RecordingModel)>,
+  /// The job the window shows, with the dictation account it started for:
+  /// its text is cleaned up only for that account.
+  result_account: Option<(u64, String)>,
 }
 
 impl Inner {
@@ -284,6 +292,7 @@ impl Inner {
     self.selection += 1;
     self.file = None;
     self.holds_result = false;
+    self.result_account = None;
   }
 
   /// The file a start names, if it is still the chosen one.
@@ -630,6 +639,10 @@ pub async fn transcribe_start(
     }
     Destination::Local => None,
   };
+  let account = crate::dictation_words::dictation_namespace(&app)
+    .ok_or_else(|| "recording transcription has no linked account".to_string())?;
+  let auto_cleanup =
+    request.destination == Destination::Cloud || dictation::cleanup_enabled(&app);
   let state = app.state::<TranscribeState>();
   let job = state.next_job.fetch_add(1, Ordering::SeqCst) + 1;
   let stop = Arc::new(AtomicBool::new(false));
@@ -658,9 +671,14 @@ pub async fn transcribe_start(
       task,
     });
     inner.holds_result = true;
+    inner.result_account = Some((job, account));
     Ok::<(), String>(())
   })?;
-  Ok(Started { job, model })
+  Ok(Started {
+    job,
+    model,
+    auto_cleanup,
+  })
 }
 
 /// Stops a transcription; the text so far stays in the window.
@@ -1190,21 +1208,30 @@ pub fn transcribe_copy_rich(
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CleanUpRequest {
+  job: u64,
   transcript: String,
   previous_text: Option<String>,
 }
 
-/// Cleans up one part of the transcript with the organization's AI model.
+/// Cleans up one part of the transcript with the organization's AI model,
+/// only for the account the recording started for.
 #[tauri::command]
 pub async fn transcribe_clean_up(
   app: AppHandle,
   window: Window,
+  state: State<'_, TranscribeState>,
   request: CleanUpRequest,
 ) -> Result<crate::recording_cleanup::CleanedPart, String> {
   require_window(&window)?;
   require_available(&app)?;
+  let account = state
+    .update(|inner| inner.result_account.clone())
+    .filter(|(job, _)| *job == request.job)
+    .map(|(_, account)| account)
+    .ok_or_else(|| "this transcript is no longer shown".to_string())?;
   crate::recording_cleanup::clean_up(
     &app,
+    &account,
     &request.transcript,
     request.previous_text.as_deref(),
   )

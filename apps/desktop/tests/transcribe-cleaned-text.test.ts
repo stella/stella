@@ -51,6 +51,15 @@ describe("parseMarkdown", () => {
     expect(bullets?.kind === "list" && !bullets.ordered).toBe(true);
   });
 
+  test("a list a later part continues keeps its numbering", () => {
+    const blocks = parseMarkdown("4. čtvrtý bod\n5. pátý bod");
+    expect(blocks[0]).toMatchObject({ kind: "list", ordered: true, start: 4 });
+    expect(blocksToText(blocks)).toBe("4. čtvrtý bod\n5. pátý bod");
+    expect(blocksToHtml(blocks)).toBe(
+      '<ol start="4"><li>čtvrtý bod</li><li>pátý bod</li></ol>',
+    );
+  });
+
   test("keeps unmatched marks and markup as text", () => {
     expect(parseInline("5 * 3 = 15 a <b>x</b>")).toEqual([
       { text: "5 * 3 = 15 a <b>x</b>", bold: false, italic: false },

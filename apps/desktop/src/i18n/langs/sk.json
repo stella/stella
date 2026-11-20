@@ -1167,7 +1167,10 @@
       "saveMarkdown": "Formátovaný text (.md)",
       "saveText": "Obyčajný text (.txt)",
       "fileNameMarkdown": "{title} upravený text.md",
-      "fileNameText": "{title} upravený text.txt"
+      "fileNameText": "{title} upravený text.txt",
+      "offerTitle": "Upraviť prepis pomocou AI",
+      "offerDescription": "Táto nahrávka bola prepísaná na tomto počítači a úprava pomocou AI je v Nastaveniach vypnutá. Úprava pošle text, nikdy zvuk, AI modelu vašej organizácie.",
+      "offerStart": "Upraviť"
     },
     "copyMenu": {
       "label": "Možnosti kopírovania",

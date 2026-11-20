@@ -1167,7 +1167,10 @@
       "saveMarkdown": "Texto formatado (.md)",
       "saveText": "Texto simples (.txt)",
       "fileNameMarkdown": "{title} revisado.md",
-      "fileNameText": "{title} revisado.txt"
+      "fileNameText": "{title} revisado.txt",
+      "offerTitle": "Revisar a transcrição com IA",
+      "offerDescription": "Esta gravação foi transcrita neste computador e a revisão por IA está desativada nas Configurações. A revisão envia o texto, nunca o áudio, ao modelo de IA da sua organização.",
+      "offerStart": "Revisar"
     },
     "copyMenu": {
       "label": "Opções de cópia",

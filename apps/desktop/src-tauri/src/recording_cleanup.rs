@@ -57,6 +57,8 @@ fn contract() -> Option<&'static RecordingContract> {
     .as_ref()
 }
 
+const ACCOUNT_CHANGED: &str =
+  "the dictation account changed since the recording started";
 const UNSUPPORTED: &str = "recording cleanup is not in this build's contract";
 
 /// The longest part one request may carry, in characters; none without
@@ -147,11 +149,12 @@ pub fn parse(body: &[u8]) -> Result<CleanedPart, String> {
   }
 }
 
-/// Cleans up one part of a recording's transcript for the dictation
-/// account. The account lease is held only while the request is signed, so
+/// Cleans up one part of a recording's transcript, only while the
+/// dictation account is still the one the recording started for. The account lease is held only while the request is signed, so
 /// a cleanup that takes a minute never holds up live dictation.
 pub async fn clean_up(
   app: &AppHandle,
+  recording_account: &str,
   transcript: &str,
   previous_text: Option<&str>,
 ) -> Result<CleanedPart, String> {
@@ -159,13 +162,18 @@ pub async fn clean_up(
   if !valid_part(transcript) {
     return Err("the part is empty or too long to clean up".to_string());
   }
-  let words = crate::dictation_words::words(app);
+  let words = crate::dictation_words::stored_for(recording_account);
   let language = crate::dictation::language(app);
   let previous = previous_text
     .map(str::trim)
     .filter(|text| !text.is_empty())
     .map(|text| tail(text, route.max_previous_text_length));
   let account = crate::dictation_cleanup::dictation_account(app).await?;
+  // Another account linked since the recording started never receives its
+  // text.
+  if account.local_data_namespace() != recording_account {
+    return Err(ACCOUNT_CHANGED.to_string());
+  }
   let request = crate::http_client::device_proof_request(
     client()?
       .post(format!("{}{}", account.api_base_url, route.path))

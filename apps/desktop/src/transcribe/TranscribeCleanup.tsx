@@ -43,6 +43,9 @@ type RecordingCleanup = {
   running: boolean;
   failed: number;
   retry: (index: number) => void;
+  /** Whether cleanup runs: on its own, or once the speaker asked. */
+  started: boolean;
+  start: () => void;
 };
 
 const isCleanedPart = (value: unknown): value is CleanedPart =>
@@ -55,12 +58,13 @@ const isCleanedPart = (value: unknown): value is CleanedPart =>
   value.instructions.every((line: unknown) => typeof line === "string");
 
 const requestCleanup = async (
+  job: number,
   transcript: string,
   previousText: string | null,
 ): Promise<CleanedPart | null> => {
   const result = await Result.tryPromise(async () =>
     invoke<unknown>("transcribe_clean_up", {
-      request: { transcript, previousText },
+      request: { job, transcript, previousText },
     }),
   );
   return Result.isOk(result) && isCleanedPart(result.value)
@@ -80,12 +84,15 @@ export const useRecordingCleanup = ({
   job,
   paragraphs,
   finished,
+  autoStart,
 }: {
   job: number;
   paragraphs: readonly Paragraph[];
   finished: boolean;
+  autoStart: boolean;
 }): RecordingCleanup => {
   const [parts, setParts] = useState<PartState[]>([]);
+  const [started, setStarted] = useState(autoStart);
   const sending = useRef<string | null>(null);
 
   const run = useCallback(
@@ -94,7 +101,7 @@ export const useRecordingCleanup = ({
       part: Pick<PartState, "text">,
       previous: string | null,
     ) => {
-      const answer = await requestCleanup(part.text, previous);
+      const answer = await requestCleanup(job, part.text, previous);
       setParts((current) =>
         current.map((entry, at) =>
           at === index
@@ -107,11 +114,11 @@ export const useRecordingCleanup = ({
         ),
       );
     },
-    [],
+    [job],
   );
 
   useEffect(() => {
-    if (parts.some((part) => part.status === "running")) {
+    if (!started || parts.some((part) => part.status === "running")) {
       return;
     }
     const last = parts.at(-1);
@@ -137,7 +144,7 @@ export const useRecordingCleanup = ({
       { ...part, status: "running", result: null },
     ]);
     void run(index, part, previous);
-  }, [finished, job, paragraphs, parts, run]);
+  }, [finished, job, paragraphs, parts, run, started]);
 
   const retry = useCallback(
     (index: number) => {
@@ -165,17 +172,20 @@ export const useRecordingCleanup = ({
       .map((part) => part.result?.markdown ?? part.text)
       .join("\n\n"),
     running:
-      parts.some((part) => part.status === "running") ||
-      !finished ||
-      nextCleanupPart({
-        paragraphs,
-        from: parts.at(-1)?.to ?? 0,
-        finished,
-        first: parts.length === 0,
-        maxCharacters: MAX_PART_CHARACTERS,
-      }) !== null,
+      started &&
+      (parts.some((part) => part.status === "running") ||
+        !finished ||
+        nextCleanupPart({
+          paragraphs,
+          from: parts.at(-1)?.to ?? 0,
+          finished,
+          first: parts.length === 0,
+          maxCharacters: MAX_PART_CHARACTERS,
+        }) !== null),
     failed: parts.filter((part) => part.status === "failed").length,
     retry,
+    started,
+    start: () => setStarted(true),
   };
 };
 
@@ -226,6 +236,9 @@ const CleanedBlocks = ({ blocks }: { blocks: readonly Block[] }) =>
         const List = block.ordered ? "ol" : "ul";
         return (
           <List
+            {...(block.ordered && block.start !== 1
+              ? { start: block.start }
+              : {})}
             className={
               block.ordered
                 ? "flex list-decimal flex-col gap-0.5 ps-5 text-sm leading-relaxed"
@@ -329,6 +342,23 @@ export const CleanedText = ({
           <p className="text-muted-foreground text-xs">{t("waiting")}</p>
         </>
       ) : null}
+    </div>
+  );
+};
+
+/** A recording transcribed on this computer with AI cleanup off: its text
+ *  goes to the organization's AI model only when the speaker asks. */
+export const CleanupOffer = ({ onStart }: { onStart: () => void }) => {
+  const t = useTranslations("transcribe.cleaned");
+  return (
+    <div className="flex max-w-md flex-col items-start gap-3 pt-2">
+      <p className="text-sm font-semibold">{t("offerTitle")}</p>
+      <p className="text-muted-foreground text-xs text-pretty">
+        {t("offerDescription")}
+      </p>
+      <Button onClick={onStart} size="sm" variant="outline">
+        {t("offerStart")}
+      </Button>
     </div>
   );
 };

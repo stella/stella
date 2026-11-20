@@ -1167,7 +1167,10 @@
       "saveMarkdown": "Formatierter Text (.md)",
       "saveText": "Nur Text (.txt)",
       "fileNameMarkdown": "{title} bereinigt.md",
-      "fileNameText": "{title} bereinigt.txt"
+      "fileNameText": "{title} bereinigt.txt",
+      "offerTitle": "Transkript mit KI bereinigen",
+      "offerDescription": "Diese Aufnahme wurde auf diesem Computer transkribiert und die KI-Bereinigung ist in den Einstellungen aus. Beim Bereinigen wird der Text, nie der Ton, an das KI-Modell Ihrer Organisation gesendet.",
+      "offerStart": "Bereinigen"
     },
     "copyMenu": {
       "label": "Kopieroptionen",

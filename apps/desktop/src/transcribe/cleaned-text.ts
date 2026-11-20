@@ -13,7 +13,7 @@ export type Inline = { text: string; bold: boolean; italic: boolean };
 export type Block =
   | { kind: "heading"; level: 1 | 2 | 3; inline: Inline[] }
   | { kind: "paragraph"; inline: Inline[] }
-  | { kind: "list"; ordered: boolean; items: Inline[][] };
+  | { kind: "list"; ordered: boolean; start: number; items: Inline[][] };
 
 const isSpace = (character: string | undefined): boolean =>
   character === " " || character === "\t";
@@ -46,8 +46,9 @@ const bulletOf = (line: string): string | null => {
     : null;
 };
 
-/** `1. item` or `1) item`, up to three digits: the item, or null. */
-const numberedOf = (line: string): string | null => {
+/** `1. item` or `1) item`, up to three digits: its number and the item,
+ *  or null. */
+const numberedOf = (line: string): { number: number; text: string } | null => {
   const trimmed = line.trimStart();
   let digits = 0;
   while (digits < 4 && isDigit(trimmed[digits])) {
@@ -58,7 +59,10 @@ const numberedOf = (line: string): string | null => {
     digits <= 3 &&
     (mark === "." || mark === ")") &&
     isSpace(trimmed[digits + 1])
-    ? trimmed.slice(digits + 2).trim()
+    ? {
+        number: Number.parseInt(trimmed.slice(0, digits), 10),
+        text: trimmed.slice(digits + 2).trim(),
+      }
     : null;
 };
 
@@ -161,7 +165,7 @@ export const parseMarkdown = (markdown: string): Block[] => {
       });
       continue;
     }
-    const item = bullet ?? numbered;
+    const item = bullet ?? numbered?.text ?? null;
     if (item !== null) {
       flush();
       const ordered = numbered !== null;
@@ -170,7 +174,13 @@ export const parseMarkdown = (markdown: string): Block[] => {
       if (last?.kind === "list" && last.ordered === ordered) {
         last.items.push(inline);
       } else {
-        blocks.push({ kind: "list", ordered, items: [inline] });
+        // A list a later part continues keeps its numbering.
+        blocks.push({
+          kind: "list",
+          ordered,
+          start: numbered?.number ?? 1,
+          items: [inline],
+        });
       }
       continue;
     }
@@ -213,11 +223,15 @@ export const blocksToHtml = (blocks: readonly Block[]): string =>
         case "paragraph":
           return `<p>${inlineHtml(block.inline)}</p>`;
         case "list": {
-          const tag = block.ordered ? "ol" : "ul";
           const items = block.items
             .map((item) => `<li>${inlineHtml(item)}</li>`)
             .join("");
-          return `<${tag}>${items}</${tag}>`;
+          if (!block.ordered) {
+            return `<ul>${items}</ul>`;
+          }
+          return block.start === 1
+            ? `<ol>${items}</ol>`
+            : `<ol start="${block.start}">${items}</ol>`;
         }
         default:
           return "";
@@ -236,7 +250,7 @@ export const blocksToText = (blocks: readonly Block[]): string =>
           return block.items
             .map(
               (item, index) =>
-                `${block.ordered ? `${index + 1}.` : "-"} ${inlineText(item)}`,
+                `${block.ordered ? `${block.start + index}.` : "-"} ${inlineText(item)}`,
             )
             .join("\n");
         default:

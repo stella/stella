@@ -1167,7 +1167,10 @@
       "saveMarkdown": "Tekst sformatowany (.md)",
       "saveText": "Zwykły tekst (.txt)",
       "fileNameMarkdown": "{title} po korekcie.md",
-      "fileNameText": "{title} po korekcie.txt"
+      "fileNameText": "{title} po korekcie.txt",
+      "offerTitle": "Popraw transkrypcję za pomocą AI",
+      "offerDescription": "To nagranie przepisano na tym komputerze, a korekta AI jest wyłączona w Ustawieniach. Korekta wysyła tekst, nigdy dźwięk, do modelu AI Twojej organizacji.",
+      "offerStart": "Popraw"
     },
     "copyMenu": {
       "label": "Opcje kopiowania",

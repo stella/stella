@@ -1167,7 +1167,10 @@
       "saveMarkdown": "نص منسّق (.md)",
       "saveText": "نص عادي (.txt)",
       "fileNameMarkdown": "{title} منقّح.md",
-      "fileNameText": "{title} منقّح.txt"
+      "fileNameText": "{title} منقّح.txt",
+      "offerTitle": "تنقيح النص المفرّغ بالذكاء الاصطناعي",
+      "offerDescription": "فُرّغ هذا التسجيل على هذا الحاسوب، وتنقيح الذكاء الاصطناعي متوقف في الإعدادات. يرسل التنقيح النص، لا الصوت أبدًا، إلى نموذج الذكاء الاصطناعي الخاص بمؤسستك.",
+      "offerStart": "تنقيح"
     },
     "copyMenu": {
       "label": "خيارات النسخ",

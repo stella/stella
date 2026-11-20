@@ -1167,7 +1167,10 @@
       "saveMarkdown": "Formatuotas tekstas (.md)",
       "saveText": "Paprastas tekstas (.txt)",
       "fileNameMarkdown": "{title} sutvarkytas.md",
-      "fileNameText": "{title} sutvarkytas.txt"
+      "fileNameText": "{title} sutvarkytas.txt",
+      "offerTitle": "Sutvarkyti transkripciją su DI",
+      "offerDescription": "Šis įrašas transkribuotas šiame kompiuteryje, o DI tvarkymas Nustatymuose išjungtas. Tvarkant jūsų organizacijos DI modeliui siunčiamas tekstas, niekada ne garsas.",
+      "offerStart": "Sutvarkyti"
     },
     "copyMenu": {
       "label": "Kopijavimo parinktys",

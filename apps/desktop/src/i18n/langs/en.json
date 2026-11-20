@@ -1167,7 +1167,10 @@
       "saveMarkdown": "Formatted text (.md)",
       "saveText": "Plain text (.txt)",
       "fileNameMarkdown": "{title} cleaned up.md",
-      "fileNameText": "{title} cleaned up.txt"
+      "fileNameText": "{title} cleaned up.txt",
+      "offerTitle": "Clean up the transcript with AI",
+      "offerDescription": "This recording was transcribed on this computer and AI cleanup is off in Settings. Cleaning it up sends the text, never the audio, to your organization’s AI model.",
+      "offerStart": "Clean up"
     },
     "copyMenu": {
       "label": "Copy options",

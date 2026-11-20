@@ -1167,7 +1167,10 @@
       "saveMarkdown": "Texte formaté (.md)",
       "saveText": "Texte brut (.txt)",
       "fileNameMarkdown": "{title} nettoyé.md",
-      "fileNameText": "{title} nettoyé.txt"
+      "fileNameText": "{title} nettoyé.txt",
+      "offerTitle": "Nettoyer la transcription avec l’IA",
+      "offerDescription": "Cet enregistrement a été transcrit sur cet ordinateur et le nettoyage par IA est désactivé dans les paramètres. Le nettoyage envoie le texte, jamais l’audio, au modèle d’IA de votre organisation.",
+      "offerStart": "Nettoyer"
     },
     "copyMenu": {
       "label": "Options de copie",

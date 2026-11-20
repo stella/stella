@@ -1167,7 +1167,10 @@
       "saveMarkdown": "Formázott szöveg (.md)",
       "saveText": "Egyszerű szöveg (.txt)",
       "fileNameMarkdown": "{title} javított.md",
-      "fileNameText": "{title} javított.txt"
+      "fileNameText": "{title} javított.txt",
+      "offerTitle": "Átirat javítása MI-vel",
+      "offerDescription": "Ezt a felvételt ezen a számítógépen írták át, és az MI-javítás ki van kapcsolva a Beállításokban. A javítás a szöveget küldi el, soha a hangot, a szervezete MI-modelljének.",
+      "offerStart": "Javítás"
     },
     "copyMenu": {
       "label": "Másolási beállítások",
