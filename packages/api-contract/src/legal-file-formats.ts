@@ -1,4 +1,9 @@
 import { ASIC_FILE_FORMATS } from "./asic-file-formats";
+import { STRUCTURED_DOCUMENT_FORMATS } from "./structured-document-formats";
+
+export const STRUCTURED_DOCUMENT_KINDS = STRUCTURED_DOCUMENT_FORMATS.map(
+  ({ kind }) => kind,
+);
 
 export const DATA_BOX_FILE_FORMAT = {
   kind: "dataBox",
@@ -27,6 +32,7 @@ export const LEGAL_FILE_FORMATS = [
   DATA_BOX_FILE_FORMAT,
   CADES_FILE_FORMAT,
   ...ASIC_FILE_FORMATS,
+  ...STRUCTURED_DOCUMENT_FORMATS,
 ] as const;
 
 export type LegalFileFormatKind = (typeof LEGAL_FILE_FORMATS)[number]["kind"];

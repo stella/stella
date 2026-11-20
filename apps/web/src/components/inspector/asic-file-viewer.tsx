@@ -63,7 +63,7 @@ export const AsicFileViewer = ({
                 ) : null}
                 {status === "truncated" && (
                   <p className="text-muted-foreground text-sm">
-                    {t("signedFile.previewTruncated")}
+                    {t("common.previewTruncated")}
                   </p>
                 )}
                 {status === "unavailable" && (

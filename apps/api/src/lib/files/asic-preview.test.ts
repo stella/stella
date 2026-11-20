@@ -7,7 +7,7 @@ import {
 } from "@stll/api-contract/legal-file-formats";
 import { ZipArchive } from "@stll/docx-core/zip";
 
-import { readAsicPreview } from "@/api/lib/files/asic-preview";
+import { readAsicPreview } from "@/api/lib/files/archive-preview";
 import { extractFileTextResult } from "@/api/lib/search/extract-content";
 import { makeAsicFixture } from "@/api/tests/fixtures/asic";
 import { testScannedFile } from "@/api/tests/helpers/scanned-file";
