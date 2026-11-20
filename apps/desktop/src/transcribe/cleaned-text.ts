@@ -71,9 +71,45 @@ const numberedOf = (line: string): { number: number; text: string } | null => {
     : null;
 };
 
+/** Every position where `mark` could close an italic run: not after a
+ *  space, and not before a letter or digit. Found once per text, so each
+ *  opener looks its closer up instead of rescanning the rest. */
+const closersOf = (source: string, mark: string): number[] => {
+  const closers: number[] = [];
+  for (let at = 1; at < source.length; at += 1) {
+    if (
+      source[at] === mark &&
+      !isSpace(source[at - 1]) &&
+      !isWordCharacter(source[at + 1])
+    ) {
+      closers.push(at);
+    }
+  }
+  return closers;
+};
+
+/** The first entry of the ascending `positions` at or after `from`, or -1. */
+const firstAtOrAfter = (positions: readonly number[], from: number): number => {
+  let low = 0;
+  let high = positions.length;
+  while (low < high) {
+    const middle = Math.floor((low + high) / 2);
+    if ((positions[middle] ?? 0) < from) {
+      low = middle + 1;
+    } else {
+      high = middle;
+    }
+  }
+  return positions[low] ?? -1;
+};
+
 /** Where the italic run opened at `start` by `mark` closes, or -1: the
  *  mark must not touch a space inside, nor a letter or digit outside. */
-const italicEnd = (source: string, start: number, mark: string): number => {
+const italicEnd = (
+  source: string,
+  start: number,
+  closers: readonly number[],
+): number => {
   if (isWordCharacter(source[start - 1])) {
     return -1;
   }
@@ -81,16 +117,7 @@ const italicEnd = (source: string, start: number, mark: string): number => {
   if (first === undefined || isSpace(first) || first === "*" || first === "_") {
     return -1;
   }
-  for (let at = start + 2; at < source.length; at += 1) {
-    if (
-      source[at] === mark &&
-      !isSpace(source[at - 1]) &&
-      !isWordCharacter(source[at + 1])
-    ) {
-      return at;
-    }
-  }
-  return -1;
+  return firstAtOrAfter(closers, start + 2);
 };
 
 /** Bold (`**`) and italic (`*` or `_`) runs; unmatched marks stay text. */
@@ -107,6 +134,7 @@ export const parseInline = (source: string): Inline[] => {
     }
     runs.push({ text, bold, italic });
   };
+  const closers = { "*": closersOf(source, "*"), _: closersOf(source, "_") };
   let plain = "";
   let at = 0;
   while (at < source.length) {
@@ -124,7 +152,7 @@ export const parseInline = (source: string): Inline[] => {
     }
     const mark = source[at] ?? "";
     if (mark === "*" || mark === "_") {
-      const close = italicEnd(source, at, mark);
+      const close = italicEnd(source, at, closers[mark]);
       if (close !== -1) {
         push(plain, false, false);
         plain = "";

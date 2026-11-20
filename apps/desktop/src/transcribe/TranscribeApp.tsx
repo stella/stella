@@ -27,7 +27,6 @@ import {
   cleanedMarkdown,
   escapeHtmlText,
   paragraphsToHtml,
-  parseMarkdown,
 } from "./cleaned-text";
 import {
   afterRefusedStart,
@@ -754,7 +753,7 @@ const ResultScreen = ({
     autoStart: session.autoCleanup,
   });
   const [copyFormat, setCopyFormat] = useCopyFormat();
-  const cleanedBlocks = parseMarkdown(cleanup.markdown);
+  const cleanedBlocks = cleanup.blocks;
   const cleanedReady = !cleanup.running && cleanup.parts.length > 0;
   const save = async (
     text: string,

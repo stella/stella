@@ -60,6 +60,14 @@ describe("parseMarkdown", () => {
     );
   });
 
+  // Each unmatched opener looks its closer up once; a rescan per opener
+  // would run billions of steps here and time the test out.
+  test("many unmatched italic marks stay text", () => {
+    const source = "*a ".repeat(50_000);
+    const runs = parseInline(source);
+    expect(runs).toEqual([{ text: source, bold: false, italic: false }]);
+  });
+
   test("keeps unmatched marks and markup as text", () => {
     expect(parseInline("5 * 3 = 15 a <b>x</b>")).toEqual([
       { text: "5 * 3 = 15 a <b>x</b>", bold: false, italic: false },

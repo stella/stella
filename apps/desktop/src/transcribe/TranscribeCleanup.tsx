@@ -41,6 +41,11 @@ type RecordingCleanup = {
   instructions: string[];
   markdown: string;
   running: boolean;
+  /** Each part's blocks, read separately so a list in one part never
+   *  continues another's numbering. */
+  blocks: Block[];
+  /** A part is being cleaned up; Try again waits for it. */
+  busy: boolean;
   failed: number;
   retry: (index: number) => void;
   /** Whether cleanup runs: on its own, or once the speaker asked. */
@@ -67,7 +72,12 @@ const requestCleanup = async (
       request: { job, transcript, previousText },
     }),
   );
-  return Result.isOk(result) && isCleanedPart(result.value)
+  // An answer with neither text nor instructions lost the part: it is
+  // shown as transcribed, with Try again.
+  return Result.isOk(result) &&
+    isCleanedPart(result.value) &&
+    (result.value.markdown.trim() !== "" ||
+      result.value.instructions.length > 0)
     ? result.value
     : null;
 };
@@ -149,7 +159,11 @@ export const useRecordingCleanup = ({
   const retry = useCallback(
     (index: number) => {
       const part = parts[index];
-      if (part?.status !== "failed") {
+      // One request at a time: a retry waits until the running part ends.
+      if (
+        part?.status !== "failed" ||
+        parts.some((entry) => entry.status === "running")
+      ) {
         return;
       }
       setParts((current) =>
@@ -182,6 +196,15 @@ export const useRecordingCleanup = ({
           first: parts.length === 0,
           maxCharacters: MAX_PART_CHARACTERS,
         }) !== null),
+    blocks: parts.flatMap((part) =>
+      part.result === null
+        ? part.text.split("\n\n").map((text) => ({
+            kind: "paragraph" as const,
+            inline: [{ text, bold: false, italic: false }],
+          }))
+        : parseMarkdown(part.result.markdown),
+    ),
+    busy: parts.some((part) => part.status === "running"),
     failed: parts.filter((part) => part.status === "failed").length,
     retry,
     started,
@@ -321,6 +344,7 @@ export const CleanedText = ({
                 />
                 <p className="flex-1 text-pretty">{t("partFailed")}</p>
                 <Button
+                  disabled={cleanup.busy}
                   onClick={() => cleanup.retry(index)}
                   size="xs"
                   variant="ghost"
