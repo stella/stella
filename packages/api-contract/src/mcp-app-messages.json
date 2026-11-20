@@ -144,7 +144,18 @@
     "supportive": "متَّبع",
     "mixed": "متباين",
     "unclassified": "غير مصنَّف",
-    "noDecisionText": "لا يتوفر نص الحكم"
+    "noDecisionText": "لا يتوفر نص الحكم",
+    "decisionLinkUnavailable": "لا يوجد رابط لفتح هذا الحكم.",
+    "searchQueryRequired": "أدخل عبارة بحث.",
+    "lastSearchResultsPage": "هذه آخر صفحة من النتائج.",
+    "hostToolsUnavailable": "افتح هذا التطبيق في برنامج يدعم أدوات stella.",
+    "citationsAlreadyExpanded": "الاستشهادات بهذا الحكم موسّعة بالفعل.",
+    "citationExpansionLimitReached": "بلغ مخطط الاستشهادات الحد الأقصى للتوسيع.",
+    "timelineNoAdjacentVersion": "لا توجد نسخة مجاورة للمقارنة.",
+    "timelineComparisonRequiresWording": "يجب أن يتوفر نص النسختين لمقارنتهما.",
+    "chooseUploadFile": "اختر ملفًا لرفعه.",
+    "waitingForUploadTarget": "بانتظار تحديد المستند الذي سيُرفع الملف إليه.",
+    "chooseComparisonFiles": "اختر الملف الأصلي والملف المعدّل."
   },
   "cs": {
     "constitutional": "Ústavní soudy",
@@ -291,7 +302,18 @@
     "supportive": "Následováno",
     "mixed": "Smíšené",
     "unclassified": "Neklasifikováno",
-    "noDecisionText": "Rozhodnutí nemá text"
+    "noDecisionText": "Rozhodnutí nemá text",
+    "decisionLinkUnavailable": "Toto rozhodnutí nemá odkaz k otevření.",
+    "searchQueryRequired": "Zadejte hledaný výraz.",
+    "lastSearchResultsPage": "Toto je poslední stránka výsledků.",
+    "hostToolsUnavailable": "Otevřete tuto aplikaci v klientu, který podporuje nástroje stella.",
+    "citationsAlreadyExpanded": "Citace tohoto rozhodnutí už jsou rozbalené.",
+    "citationExpansionLimitReached": "Graf citací dosáhl limitu rozbalení.",
+    "timelineNoAdjacentVersion": "Není k dispozici sousední verze k porovnání.",
+    "timelineComparisonRequiresWording": "K porovnání musí být dostupné znění obou verzí.",
+    "chooseUploadFile": "Vyberte soubor k nahrání.",
+    "waitingForUploadTarget": "Čeká se na určení dokumentu, do kterého se soubor nahraje.",
+    "chooseComparisonFiles": "Vyberte původní i upravený soubor."
   },
   "de": {
     "constitutional": "Verfassungsgerichte",
@@ -438,7 +460,18 @@
     "supportive": "Gefolgt",
     "mixed": "Uneinheitlich",
     "unclassified": "Nicht eingeordnet",
-    "noDecisionText": "Kein Entscheidungstext"
+    "noDecisionText": "Kein Entscheidungstext",
+    "decisionLinkUnavailable": "Für diese Entscheidung ist kein Link zum Öffnen verfügbar.",
+    "searchQueryRequired": "Geben Sie einen Suchbegriff ein.",
+    "lastSearchResultsPage": "Sie befinden sich auf der letzten Ergebnisseite.",
+    "hostToolsUnavailable": "Öffnen Sie diese App in einem Client, der stella-Tools unterstützt.",
+    "citationsAlreadyExpanded": "Die Zitate dieser Entscheidung sind bereits ausgeklappt.",
+    "citationExpansionLimitReached": "Der Zitiergraph hat sein Erweiterungslimit erreicht.",
+    "timelineNoAdjacentVersion": "Es gibt keine benachbarte Version zum Vergleichen.",
+    "timelineComparisonRequiresWording": "Für den Vergleich muss der Wortlaut beider Versionen vorliegen.",
+    "chooseUploadFile": "Wählen Sie eine Datei zum Hochladen aus.",
+    "waitingForUploadTarget": "Das Dokument, zu dem die Datei hochgeladen wird, steht noch nicht fest.",
+    "chooseComparisonFiles": "Wählen Sie die Originaldatei und die überarbeitete Datei aus."
   },
   "en": {
     "constitutional": "Constitutional courts",
@@ -585,7 +618,18 @@
     "supportive": "Followed",
     "mixed": "Mixed",
     "unclassified": "Unclassified",
-    "noDecisionText": "No decision text"
+    "noDecisionText": "No decision text",
+    "decisionLinkUnavailable": "There is no link to open this decision.",
+    "searchQueryRequired": "Enter a search query.",
+    "lastSearchResultsPage": "You are on the last page of results.",
+    "hostToolsUnavailable": "Open this app in a client that supports stella tools.",
+    "citationsAlreadyExpanded": "Citations for this decision are already expanded.",
+    "citationExpansionLimitReached": "The citation graph has reached its expansion limit.",
+    "timelineNoAdjacentVersion": "There is no adjacent version to compare.",
+    "timelineComparisonRequiresWording": "The wording of both versions must be available to compare them.",
+    "chooseUploadFile": "Choose a file to upload.",
+    "waitingForUploadTarget": "Waiting for the document to upload to.",
+    "chooseComparisonFiles": "Choose both the original and revised files."
   },
   "et": {
     "constitutional": "Põhiseaduslikkuse järelevalve kohtud",
@@ -732,7 +776,18 @@
     "supportive": "Järgitud",
     "mixed": "Vastuoluline",
     "unclassified": "Liigitamata",
-    "noDecisionText": "Lahendi tekst puudub"
+    "noDecisionText": "Lahendi tekst puudub",
+    "decisionLinkUnavailable": "Selle kohtulahendi avamiseks pole linki.",
+    "searchQueryRequired": "Sisestage otsingusõna.",
+    "lastSearchResultsPage": "Olete tulemuste viimasel lehel.",
+    "hostToolsUnavailable": "Avage see rakendus kliendis, mis toetab stella tööriistu.",
+    "citationsAlreadyExpanded": "Selle lahendi viited on juba laiendatud.",
+    "citationExpansionLimitReached": "Viitegraaf on jõudnud laiendamise piirini.",
+    "timelineNoAdjacentVersion": "Võrdlemiseks pole kõrvutist versiooni.",
+    "timelineComparisonRequiresWording": "Võrdlemiseks peab mõlema versiooni sõnastus olema kättesaadav.",
+    "chooseUploadFile": "Valige üleslaaditav fail.",
+    "waitingForUploadTarget": "Oodatakse dokumenti, kuhu fail üles laadida.",
+    "chooseComparisonFiles": "Valige nii algne kui ka muudetud fail."
   },
   "fr": {
     "constitutional": "Juridictions constitutionnelles",
@@ -879,7 +934,18 @@
     "supportive": "Suivie",
     "mixed": "Mitigée",
     "unclassified": "Non classée",
-    "noDecisionText": "Texte de la décision absent"
+    "noDecisionText": "Texte de la décision absent",
+    "decisionLinkUnavailable": "Aucun lien ne permet d’ouvrir cette décision de justice.",
+    "searchQueryRequired": "Saisissez un terme de recherche.",
+    "lastSearchResultsPage": "Vous êtes sur la dernière page de résultats.",
+    "hostToolsUnavailable": "Ouvrez cette application dans un client compatible avec les outils stella.",
+    "citationsAlreadyExpanded": "Les citations de cette décision sont déjà développées.",
+    "citationExpansionLimitReached": "Le graphe des citations a atteint sa limite de développement.",
+    "timelineNoAdjacentVersion": "Il n’y a pas de version adjacente à comparer.",
+    "timelineComparisonRequiresWording": "Le texte des deux versions doit être disponible pour les comparer.",
+    "chooseUploadFile": "Sélectionnez un fichier à importer.",
+    "waitingForUploadTarget": "En attente du document auquel ajouter le fichier.",
+    "chooseComparisonFiles": "Sélectionnez le fichier d’origine et le fichier révisé."
   },
   "hu": {
     "constitutional": "Alkotmánybíróságok",
@@ -1026,7 +1092,18 @@
     "supportive": "Követett",
     "mixed": "Vegyes",
     "unclassified": "Besorolatlan",
-    "noDecisionText": "Nincs határozatszöveg"
+    "noDecisionText": "Nincs határozatszöveg",
+    "decisionLinkUnavailable": "Ehhez a határozathoz nincs megnyitható hivatkozás.",
+    "searchQueryRequired": "Adjon meg egy keresőkifejezést.",
+    "lastSearchResultsPage": "A találatok utolsó oldalán van.",
+    "hostToolsUnavailable": "Nyissa meg ezt az alkalmazást a stella eszközeit támogató kliensben.",
+    "citationsAlreadyExpanded": "Ennek a határozatnak a hivatkozásai már ki vannak bontva.",
+    "citationExpansionLimitReached": "A hivatkozási gráf elérte a kibontási korlátot.",
+    "timelineNoAdjacentVersion": "Nincs szomszédos verzió az összehasonlításhoz.",
+    "timelineComparisonRequiresWording": "Az összehasonlításhoz mindkét verzió szövegének elérhetőnek kell lennie.",
+    "chooseUploadFile": "Válasszon ki egy fájlt a feltöltéshez.",
+    "waitingForUploadTarget": "Várakozás a feltöltés céljául szolgáló dokumentumra.",
+    "chooseComparisonFiles": "Válassza ki az eredeti és a módosított fájlt is."
   },
   "lv": {
     "constitutional": "Konstitucionālās tiesas",
@@ -1173,7 +1250,18 @@
     "supportive": "Sekots",
     "mixed": "Pretrunīgs",
     "unclassified": "Neklasificēts",
-    "noDecisionText": "Nav nolēmuma teksta"
+    "noDecisionText": "Nav nolēmuma teksta",
+    "decisionLinkUnavailable": "Nav saites šī nolēmuma atvēršanai.",
+    "searchQueryRequired": "Ievadiet meklēšanas vaicājumu.",
+    "lastSearchResultsPage": "Šī ir pēdējā rezultātu lapa.",
+    "hostToolsUnavailable": "Atveriet šo lietotni klientā, kas atbalsta stella rīkus.",
+    "citationsAlreadyExpanded": "Šī nolēmuma atsauces jau ir izvērstas.",
+    "citationExpansionLimitReached": "Atsauču grafiks ir sasniedzis izvēršanas ierobežojumu.",
+    "timelineNoAdjacentVersion": "Nav blakus esošas versijas, ar ko salīdzināt.",
+    "timelineComparisonRequiresWording": "Lai salīdzinātu abas versijas, jābūt pieejamam abu versiju tekstam.",
+    "chooseUploadFile": "Izvēlieties augšupielādējamu failu.",
+    "waitingForUploadTarget": "Tiek gaidīts dokuments, kuram pievienot failu.",
+    "chooseComparisonFiles": "Izvēlieties gan oriģinālo, gan laboto failu."
   },
   "lt": {
     "constitutional": "Konstituciniai teismai",
@@ -1320,7 +1408,18 @@
     "supportive": "Sekama",
     "mixed": "Mišrus",
     "unclassified": "Neklasifikuota",
-    "noDecisionText": "Nėra sprendimo teksto"
+    "noDecisionText": "Nėra sprendimo teksto",
+    "decisionLinkUnavailable": "Nėra nuorodos, kuria būtų galima atverti šį sprendimą.",
+    "searchQueryRequired": "Įveskite paieškos užklausą.",
+    "lastSearchResultsPage": "Tai paskutinis rezultatų puslapis.",
+    "hostToolsUnavailable": "Atverkite šią programą kliente, kuris palaiko stella įrankius.",
+    "citationsAlreadyExpanded": "Šio sprendimo citatos jau išskleistos.",
+    "citationExpansionLimitReached": "Citatų grafikas pasiekė išskleidimo ribą.",
+    "timelineNoAdjacentVersion": "Nėra gretimos versijos, su kuria būtų galima palyginti.",
+    "timelineComparisonRequiresWording": "Norint palyginti abi versijas, turi būti prieinamas jų tekstas.",
+    "chooseUploadFile": "Pasirinkite įkeliamą failą.",
+    "waitingForUploadTarget": "Laukiama dokumento, į kurį bus įkeltas failas.",
+    "chooseComparisonFiles": "Pasirinkite originalų ir pakeistą failus."
   },
   "pl": {
     "constitutional": "Trybunały konstytucyjne",
@@ -1467,7 +1566,18 @@
     "supportive": "Podzielone",
     "mixed": "Mieszane",
     "unclassified": "Niesklasyfikowane",
-    "noDecisionText": "Brak tekstu orzeczenia"
+    "noDecisionText": "Brak tekstu orzeczenia",
+    "decisionLinkUnavailable": "Brak linku do otwarcia tego orzeczenia.",
+    "searchQueryRequired": "Wpisz zapytanie.",
+    "lastSearchResultsPage": "To ostatnia strona wyników.",
+    "hostToolsUnavailable": "Otwórz tę aplikację w kliencie obsługującym narzędzia stella.",
+    "citationsAlreadyExpanded": "Cytowania tego orzeczenia są już rozwinięte.",
+    "citationExpansionLimitReached": "Graf cytowań osiągnął limit rozwijania.",
+    "timelineNoAdjacentVersion": "Brak sąsiedniej wersji do porównania.",
+    "timelineComparisonRequiresWording": "Aby porównać wersje, potrzebny jest tekst obu wersji.",
+    "chooseUploadFile": "Wybierz plik do przesłania.",
+    "waitingForUploadTarget": "Oczekiwanie na dokument, do którego ma zostać przesłany plik.",
+    "chooseComparisonFiles": "Wybierz plik oryginalny i plik po zmianach."
   },
   "pt-BR": {
     "constitutional": "Tribunais constitucionais",
@@ -1614,7 +1724,18 @@
     "supportive": "Seguida",
     "mixed": "Mista",
     "unclassified": "Não classificada",
-    "noDecisionText": "Sem texto da decisão"
+    "noDecisionText": "Sem texto da decisão",
+    "decisionLinkUnavailable": "Não há um link para abrir esta decisão.",
+    "searchQueryRequired": "Digite um termo de pesquisa.",
+    "lastSearchResultsPage": "Você está na última página de resultados.",
+    "hostToolsUnavailable": "Abra este aplicativo em um cliente compatível com as ferramentas da stella.",
+    "citationsAlreadyExpanded": "As citações desta decisão já estão expandidas.",
+    "citationExpansionLimitReached": "O grafo de citações atingiu o limite de expansão.",
+    "timelineNoAdjacentVersion": "Não há uma versão adjacente para comparar.",
+    "timelineComparisonRequiresWording": "O texto das duas versões precisa estar disponível para compará-las.",
+    "chooseUploadFile": "Selecione um arquivo para enviar.",
+    "waitingForUploadTarget": "Aguardando o documento que receberá o arquivo.",
+    "chooseComparisonFiles": "Selecione os arquivos original e revisado."
   },
   "sk": {
     "constitutional": "Ústavné súdy",
@@ -1761,7 +1882,18 @@
     "supportive": "Nasledované",
     "mixed": "Zmiešané",
     "unclassified": "Neklasifikované",
-    "noDecisionText": "Rozhodnutie nemá text"
+    "noDecisionText": "Rozhodnutie nemá text",
+    "decisionLinkUnavailable": "Na otvorenie tohto rozhodnutia nie je k dispozícii odkaz.",
+    "searchQueryRequired": "Zadajte hľadaný výraz.",
+    "lastSearchResultsPage": "Toto je posledná strana výsledkov.",
+    "hostToolsUnavailable": "Otvorte túto aplikáciu v klientovi, ktorý podporuje nástroje stella.",
+    "citationsAlreadyExpanded": "Citácie tohto rozhodnutia už sú rozbalené.",
+    "citationExpansionLimitReached": "Graf citácií dosiahol limit rozbalenia.",
+    "timelineNoAdjacentVersion": "Nie je k dispozícii susedná verzia na porovnanie.",
+    "timelineComparisonRequiresWording": "Na porovnanie musí byť dostupné znenie oboch verzií.",
+    "chooseUploadFile": "Vyberte súbor na nahratie.",
+    "waitingForUploadTarget": "Čaká sa na určenie dokumentu, do ktorého sa súbor nahrá.",
+    "chooseComparisonFiles": "Vyberte pôvodný aj upravený súbor."
   },
   "es": {
     "constitutional": "Tribunales constitucionales",
@@ -1908,6 +2040,17 @@
     "supportive": "Seguida",
     "mixed": "Mixta",
     "unclassified": "Sin clasificar",
-    "noDecisionText": "Sin texto de la resolución"
+    "noDecisionText": "Sin texto de la resolución",
+    "decisionLinkUnavailable": "No hay un enlace para abrir esta resolución judicial.",
+    "searchQueryRequired": "Introduzca un término de búsqueda.",
+    "lastSearchResultsPage": "Está en la última página de resultados.",
+    "hostToolsUnavailable": "Abra esta aplicación en un cliente compatible con las herramientas de stella.",
+    "citationsAlreadyExpanded": "Las citas de esta resolución ya están desplegadas.",
+    "citationExpansionLimitReached": "El grafo de citas ha alcanzado su límite de expansión.",
+    "timelineNoAdjacentVersion": "No hay una versión contigua con la que comparar.",
+    "timelineComparisonRequiresWording": "Para comparar las versiones, debe estar disponible el texto de ambas.",
+    "chooseUploadFile": "Seleccione un archivo para cargarlo.",
+    "waitingForUploadTarget": "A la espera del documento al que se cargará el archivo.",
+    "chooseComparisonFiles": "Seleccione tanto el archivo original como el revisado."
   }
 }
