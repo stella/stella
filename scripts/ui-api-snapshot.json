@@ -2155,6 +2155,7 @@
     ],
     "DateRangeFilter.size": ["compact", "touch"],
     "DateRangeFilter.variant": ["field", "inline"],
+    "DetailsGrid.density": ["compact", "default"],
     "DetailsGrid.labelWidth": ["auto", "lg", "md", "sm"],
     "DetailsGrid.orientation": ["auto", "horizontal", "vertical"],
     "DetailsGrid.variant": ["list", "sheet"],

@@ -118,8 +118,10 @@ const VALUE_CLASS_NAME = {
 type DetailsGridProps = React.ComponentProps<"dl"> & {
   labelWidth?: DetailsLabelWidth;
   orientation?: DetailsOrientation;
-  variant?: DetailsVariant;
-};
+} & (
+    | { variant?: "sheet"; density?: "default" | "compact" }
+    | { variant: "list"; density?: never }
+  );
 
 // A query container is size-contained, so its content no longer sizes it: in
 // a content-sized host (a popover, a `w-max` box) the sheet measured 0px wide
@@ -127,6 +129,7 @@ type DetailsGridProps = React.ComponentProps<"dl"> & {
 // instead; `min-w-0` still lets a narrower host shrink it.
 const DetailsGrid = ({
   className,
+  density,
   labelWidth,
   orientation = "horizontal",
   variant = "sheet",
@@ -191,7 +194,8 @@ const DetailsGrid = ({
       >
         <dl
           className={cn(
-            "grid grid-cols-[repeat(auto-fit,minmax(min(100%,20rem),1fr))] gap-x-6 gap-y-2 font-sans @min-[64rem]:grid-cols-3",
+            "grid grid-cols-[repeat(auto-fit,minmax(min(100%,20rem),1fr))] gap-x-6 font-sans @min-[64rem]:grid-cols-3",
+            density === "compact" ? "gap-y-1.5" : "gap-y-2",
             className,
           )}
           data-slot="details-grid"
