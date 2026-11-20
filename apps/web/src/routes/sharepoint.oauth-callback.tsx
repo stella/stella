@@ -29,6 +29,7 @@ const OAUTH_REASON_KEYS = {
   "not-configured": "sharepoint.oauthReasons.notConfigured",
   "token-exchange": "sharepoint.oauthReasons.tryAgain",
   "invalid-secret": "sharepoint.oauthReasons.tryAgain",
+  "capability-not-granted": "sharepoint.oauthReasons.consentDenied",
   unexpected: "sharepoint.oauthReasons.tryAgain",
 } as const satisfies Record<SharepointOAuthCallbackReason, TranslationKey>;
 

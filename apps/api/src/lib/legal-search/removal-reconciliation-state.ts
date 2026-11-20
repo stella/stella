@@ -19,6 +19,14 @@ const activeRemovalCheckpointSchema = v.variant("status", [
     status: v.literal("waiting"),
     nextCycleAt: apiDateTimeSchema,
   }),
+  /**
+   * After the source's own decisions: its records held as attachments to
+   * other sources' decisions, in publisher-id order after `after`.
+   */
+  v.strictObject({
+    status: v.literal("running-attachments"),
+    after: v.nullable(v.pipe(v.string(), v.minLength(1), v.maxLength(256))),
+  }),
 ]);
 
 export const removalCheckpointSchema = v.variant("status", [

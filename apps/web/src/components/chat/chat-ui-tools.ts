@@ -348,6 +348,8 @@ export const isNonPersistentGrantChatToolName = (toolName: string): boolean =>
  * renders the write summary before it typechecks.
  */
 const REGISTRY_WRITE_SUMMARY_TOOL_NAMES = {
+  calendar_list_events: false,
+  calendar_free_busy: false,
   add_comment: false,
   boe_find_related_laws: false,
   boe_get_law: false,

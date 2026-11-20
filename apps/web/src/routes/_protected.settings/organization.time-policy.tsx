@@ -1,13 +1,13 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
-import { useTranslations } from "use-intl";
 
 import { isTimeBillingRouteEnabled } from "@/hooks/use-time-billing-preview";
 import { pageTitle } from "@/lib/page-title";
 import { ensureRouteQueryData } from "@/lib/react-query";
 import { organizationSettingsOptions } from "@/queries/organization-settings";
 import { routePresentation } from "@/routes/-route-presentation";
-import { SettingsPageHeader } from "@/routes/_protected.settings/-components/settings-page-header.pending";
-import { TimePolicyCard } from "@/routes/_protected.settings/organization/-components/organization/time-policy-card";
+
+import { TimePolicyPage } from "./-organization.time-policy.page";
+import { TimePolicyPending } from "./-organization.time-policy.pending";
 
 export const Route = createFileRoute(
   "/_protected/settings/organization/time-policy",
@@ -46,17 +46,5 @@ export const Route = createFileRoute(
     meta: [{ title: pageTitle("settings.organization.timePolicy.title") }],
   }),
   component: TimePolicyPage,
+  pendingComponent: TimePolicyPending,
 });
-
-function TimePolicyPage() {
-  const t = useTranslations();
-  return (
-    <>
-      <SettingsPageHeader
-        title={t("settings.organization.timePolicy.title")}
-        description={t("settings.organization.timePolicy.description")}
-      />
-      <TimePolicyCard />
-    </>
-  );
-}

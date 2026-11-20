@@ -2323,7 +2323,7 @@
       }
     },
     "sourceChips": {
-      "alsoConsulted": "Také konzultováno ({count, number})"
+      "moreConsulted": "{count, plural, one {+# další prověřený} few {+# další prověřené} many {+# dalšího prověřeného} other {+# dalších prověřených}}"
     },
     "sourcePlaceholder": "Chatovat o {title}",
     "sourcePlaceholderAction": "Chatovat o",
@@ -2407,6 +2407,8 @@
       "boe_search_legislation": "Vyhledávání v BOE",
       "borme_get_summary": "Denní souhrn BORME",
       "business_registry_lookup": "Vyhledávání v obchodním rejstříku",
+      "calendar_free_busy": "Zjištění dostupnosti v kalendáři",
+      "calendar_list_events": "Čtení událostí kalendáře",
       "command_execution": "Spouštění příkazu",
       "compare_versions": "Porovnávání verzí",
       "configure_template_fields": "Nastavit pole vzoru",
@@ -4717,6 +4719,10 @@
       "dropPack": "Přetáhněte sem .zip/.skill nebo SKILL.md a dovednost se naimportuje",
       "editSkill": "Upravit dovednost",
       "enableSkill": "Zapnout dovednost",
+      "exportAsSkill": "Uložit jako .skill",
+      "exportAsZip": "Uložit jako .zip",
+      "exportFailed": "Dovednost se nepodařilo uložit do souboru",
+      "exportSkill": "Uložit dovednost do souboru",
       "fileExists": "Soubor s touto cestou již existuje",
       "howItRuns": "Jak se spouští",
       "importFailureFetch": "Zdroj dovednosti se nepodařilo načíst.",
@@ -5409,6 +5415,11 @@
       "googleKeyRestricted": "V Google Cloud zkontrolujte omezení klíče podle API, IP adres a odkazujících webů. Povolte potřebné API a požadavky svého serveru a zkuste to znovu.",
       "keepSavedKey": "Ponechat uložený klíč",
       "keyFormatHint": "Tento klíč má pro {provider} neobvyklý formát. Uložením jej ověříte u poskytovatele.",
+      "keyNeed": {
+        "builtIn": "Nepovinné. Bez vlastního klíče běží AI v této organizaci na modelech, které poskytuje stella.",
+        "keyRequired": "AI v této organizaci potřebuje klíč poskytovatele. Přidejte ho a AI se zapne.",
+        "ownKeys": "AI v této organizaci běží na klíčích níže."
+      },
       "modelForRole": "Model pro roli {role}",
       "modelIdPlaceholder": "Hledat modely",
       "modelsDescription": "Pro každou kategorii AI vyberte poskytovatele a jeden nabízený multimodální model.",
@@ -5416,6 +5427,7 @@
       "newApiKey": "Nový API klíč",
       "newApiKeyDescription": "Po uložení změn nahradí uložený klíč.",
       "noModelResults": "Žádné odpovídající nabízené modely",
+      "noProviders": "Zatím nejsou přidané žádné klíče poskytovatelů.",
       "openaiInsufficientQuota": "Zkontrolujte rozpočet projektu OpenAI a fakturaci API. Doplňte kredit nebo zvyšte příslušný limit a zkuste to znovu.",
       "openaiProjectOrganizationMismatch": "Použijte API klíč z požadovaného projektu a organizace OpenAI. Zkontrolujte jejich nastavení přístupu a zkuste to znovu.",
       "openrouterNoCredits": "Doplňte kredit ve fakturaci OpenRouter a zkuste to znovu.",
@@ -5438,6 +5450,8 @@
       "providerForRole": "Poskytovatel pro {role}",
       "providerKeyInvalid": "{provider} odmítl klíč. Zkontrolujte ho před uložením.",
       "providerKeyInvalidShort": "Neplatný",
+      "providerModes": "Používá se pro: {modes}",
+      "providerModesNone": "Nepoužívá se pro žádný mód. Přiřaďte ho módu v části Pokročilé.",
       "providerSetupConsole": "Otevřít nastavení poskytovatele",
       "providersDescription": "Přidejte přihlašovací údaje poskytovatelů, které má stella používat.",
       "providersPanel": "Poskytovatelé",
@@ -5464,6 +5478,7 @@
       "title": "Pokyny organizace",
       "tooLong": "Pokyny mohou obsahovat nejvýše {maxLength} znaků."
     },
+    "createdSwitchPrompt": "Organizace <bdi>{name}</bdi> byla vytvořena. Přepněte se do ní, abyste ji mohli nastavit a pozvat členy.",
     "creationEvaluationLimitReached": "Využili jste všechna {limit} zkušební období organizací. Smazáním organizace se zkušební období neobnoví. Použijte existující organizaci nebo kontaktujte podporu a domluvte si placený přístup.",
     "creationInvalidName": "Zadejte platný název organizace (nejvýše {maxLength} znaků).",
     "creationNotAllowed": "Tento účet nemůže vytvářet organizace.",
@@ -5535,6 +5550,13 @@
     "startOverDescription": "Původní požadavek už mohl organizaci vytvořit. Než začnete znovu, zkontrolujte své organizace; nový požadavek by mohl vytvořit další organizaci.",
     "startOverTitle": "Zahájit nový požadavek na vytvoření?",
     "switchOrganization": "Přepnout organizaci"
+  },
+  "organizationSetup": {
+    "aiAction": "Nastavit AI",
+    "aiOptional": "Vlastní klíče poskytovatelů AI jsou nepovinné: bez nich běží AI na modelech, které poskytuje stella.",
+    "aiRequired": "AI v této organizaci potřebuje klíč poskytovatele, jinak ji nikdo nemůže používat.",
+    "invite": "Pozvěte kolegy, aby tu mohli pracovat s vámi.",
+    "title": "Nastavte novou organizaci"
   },
   "publicTools": {
     "addSkill": "Přidat dovednost",
@@ -5975,7 +5997,7 @@
     "organization": {
       "activeMembers": "Aktivní členové",
       "ai": "Nastavení AI",
-      "aiDescription": "Připojte vlastní klíče poskytovatelů AI.",
+      "aiDescription": "Nastavte, jak v této organizaci funguje AI.",
       "anonymization": {
         "addPlaceholder": "Pojem, který se má vždy maskovat (např. název týmu)",
         "deleteAction": "Smazat pojem",
@@ -6141,7 +6163,7 @@
         "title": "AI návrhy výkazů práce"
       },
       "dataBoxes": {
-        "description": "Datová zpráva odeslaná z některé z těchto schránek se založí jako odchozí, zpráva do nich jako příchozí. Každá změna znovu odvodí směr zpráv již založených ve spisech, ke kterým máte přístup.",
+        "description": "Zprávy odeslané z těchto schránek se zakládají jako odchozí, zprávy do nich jako příchozí. Změny se projeví i u již založených zpráv.",
         "invalid": "ID datové schránky má sedm písmen nebo číslic.",
         "remove": "Odebrat datovou schránku {address}",
         "title": "Datové schránky organizace"
@@ -6174,6 +6196,7 @@
         "title": "Extrakce paměti",
         "toggleLabel": "Navrhovat záznamy do paměti z historie chatů na pozadí"
       },
+      "organizationIdHint": "Trvalé ID, které se nikdy nemění. Použijte ho při kontaktu s podporou nebo při nastavování integrací.",
       "pastInvitations": "Dřívější pozvánky",
       "pendingInvitations": "Čekající pozvánky",
       "practiceJurisdictions": "Jurisdikce",
@@ -6187,11 +6210,12 @@
       "renameTitle": "Přejmenovat organizaci",
       "renameTypeToConfirm": "Pro potvrzení napište nový název: {name}",
       "slug": {
-        "change": "Změnit identifikátor",
-        "conflict": "Tento identifikátor již používá jiná organizace.",
-        "description": "Zvolte nový identifikátor nebo vygenerujte náhodný. Původní identifikátor přestane fungovat.",
-        "opaque": "Vygenerovat náhodný identifikátor",
-        "title": "Identifikátor organizace"
+        "change": "Změnit krátký název",
+        "conflict": "Tento krátký název již používá jiná organizace.",
+        "description": "Zvolte nový krátký název nebo vygenerujte náhodný. Původní krátký název přestane fungovat.",
+        "hint": "Jedinečný krátký název organizace, nezávislý na jejím zobrazovaném názvu.",
+        "opaque": "Vygenerovat náhodný krátký název",
+        "title": "Krátký název organizace"
       },
       "timePolicy": {
         "description": "Nastavte zaokrouhlování času, omezení úprav a uzamykání měsíců.",

@@ -388,6 +388,12 @@ const buildCapabilityLeafFlags = (
     RESERVED_FLAG_KEYS.schema,
     booleanFlag("Print this command's input JSON schema and exit", false),
   );
+  flags.set(
+    RESERVED_FLAG_KEYS.save,
+    parsedStringFlag(
+      "Write the file the result's downloadUrl points to at this path (-o); for commands that return a download link",
+    ),
+  );
   if (spec.access === "write") {
     flags.set(
       RESERVED_FLAG_KEYS.dryRun,
@@ -453,7 +459,7 @@ const buildCapabilityLeafCommand = (
       brief,
       ...(description === undefined ? {} : { fullDescription: description }),
     },
-    parameters: { flags },
+    parameters: { aliases: { o: RESERVED_FLAG_KEYS.save }, flags },
     func: async function func(
       this: Context,
       parsedFlags: Record<string, unknown>,

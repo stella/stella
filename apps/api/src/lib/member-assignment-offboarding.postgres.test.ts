@@ -1256,6 +1256,7 @@ if (!databaseUrl || !runPostgresTests) {
             accessTokenEncrypted: Buffer.from("fixture"),
             accessTokenIv: Buffer.from("fixture"),
             status: "connected" as const,
+            scope: "Files.Read.All Sites.Read.All",
           })),
         );
         await db.insert(sharepointOAuthState).values({

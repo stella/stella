@@ -14,6 +14,10 @@ import {
 } from "./button-classes";
 import type { ButtonTokenVariant } from "./button.shared";
 import {
+  FIELD_CLASS_NAME,
+  FIELD_DESCRIPTION_CLASS_NAME,
+} from "./field-classes";
+import {
   INPUT_CONTROL_CLASS_NAME,
   INPUT_ELEMENT_CLASS_NAME,
   INPUT_SIZE_CLASS_NAMES,
@@ -335,6 +339,73 @@ export const LabelFace = ({
   >
     {children}
   </span>
+);
+
+/**
+ * How a field's face lays out its parts, in `Form`'s names: `stack` puts the
+ * caption over the control over its lines (the field's column), `inline` a
+ * checkbox or switch beside its caption.
+ */
+type FieldFaceLayout = "stack" | "inline";
+
+const FIELD_FACE_LAYOUT_CLASS_NAMES = {
+  stack: "",
+  inline: "flex-row items-center",
+} as const satisfies Record<FieldFaceLayout, string>;
+
+/**
+ * How close a field's face sets its parts: `snug` a step closer (a checkbox
+ * row over its line).
+ */
+type FieldFaceDensity = "default" | "snug";
+
+const FIELD_FACE_DENSITY_CLASS_NAMES = {
+  default: "",
+  snug: "gap-1",
+} as const satisfies Record<FieldFaceDensity, string>;
+
+/**
+ * A form field's face, as `Field` draws it: the caption, the control's face
+ * and the quiet lines a pending view puts in, in the field's own box.
+ */
+export const FieldFace = ({
+  children,
+  className,
+  density = "default",
+  layout = "stack",
+}: {
+  children: ReactNode;
+  className?: string | undefined;
+  density?: FieldFaceDensity | undefined;
+  layout?: FieldFaceLayout | undefined;
+}) => (
+  <div
+    className={cn(
+      FIELD_CLASS_NAME,
+      FIELD_FACE_LAYOUT_CLASS_NAMES[layout],
+      FIELD_FACE_DENSITY_CLASS_NAMES[density],
+      className,
+    )}
+    data-slot="field-face"
+  >
+    {children}
+  </div>
+);
+
+/** A field's quiet line, as `FieldDescription` draws it. */
+export const FieldDescriptionFace = ({
+  children,
+  className,
+}: {
+  children: ReactNode;
+  className?: string | undefined;
+}) => (
+  <p
+    className={cn(FIELD_DESCRIPTION_CLASS_NAME, className)}
+    data-slot="field-description-face"
+  >
+    {children}
+  </p>
 );
 
 /**

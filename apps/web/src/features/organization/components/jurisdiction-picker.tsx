@@ -14,6 +14,10 @@ import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import { filterJurisdictionOptions } from "@/features/organization/components/jurisdiction-picker.logic";
+import {
+  JURISDICTION_PICKER_CLASS,
+  JURISDICTION_ROW_CLASS,
+} from "@/features/organization/components/jurisdiction-picker.pending";
 import { useFormatter, useFormattingLocale } from "@/i18n/formatting-context";
 import { createCountryOptions, removeJurisdiction } from "@/lib/jurisdictions";
 import type { PracticeJurisdiction } from "@/lib/jurisdictions";
@@ -82,7 +86,7 @@ export const JurisdictionPicker = ({
   };
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className={JURISDICTION_PICKER_CLASS}>
       <InputGroup>
         <InputGroupAddon>
           <SearchIcon className="text-muted-foreground" />
@@ -109,7 +113,7 @@ export const JurisdictionPicker = ({
           return (
             <div
               className={cn(
-                "border-border/70 flex items-center gap-2 border-b px-2 py-1.5 last:border-b-0",
+                JURISDICTION_ROW_CLASS,
                 isSelected && "bg-accent text-foreground",
               )}
               key={country.code}

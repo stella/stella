@@ -23,6 +23,7 @@ type Rect = { x: number; y: number; width: number; height: number };
 export const waitForStableGeometry = async (
   page: Page,
   measured: Locator | readonly Locator[],
+  sampling: "animation-frames" | "driver-polls" = "animation-frames",
 ): Promise<void> => {
   const locators = "elementHandles" in measured ? [measured] : measured;
   await page.evaluate(
@@ -51,13 +52,15 @@ export const waitForStableGeometry = async (
     { fonts: EXPECTED_FONTS, styleId: MOTION_STYLE_ID },
   );
 
+  let previousSnapshot: string | undefined;
+  let equalSamples = 0;
   await expect
     .poll(
       async () => {
         const results = await Promise.all(
           locators.map(
             async (locator) =>
-              await locator.evaluateAll(async (stableElements) => {
+              await locator.evaluateAll(async (stableElements, clock) => {
                 if (stableElements.length === 0) {
                   return false;
                 }
@@ -128,6 +131,13 @@ export const waitForStableGeometry = async (
                   });
                 };
                 const first = snapshot();
+                // A JavaScript-disabled document never calls back on an animation frame.
+                // The driver observes the same boxes and text lines across its polls.
+                if (clock === "driver-polls") {
+                  return first.every(({ connected }) => connected)
+                    ? JSON.stringify(first)
+                    : false;
+                }
                 await new Promise<void>((resolve) => {
                   requestAnimationFrame(() => resolve());
                 });
@@ -141,14 +151,25 @@ export const waitForStableGeometry = async (
                   JSON.stringify(first) === JSON.stringify(second) &&
                   JSON.stringify(second) === JSON.stringify(third)
                 );
-              }),
+              }, sampling),
           ),
         );
-        return results.every(Boolean);
+        if (sampling === "animation-frames") {
+          return results.every((result) => result === true);
+        }
+        if (results.some((result) => result === false)) {
+          previousSnapshot = undefined;
+          equalSamples = 0;
+          return false;
+        }
+        const current = JSON.stringify(results);
+        equalSamples = current === previousSnapshot ? equalSamples + 1 : 1;
+        previousSnapshot = current;
+        return equalSamples >= 3;
       },
       {
         message:
-          "Geometry did not become stable: expected no running animation on the measured boxes and equal bounding boxes on two consecutive animation frames",
+          "Expected stationary landmarks with matching boxes and text lines across three samples",
         timeout: STABLE_GEOMETRY_TIMEOUT_MS,
       },
     )

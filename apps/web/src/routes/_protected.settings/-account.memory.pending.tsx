@@ -17,7 +17,7 @@ export const MemoryPageShell = ({ children }: { children: ReactNode }) => (
 );
 
 const MemoryPendingView = () => (
-  <SettingsPagePending>
+  <SettingsPagePending area="account">
     <MemoryPageShell>
       <MemoryPanelPending />
     </MemoryPageShell>

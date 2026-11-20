@@ -3393,6 +3393,15 @@ const settledRelaxedTopUp = <Hits extends { outcome: SearchPaginationOutcome }>(
         value: outcome.value,
         completion: { state: "finished", outcome: outcome.value.outcome },
       };
+    case "degraded":
+      // Its budget ran out, as a bounded optional step may: an incomplete
+      // answer, counted, and not an error.
+      reportCaseLawIncompleteAnswer({
+        surface: "search",
+        reason: "relaxed_top_up_skipped",
+        count: 1,
+      });
+      return { value: none, completion: { state: "skipped" } };
     case "skipped":
       observeFailure(outcome.error, { sink: RELAXED_TOP_UP_SKIPPED_SINK });
       reportCaseLawIncompleteAnswer({
@@ -3427,9 +3436,11 @@ const TERM_DECISION_COUNTS_SKIPPED_SINK = failureSink({
 /**
  * The per-word counts, or null when they were not due or not read. They
  * explain a short page rather than fill it, so a count that did not finish
- * leaves the page as it is and only drops the explanation.
+ * leaves the page as it is and only drops the explanation. A count its
+ * budget cut is that design at work and is counted as an incomplete answer;
+ * only a count that failed is observed as a failure.
  */
-const settledTermDecisionCounts = (
+export const settledTermDecisionCounts = (
   outcome: RelaxedTopUpOutcome<TermDecisionCounts> | null,
 ): TermDecisionCounts | null => {
   if (outcome === null) {
@@ -3438,9 +3449,21 @@ const settledTermDecisionCounts = (
   switch (outcome.type) {
     case "read":
       return outcome.value;
+    case "degraded":
+      reportCaseLawIncompleteAnswer({
+        surface: "search",
+        reason: "term_decision_counts_skipped",
+        count: 1,
+      });
+      return null;
     case "skipped":
       observeFailure(outcome.error, {
         sink: TERM_DECISION_COUNTS_SKIPPED_SINK,
+      });
+      reportCaseLawIncompleteAnswer({
+        surface: "search",
+        reason: "term_decision_counts_skipped",
+        count: 1,
       });
       return null;
     default:
@@ -4356,18 +4379,27 @@ export const searchCorpusIndexDecisions = async (
         return null;
       }
       if (rankedPlan !== null) {
+        // Under the same sub-budget as the passage path's counts: they only
+        // explain a short page, so they never hold the page past it.
         return isFirstPage && rankedPlan.words.length >= 2
           ? rankedCountsOutcome(
-              await readRankedTermDecisionCounts({
-                aggregate: getCorpusIndexClient(serving.cluster).aggregate,
-                observer,
-                signal,
-                indexId,
-                filter: route.aggregationFilter,
-                decisionCountField,
-                plan: rankedPlan,
-                limit,
-              }),
+              await runBoundedRequestStep(
+                async (stepSignal) =>
+                  await readRankedTermDecisionCounts({
+                    aggregate: getCorpusIndexClient(serving.cluster).aggregate,
+                    observer,
+                    signal: stepSignal,
+                    indexId,
+                    filter: route.aggregationFilter,
+                    decisionCountField,
+                    plan: rankedPlan,
+                    limit,
+                  }),
+                {
+                  label: "case-law-term-decision-counts",
+                  budgetMs: CASE_LAW_RELAXED_TOP_UP_BUDGET_MS,
+                },
+              ),
             )
           : null;
       }

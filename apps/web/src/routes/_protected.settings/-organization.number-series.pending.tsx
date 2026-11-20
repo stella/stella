@@ -68,7 +68,7 @@ export const NumberSeriesCardShell = ({
 );
 
 export const NumberSeriesSettingsPending = framePendingView(() => (
-  <SettingsPagePending>
+  <SettingsPagePending area="organization">
     <NumberSeriesSettingsShell>
       <NumberSeriesCardShell
         action={

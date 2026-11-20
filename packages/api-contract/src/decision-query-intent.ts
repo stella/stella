@@ -4,6 +4,10 @@ import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 import { normalizeUnicode } from "@stll/text-normalize";
 
 import {
+  caseNumberKeysMatch,
+  caseNumberMatchKey,
+} from "./case-number-match-key";
+import {
   canonicalDecisionIdentifierKey,
   DECISION_DOCKET_GRAMMARS,
   foldDecisionIdentifierInput,
@@ -490,6 +494,20 @@ const structuredCitationKey = (value: string): string =>
     .toLocaleLowerCase("und")
     .replace(/[\p{P}\p{Z}\s]+/gu, "");
 
+/**
+ * A stored reference as the exact filter compares it: its trailing year read
+ * in either printed form (`caseNumberMatchKey`), as the lookup read its rows,
+ * before punctuation is folded away with the slash the year follows.
+ */
+const storedReferenceMatchKey = (value: string): string =>
+  structuredCitationKey(
+    caseNumberMatchKey(
+      normalizeUnicode(value, "NFKC")
+        .toLocaleLowerCase("und")
+        .replace(/[\p{Z}\s]+/gu, ""),
+    ),
+  );
+
 type TypedReferenceKind = Extract<
   DecisionIdentifierKind,
   "neutral" | "reporter"
@@ -565,19 +583,21 @@ export const exactDecisionMatches = <THit extends DecisionHitIdentity>(
     case "docket":
     case "ecli":
     case "reference": {
-      // A docket is keyed by the grammar that read it; an ECLI belongs to no
-      // docket grammar, so it is compared unscoped. A stored reference is
-      // compared with case, spacing and punctuation folded, at least as
-      // loosely as every per-type key its lookup read rows by, so a row the
-      // lookup found for an equivalent spelling is never dropped here.
+      // A docket is keyed by the grammar that read it, its year in either
+      // printed form (`caseNumberMatchKey`), as the lookup read its rows; an
+      // ECLI belongs to no docket grammar, so it is compared unscoped. A
+      // stored reference is compared with its year read the same way and
+      // case, spacing and punctuation folded, at least as loosely as every per-type key its lookup read
+      // rows by, so a row the lookup found for an equivalent spelling is
+      // never dropped here.
       const grammar =
         identifier.kind === "docket"
           ? DECISION_DOCKET_GRAMMARS[identifier.jurisdiction]
           : undefined;
       const keyOf = (value: string): string =>
         identifier.kind === "reference"
-          ? structuredCitationKey(value)
-          : decisionIdentifierComparisonKey(value, grammar);
+          ? storedReferenceMatchKey(value)
+          : caseNumberMatchKey(decisionIdentifierComparisonKey(value, grammar));
       const wanted = keyOf(identifier.value);
       return hits.filter(
         (hit) =>
@@ -803,7 +823,10 @@ const fileReferenceOf = (
   { familyCanonical, grammar }: SheetReadingContext,
 ): DecisionDocketReference | null => {
   const reference = readDecisionDocketReference(docket, { grammar });
-  return reference?.family.canonical === familyCanonical ? reference : null;
+  return reference !== null &&
+    caseNumberKeysMatch(reference.family.canonical, familyCanonical)
+    ? reference
+    : null;
 };
 
 const SHEET_READINGS = {
