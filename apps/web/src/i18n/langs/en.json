@@ -5410,6 +5410,11 @@
       "googleKeyRestricted": "Check this key’s API, IP address and referrer restrictions in Google Cloud. Allow the required API and your server’s requests, then retry.",
       "keepSavedKey": "Keep saved key",
       "keyFormatHint": "This key has an unusual format for {provider}. Save to check it with the provider.",
+      "keyNeed": {
+        "builtIn": "Optional. Without a key of your own, AI in this organization runs on models provided by stella.",
+        "keyRequired": "AI in this organization needs a provider key. Add one to turn AI on.",
+        "ownKeys": "AI in this organization runs on the keys below."
+      },
       "modelForRole": "{role} model",
       "modelIdPlaceholder": "Search models",
       "modelsDescription": "Choose a provider and one offered multimodal model for each AI category.",
@@ -5417,6 +5422,7 @@
       "newApiKey": "New API key",
       "newApiKeyDescription": "This will replace the saved key when you save changes.",
       "noModelResults": "No matching offered models",
+      "noProviders": "No provider keys added.",
       "openaiInsufficientQuota": "Check your OpenAI project budget and API billing. Add credits or raise the applicable limit, then retry.",
       "openaiProjectOrganizationMismatch": "Use an API key from the intended OpenAI project and organization. Check their access settings, then retry.",
       "openrouterNoCredits": "Add credits in OpenRouter billing, then retry.",
@@ -5439,6 +5445,8 @@
       "providerForRole": "{role} provider",
       "providerKeyInvalid": "{provider} rejected the key. Double-check it before saving.",
       "providerKeyInvalidShort": "Invalid",
+      "providerModes": "Used for: {modes}",
+      "providerModesNone": "Not used for any mode. Assign it to a mode under Advanced.",
       "providerSetupConsole": "Open provider settings",
       "providersDescription": "Add the provider credentials you want stella to use.",
       "providersPanel": "Providers",
@@ -5983,7 +5991,7 @@
     "organization": {
       "activeMembers": "Active members",
       "ai": "AI configuration",
-      "aiDescription": "Connect your own AI provider keys.",
+      "aiDescription": "Choose how AI works in this organization.",
       "anonymization": {
         "addPlaceholder": "Term to always mask (e.g. team name)",
         "deleteAction": "Delete term",

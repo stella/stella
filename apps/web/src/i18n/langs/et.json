@@ -5410,6 +5410,11 @@
       "googleKeyRestricted": "Kontrollige Google Cloudis selle võtme API-, IP-aadressi- ja viitavate veebisaitide piiranguid. Lubage vajalik API ja oma serveri päringud ning proovige uuesti.",
       "keepSavedKey": "Hoia salvestatud võti alles",
       "keyFormatHint": "Selle võtme vorming on teenusepakkuja {provider} puhul ebatavaline. Salvestage võti, et seda teenusepakkujaga kontrollida.",
+      "keyNeed": {
+        "builtIn": "Valikuline. Oma võtmeta kasutab selle organisatsiooni tehisintellekt stella pakutavaid mudeleid.",
+        "keyRequired": "Selle organisatsiooni tehisintellekt vajab teenusepakkuja võtit. Lisa võti, et tehisintellekt sisse lülitada.",
+        "ownKeys": "Selle organisatsiooni tehisintellekt kasutab allolevaid võtmeid."
+      },
       "modelForRole": "Rolli {role} mudel",
       "modelIdPlaceholder": "Otsi mudeleid",
       "modelsDescription": "Vali iga AI-kategooria jaoks teenusepakkuja ja üks pakutud multimodaalne mudel.",
@@ -5417,6 +5422,7 @@
       "newApiKey": "Uus API võti",
       "newApiKeyDescription": "See asendab salvestatud võtme muudatuste salvestamisel.",
       "noModelResults": "Sobivaid pakutud mudeleid ei leitud",
+      "noProviders": "Teenusepakkujate võtmeid pole veel lisatud.",
       "openaiInsufficientQuota": "Kontrollige oma OpenAI projekti eelarvet ja API arveldust. Lisage krediiti või suurendage vastavat limiiti ja proovige uuesti.",
       "openaiProjectOrganizationMismatch": "Kasutage soovitud OpenAI projekti ja organisatsiooni API-võtit. Kontrollige nende juurdepääsuseadeid ja proovige uuesti.",
       "openrouterNoCredits": "Lisage OpenRouteri arveldusjaotises krediiti ja proovige uuesti.",
@@ -5439,6 +5445,8 @@
       "providerForRole": "{role} teenusepakkuja",
       "providerKeyInvalid": "{provider} keeldus võtmest. Kontrollige seda enne salvestamist.",
       "providerKeyInvalidShort": "Vigane",
+      "providerModes": "Kasutatakse režiimides: {modes}",
+      "providerModesNone": "Ei kasutata üheski režiimis. Määra see režiimile jaotises Täpsemad seaded.",
       "providerSetupConsole": "Ava teenusepakkuja seaded",
       "providersDescription": "Lisa nende teenusepakkujate mandaadid, mida stella peaks kasutama.",
       "providersPanel": "Teenusepakkujad",
@@ -5983,7 +5991,7 @@
     "organization": {
       "activeMembers": "Aktiivsed liikmed",
       "ai": "AI seadistus",
-      "aiDescription": "Ühendage oma tehisintellekti teenusepakkujate võtmed.",
+      "aiDescription": "Vali, kuidas tehisintellekt selles organisatsioonis töötab.",
       "anonymization": {
         "addPlaceholder": "Termin, mida alati maskeerida (nt meeskonna nimi)",
         "deleteAction": "Kustuta termin",

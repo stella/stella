@@ -8,8 +8,10 @@ import {
   DECISION_MODEL_PROVIDERS,
 } from "@stll/ai-catalog";
 import { CAPABILITY_REQUEST_HEADER } from "@stll/api-contract/capability-request";
+import type { OrganizationAIAvailability } from "@stll/api-contract/organization-ai-availability";
 import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
+import { aiAvailableResponse } from "@/__fixtures__/ai-availability";
 import { getModelOptionsForRole } from "@/components/ai-config-role-models.logic";
 import messages from "@/i18n/langs/en.json";
 import type { OrganizationAIConfig } from "@/lib/organization/ai-config-queries";
@@ -141,6 +143,7 @@ const savedConfig = {
   decision: null,
 } satisfies OrganizationAIConfig;
 let responseConfig: OrganizationAIConfig = savedConfig;
+let aiAvailability: OrganizationAIAvailability = aiAvailableResponse();
 globalThis.fetch = Object.assign(
   async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = input instanceof Request ? input.url : String(input);
@@ -204,6 +207,9 @@ globalThis.fetch = Object.assign(
         },
         { status: 400 },
       );
+    }
+    if (pathname.endsWith("/ai-availability")) {
+      return Response.json(aiAvailability);
     }
     if (pathname.endsWith("/deepl-config")) {
       return Response.json({ configured: false });
@@ -314,6 +320,7 @@ afterEach(() => {
   previewDefaults = undefined;
   previewRequests.length = 0;
   responseConfig = savedConfig;
+  aiAvailability = aiAvailableResponse();
 });
 afterAll(async () => {
   globalThis.fetch = originalFetch;
@@ -409,6 +416,13 @@ const mount = async (
       name: messages.organization.aiConfig.removeProvider,
     });
   } else {
+    // An organization without keys starts with no rows; the scenarios below
+    // begin from the first row an admin adds.
+    fireEvent.click(
+      await screen.findByRole("button", {
+        name: messages.organization.aiConfig.addProvider,
+      }),
+    );
     await waitFor(() =>
       expect(
         providerQueries().getByLabelText(messages.organization.aiConfig.apiKey),
@@ -482,7 +496,9 @@ const dirtyKey = () =>
 test("leaving AI provider settings with a dirty key prompts before navigation", async () => {
   const appRouter = await mount();
   dirtyKey();
-  expect(screen.getByText(messages.common.unsavedChanges)).toBeDefined();
+  expect(
+    providerQueries().getByText(messages.common.unsavedChanges),
+  ).toBeDefined();
   await act(async () => {
     void appRouter.navigate({ to: "/settings" });
   });
@@ -710,7 +726,9 @@ test("clearing a draft workspace ID back to absent clears row dirty state and th
   );
   fireEvent.change(workspace, { target: { value: "wrkspc_fixture" } });
   fireEvent.change(input, { target: { value: "" } });
-  expect(screen.getByText(messages.common.unsavedChanges)).toBeDefined();
+  expect(
+    providerQueries().getByText(messages.common.unsavedChanges),
+  ).toBeDefined();
   expect(hasUnsavedWork()).toBe(true);
   fireEvent.change(workspace, { target: { value: "" } });
   expect(screen.queryByText(messages.common.unsavedChanges)).toBeNull();
@@ -825,7 +843,7 @@ test("provider title and trailing add action share the section header", async ()
   );
   expect(title.parentElement?.className).toContain("items-center");
   expect(
-    screen.getByText(messages.organization.aiConfig.providersDescription)
+    (await screen.findByText(messages.organization.aiConfig.keyNeed.builtIn))
       .parentElement,
   ).toBe(title.parentElement);
 });
