@@ -89,6 +89,23 @@ test("matter picker failure does not label selected context as no matter", async
   expect(markup).not.toContain(en.inspector.matterPicker.noMatter);
 });
 
+test("matter picker names an empty selection before the matter list arrives", async () => {
+  const { ChatMatterPicker } = await import("./chat-matter-picker");
+  const empty = render(
+    createClient(),
+    <ChatMatterPicker matterIds={[]} onChange={() => {}} />,
+  );
+  expect(empty).toContain(en.inspector.matterPicker.noMatter);
+  expect(empty).not.toContain('data-slot="face-label-skeleton"');
+  // A chosen matter still waits for its name rather than guessing one.
+  const chosen = render(
+    createClient(),
+    <ChatMatterPicker matterIds={["matter-1"]} onChange={() => {}} />,
+  );
+  expect(chosen).not.toContain(en.inspector.matterPicker.noMatter);
+  expect(chosen).toContain('data-slot="face-label-skeleton"');
+});
+
 test("explicit model failure never labels the selector as auto", async () => {
   const { ChatModelSelector } = await import("./chat-model-selector");
   const { modelOptionsOptions } = await import("@/features/chat/queries");

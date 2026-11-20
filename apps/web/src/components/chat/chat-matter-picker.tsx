@@ -361,7 +361,13 @@ export const ChatMatterPicker = ({
     total: matters.length,
   });
   const selectedIdSet = new Set(matterIds);
+  // With nothing chosen the label needs no matter's name, so it is there
+  // before the matter list is; only a chosen matter waits for its name.
+  const awaitsNames = workspacesView.type === "pending" && matterIds.length > 0;
   const triggerLabel = (() => {
+    if (matterIds.length === 0) {
+      return t("inspector.matterPicker.noMatter");
+    }
     if (workspacesView.type === "error") {
       return t("common.somethingWentWrong");
     }
@@ -438,7 +444,7 @@ export const ChatMatterPicker = ({
             : triggerLabel
         }
       >
-        {workspacesView.type === "pending" ? (
+        {awaitsNames ? (
           <MatterPickerTriggerContent status="pending" />
         ) : (
           <MatterPickerTriggerContent
