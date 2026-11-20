@@ -11,6 +11,7 @@ import {
 import { inArray } from "drizzle-orm";
 
 import { RUNTIME_MODE } from "@stll/runtime-mode";
+import { createTestClock } from "@stll/test-kit";
 import { createTestState } from "@stll/test-state";
 
 import { member, organization, session, user } from "@/api/db/auth-schema";
@@ -56,6 +57,8 @@ import { setRuntimeModeForTesting } from "@/api/runtime-mode";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
+
+const testClock = createTestClock();
 
 const testState = createTestState({ file: import.meta.path, config: env });
 
@@ -887,7 +890,10 @@ describe("new-account email policy", () => {
         ),
       ),
     );
-    expect(actions).toEqual([{ type: "continue" }, { type: "continue" }]);
+    expect(actions).toEqual([
+      { type: "continue", audience: "any_address" },
+      { type: "continue", audience: "any_address" },
+    ]);
   });
 
   test("rejects a disposable address when creating its account", async () => {
@@ -940,6 +946,34 @@ describe("new-account email policy", () => {
     expect(action).toEqual({ type: "suppress_otp" });
   });
 
+  test("marks a code for an account sent while new addresses get none", async () => {
+    const limited = async (accountExists: boolean) =>
+      await getNewAccountEmailOtpAction(
+        {
+          body: { email: "member@example.com", type: "sign-in" },
+          path: "/email-otp/send-verification-otp",
+        },
+        {
+          accountExists: async () => accountExists,
+          rateLimitContext: {
+            increment: async () => ({
+              count: 4,
+              nextReset: new Date(testClock.now() + 60_000),
+              start: testClock.now(),
+            }),
+          },
+        },
+      );
+
+    // Only the account's code goes out, so whatever becomes of that mail must
+    // not be reported back: its audience is accounts only.
+    expect(await limited(true)).toEqual({
+      type: "continue",
+      audience: "accounts_only",
+    });
+    expect(await limited(false)).toEqual({ type: "suppress_otp" });
+  });
+
   test("bypasses the signup limiter with the E2E auth-rate-limit mode", async () => {
     let accountLookupCount = 0;
     let incrementCount = 0;
@@ -967,7 +1001,7 @@ describe("new-account email policy", () => {
       },
     );
 
-    expect(action).toEqual({ type: "continue" });
+    expect(action).toEqual({ type: "continue", audience: "any_address" });
     expect(accountLookupCount).toBe(0);
     expect(incrementCount).toBe(0);
   });

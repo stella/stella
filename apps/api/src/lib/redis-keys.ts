@@ -39,6 +39,7 @@ export const COORDINATION_KEY_EXPIRY = {
   "mcp-read-fence": "ttl",
   "public-read-continuation": "ttl",
   "feedback-intake": "ttl",
+  "sign-in-code-delivery": "ttl",
   // Pub/sub channels do not materialize values. The only stored key under this
   // scope is Hocuspocus's Redlock key, whose lockTimeout supplies its TTL.
   [FOLIO_COLLAB_REDIS_SCOPE]: "ttl",

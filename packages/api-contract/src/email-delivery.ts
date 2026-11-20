@@ -22,35 +22,65 @@ export const EMAIL_DELIVERY_FAILURE_REASONS = [
 export type EmailDeliveryFailureReason =
   (typeof EMAIL_DELIVERY_FAILURE_REASONS)[number];
 
-export const emailDeliveryFailureReasonSchema = v.picklist(
-  EMAIL_DELIVERY_FAILURE_REASONS,
+/**
+ * Which failure reasons the sign-in screen may name. A reason the recipient's
+ * own mail server would tell any sender is shown; `suppressed` says stella
+ * stopped mailing the address after earlier failures, so it reads the same as
+ * no report at all.
+ */
+const SIGN_IN_CODE_FAILURE_DISCLOSURE = {
+  tls_required: "shown",
+  mailbox_missing: "shown",
+  mailbox_unavailable: "shown",
+  suppressed: "generic",
+  other: "shown",
+} as const satisfies Record<EmailDeliveryFailureReason, "shown" | "generic">;
+
+type ShownReason<Reason extends EmailDeliveryFailureReason> =
+  (typeof SIGN_IN_CODE_FAILURE_DISCLOSURE)[Reason] extends "shown"
+    ? Reason
+    : never;
+
+/** A failure reason the sign-in screen names. */
+export type SignInCodeFailureReason = {
+  [Reason in EmailDeliveryFailureReason]: ShownReason<Reason>;
+}[EmailDeliveryFailureReason];
+
+export const SIGN_IN_CODE_FAILURE_REASONS =
+  EMAIL_DELIVERY_FAILURE_REASONS.filter(
+    (reason): reason is SignInCodeFailureReason =>
+      SIGN_IN_CODE_FAILURE_DISCLOSURE[reason] === "shown",
+  );
+
+export const signInCodeFailureReasonSchema = v.picklist(
+  SIGN_IN_CODE_FAILURE_REASONS,
 );
 
 /**
- * What stella knows about mail to the address a sign-in code was just
- * requested for: `failed` when the provider recently reported a failure for
- * it, `none_recorded` when it did not, `unknown` when that could not be
- * read. `none_recorded` is not proof of delivery.
+ * The random id the sign-in screen gives one code request, sent in this
+ * header. Only a request that presents the id can later ask whether that
+ * request's own code mail bounced.
  */
-export const emailDeliveryStatusSchema = v.variant("type", [
-  v.object({ type: v.literal("none_recorded") }),
-  v.object({ type: v.literal("unknown") }),
-  v.object({
-    type: v.literal("failed"),
-    reason: emailDeliveryFailureReasonSchema,
+export const SIGN_IN_ATTEMPT_HEADER = "X-Stella-Sign-In-Attempt";
+
+/** 32 random bytes, base64url without padding. */
+export const signInAttemptSchema = v.pipe(v.string(), v.regex(/^[\w-]{43}$/u));
+
+/** Where the sign-in screen asks whether its code mail bounced. */
+export const SIGN_IN_CODE_DELIVERY_PATH = "/email-otp/sign-in-delivery";
+
+/**
+ * What the provider reported about the code mail one sign-in attempt sent:
+ * `failed` once that mail bounced for a reason the screen may name, `none`
+ * otherwise. An unknown, expired or pending attempt, and one whose mail was
+ * never sent, all answer `none`.
+ */
+export const signInCodeDeliverySchema = v.variant("status", [
+  v.strictObject({ status: v.literal("none") }),
+  v.strictObject({
+    status: v.literal("failed"),
+    reason: signInCodeFailureReasonSchema,
   }),
 ]);
 
-export type EmailDeliveryStatus = v.InferOutput<
-  typeof emailDeliveryStatusSchema
->;
-
-/**
- * The code request's response carries the status in this field. A server
- * released before the field existed answers without it.
- */
-export const EMAIL_DELIVERY_STATUS_FIELD = "emailDelivery";
-
-export const emailCodeRequestResponseSchema = v.object({
-  [EMAIL_DELIVERY_STATUS_FIELD]: v.optional(emailDeliveryStatusSchema),
-});
+export type SignInCodeDelivery = v.InferOutput<typeof signInCodeDeliverySchema>;

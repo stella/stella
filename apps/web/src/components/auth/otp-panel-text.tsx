@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
-import type { EmailDeliveryFailureReason } from "@stll/api-contract/email-delivery";
+import type { SignInCodeFailureReason } from "@stll/api-contract/email-delivery";
 import { BidiText } from "@stll/ui/bidi-text";
 
 import { emailDomain } from "./email-delivery.logic";
@@ -23,13 +23,13 @@ export const OTPEmailText = ({
   return <>{t.rich(id, { email: renderEmail, emailAddress: email })}</>;
 };
 
-/** Why mail to the address recently failed, and what to do about it. */
+/** Why this request's code mail bounced, and what to do about it. */
 export const EmailDeliveryFailureText = ({
   email,
   reason,
 }: {
   email: string;
-  reason: EmailDeliveryFailureReason;
+  reason: SignInCodeFailureReason;
 }) => {
   const t = useTranslations();
   const values = { email: renderEmail, emailAddress: email };
@@ -47,8 +47,6 @@ export const EmailDeliveryFailureText = ({
       return <>{t.rich("auth.emailDelivery.mailboxMissing", values)}</>;
     case "mailbox_unavailable":
       return <>{t.rich("auth.emailDelivery.mailboxUnavailable", values)}</>;
-    case "suppressed":
-      return <>{t.rich("auth.emailDelivery.suppressed", values)}</>;
     case "other":
       return <>{t.rich("auth.emailDelivery.other", values)}</>;
     default:

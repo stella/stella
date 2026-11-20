@@ -1,15 +1,16 @@
 import { useState } from "react";
 
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { Result, TaggedError } from "better-result";
 import { useTranslations } from "use-intl";
 
-import type { EmailDeliveryFailureReason } from "@stll/api-contract/email-delivery";
+import type { SignInCodeFailureReason } from "@stll/api-contract/email-delivery";
 import {
   PROFESSIONAL_USE_DISPLAYED_VERSION_FIELD,
   PROFESSIONAL_USE_STATEMENT_VERSION,
 } from "@stll/api-contract/professional-use";
+import { Temporal } from "@stll/time";
 import { Button } from "@stll/ui/button";
 import { DialogFormState } from "@stll/ui/dialog";
 import { FrameDescription } from "@stll/ui/frame";
@@ -31,7 +32,9 @@ import { detached } from "@/lib/detached";
 import { toAuthClientError } from "@/lib/errors/auth";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { queryView } from "@/lib/query-view.logic";
 import { COMMON_TIMEZONES } from "@/lib/timezones";
+import { useQueryViewError } from "@/lib/use-query-view";
 
 import {
   accessResetProviders,
@@ -44,7 +47,7 @@ import {
   AuthCodeSlots,
   AuthCodeVerification,
 } from "./code-verification-face.pending";
-import { readEmailDeliveryStatus } from "./email-delivery.logic";
+import { newSignInAttempt, signInAttemptHeaders } from "./email-delivery.logic";
 import {
   OTPPanelFrame,
   OTPPanelLayout,
@@ -55,6 +58,10 @@ import {
   OTPEmailText,
   renderEmail,
 } from "./otp-panel-text";
+import {
+  SIGN_IN_CODE_DELIVERY_WINDOW_MS,
+  signInCodeDeliveryOptions,
+} from "./sign-in-code-delivery";
 
 type OTPPanelProps = {
   className?: string;
@@ -68,11 +75,11 @@ type OTPPanelProps = {
   onVerified?: () => void | Promise<void>;
   linkProvider?: SocialProvider | undefined;
   /**
-   * Why mail to `email` recently failed, as the code request that opened
-   * this panel reported it; the panel then explains the failure instead of
-   * saying a code was sent.
+   * The attempt id the code request that opened this panel carried. While
+   * the code can be used, the panel asks whether that request's own code
+   * mail bounced, and if so explains why instead of saying a code was sent.
    */
-  deliveryFailure?: EmailDeliveryFailureReason | undefined;
+  signInAttempt?: string | undefined;
 };
 
 const OTP_EXPIRED_MESSAGE = "OTP expired";
@@ -111,16 +118,29 @@ export const OTPPanelBody = ({
   onUseDifferentEmail,
   onVerified,
   linkProvider,
-  deliveryFailure: initialDeliveryFailure,
+  signInAttempt: initialSignInAttempt,
 }: Omit<OTPPanelProps, "className">) => {
   const t = useTranslations();
   const analytics = useAnalytics();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const [otp, setOtp] = useState(initialOtp ?? "");
-  const [deliveryFailure, setDeliveryFailure] = useState(
-    initialDeliveryFailure,
+  const [signInAttempt, setSignInAttempt] = useState(() => ({
+    attempt: initialSignInAttempt,
+    pollUntil:
+      Temporal.Now.instant().epochMilliseconds +
+      SIGN_IN_CODE_DELIVERY_WINDOW_MS,
+  }));
+  const delivery = queryView(
+    useQuery(signInCodeDeliveryOptions(signInAttempt)),
   );
+  // The follow-up only adds an explanation; when it fails, the panel keeps
+  // saying a code was sent and the failure is reported.
+  useQueryViewError(delivery, "OTPPanel:delivery");
+  const deliveryFailure =
+    delivery.type === "items" && delivery.items.status === "failed"
+      ? delivery.items.reason
+      : undefined;
   const [resetConfirmation, setResetConfirmation] = useState<{
     otp: string;
     providers: string[];
@@ -166,9 +186,11 @@ export const OTPPanelBody = ({
 
   const resendOtp = useMutation({
     mutationFn: async () => {
-      const { data, error } = await authClient.emailOtp.sendVerificationOtp({
+      const attempt = newSignInAttempt();
+      const { error } = await authClient.emailOtp.sendVerificationOtp({
         email,
         type: "sign-in",
+        fetchOptions: { headers: signInAttemptHeaders(attempt) },
       });
 
       if (error) {
@@ -185,16 +207,14 @@ export const OTPPanelBody = ({
       }
 
       setOtp("");
-      const delivery = readEmailDeliveryStatus(data);
-      if (delivery?.type === "failed") {
-        // Mail to this address is known to fail: the panel says why, and
-        // nothing claims a code is on its way.
-        setDeliveryFailure(delivery.reason);
-        return;
-      }
-      if (delivery?.type === "none_recorded") {
-        setDeliveryFailure(undefined);
-      }
+      // The new code's own mail is followed from now on; an earlier
+      // attempt's bounce no longer describes it.
+      setSignInAttempt({
+        attempt,
+        pollUntil:
+          Temporal.Now.instant().epochMilliseconds +
+          SIGN_IN_CODE_DELIVERY_WINDOW_MS,
+      });
       stellaToast.add({
         description: t("auth.checkSpamHint"),
         title: t("auth.codeSentAgain"),
@@ -404,7 +424,7 @@ export const OTPPanelContent = ({
   onSubmit,
   onUseDifferentEmail,
 }: {
-  deliveryFailure?: EmailDeliveryFailureReason | undefined;
+  deliveryFailure?: SignInCodeFailureReason | undefined;
   email: string;
   isOtpComplete: boolean;
   isOtpPulsing: boolean;

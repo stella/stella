@@ -154,9 +154,9 @@ import {
   createDemoSessionFilter,
   warnDemoAccountConfiguration,
 } from "@/api/lib/auth/demo-account-policy";
-import { createEmailDeliveryStatusPlugin } from "@/api/lib/auth/email-delivery-status";
 import {
   EMAIL_OTP_ALLOWED_ATTEMPTS,
+  EMAIL_OTP_LIFETIME_SECONDS,
   emailOtpPromotionEmail,
   requireEmailOtpResetConfirmation,
 } from "@/api/lib/auth/email-otp-reset-confirmation";
@@ -258,6 +258,12 @@ import {
   sessionLinkedAccountRequirement,
 } from "@/api/lib/auth/sign-in-account-provider";
 import {
+  createSignInCodeDeliveryPlugin,
+  rememberSignInCodeSend,
+  type SignInCodeAudience,
+} from "@/api/lib/auth/sign-in-code-delivery";
+import { getSignInCodeDeliveryStore } from "@/api/lib/auth/sign-in-code-delivery-store";
+import {
   createMicrosoftProfileMapper,
   createSocialIdentityValidation,
   SOCIAL_ACCOUNT_LINKING_OPTIONS,
@@ -318,10 +324,6 @@ import {
   sendOrganizationInvitation,
   sendOTPEmail,
 } from "@/api/lib/email/email";
-import {
-  forgetRecipientFailure,
-  readRecipientFailure,
-} from "@/api/lib/email/recipient-deliverability";
 import { handoffCommittedEntityDeletionCleanupBatch } from "@/api/lib/entity-deletion-cleanup-handoff";
 import { enqueueEntityDeletionCleanup } from "@/api/lib/entity-deletion-cleanup-queue";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -553,7 +555,11 @@ const NEW_ACCOUNT_EMAIL_OTP_ACTION = {
 } as const;
 
 type NewAccountEmailOtpAction =
-  | { type: typeof NEW_ACCOUNT_EMAIL_OTP_ACTION.continue }
+  | {
+      type: typeof NEW_ACCOUNT_EMAIL_OTP_ACTION.continue;
+      /** Whether the same request for an address without an account sends too. */
+      audience: SignInCodeAudience;
+    }
   | { type: typeof NEW_ACCOUNT_EMAIL_OTP_ACTION.suppressOtp };
 
 type EmailOtpResponseScheduleOptions = {
@@ -641,7 +647,10 @@ export const getNewAccountEmailOtpAction = async (
     ctx.path !== SEND_VERIFICATION_OTP_PATH ||
     !isSignInEmailOtpBody(ctx.body)
   ) {
-    return { type: NEW_ACCOUNT_EMAIL_OTP_ACTION.continue };
+    return {
+      type: NEW_ACCOUNT_EMAIL_OTP_ACTION.continue,
+      audience: "any_address",
+    };
   }
 
   const clientIp = ctx.request
@@ -656,12 +665,22 @@ export const getNewAccountEmailOtpAction = async (
 
   switch (result.status) {
     case "allowed":
-      return { type: NEW_ACCOUNT_EMAIL_OTP_ACTION.continue };
+      return {
+        type: NEW_ACCOUNT_EMAIL_OTP_ACTION.continue,
+        audience:
+          result.reason === "existing_account" &&
+          result.newAccounts === "rate_limited"
+            ? "accounts_only"
+            : "any_address",
+      };
     case "rejected":
       // Keep the OTP-request response identical for existing and new accounts.
       // The user.create hook rejects the disposable address only after Better
       // Auth has verified the OTP and is about to create an account.
-      return { type: NEW_ACCOUNT_EMAIL_OTP_ACTION.continue };
+      return {
+        type: NEW_ACCOUNT_EMAIL_OTP_ACTION.continue,
+        audience: "any_address",
+      };
     case "rate_limited":
       return { type: NEW_ACCOUNT_EMAIL_OTP_ACTION.suppressOtp };
     default:
@@ -2598,7 +2617,7 @@ export const createAuth = (
         // defaults (6 digits, 5-minute expiry, 3 attempts before the code
         // is invalidated); change deliberately, not by dependency drift.
         otpLength: 6,
-        expiresIn: 5 * 60,
+        expiresIn: EMAIL_OTP_LIFETIME_SECONDS,
         allowedAttempts: EMAIL_OTP_ALLOWED_ATTEMPTS,
         storeOTP: "plain",
         // Returning undefined falls back to the plugin's random generator
@@ -2619,8 +2638,10 @@ export const createAuth = (
                 path: ctx?.path ?? "",
                 request: ctx?.request,
               });
+              let audience: SignInCodeAudience;
               switch (newAccountOtpAction.type) {
                 case NEW_ACCOUNT_EMAIL_OTP_ACTION.continue:
+                  ({ audience } = newAccountOtpAction);
                   break;
                 case NEW_ACCOUNT_EMAIL_OTP_ACTION.suppressOtp:
                   // The endpoint still returns its ordinary success response.
@@ -2629,7 +2650,7 @@ export const createAuth = (
                   return;
                 default:
                   newAccountOtpAction satisfies never;
-                  panic(
+                  return panic(
                     `Unhandled new account otp action: ${String(newAccountOtpAction)}`,
                   );
               }
@@ -2655,7 +2676,19 @@ export const createAuth = (
               }
 
               const lang = extractLangFromRequest(ctx?.request);
-              await sendOTPEmail({ email, otp, type, lang });
+              const outcome = await sendOTPEmail({ email, otp, type, lang });
+              // Only the public code request is answered about its bounce.
+              if (
+                type === "sign-in" &&
+                ctx?.path === SEND_VERIFICATION_OTP_PATH
+              ) {
+                await rememberSignInCodeSend({
+                  store: getSignInCodeDeliveryStore(),
+                  headers: ctx?.headers,
+                  outcome,
+                  audience,
+                });
+              }
             },
           });
         },
@@ -2674,10 +2707,7 @@ export const createAuth = (
         createAuthMiddleware,
         () => new Date(),
       ),
-      createEmailDeliveryStatusPlugin(createAuthMiddleware, {
-        readFailure: readRecipientFailure,
-        forgetFailure: forgetRecipientFailure,
-      }),
+      createSignInCodeDeliveryPlugin(getSignInCodeDeliveryStore()),
       createOAuthConsentInfoPlugin([env.FRONTEND_URL, getAuthIssuerUrl()]),
       createStellaOAuthProvider(
         {

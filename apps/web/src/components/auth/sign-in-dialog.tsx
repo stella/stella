@@ -3,7 +3,6 @@ import { useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
-import type { EmailDeliveryFailureReason } from "@stll/api-contract/email-delivery";
 import {
   Dialog,
   DialogHeader,
@@ -30,7 +29,7 @@ type SignInDialogStep =
       status: "otp";
       email: string;
       devOtp: string | null;
-      deliveryFailure: EmailDeliveryFailureReason | undefined;
+      signInAttempt: string;
     };
 
 export const SignInDialog = ({
@@ -52,14 +51,11 @@ export const SignInDialog = ({
     }
   };
 
-  const showOtpStep = async (
-    email: string,
-    deliveryFailure: EmailDeliveryFailureReason | undefined,
-  ) => {
+  const showOtpStep = async (email: string, signInAttempt: string) => {
     // Transition immediately; the dev OTP fills in once it arrives so a slow or
     // unreachable dev API never blocks the OTP screen. The panel is keyed by the
     // code, so it remounts and picks up the prefill when it lands.
-    setStep({ status: "otp", email, devOtp: null, deliveryFailure });
+    setStep({ status: "otp", email, devOtp: null, signInAttempt });
     const devOtp = await fetchDevOtp(email);
     setStep((prev) =>
       prev.status === "otp" && prev.email === email
@@ -67,7 +63,7 @@ export const SignInDialog = ({
             status: "otp",
             email,
             devOtp,
-            deliveryFailure: prev.deliveryFailure,
+            signInAttempt: prev.signInAttempt,
           }
         : prev,
     );
@@ -88,9 +84,9 @@ export const SignInDialog = ({
             <SignInPanel
               redirectTo={redirectTo}
               showHeading={false}
-              onOtpSent={({ email, deliveryFailure }) => {
+              onOtpSent={({ email, signInAttempt }) => {
                 detached(
-                  showOtpStep(email, deliveryFailure),
+                  showOtpStep(email, signInAttempt),
                   "sign-in-dialog.show-otp-step",
                 );
               }}
@@ -98,7 +94,7 @@ export const SignInDialog = ({
           ) : (
             <OTPPanel
               key={step.devOtp ?? "empty"}
-              deliveryFailure={step.deliveryFailure}
+              signInAttempt={step.signInAttempt}
               email={step.email}
               initialOtp={step.devOtp ?? undefined}
               redirectTo={redirectTo}

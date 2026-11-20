@@ -156,7 +156,6 @@
       "mailboxMissing": "Não conseguimos entregar e-mails para <email>{emailAddress}</email>: segundo o servidor de e-mail, essa caixa de correio não existe. Verifique o endereço ou use outro endereço de e-mail.",
       "mailboxUnavailable": "No momento, não conseguimos entregar e-mails para <email>{emailAddress}</email>: a caixa de correio está cheia ou temporariamente indisponível. Tente novamente mais tarde ou use outro endereço de e-mail.",
       "other": "Não conseguimos entregar o e-mail para <email>{emailAddress}</email>. Tente novamente mais tarde ou use outro endereço de e-mail.",
-      "suppressed": "Não enviamos mais e-mails para <email>{emailAddress}</email> porque as mensagens anteriores não puderam ser entregues. Use outro endereço de e-mail.",
       "tlsRequired": "Não conseguimos entregar e-mails para <domain>{domainName}</domain>: o servidor de e-mail desse domínio não aceita e-mails criptografados. Peça à sua equipe de TI que ative o TLS (STARTTLS) no servidor de e-mail ou use outro endereço de e-mail."
     },
     "emailPlaceholder": "você@exemplo.com",

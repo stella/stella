@@ -8,7 +8,6 @@ import { Result } from "better-result";
 import { useTranslations } from "use-intl";
 import * as v from "valibot";
 
-import type { EmailDeliveryFailureReason } from "@stll/api-contract/email-delivery";
 import {
   PROFESSIONAL_USE_DISPLAYED_VERSION_FIELD,
   PROFESSIONAL_USE_STATEMENT_VERSION,
@@ -38,7 +37,7 @@ import { isAcceptInvitationRedirect } from "@/lib/redirect";
 import { emailSchema, schemaFormOptions, toFormErrors } from "@/lib/schema";
 
 import type { SocialProvider } from "./access-reset.logic";
-import { readEmailDeliveryStatus } from "./email-delivery.logic";
+import { newSignInAttempt, signInAttemptHeaders } from "./email-delivery.logic";
 import {
   LAST_USED_BADGE_PILL_CLASS_NAME,
   LAST_USED_BADGE_POSITION_CLASS_NAME,
@@ -89,7 +88,8 @@ type SignInPanelProps = {
     email: string;
     redirectTo: string;
     mode: SignInMode;
-    deliveryFailure: EmailDeliveryFailureReason | undefined;
+    /** The attempt id the code request carried, to follow its mail. */
+    signInAttempt: string;
   }) => void;
 };
 
@@ -172,18 +172,15 @@ const SignInOptionsPanel = ({
   const openPasswordEntry = (email: string) =>
     setPasswordEntry({ type: "open", email });
 
-  const handleOtpSent = async (
-    email: string,
-    deliveryFailure: EmailDeliveryFailureReason | undefined,
-  ) => {
+  const handleOtpSent = async (email: string, signInAttempt: string) => {
     if (onOtpSent) {
-      onOtpSent({ email, redirectTo, mode, deliveryFailure });
+      onOtpSent({ email, redirectTo, mode, signInAttempt });
       return;
     }
 
     await navigate({
       to: "/auth/otp",
-      search: { email, redirectTo, mode, deliveryFailure },
+      search: { email, redirectTo, mode, signInAttempt },
     });
   };
 
@@ -388,11 +385,8 @@ const EmailCodeSignInForm = ({
 }: {
   autoFocus: boolean;
   lastUsed: SignInMethod | null;
-  /** The code was requested; `deliveryFailure` says mail there recently failed. */
-  onCodeSent: (
-    email: string,
-    deliveryFailure: EmailDeliveryFailureReason | undefined,
-  ) => Promise<void>;
+  /** The code was requested under `signInAttempt`. */
+  onCodeSent: (email: string, signInAttempt: string) => Promise<void>;
   /** The server sends this address no code: it signs in with a password. */
   onPasswordRequired: (email: string) => void;
   /** Opens the password form with the address typed so far, where offered. */
@@ -406,9 +400,11 @@ const EmailCodeSignInForm = ({
       defaultValues: { email: "" },
       submitValues: "schema-output",
       onSubmit: async ({ value }) => {
-        const { data, error } = await authClient.emailOtp.sendVerificationOtp({
+        const signInAttempt = newSignInAttempt();
+        const { error } = await authClient.emailOtp.sendVerificationOtp({
           email: value.email,
           type: "sign-in",
+          fetchOptions: { headers: signInAttemptHeaders(signInAttempt) },
         });
 
         if (error?.code === AUTH_SIGN_IN_CODE_UNAVAILABLE_ERROR_CODE) {
@@ -429,11 +425,7 @@ const EmailCodeSignInForm = ({
           return;
         }
 
-        const delivery = readEmailDeliveryStatus(data);
-        await onCodeSent(
-          value.email,
-          delivery?.type === "failed" ? delivery.reason : undefined,
-        );
+        await onCodeSent(value.email, signInAttempt);
       },
     }),
   );

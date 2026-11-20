@@ -156,7 +156,6 @@
       "mailboxMissing": "Me ei saa aadressile <email>{emailAddress}</email> e-kirju kohale toimetada: meiliserveri teatel sellist postkasti ei ole. Kontrollige aadressi või kasutage teist e-posti aadressi.",
       "mailboxUnavailable": "Me ei saa praegu aadressile <email>{emailAddress}</email> e-kirju kohale toimetada: postkast on täis või ajutiselt kättesaamatu. Proovige hiljem uuesti või kasutage teist e-posti aadressi.",
       "other": "E-kirja kohaletoimetamine aadressile <email>{emailAddress}</email> ebaõnnestus. Proovige hiljem uuesti või kasutage teist e-posti aadressi.",
-      "suppressed": "Me ei saada enam e-kirju aadressile <email>{emailAddress}</email>, sest varasemaid kirju ei õnnestunud kohale toimetada. Kasutage teist e-posti aadressi.",
       "tlsRequired": "Me ei saa domeeni <domain>{domainName}</domain> aadressidele e-kirju kohale toimetada: selle meiliserver ei võta krüpteeritud e-kirju vastu. Paluge oma IT-osakonnal meiliserveris TLS (STARTTLS) sisse lülitada või kasutage teist e-posti aadressi."
     },
     "emailPlaceholder": "teie@example.com",

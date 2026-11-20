@@ -156,7 +156,6 @@
       "mailboxMissing": "Wir können keine E-Mails an <email>{emailAddress}</email> zustellen: Laut Mailserver gibt es dieses Postfach nicht. Prüfen Sie die Adresse oder verwenden Sie eine andere E-Mail-Adresse.",
       "mailboxUnavailable": "Wir können derzeit keine E-Mails an <email>{emailAddress}</email> zustellen: Das Postfach ist voll oder vorübergehend nicht erreichbar. Versuchen Sie es später erneut oder verwenden Sie eine andere E-Mail-Adresse.",
       "other": "Wir konnten keine E-Mail an <email>{emailAddress}</email> zustellen. Versuchen Sie es später erneut oder verwenden Sie eine andere E-Mail-Adresse.",
-      "suppressed": "Wir senden keine E-Mails mehr an <email>{emailAddress}</email>, weil frühere Nachrichten nicht zugestellt werden konnten. Verwenden Sie eine andere E-Mail-Adresse.",
       "tlsRequired": "Wir können keine E-Mails an <domain>{domainName}</domain> zustellen: Der Mailserver dieser Domain nimmt keine verschlüsselten E-Mails an. Bitten Sie Ihre IT-Abteilung, TLS (STARTTLS) auf dem Mailserver zu aktivieren, oder verwenden Sie eine andere E-Mail-Adresse."
     },
     "emailPlaceholder": "sie@beispiel.de",

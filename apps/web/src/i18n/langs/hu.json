@@ -156,7 +156,6 @@
       "mailboxMissing": "Nem tudunk e-mailt kézbesíteni a következő címre: <email>{emailAddress}</email>. A levelezőszerver szerint ez a postafiók nem létezik. Ellenőrizze a címet, vagy használjon másik e-mail-címet.",
       "mailboxUnavailable": "Jelenleg nem tudunk e-mailt kézbesíteni a következő címre: <email>{emailAddress}</email>. A postafiók megtelt vagy átmenetileg nem érhető el. Próbálja újra később, vagy használjon másik e-mail-címet.",
       "other": "Nem sikerült e-mailt kézbesíteni a következő címre: <email>{emailAddress}</email>. Próbálja újra később, vagy használjon másik e-mail-címet.",
-      "suppressed": "Már nem küldünk e-mailt a következő címre: <email>{emailAddress}</email>, mert a korábbi üzeneteket nem sikerült kézbesíteni. Használjon másik e-mail-címet.",
       "tlsRequired": "Nem tudunk e-mailt kézbesíteni a következő tartományba: <domain>{domainName}</domain>. A tartomány levelezőszervere nem fogad titkosított leveleket. Kérje meg az informatikai részleget, hogy kapcsolja be a TLS-t (STARTTLS) a levelezőszerveren, vagy használjon másik e-mail-címet."
     },
     "emailPlaceholder": "te@example.com",

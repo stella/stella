@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
+import { SIGN_IN_ATTEMPT_HEADER } from "@stll/api-contract/email-delivery";
 import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/auth/sign-in" });
@@ -239,7 +240,6 @@ test("a recipient server without STARTTLS is explained with its domain, and no c
 test.each([
   ["mailbox_missing", "this mailbox doesn't exist"],
   ["mailbox_unavailable", "full or temporarily unavailable"],
-  ["suppressed", "We no longer send email to"],
   ["other", "We couldn't deliver email to"],
 ] as const)(
   "a %s failure names the address and what to do",
@@ -261,25 +261,35 @@ test("without a known failure the panel says a code was sent and shows no alert"
   expect(ui.getByText(/We sent a code to/u)).toBeTruthy();
 });
 
-test("sending the code again shows a failure the server reports, and clears it once none is recorded", async () => {
+test("the panel explains its own code mail's bounce, and a code sent again starts over", async () => {
   const { QueryClient, QueryClientProvider } =
     await import("@tanstack/react-query");
   const router = await import("@tanstack/react-router");
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
-  const statuses = [
-    { type: "failed", reason: "tls_required" },
-    { type: "none_recorded" },
-  ];
+  const opening = "a".repeat(43);
+  const resent: string[] = [];
+  const polled: unknown[] = [];
   globalThis.fetch = Object.assign(
-    async (input: string | URL | Request) => {
+    async (input: string | URL | Request, init?: RequestInit) => {
       const url = input instanceof Request ? input.url : input.toString();
       if (url.includes("email-otp/send-verification-otp")) {
-        return Response.json({
-          success: true,
-          emailDelivery: statuses.shift(),
-        });
+        resent.push(
+          new Headers(init?.headers).get(SIGN_IN_ATTEMPT_HEADER) ?? "",
+        );
+        return Response.json({ success: true });
+      }
+      if (url.includes("email-otp/sign-in-delivery")) {
+        const body: unknown =
+          typeof init?.body === "string" ? JSON.parse(init.body) : null;
+        polled.push(body);
+        // Only the attempt that opened the panel bounced.
+        return Response.json(
+          JSON.stringify(body) === JSON.stringify({ attempt: opening })
+            ? { status: "failed", reason: "tls_required" }
+            : { status: "none" },
+        );
       }
       return Response.json(null);
     },
@@ -290,7 +300,11 @@ test("sending the code again shows a failure the server reports, and clears it o
     getParentRoute: () => root,
     path: "/auth/otp",
     component: () => (
-      <OTPPanel email="new.member@example.test" redirectTo="/account" />
+      <OTPPanel
+        email="new.member@example.test"
+        redirectTo="/account"
+        signInAttempt={opening}
+      />
     ),
   });
   const appRouter = router.createRouter({
@@ -307,9 +321,6 @@ test("sending the code again shows a failure the server reports, and clears it o
         </IntlProvider>
       </QueryClientProvider>,
     );
-    expect(ui.queryByRole("alert")).toBeNull();
-
-    fireEvent.click(ui.getByRole("button", { name: /Send code again/u }));
     expect((await ui.findByRole("alert")).textContent).toContain(
       "its mail server doesn't accept encrypted email",
     );
@@ -318,6 +329,12 @@ test("sending the code again shows a failure the server reports, and clears it o
     fireEvent.click(ui.getByRole("button", { name: /Send code again/u }));
     await ui.findByText(/We sent a code to/u);
     expect(ui.queryByRole("alert")).toBeNull();
+    // The new request carried a fresh attempt, and the panel asks about that
+    // one only, by its id alone.
+    expect(resent).toHaveLength(1);
+    expect(resent[0]).toMatch(/^[\w-]{43}$/u);
+    expect(resent[0]).not.toBe(opening);
+    expect(polled.at(-1)).toEqual({ attempt: resent[0] });
   } finally {
     client.clear();
     globalThis.fetch = originalFetch;

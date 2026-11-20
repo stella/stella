@@ -1,7 +1,7 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
-import type { EmailDeliveryStatus } from "@stll/api-contract/email-delivery";
+import { SIGN_IN_ATTEMPT_HEADER } from "@stll/api-contract/email-delivery";
 import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 import type { AuthCapabilities } from "./sign-in-panel.logic";
@@ -45,12 +45,9 @@ const emailOnly = {
   social: { google: false, microsoft: false, apple: false },
 } satisfies AuthCapabilities;
 
-// Requests a code for `email` from the sign-in step, the server answering
-// with `delivery`, and resolves the code step's search once it opens.
-const requestCode = async (
-  email: string,
-  delivery: EmailDeliveryStatus | undefined,
-) => {
+// Requests a code for `email` from the sign-in step and resolves the code
+// step's search once it opens, with the attempt header the request carried.
+const requestCode = async (email: string) => {
   globalThis.fetch = stubFetch(emailOnly);
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } },
@@ -82,15 +79,13 @@ const requestCode = async (
     </QueryClientProvider>,
   );
   await ui.findByRole("heading", { name: messages.auth.signIn });
+  const attempts: (string | null)[] = [];
   globalThis.fetch = Object.assign(
-    async (input: string | URL | Request) => {
+    async (input: string | URL | Request, init?: RequestInit) => {
       const url = input instanceof Request ? input.url : input.toString();
       if (url.includes("/email-otp/send-verification-otp")) {
-        return Response.json(
-          delivery === undefined
-            ? { success: true }
-            : { success: true, emailDelivery: delivery },
-        );
+        attempts.push(new Headers(init?.headers).get(SIGN_IN_ATTEMPT_HEADER));
+        return Response.json({ success: true });
       }
       return Response.json(null);
     },
@@ -104,28 +99,19 @@ const requestCode = async (
     ui.getByRole("button", { name: messages.auth.continueWithEmail }),
   );
   await ui.findByTestId("code-step");
-  return appRouter.state.location.search;
+  return { search: appRouter.state.location.search, attempts };
 };
 
-test("a code request for an address whose mail recently failed carries the reason to the code step", async () => {
-  expect(
-    await requestCode("new.member@example.test", {
-      type: "failed",
-      reason: "tls_required",
-    }),
-  ).toMatchObject({
+test("a code request names a fresh attempt and hands it to the code step", async () => {
+  const first = await requestCode("new.member@example.test");
+  cleanup();
+  const second = await requestCode("new.member@example.test");
+
+  expect(first.attempts).toHaveLength(1);
+  expect(first.attempts[0]).toMatch(/^[\w-]{43}$/u);
+  expect(first.search).toMatchObject({
     email: "new.member@example.test",
-    deliveryFailure: "tls_required",
+    signInAttempt: first.attempts[0],
   });
-});
-
-test.each([
-  ["no failure is recorded", { type: "none_recorded" } as const],
-  ["the server could not read it", { type: "unknown" } as const],
-  ["the server sent no status", undefined],
-])("the code step opens without a reason when %s", async (_, delivery) => {
-  const search = await requestCode("member@example.test", delivery);
-
-  expect(search).toMatchObject({ email: "member@example.test" });
-  expect(search).not.toHaveProperty("deliveryFailure");
+  expect(second.attempts[0]).not.toBe(first.attempts[0]);
 });

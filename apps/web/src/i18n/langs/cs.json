@@ -156,7 +156,6 @@
       "mailboxMissing": "Na adresu <email>{emailAddress}</email> nemůžeme doručit e-mail: podle poštovního serveru tato schránka neexistuje. Zkontrolujte adresu, nebo použijte jinou e-mailovou adresu.",
       "mailboxUnavailable": "Na adresu <email>{emailAddress}</email> teď nemůžeme doručit e-mail: schránka je plná nebo dočasně nedostupná. Zkuste to později, nebo použijte jinou e-mailovou adresu.",
       "other": "Na adresu <email>{emailAddress}</email> se nám nepodařilo doručit e-mail. Zkuste to později, nebo použijte jinou e-mailovou adresu.",
-      "suppressed": "Na adresu <email>{emailAddress}</email> už e-maily neposíláme, protože předchozí zprávy nešlo doručit. Použijte jinou e-mailovou adresu.",
       "tlsRequired": "Na adresy v doméně <domain>{domainName}</domain> nemůžeme doručit e-mail: její poštovní server nepřijímá šifrovanou poštu. Požádejte svoje IT oddělení, aby na poštovním serveru zapnulo TLS (STARTTLS), nebo použijte jinou e-mailovou adresu."
     },
     "emailPlaceholder": "vy@priklad.cz",

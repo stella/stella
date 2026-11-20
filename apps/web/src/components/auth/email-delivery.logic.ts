@@ -1,24 +1,24 @@
-import * as v from "valibot";
+import { SIGN_IN_ATTEMPT_HEADER } from "@stll/api-contract/email-delivery";
 
-import {
-  EMAIL_DELIVERY_STATUS_FIELD,
-  emailCodeRequestResponseSchema,
-  type EmailDeliveryStatus,
-} from "@stll/api-contract/email-delivery";
+const SIGN_IN_ATTEMPT_BYTES = 32;
 
 /**
- * What a code request's response says about mail to the requested address.
- * `undefined` means the server sent no status (one released before the
- * field), which the sign-in screen treats like `unknown`.
+ * A fresh random id for one code request. The request carries it, and only
+ * a caller holding it can later ask whether that request's code mail
+ * bounced.
  */
-export const readEmailDeliveryStatus = (
-  data: unknown,
-): EmailDeliveryStatus | undefined => {
-  const parsed = v.safeParse(emailCodeRequestResponseSchema, data);
-  return parsed.success
-    ? parsed.output[EMAIL_DELIVERY_STATUS_FIELD]
-    : undefined;
+export const newSignInAttempt = (): string => {
+  const bytes = crypto.getRandomValues(new Uint8Array(SIGN_IN_ATTEMPT_BYTES));
+  return btoa(String.fromCodePoint(...bytes))
+    .replaceAll("+", "-")
+    .replaceAll("/", "_")
+    .replace(/[=]+$/u, "");
 };
+
+/** The request headers that name a code request's attempt. */
+export const signInAttemptHeaders = (attempt: string) => ({
+  [SIGN_IN_ATTEMPT_HEADER]: attempt,
+});
 
 /** The domain part of an address, as a recipient's mail server serves it. */
 export const emailDomain = (email: string): string =>
