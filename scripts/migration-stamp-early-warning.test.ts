@@ -69,7 +69,7 @@ const fixture = ({
 };
 
 const run = (root: string, ...arguments_: string[]) => {
-  const summary = path.join(root, ".git", "summary.md");
+  const summary = path.join(root, ".git", "step-summary.txt");
   const result = Bun.spawnSync(["bash", SCRIPT, ...arguments_], {
     cwd: root,
     env: { ...process.env, GITHUB_STEP_SUMMARY: summary },

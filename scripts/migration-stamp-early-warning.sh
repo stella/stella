@@ -44,9 +44,10 @@ if (( ${#stale[@]} == 0 )); then
   exit 0
 fi
 
-fix="git fetch origin main && bun scripts/migration-restamp.ts --write --base origin/main --update-tests"
+# The fix is MIGRATION_RESTAMP_COMMAND in scripts/migration-stamps.ts; the
+# test checks that both say the same. It is printed, never run.
 for name in "${stale[@]}"; do
-  echo "::error title=Migration stamp behind main::$migrations/$name must be stamped later than $migrations/$newest_base on $base_ref; the merge queue refuses it. Fix: $fix"
+  echo "::error title=Migration stamp behind main::$migrations/$name must be stamped later than $migrations/$newest_base on $base_ref; the merge queue refuses it. Fix: git fetch origin main && bun scripts/migration-restamp.ts --write --base origin/main --update-tests"
 done
 report="$(
   echo "### Migration stamps behind $base_ref"
@@ -60,7 +61,7 @@ report="$(
   echo "Re-stamp them (this moves their lock allowances and rewrites the references in the generated files and API tests), then commit the moved files and push:"
   echo
   echo '```sh'
-  echo "$fix"
+  echo "git fetch origin main && bun scripts/migration-restamp.ts --write --base origin/main --update-tests"
   echo '```'
   echo
   echo "Add \`--forward <hours>\` to stamp them that many hours ahead, so migrations that merge in the meantime do not overtake them again."
