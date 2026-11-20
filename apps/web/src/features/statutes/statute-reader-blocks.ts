@@ -56,18 +56,34 @@ export const provisionCitationCountByBlockAnchor = (
 };
 
 /**
- * The rendered block a statute tab lands on. A link may state the local
- * provision id (`cl_7`) where the publisher namespaces it (`prilohy-cl_7`),
- * so the request resolves through the deep-link rule; an anchor the text does
- * not hold, or holds ambiguously, lands nowhere and the act opens at its top.
+ * The rendered blocks a statute tab lands on, the first being where the text
+ * scrolls. A link may state the local provision id (`cl_7`) where the
+ * publisher namespaces it (`prilohy-cl_7`), so each request resolves through
+ * the deep-link rule; an anchor the text does not hold, or holds ambiguously,
+ * lands nowhere. The subdivisions a citation names (`odst. 1 a 2`) are marked
+ * where the text holds them; where it holds none of them the provision the
+ * link names is marked instead, and with neither the act opens at its top.
  */
-export const statuteLandingAnchorId = (
+export const statuteLandingAnchorIds = (
   statute: StatuteBlocks<Block>,
-  requestedAnchorId: string | undefined,
-): string | undefined =>
-  requestedAnchorId === undefined
-    ? undefined
-    : resolveDocumentAnchor(statute, requestedAnchorId)?.anchorId;
+  {
+    anchorId,
+    citedAnchorIds = [],
+  }: {
+    anchorId?: string | undefined;
+    citedAnchorIds?: readonly string[] | undefined;
+  },
+): string[] => {
+  const resolve = (requested: string): string[] => {
+    const block = resolveDocumentAnchor(statute, requested);
+    return block === null ? [] : [block.anchorId];
+  };
+  const cited = [...new Set(citedAnchorIds.flatMap(resolve))];
+  if (cited.length > 0) {
+    return cited;
+  }
+  return anchorId === undefined ? [] : resolve(anchorId);
+};
 
 /**
  * The provision each block sits in, by the block's own anchor: the

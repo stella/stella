@@ -465,7 +465,7 @@ export const RECOMMENDED_CHAT_MODELS = [
   GPT_62_MODEL_IDS.sol.openai,
   // GPT-6.1 has no fast tier yet; GPT-6 Luna is the newest one.
   GPT_6_MODEL_IDS.luna.openai,
-  "gemini-3.8-flash",
+  "gemini-4-hydrogen",
 ] as const satisfies readonly OfferedBYOKModelId[];
 
 /**

@@ -137,6 +137,23 @@ describe("the tab a statute link opens", () => {
     expect(isStatuteViewPayload(tab.payload)).toBe(true);
   });
 
+  test("carries the subdivisions the link's label names", () => {
+    const tab = createStatuteLinkTab(statute, {
+      ...statuteLinkAt(`${statutePath}#par_240`),
+      citedAnchorIds: ["par_240-odst_1", "par_240-odst_2"],
+    });
+
+    expect(tab.payload.anchorId).toBe("par_240");
+    expect(tab.payload.citedAnchorIds).toEqual([
+      "par_240-odst_1",
+      "par_240-odst_2",
+    ]);
+    expect(isStatuteViewPayload(tab.payload)).toBe(true);
+    expect(isStatuteViewPayload({ ...tab.payload, citedAnchorIds: [""] })).toBe(
+      false,
+    );
+  });
+
   test("opens the act whole when the link names no provision", () => {
     const tab = createStatuteLinkTab(statute, statuteLinkAt(statutePath));
 

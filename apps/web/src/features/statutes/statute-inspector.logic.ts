@@ -10,6 +10,12 @@ export const STATUTE_VIEW = "statute";
 export type StatuteViewPayload = {
   /** A block to scroll to and mark once the text is shown. */
   anchorId?: string | undefined;
+  /**
+   * The subdivisions of that block the citation itself names (`§ 240 odst. 3`
+   * on a link to § 240): marked, and landed on, in its place where the text
+   * holds them.
+   */
+  citedAnchorIds?: string[] | undefined;
   /** Jurisdiction, as the act's public address spells it. */
   country: string;
   searchQuery?: string | undefined;
@@ -34,6 +40,10 @@ const isNullableString = (value: unknown): value is string | null =>
 
 const isOptionalNonEmptyString = (value: unknown): boolean =>
   value === undefined || isNonEmptyString(value);
+
+const isOptionalNonEmptyStringArray = (value: unknown): boolean =>
+  value === undefined ||
+  (Array.isArray(value) && value.every((item) => isNonEmptyString(item)));
 
 export const isStatuteViewPayload = (
   value: unknown,
@@ -61,7 +71,9 @@ export const isStatuteViewPayload = (
       isOptionalNonEmptyString(value.findSessionId)) &&
     (!("searchQuery" in value) ||
       isOptionalNonEmptyString(value.searchQuery)) &&
-    (!("anchorId" in value) || isOptionalNonEmptyString(value.anchorId))
+    (!("anchorId" in value) || isOptionalNonEmptyString(value.anchorId)) &&
+    (!("citedAnchorIds" in value) ||
+      isOptionalNonEmptyStringArray(value.citedAnchorIds))
   );
 };
 
@@ -87,6 +99,7 @@ export type StatuteViewTab = {
  */
 type CreateStatuteViewTabOptions = {
   anchorId?: string | undefined;
+  citedAnchorIds?: readonly string[] | undefined;
   country: string;
   searchQuery?: string | undefined;
   documentId: string;
@@ -99,6 +112,7 @@ type CreateStatuteViewTabOptions = {
 /** The `openView` arguments for the act a citation names. */
 export const createStatuteViewTab = ({
   anchorId,
+  citedAnchorIds = [],
   country,
   documentId,
   eli,
@@ -121,5 +135,8 @@ export const createStatuteViewTab = ({
       ? {}
       : { searchQuery, findSessionId: createUuid() }),
     ...(anchorId === undefined ? {} : { anchorId }),
+    ...(citedAnchorIds.length === 0
+      ? {}
+      : { citedAnchorIds: [...citedAnchorIds] }),
   },
 });

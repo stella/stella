@@ -55,6 +55,17 @@ it before closing the connection.
   report's scan cap, so a cap applied per generation instead of per run goes
   over the budget.
 
+- Redaction tombstone backfill (`redaction-tombstone-seed.ts`): a full
+  50-decision audit page at 15,000 and 30,000 audited decisions, search rows,
+  reserved uploads and scheduler rows; each population has decision ids of its
+  own, so no earlier run's desired states apply. Repair, inline-raw and settled cohorts
+  exercise the registered v3 task, including its separate publisher-payload
+  cleanup update. Historical rows are loaded with their current guards restored
+  before measurement; cursor advancement, cleanup reservations, audit timestamps
+  and a non-audited live control prove the work happened. The standalone
+  `redaction-tombstones.test.ts` uses an independent clone name; the same
+  scenarios are registered in the corpus gate.
+
 The corpus fixture uses 60,000-row generations and a 120,000-row twin (a 2x
 scale factor); equal reads at both sizes establish the bound independently of
 the total corpus size. The 10-second per-statement execution guard is below

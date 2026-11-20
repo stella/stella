@@ -1149,7 +1149,8 @@
       "saveFailed": "Neizdevās nokopēt vai saglabāt transkripciju. Mēģiniet vēlreiz.",
       "noSpeech": "Šajā ierakstā runa netika atrasta.",
       "fileName": "{title} – transkripcija.txt",
-      "documentTitle": "{title} – transkripcija"
+      "documentTitle": "{title} – transkripcija",
+      "transcriptTitle": "Transkripcija"
     },
     "progress": {
       "running": "Transkribē {done, number} no {total, number} min",
@@ -1158,6 +1159,28 @@
       "stopped": "Apturēts pēc {done, number} min. Līdz šim iegūtais teksts paliek.",
       "done": "Transkribētas {total, number} min.",
       "another": "Transkribēt citu ierakstu"
+    },
+    "cleaned": {
+      "title": "Sakārtots teksts",
+      "running": "Kārto…",
+      "waiting": "Katra daļa tiek sakārtota, tiklīdz tā ir transkribēta.",
+      "instructionsTitle": "Norādījumi diktātā · nav teksta daļa",
+      "instructionsLabel": "Norādījumi:",
+      "partFailed": "Šo daļu neizdevās sakārtot, tāpēc tā parādīta, kā transkribēta.",
+      "failedCount": "{count, plural, zero {# daļas nav sakārtotas} one {# daļa nav sakārtota} other {# daļas nav sakārtotas}}",
+      "saveMarkdown": "Formatēts teksts (.md)",
+      "saveText": "Vienkāršs teksts (.txt)",
+      "fileNameMarkdown": "{title} sakārtots.md",
+      "fileNameText": "{title} sakārtots.txt",
+      "offerTitle": "Sakārtot transkripciju ar MI",
+      "offerDescription": "Šis ieraksts tika transkribēts šajā datorā, un MI kārtošana iestatījumos ir izslēgta. Kārtošana nosūta jūsu organizācijas MI modelim tekstu, nekad ne skaņu.",
+      "offerStart": "Sakārtot"
+    },
+    "copyMenu": {
+      "label": "Kopēšanas iespējas",
+      "formatted": "Ar formatējumu",
+      "plain": "Kā vienkāršu tekstu",
+      "hint": "Ar formatējumu programmā Word vai Outlook tiek ielīmēti virsraksti, treknraksts un saraksti. Jūsu izvēle tiek atcerēta."
     }
   }
 }

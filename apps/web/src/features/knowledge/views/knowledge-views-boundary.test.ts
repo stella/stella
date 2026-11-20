@@ -270,6 +270,7 @@ const PUBLIC_ROUTES = [
 /** The detail page reaches the member actions through its lazy dispatcher. */
 const PUBLIC_ROUTES_WITH_DISPATCHER = [
   "routes/knowledge/templates_.catalogue.$packId.$templateId.tsx",
+  "routes/knowledge/-catalogue-template.page.tsx",
 ].map(fromSource);
 
 const PUBLIC_CONTAINER_ROOT = fromSource("routes/knowledge/-public");

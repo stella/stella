@@ -60,11 +60,11 @@ let organizationSettings = {
 };
 const GOOGLE_KEY = `AIza${"a".repeat(31)}1234`;
 const GOOGLE_DEFAULTS = {
-  chat: { provider: "google", modelId: "gemini-3.8-flash" },
-  fast: { provider: "google", modelId: "gemini-3.8-flash" },
-  reasoning: { provider: "google", modelId: "gemini-3.8-flash" },
-  pdf: { provider: "google", modelId: "gemini-3.8-flash" },
-  browse: { provider: "google", modelId: "gemini-3.8-flash" },
+  chat: { provider: "google", modelId: "gemini-4-hydrogen" },
+  fast: { provider: "google", modelId: "gemini-4-hydrogen" },
+  reasoning: { provider: "google", modelId: "gemini-4-neon" },
+  pdf: { provider: "google", modelId: "gemini-4-hydrogen" },
+  browse: { provider: "google", modelId: "gemini-4-hydrogen" },
 } satisfies OrganizationAIConfig["defaultModels"];
 const ANTHROPIC_DEFAULTS = {
   chat: { provider: "anthropic", modelId: "claude-opus-5-5" },
@@ -74,9 +74,9 @@ const ANTHROPIC_DEFAULTS = {
   browse: { provider: "anthropic", modelId: "claude-haiku-5-5" },
 } satisfies OrganizationAIConfig["defaultModels"];
 const OPENROUTER_DEFAULTS = {
-  chat: { provider: "openrouter", modelId: "openai/gpt-6-sol" },
+  chat: { provider: "openrouter", modelId: "openai/gpt-6.2-sol" },
   fast: { provider: "openrouter", modelId: "anthropic/claude-haiku-5.5" },
-  reasoning: { provider: "openrouter", modelId: "openai/gpt-6-sol" },
+  reasoning: { provider: "openrouter", modelId: "openai/gpt-6.2-sol" },
   pdf: { provider: "openrouter", modelId: "google/gemini-3.8-flash" },
   browse: { provider: "openrouter", modelId: "anthropic/claude-haiku-5.5" },
 } satisfies OrganizationAIConfig["defaultModels"];
@@ -1026,7 +1026,9 @@ test.each([false, true])(
         chat: { provider: "mistral", modelId: "mistral-medium-latest" },
         fast: { provider: "mistral", modelId: "mistral-small-latest" },
         reasoning: { provider: "mistral", modelId: "mistral-medium-latest" },
-        pdf: withFallback ? { provider: "openai", modelId: "gpt-6-sol" } : null,
+        pdf: withFallback
+          ? { provider: "openai", modelId: "gpt-6.2-sol" }
+          : null,
         browse: { provider: "mistral", modelId: "mistral-small-latest" },
       },
       providerDefaultModels: [
@@ -1048,13 +1050,13 @@ test.each([false, true])(
               {
                 provider: openai.provider,
                 defaultModels: {
-                  chat: { provider: openai.provider, modelId: "gpt-6-sol" },
+                  chat: { provider: openai.provider, modelId: "gpt-6.2-sol" },
                   fast: { provider: openai.provider, modelId: "gpt-6-luna" },
                   reasoning: {
                     provider: openai.provider,
-                    modelId: "gpt-6-sol",
+                    modelId: "gpt-6.2-sol",
                   },
-                  pdf: { provider: openai.provider, modelId: "gpt-6-sol" },
+                  pdf: { provider: openai.provider, modelId: "gpt-6.2-sol" },
                   browse: { provider: openai.provider, modelId: "gpt-6-luna" },
                 },
               },

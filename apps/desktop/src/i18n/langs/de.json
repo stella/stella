@@ -1149,7 +1149,8 @@
       "saveFailed": "Das Transkript konnte nicht kopiert oder gespeichert werden. Versuchen Sie es erneut.",
       "noSpeech": "In dieser Aufnahme wurde keine Sprache gefunden.",
       "fileName": "{title} – Transkript.txt",
-      "documentTitle": "{title} – Transkript"
+      "documentTitle": "{title} – Transkript",
+      "transcriptTitle": "Transkript"
     },
     "progress": {
       "running": "Transkription: {done, number} von {total, number} Min.",
@@ -1158,6 +1159,28 @@
       "stopped": "Nach {done, number} Min. gestoppt. Der bisherige Text bleibt erhalten.",
       "done": "{total, number} Min. transkribiert.",
       "another": "Weitere Aufnahme transkribieren"
+    },
+    "cleaned": {
+      "title": "Bereinigt",
+      "running": "Wird bereinigt…",
+      "waiting": "Jeder Teil wird bereinigt, sobald er transkribiert ist.",
+      "instructionsTitle": "Anweisungen im Diktat · nicht Teil des Textes",
+      "instructionsLabel": "Anweisungen:",
+      "partFailed": "Dieser Teil konnte nicht bereinigt werden und wird daher wie transkribiert angezeigt.",
+      "failedCount": "{count, plural, one {# Teil nicht bereinigt} other {# Teile nicht bereinigt}}",
+      "saveMarkdown": "Formatierter Text (.md)",
+      "saveText": "Nur Text (.txt)",
+      "fileNameMarkdown": "{title} bereinigt.md",
+      "fileNameText": "{title} bereinigt.txt",
+      "offerTitle": "Transkript mit KI bereinigen",
+      "offerDescription": "Diese Aufnahme wurde auf diesem Computer transkribiert und die KI-Bereinigung ist in den Einstellungen aus. Beim Bereinigen wird der Text, nie der Ton, an das KI-Modell Ihrer Organisation gesendet.",
+      "offerStart": "Bereinigen"
+    },
+    "copyMenu": {
+      "label": "Kopieroptionen",
+      "formatted": "Mit Formatierung",
+      "plain": "Als reiner Text",
+      "hint": "Mit Formatierung werden Überschriften, Fettdruck und Listen in Word oder Outlook eingefügt. Ihre Wahl wird gespeichert."
     }
   }
 }

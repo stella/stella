@@ -1149,7 +1149,8 @@
       "saveFailed": "Nepavyko nukopijuoti ar išsaugoti transkripcijos. Bandykite dar kartą.",
       "noSpeech": "Šiame įraše kalbos nerasta.",
       "fileName": "{title} – transkripcija.txt",
-      "documentTitle": "{title} – transkripcija"
+      "documentTitle": "{title} – transkripcija",
+      "transcriptTitle": "Transkripcija"
     },
     "progress": {
       "running": "Transkribuojama {done, number} iš {total, number} min.",
@@ -1158,6 +1159,28 @@
       "stopped": "Sustabdyta po {done, number} min. Iki šiol gautas tekstas išlieka.",
       "done": "Transkribuota {total, number} min.",
       "another": "Transkribuoti kitą įrašą"
+    },
+    "cleaned": {
+      "title": "Sutvarkytas tekstas",
+      "running": "Tvarkoma…",
+      "waiting": "Kiekviena dalis sutvarkoma iškart, kai tik ji transkribuojama.",
+      "instructionsTitle": "Nurodymai diktavime · ne teksto dalis",
+      "instructionsLabel": "Nurodymai:",
+      "partFailed": "Šios dalies sutvarkyti nepavyko, todėl ji rodoma taip, kaip transkribuota.",
+      "failedCount": "{count, plural, one {# dalis nesutvarkyta} few {# dalys nesutvarkytos} other {# dalių nesutvarkyta}}",
+      "saveMarkdown": "Formatuotas tekstas (.md)",
+      "saveText": "Paprastas tekstas (.txt)",
+      "fileNameMarkdown": "{title} sutvarkytas.md",
+      "fileNameText": "{title} sutvarkytas.txt",
+      "offerTitle": "Sutvarkyti transkripciją su DI",
+      "offerDescription": "Šis įrašas transkribuotas šiame kompiuteryje, o DI tvarkymas Nustatymuose išjungtas. Tvarkant jūsų organizacijos DI modeliui siunčiamas tekstas, niekada ne garsas.",
+      "offerStart": "Sutvarkyti"
+    },
+    "copyMenu": {
+      "label": "Kopijavimo parinktys",
+      "formatted": "Su formatavimu",
+      "plain": "Kaip paprastą tekstą",
+      "hint": "Su formatavimu į Word ar Outlook įklijuojamos antraštės, paryškinimai ir sąrašai. Jūsų pasirinkimas įsimenamas."
     }
   }
 }
