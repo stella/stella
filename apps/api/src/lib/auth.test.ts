@@ -47,8 +47,8 @@ import {
   withStellaTwoFactorSignInGate,
 } from "@/api/lib/auth";
 import { getAuthEndpointUrl } from "@/api/lib/auth/auth-paths";
-import { SESSION_ABSOLUTE_AGE_MS } from "@/api/lib/auth/session-liveness";
 import { toSafeId } from "@/api/lib/branded-types";
+import { SESSION_ABSOLUTE_AGE_MS } from "@/api/lib/db/session-liveness";
 import { AUTH_RATE_LIMITS } from "@/api/lib/limits";
 import { OAUTH_CLIENT_REGISTRATION_PATH } from "@/api/lib/oauth-loopback-registration";
 import { recordNewOrganizationAccessState } from "@/api/lib/usage/organization-access-state";
