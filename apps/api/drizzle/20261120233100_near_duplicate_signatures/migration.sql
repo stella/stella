@@ -15,7 +15,7 @@ CREATE TABLE "entity_version_minhash_signatures" (
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	CONSTRAINT "entity_version_minhash_signatures_length_check" CHECK (octet_length("signature") = 512)
 );--> statement-breakpoint
-ALTER TABLE "entity_version_minhash_signatures" ADD CONSTRAINT "entity_version_minhash_signatures_version_fk" FOREIGN KEY ("entity_version_id") REFERENCES "entity_versions"("id") ON DELETE CASCADE;--> statement-breakpoint
+ALTER TABLE "entity_version_minhash_signatures" ADD CONSTRAINT "entity_version_minhash_signatures_version_entity_workspace_fk" FOREIGN KEY ("entity_version_id","entity_id","workspace_id") REFERENCES "entity_versions"("id","entity_id","workspace_id") ON DELETE CASCADE;--> statement-breakpoint
 ALTER TABLE "entity_version_minhash_signatures" ADD CONSTRAINT "entity_version_minhash_signatures_organization_fk" FOREIGN KEY ("organization_id") REFERENCES "organization"("id") ON DELETE CASCADE;--> statement-breakpoint
 ALTER TABLE "entity_version_minhash_signatures" ADD CONSTRAINT "entity_version_minhash_signatures_workspace_fk" FOREIGN KEY ("workspace_id") REFERENCES "workspaces"("id") ON DELETE CASCADE;--> statement-breakpoint
 ALTER TABLE "entity_version_minhash_signatures" ADD CONSTRAINT "entity_version_minhash_signatures_workspace_organization_fk" FOREIGN KEY ("workspace_id","organization_id") REFERENCES "workspaces"("id","organization_id") ON DELETE CASCADE;--> statement-breakpoint
@@ -129,6 +129,7 @@ CREATE TABLE "entity_version_minhash_bands" (
 	CONSTRAINT "entity_version_minhash_bands_pk" PRIMARY KEY("entity_version_id","band_key")
 );--> statement-breakpoint
 ALTER TABLE "entity_version_minhash_bands" ADD CONSTRAINT "entity_version_minhash_bands_signature_fk" FOREIGN KEY ("entity_version_id") REFERENCES "entity_version_minhash_signatures"("entity_version_id") ON DELETE CASCADE;--> statement-breakpoint
+ALTER TABLE "entity_version_minhash_bands" ADD CONSTRAINT "entity_version_minhash_bands_version_entity_workspace_fk" FOREIGN KEY ("entity_version_id","entity_id","workspace_id") REFERENCES "entity_versions"("id","entity_id","workspace_id") ON DELETE CASCADE;--> statement-breakpoint
 ALTER TABLE "entity_version_minhash_bands" ADD CONSTRAINT "entity_version_minhash_bands_organization_fk" FOREIGN KEY ("organization_id") REFERENCES "organization"("id") ON DELETE CASCADE;--> statement-breakpoint
 ALTER TABLE "entity_version_minhash_bands" ADD CONSTRAINT "entity_version_minhash_bands_workspace_fk" FOREIGN KEY ("workspace_id") REFERENCES "workspaces"("id") ON DELETE CASCADE;--> statement-breakpoint
 ALTER TABLE "entity_version_minhash_bands" ADD CONSTRAINT "entity_version_minhash_bands_workspace_organization_fk" FOREIGN KEY ("workspace_id","organization_id") REFERENCES "workspaces"("id","organization_id") ON DELETE CASCADE;--> statement-breakpoint

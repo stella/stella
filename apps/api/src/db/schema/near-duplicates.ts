@@ -56,9 +56,13 @@ export const entityVersionMinhashSignatures = p.pgTable(
     ...entityFeatureGateChecks(table),
     p
       .foreignKey({
-        columns: [table.entityVersionId],
-        foreignColumns: [entityVersions.id],
-        name: "entity_version_minhash_signatures_version_fk",
+        columns: [table.entityVersionId, table.entityId, table.workspaceId],
+        foreignColumns: [
+          entityVersions.id,
+          entityVersions.entityId,
+          entityVersions.workspaceId,
+        ],
+        name: "entity_version_minhash_signatures_version_entity_workspace_fk",
       })
       .onDelete("cascade"),
     p
@@ -136,6 +140,17 @@ export const entityVersionMinhashBands = p.pgTable(
         columns: [table.entityVersionId],
         foreignColumns: [entityVersionMinhashSignatures.entityVersionId],
         name: "entity_version_minhash_bands_signature_fk",
+      })
+      .onDelete("cascade"),
+    p
+      .foreignKey({
+        columns: [table.entityVersionId, table.entityId, table.workspaceId],
+        foreignColumns: [
+          entityVersions.id,
+          entityVersions.entityId,
+          entityVersions.workspaceId,
+        ],
+        name: "entity_version_minhash_bands_version_entity_workspace_fk",
       })
       .onDelete("cascade"),
     p

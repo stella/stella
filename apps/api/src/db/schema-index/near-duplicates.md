@@ -19,16 +19,16 @@ entity_version_minhash_signatures.signature                                 byte
 entity_version_minhash_signatures.created_at                                timestamptz         default,not null  near-duplicates.ts:53
 ```
 
-## entity_version_minhash_bands · `entityVersionMinhashBands` · near-duplicates.ts:117
+## entity_version_minhash_bands · `entityVersionMinhashBands` · near-duplicates.ts:121
 
 One LSH band key per band of a signature; candidates share a key.
 
 ```text
-entity_version_minhash_bands.{...entityFeatureGateColumns()}           spread                           near-duplicates.ts:120
-entity_version_minhash_bands.{...entityFeatureWorkspaceGateColumns()}  spread                           near-duplicates.ts:121
-entity_version_minhash_bands.entity_version_id                         safeUuid            fk,not null  near-duplicates.ts:122
-entity_version_minhash_bands.organization_id                           safeOrganizationId  fk,not null  near-duplicates.ts:123
-entity_version_minhash_bands.workspace_id                              safeWorkspaceId     fk,not null  near-duplicates.ts:124
-entity_version_minhash_bands.entity_id                                 safeUuid            fk,not null  near-duplicates.ts:125
-entity_version_minhash_bands.band_key                                  bigint              not null     near-duplicates.ts:126
+entity_version_minhash_bands.{...entityFeatureGateColumns()}           spread                           near-duplicates.ts:124
+entity_version_minhash_bands.{...entityFeatureWorkspaceGateColumns()}  spread                           near-duplicates.ts:125
+entity_version_minhash_bands.entity_version_id                         safeUuid            fk,not null  near-duplicates.ts:126
+entity_version_minhash_bands.organization_id                           safeOrganizationId  fk,not null  near-duplicates.ts:127
+entity_version_minhash_bands.workspace_id                              safeWorkspaceId     fk,not null  near-duplicates.ts:128
+entity_version_minhash_bands.entity_id                                 safeUuid            fk,not null  near-duplicates.ts:129
+entity_version_minhash_bands.band_key                                  bigint              not null     near-duplicates.ts:130
 ```

@@ -1,6 +1,8 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { eq, inArray } from "drizzle-orm";
 
+import { compareCodeUnit } from "@stll/collation";
+
 import { organization, user } from "@/api/db/auth-schema";
 import type { SafeDb } from "@/api/db/safe-db";
 import {
@@ -13,10 +15,12 @@ import {
 import { createSafeDb } from "@/api/db/scoped";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { isPgConstraintError, PG_ERROR } from "@/api/lib/pg-error";
 import { findSimilarDocuments } from "@/api/lib/uploads/near-duplicates/find-similar";
 import {
   LSH_BANDS,
   NEAR_DUPLICATE_THRESHOLD,
+  SIGNATURE_LENGTH,
 } from "@/api/lib/uploads/near-duplicates/minhash";
 import { recordNearDuplicateSignature } from "@/api/lib/uploads/near-duplicates/record-signature";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
@@ -162,10 +166,10 @@ test("an edited copy in the same matter is reported above the threshold", async 
 });
 
 test("an older version of the same document is never reported", async () => {
-  expect(await find([matterId], matterId, revisedId)).toEqual([
-    "Board minutes.pdf",
-    "Superseded.pdf",
-  ]);
+  // Both read exactly like the revision, so either order is right.
+  expect(
+    (await find([matterId], matterId, revisedId)).toSorted(compareCodeUnit),
+  ).toEqual(["Board minutes.pdf", "Superseded.pdf"]);
 });
 
 test("a document in another matter is never reported", async () => {
@@ -223,4 +227,76 @@ test("deleting a version deletes its signature and band keys", async () => {
       .from(entityVersionMinhashBands)
       .where(eq(entityVersionMinhashBands.entityVersionId, entityVersionId)),
   ).toEqual([]);
+});
+
+const currentVersionOf = async (entityId: SafeId<"entity">) => {
+  const [row] = await db
+    .select({ id: entities.currentVersionId })
+    .from(entities)
+    .where(eq(entities.id, entityId));
+  return row?.id ?? createSafeId<"entityVersion">();
+};
+
+const storedSignatureOf = async (entityVersionId: SafeId<"entityVersion">) => {
+  const [signature] = await db
+    .select({ bytes: entityVersionMinhashSignatures.signature })
+    .from(entityVersionMinhashSignatures)
+    .where(eq(entityVersionMinhashSignatures.entityVersionId, entityVersionId));
+  const bands = await db
+    .select({ bandKey: entityVersionMinhashBands.bandKey })
+    .from(entityVersionMinhashBands)
+    .where(eq(entityVersionMinhashBands.entityVersionId, entityVersionId));
+  return {
+    signature: signature?.bytes,
+    bandKeys: bands
+      .map(({ bandKey }) => String(bandKey))
+      .toSorted(compareCodeUnit),
+  };
+};
+
+test("new text for a version replaces its signature and band keys", async () => {
+  const rewrittenId = await seedDocument(matterId, "Rewritten.docx", [
+    UNRELATED,
+  ]);
+  const freshId = await seedDocument(matterId, "Fresh.docx", [CONTRACT]);
+  const rewrittenVersionId = await currentVersionOf(rewrittenId);
+  await recordNearDuplicateSignature(
+    asTestRaw<Parameters<typeof recordNearDuplicateSignature>[0]>(db),
+    {
+      entityId: rewrittenId,
+      entityVersionId: rewrittenVersionId,
+      organizationId,
+      workspaceId: matterId,
+      text: CONTRACT,
+    },
+  );
+  const rewritten = await storedSignatureOf(rewrittenVersionId);
+  expect(rewritten.bandKeys).toHaveLength(LSH_BANDS);
+  expect(rewritten).toEqual(
+    await storedSignatureOf(await currentVersionOf(freshId)),
+  );
+  await db.delete(entities).where(inArray(entities.id, [rewrittenId, freshId]));
+});
+
+test("a signature must name the entity that owns its version", async () => {
+  const unsignedId = await seedDocument(matterId, "Note.docx", ["too short"]);
+  const insertion = db.insert(entityVersionMinhashSignatures).values({
+    entityVersionId: await currentVersionOf(unsignedId),
+    entityId: contractId,
+    organizationId,
+    workspaceId: matterId,
+    signature: Buffer.alloc(SIGNATURE_LENGTH * 4),
+  });
+  const failure = await insertion.execute().then(
+    () => null,
+    (error: unknown) => error,
+  );
+  expect(
+    isPgConstraintError(
+      failure,
+      PG_ERROR.FOREIGN_KEY_VIOLATION,
+      "entity_version_minhash_signatures_version_entity_workspace_fk",
+    ),
+  ).toBe(true);
+  await db.delete(entities).where(eq(entities.id, unsignedId));
 });

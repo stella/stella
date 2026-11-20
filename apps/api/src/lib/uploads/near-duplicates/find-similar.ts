@@ -73,6 +73,7 @@ export const findSimilarDocuments = async ({
     .innerJoin(
       entities,
       and(
+        eq(entities.id, entityVersionMinhashSignatures.entityId),
         eq(
           entities.currentVersionId,
           entityVersionMinhashSignatures.entityVersionId,
@@ -93,6 +94,7 @@ export const findSimilarDocuments = async ({
             .innerJoin(
               entities,
               and(
+                eq(entities.id, entityVersionMinhashBands.entityId),
                 eq(
                   entities.currentVersionId,
                   entityVersionMinhashBands.entityVersionId,
