@@ -882,7 +882,7 @@ const runScopedIngestionPipeline = async ({
     }
     const unsettled = unsettledBuildFailureCount(page);
     if (unsettled > 0) {
-      stopKind = INGESTION_STOP_KIND.ADAPTER_ERROR;
+      termination = failedCycleTermination(INGESTION_STOP_KIND.ADAPTER_ERROR);
       return `${unsettled} adapter item build failure(s) lack replayable per-item outcomes; cursor held for retry`;
     }
     return await settlePageUnreadItems({
