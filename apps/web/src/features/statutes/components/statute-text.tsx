@@ -55,10 +55,11 @@ type StatuteTextProps = {
   fulltext: string | null;
   language: string;
   /**
-   * The rendered block the reader was sent to. It keeps a marker, and the
-   * text lands on it once it is shown.
+   * The rendered blocks the reader was sent to: a citation can name several
+   * subdivisions (`odst. 1 a 2`). Each keeps a marker, and the text lands on
+   * the first once it is shown.
    */
-  landingAnchorId?: string | undefined;
+  landingAnchorIds?: readonly string[] | undefined;
   masthead: StatuteMastheadData | null;
   provisionCitationCounts: ReadonlyMap<string, number>;
   /** The publisher's scheme its anchors nest provision lists in. */
@@ -93,6 +94,7 @@ export const statuteAnnotationBlocks = (
 // The statutes reader carries no in-page find bar yet, so every block renders
 // with an empty highlight set.
 const NO_RANGES = {};
+const NO_LANDING: readonly string[] = [];
 const NO_ACTIVE_MATCH = -1;
 
 /**
@@ -141,7 +143,7 @@ export const StatuteText = ({
   citationWork,
   documentId,
   fulltext,
-  landingAnchorId,
+  landingAnchorIds = NO_LANDING,
   language,
   masthead,
   provisionCitationCounts,
@@ -156,14 +158,15 @@ export const StatuteText = ({
 
   // The same arrival the decision reader makes: straight onto the block, held
   // there while the page around it settles.
+  const [scrollAnchorId] = landingAnchorIds;
   useExternalSyncEffect(() => {
     const article = articleRef.current;
-    if (article === null || landingAnchorId === undefined) {
+    if (article === null || scrollAnchorId === undefined) {
       return undefined;
     }
-    const target = readerBlockByAnchor(article, landingAnchorId);
+    const target = readerBlockByAnchor(article, scrollAnchorId);
     return target === null ? undefined : holdLanding({ article, target });
-  }, [landingAnchorId]);
+  }, [scrollAnchorId]);
 
   if (blocks.length > 0) {
     const anchorsByPieceId = buildAnnotationAnchors(
@@ -212,7 +215,7 @@ export const StatuteText = ({
               anchorsByPieceId={anchorsByPieceId}
               block={block}
               key={block.id}
-              landing={block.anchorId === landingAnchorId}
+              landing={landingAnchorIds.includes(block.anchorId)}
               provisionAccessory={detailsAction}
               rangesByPieceId={NO_RANGES}
               statuteAnchors={statuteAnchors}

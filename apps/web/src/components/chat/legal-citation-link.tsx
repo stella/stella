@@ -96,9 +96,26 @@ const InteractiveLegalCitation = ({
     event.preventDefault();
     const url = new URL(citation.url);
     const link = classifyChatHttpLink(url, appOrigins);
+    // The words the reader clicked, which may name a narrower passage than
+    // the address: `§ 240 odst. 3` on a link to § 240.
+    const label = event.currentTarget.textContent ?? "";
     switch (link.type) {
       case "statute":
-        detached(openStatute(link.link), "legal-citation.open-statute");
+        detached(
+          (async () => {
+            const { labelledStatuteAnchorIds } =
+              await import("@/components/chat/statute-link-label.logic");
+            await openStatute({
+              ...link.link,
+              citedAnchorIds: labelledStatuteAnchorIds({
+                anchor: link.link.anchor,
+                country: link.link.params.country,
+                label,
+              }),
+            });
+          })(),
+          "legal-citation.open-statute",
+        );
         return undefined;
       case "decision":
         return panic("A statute citation must resolve to a statute route");
