@@ -27,6 +27,15 @@
     "heading": "Aptiktas naujas prisijungimas",
     "ignore": "Jei tai buvote jūs, jokių veiksmų nereikia. Jei neatpažįstate šios veiklos, peržiūrėkite aktyvias sesijas ir atšaukite tas, kurių neatpažįstate.",
     "ipAddress": "IP adresas",
+    "location": "Apytikslė vieta",
+    "locationNote": "Vieta nustatyta pagal IP adresą ir gali būti netiksli.",
+    "mapAlt": "Žemėlapis su apytiksle prisijungimo vieta: {location}",
+    "mapCredit": "Žemėlapio duomenys: Natural Earth",
+    "place": {
+      "cityCountry": "{city}, {country}",
+      "cityRegionCountry": "{city}, {region}, {country}",
+      "regionCountry": "{region}, {country}"
+    },
     "preview": "Naujas prisijungimas iš {device}",
     "subject": "Naujas prisijungimas prie jūsų stella paskyros",
     "time": "Laikas"

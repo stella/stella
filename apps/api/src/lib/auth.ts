@@ -353,6 +353,7 @@ import { observeFailure } from "@/api/lib/observability/observe-failure";
 import {
   enrichRequestContext,
   getRequestContext,
+  sealedRequestClientAddress,
 } from "@/api/lib/observability/request-context";
 import { observedStatus } from "@/api/lib/observability/server-error-answer";
 import { createOrganizationLifecycleHooks } from "@/api/lib/organization-lifecycle-hooks";
@@ -426,6 +427,7 @@ import {
   ORGANIZATION_DELETION_REFUSAL_CODE,
 } from "@/api/lib/usage/renewing-hosted-subscription";
 import { normalizeUserShortcutsField } from "@/api/lib/user-shortcuts";
+import { readViewerLocation } from "@/api/lib/viewer-location";
 import {
   memberReachesMatterSql,
   readAuthorizedWorkspaces,
@@ -2998,6 +3000,10 @@ export const createAuth = (
                   email,
                   device,
                   ipAddress,
+                  location: readViewerLocation({
+                    request: ctx.request,
+                    clientAddress: sealedRequestClientAddress(),
+                  }),
                   time: formattedTime,
                   sessionsUrl: `${env.FRONTEND_URL}${ACTIVE_SESSIONS_FRONTEND_PATH}`,
                   lang,

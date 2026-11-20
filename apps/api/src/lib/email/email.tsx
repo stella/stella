@@ -16,6 +16,11 @@ import { subject as productFeedbackSubject } from "@stll/transactional/emails/pr
 import * as ReportExportStatus from "@stll/transactional/emails/report-export-status";
 import type { ReportExportEmailStatus } from "@stll/transactional/emails/report-export-status";
 import { subject as reportExportStatusSubject } from "@stll/transactional/emails/report-export-status-subject";
+import {
+  type GeoPoint,
+  LOCATION_MAP_CONTENT_TYPE,
+  renderLocationMap,
+} from "@stll/transactional/map/location-map";
 import { renderEmail } from "@stll/transactional/render";
 
 import { env } from "@/api/env";
@@ -29,13 +34,14 @@ import { failureSink } from "@/api/lib/observability/failure";
 import { logger } from "@/api/lib/observability/logger";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { isSyntheticPrincipal } from "@/api/lib/synthetic-principal/constants";
+import type { ViewerLocation } from "@/api/lib/viewer-location";
 import { isLocalDevOpen } from "@/api/runtime-mode";
 
 import { isEmailTransportConfigComplete } from "./config";
 import { formatTransactionalEmailFrom } from "./from";
 import { createSESTransport } from "./ses";
 import { createSMTPTransport } from "./smtp";
-import type { EmailTransport } from "./transport";
+import type { EmailTransport, InlineImage } from "./transport";
 
 export const isTransactionalEmailConfigured = () =>
   isEmailTransportConfigComplete({
@@ -185,6 +191,7 @@ type SendNewDeviceLoginEmailProps = {
   email: string;
   device: string;
   ipAddress: string;
+  location: ViewerLocation;
   time: string;
   sessionsUrl: string;
   lang: SupportedLang;
@@ -194,15 +201,31 @@ export const sendNewDeviceLoginEmail = async ({
   email,
   device,
   ipAddress,
+  location,
   time,
   sessionsUrl,
   lang,
 }: SendNewDeviceLoginEmailProps) => {
+  const map =
+    location.type === "known" && location.coordinates !== null
+      ? await renderSignInLocationMap(location.coordinates)
+      : null;
   const node = (
     <NewDeviceLogin.Email
       device={device}
       ipAddress={ipAddress}
       lang={lang}
+      location={
+        location.type === "known"
+          ? {
+              type: "known",
+              city: location.city,
+              region: location.region,
+              countryCode: location.countryCode,
+              map: map === null ? null : { contentId: map.contentId },
+            }
+          : { type: "unknown" }
+      }
       sessionsUrl={sessionsUrl}
       time={time}
     />
@@ -215,7 +238,35 @@ export const sendNewDeviceLoginEmail = async ({
     subject: newDeviceLoginSubject(lang),
     html,
     text,
+    ...(map === null ? {} : { inlineImages: [map] }),
   });
+};
+
+const SIGN_IN_LOCATION_MAP_CONTENT_ID = "sign-in-location-map";
+
+// The notice still goes out without the map; a map that fails to render is
+// observed, never fatal to the send.
+const locationMapUnrendered = failureSink({
+  event: "email.new_device_login.location_map_unrendered",
+  expected: [],
+});
+
+const renderSignInLocationMap = async (
+  coordinates: GeoPoint,
+): Promise<InlineImage | null> => {
+  const rendered = await Result.tryPromise(
+    async () => await renderLocationMap(coordinates),
+  );
+  if (rendered.isErr()) {
+    observeFailure(rendered.error, { sink: locationMapUnrendered });
+    return null;
+  }
+  return {
+    contentId: SIGN_IN_LOCATION_MAP_CONTENT_ID,
+    filename: "sign-in-location.png",
+    contentType: LOCATION_MAP_CONTENT_TYPE,
+    content: rendered.value,
+  };
 };
 
 type SendOrganizationInvitationProps = {
