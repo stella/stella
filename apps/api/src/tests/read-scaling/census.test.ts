@@ -15,6 +15,7 @@ import {
 } from "../../../../../scripts/ledger-membership.ts";
 import { accountExportDownloadScalingScenario } from "./account-exports";
 import apiLedger from "./api-scaling-ledger.json";
+import { asicPreviewScalingScenario } from "./asic-preview";
 import {
   cadesContentScalingScenario,
   cadesPreviewScalingScenario,
@@ -91,6 +92,7 @@ import {
   softLawReadScalingScenario,
   softLawSearchScalingScenario,
 } from "./soft-law";
+import { structuredDocumentScalingScenario } from "./structured-document";
 import {
   apiScalingSurface,
   mcpScalingSurface,
@@ -144,6 +146,8 @@ const measuredApiScenarios = [
   ...verificationGraphScalingScenarios,
   ...verificationChronologyScalingScenarios,
   ...graphToolsScalingScenarios,
+  asicPreviewScalingScenario,
+  structuredDocumentScalingScenario,
   cadesContentScalingScenario,
   cadesPreviewScalingScenario,
   dataBoxPreviewScalingScenario,

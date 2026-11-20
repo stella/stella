@@ -75,6 +75,39 @@ export const getChatTurnDurationMs = (
   }
 };
 
+/** A short reading of elapsed time: whole seconds, or whole minutes. */
+export type ChatElapsedReading = {
+  readonly unit: "second" | "minute";
+  readonly value: number;
+};
+
+/** A live clock says nothing for its first seconds; most steps end sooner. */
+const LIVE_ELAPSED_SHOWN_AFTER_MS = 5000;
+
+/**
+ * How long a run of steps took, or has been running, as its summary line
+ * shows it: seconds up to 59, then whole minutes ("1 min", "2 min"). A live
+ * reading counts whole seconds and shows nothing for its first
+ * `LIVE_ELAPSED_SHOWN_AFTER_MS`; a settled one rounds, and is never zero.
+ */
+export const chatElapsedReading = (
+  durationMs: number,
+  { live }: { readonly live: boolean },
+): ChatElapsedReading | null => {
+  if (!Number.isFinite(durationMs) || durationMs < 0) {
+    return null;
+  }
+  if (live && durationMs < LIVE_ELAPSED_SHOWN_AFTER_MS) {
+    return null;
+  }
+  const seconds = live
+    ? Math.floor(durationMs / 1000)
+    : Math.max(1, Math.round(durationMs / 1000));
+  return seconds < 60
+    ? { unit: "second", value: seconds }
+    : { unit: "minute", value: Math.floor(seconds / 60) };
+};
+
 export const getChatTurnDurationUnits = (durationMs: number) => {
   const totalSeconds = Math.floor(durationMs / 1000);
   return {

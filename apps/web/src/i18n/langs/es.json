@@ -2162,9 +2162,17 @@
     },
     "placeholder": "Escriba su pregunta aquí, / para habilidades, @ para añadir contexto",
     "processSummary": {
-      "analyses": "{count, plural, one {# análisis} other {# análisis} many {# análisis}}",
       "changesSaved": "{count, plural, one {# cambio guardado} other {# cambios guardados} many {# cambios guardados}}",
+      "checkedRegisters": "Registros públicos consultados",
       "documentEdits": "{count, plural, one {# edición del documento} other {# ediciones del documento} many {# ediciones del documento}}",
+      "readDocument": "Documento leído",
+      "readDocuments": "Documentos leídos",
+      "searchedCaseLaw": "Jurisprudencia consultada",
+      "searchedChats": "Historial del chat consultado",
+      "searchedLegislation": "Legislación consultada",
+      "searchedLegislationAndCaseLaw": "Legislación y jurisprudencia consultadas",
+      "searchedMatters": "Asuntos revisados",
+      "searchedWeb": "Web consultada",
       "sourcesChecked": "{count, plural, one {# fuente consultada} other {# fuentes consultadas} many {# fuentes consultadas}}"
     },
     "promptImprovementStrategies": {
@@ -2251,6 +2259,7 @@
       "chipLabel": "Se ejecuta en: {place}",
       "cloud": "Nube",
       "cloudDescription": "Se ejecuta en la nube. Funciona desde cualquier sitio.",
+      "hintAntigravity": "Instala Antigravity 1.5 o posterior e inicia sesión en él",
       "hintCheck": "Revísalo en stella desktop",
       "hintInstall": "Instálalo desde stella desktop",
       "hintOffline": "Abre stella desktop en tu ordenador",
@@ -2933,6 +2942,7 @@
     "playbooks": "Playbooks",
     "preparing": "Preparando…",
     "preview": "Vista previa",
+    "previewTruncated": "El texto completo no está disponible en esta vista previa.",
     "previous": "Anterior",
     "previousMatch": "Coincidencia anterior",
     "print": "Imprimir",
@@ -4700,7 +4710,7 @@
       "discoveredSkills": "{count, plural, one {# habilidad encontrada} other {# habilidades encontradas} many {# habilidades encontradas}}",
       "discoveryEmpty": "No se encontraron habilidades en este repositorio o carpeta.",
       "discoverySkippedInvalid": "{count, plural, one {Se omitió # habilidad no válida} other {Se omitieron # habilidades no válidas} many {Se omitieron # habilidades no válidas}}",
-      "dropPack": "Suelte un .zip o SKILL.md para importar la habilidad",
+      "dropPack": "Suelte un .zip/.skill o SKILL.md para importar la habilidad",
       "editSkill": "Editar habilidad",
       "enableSkill": "Activar habilidad",
       "fileExists": "Ya existe un archivo con esta ruta",
@@ -4757,8 +4767,8 @@
           "name": "Resumir un documento"
         }
       },
-      "uploadHelp": "Usa un archivo SKILL.md o una carpeta .zip que contenga SKILL.md y recursos opcionales de solo lectura.",
-      "uploadPack": "Subir .zip o SKILL.md",
+      "uploadHelp": "Usa un archivo SKILL.md o una carpeta .zip/.skill que contenga SKILL.md y recursos opcionales de solo lectura.",
+      "uploadPack": "Subir .zip/.skill o SKILL.md",
       "urlPlaceholder": "https://github.com/org/repo/tree/main/ruta/a/la/habilidad",
       "version": "Versión: {version}"
     },
@@ -6448,6 +6458,10 @@
     "versionChangesRemoved": "{count, plural, one {# disposición suprimida} other {# disposiciones suprimidas} many {# disposiciones suprimidas}}",
     "versionChangesWords": "{inserted, plural, one {# palabra añadida} other {# palabras añadidas} many {# palabras añadidas}}, {deleted, plural, one {# palabra suprimida} other {# palabras suprimidas} many {# palabras suprimidas}}",
     "wordingVersionUnknown": "No se conoce la fecha de la versión de la redacción"
+  },
+  "structuredDocument": {
+    "noReadableContent": "No hay texto legible para la vista previa.",
+    "textOnly": "Vista previa de texto sin diseño de página ni imágenes."
   },
   "styleSets": {
     "create": "Crear",

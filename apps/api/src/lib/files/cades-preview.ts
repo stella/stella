@@ -88,7 +88,7 @@ const runCadesWorker = async (
 
 export const readCadesPreview = async (
   source: ScannedFile,
-  fileName: string,
+  fileName = source.fileName,
 ): Promise<
   Result<
     v.InferOutput<typeof cadesPreviewSchema>,
@@ -123,7 +123,7 @@ export const readCadesPreview = async (
 
 export const readCadesPdf = async (
   source: ScannedFile,
-  fileName: string,
+  fileName = source.fileName,
 ): Promise<Result<Uint8Array, HandlerError<422 | 500 | 503>>> => {
   const result = await runCadesWorker(source, fileName, CADES_WORKER_MODE.pdf);
   if (result.isErr()) {

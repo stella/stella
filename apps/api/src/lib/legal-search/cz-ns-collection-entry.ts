@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 /**
  * One entry of the Supreme Court's official collection, the Sbírka soudních
  * rozhodnutí a stanovisek (sbirka.nsoud.cz), as the decision row keeps it.
@@ -158,6 +159,29 @@ export const readStoredCzNsCollectionEntry = (
       }
     : null;
 };
+
+/** Convert the publisher's edition statement to the attachment's body descriptor. */
+export const czNsCollectionDocumentPartSchema = v.pipe(
+  storedCzNsCollectionEntrySchema,
+  v.transform(({ reportEdition, legalSentence, keywords }) => {
+    const fields = { legalSentence, keywords: [...keywords] };
+    switch (reportEdition?.extent) {
+      case "section":
+        return {
+          extent: "section",
+          ...reportEdition.sectionPart,
+          ...fields,
+        } as const;
+      case "complete":
+        return { extent: "complete", ...fields } as const;
+      case undefined:
+        return { extent: "unclassified", ...fields } as const;
+      default:
+        reportEdition satisfies never;
+        return panic("Unhandled collection report edition");
+    }
+  }),
+);
 
 /** URL fields of the entry, for the metadata URL contract. */
 export const CZ_NS_COLLECTION_METADATA_URL_SCHEMA = {

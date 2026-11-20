@@ -19,6 +19,10 @@
  * decision of the same file.
  */
 
+import {
+  isWholeEntryIdentifier,
+  parseDecisionQuery,
+} from "@stll/api-contract/decision-query-intent";
 import { normalizeUnicode, stripDiacritics } from "@stll/text-normalize";
 
 const CZECH_ECLI =
@@ -74,6 +78,25 @@ const czechEcliSpellings = (ecli: string): string[] => {
   ];
 };
 
+/** Use the canonical identifier parser to recognize the Court of Justice's printed short form. */
+const europeanEcliSpellings = (ecli: string): string[] => {
+  const intent = parseDecisionQuery(ecli);
+  if (
+    intent.type !== "identifier" ||
+    intent.kind !== "ecli" ||
+    !isWholeEntryIdentifier(intent)
+  ) {
+    return [ecli];
+  }
+  const short = intent.value.slice("ECLI:".length);
+  const shortIntent = parseDecisionQuery(short);
+  return shortIntent.type === "identifier" &&
+    shortIntent.kind === "ecli" &&
+    isWholeEntryIdentifier(shortIntent)
+    ? [...new Set([ecli, intent.value, short])]
+    : [ecli];
+};
+
 /**
  * Every spelling of this ECLI that names the same decision under the
  * jurisdiction's grammar, the stated one first. A jurisdiction without a
@@ -82,4 +105,13 @@ const czechEcliSpellings = (ecli: string): string[] => {
 export const ecliPublisherSpellings = (
   country: string,
   ecli: string,
-): string[] => (country === "CZE" ? czechEcliSpellings(ecli) : [ecli]);
+): string[] => {
+  switch (country) {
+    case "CZE":
+      return czechEcliSpellings(ecli);
+    case "EU":
+      return europeanEcliSpellings(ecli);
+    default:
+      return [ecli];
+  }
+};

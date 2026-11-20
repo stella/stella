@@ -279,7 +279,7 @@ const authenticate = async (
   if (stored === null) {
     return Result.ok("signed_in");
   }
-  if (!stored.signedIn(options.configDir)) {
+  if (!stored.signedIn(options.configDir, options.environment)) {
     return Result.ok("signed_out");
   }
   const answered = await client.request("authenticate", {
@@ -527,9 +527,63 @@ const probeAgent = async (
  * answers from the last probe while its executable and stored sign-in are
  * unchanged.
  */
+/**
+ * The installed version when it is older than the agent's ACP server, which
+ * is then never started; `null` when it serves ACP or the definition sets no
+ * minimum.
+ */
+const tooOldVersion = async (
+  options: AcpHarnessAdapterOptions,
+): Promise<Result<string | null, HarnessProbeError>> => {
+  const minimum = options.definition.minimumVersion;
+  if (minimum === null) {
+    return Result.ok(null);
+  }
+  const read = await Result.tryPromise(async () =>
+    minimum.read(options.executable),
+  );
+  if (Result.isError(read)) {
+    return Result.err(
+      new HarnessProbeError({
+        reason: "harness_unavailable",
+        message: `${options.definition.displayName} could not be started.`,
+      }),
+    );
+  }
+  const version = read.value;
+  if (version === null) {
+    // Without its version it cannot be known to serve ACP.
+    return Result.err(
+      new HarnessProbeError({
+        reason: "harness_unavailable",
+        message: `${options.definition.displayName} did not report its version.`,
+      }),
+    );
+  }
+  return Result.ok(
+    Bun.semver.satisfies(version, `<${minimum.version}`) ? version : null,
+  );
+};
+
 const probe = async (
   options: AcpHarnessAdapterOptions,
 ): Promise<Result<HarnessProbe, HarnessProbeError>> => {
+  const checked = await tooOldVersion(options);
+  if (Result.isError(checked)) {
+    return checked;
+  }
+  const tooOld = checked.value;
+  if (tooOld !== null) {
+    // The compatibility policy reports it as one to update.
+    return Result.ok({
+      version: tooOld,
+      auth: { type: "signed_out" },
+      models: [],
+      capabilities: [],
+      approvalModes: [...options.definition.approvalModes],
+      usageLimit: null,
+    });
+  }
   const nowMs = Temporal.Now.instant().epochMilliseconds;
   sweepTempDirs(options.configDir, nowMs);
   const { probeCacheMs, storedSignIn } = options.definition;
@@ -539,7 +593,7 @@ const probe = async (
           options.executable,
           storedSignIn === null
             ? null
-            : storedSignIn.signedIn(options.configDir),
+            : storedSignIn.signedIn(options.configDir, options.environment),
         )
       : null;
   if (key !== null) {
@@ -890,8 +944,23 @@ const startTurn = async (
       }),
     );
   }
+  const checked = await tooOldVersion(options);
+  if (Result.isError(checked)) {
+    return Result.err(new HarnessStartError(checked.error));
+  }
+  if (checked.value !== null) {
+    return Result.err(
+      new HarnessStartError({
+        reason: "start_rejected",
+        message: `This version of ${options.definition.displayName} does not serve the Agent Client Protocol.`,
+      }),
+    );
+  }
   const stored = options.definition.storedSignIn;
-  if (stored !== null && !stored.signedIn(options.configDir)) {
+  if (
+    stored !== null &&
+    !stored.signedIn(options.configDir, options.environment)
+  ) {
     return Result.err(
       new HarnessStartError({ reason: "auth_required", message: SIGNED_OUT }),
     );

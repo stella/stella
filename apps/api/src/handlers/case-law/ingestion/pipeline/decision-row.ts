@@ -39,6 +39,10 @@ import {
   lostRowWriteStatus,
   readDocumentlessPayloadStateTx,
 } from "@/api/handlers/case-law/ingestion/pipeline/decision-row-update";
+import {
+  matchHostDecisionsTx,
+  persistOwnCollectionPartTx,
+} from "@/api/handlers/case-law/ingestion/pipeline/held-decision-attachment";
 import { DECISION_ROW_WRITE_STATUS } from "@/api/handlers/case-law/ingestion/pipeline/types";
 import type { DecisionRowWriteStatus } from "@/api/handlers/case-law/ingestion/pipeline/types";
 import {
@@ -353,6 +357,17 @@ const writeDecisionRow = async (
       return DECISION_ROW_WRITE_STATUS.IDENTITY_MOVED;
     }
     const { existing } = fallbackWinner;
+    if (existing === undefined && write.heldDecisionCheck !== undefined) {
+      // The graph admission precedes every canonical row insert. Recheck
+      // after admission so concurrent publisher posts cannot both create a row.
+      const candidate = await matchHostDecisionsTx(tx, {
+        ...write.heldDecisionCheck,
+        sourceId,
+      });
+      if (candidate.type !== "none") {
+        return DECISION_ROW_WRITE_STATUS.IDENTITY_MOVED;
+      }
+    }
     // audit: skip — background case-law ingestion pipeline; public case-law data, not user actions
     const projectionLock = await lockActiveCorpusProjectionSourceByIdTx(tx, {
       family: "case_law",
@@ -505,6 +520,7 @@ const writeDecisionRow = async (
         independentClaims: [DECISION_IDENTIFIER_CLAIM.HOST],
       })),
     );
+    await persistOwnCollectionPartTx(tx, write, scopedDb);
     return await finishInsertedRowTx(tx, write, insertedId, projectionLock);
   });
 

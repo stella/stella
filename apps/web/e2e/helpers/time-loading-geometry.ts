@@ -13,8 +13,30 @@ const LANGUAGES = [
   { locale: "en", browserLocale: "en-US", messages: en },
   { locale: "cs", browserLocale: "cs-CZ", messages: cs },
 ] as const;
+type CommonSurface = {
+  path: string;
+  busy: string;
+  landmarks: Readonly<Record<string, string>>;
+};
+
+type LoadingSurface = CommonSurface &
+  (
+    | { type: "steady" }
+    | {
+        type: "date";
+        apiPath: string;
+        nextLabel: (messages: typeof en | typeof cs) => string;
+      }
+    | {
+        type: "filter";
+        apiPath: string;
+        filter: (messages: typeof en | typeof cs) => string;
+      }
+  );
+
 const SURFACES = [
   {
+    type: "date",
     path: "/time?date=2026-11-04",
     apiPath: "/v1/time-entries/me",
     busy: "main section:has(#my-week-day-title) ul[aria-busy=true]",
@@ -28,6 +50,7 @@ const SURFACES = [
     },
   },
   {
+    type: "date",
     path: "/time/report?period=week&from=2026-11-02&to=2026-11-08",
     apiPath: "/v1/time-entries/report",
     busy: "main section[aria-busy=true]:has(table)",
@@ -40,7 +63,32 @@ const SURFACES = [
       firstRow: "tbody tr",
     },
   },
-] as const;
+  {
+    type: "steady",
+    path: "/settings/organization/members",
+    busy: "table:first-of-type tbody[aria-busy=true]",
+    landmarks: {
+      heading: "h1",
+      section: "h2",
+      table: "table",
+      firstRow: "tbody tr",
+    },
+  },
+  {
+    type: "filter",
+    path: "/settings/organization/audit-logs",
+    apiPath: "/v1/audit-logs",
+    busy: "tbody[aria-busy=true]",
+    filter: (messages) =>
+      messages.settings.organization.auditLogsResourceTypePlaceholder,
+    landmarks: {
+      heading: "h1",
+      filters: "[data-slot=frame-panel] .grid.items-end",
+      table: "table",
+      firstRow: "tbody tr",
+    },
+  },
+] as const satisfies readonly LoadingSurface[];
 
 const captureLandmarks = async (
   page: Page,
@@ -67,17 +115,17 @@ const captureLandmarks = async (
     landmarks,
   );
 
-type MeasureTimeLoadingOptions = {
+type MeasureLoadingGeometryOptions = {
   browser: Browser;
   baseURL: string;
   storageState: string;
 };
 
-export const measureTimeLoadingGeometry = async ({
+export const measureLoadingGeometry = async ({
   browser,
   baseURL,
   storageState,
-}: MeasureTimeLoadingOptions) => {
+}: MeasureLoadingGeometryOptions) => {
   const account = await browser.newContext({ baseURL, storageState });
   try {
     const session = await account.request.get(
@@ -148,15 +196,34 @@ export const measureTimeLoadingGeometry = async ({
                 "lang",
                 locale,
               );
-              const next = page.getByRole("button", {
-                name: surface.nextLabel(messages),
-                exact: true,
-              });
-              await expect(next).toBeEnabled();
               const busy = page.locator(surface.busy);
+              await expect(busy).toHaveCount(0);
+              const rowSelector =
+                "firstRow" in surface.landmarks
+                  ? surface.landmarks.firstRow
+                  : surface.landmarks.heading;
+              await expect(page.locator(rowSelector).first()).toBeVisible();
               await expect(busy).toHaveCount(0);
               const loaded = await captureLandmarks(page, surface.landmarks);
 
+              if (surface.type === "steady") {
+                evidence.push({
+                  locale,
+                  route: surface.path,
+                  serverDocumentLanguage,
+                  server,
+                  loaded,
+                });
+                continue;
+              }
+              const next =
+                surface.type === "date"
+                  ? page.getByRole("button", {
+                      name: surface.nextLabel(messages),
+                      exact: true,
+                    })
+                  : page.getByPlaceholder(surface.filter(messages));
+              await expect(next).toBeEnabled();
               const isDataRequest = (url: URL) =>
                 url.pathname === surface.apiPath;
               const gate = Promise.withResolvers<undefined>();
@@ -165,7 +232,11 @@ export const measureTimeLoadingGeometry = async ({
                 await route.continue();
               });
               try {
-                await next.click();
+                if (surface.type === "date") {
+                  await next.click();
+                } else {
+                  await next.fill("workspace");
+                }
                 await expect(busy).toBeVisible();
                 await expect(next).toBeEnabled();
                 const pending = await captureLandmarks(page, surface.landmarks);
@@ -187,7 +258,7 @@ export const measureTimeLoadingGeometry = async ({
               }
             }
             errors.assertEmpty(
-              `unexpected browser errors with ${locale} time loading views`,
+              `unexpected browser errors with ${locale} loading views`,
             );
           } finally {
             detach();

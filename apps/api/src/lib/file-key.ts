@@ -30,7 +30,7 @@ const fileExtensionMap: Record<string, string> = {
   "application/vnd.ms-outlook": "msg",
   // Storage suffixes are persisted. Recognizing a new viewer format must not
   // change the keys used to retrieve previously uploaded files.
-  [DATA_BOX_FILE_FORMAT.mimeType]: DATA_BOX_FILE_FORMAT.extension.slice(1),
+  [DATA_BOX_FILE_FORMAT.mimeType]: "zfo",
   "application/rtf": "rtf",
 };
 

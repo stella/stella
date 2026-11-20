@@ -1,10 +1,10 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useTranslations } from "use-intl";
 
 import { pageTitle } from "@/lib/page-title";
 import { routePresentation } from "@/routes/-route-presentation";
-import { SettingsPageHeader } from "@/routes/_protected.settings/-components/settings-page-header.pending";
-import { DocumentTypesCard } from "@/routes/_protected.settings/organization/-components/organization/document-types-card";
+
+import { OrganizationDocumentTypesPage } from "./-organization.document-types.page";
+import { DocumentTypesPending } from "./-organization.document-types.pending";
 
 export const Route = createFileRoute(
   "/_protected/settings/organization/document-types",
@@ -20,18 +20,5 @@ export const Route = createFileRoute(
     meta: [{ title: pageTitle("settings.organization.documentTypes.title") }],
   }),
   component: OrganizationDocumentTypesPage,
+  pendingComponent: DocumentTypesPending,
 });
-
-function OrganizationDocumentTypesPage() {
-  const t = useTranslations();
-
-  return (
-    <>
-      <SettingsPageHeader
-        description={t("settings.organization.documentTypes.description")}
-        title={t("settings.organization.documentTypes.title")}
-      />
-      <DocumentTypesCard />
-    </>
-  );
-}
