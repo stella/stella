@@ -2356,6 +2356,10 @@
     "stopResponse": "Apturēt",
     "stopped": "Apturēts",
     "stopping": "Aptur…",
+    "subagentRun": {
+      "browseWeb": "Tīmekļa pārlūkošana",
+      "generic": "Apakšuzdevuma izpilde"
+    },
     "suggestTitle": "Ieteikt nosaukumu",
     "suggestTitleUnavailableAnonymized": "Anonimizētām sarunām nosaukuma ieteikumi nav pieejami.",
     "suggestingTitle": "Notiek nosaukuma ieteikšana…",
@@ -5397,6 +5401,7 @@
       "defaultModel": "Noklusējums: {model}",
       "defaultModelOption": "Noklusējums",
       "defaultRationale": {
+        "browse": "Darbam ar tīmekļa vietnēm pārlūkprogrammā.",
         "chat": "Sarunām un ikdienas jautājumiem.",
         "fast": "Īsiem, ikdienišķiem uzdevumiem.",
         "pdf": "PDF dokumentu lasīšanai un analīzei.",
@@ -5456,6 +5461,7 @@
       "replaceKey": "Aizstāt atslēgu",
       "roleUnavailable": "{provider} neatbalsta šo lomu.",
       "roles": {
+        "browse": "Pārlūkošana",
         "chat": "Tērzēšana",
         "fast": "Ātrs",
         "pdf": "PDF",
@@ -5518,7 +5524,7 @@
     "members": {
       "billingAccess": "Piekļuve norēķinu datiem",
       "changeRole": "Mainīt lomu",
-      "confirmRoleChangeDescription": "{email} loma tiks mainīta no {oldRole} uz {newRole}.",
+      "confirmRoleChangeDescription": "{email} loma tiks mainīta {oldRole, select, owner {no īpašnieka lomas} admin {no administratora lomas} member {no dalībnieka lomas} intern {no praktikanta lomas} external {no ārējā sadarbības partnera lomas} other {}} {newRole, select, owner {uz īpašnieka lomu} admin {uz administratora lomu} member {uz dalībnieka lomu} intern {uz praktikanta lomu} external {uz ārējā sadarbības partnera lomu} other {}}.",
       "confirmRoleChangeTitle": "Mainīt lomu",
       "joined": "Pievienojās",
       "noMembersFound": "Dalībnieki nav atrasti",

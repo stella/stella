@@ -1,11 +1,12 @@
 import { expect } from "@playwright/test";
-import type { Browser, Page } from "@playwright/test";
+import type { Browser } from "@playwright/test";
 import * as v from "valibot";
 
 import cs from "../../src/i18n/langs/cs.json" with { type: "json" };
 import en from "../../src/i18n/langs/en.json" with { type: "json" };
 import { apiDelete, apiPut, E2E_API_ORIGIN } from "./api";
 import { setPresentationPrefs } from "./presentation-prefs";
+import { captureLandmarks } from "./stable-geometry";
 import { createBrowserErrorCollector } from "./test";
 
 const VIEWPORT = { width: 1440, height: 900 };
@@ -167,31 +168,6 @@ const KNOWLEDGE_SURFACES = [
 /** The fixed surfaces a set measures (the contacts set builds its own). */
 const surfaceSet = (set: "time-admin" | "knowledge") =>
   set === "knowledge" ? KNOWLEDGE_SURFACES : SURFACES;
-
-const captureLandmarks = async (
-  page: Page,
-  landmarks: Readonly<Record<string, string>>,
-) =>
-  await page.evaluate(
-    (selectors) =>
-      Object.fromEntries(
-        Object.entries(selectors).map(([name, selector]) => {
-          const box = document.querySelector(selector)?.getBoundingClientRect();
-          return [
-            name,
-            box === undefined
-              ? null
-              : {
-                  top: box.top,
-                  left: box.left,
-                  width: box.width,
-                  height: box.height,
-                },
-          ];
-        }),
-      ),
-    landmarks,
-  );
 
 type MeasureLoadingGeometryOptions = {
   browser: Browser;

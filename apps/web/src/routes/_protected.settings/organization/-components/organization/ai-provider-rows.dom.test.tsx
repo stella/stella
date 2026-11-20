@@ -275,6 +275,7 @@ describe("BYOK provider rows", () => {
         fast: null,
         reasoning: null,
         pdf: { provider: "openrouter", modelId: "pdf-model" },
+        browse: null,
       },
     });
     expect(screen.getByText(labels.keyNeed.ownKeys)).toBeDefined();
@@ -297,6 +298,7 @@ describe("BYOK provider rows", () => {
         fast: null,
         reasoning: null,
         pdf: null,
+        browse: null,
       },
     });
     expect(screen.queryByText(/Used for/u)).toBeNull();

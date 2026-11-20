@@ -2356,6 +2356,10 @@
     "stopResponse": "إيقاف",
     "stopped": "متوقف",
     "stopping": "جارٍ الإيقاف…",
+    "subagentRun": {
+      "browseWeb": "تصفح الويب",
+      "generic": "العمل على مهمة فرعية"
+    },
     "suggestTitle": "اقتراح عنوان",
     "suggestTitleUnavailableAnonymized": "اقتراح العناوين غير متاح للمحادثات التي تم إخفاء هويتها.",
     "suggestingTitle": "جارٍ اقتراح عنوان…",
@@ -5397,6 +5401,7 @@
       "defaultModel": "الافتراضي: {model}",
       "defaultModelOption": "الافتراضي",
       "defaultRationale": {
+        "browse": "للعمل على المواقع الإلكترونية في المتصفح.",
         "chat": "للمحادثات والأسئلة اليومية.",
         "fast": "للمهام القصيرة والروتينية.",
         "pdf": "لقراءة مستندات PDF وتحليلها.",
@@ -5456,6 +5461,7 @@
       "replaceKey": "استبدال المفتاح",
       "roleUnavailable": "لا يدعم {provider} هذا الدور.",
       "roles": {
+        "browse": "التصفح",
         "chat": "دردشة",
         "fast": "سريع",
         "pdf": "PDF",
@@ -5518,7 +5524,7 @@
     "members": {
       "billingAccess": "الاطلاع على بيانات الفوترة",
       "changeRole": "تغيير الدور",
-      "confirmRoleChangeDescription": "سيتغير دور {email} من {oldRole} إلى {newRole}.",
+      "confirmRoleChangeDescription": "سيتغير دور {email} من {oldRole, select, owner {مالك} admin {مسؤول} member {عضو} intern {متدرب} external {متعاون خارجي} other {}} إلى {newRole, select, owner {مالك} admin {مسؤول} member {عضو} intern {متدرب} external {متعاون خارجي} other {}}.",
       "confirmRoleChangeTitle": "تغيير الدور",
       "joined": "تاريخ الانضمام",
       "noMembersFound": "لم يُعثر على أعضاء",
