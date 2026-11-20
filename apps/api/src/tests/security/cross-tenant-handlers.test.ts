@@ -1004,6 +1004,21 @@ const saveOrganizationBDraftSettings = async (
 
 const desktopCredentialIsolationCases = (): IsolationCase[] => [
   {
+    name: "desktop registry configuration organization name",
+    runAAgainstB: async ({ desktopA }) =>
+      await (
+        await desktopA(desktopRequest("/registry", { type: "config" }))
+      ).json(),
+    runBPositive: async ({ desktopB }) =>
+      await (
+        await desktopB(desktopRequest("/registry", { type: "config" }))
+      ).json(),
+    expectDenied: (result) =>
+      expect(result).toMatchObject({ organizationName: "Org A" }),
+    expectPositive: (result) =>
+      expect(result).toMatchObject({ organizationName: "Org B" }),
+  },
+  {
     name: "desktop registry saved format",
     runAAgainstB: async ({ desktopA }) =>
       await desktopA(
