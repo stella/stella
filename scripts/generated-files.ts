@@ -2078,7 +2078,7 @@ const GENERATOR_DECLARATIONS = [
     ],
     write: ["bun", "--cwd=packages/recording-wasm", "run", "build:wasm"],
     check: ["bash", "packages/recording-wasm/scripts/test-wasm-offline.sh"],
-    checkedBy: "Check generated WebAssembly from a fresh Cargo cache",
+    checkedBy: "Check generated recording WebAssembly from a fresh Cargo cache",
     autofix: false,
     after: [],
   },

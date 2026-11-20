@@ -6773,7 +6773,7 @@ jobs:
         timeout-minutes: 15
         run: bash scripts/retry.sh bash packages/recording-wasm/scripts/wasm-toolchain.sh
 
-      - name: Check generated WebAssembly from a fresh Cargo cache
+      - name: Check generated recording WebAssembly from a fresh Cargo cache
         id: wasm-check
         env:
           RECORDING_WASM_OUT_DIR: ${{ runner.temp }}/recording-wasm

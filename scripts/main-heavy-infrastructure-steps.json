@@ -981,7 +981,7 @@
     "displayName": { "prefix": "recording-wasm-drift", "suffix": "" },
     "declaredStepNames": [
       "Cancel merge group after failure in this job",
-      "Check generated WebAssembly from a fresh Cargo cache",
+      "Check generated recording WebAssembly from a fresh Cargo cache",
       "Checkout",
       "Fetch Rust dependencies and wasm-bindgen",
       "Fetch license audit inputs",
