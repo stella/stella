@@ -735,6 +735,7 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
                 <Button
                   aria-label={tSkills("disableSkill")}
                   disabled={patchMetadata.isPending}
+                  disabledReason={t("common.saving")}
                   onClick={toggleEnabled}
                   size="icon-sm"
                   variant="secondary"
@@ -744,6 +745,7 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
               ) : (
                 <Button
                   disabled={patchMetadata.isPending}
+                  disabledReason={t("common.saving")}
                   onClick={toggleEnabled}
                   size="sm"
                 >
@@ -1220,6 +1222,7 @@ function FolderCreateActions({
   onCreateFile,
   onCreateFolder,
 }: FolderCreateActionsProps) {
+  const tCommon = useTranslations("common");
   const tSkills = useTranslations("knowledge.agentSkills");
   const [newFileOpen, setNewFileOpen] = useState(false);
   const [filename, setFilename] = useState("");
@@ -1277,6 +1280,9 @@ function FolderCreateActions({
             />
             <Button
               disabled={createPending || filename.trim().length === 0}
+              disabledReason={
+                createPending ? tCommon("creating") : tSkills("enterFileName")
+              }
               onClick={submitNewFile}
               size="sm"
             >
@@ -1313,6 +1319,7 @@ function FileRowActions({
       <Button
         aria-label={tSkills("renameFile")}
         disabled={renamePending}
+        disabledReason={t("common.saving")}
         onClick={() => onStartRename(entry)}
         size="icon-sm"
         variant="ghost"
@@ -1325,6 +1332,7 @@ function FileRowActions({
             <Button
               aria-label={tSkills("deleteFile")}
               disabled={deletePending}
+              disabledReason={t("common.deleting")}
               size="icon-sm"
               variant="ghost"
             >
@@ -1347,6 +1355,7 @@ function FileRowActions({
             </Button>
             <Button
               disabled={deletePending}
+              disabledReason={t("common.deleting")}
               onClick={() => {
                 setConfirmingDelete(false);
                 onDeleteFile(entry);
@@ -1458,6 +1467,9 @@ function RootAddMenu({
             />
             <Button
               disabled={createPending || path.trim().length === 0}
+              disabledReason={
+                createPending ? t("common.creating") : tSkills("enterFileName")
+              }
               onClick={submitNewFile}
               size="sm"
             >
