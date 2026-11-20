@@ -16,6 +16,10 @@ import {
 import { accountExportDownloadScalingScenario } from "./account-exports";
 import apiLedger from "./api-scaling-ledger.json";
 import {
+  cadesContentScalingScenario,
+  cadesPreviewScalingScenario,
+} from "./cades-preview";
+import {
   browseCalendarScalingScenario,
   browseCourtsScalingScenario,
 } from "./case-law-browse-hubs";
@@ -140,6 +144,8 @@ const measuredApiScenarios = [
   ...verificationGraphScalingScenarios,
   ...verificationChronologyScalingScenarios,
   ...graphToolsScalingScenarios,
+  cadesContentScalingScenario,
+  cadesPreviewScalingScenario,
   dataBoxPreviewScalingScenario,
   ...dataBoxSettingsScalingScenarios,
   suggestionRangeScalingScenario,

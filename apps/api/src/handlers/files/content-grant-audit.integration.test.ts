@@ -1,5 +1,5 @@
 import { PDF } from "@libpdf/core";
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import {
   afterAll,
   afterEach,
@@ -13,6 +13,7 @@ import { eq, inArray } from "drizzle-orm";
 
 import { DATA_BOX_MESSAGE_MIME_TYPE } from "@stll/api-contract/data-box";
 import { EML_MIME_TYPE } from "@stll/api-contract/email-mime-types";
+import { CADES_FILE_FORMAT } from "@stll/api-contract/legal-file-formats";
 import { ZipArchive } from "@stll/docx-core/zip";
 import { rejectionOf } from "@stll/property-testing/rejection";
 import { sha256Hex } from "@stll/sha256/bun";
@@ -34,6 +35,10 @@ import {
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
 import { env } from "@/api/env";
 import { envBase } from "@/api/env-base";
+import {
+  cadesContentEndpoint,
+  cadesPreviewEndpoint,
+} from "@/api/handlers/files/cades";
 import { readDocumentProperties } from "@/api/handlers/files/document-properties";
 import emailAttachmentEndpoint from "@/api/handlers/files/email-attachment";
 import {
@@ -56,6 +61,7 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { createEmailAttachmentDescriptor } from "@/api/lib/files/email-attachment-token";
 import { readDataBoxFile } from "@/api/lib/files/read-data-box-file";
 import { readFileHandler } from "@/api/lib/files/read-file";
+import { LEGAL_FILE_READERS } from "@/api/lib/files/read-legal-file";
 import { createFileKey } from "@/api/lib/files/utils";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import {
@@ -69,11 +75,16 @@ import {
 import { readSyntheticSessionAuthority } from "@/api/lib/synthetic-principal/session-authority";
 import { createSyntheticSessionStore } from "@/api/lib/synthetic-principal/store";
 import { DOCX_MIME_TYPE, PDF_MIME_TYPE } from "@/api/mime-types";
+import { wrapP7m } from "@/api/tests/fixtures/p7m";
 import { FIXTURE_MESSAGE, zfoFile } from "@/api/tests/fixtures/zfo";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
 import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+import {
+  cadesContentScalingScenario,
+  cadesPreviewScalingScenario,
+} from "@/api/tests/read-scaling/cades-preview";
 import { dataBoxPreviewScalingScenario } from "@/api/tests/read-scaling/data-box-preview";
 import { readScalingViolations } from "@/api/tests/read-scaling/measurement";
 import {
@@ -104,6 +115,10 @@ beforeAll(async () => {
 
 afterAll(async () => {
   if (seededEntityIds.length > 0) {
+    await testDb
+      .update(entities)
+      .set({ currentVersionId: null })
+      .where(inArray(entities.id, seededEntityIds));
     await testDb
       .delete(fields)
       .where(
@@ -841,6 +856,115 @@ const seedDataBox = async () =>
     await zfoFile(),
   );
 
+const seedCades = async (bytes?: Uint8Array) =>
+  await seedStored(
+    {
+      fileName: "contratto.PDF.P7M",
+      mimeType: CADES_FILE_FORMAT.mimeType,
+      pdfFileId: null,
+    },
+    await wrapP7m(bytes ?? (await pdfBytes())),
+  );
+
+const cadesContext = (fieldId: SafeId<"field">, scopedDb: ScopedDb) =>
+  createTestHandlerContext<Parameters<typeof cadesPreviewEndpoint.handler>[0]>({
+    workspaceId: ids.wsA1,
+    session: { activeOrganizationId: ids.orgA },
+    user: { id: ids.userA1 },
+    audit: recorderA(),
+    scopedDb,
+    safeDb: createSafeDb(testDb, [ids.wsA1], ids.orgA, ids.userA1),
+    params: { workspaceId: ids.wsA1, fieldId },
+  });
+
+describe("CAdES file delivery", () => {
+  test("serves the exact embedded PDF, scoped and audited", async () => {
+    const bytes = await pdfBytes();
+    const file = await seedCades(bytes);
+    const response = await cadesContentEndpoint.handler(
+      cadesContext(file.fieldId, scopedDbA()),
+    );
+    if (!(response instanceof Response)) {
+      panic("Expected a PDF response");
+    }
+    expect(response.headers.get("content-type")).toBe(PDF_MIME_TYPE);
+    expect(response.headers.get("cache-control")).toBe("private, no-store");
+    expect(response.headers.get("x-content-type-options")).toBe("nosniff");
+    expect(new Uint8Array(await response.arrayBuffer())).toEqual(
+      new Uint8Array(bytes),
+    );
+    await expectOneContentRow(file.entityId, {
+      action: "access",
+      metadata: { format: "cades", fieldId: file.fieldId },
+    });
+  });
+
+  test("reads a stored generic-MIME signed file for the agent", async () => {
+    const content = "Clausola terza";
+    const { fieldId, entityId, entityVersionId } = await seedStored(
+      {
+        fileName: "contratto.txt.p7m",
+        mimeType: "application/octet-stream",
+        pdfFileId: null,
+      },
+      await wrapP7m(new TextEncoder().encode(content)),
+    );
+    await testDb
+      .update(entities)
+      .set({ currentVersionId: entityVersionId })
+      .where(eq(entities.id, entityId));
+    const read = await LEGAL_FILE_READERS.cades({
+      fieldId,
+      scopedDb: scopedDbA(),
+      workspaceId: ids.wsA1,
+      organizationId: ids.orgA,
+      recordAuditEvent: recorderA(),
+      purpose: "agent",
+    });
+    expect(read.unwrap().text).toContain(content);
+    expect(read.unwrap().text).toContain("unverified");
+  });
+
+  test("both endpoints refuse files from another matter", async () => {
+    const { fieldId } = await seedFile(
+      {
+        fileName: "contratto.p7m",
+        mimeType: CADES_FILE_FORMAT.mimeType,
+        pdfFileId: null,
+      },
+      "b",
+    );
+    const context = cadesContext(fieldId, scopedDbA());
+    expect(answeredStatus(await cadesContentEndpoint.handler(context))).toBe(
+      404,
+    );
+    expect(answeredStatus(await cadesPreviewEndpoint.handler(context))).toBe(
+      404,
+    );
+  });
+
+  test.each([cadesContentScalingScenario, cadesPreviewScalingScenario])(
+    "$name cost stays bounded as a matter grows",
+    async ({ measure }) => {
+      const { fieldId } = await seedCades();
+      const context = cadesContext(fieldId, scopedDbA());
+      const small = await measure(context);
+      const unrelated = Array.from({ length: 80 }, () => ({
+        id: createSafeId<"entity">(),
+        name: "Docket entry",
+        kind: "document" as const,
+        workspaceId: ids.wsA1,
+      }));
+      seededEntityIds.push(...unrelated.map(({ id }) => id));
+      await testDb.insert(entities).values(unrelated);
+      const large = await measure(context);
+      expect(small.statements).toBeGreaterThan(0);
+      expect(small.rows).toBe(1);
+      expect(readScalingViolations({ small, large })).toEqual([]);
+    },
+  );
+});
+
 const readDataBox = async (fieldId: SafeId<"field">, scopedDb: ScopedDb) =>
   await readDataBoxFile({
     fieldId,
@@ -1086,6 +1210,22 @@ const answeredStatus = (answer: unknown): number => {
 };
 
 const STREAMED_PATHS: readonly StreamedPath[] = [
+  {
+    name: "a signed document preview",
+    seed: seedCades,
+    read: async ({ fieldId }, scopedDb) =>
+      answeredStatus(
+        await cadesPreviewEndpoint.handler(cadesContext(fieldId, scopedDb)),
+      ),
+  },
+  {
+    name: "a signed document's PDF",
+    seed: seedCades,
+    read: async ({ fieldId }, scopedDb) =>
+      answeredStatus(
+        await cadesContentEndpoint.handler(cadesContext(fieldId, scopedDb)),
+      ),
+  },
   {
     name: "a data-box preview",
     seed: seedDataBox,
