@@ -73,6 +73,23 @@ const scrollHeaderIntoView = (element: HTMLElement | null) => {
   element?.scrollIntoView({ block: "nearest", inline: "nearest" });
 };
 
+type RunBlockerOptions = {
+  running: boolean;
+  rowCount: number;
+  hasRunAction: boolean;
+};
+
+const runBlockerKey = ({
+  running,
+  rowCount,
+  hasRunAction,
+}: RunBlockerOptions) => {
+  if (running) {
+    return "caseLaw.research.runInProgress";
+  }
+  return rowCount === 0 || !hasRunAction ? "aiColumns.noRowsToRun" : undefined;
+};
+
 export const QuestionColumnPopover = ({
   actions,
   column,
@@ -106,6 +123,11 @@ export const QuestionColumnPopover = ({
   const scopedStates = scope.rowIds.map(stateFor);
   const pageMenu = aiColumnRunMenu(pageDecisionIds.map(stateFor));
   const primaryRun = aiColumnRunMenu(scopedStates).at(0);
+  const headerRunReasonKey = runBlockerKey({
+    running: questions?.isRunning === true,
+    rowCount: scope.count,
+    hasRunAction: primaryRun !== undefined,
+  });
 
   return (
     <div className="flex h-full items-center gap-1 pe-2">
@@ -179,6 +201,11 @@ export const QuestionColumnPopover = ({
                     disabled={
                       questions?.isRunning || pageDecisionIds.length === 0
                     }
+                    disabledReason={
+                      questions?.isRunning
+                        ? t("caseLaw.research.runInProgress")
+                        : t("caseLaw.research.emptyPage")
+                    }
                     onClick={() => {
                       setIsOpen(false);
                       questions?.onRunColumn(question, {
@@ -240,8 +267,8 @@ export const QuestionColumnPopover = ({
             states: scopedStates,
             menuOpen: isOpen,
           })}
-          disabled={
-            questions.isRunning || scope.count === 0 || primaryRun === undefined
+          disabledReason={
+            headerRunReasonKey === undefined ? undefined : t(headerRunReasonKey)
           }
           onRun={() => {
             if (primaryRun === undefined) {
