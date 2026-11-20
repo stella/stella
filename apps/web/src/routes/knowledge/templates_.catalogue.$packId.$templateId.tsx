@@ -16,8 +16,8 @@ import { pageTitle } from "@/lib/page-title";
 import { createPublicHead } from "@/lib/public-seo";
 import { ensureRouteQueryData } from "@/lib/react-query";
 import { routePresentation } from "@/routes/-route-presentation";
-import { CatalogueTemplatePage } from "@/routes/knowledge/-public/catalogue-template.page";
-import { CatalogueTemplatePending } from "@/routes/knowledge/-public/catalogue-template.pending";
+import { CatalogueTemplatePage } from "@/routes/knowledge/-catalogue-template.page";
+import { CatalogueTemplatePending } from "@/routes/knowledge/-catalogue-template.pending";
 
 type CatalogueTemplateLoaderArgs = {
   context: { queryClient: QueryClient };

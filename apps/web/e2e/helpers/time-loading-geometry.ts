@@ -229,12 +229,17 @@ export const measureLoadingGeometry = async ({
             }),
           )
         : null;
-    let surfaces: readonly LoadingSurface[] = SURFACES;
-    if (contact !== null) {
-      surfaces = contactSurfaces(contact.id);
-    } else if (skill !== null) {
-      surfaces = skillSurfaces(skill.id);
-    }
+    // The fixture's own surfaces, where the set made one.
+    const fixtureSurfaces = (): readonly LoadingSurface[] | null => {
+      if (contact !== null) {
+        return contactSurfaces(contact.id);
+      }
+      if (skill !== null) {
+        return skillSurfaces(skill.id);
+      }
+      return null;
+    };
+    const surfaces = fixtureSurfaces() ?? SURFACES;
     const evidence = [];
     try {
       for (const { locale, browserLocale, messages } of LANGUAGES) {

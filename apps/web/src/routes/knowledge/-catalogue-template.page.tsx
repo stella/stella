@@ -7,7 +7,7 @@ import { TemplateCatalogueDetailView } from "@/features/knowledge/views/template
 import { TemplateCatalogueDetailPending } from "@/features/knowledge/views/templates/template-catalogue-detail-view.pending";
 import { detached } from "@/lib/detached";
 import { CatalogueTemplateActions } from "@/routes/knowledge/-catalogue-template-actions";
-import { CatalogueTemplateShell } from "@/routes/knowledge/-public/catalogue-template.pending";
+import { CatalogueTemplateShell } from "@/routes/knowledge/-catalogue-template.pending";
 
 const catalogueTemplateRouteApi = getRouteApi(
   "/knowledge/templates_/catalogue/$packId/$templateId",
