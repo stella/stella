@@ -1,5 +1,9 @@
 import { useState } from "react";
 
+import {
+  CHAT_STEP_LEDGER_KEY,
+  type ChatStepLedger,
+} from "@stll/api-contract/chat-step-ledger";
 import { Button } from "@stll/ui/button";
 import { RotateCcwIcon } from "@stll/ui/icons";
 
@@ -148,6 +152,61 @@ const ENDED_AT_FAILURE_FRAME: Frame = {
   parts: [THINKING, searchHistory("complete"), readSection("complete")],
 };
 
+// A code step whose second search did not go through, with the ledger the
+// server records beside the script's own (failed) result.
+const FAILED_CODE_SEARCH_INPUT = {
+  typescriptCode: [
+    'const a = await external_search_case_law({ queries: ["limitation of liability cap share purchase"], country: "CZE" });',
+    'const b = await external_search_case_law({ queries: ["indemnity cap carve-outs"], country: "CZE", courts: ["NS"], date_from: "2020-01-01" });',
+    "return { a, b };",
+  ].join("\n"),
+};
+
+const failedCodeSearch: ChatToolCallPart = {
+  type: "tool-call",
+  id: "status-tool-code-search",
+  name: "execute_typescript",
+  arguments: JSON.stringify(FAILED_CODE_SEARCH_INPUT),
+  state: "complete",
+  input: FAILED_CODE_SEARCH_INPUT,
+  output: {
+    success: false,
+    error: { message: "Court filter matched no court", name: "Error" },
+    logs: [],
+    [CHAT_STEP_LEDGER_KEY]: {
+      calls: [
+        {
+          tool: "search_case_law",
+          queries: ["limitation of liability cap share purchase"],
+          filters: [{ kind: "country", value: "CZE" }],
+          outcome: "ok",
+          found: [],
+          foundOmitted: 0,
+        },
+        {
+          tool: "search_case_law",
+          queries: ["indemnity cap carve-outs"],
+          filters: [
+            { kind: "country", value: "CZE" },
+            { kind: "court", value: "NS" },
+            { kind: "dateFrom", value: "2020-01-01" },
+          ],
+          outcome: "error",
+          found: [],
+          foundOmitted: 0,
+        },
+      ],
+      callsOmitted: 0,
+    } satisfies ChatStepLedger,
+  },
+};
+
+const ENDED_AT_FAILED_CODE_STEP_FRAME: Frame = {
+  durationMs: 0,
+  isGenerating: false,
+  parts: [THINKING, failedCodeSearch],
+};
+
 // The chat page's transcript rhythm (`ConversationContent` gap-3), so the
 // fixture spaces messages the way the product does.
 const THREAD_FRAME_CLASS =
@@ -268,6 +327,21 @@ export function ChatStatusPlayground() {
             </h2>
             <div className={THREAD_FRAME_CLASS}>
               {thread("ended-at-failure", ENDED_AT_FAILURE_FRAME, true)}
+            </div>
+          </section>
+          <section
+            className="flex flex-col gap-2"
+            data-testid="failed-code-step"
+          >
+            <h2 className="text-muted-foreground text-xs font-medium">
+              Turn ended at a code step whose search failed
+            </h2>
+            <div className={THREAD_FRAME_CLASS}>
+              {thread(
+                "ended-at-failed-code-step",
+                ENDED_AT_FAILED_CODE_STEP_FRAME,
+                true,
+              )}
             </div>
           </section>
         </div>

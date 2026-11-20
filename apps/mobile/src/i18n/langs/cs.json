@@ -212,6 +212,11 @@
       "validate_skill_package": "Zkontrolovat dovednost",
       "web_search": "Vyhledávání na webu"
     },
+    "toolResearch": {
+      "caseLaw": "Hledám v judikatuře",
+      "legislation": "Čtu předpisy",
+      "legislationAndCaseLaw": "Hledám v předpisech a judikatuře"
+    },
     "localRun": {
       "title": {
         "sign_in": "Pro pokračování se přihlaste",

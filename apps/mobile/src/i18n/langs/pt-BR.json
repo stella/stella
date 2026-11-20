@@ -212,6 +212,11 @@
       "validate_skill_package": "Verificar habilidade",
       "web_search": "Pesquisando na web"
     },
+    "toolResearch": {
+      "caseLaw": "Pesquisando jurisprudência",
+      "legislation": "Lendo a legislação",
+      "legislationAndCaseLaw": "Pesquisando legislação e jurisprudência"
+    },
     "localRun": {
       "title": {
         "sign_in": "Faça login para continuar",

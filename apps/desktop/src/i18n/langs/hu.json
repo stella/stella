@@ -36,7 +36,11 @@
     "sessionOpeningInOffice": "Megnyitás Office-ban",
     "sessionSavingDraft": "Piszkozat mentése",
     "reconnectAccount": "Újracsatlakozás a stella webhez…",
-    "transcribeRecording": "Felvétel átírása…"
+    "transcribeRecording": "Felvétel átírása…",
+    "dictation": "Diktálás",
+    "dictationHint": "A diktáláshoz tartsa lenyomva a(z) {key} billentyűt",
+    "dictationSettings": "Diktálási beállítások…",
+    "dictationTurnOn": "Diktálás bekapcsolása…"
   },
   "notification": {
     "checkpointDelayedBody": "{fileName}: a változtatások helyben maradnak, és automatikusan újrapróbálkoznak",
@@ -697,7 +701,8 @@
       "focusUnconfirmed": "A stella nem tudta megállapítani, melyik alkalmazás aktív, ezért semmi sem lett beírva. Próbálja újra.",
       "shortcutHeld": "Engedje fel a billentyűparancs gombjait a gépeléshez. Semmi sem lett beírva; próbálja újra.",
       "passwordField": "Jelszómező van kijelölve, ezért a diktálás nem lett megőrizve vagy beírva.",
-      "cloudTranscription": "A stella AI nem tudta átírni ezt a diktálást, és a beszédmodell nincs ezen a számítógépen. Próbálja újra, vagy az „Átírás ezzel” beállításnál válassza az „Ez a számítógép” lehetőséget, és töltse le a modellt."
+      "cloudTranscription": "A stella AI nem tudta átírni ezt a diktálást, és a beszédmodell nincs ezen a számítógépen. Próbálja újra, vagy az „Átírás ezzel” beállításnál válassza az „Ez a számítógép” lehetőséget, és töltse le a modellt.",
+      "nothingHeard": "A stella nem hallott beszédet. Ellenőrizze a bemeneti eszközt a Hang beállításaiban."
     },
     "failureKeptInHistory": "A szöveg megtalálható a vágólap előzményeiben.",
     "transcribeRecording": {
@@ -705,6 +710,21 @@
       "description": "Legfeljebb 4 órás diktafonfájlt, hangjegyzetet vagy értekezlet-felvételt alakít szöveggé.",
       "open": "Megnyitás",
       "failed": "Az ablakot nem sikerült megnyitni. Próbálja újra."
+    },
+    "notice": {
+      "title": "A stella nem hallja a mikrofont",
+      "allowBody": "Engedélyezze a mikrofon-hozzáférést, majd próbálja újra.",
+      "checkBodyMac": "Ellenőrizze a mikrofon-hozzáférést a Rendszerbeállításokban, majd próbálja újra.",
+      "checkBodyPc": "Ellenőrizze a mikrofon-hozzáférést a Windows beállításaiban, majd próbálja újra.",
+      "allow": "Mikrofon engedélyezése",
+      "openSettingsMac": "Rendszerbeállítások megnyitása",
+      "openSettingsPc": "Beállítások megnyitása",
+      "dismiss": "Bezárás",
+      "nothingTitle": "A stella nem hallott beszédet",
+      "nothingBody": "Beszéljen, amíg lenyomva tartja a billentyűt, vagy válasszon másik bemenetet a Hang beállításaiban.",
+      "inputDevice": "Bemenet: {device}",
+      "openSoundMac": "Hangbeállítások megnyitása",
+      "openSoundPc": "Hangbeállítások megnyitása"
     },
     "preview": {
       "label": "Az eddig diktált szöveg",
@@ -809,8 +829,8 @@
     "permissionsTitlePc": "A számítógép beállítása",
     "permissionsBody": "Minden engedélyről Ön dönt. Később a Beállításokban módosíthatja őket.",
     "neverRequested": "Az alkalmazás soha nem kéri:",
-    "tryTitle": "Próbálja ki most",
-    "tryBody": "Másoljon ki egy tetszőleges szöveget, majd nyomja le ezt: {shortcut}.",
+    "tryTitle": "Próbálja ki a vágólap előzményeit",
+    "tryBody": "Másoljon ki egy tetszőleges szöveget, majd a vágólap előzményeinek megnyitásához nyomja le ezt: {shortcut}.",
     "tryWaiting": "Billentyűparancsra vár",
     "tryKeepGoing": "Folytassa…",
     "tryExtraModifier": "Ezt nyomta le: {pressed}. Használja ezt: {shortcut}.",

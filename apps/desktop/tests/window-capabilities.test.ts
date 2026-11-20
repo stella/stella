@@ -41,6 +41,7 @@ const SHELL_INVOKE_SOURCES = [
 const SHELL_WINDOW_MODULES: Record<string, readonly string[]> = {
   "src-tauri/capabilities/default.json": [
     "src/mainview/App.tsx",
+    "src/mainview/DictationInputFix.tsx",
     "src/mainview/AgentSubscriptionsSection.tsx",
     "src/mainview/KeepAwakeSection.tsx",
     "src/mainview/LocalSkillFoldersSection.tsx",
@@ -56,6 +57,9 @@ const SHELL_WINDOW_MODULES: Record<string, readonly string[]> = {
   "src-tauri/capabilities/transcribe.json": [
     "src/transcribe/TranscribeApp.tsx",
     "src/transcribe/TranscribeMatterPicker.tsx",
+  ],
+  "src-tauri/capabilities/dictation-notice.json": [
+    "src/mainview/DictationNoticeApp.tsx",
   ],
   "src-tauri/capabilities/dictation-preview.json": [
     "src/dictation/DictationPreviewApp.tsx",

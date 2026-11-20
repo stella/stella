@@ -1732,6 +1732,7 @@
       "unorderedList": "Zoznam s odrážkami",
       "wholeBlockRequired": "Na zmenu štýlu vyberte celý odsek alebo zoznam."
     },
+    "answerNotFinished": "stella túto odpoveď nedokončila.",
     "answerQuote": {
       "showInDecision": "Zobraziť v rozhodnutí",
       "unverified": "Citáciu sa nepodarilo overiť",
@@ -2325,6 +2326,20 @@
       "runFull": "Agent teraz ďalšie správy neprijme.",
       "title": "Správa čaká v poradí, kým agent neskončí",
       "turnNotRunning": "Agent práve nepracuje."
+    },
+    "stepDigest": {
+      "decisionsFound": "{found, plural, one {# rozhodnutie nájdené} few {# rozhodnutia nájdené} many {# rozhodnutia nájdeného} other {# rozhodnutí nájdených}}",
+      "decisionsFoundUsed": "{found, plural, one {# rozhodnutie nájdené} few {# rozhodnutia nájdené} many {# rozhodnutia nájdeného} other {# rozhodnutí nájdených}}, {used, plural, one {# použité v odpovedi} few {# použité v odpovedi} many {# použitého v odpovedi} other {# použitých v odpovedi}}",
+      "filterAsOf": "K {date}",
+      "legislationFound": "{count, plural, one {# predpis alebo ustanovenie} few {# predpisy a ustanovenia} many {# predpisu a ustanovenia} other {# predpisov a ustanovení}}",
+      "lookupDidNotGoThrough": "Toto hľadanie neprešlo.",
+      "moreFound": "{count, plural, one {a # ďalší} few {a # ďalšie} many {a # ďalšieho} other {a # ďalších}}",
+      "moreLookups": "{count, plural, one {# ďalší dopyt sa nezobrazuje} few {# ďalšie dopyty sa nezobrazujú} many {# ďalšieho dopytu sa nezobrazuje} other {# ďalších dopytov sa nezobrazuje}}",
+      "notRecorded": "Tento krok prebehol skôr, ako stella začala zaznamenávať, čo ktorý krok hľadá.",
+      "nothingFound": "Nič nezodpovedá.",
+      "technicalDetails": "Technické detaily",
+      "usedInAnswer": "Použité v odpovedi",
+      "versionFrom": "Znenie od {date}"
     },
     "stopFailed": "Odpoveď sa nepodarilo zastaviť. Skúste to znova.",
     "stopResponse": "Zastaviť",
@@ -5768,6 +5783,9 @@
       "chatNotificationsDescription": "Dostanete upozornenie z tohto prehliadača, keď sa odpoveď v chate dokončí, kým je stella na pozadí.",
       "chatNotificationsToggle": "Upozorniť ma, keď je odpoveď hotová alebo potrebuje môj vstup",
       "chatNotificationsUnsupported": "Tento prehliadač upozornenia nepodporuje.",
+      "chatTechnicalDetails": "Technické detaily v chate",
+      "chatTechnicalDetailsDescription": "Každý krok v chate ukazuje, čo hľadal a čo našiel. Po zapnutí uvidíte aj kód a nespracované výsledky za ním.",
+      "chatTechnicalDetailsToggle": "Zobrazovať technické detaily v chate",
       "confirmDelete": "Potvrdiť vymazanie účtu",
       "dangerZone": "Nebezpečná zóna",
       "dangerZoneDescription": "Natrvalo vymazať prístup k účtu a súkromné údaje účtu.",

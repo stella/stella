@@ -1732,6 +1732,7 @@
       "unorderedList": "Aufzählung",
       "wholeBlockRequired": "Wählen Sie einen ganzen Absatz oder eine ganze Liste aus, um den Stil zu ändern."
     },
+    "answerNotFinished": "stella konnte diese Antwort nicht fertigstellen.",
     "answerQuote": {
       "showInDecision": "In der Entscheidung zeigen",
       "unverified": "Zitat nicht verifiziert",
@@ -2325,6 +2326,20 @@
       "runFull": "Der Agent nimmt gerade keine weiteren Nachrichten an.",
       "title": "Ihre Nachricht wartet, bis der Agent fertig ist",
       "turnNotRunning": "Der Agent arbeitet gerade nicht."
+    },
+    "stepDigest": {
+      "decisionsFound": "{found, plural, one {# Entscheidung gefunden} other {# Entscheidungen gefunden}}",
+      "decisionsFoundUsed": "{found, plural, one {# Entscheidung gefunden} other {# Entscheidungen gefunden}}, {used, plural, one {# in der Antwort verwendet} other {# in der Antwort verwendet}}",
+      "filterAsOf": "Stand {date}",
+      "legislationFound": "{count, plural, one {# Rechtsvorschrift oder Bestimmung} other {# Rechtsvorschriften und Bestimmungen}}",
+      "lookupDidNotGoThrough": "Diese Suche hat nicht geklappt.",
+      "moreFound": "{count, plural, one {# weiteres nicht angezeigt} other {# weitere nicht angezeigt}}",
+      "moreLookups": "{count, plural, one {# weitere Abfrage nicht angezeigt} other {# weitere Abfragen nicht angezeigt}}",
+      "notRecorded": "Dieser Schritt lief, bevor stella festgehalten hat, was jeder Schritt nachschlägt.",
+      "nothingFound": "Keine Treffer.",
+      "technicalDetails": "Technische Details",
+      "usedInAnswer": "In der Antwort verwendet",
+      "versionFrom": "Fassung ab {date}"
     },
     "stopFailed": "Die Antwort konnte nicht gestoppt werden. Versuchen Sie es erneut.",
     "stopResponse": "Stoppen",
@@ -5768,6 +5783,9 @@
       "chatNotificationsDescription": "Erhalten Sie eine Benachrichtigung von diesem Browser, wenn eine Chat-Antwort fertig ist, während stella im Hintergrund läuft.",
       "chatNotificationsToggle": "Benachrichtigen, wenn eine Antwort fertig ist oder meine Eingabe braucht",
       "chatNotificationsUnsupported": "Dieser Browser unterstützt keine Benachrichtigungen.",
+      "chatTechnicalDetails": "Technische Details im Chat",
+      "chatTechnicalDetailsDescription": "Jeder Schritt im Chat zeigt, was er nachgeschlagen und gefunden hat. Eingeschaltet sehen Sie auch den Code und die Rohergebnisse dahinter.",
+      "chatTechnicalDetailsToggle": "Technische Details im Chat anzeigen",
       "confirmDelete": "Konto löschen bestätigen",
       "dangerZone": "Gefahrenbereich",
       "dangerZoneDescription": "Löschen Sie Ihren Kontozugriff und private Kontodaten dauerhaft.",

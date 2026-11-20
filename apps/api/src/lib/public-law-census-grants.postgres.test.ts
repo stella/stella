@@ -7,6 +7,7 @@ import type { PublicLawDatabaseRolePermissions } from "@/api/lib/public-law-read
 import {
   CENSUS_COLUMN_GRANTS_BY_RELATION,
   COLLECTION_BODY_COLUMN_GRANTS_BY_RELATION,
+  COLLECTION_OBSERVATION_COLUMN_GRANTS_BY_RELATION,
   COLLECTION_PART_COLUMN_GRANTS_BY_RELATION,
   LEGISLATION_WORK_IDENTIFIER_COLUMN_GRANTS_BY_RELATION,
   PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION,
@@ -20,6 +21,10 @@ describe.skipIf(!enabled)("staged public-law grants (postgres)", () => {
     Object.entries({
       ...CENSUS_COLUMN_GRANTS_BY_RELATION,
       ...COLLECTION_BODY_COLUMN_GRANTS_BY_RELATION,
+      case_law_published_decisions: {
+        ...COLLECTION_BODY_COLUMN_GRANTS_BY_RELATION.case_law_published_decisions,
+        ...COLLECTION_OBSERVATION_COLUMN_GRANTS_BY_RELATION.case_law_published_decisions,
+      },
       case_law_collection_bodies: {
         ...COLLECTION_BODY_COLUMN_GRANTS_BY_RELATION.case_law_collection_bodies,
         ...COLLECTION_PART_COLUMN_GRANTS_BY_RELATION.case_law_collection_bodies,
