@@ -65,6 +65,8 @@ export const effectiveGeneratorInputs = (generator: Generator) => [
 
 const TRANSITIVE_GENERATOR_INPUTS = {
   "account-export-tables": [
+    "apps/api/src/lib/db/sealed-text.ts",
+    "apps/api/src/lib/db/sso-provider-config.ts",
     "apps/api/src/lib/imports/external-ref-limits.ts",
     "apps/api/src/*",
     "apps/api/src/db/*",
@@ -810,6 +812,8 @@ const TRANSITIVE_GENERATOR_INPUTS = {
     "scripts/generated-source-hash.ts",
   ],
   "status-tables": [
+    "apps/api/src/lib/db/sealed-text.ts",
+    "apps/api/src/lib/db/sso-provider-config.ts",
     "apps/api/src/lib/imports/external-ref-limits.ts",
     "apps/api/src/*",
     "apps/api/src/db/*",
@@ -927,6 +931,8 @@ const TRANSITIVE_GENERATOR_INPUTS = {
     "scripts/oxlint-presets/*",
   ],
   "transition-triggers": [
+    "apps/api/src/lib/db/sealed-text.ts",
+    "apps/api/src/lib/db/sso-provider-config.ts",
     "apps/api/src/lib/imports/external-ref-limits.ts",
     "apps/api/src/*",
     "apps/api/src/db/*",

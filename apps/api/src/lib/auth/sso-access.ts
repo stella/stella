@@ -14,8 +14,10 @@ import type {
   SsoAccess,
 } from "@/api/lib/auth/member-authorization";
 import { SSO_ACCESS_STATUS } from "@/api/lib/auth/member-authorization";
+import { liveSessionPredicate } from "@/api/lib/auth/session-liveness";
 import type { SafeId } from "@/api/lib/branded-types";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
+import { typedPgArray } from "@/api/lib/search/sql";
 
 /**
  * The one SSO decision. Every surface that admits a member of an
@@ -91,7 +93,7 @@ export const ssoAccessColumn = (
           select 1 from ${session}
           where ${session.id} = ${authentication.sessionId}
             and ${session.userId} = ${member.userId}
-            and ${session.expiresAt} > now()
+            and ${liveSessionPredicate(new Date(), session)}
             and ${providerOfOrganization(session.ssoProviderId, member.organizationId)}
         ) then ${SSO_ACCESS_STATUS.satisfied}::text
         else ${SSO_ACCESS_STATUS.signInRequired}::text
@@ -140,7 +142,9 @@ export const readSessionSsoAccess = async (
     return { status: SSO_ACCESS_STATUS.notRequired };
   }
   const live =
-    liveness === "live" ? sql`and ${session.expiresAt} > now()` : sql``;
+    liveness === "live"
+      ? sql`and ${liveSessionPredicate(new Date(), session)}`
+      : sql``;
   const rows = await db.execute<{ status: string }>(sql`
     select case
       when not ${organizationRequiresSso(organizationId)}
@@ -159,4 +163,40 @@ export const readSessionSsoAccess = async (
   return status === undefined
     ? panic("The SSO decision returned no row")
     : ssoAccessOf(status);
+};
+
+/**
+ * Whether any of `organizationIds` requires SSO and refuses the session, in
+ * one statement: the organization endpoints act on every organization a
+ * request names.
+ */
+export const ssoRefusesSessionInAny = async (
+  db: SsoDecisionDb,
+  {
+    organizationIds,
+    userId,
+    sessionId,
+  }: Omit<SessionSsoLookup, "organizationId" | "session"> & {
+    organizationIds: readonly SafeId<"organization">[];
+  },
+): Promise<boolean> => {
+  if (!isEnterpriseSsoDeployed() || organizationIds.length === 0) {
+    return false;
+  }
+  const requested = sql`requested.organization_id`;
+  const rows = await db.execute<{ refused: boolean }>(sql`
+    select exists (
+      select 1
+      from unnest(${typedPgArray(organizationIds, "text")}) as requested(organization_id)
+      where ${organizationRequiresSso(requested)}
+        and not exists (
+          select 1 from ${session}
+          where ${session.id} = ${sessionId}
+            and ${session.userId} = ${userId}
+            and ${liveSessionPredicate(new Date(), session)}
+            and ${providerOfOrganization(session.ssoProviderId, requested)}
+        )
+    ) as refused
+  `);
+  return rows.at(0)?.refused ?? panic("The SSO decision returned no row");
 };

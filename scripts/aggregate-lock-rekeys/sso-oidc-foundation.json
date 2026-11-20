@@ -2,7 +2,7 @@
   {
     "file": "apps/api/src/lib/auth.ts",
     "from": "d68156f694d31a8cc9e479924e72740eb410534a18d42d4be1b0a662525c9eb8",
-    "to": "914d4465b29bdf82b47528100f89e34b2d2998303c13950ddf875034b2ccac7d",
+    "to": "7df306809a7a175c21518c91d74c93d9b682c9ae94811599316e7aee7be41e22",
     "reason": "The provider write transaction also reads the organization's SSO decision for the token's session after the credential fence; it takes no new lock and the single in-transaction create is unchanged."
   }
 ]

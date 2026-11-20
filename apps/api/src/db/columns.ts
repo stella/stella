@@ -6,8 +6,8 @@ import {
   decodeStoredChatContent,
   encodeStoredChatContent,
 } from "@/api/db/stored-chat-part-codec";
-import type { SealedTextScope } from "@/api/lib/content-encryption";
-import { openText, sealText } from "@/api/lib/content-encryption";
+import type { SealedTextScope } from "@/api/lib/db/sealed-text";
+import { openText, sealText } from "@/api/lib/db/sealed-text";
 
 /**
  * A text column holding a secret sealed under `scope`: every write through

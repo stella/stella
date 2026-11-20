@@ -277,12 +277,15 @@ import {
 import { socialTokenExchangePlugin } from "@/api/lib/auth/social-token-exchange";
 import { readCurrentLiveSseSessions } from "@/api/lib/auth/sse-session-liveness-reader";
 import {
-  readSessionSsoAccess,
   ssoAccessColumn,
   ssoAccessOf,
   ssoAdmitsSession,
 } from "@/api/lib/auth/sso-access";
-import { ssoOrganizationGuardPlugin } from "@/api/lib/auth/sso-organization-guard";
+import {
+  createSsoOrganizationGuardPlugin,
+  refuseConsentUnlessSsoAdmits,
+  refuseTokenUnlessSsoAdmits,
+} from "@/api/lib/auth/sso-organization-guard";
 import {
   createSsoSignInPlugin,
   SSO_ACCOUNT_FIELDS,
@@ -1792,26 +1795,11 @@ export const createAuth = (
               error_description: "The authorization is no longer valid.",
             });
           }
-          // Every organization token, first issue and refresh alike, carries
-          // the SSO provenance of the browser session that granted it: an
-          // organization that requires SSO refuses a token whose session no
-          // provider of its created, or whose session row is gone.
-          if (
-            grant !== undefined &&
-            grant.organizationId !== null &&
-            (
-              await readSessionSsoAccess(tx, {
-                organizationId: grant.organizationId,
-                userId: grant.userId,
-                sessionId: grant.sessionId,
-                session: "recorded",
-              })
-            ).status === SSO_ACCESS_STATUS.signInRequired
-          ) {
-            throw new APIError("BAD_REQUEST", {
-              error: "invalid_grant",
-              error_description:
-                "This organization requires signing in with its SSO provider.",
+          if (grant !== undefined && grant.organizationId !== null) {
+            await refuseTokenUnlessSsoAdmits(tx, {
+              organizationId: grant.organizationId,
+              userId: grant.userId,
+              sessionId: grant.sessionId,
             });
           }
           if (clientId) {
@@ -2740,7 +2728,7 @@ export const createAuth = (
       // Mounted always, answering 404 until FEATURE_ENTERPRISE_SSO is on.
       createSsoSignInPlugin(),
       // Holds the organization endpoints to the same SSO decision.
-      ssoOrganizationGuardPlugin,
+      createSsoOrganizationGuardPlugin(rootDb),
       createMemberInvitationSectionsPlugin(
         createAuthMiddleware,
         () => new Date(),
@@ -2877,22 +2865,12 @@ export const createAuth = (
                     "An organization must be selected before granting stella MCP access",
                 });
               }
-              // Consent grants the organization only to a session it admits;
-              // token issuance checks the same decision again.
-              const ssoAccess = await readSessionSsoAccess(rootDb, {
+              await refuseConsentUnlessSsoAdmits(rootDb, {
                 organizationId:
                   brandPersistedOrganizationId(activeOrganizationId),
                 userId: brandPersistedUserId(session.userId),
                 sessionId: session.id,
-                session: "live",
               });
-              if (ssoAccess.status === SSO_ACCESS_STATUS.signInRequired) {
-                throw new APIError("FORBIDDEN", {
-                  error: SSO_SIGN_IN_REQUIRED_CODE,
-                  message:
-                    "This organization requires signing in with its SSO provider.",
-                });
-              }
 
               return activeOrganizationId;
             },

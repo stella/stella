@@ -19,7 +19,7 @@ import { getAuth, resolveMemberAuthorization } from "@/api/lib/auth";
 import { getAuthEndpointUrl } from "@/api/lib/auth/auth-paths";
 import type { MemberAuthentication } from "@/api/lib/auth/member-authorization";
 import { ORGANIZATION_ENDPOINT_SSO } from "@/api/lib/auth/sso-organization-guard";
-import { sealText } from "@/api/lib/content-encryption";
+import { sealText } from "@/api/lib/db/sealed-text";
 import { defineEndpoint } from "@/api/lib/endpoints";
 import { errorBoundary } from "@/api/lib/observability/request-lifecycle";
 import { isPgConstraintError, isPgError, PG_ERROR } from "@/api/lib/pg-error";

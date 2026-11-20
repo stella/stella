@@ -87,7 +87,7 @@ const PUBLIC_SSO_ERRORS: ReadonlySet<string> = new Set([
 ]);
 
 /** The public error for a failure code the callback produced. */
-export const publicSsoError = (code: string): string =>
+const publicSsoError = (code: string): string =>
   PUBLIC_SSO_ERRORS.has(code) ? code : SSO_SIGN_IN_FAILED;
 
 const NONCE_SCOPE = "stella:sso-nonce:v1:";

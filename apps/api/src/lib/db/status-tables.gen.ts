@@ -545,6 +545,7 @@ export const ENUM_COLUMNS = {
     "personal_api_key_policy",
     "sanctions_monitoring_mode",
   ],
+  organization_sso_policy: ["requirement"],
   pdf_signing_sessions: ["close_reason", "entity_feature_gate", "key_type"],
   pending_uploads: ["purpose"],
   push_devices: ["bundle_id", "environment"],

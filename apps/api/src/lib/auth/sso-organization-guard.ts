@@ -8,20 +8,33 @@ import { inArray } from "drizzle-orm";
 import { SSO_SIGN_IN_REQUIRED_CODE } from "@stll/api-contract/sso";
 
 import { invitation, organization } from "@/api/db/auth-schema";
-import { rootDb } from "@/api/db/root";
+import type { Transaction } from "@/api/db/root";
 import type { getAuth } from "@/api/lib/auth";
 import { SSO_ACCESS_STATUS } from "@/api/lib/auth/member-authorization";
 import {
   isEnterpriseSsoDeployed,
   readSessionSsoAccess,
+  ssoRefusesSessionInAny,
 } from "@/api/lib/auth/sso-access";
+import type { SafeId } from "@/api/lib/branded-types";
 import {
   brandPersistedOrganizationId,
   brandPersistedUserId,
 } from "@/api/lib/safe-id-boundaries";
 import { isRecord } from "@/api/lib/type-guards";
 
+/**
+ * The SSO refusals better-auth's own endpoints raise: the organization
+ * endpoints, OAuth consent and OAuth token issuance. Each asks the shared
+ * decision in `sso-access.ts`; the caller hands in the database it runs on.
+ */
+
 const ORGANIZATION_PATH_PREFIX = "/organization/";
+
+const SSO_SIGN_IN_REQUIRED_MESSAGE =
+  "This organization requires signing in with its SSO provider.";
+
+type SsoGuardDatabase = Pick<Transaction, "execute" | "select">;
 
 type RegisteredAuthApi = ReturnType<
   typeof getEndpoints<ReturnType<typeof getAuth>["options"]>
@@ -84,6 +97,7 @@ const stringField = (source: unknown, field: string): string | undefined => {
  * several endpoints use whatever the request names.
  */
 const requestOrganizations = async (
+  db: SsoGuardDatabase,
   input: { body: unknown; query: unknown },
   activeOrganizationId: string | undefined,
 ): Promise<ReadonlySet<string>> => {
@@ -103,7 +117,7 @@ const requestOrganizations = async (
   const bySlug =
     slugs.length === 0
       ? []
-      : await rootDb
+      : await db
           .select({ id: organization.id })
           .from(organization)
           .where(inArray(organization.slug, slugs))
@@ -111,7 +125,7 @@ const requestOrganizations = async (
   const byInvitation =
     invitationIds.length === 0
       ? []
-      : await rootDb
+      : await db
           .select({ id: invitation.organizationId })
           .from(invitation)
           .where(inArray(invitation.id, invitationIds))
@@ -129,47 +143,91 @@ const requestOrganizations = async (
  * neither read nor change that organization through them. The session is
  * not ended, and the recovery endpoints stay open.
  */
-const ssoOrganizationGate = createAuthMiddleware(async (ctx) => {
-  if (!isEnterpriseSsoDeployed() || ctx.path === undefined) {
-    return;
-  }
-  if (isRecoveryEndpoint(ctx.path)) {
-    return;
-  }
-  const current = await getSessionFromCtx(ctx);
-  if (current === null) {
-    return;
-  }
-  const active: unknown = current.session["activeOrganizationId"];
-  const organizations = await requestOrganizations(
-    { body: ctx.body, query: ctx.query },
-    typeof active === "string" && active !== "" ? active : undefined,
-  );
-  for (const organizationId of organizations) {
-    const access = await readSessionSsoAccess(rootDb, {
-      organizationId: brandPersistedOrganizationId(organizationId),
-      userId: brandPersistedUserId(current.user.id),
-      sessionId: current.session.id,
-      session: "live",
-    });
-    if (access.status === SSO_ACCESS_STATUS.signInRequired) {
-      throw new APIError("FORBIDDEN", {
-        code: SSO_SIGN_IN_REQUIRED_CODE,
-        message: "This organization requires signing in with its SSO provider.",
-      });
-    }
-  }
-});
+export const createSsoOrganizationGuardPlugin = (db: SsoGuardDatabase) =>
+  ({
+    id: "stella-sso-organization-guard",
+    hooks: {
+      before: [
+        {
+          matcher: (ctx) =>
+            ctx.path?.startsWith(ORGANIZATION_PATH_PREFIX) ?? false,
+          handler: createAuthMiddleware(async (ctx) => {
+            if (!isEnterpriseSsoDeployed() || ctx.path === undefined) {
+              return;
+            }
+            if (isRecoveryEndpoint(ctx.path)) {
+              return;
+            }
+            const current = await getSessionFromCtx(ctx);
+            if (current === null) {
+              return;
+            }
+            const active: unknown = current.session["activeOrganizationId"];
+            const organizations = await requestOrganizations(
+              db,
+              { body: ctx.body, query: ctx.query },
+              typeof active === "string" && active !== "" ? active : undefined,
+            );
+            const refused = await ssoRefusesSessionInAny(db, {
+              organizationIds: [...organizations].map((id) =>
+                brandPersistedOrganizationId(id),
+              ),
+              userId: brandPersistedUserId(current.user.id),
+              sessionId: current.session.id,
+            });
+            if (refused) {
+              throw new APIError("FORBIDDEN", {
+                code: SSO_SIGN_IN_REQUIRED_CODE,
+                message: SSO_SIGN_IN_REQUIRED_MESSAGE,
+              });
+            }
+          }),
+        },
+      ],
+    },
+  }) satisfies BetterAuthPlugin;
 
-export const ssoOrganizationGuardPlugin = {
-  id: "stella-sso-organization-guard",
-  hooks: {
-    before: [
-      {
-        matcher: (ctx) =>
-          ctx.path?.startsWith(ORGANIZATION_PATH_PREFIX) ?? false,
-        handler: ssoOrganizationGate,
-      },
-    ],
-  },
-} satisfies BetterAuthPlugin;
+type SessionGrantLookup = {
+  organizationId: SafeId<"organization">;
+  userId: SafeId<"user">;
+  sessionId: string | null;
+};
+
+/**
+ * Consent grants an organization only to a live session it admits; token
+ * issuance checks the same decision again.
+ */
+export const refuseConsentUnlessSsoAdmits = async (
+  db: SsoGuardDatabase,
+  lookup: SessionGrantLookup,
+): Promise<void> => {
+  const access = await readSessionSsoAccess(db, { ...lookup, session: "live" });
+  if (access.status === SSO_ACCESS_STATUS.signInRequired) {
+    throw new APIError("FORBIDDEN", {
+      error: SSO_SIGN_IN_REQUIRED_CODE,
+      message: SSO_SIGN_IN_REQUIRED_MESSAGE,
+    });
+  }
+};
+
+/**
+ * Every organization token, first issue and refresh alike, carries the SSO
+ * provenance of the browser session that granted it: an organization that
+ * requires SSO refuses a token whose session no provider of its created, or
+ * whose session row is gone.
+ */
+export const refuseTokenUnlessSsoAdmits = async (
+  tx: SsoGuardDatabase,
+  lookup: SessionGrantLookup,
+): Promise<void> => {
+  const access = await readSessionSsoAccess(tx, {
+    ...lookup,
+    session: "recorded",
+  });
+  if (access.status === SSO_ACCESS_STATUS.signInRequired) {
+    throw new APIError("BAD_REQUEST", {
+      error: "invalid_grant",
+      error_description: SSO_SIGN_IN_REQUIRED_MESSAGE,
+    });
+  }
+};

@@ -260,9 +260,9 @@ export const recordUserProfessionalUseAtCreation = async (
         statementVersion: acceptance.statementVersion,
         source: PROFESSIONAL_USE_ACCEPTANCE_SOURCE.registration,
       });
-      return;
+      break;
     case "required":
-      return;
+      break;
     default:
       acceptance satisfies never;
       panic("Unhandled creation acceptance");

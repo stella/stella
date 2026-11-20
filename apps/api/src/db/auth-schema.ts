@@ -21,7 +21,7 @@ import {
   authUserPolicies,
   denyStellaAccessPolicies,
 } from "@/api/db/rls";
-import { admitSsoOidcConfig } from "@/api/lib/auth/sso-provider-config";
+import { admitSsoOidcConfig } from "@/api/lib/db/sso-provider-config";
 import { ACCOUNT_EMAIL_UNDELIVERABLE_REASONS } from "@/api/lib/email/deliverability-contract";
 import {
   SYNTHETIC_PRINCIPAL,
