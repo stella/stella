@@ -2403,6 +2403,7 @@ const config = defineConfig({
     "./.oxlint-plugins/icon-button-requires-tooltip.ts",
     "./.oxlint-plugins/semantic-controls.ts",
     "./.oxlint-plugins/no-disabled-tooltip-trigger.ts",
+    "./.oxlint-plugins/disabled-control-needs-reason.ts",
     "./.oxlint-plugins/no-button-whitespace-normal.ts",
     "./.oxlint-plugins/no-dialog-trigger-menu-item.ts",
     "./.oxlint-plugins/no-decorated-search-input.ts",
@@ -4424,6 +4425,20 @@ const config = defineConfig({
       ],
       rules: {
         "no-disabled-tooltip-trigger/no-disabled-tooltip-trigger": "error",
+      },
+    },
+    {
+      // A disabled Button must say why it cannot act (`disabledReason`).
+      // Enforced on its fixture only while the existing sites burn down: the
+      // `disabled-control-without-reason` ratchet in scripts/ratchet.ts holds
+      // their count and lets it only fall. The PR that reaches zero widens
+      // these files to the ratchet's scope (web `.tsx` under apps/* and
+      // packages/*, not apps/mobile or `*.native.tsx`) and drops the ratchet.
+      files: [
+        ".oxlint-plugins/__fixtures__/disabled-control-needs-reason.fixture.tsx",
+      ],
+      rules: {
+        "disabled-control-needs-reason/disabled-control-needs-reason": "error",
       },
     },
     {
