@@ -41,6 +41,8 @@ export const ConditionBuilder = ({
   const labels: ConditionBuilderLabels = {
     addCondition: addConditionLabel ?? t("templates.conditionAddRule"),
     addGroup: t("templates.conditionAddGroup"),
+    groupFull: t("templates.conditionGroupFull"),
+    noFields: t("templates.conditionNeedsField"),
     when: t("templates.conditionWhen"),
     match: t("templates.conditionMatch"),
     and: t("common.and"),
