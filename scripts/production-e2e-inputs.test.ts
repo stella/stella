@@ -15,12 +15,14 @@ import { repoRelativePath } from "@stll/portable-path";
 import {
   productionE2eChanged,
   productionE2eInputs,
+  productionWebPackages,
   productionWebSource,
 } from "./production-e2e-inputs.mjs";
 
+const repositoryRoot = path.resolve(import.meta.dirname, "..");
 const productionConfig = path.resolve(
-  import.meta.dirname,
-  "../apps/web/e2e/playwright.config.ts",
+  repositoryRoot,
+  "apps/web/e2e/playwright.config.ts",
 );
 const directory = mkdtempSync(path.join(tmpdir(), "production-e2e-inputs-"));
 afterAll(() => rmSync(directory, { recursive: true, force: true }));
@@ -85,6 +87,147 @@ test("shipped web source changes the production suite; tests, stories and docs d
     expect(productionWebSource(file), file).toBe(false);
     expect(productionE2eChanged([file]), file).toBe(false);
   }
+});
+
+test("bundled workspace package source changes the production suite; tooling and dev-only packages do not", () => {
+  for (const file of [
+    "packages/ui/src/components/view-toolbar.tsx",
+    "packages/ui/src/styles/globals.css",
+    "packages/locales/src/index.ts",
+    // Reached through @stll/api-contract and @stll/chat, not apps/web itself.
+    "packages/uuid-codec/src/index.ts",
+    "packages/html/src/load.ts",
+    // Bundled folders beside src: committed WASM, exported assets and
+    // entries, and an exported script.
+    "packages/scan-engine/generated/scan_engine_bg.wasm",
+    "packages/catalogue/entries/skills/jurisrank/manifest.json",
+    "packages/catalogue/scripts/pinned-content-facts.ts",
+  ]) {
+    expect(productionWebSource(file), file).toBe(true);
+    expect(productionE2eChanged(["README.md", file]), file).toBe(true);
+  }
+  for (const file of [
+    "packages/ui/src/components/view-toolbar.test.tsx",
+    "packages/ui/src/components/button.stories.tsx",
+    "packages/ui/README.md",
+    "packages/ui/package.json",
+    "packages/ui/vite.config.ts",
+    "packages/ui/scripts/generate-icons.ts",
+    "packages/html/tests/load.ts",
+    "packages/scan-engine/fixtures/blank.pgm",
+    // Dev-only workspace packages of apps/web and packages nothing ships.
+    "packages/playwright-tools/src/index.ts",
+    "packages/ssr-testkit/src/index.ts",
+    "packages/property-testing/src/index.ts",
+    "packages/cli/src/index.ts",
+    "packages/uis/src/index.ts",
+  ]) {
+    expect(productionWebSource(file), file).toBe(false);
+    expect(productionE2eChanged([file]), file).toBe(false);
+  }
+});
+
+test("bundled packages are the web app's transitive runtime workspace dependencies", () => {
+  const manifest = (packageDirectory: string) =>
+    JSON.parse(
+      readFileSync(
+        path.join(repositoryRoot, packageDirectory, "package.json"),
+        "utf-8",
+      ),
+    ) as {
+      name: string;
+      dependencies?: Record<string, string>;
+      devDependencies?: Record<string, string>;
+    };
+  const web = manifest("apps/web");
+  const shipped = productionWebPackages();
+  const names = new Set(shipped.map((entry) => manifest(entry.directory).name));
+  // Every direct runtime workspace dependency ships, so a new one needs no
+  // list edit.
+  for (const [name, specifier] of Object.entries(web.dependencies ?? {})) {
+    expect(names.has(name), name).toBe(specifier.startsWith("workspace:"));
+  }
+  expect(names).toContain("@stll/ui");
+  expect(names).toContain("@stll/uuid-codec");
+  for (const name of Object.keys(web.devDependencies ?? {})) {
+    if (!(name in (web.dependencies ?? {}))) {
+      expect(names.has(name), name).toBe(false);
+    }
+  }
+  // Each package's exported entry points count as shipped.
+  for (const { directory: packageDirectory, exports } of shipped) {
+    expect(exports.length, packageDirectory).toBeGreaterThan(0);
+    for (const target of exports) {
+      if (/\.(?:mdx?|d\.ts)$/u.test(target)) {
+        continue;
+      }
+      const file = path.posix.join(
+        packageDirectory,
+        target.replace("*", "entry.ts"),
+      );
+      expect(productionWebSource(file), file).toBe(true);
+    }
+  }
+});
+
+test("the bundled package graph follows workspace manifests", () => {
+  const root = mkdtempSync(path.join(directory, "graph-"));
+  const write = (file: string, content: unknown) => {
+    mkdirSync(path.dirname(path.join(root, file)), { recursive: true });
+    writeFileSync(path.join(root, file), JSON.stringify(content));
+  };
+  write("package.json", { workspaces: ["apps/*", "packages/*", "tools/kit"] });
+  write("apps/web/package.json", {
+    name: "web",
+    dependencies: { direct: "workspace:^", external: "^1.0.0" },
+    devDependencies: { kit: "workspace:*" },
+  });
+  write("packages/direct/package.json", {
+    name: "direct",
+    exports: { ".": "./src/index.ts", "./data/*": "./data/*" },
+    dependencies: { transitive: "workspace:*" },
+    devDependencies: { kit: "workspace:*" },
+  });
+  write("packages/transitive/package.json", {
+    name: "transitive",
+    main: "./index.ts",
+  });
+  write("tools/kit/package.json", { name: "kit" });
+  expect(productionWebPackages(root)).toEqual([
+    { directory: "packages/direct", exports: ["src/index.ts", "data/*"] },
+    { directory: "packages/transitive", exports: ["index.ts"] },
+  ]);
+  for (const file of [
+    "packages/direct/src/index.ts",
+    "packages/direct/data/table.json",
+    "packages/transitive/index.ts",
+    "packages/transitive/lib/helper.ts",
+  ]) {
+    expect(productionWebSource(file, root), file).toBe(true);
+  }
+  for (const file of [
+    "packages/direct/package.json",
+    "packages/direct/tsconfig.json",
+    "packages/direct/src/index.test.ts",
+    "packages/transitive/tests/helper.ts",
+    "tools/kit/src/index.ts",
+  ]) {
+    expect(productionWebSource(file, root), file).toBe(false);
+  }
+
+  const missing = mkdtempSync(path.join(directory, "missing-"));
+  mkdirSync(path.join(missing, "apps/web"), { recursive: true });
+  writeFileSync(
+    path.join(missing, "package.json"),
+    JSON.stringify({ workspaces: ["apps/*"] }),
+  );
+  writeFileSync(
+    path.join(missing, "apps/web/package.json"),
+    JSON.stringify({ name: "web", dependencies: { gone: "workspace:*" } }),
+  );
+  expect(() => productionWebPackages(missing)).toThrow(
+    "Workspace dependency gone has no workspace package",
+  );
 });
 
 test("input derivation follows a different testDir, transitive imports and setup assets", () => {
