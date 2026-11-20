@@ -2323,7 +2323,7 @@
       }
     },
     "sourceChips": {
-      "alsoConsulted": "Również sprawdzono ({count, number})"
+      "moreConsulted": "{count, plural, one {+# inne sprawdzone} few {+# inne sprawdzone} many {+# innych sprawdzonych} other {+# innych sprawdzonych}}"
     },
     "sourcePlaceholder": "Czat o {title}",
     "sourcePlaceholderAction": "Czat o",

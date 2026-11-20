@@ -2323,7 +2323,7 @@
       }
     },
     "sourceChips": {
-      "alsoConsulted": "Také konzultováno ({count, number})"
+      "moreConsulted": "{count, plural, one {+# další prověřený} few {+# další prověřené} many {+# dalšího prověřeného} other {+# dalších prověřených}}"
     },
     "sourcePlaceholder": "Chatovat o {title}",
     "sourcePlaceholderAction": "Chatovat o",

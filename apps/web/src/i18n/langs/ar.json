@@ -2323,7 +2323,7 @@
       }
     },
     "sourceChips": {
-      "alsoConsulted": "تمت مراجعتها أيضًا ({count, number})"
+      "moreConsulted": "{count, plural, zero {+# مصادر أخرى تمت مراجعتها} one {+مصدر آخر تمت مراجعته} two {+مصدران آخران تمت مراجعتهما} few {+# مصادر أخرى تمت مراجعتها} many {+# مصدرًا آخر تمت مراجعته} other {+# مصدر آخر تمت مراجعته}}"
     },
     "sourcePlaceholder": "تحدّث عن {title}",
     "sourcePlaceholderAction": "تحدّث عن",

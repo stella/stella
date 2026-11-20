@@ -166,19 +166,21 @@ test("assistant footer holds the turn's duration and consulted sources in the ac
 
   // The disclosure's root leaves its trigger in the row; a wrapper with a box
   // would take the row's items and break the line.
-  const trigger = view.getByRole("button", { name: "Also consulted (1)" });
+  const trigger = view.getByRole("button", { name: "+1 more consulted" });
   const citations = footer.querySelector("[data-chat-answer-citations]");
   expect(citations?.classList.contains("contents")).toBe(true);
+  expect(trigger.closest("[data-chat-answer-citations]")).toBe(citations);
   expect(
     citations
       ?.querySelector('[data-slot="collapsible"]')
       ?.classList.contains("contents"),
   ).toBe(true);
-  // The divider travels with the trigger, so it never ends a wrapped line.
+  // The divider travels with the row's "Sources" label, so it never ends a
+  // wrapped line.
   expect(
-    trigger.parentElement?.querySelector(
-      "[data-chat-answer-citations-divider]",
-    ),
+    view
+      .getByText("Sources:")
+      .parentElement?.querySelector("[data-chat-answer-citations-divider]"),
   ).toBeTruthy();
 });
 

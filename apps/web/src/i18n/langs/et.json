@@ -2323,7 +2323,7 @@
       }
     },
     "sourceChips": {
-      "alsoConsulted": "Samuti vaadatud ({count, number})"
+      "moreConsulted": "+{count, number} veel vaadatud"
     },
     "sourcePlaceholder": "Vestle teemal {title}",
     "sourcePlaceholderAction": "Vestle teemal",

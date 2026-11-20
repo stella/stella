@@ -1,6 +1,6 @@
 /**
- * An answer's footer holds its actions and the "Also consulted" disclosure on
- * one row.
+ * An answer's footer holds its actions and its sources row, with the "+N more
+ * consulted" disclosure, on one row.
  *
  * The bench at `/dev?visual=chat-answer-footer` renders a finished turn through
  * the real transcript. The disclosure's trigger stays in the row and its
@@ -25,11 +25,12 @@ test("the answer footer keeps its actions and consulted sources on one row", asy
     waitUntil: "domcontentloaded",
   });
   const footer = page.locator("[data-chat-answer-footer]").last();
-  // The disclosure leads the citations, ahead of the cited sources; its label
-  // is translated, so the "ar" project finds it by position, not by name.
+  // The disclosure folds what the answer consulted into the sources row; its
+  // label is translated, so the "ar" project finds it by its mark, not by name.
   const trigger = footer
-    .locator("[data-chat-answer-citations]")
-    .getByRole("button")
+    .locator(
+      "[data-chat-answer-citations] [data-chat-answer-consulted-trigger]",
+    )
     .first();
   await expect(trigger).toBeVisible();
   await expect(trigger).toHaveAttribute("aria-expanded", "false");
