@@ -156,6 +156,8 @@ stylesheet = "node_modules/tailwindcss/theme.css"
 # tests concurrently lets .oxlint-plugins/__tests__/lint-single-rule.ts lint
 # every waiting case of one rule configuration in a single oxlint run.
 concurrentTestGlob = "**/.oxlint-plugins/__tests__/*.test.ts"
+# Kills a test process whose event loop stops turning.
+preload = ["./packages/scripts/src/test-event-loop-watchdog.ts"]
 
 # Test-file rules for `bun lint`, which applies this section on top of
 # oxlint.config.ts. Stable `bun test` and `bun install` ignore it, and oxlint

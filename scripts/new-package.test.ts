@@ -83,6 +83,7 @@ test("scaffolds the package files and registers the knip workspace", () => {
     files: [
       "packages/matter-dates/package.json",
       "packages/matter-dates/tsconfig.json",
+      "packages/matter-dates/bunfig.toml",
       "packages/matter-dates/src/index.ts",
       "packages/matter-dates/README.md",
       "knip.json",
@@ -153,7 +154,10 @@ test("scaffolded files need no formatting pass", () => {
     throw new Error(`scaffold rejected: ${result.message}`);
   }
 
-  const scaffolded = result.files.filter((rel) => rel !== "knip.json");
+  // The formatter has no TOML parser.
+  const scaffolded = result.files.filter(
+    (rel) => rel !== "knip.json" && !rel.endsWith(".toml"),
+  );
   const before = scaffolded.map((rel) => read(root, rel));
 
   // Each file is formatted at its repository path, under the root bunfig.toml.

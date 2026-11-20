@@ -2,4 +2,8 @@
 auto = "disable"
 
 [test]
-preload = ["./src/test-setup.ts"]
+preload = [
+  # Kills a test process whose event loop stops turning.
+  "../../packages/scripts/src/test-event-loop-watchdog.ts",
+  "./src/test-setup.ts",
+]

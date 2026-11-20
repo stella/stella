@@ -5,8 +5,8 @@
 //   bun run new-package <name> --description "<one line>"
 //
 // Extraction has to be cheaper than duplication, or duplication wins: this
-// writes the four files a workspace package needs (package.json, tsconfig.json,
-// src/index.ts, README.md), registers the knip workspace, and prints the wiring
+// writes the five files a workspace package needs (package.json, tsconfig.json,
+// bunfig.toml, src/index.ts, README.md), registers the knip workspace, and prints the wiring
 // steps. Templates track packages/chat-limits, the smallest package in the
 // repo.
 
@@ -123,6 +123,17 @@ const packageJsonTemplate = ({
     null,
     2,
   )}\n`;
+
+// scripts/check-standalone-lockfiles.ts requires the install block and
+// packages/scripts/src/test-event-loop-watchdog-coverage.test.ts the preload.
+const BUNFIG_TEMPLATE = `[install]
+# Fail on a missing import instead of installing it at run time.
+auto = "disable"
+
+[test]
+# Kills a test process whose event loop stops turning.
+preload = ["../../packages/scripts/src/test-event-loop-watchdog.ts"]
+`;
 
 // Written out rather than stringified: `JSON.stringify` breaks every array
 // across lines, and the formatter keeps these on one.
@@ -282,6 +293,7 @@ export const scaffoldPackage = ({
       content: packageJsonTemplate({ name, description }),
     },
     { rel: `${rel}/tsconfig.json`, content: TSCONFIG_TEMPLATE },
+    { rel: `${rel}/bunfig.toml`, content: BUNFIG_TEMPLATE },
     { rel: `${rel}/src/index.ts`, content: INDEX_TEMPLATE },
     { rel: `${rel}/README.md`, content: readmeTemplate({ name, description }) },
   ];
