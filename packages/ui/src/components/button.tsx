@@ -503,6 +503,7 @@ const ButtonTextRun = ({
   children,
   className,
   disabled,
+  disabledReason,
   variant = "link",
   ...props
 }: ButtonTextRunProps) => (
@@ -520,6 +521,7 @@ const ButtonTextRun = ({
       {...props}
       className={BUTTON_TEXT_RUN_TARGET_CLASS}
       disabled={disabled}
+      disabledReason={disabledReason}
       focusRing="outside"
       icon={undefined}
       loading={false}
