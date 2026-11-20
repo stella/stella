@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useLayoutEffect } from "react";
 import type { DependencyList, EffectCallback } from "react";
 
 // The only sanctioned callers of a raw `useEffect` in apps/web. Direct
@@ -15,6 +15,16 @@ import type { DependencyList, EffectCallback } from "react";
 export const useMountEffect = (effect: EffectCallback) => {
   // oxlint-disable-next-line react/exhaustive-deps -- mount-only by design; `effect` is intentionally excluded so it runs exactly once
   useEffect(effect, []);
+};
+
+/**
+ * `useMountEffect` for a write the first painted frame must already show:
+ * it runs before the browser paints, so a store it updates re-renders before
+ * the frame does.
+ */
+export const useMountLayoutEffect = (effect: EffectCallback) => {
+  // oxlint-disable-next-line react/exhaustive-deps -- mount-only by design; `effect` is intentionally excluded so it runs exactly once
+  useLayoutEffect(effect, []);
 };
 
 /**

@@ -68,6 +68,14 @@ const renderAt = async (
     component: Page,
     pendingComponent: PagePending,
   });
+  // A page that opens its own inspector tab on entry, as the document page.
+  const documentRoute = router.createRoute({
+    getParentRoute: () => memberRoute,
+    path: "/document",
+    staticData: { inspector: "opens-page-tab" },
+    component: Page,
+    pendingComponent: PagePending,
+  });
   const plainRoute = router.createRoute({
     getParentRoute: () => memberRoute,
     path: "/plain",
@@ -125,6 +133,7 @@ const renderAt = async (
       standaloneRoute,
       memberRoute.addChildren([
         chatRoute,
+        documentRoute,
         plainRoute,
         redirectRoute,
         navigatorRoute,
@@ -183,6 +192,24 @@ test("the root pending paints the member frame around the page's view", async ()
   expect(
     view.container.querySelector('[data-slot="pending-sidebar"]')?.textContent,
   ).toBe("");
+});
+
+// The page opens the pane when it mounts, so every frame painted before it
+// reserves the pane's width rather than the bare rail, cold paint included.
+test("a page that opens the inspector on entry has the pane reserved before it", async () => {
+  const dockWidth = (view: { container: HTMLElement }) =>
+    view.container.querySelector<HTMLElement>(
+      '[data-slot="inspector-pending-dock"]',
+    )?.style.width;
+  for (const root of [RootPendingComponent, undefined]) {
+    const opening = await renderAt("/document", root);
+    expect(opening.queryByTestId("page-pending")).not.toBeNull();
+    expect(dockWidth(opening)).toMatch(/^\d+px$/u);
+    testing.cleanup();
+    const other = await renderAt("/chat", root);
+    expect(dockWidth(other)).toBe("");
+    testing.cleanup();
+  }
 });
 
 test("the root paints a standalone page in its own pending view", async () => {

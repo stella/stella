@@ -47,6 +47,7 @@ import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-sto
 import type { InspectorTab } from "@/components/inspector/inspector-tabs-store";
 import { newChatMatterScope } from "@/components/inspector/new-chat-scope";
 import { useSharedInspectorPaneWidth } from "@/components/inspector/pane-width-storage";
+import { useRouteReservesInspectorPane } from "@/components/inspector/route-inspector-entry";
 import { useInspectorTabPersistence } from "@/components/inspector/use-inspector-tab-persistence";
 import { useRouteWorkspaceId } from "@/components/inspector/use-route-workspace-id";
 import { KeyboardShortcutsDialog } from "@/components/keyboard-shortcuts-dialog";
@@ -234,10 +235,12 @@ export const ProtectedAppFrame = ({
     : null;
   const routeMatterChromeStyle = matterChromeStyle(activeMatterColor);
   // Restore the authenticated tab scope before any previous scope can paint.
-  const reserveInspectorPane = useInspectorTabPersistence({
+  const reserveRestoredPane = useInspectorTabPersistence({
     organizationId: inspectorBroadcastOrganizationId,
     userId: inspectorBroadcastUserId,
   });
+  const reserveRoutePane = useRouteReservesInspectorPane();
+  const reserveInspectorPane = reserveRestoredPane || reserveRoutePane;
   const inspectorPaneOpen = useInspectorTabsStore(
     (state) => state.tabs.length > 0 && !state.minimized,
   );

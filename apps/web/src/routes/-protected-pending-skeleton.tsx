@@ -29,6 +29,7 @@ import {
 } from "@/components/inspector/inspector-storage-keys";
 import type { InspectorStorageScope } from "@/components/inspector/inspector-storage-keys";
 import { ProtectedPendingInspectorScopeContext } from "@/components/inspector/protected-pending-inspector-scope";
+import type { RouteInspectorEntry } from "@/components/inspector/route-inspector-entry";
 import { useIntlMounted } from "@/components/pending-text";
 import {
   SIDEBAR_WIDTH_ICON_PX,
@@ -99,10 +100,13 @@ const PINNED_ROW_KEYS = ["a", "b", "c"] as const;
 export function ProtectedPendingSkeleton({
   body,
   content,
+  inspectorOnEntry,
   inspectorScope,
 }: {
   body?: RouteComponent | undefined;
   content?: ReactElement | undefined;
+  /** What the leaf route's page does with the inspector when it mounts. */
+  inspectorOnEntry?: RouteInspectorEntry | undefined;
   inspectorScope?: InspectorStorageScope;
 }) {
   if (inspectorScope !== undefined) {
@@ -110,6 +114,7 @@ export function ProtectedPendingSkeleton({
       <ProtectedPendingSkeletonContent
         body={body}
         content={content}
+        inspectorOnEntry={inspectorOnEntry}
         inspectorScope={inspectorScope}
       />
     );
@@ -120,6 +125,7 @@ export function ProtectedPendingSkeleton({
         <ProtectedPendingSkeletonContent
           body={body}
           content={content}
+          inspectorOnEntry={inspectorOnEntry}
           inspectorScope={contextScope}
         />
       )}
@@ -188,22 +194,27 @@ function NavItemText({
 function ProtectedPendingSkeletonContent({
   body,
   content,
+  inspectorOnEntry,
   inspectorScope,
 }: {
   body: RouteComponent | undefined;
   content: ReactElement | undefined;
+  inspectorOnEntry: RouteInspectorEntry | undefined;
   inspectorScope: InspectorStorageScope | undefined;
 }) {
   const intlMounted = useIntlMounted();
   const navItems = usePendingNavItems(inspectorScope);
   const { prefs } = usePresentationPrefs();
   const viewportWidth = useViewportWidth();
-  // The restore policy the authenticated frame applies, on the stored tabs:
+  // A page that opens its own tab on entry has the pane open once it is
+  // there, which the server's paint knows from the address alone. Otherwise
+  // the restore policy the authenticated frame applies, on the stored tabs:
   // the member's tab registry loads with that frame, and the store writes
   // only tabs it would restore.
   const paneRequested =
-    inspectorScope !== undefined &&
-    isPersistedInspectorPaneOpen(inspectorScope, countStoredInspectorTabs);
+    inspectorOnEntry === "opens-page-tab" ||
+    (inspectorScope !== undefined &&
+      isPersistedInspectorPaneOpen(inspectorScope, countStoredInspectorTabs));
   const sidebarOpen =
     prefs.sidebarOpen &&
     !shouldForceSidebarCollapsed({
