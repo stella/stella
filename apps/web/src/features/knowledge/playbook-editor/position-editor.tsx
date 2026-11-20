@@ -1129,6 +1129,7 @@ const FallbackEntryRow = ({
           <Button
             aria-label={t("common.moveUp")}
             disabled={index === 0}
+            disabledReason={t("common.alreadyFirst")}
             onClick={onMoveUp}
             size="icon-xs"
             type="button"
@@ -1139,6 +1140,7 @@ const FallbackEntryRow = ({
           <Button
             aria-label={t("common.moveDown")}
             disabled={index === total - 1}
+            disabledReason={t("common.alreadyLast")}
             onClick={onMoveDown}
             size="icon-xs"
             type="button"
