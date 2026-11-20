@@ -43,7 +43,6 @@ import {
 } from "./ai-config-card.pending";
 import {
   hasCustomAIModels,
-  modesByProvider,
   resolveProviderKeyNeed,
   sameProviderSet,
 } from "./ai-config-form.logic";
@@ -259,18 +258,16 @@ export const AIConfigForm = ({
     availability:
       availabilityView.type === "items" ? availabilityView.items : undefined,
   });
-  // Each saved key's modes, read only while the rows match what is saved:
-  // the defaults of an unsaved provider set would describe a future state.
-  const providerModes =
+  // The effective model per mode, read only while the rows match what is
+  // saved: the defaults of an unsaved provider set describe a future state.
+  const roleSelections =
     form.defaultModels !== null &&
     sameProviderSet(form.providers, form.storedProviders)
-      ? modesByProvider(
-          roleModelsFromOverrideModels({
-            overrideModels: form.roleModels,
-            defaultModels: form.defaultModels,
-            providers: providerValues,
-          }),
-        )
+      ? roleModelsFromOverrideModels({
+          overrideModels: form.roleModels,
+          defaultModels: form.defaultModels,
+          providers: providerValues,
+        })
       : null;
   return (
     <AIConfigFormLayout
@@ -340,7 +337,7 @@ export const AIConfigForm = ({
             providers={form.providers}
             disabled={form.saving}
             keyNeed={keyNeed}
-            modes={providerModes}
+            roleSelections={roleSelections}
             setupErrorCode={settingsError?.code}
             onChange={form.changeProviders}
             onRemove={form.removeProvider}

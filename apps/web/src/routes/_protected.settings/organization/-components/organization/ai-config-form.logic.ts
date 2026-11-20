@@ -181,19 +181,12 @@ export const resolveProviderKeyNeed = ({
   }
 };
 
-/** The modes (chat, fast, reasoning, PDF) each provider serves, in mode order. */
-export const modesByProvider = (
+/** The modes (chat, fast, reasoning, PDF) a provider serves, in mode order. */
+export const providerModes = (
   selections: RoleModelSelections,
-): ReadonlyMap<ProviderValue, readonly RoleValue[]> => {
-  const modes = new Map<ProviderValue, RoleValue[]>();
-  for (const role of ROLE_KEYS) {
-    const provider = selections[role]?.provider;
-    if (provider !== undefined) {
-      modes.set(provider, [...(modes.get(provider) ?? []), role]);
-    }
-  }
-  return modes;
-};
+  provider: ProviderValue,
+): RoleValue[] =>
+  ROLE_KEYS.filter((role) => selections[role]?.provider === provider);
 
 /** Whether two provider lists name the same providers, in any order. */
 export const sameProviderSet = (

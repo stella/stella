@@ -32,14 +32,14 @@ type MountOptions = {
   disabled?: boolean;
   setupErrorCode?: string;
   keyNeed?: Parameters<typeof AIProviderRows>[0]["keyNeed"];
-  modes?: Parameters<typeof AIProviderRows>[0]["modes"];
+  roleSelections?: Parameters<typeof AIProviderRows>[0]["roleSelections"];
 };
 const mount = ({
   initial = [createProviderCredentialDraft("openrouter")],
   disabled = false,
   setupErrorCode,
   keyNeed = "unknown",
-  modes = null,
+  roleSelections = null,
 }: MountOptions = {}) => {
   const changes: ProviderCredentialDraft[][] = [];
   const removed: ProviderCredentialDraft[] = [];
@@ -51,7 +51,7 @@ const mount = ({
         storedProviders={initial}
         disabled={disabled}
         keyNeed={keyNeed}
-        modes={modes}
+        roleSelections={roleSelections}
         setupErrorCode={setupErrorCode}
         onChange={(next) => {
           changes.push(next);
@@ -270,7 +270,12 @@ describe("BYOK provider rows", () => {
     mount({
       initial: [saved("openrouter"), saved("anthropic")],
       keyNeed: "ownKeys",
-      modes: new Map([["openrouter", ["chat", "pdf"]]]),
+      roleSelections: {
+        chat: { provider: "openrouter", modelId: "chat-model" },
+        fast: null,
+        reasoning: null,
+        pdf: { provider: "openrouter", modelId: "pdf-model" },
+      },
     });
     expect(screen.getByText(labels.keyNeed.ownKeys)).toBeDefined();
     expect(
@@ -286,7 +291,14 @@ describe("BYOK provider rows", () => {
     expect(screen.getByText(labels.providerModesNone)).toBeDefined();
   });
   test("a row being edited does not claim modes", () => {
-    mount({ modes: new Map([["openrouter", ["chat"]]]) });
+    mount({
+      roleSelections: {
+        chat: { provider: "openrouter", modelId: "chat-model" },
+        fast: null,
+        reasoning: null,
+        pdf: null,
+      },
+    });
     expect(screen.queryByText(/Used for/u)).toBeNull();
   });
 });

@@ -34,12 +34,14 @@ import {
 import type {
   ProviderCredentialDraft,
   ProviderValue,
+  RoleModelSelections,
   RoleValue,
 } from "@/components/ai-config-role-models.logic";
 import { SecretInput } from "@/components/secret-input";
 import { useFormatter } from "@/i18n/formatting-context";
 import { providerSetupGuidance } from "@/lib/errors/provider-setup-guidance";
 
+import { providerModes } from "./ai-config-form.logic";
 import type { ProviderKeyNeed } from "./ai-config-form.logic";
 import {
   AI_PROVIDER_ROW_LINE_CLASS,
@@ -50,7 +52,7 @@ export const AIProviderRows = ({
   providers,
   disabled,
   keyNeed,
-  modes,
+  roleSelections,
   onChange,
   onRemove,
   storedProviders = EMPTY_PROVIDERS,
@@ -87,7 +89,11 @@ export const AIProviderRows = ({
           key={draft.provider}
           draft={draft}
           disabled={disabled}
-          modes={modes === null ? null : (modes.get(draft.provider) ?? [])}
+          modes={
+            roleSelections === null
+              ? null
+              : providerModes(roleSelections, draft.provider)
+          }
           setupErrorCode={setupErrorCode}
           removalImpact={
             storedProviders.filter((provider) => provider.apiKeyMasked)
@@ -150,8 +156,8 @@ type AIProviderRowsProps = {
   storedProviders?: readonly ProviderCredentialDraft[];
   disabled: boolean;
   keyNeed: ProviderKeyNeed;
-  /** The modes each provider serves; null while that cannot be told. */
-  modes: ReadonlyMap<ProviderValue, readonly RoleValue[]> | null;
+  /** The effective model per mode; null while that cannot be told. */
+  roleSelections: RoleModelSelections | null;
   setupErrorCode?: string | undefined;
   onChange: (providers: ProviderCredentialDraft[]) => void;
   onRemove: (provider: ProviderCredentialDraft) => void;

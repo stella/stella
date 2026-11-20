@@ -12,7 +12,7 @@ import {
 import {
   canSaveAIConfig,
   deriveInitialAIConfig,
-  modesByProvider,
+  providerModes,
   resolveProviderKeyNeed,
   sameProviderSet,
 } from "./ai-config-form.logic";
@@ -122,20 +122,16 @@ test.each([
   },
 );
 
-test("modes group by the provider that serves them, in mode order", () => {
-  expect(
-    modesByProvider({
-      chat: { provider: "anthropic", modelId: "a" },
-      fast: { provider: "google", modelId: "g" },
-      reasoning: { provider: "anthropic", modelId: "a" },
-      pdf: null,
-    }),
-  ).toEqual(
-    new Map([
-      ["anthropic", ["chat", "reasoning"]],
-      ["google", ["fast"]],
-    ]),
-  );
+test("a provider serves the modes whose model it supplies, in mode order", () => {
+  const selections = {
+    chat: { provider: "anthropic", modelId: "a" },
+    fast: { provider: "google", modelId: "g" },
+    reasoning: { provider: "anthropic", modelId: "a" },
+    pdf: null,
+  } as const;
+  expect(providerModes(selections, "anthropic")).toEqual(["chat", "reasoning"]);
+  expect(providerModes(selections, "google")).toEqual(["fast"]);
+  expect(providerModes(selections, "openai")).toEqual([]);
 });
 
 test("provider sets compare by provider, not order", () => {
