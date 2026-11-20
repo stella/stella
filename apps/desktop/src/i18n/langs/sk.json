@@ -638,7 +638,7 @@
     "latestDayReached": "Zobrazujete si najnovší dostupný deň.",
     "savingCapturePreference": "Ukladá sa nastavenie zaznamenávania…",
     "writeDescription": "Zadajte opis tohto záznamu.",
-    "chooseMatterForEntry": "Vyberte prípad pre tento záznam.",
+    "chooseMatterForEntry": "Vyberte spis pre tento záznam.",
     "entryNeedsDuration": "Vyberte časový rozsah s fakturovateľnou dĺžkou.",
     "enterRefinement": "Zadajte pokyn na úpravu opisu."
   },
@@ -1187,7 +1187,7 @@
       "fileName": "{title} – prepis.txt",
       "documentTitle": "{title} – prepis",
       "transcriptTitle": "Prepis",
-      "alreadySaved": "Prepis už je uložený v prípade."
+      "alreadySaved": "Prepis už je uložený v spise."
     },
     "progress": {
       "running": "Prepisuje sa {done, number} z {total, number} min",

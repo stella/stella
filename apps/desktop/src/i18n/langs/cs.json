@@ -638,7 +638,7 @@
     "latestDayReached": "Prohlížíte si nejnovější dostupný den.",
     "savingCapturePreference": "Ukládá se nastavení záznamu…",
     "writeDescription": "Zadejte popis tohoto záznamu.",
-    "chooseMatterForEntry": "Vyberte případ pro tento záznam.",
+    "chooseMatterForEntry": "Vyberte spis pro tento záznam.",
     "entryNeedsDuration": "Vyberte časový rozsah s fakturovatelnou délkou.",
     "enterRefinement": "Zadejte pokyn k úpravě popisu."
   },
@@ -1187,7 +1187,7 @@
       "fileName": "{title} – přepis.txt",
       "documentTitle": "{title} – přepis",
       "transcriptTitle": "Přepis",
-      "alreadySaved": "Přepis už je uložený v případu."
+      "alreadySaved": "Přepis už je uložený ve spisu."
     },
     "progress": {
       "running": "Přepisuje se {done, number} z {total, number} min",

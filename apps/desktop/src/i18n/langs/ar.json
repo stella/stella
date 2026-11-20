@@ -638,7 +638,7 @@
     "latestDayReached": "أنت تعرض أحدث يوم متاح.",
     "savingCapturePreference": "جارٍ حفظ تفضيل التسجيل…",
     "writeDescription": "أدخل وصفًا لهذا الإدخال.",
-    "chooseMatterForEntry": "اختر قضية لهذا الإدخال.",
+    "chooseMatterForEntry": "اختر ملفًا قانونيًا لهذا الإدخال.",
     "entryNeedsDuration": "اختر نطاقًا زمنيًا بمدة قابلة للفوترة.",
     "enterRefinement": "أدخل تعليمات لمراجعة الوصف."
   },
@@ -1187,7 +1187,7 @@
       "fileName": "{title} - نص.txt",
       "documentTitle": "{title} - نص",
       "transcriptTitle": "النص المفرّغ",
-      "alreadySaved": "حُفظ النص المنسوخ في القضية بالفعل."
+      "alreadySaved": "حُفظ النص المنسوخ في الملف القانوني بالفعل."
     },
     "progress": {
       "running": "جارٍ التحويل: {done, number} من {total, number} د",

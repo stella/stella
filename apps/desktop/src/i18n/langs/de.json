@@ -638,7 +638,7 @@
     "latestDayReached": "Sie sehen den letzten verfügbaren Tag.",
     "savingCapturePreference": "Ihre Aufnahmeeinstellung wird gespeichert…",
     "writeDescription": "Geben Sie eine Beschreibung für diesen Eintrag ein.",
-    "chooseMatterForEntry": "Wählen Sie eine Angelegenheit für diesen Eintrag aus.",
+    "chooseMatterForEntry": "Wählen Sie eine Akte für diesen Eintrag aus.",
     "entryNeedsDuration": "Wählen Sie einen Zeitraum mit abrechenbarer Dauer aus.",
     "enterRefinement": "Geben Sie eine Anweisung zur Überarbeitung der Beschreibung ein."
   },
@@ -1187,7 +1187,7 @@
       "fileName": "{title} – Transkript.txt",
       "documentTitle": "{title} – Transkript",
       "transcriptTitle": "Transkript",
-      "alreadySaved": "Das Transkript wurde bereits in der Angelegenheit gespeichert."
+      "alreadySaved": "Das Transkript wurde bereits im Mandat gespeichert."
     },
     "progress": {
       "running": "Transkription: {done, number} von {total, number} Min.",
