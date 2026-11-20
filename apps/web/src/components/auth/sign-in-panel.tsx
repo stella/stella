@@ -474,6 +474,11 @@ const EmailCodeSignInForm = ({
             <Button
               className="w-full"
               disabled={!canSubmit || email.trim().length === 0}
+              disabledReason={
+                isSubmitting
+                  ? t("auth.sendingCode")
+                  : t("validation.invalidEmail")
+              }
               loading={isSubmitting}
               type="submit"
               variant={signInMethodVariant({
@@ -621,6 +626,11 @@ const BootstrapSignUpForm = ({
               password.trim().length === 0 ||
               bootstrapToken.trim().length === 0
             }
+            disabledReason={
+              isSubmitting
+                ? t("auth.confirmingHandoff")
+                : t("auth.enterBootstrapCredentials")
+            }
             loading={isSubmitting}
             type="submit"
           >
@@ -737,25 +747,33 @@ const SocialButton = ({
   loading: boolean;
   disabled: boolean;
   onClick: () => void;
-}) => (
-  <LastUsedSignInFrame lastUsed={lastUsed === method}>
-    {(describedBy) => (
-      <Button
-        aria-describedby={describedBy}
-        layout="wrap"
-        className="w-full min-w-0 shrink items-center justify-center text-center max-sm:px-2 max-sm:text-[0.95rem] max-sm:leading-tight"
-        disabled={disabled}
-        loading={loading}
-        onClick={onClick}
-        size="lg"
-        variant={signInMethodVariant({ method, lastUsed, fallback: "outline" })}
-      >
-        {icon}
-        <span className="min-w-0 text-center">{label}</span>
-      </Button>
-    )}
-  </LastUsedSignInFrame>
-);
+}) => {
+  const t = useTranslations();
+  return (
+    <LastUsedSignInFrame lastUsed={lastUsed === method}>
+      {(describedBy) => (
+        <Button
+          aria-describedby={describedBy}
+          layout="wrap"
+          className="w-full min-w-0 shrink items-center justify-center text-center max-sm:px-2 max-sm:text-[0.95rem] max-sm:leading-tight"
+          disabled={disabled}
+          disabledReason={t("auth.confirmingHandoff")}
+          loading={loading}
+          onClick={onClick}
+          size="lg"
+          variant={signInMethodVariant({
+            method,
+            lastUsed,
+            fallback: "outline",
+          })}
+        >
+          {icon}
+          <span className="min-w-0 text-center">{label}</span>
+        </Button>
+      )}
+    </LastUsedSignInFrame>
+  );
+};
 
 // Apple's logo in the button's own text colour, as Apple's sign-in button
 // guidelines require for a custom button.
