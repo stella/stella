@@ -1,0 +1,4 @@
+{
+  "add-column": "Adds nullable publisher effect, channel contribution and watermark columns without defaults or data rewrites. Catalog locks are bounded by 1s lock_timeout and 30s statement_timeout.",
+  "add-constraint": "Adds a NOT VALID effect projection check for future writes without scanning historical rows. Existing readers and writers remain valid with null effect_details; catalog lock is bounded by 1s lock_timeout and 30s statement_timeout."
+}

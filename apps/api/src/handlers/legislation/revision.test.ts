@@ -97,3 +97,25 @@ test("a revision retains independent date meanings, provision scope and an unnor
     input.metadata.publisherEvidence,
   );
 });
+
+test("amendment channels affect revision identity while observation times do not", () => {
+  const amendments = {
+    observedAt: "2026-10-20T10:00:00Z",
+    coverage: { type: "complete" },
+    relations: [],
+  } as const;
+  const hash = (channel: string | undefined, observedAt: string) =>
+    new LegislationRevision({
+      ...input,
+      amendments: { ...amendments, relations: [], channel, observedAt },
+    }).sourceHash(EFFECTIVE_CONSOLIDATION);
+  expect(hash("bulk", amendments.observedAt)).not.toBe(
+    hash("sparql", amendments.observedAt),
+  );
+  expect(hash("bulk", amendments.observedAt)).toBe(
+    hash("bulk", "2026-10-21T10:00:00Z"),
+  );
+  expect(hash(undefined, amendments.observedAt)).toBe(
+    hash("legacy", amendments.observedAt),
+  );
+});

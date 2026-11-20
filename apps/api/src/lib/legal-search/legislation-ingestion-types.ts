@@ -21,6 +21,8 @@ import type {
 } from "@/api/lib/legal-search/ingestion-types";
 import type { OutboundHostPolicy } from "@/api/lib/restrict-outbound-url";
 
+import type { LegislationAmendmentEffect } from "./legislation-amendment-effect";
+
 /**
  * The legislation half of the ingestion contract, mirroring `SourceAdapter`
  * in `ingestion-types.ts`.
@@ -134,6 +136,9 @@ export const LEGISLATION_AMENDMENT_EFFECTIVE_TYPES = [
   "not-stated",
 ] as const;
 
+export type LegislationAmendmentResolvedEffect =
+  LegislationAmendmentEffect | { type: "conflicting" };
+
 /** One publisher-identified amendment instruction affecting one provision. */
 export type LegislationAmendmentRelation = {
   publisherId: string;
@@ -144,8 +149,7 @@ export type LegislationAmendmentRelation = {
   amendingAnchor: string | null;
   affectedAnchor: string;
   changeKind: (typeof LEGISLATION_AMENDMENT_CHANGE_KINDS)[number];
-  effective:
-    { type: "date"; on: string } | { type: "not-stated"; text: string | null };
+  effective: LegislationAmendmentEffect;
   /** Original instruction code, retained alongside its normalized kind. */
   publisherInstruction: string | null;
 };
@@ -162,10 +166,53 @@ export type LegislationAmendmentCoverage =
  * replay; it must never be replaced with the replay's current time.
  */
 export type LegislationAmendmentSnapshot = {
+  /** Publisher channel; omitted by clients predating channel observations. */
+  channel?: string;
   observedAt: string;
   relations: LegislationAmendmentRelation[];
   coverage: LegislationAmendmentCoverage;
 };
+
+/** Latest contribution from one publisher channel, retained independently. */
+export type LegislationAmendmentPositiveEvidence = {
+  observedAt: string;
+  relation: LegislationAmendmentRelation;
+  /** Bounded same-channel conditional projection, distinct from the latest raw relation. */
+  retainedConditional?: {
+    /** Time of the latest incorporated conditional contribution, not each field's origin. */
+    observedAt: string;
+    relation: LegislationAmendmentRelation;
+  };
+};
+
+export type LegislationAmendmentChannelObservation = { channel: string } & (
+  | ({
+      status: "present" | "historical";
+    } & LegislationAmendmentPositiveEvidence)
+  | {
+      status: "absent";
+      observedAt: string;
+      lastPositive: LegislationAmendmentPositiveEvidence | null;
+    }
+);
+
+export type LegislationAmendmentChannelSnapshot = {
+  status: "active" | "historical";
+  channel: string;
+  observedAt: string;
+  coverage: LegislationAmendmentCoverage;
+};
+
+/** Cross-channel counts are not unique totals without publisher link identities. */
+export type LegislationAmendmentStoredCoverage =
+  LegislationAmendmentCoverage & {
+    aggregation?: {
+      representativeChannel: string;
+      channels: { channel: string; coverage: LegislationAmendmentCoverage }[];
+      distinctUnlocatedTotal:
+        { type: "exact"; count: number } | { type: "unknown" };
+    };
+  };
 
 /** Normalized legislation document — what every source produces. */
 export type LegislationDocumentInput = {

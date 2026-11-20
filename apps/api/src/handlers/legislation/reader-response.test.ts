@@ -415,6 +415,8 @@ test("amendment previews preserve same-day actors, staged starts, and source gap
     effectiveDate: "2027-01-01",
     effectiveText: null,
     publisherInstruction: null,
+    effectDetails: null,
+    observations: null,
   } as const;
   const page = {
     items: [
@@ -488,6 +490,8 @@ test("an instruction the publisher restates under several links reads once and k
     effectiveDate: "2024-01-01",
     effectiveText: null,
     publisherInstruction: "UPRAVUJE",
+    effectDetails: null,
+    observations: null,
   } as const;
   const page = {
     items: [

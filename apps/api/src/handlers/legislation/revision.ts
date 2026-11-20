@@ -17,6 +17,7 @@ import {
   writeCorpusDocument,
 } from "@/api/lib/legal-search/corpus-storage";
 import type { CorpusWriteOutcome } from "@/api/lib/legal-search/corpus-storage";
+import { LEGISLATION_AMENDMENT_LEGACY_CHANNEL } from "@/api/lib/legal-search/legislation-amendment-observations";
 import {
   admitLegislationAmendmentTarget,
   LegislationAmendmentObservationError,
@@ -110,7 +111,13 @@ export const legislationSourceHash = (
         : [[...new Set(input.identifiers)].toSorted(compareCodeUnit)]),
       ...(input.amendments === undefined
         ? []
-        : [[input.amendments.relations, input.amendments.coverage]]),
+        : [
+            [
+              input.amendments.relations,
+              input.amendments.coverage,
+              input.amendments.channel ?? LEGISLATION_AMENDMENT_LEGACY_CHANNEL,
+            ],
+          ]),
       ...(typed === null
         ? []
         : [
