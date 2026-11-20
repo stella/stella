@@ -2,20 +2,20 @@ import type { BoundedReadResult } from "@/api/lib/db/read-bounded";
 
 import { HELD_DECISION_MATCH_BASIS } from "./held-decision-attachment-values";
 
-export type HeldDecisionCandidate = { id: string };
+type HeldDecisionCandidate = { id: string };
 
 type CandidatePaths<TCandidate> = {
   ecli: BoundedReadResult<TCandidate>;
   courtDocketDate: BoundedReadResult<TCandidate>;
 };
 
-export type HeldDecisionCandidateSets<TCandidate> = {
+type HeldDecisionCandidateSets<TCandidate> = {
   /** Original decision publishers take precedence over collection copies. */
   hosts: CandidatePaths<TCandidate>;
   collections: CandidatePaths<TCandidate>;
 };
 
-export type HeldDecisionCandidateResolution<TCandidate> =
+type HeldDecisionCandidateResolution<TCandidate> =
   | { status: "absent" }
   | {
       status: "matched";
