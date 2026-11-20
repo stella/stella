@@ -8,6 +8,7 @@ import type { ConditionNode, EntityKind, WorkspaceProperty } from "@/lib/types";
 import {
   entitiesRootKey,
   entityDetailKey,
+  entityVersionsRootKey,
 } from "@/lib/workspaces/queries/entity-keys.logic";
 
 /**
@@ -117,10 +118,7 @@ export const isEntityCollectionQueryKey = (
 export const entitiesKeys = {
   all: entitiesRootKey,
   detail: entityDetailKey,
-  versions: (workspaceId: string, entityId: string) => [
-    ...entitiesKeys.detail(workspaceId, entityId),
-    "versions",
-  ],
+  versions: entityVersionsRootKey,
   sample: ({
     workspaceId,
     filters,

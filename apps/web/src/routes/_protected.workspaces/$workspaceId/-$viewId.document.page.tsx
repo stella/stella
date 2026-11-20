@@ -818,7 +818,12 @@ function RouteComponentInner({
           }
 
           if (filePreviewState === "error") {
-            const error = versionDataQuery.error;
+            // The read that failed: the version list, or the direct lookup of
+            // a field outside it.
+            const failedQuery = versionDataQuery.isError
+              ? versionDataQuery
+              : fieldFileQuery;
+            const error = failedQuery.error;
             return (
               <DefaultErrorComponent
                 error={
@@ -832,7 +837,7 @@ function RouteComponentInner({
                 }
                 reset={() => {
                   detached(
-                    versionDataQuery.refetch(),
+                    failedQuery.refetch(),
                     "document.version-metadata-retry",
                   );
                 }}

@@ -85,6 +85,53 @@ describe("the document page's loading sheet", () => {
     });
   });
 
+  test("is read from the version history for an older version's file", () => {
+    const queryClient = cacheWith(DOCX_MIME);
+    queryClient.setQueryData(
+      [...entityDetailKey(workspaceId, entityId), "versions"],
+      {
+        versions: [
+          {
+            file: {
+              fieldId: "field-old",
+              propertyId: "property-1",
+              fileName: "contract",
+              mimeType: PDF_MIME,
+              sizeBytes: 10,
+            },
+          },
+        ],
+      },
+    );
+    expect(
+      cachedDocumentPageSheet(queryClient, workspaceId, {
+        ...search,
+        field: "field-old",
+      }),
+    ).toEqual({ type: "pdf", colorMode: "system" });
+  });
+
+  test("is read from a field's own lookup past the history's first page", () => {
+    const queryClient = cacheWith(DOCX_MIME);
+    const versionsKey = [...entityDetailKey(workspaceId, entityId), "versions"];
+    queryClient.setQueryData(versionsKey, { versions: [] });
+    queryClient.setQueryData([...versionsKey, "field-file", "field-older"], {
+      file: { propertyId: "property-1", fileName: "deed", mimeType: XLSX_MIME },
+    });
+    expect(
+      cachedDocumentPageSheet(queryClient, workspaceId, {
+        ...search,
+        field: "field-older",
+      }),
+    ).toEqual({ type: "office" });
+    expect(
+      cachedDocumentPageSheet(queryClient, workspaceId, {
+        ...search,
+        field: "field-elsewhere",
+      }),
+    ).toEqual({ type: "unknown" });
+  });
+
   test("is not claimed where the cache cannot say, or the pane depends on loaded data", () => {
     const unknown: DocumentPageSheet = { type: "unknown" };
     expect(cachedDocumentPageSheet(null, workspaceId, search)).toEqual(unknown);

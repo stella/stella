@@ -15,3 +15,9 @@ export const entityDetailKey = (workspaceId: string, entityId: string) => [
   ...entitiesRootKey(workspaceId),
   entityId,
 ];
+
+/** Every version-history read of one entity starts with this. */
+export const entityVersionsRootKey = (
+  workspaceId: string,
+  entityId: string,
+) => [...entityDetailKey(workspaceId, entityId), "versions"];

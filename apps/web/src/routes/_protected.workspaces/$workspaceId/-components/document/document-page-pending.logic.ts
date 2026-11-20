@@ -7,7 +7,11 @@ import { fileMetadataQueryKey } from "@/lib/files/file-metadata-query.logic";
 import { PDF_COLOR_MODES } from "@/lib/pdf/pdf-color-mode";
 import type { PDFColorMode } from "@/lib/pdf/pdf-color-mode";
 import type { EntityField } from "@/lib/types";
-import { entityDetailKey } from "@/lib/workspaces/queries/entity-keys.logic";
+import {
+  entityDetailKey,
+  entityVersionsRootKey,
+} from "@/lib/workspaces/queries/entity-keys.logic";
+import type { EntityVersion } from "@/lib/workspaces/queries/entity-versions";
 
 /**
  * What the document page will draw for the file it opens, as far as the
@@ -36,6 +40,15 @@ const UNKNOWN: DocumentPageSheet = { type: "unknown" };
 /** The part of the entity page's entity the sheet is chosen from. */
 type CachedDocumentEntity = { fields: readonly EntityField[] };
 
+/**
+ * What the cache holds under an entity's version-history key: a page of the
+ * history (`entityVersionsOptions`), or one field's file looked up on its
+ * own (`fieldFileOptions`, keyed by the field id last).
+ */
+type CachedVersionRead =
+  | { versions: readonly EntityVersion[] }
+  | { file: Pick<NonNullable<EntityVersion["file"]>, "mimeType"> | null };
+
 /** The search the document page reads its pane from. */
 export type DocumentPageSearch = {
   entity?: string | undefined;
@@ -61,7 +74,32 @@ const cachedFileMimeType = (
     }),
   );
   const field = entity?.fields.find((candidate) => candidate.id === fieldId);
-  return field?.content.type === "file" ? field.content.mimeType : undefined;
+  if (field !== undefined) {
+    return field.content.type === "file" ? field.content.mimeType : undefined;
+  }
+  // An older version's file is not among the entity's current fields; the
+  // page finds it in the version history (or, past its first page, by the
+  // field's own lookup, cached under the same key), and so does its loading
+  // view.
+  const reads = queryClient.getQueriesData<CachedVersionRead>({
+    queryKey: entityVersionsRootKey(workspaceId, entityId),
+  });
+  for (const [queryKey, read] of reads) {
+    if (read === undefined) {
+      continue;
+    }
+    if ("versions" in read) {
+      const file = read.versions.find(
+        (version) => version.file?.fieldId === fieldId,
+      )?.file;
+      if (file) {
+        return file.mimeType;
+      }
+    } else if (queryKey.at(-1) === fieldId && read.file !== null) {
+      return read.file.mimeType;
+    }
+  }
+  return undefined;
 };
 
 // The colour-mode control sits in the PDF toolbar for a PDF that was not

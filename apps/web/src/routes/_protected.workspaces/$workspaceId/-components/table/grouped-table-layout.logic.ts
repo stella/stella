@@ -15,6 +15,7 @@ import { getWorkspaceGridTemplateColumns } from "@/components/workspaces/table/w
 import type { GridColumnGeometry } from "@/components/workspaces/table/workspace-table/internals-helpers";
 import { SKELETON_ROW_KEYS } from "@/components/workspaces/table/workspace-table/skeleton-rows.logic";
 import type { WorkspaceProperty, WorkspaceView } from "@/lib/types";
+import type { StoredColumnSizing } from "@/lib/workspaces/stored-column-sizing.logic";
 import { pendingTableGrid } from "@/routes/_protected.workspaces/$workspaceId/-components/table/pending-table-columns.logic";
 import type { PendingTableGrid } from "@/routes/_protected.workspaces/$workspaceId/-components/table/pending-table-columns.logic";
 
@@ -155,9 +156,12 @@ export const groupKeyFor = (value: string | null): string =>
  */
 export const pendingGroupedSections = ({
   properties,
+  sizing,
   view,
 }: {
   properties: readonly WorkspaceProperty[];
+  /** The widths the table store holds for this view (`storedColumnSizing`). */
+  sizing?: StoredColumnSizing | undefined;
   view: WorkspaceView<"table">;
 }): PendingGroupSection[] | null => {
   const groupBy = view.layout.groupByPropertyId ?? "";
@@ -165,7 +169,7 @@ export const pendingGroupedSections = ({
   if (groups === null) {
     return null;
   }
-  const grid = pendingTableGrid({ properties, view });
+  const grid = pendingTableGrid({ properties, sizing, view });
   const classifier = resolveDocumentTypeClassifier(properties);
   const gateLabels =
     classifier?.id === groupBy

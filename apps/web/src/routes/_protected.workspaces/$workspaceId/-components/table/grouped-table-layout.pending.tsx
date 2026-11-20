@@ -11,6 +11,7 @@ import {
   WorkspaceTableSkeletonRows,
 } from "@/components/workspaces/table/workspace-table/skeleton-rows";
 import type { WorkspaceProperty, WorkspaceView } from "@/lib/types";
+import { storedColumnSizing } from "@/lib/workspaces/stored-column-sizing.logic";
 import {
   getGroupSkeletonLayout,
   pendingGroupedSections,
@@ -63,12 +64,17 @@ export const GroupSkeletonFace = ({
 export const GroupedTableViewPending = ({
   properties,
   view,
+  workspaceId,
 }: {
   properties: readonly WorkspaceProperty[];
   view: WorkspaceView<"table">;
   workspaceId: string;
 }) => {
-  const sections = pendingGroupedSections({ properties, view });
+  const sections = pendingGroupedSections({
+    properties,
+    sizing: storedColumnSizing({ workspaceId, viewId: view.id }),
+    view,
+  });
   if (sections === null) {
     return null;
   }
