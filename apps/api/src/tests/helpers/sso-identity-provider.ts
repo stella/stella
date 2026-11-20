@@ -42,6 +42,8 @@ export type TokenFault = {
   nonce?: string | null;
   /** The subject the user-info endpoint reports. */
   userInfoSubject?: string;
+  /** Claims the user-info endpoint leaves out, as OIDC lets it. */
+  userInfoOmits?: readonly string[];
 };
 
 /**
@@ -95,11 +97,15 @@ export const createIdentityProvider = async () => {
     switch (url.pathname) {
       case "/jwks":
         return Response.json({ keys: [publicJwk] });
-      case "/userinfo":
+      case "/userinfo": {
+        const omitted = new Set(fault.userInfoOmits);
         return Response.json({
-          ...claims,
+          ...Object.fromEntries(
+            Object.entries(claims).filter(([claim]) => !omitted.has(claim)),
+          ),
           sub: fault.userInfoSubject ?? claims.sub,
         });
+      }
       case "/token": {
         const verifier = body.get("code_verifier");
         const verifierMatched =

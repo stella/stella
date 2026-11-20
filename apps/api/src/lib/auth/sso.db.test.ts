@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { afterAll, describe, expect, setDefaultTimeout, test } from "bun:test";
 import { and, eq, sql } from "drizzle-orm";
 
@@ -386,6 +387,32 @@ describe("organization SSO", () => {
       "sso_sign_in_failed",
     );
     expect(await sessionOf(refused.cookieHeader())).toBeNull();
+  });
+
+  test("admits an address the ID token verifies when user info leaves out email_verified", async () => {
+    testState.setConfig("FEATURE_ENTERPRISE_SSO", true);
+    const idp = await createIdentityProvider();
+    const owner = await signInHuman(`sso-uiclaims-${unique()}@stella.dev`);
+    const organization = await createOrganization(owner, "uiclaims");
+    const domain = `uiclaims-${unique()}.test`;
+    const provider = await registerProvider(testDb, organization.id, [domain], {
+      config: { userInfoEndpoint: `${IDP_ORIGIN}/userinfo` },
+    });
+    const email = `uiclaims-${unique()}@${domain}`;
+
+    const signedIn = await signInWithSso(
+      idp,
+      provider.providerId,
+      verifiedClaims(`uiclaims-${unique()}`, email),
+      { fault: { userInfoOmits: ["email_verified"] } },
+    );
+    expect(signedIn.location.searchParams.get("error")).toBeNull();
+    // The account records the address as the signed ID token verified it.
+    const created = await testDb
+      .select({ email: user.email, emailVerified: user.emailVerified })
+      .from(user)
+      .where(eq(user.id, signedIn.userId ?? panic("the sign-in was refused")));
+    expect(created).toEqual([{ email, emailVerified: true }]);
   });
 
   test("a provider recreated under the same id does not inherit the earlier provider's identities or sessions", async () => {

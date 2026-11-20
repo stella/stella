@@ -133,6 +133,31 @@ const authenticatedProvider = defineRequestState<
   AuthenticatedProvider | undefined
 >(() => undefined);
 
+/**
+ * The provider row this request's callback verified for `providerId`; a
+ * write the callback did not verify is refused.
+ */
+const verifiedProviderRecord = async (providerId: unknown): Promise<string> => {
+  const verified = await authenticatedProvider.get();
+  if (verified === undefined || verified.providerId !== providerId) {
+    throw new APIError("UNAUTHORIZED", {
+      message: "The SSO sign-in could not be verified.",
+    });
+  }
+  return verified.recordId;
+};
+
+/**
+ * Whether this request's SSO user resolution admitted a sign-in through
+ * `providerId`: only an address the signed ID token verifies is admitted.
+ */
+export const isResolvedSsoSignIn = async (
+  providerId: string | undefined,
+): Promise<boolean> => {
+  const verified = await authenticatedProvider.get();
+  return verified !== undefined && verified.providerId === providerId;
+};
+
 /** The domains, comma-separated in the provider row, it may create accounts for. */
 const providerDomains = (domainList: string): ReadonlySet<string> =>
   new Set(
@@ -170,10 +195,12 @@ const resolveSsoUser = async (
   if (source.type !== "persisted") {
     return reject(SSO_REJECTION_CODE.unavailable);
   }
+  // The signed ID token decides verification. With a user-info endpoint the
+  // plugin reads the profile, and its `email_verified`, from that unsigned
+  // response, which may omit the claim; only its address must match.
   const email = verifiedIdTokenEmail(input.verifiedIdTokenClaims);
   if (
     email === undefined ||
-    !input.providerUser.emailVerified ||
     normalizeEmail(input.providerUser.email) !== email
   ) {
     return reject(SSO_REJECTION_CODE.emailUnverified);
@@ -243,13 +270,7 @@ export const ssoSessionProvenance = async (
   if (callbackProviderId === undefined) {
     return { ssoProviderId: null };
   }
-  const verified = await authenticatedProvider.get();
-  if (verified === undefined || verified.providerId !== callbackProviderId) {
-    throw new APIError("UNAUTHORIZED", {
-      message: "The SSO sign-in could not be verified.",
-    });
-  }
-  return { ssoProviderId: verified.recordId };
+  return { ssoProviderId: await verifiedProviderRecord(callbackProviderId) };
 };
 
 /**
@@ -333,19 +354,33 @@ export const ssoAccountCreateFields = async (
   if (!isSsoAccountWrite(account, ctx)) {
     return undefined;
   }
-  const verified = await authenticatedProvider.get();
-  if (verified === undefined || verified.providerId !== account["providerId"]) {
-    throw new APIError("UNAUTHORIZED", {
-      message: "The SSO sign-in could not be verified.",
-    });
+  return {
+    ...clearedTokens(account),
+    ssoProviderId: await verifiedProviderRecord(account["providerId"]),
+  };
+};
+
+/**
+ * The fields an account created by an SSO sign-in is created with, or
+ * undefined on any other endpoint: its address verified, because the
+ * resolver admitted the sign-in only for an address the signed ID token
+ * verifies, whatever the unsigned user-info response said.
+ */
+export const ssoUserCreateFields = async (
+  ctx: SsoEndpoint | null | undefined,
+): Promise<{ emailVerified: true } | undefined> => {
+  const callbackProviderId = ssoCallbackProviderId(ctx);
+  if (callbackProviderId === undefined) {
+    return undefined;
   }
-  return { ...clearedTokens(account), ssoProviderId: verified.recordId };
+  await verifiedProviderRecord(callbackProviderId);
+  return { emailVerified: true };
 };
 
 const SSO_OPTIONS = {
   resolveUser: resolveSsoUser,
   // The resolver admits an address only when the signed ID token verifies
-  // it; this lets the shared identity policy see that verification too.
+  // it; this passes the provider's own verification flag to the account.
   // oxlint-disable-next-line typescript/no-deprecated -- the resolver never relies on the provider flag alone: it requires the signed ID token to verify the same address in one of the provider's verified domains
   trustEmailVerified: true,
   // Membership follows the organization's own invitation and provisioning

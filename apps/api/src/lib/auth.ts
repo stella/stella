@@ -287,6 +287,7 @@ import {
   ssoAccountCreateFields,
   ssoAccountUpdateFields,
   ssoSessionProvenance,
+  ssoUserCreateFields,
 } from "@/api/lib/auth/sso-sign-in";
 import { withoutTrustedDeviceBypass } from "@/api/lib/auth/two-factor-trusted-device";
 import { unlinkAccountWithConfirmation } from "@/api/lib/auth/unlink-account-runtime";
@@ -2505,15 +2506,16 @@ export const createAuth = (
               headers: ctx?.request?.headers ?? ctx?.headers,
               clientAddress: sealedRequestClientAddress(),
             });
-            return await Promise.resolve({
-              data:
-                viewerLocation.type === "known"
-                  ? {
-                      ...data.value,
-                      detectedCountry: viewerLocation.countryCode,
-                    }
-                  : data.value,
-            });
+            const ssoFields = await ssoUserCreateFields(ctx);
+            return {
+              data: {
+                ...data.value,
+                ...(viewerLocation.type === "known"
+                  ? { detectedCountry: viewerLocation.countryCode }
+                  : {}),
+                ...ssoFields,
+              },
+            };
           },
           // Creating the account where the professional-use statement is
           // shown, from a request naming the current version, is the
