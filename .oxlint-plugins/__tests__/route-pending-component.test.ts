@@ -110,23 +110,11 @@ const pendingRule = async (source: string) =>
     { plugin: PLUGIN, sourcePath: "x.pending.tsx" },
   );
 
-// A module on the unmarked list, and one that is not.
-const LISTED_PENDING = unmarkedList[0] ?? "";
 const CONTEXT_PENDING_SOURCE = [
   'import { useTranslations } from "use-intl";',
   'import { Menu } from "@stll/ui/menu";',
   "export const XPending = () => <Menu>{useTranslations()('x')}</Menu>;",
 ].join("\n");
-
-test("a listed pending module renders inside the providers, unchecked", async () => {
-  expect(LISTED_PENDING).toEndWith(".pending.tsx");
-  expect(
-    await lintSingleRule("pending-module-imports", CONTEXT_PENDING_SOURCE, {
-      plugin: PLUGIN,
-      sourcePath: LISTED_PENDING,
-    }),
-  ).toEqual([]);
-});
 
 test("an unlisted pending module is context-free, marked or not", async () => {
   // A piece a frame view imports marks nothing itself, and is checked too.
@@ -138,19 +126,7 @@ test("an unlisted pending module is context-free, marked or not", async () => {
   ).toEqual([1, 2, 3]);
 });
 
-test("a listed module that marks a frame view is told to leave the list", async () => {
-  expect(
-    await lintSingleRule(
-      "pending-module-imports",
-      "const XPendingView = () => null;\nexport const XPending = framePendingView(XPendingView);",
-      { plugin: PLUGIN, sourcePath: LISTED_PENDING },
-    ),
-  ).toEqual([1]);
-});
-
-test("a route's pending view is marked for the frame unless its module is listed", async () => {
-  const listedStem = LISTED_PENDING.replace(/\.pending\.tsx$/u, "");
-  const listedRoute = `${path.dirname(LISTED_PENDING)}/lint-fixture-route.tsx`;
+test("a route's pending view is marked for the frame", async () => {
   const results = await lintRuleAcrossFiles(
     "route-pending-component",
     {
@@ -167,18 +143,11 @@ test("a route's pending view is marked for the frame unless its module is listed
         'createFileRoute("/x")({ component: XPage, pendingComponent: XPending });',
       ].join("\n"),
       "unmarked/x.pending.tsx": "export const XPending = () => null;",
-      [listedRoute]: [
-        `import { XPage } from "./${path.basename(listedStem)}.page";`,
-        `import { XPending } from "./${path.basename(listedStem)}.pending";`,
-        'createFileRoute("/x")({ component: XPage, pendingComponent: XPending });',
-      ].join("\n"),
-      [LISTED_PENDING]: "export const XPending = () => null;",
     },
     { plugin: PLUGIN },
   );
   expect(results["marked/route.tsx"]).toEqual([]);
   expect(results["unmarked/route.tsx"]).toEqual([3]);
-  expect(results[listedRoute]).toEqual([]);
 });
 
 test("a pending half imports only pending-safe modules", async () => {

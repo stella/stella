@@ -59,3 +59,15 @@ export const KANBAN_CHROME_TOGGLE_COARSE_TARGET_CLASS =
  */
 export const KANBAN_CARD_STICKY_TOP_CLASS =
   "top-(--kanban-card-sticky-top,0px)";
+
+/**
+ * Every board column takes this inline size; a collapsed band takes one lane.
+ * The board and its loading face both lay their columns out at it.
+ */
+export const KANBAN_COLUMN_WIDTH_CLASS = "w-[300px] shrink-0";
+export const KANBAN_COLUMN_WIDTH_PX = 300;
+/** The `gap-3` between columns, so a band header can span its columns. */
+export const KANBAN_COLUMN_GAP_PX = 12;
+/** A collapsed band folds its columns into one narrow lane. */
+export const KANBAN_COLLAPSED_BAND_WIDTH_CLASS = "w-12 shrink-0";
+export const KANBAN_COLLAPSED_BAND_WIDTH_PX = 48;

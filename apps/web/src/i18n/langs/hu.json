@@ -2323,7 +2323,7 @@
       }
     },
     "sourceChips": {
-      "alsoConsulted": "Szintén áttekintve ({count, number})"
+      "moreConsulted": "+{count, number} további átnézett"
     },
     "sourcePlaceholder": "Csevegés erről: {title}",
     "sourcePlaceholderAction": "Csevegés erről:",
@@ -2942,6 +2942,7 @@
     "playbooks": "Playbookok",
     "preparing": "Előkészítés…",
     "preview": "Előnézet",
+    "previewTruncated": "A teljes szöveg nem érhető el ebben az előnézetben.",
     "previous": "Előző",
     "previousMatch": "Előző találat",
     "print": "Nyomtatás",
@@ -6313,7 +6314,6 @@
     "layer": "{number, number}. aláírási réteg",
     "noReadableContent": "Nincs megjeleníthető olvasható tartalom.",
     "pdfUnavailable": "A PDF előnézete nem érhető el.",
-    "previewTruncated": "A teljes szöveg nem érhető el ebben az előnézetben.",
     "unknownSigner": "Ismeretlen aláíró",
     "unreadable": "Az aláírt fájl nem olvasható.",
     "unverified": "Az aláírásokat nem ellenőriztük."
@@ -6458,6 +6458,10 @@
     "versionChangesRemoved": "{count, plural, one {# elhagyott rendelkezés} other {# elhagyott rendelkezés}}",
     "versionChangesWords": "{inserted, plural, one {# beszúrt szó} other {# beszúrt szó}}, {deleted, plural, one {# törölt szó} other {# törölt szó}}",
     "wordingVersionUnknown": "A szövegváltozat dátuma nem érhető el"
+  },
+  "structuredDocument": {
+    "noReadableContent": "Nincs megjeleníthető szöveg az előnézethez.",
+    "textOnly": "Szöveges előnézet az oldalelrendezés és a képek nélkül."
   },
   "styleSets": {
     "create": "Létrehozás",

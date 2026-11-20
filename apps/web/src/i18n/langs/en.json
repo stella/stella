@@ -2323,7 +2323,7 @@
       }
     },
     "sourceChips": {
-      "alsoConsulted": "Also consulted ({count, number})"
+      "moreConsulted": "+{count, number} more consulted"
     },
     "sourcePlaceholder": "Chat about {title}",
     "sourcePlaceholderAction": "Chat about",
@@ -2942,6 +2942,7 @@
     "playbooks": "Playbooks",
     "preparing": "Preparing…",
     "preview": "Preview",
+    "previewTruncated": "The full text is unavailable in this preview.",
     "previous": "Previous",
     "previousMatch": "Previous match",
     "print": "Print",
@@ -6313,7 +6314,6 @@
     "layer": "Signature layer {number, number}",
     "noReadableContent": "No readable content is available for preview.",
     "pdfUnavailable": "The PDF preview is unavailable.",
-    "previewTruncated": "The full text is unavailable in this preview.",
     "unknownSigner": "Unknown signer",
     "unreadable": "The signed file could not be read.",
     "unverified": "The signatures have not been verified."
@@ -6458,6 +6458,10 @@
     "versionChangesRemoved": "{count, plural, one {# provision removed} other {# provisions removed}}",
     "versionChangesWords": "{inserted, plural, one {# word inserted} other {# words inserted}}, {deleted, plural, one {# word deleted} other {# words deleted}}",
     "wordingVersionUnknown": "Wording version date unavailable"
+  },
+  "structuredDocument": {
+    "noReadableContent": "No readable text is available for preview.",
+    "textOnly": "Text preview without page layout or images."
   },
   "styleSets": {
     "create": "Create",

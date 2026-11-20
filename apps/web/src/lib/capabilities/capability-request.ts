@@ -45,6 +45,8 @@ export type AppOnlyWriteId =
   | "chat.threads.limit-reminder.set"
   | "chat.threads.model.update"
   | "chat.turns.steer"
+  | "contacts.import.inspect"
+  | "contacts.import.preview"
   | "files.document-properties.update"
   | "files.email-attachment.save"
   | "folio-collaboration.join"

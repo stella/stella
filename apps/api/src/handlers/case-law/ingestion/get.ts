@@ -94,14 +94,18 @@ type SourceStatus = {
    * failure message is verbatim publisher or driver output, so the failure is
    * reported as `status` here and as the classified `topErrors` below.
    */
-  lastEvent: {
-    status: string;
-    inserted: number;
-    skipped: number;
-    durationMs: number;
-    finishedAt: string;
-    failed: boolean;
-  } | null;
+  lastEvent:
+    | (Pick<
+        typeof caseLawIngestionEvents.$inferSelect,
+        "status" | "pauseReason"
+      > & {
+        inserted: number;
+        skipped: number;
+        durationMs: number;
+        finishedAt: string;
+        failed: boolean;
+      })
+    | null;
   topErrors: { errorType: string; count: number }[];
   reconciliation: SourceReconciliationStatus | null;
   /**
@@ -211,6 +215,7 @@ export const latestIngestionEventsQuery = (
     .select({
       sourceId: caseLawSources.id,
       status: caseLawIngestionEvents.status,
+      pauseReason: caseLawIngestionEvents.pauseReason,
       inserted: caseLawIngestionEvents.inserted,
       skipped: caseLawIngestionEvents.skipped,
       durationMs: caseLawIngestionEvents.durationMs,
@@ -419,6 +424,7 @@ const readSourceAggregates = async ({
   for (const row of lastEventRows) {
     requireAggregate(aggregates, row.sourceId).lastEvent = {
       status: row.status,
+      pauseReason: row.pauseReason,
       inserted: row.inserted,
       skipped: row.skipped,
       durationMs: row.durationMs,

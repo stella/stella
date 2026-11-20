@@ -4,6 +4,10 @@ import { TRUNCATED_TEXT_LINES_CLASS } from "../components/truncated-text-face";
 import { cn } from "../lib/utils";
 import { KANBAN_CHROME_ROW_HEIGHT } from "./layout-tokens";
 
+// The width every board column takes, for a loading board that lays its
+// column headers out where the board will.
+export { KANBAN_COLUMN_WIDTH_CLASS } from "./layout-tokens";
+
 /** The column name and its count, as one cut line of text. */
 export const KANBAN_COLUMN_NAME_CLASS =
   "flex flex-1 items-center gap-1.5 text-sm font-medium";

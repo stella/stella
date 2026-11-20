@@ -2323,7 +2323,7 @@
       }
     },
     "sourceChips": {
-      "alsoConsulted": "Também consultadas ({count, number})"
+      "moreConsulted": "{count, plural, one {+# outra consultada} many {+# outras consultadas} other {+# outras consultadas}}"
     },
     "sourcePlaceholder": "Conversar sobre {title}",
     "sourcePlaceholderAction": "Conversar sobre",
@@ -2942,6 +2942,7 @@
     "playbooks": "Playbooks",
     "preparing": "Preparando…",
     "preview": "Visualização",
+    "previewTruncated": "O texto completo não está disponível nesta prévia.",
     "previous": "Anterior",
     "previousMatch": "Ocorrência anterior",
     "print": "Imprimir",
@@ -6313,7 +6314,6 @@
     "layer": "Camada de assinaturas {number, number}",
     "noReadableContent": "Não há conteúdo legível para exibir na prévia.",
     "pdfUnavailable": "A prévia do PDF não está disponível.",
-    "previewTruncated": "O texto completo não está disponível nesta prévia.",
     "unknownSigner": "Signatário desconhecido",
     "unreadable": "Não foi possível ler o arquivo assinado.",
     "unverified": "As assinaturas não foram verificadas."
@@ -6458,6 +6458,10 @@
     "versionChangesRemoved": "{count, plural, one {# dispositivo suprimido} other {# dispositivos suprimidos} many {# dispositivos suprimidos}}",
     "versionChangesWords": "{inserted, plural, one {# palavra incluída} other {# palavras incluídas} many {# palavras incluídas}}, {deleted, plural, one {# palavra suprimida} other {# palavras suprimidas} many {# palavras suprimidas}}",
     "wordingVersionUnknown": "Data da versão da redação indisponível"
+  },
+  "structuredDocument": {
+    "noReadableContent": "Não há texto legível para exibir na prévia.",
+    "textOnly": "Prévia do texto sem o layout da página nem as imagens."
   },
   "styleSets": {
     "create": "Criar",

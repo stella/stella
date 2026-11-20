@@ -2323,7 +2323,7 @@
       }
     },
     "sourceChips": {
-      "alsoConsulted": "También consultadas ({count, number})"
+      "moreConsulted": "{count, plural, one {+# consultada más} many {+# consultadas más} other {+# consultadas más}}"
     },
     "sourcePlaceholder": "Chat sobre {title}",
     "sourcePlaceholderAction": "Chat sobre",
@@ -2942,6 +2942,7 @@
     "playbooks": "Playbooks",
     "preparing": "Preparando…",
     "preview": "Vista previa",
+    "previewTruncated": "El texto completo no está disponible en esta vista previa.",
     "previous": "Anterior",
     "previousMatch": "Coincidencia anterior",
     "print": "Imprimir",
@@ -6313,7 +6314,6 @@
     "layer": "Capa de firmas {number, number}",
     "noReadableContent": "No hay contenido legible para la vista previa.",
     "pdfUnavailable": "La vista previa del PDF no está disponible.",
-    "previewTruncated": "El texto completo no está disponible en esta vista previa.",
     "unknownSigner": "Firmante desconocido",
     "unreadable": "No se ha podido leer el archivo firmado.",
     "unverified": "Las firmas no se han verificado."
@@ -6458,6 +6458,10 @@
     "versionChangesRemoved": "{count, plural, one {# disposición suprimida} other {# disposiciones suprimidas} many {# disposiciones suprimidas}}",
     "versionChangesWords": "{inserted, plural, one {# palabra añadida} other {# palabras añadidas} many {# palabras añadidas}}, {deleted, plural, one {# palabra suprimida} other {# palabras suprimidas} many {# palabras suprimidas}}",
     "wordingVersionUnknown": "No se conoce la fecha de la versión de la redacción"
+  },
+  "structuredDocument": {
+    "noReadableContent": "No hay texto legible para la vista previa.",
+    "textOnly": "Vista previa de texto sin diseño de página ni imágenes."
   },
   "styleSets": {
     "create": "Crear",

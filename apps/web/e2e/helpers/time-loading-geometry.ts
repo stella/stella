@@ -4,7 +4,7 @@ import * as v from "valibot";
 
 import cs from "../../src/i18n/langs/cs.json" with { type: "json" };
 import en from "../../src/i18n/langs/en.json" with { type: "json" };
-import { E2E_API_ORIGIN } from "./api";
+import { apiDelete, apiPut, E2E_API_ORIGIN } from "./api";
 import { setPresentationPrefs } from "./presentation-prefs";
 import { captureLandmarks } from "./stable-geometry";
 import { createBrowserErrorCollector } from "./test";
@@ -91,16 +91,56 @@ const SURFACES = [
   },
 ] as const satisfies readonly LoadingSurface[];
 
+/**
+ * The inbox and contact surfaces, recorded as evidence beside the others: the
+ * contacts list, one contact (a fixture the measurement creates) and the
+ * inbox, whose body the cold paint leaves to the layout this browser keeps.
+ */
+const contactSurfaces = (contactId: string): readonly LoadingSurface[] => [
+  {
+    type: "steady",
+    path: "/contacts",
+    busy: "tbody tr[aria-hidden=true]",
+    landmarks: {
+      heading: "thead",
+      table: "table",
+      firstRow: "tbody tr",
+    },
+  },
+  {
+    type: "steady",
+    path: `/contacts/${contactId}`,
+    busy: "h1 [data-slot=face-label-skeleton]",
+    landmarks: {
+      heading: "h1",
+      firstSection: "section",
+      secondSection: "section ~ section",
+    },
+  },
+  {
+    type: "steady",
+    path: "/inbox",
+    busy: "[data-slot=entity-view-kanban-pending], [data-slot=entity-view-table-pending]",
+    landmarks: {
+      heading: "fieldset",
+      body: "[data-kanban-column-header], [data-slot=workspace-grid-head]",
+    },
+  },
+];
+
 type MeasureLoadingGeometryOptions = {
   browser: Browser;
   baseURL: string;
   storageState: string;
+  /** Which surfaces to measure: time and admin, or inbox and contacts. */
+  set?: "time-admin" | "contacts" | undefined;
 };
 
 export const measureLoadingGeometry = async ({
   browser,
   baseURL,
   storageState,
+  set = "time-admin",
 }: MeasureLoadingGeometryOptions) => {
   const account = await browser.newContext({ baseURL, storageState });
   try {
@@ -123,6 +163,18 @@ export const measureLoadingGeometry = async ({
       await expect(response).toBeOK();
     };
 
+    const contact =
+      set === "contacts"
+        ? v.parse(
+            v.object({ id: v.string() }),
+            await apiPut(account.request, "/contacts", {
+              type: "organization",
+              displayName: "Geometry fixture s.r.o.",
+              organizationName: "Geometry fixture s.r.o.",
+            }),
+          )
+        : null;
+    const surfaces = contact === null ? SURFACES : contactSurfaces(contact.id);
     const evidence = [];
     try {
       for (const { locale, browserLocale, messages } of LANGUAGES) {
@@ -154,7 +206,7 @@ export const measureLoadingGeometry = async ({
           const errors = createBrowserErrorCollector();
           const detach = errors.trackPage(page);
           try {
-            for (const surface of SURFACES) {
+            for (const surface of surfaces) {
               await serverPage.goto(surface.path);
               // Protected routes render a shared cold shell before locale hydration.
               const serverDocumentLanguage = await serverPage
@@ -246,6 +298,9 @@ export const measureLoadingGeometry = async ({
       return { viewport: VIEWPORT, evidence };
     } finally {
       await setLocale(original.user.locale);
+      if (contact !== null) {
+        await apiDelete(account.request, `/contacts/${contact.id}`);
+      }
     }
   } finally {
     await account.close();

@@ -84,6 +84,11 @@ const AGENT_SKILL_PACKAGE_SIZE_GUARD_MIGRATION_PATH = nodePath.join(
   "20261120070000_agent_skill_package_size_guard",
   "migration.sql",
 );
+const AGENT_SKILL_ORIGINAL_CLEANUP_TRIGGERS_MIGRATION_PATH = nodePath.join(
+  DRIZZLE_DIR,
+  "20261120070200_agent_skill_original_cleanup_triggers",
+  "migration.sql",
+);
 const SYNTHETIC_SESSION_MIGRATION_PATH = nodePath.join(
   DRIZZLE_DIR,
   "20261019070000_monitoring_session",
@@ -480,6 +485,12 @@ export const installPgliteAgentSkillRevisionTrigger = async (
   await installPgliteMigration({
     db,
     migrationPath: AGENT_SKILL_PACKAGE_SIZE_GUARD_MIGRATION_PATH,
+  });
+  // And the original triggers, which replace the size guard to count
+  // originals and queue removed originals for erasure.
+  await installPgliteMigration({
+    db,
+    migrationPath: AGENT_SKILL_ORIGINAL_CLEANUP_TRIGGERS_MIGRATION_PATH,
   });
 };
 

@@ -18,12 +18,14 @@ import {
   stampedDownloadEndpoint,
   updateDocumentPropertiesEndpoint,
 } from "@/api/handlers/files/routes";
+import structuredDocumentPreviewEndpoint from "@/api/handlers/files/structured-document";
 import readFileThumbnailEndpoint from "@/api/handlers/files/thumbnail";
 import { routes } from "@/api/http/route";
 
 export const filesRoute = routes(
   {
     "/url/:fieldId": { GET: readFileEndpoint },
+    "/structured-document/:fieldId": { GET: structuredDocumentPreviewEndpoint },
     "/asic/:fieldId": { GET: asicPreviewEndpoint },
     "/cades/:fieldId": { GET: cadesPreviewEndpoint },
     "/cades/:fieldId/content": { GET: cadesContentEndpoint },

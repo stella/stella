@@ -23,15 +23,7 @@ export type {
 } from "./column-band-header";
 export { KanbanColumnBandHeader } from "./column-band-header";
 export type { KanbanColumnBandSpan } from "./column-bands";
-export {
-  hasKanbanColumnBands,
-  KANBAN_COLLAPSED_BAND_WIDTH_CLASS,
-  KANBAN_COLLAPSED_BAND_WIDTH_PX,
-  KANBAN_COLUMN_GAP_PX,
-  KANBAN_COLUMN_WIDTH_CLASS,
-  KANBAN_COLUMN_WIDTH_PX,
-  resolveKanbanColumnBands,
-} from "./column-bands";
+export { hasKanbanColumnBands, resolveKanbanColumnBands } from "./column-bands";
 export type { KanbanColumnHeaderProps } from "./column-header";
 export { KanbanColumnHeader } from "./column-header";
 export {
@@ -39,6 +31,11 @@ export {
   KANBAN_BAND_CAPTION_ROW_HEIGHT_PX,
   KANBAN_CHROME_ROW_HEIGHT,
   KANBAN_CHROME_ROW_HEIGHT_PX,
+  KANBAN_COLLAPSED_BAND_WIDTH_CLASS,
+  KANBAN_COLLAPSED_BAND_WIDTH_PX,
+  KANBAN_COLUMN_GAP_PX,
+  KANBAN_COLUMN_WIDTH_CLASS,
+  KANBAN_COLUMN_WIDTH_PX,
 } from "./layout-tokens";
 export type {
   KanbanCardDragSurfaceProps,

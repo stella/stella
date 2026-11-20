@@ -1,0 +1,6 @@
+{
+  "metric": "unclassified-handler-failures",
+  "file": "apps/api/src/lib/agent-skills/resource-originals.ts",
+  "delta": 1,
+  "reason": "A failed transaction reserving cleanup ownership for a skill file's original is an internal defect, not a capacity or upstream condition the caller can act on, so it should keep alerting as unclassified."
+}

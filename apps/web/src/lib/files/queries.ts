@@ -14,6 +14,7 @@ import {
 import { asicPreviewSchema } from "@stll/api-contract/asic";
 import { cadesPreviewSchema } from "@stll/api-contract/cades";
 import { UPLOAD_DOCUMENT_MAX_BYTES } from "@stll/api-contract/limits";
+import { structuredDocumentPreviewSchema } from "@stll/api-contract/structured-document";
 import { fetchWithTimeout } from "@stll/fetch";
 import {
   readBodyJsonWithIdleDeadline,
@@ -257,6 +258,37 @@ export const asicPreviewOptions = (props: FileOptionsProps) =>
           asicPreviewSchema,
           unwrapApiResponse(response),
           "ASiC preview must match its response schema",
+        );
+      },
+    }),
+    {
+      resources: [
+        RESOURCE_TYPE.ENTITY,
+        RESOURCE_TYPE.FIELD,
+        RESOURCE_TYPE.USER_FILE,
+      ],
+      scope: { type: "workspace", workspaceId: props.workspaceId },
+    },
+  );
+
+export const structuredDocumentPreviewOptions = (props: FileOptionsProps) =>
+  resourceQueryOptions(
+    queryOptions({
+      queryKey: [
+        ...filesKeys.all(),
+        "structured-document",
+        props.workspaceId,
+        props.fieldId,
+      ],
+      queryFn: async ({ signal }) => {
+        const fileRoutes = api.files({ workspaceId: props.workspaceId });
+        const response = await fileRoutes["structured-document"]({
+          fieldId: props.fieldId,
+        }).get({ fetch: { signal } });
+        return parseSuccessBody(
+          structuredDocumentPreviewSchema,
+          unwrapApiResponse(response),
+          "Structured document preview must match its response schema",
         );
       },
     }),

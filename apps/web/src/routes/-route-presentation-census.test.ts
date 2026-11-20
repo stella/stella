@@ -309,7 +309,7 @@ function findMissingRoutePresentation({
     const source =
       sourcePath === undefined
         ? undefined
-        : sourcesByPath.get(sourcePath)?.source;
+        : withPageModuleSources(sourcePath, sourcesByPath);
     if (source === undefined) {
       missing.push(`${id}: source`);
       continue;
@@ -340,6 +340,35 @@ function findMissingRoutePresentation({
     }
   }
   return missing.toSorted();
+}
+
+/**
+ * A route file's source with the page modules it renders (`./-x.page`): a
+ * converted route keeps its options in the route file and its component, a
+ * `<RouteDocumentTitle>` included, in the page module.
+ */
+function withPageModuleSources(
+  sourcePath: string,
+  sourcesByPath: ReadonlyMap<string, RouteSource>,
+): string | undefined {
+  const source = sourcesByPath.get(sourcePath)?.source;
+  if (source === undefined) {
+    return undefined;
+  }
+  const pageImport = /from "\.\/(-[^"]+\.page)"/gu;
+  const pageSources = [...source.matchAll(pageImport)].flatMap((match) => {
+    const pageModule = match[1];
+    if (pageModule === undefined) {
+      return [];
+    }
+    const pagePath = path.posix.join(
+      path.posix.dirname(sourcePath),
+      pageModule,
+    );
+    const pageSource = sourcesByPath.get(pagePath)?.source;
+    return pageSource === undefined ? [] : [pageSource];
+  });
+  return [source, ...pageSources].join("\n");
 }
 
 function routeSourcePaths(routeTree: string): Map<string, string> {

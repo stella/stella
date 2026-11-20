@@ -124,6 +124,12 @@ export type WorkspaceViewSwitcherFaceProps<
   direction?: InlineDirection | undefined;
   views: readonly View[];
   renderIcon: (view: View) => ReactNode;
+  /**
+   * A view's name in its tab's name box, for a name the caller draws itself
+   * (one that waits on the app's messages); `null`, or no callback, draws
+   * the view's own name.
+   */
+  renderName?: ((view: View) => ReactNode) | undefined;
   reserveActionSpace: boolean;
   addControl?: ReactNode;
 };
@@ -140,6 +146,7 @@ export const WorkspaceViewSwitcherFace = <
   direction,
   views,
   renderIcon,
+  renderName,
   reserveActionSpace,
   addControl,
 }: WorkspaceViewSwitcherFaceProps<View>) => (
@@ -149,16 +156,31 @@ export const WorkspaceViewSwitcherFace = <
     ariaLabel={ariaLabel}
     direction={direction}
   >
-    {views.map((view) => (
-      <div className="relative flex h-full items-center" key={view.id}>
-        <WorkspaceViewTabFace
-          reserveActionSpace={reserveActionSpace}
-          value={view.id}
-        >
-          {renderIcon(view)}
-          <WorkspaceViewTabNameFace name={view.name} />
-        </WorkspaceViewTabFace>
-      </div>
-    ))}
+    {views.map((view) => {
+      const name = renderName?.(view) ?? null;
+      return (
+        <div className="relative flex h-full items-center" key={view.id}>
+          <WorkspaceViewTabFace
+            reserveActionSpace={reserveActionSpace}
+            value={view.id}
+          >
+            {renderIcon(view)}
+            {name === null ? (
+              <WorkspaceViewTabNameFace name={view.name} />
+            ) : (
+              <span
+                className={cn(
+                  TRUNCATED_TEXT_LINES_CLASS[1],
+                  WORKSPACE_VIEW_TAB_NAME_CLASS,
+                )}
+                data-slot="truncated-text"
+              >
+                {name}
+              </span>
+            )}
+          </WorkspaceViewTabFace>
+        </div>
+      );
+    })}
   </WorkspaceViewStrip>
 );

@@ -92,6 +92,7 @@ import {
   softLawReadScalingScenario,
   softLawSearchScalingScenario,
 } from "./soft-law";
+import { structuredDocumentScalingScenario } from "./structured-document";
 import {
   apiScalingSurface,
   mcpScalingSurface,
@@ -146,6 +147,7 @@ const measuredApiScenarios = [
   ...verificationChronologyScalingScenarios,
   ...graphToolsScalingScenarios,
   asicPreviewScalingScenario,
+  structuredDocumentScalingScenario,
   cadesContentScalingScenario,
   cadesPreviewScalingScenario,
   dataBoxPreviewScalingScenario,

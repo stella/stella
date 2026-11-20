@@ -75,6 +75,7 @@ const importSkillFromUrl = createSafeRootHandler(
     );
 
     const installResult = await installSkill({
+      binaryFiles: parsed.binaryFiles,
       memberRole,
       onSlugTaken: "copy",
       origin: "url",

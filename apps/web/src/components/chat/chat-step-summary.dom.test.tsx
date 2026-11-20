@@ -340,3 +340,79 @@ test("once the run hands over to the answer, the turn's line stands on its own a
     "Searched legislation and case law · 5 lookups",
   );
 });
+
+const PLAN = {
+  type: "text",
+  content:
+    "Dohledám znění § 240 o. s. ř. a judikaturu Nejvyššího soudu k počátku běhu lhůty.",
+} satisfies Part;
+const REASONING = {
+  type: "thinking",
+  content: "The question is when the time limit for an appeal starts.",
+} satisfies Part;
+
+test("the plan written before the steps reads as quiet prose above them, not as the answer", () => {
+  const view = render(
+    <Thread locale="cs" parts={[REASONING, PLAN, ...LEGAL_RUN, ANSWER]} />,
+  );
+  const intents = view.container.querySelectorAll(
+    "[data-chat-narrated-intent]",
+  );
+  expect(intents).toHaveLength(1);
+  const intent = intents.item(0);
+  expect(intent.textContent).toBe(PLAN.content);
+  // Muted, unboxed, cut at three lines, and inside the run it introduces,
+  // above the run's line.
+  expect(intent.className).toContain("text-muted-foreground");
+  expect(intent.className).toContain("line-clamp-3");
+  expect(intent.className).not.toMatch(/(?:^|\s)border(?:\s|$)/u);
+  const list = intent.closest('[data-slot="chat-step-list"]');
+  expect(list).not.toBeNull();
+  expect(list?.querySelector("[data-chat-narrated-intent], button")).toBe(
+    intent,
+  );
+  // One run: the reasoning before the plan stays one of its steps, and the
+  // plan is neither a step nor counted as one.
+  expect(
+    view.container.querySelectorAll('[data-slot="chat-step-list"]'),
+  ).toHaveLength(1);
+  expect(stepTrigger(view.container).textContent).toBe(
+    "Prohledány předpisy a judikatura · 5 dotazů",
+  );
+  // The answer is the text after the steps, once.
+  expect(view.container.textContent.split(PLAN.content)).toHaveLength(2);
+});
+
+test("text before the steps that reads as an answer stays the answer", () => {
+  const long = {
+    type: "text",
+    content: "## Postup\n\nNejprve dohledám § 240 o. s. ř., pak judikaturu.",
+  } satisfies Part;
+  const view = render(<Thread parts={[long, ...LEGAL_RUN, ANSWER]} />);
+  expect(
+    view.container.querySelector("[data-chat-narrated-intent]"),
+  ).toBeNull();
+  expect(view.container.textContent).toContain("Postup");
+});
+
+test("a plan still streaming with no step after it reads as text until a step follows", () => {
+  const view = render(<Thread isGenerating parts={[PLAN]} />);
+  expect(
+    view.container.querySelector("[data-chat-narrated-intent]"),
+  ).toBeNull();
+  expect(view.container.textContent).toContain(PLAN.content);
+  view.unmount();
+  const next = render(
+    <Thread
+      isGenerating
+      parts={[PLAN, codeStep("search", ["search_case_law"], "input-complete")]}
+    />,
+  );
+  expect(
+    next.container.querySelector("[data-chat-narrated-intent]")?.textContent,
+  ).toBe(PLAN.content);
+  // While it runs, the run still reads one live line under its plan.
+  expect(
+    next.container.querySelectorAll("[data-turn-live-status]"),
+  ).toHaveLength(1);
+});
