@@ -245,6 +245,8 @@ pub enum LocalDataKey<'a> {
   ActivityTimeline(&'a str),
   /// The desktop runner journal of one account.
   DesktopRunner(&'a str),
+  /// The transcripts one account keeps from recordings it transcribed.
+  TranscribeHistory(&'a str),
 }
 
 impl<'a> LocalDataKey<'a> {
@@ -256,6 +258,9 @@ impl<'a> LocalDataKey<'a> {
       }
       Self::DesktopRunner(namespace) => {
         format!("desktop-runner:journal:v1:{namespace}").into()
+      }
+      Self::TranscribeHistory(namespace) => {
+        format!("transcribe:history:v1:{namespace}").into()
       }
     }
   }
@@ -286,6 +291,14 @@ pub fn get_local_data_key(key: LocalDataKey<'_>) -> Result<LocalDataKeyLookup, S
     }
     Err(Error::NoEntry) => Ok(LocalDataKeyLookup::Missing),
     Err(e) => Err(format!("keychain read error: {e}")),
+  }
+}
+
+/// Removes a local data store's key once none of its data is left.
+pub fn delete_local_data_key(key: LocalDataKey<'_>) -> Result<(), String> {
+  match named_entry(&key.account())?.delete_credential() {
+    Ok(()) | Err(Error::NoEntry) => Ok(()),
+    Err(error) => Err(format!("keychain delete failed: {error}")),
   }
 }
 
@@ -482,6 +495,10 @@ mod tests {
     assert_eq!(
       LocalDataKey::DesktopRunner("fixture").account(),
       "desktop-runner:journal:v1:fixture"
+    );
+    assert_eq!(
+      LocalDataKey::TranscribeHistory("fixture").account(),
+      "transcribe:history:v1:fixture"
     );
   }
 

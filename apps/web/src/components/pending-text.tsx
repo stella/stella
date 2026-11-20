@@ -584,6 +584,7 @@ type PendingTextMessageKey =
   | "tasks.status"
   | "templates.addItem"
   | "templates.allTemplates"
+  | "templates.downloadPdf"
   | "templates.newTemplate"
   | "templates.useTemplate"
   | "timesheets.week.title"

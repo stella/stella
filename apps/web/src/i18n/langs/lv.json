@@ -1795,7 +1795,6 @@
       "searchAllPastChatsQuestion": "Meklēt visās jūsu tērzēšanās?",
       "uploadedDocumentPlaceholder": "(augšupielādēts dokuments)"
     },
-    "askAnything": "Jautājiet jebko",
     "askUser": {
       "custom": "Rakstīt savu",
       "edit": "Rediģēt atbildes",
@@ -1953,6 +1952,7 @@
     "historyTrimmed": "Agrākās ziņas neizdevās apkopot, tāpēc šajā atbildē ņemta vērā tikai jaunākā sarunas daļa.",
     "improvePrompt": "Uzlabot uzvedni",
     "improvePromptDraftChanged": "Melnraksts mainījās, tāpēc uzlabojums netika lietots.",
+    "improvePromptEmpty": "Ievadiet uzvedni, lai to uzlabotu.",
     "improvePromptPlainTextOnly": "Uzvedni var uzlabot tikai vienkārša teksta formā.",
     "improvePromptUnavailableAnonymized": "Anonimizētajā režīmā uzvedni nevar uzlabot.",
     "improvingPrompt": "Uzvedne tiek uzlabota…",
@@ -2312,6 +2312,7 @@
     "sendErrorToolsUnsupported": "Šis modelis nevar izmantot rīkus, tāpēc nevar atbildēt uz jautājumiem par jūsu lietu. Pārslēdzieties uz modeli, kas atbalsta rīkus.",
     "sendErrorTurnTooLarge": "Šī atbilde kļuva pārāk liela, lai to piegādātu pilnībā. Lai turpinātu, nosūtiet jaunu ziņu.",
     "sendPrompt": "Sūtīt ziņojumu",
+    "sendPromptEmpty": "Ievadiet ziņojumu, lai to nosūtītu.",
     "sendQueuedMessageNow": "Sūtīt tūlīt",
     "sendWithoutAnonymization": "Sūtīt bez anonimizācijas",
     "signInToChat": "Piesakieties, lai tērzētu par šo dokumentu",

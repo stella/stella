@@ -1795,7 +1795,6 @@
       "searchAllPastChatsQuestion": "Alle Ihre Chats durchsuchen?",
       "uploadedDocumentPlaceholder": "(hochgeladenes Dokument)"
     },
-    "askAnything": "Beliebige Frage stellen",
     "askUser": {
       "custom": "Eigene Antwort",
       "edit": "Antworten bearbeiten",
@@ -1953,6 +1952,7 @@
     "historyTrimmed": "Ältere Nachrichten konnten nicht zusammengefasst werden. Diese Antwort berücksichtigt daher nur den jüngsten Teil der Unterhaltung.",
     "improvePrompt": "Prompt verbessern",
     "improvePromptDraftChanged": "Der Entwurf wurde geändert, daher wurde die Verbesserung nicht übernommen.",
+    "improvePromptEmpty": "Geben Sie einen Prompt ein, um ihn zu verbessern.",
     "improvePromptPlainTextOnly": "Prompts können nur als Klartext verbessert werden.",
     "improvePromptUnavailableAnonymized": "Im anonymisierten Modus können Prompts nicht verbessert werden.",
     "improvingPrompt": "Prompt wird verbessert…",
@@ -2312,6 +2312,7 @@
     "sendErrorToolsUnsupported": "Dieses Modell kann keine Tools verwenden und daher keine Fragen zu Ihrer Akte beantworten. Wechseln Sie zu einem Modell, das Tools unterstützt.",
     "sendErrorTurnTooLarge": "Diese Antwort ist zu umfangreich geworden, um vollständig übermittelt zu werden. Senden Sie eine neue Nachricht, um fortzufahren.",
     "sendPrompt": "Nachricht senden",
+    "sendPromptEmpty": "Geben Sie eine Nachricht ein, um sie zu senden.",
     "sendQueuedMessageNow": "Jetzt senden",
     "sendWithoutAnonymization": "Ohne Anonymisierung senden",
     "signInToChat": "Melden Sie sich an, um über dieses Dokument zu chatten",

@@ -1795,7 +1795,6 @@
       "searchAllPastChatsQuestion": "Pesquisar em todos os seus chats?",
       "uploadedDocumentPlaceholder": "(documento enviado)"
     },
-    "askAnything": "Pergunte qualquer coisa",
     "askUser": {
       "custom": "Escreva o seu próprio",
       "edit": "Editar respostas",
@@ -1953,6 +1952,7 @@
     "historyTrimmed": "Não foi possível resumir as mensagens anteriores, então esta resposta considera apenas a parte mais recente da conversa.",
     "improvePrompt": "Melhorar prompt",
     "improvePromptDraftChanged": "O rascunho mudou, então a melhoria não foi aplicada.",
+    "improvePromptEmpty": "Digite um prompt para melhorá-lo.",
     "improvePromptPlainTextOnly": "A melhoria de prompts está disponível apenas para texto simples.",
     "improvePromptUnavailableAnonymized": "A melhoria de prompts não está disponível no modo anonimizado.",
     "improvingPrompt": "Melhorando prompt…",
@@ -2312,6 +2312,7 @@
     "sendErrorToolsUnsupported": "Este modelo não pode usar ferramentas, então não consegue responder a perguntas sobre o seu caso. Mude para um modelo que aceite ferramentas.",
     "sendErrorTurnTooLarge": "Esta resposta ficou grande demais para ser entregue por completo. Envie uma nova mensagem para continuar.",
     "sendPrompt": "Enviar mensagem",
+    "sendPromptEmpty": "Digite uma mensagem para enviá-la.",
     "sendQueuedMessageNow": "Enviar agora",
     "sendWithoutAnonymization": "Enviar sem anonimização",
     "signInToChat": "Entre para conversar sobre este documento",

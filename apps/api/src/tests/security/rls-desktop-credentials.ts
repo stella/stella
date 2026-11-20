@@ -36,7 +36,10 @@ export const createRlsDesktopCredentials = async (
     membershipDb: asTestRaw<typeof rlsDb>(testDb),
     verifyApiKey: () => auth.api.verifyApiKey,
     resolveMember: async (lookup) =>
-      await resolveMemberAuthorization(lookup, testDb),
+      await resolveMemberAuthorization(
+        { ...lookup, authentication: { kind: "credential" } },
+        testDb,
+      ),
   });
   type DeviceIdentity = Awaited<ReturnType<typeof createDesktopDeviceSigner>>;
   const mint = async (

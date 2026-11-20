@@ -1795,7 +1795,6 @@
       "searchAllPastChatsQuestion": "Kas otsida kõigist teie vestlustest?",
       "uploadedDocumentPlaceholder": "(üles laaditud dokument)"
     },
-    "askAnything": "Küsi mida tahes",
     "askUser": {
       "custom": "Kirjuta oma",
       "edit": "Muuda vastuseid",
@@ -1953,6 +1952,7 @@
     "historyTrimmed": "Varasemaid sõnumeid ei õnnestunud kokku võtta, seega arvestab see vastus ainult vestluse viimast osa.",
     "improvePrompt": "Täiusta viipa",
     "improvePromptDraftChanged": "Mustand muutus, seega täiustust ei rakendatud.",
+    "improvePromptEmpty": "Kirjutage viip, et seda täiustada.",
     "improvePromptPlainTextOnly": "Viipa saab täiustada ainult lihttekstina.",
     "improvePromptUnavailableAnonymized": "Anonüümitud režiimis ei saa viipa täiustada.",
     "improvingPrompt": "Viiba täiustamine…",
@@ -2312,6 +2312,7 @@
     "sendErrorToolsUnsupported": "See mudel ei saa tööriistu kasutada, seega ei saa see sinu toimiku kohta küsimustele vastata. Vaheta mudelile, mis tööriistu toetab.",
     "sendErrorTurnTooLarge": "See vastus läks liiga suureks, et seda tervikuna edastada. Jätkamiseks saada uus sõnum.",
     "sendPrompt": "Saada sõnum",
+    "sendPromptEmpty": "Kirjutage sõnum, et seda saata.",
     "sendQueuedMessageNow": "Saada kohe",
     "sendWithoutAnonymization": "Saada anonüümimiseta",
     "signInToChat": "Logi sisse, et sellest dokumendist vestelda",

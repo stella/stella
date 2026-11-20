@@ -1795,7 +1795,6 @@
       "searchAllPastChatsQuestion": "Prohledat všechny vaše chaty?",
       "uploadedDocumentPlaceholder": "(nahraný dokument)"
     },
-    "askAnything": "Zeptejte se na cokoli",
     "askUser": {
       "custom": "Napsat vlastní",
       "edit": "Upravit odpovědi",
@@ -1953,6 +1952,7 @@
     "historyTrimmed": "Starší zprávy se nepodařilo shrnout, a tak tato odpověď vychází jen z poslední části konverzace.",
     "improvePrompt": "Vylepšit zadání",
     "improvePromptDraftChanged": "Zadání se změnilo, takže vylepšení nebylo použito.",
+    "improvePromptEmpty": "Napište zadání, které chcete vylepšit.",
     "improvePromptPlainTextOnly": "Vylepšení zadání je dostupné pouze pro prostý text.",
     "improvePromptUnavailableAnonymized": "Vylepšení zadání není dostupné v anonymizovaném režimu.",
     "improvingPrompt": "Vylepšuji zadání…",
@@ -2312,6 +2312,7 @@
     "sendErrorToolsUnsupported": "Tento model neumí používat nástroje, takže nemůže odpovídat na otázky k vašemu spisu. Přepněte na model, který nástroje podporuje.",
     "sendErrorTurnTooLarge": "Tato odpověď je příliš velká na to, aby se dala doručit celá. Pokračujte novou zprávou.",
     "sendPrompt": "Odeslat zprávu",
+    "sendPromptEmpty": "Napište zprávu, kterou chcete odeslat.",
     "sendQueuedMessageNow": "Odeslat hned",
     "sendWithoutAnonymization": "Odeslat bez anonymizace",
     "signInToChat": "Přihlaste se a chatujte o tomto dokumentu",
