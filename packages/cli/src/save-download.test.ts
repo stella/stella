@@ -16,9 +16,9 @@ const recordingWrite = () => {
 };
 
 const fetcherAnswering =
-  (response: Response, seen: string[] = []): typeof fetch =>
-  async (input) => {
-    seen.push(input instanceof Request ? input.url : input.toString());
+  (response: Response, seen: string[] = []) =>
+  async (url: URL) => {
+    seen.push(url.toString());
     return await Promise.resolve(response);
   };
 

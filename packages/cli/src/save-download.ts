@@ -7,6 +7,9 @@
 import { Result } from "better-result";
 import { writeFile } from "node:fs/promises";
 
+/** How long one download may take before the save gives up. */
+const DOWNLOAD_TIMEOUT_MS = 120_000;
+
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
@@ -35,7 +38,7 @@ export type SaveDownloadFailure = {
 };
 
 export type SaveDownloadOptions = {
-  fetcher?: typeof fetch;
+  fetcher?: (url: URL) => Promise<Response>;
   path: string;
   payload: unknown;
   write?: (path: string, bytes: Uint8Array) => Promise<void>;
@@ -43,7 +46,8 @@ export type SaveDownloadOptions = {
 
 /** Fetch the result's download and write it to `path`; the byte count saved. */
 export const saveDownload = async ({
-  fetcher = fetch,
+  fetcher = async (url) =>
+    await fetch(url, { signal: AbortSignal.timeout(DOWNLOAD_TIMEOUT_MS) }),
   path,
   payload,
   write = writeFile,
