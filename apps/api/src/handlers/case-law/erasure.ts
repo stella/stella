@@ -3,6 +3,7 @@ import { and, eq, inArray, or } from "drizzle-orm";
 
 import { Temporal } from "@stll/time";
 
+import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
   CASE_LAW_CORPUS_MIRROR_STATUS,
@@ -327,6 +328,74 @@ type RedactionFence =
   /** The fence itself failed, which says nothing about the row. */
   | { type: "lock-failed"; cause: unknown };
 
+type SupersededFenceEvidenceOptions = {
+  evidence: RemovalEvidence;
+  decisions: readonly Parameters<typeof supersededRemovalEvidence>[1][];
+  decisionId: SafeId<"caseLawDecision">;
+  canonicalId: SafeId<"caseLawDecision">;
+};
+
+/** Why removal evidence no longer authorizes this fence, or null when it does. */
+const supersededFenceEvidence = ({
+  evidence,
+  decisions,
+  decisionId,
+  canonicalId,
+}: SupersededFenceEvidenceOptions): RemovalSupersededReason | null => {
+  const requested = decisions.find(({ id }) => id === decisionId);
+  if (requested === undefined) {
+    return REMOVAL_SUPERSEDED_REASON.IDENTITY_CHANGED;
+  }
+  const reason = supersededRemovalEvidence(evidence, requested);
+  if (reason !== null) {
+    return reason;
+  }
+  // An alias's absence cannot authorize the first redaction of another live canonical row.
+  return canonicalId !== decisionId &&
+    decisions.some(
+      ({ id, redactedAt }) => id === canonicalId && redactedAt === null,
+    )
+    ? REMOVAL_SUPERSEDED_REASON.CANONICAL_CHANGED
+    : null;
+};
+
+type RetainRedactionClaimOptions = {
+  requested: Pick<
+    typeof caseLawDecisions.$inferSelect,
+    | "id"
+    | "sourceId"
+    | "sourceDocumentId"
+    | "sourceObservedAt"
+    | "sourceObservationOrder"
+  >;
+  evidence: RemovalEvidence | undefined;
+  retryItem: RemovalRetryItem | undefined;
+};
+
+/** Retain the requested decision's accepted erasure inside the fence. */
+const retainRedactionClaimTx = async (
+  tx: Transaction,
+  { requested, evidence, retryItem }: RetainRedactionClaimOptions,
+): Promise<ClaimedErasureRecovery> => {
+  const now = new Date();
+  return await retainClaimedErasureTx(tx, {
+    retryItem,
+    now,
+    decisionId: requested.id,
+    sourceId: requested.sourceId,
+    evidence: evidence ?? {
+      type: "existing-redaction",
+      decisionId: requested.id,
+      sourceId: requested.sourceId,
+      sourceDocumentId: requested.sourceDocumentId,
+      sourceObservedAt: requested.sourceObservedAt?.toISOString() ?? null,
+      sourceObservationOrder:
+        requested.sourceObservationOrder?.toString() ?? null,
+      observedAt: now.toISOString(),
+    },
+  });
+};
+
 type FencedDecision = {
   cancelledIntents: Awaited<
     ReturnType<typeof cancelCaseLawCorpusUploadIntents>
@@ -429,57 +498,30 @@ export const redactCaseLawDecision = async ({
     }
 
     if (evidence !== undefined) {
-      const requested = decisions.find(({ id }) => id === decisionId);
-      if (requested === undefined) {
-        return {
-          type: "superseded",
-          reason: REMOVAL_SUPERSEDED_REASON.IDENTITY_CHANGED,
-        };
-      }
-      const reason = supersededRemovalEvidence(evidence, requested);
+      const reason = supersededFenceEvidence({
+        evidence,
+        decisions,
+        decisionId,
+        canonicalId,
+      });
       if (reason !== null) {
         return { type: "superseded", reason };
-      }
-      // An alias's absence cannot authorize the first redaction of another live canonical row.
-      if (
-        canonicalId !== decisionId &&
-        decisions.some(
-          ({ id, redactedAt }) => id === canonicalId && redactedAt === null,
-        )
-      ) {
-        return {
-          type: "superseded",
-          reason: REMOVAL_SUPERSEDED_REASON.CANONICAL_CHANGED,
-        };
       }
     }
 
     const claimDecisionId = decisions.some(({ id }) => id === decisionId)
       ? decisionId
       : canonicalId;
-    let recovery: ClaimedErasureRecovery = { type: "external" };
-    if (prepareSupplementHolders !== undefined) {
-      const requested =
-        decisions.find(({ id }) => id === claimDecisionId) ??
-        panic("Claim omitted its canonical decision");
-      const now = new Date();
-      recovery = await retainClaimedErasureTx(tx, {
-        retryItem,
-        now,
-        decisionId: requested.id,
-        sourceId: requested.sourceId,
-        evidence: evidence ?? {
-          type: "existing-redaction",
-          decisionId: requested.id,
-          sourceId: requested.sourceId,
-          sourceDocumentId: requested.sourceDocumentId,
-          sourceObservedAt: requested.sourceObservedAt?.toISOString() ?? null,
-          sourceObservationOrder:
-            requested.sourceObservationOrder?.toString() ?? null,
-          observedAt: now.toISOString(),
-        },
-      });
-    }
+    const recovery: ClaimedErasureRecovery =
+      prepareSupplementHolders === undefined
+        ? { type: "external" }
+        : await retainRedactionClaimTx(tx, {
+            requested:
+              decisions.find(({ id }) => id === claimDecisionId) ??
+              panic("Claim omitted its canonical decision"),
+            evidence,
+            retryItem,
+          });
 
     const pendingFenceResults = [];
     for (const decision of decisions) {
