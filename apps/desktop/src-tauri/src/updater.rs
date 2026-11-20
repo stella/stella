@@ -9,6 +9,8 @@
 //   long-lived desktop sessions still pick up new releases.
 // - When the tray "Check for updates" item is clicked, run the same
 //   check synchronously and notify whether an update was found.
+// - Settings → About checks without installing, shows what it found,
+//   and installs through that same check when the user asks.
 // - When an update is found and no desktop edit sessions are
 //   active, download + install + relaunch. The installer handles
 //   the binary swap; `crate::relaunch` owns the hand-over to the
@@ -174,17 +176,9 @@ pub async fn run_check(handle: &AppHandle, active_edit_sessions: bool) -> CheckO
   // Startup, handoffs and tray actions cannot run installers concurrently.
   let _check = CHECK_LOCK.lock().await;
   record_check(unix_seconds(SystemTime::now()));
-  let exit_handle = handle.clone();
-  let updater = match handle
-    .updater_builder()
-    .on_before_exit(move || {
-      crate::desktop_crash::clean_exit(&exit_handle);
-      exit_handle.cleanup_before_exit();
-    })
-    .build()
-  {
+  let updater = match build_updater(handle) {
     Ok(u) => u,
-    Err(err) => return CheckOutcome::Failed(err.to_string()),
+    Err(err) => return CheckOutcome::Failed(err),
   };
 
   let update = match updater.check().await {
@@ -240,6 +234,67 @@ pub async fn run_check(handle: &AppHandle, active_edit_sessions: bool) -> CheckO
   }
 
   CheckOutcome::Installed { version }
+}
+
+fn build_updater(handle: &AppHandle) -> Result<tauri_plugin_updater::Updater, String> {
+  let exit_handle = handle.clone();
+  handle
+    .updater_builder()
+    .on_before_exit(move || {
+      crate::desktop_crash::clean_exit(&exit_handle);
+      exit_handle.cleanup_before_exit();
+    })
+    .build()
+    .map_err(|err| err.to_string())
+}
+
+/// What Settings → About shows after a check or an install it started
+/// (`UpdateCheck` in `src/mainview/UpdateCheck.tsx`). A failure is the
+/// command's error instead.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+#[serde(tag = "status", rename_all = "snake_case")]
+pub enum SettingsCheck {
+  UpToDate,
+  Available { version: String },
+  Deferred { version: String },
+  Installing { version: String },
+  Managed,
+}
+
+/// Asks the release feed whether a newer version exists and installs
+/// nothing: Settings offers the update, then installs through `run_check`.
+pub async fn check_from_settings(handle: &AppHandle) -> Result<SettingsCheck, String> {
+  if crate::managed_policy::current().updates_disabled {
+    return Ok(SettingsCheck::Managed);
+  }
+  let found = match build_updater(handle) {
+    Ok(updater) => updater.check().await.map_err(|err| err.to_string()),
+    Err(err) => Err(err),
+  };
+  match found {
+    Ok(Some(update)) => Ok(SettingsCheck::Available {
+      version: update.version,
+    }),
+    Ok(None) => Ok(SettingsCheck::UpToDate),
+    Err(err) => {
+      tracing::warn!(error = %err, "settings updater check failed");
+      Err(err)
+    }
+  }
+}
+
+/// The Settings result of an install that went through `run_check`.
+pub fn settings_outcome(outcome: CheckOutcome) -> Result<SettingsCheck, String> {
+  match outcome {
+    CheckOutcome::Deferred { version } => Ok(SettingsCheck::Deferred { version }),
+    CheckOutcome::UpToDate => Ok(SettingsCheck::UpToDate),
+    CheckOutcome::Installed { version } => Ok(SettingsCheck::Installing { version }),
+    CheckOutcome::Failed(err) => {
+      tracing::warn!(error = %err, "settings update install failed");
+      Err(err)
+    }
+    CheckOutcome::Disabled => Ok(SettingsCheck::Managed),
+  }
 }
 
 fn updater_public_key() -> Result<String, String> {
@@ -385,6 +440,46 @@ fn notify(handle: &AppHandle, title: &str, body: &str) {
 #[cfg(test)]
 mod tests {
   use super::*;
+
+  #[test]
+  fn settings_sees_each_install_outcome() {
+    let version = || "0.9.87".to_string();
+    assert_eq!(
+      settings_outcome(CheckOutcome::Deferred { version: version() }),
+      Ok(SettingsCheck::Deferred { version: version() })
+    );
+    assert_eq!(
+      settings_outcome(CheckOutcome::Installed { version: version() }),
+      Ok(SettingsCheck::Installing { version: version() })
+    );
+    assert_eq!(
+      settings_outcome(CheckOutcome::UpToDate),
+      Ok(SettingsCheck::UpToDate)
+    );
+    assert_eq!(
+      settings_outcome(CheckOutcome::Disabled),
+      Ok(SettingsCheck::Managed)
+    );
+    assert_eq!(
+      settings_outcome(CheckOutcome::Failed("offline".into())),
+      Err("offline".to_string())
+    );
+  }
+
+  #[test]
+  fn settings_check_serializes_as_a_tagged_status() {
+    assert_eq!(
+      serde_json::to_value(SettingsCheck::Available {
+        version: "0.9.87".into()
+      })
+      .expect("settings check serializes"),
+      serde_json::json!({ "status": "available", "version": "0.9.87" })
+    );
+    assert_eq!(
+      serde_json::to_value(SettingsCheck::UpToDate).expect("settings check serializes"),
+      serde_json::json!({ "status": "up_to_date" })
+    );
+  }
 
   #[test]
   fn update_package_limit_accepts_the_boundary_and_rejects_one_more_byte() {

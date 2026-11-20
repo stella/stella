@@ -237,6 +237,16 @@
     "startOnLoginDescription": "A stella desktop automatikus indítása bejelentkezéskor.",
     "stellaDesktop": "stella desktop",
     "support": "Támogatás",
+    "updates": {
+      "upToDate": "A stella desktop naprakész.",
+      "available": "Elérhető a(z) {version} verzió.",
+      "install": "Telepítés és újraindítás",
+      "installing": "A(z) {version} verzió telepítése folyamatban. A stella desktop ezután újraindul.",
+      "deferred": "A(z) {version} verzió akkor települ, amikor befejezi a megnyitott dokumentumok szerkesztését.",
+      "checkFailed": "A stella desktop nem tudta ellenőrizni a frissítéseket.",
+      "installFailed": "A stella desktop nem tudta telepíteni a frissítést.",
+      "support": "Valami nem stimmel? Írjon ügyfélszolgálatunknak: <email>{address}</email>"
+    },
     "title": "Beállítások",
     "pages": {
       "general": "Általános",

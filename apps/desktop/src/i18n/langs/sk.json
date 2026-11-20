@@ -237,6 +237,16 @@
     "startOnLoginDescription": "Spustiť stella desktop automaticky pri prihlásení.",
     "stellaDesktop": "stella desktop",
     "support": "Podpora",
+    "updates": {
+      "upToDate": "stella desktop je aktuálny.",
+      "available": "Je k dispozícii verzia {version}.",
+      "install": "Nainštalovať a reštartovať",
+      "installing": "Inštaluje sa verzia {version}. Po dokončení sa stella desktop reštartuje.",
+      "deferred": "Verzia {version} sa nainštaluje, keď dokončíte úpravy otvorených dokumentov.",
+      "checkFailed": "stella desktop nemohol skontrolovať aktualizácie.",
+      "installFailed": "stella desktop nemohol nainštalovať aktualizáciu.",
+      "support": "Niečo nefunguje? Napíšte našej podpore: <email>{address}</email>"
+    },
     "title": "Nastavenia",
     "pages": {
       "general": "Všeobecné",

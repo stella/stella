@@ -358,6 +358,27 @@ pub async fn email_support() -> Result<bool, String> {
   Ok(SessionManager::email_support())
 }
 
+/// Settings → About: whether a newer version exists. Installs nothing.
+#[tauri::command]
+pub async fn check_for_updates(
+  app: tauri::AppHandle,
+) -> Result<crate::updater::SettingsCheck, String> {
+  crate::updater::check_from_settings(&app).await
+}
+
+/// Settings → About: installs through the check the tray and the
+/// background schedule run, so active desktop edits defer it the same way.
+#[tauri::command]
+pub async fn install_update(
+  app: tauri::AppHandle,
+  state: State<'_, AppState>,
+) -> Result<crate::updater::SettingsCheck, String> {
+  let active_edit_sessions = state.lock().await.has_active_edit_sessions();
+  crate::updater::settings_outcome(
+    crate::updater::run_check(&app, active_edit_sessions).await,
+  )
+}
+
 #[tauri::command]
 pub async fn reveal_support_root(state: State<'_, AppState>) -> Result<bool, String> {
   let mgr = state.lock().await;

@@ -237,6 +237,16 @@
     "startOnLoginDescription": "Iniciar stella desktop automáticamente al iniciar sesión.",
     "stellaDesktop": "stella desktop",
     "support": "Soporte",
+    "updates": {
+      "upToDate": "stella desktop está actualizado.",
+      "available": "La versión {version} está disponible.",
+      "install": "Instalar y reiniciar",
+      "installing": "Instalando la versión {version}. stella desktop se reiniciará al terminar.",
+      "deferred": "La versión {version} se instalará cuando termine de editar los documentos abiertos.",
+      "checkFailed": "stella desktop no pudo buscar actualizaciones.",
+      "installFailed": "stella desktop no pudo instalar la actualización.",
+      "support": "¿Algo no funciona bien? Escriba a nuestro soporte: <email>{address}</email>"
+    },
     "title": "Configuración",
     "pages": {
       "general": "General",

@@ -16,6 +16,8 @@
     "allow-update-notification-preferences",
     "allow-copy-diagnostics",
     "allow-email-support",
+    "allow-check-for-updates",
+    "allow-install-update",
     "allow-reveal-support-root",
     "allow-set-autostart",
     "allow-onboarding-restart",
