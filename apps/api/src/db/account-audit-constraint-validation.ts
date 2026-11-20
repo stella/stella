@@ -6,7 +6,7 @@ import type { OnlineRepair } from "./online-migration-connection";
 export const ACCOUNT_AUDIT_CONSTRAINT = {
   tableName: "account_audit_logs",
   constraintName: "account_audit_logs_event_type_check",
-  introducedBy: "20261120234000_session_sign_ins",
+  introducedBy: "20261121020000_session_sign_ins",
 } as const satisfies OnlineConstraintValidation & { introducedBy: string };
 
 export const ACCOUNT_AUDIT_CONSTRAINT_VALIDATION = {
