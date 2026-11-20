@@ -784,6 +784,9 @@ describe("pending layer ratchet", () => {
     expect(pendingFailures(result)).toEqual([]);
     expect(result.pendingBudget.reanchored).toBe(true);
     expect(result.notices).toEqual([expect.stringContaining("re-anchored")]);
+    expect(startupSummary(result)).toContain(
+      "| 245.1 KiB (re-anchored from 195.3 KiB), ",
+    );
   });
 
   test("with no base to read, growth counts from the tree's total with the slack only", () => {
