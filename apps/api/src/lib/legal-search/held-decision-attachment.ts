@@ -1,5 +1,5 @@
 import { panic } from "better-result";
-import * as v from "valibot";
+import type * as v from "valibot";
 
 import {
   DECISION_IDENTIFIER_TYPES,
@@ -9,7 +9,7 @@ import {
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
 import {
   CZ_NS_COLLECTION_METADATA_KEY,
-  czNsCollectionDocumentPart,
+  czNsCollectionDocumentPartSchema,
   storedCzNsCollectionEntrySchema,
 } from "@/api/lib/legal-search/cz-ns-collection-entry";
 import {
@@ -105,10 +105,7 @@ export const HELD_DECISION_ATTACHMENTS: Readonly<
     hostAdapterKeys: otherSourcesOf(ADAPTER_KEYS.CZ_NS_SBIRKA),
     metadataKey: CZ_NS_COLLECTION_METADATA_KEY,
     metadataSchema: storedCzNsCollectionEntrySchema,
-    documentPartSchema: v.pipe(
-      storedCzNsCollectionEntrySchema,
-      v.transform(czNsCollectionDocumentPart),
-    ),
+    documentPartSchema: czNsCollectionDocumentPartSchema,
     declaredIdentifierTypes: [DECISION_IDENTIFIER_TYPES.REPORTER_CITATION],
     docketHeldUnderOtherDate: "park-for-review",
   },

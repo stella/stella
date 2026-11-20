@@ -217,8 +217,6 @@ export const matchHostDecisionsTx = async (
     observed.country,
     observed.ecli,
   );
-  const primaryEcliValues = ecliIdentity?.primaryValues ?? [];
-  const ecliKeys = ecliIdentity?.keys ?? [];
   const docketKeys = docketFamilyKeysToRead(
     observed.caseNumber,
     observed.country,
@@ -232,15 +230,15 @@ export const matchHostDecisionsTx = async (
   };
   const readPaths = async (role: "host" | "collection") => ({
     ecli:
-      ecliKeys.length === 0
+      ecliIdentity === null
         ? { type: "complete" as const, rows: [] }
         : await readHeldDecisionCandidates(tx, {
             ...queryOptions,
             role,
             path: {
               basis: "ecli",
-              keys: ecliKeys,
-              primaryValues: primaryEcliValues,
+              keys: ecliIdentity.keys,
+              primaryValues: ecliIdentity.primaryValues,
             },
           }),
     courtDocketDate:
