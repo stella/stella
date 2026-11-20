@@ -268,6 +268,7 @@ const RecordingSettings = ({ onCommand, settings }: SettingsSectionProps) => {
         <Checkbox
           aria-describedby={detectCallsIds.description}
           aria-labelledby={detectCallsIds.label}
+          id={detectCallsIds.control}
           checked={settings.detectCalls}
           onCheckedChange={(enabled) =>
             onCommand("activity_set_detect_calls", { enabled })

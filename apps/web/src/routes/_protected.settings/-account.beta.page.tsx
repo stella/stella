@@ -36,6 +36,7 @@ const BetaFeatureToggle = ({
       <Checkbox
         aria-describedby={ids.description}
         aria-labelledby={ids.label}
+        id={ids.control}
         checked={checked}
         disabled={disabled}
         onCheckedChange={(next) => {

@@ -56,12 +56,15 @@ describe("SettingsRow", () => {
         <Switch
           aria-describedby={ids.description}
           aria-labelledby={ids.label}
+          id={ids.control}
         />
       </SettingsRow>,
     );
 
-    expect(markup).toContain("<label");
+    expect(markup).toContain(`<label`);
+    expect(markup).toContain(`for="${ids.control}"`);
     expect(markup).toContain('role="switch"');
+    expect(idsIn(markup)).toContain(ids.control);
     expect(idsIn(markup)).toContain(ids.label);
     expect(idsIn(markup)).toContain(ids.description);
   });

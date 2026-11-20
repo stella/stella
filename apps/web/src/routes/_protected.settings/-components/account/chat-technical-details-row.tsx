@@ -24,6 +24,7 @@ export const ChatTechnicalDetailsRow = () => {
       <Switch
         aria-describedby={ids.description}
         aria-labelledby={ids.label}
+        id={ids.control}
         checked={prefs.chatTechnicalDetails}
         onCheckedChange={(next) => {
           setPrefs(() => ({ chatTechnicalDetails: next }));

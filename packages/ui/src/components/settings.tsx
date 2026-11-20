@@ -78,8 +78,12 @@ const SettingsSection = ({
   );
 };
 
-/** The ids a row's control points at for its name and its description. */
+/**
+ * A row's ids: the control points at `label` and `description` for its name
+ * and its description, and takes `control` as its own id in a label row.
+ */
 const settingsRowIds = (id: string) => ({
+  control: `${id}-control`,
   description: `${id}-description`,
   label: `${id}-label`,
 });
@@ -93,21 +97,23 @@ const ROW_DEPTH_CLASS = {
 } as const satisfies Record<SettingsRowDepth, string>;
 
 /**
- * What a press on the row does. `label`: the row is its control's label, so
- * a press anywhere on it reaches the control (a switch or a checkbox); keep
- * every other interactive element out of such a row.
+ * What a press on the row's text does. `label`: the text is the label of
+ * the control whose id is `settingsRowIds(id).control` (a switch or a
+ * checkbox), so a press on it flips the control. The text, not the whole
+ * row, is the label: a label wrapped around the control would hand a press
+ * on the control to it a second time where the label's default action runs
+ * before the control's own handler cancels it.
  */
-type SettingsRowInteraction = "none" | "label";
+type SettingsRowInteraction =
+  | { interaction?: "none" | undefined; id?: string | undefined }
+  | { interaction: "label"; id: string };
 
 // A row too narrow for its text and its control wraps the control under the
 // text rather than squeezing the text.
 const SETTINGS_ROW_BOX_CLASS =
   "flex min-h-14 w-full flex-wrap items-center gap-x-3 gap-y-2 py-2.5 pe-4 text-start";
 
-type SettingsRowProps = {
-  /** Names the title and the description (`settingsRowIds`), so the
-   *  control can point at them. */
-  id?: string | undefined;
+type SettingsRowProps = SettingsRowInteraction & {
   /** A 32px tile before the title (`ListItemMedia`). */
   media?: React.ReactNode;
   title: React.ReactNode;
@@ -121,61 +127,75 @@ type SettingsRowProps = {
   depth?: SettingsRowDepth | undefined;
   /** Shown dimmed: its control is disabled until something else allows it. */
   disabled?: boolean | undefined;
-  interaction?: SettingsRowInteraction | undefined;
 };
 
 /** One option: media, title and secondary line, then its control. */
-const SettingsRow = ({
-  children,
-  depth = "top",
-  description,
-  disabled = false,
-  footer,
-  id,
-  interaction = "none",
-  media,
-  title,
-}: SettingsRowProps) => {
+const SettingsRow = (props: SettingsRowProps) => {
+  const {
+    children,
+    depth = "top",
+    description,
+    disabled = false,
+    footer,
+    id,
+    media,
+    title,
+  } = props;
   const ids = id === undefined ? undefined : settingsRowIds(id);
-  const Box = interaction === "label" ? "label" : "div";
+  const controlId =
+    props.interaction === "label" ? settingsRowIds(props.id).control : null;
+  const text = (
+    <>
+      <span
+        className="text-foreground text-sm font-medium text-pretty wrap-break-word"
+        data-slot="settings-row-title"
+        id={ids?.label}
+      >
+        {title}
+      </span>
+      {rendersSomething(description) && (
+        <span
+          className="text-muted-foreground text-xs text-pretty wrap-break-word"
+          data-slot="settings-row-description"
+          id={ids?.description}
+        >
+          {description}
+        </span>
+      )}
+    </>
+  );
+  const textClass = cn(
+    "flex min-w-48 flex-1 basis-48 flex-col justify-center gap-0.5 self-stretch",
+    disabled && "opacity-64",
+  );
   return (
     <li
       className="flex min-w-0 flex-col"
       data-disabled={disabled ? "" : undefined}
       data-slot="settings-row"
     >
-      <Box
+      <div
         className={cn(
           SETTINGS_ROW_BOX_CLASS,
           ROW_DEPTH_CLASS[depth],
-          interaction === "label" &&
-            "hover:bg-muted/50 cursor-pointer has-data-disabled:cursor-not-allowed has-data-disabled:hover:bg-transparent",
+          controlId !== null &&
+            "has-[label:hover]:bg-muted/50 has-data-disabled:has-[label:hover]:bg-transparent",
         )}
       >
         {media}
-        <span
-          className={cn(
-            "flex min-w-48 flex-1 basis-48 flex-col gap-0.5",
-            disabled && "opacity-64",
-          )}
-        >
-          <span
-            className="text-foreground text-sm font-medium text-pretty wrap-break-word"
-            data-slot="settings-row-title"
-            id={ids?.label}
+        {controlId === null ? (
+          <span className={textClass}>{text}</span>
+        ) : (
+          <label
+            className={cn(
+              textClass,
+              "cursor-pointer in-[li:has([data-disabled])]:cursor-not-allowed",
+            )}
+            htmlFor={controlId}
           >
-            {title}
-          </span>
-          {rendersSomething(description) && (
-            <span
-              className="text-muted-foreground text-xs text-pretty wrap-break-word"
-              data-slot="settings-row-description"
-              id={ids?.description}
-            >
-              {description}
-            </span>
-          )}
-        </span>
+            {text}
+          </label>
+        )}
         {rendersSomething(children) && (
           <span
             className="ms-auto flex shrink-0 items-center gap-2"
@@ -184,7 +204,7 @@ const SettingsRow = ({
             {children}
           </span>
         )}
-      </Box>
+      </div>
       {rendersSomething(footer) && (
         <div className={cn("pe-4 pb-3 empty:hidden", ROW_DEPTH_CLASS[depth])}>
           {footer}

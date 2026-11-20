@@ -62,6 +62,7 @@ export const MemoryExtractionCard = ({
         <Checkbox
           aria-describedby={ids.description}
           aria-labelledby={ids.label}
+          id={ids.control}
           checked={enabled}
           disabled={disabled}
           onCheckedChange={onChange}

@@ -57,6 +57,7 @@ export const ChatNotificationsRow = () => {
       <Switch
         aria-describedby={ids.description}
         aria-labelledby={ids.label}
+        id={ids.control}
         checked={enabled}
         disabled={!supported}
         onCheckedChange={(next) => {

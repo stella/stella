@@ -653,6 +653,7 @@ const NotificationsPane = ({
                 aria-describedby={ids.description}
                 aria-labelledby={ids.label}
                 checked={notificationPreferences[item.key]}
+                id={ids.control}
                 disabled={!ready}
                 onCheckedChange={(checked) => {
                   onPreferenceChange(item.key, checked);

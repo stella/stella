@@ -45,6 +45,7 @@ describe("a label row", () => {
             <Control
               aria-describedby={ids.description}
               aria-labelledby={ids.label}
+              id={ids.control}
               onCheckedChange={onCheckedChange}
             />
           </SettingsRow>
