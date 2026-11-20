@@ -1,4 +1,5 @@
 import {
+  CYCLE_OUTCOME,
   INGESTION_STOP_DISPOSITION,
   type IngestionStopKind,
 } from "@stll/legal-atlas/ingestion-cycle";
@@ -38,6 +39,15 @@ export const createIngestionAlertHealth = ({
   const stalledAdapters = new Map<string, IngestionStopKind>();
 
   const step = (adapterKey: string, cycle: CycleResult) => {
+    if (cycle.outcome === CYCLE_OUTCOME.PAUSED) {
+      episodes.delete(adapterKey);
+      stalledAdapters.delete(adapterKey);
+      return {
+        disposition: "resumable",
+        stopKind: null,
+        stall: { state: INITIAL_STALL_ALERT, sustained: null, capture: false },
+      };
+    }
     const stopKind = cycleStopKind(cycle);
     const disposition = INGESTION_STOP_DISPOSITION[stopKind];
     const previous = episodes.get(adapterKey);

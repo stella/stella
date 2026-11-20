@@ -4,8 +4,6 @@ import { useQuery } from "@tanstack/react-query";
 import { Result } from "better-result";
 import { useTranslations } from "use-intl";
 
-import { Frame, FramePanel } from "@stll/ui/frame";
-
 import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { JurisdictionPicker } from "@/features/organization/components/jurisdiction-picker";
 import { api } from "@/lib/api";
@@ -17,6 +15,10 @@ import {
   organizationSettingsOptions,
 } from "@/lib/organization/settings-queries";
 import { queryView } from "@/lib/query-view.logic";
+import {
+  OrganizationJurisdictionsCardFrame,
+  OrganizationJurisdictionsCardPending,
+} from "@/routes/_protected.settings/organization/-components/organization/jurisdictions-card.pending";
 import { useSettingsMutation } from "@/routes/_protected.settings/organization/-hooks/use-settings-mutation";
 
 export const OrganizationJurisdictionsCard = () => {
@@ -65,42 +67,39 @@ export const OrganizationJurisdictionsCard = () => {
     errorToast: { title: t("errors.actionFailed") },
   });
 
+  if (settingsView.type === "pending") {
+    return <OrganizationJurisdictionsCardPending />;
+  }
   if (settingsView.type !== "items") {
     return <QueryViewFeedback view={settingsView} />;
   }
 
   return (
-    <Frame>
-      <QueryViewFeedback view={settingsView} />
-      <FramePanel>
-        <div className="flex flex-col gap-3 p-1">
-          <p className="text-muted-foreground text-sm">
-            {t("settings.organization.practiceJurisdictionsDescription")}
-          </p>
-          <JurisdictionPicker
-            onChange={(next) => {
-              const generation = selectionGenerationRef.current + 1;
-              selectionGenerationRef.current = generation;
-              setImmediateSelected(next);
-              startSelectionTransition(async () => {
-                applyOptimisticSelection(next);
-                // The error toast is surfaced via the mutation's `onError`.
-                // Settling as a Result lets the transition resolve, and React
-                // reverts `optimisticSelected` to the server value.
-                const result = await Result.tryPromise({
-                  try: async () => await updateMutation.mutateAsync(next),
-                  catch: (error) => error,
-                });
-                result.unwrapOr(undefined);
-                if (selectionGenerationRef.current === generation) {
-                  setImmediateSelected(null);
-                }
-              });
-            }}
-            selected={selected}
-          />
-        </div>
-      </FramePanel>
-    </Frame>
+    <OrganizationJurisdictionsCardFrame
+      feedback={<QueryViewFeedback view={settingsView} />}
+    >
+      <JurisdictionPicker
+        onChange={(next) => {
+          const generation = selectionGenerationRef.current + 1;
+          selectionGenerationRef.current = generation;
+          setImmediateSelected(next);
+          startSelectionTransition(async () => {
+            applyOptimisticSelection(next);
+            // The error toast is surfaced via the mutation's `onError`.
+            // Settling as a Result lets the transition resolve, and React
+            // reverts `optimisticSelected` to the server value.
+            const result = await Result.tryPromise({
+              try: async () => await updateMutation.mutateAsync(next),
+              catch: (error) => error,
+            });
+            result.unwrapOr(undefined);
+            if (selectionGenerationRef.current === generation) {
+              setImmediateSelected(null);
+            }
+          });
+        }}
+        selected={selected}
+      />
+    </OrganizationJurisdictionsCardFrame>
   );
 };

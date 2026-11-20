@@ -2323,7 +2323,7 @@
       }
     },
     "sourceChips": {
-      "alsoConsulted": "Ebenfalls konsultiert ({count, number})"
+      "moreConsulted": "+{count, number} weitere geprüft"
     },
     "sourcePlaceholder": "Chat über {title}",
     "sourcePlaceholderAction": "Chat über",

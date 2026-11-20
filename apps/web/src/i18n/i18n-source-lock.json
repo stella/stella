@@ -1855,7 +1855,7 @@
   "chat.signInToChatAbout": "Sign in to chat about",
   "chat.skills.scope.private": "Your skills",
   "chat.skills.scope.team": "Team skills",
-  "chat.sourceChips.alsoConsulted": "Also consulted ({count, number})",
+  "chat.sourceChips.moreConsulted": "+{count, number} more consulted",
   "chat.sourcePlaceholder": "Chat about {title}",
   "chat.sourcePlaceholderAction": "Chat about",
   "chat.sources": "Sources:",

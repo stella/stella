@@ -14,6 +14,7 @@ import type { ContactUpdate } from "@/lib/contacts/mutations";
 import { contactOptions } from "@/lib/contacts/queries";
 import { detached } from "@/lib/detached";
 import { notifyUserProblem } from "@/lib/errors/user-toast";
+import { DETAIL_ROW_LABEL_CLASS } from "@/routes/_protected.contacts/-components/detail-section.pending";
 import {
   buildContactRatePayload,
   buildNumericContactPayload,
@@ -133,9 +134,7 @@ export const EditableRow = ({
   if (rename.state.mode === "edit") {
     return (
       <div className="flex items-baseline gap-2">
-        {label && (
-          <span className="text-muted-foreground w-32 shrink-0">{label}</span>
-        )}
+        {label && <span className={DETAIL_ROW_LABEL_CLASS}>{label}</span>}
         <InlineRenameInput
           {...inputAttributes}
           className="text-sm"
@@ -158,9 +157,7 @@ export const EditableRow = ({
 
   return (
     <div className="flex items-baseline gap-2">
-      {label && (
-        <span className="text-muted-foreground w-32 shrink-0">{label}</span>
-      )}
+      {label && <span className={DETAIL_ROW_LABEL_CLASS}>{label}</span>}
       {/* Without a currency there is nothing to edit yet: the hint stands as
           plain text (a disabled Button would dim the already subtle hint). */}
       {rateNeedsCurrency ? (
