@@ -300,7 +300,9 @@ describe("the numbered pager", () => {
       view.queryByLabelText(`Go to page ${String(DEEPEST_PAGE + 1)}`),
     ).toBeNull();
     expect(
-      view.getByText(messages.caseLaw.pagination.refineForMore),
+      view.getByText(messages.caseLaw.pagination.refineForMore, {
+        selector: "p",
+      }),
     ).toBeDefined();
   });
 
@@ -314,7 +316,9 @@ describe("the numbered pager", () => {
 
     expect(next.getAttribute("aria-disabled")).toBe("true");
     expect(
-      view.getByText(messages.caseLaw.pagination.refineForMore),
+      view.getByText(messages.caseLaw.pagination.refineForMore, {
+        selector: "p",
+      }),
     ).toBeDefined();
   });
 
