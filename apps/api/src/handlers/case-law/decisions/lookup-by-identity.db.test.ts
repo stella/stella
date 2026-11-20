@@ -999,31 +999,46 @@ test(
   DB_TEST_TIMEOUT_MS,
 );
 
+const zeroSenatePrefixes = ["0", "000000", "00 00"] as const;
+const zeroSenateSeparators = [" ", ""] as const;
+
 // timeout: bounded embedded Postgres fixtures exercise indexed legacy identity paths.
 test.each(
   (["citation-key", "identifier", "family-key"] as const).flatMap(
     (mode, index) =>
-      ["0", "000000", "00 00"].flatMap((zeroPrefix, prefixIndex) => [
-        {
-          mode,
-          ordinal: 42 + index * 3 + prefixIndex,
-          storedZero: true,
-          zeroPrefix,
-        },
-        {
-          mode,
-          ordinal: 42 + index * 3 + prefixIndex,
-          storedZero: false,
-          zeroPrefix,
-        },
-      ]),
+      zeroSenatePrefixes.flatMap((zeroPrefix, prefixIndex) =>
+        zeroSenateSeparators.flatMap((separator, separatorIndex) => [
+          {
+            mode,
+            ordinal:
+              42 +
+              (index * zeroSenatePrefixes.length + prefixIndex) *
+                zeroSenateSeparators.length +
+              separatorIndex,
+            storedZero: true,
+            zeroPrefix,
+            separator,
+          },
+          {
+            mode,
+            ordinal:
+              42 +
+              (index * zeroSenatePrefixes.length + prefixIndex) *
+                zeroSenateSeparators.length +
+              separatorIndex,
+            storedZero: false,
+            zeroPrefix,
+            separator,
+          },
+        ]),
+      ),
   ),
 )(
-  "Czech zero senate reads legacy $mode identities in both directions ($storedZero/$zeroPrefix)",
-  async ({ mode, ordinal, storedZero, zeroPrefix }) => {
+  "Czech zero senate reads legacy $mode identities in both directions ($storedZero/$zeroPrefix/$separator)",
+  async ({ mode, ordinal, storedZero, zeroPrefix, separator }) => {
     const base = `Ts ${ordinal}/2003`;
-    const stored = storedZero ? `${zeroPrefix} ${base}` : base;
-    const query = storedZero ? base : `${zeroPrefix} ${base}`;
+    const stored = storedZero ? `${zeroPrefix}${separator}${base}` : base;
+    const query = storedZero ? base : `${zeroPrefix}${separator}${base}`;
     const printed = mode === "family-key" ? `${stored} - 46` : stored;
     const db = drizzle({ client });
     const sourceId = storedZero ? zeroSenateSourceId : openSourceId;
@@ -1033,7 +1048,7 @@ test.each(
       {
         id,
         sourceId,
-        sourceDocumentId: `legacy-${mode}-${storedZero ? "zero" : "bare"}-${zeroPrefix.replaceAll(" ", "")}`,
+        sourceDocumentId: `legacy-${mode}-${storedZero ? "zero" : "bare"}-${ordinal}`,
         country: "CZE",
         court: "Nejvyšší soud",
         language: "cs",
@@ -1047,7 +1062,7 @@ test.each(
       {
         id: positiveId,
         sourceId: openSourceId,
-        sourceDocumentId: `positive-${mode}-${storedZero ? "zero" : "bare"}-${zeroPrefix.replaceAll(" ", "")}`,
+        sourceDocumentId: `positive-${mode}-${storedZero ? "zero" : "bare"}-${ordinal}`,
         country: "CZE",
         court: "Nejvyšší soud",
         language: "cs",

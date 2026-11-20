@@ -424,8 +424,8 @@ export const decisionDocketFamilySpellings = (
   }
   const spellings = [
     formatted,
-    ...CZE_ZERO_SENATE_PREFIX_SPELLINGS.map((prefix) =>
-      prefix === "" ? bare : `${prefix} ${bare}`,
+    ...CZE_ZERO_SENATE_PREFIX_SPELLINGS.flatMap((prefix) =>
+      prefix === "" ? [bare] : [`${prefix} ${bare}`, `${prefix}${bare}`],
     ),
   ];
   return [

@@ -1304,6 +1304,12 @@ test("Czech five-digit court sheets preserve file identity and the exact target 
   }
 });
 
+test("bare Czech dockets read unspaced zero-senate spellings", () => {
+  expect(decisionDocketFamilySpellings("Ts 42/2003", "CZE")).toContain(
+    "0Ts 42/2003",
+  );
+});
+
 test("Czech zero senate is absent", () => {
   assertProperty(
     "Czech zero senate is absent",
@@ -1315,18 +1321,31 @@ test("Czech zero senate is absent", () => {
         senate: fc.integer({ min: 1, max: 999 }),
         zeroPrefix: fc.constantFrom(...CZE_ZERO_SENATE_PREFIXES),
         separateComponents: fc.boolean(),
+        separateRegistry: fc.boolean(),
       }),
-      ({ registry, ordinal, year, senate, zeroPrefix, separateComponents }) => {
+      ({
+        registry,
+        ordinal,
+        year,
+        senate,
+        zeroPrefix,
+        separateComponents,
+        separateRegistry,
+      }) => {
         const bare = `${registry} ${ordinal}/${year}`;
         const split = Math.ceil(zeroPrefix.length / 2);
         const prefix =
           separateComponents && zeroPrefix.length > 1
             ? `${zeroPrefix.slice(0, split)} ${zeroPrefix.slice(split)}`
             : zeroPrefix;
-        const zero = prefix === "" ? bare : `${prefix} ${bare}`;
+        const zero =
+          prefix === ""
+            ? bare
+            : `${prefix}${separateRegistry ? " " : ""}${bare}`;
         const key = docketFamilyKeyOf(bare, "CZE");
         expect(key).not.toBeNull();
         expect(docketFamilyKeyOf(zero, "CZE")).toBe(key);
+        expect(decisionDocketFamilySpellings(bare, "CZE")).toContain(zero);
         expect(docketFamilyKeysToRead(zero, "CZE")).toEqual(
           docketFamilyKeysToRead(bare, "CZE"),
         );
