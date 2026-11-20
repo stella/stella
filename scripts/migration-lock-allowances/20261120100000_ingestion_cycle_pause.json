@@ -1,0 +1,4 @@
+{
+  "add-column": "Adds one nullable pause_reason column without a default or data rewrite; the catalog lock is bounded by 1s lock_timeout and 30s statement_timeout.",
+  "add-constraint": "Adds two NOT VALID CHECK constraints, enforcing future event writes without scanning historical rows. Both catalog changes are bounded by 1s lock_timeout and 30s statement_timeout; existing completed/failed events remain valid."
+}
