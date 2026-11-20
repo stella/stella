@@ -179,7 +179,6 @@ export const TAGGED_FAILURE_REASON = {
   CourtListenerRecordRejectedError: "tagged_failure",
   CoverageError: "tagged_failure",
   CredentialNotFoundError: "tagged_failure",
-  CzIsirAnonymizationError: "tagged_failure",
   CzIsirFeedParseError: "tagged_failure",
   CzIsirParseError: "tagged_failure",
   CzNsSbirkaParseError: "tagged_failure",

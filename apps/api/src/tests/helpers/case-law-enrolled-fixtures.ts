@@ -3312,8 +3312,8 @@ export const czNsSbirkaFixture = (): EnrolledAdapterFixture => ({
 
 /**
  * A high court's appeal decision in an insolvency file, read as the walk reads
- * it: the feed page names it, its document is read and stored as anonymised
- * paragraphs (`tests/helpers/cz-isir-fixture.ts`).
+ * it: the feed page names it, its document is read and stored as paragraphs
+ * (`tests/helpers/cz-isir-fixture.ts`).
  */
 export const czIsirFixture = (): EnrolledAdapterFixture => ({
   // Action 65000689 of the feed page, as the feed states it.
