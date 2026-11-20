@@ -1235,7 +1235,7 @@ export const stageOwnCollectionPart = async ({
 
 /** A new canonical row and its self-part become visible in the same transaction. */
 export const persistOwnCollectionPartTx = async (
-  tx: Transaction,
+  tx: CitationGraphTransaction<Transaction>,
   write: DecisionRowWrite,
   scopedDb: ScopedDb,
 ): Promise<void> => {
