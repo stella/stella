@@ -84,6 +84,9 @@ struct Active {
 /// What a dictation that did not fail came to.
 enum Delivered {
   Typed,
+  /// The microphone stopped while the key was down: what it heard before
+  /// was typed, and the speaker is still told it stopped.
+  CutShort(Failed),
   /// No words to type.
   Empty,
   Cancelled,
@@ -181,6 +184,10 @@ fn run(app: &AppHandle, commands: &Receiver<Command>) {
             &mut moved,
           ) {
             Ok(Delivered::Typed) => Outcome::Typed,
+            Ok(Delivered::CutShort(failed)) => {
+              dictation::report_input_failure(app, failed, device);
+              Outcome::Typed
+            }
             Ok(Delivered::Empty) => Outcome::Empty,
             Ok(Delivered::Cancelled) => Outcome::Cancelled,
             Err(failed) => {
@@ -384,11 +391,9 @@ fn finish(
   let rate = recorder.rate;
   let stretches = live.sent();
   let held = trace.held();
-  let Some(last) = recorder.finish() else {
-    log_hold(app, held, recorded, rate, stretches);
-    discard(live, worker);
-    return Err(Failure::Microphone.into());
-  };
+  // A microphone that stopped midway leaves what it already delivered: the
+  // stretches sent while the key was down still count.
+  let Finished { last, lost } = recorder.finish();
   // Counted once the stream stopped, so the last frames it delivered count.
   log_hold(
     app,
@@ -428,6 +433,9 @@ fn finish(
   };
   let text = text.trim();
   if text.is_empty() {
+    if lost {
+      return Err(Failure::Microphone.into());
+    }
     // A hold that heard nothing is told unless it was a tap.
     return heard_nothing(held).map(|()| Delivered::Empty);
   }
@@ -453,7 +461,19 @@ fn finish(
     kept_in_history,
   }
   .log();
-  result.map(|()| Delivered::Typed)
+  result.map(|()| typed(lost, kept_in_history))
+}
+
+/// What typing came to: a microphone that stopped midway is still told.
+const fn typed(lost: bool, kept_in_history: bool) -> Delivered {
+  if lost {
+    Delivered::CutShort(Failed {
+      failure: Failure::Microphone,
+      kept_in_history,
+    })
+  } else {
+    Delivered::Typed
+  }
 }
 
 /// Keeps the text and types it: what came of it, how long the focus read
@@ -701,6 +721,9 @@ impl Drop for Worker {
 struct Tape {
   samples: Vec<f32>,
   taken: usize,
+  /// The device went away or the stream stopped for good: nothing more
+  /// arrives, though what arrived before still counts.
+  lost: bool,
 }
 
 type Shared = Arc<Mutex<Tape>>;
@@ -771,9 +794,9 @@ impl Recorder {
     lock(&self.tape).samples.len() / self.channels.max(1)
   }
 
-  /// Stops the stream and takes the last of its audio; `None` when capture
-  /// did not survive.
-  fn finish(self) -> Option<Vec<f32>> {
+  /// Stops the stream and takes the last of its audio, and whether capture
+  /// stopped on its own before.
+  fn finish(self) -> Finished {
     let Self {
       stop,
       thread,
@@ -782,11 +805,24 @@ impl Recorder {
       ..
     } = self;
     drop(stop);
-    if thread.join().is_err() {
-      return None;
+    let survived = thread.join().is_ok();
+    let (last, lost) = {
+      let mut tape = lock(&tape);
+      (take_frames(&mut tape, channels), tape.lost)
+    };
+    Finished {
+      last,
+      lost: lost || !survived,
     }
-    Some(take_frames(&mut lock(&tape), channels))
   }
+}
+
+/// The end of a recording.
+struct Finished {
+  /// The audio captured since the last take.
+  last: Vec<f32>,
+  /// The device went away or capture failed before the key came up.
+  lost: bool,
 }
 
 /// What the capture thread hands over once its stream plays.
@@ -966,6 +1002,17 @@ fn open_stream(choice: Option<&Choice>) -> Option<(cpal::Stream, Opened)> {
   ))
 }
 
+/// Whether a stream error means no more audio comes, rather than a glitch
+/// or a reroute the stream survives.
+const fn ends_capture(kind: cpal::ErrorKind) -> bool {
+  matches!(
+    kind,
+    cpal::ErrorKind::DeviceNotAvailable
+      | cpal::ErrorKind::HostUnavailable
+      | cpal::ErrorKind::StreamInvalidated
+  )
+}
+
 fn build<T>(
   device: &cpal::Device,
   config: &cpal::StreamConfig,
@@ -977,6 +1024,7 @@ where
   f32: FromSample<T>,
 {
   let sink = Arc::clone(tape);
+  let failed = Arc::clone(tape);
   device
     .build_input_stream(
       *config,
@@ -991,7 +1039,12 @@ where
             .map(|sample| sample.to_sample::<f32>()),
         );
       },
-      |error| tracing::warn!(%error, "dictation audio stream failed"),
+      move |error: cpal::Error| {
+        tracing::warn!(%error, "dictation audio stream failed");
+        if ends_capture(error.kind()) {
+          lock(&failed).lost = true;
+        }
+      },
       None,
     )
     .ok()
@@ -1035,6 +1088,7 @@ mod tests {
     let mut tape = Tape {
       samples: vec![0.1, 0.2, 0.3, 0.4, 0.5],
       taken: 0,
+      lost: false,
     };
     assert_eq!(take_frames(&mut tape, 2), vec![0.1, 0.2, 0.3, 0.4]);
     assert_eq!(tape.samples, vec![0.5]);
@@ -1043,5 +1097,25 @@ mod tests {
     assert!(tape.samples.is_empty());
     // Taken audio still counts toward the recording limit.
     assert_eq!(tape.taken, 6);
+  }
+
+  #[test]
+  fn a_microphone_that_stopped_is_told_even_when_its_words_were_typed() {
+    assert!(matches!(typed(false, true), Delivered::Typed));
+    assert!(matches!(
+      typed(true, true),
+      Delivered::CutShort(Failed {
+        failure: Failure::Microphone,
+        kept_in_history: true,
+      })
+    ));
+  }
+
+  #[test]
+  fn only_a_stream_that_cannot_go_on_ends_capture() {
+    assert!(ends_capture(cpal::ErrorKind::DeviceNotAvailable));
+    assert!(ends_capture(cpal::ErrorKind::StreamInvalidated));
+    assert!(!ends_capture(cpal::ErrorKind::Xrun));
+    assert!(!ends_capture(cpal::ErrorKind::DeviceChanged));
   }
 }
