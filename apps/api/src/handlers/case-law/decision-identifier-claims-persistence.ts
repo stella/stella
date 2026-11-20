@@ -10,6 +10,7 @@ import {
 } from "@/api/db/schema";
 import type { CitationGraphTransaction } from "@/api/handlers/case-law/citation-graph-transaction";
 import type { SafeId } from "@/api/lib/branded-types";
+import { sameStoredCaseNumberKeySql } from "@/api/lib/case-law/case-number-match-key";
 import { DECISION_IDENTIFIER_CLAIM } from "@/api/lib/case-law/decision-identifier-claims";
 import { replayWrite } from "@/api/lib/case-law/replay-write";
 
@@ -55,7 +56,7 @@ const incomingIdentifier = (
   SELECT 1 FROM jsonb_to_recordset(${JSON.stringify(identifiers)}::text::jsonb)
     AS incoming(type text, "normalizedValue" text)
   WHERE incoming.type = ${caseLawDecisionIdentifiers.type}
-    AND incoming."normalizedValue" = ${caseLawDecisionIdentifiers.normalizedValue})`;
+    AND ${sameStoredCaseNumberKeySql(sql`incoming."normalizedValue"`, caseLawDecisionIdentifiers.normalizedValue)})`;
 
 type RefreshHostIdentifierOptions = {
   decisionId: SafeId<"caseLawDecision">;
@@ -83,7 +84,7 @@ export const reconcileHostIdentifierClaimsTx = async (
       AS incoming("decisionId" uuid, type text, "normalizedValue" text)
     WHERE incoming."decisionId" = ${caseLawDecisionIdentifiers.decisionId}
       AND incoming.type = ${caseLawDecisionIdentifiers.type}
-      AND incoming."normalizedValue" = ${caseLawDecisionIdentifiers.normalizedValue})`;
+      AND ${sameStoredCaseNumberKeySql(sql`incoming."normalizedValue"`, caseLawDecisionIdentifiers.normalizedValue)})`;
   const desiredClaims = sql`CASE WHEN ${observed} THEN
       CASE WHEN ${knownIndependentClaims} @> ARRAY[${hostClaim}]::varchar[]
         THEN ${knownIndependentClaims} ELSE array_append(${knownIndependentClaims}, ${hostClaim}) END
