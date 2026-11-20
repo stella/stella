@@ -2359,6 +2359,11 @@
       "accepted": "Applied",
       "rejected": "Rejected"
     },
+    "switcher": {
+      "allChats": "All chats",
+      "searchPlaceholder": "Find a chat…",
+      "trigger": "Switch chat"
+    },
     "tableChart": {
       "bar": "Bar",
       "kind": "Chart type",
