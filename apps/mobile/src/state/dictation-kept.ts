@@ -1,6 +1,8 @@
 import { panic, TaggedError } from "better-result";
 import * as v from "valibot";
 
+import { AI_FAILURE_CODES } from "@stll/api-contract/ai-errors";
+
 import type { ApiError } from "@/state/api-request";
 
 /**
@@ -120,6 +122,11 @@ export const keptFor = (
 export const retriesByItself = (error: PieceFailure): boolean => {
   switch (error._tag) {
     case "ApiRequestError":
+      // The picked model is not served at all: trying it again by itself
+      // would only fail again until the person retries or picks another.
+      if (error.code !== undefined && MODEL_UNSERVED_CODES.has(error.code)) {
+        return false;
+      }
       return (
         error.status === undefined ||
         error.status === 408 ||
@@ -136,6 +143,12 @@ export const retriesByItself = (error: PieceFailure): boolean => {
       return panic("A transcription failed with an error of no known kind");
   }
 };
+
+/** What the server answers for a model it does not serve in the organization's region. */
+const MODEL_UNSERVED_CODES: ReadonlySet<string> = new Set([
+  "transcription_model_unavailable",
+  AI_FAILURE_CODES.managed_provider_unavailable,
+]);
 
 const FIRST_RETRY_MS = 30_000;
 const LONGEST_RETRY_MS = 10 * 60 * 1000;
