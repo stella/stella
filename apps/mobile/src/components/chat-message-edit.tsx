@@ -257,6 +257,7 @@ const ChatMessageEdit = ({
       />
       <DictateButton
         disabled={sending}
+        field="message"
         matterId={matterId}
         onBusyChange={setDictating}
         onText={field.insert}

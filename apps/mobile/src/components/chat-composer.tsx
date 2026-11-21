@@ -14,7 +14,7 @@ import { Textarea } from "@stll/ui/textarea";
 
 import { ChatAttachmentChip } from "@/components/chat-attachment-chip";
 import { ComposerAttachMenu } from "@/components/composer-attach-menu";
-import { dictationClock } from "@/components/dictate-button";
+import { dictationClock, KeptDictationBar } from "@/components/dictate-button";
 import { ThreadMatter } from "@/components/thread-matter";
 import { useChatAttachments } from "@/components/use-chat-attachments";
 import type { AttachmentNotice } from "@/components/use-chat-attachments";
@@ -133,6 +133,7 @@ export const ChatComposer = ({
   });
   const field = useDictationField(draft, setDraft);
   const dictation = useDictation(field.insert, {
+    field: "chat",
     matterId: use(ThreadMatter),
   });
   const message = draft.trim();
@@ -275,6 +276,7 @@ export const ChatComposer = ({
           {t("sendWithoutAnonymization")}
         </Button>
       ) : null}
+      <KeptDictationBar dictation={dictation} />
       <Box>
         {files.attachments.length === 0 ? null : (
           <ScrollView

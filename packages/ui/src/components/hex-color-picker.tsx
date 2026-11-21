@@ -198,23 +198,20 @@ const useColorManipulation = (
   onChange?: (hex: string) => void,
 ): [HsvaColor, (params: Partial<HsvaColor>) => void] => {
   const onChangeCallback = useEventCallback<string>(onChange);
-  const [hsva, setHsva] = useState<HsvaColor>(() => hexToHsva(color));
-  const [committedColor, setCommittedColor] = useState(color);
+  const [local, setLocal] = useState<{ color: string; hsva: HsvaColor }>(
+    () => ({
+      color,
+      hsva: hexToHsva(color),
+    }),
+  );
 
-  // Adjust internal HSVA when the inbound color prop changes. Comparing
-  // against the last committed color during render (React's "adjusting
-  // state when a prop changes" pattern) avoids a lagging extra-render effect.
-  if (!equalHex(color, committedColor)) {
-    setCommittedColor(color);
-    setHsva(hexToHsva(color));
-  }
+  const hsva = equalHex(color, local.color) ? local.hsva : hexToHsva(color);
 
   const handleChange = (params: Partial<HsvaColor>) => {
     const next = { ...hsva, ...params };
-    setHsva(next);
     const hex = hsvaToHex(next);
-    if (!equalHex(hex, committedColor)) {
-      setCommittedColor(hex);
+    setLocal({ color: hex, hsva: next });
+    if (!equalHex(hex, color)) {
       onChangeCallback(hex);
     }
   };
