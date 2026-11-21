@@ -53,7 +53,7 @@ export const readerMessages = (hostLocale: string | undefined) => {
   } satisfies ReaderMessages;
 };
 
-export const readerCollectionAttributionMessages = (
+const readerCollectionAttributionMessages = (
   hostLocale: string | undefined,
 ): CollectionAttributionMessages => {
   const { locale, formattingLocale } = appLocale(hostLocale);
