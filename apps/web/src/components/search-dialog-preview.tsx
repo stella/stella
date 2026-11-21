@@ -1,4 +1,4 @@
-import { lazy, Suspense, useId, useMemo } from "react";
+import { lazy, Suspense, useId } from "react";
 
 import { useQuery } from "@tanstack/react-query";
 import { panic } from "better-result";
@@ -316,15 +316,11 @@ type SearchPreviewBodyProps = Pick<
 
 const SearchPreviewBody = (props: SearchPreviewBodyProps) => {
   const { hit } = props;
-  const searchText = useMemo(
-    () =>
-      getSearchHighlightText({
-        headline: hit.headline,
-        previewLocatorCandidates: props.previewLocatorCandidates,
-        query: props.query,
-      }),
-    [hit.headline, props.previewLocatorCandidates, props.query],
-  );
+  const searchText = getSearchHighlightText({
+    headline: hit.headline,
+    previewLocatorCandidates: props.previewLocatorCandidates,
+    query: props.query,
+  });
   const emailPreviewTarget = getEmailSearchPreviewTarget(hit);
   if (hit.type === "matter") {
     return <SearchMatterPreview workspaceId={hit.workspaceId} />;
@@ -377,15 +373,11 @@ const SearchTextPreview = ({
   userId,
 }: SearchPreviewBodyProps) => {
   const t = useTranslations();
-  const searchText = useMemo(
-    () =>
-      getSearchHighlightText({
-        headline: hit.headline,
-        previewLocatorCandidates,
-        query,
-      }),
-    [hit.headline, previewLocatorCandidates, query],
-  );
+  const searchText = getSearchHighlightText({
+    headline: hit.headline,
+    previewLocatorCandidates,
+    query,
+  });
   const target = getSearchPreviewTarget(hit);
   const { data, isError, isFetching, refetch } = useQuery(
     searchPreviewOptions({
@@ -423,6 +415,7 @@ const SearchTextPreview = ({
           </p>
           <Button
             disabled={isFetching}
+            disabledReason={t("common.loading")}
             onClick={() => {
               detached(refetch(), "search-dialog.refetch");
             }}

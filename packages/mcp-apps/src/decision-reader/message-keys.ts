@@ -19,6 +19,7 @@ export const READER_MESSAGE_KEYS = {
   "inspector.external.openOriginal": "inspector.external.openOriginal",
   "caseLaw.citation.notInStella": "caseLaw.citation.notInStella",
   "statutes.provisionTextUnavailable": "statutes.provisionTextUnavailable",
+  "common.loading": "common.loading",
   "statutes.showCitedPartOnly": "statutes.showCitedPartOnly",
   "statutes.showFullProvision": "statutes.showFullProvision",
   "aiDisclosure.caseLaw": "aiDisclosure.caseLaw",

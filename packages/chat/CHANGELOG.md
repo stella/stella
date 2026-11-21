@@ -1,5 +1,74 @@
 # @stll/chat
 
+## 0.6.6
+
+### Patch Changes
+
+- Updated dependencies [[`d357728`](https://github.com/stella/stella/commit/d357728224fb93f2fda81a1fb619a2f6f7fe5557)]:
+  - @stll/ui@0.80.0
+
+## 0.6.5
+
+### Patch Changes
+
+- Updated dependencies [[`2d31b6d`](https://github.com/stella/stella/commit/2d31b6d446bf6c1a38c09d27d0b56456dcbed015)]:
+  - @stll/ui@0.79.0
+
+## 0.6.4
+
+### Patch Changes
+
+- Updated dependencies [[`b6194a7`](https://github.com/stella/stella/commit/b6194a73bae3624e7afb0f8a6b21ac9facdb97f8)]:
+  - @stll/ui@0.78.0
+
+## 0.6.3
+
+### Patch Changes
+
+- [#8997](https://github.com/stella/stella/pull/8997) [`37117f6`](https://github.com/stella/stella/commit/37117f6e007640ac3eeff769935081020d49ad74) Thanks [@dependabot](https://github.com/apps/dependabot)! - Update `tldts` to `7.5.3`.
+  Update `lucide-react` to `1.73.0`.
+- Updated dependencies [[`ebe8ae8`](https://github.com/stella/stella/commit/ebe8ae88a7847490bc6d40153ab3a80a97cebc4e), [`be836e0`](https://github.com/stella/stella/commit/be836e098b22eb7fc70661f150c0dfc11c6a3220), [`68c1187`](https://github.com/stella/stella/commit/68c118754f48886030189fc90429f3a224f7c499), [`e7a4e0c`](https://github.com/stella/stella/commit/e7a4e0c73395c7481f051aefb03a2306bbf1f5ef), [`10a2406`](https://github.com/stella/stella/commit/10a2406e96662f08eb556a0155676732d511cdfc), [`9977457`](https://github.com/stella/stella/commit/99774576b74999d1c440ca26f3345a6975c54dd0), [`37117f6`](https://github.com/stella/stella/commit/37117f6e007640ac3eeff769935081020d49ad74), [`c3b4e95`](https://github.com/stella/stella/commit/c3b4e95a62d63062c0013dc3d8c8fbb79c6d3cbf), [`25a0c38`](https://github.com/stella/stella/commit/25a0c386561c724d1c7cc0100c7a0a08c2e39b24), [`47c898e`](https://github.com/stella/stella/commit/47c898e35450bb16260efaef0bf1144cd59a355d), [`4a564f6`](https://github.com/stella/stella/commit/4a564f686b8ee215910fcfa46860fb2e1f06086b), [`846c016`](https://github.com/stella/stella/commit/846c016a47690b5c6c88db2f78881aa68758668a), [`036acf9`](https://github.com/stella/stella/commit/036acf965aae01184cee165c28dd8d7c0a4443b9), [`6d0d7f7`](https://github.com/stella/stella/commit/6d0d7f79e8792da0ef60232ce75cf98b6ee204b0), [`47c898e`](https://github.com/stella/stella/commit/47c898e35450bb16260efaef0bf1144cd59a355d)]:
+  - @stll/ui@0.77.0
+  - @stll/ai-catalog@0.17.0
+
+## 0.6.2
+
+### Patch Changes
+
+- [#8880](https://github.com/stella/stella/pull/8880) [`1f4ee37`](https://github.com/stella/stella/commit/1f4ee37011a600e45f2c4b4204ac25688e5a372f) Thanks [@dependabot](https://github.com/apps/dependabot)! - Update `tldts` to `7.5.2`.
+  Update `lucide-react` to `1.72.0`.
+  Update `use-intl` to `4.15.1`.
+- Updated dependencies [[`0cf5be6`](https://github.com/stella/stella/commit/0cf5be6003a6796bb5f1dbbe937704027f79897b), [`86022ca`](https://github.com/stella/stella/commit/86022ca85d6a2d92a262628f29d720d5a0e1eb03), [`f8831e4`](https://github.com/stella/stella/commit/f8831e47629b27bdcaf4041f19b8196b6d30dab5), [`3d7121a`](https://github.com/stella/stella/commit/3d7121a5dfe6b34b74729dea7157b33f0a5d171a), [`1f4ee37`](https://github.com/stella/stella/commit/1f4ee37011a600e45f2c4b4204ac25688e5a372f), [`b261ece`](https://github.com/stella/stella/commit/b261ece00959cc1349dec67471de4b46e2009fec), [`6709183`](https://github.com/stella/stella/commit/67091834bf8af1291247c7be3f5540d311167ead), [`1f24eba`](https://github.com/stella/stella/commit/1f24eba240c916800932ff33c288521f32b539e3), [`e82f6b6`](https://github.com/stella/stella/commit/e82f6b6a289f2a9e6d01f60b5f7cacb29ce57d1c), [`c2cddf2`](https://github.com/stella/stella/commit/c2cddf2c635ac648c258913fc9c51d2d4fa9d225), [`f6360bf`](https://github.com/stella/stella/commit/f6360bff82e3a13fcaa16dc85db2097f1300c9c9), [`efaf23f`](https://github.com/stella/stella/commit/efaf23fe907e7596cc676851985b4a90f9882e57), [`c2cddf2`](https://github.com/stella/stella/commit/c2cddf2c635ac648c258913fc9c51d2d4fa9d225)]:
+  - @stll/ai-catalog@0.16.0
+  - @stll/ui@0.76.0
+
+## 0.6.1
+
+### Patch Changes
+
+- Updated dependencies [[`9083d12`](https://github.com/stella/stella/commit/9083d12e2b853c009066c81117fea294e3b548dc), [`9e0fd52`](https://github.com/stella/stella/commit/9e0fd526ef113a0ccf90546b8ef92ea5fff36318), [`e229034`](https://github.com/stella/stella/commit/e22903462cf3734c29b0a97f2f48dc3023e758c8), [`f2d9c52`](https://github.com/stella/stella/commit/f2d9c5236e757123bc254e2783d60414c6b7db91), [`54d4095`](https://github.com/stella/stella/commit/54d409572d79298687864e424ed8dd555ea075e2), [`0dad4da`](https://github.com/stella/stella/commit/0dad4da417b4a99c6141363e2c05a757a314fb72), [`7c534ed`](https://github.com/stella/stella/commit/7c534ed29c09e58efc43fcb3d985941eb52e12b6), [`e8aa798`](https://github.com/stella/stella/commit/e8aa7988f19952963102e45c4a95af1005045437)]:
+  - @stll/ui@0.75.0
+  - @stll/ai-catalog@0.15.0
+
+## 0.6.0
+
+### Minor Changes
+
+- [#8725](https://github.com/stella/stella/pull/8725) [`eed7337`](https://github.com/stella/stella/commit/eed73373605dafa4c513e800efeaefa52b7909cf) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Export `finishedChatRunResponse` from `@stll/chat/durable-transport`: the stream that only ends a run, which a client reads when it follows the turn in the stored thread instead of its live stream.
+
+### Patch Changes
+
+- Updated dependencies [[`178d3f9`](https://github.com/stella/stella/commit/178d3f9f9007de5933b40fd76f8bbaaf65ad089f), [`d8eea73`](https://github.com/stella/stella/commit/d8eea7352a0a6cdeac6498e6231a17818e8cd2d2), [`f6d0e9c`](https://github.com/stella/stella/commit/f6d0e9c9d9966961d52a3d8038a253193632ef2b), [`b1ce389`](https://github.com/stella/stella/commit/b1ce389d73729179bd174166e78499310331479e), [`6359411`](https://github.com/stella/stella/commit/6359411768fbe352d04d63ead41386de9e70137b), [`b9120cd`](https://github.com/stella/stella/commit/b9120cd4f32b6019e3e1db42309ac50960badf2f), [`3505436`](https://github.com/stella/stella/commit/3505436363a468d70e34faa5d8511a31e6cb80a9), [`e5dacf4`](https://github.com/stella/stella/commit/e5dacf41a6d171397eb8b81fcd69385d41767005)]:
+  - @stll/ui@0.74.0
+  - @stll/ai-catalog@0.14.0
+
+## 0.5.1
+
+### Patch Changes
+
+- Updated dependencies [[`501e484`](https://github.com/stella/stella/commit/501e48459f95e38d4594eff47b6daf2040380582), [`64d8cfd`](https://github.com/stella/stella/commit/64d8cfd04b20823f8f8ceabb9dbd0d79bf76ee66), [`c6f510f`](https://github.com/stella/stella/commit/c6f510fb3b4fe3ebcb8a3c761d623dd13cc53c63)]:
+  - @stll/ui@0.73.0
+
 ## 0.5.0
 
 ### Minor Changes

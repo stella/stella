@@ -12,14 +12,22 @@ import { envBase } from "@/api/env-base";
 import { startFeatureAccessGrantsRefresh } from "@/api/env-feature-access";
 import { computeCaseLawCoverageAnswer } from "@/api/handlers/case-law/decisions/coverage";
 import { reapOwnerlessChatTurnOnTx } from "@/api/handlers/chat/chat-turn-persistence";
-import { relinquishChatTurnRuns } from "@/api/handlers/chat/chat-turn-run";
+import {
+  chatTurnRelinquishmentOf,
+  relinquishChatTurnRuns,
+} from "@/api/handlers/chat/chat-turn-run";
+import { startChatLimitResumer } from "@/api/handlers/chat/limit-reminder/limit-resume-sender";
 import { startChatQueueSender } from "@/api/handlers/chat/queue/chat-queue-sender";
+import { startChatTurnAdopter } from "@/api/handlers/chat/turns/adopt";
 import { initBuiltinReportTemplates } from "@/api/handlers/reports/builtin-templates";
+import { servedRegisteredSoftLawAuthorities } from "@/api/handlers/soft-law/served-sources";
+import { syncSoftLaw } from "@/api/handlers/soft-law/sync";
 import { clearLookupPreviewCache } from "@/api/handlers/templates/lookup-preview-cache";
 import { createHttpApp } from "@/api/http/app";
 import { detached } from "@/api/lib/analytics/capture";
 import { getServerAnalytics } from "@/api/lib/analytics/client";
 import { realtimeAuthorizers } from "@/api/lib/auth";
+import { getCaseLawIngestionDb } from "@/api/lib/case-law-ingestion-db";
 import { startManagedProviderChecks } from "@/api/lib/chat/managed-provider-checks";
 import { clientAddressConfigurationWarning } from "@/api/lib/client-ip";
 import { assertConfiguredBetterAuthOAuthPolicy } from "@/api/lib/db/assert-better-auth-oauth-policy";
@@ -65,6 +73,7 @@ import { createSchedulerTaskRegistry } from "@/api/lib/scheduler/registry";
 import { startSchedulerLoop } from "@/api/lib/scheduler/runner";
 import { createCaseLawCoverageRefreshTask } from "@/api/lib/scheduler/tasks/case-law-coverage-refresh";
 import { createReapOwnerlessChatTurnsTask } from "@/api/lib/scheduler/tasks/chat-turn-reaper";
+import { createSoftLawSyncTask } from "@/api/lib/scheduler/tasks/soft-law-sync";
 import { startSse, stopSse } from "@/api/lib/sse";
 import { clearByokAdapterCache } from "@/api/lib/tanstack-ai-models";
 import { flushActionCostRecords } from "@/api/lib/usage/action-costs/recorder";
@@ -263,6 +272,8 @@ const startServer = async (): Promise<void> => {
   // Before the listener opens, so no runner upgrade finds the gateway absent.
   await startDesktopRunnerGateway();
   const stopChatQueueSender = startChatQueueSender();
+  const stopChatLimitResumer = startChatLimitResumer();
+  const stopChatTurnAdopter = startChatTurnAdopter();
 
   const server = Bun.serve({
     port: getApiPort(),
@@ -316,8 +327,17 @@ const startServer = async (): Promise<void> => {
           "error.type": errorTag(error),
         });
       },
-      relinquishChatTurnRuns,
+      // Off by default: every task must adopt (`CHAT_TURN_HANDED_OVER_ROLLOUT`)
+      // before any releases a turn to one.
+      relinquishChatTurnRuns: async () =>
+        await relinquishChatTurnRuns(
+          chatTurnRelinquishmentOf(
+            isDeploymentFeatureEnabled("FEATURE_CHAT_TURN_HANDOVER"),
+          ),
+        ),
       stopChatQueueSender,
+      stopChatLimitResumer,
+      stopChatTurnAdopter,
       stopHttp: async () => {
         // Runner sockets are asked to reconnect elsewhere before the
         // listener stops waiting on open connections.
@@ -397,6 +417,16 @@ const startServer = async (): Promise<void> => {
           createReapOwnerlessChatTurnsTask(reapOwnerlessChatTurnOnTx),
           createCaseLawCoverageRefreshTask({
             compute: computeCaseLawCoverageAnswer,
+          }),
+          createSoftLawSyncTask({
+            authorities: servedRegisteredSoftLawAuthorities,
+            sync: async ({ authority, signal }) =>
+              await syncSoftLaw({
+                authority,
+                configuration: { type: "default" },
+                scopedDb: getCaseLawIngestionDb(),
+                signal,
+              }),
           }),
         ),
       }),

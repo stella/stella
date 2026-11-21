@@ -9,10 +9,14 @@ import {
   anchorListDepth,
   anchorListDesignator,
   anchorWithin,
+  annexDesignator,
   E_SBIRKA_ANCHORS,
+  MAGYAR_KOZLONY_ANCHORS,
+  requestedAnnexDesignator,
   SLOV_LEX_ANCHORS,
   US_CODE_ANCHORS,
   wholeStatuteAnchors,
+  wordingOwnerAnchor,
 } from "./statute-anchor-scheme.js";
 import type { StatuteAnchorScheme } from "./statute-anchor-scheme.js";
 
@@ -212,6 +216,78 @@ describe("Slov-Lex anchors", () => {
   });
 });
 
+describe("Magyar Közlöny anchors", () => {
+  test("a subdivision sits under every path step before it, and nowhere else", () => {
+    const rows: Relation[] = [
+      { ancestor: "sz_10", anchor: "sz_10-bek_2", within: true },
+      {
+        ancestor: "sz_6:519-bek_1",
+        anchor: "sz_6:519-bek_1-pont_b-alpont_ba",
+        within: true,
+      },
+      // A book-numbered section is one segment, whatever its colon.
+      { ancestor: "sz_6", anchor: "sz_6:519-bek_1", within: false },
+      // A lettered section number is its own section, not a child.
+      { ancestor: "sz_25", anchor: "sz_25/G", within: false },
+      { ancestor: "sz_10-bek_1", anchor: "sz_10-bek_10", within: false },
+      // A restated anchor is the same unit stated twice.
+      { ancestor: "sz_9-pont_a", anchor: "sz_9-pont_a~2", within: false },
+      { ancestor: "cikk_IV", anchor: "cikk_IV-bek_1", within: true },
+      { ancestor: "mell_1", anchor: "mell_1-szoveg_1", within: true },
+      { ancestor: "mell_1", anchor: "mell_10-szoveg_1", within: false },
+      // Another publisher's separator continues no path here.
+      { ancestor: "sz_10", anchor: "sz_10.bek_2", within: false },
+    ];
+    expect(relations(MAGYAR_KOZLONY_ANCHORS, rows)).toEqual(rows);
+  });
+
+  test("a point sits one level in and a point in a point two, whatever its designator", () => {
+    expect(
+      depths(MAGYAR_KOZLONY_ANCHORS, [
+        "sz_10-bek_2",
+        "sz_9-pont_a",
+        "sz_6:519-bek_1-pont_b",
+        "sz_6:519-bek_1-pont_b-alpont_ba",
+        "sz_3-pont_12",
+        "sz_9-pont_a~2",
+        "sz_12-bek_2-pont_b-szoveg_1",
+        "sz_9-szoveg_1",
+        "cikk_IV-bek_1",
+      ]),
+    ).toEqual({
+      "sz_10-bek_2": null,
+      "sz_9-pont_a": 1,
+      "sz_6:519-bek_1-pont_b": 1,
+      "sz_6:519-bek_1-pont_b-alpont_ba": 2,
+      "sz_3-pont_12": 1,
+      "sz_9-pont_a~2": 1,
+      // Closing wording filed under a point is drawn as deep as the point.
+      "sz_12-bek_2-pont_b-szoveg_1": 1,
+      "sz_9-szoveg_1": null,
+      "cikk_IV-bek_1": null,
+    });
+    expect(
+      [
+        "sz_6:519-bek_1-pont_b-alpont_ba",
+        "sz_9-pont_a~2",
+        "sz_12-bek_2-pont_b-szoveg_1",
+      ].map((anchor) => anchorListDesignator(MAGYAR_KOZLONY_ANCHORS, anchor)),
+    ).toEqual(["ba", "a", null]);
+  });
+
+  test("wording the gazette numbers nowhere names the unit it is filed under", () => {
+    expect(
+      [
+        "sz_9-szoveg_1",
+        "sz_12-bek_2-pont_b-szoveg_1",
+        "mell_1-szoveg_1",
+        "szoveg_1",
+        "sz_9-pont_b",
+      ].map((anchor) => wordingOwnerAnchor(MAGYAR_KOZLONY_ANCHORS, anchor)),
+    ).toEqual(["sz_9", "sz_12-bek_2-pont_b", "mell_1", null, null]);
+  });
+});
+
 describe("US Code anchors", () => {
   test("nest on their own separator, never on a section number's hyphen", () => {
     const rows: Relation[] = [
@@ -236,5 +312,88 @@ describe("anchors read whole", () => {
     ).toBe(false);
     expect(anchorListDepth(whole, "par_1-odst_1-pism_a")).toBeNull();
     expect(anchorListDesignator(whole, "par_1-odst_1-pism_a")).toBeNull();
+  });
+});
+
+describe("annex anchors", () => {
+  test("each publisher's annex anchors name their designator", () => {
+    expect(
+      [
+        "pril_3",
+        "pril_2A",
+        "pril_A/1",
+        "pril_4:2",
+        "priloha_27",
+        "pril_3-frag_8775881",
+        "par_3",
+      ].map((anchor) => annexDesignator(E_SBIRKA_ANCHORS, anchor)),
+    ).toEqual(["3", "2a", "a/1", "4:2", "27", null, null]);
+    expect(
+      [
+        "prilohy.priloha-priloha_c_3_k_zakonu_c_108_2024_z_z",
+        "prilohy.priloha-priloha_c_1a_k_zakonu_c_311_2001_z_z",
+        "prilohy.priloha-1",
+        "prilohy.priloha-priloha_k_zakonu_c_106_2024_z_z",
+        "prilohy.priloha-priloha_ii_k_vyhlasce_ministra_ochrany_prace_c_164_sb",
+        "prilohy.priloha-priloha_a",
+        "prilohy.priloha-priloha_vyhlasky_c_72_1945_sb",
+        "predpis.priloha-priloha_c_3_k_vyhlasce_c_130_1975_sb",
+        "predpis.clanok-1.prilohy.priloha-priloha_c_1_znie",
+        "prilohy.priloha-priloha_c_3_k_zakonu_c_108_2024_z_z.bod-1",
+        "paragraf-3",
+      ].map((anchor) => annexDesignator(SLOV_LEX_ANCHORS, anchor)),
+    ).toEqual(["3", "1a", "1", "", "ii", "a", "", "3", null, null, null]);
+    expect(
+      ["mell_1", "mell_2A", "mell", "mell_1-szoveg_1", "sz_1"].map((anchor) =>
+        annexDesignator(MAGYAR_KOZLONY_ANCHORS, anchor),
+      ),
+    ).toEqual(["1", "2a", "", null, null]);
+    expect(annexDesignator(US_CODE_ANCHORS, "pril_3")).toBeNull();
+  });
+
+  test("a caller's spelling of an annex is read whatever grammar it uses", () => {
+    expect(
+      [
+        "priloha_3",
+        "příloha č. 3",
+        "Příloha 3",
+        "PŘÍLOHA Č. 3",
+        "pril_3",
+        "annex-3",
+        "prilohy.priloha-3",
+        "priloha_c_3",
+        "pril_2A",
+        "pril_C",
+        "priloha",
+        "1. melléklet",
+        "1. MELLÉKLET",
+        "melléklet 1",
+        "melleklet_2A",
+        "Melléklet",
+        "par_3",
+        "frag_3",
+        "1. bekezdés",
+      ].map(requestedAnnexDesignator),
+    ).toEqual([
+      "3",
+      "3",
+      "3",
+      "3",
+      "3",
+      "3",
+      "3",
+      "3",
+      "2a",
+      "c",
+      "",
+      "1",
+      "1",
+      "1",
+      "2a",
+      "",
+      null,
+      null,
+      null,
+    ]);
   });
 });

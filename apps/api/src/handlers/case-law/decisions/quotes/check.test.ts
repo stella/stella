@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import * as v from "valibot";
 
 import { DECISION_READ_RESOLUTION } from "@stll/api-contract/case-law-decision-resolution";
+import { noDecisionReviewFound } from "@stll/api-contract/case-law-reviews";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 
 import { createSafeId } from "@/api/lib/branded-types";
@@ -24,6 +25,8 @@ const readOf = () =>
     documentPending: false,
     documentReadFailed: false,
     documentUnavailable: false,
+    textWithheldReason: null,
+    textIncompleteReason: null,
     hasDocument: true,
     resolution: { type: DECISION_READ_RESOLUTION.DIRECT },
     caseNumber: "1 Test 1/2026",
@@ -68,6 +71,7 @@ const readOf = () =>
     citationsNextCursor: null,
     caseFile: { items: [], nextCursor: null, limit: 50 },
     extractionWarnings: [],
+    appealReviews: noDecisionReviewFound(),
     sourceLanguages: [],
   }) satisfies ReadCaseLawDecisionSuccess;
 

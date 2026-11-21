@@ -1,5 +1,6 @@
 import { panic } from "better-result";
 import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 
 import {
   type Node,
@@ -224,7 +225,7 @@ if (import.meta.main) {
     "ts",
   );
   process.exitCode = await writeOrCheckArtifacts(
-    [{ path: owner.pathname, contents }],
+    [{ path: fileURLToPath(owner), contents }],
     {
       write: process.argv.includes("--write"),
       matched: "the online unique index declarations",

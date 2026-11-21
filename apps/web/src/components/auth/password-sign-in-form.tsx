@@ -1,5 +1,6 @@
 import { useForm, useSelector } from "@tanstack/react-form";
 import { useNavigate } from "@tanstack/react-router";
+import { Result } from "better-result";
 import { useTranslations } from "use-intl";
 import * as v from "valibot";
 
@@ -23,6 +24,7 @@ import { notifyUserError } from "@/lib/errors/user-toast";
 import { emailSchema, schemaFormOptions, toFormErrors } from "@/lib/schema";
 
 import { LastUsedFieldBadge } from "./last-used-sign-in";
+import { SIGN_IN_CREDENTIAL_INPUT_SIZE } from "./sign-in-panel-face.pending";
 import { SIGN_IN_METHOD, signInMethodVariant } from "./sign-in-panel.logic";
 import type { SignInMethod } from "./sign-in-panel.logic";
 
@@ -59,7 +61,7 @@ export const EmailCredentialField = ({
         onBlur={field.handleBlur}
         onChange={(e) => field.handleChange(e.target.value)}
         placeholder={t("auth.emailPlaceholder")}
-        size="lg"
+        size={SIGN_IN_CREDENTIAL_INPUT_SIZE}
         type="email"
         value={field.state.value}
       />
@@ -87,7 +89,7 @@ export const SecretCredentialField = ({
       onBlur={field.handleBlur}
       onChange={(e) => field.handleChange(e.target.value)}
       placeholder={placeholder}
-      size="lg"
+      size={SIGN_IN_CREDENTIAL_INPUT_SIZE}
       value={field.state.value}
     />
     <FieldError />
@@ -149,11 +151,18 @@ export const PasswordSignInForm = ({
           return;
         }
 
+        const refreshed = await Result.tryPromise(
+          async () => await invalidateSession.mutateAsync(),
+        );
+        if (refreshed.isErr()) {
+          notifyUserError(refreshed.error, t("errors.actionFailed"));
+          return;
+        }
+
         // An enrolled user's password is correct but the session is still
         // pending a second factor; send them to the same challenge page the
         // email-OTP flow uses instead of treating this as a completed sign-in.
         if (isTwoFactorRedirect(data)) {
-          await invalidateSession.mutateAsync();
           await navigate({
             to: "/auth/two-factor",
             search: { redirectTo },
@@ -161,7 +170,6 @@ export const PasswordSignInForm = ({
           return;
         }
 
-        await invalidateSession.mutateAsync();
         await navigate({
           to: "/auth/organization",
           search: { redirectTo },
@@ -218,6 +226,11 @@ export const PasswordSignInForm = ({
               !canSubmit ||
               email.trim().length === 0 ||
               password.trim().length === 0
+            }
+            disabledReason={
+              isSubmitting
+                ? t("auth.confirmingHandoff")
+                : t("auth.enterEmailAndPassword")
             }
             loading={isSubmitting}
             type="submit"

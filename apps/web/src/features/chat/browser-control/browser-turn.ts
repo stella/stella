@@ -1,3 +1,4 @@
+import { withSubagentRunParts } from "@/components/chat/chat-subagent-parts.logic";
 import type { PersistedChatMessage } from "@/components/chat/chat-ui-tools";
 
 /**
@@ -5,7 +6,8 @@ import type { PersistedChatMessage } from "@/components/chat/chat-ui-tools";
  * it. The id is the persisted message's, so a runtime rebuilt mid-turn (a
  * reload between an approval and its continuation) keeps charging the same
  * turn. With `toolCallId`, the user message before the assistant message
- * holding that call; without, the latest user message. A regeneration reuses
+ * holding that call, directly or inside a sub-agent run it holds; without,
+ * the latest user message. A regeneration reuses
  * its user message, so it shares that turn's budget.
  */
 export const browserTurnId = (
@@ -16,7 +18,7 @@ export const browserTurnId = (
     toolCallId === undefined
       ? -1
       : messages.findIndex(({ parts }) =>
-          parts.some(
+          withSubagentRunParts(parts).some(
             (part) => part.type === "tool-call" && part.id === toolCallId,
           ),
         );

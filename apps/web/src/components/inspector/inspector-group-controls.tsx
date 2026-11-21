@@ -54,6 +54,9 @@ export type InspectorGroupPresentation = {
   color: string;
 } & ({ type: "matter"; workspaceId: string } | { type: "custom" });
 
+/** Open tabs by group, in the order the rail and the phone switcher show them. */
+export type InspectorGroups = ReturnType<typeof useInspectorGroups>;
+
 export const useInspectorGroups = () => {
   const t = useTranslations();
   const { activeOrganizationId, id: userId } = useAuthenticatedUser();
@@ -274,7 +277,11 @@ export const InspectorGroupEditor = ({
             <Button onClick={onClose} type="button" variant="ghost">
               {t("common.cancel")}
             </Button>
-            <Button disabled={!name.trim()} type="submit">
+            <Button
+              disabled={!name.trim()}
+              disabledReason={t("inspector.enterGroupName")}
+              type="submit"
+            >
               {t("common.save")}
             </Button>
           </DialogFooter>

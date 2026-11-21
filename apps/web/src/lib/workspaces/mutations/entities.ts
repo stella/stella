@@ -105,18 +105,27 @@ type MoveEntityVars = {
 
 export const useMoveEntity = () => {
   const analytics = useAnalytics();
+  const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ workspaceId, entityId, parentId }: MoveEntityVars) => {
-      const response = await api
-        .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
-        .move.patch({
-          entityId: toSafeId<"entity">(entityId),
-          parentId: parentId === null ? null : toSafeId<"entity">(parentId),
-        });
+    mutationFn: resourceMutation({
+      mutation: "moveEntity",
+      queryClient,
+      mutationFn: async ({
+        workspaceId,
+        entityId,
+        parentId,
+      }: MoveEntityVars) => {
+        const response = await api
+          .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
+          .move.patch({
+            entityId: toSafeId<"entity">(entityId),
+            parentId: parentId === null ? null : toSafeId<"entity">(parentId),
+          });
 
-      return unwrapApiResponse(response);
-    },
+        return unwrapApiResponse(response);
+      },
+    }),
     onError: (error) => {
       analytics.captureError(error, {
         fingerprintKey: "useMoveEntity:failure",
@@ -423,16 +432,18 @@ export const updateKanbanPlacementRequest = async ({
   status,
   fields,
 }: UpdateKanbanPlacementVars) => {
-  const response = await api
-    .fields({ workspaceId: toSafeId<"workspace">(workspaceId) })
-    ["kanban-placement"].patch({
-      entityId: toSafeId<"entity">(entityId),
-      ...(status !== undefined && { status }),
-      fields: fields.map(({ propertyId, content }) => ({
-        propertyId: toSafeId<"property">(propertyId),
-        content,
-      })),
-    });
+  const fieldsApi = api.fields({
+    workspaceId: toSafeId<"workspace">(workspaceId),
+  });
+
+  const response = await fieldsApi["kanban-placement"].patch({
+    entityId: toSafeId<"entity">(entityId),
+    ...(status !== undefined && { status }),
+    fields: fields.map(({ propertyId, content }) => ({
+      propertyId: toSafeId<"property">(propertyId),
+      content,
+    })),
+  });
 
   return unwrapApiResponse(response);
 };

@@ -4,7 +4,8 @@ import { useQuery } from "@tanstack/react-query";
 import { Link, useRouterState } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
-import { RESOURCE_TYPE } from "@stll/api-contract";
+import { SESSION_SIGN_IN_REVIEW } from "@stll/api-contract/session-sign-ins";
+import { Badge } from "@stll/ui/badge";
 import { Button } from "@stll/ui/button";
 import { ChevronDownIcon, KeyboardIcon } from "@stll/ui/icons";
 import {
@@ -17,26 +18,31 @@ import {
 } from "@stll/ui/menu";
 import { ScrollArea } from "@stll/ui/scroll-area";
 import { TruncatedText } from "@stll/ui/truncated-text";
-import { cn } from "@stll/ui/utils";
 
 import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { env } from "@/env";
 import { useTimeBillingChromeEnabled } from "@/hooks/use-time-billing-preview";
+import { useFormatter } from "@/i18n/formatting-context";
+import { sessionSignInsOptions } from "@/lib/account/session-sign-ins";
 import { authClient } from "@/lib/auth-client";
 import { roleOptions } from "@/lib/auth-queries";
+import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { betaFeaturesAvailable } from "@/lib/beta-features";
 import { useKeyboardShortcutsDialogStore } from "@/lib/keyboard-shortcuts-dialog-store";
 import { useCallerFeatureEnabled } from "@/lib/organization/feature-access/access";
 import { CALLER_FEATURE } from "@/lib/organization/feature-access/surfaces";
 import { queryView } from "@/lib/query-view.logic";
 import { useQueryViewError } from "@/lib/use-query-view";
-import { resourceQueryOptions } from "@/lib/workspace-realtime";
 import { settingsNavSections } from "@/routes/_protected.settings/-components/settings-shell/settings-nav";
-
-const NAV_ITEM_CLASS = cn(
-  "hover:bg-sidebar-accent/60 flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm outline-hidden",
-  "focus-visible:ring-ring focus-visible:ring-2",
-);
+import {
+  SETTINGS_NAV_CLASS,
+  SETTINGS_NAV_ITEM_CLASS,
+  SETTINGS_NAV_SECTION_CLASS,
+  SETTINGS_NAV_SECTION_LABEL_CLASS,
+  SettingsChromeScope,
+  SettingsContent,
+  SettingsShellLayout,
+} from "@/routes/_protected.settings/-components/settings-shell/settings-shell.pending";
 
 type SettingsShellProps = {
   children: ReactNode;
@@ -45,17 +51,14 @@ type SettingsShellProps = {
 /**
  * The settings area inside the app frame: account and organization pages
  * share this navigation, so moving between them never changes the frame.
+ * Its regions come from `SettingsShellLayout`, which a settings page's
+ * pending view draws on a cold load before this shell mounts.
  */
 export const SettingsShell = ({ children }: SettingsShellProps) => {
   const t = useTranslations();
   const memoryEnabled = useCallerFeatureEnabled(CALLER_FEATURE.aiMemory);
   const timeBilling = useTimeBillingChromeEnabled();
-  const roleQuery = useQuery(
-    resourceQueryOptions(roleOptions, {
-      resources: [RESOURCE_TYPE.USER, RESOURCE_TYPE.ORGANIZATION],
-      scope: { type: "organization" },
-    }),
-  );
+  const roleQuery = useQuery(roleOptions);
   const roleView = queryView(roleQuery);
   useQueryViewError(roleView, "SettingsShell.role:query");
   const role =
@@ -66,6 +69,7 @@ export const SettingsShell = ({ children }: SettingsShellProps) => {
     select: (state) => state.location.pathname,
   });
   const openShortcuts = useKeyboardShortcutsDialogStore((store) => store.open);
+  const reviewCount = usePendingSignInReviewCount();
   const sections = settingsNavSections({
     role,
     memory:
@@ -85,8 +89,8 @@ export const SettingsShell = ({ children }: SettingsShellProps) => {
     .find(({ to }) => pathname === to || pathname.startsWith(`${to}/`));
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-hidden md:flex-row">
-      <div className="shrink-0 border-b p-3 md:hidden">
+    <SettingsShellLayout
+      mobileMenu={
         <Menu>
           <MenuTrigger
             aria-label={t("common.settings")}
@@ -119,6 +123,9 @@ export const SettingsShell = ({ children }: SettingsShellProps) => {
                     >
                       <Icon className="size-4" />
                       {t(item.labelKey)}
+                      {item.to === SECURITY_PATH && reviewCount > 0 && (
+                        <SignInReviewBadge count={reviewCount} />
+                      )}
                     </MenuItem>
                   );
                 })}
@@ -132,16 +139,13 @@ export const SettingsShell = ({ children }: SettingsShellProps) => {
             ))}
           </MenuPopup>
         </Menu>
-      </div>
-      <div className="bg-muted/30 hidden w-60 shrink-0 border-e md:block">
+      }
+      nav={
         <ScrollArea className="h-full">
-          <nav
-            aria-label={t("common.settings")}
-            className="flex flex-col gap-4 p-3"
-          >
+          <nav aria-label={t("common.settings")} className={SETTINGS_NAV_CLASS}>
             {sections.map((section) => (
-              <div key={section.id} className="flex flex-col gap-1">
-                <div className="text-muted-foreground px-2 py-1 text-xs font-medium tracking-wide uppercase">
+              <div key={section.id} className={SETTINGS_NAV_SECTION_CLASS}>
+                <div className={SETTINGS_NAV_SECTION_LABEL_CLASS}>
                   {t(section.labelKey)}
                 </div>
                 {section.items.map((item) => {
@@ -153,11 +157,14 @@ export const SettingsShell = ({ children }: SettingsShellProps) => {
                         className:
                           "bg-sidebar-accent text-sidebar-accent-foreground",
                       }}
-                      className={NAV_ITEM_CLASS}
+                      className={SETTINGS_NAV_ITEM_CLASS}
                       to={item.to}
                     >
                       <Icon className="size-4" />
                       <span>{t(item.labelKey)}</span>
+                      {item.to === SECURITY_PATH && reviewCount > 0 && (
+                        <SignInReviewBadge count={reviewCount} />
+                      )}
                     </Link>
                   );
                 })}
@@ -167,7 +174,7 @@ export const SettingsShell = ({ children }: SettingsShellProps) => {
                     onClick={openShortcuts}
                     variant="plain"
                   >
-                    <span className={NAV_ITEM_CLASS}>
+                    <span className={SETTINGS_NAV_ITEM_CLASS}>
                       <KeyboardIcon className="size-4" />
                       <span>{t("navigation.shortcutsDialog.title")}</span>
                     </span>
@@ -177,17 +184,47 @@ export const SettingsShell = ({ children }: SettingsShellProps) => {
             ))}
           </nav>
         </ScrollArea>
-      </div>
+      }
+    >
       <ScrollArea className="min-h-0 min-w-0 flex-1">
-        <section className="flex min-w-0 flex-col">
-          {/* One width for every page: organization tables need it, and
-              moving between sections never shifts the content. */}
-          <div className="mx-auto flex w-full max-w-5xl flex-col gap-4 p-6">
-            <QueryViewFeedback view={roleView} />
-            {children}
-          </div>
-        </section>
+        <SettingsContent>
+          {/* The role arrives with the app's shell; only a failed read
+              speaks here, never a loading line above the page. */}
+          {roleView.type !== "pending" && <QueryViewFeedback view={roleView} />}
+          <SettingsChromeScope>{children}</SettingsChromeScope>
+        </SettingsContent>
       </ScrollArea>
-    </div>
+    </SettingsShellLayout>
+  );
+};
+
+const SECURITY_PATH = "/settings/account/security";
+
+/** How many sign-ins wait for the account holder's review. */
+const usePendingSignInReviewCount = (): number => {
+  const { id } = useAuthenticatedUser();
+  // A failed read shows no badge; the security page offers the retry.
+  const signIns = queryView(useQuery(sessionSignInsOptions(id)), {
+    isEmpty: () => false,
+  });
+  useQueryViewError(signIns, "SettingsShell:signInReviews");
+  return signIns.type === "items"
+    ? signIns.items.filter(
+        ({ review }) => review === SESSION_SIGN_IN_REVIEW.pending,
+      ).length
+    : 0;
+};
+
+const SignInReviewBadge = ({ count }: { count: number }) => {
+  const t = useTranslations();
+  const format = useFormatter();
+  return (
+    <Badge
+      aria-label={t("settings.account.security.navReviewCount", { count })}
+      className="ms-auto"
+      tone="warning"
+    >
+      {format.number(count)}
+    </Badge>
   );
 };

@@ -38,6 +38,7 @@ import { entitySummariesOptions } from "@/lib/workspaces/queries/entities";
 import { flowRunsKeys } from "@/lib/workspaces/queries/flow-runs";
 
 import { filterEntitiesByName } from "./run-launcher.logic";
+import { RunLauncherFrame, RunLauncherSkeleton } from "./run-launcher.pending";
 
 type RunLauncherProps = {
   workspaceId: string;
@@ -139,7 +140,11 @@ export const RunLauncher = ({
     onStarted(response.data.runId);
   };
 
-  if (flowsDataView.type === "pending" || flowsDataView.type === "error") {
+  if (flowsDataView.type === "pending") {
+    return <RunLauncherSkeleton />;
+  }
+
+  if (flowsDataView.type === "error") {
     return <QueryViewFeedback view={flowsDataView} />;
   }
 
@@ -156,8 +161,23 @@ export const RunLauncher = ({
     );
   }
 
+  const resolveWorkflowLaunchDisabledReason = () => {
+    if (starting) {
+      return t("flows.runs.starting");
+    }
+    if (!canRun) {
+      return t("errors.api.forbidden");
+    }
+    if (!definitionId) {
+      return t("flows.runs.selectFlow");
+    }
+    return t("flows.runs.tooManyInputDocuments", {
+      max: format.number(FLOW_RUN_INPUT_ENTITIES_MAX),
+    });
+  };
+
   return (
-    <div className="grid gap-4 rounded-lg border p-4">
+    <RunLauncherFrame>
       <QueryViewFeedback view={flowsDataView} />
       <div className="grid gap-1.5">
         <Label htmlFor="flow-run-definition">
@@ -251,6 +271,7 @@ export const RunLauncher = ({
           disabled={
             !canRun || !definitionId || starting || exceedsInputEntitiesLimit
           }
+          disabledReason={resolveWorkflowLaunchDisabledReason()}
           loading={starting}
           onClick={() => {
             detached(handleStart(), "run-launcher.start");
@@ -261,6 +282,6 @@ export const RunLauncher = ({
           {t("common.start")}
         </Button>
       </div>
-    </div>
+    </RunLauncherFrame>
   );
 };

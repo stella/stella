@@ -73,11 +73,11 @@ export const cleanupPageGradients = () => {
 export const initializePageGradients = () => {
   for (const { containerId, iosIntensity, speed, svgUrl } of GRADIENT_LAYERS) {
     const container = document.querySelector<HTMLElement>(`#${containerId}`);
-    if (!container || container.dataset.animatedGradient === "initialized") {
+    if (!container || container.dataset["animatedGradient"] === "initialized") {
       continue;
     }
 
-    container.dataset.animatedGradient = "initialized";
+    container.dataset["animatedGradient"] = "initialized";
     void initializeGradient(container, svgUrl, speed, iosIntensity);
   }
 };
@@ -126,10 +126,10 @@ const initializeGradient = async (
 
   const filterId = group
     .getAttribute("filter")
-    ?.match(/url\(#(?<filterId>[^)]+)\)/u)?.groups?.filterId;
+    ?.match(/url\(#(?<filterId>[^)]+)\)/u)?.groups?.["filterId"];
   const bases = rects.map((rect) => {
     const gradientId = rect.getAttribute("fill")?.match(/#(?<gradientId>\w+)/u)
-      ?.groups?.gradientId;
+      ?.groups?.["gradientId"];
     if (gradientId === undefined) {
       return 0.5;
     }

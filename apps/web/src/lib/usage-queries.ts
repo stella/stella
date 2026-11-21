@@ -58,7 +58,7 @@ export const usageEntitlementOptions = ({
     }),
     {
       resources: [RESOURCE_TYPE.ORGANIZATION],
-      scope: { type: "organization" },
+      scope: { type: "organization", organizationId },
     },
   );
 

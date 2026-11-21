@@ -1,0 +1,7 @@
+{
+  "create-table-references": "The new queue table references the handful-row corpus_index_generations registry; its SHARE ROW EXCLUSIVE is a catalog change taken under the mutation fence with a one-second lock bound.",
+  "row-level-security": "Enabling and forcing row security on the table created in this migration touches no existing relation.",
+  "create-policy": "The policies are created on the table created in this migration, which no other session can reach yet.",
+  "create-trigger": "Both row triggers on the revision table are created under the mutation fence with a one-second lock bound, so projection writers are already held, readers are not blocked, and no stored row is read or rewritten.",
+  "lock-table-nowait": "Both tables are locked without waiting right after the mutation fence: a writer already holding one makes the attempt fail at once and the runner retries the migration, instead of the migration and that writer deadlocking on the fence."
+}

@@ -7,6 +7,10 @@
 
 import { panic } from "better-result";
 
+import {
+  documentToDocx,
+  stellaLandscapeDocument,
+} from "@stll/docx-authoring/document";
 import { heading, paragraph, run, table } from "@stll/folio-core/server";
 import type { TableCellSpec } from "@stll/folio-core/server";
 
@@ -22,10 +26,6 @@ import type {
   DocumentReviewDecision,
   DocumentReviewFindingPayload,
 } from "@/api/lib/document-review/run-contract";
-import {
-  documentToDocx,
-  stellaLandscapeDocument,
-} from "@/api/lib/docx-authoring/document";
 import type { PositionSeverity } from "@/api/lib/workflow/playbook-positions";
 import type { VerdictTier } from "@/api/lib/workflow/verdict-tiers";
 

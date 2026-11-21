@@ -7,7 +7,7 @@ import {
 import "@tanstack/react-router";
 
 import { appShellNavigationLink } from "../helpers/app-shell";
-import { seedSidebarState } from "../helpers/sidebar-state";
+import { setPresentationPrefs } from "../helpers/presentation-prefs";
 import { expect, test } from "../helpers/test";
 
 const cases = [
@@ -15,9 +15,16 @@ const cases = [
   { path: "/contacts", listPath: "/v1/contacts" },
 ] as const;
 
+// The router slice this spec patches; AnyRouter types it as any.
+type HeldRoute = {
+  options: { loader?: (context: unknown) => unknown };
+  update: (options: { loader: (context: unknown) => unknown }) => void;
+};
+type HeldRouter = { routesById: Record<string, HeldRoute | undefined> };
+
 const holdProtectedLoader = async (page: Page, path: string) => {
   await page.evaluate((targetPath) => {
-    const router = window.__TSR_ROUTER__;
+    const router = window.__TSR_ROUTER__ as unknown as HeldRouter | undefined;
     const route = router?.routesById["/_protected"];
     const original = route?.options.loader;
     if (route === undefined || typeof original !== "function") {
@@ -83,11 +90,12 @@ const holdRequest = async (page: Page, path: string) => {
 };
 
 const expectSingleShell = async (page: Page) => {
-  // The old static shell has no sidebar slot; include its visible sidebar
-  // column so it cannot hide from the same census as the mounted app chrome.
+  // Count the pending column and mounted sidebar with the same shell census.
   expect(
     await page
-      .locator('[data-slot="sidebar"]:visible, .bg-sidebar.w-64:visible')
+      .locator(
+        '[data-slot="sidebar"]:visible, [data-slot="pending-sidebar"]:visible',
+      )
       .count(),
   ).toBe(1);
   // Exclude hidden wordmarks without hiding a second rendered logo.
@@ -101,10 +109,13 @@ for (const { path, listPath } of cases) {
     baseURL,
     page,
   }) => {
-    await seedSidebarState({
-      baseURL,
+    if (baseURL === undefined) {
+      throw new Error("Pending shell requires a base URL");
+    }
+    await setPresentationPrefs({
       context: page.context(),
-      state: "expanded",
+      url: baseURL,
+      patch: { sidebarOpen: true },
     });
     await page.goto("/knowledge", { waitUntil: "commit" });
     await expect(appShellNavigationLink(page, path)).toBeVisible({

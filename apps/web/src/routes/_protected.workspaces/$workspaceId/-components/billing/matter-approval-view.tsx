@@ -1,4 +1,4 @@
-import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
+import { useQueryClient, useSuspenseQueries } from "@tanstack/react-query";
 import { useRouteContext } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
@@ -22,9 +22,20 @@ import { detached } from "@/lib/detached";
 import { MEDIUM_DATE_FORMAT } from "@/lib/relative-time";
 import { expensesQueryRoot } from "@/lib/resource-query-roots.logic";
 import { useUpdateExpense } from "@/lib/workspaces/mutations/expenses";
-import { expensesOptions } from "@/lib/workspaces/queries/expenses";
+import type { expensesOptions } from "@/lib/workspaces/queries/expenses";
 import { invoicesKeys } from "@/lib/workspaces/queries/invoices";
-import { timeEntriesOptions } from "@/lib/workspaces/queries/time-entries";
+import type { timeEntriesOptions } from "@/lib/workspaces/queries/time-entries";
+
+import {
+  approvedMatterExpensesOptions,
+  approvedMatterTimeOptions,
+  draftMatterExpensesOptions,
+  submittedMatterTimeOptions,
+} from "./matter-approval-queries";
+import {
+  MatterTimeApprovalLayout,
+  MatterTimeApprovalRows,
+} from "./matter-approval-view.pending";
 
 type Props = { workspaceId: string };
 
@@ -62,18 +73,19 @@ const ApprovalLists = ({ workspaceId }: Props) => {
     from: "/_protected",
     select: (context) => context.user.id,
   });
-  const { data: submittedEntries } = useSuspenseQuery(
-    timeEntriesOptions(workspaceId, userId, { status: "submitted" }),
-  );
-  const { data: approvedEntries } = useSuspenseQuery(
-    timeEntriesOptions(workspaceId, userId, { status: "approved" }),
-  );
-  const { data: draftExpenses } = useSuspenseQuery(
-    expensesOptions(workspaceId, { status: "draft" }),
-  );
-  const { data: approvedExpenses } = useSuspenseQuery(
-    expensesOptions(workspaceId, { status: "approved" }),
-  );
+  const [
+    { data: submittedEntries },
+    { data: approvedEntries },
+    { data: draftExpenses },
+    { data: approvedExpenses },
+  ] = useSuspenseQueries({
+    queries: [
+      submittedMatterTimeOptions(workspaceId, userId),
+      approvedMatterTimeOptions(workspaceId, userId),
+      draftMatterExpensesOptions(workspaceId),
+      approvedMatterExpensesOptions(workspaceId),
+    ],
+  });
   const expenses = canApproveExpenses
     ? [...draftExpenses, ...approvedExpenses]
     : [];
@@ -142,12 +154,9 @@ const TimeApprovals = ({
   const show = { timekeeper: true, matter: false, date: true };
 
   return (
-    <section className="flex flex-col gap-3">
-      <div className="flex min-h-9 items-center justify-between gap-3">
-        <h2 className="text-sm font-medium">
-          {t("billing.approval.timeEntries")}
-        </h2>
-        {selected.length > 0 && (
+    <MatterTimeApprovalLayout
+      actions={
+        selected.length > 0 && (
           <div className="flex flex-wrap items-center justify-end gap-2">
             <ReturnSelected review={review} selected={selected} />
             <Button
@@ -160,9 +169,11 @@ const TimeApprovals = ({
               })}
             </Button>
           </div>
-        )}
-      </div>
-      <ul className="flex flex-col gap-3">
+        )
+      }
+      title={t("billing.approval.timeEntries")}
+    >
+      <MatterTimeApprovalRows>
         {submitted.map((row) => (
           <TimeReviewRow
             key={row.id}
@@ -172,13 +183,13 @@ const TimeApprovals = ({
             stage="submitted"
           />
         ))}
-      </ul>
+      </MatterTimeApprovalRows>
       {approved.length > 0 && (
         <h3 className="text-muted-foreground text-xs font-medium">
           {t("billing.statuses.approved")}
         </h3>
       )}
-      <ul className="flex flex-col gap-3">
+      <MatterTimeApprovalRows>
         {approved.map((row) => (
           <TimeReviewRow
             key={row.id}
@@ -188,8 +199,8 @@ const TimeApprovals = ({
             stage="approved"
           />
         ))}
-      </ul>
-    </section>
+      </MatterTimeApprovalRows>
+    </MatterTimeApprovalLayout>
   );
 };
 

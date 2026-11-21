@@ -1,4 +1,4 @@
-import { Suspense, useCallback, useMemo, useRef, useState } from "react";
+import { Suspense, useMemo, useRef, useState } from "react";
 
 import {
   useMutation,
@@ -339,26 +339,23 @@ const useColumnDrafts = (defaultFileIds: string[], seed?: Draft) => {
   const [drafts, setDrafts] = useState(initialDrafts);
   const nextId = useNextId(drafts.length);
 
-  const updateDraft = useCallback((id: number, patch: Partial<Draft>) => {
+  const updateDraft = (id: number, patch: Partial<Draft>) => {
     setDrafts((prev) =>
       prev.map((d) => (d.id === id ? { ...d, ...patch } : d)),
     );
-  }, []);
+  };
 
-  const removeDraft = useCallback((id: number) => {
+  const removeDraft = (id: number) => {
     setDrafts((prev) =>
       prev.length === 1 ? prev : prev.filter((d) => d.id !== id),
     );
-  }, []);
+  };
 
-  const addDraft = useCallback(() => {
+  const addDraft = () => {
     setDrafts((prev) => [...prev, makeEmptyDraft(nextId(), defaultFileIds)]);
-  }, [defaultFileIds, nextId]);
+  };
 
-  const validDrafts = useMemo(
-    () => drafts.filter((d) => d.name.trim().length > 0),
-    [drafts],
-  );
+  const validDrafts = drafts.filter((d) => d.name.trim().length > 0);
   const isDirty = columnDraftsChanged(drafts, initialDrafts);
 
   const handlersFor = (draft: Draft): DraftHandlers => ({
@@ -372,6 +369,7 @@ const useColumnDrafts = (defaultFileIds: string[], seed?: Draft) => {
 
 type BulkColumnsFormProps = React.PropsWithChildren<{
   canSubmit: boolean;
+  submitDisabledReason: string | undefined;
   capability: Capability | null;
   mode: ColumnDialogMode;
   /** The matter's document-type gate; the organization's columns have none. */
@@ -386,6 +384,7 @@ type BulkColumnsFormProps = React.PropsWithChildren<{
 /** The dialog's chrome: the title, the drafts, the gate and the two buttons. */
 const BulkColumnsForm = ({
   canSubmit,
+  submitDisabledReason,
   capability,
   dirty,
   children,
@@ -433,6 +432,7 @@ const BulkColumnsForm = ({
             {(capabilityProps) => (
               <Button
                 disabled={!canSubmit}
+                disabledReason={submitDisabledReason}
                 loading={isPending}
                 onClick={onSubmit}
                 size="sm"
@@ -490,6 +490,31 @@ type ColumnsBodyProps = {
   onClose: () => void;
 };
 
+type BulkColumnSubmitDisabledReasonOptions = {
+  isPending: boolean;
+  withinDependencyCap: boolean;
+  t: (
+    key:
+      | "common.creating"
+      | "workspaces.properties.reduceDependencies"
+      | "workspaces.properties.completeColumn",
+  ) => string;
+};
+
+const bulkColumnSubmitDisabledReason = ({
+  isPending,
+  withinDependencyCap,
+  t,
+}: BulkColumnSubmitDisabledReasonOptions) => {
+  if (isPending) {
+    return t("common.creating");
+  }
+  if (!withinDependencyCap) {
+    return t("workspaces.properties.reduceDependencies");
+  }
+  return t("workspaces.properties.completeColumn");
+};
+
 const PropertyColumnsBody = ({
   workspaceId,
   onClose,
@@ -502,6 +527,7 @@ const PropertyColumnsBody = ({
   const { data: properties } = useSuspenseQuery(propertiesOptions(workspaceId));
   const displayName = usePropertyDisplayName();
 
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- load-bearing, without this memo boundary the React Compiler does not cache this value
   const fileProperties = useMemo<FileChip[]>(
     () =>
       properties.flatMap((p) =>
@@ -509,10 +535,11 @@ const PropertyColumnsBody = ({
       ),
     [displayName, properties],
   );
-  const allProperties = useMemo<FileChip[]>(
-    () => properties.map((p) => ({ id: p.id, name: displayName(p) })),
-    [displayName, properties],
-  );
+  const allProperties: FileChip[] = properties.map((p) => ({
+    id: p.id,
+    name: displayName(p),
+  }));
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- load-bearing, without this memo boundary the React Compiler does not cache this value
   const defaultFileIds = useMemo(
     () => fileProperties.map((p) => p.id),
     [fileProperties],
@@ -520,6 +547,7 @@ const PropertyColumnsBody = ({
 
   // Shared "applies to" scope: gate every AI column added here to one document
   // type (or all). Offered only when a Document Type classifier exists.
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- load-bearing, without this memo boundary the React Compiler does not cache this value
   const classifier = useMemo(
     () => resolveDocumentTypeClassifier(properties),
     [properties],
@@ -600,6 +628,11 @@ const PropertyColumnsBody = ({
       }
       dirty={isDirty || scopeDocType !== null}
       canSubmit={canSubmit}
+      submitDisabledReason={bulkColumnSubmitDisabledReason({
+        isPending: batch.isPending,
+        withinDependencyCap,
+        t,
+      })}
       footerExtra={
         classifier && docTypeOptions.length > 0 ? (
           <div className="flex min-w-0 items-center gap-2">
@@ -741,6 +774,11 @@ const QuestionColumnsBody = ({
       capability="ai"
       dirty={isDirty}
       canSubmit={canSubmit}
+      submitDisabledReason={
+        save.isPending
+          ? t("common.saving")
+          : t("workspaces.properties.enterQuestion")
+      }
       {...(discardsAnswers
         ? {
             footerExtra: (
@@ -771,10 +809,10 @@ const QuestionColumnsBody = ({
 
 const useNextId = (initial: number) => {
   const ref = useRef(initial);
-  return useCallback(() => {
+  return () => {
     ref.current += 1;
     return ref.current;
-  }, []);
+  };
 };
 
 /**
@@ -822,26 +860,20 @@ const DraftCard = ({
     onChange({ prompt: next });
   });
 
-  const promptField: PropertyPromptFieldHandle = useMemo(
-    () => ({
-      name: `draft-${draft.id}`,
-      state: { value: initialPrompt },
-      handleChange: handlePromptChange,
-      handleBlur: () => undefined,
-    }),
-    [draft.id, handlePromptChange, initialPrompt],
-  );
+  const promptField: PropertyPromptFieldHandle = {
+    name: `draft-${draft.id}`,
+    state: { value: initialPrompt },
+    handleChange: handlePromptChange,
+    handleBlur: () => undefined,
+  };
 
-  const handleMentions = useCallback(
-    (mentions: string[]) => {
-      onChange({ mentions });
-    },
-    [onChange],
-  );
+  const handleMentions = (mentions: string[]) => {
+    onChange({ mentions });
+  };
 
-  const handleEditorReady = useCallback((editor: Editor) => {
+  const handleEditorReady = (editor: Editor) => {
     editorRef.current = editor;
-  }, []);
+  };
 
   const trimmedName = draft.name.trim();
   const isAi = draft.tool === "ai-model" && isWorkspace;
@@ -905,18 +937,11 @@ const DraftCard = ({
     });
   };
 
-  const sourceIds = useMemo(
-    () => [...new Set([...draft.fileIds, ...draft.mentions])],
-    [draft.fileIds, draft.mentions],
-  );
-  const selectedFiles = useMemo(
-    () =>
-      sourceIds.flatMap((id) => {
-        const found = allProperties.find((p) => p.id === id);
-        return found ? [found] : [];
-      }),
-    [sourceIds, allProperties],
-  );
+  const sourceIds = [...new Set([...draft.fileIds, ...draft.mentions])];
+  const selectedFiles = sourceIds.flatMap((id) => {
+    const found = allProperties.find((p) => p.id === id);
+    return found ? [found] : [];
+  });
   const availableFiles = allProperties.filter((p) => !sourceIds.includes(p.id));
   const needsOptions =
     draft.contentType === "single-select" ||
@@ -955,6 +980,7 @@ const DraftCard = ({
           <AiRewriteControl
             className="text-muted-foreground hover:text-foreground shrink-0"
             disabled={suggestDisabled}
+            disabledReason={t("workspaces.properties.enterQuestion")}
             isPending={suggestPrompt.isPending}
             label={t("workspaces.properties.suggestWithAI")}
             onRewrite={handleAutoPrompt}
@@ -1003,6 +1029,7 @@ const DraftCard = ({
           <PropertyPromptInput
             aiEditAction={{
               disabled: autoPromptDisabled,
+              disabledReason: t("workspaces.properties.enterColumnName"),
               isPending: suggestPrompt.isPending,
               label: t("workspaces.properties.suggestWithAI"),
               onClick: handleAutoPrompt,

@@ -27,3 +27,29 @@ export const readQueryResult = <TData, TError extends Error>(
   }
   return result.value;
 };
+
+type ExpectedQueryRefusalOptions<TData, TError extends Error> = {
+  run: () => Promise<TData>;
+  isExpectedRefusal: (error: unknown) => error is TError;
+};
+
+/** Handle selected query refusals as data, preserving every other rejected value
+ * for the caller's existing failure owner. */
+export const queryResultWithExpectedRefusal = async <
+  TData,
+  TError extends Error,
+>({
+  run,
+  isExpectedRefusal,
+}: ExpectedQueryRefusalOptions<TData, TError>): Promise<
+  Result<TData, TError>
+> => {
+  try {
+    return Result.ok(await run());
+  } catch (error) {
+    if (isExpectedRefusal(error)) {
+      return Result.err(error);
+    }
+    throw error;
+  }
+};

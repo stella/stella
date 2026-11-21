@@ -14,8 +14,6 @@ import type { OnlineStepIntroduction } from "./online-migration-connection";
 const ACCOUNT_CREDENTIAL_SINGLETON_UIDX = "account_credential_singleton_uidx";
 const ACCOUNT_PROVIDER_ACCOUNT_ID_UIDX = "account_provider_account_id_uidx";
 const CASE_LAW_DECISIONS_SLUG_UIDX = "case_law_decisions_slug_uidx";
-const CASE_LAW_DECISIONS_SOURCE_CASE_LANG_NULL_IDX =
-  "case_law_decisions_source_case_lang_null_idx";
 const CASE_LAW_DECISIONS_SOURCE_DOCUMENT_IDX =
   "case_law_decisions_source_document_idx";
 const CASE_LAW_DECISIONS_SOURCE_FALLBACK_CONTENT_IDX =
@@ -25,6 +23,7 @@ const CASE_LAW_DECISIONS_SOURCE_FALLBACK_IDENTITY_IDX =
 const CASE_LAW_INGESTION_FAILURES_SOURCE_RECORD_UIDX =
   "case_law_ingestion_failures_source_record_uidx";
 const CHAT_MESSAGES_ID_THREAD_UIDX = "chat_messages_id_thread_uidx";
+const CHAT_TURNS_ACTIVE_THREAD_V2_UIDX = "chat_turns_active_thread_v2_uidx";
 const CHAT_TURNS_ORG_RUN_ID_UIDX = "chat_turns_org_run_id_uidx";
 const CHAT_TURNS_THREAD_ORDINAL_UIDX = "chat_turns_thread_ordinal_uidx";
 const CONTACTS_ORG_EXTERNAL_UIDX = "contacts_org_external_uidx";
@@ -88,12 +87,12 @@ export const ONLINE_UNIQUE_INDEX_NAMES = {
   ACCOUNT_CREDENTIAL_SINGLETON_UIDX,
   ACCOUNT_PROVIDER_ACCOUNT_ID_UIDX,
   CASE_LAW_DECISIONS_SLUG_UIDX,
-  CASE_LAW_DECISIONS_SOURCE_CASE_LANG_NULL_IDX,
   CASE_LAW_DECISIONS_SOURCE_DOCUMENT_IDX,
   CASE_LAW_DECISIONS_SOURCE_FALLBACK_CONTENT_IDX,
   CASE_LAW_DECISIONS_SOURCE_FALLBACK_IDENTITY_IDX,
   CASE_LAW_INGESTION_FAILURES_SOURCE_RECORD_UIDX,
   CHAT_MESSAGES_ID_THREAD_UIDX,
+  CHAT_TURNS_ACTIVE_THREAD_V2_UIDX,
   CHAT_TURNS_ORG_RUN_ID_UIDX,
   CHAT_TURNS_THREAD_ORDINAL_UIDX,
   CONTACTS_ORG_EXTERNAL_UIDX,
@@ -128,7 +127,6 @@ export const ONLINE_UNIQUE_INDEX_NAMES = {
 
 export {
   CASE_LAW_DECISIONS_SLUG_UIDX,
-  CASE_LAW_DECISIONS_SOURCE_CASE_LANG_NULL_IDX,
   CASE_LAW_DECISIONS_SOURCE_DOCUMENT_IDX,
   CASE_LAW_INGESTION_FAILURES_SOURCE_RECORD_UIDX,
   CHAT_TURNS_ORG_RUN_ID_UIDX,
@@ -242,6 +240,25 @@ export const CHAT_TURN_ORDINAL_UNIQUE_INDEXES = [
       "ON public.chat_turns USING btree (thread_id, ordinal NULLS FIRST)",
     isUnique: true,
     name: "chat_turns_thread_ordinal_uidx",
+    tableName: "chat_turns",
+  },
+] as const satisfies readonly (OnlineIndexDeclaration & {
+  introducedBy: OnlineStepIntroduction;
+})[];
+
+/**
+ * A thread's one unsettled turn, `handed-over` included. Replaces
+ * chat_turns_active_thread_uidx, whose predicate predates the status.
+ */
+export const CHAT_TURN_HANDED_OVER_UNIQUE_INDEXES = [
+  {
+    introducedBy: "20261116020100_chat_turns_handed_over",
+    createSql:
+      "CREATE UNIQUE INDEX CONCURRENTLY \"chat_turns_active_thread_v2_uidx\" ON public.\"chat_turns\" USING btree (\"thread_id\") WHERE \"status\" IN ('accepted', 'running', 'awaiting-user', 'handed-over')",
+    definitionBody:
+      "ON public.chat_turns USING btree (thread_id) WHERE (status = ANY (ARRAY['accepted'::text, 'running'::text, 'awaiting-user'::text, 'handed-over'::text]))",
+    isUnique: true,
+    name: "chat_turns_active_thread_v2_uidx",
     tableName: "chat_turns",
   },
 ] as const satisfies readonly (OnlineIndexDeclaration & {
@@ -504,6 +521,7 @@ export const ONLINE_UNIQUE_INDEX_VALIDATION_DEFINITIONS: readonly (Omit<
   ...CLIENT_INVOICE_UNIQUE_INDEXES,
   ...IMPORT_PROVENANCE_UNIQUE_INDEXES,
   ...CHAT_TURN_ORDINAL_UNIQUE_INDEXES,
+  ...CHAT_TURN_HANDED_OVER_UNIQUE_INDEXES,
   ...LEGISLATION_UNIQUE_INDEXES,
   ...FALLBACK_DECISION_UNIQUE_INDEXES,
   ...REWRITTEN_MIGRATION_INDEXES.filter(({ isUnique }) => isUnique),

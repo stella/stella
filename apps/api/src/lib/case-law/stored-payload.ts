@@ -1,3 +1,4 @@
+// parser-output-unchanged: Adds the shared current-supplement merge predicate; existing decision document predicates and parser output are unchanged.
 /**
  * One definition of "this decision holds a document", shared by
  * everything that has to decide whether a payload is safe to overwrite,
@@ -13,9 +14,6 @@
 import { notInArray, sql } from "drizzle-orm";
 import type { Column, SQL } from "drizzle-orm";
 
-import { hasUsableAst } from "@stll/legal-ast/document-ast";
-
-import type { CorpusPayload } from "@/api/lib/legal-search/corpus-storage";
 import {
   EMPTY_CORPUS_CONTENT_HASHES,
   storedCorpusWriteIsCompleteSql,
@@ -70,6 +68,18 @@ export const rowHoldsDocumentFor = (
   )
 )`;
 
+/** A supplement is placed only when its judgment includes the current source version. */
+export const supplementIsMergedFor = ({
+  decisionId,
+  sourceHash,
+  mergedSourceHash,
+}: {
+  decisionId: Column;
+  sourceHash: Column;
+  mergedSourceHash: Column;
+}): SQL<boolean> =>
+  sql<boolean>`coalesce(${decisionId} is not null and ${mergedSourceHash} = ${sourceHash}, false)`;
+
 /**
  * Public reads cannot inspect the normalized corpus key. Confirm the readable
  * pointers instead: completed corpus writes persist all keys atomically, and
@@ -86,19 +96,6 @@ export const publicRowHoldsDocumentFor = (
     and ${notInArray(table.contentHash, [...EMPTY_CORPUS_CONTENT_HASHES])}
   )
 )`;
-
-/**
- * The same question as `pgPayloadCarriesDocument`, asked of a payload
- * already in hand rather than of a row. The two must agree: this one
- * judges what the trim is about to delete, that one filters rows the
- * trim and the ingestion refresh never load.
- */
-export const payloadCarriesDocument = ({
-  text,
-  sections,
-  ast,
-}: CorpusPayload): boolean =>
-  (text ?? "") !== "" || hasUsableAst(ast) || (sections?.length ?? 0) > 0;
 
 /**
  * Whether a content hash names the payload a metadata-first ingest

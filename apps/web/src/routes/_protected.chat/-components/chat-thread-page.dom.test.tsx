@@ -10,6 +10,7 @@ import {
   aiAvailableResponse,
   aiUnavailableResponse,
 } from "@/__fixtures__/ai-availability";
+import { isDisabledControl } from "@/__fixtures__/disabled-control";
 import type { WebApiRoutes } from "@/lib/api";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/chat" });
@@ -60,7 +61,8 @@ const { setThreadActiveSkill, useThreadActiveSkillStore } =
   await import("@/features/chat/thread-active-skill-store");
 const { toSafeId } = await import("@/lib/safe-id");
 const { skillsOptions } = await import("@/lib/knowledge/queries");
-const { ChatThreadPage } = await import("./chat-thread-page");
+const { ChromeHeaderActionsSlot } = await import("@/lib/chrome-header-actions");
+const { ChatThreadPage } = await import("./chat-thread.page");
 
 const user = {
   activeOrganizationId: "00000000-0000-7000-8000-00000000ffff",
@@ -83,7 +85,7 @@ type ThreadResponse =
 const savedThread = {
   activeSkill: builder,
   activeTurnId: null,
-  newestLocalTurn: null,
+  activeTurnSteering: "not_steerable",
   attachedFiles: { fileCount: 0, files: [] },
   context: {
     estimatedTokens: 0,
@@ -361,6 +363,10 @@ const openThreadPage = async (client: InstanceType<typeof QueryClient>) => {
     path: "/chat/$threadId",
     component: () => (
       <ChatEditorProvider>
+        {/* The shell's header, which the page publishes its actions into. */}
+        <header>
+          <ChromeHeaderActionsSlot />
+        </header>
         <ChatThreadPage threadRef={threadRef} />
       </ChatEditorProvider>
     ),
@@ -403,9 +409,9 @@ const openThreadPage = async (client: InstanceType<typeof QueryClient>) => {
 const send = async (ui: ReturnType<typeof testing.render>, count: number) => {
   await testing.waitFor(() =>
     expect(
-      ui
-        .getByRole("button", { name: messages.chat.sendPrompt })
-        .hasAttribute("disabled"),
+      isDisabledControl(
+        ui.getByRole("button", { name: messages.chat.sendPrompt }),
+      ),
     ).toBe(false),
   );
   await testing.act(async () => {
@@ -498,7 +504,7 @@ test("unavailable AI blocks sending and preserves the draft until availability r
   expect(textbox.textContent).toBe(prompt);
 
   const sendButton = ui.getByRole("button", { name: messages.chat.sendPrompt });
-  expect(sendButton.hasAttribute("disabled")).toBe(true);
+  expect(sendButton.getAttribute("aria-disabled")).toBe("true");
   expect(textbox.getAttribute("contenteditable")).toBe("true");
   await testing.act(async () => {
     testing.fireEvent.click(sendButton);
@@ -585,5 +591,50 @@ test("an empty chat without a skill keeps the general prompts", async () => {
   for (const prompt of openingPrompts) {
     expect(ui.queryByText(prompt.name)).toBeNull();
   }
+  expect(unexpected).toEqual([]);
+});
+
+test("a chat with messages offers New chat once, in the page header, and not again under the composer", async () => {
+  serveSavedBuilder({ thread: { ...savedThread, activeSkill: null } });
+  const ui = await openThreadPage(createClient());
+  draftPrompt("Which clauses does the lease cover?");
+  await send(ui, 1);
+  await ui.findByText(ANSWER);
+
+  const header = ui.container.querySelector("header");
+  if (header === null) {
+    throw new Error("Expected the shell header to render");
+  }
+  await testing.waitFor(() =>
+    expect(
+      testing.within(header).queryAllByRole("link", {
+        name: messages.chat.newChat,
+      }).length,
+    ).toBe(1),
+  );
+  expect(
+    ui.queryAllByRole("button", { name: messages.chat.newChat }).length,
+  ).toBe(0);
+  expect(unexpected).toEqual([]);
+});
+
+test("the chat header has no history button of its own: the title's switcher reaches the history", async () => {
+  serveSavedBuilder({ thread: { ...savedThread, activeSkill: null } });
+  const ui = await openThreadPage(createClient());
+
+  const header = ui.container.querySelector("header");
+  if (header === null) {
+    throw new Error("Expected the shell header to render");
+  }
+  // The header's actions have landed once its New chat shows.
+  await testing.waitFor(() =>
+    expect(header.textContent.includes(messages.chat.newChat)).toBe(true),
+  );
+  expect(header.querySelector('a[href="/chat/history"]')).toBeNull();
+  expect(
+    testing.within(header).queryAllByRole("button", {
+      name: messages.common.history,
+    }).length,
+  ).toBe(0);
   expect(unexpected).toEqual([]);
 });

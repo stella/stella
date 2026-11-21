@@ -17,6 +17,7 @@ const { cleanup, render, fireEvent, waitFor, act } =
 const { QueryClient, QueryClientProvider } =
   await import("@tanstack/react-query");
 const { IntlProvider } = await import("use-intl");
+const { FormattingProvider } = await import("@/i18n/formatting-context");
 const { AuthenticatedUserProvider } =
   await import("@/lib/authenticated-user-context");
 const { roleOptions } = await import("@/lib/auth-queries");
@@ -102,7 +103,9 @@ const mount = () => {
             wordEditShortcut: null,
           }}
         >
-          <SkillResourcePanel tab={tab} onClose={() => undefined} />
+          <FormattingProvider locale="en" timeZone="UTC">
+            <SkillResourcePanel tab={tab} onClose={() => undefined} />
+          </FormattingProvider>
         </AuthenticatedUserProvider>
       </IntlProvider>
     </QueryClientProvider>,

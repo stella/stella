@@ -150,8 +150,10 @@ test("checked matter ids stay immutable", async () => {
   await inMatter(async (tx) => {
     const workspaceIds = await checkedWorkspaceIds(tx, [ids.wsA1]);
     expect(() => {
-      // @ts-expect-error Checked matter ids expose no mutating methods.
-      workspaceIds.push(ids.wsA2);
+      // Checked matter ids expose no mutating methods; force the call anyway.
+      Reflect.apply(Reflect.get(workspaceIds, "push"), workspaceIds, [
+        ids.wsA2,
+      ]);
     }).toThrow(TypeError);
     expect([...workspaceIds]).toEqual([ids.wsA1]);
   });

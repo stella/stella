@@ -212,6 +212,17 @@ const DraftBody = ({
   const placing = placement?.type === "placing";
   const alreadyInBody = inBody === draft;
 
+  const placementDisabledReason = () => {
+    if (placing) {
+      return t("placingDraft");
+    }
+    if (alreadyInBody) {
+      return t("insertedIntoDraft");
+    }
+    return draft.trim().length === 0 ? t("enterDraftText") : undefined;
+  };
+  const disabledReason = placementDisabledReason();
+
   const place = () => {
     if (placing || alreadyInBody) {
       return;
@@ -252,7 +263,8 @@ const DraftBody = ({
       ) : null}
       <div className="flex flex-wrap items-center gap-2">
         <Button
-          disabled={draft.trim().length === 0 || alreadyInBody || placing}
+          disabled={disabledReason !== undefined}
+          disabledReason={disabledReason}
           loading={placing}
           onClick={place}
           size="sm"

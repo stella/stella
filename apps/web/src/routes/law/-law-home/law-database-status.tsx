@@ -63,14 +63,7 @@ export const LawDatabaseStatus = ({ country }: { country: string }) => {
 
   return (
     <Popover>
-      <PopoverTrigger
-        className={cn(
-          COMPOSER_PICKER_TRIGGER_CLASS,
-          // The row's type is 11px, so the badge is half a touch target tall.
-          // A coarse pointer gets the button's own 44px box, as `Button` does.
-          "relative pointer-coarse:after:absolute pointer-coarse:after:size-full pointer-coarse:after:min-h-11 pointer-coarse:after:min-w-11",
-        )}
-      >
+      <PopoverTrigger appearance="caption">
         <CaseLawHealthSignal health={status.health} />
       </PopoverTrigger>
       <PopoverPanel
@@ -101,11 +94,12 @@ export const LawDatabaseStatus = ({ country }: { country: string }) => {
         </DetailsGrid>
         {/* This panel answers whether to trust a search here; the coverage
             page answers why, source by source and court by court, and opens
-            on this country. */}
+            on this country. Styled as the page's other secondary action,
+            the Recent list's "Show more". */}
         <Link
           className={cn(
-            buttonVariants({ size: "sm", variant: "outline" }),
-            "justify-between",
+            buttonVariants({ size: "xs", variant: "ghost" }),
+            "self-start",
           )}
           hash={caseLawCoverageAnchor(country)}
           to="/law/coverage"

@@ -485,6 +485,8 @@ test("termination aborts stalled catalog requests within the service deadline", 
         httpStopped = true;
       },
       stopChatQueueSender: () => undefined,
+      stopChatLimitResumer: () => undefined,
+      stopChatTurnAdopter: () => undefined,
       stopScheduler: () => undefined,
       stopSse: () => undefined,
       timeout: sleep(deadlineMs),

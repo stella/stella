@@ -1,6 +1,5 @@
 import {
   type RefObject,
-  useCallback,
   useDeferredValue,
   useMemo,
   useRef,
@@ -23,7 +22,6 @@ import {
   getKanbanGroups,
   resolveKanbanGroupOptions,
 } from "@stll/ui/kanban";
-import { Skeleton } from "@stll/ui/skeleton";
 import { cn } from "@stll/ui/utils";
 
 import { QueryViewFeedback } from "@/components/query-view-feedback";
@@ -32,6 +30,7 @@ import {
   toTableEntities,
 } from "@/components/workspaces/entity-utils";
 import { useSyncJustificationChunks } from "@/components/workspaces/hooks/use-sync-justifications";
+import { UNCATEGORIZED_GROUP_LABEL_ID } from "@/components/workspaces/kanban/kanban-group-labels.logic";
 import {
   isGroupableProperty,
   resolveWorkspaceKanbanGrouping,
@@ -54,12 +53,10 @@ import type {
 import { useEntityTableFind } from "@/components/workspaces/table/use-entity-table-find";
 import {
   WorkspaceGridCell,
-  WorkspaceGridHead,
   WorkspaceGridRow,
 } from "@/components/workspaces/table/workspace-grid";
 import { getOrderedColumns } from "@/components/workspaces/table/workspace-grid-order";
 import { AddPropertyRailSpacer } from "@/components/workspaces/table/workspace-table/end-fillers";
-import { HeaderEndFillerCell } from "@/components/workspaces/table/workspace-table/header-cells";
 import {
   TABLE_ROW_ESTIMATE_PX,
   type WorkspaceGridStyle,
@@ -71,7 +68,6 @@ import {
   getWorkspaceGridTemplateColumns,
   tableEndFillerCellStyle,
 } from "@/components/workspaces/table/workspace-table/internals-helpers";
-import { WorkspaceTableSkeletonRows } from "@/components/workspaces/table/workspace-table/skeleton-rows";
 import { WorkspaceTable } from "@/components/workspaces/table/workspace-table/workspace-table";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { detached } from "@/lib/detached";
@@ -89,7 +85,12 @@ import { GroupScopeProvider } from "@/routes/_protected.workspaces/$workspaceId/
 import {
   getGroupSkeletonLayout,
   GROUP_TABLE_PAGE_SIZE,
+  groupKeyFor,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/table/grouped-table-layout.logic";
+import {
+  GROUPED_TABLE_CLASS,
+  GroupSkeletonFace,
+} from "@/routes/_protected.workspaces/$workspaceId/-components/table/grouped-table-layout.pending";
 import { useTableColumns } from "@/routes/_protected.workspaces/$workspaceId/-components/table/table-columns";
 import { includesListItems } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-kind-filters";
 import { useSyncSelectedEntities } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-sync-selected-entities";
@@ -119,12 +120,6 @@ const isGroupedTableExcludedKind = (kind: EntityKind): boolean =>
 const GROUPED_TABLE_EXCLUDED_KINDS = ENTITY_KINDS.filter(
   isGroupedTableExcludedKind,
 );
-
-// Stable key for a group. The null (uncategorized) bucket and real string values
-// live in disjoint namespaces so an option literally named "uncategorized"
-// can't collide with the null bucket.
-const groupKeyFor = (value: string | null): string =>
-  value === null ? "uncategorized" : `value:${value}`;
 
 const getEagerGroupValues = (
   groups: KanbanGroup[],
@@ -174,6 +169,7 @@ export const GroupedTableLayout = ({
 
   const groupByConfig = view.layout.groupByPropertyId ?? "";
   const schema = useWorkspaceKanbanSchema(properties);
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- load-bearing, without this memo boundary the React Compiler does not cache this value
   const grouping = useMemo(
     () => resolveWorkspaceKanbanGrouping(groupByConfig, schema),
     [groupByConfig, schema],
@@ -185,28 +181,22 @@ export const GroupedTableLayout = ({
   // The grouping property's option values, sent to the row/count queries so the
   // uncategorized group folds in cells whose value is no longer an option
   // (`undefined` for the built-in "kind" grouping, which has no option list).
-  const optionValues = useMemo(
-    () =>
-      groupByProperty?.content.type === "single-select" ||
-      groupByProperty?.content.type === "multi-select"
-        ? groupByProperty.content.options.map((option) => option.value)
-        : undefined,
-    [groupByProperty],
-  );
-  const fieldIds = useMemo(
-    () =>
-      visibleEntityFieldIds({
-        hiddenProperties: view.layout.hiddenProperties,
-        properties,
-        requiredPropertyIds: groupByProperty ? [groupByProperty.id] : [],
-      }),
-    [groupByProperty, view.layout.hiddenProperties, properties],
-  );
+  const optionValues =
+    groupByProperty?.content.type === "single-select" ||
+    groupByProperty?.content.type === "multi-select"
+      ? groupByProperty.content.options.map((option) => option.value)
+      : undefined;
+  const fieldIds = visibleEntityFieldIds({
+    hiddenProperties: view.layout.hiddenProperties,
+    properties,
+    requiredPropertyIds: groupByProperty ? [groupByProperty.id] : [],
+  });
 
   // When grouped by the workspace's "Document Type" classifier, each section
   // renders the common columns plus only the playbook columns scoped to that
   // section's document type, read from each column's materialized doc-type gate.
   // Any other grouping keeps the shared column set.
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- load-bearing, without this memo boundary the React Compiler does not cache this value
   const documentTypeClassifier = useMemo(
     () => resolveDocumentTypeClassifier(properties),
     [properties],
@@ -216,6 +206,7 @@ export const GroupedTableLayout = ({
     documentTypeClassifier?.id === groupByPropertyId
       ? groupByPropertyId
       : null;
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- load-bearing, without this memo boundary the React Compiler does not cache this value
   const gateLabelsByColumnId = useMemo(
     () =>
       classifierPropertyId !== null
@@ -229,6 +220,7 @@ export const GroupedTableLayout = ({
   // The whole-view "+ new document" row carries the common (ungated) columns: a
   // freshly created, unclassified document has no document type, so no playbook
   // column applies to it yet.
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- load-bearing, without this memo boundary the React Compiler does not cache this value
   const addRowColumns = useMemo(
     () =>
       selectGroupColumns({ columns, gateLabelsByColumnId, groupValue: null }),
@@ -262,7 +254,7 @@ export const GroupedTableLayout = ({
   const groupCountsView = queryView(groupCounts, { isEmpty: () => false });
   const countsData =
     groupCountsView.type === "items" ? groupCountsView.items : undefined;
-  const countByValue = useMemo(() => {
+  const countByValue = (() => {
     const map = new Map<string | null, number>();
     if (countsData) {
       for (const entry of countsData) {
@@ -270,7 +262,7 @@ export const GroupedTableLayout = ({
       }
     }
     return map;
-  }, [countsData]);
+  })();
   const countsLoaded = countsData !== undefined;
 
   // Each section loads its own rows; collect them by group so the row selection
@@ -279,15 +271,12 @@ export const GroupedTableLayout = ({
   const [treeDataByGroup, setTreeDataByGroup] = useState<
     Record<string, TableTreeNode[]>
   >({});
-  const reportGroupTreeData = useCallback(
-    (groupKey: string, nodes: TableTreeNode[]) => {
-      setTreeDataByGroup((prev) =>
-        prev[groupKey] === nodes ? prev : { ...prev, [groupKey]: nodes },
-      );
-    },
-    [],
-  );
-  const allTreeData = useMemo(() => {
+  const reportGroupTreeData = (groupKey: string, nodes: TableTreeNode[]) => {
+    setTreeDataByGroup((prev) =>
+      prev[groupKey] === nodes ? prev : { ...prev, [groupKey]: nodes },
+    );
+  };
+  const allTreeData = (() => {
     // A multi-select grouping puts the same entity in several sections, so
     // dedupe by entity id before resolving the shared selection and row-id set.
     const seen = new Set<string>();
@@ -299,7 +288,7 @@ export const GroupedTableLayout = ({
       }
     }
     return unique;
-  }, [treeDataByGroup]);
+  })();
   useSyncSelectedEntities({
     workspaceId,
     viewId: view.id,
@@ -308,10 +297,7 @@ export const GroupedTableLayout = ({
   // Every row id across all sections, so a section's select-all keeps the other
   // sections' selections (they share one selection) without resurrecting stale
   // ids.
-  const allRowIds = useMemo(
-    () => allTreeData.map((node) => node.entityId),
-    [allTreeData],
-  );
+  const allRowIds = allTreeData.map((node) => node.entityId);
   // The cross-group row-id union grows as each group's first page lands, so
   // passing it as a prop would re-render every section on every group load
   // (each rebuilding its table). Sections only need it inside the "select
@@ -346,7 +332,7 @@ export const GroupedTableLayout = ({
   // Cells whose value is no longer a current option fold into the uncategorized
   // group server-side (the row/count queries treat "no current-option value" as
   // uncategorized), so the sections are just the option groups plus uncategorized.
-  const groups = getKanbanGroups(options, t("common.uncategorized"));
+  const groups = getKanbanGroups(options, t(UNCATEGORIZED_GROUP_LABEL_ID));
   const eagerGroupValues = countsLoaded
     ? getEagerGroupValues(groups, countByValue)
     : null;
@@ -385,7 +371,7 @@ export const GroupedTableLayout = ({
         {groupCountsView.type !== "pending" && (
           <QueryViewFeedback view={groupCountsView} />
         )}
-        <div className="flex w-max min-w-full flex-col" ref={scrollRef}>
+        <div className={GROUPED_TABLE_CLASS} ref={scrollRef}>
           {groups.map((group) => (
             <GroupSection
               columns={columns}
@@ -518,27 +504,11 @@ const GroupSkeleton = ({
     getGroupSkeletonLayout(totalRows);
 
   return (
-    <div style={gridStyle}>
-      <WorkspaceGridRow className="pointer-events-none">
-        {renderColumns.map((column) => (
-          <WorkspaceGridHead
-            className="flex items-center px-2"
-            key={column.id}
-            role="presentation"
-          >
-            <Skeleton className="h-3.5 w-2/5" />
-          </WorkspaceGridHead>
-        ))}
-        <HeaderEndFillerCell
-          addPropertyColumn={addPropertyColumn}
-          renderColumns={renderColumns}
-        />
-      </WorkspaceGridRow>
-      <WorkspaceTableSkeletonRows
-        addPropertyColumn={addPropertyColumn}
-        renderColumns={renderColumns}
-        rowCount={skeletonRowCount}
-      />
+    <GroupSkeletonFace
+      grid={{ addPropertyColumn, renderColumns }}
+      rowCount={skeletonRowCount}
+      style={gridStyle}
+    >
       {fillerRowCount > 0 && (
         <WorkspaceGridRow
           className="pointer-events-none"
@@ -570,7 +540,7 @@ const GroupSkeleton = ({
           )}
         </WorkspaceGridRow>
       )}
-    </div>
+    </GroupSkeletonFace>
   );
 };
 
@@ -621,15 +591,11 @@ const GroupSection = ({
   // this group's document type (see selectGroupColumns). Sections legitimately
   // differ in columns and grid width when grouped by the "Document Type"
   // classifier; for other groupings this returns the shared columns unchanged.
-  const sectionColumns = useMemo(
-    () =>
-      selectGroupColumns({
-        columns,
-        gateLabelsByColumnId,
-        groupValue: group.value,
-      }),
-    [columns, gateLabelsByColumnId, group.value],
-  );
+  const sectionColumns = selectGroupColumns({
+    columns,
+    gateLabelsByColumnId,
+    groupValue: group.value,
+  });
 
   // A category with no rows (an option no document carries yet) collapses to a
   // slim header; only groups known to have rows fire their row query.
@@ -682,6 +648,7 @@ const GroupSection = ({
   // query is disabled, but React Query can still hold cached pages for this key.
   // Drop them when the group has no rows so stale rows aren't published to the
   // selection union or rendered.
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- load-bearing, without this memo boundary the React Compiler does not cache this value
   const entities = useMemo(() => {
     if (!hasRows || !queryData) {
       return [];
@@ -690,6 +657,7 @@ const GroupSection = ({
   }, [hasRows, queryData]);
   const loadedCount = entities.length;
 
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- load-bearing, without this memo boundary the React Compiler does not cache this value
   const treeData = useMemo(() => toTableEntities(entities), [entities]);
 
   // Publish this section's rows to the parent so the row selection resolves
@@ -702,14 +670,14 @@ const GroupSection = ({
 
   // AI cells read justifications from the workspace store; sync each loaded page
   // so the source hover card and citation highlights work in grouped views too.
-  const justificationEntityIdChunks = useMemo(() => {
+  const justificationEntityIdChunks = (() => {
     if (!queryData) {
       return [];
     }
     return queryData.pages.map((page) =>
       page.entities.map((entity) => entity.entityId),
     );
-  }, [queryData]);
+  })();
   useSyncJustificationChunks({
     workspaceId,
     entityIdChunks: justificationEntityIdChunks,

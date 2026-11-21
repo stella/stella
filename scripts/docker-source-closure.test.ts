@@ -1229,6 +1229,34 @@ describe("Docker source closure", () => {
     }
   });
 
+  test("an executable run on Bun reads what the bare executable reads", () => {
+    const context: SourceTree = new Map([
+      [
+        "/app/vite.config.ts",
+        put("bun-runtime/vite.config.ts", "export default {};"),
+      ],
+      ["/app/src/route.tsx", put("bun-runtime/src/route.tsx", "export {};")],
+    ]);
+    const bare = commandEntries(root, context, "vite build", "/app");
+    expect(bare).toEqual(["/app/vite.config.ts", "/app/src/route.tsx"]);
+    for (const command of ["bun --bun vite build", "bun -b vite build"]) {
+      expect(commandEntries(root, context, command, "/app")).toEqual(bare);
+    }
+    const scripted: SourceTree = new Map([
+      ["/app/entry.ts", put("bun-runtime/entry.ts", "export {};")],
+      [
+        "/app/package.json",
+        put(
+          "bun-runtime/package.json",
+          JSON.stringify({ scripts: { vite: "bun entry.ts" } }),
+        ),
+      ],
+    ]);
+    expect(commandEntries(root, scripted, "bun --bun vite", "/app")).toEqual([
+      "/app/entry.ts",
+    ]);
+  });
+
   test("source-run arguments are distinct from Bun options and build entrypoints", () => {
     const context: SourceTree = new Map([
       ["/app/entry.ts", "entry.ts"],

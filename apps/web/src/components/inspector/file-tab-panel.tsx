@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import type {
   Dispatch,
   MouseEvent,
@@ -211,35 +211,6 @@ const getFileTabEditorState = ({
   };
 };
 
-const getFileTabChromeState = ({
-  isEditingNativeDocx,
-  isEmailDisplay,
-  isMarkdownDisplay,
-  isOfficeDisplay,
-  isPlainTextDisplay,
-  tab,
-}: {
-  isEditingNativeDocx: boolean;
-  isEmailDisplay: boolean;
-  isMarkdownDisplay: boolean;
-  isOfficeDisplay: boolean;
-  isPlainTextDisplay: boolean;
-  tab: FileTabPanelProps["tab"];
-}) => {
-  const isPreviewFacet = (tab.facet ?? "preview") === "preview";
-  return {
-    canOpenFullView: !isEmailDisplay && !isMarkdownDisplay,
-    isPreviewFacet,
-    isPreviewOverlayVisible:
-      isPreviewFacet &&
-      !isEditingNativeDocx &&
-      !isEmailDisplay &&
-      !isMarkdownDisplay &&
-      !isOfficeDisplay &&
-      !isPlainTextDisplay,
-  };
-};
-
 export const FileTabPanel = ({
   activeId,
   canUpdateEntity,
@@ -276,6 +247,7 @@ export const FileTabPanel = ({
   const t = useTranslations();
   const [pdfColorMode, setPDFColorMode] = useState<PDFColorMode>("system");
   const setFileFacet = useInspectorTabsStore((s) => s.setFileFacet);
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- load-bearing, without this memo boundary the React Compiler does not cache this value
   const display = useMemo(
     () => getFileTabDisplayState({ activeId, minimized, scaleOffsets, tab }),
     [activeId, minimized, scaleOffsets, tab],
@@ -338,12 +310,9 @@ export const FileTabPanel = ({
     tab,
   });
 
-  const handleViewerError = useCallback(
-    (error: unknown) => {
-      notifyUserError(error, t("errors.actionFailed"));
-    },
-    [t],
-  );
+  const handleViewerError = (error: unknown) => {
+    notifyUserError(error, t("errors.actionFailed"));
+  };
 
   const docxEditor = useDocxEditorBindings({
     docxActionsRef,
@@ -385,7 +354,10 @@ export const FileTabPanel = ({
     isNativeDocxDisplay,
     isOfficeDisplay,
     isPdfDisplay,
-    isTextDisplay: isMarkdownDisplay || isPlainTextDisplay,
+    isTextDisplay:
+      isMarkdownDisplay ||
+      isPlainTextDisplay ||
+      display.nativePreviewKind === "dataBox",
     readsDocumentInInspector,
     tab,
   });
@@ -394,15 +366,12 @@ export const FileTabPanel = ({
   // into a locked DOCX unlocks it. The header carries only the exit — Save
   // or Create version — while editing. It is gated on the Preview facet
   // because switching facets unmounts the editor.
-  const { canOpenFullView, isPreviewFacet, isPreviewOverlayVisible } =
-    getFileTabChromeState({
-      isEditingNativeDocx,
-      isEmailDisplay,
-      isMarkdownDisplay,
-      isOfficeDisplay,
-      isPlainTextDisplay,
-      tab,
-    });
+  const { canOpenFullView } = display;
+  const isPreviewFacet = (tab.facet ?? "preview") === "preview";
+  const isPreviewOverlayVisible =
+    isPreviewFacet &&
+    !isEditingNativeDocx &&
+    (requiresPdfMeasurement || isNativeDocxDisplay);
   const editExit = isMarkdownDisplay ? (
     <MarkdownDraftActions draft={markdown} />
   ) : (
@@ -582,6 +551,7 @@ const DocxFinalizeButton = ({
     <Button
       className={cn(isCollaborating && "min-h-11")}
       disabled={isCollaborating && !isCollaborationPublishable}
+      disabledReason={t("folio.syncing")}
       onClick={() => {
         const finalize = docxActionsRef.current.get(tabId)?.finalize();
         if (finalize) {

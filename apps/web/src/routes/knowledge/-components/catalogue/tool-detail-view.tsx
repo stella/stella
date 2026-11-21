@@ -149,8 +149,8 @@ const ToolDetailContent = ({
     }
     detached(
       navigate({
-        to: "/knowledge/tools/$entry",
-        params: { entry: entry.installedSkillId },
+        to: "/knowledge/tools/skills/$skillId",
+        params: { skillId: entry.installedSkillId },
       }),
       "tool-detail-view.navigate",
     );
@@ -186,6 +186,7 @@ const ToolDetailContent = ({
             <Button
               className="flex-1"
               disabled={install.isPending}
+              disabledReason={t("common.installing")}
               onClick={onInstall}
               type="button"
             >
@@ -216,6 +217,7 @@ const ToolDetailContent = ({
             <Button
               className="flex-1"
               disabled={uninstall.isPending}
+              disabledReason={t("common.removing")}
               onClick={requestRemoval}
               type="button"
               variant="destructive-outline"

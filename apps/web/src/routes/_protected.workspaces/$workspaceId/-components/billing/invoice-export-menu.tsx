@@ -131,6 +131,7 @@ export const InvoiceExportMenu = ({
           <Button
             aria-busy={exportFile.isPending}
             disabled={exportFile.isPending}
+            disabledReason={t("common.preparing")}
             size="sm"
             variant="outline"
           />

@@ -46,6 +46,7 @@ describe("auth session paths", () => {
       "/sign-in/email-otp",
       "/sign-in/social",
       "/sign-up/email",
+      "/sso/callback/:providerId",
     ]);
 
     const enabledPaths = getEnabledAuthEndpointPaths();

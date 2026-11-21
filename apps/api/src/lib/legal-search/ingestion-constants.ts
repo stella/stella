@@ -1,3 +1,5 @@
+// parser-output-unchanged: the cz-ns-sbirka adapter entry is new; existing adapters read only their own keys, so their parsed output is unchanged.
+// parser-output-unchanged: the TST adapter entry is new; existing adapters read only their own keys, so their parsed output is unchanged.
 // parser-output-unchanged: source declarations move to independent entries; values are unchanged.
 export {
   ADAPTER_KEYS,
@@ -7,6 +9,21 @@ export {
   PARSER_VERSIONS,
   SOURCE_FINGERPRINT_VERSIONS,
 } from "./parser-registry.gen";
+
+/**
+ * The TST reconciliation slice of its súmulas, OJs and precedentes
+ * normativos, listed whole by number: some carry no publication date, so no
+ * day slice holds them. It sorts before every day, first in walk order.
+ */
+export const BR_TST_PRECEDENTS_SLICE = "0-precedentes";
+
+/**
+ * The Supreme Court collection's reconciliation slice of its Vážný volumes:
+ * the interwar Supreme Court's decisions, which the archive lists under one
+ * term of their own rather than under a collection year. It sorts before
+ * every year, first in walk order.
+ */
+export const CZ_NS_SBIRKA_VAZNY_SLICE = "0-vazny";
 
 /**
  * Capacity bound for a complete `case_law_sources` read, and nothing more.

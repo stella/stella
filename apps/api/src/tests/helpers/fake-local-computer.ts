@@ -3,6 +3,10 @@ import type { RunAgentResumeItem, StreamChunk } from "@tanstack/ai";
 import { panic, Result } from "better-result";
 
 import { type HarnessEvent, harnessEventsToChunks } from "@stll/agent-engine";
+import {
+  CHAT_TURN_STEERING,
+  type ChatTurnSteering,
+} from "@stll/api-contract/chat-send-intent";
 import { DESKTOP_RUNNER_DESKTOP_MESSAGE } from "@stll/api-contract/desktop-runner";
 
 import { createLocalChatRun } from "@/api/handlers/chat/local-run-chunks";
@@ -66,8 +70,16 @@ export const createComputer = () => {
   const stored: StoredRunEvent[] = [];
   const queued = { interrupts: 0, approvals: 0 };
   let state: DesktopRunnerRunView["state"] = "running";
+  /** Whether the run's harness last reported `steer`. */
+  let steering: ChatTurnSteering = CHAT_TURN_STEERING.notSteerable;
   let chatReadSeq = 0;
   let approvalRequest: StoredRunEvent | undefined;
+  /** The text each steer handed the run, as the API queued it. */
+  const inputs = new Map<string, string>();
+  /** What the turn made of the run's steer reports, in order. */
+  const steerSettles: [string, "taken" | "refused"][] = [];
+  let steerSettled = Promise.withResolvers<undefined>();
+  let steerGate: Promise<undefined> = Promise.resolve(undefined);
   const store = (message: (seq: number) => Record<string, unknown>) => {
     const seq = stored.length + 1;
     const event = { seq, message: { ...message(seq), runId: RUNNER_RUN_ID } };
@@ -125,6 +137,12 @@ export const createComputer = () => {
       chatReadSeq = seq;
       return Result.ok(undefined);
     },
+    readHandedOverChatRun: async () =>
+      Result.ok({
+        runId: RUNNER_RUN_ID,
+        harness: DESTINATION.harness,
+        chatReadSeq,
+      }),
     readChatRunForRequest: async () =>
       Result.ok(
         approvalRequest === undefined
@@ -145,10 +163,21 @@ export const createComputer = () => {
     answerQuestion: async () => panic("No question is asked here"),
     pairAppCall: async () => panic("No app call is reported here"),
     readRunOutputFile: async () => panic("No output file is reported here"),
-    readRunInputText: async () => panic("No steer is reported here"),
+    readRunInputText: async ({ inputId }) =>
+      Result.ok(inputs.get(inputId) ?? null),
+    readChatTurnSteering: async () =>
+      await Promise.resolve(Result.ok(steering)),
   };
   const context: LocalRunContext = {
     control,
+    steeredQueue: {
+      settle: async (inputId, report) => {
+        steerSettles.push([inputId, report]);
+        steerSettled.resolve(undefined);
+        await steerGate;
+        return Result.ok(undefined);
+      },
+    },
     runBell,
     owner: {
       userId: toSafeId<"user">("user_bound"),
@@ -164,6 +193,29 @@ export const createComputer = () => {
     context,
     queued,
     chatReadSeq: () => chatReadSeq,
+    steerSettles,
+    /** The API handed the run steer `inputId` with `text`. */
+    handInput: (inputId: string, text: string) => {
+      inputs.set(inputId, text);
+    },
+    /** Hold the turn's next steer report until `release`. */
+    holdSteers: () => {
+      const gate = Promise.withResolvers<undefined>();
+      steerGate = gate.promise;
+      steerSettled = Promise.withResolvers<undefined>();
+      return {
+        reached: steerSettled.promise,
+        release: () => gate.resolve(undefined),
+      };
+    },
+    /** The run's harness now reports `steer`, or no longer does. */
+    reportSteering: (next: ChatTurnSteering) => {
+      steering = next;
+    },
+    /** Where a released reader stopped, as its release records it. */
+    releaseAt: (seq: number) => {
+      chatReadSeq = seq;
+    },
     events: (chunks: readonly StreamChunk[]) => {
       for (const chunk of chunks) {
         store((seq) => ({
@@ -204,7 +256,7 @@ export const localSource =
     computer: ReturnType<typeof createComputer>,
     resume?: readonly RunAgentResumeItem[],
   ) =>
-  (abortSignal: AbortSignal) =>
+  (abortSignal: AbortSignal, handOverSignal = new AbortController().signal) =>
     createLocalChatRun(
       computer.context,
       resume === undefined
@@ -226,4 +278,22 @@ export const localSource =
       instructions: "You are stella.",
       resume,
       abortSignal,
+      handOverSignal,
+    });
+
+/** The turn's run as a task that adopted the turn reads it on. */
+export const adoptedSource =
+  (computer: ReturnType<typeof createComputer>) =>
+  (abortSignal: AbortSignal, handOverSignal = new AbortController().signal) =>
+    createLocalChatRun(computer.context, {
+      type: "adopt",
+      harness: DESTINATION.harness,
+    }).stream({
+      chatRunId: "chat-run-bound",
+      chatTurnId: TURN_ID,
+      messages: [],
+      instructions: "You are stella.",
+      resume: undefined,
+      abortSignal,
+      handOverSignal,
     });

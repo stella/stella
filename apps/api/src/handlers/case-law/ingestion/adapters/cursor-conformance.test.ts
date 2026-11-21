@@ -499,6 +499,36 @@ const ADAPTER_CONFORMANCE = {
     disposition: "excluded",
     reason: "the complete JSON-LD export is covered by adapter fixture tests",
   },
+  [ADAPTER_KEYS.BR_TJDFT]: {
+    disposition: "exercised",
+    // Every closed publication day answers an empty window, so the frontier
+    // crosses the last closed day's two bases and waits on a day that has
+    // not closed: a cycle there sends nothing and returns its cursor.
+    exhaustedSource: () =>
+      jsonResponse({
+        hits: { value: 0 },
+        agregacoes: {},
+        paginacao: { pagina: 0, tamanho: 40 },
+        registros: [],
+      }),
+    maxSteadyStateCursors: 1,
+    maxSteadyStatePositions: 0,
+  },
+  [ADAPTER_KEYS.CZ_ISIR]: {
+    disposition: "excluded",
+    reason:
+      "the feed walk by action id, the cursor standing still at the feed's end and the stop on an unread document are covered by cz-isir.test.ts against a composed feed page",
+  },
+  [ADAPTER_KEYS.CZ_NS_SBIRKA]: {
+    disposition: "excluded",
+    reason:
+      "the sitemap walk, the parked cycle at the newest entry, an edited entry met again and the stop on an unread page are covered by cz-ns-sbirka.test.ts against recorded sitemaps",
+  },
+  [ADAPTER_KEYS.BR_TST]: {
+    disposition: "excluded",
+    reason:
+      "the walk, the window restart, the quiet parked cycle and the rate-limit halt are covered by br-tst.test.ts against a scripted search",
+  },
 } as const satisfies Record<AdapterKey, AdapterCoverage>;
 
 /**

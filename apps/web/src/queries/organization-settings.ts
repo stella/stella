@@ -6,35 +6,14 @@ import { RESOURCE_TYPE } from "@stll/api-contract";
 import { api } from "@/lib/api";
 import { unwrapApiResponse } from "@/lib/errors/api";
 import { ROUTE_QUERY_STALE_TIME_MS } from "@/lib/react-query";
-import { organizationSettingsQueryRoot } from "@/lib/resource-query-roots.logic";
 import { resourceQueryOptions } from "@/lib/workspace-realtime";
-
-type OrganizationSettingsCaller = {
-  organizationId: string;
-  userId: string;
-};
-
-type OptionalOrganizationSettingsCaller = Omit<
+import { organizationSettingsKeys } from "@/queries/organization-settings-keys.logic";
+import type {
+  OptionalOrganizationSettingsCaller,
   OrganizationSettingsCaller,
-  "organizationId"
-> & {
-  organizationId: string | null;
-};
+} from "@/queries/organization-settings-keys.logic";
 
-export const organizationSettingsKeys = {
-  all: organizationSettingsQueryRoot(),
-  byOrganization: (organizationId: string | null) => [
-    ...organizationSettingsKeys.all,
-    organizationId,
-  ],
-  byCaller: ({
-    organizationId,
-    userId,
-  }: OptionalOrganizationSettingsCaller) => [
-    ...organizationSettingsKeys.byOrganization(organizationId),
-    userId,
-  ],
-};
+export { organizationSettingsKeys } from "@/queries/organization-settings-keys.logic";
 
 const fetchOrganizationSettings = async ({ signal }: QueryFunctionContext) => {
   const response = await api["organization-settings"].get({
@@ -51,11 +30,17 @@ export const organizationSettingsOptions = ({
   organizationId,
   userId,
 }: OrganizationSettingsCaller) =>
-  queryOptions({
-    queryKey: organizationSettingsKeys.byCaller({ organizationId, userId }),
-    queryFn: fetchOrganizationSettings,
-    staleTime: ROUTE_QUERY_STALE_TIME_MS,
-  });
+  resourceQueryOptions(
+    queryOptions({
+      queryKey: organizationSettingsKeys.byCaller({ organizationId, userId }),
+      queryFn: fetchOrganizationSettings,
+      staleTime: ROUTE_QUERY_STALE_TIME_MS,
+    }),
+    {
+      resources: [RESOURCE_TYPE.ORGANIZATION],
+      scope: { type: "organization", organizationId, userId },
+    },
+  );
 
 export const optionalOrganizationSettingsOptions = ({
   organizationId,
@@ -67,8 +52,10 @@ export const optionalOrganizationSettingsOptions = ({
       queryFn: organizationId === null ? skipToken : fetchOrganizationSettings,
       staleTime: ROUTE_QUERY_STALE_TIME_MS,
     }),
-    {
-      resources: [RESOURCE_TYPE.ORGANIZATION],
-      scope: { type: "organization" },
-    },
+    organizationId === null
+      ? { type: "independent" }
+      : {
+          resources: [RESOURCE_TYPE.ORGANIZATION],
+          scope: { type: "organization", organizationId, userId },
+        },
   );

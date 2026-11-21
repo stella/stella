@@ -19,6 +19,7 @@ import { toSafeId } from "@/lib/safe-id";
 import type { ViewLayout } from "@/lib/types";
 import { resourceQueryOptions } from "@/lib/workspace-realtime";
 import { toWorkspaceEntity } from "@/lib/workspaces/queries/entities";
+import { entityViewLayoutsKey } from "@/lib/workspaces/queries/entity-view-layouts-key.logic";
 import { myWorkKeys } from "@/lib/workspaces/queries/my-work";
 
 export const entityViewKeys = {
@@ -114,7 +115,7 @@ export const entityViewRowsOptions = ({
       scope:
         scope.type === "matter"
           ? { type: "workspace", workspaceId: scope.matterId }
-          : { type: "organization" },
+          : { type: "organization", organizationId, userId },
     },
   );
 };
@@ -150,7 +151,7 @@ const toProposalProjection = ({
 
 export const entityViewsOptions = (organizationId: string, userId: string) =>
   queryOptions({
-    queryKey: ["entity-view-layouts", organizationId, userId],
+    queryKey: entityViewLayoutsKey(organizationId, userId),
     queryFn: async ({ signal }) =>
       unwrapApiResponse(await api["entity-views"].get({ fetch: { signal } })),
   });

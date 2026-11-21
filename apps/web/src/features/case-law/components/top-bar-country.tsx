@@ -60,10 +60,20 @@ export const TopBarCountry = () => {
 const TopBarCaseLawCountry = ({ route }: { route: "home" | "cases" }) => {
   const format = useFormatter();
   const navigate = useNavigate();
-  // Read from the location rather than a route-scoped hook: this renders in
-  // shared chrome, above the route whose search it is reading.
+  // Read from the rendered match rather than a route-scoped hook: this
+  // renders in shared chrome, above the route whose search it is reading.
+  // The match, not the location, so the label always names the page shown:
+  // a navigation moves the location first, even while this hydrates.
   const country = useRouterState({
-    select: (state) => state.location.search.country,
+    select: (state) => {
+      const search: unknown = state.matches.at(-1)?.search;
+      return typeof search === "object" &&
+        search !== null &&
+        "country" in search &&
+        typeof search.country === "string"
+        ? search.country
+        : undefined;
+    },
   });
 
   const switchTo = (next: string) => {

@@ -6,6 +6,11 @@ import { useFormatter, useLocale, useTranslations } from "use-intl";
 
 import { Temporal } from "@stll/time";
 import { Button } from "@stll/ui/button";
+import {
+  Collapsible,
+  CollapsiblePanel,
+  CollapsibleTrigger,
+} from "@stll/ui/collapsible";
 import { DayCalendar } from "@stll/ui/day-calendar";
 import {
   ChevronLeftIcon,
@@ -293,12 +298,14 @@ const ActivityWelcome = ({
           {t("welcomeControlFact")}
         </li>
       </ul>
-      <details className="text-muted-foreground text-xs">
-        <summary className="flex min-h-11 cursor-pointer items-center">
+      <Collapsible className="text-muted-foreground text-xs">
+        <CollapsibleTrigger render={<Button size="touch" variant="muted" />}>
           {t("welcomeLearnMore")}
-        </summary>
-        <p className="leading-relaxed text-pretty">{t("welcomeDetails")}</p>
-      </details>
+        </CollapsibleTrigger>
+        <CollapsiblePanel>
+          <p className="leading-relaxed text-pretty">{t("welcomeDetails")}</p>
+        </CollapsiblePanel>
+      </Collapsible>
       <CaptureDetailsControl
         onCommand={onCommand}
         settings={snapshot}
@@ -372,6 +379,9 @@ const DayHeader = ({
           disabled={
             navigationDisabled || snapshot.date <= snapshot.earliestDate
           }
+          disabledReason={
+            navigationDisabled ? t("creatingDrafts") : t("earliestDayReached")
+          }
           onClick={() => onNavigate(shiftDate(snapshot.date, -1))}
           size="icon"
           variant="ghost"
@@ -388,6 +398,9 @@ const DayHeader = ({
         <Button
           aria-label={t("nextDay")}
           disabled={navigationDisabled || snapshot.date >= snapshot.latestDate}
+          disabledReason={
+            navigationDisabled ? t("creatingDrafts") : t("latestDayReached")
+          }
           onClick={() => onNavigate(shiftDate(snapshot.date, 1))}
           size="icon"
           variant="ghost"
@@ -397,6 +410,7 @@ const DayHeader = ({
         {snapshot.date === snapshot.today ? null : (
           <Button
             disabled={navigationDisabled}
+            disabledReason={t("creatingDrafts")}
             onClick={() => onNavigate(snapshot.today)}
             variant="ghost"
           >

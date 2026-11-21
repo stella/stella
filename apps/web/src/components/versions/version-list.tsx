@@ -265,6 +265,7 @@ export const VersionRow = ({
               aria-label={t("common.summarizeChanges")}
               aria-busy={summary.status === "loading" || undefined}
               disabled={summary.status === "loading"}
+              disabledReason={t("common.loading")}
               onClick={() => {
                 detached(handleSummarize(), "version-list.summarize");
               }}

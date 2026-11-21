@@ -75,7 +75,6 @@ import {
   ComposerEditModeSubmenu,
 } from "@/components/chat/chat-edit-mode-menu";
 import {
-  CHAT_MODEL_MENU_POPUP_CLASS_NAME,
   ChatModelOptionsMenu,
   type ComposerModelsMenuProps,
 } from "@/components/chat/chat-model-options-menu";
@@ -495,7 +494,7 @@ const ComposerModelsSubmenu = ({
         <CpuIcon />
         {t("chat.composerMenu.models")}
       </MenuSubTrigger>
-      <MenuSubPopup className={CHAT_MODEL_MENU_POPUP_CLASS_NAME}>
+      <MenuSubPopup className="w-[min(32rem,calc(100vw-2rem))] max-w-(--available-width)">
         <ChatModelOptionsMenu
           enabled={enabled && open}
           key={open ? "open" : "closed"}
@@ -733,10 +732,12 @@ export const ComposerSkillsMenu = ({
   const unavailableSkillIds = availability?.hidden;
   const browserExtensionStoreUrl = useBrowserExtensionStoreUrl();
   const oneClickNeeds = oneClickSkillNeeds(chat, browserExtensionStoreUrl);
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- load-bearing, without this memo boundary the React Compiler does not cache this value
   const shortcutRows = useMemo(
     () => commandShortcutRowsFromSkillPages(data?.pages, unavailableSkillIds),
     [data?.pages, unavailableSkillIds],
   );
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- load-bearing, without this memo boundary the React Compiler does not cache this value
   const items = useMemo(
     () =>
       buildChatSlashItems({
@@ -1324,10 +1325,7 @@ const ComposerContextMatterSub = ({
     enabled: open,
   });
   const activeView = views?.at(0) ?? null;
-  const { filters, sorts } = useMemo(
-    () => getMentionViewScope(activeView?.layout),
-    [activeView?.layout],
-  );
+  const { filters, sorts } = getMentionViewScope(activeView?.layout);
   // Same 150ms settle window as the workspace mention source's entity search
   // (`use-workspace-chat-mention-registration.ts`), so typing here produces
   // the same request cadence instead of a query per keystroke.
@@ -1335,16 +1333,13 @@ const ComposerContextMatterSub = ({
     search.trim(),
     CHAT_MENTION_SEARCH_DEBOUNCE_MS,
   );
-  const entitiesKey = useMemo(
-    () => ({
-      workspaceId: matter.id,
-      filters,
-      sorts,
-      ...(debouncedSearch && { search: debouncedSearch }),
-      pageSize: CHAT_MENTION_ENTITY_RESULT_LIMIT,
-    }),
-    [debouncedSearch, filters, matter.id, sorts],
-  );
+  const entitiesKey = {
+    workspaceId: matter.id,
+    filters,
+    sorts,
+    ...(debouncedSearch && { search: debouncedSearch }),
+    pageSize: CHAT_MENTION_ENTITY_RESULT_LIMIT,
+  };
   const { data: entitiesData, isError: entitiesFailed } = useQuery({
     ...useEntitiesOptions(entitiesKey),
     enabled: open && views !== undefined,
@@ -1357,7 +1352,7 @@ const ComposerContextMatterSub = ({
     threadRef.scope === "workspace" && threadRef.workspaceId === matter.id
       ? undefined
       : matter.id;
-  const fileOptions = useMemo<ChatMentionOption[]>(() => {
+  const fileOptions: ChatMentionOption[] = (() => {
     if (!entitiesData) {
       return [];
     }
@@ -1368,15 +1363,12 @@ const ComposerContextMatterSub = ({
         sourceWorkspaceId,
       }),
     );
-  }, [entitiesData, matter.id, sourceWorkspaceId]);
-  const matterMentionOption = useMemo<ChatMentionOption | undefined>(
-    () =>
-      buildWorkspaceMentionOptions({
-        workspaces: [{ id: matter.id, name: matter.name }],
-        firstViewIdsByWorkspaceId: undefined,
-      }).at(0),
-    [matter.id, matter.name],
-  );
+  })();
+  const matterMentionOption: ChatMentionOption | undefined =
+    buildWorkspaceMentionOptions({
+      workspaces: [{ id: matter.id, name: matter.name }],
+      firstViewIdsByWorkspaceId: undefined,
+    }).at(0);
 
   const renderFileOptions = () => {
     if (viewsFailed || entitiesFailed) {
@@ -1512,7 +1504,7 @@ export const ComposerMcpSubmenu = ({
   const connectionsData =
     connectionsView.type === "items" ? connectionsView.items : undefined;
 
-  const connectionBySlug = useMemo(() => {
+  const connectionBySlug = (() => {
     const map = new Map<
       string,
       NonNullable<typeof connectionsData>["connections"][number]
@@ -1523,7 +1515,7 @@ export const ComposerMcpSubmenu = ({
       }
     }
     return map;
-  }, [connectionsData]);
+  })();
 
   const connectors = connectorsData ? connectorsData.connectors : [];
   const rows = filterBySearchQuery({

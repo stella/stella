@@ -1,0 +1,5 @@
+{
+  "capture": "synthetic",
+  "sha256": "31d710ca107fe7396debe1d0372adb4e828809b151d7bacb923366b1c955c643",
+  "note": "anonymised paragraphs of insolvency register document 81161847 (Vrchní soud v Praze, rozsudek of 29 September 2026 in an incidental dispute), as the cz-isir reader and anonymiser produced them on 2026-11-19, shortened to the header, operative part, opening reasons and closing, with the parties' company names replaced by invented ones"
+}

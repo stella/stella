@@ -5,11 +5,12 @@ defaults:
     shell: bash
 
 on:
-  pull_request_target:
+  pull_request:
     # Run when a PR opens, when its title or body is edited, and when a
-    # maintainer requests a rerun with "run-pr-lint". This metadata-only
-    # workflow reads the title and body and never checks out or executes PR
-    # code, so it is safe to run for forks without approval.
+    # maintainer requests a rerun with "run-pr-lint". The checks read the
+    # title and body only. Fork pull requests get a read-only token, so the
+    # reusable workflow's labelling and assignment steps, which never gate,
+    # apply to same-repository pull requests only.
     types: [opened, edited, labeled]
 
 concurrency:
@@ -21,14 +22,10 @@ concurrency:
     }}
   cancel-in-progress: true
 
-permissions:
-  contents: read
-  issues: read
-  pull-requests: write
+permissions: {}
 
 jobs:
   pr-body-log-lines:
-    permissions: {}
     if: >-
       github.event.action == 'opened'
       || github.event.action == 'edited'
@@ -36,28 +33,34 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 2
     steps:
-      - name: Checkout trusted workflow revision
+      - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
-      - name: Setup Node.js
-        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        timeout-minutes: 2
         with:
-          node-version: 24
+          bun-version-file: package.json
 
       - name: Reject tool log lines
         env:
           PR_BODY: ${{ github.event.pull_request.body }}
-        run: node scripts/check-pr-body.ts
+        run: bun scripts/check-pr-body.ts
 
   pr-lint:
     if: >-
-      github.event.pull_request.user.login != 'dependabot[bot]'
+      github.actor != 'dependabot[bot]'
+      && github.event.pull_request.user.login != 'dependabot[bot]'
       && (github.event.action == 'opened'
           || github.event.action == 'edited'
           || github.event.label.name == 'run-pr-lint')
+    permissions:
+      contents: read
+      issues: read
+      pull-requests: write
     # Reusable workflow only consumes the auto-provided GITHUB_TOKEN.
     # Do not switch to `secrets: inherit` — that widens the blast radius
     # if the reusable ever starts touching named secrets.
-    uses: stella/.github/.github/workflows/pr-lint.yml@0cc2def60afb3e0fac0df9f541baf926f77889fa
+    uses: stella/.github/.github/workflows/pr-lint.yml@2664e46f02aea7164ba71bcdd485a686166993a4

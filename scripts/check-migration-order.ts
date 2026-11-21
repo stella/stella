@@ -25,6 +25,7 @@ import {
 import {
   findMigrationTimestampViolations,
   MIGRATION_FILE,
+  MIGRATION_RESTAMP_COMMAND,
   MIGRATION_TIMESTAMP,
   type MigrationIdentityChanges,
   readMigrationBaseSnapshot,
@@ -409,6 +410,7 @@ if (import.meta.main) {
           ({ directory, newestBaseDirectory }) =>
             `New migration ${directory} must be stamped later than the newest base migration ${newestBaseDirectory}. Re-stamp the unmerged migration later than that one; never re-stamp a merged migration.`,
         )
+        .concat(`Fix on the branch: ${MIGRATION_RESTAMP_COMMAND}`)
         .join("\n"),
     );
   }
@@ -416,15 +418,16 @@ if (import.meta.main) {
   const inventorySqlFiles = aliasInventory.map(
     ({ fileName }) => `apps/api/drizzle/${fileName}/migration.sql`,
   );
-  const headHashes: Record<string, string> = {};
-  for (const file of new Set([
-    ...Object.keys(baseHashes),
-    ...inventorySqlFiles,
-  ])) {
-    headHashes[file] = hashBytes(
-      readGitFile({ ref: "HEAD", file, cwd: REPO_ROOT }),
-    );
-  }
+  const headHashes = Object.fromEntries(
+    Array.from(
+      new Set([...Object.keys(baseHashes), ...inventorySqlFiles]),
+      (file) =>
+        [
+          file,
+          hashBytes(readGitFile({ ref: "HEAD", file, cwd: REPO_ROOT })),
+        ] as const,
+    ),
+  );
   let snapshotUpgrades: ReadonlySet<string> = new Set();
   if (changes.modifiedFiles.some((file) => SNAPSHOT_FILE.test(file))) {
     const snapshotFiles = new TextDecoder()

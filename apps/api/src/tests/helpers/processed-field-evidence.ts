@@ -10,10 +10,17 @@
 
 import { panic, Result } from "better-result";
 import path from "node:path";
+import * as v from "valibot";
 
 import { parseDocx } from "@stll/folio-core/server";
 import { type DocumentAst, isDocumentAst } from "@stll/legal-ast/document-ast";
 
+import {
+  assembleBrTjdftDecision,
+  readBrTjdftSearch,
+} from "@/api/handlers/case-law/ingestion/adapters/br-tjdft";
+import { buildBrTstDecision } from "@/api/handlers/case-law/ingestion/adapters/br-tst";
+import { buildCzNsSbirkaDecision } from "@/api/handlers/case-law/ingestion/adapters/cz-ns-sbirka";
 import { parseCzUohsDocumentPdf as uncheckedParseCzUohsDocumentPdf } from "@/api/handlers/case-law/ingestion/adapters/cz-uohs";
 import {
   buildPlDecision,
@@ -22,6 +29,7 @@ import {
 import { assemblePlNsaDecision } from "@/api/handlers/case-law/ingestion/adapters/pl-nsa";
 import { PL_NSA_SNAPSHOT } from "@/api/handlers/case-law/ingestion/adapters/pl-nsa-dataset";
 import { parseFindokDecisionXml as uncheckedParseFindokDecisionXml } from "@/api/handlers/case-law/ingestion/parsers/at-findok";
+import { parseCzIsirDecision as parseCzIsirDecisionUnguarded } from "@/api/handlers/case-law/ingestion/parsers/cz-isir";
 import { parseNsDecisionHtml as uncheckedParseNsDecisionHtml } from "@/api/handlers/case-law/ingestion/parsers/cz-ns";
 import { parseNssDecisionHtml as uncheckedParseNssDecisionHtml } from "@/api/handlers/case-law/ingestion/parsers/cz-nss";
 import {
@@ -127,6 +135,25 @@ const readCzUohs: EvidenceReader = async (fixture) => [
     }),
   },
 ];
+
+/** Every record of a recorded TST search response, built as the crawl builds it. */
+const readBrTst: EvidenceReader = async (fixture) => {
+  const recorded = await jsonOf(fixture);
+  const items = isRecord(recorded) ? recorded["registros"] : undefined;
+  if (!isUnknownArray(items)) {
+    return panic(`${fixture} is not a TST search response`);
+  }
+  return items.flatMap((item, index) => {
+    const record = isRecord(item) ? item["registro"] : undefined;
+    if (!isRecord(record)) {
+      return panic(`${fixture} lists a row with no record`);
+    }
+    const { documentAst } = buildBrTstDecision(record).decision;
+    return isDocumentAst(documentAst)
+      ? [{ id: `${fixture}#${String(index)}`, ast: documentAst }]
+      : panic(`${fixture}#${String(index)} built no document`);
+  });
+};
 
 const readCzNss: EvidenceReader = async (fixture) => [
   {
@@ -414,6 +441,54 @@ const readAtFindok: EvidenceReader = async (fixture) => {
   return [{ id: fixture, ast: parsed.value.documentAst }];
 };
 
+/** A recorded one-record detail answer, assembled as the crawl assembles it. */
+const readBrTjdft: EvidenceReader = async (fixture) => {
+  const raw = await textOf(fixture);
+  const record =
+    readBrTjdftSearch(raw)?.rows.at(0) ??
+    panic(`${fixture}: no TJDFT detail record`);
+  const { documentAst } = assembleBrTjdftDecision({
+    listing: record,
+    detail: { record, raw },
+    detailStatus: undefined,
+  });
+  return isDocumentAst(documentAst)
+    ? [{ id: fixture, ast: documentAst }]
+    : panic(`${fixture}: the TJDFT record parsed to no document`);
+};
+
+/** A recorded collection detail page, built as the crawl builds it. */
+const readCzNsSbirka: EvidenceReader = async (fixture) => {
+  const postId =
+    /cz-ns-sbirka-(?<postId>\d+)\.html\.gz$/u.exec(fixture)?.groups?.[
+      "postId"
+    ] ?? panic(`${fixture}: not a collection detail recording`);
+  const decision = buildCzNsSbirkaDecision({
+    postId,
+    detailHtml: await textOf(fixture),
+  });
+  return decision !== null && isDocumentAst(decision.documentAst)
+    ? [{ id: fixture, ast: decision.documentAst }]
+    : panic(`${fixture}: the collection entry parsed to no document`);
+};
+
+const parseCzIsirDecision = guardParser(parseCzIsirDecisionUnguarded);
+
+/** The paragraphs the cz-isir reader stored, parsed as a replay parses them. */
+const readCzIsir: EvidenceReader = async (fixture) => {
+  const paragraphs = v.parse(
+    v.array(v.strictObject({ text: v.string(), bold: v.boolean() })),
+    await jsonOf(fixture),
+  );
+  const parsed = parseCzIsirDecision(paragraphs, {
+    documentId: path.basename(fixture),
+    sourceUrl: fixture,
+  });
+  return Result.isOk(parsed)
+    ? [{ id: fixture, ast: parsed.value.documentAst }]
+    : panic(`${fixture}: the register document parsed to no decision`);
+};
+
 /** Every source's reader, or `null` where its declaration names no recording. */
 export const PROCESSED_FIELD_EVIDENCE_READERS = {
   "cz-regional": readCzRegional,
@@ -421,6 +496,9 @@ export const PROCESSED_FIELD_EVIDENCE_READERS = {
   "cz-nss": readCzNss,
   "cz-us": readCzUs,
   "cz-uohs": readCzUohs,
+  "cz-ns-sbirka": readCzNsSbirka,
+  "cz-isir": readCzIsir,
+  "br-tst": readBrTst,
   "sk-courts": null,
   "sk-us": readSkUs,
   "pl-courts": readPlCourts,
@@ -457,5 +535,6 @@ export const PROCESSED_FIELD_EVIDENCE_READERS = {
   "pl-kis": null,
   "pl-uodo": readPlUodo,
   "pl-uokik": null,
+  "br-tjdft": readBrTjdft,
   "us-courtlistener": null,
 } as const satisfies Record<ProcessedFieldSourceKey, EvidenceReader | null>;

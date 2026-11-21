@@ -87,7 +87,13 @@ const readGeometry = async (page: Page) => {
           '[data-slot="workspace-grid-row"][data-index]',
         ),
       ];
-      const firstRow = rows.find((row) => row.dataset["index"] === "0");
+      // The first row the body draws: which one that is after a scroll
+      // depends on how far below the window the table has mounted rows.
+      const firstRow = rows
+        .toSorted(
+          (a, b) => Number(a.dataset["index"]) - Number(b.dataset["index"]),
+        )
+        .at(0);
       return {
         scroll: {
           scrollLeft: Math.round(scroll.scrollLeft),
@@ -421,7 +427,9 @@ const readFirstLineOffsets = async (page: Page) => {
         return walker.nextNode();
       };
       return [...document.querySelectorAll(bodyRowSelector)].map((row) => {
-        const number = row.querySelector('[data-slot="table-row-number"]');
+        const number = row.querySelector(
+          '[data-slot="checkbox-cell-label"], [data-slot="table-row-number"]',
+        );
         const numberText = number?.firstChild;
         if (!numberText) {
           throw new Error("row has no number");

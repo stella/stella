@@ -15,6 +15,10 @@ import {
   type DocxSuggestionSurface,
 } from "@stll/api-contract/chat-docx-suggestions";
 import type { ChatRunTarget } from "@stll/api-contract/chat-run-target";
+import {
+  CHAT_TURN_STEERING,
+  type ChatTurnSteering,
+} from "@stll/api-contract/chat-send-intent";
 
 import type { ChatContextUsage } from "@/components/chat/chat-context-meter";
 import type { PersistedChatMessage } from "@/components/chat/chat-ui-tools";
@@ -162,21 +166,12 @@ const EMPTY_ATTACHED_FILES: ChatThreadAttachedFiles = {
   files: [],
 };
 
-/**
- * The member's newest turn of a chat that runs on their computer, and the
- * message that answered it: only this turn's file changes can be undone.
- */
-export type NewestLocalTurn = {
-  id: SafeId<"chatTurn">;
-  assistantMessageId: SafeId<"chatMessage"> | null;
-};
-
 type ThreadFetch = {
   activeSkill: ActiveSkillChatContext | null;
-  /** Absent for a cloud chat. */
-  newestLocalTurn?: NewestLocalTurn | undefined;
   /** The thread's turn not yet settled; null when every turn has settled. */
   activeTurnId: SafeId<"chatTurn"> | null;
+  /** Whether that turn takes a message mid-turn, as the server knows it. */
+  activeTurnSteering: ChatTurnSteering;
   attachedFiles: ChatThreadAttachedFiles;
   /** Where this thread's opening history came from. */
   forkProvenance: ForkProvenance;
@@ -249,6 +244,7 @@ const fetchThreadMessages = async (
     return {
       activeSkill: null,
       activeTurnId: null,
+      activeTurnSteering: CHAT_TURN_STEERING.notSteerable,
       attachedFiles: EMPTY_ATTACHED_FILES,
       forkProvenance: { type: "none" },
       messages: [],
@@ -270,9 +266,7 @@ const fetchThreadMessages = async (
   return {
     activeSkill: data.activeSkill,
     activeTurnId: data.activeTurnId,
-    ...(data.newestLocalTurn === null
-      ? {}
-      : { newestLocalTurn: data.newestLocalTurn }),
+    activeTurnSteering: data.activeTurnSteering,
     attachedFiles: data.attachedFiles,
     forkProvenance: data.forkProvenance,
     messages: deserializeChatMessages(data.messages),
@@ -407,14 +401,16 @@ const fetchFileChatThread = async ({
   fieldId,
   workspaceId,
 }: FileChatThreadKey): Promise<FileChatThreadFetchResult> => {
-  const response = await api.chat
-    .workspaces({ workspaceId: toSafeId<"workspace">(workspaceId) })
-    ["file-thread"].get({
-      query: {
-        entityId: toSafeId<"entity">(entityId),
-        fieldId: toSafeId<"field">(fieldId),
-      },
-    });
+  const workspaceApi = api.chat.workspaces({
+    workspaceId: toSafeId<"workspace">(workspaceId),
+  });
+
+  const response = await workspaceApi["file-thread"].get({
+    query: {
+      entityId: toSafeId<"entity">(entityId),
+      fieldId: toSafeId<"field">(fieldId),
+    },
+  });
 
   const data = unwrapApiResponse(response);
 
@@ -540,16 +536,16 @@ export const listChatHistoryItems = (
 export type ChatThreadFetched = {
   activeSkill: ActiveSkillChatContext | null;
   /**
-   * The member's newest turn when the chat runs on their computer, whose
-   * file changes the chat offers to undo; absent for a cloud chat and a
-   * file thread.
-   */
-  newestLocalTurn?: NewestLocalTurn | undefined;
-  /**
    * The thread's turn not yet settled when this page was read, which the
    * composer's Stop cancels. Null when every turn has settled.
    */
   activeTurnId: SafeId<"chatTurn"> | null;
+  /**
+   * Whether that turn takes a message mid-turn (`ChatTurnSteering`), as the
+   * server knows it; absent for a file thread, whose turns run on stella and
+   * take none.
+   */
+  activeTurnSteering?: ChatTurnSteering | undefined;
   /**
    * The files the thread attached, for the header's file stack. Read with
    * the page because older messages page in on demand, so the transcript
@@ -804,13 +800,15 @@ export const materializeFileChatThread = async ({
   hasDocxEditSurface,
   key,
 }: MaterializeFileChatThreadArgs): Promise<FileChatThreadBinding> => {
-  const response = await api.chat
-    .workspaces({ workspaceId: toSafeId<"workspace">(key.workspaceId) })
-    ["file-thread"].post({
-      entityId: toSafeId<"entity">(key.entityId),
-      fieldId: toSafeId<"field">(key.fieldId),
-      threadId: toSafeId<"chatThread">(draftThreadId),
-    });
+  const workspaceApi = api.chat.workspaces({
+    workspaceId: toSafeId<"workspace">(key.workspaceId),
+  });
+
+  const response = await workspaceApi["file-thread"].post({
+    entityId: toSafeId<"entity">(key.entityId),
+    fieldId: toSafeId<"field">(key.fieldId),
+    threadId: toSafeId<"chatThread">(draftThreadId),
+  });
 
   const data = unwrapApiResponse(response);
   const threadId = toChatThreadId(data.threadId);
@@ -1074,14 +1072,16 @@ type ChatThreadSuggestedPromptsFetched = {
 const fetchThreadSuggestedPrompts = async (
   threadRef: ChatThreadRef,
 ): Promise<ChatThreadSuggestedPromptsFetched> => {
-  const response = await api.chat
-    .threads({ threadId: toSafeId<"chatThread">(threadRef.threadId) })
-    ["suggested-prompts"].post(undefined, {
-      query:
-        threadRef.scope === "workspace"
-          ? { workspaceId: toSafeId<"workspace">(threadRef.workspaceId) }
-          : {},
-    });
+  const threadApi = api.chat.threads({
+    threadId: toSafeId<"chatThread">(threadRef.threadId),
+  });
+
+  const response = await threadApi["suggested-prompts"].post(undefined, {
+    query:
+      threadRef.scope === "workspace"
+        ? { workspaceId: toSafeId<"workspace">(threadRef.workspaceId) }
+        : {},
+  });
 
   if (response.error) {
     getAnalytics().captureError(toAPIError(response.error), {
@@ -1159,7 +1159,10 @@ export const localRunnersOptions = (activeOrganizationId: string) =>
       staleTime: 30_000,
       queryFn: async ({ signal }) => await fetchChatLocalRunners(signal),
     }),
-    { resources: [RESOURCE_TYPE.USER], scope: { type: "organization" } },
+    {
+      resources: [RESOURCE_TYPE.USER],
+      scope: { type: "organization", organizationId: activeOrganizationId },
+    },
   );
 
 export const groupedChatThreadsOptions = ({
@@ -1278,13 +1281,26 @@ export const chatThreadTitleOptions = ({
   persistedThread,
   needed = true,
 }: ChatThreadTitleOptionsArgs) =>
-  queryOptions({
-    enabled: needed && persistedThread?.threadExists === true,
-    staleTime: STALE_TIME.FIVETEEN.MINUTES,
-    gcTime: STALE_TIME.FIVETEEN.MINUTES,
-    queryKey: chatKeys.threadTitle(activeOrganizationId, key),
-    queryFn: async () => await fetchChatThreadTitle(key),
-  });
+  resourceQueryOptions(
+    queryOptions({
+      enabled: needed && persistedThread?.threadExists === true,
+      staleTime: STALE_TIME.FIVETEEN.MINUTES,
+      gcTime: STALE_TIME.FIVETEEN.MINUTES,
+      queryKey: chatKeys.threadTitle(activeOrganizationId, key),
+      queryFn: async () => await fetchChatThreadTitle(key),
+    }),
+    // The thread's title, in the matter it belongs to or in the
+    // organization for a thread outside any matter.
+    key.workspaceId === undefined
+      ? {
+          resources: [RESOURCE_TYPE.CHAT_THREAD],
+          scope: { type: "organization", organizationId: activeOrganizationId },
+        }
+      : {
+          resources: [RESOURCE_TYPE.CHAT_THREAD],
+          scope: { type: "workspace", workspaceId: key.workspaceId },
+        },
+  );
 
 // Match every cached `chatKeys.groupedThreads` entry, whatever org, user,
 // search term and matter filter it carries: the invalidator cannot reconstruct

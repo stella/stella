@@ -116,7 +116,8 @@ if (!databaseUrl || !enabled) {
             );
             if (
               Object.values(getColumns(table)).some(
-                (column) => column.name === "entity_feature_gate",
+                (column: { name: string }) =>
+                  column.name === "entity_feature_gate",
               )
             ) {
               await db.execute(
@@ -274,6 +275,7 @@ if (!databaseUrl || !enabled) {
                 accessTokenEncrypted: Buffer.from("ciphertext"),
                 accessTokenIv: Buffer.from("iv"),
                 status: "connected",
+                scope: "Files.Read.All Sites.Read.All",
               });
               await tx.insert(sharepointOAuthState).values({
                 state: Bun.randomUUIDv7(),

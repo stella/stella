@@ -1480,15 +1480,18 @@ type PackageScriptOptions = {
   cwd: string;
   expand: SourceCommandOptions["expand"];
 };
+const packageScripts = (context: CommandContext, cwd: string) => {
+  const owner = context.tree.get(`${cwd}/package.json`);
+  return typeof owner === "string"
+    ? (JSON.parse(text(context.root, owner)).scripts ?? {})
+    : {};
+};
+
 const packageScriptEntries = (
   context: CommandContext,
   options: PackageScriptOptions,
 ) => {
-  const owner = context.tree.get(`${options.cwd}/package.json`);
-  const scripts =
-    typeof owner === "string"
-      ? (JSON.parse(text(context.root, owner)).scripts ?? {})
-      : {};
+  const scripts = packageScripts(context, options.cwd);
   if (!Object.hasOwn(scripts, options.name)) {
     return undefined;
   }
@@ -1818,6 +1821,30 @@ const unwrapSourceCommand = (
   }
 };
 
+const BUN_RUNTIME_SWITCHES = new Set(["--bun", "-b"]);
+const BUN_SUBCOMMANDS = new Set(["build", "run", "test", "x"]);
+
+/**
+ * `bun --bun <executable>` starts a package executable on Bun instead of the
+ * Node its shebang names, so it reads what the bare executable reads.
+ */
+const withoutBunRuntimeSwitch = (
+  context: CommandContext,
+  words: string[],
+  cwd: string,
+): string[] => {
+  const [program, flag, executable] = words;
+  return program === "bun" &&
+    BUN_RUNTIME_SWITCHES.has(flag ?? "") &&
+    executable !== undefined &&
+    /^[\w@][\w.@-]*$/u.test(executable) &&
+    !modulePattern.test(executable) &&
+    !BUN_SUBCOMMANDS.has(executable) &&
+    !Object.hasOwn(packageScripts(context, cwd), executable)
+    ? words.slice(2)
+    : words;
+};
+
 const walkCommand = (
   context: CommandContext,
   command: string,
@@ -1843,7 +1870,11 @@ const walkCommand = (
     if (event.type !== "command") {
       continue;
     }
-    const words = unwrapSourceCommand(event.words, runContext.environment);
+    const words = withoutBunRuntimeSwitch(
+      runContext,
+      unwrapSourceCommand(event.words, runContext.environment),
+      cwd,
+    );
     const program = words.shift();
     if (program === "sh" || program === "bash") {
       const script = words.at(1);
@@ -2262,6 +2293,33 @@ type HydrateStageSourcesOptions = {
   production: "guaranteed" | "conditional";
   producers: ReturnType<typeof sourceProducers>;
 };
+/**
+ * A producer may import the outputs it derives: it seeds a static import
+ * target before loading it and reads the rest lazily. Its own outputs are
+ * therefore never prerequisites of the RUN that executes it.
+ */
+const producerOwnOutputs = (
+  root: string,
+  entry: SourceCommandEntry,
+  producers: ReturnType<typeof sourceProducers>,
+): SourceTree =>
+  new Map(
+    producers
+      .filter(({ entries }) =>
+        entries.some(
+          (producer) =>
+            producer.file === entry.file &&
+            JSON.stringify(producer.args) === JSON.stringify(entry.args),
+        ),
+      )
+      .flatMap(({ generator }) =>
+        generator.outputs.flatMap((pattern) => [
+          ...new Bun.Glob(pattern).scanSync({ cwd: root, onlyFiles: true }),
+        ]),
+      )
+      .map((output) => [absolute("/app", output), output] as const),
+  );
+
 const hydrateStageSources = ({
   root,
   stage,
@@ -2452,11 +2510,22 @@ export const checkDockerSource = (
             if (isPackagedArtifact(runStage, entry.file)) {
               return;
             }
-            const closure = stageClosureProblems({
-              root,
-              stage: runStage,
-              entries: [entry.file],
-            });
+            const ownOutputs = producerOwnOutputs(root, entry, producers);
+            const closure =
+              ownOutputs.size === 0
+                ? stageClosureProblems({
+                    root,
+                    stage: runStage,
+                    entries: [entry.file],
+                  })
+                : stageClosureProblems({
+                    root,
+                    stage: {
+                      ...createStage(runStage),
+                      files: new Map([...runStage.files, ...ownOutputs]),
+                    },
+                    entries: [entry.file],
+                  });
             problems.push(...closure);
             if (closure.length > 0) {
               return;

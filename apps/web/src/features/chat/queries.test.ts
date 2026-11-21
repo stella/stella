@@ -5,15 +5,7 @@ import {
   replaceEqualDeep,
 } from "@tanstack/react-query";
 import { Result } from "better-result";
-import {
-  afterEach,
-  beforeEach,
-  describe,
-  expect,
-  mock,
-  spyOn,
-  test,
-} from "bun:test";
+import { afterEach, beforeEach, describe, expect, mock, spyOn } from "bun:test";
 
 import type { ReasoningEffort } from "@stll/ai-catalog";
 import {
@@ -24,6 +16,7 @@ import {
   CHAT_CONTINUATION_REJECTED_ERROR_CODE,
   CHAT_TURN_ID_HEADER,
   CHAT_TURN_INTENT,
+  RESOURCE_TYPE,
 } from "@stll/api-contract";
 import {
   ACTION_ADMISSION_CODES,
@@ -32,6 +25,7 @@ import {
 import type { ChatRunTarget } from "@stll/api-contract/chat-run-target";
 import { sleep } from "@stll/concurrency/sleep";
 import { rejectionOf } from "@stll/property-testing/rejection";
+import { requestTest as test } from "@stll/start-runtime/test-request";
 
 import { getChatAssistantTurnError } from "@/components/chat/chat-ui-tools";
 import type { PersistedChatMessage } from "@/components/chat/chat-ui-tools";
@@ -315,6 +309,24 @@ describe("chat thread fetch failures", () => {
     expect(titleOptions(persisted, false).enabled).toBe(false);
   });
 
+  test("the title read follows the thread in its matter or organization", () => {
+    const resourceReads = (workspaceId: string | undefined) =>
+      chatThreadTitleOptions({
+        activeOrganizationId: "org_test",
+        key: { threadId: "thread-title", workspaceId },
+        persistedThread: undefined,
+      }).meta.resourceReads;
+
+    expect(resourceReads(undefined)).toEqual({
+      resources: [RESOURCE_TYPE.CHAT_THREAD],
+      scope: { type: "organization", organizationId: "org_test" },
+    });
+    expect(resourceReads("ws_test")).toEqual({
+      resources: [RESOURCE_TYPE.CHAT_THREAD],
+      scope: { type: "workspace", workspaceId: "ws_test" },
+    });
+  });
+
   test("returns an empty draft for an allowed missing thread", async () => {
     globalThis.fetch = createFetchMock(404, { message: "Thread not found" });
 
@@ -327,13 +339,12 @@ describe("chat thread fetch failures", () => {
     });
   });
 
-  test.each([
+  for (const { allowMissingThread, status } of [
     { allowMissingThread: false, status: 404 },
     { allowMissingThread: false, status: 500 },
     { allowMissingThread: true, status: 500 },
-  ])(
-    "propagates status $status when allowMissingThread is $allowMissingThread",
-    async ({ allowMissingThread, status }) => {
+  ]) {
+    test(`propagates status ${status} when allowMissingThread is ${allowMissingThread}`, async () => {
       globalThis.fetch = createFetchMock(status, { message: "Request failed" });
       const result = await Result.tryPromise({
         try: async () => await queryClient().query(options(allowMissingThread)),
@@ -347,8 +358,8 @@ describe("chat thread fetch failures", () => {
           expect(result.error.status).toBe(status);
         }
       }
-    },
-  );
+    });
+  }
 });
 
 describe("thread-scoped chat keys", () => {
@@ -826,7 +837,7 @@ describe("buildSendRequestBody", () => {
     });
   });
 
-  test("carries a computer run target and leaves the cloud default unsent", () => {
+  test("names the Run on choice, cloud included, and nothing without one", () => {
     const threadId = toChatThreadId("thread-A");
     const bodyFor = (runTarget: ChatRunTarget | undefined) =>
       buildSendRequestBody({
@@ -844,7 +855,9 @@ describe("buildSendRequestBody", () => {
       reasoningEffort: null,
     };
     expect(bodyFor(local).runTarget).toEqual(local);
-    expect("runTarget" in bodyFor({ kind: "cloud" })).toBe(false);
+    // The server runs a send that names no target where its thread runs, so
+    // a member who picked cloud on a thread that ran on a computer must say so.
+    expect(bodyFor({ kind: "cloud" }).runTarget).toEqual({ kind: "cloud" });
     expect("runTarget" in bodyFor(undefined)).toBe(false);
   });
 
@@ -3394,15 +3407,14 @@ describe("acquireChatRuntime reconcile", () => {
     },
   ];
 
-  test.each([
+  for (const { code, reported } of [
     { code: "provider_unavailable", reported: false },
     { code: "local_runner_needs_login", reported: false },
     { code: ACTION_ADMISSION_CODES.concurrencyBusy, reported: false },
     { code: "unknown", reported: true },
     { code: undefined, reported: true },
-  ])(
-    "reports a run error with code $code only when the server left it unclassified",
-    async ({ code, reported }) => {
+  ]) {
+    test(`reports a run error with code ${String(code)} only when the server left it unclassified`, async () => {
       const capture = spyOn(getAnalytics(), "captureError").mockImplementation(
         () => undefined,
       );
@@ -3442,8 +3454,8 @@ describe("acquireChatRuntime reconcile", () => {
           options.fingerprintKey === "acquireChatRuntime:failure",
       );
       expect(reports).toHaveLength(reported ? 1 : 0);
-    },
-  );
+    });
+  }
 
   test("shows a rejected native approval continuation as the thread error", async () => {
     const requests: unknown[] = [];

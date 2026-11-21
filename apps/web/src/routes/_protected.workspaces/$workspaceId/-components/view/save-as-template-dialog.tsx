@@ -161,7 +161,14 @@ export const SaveAsTemplateDialogView = ({
             <DialogClose render={<Button variant="ghost" />}>
               {t("common.cancel")}
             </DialogClose>
-            <Button disabled={!canSubmit} loading={pending} type="submit">
+            <Button
+              disabled={!canSubmit}
+              disabledReason={
+                pending ? t("common.saving") : t("common.enterName")
+              }
+              loading={pending}
+              type="submit"
+            >
               {t("workspaces.views.templates.save")}
             </Button>
           </DialogFooter>

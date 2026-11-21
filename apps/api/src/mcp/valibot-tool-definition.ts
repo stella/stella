@@ -68,17 +68,18 @@ type ValibotMcpToolDefinition<TDefinition extends ValibotMcpToolInput> = Omit<
 const appendGuidance = (
   schema: Record<string, unknown>,
   annotation: AgentInputNormalizationAnnotation,
-): void => {
+): Record<string, unknown> => {
   const description = schema["description"];
-  Object.assign(
-    schema,
-    agentInputNormalizationMetadata(
+  return {
+    ...schema,
+    ...agentInputNormalizationMetadata(
       annotation,
       typeof description === "string" ? description : undefined,
     ),
-  );
+  };
 };
 
+/** Rebuild only branches containing the declared path; absence stays explicit. */
 const annotateSchemaPath = ({
   schema,
   path,
@@ -87,50 +88,60 @@ const annotateSchemaPath = ({
   schema: Record<string, unknown>;
   path: readonly string[];
   annotation: AgentInputNormalizationAnnotation;
-}): boolean => {
+}): Record<string, unknown> | undefined => {
   const segment = path.at(0);
   if (segment === undefined) {
-    appendGuidance(schema, annotation);
-    return true;
+    return appendGuidance(schema, annotation);
   }
-  let found = false;
+  let annotated: Record<string, unknown> | undefined;
   for (const keyword of ["anyOf", "oneOf", "allOf"] as const) {
     const branches = schema[keyword];
-    if (!Array.isArray(branches)) {
+    if (!isUnknownArray(branches)) {
       continue;
     }
-    for (const branch of branches) {
-      if (isSchemaRecord(branch)) {
-        found =
-          annotateSchemaPath({ schema: branch, path, annotation }) || found;
-      }
+    const updated = branches.map((branch) =>
+      isSchemaRecord(branch)
+        ? annotateSchemaPath({ schema: branch, path, annotation })
+        : undefined,
+    );
+    if (updated.some((branch) => branch !== undefined)) {
+      annotated = {
+        ...(annotated ?? schema),
+        [keyword]: branches.map((branch, index) => updated[index] ?? branch),
+      };
     }
   }
   if (segment === "[]") {
     const items = schema["items"];
-    return isSchemaRecord(items)
-      ? annotateSchemaPath({
-          schema: items,
-          path: path.slice(1),
-          annotation,
-        }) || found
-      : found;
+    const updated = isSchemaRecord(items)
+      ? annotateSchemaPath({ schema: items, path: path.slice(1), annotation })
+      : undefined;
+    return updated === undefined
+      ? annotated
+      : { ...(annotated ?? schema), items: updated };
   }
   const arraySegment = segment.endsWith("[]");
   const propertyName = arraySegment ? segment.slice(0, -2) : segment;
   const properties = schema["properties"];
-  const property = isSchemaRecord(properties) ? properties[propertyName] : null;
+  if (!isSchemaRecord(properties) || !Object.hasOwn(properties, propertyName)) {
+    return annotated;
+  }
+  const property = properties[propertyName];
   if (!isSchemaRecord(property)) {
-    return found;
+    return annotated;
   }
   // Resolve the property before its items so nullable arrays traverse their union.
-  return (
-    annotateSchemaPath({
-      schema: property,
-      path: arraySegment ? ["[]", ...path.slice(1)] : path.slice(1),
-      annotation,
-    }) || found
-  );
+  const updated = annotateSchemaPath({
+    schema: property,
+    path: arraySegment ? ["[]", ...path.slice(1)] : path.slice(1),
+    annotation,
+  });
+  return updated === undefined
+    ? annotated
+    : {
+        ...(annotated ?? schema),
+        properties: { ...properties, [propertyName]: updated },
+      };
 };
 
 /**
@@ -200,18 +211,19 @@ const applyInputNormalizationPlan = (
   if (plan === undefined) {
     return schema;
   }
+  let annotatedSchema = schema;
   for (const [path, annotation] of Object.entries(plan)) {
-    if (
-      !annotateSchemaPath({
-        schema,
-        path: path.split("."),
-        annotation,
-      })
-    ) {
+    const annotated = annotateSchemaPath({
+      schema: annotatedSchema,
+      path: path.split("."),
+      annotation,
+    });
+    if (annotated === undefined) {
       return panic(`Agent input normalization path does not exist: ${path}`);
     }
+    annotatedSchema = { ...annotated, type: schema.type };
   }
-  return schema;
+  return annotatedSchema;
 };
 
 const deriveMcpInputSchema = (
@@ -309,13 +321,92 @@ export const deriveMcpOutputSchema = (
   if (!acceptsObject) {
     return panic("A native MCP tool output schema must accept an object root");
   }
-  return compaction === "equivalent"
-    ? nullableAsTypeArray(projected)
-    : projected;
+  return tolerateOutputWidening(
+    compaction === "equivalent" ? nullableAsTypeArray(projected) : projected,
+  );
 };
 
 const isSchemaRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
+
+/**
+ * Keywords whose value is data rather than a schema, so a nested keyword
+ * inside them is never rewritten.
+ */
+const SCHEMA_DATA_KEYWORDS = new Set([
+  "const",
+  "default",
+  "examples",
+  "required",
+]);
+
+/**
+ * Keywords whose subschema does not widen the result when it widens: `not`
+ * rejects what its subschema matches, and `if` picks which branch applies.
+ * Opening either would narrow the schema around it (`not: { examples }`
+ * rejects every value), so their subschemas stay exact. An exact `not`
+ * already admits every value it does not name.
+ */
+const EXACT_SUBSCHEMA_KEYWORDS = new Set(["if", "not"]);
+
+/**
+ * An advertised output schema tolerates what a later deploy may add. A client
+ * keeps the `tools/list` it fetched for its whole session and validates every
+ * result against that copy; a stateless connection is never told the list
+ * changed. A closed object or a closed value list would turn each field or
+ * value a deploy adds into a rejection of every call from every session listed
+ * before it. So an object admits keys it does not declare, and a value list is
+ * published as `examples`: the values known today, documented rather than
+ * enforced. The executable Valibot source stays exact: dispatch parses each
+ * result through it and strips and reports a key it does not declare, and
+ * rejects a value outside its list, so a client never receives either.
+ */
+const tolerateOutputWidening = (
+  schema: Record<string, unknown>,
+): Record<string, unknown> =>
+  Object.fromEntries(
+    Object.entries(schema).flatMap(([key, value]): [string, unknown][] => {
+      if (key === "additionalProperties" && value === false) {
+        return [];
+      }
+      if (key === "enum" && isUnknownArray(value)) {
+        const known: unknown = schema["examples"];
+        return [
+          [
+            "examples",
+            isUnknownArray(known) ? [...new Set([...known, ...value])] : value,
+          ],
+        ];
+      }
+      if (key === "examples" && isUnknownArray(schema["enum"])) {
+        return [];
+      }
+      if (SCHEMA_DATA_KEYWORDS.has(key) || EXACT_SUBSCHEMA_KEYWORDS.has(key)) {
+        return [[key, value]];
+      }
+      if (SCHEMA_MAP_KEYWORDS.has(key) && isSchemaRecord(value)) {
+        return [
+          [
+            key,
+            Object.fromEntries(
+              Object.entries(value).map(([name, nested]): [string, unknown] => [
+                name,
+                tolerateOutputWideningIn(nested),
+              ]),
+            ),
+          ],
+        ];
+      }
+      return [[key, tolerateOutputWideningIn(value)]];
+    }),
+  );
+
+const tolerateOutputWideningIn = (value: unknown): unknown => {
+  if (Array.isArray(value)) {
+    return value.map((nested: unknown) => tolerateOutputWideningIn(nested));
+  }
+  return isSchemaRecord(value) ? tolerateOutputWidening(value) : value;
+};
 
 /**
  * Keywords whose value maps names to schemas rather than being a schema. The

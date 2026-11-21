@@ -29,6 +29,7 @@ export * from "./schema/sanctions";
 export * from "./schema/sanctions-monitoring";
 export * from "./schema/corpus-index-generations";
 export * from "./schema/corpus-index-projections";
+export * from "./schema/corpus-index-seedings";
 export * from "./schema/lists";
 export * from "./schema/chat";
 export * from "./schema/chat-secrets";
@@ -51,6 +52,7 @@ export * from "./schema/chat-tool-grants";
 export * from "./schema/chat-browser-site-grants";
 export * from "./schema/conflict-checks";
 export * from "./schema/sharepoint";
+export * from "./schema/outbound-actions";
 export * from "./schema/files-views";
 export * from "./schema/entity-views";
 export * from "./schema/reports";
@@ -66,6 +68,7 @@ export * from "./schema/workflow";
 export * from "./schema/signals";
 export * from "./schema/notifications";
 export * from "./schema/push-devices";
+export * from "./schema/session-sign-ins";
 export * from "./schema/timer-activity-devices";
 export * from "./schema/correspondence";
 export * from "./schema/feedback";
@@ -170,6 +173,9 @@ export * from "./schema/soft-law";
 
 export * from "./schema/desktop-presence";
 export * from "./schema/desktop-device-proof-replay";
+
+export * from "./schema/kept-transcript-deletions";
+export * from "./schema/email-delivery-failures";
 export * from "./schema/desktop-runner";
 
 export * from "./schema/mcp-web-handoff";

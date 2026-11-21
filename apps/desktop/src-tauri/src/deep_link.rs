@@ -36,6 +36,7 @@ enum DeepLinkAction {
     web_origin: String,
   },
   Ping,
+  OpenAgentSettings(crate::AgentSettingsFocus),
   OpenDesktopEdit {
     api_base_url: String,
     handoff_token: String,
@@ -91,6 +92,26 @@ pub fn set_self_host_connect_response(approved: bool) {
   }
 }
 
+/// `stella://settings/agents`, optionally with exactly one `harness` naming
+/// a managed agent. Anything else, an extra or repeated parameter included,
+/// opens nothing, so the window only ever receives one of its own ids.
+fn parse_agent_settings(url: &reqwest::Url) -> Option<crate::AgentSettingsFocus> {
+  if url.path() != "/agents" || url.fragment().is_some() {
+    return None;
+  }
+  let mut pairs = url.query_pairs();
+  match (pairs.next(), pairs.next()) {
+    (None, _) => Some(crate::AgentSettingsFocus::All),
+    (Some((key, value)), None) if key == "harness" => {
+      crate::harness_release::ManagedHarness::ALL
+        .into_iter()
+        .find(|harness| harness.id() == value)
+        .map(crate::AgentSettingsFocus::Harness)
+    }
+    _ => None,
+  }
+}
+
 fn parse_deep_link(raw_url: &str) -> Option<DeepLinkAction> {
   let url = reqwest::Url::parse(raw_url).ok()?;
   if url.scheme() != "stella" {
@@ -139,6 +160,10 @@ fn parse_deep_link(raw_url: &str) -> Option<DeepLinkAction> {
 
   if url.host_str() == Some("ping") {
     return Some(DeepLinkAction::Ping);
+  }
+
+  if url.host_str() == Some("settings") {
+    return parse_agent_settings(&url).map(DeepLinkAction::OpenAgentSettings);
   }
 
   if url.host_str() == Some("self-host") && url.path() == "/connect" {
@@ -304,10 +329,9 @@ pub fn handle_url(
           return;
         }
 
-        let active_edit_sessions = {
-          let mgr = manager.lock().await;
-          mgr.has_active_edit_sessions()
-        };
+        let sessions = &*manager;
+        let active_edit_sessions =
+          move || async move { sessions.lock().await.has_active_edit_sessions() };
 
         match updater::run_check(&app_handle, active_edit_sessions).await {
           updater::CheckOutcome::Deferred { version } => {
@@ -329,6 +353,12 @@ pub fn handle_url(
             tracing::debug!("deep link updater check skipped: updates are managed");
           }
         }
+      });
+    }
+    Some(DeepLinkAction::OpenAgentSettings(focus)) => {
+      tracing::info!("agent settings deep link received");
+      tauri::async_runtime::spawn(async move {
+        crate::show_settings(&app_handle, crate::SettingsView::Agents(focus));
       });
     }
     Some(DeepLinkAction::OpenDesktopEdit {
@@ -1198,6 +1228,42 @@ mod tests {
         crate::account::LinkIntent::Switch
       ]
     );
+  }
+
+  #[test]
+  fn settings_links_open_only_a_known_agent_focus() {
+    let contract: serde_json::Value =
+      serde_json::from_str(ACCOUNT_LINK_CONTRACT).unwrap();
+    let links = &contract["settingsLinks"];
+    let valid = links["valid"].as_array().unwrap();
+    let mut focuses = Vec::new();
+    for link in valid {
+      let focus = match link["harness"].as_str() {
+        None => crate::AgentSettingsFocus::All,
+        Some(id) => crate::AgentSettingsFocus::Harness(
+          crate::harness_release::ManagedHarness::ALL
+            .into_iter()
+            .find(|harness| harness.id() == id)
+            .unwrap(),
+        ),
+      };
+      assert_eq!(
+        parse_deep_link(link["url"].as_str().unwrap()),
+        Some(DeepLinkAction::OpenAgentSettings(focus))
+      );
+      focuses.push(focus);
+    }
+    // Every focus once, in whatever order the fixture lists them.
+    assert_eq!(focuses.len(), crate::AgentSettingsFocus::ALL.len());
+    for focus in crate::AgentSettingsFocus::ALL {
+      assert!(focuses.contains(&focus), "{focus:?} has no settings link");
+    }
+    let rejected = links["rejected"].as_array().unwrap();
+    assert!(!rejected.is_empty());
+    for url in rejected {
+      let url = url.as_str().unwrap();
+      assert_eq!(parse_deep_link(url), None, "{url}");
+    }
   }
 
   #[test]

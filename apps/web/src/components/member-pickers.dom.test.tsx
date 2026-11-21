@@ -66,10 +66,13 @@ const { ContactOwnersEditor } =
 const { RateManagementDialog } =
   await import("@/routes/_protected.workspaces/$workspaceId/-components/billing/rate-management-dialog");
 const { toSafeId } = await import("@/lib/safe-id");
-const { roleOptions } = await import("@/lib/auth-queries");
+const { roleOptions, sessionOptions } = await import("@/lib/auth-queries");
+const { MEMBER_SESSION } =
+  await import("@/lib/account/auth-session.test-fixtures");
 const { DeletionTaskReassignments } =
   await import("@/routes/_protected.settings/-components/account/deletion-task-reassignments");
 
+const USER_ID = "00000000-0000-7000-8000-0000000000ff";
 const ORGANIZATION = "00000000-0000-7000-8000-00000000f001";
 const WORKSPACE = "00000000-0000-7000-8000-00000000f002";
 const TASK = "00000000-0000-7000-8000-00000000f003";
@@ -143,6 +146,16 @@ const mount = async (children: () => ReactNode) => {
     },
   });
   clients.push(client);
+  const signedInSession = {
+    ...MEMBER_SESSION,
+    user: { ...MEMBER_SESSION.user, id: USER_ID },
+    session: {
+      ...MEMBER_SESSION.session,
+      userId: USER_ID,
+      activeOrganizationId: ORGANIZATION,
+    },
+  } satisfies typeof MEMBER_SESSION;
+  client.setQueryData(sessionOptions.queryKey, signedInSession);
   const root = router.createRootRoute({ component: router.Outlet });
   const protectedRoute = router.createRoute({
     getParentRoute: () => root,
@@ -168,7 +181,7 @@ const mount = async (children: () => ReactNode) => {
             user={{
               activeOrganizationId: ORGANIZATION,
               email: "owner@kancelar.example",
-              id: "00000000-0000-7000-8000-0000000000ff",
+              id: USER_ID,
               image: null,
               name: "Owner",
               preferredName: null,

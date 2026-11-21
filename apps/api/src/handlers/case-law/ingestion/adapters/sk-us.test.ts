@@ -9,6 +9,7 @@ import {
   setSystemTime,
   test,
 } from "bun:test";
+import { fileURLToPath } from "node:url";
 
 /* oxlint-disable typescript/promise-function-async -- fetch mock callbacks return Promise.resolve without being async */
 import { INGESTION_STOP_KIND } from "@stll/legal-atlas/ingestion-cycle";
@@ -37,6 +38,7 @@ import {
   UnpersistableDecisionFieldError,
 } from "@/api/lib/errors/tagged-errors";
 import { readGzipJson } from "@/api/lib/gzip-json";
+import { sanitizeResult } from "@/api/lib/legal-search/ingestion-normalization";
 import {
   decodeSourceRawEnvelope,
   decodeSourceRawEnvelopeObjects,
@@ -196,6 +198,10 @@ const CHAMBER_RESOLUTION = {
   mkDateOfDecision: "12/15/1993 00:00:00",
   mkFormOfDecision: "Uznesenie",
 } as const;
+
+/** The identity the same record has when listed without its document id. */
+const quarantineIdentityOf = (doc: Parameters<typeof skUsListingIdentity>[0]) =>
+  skUsListingIdentity({ ...doc, documentId: null });
 
 /** The DMS lists metadata rows with no downloadable document behind them. */
 const WITHOUT_DOCUMENT_ID = {
@@ -595,27 +601,254 @@ describe("sk-us listing identity", () => {
     );
   });
 
-  test("an id the decision column cannot hold keys nothing", () => {
-    expect(
-      skUsListingIdentity({
-        ...PLENARY_OPINION,
-        documentId: "d".repeat(SOURCE_DOCUMENT_ID_MAX_LENGTH + 1),
-      }),
-    ).toEqual({ type: "unidentifiable" });
+  test("an id the decision column cannot hold keys the row's audit identity", () => {
+    // Keyed as the same record listed with no id at all, so the row is
+    // stored once rather than hunted under an id no column can hold.
+    const identity = skUsListingIdentity({
+      ...PLENARY_OPINION,
+      documentId: "d".repeat(SOURCE_DOCUMENT_ID_MAX_LENGTH + 1),
+    });
+    expect(identity).toMatchObject({ type: "document" });
+    expect(identity).toEqual(quarantineIdentityOf(PLENARY_OPINION));
   });
 
-  test("an item the crawl would drop is unidentifiable, not keyed on nothing", () => {
+  test("a row with no document id is keyed on its audit identity, not dropped", () => {
+    const identity = skUsListingIdentity(WITHOUT_DOCUMENT_ID);
+    expect(identity).toMatchObject({ type: "document" });
+    expect(listingIdentityKey(identity)).toMatch(
+      /^document:sk-us-quarantine:[0-9a-f]{64}$/u,
+    );
+    // The DMS states empty fields as null; null states no id either.
+    expect(
+      skUsListingIdentity({ ...WITHOUT_DOCUMENT_ID, documentId: null }),
+    ).toEqual(identity);
+  });
+
+  test("an item stating nothing that names it stays unidentifiable", () => {
+    // A usable id with no docket is not quarantined: the id is the record.
     expect(
       skUsListingIdentity({ ...CHAMBER_RESOLUTION, mkRSAPNumberOfFile: "" }),
     ).toEqual({
       type: "unidentifiable",
     });
-    expect(skUsListingIdentity(WITHOUT_DOCUMENT_ID)).toEqual({
-      type: "unidentifiable",
+    expect(
+      skUsListingIdentity({ ...WITHOUT_DOCUMENT_ID, mkRSAPNumberOfFile: "" }),
+    ).toEqual({ type: "unidentifiable" });
+    expect(
+      listingIdentityKey(
+        skUsListingIdentity({
+          ...WITHOUT_DOCUMENT_ID,
+          mkRSAPNumberOfFile: null,
+        }),
+      ),
+    ).toBeNull();
+  });
+});
+
+describe("sk-us row without a usable document id", () => {
+  afterEach(() => {
+    testFetchState.restore();
+  });
+
+  test("the audit identity is read off fields that survive the id coming back", () => {
+    const identity = quarantineIdentityOf(PLENARY_OPINION);
+    // Listing position, the ECLI and later publication dates move between
+    // listings of one record; the identity does not.
+    expect(
+      quarantineIdentityOf({
+        ...PLENARY_OPINION,
+        index: 41,
+        mkECLI: null,
+        mkPublicationDate: "04/01/2020 00:00:00",
+      }),
+    ).toEqual(identity);
+    // A separate opinion under the same docket on the same day is its own row.
+    expect(
+      quarantineIdentityOf({ ...PLENARY_OPINION, mkDifferentView: "Áno" }),
+    ).not.toEqual(identity);
+    expect(
+      quarantineIdentityOf({ ...PLENARY_OPINION, mkRVPNumberOfFile: "1/2020" }),
+    ).not.toEqual(identity);
+  });
+
+  test("the crawl stores it listing-only without asking the court for more", async () => {
+    const stub = mockFetch({
+      search: [
+        {
+          type: "page",
+          documents: [WITHOUT_DOCUMENT_ID],
+          numFound: 1,
+        },
+      ],
+    });
+
+    const page = (await skUsAdapter.fetchPage("2021:0", {})).unwrap();
+
+    const identity = skUsListingIdentity(WITHOUT_DOCUMENT_ID);
+    expect(page.itemBuildFailures).toEqual({
+      type: "item_build_failed",
+      count: 0,
+    });
+    expect(page.decisions).toHaveLength(1);
+    expect(page.decisions.at(0)).toMatchObject({
+      sourceDocumentId:
+        identity.type === "document" ? identity.sourceDocumentId : null,
+      caseNumber: WITHOUT_DOCUMENT_ID.mkRSAPNumberOfFile,
+      court: "Ústavný súd SR",
+      decisionDate: "1993-12-15",
+      isListingOnly: true,
+      metadata: {
+        identityQuarantined: true,
+        listedOnly: true,
+        listedOnlyReason: "no_usable_document_id",
+        documentType: WITHOUT_DOCUMENT_ID.mkDocumentType,
+      },
+    });
+    expect(page.decisions.at(0)?.caseNumberIsPlaceholder).toBeUndefined();
+    expect(page.decisions.at(0)?.sourceUrl).toBeUndefined();
+    expect(
+      decodeSourceRawEnvelope(page.decisions.at(0)?.sourceRaw ?? ""),
+    ).toEqual({ listing: JSON.stringify(WITHOUT_DOCUMENT_ID) });
+    expect(stub.downloads()).toBe(0);
+    expect(stub.facetCalls()).toBe(0);
+  });
+
+  test("a row stating only its registry number is labelled a placeholder", async () => {
+    mockFetch({ search: [] });
+    const registryOnly = {
+      ...WITHOUT_DOCUMENT_ID,
+      mkRSAPNumberOfFile: null,
+      mkRVPNumberOfFile: "1448/2020",
+    };
+
+    const built = await buildSkUsDecision(registryOnly);
+
+    if (built.type !== "built") {
+      throw new Error(`expected a built row, got ${built.type}`);
+    }
+    const { caseNumber, caseNumberIsPlaceholder, sourceDocumentId } =
+      built.decision;
+    expect(caseNumberIsPlaceholder).toBe(true);
+    expect(String(caseNumber)).toBe(String(sourceDocumentId));
+    expect(listingIdentityKey(skUsListingIdentity(registryOnly))).toBe(
+      `document:${String(sourceDocumentId)}`,
+    );
+  });
+
+  test("the reconciliation builds a parked one and holds it without a document", async () => {
+    mockFetch({ search: [] });
+    // Parked as JSONB, where the DMS's null document id survives.
+    const parked: unknown = structuredClone({
+      ...WITHOUT_DOCUMENT_ID,
+      documentId: null,
+    });
+
+    const built = await reconciliation.buildDecision(parked);
+
+    expect(built).toMatchObject({
+      type: "built",
+      decision: { isListingOnly: true },
+    });
+    const identity = skUsListingIdentity(WITHOUT_DOCUMENT_ID);
+    // Read as held, or the walk would hunt a document nothing can address.
+    expect(reconciliation.heldWithoutDetail?.(identity)).toBe(true);
+    expect(
+      reconciliation.heldWithoutDetail?.(skUsListingIdentity(PLENARY_OPINION)),
+    ).toBe(false);
+  });
+
+  test("the keyed record takes over the row its id-less listing stored", async () => {
+    mockFetch({ search: [] });
+
+    const built = await buildSkUsDecision(PLENARY_OPINION);
+
+    const quarantined = quarantineIdentityOf(PLENARY_OPINION);
+    expect(built.type).toBe("built");
+    expect(
+      built.type === "built"
+        ? built.decision.sourceDocumentIdRepairAliases
+        : undefined,
+    ).toEqual([
+      quarantined.type === "document" ? quarantined.sourceDocumentId : "",
+    ]);
+  });
+
+  test("a stored quarantined row replays to itself", async () => {
+    mockFetch({ search: [] });
+    const built = await buildSkUsDecision(WITHOUT_DOCUMENT_ID);
+    if (built.type !== "built") {
+      throw new Error(`expected a built row, got ${built.type}`);
+    }
+
+    const replayed = await skUsAdapter.reparseStoredRaw?.(
+      storedReplayInput(built.decision),
+    );
+
+    expect(replayed).toEqual({ type: "parsed", result: built.decision });
+    expect(
+      await skUsAdapter.reparseStoredRaw?.({
+        ...storedReplayInput(built.decision),
+        sourceDocumentId: "another-row",
+      }),
+    ).toMatchObject({ type: "rejected" });
+  });
+
+  test("a stored quarantined row replays to itself when its docket carries a character ingestion strips", async () => {
+    mockFetch({ search: [] });
+    const docket = WITHOUT_DOCUMENT_ID.mkRSAPNumberOfFile;
+    const withStrippedCharacters = {
+      ...WITHOUT_DOCUMENT_ID,
+      mkRSAPNumberOfFile: `\u200B${docket}\uFEFF`,
+    };
+    const built = await buildSkUsDecision(withStrippedCharacters);
+    if (built.type !== "built") {
+      throw new Error(`expected a built row, got ${built.type}`);
+    }
+    // What the pipeline stores: the raw without the characters it strips.
+    const stored = sanitizeResult(built.decision).unwrap();
+
+    const replayed = await skUsAdapter.reparseStoredRaw?.(
+      storedReplayInput(stored),
+    );
+
+    expect(replayed).toMatchObject({
+      type: "parsed",
+      result: {
+        sourceDocumentId: stored.sourceDocumentId,
+        caseNumber: docket,
+      },
+    });
+    expect(skUsListingIdentity(withStrippedCharacters)).toEqual(
+      skUsListingIdentity(WITHOUT_DOCUMENT_ID),
+    );
+  });
+
+  test("a text field of another type reads as absent instead of failing the row", async () => {
+    mockFetch({ search: [] });
+    // Parked as JSONB, where a field whose type the DMS changed survives.
+    const parked: unknown = structuredClone({
+      ...WITHOUT_DOCUMENT_ID,
+      mkClauseTitle: 7,
+      mkClauseText: ["Právna veta"],
+    });
+
+    const built = await reconciliation.buildDecision(parked);
+
+    expect(built).toMatchObject({
+      type: "built",
+      decision: {
+        isListingOnly: true,
+        textFields: {
+          headnote: { type: "absent" },
+          legalSentence: { type: "absent" },
+        },
+      },
     });
     expect(
-      listingIdentityKey(skUsListingIdentity(WITHOUT_DOCUMENT_ID)),
-    ).toBeNull();
+      built.type === "built"
+        ? decodeSourceRawEnvelope(built.decision.sourceRaw ?? "")
+        : undefined,
+    ).toEqual({ listing: JSON.stringify(parked) });
   });
 });
 
@@ -703,10 +936,7 @@ describe("sk-us listSlicePage", () => {
 
     expect(
       await reconciliation.listSlicePage({ slice: "1993-01", page: 0 }),
-    ).toEqual({
-      items: [],
-      totalPages: 0,
-    });
+    ).toEqual({ items: [], totalPages: 0, publisherCount: 0 });
   });
 
   test("a server error throws instead of reading as an empty slice", async () => {
@@ -1527,11 +1757,18 @@ describe("sk-us buildDecision", () => {
         mkRSAPNumberOfFile: "",
       }),
     ).toEqual({ type: "unkeyable" });
-    // A field whose type the DMS changed under us keys nothing either.
+    // A document id whose type the DMS changed under us is no usable id: the
+    // row is kept under its audit identity, as the crawl keeps it.
     expect(
       await reconciliation.buildDecision({ ...PLENARY_OPINION, documentId: 7 }),
-    ).toEqual({
-      type: "unkeyable",
+    ).toMatchObject({
+      type: "built",
+      decision: {
+        sourceDocumentId: listingIdentityKey(
+          quarantineIdentityOf(PLENARY_OPINION),
+        )?.replace(/^document:/u, ""),
+        isListingOnly: true,
+      },
     });
   });
 
@@ -2377,7 +2614,7 @@ describe("the responses this court served, as recorded", () => {
     const file = Bun.gunzipSync(
       new Uint8Array(
         await Bun.file(
-          new URL("sk-us-decision.pdf.gz", FIXTURES).pathname,
+          fileURLToPath(new URL("sk-us-decision.pdf.gz", FIXTURES)),
         ).arrayBuffer(),
       ),
     );

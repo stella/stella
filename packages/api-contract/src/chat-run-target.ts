@@ -1,5 +1,7 @@
 import * as v from "valibot";
 
+import type { CHAT_TRANSPORT_ERROR_CODE } from "@stll/anonymize-chat";
+
 import type { AgentHarness } from "./agent-harness";
 import { apiDateTimeSchema } from "./api-date";
 import {
@@ -32,8 +34,24 @@ export const CHAT_RUN_TARGET_KIND = {
 export const CHAT_LOCAL_RUN_HARNESSES = [
   "codex",
   "claude-code",
+  "antigravity",
 ] as const satisfies readonly AgentHarness[];
 export type ChatLocalRunHarness = (typeof CHAT_LOCAL_RUN_HARNESSES)[number];
+
+/**
+ * Harnesses stella desktop installs and signs in to, each at its own card in
+ * the app's Settings; any other the member sets up in the agent itself.
+ */
+export const DESKTOP_SET_UP_HARNESSES = [
+  "codex",
+  "claude-code",
+] as const satisfies readonly ChatLocalRunHarness[];
+export type DesktopSetUpHarness = (typeof DESKTOP_SET_UP_HARNESSES)[number];
+
+export const isDesktopSetUpHarness = (
+  harness: ChatLocalRunHarness,
+): harness is DesktopSetUpHarness =>
+  DESKTOP_SET_UP_HARNESSES.some((candidate) => candidate === harness);
 
 export const isChatLocalRunHarness = (
   harness: AgentHarness,
@@ -130,6 +148,14 @@ export const CHAT_LOCAL_RUN_WEB_SEARCH_BY_HARNESS = {
     ask: CHAT_LOCAL_RUN_WEB_SEARCH.asks,
     auto: CHAT_LOCAL_RUN_WEB_SEARCH.unasked,
     full_auto: CHAT_LOCAL_RUN_WEB_SEARCH.unasked,
+  },
+  // stella answers Antigravity's permission requests: a web fetch asks at
+  // Ask and runs at Auto. It runs in neither plan nor full auto.
+  antigravity: {
+    plan: CHAT_LOCAL_RUN_WEB_SEARCH.off,
+    ask: CHAT_LOCAL_RUN_WEB_SEARCH.asks,
+    auto: CHAT_LOCAL_RUN_WEB_SEARCH.unasked,
+    full_auto: CHAT_LOCAL_RUN_WEB_SEARCH.off,
   },
 } as const satisfies Record<
   ChatLocalRunHarness,
@@ -311,15 +337,39 @@ export type ChatLocalRunSteerEvent = v.InferOutput<
   typeof chatLocalRunSteerEventSchema
 >;
 
+/**
+ * Where a steered message comes from: `composer`, a message the member just
+ * wrote, or `queued`, the queued message `inputId` at the `revision` the
+ * client read. A queued message the turn takes leaves the queue on the
+ * server, in the transaction that handles the run's report, so the queue
+ * never sends it again; one it does not take stays queued.
+ */
+export const CHAT_LOCAL_RUN_STEER_SOURCE = {
+  composer: "composer",
+  queued: "queued",
+} as const;
+
+const chatLocalRunSteerSourceSchema = v.variant("type", [
+  v.strictObject({ type: v.literal(CHAT_LOCAL_RUN_STEER_SOURCE.composer) }),
+  v.strictObject({
+    type: v.literal(CHAT_LOCAL_RUN_STEER_SOURCE.queued),
+    revision: v.pipe(v.number(), v.integer(), v.minValue(0)),
+  }),
+]);
+export type ChatLocalRunSteerSource = v.InferOutput<
+  typeof chatLocalRunSteerSourceSchema
+>;
+
 /** What the chat asks to steer a running local turn with. */
 export const chatLocalRunSteerRequestSchema = v.strictObject({
-  /** The queued message's id, so a repeat steers once. */
+  /** The message's id (a queued one's own), so a repeat steers once. */
   inputId: v.pipe(v.string(), v.uuid()),
   text: v.pipe(
     v.string(),
     v.minLength(1),
     v.maxLength(DESKTOP_RUNNER_MAX_INPUT_TEXT_LENGTH),
   ),
+  source: chatLocalRunSteerSourceSchema,
 });
 export type ChatLocalRunSteerRequest = v.InferOutput<
   typeof chatLocalRunSteerRequestSchema
@@ -333,6 +383,11 @@ export type ChatLocalRunSteerRequest = v.InferOutput<
  *   or after the run ended.
  * - `harness_cannot_steer`: the turn's agent takes no message mid-turn.
  * - `run_full`: the run holds as many commands as one run may.
+ * - `queued_message_changed`: the queued message was edited, sent or
+ *   removed since the revision the request names, or that revision is
+ *   queued to be sent anonymized (a steer hands the text over as it is, and
+ *   a turn on a computer is never anonymized) or carries files (a steer
+ *   hands over text alone).
  * - `not_taken`: the agent did not take it; its turn was ending or between
  *   attempts. Only the turn's stream says this, as `refused`.
  */
@@ -341,6 +396,7 @@ const CHAT_LOCAL_RUN_STEER_ROUTE_REFUSALS = [
   "no_run",
   "harness_cannot_steer",
   "run_full",
+  "queued_message_changed",
 ] as const;
 export const CHAT_LOCAL_RUN_STEER_REFUSALS = [
   ...CHAT_LOCAL_RUN_STEER_ROUTE_REFUSALS,
@@ -364,6 +420,15 @@ export const chatLocalRunSteerOutcomeSchema = v.variant("type", [
 export type ChatLocalRunSteerOutcome = v.InferOutput<
   typeof chatLocalRunSteerOutcomeSchema
 >;
+
+/**
+ * The code an anonymized send refused by the member's computer carries: its
+ * agent reads their matters as they are, so it never runs anonymized.
+ * `@stll/anonymize-chat` owns the code; this is it, bound to the owner's value
+ * at compile time, for a client that reads refusals without that package.
+ */
+export const CHAT_LOCAL_RUN_ANONYMIZED_REFUSAL_CODE =
+  "local_run_anonymized_refusal" satisfies (typeof CHAT_TRANSPORT_ERROR_CODE)["localRunAnonymizedRefusal"];
 
 /**
  * The CUSTOM stream event a turn running on a computer sends while its run
@@ -434,6 +499,38 @@ export const chatLocalRunContextSchema = v.strictObject({
 export type ChatLocalRunContext = v.InferOutput<
   typeof chatLocalRunContextSchema
 >;
+
+/**
+ * The run-finished metadata key under which a turn that ran on the member's
+ * computer reports the model it asked for and the one the harness ran it on,
+ * which differ when the provider rerouted the turn (Codex `model/rerouted`,
+ * Claude Code's refusal fallback). The answer keeps both, so it can say it ran
+ * on another model than the one asked for.
+ */
+export const CHAT_LOCAL_RUN_MODEL_METADATA_KEY = "localRunModel";
+
+export const chatLocalRunModelSchema = v.strictObject({
+  requested: localModelSchema,
+  ran: localModelSchema,
+});
+export type ChatLocalRunModel = v.InferOutput<typeof chatLocalRunModelSchema>;
+
+/**
+ * The model an answer ran on when the harness rerouted it away from the one
+ * asked for; `null` when it ran on that one or the answer says nothing valid.
+ */
+export const chatLocalRunReroutedModel = (metadata: unknown): string | null => {
+  if (typeof metadata !== "object" || metadata === null) {
+    return null;
+  }
+  const reported = v.safeParse(
+    chatLocalRunModelSchema,
+    Reflect.get(metadata, CHAT_LOCAL_RUN_MODEL_METADATA_KEY),
+  );
+  return reported.success && reported.output.ran !== reported.output.requested
+    ? reported.output.ran
+    : null;
+};
 
 /**
  * What a turn on a computer tells the chat about the files it handed back, as

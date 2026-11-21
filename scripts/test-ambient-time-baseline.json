@@ -1485,7 +1485,7 @@
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
   "apps/api/src/lib/flows/flow-run-worker.integration.test.ts": {
-    "count": 6,
+    "count": 2,
     "owner": "api",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
@@ -1674,11 +1674,6 @@
     "owner": "api",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
-  "apps/api/src/lib/load/request-latency-budget.test.ts": {
-    "count": 3,
-    "owner": "api",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
   "apps/api/src/lib/machine-api-keys/personal-lifecycle.db.test.ts": {
     "count": 6,
     "owner": "api",
@@ -1691,11 +1686,6 @@
   },
   "apps/api/src/lib/machine-api-keys/personal-policy.property.test.ts": {
     "count": 1,
-    "owner": "api",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
-  "apps/api/src/lib/mcp-upstream/connections.test.ts": {
-    "count": 7,
     "owner": "api",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
@@ -1895,11 +1885,6 @@
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
   "apps/api/src/lib/scheduler/tasks/flow-run.test.ts": {
-    "count": 2,
-    "owner": "api",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
-  "apps/api/src/lib/scheduler/tasks/hosted-usage-webhook-retention.test.ts": {
     "count": 2,
     "owner": "api",
     "reason": "pre-kit census; migrate to @stll/test-kit"
@@ -2189,11 +2174,6 @@
     "owner": "api",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
-  "apps/api/src/scripts/corpus-generation.db.test.ts": {
-    "count": 1,
-    "owner": "api",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
   "apps/api/src/scripts/corpus-generation.postgres.test.ts": {
     "count": 1,
     "owner": "api",
@@ -2409,11 +2389,6 @@
     "owner": "web",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
-  "apps/web/src/components/sidebar/sidebar-state.dom.test.ts": {
-    "count": 1,
-    "owner": "web",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
   "apps/web/src/features/chat/components/proxy-chat-link.dom.test.tsx": {
     "count": 1,
     "owner": "web",
@@ -2464,11 +2439,6 @@
     "owner": "api-contract",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
-  "packages/cli/src/auth/ensure-fresh-credential.test.ts": {
-    "count": 5,
-    "owner": "cli",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
   "packages/cli/src/auth/login.test.ts": {
     "count": 1,
     "owner": "cli",
@@ -2486,11 +2456,6 @@
   },
   "packages/cli/src/auth/manage.test.ts": {
     "count": 4,
-    "owner": "cli",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
-  "packages/cli/src/auth/resolve-access-token.test.ts": {
-    "count": 17,
     "owner": "cli",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },

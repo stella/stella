@@ -152,23 +152,29 @@ export const readChatQueueOnTx = async ({
 };
 
 export type EnqueueOutcome =
-  { type: "queued"; item: ChatQueueItem } | { type: "full" } | { type: "sent" };
+  | { type: "queued"; item: ChatQueueItem }
+  | { type: "already-queued"; item: ChatQueueItem }
+  | { type: "full" }
+  | { type: "sent" };
 
 /**
- * Queue `send` at the end of the thread's queue under `id`. Idempotent on
- * `id`: a message already queued answers as queued, one already sent as
- * sent. The caller holds the thread lock.
+ * Queue `send` at the end of the thread's queue under `id`, with the chat
+ * files its enqueue stored (`uploadedFileIds`). Idempotent on `id`: a
+ * message already queued answers as already queued (keeping the files it was
+ * queued with), one already sent as sent. The caller holds the thread lock.
  */
 export const enqueueChatMessageOnTx = async ({
   id,
   send,
   threadId,
   tx,
+  uploadedFileIds,
 }: {
   id: SafeId<"chatMessage">;
   send: QueuedChatSend;
   threadId: SafeId<"chatThread">;
   tx: Transaction;
+  uploadedFileIds: readonly SafeId<"userFile">[];
 }): Promise<EnqueueOutcome> => {
   const existing = (
     await tx
@@ -183,7 +189,7 @@ export const enqueueChatMessageOnTx = async ({
       .limit(1)
   ).at(0);
   if (existing !== undefined) {
-    return { type: "queued", item: itemOfRow(existing) };
+    return { type: "already-queued", item: itemOfRow(existing) };
   }
   if (await wasSentOnTx({ id, threadId, tx })) {
     return { type: "sent" };
@@ -222,6 +228,7 @@ export const enqueueChatMessageOnTx = async ({
       threadId,
       position: queued + 1,
       request: send,
+      uploadedFileIds: [...uploadedFileIds],
     })
     .returning(QUEUE_ROW_COLUMNS);
   return inserted === undefined

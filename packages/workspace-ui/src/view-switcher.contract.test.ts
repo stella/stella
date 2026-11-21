@@ -3,9 +3,15 @@ import { expect, test } from "bun:test";
 const source = await Bun.file(
   new URL("view-switcher.tsx", import.meta.url),
 ).text();
-const manifest = await Bun.file(
-  new URL("../package.json", import.meta.url),
-).json();
+// The strip and its tabs live in the light strip module, which the switcher
+// renders through the face module.
+const faceSource = await Bun.file(
+  new URL("view-strip.tsx", import.meta.url),
+).text();
+const manifest: {
+  peerDependencies: Record<string, string>;
+  devDependencies: Record<string, string>;
+} = await Bun.file(new URL("../package.json", import.meta.url)).json();
 const atlaskitPeerDependencies = Object.fromEntries(
   Object.entries(manifest.peerDependencies).filter(([name]) =>
     name.startsWith("@atlaskit/"),
@@ -18,8 +24,14 @@ const atlaskitDevDependencies = Object.fromEntries(
 );
 
 test("selection remains controlled by the accessible tabs primitive", () => {
-  expect(source).toContain("onValueChange=");
-  expect(source).not.toMatch(/<TabsTab[\s\S]*?onClick=/u);
+  expect(faceSource).toContain("onValueChange=");
+  expect(source).toContain("<WorkspaceViewStrip");
+  expect(source).toContain("onViewChange={onViewChange}");
+  for (const tabs of [source, faceSource]) {
+    expect(tabs).not.toMatch(
+      /<(TabsTab|WorkspaceViewTabFace)[\s\S]*?onClick=/u,
+    );
+  }
 });
 
 test("drag interactions use one published Pragmatic DnD v4 contract", () => {

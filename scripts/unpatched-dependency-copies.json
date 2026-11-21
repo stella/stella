@@ -1,0 +1,14 @@
+{
+  "copies": [
+    {
+      "package": "@emnapi/runtime@1.11.1",
+      "parents": ["@bruits/satteri-wasm32-wasi"],
+      "reason": "The emnapi patches stop a content security policy violation in the browser bundle. This copy belongs to the satteri WASI binding (cpu \"none\", installed only when the WASI fallback is forced), which pins 1.11.1 exactly and runs in Node while the landing site builds, never in a browser."
+    },
+    {
+      "package": "@emnapi/runtime@1.11.2",
+      "parents": ["@oxc-resolver/binding-wasm32-wasi"],
+      "reason": "The emnapi patches stop a content security policy violation in the browser bundle. This copy belongs to the oxc-resolver WASI binding (cpu \"none\", installed only when the WASI fallback is forced), which pins 1.11.2 exactly and runs in Node build tooling, never in a browser."
+    }
+  ]
+}

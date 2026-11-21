@@ -52,4 +52,6 @@ export type SessionSnapshot = { baseVersionNumber: number, entityId: string, fil
 
 export type SessionStatus = "opening" | "ready" | "syncing" | "finalizing" | "error";
 
+export type SettingsCheck = { "status": "up_to_date" } | { "status": "available", version: string, } | { "status": "deferred", version: string, } | { "status": "installing", version: string, } | { "status": "managed" };
+
 export type TrustedSelfHostConnection = { apiBaseUrl: string, trustedAt: string, webOrigin: string, };

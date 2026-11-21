@@ -381,6 +381,48 @@ updates:
       - dependency-name: "react-native"
         update-types:
           - "version-update:semver-minor"
+      # Expo SDK 58 requires react-native-svg 15.16.0 exactly (`expo doctor`
+      # fails on 15.16.1). Remove this guard when the SDK upgrade moves it.
+      - dependency-name: "react-native-svg"
+        versions:
+          - ">15.16.0"
+      # lucide-static feeds the mobile bar glyphs, which are native assets: a
+      # bump rewrites them and changes the native fingerprint, so it needs a
+      # TestFlight build. Remove this when the next store build bumps it.
+      - dependency-name: "lucide-static"
+        versions:
+          - ">1.70.0"
+      # oxlint 1.93 makes the root-script type-aware lint in
+      # scripts/code-check-affected.test.ts about 3x slower (7-11 s to 28-30 s
+      # on CI). oxlint, @oxlint/plugins and oxlint-tsgolint stay on the
+      # versions that pair with oxlint 1.90 until that is fixed.
+      - dependency-name: "oxlint"
+        versions:
+          - ">1.90.0"
+      - dependency-name: "@oxlint/plugins"
+        versions:
+          - ">1.90.0"
+      - dependency-name: "oxlint-tsgolint"
+        versions:
+          - ">7.0.2005"
+      # prosemirror-inputrules 1.6.0 imports prosemirror-model without
+      # declaring it, which the isolated linker cannot resolve. Remove this
+      # when a release declares the dependency.
+      - dependency-name: "prosemirror-inputrules"
+        versions:
+          - "1.6.0"
+      # @tanstack/react-hotkeys 0.25 deprecates the formatForDisplay re-export
+      # that apps/web/src/lib/hotkeys.ts calls with the hydration-safe
+      # platform. Remove this with the change that migrates the formatter.
+      - dependency-name: "@tanstack/react-hotkeys"
+        versions:
+          - ">0.23.1"
+      # turbo 2.11.11 re-runs cached API typecheck tasks whose inputs did not
+      # change (packages/scripts/src/api-typecheck-cache.test.ts). Remove this
+      # when a release keeps those cache hits.
+      - dependency-name: "turbo"
+        versions:
+          - ">2.11.10"
     commit-message:
       prefix: "chore"
     reviewers:

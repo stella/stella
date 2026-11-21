@@ -47,8 +47,14 @@ test("the rehearsal step and job timeouts derive from the script's own budget", 
     )?.[1],
   );
   expect(Number.isInteger(budgetSeconds) && budgetSeconds > 0).toBe(true);
-  // The upgrade and its fixed-point rerun each run under the budget.
+  // The upgrade and its fixed-point rerun each run under the budget; the
+  // pending online drain runs in what the deploy's migrate left of the
+  // upgrade's, so the two budgets still bound every migration run.
   expect(script.match(/timeout --foreground "\$budget"/gu)).toHaveLength(2);
+  expect(script).toContain("drain_budget=$(( budget - upgrade_seconds ))");
+  expect(script.match(/timeout --foreground "\$drain_budget"/gu)).toHaveLength(
+    1,
+  );
 
   const job = workflow.jobs["migration-upgrade-rehearsal"];
   const step = job.steps.find(
@@ -129,6 +135,8 @@ const args = process.argv.slice(2);
 appendFileSync(path.join(process.env.REHEARSAL_TEST_STATE, "events"), "bun " + args.join(" ") + "\\n");
 if (args.includes("assert-empty") && process.env.REHEARSAL_TEST_FAILURE === "nonempty") {
   process.exit(29);
+} else if (args.some((arg) => arg.endsWith("drain-pending-online-units.ts")) && process.env.REHEARSAL_TEST_FAILURE === "drain") {
+  process.exit(31);
 } else if (args.includes("contend")) {
   console.log("contending: locks held");
   setInterval(() => {}, 1000);
@@ -252,7 +260,7 @@ const runFake = async (failure: string, body = script) => {
   }
 };
 
-test("base startup precedes target fixtures; the promoted and candidate releases boot after all migration proofs", async () => {
+test("the upgrade follows a deploy's order: finalized migrate, the promoted release, the pending drain, the full rerun, then the candidate", async () => {
   const result = await runFake("");
   expect(result.exitCode, result.output).toBe(0);
   const events = result.events.split("\n");
@@ -272,12 +280,32 @@ test("base startup precedes target fixtures; the promoted and candidate releases
   const parity = events.findIndex((event) =>
     event.includes("drizzle-kit push"),
   );
+  const migrateRuns = events.flatMap((event, index) =>
+    event.startsWith("bun run src/db/migrate.ts") ? [{ event, index }] : [],
+  );
+  const drain = events.indexOf(
+    "bun run src/scripts/drain-pending-online-units.ts",
+  );
+  const [finalizedUpgrade, fullRerun] = migrateRuns;
+  expect(migrateRuns).toHaveLength(2);
+  expect(finalizedUpgrade?.event).toBe(
+    "bun run src/db/migrate.ts --online=finalized",
+  );
+  expect(fullRerun?.event).toStartWith(
+    "bun run src/db/migrate.ts --rehearsal-online-repair-report ",
+  );
+  expect(fullRerun?.event).not.toContain("--online=");
   expect(baseBoot).toBeGreaterThan(-1);
   expect(seed).toBeGreaterThan(baseBoot);
-  expect(parity).toBeGreaterThan(seed);
-  expect(servedBoot).toBeGreaterThan(parity);
+  expect(finalizedUpgrade?.index).toBeGreaterThan(seed);
+  // The promoted release starts against what the deploy ran before its
+  // rollout, never against the pending work drained after it.
+  expect(servedBoot).toBeGreaterThan(finalizedUpgrade?.index ?? Infinity);
   expect(events[servedBoot]).toContain("stella-api:v1.2.3");
-  expect(candidateBoot).toBeGreaterThan(servedBoot);
+  expect(drain).toBeGreaterThan(servedBoot);
+  expect(fullRerun?.index).toBeGreaterThan(drain);
+  expect(parity).toBeGreaterThan(fullRerun?.index ?? Infinity);
+  expect(candidateBoot).toBeGreaterThan(parity);
   const version = readFileSync(
     new URL("../VERSION", import.meta.url),
     "utf-8",
@@ -369,6 +397,32 @@ test("a promoted release that refuses the upgraded database names its check and 
         (event) =>
           event.startsWith("docker run -d") && event.includes("-candidate "),
       ),
+  ).toBe(false);
+  // The drain belongs after the rollout the refusal stopped.
+  expect(result.events).not.toContain("drain-pending-online-units.ts");
+  expect(result.state).toEqual([]);
+  expect(result.runtime).toEqual([]);
+});
+
+test("a failed pending online drain fails the rehearsal before the full rerun and the candidate boot", async () => {
+  const result = await runFake("drain");
+  expect(result.exitCode).toBe(1);
+  expect(result.output).toContain(
+    "The pending online drain failed on a scale-shaped database",
+  );
+  const events = result.events.split("\n");
+  expect(
+    events.some(
+      (event) =>
+        event.startsWith("docker run -d") && event.includes("-served "),
+    ),
+  ).toBe(true);
+  expect(result.events).not.toContain("--rehearsal-online-repair-report");
+  expect(
+    events.some(
+      (event) =>
+        event.startsWith("docker run -d") && event.includes("-candidate "),
+    ),
   ).toBe(false);
   expect(result.state).toEqual([]);
   expect(result.runtime).toEqual([]);

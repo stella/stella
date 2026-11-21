@@ -1,4 +1,4 @@
-import { useId, useMemo, useRef, useState } from "react";
+import { useId, useRef, useState } from "react";
 import type { KeyboardEvent, PointerEvent } from "react";
 
 import { panic, Result } from "better-result";
@@ -63,6 +63,7 @@ export type PageOrganizerCropProps = {
   onApply: (crops: ReadonlyMap<string, NormalizedCrop | null>) => void;
   onReset: () => void;
   disabled: boolean;
+  disabledReason?: string | undefined;
 };
 
 const geometryFor = ({ page, pageInfo }: CropPanelPage): CropPageGeometry => {
@@ -104,6 +105,7 @@ export const PageOrganizerCrop = ({
   onApply,
   onReset,
   disabled,
+  disabledReason,
 }: PageOrganizerCropProps) => {
   const t = useTranslations("workspaces.pdf.pageEditor");
   const tCommon = useTranslations("common");
@@ -111,7 +113,7 @@ export const PageOrganizerCrop = ({
   const first = pages.at(0) ?? panic("Crop panel requires selected pages");
   // The smallest displayed width and height bound one physical margin draft
   // for every selected page. Measure once, rather than for each drag event.
-  const selectionGeometry = useMemo(() => {
+  const selectionGeometry = (() => {
     let width = Number.POSITIVE_INFINITY;
     let height = Number.POSITIVE_INFINITY;
     for (const entry of pages) {
@@ -123,7 +125,7 @@ export const PageOrganizerCrop = ({
       height = Math.min(height, viewport.height);
     }
     return { width, height, rotation: 0 as const };
-  }, [pages]);
+  })();
   const [margins, setMargins] = useState(() =>
     clampCropMarginsMm(
       cropToMarginsMm(first.page.crop, geometryFor(first)),
@@ -169,6 +171,7 @@ export const PageOrganizerCrop = ({
             data-crop-action="previous"
             aria-label={t("cropPreviousPage")}
             disabled={activeIndex === 0}
+            disabledReason={t("cropFirstSelectedPage")}
             onClick={() => setActiveIndex(activeIndex - 1)}
             size="sm"
             variant="outline"
@@ -185,6 +188,7 @@ export const PageOrganizerCrop = ({
             data-crop-action="next"
             aria-label={t("cropNextPage")}
             disabled={activeIndex === pages.length - 1}
+            disabledReason={t("cropLastSelectedPage")}
             onClick={() => setActiveIndex(activeIndex + 1)}
             size="sm"
             variant="outline"
@@ -265,6 +269,7 @@ export const PageOrganizerCrop = ({
         <Button
           data-crop-action="reset"
           disabled={disabled}
+          disabledReason={disabledReason}
           onClick={onReset}
           variant="ghost"
         >
@@ -276,6 +281,7 @@ export const PageOrganizerCrop = ({
         <Button
           data-crop-action="apply"
           disabled={disabled || !canCrop}
+          disabledReason={disabledReason ?? t("cropTooSmall")}
           onClick={() =>
             onApply(
               new Map(

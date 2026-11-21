@@ -5,6 +5,7 @@ import { afterAll, afterEach, expect, test } from "bun:test";
 
 import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
+import { defaultPresentationPrefs } from "@/lib/account/presentation-prefs/preferences";
 import { createAnalyticsValue } from "@/lib/analytics/provider";
 import { createRouteErrorLifecycleController } from "@/lib/analytics/route-error-lifecycle";
 import { createAppQueryClient } from "@/lib/react-query";
@@ -13,6 +14,11 @@ import { WEB_ROUTE_TEMPLATES } from "@/route-templates.gen";
 import { organizationSettingsDestination } from "@/routes/-organization-settings-route";
 
 const EMPTY_SEARCH = {};
+/** The route fields this test reads or clears before navigating. */
+type StrippableRoute = {
+  id: string;
+  options: { beforeLoad?: unknown; loader?: unknown };
+};
 
 GlobalRegistrator.register({ url: "http://localhost:3000" });
 afterAll(async () => await unregisterDomEnvironment());
@@ -55,6 +61,7 @@ const createTestRouter = (from: string) => {
       routeErrorLifecycle: createRouteErrorLifecycleController(
         analyticsValue.analytics,
       ),
+      presentationPrefs: defaultPresentationPrefs,
     },
     history: createMemoryHistory({ initialEntries: [from] }),
     parseSearch: parseRouteSearch,
@@ -62,7 +69,8 @@ const createTestRouter = (from: string) => {
     stringifySearch: stringifyRouteSearch,
   });
 
-  for (const route of Object.values(router.routesById)) {
+  const routes: StrippableRoute[] = Object.values(router.routesById);
+  for (const route of routes) {
     if (!originalRouteOptions.has(route)) {
       const { beforeLoad, loader } = route.options;
       originalRouteOptions.set(route, { beforeLoad, loader });

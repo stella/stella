@@ -165,6 +165,24 @@ impl Fixture {
       .filter(|line| line.starts_with("started "))
       .count()
   }
+
+  /// The connections the holder of `version` accepted and has not yet seen
+  /// close.
+  fn connections(&self, version: &str) -> usize {
+    let log = fs::read_to_string(self.log()).unwrap_or_default();
+    let count = |marker: String| log.lines().filter(|line| *line == marker).count();
+    count(format!("connected {version}"))
+      .saturating_sub(count(format!("disconnected {version}")))
+  }
+
+  /// Wait until the holder of `version` saw every connection to it close, as
+  /// it does once a dropped supervisor is gone: the next supervisor then
+  /// meets the holder alone, as after an app restart, and never races the
+  /// old one for it.
+  async fn until_released(&self, version: &str) {
+    let what = format!("the {version} holder saw its connections close");
+    until(&what, || self.connections(version) == 0).await;
+  }
 }
 
 impl Drop for Fixture {
@@ -551,9 +569,8 @@ fn runs_outlive_the_supervisor_and_resume_in_the_next_one() {
     // What quitting the app does: the handle goes, nothing is sent.
     drop(first);
     // The holder still answers once the old supervisor let go.
-    let endpoint = fixture.endpoint(VERSION);
-    tokio::time::sleep(Duration::from_millis(200)).await; // kit-allow: lets a dropped connection close in a real process
-    assert!(endpoint.exists());
+    fixture.until_released(VERSION).await;
+    assert!(fixture.endpoint(VERSION).exists());
 
     let second = fixture.sidecar();
     assert_eq!(
@@ -760,7 +777,7 @@ fn a_new_version_drains_the_old_holder_and_removes_its_folder() {
     let mut outputs = old.start_run(start).unwrap();
     assert_eq!(next(&mut outputs).await, started(&run_id));
     drop(old);
-    tokio::time::sleep(Duration::from_millis(200)).await; // kit-allow: lets a dropped connection close in a real process
+    fixture.until_released("1.3.0").await;
 
     let new = fixture.sidecar();
     assert_eq!(
@@ -993,7 +1010,7 @@ fn a_holder_is_found_where_it_recorded_its_endpoint_after_the_runtime_folder_mov
     let mut outputs = first.start_run(start).unwrap();
     assert_eq!(next(&mut outputs).await, started(&run_id));
     drop(first);
-    tokio::time::sleep(Duration::from_millis(200)).await; // kit-allow: lets a dropped connection close in a real process
+    fixture.until_released(VERSION).await;
 
     // The next launch's environment names another runtime folder.
     let second = fixture.sidecar_with_sockets_in(second_dir.clone());
@@ -1404,13 +1421,27 @@ mod stand_in {
     current: Option<Connection>,
   }
 
+  /// Add a line to the log in one write: holders of several versions share
+  /// the log, and a line written in pieces can be split by another's.
   fn append(log: &Path, line: &str) {
     let mut file = fs::OpenOptions::new()
       .create(true)
       .append(true)
       .open(log)
       .unwrap();
-    writeln!(file, "{line}").unwrap();
+    file.write_all(format!("{line}\n").as_bytes()).unwrap();
+  }
+
+  /// Logs a connection's end, however its task ends.
+  struct Closed {
+    log: PathBuf,
+    version: String,
+  }
+
+  impl Drop for Closed {
+    fn drop(&mut self) {
+      append(&self.log, &format!("disconnected {}", self.version));
+    }
   }
 
   pub(super) async fn serve(dir: PathBuf, endpoint: PathBuf, log: PathBuf) {
@@ -1432,7 +1463,7 @@ mod stand_in {
     let state = Arc::new(Mutex::new(State {
       dir,
       endpoint,
-      log,
+      log: log.clone(),
       secret,
       draining: false,
       runs: HashMap::new(),
@@ -1444,11 +1475,17 @@ mod stand_in {
     loop {
       let (stream, _address) = listener.accept().await.unwrap();
       next_id += 1;
+      append(&log, &format!("connected {version}"));
+      let closed = Closed {
+        log: log.clone(),
+        version: version.clone(),
+      };
       tokio::spawn(connection(
         Arc::clone(&state),
         stream,
         next_id,
         version.clone(),
+        closed,
       ));
     }
   }
@@ -1458,6 +1495,7 @@ mod stand_in {
     stream: tokio::net::UnixStream,
     id: u64,
     version: String,
+    _closed: Closed,
   ) {
     let (read, writer) = stream.into_split();
     let mut writer = Some(writer);

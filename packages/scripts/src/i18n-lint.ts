@@ -42,12 +42,12 @@ import type { NestedMessages } from "./i18n-check";
 const flatten = (
   obj: NestedMessages,
   prefix = "",
-  out: Record<string, string> = {},
-): Record<string, string> => {
+  out = new Map<string, string>(),
+): Map<string, string> => {
   for (const [key, value] of Object.entries(obj)) {
     const fullKey = prefix ? `${prefix}.${key}` : key;
     if (typeof value === "string") {
-      out[fullKey] = value;
+      out.set(fullKey, value);
     } else {
       flatten(value, fullKey, out);
     }
@@ -236,7 +236,9 @@ export const findMissingPluralCategories = (
     return [];
   }
 
-  const omitted = OMITTED_CARDINAL_PLURALS[locale];
+  const omitted = Object.hasOwn(OMITTED_CARDINAL_PLURALS, locale)
+    ? OMITTED_CARDINAL_PLURALS[locale]
+    : undefined;
   const cardinal = pluralCategories(locale, "cardinal").filter(
     (category) => !omitted?.has(category),
   );
@@ -538,6 +540,124 @@ export const hasEmDash = (value: string): boolean =>
 
 export const EM_DASH_GUIDANCE =
   "no em dash: rewrite the break with a period, comma, colon or parentheses";
+
+// Prefer the single Unicode horizontal ellipsis (…) over three ASCII dots (...).
+// Extract only literal text from an ICU message so placeholder names (e.g.
+// `{dir}` in German) and select branch keys are excluded from prose checks.
+const collectLiteralText = (
+  elements: readonly MessageFormatElement[],
+): string =>
+  elements
+    .map((el) => {
+      if (el.type === TYPE.literal) {
+        return el.value;
+      }
+      if (el.type === TYPE.plural || el.type === TYPE.select) {
+        return Object.values(el.options)
+          .map((opt) => collectLiteralText(opt.value))
+          .join(" ");
+      }
+      if (el.type === TYPE.tag) {
+        return collectLiteralText(el.children);
+      }
+      return " ";
+    })
+    .join("");
+
+const literalMessageText = (value: string): string => {
+  const ast = safeParse(value);
+  return ast === null ? value : collectLiteralText(ast);
+};
+
+export const hasAsciiEllipsis = (value: string): boolean =>
+  value.includes("...");
+
+export const ASCII_ELLIPSIS_GUIDANCE =
+  "use the single-character ellipsis (…) instead of three dots (...)";
+
+// Keep the product name uninflected in inflected locales (cs, sk, pl, hu, et,
+// lt, lv): declining a female first name (e.g. cs "do stelly", hu "stellába",
+// et "stellasse") sounds overly personal and inconsistent with B2B legal copy.
+// Decline an appositive noun in front of it instead (e.g. "do aplikace stella",
+// "w aplikacji stella", "a stella alkalmazásba"), and never leave a bare
+// ungrammatical preposition/verb before nominative "stella" either.
+const INFLECTED_STELLA_LOCALES = new Set([
+  "cs",
+  "sk",
+  "pl",
+  "hu",
+  "et",
+  "lt",
+  "lv",
+]);
+const INFLECTED_STELLA_PATTERN =
+  /(?<!\p{L})(?:stell(?:y|u|e|ou|i|ę|ą|át|ába|ából|ában|ához|ának|án|ával|asse|ast|as|at|aga|ale|al|alt|ai|os|oje|ā)|stella-(?:st|sse|s|ga|le|l|lt))(?!\p{L})/iu;
+
+const BARE_STELLA_LOCALES = new Set(["cs", "sk"]);
+const BARE_STELLA_PATTERN =
+  /(?<!\p{L})(?:do|od|ze|zo|k|ke|ku|pro|pre|otevřít|otevřete|otvoriť|otvorte|připojit|připojte|pripojiť|pripojte)\s+stella(?!\p{L}|\s+(?:desktop|web|CLI|MCP|Style|AI|Legal|Editor)\b)/iu;
+
+export const hasInflectedStella = (value: string, locale: string): boolean =>
+  INFLECTED_STELLA_LOCALES.has(locale) && INFLECTED_STELLA_PATTERN.test(value);
+
+export const hasBareUngrammaticalStella = (
+  value: string,
+  locale: string,
+): boolean =>
+  BARE_STELLA_LOCALES.has(locale) && BARE_STELLA_PATTERN.test(value);
+
+export const INFLECTED_STELLA_GUIDANCE =
+  "keep stella uninflected; decline a noun in front of it (e.g. cs 'do aplikace stella', pl 'w aplikacji stella', hu 'a stella alkalmazásba', et 'rakenduses stella')";
+
+// Avoid anthropomorphic 1st-person UI voice ("I am preparing/loading/working…"):
+// stella is a legal tool, not a persona. Prefer impersonal or verbal-noun forms.
+const FIRST_PERSON_APP_VOICE_PATTERNS = new Map<string, RegExp>([
+  [
+    "cs",
+    /(?<!\p{L})(?:připravuji|načítám|hledám|pracuji|zpracovávám|odesílám|ukládám|stahuji|kontroluji|analyzuji|vytvářím|ověřuji)(?!\p{L})/iu,
+  ],
+  [
+    "sk",
+    /(?<!\p{L})(?:pripravujem|načítavam|hľadám|pracujem|spracúvam|odosielam|ukladám|sťahujem|kontrolujem|analyzujem|vytváram|overujem)(?!\p{L})/iu,
+  ],
+  [
+    "de",
+    /(?<!\p{L})ich\s+(?:bereite|lade|suche|arbeite|prüfe|erstelle|speichere)(?!\p{L})/iu,
+  ],
+]);
+
+export const hasFirstPersonAppVoice = (
+  value: string,
+  locale: string,
+): boolean =>
+  FIRST_PERSON_APP_VOICE_PATTERNS.get(locale)?.test(
+    literalMessageText(value),
+  ) ?? false;
+
+export const FIRST_PERSON_APP_VOICE_GUIDANCE =
+  "avoid 1st-person app voice (e.g. cs 'Analyzuji…', sk 'Pracujem…'); use impersonal forms ('Analyzuje se…', 'Probíhá…') so the app does not speak as a persona";
+
+// Enforce the established T-V register per locale (de Sie, cs/sk vykání,
+// hu Ön, es tú) on unambiguous pronouns so informal/formal drift does not creep in.
+const REGISTER_DRIFT_PATTERNS = new Map<string, RegExp>([
+  [
+    "de",
+    /(?<!\p{L})(?:du|dich|dir|dein|deine|deinem|deinen|deiner|deines)(?!\p{L})/iu,
+  ],
+  ["cs", /(?<!\p{L})(?:tvůj|tvá|tvé|tvoje|tvého|tvému|tvým|tvých)(?!\p{L})/iu],
+  [
+    "sk",
+    /(?<!\p{L})(?:tvoj|tvoja|tvoje|tvojho|tvojmu|tvojím|tvojich)(?!\p{L})/iu,
+  ],
+  ["hu", /(?<!\p{L})(?:tied|neked|téged|veled)(?!\p{L})/iu],
+  ["es", /(?<!\p{L})(?:usted|ustedes)(?!\p{L})/iu],
+]);
+
+export const hasRegisterDrift = (value: string, locale: string): boolean =>
+  REGISTER_DRIFT_PATTERNS.get(locale)?.test(literalMessageText(value)) ?? false;
+
+export const REGISTER_DRIFT_GUIDANCE =
+  "keep the locale's established register (de Sie, cs/sk vykání, hu Ön, es tú)";
 
 export type ForbiddenRule = {
   concept: string;
@@ -856,7 +976,8 @@ const findViolations = (
           key,
         }).length > 0 ||
           hasInvalidCapitalizedStella(targetValue) ||
-          hasEmDash(targetValue))
+          hasEmDash(targetValue) ||
+          hasAsciiEllipsis(targetValue))
       ) {
         result.terminology.push(key);
       }
@@ -885,7 +1006,12 @@ const findViolations = (
         key,
       }).length > 0 ||
       hasInvalidCapitalizedStella(targetValue) ||
-      hasEmDash(targetValue)
+      hasEmDash(targetValue) ||
+      hasAsciiEllipsis(targetValue) ||
+      hasInflectedStella(targetValue, locale) ||
+      hasBareUngrammaticalStella(targetValue, locale) ||
+      hasFirstPersonAppVoice(targetValue, locale) ||
+      hasRegisterDrift(targetValue, locale)
     ) {
       result.terminology.push(key);
     }
@@ -941,7 +1067,9 @@ if (import.meta.main) {
       return parseNestedMessages(text, filePath);
     };
 
-    const source = flatten(await readJson(path.resolve(langsDir, "en.json")));
+    const source = Object.fromEntries(
+      flatten(await readJson(path.resolve(langsDir, "en.json"))),
+    );
     const glossary = parseGlossary(await Bun.file(glossaryPath).text());
     const rules = buildForbiddenRules(glossary);
 
@@ -972,7 +1100,15 @@ if (import.meta.main) {
         .toSorted(),
     ];
 
-    const next = emptyBaseline();
+    const next: Record<
+      LintCategory,
+      Map<string, Map<string, BaselineEntry>>
+    > = {
+      placeholder: new Map(),
+      icu: new Map(),
+      plural: new Map(),
+      terminology: new Map(),
+    };
     let hasIssues = false;
 
     for (const file of localeFiles) {
@@ -980,7 +1116,9 @@ if (import.meta.main) {
       const target =
         locale === "en"
           ? source
-          : flatten(await readJson(path.resolve(langsDir, file)));
+          : Object.fromEntries(
+              flatten(await readJson(path.resolve(langsDir, file))),
+            );
       const violations = findViolations(source, target, locale, rules);
 
       const reported: string[] = [];
@@ -991,7 +1129,10 @@ if (import.meta.main) {
             target: target[key] ?? "",
           };
           if (writeBaseline) {
-            (next[category][key] ??= {})[locale] = entry;
+            const byLocale =
+              next[category].get(key) ?? new Map<string, BaselineEntry>();
+            byLocale.set(locale, entry);
+            next[category].set(key, byLocale);
           } else if (
             !isSuppressed({
               baseline,
@@ -1012,6 +1153,19 @@ if (import.meta.main) {
                       key,
                     }),
                     ...(hasEmDash(entry.target) ? [EM_DASH_GUIDANCE] : []),
+                    ...(hasAsciiEllipsis(entry.target)
+                      ? [ASCII_ELLIPSIS_GUIDANCE]
+                      : []),
+                    ...(hasInflectedStella(entry.target, locale) ||
+                    hasBareUngrammaticalStella(entry.target, locale)
+                      ? [INFLECTED_STELLA_GUIDANCE]
+                      : []),
+                    ...(hasFirstPersonAppVoice(entry.target, locale)
+                      ? [FIRST_PERSON_APP_VOICE_GUIDANCE]
+                      : []),
+                    ...(hasRegisterDrift(entry.target, locale)
+                      ? [REGISTER_DRIFT_GUIDANCE]
+                      : []),
                   ]
                 : [];
             const suffix =
@@ -1074,17 +1228,15 @@ if (import.meta.main) {
 
     if (writeBaseline) {
       const sortRecord = (
-        record: Record<string, Record<string, BaselineEntry>>,
+        record: Map<string, Map<string, BaselineEntry>>,
       ): Record<string, Record<string, BaselineEntry>> =>
         Object.fromEntries(
-          Object.entries(record)
+          [...record]
             .toSorted(([a], [b]) => a.localeCompare(b))
             .map(([key, byLocale]) => [
               key,
               Object.fromEntries(
-                Object.entries(byLocale).toSorted(([a], [b]) =>
-                  a.localeCompare(b),
-                ),
+                [...byLocale].toSorted(([a], [b]) => a.localeCompare(b)),
               ),
             ]),
         );
@@ -1098,8 +1250,8 @@ if (import.meta.main) {
       const count = CATEGORIES.reduce(
         (sum, category) =>
           sum +
-          Object.values(next[category]).reduce(
-            (n, byLocale) => n + Object.keys(byLocale).length,
+          [...next[category].values()].reduce(
+            (n, byLocale) => n + byLocale.size,
             0,
           ),
         0,

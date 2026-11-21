@@ -75,6 +75,11 @@ const CROSS_TENANT_WAIVERS: Record<string, WaiverReason> = {
   // on the credential path, are covered by
   // `tests/security/machine-api-keys.test.ts`.
   "api-keys": WAIVER_REASON.isolatedOutsideRlsHarness,
+  // Bearer-token reads resolve their own organization and recheck it inside
+  // SECURITY DEFINER projections, rather than using a signed-in member's RLS
+  // scope. handlers/invoice-links/invoice-links.integration.test.ts covers
+  // live-token positive controls and foreign-organization projection denial.
+  "invoice-links": WAIVER_REASON.isolatedOutsideRlsHarness,
   // The runner socket reads and writes through the gateway's root connection;
   // every row it touches is bound to the account, organization, installation
   // and device key the upgrade proved. The binding and the refusal of another

@@ -36,6 +36,7 @@ import {
   FAKE_THREAD_ID,
   type FakeScenario,
 } from "../../scripts/fake-codex-app-server";
+import { readCompleteLines } from "../../scripts/fake-harness-peer";
 import { bundledHarnessCompatibility } from "../harness/compatibility";
 import { PROTOCOL_LOG_OFF } from "../protocol-log";
 import {
@@ -129,12 +130,10 @@ type Place = {
 
 /** Every line the fake harnesses logged, parsed. */
 const fakeEntries = (fakeLog: string): Record<string, unknown>[] =>
-  existsSync(fakeLog)
-    ? readFileSync(fakeLog, "utf-8")
-        .split("\n")
-        .filter((line) => line !== "")
-        .map((line) => JSON.parse(line))
-    : [];
+  readCompleteLines(fakeLog).map((line) => {
+    const entry: Record<string, unknown> = JSON.parse(line);
+    return entry;
+  });
 
 const place = (): Place => {
   const root = mkdtempSync(path.join(tmpdir(), "stella-holder-"));
@@ -150,14 +149,12 @@ const place = (): Place => {
     fakeLog,
     secret: () => readFileSync(path.join(dir, HOLDER_SECRET_FILE), "utf-8"),
     received: () =>
-      existsSync(fakeLog)
-        ? readFileSync(fakeLog, "utf-8")
-            .split("\n")
-            .filter((line) => line !== "")
-            .map((line) => JSON.parse(line))
-            .filter((entry) => entry.received !== undefined)
-            .map((entry) => entry.received)
-        : [],
+      readCompleteLines(fakeLog).flatMap((line) => {
+        const entry: {
+          received?: ReturnType<Place["received"]>[number];
+        } = JSON.parse(line);
+        return entry.received === undefined ? [] : [entry.received];
+      }),
     startups: () =>
       fakeEntries(fakeLog).flatMap(({ startup }) =>
         startup === undefined ? [] : [startup],

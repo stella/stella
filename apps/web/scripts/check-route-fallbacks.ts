@@ -123,6 +123,28 @@ const SHELL_SYMBOLS = new Set([
   "StellaMark",
 ]);
 const LOGO_LOADER_MODULE = "@stll/ui/loader";
+// The modules that export the shared landing greeting.
+const LANDING_GREETING_MODULES: ReadonlySet<string> = new Set([
+  "@stll/ui/landing",
+  "@stll/ui/landing-shell",
+]);
+
+// These marks identify the OAuth service and brand the onboarding sidebar
+// preview. Each belongs to page content in both loading and loaded views.
+const PAGE_CONTENT_MARKS = [
+  {
+    file: "components/oauth-consent/consent-card-shell.pending.tsx",
+    component: "ConsentClientTilePair",
+    module: "@stll/ui/stella-mark",
+    symbol: "StellaMark",
+  },
+  {
+    file: "routes/onboarding/-components/sidebar-preview.pending.tsx",
+    component: "OnboardingSidebarFrame",
+    module: "@stll/ui/stella-wordmark",
+    symbol: "StellaWordmarkLatin",
+  },
+] as const;
 
 class FallbackSymbols {
   private readonly modules = new Map<string, Module>();
@@ -313,8 +335,11 @@ class FallbackSymbols {
     if (node.type === "JSXClosingElement") {
       return [];
     }
-    if (node.type === "JSXOpeningElement" && this.isInlineLoader(file, node)) {
-      return [];
+    if (node.type === "JSXOpeningElement") {
+      const exempt = this.inspectExemptElement(file, node, visited, locals);
+      if (exempt) {
+        return exempt;
+      }
     }
     if (node.type === "JSXAttribute") {
       return this.inspectAttribute(file, node, visited, locals);
@@ -490,6 +515,49 @@ class FallbackSymbols {
     };
     visitChildren(body, returns);
     return findings;
+  }
+  // Elements whose chrome is not the frame's: an inline loader, and a landing
+  // greeting's tile, which holds the page's own mark (the chat home greets
+  // with the stella mark): page content drawn the same in both phases, not
+  // the frame's logo standing in for a page.
+  inspectExemptElement(
+    file: string,
+    node: JSXOpeningElement,
+    visited: Set<string>,
+    locals: Map<string, Node>,
+  ): string[] | undefined {
+    if (this.isInlineLoader(file, node)) {
+      return [];
+    }
+    const name = this.text(file, node.name);
+    const source = this.load(file);
+    const binding = source.imports.get(name);
+    const mark = PAGE_CONTENT_MARKS.find(
+      (entry) =>
+        binding?.name === entry.symbol &&
+        binding.module === entry.module &&
+        path.join(this.srcDirectory, entry.file) === file,
+    );
+    const owner = mark && source.definitions.get(mark.component);
+    if (owner && owner.start <= node.start && node.end <= owner.end) {
+      return node.attributes.flatMap((attr) =>
+        this.inspectNode(file, attr, visited, locals),
+      );
+    }
+    // Only the canonical greeting owns its icon slot.
+    if (
+      name !== "LandingGreeting" ||
+      binding?.name !== "LandingGreeting" ||
+      !LANDING_GREETING_MODULES.has(binding.module)
+    ) {
+      return undefined;
+    }
+    return node.attributes.flatMap((attribute) =>
+      attribute.type === "JSXAttribute" &&
+      this.text(file, attribute.name) === "icon"
+        ? []
+        : this.inspectNode(file, attribute, visited, locals),
+    );
   }
   inspectAttribute(
     file: string,

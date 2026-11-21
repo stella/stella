@@ -100,6 +100,31 @@ const createInitialSaveState = (): EmailAttachmentSaveState => ({
   status: EMAIL_ATTACHMENT_SAVE_STATUS.idle,
 });
 
+type AttachmentSaveDisabledReasonOptions = {
+  saving: boolean;
+  hasMatter: boolean;
+  t: (
+    key:
+      | "common.saving"
+      | "common.selectAMatter"
+      | "inspector.selectAttachmentToSave",
+  ) => string;
+};
+
+const attachmentSaveDisabledReason = ({
+  saving,
+  hasMatter,
+  t,
+}: AttachmentSaveDisabledReasonOptions) => {
+  if (saving) {
+    return t("common.saving");
+  }
+  if (!hasMatter) {
+    return t("common.selectAMatter");
+  }
+  return t("inspector.selectAttachmentToSave");
+};
+
 export const EmailAttachmentsFacet = ({
   chatMode,
   entityId,
@@ -293,6 +318,11 @@ export const EmailAttachmentsFacet = ({
                 saveTargetAttachment === undefined ||
                 saving
               }
+              disabledReason={attachmentSaveDisabledReason({
+                saving,
+                hasMatter: matterTarget !== null,
+                t,
+              })}
               onClick={() => {
                 if (matterTarget && saveTargetAttachment) {
                   saveAttachment({
@@ -676,6 +706,7 @@ const AttachmentListItem = ({
         <Button
           className="flex min-h-11 min-w-0 flex-1"
           disabled={!attachment.previewable}
+          disabledReason={t("inspector.attachmentNotPreviewable")}
           onClick={() => onSelect(attachment.id)}
           variant="plain"
         >
@@ -735,7 +766,7 @@ const AttachmentSaveControls = ({
       menuLabel={t("common.selectAMatter")}
       onPrimaryClick={onSave}
       primaryDescriptionId={descriptionId}
-      primaryDisabled={disabled}
+      primaryDisabledReason={disabled ? t("common.saving") : undefined}
       primaryContent={compact ? "icon" : "text"}
       primaryLabel={t("common.save")}
       size="sm"

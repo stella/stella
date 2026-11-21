@@ -1,6 +1,6 @@
 {
   "name": "@stll/template-conditions",
-  "version": "0.6.6",
+  "version": "0.7.0",
   "description": "A document-template marker and condition engine: {{...}} marker grammar, parse, compute, serialize, field values.",
   "keywords": [
     "condition",
@@ -37,7 +37,7 @@
   },
   "scripts": {
     "clean": "git clean -xdf dist .cache .turbo node_modules",
-    "build": "tsdown",
+    "build": "bun --bun tsdown",
     "pack:dry-run": "bun pm pack --dry-run",
     "test": "bun test",
     "test:property": "bun test --preload @stll/property-testing/preload $(grep -rlE 'fc\\.assert|assertProperty' src --include='*.test.ts')",

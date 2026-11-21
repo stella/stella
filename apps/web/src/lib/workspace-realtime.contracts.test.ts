@@ -5,7 +5,9 @@ import {
   QueryObserver,
   queryOptions,
 } from "@tanstack/react-query";
+import { revokeOtherSessions, updateUser } from "better-auth/api";
 import { organization } from "better-auth/plugins";
+import { panic } from "better-result";
 import { expect, spyOn, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import path from "node:path";
@@ -17,6 +19,11 @@ import {
   RESOURCE_TYPE,
   type ResourceType,
 } from "@stll/api-contract";
+import {
+  SESSION_SIGN_IN_MAP_PATH,
+  SESSION_SIGN_IN_REVIEW_PATH,
+  SESSION_SIGN_INS_PATH,
+} from "@stll/api-contract/session-sign-ins";
 import { SIGNAL_VIEW } from "@stll/api-contract/signals";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
@@ -26,7 +33,9 @@ import {
   verificationRunOptions,
 } from "@/features/avt/queries";
 import { linkIconOptions } from "@/features/chat/link-icons";
+import { MEMBER_SESSION } from "@/lib/account/auth-session.test-fixtures";
 import { getAnalytics } from "@/lib/analytics/provider";
+import { rootKeys, sessionOptions } from "@/lib/auth-query-options";
 import { fileMetadataOptions } from "@/lib/files/file-metadata-query";
 import { fileMetadataByFieldQueryRoot } from "@/lib/files/file-metadata-query.logic";
 import { fileOptions, textFileOptions } from "@/lib/files/queries";
@@ -77,6 +86,15 @@ const RUN_ID = "00000000-0000-4000-8000-0000000000a1";
 const ENTITY_ID = "00000000-0000-4000-8000-0000000000e1";
 const ORGANIZATION_ID = "organization-rename";
 const USER_ID = "user-rename";
+const CONTRACT_SESSION = {
+  ...MEMBER_SESSION,
+  user: { ...MEMBER_SESSION.user, id: USER_ID },
+  session: {
+    ...MEMBER_SESSION.session,
+    userId: USER_ID,
+    activeOrganizationId: ORGANIZATION_ID,
+  },
+} satisfies typeof MEMBER_SESSION;
 const coverageLayout = {
   version: 1,
   type: "table",
@@ -305,7 +323,11 @@ test("each migrated mutation still invalidates every prior cache target", async 
   const migrated = Object.entries(migratedMutationTargets);
   expect(migrated.length).toBeGreaterThan(0);
   for (const [mutation, factories] of migrated) {
-    if (!isContractName(mutation)) {
+    if (
+      !isContractName(mutation) ||
+      mutation === "updateUser" ||
+      isPublicTokenMutation(mutation)
+    ) {
       throw new TypeError(`Frozen targets name no contract: ${mutation}`);
     }
     expect({ mutation, factories: factories.length > 0 }).toEqual({
@@ -316,6 +338,7 @@ test("each migrated mutation still invalidates every prior cache target", async 
     const queryClient = new QueryClient({
       defaultOptions: { queries: { retry: false, staleTime: Infinity } },
     });
+    queryClient.setQueryData(sessionOptions.queryKey, CONTRACT_SESSION);
     try {
       for (const { target, readers } of targets) {
         expect(readers.length).toBeGreaterThan(0);
@@ -366,6 +389,7 @@ test("organization mutations invalidate organization readers without touching wo
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false, staleTime: Infinity } },
   });
+  queryClient.setQueryData(sessionOptions.queryKey, CONTRACT_SESSION);
   const organizationReader = resourceQueryOptions(
     queryOptions({
       queryKey: ["mcp", "organization"],
@@ -373,7 +397,7 @@ test("organization mutations invalidate organization readers without touching wo
     }),
     {
       resources: [RESOURCE_TYPE.MCP_CONNECTOR],
-      scope: { type: "organization" },
+      scope: { type: "organization", organizationId: ORGANIZATION_ID },
     },
   );
   const workspaceReader = resourceQueryOptions(
@@ -417,13 +441,71 @@ test("organization mutations invalidate organization readers without touching wo
   }
 });
 
+// A public page's token write has no member session to refresh.
+const PUBLIC_TOKEN_MUTATIONS = ["openInvoiceLinkFile"] as const;
+type PublicTokenMutation = (typeof PUBLIC_TOKEN_MUTATIONS)[number];
+const isPublicTokenMutation = (name: string): name is PublicTokenMutation =>
+  PUBLIC_TOKEN_MUTATIONS.some((mutation) => mutation === name);
+
+test("public token contracts write only public routes", () => {
+  for (const [name, contract] of Object.entries(RESOURCE_MUTATION_CONTRACTS)) {
+    expect(
+      contract.writes.every(({ route }) => route.startsWith("/public/")),
+    ).toBe(isPublicTokenMutation(name));
+  }
+});
+
+test("a public token write settles without touching any session query", async () => {
+  const queryClient = new QueryClient();
+  queryClient.setQueryData(rootKeys.session, {
+    user: { id: "profile-user" },
+    session: { activeOrganizationId: "profile-organization" },
+  });
+  queryClient.getQueryCache().build(queryClient, {
+    queryKey: ["registered-reader", "invoice"],
+    queryFn: async () => null,
+    meta: {
+      resourceReads: {
+        resources: [RESOURCE_TYPE.INVOICE],
+        scope: { type: "workspace", workspaceId: WORKSPACE_ID },
+      },
+    },
+  });
+  const invalidate = spyOn(queryClient, "invalidateQueries");
+  const committed = new Blob(["invoice"]);
+  try {
+    const write = resourceMutation({
+      mutation: "openInvoiceLinkFile",
+      queryClient,
+      scope: { type: "public-token" },
+      mutationFn: async ({ token }: { token: string }) =>
+        token === "link-token" ? committed : panic("Unexpected link token"),
+    });
+    expect(await write({ token: "link-token" })).toBe(committed);
+    expect(invalidate).not.toHaveBeenCalled();
+  } finally {
+    invalidate.mockRestore();
+    queryClient.clear();
+  }
+});
+
 test("cache invalidation failures preserve every registered mutation's committed result", async () => {
   const mutationNames = Object.keys(RESOURCE_MUTATION_CONTRACTS).filter(
-    (name): name is keyof typeof RESOURCE_MUTATION_CONTRACTS =>
-      Object.hasOwn(RESOURCE_MUTATION_CONTRACTS, name),
+    (
+      name,
+    ): name is Exclude<
+      keyof typeof RESOURCE_MUTATION_CONTRACTS,
+      PublicTokenMutation
+    > =>
+      Object.hasOwn(RESOURCE_MUTATION_CONTRACTS, name) &&
+      !isPublicTokenMutation(name),
   );
   for (const mutation of mutationNames) {
     const queryClient = new QueryClient();
+    queryClient.setQueryData(rootKeys.session, {
+      user: { id: "profile-user" },
+      session: { activeOrganizationId: "profile-organization" },
+    });
     // A registered reader of what the write changes, so every contract has
     // something to refresh, including one whose resource has no static scope.
     const [resource, ...resources] =
@@ -435,6 +517,14 @@ test("cache invalidation failures preserve every registered mutation's committed
         resourceReads: {
           resources: [resource, ...resources],
           scope: { type: "workspace", workspaceId: WORKSPACE_ID },
+          ...(mutation === "updateUser"
+            ? {
+                organizationReads: {
+                  organizationId: "profile-organization",
+                  resources: [RESOURCE_TYPE.USER],
+                },
+              }
+            : {}),
         },
       },
     });
@@ -445,11 +535,23 @@ test("cache invalidation failures preserve every registered mutation's committed
     ).mockRejectedValue(failure);
     const capture = spyOn(getAnalytics(), "captureError");
     const committed = { workspaceId: WORKSPACE_ID, name: "confirmed" };
-    const write = resourceMutation({
-      mutation,
-      queryClient,
-      mutationFn: async () => committed,
-    });
+    const write =
+      mutation === "updateUser"
+        ? resourceMutation({
+            mutation,
+            queryClient,
+            scope: {
+              type: "organization-projection",
+              userId: "profile-user",
+              organizationId: "profile-organization",
+            },
+            mutationFn: async () => committed,
+          })
+        : resourceMutation({
+            mutation,
+            queryClient,
+            mutationFn: async () => committed,
+          });
     try {
       expect(
         await write({ workspaceId: WORKSPACE_ID, entityId: ENTITY_ID }),
@@ -481,6 +583,7 @@ test("entity-view and inbox readers register rename dependencies and preserve wo
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false, staleTime: Infinity } },
   });
+  queryClient.setQueryData(sessionOptions.queryKey, CONTRACT_SESSION);
   const layout = {
     version: 1,
     type: "table",
@@ -493,8 +596,8 @@ test("entity-view and inbox readers register rename dependencies and preserve wo
   } as const satisfies ViewLayout;
   const matterView = (matterId: string) =>
     entityViewRowsOptions({
-      organizationId: "organization",
-      userId: "user",
+      organizationId: ORGANIZATION_ID,
+      userId: USER_ID,
       scope: { type: "matter", matterId },
       layout,
       inboxView: SIGNAL_VIEW.OPEN,
@@ -503,14 +606,14 @@ test("entity-view and inbox readers register rename dependencies and preserve wo
     matterView(WORKSPACE_ID),
     matterView(OTHER_WORKSPACE_ID),
     entityViewRowsOptions({
-      organizationId: "organization",
-      userId: "user",
+      organizationId: ORGANIZATION_ID,
+      userId: USER_ID,
       scope: { type: "organization" },
       layout,
       inboxView: SIGNAL_VIEW.OPEN,
     }),
-    inboxCountOptions("organization", "user"),
-    inboxSignalOptions("organization", "user", "signal"),
+    inboxCountOptions(ORGANIZATION_ID, USER_ID),
+    inboxSignalOptions(ORGANIZATION_ID, USER_ID, "signal"),
   ];
   const isolated = fileMetadataOptions({
     workspaceId: OTHER_WORKSPACE_ID,
@@ -637,6 +740,53 @@ const imports = (source: ts.SourceFile) => {
     }
   }
   return bindings;
+};
+
+type AuthEndpointRoutesOptions = {
+  sources: readonly ts.SourceFile[];
+  /** The contract constants a path may name instead of a literal. */
+  constants: ReadonlyMap<string, string>;
+};
+
+/**
+ * The route and method of every `createAuthEndpoint(path, { method })` the
+ * sources declare; the path is a literal or a named contract constant.
+ */
+const authEndpointRoutes = ({
+  sources,
+  constants,
+}: AuthEndpointRoutesOptions) => {
+  const routes = new Map<string, string>();
+  const visit = (node: ts.Node) => {
+    if (
+      ts.isCallExpression(node) &&
+      node.expression.getText() === "createAuthEndpoint"
+    ) {
+      const pathNode = node.arguments.at(0);
+      const options = node.arguments.at(1);
+      let route: string | undefined;
+      if (pathNode && ts.isStringLiteral(pathNode)) {
+        route = pathNode.text;
+      } else if (pathNode && ts.isIdentifier(pathNode)) {
+        route = constants.get(pathNode.text);
+      }
+      if (route === undefined || !options) {
+        throw new TypeError(
+          `Auth endpoint path must be a literal or a contract constant: ${node.getText()}`,
+        );
+      }
+      const method = propertyValue(options, "method");
+      if (!ts.isStringLiteral(method)) {
+        throw new TypeError(`Auth endpoint ${route} must name its method`);
+      }
+      routes.set(route, method.text);
+    }
+    ts.forEachChild(node, visit);
+  };
+  for (const source of sources) {
+    visit(source);
+  }
+  return routes;
 };
 
 const exportedSafeHandlerConstructors = (source: ts.SourceFile) => {
@@ -1129,11 +1279,92 @@ test("every mutation resource declaration agrees with its registered backend rou
   );
   const organizationEndpoints = organization().endpoints;
   expect(organizationPluginIsRegistered(readSource("lib/auth.ts"))).toBe(true);
+  // The API's own account session endpoints (`sessionSignInsClient`).
+  const sessionSignInsEndpoints = authEndpointRoutes({
+    sources: [
+      readSource("lib/auth/session-lifetime.ts"),
+      readSource("lib/auth/session-sign-ins-plugin.ts"),
+    ],
+    constants: new Map([
+      ["SESSION_SIGN_IN_MAP_PATH", SESSION_SIGN_IN_MAP_PATH],
+      ["SESSION_SIGN_IN_REVIEW_PATH", SESSION_SIGN_IN_REVIEW_PATH],
+      ["SESSION_SIGN_INS_PATH", SESSION_SIGN_INS_PATH],
+    ]),
+  });
   for (const contract of Object.values(RESOURCE_MUTATION_CONTRACTS)) {
     expect(contract.writes.length).toBeGreaterThan(0);
     const observedResources = new Set<ResourceType>();
     let registeredWriteCount = 0;
     for (const write of contract.writes) {
+      if (
+        write.type === "auth-core-endpoint" &&
+        write.endpoint === "revokeOtherSessions"
+      ) {
+        expect(write.method).toBe(revokeOtherSessions.options.method);
+        expect(write.route).toBe(revokeOtherSessions.path);
+        expect(contract.resources).toEqual([RESOURCE_TYPE.USER]);
+        observedResources.add(RESOURCE_TYPE.USER);
+        registeredWriteCount += 1;
+        continue;
+      }
+      if (write.type === "auth-core-endpoint") {
+        const endpoint = updateUser();
+        expect(write.endpoint).toBe("updateUser");
+        expect(write.method).toBe(endpoint.options.method);
+        expect(write.route).toBe(endpoint.path);
+        expect(contract.resources).toEqual([RESOURCE_TYPE.USER]);
+        const authSource = readSource("lib/auth.ts");
+        expect(
+          imports(authSource).get("createUserProjectionUpdateHook"),
+        ).toEqual({
+          module: "@/api/lib/auth/user-projection-updates",
+          name: "createUserProjectionUpdateHook",
+        });
+        const registrations: ts.CallExpression[] = [];
+        const visitAuth = (node: ts.Node) => {
+          if (
+            ts.isCallExpression(node) &&
+            node.expression.getText() === "betterAuth"
+          ) {
+            const options = node.arguments.at(0);
+            if (!options) {
+              throw new TypeError("Auth options are missing");
+            }
+            const hook = propertyValue(
+              propertyValue(
+                propertyValue(propertyValue(options, "databaseHooks"), "user"),
+                "update",
+              ),
+              "after",
+            );
+            if (!ts.isCallExpression(hook)) {
+              throw new TypeError(
+                "User update after hook must register its owner",
+              );
+            }
+            registrations.push(hook);
+          }
+          ts.forEachChild(node, visitAuth);
+        };
+        visitAuth(authSource);
+        expect(registrations).toHaveLength(1);
+        expect(registrations.at(0)?.expression.getText()).toBe(
+          "createUserProjectionUpdateHook",
+        );
+        observedResources.add(RESOURCE_TYPE.USER);
+        registeredWriteCount += 1;
+        continue;
+      }
+      if (
+        write.type === "auth-plugin-endpoint" &&
+        write.plugin === "session-sign-ins"
+      ) {
+        expect(sessionSignInsEndpoints.get(write.route)).toBe(write.method);
+        expect(contract.resources).toEqual([RESOURCE_TYPE.USER]);
+        observedResources.add(RESOURCE_TYPE.USER);
+        registeredWriteCount += 1;
+        continue;
+      }
       if (write.type === "auth-plugin-endpoint") {
         const endpoint = organizationEndpoints[write.endpoint];
         expect(contract.resources).toEqual([RESOURCE_TYPE.ORGANIZATION]);

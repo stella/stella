@@ -89,6 +89,7 @@ export const LocalFolderApproval = ({
     <Button
       aria-label={explanation}
       disabled={approve.isPending}
+      disabledReason={t("common.approving")}
       onClick={() => {
         approve.mutate(folder);
       }}

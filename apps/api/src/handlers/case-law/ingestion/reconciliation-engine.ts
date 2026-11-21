@@ -90,8 +90,14 @@ import {
   SLICE_LISTING_PROOF,
 } from "@/api/handlers/case-law/ingestion/slice-listing";
 import type { SafeId } from "@/api/lib/branded-types";
+import { censusScope } from "@/api/lib/case-law/completeness-census";
+import { recordCompletenessCensus } from "@/api/lib/case-law/completeness-census-writer";
 import { decisionAbsorptionSql } from "@/api/lib/case-law/decision-absorption";
-import { rowHoldsDocumentFor } from "@/api/lib/case-law/stored-payload";
+import { selectAttachmentDocumentIds } from "@/api/lib/case-law/held-attachment-reads";
+import {
+  rowHoldsDocumentFor,
+  supplementIsMergedFor,
+} from "@/api/lib/case-law/stored-payload";
 import {
   errorFingerprint,
   errorSystemFields,
@@ -628,7 +634,7 @@ const selectHeldDocumentIds = async (
     return [];
   }
   const detail = detailCondition(requireDetail, rowRules);
-  const { decisions, supplements } = await scopedDb(async (tx) => ({
+  const { decisions, supplements, attached } = await scopedDb(async (tx) => ({
     decisions: await tx
       .select({
         sourceDocumentId: caseLawDecisions.sourceDocumentId,
@@ -651,9 +657,7 @@ const selectHeldDocumentIds = async (
     supplements: await tx
       .select({
         sourceDocumentId: caseLawDecisionSupplements.sourceDocumentId,
-        decisionId: caseLawDecisionSupplements.decisionId,
-        sourceHash: caseLawDecisionSupplements.sourceHash,
-        mergedSourceHash: caseLawDecisionSupplements.mergedSourceHash,
+        merged: supplementIsMergedFor(caseLawDecisionSupplements),
       })
       .from(caseLawDecisionSupplements)
       .where(
@@ -665,16 +669,12 @@ const selectHeldDocumentIds = async (
         ),
       )
       .limit(documentIds.length),
+    attached: await selectAttachmentDocumentIds(tx, { sourceId, documentIds }),
   }));
   const supplementStateById = new Map(
     supplements.map(
       (row) =>
-        [
-          row.sourceDocumentId,
-          row.decisionId !== null && row.mergedSourceHash === row.sourceHash
-            ? "merged"
-            : "unmerged",
-        ] as const,
+        [row.sourceDocumentId, row.merged ? "merged" : "unmerged"] as const,
     ),
   );
   const rowsById = new Map(
@@ -684,6 +684,10 @@ const selectHeldDocumentIds = async (
   );
   return documentIds.filter((sourceDocumentId) => {
     const row = rowsById.get(sourceDocumentId);
+    // A record settled as an attachment to another source's decision.
+    if (row === undefined && attached.has(sourceDocumentId)) {
+      return true;
+    }
     const supplementState = supplementStateById.get(sourceDocumentId);
     if (supplementState === "merged") {
       return row === undefined || row.settled;
@@ -1495,6 +1499,7 @@ const ingestListedItem = async ({
 };
 
 type WalkSliceOptions = {
+  publisherScope: ReturnType<typeof censusScope>;
   adapterKey: string;
   fetchDelayMs: number;
   ingestBudget: number;
@@ -1520,6 +1525,7 @@ type WalkSliceOptions = {
  * slice whose misses exceeded the budget records short and is selected again.
  */
 const walkSlice = async ({
+  publisherScope,
   adapterKey,
   fetchDelayMs,
   ingestBudget,
@@ -1674,6 +1680,17 @@ const walkSlice = async ({
       reported: summary.keyable,
       collected: summary.heldBefore + summary.written,
     },
+  });
+  await lease.beforeDatabaseMark();
+  await recordCompletenessCensus(scopedDb, {
+    adapterKey,
+    sourceId,
+    leaseToken: lease.leaseToken,
+    slice,
+    scope: publisherScope,
+    identities: listing.value.censusIdentities,
+    publisherCount: listing.value.publisherCount,
+    observedAt: now(),
   });
   return summary;
 };
@@ -1971,6 +1988,7 @@ type ExecuteReconciliationUnitOptions = Pick<
   | "sourceId"
   | "signal"
 > & {
+  publisherScope: ReturnType<typeof censusScope>;
   readStoredRaw: StoredRawResultReader;
   reconciliation: SourceReconciliation;
   sliceIngestBudget: number;
@@ -1979,6 +1997,7 @@ type ExecuteReconciliationUnitOptions = Pick<
 };
 
 const executeReconciliationUnit = async ({
+  publisherScope,
   adapterKey,
   fetchDelayMs,
   now,
@@ -2040,6 +2059,7 @@ const executeReconciliationUnit = async ({
           return {
             type: "worked",
             summary: await walkSlice({
+              publisherScope,
               adapterKey,
               fetchDelayMs,
               ingestBudget: sliceIngestBudget,
@@ -2297,6 +2317,7 @@ export const runReconciliationWorkUnit = async ({
   const executed = await Result.tryPromise({
     try: async () =>
       await executeReconciliationUnit({
+        publisherScope: censusScope(adapterReconciliation, startedAt),
         adapterKey,
         fetchDelayMs,
         now,

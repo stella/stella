@@ -10,6 +10,7 @@ import {
   caseLawProjectionTitle,
   deriveCorpusIndexProjectionDescriptor,
   type LegislationV2ProjectionInput,
+  undeclaredLanguageFingerprintFields,
 } from "@/api/lib/legal-search/corpus-index-projection-descriptor";
 import { caseLawProjectionInputFromCanonical } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
 import { EMPTY_CORPUS_CONTENT_HASHES } from "@/api/lib/legal-search/corpus-storage";
@@ -772,5 +773,23 @@ test("a generation without ranking signals never reads them into its fingerprint
       manifest.generation,
       fingerprintOf(manifest, { ...RANKED_INPUT, courtId: "sk-court-7" }),
     ]).toEqual([manifest.generation, fingerprintOf(manifest, RANKED_INPUT)]);
+  }
+});
+
+test("only a decision in an undeclared language carries the mark that a declaration later removes", () => {
+  expect(
+    undeclaredLanguageFingerprintFields({
+      jurisdiction: "CZE",
+      language: "de",
+    }),
+  ).toEqual({ documentLanguage: "undeclared" });
+  // Declared, with or without a stemmer: no field, so the fingerprints the
+  // census above pins do not move.
+  for (const declared of [
+    { jurisdiction: "CZE", language: "cs" },
+    { jurisdiction: "SVK", language: "cs" },
+    { jurisdiction: "EU", language: "bg" },
+  ]) {
+    expect(undeclaredLanguageFingerprintFields(declared)).toEqual({});
   }
 });

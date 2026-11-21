@@ -17,6 +17,7 @@ test("a zero total is settled only once sent or paid, and states so only then", 
       status,
       totalAmount: 0,
       paidAmount: 0,
+      creditedAmount: 0,
     }),
   ]);
   expect(Object.fromEntries(states)).toEqual(
@@ -45,9 +46,15 @@ test("the document state follows the same settled rule as the invoice status", (
         status,
         totalAmount,
         paidAmount,
+        creditedAmount: 0,
       });
       expect(state.status === "settled").toBe(
-        isInvoiceSettled({ totalAmount, paidAmount, status }),
+        isInvoiceSettled({
+          totalAmount,
+          paidAmount,
+          creditedAmount: 0,
+          status,
+        }),
       );
       expect(state).toEqual(
         paidAmount < totalAmount
@@ -65,6 +72,26 @@ test("a credit note asks for no payment whatever its balance", () => {
       status: "sent",
       totalAmount: -500,
       paidAmount: 0,
+      creditedAmount: 0,
     }),
   ).toEqual({ status: "not_payable" });
+});
+
+test("issued credit notes reduce what is due, and only payments settle the rest", () => {
+  const state = (paidAmount: number, creditedAmount: number) =>
+    invoicePaymentState({
+      documentType: "invoice",
+      status: "sent",
+      totalAmount: 1000,
+      paidAmount,
+      creditedAmount,
+    });
+  expect(state(0, 400)).toEqual<unknown>({
+    status: "due",
+    amountMinor: cents(600),
+  });
+  expect(state(600, 400)).toEqual({ status: "settled" });
+  // A credit note covering the whole invoice leaves nothing due, yet records
+  // no money received.
+  expect(state(0, 1000)).toEqual({ status: "not_payable" });
 });

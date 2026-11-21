@@ -1,10 +1,13 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, mock, spyOn, test } from "bun:test";
 
-import type {
-  ChatLocalRunReadiness,
-  ChatLocalRunTarget,
-  ChatRunTarget,
+import {
+  CHAT_LOCAL_RUN_HARNESSES,
+  type ChatLocalHarnessReadiness,
+  type ChatLocalRunHarness,
+  type ChatLocalRunReadiness,
+  type ChatLocalRunTarget,
+  type ChatRunTarget,
 } from "@stll/api-contract/chat-run-target";
 import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
@@ -19,8 +22,9 @@ const { IntlProvider } = await import("use-intl");
 const { Menu, MenuPopup, MenuTrigger } = await import("@stll/ui/menu");
 const { FormattingProvider } = await import("@/i18n/formatting-context");
 const { localRunnersOptions } = await import("@/features/chat/queries");
-const { ChatRunTargetMenu, LocalModelOptions } =
-  await import("./chat-run-target-menu");
+const { ChatRunTargetMenu } = await import("./chat-run-target-menu");
+const { ChatModelOptionsMenu } = await import("./chat-model-options-menu");
+const { toChatThreadId } = await import("@/lib/chat-thread-ref");
 const desktopBridge = await import("@/lib/desktop-bridge");
 const { DESKTOP_PING_URL } =
   await import("@/features/chat/desktop-launch.logic");
@@ -118,6 +122,7 @@ const renderMenu = (
                   chosen.push(next);
                 }}
                 selected={target}
+                startedInCloud={null}
               />
             </MenuPopup>
           </Menu>
@@ -145,13 +150,28 @@ const renderModels = (selected: ChatLocalRunTarget) => {
           <Menu open>
             <MenuTrigger />
             <MenuPopup>
-              <LocalModelOptions
-                activeOrganizationId={ORGANIZATION_ID}
+              <ChatModelOptionsMenu
                 enabled={false}
-                onSelect={(next) => {
-                  chosen.push(next);
+                models={{
+                  activeOrganizationId: ORGANIZATION_ID,
+                  threadRef: {
+                    scope: "global",
+                    threadId: toChatThreadId("thread-local-run"),
+                  },
+                  state: "ready",
+                  selectedModel: null,
+                  selectedReasoningEffort: null,
+                  selectModel: () => undefined,
+                  runTarget: {
+                    type: "choice",
+                    selected: target,
+                    select: (next) => {
+                      chosen.push(next);
+                    },
+                    startedInCloud: null,
+                  },
                 }}
-                selected={target}
+                open
               />
             </MenuPopup>
           </Menu>
@@ -234,33 +254,53 @@ test("choosing a permission mode keeps the harness and model, and the stored cho
   );
 });
 
-test("the model chip offers the model's reasoning efforts beside the harness default, and a choice keeps the model and permissions", async () => {
+/** Open the reasoning effort submenu of the model row showing `shown`. */
+const openEfforts = async (view: ReturnType<typeof render>, shown: string) => {
+  const trigger = await waitFor(() => {
+    const found = [
+      ...document.querySelectorAll<HTMLElement>(
+        '[data-slot="menu-sub-trigger"]',
+      ),
+    ].find((candidate) => candidate.textContent.trim() === shown);
+    if (found === undefined) {
+      throw new Error(`no effort trigger showing ${shown}`);
+    }
+    return found;
+  });
+  // Choosing an effort keeps its menu open, and activating an open
+  // submenu's trigger closes it: open it only when it is closed.
+  if (!Object.hasOwn(trigger.dataset, "popupOpen")) {
+    fireEvent.click(trigger);
+  }
+  return await waitFor(() => {
+    const menus = view.getAllByRole("menu");
+    const submenu = menus.at(-1);
+    if (submenu === undefined || menus.length < 2) {
+      throw new Error("no effort submenu");
+    }
+    return submenu;
+  });
+};
+
+test("the model chip offers the model's reasoning efforts in the row's effort menu, as stella's models do, and a choice keeps the model and permissions", async () => {
   const { view, chosen, rerender } = renderModels(LOCAL);
-  expect(await waitFor(() => view.getByText("Reasoning effort"))).toBeTruthy();
-  // The effort's own Default, not the recommended model above it.
-  const effortDefault = async () =>
-    await waitFor(() => {
-      const item = view
-        .getAllByRole("menuitemradio")
-        .find(
-          (candidate) =>
-            candidate.textContent.replace(/^Selected/u, "") === "Default",
-        );
-      if (item === undefined) {
-        throw new Error("no Default effort");
-      }
-      return item;
-    });
-  const harnessDefault = await effortDefault();
-  expect(harnessDefault.getAttribute("aria-checked")).toBe("true");
-  expect(view.queryByText("Medium")).toBeNull();
+  // The row says its effort; the harness's own until one is chosen.
+  const efforts = await openEfforts(view, "Default");
+  const names = within(efforts)
+    .getAllByRole("menuitemradio")
+    .map((item) => item.textContent.replace(/^Selected/u, ""));
+  expect(names).toEqual(["Default", "Low", "High"]);
+  expect(within(efforts).queryByText("Medium")).toBeNull();
   fireEvent.click(await radioItem(view, "High"));
   expect(chosen).toEqual([{ ...LOCAL, reasoningEffort: "high" }]);
+
   rerender({ ...LOCAL, reasoningEffort: "high" });
-  expect((await radioItem(view, "High")).getAttribute("aria-checked")).toBe(
-    "true",
-  );
-  fireEvent.click(await effortDefault());
+  const chosenEfforts = await openEfforts(view, "High");
+  const high = within(chosenEfforts)
+    .getAllByRole("menuitemradio")
+    .find((item) => item.textContent.replace(/^Selected/u, "") === "High");
+  expect(high?.getAttribute("aria-checked")).toBe("true");
+  fireEvent.click(await radioItem(view, "Default"));
   expect(chosen.at(-1)).toEqual(LOCAL);
 });
 
@@ -393,4 +433,140 @@ test("choosing an agent on a computer that is not connected opens stella desktop
   expect(view.queryByText(messages.chat.runOn.hintOffline)).toBeNull();
   expect(chosen).toEqual([]);
   expect(open).toHaveBeenCalledTimes(1);
+});
+
+/** The states a harness is set up from in stella desktop. */
+type SetupState =
+  "needs_login" | "not_installed" | "unsupported" | "unavailable";
+
+/** A report of `harness` in `state`, as its computer sends it. */
+const setupReport = (
+  id: ChatLocalRunHarness,
+  state: SetupState,
+): ChatLocalHarnessReadiness => {
+  switch (state) {
+    case "needs_login":
+      return { id, state, version: "0.50.0" };
+    case "not_installed":
+      return { id, state };
+    case "unsupported":
+      return { id, state, version: null };
+    case "unavailable":
+      return { id, state, reason: "probe_failed" };
+    default:
+      state satisfies never;
+      throw new Error("Unknown setup state");
+  }
+};
+
+/** READINESS with each harness reported in its state of `states`. */
+const withHarnessStates = (
+  states: Partial<Record<ChatLocalRunHarness, SetupState>>,
+): ChatLocalRunReadiness => ({
+  ...READINESS,
+  runners: READINESS.runners.map((runner) => ({
+    ...runner,
+    harnesses: CHAT_LOCAL_RUN_HARNESSES.flatMap((id) => {
+      const state = states[id];
+      return state === undefined ? [] : [setupReport(id, state)];
+    }),
+  })),
+});
+
+const harnessRow = async (view: ReturnType<typeof render>, name: string) =>
+  await waitFor(() => {
+    const item = view
+      .getAllByRole("menuitem")
+      .find((candidate) => candidate.textContent.startsWith(name));
+    if (item === undefined) {
+      throw new Error(`no ${name} row`);
+    }
+    return item;
+  });
+
+test("an agent that needs signing in opens stella desktop at its card and then says how to get there by hand", async () => {
+  const open = spyOn(desktopBridge, "openDesktopUrl").mockImplementation(
+    () => undefined,
+  );
+  const { view, chosen } = renderMenu(
+    { kind: "cloud" },
+    withHarnessStates({ codex: "needs_login", "claude-code": "needs_login" }),
+  );
+
+  const claude = await harnessRow(view, "Claude Code");
+  expect(claude.getAttribute("aria-disabled")).not.toBe("true");
+  const status = within(claude).getByRole("status");
+  expect(status.textContent).toBe(messages.chat.runOn.hintSignIn);
+
+  fireEvent.click(claude);
+
+  expect(open).toHaveBeenCalledTimes(1);
+  expect(open).toHaveBeenCalledWith(
+    "stella://settings/agents?harness=claude-code",
+  );
+  await waitFor(() =>
+    expect(status.textContent).toBe(messages.chat.runOn.stepsSignInClaudeCode),
+  );
+  // The menu stays open on the row, and nothing was chosen for the member.
+  expect(within(claude).getByRole("status")).toBe(status);
+  expect(chosen).toEqual([]);
+
+  const codex = await harnessRow(view, "Codex");
+  fireEvent.click(codex);
+  expect(open).toHaveBeenLastCalledWith(
+    "stella://settings/agents?harness=codex",
+  );
+  await waitFor(() =>
+    expect(within(codex).getByRole("status").textContent).toBe(
+      messages.chat.runOn.stepsSignInCodex,
+    ),
+  );
+});
+
+test.each([
+  ["not_installed", "hintInstall", "stepsInstall"],
+  ["unsupported", "hintUpdate", "stepsCheck"],
+  ["unavailable", "hintCheck", "stepsCheck"],
+] as const)(
+  "an agent reported %s says what to do and opens stella desktop at its card",
+  async (state, hintKey, stepsKey) => {
+    const open = spyOn(desktopBridge, "openDesktopUrl").mockImplementation(
+      () => undefined,
+    );
+    const { view, chosen } = renderMenu(
+      { kind: "cloud" },
+      withHarnessStates({ codex: state, "claude-code": "needs_login" }),
+    );
+    const codex = await harnessRow(view, "Codex");
+    const status = within(codex).getByRole("status");
+    expect(status.textContent).toBe(messages.chat.runOn[hintKey]);
+
+    fireEvent.click(codex);
+
+    expect(open).toHaveBeenCalledWith("stella://settings/agents?harness=codex");
+    await waitFor(() =>
+      expect(status.textContent).toBe(
+        messages.chat.runOn[stepsKey].replace("{harness}", "Codex"),
+      ),
+    );
+    expect(chosen).toEqual([]);
+  },
+);
+
+test("an agent the member sets up themselves says how, and opens nothing", async () => {
+  const open = spyOn(desktopBridge, "openDesktopUrl").mockImplementation(
+    () => undefined,
+  );
+  const { view, chosen } = renderMenu(
+    { kind: "cloud" },
+    withHarnessStates({ codex: "needs_login", antigravity: "needs_login" }),
+  );
+  const antigravity = await harnessRow(view, "Antigravity");
+  expect(antigravity.getAttribute("aria-disabled")).toBe("true");
+  expect(antigravity.textContent).toContain(
+    messages.chat.runOn.hintAntigravity,
+  );
+  fireEvent.click(antigravity);
+  expect(open).not.toHaveBeenCalled();
+  expect(chosen).toEqual([]);
 });

@@ -1,7 +1,9 @@
 name: Prove release PR tree
 
+# Release pull requests come from this repository, where a pull_request run
+# gets the workflow's token scopes; fork pull requests never qualify.
 on:
-  pull_request_target:
+  pull_request:
     branches: [main]
     types: [opened, synchronize, ready_for_review]
 
@@ -35,6 +37,13 @@ jobs:
           ref: main
           fetch-depth: 0
           persist-credentials: false
+
+      # The release candidate verifier runs on Bun, at the version main pins.
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: package.json
+          no-cache: true
 
       - name: Dispatch release candidate tag
         timeout-minutes: 3

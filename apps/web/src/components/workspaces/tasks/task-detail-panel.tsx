@@ -6,9 +6,7 @@ import { panic, Result } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
-import { DirectionalIcon } from "@stll/ui/directional-icon";
 import {
-  ArrowLeftIcon,
   HistoryIcon,
   InboxIcon,
   RotateCcwIcon,
@@ -21,6 +19,10 @@ import { Skeleton } from "@stll/ui/skeleton";
 import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
+import {
+  InspectorPhoneNavigation,
+  InspectorTabSwitcherTrigger,
+} from "@/components/inspector/inspector-tab-header-frame";
 import {
   closeInspectorTabsForEntities,
   useInspectorTabsStore,
@@ -108,7 +110,6 @@ const TaskDetailPanelContent = ({
   const tCommon = useTranslations("common");
   const format = useFormatter();
   const closeTab = useInspectorTabsStore((s) => s.closeTab);
-  const setMinimized = useInspectorTabsStore((s) => s.setMinimized);
   const isNewTask = useInspectorTabsStore((s) => {
     const found = s.tabs.find((tab) => tab.id === taskId);
     return found?.type === "task" && found.isNew;
@@ -118,18 +119,20 @@ const TaskDetailPanelContent = ({
     return found?.type === "task" ? found.creationStatus : "ready";
   });
   const clearNewFlag = useInspectorTabsStore((s) => s.clearTaskNewFlag);
-  const handleBack = () => setMinimized(true);
   const handleClose = () => closeTab(taskId);
   const queryClient = useQueryClient();
   const analytics = useAnalytics();
-  const userId = useAuthenticatedUser().id;
+  const { id: userId, activeOrganizationId } = useAuthenticatedUser();
 
   const {
     data: task,
     error: taskError,
     isLoading,
   } = useQuery(
-    taskTabDetailOptions({ creationStatus, id: taskId, workspaceId }),
+    taskTabDetailOptions(
+      { creationStatus, id: taskId, workspaceId },
+      activeOrganizationId,
+    ),
   );
 
   useExternalSyncEffect(() => {
@@ -388,7 +391,11 @@ const TaskDetailPanelContent = ({
     }
     const previous = isTaskStatus(task?.status) ? task.status : "open";
     const previousKnown = !updateMutation.isPending;
-    const { queryKey } = taskDetailOptions(workspaceId, taskId);
+    const { queryKey } = taskDetailOptions({
+      workspaceId,
+      taskId,
+      organizationId: activeOrganizationId,
+    });
     // The returned promise, not a per-call `onSuccess`: that one is dropped
     // when the panel closes or another edit starts, and the toast with it. A
     // failure is reported by the mutation's own `onError`.
@@ -467,16 +474,10 @@ const TaskDetailPanelContent = ({
             TOOLBAR_ROW_HEIGHT,
           )}
         >
-          <Button
-            aria-label={tCommon("back")}
-            className="-ms-1 md:hidden"
-            onClick={handleBack}
-            size="icon-sm"
-            title={tCommon("back")}
-            variant="ghost"
-          >
-            <DirectionalIcon className="size-4" icon={ArrowLeftIcon} />
-          </Button>
+          <InspectorPhoneNavigation
+            className="-ms-1"
+            switcher={<InspectorTabSwitcherTrigger />}
+          />
           <Skeleton className="h-4 flex-1" />
           <Button
             aria-label={tCommon("close")}
@@ -506,16 +507,10 @@ const TaskDetailPanelContent = ({
             TOOLBAR_ROW_HEIGHT,
           )}
         >
-          <Button
-            aria-label={tCommon("back")}
-            className="-ms-1 md:hidden"
-            onClick={handleBack}
-            size="icon-sm"
-            title={tCommon("back")}
-            variant="ghost"
-          >
-            <DirectionalIcon className="size-4" icon={ArrowLeftIcon} />
-          </Button>
+          <InspectorPhoneNavigation
+            className="-ms-1"
+            switcher={<InspectorTabSwitcherTrigger />}
+          />
           <span className="text-muted-foreground flex-1 text-xs">
             {t("notFound")}
           </span>
@@ -617,16 +612,10 @@ const TaskDetailPanelContent = ({
           TOOLBAR_ROW_HEIGHT,
         )}
       >
-        <Button
-          aria-label={tCommon("back")}
-          className="-ms-1 md:hidden"
-          onClick={handleBack}
-          size="icon-sm"
-          title={tCommon("back")}
-          variant="ghost"
-        >
-          <DirectionalIcon className="size-4" icon={ArrowLeftIcon} />
-        </Button>
+        <InspectorPhoneNavigation
+          className="-ms-1"
+          switcher={<InspectorTabSwitcherTrigger />}
+        />
         <TruncatedText className="flex-1 text-xs font-medium">
           {isNewTask ? t("newTask") : name}
         </TruncatedText>
@@ -795,6 +784,7 @@ const TaskDetailPanelContent = ({
                     </span>
                     <Button
                       disabled={workflowActionMutation.isPending}
+                      disabledReason={tCommon("saving")}
                       onClick={() =>
                         workflowActionMutation.mutate({ type: "acknowledge" })
                       }
@@ -810,6 +800,7 @@ const TaskDetailPanelContent = ({
                   workflow.status === "cancelled") && (
                   <Button
                     disabled={workflowActionMutation.isPending}
+                    disabledReason={tCommon("saving")}
                     onClick={() =>
                       workflowActionMutation.mutate({
                         type: "transition",

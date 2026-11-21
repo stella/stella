@@ -668,6 +668,7 @@ test("the lockfile release-age guard follows every tracked lockfile", () => {
     "apps/desktop/src-tauri/Cargo.lock",
     "packages/scan-engine/Cargo.lock",
     "packages/scan-engine/Cargo.toml",
+    ".cargo/config.toml",
     "scripts/check-lockfile-release-ages.ts",
     "scripts/check-lockfile-release-ages.test.ts",
     "scripts/check-stll-quarantine-excludes.ts",
@@ -705,6 +706,11 @@ test("desktop Windows dry run follows release inputs and skips unrelated changes
     "docs/guide.md",
     "scripts/check-marketing-content.ts",
     "scripts/ci-plan.ts",
+    "apps/desktop/tests/shortcut-keys.test.ts",
+    "apps/desktop/e2e/smoke.spec.ts",
+    "apps/desktop/src/i18n/langs/cs.json",
+    "apps/desktop/src/i18n/i18n-check-baseline.json",
+    "apps/desktop/src/i18n/i18n-source-lock.json",
   ]) {
     expect(runSelector([file], [output]), file).toEqual(["false"]);
   }

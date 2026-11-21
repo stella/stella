@@ -37,6 +37,7 @@ import {
 } from "@/api/lib/desktop-runner/app-calls";
 import { createLocalRunBell } from "@/api/lib/desktop-runner/doorbell";
 import type { DesktopRunnerDb, RunOwner } from "@/api/lib/desktop-runner/store";
+import { unqueuedSteers } from "@/api/tests/helpers/steered-queue";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   createTestIds,
@@ -218,12 +219,15 @@ const readTurn = async ({
     readRun: async () =>
       await Promise.resolve(Result.ok({ runId, state: "finished" })),
     recordChatReadSeq: async () => await Promise.resolve(Result.ok(undefined)),
+    readChatTurnSteering: async () =>
+      await Promise.resolve(Result.ok("not_steerable")),
     interruptRun: async () =>
       await Promise.resolve(Result.ok({ type: "queued" })),
   });
   const run = createLocalChatRun(
     {
       control,
+      steeredQueue: unqueuedSteers,
       runBell: createLocalRunBell(),
       owner: runOwner,
       chatThreadId: ids.chatThreadGlobalA1,
@@ -250,6 +254,7 @@ const readTurn = async ({
     instructions: "",
     resume: undefined,
     abortSignal: new AbortController().signal,
+    handOverSignal: new AbortController().signal,
   })) {
     read.push(chunk);
   }
@@ -259,7 +264,7 @@ const readTurn = async ({
 const appParts = (chunks: readonly PublicStreamChunk[]) =>
   chunks.flatMap((chunk) =>
     chunk.type === EventType.CUSTOM && chunk.name === "ui-resource"
-      ? [chunk.value]
+      ? [chunk.value as unknown]
       : [],
   );
 
@@ -321,9 +326,9 @@ describe("an app shown for a local run's call", () => {
     expect(decision.type).toBe("persist");
     if (decision.type === "persist") {
       const stored = toPersistedChatMessageContentV3({ data: [decision.part] });
-      expect(normalizePersistedChatMessageContent(stored).parts).toEqual([
-        part,
-      ]);
+      const storedParts: unknown =
+        normalizePersistedChatMessageContent(stored).parts;
+      expect(storedParts).toEqual([part]);
     }
   });
 

@@ -410,6 +410,7 @@ export const decisionsPageOptions = ({
             headline: h.headline,
             textAvailability: h.textAvailability,
             match: h.match,
+            missingTerms: h.missingTerms,
             anchorId: h.anchorId,
             citationCount: h.citationCount,
             createdAt: h.createdAt,

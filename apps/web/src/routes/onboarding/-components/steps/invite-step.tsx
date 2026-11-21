@@ -190,6 +190,7 @@ export const InviteStep = ({
                   <Button
                     aria-label={t("common.remove")}
                     disabled={isSubmitting}
+                    disabledReason={t("common.sending")}
                     onClick={() => removeEmail(email)}
                     size="inline"
                     tooltip={t("common.remove")}
@@ -237,6 +238,7 @@ export const InviteStep = ({
       <div className="mt-auto flex items-center justify-between gap-3 pt-8">
         <Button
           disabled={isSubmitting}
+          disabledReason={t("common.sending")}
           onClick={() => onNext({ emails: [] })}
           type="button"
           variant="ghost"

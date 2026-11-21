@@ -3,14 +3,17 @@ import { useState, useSyncExternalStore } from "react";
 import {
   type DataTag,
   type QueryKey,
+  useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
-import type { Result } from "better-result";
+import { panic, type Result } from "better-result";
 import { useTranslations } from "use-intl";
 
 import type { ReasoningEffort } from "@stll/ai-catalog";
 import {
   CHAT_CLOUD_RUN_TARGET,
+  type ChatLocalRunReadiness,
+  type ChatLocalRunTarget,
   type ChatRunTarget,
 } from "@stll/api-contract/chat-run-target";
 
@@ -18,7 +21,11 @@ import {
   CHAT_RUN_ON_CLOUD_ONLY,
   type ComposerModelsMenuProps,
 } from "@/components/chat/chat-model-options-menu";
-import { effectiveRunTarget } from "@/components/chat/chat-run-target-menu.logic";
+import {
+  type ChatCloudStart,
+  effectiveRunTarget,
+  newChatStart,
+} from "@/components/chat/chat-run-target-menu.logic";
 import {
   type ModelPersistError,
   writeChatThreadModel,
@@ -44,6 +51,7 @@ import { useLatestCallback } from "@/hooks/use-latest-callback";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { detached } from "@/lib/detached";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { type QueryView, queryView } from "@/lib/query-view.logic";
 import { toSafeId } from "@/lib/safe-id";
 
 /** What the thread, or the draft that becomes it, stores about its turns. */
@@ -69,11 +77,13 @@ type UseChatComposerModelsOptions = {
    */
   runOn?: "choice" | "cloud_only";
   /**
-   * For a surface that opens new chats (the new-chat page, an inspector chat
-   * tab): a chat the server holds no row for when first read starts on the
-   * member's last Run on choice. A thread page shows what its thread stores.
+   * For a surface that mostly opens new chats (the new-chat page, an
+   * inspector chat tab): before the chat's first read, its row lays out for
+   * the member's last Run on choice. On every surface, a chat the server
+   * holds no row for when first read starts on that choice; this only
+   * shapes the row while that read is pending.
    */
-  startsOnLastChoice?: boolean;
+  opensNewChats?: boolean;
 };
 
 export type ChatComposerModels = {
@@ -98,22 +108,92 @@ export type ChatComposerModels = {
 };
 
 /**
- * One thread's choice owner, and where a new chat's turns start. `start` is
- * decided once, from the chat's first read: the member's last Run on choice
- * for a chat the server held no row for then, `null` for one it held. It
- * stands until this chat's own choice is stored, so a write that creates
- * the row without one (web search turned on) does not drop it, and the first
- * send carries it.
+ * Where a new chat's turns start, decided once from the chat's first read:
+ * the member's last Run on choice for a chat the server held no row for
+ * then, `null` for one it held. A last choice on the member's computer is
+ * `checking` until their computers are read, and starts in the cloud, with
+ * the reason, when its harness cannot take a turn there. The start stands
+ * until this chat's own choice is stored, so a write that creates the row
+ * without one (web search turned on) does not drop it, and the first send
+ * carries it.
  */
+type ThreadStart =
+  | { type: "undecided" }
+  | { type: "checking"; remembered: ChatLocalRunTarget }
+  | {
+      type: "decided";
+      target: ChatRunTarget | null;
+      cloudStart: ChatCloudStart | null;
+    };
+
+/** One thread's choice owner, and where its turns start. */
 type ThreadChoice = {
   owner: ComposerChoiceOwner<ModelPersistError>;
-  start:
-    { type: "undecided" } | { type: "decided"; target: ChatRunTarget | null };
+  start: ThreadStart;
 };
 
-/** The start as decided, read when a send or a pick happens. */
-const startOf = (thread: ThreadChoice): ChatRunTarget | null =>
-  thread.start.type === "decided" ? thread.start.target : null;
+/** The chat's own choice is stored; it starts from nothing else. */
+const STORED_START = {
+  type: "decided",
+  target: null,
+  cloudStart: null,
+} as const satisfies ThreadStart;
+
+/**
+ * The start as decided, read when a send or a pick happens. A send made
+ * while the computers are still being read carries the member's last
+ * choice.
+ */
+const startOf = ({ start }: ThreadChoice): ChatRunTarget | null => {
+  switch (start.type) {
+    case "undecided":
+      return null;
+    case "checking":
+      return start.remembered;
+    case "decided":
+      return start.target;
+    default:
+      start satisfies never;
+      return panic("Unknown chat start");
+  }
+};
+
+/** The start of a chat first read as `stored`, before its computers are. */
+const firstStart = ({
+  activeOrganizationId,
+  runOn,
+  stored,
+}: {
+  activeOrganizationId: string;
+  runOn: "choice" | "cloud_only";
+  stored: StoredChatModels;
+}): ThreadStart => {
+  const remembered =
+    runOn === "choice" && !stored.threadExists
+      ? rememberedRunTarget(activeOrganizationId)
+      : undefined;
+  return remembered?.kind === "local"
+    ? { type: "checking", remembered }
+    : { type: "decided", target: remembered ?? null, cloudStart: null };
+};
+
+/** The member's computers as a start check reads them; `undefined` until read. */
+const startReadiness = (
+  view: QueryView<ChatLocalRunReadiness, Error>,
+): ChatLocalRunReadiness | "check_failed" | undefined => {
+  switch (view.type) {
+    case "items":
+      return view.items;
+    case "error":
+    case "empty":
+      return "check_failed";
+    case "pending":
+      return undefined;
+    default:
+      view satisfies never;
+      return panic("Unknown query view");
+  }
+};
 
 const choiceOf = (
   stored: StoredChatModels,
@@ -132,11 +212,12 @@ const choiceOf = (
  * shows the stored choice again. The menus stay disabled until the stored
  * choice is known, so no pick composes on a choice not yet read.
  *
- * A new chat starts where the member last chose to run turns, on stella or
- * on their computer, and its first send carries that target. A computer
- * that is offline is shown so in the bar; the turn is never moved to stella
- * in its place. Every Run on pick, in any chat, is remembered as the member's
- * last choice.
+ * A new chat, on every surface that offers Run on, starts where the member
+ * last chose to run turns, on stella or on their computer with the model and
+ * effort chosen there, and its first send carries that target. When that
+ * harness cannot take a turn now (the computer offline, the agent signed
+ * out), the chat starts on stella instead and the where chip says why. Every
+ * Run on pick, in any chat, is remembered as the member's last choice.
  */
 export const useChatComposerModels = ({
   activeOrganizationId,
@@ -144,7 +225,7 @@ export const useChatComposerModels = ({
   stored,
   queryKey,
   runOn = "choice",
-  startsOnLastChoice = false,
+  opensNewChats = false,
 }: UseChatComposerModelsOptions): ChatComposerModels => {
   const t = useTranslations();
   const queryClient = useQueryClient();
@@ -175,7 +256,7 @@ export const useChatComposerModels = ({
           stored: (choice) => {
             // The chat's own choice is stored now; it no longer starts from
             // the member's last one.
-            created.start = { type: "decided", target: null };
+            created.start = STORED_START;
             applyStored(choice);
           },
           refetch,
@@ -188,22 +269,49 @@ export const useChatComposerModels = ({
     })();
   // Decided on the chat's first read, and the same on every render after.
   if (thread.start.type === "undecided" && stored !== undefined) {
-    thread.start = {
-      type: "decided",
-      target:
-        runOn === "choice" && startsOnLastChoice && !stored.threadExists
-          ? (rememberedRunTarget(activeOrganizationId) ?? null)
-          : null,
-    };
+    thread.start = firstStart({ activeOrganizationId, runOn, stored });
+  }
+  const runnersView = queryView(
+    useQuery({
+      ...localRunnersOptions(activeOrganizationId),
+      enabled: thread.start.type === "checking",
+    }),
+  );
+  if (thread.start.type === "checking") {
+    const readiness = startReadiness(runnersView);
+    if (readiness !== undefined) {
+      const decided = newChatStart(thread.start.remembered, readiness);
+      thread.start =
+        decided.type === "remembered"
+          ? { type: "decided", target: decided.target, cloudStart: null }
+          : {
+              type: "decided",
+              target: CHAT_CLOUD_RUN_TARGET,
+              cloudStart: decided.reason,
+            };
+    }
   }
   const start = startOf(thread);
+  const cloudStart =
+    thread.start.type === "decided" ? thread.start.cloudStart : null;
   const { owner } = thread;
   const desired = useSyncExternalStore(owner.subscribe, owner.desired);
   const shown =
     desired ?? (stored === undefined ? undefined : choiceOf(stored, start));
+  // Before the first read, a surface that opens new chats lays its row out
+  // for where a new chat starts, the member's last Run on choice, which this
+  // browser holds: the web search switch, for one, is absent for a chat on
+  // the member's computer, so it does not show and then leave. Nothing is
+  // decided on it (the start is decided on the read, above), and the menus
+  // and the model chip stay pending until then.
+  const shownTarget =
+    shown?.runTarget ??
+    (runOn === "choice" && opensNewChats && stored === undefined
+      ? rememberedRunTarget(activeOrganizationId)
+      : undefined);
   const choiceTarget = useEffectiveRunTarget(
     activeOrganizationId,
-    runOn === "choice" ? shown?.runTarget : undefined,
+    runOn === "choice" ? shownTarget : undefined,
   );
   const runTarget = runOn === "choice" ? choiceTarget : CHAT_CLOUD_RUN_TARGET;
   const getRunTarget = useLatestCallback((): ChatRunTarget => {
@@ -250,7 +358,12 @@ export const useChatComposerModels = ({
     models: {
       activeOrganizationId,
       threadRef,
-      state: stored === undefined ? "loading" : "ready",
+      // Also while a new chat's last choice waits on the computers' read,
+      // so the chips never show a place the chat may not start on.
+      state:
+        stored === undefined || thread.start.type === "checking"
+          ? "loading"
+          : "ready",
       selectedModel: shown?.model ?? null,
       selectedReasoningEffort: shown?.reasoningEffort ?? null,
       selectModel: ({ model, reasoningEffort }) => {
@@ -261,6 +374,8 @@ export const useChatComposerModels = ({
           ? {
               type: "choice",
               selected: runTarget,
+              // Said only while the chat shows its start, not a pick.
+              startedInCloud: desired === null ? cloudStart : null,
               select: (target) => {
                 rememberRunTarget(activeOrganizationId, target);
                 // Picking the member's computer while none is connected

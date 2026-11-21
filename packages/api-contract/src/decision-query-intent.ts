@@ -1,7 +1,12 @@
 import { panic } from "better-result";
 
+import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 import { normalizeUnicode } from "@stll/text-normalize";
 
+import {
+  caseNumberKeysMatch,
+  caseNumberMatchKey,
+} from "./case-number-match-key";
 import {
   canonicalDecisionIdentifierKey,
   DECISION_DOCKET_GRAMMARS,
@@ -50,7 +55,8 @@ export type DecisionIdentifierIntent =
       selector: DecisionDocketSelector;
     } & EmbeddedIn)
   | ({ type: "identifier"; kind: "ecli"; value: string } & EmbeddedIn)
-  | { type: "identifier"; kind: "reporter" | "neutral"; value: string };
+  | { type: "identifier"; kind: "reporter" | "neutral"; value: string }
+  | { type: "identifier"; kind: "reference"; value: string };
 
 /**
  * A jurisdiction's reporter citation grammar, supplied by the caller the way
@@ -71,7 +77,25 @@ export type DecisionReporterGrammar = {
  * never inferred from free text: no grammar declares one, and a catch-all
  * pattern would claim ordinary words, so it only arrives typed explicitly.
  */
-export type DecisionIdentifierKind = "docket" | "ecli" | "reporter" | "neutral";
+export type DecisionIdentifierKind =
+  "docket" | "ecli" | "reporter" | "neutral" | "reference";
+
+/**
+ * An entry read as a decision's own stored reference, exactly as a result
+ * displays it, for the references no grammar claims: an authority's decision
+ * number (`ÚOHS-S0236/2016/KD`), a docket in a form no court grammar reads.
+ * `parseDecisionQuery` never produces it, since a free-text box must keep
+ * words as words; a caller that is handed an identifier by contract (resolve)
+ * reads an unclaimed one this way, so every reference a result shows names
+ * its decision back.
+ */
+export const storedDecisionReferenceIntent = (
+  value: string,
+): Extract<DecisionIdentifierIntent, { kind: "reference" }> => ({
+  type: "identifier",
+  kind: "reference",
+  value: value.trim(),
+});
 
 /**
  * What a case-law box entry asks for: a decision by its identifier (a docket
@@ -414,6 +438,7 @@ export const isWholeEntryIdentifier = (
       return intent.embeddedIn === undefined;
     case "neutral":
     case "reporter":
+    case "reference":
       return true;
     default: {
       intent satisfies never;
@@ -469,6 +494,20 @@ const structuredCitationKey = (value: string): string =>
     .toLocaleLowerCase("und")
     .replace(/[\p{P}\p{Z}\s]+/gu, "");
 
+/**
+ * A stored reference as the exact filter compares it: its trailing year read
+ * in either printed form (`caseNumberMatchKey`), as the lookup read its rows,
+ * before punctuation is folded away with the slash the year follows.
+ */
+const storedReferenceMatchKey = (value: string): string =>
+  structuredCitationKey(
+    caseNumberMatchKey(
+      normalizeUnicode(value, "NFKC")
+        .toLocaleLowerCase("und")
+        .replace(/[\p{Z}\s]+/gu, ""),
+    ),
+  );
+
 type TypedReferenceKind = Extract<
   DecisionIdentifierKind,
   "neutral" | "reporter"
@@ -476,7 +515,7 @@ type TypedReferenceKind = Extract<
 
 type TypedReferenceComparison = {
   identifierType: string;
-  key: (value: string) => string;
+  key: (value: string) => string | null;
 };
 
 /**
@@ -496,7 +535,9 @@ const typedReferenceComparison = (
       return {
         identifierType: "reporter-citation",
         key: (value) =>
-          structuredCitationKey(reporters?.canonicalCitation(value) ?? value),
+          reporters
+            ? reporters.canonicalCitation(value)
+            : structuredCitationKey(value),
       };
     default: {
       kind satisfies never;
@@ -524,7 +565,8 @@ type DecisionHitIdentity = {
 /**
  * The hits that answer to the reference: for a docket, every decision of its
  * case file (siblings, sheets and parts alike); for an ECLI, the decision
- * carrying it. A docket or an ECLI matches by case number, ECLI, or any other
+ * carrying it; for a stored reference, the decisions showing it. A docket, an
+ * ECLI or a stored reference matches by case number, ECLI, or any other
  * identifier the publisher supplied (a second docket, a reporter citation). A
  * reporter or neutral citation matches only an identifier of its own type.
  *
@@ -539,15 +581,23 @@ export const exactDecisionMatches = <THit extends DecisionHitIdentity>(
 ): THit[] => {
   switch (identifier.kind) {
     case "docket":
-    case "ecli": {
-      // A docket is keyed by the grammar that read it; an ECLI belongs to no
-      // docket grammar, so it is compared unscoped.
+    case "ecli":
+    case "reference": {
+      // A docket is keyed by the grammar that read it, its year in either
+      // printed form (`caseNumberMatchKey`), as the lookup read its rows; an
+      // ECLI belongs to no docket grammar, so it is compared unscoped. A
+      // stored reference is compared with its year read the same way and
+      // case, spacing and punctuation folded, at least as loosely as every per-type key its lookup read
+      // rows by, so a row the lookup found for an equivalent spelling is
+      // never dropped here.
       const grammar =
         identifier.kind === "docket"
           ? DECISION_DOCKET_GRAMMARS[identifier.jurisdiction]
           : undefined;
       const keyOf = (value: string): string =>
-        decisionIdentifierComparisonKey(value, grammar);
+        identifier.kind === "reference"
+          ? storedReferenceMatchKey(value)
+          : caseNumberMatchKey(decisionIdentifierComparisonKey(value, grammar));
       const wanted = keyOf(identifier.value);
       return hits.filter(
         (hit) =>
@@ -568,7 +618,9 @@ export const exactDecisionMatches = <THit extends DecisionHitIdentity>(
         (hit) =>
           hit.identifiers?.some(
             ({ type, value }) =>
-              type === identifierType && key(value) === wanted,
+              wanted !== null &&
+              type === identifierType &&
+              key(value) === wanted,
           ) === true,
       );
     }
@@ -607,6 +659,13 @@ export const exactDecisionMatches = <THit extends DecisionHitIdentity>(
  * decisions of one file can be issued on one day, so nothing here ever
  * prefers a candidate by its date or its court.
  */
+export const DECISION_IDENTITY_READ = {
+  COMPLETE: "complete",
+  TRUNCATED: "truncated",
+} as const;
+export type DecisionIdentityRead =
+  (typeof DECISION_IDENTITY_READ)[keyof typeof DECISION_IDENTITY_READ];
+
 export type DecisionIdentityResolution<THit> =
   | { readonly status: "none" }
   | {
@@ -617,7 +676,7 @@ export type DecisionIdentityResolution<THit> =
   | {
       readonly status: "ambiguous";
       readonly candidates: readonly THit[];
-      readonly reason: "several" | "selector_unmatched";
+      readonly reason: "several" | "selector_unmatched" | "candidate_limit";
     }
   | {
       readonly status: "incomplete_identifier";
@@ -764,7 +823,10 @@ const fileReferenceOf = (
   { familyCanonical, grammar }: SheetReadingContext,
 ): DecisionDocketReference | null => {
   const reference = readDecisionDocketReference(docket, { grammar });
-  return reference?.family.canonical === familyCanonical ? reference : null;
+  return reference !== null &&
+    caseNumberKeysMatch(reference.family.canonical, familyCanonical)
+    ? reference
+    : null;
 };
 
 const SHEET_READINGS = {
@@ -855,6 +917,8 @@ const resolvedAmong = <THit>(
  * selector, and to nothing arbitrary when none is.
  */
 type ResolveDecisionIdentityOptions = ExactDecisionMatchesOptions & {
+  /** Whether the lookup reached every holder of the exact stored identifier key. */
+  readonly exactIdentityRead?: DecisionIdentityRead | undefined;
   /**
    * The sheet sources a selector is read from; every one when absent. A
    * reader that adjudicates sheets from only some of them (the citation
@@ -869,6 +933,13 @@ export const resolveDecisionIdentity = <THit extends DecisionHitIdentity>(
   options: ResolveDecisionIdentityOptions = {},
 ): DecisionIdentityResolution<THit> => {
   const family = exactDecisionMatches(identifier, hits, options);
+  if (options.exactIdentityRead === DECISION_IDENTITY_READ.TRUNCATED) {
+    return {
+      status: "ambiguous",
+      candidates: family,
+      reason: "candidate_limit",
+    };
+  }
   if (identifier.kind !== "docket") {
     return resolvedAmong(family, "identifier");
   }
@@ -878,6 +949,29 @@ export const resolveDecisionIdentity = <THit extends DecisionHitIdentity>(
   }
   if (selector.kind === "none") {
     const [only, ...rest] = family;
+    if (
+      only !== undefined &&
+      rest.length === 0 &&
+      options.exactIdentityRead === DECISION_IDENTITY_READ.COMPLETE &&
+      only.identifiers?.some(({ type, value }) => {
+        if (type !== DECISION_IDENTIFIER_TYPES.CASE_NUMBER) {
+          return false;
+        }
+        const stored = readDecisionDocketReference(value, {
+          grammar: DECISION_DOCKET_GRAMMARS[identifier.jurisdiction],
+        });
+        return (
+          stored?.selector.kind === "none" &&
+          stored.family.canonical ===
+            decisionIdentifierComparisonKey(
+              identifier.family,
+              DECISION_DOCKET_GRAMMARS[identifier.jurisdiction],
+            )
+        );
+      }) === true
+    ) {
+      return { status: "unique", decision: only, basis: "identifier" };
+    }
     // Where a sibling can be stored under its sheet, the read may not have
     // reached it: one decision found is not one decision in the file.
     if (

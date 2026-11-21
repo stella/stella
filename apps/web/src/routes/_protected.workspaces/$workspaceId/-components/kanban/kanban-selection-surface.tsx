@@ -17,6 +17,7 @@ import type {
   ViewportRect,
 } from "@/components/workspaces/kanban/kanban-selection.logic";
 import { useMountEffect } from "@/hooks/use-effect";
+import { KANBAN_SELECTION_SURFACE_CLASS } from "@/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-view.pending";
 
 /**
  * Where a marquee may not start: on a card (that is a click or a card drag),
@@ -159,7 +160,7 @@ export const KanbanSelectionSurface = ({
 
   return (
     <div
-      className={cn("relative min-h-0", className)}
+      className={cn(KANBAN_SELECTION_SURFACE_CLASS, className)}
       onPointerDown={startGesture}
     >
       {children}

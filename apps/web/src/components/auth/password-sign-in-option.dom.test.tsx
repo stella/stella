@@ -1,5 +1,5 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
-import { afterAll, afterEach, expect, test } from "bun:test";
+import { afterAll, afterEach, expect, spyOn, test } from "bun:test";
 
 import { AUTH_SIGN_IN_CODE_UNAVAILABLE_ERROR_CODE } from "@stll/auth-model";
 import { sleep } from "@stll/concurrency/sleep";
@@ -31,6 +31,7 @@ const { MEMBER_SESSION } =
 const { SIGN_IN_MODE } = await import("./sign-in-mode");
 const { SignInPanel } = await import("./sign-in-panel");
 const { SIGN_IN_ENTRY_METHOD } = await import("./sign-in-panel.logic");
+const { stellaToast } = await import("@stll/ui/toast");
 
 const clients: InstanceType<typeof QueryClient>[] = [];
 
@@ -253,13 +254,7 @@ test("password two-factor sign-in clears the old session before the challenge gu
     },
     { mode: SIGN_IN_MODE.reauthenticate, events },
   );
-  await client.query({
-    ...sessionOptions,
-    queryFn: async () => {
-      events.push("session-read");
-      return pendingTwoFactor ? null : MEMBER_SESSION;
-    },
-  });
+  client.setQueryData(sessionOptions.queryKey, MEMBER_SESSION);
   events.length = 0;
   globalThis.fetch = Object.assign(
     async (input: string | URL | Request) => {
@@ -268,6 +263,10 @@ test("password two-factor sign-in clears the old session before the challenge gu
         events.push("password-sign-in");
         pendingTwoFactor = true;
         return Response.json({ twoFactorRedirect: true });
+      }
+      if (url.includes("/get-session")) {
+        events.push("session-read");
+        return Response.json(pendingTwoFactor ? null : MEMBER_SESSION);
       }
       return Response.json(null);
     },
@@ -303,4 +302,70 @@ test("password two-factor sign-in clears the old session before the challenge gu
     events.indexOf("challenge"),
   );
   expect(appRouter.state.location.pathname).toBe("/auth/two-factor");
+});
+
+test("a committed password sign-in with a failed session refresh stays on the form and notifies once", async () => {
+  const { ui, appRouter } = await mount({ ...emailOnly, localPassword: true });
+  const requested: string[] = [];
+  globalThis.fetch = Object.assign(
+    async (input: string | URL | Request) => {
+      const url = new URL(input instanceof Request ? input.url : String(input));
+      requested.push(url.pathname);
+      if (url.pathname.endsWith("/sign-in/email")) {
+        return Response.json({
+          redirect: false,
+          token: "token",
+          user: MEMBER_SESSION.user,
+        });
+      }
+      if (url.pathname.endsWith("/get-session")) {
+        return Response.json(
+          {
+            code: "INTERNAL_SERVER_ERROR",
+            message: "Session could not be read",
+          },
+          { status: 503 },
+        );
+      }
+      throw new Error(`Unexpected request: ${url.pathname}`);
+    },
+    { preconnect: () => undefined },
+  );
+  const notice = spyOn(stellaToast, "add").mockImplementation(() => "notice");
+  try {
+    const submit = ui.getByRole("button", {
+      name: messages.auth.signInWithPassword,
+    });
+    const form = submit.closest("form");
+    if (form === null) {
+      throw new Error("Password sign-in button must belong to its form");
+    }
+    const fields = within(form);
+    fireEvent.change(
+      fields.getByPlaceholderText(messages.auth.emailPlaceholder),
+      {
+        target: { value: "member@example.test" },
+      },
+    );
+    fireEvent.change(fields.getByPlaceholderText(messages.auth.password), {
+      target: { value: "correct horse battery staple" },
+    });
+    fireEvent.click(submit);
+    await waitFor(() => expect(notice).toHaveBeenCalledTimes(1));
+    await waitFor(() =>
+      expect(submit.getAttribute("aria-disabled")).not.toBe("true"),
+    );
+    expect(appRouter.state.location.pathname).toBe("/auth/sign-in");
+    expect(ui.queryByTestId("existing-session")).toBeNull();
+    expect(ui.getByDisplayValue("member@example.test")).toBeDefined();
+    expect(
+      requested.filter((path) => path.endsWith("/sign-in/email")),
+    ).toHaveLength(1);
+    expect(
+      requested.filter((path) => path.endsWith("/get-session")),
+    ).toHaveLength(1);
+    expect(notice).toHaveBeenCalledTimes(1);
+  } finally {
+    notice.mockRestore();
+  }
 });

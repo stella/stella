@@ -19,7 +19,10 @@ import { waitForExternalState } from "@stll/property-testing/external-state";
 import { HAPPY_PATH_TIMEOUT_MS } from "@/api/tests/test-timeouts";
 
 import migrationAliasInventory from "../lib/db/migration-alias-inventory.json";
-import { assertMigrationHistory } from "../lib/db/migration-history";
+import {
+  assertMigrationHistory,
+  RETIRED_REWRITTEN_MIGRATION_INDEXES,
+} from "../lib/db/migration-history";
 import { isPgError, PG_ERROR } from "../lib/pg-error";
 import { withGatedTestClients } from "../tests/gated-test-database";
 import {
@@ -325,7 +328,13 @@ if (!runPostgresTests || databaseUrl === undefined) {
             );
             await admin.unsafe(`SET ROLE ${ownerRole}`);
             const authority = (
-              await admin.unsafe(
+              await admin.unsafe<
+                {
+                  caller: string;
+                  maySignalLogin: boolean;
+                  maySignalAny: boolean;
+                }[]
+              >(
                 `SELECT current_user AS caller,
                       pg_has_role(current_user, session_user, 'USAGE') AS "maySignalLogin",
                       pg_has_role(current_user, 'pg_signal_backend', 'USAGE') AS "maySignalAny"`,
@@ -1664,11 +1673,17 @@ if (!runPostgresTests || databaseUrl === undefined) {
                      AND table_relation.relname = $2`,
                     [index.name, index.tableName],
                   );
-                  expect(state).toEqual({
-                    isReady: true,
-                    isUnique: index.isUnique,
-                    isValid: true,
-                  });
+                  // A retired index keeps its receipt; the online phase of
+                  // the initial run dropped it and no predecessor rebuilds it.
+                  if (RETIRED_REWRITTEN_MIGRATION_INDEXES.has(index.name)) {
+                    expect(state).toBeUndefined();
+                  } else {
+                    expect(state).toEqual({
+                      isReady: true,
+                      isUnique: index.isUnique,
+                      isValid: true,
+                    });
+                  }
                 }
               }
             } finally {

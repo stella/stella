@@ -1,8 +1,12 @@
 import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
 
+import { RESOURCE_TYPE } from "@stll/api-contract";
+
+import type { Week } from "@/components/billing/work-week.logic";
 import { api } from "@/lib/api";
 import { unwrapApiResponse } from "@/lib/errors/api";
 import { stringCursorSeed } from "@/lib/infinite-query";
+import { resourceQueryOptions } from "@/lib/workspace-realtime";
 
 /** The API's largest page: a week of submitted time usually fits in one. */
 const TIME_APPROVALS_PAGE_SIZE = 200;
@@ -63,17 +67,40 @@ export const timeApprovalQueueOptions = (
   userId: string,
   filters: TimeApprovalFilters,
 ) =>
-  infiniteQueryOptions({
-    queryKey: timeApprovalsKeys.list(organizationId, userId, filters),
-    initialPageParam: stringCursorSeed(),
-    queryFn: async ({ pageParam, signal }) =>
-      await fetchApprovalQueuePage({
-        filters,
-        limit: TIME_APPROVALS_PAGE_SIZE,
-        cursor: pageParam,
-        signal,
-      }),
-    getNextPageParam: (page) => page.nextCursor ?? undefined,
+  resourceQueryOptions(
+    infiniteQueryOptions({
+      queryKey: timeApprovalsKeys.list(organizationId, userId, filters),
+      initialPageParam: stringCursorSeed(),
+      queryFn: async ({ pageParam, signal }) =>
+        await fetchApprovalQueuePage({
+          filters,
+          limit: TIME_APPROVALS_PAGE_SIZE,
+          cursor: pageParam,
+          signal,
+        }),
+      getNextPageParam: (page) => page.nextCursor ?? undefined,
+    }),
+    {
+      resources: [RESOURCE_TYPE.TIME_ENTRY],
+      scope: { type: "organization", organizationId, userId },
+    },
+  );
+
+/**
+ * The queue the page reads: one week, narrowed by the server to a person and
+ * a matter, so a filter never depends on which pages happen to be loaded.
+ */
+export const timeApprovalsQuery = (
+  organizationId: string,
+  userId: string,
+  week: Week,
+  { member, matter }: Pick<TimeApprovalFilters, "member" | "matter">,
+) =>
+  timeApprovalQueueOptions(organizationId, userId, {
+    from: week.start,
+    to: week.end,
+    ...(member === undefined ? {} : { member }),
+    ...(matter === undefined ? {} : { matter }),
   });
 
 /** How many submitted entries wait for this approver (bounded by the API). */

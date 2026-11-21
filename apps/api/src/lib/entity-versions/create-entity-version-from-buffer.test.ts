@@ -19,6 +19,7 @@ import { envDocumentProcessingWorker } from "@/api/env-document-processing-worke
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
 import { injectStamp, stripStamp } from "@/api/lib/docx-stamp";
+import { CALLER_AUTHORIZED } from "@/api/lib/entities/buffer-write-authority";
 import { createEntityVersionFromBuffer } from "@/api/lib/entity-versions/create-entity-version-from-buffer";
 import type { CreateEntityVersionFromBufferDependencies } from "@/api/lib/entity-versions/create-entity-version-from-buffer";
 import {
@@ -53,7 +54,8 @@ beforeEach(() => {
   writeFileVersionMock.mockReset();
 });
 
-const writeFileVersionMock = mock();
+const writeFileVersionMock =
+  mock<CreateEntityVersionFromBufferDependencies["writeFileVersion"]>();
 const processExtractionMock = mock();
 const requestNativeExtractionRunMock = mock();
 const enqueueSearchRepairsMock = mock();
@@ -194,6 +196,7 @@ const dependencies = {
   },
 } satisfies CreateEntityVersionFromBufferDependencies;
 const baseInput = {
+  authority: CALLER_AUTHORIZED,
   safeDb,
   organizationId: toSafeId<"organization">("org_1"),
   workspaceId: toSafeId<"workspace">("ws_1"),
@@ -343,7 +346,7 @@ describe("createEntityVersionFromBuffer", () => {
         filePropertyId: toSafeId<"property">("property_1"),
         versionNumber: 2,
       };
-      await input.afterWrite(result);
+      await input.afterWrite?.(result);
       return result;
     });
 
@@ -401,7 +404,7 @@ describe("createEntityVersionFromBuffer", () => {
         filePropertyId: toSafeId<"property">("property_1"),
         versionNumber: 2,
       };
-      await input.afterWrite(result);
+      await input.afterWrite?.(result);
       return result;
     });
     const pdf = new Uint8Array(await createEncryptedPdf()).slice().buffer;
@@ -439,7 +442,7 @@ describe("createEntityVersionFromBuffer", () => {
         filePropertyId: toSafeId<"property">("property_1"),
         versionNumber: 2,
       };
-      await input.afterWrite(result);
+      await input.afterWrite?.(result);
       return result;
     });
     const submitted = await stampedDocxBytes();
@@ -555,7 +558,7 @@ describe("createEntityVersionFromBuffer", () => {
         filePropertyId: toSafeId<"property">("property_1"),
         versionNumber: 2,
       };
-      await input.afterWrite(result);
+      await input.afterWrite?.(result);
       return result;
     });
     const commitError = new Error("connection lost after commit");
@@ -602,7 +605,7 @@ describe("createEntityVersionFromBuffer", () => {
         filePropertyId: toSafeId<"property">("property_1"),
         versionNumber: 2,
       };
-      await input.afterWrite(result);
+      await input.afterWrite?.(result);
       return result;
     });
 

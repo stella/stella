@@ -63,6 +63,7 @@ import { hasVisibleMoney } from "@/api/lib/billing/money-response";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { CapabilityTransport } from "@/api/lib/capability-transport";
 import { workspaceSegmentSchema } from "@/api/lib/custom-schema";
+import { databaseConstraintRefusal } from "@/api/lib/db/constraint-refusals";
 import { resourcesAreVisible } from "@/api/lib/entities/resource-access";
 import type { ActionAdmissionError } from "@/api/lib/errors/action-admission-error";
 import { resolveHandlerError } from "@/api/lib/errors/handler-error-resolution";
@@ -309,6 +310,9 @@ type McpCapabilityReason =
  * - `compound_consent`: operations that require multiple independent OAuth
  *   consent families; these stay first-party-only until the generic capability
  *   path can enforce conjunctive scopes.
+ * - `human_confirmation`: the user's own confirmation of an action an agent
+ *   prepared (for example sending an email they reviewed); an agent must never
+ *   be able to confirm for them.
  * - `organization_export`: starting or downloading a whole-organization data
  *   export; a person performs it in the app, never an agent, because it hands
  *   over the firm's privileged material in one action.
@@ -342,6 +346,7 @@ type McpInternalReason =
   | "native_tool_ui"
   | "billing_ui"
   | "compound_consent"
+  | "human_confirmation"
   | "native_device"
   | "organization_export"
   | "agent_autonomy_ceiling";
@@ -1080,6 +1085,9 @@ const runSafeHandlerInDeliveryScope = async <
     const handlerError =
       requestAbortRefusal(ctx.request.signal, error) ??
       publicReadTimeoutError(error) ??
+      // Before the typed status: a writer that wrapped the refused write in
+      // its own 500 still answers the limit the database kept.
+      databaseConstraintRefusal(error) ??
       resolveHandlerError(error, env.ACTION_LIMIT_CONTACT_URL);
     if (handlerError !== null) {
       const statusCode = handlerError.status;
@@ -1161,6 +1169,9 @@ const runSafeHandlerInDeliveryScope = async <
     const handlerError =
       requestAbortRefusal(ctx.request.signal, error) ??
       publicReadTimeoutError(error) ??
+      // Before the typed status: a writer that wrapped the refused write in
+      // its own 500 still answers the limit the database kept.
+      databaseConstraintRefusal(error) ??
       resolveHandlerError(error, env.ACTION_LIMIT_CONTACT_URL);
     if (handlerError !== null) {
       applyRetryAfterHeader(ctx, handlerError.retryAfterMs);
@@ -2901,7 +2912,7 @@ const logAndCaptureSafeError = ({
     requestState: { answeredStatus: statusCode },
   });
 
-  const attributes: Record<string, string | number | boolean> = {
+  const diagnosticAttributes = {
     "http.method": request.method,
     "http.route": route,
     "http.status_code": statusCode,
@@ -2909,45 +2920,38 @@ const logAndCaptureSafeError = ({
       reqCtx ? performance.now() - reqCtx.startTime : 0,
     ),
     "error.type": errorTag(error),
+    ...requestErrorStatusFields(evidence),
+    ...causeChainAttributes(evidence),
+
+    // Every answered failure is un-diagnosable without this: the message and
+    // stack are redacted from every sink, leaving only `error.type`. The
+    // diagnostic identity (class, stable code and source positions) is non-PII
+    // and uses keys that survive the logger's redaction, so a failure always
+    // carries a code location. A 4xx needs it at least as much as a panic —
+    // `error.type` reads `HandlerError` at every one of the dozens of sites
+    // that reject a request payload, so the frame is the only thing that says
+    // which rejection fired.
+    ...identityFields(evidence),
   };
-
-  Object.assign(attributes, requestErrorStatusFields(evidence));
-  Object.assign(attributes, causeChainAttributes(evidence));
-
-  // Every answered failure is un-diagnosable without this: the message and
-  // stack are redacted from every sink, leaving only `error.type`. The
-  // diagnostic identity (class, stable code and source positions) is non-PII
-  // and uses keys that survive the logger's redaction, so a failure always
-  // carries a code location. A 4xx needs it at least as much as a panic —
-  // `error.type` reads `HandlerError` at every one of the dozens of sites
-  // that reject a request payload, so the frame is the only thing that says
-  // which rejection fired.
-  Object.assign(attributes, identityFields(evidence));
 
   const privateInputRequest = /\/chat\/threads\/[^/]+\/secrets\/[^/]+$/u.test(
     new URL(request.url).pathname,
   );
-  if (isLocalDevOpen() && env.DEBUG_UNREDACTED_ERRORS && !privateInputRequest) {
-    Object.assign(attributes, unredactedErrorFields(error));
-  }
-
-  if (reqCtx?.requestId) {
-    attributes["request.id"] = reqCtx.requestId;
-  }
-
-  if (reqCtx?.posthogDistinctId) {
-    attributes["posthogDistinctId"] = reqCtx.posthogDistinctId;
-  }
-
-  if (reqCtx?.sessionId) {
-    attributes["sessionId"] = reqCtx.sessionId;
-  }
-
-  if (reqCtx?.organizationId) {
-    attributes["enduser.organization_id"] = reqCtx.organizationId;
-  }
-
-  Object.assign(attributes, shadowFields(grading));
+  const attributes: Record<string, string | number | boolean> = {
+    ...diagnosticAttributes,
+    ...(isLocalDevOpen() && env.DEBUG_UNREDACTED_ERRORS && !privateInputRequest
+      ? unredactedErrorFields(error)
+      : {}),
+    ...(reqCtx?.requestId ? { "request.id": reqCtx.requestId } : {}),
+    ...(reqCtx?.posthogDistinctId
+      ? { posthogDistinctId: reqCtx.posthogDistinctId }
+      : {}),
+    ...(reqCtx?.sessionId ? { sessionId: reqCtx.sessionId } : {}),
+    ...(reqCtx?.organizationId
+      ? { "enduser.organization_id": reqCtx.organizationId }
+      : {}),
+    ...shadowFields(grading),
+  };
 
   // Operator feature refusals retain 503 on the wire while remaining an
   // expected warning. Other server failures take their grade's severity.

@@ -1,11 +1,10 @@
 import type { PropsWithChildren } from "react";
-import { createContext, use, useCallback, useMemo, useState } from "react";
+import { createContext, use, useState } from "react";
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
-import { RESOURCE_TYPE } from "@stll/api-contract";
 import type { OrganizationAIAvailability } from "@stll/api-contract/organization-ai-availability";
 import {
   AI_PROVIDER_CONFIGURATION,
@@ -64,7 +63,6 @@ import {
 } from "@/lib/organization/ai-config-queries";
 import { queryView } from "@/lib/query-view.logic";
 import { useQueryViewError } from "@/lib/use-query-view";
-import { resourceQueryOptions } from "@/lib/workspace-realtime";
 import { PROVIDER_SCOPE } from "@/routes/-app-frame-scope";
 
 type AIAvailabilityStatus = "pending" | "available" | "unavailable";
@@ -113,17 +111,16 @@ const AIAvailabilityRoot = ({ children }: PropsWithChildren) => {
   const t = useTranslations();
   const queryClient = useQueryClient();
   const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
-  const availabilityOptions = useMemo(
-    () => aiAvailabilityOptions({ organizationId: activeOrganizationId }),
-    [activeOrganizationId],
-  );
+  const availabilityOptions = aiAvailabilityOptions({
+    organizationId: activeOrganizationId,
+  });
   const dataQuery = useChromeQuery(availabilityOptions);
   const dataView = queryView(dataQuery);
   useQueryViewError(dataView, "AIAvailabilityRoot:query");
   const { isFetching } = dataQuery;
   const data = dataView.type === "items" ? dataView.items : undefined;
 
-  const openAIKeyDialog = useCallback(() => {
+  const openAIKeyDialog = () => {
     if (
       dataQuery.status === "success" &&
       data?.providerConfiguration === "allowed" &&
@@ -131,9 +128,9 @@ const AIAvailabilityRoot = ({ children }: PropsWithChildren) => {
     ) {
       setOpen(true);
     }
-  }, [data, dataQuery.status]);
+  };
 
-  const ensureAIAvailable = useCallback(async () => {
+  const ensureAIAvailable = async () => {
     const availability = await queryClient
       .query({
         ...availabilityOptions,
@@ -189,9 +186,9 @@ const AIAvailabilityRoot = ({ children }: PropsWithChildren) => {
       type: "info",
     });
     return false;
-  }, [availabilityOptions, dataQuery.status, queryClient, t]);
+  };
 
-  const openIfAIUnavailable = useCallback(() => {
+  const openIfAIUnavailable = () => {
     if (
       dataQuery.status === "success" &&
       data &&
@@ -202,7 +199,7 @@ const AIAvailabilityRoot = ({ children }: PropsWithChildren) => {
     ) {
       setOpen(true);
     }
-  }, [data, dataQuery.status, isFetching]);
+  };
   let aiUnavailable: AIUnavailableState | null = null;
   if (
     dataQuery.status === "error" ||
@@ -246,15 +243,12 @@ const AIAvailabilityRoot = ({ children }: PropsWithChildren) => {
     availability = "available";
   }
 
-  const value = useMemo(
-    () => ({
-      availability,
-      ensureAIAvailable,
-      openAIKeyDialog,
-      openIfAIUnavailable,
-    }),
-    [availability, ensureAIAvailable, openAIKeyDialog, openIfAIUnavailable],
-  );
+  const value = {
+    availability,
+    ensureAIAvailable,
+    openAIKeyDialog,
+    openIfAIUnavailable,
+  };
 
   return (
     <AIAvailabilityContext value={value}>
@@ -275,6 +269,27 @@ export const useAIKeyGate = () =>
     scope: PROVIDER_SCOPE.ai,
     missingMessage: "useAIKeyGate must be used within AIAvailabilityProvider",
   });
+
+export const useAISendBlockReason = () => {
+  const t = useTranslations();
+  const gate = use(AIAvailabilityContext);
+  const state = use(AIUnavailableContext);
+  if (gate?.availability === "pending") {
+    return t("common.loading");
+  }
+  if (state === null) {
+    return undefined;
+  }
+  switch (state.type) {
+    case "unavailable":
+      return t("chat.sendErrorProviderUnavailable");
+    case "configurationRequired":
+      return t(aiUnavailableMessageKey(state.availability));
+    default:
+      state satisfies never;
+      return panic("Unhandled AI send availability state");
+  }
+};
 
 export const AIUnavailableDialogTrigger = () => {
   const state = use(AIUnavailableContext);
@@ -334,16 +349,18 @@ export const AIUnavailableDialogTrigger = () => {
   }
 };
 
-/** Keep the route's composer and draft mounted in every availability state. */
+/**
+ * Keep the route's composer and draft mounted in every availability state.
+ * While availability is read, nothing is added above the page: the
+ * composer's send control stays unavailable until it is known (each chat
+ * surface passes `sendDisabled` while it is not "available"), so the wait
+ * shows in the composer row and the page does not move when it ends.
+ */
 export const RequireAIKey = ({ children }: PropsWithChildren) => {
   const { availability } = useAIKeyGate();
   return (
     <div className="flex h-full min-h-0 w-full min-w-0 flex-1 flex-col">
-      {availability === "pending" ? (
-        <QueryViewFeedback view={{ type: "pending" }} />
-      ) : (
-        <AIUnavailableDialogTrigger />
-      )}
+      {availability === "pending" ? null : <AIUnavailableDialogTrigger />}
       <AIAvailabilityFeedbackContext value={true}>
         {children}
       </AIAvailabilityFeedbackContext>
@@ -410,6 +427,30 @@ type AIKeyRequiredDialogProps = {
 const DEFAULT_PROVIDER_DRAFTS: ProviderCredentialDraft[] = [
   createProviderCredentialDraft(),
 ];
+
+type AiConfigDisabledReasonOptions = {
+  configStatus: "pending" | "error" | "success";
+  defaultsStatus: "pending" | "error" | "empty" | "items";
+  tCommon: (key: "loading") => string;
+  t: (key: "ai.keyRequired.configUnreadable") => string;
+  tOrganization: (key: "aiConfig.selectModelForEachRole") => string;
+};
+
+const aiConfigDisabledReason = ({
+  configStatus,
+  defaultsStatus,
+  tCommon,
+  t,
+  tOrganization,
+}: AiConfigDisabledReasonOptions) => {
+  if (configStatus === "pending" || defaultsStatus === "pending") {
+    return tCommon("loading");
+  }
+  if (configStatus === "error" || defaultsStatus === "error") {
+    return t("ai.keyRequired.configUnreadable");
+  }
+  return tOrganization("aiConfig.selectModelForEachRole");
+};
 
 export const AIKeyRequiredDialog = ({
   onOpenChange,
@@ -584,32 +625,24 @@ export const AIKeyRequiredDialog = ({
   const storedProviderValues = config?.configured
     ? config.providers.map(({ provider }) => provider)
     : [];
-  const defaultsQuery = useChromeQuery(
-    resourceQueryOptions(
-      {
-        ...aiDefaultsPreviewOptions({
-          organizationId: activeOrganizationId,
-          providers: providerValues,
-        }),
-        enabled: open && mayConfigure && configQuery.status === "success",
-        ...(config !== undefined &&
-        JSON.stringify(providerValues) === JSON.stringify(storedProviderValues)
-          ? {
-              initialData: {
-                defaultModels: projectDefaultRoleModels(config.defaultModels),
-                providerDefaultModels: projectProviderDefaultRoleModels(
-                  config.providerDefaultModels,
-                ),
-              },
-            }
-          : {}),
-      },
-      {
-        resources: [RESOURCE_TYPE.ORGANIZATION],
-        scope: { type: "organization" },
-      },
-    ),
-  );
+  const defaultsQuery = useChromeQuery({
+    ...aiDefaultsPreviewOptions({
+      organizationId: activeOrganizationId,
+      providers: providerValues,
+    }),
+    enabled: open && mayConfigure && configQuery.status === "success",
+    ...(config !== undefined &&
+    JSON.stringify(providerValues) === JSON.stringify(storedProviderValues)
+      ? {
+          initialData: {
+            defaultModels: projectDefaultRoleModels(config.defaultModels),
+            providerDefaultModels: projectProviderDefaultRoleModels(
+              config.providerDefaultModels,
+            ),
+          },
+        }
+      : {}),
+  });
   const defaultsView = queryView(defaultsQuery);
   useQueryViewError(defaultsView, "AIKeyRequiredDialog:defaults-query");
   const defaultModels =
@@ -693,6 +726,13 @@ export const AIKeyRequiredDialog = ({
           </DialogClose>
           <Button
             disabled={!canSave}
+            disabledReason={aiConfigDisabledReason({
+              configStatus: configQuery.status,
+              defaultsStatus: defaultsView.type,
+              tCommon,
+              t,
+              tOrganization,
+            })}
             loading={saveMutation.isPending}
             onClick={() => saveMutation.mutate()}
             title={configRefusalKey === null ? undefined : t(configRefusalKey)}

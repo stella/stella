@@ -1,4 +1,6 @@
 import { expect, test } from "bun:test";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 import {
   parseSource,
@@ -124,13 +126,13 @@ const violations = (filename: string, source: string) => {
 };
 
 test("mobile credential mutations and state commits have one owner", async () => {
-  const root = new URL("../", import.meta.url).pathname;
+  const root = fileURLToPath(new URL("../", import.meta.url));
   for await (const filename of new Bun.Glob("**/*.{ts,tsx}").scan(root)) {
     if (filename.endsWith(".test.ts")) {
       continue;
     }
     expect(
-      violations(filename, await Bun.file(`${root}${filename}`).text()),
+      violations(filename, await Bun.file(path.join(root, filename)).text()),
       filename,
     ).toEqual([]);
   }

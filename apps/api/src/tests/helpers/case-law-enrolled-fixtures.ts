@@ -1,5 +1,6 @@
+// parser-output-unchanged: the cz-ns-sbirka adapter entry is new; existing adapters read only their own keys, so their parsed output is unchanged.
+// parser-output-unchanged: the TST adapter entry is new; existing adapters read only their own keys, so their parsed output is unchanged.
 import { panic, Result } from "better-result";
-
 /**
  * A decision per enrolled case-law adapter, built from payloads shaped like
  * the ones its publisher serves.
@@ -18,7 +19,10 @@ import { panic, Result } from "better-result";
  * Each build scopes its publisher fetch replacement to the operation and
  * restores it before returning.
  */
+import { readFileSync } from "node:fs";
+
 import { load } from "@stll/html";
+import { Temporal } from "@stll/time";
 
 import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
 import {
@@ -53,9 +57,16 @@ import { AT_UVS_SOURCE } from "@/api/handlers/case-law/ingestion/adapters/at-uvs
 import { AT_VERG_SOURCE } from "@/api/handlers/case-law/ingestion/adapters/at-verg";
 import { AT_VFGH_SOURCE } from "@/api/handlers/case-law/ingestion/adapters/at-vfgh";
 import { AT_VWGH_SOURCE } from "@/api/handlers/case-law/ingestion/adapters/at-vwgh";
+import { brTjdftAdapter } from "@/api/handlers/case-law/ingestion/adapters/br-tjdft";
+import {
+  brTstFetchPage,
+  buildBrTstDecision,
+  encodeBrTstCursor,
+} from "@/api/handlers/case-law/ingestion/adapters/br-tst";
 import { courtListenerConformanceFixture } from "@/api/handlers/case-law/ingestion/adapters/courtlistener/conformance-fixture";
 import { COURTLISTENER_IMPORT_KEY } from "@/api/handlers/case-law/ingestion/adapters/courtlistener/map";
 import { buildCzNsDecision } from "@/api/handlers/case-law/ingestion/adapters/cz-ns";
+import { readCzNsSbirkaEntry } from "@/api/handlers/case-law/ingestion/adapters/cz-ns-sbirka";
 import { buildCzNssDecision as uncheckedBuildCzNssDecision } from "@/api/handlers/case-law/ingestion/adapters/cz-nss";
 import {
   buildCzRegionalDecision,
@@ -143,6 +154,7 @@ import {
   sourceBinaryRef,
 } from "@/api/lib/legal-search/raw-source-storage";
 import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
+import { buildCzIsirFixtureDecision } from "@/api/tests/helpers/cz-isir-fixture";
 import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
 import { withTestFetch } from "@/api/tests/helpers/test-fetch";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
@@ -2462,6 +2474,100 @@ export const huBhgyFixture = (
   },
 });
 
+// ── BR TJDFT fixture ─────────────────────────────────────
+
+/** A recorded TJDFT search answer, read synchronously for the raw oracle. */
+const brTjdftAnswer = (name: string): Record<string, unknown> => {
+  const answer: unknown = JSON.parse(
+    new TextDecoder().decode(
+      Bun.gunzipSync(
+        readFileSync(
+          new URL(
+            `../../handlers/case-law/ingestion/adapters/__fixtures__/${name}`,
+            import.meta.url,
+          ),
+        ),
+      ),
+    ),
+  );
+  return isRecord(answer) ? answer : panic(`${name} is not a TJDFT answer`);
+};
+
+const brTjdftRecords = (
+  answer: Record<string, unknown>,
+): Record<string, unknown>[] => {
+  const rows = answer["registros"];
+  return isUnknownArray(rows) ? rows.filter(isRecord) : [];
+};
+
+const brTjdftFirstRecord = (name: string): Record<string, unknown> =>
+  brTjdftRecords(brTjdftAnswer(name)).at(0) ??
+  panic(`${name} holds no TJDFT record`);
+
+/**
+ * The recorded PJe acórdão's detail answer, with the fields only other
+ * recorded records state copied in from them: a revisor, a designated
+ * rapporteur, the printed page of a gazette publication, the organ a
+ * monocratic decision names and auxiliary terms. One decision then states
+ * the union the field inventory declares, and every value is one the court
+ * served.
+ */
+const brTjdftUnionAnswer = () => {
+  const answer = brTjdftAnswer("br-tjdft-detail-acordao-pje.json.gz");
+  const record =
+    brTjdftRecords(answer).at(0) ?? panic("the PJe answer holds no record");
+  const revisor = brTjdftFirstRecord("br-tjdft-detail-acordao-revisor.json.gz");
+  const designado = brTjdftFirstRecord(
+    "br-tjdft-detail-acordao-designado.json.gz",
+  );
+  const gazette = brTjdftFirstRecord("br-tjdft-detail-acordao-2010.json.gz");
+  const monocratic = brTjdftFirstRecord("br-tjdft-detail-decisao.json.gz");
+  const union = {
+    ...record,
+    nomeRevisor: revisor["nomeRevisor"],
+    termosAuxiliares: revisor["termosAuxiliares"],
+    nomeRelatorDesignado: designado["nomeRelatorDesignado"],
+    paginaPublicacao: gazette["paginaPublicacao"],
+    descricaoOrgao: monocratic["descricaoOrgao"],
+  };
+  const listing =
+    brTjdftRecords(brTjdftAnswer("br-tjdft-listing-acordaos.json.gz")).find(
+      (row) => row["uuid"] === record["uuid"],
+    ) ?? panic("the listing fixture lost the PJe acórdão");
+  return {
+    answer: { ...answer, registros: [union] },
+    listing,
+    focus: record["jurisprudenciaEmFoco"],
+  };
+};
+
+/**
+ * Served through the adapter's own detail read, as the crawl and the
+ * reconciliation walk read a listed record.
+ */
+export const brTjdftFixture = (): EnrolledAdapterFixture => {
+  const { answer, listing, focus } = brTjdftUnionAnswer();
+  return {
+    rawFieldValues: { jurisprudenciaEmFoco: [focus] },
+    buildDecision: async () => {
+      const built = await withTestFetch(
+        asFetchMock(
+          async () =>
+            await Promise.resolve(
+              new Response(JSON.stringify(answer), {
+                headers: { "Content-Type": "application/json; charset=utf-8" },
+              }),
+            ),
+        ),
+        async () => await brTjdftAdapter.reconciliation.buildDecision(listing),
+      );
+      return built.type === "built"
+        ? built.decision
+        : panic(`the br-tjdft fixture built ${built.type}`);
+    },
+  };
+};
+
 // ── PL TK fixture ────────────────────────────────────────
 
 /** One labelled row of a record, in the portal's own markup. */
@@ -3088,6 +3194,141 @@ export const czUohsFixture = (): EnrolledAdapterFixture => ({
   },
 });
 
+// ── CZ NS collection (Sbírka) fixture ───────────────────
+
+const CZ_NS_SBIRKA_FIXTURES = new URL(
+  "../../handlers/case-law/ingestion/adapters/__fixtures__/",
+  import.meta.url,
+);
+
+/**
+ * The recorded detail pages, by post id: a Supreme Court decision the court's
+ * database also holds (5819), a pre-1993 decision in Czech (10001) and one in
+ * Slovak (9586), a stanovisko (19679), an entry whose table states only its
+ * keywords and provisions (13914), one whose heading and row disagree on the
+ * date (4320), and two stating the rows only some entries carry: the
+ * decisions an entry bears on (15158) and a constitutional complaint (18598).
+ */
+export const CZ_NS_SBIRKA_RECORDINGS = [
+  "5819",
+  "10001",
+  "9586",
+  "19679",
+  "13914",
+  "4320",
+  "15158",
+  "18598",
+] as const;
+
+export type CzNsSbirkaRecording = (typeof CZ_NS_SBIRKA_RECORDINGS)[number];
+
+/** One recorded detail page, as the publisher served it. */
+export const czNsSbirkaRecordedPage = (postId: CzNsSbirkaRecording): string =>
+  new TextDecoder().decode(
+    Bun.gunzipSync(
+      readFileSync(
+        new URL(`cz-ns-sbirka-${postId}.html.gz`, CZ_NS_SBIRKA_FIXTURES),
+      ),
+    ),
+  );
+
+/**
+ * A 2021 Supreme Court judgment, R 13/2022, read as the crawl and the
+ * reconciliation read an entry: a publisher read builds it, so a failed or
+ * refused read fails the build. Its page states every row the collection
+ * labels, the annotation, the decisions it bears on and the constitutional
+ * complaint included; the values below are the page's, as the entry stores
+ * them.
+ */
+export const czNsSbirkaFixture = (): EnrolledAdapterFixture => ({
+  rawFieldValues: {
+    "Číslo rozhodnutí": "13",
+    Rok: 2022,
+    Sešit: "2",
+    Druh: "Rozhodnutí ve věcech občanskoprávních, obchodních a správních",
+    Heslo: [
+      "Náhradní pozemek",
+      "Stavební řízení",
+      "Vlastnictví",
+      "Zmírnění křivd (restituce)",
+    ],
+    Předpisy: [
+      "§ 1114 o. z.",
+      "§ 11a odst. 1 zákona č. 229/1991 Sb.",
+      "§ 161 odst. 3 o. s. ř.",
+      "§ 82 odst. 3 zákona č. 183/2006 Sb.",
+    ],
+    "Dotčená rozhodnutí": [
+      "Rozsudek Nejvyššího soudu ze dne 11. 12. 2013, sp. zn. 31 Cdo 2060/2010, uveřejněný pod číslem 19/2014 Sbírky soudních rozhodnutí a stanovisek, část občanskoprávní a obchodní",
+      "Zhodnocení Nejvyššího soudu SSR ze dne 27. 6. 1972, sp. zn. Cpj 57/71, uveřejněný pod číslem 65/72 Sbírky soudních rozhodnutí a stanovisek, část občanskoprávní a obchodní",
+      "Usnesení Nejvyššího soudu ze dne 28. 4. 2016, sp. zn. 21 Cdo 2669/2015",
+      "Rozsudek Nejvyššího soudu ze dne 26. 4. 2017, sp. zn. 22 Cdo 586/2017",
+      "Rozsudek Nejvyššího soudu ze dne 20. 4. 2016, sp. zn. 22 Cdo 75/2016",
+      "Usnesení Nejvyššího soudu ze dne 22. 1. 2019, sp. zn. 28 Cdo 4144/2018",
+      "Usnesení Nejvyššího soudu ze dne 31. 3. 2020, sp. zn. 28 Cdo 809/2020",
+      "Usnesení Nejvyššího soudu ze dne 6. 2. 2018, sp. zn. 28 Cdo 4161/2017",
+      "Rozsudek Nejvyššího soudu ze dne 27. 8. 2018, sp. zn. 28 Cdo 4166/2017",
+      "Rozsudek Nejvyššího soudu ze dne 9. 6. 2009, sp. zn. 28 Cdo 1404/2009",
+      "Rozsudek Nejvyššího správního soudu ze dne 16. 12. 2008, sp. zn. 2 As 62/2008",
+      "Nález Ústavního soudu ze dne 2. 2. 2000, sp. zn. I. ÚS 22/99, N 14/17 SbNU 103",
+      "Nález Ústavního soudu ze dne 29. 8. 2000, sp. zn. I. ÚS 653/99, N 123/19 SbNU 155",
+      "Nález Ústavního soudu ze dne 5. 1. 2021, sp. zn. III. ÚS 3804/19",
+      "Usnesení Ústavního soudu ze dne 16. 12. 1998, sp. zn. II. ÚS 458/98, U 75/12 SbNU 549",
+    ],
+    "Ústavní stížnost":
+      "Rozhodnutí bylo dne 23. 7. 2021 napadeno ústavní stížností; řízení je vedeno pod sp. zn. III. ÚS 1995/21; řízení bylo dne 9. 11. 2021 pro zpětvzetí ústavní stížnosti zastaveno.",
+  },
+  buildDecision: async () =>
+    await withTestFetch(
+      asFetchMock(
+        async () =>
+          await Promise.resolve(
+            new Response(czNsSbirkaRecordedPage("18598"), {
+              headers: { "Content-Type": "text/html; charset=UTF-8" },
+            }),
+          ),
+      ),
+      async () => {
+        const result = await readCzNsSbirkaEntry("18598", null, undefined);
+        if (Result.isError(result)) {
+          return await Promise.reject(result.error);
+        }
+        const read = result.value;
+        switch (read.type) {
+          case "built":
+          case "build-failed":
+            return read.decision;
+          case "unread":
+            return await unreadBuild(ADAPTER_KEYS.CZ_NS_SBIRKA, read.read);
+          case "unkeyable":
+            return panic("the cz-ns-sbirka fixture built nothing");
+          default:
+            read satisfies never;
+            return panic("Unhandled cz-ns-sbirka fixture build");
+        }
+      },
+    ),
+});
+
+/**
+ * A high court's appeal decision in an insolvency file, read as the walk reads
+ * it: the feed page names it, its document is read and stored as paragraphs
+ * (`tests/helpers/cz-isir-fixture.ts`).
+ */
+export const czIsirFixture = (): EnrolledAdapterFixture => ({
+  // Action 65000689 of the feed page, as the feed states it.
+  rawFieldValues: {
+    id: 65_000_689,
+    datumZverejneniUdalosti: "2024-02-28T13:59:00.000+01:00",
+    spisovaZnacka: "INS 10782/2023",
+    typUdalosti: 373,
+    popisUdalosti: "Rozhodnutí o odvolání - potvrzeno",
+    oddil: "B",
+    cisloVOddilu: 24,
+  },
+  buildDecision: buildCzIsirFixtureDecision,
+});
+
 export const ukFclFixture = (
   documentUrl = new URL(
     "../../handlers/case-law/ingestion/parsers/__fixtures__/uk-fcl.xml",
@@ -3118,6 +3359,124 @@ export const ukFclFixture = (
   },
 });
 
+// ── BR TST fixture ───────────────────────────────────────
+
+const BR_TST_FIXTURES = new URL(
+  "../../handlers/case-law/ingestion/adapters/__fixtures__/",
+  import.meta.url,
+);
+
+/** The recorded search responses: one or two records of every type. */
+export const BR_TST_RECORDINGS = [
+  "br-tst-acordao-2024.json",
+  "br-tst-acordao-1985.json",
+  "br-tst-despacho-2020.json",
+  "br-tst-despacho-2024.json",
+  "br-tst-sumula.json",
+  "br-tst-orientacao.json",
+  "br-tst-orientacao-transitoria.json",
+  "br-tst-orientacao-precedentes-externos.json",
+  "br-tst-precedente-normativo.json",
+] as const;
+
+/** The records of one recorded search response, as the search served them. */
+export const brTstRecordedRecords = async (
+  name: (typeof BR_TST_RECORDINGS)[number],
+): Promise<Record<string, unknown>[]> => {
+  const parsed: unknown = JSON.parse(
+    await Bun.file(new URL(name, BR_TST_FIXTURES)).text(),
+  );
+  const items = isRecord(parsed) ? parsed["registros"] : undefined;
+  return Array.isArray(items)
+    ? items.flatMap((item: unknown) =>
+        isRecord(item) && isRecord(item["registro"]) ? [item["registro"]] : [],
+      )
+    : panic(`${name} is not a TST search response`);
+};
+
+const brTstRecordedAcordao = async (): Promise<Record<string, unknown>> =>
+  (await brTstRecordedRecords("br-tst-acordao-2024.json")).at(0) ??
+  panic("the TST acórdão recording lost its record");
+
+/** The recorded modern acórdão, built as the crawl builds it. */
+export const brTstAcordaoFixture = (): EnrolledAdapterFixture => ({
+  buildDecision: async () =>
+    buildBrTstDecision(await brTstRecordedAcordao()).decision,
+});
+
+/** A recorded value that states something: not null, not empty. */
+const statesValue = (value: unknown): boolean =>
+  value !== null &&
+  value !== "" &&
+  !(Array.isArray(value) && value.length === 0);
+
+/**
+ * One acórdão stating every field the search states for any record type: the
+ * recorded acórdão, plus each field only another type's recordings state, at
+ * the first recorded value that states something. The registry suites take
+ * one decision per source while the inventory is total over all six types;
+ * `br-tst.test.ts` certifies each type against its own recordings.
+ */
+export const brTstFixture = (): EnrolledAdapterFixture => ({
+  buildDecision: async () => {
+    const union: Record<string, unknown> = {};
+    for (const name of BR_TST_RECORDINGS) {
+      for (const record of await brTstRecordedRecords(name)) {
+        for (const [key, value] of Object.entries(record)) {
+          if (!Object.hasOwn(union, key) || !statesValue(union[key])) {
+            union[key] = value;
+          }
+        }
+      }
+    }
+    return buildBrTstDecision({ ...union, ...(await brTstRecordedAcordao()) })
+      .decision;
+  },
+});
+
+/**
+ * The recorded acórdão as one crawl page serves it, so a publisher read is
+ * what builds the decision: a failed or refused read fails the page.
+ */
+export const brTstCrawlFixture = (): EnrolledAdapterFixture => ({
+  buildDecision: async () => {
+    const record = await brTstRecordedAcordao();
+    const page = await withTestFetch(
+      asFetchMock(
+        async () =>
+          await Promise.resolve(
+            new Response(
+              JSON.stringify({
+                tempoGasto: 1,
+                totalRegistros: 1,
+                registros: [{ registro: record, destaques: {} }],
+                agregacoes: [],
+              }),
+              { headers: { "Content-Type": "application/json" } },
+            ),
+          ),
+      ),
+      async () =>
+        await brTstFetchPage(
+          encodeBrTstCursor({
+            phase: "walk",
+            regime: "sweep",
+            window: { type: "day", day: "2024-03-15", part: "all" },
+            rowsRead: 0,
+          }),
+          { now: Temporal.Instant.from("2026-10-25T12:00:00Z") },
+        ),
+    );
+    if (Result.isError(page)) {
+      throw page.error;
+    }
+    return (
+      page.value.decisions.at(0) ??
+      panic("the TST crawl fixture built no decision")
+    );
+  },
+});
+
 /** Total fixture coverage shared by field inventory and publication invariants. */
 export const CASE_LAW_CONFORMANCE_FIXTURES = {
   [COURTLISTENER_IMPORT_KEY]: courtListenerConformanceFixture,
@@ -3126,6 +3485,9 @@ export const CASE_LAW_CONFORMANCE_FIXTURES = {
   [ADAPTER_KEYS.CZ_US]: czUsFixture,
   [ADAPTER_KEYS.CZ_REGIONAL]: czRegionalFixture,
   [ADAPTER_KEYS.CZ_UOHS]: czUohsFixture,
+  [ADAPTER_KEYS.CZ_NS_SBIRKA]: czNsSbirkaFixture,
+  [ADAPTER_KEYS.CZ_ISIR]: czIsirFixture,
+  [ADAPTER_KEYS.BR_TST]: brTstFixture,
   [ADAPTER_KEYS.SK_COURTS]: skCourtsFixture,
   [ADAPTER_KEYS.SK_US]: skUsFixture,
   [ADAPTER_KEYS.PL_COURTS]: plCourtsFixture,
@@ -3152,6 +3514,7 @@ export const CASE_LAW_CONFORMANCE_FIXTURES = {
   [ADAPTER_KEYS.PL_KIS]: plKisFixture,
   [ADAPTER_KEYS.PL_UODO]: plUodoFixture,
   [ADAPTER_KEYS.PL_UOKIK]: plUokikFixture,
+  [ADAPTER_KEYS.BR_TJDFT]: brTjdftFixture,
 } as const satisfies Record<
   SourceRegistrationKey,
   () => EnrolledAdapterFixture

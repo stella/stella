@@ -49,10 +49,8 @@ export const GlobalTimerContent = ({
   workspaceId?: string;
 }) => {
   const t = useTranslations();
-  const format = useFormatter();
   const user = useAuthenticatedUser();
   const analytics = useAnalytics();
-  const now = useNow({ updateInterval: 1000 }).getTime();
   const [open, setOpen] = useState(false);
   const [panel, setPanel] = useState<TimerPanelState>({ type: "list" });
   const timers = useInfiniteQuery(
@@ -90,12 +88,6 @@ export const GlobalTimerContent = ({
       );
     }
   }, [analytics, runningCount]);
-  const elapsed = (timer: TimeTimer) =>
-    formatTimerSeconds({
-      seconds: elapsedTimerSeconds(timer, now),
-      formatNumber: (value) =>
-        format.number(value, { minimumIntegerDigits: 2, useGrouping: false }),
-    });
   const selectedMatterId =
     panel.type === "confirm" ? panel.timer.matterId : workspaceId;
   const selectedMatter = matters.data?.workspaces.find(
@@ -125,7 +117,7 @@ export const GlobalTimerContent = ({
         >
           <ClockIcon className="size-4" />
           {active ? (
-            <bdi className="text-sm tabular-nums">{elapsed(active)}</bdi>
+            <TimerElapsed className="text-sm tabular-nums" timer={active} />
           ) : (
             <span className="sr-only">{t("billing.globalTimer.title")}</span>
           )}
@@ -183,9 +175,10 @@ export const GlobalTimerContent = ({
                           </BidiText>
                         )}
                       </div>
-                      <bdi className="shrink-0 text-sm tabular-nums">
-                        {elapsed(timer)}
-                      </bdi>
+                      <TimerElapsed
+                        className="shrink-0 text-sm tabular-nums"
+                        timer={timer}
+                      />
                     </div>
                     {(canUpdate || canDelete) && (
                       <div className="flex flex-wrap gap-1">
@@ -193,6 +186,7 @@ export const GlobalTimerContent = ({
                           <Button
                             className="min-h-11"
                             disabled={mutation.isPending}
+                            disabledReason={t("common.saving")}
                             onClick={() =>
                               mutation.mutate({
                                 type:
@@ -215,6 +209,11 @@ export const GlobalTimerContent = ({
                           <Button
                             className="min-h-11"
                             disabled={mutation.isPending || matters.isPending}
+                            disabledReason={
+                              mutation.isPending
+                                ? t("common.saving")
+                                : t("common.loading")
+                            }
                             onClick={() => {
                               mutation.reset();
                               setPanel({ type: "confirm", timer });
@@ -228,6 +227,7 @@ export const GlobalTimerContent = ({
                           <Button
                             className="min-h-11"
                             disabled={mutation.isPending}
+                            disabledReason={t("common.saving")}
                             onClick={() =>
                               mutation.mutate({ type: "discard", id: timer.id })
                             }
@@ -244,6 +244,7 @@ export const GlobalTimerContent = ({
               {timers.hasNextPage && (
                 <Button
                   disabled={timers.isFetchingNextPage}
+                  disabledReason={t("common.loading")}
                   onClick={() =>
                     detached(timers.fetchNextPage(), "global-timer.load-more")
                   }
@@ -262,6 +263,11 @@ export const GlobalTimerContent = ({
                   disabled={
                     mutation.isPending ||
                     (workspaceId !== undefined && matters.isPending)
+                  }
+                  disabledReason={
+                    mutation.isPending
+                      ? t("common.saving")
+                      : t("common.loading")
                   }
                   onClick={() => setPanel({ type: "start" })}
                 >
@@ -283,6 +289,7 @@ export const GlobalTimerContent = ({
         <Button
           className="min-h-11"
           disabled={mutation.isPending}
+          disabledReason={t("common.saving")}
           onClick={() => {
             setOpen(true);
             mutation.mutate({ type: "pause", id: active.id });
@@ -293,5 +300,33 @@ export const GlobalTimerContent = ({
         </Button>
       )}
     </div>
+  );
+};
+
+/**
+ * A timer's elapsed time. The one-second clock lives here, not in the header
+ * control, so it ticks only while something shows a timer (a running timer in
+ * the trigger, or the open popover's list) and only for a running timer: an
+ * idle header never re-renders.
+ */
+const TimerElapsed = ({
+  className,
+  timer,
+}: {
+  className: string;
+  timer: TimeTimer;
+}) => {
+  const format = useFormatter();
+  const now = useNow(
+    timer.state === "running" ? { updateInterval: 1000 } : {},
+  ).getTime();
+  return (
+    <bdi className={className}>
+      {formatTimerSeconds({
+        seconds: elapsedTimerSeconds(timer, now),
+        formatNumber: (value) =>
+          format.number(value, { minimumIntegerDigits: 2, useGrouping: false }),
+      })}
+    </bdi>
   );
 };

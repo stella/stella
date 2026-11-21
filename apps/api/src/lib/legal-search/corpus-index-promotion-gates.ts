@@ -50,7 +50,7 @@ export class CorpusGenerationNotConvergedError extends TaggedError(
 
 type CensusExpectation = "present" | "absent";
 
-export class CorpusGenerationCensusDriftError extends TaggedError(
+class CorpusGenerationCensusDriftError extends TaggedError(
   "CorpusGenerationCensusDriftError",
 )<{
   message: string;
@@ -59,7 +59,7 @@ export class CorpusGenerationCensusDriftError extends TaggedError(
   driftRevisions: string[];
 }> {}
 
-export class CorpusGenerationCensusUnreadableError extends TaggedError(
+class CorpusGenerationCensusUnreadableError extends TaggedError(
   "CorpusGenerationCensusUnreadableError",
 )<{ message: string; indexId: string; cause: unknown }> {}
 

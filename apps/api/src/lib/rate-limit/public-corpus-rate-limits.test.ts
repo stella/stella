@@ -582,7 +582,15 @@ describe("public corpus fleet request budgets", () => {
             method: requestMethod,
           })),
       );
-    });
+    })
+    .concat(
+      ["GET", "HEAD"].flatMap((method) =>
+        [
+          "/law/statutes?query=constitution",
+          "/law/statutes/?query=constitution",
+        ].map((path) => ({ path, method })),
+      ),
+    );
   for (const { path, method } of searchRoutes) {
     test(`search address refusals preserve fleet capacity without double charging: ${method} ${path}`, async () => {
       const bindings = createBindings();
@@ -686,7 +694,7 @@ describe("public corpus fleet request budgets", () => {
       // failure next to its admission line.
       const failures = lines.filter((line) => !isAdmissionLine(line));
       expect(failures.map((line): unknown => JSON.parse(line))).toEqual(
-        Array.from({ length: 3 }, () =>
+        Array.from({ length: 3 }, (): unknown =>
           expect.objectContaining({
             sink: "api.capacity_refused",
             reason: "work_capacity_unavailable",

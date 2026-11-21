@@ -16,6 +16,9 @@ export const ACCOUNT_AUDIT_EVENT_TYPES = [
   "account.data_export.expired",
   "account.sign_in_method.disconnected",
   "account.oauth_connection.disconnected",
+  "account.sign_in.review_requested",
+  "account.sign_in.confirmed",
+  "account.sign_in.confirmation_undone",
   "organization.created",
   ORGANIZATION_EVALUATION_STARTED_EVENT_TYPE,
 ] as const;

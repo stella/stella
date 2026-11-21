@@ -30,6 +30,7 @@ import {
   oauthRefreshToken,
   organization,
   session,
+  ssoProvider,
   twoFactor,
 } from "@/api/db/auth-schema";
 import { WORKSPACE_ACCESS_MODE } from "@/api/db/rls";
@@ -60,9 +61,11 @@ import {
   folioCollabRooms,
   folioCollabRoomTokens,
   legalReaderAnnotations,
+  legalReaderAnswers,
   mcpOAuthState,
   mcpUserConnections,
   mcpWebHandoff,
+  outboundActions,
   pdfSigningSessions,
   PENDING_UPLOAD_RECOVERABLE_STATUSES,
   pendingUploads,
@@ -255,6 +258,7 @@ const REVOKE_AUTH_CREDENTIALS_TABLES = [
   twoFactor,
   invitation,
   apikey,
+  ssoProvider,
 ] as const satisfies readonly PgTable[];
 
 /**
@@ -286,6 +290,13 @@ export const revokeAuthCredentialsAndInvitations = async ({
   // Delete invitations sent by the user, and also invitations sent to the user's email
   await tx.delete(invitation).where(eq(invitation.inviterId, currentUserId));
   await tx.delete(invitation).where(eq(invitation.email, email));
+  // An organization's SSO provider outlives the person who registered it;
+  // only the attribution is cleared.
+  // audit: skip - verifyAndDeleteUser records the parent account-deletion request in this transaction.
+  await tx
+    .update(ssoProvider)
+    .set({ userId: null })
+    .where(eq(ssoProvider.userId, currentUserId));
 };
 
 const REVOKE_OAUTH_TOKENS_TABLES = [
@@ -1367,6 +1378,7 @@ export const deleteUserFiles = async ({
 
 const DELETE_CHAT_THREADS_TABLES = [
   fileChatThreads,
+  outboundActions,
   chatThreads,
 ] as const satisfies readonly PgTable[];
 
@@ -1390,6 +1402,48 @@ export const deleteChatThreadsAndFileLinks = async ({
         ),
       ),
     );
+  const deletedActions = tx
+    .$with("deleted_account_outbound_actions")
+    .as(
+      tx
+        .delete(outboundActions)
+        .where(eq(outboundActions.userId, currentUserId))
+        .returning({ organizationId: outboundActions.organizationId }),
+    );
+  const groups = await tx
+    .with(deletedActions)
+    .select({
+      organizationId: deletedActions.organizationId,
+      actionCount: count(),
+    })
+    .from(deletedActions)
+    .groupBy(deletedActions.organizationId);
+  const userId = brandPersistedUserId(currentUserId);
+  await recordAuditGroups({
+    tx,
+    groups: groups.map((group) => ({
+      bindings: {
+        organizationId: group.organizationId,
+        workspaceId: null,
+        userId,
+        execution: {
+          performer: { type: "user" as const, id: userId },
+          trigger: { type: "system" as const, source: "account_deletion" },
+        },
+      },
+      events: [
+        {
+          action: AUDIT_ACTION.UPDATE,
+          resourceType: AUDIT_RESOURCE_TYPE.ORGANIZATION_SETTINGS,
+          resourceId: group.organizationId,
+          metadata: {
+            change: "account-outbound-actions-deleted",
+            actionCount: group.actionCount,
+          },
+        },
+      ],
+    })),
+  });
   await tx
     .delete(chatThreads)
     .where(
@@ -1398,6 +1452,36 @@ export const deleteChatThreadsAndFileLinks = async ({
         erasableChatThreads(retainedWorkspaceIds),
       ),
     );
+};
+
+const DELETE_PRIVATE_READER_ANSWERS_TABLES = [
+  legalReaderAnswers,
+] as const satisfies readonly PgTable[];
+
+/**
+ * Private reader questions and generated answers belong to the deleting
+ * account. Shared threads remain organization data; child messages cascade
+ * with each deleted private parent.
+ */
+export const deletePrivateLegalReaderAnswers = async (
+  tx: Transaction,
+  currentUserId: SafeId<"user">,
+): Promise<void> => {
+  await tx.execute(
+    sql`SELECT set_config(${ACCOUNT_ERASURE_USER_SETTING}, ${currentUserId}, true)`,
+  );
+  // audit: skip - the enclosing account deletion records the erasure
+  await tx
+    .delete(legalReaderAnswers)
+    .where(
+      and(
+        eq(legalReaderAnswers.userId, currentUserId),
+        eq(legalReaderAnswers.visibility, "private"),
+      ),
+    );
+  await tx.execute(
+    sql`SELECT set_config(${ACCOUNT_ERASURE_USER_SETTING}, '', true)`,
+  );
 };
 
 const DELETE_PERSONAL_AI_MEMORIES_TABLES = [
@@ -1797,6 +1881,7 @@ export const ACCOUNT_DELETION_MANUAL_TABLES = [
   ...DELETE_FILE_COMPARISON_UPLOADS_TABLES,
   ...DELETE_USER_FILES_TABLES,
   ...DELETE_CHAT_THREADS_TABLES,
+  ...DELETE_PRIVATE_READER_ANSWERS_TABLES,
   ...DELETE_PERSONAL_AI_MEMORIES_TABLES,
   ...DELETE_WORKSPACE_VIEW_TEMPLATES_TABLES,
   ...DELETE_BILLING_RATES_TABLES,

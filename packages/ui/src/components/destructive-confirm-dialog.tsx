@@ -103,6 +103,7 @@ const DestructiveConfirmDialog = ({
           </AlertDialogClose>
           <Button
             disabled={!typedConfirmation.confirmed}
+            disabledReason={inputLabel}
             loading={loading}
             onClick={handleConfirmClick}
             variant="destructive"

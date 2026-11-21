@@ -619,6 +619,8 @@ test("a cancelled structured Bedrock request never reaches the provider", async 
 // rebuilding its ApiError from the message discards the status at this boundary.
 test("Gemini structured output preserves its provider HTTP status", async () => {
   const cassette = cassetteFor(cassettes, "google", "rate-limit");
+  // The recorded model, not the current default: the path names it.
+  const { model } = cassette;
   replay.serve({
     ...cassette,
     exchanges: cassette.exchanges.map((exchange) => ({
@@ -632,7 +634,6 @@ test("Gemini structured output preserves its provider HTTP status", async () => 
       },
     })),
   });
-  const model = wireChatModel("google");
   const adapter = createTanStackTextAdapterFactory({
     dataClass: "public_corpus",
     apiKey: "cassette-replay-no-credentials",

@@ -5,7 +5,7 @@ import {
   featureAccessSnapshotFromAuthorization,
   resolveCredentialMemberAuthorization,
 } from "@/api/lib/auth";
-import type { MemberAuthorizationLookup } from "@/api/lib/auth/member-authorization";
+import type { CredentialMemberAuthorizationLookup } from "@/api/lib/auth/member-authorization";
 import { readAuthorizedWorkspaceExecutionAccess } from "@/api/lib/workspaces/authorized-workspace-ids";
 
 /**
@@ -15,7 +15,7 @@ import { readAuthorizedWorkspaceExecutionAccess } from "@/api/lib/workspaces/aut
 export const resolveCredentialMemberExecutionContext = async ({
   organizationId,
   userId,
-}: MemberAuthorizationLookup) => {
+}: CredentialMemberAuthorizationLookup) => {
   const authorization = await resolveCredentialMemberAuthorization({
     organizationId,
     userId,

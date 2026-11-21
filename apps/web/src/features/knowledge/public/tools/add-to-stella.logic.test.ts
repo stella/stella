@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 
 import { resolveAddToStellaState } from "@/features/knowledge/public/tools/add-to-stella.logic";
@@ -9,6 +10,8 @@ const availableEntry = {
   installState: "available" as const,
 };
 
+const retry = async () => panic("Unexpected catalogue retry");
+
 describe("public catalogue install affordance", () => {
   test("requires authentication and waits for organization state", () => {
     expect(
@@ -16,7 +19,7 @@ describe("public catalogue install affordance", () => {
         authStatus: "anonymous",
         canInstall: undefined,
         entry,
-        organizationEntries: undefined,
+        catalogue: { type: "pending" },
       }),
     ).toEqual({ type: "sign-in" });
     expect(
@@ -24,7 +27,7 @@ describe("public catalogue install affordance", () => {
         authStatus: "unavailable",
         canInstall: undefined,
         entry,
-        organizationEntries: undefined,
+        catalogue: { type: "pending" },
       }),
     ).toEqual({ type: "sign-in" });
     expect(
@@ -32,7 +35,7 @@ describe("public catalogue install affordance", () => {
         authStatus: "authenticated",
         canInstall: undefined,
         entry,
-        organizationEntries: undefined,
+        catalogue: { type: "pending" },
       }),
     ).toEqual({ type: "checking" });
   });
@@ -43,7 +46,11 @@ describe("public catalogue install affordance", () => {
         authStatus: "authenticated",
         canInstall: false,
         entry,
-        organizationEntries: [availableEntry],
+        catalogue: {
+          type: "items",
+          retry,
+          items: { entries: [availableEntry] },
+        },
       }),
     ).toEqual({ type: "forbidden" });
   });
@@ -54,7 +61,11 @@ describe("public catalogue install affordance", () => {
         authStatus: "authenticated",
         canInstall: "error",
         entry,
-        organizationEntries: [availableEntry],
+        catalogue: {
+          type: "items",
+          retry,
+          items: { entries: [availableEntry] },
+        },
       }),
     ).toEqual({ type: "role-error" });
   });
@@ -65,7 +76,13 @@ describe("public catalogue install affordance", () => {
         authStatus: "authenticated",
         canInstall: true,
         entry,
-        organizationEntries: [{ ...availableEntry, installState: "installed" }],
+        catalogue: {
+          type: "items",
+          retry,
+          items: {
+            entries: [{ ...availableEntry, installState: "installed" }],
+          },
+        },
       }),
     ).toEqual({ type: "installed" });
     expect(
@@ -73,11 +90,50 @@ describe("public catalogue install affordance", () => {
         authStatus: "authenticated",
         canInstall: true,
         entry,
-        organizationEntries: [
-          { ...availableEntry, installState: "unavailable" },
-        ],
+        catalogue: {
+          type: "items",
+          retry,
+          items: {
+            entries: [{ ...availableEntry, installState: "unavailable" }],
+          },
+        },
       }),
     ).toEqual({ type: "unavailable" });
+  });
+
+  test("distinguishes a failed read from an unlisted tool", () => {
+    const options = {
+      authStatus: "authenticated",
+      canInstall: true,
+      entry,
+    } as const;
+    expect(
+      resolveAddToStellaState({
+        ...options,
+        catalogue: {
+          type: "error",
+          error: new TypeError("read failed"),
+          retry,
+        },
+      }),
+    ).toEqual({ type: "catalogue-error" });
+    expect(
+      resolveAddToStellaState({
+        ...options,
+        catalogue: { type: "items", retry, items: { entries: [] } },
+      }),
+    ).toEqual({ type: "missing-entry" });
+    expect(
+      resolveAddToStellaState({
+        ...options,
+        catalogue: {
+          type: "items",
+          retry,
+          items: { entries: [availableEntry] },
+          refetchError: new TypeError("read failed"),
+        },
+      }),
+    ).toEqual({ type: "catalogue-error" });
   });
 
   test("lets a disabled native tool be enabled again", () => {
@@ -86,14 +142,20 @@ describe("public catalogue install affordance", () => {
         authStatus: "authenticated",
         canInstall: true,
         entry: { kind: "native-tool", slug: "web-search" },
-        organizationEntries: [
-          {
-            kind: "native-tool",
-            slug: "web-search",
-            enabled: false,
-            installState: "installed",
+        catalogue: {
+          type: "items",
+          retry,
+          items: {
+            entries: [
+              {
+                kind: "native-tool",
+                slug: "web-search",
+                enabled: false,
+                installState: "installed",
+              },
+            ],
           },
-        ],
+        },
       }),
     ).toEqual({ type: "install" });
   });

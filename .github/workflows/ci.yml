@@ -413,7 +413,7 @@ jobs:
       # merge group validates the queued tree, so it needs no patch identity.
       - name: Checkout patch-id inputs
         if: (github.event_name == 'pull_request' && github.event.action != 'enqueued') || github.event_name == 'merge_group'
-        uses: stella/.github/actions/partial-clone-checkout@0cc2def60afb3e0fac0df9f541baf926f77889fa
+        uses: stella/.github/actions/partial-clone-checkout@2664e46f02aea7164ba71bcdd485a686166993a4
         with:
           ref: ${{ (inputs.heavy_only == true || inputs.pr_depth_only == true) && inputs.sha || '' }}
           fetch-depth: 0
@@ -921,7 +921,7 @@ jobs:
         # are enough to list changed paths, and git fetches any other blob a
         # step reads (a `git show <base>:<file>`, say) on first access. Jobs
         # that never look past HEAD keep the default shallow checkout.
-        uses: stella/.github/actions/partial-clone-checkout@0cc2def60afb3e0fac0df9f541baf926f77889fa
+        uses: stella/.github/actions/partial-clone-checkout@2664e46f02aea7164ba71bcdd485a686166993a4
         with:
           fetch-depth: 0
           persist-credentials: false
@@ -1593,12 +1593,17 @@ jobs:
         name: Cancel merge group after failure in this job
         if: failure() && github.event_name == 'merge_group'
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        env:
+          JOB_STATUS: ${{ job.status }}
         with:
           retries: 0
-          script: |
+          script: &merge_group_cancel_script |
             let diagnostic;
             let failureSummary = "failed-step lookup unavailable";
             let evidenceTimer;
+            let ownJob;
+            const failedHere = process.env.JOB_STATUS === "failure";
+            const failed = (step) => step.conclusion === "failure";
             try {
               const jobs = await Promise.race([
                 github.paginate(
@@ -1615,13 +1620,13 @@ jobs:
                   evidenceTimer = setTimeout(() => reject(new Error("Failed-step lookup timed out")), 10000);
                 }),
               ]);
+              ownJob = jobs.find((job) => job.status === "in_progress" && job.runner_name === process.env.RUNNER_NAME);
               const failures = jobs.flatMap((job) => (job.steps || [])
-                .filter((step) => step.conclusion === "failure")
+                .filter(failed)
                 .map((step) => `${job.name} / ${step.number}: ${step.name} (${job.html_url})`));
-              // A lost runner leaves a failed job whose step ended cancelled (or that never ran a step); with no failed
-              // step and no such evidence the jobs API may still be catching up, so cancel as before.
+              if (failedHere && !ownJob?.steps?.some(failed)) failures.push(`${ownJob?.name || context.job}: failed step not yet listed`);
               const lost = jobs.filter((job) => job.conclusion === "failure"
-                && !(job.steps || []).some((step) => step.conclusion === "failure")
+                && !(job.steps || []).some(failed)
                 && (job.steps || []).every((step) => !step.status || step.status === "completed")
                 && (!(job.steps || []).length || job.steps.some((step) => step.conclusion === "cancelled")));
               if (!failures.length && lost.length) {
@@ -1641,6 +1646,20 @@ jobs:
               await core.summary.write();
             } catch {
               core.error(`${context.job}: cancellation step summary could not be written`);
+            }
+            if (ownJob && (failedHere || ownJob.steps?.some(failed))) {
+              try {
+                await github.rest.actions.createWorkflowDispatch({
+                  ...context.repo,
+                  workflow_id: "cancel-failed-run.yml",
+                  ref: "main",
+                  inputs: { run_id: String(context.runId), run_attempt: process.env.GITHUB_RUN_ATTEMPT, job_id: String(ownJob.id) },
+                });
+                core.notice(`${context.job}: the run is cancelled once this job ends, so this job keeps its failure conclusion.`);
+                return;
+              } catch {
+                core.error(`${context.job}: the cancellation could not be handed off; cancelling the run now.`);
+              }
             }
             await github.rest.actions.cancelWorkflowRun({
               ...context.repo,
@@ -1774,7 +1793,7 @@ jobs:
       &quick-checks-steps # parser-version-guard reads Git history, so the checkout is full.
       - name: Checkout
         id: checkout
-        uses: stella/.github/actions/partial-clone-checkout@0cc2def60afb3e0fac0df9f541baf926f77889fa
+        uses: stella/.github/actions/partial-clone-checkout@2664e46f02aea7164ba71bcdd485a686166993a4
         with:
           fetch-depth: 0
           persist-credentials: false
@@ -1825,6 +1844,10 @@ jobs:
           path: ${{ runner.temp }}/bun-install/*.log
           retention-days: 7
           if-no-files-found: ignore
+
+      - name: Check script test declarations
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: &script_test_declarations bun scripts/run-unlisted-script-tests.ts --check-declarations
 
       # Workflow job classifications fail more red pull requests than any
       # other check and take seconds, so they run here, before the heavy
@@ -2186,7 +2209,7 @@ jobs:
     steps:
       - name: Checkout
         id: checkout
-        uses: stella/.github/actions/partial-clone-checkout@0cc2def60afb3e0fac0df9f541baf926f77889fa
+        uses: stella/.github/actions/partial-clone-checkout@2664e46f02aea7164ba71bcdd485a686166993a4
         with:
           fetch-depth: 0
           persist-credentials: false
@@ -2296,13 +2319,11 @@ jobs:
 
       - name: Capability catalog drift guard
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
-        # The committed capability catalog (every `tool`/`covered` safe handler,
-        # projected to id + input schema + permissions + scope + access +
-        # destructive) must match the live handler graph. `--check` regenerates
-        # it in-memory and byte-compares against the committed JSON, so a handler
-        # or mapping-table change cannot silently ship a stale catalog.
-        # Regenerate: `bun --env-file=apps/api/.env
-        # apps/api/scripts/export-capability-catalog.ts`.
+        # The capability catalog is derived from the live handler graph and
+        # never committed. `--check` derives it in memory, fails on any catalog
+        # error, and byte-compares the committed coverage table, so a handler or
+        # mapping-table change cannot silently ship a stale table.
+        # Regenerate: `bun apps/api/scripts/export-capability-catalog.ts`.
         run: |
           bun apps/api/scripts/export-capability-catalog.ts --check
 
@@ -2488,7 +2509,7 @@ jobs:
           CI_CHECK_KIND: CONTEXTUAL
           CI_CHECK_CONTEXT: "Operational checkout, installation, preparation, reporting or cancellation; depends on runner state or workflow execution."
         id: checkout
-        uses: stella/.github/actions/partial-clone-checkout@0cc2def60afb3e0fac0df9f541baf926f77889fa
+        uses: stella/.github/actions/partial-clone-checkout@2664e46f02aea7164ba71bcdd485a686166993a4
         with:
           fetch-depth: 0
           persist-credentials: false
@@ -2679,7 +2700,7 @@ jobs:
           CI_CHECK_KIND: CONTEXTUAL
           CI_CHECK_CONTEXT: "Operational checkout, installation, preparation, reporting or cancellation; depends on runner state or workflow execution."
         id: checkout
-        uses: stella/.github/actions/partial-clone-checkout@0cc2def60afb3e0fac0df9f541baf926f77889fa
+        uses: stella/.github/actions/partial-clone-checkout@2664e46f02aea7164ba71bcdd485a686166993a4
         with:
           fetch-depth: 0
           persist-credentials: false
@@ -2784,7 +2805,7 @@ jobs:
           CI_CHECK_CONTEXT: "Uses event target or Git base/merge-base rather than only the current input tree."
         if: ${{ !cancelled() && steps.checkout.outcome == 'success' && (github.event_name == 'pull_request') && steps.policy.outcome == 'success' }}
         # The repository owner publishes this versioned shared contract.
-        uses: stella/.github/.github/actions/changeset-policy@0cc2def60afb3e0fac0df9f541baf926f77889fa # v1.8.0
+        uses: stella/.github/.github/actions/changeset-policy@2664e46f02aea7164ba71bcdd485a686166993a4 # v1.8.0
         with:
           release-paths: ${{ steps.policy.outputs.release_paths }}
           generated-paths: ${{ steps.policy.outputs.generated_paths }}
@@ -2909,6 +2930,14 @@ jobs:
           CI_CHECK_CONTEXT: "Operational checkout, installation, preparation, reporting or cancellation; depends on runner state or workflow execution."
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         run: bun scripts/ci-generated-sources.ts restore "$RUNNER_TEMP/generated-sources"
+
+      - name: Check script test declarations
+        env:
+          CI_CHECK_KIND: STATIC
+          CI_CHECK_INPUTS: tracked-tree+generated-inputs
+        id: script_test_declarations
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') && (github.event_name == 'merge_group' || steps.static_receipts.outputs.reuse_script_test_declarations != 'true') }}
+        run: *script_test_declarations
 
       - name: Prepare route network manifest
         env:
@@ -3177,9 +3206,11 @@ jobs:
           echo "output=$output" >> "$GITHUB_OUTPUT"
           bun run test -- --concurrency=2 "${args[@]}" "${shard_args[@]}" --dry=json > "$plan"
           # On failure the log ends with the failing tests and their errors.
+          # A heavy_only run may check out a digest script without --summary;
+          # it refuses the flag, so the tail is printed again without it.
           bun run test -- --concurrency=2 --output-logs=full --log-order=stream "${args[@]}" "${shard_args[@]}" 2>&1 | tee "$output" || {
             status=$?
-            timeout 60 bun scripts/ci-failure-digest.ts tail "$output" || true
+            timeout 60 bun scripts/ci-failure-digest.ts tail "$output" --summary "$GITHUB_STEP_SUMMARY" || timeout 60 bun scripts/ci-failure-digest.ts tail "$output" || true
             exit "$status"
           }
           bun scripts/test-shards.ts --verify-output "$SHARD" "$plan" "$output"
@@ -3237,9 +3268,11 @@ jobs:
           echo "output=$output" >> "$GITHUB_OUTPUT"
           bun run test -- --concurrency=2 "${args[@]}" "${shard_args[@]}" --dry=json > "$plan"
           # On failure the log ends with the failing tests and their errors.
+          # A heavy_only run may check out a digest script without --summary;
+          # it refuses the flag, so the tail is printed again without it.
           bun run test -- --concurrency=2 --output-logs=full --log-order=stream "${args[@]}" "${shard_args[@]}" 2>&1 | tee "$output" || {
             status=$?
-            timeout 60 bun scripts/ci-failure-digest.ts tail "$output" || true
+            timeout 60 bun scripts/ci-failure-digest.ts tail "$output" --summary "$GITHUB_STEP_SUMMARY" || timeout 60 bun scripts/ci-failure-digest.ts tail "$output" || true
             exit "$status"
           }
           bun scripts/test-shards.ts --verify-output "$SHARD" "$plan" "$output"
@@ -3431,7 +3464,7 @@ jobs:
       - &full_checkout_input_sha
         id: checkout
         name: Checkout
-        uses: stella/.github/actions/partial-clone-checkout@0cc2def60afb3e0fac0df9f541baf926f77889fa
+        uses: stella/.github/actions/partial-clone-checkout@2664e46f02aea7164ba71bcdd485a686166993a4
         with:
           fetch-depth: 0
           persist-credentials: false
@@ -3701,7 +3734,7 @@ jobs:
       CI_GENERATED_SOURCES_MANIFEST: ${{ github.workspace }}/.cache/ci-generated-sources/manifest.json
     steps:
       - name: Checkout
-        uses: stella/.github/actions/partial-clone-checkout@0cc2def60afb3e0fac0df9f541baf926f77889fa
+        uses: stella/.github/actions/partial-clone-checkout@2664e46f02aea7164ba71bcdd485a686166993a4
         with:
           fetch-depth: 0
           persist-credentials: false
@@ -3806,6 +3839,9 @@ jobs:
             let diagnostic;
             let failureSummary = "failed-step lookup unavailable";
             let evidenceTimer;
+            let ownJob;
+            const failedHere = process.env.JOB_STATUS === "failure";
+            const failed = (step) => step.conclusion === "failure";
             try {
               const jobs = await Promise.race([
                 github.paginate(
@@ -3822,13 +3858,13 @@ jobs:
                   evidenceTimer = setTimeout(() => reject(new Error("Failed-step lookup timed out")), 10000);
                 }),
               ]);
+              ownJob = jobs.find((job) => job.status === "in_progress" && job.runner_name === process.env.RUNNER_NAME);
               const failures = jobs.flatMap((job) => (job.steps || [])
-                .filter((step) => step.conclusion === "failure")
+                .filter(failed)
                 .map((step) => `${job.name} / ${step.number}: ${step.name} (${job.html_url})`));
-              // A lost runner leaves a failed job whose step ended cancelled (or that never ran a step); with no failed
-              // step and no such evidence the jobs API may still be catching up, so cancel as before.
+              if (failedHere && !ownJob?.steps?.some(failed)) failures.push(`${ownJob?.name || context.job}: failed step not yet listed`);
               const lost = jobs.filter((job) => job.conclusion === "failure"
-                && !(job.steps || []).some((step) => step.conclusion === "failure")
+                && !(job.steps || []).some(failed)
                 && (job.steps || []).every((step) => !step.status || step.status === "completed")
                 && (!(job.steps || []).length || job.steps.some((step) => step.conclusion === "cancelled")));
               if (!failures.length && lost.length) {
@@ -3848,6 +3884,20 @@ jobs:
               await core.summary.write();
             } catch {
               core.error(`${context.job}: cancellation step summary could not be written`);
+            }
+            if (ownJob && (failedHere || ownJob.steps?.some(failed))) {
+              try {
+                await github.rest.actions.createWorkflowDispatch({
+                  ...context.repo,
+                  workflow_id: "cancel-failed-run.yml",
+                  ref: "main",
+                  inputs: { run_id: String(context.runId), run_attempt: process.env.GITHUB_RUN_ATTEMPT, job_id: String(ownJob.id) },
+                });
+                core.notice(`${context.job}: the run is cancelled once this job ends, so this job keeps its failure conclusion.`);
+                return;
+              } catch {
+                core.error(`${context.job}: the cancellation could not be handed off; cancelling the run now.`);
+              }
             }
             await github.rest.actions.cancelWorkflowRun({
               ...context.repo,
@@ -3881,7 +3931,7 @@ jobs:
       CI_GENERATED_SOURCES_MANIFEST: ${{ github.workspace }}/.cache/ci-generated-sources/manifest.json
     steps:
       - name: Checkout
-        uses: stella/.github/actions/partial-clone-checkout@0cc2def60afb3e0fac0df9f541baf926f77889fa
+        uses: stella/.github/actions/partial-clone-checkout@2664e46f02aea7164ba71bcdd485a686166993a4
         with:
           fetch-depth: 0
           persist-credentials: false
@@ -4428,7 +4478,7 @@ jobs:
           persist-credentials: false
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@0cc2def60afb3e0fac0df9f541baf926f77889fa
+        uses: stella/.github/actions/setup-bun-cached@2664e46f02aea7164ba71bcdd485a686166993a4
         with:
           save: ${{ github.ref == 'refs/heads/main' }}
 
@@ -4513,7 +4563,7 @@ jobs:
           persist-credentials: false
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@0cc2def60afb3e0fac0df9f541baf926f77889fa
+        uses: stella/.github/actions/setup-bun-cached@2664e46f02aea7164ba71bcdd485a686166993a4
         with:
           save: ${{ github.ref == 'refs/heads/main' }}
 
@@ -4972,14 +5022,15 @@ jobs:
           if-no-files-found: error
           retention-days: 1
 
-      - name: Bundle size report
+      - name: Startup bundle gates
+        # Blocking: the startup graph's gates (scripts/bundle-startup-gates.ts).
         run: |
           bun scripts/bundle-baseline.ts --self-test
           bun --preload ./scripts/offline-network-preload.ts scripts/bundle-baseline.ts --check
 
       - name: Bundle duplicate content guard
-        # Blocking, unlike the warning-only size report above: a chunk that
-        # repeats a large block of identical content is a build defect.
+        # Blocking: a chunk that repeats a large block of identical content
+        # is a build defect.
         run: bun scripts/bundle-baseline.ts --check-duplicates
 
       - name: Prod-deps web boot smoke
@@ -5063,7 +5114,7 @@ jobs:
       - *ci_image_mirror_login
       - &setup_bun_cached
         name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@0cc2def60afb3e0fac0df9f541baf926f77889fa
+        uses: stella/.github/actions/setup-bun-cached@2664e46f02aea7164ba71bcdd485a686166993a4
         with:
           bun-version-file: package.json
           save: ${{ github.ref == 'refs/heads/main' }}
@@ -5148,7 +5199,9 @@ jobs:
       )
       )
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    # Passing runs take 7 to 9 min (the three bundles about 5 to 7); 20 min
+    # allows about 2.5x contention headroom for a slow hosted runner.
+    timeout-minutes: 20
     permissions:
       contents: read
       actions: write
@@ -5350,7 +5403,7 @@ jobs:
       - name: Check route network baseline
         if: ${{ !cancelled() && steps.checkout.outcome == 'success' }}
         continue-on-error: ${{ github.event_name == 'merge_group' }}
-        timeout-minutes: 6
+        timeout-minutes: 8
         id: network-baseline
         env:
           PLAYWRIGHT_JSON_OUTPUT_FILE: ${{ github.workspace }}/.cache/playwright-timings/check-route-network-baseline.json
@@ -6104,59 +6157,11 @@ jobs:
     steps:
       - name: Cancel merge group after failure in this job
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        env:
+          JOB_STATUS: ${{ job.status }}
         with:
           retries: 0
-          script: |
-            let diagnostic;
-            let failureSummary = "failed-step lookup unavailable";
-            let evidenceTimer;
-            try {
-              const jobs = await Promise.race([
-                github.paginate(
-                  "GET /repos/{owner}/{repo}/actions/runs/{run_id}/attempts/{attempt_number}/jobs",
-                  {
-                    ...context.repo,
-                    run_id: context.runId,
-                    attempt_number: Number(process.env.GITHUB_RUN_ATTEMPT),
-                    per_page: 100,
-                    request: { timeout: 10000 },
-                  },
-                ),
-                new Promise((_, reject) => {
-                  evidenceTimer = setTimeout(() => reject(new Error("Failed-step lookup timed out")), 10000);
-                }),
-              ]);
-              const failures = jobs.flatMap((job) => (job.steps || [])
-                .filter((step) => step.conclusion === "failure")
-                .map((step) => `${job.name} / ${step.number}: ${step.name} (${job.html_url})`));
-              // A lost runner leaves a failed job whose step ended cancelled (or that never ran a step); with no failed
-              // step and no such evidence the jobs API may still be catching up, so cancel as before.
-              const lost = jobs.filter((job) => job.conclusion === "failure"
-                && !(job.steps || []).some((step) => step.conclusion === "failure")
-                && (job.steps || []).every((step) => !step.status || step.status === "completed")
-                && (!(job.steps || []).length || job.steps.some((step) => step.conclusion === "cancelled")));
-              if (!failures.length && lost.length) {
-                core.notice(`${lost.map((job) => job.name).join(", ")}: the runner was lost before any step failed; the run continues.`);
-                return;
-              }
-              failureSummary = failures.length ? failures.join("; ") : "failed steps not yet available from the jobs API";
-              diagnostic = `${context.job}: cancelling failed merge group; failed steps: ${failures.length ? failures.join("; ") : "not yet available from the jobs API"}`;
-            } catch {
-              diagnostic = `${context.job}: cancelling failed merge group; failed-step lookup unavailable`;
-            } finally {
-              clearTimeout(evidenceTimer);
-            }
-            core.error(diagnostic);
-            try {
-              core.summary.addRaw(`Merge group failed: ${failureSummary}. Other jobs were cancelled to free runners.\n${diagnostic}\n`);
-              await core.summary.write();
-            } catch {
-              core.error(`${context.job}: cancellation step summary could not be written`);
-            }
-            await github.rest.actions.cancelWorkflowRun({
-              ...context.repo,
-              run_id: context.runId,
-            });
+          script: *merge_group_cancel_script
 
   # One HTML report from the browser suites' blob reports, when a suite
   # failed. Diagnostic only: ci-result evaluates the suites themselves, so
@@ -6453,7 +6458,7 @@ jobs:
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
         with:
-          toolchain: 1.99.1
+          toolchain: 1.100.0
           targets: ${{ matrix.target }}
 
       - name: Resolve Windows build toolchain
@@ -6632,7 +6637,7 @@ jobs:
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
         with:
-          toolchain: 1.99.1
+          toolchain: 1.100.0
           targets: wasm32-unknown-unknown
 
       - name: Restore Rust build cache
@@ -6766,7 +6771,7 @@ jobs:
         name: Setup Rust
         uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
         with:
-          toolchain: 1.99.1
+          toolchain: 1.100.0
           targets: ${{ matrix.target }}
           components: clippy
 
@@ -6963,7 +6968,7 @@ jobs:
           persist-credentials: false
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@0cc2def60afb3e0fac0df9f541baf926f77889fa
+        uses: stella/.github/actions/setup-bun-cached@2664e46f02aea7164ba71bcdd485a686166993a4
         with:
           save: ${{ github.ref == 'refs/heads/main' }}
           bun-version-file: "package.json"
@@ -7840,8 +7845,16 @@ jobs:
               .[].jobs[] | select(.conclusion == "cancelled" or .conclusion == "failure" or .conclusion == "timed_out")
               | [.name, .conclusion, (.check_run_url // "missing")] | @tsv
               ' <<< "$cancelled_jobs")
+            # A failed job hands its run's cancellation off and keeps its
+            # failure conclusion (its cancel step succeeded); a job the run's
+            # cancellation reached first ends cancelled. Either names the
+            # failed step that ended the run.
             failed_steps=$(jq -r '
-              .[].jobs[] | select(.conclusion == "cancelled") | . as $job
+              .[].jobs[]
+              | select(.conclusion == "cancelled"
+                  or (.conclusion == "failure"
+                    and any((.steps // [])[]; .name == "Cancel merge group after failure in this job" and .conclusion == "success")))
+              | . as $job
               | (.steps // [])[] | select(.conclusion == "failure")
               | "\($job.name) / \(.number): \(.name) (\($job.html_url))"
               | gsub("%"; "%25") | gsub("\r"; "%0D") | gsub("\n"; "%0A")
@@ -7851,7 +7864,7 @@ jobs:
               echo "$failure_summary"
               printf '%s\n' "$failure_summary" >> "$GITHUB_STEP_SUMMARY"
               while IFS= read -r failed_step; do
-                echo "::error::Cancelled CI job contains a failed step: $failed_step"
+                echo "::error::CI job failed: $failed_step"
               done <<< "$failed_steps"
               exit 1
             fi
@@ -8243,7 +8256,7 @@ jobs:
       # Reporting only: the verdict above is unchanged.
       - name: Setup Bun for the failure digest
         if: failure() && steps.outcome.outcome == 'failure'
-        uses: stella/.github/actions/setup-bun-cached@0cc2def60afb3e0fac0df9f541baf926f77889fa
+        uses: stella/.github/actions/setup-bun-cached@2664e46f02aea7164ba71bcdd485a686166993a4
         with:
           save: ${{ github.ref == 'refs/heads/main' }}
           bun-version-file: .workflow-tooling/package.json

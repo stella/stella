@@ -438,11 +438,9 @@ export const MatterMetadataPanel = ({
           {canCreateWorkspace && (
             <div className="flex flex-col">
               <Button
-                className={cn(
-                  "w-full justify-start rounded-none px-3",
-                  TOOLBAR_ROW_HEIGHT,
-                )}
+                className="w-full"
                 onClick={() => setDuplicateMode("metadata")}
+                size="inspector-row"
                 variant="ghost"
               >
                 <span className={MATTER_INFO_ICON_SLOT_CLASS}>
@@ -451,11 +449,9 @@ export const MatterMetadataPanel = ({
                 {t("common.duplicate")}
               </Button>
               <Button
-                className={cn(
-                  "w-full justify-start rounded-none px-3",
-                  TOOLBAR_ROW_HEIGHT,
-                )}
+                className="w-full"
                 onClick={() => setDuplicateMode("content")}
+                size="inspector-row"
                 variant="ghost"
               >
                 <span className={MATTER_INFO_ICON_SLOT_CLASS}>
@@ -471,6 +467,7 @@ export const MatterMetadataPanel = ({
             <Button
               className="block w-full shrink-0"
               disabled={deleteWorkspace.isPending}
+              disabledReason={t("workspaces.deletingWorkspace")}
               onClick={() => setDeleteDialogOpen(true)}
               variant="plain"
             >

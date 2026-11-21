@@ -92,3 +92,50 @@ export const rehypeMarkdownSourceOffsets =
     };
     visit(tree);
   };
+
+const SOURCE_OFFSETS_PROPERTY = "data-src-offsets";
+
+/**
+ * Drops whitespace from one end of a text node that a later pass tidies (the
+ * space inside "( [§ 240](…) )"), keeping the anchors of the span this pass
+ * stamped around it true: the span's offsets lose the dropped characters, so
+ * every rendered character still maps to its own place in the source.
+ */
+export const trimAnchoredTextWhitespace = (
+  text: Text,
+  parent: Root | Element,
+  side: "start" | "end",
+) => {
+  const trimmed =
+    side === "start" ? text.value.trimStart() : text.value.trimEnd();
+  const removed = text.value.length - trimmed.length;
+  if (removed === 0) {
+    return;
+  }
+  const raw =
+    parent.type === "element"
+      ? parent.properties[SOURCE_OFFSETS_PROPERTY]
+      : undefined;
+  if (parent.type === "element" && raw !== undefined) {
+    const offsets = String(raw).split(",").map(Number);
+    // Stamped spans hold exactly one text leaf; anything else is not this
+    // pass's span and keeps its text.
+    if (
+      parent.children.length !== 1 ||
+      offsets.length !== text.value.length + 1
+    ) {
+      return;
+    }
+    const kept =
+      side === "start"
+        ? offsets.slice(removed)
+        : offsets.slice(0, offsets.length - removed);
+    parent.properties = {
+      ...parent.properties,
+      "data-src-start": kept.at(0),
+      "data-src-end": kept.at(-1),
+      [SOURCE_OFFSETS_PROPERTY]: kept.join(","),
+    };
+  }
+  text.value = trimmed;
+};

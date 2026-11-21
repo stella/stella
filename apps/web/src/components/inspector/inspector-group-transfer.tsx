@@ -1,4 +1,4 @@
-import { useCallback, useLayoutEffect, useRef, useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import type { ReactNode, RefObject } from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -102,7 +102,7 @@ export const useInspectorGroupTransfer = (
     );
   };
 
-  const requestMove = useCallback((tabId: string, groupId: string | null) => {
+  const requestMove = (tabId: string, groupId: string | null) => {
     const store = useInspectorTabsStore.getState();
     const tab = store.tabs.find((candidate) => candidate.id === tabId);
     if (tab === undefined) {
@@ -138,7 +138,7 @@ export const useInspectorGroupTransfer = (
         plan satisfies never;
         panic("Unhandled Inspector group transfer plan");
     }
-  }, []);
+  };
 
   const close = () => {
     if (!submittingRef.current) {
@@ -187,15 +187,17 @@ export const useInspectorGroupTransfer = (
     let copiedFile = pending.copiedFile;
     if (copiedFile === null) {
       const result = await Result.tryPromise(async () => {
-        const response = await api
-          .entities({ workspaceId: toSafeId<"workspace">(source.workspaceId) })
-          ["copy-to-workspace"].post({
-            entityId: toSafeId<"entity">(source.entityId),
-            targetWorkspaceId: toSafeId<"workspace">(pending.workspaceId),
-            targetParentId: null,
-            deleteSource: false,
-            sourceFieldId: toSafeId<"field">(source.id),
-          });
+        const entitiesApi = api.entities({
+          workspaceId: toSafeId<"workspace">(source.workspaceId),
+        });
+
+        const response = await entitiesApi["copy-to-workspace"].post({
+          entityId: toSafeId<"entity">(source.entityId),
+          targetWorkspaceId: toSafeId<"workspace">(pending.workspaceId),
+          targetParentId: null,
+          deleteSource: false,
+          sourceFieldId: toSafeId<"field">(source.id),
+        });
         return unwrapApiResponse(response);
       });
 
@@ -395,7 +397,12 @@ export const useInspectorGroupTransfer = (
           </DialogDescription>
         </DialogHeader>
         <DialogFooter>
-          <Button disabled={isSubmitting} onClick={close} variant="ghost">
+          <Button
+            disabled={isSubmitting}
+            disabledReason={t("common.saving")}
+            onClick={close}
+            variant="ghost"
+          >
             {t("common.cancel")}
           </Button>
           {pending?.type === "chat" ? (
@@ -414,6 +421,7 @@ export const useInspectorGroupTransfer = (
             <>
               <Button
                 disabled={isSubmitting}
+                disabledReason={t("common.saving")}
                 onClick={() => {
                   if (pending) {
                     useInspectorTabsStore
@@ -428,6 +436,7 @@ export const useInspectorGroupTransfer = (
               </Button>
               <Button
                 disabled={isSubmitting}
+                disabledReason={t("common.saving")}
                 onClick={() => {
                   detached(copyAndAssign(), "inspector-group-transfer.copy");
                 }}

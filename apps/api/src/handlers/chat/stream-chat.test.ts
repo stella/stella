@@ -48,6 +48,8 @@ import {
 import {
   CHAT_LOCAL_RUN_CONTEXT_METADATA_KEY,
   CHAT_LOCAL_RUN_LIMIT_METADATA_KEY,
+  CHAT_LOCAL_RUN_MODEL_METADATA_KEY,
+  chatLocalRunReroutedModel,
 } from "@stll/api-contract/chat-run-target";
 import {
   VISUAL_PREVIEW_TOOL_NAME,
@@ -270,6 +272,7 @@ describe("agent sandbox third-party boundary", () => {
     const error = resolveAgentRunBoundaryError({
       boundary: { type: CHAT_SEND_MODE.anonymized },
       runMode: CHAT_RUN_MODE.agent,
+      runsOn: "agent_sandbox",
     });
 
     expect(error).toMatchObject({
@@ -278,11 +281,27 @@ describe("agent sandbox third-party boundary", () => {
     });
   });
 
+  test("refuses an anonymized turn on the member's computer, naming the computer", () => {
+    const error = resolveAgentRunBoundaryError({
+      boundary: { type: CHAT_SEND_MODE.anonymized },
+      runMode: CHAT_RUN_MODE.agent,
+      runsOn: "computer",
+    });
+
+    expect(error).toMatchObject({
+      code: CHAT_TRANSPORT_ERROR_CODE.localRunAnonymizedRefusal,
+      status: 422,
+    });
+    expect(error?.message).toContain("your computer");
+    expect(error?.message).not.toContain("sandbox");
+  });
+
   test("allows an explicit agent run at the raw boundary", () => {
     expect(
       resolveAgentRunBoundaryError({
         boundary: { type: "raw" },
         runMode: CHAT_RUN_MODE.agent,
+        runsOn: "computer",
       }),
     ).toBeNull();
   });
@@ -6022,7 +6041,9 @@ describe("chat stream refs", () => {
       transformClientVisibleStream({
         deniedApprovals,
         resolveAssistantValueRefs: (value) =>
-          JSON.parse(JSON.stringify(value).replaceAll(ref, () => resolved)),
+          JSON.parse(
+            JSON.stringify(value).replaceAll(ref, () => resolved),
+          ) as unknown,
         source: streamChunks([buildEngineSnapshot(history)]),
         storedHistory: NOTHING_REWRITTEN,
       }),
@@ -7368,6 +7389,64 @@ test("a local turn's context report is stored with its answer and reloaded, and 
   }
 });
 
+test("a local turn's models are stored with its answer and reloaded, and a malformed report is not", async () => {
+  const finishedWith = async (reported: unknown) => {
+    const chunks = async function* (): AsyncIterable<StreamChunk> {
+      yield { type: EventType.RUN_STARTED, runId: "run-1", threadId: "t-1" };
+      yield {
+        type: EventType.TEXT_MESSAGE_START,
+        messageId: "m-1",
+        role: "assistant",
+      };
+      yield {
+        type: EventType.TEXT_MESSAGE_CONTENT,
+        messageId: "m-1",
+        delta: "Done.",
+      };
+      yield { type: EventType.TEXT_MESSAGE_END, messageId: "m-1" };
+      yield {
+        type: EventType.RUN_FINISHED,
+        runId: "run-1",
+        threadId: "t-1",
+        finishReason: "stop",
+        metadata: { [CHAT_LOCAL_RUN_MODEL_METADATA_KEY]: reported },
+      };
+    };
+    const result = await persistNativeInterruptTurn(chunks());
+    const response =
+      result.finish?.responseMessage ?? panic("Expected terminal response");
+    const reloaded = normalizePersistedChatMessageContent(
+      toPersistedChatMessageContentV3({
+        data: response.parts,
+        metadata: response.metadata,
+      }),
+    ).metadata;
+    return {
+      stored: response.metadata.localRunModel,
+      reloaded: reloaded.localRunModel,
+      ranOn: chatLocalRunReroutedModel(reloaded),
+    };
+  };
+
+  const rerouted = { requested: "gpt-5.5", ran: "gpt-5.4" };
+  const reported = await finishedWith(rerouted);
+  expect(reported.stored).toEqual(rerouted);
+  expect(reported.reloaded).toEqual(rerouted);
+  expect(reported.ranOn).toBe("gpt-5.4");
+
+  const asked = { requested: "gpt-5.5", ran: "gpt-5.5" };
+  expect((await finishedWith(asked)).ranOn).toBeNull();
+
+  for (const malformed of [
+    { requested: "gpt-5.5" },
+    { requested: "gpt-5.5", ran: "" },
+    { ...rerouted, note: "extra" },
+    "gpt-5.4",
+  ]) {
+    expect((await finishedWith(malformed)).stored).toBeUndefined();
+  }
+});
+
 describe("decision passage court numbers", () => {
   const OPEN_ID = toSafeId<"caseLawDecision">(
     "019a0000-0000-7000-8000-000000000301",
@@ -7757,4 +7836,93 @@ test("an event type outside the engine's types reaches the client between answer
   expect(collectText(visible)).toBe("The answer continues.");
   expect(visible.map(({ type }): string => type)).toContain("FUTURE_EVENT");
   expect(visible.at(-1)?.type).toBe(EventType.RUN_FINISHED);
+});
+
+describe("a child run's content through the outgoing streams", () => {
+  test("keeps its subagentRunId on every released delta, held tails included", async () => {
+    const child = { subagentRunId: "child-run" };
+    // Each text ends inside a `#stella-` href, so its tail is held: the
+    // answer's until its END, the reasoning's until the stream ends.
+    const source = streamChunks(
+      asTestRaw<StreamChunk[]>([
+        {
+          ...child,
+          messageId: "child-answer",
+          role: "assistant",
+          type: EventType.TEXT_MESSAGE_START,
+        },
+        {
+          ...child,
+          delta: "See [NDA](#stella-entity-ref",
+          messageId: "child-answer",
+          type: EventType.TEXT_MESSAGE_CONTENT,
+        },
+        {
+          ...child,
+          delta: "=ent_1).",
+          messageId: "child-answer",
+          type: EventType.TEXT_MESSAGE_CONTENT,
+        },
+        {
+          ...child,
+          messageId: "child-answer",
+          type: EventType.TEXT_MESSAGE_END,
+        },
+        {
+          ...child,
+          parentMessageId: "child-answer",
+          toolCallId: "child-call",
+          toolCallName: "use-browser",
+          type: EventType.TOOL_CALL_START,
+        },
+        {
+          ...child,
+          delta: '{"action":"open"}',
+          toolCallId: "child-call",
+          type: EventType.TOOL_CALL_ARGS,
+        },
+        {
+          ...child,
+          delta: "Checking [it](#stella-entity-ref",
+          messageId: "child-thought",
+          type: EventType.REASONING_MESSAGE_CONTENT,
+        },
+      ]),
+    );
+    const persistenceVisible = transformPersistenceVisibleStream({
+      boundary: { type: "raw" },
+      initialRestorationPlaceholders: new Set(),
+      restorationPairs: [],
+      source,
+    });
+    const clientChunks = await collectChunks(
+      transformClientVisibleStream({
+        source: persistenceVisible,
+        storedHistory: NOTHING_REWRITTEN,
+      }),
+    );
+
+    const content = clientChunks.filter(
+      (chunk) =>
+        chunk.type === EventType.TEXT_MESSAGE_CONTENT ||
+        chunk.type === EventType.REASONING_MESSAGE_CONTENT ||
+        chunk.type === EventType.TOOL_CALL_ARGS,
+    );
+    const deltas = (type: EventType) =>
+      content
+        .flatMap((chunk) =>
+          chunk.type === type && "delta" in chunk ? [chunk.delta] : [],
+        )
+        .join("");
+    expect(deltas(EventType.TEXT_MESSAGE_CONTENT)).toBe(
+      "See [NDA](#stella-entity-ref=ent_1).",
+    );
+    expect(deltas(EventType.REASONING_MESSAGE_CONTENT)).toBe(
+      "Checking [it](#stella-entity-ref",
+    );
+    expect(deltas(EventType.TOOL_CALL_ARGS)).toBe('{"action":"open"}');
+    for (const chunk of content) {
+      expect(chunk).toMatchObject(child);
+    }
+  });
 });

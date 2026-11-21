@@ -8,6 +8,8 @@ import { Tooltip, TooltipPopup, TooltipTrigger } from "./tooltip";
 type TooltipTriggerOptions = {
   trigger: React.ReactElement;
   tooltip: React.ReactNode;
+  keepTriggerMounted?: boolean;
+  popupDescriptionId?: string | undefined;
 };
 
 /**
@@ -15,15 +17,26 @@ type TooltipTriggerOptions = {
  * their content is a label or a glyph; a trigger rendered as `Button` hands its
  * `aria-label` to that Button, whose size decides (see `BUTTON_SIZE_CONTENT`).
  */
-const renderTooltipTrigger = ({ trigger, tooltip }: TooltipTriggerOptions) => {
-  if (!hasTooltipContent(tooltip)) {
+const renderTooltipTrigger = ({
+  trigger,
+  tooltip,
+  keepTriggerMounted = false,
+  popupDescriptionId,
+}: TooltipTriggerOptions) => {
+  const hasContent = hasTooltipContent(tooltip);
+  // Entering a disabled state must leave the focused DOM button in place.
+  if (!hasContent && !keepTriggerMounted) {
     return trigger;
   }
 
   return (
-    <Tooltip>
+    <Tooltip disabled={!hasContent}>
       <TooltipTrigger render={trigger} />
-      <TooltipPopup>{tooltip}</TooltipPopup>
+      {hasContent && (
+        <TooltipPopup descriptionId={popupDescriptionId}>
+          {tooltip}
+        </TooltipPopup>
+      )}
     </Tooltip>
   );
 };

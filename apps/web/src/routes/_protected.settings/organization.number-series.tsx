@@ -1,5 +1,4 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
-import { useTranslations } from "use-intl";
 
 import { isTimeBillingPreviewEnabled } from "@/hooks/use-time-billing-preview";
 import { roleOptions } from "@/lib/auth-queries";
@@ -7,8 +6,9 @@ import { isBillingSettingsAccessible } from "@/lib/organization/billing-settings
 import { pageTitle } from "@/lib/page-title";
 import { ensureRouteQueryData } from "@/lib/react-query";
 import { routePresentation } from "@/routes/-route-presentation";
-import { SettingsPageHeader } from "@/routes/_protected.settings/-components/settings-page-header";
-import { NumberSeriesCard } from "@/routes/_protected.settings/organization/-components/organization/number-series-card";
+
+import { NumberSeriesSettingsPage } from "./-organization.number-series.page";
+import { NumberSeriesSettingsPending } from "./-organization.number-series.pending";
 
 export const Route = createFileRoute(
   "/_protected/settings/organization/number-series",
@@ -41,14 +41,5 @@ export const Route = createFileRoute(
   },
   head: () => ({ meta: [{ title: pageTitle("billing.numberSeries.title") }] }),
   component: NumberSeriesSettingsPage,
+  pendingComponent: NumberSeriesSettingsPending,
 });
-
-function NumberSeriesSettingsPage() {
-  const t = useTranslations();
-  return (
-    <>
-      <SettingsPageHeader title={t("billing.numberSeries.title")} />
-      <NumberSeriesCard />
-    </>
-  );
-}

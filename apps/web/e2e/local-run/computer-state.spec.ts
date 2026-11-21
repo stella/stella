@@ -1,7 +1,6 @@
-import type { APIRequestContext, Page } from "@playwright/test";
+import type { APIRequestContext, Locator, Page } from "@playwright/test";
 import { existsSync } from "node:fs";
 
-import { E2E_API_ORIGIN } from "../helpers/api";
 import { expect, test } from "../helpers/test";
 import { PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS } from "../helpers/wait-budgets";
 import {
@@ -20,7 +19,8 @@ import {
   transcript,
 } from "./computer";
 
-// Turns whose computer goes away, links again, or undoes what a turn wrote.
+// Turns whose computer goes away, links again, or whose edit undoes what the
+// turns since wrote.
 
 const TEXT_ANSWER =
   "Lease one is the office lease; lease two is the warehouse.";
@@ -29,7 +29,9 @@ const WROTE_ANSWER = "Wrote notes.md.";
 /** What the next turn tells the agent after an undo (control.ts). */
 const UNDONE_NOTE = "the member undid the file changes of an earlier reply";
 const UNDO_REQUEST =
-  /\/chat\/threads\/[^/]+\/turns\/[^/]+\/local-files\/undo$/u;
+  /\/chat\/threads\/[^/]+\/messages\/[^/]+\/local-files\/undo$/u;
+/** The edit form's choice to undo the files too. */
+const UNDO_FILES = "Also undo file changes made since this message";
 
 /** The chat's read of its thread. */
 const THREAD_MESSAGES = /\/v1\/chat\/threads\/[^/]+\/messages(?:\?|$)/u;
@@ -38,7 +40,7 @@ const NO_COMPUTER = "None of your computers is connected.";
 /** The failed turn's button that opens stella desktop and sends again. */
 const OPEN_DESKTOP = "Open stella desktop";
 /** What a turn, and that button, say while stella desktop opens. */
-const OPENING_DESKTOP = "Opening stella desktop...";
+const OPENING_DESKTOP = "Opening stella desktop…";
 
 test.beforeEach(async ({ request }) => {
   await setComputerOnline(request, true);
@@ -69,84 +71,78 @@ const writeNotes = async (page: Page) => {
   return file;
 };
 
-/** The actions of the chat's first answer, the one that wrote the notes. */
-const notesAnswerActions = (page: Page) =>
-  transcript(page).getByRole("button", { name: "Actions" }).first();
-
-const undoItem = (page: Page) =>
-  page.getByRole("menuitem", { name: "Undo file changes" });
-
-const askToUndo = async (page: Page) => {
-  await notesAnswerActions(page).click();
-  await undoItem(page).click();
-  const dialog = page.getByRole("alertdialog", {
-    name: "Undo this turn's file changes?",
-  });
-  await dialog.getByRole("button", { name: "Undo changes" }).click();
+/** Open the edit form of the member's message that asked for the notes. */
+const editNotesMessage = async (page: Page) => {
+  const message = transcript(page)
+    .locator("[data-chat-message-id]")
+    .filter({ hasText: "Write the notes" });
+  await message.hover();
+  await message.getByRole("button", { name: "Edit message" }).click();
+  const form = page.locator("[data-chat-message-edit]");
+  await expect(form).toBeVisible();
+  return form;
 };
 
-test("the answer of a turn that just wrote files offers to undo them", async ({
+/** Replace the edited text and send it from the form. */
+const sendEdit = async (form: Locator, text: string) => {
+  const input = form.getByRole("textbox", { name: "Edited message" });
+  await input.focus();
+  await input.press("ControlOrMeta+a");
+  await input.pressSequentially(text);
+  await form.getByRole("button", { name: "Send message" }).click();
+};
+
+test("editing the message that wrote files offers to undo them, unchecked", async ({
   page,
 }) => {
   await writeNotes(page);
-  await notesAnswerActions(page).click();
-  await expect(undoItem(page)).toBeVisible();
+  const form = await editNotesMessage(page);
+  const choice = form.getByRole("checkbox", { name: UNDO_FILES });
+  await expect(choice).toBeEnabled({
+    timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS,
+  });
+  await expect(choice).not.toBeChecked();
+  await expect(form).toContainText(
+    "This also undoes changes you made in the folder yourself.",
+  );
 });
 
-test("undo removes what the newest turn wrote, and the next turn is told", async ({
+test("an edit that undoes the files removes what the turns since wrote, and the edited turn is told", async ({
   page,
-  request,
 }) => {
   const file = await writeNotes(page);
-  // From the chat as loaded, which reads the newest local turn.
+  // From the chat as loaded.
   await page.reload({ waitUntil: "commit" });
   await expectTurnsFinished(page, 1);
+  await chooseRunOn(page, { place: "computer", agent: "codex", model: "text" });
 
+  const log = agentLog("codex");
+  const form = await editNotesMessage(page);
+  const choice = form.getByRole("checkbox", { name: UNDO_FILES });
+  await expect(choice).toBeEnabled({
+    timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS,
+  });
+  await choice.check();
   const undoRequest = page.waitForRequest(
     (sent) => sent.method() === "POST" && UNDO_REQUEST.test(sent.url()),
     { timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS },
   );
-  await askToUndo(page);
-  const undoUrl = new URL((await undoRequest).url());
+  await sendEdit(form, "What is in the folder now?");
+  await undoRequest;
 
-  const marker = transcript(page).locator('[data-local-files-undo="restored"]');
-  await expect(marker).toHaveText("File changes undone", {
-    timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS,
-  });
-  await expect.poll(() => existsSync(file)).toBe(false);
-
-  // The next turn carries the note, so the agent reads files again.
-  const log = agentLog("codex");
-  await chooseRunOn(page, { place: "computer", agent: "codex", model: "text" });
-  await send(page, "What is in the folder now?");
   await expect(transcript(page)).toContainText(TEXT_ANSWER, {
     timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS,
   });
+  await expect(form).toHaveCount(0);
+  expect(existsSync(file)).toBe(false);
+  // The edited turn carries the note, so the agent reads files again.
   expect(
     messagesReceived(log).some((message) => message.includes(UNDONE_NOTE)),
   ).toBe(true);
-
-  // The marker stays with the older turn, which can no longer be undone:
-  // its answer offers no undo, and asking the API again answers with the
-  // undo already done, never a second one.
-  await page.reload({ waitUntil: "commit" });
-  await expect(marker).toBeVisible({
-    timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS,
-  });
-  await notesAnswerActions(page).click();
-  await expect(page.getByRole("menu")).toBeVisible();
-  await expect(undoItem(page)).toHaveCount(0);
-  await page.keyboard.press("Escape");
-  const repeated = await request.post(`${E2E_API_ORIGIN}${undoUrl.pathname}`);
-  expect(repeated.status()).toBe(202);
-  expect(await repeated.json()).toMatchObject({
-    status: "accepted",
-    undo: { state: "restored" },
-  });
-  expect(existsSync(file)).toBe(false);
+  await expect(transcript(page)).not.toContainText(WROTE_ANSWER);
 });
 
-test("undo is refused while the computer is offline, and the file stays", async ({
+test("an undo refused while the computer is offline sends nothing and keeps the file", async ({
   page,
   request,
   browserErrors,
@@ -156,17 +152,26 @@ test("undo is refused while the computer is offline, and the file stays", async 
   const file = await writeNotes(page);
   await page.reload({ waitUntil: "commit" });
   await expectTurnsFinished(page, 1);
+  const form = await editNotesMessage(page);
+  const choice = form.getByRole("checkbox", { name: UNDO_FILES });
+  await expect(choice).toBeEnabled({
+    timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS,
+  });
+  await choice.check();
   await setComputerOnline(request, false);
 
-  await askToUndo(page);
+  await sendEdit(form, "What is in the folder now?");
 
-  await expect(transcript(page)).toContainText(
+  await expect(form).toContainText(
     "Your computer is offline. Open the stella desktop app and try again.",
     { timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS },
   );
+  // The draft stays, the box unchecked, and the turn is not replaced.
   await expect(
-    transcript(page).locator('[data-local-files-undo="restored"]'),
-  ).toHaveCount(0);
+    form.getByRole("textbox", { name: "Edited message" }),
+  ).toHaveText("What is in the folder now?");
+  await expect(choice).not.toBeChecked();
+  await expect(transcript(page)).toContainText(WROTE_ANSWER);
   expect(existsSync(file)).toBe(true);
 });
 

@@ -228,6 +228,8 @@ describe("ÚOHS JSON-LD", () => {
       }
       const bodyText = body.map(({ plainText }) => plainText).join("\n");
       expect(bodyText).not.toContain("1/12 třída Kpt. Jaroše");
+      // The footer counting the pages ("… soutěže 2/12") is one running line.
+      expect(bodyText).not.toMatch(/hospodářské soutěže \d+\/\d+/u);
       expect(bodyText).not.toContain(
         "Ve správním spise se nachází pod položkou",
       );
@@ -509,6 +511,23 @@ describe("ÚOHS JSON-LD", () => {
     expect(bodyText).toContain("Small body text after the body resumes.");
   });
 
+  test("joins a paragraph the page's counted footer broke", async () => {
+    const bytes = new Uint8Array(
+      await Bun.file(
+        new URL("__fixtures__/cz-uohs-2026-R0137.pdf", import.meta.url),
+      ).arrayBuffer(),
+    );
+    const ast = await parseCzUohsDocumentPdf(bytes, {
+      caseNumber: "ÚOHS-R0137/2026/VZ",
+      sourceUrl: "cz-uohs-2026-R0137.pdf",
+    });
+    // Page 2 opens mid-sentence ("Mgr. Martinou | Slaninovou") under page
+    // 1's footer; no paragraph ends where the page did.
+    expect(
+      ast.blocks.filter(({ plainText }) => plainText.endsWith("Mgr. Martinou")),
+    ).toEqual([]);
+  });
+
   test("a document without numbered paragraphs gets no paragraph numbers", async () => {
     const ast = await parseCzUohsDocumentPdf(czUohsSyntheticPdf(), {
       caseNumber: "synthetic",
@@ -694,10 +713,10 @@ describe("ÚOHS JSON-LD", () => {
     ).toBeUndefined();
   });
 
-  test("emits citation-shaped authority identifiers", async () => {
+  test("emits authority identifiers as the office prints them", async () => {
     expect(czUohsDecisionIdentifiers((await records())[0]!)).toEqual([
-      { type: "authority-decision-number", value: "úohs-r0901/2026/vz" },
-      { type: "authority-decision-number", value: "úohs-90001/2026/163" },
+      { type: "authority-decision-number", value: "ÚOHS-R0901/2026/VZ" },
+      { type: "authority-decision-number", value: "ÚOHS-90001/2026/163" },
     ]);
   });
 
@@ -800,7 +819,7 @@ describe("ÚOHS JSON-LD", () => {
       "document",
       "document-1",
     ]);
-    const provenance = JSON.parse(
+    const provenance: { documents: Record<string, unknown> } = JSON.parse(
       decodeSourceRawEnvelope(decision.sourceRaw ?? "")?.["provenance"] ??
         "null",
     );
@@ -912,7 +931,7 @@ describe("ÚOHS JSON-LD", () => {
     if (first.nextCursor === null) {
       return;
     }
-    const cursor = JSON.parse(first.nextCursor);
+    const cursor: { snapshotId: string } = JSON.parse(first.nextCursor);
     cursor.snapshotId = "not-cached";
     const second = (
       await czUohsAdapter.fetchPage(JSON.stringify(cursor), {}, undefined)

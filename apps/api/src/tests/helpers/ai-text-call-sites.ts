@@ -289,14 +289,17 @@ const chatCompactionDriver = textCallSiteDriver({
   finishPolicy: COMPACTION_FINISH_POLICY,
   run: async (cassette) => {
     const summaryErrors: HandlerError[] = [];
-    const result = await compactChatMessagesForModel({
-      ...compactionOptions(cassette),
-      boundary: { type: "raw" },
-      messages: chatThread,
-      onSummaryError: (error) => {
-        summaryErrors.push(error);
-      },
-    });
+    // Chat compaction always settles: a failure trims the history instead.
+    const result = Result.ok(
+      await compactChatMessagesForModel({
+        ...compactionOptions(cassette),
+        boundary: { type: "raw" },
+        messages: chatThread,
+        onSummaryError: (error) => {
+          summaryErrors.push(error);
+        },
+      }),
+    );
     return compactionAnswerOf({
       input: chatThread,
       result,
@@ -452,6 +455,10 @@ export const PENDING_TEXT_CALL_SITES: Readonly<Record<string, number>> = {
   "handlers/chat/generate-thread-title.ts": 1,
   "handlers/chat/get-suggested-prompts.ts": 1,
   "handlers/chat/improve-prompt.ts": 1,
+  // Approved 2026-11-20: browsing sub-agent call site; the sub-agent replay
+  // driver follow-up clears this and subagent-runner, then lower the total
+  // again.
+  "handlers/chat/browse-web-agent.ts": 1,
   "handlers/chat/subagent-runner.ts": 1,
   "handlers/chat/suggest-thread-title.ts": 1,
   "handlers/chat/thread-recap.ts": 1,
@@ -466,4 +473,4 @@ export const PENDING_TEXT_CALL_SITES: Readonly<Record<string, number>> = {
 
 /** The ledger's total. Lower it with every reference driven; never raise
  *  it. */
-export const PENDING_TEXT_REFERENCES = 16;
+export const PENDING_TEXT_REFERENCES = 17;

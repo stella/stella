@@ -18,6 +18,7 @@ import {
   CORPUS_FINAL_INDEX_INDEXING_DEFAULT,
   type CorpusIndexConfig,
 } from "@/api/lib/legal-search/corpus-index-config";
+import { CORPUS_INDEX_INCARNATION_MAX_LENGTH } from "@/api/lib/legal-search/corpus-index-route-proof-contract";
 import {
   getPublicReadSignal,
   withPublicReadIo,
@@ -295,11 +296,24 @@ type CorpusIndexSearchResponse = {
  * it can do two things that one cannot: project each hit to named stored
  * fields, and report the BM25 score beside the hit.
  */
+/**
+ * A scored read's query as ES DSL rather than a query string: what a ranking
+ * needs when scope must filter without scoring (`filter`) and words must
+ * count toward `minimum_should_match` (`corpus-ranked-decision-query.ts`).
+ */
+export type CorpusIndexQueryDsl = {
+  type: "dsl";
+  query: Readonly<Record<string, unknown>>;
+};
+
 type CorpusIndexScoredSearchInput = {
   observer: RegistryRequestObservation;
   indexId: string;
-  /** Full corpus index query string, read exactly as `search` reads it. */
-  query: string;
+  /**
+   * Full corpus index query string, read exactly as `search` reads it, or a
+   * DSL query sent as given.
+   */
+  query: string | CorpusIndexQueryDsl;
   /** Rank of the first hit returned. */
   from: number;
   size: number;
@@ -328,6 +342,28 @@ export type CorpusIndexScoredSearchResponse = {
 };
 
 const STORED_FIELD_NAME = /^[A-Za-z_][A-Za-z0-9_.]*$/u;
+
+/**
+ * The ES-compatible endpoint answers HTTP 200 with the splits it could read
+ * when one fails (`allow_partial_search_results` defaults to true there,
+ * unlike the native endpoint's `allow_failed_splits`). A ranking or a count
+ * missing a split is a short answer that looks whole, so every ES read asks
+ * for failure instead, and every ES answer is checked for failed shards too.
+ */
+export const STRICT_ELASTIC_READ = "allow_partial_search_results=false";
+
+/**
+ * Whether an ES-compatible answer reports a shard (split) it could not read.
+ * A missing `_shards` is not proof of failure; a count above zero is.
+ */
+export const elasticAnswerHasFailedShards = (response: unknown): boolean => {
+  const shards = isRecord(response) ? response["_shards"] : undefined;
+  if (!isRecord(shards)) {
+    return false;
+  }
+  const failed = shards["failed"];
+  return typeof failed !== "number" || failed !== 0;
+};
 
 /**
  * The request a scored read sends.
@@ -363,9 +399,12 @@ export const corpusIndexScoredSearchRequest = ({
     }
   }
   return {
-    path: `/api/v1/_elastic/${indexId}/_search?_source_includes=${fields.join(",")}`,
+    path: `/api/v1/_elastic/${indexId}/_search?_source_includes=${fields.join(",")}&${STRICT_ELASTIC_READ}`,
     body: {
-      query: { query_string: { query, default_operator: "AND" } },
+      query:
+        typeof query === "string"
+          ? { query_string: { query, default_operator: "AND" } }
+          : query.query,
       from,
       size,
       sort: [{ _score: { order: "desc" } }],
@@ -389,6 +428,9 @@ export const parseCorpusIndexScoredSearchResponse = (
   response: unknown,
   requiredFields: readonly string[],
 ): CorpusIndexScoredSearchResponse | null => {
+  if (elasticAnswerHasFailedShards(response)) {
+    return null;
+  }
   const outer = isRecord(response) ? response["hits"] : undefined;
   if (!isRecord(outer)) {
     return null;
@@ -519,6 +561,15 @@ export type CorpusIndexPublishedSplitCount = {
   publishedSplits: number;
 };
 
+/**
+ * Which incarnation of an index id the engine holds now. The engine gives
+ * every index it creates a fresh uid (`index_uid`, the id plus a ULID), so
+ * an index deleted and created again under the same id, or restored from
+ * another metastore, never reads as the one an earlier read saw.
+ */
+export type CorpusIndexIncarnation =
+  { type: "missing" } | { type: "present"; incarnation: string };
+
 type CorpusIndexPublishedSplitCountsInput = {
   includes: (indexId: string) => boolean;
   observer: RegistryRequestObservation;
@@ -539,6 +590,11 @@ export type CorpusIndexClient = {
     indexId: string,
     observer: RegistryRequestObservation,
   ) => Promise<Result<boolean, CorpusIndexError>>;
+  /** The incarnation of `indexId` the search endpoint reads now. */
+  readIndexIncarnation: (
+    indexId: string,
+    observer: RegistryRequestObservation,
+  ) => Promise<Result<CorpusIndexIncarnation, CorpusIndexError>>;
   /**
    * Published split count of each index the predicate admits, from the search
    * endpoint, which answers while the build lane is parked.
@@ -1032,6 +1088,41 @@ const requestJson = async (unbounded: CorpusIndexRequest): Promise<unknown> =>
         reach: bodyReadReach(error),
       });
     });
+  });
+
+/** An index's metadata document, or that the engine holds no such index. */
+type IndexMetadataRead =
+  { type: "missing" } | { type: "present"; metadata: unknown };
+
+const readIndexMetadata = async (
+  request: CorpusIndexRequest,
+): Promise<Result<IndexMetadataRead, CorpusIndexError>> =>
+  await Result.tryPromise({
+    try: async () =>
+      await sendRequest(
+        request,
+        async (response, bounded): Promise<IndexMetadataRead> => {
+          if (response.status === 404) {
+            return { type: "missing" };
+          }
+          if (!response.ok) {
+            throw new CorpusIndexError({
+              message: `corpus index ${requestLabel(request)} -> ${response.status}`,
+              status: response.status,
+            });
+          }
+          const metadata = await response.json().catch((error: unknown) => {
+            throw requestFailure({
+              request: bounded,
+              error,
+              unaborted: "returned an unreadable body",
+              reach: bodyReadReach(error),
+            });
+          });
+          return { type: "present", metadata };
+        },
+      ),
+    catch: toCorpusIndexError,
   });
 
 type SettlementSplit = {
@@ -1642,57 +1733,84 @@ const buildClient = (
       catch: toCorpusIndexError,
     }),
 
-  attestIndexConfig: async (config, observer) =>
-    await Result.tryPromise({
-      try: async () => {
-        const request = {
-          observer,
-          baseUrl: mutationBaseUrl(cluster),
-          path: `/api/v1/indexes/${config.index_id}`,
-          init: { method: "GET" },
-          timeoutMs: ADMIN_TIMEOUT_MS,
-        } satisfies CorpusIndexRequest;
-        return await sendRequest(request, async (response, bounded) => {
-          if (response.status === 404) {
-            return { status: "missing" } as const;
-          }
-          if (!response.ok) {
-            throw new CorpusIndexError({
-              message: `corpus index ${requestLabel(request)} -> ${response.status}`,
-              status: response.status,
-            });
-          }
-          const metadata = await response.json().catch((error: unknown) => {
-            throw requestFailure({
-              request: bounded,
-              error,
-              unaborted: "returned an unreadable body",
-              reach: bodyReadReach(error),
-            });
-          });
-          if (!isRecord(metadata) || !isRecord(metadata["index_config"])) {
-            throw new CorpusIndexError({
-              message: "corpus index metadata omitted its index config",
-            });
-          }
-          const observedConfig = metadata["index_config"];
-          const difference = configDifference(config, observedConfig);
-          if (difference !== null) {
-            throw new CorpusIndexError({
-              message: `corpus index ${config.index_id} configuration drift at ${difference}`,
-            });
-          }
-          const indexUri = observedConfig["index_uri"];
-          if (typeof indexUri !== "string" || indexUri.length === 0) {
-            throw new CorpusIndexError({
-              message: `corpus index ${config.index_id} metadata omitted its index URI`,
-            });
-          }
-          return { status: "matching", indexUri } as const;
-        });
-      },
-      catch: toCorpusIndexError,
-    }),
+  readIndexIncarnation: async (indexId, observer) => {
+    const read = await readIndexMetadata({
+      observer,
+      // The endpoint the census reads, so the incarnation is the one the
+      // census pages observed.
+      baseUrl: searchBaseUrl(cluster),
+      path: `/api/v1/indexes/${indexId}`,
+      init: { method: "GET" },
+      timeoutMs: ADMIN_TIMEOUT_MS,
+    });
+    if (read.isErr()) {
+      return Result.err(read.error);
+    }
+    if (read.value.type === "missing") {
+      return Result.ok({ type: "missing" });
+    }
+    const { metadata } = read.value;
+    const incarnation = isRecord(metadata) ? metadata["index_uid"] : undefined;
+    const config = isRecord(metadata) ? metadata["index_config"] : undefined;
+    // An uid names its index id first: `<index id>:<ULID>`.
+    if (
+      typeof incarnation !== "string" ||
+      !incarnation.startsWith(`${indexId}:`) ||
+      incarnation.length <= indexId.length + 1 ||
+      incarnation.length > CORPUS_INDEX_INCARNATION_MAX_LENGTH ||
+      !isRecord(config) ||
+      config["index_id"] !== indexId
+    ) {
+      return Result.err(
+        new CorpusIndexError({
+          message: `corpus index ${indexId} metadata named no incarnation of it`,
+        }),
+      );
+    }
+    return Result.ok({ type: "present", incarnation });
+  },
+
+  attestIndexConfig: async (config, observer) => {
+    const read = await readIndexMetadata({
+      observer,
+      baseUrl: mutationBaseUrl(cluster),
+      path: `/api/v1/indexes/${config.index_id}`,
+      init: { method: "GET" },
+      timeoutMs: ADMIN_TIMEOUT_MS,
+    });
+    if (read.isErr()) {
+      return Result.err(read.error);
+    }
+    if (read.value.type === "missing") {
+      return Result.ok({ status: "missing" });
+    }
+    const { metadata } = read.value;
+    if (!isRecord(metadata) || !isRecord(metadata["index_config"])) {
+      return Result.err(
+        new CorpusIndexError({
+          message: "corpus index metadata omitted its index config",
+        }),
+      );
+    }
+    const observedConfig = metadata["index_config"];
+    const difference = configDifference(config, observedConfig);
+    if (difference !== null) {
+      return Result.err(
+        new CorpusIndexError({
+          message: `corpus index ${config.index_id} configuration drift at ${difference}`,
+        }),
+      );
+    }
+    const indexUri = observedConfig["index_uri"];
+    if (typeof indexUri !== "string" || indexUri.length === 0) {
+      return Result.err(
+        new CorpusIndexError({
+          message: `corpus index ${config.index_id} metadata omitted its index URI`,
+        }),
+      );
+    }
+    return Result.ok({ status: "matching", indexUri });
+  },
 
   ingestBatch: async (indexId, ndjson, commit, observer) =>
     await ingestBatch({
@@ -1876,7 +1994,7 @@ const buildClient = (
     const path =
       filter === undefined
         ? `/api/v1/${indexId}/search`
-        : `/api/v1/_elastic/${indexId}/_search`;
+        : `/api/v1/_elastic/${indexId}/_search?${STRICT_ELASTIC_READ}`;
     return await withSearchAdmission(
       searchAdmission,
       {
@@ -1935,7 +2053,11 @@ const buildClient = (
               timeoutMs: remainingAfterWait,
               signal,
             });
-            if (!isRecord(response) || !isRecord(response["aggregations"])) {
+            if (
+              !isRecord(response) ||
+              !isRecord(response["aggregations"]) ||
+              elasticAnswerHasFailedShards(response)
+            ) {
               throw new CorpusIndexError({
                 message:
                   "corpus index aggregation returned an invalid response",

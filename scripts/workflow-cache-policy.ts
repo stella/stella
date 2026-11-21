@@ -19,20 +19,20 @@ const triggers = (on: unknown): string[] => {
 
 // Release and deploy jobs restore caches from the default branch's scope.
 // pull_request runs save only to their own pull request's scope, but
-// pull_request_target and workflow_run runs save to the default branch's
-// scope: a fork can influence the first, and the second runs release and
-// signing jobs. So none of their jobs may save to or restore from any cache,
-// and a reusable workflow they call must be one reviewed for that.
-const DEFAULT_SCOPE_EVENTS = ["pull_request_target", "workflow_run"];
+// workflow_run runs save to the default branch's scope: a fork pull request
+// can trigger them, and they run release and signing jobs. So none of their
+// jobs may save to or restore from any cache, and a reusable workflow they
+// call must be one reviewed for that.
+const DEFAULT_SCOPE_EVENTS = ["workflow_run"];
 const REVIEWED_REUSABLE_WORKFLOWS: Record<string, string> = {
-  "stella/.github/.github/workflows/pr-lint.yml@0cc2def60afb3e0fac0df9f541baf926f77889fa":
-    "title, label, size and assignee actions only; no cache",
-  "stella/.github/.github/workflows/npm-independent-release.yml@0cc2def60afb3e0fac0df9f541baf926f77889fa":
+  "stella/.github/.github/workflows/npm-independent-release.yml@2664e46f02aea7164ba71bcdd485a686166993a4":
     "checkout, artifact download, setup-node without a cache input, hardened publish action from the pinned release-tooling checkout; no cache",
 };
 const DESKTOP_WINDOWS_BUILD_CACHE_USE =
   "baptiste0928/cargo-install caches installed Rust binaries";
 const REVIEWED_LOCAL_ACTIONS: Record<string, string> = {
+  "./.github/actions/provenance":
+    "subject validation and pinned attestation actions only; no cache",
   "./.github/actions/desktop-windows-build": DESKTOP_WINDOWS_BUILD_CACHE_USE,
   "./.github/actions/ci-install":
     "exact scoped store restore; save only after a successful frozen install on main",
@@ -65,6 +65,8 @@ const CACHE_FREE_BUN_JOBS: Record<string, string> = {
     "validates and publishes the immutable main network recording",
   ".github/workflows/release-mobile-ios.yml#testflight":
     "builds the iOS app shipped to TestFlight",
+  ".github/workflows/release-proof.yml#dispatch":
+    "runs main's release candidate verifier and dispatches the release tag with an actions: write token",
   ".github/workflows/release-rehearsal.yml#rehearse":
     "rehearses the release from the release revision",
 };
@@ -79,10 +81,16 @@ const UNSTORED_BUN_JOBS: Record<string, string> = {
     "its filtered API/CLI install (8-13 s in run 38089283216) is cheaper than a store restore",
   ".github/workflows/fetch-public-documents.yml#fetch": "installs nothing",
   ".github/workflows/journey-canary.yml#journeys": "installs nothing",
+  ".github/workflows/merge-group-hold.yml#dequeue-held-pull-request":
+    "runs one dependency-free script from the default branch; installs nothing",
+  ".github/workflows/merge-group-hold.yml#merge-group-hold":
+    "runs one dependency-free script from the target branch; installs nothing",
   ".github/workflows/mobile-fingerprint-check.yml#fingerprint":
     "installs the mobile closure of both the merge result and its base",
   ".github/workflows/mobile-fingerprint-check.yml#fingerprint-macos":
     "installs the mobile closure of the merge result on macOS",
+  ".github/workflows/pr-lint.yml#pr-body-log-lines":
+    "checks the pull request body with one dependency-free script; installs nothing",
 };
 
 const setsBunNoCache = (step: unknown) =>

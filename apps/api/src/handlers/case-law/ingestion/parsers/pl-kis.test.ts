@@ -5,6 +5,7 @@
 
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
+import { fileURLToPath } from "node:url";
 
 import { load } from "@stll/html";
 import { hasInlineChildren } from "@stll/legal-ast/document-ast";
@@ -26,7 +27,7 @@ const ADAPTER_FIXTURES = new URL("../adapters/__fixtures__/", import.meta.url);
 /** Every captured detail, one per category the adapter ingests. */
 const DETAIL_FIXTURES = [
   ...new Bun.Glob("pl-kis-detail-*.json.gz").scanSync(
-    ADAPTER_FIXTURES.pathname,
+    fileURLToPath(ADAPTER_FIXTURES),
   ),
 ]
   .toSorted()
@@ -47,7 +48,7 @@ const fieldOf = async (detail: URL, key: string): Promise<unknown> => {
       Bun.gunzipSync(new Uint8Array(await Bun.file(detail).arrayBuffer())),
     ),
   );
-  const fields =
+  const fields: unknown[] =
     typeof parsed === "object" &&
     parsed !== null &&
     "dokument" in parsed &&
@@ -58,7 +59,7 @@ const fieldOf = async (detail: URL, key: string): Promise<unknown> => {
       ? parsed.dokument.fields
       : [];
   return fields.find(
-    (field: unknown) =>
+    (field: unknown): field is { key: unknown; value?: unknown } =>
       typeof field === "object" &&
       field !== null &&
       "key" in field &&
@@ -375,7 +376,11 @@ const INTERPRETATION_2007 = new URL(
 /** Every captured EUREKA detail: one per category, and the parser's own. */
 const EVERY_DETAIL = [
   ...DETAIL_FIXTURES,
-  ...[...new Bun.Glob("**/pl-kis-*.json.gz").scanSync(PARSER_FIXTURES.pathname)]
+  ...[
+    ...new Bun.Glob("**/pl-kis-*.json.gz").scanSync(
+      fileURLToPath(PARSER_FIXTURES),
+    ),
+  ]
     .toSorted()
     .map((name) => new URL(name, PARSER_FIXTURES)),
 ];

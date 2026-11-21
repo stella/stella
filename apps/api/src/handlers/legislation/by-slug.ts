@@ -23,7 +23,10 @@ import {
   legislationVersionRef,
   versionSortKey,
 } from "@/api/lib/legal-search/legislation-validity-window";
-import { selectInconsistentWindowVersions } from "@/api/lib/legal-search/legislation-window-gap";
+import {
+  selectInconsistentWindowVersions,
+  selectPromulgatedOnlyVersion,
+} from "@/api/lib/legal-search/legislation-window-gap";
 import {
   readPublicLawCountry,
   tPublicLawCountry,
@@ -153,12 +156,21 @@ export const readStatuteBySlugHandler = async ({
       conditions: workKeyConditions(work, "pages"),
       asOf: asOfDate,
     });
-    return inconsistent.length > 0
-      ? ({
-          type: LEGISLATION_PUBLISHER_WINDOW_INCONSISTENT,
-          versions: inconsistent,
-        } as const)
-      : ({ type: "uncovered-date" } as const);
+    if (inconsistent.length > 0) {
+      return {
+        type: LEGISLATION_PUBLISHER_WINDOW_INCONSISTENT,
+        versions: inconsistent,
+      } as const;
+    }
+    // A Work held only as promulgated reads as that text on a date, as it
+    // does without one; its kind travels with the reply.
+    const promulgated = await selectPromulgatedOnlyVersion(tx, {
+      conditions: workKeyConditions(work, "pages"),
+      asOf: asOfDate,
+    });
+    return promulgated === null
+      ? ({ type: "uncovered-date" } as const)
+      : ({ type: "expression", id: promulgated } as const);
   });
 
   if (resolved.type === "unknown-work") {

@@ -22,6 +22,10 @@ import * as v from "valibot";
 
 import { MCP_DEFAULT_RESOURCE_SCOPES, MCP_HTTP_PATH } from "@stll/api-contract";
 import {
+  AI_FAILURE_CODES,
+  isAIFailureCode,
+} from "@stll/api-contract/ai-errors";
+import {
   DESKTOP_ACCOUNT_POLICY,
   DESKTOP_ACCOUNT_PROTOCOL_HEADER,
 } from "@stll/api-contract/desktop-registry";
@@ -1944,6 +1948,7 @@ const reviewEnvelopeCode = (body: unknown): string => {
       : "unrecognized";
   }
   return REVIEW_KNOWN_ERROR_CODES.has(code) ||
+    isAIFailureCode(code) ||
     [
       "invalid_request",
       "invalid_scope",
@@ -2764,6 +2769,11 @@ const researchLookupSchema = v.object({
   ),
 });
 
+const researchRunWithoutModelSchema = v.object({
+  status: v.literal(403),
+  body: v.object({ code: v.literal(AI_FAILURE_CODES.role_not_configured) }),
+});
+
 type ResearchColumnJourneyOptions = ReviewAccountJourneyOptions & {
   environment: "staging" | "production";
   /** Injected by tests; the poll otherwise waits on the wall clock. */
@@ -2911,16 +2921,32 @@ export const runResearchColumnJourney = async (
   if (outcome.isErr()) {
     const error = outcome.error;
     const name = `${RESEARCH_JOURNEY_NAME}: ${state.step}`;
-    results.push(
-      error instanceof CanaryRateLimitError
-        ? { name, status: PROBE_STATUS.rateLimited, detail: error.message }
-        : failed(
-            name,
-            error instanceof ReviewJourneyError
-              ? error.message
-              : `HTTP unavailable; envelope code none; ${describeProbeFailure(error)}`,
-          ),
-    );
+    // Where every organization brings its own provider key and the review
+    // organization holds none, the run is refused before any decision is
+    // read. That is the deployment's configuration, not a broken read, so it
+    // warns that the read went unexercised instead of failing.
+    const refusedWithoutModel =
+      state.step === "run" &&
+      v.is(researchRunWithoutModelSchema, state.lastResponse);
+    if (refusedWithoutModel) {
+      results.push({
+        name,
+        status: PROBE_STATUS.warned,
+        detail:
+          "the review organization has no model for this task, so no research question was asked",
+      });
+    } else {
+      results.push(
+        error instanceof CanaryRateLimitError
+          ? { name, status: PROBE_STATUS.rateLimited, detail: error.message }
+          : failed(
+              name,
+              error instanceof ReviewJourneyError
+                ? error.message
+                : `HTTP unavailable; envelope code none; ${describeProbeFailure(error)}`,
+            ),
+      );
+    }
   }
   if (columnId !== undefined) {
     const id = columnId;

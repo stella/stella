@@ -4,6 +4,7 @@ import { execFileSync } from "node:child_process";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 import { captureDefinitions } from "../apps/web/e2e/marketing/captures";
 import {
@@ -295,7 +296,11 @@ test("provenance-only reporting and reshoot dry-run never spawn rendered compari
       },
     ]) {
       const result = Bun.spawnSync(
-        [process.execPath, new URL(script, import.meta.url).pathname, flag],
+        [
+          process.execPath,
+          fileURLToPath(new URL(script, import.meta.url)),
+          flag,
+        ],
         {
           env: {
             ...process.env,
@@ -324,10 +329,9 @@ test("maintenance release classification never invokes rendered comparison", () 
       "#!/usr/bin/env bash\necho RENDERED_COMPARISON_IN_MAINTENANCE >&2\nexit 91\n",
       { mode: 0o755 },
     );
-    const modulePath = new URL(
-      "prepare-maintenance-release.ts",
-      import.meta.url,
-    ).pathname;
+    const modulePath = fileURLToPath(
+      new URL("prepare-maintenance-release.ts", import.meta.url),
+    );
     const result = Bun.spawnSync(
       [
         process.execPath,

@@ -225,25 +225,27 @@ export const AnonymizationFacet = ({
       },
       request,
     ) => {
-      const response = await api
-        .workspaces({ workspaceId: toSafeId<"workspace">(vars.workspaceId) })
-        ["anonymization-terms"].put(
-          {
-            entries: vars.entries.map((entry) =>
-              entry.variants
-                ? {
-                    canonical: entry.canonical,
-                    label: entry.label,
-                    variants: [...entry.variants],
-                  }
-                : {
-                    canonical: entry.canonical,
-                    label: entry.label,
-                  },
-            ),
-          },
-          request,
-        );
+      const workspaceApi = api.workspaces({
+        workspaceId: toSafeId<"workspace">(vars.workspaceId),
+      });
+
+      const response = await workspaceApi["anonymization-terms"].put(
+        {
+          entries: vars.entries.map((entry) =>
+            entry.variants
+              ? {
+                  canonical: entry.canonical,
+                  label: entry.label,
+                  variants: [...entry.variants],
+                }
+              : {
+                  canonical: entry.canonical,
+                  label: entry.label,
+                },
+          ),
+        },
+        request,
+      );
 
       // No `onError` capture here: the only caller awaits `mutateAsync` inside
       // a try/catch that captures and toasts, so a handler here would report
@@ -254,12 +256,13 @@ export const AnonymizationFacet = ({
   });
   const deleteMutation = useMutation({
     mutationFn: async (vars: { workspaceId: string; entryId: string }) => {
-      const response = await api
-        .workspaces({ workspaceId: toSafeId<"workspace">(vars.workspaceId) })
-        ["anonymization-terms"]({
-          entryId: toSafeId<"anonymizationBlacklistEntry">(vars.entryId),
-        })
-        .delete({});
+      const workspaceApi = api.workspaces({
+        workspaceId: toSafeId<"workspace">(vars.workspaceId),
+      });
+
+      const response = await workspaceApi["anonymization-terms"]({
+        entryId: toSafeId<"anonymizationBlacklistEntry">(vars.entryId),
+      }).delete({});
 
       if (response.error) {
         throw toAPIError(response.error);
@@ -440,19 +443,21 @@ export const AnonymizationFacet = ({
       },
       request,
     ) => {
-      const response = await api
-        .workspaces({ workspaceId: toSafeId<"workspace">(vars.workspaceId) })
-        ["anonymization-allowlist"].put(
-          {
-            canonical: vars.canonical,
-            label: vars.label,
-            scope: vars.scope,
-            ...(vars.scope === "document" && vars.entityId
-              ? { entityId: toSafeId<"entity">(vars.entityId) }
-              : {}),
-          },
-          request,
-        );
+      const workspaceApi = api.workspaces({
+        workspaceId: toSafeId<"workspace">(vars.workspaceId),
+      });
+
+      const response = await workspaceApi["anonymization-allowlist"].put(
+        {
+          canonical: vars.canonical,
+          label: vars.label,
+          scope: vars.scope,
+          ...(vars.scope === "document" && vars.entityId
+            ? { entityId: toSafeId<"entity">(vars.entityId) }
+            : {}),
+        },
+        request,
+      );
       return unwrapApiResponse(response);
     },
     onError: (error) => {
@@ -464,12 +469,13 @@ export const AnonymizationFacet = ({
   });
   const deleteAllowlistMutation = useMutation({
     mutationFn: async (vars: { workspaceId: string; entryId: string }) => {
-      const response = await api
-        .workspaces({ workspaceId: toSafeId<"workspace">(vars.workspaceId) })
-        ["anonymization-allowlist"]({
-          entryId: toSafeId<"anonymizationAllowlistEntry">(vars.entryId),
-        })
-        .delete({});
+      const workspaceApi = api.workspaces({
+        workspaceId: toSafeId<"workspace">(vars.workspaceId),
+      });
+
+      const response = await workspaceApi["anonymization-allowlist"]({
+        entryId: toSafeId<"anonymizationAllowlistEntry">(vars.entryId),
+      }).delete({});
       if (response.error) {
         throw toAPIError(response.error);
       }
@@ -742,6 +748,11 @@ export const AnonymizationFacet = ({
             aria-label={t("inspector.anonymization.downloadAction")}
             className="w-full justify-start"
             disabled={!canDownloadAnonymized}
+            disabledReason={
+              downloadStatus === "running"
+                ? t("common.preparing")
+                : t("inspector.anonymization.waitForMatches")
+            }
             onClick={() => {
               detached(
                 handleDownloadAnonymized(),
@@ -945,6 +956,7 @@ export const AnonymizationFacet = ({
                 )}
                 <Button
                   disabled={deleteMutation.isPending}
+                  disabledReason={t("common.deleting")}
                   onClick={(event) => {
                     event.stopPropagation();
                     deleteMutation.mutate({ workspaceId, entryId: entry.id });
@@ -1052,6 +1064,7 @@ export const AnonymizationFacet = ({
                                 "inspector.anonymization.restoreAction",
                               )}
                               disabled={deleteAllowlistMutation.isPending}
+                              disabledReason={t("common.deleting")}
                               onClick={() => {
                                 const matches = allowlistByCanonical.get(
                                   row.canonical.toLocaleLowerCase(),
@@ -1087,8 +1100,10 @@ export const AnonymizationFacet = ({
                                   scope: "document",
                                 });
                               }}
-                              primaryDisabled={
+                              primaryDisabledReason={
                                 createAllowlistMutation.isPending
+                                  ? t("common.saving")
+                                  : undefined
                               }
                               primaryContent="icon"
                               primaryLabel={t(
@@ -1162,9 +1177,17 @@ const AddTermSubmitButton = ({
   disabled: boolean;
   label: string;
 }) => {
+  const t = useTranslations();
   const { pending } = useFormStatus();
   return (
-    <Button disabled={disabled || pending} size="sm" type="submit">
+    <Button
+      disabled={disabled || pending}
+      disabledReason={
+        pending ? t("common.saving") : t("inspector.anonymization.enterTerm")
+      }
+      size="sm"
+      type="submit"
+    >
       {label}
     </Button>
   );

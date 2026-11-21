@@ -1259,11 +1259,30 @@ process.exit(childExitStatus(result));
       expect(taskInputs(tasks, `${name}#typecheck`)).toEqual(
         expect.arrayContaining(taskInputs(tasks, "typecheck")),
       );
-      expect(
-        taskField(tasks, `${name}#typecheck`, "outputs").filter(
-          (output) => !typecheckOutputs.has(output),
-        ),
-      ).not.toEqual([]);
+      const ownsBuild = taskField(
+        tasks,
+        `${name}#typecheck`,
+        "dependsOn",
+      ).includes("build");
+      if (ownsBuild) {
+        // The build cache restores generated types before typecheck, then lint.
+        // Diagnostics must not restore a second copy over another consumer.
+        expect(taskField(tasks, `${name}#typecheck`, "outputs")).toEqual([]);
+        const genericBuildOutputs = new Set(
+          taskField(tasks, "build", "outputs"),
+        );
+        expect(
+          taskField(tasks, `${name}#build`, "outputs").filter(
+            (output) => !genericBuildOutputs.has(output),
+          ),
+        ).not.toEqual([]);
+      } else {
+        expect(
+          taskField(tasks, `${name}#typecheck`, "outputs").filter(
+            (output) => !typecheckOutputs.has(output),
+          ),
+        ).not.toEqual([]);
+      }
     }
   });
 
@@ -1924,9 +1943,9 @@ console.log(m.configuredCodeCheckConcurrency(), m.codeCheckConcurrency(12 * 1024
 
 describe("check failure reporting", () => {
   const commands = [
-    ["bun", "turbo", "lint"],
-    ["bun", "turbo", "typecheck"],
-    ["bun", "turbo", "typecheck:repo"],
+    ["bun", "--bun", "turbo", "lint"],
+    ["bun", "--bun", "turbo", "typecheck"],
+    ["bun", "--bun", "turbo", "typecheck:repo"],
   ];
   test("planner deadlines retain measured headroom beyond the old fixed cap and respect the remaining leg budget", () => {
     const longest =
@@ -2100,12 +2119,14 @@ describe("check failure reporting", () => {
     expect(executed).toEqual(commands.slice(0, 1));
     const report = output.join("");
     expect(report).toContain("code-check: 1 failed command(s)\n");
-    expect(report).toContain("code-check: failed (exit 2): bun turbo lint");
-    expect(report).not.toContain(
-      "code-check: failed (exit 2): bun turbo typecheck:repo",
+    expect(report).toContain(
+      "code-check: failed (exit 2): bun --bun turbo lint",
     );
     expect(report).not.toContain(
-      "code-check: failed (exit 2): bun turbo typecheck\n",
+      "code-check: failed (exit 2): bun --bun turbo typecheck:repo",
+    );
+    expect(report).not.toContain(
+      "code-check: failed (exit 2): bun --bun turbo typecheck\n",
     );
   });
   test.each([{ args: [] }, { args: ["--leg", "api"] }])(

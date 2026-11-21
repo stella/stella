@@ -11,6 +11,8 @@ import { resourceMutationDigest } from "@stll/api-contract/realtime-mutation-dig
 
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import createClaimRecheck from "@/api/handlers/lists/verifications/claim-rechecks/create";
+import addWorkspaceMember from "@/api/handlers/workspaces/members/add";
+import removeWorkspaceMember from "@/api/handlers/workspaces/members/remove";
 import { status } from "@/api/http/status";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import {
@@ -31,6 +33,7 @@ import {
   organizationResourceSetUpdates,
   workspaceResourceSetUpdates,
 } from "@/api/lib/resource-set-realtime";
+import { WRITE_TOOL_REALTIME } from "@/api/mcp/tool-realtime";
 import {
   installRecordingAnalytics,
   installRecordingLogger,
@@ -536,3 +539,33 @@ describe("announceResourceSetUpdates", () => {
     expect(announcements).toEqual([]);
   });
 });
+
+for (const [handler, tool] of [
+  [addWorkspaceMember, "add_matter_member"],
+  [removeWorkspaceMember, "remove_matter_member"],
+] as const) {
+  test(`${tool} announces its committed membership change to the existing organization fan-out`, () => {
+    const { announcements, announce } = recorder();
+    expect(WRITE_TOOL_REALTIME[tool]).toEqual([handler.config.realtime]);
+    announce({
+      realtime: handler.config.realtime,
+      result: { id: "membership" },
+      organizationId: ORGANIZATION_ID,
+      workspaceId: WORKSPACE_ID,
+    });
+    expect(announcements).toEqual([
+      {
+        audience: "organization",
+        id: ORGANIZATION_ID,
+        type: RESOURCE_TYPE.WORKSPACE,
+      },
+    ]);
+    announce({
+      realtime: handler.config.realtime,
+      result: new Response(null, { status: 409 }),
+      organizationId: ORGANIZATION_ID,
+      workspaceId: WORKSPACE_ID,
+    });
+    expect(announcements).toHaveLength(1);
+  });
+}

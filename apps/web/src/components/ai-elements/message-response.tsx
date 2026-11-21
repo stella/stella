@@ -1,6 +1,6 @@
 "use client";
 
-import { memo, useMemo } from "react";
+import { memo } from "react";
 import type { ComponentProps } from "react";
 
 import { cjk } from "@streamdown/cjk";
@@ -18,6 +18,7 @@ import {
   AnswerTreeIds,
   withAnswerLinkIds,
 } from "@/components/ai-elements/message-response-link-ids";
+import { rehypeCitationLeadIn } from "@/components/chat/rehype-citation-lead-in";
 import { rehypeMarkdownSourceOffsets } from "@/components/chat/rehype-markdown-source-offsets";
 import { rehypeNumberAnswerLinks } from "@/components/chat/rehype-number-answer-links";
 import { rehypeScopeAnswerIds } from "@/components/chat/rehype-scope-answer-ids";
@@ -36,6 +37,49 @@ const EMPTY_REHYPE_PLUGINS = Object.freeze([]);
 // the model actually saw (`[PERSON_1]`, …).
 const ANON_TAG_ALLOWED: { "stll-anon": string[] } = { "stll-anon": ["ph"] };
 
+/**
+ * How every rendered answer reads, whatever surface holds it. Streamdown's
+ * defaults set a page (headings at 1.7 to 2 times the body); an answer is a
+ * few sections of prose, so its headings stay close to the body and spacing,
+ * not size, separates them. The body size comes from the surface (16px in
+ * the chat thread); headings are fixed steps of the type scale above it.
+ */
+const ANSWER_TYPOGRAPHY_CLASS_NAME = cn(
+  "size-full [&>*:first-child]:mt-0 [&>*:last-child]:mb-0",
+  // A streamed block sits in its direction wrapper (`AnswerBlock`), and a
+  // heading's margin collapses through it: trim the first and last the same.
+  "[&>div[dir]:first-child>:first-child]:mt-0 [&>div[dir]:last-child>:last-child]:mb-0",
+  // The block gap goes on the wrapped block, not the wrapper, at the same
+  // zero specificity `space-y-*` has: a heading's own smaller margin below
+  // then wins as it does in a settled answer, instead of collapsing into a
+  // 12px wrapper margin.
+  "[&>div[dir]]:mb-0 [:where(&>div[dir]:not(:last-child)>:last-child)]:mb-3",
+  // 12px between blocks. Margins collapse, so a heading's own space above
+  // replaces the gap rather than adding to it.
+  "space-y-3",
+  // An answer never needs a page title: h1 reads as a section heading. One
+  // variant per tag, so a surface's own heading override (`[&_h1]:text-xs`)
+  // replaces these through `cn` instead of racing them on specificity.
+  "[&_h1]:mt-7 [&_h1]:mb-2 [&_h1]:text-lg/6.5 [&_h1]:text-balance",
+  "[&_h2]:mt-7 [&_h2]:mb-2 [&_h2]:text-lg/6.5 [&_h2]:text-balance",
+  "[&_h3]:mt-5 [&_h3]:mb-1.5 [&_h3]:text-base/6.5 [&_h3]:text-balance",
+  "[&_h4]:mt-5 [&_h4]:mb-1.5 [&_h4]:text-base/6.5 [&_h4]:text-balance",
+  "[&_h5]:mt-4 [&_h5]:mb-1 [&_h5]:text-sm [&_h5]:text-balance",
+  "[&_h6]:mt-4 [&_h6]:mb-1 [&_h6]:text-sm [&_h6]:text-balance",
+  // Markers hang outside the text, so wrapped lines align with the first.
+  "[&_ol]:list-outside [&_ol]:list-decimal [&_ol]:ps-6",
+  "[&_ul]:list-outside [&_ul]:list-disc [&_ul]:ps-6",
+  // One 6px step between items at every depth. Streamdown pads each item,
+  // and that padding stacked on a nested list's own margins left a much
+  // wider gap after a nested list than between two plain items.
+  "[&_li]:my-0 [&_li]:py-0 [&_li+li]:mt-1.5",
+  "[&_li>:is(ul,ol)]:mt-1.5 [&_li>:is(ul,ol)]:mb-0",
+  // `inline` keeps the loose-list `<p>` next to the list marker
+  // (Tailwind would otherwise need to scan streamdown's compiled
+  // JS to pick up its own `[&>p]:inline` utility on each `<li>`).
+  "[&_li>p]:my-0 [&_li>p]:inline [&_li>p+p]:mt-2",
+);
+
 export const MessageResponseImpl = memo(
   ({
     className,
@@ -49,26 +93,23 @@ export const MessageResponseImpl = memo(
     // a streamed one names them per block (`AnswerBlock`).
     const parsedWhole = sourceOffsets || props.mode === "static";
     const source = typeof props.children === "string" ? props.children : "";
-    const treeIdPrefix = useMemo(
-      () => (parsedWhole ? answerTreeIdPrefix(0, source) : undefined),
-      [parsedWhole, source],
-    );
+    const treeIdPrefix = parsedWhole
+      ? answerTreeIdPrefix(0, source)
+      : undefined;
     const link = components?.a ?? messageComponents.a;
-    const effectiveRehypePlugins = useMemo(
-      () => [
-        // Streamdown's raw HTML, sanitize and harden chain always runs first:
-        // a caller's `rehypePlugins` only add to it. Replacing it would render
-        // raw HTML as literal text and leave link hardening to the components.
-        // Ids and names from raw HTML then move into the answer namespace.
-        ...Object.values(defaultRehypePlugins),
-        rehypeScopeAnswerIds,
-        ...(rehypePlugins ?? EMPTY_REHYPE_PLUGINS),
-        ...(sourceOffsets ? [rehypeMarkdownSourceOffsets] : []),
-        rehypeChatLinks,
-        rehypeNumberAnswerLinks,
-      ],
-      [rehypePlugins, sourceOffsets],
-    );
+    const effectiveRehypePlugins = [
+      // Streamdown's raw HTML, sanitize and harden chain always runs first:
+      // a caller's `rehypePlugins` only add to it. Replacing it would render
+      // raw HTML as literal text and leave link hardening to the components.
+      // Ids and names from raw HTML then move into the answer namespace.
+      ...Object.values(defaultRehypePlugins),
+      rehypeScopeAnswerIds,
+      ...(rehypePlugins ?? EMPTY_REHYPE_PLUGINS),
+      ...(sourceOffsets ? [rehypeMarkdownSourceOffsets] : []),
+      rehypeChatLinks,
+      rehypeCitationLeadIn,
+      rehypeNumberAnswerLinks,
+    ];
     // Streamdown's internal memo doesn't compare `rehypePlugins`, so
     // a re-render with a new plugin set is silently skipped and the
     // unified processor is never rebuilt. Tying the key to plugin
@@ -84,16 +125,7 @@ export const MessageResponseImpl = memo(
           // instead of inheriting the RTL shell and reordering Latin punctuation.
           dir="auto"
           key={rehypePluginsKey(effectiveRehypePlugins)}
-          className={cn(
-            "size-full [&>*:first-child]:mt-0 [&>*:last-child]:mb-0",
-            "[&_ol]:my-2 [&_ol]:list-decimal [&_ol]:ps-5",
-            "[&_ul]:my-2 [&_ul]:list-disc [&_ul]:ps-5",
-            // `inline` keeps the loose-list `<p>` next to the list marker
-            // (Tailwind would otherwise need to scan streamdown's compiled
-            // JS to pick up its own `[&>p]:inline` utility on each `<li>`).
-            "[&_li]:my-1 [&_li>p]:my-0 [&_li>p]:inline [&_li>p+p]:mt-2",
-            className,
-          )}
+          className={cn(ANSWER_TYPOGRAPHY_CLASS_NAME, className)}
           plugins={streamdownPlugins}
           allowedTags={{ ...ANON_TAG_ALLOWED, ...allowedTags }}
           BlockComponent={AnswerBlock}

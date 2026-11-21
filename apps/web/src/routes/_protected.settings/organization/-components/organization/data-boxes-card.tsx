@@ -9,10 +9,8 @@ import {
 } from "@stll/api-contract/data-box";
 import { Button } from "@stll/ui/button";
 import { Form } from "@stll/ui/form";
-import { Frame, FramePanel } from "@stll/ui/frame";
-import { Trash2Icon } from "@stll/ui/icons";
+import { PlusIcon, Trash2Icon } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
-import { Label } from "@stll/ui/label";
 
 import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { usePermissions } from "@/hooks/use-permissions";
@@ -23,6 +21,10 @@ import { detached } from "@/lib/detached";
 import { unwrapApiResponse } from "@/lib/errors/api";
 import { queryView } from "@/lib/query-view.logic";
 import { allCorrespondenceQueryRoot } from "@/lib/resource-query-roots.logic";
+import {
+  OrganizationDataBoxesCardFrame,
+  OrganizationDataBoxesCardPending,
+} from "@/routes/_protected.settings/organization/-components/organization/data-boxes-card.pending";
 import { useSettingsMutation } from "@/routes/_protected.settings/organization/-hooks/use-settings-mutation";
 import {
   organizationDataBoxesKeys,
@@ -36,7 +38,7 @@ import {
  */
 export const OrganizationDataBoxesCard = () => {
   const t = useTranslations();
-  const inputId = useId();
+  const errorId = useId();
   const queryClient = useQueryClient();
   const { activeOrganizationId } = useAuthenticatedUser();
   const canEdit = usePermissions({ organizationSettings: ["update"] });
@@ -95,6 +97,9 @@ export const OrganizationDataBoxesCard = () => {
     onSuccess: refreshCorrespondence,
   });
 
+  if (view.type === "pending") {
+    return <OrganizationDataBoxesCardPending />;
+  }
   if (view.type !== "items") {
     return <QueryViewFeedback view={view} />;
   }
@@ -102,86 +107,84 @@ export const OrganizationDataBoxesCard = () => {
   const pending = add.isPending || remove.isPending;
 
   return (
-    <Frame>
-      <FramePanel>
-        <div className="flex flex-col gap-3 p-1">
-          <QueryViewFeedback view={view} />
-          <p className="text-muted-foreground text-sm">
-            {t("settings.organization.dataBoxes.description")}
-          </p>
-          {boxIds.length > 0 && (
-            <ul className="divide-y">
-              {boxIds.map((boxId) => (
-                <li
-                  className="flex min-h-11 items-center justify-between gap-2"
-                  key={boxId}
-                >
-                  <bdi className="font-mono text-sm" dir="ltr">
-                    {boxId}
-                  </bdi>
-                  {canEdit && (
-                    <Button
-                      aria-label={t("settings.organization.dataBoxes.remove", {
-                        address: boxId,
-                      })}
-                      className="min-h-11"
-                      disabled={pending}
-                      onClick={() => remove.mutate(boxId)}
-                      size="sm"
-                      tooltip={t("settings.organization.dataBoxes.remove", {
-                        address: boxId,
-                      })}
-                      variant="ghost"
-                    >
-                      <Trash2Icon className="size-4" />
-                    </Button>
-                  )}
-                </li>
-              ))}
-            </ul>
-          )}
-          {canEdit && (
-            <Form
-              className="flex flex-wrap items-end gap-2"
-              onSubmit={(event) => {
-                event.preventDefault();
-                const boxId = draft.trim().toLowerCase();
-                const valid = STORED_DATA_BOX_ID_PATTERN.test(boxId);
-                setInvalid(!valid);
-                if (valid) {
-                  add.mutate(boxId);
-                }
-              }}
+    <OrganizationDataBoxesCardFrame
+      feedback={<QueryViewFeedback view={view} />}
+    >
+      {boxIds.length > 0 && (
+        <ul className="divide-y">
+          {boxIds.map((boxId) => (
+            <li
+              className="flex min-h-11 items-center justify-between gap-2"
+              key={boxId}
             >
-              <div className="flex flex-col gap-1">
-                <Label htmlFor={inputId}>
-                  {t("contacts.communication.dataBoxPlaceholder")}
-                </Label>
-                <Input
-                  aria-invalid={invalid}
-                  className="w-32 font-mono"
-                  dir="ltr"
-                  id={inputId}
-                  maxLength={DATA_BOX_ID_LENGTH}
-                  onChange={(event) => {
-                    setDraft(event.target.value);
-                    setInvalid(false);
-                  }}
-                  value={draft}
-                />
-              </div>
-              <Button className="min-h-11" disabled={pending} type="submit">
-                {t("common.add")}
-              </Button>
-            </Form>
-          )}
-          {invalid && (
-            <p className="text-destructive text-xs">
-              {t("settings.organization.dataBoxes.invalid")}
-            </p>
-          )}
-        </div>
-      </FramePanel>
-    </Frame>
+              <bdi className="font-mono text-sm" dir="ltr">
+                {boxId}
+              </bdi>
+              {canEdit && (
+                <Button
+                  aria-label={t("settings.organization.dataBoxes.remove", {
+                    address: boxId,
+                  })}
+                  className="min-h-11"
+                  disabled={pending}
+                  disabledReason={t("common.saving")}
+                  onClick={() => remove.mutate(boxId)}
+                  size="sm"
+                  tooltip={t("settings.organization.dataBoxes.remove", {
+                    address: boxId,
+                  })}
+                  variant="ghost"
+                >
+                  <Trash2Icon className="size-4" />
+                </Button>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+      {canEdit && (
+        <Form
+          density="compact"
+          layout="inline"
+          onSubmit={(event) => {
+            event.preventDefault();
+            const boxId = draft.trim().toLowerCase();
+            const valid = STORED_DATA_BOX_ID_PATTERN.test(boxId);
+            setInvalid(!valid);
+            if (valid) {
+              add.mutate(boxId);
+            }
+          }}
+        >
+          <Input
+            aria-describedby={invalid ? errorId : undefined}
+            aria-invalid={invalid}
+            aria-label={t("contacts.communication.dataBoxPlaceholder")}
+            className="max-w-48 font-mono"
+            dir="ltr"
+            maxLength={DATA_BOX_ID_LENGTH}
+            onChange={(event) => {
+              setDraft(event.target.value);
+              setInvalid(false);
+            }}
+            placeholder={t("contacts.communication.dataBoxPlaceholder")}
+            value={draft}
+          />
+          <Button
+            disabled={pending}
+            disabledReason={t("common.saving")}
+            type="submit"
+          >
+            <PlusIcon />
+            {t("common.add")}
+          </Button>
+        </Form>
+      )}
+      {invalid && (
+        <p className="text-destructive text-xs" id={errorId}>
+          {t("settings.organization.dataBoxes.invalid")}
+        </p>
+      )}
+    </OrganizationDataBoxesCardFrame>
   );
 };

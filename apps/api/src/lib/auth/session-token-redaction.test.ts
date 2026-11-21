@@ -218,11 +218,13 @@ const apiRoot = path.resolve(import.meta.dir, "../../..");
 // Only these modules read the session table outside Better Auth: the lifetime
 // store (credential checks), the new-device notice (address and user agent),
 // the MCP web handoff (id and client name), the monitoring session authority
-// (id and expiry only) and the event-stream liveness sweep (id and owner only).
+// (id and expiry only), the event-stream liveness sweep (id and owner only)
+// and the sign-in store (id beside its own sign-in columns).
 const SESSION_TABLE_READERS = new Set([
   "src/lib/auth/mcp-web-handoff.ts",
   "src/lib/auth/session-history.ts",
   "src/lib/auth/session-lifetime-store.ts",
+  "src/lib/auth/session-sign-ins.ts",
   "src/lib/auth/sse-session-liveness.ts",
   "src/lib/synthetic-principal/session-authority.ts",
 ]);

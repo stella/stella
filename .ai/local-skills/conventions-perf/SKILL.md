@@ -17,12 +17,20 @@ up as a reviewable diff in the PR. The guards include:
   `apps/web/e2e/helpers/network.ts` from `apps/web/e2e/specs/route-smoke.spec.ts`):
   per-route request manifest, waterfall depth, per-request repeat budget, and
   per-request DB query budget.
-- **Bundle baseline** (`scripts/bundle-baseline.ts` +
-  `scripts/bundle-baseline.json`): gzipped size per vendor/entry/route chunk
-  group, reported by the web-build CI job via `--check` and listed nightly by
-  `bundle-size-nightly.yml`. Growth past the headroom is a warning annotation
-  plus a job-summary table, never a failing check; it fails only when it cannot
-  measure (missing build or baseline).
+- **Startup bundle gates** (`scripts/bundle-baseline.ts --check` over
+  `scripts/bundle-startup-gates.ts`, budgets `initial` and `pending` in
+  `scripts/bundle-baseline.json`):
+  blocking in the web-build CI job, on the build's Start manifest and hidden
+  sourcemaps. The initial graph is the manifest's `__root__` preloads, which
+  carry the route tree and every route file. Four gates: its gzip may grow at
+  most 8 KiB over the committed budget; `*.pending.tsx` views in it stay under
+  6 KiB minified each and within 1 KiB of the committed `pending` total
+  together; it holds no page code (`*.page.tsx` or route-local `-*-page.tsx`
+  modules, `?tsr-shared=1` modules, or route-file code only the route's
+  `component` reaches); and every page a route loads
+  with `import()` is in that route's manifest preloads, so a cold load never
+  waits an extra hop. No offender is exempt. Per-group gzip sizes (entry,
+  `vendor-*`, routes) stay a report in the default mode.
 - **React Compiler bailout guard** (`scripts/rc-bailouts.ts` +
   `scripts/react-compiler-bailouts.json`): tracks every component the compiler
   cannot memoize, so a bailout losing its manual `useMemo`/`useCallback` fails
@@ -139,7 +147,7 @@ main recording defaults to `write`; dispatch with `mode=rewrite` after a
 performance fix to tighten it. Do not commit measurement output on a PR.
 
 The bundle baseline mirrors this with `--write-baseline` (regenerate) and a
-`RATCHET_DOWN` prompt (not a failure) when a chunk shrinks by more than 3%,
+notice (not a failure) when the initial graph shrinks by more than 8 KiB,
 so a real win gets locked in rather than silently drifting back up. The RC
 bailout guard and the query counter follow the same "commit the smaller
 number, don't just silence the check" norm.
@@ -190,19 +198,36 @@ If instead the check reports `DB query count missing on <route>`, the
 response stopped exposing the dev/test `x-db-queries` header — restore the
 query counter wiring before trusting the route's N+1 budget again.
 
-### Bundle group over budget
+### Startup bundle gate failed
 
-The bundle report warns (it does not block) when a named group (`entry`, a
-`vendor-*` chunk, or `routes`/`largest-route`) exceeds its committed gzip size
-by more than 3% (or 1 KiB, whichever is larger, per
-`HEADROOM`/`HEADROOM_FLOOR_BYTES`). Treat the warning as work: find what grew
-and trim it, or re-measure with `--write-baseline` and a rationale. Two specific
-shapes to look for:
+The job summary's "Startup bundle gates" table names the gate and each
+offender with its minified bytes.
 
-- **A dependency escaped its `manualChunks` bucket** and landed in `entry`
-  (paid on every cold visit) instead of a lazy route chunk or `vendor-*`
-  group. Dynamic-`import()` it, or fix the `manualChunks` rule in
-  `apps/web/vite.config.ts`. [review]
+- **Initial JS over budget.** Something new is reachable from a route file or
+  the root without a lazy boundary: a dependency a route file imports, or a
+  page an eager option renders. Put it behind the route's `component` (the
+  router splits it) or a dynamic `import()`. Rebaseline with
+  `--write-baseline` only with a stated reason every cold visit should pay
+  for it. [check: scripts/bundle-baseline.ts]
+- **Page code at startup.** A pending or error component, a loader or an
+  export reaches the page: the pending view imports from the page module, or
+  renders a component the page also renders, or the route file exports a page
+  part. Give the loading view its own `-x.pending.tsx` that imports nothing
+  from `-x.page.tsx`, and keep shared pieces in a module of their own.
+  [check: scripts/bundle-baseline.ts]
+- **Pending view too large.** It renders more than the page's skeleton.
+  [check: scripts/bundle-baseline.ts]
+- **Extra cold-load hop.** A route loads its page with a hand-written
+  `lazyRouteComponent(() => import(...))` or `await import(...)`, which the
+  manifest cannot preload. Import the page statically from the route file's
+  `component` and let the router split it. [check: scripts/bundle-baseline.ts]
+- **Pending layer over budget.** The loading views grew past the committed
+  `pending` total. Trim them, or re-anchor with `--write-baseline` and state
+  in the pull request why every cold visit should pay for it.
+  [check: scripts/bundle-baseline.ts]
+- **A dependency escaped its `manualChunks` bucket** and landed in the
+  initial graph instead of a lazy route chunk. Dynamic-`import()` it, or fix
+  the `manualChunks` rule in `apps/web/vite.config.ts`. [review]
 - **`vendor-anonymize-data` or `wasm-vendor` show up nonzero.** These are
   tracked at 0 because they should only ever load inside a web worker, never
   the main client bundle. A nonzero value means a worker-only dependency

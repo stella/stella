@@ -425,7 +425,8 @@ describe("compact provision cards", () => {
     const view = await renderDecision(true);
     const card =
       firstCard(view) ?? panic("Expected an expanded provision card");
-    expect(card.getAttribute("aria-expanded")).toBe("false");
+    const trigger = within(card).getByRole("button", { name: FIRST_CITATION });
+    expect(trigger.getAttribute("aria-expanded")).toBe("false");
     const open = within(card).getByRole("button", {
       name: messages.common.openInSidePanel,
     });
@@ -438,10 +439,18 @@ describe("compact provision cards", () => {
     });
     open.dispatchEvent(nestedKey);
     expect(nestedKey.defaultPrevented).toBe(false);
-    expect(card.getAttribute("aria-expanded")).toBe("false");
-    // Enter on the card itself still toggles it.
-    fireEvent.keyDown(card, { key: "Enter" });
-    expect(card.getAttribute("aria-expanded")).toBe("true");
+    expect(trigger.getAttribute("aria-expanded")).toBe("false");
+    // Native disclosure activation belongs to the browser; the DOM harness
+    // dispatches its resulting click explicitly.
+    const triggerKey = new KeyboardEvent("keydown", {
+      bubbles: true,
+      cancelable: true,
+      key: "Enter",
+    });
+    trigger.dispatchEvent(triggerKey);
+    expect(triggerKey.defaultPrevented).toBe(false);
+    fireEvent.click(trigger);
+    expect(trigger.getAttribute("aria-expanded")).toBe("true");
   });
 
   test("shows where a provision sits only where its label does not say so", async () => {

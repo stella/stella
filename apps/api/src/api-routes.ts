@@ -60,12 +60,13 @@ import {
   feedbackRoute,
 } from "@/api/handlers/feedback/routes";
 import { fieldsRoute } from "@/api/handlers/fields/routes";
-import { filesRoute } from "@/api/handlers/files/route-table";
+import { fileContentRoute, filesRoute } from "@/api/handlers/files/route-table";
 import { flowsRoute } from "@/api/handlers/flows/routes";
 import { flowRunsRoute } from "@/api/handlers/flows/run-route";
 import { folioCollabRoute } from "@/api/handlers/folio-collab/routes";
 import { healthRoute } from "@/api/handlers/health/routes";
 import { hostedUsageWebhookRoute } from "@/api/handlers/hosted-usage-webhook/routes";
+import { invoiceLinksRoute } from "@/api/handlers/invoice-links/routes";
 import { invoicesRoute } from "@/api/handlers/invoices/routes";
 import { legalReaderRoute } from "@/api/handlers/legal-reader/routes";
 import { legalResolveRoute } from "@/api/handlers/legal-resolve/routes";
@@ -84,6 +85,7 @@ import { numberSeriesRoute } from "@/api/handlers/number-series/routes";
 import { operatorRoute } from "@/api/handlers/operator/routes";
 import { organizationSettingsRoute } from "@/api/handlers/organization-settings/routes";
 import { organizationsRoute } from "@/api/handlers/organizations/routes";
+import { outboundActionsRoute } from "@/api/handlers/outbound-actions/routes";
 import { playbooksRoute } from "@/api/handlers/playbooks/routes";
 import { playbookRunsRoute } from "@/api/handlers/playbooks/run-route";
 import { propertiesRoute } from "@/api/handlers/properties/routes";
@@ -117,7 +119,10 @@ import { memberTimeTargetsRoute } from "@/api/handlers/time-entries/members/rout
 import { timeEntryReportRoute } from "@/api/handlers/time-entries/report/routes";
 import { timeEntriesRoute } from "@/api/handlers/time-entries/routes";
 import { timeTimersRoute } from "@/api/handlers/time-timers/routes";
-import { uploadsRoute } from "@/api/handlers/uploads/routes";
+import {
+  desktopDictationTranscriptAudioRoute,
+  uploadsRoute,
+} from "@/api/handlers/uploads/routes";
 import { usageRoute } from "@/api/handlers/usage/routes";
 import { userFilesRoute } from "@/api/handlers/user-files/routes";
 import { vatRateRoute } from "@/api/handlers/vat-rates/routes";
@@ -202,6 +207,7 @@ export const apiRoutes = mount([
   visualSandboxRoute,
   aiAutocompleteRoute,
   feedbackPublicRoute,
+  invoiceLinksRoute,
   memoriesRoute,
   notificationsRoute,
   timeApprovalQueueRoute,
@@ -235,6 +241,7 @@ export const apiRoutes = mount([
       flowRunsRoute,
       documentTypesRoute,
       propertiesRoute,
+      fileContentRoute,
       filesRoute,
       folioCollabRoute,
       desktopEditSessionsRoute,
@@ -259,6 +266,7 @@ export const apiRoutes = mount([
       externalPreviewRoute,
       mcpConnectorsRoute,
       sharepointRoute,
+      outboundActionsRoute,
       catalogueRoute,
       organizationSettingsRoute,
       organizationsRoute,
@@ -322,5 +330,6 @@ export const apiRoutes = mount([
   desktopFeatureAccessRoute,
   desktopTimeEntriesRoute,
   desktopDictationRoute,
+  desktopDictationTranscriptAudioRoute,
   desktopRunnerRoute,
 ]);

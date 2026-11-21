@@ -1,19 +1,16 @@
-import { Result } from "better-result";
 /**
  * Delegated, read-only Microsoft Graph client for the SharePoint connection.
  *
- *   1. `ensureSharepointAccessToken` — return a usable access token,
- *      refreshing it when expired and persisting the rotated tokens. On any
- *      refresh failure the connection is marked `reconnect_required` and the
- *      failure is surfaced (never swallowed), so a stale token can never be
- *      used silently.
- *   2. Browsing: followed or searched sites, drives (the caller's own and a
- *      site's document libraries) and a folder's children, each mapped from
- *      Graph's `@odata.nextLink` pagination into a cursor page.
+ * Token acquisition and refresh live with the Microsoft 365 capability owner
+ * (`@/api/lib/auth/microsoft365/graph-token`). This module maps Graph reads:
+ * the connected account's label, and browsing followed or searched sites,
+ * drives (the caller's own and a site's document libraries) and a folder's
+ * children, each mapped from Graph's `@odata.nextLink` pagination into a
+ * cursor page.
  *
  * There is no write path and no background sync here.
  */
-import { and, eq } from "drizzle-orm";
+import { Result } from "better-result";
 import * as v from "valibot";
 
 import { parseIntegerToken } from "@stll/agent-input/numeric-token";
@@ -23,48 +20,30 @@ import {
   SHAREPOINT_ROOT_ITEM_ID,
   type SharepointItemKind,
 } from "@stll/api-contract/sharepoint";
+import { classifyFailure } from "@stll/errors";
 import { fetchWithTimeout } from "@stll/fetch";
 import {
   BodyByteLimitError,
   readBodyJsonWithIdleDeadline,
   readBodyWithIdleDeadline,
 } from "@stll/fetch/body-reader";
-import { Temporal } from "@stll/time";
 
-import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
-import { sharepointConnections } from "@/api/db/schema";
-import type { SharepointConnectionStatus } from "@/api/db/schema";
-import {
-  decryptSharepointSecret,
-  encryptSharepointSecret,
-} from "@/api/handlers/sharepoint/crypto";
-import {
-  getSharepointOAuthConfig,
-  refreshAccessToken,
-  tokenExpiresAt,
-} from "@/api/handlers/sharepoint/graph-oauth";
-import type { SafeId } from "@/api/lib/branded-types";
+import { safeOutboundFetchBytes } from "@/api/lib/auth/authorized-outbound-fetch";
+import { graphResponseFailureReason } from "@/api/lib/auth/microsoft365/graph-response-failure";
+import type { ThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { failureSink } from "@/api/lib/observability/failure";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
 import type { Page } from "@/api/lib/pagination";
 import type { AccessToken } from "@/api/lib/secret-brands";
 
 const GRAPH_FETCH_TIMEOUT_MS = 10_000;
+const GRAPH_ACCOUNT_RESPONSE_MAX_BYTES = 64 * 1024;
 const GRAPH_API_BASE_URL = "https://graph.microsoft.com/v1.0";
-// Refresh a little early so a token does not expire mid-request.
-const TOKEN_EXPIRY_BUFFER_MS = 60_000;
-
-/** Columns `ensureSharepointAccessToken` needs from a connection row. */
-export type SharepointConnectionTokens = {
-  id: SafeId<"sharepointConnection">;
-  organizationId: SafeId<"organization">;
-  userId: SafeId<"user">;
-  accessTokenEncrypted: Buffer;
-  accessTokenIv: Buffer;
-  refreshTokenEncrypted: Buffer | null;
-  refreshTokenIv: Buffer | null;
-  expiresAt: Date | null;
-  status: SharepointConnectionStatus;
-};
+const ACCOUNT_LABEL_FAILED_SINK = failureSink({
+  event: "sharepoint.account_label_lookup_failed",
+  expected: [],
+});
 
 const reconnectRequiredError = (): HandlerError<409> =>
   new HandlerError({
@@ -72,175 +51,6 @@ const reconnectRequiredError = (): HandlerError<409> =>
     code: SHAREPOINT_REFUSAL_CODE.reconnectRequired,
     message: "SharePoint connection must be reconnected",
     hint: "Reconnect the Microsoft account in stella's SharePoint settings.",
-  });
-
-/**
- * Flags the connection for reconnect, but only while it still holds the
- * access token the failing call used: a reconnect that replaced the tokens in
- * the meantime must not be undone by a late failure of the old grant.
- */
-export const markReconnectRequired = async ({
-  connection,
-  safeDb,
-}: {
-  connection: SharepointConnectionTokens;
-  safeDb: SafeDb;
-}): Promise<Result<void, SafeDbError>> =>
-  await Result.gen(async function* () {
-    yield* Result.await(
-      safeDb(async (tx) => {
-        // audit: skip — token-refresh bookkeeping: flags the connection as
-        // needing reconnect. The user-facing lifecycle events (connect /
-        // disconnect / org-disable purge) are the audited surface.
-        await tx
-          .update(sharepointConnections)
-          .set({ status: "reconnect_required", updatedAt: new Date() })
-          .where(
-            and(
-              eq(sharepointConnections.id, connection.id),
-              eq(
-                sharepointConnections.organizationId,
-                connection.organizationId,
-              ),
-              eq(sharepointConnections.userId, connection.userId),
-              eq(sharepointConnections.accessTokenIv, connection.accessTokenIv),
-            ),
-          );
-      }),
-    );
-    return Result.ok(undefined);
-  });
-
-/** A usable token and the IV it is stored under, which names that grant. */
-type UsableSharepointToken = {
-  accessToken: AccessToken;
-  accessTokenIv: Buffer;
-};
-
-export const ensureSharepointAccessToken = async ({
-  connection,
-  safeDb,
-}: {
-  connection: SharepointConnectionTokens;
-  safeDb: SafeDb;
-}): Promise<
-  Result<UsableSharepointToken, HandlerError<409 | 500 | 502> | SafeDbError>
-> =>
-  await Result.gen(async function* () {
-    const stillValid =
-      connection.status === "connected" &&
-      connection.expiresAt !== null &&
-      connection.expiresAt.getTime() -
-        Temporal.Now.instant().epochMilliseconds >
-        TOKEN_EXPIRY_BUFFER_MS;
-
-    if (stillValid) {
-      const accessToken = await decryptSharepointSecret({
-        purpose: "sharepoint_access_token",
-        ciphertext: connection.accessTokenEncrypted,
-        iv: connection.accessTokenIv,
-        organizationId: connection.organizationId,
-        userId: connection.userId,
-      });
-      return Result.ok({
-        accessToken,
-        accessTokenIv: connection.accessTokenIv,
-      });
-    }
-
-    if (!connection.refreshTokenEncrypted || !connection.refreshTokenIv) {
-      yield* Result.await(markReconnectRequired({ connection, safeDb }));
-      return Result.err(reconnectRequiredError());
-    }
-
-    const config = getSharepointOAuthConfig();
-    if (Result.isError(config)) {
-      return Result.err(config.error);
-    }
-
-    const refreshToken = await decryptSharepointSecret({
-      purpose: "sharepoint_refresh_token",
-      ciphertext: connection.refreshTokenEncrypted,
-      iv: connection.refreshTokenIv,
-      organizationId: connection.organizationId,
-      userId: connection.userId,
-    });
-
-    const refreshed = await refreshAccessToken({
-      clientId: config.value.clientId,
-      clientSecret: config.value.clientSecret,
-      refreshToken,
-      tenantId: config.value.tenantId,
-    });
-
-    if (Result.isError(refreshed)) {
-      yield* Result.await(markReconnectRequired({ connection, safeDb }));
-      return Result.err(reconnectRequiredError());
-    }
-
-    const token = refreshed.value;
-    const encryptedAccess = await encryptSharepointSecret({
-      purpose: "sharepoint_access_token",
-      secret: token.access_token,
-      organizationId: connection.organizationId,
-      userId: connection.userId,
-    });
-    const encryptedRefresh = token.refresh_token
-      ? await encryptSharepointSecret({
-          purpose: "sharepoint_refresh_token",
-          secret: token.refresh_token,
-          organizationId: connection.organizationId,
-          userId: connection.userId,
-        })
-      : null;
-
-    yield* Result.await(
-      safeDb(async (tx) => {
-        // audit: skip — token-refresh bookkeeping: rotates the stored access /
-        // refresh tokens after a silent Graph refresh. The user-facing
-        // lifecycle events (connect / disconnect / org-disable purge) are the
-        // audited surface.
-        await tx
-          .update(sharepointConnections)
-          .set({
-            accessTokenEncrypted: encryptedAccess.ciphertext,
-            accessTokenIv: encryptedAccess.iv,
-            ...(encryptedRefresh
-              ? {
-                  refreshTokenEncrypted: encryptedRefresh.ciphertext,
-                  refreshTokenIv: encryptedRefresh.iv,
-                }
-              : {}),
-            tokenType: token.token_type ?? "Bearer",
-            scope: token.scope ?? null,
-            expiresAt: tokenExpiresAt(token),
-            status: "connected",
-            lastUsedAt: new Date(),
-            updatedAt: new Date(),
-          })
-          .where(
-            and(
-              eq(sharepointConnections.id, connection.id),
-              eq(
-                sharepointConnections.organizationId,
-                connection.organizationId,
-              ),
-              eq(sharepointConnections.userId, connection.userId),
-            ),
-          );
-      }),
-    );
-
-    // Re-decrypt what we just stored so the returned value is minted through
-    // the single brand boundary, rather than casting the raw string here.
-    const accessToken = await decryptSharepointSecret({
-      purpose: "sharepoint_access_token",
-      ciphertext: encryptedAccess.ciphertext,
-      iv: encryptedAccess.iv,
-      organizationId: connection.organizationId,
-      userId: connection.userId,
-    });
-    return Result.ok({ accessToken, accessTokenIv: encryptedAccess.iv });
   });
 
 const meResponseSchema = v.looseObject({
@@ -251,33 +61,96 @@ const meResponseSchema = v.looseObject({
 
 /**
  * Best-effort display label for the connected Microsoft account, read once at
- * connect time. Boundary try/catch: a failure here must never block the
- * connection, so it degrades to `null`. `accessToken` is the raw token fresh
- * from the code exchange (not yet a stored `Secret`).
+ * connect time. The callback decides whether a failed optional lookup blocks
+ * its authorized token connection.
  */
-export const fetchAccountLabel = async (
-  accessToken: string,
-): Promise<string | null> => {
-  try {
-    const url = new URL(`${GRAPH_API_BASE_URL}/me`);
-    url.searchParams.set("$select", "userPrincipalName,displayName,mail");
-    const response = await fetchWithTimeout(url, {
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        Accept: "application/json",
-      },
-      timeoutMs: GRAPH_FETCH_TIMEOUT_MS,
-    });
-    if (!response.ok) {
-      return null;
-    }
-    const parsed = v.parse(meResponseSchema, await response.json());
-    return (
-      parsed.userPrincipalName ?? parsed.mail ?? parsed.displayName ?? null
+export const fetchAccountLabel = async ({
+  accessToken,
+  fetchBytes = safeOutboundFetchBytes,
+  permit,
+  signal,
+}: {
+  accessToken: string;
+  fetchBytes?: typeof safeOutboundFetchBytes;
+  permit: ThirdPartyOutboundPermit;
+  signal?: AbortSignal | undefined;
+}) => {
+  // The request never produced a Graph answer: Microsoft was unreachable.
+  const mapError = (cause: unknown): HandlerError<502> =>
+    classifyFailure(
+      new HandlerError({
+        status: 502,
+        code: "internal_error",
+        message: HandlerError.is(cause)
+          ? cause.message
+          : "Microsoft account lookup failed",
+        cause,
+      }),
+      "upstream_unavailable",
     );
-  } catch {
-    return null;
+  const url = new URL(`${GRAPH_API_BASE_URL}/me`);
+  url.searchParams.set("$select", "userPrincipalName,displayName,mail");
+  const result = (
+    await Result.tryPromise({
+      try: async () =>
+        await fetchBytes({
+          url,
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            Accept: "application/json",
+          },
+          maxBytes: GRAPH_ACCOUNT_RESPONSE_MAX_BYTES,
+          permit,
+          signal,
+          timeoutMs: GRAPH_FETCH_TIMEOUT_MS,
+          redirect: "error",
+        }),
+      catch: mapError,
+    })
+  )
+    .andThen((response) => response.mapError(mapError))
+    .andThen((response) => {
+      if (!response.ok) {
+        return Result.err(
+          classifyFailure(
+            new HandlerError({
+              status: 502,
+              code: "internal_error",
+              message: `Microsoft account lookup returned HTTP ${response.status}`,
+            }),
+            graphResponseFailureReason(response.status),
+          ),
+        );
+      }
+      const json = Result.try((): unknown =>
+        JSON.parse(new TextDecoder().decode(response.body)),
+      );
+      const parsed = Result.isError(json)
+        ? null
+        : v.safeParse(meResponseSchema, json.value);
+      if (!parsed?.success) {
+        return Result.err(
+          classifyFailure(
+            new HandlerError({
+              status: 502,
+              code: "internal_error",
+              message: "Invalid Microsoft account response",
+            }),
+            "response_invalid",
+          ),
+        );
+      }
+      return Result.ok(
+        parsed.output.userPrincipalName ??
+          parsed.output.mail ??
+          parsed.output.displayName ??
+          null,
+      );
+    });
+  if (Result.isError(result)) {
+    observeFailure(result.error, { sink: ACCOUNT_LABEL_FAILED_SINK });
   }
+  return result;
 };
 
 // Browsing. Every read below is delegated: Microsoft evaluates the caller's

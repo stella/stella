@@ -118,6 +118,7 @@ export const RESOURCE_IDENTITY_DISPOSITION = {
   fileChatThread: { type: "non_resource", reason: "association" },
   templateChatThread: { type: "non_resource", reason: "association" },
   templateDeletionCleanupRequest: { type: "non_resource", reason: "job" },
+  agentSkillOriginalCleanupRequest: { type: "non_resource", reason: "job" },
   templateLookupFormat: { type: "non_resource", reason: "subresource" },
   clause: { type: "resource", resourceType: RESOURCE_TYPE.CLAUSE },
   clauseCategory: {
@@ -151,6 +152,8 @@ export const RESOURCE_IDENTITY_DISPOSITION = {
   contactImportRequest: { type: "non_resource", reason: "workflow" },
   contactRelationship: { type: "non_resource", reason: "association" },
   corpusIndexProjectionIntent: { type: "non_resource", reason: "workflow" },
+  // The receipt of one serving flip of a public corpus family.
+  corpusIndexGenerationFlip: { type: "non_resource", reason: "event" },
   hostedCheckoutClaim: { type: "non_resource", reason: "workflow" },
   usageAllocation: { type: "non_resource", reason: "policy" },
   usageLaneCounter: { type: "non_resource", reason: "event" },
@@ -216,6 +219,7 @@ export const RESOURCE_IDENTITY_DISPOSITION = {
   infoSoudTrackedCase: { type: "non_resource", reason: "workflow" },
   invoice: { type: "resource", resourceType: RESOURCE_TYPE.INVOICE },
   invoiceLine: { type: "non_resource", reason: "subresource" },
+  invoiceSend: { type: "non_resource", reason: "subresource" },
   invoicePayment: { type: "non_resource", reason: "subresource" },
   justification: { type: "non_resource", reason: "subresource" },
   legislationDocument: {
@@ -273,6 +277,7 @@ export const RESOURCE_IDENTITY_DISPOSITION = {
     resourceType: RESOURCE_TYPE.ORGANIZATION,
   },
   organizationSettings: { type: "non_resource", reason: "singleton" },
+  outboundAction: { type: "non_resource", reason: "workflow" },
   fileComparisonUpload: { type: "non_resource", reason: "workflow" },
   pdfSigningSession: { type: "non_resource", reason: "session" },
   pendingUpload: { type: "non_resource", reason: "workflow" },

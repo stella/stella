@@ -3,10 +3,10 @@ import type { MouseEvent, ReactNode } from "react";
 
 import { useHotkey } from "@tanstack/react-hotkeys";
 import { useMatch } from "@tanstack/react-router";
-import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
+import { DirectionalIcon } from "@stll/ui/directional-icon";
 import { CogIcon, PanelRightIcon, PinIcon, PinOffIcon } from "@stll/ui/icons";
 import {
   InspectorDock,
@@ -41,10 +41,14 @@ import { ChatMentionProviders } from "@/components/chat-mention-providers";
 import { DocxEditorHost } from "@/components/docx/docx-editor-host";
 import { DragAndDropLiveRegion } from "@/components/drag-and-drop-live-region";
 import { resolveInspectorDockVisibility } from "@/components/inspector/inspector-dock-visibility";
+import { INSPECTOR_FOCUS_INTENT } from "@/components/inspector/inspector-store-types";
+import { InspectorTabHeaderPending } from "@/components/inspector/inspector-tab-header-frame";
+import { getInspectorTabWorkspaceId } from "@/components/inspector/inspector-tab-workspace";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import type { InspectorTab } from "@/components/inspector/inspector-tabs-store";
 import { newChatMatterScope } from "@/components/inspector/new-chat-scope";
 import { useSharedInspectorPaneWidth } from "@/components/inspector/pane-width-storage";
+import { useLeafRouteInspectorEntry } from "@/components/inspector/route-inspector-entry";
 import { useInspectorTabPersistence } from "@/components/inspector/use-inspector-tab-persistence";
 import { useRouteWorkspaceId } from "@/components/inspector/use-route-workspace-id";
 import { KeyboardShortcutsDialog } from "@/components/keyboard-shortcuts-dialog";
@@ -75,7 +79,6 @@ import { useI18nStore } from "@/i18n/i18n-store";
 import { AuthenticatedUserProvider } from "@/lib/authenticated-user-context";
 import type { AuthenticatedUser } from "@/lib/authenticated-user-context";
 import { ChromeHeaderActionsSlot } from "@/lib/chrome-header-actions";
-import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { detached } from "@/lib/detached";
 import { toAuthClientError } from "@/lib/errors/auth";
 import { usePinnedStore } from "@/lib/pinned-store";
@@ -89,6 +92,7 @@ import {
 } from "@/lib/workspaces/queries";
 import { shouldForceSidebarCollapsed } from "@/routes/-inspector-pane-width";
 import { ChatMenuContent } from "@/routes/-protected-app/-components/chat-menu-content";
+import { ExactDuplicateUploadDialog } from "@/routes/-protected-app/-components/exact-duplicate-upload-dialog";
 import { PaymentRetryBanner } from "@/routes/-protected-app/-components/payment-retry-banner";
 import {
   createSessionActivity,
@@ -136,7 +140,7 @@ const InspectorRailFallback = () => {
               SIDE_RAIL_ICON_BUTTON_SIZE,
             )}
           >
-            <PanelRightIcon className="size-4" />
+            <DirectionalIcon className="size-4" icon={PanelRightIcon} />
           </span>
         }
       />
@@ -144,18 +148,11 @@ const InspectorRailFallback = () => {
   );
 };
 
+// The phone sheet while the panel chunk loads. Its header is the tab header in
+// its pending phase, so the header does not move when the panel replaces it.
 const MobileInspectorFallback = () => (
   <div className="bg-background flex h-full min-w-0 flex-col">
-    <div
-      className={cn(
-        "flex shrink-0 items-center gap-2 border-b px-3",
-        TOOLBAR_ROW_HEIGHT,
-      )}
-    >
-      <Skeleton className="h-4 w-16" />
-      <Skeleton className="h-4 flex-1" />
-      <Skeleton className="size-7 rounded-md" />
-    </div>
+    <InspectorTabHeaderPending />
     <div className="space-y-3 px-4 py-4">
       <Skeleton className="h-7 w-2/3" />
       <Skeleton className="h-8 w-full" />
@@ -176,6 +173,7 @@ export const ProtectedAppFrame = ({
   user: AuthenticatedUser;
   children: ReactNode;
 }) => {
+  const t = useTranslations();
   useMountEffect(() => {
     const activity = createSessionActivity({
       page: document,
@@ -230,10 +228,19 @@ export const ProtectedAppFrame = ({
     : null;
   const routeMatterChromeStyle = matterChromeStyle(activeMatterColor);
   // Restore the authenticated tab scope before any previous scope can paint.
-  const reserveInspectorPane = useInspectorTabPersistence({
+  const reserveRestoredPane = useInspectorTabPersistence({
     organizationId: inspectorBroadcastOrganizationId,
     userId: inspectorBroadcastUserId,
   });
+  // A page that opens the pane on entry has it reserved until the inspector
+  // holds a tab (the page opens its own after mounting); from then on the
+  // tabs, and the member minimizing them, decide as anywhere else.
+  const routeOpensInspector = useLeafRouteInspectorEntry() === "opens-page-tab";
+  const hasInspectorTabs = useInspectorTabsStore(
+    (state) => state.tabs.length > 0,
+  );
+  const reserveInspectorPane =
+    reserveRestoredPane || (routeOpensInspector && !hasInspectorTabs);
   const inspectorPaneOpen = useInspectorTabsStore(
     (state) => state.tabs.length > 0 && !state.minimized,
   );
@@ -256,14 +263,18 @@ export const ProtectedAppFrame = ({
       return;
     }
     if (activeWorkspaceId) {
-      store.openChat(newChatMatterScope(activeWorkspaceId));
+      store.openChat({
+        ...newChatMatterScope(activeWorkspaceId),
+        focus: INSPECTOR_FOCUS_INTENT.claim,
+      });
     }
   }, [activeWorkspaceId]);
   useHotkey(useEffectiveHotkey("toggleChat"), handleToggleInspectorHotkey);
   useHotkey(useEffectiveHotkey("newChat"), () => {
-    useInspectorTabsStore
-      .getState()
-      .openChat(newChatMatterScope(activeWorkspaceId));
+    useInspectorTabsStore.getState().openChat({
+      ...newChatMatterScope(activeWorkspaceId),
+      focus: INSPECTOR_FOCUS_INTENT.claim,
+    });
   });
 
   return (
@@ -286,6 +297,7 @@ export const ProtectedAppFrame = ({
                     <WorkspaceInspectorSidePanel
                       reservePane={reserveInspectorPane}
                       routeMatterChromeStyle={routeMatterChromeStyle}
+                      routeMatterColor={activeMatterColor}
                     />
                   }
                   navigation={{
@@ -296,6 +308,7 @@ export const ProtectedAppFrame = ({
                     ),
                     mode: "responsive",
                   }}
+                  skipToContentLabel={t("common.skipToContent")}
                   topBar={() => <ProtectedContent />}
                 >
                   {children}
@@ -309,6 +322,7 @@ export const ProtectedAppFrame = ({
                 <MakeSkillReviewDialog />
                 <AttachedTemplateUploadDialog />
                 <DocumentReferenceUploadDialog />
+                <ExactDuplicateUploadDialog />
                 <ShortcutEchoHud />
                 <KeyboardShortcutsDialog />
               </ChatEditorProvider>
@@ -358,11 +372,12 @@ function ProtectedContent() {
       // No tabs yet — open a new chat. With a matter context the
       // chat is workspace-scoped and seeded with that matter's
       // contextMatterIds; outside a matter we open a global chat.
-      openInspectorChat(
-        workspaceId === undefined
+      openInspectorChat({
+        ...(workspaceId === undefined
           ? {}
-          : { workspaceId, contextMatterIds: [workspaceId] },
-      );
+          : { workspaceId, contextMatterIds: [workspaceId] }),
+        focus: INSPECTOR_FOCUS_INTENT.claim,
+      });
       return;
     }
     toggleInspector();
@@ -400,11 +415,12 @@ function ProtectedContent() {
     setChatMenuOpen(true);
   };
   const handleOpenNewChatFromMenu = () => {
-    openInspectorChat(
-      workspaceId === undefined
+    openInspectorChat({
+      ...(workspaceId === undefined
         ? {}
-        : { workspaceId, contextMatterIds: [workspaceId] },
-    );
+        : { workspaceId, contextMatterIds: [workspaceId] }),
+      focus: INSPECTOR_FOCUS_INTENT.claim,
+    });
     setChatMenuOpen(false);
   };
 
@@ -555,32 +571,6 @@ const resolveInspectorWorkspaceId = ({
   return undefined;
 };
 
-const getInspectorTabWorkspaceId = (
-  tab: InspectorTab | undefined,
-): string | undefined => {
-  if (tab === undefined) {
-    return undefined;
-  }
-
-  switch (tab.type) {
-    case "pdf":
-    case "matter":
-    case "task":
-      return tab.workspaceId;
-    case "chat":
-      return tab.workspaceId ?? tab.contextMatterIds.at(0);
-    case "external":
-      return tab.workspaceId ?? undefined;
-    case "skill-resource":
-    case "view":
-      return undefined;
-    default: {
-      tab satisfies never;
-      return panic(`Unhandled tab: ${String(tab)}`);
-    }
-  }
-};
-
 /**
  * Workspace inspector pane — file viewers + chat tabs. Mounted at
  * the protected layout level (next to `TemplateAssistantSidePanel`)
@@ -594,9 +584,11 @@ const getInspectorTabWorkspaceId = (
 function WorkspaceInspectorSidePanel({
   reservePane,
   routeMatterChromeStyle,
+  routeMatterColor,
 }: {
   reservePane: boolean;
   routeMatterChromeStyle: MatterChromeStyle;
+  routeMatterColor: string | null;
 }) {
   const t = useTranslations();
   const { isMobile } = useSidebar();
@@ -628,7 +620,6 @@ function WorkspaceInspectorSidePanel({
   const sidebarWidth = useSidebarInlineSize();
   const viewportWidth = useViewportWidth();
   const { resetWidth, resizeHandleProps, width } = useSharedInspectorPaneWidth({
-    openedFrom: "matter",
     sidebarWidth,
     viewportWidth,
   });
@@ -708,7 +699,10 @@ function WorkspaceInspectorSidePanel({
             <SheetTitle>{t("inspector.title")}</SheetTitle>
           </SheetHeader>
           <Suspense fallback={<MobileInspectorFallback />}>
-            <LazyInspectorPanel workspaceId={activeWorkspaceId} />
+            <LazyInspectorPanel
+              routeMatterColor={routeMatterColor}
+              workspaceId={activeWorkspaceId}
+            />
           </Suspense>
         </SheetPopup>
       </Sheet>
@@ -727,7 +721,10 @@ function WorkspaceInspectorSidePanel({
       onResetWidth={resetWidth}
     >
       <Suspense fallback={<InspectorRailFallback />}>
-        <LazyInspectorPanel workspaceId={activeWorkspaceId} />
+        <LazyInspectorPanel
+          routeMatterColor={routeMatterColor}
+          workspaceId={activeWorkspaceId}
+        />
       </Suspense>
     </InspectorDock>
   );

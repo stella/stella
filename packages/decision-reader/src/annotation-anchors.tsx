@@ -273,18 +273,18 @@ export const buildAnnotationAnchors = (
     existing.push(annotation);
   }
 
-  const anchorsByPieceId: Record<string, TextAnchor[]> = {};
+  const anchorsByPieceId = new Map<string, TextAnchor[]>();
   for (const [anchorId, pieceAnnotations] of byAnchor) {
     const piece = pieceByAnchorId.get(anchorId);
     if (piece === undefined) {
       continue;
     }
-    anchorsByPieceId[piece.pieceId] = annotationTextAnchors(
-      pieceAnnotations,
-      piece.text,
+    anchorsByPieceId.set(
+      piece.pieceId,
+      annotationTextAnchors(pieceAnnotations, piece.text),
     );
   }
-  return anchorsByPieceId;
+  return Object.fromEntries(anchorsByPieceId);
 };
 
 export const renderLinkAnnotations = ({

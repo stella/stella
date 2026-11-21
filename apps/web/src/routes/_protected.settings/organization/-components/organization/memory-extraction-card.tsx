@@ -1,9 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
-import { useTranslations } from "use-intl";
 
 import { Checkbox } from "@stll/ui/checkbox";
-import { Field, FieldLabel } from "@stll/ui/field";
-import { Frame, FramePanel } from "@stll/ui/frame";
+import { SettingsPanel, settingsRowIds } from "@stll/ui/settings";
 
 import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
@@ -12,6 +10,11 @@ import { queryView } from "@/lib/query-view.logic";
 
 import { AISettingsSectionFeedback } from "./ai-settings-section";
 import type { ToggleSettingsSectionProps } from "./ai-settings-section";
+import {
+  AIToggleCardFrame,
+  AIToggleCardPending,
+  MEMORY_EXTRACTION_CARD,
+} from "./ai-toggle-card.pending";
 
 export const MemoryExtractionCard = ({
   value,
@@ -19,7 +22,6 @@ export const MemoryExtractionCard = ({
   disabled,
   feedback,
 }: ToggleSettingsSectionProps) => {
-  const t = useTranslations("settings.organization.memoryExtraction");
   const { activeOrganizationId, id: userId } = useAuthenticatedUser();
   const settingsQuery = useQuery(
     organizationSettingsOptions({
@@ -31,30 +33,45 @@ export const MemoryExtractionCard = ({
   const settings =
     settingsView.type === "items" ? settingsView.items : undefined;
 
+  if (settingsView.type === "pending") {
+    return <AIToggleCardPending {...MEMORY_EXTRACTION_CARD} />;
+  }
   if (!settings) {
-    return <QueryViewFeedback view={settingsView} />;
+    return (
+      <SettingsPanel>
+        <QueryViewFeedback view={settingsView} />
+      </SettingsPanel>
+    );
   }
 
   const enabled = value ?? settings.memoryExtractionEnabled;
+  const ids = settingsRowIds(MEMORY_EXTRACTION_CARD.id);
 
   return (
-    <Frame>
-      <QueryViewFeedback view={settingsView} />
-      <FramePanel>
-        <div className="flex flex-col gap-3 p-1">
-          <h2 className="text-sm font-medium">{t("title")}</h2>
-          <p className="text-muted-foreground text-xs">{t("description")}</p>
-          <Field className="flex-row items-center gap-2">
-            <Checkbox
-              checked={enabled}
-              disabled={disabled}
-              onCheckedChange={onChange}
-            />
-            <FieldLabel>{t("toggleLabel")}</FieldLabel>
-          </Field>
-          <AISettingsSectionFeedback feedback={feedback} />
-        </div>
-      </FramePanel>
-    </Frame>
+    <AIToggleCardFrame
+      description={MEMORY_EXTRACTION_CARD.description}
+      id={MEMORY_EXTRACTION_CARD.id}
+      notice={
+        settingsView.type === "items" &&
+        settingsView.refetchError !== undefined ? (
+          <QueryViewFeedback view={settingsView} />
+        ) : undefined
+      }
+      title={MEMORY_EXTRACTION_CARD.title}
+      toggle={
+        <Checkbox
+          aria-describedby={ids.description}
+          aria-labelledby={ids.label}
+          id={ids.control}
+          checked={enabled}
+          disabled={disabled}
+          onCheckedChange={onChange}
+        />
+      }
+    >
+      {feedback.status === "idle" ? undefined : (
+        <AISettingsSectionFeedback feedback={feedback} />
+      )}
+    </AIToggleCardFrame>
   );
 };

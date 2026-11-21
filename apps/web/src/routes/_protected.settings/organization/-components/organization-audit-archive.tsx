@@ -13,6 +13,8 @@ import { apiUrl } from "@/lib/api-url";
 import type { OrganizationAuditExportStatus } from "@/lib/organization/audit-export-queries";
 import { MEDIUM_DATE_SHORT_TIME_FORMAT } from "@/lib/relative-time";
 
+import { OrganizationAuditArchiveFrame } from "./organization-audit-archive.pending";
+
 type OrganizationAuditArchiveProps = {
   status: OrganizationAuditExportStatus | null;
   requestPending: boolean;
@@ -33,6 +35,7 @@ export const OrganizationAuditArchive = ({
   const requestButton = (label: string) => (
     <Button
       disabled={requestPending}
+      disabledReason={t("common.preparing")}
       loading={requestPending}
       onClick={onRequest}
       size="sm"
@@ -136,12 +139,5 @@ export const OrganizationAuditArchive = ({
     }
   })();
 
-  return (
-    <div className="flex flex-col gap-3">
-      <p className="text-muted-foreground text-sm">
-        {t("admin.auditArchiveDescription")}
-      </p>
-      {state}
-    </div>
-  );
+  return <OrganizationAuditArchiveFrame>{state}</OrganizationAuditArchiveFrame>;
 };

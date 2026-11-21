@@ -11,6 +11,7 @@ import {
 } from "../scripts/pinned-content-facts";
 import {
   fetchDirectoryContents,
+  fetchPinnedResourceFile,
   fetchPinnedTextFile,
   fetchWithBoundedRetry,
 } from "../scripts/pinned-content-upstream";
@@ -128,6 +129,26 @@ describe("pinned content fetch retry", () => {
     });
     expect(attempts).toBe(2);
     expect(delays).toEqual([200]);
+  });
+
+  test("reads a resource that is not UTF-8 text as binary, as an install does", async () => {
+    const read = async (body: Uint8Array | string) =>
+      await fetchPinnedResourceFile({
+        fetcher: async () => new Response(body),
+        label: "resource",
+        maxBytes: 1024,
+        repoRelativePath: "skills/example/notes.txt",
+        target: GITHUB_TARGET,
+      });
+    expect(
+      (await read(new Uint8Array([0x66, 0xff, 0x6f])))?.content,
+    ).toBeNull();
+    expect((await read("text\0with nul"))?.content).toBeNull();
+    expect(await read("plain text")).toEqual({
+      byteLength: 10,
+      content: "plain text",
+      sha256: sha256Hex("plain text"),
+    });
   });
 
   test("retries a body-read failure through the contents path", async () => {

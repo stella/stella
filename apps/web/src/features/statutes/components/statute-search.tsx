@@ -4,6 +4,7 @@ import {
   publicLawAskScope,
   PublicLawSearch,
 } from "@/components/public-law-search";
+import { STATUTE_SEARCH_PLACEHOLDER } from "@/features/statutes/components/statute-search.pending";
 import { useFormatter } from "@/i18n/formatting-context";
 import { statuteCountryName } from "@/lib/statutes/statute-route";
 
@@ -45,7 +46,7 @@ export const StatuteSearch = ({
       maxLength={maxLength}
       onQueryChange={onQueryChange}
       onSubmit={onSubmit}
-      placeholder={t("statutes.searchPlaceholder")}
+      placeholder={t(STATUTE_SEARCH_PLACEHOLDER)}
       query={query}
       searchLabel={t("statutes.searchLabel")}
     />

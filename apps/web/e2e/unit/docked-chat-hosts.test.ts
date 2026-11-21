@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 
 import { parseSource } from "@stll/scripts/src/syntax-tree";
 
+import { APP_FRAME_SCOPE } from "../../src/routes/-app-frame-scope";
 import {
   declaredAppFrameScope,
   isServerEndpoint,
@@ -58,17 +59,28 @@ export const Route = createFileRoute("/feature")({ staticData: { ${metadata} } }
   ).toThrow("Unsupported appFrame metadata");
 });
 
-test.each(["member", "knowledge", "none"])(
+test.each(Object.entries(APP_FRAME_SCOPE))(
   "reads declared %s scope independently of route names",
-  (scope) => {
+  (name, scope) => {
     const source = parseSource(
       "renamed-route.tsx",
       `import { APP_FRAME_SCOPE as scope } from "@/routes/-app-frame-scope";
-export const Route = createFileRoute("/unrelated-name")({ staticData: { appFrame: scope.${scope} } });`,
+export const Route = createFileRoute("/unrelated-name")({ staticData: { appFrame: scope.${name} } });`,
     );
     expect(declaredAppFrameScope(source, "renamed-route.tsx")).toBe(scope);
   },
 );
+
+test("rejects frame metadata with an unknown scope name", () => {
+  const source = parseSource(
+    "route.tsx",
+    `import { APP_FRAME_SCOPE as scope } from "@/routes/-app-frame-scope";
+export const Route = createFileRoute("/feature")({ staticData: { appFrame: scope.toString } });`,
+  );
+  expect(() => declaredAppFrameScope(source, "route.tsx")).toThrow(
+    "Unknown appFrame metadata",
+  );
+});
 
 test("absent metadata inherits while unsupported metadata fails", () => {
   const scopeOf = (source: string) =>

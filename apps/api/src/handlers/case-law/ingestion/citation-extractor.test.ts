@@ -35,7 +35,7 @@ import { CITATION_STORAGE_WIDTHS } from "@/api/lib/case-law/citation-storage-bou
 import { storeDecisionIdentifiersInMetadata } from "@/api/lib/legal-search/decision-identifier-metadata";
 
 describe("extractCitations", () => {
-  test("an ÚOHS citation normalizes to the adapter's emitted identifier", () => {
+  test("an ÚOHS citation keys as the adapter's emitted identifier", () => {
     const [citation] = extractCitations([
       { index: 0, text: "ÚOHS ÚOHS-R0901/2026/VZ" },
     ]);
@@ -48,7 +48,7 @@ describe("extractCitations", () => {
         citation!.identifierType,
         citation!.citationText,
       ),
-    ).toBe(emitted[0].value);
+    ).toBe(normalizeDecisionIdentifierValue(emitted[0].type, emitted[0].value));
   });
   test.each([
     ["ÚOHS ÚOHS-S123/2024/VZ", "ÚOHS-S123/2024/VZ"],
@@ -190,6 +190,36 @@ describe("extractCitations", () => {
     const citations = extractCitations([{ index: 0, text }]);
     expect(citations).toHaveLength(1);
     expect(citations[0]?.citationText).toBe("sen. zn. 29 NSČR 55/2013");
+  });
+
+  test.each([
+    ["sen. zn. 29 NSČR 112/2013", "29 NSCR 112/2013"],
+    ["29 NSČR 112/2013", "29 NSCR 112/2013"],
+    ["29NSČR/112/2013", "29 NSCR 112/2013"],
+    ["sen. zn. 29 nsčr 112/2013", "29 NSCR 112/2013"],
+  ])(
+    "keys the printed insolvency register %p as the stored case number %p",
+    (printed, stored) => {
+      // Judgments print "NSČR"; the Supreme Court's database and ECLI
+      // (`29.NSCR.112.2013`) spell it "NSCR", and so does the stored case
+      // number. Both spellings must share one key, or the citation and the
+      // docket lookup never reach the decision.
+      expect(citationKeyOf(printed)).toBe("29nscr/112/2013");
+      expect(citationKeyOf(printed)).toBe(citationKeyOf(stored));
+    },
+  );
+
+  test("keys a consolidated NSČR docket as the stored NSCR one", () => {
+    expect(citationKeyOf("29 NSČR 112,113/2013")).toBe("29nscr/112,113/2013");
+    expect(citationKeyOf("29 NSČR 112,113/2013")).toBe(
+      citationKeyOf("29 NSCR 112,113/2013"),
+    );
+  });
+
+  test("keeps the diacritic of a register stored with it", () => {
+    // The Slovak administrative register "Sžo" is stored as printed, so its
+    // key keeps the diacritic and stays equal to the stored rows' keys.
+    expect(citationKeyOf("8 Sžo 12/2010")).toBe("8sžo/12/2010");
   });
 
   test("extracts Constitutional Court citations in senate and plenum form", () => {

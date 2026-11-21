@@ -98,6 +98,7 @@ export const createWorkAdmission = ({
   };
   const states = {
     "heavy-sidecar": createPoolState("heavy-sidecar"),
+    "file-scan": createPoolState("file-scan"),
   } as const satisfies Record<WorkPool, PoolState>;
 
   type AcquireOptions = {
@@ -215,6 +216,7 @@ export const createWorkAdmission = ({
     stats: () =>
       ({
         "heavy-sidecar": poolMetrics("heavy-sidecar"),
+        "file-scan": poolMetrics("file-scan"),
       }) as const satisfies Record<WorkPool, ReturnType<typeof poolMetrics>>,
   };
 };
@@ -230,14 +232,17 @@ export const admitWork: ReturnType<
 >["admit"] = async (options) => await getWorkAdmission().admit(options);
 export const readWorkPoolMetrics = () => getWorkAdmission().stats();
 
-export const resetWorkAdmissionForTesting = (): void => {
+export const resetWorkAdmissionForTesting = (
+  options?: Parameters<typeof createWorkAdmission>[0],
+): void => {
   const activePools = Object.values(getWorkAdmission().stats()).filter(
     ({ inFlight, queued }) => inFlight !== 0 || queued !== 0,
   );
   if (activePools.length > 0) {
     panic("Cannot reset work admission while work is active");
   }
-  processAdmission = undefined;
+  processAdmission =
+    options === undefined ? undefined : createWorkAdmission(options);
 };
 
 export const assertWorkAdmission = (admission: WorkAdmission): void => {

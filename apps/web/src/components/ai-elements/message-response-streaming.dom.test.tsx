@@ -316,7 +316,7 @@ const renderedHtml = async (source: string, options: RenderOptions = {}) => {
 
 const renderedTree = async (source: string, options: RenderOptions = {}) => {
   const view = await mountAnswer(source, options);
-  const tree = view.root.cloneNode(true);
+  const tree = document.importNode(view.root, true);
   await view.unmount();
   return tree;
 };
@@ -426,62 +426,76 @@ const brokenFragments = (root: Element): string[] => {
   });
 };
 
+const settlesToWholeAnswer = (options: RenderOptions) =>
+  fc.asyncProperty(
+    streamedChatAnswerArbitrary,
+    async ({ answer, prefixes }) => {
+      // While the turn runs the chat marks the answer as animating.
+      const streaming = { ...options, isAnimating: true };
+      const view = await mountAnswer(prefixes.at(0) ?? "", streaming);
+      for (const prefix of prefixes) {
+        await view.update(prefix);
+        expect({
+          prefix,
+          active: activeContent(view.root),
+        }).toEqual({ prefix, active: [] });
+        expect(duplicateIds(view.root, prefix)).toEqual([]);
+        expect({ prefix, names: unscopedNames(view.root) }).toEqual({
+          prefix,
+          names: [],
+        });
+      }
+      // DOM equality ignores the order React added attributes in earlier frames.
+      expect(view.root.isEqualNode(await renderedTree(answer, streaming))).toBe(
+        true,
+      );
+      // The chat settles a finished turn by switching to source offsets;
+      // the settled frame is the one a reload of the thread shows.
+      const settled = { ...options, sourceOffsets: true };
+      await view.update(answer, settled);
+      expect(view.root.isEqualNode(await renderedTree(answer, settled))).toBe(
+        true,
+      );
+      expect(activeContent(view.root)).toEqual([]);
+      expect(unscopedNames(view.root)).toEqual([]);
+      expect(brokenFragments(view.root)).toEqual([]);
+      // Restorations can arrive after the text (server metadata): the
+      // mounted answer must pick up the new plugin set, not keep the old.
+      const restored = { ...settled, rehypePlugins: LATE_RESTORATION };
+      await view.update(answer, restored);
+      expect(view.root.isEqualNode(await renderedTree(answer, restored))).toBe(
+        true,
+      );
+      await view.unmount();
+    },
+  );
+
 describe("streamed chat answers", () => {
   test("streamed answers settle to the render of the whole answer", async () => {
     await assertProperty(
       "streamed answers settle to the render of the whole answer",
-      fc.asyncProperty(
-        streamedChatAnswerArbitrary,
-        async ({ answer, prefixes }) => {
-          for (const config of RENDERER_CONFIGS) {
-            // While the turn runs the chat marks the answer as animating.
-            const streaming = { ...config.options, isAnimating: true };
-            const view = await mountAnswer(prefixes.at(0) ?? "", streaming);
-            for (const prefix of prefixes) {
-              await view.update(prefix);
-              expect({
-                config: config.name,
-                prefix,
-                active: activeContent(view.root),
-              }).toEqual({ config: config.name, prefix, active: [] });
-              expect(duplicateIds(view.root, prefix)).toEqual([]);
-              expect({ prefix, names: unscopedNames(view.root) }).toEqual({
-                prefix,
-                names: [],
-              });
-            }
-            // DOM equality retains every node and attribute value independently of
-            // the order React added attributes during earlier stream frames.
-            expect(
-              view.root.isEqualNode(await renderedTree(answer, streaming)),
-            ).toBe(true);
-            // The chat settles a finished turn by switching to source offsets;
-            // the settled frame is the one a reload of the thread shows.
-            const settled = { ...config.options, sourceOffsets: true };
-            await view.update(answer, settled);
-            expect(
-              view.root.isEqualNode(await renderedTree(answer, settled)),
-            ).toBe(true);
-            expect(activeContent(view.root)).toEqual([]);
-            expect(unscopedNames(view.root)).toEqual([]);
-            expect(brokenFragments(view.root)).toEqual([]);
-            // Restorations can arrive after the text (server metadata): the
-            // mounted answer must pick up the new plugin set, not keep the old.
-            const restored = { ...settled, rehypePlugins: LATE_RESTORATION };
-            await view.update(answer, restored);
-            expect(
-              view.root.isEqualNode(await renderedTree(answer, restored)),
-            ).toBe(true);
-            await view.unmount();
-          }
-          // Plugins a surface adds must never change what the base chain renders.
-          expect(
-            (
-              await renderedTree(answer, { rehypePlugins: ANON_PLUGINS })
-            ).isEqualNode(await renderedTree(answer)),
-          ).toBe(true);
-        },
-      ),
+      settlesToWholeAnswer({}),
+      { numRuns: 30 },
+    );
+  });
+
+  test("anonymized answers settle to the render of the whole answer", async () => {
+    await assertProperty(
+      "anonymized answers settle to the render of the whole answer",
+      settlesToWholeAnswer({ rehypePlugins: ANON_PLUGINS }),
+      { numRuns: 30 },
+    );
+  });
+
+  test("an unmatched restoration leaves the whole answer unchanged", async () => {
+    await assertProperty(
+      "an unmatched restoration leaves the whole answer unchanged",
+      fc.asyncProperty(chatAnswerArbitrary, async (answer) => {
+        const anonymized = await renderedTree(answer, {
+          rehypePlugins: ANON_PLUGINS,
+        });
+        expect(anonymized.isEqualNode(await renderedTree(answer))).toBe(true);
+      }),
       { numRuns: 30 },
     );
   });
@@ -696,6 +710,56 @@ describe("answer link ids", () => {
       ),
       { numRuns: 30 },
     );
+  });
+});
+
+/**
+ * The answer's blocks: the children of Streamdown's root, which carries the
+ * gap between blocks (`space-y-*` margins on each child).
+ */
+const answerBlocks = (root: HTMLElement): HTMLElement[] =>
+  [...(root.firstElementChild?.children ?? [])].filter(
+    (node) => node instanceof HTMLElement,
+  );
+
+/** Margins do nothing on a `display: contents` box, so the gap would vanish. */
+const blocksWithoutMargins = (root: HTMLElement): string[] =>
+  answerBlocks(root)
+    .filter((answerBlock) => answerBlock.style.display === "contents")
+    .map((answerBlock) => answerBlock.outerHTML);
+
+describe("block spacing while an answer streams", () => {
+  test("every streamed block takes the gap a settled block takes", async () => {
+    await assertProperty(
+      "every streamed block takes the gap a settled block takes",
+      fc.asyncProperty(streamedChatAnswerArbitrary, async ({ prefixes }) => {
+        const view = await mountAnswer(prefixes.at(0) ?? "", {
+          isAnimating: true,
+        });
+        for (const prefix of prefixes) {
+          await view.update(prefix);
+          expect({ prefix, blocks: blocksWithoutMargins(view.root) }).toEqual({
+            prefix,
+            blocks: [],
+          });
+        }
+        await view.unmount();
+      }),
+      { numRuns: 15 },
+    );
+  });
+
+  test("two streamed paragraphs render as two spaced blocks", async () => {
+    const view = await mountAnswer("First paragraph.\n\nSecond paragraph.", {
+      isAnimating: true,
+    });
+    const blocks = answerBlocks(view.root);
+    expect(blocks.map((answerBlock) => answerBlock.textContent)).toEqual([
+      "First paragraph.",
+      "Second paragraph.",
+    ]);
+    expect(blocksWithoutMargins(view.root)).toEqual([]);
+    await view.unmount();
   });
 });
 

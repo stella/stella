@@ -26,6 +26,7 @@ import {
 } from "@/api/handlers/feedback/routes";
 import { healthRoute } from "@/api/handlers/health/routes";
 import { hostedUsageWebhookRoute } from "@/api/handlers/hosted-usage-webhook/routes";
+import { invoiceLinksRoute } from "@/api/handlers/invoice-links/routes";
 import { mcpAppSandboxRoute } from "@/api/handlers/mcp-app-sandbox/routes";
 import { mcpRoute } from "@/api/handlers/mcp/routes";
 import { memoriesRoute } from "@/api/handlers/memories/routes";
@@ -40,6 +41,7 @@ import { myTimeEntriesRoute } from "@/api/handlers/time-entries/me/routes";
 import { memberTimeTargetsRoute } from "@/api/handlers/time-entries/members/routes";
 import { timeEntryReportRoute } from "@/api/handlers/time-entries/report/routes";
 import { timeTimersRoute } from "@/api/handlers/time-timers/routes";
+import { desktopDictationTranscriptAudioRoute } from "@/api/handlers/uploads/routes";
 import { visualSandboxRoute } from "@/api/handlers/visual-sandbox/routes";
 import { wellKnownRoute } from "@/api/handlers/well-known/routes";
 import { workspacesRoute } from "@/api/handlers/workspaces/routes";
@@ -129,6 +131,7 @@ const ROOT_ROUTE_TABLES: Readonly<Record<string, readonly RouteEntry[]>> = {
   authUiRoute,
   conflictChecksRoute,
   desktopDictationRoute,
+  desktopDictationTranscriptAudioRoute,
   desktopFeatureAccessRoute,
   desktopPresenceRoute,
   desktopRunnerRoute,
@@ -138,6 +141,8 @@ const ROOT_ROUTE_TABLES: Readonly<Record<string, readonly RouteEntry[]>> = {
   feedbackRoute,
   healthRoute,
   hostedUsageWebhookRoute,
+  // Token-authenticated invoice link; each route carries its own rate budget.
+  invoiceLinksRoute,
   internalTimeEntriesRoute,
   mcpAppSandboxRoute,
   mcpRoute,

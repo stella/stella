@@ -42,6 +42,13 @@ import { toSafeId } from "@/lib/safe-id";
 import type { SafeId } from "@/lib/safe-id";
 import { useSettingsMutation } from "@/routes/_protected.settings/organization/-hooks/use-settings-mutation";
 
+import {
+  DocumentTypeRowFace,
+  DocumentTypeRows,
+  DocumentTypesCardPending,
+  DocumentTypesCardShell,
+} from "./document-types-card.pending";
+
 const DOCUMENT_TYPE_DRAG_TYPE = "stella/document-type";
 
 type DocumentType = {
@@ -131,15 +138,25 @@ export const DocumentTypesCard = () => {
     );
   };
 
-  if (settingsView.type === "pending" || settingsView.type === "error") {
+  if (settingsView.type === "pending") {
+    return (
+      <>
+        <div className="sr-only">
+          <QueryViewFeedback view={settingsView} />
+        </div>
+        <DocumentTypesCardPending />
+      </>
+    );
+  }
+  if (settingsView.type === "error") {
     return <QueryViewFeedback view={settingsView} />;
   }
 
   return (
-    <div className="flex flex-col gap-6">
+    <DocumentTypesCardShell>
       <QueryViewFeedback view={settingsView} />
       {items.length > 0 && (
-        <ul className="flex flex-col gap-2">
+        <DocumentTypeRows>
           {items.map((item) => (
             <DocumentTypeRow
               key={item.id}
@@ -147,7 +164,7 @@ export const DocumentTypesCard = () => {
               type={item}
             />
           ))}
-        </ul>
+        </DocumentTypeRows>
       )}
 
       <Form
@@ -166,13 +183,18 @@ export const DocumentTypesCard = () => {
         />
         <Button
           disabled={newLabel.trim().length === 0 || createMutation.isPending}
+          disabledReason={
+            createMutation.isPending
+              ? t("common.creating")
+              : t("common.enterName")
+          }
           type="submit"
         >
           <PlusIcon />
           {t("common.add")}
         </Button>
       </Form>
-    </div>
+    </DocumentTypesCardShell>
   );
 };
 
@@ -300,11 +322,8 @@ const DocumentTypeRow = ({ type, onReorder }: DocumentTypeRowProps) => {
   };
 
   return (
-    <li
-      className={cn(
-        "bg-card flex items-center gap-2 rounded-lg border px-2 py-1.5",
-        isDropTarget && "ring-primary ring-2",
-      )}
+    <DocumentTypeRowFace
+      className={cn(isDropTarget && "ring-primary ring-2")}
       ref={setRowRef}
     >
       <Button
@@ -334,6 +353,7 @@ const DocumentTypeRow = ({ type, onReorder }: DocumentTypeRowProps) => {
         aria-label={t("common.delete")}
         className="shrink-0"
         disabled={deleteMutation.isPending}
+        disabledReason={t("common.deleting")}
         onClick={() => deleteMutation.mutate()}
         size="icon-xs"
         type="button"
@@ -341,6 +361,6 @@ const DocumentTypeRow = ({ type, onReorder }: DocumentTypeRowProps) => {
       >
         <Trash2Icon />
       </Button>
-    </li>
+    </DocumentTypeRowFace>
   );
 };

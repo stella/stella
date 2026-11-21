@@ -1,5 +1,11 @@
-import { Result, TaggedError } from "better-result";
+import { panic, Result, TaggedError } from "better-result";
 import * as v from "valibot";
+
+import { asicPreviewSchema } from "@stll/api-contract/asic";
+import { cadesPreviewSchema } from "@stll/api-contract/cades";
+import { DATA_BOX_DOCUMENT_KINDS } from "@stll/api-contract/data-box";
+import { legalFileFormat } from "@stll/api-contract/document-format";
+import { structuredDocumentPreviewSchema } from "@stll/api-contract/structured-document";
 
 import type { Fetch } from "@/connection/http";
 import type { AccessTokenSource } from "@/connection/session";
@@ -90,6 +96,71 @@ const fileUrlSchema = v.object({
   encrypted: v.optional(v.boolean()),
 });
 
+const dataBoxPreviewSchema = v.object({
+  kind: v.picklist(DATA_BOX_DOCUMENT_KINDS),
+  text: v.string(),
+});
+
+type DataBoxDocumentFile = {
+  readonly viewer: "dataBox";
+  readonly fileName: string;
+  readonly fieldId: string;
+  readonly preview: Result<
+    v.InferOutput<typeof dataBoxPreviewSchema>,
+    ApiError
+  >;
+};
+
+type CadesDocumentFile = {
+  readonly viewer: "cades";
+  readonly fileName: string;
+  readonly fieldId: string;
+  readonly preview: Result<v.InferOutput<typeof cadesPreviewSchema>, ApiError>;
+};
+
+type AsicDocumentFile = {
+  readonly viewer: "asic";
+  readonly fileName: string;
+  readonly fieldId: string;
+  readonly preview: Result<v.InferOutput<typeof asicPreviewSchema>, ApiError>;
+};
+
+type StructuredDocumentFile = {
+  readonly viewer: "structured-document";
+  readonly fileName: string;
+  readonly fieldId: string;
+  readonly preview: Result<
+    v.InferOutput<typeof structuredDocumentPreviewSchema>,
+    ApiError
+  >;
+};
+
+export type LegalDocumentFile =
+  | AsicDocumentFile
+  | CadesDocumentFile
+  | DataBoxDocumentFile
+  | StructuredDocumentFile;
+
+export type DocumentFile = NativeDocumentFile | LegalDocumentFile;
+
+export const readOriginalDocumentFile = async ({
+  fetch,
+  source,
+  workspaceId,
+  fieldId,
+}: {
+  readonly fetch: Fetch;
+  readonly source: AccessTokenSource;
+  readonly workspaceId: string;
+  readonly fieldId: string;
+}) =>
+  await requestApi({
+    fetch,
+    source,
+    path: fileUrlPath(workspaceId, fieldId, "download"),
+    schema: fileUrlSchema,
+  });
+
 /** The document has no file: it was created empty, or its file was removed. */
 class NoFileError extends TaggedError("NoFileError")<{
   message: string;
@@ -98,7 +169,7 @@ class NoFileError extends TaggedError("NoFileError")<{
 export type DocumentFileError = ApiError | NoFileError;
 
 /** A short-lived, audited link to one document's file, and where it opens. */
-export type DocumentFile = {
+type NativeDocumentFile = {
   /** The document's file column, which an edit names. */
   readonly propertyId: string;
   /** The version the file is of, which an edit must start from. */
@@ -116,7 +187,7 @@ export type DocumentFile = {
 const documentFileOf = (
   delivered: v.InferOutput<typeof fileUrlSchema>,
   { propertyId, versionNumber }: VersionFile,
-): DocumentFile => ({
+): NativeDocumentFile => ({
   propertyId,
   versionNumber,
   fileName: delivered.fileName,
@@ -165,22 +236,79 @@ export const readDocumentFile = async ({
         new NoFileError({ message: `Document ${entityId} has no file` }),
       );
     }
-    const read = async (purpose: FilePurpose) =>
-      await requestApi({
-        fetch,
-        source,
-        path: fileUrlPath(workspaceId, file.fieldId, purpose),
-        schema: fileUrlSchema,
-      });
-    const display = await read("display");
+    const { fieldId, fileName, mimeType } = file;
+    const kind = legalFileFormat(mimeType, fileName)?.kind;
+    switch (kind) {
+      case "asicE":
+      case "asicS": {
+        const preview = await requestApi({
+          fetch,
+          source,
+          path: `/v1/files/${encodeURIComponent(workspaceId)}/asic/${encodeURIComponent(fieldId)}`,
+          schema: asicPreviewSchema,
+        });
+        return Result.ok({
+          viewer: "asic",
+          fileName,
+          fieldId,
+          preview,
+        } satisfies AsicDocumentFile);
+      }
+      case "cades": {
+        const preview = await requestApi({
+          fetch,
+          source,
+          path: `/v1/files/${encodeURIComponent(workspaceId)}/cades/${encodeURIComponent(fieldId)}`,
+          schema: cadesPreviewSchema,
+        });
+        return Result.ok({ viewer: kind, fileName, fieldId, preview });
+      }
+      case "dataBox": {
+        const preview = await requestApi({
+          fetch,
+          source,
+          path: `/v1/files/${encodeURIComponent(workspaceId)}/data-box/${encodeURIComponent(fieldId)}`,
+          schema: dataBoxPreviewSchema,
+        });
+        return Result.ok({ viewer: kind, fileName, fieldId, preview });
+      }
+      case "ofd":
+      case "uyap": {
+        const preview = await requestApi({
+          fetch,
+          source,
+          path: `/v1/files/${encodeURIComponent(workspaceId)}/structured-document/${encodeURIComponent(fieldId)}`,
+          schema: structuredDocumentPreviewSchema,
+        });
+        return Result.ok({
+          viewer: "structured-document",
+          fileName,
+          fieldId,
+          preview,
+        } satisfies StructuredDocumentFile);
+      }
+      case undefined:
+        break;
+      default:
+        kind satisfies never;
+        return panic("Unsupported legal file viewer");
+    }
+    const display = await requestApi({
+      fetch,
+      source,
+      path: fileUrlPath(workspaceId, fieldId, "display"),
+      schema: fileUrlSchema,
+    });
     if (Result.isOk(display)) {
       return Result.ok(documentFileOf(display.value, file));
     }
     if (!fallsBackToDownload(display.error)) {
       return Result.err(display.error);
     }
-    const stored = yield* Result.await(read("download"));
-    const original: DocumentFile = {
+    const stored = yield* Result.await(
+      readOriginalDocumentFile({ fetch, source, workspaceId, fieldId }),
+    );
+    const original: NativeDocumentFile = {
       ...documentFileOf(stored, file),
       viewer: "quick-look",
     };

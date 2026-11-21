@@ -112,12 +112,14 @@ jobs:
   release-trigger:
     name: Resolve release trigger
     # A workflow_run trigger is accepted only from this repository's own
-    # release workflow, started by a tag push or a manual dispatch.
+    # release workflow, started by a tag push or a manual dispatch. A release
+    # run whose jobs were all skipped carries no receipt and is ignored.
     if: >-
       github.event_name != 'workflow_run'
       || (github.event.workflow_run.head_repository.full_name == github.repository
       && github.event.workflow_run.path == '.github/workflows/release.yml'
-      && contains(fromJSON('["push", "workflow_dispatch"]'), github.event.workflow_run.event))
+      && contains(fromJSON('["push", "workflow_dispatch"]'), github.event.workflow_run.event)
+      && github.event.workflow_run.conclusion != 'skipped')
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
@@ -244,6 +246,7 @@ jobs:
       package_files: ${{ steps.pack.outputs.package_files }}
       packages: ${{ steps.pack.outputs.packages }}
       source_sha: ${{ steps.pack.outputs.source_sha }}
+      cli_release_ref: ${{ steps.release-source.outputs.release_ref }}
     steps:
       - name: Checkout network retry helper
         timeout-minutes: 2
@@ -467,6 +470,7 @@ jobs:
             exit 1
           fi
           echo "expected_production_commit=${release_sha}" >> "$GITHUB_OUTPUT"
+          echo "release_ref=${release_ref}" >> "$GITHUB_OUTPUT"
 
       - name: Set up Node for the CLI smoke test
         if: contains(fromJSON(steps.pack.outputs.packages), 'cli')
@@ -743,6 +747,280 @@ jobs:
           retention-days: 1
           if-no-files-found: error
 
+  cli-native-build:
+    name: Build standalone CLI (${{ matrix.platform }})
+    needs: pack
+    if: needs.pack.outputs.cli_release_ref != ''
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 40
+    permissions:
+      contents: read
+    strategy: &cli-native-strategy
+      fail-fast: false
+      matrix:
+        include:
+          - platform: darwin-arm64
+            runner: macos-15
+            target: bun-darwin-arm64
+            extension: ""
+          - platform: darwin-x64
+            runner: macos-15
+            target: bun-darwin-x64
+            extension: ""
+          - platform: linux-x64
+            runner: ubuntu-24.04
+            target: bun-linux-x64-baseline
+            extension: ""
+          - platform: linux-arm64
+            runner: ubuntu-24.04-arm
+            target: bun-linux-arm64
+            extension: ""
+          - platform: windows-x64
+            runner: windows-latest
+            target: bun-windows-x64-baseline
+            extension: .exe
+    steps:
+      - name: Checkout validated CLI release source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.pack.outputs.source_sha }}
+          persist-credentials: false
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: package.json
+          no-cache: true
+
+      - name: Install locked build dependencies
+        shell: bash
+        timeout-minutes: 20
+        run: bash scripts/retry.sh bun ci --ignore-scripts
+
+      - name: Compile standalone CLI
+        shell: bash
+        timeout-minutes: 10
+        env:
+          CLI_TARGET: ${{ matrix.target }}
+          CLI_ASSET: stella-${{ matrix.platform }}${{ matrix.extension }}
+        run: |
+          bun run --cwd packages/cli codegen:runtime
+          mkdir -p native-cli
+          cd packages/cli
+          bash ../../scripts/retry.sh bun build src/cli.ts --compile \
+            --target="$CLI_TARGET" --outfile="../../native-cli/$CLI_ASSET" \
+            --asset capabilities --asset src/generated/registry-snapshot.json \
+            --no-compile-autoload-dotenv --no-compile-autoload-bunfig
+
+      - name: Smoke test standalone CLI
+        shell: bash
+        # macOS x64 runs under Rosetta on the signing runner.
+        env:
+          CLI_ASSET: stella-${{ matrix.platform }}${{ matrix.extension }}
+        run: |
+          "./native-cli/$CLI_ASSET" --version
+          "./native-cli/$CLI_ASSET" --help
+
+      - name: Upload unsigned standalone CLI
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: cli-native-build-${{ matrix.platform }}
+          path: native-cli/stella-${{ matrix.platform }}${{ matrix.extension }}
+          if-no-files-found: error
+          retention-days: 7
+
+  cli-native-sign:
+    name: Sign standalone CLI (${{ matrix.platform }})
+    needs: cli-native-build
+    if: github.ref == 'refs/heads/main'
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 40
+    permissions: {}
+    strategy: *cli-native-strategy
+    steps:
+      - name: Download built standalone CLI
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: cli-native-build-${{ matrix.platform }}
+          path: native-cli
+
+      - name: Import Apple Developer ID certificate into temporary keychain
+        if: startsWith(matrix.platform, 'darwin-')
+        uses: apple-actions/import-codesign-certs@288b8ec97b82c66b6f2a6baaf7acc8dfbcbe331c # v7.2.0
+        with:
+          p12-file-base64: ${{ secrets.APPLE_CERTIFICATE }}
+          p12-password: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+
+      - name: Sign and notarize macOS CLI
+        shell: bash
+        if: startsWith(matrix.platform, 'darwin-')
+        timeout-minutes: 25
+        env:
+          CLI_ASSET: stella-${{ matrix.platform }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_KEY_PATH: ${{ runner.temp }}/apple-api.p8
+          APPLE_API_KEY_BASE64: ${{ secrets.APPLE_API_KEY }}
+        run: |
+          set -euo pipefail
+          trap 'rm -f "$APPLE_API_KEY_PATH"' EXIT
+          umask 077
+          printf '%s' "$APPLE_API_KEY_BASE64" | base64 -d > "$APPLE_API_KEY_PATH"
+          chmod 755 "native-cli/$CLI_ASSET"
+          # Signing policy comes from this workflow, never the build artifact.
+          cat > "$RUNNER_TEMP/cli-entitlements.plist" <<'PLIST'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0"><dict>
+          <key>com.apple.security.cs.allow-jit</key><true/>
+          <key>com.apple.security.cs.allow-unsigned-executable-memory</key><true/>
+          </dict></plist>
+          PLIST
+          codesign --force --timestamp --options runtime \
+            --identifier app.stll.cli --entitlements "$RUNNER_TEMP/cli-entitlements.plist" \
+            --sign "$APPLE_SIGNING_IDENTITY" "native-cli/$CLI_ASSET"
+          codesign --verify --strict --verbose=2 "native-cli/$CLI_ASSET"
+          ditto -c -k --keepParent "native-cli/$CLI_ASSET" "$RUNNER_TEMP/cli-notary.zip"
+          xcrun notarytool submit "$RUNNER_TEMP/cli-notary.zip" \
+            --key "$APPLE_API_KEY_PATH" --key-id "$APPLE_API_KEY" \
+            --issuer "$APPLE_API_ISSUER" --wait --timeout 20m --output-format json \
+            > "$RUNNER_TEMP/cli-notary-result.json"
+          jq -e '.status == "Accepted"' "$RUNNER_TEMP/cli-notary-result.json"
+          # A bare Mach-O cannot be stapled. Gatekeeper checks its accepted
+          # notarization ticket online when the installed executable runs.
+
+      - name: Setup Rust for Windows signing tools
+        if: matrix.platform == 'windows-x64'
+        uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+        with:
+          toolchain: 1.100.0
+
+      - name: Install desktop Windows signing CLI
+        if: matrix.platform == 'windows-x64'
+        uses: baptiste0928/cargo-install@8195d4f734a149db85385bb4102b42efcd373759 # v3.5.0
+        with:
+          crate: trusted-signing-cli
+          version: "0.10.0"
+          locked: true
+
+      - name: Sign Windows CLI with desktop signing mechanism
+        if: matrix.platform == 'windows-x64'
+        shell: bash
+        timeout-minutes: 10
+        env:
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+          AZURE_ENDPOINT: ${{ secrets.AZURE_ENDPOINT }}
+          AZURE_CODE_SIGNING_ACCOUNT: ${{ secrets.AZURE_CODE_SIGNING_ACCOUNT }}
+          AZURE_CERT_PROFILE: ${{ secrets.AZURE_CERT_PROFILE }}
+        run: |
+          pwsh -NoProfile -NonInteractive -Command - <<'POWERSHELL'
+          $ErrorActionPreference = "Stop"
+          $signtool = Get-ChildItem -LiteralPath "${env:ProgramFiles(x86)}\Windows Kits\10\bin" -Directory |
+            Where-Object { $_.Name -match '^10\.\d+\.\d+\.\d+$' } |
+            Sort-Object { [Version]$_.Name } -Descending |
+            ForEach-Object { Join-Path $_.FullName 'x64\signtool.exe' } |
+            Where-Object { Test-Path -LiteralPath $_ -PathType Leaf } |
+            Select-Object -First 1
+          if (-not $signtool) { throw "signtool.exe was not found" }
+          $env:SIGNTOOL_PATH = $signtool
+          $executables = @(Get-ChildItem -LiteralPath native-cli -Filter *.exe -File -Recurse -ErrorAction Stop)
+          if ($executables.Count -eq 0) { throw "No Windows executables to sign" }
+          foreach ($executable in $executables) {
+            & trusted-signing-cli -e $env:AZURE_ENDPOINT -a $env:AZURE_CODE_SIGNING_ACCOUNT -c $env:AZURE_CERT_PROFILE $executable.FullName
+            if ($LASTEXITCODE -ne 0) { throw "Windows executable signing failed" }
+          }
+
+          POWERSHELL
+
+      - name: Verify Windows signatures and timestamps
+        if: matrix.platform == 'windows-x64'
+        shell: bash
+        env:
+          SIGNED_ARTIFACT_DIRECTORY: native-cli
+        run: |
+          pwsh -NoProfile -NonInteractive -Command - <<'POWERSHELL'
+          $ErrorActionPreference = "Stop"
+          $executables = @(Get-ChildItem -LiteralPath $env:SIGNED_ARTIFACT_DIRECTORY -Filter *.exe -File -Recurse -ErrorAction Stop)
+          if ($executables.Count -eq 0) { throw "No Windows executables to verify" }
+          foreach ($executable in $executables) {
+            $signature = Get-AuthenticodeSignature -LiteralPath $executable.FullName -ErrorAction Stop
+            if ($signature.Status -ne "Valid") { throw "Windows Authenticode signature is invalid" }
+            if ($null -eq $signature.TimeStamperCertificate) { throw "Windows Authenticode timestamp is missing" }
+          }
+
+          POWERSHELL
+
+      - name: Upload verified standalone CLI
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: cli-native-release-${{ matrix.platform }}
+          path: native-cli/stella-${{ matrix.platform }}${{ matrix.extension }}
+          if-no-files-found: error
+          retention-days: 7
+
+  cli-native-upload:
+    name: Publish standalone CLI assets
+    needs: [pack, release-cli, cli-native-sign]
+    if: >-
+      !cancelled()
+      && needs.pack.result == 'success'
+      && needs.release-cli.result == 'success'
+      && needs.cli-native-sign.result == 'success'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      actions: read
+      contents: write
+      id-token: write
+      attestations: write
+    steps:
+      - name: Checkout release asset tooling
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.workflow_sha }}
+          persist-credentials: false
+          sparse-checkout: |
+            scripts/gh-retry.sh
+            scripts/upload-release-assets.sh
+            scripts/download-run-artifact.sh
+            .github/actions/provenance
+          sparse-checkout-cone-mode: false
+
+      - name: Download standalone CLI binaries
+        timeout-minutes: 5
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/download-run-artifact.sh --pattern 'cli-native-release-*' --merge --path native-cli
+
+      - name: Hash final release binaries
+        timeout-minutes: 5
+        run: |
+          set -euo pipefail
+          assets=(stella-darwin-arm64 stella-darwin-x64 stella-linux-x64 stella-linux-arm64 stella-windows-x64.exe)
+          (
+            cd native-cli
+            sha256sum "${assets[@]}" > checksums.txt
+          )
+
+      - name: Attest release binaries and checksums
+        timeout-minutes: 5
+        uses: ./.github/actions/provenance
+        with:
+          subject-path: native-cli/*
+
+      - name: Attach verified binaries to the existing release
+        timeout-minutes: 5
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CLI_RELEASE_REF: ${{ needs.pack.outputs.cli_release_ref }}
+          GH_RETRY_SCRIPT: ${{ github.workspace }}/scripts/gh-retry.sh
+        run: |
+          bash scripts/upload-release-assets.sh "$GITHUB_REPOSITORY" "$CLI_RELEASE_REF" native-cli/*
+
   # npm-release-jobs:start
 
   # Generated by scripts/generate-npm-release-jobs.ts; do not edit.
@@ -767,7 +1045,7 @@ jobs:
       actions: read
       contents: write
       id-token: write
-    uses: stella/.github/.github/workflows/npm-independent-release.yml@0cc2def60afb3e0fac0df9f541baf926f77889fa # release job environment input
+    uses: stella/.github/.github/workflows/npm-independent-release.yml@2664e46f02aea7164ba71bcdd485a686166993a4 # release job environment input
     with:
       environment: release-app
       artifact-pattern: npm-tarball-auth-model
@@ -798,7 +1076,7 @@ jobs:
       actions: read
       contents: write
       id-token: write
-    uses: stella/.github/.github/workflows/npm-independent-release.yml@0cc2def60afb3e0fac0df9f541baf926f77889fa # release job environment input
+    uses: stella/.github/.github/workflows/npm-independent-release.yml@2664e46f02aea7164ba71bcdd485a686166993a4 # release job environment input
     with:
       environment: release-app
       artifact-pattern: npm-tarball-ai-catalog
@@ -829,7 +1107,7 @@ jobs:
       actions: read
       contents: write
       id-token: write
-    uses: stella/.github/.github/workflows/npm-independent-release.yml@0cc2def60afb3e0fac0df9f541baf926f77889fa # release job environment input
+    uses: stella/.github/.github/workflows/npm-independent-release.yml@2664e46f02aea7164ba71bcdd485a686166993a4 # release job environment input
     with:
       environment: release-app
       artifact-pattern: npm-tarball-text-normalize
@@ -862,7 +1140,7 @@ jobs:
       actions: read
       contents: write
       id-token: write
-    uses: stella/.github/.github/workflows/npm-independent-release.yml@0cc2def60afb3e0fac0df9f541baf926f77889fa # release job environment input
+    uses: stella/.github/.github/workflows/npm-independent-release.yml@2664e46f02aea7164ba71bcdd485a686166993a4 # release job environment input
     with:
       environment: release-app
       artifact-pattern: npm-tarball-anonymize-chat
@@ -893,7 +1171,7 @@ jobs:
       actions: read
       contents: write
       id-token: write
-    uses: stella/.github/.github/workflows/npm-independent-release.yml@0cc2def60afb3e0fac0df9f541baf926f77889fa # release job environment input
+    uses: stella/.github/.github/workflows/npm-independent-release.yml@2664e46f02aea7164ba71bcdd485a686166993a4 # release job environment input
     with:
       environment: release-app
       artifact-pattern: npm-tarball-ui
@@ -924,7 +1202,7 @@ jobs:
       actions: read
       contents: write
       id-token: write
-    uses: stella/.github/.github/workflows/npm-independent-release.yml@0cc2def60afb3e0fac0df9f541baf926f77889fa # release job environment input
+    uses: stella/.github/.github/workflows/npm-independent-release.yml@2664e46f02aea7164ba71bcdd485a686166993a4 # release job environment input
     with:
       environment: release-app
       artifact-pattern: npm-tarball-html
@@ -961,7 +1239,7 @@ jobs:
       actions: read
       contents: write
       id-token: write
-    uses: stella/.github/.github/workflows/npm-independent-release.yml@0cc2def60afb3e0fac0df9f541baf926f77889fa # release job environment input
+    uses: stella/.github/.github/workflows/npm-independent-release.yml@2664e46f02aea7164ba71bcdd485a686166993a4 # release job environment input
     with:
       environment: release-app
       artifact-pattern: npm-tarball-chat
@@ -992,7 +1270,7 @@ jobs:
       actions: read
       contents: write
       id-token: write
-    uses: stella/.github/.github/workflows/npm-independent-release.yml@0cc2def60afb3e0fac0df9f541baf926f77889fa # release job environment input
+    uses: stella/.github/.github/workflows/npm-independent-release.yml@2664e46f02aea7164ba71bcdd485a686166993a4 # release job environment input
     with:
       environment: release-app
       artifact-pattern: npm-tarball-country-codes
@@ -1027,7 +1305,7 @@ jobs:
       actions: read
       contents: write
       id-token: write
-    uses: stella/.github/.github/workflows/npm-independent-release.yml@0cc2def60afb3e0fac0df9f541baf926f77889fa # release job environment input
+    uses: stella/.github/.github/workflows/npm-independent-release.yml@2664e46f02aea7164ba71bcdd485a686166993a4 # release job environment input
     with:
       environment: release-app
       artifact-pattern: npm-tarball-business-registries
@@ -1058,7 +1336,7 @@ jobs:
       actions: read
       contents: write
       id-token: write
-    uses: stella/.github/.github/workflows/npm-independent-release.yml@0cc2def60afb3e0fac0df9f541baf926f77889fa # release job environment input
+    uses: stella/.github/.github/workflows/npm-independent-release.yml@2664e46f02aea7164ba71bcdd485a686166993a4 # release job environment input
     with:
       environment: release-app
       artifact-pattern: npm-tarball-conditions
@@ -1091,7 +1369,7 @@ jobs:
       actions: read
       contents: write
       id-token: write
-    uses: stella/.github/.github/workflows/npm-independent-release.yml@0cc2def60afb3e0fac0df9f541baf926f77889fa # release job environment input
+    uses: stella/.github/.github/workflows/npm-independent-release.yml@2664e46f02aea7164ba71bcdd485a686166993a4 # release job environment input
     with:
       environment: release-app
       artifact-pattern: npm-tarball-template-conditions
@@ -1122,7 +1400,7 @@ jobs:
       actions: read
       contents: write
       id-token: write
-    uses: stella/.github/.github/workflows/npm-independent-release.yml@0cc2def60afb3e0fac0df9f541baf926f77889fa # release job environment input
+    uses: stella/.github/.github/workflows/npm-independent-release.yml@2664e46f02aea7164ba71bcdd485a686166993a4 # release job environment input
     with:
       environment: release-app
       artifact-pattern: npm-tarball-docx-utils
@@ -1153,7 +1431,7 @@ jobs:
       actions: read
       contents: write
       id-token: write
-    uses: stella/.github/.github/workflows/npm-independent-release.yml@0cc2def60afb3e0fac0df9f541baf926f77889fa # release job environment input
+    uses: stella/.github/.github/workflows/npm-independent-release.yml@2664e46f02aea7164ba71bcdd485a686166993a4 # release job environment input
     with:
       environment: release-app
       artifact-pattern: npm-tarball-start-runtime
@@ -1184,7 +1462,7 @@ jobs:
       actions: read
       contents: write
       id-token: write
-    uses: stella/.github/.github/workflows/npm-independent-release.yml@0cc2def60afb3e0fac0df9f541baf926f77889fa # release job environment input
+    uses: stella/.github/.github/workflows/npm-independent-release.yml@2664e46f02aea7164ba71bcdd485a686166993a4 # release job environment input
     with:
       environment: release-app
       artifact-pattern: npm-tarball-ssr-kit
@@ -1215,7 +1493,7 @@ jobs:
       actions: read
       contents: write
       id-token: write
-    uses: stella/.github/.github/workflows/npm-independent-release.yml@0cc2def60afb3e0fac0df9f541baf926f77889fa # release job environment input
+    uses: stella/.github/.github/workflows/npm-independent-release.yml@2664e46f02aea7164ba71bcdd485a686166993a4 # release job environment input
     with:
       environment: release-app
       artifact-pattern: npm-tarball-ssr-testkit
@@ -1246,7 +1524,7 @@ jobs:
       actions: read
       contents: write
       id-token: write
-    uses: stella/.github/.github/workflows/npm-independent-release.yml@0cc2def60afb3e0fac0df9f541baf926f77889fa # release job environment input
+    uses: stella/.github/.github/workflows/npm-independent-release.yml@2664e46f02aea7164ba71bcdd485a686166993a4 # release job environment input
     with:
       environment: release-app
       artifact-pattern: npm-tarball-money
@@ -1279,7 +1557,7 @@ jobs:
       actions: read
       contents: write
       id-token: write
-    uses: stella/.github/.github/workflows/npm-independent-release.yml@0cc2def60afb3e0fac0df9f541baf926f77889fa # release job environment input
+    uses: stella/.github/.github/workflows/npm-independent-release.yml@2664e46f02aea7164ba71bcdd485a686166993a4 # release job environment input
     with:
       environment: release-app
       artifact-pattern: npm-tarball-calculations
@@ -1314,7 +1592,7 @@ jobs:
       actions: read
       contents: write
       id-token: write
-    uses: stella/.github/.github/workflows/npm-independent-release.yml@0cc2def60afb3e0fac0df9f541baf926f77889fa # release job environment input
+    uses: stella/.github/.github/workflows/npm-independent-release.yml@2664e46f02aea7164ba71bcdd485a686166993a4 # release job environment input
     with:
       environment: release-app
       artifact-pattern: npm-tarball-workspace-model
@@ -1353,7 +1631,7 @@ jobs:
       actions: read
       contents: write
       id-token: write
-    uses: stella/.github/.github/workflows/npm-independent-release.yml@0cc2def60afb3e0fac0df9f541baf926f77889fa # release job environment input
+    uses: stella/.github/.github/workflows/npm-independent-release.yml@2664e46f02aea7164ba71bcdd485a686166993a4 # release job environment input
     with:
       environment: release-app
       artifact-pattern: npm-tarball-workspace-ui
@@ -1384,7 +1662,7 @@ jobs:
       actions: read
       contents: write
       id-token: write
-    uses: stella/.github/.github/workflows/npm-independent-release.yml@0cc2def60afb3e0fac0df9f541baf926f77889fa # release job environment input
+    uses: stella/.github/.github/workflows/npm-independent-release.yml@2664e46f02aea7164ba71bcdd485a686166993a4 # release job environment input
     with:
       environment: release-app
       artifact-pattern: npm-tarball-stable-stringify
@@ -1421,7 +1699,7 @@ jobs:
       actions: read
       contents: write
       id-token: write
-    uses: stella/.github/.github/workflows/npm-independent-release.yml@0cc2def60afb3e0fac0df9f541baf926f77889fa # release job environment input
+    uses: stella/.github/.github/workflows/npm-independent-release.yml@2664e46f02aea7164ba71bcdd485a686166993a4 # release job environment input
     with:
       environment: release-app
       artifact-pattern: npm-tarball-agent-input
@@ -1454,7 +1732,7 @@ jobs:
       actions: read
       contents: write
       id-token: write
-    uses: stella/.github/.github/workflows/npm-independent-release.yml@0cc2def60afb3e0fac0df9f541baf926f77889fa # release job environment input
+    uses: stella/.github/.github/workflows/npm-independent-release.yml@2664e46f02aea7164ba71bcdd485a686166993a4 # release job environment input
     with:
       environment: release-app
       artifact-pattern: npm-tarball-mcp-kit
@@ -1485,7 +1763,7 @@ jobs:
       actions: read
       contents: write
       id-token: write
-    uses: stella/.github/.github/workflows/npm-independent-release.yml@0cc2def60afb3e0fac0df9f541baf926f77889fa # release job environment input
+    uses: stella/.github/.github/workflows/npm-independent-release.yml@2664e46f02aea7164ba71bcdd485a686166993a4 # release job environment input
     with:
       environment: release-app
       artifact-pattern: npm-tarball-fetch
@@ -1518,7 +1796,7 @@ jobs:
       actions: read
       contents: write
       id-token: write
-    uses: stella/.github/.github/workflows/npm-independent-release.yml@0cc2def60afb3e0fac0df9f541baf926f77889fa # release job environment input
+    uses: stella/.github/.github/workflows/npm-independent-release.yml@2664e46f02aea7164ba71bcdd485a686166993a4 # release job environment input
     with:
       environment: release-app
       artifact-pattern: npm-tarball-scan-engine
@@ -1553,7 +1831,7 @@ jobs:
       actions: read
       contents: write
       id-token: write
-    uses: stella/.github/.github/workflows/npm-independent-release.yml@0cc2def60afb3e0fac0df9f541baf926f77889fa # release job environment input
+    uses: stella/.github/.github/workflows/npm-independent-release.yml@2664e46f02aea7164ba71bcdd485a686166993a4 # release job environment input
     with:
       environment: release-app
       artifact-pattern: npm-tarball-cli

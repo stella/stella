@@ -4,11 +4,20 @@
  * content is the ISDS message XML (envelope and base64 files).
  */
 
-/** The registered media type for the `.zfo` extension. */
-export const DATA_BOX_MESSAGE_MIME_TYPE =
-  "application/vnd.software602.filler.form-xml-zip";
+import * as v from "valibot";
 
-const DATA_BOX_MESSAGE_EXTENSION = "zfo";
+import { apiDateTimeSchema } from "./api-date";
+import { legalFileFormat } from "./document-format";
+import { DATA_BOX_FILE_FORMAT } from "./legal-file-formats";
+
+export const DATA_BOX_MESSAGE_MIME_TYPE = DATA_BOX_FILE_FORMAT.mimeType;
+
+export const DATA_BOX_DOCUMENT_KIND = {
+  message: "message",
+  receipt: "receipt",
+} as const;
+
+export const DATA_BOX_DOCUMENT_KINDS = Object.values(DATA_BOX_DOCUMENT_KIND);
 
 export const DATA_BOX_ID_LENGTH = 7;
 
@@ -62,52 +71,62 @@ export const DATA_BOX_MESSAGE_STATUSES = [
 ] as const;
 export type DataBoxMessageStatus = (typeof DATA_BOX_MESSAGE_STATUSES)[number];
 
-export type DataBoxParty = {
-  boxId: string;
-  name: string | null;
-  address: string | null;
+const nullableText = v.nullable(v.string());
+const nullableTimestamp = v.nullable(apiDateTimeSchema);
+
+const dataBoxPartySchema = v.object({
+  boxId: v.pipe(v.string(), v.regex(STORED_DATA_BOX_ID_PATTERN)),
+  name: nullableText,
+  address: nullableText,
   /** The party's reference number (číslo jednací). */
-  referenceNumber: string | null;
+  referenceNumber: nullableText,
   /** The party's file mark (spisová značka). */
-  fileMark: string | null;
-};
+  fileMark: nullableText,
+});
+export type DataBoxParty = v.InferOutput<typeof dataBoxPartySchema>;
 
-/**
- * The system's electronic seal over the exported file, as found in it. It is
- * kept with the source file and never verified, here or over the network.
- */
-export type DataBoxSeal = {
-  status: "unverified";
-  signerName: string | null;
-  issuerName: string | null;
-  serialNumber: string | null;
-  signedAt: string | null;
-};
+/** The system's electronic seal over the file, as stated in its signed container. */
+const dataBoxSealSchema = v.object({
+  status: v.literal("unverified"),
+  signerName: nullableText,
+  issuerName: nullableText,
+  serialNumber: nullableText,
+  signedAt: nullableTimestamp,
+});
+export type DataBoxSeal = v.InferOutput<typeof dataBoxSealSchema>;
 
-/**
- * The message envelope as stated in the exported file, with its direction
- * basis derived from the organization's current data boxes on this read.
- */
-export type DataBoxEnvelope = DataBoxStatedEnvelope & {
-  directionBasis: DataBoxDirectionBasis;
-};
+export const dataBoxDeliveryEventSchema = v.object({
+  occurredAt: nullableTimestamp,
+  description: nullableText,
+});
+export type DataBoxDeliveryEvent = v.InferOutput<
+  typeof dataBoxDeliveryEventSchema
+>;
 
 /** The envelope exactly as the exported file states it. */
-export type DataBoxStatedEnvelope = {
-  messageId: string;
+export const dataBoxStatedEnvelopeSchema = v.object({
+  messageId: v.pipe(v.string(), v.regex(DATA_BOX_MESSAGE_ID_PATTERN)),
   /** `dmType`: a one-letter message kind (V public, K postal, ...). */
-  messageType: string | null;
-  sender: DataBoxParty;
-  recipient: DataBoxParty;
-  toHands: string | null;
-  personalDelivery: boolean | null;
-  substituteDelivery: boolean | null;
+  messageType: nullableText,
+  sender: dataBoxPartySchema,
+  recipient: dataBoxPartySchema,
+  toHands: nullableText,
+  personalDelivery: v.nullable(v.boolean()),
+  substituteDelivery: v.nullable(v.boolean()),
   /** Dodání: when the message reached the recipient's box. */
-  deliveredAt: string | null;
+  deliveredAt: nullableTimestamp,
   /** Doručení: when the message was accepted, by login or by fiction. */
-  acceptedAt: string | null;
-  status: DataBoxMessageStatus | null;
-  seal: DataBoxSeal;
+  acceptedAt: nullableTimestamp,
+  status: v.nullable(v.picklist(DATA_BOX_MESSAGE_STATUSES)),
+  seal: dataBoxSealSchema,
+});
+export type DataBoxStatedEnvelope = v.InferOutput<
+  typeof dataBoxStatedEnvelopeSchema
+>;
+
+/** The organization's current box inventory supplies the message direction. */
+export type DataBoxEnvelope = DataBoxStatedEnvelope & {
+  directionBasis: DataBoxDirectionBasis;
 };
 
 /** The organization's own data boxes, lowercase. */
@@ -131,15 +150,6 @@ export const resolveDataBoxMessageMimeType = ({
   fileName,
   mimeType,
 }: ResolveDataBoxMessageMimeTypeOptions): string | null => {
-  if (isDataBoxMessageMimeType(mimeType)) {
-    return DATA_BOX_MESSAGE_MIME_TYPE;
-  }
-  const dotIndex = fileName?.lastIndexOf(".") ?? -1;
-  if (!fileName || dotIndex === -1) {
-    return null;
-  }
-  return fileName.slice(dotIndex + 1).toLowerCase() ===
-    DATA_BOX_MESSAGE_EXTENSION
-    ? DATA_BOX_MESSAGE_MIME_TYPE
-    : null;
+  const format = legalFileFormat(mimeType, fileName);
+  return format?.kind === DATA_BOX_FILE_FORMAT.kind ? format.mimeType : null;
 };

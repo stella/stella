@@ -35,7 +35,6 @@ const REJECT_VARIANT = {
 } as const satisfies Record<ReviewDecisionEmphasis, string>;
 
 type ReviewDecisionActionsProps = {
-  state: ReviewDecisionState;
   onAccept?: (() => void) | undefined;
   onReject?: (() => void) | undefined;
   onRevert?: (() => void) | undefined;
@@ -50,9 +49,12 @@ type ReviewDecisionActionsProps = {
   reopenLabel?: string | undefined;
   acceptTooltip?: ReactNode;
   rejectTooltip?: ReactNode;
-  disabled?: boolean;
+  disabledReason?: string | undefined;
   className?: string;
-};
+} & (
+  | { state: Exclude<ReviewDecisionState, "applying">; applyingReason?: never }
+  | { state: ReviewDecisionState; applyingReason: string }
+);
 
 /** Accept / reject / revert / reopen, in one shape, for every review surface. */
 export const ReviewDecisionActions = ({
@@ -69,13 +71,14 @@ export const ReviewDecisionActions = ({
   reopenLabel,
   acceptTooltip,
   rejectTooltip,
-  disabled = false,
+  disabledReason,
+  applyingReason,
   className,
 }: ReviewDecisionActionsProps) => {
   const controls = renderControls({
     acceptLabel,
     acceptTooltip,
-    disabled,
+    disabledReason: state === "applying" ? applyingReason : disabledReason,
     emphasis,
     onAccept,
     onReject,
@@ -103,17 +106,17 @@ export const ReviewDecisionActions = ({
 };
 
 type RenderControlsOptions = Required<
-  Pick<ReviewDecisionActionsProps, "disabled" | "emphasis" | "size" | "state">
+  Pick<ReviewDecisionActionsProps, "emphasis" | "size" | "state">
 > &
   Omit<
     ReviewDecisionActionsProps,
-    "className" | "disabled" | "emphasis" | "size" | "state"
+    "className" | "emphasis" | "size" | "state" | "applyingReason"
   >;
 
 const renderControls = ({
   acceptLabel,
   acceptTooltip,
-  disabled,
+  disabledReason,
   emphasis,
   onAccept,
   onReject,
@@ -129,12 +132,12 @@ const renderControls = ({
   switch (state) {
     case "pending":
     case "applying": {
-      const inert = disabled || state === "applying";
       return (
         <>
           {onAccept === undefined ? null : (
             <Button
-              disabled={inert}
+              disabled={disabledReason !== undefined}
+              disabledReason={disabledReason}
               onClick={onAccept}
               size={size}
               tooltip={acceptTooltip}
@@ -146,7 +149,8 @@ const renderControls = ({
           )}
           {onReject === undefined ? null : (
             <Button
-              disabled={inert}
+              disabled={disabledReason !== undefined}
+              disabledReason={disabledReason}
               onClick={onReject}
               size={size}
               tooltip={rejectTooltip}
@@ -169,7 +173,8 @@ const renderControls = ({
         <>
           {onRevert === undefined ? null : (
             <Button
-              disabled={disabled}
+              disabled={disabledReason !== undefined}
+              disabledReason={disabledReason}
               onClick={onRevert}
               size={size}
               variant="muted"
@@ -180,7 +185,8 @@ const renderControls = ({
           {onReopen === undefined ? null : (
             <Button
               aria-label={reopenLabel}
-              disabled={disabled}
+              disabled={disabledReason !== undefined}
+              disabledReason={disabledReason}
               onClick={onReopen}
               size={size === "xs" ? "icon-xs" : "icon-sm"}
               variant="ghost"

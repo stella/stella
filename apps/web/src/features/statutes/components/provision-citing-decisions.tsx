@@ -236,6 +236,7 @@ export const ProvisionCitingDecisions = ({
       {hasNextPage && (
         <Button
           disabled={isFetchingNextPage}
+          disabledReason={t("common.loading")}
           onClick={() =>
             detached(fetchNextPage(), "statutes.citing-decisions-more")
           }

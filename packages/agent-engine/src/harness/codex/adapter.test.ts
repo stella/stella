@@ -52,6 +52,10 @@ import {
   type FakeScenario,
 } from "../../../scripts/fake-codex-app-server";
 import {
+  readCompleteLines,
+  readFakeHarnessLog,
+} from "../../../scripts/fake-harness-peer";
+import {
   FAKE_STELLA_ANSWER,
   FAKE_STELLA_CALLS,
   FAKE_STELLA_SERVER,
@@ -113,6 +117,7 @@ const harnessFor = (
   scenario: FakeScenario,
   capacityRetry = FAST_CAPACITY_RETRY,
   environment: Readonly<Record<string, string>> = {},
+  requestTimeoutMs = 10_000,
 ) => {
   const root = mkdtempSync(path.join(tmpdir(), "stella-codex-adapter-"));
   cleanups.push(() => rmSync(root, { recursive: true, force: true }));
@@ -132,29 +137,50 @@ const harnessFor = (
     },
     clientVersion: "0.0.1",
     gracePeriodMs: 1000,
-    requestTimeoutMs: 10_000,
+    requestTimeoutMs,
     capacityRetry,
     onBackgroundError: (error) => {
       backgroundErrors.push(error);
     },
   });
-  /** Messages the fake server received, in order. */
-  const received = (): {
+  type ReceivedMessage = {
     method?: string;
     id?: unknown;
     params?: unknown;
     result?: unknown;
     error?: unknown;
-  }[] =>
+  };
+  /** Messages the fake server received, in order. */
+  const received = (): ReceivedMessage[] =>
+    readCompleteLines(logPath).flatMap((line) => {
+      const entry: { received?: ReceivedMessage } = JSON.parse(line);
+      return entry.received === undefined ? [] : [entry.received];
+    });
+  const startup = () => {
+    const first: {
+      startup: {
+        codexHome?: unknown;
+        cwd?: unknown;
+        packageCache?: unknown;
+        path?: unknown;
+      };
+    } = JSON.parse(readCompleteLines(logPath)[0] ?? "{}");
+    return first.startup;
+  };
+  /** How many times the server was launched. */
+  const launches = () =>
     readFileSync(logPath, "utf-8")
       .split("\n")
-      .filter((line) => line !== "")
-      .map((line) => JSON.parse(line))
-      .filter((entry) => entry.received !== undefined)
-      .map((entry) => entry.received);
-  const startup = () =>
-    JSON.parse(readFileSync(logPath, "utf-8").split("\n")[0] ?? "{}").startup;
-  return { adapter, codexHome, workspaceDir, logPath, received, startup };
+      .filter((line) => line.startsWith('{"startup":')).length;
+  return {
+    adapter,
+    codexHome,
+    workspaceDir,
+    logPath,
+    received,
+    startup,
+    launches,
+  };
 };
 
 const transcript: ModelMessage[] = [
@@ -243,6 +269,26 @@ const terminal = (events: readonly HarnessEvent[]) => events.at(-1);
 const FUTURE_RESET_ISO = new Date(FAKE_FUTURE_RESET * 1000).toISOString();
 
 describe("Codex adapter over a stdio app-server", () => {
+  test("a start too slow for its deadline is tried once more, and the turn runs", async () => {
+    for (const scenario of ["slow_first_start", "slow_first_thread"] as const) {
+      const harness = harnessFor(scenario, FAST_CAPACITY_RETRY, {}, 2000);
+      const started = await harness.adapter.startTurn(
+        turnInput(harness.workspaceDir),
+      );
+      if (Result.isError(started)) {
+        throw started.error;
+      }
+      const collected = collect(started.value);
+      await collected.done;
+      await started.value.dispose();
+      expect(terminal(collected.events)?.type).toBe("turn.completed");
+      expect(harness.launches()).toBe(2);
+      expect(
+        harness.received().filter(({ method }) => method === "turn/start"),
+      ).toHaveLength(1);
+    }
+  });
+
   test("runs with the stella-owned CODEX_HOME in the workspace and sends the MCP bearer only over stdio", async () => {
     const { events, received, startup, codexHome, workspaceDir } =
       await run("tool_calls");
@@ -2234,9 +2280,10 @@ describe("Codex background terminals after a turn", () => {
     // Its server exited during the turn: nothing is kept any more.
     expect(await next.value.release()).toBeNull();
 
-    const startups = readFileSync(logPath, "utf-8")
-      .split("\n")
-      .filter((line) => line.includes('"startup"'));
+    const startups = readFakeHarnessLog(logPath).filter(
+      (entry) =>
+        typeof entry === "object" && entry !== null && "startup" in entry,
+    );
     expect(startups).toHaveLength(1);
     const methods = received().map(({ method }) => method);
     expect(methods.filter((method) => method === "initialize")).toHaveLength(1);
@@ -2247,6 +2294,43 @@ describe("Codex background terminals after a turn", () => {
     expect(turnStarts).toHaveLength(2);
     expect(turnStarts[1]?.params).toMatchObject({ threadId: FAKE_THREAD_ID });
     expect(methods).toContain("thread/backgroundTerminals/clean");
+  });
+
+  test("a next turn at another model and effort runs in the kept process", async () => {
+    const { adapter, workspaceDir, received, logPath, turn } =
+      await completedTurn("background_terminal");
+    const live = await turn.release();
+    if (live === null) {
+      throw new Error("The turn did not keep its process.");
+    }
+    const next = await adapter.startTurn(
+      turnInput(workspaceDir, {
+        model: "gpt-test-2",
+        reasoningEffort: "high",
+        continuation: { type: "live", session: live },
+      }),
+    );
+    if (Result.isError(next)) {
+      throw next.error;
+    }
+    const collected = collect(next.value);
+    await collected.done;
+    expect(terminal(collected.events)).toMatchObject({
+      type: "turn.completed",
+    });
+    const startups = readFileSync(logPath, "utf-8")
+      .split("\n")
+      .filter((line) => line.includes('"startup"'));
+    expect(startups).toHaveLength(1);
+    const turnStarts = received().filter(
+      ({ method }) => method === "turn/start",
+    );
+    expect(turnStarts[0]?.params).not.toHaveProperty("model");
+    expect(turnStarts[1]?.params).toMatchObject({
+      threadId: FAKE_THREAD_ID,
+      model: "gpt-test-2",
+      effort: "high",
+    });
   });
 
   test("a kept process ends by itself once its last background command exits", async () => {

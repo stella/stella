@@ -1,23 +1,49 @@
 import { DESKTOP_EDIT_FILE_TYPE_CONFIG } from "./desktop-edit-file-types";
+import { legalFileFormat } from "./document-format";
+import { LEGAL_FILE_FORMATS } from "./legal-file-formats";
 
-export const CHAT_FILE_TYPE_CONFIG = [
-  { extensions: [".png"], mimeType: "image/png" },
-  { extensions: [".jpg", ".jpeg"], mimeType: "image/jpeg" },
-  { extensions: [".webp"], mimeType: "image/webp" },
-  { extensions: [".gif"], mimeType: "image/gif" },
-  { extensions: [".pdf"], mimeType: "application/pdf" },
+type ChatFileSource =
+  "native" | "plain-text" | "docx-markdown" | "extracted-text";
+
+const SHARED_INPUT_OUTPUT_FILE_TYPES = [
+  { extensions: [".png"], source: "native", mimeType: "image/png" },
+  { extensions: [".jpg", ".jpeg"], source: "native", mimeType: "image/jpeg" },
+  { extensions: [".webp"], source: "native", mimeType: "image/webp" },
+  { extensions: [".gif"], source: "native", mimeType: "image/gif" },
+  { extensions: [".pdf"], source: "native", mimeType: "application/pdf" },
   {
+    source: "docx-markdown",
     extensions: [DESKTOP_EDIT_FILE_TYPE_CONFIG.docx.extension],
     mimeType: DESKTOP_EDIT_FILE_TYPE_CONFIG.docx.mimeType,
   },
   {
+    source: "extracted-text",
     extensions: [DESKTOP_EDIT_FILE_TYPE_CONFIG.xlsx.extension],
     mimeType: DESKTOP_EDIT_FILE_TYPE_CONFIG.xlsx.mimeType,
   },
-  { extensions: [".txt"], mimeType: "text/plain" },
-  { extensions: [".csv"], mimeType: "text/csv" },
-  { extensions: [".md"], mimeType: "text/markdown" },
+  { extensions: [".txt"], source: "plain-text", mimeType: "text/plain" },
+  { extensions: [".csv"], source: "plain-text", mimeType: "text/csv" },
+  { extensions: [".md"], source: "plain-text", mimeType: "text/markdown" },
 ] as const;
+
+export const CHAT_FILE_TYPE_CONFIG = [
+  ...SHARED_INPUT_OUTPUT_FILE_TYPES,
+  ...LEGAL_FILE_FORMATS.map(
+    ({ extensions, mimeType }) =>
+      ({
+        extensions,
+        mimeType,
+        source: "extracted-text",
+      }) as const,
+  ),
+] as const satisfies readonly {
+  extensions: readonly string[];
+  mimeType: string;
+  source: ChatFileSource;
+}[];
+
+export const chatFileSource = (mimeType: string) =>
+  CHAT_FILE_TYPE_CONFIG.find((entry) => entry.mimeType === mimeType)?.source;
 
 export const CHAT_FILE_MIME_TYPES = CHAT_FILE_TYPE_CONFIG.map(
   ({ mimeType }) => mimeType,
@@ -27,6 +53,25 @@ export type ChatFileMimeType = (typeof CHAT_FILE_MIME_TYPES)[number];
 
 export const isChatFileMimeType = (value: string): value is ChatFileMimeType =>
   CHAT_FILE_MIME_TYPES.some((mimeType) => mimeType === value);
+
+/** Some system pickers supply a generic MIME type for otherwise identifiable files. */
+export const chatFileMimeType = (
+  name: string,
+  mimeType: string | null | undefined,
+): ChatFileMimeType | undefined => {
+  const legal = legalFileFormat(mimeType, name);
+  if (legal) {
+    return legal.mimeType;
+  }
+  const declared = mimeType?.split(";").at(0)?.trim().toLowerCase();
+  if (declared && isChatFileMimeType(declared)) {
+    return declared;
+  }
+  const lower = name.toLowerCase();
+  return SHARED_INPUT_OUTPUT_FILE_TYPES.find(({ extensions }) =>
+    extensions.some((extension) => lower.endsWith(extension)),
+  )?.mimeType;
+};
 
 export const CHAT_FILE_INPUT_ACCEPT = CHAT_FILE_TYPE_CONFIG.flatMap(
   ({ extensions }) => extensions,
@@ -44,7 +89,7 @@ const RUN_OUTPUT_ONLY_FILE_TYPE_CONFIG = [
 ] as const;
 
 const RUN_OUTPUT_FILE_TYPE_CONFIG = [
-  ...CHAT_FILE_TYPE_CONFIG,
+  ...SHARED_INPUT_OUTPUT_FILE_TYPES,
   ...RUN_OUTPUT_ONLY_FILE_TYPE_CONFIG,
 ];
 

@@ -4,39 +4,31 @@ import { useTranslations } from "use-intl";
 import { InfoIcon, PlugIcon, ShieldCheckIcon } from "@stll/ui/icons";
 import { ListItemStatus } from "@stll/ui/list";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "@stll/ui/tooltip";
-import { cn } from "@stll/ui/utils";
 
 import type { ConsentClientIdentity } from "@/components/oauth-consent/client-identity.logic";
+import { ConsentClientTilePair } from "@/components/oauth-consent/consent-card-shell.pending";
 import { VerifiedClientMark } from "@/components/oauth-consent/verified-client-mark";
-import { StellaMark } from "@/components/stella-mark";
 
-const TILE_CLASS =
-  "bg-background outline-foreground/8 flex size-11 shrink-0 items-center justify-center rounded-xl shadow-xs outline-1";
+/** The client's mark: its verified logo, else a neutral connection mark. */
+export const ConsentClientMark = ({
+  identity,
+}: {
+  identity: ConsentClientIdentity;
+}) =>
+  identity.type === "verified" ? (
+    <VerifiedClientMark brand={identity.brand} className="size-6" />
+  ) : (
+    <PlugIcon className="size-6" data-slot="unverified-client-mark" />
+  );
 
-/** The client's tile beside stella's: a verified mark, else a neutral connection mark. */
+/** The client's tile beside stella's, above the consent decision. */
 export const ConsentClientTiles = ({
   identity,
 }: {
   identity: ConsentClientIdentity;
-}) => {
-  const mark =
-    identity.type === "verified" ? (
-      <VerifiedClientMark brand={identity.brand} className="size-6" />
-    ) : null;
-  return (
-    <div className="flex items-center gap-3" aria-hidden="true">
-      <div className={cn(TILE_CLASS, "text-lg font-medium")}>
-        {mark ?? (
-          <PlugIcon className="size-6" data-slot="unverified-client-mark" />
-        )}
-      </div>
-      <span className="text-muted-foreground">+</span>
-      <div className={TILE_CLASS}>
-        <StellaMark className="size-6" />
-      </div>
-    </div>
-  );
-};
+}) => (
+  <ConsentClientTilePair client={<ConsentClientMark identity={identity} />} />
+);
 
 /** One line under the title: who verified the client, or that nobody did. */
 export const ConsentClientVerification = ({

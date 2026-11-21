@@ -27,7 +27,7 @@ import { useTranslations } from "use-intl";
 
 import {
   CHAT_FILE_INPUT_ACCEPT,
-  isChatFileMimeType,
+  chatFileMimeType,
 } from "@stll/api-contract/chat-file-types";
 import {
   CHAT_MEMBER_SEND_ACTION,
@@ -86,8 +86,7 @@ import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { useUnsavedWork } from "@/hooks/use-unsaved-work";
 import type { TranslationKey } from "@/i18n/types";
-import { getAnalytics, useAnalytics } from "@/lib/analytics/provider";
-import type { FollowupSurface } from "@/lib/analytics/types";
+import { getAnalytics } from "@/lib/analytics/provider";
 import {
   areDraftDocsEqual,
   createChatDraftState,
@@ -117,17 +116,6 @@ const EMPTY_ATTACHMENTS: ChatDraftAttachment[] = [];
 const EMPTY_SENT_MESSAGE_HISTORY: readonly string[] = [];
 const EMPTY_CHAT_DRAFT_DOC = createEmptyChatDraftDoc();
 
-// Wrap an interpolated value in Unicode directional isolates (FSI…PDI) so an
-// embedded run keeps its own direction inside a translated string of the
-// opposite direction — e.g. a Latin suggestion inside the Arabic "tab to ask"
-// placeholder, whose trailing "?" would otherwise reorder to the wrong side.
-// The plain-string equivalent of wrapping in <bdi>.
-// U+2068 FIRST STRONG ISOLATE, U+2069 POP DIRECTIONAL ISOLATE.
-const FIRST_STRONG_ISOLATE = String.fromCodePoint(8296);
-const POP_DIRECTIONAL_ISOLATE = String.fromCodePoint(8297);
-const isolateBidi = (value: string): string =>
-  `${FIRST_STRONG_ISOLATE}${value}${POP_DIRECTIONAL_ISOLATE}`;
-
 type ChatDraftFileAttachment = {
   type: "file";
   file: File;
@@ -136,8 +124,24 @@ type ChatDraftFileAttachment = {
   mimeType: string;
 };
 
+/**
+ * A chat file the server already stores (a queued message's, taken back into
+ * the composer to be written again): shown like any file and sent again by
+ * reference, never uploaded twice.
+ */
+export type ChatDraftStoredFileAttachment = {
+  type: "stored_file";
+  filename: string;
+  id: string;
+  mimeType: string;
+  /** The stored file's URL, as the message part named it. */
+  url: string;
+};
+
 export type ChatDraftAttachment =
-  ChatDraftFileAttachment | PastedTextAttachment;
+  | ChatDraftFileAttachment
+  | ChatDraftStoredFileAttachment
+  | PastedTextAttachment;
 
 export type ChatInputDraft = {
   files: ChatDraftAttachment[];
@@ -278,6 +282,7 @@ type RegisteredExtension = {
 export type ChatMessageDraftHandoff = {
   html: string;
   pastedTexts: readonly string[];
+  storedFiles: readonly ChatDraftStoredFileAttachment[];
 };
 
 type ActiveChatEditorHandle = {
@@ -773,47 +778,24 @@ export const useChatComposerWiring = ({
 };
 
 export const useChatEditor = ({
-  followupAnalytics,
   onDraftStart,
   placeholder,
   sentMessageHistory,
   threadRef,
-  suggestedFollowupPrompt,
 }: {
-  followupAnalytics?: { surface: FollowupSurface } | undefined;
   onDraftStart?: (() => void) | undefined;
   placeholder?: string | undefined;
   sentMessageHistory?: readonly string[] | undefined;
   threadRef: ChatThreadRef;
-  suggestedFollowupPrompt?: string | undefined;
 }): ChatEditorController => {
   const t = useTranslations();
-  const analytics = useAnalytics();
   const queryClient = useQueryClient();
-  const defaultPlaceholder = t("chat.placeholder");
-  const tabToAskText = suggestedFollowupPrompt
-    ? t("chat.tabToAsk", { prompt: isolateBidi(suggestedFollowupPrompt) })
-    : undefined;
-  const resolvedPlaceholder = tabToAskText ?? placeholder ?? defaultPlaceholder;
+  // Suggested follow-ups live under the answer they follow
+  // (`SuggestedFollowups`), never in the composer as ghost text.
+  const resolvedPlaceholder = placeholder ?? t("chat.placeholder");
   const placeholderRef = useRef(resolvedPlaceholder);
   // oxlint-disable-next-line react/refs -- latest-ref mirror: the imperative editor's Placeholder plugin reads placeholderRef.current out-of-render, so it must hold this render's value
   placeholderRef.current = resolvedPlaceholder;
-  const suggestedFollowupPromptRef = useRef(suggestedFollowupPrompt);
-  // oxlint-disable-next-line react/refs -- latest-ref mirror: consumed by out-of-render editor handlers, must reflect this render's prop
-  suggestedFollowupPromptRef.current = suggestedFollowupPrompt;
-  // The editor's key handler is installed once; this reads the current
-  // surface when Tab accepts the suggestion.
-  const reportGhostAccepted = useLatestCallback(() => {
-    if (followupAnalytics === undefined) {
-      return;
-    }
-    analytics.captureFollowupSelected({
-      index: 0,
-      source: "generated",
-      surface: followupAnalytics.surface,
-      via: "ghost-tab",
-    });
-  });
   const submitHandlerRef = useRef<ChatComposerSubmitHandler | null>(null);
   const confirmedCredentialSendRef = useRef(false);
   const fileIdCounterRef = useRef(0);
@@ -1011,7 +993,7 @@ export const useChatEditor = ({
         pastedTextAttachmentsRef.current = pastedAttachments;
         const nextAttachments = [
           ...attachmentsRef.current.filter(
-            (attachment) => attachment.type === "file",
+            (attachment) => attachment.type !== "pasted_text",
           ),
           ...readPastedTextAttachments(pastedAttachments),
         ];
@@ -1138,7 +1120,7 @@ export const useChatEditor = ({
   // line breaks survive. What the composer already holds is kept, after it
   // and a paragraph between them.
   const restoreMessageDraft = useLatestCallback(
-    ({ html, pastedTexts }: ChatMessageDraftHandoff) => {
+    ({ html, pastedTexts, storedFiles }: ChatMessageDraftHandoff) => {
       const targetEditor = editorRef.current;
       if (!isUsableEditor(targetEditor)) {
         return;
@@ -1156,6 +1138,16 @@ export const useChatEditor = ({
       }
       for (const text of pastedTexts) {
         addPastedTextAttachment(text);
+      }
+      if (storedFiles.length > 0) {
+        const withStoredFiles = [...attachmentsRef.current, ...storedFiles];
+        attachmentsRef.current = withStoredFiles;
+        const doc = targetEditor.getJSON();
+        getOrCreateWeakSet(editorAuthoredDocsRef).add(doc);
+        setDraft(
+          threadKey,
+          createChatDraftState({ attachments: withStoredFiles, doc }),
+        );
       }
       markDraftStarted();
       targetEditor.commands.focus("end");
@@ -1217,32 +1209,6 @@ export const useChatEditor = ({
     handleKeyDown: (view, event) => {
       if (handleMessageHistoryKeyDown(view.state, event)) {
         return true;
-      }
-
-      // ArrowRight or Tab + empty editor + suggested followup: accept the
-      // suggestion without auto-submitting (so the user can review and press
-      // Enter). Tab is intercepted only in this narrow state — a suggestion
-      // on offer and the input empty — so it still moves focus normally (for
-      // keyboard and screen-reader users) everywhere else, including the
-      // moment the suggestion is gone.
-      if (
-        (event.key === "ArrowRight" || event.key === "Tab") &&
-        !event.shiftKey &&
-        !event.altKey &&
-        !event.ctrlKey &&
-        !event.metaKey &&
-        !event.isComposing
-      ) {
-        const suggestion = suggestedFollowupPromptRef.current;
-        const targetEditor = editorRef.current;
-        if (suggestion && targetEditor?.isEmpty) {
-          event.preventDefault();
-          reportGhostAccepted();
-          targetEditor.commands.setContent(
-            createChatComposerDocument(suggestion),
-          );
-          return true;
-        }
       }
 
       // Submit on Enter (the plain send) or Cmd/Ctrl+Enter (the queue
@@ -1539,13 +1505,14 @@ export const useChatEditor = ({
 
       for (const file of Array.from(files)) {
         if (
-          nextAttachments.filter((item) => item.type === "file").length >=
-          CHAT_FILES_PER_MESSAGE
+          nextAttachments.filter((item) => item.type !== "pasted_text")
+            .length >= CHAT_FILES_PER_MESSAGE
         ) {
           break;
         }
 
-        if (!isChatFileMimeType(file.type) || file.size > CHAT_MAX_FILE_BYTES) {
+        const mimeType = chatFileMimeType(file.name, file.type);
+        if (!mimeType || file.size > CHAT_MAX_FILE_BYTES) {
           continue;
         }
 
@@ -1555,7 +1522,7 @@ export const useChatEditor = ({
           file,
           filename: file.name,
           id: `chat-file-${fileIdCounterRef.current}`,
-          mimeType: file.type,
+          mimeType,
         });
       }
 

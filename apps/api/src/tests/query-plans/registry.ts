@@ -27,6 +27,7 @@ import {
 import { listDecisionsPageQuery } from "@/api/handlers/case-law/decisions/list";
 import {
   decisionIdsByIdentityQuery,
+  servableCandidateRevisionsStatement,
   unresolvedCandidateDecisionRowsStatement,
   unresolvedPageDecisionRowsStatement,
 } from "@/api/handlers/case-law/decisions/search";
@@ -63,11 +64,17 @@ import {
   ID_PAGE_SIZE,
 } from "@/api/lib/case-law/provision-state-backfill/backfill";
 import { CASE_LAW_SURFACE_COUNTRIES } from "@/api/lib/case-law/public-subject";
+import {
+  SITEMAP_RANGE_ROWS,
+  SITEMAP_RANGE_ROWS_CEILING,
+} from "@/api/lib/case-law/sitemap-shard-budget";
 import { sitemapMonthCountSql } from "@/api/lib/case-law/sitemap-shard-refresh";
-import { SITEMAP_SHARD_BUCKET_COUNT } from "@/api/lib/case-law/sitemap-shard-sql";
+import { SITEMAP_RANGES_PER_MONTH_MAX } from "@/api/lib/case-law/sitemap-shard-sql";
 import { sourceArrivalsRefreshQuery } from "@/api/lib/case-law/source-arrivals-refresh";
 import {
+  corpusIndexFlipBehindCursorQuery,
   corpusIndexFlipCoveragePageQuery,
+  corpusIndexFlipPageRecountQuery,
   corpusIndexFlipRegressionQuery,
 } from "@/api/lib/legal-search/corpus-index-flip-parity";
 import { corpusProjectionErasureClaimQuery } from "@/api/lib/legal-search/corpus-index-projection-erasure-store";
@@ -117,6 +124,20 @@ type QueryPlanEntry = {
 /** A generation a flip could move the seeded one's readers to. */
 const FLIP_CANDIDATE_GENERATION = "case_law_v10";
 
+/** Two walked pages' bounds, as a flip's coverage walk keeps them. */
+const FLIP_WALKED_PAGES = [
+  {
+    after: null,
+    last: "0198e331-e578-7000-8000-000000000400",
+    walked: 1000,
+  },
+  {
+    after: "0198e331-e578-7000-8000-000000000400",
+    last: "0198e331-e578-7000-8000-000000000800",
+    walked: 1000,
+  },
+] as const;
+
 /**
  * A read that resolves a decision's language versions probes that one group,
  * a handful of rows per decision on the page, off the covering group index.
@@ -132,7 +153,6 @@ const shardConditions = getShardConditions({
   country: "CZE",
   year: "2010",
   month: "02",
-  bucket: "all",
 });
 if (!Array.isArray(shardConditions)) {
   panic("The query-plan shard fixture must be valid");
@@ -322,9 +342,9 @@ export const QUERY_PLAN_REGISTRY = [
     planMode: "covering-index",
     heapFetchMitigation: {
       type: "heapFetchBudget",
-      rows: SITEMAP_SHARD_BUCKET_COUNT * LIMITS.caseLawSitemapShardUrlLimit,
+      rows: SITEMAP_RANGES_PER_MONTH_MAX * SITEMAP_RANGE_ROWS,
       reason:
-        "Scheduler-only recount of one country-month, read as one range of the partial sitemap index; a month the sitemap can still list holds at most one URL limit per bucket, and heap visits are only for pages not yet all-visible.",
+        "Scheduler-only recount of one country-month, read as one range of the partial sitemap index for the cut and again for the count; a month the sitemap can list holds at most as many ranges as their names hold, and heap visits are only for pages not yet all-visible.",
     },
     contract: planContracts["case-law.sitemap-month-count"],
   },
@@ -345,13 +365,17 @@ export const QUERY_PLAN_REGISTRY = [
     id: "case-law.sitemap-shard-read",
     class: "page",
     role: "public-law-reader",
-    build: (tx) => sitemapShardDecisionsQuery(tx, shardConditions),
+    build: (tx) =>
+      sitemapShardDecisionsQuery(tx, shardConditions, {
+        start: { date: "2010-02-11", id: QUERY_PLAN_SAMPLE.caseLaw.decisionId },
+        end: null,
+      }),
     seed: "case-law",
     heapFetchMitigation: {
       type: "heapFetchBudget",
-      rows: SITEMAP_SHARD_BUCKET_COUNT * LIMITS.caseLawSitemapShardUrlLimit,
+      rows: SITEMAP_RANGE_ROWS_CEILING + 1,
       reason:
-        "One country-month, read as one range of the partial sitemap index before the page is fetched; a month the sitemap can still list holds at most one URL limit per bucket, and heap visits are only for pages not yet all-visible.",
+        "One range of one country-month, read as one range of the date index and stopped one decision past what a file may serve; each decision's language-group probes visit the heap only for pages not yet all-visible.",
     },
     contract: planContracts["case-law.sitemap-shard-read"],
   },
@@ -448,6 +472,27 @@ export const QUERY_PLAN_REGISTRY = [
     seed: "case-law",
     heapFetchMitigation: LANGUAGE_GROUP_HEAP_FETCHES,
     contract: planContracts["case-law.search-candidate-rows"],
+  },
+  {
+    // The keyed read of an indexed ranking, once per scan round: which copy
+    // Postgres serves each candidate from, by primary-key probes only.
+    id: "case-law.search-servable-candidate-revisions",
+    class: "page",
+    role: "public-law-reader",
+    build: (tx) =>
+      servableCandidateRevisionsStatement(tx, {
+        body: { country: sampleCountry },
+        generation: QUERY_PLAN_SAMPLE.caseLaw.generation,
+        ids: QUERY_PLAN_SAMPLE.caseLaw.candidateIds,
+      }),
+    seed: "case-law",
+    heapFetchMitigation: {
+      type: "heapFetchBudget",
+      rows: LIMITS.corpusIndexSearchCandidateLimit,
+      reason:
+        "The decisions of one scan round, probed by the id array the round reached, and heap visits are only for pages not yet all-visible.",
+    },
+    contract: planContracts["case-law.search-servable-candidate-revisions"],
   },
   {
     id: PUBLIC_LAW_SHARED_QUERY.caseLawCorpusIndexRehydration,
@@ -902,8 +947,8 @@ export const QUERY_PLAN_REGISTRY = [
     contract: planContracts["corpus-index.flip-regressions"],
   },
   {
-    // One coverage page: the serving generation's applied-census index in
-    // entity order, each copy probed in the candidate by primary key.
+    // One coverage page: the serving generation's states in primary-key
+    // order, each probed in the candidate by primary key.
     id: "corpus-index.flip-coverage-page",
     class: "page",
     role: "root",
@@ -927,6 +972,57 @@ export const QUERY_PLAN_REGISTRY = [
         "Operator-only page: one candidate primary-key probe per serving copy the page walked, at most the page size, and heap visits are only for pages not yet all-visible.",
     },
     contract: planContracts["corpus-index.flip-coverage-page"],
+  },
+  {
+    // Under the flip's fence: every walked page counted again, one
+    // index-only primary-key range count per page.
+    id: "corpus-index.flip-page-recount",
+    class: "aggregate",
+    role: "root",
+    build: () =>
+      corpusIndexFlipPageRecountQuery(
+        {
+          family: "case_law",
+          serving: QUERY_PLAN_SAMPLE.caseLaw.generation,
+          candidate: FLIP_CANDIDATE_GENERATION,
+        },
+        FLIP_WALKED_PAGES,
+      ),
+    seed: "case-law",
+    heapFetchMitigation: {
+      type: "heapFetchBudget",
+      rows: 5000,
+      reason:
+        "Operator-only, under the flip's fence: one primary-key range count per walked page, at most the coverage page size, and heap visits are only for pages not yet all-visible (measured 0.1 to 0.3 s per 2 M states).",
+    },
+    contract: planContracts["corpus-index.flip-page-recount"],
+  },
+  {
+    // Under the flip's fence: the moved pages' states and the listed ones,
+    // each probed by primary key in both generations.
+    id: "corpus-index.flip-behind-cursor",
+    class: "page",
+    role: "root",
+    build: () =>
+      corpusIndexFlipBehindCursorQuery(
+        {
+          family: "case_law",
+          serving: QUERY_PLAN_SAMPLE.caseLaw.generation,
+          candidate: FLIP_CANDIDATE_GENERATION,
+        },
+        {
+          pages: FLIP_WALKED_PAGES,
+          listed: ["0198e331-e578-7000-8000-000000000900"],
+        },
+      ),
+    seed: "case-law",
+    heapFetchMitigation: {
+      type: "heapFetchBudget",
+      rows: 50_000,
+      reason:
+        "Operator-only, under the flip's fence: one serving and one candidate primary-key probe per state of a page whose count moved or of the listed ones, at most the recheck bound, and heap visits are only for pages not yet all-visible.",
+    },
+    contract: planContracts["corpus-index.flip-behind-cursor"],
   },
 ] as const satisfies readonly QueryPlanEntry[];
 

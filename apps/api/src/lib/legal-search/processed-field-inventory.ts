@@ -1,3 +1,6 @@
+// parser-output-unchanged: the cz-ns-sbirka adapter entry is new; existing adapters read only their own keys, so their parsed output is unchanged.
+// parser-output-unchanged: the br-tjdft adapter entry is new; existing adapters read only their own keys, so their parsed output is unchanged.
+// parser-output-unchanged: the TST adapter entry is new; existing adapters read only their own keys, so their parsed output is unchanged.
 // parser-output-unchanged: the ÚOHS adapter entry is new; existing adapters read only their own keys, so their parsed output is unchanged.
 // parser-output-unchanged: declarations about parser output; no parser reads this module.
 /**
@@ -382,6 +385,44 @@ export const PROCESSED_FIELD_INVENTORY = {
       recordedEvidence(
         "src/handlers/case-law/ingestion/adapters/__fixtures__/cz-uohs-2026-R0137.pdf",
         "src/handlers/case-law/ingestion/adapters/__fixtures__/cz-uohs-2026-S0383.pdf",
+      ),
+    ),
+  },
+  [ADAPTER_KEYS.CZ_ISIR]: {
+    "court-paragraph-numbers": providedField(
+      PARAGRAPH_NUMBERS_FROM_TEXT,
+      recordedEvidence(
+        "src/handlers/case-law/ingestion/parsers/__fixtures__/cz-isir-3-vsph-1361-2023.json",
+        "src/handlers/case-law/ingestion/parsers/__fixtures__/cz-isir-103-vsph-257-2026.json",
+      ),
+    ),
+  },
+  [ADAPTER_KEYS.CZ_NS_SBIRKA]: {
+    "court-paragraph-numbers": providedField(
+      PARAGRAPH_NUMBERS_FROM_TEXT,
+      recordedEvidence(
+        "src/handlers/case-law/ingestion/adapters/__fixtures__/cz-ns-sbirka-5819.html.gz",
+      ),
+    ),
+  },
+  [ADAPTER_KEYS.BR_TJDFT]: {
+    "court-paragraph-numbers": skippedField(
+      PROCESSED_FIELD_SKIP_REASONS.SOURCE_LACKS,
+      "TJDFT judgments are unnumbered running paragraphs under the report, the votes and the decision; only some headnotes enumerate their points",
+      recordedEvidence(
+        "src/handlers/case-law/ingestion/adapters/__fixtures__/br-tjdft-detail-acordao-pje.json.gz",
+        "src/handlers/case-law/ingestion/adapters/__fixtures__/br-tjdft-detail-acordao-2010.json.gz",
+      ),
+    ),
+  },
+  [ADAPTER_KEYS.BR_TST]: {
+    "court-paragraph-numbers": skippedField(
+      PROCESSED_FIELD_SKIP_REASONS.SOURCE_LACKS,
+      "TST decisions print no citable paragraph numbers: an acórdão is cited by its docket, and the numerals it prints open headnote items and lists, not paragraphs",
+      recordedEvidence(
+        "src/handlers/case-law/ingestion/adapters/__fixtures__/br-tst-acordao-2024.json",
+        "src/handlers/case-law/ingestion/adapters/__fixtures__/br-tst-acordao-1985.json",
+        "src/handlers/case-law/ingestion/adapters/__fixtures__/br-tst-despacho-2020.json",
       ),
     ),
   },

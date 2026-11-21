@@ -7,7 +7,7 @@ import { IntlProvider } from "use-intl";
 import type { ChatRunTarget } from "@stll/api-contract/chat-run-target";
 
 import { ChatComposerDock } from "@/components/chat/chat-composer-dock";
-import { ChatMatterPickerPending } from "@/components/chat/chat-matter-picker";
+import { ChatMatterPickerPending } from "@/components/chat/chat-matter-picker.pending";
 import { PromptBarPending } from "@/components/chat/docked-composer";
 import { FormattingProvider } from "@/i18n/formatting-context";
 import en from "@/i18n/langs/en.json";
@@ -43,7 +43,10 @@ describe("chat composer dock", () => {
     expect(markup.match(/data-slot="skeleton"/gu)).toHaveLength(1);
   });
 
-  const dockFor = (runTarget: ChatRunTarget) =>
+  const dockFor = (
+    runTarget: ChatRunTarget,
+    state: "loading" | "ready" = "ready",
+  ) =>
     renderToStaticMarkup(
       <QueryClientProvider client={new QueryClient()}>
         <IntlProvider locale="en" messages={en} timeZone="UTC">
@@ -55,7 +58,7 @@ describe("chat composer dock", () => {
                   scope: "global",
                   threadId: toChatThreadId("thread-1"),
                 },
-                state: "ready",
+                state,
                 selectedModel: null,
                 selectedReasoningEffort: null,
                 selectModel: () => undefined,
@@ -63,6 +66,7 @@ describe("chat composer dock", () => {
                   type: "choice",
                   selected: runTarget,
                   select: () => undefined,
+                  startedInCloud: null,
                 },
               }}
               status="pending"
@@ -87,6 +91,34 @@ describe("chat composer dock", () => {
         reasoningEffort: null,
       }),
     ).not.toContain("lucide-globe");
+  });
+
+  const AUTO_LABEL = `>${en.chat.modelSelector.autoLabel}<`;
+  const PENDING_CHIP = 'data-composer-chip="pending"';
+  const CODEX = {
+    kind: "local",
+    harness: "codex",
+    model: "gpt-5-codex",
+    approvals: "ask",
+    reasoningEffort: null,
+  } as const satisfies ChatRunTarget;
+
+  test("a model chip whose stored choice is not read yet holds a bar, never Auto", () => {
+    const pending = dockFor({ kind: "cloud" }, "loading");
+    expect(pending).toContain(PENDING_CHIP);
+    expect(pending).not.toContain(AUTO_LABEL);
+    // Once read, a chat on stella with no model chosen says Auto.
+    const ready = dockFor({ kind: "cloud" });
+    expect(ready).toContain(AUTO_LABEL);
+    expect(ready).not.toContain(PENDING_CHIP);
+  });
+
+  test("a computer's model chip waits for the agent's own name of the model", () => {
+    // The member's computers are not read in this render: the chip holds its
+    // box instead of showing the stored id and then the agent's label.
+    const markup = dockFor(CODEX);
+    expect(markup).toContain(PENDING_CHIP);
+    expect(markup).not.toContain(">gpt-5-codex<");
   });
 
   test("keeps the known plus control in the pending prompt row", () => {

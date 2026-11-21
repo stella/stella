@@ -410,6 +410,21 @@ describe("PostHog browser analytics adapter", () => {
     });
   });
 
+  test("initialises the shared SDK once across analytics values", () => {
+    posthogMock.__loaded = true;
+    try {
+      const { client } = createPostHogAnalytics({
+        host: "https://posthog.test",
+        key: "phc_test",
+      });
+
+      expect(initMock).not.toHaveBeenCalled();
+      expect(client).toBe(posthogMock);
+    } finally {
+      posthogMock.__loaded = false;
+    }
+  });
+
   test("points UI links at the PostHog origin when ingesting via a proxy", () => {
     createPostHogAnalytics({
       host: "https://e.example.test",

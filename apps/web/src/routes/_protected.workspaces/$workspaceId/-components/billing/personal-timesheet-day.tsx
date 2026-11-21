@@ -54,6 +54,12 @@ import {
 } from "@/lib/workspaces/queries/time-entries";
 import { TimeSuggestionsLane } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/time-suggestions-lane";
 
+import {
+  PersonalTimesheetDayLayout,
+  PersonalTimesheetEntries,
+  PersonalTimesheetEntryLayout,
+} from "./personal-timesheet-day.pending";
+
 type PersonalTimesheetDayProps = {
   canCreateTimeEntry: boolean;
   workspaceId: string;
@@ -246,23 +252,22 @@ export const PersonalTimesheetDay = ({
         };
 
   return (
-    <div className="flex flex-col gap-3">
-      <div className="flex min-h-11 flex-wrap items-center justify-between gap-3">
-        <span className="text-sm font-medium tabular-nums">
-          {formatMinutes(summary.totalMinutes)}
-        </span>
-        {canCreate && (
+    <PersonalTimesheetDayLayout
+      actions={
+        canCreate && (
           <Button
             disabled={!canCreateTimeEntry}
+            disabledReason={tBilling("time.selectEligibleWorkDate")}
             onClick={() => setDialog({ type: "create" })}
             size="sm"
           >
             <PlusIcon className="size-4" />
             {tCommon("logTime")}
           </Button>
-        )}
-      </div>
-
+        )
+      }
+      summary={formatMinutes(summary.totalMinutes)}
+    >
       {canCreate && canCreateTimeEntry && suggestions.items.length > 0 && (
         <TimeSuggestionsLane
           activeMinutes={suggestions.activeMinutes}
@@ -297,76 +302,82 @@ export const PersonalTimesheetDay = ({
       )}
 
       {entries.length > 0 ? (
-        <div className="flex flex-col gap-2">
+        <PersonalTimesheetEntries>
           {entries.map((entry) => (
-            <div
-              className="flex min-h-14 items-center gap-3 rounded-lg border px-3 py-2"
+            <PersonalTimesheetEntryLayout
+              actions={
+                <>
+                  {entry.status === "draft" &&
+                    entry.timerStartedAt === null &&
+                    canUpdate && (
+                      <Button
+                        aria-label={timeEntryActionLabel(
+                          tCommon("edit"),
+                          entry.narrative,
+                        )}
+                        className="size-11"
+                        onClick={() =>
+                          setDialog({ type: "edit", id: entry.id })
+                        }
+                        size="icon"
+                        variant="ghost"
+                      >
+                        <PencilIcon className="size-4" />
+                      </Button>
+                    )}
+                  {entry.status === "draft" &&
+                    entry.timerStartedAt === null &&
+                    canDelete && (
+                      <Button
+                        aria-label={timeEntryActionLabel(
+                          tCommon("delete"),
+                          entry.narrative,
+                        )}
+                        className="size-11"
+                        disabled={deleteEntry.isPending}
+                        disabledReason={tCommon("deleting")}
+                        onClick={() => setDeletingId(entry.id)}
+                        size="icon"
+                        variant="destructive-ghost"
+                      >
+                        <TrashIcon className="size-4" />
+                      </Button>
+                    )}
+                </>
+              }
+              duration={formatMinutes(entry.durationMinutes)}
               key={entry.id}
-            >
-              <div className="min-w-0 flex-1">
-                <TruncatedText
-                  className="text-sm font-medium"
-                  render={<BidiText as="p" />}
-                >
-                  {entry.narrative}
-                </TruncatedText>
-                {(!entry.billable ||
-                  entry.source === "suggested" ||
-                  entry.source === "activity") && (
-                  <span className="text-muted-foreground text-xs">
-                    {[
-                      entry.source === "suggested" ||
-                      entry.source === "activity"
-                        ? tCommon("suggested")
-                        : null,
-                      entry.billable ? null : tBilling("nonBillable"),
-                    ]
-                      .filter((label) => label !== null)
-                      .join(" · ")}
-                  </span>
-                )}
-              </div>
-              <span className="text-muted-foreground shrink-0 text-sm tabular-nums">
-                {formatMinutes(entry.durationMinutes)}
-              </span>
-              {entry.status === "draft" &&
-                entry.timerStartedAt === null &&
-                canUpdate && (
-                  <Button
-                    aria-label={timeEntryActionLabel(
-                      tCommon("edit"),
-                      entry.narrative,
-                    )}
-                    className="size-11"
-                    onClick={() => setDialog({ type: "edit", id: entry.id })}
-                    size="icon"
-                    variant="ghost"
+              narrative={
+                <>
+                  <TruncatedText
+                    className="text-sm font-medium"
+                    render={<BidiText as="p" />}
                   >
-                    <PencilIcon className="size-4" />
-                  </Button>
-                )}
-              {entry.status === "draft" &&
-                entry.timerStartedAt === null &&
-                canDelete && (
-                  <Button
-                    aria-label={timeEntryActionLabel(
-                      tCommon("delete"),
-                      entry.narrative,
-                    )}
-                    className="size-11"
-                    disabled={deleteEntry.isPending}
-                    onClick={() => setDeletingId(entry.id)}
-                    size="icon"
-                    variant="destructive-ghost"
-                  >
-                    <TrashIcon className="size-4" />
-                  </Button>
-                )}
-            </div>
+                    {entry.narrative}
+                  </TruncatedText>
+                  {(!entry.billable ||
+                    entry.source === "suggested" ||
+                    entry.source === "activity") && (
+                    <span className="text-muted-foreground text-xs">
+                      {[
+                        entry.source === "suggested" ||
+                        entry.source === "activity"
+                          ? tCommon("suggested")
+                          : null,
+                        entry.billable ? null : tBilling("nonBillable"),
+                      ]
+                        .filter((label) => label !== null)
+                        .join(" · ")}
+                    </span>
+                  )}
+                </>
+              }
+            />
           ))}
           {entriesQuery.hasNextPage && (
             <Button
               disabled={entriesQuery.isFetchingNextPage}
+              disabledReason={tCommon("loading")}
               onClick={() => {
                 detached(
                   entriesQuery.fetchNextPage(),
@@ -378,13 +389,14 @@ export const PersonalTimesheetDay = ({
               {tCommon("loadMore")}
             </Button>
           )}
-        </div>
+        </PersonalTimesheetEntries>
       ) : (
         <div className="text-muted-foreground flex flex-col items-center gap-3 rounded-lg border border-dashed py-10 text-center text-sm">
           <span>{tBilling("noEntries")}</span>
           {canCreate && (
             <Button
               disabled={!canCreateTimeEntry}
+              disabledReason={tBilling("time.selectEligibleWorkDate")}
               onClick={() => setDialog({ type: "create" })}
               variant="outline"
             >
@@ -442,6 +454,11 @@ export const PersonalTimesheetDay = ({
             </AlertDialogClose>
             <Button
               disabled={!deletingId || deleteEntry.isPending}
+              disabledReason={
+                deleteEntry.isPending
+                  ? tCommon("deleting")
+                  : tCommon("selectTimeEntry")
+              }
               onClick={() => {
                 if (!deletingId) {
                   return;
@@ -463,6 +480,6 @@ export const PersonalTimesheetDay = ({
           </AlertDialogFooter>
         </AlertDialogPopup>
       </AlertDialog>
-    </div>
+    </PersonalTimesheetDayLayout>
   );
 };

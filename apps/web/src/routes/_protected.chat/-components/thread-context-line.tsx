@@ -8,6 +8,8 @@ import { TruncatedText } from "@stll/ui/truncated-text";
 
 import { InlinePill } from "@/components/inline-pill";
 import {
+  AllMattersChip,
+  AllMattersIcon,
   ReferenceChip,
   ReferenceIcon,
 } from "@/components/references/reference-chip";
@@ -20,6 +22,12 @@ import { layoutThreadContext } from "./thread-context-line.logic";
 type ThreadContext = ChatHistoryItem["context"];
 type ThreadContextMatter = ThreadContext["matters"][number];
 type ThreadContextFile = ThreadContext["files"][number];
+
+type ThreadContextProps = {
+  /** How many matters the reader can open; unknown while their list loads. */
+  accessibleMatterCount: number | undefined;
+  context: ThreadContext;
+};
 
 // Chips shrink with the row and truncate their label; the cap keeps one long
 // name from taking the whole line from its neighbours. The column stretches
@@ -47,12 +55,17 @@ const fileReference = (file: ThreadContextFile): ChatReference => ({
  * The quiet context line under a chat history title: the matters and files
  * the chat drew on, as mention-style chips. At most two of each show inline;
  * the rest fold into one "+N" badge whose hidden names screen readers still
- * hear. The line never wraps: chips truncate instead.
+ * hear. A chat that drew on every matter the reader can open shows one
+ * "All matters" chip instead of naming them. The line never wraps: chips
+ * truncate instead.
  */
-export const ThreadContextLine = ({ context }: { context: ThreadContext }) => {
+export const ThreadContextLine = ({
+  accessibleMatterCount,
+  context,
+}: ThreadContextProps) => {
   const t = useTranslations();
   const format = useFormatter();
-  const layout = layoutThreadContext(context);
+  const layout = layoutThreadContext(context, { accessibleMatterCount });
 
   if (!layout.hasContext) {
     return null;
@@ -65,6 +78,11 @@ export const ThreadContextLine = ({ context }: { context: ThreadContext }) => {
 
   return (
     <span className="flex min-w-0 shrink items-center gap-1 overflow-hidden">
+      {layout.allMatters ? (
+        <span className={CHIP_SLOT_CLASS}>
+          <AllMattersChip label={t("inspector.matterPicker.allMatters")} />
+        </span>
+      ) : null}
       {layout.inline.matters.map((matter) => (
         <span className={CHIP_SLOT_CLASS} key={`matter-${matter.id}`}>
           <ReferenceChip
@@ -105,16 +123,23 @@ export const ThreadContextLine = ({ context }: { context: ThreadContext }) => {
  * history row's link owns (so keyboard focus opens it as hover does).
  */
 export const ThreadContextTooltip = ({
+  accessibleMatterCount,
   context,
-}: {
-  context: ThreadContext;
-}) => {
+}: ThreadContextProps) => {
   const t = useTranslations();
-  const layout = layoutThreadContext(context);
+  const layout = layoutThreadContext(context, { accessibleMatterCount });
 
   return (
     <div className="flex min-w-0 flex-col gap-2 py-1">
-      {context.matters.length > 0 ? (
+      {layout.allMatters ? (
+        <ThreadContextSection title={t("common.matters")}>
+          <ThreadContextEntry
+            icon={<AllMattersIcon />}
+            name={t("inspector.matterPicker.allMatters")}
+          />
+        </ThreadContextSection>
+      ) : null}
+      {!layout.allMatters && context.matters.length > 0 ? (
         <ThreadContextSection title={t("common.matters")}>
           {context.matters.map((matter) => (
             <ThreadContextEntry

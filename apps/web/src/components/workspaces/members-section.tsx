@@ -27,17 +27,13 @@ import { usePermissions } from "@/hooks/use-permissions";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
-import { detached } from "@/lib/detached";
 import { toAPIError } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import type { QueryView } from "@/lib/query-view.logic";
 import { queryView } from "@/lib/query-view.logic";
 import { toSafeId } from "@/lib/safe-id";
-import { workspacesKeys } from "@/lib/workspaces/queries";
-import {
-  workspaceMembersKeys,
-  workspaceMembersOptions,
-} from "@/lib/workspaces/queries/workspace-members";
+import { resourceMutation } from "@/lib/workspace-realtime";
+import { workspaceMembersOptions } from "@/lib/workspaces/queries/workspace-members";
 
 type MembersSectionProps = {
   workspaceId: string;
@@ -140,16 +136,20 @@ const MemberRow = ({
   const queryClient = useQueryClient();
   const analytics = useAnalytics();
   const removeMember = useMutation({
-    mutationFn: async (vars: { workspaceId: string; userId: string }) => {
-      const response = await api
-        .workspaces({ workspaceId: toSafeId<"workspace">(vars.workspaceId) })
-        .members({ userId: toSafeId<"user">(vars.userId) })
-        .delete({});
+    mutationFn: resourceMutation({
+      mutation: "removeWorkspaceMember",
+      queryClient,
+      mutationFn: async (vars: { workspaceId: string; userId: string }) => {
+        const response = await api
+          .workspaces({ workspaceId: toSafeId<"workspace">(vars.workspaceId) })
+          .members({ userId: toSafeId<"user">(vars.userId) })
+          .delete({});
 
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-    },
+        if (response.error) {
+          throw toAPIError(response.error);
+        }
+      },
+    }),
     onError: (error) => {
       analytics.captureError(error, {
         fingerprintKey: "MemberRow:failure",
@@ -167,16 +167,6 @@ const MemberRow = ({
             title: t("success.memberRemoved"),
             type: "success",
           });
-          detached(
-            queryClient.invalidateQueries({
-              queryKey: workspaceMembersKeys.all(workspaceId),
-            }),
-            "members-section.invalidate",
-          );
-          detached(
-            queryClient.invalidateQueries({ queryKey: workspacesKeys.all }),
-            "members-section.invalidate",
-          );
         },
         onError: (error) => {
           notifyUserError(error, t("errors.actionFailed"));
@@ -223,6 +213,7 @@ const MemberRow = ({
               </DialogClose>
               <Button
                 disabled={removeMember.isPending}
+                disabledReason={t("common.removing")}
                 onClick={handleRemove}
                 variant="destructive"
               >

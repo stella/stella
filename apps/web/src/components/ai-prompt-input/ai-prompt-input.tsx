@@ -56,6 +56,7 @@ type AIPromptValueFormat = "html" | "text";
 
 type AIPromptEditAction = {
   disabled: boolean;
+  disabledReason?: string | undefined;
   isPending: boolean;
   label: string;
   onClick: (instruction: string) => void;
@@ -134,6 +135,7 @@ export const AIPromptInput = ({
     activeOrganizationId,
     userId,
   );
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- load-bearing, without this memo boundary the React Compiler does not cache this value
   const slashShortcutRows = useMemo(
     () =>
       commandShortcutRowsFromSkillPages(skillPages?.pages, unavailableSkillIds),
@@ -150,6 +152,7 @@ export const AIPromptInput = ({
     isFetchingNextSkillPage,
     isNextSkillPageError,
   ]);
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- load-bearing, without this memo boundary the React Compiler does not cache this value
   const slashItems = useMemo<SlashItem[]>(
     () =>
       buildChatSlashItems({
@@ -317,6 +320,7 @@ export const AIPromptInput = ({
             variant === "filled" && "end-1 top-1",
           )}
           disabled={aiEditAction.disabled}
+          disabledReason={aiEditAction.disabledReason}
           isPending={aiEditAction.isPending}
           label={aiEditAction.label}
           onRewrite={aiEditAction.onClick}

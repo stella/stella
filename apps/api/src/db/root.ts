@@ -39,10 +39,15 @@ import {
 import type { AuditRecorder } from "@/api/lib/db/audit-recording";
 import { runTransactionsInCallerContext } from "@/api/lib/db/caller-async-context";
 import {
+  discardChatLimitResumeOnTx,
+  readDueChatLimitResumesOnTx,
+} from "@/api/lib/db/chat-limit-reminder-system";
+import {
   holdQueueOfUnavailableMemberOnTx,
   readDueQueueHeadOnTx,
   sweepThreadsWithDueQueueOnTx,
 } from "@/api/lib/db/chat-queue-system";
+import { sweepHandedOverChatTurnsOnTx } from "@/api/lib/db/chat-turn-handover-system";
 import { recordLegalResolveAuditInTransaction } from "@/api/lib/db/legal-resolve-audit";
 import type { LegalResolveAudit } from "@/api/lib/db/legal-resolve-audit";
 import { meterSqlClient } from "@/api/lib/db/meter-client";
@@ -73,6 +78,11 @@ import type {
   ChangeServiceOAuthClientOptions,
   CreateServiceOAuthClientOptions,
 } from "@/api/lib/db/service-client-operator";
+import {
+  readSessionSsoAccess,
+  ssoRefusesSessionInAny,
+} from "@/api/lib/db/sso-access";
+import type { SsoRequestLookup } from "@/api/lib/db/sso-access";
 import { abortTransaction } from "@/api/lib/db/transaction-abort";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { fingerprintRequest } from "@/api/lib/idempotency/request-receipts";
@@ -270,6 +280,39 @@ export const holdChatQueueOfUnavailableMember = async (
     async (tx) => await holdQueueOfUnavailableMemberOnTx({ ...options, tx }),
   );
 
+/**
+ * The limit resumer reads across organizations which requests to continue a
+ * chat after a usage limit are due and whose they are, before that member is
+ * proved again, and drops one whose member can no longer act. Ids, owners
+ * and times only; the resumed turn, or the notification instead, is written
+ * on the member's own connection.
+ */
+export const readDueChatLimitResumes = async (
+  options: Omit<Parameters<typeof readDueChatLimitResumesOnTx>[0], "tx">,
+) =>
+  await withAggregateTransaction(
+    rootDb,
+    async (tx) => await readDueChatLimitResumesOnTx({ ...options, tx }),
+  );
+export const discardChatLimitResume = async (
+  options: Omit<Parameters<typeof discardChatLimitResumeOnTx>[0], "tx">,
+) =>
+  await withAggregateTransaction(
+    rootDb,
+    async (tx) => await discardChatLimitResumeOnTx({ ...options, tx }),
+  );
+
+/**
+ * The handed-over chat turns another task may adopt, across organizations,
+ * before their members are proved again; the adoption runs on the member's
+ * own connection.
+ */
+export const sweepHandedOverChatTurns = async (limit: number) =>
+  await withAggregateTransaction(
+    rootDb,
+    async (tx) => await sweepHandedOverChatTurnsOnTx({ limit, tx }),
+  );
+
 /** Organization-bound OAuth operations never expose the owner connection. */
 export const readServiceOAuthClientBinding = async (clientId: string) =>
   await readOAuthClientBinding(rootDb, clientId);
@@ -316,6 +359,26 @@ export const recordLegalResolveAudit = async (options: LegalResolveAudit) =>
     async (tx) =>
       await recordLegalResolveAuditInTransaction({ ...options, tx }),
   );
+
+/**
+ * The SSO decision for the auth framework's organization endpoints, for
+ * OAuth consent and for signed access tokens. Each runs outside any request
+ * transaction, so the decision reads on this connection; callers receive the
+ * answer, never the handle.
+ */
+export const readOrganizationRequestSsoRefusal = async (
+  lookup: SsoRequestLookup,
+) => await ssoRefusesSessionInAny(rootDb, lookup);
+export const readConsentSsoAccess = async (
+  lookup: Omit<Parameters<typeof readSessionSsoAccess>[1], "session">,
+) => await readSessionSsoAccess(rootDb, { ...lookup, session: "live" });
+/**
+ * The SSO decision for a signed access token, which no row records: it is
+ * decided when the token is signed, against the session the grant recorded.
+ */
+export const readSignedAccessTokenSsoAccess = async (
+  lookup: Omit<Parameters<typeof readSessionSsoAccess>[1], "session">,
+) => await readSessionSsoAccess(rootDb, { ...lookup, session: "recorded" });
 
 type ReadOAuthGrantAdmissionOptions = {
   clientId: string;

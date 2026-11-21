@@ -9,14 +9,16 @@ import type { AuthoredDocumentPropertyKey } from "@stll/api-contract";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import { entities, entityVersions, fields } from "@/api/db/schema";
+import { envBase } from "@/api/env-base";
 import { status } from "@/api/http/status";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
+import { CALLER_AUTHORIZED } from "@/api/lib/entities/buffer-write-authority";
 import { createEntityVersionFromBuffer } from "@/api/lib/entity-versions/create-entity-version-from-buffer";
 import { serverBuiltFileEncryption } from "@/api/lib/files/detect-file-encryption";
 import { writeDocumentProperties } from "@/api/lib/files/document-properties";
 import { createFileKey } from "@/api/lib/files/utils";
-import { readS3ArrayBuffer } from "@/api/lib/s3";
+import { readS3ObjectBounded } from "@/api/lib/s3";
 import { withTimeout } from "@/api/lib/with-timeout";
 
 const DOCUMENT_PROPERTIES_READ_TIMEOUT_MS = 30 * 1000;
@@ -124,23 +126,31 @@ export const updateDocumentProperties = async ({
 
   const bytes = await withTimeout(
     async (signal) =>
-      await readS3ArrayBuffer(
-        createFileKey({
+      await readS3ObjectBounded({
+        bucket: envBase.S3_BUCKET,
+        key: createFileKey({
           organizationId,
           workspaceId,
           fileId: content.id,
           mimeType: content.mimeType,
         }),
+        maxBytes: DOCUMENT_PROPERTIES_MAX_BYTES,
         signal,
-      ),
+      }),
     {
       label: "Document properties storage read",
       timeoutMs: DOCUMENT_PROPERTIES_READ_TIMEOUT_MS,
     },
   );
 
+  const buffer =
+    bytes.buffer instanceof ArrayBuffer &&
+    bytes.byteOffset === 0 &&
+    bytes.byteLength === bytes.buffer.byteLength
+      ? bytes.buffer
+      : bytes.slice().buffer;
   const written = await writeDocumentProperties({
-    bytes,
+    bytes: buffer,
     mimeType: content.mimeType,
     values: Object.fromEntries(entries),
   });
@@ -152,6 +162,7 @@ export const updateDocumentProperties = async ({
   // a file, so version numbering, field cloning, the audit event, derivative
   // and extraction re-queueing all stay identical to an ordinary re-upload.
   const result = await createEntityVersionFromBuffer({
+    authority: CALLER_AUTHORIZED,
     buffer: written.bytes,
     entityId: row.entityId,
     fileName: content.fileName,

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import type { ComponentType, ReactNode } from "react";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Result } from "better-result";
@@ -17,25 +18,20 @@ import {
   DialogPopup,
   DialogTitle,
 } from "@stll/ui/dialog";
+import { KeyRoundIcon, MailIcon } from "@stll/ui/icons";
 import { InputOTP, InputOTPGroup, InputOTPSlot } from "@stll/ui/input-otp";
-import {
-  List,
-  ListGroup,
-  ListGroupDescription,
-  ListGroupHeader,
-  ListGroupHeading,
-  ListGroupTitle,
-  ListItem,
-  ListItemActions,
-  ListItemContent,
-  ListItemDescription,
-  ListItemTitle,
-} from "@stll/ui/list";
+import { ListItemMedia } from "@stll/ui/list";
+import { SettingsPanel, SettingsRow } from "@stll/ui/settings";
 
 import {
+  type SocialProvider,
   socialProviderName,
   socialProviderSchema,
 } from "@/components/auth/access-reset.logic";
+import {
+  GoogleIcon,
+  MicrosoftIcon,
+} from "@/components/auth/sign-in-brand-marks";
 import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { linkedAccountsOptions } from "@/lib/account/queries";
 import { useAnalytics } from "@/lib/analytics/provider";
@@ -46,6 +42,12 @@ import { toAuthClientError } from "@/lib/errors/auth";
 import { readQueryResult } from "@/lib/errors/query-result";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { queryView } from "@/lib/query-view.logic";
+import type { QueryView } from "@/lib/query-view.logic";
+import {
+  SIGN_IN_METHODS_SECTION_ID,
+  SignInMethodsGroup,
+  SignInMethodsRowsPending,
+} from "@/routes/_protected.settings/-components/account/sign-in-methods.pending";
 
 type SelectedAccount = { id: string; provider: string };
 const CONFIRMATION_CODE_LENGTH = 6;
@@ -76,7 +78,7 @@ export const SignInMethods = () => {
       const result = await authClient.linkSocial({
         provider,
         callbackURL: new URL(
-          "/settings/account/profile",
+          `/settings/account/security#${SIGN_IN_METHODS_SECTION_ID}`,
           window.location.origin,
         ).toString(),
         errorCallbackURL: new URL(
@@ -145,39 +147,41 @@ export const SignInMethods = () => {
     },
   });
   const pending = connect.isPending || send.isPending || unlink.isPending;
+  const pendingReason = t(
+    pendingSignInReasonKey({
+      connecting: connect.isPending,
+      sending: send.isPending,
+    }),
+  );
   const dataReady =
     accountsView.type === "items" &&
     accountsView.refetchError === undefined &&
     capabilitiesView.type === "items" &&
     capabilitiesView.refetchError === undefined;
 
+  const loading =
+    accountsView.type === "pending" || capabilitiesView.type === "pending";
+
   return (
-    <ListGroup>
-      <ListGroupHeader>
-        <ListGroupHeading>
-          <ListGroupTitle>
-            {t("settings.account.signInMethods.title")}
-          </ListGroupTitle>
-          <ListGroupDescription>
-            {t("settings.account.signInMethods.description")}
-          </ListGroupDescription>
-        </ListGroupHeading>
-      </ListGroupHeader>
-      <QueryViewFeedback view={accountsView} />
-      <QueryViewFeedback view={capabilitiesView} />
+    <SignInMethodsGroup>
+      {/* While either read loads, the rows' placeholders hold their place.
+          A failed read offers its retry on its own, whatever the other read
+          is doing; neither prints a loading line. */}
+      {(readFailed(accountsView) || readFailed(capabilitiesView)) && (
+        <SettingsPanel>
+          <QueryViewFeedback view={accountsView} />
+          <QueryViewFeedback view={capabilitiesView} />
+        </SettingsPanel>
+      )}
+      {loading && <SignInMethodsRowsPending />}
       {dataReady && (
-        <List>
+        <>
           {capabilitiesView.items.emailOtp && (
-            <ListItem>
-              <ListItemContent>
-                <ListItemTitle>
-                  {t("settings.account.signInMethods.emailCode")}
-                </ListItemTitle>
-                <ListItemDescription>
-                  {t("settings.account.signInMethods.emailCodeDescription")}
-                </ListItemDescription>
-              </ListItemContent>
-            </ListItem>
+            <SignInMethodTile
+              mark={<MailIcon aria-hidden="true" className="size-4" />}
+              name={t("settings.account.signInMethods.emailCode")}
+              status={t("settings.account.security.methodAlwaysAvailable")}
+            />
           )}
           {accountsView.items.map((account) => {
             const provider = v.safeParse(
@@ -190,41 +194,52 @@ export const SignInMethods = () => {
             } else if (account.providerId === "credential") {
               name = t("auth.password");
             }
+            let note: string | undefined;
+            if (accountsView.items.length <= 1) {
+              note = t("settings.account.signInMethods.lastMethod");
+            } else if (!capabilitiesView.items.transactionalEmail) {
+              note = t("settings.account.signInMethods.unavailable");
+            }
+            const resolveDisconnectDisabledReason = () => {
+              if (pending) {
+                return pendingReason;
+              }
+              if (accountsView.items.length <= 1) {
+                return t("settings.account.signInMethods.lastMethod");
+              }
+              return t("settings.account.signInMethods.unavailable");
+            };
+
             return (
-              <ListItem key={account.id}>
-                <ListItemContent>
-                  <ListItemTitle>
-                    <bdi>{name}</bdi>
-                  </ListItemTitle>
-                  {accountsView.items.length <= 1 && (
-                    <ListItemDescription>
-                      {t("settings.account.signInMethods.lastMethod")}
-                    </ListItemDescription>
-                  )}
-                  {!capabilitiesView.items.transactionalEmail && (
-                    <ListItemDescription>
-                      {t("settings.account.signInMethods.unavailable")}
-                    </ListItemDescription>
-                  )}
-                </ListItemContent>
-                <ListItemActions>
-                  <Button
-                    variant="ghost"
-                    disabled={
-                      pending ||
-                      accountsView.items.length <= 1 ||
-                      !capabilitiesView.items.transactionalEmail
-                    }
-                    onClick={() => {
-                      setSelected({ id: account.id, provider: name });
-                      setCode("");
-                      setConfirmation("request");
-                    }}
-                  >
-                    {t("common.disconnect")}
-                  </Button>
-                </ListItemActions>
-              </ListItem>
+              <SignInMethodTile
+                key={account.id}
+                mark={
+                  provider.success ? (
+                    <ProviderMark provider={provider.output} />
+                  ) : undefined
+                }
+                name={name}
+                note={note}
+                status={t("common.connected")}
+              >
+                <Button
+                  disabled={
+                    pending ||
+                    accountsView.items.length <= 1 ||
+                    !capabilitiesView.items.transactionalEmail
+                  }
+                  disabledReason={resolveDisconnectDisabledReason()}
+                  onClick={() => {
+                    setSelected({ id: account.id, provider: name });
+                    setCode("");
+                    setConfirmation("request");
+                  }}
+                  size="sm"
+                  variant="outline"
+                >
+                  {t("common.disconnect")}
+                </Button>
+              </SignInMethodTile>
             );
           })}
           {AUTH_SOCIAL_PROVIDER_IDS.filter(
@@ -234,24 +249,24 @@ export const SignInMethods = () => {
                 (account) => account.providerId === provider,
               ),
           ).map((provider) => (
-            <ListItem key={provider}>
-              <ListItemContent>
-                <ListItemTitle>
-                  <bdi>{socialProviderName(provider)}</bdi>
-                </ListItemTitle>
-              </ListItemContent>
-              <ListItemActions>
-                <Button
-                  variant="ghost"
-                  disabled={pending}
-                  onClick={() => connect.mutate(provider)}
-                >
-                  {t("common.connect")}
-                </Button>
-              </ListItemActions>
-            </ListItem>
+            <SignInMethodTile
+              key={provider}
+              mark={<ProviderMark provider={provider} />}
+              name={socialProviderName(provider)}
+              status={t("common.notConnected")}
+            >
+              <Button
+                disabled={pending}
+                disabledReason={pendingReason}
+                onClick={() => connect.mutate(provider)}
+                size="sm"
+                variant="outline"
+              >
+                {t("common.connect")}
+              </Button>
+            </SignInMethodTile>
           ))}
-        </List>
+        </>
       )}
       <Dialog
         open={selected !== null}
@@ -296,34 +311,161 @@ export const SignInMethods = () => {
               </InputOTP>
             </div>
           )}
-          <DialogFooter>
-            <DialogClose render={<Button variant="ghost" disabled={pending} />}>
-              {t("common.cancel")}
-            </DialogClose>
-            {confirmation === "request" ? (
-              <Button disabled={pending} onClick={() => send.mutate()}>
-                {t("settings.account.sendOtpCode")}
-              </Button>
-            ) : (
-              <Button
-                variant="destructive"
-                disabled={
-                  pending ||
-                  code.length !== CONFIRMATION_CODE_LENGTH ||
-                  !dataReady
-                }
-                onClick={() => {
-                  if (selected) {
-                    unlink.mutate(selected.id);
-                  }
-                }}
-              >
-                {t("common.disconnect")}
-              </Button>
-            )}
-          </DialogFooter>
+          <DisconnectDialogFooter
+            codeComplete={code.length === CONFIRMATION_CODE_LENGTH}
+            confirmation={confirmation}
+            dataReady={dataReady}
+            loading={loading}
+            onConfirm={() => {
+              if (selected) {
+                unlink.mutate(selected.id);
+              }
+            }}
+            onRequest={() => send.mutate()}
+            pending={pending}
+            pendingReason={pendingReason}
+          />
         </DialogPopup>
       </Dialog>
-    </ListGroup>
+    </SignInMethodsGroup>
+  );
+};
+
+const pendingSignInReasonKey = ({
+  connecting,
+  sending,
+}: {
+  connecting: boolean;
+  sending: boolean;
+}) => {
+  if (connecting) {
+    return "common.connecting";
+  }
+  return sending ? "common.sending" : "common.disconnecting";
+};
+
+type DisconnectDialogFooterProps = {
+  codeComplete: boolean;
+  confirmation: "request" | "code";
+  dataReady: boolean;
+  loading: boolean;
+  onConfirm: () => void;
+  onRequest: () => void;
+  pending: boolean;
+  pendingReason: string;
+};
+
+const DisconnectDialogFooter = ({
+  codeComplete,
+  confirmation,
+  dataReady,
+  loading,
+  onConfirm,
+  onRequest,
+  pending,
+  pendingReason,
+}: DisconnectDialogFooterProps) => {
+  const t = useTranslations();
+  const resolveConfirmDisabledReason = () => {
+    if (pending) {
+      return pendingReason;
+    }
+    if (loading) {
+      return t("common.loading");
+    }
+    if (!dataReady) {
+      return t("common.loadFailed");
+    }
+    return t("common.enterVerificationCode");
+  };
+  return (
+    <DialogFooter>
+      <DialogClose
+        render={
+          <Button
+            variant="ghost"
+            disabled={pending}
+            disabledReason={pendingReason}
+          />
+        }
+      >
+        {t("common.cancel")}
+      </DialogClose>
+      {confirmation === "request" ? (
+        <Button
+          disabled={pending}
+          disabledReason={pendingReason}
+          onClick={onRequest}
+        >
+          {t("settings.account.sendOtpCode")}
+        </Button>
+      ) : (
+        <Button
+          variant="destructive"
+          disabled={pending || !codeComplete || !dataReady}
+          disabledReason={resolveConfirmDisabledReason()}
+          onClick={onConfirm}
+        >
+          {t("common.disconnect")}
+        </Button>
+      )}
+    </DialogFooter>
+  );
+};
+
+/** A read that failed outright or on its refetch, which offers a retry. */
+const readFailed = <TData, TError>(view: QueryView<TData, TError>) =>
+  view.type === "error" ||
+  (view.type === "items" && view.refetchError !== undefined);
+
+type SignInMethodTileProps = {
+  /** The provider's own mark, or a glyph for the email code. */
+  mark: ReactNode;
+  name: string;
+  status: string;
+  /** Why the row's action is unavailable, in words. */
+  note?: string | undefined;
+  children?: ReactNode;
+};
+
+/** One method: its mark's tile, its name and state, then its action. */
+const SignInMethodTile = ({
+  mark,
+  name,
+  status,
+  note,
+  children,
+}: SignInMethodTileProps) => (
+  <SettingsRow
+    description={
+      <>
+        {status}
+        {note !== undefined && (
+          <>
+            <span aria-hidden="true"> · </span>
+            <span>{note}</span>
+          </>
+        )}
+      </>
+    }
+    media={<ListItemMedia>{mark}</ListItemMedia>}
+    title={<bdi>{name}</bdi>}
+  >
+    {children}
+  </SettingsRow>
+);
+
+const PROVIDER_MARKS = {
+  apple: undefined,
+  google: GoogleIcon,
+  microsoft: MicrosoftIcon,
+} as const satisfies Record<SocialProvider, ComponentType | undefined>;
+
+const ProviderMark = ({ provider }: { provider: SocialProvider }) => {
+  const Mark = PROVIDER_MARKS[provider];
+  return Mark === undefined ? (
+    <KeyRoundIcon aria-hidden="true" className="size-4" />
+  ) : (
+    <Mark />
   );
 };

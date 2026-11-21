@@ -11,6 +11,10 @@ import { assertProperty, propertyTestTimeout } from "@stll/property-testing";
 import { rejectionOf } from "@stll/property-testing/rejection";
 import { dbClock } from "@stll/test-kit/db";
 
+import {
+  CORPUS_SCHEMA_LANE,
+  runUnderCorpusSchemaLane,
+} from "@/api/db/corpus-schema-lane";
 import type { Transaction } from "@/api/db/root";
 import {
   corpusIndexGenerations,
@@ -31,8 +35,10 @@ import {
 } from "@/api/lib/legal-search/corpus-index-projection-contract";
 import { deriveCorpusIndexProjectionDescriptor } from "@/api/lib/legal-search/corpus-index-projection-descriptor";
 import { legislationProjectionInputFromCanonical } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
+import { readReservedCorpusProjectionMaterialsTx } from "@/api/lib/legal-search/corpus-index-projection-materials";
 import {
   buildCorpusProjectionRouteOffline,
+  CORPUS_PROJECTION_OFFLINE_CANONICAL_MISMATCH_PAGE_LIMIT,
   type CorpusProjectionOfflineAdmission,
   type CorpusProjectionOfflineBuildLock,
   type CorpusProjectionOfflineBuildLockHold,
@@ -55,6 +61,7 @@ import {
   CORPUS_PROJECTION_OFFLINE_INDEXER_END_MARGIN_MS,
   CORPUS_PROJECTION_OFFLINE_START_WINDOW_MS,
 } from "@/api/lib/legal-search/corpus-index-projection-publish-fence";
+import { settleRejectedCorpusProjectionMaterials } from "@/api/lib/legal-search/corpus-index-projection-revision-block";
 import {
   CORPUS_PROJECTION_APPEND_UNKNOWN_ATTEMPT_LIMIT,
   CORPUS_PROJECTION_OFFLINE_LONE_KILL_MESSAGE,
@@ -65,6 +72,7 @@ import {
 } from "@/api/lib/legal-search/corpus-index-projection-store";
 import { EFFECTIVE_CONSOLIDATION } from "@/api/lib/legal-search/legislation-expression-classification";
 import { corpusProjectionLegacyFixture } from "@/api/tests/helpers/corpus-projection-legacy-fixture";
+import { optOutOfCorpusProjectionSeedingGuard } from "@/api/tests/helpers/corpus-projection-seeding-guard";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
@@ -231,13 +239,23 @@ const transactionRunner =
         `before start transaction ${start}`,
       );
     }
-    const value = await db.transaction(async (tx) => {
-      if (model.repeatableRead) {
-        await tx.execute(sql`SET TRANSACTION ISOLATION LEVEL REPEATABLE READ`);
-      }
-      const result = await operation(asTestRaw<Transaction>(tx));
-      crashIf(model, dies, `commit of transaction ${index}`);
-      return result;
+    // Production's boundary (`createIngestionDb`): every transaction holds
+    // the corpus schema lane shared before the work runs.
+    const value = await runUnderCorpusSchemaLane({
+      database: {
+        transaction: async (fn) =>
+          await db.transaction(
+            fn,
+            model.repeatableRead
+              ? { isolationLevel: "repeatable read" }
+              : undefined,
+          ),
+      },
+      work: async (tx) => {
+        const result = await operation(asTestRaw<Transaction>(tx));
+        crashIf(model, dies, `commit of transaction ${index}`);
+        return result;
+      },
     });
     // The next start transaction is held back: its statement instant, read
     // before it opens, falls that much later.
@@ -832,13 +850,22 @@ const runBuild = async (
   const deadline = new Date(
     (await now(model)).getTime() + (command.deadlineInMs ?? RUN_MS),
   );
+  const indexId = await routeOf(model);
   const outcome = await Result.tryPromise({
     try: async () =>
       await buildCorpusProjectionRouteOffline({
         runInTransaction: transactionRunner(model),
-        client: engineClientOf(model),
+        client: {
+          ...engineClientOf(model),
+          readPublishedSplitCounts: async ({ includes }) =>
+            Result.ok(
+              includes(indexId)
+                ? [{ indexId, publishedSplits: FAKE_PUBLISHED_SPLITS }]
+                : [],
+            ),
+        },
         ...TARGET,
-        indexId: await routeOf(model),
+        indexId,
         runId: "model",
         shardDirectory,
         deadline,
@@ -868,6 +895,7 @@ const runBuild = async (
                 ? `Text of ${material.lease.entityId}. ${"Words ".repeat(4000)}`
                 : `Text of ${material.lease.entityId}.`,
               ast: null,
+              storedAst: { type: "absent" },
             }),
         },
       }),
@@ -884,6 +912,9 @@ const runBuild = async (
   }
   return outcome.value;
 };
+
+/** What the fake metastore reports the route publishes when a run ends. */
+const FAKE_PUBLISHED_SPLITS = 3;
 
 /** The engine's census of what the fake indexer published. */
 const engineClientOf = (model: Model) => ({
@@ -1093,6 +1124,10 @@ const drain = async (model: Model) => {
 
 beforeAll(async () => {
   client = await createTestPglite();
+  await optOutOfCorpusProjectionSeedingGuard(client, {
+    reason:
+      "Exercises the projection store, executor and serving pipeline on canonical rows and desired states this suite stands up as fixtures; no desired writer runs here, and the writer suites keep the guard.",
+  });
   db = drizzle({ client });
   await installProjectionDdl(true);
   await db.insert(corpusIndexGenerations).values({
@@ -1207,6 +1242,271 @@ const tally = () => {
 };
 
 describe("offline route build", () => {
+  test("distinguishes current canonical mismatch from supersession, removal and a moved lease", async () => {
+    const model = await newModel(4);
+    const leases = await transactionRunner(model)(
+      async (tx) =>
+        await reserveCorpusProjectionIntentsTx(tx, {
+          ...TARGET,
+          limit: 4,
+          leaseMs: PLAN.leaseMs,
+        }),
+    );
+    expect(leases).toHaveLength(4);
+    const [mismatch, superseded, removed, lost] = leases;
+    if (
+      mismatch === undefined ||
+      superseded === undefined ||
+      removed === undefined ||
+      lost === undefined
+    ) {
+      panic("Expected four reserved canonical inputs");
+    }
+    await db
+      .update(legislationDocuments)
+      .set({ contentHash: "e".repeat(64) })
+      .where(
+        eq(
+          legislationDocuments.id,
+          toSafeId<"legislationDocument">(mismatch.entityId),
+        ),
+      );
+    await changeDesired(superseded.entityId);
+    await db
+      .update(legislationDocuments)
+      .set({ contentHash: null })
+      .where(
+        eq(
+          legislationDocuments.id,
+          toSafeId<"legislationDocument">(removed.entityId),
+        ),
+      );
+    await db
+      .update(corpusIndexProjectionIntents)
+      .set({ leaseToken: "0198e331-e578-7000-8003-000000000001" })
+      .where(eq(corpusIndexProjectionIntents.id, lost.intentId));
+    const materials = await transactionRunner(model)(
+      async (tx) =>
+        await readReservedCorpusProjectionMaterialsTx(tx, { leases }),
+    );
+    expect(materials.ready).toEqual([]);
+    expect(materials.rejected.map(({ status }) => status)).toEqual([
+      "canonical_input_mismatch",
+      "stale",
+      "stale",
+      "lease_lost",
+    ]);
+    expect(
+      await settleRejectedCorpusProjectionMaterials({
+        runInTransaction: transactionRunner(model),
+        rejected: materials.rejected,
+        policy: POLICY,
+      }),
+    ).toMatchObject({ cancelled: 3, leaseLost: 1 });
+    expect(
+      (await readIntents(model.entityIds))
+        .filter(({ status }) => status === "reserved")
+        .map(({ leaseToken }) => leaseToken),
+    ).toEqual(["0198e331-e578-7000-8003-000000000001"]);
+  });
+
+  test("bounds consecutive current-state mismatch pages and resumes repaired inputs without lost leases", async () => {
+    const rejectedCount =
+      CORPUS_PROJECTION_OFFLINE_CANONICAL_MISMATCH_PAGE_LIMIT * SHARD_REVISIONS;
+    const model = await newModel(rejectedCount + SHARD_REVISIONS * 2);
+    const mismatchedIds = model.entityIds
+      .slice(SHARD_REVISIONS)
+      .map((id) => toSafeId<"legislationDocument">(id));
+    await db
+      .update(legislationDocuments)
+      .set({ contentHash: "e".repeat(64) })
+      .where(inArray(legislationDocuments.id, mismatchedIds));
+    const stopped = await runBuild(model, QUIET_RUN);
+    expect(stopped?.status).toBe("canonical_input_mismatch");
+    expect(stopped?.progress).toMatchObject({
+      reserved: rejectedCount + SHARD_REVISIONS,
+      started: SHARD_REVISIONS,
+      proved: SHARD_REVISIONS,
+      canonicalInputMismatch: {
+        revisions: rejectedCount,
+        pages: CORPUS_PROJECTION_OFFLINE_CANONICAL_MISMATCH_PAGE_LIMIT,
+        consecutivePages:
+          CORPUS_PROJECTION_OFFLINE_CANONICAL_MISMATCH_PAGE_LIMIT,
+      },
+      notStarted: { cancelled: rejectedCount, leaseLost: 0 },
+      outstanding: 0,
+    });
+    expect(stopped?.progress.cursor?.entityId).toBe(
+      model.entityIds.at(SHARD_REVISIONS - 1),
+    );
+    expect(model.deliveries).toHaveLength(1);
+    expect(
+      (await readIntents(model.entityIds)).every(
+        ({ status, leaseToken }) =>
+          (status === "cancelled" || status === "applied") &&
+          leaseToken === null,
+      ),
+    ).toBe(true);
+    expect(
+      (await readStates(model.entityIds)).filter(
+        ({ appliedRevision }) => appliedRevision !== null,
+      ),
+    ).toHaveLength(SHARD_REVISIONS);
+    await db
+      .update(legislationDocuments)
+      .set({ contentHash: "d".repeat(64) })
+      .where(eq(legislationDocuments.sourceId, SOURCE_ID));
+    const resumed = await runBuild(model, QUIET_RUN, stopped?.progress.cursor);
+    expect(resumed?.status).toBe("drained");
+    expect(resumed?.progress.proved).toBe(mismatchedIds.length);
+    expect(
+      (await readIntents(model.entityIds)).every(
+        ({ status }) => status === "cancelled" || status === "applied",
+      ),
+    ).toBe(true);
+    expect(
+      (await readStates(model.entityIds)).every(
+        ({ appliedRevision }) => appliedRevision !== null,
+      ),
+    ).toBe(true);
+  });
+
+  test("a walk boundary resets the mismatch cursor before every rejected input", async () => {
+    const lateCount =
+      (CORPUS_PROJECTION_OFFLINE_CANONICAL_MISMATCH_PAGE_LIMIT - 2) *
+        SHARD_REVISIONS +
+      1;
+    const model = await newModel(lateCount + SHARD_REVISIONS * 2);
+    const mismatchedIds = model.entityIds
+      .filter(
+        (_id, index) => index < SHARD_REVISIONS || index >= SHARD_REVISIONS * 2,
+      )
+      .map((id) => toSafeId<"legislationDocument">(id));
+    await db
+      .update(legislationDocuments)
+      .set({ contentHash: "e".repeat(64) })
+      .where(inArray(legislationDocuments.id, mismatchedIds));
+    const stopped = await runBuild(model, QUIET_RUN);
+    expect(stopped?.status).toBe("canonical_input_mismatch");
+    expect(stopped?.progress.walk.passes).toBe(2);
+    expect(stopped?.progress.cursor).toBeNull();
+    expect(stopped?.progress.canonicalInputMismatch.revisions).toBe(
+      mismatchedIds.length + SHARD_REVISIONS,
+    );
+    expect(stopped?.progress.canonicalInputMismatch.consecutivePages).toBe(
+      CORPUS_PROJECTION_OFFLINE_CANONICAL_MISMATCH_PAGE_LIMIT,
+    );
+    expect(stopped?.progress.proved).toBe(SHARD_REVISIONS);
+    expect(stopped?.progress.notStarted.leaseLost).toBe(0);
+    expect(
+      (await readIntents(model.entityIds)).every(
+        ({ status, leaseToken }) =>
+          (status === "cancelled" || status === "applied") &&
+          leaseToken === null,
+      ),
+    ).toBe(true);
+    await db
+      .update(legislationDocuments)
+      .set({ contentHash: "d".repeat(64) })
+      .where(inArray(legislationDocuments.id, mismatchedIds));
+    const resumed = await runBuild(model, QUIET_RUN, stopped?.progress.cursor);
+    expect(resumed?.status).toBe("drained");
+    expect(resumed?.progress.proved).toBe(mismatchedIds.length);
+    expect(
+      (await readStates(model.entityIds)).every(
+        ({ appliedRevision }) => appliedRevision !== null,
+      ),
+    ).toBe(true);
+  });
+
+  test("mixed pages and an isolated canonical mismatch still settle healthy revisions", async () => {
+    const model = await newModel(
+      CORPUS_PROJECTION_OFFLINE_CANONICAL_MISMATCH_PAGE_LIMIT *
+        SHARD_REVISIONS +
+        1,
+    );
+    const first =
+      model.entityIds.at(0) ?? panic("Expected a canonical mismatch fixture");
+    await db
+      .update(legislationDocuments)
+      .set({ contentHash: "e".repeat(64) })
+      .where(
+        eq(legislationDocuments.id, toSafeId<"legislationDocument">(first)),
+      );
+    const stopped = await runBuild(model, QUIET_RUN);
+    expect(stopped?.status).toBe("no_progress");
+    expect(stopped?.progress.proved).toBe(model.entityIds.length - 1);
+    expect(
+      stopped?.progress.canonicalInputMismatch.consecutivePages,
+    ).toBeLessThan(CORPUS_PROJECTION_OFFLINE_CANONICAL_MISMATCH_PAGE_LIMIT);
+    expect(stopped?.progress.notStarted.leaseLost).toBe(0);
+    expect(
+      (await readIntents(model.entityIds)).every(
+        ({ status }) => status === "cancelled" || status === "applied",
+      ),
+    ).toBe(true);
+    await db
+      .update(legislationDocuments)
+      .set({ contentHash: "d".repeat(64) })
+      .where(
+        eq(legislationDocuments.id, toSafeId<"legislationDocument">(first)),
+      );
+    const resumed = await runBuild(model, QUIET_RUN, stopped?.progress.cursor);
+    expect(resumed?.status).toBe("drained");
+    expect(resumed?.progress.proved).toBe(1);
+  });
+
+  test("healthy pages reset the mismatch streak while transient pages repair and replay", async () => {
+    const groups = CORPUS_PROJECTION_OFFLINE_CANONICAL_MISMATCH_PAGE_LIMIT + 1;
+    const model = await newModel(groups * SHARD_REVISIONS * 2);
+    const mismatched = model.entityIds.filter(
+      (_id, index) => index % (SHARD_REVISIONS * 2) < SHARD_REVISIONS,
+    );
+    await db
+      .update(legislationDocuments)
+      .set({ contentHash: "e".repeat(64) })
+      .where(
+        inArray(
+          legislationDocuments.id,
+          mismatched.map((id) => toSafeId<"legislationDocument">(id)),
+        ),
+      );
+    let delivered = 0;
+    const outcome = await runBuild(model, {
+      ...QUIET_RUN,
+      onDelivery: async () => {
+        const repaired = mismatched.slice(
+          delivered * SHARD_REVISIONS,
+          (delivered + 1) * SHARD_REVISIONS,
+        );
+        delivered += 1;
+        if (repaired.length > 0) {
+          await db
+            .update(legislationDocuments)
+            .set({ contentHash: "d".repeat(64) })
+            .where(
+              inArray(
+                legislationDocuments.id,
+                repaired.map((id) => toSafeId<"legislationDocument">(id)),
+              ),
+            );
+        }
+      },
+    });
+    expect(outcome?.status).toBe("drained");
+    expect(outcome?.progress.canonicalInputMismatch.pages).toBe(groups);
+    expect(outcome?.progress.proved).toBe(model.entityIds.length);
+    expect(outcome?.progress.notStarted).toMatchObject({
+      cancelled: mismatched.length,
+      leaseLost: 0,
+    });
+    expect(
+      (await readIntents(model.entityIds)).every(
+        ({ status }) => status === "cancelled" || status === "applied",
+      ),
+    ).toBe(true);
+  });
+
   test(
     "an offline route build converges under a crash at any step with no cleanup",
     async () => {
@@ -1664,20 +1964,32 @@ describe("offline route build", () => {
   });
 
   test("an offline start runs only first in a fresh read committed transaction", async () => {
-    /** The guard's refusal after `prepare`, or null when it lets the start run. */
-    const guard = async (prepare: (tx: Transaction) => Promise<void>) =>
+    /**
+     * The guard's refusal after `prepare`, or null when it lets the start
+     * run; in a bare transaction, or under the corpus schema lane as
+     * production's boundary runs every transaction.
+     */
+    const guard = async (
+      prepare: (tx: Transaction) => Promise<void>,
+      boundary: "bare" | "schema_lane" = "bare",
+    ) =>
       (
         await Result.tryPromise({
-          try: async () =>
-            await db.transaction(async (raw) => {
+          try: async () => {
+            const work = async (raw: unknown) => {
               const tx = asTestRaw<Transaction>(raw);
               await prepare(tx);
               await requireFreshReadCommittedStartTx(tx);
-            }),
+            };
+            await (boundary === "bare"
+              ? db.transaction(work)
+              : runUnderCorpusSchemaLane({ database: db, work }));
+          },
           catch: (cause: unknown) =>
             cause instanceof Error ? cause.message : String(cause),
         })
       ).match({ ok: () => null, err: (message) => message });
+    const laneKey = sql`hashtext(${CORPUS_SCHEMA_LANE.domain}), hashtext(${CORPUS_SCHEMA_LANE.lane})`;
     const model = await newModel(1);
     const entityId = model.entityIds.at(0) ?? panic("No entity");
     expect(await guard(async () => undefined)).toBeNull();
@@ -1707,6 +2019,43 @@ describe("offline route build", () => {
       }),
     ).toContain("read committed");
 
+    // The corpus schema lane held shared, as every production transaction
+    // holds it, is the one lock let through; anything beside it is not.
+    expect(await guard(async () => undefined, "schema_lane")).toBeNull();
+    expect(
+      await guard(async (tx) => {
+        await tx.execute(
+          sql`SELECT entity_id FROM ${corpusIndexProjectionStates} WHERE entity_id = ${entityId} FOR UPDATE`,
+        );
+      }, "schema_lane"),
+    ).toContain("holds no lock yet");
+    expect(
+      await guard(async (tx) => {
+        await tx.execute(sql`SELECT pg_advisory_xact_lock(1, 2)`);
+      }, "schema_lane"),
+    ).toContain("holds no lock yet");
+    expect(
+      await guard(async (tx) => {
+        await tx.execute(sql`SELECT pg_advisory_xact_lock_shared(1, 2)`);
+      }, "schema_lane"),
+    ).toContain("holds no lock yet");
+    // The lane exclusive is refused, alone or beside the shared hold.
+    expect(
+      await guard(async (tx) => {
+        await tx.execute(sql`SELECT pg_advisory_xact_lock(${laneKey})`);
+      }),
+    ).toContain("holds no lock yet");
+    expect(
+      await guard(async (tx) => {
+        await tx.execute(sql`SELECT pg_advisory_xact_lock(${laneKey})`);
+      }, "schema_lane"),
+    ).toContain("holds no lock yet");
+    // Whole starts under the lane: every run of this file goes through
+    // `transactionRunner`, which holds the lane as production does.
+    const started = await newModel();
+    const run = await runBuild(started, { ...QUIET_RUN, maxShardRevisions: 8 });
+    expect(run?.progress.started).toBe(ENTITIES);
+
     // A caller whose transactions run in repeatable read starts nothing.
     const refused = await newModel();
     refused.repeatableRead = true;
@@ -1730,6 +2079,8 @@ describe("offline route build", () => {
     model.lockHeld = true;
     const outcome = await runBuild(model, QUIET_RUN);
     expect(outcome?.status).toBe("lock_held");
+    // A run that never held the route has nothing to count.
+    expect(outcome?.publishedSplits).toEqual({ read: "not_read" });
     expect(await readIntents(model.entityIds)).toEqual([]);
   });
 
@@ -1738,6 +2089,11 @@ describe("offline route build", () => {
     const first = await runBuild(model, QUIET_RUN);
     expect(first?.status).toBe("drained");
     expect(first?.progress.proved).toBe(ENTITIES);
+    // The receipt names the route's published splits as the run left them.
+    expect(first?.publishedSplits).toEqual({
+      read: "counted",
+      count: FAKE_PUBLISHED_SPLITS,
+    });
     // One entity sorts after the cursor the run resumes from, one before it.
     const seeded = await seedEntities(2);
     const ahead = seeded.at(0) ?? panic("Expected two entities");

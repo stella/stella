@@ -4,16 +4,18 @@ import * as v from "valibot";
 import { PUBLIC_CASE_LAW_PAGE_COUNTRIES } from "@stll/api-contract/case-law-launch-readiness";
 
 import readDecisionAnchorRedirectsRoute from "@/api/handlers/case-law/decisions/anchor-redirects";
+import readBrowseCalendar from "@/api/handlers/case-law/decisions/browse-calendar";
+import listBrowseCourts from "@/api/handlers/case-law/decisions/browse-courts";
 import {
   listDecisionFacetsHandler,
   listDecisionFacetsQuerySchema,
 } from "@/api/handlers/case-law/decisions/facets";
 import validateDecisionFilters from "@/api/handlers/case-law/decisions/filter-validation";
+import { readDecisionQuerySchema } from "@/api/handlers/case-law/decisions/get";
 import {
-  readDecisionHandler,
-  readDecisionQuerySchema,
-} from "@/api/handlers/case-law/decisions/get";
-import { hydrateDeferredDocument } from "@/api/handlers/case-law/decisions/get-deferred-document";
+  hydrateDeferredDocument,
+  prepareDecisionDocumentRead,
+} from "@/api/handlers/case-law/decisions/get-deferred-document";
 import {
   listLatestDecisionsHandler,
   listLatestDecisionsQuerySchema,
@@ -253,13 +255,22 @@ const readDecision = createSafePublicSubjectFollowUpHandler({
   caseLawDb: caseLawPublicReadDb,
   locate: ({ params: { decisionId } }) => ({ kind: "id", id: decisionId }),
   read: async (subject, { query: { citationsCursor, caseFileCursor } }) =>
-    await readDecisionHandler({ subject, citationsCursor, caseFileCursor }),
+    await prepareDecisionDocumentRead({
+      subject,
+      citationsCursor,
+      caseFileCursor,
+    }),
   // Unauthenticated: hydrates when a slot is free, but never persists
   // demand — see `recordDemand`. Runs after the gated transaction closes.
   followUp: async (read) => {
-    const hydrated = await hydrateDeferredDocument(read, false, {
-      type: "on-demand",
-      permit: grantThirdPartyOutboundPermit(),
+    const hydrated = await hydrateDeferredDocument({
+      prepared: read,
+      caseLawDb: caseLawPublicReadDb,
+      recordDemand: false,
+      documentHydration: {
+        type: "on-demand",
+        permit: grantThirdPartyOutboundPermit(),
+      },
     });
     return "documentPending" in hydrated
       ? projectDecisionReader(hydrated)
@@ -295,11 +306,20 @@ const readDecisionBySlug = createSafePublicSubjectFollowUpHandler({
       : { kind: "slug", country: countryRead.country, slug, language };
   },
   read: async (subject, { query: { citationsCursor, caseFileCursor } }) =>
-    await readDecisionHandler({ subject, citationsCursor, caseFileCursor }),
+    await prepareDecisionDocumentRead({
+      subject,
+      citationsCursor,
+      caseFileCursor,
+    }),
   followUp: async (read) => {
-    const hydrated = await hydrateDeferredDocument(read, false, {
-      type: "on-demand",
-      permit: grantThirdPartyOutboundPermit(),
+    const hydrated = await hydrateDeferredDocument({
+      prepared: read,
+      caseLawDb: caseLawPublicReadDb,
+      recordDemand: false,
+      documentHydration: {
+        type: "on-demand",
+        permit: grantThirdPartyOutboundPermit(),
+      },
     });
     return "documentPending" in hydrated
       ? projectDecisionReader(hydrated)
@@ -492,6 +512,8 @@ const listSitemapShards = createSafeBoundedPublicHandler(
 export const publicCaseLawRoute = routes(
   {
     "/coverage": { GET: readCaseLawCoverage },
+    "/browse/courts": { GET: listBrowseCourts },
+    "/browse/calendar": { GET: readBrowseCalendar },
     "/decisions": { GET: listDecisions },
     "/decisions/facets": { GET: listDecisionFacets },
     "/decisions/filter-validation": { GET: validateDecisionFilters },

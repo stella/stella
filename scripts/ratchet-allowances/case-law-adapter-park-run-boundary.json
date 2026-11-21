@@ -1,0 +1,5 @@
+{
+  "metric": "lint-suppression-directives",
+  "delta": 1,
+  "reason": "The failure-run read compares two timestamp columns inside one statement (an event's finish time against the run boundary's finish time from a lateral subquery); no JS Date is round-tripped, which is the truncation the rule guards against."
+}

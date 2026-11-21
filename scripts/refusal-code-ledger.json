@@ -1780,16 +1780,6 @@
     "reason": "Predates the rule: a client refusal without a code; give it a stable code and, when a person acts on it, a web message."
   },
   {
-    "id": "require-refusal-code::apps/api/src/handlers/invoices/export-records.ts::toExportRecords::status 404",
-    "count": 1,
-    "reason": "Predates the rule: a client refusal without a code; give it a stable code and, when a person acts on it, a web message."
-  },
-  {
-    "id": "require-refusal-code::apps/api/src/handlers/invoices/export-records.ts::toExportRecords::status 409",
-    "count": 6,
-    "reason": "Predates the rule: a client refusal without a code; give it a stable code and, when a person acts on it, a web message."
-  },
-  {
     "id": "require-refusal-code::apps/api/src/handlers/invoices/export.ts::createInvoicesExport::status 409",
     "count": 1,
     "reason": "Predates the rule: a client refusal without a code; give it a stable code and, when a person acts on it, a web message."
@@ -1841,21 +1831,6 @@
   },
   {
     "id": "require-refusal-code::apps/api/src/handlers/invoices/payments/list.ts::<module>::status 404",
-    "count": 1,
-    "reason": "Predates the rule: a client refusal without a code; give it a stable code and, when a person acts on it, a web message."
-  },
-  {
-    "id": "require-refusal-code::apps/api/src/handlers/invoices/pdf/export.ts::createInvoicePdfExport::status 404",
-    "count": 1,
-    "reason": "Predates the rule: a client refusal without a code; give it a stable code and, when a person acts on it, a web message."
-  },
-  {
-    "id": "require-refusal-code::apps/api/src/handlers/invoices/pdf/export.ts::createInvoicePdfExport::status 409",
-    "count": 2,
-    "reason": "Predates the rule: a client refusal without a code; give it a stable code and, when a person acts on it, a web message."
-  },
-  {
-    "id": "require-refusal-code::apps/api/src/handlers/invoices/pdf/export.ts::invoiceRenderError::status 409",
     "count": 1,
     "reason": "Predates the rule: a client refusal without a code; give it a stable code and, when a person acts on it, a web message."
   },
@@ -2785,11 +2760,6 @@
     "reason": "Predates the rule: a client refusal without a code; give it a stable code and, when a person acts on it, a web message."
   },
   {
-    "id": "require-refusal-code::apps/api/src/handlers/saved-searches/update.ts::<module>::status 404",
-    "count": 1,
-    "reason": "Predates the rule: a client refusal without a code; give it a stable code and, when a person acts on it, a web message."
-  },
-  {
     "id": "require-refusal-code::apps/api/src/handlers/saved-searches/update.ts::<module>::status 422",
     "count": 1,
     "reason": "Predates the rule: a client refusal without a code; give it a stable code and, when a person acts on it, a web message."
@@ -3090,16 +3060,6 @@
     "reason": "Predates the rule: a client refusal without a code; give it a stable code and, when a person acts on it, a web message."
   },
   {
-    "id": "require-refusal-code::apps/api/src/handlers/skills/resources/upload.ts::<module>::status 400",
-    "count": 1,
-    "reason": "Predates the rule: a client refusal without a code; give it a stable code and, when a person acts on it, a web message."
-  },
-  {
-    "id": "require-refusal-code::apps/api/src/handlers/skills/resources/upload.ts::<module>::status 422",
-    "count": 1,
-    "reason": "Predates the rule: a client refusal without a code; give it a stable code and, when a person acts on it, a web message."
-  },
-  {
     "id": "require-refusal-code::apps/api/src/handlers/skills/revisions/get.ts::<module>::status 404",
     "count": 1,
     "reason": "Predates the rule: a client refusal without a code; give it a stable code and, when a person acts on it, a web message."
@@ -3136,7 +3096,7 @@
   },
   {
     "id": "require-refusal-code::apps/api/src/handlers/style-sets/delete.ts::<module>::status 404",
-    "count": 2,
+    "count": 1,
     "reason": "Predates the rule: a client refusal without a code; give it a stable code and, when a person acts on it, a web message."
   },
   {
@@ -3570,11 +3530,6 @@
     "reason": "Predates the rule: a client refusal without a code; give it a stable code and, when a person acts on it, a web message."
   },
   {
-    "id": "require-refusal-code::apps/api/src/handlers/uploads/create.ts::<module>::status 400",
-    "count": 1,
-    "reason": "Predates the rule: a client refusal without a code; give it a stable code and, when a person acts on it, a web message."
-  },
-  {
     "id": "require-refusal-code::apps/api/src/handlers/uploads/delete.ts::<module>::status 404",
     "count": 2,
     "reason": "Predates the rule: a client refusal without a code; give it a stable code and, when a person acts on it, a web message."
@@ -3606,11 +3561,6 @@
   },
   {
     "id": "require-refusal-code::apps/api/src/handlers/uploads/entity-version.ts::validateEntityVersion::status 409",
-    "count": 1,
-    "reason": "Predates the rule: a client refusal without a code; give it a stable code and, when a person acts on it, a web message."
-  },
-  {
-    "id": "require-refusal-code::apps/api/src/handlers/uploads/update.ts::<module>::status 404",
     "count": 1,
     "reason": "Predates the rule: a client refusal without a code; give it a stable code and, when a person acts on it, a web message."
   },

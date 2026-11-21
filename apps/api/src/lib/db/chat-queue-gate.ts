@@ -92,7 +92,12 @@ const closePositionGapOnTx = async ({
 };
 
 export type QueuedMessageRemoval =
-  | { type: "removed"; request: unknown }
+  | {
+      type: "removed";
+      request: unknown;
+      /** The chat files the enqueue stored for it. */
+      uploadedFileIds: SafeId<"userFile">[];
+    }
   | { type: "changed" }
   | { type: "sent" }
   | { type: "not-found" };
@@ -127,6 +132,7 @@ export const removeQueuedChatMessageOnTx = async ({
     .returning({
       position: chatQueuedMessages.position,
       request: chatQueuedMessages.request,
+      uploadedFileIds: chatQueuedMessages.uploadedFileIds,
     });
   if (removed === undefined) {
     const queued = await tx
@@ -148,7 +154,11 @@ export const removeQueuedChatMessageOnTx = async ({
   }
   await closePositionGapOnTx({ position: removed.position, threadId, tx });
   await dropHoldOfEmptyQueueOnTx({ threadId, tx });
-  return { type: "removed", request: removed.request };
+  return {
+    type: "removed",
+    request: removed.request,
+    uploadedFileIds: removed.uploadedFileIds,
+  };
 };
 
 export type ChatQueueHoldWrite =
@@ -200,9 +210,11 @@ export const holdChatQueueOnTx = async ({
   })();
   // Owner columns come from the thread, and the row is written only while
   // the thread has a queued message.
+  // The table is named in the text so the conflict target reads as this
+  // table's key, not a chat turn's (scripts/check-online-index-dependencies.ts).
   // audit: skip — a hold records why queued messages wait; the turn or refusal that caused it is recorded where it happened
   await tx.execute(sql`
-    INSERT INTO ${chatQueueHolds} (
+    INSERT INTO chat_queue_holds (
       thread_id, organization_id, workspace_id, user_id, reason,
       turn_id, queued_message_id, refusal_code
     )

@@ -109,8 +109,8 @@ test("document upload stays disabled through host updates and preserves the file
   expect(
     screen
       .getByRole("button", { name: "Nahrát verzi" })
-      .hasAttribute("disabled"),
-  ).toBe(true);
+      .getAttribute("aria-disabled"),
+  ).toBe("true");
   await runtime.upload();
   app.response.resolve({
     isError: true,

@@ -2,14 +2,16 @@ import { Suspense, useState, useTransition } from "react";
 
 import { Result } from "better-result";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
-import { ActivityIndicator, Platform, ScrollView, View } from "react-native";
+import { Platform, ScrollView, View } from "react-native";
 import { useFormatter, useTimeZone, useTranslations } from "use-intl";
 
 import { Input } from "@stll/ui/input";
+import { Loader } from "@stll/ui/loader";
 import { Text } from "@stll/ui/text";
 
 import { useChanged } from "@/components/changes";
 import { ChoiceChip } from "@/components/choice-chip";
+import { DictateButton } from "@/components/dictate-button";
 import { DueDatePicker } from "@/components/due-date-picker";
 import { screenStyles } from "@/components/empty-state-screen";
 import { MatterPicker } from "@/components/matter-picker";
@@ -19,6 +21,7 @@ import type { WriteFailure } from "@/components/write-failure";
 import { epochMilliseconds } from "@/connection/clock";
 import type { AccessTokenSource } from "@/connection/session";
 import { useSession } from "@/connection/session-provider";
+import { appendDictation } from "@/state/dictation";
 import { listMatters } from "@/state/matters";
 import { pickerDate } from "@/state/picked-day";
 import {
@@ -30,7 +33,6 @@ import {
   newTaskAssignees,
 } from "@/state/tasks";
 import type { DueChoice } from "@/state/tasks";
-import { useAppColors } from "@/theme";
 
 /**
  * A new task, presented as a sheet over the tasks: its name, when it is due
@@ -48,7 +50,6 @@ const NewTaskScreen = () => {
 const NewTaskForm = ({ source }: { source: AccessTokenSource }) => {
   const t = useTranslations("tasks");
   const tabs = useTranslations("tabs");
-  const colors = useAppColors();
   const router = useRouter();
   const { end } = useSession();
   const changed = useChanged();
@@ -76,6 +77,8 @@ const NewTaskForm = ({ source }: { source: AccessTokenSource }) => {
     return new Set(session === undefined ? [] : [session.userId]);
   });
   const [failure, setFailure] = useState<WriteFailure | null>(null);
+  // Adding waits for a dictation to land in the name: closing the form drops it.
+  const [dictating, setDictating] = useState(false);
   const [adding, startAdding] = useTransition();
   const [matters] = useState(async () => {
     const result = await listMatters({ fetch, source });
@@ -84,10 +87,11 @@ const NewTaskForm = ({ source }: { source: AccessTokenSource }) => {
     }
     return result;
   });
-  const ready = name.trim() !== "" && matterId !== null && !adding;
+  const ready =
+    name.trim() !== "" && matterId !== null && !adding && !dictating;
 
   const add = () => {
-    if (matterId === null) {
+    if (matterId === null || dictating) {
       return;
     }
     const days = DUE_CHOICES.find((choice) => choice.key === due)?.days ?? null;
@@ -162,6 +166,13 @@ const NewTaskForm = ({ source }: { source: AccessTokenSource }) => {
           returnKeyType="done"
           value={name}
         />
+        <DictateButton
+          matterId={matterId ?? undefined}
+          onBusyChange={setDictating}
+          onText={(dictated) => {
+            setName((typed) => appendDictation(typed, dictated));
+          }}
+        />
         <WriteFailureNotice failure={failure} message={t("addFailed")} />
         <View className="gap-2">
           <View className="px-1">
@@ -213,7 +224,7 @@ const NewTaskForm = ({ source }: { source: AccessTokenSource }) => {
           <View className="px-1">
             <Text variant="section">{t("matterTitle")}</Text>
           </View>
-          <Suspense fallback={<ActivityIndicator color={colors.muted} />}>
+          <Suspense fallback={<Loader />}>
             <MatterPicker
               matters={matters}
               onSelect={(id) => {
@@ -229,7 +240,7 @@ const NewTaskForm = ({ source }: { source: AccessTokenSource }) => {
             <View className="px-1">
               <Text variant="section">{t("assignedTo")}</Text>
             </View>
-            <Suspense fallback={<ActivityIndicator color={colors.muted} />}>
+            <Suspense fallback={<Loader />}>
               <MemberList
                 assigned={chosen}
                 load={members.load}

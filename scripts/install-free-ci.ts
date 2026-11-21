@@ -690,6 +690,7 @@ const BUN_SWITCHES = new Set([
   "--watch",
 ]);
 const BUN_VALUE_FLAGS = new Set([
+  "--config",
   "--cwd",
   "--env-file",
   "--eval",
@@ -873,6 +874,11 @@ type ResolveRepoPathOptions = {
 
 const PRESERVED_TOOLING_FILES = new Map([
   ["$RUNNER_TEMP/ci-pr-jobs-cli.ts", "scripts/ci-pr-jobs-cli.ts"],
+  // release.yml copies the trusted verifier there before the candidate checkout.
+  [
+    "$RUNNER_TEMP/verify-release-candidate-tree.mjs",
+    "scripts/verify-release-candidate-tree.mjs",
+  ],
   [
     "$STAGING_PROOF_GATE_DIR/staging-proof-readiness-cli.ts",
     "scripts/staging-proof-readiness-cli.ts",

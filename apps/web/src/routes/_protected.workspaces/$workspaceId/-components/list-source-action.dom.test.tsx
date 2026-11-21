@@ -85,7 +85,7 @@ const settings = {
   aiInstructions: "",
   aiInstructionsMaxLength: 3000,
   declaredFeatureIds: ["legal-lists", "list-verification"],
-  deploymentFeatures: { legalLists: true },
+  deploymentFeatures: { legalLists: true, invoiceLinks: true },
   capabilities: {},
   documentProcessingMode: "off",
   matterNumberPattern: "{year}/{number}",
@@ -108,6 +108,13 @@ const settings = {
 const clients: InstanceType<typeof QueryClient>[] = [];
 const spies: { mockRestore: () => void }[] = [];
 const requests: Request[] = [];
+/** The item-source create body; the assertions read these fields as-is. */
+type SourceRequestBody = {
+  sourceEntityId: unknown;
+  sourceEntityVersionId: unknown;
+  locator: unknown;
+  quote: unknown;
+};
 type MountActionOptions = {
   locale?: string;
   messages?: typeof english;
@@ -245,7 +252,7 @@ const answer = (status = 200) => {
       request.method === "POST" &&
       path === `/v1/lists/${workspaceId}/item-sources`
     ) {
-      const body = await request.clone().json();
+      const body: SourceRequestBody = await request.clone().json();
       if (status !== 200) {
         return Response.json({ message: "Not found" }, { status });
       }
@@ -374,7 +381,7 @@ for (const { locale, messages } of [
     await save(mounted);
     await waitFor(() => expect(mounted.created).toEqual([itemEntityId]));
     const post = requests.find((request) => request.method === "POST");
-    expect(post?.headers.get("Idempotency-Key")).toBeNull();
+    expect(post?.headers.get("Idempotency-Key")).toBeTruthy();
     expect(await post?.json()).toEqual({
       listId,
       itemEntityId,
@@ -503,7 +510,7 @@ test("correcting a page validation error allows saving without reopening the for
   });
   await save(mounted);
   await waitFor(() => expect(mounted.created).toHaveLength(1));
-  const body = await requests
+  const body: SourceRequestBody = await requests
     .find((request) => request.method === "POST")
     ?.json();
   expect(body.locator).toEqual({ type: "pdf-page", pageNumber: 1 });
@@ -523,7 +530,7 @@ test("choosing DOCX replaces PDF, clears its page, and accepts a quote at the li
   });
   await save(mounted);
   await waitFor(() => expect(mounted.created).toHaveLength(1));
-  const body = await requests
+  const body: SourceRequestBody = await requests
     .find((request) => request.method === "POST")
     ?.json();
   expect(body.locator).toEqual({ type: "document" });
@@ -537,7 +544,7 @@ test("an optional page and quote can both be omitted", async () => {
   await pickDocument(mounted, "Signed", "Signed agreement");
   await save(mounted);
   await waitFor(() => expect(mounted.created).toHaveLength(1));
-  const body = await requests
+  const body: SourceRequestBody = await requests
     .find((request) => request.method === "POST")
     ?.json();
   expect(body.locator).toEqual({ type: "document" });
@@ -565,6 +572,172 @@ test("a server refusal preserves the draft, reports an error, and leaves sources
   ).toBe("Keep this quote");
   expect(mounted.invalidation).not.toHaveBeenCalled();
   expect(mounted.created).toHaveLength(0);
+});
+test("overlapping source form submissions share one prepared version and replay key", async () => {
+  answer();
+  const respond = respondRequest;
+  const release = Promise.withResolvers<undefined>();
+  const reading = Promise.withResolvers<undefined>();
+  respondRequest = async (request) => {
+    const response = await respond(request);
+    if (
+      request.method === "GET" &&
+      new URL(request.url).pathname.includes("/entity/")
+    ) {
+      reading.resolve(undefined);
+      await release.promise;
+    }
+    return response;
+  };
+  const mounted = await mountAction();
+  await openForm(mounted);
+  await pickDocument(mounted, "Signed", "Signed agreement");
+  const button = mounted.view.getByRole("button", {
+    name: english.common.save,
+  });
+  const form = button.closest("form") ?? panic("Source form is required");
+  await act(async () => {
+    fireEvent.submit(form);
+    fireEvent.submit(form);
+  });
+  await reading.promise;
+  await act(async () => {
+    fireEvent.submit(form);
+    release.resolve(undefined);
+  });
+  await waitFor(() => expect(mounted.created).toHaveLength(2));
+  expect(requests.filter((request) => request.method === "GET")).toHaveLength(
+    1,
+  );
+  const posts = requests.filter((request) => request.method === "POST");
+  expect(posts).toHaveLength(2);
+  const first = posts.at(0) ?? panic("First source request is required");
+  const second = posts.at(1) ?? panic("Overlapping source request is required");
+  expect(first.headers.get("Idempotency-Key")).toBeTruthy();
+  expect(second.headers.get("Idempotency-Key")).toBe(
+    first.headers.get("Idempotency-Key"),
+  );
+  expect(await second.json()).toEqual(await first.json());
+});
+test("a refused document preparation can be retried without changing the draft", async () => {
+  answer();
+  const respond = respondRequest;
+  let reads = 0;
+  respondRequest = async (request) => {
+    const response = await respond(request);
+    if (
+      request.method === "GET" &&
+      new URL(request.url).pathname.includes("/entity/")
+    ) {
+      reads += 1;
+      if (reads === 1) {
+        return Response.json({ message: "Forbidden" }, { status: 403 });
+      }
+    }
+    return response;
+  };
+  const toast = spyOn(stellaToast, "add").mockReturnValue("source-toast");
+  spies.push(toast);
+  const mounted = await mountAction();
+  await openForm(mounted);
+  await pickDocument(mounted, "Signed", "Signed agreement");
+  await save(mounted);
+  await waitFor(() => expect(toast).toHaveBeenCalledTimes(1));
+  expect(requests.filter((request) => request.method === "POST")).toHaveLength(
+    0,
+  );
+  await save(mounted);
+  await waitFor(() => expect(mounted.created).toHaveLength(1));
+  expect(reads).toBe(2);
+  expect(requests.filter((request) => request.method === "POST")).toHaveLength(
+    1,
+  );
+});
+test("ambiguous source retries retain each intent's key and document version", async () => {
+  answer();
+  const respond = respondRequest;
+  const nextVersionId = "019a0000-0000-7000-8000-000000000010";
+  let currentVersionId = versionId;
+  let writes = 0;
+  respondRequest = async (request) => {
+    const response = await respond(request);
+    if (
+      request.method === "GET" &&
+      new URL(request.url).pathname.includes("/entity/")
+    ) {
+      return Response.json({ ...(await response.json()), currentVersionId });
+    }
+    if (request.method === "POST") {
+      writes += 1;
+      if (writes <= 2) {
+        currentVersionId = nextVersionId;
+        // The server committed, but the client cannot know whether it did.
+        throw new TypeError("Source response lost");
+      }
+    }
+    return response;
+  };
+  const toast = spyOn(stellaToast, "add").mockReturnValue("source-toast");
+  spies.push(toast);
+  const mounted = await mountAction();
+  await openForm(mounted);
+  await pickDocument(mounted, "Signed", "Signed agreement");
+  const changeQuote = (value: string) => {
+    fireEvent.change(mounted.view.getByLabelText(english.lists.sources.quote), {
+      target: { value },
+    });
+  };
+  changeQuote("First intent");
+  await save(mounted);
+  await waitFor(() => expect(toast).toHaveBeenCalledTimes(1));
+  expect(mounted.created).toHaveLength(0);
+  expect(mounted.invalidation).not.toHaveBeenCalled();
+
+  changeQuote("Different intent");
+  await save(mounted);
+  await waitFor(() => expect(toast).toHaveBeenCalledTimes(2));
+  expect(mounted.created).toHaveLength(0);
+  expect(mounted.invalidation).not.toHaveBeenCalled();
+
+  changeQuote("First intent");
+  await save(mounted);
+  await waitFor(() => expect(mounted.created).toHaveLength(1));
+  const posts = requests.filter((request) => request.method === "POST");
+  expect(posts).toHaveLength(3);
+  const first = posts.at(0) ?? panic("First source request is required");
+  const changed = posts.at(1) ?? panic("Changed source request is required");
+  const replay = posts.at(2) ?? panic("Replayed source request is required");
+  const firstKey = first.headers.get("Idempotency-Key");
+  expect(firstKey).toBeTruthy();
+  expect(changed.headers.get("Idempotency-Key")).toBeTruthy();
+  expect(changed.headers.get("Idempotency-Key")).not.toBe(firstKey);
+  expect(replay.headers.get("Idempotency-Key")).toBe(firstKey);
+  const firstBody: unknown = await first.clone().json();
+  expect(firstBody).toMatchObject({ sourceEntityVersionId: versionId });
+  expect(await replay.clone().json()).toEqual(firstBody);
+  expect(await changed.clone().json()).toMatchObject({
+    quote: "Different intent",
+    sourceEntityVersionId: nextVersionId,
+  });
+  expect(requests.filter((request) => request.method === "GET")).toHaveLength(
+    2,
+  );
+
+  // A completed attachment is a new intent if the form is opened again.
+  await openForm(mounted);
+  await pickDocument(mounted, "Signed", "Signed agreement");
+  changeQuote("First intent");
+  await save(mounted);
+  await waitFor(() => expect(mounted.created).toHaveLength(2));
+  const fresh =
+    requests.filter((request) => request.method === "POST").at(3) ??
+    panic("New source request is required");
+  expect(fresh.headers.get("Idempotency-Key")).toBeTruthy();
+  expect(fresh.headers.get("Idempotency-Key")).not.toBe(firstKey);
+  expect(await fresh.json()).toMatchObject({
+    quote: "First intent",
+    sourceEntityVersionId: nextVersionId,
+  });
 });
 for (const options of [
   { granted: false },

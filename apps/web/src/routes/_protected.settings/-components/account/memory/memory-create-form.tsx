@@ -165,6 +165,9 @@ export const MemoryCreateForm = (props: MemoryCreateFormProps) => {
       <Button
         className="self-start"
         disabled={!canSubmit}
+        disabledReason={
+          createMemory.isPending ? commonT("creating") : t("enterMemory")
+        }
         loading={createMemory.isPending}
         size="sm"
         type="submit"

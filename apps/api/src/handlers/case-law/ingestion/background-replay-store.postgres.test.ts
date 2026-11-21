@@ -170,7 +170,7 @@ if (!databaseUrl || !enabled) {
           id,
           sourceId: source.id,
           caseNumber: `store-${index}`,
-          court: "fixture court",
+          court: "Nejvyšší soud",
           country: "CZE",
           language: "cs",
           parserVersion: 1,
@@ -3214,10 +3214,10 @@ if (!databaseUrl || !enabled) {
             for (const [index, id] of fixtureIds.entries()) {
               await tx.execute(sql`INSERT INTO case_law_decisions
                 (id, source_id, case_number, court, country, language, parser_version, source_raw_s3_key)
-                VALUES (${id}, ${sourceId}, ${`store-${index}`}, 'fixture court', 'CZE', 'cs', 1, ${`fixture/${id}`})`);
+                VALUES (${id}, ${sourceId}, ${`store-${index}`}, 'Nejvyšší soud', 'CZE', 'cs', 1, ${`fixture/${id}`})`);
             }
             await tx.execute(sql`INSERT INTO case_law_decisions (id, source_id, case_number, court, country, language, parser_version, source_raw_s3_key)
-              SELECT ('00000000-0000-7000-8000-' || lpad(n::text, 12, '0'))::uuid, ${sourceId}, 'plan-' || n::text, 'fixture court', 'CZE', 'cs', 2,
+              SELECT ('00000000-0000-7000-8000-' || lpad(n::text, 12, '0'))::uuid, ${sourceId}, 'plan-' || n::text, 'Nejvyšší soud', 'CZE', 'cs', 2,
                 CASE WHEN n % 2 = 0 THEN NULL ELSE 'fixture-plan' END
               FROM generate_series(1, 1000) AS series(n)`);
             await tx.execute(sql`INSERT INTO case_law_replay_blocked (source_id, decision_id, source_raw_s3_key, parser_version_from, parser_version_to, outcome, reason, detail)

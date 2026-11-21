@@ -1,9 +1,9 @@
 name: Bundle size nightly
 
-# Bundle growth never blocks a pull request: CI annotates groups that grew past
-# the headroom. This on-demand run lists every group over budget on main in the
-# job summary, so growth that slipped through stays visible until it is
-# trimmed or re-measured.
+# The web-build job blocks pull requests on the startup bundle gates. This
+# on-demand run applies the same gates to main and writes their table (initial
+# JS against its budget, the pending layer, every listed offender) to the job
+# summary.
 
 defaults:
   run:
@@ -30,7 +30,7 @@ jobs:
           persist-credentials: false
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@0cc2def60afb3e0fac0df9f541baf926f77889fa
+        uses: stella/.github/actions/setup-bun-cached@2664e46f02aea7164ba71bcdd485a686166993a4
         with:
           save: ${{ github.ref == 'refs/heads/main' }}
 
@@ -48,5 +48,5 @@ jobs:
       - name: Build web
         uses: ./.github/actions/build-e2e-web
 
-      - name: Bundle size report
+      - name: Startup bundle gates
         run: bun --preload ./scripts/offline-network-preload.ts scripts/bundle-baseline.ts --check

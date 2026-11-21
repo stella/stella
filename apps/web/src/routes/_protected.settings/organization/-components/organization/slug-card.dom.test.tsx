@@ -17,6 +17,8 @@ const { QueryClient, QueryClientProvider } =
   await import("@tanstack/react-query");
 const { IntlProvider } = await import("use-intl");
 const { OrganizationSlugCard } = await import("./slug-card");
+const { loadLocaleMessages, supportedLanguages } =
+  await import("@/i18n/i18n-store");
 
 afterEach(() => {
   cleanup();
@@ -168,19 +170,46 @@ test("pending changes disable editing, cancellation and duplicate submissions", 
   const save = within(dialog).getByRole("button", {
     name: messages.common.saveChanges,
   });
-  expect(save).toHaveProperty("disabled", true);
+  expect(save.getAttribute("aria-disabled")).toBe("true");
   expect(within(dialog).getByRole("textbox")).toHaveProperty("disabled", true);
   expect(
     within(dialog).getByRole("checkbox").getAttribute("aria-disabled"),
   ).toBe("true");
   expect(
-    within(dialog).getByRole("button", { name: messages.common.cancel }),
-  ).toHaveProperty("disabled", true);
+    within(dialog)
+      .getByRole("button", { name: messages.common.cancel })
+      .getAttribute("aria-disabled"),
+  ).toBe("true");
   fireEvent.click(save);
   expect(requests).toHaveLength(1);
   resolve(Response.json({ slug: "new-firm" }));
   await waitFor(() => expect(completed()).toBe(1));
 });
+
+test("the slug panel says what the handle is, apart from the organization ID", () => {
+  mount();
+  const heading = screen.getByRole("heading", {
+    name: messages.settings.organization.slug.title,
+  });
+  expect(heading.parentElement?.textContent).toContain(
+    messages.settings.organization.slug.hint,
+  );
+});
+
+// The General page shows the handle and the ID one above the other; a locale
+// that names both the same leaves the reader to guess which is which.
+test.each(supportedLanguages)(
+  "%s names the handle and the organization ID differently",
+  async (lang) => {
+    const catalog = await loadLocaleMessages(lang);
+    expect(catalog.settings.organization.slug.title).not.toBe(
+      catalog.admin.organizationId,
+    );
+    expect(catalog.settings.organization.slug.hint).not.toBe(
+      catalog.settings.organization.organizationIdHint,
+    );
+  },
+);
 
 test("members can read the slug without a change action", () => {
   mount("en", false);

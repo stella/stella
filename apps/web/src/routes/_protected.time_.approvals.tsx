@@ -1,27 +1,21 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
 
-import { Temporal } from "@stll/time";
-import { Skeleton } from "@stll/ui/skeleton";
-
-import { weekOf } from "@/components/billing/work-week.logic";
-import {
-  TimeApprovalsPage,
-  timeApprovalsQuery,
-} from "@/features/time-review/time-approvals-page";
+import { todayIn, weekOf } from "@/components/billing/work-week.logic";
 import { timeApprovalsSearchSchema } from "@/features/time-review/time-approvals-search";
 import { isTimeBillingRouteEnabled } from "@/hooks/use-time-billing-preview";
 import { authClient } from "@/lib/auth-client";
 import { roleOptions } from "@/lib/auth-queries";
-import { detached } from "@/lib/detached";
 import { pageTitle } from "@/lib/page-title";
+import { routeLoadMode } from "@/lib/query-view.logic";
 import {
   ensureRouteInfiniteQueryData,
   ensureRouteQueryData,
 } from "@/lib/react-query";
+import { timeApprovalsQuery } from "@/lib/workspaces/queries/time-approvals";
 import { routePresentation } from "@/routes/-route-presentation";
 
-const todayIn = (timezoneId: string) =>
-  Temporal.Now.plainDateISO(timezoneId).toString();
+import { TimeApprovalsRoute } from "./-time-approvals.page";
+import { TimeApprovalsPending } from "./-time-approvals.pending";
 
 export const Route = createFileRoute("/_protected/time_/approvals")({
   validateSearch: timeApprovalsSearchSchema,
@@ -63,77 +57,25 @@ export const Route = createFileRoute("/_protected/time_/approvals")({
       redirect({ to: "/workspaces", throw: true });
     }
   },
-  loader: async ({ context, deps }) => {
+  loader: async ({ cause, context, deps }) => {
     const date = deps.date ?? todayIn(context.user.timezoneId);
-    await ensureRouteInfiniteQueryData(
-      context.queryClient,
-      timeApprovalsQuery(
-        context.user.activeOrganizationId,
-        context.user.id,
-        weekOf(date),
-        { member: deps.member, matter: deps.matter },
-      ),
+    const options = timeApprovalsQuery(
+      context.user.activeOrganizationId,
+      context.user.id,
+      weekOf(date),
+      deps,
     );
+    if (
+      routeLoadMode({
+        cause,
+        hasCachedPages:
+          context.queryClient.getQueryData(options.queryKey) !== undefined,
+      }) === "await"
+    ) {
+      await ensureRouteInfiniteQueryData(context.queryClient, options);
+    }
   },
   head: () => ({ meta: [{ title: pageTitle("billing.approval.title") }] }),
   pendingComponent: TimeApprovalsPending,
   component: TimeApprovalsRoute,
 });
-
-function TimeApprovalsPending() {
-  return (
-    <div className="flex h-full flex-col">
-      <div className="flex items-center justify-between gap-3 border-b px-4 py-3">
-        <Skeleton className="h-5 w-32" />
-        <Skeleton className="h-11 w-64" />
-      </div>
-      <div className="mx-auto flex w-full max-w-4xl flex-col gap-3 p-4">
-        <Skeleton className="h-5 w-48" />
-        {Array.from({ length: 4 }, (_, index) => (
-          <Skeleton className="h-24 w-full rounded-md" key={index} />
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function TimeApprovalsRoute() {
-  const search = Route.useSearch({
-    select: ({ date, member, matter }) => ({ date, member, matter }),
-  });
-  const { organizationId, userId, timezoneId } = Route.useRouteContext({
-    select: (context) => ({
-      organizationId: context.user.activeOrganizationId,
-      userId: context.user.id,
-      timezoneId: context.user.timezoneId,
-    }),
-  });
-  const navigate = Route.useNavigate();
-
-  return (
-    <TimeApprovalsPage
-      filter={{
-        date: search.date ?? todayIn(timezoneId),
-        member: search.member,
-        matter: search.matter,
-      }}
-      onFilterChange={(filter) =>
-        detached(
-          navigate({
-            search: {
-              date: filter.date,
-              ...(filter.member === undefined ? {} : { member: filter.member }),
-              ...(filter.matter === undefined ? {} : { matter: filter.matter }),
-            },
-          }),
-          "time-approvals.navigate",
-        )
-      }
-      onThisWeek={() =>
-        detached(navigate({ search: {} }), "time-approvals.this-week")
-      }
-      organizationId={organizationId}
-      userId={userId}
-    />
-  );
-}

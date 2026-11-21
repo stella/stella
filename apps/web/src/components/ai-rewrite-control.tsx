@@ -44,9 +44,32 @@ const AI_REWRITE_PRESETS = [
 type AiRewriteControlProps = {
   className?: string | undefined;
   disabled?: boolean | undefined;
+  disabledReason?: string | undefined;
   isPending?: boolean | undefined;
   label?: string | undefined;
   onRewrite: (instruction: string) => void;
+};
+
+type RewriteDisabledReasonOptions = {
+  isPending: boolean;
+  disabled: boolean;
+  disabledReason: string | undefined;
+  t: (key: "rewriting" | "rewriteDisabled") => string;
+};
+
+const rewriteDisabledReason = ({
+  isPending,
+  disabled,
+  disabledReason,
+  t,
+}: RewriteDisabledReasonOptions) => {
+  if (isPending) {
+    return t("rewriting");
+  }
+  if (disabled) {
+    return disabledReason ?? t("rewriteDisabled");
+  }
+  return undefined;
 };
 
 /**
@@ -58,6 +81,7 @@ type AiRewriteControlProps = {
 export const AiRewriteControl = ({
   className,
   disabled = false,
+  disabledReason,
   isPending = false,
   label,
   onRewrite,
@@ -95,7 +119,12 @@ export const AiRewriteControl = ({
         onPrimaryClick={() => runRewrite(AI_REWRITE_PRESETS[0].instruction)}
         onOpenChange={setOpen}
         open={open}
-        primaryDisabled={unavailable}
+        primaryDisabledReason={rewriteDisabledReason({
+          isPending,
+          disabled,
+          disabledReason,
+          t,
+        })}
         primaryContent="icon"
         primaryLabel={actionLabel}
         size="sm"
@@ -109,8 +138,7 @@ export const AiRewriteControl = ({
             <div className="flex flex-col gap-1">
               {AI_REWRITE_PRESETS.map((preset) => (
                 <Button
-                  className="w-full justify-start font-normal"
-                  size="sm"
+                  size="row"
                   variant="ghost"
                   key={preset.id}
                   onClick={() => runRewrite(preset.instruction)}
@@ -121,8 +149,9 @@ export const AiRewriteControl = ({
               <div className="bg-border my-1 h-px" />
               <div className="flex flex-col gap-1">
                 <Label
-                  className="text-muted-foreground px-1 text-xs font-medium"
+                  className="mx-1"
                   htmlFor={customInstructionId}
+                  variant="muted"
                 >
                   {t("refinePlaceholder")}
                 </Label>
@@ -148,6 +177,7 @@ export const AiRewriteControl = ({
                 <Button
                   className="mt-1 self-end"
                   disabled={customInstruction.trim().length === 0}
+                  disabledReason={t("enterRewriteInstruction")}
                   onClick={() => runRewrite(customInstruction.trim())}
                   size="sm"
                   type="button"
@@ -161,7 +191,7 @@ export const AiRewriteControl = ({
         }
       >
         {isPending ? (
-          <Loader className="size-3.5" label={tCommon("loading")} size="sm" />
+          <Loader label={tCommon("loading")} size="sm" />
         ) : (
           <AiActionIcon aria-hidden className="size-3.5" />
         )}

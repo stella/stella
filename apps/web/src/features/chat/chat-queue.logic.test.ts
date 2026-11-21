@@ -15,18 +15,18 @@ import {
   type ChatThreadSendState,
 } from "@stll/api-contract/chat-send-intent";
 import { DESKTOP_RUNNER_MAX_INPUT_TEXT_LENGTH } from "@stll/api-contract/desktop-runner";
+import { USER_FILE_URL_PREFIX } from "@stll/api-contract/user-file-url";
 
 import type { ChatQueue, ChatQueueItem } from "@/features/chat/chat-queue";
 import {
-  canQueueMessage,
   CHAT_QUEUE_HOLD_NOTICE_KEYS,
   composerDraftOfParts,
   isQueueInsteadRefusal,
   queuedSendNow,
+  queuedSteerOf,
   queueMoveTarget,
   snapshotChatRequestOptions,
   steerableMessageText,
-  steerableQueuedText,
   withQueuedMessageMoved,
   withQueuedMessageRemoved,
 } from "@/features/chat/chat-queue.logic";
@@ -92,7 +92,7 @@ describe("Send now on a queued message", () => {
     for (const queued of [
       item("a"),
       // The preview is cut at its limit; the turn is handed the message read
-      // whole (`steerableQueuedText`).
+      // whole (`queuedSteerOf`).
       item("long", { preview: "x".repeat(CHAT_QUEUE_PREVIEW_MAX_CHARS) }),
     ]) {
       expect(queuedSendNow(STATES.workingSteerable, queued)).toEqual({
@@ -183,80 +183,55 @@ describe("removing a queued message", () => {
 });
 
 describe("what a message brings to the queue", () => {
-  test("text and pasted text can wait; a file the composer has not stored cannot", () => {
-    const id = toSafeId<"chatMessage">("message");
-    expect(canQueueMessage({ content: "<p>Hello</p>", id })).toBe(true);
-    expect(
-      canQueueMessage({
-        content: [
-          { type: "text", content: "<p>See</p>" },
-          createChatPastedTextPart("pasted"),
-        ],
-        id,
-      }),
-    ).toBe(true);
-    expect(
-      canQueueMessage({
-        content: [
-          { type: "text", content: "<p>See</p>" },
-          {
-            type: "image",
-            source: {
-              type: "url",
-              value: "data:image/png;base64,AAAA",
-              mimeType: "image/png",
-            },
-          },
-        ],
-        id,
-      }),
-    ).toBe(false);
-  });
-
   test("a queued message read whole goes to a running turn whole, up to what a steer takes", () => {
-    const raw = { sendMode: CHAT_SEND_MODE.rawOverride };
+    const raw = { revision: 0, sendMode: CHAT_SEND_MODE.rawOverride };
+    const textOf = (
+      parts: readonly unknown[],
+      queued: Pick<ChatQueueItem, "revision" | "sendMode"> = raw,
+    ) =>
+      queuedSteerOf({
+        item: queued,
+        read: { message: { parts }, revision: 0 },
+      })?.text ?? null;
     const long = "Clause ".repeat(CHAT_QUEUE_PREVIEW_MAX_CHARS);
     expect(long.length).toBeGreaterThan(CHAT_QUEUE_PREVIEW_MAX_CHARS);
-    expect(
-      steerableQueuedText({
-        item: raw,
-        parts: [{ type: "text", content: long }],
-      }),
-    ).toBe(long.trim());
+    expect(textOf([{ type: "text", content: long }])).toBe(long.trim());
     const tooLong = "x".repeat(DESKTOP_RUNNER_MAX_INPUT_TEXT_LENGTH + 1);
+    expect(textOf([{ type: "text", content: tooLong }])).toBeNull();
     expect(
-      steerableQueuedText({
-        item: raw,
-        parts: [{ type: "text", content: tooLong }],
+      textOf([
+        { type: "text", content: "Go" },
+        createChatPastedTextPart("pasted"),
+      ]),
+    ).toBeNull();
+    expect(
+      textOf([{ type: "text", content: "Go" }], {
+        revision: 0,
+        sendMode: CHAT_SEND_MODE.anonymized,
       }),
     ).toBeNull();
     expect(
-      steerableQueuedText({
-        item: raw,
-        parts: [
-          { type: "text", content: "Go" },
-          createChatPastedTextPart("pasted"),
-        ],
-      }),
+      textOf([
+        { type: "text", content: "Go" },
+        {
+          type: "file",
+          url: "stella-user-file://f",
+          mimeType: "application/pdf",
+        },
+      ]),
     ).toBeNull();
+  });
+
+  test("Send now steers only the revision the queue showed; one changed since is sent next", () => {
+    const shown = item("a", { revision: 0 });
+    const parts = [{ type: "text", content: "Go" }];
     expect(
-      steerableQueuedText({
-        item: { sendMode: CHAT_SEND_MODE.anonymized },
-        parts: [{ type: "text", content: "Go" }],
-      }),
-    ).toBeNull();
+      queuedSteerOf({ item: shown, read: { message: { parts }, revision: 0 } }),
+    ).toEqual({ revision: 0, text: "Go" });
+    // Switched to anonymized on another device: the read is of the next
+    // revision, whose mode the queue's read never showed.
     expect(
-      steerableQueuedText({
-        item: raw,
-        parts: [
-          { type: "text", content: "Go" },
-          {
-            type: "file",
-            url: "stella-user-file://f",
-            mimeType: "application/pdf",
-          },
-        ],
-      }),
+      queuedSteerOf({ item: shown, read: { message: { parts }, revision: 1 } }),
     ).toBeNull();
   });
 
@@ -285,18 +260,39 @@ describe("what a message brings to the queue", () => {
     ).toBeNull();
   });
 
-  test("goes back into the composer as its markup and its pasted texts", () => {
+  test("goes back into the composer as its markup, its pasted texts and its stored files by reference", () => {
     const pasted = createChatPastedTextPart("a long paste");
     // The fixture reaches the split: a pasted text is a text part too.
     expect(isChatPastedTextPart(pasted)).toBe(true);
     expect(pasted.type).toBe("text");
-    expect(
-      composerDraftOfParts([
-        { type: "text", content: "<p>One</p>" },
-        pasted,
-        { type: "image", source: { type: "url", value: "user-file://x" } },
-      ]),
-    ).toEqual({ html: "<p>One</p>", pastedTexts: ["a long paste"] });
+    const storedUrl = `${USER_FILE_URL_PREFIX}00000000-0000-7000-8000-0000000000f1`;
+    const draft = composerDraftOfParts([
+      { type: "text", content: "<p>One</p>" },
+      pasted,
+      {
+        type: "document",
+        source: { type: "url", value: storedUrl, mimeType: "application/pdf" },
+        metadata: { filename: "lease.pdf" },
+      },
+      // Never stored: nothing of it can come back.
+      {
+        type: "image",
+        source: { type: "url", value: "data:image/png;base64,AA" },
+      },
+    ]);
+    expect(draft).toEqual({
+      html: "<p>One</p>",
+      pastedTexts: ["a long paste"],
+      storedFiles: [
+        {
+          type: "stored_file",
+          filename: "lease.pdf",
+          id: expect.any(String),
+          mimeType: "application/pdf",
+          url: storedUrl,
+        },
+      ],
+    });
   });
 });
 

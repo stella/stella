@@ -7,7 +7,8 @@ import messages from "@/i18n/langs/en.json";
 
 GlobalRegistrator.register({ url: "https://app.example.test" });
 const { act, useSyncExternalStore } = await import("react");
-const { cleanup, render } = await import("@testing-library/react");
+const { cleanup, fireEvent, render, waitFor } =
+  await import("@testing-library/react");
 const { IntlProvider } = await import("use-intl");
 const { ChatComposerActionButton } =
   await import("./chat-composer-action-button");
@@ -73,7 +74,7 @@ test("a reattached Stop becomes disabled Send on the same element when its delay
   };
   const ui = render(<Viewer />);
   const stop = ui.getByRole("button", { name: messages.chat.stopResponse });
-  expect(stop.matches(":disabled")).toBe(false);
+  expect(stop.getAttribute("aria-disabled")).toBeNull();
   await act(async () => {
     probe.resolve(
       Response.json({ type: "transcript", turnId: "settled-turn" }),
@@ -83,7 +84,8 @@ test("a reattached Stop becomes disabled Send on the same element when its delay
     ui.queryByRole("button", { name: messages.chat.stopResponse }),
   ).toBeNull();
   expect(ui.getByRole("button", { name: messages.chat.sendPrompt })).toBe(stop);
-  expect(stop.matches(":disabled")).toBe(true);
+  // Disabled but still hoverable: its tooltip says why (`aria-disabled`).
+  expect(stop.getAttribute("aria-disabled")).toBe("true");
   expect(reloads).toBe(1);
   expect(errors).toEqual([]);
 });
@@ -105,7 +107,68 @@ test("a stop on its way says Stopping and takes no second click", () => {
   );
   const button = ui.getByRole("button", { name: messages.chat.stopping });
   expect(button.getAttribute("aria-busy")).toBe("true");
-  expect(button.hasAttribute("disabled")).toBe(true);
+  expect(button.getAttribute("aria-disabled")).toBe("true");
   button.click();
   expect(stops).toBe(0);
+});
+
+test("an empty draft keeps Send reachable and names what to do", () => {
+  let sends = 0;
+  const ui = render(
+    <IntlProvider locale="en" messages={messages} timeZone="UTC">
+      <ChatComposerActionButton
+        canSend={false}
+        disabledReason={messages.chat.sendPromptEmpty}
+        isGenerating={false}
+        onSend={() => {
+          sends += 1;
+        }}
+      />
+    </IntlProvider>,
+  );
+  const button = ui.getByRole("button", { name: messages.chat.sendPrompt });
+  // Focusable and hoverable, so the tooltip with the reason can open.
+  expect(button.getAttribute("aria-disabled")).toBe("true");
+  expect(button.hasAttribute("disabled")).toBe(false);
+  button.click();
+  expect(sends).toBe(0);
+});
+
+const hover = (element: HTMLElement) => {
+  fireEvent.pointerEnter(element, { pointerType: "mouse" });
+  fireEvent.pointerMove(element, { pointerType: "mouse" });
+  fireEvent.mouseEnter(element);
+  fireEvent.mouseMove(element);
+};
+
+const openTooltips = () =>
+  [...document.querySelectorAll('[data-slot="tooltip-popup"]')].map(
+    (popup) => popup.textContent,
+  );
+
+test("a resting pointer keeps a tooltip open on Send only while it says why Send is disabled", async () => {
+  const Composer = ({ canSend }: { canSend: boolean }) => (
+    <IntlProvider locale="en" messages={messages} timeZone="UTC">
+      <ChatComposerActionButton
+        canSend={canSend}
+        disabledReason={messages.chat.sendPromptEmpty}
+        isGenerating={false}
+        onSend={() => undefined}
+      />
+    </IntlProvider>
+  );
+  const ui = render(<Composer canSend={false} />);
+  const send = ui.getByRole("button", { name: messages.chat.sendPrompt });
+  act(() => {
+    hover(send);
+  });
+  await waitFor(() => {
+    expect(openTooltips()).toEqual([messages.chat.sendPromptEmpty]);
+  });
+  // The draft fills under the resting pointer: an enabled Send names
+  // itself and keeps no tooltip open over the turn it starts.
+  ui.rerender(<Composer canSend />);
+  await waitFor(() => {
+    expect(openTooltips()).toEqual([]);
+  });
 });

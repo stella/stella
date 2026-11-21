@@ -32,7 +32,8 @@ const getHandlerError = (run: () => unknown): HandlerError => {
     run();
   } catch (error) {
     if (error instanceof HandlerError) {
-      return error;
+      const handlerError: HandlerError = error;
+      return handlerError;
     }
     throw error;
   }

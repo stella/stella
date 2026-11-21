@@ -152,7 +152,7 @@ const render = (data: unknown) => {
 };
 
 describe("change-of-control exposure page", () => {
-  test("totals each position's counterparties, documents, value and share", () => {
+  test("totals each position's counterparties, value and share", () => {
     const { element, ready } = render(pageData);
     const stats = element("stats").children.map((group) =>
       group.children.map((child) => child.text),
@@ -161,17 +161,17 @@ describe("change-of-control exposure page", () => {
       [
         "Consent or termination review",
         "€88.4m",
-        "4 counterparties · 36 documents · 50% of value",
+        "4 counterparties · 50% of value",
       ],
       [
         "Consent to confirm",
         "€47.9m",
-        "2 counterparties · 18 documents · 27% of value",
+        "2 counterparties · 27% of value",
       ],
       [
         "Notice only",
         "€40.5m",
-        "2 counterparties · 18 documents · 23% of value",
+        "2 counterparties · 23% of value",
       ],
     ]);
     // The split bar grows each segment by its value, in position order.
@@ -212,8 +212,23 @@ describe("change-of-control exposure page", () => {
       "9",
       "€21.5m",
       "Critical",
-      "Consent or termination review",
     ]);
+    // Each row's position is its dot, which names the position for
+    // assistive technology and on hover.
+    const markers = element("matrix-body").children.map(
+      (row) => row.children.at(0)?.children.at(0)?.children.at(0)?.attributes,
+    );
+    expect(markers.map((marker) => marker?.get("aria-label"))).toEqual([
+      "Consent or termination review",
+      "Consent or termination review",
+      "Consent or termination review",
+      "Consent or termination review",
+      "Consent to confirm",
+      "Consent to confirm",
+      "Notice only",
+      "Notice only",
+    ]);
+    expect(markers.at(0)?.get("role")).toBe("img");
     expect(
       rows.map((cells) => cells.at(0) ?? "").toSorted(compareCodeUnit),
     ).toEqual(
@@ -229,9 +244,9 @@ describe("change-of-control exposure page", () => {
     expect(
       element("stats").children.map((group) => group.children.at(2)?.text),
     ).toEqual([
-      "0 counterparties · 0 documents · 0% of value",
-      "0 counterparties · 0 documents · 0% of value",
-      "0 counterparties · 0 documents · 0% of value",
+      "0 counterparties · 0% of value",
+      "0 counterparties · 0% of value",
+      "0 counterparties · 0% of value",
     ]);
     expect(element("matrix-body").children).toEqual([]);
     expect(ready()).toBe(1);

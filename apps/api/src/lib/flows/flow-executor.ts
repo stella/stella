@@ -8,8 +8,9 @@ import {
   TransactionRollbackError,
 } from "drizzle-orm";
 
+import { RESOURCE_TYPE, resourceRef } from "@stll/api-contract";
 import { NOTIFICATION_KIND } from "@stll/api-contract/notifications";
-import { drainFanOut } from "@stll/concurrency";
+import { markdownToStellaDocx } from "@stll/docx-authoring/markdown";
 import { todayFor } from "@stll/time";
 
 import type { rootDb, Transaction } from "@/api/db/root";
@@ -36,13 +37,17 @@ import {
   createAuditRecorder,
 } from "@/api/lib/audit-log";
 import type { AuditExecutionContext, AuditRecorder } from "@/api/lib/audit-log";
-import { resolveWorkspaceMemberAccess } from "@/api/lib/auth";
 import type { SafeId } from "@/api/lib/branded-types";
+import { FLOW_RUN_TRANSITIONS_V1 } from "@/api/lib/db/flow-run-transition-spec";
+import {
+  hasCurrentActiveWorkspaceMemberPermission,
+  requireCurrentActiveWorkspaceMemberPermission,
+} from "@/api/lib/db/member-authority";
+import { transition } from "@/api/lib/db/transitions";
 import {
   loadCurrentExtractedContents,
   loadCurrentExtractedSources,
 } from "@/api/lib/document-content-provenance";
-import { markdownToStellaDocx } from "@/api/lib/docx-authoring/from-markdown";
 import { createEntityFromBuffer } from "@/api/lib/entities/create-from-buffer";
 import { lockWorkspacesForEntityCap } from "@/api/lib/entity-cap-lock";
 import { TASK_STATUS } from "@/api/lib/entity-constants";
@@ -90,6 +95,7 @@ import { logger } from "@/api/lib/observability/logger";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { readWorkspaceOrganizationTimeZone } from "@/api/lib/organization-time-zone";
 import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
+import { broadcastWorkspaceResourceUpdated } from "@/api/lib/resource-realtime";
 import { createRootSafeDb, createRootScopedDb } from "@/api/lib/root-scoped-db";
 import { brandPersistedFlowRunId } from "@/api/lib/safe-id-boundaries";
 import { flushEntitySearchRepairs } from "@/api/lib/search/projection-repair-flush";
@@ -240,6 +246,22 @@ export const executeFlowStep = async (
 
   // Mark the step (and run) running. Broadcast so the UI shows progress.
   const startedPayload = await scopedDb(async (tx) => {
+    const currentlyAuthorized = await hasCurrentActiveWorkspaceMemberPermission(
+      {
+        db: tx,
+        organizationId: scope.organizationId,
+        workspaceId: run.workspaceId,
+        userId: actorUserId,
+        permissions: { flow: ["run"] },
+      },
+    );
+    if (!currentlyAuthorized) {
+      abortTransaction(
+        new FlowStepError({
+          message: "The workflow actor is no longer authorized in this matter.",
+        }),
+      );
+    }
     const current = await lockRunAndCurrentStep(tx, {
       workspaceId: run.workspaceId,
       runId,
@@ -253,21 +275,6 @@ export const executeFlowStep = async (
       current.step?.status === "awaiting_review"
     ) {
       return null;
-    }
-    const workspace = await resolveWorkspaceMemberAccess(
-      {
-        organizationId: scope.organizationId,
-        workspaceId: run.workspaceId,
-        userId: actorUserId,
-      },
-      tx,
-    );
-    if (workspace === null) {
-      abortTransaction(
-        new FlowStepError({
-          message: "The workflow actor is no longer a member of this matter.",
-        }),
-      );
     }
     const startedAt = new Date();
     await tx
@@ -463,10 +470,10 @@ const runAiStep = async ({
     async (tx) => await readPriorAiMarkdown(tx, run.id, stepIndex),
   );
   const documents = stepDef.includeDocuments
-    ? await loadInputDocuments(
+    ? await loadInputDocuments({
         scopedDb,
         organizationId,
-        await scopedDb(async (tx) =>
+        workspaceIds: await scopedDb(async (tx) =>
           (
             await authorizedWorkspaceIds(tx, {
               organizationId,
@@ -474,8 +481,8 @@ const runAiStep = async ({
             })
           ).unwrap("The scoped workspace authorization read must succeed"),
         ),
-        run.inputEntityIds,
-      )
+        entityIds: run.inputEntityIds,
+      })
     : [];
 
   const prompt = buildAiStepPrompt({
@@ -518,6 +525,22 @@ const runAiStep = async ({
       workspaceId: run.workspaceId,
     },
   });
+
+  // Inputs and configuration can take time to assemble. Recheck immediately
+  // before the model boundary so a committed role, matter-access, or lifecycle
+  // change since step claim prevents new model work.
+  unwrapOrFlowStepError(
+    await safeDb(async (tx) => {
+      await requireCurrentActiveWorkspaceMemberPermission({
+        db: tx,
+        organizationId,
+        workspaceId: run.workspaceId,
+        userId: actorUserId,
+        permissions: { flow: ["run"] },
+      });
+    }),
+    "The workflow actor is no longer authorized in this matter.",
+  );
 
   // `generateTanStackTextForTask` throws on provider/config failure; that is
   // exactly the retry signal the worker wants, so we let it propagate. Works
@@ -620,12 +643,18 @@ const readPriorAiMarkdown = async (
   return markdown;
 };
 
-export const loadInputDocuments = async (
-  scopedDb: ReturnType<typeof createRootScopedDb>,
-  organizationId: SafeId<"organization">,
-  workspaceIds: AuthorizedWorkspaceIds,
-  entityIds: SafeId<"entity">[],
-): Promise<FlowStepDocument[]> => {
+type LoadInputDocumentsOptions = {
+  scopedDb: ReturnType<typeof createRootScopedDb>;
+  organizationId: SafeId<"organization">;
+  workspaceIds: AuthorizedWorkspaceIds;
+  entityIds: SafeId<"entity">[];
+};
+export const loadInputDocuments = async ({
+  scopedDb,
+  organizationId,
+  workspaceIds,
+  entityIds,
+}: LoadInputDocumentsOptions): Promise<FlowStepDocument[]> => {
   if (entityIds.length === 0) {
     return [];
   }
@@ -637,7 +666,10 @@ export const loadInputDocuments = async (
     }
     const missingEntities = await scopedDb((tx) =>
       tx.query.entities.findMany({
-        where: { id: { in: missingIds } },
+        where: {
+          id: { in: missingIds },
+          workspaceId: { in: [...workspaceIds] },
+        },
         columns: { name: true },
         limit: missingIds.length,
       }),
@@ -653,41 +685,25 @@ export const loadInputDocuments = async (
 
   // Availability is decided from provenance alone; text is decrypted only for
   // a complete input set, and a document that became unavailable in between
-  // gets the same refusal.
+  // gets the same refusal. A data-box file is read like any other input, from
+  // its stored text.
+  const options = { entityIds, organizationId, workspaceIds };
   const sources = await scopedDb(
-    async (tx) =>
-      await loadCurrentExtractedSources(tx, {
-        entityIds,
-        organizationId,
-        workspaceIds,
-      }),
+    async (tx) => await loadCurrentExtractedSources(tx, options),
   );
   await refuseUnavailable(new Set(sources.map((row) => row.entityId)));
   const available = await scopedDb(
-    async (tx) =>
-      await loadCurrentExtractedContents(tx, {
-        entityIds,
-        organizationId,
-        workspaceIds,
-      }),
+    async (tx) => await loadCurrentExtractedContents(tx, options),
   );
   await refuseUnavailable(new Set(available.map((row) => row.entityId)));
-
-  const drained = await drainFanOut({
-    items: available,
-    signal: new AbortController().signal,
-    operation: async (row, signal) => {
-      signal.throwIfAborted();
-      return await Promise.resolve({
-        label: row.name,
-        text: row.text,
-      });
-    },
-  });
-  if (Result.isError(drained)) {
-    throw drained.error;
-  }
-  return drained.value;
+  // The prompt lists documents in the order the run selected them.
+  const inputOrder = new Map(entityIds.map((id, index) => [id, index]));
+  return available
+    .toSorted(
+      (a, b) =>
+        (inputOrder.get(a.entityId) ?? 0) - (inputOrder.get(b.entityId) ?? 0),
+    )
+    .map((row) => ({ label: row.name, text: row.text }));
 };
 
 /**
@@ -890,6 +906,18 @@ const runCreateDocumentStep = async ({
         fileName: `${stepDef.documentTitle}.docx`,
         mimeType: DOCX_MIME_TYPE,
         encryption: serverBuiltFileEncryption(),
+        authority: {
+          type: "current-member",
+          authorize: async (tx) => {
+            await requireCurrentActiveWorkspaceMemberPermission({
+              db: tx,
+              organizationId,
+              workspaceId: run.workspaceId,
+              userId: actorUserId,
+              permissions: { entity: ["create"] },
+            });
+          },
+        },
         afterCreate: async (tx, document) => {
           // The entity creator holds the workspace cap lock before this run lock.
           // Keep the artifact and its owning step in the same commit: cancellation
@@ -1165,19 +1193,23 @@ const pauseAtReviewGate = async ({
         and(eq(flowRunSteps.runId, runId), eq(flowRunSteps.index, stepIndex)),
       )
       .limit(1);
-    const reviewTaskEntityId =
-      stepRows.at(0)?.reviewTaskEntityId ??
-      (await raiseReviewTask({
-        tx,
-        run,
-        stepDef,
-        actorUserId,
-        features,
-        recordAuditEvent,
-      }));
+    const existingTaskEntityId = stepRows.at(0)?.reviewTaskEntityId;
+    const task = existingTaskEntityId
+      ? { type: "reused" as const, entityId: existingTaskEntityId }
+      : {
+          type: "created" as const,
+          entityId: await raiseReviewTask({
+            tx,
+            run,
+            stepDef,
+            actorUserId,
+            features,
+            recordAuditEvent,
+          }),
+        };
     await tx
       .update(flowRunSteps)
-      .set({ status: "awaiting_review", reviewTaskEntityId })
+      .set({ status: "awaiting_review", reviewTaskEntityId: task.entityId })
       .where(
         and(eq(flowRunSteps.runId, runId), eq(flowRunSteps.index, stepIndex)),
       );
@@ -1203,18 +1235,31 @@ const pauseAtReviewGate = async ({
     return {
       payload: await readRunProgress(tx, runId),
       pings: gatePings,
-      taskEntityId: reviewTaskEntityId,
+      task,
     };
   });
   if (paused === null) {
     return;
   }
-  const { payload, pings, taskEntityId } = paused;
+  const { payload, pings, task } = paused;
+  switch (task.type) {
+    case "created":
+      broadcastWorkspaceResourceUpdated(
+        workspaceId,
+        resourceRef({ type: RESOURCE_TYPE.ENTITY, id: task.entityId }),
+      );
+      break;
+    case "reused":
+      break;
+    default:
+      task satisfies never;
+      panic(`Unhandled review task: ${String(task)}`);
+  }
   broadcastUpdate(workspaceId, payload);
   pingNotificationRecipients(pings);
   detached(
     async () =>
-      flushSearchRepairs([taskEntityId]).catch(
+      flushSearchRepairs([task.entityId]).catch(
         createErrorCapture(
           handlerErrorContext("pauseAtReviewGate.flushSearchRepairs"),
         ),
@@ -1655,7 +1700,7 @@ export type CancelFlowRunOptions = {
   workspaceId: SafeId<"workspace">;
   runId: SafeId<"flowRun">;
   userId: SafeId<"user">;
-  /** Records the cancellation of an open review task as the caller's act. */
+  /** Records cancellation of the run and any open review task as the caller's act. */
   recordAuditEvent: AuditRecorder;
 };
 
@@ -1707,6 +1752,10 @@ export const cancelFlowRun = async ({
             }),
           );
         }
+        const changedBeforeCancellation = new HandlerError({
+          status: 409,
+          message: "This run changed before it could be cancelled.",
+        });
         // Progressing work remains cancellable. A request that observed an
         // open gate cannot replace a decision committed while it waited.
         if (
@@ -1714,17 +1763,28 @@ export const cancelFlowRun = async ({
           (run.status === "awaiting_review" &&
             current.run.status !== "awaiting_review")
         ) {
-          return Result.err(
-            new HandlerError({
-              status: 409,
-              message: "This run changed before it could be cancelled.",
-            }),
-          );
+          return Result.err(changedBeforeCancellation);
         }
-        await tx
-          .update(flowRuns)
-          .set({ status: "cancelled", finishedAt: now })
-          .where(eq(flowRuns.id, runId));
+        const cancellation = await transition({
+          tx,
+          spec: FLOW_RUN_TRANSITIONS_V1,
+          id: runId,
+          options: {
+            from: [current.run.status],
+            to: "cancelled",
+            set: { finishedAt: now },
+          },
+          recordTransitionAuditEvent: async (auditTx, row) => {
+            await recordAuditEvent(auditTx, {
+              action: AUDIT_ACTION.CANCEL,
+              resourceType: AUDIT_RESOURCE_TYPE.FLOW_RUN,
+              resourceId: row.id,
+            });
+          },
+        });
+        if (cancellation.type === "stale") {
+          return Result.err(changedBeforeCancellation);
+        }
         // Any not-yet-terminal step is abandoned, and the task an open gate
         // raised is withdrawn with it.
         const abandoned = await tx

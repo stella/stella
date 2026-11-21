@@ -1,6 +1,6 @@
 {
   "name": "@stll/ai-catalog",
-  "version": "0.13.0",
+  "version": "0.17.0",
   "description": "Provider-neutral AI model roles, capabilities, and curated model metadata.",
   "keywords": [
     "ai",
@@ -37,7 +37,7 @@
   },
   "scripts": {
     "clean": "git clean -xdf dist .cache .turbo node_modules",
-    "build": "tsdown",
+    "build": "bun --bun tsdown",
     "gen:benchmarks": "bun ../scripts/src/model-catalog-benchmarks-gen.ts",
     "gen:capabilities": "bun --preload ../../scripts/offline-network-preload.ts ../scripts/src/model-catalog-capabilities-gen.ts",
     "check:generations": "bun --preload ../../scripts/offline-network-preload.ts ../scripts/src/model-catalog-generation-check.ts",

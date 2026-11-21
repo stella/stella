@@ -5,11 +5,8 @@ import { useNavigate } from "@tanstack/react-router";
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
-import {
-  FileTextIcon,
-  MessageSquareIcon,
-  PanelRightIcon,
-} from "@stll/ui/icons";
+import { DirectionalIcon } from "@stll/ui/directional-icon";
+import { PanelRightIcon } from "@stll/ui/icons";
 import {
   entityTabGlyph,
   InspectorEntityTab,
@@ -18,52 +15,54 @@ import {
 } from "@stll/ui/inspector";
 import type { InspectorEntityTabInactiveIcon } from "@stll/ui/inspector";
 import { getMatterSwatch } from "@stll/ui/matter-colors";
-import { MatterIcon } from "@stll/ui/matter-icon";
 import { containedEventHandler } from "@stll/ui/use-contained-handler";
 import { cn } from "@stll/ui/utils";
 import { WorkspaceEndRail } from "@stll/ui/workspace-shell";
 
 import { useMainLegalDocument } from "@/components/ai-suggestions/use-main-legal-document";
-import { DocumentIcon } from "@/components/document-icon";
-import { chatTabHeaderLabel } from "@/components/inspector/chat-context-label.logic";
-import { ExternalSourceLogo } from "@/components/inspector/external-reference-panel";
-import { findMcpConnectorIconHref } from "@/components/inspector/external-source-icon";
 import { getActiveSkillChatContext } from "@/components/inspector/inspector-active-skill";
-import { useInspectorGroups } from "@/components/inspector/inspector-group-controls";
+import type { InspectorGroups } from "@/components/inspector/inspector-group-controls";
 import {
   INSPECTOR_TAB_DRAG_TYPE,
   InspectorRailGroup,
 } from "@/components/inspector/inspector-group-rail";
 import { useInspectorGroupTransfer } from "@/components/inspector/inspector-group-transfer";
 import { planInspectorTabDrop } from "@/components/inspector/inspector-groups.logic";
-import { railChatOpenArgs } from "@/components/inspector/inspector-rail-chat.logic";
+import {
+  railChatOpenArgs,
+  railChatSkill,
+} from "@/components/inspector/inspector-rail-chat.logic";
+import { INSPECTOR_FOCUS_INTENT } from "@/components/inspector/inspector-store-types";
+import {
+  InspectorTabIcon,
+  InspectorTabLabel,
+  SuggestedReviveTabIcon,
+} from "@/components/inspector/inspector-tab-presentation";
 import {
   isGenericInspectorTab,
   useInspectorTabsStore,
 } from "@/components/inspector/inspector-tabs-store";
 import type {
-  ChatTab,
   InspectorTab,
+  InspectorTabsStore,
 } from "@/components/inspector/inspector-tabs-store";
 import { buildMaximizeTabAction } from "@/components/inspector/maximize-tab";
-import { taskTabDetailOptions } from "@/components/inspector/task-tab-query";
 import { useRailContextMenu } from "@/components/inspector/use-rail-context-menu";
 import { useRouteWorkspaceId } from "@/components/inspector/use-route-workspace-id";
 import { useTabContextMenu } from "@/components/inspector/use-tab-context-menu";
 import { getInspectorView } from "@/components/inspector/view-registry";
 import Tooltip from "@/components/tooltip";
-import { EntityKindIcon } from "@/components/workspaces/entity-kind-icon";
+import { useMainSkill } from "@/features/knowledge/use-main-skill";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useRouteErrorLifecycle } from "@/lib/analytics/route-error-lifecycle-context";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
-import { useSkillLabel } from "@/lib/knowledge/built-in-skills";
-import { mcpConnectorsOptions } from "@/lib/knowledge/queries";
 import { catalogueOptions } from "@/lib/knowledge/queries/catalogue";
 import { queryView } from "@/lib/query-view.logic";
 import { useQueryViewError } from "@/lib/use-query-view";
 
 export const InspectorRail = ({
   activeId,
+  groups: { visibleGroups, ungroupedTabs },
   minimized,
   onActivateTab,
   onCloseTab,
@@ -90,10 +89,16 @@ export const InspectorRail = ({
     activeSkillCatalogueDataView.type === "items"
       ? activeSkillCatalogueDataView.items
       : undefined;
-  const activeSkill = getActiveSkillChatContext(
-    activeTab,
-    activeSkillCatalogueData?.entries,
-  );
+  // The skill editor in the main view names its skill as the editor's own
+  // new-chat button does.
+  const mainViewSkill = useMainSkill();
+  const activeSkill = railChatSkill({
+    activeTabSkill: getActiveSkillChatContext(
+      activeTab,
+      activeSkillCatalogueData?.entries,
+    ),
+    mainViewSkill,
+  });
   // A new chat is about the matter in the URL, not the matter this rail
   // displays (the active tab's, which the user may have left).
   const routeWorkspaceId = useRouteWorkspaceId();
@@ -104,7 +109,6 @@ export const InspectorRail = ({
   // The rail stands beside the main view, so a chat started here is about
   // whatever that view is showing.
   const legalDocument = useMainLegalDocument();
-  const { visibleGroups, ungroupedTabs } = useInspectorGroups();
   const transfer = useInspectorGroupTransfer();
   const dropOnTab = ({ sourceId, targetId }: InspectorTabDropArgs) => {
     const store = useInspectorTabsStore.getState();
@@ -132,13 +136,14 @@ export const InspectorRail = ({
   const collapsedGroupIds = useInspectorTabsStore((s) => s.collapsedGroupIds);
 
   const openContextChat = () => {
-    onOpenChat(
-      railChatOpenArgs({
+    onOpenChat({
+      ...railChatOpenArgs({
         activeSkill,
         legalDocument,
         workspaceId: routeWorkspaceId,
       }),
-    );
+      focus: INSPECTOR_FOCUS_INTENT.claim,
+    });
   };
 
   const toggleLabel = (() => {
@@ -183,7 +188,7 @@ export const InspectorRail = ({
           }
           side="left"
         >
-          <PanelRightIcon className="size-4" />
+          <DirectionalIcon className="size-4" icon={PanelRightIcon} />
         </Tooltip>
       }
     >
@@ -236,19 +241,13 @@ export const InspectorRail = ({
 
 type InspectorRailProps = {
   activeId: string | null;
+  /** The panel's tab groups (`useInspectorGroups`), shared with the phone
+   *  tab switcher so both list the same tabs in the same order. */
+  groups: InspectorGroups;
   minimized: boolean;
   onActivateTab: (tabId: string) => void;
   onCloseTab: (tabId: string) => void;
-  onOpenChat: (
-    args?: Parameters<
-      (args?: {
-        label?: string;
-        workspaceId?: string | undefined;
-        contextMatterIds?: string[];
-        activeSkill?: ChatTab["activeSkill"];
-      }) => void
-    >[0],
-  ) => void;
+  onOpenChat: InspectorTabsStore["openChat"];
   onSetMinimized: (minimized: boolean) => void;
   tabs: InspectorTab[];
 };
@@ -258,106 +257,6 @@ const inspectorDiagnosticState = (tabCount: number, minimized: boolean) => {
     return "empty";
   }
   return minimized ? "minimized" : "open";
-};
-
-type FileTabIconProps = {
-  fileName: string;
-  mimeType: string | undefined;
-};
-
-/**
- * Rail icon for any file-like tab, shown while its `InspectorEntityTab` is
- * active (`entityTabGlyph` covers the inactive glyph). Shared by workspace
- * file tabs and skill resources so every file reads the same way in the
- * rail.
- */
-const FileTabIcon = ({ fileName, mimeType }: FileTabIconProps) => {
-  if (mimeType) {
-    return (
-      <DocumentIcon
-        className="size-3.5"
-        fileName={fileName}
-        mimeType={mimeType}
-      />
-    );
-  }
-  return <FileTextIcon className="size-3.5" />;
-};
-
-type VerticalTabIconProps = {
-  tab: InspectorTab;
-  externalIconHref?: string | undefined;
-};
-
-/**
- * The icon `InspectorEntityTab` shows for this tab. For file-like kinds
- * (see `tabGlyph`), that's only while active — `InspectorEntityTab` swaps
- * to `entityTabGlyph`'s abbreviation otherwise, so this never has to
- * branch on that itself. Every other kind has no glyph to swap to, so
- * `InspectorEntityTab` keeps rendering this icon while inactive too
- * (dimmed) — a registration's own rail icon is always asked for its
- * `active` rendering here for the same reason.
- */
-const VerticalTabIcon = ({ tab, externalIconHref }: VerticalTabIconProps) => {
-  // Generic registry-backed kinds (registered by non-workspace
-  // routes) delegate their rail icon to the registration so the
-  // rail stays open to extension without growing this switch.
-  if (isGenericInspectorTab(tab)) {
-    const registration = getInspectorView(tab.viewType);
-    if (registration === undefined) {
-      return (
-        <span className="text-[9px] leading-none font-semibold tracking-tight uppercase">
-          {entityTabGlyph(tab.label)}
-        </span>
-      );
-    }
-    const RailIcon = registration.railIcon;
-    return (
-      <RailIcon
-        active
-        tab={{
-          id: tab.id,
-          label: tab.label,
-          payload: tab.payload,
-          ownerRouteId: tab.ownerRouteId,
-        }}
-      />
-    );
-  }
-
-  if (tab.type === "task") {
-    return (
-      <EntityKindIcon className="size-3.5" kind="task" status={tab.status} />
-    );
-  }
-
-  if (tab.type === "chat") {
-    return <MessageSquareIcon className="size-3.5" />;
-  }
-
-  if (tab.type === "matter") {
-    return (
-      <MatterIcon
-        className="size-3.5"
-        matter={{ id: tab.workspaceId, color: tab.color ?? null }}
-      />
-    );
-  }
-
-  if (tab.type === "external") {
-    return (
-      <ExternalSourceLogo
-        className="size-3.5 border-0"
-        iconHref={externalIconHref}
-      />
-    );
-  }
-
-  if (tab.type === "skill-resource") {
-    return <FileTabIcon fileName={tab.label} mimeType={tab.mimeType} />;
-  }
-
-  return <FileTabIcon fileName={tab.fileName} mimeType={tab.mimeType} />;
 };
 
 /**
@@ -429,47 +328,6 @@ const SuggestedReviveTab = () => {
   );
 };
 
-const SuggestedReviveTabIcon = ({ tab }: { tab: InspectorTab }) => {
-  if (isGenericInspectorTab(tab)) {
-    const registration = getInspectorView(tab.viewType);
-    if (registration !== undefined) {
-      const RailIcon = registration.railIcon;
-      return (
-        <RailIcon
-          active={false}
-          tab={{
-            id: tab.id,
-            label: tab.label,
-            payload: tab.payload,
-            ownerRouteId: tab.ownerRouteId,
-          }}
-        />
-      );
-    }
-  }
-  // Unlike the inactive regular tabs (abbreviation text), the ghost
-  // always shows the file-type icon: the chip stands in for the
-  // document that is centered in the main view, so the icon is the
-  // recognisable anchor.
-  if (tab.type === "pdf" && tab.mimeType !== undefined) {
-    return (
-      <DocumentIcon
-        className="size-3.5"
-        fileName={tab.fileName}
-        mimeType={tab.mimeType}
-      />
-    );
-  }
-  if (tab.type === "pdf") {
-    return <FileTextIcon className="size-3.5" />;
-  }
-  return (
-    <span className="text-[9px] leading-none font-semibold tracking-tight uppercase">
-      {entityTabGlyph(tab.label)}
-    </span>
-  );
-};
-
 type InspectorTabDropArgs = { sourceId: string; targetId: string };
 
 type VerticalTabProps = {
@@ -490,61 +348,14 @@ const flashTabElement = (el: HTMLElement) => {
   );
 };
 
-const ChatVerticalTab = ({
-  tab,
-  ...props
-}: VerticalTabProps & { tab: ChatTab }) => {
-  const t = useTranslations();
-  const skillLabel = useSkillLabel();
-  const label = chatTabHeaderLabel({
-    activeSkillName:
-      tab.activeSkill === undefined ? undefined : skillLabel(tab.activeSkill),
-    boundDocumentLabel: undefined,
-    newChatLabel: t("chat.newChat"),
-    tabLabel: tab.label,
-  });
-  return <VerticalTabCell {...props} tab={{ ...tab, label }} />;
-};
-
-const VerticalTab = (props: VerticalTabProps) => {
-  const { tab } = props;
-  if (tab.type === "chat") {
-    return <ChatVerticalTab {...props} tab={tab} />;
-  }
-  if (tab.type === "task") {
-    return <TaskVerticalTab {...props} tab={tab} />;
-  }
-  if (tab.type !== "view") {
-    return <VerticalTabCell {...props} />;
-  }
-  const RailLabel = getInspectorView(tab.viewType)?.railLabel;
-  if (RailLabel === undefined) {
-    return <VerticalTabCell {...props} />;
-  }
-  return (
-    <RailLabel
-      renderLabel={(label) => (
-        <VerticalTabCell {...props} tab={{ ...tab, label }} />
-      )}
-      tab={tab}
-    />
-  );
-};
-
-const TaskVerticalTab = ({
-  tab,
-  ...props
-}: VerticalTabProps & { tab: Extract<InspectorTab, { type: "task" }> }) => {
-  const t = useTranslations();
-  const taskQuery = useQuery(taskTabDetailOptions(tab));
-  const taskView = queryView(taskQuery);
-  useQueryViewError(taskView, "TaskVerticalTab:query");
-  const label =
-    taskView.type === "items"
-      ? taskView.items.name || t("tasks.untitled")
-      : (tab.creationStatus === "pending" && tab.label) || t("common.loading");
-  return <VerticalTabCell {...props} tab={{ ...tab, label }} />;
-};
+const VerticalTab = (props: VerticalTabProps) => (
+  <InspectorTabLabel
+    render={(label) => (
+      <VerticalTabCell {...props} tab={{ ...props.tab, label }} />
+    )}
+    tab={props.tab}
+  />
+);
 
 const VerticalTabCell = ({
   onDropTab,
@@ -559,33 +370,6 @@ const VerticalTabCell = ({
   const tabNavigate = useNavigate();
   const tabQueryClient = useQueryClient();
   const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
-  const externalConnectorSlug =
-    tab.type === "external" ? tab.connectorSlug : undefined;
-  const storedExternalIconHref =
-    tab.type === "external" ? tab.iconHref : undefined;
-  const mcpConnectorsDataQuery = useQuery({
-    ...mcpConnectorsOptions(activeOrganizationId),
-    enabled:
-      externalConnectorSlug !== undefined &&
-      storedExternalIconHref === undefined,
-  });
-  const mcpConnectorsDataView = queryView(mcpConnectorsDataQuery);
-  useQueryViewError(mcpConnectorsDataView, "VerticalTabCell:query");
-  const mcpConnectorsData =
-    mcpConnectorsDataView.type === "items"
-      ? mcpConnectorsDataView.items
-      : undefined;
-  const availableConnectors = mcpConnectorsData
-    ? mcpConnectorsData.connectors
-    : [];
-  const externalIconHref =
-    storedExternalIconHref ??
-    (externalConnectorSlug === undefined
-      ? undefined
-      : findMcpConnectorIconHref({
-          connectorSlug: externalConnectorSlug,
-          connectors: availableConnectors,
-        }));
 
   const contextMenu = useTabContextMenu({
     canRename: tab.type !== "matter",
@@ -599,16 +383,32 @@ const VerticalTabCell = ({
     }),
   });
 
-  // Flash the tab on (re-)activation.
+  // Flash the tab on (re-)activation from elsewhere (a document link, a chat
+  // opening a file, a command), so the eye finds where it lives in the rail.
+  // An activation this cell's own click caused never flashes: the reader is
+  // already looking at the cell, and a fading fill on the tab they just chose
+  // reads as the file still loading. The click records the sequence number it
+  // produced, so only that exact activation is skipped.
   const activationSeq = useInspectorTabsStore((s) => s.activationSeq);
   const prevSeq = useRef(activationSeq);
+  const selfActivationSeq = useRef<number | null>(null);
   useExternalSyncEffect(() => {
     const el = tabRef.current;
-    if (el && active && activationSeq !== prevSeq.current) {
+    if (
+      el &&
+      active &&
+      activationSeq !== prevSeq.current &&
+      activationSeq !== selfActivationSeq.current
+    ) {
       flashTabElement(el);
     }
     prevSeq.current = activationSeq;
   }, [active, activationSeq]);
+  const activateFromRail = () => {
+    onActivate();
+    // Store updates are synchronous, so this is the sequence the click made.
+    selfActivationSeq.current = useInspectorTabsStore.getState().activationSeq;
+  };
 
   // Targeted flash: flash this tab when something asks for it by id
   // (e.g. clicking a field in the document, or a chat just opened here),
@@ -637,7 +437,7 @@ const VerticalTabCell = ({
         )}
         draggable
         glyph={tabGlyph(tab)}
-        icon={<VerticalTabIcon externalIconHref={externalIconHref} tab={tab} />}
+        icon={<InspectorTabIcon tab={tab} />}
         inactiveIcon={tabInactiveIcon(tab)}
         label={tooltipLabel}
         onClose={onClose}
@@ -667,7 +467,7 @@ const VerticalTabCell = ({
           event.stopPropagation();
           onDropTab({ sourceId, targetId: tab.id });
         }}
-        onSelect={onActivate}
+        onSelect={activateFromRail}
         ref={tabRef}
       />
       {contextMenu.element}

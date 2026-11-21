@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
@@ -134,7 +134,7 @@ export const MatterCombobox = ({
   // changes, so a list rebuilt on every render re-renders the combobox
   // forever. Memoized on the cached query results (stable references) and
   // the pinned order, the list changes only when its inputs do.
-  const items = useMemo(() => {
+  const items = (() => {
     // Nothing to offer until the navigation list has loaded.
     const workspaces =
       navigation === undefined ? NO_WORKSPACES : navigation.workspaces;
@@ -151,7 +151,7 @@ export const MatterCombobox = ({
       workspaces,
     }).map((matter) => matter.id);
     return groupMatterOptions({ matters, recentIds });
-  }, [browsing, chatHistory, navigation, pinnedOrder]);
+  })();
 
   return (
     <div className="flex flex-col gap-2">
@@ -202,12 +202,13 @@ export const MatterCombobox = ({
               )
             }
           </ComboboxList>
-          <ComboboxEmpty>{t("common.noResults")}</ComboboxEmpty>
+          {/* While the matters load the list is empty but not "no
+              results": the field keeps its height and says so in place. */}
+          <ComboboxEmpty>
+            {isPending ? t("common.loading") : t("common.noResults")}
+          </ComboboxEmpty>
         </ComboboxPopup>
       </Combobox>
-      {isPending && (
-        <p className="text-muted-foreground text-sm">{t("common.loading")}</p>
-      )}
       {error !== null && (
         <div className="flex items-center justify-between gap-2 text-sm">
           <span className="text-destructive">{t("errors.actionFailed")}</span>

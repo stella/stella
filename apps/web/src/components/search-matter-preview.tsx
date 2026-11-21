@@ -51,6 +51,7 @@ export const SearchMatterPreview = ({
           variant="outline"
           size="sm"
           disabled={isFetching}
+          disabledReason={t("common.loading")}
           onClick={() => {
             detached(refetch(), "search-matter-preview.refetch");
           }}
@@ -126,12 +127,12 @@ const MatterPreviewActivity = ({ workspaceId }: { workspaceId: string }) => {
   const format = useFormatter();
   const { data, isError, isFetching, refetch } = useQuery({
     queryKey: [...workspacesKeys.byId(workspaceId), "search-preview"],
-    queryFn: async ({ signal }) =>
-      unwrapApiResponse(
-        await api
-          .workspaces({ workspaceId })
-          ["search-preview"].get({ fetch: { signal } }),
-      ),
+    queryFn: async ({ signal }) => {
+      const workspaceApi = api.workspaces({ workspaceId });
+      return unwrapApiResponse(
+        await workspaceApi["search-preview"].get({ fetch: { signal } }),
+      );
+    },
     staleTime: ROUTE_QUERY_STALE_TIME_MS,
   });
   if (isError) {
@@ -147,6 +148,7 @@ const MatterPreviewActivity = ({ workspaceId }: { workspaceId: string }) => {
           size="sm"
           variant="outline"
           disabled={isFetching}
+          disabledReason={t("common.loading")}
           onClick={() => {
             detached(refetch(), "search-matter-preview.activity-retry");
           }}

@@ -1055,11 +1055,13 @@ describe("public-law reader role", () => {
       await readSitemapDecisionAlternates(tx, ["reader-role-census"]);
     });
 
+    // The read looks the file up as the reader before it reads a decision;
+    // a month the index does not list is not served.
     const shard = await listSitemapShardDecisionsHandler(
       { country: "cze", year: "2026", month: "08" },
       caseLawDb,
     );
-    expect(shard).toMatchObject({ items: [] });
+    expect(shard).toMatchObject({ code: 404 });
 
     const search = await rehydrateCaseLawCandidates({
       body: { country: PUBLIC_COUNTRY, query: "reader role census" },

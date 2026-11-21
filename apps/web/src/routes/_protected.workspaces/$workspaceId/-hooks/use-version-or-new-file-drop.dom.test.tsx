@@ -91,7 +91,7 @@ const fetchImplementation = Object.assign(
       ) {
         throw new Error("expected a tree upload request body");
       }
-      const file = body.files.at(0);
+      const file: unknown = body.files.at(0);
       if (
         typeof file !== "object" ||
         file === null ||
@@ -553,6 +553,34 @@ describe("OS file drops in the Files view", () => {
       ).toEqual([{ entityId: fileEntityId }]),
     );
     expect(uploadParentIds()).toEqual([]);
+    client.clear();
+  });
+
+  test("choosing a new document uploads it without asking about duplicates again", async () => {
+    const { mounted, client } = await mountFilesView();
+    const row = rowNamed("contract.pdf");
+    const file = new File(["v2"], "contract-v2.pdf", {
+      type: "application/pdf",
+    });
+
+    const transfer = hoverWithOsFile(row, file);
+    dispatchDrag("drop", row, transfer);
+
+    const messages = englishMessages.workspaces.files.versionOrNewFile;
+    fireEvent.click(
+      await mounted.findByRole("button", { name: messages.createNewOption }),
+    );
+
+    await waitFor(() =>
+      expect(
+        requests.filter(({ pathname }) => pathname.endsWith("/presign")),
+      ).toHaveLength(1),
+    );
+    expect(
+      requests.filter(({ pathname }) =>
+        pathname.endsWith("/entity-create/preflight"),
+      ),
+    ).toEqual([]);
     client.clear();
   });
 });

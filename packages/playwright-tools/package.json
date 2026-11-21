@@ -20,10 +20,10 @@
     "typecheck": "bun check --no-pretty --all --project=tsconfig.json",
     "lint": "cd ../.. && bun scripts/lint.ts packages/playwright-tools",
     "lint:fix": "cd ../.. && bun scripts/lint.ts --fix packages/playwright-tools",
-    "report": "PLAYWRIGHT_HTML_OUTPUT_DIR=../../apps/web/playwright-report playwright merge-reports --reporter html ../../apps/web/all-blob-reports"
+    "report": "PLAYWRIGHT_HTML_OUTPUT_DIR=../../apps/web/playwright-report bun --bun playwright merge-reports --reporter html ../../apps/web/all-blob-reports"
   },
   "devDependencies": {
-    "@playwright/test": "^1.65.0",
+    "@playwright/test": "^1.65.1",
     "@stll/typescript-config": "workspace:*",
     "bun-types": "catalog:"
   }

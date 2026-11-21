@@ -19,9 +19,13 @@ const IDEMPOTENT_MUTATION = {
   file: "apps/web/src/lib/idempotency/use-idempotent-mutation.ts",
   name: "useIdempotentMutation",
 } as const;
-const ROUTE_READER_HELPERS = new Set([
+/** Route helpers that take the query client first and the query options
+ *  second (`apps/web/src/lib/react-query.ts`). The census and the
+ *  invalidation check both read options from this one list. */
+export const ROUTE_READER_HELPERS: ReadonlySet<string> = new Set([
   "ensureRouteQueryData",
   "ensureRouteInfiniteQueryData",
+  "prefetchRouteQuery",
 ]);
 const READERS = new Set([
   ...ROUTE_READER_HELPERS,
@@ -99,10 +103,20 @@ const constBindingValue = ({ node, value }: Binding): ts.Node | undefined =>
     ? value
     : undefined;
 
-const isRouteSegmentCall = (node: ts.CallExpression): boolean =>
-  ts.isPropertyAccessExpression(node.expression) ||
-  (ts.isElementAccessExpression(node.expression) &&
-    ts.isStringLiteral(node.expression.argumentExpression));
+const hasParameterEvaluation = (node: ts.Node): boolean =>
+  ((ts.isParameter(node) || ts.isBindingElement(node)) &&
+    (node.initializer !== undefined || node.dotDotDotToken !== undefined)) ||
+  ts.forEachChild(node, hasParameterEvaluation) === true;
+
+const isRouteSegmentCall = (node: ts.CallExpression): boolean => {
+  const callee = unwrap(node.expression);
+  return (
+    ts.isPropertyAccessExpression(callee) ||
+    (ts.isCallExpression(callee) && isRouteSegmentCall(callee)) ||
+    (ts.isElementAccessExpression(callee) &&
+      ts.isStringLiteral(callee.argumentExpression))
+  );
+};
 
 const isApiRequestCall = (node: ts.CallExpression): boolean =>
   API_CLIENT_REQUEST_METHODS.has(callName(node.expression) ?? "");
@@ -158,6 +172,10 @@ type CensusLocation = {
   column: number;
   callee: string;
 };
+type ResourceMutationBoundary = CensusLocation & {
+  writes: CensusRoute[];
+  unresolved: CensusUnresolved[];
+};
 export type MutationCensusEntry = CensusLocation & {
   kind: "useMutation" | "mutationOptions" | "wrapper";
   wrapperOf: string[];
@@ -167,6 +185,7 @@ export type MutationCensusEntry = CensusLocation & {
   readerIds: string[];
   unresolved: CensusUnresolved[];
   ownUnresolved: CensusUnresolved[];
+  resourceMutations?: ResourceMutationBoundary[];
 };
 export type QueryReaderCensusEntry = CensusLocation & {
   kind: string;
@@ -321,6 +340,14 @@ const indexModule = ({ file, text }: SourceInput): Module => {
         }
       }
     }
+    if (ts.isFunctionExpression(node) && node.name) {
+      bindings.push({
+        name: node.name.text,
+        node,
+        value: node,
+        scope: node,
+      });
+    }
     if (ts.isFunctionDeclaration(node) && node.name) {
       bindings.push({
         name: node.name.text,
@@ -408,16 +435,20 @@ type ImportedPrimitiveArgs = {
   seen?: Set<string>;
 };
 
+type ScanIntent = "inspect" | "evaluate";
+
 type ScanCallArgs = {
   current: Value & { node: ts.CallExpression };
   depth: number;
   nextActive: Set<ts.Node>;
+  intent: ScanIntent;
 };
 
 type ScanArgs = {
   value: Value;
   depth: number;
   active?: Set<ts.Node>;
+  intent?: ScanIntent;
 };
 
 type CallScanMode = "transitive" | "outside-mutations";
@@ -430,6 +461,7 @@ class CallScanner {
     this.mode = mode;
   }
   readonly routes: CensusRoute[] = [];
+  readonly resourceMutations: ResourceMutationBoundary[] = [];
   readonly effects: CensusCacheEffect[] = [];
   readonly unresolved: CensusUnresolved[] = [];
   readonly wrapperOf = new Set<string>();
@@ -438,6 +470,7 @@ class CallScanner {
   readonly visited = new Set<string>();
   readonly scanned = new Set<string>();
   readonly optionsNodes = new Set<ts.Node>();
+  readonly returnedFunctionValues = new Set<ts.Node>();
   deduplicate = <T>(items: T[]) =>
     items.filter((item) => {
       const key = JSON.stringify(item);
@@ -453,8 +486,51 @@ class CallScanner {
       file: node.getSourceFile().fileName,
       expression: normalize(node),
     });
-  scanCall = ({ current, depth, nextActive }: ScanCallArgs) => {
+  scanEvaluation = ({
+    value,
+    depth,
+    active = new Set<ts.Node>(),
+  }: ScanArgs) => {
+    const { node, env } = value;
+    if (active.has(node)) {
+      return;
+    }
+    if (depth > 12) {
+      this.unknown("helper-depth-limit", node);
+      return;
+    }
+    // Evaluating a function value does not invoke its body. Calls bind their
+    // own arguments; operation options and callback arguments use scan().
+    if (ts.isFunctionLike(node)) {
+      if (node.name && ts.isComputedPropertyName(node.name)) {
+        this.scanEvaluation({
+          value: { node: node.name.expression, env },
+          depth,
+          active,
+        });
+      }
+      return;
+    }
+    if (ts.isCallExpression(node)) {
+      this.scan({ value, depth, active, intent: "evaluate" });
+      return;
+    }
+    const nextActive = new Set(active).add(node);
+    ts.forEachChild(node, (child) =>
+      this.scanEvaluation({
+        value: { node: child, env },
+        depth,
+        active: nextActive,
+      }),
+    );
+  };
+  scanCall = ({ current, depth, nextActive, intent }: ScanCallArgs) => {
     const node = current.node;
+    this.scanEvaluation({
+      value: { node: node.expression, env: current.env },
+      depth,
+      active: nextActive,
+    });
     const name = this.analyzer.primitiveName(node);
     switch (this.mode) {
       case "transitive":
@@ -468,18 +544,7 @@ class CallScanner {
         this.mode satisfies never;
         panic("Unhandled mutation census scan mode");
     }
-    if (
-      this.mode === "outside-mutations" &&
-      this.analyzer.isResourceMutationFactory(node)
-    ) {
-      const options = node.arguments.at(0);
-      if (options) {
-        this.scanFactoryOptions({
-          value: { node: options, env: current.env },
-          depth: depth + 1,
-          active: nextActive,
-        });
-      }
+    if (this.scanOwnedMutation({ current, depth, nextActive })) {
       return;
     }
     const route = this.analyzer.routeOf(node);
@@ -543,15 +608,14 @@ class CallScanner {
       return;
     }
     if (!route && !CACHE_EFFECTS.has(name ?? "")) {
-      const helperTarget = this.analyzer.resolve({
-        node: node.expression,
-        env: current.env,
-      });
-      const body = this.analyzer.effectFunctions.has(helperTarget.node)
-        ? this.analyzer.invocation(node, current.env)
-        : undefined;
+      const body = this.invocationBody(node, current.env);
       if (body) {
-        this.scan({ value: body, depth: depth + 1, active: nextActive });
+        this.scanInvocationBody({
+          value: body,
+          depth: depth + 1,
+          active: nextActive,
+          intent,
+        });
       }
     }
     for (const argument of node.arguments) {
@@ -562,6 +626,160 @@ class CallScanner {
       });
     }
     return;
+  };
+  invocationBody = (
+    call: ts.CallExpression,
+    env: Environment,
+  ): Value | undefined => {
+    const target = this.analyzer.resolve({ node: call.expression, env });
+    const reachable =
+      this.analyzer.effectFunctions.has(target.node) ||
+      (this.mode === "outside-mutations" &&
+        this.analyzer.resourceMutationFunctions.has(target.node));
+    return reachable ? this.analyzer.invocation(call, env) : undefined;
+  };
+  scanInvocationBody = ({
+    value,
+    depth,
+    active = new Set<ts.Node>(),
+    intent = "inspect",
+  }: ScanArgs) => {
+    const returned = this.analyzer.returned(value);
+    if (
+      this.mode === "outside-mutations" &&
+      returned &&
+      functionNode(unwrap(returned.node))
+    ) {
+      this.returnedFunctionValues.add(unwrap(returned.node));
+    }
+    const scanBody = { evaluate: this.scanEvaluation, inspect: this.scan }[
+      intent
+    ];
+    scanBody({ value, depth, active });
+  };
+  scanReturnedFunction = ({
+    value,
+    depth,
+    active = new Set<ts.Node>(),
+    intent = "inspect",
+  }: ScanArgs): boolean => {
+    if (!this.returnedFunctionValues.has(value.node)) {
+      return false;
+    }
+    // Only this returned value lacks execution credit. Eager work and nested
+    // mutation primitives elsewhere in the helper retain their own boundaries.
+    const scanner = new CallScanner(this.analyzer, "transitive");
+    const scanBody = {
+      evaluate: scanner.scanEvaluation,
+      inspect: scanner.scan,
+    }[intent];
+    scanBody({ value, depth, active });
+    this.routes.push(...scanner.routes);
+    this.unresolved.push(...scanner.unresolved);
+    return true;
+  };
+  scanOwnedMutation = ({
+    current,
+    depth,
+    nextActive,
+  }: Omit<ScanCallArgs, "intent">): boolean => {
+    if (this.mode !== "outside-mutations") {
+      return false;
+    }
+    const node = current.node;
+    if (this.analyzer.isResourceMutationFactory(node)) {
+      const options = node.arguments.at(0);
+      if (options) {
+        this.scanFactoryOptions({
+          value: { node: options, env: current.env },
+          depth: depth + 1,
+          active: nextActive,
+        });
+      }
+      for (const argument of node.arguments.slice(1)) {
+        this.scan({
+          value: { node: argument, env: current.env },
+          depth,
+          active: nextActive,
+        });
+      }
+      return true;
+    }
+    const owner = this.analyzer.resourceMutationValue({
+      node: node.expression,
+      env: current.env,
+    });
+    if (!owner) {
+      return false;
+    }
+    this.scanResourceMutation(owner, depth + 1);
+    // Callee evaluation already ran; invocation arguments also remain outside the owner.
+    for (const argument of node.arguments) {
+      this.scan({
+        value: { node: argument, env: current.env },
+        depth,
+        active: nextActive,
+      });
+    }
+    return true;
+  };
+  scanOwnedMutationFunction = (
+    value: Value & { node: ts.PropertyAssignment },
+    depth: number,
+    active: Set<ts.Node>,
+  ): boolean => {
+    if (
+      this.mode !== "outside-mutations" ||
+      propertyName(value.node.name) !== "mutationFn"
+    ) {
+      return false;
+    }
+    const callback = { node: value.node.initializer, env: value.env };
+    const owner = this.analyzer.resourceMutationValue(callback);
+    if (!owner) {
+      return false;
+    }
+    // Creating the effective callback can itself perform unowned work.
+    this.scanEvaluation({ value: callback, depth, active });
+    this.scanResourceMutation(owner, depth + 1);
+    return true;
+  };
+  scanResourceMutation = (owner: Value, depth: number) => {
+    if (!ts.isCallExpression(owner.node)) {
+      return;
+    }
+    const options = owner.node.arguments.at(0);
+    if (!options) {
+      this.unknown("resource-mutation-options-missing", owner.node);
+      return;
+    }
+    this.scanFactoryOptions({
+      value: { node: options, env: owner.env },
+      depth,
+    });
+    const callback = this.analyzer.property(
+      { node: options, env: owner.env },
+      "mutationFn",
+    );
+    const scanner = new CallScanner(this.analyzer, "transitive");
+    const resolved = callback && this.analyzer.resolve(callback);
+    if (resolved && functionNode(resolved.node)) {
+      scanner.scan({ value: resolved, depth: 0 });
+    } else {
+      scanner.unknown(
+        "dynamic-operation-function",
+        callback?.node ?? owner.node,
+      );
+    }
+    this.resourceMutations.push({
+      ...this.analyzer.location(owner.node),
+      writes: scanner.deduplicate(
+        scanner.routes.filter(
+          ({ method }) => method !== "get" && method !== "head",
+        ),
+      ),
+      unresolved: scanner.deduplicate(scanner.unresolved),
+    });
   };
   scanFactoryOptions = ({ value, depth, active = new Set() }: ScanArgs) => {
     if (depth > 12) {
@@ -606,7 +824,12 @@ class CallScanner {
       });
     }
   };
-  scan = ({ value, depth, active = new Set<ts.Node>() }: ScanArgs) => {
+  scan = ({
+    value,
+    depth,
+    active = new Set<ts.Node>(),
+    intent = "inspect",
+  }: ScanArgs) => {
     const current = value;
     const node = current.node;
     if (active.has(node)) {
@@ -616,14 +839,19 @@ class CallScanner {
       this.unknown("helper-depth-limit", node);
       return;
     }
-    const signature = `${node.getSourceFile().fileName}:${String(node.kind)}:${String(node.pos)}:${String(node.end)}:${[...current.env.entries()].map(([parameter, argument]) => `${parameter.getSourceFile().fileName}:${String(parameter.pos)}=${argument.node.getSourceFile().fileName}:${String(argument.node.pos)}`).join(";")}`;
+    const signature = `${intent}:${node.getSourceFile().fileName}:${String(node.kind)}:${String(node.pos)}:${String(node.end)}:${[...current.env.entries()].map(([parameter, argument]) => `${parameter.getSourceFile().fileName}:${String(parameter.pos)}=${argument.node.getSourceFile().fileName}:${String(argument.node.pos)}`).join(";")}`;
     if (this.scanned.has(signature)) {
       return;
     }
     this.scanned.add(signature);
     const nextActive = new Set(active).add(node);
     if (ts.isCallExpression(node)) {
-      this.scanCall({ current: { node, env: current.env }, depth, nextActive });
+      this.scanCall({
+        current: { node, env: current.env },
+        depth,
+        nextActive,
+        intent,
+      });
       return;
     }
     if (ts.isSpreadAssignment(node)) {
@@ -659,6 +887,15 @@ class CallScanner {
         "onError",
       ].includes(propertyName(node.name) ?? "")
     ) {
+      if (
+        this.scanOwnedMutationFunction(
+          { node, env: current.env },
+          depth,
+          nextActive,
+        )
+      ) {
+        return;
+      }
       const fn = this.analyzer.resolve({
         node: node.initializer,
         env: current.env,
@@ -697,6 +934,9 @@ class CallScanner {
     if (ts.isFunctionDeclaration(node)) {
       return;
     }
+    if (this.scanReturnedFunction({ value: current, depth, active, intent })) {
+      return;
+    }
     // Function arguments and lifecycle callbacks can execute; uncalled local declarations cannot.
     if (functionNode(node) && node.body) {
       this.scan({
@@ -729,6 +969,7 @@ class CensusAnalyzer {
   readonly mutationFunctions = new Set<ts.Node>();
   readonly readerFunctions = new Set<ts.Node>();
   readonly effectFunctions = new Set<ts.Node>();
+  readonly resourceMutationFunctions = new Set<ts.Node>();
   readonly authPluginRoutes;
   readonly mutations: MutationCensusEntry[] = [];
   readonly readers: QueryReaderCensusEntry[] = [];
@@ -780,7 +1021,8 @@ class CensusAnalyzer {
         if (
           type &&
           ts.isStringLiteral(type) &&
-          type.text === "auth-plugin-endpoint" &&
+          (type.text === "auth-plugin-endpoint" ||
+            type.text === "auth-core-endpoint") &&
           method &&
           ts.isStringLiteral(method) &&
           route &&
@@ -889,6 +1131,75 @@ class CensusAnalyzer {
       );
     }
     return false;
+  };
+  /** Follow only stable values and direct-return factories; merely creating a
+   * callable never proves its callback executed. */
+  resourceMutationValue = (
+    value: Value,
+    seen = new Set<ts.Node>(),
+  ): Value | undefined => {
+    const node = unwrap(value.node);
+    if (seen.has(node) || seen.size > 12) {
+      return undefined;
+    }
+    const nextSeen = new Set(seen).add(node);
+    if (ts.isIdentifier(node)) {
+      const binding = this.bindingFor(node);
+      if (binding) {
+        const argument = value.env.get(binding.node);
+        const initializer = constBindingValue(binding);
+        if (argument) {
+          return this.resourceMutationValue(argument, nextSeen);
+        }
+        return initializer
+          ? this.resourceMutationValue(
+              { node: initializer, env: value.env },
+              nextSeen,
+            )
+          : undefined;
+      }
+      const resolved = this.resolve(value);
+      return resolved.node === node
+        ? undefined
+        : this.resourceMutationValue(resolved, nextSeen);
+    }
+    if (!ts.isCallExpression(node)) {
+      return undefined;
+    }
+    if (this.isResourceMutationFactory(node)) {
+      return { node, env: value.env };
+    }
+    const target = this.resolve({ node: node.expression, env: value.env });
+    if (this.stableOptionsFunction(node.expression) !== target.node) {
+      return undefined;
+    }
+    if (
+      (!ts.isArrowFunction(target.node) &&
+        !ts.isFunctionExpression(target.node)) ||
+      target.node.asteriskToken ||
+      target.node.modifiers?.some(
+        ({ kind }) => kind === ts.SyntaxKind.AsyncKeyword,
+      )
+    ) {
+      return undefined;
+    }
+    // A factory may bind parameters, but optional/default/rest evaluation is not transparent.
+    if (target.node.parameters.some(hasParameterEvaluation)) {
+      return undefined;
+    }
+    const body = this.invocation(node, value.env);
+    if (
+      !body ||
+      (ts.isBlock(body.node) &&
+        (body.node.statements.length !== 1 ||
+          body.node.statements.at(0)?.kind !== ts.SyntaxKind.ReturnStatement))
+    ) {
+      return undefined;
+    }
+    const returned = this.returned(body);
+    return returned
+      ? this.resourceMutationValue(returned, nextSeen)
+      : undefined;
   };
   moduleBase = (from: string, specifier: string) => {
     const exported = this.packageExports.get(specifier);
@@ -1576,6 +1887,9 @@ class CensusAnalyzer {
     while (changed) {
       changed = false;
       for (const call of this.calls) {
+        if (this.propagateResourceMutationFunctions(call)) {
+          changed = true;
+        }
         if (this.propagateReaderFunctions(call)) {
           changed = true;
         }
@@ -1611,6 +1925,25 @@ class CensusAnalyzer {
       this.readerDisposition(call) !== "excluded"
     );
   };
+  /** Reachability makes opaque owned callbacks inspectable; it grants no
+   * execution or contract credit and never affects the transitive census. */
+  propagateResourceMutationFunctions = (call: ts.CallExpression): boolean => {
+    const target = this.targets.get(call);
+    if (
+      !this.isResourceMutationFactory(call) &&
+      !(target && this.resourceMutationFunctions.has(target))
+    ) {
+      return false;
+    }
+    let changed = false;
+    for (const owner of ancestors(call).filter(functionNode)) {
+      if (!this.resourceMutationFunctions.has(owner)) {
+        this.resourceMutationFunctions.add(owner);
+        changed = true;
+      }
+    }
+    return changed;
+  };
   propagateReaderFunctions = (call: ts.CallExpression) => {
     const target = this.targets.get(call);
     if (
@@ -1643,15 +1976,23 @@ class CensusAnalyzer {
     return { primitive, mutation, readerDisposition, readerWrapper, reader };
   };
   mutationOwnership = ({ call, writes, unresolved }: MutationOwnershipArgs) => {
-    if (MUTATIONS.has(this.primitiveName(call) ?? "")) {
-      return { ownWrites: writes, ownUnresolved: unresolved };
-    }
     const scanner = new CallScanner(this, "outside-mutations");
-    const body = this.invocation(call, new Map());
+    const argument = MUTATIONS.has(this.primitiveName(call) ?? "")
+      ? call.arguments.at(0)
+      : undefined;
+    const body = argument
+      ? { node: argument, env: new Map<ts.Node, Value>() }
+      : this.invocation(call, new Map());
     if (body) {
       scanner.scan({ value: body, depth: 0 });
     } else {
       scanner.unknown("unresolved-mutation-wrapper", call);
+    }
+    if (
+      MUTATIONS.has(this.primitiveName(call) ?? "") &&
+      scanner.resourceMutations.length === 0
+    ) {
+      return { ownWrites: writes, ownUnresolved: unresolved };
     }
     return {
       ownWrites: scanner.deduplicate(
@@ -1660,6 +2001,9 @@ class CensusAnalyzer {
         ),
       ),
       ownUnresolved: scanner.deduplicate(scanner.unresolved),
+      ...(scanner.resourceMutations.length > 0
+        ? { resourceMutations: scanner.deduplicate(scanner.resourceMutations) }
+        : {}),
     };
   };
   analyzeCall = (call: ts.CallExpression) => {
@@ -1855,13 +2199,92 @@ export type MutationQueryCensus = ReturnType<
   typeof inspectMutationQuerySources
 >;
 
-export const generateMutationQueryCensus = (root: string) => {
-  const packageDirectories = [
-    ...new Bun.Glob("packages/*/package.json").scanSync({ cwd: root }),
-  ].toSorted();
+/** The files a census reads: the working tree, or the tree of one commit. */
+export type CensusTree = {
+  /** Repository-relative files matching a glob. */
+  glob: (pattern: string) => string[];
+  read: (file: string) => string;
+};
+
+export const workingTree = (root: string): CensusTree => ({
+  glob: (pattern) => [...new Bun.Glob(pattern).scanSync({ cwd: root })],
+  read: (file) => readFileSync(path.join(root, file), "utf-8"),
+});
+
+const CENSUS_TREE_PREFIXES = ["apps/web/", "packages/"];
+
+/**
+ * The census's files as one commit holds them, read in a single
+ * `git cat-file --batch` so a whole tree costs two processes.
+ */
+export const revisionTree = (root: string, revision: string): CensusTree => {
+  const listing = Bun.spawnSync(
+    [
+      "git",
+      "ls-tree",
+      "-r",
+      "-z",
+      "--name-only",
+      revision,
+      "--",
+      "apps/web",
+      "packages",
+    ],
+    { cwd: root },
+  );
+  if (listing.exitCode !== 0) {
+    return panic(`Cannot list the files of ${revision}`);
+  }
+  const files = listing.stdout
+    .toString()
+    .split("\0")
+    .filter(
+      (file) =>
+        file !== "" &&
+        CENSUS_TREE_PREFIXES.some((prefix) => file.startsWith(prefix)) &&
+        /\.(?:[cm]?[jt]sx?|json)$/u.test(file) &&
+        !file.includes("/node_modules/"),
+    );
+  const batch = Bun.spawnSync(["git", "cat-file", "--batch"], {
+    cwd: root,
+    stdin: Buffer.from(files.map((file) => `${revision}:${file}\n`).join("")),
+  });
+  if (batch.exitCode !== 0) {
+    return panic(`Cannot read the files of ${revision}`);
+  }
+  const output = batch.stdout;
+  const texts = new Map<string, string>();
+  let offset = 0;
+  for (const file of files) {
+    const headerEnd = output.indexOf(0x0a, offset);
+    const header = output.subarray(offset, headerEnd).toString();
+    const size = Number(header.split(" ").at(2));
+    if (!header.includes(" blob ") || !Number.isInteger(size)) {
+      return panic(`Unexpected cat-file header for ${file}: ${header}`);
+    }
+    const start = headerEnd + 1;
+    texts.set(file, output.subarray(start, start + size).toString("utf-8"));
+    offset = start + size + 1;
+  }
+  return {
+    glob: (pattern) => {
+      const glob = new Bun.Glob(pattern);
+      return [...texts.keys()].filter((file) => glob.match(file));
+    },
+    read: (file) =>
+      texts.get(file) ??
+      panic(`${file} is not in the census tree of ${revision}`),
+  };
+};
+
+export const generateMutationQueryCensus = (
+  root: string,
+  tree: CensusTree = workingTree(root),
+) => {
+  const packageDirectories = tree.glob("packages/*/package.json").toSorted();
   const manifests = new Map(
     packageDirectories.map((file) => {
-      const manifest = JSON.parse(readFileSync(path.join(root, file), "utf-8"));
+      const manifest = JSON.parse(tree.read(file));
       return [manifest.name, { directory: path.posix.dirname(file), manifest }];
     }),
   );
@@ -1901,24 +2324,19 @@ export const generateMutationQueryCensus = (root: string) => {
       visitDependencies(dependency.manifest);
     }
   };
-  visitDependencies(
-    JSON.parse(readFileSync(path.join(root, "apps/web/package.json"), "utf-8")),
-  );
+  visitDependencies(JSON.parse(tree.read("apps/web/package.json")));
   const files: string[] = [];
   for (const directory of ["apps/web", ...[...packages].toSorted()]) {
-    for (const file of new Bun.Glob(
+    for (const file of tree.glob(
       `${directory}/src/**/*.{ts,tsx,js,jsx,mts,cts}`,
-    ).scanSync({ cwd: root })) {
+    )) {
       if (isMutationQueryCensusSource(file)) {
         files.push(file);
       }
     }
   }
   const census = inspectMutationQuerySources(
-    files.toSorted().map((file) => ({
-      file,
-      text: readFileSync(path.join(root, file), "utf-8"),
-    })),
+    files.toSorted().map((file) => ({ file, text: tree.read(file) })),
     packageExports,
   );
   return {

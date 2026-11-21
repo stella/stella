@@ -6,6 +6,7 @@ import * as v from "valibot";
 
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
 import { CHAT_TURN_ID_HEADER, CHAT_TURN_INTENT } from "@stll/api-contract";
+import { CHAT_COMMAND_ERROR_CODE } from "@stll/api-contract/chat-command";
 import type { ChatTurnBudget } from "@stll/chat-limits";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
@@ -44,6 +45,7 @@ import cancelTurn from "@/api/handlers/chat/turns/cancel";
 import { joinChatTurn, probeChatTurn } from "@/api/handlers/chat/turns/resume";
 import type { ChatPart } from "@/api/handlers/chat/types";
 import type { ApiRoutePath } from "@/api/http/api-route-types";
+import { applyResponseHeaders, type ResponseHeaders } from "@/api/http/context";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import {
@@ -229,7 +231,15 @@ class ChatConnectionLostError extends TaggedError("ChatConnectionLostError")<{
 
 /** The HTTP answer a route's status response makes (a refusal, or a Stop's
  *  answer), as the browser sees it. */
-const statusResponse = (answer: unknown): Response => {
+/**
+ * The route's answer as the page receives it: a refusal carries the headers
+ * the handler set, as the router's response does (a replayed command names
+ * its turn there).
+ */
+const statusResponse = (
+  answer: unknown,
+  set: ResponseHeaders = {},
+): Response => {
   if (answer instanceof Response) {
     return answer;
   }
@@ -241,8 +251,10 @@ const statusResponse = (answer: unknown): Response => {
     typeof answer === "object" && answer !== null
       ? Reflect.get(answer, "response")
       : undefined;
+  const headers = new Headers({ "Content-Type": "application/json" });
+  applyResponseHeaders(headers, set, { overwrite: false });
   return new Response(JSON.stringify(body ?? { message: "Refused" }), {
-    headers: { "Content-Type": "application/json" },
+    headers,
     status: typeof status === "number" ? status : 500,
   });
 };
@@ -457,7 +469,11 @@ export const createApprovalHarness = ({
       userId: executionUserId,
     }) => {
       const authorization = await resolveMemberAuthorization(
-        { organizationId, userId: executionUserId },
+        {
+          organizationId,
+          userId: executionUserId,
+          authentication: { kind: "credential" },
+        },
         testDb,
       );
       if (authorization === null) {
@@ -600,8 +616,10 @@ export const createApprovalHarness = ({
   const contextFromBody = (
     body: SendBody,
     signal?: AbortSignal,
+    headers?: RequestInit["headers"],
   ): SendMessageCtx => {
     const request = createTornDownRequest({
+      headers,
       signal,
       url: "http://localhost/v1/chat",
     });
@@ -648,6 +666,8 @@ export const createApprovalHarness = ({
       promptCachingEnabled,
       recordAuditEvent: async () => await Promise.resolve(),
       request: request.request,
+      // The lower-cased request headers the router hands every handler.
+      headers: Object.fromEntries(request.request.headers),
       route: "/v1/chat" satisfies ApiRoutePath,
       safeDb,
       scopedDb,
@@ -1145,7 +1165,10 @@ export const createApprovalHarness = ({
    * connection drops, and the run never persists what it did after its last
    * write. The turn's lease is then expired, as a dead owner's would be.
    */
-  const crashDuring = async (body: SendBody): Promise<Response> => {
+  const crashDuring = async (
+    body: SendBody,
+    headers: RequestInit["headers"],
+  ): Promise<Response> => {
     const threadId = body.threadId;
     const stalled = provider.stalled(threadId);
     // What the dying process sent the model and never stored is gone: the
@@ -1153,9 +1176,10 @@ export const createApprovalHarness = ({
     const prompts = provider.promptLedgerOf(threadId);
     const beforeCrash = prompts.mark();
     // The dying process never sees the page go away, so no signal reaches it.
-    const result = await handle(contextFromBody(body));
+    const ctx = contextFromBody(body, undefined, headers);
+    const result = await handle(ctx);
     if (!(result instanceof Response && result.ok)) {
-      return statusResponse(result);
+      return statusResponse(result, ctx.set.headers);
     }
     // Reading the stream is what runs the turn; it stops at the stall. In
     // this process the run lives on, stalled, until `close` ends it.
@@ -1353,14 +1377,24 @@ export const createApprovalHarness = ({
     };
   };
 
-  /** The route's refusal, reported and recorded. */
-  const refuse = async (endRecord: RecordEnd, rejection: unknown) => {
-    clientFindings.push(
-      ...violationsOf(CHAT_ORACLE.clientRequestsAccepted, [
-        { refused: Bun.inspect(rejection) },
-      ]),
-    );
-    const response = statusResponse(rejection);
+  /**
+   * The route's refusal, reported and recorded. A replayed command is not
+   * one: the page's retry is answered with the turn its first attempt took.
+   */
+  const refuse = async (
+    endRecord: RecordEnd,
+    rejection: unknown,
+    set: ResponseHeaders,
+  ) => {
+    const response = statusResponse(rejection, set);
+    const refusal = await response.clone().text();
+    if (!refusal.includes(`"${CHAT_COMMAND_ERROR_CODE.replayed}"`)) {
+      clientFindings.push(
+        ...violationsOf(CHAT_ORACLE.clientRequestsAccepted, [
+          { refused: Bun.inspect(rejection) },
+        ]),
+      );
+    }
     await endRecord({
       ended: "complete",
       response: {
@@ -1381,6 +1415,7 @@ export const createApprovalHarness = ({
   const postChatBody = async (
     posted: unknown,
     signal: AbortSignal | undefined,
+    headers: RequestInit["headers"],
   ): Promise<{ done: Promise<void>; response: Response }> => {
     // Decoded exactly as the route decodes it: unknown keys are dropped.
     const decoded = v.safeParse(agUiSendMessageBodySchema, posted);
@@ -1407,7 +1442,7 @@ export const createApprovalHarness = ({
     }
     if (crashingThreads.delete(raw.threadId)) {
       try {
-        const refused = await crashDuring(raw);
+        const refused = await crashDuring(raw, headers);
         await endRecord({
           ended: "complete",
           response: {
@@ -1427,7 +1462,7 @@ export const createApprovalHarness = ({
       }
     }
     if (liveThreads.has(raw.threadId)) {
-      const ctx = contextFromBody(raw, signal);
+      const ctx = contextFromBody(raw, signal, headers);
       const before = await readThreadMessages(raw.threadId);
       const result = await handle(ctx);
       if (result instanceof Response && result.ok) {
@@ -1442,14 +1477,15 @@ export const createApprovalHarness = ({
       }
       return {
         done: Promise.resolve(),
-        response: await refuse(endRecord, result),
+        response: await refuse(endRecord, result, ctx.set.headers),
       };
     }
-    const outcome = await sendAndCheck(contextFromBody(raw, signal));
+    const ctx = contextFromBody(raw, signal, headers);
+    const outcome = await sendAndCheck(ctx);
     if (outcome.status === "rejected") {
       return {
         done: Promise.resolve(),
-        response: await refuse(endRecord, outcome.rejection),
+        response: await refuse(endRecord, outcome.rejection, ctx.set.headers),
       };
     }
     clientFindings.push(...outcome.violations);
@@ -1554,7 +1590,11 @@ export const createApprovalHarness = ({
     let done: Promise<void> = Promise.resolve();
     try {
       const parsed: unknown = JSON.parse(raw);
-      const posted = await postChatBody(parsed, init.signal ?? undefined);
+      const posted = await postChatBody(
+        parsed,
+        init.signal ?? undefined,
+        init.headers,
+      );
       done = posted.done;
       return posted.response;
     } finally {
@@ -1800,7 +1840,7 @@ export const createApprovalHarness = ({
     close: async () =>
       await measure("close", async () => {
         try {
-          await relinquishChatTurnRuns();
+          await relinquishChatTurnRuns({ type: "end" });
           await Promise.all(abandonedReads);
         } finally {
           fetchInstallation.restore();

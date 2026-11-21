@@ -45,7 +45,9 @@ const { CreateOrganizationDialog } =
   await import("./create-organization-dialog");
 const { SidebarUserMenu } = await import("./sidebar-user-menu");
 const { SidebarProvider, SidebarMenu } = await import("@stll/ui/sidebar");
-const { roleOptions } = await import("@/lib/auth-queries");
+const { roleOptions, sessionOptions } = await import("@/lib/auth-queries");
+const { MEMBER_SESSION } =
+  await import("@/lib/account/auth-session.test-fixtures");
 const { organizationListOptions } = await import("@/lib/organization/queries");
 
 type CreatedOrganization =
@@ -53,6 +55,16 @@ type CreatedOrganization =
 const ORGANIZATION_ID = "019a0000-0000-7000-8000-000000000601";
 const USER_ID = "019a0000-0000-7000-8000-000000000602";
 const ORIGINAL_ORGANIZATION_ID = "019a0000-0000-7000-8000-000000000603";
+const INITIAL_SESSION = {
+  ...MEMBER_SESSION,
+  user: { ...MEMBER_SESSION.user, id: USER_ID },
+  session: {
+    ...MEMBER_SESSION.session,
+    userId: USER_ID,
+    activeOrganizationId: ORIGINAL_ORGANIZATION_ID,
+  },
+};
+let serverSession = INITIAL_SESSION;
 const CREATED_ORGANIZATION = {
   organizationId: ORGANIZATION_ID,
   name: "New firm",
@@ -126,6 +138,7 @@ globalThis.fetch = Object.assign(
             : {
                 ...CREATED_ORGANIZATION,
                 organizationId: "019a0000-0000-7000-8000-000000000604",
+                name: "New firm 2",
                 slug: "new-firm-2",
               };
         serverReceipts.set(key, organization);
@@ -141,16 +154,31 @@ globalThis.fetch = Object.assign(
       }
       return Response.json(organization);
     }
+    if (path.endsWith("/get-session")) {
+      return Response.json(serverSession);
+    }
     if (path.endsWith("/organization/set-active")) {
+      let response: Response;
       if (deferredSwitch) {
-        return await deferredSwitch;
+        response = await deferredSwitch;
+      } else if (switchOutcome === "switched") {
+        response = switchedResponse();
+      } else {
+        response = Response.json(
+          { code: "FORBIDDEN", message: "Switch refused" },
+          { status: 403 },
+        );
       }
-      return switchOutcome === "switched"
-        ? switchedResponse()
-        : Response.json(
-            { code: "FORBIDDEN", message: "Switch refused" },
-            { status: 403 },
-          );
+      if (response.ok) {
+        serverSession = {
+          ...serverSession,
+          session: {
+            ...serverSession.session,
+            activeOrganizationId: ORGANIZATION_ID,
+          },
+        };
+      }
+      return response;
     }
     if (path.endsWith("/organization/get-active-member-role")) {
       return Response.json({ role: "owner" });
@@ -175,6 +203,7 @@ afterEach(async () => {
   refusalResponse = undefined;
   unknownFailureResponse = undefined;
   switchOutcome = "switched";
+  serverSession = INITIAL_SESSION;
   deferredCreate = undefined;
   deferredSwitch = undefined;
   document.documentElement.dir = "ltr";
@@ -221,7 +250,8 @@ const renderCreationSurface = async ({
   if (!clients.includes(queryClient)) {
     clients.push(queryClient);
   }
-  queryClient.setQueryData(roleOptions.queryKey, "owner");
+  queryClient.setQueryData(sessionOptions.queryKey, serverSession);
+  await queryClient.query(roleOptions);
   queryClient.setQueryData(organizationListOptions(USER_ID).queryKey, [
     {
       id: ORIGINAL_ORGANIZATION_ID,
@@ -333,7 +363,22 @@ const switchOrganization = async (button: HTMLElement) => {
 };
 
 const expectCreated = async (messages: typeof en | typeof ar) => {
-  expect(await screen.findByText(CREATED_ORGANIZATION.slug)).toBeTruthy();
+  const dialog = screen.getByRole("dialog", {
+    name: messages.organization.newOrganization,
+  });
+  const created = await within(dialog).findByRole("status");
+  // The created state names the organization and asks for the switch; the
+  // generated slug means nothing to the user here and stays out of view.
+  expect(created.textContent).toBe(
+    messages.organization.createdSwitchPrompt.replace(
+      "<bdi>{name}</bdi>",
+      () => CREATED_ORGANIZATION.name,
+    ),
+  );
+  expect(created.querySelector("bdi")?.textContent).toBe(
+    CREATED_ORGANIZATION.name,
+  );
+  expect(within(dialog).queryByText(CREATED_ORGANIZATION.slug)).toBeNull();
   expect(
     screen
       .getByRole("textbox", { name: messages.common.organizationName })
@@ -400,7 +445,7 @@ test.each(
       fireEvent.submit(form);
     });
     await waitFor(() => expect(creationKeys).toHaveLength(1));
-    expect(submit.hasAttribute("disabled")).toBe(true);
+    expect(submit.getAttribute("aria-disabled")).toBe("true");
     response.resolve(createdResponse());
     const switchButton = await expectCreated(messages);
     expect(switchRequests()).toHaveLength(0);
@@ -890,7 +935,7 @@ test("starting over after an unknown outcome requires confirmation and preserves
   expect(input.getAttribute("value")).toBe(exactDraft);
   createOutcome = "created";
   createOrganization(messages);
-  expect(await screen.findByText("new-firm-2")).toBeTruthy();
+  expect(await screen.findByText("New firm 2")).toBeTruthy();
   expect(creationKeys).toHaveLength(3);
   expect(creationKeys.at(2)).not.toBe(creationKeys.at(0));
   expect(serverReceipts.size).toBe(2);

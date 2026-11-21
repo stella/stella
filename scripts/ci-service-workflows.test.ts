@@ -434,7 +434,8 @@ test("GHCR attestations run before the job logs out of GHCR", () => {
           loggedIn = false;
         }
         const attests =
-          uses.endsWith("/provenance") ||
+          (uses.endsWith("/provenance") &&
+            !record(step["with"] ?? {})["subject-path"]) ||
           (uses.startsWith("actions/attest@") &&
             record(step["with"] ?? {})["push-to-registry"] === true);
         if (attests && !loggedIn) {

@@ -63,6 +63,7 @@ export const SELLER_PROFILE_COLUMNS = {
   accountNumber: "export",
   defaultCurrency: "export",
   footerNotes: "export",
+  email: "export",
   isDefault: "export",
   archivedAt: "export",
   createdAt: "export",

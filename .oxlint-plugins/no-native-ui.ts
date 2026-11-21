@@ -17,22 +17,33 @@
 // one native control is reported once: a checkbox by the checkbox rule, a
 // date by no-raw-date-input, a text field by the input rule.
 //
+// The registry's React Native column adds the components a native renderer
+// replaces in the app: `<Pressable>` imported from "react-native" (under any
+// local name, or as `RN.Pressable`) is the button rule's, `<ActivityIndicator>`
+// the loader rule's, a `<TextInput multiline>` the textarea rule's. `role` and
+// React Native's `accessibilityRole` are read alike.
+//
 // The design system itself renders this markup and is out of scope
 // (oxlint.config.ts); so is a role a component sets for its own popup, which
 // never appears at a product call site.
 
-import type { CreateOnceRule } from "@oxlint/plugins";
+import type { CreateOnceRule, ESTree } from "@oxlint/plugins";
 import { eslintCompatPlugin } from "@oxlint/plugins";
 
 import {
   INPUT_TYPES_OUTSIDE_INPUT_RULE,
   type NativeAttribute,
   nativeEntries,
-  nativeEntry,
-  type NativeModule,
-  type NativePatterns,
+  type NativeRuleEntry,
+  REACT_NATIVE_MODULE,
 } from "./no-native-ui-registry.ts";
-import { isAstNode, jsxName } from "./utils.ts";
+import {
+  type AstNode,
+  isAstNode,
+  jsxName,
+  resolveVariable,
+  type ScopeContext,
+} from "./utils.ts";
 
 /** Elements that forward `type` to a native `<input>`. */
 const INPUT_ELEMENTS = new Set(["input", "Input"]);
@@ -131,18 +142,139 @@ const isInputRuleType = (type: string): boolean =>
   !CLAIMED_INPUT_TYPES.has(type) &&
   !Object.hasOwn(INPUT_TYPES_OUTSIDE_INPUT_RULE, type);
 
+/** The attributes that carry an element's role, on the web and in React Native. */
+const ROLE_ATTRIBUTES = new Set(["role", "accessibilityRole"]);
+
+/** The name an import specifier takes from its module (`Text` in `Text as T`). */
+const importedName = (specifier: unknown): string | null => {
+  if (!isAstNode(specifier) || specifier.type !== "ImportSpecifier") {
+    return null;
+  }
+  const imported: unknown = specifier.imported;
+  if (!isAstNode(imported)) {
+    return null;
+  }
+  if (imported.type === "Identifier" && typeof imported.name === "string") {
+    return imported.name;
+  }
+  return typeof imported.value === "string" ? imported.value : null;
+};
+
+/**
+ * The "react-native" import specifier a tag's identifier binds to, lexically:
+ * a parameter or local named `Text` shadows the import. Read from the binding
+ * itself, so a tag above its import declaration resolves too.
+ */
+const reactNativeSpecifier = (
+  context: ScopeContext,
+  identifier: ESTree.JSXIdentifier,
+): AstNode | null => {
+  const definition = resolveVariable(context, identifier)?.defs.at(0);
+  if (
+    definition?.type !== "ImportBinding" ||
+    !isAstNode(definition.parent) ||
+    !isAstNode(definition.parent.source) ||
+    definition.parent.source.value !== REACT_NATIVE_MODULE ||
+    definition.parent.importKind === "type"
+  ) {
+    return null;
+  }
+  const specifier: unknown = definition.node;
+  return isAstNode(specifier) && specifier.importKind !== "type"
+    ? specifier
+    : null;
+};
+
+/** The React Native component a JSX tag renders, or null for any other tag. */
+const reactNativeComponent = (
+  context: ScopeContext,
+  name: ESTree.JSXElementName,
+): string | null => {
+  if (name.type === "JSXIdentifier") {
+    const specifier = reactNativeSpecifier(context, name);
+    return specifier?.type === "ImportSpecifier"
+      ? importedName(specifier)
+      : null;
+  }
+  if (
+    name.type === "JSXMemberExpression" &&
+    name.object.type === "JSXIdentifier" &&
+    reactNativeSpecifier(context, name.object)?.type ===
+      "ImportNamespaceSpecifier"
+  ) {
+    return jsxName(name.property);
+  }
+  return null;
+};
+
+/** Whether an element sets a flag attribute (`multiline`, not `={false}`). */
+const setsFlag = (opening: unknown, flag: string): boolean =>
+  attributesOf(opening).some(
+    ({ name, value }) =>
+      name === flag &&
+      !(
+        isAstNode(value) &&
+        value.type === "JSXExpressionContainer" &&
+        isAstNode(value.expression) &&
+        value.expression.type === "Literal" &&
+        value.expression.value === false
+      ),
+  );
+
+/** `TextInput[multiline]`: a component, and the flag that picks this rule. */
+const parseSelector = (
+  selector: string,
+): { component: string; flag: string | null } => {
+  const match = /^(?<component>\w+)(?:\[(?<flag>\w+)\])?$/u.exec(selector);
+  return {
+    component: match?.groups?.component ?? selector,
+    flag: match?.groups?.flag ?? null,
+  };
+};
+
+/** Flags some rule's selector picks out of each React Native component. */
+const FLAGGED_SELECTORS = new Map<string, string[]>();
+for (const { reactNative } of nativeEntries()) {
+  for (const { component, flag } of reactNative.map(parseSelector)) {
+    if (flag !== null) {
+      FLAGGED_SELECTORS.set(component, [
+        ...(FLAGGED_SELECTORS.get(component) ?? []),
+        flag,
+      ]);
+    }
+  }
+}
+
+/** Whether one React Native element is what `selector` names. */
+const selectorMatches = (
+  selector: string,
+  component: string,
+  opening: unknown,
+): boolean => {
+  const parsed = parseSelector(selector);
+  if (parsed.component !== component) {
+    return false;
+  }
+  if (parsed.flag !== null) {
+    return setsFlag(opening, parsed.flag);
+  }
+  return !(FLAGGED_SELECTORS.get(component) ?? []).some((flag) =>
+    setsFlag(opening, flag),
+  );
+};
+
 const MESSAGE =
   "{{found}} hand-rolls a control @stll/ui already ships. Render {{use}} instead.";
 
 // The rule a registry row generates. `docs.description` carries the row's
 // replacement so the registry test can prove each rule name is wired to its
 // own row.
-const nativeRule = (module: NativeModule): CreateOnceRule => {
-  const {
-    use,
-    patterns,
-  }: { readonly use: string; readonly patterns: NativePatterns } =
-    nativeEntry(module);
+const ENTRIES = new Map(nativeEntries().map((entry) => [entry.module, entry]));
+
+const nativeRule = (module: string): CreateOnceRule => {
+  const { use, patterns, reactNative }: NativeRuleEntry = ENTRIES.get(
+    module,
+  ) ?? { module, use: "", patterns: {}, reactNative: [] };
   return {
     meta: {
       type: "problem",
@@ -165,6 +297,15 @@ const nativeRule = (module: NativeModule): CreateOnceRule => {
           if (element === null) {
             return;
           }
+          const component = reactNativeComponent(context, node.name);
+          if (
+            component !== null &&
+            reactNative.some((selector) =>
+              selectorMatches(selector, component, node),
+            )
+          ) {
+            report(node, `React Native's <${component}>`);
+          }
           const intrinsic = isIntrinsic(element);
           if (intrinsic && patterns.elements?.includes(element) === true) {
             if (element !== "input") {
@@ -177,12 +318,12 @@ const nativeRule = (module: NativeModule): CreateOnceRule => {
             }
           }
           for (const attribute of attributesOf(node)) {
-            if (attribute.name === "role") {
+            if (ROLE_ATTRIBUTES.has(attribute.name)) {
               const role = literalStringsOf(attribute.value).find((value) =>
                 patterns.roles?.includes(value),
               );
               if (role !== undefined) {
-                report(attribute.node, `role="${role}"`);
+                report(attribute.node, `${attribute.name}="${role}"`);
               }
               continue;
             }
@@ -227,6 +368,7 @@ export default eslintCompatPlugin({
     "no-native-form": nativeRule("form"),
     "no-native-input": nativeRule("input"),
     "no-native-input-otp": nativeRule("input-otp"),
+    "no-native-loader": nativeRule("loader"),
     "no-native-label": nativeRule("label"),
     "no-native-menu": nativeRule("menu"),
     "no-native-number-input": nativeRule("number-input"),
@@ -234,9 +376,11 @@ export default eslintCompatPlugin({
     "no-native-secret-input": nativeRule("secret-input"),
     "no-native-select": nativeRule("select"),
     "no-native-separator": nativeRule("separator"),
+    "no-native-sheet": nativeRule("sheet"),
     "no-native-switch": nativeRule("switch"),
     "no-native-table": nativeRule("table"),
     "no-native-tabs": nativeRule("tabs"),
+    "no-native-text": nativeRule("text"),
     "no-native-textarea": nativeRule("textarea"),
     "no-native-tooltip": nativeRule("tooltip"),
   },

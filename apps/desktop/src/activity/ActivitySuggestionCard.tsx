@@ -109,7 +109,7 @@ type ActivitySuggestionCardProps = {
   times: SuggestionTimes;
   edit: SuggestionEdit;
   candidates: readonly DesktopTimeEntryMatterCandidate[];
-  editable: boolean;
+  editingDisabledReason?: string | undefined;
   timeLabel: string;
   sourceAppVisuals: ActivityDaySnapshot["sourceAppVisuals"];
   /** Why no window titles were recorded, with the action that changes it;
@@ -173,7 +173,7 @@ export const ActivitySuggestionCard = ({
   times,
   edit,
   candidates,
-  editable,
+  editingDisabledReason,
   timeLabel,
   sourceAppVisuals,
   titlesNotice,
@@ -196,6 +196,7 @@ export const ActivitySuggestionCard = ({
   onCopy,
 }: ActivitySuggestionCardProps) => {
   const t = useTranslations("activity");
+  const editable = editingDisabledReason === undefined;
   const locale = useLocale();
   const card = useRef<HTMLElement>(null);
   // The card is keyed by suggestion: each one takes focus as it opens, so a
@@ -218,11 +219,19 @@ export const ActivitySuggestionCard = ({
     observer.observe(element);
     return () => observer.disconnect();
   }, []);
-  const acceptable =
-    editable &&
-    edit.matter !== null &&
-    edit.narrative.trim().length > 0 &&
-    suggestion.roundedTenths > 0;
+  const acceptDisabledReason = (() => {
+    if (editingDisabledReason !== undefined) {
+      return editingDisabledReason;
+    }
+    if (edit.matter === null) {
+      return t("chooseMatterForEntry");
+    }
+    if (edit.narrative.trim().length === 0) {
+      return t("writeDescription");
+    }
+    return suggestion.roundedTenths > 0 ? undefined : t("entryNeedsDuration");
+  })();
+  const acceptable = acceptDisabledReason === undefined;
   const shortcutLabel = (keys: ShortcutKeys) =>
     formatShortcut({ keys, layout: null, locale, platform: PLATFORM });
   const runShortcut = useEffectEvent((shortcut: CardShortcut) => {
@@ -328,7 +337,7 @@ export const ActivitySuggestionCard = ({
             </span>
             <MatterPicker
               candidates={candidates}
-              disabled={!editable}
+              disabledReason={editingDisabledReason}
               label={edit.matter?.name ?? t("chooseMatter")}
               // Codes follow the matter's billing format, so a new matter
               // drops them until it is drafted again. A card that started on
@@ -386,7 +395,7 @@ export const ActivitySuggestionCard = ({
           />
           {structure === null ? null : (
             <StructureProposal
-              editable={editable}
+              editingDisabledReason={editingDisabledReason}
               onAccept={onAcceptStructure}
               structure={structure}
             />
@@ -426,6 +435,7 @@ export const ActivitySuggestionCard = ({
         <div className="flex flex-wrap items-center justify-end gap-2">
           <Button
             disabled={!editable}
+            disabledReason={editingDisabledReason}
             onClick={onReject}
             size="sm"
             variant="ghost"
@@ -433,7 +443,12 @@ export const ActivitySuggestionCard = ({
             {t("reject")}
             <ShortcutHint label={shortcutLabel(REJECT_KEYS)} />
           </Button>
-          <Button disabled={!acceptable} onClick={onAccept} size="sm">
+          <Button
+            disabled={!acceptable}
+            disabledReason={acceptDisabledReason}
+            onClick={onAccept}
+            size="sm"
+          >
             {t("accept")}
             <ShortcutHint label={shortcutLabel(ACCEPT_KEYS)} />
           </Button>
@@ -754,7 +769,12 @@ const RefineInput = ({
           placeholder={t("aiRefinePlaceholder")}
           value={text}
         />
-        <Button disabled={steer.length === 0} size="sm" type="submit">
+        <Button
+          disabled={steer.length === 0}
+          disabledReason={t("enterRefinement")}
+          size="sm"
+          type="submit"
+        >
           {t("aiRefine")}
         </Button>
       </div>
@@ -865,11 +885,11 @@ const GuidelineFlags = ({
  * Accept creates. */
 const StructureProposal = ({
   structure,
-  editable,
+  editingDisabledReason,
   onAccept,
 }: {
   structure: NonNullable<CardDraft["structure"]>;
-  editable: boolean;
+  editingDisabledReason: string | undefined;
   onAccept: () => void;
 }) => {
   const t = useTranslations("activity");
@@ -918,7 +938,8 @@ const StructureProposal = ({
       </ul>
       <Button
         className="self-start"
-        disabled={!editable}
+        disabled={editingDisabledReason !== undefined}
+        disabledReason={editingDisabledReason}
         onClick={onAccept}
         size="xs"
       >
