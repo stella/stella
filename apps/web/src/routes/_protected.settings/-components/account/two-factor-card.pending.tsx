@@ -13,10 +13,12 @@ export const TWO_FACTOR_STATUS_CLASS =
   "inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium";
 
 type TwoFactorCardFrameProps = {
-  /** Whether two-factor sign-in is on, as a chip. */
+  /** Whether two-factor sign-in is on, as a chip beside the title. */
   status: ReactNode;
-  /** Turning it on or off, and the backup codes. */
-  actions: ReactNode;
+  /** Turning it on or off: the row's one control. */
+  action: ReactNode;
+  /** Further actions while it is on (the backup codes), under the row. */
+  footer?: ReactNode;
   /** What the section mounts beside its panel (its dialogs). */
   children?: ReactNode;
 };
@@ -26,8 +28,9 @@ export const TWO_FACTOR_SECTION_ID = "two-factor";
 
 /** The two-factor section (`TwoFactorCard`): header, status and actions. */
 export const TwoFactorCardFrame = ({
-  actions,
+  action,
   children,
+  footer,
   status,
 }: TwoFactorCardFrameProps) => (
   <div className="scroll-mt-6" id={TWO_FACTOR_SECTION_ID}>
@@ -44,15 +47,18 @@ export const TwoFactorCardFrame = ({
             <LockIcon />
           </ListItemMedia>
         }
+        footer={footer}
         title={
-          <PendingText
-            barClassName="w-36"
-            id="settings.account.twoFactor.title"
-          />
+          <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+            <PendingText
+              barClassName="w-36"
+              id="settings.account.twoFactor.title"
+            />
+            {status}
+          </span>
         }
       >
-        {status}
-        {actions}
+        {action}
       </SettingsRow>
     </SettingsSection>
     {children}
@@ -62,7 +68,7 @@ export const TwoFactorCardFrame = ({
 /** The section while the session loads: the chip and the action as faces. */
 export const TwoFactorCardPending = () => (
   <TwoFactorCardFrame
-    actions={
+    action={
       <ButtonFace size="sm" variant="outline">
         <FaceLabelPending className="w-16" />
       </ButtonFace>
