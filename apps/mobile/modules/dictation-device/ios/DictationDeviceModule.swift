@@ -1,20 +1,24 @@
 import AVFoundation
 import ExpoModulesCore
+import Network
 
 /// What a dictation asks of the phone beyond the recorder
 /// (`src/native/dictation-device.ts`): which microphone it records from,
-/// how it shares the audio session with other apps, and when the system
-/// takes the microphone away.
+/// how it shares the audio session with other apps, when the system takes
+/// the microphone away, where a dictation not yet transcribed waits, and
+/// when the phone is online again to transcribe it.
 public class DictationDeviceModule: Module {
   /// Whether a dictation holds the iPhone's own microphone, so a headset
   /// or car that connects meanwhile does not take the input.
   private var holdsBuiltInMicrophone = false
   private var observers: [NSObjectProtocol] = []
+  private var network: NWPathMonitor?
+  private var online: Bool?
 
   public func definition() -> ModuleDefinition {
     Name("DictationDevice")
 
-    Events("onInterruption", "onInputLost")
+    Events("onInterruption", "onInputLost", "onNetworkChange")
 
     OnCreate {
       self.observe()
@@ -23,6 +27,35 @@ public class DictationDeviceModule: Module {
     OnDestroy {
       self.observers.forEach(NotificationCenter.default.removeObserver)
       self.observers.removeAll()
+      self.network?.cancel()
+      self.network = nil
+    }
+
+    OnStartObserving("onNetworkChange") {
+      self.watchNetwork()
+    }
+
+    OnStopObserving("onNetworkChange") {
+      self.network?.cancel()
+      self.network = nil
+      self.online = nil
+    }
+
+    // A folder of the app's own, left out of backups, whose files can be
+    // read once the phone has been unlocked after it started, so a retry
+    // with the screen locked still reads them.
+    Function("keptFolder") { () -> String in
+      let folder = try FileManager.default
+        .url(for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: true)
+        .appendingPathComponent("dictation-kept", isDirectory: true)
+      try FileManager.default.createDirectory(
+        at: folder, withIntermediateDirectories: true,
+        attributes: [.protectionKey: FileProtectionType.completeUntilFirstUserAuthentication])
+      var values = URLResourceValues()
+      values.isExcludedFromBackup = true
+      var excluded = folder
+      try excluded.setResourceValues(values)
+      return folder.absoluteString
     }
 
     // Called after the recorder prepares, since preparing resets the
@@ -70,6 +103,24 @@ public class DictationDeviceModule: Module {
       let builtIn = session.availableInputs?.first(where: { $0.portType == .builtInMic })
     else { return }
     try? session.setPreferredInput(builtIn)
+  }
+
+  /// Reports each change between online and offline, as the path monitor
+  /// sees it, starting with the current state.
+  private func watchNetwork() {
+    guard network == nil else { return }
+    let monitor = NWPathMonitor()
+    monitor.pathUpdateHandler = { [weak self] path in
+      DispatchQueue.main.async {
+        guard let self else { return }
+        let online = path.status == .satisfied
+        guard self.online != online else { return }
+        self.online = online
+        self.sendEvent("onNetworkChange", ["online": online])
+      }
+    }
+    monitor.start(queue: DispatchQueue.global(qos: .utility))
+    network = monitor
   }
 
   private func observe() {

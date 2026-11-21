@@ -8,11 +8,13 @@ type DictationDeviceEvents = {
   onInterruption: (event: DictationInterruption) => void;
   /** The microphone a dictation recorded from went away, as AirPods put back in their case. */
   onInputLost: () => void;
+  onNetworkChange: (event: { readonly online: boolean }) => void;
 };
 
 type DictationDeviceModule = EventEmitter<DictationDeviceEvents> & {
   routeForDictation: (builtInMicrophone: boolean) => void;
   releaseRoute: () => void;
+  keptFolder: () => string;
 };
 
 /**
@@ -45,7 +47,10 @@ export const releaseDictationRoute = (): void => {
 export const watchDictationDevice = ({
   onInterruption,
   onInputLost,
-}: DictationDeviceEvents): EventSubscription[] =>
+}: Pick<
+  DictationDeviceEvents,
+  "onInterruption" | "onInputLost"
+>): EventSubscription[] =>
   device === null
     ? []
     : [
@@ -55,3 +60,21 @@ export const watchDictationDevice = ({
 
 /** Whether this build chooses the microphone itself, so Settings offers the choice. */
 export const DICTATION_ROUTE_AVAILABLE = device !== null;
+
+/**
+ * Hears each change between online and offline, the current state first;
+ * null in a build that cannot tell.
+ */
+export const watchNetwork = (
+  onChange: (online: boolean) => void,
+): EventSubscription | null =>
+  device?.addListener("onNetworkChange", ({ online }) => {
+    onChange(online);
+  }) ?? null;
+
+/**
+ * The folder kept dictations wait in (`native/kept-dictation-files`), as a
+ * file URL; null in a build without one of its own.
+ */
+export const keptDictationFolder = (): string | null =>
+  device?.keptFolder() ?? null;

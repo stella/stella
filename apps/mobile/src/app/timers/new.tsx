@@ -120,6 +120,7 @@ const NewTimerForm = ({ source }: { source: AccessTokenSource }) => {
           value={description}
         />
         <DictateButton
+          field="timer"
           matterId={matterId ?? undefined}
           onBusyChange={setDictating}
           onText={field.insert}
