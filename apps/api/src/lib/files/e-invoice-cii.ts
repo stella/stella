@@ -29,10 +29,13 @@ const dateOf = (node: DocumentXmlNode | undefined): string | null => {
   if (text === null) {
     return null;
   }
-  const [, year, month, day] =
-    attributeOf(value, "format") === "102"
-      ? (CALENDAR_DATE.exec(text) ?? [])
-      : [];
+  if (attributeOf(value, "format") !== "102") {
+    return text;
+  }
+  const match = CALENDAR_DATE.exec(text);
+  const year = match?.[1];
+  const month = match?.[2];
+  const day = match?.[3];
   return year !== undefined && month !== undefined && day !== undefined
     ? `${year}-${month}-${day}`
     : text;
