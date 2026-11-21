@@ -69,7 +69,7 @@ export const scoreDictationCleanup = (
     const scenario =
       dictationCleanupCases.find(({ id }) => id === caseId) ??
       panic("Unknown dictation cleanup case");
-    const accepted = acceptDictationCleanup(output, scenario.transcript);
+    const accepted = acceptDictationCleanup(output, scenario);
     const rendered = accepted.isOk()
       ? renderDictationSegments(accepted.value.segments)
       : null;

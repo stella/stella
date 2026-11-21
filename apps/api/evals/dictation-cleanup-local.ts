@@ -30,6 +30,10 @@ if (mode === "prompts") {
           ...(scenario.context === undefined
             ? {}
             : { context: scenario.context }),
+          ...(scenario.style === undefined ? {} : { style: scenario.style }),
+          ...(scenario.translateTo === undefined
+            ? {}
+            : { translateTo: scenario.translateTo }),
         }),
         outputSchema,
         instruction:
