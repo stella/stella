@@ -55,14 +55,17 @@ const SaveScanForm = ({ source }: { source: AccessTokenSource }) => {
     /** The file's type; a scan is always a PDF. */
     mimeType?: string;
     name: string;
-    /** "file" for a document picked from Files; a scan otherwise. */
+    /** "file" for a document picked from Files, "dictation" for dictated text; a scan otherwise. */
     origin?: string;
     pageCount?: string;
     sha256Hex: string;
     size: string;
     uri: string;
   }>();
-  const picked = params.origin === UPLOAD_ORIGIN.file;
+  // A file or a dictation's text has no pages to count; a scan does.
+  const picked =
+    params.origin === UPLOAD_ORIGIN.file ||
+    params.origin === UPLOAD_ORIGIN.dictation;
   const matterT = useTranslations("matter");
   // The review passes both counts; a missing one reads as none.
   const size = parseIntegerToken(params.size, { sign: "unsigned" }).unwrapOr(0);
@@ -108,11 +111,11 @@ const SaveScanForm = ({ source }: { source: AccessTokenSource }) => {
       });
       if (Result.isOk(uploaded)) {
         changed("documents");
-        // This sheet, and for a scan the review under it, which removes the
-        // scan's files as it closes. A sheet closed meanwhile, as Escape can,
-        // leaves the review as it is.
+        // This sheet, and for a scan or a dictation the screen under it,
+        // which removes its files as it closes. A sheet closed meanwhile, as
+        // Escape can, leaves that screen as it is.
         if (navigation.isFocused()) {
-          router.dismiss(picked ? 1 : 2);
+          router.dismiss(params.origin === UPLOAD_ORIGIN.file ? 1 : 2);
         }
         return;
       }

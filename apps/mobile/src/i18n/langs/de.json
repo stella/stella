@@ -610,6 +610,20 @@
     "hideList": "Liste ausblenden",
     "showList": "Liste einblenden"
   },
+  "quickDictation": {
+    "activityReady": "Diktat bereit",
+    "activityReadyDetail": "Tippe, um den Text in stella zu prüfen",
+    "activityRecording": "Diktat läuft",
+    "activityRecordingDetail": "Tippe auf Fertig, um den Text zu prüfen",
+    "copied": "Kopiert",
+    "copy": "Kopieren",
+    "documentName": "Diktat {when}",
+    "none": "Kein Diktat wartet. Starte eines mit der Aktionstaste, Siri oder im Kontrollzentrum.",
+    "noneTitle": "Nichts zu prüfen",
+    "saveFailed": "Der Text konnte nicht zum Speichern vorbereitet werden. Versuche es erneut.",
+    "sendToChat": "An den Chat senden",
+    "text": "Diktierter Text"
+  },
   "role": {
     "readFailed": "Ihre Berechtigungen konnten nicht geladen werden, daher sind Änderungen vorerst ausgeblendet.",
     "retry": "Erneut versuchen"
