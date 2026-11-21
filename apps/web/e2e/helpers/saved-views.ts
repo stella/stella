@@ -72,6 +72,8 @@ export const expectSavedView = async (
 /**
  * Switches to a view from its tab, or from the menu when the strip has no
  * room for its tab, and returns the tab it then has as the active view.
+ * At the narrowest width the strip shows no tab at all, the active view's
+ * included; the menu then marks the open view as current instead.
  */
 export const openSavedView = async (
   page: Page,
@@ -86,10 +88,28 @@ export const openSavedView = async (
     await moreViews(page).click();
     await page.getByRole("menuitem", { exact: true, name }).click();
   }
-  await expect(tab).toHaveAttribute(
-    "aria-selected",
-    "true",
-    within(options.timeout),
-  );
+  const selectedTab = viewStrip(page).getByRole("tab", {
+    exact: true,
+    name,
+    selected: true,
+  });
+  const anyTab = viewStrip(page).getByRole("tab");
+  await expect
+    .poll(
+      async () =>
+        (await selectedTab.count()) > 0 || (await anyTab.count()) === 0,
+      {
+        message: `"${name}" is the open view`,
+        ...within(options.timeout),
+      },
+    )
+    .toBe(true);
+  if ((await anyTab.count()) === 0) {
+    await moreViews(page).click();
+    await expect(
+      page.getByRole("menuitem", { exact: true, name }),
+    ).toHaveAttribute("aria-current", "page");
+    await page.keyboard.press("Escape");
+  }
   return tab;
 };

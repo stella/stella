@@ -24,6 +24,11 @@ type UseInlineOverflowOptions = {
   activeIndex: number;
   /** How many items the row holds. */
   itemCount: number;
+  /**
+   * Names the items in their order, so a reorder recounts them: swapping
+   * two items keeps the measuring row's size, which no observer reports.
+   */
+  itemOrder: string;
 };
 
 /**
@@ -41,13 +46,14 @@ type UseInlineOverflowOptions = {
  * currently showing, so collapsing an item never changes the measurement
  * that collapsed it. The count is recomputed whenever either element resizes
  * (a docked pane narrows the row, an added view or a rename widens the copy)
- * and when the active item changes. The first count arrives with the
+ * and when the active item or the items' order changes. The first count arrives with the
  * observer's first report, before the row paints; until then every item
  * shows.
  */
 export const useInlineOverflow = ({
   activeIndex,
   itemCount,
+  itemOrder,
 }: UseInlineOverflowOptions) => {
   const [container, setContainer] = useState<HTMLElement | null>(null);
   const [measure, setMeasure] = useState<HTMLElement | null>(null);
@@ -96,7 +102,10 @@ export const useInlineOverflow = ({
     observer.observe(container);
     observer.observe(measure);
     return () => observer.disconnect();
-  }, [activeIndex, container, measure]);
+    // `itemOrder` is read by the observer's report, through the copies'
+    // order in the measuring row; the effect re-observes when it changes.
+    // oxlint-disable-next-line react/exhaustive-effect-dependencies -- the order lives in the DOM the observer measures
+  }, [activeIndex, container, itemOrder, measure]);
 
   return {
     /** The measured row, once mounted. */

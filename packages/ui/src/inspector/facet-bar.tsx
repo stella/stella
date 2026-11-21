@@ -76,6 +76,7 @@ export const InspectorFacetBar = <F extends string>({
     useInlineOverflow({
       activeIndex,
       itemCount: facets.length,
+      itemOrder: facets.join("\n"),
     });
   const { visible: visibleFacets, overflow: overflowFacets } =
     splitInlineOverflow(facets, visibleCount, activeIndex);

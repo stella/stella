@@ -23,6 +23,8 @@ const { WorkspaceViewSwitcher } =
 const TAB_WIDTH = 100;
 const TRIGGER_WIDTH = 24;
 let rowWidth = 250;
+/** Tabs a test draws at a width of their own, by name. */
+const tabWidths = new Map<string, number>();
 
 const originalRect = HTMLElement.prototype.getBoundingClientRect;
 const rect = (width: number) => new DOMRect(0, 0, width, 32);
@@ -30,7 +32,7 @@ HTMLElement.prototype.getBoundingClientRect = function getBoundingClientRect(
   this: HTMLElement,
 ) {
   if (this.hasAttribute(INLINE_OVERFLOW_ITEM_ATTRIBUTE)) {
-    return rect(TAB_WIDTH);
+    return rect(tabWidths.get(this.textContent) ?? TAB_WIDTH);
   }
   if (this.hasAttribute(INLINE_OVERFLOW_TRIGGER_ATTRIBUTE)) {
     return rect(TRIGGER_WIDTH);
@@ -78,6 +80,7 @@ globalThis.ResizeObserver = ResizeObserverStub;
 afterEach(() => {
   cleanup();
   observers.clear();
+  tabWidths.clear();
   rowWidth = 250;
 });
 
@@ -95,8 +98,14 @@ const VIEWS = [
   { id: "correspondence", name: "Correspondence" },
 ];
 
-const Harness = () => {
-  const [activeViewId, setActiveViewId] = useState("table");
+const Harness = ({
+  initialViewId = "table",
+  views = VIEWS,
+}: {
+  initialViewId?: string;
+  views?: readonly { id: string; name: string }[];
+}) => {
+  const [activeViewId, setActiveViewId] = useState(initialViewId);
   return (
     <WorkspaceViewSwitcher
       activeViewId={activeViewId}
@@ -107,7 +116,7 @@ const Harness = () => {
       overflowLabel="Show more"
       renderIcon={() => null}
       reorder={null}
-      views={VIEWS}
+      views={views}
     />
   );
 };
@@ -181,5 +190,40 @@ describe("WorkspaceViewSwitcher overflow", () => {
 
     expect(tabNames(mounted.container)).toEqual(VIEWS.map(({ name }) => name));
     expect(mounted.queryByRole("button", { name: "Show more" })).toBeNull();
+  });
+
+  test("a reordered strip recounts what fits, though its size stays the same", async () => {
+    // Narrow, wide, narrow; the last is open. Swapping the first two keeps the
+    // measuring row's size, which no observer reports, so only the order says
+    // the old count no longer fits.
+    rowWidth = 160;
+    tabWidths.set("All matters", 50);
+    tabWidths.set("Deadlines", 150);
+    tabWidths.set("Lists", 50);
+    const [table, calendar, filesystem] = VIEWS;
+    if (!table || !calendar || !filesystem) {
+      throw new Error("The fixture lists three views");
+    }
+    const mounted = render(
+      <Harness
+        initialViewId="filesystem"
+        views={[table, calendar, filesystem]}
+      />,
+    );
+    await waitFor(() => {
+      expect(tabNames(mounted.container)).toEqual(["All matters", "Lists"]);
+    });
+
+    mounted.rerender(
+      <Harness
+        initialViewId="filesystem"
+        views={[calendar, table, filesystem]}
+      />,
+    );
+
+    // Deadlines (150) beside Lists (50) and the trigger is past 160px.
+    await waitFor(() => {
+      expect(tabNames(mounted.container)).toEqual(["Lists"]);
+    });
   });
 });

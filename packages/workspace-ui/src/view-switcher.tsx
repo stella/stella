@@ -156,7 +156,11 @@ export const WorkspaceViewSwitcher = <View extends WorkspaceViewSwitcherItem>({
     measured,
     measureRef,
     visibleCount,
-  } = useInlineOverflow({ activeIndex: pinnedIndex, itemCount: views.length });
+  } = useInlineOverflow({
+    activeIndex: pinnedIndex,
+    itemCount: views.length,
+    itemOrder: views.map((view) => view.id).join("\n"),
+  });
   const { visible: visibleTabs, overflow: overflowTabs } = splitInlineOverflow(
     viewTabs,
     visibleCount,
@@ -215,6 +219,11 @@ export const WorkspaceViewSwitcher = <View extends WorkspaceViewSwitcherItem>({
                 <MenuPopup align="end">
                   {overflowTabs.map(({ view }) => (
                     <MenuItem
+                      // At the narrowest width the active view has no tab
+                      // either; the menu then says which view is open.
+                      aria-current={
+                        view.id === activeViewId ? "page" : undefined
+                      }
                       data-view-overflow-item={view.id}
                       key={view.id}
                       onClick={() => onViewChange(view.id)}
