@@ -9,10 +9,16 @@ import {
   pricingPlans,
   yearlyTotal,
   type BillingInterval,
+  type PricingPlanId,
 } from "../data/pricing";
 import { appUrl, selfHostingUrl } from "../data/site-nav";
 import { defaultLocale, isLocale, locales } from "../i18n/config";
-import { catalogs, getTranslations, requireLinkedSegment } from "../i18n/utils";
+import {
+  catalogs,
+  getTranslations,
+  requireLinkedSegment,
+  type TranslationKey,
+} from "../i18n/utils";
 
 // One template renders /pricing and /<lang>/pricing. Prose comes from the
 // catalog (`pricing.*`); amounts and storage come from data/pricing.ts and are
@@ -22,6 +28,54 @@ const locale = isLocale(rawLocale) ? rawLocale : defaultLocale;
 const t = getTranslations(locale);
 const copy = catalogs[locale].pricing;
 const { hreflang } = locales[locale];
+
+// Each plan's prose by literal catalog key, so the catalog check sees every
+// key the page reads.
+const PLAN_COPY = {
+  free: {
+    summary: "pricing.plans.free.summary",
+    features: [
+      "pricing.plans.free.features.0",
+      "pricing.plans.free.features.1",
+      "pricing.plans.free.features.2",
+    ],
+  },
+  solo: {
+    summary: "pricing.plans.solo.summary",
+    features: [
+      "pricing.plans.solo.features.0",
+      "pricing.plans.solo.features.1",
+    ],
+  },
+  team: {
+    summary: "pricing.plans.team.summary",
+    features: [
+      "pricing.plans.team.features.0",
+      "pricing.plans.team.features.1",
+    ],
+  },
+} as const satisfies Record<
+  PricingPlanId,
+  { summary: TranslationKey; features: readonly TranslationKey[] }
+>;
+
+const EVERY_PLAN_COPY = {
+  caseLaw: {
+    title: "pricing.everyPlan.caseLaw.title",
+    body: "pricing.everyPlan.caseLaw.body",
+  },
+  keys: {
+    title: "pricing.everyPlan.keys.title",
+    body: "pricing.everyPlan.keys.body",
+  },
+  selfHost: {
+    title: "pricing.everyPlan.selfHost.title",
+    body: "pricing.everyPlan.selfHost.body",
+  },
+} as const satisfies Record<
+  string,
+  { title: TranslationKey; body: TranslationKey }
+>;
 
 // The page opens on the yearly price.
 const DEFAULT_INTERVAL: BillingInterval = "yearly";
@@ -41,7 +95,7 @@ const plans = pricingPlans.map((plan) => {
     ? t("pricing.storagePerSeat", { storage })
     : t("pricing.storage", { storage });
   const unit = perSeat ? t("pricing.perSeatPerMonth") : t("pricing.perMonth");
-  const planCopy = copy.plans[plan.id];
+  const planCopy = PLAN_COPY[plan.id];
 
   const prices = (() => {
     switch (plan.price.type) {
@@ -49,7 +103,7 @@ const plans = pricingPlans.map((plan) => {
         return {
           type: "free" as const,
           amount: formatPrice(0, hreflang),
-          note: copy.plans.free.priceNote,
+          note: t("pricing.plans.free.priceNote"),
         };
       }
       case "paid": {
@@ -107,10 +161,10 @@ const plans = pricingPlans.map((plan) => {
   return {
     id: plan.id,
     name: plan.name,
-    summary: planCopy.summary,
+    summary: t(planCopy.summary),
     seatingLine,
     storageLine,
-    features: Object.values(planCopy.features),
+    features: planCopy.features.map((key) => t(key)),
     prices,
     cta,
   };
@@ -118,12 +172,12 @@ const plans = pricingPlans.map((plan) => {
 
 const everyPlan = (["caseLaw", "keys", "selfHost"] as const).map((id) => ({
   id,
-  title: copy.everyPlan[id].title,
-  body: copy.everyPlan[id].body,
+  title: t(EVERY_PLAN_COPY[id].title),
+  body: t(EVERY_PLAN_COPY[id].body),
 }));
 const selfHostLink = requireLinkedSegment(
   "pricing.everyPlan.selfHost.body",
-  copy.everyPlan.selfHost.body,
+  t("pricing.everyPlan.selfHost.body"),
 );
 
 const faqs = Object.entries(copy.faqs).map(([id, faq]) => ({
@@ -154,8 +208,8 @@ const faqJsonLd = {
 ---
 
 <Base
-  title={copy.metaTitle}
-  description={copy.metaDescription}
+  title={t("pricing.metaTitle")}
+  description={t("pricing.metaDescription")}
   current="pricing"
   translationScope="all-locales"
 >
@@ -182,14 +236,14 @@ const faqJsonLd = {
             style="--reveal-delay: 80ms"
             class="mt-3 text-balance font-display text-4xl font-medium leading-[1.1] tracking-tight sm:text-5xl"
           >
-            {copy.title}
+            {t("pricing.title")}
           </h1>
           <p
             data-reveal
             style="--reveal-delay: 160ms; color: var(--muted-foreground)"
             class="mx-auto mt-5 max-w-2xl text-pretty text-lg leading-[1.7]"
           >
-            {copy.subtitle}
+            {t("pricing.subtitle")}
           </p>
         </div>
       </section>
@@ -260,7 +314,7 @@ const faqJsonLd = {
 
                 <a
                   href={appUrl}
-                  class="plan-cta mt-6 inline-flex min-h-11 items-center justify-center rounded-[0.85rem] px-5 text-center text-sm font-medium transition-[border-color,background-color] duration-150"
+                  class="plan-cta mt-6 inline-flex min-h-11 items-center justify-center rounded-[0.85rem] px-5 text-center text-sm font-medium"
                 >
                   {plan.cta}
                 </a>
@@ -290,9 +344,9 @@ const faqJsonLd = {
           class="mx-auto mt-5 flex max-w-300 flex-col gap-1 text-sm sm:flex-row sm:justify-between"
           style="color: var(--muted-foreground)"
         >
-          <p>{copy.signUpNote}</p>
+          <p>{t("pricing.signUpNote")}</p>
           {/* PLACEHOLDER for Jan: VAT treatment is undecided; confirm or replace this line. */}
-          <p data-placeholder="vat">{copy.vatNote}</p>
+          <p data-placeholder="vat">{t("pricing.vatNote")}</p>
         </div>
       </section>
 
@@ -304,7 +358,7 @@ const faqJsonLd = {
             class="mb-6 text-xs font-medium uppercase tracking-[0.2em]"
             style="color: var(--muted-foreground)"
           >
-            {copy.everyPlan.heading}
+            {t("pricing.everyPlan.heading")}
           </h2>
           <div class="grid border-t sm:grid-cols-3" style="border-color: var(--border)">
             {
@@ -401,7 +455,7 @@ const faqJsonLd = {
             data-reveal
             class="text-balance font-display text-4xl font-medium tracking-tight sm:text-5xl"
           >
-            {copy.ctaHeading}
+            {t("pricing.ctaHeading")}
           </h2>
           <div class="mt-10">
             <a
@@ -432,11 +486,10 @@ const faqJsonLd = {
       border: 1px solid var(--border);
       background: color-mix(in srgb, var(--card) 80%, transparent);
     }
+    /* Paint changes are not transitioned: the chosen period and a hovered
+       call to action switch at once. */
     .interval-option {
       color: var(--muted-foreground);
-      transition:
-        background-color 150ms,
-        color 150ms;
     }
     .interval-option:has(input:checked) {
       background: var(--background);
