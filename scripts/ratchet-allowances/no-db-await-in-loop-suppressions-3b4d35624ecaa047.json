@@ -1,0 +1,6 @@
+{
+  "metric": "no-db-await-in-loop-suppressions",
+  "file": "apps/api/src/lib/dictation/learned-fixes.ts",
+  "delta": 2,
+  "reason": "The learned-fix write is a compare-and-set on one member row: a bounded retry reads the row again and writes once per attempt, only after another write won the race, so the awaits in the loop are sequential by design and never per item."
+}
