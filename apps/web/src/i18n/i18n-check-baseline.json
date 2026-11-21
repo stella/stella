@@ -1021,9 +1021,6 @@
     "workspaces.views.calendar.addDates": [
       "fr"
     ],
-    "workspaces.views.calendar.additionalDates": [
-      "fr"
-    ],
     "workspaces.views.reportExport.formatLabel": [
       "de",
       "fr",

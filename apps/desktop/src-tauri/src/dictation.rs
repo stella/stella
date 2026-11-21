@@ -1,11 +1,13 @@
 //! Hold-to-talk dictation into any app. Speech is transcribed on this
 //! computer: audio never leaves it and is never stored. The finished text is
 //! kept only in stella's own clipboard history on this computer, labelled as
-//! a dictation, while that history is on; the system clipboard is never
-//! written. With AI cleanup on (the default), the transcribed text, never the
-//! audio, goes through stella to the organization's AI provider before it is
-//! typed, with the kind of app it goes to and, when the user shares them, the
-//! window title and the text before the cursor; stella stores none of it.
+//! a dictation, while that history is on (and, while it holds the last one,
+//! in memory to type it again: `dictation_retype`); the system clipboard is
+//! never written. With AI cleanup on (the default), the transcribed text,
+//! never the audio, goes through stella to the organization's AI provider
+//! before it is typed, with the kind of app it goes to and, when the user
+//! shares them, the window title and the text before the cursor; stella
+//! stores none of it.
 //! Only when the user chooses stella AI for transcription does the audio
 //! leave this computer.
 //!
@@ -26,7 +28,7 @@ use std::{
 
 use serde::Serialize;
 use sha2::{Digest, Sha256};
-use tauri::{AppHandle, Emitter, Manager, State};
+use tauri::{AppHandle, Emitter, EventId, Listener, Manager, State};
 use tauri_plugin_global_shortcut::{
   Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutEvent, ShortcutState,
 };
@@ -38,8 +40,10 @@ use crate::{
   device_preference::DevicePreference,
   dictation_cloud::{self, CloudModels, Destination},
   dictation_context::{self, Sharing},
+  dictation_focus::{self, FocusTarget},
   dictation_hold_key::{self, Action, Gesture, HoldChoice},
   dictation_language::{self, Choice, LanguageSnapshot},
+  dictation_retype::{self, LastDictation, Request},
   dictation_words,
   feature_gate::{DesktopFeature, FeatureGates},
   http_client::{DesktopHttpClient, HttpClientOptions},
@@ -64,6 +68,9 @@ const SHARE_TEXT_BEFORE_CURSOR_PREFERENCE_FILE_NAME: &str =
 /// On unless the user turned it off: a short sound when dictation starts
 /// and stops listening.
 const SOUNDS_PREFERENCE_FILE_NAME: &str = "dictation-sounds";
+/// On unless the user turned it off: a shortcut types the last dictation
+/// again.
+const RETYPE_SHORTCUT_PREFERENCE_FILE_NAME: &str = "dictation-retype-shortcut";
 /// The key dictation listens for; absent: this computer's default.
 const HOLD_KEY_PREFERENCE_FILE_NAME: &str = "dictation-hold-key";
 const MAX_MODEL_ID_BYTES: usize = 128;
@@ -92,16 +99,19 @@ pub fn local_model_id() -> &'static str {
 /// Enough progress events to look alive, few enough to stay cheap.
 const PROGRESS_STEP_BYTES: u64 = MODEL_BYTES / 100;
 
-fn shortcut() -> Shortcut {
+pub(crate) fn shortcut() -> Shortcut {
   Shortcut::new(Some(Modifiers::CONTROL.union(Modifiers::ALT)), Code::Space)
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Command {
   Press,
   Release,
   /// Stop recording and discard it: a tap or a shortcut on the hold key.
   Cancel,
+  /// Type the last dictation again into the app focused when it was asked
+  /// for; ignored while one is recording.
+  Retype(Option<FocusTarget>),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -207,6 +217,20 @@ pub struct DictationSnapshot {
   /// The hold key cannot be heard yet: on a Mac, until stella has
   /// Accessibility access.
   hold_key_waiting: bool,
+  /// Whether a shortcut types the last dictation again, its keys, and
+  /// whether another app holds them.
+  retype_shortcut: bool,
+  retype_keys: ShortcutKeys,
+  retype_shortcut_taken: bool,
+}
+
+/// Whether the shortcut that types the last dictation again is registered.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum RetypeListening {
+  None,
+  Registered,
+  /// The OS refused it: another app holds the combination.
+  Taken,
 }
 
 /// What listens for the key while dictation runs.
@@ -236,6 +260,12 @@ struct Inner {
   hold_key: HoldChoice,
   hold_key_waiting: bool,
   listening: Listening,
+  retype_shortcut: bool,
+  retype_listening: RetypeListening,
+  /// Only in memory, and only while clipboard history holds it.
+  last: Option<LastDictation>,
+  /// Forgets the last dictation once clipboard history no longer holds it.
+  history_listener: Option<EventId>,
   /// Counts listeners started, so a stopped one cannot report its state.
   listener_generation: u64,
   commands: Option<Sender<Command>>,
@@ -255,6 +285,11 @@ impl DictationState {
       .read()
       .as_deref()
       != Some(DISABLED_VALUE);
+    let retype_shortcut =
+      DevicePreference::in_app_data(RETYPE_SHORTCUT_PREFERENCE_FILE_NAME)
+        .read()
+        .as_deref()
+        != Some(DISABLED_VALUE);
     let shared = |file_name: &str| {
       DevicePreference::in_app_data(file_name).read().as_deref() == Some(ENABLED_VALUE)
     };
@@ -299,6 +334,10 @@ impl DictationState {
       hold_key,
       hold_key_waiting: false,
       listening: Listening::None,
+      retype_shortcut,
+      retype_listening: RetypeListening::None,
+      last: None,
+      history_listener: None,
       listener_generation: 0,
       commands: None,
     }))
@@ -339,6 +378,9 @@ impl DictationState {
       hold_key: inner.hold_key,
       hold_keys: HoldChoice::OFFERED,
       hold_key_waiting: inner.hold_key_waiting,
+      retype_shortcut: inner.retype_shortcut,
+      retype_keys: ShortcutKeys::of(&dictation_retype::shortcut()),
+      retype_shortcut_taken: inner.retype_listening == RetypeListening::Taken,
     }
   }
 
@@ -464,6 +506,8 @@ pub fn recording(app: &AppHandle) -> bool {
 pub struct TrayDictation {
   pub enabled: bool,
   pub hold_key: HoldChoice,
+  /// Whether there is a last dictation to type again.
+  pub can_retype: bool,
 }
 
 pub fn tray_state(app: &AppHandle) -> Option<TrayDictation> {
@@ -471,6 +515,7 @@ pub fn tray_state(app: &AppHandle) -> Option<TrayDictation> {
     app.state::<DictationState>().update(|inner| TrayDictation {
       enabled: inner.enabled,
       hold_key: inner.hold_key,
+      can_retype: inner.last.is_some(),
     })
   })
 }
@@ -589,6 +634,82 @@ pub fn cleanup_enabled(app: &AppHandle) -> bool {
 /// Whether a short sound marks the start and the end of listening.
 pub fn sounds_enabled(app: &AppHandle) -> bool {
   app.state::<DictationState>().update(|inner| inner.sounds)
+}
+
+/// Remembers a dictation clipboard history just kept, for typing it again;
+/// the tray offers that once there is one.
+pub fn remember_last(app: &AppHandle, last: LastDictation) {
+  let first = app
+    .state::<DictationState>()
+    .update(|inner| inner.last.replace(last).is_none());
+  if first {
+    crate::activity::refresh_tray(app);
+  }
+}
+
+/// The last dictation, while clipboard history still holds it; one it no
+/// longer holds is forgotten.
+pub fn last_dictation(app: &AppHandle) -> Option<LastDictation> {
+  let last = app
+    .state::<DictationState>()
+    .update(|inner| inner.last.clone())?;
+  if crate::clipboard::holds_dictation(app, &last.history_id) {
+    return Some(last);
+  }
+  forget_last(app);
+  None
+}
+
+/// Forgets the last dictation once clipboard history no longer holds it:
+/// deleted, history cleared or paused, or turned off. Checked off the thread
+/// that announced the change, which may still hold history's lock.
+fn forget_last_unless_held(app: &AppHandle) {
+  let Some(id) = app
+    .state::<DictationState>()
+    .update(|inner| inner.last.as_ref().map(|last| last.history_id.clone()))
+  else {
+    return;
+  };
+  let app = app.clone();
+  tauri::async_runtime::spawn_blocking(move || {
+    if !crate::clipboard::holds_dictation(&app, &id) {
+      forget_last(&app);
+    }
+  });
+}
+
+fn forget_last(app: &AppHandle) {
+  let forgot = app
+    .state::<DictationState>()
+    .update(|inner| inner.last.take().is_some());
+  if forgot {
+    crate::activity::refresh_tray(app);
+  }
+}
+
+/// The tray's "type the last dictation again".
+pub fn retype_from_tray(app: &AppHandle) {
+  request_retype(app, Request::Tray);
+}
+
+/// Reads the focus as the request arrives, off the thread that delivered
+/// it (the focus lookup waits for the main thread), and only then queues
+/// it: a request that waits behind a dictation types only into the app
+/// that was focused when it was made.
+fn request_retype(app: &AppHandle, request: Request) {
+  let app = app.clone();
+  let spawned = std::thread::Builder::new()
+    .name("dictation-retype".to_string())
+    .spawn(move || {
+      if request == Request::Tray {
+        std::thread::sleep(dictation_retype::TRAY_SETTLE);
+      }
+      let focus = dictation_focus::current(&app);
+      send_command(&app, Command::Retype(focus));
+    });
+  if let Err(error) = spawned {
+    tracing::warn!(%error, "dictation retype could not start");
+  }
 }
 
 /// Starts a dictation: marks it recording and reads the speech model under
@@ -788,6 +909,47 @@ fn listen_for_hold_key(
   Listening::None
 }
 
+fn on_retype_shortcut(app: &AppHandle, _shortcut: &Shortcut, event: ShortcutEvent) {
+  if event.state == ShortcutState::Pressed {
+    request_retype(app, Request::Shortcut);
+  }
+}
+
+/// Registers the shortcut that types the last dictation again, while the
+/// speaker wants it.
+fn listen_for_retype(app: &AppHandle) {
+  if !app
+    .state::<DictationState>()
+    .update(|inner| inner.retype_shortcut)
+  {
+    return;
+  }
+  let listening = match app
+    .global_shortcut()
+    .on_shortcut(dictation_retype::shortcut(), on_retype_shortcut)
+  {
+    Ok(()) => RetypeListening::Registered,
+    Err(error) => {
+      tracing::warn!(%error, "dictation retype shortcut could not be registered");
+      RetypeListening::Taken
+    }
+  };
+  change(app, |inner| inner.retype_listening = listening);
+}
+
+fn unlisten_retype(app: &AppHandle) {
+  let listening = change(app, |inner| {
+    std::mem::replace(&mut inner.retype_listening, RetypeListening::None)
+  });
+  if listening == RetypeListening::Registered
+    && let Err(error) = app
+      .global_shortcut()
+      .unregister(dictation_retype::shortcut())
+  {
+    tracing::warn!(%error, "dictation retype shortcut could not be released");
+  }
+}
+
 /// Stops listening; a recording in progress is left to its release or to
 /// the engine stopping.
 fn unlisten(app: &AppHandle) {
@@ -814,15 +976,27 @@ fn start(app: &AppHandle) {
     change(app, |inner| inner.commands = sender);
   }
   listen(app);
+  listen_for_retype(app);
+  let history_app = app.clone();
+  let history_listener = app.listen(crate::clipboard::HISTORY_EVENT, move |_event| {
+    forget_last_unless_held(&history_app);
+  });
+  change(app, |inner| inner.history_listener = Some(history_listener));
 }
 
 fn stop(app: &AppHandle) {
   unlisten(app);
+  unlisten_retype(app);
   // Dropping the sender ends the engine thread and with it the worker.
-  change(app, |inner| {
+  let history_listener = change(app, |inner| {
     inner.commands = None;
     inner.failure = None;
+    inner.last = None;
+    inner.history_listener.take()
   });
+  if let Some(history_listener) = history_listener {
+    app.unlisten(history_listener);
+  }
 }
 
 /// The server's decision, applied whenever it arrives or changes. Nothing
@@ -933,6 +1107,33 @@ pub fn dictation_set_sounds(
     stored_switch(enabled),
     |inner| inner.sounds = enabled,
   )?;
+  Ok(read_snapshot(&app, &state))
+}
+
+/// Whether a shortcut types the last dictation again. Applies at once while
+/// dictation runs.
+#[tauri::command]
+pub fn dictation_set_retype_shortcut(
+  app: AppHandle,
+  state: State<'_, DictationState>,
+  enabled: bool,
+) -> Result<DictationSnapshot, String> {
+  if !available(&app) {
+    return Err("dictation is not available on this computer".to_string());
+  }
+  let changed = change_preference(
+    &app,
+    RETYPE_SHORTCUT_PREFERENCE_FILE_NAME,
+    stored_switch(enabled),
+    |inner| std::mem::replace(&mut inner.retype_shortcut, enabled) != enabled,
+  )?;
+  if changed && state.update(|inner| inner.commands.is_some()) {
+    if enabled {
+      listen_for_retype(&app);
+    } else {
+      unlisten_retype(&app);
+    }
+  }
   Ok(read_snapshot(&app, &state))
 }
 
@@ -1329,9 +1530,30 @@ mod tests {
       hold_key: HoldChoice::parse(None),
       hold_key_waiting: false,
       listening: Listening::None,
+      retype_shortcut: true,
+      retype_listening: RetypeListening::None,
+      last: None,
+      history_listener: None,
       listener_generation: 0,
       commands: None,
     }))
+  }
+
+  #[test]
+  fn the_retype_shortcut_is_on_and_names_its_keys() {
+    let state = state(true);
+    let snapshot =
+      serde_json::to_value(state.snapshot(true, false, Vec::new(), true)).unwrap();
+    assert_eq!(snapshot["retypeShortcut"], true);
+    assert_eq!(snapshot["retypeShortcutTaken"], false);
+    assert_eq!(
+      snapshot["retypeKeys"],
+      serde_json::to_value(ShortcutKeys::of(&dictation_retype::shortcut())).unwrap()
+    );
+    state.update(|inner| inner.retype_listening = RetypeListening::Taken);
+    let taken =
+      serde_json::to_value(state.snapshot(true, false, Vec::new(), true)).unwrap();
+    assert_eq!(taken["retypeShortcutTaken"], true);
   }
 
   #[test]

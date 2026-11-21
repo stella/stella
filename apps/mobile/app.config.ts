@@ -502,14 +502,16 @@ const appConfigBase = ({
       },
     ],
     // The composer's microphone dictates a message
-    // (src/components/use-dictation.ts); recording only while the app is open.
+    // (src/components/use-dictation.ts). A dictation the person started goes
+    // on while the screen is locked or another app is open, until they
+    // finish it or it reaches its limit (background audio mode).
     [
       "expo-audio",
       {
         microphonePermission:
           "stella records your voice while you dictate a message, to type it for you.",
         recordAudioAndroid: true,
-        enableBackgroundRecording: false,
+        enableBackgroundRecording: true,
       },
     ] satisfies [string, unknown],
     // Notifications from the server: mentions, approvals, finished exports

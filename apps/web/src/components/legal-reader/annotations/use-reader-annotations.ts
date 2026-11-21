@@ -286,7 +286,7 @@ export const useReaderAnnotations = (
       if (before.items.length >= GUEST_ANNOTATIONS_MAX_ITEMS) {
         notifyUserProblem(
           t("legalReader.annotations.guestLimitReached", {
-            count: String(GUEST_ANNOTATIONS_MAX_ITEMS),
+            count: GUEST_ANNOTATIONS_MAX_ITEMS,
           }),
         );
         return Result.err(

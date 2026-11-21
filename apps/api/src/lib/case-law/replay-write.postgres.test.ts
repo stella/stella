@@ -17,7 +17,7 @@ import {
   CORPUS_INDEX_MANIFESTS,
   corpusIndexManifestDigest,
 } from "@/api/lib/legal-search/corpus-index-manifest";
-import { writeDesiredStates } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
+import { writeRepairedCorpusProjectionDesiredStatesTx } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
 import { EMPTY_AST } from "@/api/lib/legal-search/ingestion-types";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 
@@ -169,8 +169,13 @@ if (!databaseUrl || !enabled) {
               });
             });
           }
-          await db.transaction(
-            async (tx) => await writeDesiredStates(tx, projections),
+          await db.transaction(async (tx) =>
+            (
+              await writeRepairedCorpusProjectionDesiredStatesTx(tx, {
+                epochs: null,
+                values: projections,
+              })
+            ).unwrap(),
           );
         };
         const before = await versions();

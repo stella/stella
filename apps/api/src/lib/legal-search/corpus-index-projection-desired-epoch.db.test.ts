@@ -345,9 +345,12 @@ test("a generation whose desired epoch trails the canonical one is current to ev
 
   // Reconciliation, single and batched, finds nothing to do.
   expect(
-    await runInTransaction(
-      async (tx) => await reconcileCorpusProjectionDesiredStateTx(tx, subject),
-    ),
+    (
+      await runInTransaction(
+        async (tx) =>
+          await reconcileCorpusProjectionDesiredStateTx(tx, subject),
+      )
+    ).unwrap(),
   ).toEqual({ epoch: 2n, changed: false, generationCount: 2 });
   await synchronizeBatch();
   expect(await statesOf()).toEqual(trailing);
@@ -638,10 +641,12 @@ test(
 
             // Reconciling again is a fixed point.
             expect(
-              await runInTransaction(
-                async (tx) =>
-                  await reconcileCorpusProjectionDesiredStateTx(tx, subject),
-              ),
+              (
+                await runInTransaction(
+                  async (tx) =>
+                    await reconcileCorpusProjectionDesiredStateTx(tx, subject),
+                )
+              ).unwrap(),
             ).toMatchObject({ epoch: after.epoch, changed: false });
             expect(await statesOf()).toEqual(states);
             expect(await decisionRow()).toEqual(after);

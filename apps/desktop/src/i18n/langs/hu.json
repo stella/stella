@@ -184,7 +184,7 @@
     "unreadableEraseNotice": "Egyes mentett tevékenységek nem olvashatók. Törölheti az olvashatatlan mentett tevékenységet és a hozzá tartozó piszkozat-helyreállítási adatokat.",
     "unrecoverableOtherHistoryConfirmation": "A más fiókokhoz tartozó mentett előzmények törlődnek, beleértve a hiányzó kulcsokkal vagy olvashatatlan fájlokkal rendelkező függőben lévő piszkozatok helyreállítási adatait. A létrehozott piszkozatok már létezhetnek. Ez a művelet nem vonható vissza.",
     "welcomeControlFact": "Az inaktív idő nem számít. Bármikor szüneteltetheti vagy törölheti.",
-    "welcomeDetails": "Az alkalmazások tevékenységét néhány másodpercenként rögzíti a rendszer, és soha nem tölti fel automatikusan. Az ablakcímeket és a megnyitott dokumentumok elérési útjait is rögzíti, hacsak ki nem kapcsolja a részleteket. Az összefoglalók csak kérésre kerülnek a vágólapra. Kizárhat alkalmazásokat, és megadhatja az előzmények megőrzési idejét. A részletek kikapcsolása leállítja az új részletek rögzítését; a korábbiak a megőrzési idő végéig vagy törlésig megmaradnak. Egy javaslat ablakcímei csak akkor hagyják el ezt az eszközt, ha jóváhagyja a stella AI által írt leírást, egyszer vagy mindig; nem tárolódnak.",
+    "welcomeDetails": "Az alkalmazások tevékenységét néhány másodpercenként rögzíti a rendszer, és soha nem tölti fel automatikusan. Az ablakcímeket és a megnyitott dokumentumok elérési útjait is rögzíti, hacsak ki nem kapcsolja a részleteket. Az összefoglalók csak kérésre kerülnek a vágólapra. Kizárhat alkalmazásokat, és megadhatja az előzmények megőrzési idejét. A részletek kikapcsolása leállítja az új részletek rögzítését; a korábbiak a megőrzési idő végéig vagy törlésig megmaradnak. Egy javaslat ablakcímei csak akkor hagyják el ezt az eszközt, ha a hozzájárulás megadása után stella AI vázlatot kér, egyszer vagy mindig; nem tárolódnak.",
     "welcomeLearnMore": "További információ",
     "welcomeLocalFact": "Titkosítva ezen az eszközön.",
     "welcomePreviewMatter": "A Riverside bérleti szerződésének meghosszabbítása",
@@ -669,6 +669,11 @@
     },
     "removeFailed": "A beszédmodellt nem sikerült eltávolítani. Próbálja újra.",
     "removeModel": "Eltávolítás",
+    "retype": {
+      "description": "Nyomja meg a(z) {shortcut} billentyűparancsot, hogy az utolsó diktálását újra beírja a kurzorhoz. Csak a memóriában marad, amíg a vágólapelőzményekben van.",
+      "taken": "Egy másik alkalmazás használja ezt: {shortcut}. A stella ikon Diktálás menüje ugyanezt kínálja.",
+      "title": "Billentyűparancs az utolsó diktáláshoz"
+    },
     "shortcutTaken": "Egy másik alkalmazás használja ezt: {shortcut}.",
     "sounds": {
       "description": "Rövid, halk hang lejátszása, amikor a felvétel elindul, és amikor véget ér.",
@@ -763,7 +768,7 @@
     "takenOverTitle": "Szerkesztés másik eszközre áthelyezve"
   },
   "onboarding": {
-    "activityAiNote": "Egy javaslat ablakcímei csak akkor hagyják el ezt az eszközt, ha jóváhagyja a stella AI által írt leírást, egyszer vagy mindig. Nem tárolódnak.",
+    "activityAiNote": "Egy javaslat ablakcímei csak akkor hagyják el ezt az eszközt, ha a hozzájárulás megadása után stella AI vázlatot kér, egyszer vagy mindig. Nem tárolódnak.",
     "activityBody": "Lássa, mire ment el a munkanapja, és alakítsa időbejegyzés-piszkozatokká. Ön dönti el, mi kerül rögzítésre és mi kerül elküldésre.",
     "activityConsentNote": "Semmi sem kerül rögzítésre, amíg a Tevékenységben nem kattint a Rögzítés indítása gombra. Bármikor szüneteltethet, kizárhat alkalmazásokat vagy törölhet bármely napot.",
     "activityNeverKeys": "Billentyűleütéseket vagy begépelt szöveget",
@@ -1210,6 +1215,7 @@
     "checkForUpdates": "Frissítések keresése",
     "dictation": "Diktálás",
     "dictationHint": "A diktáláshoz tartsa lenyomva a(z) {key} billentyűt",
+    "dictationRetype": "Utolsó diktálás újbóli beírása",
     "dictationSettings": "Diktálási beállítások…",
     "dictationTurnOn": "Diktálás bekapcsolása…",
     "documentsSyncing": "{count, plural, one {1 dokumentum szinkronizálódik} other {{count} dokumentum szinkronizálódik}}",

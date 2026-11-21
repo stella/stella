@@ -151,6 +151,7 @@ export const FAILURE_TAGS = [
   "CorpusPackError",
   "CorpusPayloadUnavailableError",
   "CorpusProjectionAppendError",
+  "CorpusProjectionServedCopyHold",
   "CorpusProjectionUnservedReadError",
   "CorpusSchemaLaneUnavailableError",
   "CorpusSearchFacetsError",

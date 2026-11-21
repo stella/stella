@@ -35,7 +35,8 @@ import { Tooltip, TooltipFactTrigger, TooltipPopup } from "@stll/ui/tooltip";
 import { subscribeDesktopEvent } from "../shared/desktop-events";
 import { formatHoldKey, isHoldKey } from "../shared/hold-key";
 import type { HoldKey } from "../shared/hold-key";
-import type { ShortcutKeys } from "../shared/shortcut-keys";
+import { formatShortcut } from "../shared/shortcut-keys";
+import type { KeyboardLayout, ShortcutKeys } from "../shared/shortcut-keys";
 import {
   DESKTOP_PLATFORM,
   useKeyboardLayout,
@@ -116,6 +117,11 @@ export type DictationSnapshot = {
   model: DictationModel;
   modelBytes: number;
   phase: "idle" | "recording" | "transcribing";
+  /** Whether a shortcut types the last dictation again, its keys, and
+   *  whether another app holds them. */
+  retypeKeys: ShortcutKeys;
+  retypeShortcut: boolean;
+  retypeShortcutTaken: boolean;
   shortcutTaken: boolean;
 };
 
@@ -321,10 +327,6 @@ const DictationPage = ({
     return Result.isOk(result);
   };
 
-  const setHoldKey = async (holdKey: HoldKey) => {
-    await change("dictation_set_hold_key", { holdKey });
-  };
-
   const setEnabled = async (enabled: boolean) => {
     await change("dictation_set_enabled", { enabled });
   };
@@ -418,28 +420,16 @@ const DictationPage = ({
       <TranscribeRecordingGroup />
       {snapshot.enabled && (
         <>
-          <SettingsSection title={t("groups.shortcut")}>
-            {snapshot.holdKeys.length > 1 && (
-              <DictationHoldKeyRow
-                holdKey={snapshot.holdKey}
-                holdKeys={snapshot.holdKeys}
-                label={holdKeyLabel}
-                onChange={(holdKey) => {
-                  void setHoldKey(holdKey);
-                }}
-              />
-            )}
-            <DictationMicrophoneRow
-              focused={focus === "microphone"}
-              onFocused={onFocusShown}
-            />
-            <DictationSoundsRow
-              checked={snapshot.sounds}
-              onChange={(sounds) => {
-                void change("dictation_set_sounds", { enabled: sounds });
-              }}
-            />
-          </SettingsSection>
+          <DictationShortcutSection
+            change={(command, args) => {
+              void change(command, args);
+            }}
+            focus={focus}
+            holdKeyLabel={holdKeyLabel}
+            layout={layout}
+            onFocusShown={onFocusShown}
+            snapshot={snapshot}
+          />
           <SettingsSection title={t("groups.transcription")}>
             {snapshot.cloudAvailable ? (
               <DictationDestination
@@ -560,6 +550,62 @@ const DictationPage = ({
   );
 };
 
+/** The key to hold, the microphone, the sounds and the shortcut that types
+ *  the last dictation again. */
+const DictationShortcutSection = ({
+  change,
+  focus,
+  holdKeyLabel,
+  layout,
+  onFocusShown,
+  snapshot,
+}: Pick<DictationFocus, "focus" | "onFocusShown"> & {
+  change: (command: string, args: InvokeArgs) => void;
+  holdKeyLabel: (holdKey: HoldKey) => string;
+  layout: KeyboardLayout | null;
+  snapshot: DictationSnapshot;
+}) => {
+  const t = useTranslations("dictation");
+  const locale = useLocale();
+  return (
+    <SettingsSection title={t("groups.shortcut")}>
+      {snapshot.holdKeys.length > 1 && (
+        <DictationHoldKeyRow
+          holdKey={snapshot.holdKey}
+          holdKeys={snapshot.holdKeys}
+          label={holdKeyLabel}
+          onChange={(holdKey) => {
+            change("dictation_set_hold_key", { holdKey });
+          }}
+        />
+      )}
+      <DictationMicrophoneRow
+        focused={focus === "microphone"}
+        onFocused={onFocusShown}
+      />
+      <DictationSoundsRow
+        checked={snapshot.sounds}
+        onChange={(sounds) => {
+          change("dictation_set_sounds", { enabled: sounds });
+        }}
+      />
+      <DictationRetypeRow
+        checked={snapshot.retypeShortcut}
+        onChange={(enabled) => {
+          change("dictation_set_retype_shortcut", { enabled });
+        }}
+        shortcut={formatShortcut({
+          keys: snapshot.retypeKeys,
+          layout,
+          locale,
+          platform: DESKTOP_PLATFORM,
+        })}
+        taken={snapshot.retypeShortcutTaken}
+      />
+    </SettingsSection>
+  );
+};
+
 /** Where a recording on disk is transcribed: its own window, offered
  *  wherever dictation is, whether or not the shortcut is on. */
 const TranscribeRecordingGroup = () => {
@@ -677,6 +723,41 @@ const DictationSoundsRow = ({
     <SettingsRow
       description={t("description")}
       id="dictation-sounds"
+      title={t("title")}
+    >
+      <Switch
+        aria-describedby={ids.description}
+        aria-labelledby={ids.label}
+        checked={checked}
+        onCheckedChange={onChange}
+      />
+    </SettingsRow>
+  );
+};
+
+/** The shortcut that types the last dictation again; the tray offers the
+ *  same whether or not it is on. */
+const DictationRetypeRow = ({
+  checked,
+  onChange,
+  shortcut,
+  taken,
+}: {
+  checked: boolean;
+  onChange: (enabled: boolean) => void;
+  shortcut: string;
+  taken: boolean;
+}) => {
+  const t = useTranslations("dictation.retype");
+  const ids = settingsRowIds("dictation-retype");
+  return (
+    <SettingsRow
+      description={
+        checked && taken
+          ? t("taken", { shortcut })
+          : t("description", { shortcut })
+      }
+      id="dictation-retype"
       title={t("title")}
     >
       <Switch

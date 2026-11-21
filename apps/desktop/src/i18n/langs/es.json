@@ -184,7 +184,7 @@
     "unreadableEraseNotice": "No se puede leer parte de la actividad guardada. Puede borrar la actividad guardada ilegible y los datos de recuperación de sus borradores.",
     "unrecoverableOtherHistoryConfirmation": "Se eliminará el historial guardado de otras cuentas, incluidos los datos de recuperación de borradores pendientes con claves ausentes o archivos ilegibles. Es posible que los borradores creados ya existan. Esta acción no se puede deshacer.",
     "welcomeControlFact": "Se excluye el tiempo de inactividad. Pause o elimine cuando quiera.",
-    "welcomeDetails": "La actividad de las aplicaciones se registra cada pocos segundos y nunca se sube automáticamente. También se registran los títulos de ventanas y las rutas de los documentos abiertos, salvo que desactive los detalles. Los resúmenes solo se copian al portapapeles cuando lo solicita. Puede excluir aplicaciones y elegir cuánto tiempo se conserva el historial. Desactivar los detalles detiene el registro de nuevos detalles; los anteriores se conservan hasta que venza el plazo de conservación o se eliminen. Los títulos de ventana de una sugerencia solo salen de este dispositivo cuando aprueba una descripción de stella IA, una vez o siempre; no se guardan.",
+    "welcomeDetails": "La actividad de las aplicaciones se registra cada pocos segundos y nunca se sube automáticamente. También se registran los títulos de ventanas y las rutas de los documentos abiertos, salvo que desactive los detalles. Los resúmenes solo se copian al portapapeles cuando lo solicita. Puede excluir aplicaciones y elegir cuánto tiempo se conserva el historial. Desactivar los detalles detiene el registro de nuevos detalles; los anteriores se conservan hasta que venza el plazo de conservación o se eliminen. Los títulos de ventana de una sugerencia solo salen de este dispositivo cuando solicitas un borrador de stella IA tras conceder el consentimiento, una vez o siempre; no se guardan.",
     "welcomeLearnMore": "Más información",
     "welcomeLocalFact": "Cifrado en este dispositivo.",
     "welcomePreviewMatter": "Renovación del arrendamiento de Riverside",
@@ -669,6 +669,11 @@
     },
     "removeFailed": "No se pudo eliminar el modelo de voz. Inténtalo de nuevo.",
     "removeModel": "Eliminar",
+    "retype": {
+      "description": "Pulsa {shortcut} para volver a escribir tu último dictado en el cursor. Solo se guarda en memoria mientras está en el historial del portapapeles.",
+      "taken": "Otra app está usando {shortcut}. El menú Dictado del icono de stella ofrece lo mismo.",
+      "title": "Atajo para el último dictado"
+    },
     "shortcutTaken": "Otra aplicación está usando {shortcut}.",
     "sounds": {
       "description": "Reproducir un sonido breve y suave cuando empieza la grabación y cuando termina.",
@@ -763,7 +768,7 @@
     "takenOverTitle": "Edición movida a otro dispositivo"
   },
   "onboarding": {
-    "activityAiNote": "Los títulos de ventana de una sugerencia solo salen de este dispositivo cuando aprueba una descripción de stella IA, una vez o siempre. No se guardan.",
+    "activityAiNote": "Los títulos de ventana de una sugerencia solo salen de este dispositivo cuando solicitas un borrador de stella IA tras conceder el consentimiento, una vez o siempre. No se guardan.",
     "activityBody": "Ve en qué se te fue la jornada y conviértela en borradores de registros de tiempo. Tú decides qué se registra y qué se envía.",
     "activityConsentNote": "No se registra nada hasta que pulse Empezar a registrar en Actividad. Puede pausar, excluir aplicaciones o eliminar cualquier día cuando quiera.",
     "activityNeverKeys": "Pulsaciones de teclas o texto escrito",
@@ -1210,6 +1215,7 @@
     "checkForUpdates": "Buscar actualizaciones",
     "dictation": "Dictado",
     "dictationHint": "Mantenga pulsado {key} para dictar",
+    "dictationRetype": "Volver a escribir el último dictado",
     "dictationSettings": "Ajustes de dictado…",
     "dictationTurnOn": "Activar el dictado…",
     "documentsSyncing": "{count, plural, one {1 documento sincronizándose} other {{count} documentos sincronizándose}}",

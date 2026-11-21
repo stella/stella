@@ -22,9 +22,10 @@ const { act, cleanup, fireEvent, render, waitFor } =
 const { QueryClient, QueryClientProvider } =
   await import("@tanstack/react-query");
 const router = await import("@tanstack/react-router");
-const { IntlProvider } = await import("use-intl");
+const { createTranslator, IntlProvider } = await import("use-intl");
 const { FormattingProvider } = await import("@/i18n/formatting-context");
-const { buildFormattingLocale } = await import("@/i18n/i18n-store");
+const { buildFormattingLocale, buildMessageLocale } =
+  await import("@/i18n/i18n-store");
 const { citingDecisionsInfiniteOptions, topCitingDecisionsOptions } =
   await import("@/features/statutes/queries/citing-decisions");
 const { ProvisionCitingDecisions } =
@@ -140,6 +141,12 @@ const mount = async ({
     numberingSystem: "auto",
     weekStart: "auto",
   });
+  const messageLocale = buildMessageLocale({
+    lang: locale,
+    region: "",
+    regionalFormat: "auto",
+    numberingSystem: "auto",
+  });
   const root = router.createRootRoute({
     component: () => (
       <ProvisionCitingDecisions
@@ -160,7 +167,7 @@ const mount = async ({
   await appRouter.load();
   return render(
     <QueryClientProvider client={client}>
-      <IntlProvider locale={locale} messages={messages} timeZone="UTC">
+      <IntlProvider locale={messageLocale} messages={messages} timeZone="UTC">
         <FormattingProvider locale={formattingLocale} timeZone="UTC">
           <router.RouterProvider router={appRouter} />
         </FormattingProvider>
@@ -307,10 +314,18 @@ for (const [locale, messages] of [
         element.textContent.includes(localizedLimit),
     );
 
+    const messageLocale = buildMessageLocale({
+      lang: locale,
+      region: "",
+      regionalFormat: "auto",
+      numberingSystem: "auto",
+    });
+    const t = createTranslator({ locale: messageLocale, messages });
     expect(capNotice.textContent).toBe(
-      messages.statutes.citingDecisionsSnapshotCapped
-        .replace("{count}", () => localizedCount)
-        .replace("{limit}", () => localizedLimit),
+      t("statutes.citingDecisionsSnapshotCapped", {
+        count: 1,
+        limit: localizedLimit,
+      }),
     );
     expect(
       ui.queryByRole("button", { name: messages.common.loadMore }),

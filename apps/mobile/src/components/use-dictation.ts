@@ -22,6 +22,11 @@ import type { AccessTokenSource } from "@/connection/session";
 import { useSession } from "@/connection/session-provider";
 import { deviceAccountStore } from "@/native/account-store";
 import {
+  releaseDictationRoute,
+  routeForDictation,
+  watchDictationDevice,
+} from "@/native/dictation-device";
+import {
   cleanUpDictation,
   DICTATION_MAX_SECONDS,
   readMatterVocabulary,
@@ -68,8 +73,28 @@ export type DictationPhase = "idle" | "recording" | "transcribing";
 /** Why a dictation gave no text. */
 export type DictationNotice = "denied" | "failed" | "silent";
 
+/**
+ * Records alongside other apps' audio, which keeps playing, and goes on
+ * when the screen locks or the person switches apps: the dictation ends
+ * only when they finish it, at its limit, or when the system takes the
+ * microphone.
+ */
+const RECORDING_MODE = {
+  allowsRecording: true,
+  playsInSilentMode: true,
+  interruptionMode: "mixWithOthers",
+  allowsBackgroundRecording: true,
+} as const;
+
+/**
+ * A dictation the system ends (a call, Siri, the microphone unplugged) is
+ * transcribed once this much was heard; anything shorter was no dictation.
+ */
+const SYSTEM_STOP_KEEPS_MS = 300;
+
 /** Gives the microphone back, so other apps' audio resumes. */
 const releaseMicrophone = async () => {
+  releaseDictationRoute();
   await setAudioModeAsync({ allowsRecording: false });
 };
 
@@ -102,6 +127,8 @@ type DictationSetup = {
  */
 type Run = {
   readonly setup: Promise<DictationSetup>;
+  /** Whether each piece records from the iPhone's own microphone. */
+  readonly builtInMicrophone: boolean;
   readonly matterId: string | undefined;
   readonly locale: string;
   /** How long the finished pieces ran. */
@@ -143,7 +170,14 @@ export const useDictation = (
   // A stop the recorder makes by itself, at a piece's limit, is a cut.
   const meaning = useRef<StopMeaning>("cut");
   const stopping = useRef(false);
+  // Whether a piece is open: recording, or paused by the system, which
+  // still has to be stopped for its audio to count.
+  const live = useRef(false);
   const run = useRef<Run | null>(null);
+  const fail = () => {
+    setPhase("idle");
+    setNotice("failed");
+  };
   // Set before the first await of `start`, so a second tap while the
   // permission prompt or the recorder is still opening is ignored.
   const starting = useRef(false);
@@ -187,31 +221,26 @@ export const useDictation = (
       return;
     }
     stopping.current = false;
+    live.current = false;
     const how = meaning.current;
     meaning.current = "cut";
     const current = run.current;
-    const { url } = status;
-    if (url !== null) {
-      if (current === null || status.hasError || how === "cancel") {
-        discardRecording(url);
-      } else {
-        current.pieces.push(pieceText(current.setup, url, current.matterId));
-      }
-    }
+    filePiece({ current, status, how });
     if (current === null) {
       return;
     }
-    const finishedMs = current.doneMs + current.pieceMs;
-    current.doneMs = finishedMs;
+    const finishedMs = current.doneMs;
     setDoneMs(finishedMs);
-    current.pieceMs = 0;
-    current.watch = NO_PAUSE;
     const ended =
       how !== "cut" || status.hasError || finishedMs >= DICTATION_TOTAL_MAX_MS;
     const next = ended
       ? conclude(current, how === "cancel" ? "cancel" : "finish")
       : continueRecording({
           recorder,
+          builtInMicrophone: current.builtInMicrophone,
+          onRecording: () => {
+            live.current = true;
+          },
           stillCut: () => meaning.current === "cut" && run.current === current,
           conclude: async () => {
             await conclude(
@@ -239,12 +268,27 @@ export const useDictation = (
     meaning.current = how;
     // Between pieces nothing records: the next piece reads the meaning
     // before it starts.
-    if (stopping.current || !recorder.isRecording) {
+    if (stopping.current || !live.current) {
       return;
     }
     stopping.current = true;
     await recorder.stop();
   };
+
+  // The system took the microphone, or the one recorded from went away: the
+  // recorder is paused and would go on by itself afterwards, which is no
+  // longer what the person is saying. What was heard is transcribed.
+  // A stop the person already asked for stands.
+  useSystemStops(() => {
+    const current = run.current;
+    if (current === null || meaning.current !== "cut") {
+      return;
+    }
+    // The recorder's own count, as the last reading may be 250 ms old.
+    const pieceMs = live.current ? recorder.getStatus().durationMillis : 0;
+    const heardMs = current.doneMs + Math.max(current.pieceMs, pieceMs);
+    stop(heardMs >= SYSTEM_STOP_KEEPS_MS ? "finish" : "cancel").catch(fail);
+  });
 
   useCutAtPauses(reading, (latest) => {
     const current = run.current;
@@ -261,33 +305,26 @@ export const useDictation = (
       return;
     }
     const { source } = state;
-    const permission = await requestRecordingPermissionsAsync();
-    if (attempt.current !== id) {
-      return;
-    }
-    if (!permission.granted) {
-      setNotice("denied");
-      return;
-    }
-    await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true });
-    const prepared = await Result.tryPromise(
-      async () => await recorder.prepareToRecordAsync(),
-    );
-    if (prepared.isErr() || attempt.current !== id) {
-      // No recording started, so no finished status will release it.
-      if (prepared.isErr()) {
-        setNotice("failed");
+    const opened = await openMicrophone({
+      recorder,
+      source,
+      current: () => attempt.current === id,
+    });
+    if (opened.type !== "open") {
+      if (opened.type !== "stale") {
+        setNotice(opened.type);
       }
-      await releaseMicrophone();
       return;
     }
+    const { preferences } = opened;
     meaning.current = "cut";
     setDoneMs(0);
     run.current = {
       // Read while the person speaks, so the first piece waits for nothing.
-      setup: readSetup(source, async () =>
+      setup: readSetup(source, preferences, async () =>
         matterId === undefined ? [] : await matterTerms(source, matterId),
       ),
+      builtInMicrophone: preferences.microphone === "built-in",
       matterId,
       locale,
       doneMs: 0,
@@ -296,6 +333,7 @@ export const useDictation = (
       watch: NO_PAUSE,
     };
     recorder.record({ forDuration: DICTATION_MAX_SECONDS });
+    live.current = true;
     setPhase("recording");
   };
 
@@ -304,11 +342,6 @@ export const useDictation = (
     run.current = null;
     meaning.current = "cancel";
   });
-
-  const ended = () => {
-    setPhase("idle");
-    setNotice("failed");
-  };
 
   return {
     phase,
@@ -325,16 +358,16 @@ export const useDictation = (
       starting.current = true;
       attempt.current += 1;
       start(attempt.current)
-        .catch(ended)
+        .catch(fail)
         .finally(() => {
           starting.current = false;
         });
     },
     finish: () => {
-      stop("finish").catch(ended);
+      stop("finish").catch(fail);
     },
     cancel: () => {
-      stop("cancel").catch(ended);
+      stop("cancel").catch(fail);
     },
     /** A sent message forgets the last notice and stops a start still opening the microphone. */
     settleForSend: () => {
@@ -345,26 +378,117 @@ export const useDictation = (
 };
 
 /**
+ * Files the piece the recorder just finished under the dictation: its
+ * text to come, or, when the system's audio restarted and took it, its
+ * loss, which the person hears of. A recording with no dictation to go to
+ * is deleted.
+ */
+const filePiece = ({
+  current,
+  status: { hasError, mediaServicesDidReset, url },
+  how,
+}: {
+  current: Run | null;
+  status: RecordingStatus;
+  how: StopMeaning;
+}) => {
+  if (url !== null) {
+    if (current === null || hasError || how === "cancel") {
+      discardRecording(url);
+    } else {
+      current.pieces.push(pieceText(current.setup, url, current.matterId));
+    }
+  } else if (current !== null && mediaServicesDidReset === true) {
+    current.pieces.push(Promise.resolve(null));
+  }
+  if (current !== null) {
+    current.doneMs += current.pieceMs;
+    current.pieceMs = 0;
+    current.watch = NO_PAUSE;
+  }
+};
+
+/** How opening the microphone for a dictation went. */
+type Opened =
+  | { readonly type: "open"; readonly preferences: DictationPreferences }
+  | { readonly type: "denied" }
+  | { readonly type: "failed" }
+  /** A send, a closed field or another start moved on meanwhile. */
+  | { readonly type: "stale" };
+
+/**
+ * Asks for the microphone the first time, reads the person's choices,
+ * which decide the microphone, and prepares the recorder on it. A start
+ * that no longer counts (`current`) lets the microphone go again.
+ */
+const openMicrophone = async ({
+  recorder,
+  source,
+  current,
+}: {
+  recorder: AudioRecorder;
+  source: AccessTokenSource;
+  current: () => boolean;
+}): Promise<Opened> => {
+  const permission = await requestRecordingPermissionsAsync();
+  if (!current()) {
+    return { type: "stale" };
+  }
+  if (!permission.granted) {
+    return { type: "denied" };
+  }
+  const session = source.session();
+  // A choice the phone cannot read is the default.
+  const preferences =
+    session === undefined
+      ? DEFAULT_DICTATION_PREFERENCES
+      : await readDictationPreferences(deviceAccountStore, session).catch(
+          () => DEFAULT_DICTATION_PREFERENCES,
+        );
+  // A start that no longer counts leaves the shared session alone.
+  if (!current()) {
+    return { type: "stale" };
+  }
+  await setAudioModeAsync(RECORDING_MODE);
+  const prepared = await Result.tryPromise(async () => {
+    await recorder.prepareToRecordAsync();
+    routeForDictation(preferences.microphone === "built-in");
+  });
+  if (prepared.isOk() && current()) {
+    return { type: "open", preferences };
+  }
+  // No recording started, so no finished status will release it.
+  await releaseMicrophone();
+  return prepared.isErr() ? { type: "failed" } : { type: "stale" };
+};
+
+/**
  * Records the next piece right after a cut, unless the person ended the
  * dictation meanwhile or the recorder cannot go on: then it concludes.
  */
 const continueRecording = async ({
   recorder,
+  builtInMicrophone,
+  onRecording,
   stillCut,
   conclude,
 }: {
   recorder: AudioRecorder;
+  builtInMicrophone: boolean;
+  onRecording: () => void;
   stillCut: () => boolean;
   conclude: () => Promise<void>;
 }) => {
-  const prepared = await Result.tryPromise(
-    async () => await recorder.prepareToRecordAsync(),
-  );
+  const prepared = await Result.tryPromise(async () => {
+    await recorder.prepareToRecordAsync();
+    routeForDictation(builtInMicrophone);
+  });
   if (prepared.isErr() || !stillCut()) {
     await conclude();
     return;
   }
   recorder.record({ forDuration: DICTATION_MAX_SECONDS });
+  onRecording();
 };
 
 /** One reading of the recorder while it records. */
@@ -432,6 +556,30 @@ const useCutAtPauses = (
   }, [durationMillis, isRecording, metering]);
 };
 
+/**
+ * Hands `onStop` the system's interruptions (a call, Siri) and the loss of
+ * the microphone recorded from, for as long as the dictation's field is
+ * open.
+ */
+const useSystemStops = (onStop: () => void) => {
+  const handle = useEffectEvent(onStop);
+  useEffect(() => {
+    const subscriptions = watchDictationDevice({
+      onInterruption: () => {
+        handle();
+      },
+      onInputLost: () => {
+        handle();
+      },
+    });
+    return () => {
+      for (const subscription of subscriptions) {
+        subscription.remove();
+      }
+    };
+  }, []);
+};
+
 /** One matter's names for the model, read once per matter while the composer is open; none when they cannot be read. */
 const useMatterTerms = () => {
   const cached = useRef<{ matterId: string; terms: string[] }>(undefined);
@@ -483,18 +631,10 @@ const useDropOnClose = (recorder: AudioRecorder, onClose: () => void) => {
 /** The person's choices on this phone and the matter's names, read once per dictation. */
 const readSetup = async (
   source: AccessTokenSource,
+  preferences: DictationPreferences,
   terms: () => Promise<string[]>,
 ): Promise<DictationSetup> => {
-  const session = source.session();
-  // A choice the phone cannot read is no choice: the server's default.
-  const [preferences, vocabulary] = await Promise.all([
-    session === undefined
-      ? DEFAULT_DICTATION_PREFERENCES
-      : readDictationPreferences(deviceAccountStore, session).catch(
-          () => DEFAULT_DICTATION_PREFERENCES,
-        ),
-    terms().catch(() => []),
-  ]);
+  const vocabulary = await terms().catch(() => []);
   return { source, preferences, vocabulary };
 };
 
