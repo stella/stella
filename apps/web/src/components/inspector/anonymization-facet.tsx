@@ -935,7 +935,7 @@ export const AnonymizationFacet = ({
                     content={t(
                       "inspector.anonymization.termMatchCountAriaLabel",
                       {
-                        count: String(hitCount),
+                        count: hitCount,
                       },
                     )}
                     render={
@@ -944,7 +944,7 @@ export const AnonymizationFacet = ({
                         aria-label={t(
                           "inspector.anonymization.termMatchCountAriaLabel",
                           {
-                            count: String(hitCount),
+                            count: hitCount,
                           },
                         )}
                         role="group"
@@ -1039,7 +1039,7 @@ export const AnonymizationFacet = ({
                               content={t(
                                 "inspector.anonymization.termMatchCountAriaLabel",
                                 {
-                                  count: String(row.count),
+                                  count: row.count,
                                 },
                               )}
                               render={
@@ -1047,7 +1047,7 @@ export const AnonymizationFacet = ({
                                   aria-label={t(
                                     "inspector.anonymization.termMatchCountAriaLabel",
                                     {
-                                      count: String(row.count),
+                                      count: row.count,
                                     },
                                   )}
                                   className="bg-muted text-muted-foreground rounded-full px-2 py-0.5 text-xs tabular-nums"
