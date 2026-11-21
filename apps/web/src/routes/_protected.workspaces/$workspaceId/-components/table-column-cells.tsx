@@ -2,6 +2,7 @@ import {
   type PropsWithChildren,
   type ReactElement,
   type ReactNode,
+  useContext,
   useState,
 } from "react";
 
@@ -59,6 +60,7 @@ import {
   resolveAiCellTargets,
   type SourceFileTarget,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/table-column.logic";
+import { TableCellEngagement } from "@/routes/_protected.workspaces/$workspaceId/-components/table/table-cell-engagement";
 
 const PropertyCellContent = ({
   entity,
@@ -70,16 +72,23 @@ const PropertyCellContent = ({
   const field = entity.fields[property.id];
   const fieldContent = field?.content;
   const cellMetadata = entity.cellMetadata[property.id];
-  // Coordinated with the CellMetadataFlags child via the shared
-  // override store, so both calls land on the same in-flight patch.
-  // setLocked lets us latch an AI cell the moment the user commits
-  // a manual edit — see the AI-model branch below.
-  const { setLocked } = useCellMetadataFlags({
+  // Review actions and the lock applied after a manual AI edit share one
+  // mutation owner, which stays mounted while the user moves between cells.
+  const flags = useCellMetadataFlags({
     workspaceId: property.workspaceId,
     entityId: entity.entityId,
     propertyId: property.id,
     metadata: cellMetadata,
   });
+  const engaged = useContext(TableCellEngagement);
+  const reviewControls =
+    engaged || flags.isLocked || flags.activeFlags.length > 0 ? (
+      <CellMetadataFlags
+        flags={flags}
+        metadata={cellMetadata}
+        showActions={engaged}
+      />
+    ) : null;
 
   const justification = useWorkspaceStore((s) =>
     selectJustificationByFieldId(s.justifications, field?.id),
@@ -124,14 +133,7 @@ const PropertyCellContent = ({
   if (property.content.type === "file" || fieldContent?.type === "file") {
     return (
       <span className="flex min-w-0 items-center gap-1.5">
-        {offersCellReview("file") && (
-          <CellMetadataFlags
-            entityId={entity.entityId}
-            metadata={cellMetadata}
-            propertyId={property.id}
-            workspaceId={property.workspaceId}
-          />
-        )}
+        {offersCellReview("file") && reviewControls}
         <EditableField
           content={fieldContent}
           displayVariant="table"
@@ -157,12 +159,7 @@ const PropertyCellContent = ({
   if (property.tool.type === "manual-input") {
     return (
       <>
-        <CellMetadataFlags
-          entityId={entity.entityId}
-          metadata={cellMetadata}
-          propertyId={property.id}
-          workspaceId={property.workspaceId}
-        />
+        {reviewControls}
         <EditableField
           content={fieldContent}
           entityId={entity.entityId}
@@ -185,12 +182,7 @@ const PropertyCellContent = ({
   if (isPlaybookVerdictProperty(property)) {
     const verdictCell = (
       <span className="flex min-w-0 items-center gap-1.5">
-        <CellMetadataFlags
-          entityId={entity.entityId}
-          metadata={cellMetadata}
-          propertyId={property.id}
-          workspaceId={property.workspaceId}
-        />
+        {reviewControls}
         <EditableField
           content={fieldContent}
           displayVariant="table"
@@ -238,19 +230,14 @@ const PropertyCellContent = ({
           })}
           sourceFile={targets.sourceFile}
         >
-          <CellMetadataFlags
-            entityId={entity.entityId}
-            metadata={cellMetadata}
-            propertyId={property.id}
-            workspaceId={property.workspaceId}
-          />
+          {reviewControls}
           <EditableField
             content={fieldContent}
             displayVariant="table"
             entityId={entity.entityId}
             entityKind={entity.kind}
             fieldId={field.id}
-            onManualSave={() => setLocked(true)}
+            onManualSave={() => flags.setLocked(true)}
             property={property}
             propertyId={property.id}
             showDateIcon={false}
@@ -289,12 +276,7 @@ const PropertyCellContent = ({
 
   return withOverride(
     <>
-      <CellMetadataFlags
-        entityId={entity.entityId}
-        metadata={cellMetadata}
-        propertyId={property.id}
-        workspaceId={property.workspaceId}
-      />
+      {reviewControls}
       <EditableField
         content={fieldContent}
         displayVariant="table"
