@@ -115,6 +115,7 @@ const isApplicable = (
 describe("billing rate selection properties", () => {
   test("selected entry is always applicable and has strictly best specificity rank", () => {
     assertProperty(
+      "selected entry is always applicable and has strictly best specificity rank",
       fc.property(
         fc.array(rateEntryArb, { maxLength: 30 }),
         fc.constantFrom(...TABLES),
@@ -160,7 +161,10 @@ describe("billing rate selection properties", () => {
           const firstInBestTier = applicable.find(
             (entry) => specificityRank(entry, roles) === bestRank,
           );
-          expect(selected.id).toBe(firstInBestTier?.id);
+          expect(firstInBestTier).toBeDefined();
+          if (firstInBestTier !== undefined) {
+            expect(selected.id).toBe(firstInBestTier.id);
+          }
         },
       ),
     );
@@ -168,6 +172,7 @@ describe("billing rate selection properties", () => {
 
   test("entries in other rate tables never influence selection", () => {
     assertProperty(
+      "entries in other rate tables never influence selection",
       fc.property(
         fc.array(rateEntryArb, { maxLength: 20 }),
         fc.array(rateEntryArb, { maxLength: 15 }),

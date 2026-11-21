@@ -38,6 +38,7 @@ const roleArb = fc.constantFrom(...ORGANIZATION_ROLE_NAMES);
 describe("organization permissions properties", () => {
   test("client roleAllows matches server memberHasPermissions without billingAccess", () => {
     assertProperty(
+      "client roleAllows matches server memberHasPermissions without billingAccess",
       fc.property(roleArb, permissionInputArb(), (role, permissions) => {
         expect(roleAllows(role, permissions)).toBe(
           memberHasPermissions({
@@ -52,6 +53,7 @@ describe("organization permissions properties", () => {
 
   test("billingAccess is monotonic and never leaks non-billing permissions", () => {
     assertProperty(
+      "billingAccess is monotonic",
       fc.property(roleArb, permissionInputArb(), (role, permissions) => {
         const withoutBilling = memberHasPermissions({
           role,
@@ -70,6 +72,7 @@ describe("organization permissions properties", () => {
     );
 
     assertProperty(
+      "billingAccess never leaks non-billing permissions",
       fc.property(
         roleArb,
         permissionInputArb(NON_BILLING_RESOURCES),
@@ -86,6 +89,7 @@ describe("organization permissions properties", () => {
 
   test("role hierarchy: owner >= admin >= member for every permission set", () => {
     assertProperty(
+      "role hierarchy owner >= admin >= member",
       fc.property(
         fc.boolean(),
         permissionInputArb(),
@@ -118,6 +122,7 @@ describe("organization permissions properties", () => {
 
   test("withBillingRead always requires billing read and deduplicated workspace read", () => {
     assertProperty(
+      "withBillingRead requires billing read and deduplicated workspace read",
       fc.property(
         fc.subarray([...statements.workspace]),
         (workspaceActions) => {
@@ -139,6 +144,7 @@ describe("organization permissions properties", () => {
 
   test("assignableRoles prevents privilege escalation for every role", () => {
     assertProperty(
+      "assignableRoles prevents privilege escalation",
       fc.property(roleArb, (role) => {
         const assignable = assignableRoles(role);
         if (!isOrganizationManagementRole(role)) {
