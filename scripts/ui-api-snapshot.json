@@ -2226,6 +2226,9 @@
       "csv",
       "dataBox",
       "excel",
+      "fatturaPA",
+      "isdoc",
+      "isdocx",
       "markdown",
       "ofd",
       "openDocumentSheet",
@@ -2234,7 +2237,8 @@
       "powerpoint",
       "rtf",
       "uyap",
-      "word"
+      "word",
+      "xml"
     ],
     "DropdownMenuCheckboxItem.variant": ["default", "switch"],
     "DropdownMenuItem.variant": ["default", "destructive"],

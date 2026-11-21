@@ -7,6 +7,7 @@ import { afterAll, afterEach, expect, test } from "bun:test";
 
 import { DATA_BOX_DOCUMENT_KINDS } from "@stll/api-contract/data-box";
 import type { DataBoxEnvelope } from "@stll/api-contract/data-box";
+import type { EInvoicePreview } from "@stll/api-contract/e-invoice";
 import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 import { reactCompilerBunPlugin } from "@stll/scripts/src/react-compiler-bun-plugin";
 
@@ -33,11 +34,18 @@ globalThis.fetch = Object.assign(
         headers: { "content-type": "application/pdf" },
       });
     }
+    if (url.includes("/e-invoice/field-e-invoice-single")) {
+      return Response.json(singleInvoicePreview);
+    }
+    if (url.includes("/e-invoice/field-e-invoice-batch")) {
+      return Response.json(invoiceBatchPreview);
+    }
     if (url.includes("/structured-document/field-structured")) {
       return Response.json({ text: "İlk sayfa\n法院文件", truncated: true });
     }
     if (
       url.includes("/structured-document/field-preview-unavailable") ||
+      url.includes("/e-invoice/field-e-invoice-refused") ||
       url.includes("/asic/field-asic-unsupported") ||
       url.includes("/cades/field-cades-unsupported")
     ) {
@@ -56,6 +64,112 @@ globalThis.fetch = Object.assign(
   },
   { preconnect: originalFetch.preconnect },
 );
+
+const emptyParty = {
+  name: null,
+  identifiers: [],
+  address: [],
+} satisfies EInvoicePreview["invoices"][number]["seller"];
+
+const sampleInvoice = {
+  documentType: "invoice",
+  typeCode: "1",
+  number: "INV-TEST-0001",
+  issueDate: "2026-01-15",
+  taxPointDate: "2026-01-14",
+  dueDate: "2026-01-29",
+  currency: "CZK",
+  seller: {
+    name: "Sample Supplier Test",
+    identifiers: [
+      { kind: "vat", scheme: null, value: "XX0000000001" },
+      { kind: "registration", scheme: "0088", value: "TEST-REG-0001" },
+    ],
+    address: ["1 Sample Street", "00000 Sample City", "XX"],
+  },
+  buyer: {
+    name: "Sample Customer Test",
+    identifiers: [{ kind: "vat", scheme: null, value: "XX0000000002" }],
+    address: [],
+  },
+  lines: [
+    {
+      id: "1",
+      description: "Sample consulting hours",
+      quantity: "10.000",
+      unitCode: "HUR",
+      unitPrice: "100.00",
+      vatRate: "21",
+      vatCategory: "S",
+      netAmount: "1000.00",
+    },
+  ],
+  lineCount: 3,
+  vatBreakdown: [
+    {
+      rate: "21",
+      category: "S",
+      taxableAmount: "1000.00",
+      taxAmount: "210.00",
+      exemptionReason: null,
+    },
+  ],
+  totals: {
+    netAmount: "1000.00",
+    taxAmount: "210.00",
+    grossAmount: "1210.00",
+    prepaidAmount: null,
+    payableAmount: "1210.00",
+  },
+  payments: [
+    {
+      meansCode: "42",
+      dueDate: null,
+      amount: null,
+      iban: "XX00TEST0000000000000001",
+      bic: null,
+      accountNumber: null,
+      bankCode: null,
+      reference: "TEST-REF-0001",
+    },
+  ],
+  notes: ["Sample note"],
+} satisfies EInvoicePreview["invoices"][number];
+
+const singleInvoicePreview = {
+  syntax: "isdoc",
+  version: "6.0.2",
+  invoices: [sampleInvoice],
+  attachments: [
+    {
+      index: 0,
+      fileName: "sample-timesheet.pdf",
+      description: "Sample timesheet",
+      sizeBytes: 2048,
+    },
+  ],
+} satisfies EInvoicePreview;
+
+const invoiceBatchPreview = {
+  syntax: "fatturaPA",
+  version: "FPR12",
+  invoices: [
+    sampleInvoice,
+    {
+      ...sampleInvoice,
+      documentType: "creditNote",
+      number: "CN-TEST-0002",
+      seller: emptyParty,
+      buyer: emptyParty,
+      lines: [],
+      lineCount: 0,
+      vatBreakdown: [],
+      payments: [],
+      notes: [],
+    },
+  ],
+  attachments: [],
+} satisfies EInvoicePreview;
 
 let docxEngineRenderCount = 0;
 let pdfEngineRenderCount = 0;
@@ -401,6 +515,7 @@ test.each([
             signers: [{ id: "layer-0.1.signer-0", name: null }],
           },
         ],
+        invoice: null,
       });
     });
     expect(
@@ -594,6 +709,135 @@ test.each([".udf", ".ofd"])(
     ).toBeTruthy();
   },
 );
+
+test.each([
+  { extension: ".isdoc", mimeType: "application/octet-stream" },
+  { extension: ".xml", mimeType: "application/xml" },
+])(
+  "renders a $extension structured invoice with its parties and totals",
+  async ({ extension, mimeType }) => {
+    const mounted = renderFileTab({
+      ...pdfTab,
+      id: toSafeId<"field">("field-e-invoice-single"),
+      fileName: `INV-TEST-0001${extension}`,
+      mimeType,
+    });
+
+    expect(
+      await mounted.findByRole("heading", { name: "Invoice INV-TEST-0001" }),
+    ).toBeTruthy();
+    expect(mounted.getByText("ISDOC, version 6.0.2")).toBeTruthy();
+    expect(mounted.getByRole("heading", { name: "Supplier" })).toBeTruthy();
+    expect(mounted.getByText("Sample Supplier Test")).toBeTruthy();
+    expect(mounted.getByText("Sample Customer Test")).toBeTruthy();
+    expect(mounted.getByText("XX0000000001")).toBeTruthy();
+    expect(mounted.getByText("Registration number (0088)")).toBeTruthy();
+    expect(mounted.getByText("Sample consulting hours")).toBeTruthy();
+    expect(mounted.getByText("10.000 HUR")).toBeTruthy();
+    expect(mounted.getByText("Showing 1 of 3 lines")).toBeTruthy();
+    expect(mounted.getAllByText("21% (S)")).toHaveLength(2);
+    expect(mounted.getByText("Total with VAT")).toBeTruthy();
+    expect(mounted.getAllByText("1210.00 CZK")).toHaveLength(2);
+    expect(mounted.getByText("XX00TEST0000000000000001")).toBeTruthy();
+    expect(mounted.getByText("Sample note")).toBeTruthy();
+    // A total the file does not state is left out, not shown as empty.
+    expect(mounted.queryByText("Paid in advance")).toBeNull();
+    expect(mounted.getByText("sample-timesheet.pdf")).toBeTruthy();
+    expect(
+      mounted.getByRole("button", { name: "Download sample-timesheet.pdf" }),
+    ).toBeTruthy();
+    expect(
+      mounted.getByRole("button", { name: "Download original" }),
+    ).toBeTruthy();
+    expect(pdfEngineRenderCount).toBe(0);
+  },
+);
+
+test("shows each invoice of an Italian batch under its own heading", async () => {
+  const mounted = renderFileTab({
+    ...pdfTab,
+    id: toSafeId<"field">("field-e-invoice-batch"),
+    fileName: "IT00000000000_TEST1.xml",
+    mimeType: "text/xml",
+  });
+
+  expect(
+    await mounted.findByRole("heading", { name: "Invoice INV-TEST-0001" }),
+  ).toBeTruthy();
+  expect(
+    mounted.getByRole("heading", { name: "Credit note CN-TEST-0002" }),
+  ).toBeTruthy();
+  expect(mounted.getByText("FatturaPA, version FPR12")).toBeTruthy();
+  expect(mounted.getByText("Document 1 of 2")).toBeTruthy();
+  expect(mounted.getByText("Document 2 of 2")).toBeTruthy();
+  // The credit note states no lines, so it has no line table of its own.
+  expect(mounted.getAllByRole("heading", { name: "Line items" })).toHaveLength(
+    1,
+  );
+});
+
+test.each([
+  {
+    extension: ".xml",
+    message: "This XML file is not a recognized structured invoice.",
+  },
+  { extension: ".isdoc", message: "The invoice could not be read." },
+  { extension: ".isdocx", message: "The invoice could not be read." },
+])(
+  "keeps the $extension original available when no invoice can be read",
+  async ({ extension, message }) => {
+    const mounted = renderFileTab({
+      ...pdfTab,
+      id: toSafeId<"field">("field-e-invoice-refused"),
+      fileName: `document${extension}`,
+      mimeType: "application/octet-stream",
+    });
+    expect(await mounted.findByText(message)).toBeTruthy();
+    expect(
+      mounted.getByRole("button", { name: "Download original" }),
+    ).toBeTruthy();
+    expect(pdfEngineRenderCount).toBe(0);
+  },
+);
+
+test("reads the invoice inside a signed FatturaPA file", async () => {
+  const tab = {
+    ...pdfTab,
+    id: toSafeId<"field">("field-cades-invoice"),
+    label: "Signed invoice",
+    fileName: "IT00000000000_TEST1.xml.p7m",
+    mimeType: "application/pkcs7-mime",
+  };
+  const key = { fieldId: tab.id, workspaceId: tab.workspaceId };
+  const mounted = renderFileTab(tab, (client) => {
+    client.setQueryData(cadesPreviewOptions(key).queryKey, {
+      fileName: "IT00000000000_TEST1.xml",
+      mimeType: "application/xml",
+      text: "<FatturaElettronica>raw source</FatturaElettronica>",
+      layers: [
+        {
+          id: "layer-0",
+          signers: [{ id: "layer-0.signer-0", name: "Sample signer" }],
+        },
+      ],
+      invoice: invoiceBatchPreview,
+    });
+  });
+
+  expect(
+    await mounted.findByRole("heading", { name: "Invoice INV-TEST-0001" }),
+  ).toBeTruthy();
+  expect(mounted.getByText("Sample signer")).toBeTruthy();
+  expect(
+    mounted.getByText("The signatures have not been verified."),
+  ).toBeTruthy();
+  expect(mounted.getAllByText("Total with VAT")).toHaveLength(2);
+  // The invoice replaces the raw source text.
+  expect(
+    mounted.queryByText("<FatturaElettronica>raw source</FatturaElettronica>"),
+  ).toBeNull();
+  expect(cadesPdfRequests).toHaveLength(0);
+});
 
 function renderFileTab(
   tab: typeof docxTab | typeof pdfTab,

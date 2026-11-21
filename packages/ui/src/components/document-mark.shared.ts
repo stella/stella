@@ -282,10 +282,22 @@ const legalDocumentMark = (details: string) =>
 
 const signedDocumentMark = legalDocumentMark("M7 11h8m-8 3h5m1 4 2 2 4-5");
 const structuredDocumentMark = legalDocumentMark("M7 11h8m-8 4h8m-8 4h5");
+// An invoice: item lines with their amounts beside them, then the total.
+const invoiceDocumentMark = legalDocumentMark(
+  "M7 10h4m3 0h1m-8 3h4m3 0h1m-8 4h8",
+);
+// Markup: a pair of angle brackets around a slash.
+const markupDocumentMark = legalDocumentMark(
+  "M9 11.5 7 14l2 2.5m4-5 2 2.5-2 2.5m-1-6-2 7",
+);
 
 export const DOCUMENT_MARKS = {
+  fatturaPA: invoiceDocumentMark,
+  isdoc: invoiceDocumentMark,
+  isdocx: invoiceDocumentMark,
   ofd: structuredDocumentMark,
   uyap: structuredDocumentMark,
+  xml: markupDocumentMark,
   asicE: signedDocumentMark,
   asicS: signedDocumentMark,
   cades: signedDocumentMark,

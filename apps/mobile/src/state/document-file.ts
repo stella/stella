@@ -5,6 +5,7 @@ import { asicPreviewSchema } from "@stll/api-contract/asic";
 import { cadesPreviewSchema } from "@stll/api-contract/cades";
 import { DATA_BOX_DOCUMENT_KINDS } from "@stll/api-contract/data-box";
 import { legalFileFormat } from "@stll/api-contract/document-format";
+import { eInvoicePreviewSchema } from "@stll/api-contract/e-invoice";
 import { structuredDocumentPreviewSchema } from "@stll/api-contract/structured-document";
 
 import type { Fetch } from "@/connection/http";
@@ -135,10 +136,26 @@ type StructuredDocumentFile = {
   >;
 };
 
+type EInvoiceDocumentFile = {
+  readonly viewer: "e-invoice";
+  /**
+   * The format its name or type claims. Any XML file is read as a possible
+   * invoice, so a refused `xml` read means it is not one.
+   */
+  readonly format: "isdoc" | "isdocx" | "xml";
+  readonly fileName: string;
+  readonly fieldId: string;
+  readonly preview: Result<
+    v.InferOutput<typeof eInvoicePreviewSchema>,
+    ApiError
+  >;
+};
+
 export type LegalDocumentFile =
   | AsicDocumentFile
   | CadesDocumentFile
   | DataBoxDocumentFile
+  | EInvoiceDocumentFile
   | StructuredDocumentFile;
 
 export type DocumentFile = NativeDocumentFile | LegalDocumentFile;
@@ -286,6 +303,23 @@ export const readDocumentFile = async ({
           fieldId,
           preview,
         } satisfies StructuredDocumentFile);
+      }
+      case "isdoc":
+      case "isdocx":
+      case "xml": {
+        const preview = await requestApi({
+          fetch,
+          source,
+          path: `/v1/files/${encodeURIComponent(workspaceId)}/e-invoice/${encodeURIComponent(fieldId)}`,
+          schema: eInvoicePreviewSchema,
+        });
+        return Result.ok({
+          viewer: "e-invoice",
+          format: kind,
+          fileName,
+          fieldId,
+          preview,
+        } satisfies EInvoiceDocumentFile);
       }
       case undefined:
         break;

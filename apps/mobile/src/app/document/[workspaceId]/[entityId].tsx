@@ -21,6 +21,7 @@ import { Text } from "@stll/ui/text";
 import DocumentView from "@/components/document-viewer/document-view.dom";
 import { FIT_ZOOM, pageAppearance } from "@/components/document-viewer/zoom";
 import type { ViewerAppearance } from "@/components/document-viewer/zoom";
+import { EInvoiceDetails } from "@/components/e-invoice-details";
 import { EmptyCard, screenStyles } from "@/components/empty-state-screen";
 import { LucideGlyphs } from "@/components/ui/lucide-glyphs";
 import { useDocumentEditing } from "@/components/use-document-editing";
@@ -87,6 +88,7 @@ const openDocument = async ({
     file.value.viewer === "asic" ||
     file.value.viewer === "cades" ||
     file.value.viewer === "dataBox" ||
+    file.value.viewer === "e-invoice" ||
     file.value.viewer === "structured-document"
   ) {
     return { status: "legalPreview", file: file.value };
@@ -435,6 +437,7 @@ const LegalFilePreview = ({
   const common = useTranslations("common");
   const signedFile = useTranslations("signedFile");
   const structuredDocument = useTranslations("structuredDocument");
+  const eInvoice = useTranslations("eInvoice");
   const { fieldId, preview, viewer } = file;
   const [openingOriginal, setOpeningOriginal] = useState(false);
   const originalInFlight = useRef(false);
@@ -500,7 +503,7 @@ const LegalFilePreview = ({
 
   const previewBody = (() => {
     if (viewer === "cades" && Result.isOk(preview)) {
-      const { fileName, layers, text } = preview.value;
+      const { fileName, invoice, layers, text } = preview.value;
       return (
         <>
           <Text accessibilityRole="header" selectable variant="headline">
@@ -519,11 +522,13 @@ const LegalFilePreview = ({
               ))}
             </View>
           ))}
-          {text.trim() ? (
-            <Text selectable>{text}</Text>
-          ) : (
-            <Text variant="caption">{signedFile("noReadableContent")}</Text>
-          )}
+          {invoice !== null && <EInvoiceDetails preview={invoice} />}
+          {invoice === null &&
+            (text.trim() ? (
+              <Text selectable>{text}</Text>
+            ) : (
+              <Text variant="caption">{signedFile("noReadableContent")}</Text>
+            ))}
         </>
       );
     }
@@ -553,6 +558,9 @@ const LegalFilePreview = ({
           </>
         );
       }
+      if (viewer === "e-invoice") {
+        return <EInvoiceDetails preview={preview.value} />;
+      }
       if (viewer === "structured-document") {
         return (
           <>
@@ -576,6 +584,12 @@ const LegalFilePreview = ({
     const unreadableMessages = {
       dataBox: t("failure.dataBoxUnreadable"),
       "structured-document": structuredDocument("noReadableContent"),
+      // Any XML file is offered to the invoice reader; refused, it is not one.
+      "e-invoice": eInvoice(
+        file.viewer === "e-invoice" && file.format === "xml"
+          ? "notRecognized"
+          : "unreadable",
+      ),
       asic: signedFile("unreadable"),
       cades: signedFile("unreadable"),
     } satisfies Record<typeof viewer, string>;
