@@ -330,7 +330,7 @@ const needsSpaceAfter = (text: string, after: string): boolean => {
 };
 
 const capitalizeFirst = (text: string): string => {
-  const first = text.match(/^\P{L}*(\p{L}+)/u)?.at(1) ?? "";
+  const first = /^\P{L}*(\p{L}+)/u.exec(text)?.at(1) ?? "";
   // A word with a capital inside, as "iPhone", is written that way.
   if (first === "" || first !== first.toLowerCase()) {
     return text;
@@ -344,11 +344,11 @@ const capitalizeFirst = (text: string): string => {
  * it is no name; "I" and its contractions stay.
  */
 const lowercaseFirstWord = (text: string, names: readonly string[]): string => {
-  const first = text.match(/^\P{L}*(\p{L}[\p{L}\p{M}'’-]*)/u)?.at(1) ?? "";
+  const first = /^\P{L}*(\p{L}[\p{L}\p{M}'’-]*)/u.exec(text)?.at(1) ?? "";
   const rest = first.slice(1);
   if (
     first === "" ||
-    first.charAt(0) === first.charAt(0).toLowerCase() ||
+    !startsUpper(first) ||
     rest !== rest.toLowerCase() ||
     /^I(?:['’]|$)/u.test(first) ||
     isName(first, names)
@@ -364,10 +364,8 @@ const isName = (word: string, names: readonly string[]): boolean => {
   const folded = foldSearchMatchText(word);
   return names.some((name) => {
     const head = foldSearchMatchText(name.split(/\s/u).at(0) ?? "");
-    return (
-      head !== "" &&
-      folded.startsWith(head) &&
-      name.charAt(0) !== name.charAt(0).toLowerCase()
-    );
+    return head !== "" && folded.startsWith(head) && startsUpper(name);
   });
 };
+
+const startsUpper = (word: string): boolean => /^\p{Lu}/u.test(word);
