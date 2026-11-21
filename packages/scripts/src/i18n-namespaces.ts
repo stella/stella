@@ -5,7 +5,7 @@
  *
  * Usage: i18n-namespaces <build|split|check> <i18n-dir>
  */
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import { mkdir, readdir, rm } from "node:fs/promises";
 import path from "node:path";
 
@@ -120,15 +120,15 @@ export const checkNamespaces = async (i18nDir: string): Promise<string[]> => {
     const localeSeen = new Map<string, string>();
     for (const domain of domains) {
       const filePath = path.join(localeDir, `${domain}.json`);
-      let parsed: unknown;
-      try {
-        parsed = JSON.parse(await Bun.file(filePath).text());
-      } catch (error) {
+      const rawText = await Bun.file(filePath).text();
+      const parsedResult = Result.try<unknown>(() => JSON.parse(rawText));
+      if (parsedResult.isErr()) {
         errors.push(
-          `${locale}/${domain}.json: invalid JSON (${String(error)})`,
+          `${locale}/${domain}.json: invalid JSON (${String(parsedResult.error)})`,
         );
         continue;
       }
+      const parsed = parsedResult.value;
       if (!isJsonObject(parsed)) {
         errors.push(
           `${locale}/${domain}.json: expected nested object of strings`,
