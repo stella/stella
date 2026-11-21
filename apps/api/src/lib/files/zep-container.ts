@@ -33,7 +33,7 @@ import { parseStandaloneXml } from "@/api/lib/files/xml-document-package";
 // Documents travel in "M" MIME envelopes (E.1); "S" entries sign them.
 const MAIN_DIRECTORY = /^D\d{14}Z\d*$/u;
 const AUXILIARY_FOLDERS = new Set(["Certificate", "Revocation", "Policy"]);
-const ITEM = /^(?<type>CRL|OCSP|[SMAPC])\d{14}Z\d*\.(?<extension>[a-z0-9]+)$/iu;
+const ITEM = /^(CRL|OCSP|[SMAPC])\d{14}Z\d*\.([a-z0-9]+)$/iu;
 const MAX_SIGNATURE_XML_BYTES = 8 * 1024 * 1024;
 const PKCS7_SIGNATURE_TYPES = new Set([
   "application/pkcs7-signature",
@@ -68,9 +68,9 @@ const classify = (
       }
       continue;
     }
-    const item = ITEM.exec(fileName)?.groups;
-    const type = item?.type?.toUpperCase();
-    const extension = item?.extension?.toLowerCase() ?? "";
+    const item = ITEM.exec(fileName);
+    const type = item?.[1]?.toUpperCase();
+    const extension = item?.[2]?.toLowerCase() ?? "";
     if (type === "M" && extension === "eml") {
       inventory.envelopes.push({ fileName: path, entry });
     } else if (type === "S" && (extension === "p7s" || extension === "xml")) {

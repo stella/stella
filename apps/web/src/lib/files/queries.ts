@@ -338,7 +338,7 @@ export const cadesPreviewOptions = (props: FileOptionsProps) =>
   );
 
 /** An audited PDF the API derives from a signed file, read within the upload limit. */
-const fetchDerivedPdf = async (path: string, signal: AbortSignal) => {
+const fetchDerivedPdf = async (path: `/${string}`, signal: AbortSignal) => {
   const response = await fetchWithTimeout(apiUrl(path), {
     credentials: "include",
     signal,

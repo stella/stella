@@ -101,7 +101,10 @@ const decodeCertificate = (node: DocumentXmlNode) => {
   return certificate.isOk() ? { der, certificate: certificate.value } : null;
 };
 
-type SigningCertificateDigest = { algorithm: string; value: string };
+type SigningCertificateDigest = {
+  algorithm: (bytes: Uint8Array) => string;
+  value: string;
+};
 
 const signingCertificateDigests = (
   signature: DocumentXmlNode,
