@@ -12,6 +12,8 @@
  * and short words only when they differ in case or diacritics alone.
  */
 
+import { normalizeUnicode } from "@stll/text-normalize";
+
 /** Custom words shorter than this, in letters, are left alone: too many ordinary words are that close to them. */
 const MIN_LETTERS = 4;
 /** From this many letters on, one letter may differ. */
@@ -76,17 +78,21 @@ const ENDINGS = {
   possessive: ["s"],
 } as const satisfies Record<string, readonly string[]>;
 
-/** A custom word or phrase as compared: its words, folded. */
-type Target = {
-  readonly spelling: string;
-  /** The words as written, in order. */
-  readonly words: readonly string[];
-  readonly folded: readonly string[];
-  readonly letters: number;
-};
-
 /** A piece of the text: a word, or what lies between two words. */
 type Piece = { readonly kind: "word" | "between"; readonly text: string };
+
+/**
+ * A custom word or phrase as compared: split into words and what lies
+ * between them as the text is, its words also folded.
+ */
+type Target = {
+  readonly pieces: readonly (
+    | { readonly kind: "word"; readonly text: string; readonly folded: string }
+    | { readonly kind: "between"; readonly text: string }
+  )[];
+  readonly words: number;
+  readonly letters: number;
+};
 
 /** How one word of the text reads as one word of a custom word. */
 type WordMatch = {
@@ -128,15 +134,32 @@ export const respell = (text: string, words: readonly string[]): string => {
   return out;
 };
 
+/**
+ * A custom word as compared, composed (NFC) so its last letter is one
+ * character, from its first word on; what follows its last word stays
+ * only when it is no space, as the full stop of "s.r.o.".
+ */
 const target = (spelling: string): Target | undefined => {
-  const words = spelling.split(/\s+/u).filter((word) => fold(word) !== "");
-  const folded = words.map(fold);
-  const letters = folded.reduce(
-    (sum, word) => sum + Array.from(word).length,
+  const split = splitWords(normalizeUnicode(spelling, "NFC").trim());
+  const start = split.findIndex(({ kind }) => kind === "word");
+  const pieces = split
+    .slice(Math.max(start, 0))
+    .map((piece) =>
+      piece.kind === "word"
+        ? { kind: "word" as const, text: piece.text, folded: fold(piece.text) }
+        : { kind: "between" as const, text: piece.text },
+    );
+  const letters = pieces.reduce(
+    (sum, piece) =>
+      sum + (piece.kind === "word" ? Array.from(piece.folded).length : 0),
     0,
   );
   return letters >= MIN_LETTERS
-    ? { spelling, words, folded, letters }
+    ? {
+        pieces,
+        words: pieces.filter(({ kind }) => kind === "word").length,
+        letters,
+      }
     : undefined;
 };
 
@@ -192,44 +215,22 @@ const bestMatch = (
     { spelled: string; taken: number; rank: readonly number[] } | undefined;
   let tied = false;
   for (const candidate of targets) {
-    const leading = leadingWords(pieces, candidate.folded.length);
-    if (leading === undefined) {
+    const aligned = align(pieces, candidate);
+    if (
+      aligned === undefined ||
+      aligned.distance > allowed(candidate.letters)
+    ) {
       continue;
     }
-    const matches = leading.words.map((word, index) =>
-      matchWord(
-        word,
-        candidate.words[index] ?? "",
-        candidate.folded[index] ?? "",
-      ),
-    );
-    if (matches.some((match) => match === undefined)) {
-      continue;
-    }
-    const found = matches.filter((match) => match !== undefined);
-    const distance = found.reduce((sum, match) => sum + match.distance, 0);
-    if (distance > allowed(candidate.letters)) {
-      continue;
-    }
-    const rank = [
-      distance,
-      found.filter(({ inflected }) => inflected).length,
-      -candidate.folded.length,
-    ];
+    const rank = [aligned.distance, aligned.inflected, -candidate.words];
     const order = best === undefined ? -1 : compareRanks(rank, best.rank);
     if (order === 0) {
       tied = true;
     } else if (order < 0) {
-      const original = joinPieces(pieces.slice(0, leading.taken));
+      const original = joinPieces(pieces.slice(0, aligned.taken));
       best = {
-        spelled: casedLike(
-          spellPhrase(
-            found.map(({ spelled }) => spelled),
-            candidate.spelling,
-          ),
-          original,
-        ),
-        taken: leading.taken,
+        spelled: casedLike(aligned.spelled, original),
+        taken: aligned.taken,
         rank,
       };
       tied = false;
@@ -256,35 +257,56 @@ const compareRanks = (
   return 0;
 };
 
-/** The spelled words of a phrase, joined as the custom word joins them. */
-const spellPhrase = (spelled: readonly string[], spelling: string): string => {
-  const gaps = spelling.trim().match(/\s+/gu) ?? [];
-  return spelled.map((word, index) => `${word}${gaps[index] ?? ""}`).join("");
-};
-
 const joinPieces = (pieces: readonly Piece[]): string =>
   pieces.map(({ text }) => text).join("");
 
 /**
- * The first `count` words of `pieces` when only spaces separate them, and
- * how many pieces they span.
+ * How the pieces at the start of `pieces` read as the custom word: each
+ * word close to its word, spaces where it has spaces and the same
+ * punctuation where it has punctuation; a full stop it ends with may be
+ * followed by more. The custom word as it should be written there, how
+ * many pieces it covers, how far off its words are and how many took an
+ * ending. None when the pieces do not line up.
  */
-const leadingWords = (
+const align = (
   pieces: readonly Piece[],
-  count: number,
-): { words: string[]; taken: number } | undefined => {
-  const words: string[] = [];
-  for (const [index, piece] of pieces.entries()) {
-    if (piece.kind === "word") {
-      words.push(piece.text);
-    } else if (!/^ +$/u.test(piece.text)) {
+  { pieces: wanted }: Target,
+):
+  | { spelled: string; taken: number; distance: number; inflected: number }
+  | undefined => {
+  let spelled = "";
+  let distance = 0;
+  let inflected = 0;
+  for (const [index, want] of wanted.entries()) {
+    const piece = pieces.at(index);
+    if (piece === undefined || piece.kind !== want.kind) {
       return undefined;
     }
-    if (words.length === count) {
-      return { words, taken: index + 1 };
+    if (want.kind === "word") {
+      const match = matchWord(piece.text, want.text, want.folded);
+      if (match === undefined) {
+        return undefined;
+      }
+      spelled += match.spelled;
+      distance += match.distance;
+      inflected += match.inflected ? 1 : 0;
+    } else if (/^\s+$/u.test(want.text)) {
+      if (!/^ +$/u.test(piece.text)) {
+        return undefined;
+      }
+      spelled += want.text;
+    } else if (
+      index === wanted.length - 1 &&
+      piece.text.startsWith(want.text)
+    ) {
+      spelled += piece.text;
+    } else if (piece.text === want.text) {
+      spelled += want.text;
+    } else {
+      return undefined;
     }
   }
-  return undefined;
+  return { spelled, taken: wanted.length, distance, inflected };
 };
 
 /**

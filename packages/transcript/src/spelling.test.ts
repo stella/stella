@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
+import { normalizeUnicode } from "@stll/text-normalize";
+
 import { respell } from "./spelling";
 
 // The cases of the desktop's spelling pass (dictation_spelling.rs), which
@@ -91,6 +93,21 @@ describe("as on the desktop", () => {
   });
 });
 
+describe("punctuation inside a custom word", () => {
+  test("a company suffix matches as written", () => {
+    expect(respell("smlouva s novak s.r.o.", ["Novák s.r.o."])).toBe(
+      "smlouva s Novák s.r.o.",
+    );
+    expect(respell("novak s.r.o., ahoj", ["Novák s.r.o."])).toBe(
+      "Novák s.r.o., ahoj",
+    );
+  });
+
+  test("other punctuation is no match", () => {
+    expect(respell("novak s. r. o.", ["Novák s.r.o."])).toBe("novak s. r. o.");
+  });
+});
+
 describe("case endings", () => {
   test("a name keeps the ending it was spoken with", () => {
     expect(respell("dopis pro dvoraka", ["Dvořák"])).toBe("dopis pro Dvořáka");
@@ -120,6 +137,12 @@ describe("case endings", () => {
 
   test("a word spelled as a custom word wins over an ending", () => {
     expect(respell("pro novaka", ["Novák", "Nováka"])).toBe("pro Nováka");
+  });
+
+  test("a name written decomposed takes endings as a composed one", () => {
+    expect(
+      respell("pana novotneho", [normalizeUnicode("Novotný", "NFD")]),
+    ).toBe("pana Novotného");
   });
 
   test("a short stem takes no ending", () => {
