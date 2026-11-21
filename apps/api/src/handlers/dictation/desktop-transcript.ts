@@ -369,9 +369,7 @@ export const createDesktopDictationTranscriptEndpoint = ({
               }),
             catch: (cause: unknown) => cause,
           });
-          const filedCleaned = Result.isError(attempted)
-            ? attempted
-            : attempted.value;
+          const filedCleaned = attempted.andThen((answered) => answered);
           if (Result.isOk(filedCleaned)) {
             files.push({
               kind: "cleaned",
