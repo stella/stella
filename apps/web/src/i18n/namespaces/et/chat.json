@@ -277,7 +277,7 @@
       "reported": "Nii, nagu sinu arvutis töötav programmeerimisagent pärast oma viimast vastust teatas. Agent haldab oma konteksti ise.",
       "reportedTokens": "{used} / {total} tokenit",
       "summary": "Vanemate sõnumite kokkuvõte",
-      "summaryWithCount": "{count} vanema sõnumi kokkuvõte",
+      "summaryWithCount": "{count, plural, one {# vanema sõnumi} other {# vanema sõnumi}} kokkuvõte",
       "title": "Vestluse kontekst",
       "tokens": "~{used} / {total} tokenit",
       "tools": "Tööriistad",
@@ -496,7 +496,7 @@
       "working": "{count, plural, one {# vestlus on töös} other {# vestlust on töös}}",
       "workingNow": "Töös"
     },
-    "maxAttachmentsReached": "Maksimaalselt {count} faili sõnumi kohta",
+    "maxAttachmentsReached": "Maksimaalselt {count, plural, one {# fail} other {# faili}} sõnumi kohta",
     "mcpReconnect": {
       "additional": "{count, plural, one {+# veel} other {+# veel}}",
       "dismiss": "Peida ühenduse teade",
@@ -558,7 +558,7 @@
     "openingChat": "Vestlust avatakse…",
     "overlayLoadFailed": "Dokumendi vestlust ei õnnestunud laadida.",
     "overlayUpdated": "stella on uuendatud. Dokumendi vestluse kasutamiseks laadige leht uuesti.",
-    "pastedChars": "Kleebitud · {count} märki",
+    "pastedChars": "Kleebitud · {count, plural, one {# märk} other {# märki}}",
     "pastedText": {
       "expand": "Näita kogu teksti",
       "fromClipboard": "Kleebitud {count, plural, one {# märk} other {# märki}}",

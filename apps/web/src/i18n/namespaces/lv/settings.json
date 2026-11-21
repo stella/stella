@@ -523,7 +523,7 @@
         "entriesHeading": "Komandas termini ({count})",
         "importHint": "CSV (canonical,label,variants), TXT (viens rindiņā) vai JSON",
         "importParseError": "Failu nevarēja nolasīt. Izmantojiet CSV, TXT vai JSON.",
-        "importSuccessToast": "Importēti {count} termini.",
+        "importSuccessToast": "{count, plural, zero {Importēti # termini.} one {Importēts # termins.} other {Importēti # termini.}}",
         "labelPickerAriaLabel": "Atbilstības etiķete",
         "labelPickerEmpty": "Nav atbilstoša veida.",
         "labelPickerPlaceholder": "Veids",

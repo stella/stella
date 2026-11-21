@@ -523,7 +523,7 @@
         "entriesHeading": "Términos del equipo ({count})",
         "importHint": "CSV (canonical,label,variants), TXT (uno por línea) o JSON",
         "importParseError": "No se pudo leer ese archivo. Utilice CSV, TXT o JSON.",
-        "importSuccessToast": "Se importaron {count} términos.",
+        "importSuccessToast": "{count, plural, one {Se importó # término.} many {Se importaron # términos.} other {Se importaron # términos.}}",
         "labelPickerAriaLabel": "Etiqueta de coincidencia",
         "labelPickerEmpty": "Sin tipos coincidentes.",
         "labelPickerPlaceholder": "Tipo",

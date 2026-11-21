@@ -523,7 +523,7 @@
         "entriesHeading": "Teamweite Begriffe ({count})",
         "importHint": "CSV (canonical,label,variants), TXT (eine pro Zeile) oder JSON",
         "importParseError": "Diese Datei konnte nicht gelesen werden. Verwenden Sie CSV, TXT oder JSON.",
-        "importSuccessToast": "{count} Begriffe importiert.",
+        "importSuccessToast": "{count, plural, one {# Begriff} other {# Begriffe}} importiert.",
         "labelPickerAriaLabel": "Trefferbezeichnung",
         "labelPickerEmpty": "Kein passender Typ.",
         "labelPickerPlaceholder": "Typ",

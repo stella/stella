@@ -491,7 +491,7 @@ const ImportSkillDialogBody = ({
               {discovery.skills.length > MAX_SELECTED_SKILLS && (
                 <p className="text-muted-foreground text-xs">
                   {tSkills("selectionLimit", {
-                    count: format.number(MAX_SELECTED_SKILLS),
+                    count: MAX_SELECTED_SKILLS,
                   })}
                 </p>
               )}

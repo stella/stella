@@ -797,7 +797,7 @@
     "justification": "Pagrindimas:",
     "kanban": {
       "deleteAll": "Ištrinti visus",
-      "deleteAllConfirm": "Ištrinti visus {count} elementus stulpelyje \"{column}\"?",
+      "deleteAllConfirm": "{count, plural, one {Ištrinti # elementą stulpelyje \"{column}\"?} few {Ištrinti visus # elementus stulpelyje \"{column}\"?} many {Ištrinti visus # elemento stulpelyje \"{column}\"?} other {Ištrinti visus # elementų stulpelyje \"{column}\"?}}",
       "hideColumn": "Slėpti stulpelį",
       "moveFailed": "{failed, plural, one {Nepavyko perkelti # iš {total} elementų.} few {Nepavyko perkelti # iš {total} elementų.} other {Nepavyko perkelti # iš {total} elementų.} many {Nepavyko perkelti # iš {total} elementų.}}",
       "readOnlyGrouping": "Šis grupavimas yra tik skaitomas",
@@ -1251,7 +1251,7 @@
       "aiGenerated": "Sugeneruota DI",
       "calendar": {
         "addDates": "+ Datos",
-        "additionalDates": "+{count} datų",
+        "additionalDates": "+{count, plural, one {# data} few {# datos} many {# datos} other {# datų}}",
         "createdAt": "Sukurta",
         "dueDateTaskOnly": "Terminą galima nustatyti tik agendos elementams",
         "month": "Mėnuo",
@@ -1352,13 +1352,13 @@
     },
     "workflow": {
       "largeRunPrompt": {
-        "description": "Į eilę bus įtrauktas DI išgavimas {count} dokumentų. Pradėkite tik jei dabar norite apdoroti tiek failų.",
+        "description": "Į eilę bus įtrauktas DI išgavimas {count, plural, one {# dokumentui} few {# dokumentams} many {# dokumento} other {# dokumentų}}. Pradėkite tik jei dabar norite apdoroti tiek failų.",
         "start": "Pradėti išgavimą",
         "title": "Pradėti DI išgavimą?"
       },
       "noFieldsToProcess": "Nėra laukų apdorojimui",
       "serviceTierPrompt": {
-        "description": "Ši darbo eiga į eilę įtrauks DI išgavimą {count} dokumentų. Paleiskite dabar naudodami standartinius kreditus arba naudokite sumažintus kreditus ir palaukite ilgiau.",
+        "description": "Ši darbo eiga į eilę įtrauks DI išgavimą {count, plural, one {# dokumentui} few {# dokumentams} many {# dokumento} other {# dokumentų}}. Paleiskite dabar naudodami standartinius kreditus arba naudokite sumažintus kreditus ir palaukite ilgiau.",
         "flex": "Naudoti sumažintus kreditus",
         "standard": "Paleisti dabar",
         "title": "Naudoti sumažintus kreditus?"

@@ -277,7 +277,7 @@
       "reported": "As the coding agent on your computer reported it after its latest answer. The agent manages its own context.",
       "reportedTokens": "{used} / {total} tokens",
       "summary": "Summary of older messages",
-      "summaryWithCount": "Summary of {count} older messages",
+      "summaryWithCount": "Summary of {count, plural, one {# older message} other {# older messages}}",
       "title": "Conversation context",
       "tokens": "~{used} / {total} tokens",
       "tools": "Tools",
@@ -496,7 +496,7 @@
       "working": "{count, plural, one {# chat is working} other {# chats are working}}",
       "workingNow": "Working"
     },
-    "maxAttachmentsReached": "Maximum {count} files per message",
+    "maxAttachmentsReached": "Maximum {count, plural, one {# file} other {# files}} per message",
     "mcpReconnect": {
       "additional": "{count, plural, one {+# more} other {+# more}}",
       "dismiss": "Dismiss connection notice",
@@ -558,7 +558,7 @@
     "openingChat": "Opening the chat…",
     "overlayLoadFailed": "The document chat couldn't load.",
     "overlayUpdated": "stella was updated. Reload the page to use the document chat.",
-    "pastedChars": "Pasted · {count} chars",
+    "pastedChars": "Pasted · {count, plural, one {# char} other {# chars}}",
     "pastedText": {
       "expand": "Show full text",
       "fromClipboard": "Pasted {count, plural, one {# character} other {# characters}}",

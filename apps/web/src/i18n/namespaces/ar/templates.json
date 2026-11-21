@@ -128,7 +128,7 @@
   },
   "docxReview": {
     "acceptAll": "قبول الكل",
-    "acceptAllConfirmDescription": "يطبّق ذلك {count} اقتراحًا على المستند دفعة واحدة.",
+    "acceptAllConfirmDescription": "يطبّق ذلك {count, plural, zero {# اقتراح} one {اقتراحًا واحدًا (#)} two {اقتراحين (#)} few {# اقتراحات} many {# اقتراحًا} other {# اقتراح}} على المستند دفعة واحدة.",
     "acceptAllConfirmTitle": "قبول جميع الاقتراحات؟",
     "acceptingChanges": "جارٍ قبول التغييرات…",
     "applyAs": "بصيغة",
@@ -365,7 +365,7 @@
       "addPlaceholder": "أضف تعليقًا…",
       "cancel": "إلغاء",
       "hideAll": "إخفاء التعليقات",
-      "moreReplies": "{count} ردود إضافية",
+      "moreReplies": "{count, plural, zero {# رد إضافي} one {رد إضافي واحد (#)} two {ردان إضافيان (#)} few {# ردود إضافية} many {# ردًا إضافيًا} other {# رد إضافي}}",
       "noComments": "لا توجد تعليقات بعد.",
       "reply": "رد",
       "replyPlaceholder": "رُدّ أو أضِف آخرين باستخدام @",

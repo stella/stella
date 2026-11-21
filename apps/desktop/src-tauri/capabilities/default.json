@@ -29,6 +29,7 @@
     "allow-dictation-set-enabled",
     "allow-dictation-set-cleanup",
     "allow-dictation-set-sounds",
+    "allow-dictation-set-retype-shortcut",
     "allow-dictation-set-share-window-title",
     "allow-dictation-set-share-text-before-cursor",
     "allow-dictation-set-language",

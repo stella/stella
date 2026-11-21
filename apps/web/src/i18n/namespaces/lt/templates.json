@@ -128,7 +128,7 @@
   },
   "docxReview": {
     "acceptAll": "Priimti visus",
-    "acceptAllConfirmDescription": "Taip dokumentui iškart pritaikoma {count} pasiūlymų.",
+    "acceptAllConfirmDescription": "Taip dokumentui iškart {count, plural, one {pritaikomas # pasiūlymas} few {pritaikomi # pasiūlymai} many {pritaikoma # pasiūlymo} other {pritaikoma # pasiūlymų}}.",
     "acceptAllConfirmTitle": "Priimti visus pasiūlymus?",
     "acceptingChanges": "Priimami keitimai…",
     "applyAs": "kaip",
@@ -365,7 +365,7 @@
       "addPlaceholder": "Pridėti komentarą…",
       "cancel": "Atšaukti",
       "hideAll": "Slėpti komentarus",
-      "moreReplies": "Dar {count} atsakymų",
+      "moreReplies": "{count, plural, one {Dar # atsakymas} few {Dar # atsakymai} many {Dar # atsakymo} other {Dar # atsakymų}}",
       "noComments": "Komentarų kol kas nėra.",
       "reply": "Atsakyti",
       "replyPlaceholder": "Atsakykite arba pridėkite kitus naudodami @",

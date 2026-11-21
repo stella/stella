@@ -128,7 +128,7 @@
   },
   "docxReview": {
     "acceptAll": "Tout accepter",
-    "acceptAllConfirmDescription": "Cela applique {count} suggestions au document en une seule fois.",
+    "acceptAllConfirmDescription": "Cela applique {count, plural, one {# suggestion} many {# suggestions} other {# suggestions}} au document en une seule fois.",
     "acceptAllConfirmTitle": "Accepter toutes les suggestions ?",
     "acceptingChanges": "Acceptation des modifications…",
     "applyAs": "comme",
@@ -365,7 +365,7 @@
       "addPlaceholder": "Ajouter un commentaire…",
       "cancel": "Annuler",
       "hideAll": "Masquer les commentaires",
-      "moreReplies": "{count} réponses de plus",
+      "moreReplies": "{count, plural, one {# réponse de plus} many {# réponses de plus} other {# réponses de plus}}",
       "noComments": "Aucun commentaire pour le moment.",
       "reply": "Répondre",
       "replyPlaceholder": "Répondre ou ajouter d’autres personnes avec @",

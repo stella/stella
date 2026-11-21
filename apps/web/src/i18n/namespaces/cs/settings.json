@@ -523,7 +523,7 @@
         "entriesHeading": "Týmové pojmy ({count})",
         "importHint": "CSV (canonical,label,variants), TXT (jeden na řádek) nebo JSON",
         "importParseError": "Soubor nelze přečíst. Použijte CSV, TXT nebo JSON.",
-        "importSuccessToast": "Importováno {count} pojmů.",
+        "importSuccessToast": "{count, plural, one {Importován # pojem.} few {Importovány # pojmy.} many {Importováno # pojmů.} other {Importováno # pojmů.}}",
         "labelPickerAriaLabel": "Štítek údaje",
         "labelPickerEmpty": "Žádný odpovídající typ.",
         "labelPickerPlaceholder": "Typ",

@@ -128,7 +128,7 @@
   },
   "docxReview": {
     "acceptAll": "Zaakceptuj wszystkie",
-    "acceptAllConfirmDescription": "Spowoduje to zastosowanie {count} sugestii do dokumentu naraz.",
+    "acceptAllConfirmDescription": "Spowoduje to zastosowanie {count, plural, one {# sugestii} few {# sugestii} many {# sugestii} other {# sugestii}} do dokumentu naraz.",
     "acceptAllConfirmTitle": "Zaakceptować wszystkie sugestie?",
     "acceptingChanges": "Akceptowanie zmian…",
     "applyAs": "jako",
@@ -365,7 +365,7 @@
       "addPlaceholder": "Dodaj komentarz…",
       "cancel": "Anuluj",
       "hideAll": "Ukryj komentarze",
-      "moreReplies": "{count} więcej odpowiedzi",
+      "moreReplies": "{count, plural, one {# odpowiedź więcej} few {# odpowiedzi więcej} many {# odpowiedzi więcej} other {# odpowiedzi więcej}}",
       "noComments": "Brak komentarzy.",
       "reply": "Odpowiedz",
       "replyPlaceholder": "Odpowiedz lub dodaj inne osoby przez @",

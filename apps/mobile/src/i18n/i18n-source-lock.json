@@ -718,5 +718,7 @@
   "timers.title": "Timers",
   "timers.unavailable": "Time tracking is not turned on for your organization.",
   "writes.consentNeeded": "To make changes from the app, stella needs your permission. Sign in again to give it.",
-  "writes.signInAgain": "Sign in again"
+  "writes.signInAgain": "Sign in again",
+  "settings.dictationBuiltInMicrophone": "Always use iPhone microphone",
+  "settings.dictationBuiltInMicrophoneHint": "Records with the iPhone’s own microphone even when AirPods or a car are connected, so they keep playing in full quality instead of switching to call audio."
 }

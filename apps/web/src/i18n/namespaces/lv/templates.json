@@ -128,7 +128,7 @@
   },
   "docxReview": {
     "acceptAll": "Pieņemt visu",
-    "acceptAllConfirmDescription": "Tādējādi dokumentam vienlaikus tiek lietoti {count} ieteikumi.",
+    "acceptAllConfirmDescription": "Tādējādi dokumentam vienlaikus {count, plural, zero {tiek lietoti # ieteikumi} one {tiek lietots # ieteikums} other {tiek lietoti # ieteikumi}}.",
     "acceptAllConfirmTitle": "Pieņemt visus ieteikumus?",
     "acceptingChanges": "Izmaiņas tiek akceptētas…",
     "applyAs": "kā",
@@ -365,7 +365,7 @@
       "addPlaceholder": "Pievienot komentāru…",
       "cancel": "Atcelt",
       "hideAll": "Slēpt komentārus",
-      "moreReplies": "vēl {count} atbildes",
+      "moreReplies": "{count, plural, zero {vēl # atbildes} one {vēl # atbilde} other {vēl # atbildes}}",
       "noComments": "Vēl nav komentāru.",
       "reply": "Atbildēt",
       "replyPlaceholder": "Atbildiet vai pievienojiet citus ar @",

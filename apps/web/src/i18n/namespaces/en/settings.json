@@ -523,7 +523,7 @@
         "entriesHeading": "Team-wide terms ({count})",
         "importHint": "CSV (canonical,label,variants), TXT (one per line), or JSON",
         "importParseError": "Couldn't read that file. Use CSV, TXT, or JSON.",
-        "importSuccessToast": "Imported {count} terms.",
+        "importSuccessToast": "Imported {count, plural, one {# term} other {# terms}}.",
         "labelPickerAriaLabel": "Match label",
         "labelPickerEmpty": "No matching label.",
         "labelPickerPlaceholder": "Label",

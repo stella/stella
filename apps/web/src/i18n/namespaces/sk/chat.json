@@ -277,7 +277,7 @@
       "reported": "Podľa údajov programovacieho agenta vo vašom počítači po jeho poslednej odpovedi. Agent si kontext spravuje sám.",
       "reportedTokens": "{used} / {total} tokenov",
       "summary": "Zhrnutie starších správ",
-      "summaryWithCount": "Zhrnutie {count} starších správ",
+      "summaryWithCount": "Zhrnutie {count, plural, one {# staršej správy} few {# starších správ} many {# starších správ} other {# starších správ}}",
       "title": "Kontext konverzácie",
       "tokens": "~{used} / {total} tokenov",
       "tools": "Nástroje",
@@ -496,7 +496,7 @@
       "working": "{count, plural, one {Pracuje # chat} few {Pracujú # chaty} many {Pracuje # chatu} other {Pracuje # chatov}}",
       "workingNow": "Pracuje"
     },
-    "maxAttachmentsReached": "Maximálne {count} súborov na správu",
+    "maxAttachmentsReached": "Maximálne {count, plural, one {# súbor} few {# súbory} many {# súborov} other {# súborov}} na správu",
     "mcpReconnect": {
       "additional": "{count, plural, one {+# ďalšie} few {+# ďalšie} many {+# ďalšieho} other {+# ďalších}}",
       "dismiss": "Skryť upozornenie na pripojenie",
@@ -558,7 +558,7 @@
     "openingChat": "Otvára sa chat…",
     "overlayLoadFailed": "Chat k dokumentu sa nepodarilo načítať.",
     "overlayUpdated": "stella bola aktualizovaná. Ak chcete používať chat k dokumentu, načítajte stránku znova.",
-    "pastedChars": "Vložené · {count} znakov",
+    "pastedChars": "Vložené · {count, plural, one {# znak} few {# znaky} many {# znakov} other {# znakov}}",
     "pastedText": {
       "expand": "Zobraziť celý text",
       "fromClipboard": "Vložené {count, plural, one {# znak} few {# znaky} other {# znakov} many {# znaku}}",

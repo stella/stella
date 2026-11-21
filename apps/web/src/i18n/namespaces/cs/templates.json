@@ -128,7 +128,7 @@
   },
   "docxReview": {
     "acceptAll": "Přijmout vše",
-    "acceptAllConfirmDescription": "Tím se na dokument najednou použije {count} návrhů.",
+    "acceptAllConfirmDescription": "Tím se na dokument najednou {count, plural, one {použije # návrh} few {použijí # návrhy} many {použije # návrhů} other {použije # návrhů}}.",
     "acceptAllConfirmTitle": "Přijmout všechny návrhy?",
     "acceptingChanges": "Přijímají se změny…",
     "applyAs": "jako",
@@ -365,7 +365,7 @@
       "addPlaceholder": "Přidat komentář…",
       "cancel": "Zrušit",
       "hideAll": "Skrýt komentáře",
-      "moreReplies": "{count} dalších odpovědí",
+      "moreReplies": "{count, plural, one {# další odpověď} few {# další odpovědi} many {# dalších odpovědí} other {# dalších odpovědí}}",
       "noComments": "Zatím žádné komentáře.",
       "reply": "Odpovědět",
       "replyPlaceholder": "Odpovědět nebo přidat další pomocí @",

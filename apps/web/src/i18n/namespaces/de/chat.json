@@ -277,7 +277,7 @@
       "reported": "So hat es der Coding-Agent auf Ihrem Computer nach seiner letzten Antwort gemeldet. Der Agent verwaltet seinen Kontext selbst.",
       "reportedTokens": "{used} / {total} Tokens",
       "summary": "Zusammenfassung älterer Nachrichten",
-      "summaryWithCount": "Zusammenfassung von {count} älteren Nachrichten",
+      "summaryWithCount": "Zusammenfassung von {count, plural, one {# älteren Nachricht} other {# älteren Nachrichten}}",
       "title": "Kontext der Unterhaltung",
       "tokens": "~{used} / {total} Tokens",
       "tools": "Tools",
@@ -496,7 +496,7 @@
       "working": "{count, plural, one {# Chat arbeitet} other {# Chats arbeiten}}",
       "workingNow": "Arbeitet"
     },
-    "maxAttachmentsReached": "Maximal {count} Dateien pro Nachricht",
+    "maxAttachmentsReached": "Maximal {count, plural, one {# Datei} other {# Dateien}} pro Nachricht",
     "mcpReconnect": {
       "additional": "{count, plural, one {+# weitere} other {+# weitere}}",
       "dismiss": "Verbindungshinweis ausblenden",
@@ -558,7 +558,7 @@
     "openingChat": "Chat wird geöffnet…",
     "overlayLoadFailed": "Der Dokumentchat konnte nicht geladen werden.",
     "overlayUpdated": "stella wurde aktualisiert. Laden Sie die Seite neu, um den Dokumentchat zu verwenden.",
-    "pastedChars": "Eingefügt · {count} Zeichen",
+    "pastedChars": "Eingefügt · {count, plural, one {# Zeichen} other {# Zeichen}}",
     "pastedText": {
       "expand": "Vollständigen Text anzeigen",
       "fromClipboard": "{count, plural, one {# Zeichen eingefügt} other {# Zeichen eingefügt}}",

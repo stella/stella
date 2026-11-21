@@ -277,7 +277,7 @@
       "reported": "Conforme informado pelo agente de programação do seu computador após a última resposta. O agente gerencia o próprio contexto.",
       "reportedTokens": "{used} de {total} tokens",
       "summary": "Resumo das mensagens mais antigas",
-      "summaryWithCount": "Resumo de {count} mensagens mais antigas",
+      "summaryWithCount": "Resumo de {count, plural, one {# mensagem mais antiga} many {# mensagens mais antigas} other {# mensagens mais antigas}}",
       "title": "Contexto da conversa",
       "tokens": "~{used} de {total} tokens",
       "tools": "Ferramentas",
@@ -496,7 +496,7 @@
       "working": "{count, plural, one {# chat em andamento} other {# chats em andamento} many {# chats em andamento}}",
       "workingNow": "Em andamento"
     },
-    "maxAttachmentsReached": "Máximo de arquivos {count} por mensagem",
+    "maxAttachmentsReached": "Máximo de {count, plural, one {# arquivo} many {# arquivos} other {# arquivos}} por mensagem",
     "mcpReconnect": {
       "additional": "{count, plural, one {+# mais} many {+# mais} other {+# mais}}",
       "dismiss": "Ocultar aviso de conexão",
@@ -558,7 +558,7 @@
     "openingChat": "Abrindo o chat…",
     "overlayLoadFailed": "Não foi possível carregar o chat do documento.",
     "overlayUpdated": "A stella foi atualizada. Recarregue a página para usar o chat do documento.",
-    "pastedChars": "Colado · {count} caracteres",
+    "pastedChars": "Colado · {count, plural, one {# caractere} many {# caracteres} other {# caracteres}}",
     "pastedText": {
       "expand": "Mostrar texto completo",
       "fromClipboard": "{count, plural, one {# caractere colado} other {# caracteres colados} many {# caracteres colados}}",

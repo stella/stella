@@ -660,6 +660,8 @@
     "accountTitle": "Konto",
     "deleteAccount": "Kustuta konto",
     "deleteAccountHint": "Avab teie konto veebis, kus saate selle koos kõigega, mis on teie oma, kustutada.",
+    "dictationBuiltInMicrophone": "Kasuta alati iPhone’i mikrofoni",
+    "dictationBuiltInMicrophoneHint": "Salvestab iPhone’i mikrofoniga ka siis, kui AirPodsid või auto on ühendatud, nii et need mängivad edasi täies kvaliteedis ega lülitu kõnerežiimi.",
     "dictationCleanup": "Paranda tehisintellektiga",
     "dictationCleanupHint": "Parandab tuvastusvead ja dikteeritud vormingu, näiteks „uus rida“. Ainult tekst, mitte heli, läheb stella kaudu teie organisatsiooni tehisintellekti teenusepakkujale; stella seda ei talleta.",
     "dictationModelDefault": "Vaikimisi",

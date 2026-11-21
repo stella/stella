@@ -277,7 +277,7 @@
       "reported": "Tel que l’agent de code de votre ordinateur l’a indiqué après sa dernière réponse. L’agent gère lui-même son contexte.",
       "reportedTokens": "{used} / {total} jetons",
       "summary": "Résumé des anciens messages",
-      "summaryWithCount": "Résumé de {count} anciens messages",
+      "summaryWithCount": "Résumé de {count, plural, one {# ancien message} many {# anciens messages} other {# anciens messages}}",
       "title": "Contexte de la conversation",
       "tokens": "~{used} / {total} jetons",
       "tools": "Outils",
@@ -496,7 +496,7 @@
       "working": "{count, plural, one {# conversation en cours} other {# conversations en cours} many {# conversations en cours}}",
       "workingNow": "En cours"
     },
-    "maxAttachmentsReached": "Maximum {count} fichiers par message",
+    "maxAttachmentsReached": "Maximum {count, plural, one {# fichier} many {# fichiers} other {# fichiers}} par message",
     "mcpReconnect": {
       "additional": "{count, plural, one {+# de plus} many {+# de plus} other {+# de plus}}",
       "dismiss": "Masquer l’avis de connexion",
@@ -558,7 +558,7 @@
     "openingChat": "Ouverture de la conversation…",
     "overlayLoadFailed": "Impossible de charger la conversation du document.",
     "overlayUpdated": "stella a été mise à jour. Rechargez la page pour utiliser la conversation du document.",
-    "pastedChars": "Collé · {count} caractères",
+    "pastedChars": "Collé · {count, plural, one {# caractère} many {# caractères} other {# caractères}}",
     "pastedText": {
       "expand": "Afficher le texte complet",
       "fromClipboard": "Collé : {count, plural, one {# caractère} other {# caractères} many {# caractères}}",

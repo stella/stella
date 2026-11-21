@@ -797,7 +797,7 @@
     "justification": "Justification :",
     "kanban": {
       "deleteAll": "Tout supprimer",
-      "deleteAllConfirm": "Supprimer les {count} éléments de « {column} » ?",
+      "deleteAllConfirm": "{count, plural, one {Supprimer # élément de « {column} » ?} many {Supprimer les # éléments de « {column} » ?} other {Supprimer les # éléments de « {column} » ?}}",
       "hideColumn": "Masquer la colonne",
       "moveFailed": "{failed, plural, one {# élément sur {total} n’a pas pu être déplacé.} other {# éléments sur {total} n’ont pas pu être déplacés.} many {# éléments sur {total} n’ont pas pu être déplacés.}}",
       "readOnlyGrouping": "Ce regroupement est en lecture seule",
@@ -1251,7 +1251,7 @@
       "aiGenerated": "Généré par IA",
       "calendar": {
         "addDates": "+ Dates",
-        "additionalDates": "+{count} dates",
+        "additionalDates": "+{count, plural, one {# date} many {# dates} other {# dates}}",
         "createdAt": "Créé le",
         "dueDateTaskOnly": "Une échéance ne peut être définie que pour les éléments d'agenda",
         "month": "Mois",
@@ -1352,13 +1352,13 @@
     },
     "workflow": {
       "largeRunPrompt": {
-        "description": "Cela mettra en file d’attente l’extraction par IA pour {count} documents. Lancez-la uniquement si vous voulez traiter autant de fichiers maintenant.",
+        "description": "Cela mettra en file d’attente l’extraction par IA pour {count, plural, one {# document} many {# documents} other {# documents}}. Lancez-la uniquement si vous voulez traiter autant de fichiers maintenant.",
         "start": "Lancer l’extraction",
         "title": "Lancer l’extraction par IA ?"
       },
       "noFieldsToProcess": "Aucun champ à traiter",
       "serviceTierPrompt": {
-        "description": "Ce flux de travail mettra en file d'attente l'extraction IA pour {count} documents. Lancez-la maintenant avec des crédits standard, ou utilisez des crédits réduits et attendez plus longtemps.",
+        "description": "Ce flux de travail mettra en file d’attente l’extraction IA pour {count, plural, one {# document} many {# documents} other {# documents}}. Lancez-la maintenant avec des crédits standard, ou utilisez des crédits réduits et attendez plus longtemps.",
         "flex": "Utiliser des crédits réduits",
         "standard": "Lancer maintenant",
         "title": "Utiliser des crédits réduits ?"

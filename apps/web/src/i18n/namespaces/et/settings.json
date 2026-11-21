@@ -523,7 +523,7 @@
         "entriesHeading": "Meeskonnaülesed terminid ({count})",
         "importHint": "CSV (canonical,label,variants), TXT (üks rea kohta) või JSON",
         "importParseError": "Faili ei õnnestunud lugeda. Kasutage CSV-, TXT- või JSON-vormingut.",
-        "importSuccessToast": "Imporditud {count} terminit.",
+        "importSuccessToast": "Imporditud {count, plural, one {# termin} other {# terminit}}.",
         "labelPickerAriaLabel": "Vaste silt",
         "labelPickerEmpty": "Sobivat tüüpi pole.",
         "labelPickerPlaceholder": "Tüüp",

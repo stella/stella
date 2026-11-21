@@ -184,7 +184,7 @@
     "unreadableEraseNotice": "Niektorú uloženú aktivitu nemožno prečítať. Nečitateľnú uloženú aktivitu a údaje na obnovenie jej konceptov môžete vymazať.",
     "unrecoverableOtherHistoryConfirmation": "Uložená história iných účtov bude vymazaná vrátane údajov na obnovenie čakajúcich konceptov s chýbajúcimi kľúčmi alebo nečitateľnými súbormi. Vytvorené koncepty už môžu existovať. Túto akciu nemožno vrátiť späť.",
     "welcomeControlFact": "Nečinnosť sa nepočíta. Kedykoľvek pozastavte alebo vymažte.",
-    "welcomeDetails": "Aktivita aplikácií sa zaznamenáva každých niekoľko sekúnd a nikdy sa automaticky neodosiela. Zaznamenávajú sa aj názvy okien a cesty k otvoreným dokumentom, kým podrobnosti nevypnete. Súhrny sa do schránky kopírujú len na vyžiadanie. Môžete vylúčiť aplikácie a zvoliť dobu uchovávania histórie. Vypnutie podrobností zastaví zaznamenávanie nových; predchádzajúce zostávajú do uplynutia doby uchovávania alebo vymazania. Názvy okien návrhu opustia toto zariadenie len vtedy, keď schválite popis od stella AI, raz alebo vždy; neukladajú sa.",
+    "welcomeDetails": "Aktivita aplikácií sa zaznamenáva každých niekoľko sekúnd a nikdy sa automaticky neodosiela. Zaznamenávajú sa aj názvy okien a cesty k otvoreným dokumentom, kým podrobnosti nevypnete. Súhrny sa do schránky kopírujú len na vyžiadanie. Môžete vylúčiť aplikácie a zvoliť dobu uchovávania histórie. Vypnutie podrobností zastaví zaznamenávanie nových; predchádzajúce zostávajú do uplynutia doby uchovávania alebo vymazania. Názvy okien návrhu opustia toto zariadenie len vtedy, keď po udelení súhlasu s navrhovaním požiadate o návrh od stella AI, raz alebo vždy; neukladajú sa.",
     "welcomeLearnMore": "Viac informácií",
     "welcomeLocalFact": "Šifrované v tomto zariadení.",
     "welcomePreviewMatter": "Predĺženie nájmu Riverside",
@@ -669,6 +669,11 @@
     },
     "removeFailed": "Model reči sa nepodarilo odstrániť. Skúste to znova.",
     "removeModel": "Odstrániť",
+    "retype": {
+      "description": "Stlačením {shortcut} napíšete posledný diktát znova na miesto kurzora. Drží sa len v pamäti, kým je v histórii schránky.",
+      "taken": "Skratku {shortcut} používa iná aplikácia. To isté ponúka ponuka Diktovanie pri ikone aplikácie stella.",
+      "title": "Skratka pre posledný diktát"
+    },
     "shortcutTaken": "Skratku {shortcut} používa iná aplikácia.",
     "sounds": {
       "description": "Prehrať krátky tichý zvuk, keď nahrávanie začne a keď skončí.",
@@ -763,7 +768,7 @@
     "takenOverTitle": "Úpravy presunuté na iné zariadenie"
   },
   "onboarding": {
-    "activityAiNote": "Názvy okien návrhu opustia toto zariadenie len vtedy, keď schválite popis od stella AI, raz alebo vždy. Neukladajú sa.",
+    "activityAiNote": "Názvy okien návrhu opustia toto zariadenie len vtedy, keď po udelení súhlasu s navrhovaním požiadate o návrh od stella AI, raz alebo vždy. Neukladajú sa.",
     "activityBody": "Uvidíte, kam sa podel váš pracovný deň, a premeníte ho na koncepty časových záznamov. O tom, čo sa zaznamená a čo sa odošle, rozhodujete vy.",
     "activityConsentNote": "Nič sa nezaznamenáva, kým v Aktivite nestlačíte Začať zaznamenávať. Kedykoľvek môžete pozastaviť, vylúčiť aplikácie alebo vymazať ktorýkoľvek deň.",
     "activityNeverKeys": "Stlačenia klávesov ani písaný text",
@@ -1210,6 +1215,7 @@
     "checkForUpdates": "Skontrolovať aktualizácie",
     "dictation": "Diktovanie",
     "dictationHint": "Na diktovanie podržte {key}",
+    "dictationRetype": "Napísať posledný diktát znova",
     "dictationSettings": "Nastavenia diktovania…",
     "dictationTurnOn": "Zapnúť diktovanie…",
     "documentsSyncing": "{count, plural, one {1 dokument sa synchronizuje} few {{count} dokumenty sa synchronizujú} other {{count} dokumentov sa synchronizuje}}",

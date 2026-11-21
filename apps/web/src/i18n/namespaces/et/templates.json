@@ -128,7 +128,7 @@
   },
   "docxReview": {
     "acceptAll": "Nõustu kõigiga",
-    "acceptAllConfirmDescription": "See rakendab dokumendile korraga {count} soovitust.",
+    "acceptAllConfirmDescription": "See rakendab dokumendile korraga {count, plural, one {# soovituse} other {# soovitust}}.",
     "acceptAllConfirmTitle": "Kas nõustuda kõigi soovitustega?",
     "acceptingChanges": "Muudatusi kinnitatakse…",
     "applyAs": "kui",
@@ -365,7 +365,7 @@
       "addPlaceholder": "Lisa kommentaar…",
       "cancel": "Tühista",
       "hideAll": "Peida kommentaarid",
-      "moreReplies": "veel {count} vastust",
+      "moreReplies": "{count, plural, one {veel # vastus} other {veel # vastust}}",
       "noComments": "Kommentaare veel pole.",
       "reply": "Vasta",
       "replyPlaceholder": "Vasta või lisa teisi @ abil",

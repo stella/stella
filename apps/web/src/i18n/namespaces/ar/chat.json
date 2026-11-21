@@ -277,7 +277,7 @@
       "reported": "كما أبلغ عنه وكيل البرمجة على حاسوبك بعد آخر إجابة له. يدير الوكيل سياقه بنفسه.",
       "reportedTokens": "{used} / {total} رمز",
       "summary": "ملخّص الرسائل الأقدم",
-      "summaryWithCount": "ملخّص {count} من الرسائل الأقدم",
+      "summaryWithCount": "ملخّص {count, plural, zero {# رسالة أقدم} one {رسالة أقدم واحدة (#)} two {رسالتين أقدم (#)} few {# رسائل أقدم} many {# رسالة أقدم} other {# رسالة أقدم}}",
       "title": "سياق المحادثة",
       "tokens": "~{used} / {total} رمز",
       "tools": "الأدوات",
@@ -496,7 +496,7 @@
       "working": "{count, plural, zero {لا توجد دردشات قيد العمل} one {دردشة واحدة قيد العمل} two {دردشتان قيد العمل} few {# دردشات قيد العمل} many {# دردشة قيد العمل} other {# دردشة قيد العمل}}",
       "workingNow": "قيد العمل"
     },
-    "maxAttachmentsReached": "بحدّ أقصى {count} ملفات لكل رسالة",
+    "maxAttachmentsReached": "بحدّ أقصى {count, plural, zero {# ملف} one {ملف واحد (#)} two {ملفان (#)} few {# ملفات} many {# ملفًا} other {# ملف}} لكل رسالة",
     "mcpReconnect": {
       "additional": "{count, plural, zero {+# اتصالات إضافية} one {+# اتصال إضافي} two {+# اتصالان إضافيان} few {+# اتصالات إضافية} many {+# اتصالًا إضافيًا} other {+# اتصال إضافي}}",
       "dismiss": "إخفاء إشعار الاتصال",
@@ -558,7 +558,7 @@
     "openingChat": "جارٍ فتح الدردشة…",
     "overlayLoadFailed": "تعذّر تحميل دردشة المستند.",
     "overlayUpdated": "تم تحديث stella. أعد تحميل الصفحة لاستخدام دردشة المستند.",
-    "pastedChars": "تم اللصق · {count} حرف",
+    "pastedChars": "تم اللصق · {count, plural, zero {# حرف} one {حرف واحد (#)} two {حرفان (#)} few {# أحرف} many {# حرفًا} other {# حرف}}",
     "pastedText": {
       "expand": "عرض النص الكامل",
       "fromClipboard": "تم لصق {count, plural, zero {# حرف} one {# حرف} two {# حرفين} few {# أحرف} many {# حرفاً} other {# حرف}}",

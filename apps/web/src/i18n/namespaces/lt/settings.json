@@ -523,7 +523,7 @@
         "entriesHeading": "Komandos terminai ({count})",
         "importHint": "CSV (canonical,label,variants), TXT (po vieną eilutėje) arba JSON",
         "importParseError": "Nepavyko perskaityti failo. Naudokite CSV, TXT arba JSON.",
-        "importSuccessToast": "Importuota {count} terminų.",
+        "importSuccessToast": "{count, plural, one {Importuotas # terminas.} few {Importuoti # terminai.} many {Importuota # termino.} other {Importuota # terminų.}}",
         "labelPickerAriaLabel": "Atitikmens žyma",
         "labelPickerEmpty": "Tinkamo tipo nėra.",
         "labelPickerPlaceholder": "Tipas",

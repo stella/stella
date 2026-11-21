@@ -523,7 +523,7 @@
         "entriesHeading": "مصطلحات على مستوى الفريق ({count})",
         "importHint": "‏CSV (canonical,label,variants)، أو TXT (واحد في كل سطر)، أو JSON",
         "importParseError": "تعذّرت قراءة ذلك الملف. استخدم CSV أو TXT أو JSON.",
-        "importSuccessToast": "تم استيراد {count} مصطلحًا.",
+        "importSuccessToast": "تم استيراد {count, plural, zero {# مصطلح} one {مصطلح واحد (#)} two {مصطلحين (#)} few {# مصطلحات} many {# مصطلحًا} other {# مصطلح}}.",
         "labelPickerAriaLabel": "تسمية التطابق",
         "labelPickerEmpty": "لا توجد تسمية مطابقة.",
         "labelPickerPlaceholder": "التسمية",

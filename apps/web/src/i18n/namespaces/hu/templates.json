@@ -128,7 +128,7 @@
   },
   "docxReview": {
     "acceptAll": "Összes elfogadása",
-    "acceptAllConfirmDescription": "Ez egyszerre {count} javaslatot alkalmaz a dokumentumon.",
+    "acceptAllConfirmDescription": "Ez egyszerre {count, plural, one {# javaslatot} other {# javaslatot}} alkalmaz a dokumentumon.",
     "acceptAllConfirmTitle": "Elfogadja az összes javaslatot?",
     "acceptingChanges": "Módosítások elfogadása…",
     "applyAs": "mint",
@@ -365,7 +365,7 @@
       "addPlaceholder": "Megjegyzés hozzáadása…",
       "cancel": "Mégse",
       "hideAll": "Megjegyzések elrejtése",
-      "moreReplies": "még {count} válasz",
+      "moreReplies": "{count, plural, one {még # válasz} other {még # válasz}}",
       "noComments": "Még nincsenek megjegyzések.",
       "reply": "Válasz",
       "replyPlaceholder": "Válaszoljon, vagy adjon hozzá másokat a @ jellel",

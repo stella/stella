@@ -797,7 +797,7 @@
     "justification": "Uzasadnienie:",
     "kanban": {
       "deleteAll": "Usuń wszystkie",
-      "deleteAllConfirm": "Usunąć wszystkie {count} elementy z kolumny „{column}”?",
+      "deleteAllConfirm": "{count, plural, one {Usunąć # element z kolumny „{column}”?} few {Usunąć wszystkie # elementy z kolumny „{column}”?} many {Usunąć wszystkie # elementów z kolumny „{column}”?} other {Usunąć wszystkie # elementu z kolumny „{column}”?}}",
       "hideColumn": "Ukryj kolumnę",
       "moveFailed": "{failed, plural, one {Nie udało się przenieść # z {total} elementów.} few {Nie udało się przenieść # z {total} elementów.} many {Nie udało się przenieść # z {total} elementów.} other {Nie udało się przenieść # z {total} elementów.}}",
       "readOnlyGrouping": "To grupowanie jest tylko do odczytu",
@@ -1251,7 +1251,7 @@
       "aiGenerated": "Wygenerowane przez AI",
       "calendar": {
         "addDates": "+ Daty",
-        "additionalDates": "+{count} dat",
+        "additionalDates": "+{count, plural, one {# data} few {# daty} many {# dat} other {# daty}}",
         "createdAt": "Utworzono",
         "dueDateTaskOnly": "Termin można ustawić tylko dla pozycji agendy",
         "month": "Miesiąc",
@@ -1352,13 +1352,13 @@
     },
     "workflow": {
       "largeRunPrompt": {
-        "description": "Spowoduje to dodanie ekstrakcji AI dla {count} dokumentów do kolejki. Uruchom ją tylko wtedy, gdy chcesz teraz przetworzyć tyle plików.",
+        "description": "Spowoduje to dodanie ekstrakcji AI dla {count, plural, one {# dokumentu} few {# dokumentów} many {# dokumentów} other {# dokumentu}} do kolejki. Uruchom ją tylko wtedy, gdy chcesz teraz przetworzyć tyle plików.",
         "start": "Uruchom ekstrakcję",
         "title": "Uruchomić ekstrakcję AI?"
       },
       "noFieldsToProcess": "Brak pól do przetworzenia",
       "serviceTierPrompt": {
-        "description": "Ten proces doda ekstrakcję AI do kolejki dla {count} dokumentów. Uruchom teraz ze standardowymi kredytami albo użyj obniżonych kredytów i poczekaj dłużej.",
+        "description": "Ten proces doda ekstrakcję AI do kolejki dla {count, plural, one {# dokumentu} few {# dokumentów} many {# dokumentów} other {# dokumentu}}. Uruchom teraz ze standardowymi kredytami albo użyj obniżonych kredytów i poczekaj dłużej.",
         "flex": "Użyj obniżonych kredytów",
         "standard": "Uruchom teraz",
         "title": "Użyć obniżonych kredytów?"

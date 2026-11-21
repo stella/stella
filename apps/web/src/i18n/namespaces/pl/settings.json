@@ -523,7 +523,7 @@
         "entriesHeading": "Terminy zespołowe ({count})",
         "importHint": "CSV (canonical,label,variants), TXT (jeden w wierszu) lub JSON",
         "importParseError": "Nie udało się odczytać pliku. Użyj CSV, TXT lub JSON.",
-        "importSuccessToast": "Zaimportowano {count} terminów.",
+        "importSuccessToast": "Zaimportowano {count, plural, one {# termin} few {# terminy} many {# terminów} other {# terminu}}.",
         "labelPickerAriaLabel": "Etykieta dopasowania",
         "labelPickerEmpty": "Brak pasującego typu.",
         "labelPickerPlaceholder": "Typ",

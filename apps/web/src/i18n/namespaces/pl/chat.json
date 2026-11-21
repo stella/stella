@@ -277,7 +277,7 @@
       "reported": "Według agenta programistycznego na Twoim komputerze po jego ostatniej odpowiedzi. Agent sam zarządza swoim kontekstem.",
       "reportedTokens": "{used} / {total} tokenów",
       "summary": "Podsumowanie starszych wiadomości",
-      "summaryWithCount": "Podsumowanie {count} starszych wiadomości",
+      "summaryWithCount": "Podsumowanie {count, plural, one {# starszej wiadomości} few {# starszych wiadomości} many {# starszych wiadomości} other {# starszej wiadomości}}",
       "title": "Kontekst rozmowy",
       "tokens": "~{used} / {total} tokenów",
       "tools": "Narzędzia",
@@ -496,7 +496,7 @@
       "working": "{count, plural, one {# czat pracuje} few {# czaty pracują} many {# czatów pracuje} other {# czatu pracuje}}",
       "workingNow": "W toku"
     },
-    "maxAttachmentsReached": "Maksymalnie {count} plików na wiadomość",
+    "maxAttachmentsReached": "Maksymalnie {count, plural, one {# plik} few {# pliki} many {# plików} other {# pliku}} na wiadomość",
     "mcpReconnect": {
       "additional": "{count, plural, one {+# kolejne} few {+# kolejne} many {+# kolejnych} other {+# kolejnego}}",
       "dismiss": "Ukryj powiadomienie o połączeniu",
@@ -558,7 +558,7 @@
     "openingChat": "Otwieranie czatu…",
     "overlayLoadFailed": "Nie udało się wczytać czatu dokumentu.",
     "overlayUpdated": "stella została zaktualizowana. Odśwież stronę, aby korzystać z czatu dokumentu.",
-    "pastedChars": "Wklejono · {count} znaków",
+    "pastedChars": "Wklejono · {count, plural, one {# znak} few {# znaki} many {# znaków} other {# znaku}}",
     "pastedText": {
       "expand": "Pokaż pełny tekst",
       "fromClipboard": "Wklejono {count, plural, one {# znak} few {# znaki} many {# znaków} other {# znaków}}",

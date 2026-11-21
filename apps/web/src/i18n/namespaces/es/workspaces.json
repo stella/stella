@@ -797,7 +797,7 @@
     "justification": "Justificación:",
     "kanban": {
       "deleteAll": "Eliminar todo",
-      "deleteAllConfirm": "¿Eliminar los {count} elementos de \"{column}\"?",
+      "deleteAllConfirm": "{count, plural, one {¿Eliminar # elemento de \"{column}\"?} many {¿Eliminar los # elementos de \"{column}\"?} other {¿Eliminar los # elementos de \"{column}\"?}}",
       "hideColumn": "Ocultar columna",
       "moveFailed": "{failed, plural, one {No se pudo mover # de {total} elementos.} other {No se pudieron mover # de {total} elementos.} many {No se pudieron mover # de {total} elementos.}}",
       "readOnlyGrouping": "Esta agrupación es de solo lectura",
@@ -1251,7 +1251,7 @@
       "aiGenerated": "Generado por IA",
       "calendar": {
         "addDates": "+ Fechas",
-        "additionalDates": "+{count} fechas",
+        "additionalDates": "+{count, plural, one {# fecha} many {# fechas} other {# fechas}}",
         "createdAt": "Creado el",
         "dueDateTaskOnly": "La fecha límite solo se puede establecer para elementos de agenda",
         "month": "Mes",
@@ -1352,13 +1352,13 @@
     },
     "workflow": {
       "largeRunPrompt": {
-        "description": "Esto pondrá en cola la extracción con IA para {count} documentos. Iníciala solo si quieres procesar ahora tantos archivos.",
+        "description": "Esto pondrá en cola la extracción con IA para {count, plural, one {# documento} many {# documentos} other {# documentos}}. Iníciala solo si quieres procesar ahora tantos archivos.",
         "start": "Iniciar extracción",
         "title": "¿Iniciar extracción con IA?"
       },
       "noFieldsToProcess": "No hay campos para procesar",
       "serviceTierPrompt": {
-        "description": "Este flujo de trabajo pondrá en cola la extracción de IA para {count} documentos. Inícielo ahora con créditos estándar o use créditos reducidos y espere más.",
+        "description": "Este flujo de trabajo pondrá en cola la extracción de IA para {count, plural, one {# documento} many {# documentos} other {# documentos}}. Inícialo ahora con créditos estándar o usa créditos reducidos y espera más.",
         "flex": "Usar créditos reducidos",
         "standard": "Iniciar ahora",
         "title": "¿Usar créditos reducidos?"

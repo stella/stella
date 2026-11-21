@@ -277,7 +277,7 @@
       "reported": "Kā ziņoja programmēšanas aģents jūsu datorā pēc savas pēdējās atbildes. Aģents savu kontekstu pārvalda pats.",
       "reportedTokens": "{used} / {total} tokeni",
       "summary": "Vecāko ziņojumu kopsavilkums",
-      "summaryWithCount": "{count} vecāko ziņojumu kopsavilkums",
+      "summaryWithCount": "{count, plural, zero {# vecāku ziņojumu} one {# vecāka ziņojuma} other {# vecāku ziņojumu}} kopsavilkums",
       "title": "Sarunas konteksts",
       "tokens": "~{used} / {total} tokeni",
       "tools": "Rīki",
@@ -496,7 +496,7 @@
       "working": "{count, plural, zero {# tērzēšanu darbojas} one {# tērzēšana darbojas} other {# tērzēšanas darbojas}}",
       "workingNow": "Notiek"
     },
-    "maxAttachmentsReached": "Maksimāli {count} faili vienā ziņojumā",
+    "maxAttachmentsReached": "Maksimāli {count, plural, zero {# faili} one {# fails} other {# faili}} vienā ziņojumā",
     "mcpReconnect": {
       "additional": "{count, plural, zero {+# citu} one {+# cits} other {+# citi}}",
       "dismiss": "Paslēpt paziņojumu par savienojumu",
@@ -558,7 +558,7 @@
     "openingChat": "Saruna tiek atvērta…",
     "overlayLoadFailed": "Neizdevās ielādēt dokumenta tērzēšanu.",
     "overlayUpdated": "stella ir atjaunināta. Lai izmantotu dokumenta tērzēšanu, pārlādējiet lapu.",
-    "pastedChars": "Ielīmēts · {count} rakstz.",
+    "pastedChars": "Ielīmēts · {count, plural, zero {# rakstz.} one {# rakstz.} other {# rakstz.}}",
     "pastedText": {
       "expand": "Rādīt pilnu tekstu",
       "fromClipboard": "{count, plural, zero {Ielīmētas # rakstzīmju} one {Ielīmēta # rakstzīme} other {Ielīmētas # rakstzīmes}}",

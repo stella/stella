@@ -523,7 +523,7 @@
         "entriesHeading": "Termos da equipe ({count})",
         "importHint": "CSV (canonical,label,variants), TXT (um por linha) ou JSON",
         "importParseError": "Não foi possível ler o arquivo. Use CSV, TXT ou JSON.",
-        "importSuccessToast": "{count} termos importados.",
+        "importSuccessToast": "{count, plural, one {# termo importado} many {# termos importados} other {# termos importados}}.",
         "labelPickerAriaLabel": "Rótulo da correspondência",
         "labelPickerEmpty": "Nenhum tipo correspondente.",
         "labelPickerPlaceholder": "Tipo",
