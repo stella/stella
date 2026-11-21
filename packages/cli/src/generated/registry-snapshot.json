@@ -2349,11 +2349,6 @@
                   "type": "object",
                   "additionalProperties": true
                 },
-                "sourceUrl": {
-                  "type": "string",
-                  "format": "uri",
-                  "maxLength": 8192
-                },
                 "retrievedAt": {
                   "type": ["string", "null"],
                   "format": "date-time",
@@ -2538,11 +2533,6 @@
                 "source": {
                   "type": "object",
                   "additionalProperties": true
-                },
-                "sourceUrl": {
-                  "type": "string",
-                  "format": "uri",
-                  "maxLength": 8192
                 },
                 "retrievedAt": {
                   "type": ["string", "null"],
