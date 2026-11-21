@@ -18,11 +18,9 @@ import {
   ASIC_E_FILE_FORMAT,
   ASIC_S_FILE_FORMAT,
   CADES_FILE_FORMAT,
-} from "@stll/api-contract/legal-file-formats";
-import {
   E_AKTA_FILE_FORMAT,
-  SIGNED_DOSSIER_FORMATS,
-} from "@stll/api-contract/signed-dossier-formats";
+} from "@stll/api-contract/legal-file-formats";
+import { SIGNED_DOSSIER_FORMATS } from "@stll/api-contract/signed-dossier-formats";
 import { STRUCTURED_DOCUMENT_FORMATS } from "@stll/api-contract/structured-document-formats";
 import { ZipArchive } from "@stll/docx-core/zip";
 import { rejectionOf } from "@stll/property-testing/rejection";

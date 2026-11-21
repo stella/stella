@@ -573,9 +573,8 @@ const LegalFilePreview = ({
                 ))
               )}
             </View>
-            {documents.map(({ fileName, status, text }, index) => (
-              // oxlint-disable-next-line react/no-array-index-key -- names can repeat in a container; the server's position is the document's identity.
-              <View key={index}>
+            {documents.map(({ id, fileName, status, text }) => (
+              <View key={id}>
                 <Text accessibilityRole="header" selectable variant="label">
                   {fileName}
                 </Text>

@@ -1,6 +1,6 @@
 import { Result } from "better-result";
 
-import { E_AKTA_FILE_FORMAT } from "@stll/api-contract/signed-dossier-formats";
+import { E_AKTA_FILE_FORMAT } from "@stll/api-contract/legal-file-formats";
 
 import { DOCUMENT_ARCHIVE_MAX_BYTES } from "@/api/lib/files/archive-preview-protocol";
 import type { ContainerMember } from "@/api/lib/files/asic-preview-worker";

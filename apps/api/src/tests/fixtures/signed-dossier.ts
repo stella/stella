@@ -24,7 +24,7 @@ const base64 = (bytes: Uint8Array) => Buffer.from(bytes).toString("base64");
 const certificates = new Map<string, Promise<Uint8Array>>();
 
 /** A cached synthetic certificate whose subject common name is `name`. */
-export const fixtureCertificate = async (name: string) => {
+const fixtureCertificate = async (name: string) => {
   let der = certificates.get(name);
   if (der === undefined) {
     der = createSelfSignedCertificate({ commonName: name, keyType: "EC" }).then(

@@ -6,6 +6,7 @@ export const SIGNED_DOSSIER_FORMATS = [
     // signatures. `.et3` is its delivery receipt and `.dosszie` the name
     // another Hungarian signing client saves the same dossier under.
     kind: "eAkta",
+    container: "xml",
     auditFormat: "e-akta",
     label: "ES3",
     extensions: [".es3", ".et3", ".dosszie"],
@@ -16,6 +17,7 @@ export const SIGNED_DOSSIER_FORMATS = [
     // Slovak ZEPf: a ZIP of external signatures over a MIME envelope that
     // holds the signed documents.
     kind: "zep",
+    container: "zip",
     auditFormat: "zep",
     label: "ZEP",
     extensions: [".zep"],
@@ -23,5 +25,3 @@ export const SIGNED_DOSSIER_FORMATS = [
     mimeAliases: ["application/zep"],
   },
 ] as const;
-
-export const [E_AKTA_FILE_FORMAT, ZEP_FILE_FORMAT] = SIGNED_DOSSIER_FORMATS;

@@ -804,7 +804,10 @@ try {
       fileBytes,
       mimeType: process.argv[4] ?? "",
       maxChars,
-      document: Number(process.argv[5] ?? -1),
+      // An unparsable position names no document; the reader refuses it.
+      document: parseIntegerToken(process.argv[5] ?? "", {
+        sign: "unsigned",
+      }).unwrapOr(-1),
     });
     if (written.isErr()) {
       exitWithWorkerError(written.error);

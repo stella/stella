@@ -94,47 +94,48 @@ export const SignedDossierViewer = ({
           <section className="text-sm">
             <h2 className="font-medium">{t("common.documents")}</h2>
             <ul className="divide-y">
-              {data.documents.map(({ fileName, pdf, status, text }, index) => (
-                // oxlint-disable-next-line react/no-array-index-key -- names can repeat in a container; the server's position is the document's identity.
-                <li className="space-y-2 py-3" key={index}>
-                  <div className="flex items-center justify-between gap-2">
-                    <h3 className="min-w-0 font-medium wrap-break-word">
-                      <BidiText>{fileName}</BidiText>
-                    </h3>
-                    {pdf && (
-                      <Button
-                        aria-pressed={shownPdf === index}
-                        onClick={() => {
-                          setSelected(index);
-                        }}
-                        size="sm"
-                        type="button"
-                        variant={shownPdf === index ? "secondary" : "ghost"}
+              {data.documents.map(
+                ({ id, fileName, pdf, status, text }, index) => (
+                  <li className="space-y-2 py-3" key={id}>
+                    <div className="flex items-center justify-between gap-2">
+                      <h3 className="min-w-0 font-medium wrap-break-word">
+                        <BidiText>{fileName}</BidiText>
+                      </h3>
+                      {pdf && (
+                        <Button
+                          aria-pressed={shownPdf === index}
+                          onClick={() => {
+                            setSelected(index);
+                          }}
+                          size="sm"
+                          type="button"
+                          variant={shownPdf === index ? "secondary" : "ghost"}
+                        >
+                          {t("common.preview")}
+                        </Button>
+                      )}
+                    </div>
+                    {!pdf && status !== "unavailable" && text.trim() ? (
+                      <pre
+                        className="font-sans leading-relaxed wrap-break-word whitespace-pre-wrap"
+                        dir="auto"
                       >
-                        {t("common.preview")}
-                      </Button>
+                        {text}
+                      </pre>
+                    ) : null}
+                    {!pdf && status === "truncated" && (
+                      <p className="text-muted-foreground">
+                        {t("common.previewTruncated")}
+                      </p>
                     )}
-                  </div>
-                  {!pdf && status !== "unavailable" && text.trim() ? (
-                    <pre
-                      className="font-sans leading-relaxed wrap-break-word whitespace-pre-wrap"
-                      dir="auto"
-                    >
-                      {text}
-                    </pre>
-                  ) : null}
-                  {!pdf && status === "truncated" && (
-                    <p className="text-muted-foreground">
-                      {t("common.previewTruncated")}
-                    </p>
-                  )}
-                  {!pdf && status === "unavailable" && (
-                    <p className="text-muted-foreground">
-                      {t("signedFile.noReadableContent")}
-                    </p>
-                  )}
-                </li>
-              ))}
+                    {!pdf && status === "unavailable" && (
+                      <p className="text-muted-foreground">
+                        {t("signedFile.noReadableContent")}
+                      </p>
+                    )}
+                  </li>
+                ),
+              )}
             </ul>
           </section>
         </article>

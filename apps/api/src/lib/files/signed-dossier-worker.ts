@@ -53,6 +53,8 @@ const readSignedDossier = async (bytes: Uint8Array, mimeType: string) => {
     : await readers[format.kind](bytes);
 };
 
+const documentId = (position: number) => `document-${position}`;
+
 export const extractSignedDossierPreview = async ({
   fileBytes,
   mimeType,
@@ -73,7 +75,8 @@ export const extractSignedDossierPreview = async ({
   const layoutChars =
     signedDossierText({
       signers,
-      documents: documents.map(({ fileName }) => ({
+      documents: documents.map(({ fileName }, position) => ({
+        id: documentId(position),
         fileName,
         pdf: false,
         status: "truncated",
@@ -91,7 +94,8 @@ export const extractSignedDossierPreview = async ({
   return Result.ok({
     signers,
     documents: texts.value.map(
-      ({ fileName, mimeType: type, status, text }) => ({
+      ({ fileName, mimeType: type, status, text }, position) => ({
+        id: documentId(position),
         fileName,
         status,
         text,

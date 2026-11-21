@@ -59,7 +59,7 @@ const isXmlSignature = (node: DocumentXmlNode) =>
  * Matching elements in document order, not descending into a match or into a
  * nested XML signature, such as a countersignature, unless that is the match.
  */
-export const descendantElements = (
+const descendantElements = (
   node: DocumentXmlNode,
   matches: (node: DocumentXmlNode) => boolean,
 ): DocumentXmlNode[] => {
@@ -154,7 +154,9 @@ export const readXadesSigners = (
       (node) =>
         node.namespaceURI === XMLDSIG_NAMESPACE &&
         node.localName === "X509Certificate",
-    ).flatMap((node) => decodeCertificate(node) ?? []);
+    )
+      .map(decodeCertificate)
+      .filter((certificate) => certificate !== null);
     const digests = signingCertificateDigests(signature);
     const named = certificates.filter(({ der }) =>
       digests.some(({ algorithm, value }) => algorithm(der) === value),

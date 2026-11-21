@@ -39,9 +39,10 @@ describe("ZEPf containers", () => {
       ["D20260105090000Z/Other/poznámka.txt", "Poznámka"],
     ]);
     // Certificates and other validation data are not documents.
-    expect(signers.map(({ name }) => name).toSorted()).toEqual([
-      "Example XML signer",
+    // Signatures keep the container's entry order.
+    expect(signers.map(({ name }) => name)).toEqual([
       "Example first signer",
+      "Example XML signer",
     ]);
   });
 

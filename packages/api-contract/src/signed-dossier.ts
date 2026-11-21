@@ -9,6 +9,8 @@ import * as v from "valibot";
 export const signedDossierPreviewSchema = v.object({
   documents: v.array(
     v.object({
+      /** Stable for one file: the document's position in the container. */
+      id: v.string(),
       fileName: v.string(),
       text: v.string(),
       status: v.picklist(["readable", "truncated", "unavailable"]),

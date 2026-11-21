@@ -571,24 +571,28 @@ test.each([".es3", ".dosszie", ".zep"])(
         ],
         documents: [
           {
+            id: "document-0",
             fileName: "kérelem.txt",
             status: "readable",
             text: "Kérelem szövege",
             pdf: false,
           },
           {
+            id: "document-1",
             fileName: "végzés.pdf",
             status: "readable",
             text: "Végzés",
             pdf: true,
           },
           {
+            id: "document-2",
             fileName: "csomag.zip",
             status: "unavailable",
             text: "",
             pdf: false,
           },
           {
+            id: "document-3",
             fileName: "melléklet.pdf",
             status: "unavailable",
             text: "",

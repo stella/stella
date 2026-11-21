@@ -4,7 +4,7 @@ import { expect, test } from "bun:test";
 import {
   E_AKTA_FILE_FORMAT,
   ZEP_FILE_FORMAT,
-} from "@stll/api-contract/signed-dossier-formats";
+} from "@stll/api-contract/legal-file-formats";
 import { ZipArchive } from "@stll/docx-core/zip";
 
 import {
@@ -68,18 +68,26 @@ test("previews an e-akta dossier uploaded under a generic type, and search reads
     signers: [{ id: "signature-0", name: "Example frame signer" }],
     documents: [
       {
+        id: "document-0",
         fileName: "kérelem.txt",
         text: "Kérelem száma 47",
         status: "readable",
         pdf: false,
       },
       {
+        id: "document-1",
         fileName: "végzés.pdf",
         text: expect.stringContaining(marker),
         status: "readable",
         pdf: true,
       },
-      { fileName: "csomag.zip", text: "", status: "unavailable", pdf: false },
+      {
+        id: "document-2",
+        fileName: "csomag.zip",
+        text: "",
+        status: "unavailable",
+        pdf: false,
+      },
     ],
   });
 
@@ -128,12 +136,14 @@ test("previews a ZEPf container stored as a generic ZIP", async () => {
   ]);
   expect(preview.documents).toEqual([
     {
+      id: "document-0",
       fileName: "M20260105090000Z.txt",
       text: "Žiadosť",
       status: "readable",
       pdf: false,
     },
     {
+      id: "document-1",
       fileName: "rozhodnutie.pdf",
       text: expect.stringContaining(marker),
       status: "readable",

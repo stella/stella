@@ -57,7 +57,13 @@ export const signedDossierPreviewEndpoint = createSafeHandler(
 
 export const signedDossierContentEndpoint = createSafeHandler(
   {
-    ...config,
+    contract: "patch",
+    contentDelivery: { type: "audited" },
+    permissions: { workspace: ["read"] },
+    accountAccess: ACCOUNT_ACCESS.sandbox,
+    access: "read",
+    mcp: { type: "internal", reason: "upload_mechanics" },
+    params: workspaceParams({ fieldId: resourceIdSchema("field") }),
     query: v.object({
       /** The document's position in the container's preview list. */
       document: numberFromString(

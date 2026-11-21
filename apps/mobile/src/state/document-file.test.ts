@@ -364,12 +364,14 @@ describe("reading a document's file", () => {
         ],
         documents: [
           {
+            id: "document-0",
             fileName: "határozat.pdf",
             status: "readable",
             text: "Az első oldal",
             pdf: true,
           },
           {
+            id: "document-1",
             fileName: "príloha.bin",
             status: "unavailable",
             text: "",
