@@ -8,12 +8,15 @@ import {
   transcribeRecording,
 } from "@/state/dictation";
 import { sameClassFallback } from "@/state/dictation-fallback";
+import type { ModelClass } from "@/state/dictation-fallback";
 import { RecordingReadError } from "@/state/dictation-kept";
 import type { PieceFailure } from "@/state/dictation-kept";
 
 /** What a recording is transcribed with: the model, the matter and its names. */
 type PieceChoice = {
   readonly modelId: string | undefined;
+  /** Where the picked model's audio goes, as kept when it was picked. */
+  readonly modelClass: ModelClass | null;
   readonly matterId: string | undefined;
   readonly vocabulary: readonly string[];
 };
@@ -66,7 +69,7 @@ export const transcribePiece = async ({
   }
   const offered = await readDictationModels({ fetch, source });
   const fallback = offered.isOk()
-    ? sameClassFallback(picked, offered.value)
+    ? sameClassFallback(picked, choice.modelClass, offered.value)
     : undefined;
   return fallback === undefined
     ? first

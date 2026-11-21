@@ -151,6 +151,7 @@ const retryKept = async (
         ).unwrapOr([]);
   const choice = {
     modelId: kept.modelId ?? undefined,
+    modelClass: kept.modelClass,
     matterId: kept.matterId ?? undefined,
     vocabulary,
   };
