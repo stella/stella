@@ -9,8 +9,8 @@ import {
 import { ExpoFormData } from "@/connection/test-support/expo-form-data";
 
 import {
-  appendDictation,
   cleanUpDictation,
+  insertDictation,
   readDictationModels,
   readMatterVocabulary,
   segmentsText,
@@ -323,14 +323,117 @@ describe("cleaning up a dictation", () => {
   });
 });
 
-describe("adding dictated text to the box", () => {
+describe("putting dictated text where the cursor is", () => {
+  const insert = (
+    draft: string,
+    dictated: string,
+    {
+      at = draft.length,
+      to = at,
+      names = [],
+      locale = "cs",
+    }: { at?: number; to?: number; names?: string[]; locale?: string } = {},
+  ) =>
+    insertDictation({
+      draft,
+      selection: { start: at, end: to },
+      dictated: { text: dictated, names },
+      locale,
+    });
+
   test.each([
     ["", "Dobrý den.", "Dobrý den."],
     ["Shrň", "smlouvu o dílo.", "Shrň smlouvu o dílo."],
     ["Shrň ", "smlouvu.", "Shrň smlouvu."],
-    ["Shrň\n", "smlouvu.", "Shrň\nsmlouvu."],
+    ["Shrň\n", "smlouvu.", "Shrň\nSmlouvu."],
     ["Shrň", "", "Shrň"],
+    ["Hotovo.", "zítra pošlu fakturu.", "Hotovo. Zítra pošlu fakturu."],
+    ["Shrň", "Smlouvu o dílo.", "Shrň smlouvu o dílo."],
+    ["Viz (", "Příloha 2", "Viz (příloha 2"],
+    ["Odpověď", ", prosím.", "Odpověď, prosím."],
   ])("%j then %j reads %j", (draft, dictated, expected) => {
-    expect(appendDictation(draft, dictated)).toBe(expected);
+    expect(insert(draft, dictated).text).toBe(expected);
+  });
+
+  test("text goes in at the cursor, with a space on either side", () => {
+    expect(
+      insert("Pošli smlouvu klientovi.", "Podepsanou.", { at: 13 }),
+    ).toEqual({ text: "Pošli smlouvu podepsanou klientovi.", caret: 24 });
+  });
+
+  test("a selection is replaced", () => {
+    expect(
+      insert("Pošli návrh klientovi.", "Smlouvu", { at: 6, to: 11 }).text,
+    ).toBe("Pošli smlouvu klientovi.");
+  });
+
+  test("before a new sentence the full stop stays", () => {
+    expect(insert("Hotovo. Díky.", "Pošlu to.", { at: 8 }).text).toBe(
+      "Hotovo. Pošlu to. Díky.",
+    );
+  });
+
+  test("before a comma the full stop goes", () => {
+    expect(insert("Ano, díky.", "Souhlasím.", { at: 3 }).text).toBe(
+      "Ano souhlasím, díky.",
+    );
+  });
+
+  test("before a line break the full stop stays", () => {
+    expect(insert("\nDál.", "Hotovo.", { at: 0 }).text).toBe("Hotovo.\nDál.");
+    expect(insert("\nale", "Hotovo.", { at: 0 }).text).toBe("Hotovo.\nale");
+  });
+
+  test("an ellipsis stays", () => {
+    expect(insert("a pak", "Uvidíme...", { at: 0 }).text).toBe(
+      "Uvidíme... a pak",
+    );
+  });
+
+  test("names, words in capitals and I keep their capital mid-sentence", () => {
+    expect(insert("Smlouva s", "Novákem.", { names: ["Novák"] }).text).toBe(
+      "Smlouva s Novákem.",
+    );
+    expect(insert("Podle", "EBITDA.").text).toBe("Podle EBITDA.");
+    expect(insert("and then", "I'll send it.", { locale: "en" }).text).toBe(
+      "and then I'll send it.",
+    );
+  });
+
+  test("in German a noun keeps its capital mid-sentence", () => {
+    expect(insert("Gestern kam der", "Vertrag.", { locale: "de" }).text).toBe(
+      "Gestern kam der Vertrag.",
+    );
+  });
+
+  test("a sentence starts after a closing quote that ends one", () => {
+    expect(insert("Řekl „ano.“", "pošlu to.").text).toBe(
+      "Řekl „ano.“ Pošlu to.",
+    );
+  });
+
+  test("an opening quote takes the text without a space", () => {
+    expect(insert('He said "', "Fine", { locale: "en" }).text).toBe(
+      'He said "fine',
+    );
+    expect(insert("Řekl „", "Ano").text).toBe("Řekl „ano");
+  });
+
+  test("a word with a capital inside keeps it at a sentence start", () => {
+    expect(insert("", "iPhone je tu.").text).toBe("iPhone je tu.");
+  });
+
+  test("no cursor, or one past the end, puts the text at the end", () => {
+    expect(
+      insertDictation({
+        draft: "Shrň",
+        selection: undefined,
+        dictated: { text: "smlouvu.", names: [] },
+        locale: "cs",
+      }).text,
+    ).toBe("Shrň smlouvu.");
+    expect(insert("Shrň", "smlouvu.", { at: 40, to: 2 }).text).toBe(
+      "Shrň smlouvu.",
+    );
   });
 });
