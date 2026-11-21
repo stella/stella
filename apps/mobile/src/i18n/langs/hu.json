@@ -610,6 +610,20 @@
     "hideList": "Lista elrejtése",
     "showList": "Lista megjelenítése"
   },
+  "quickDictation": {
+    "activityReady": "A diktálás kész",
+    "activityReadyDetail": "Koppints, és nézd át a szöveget a stella alkalmazásban",
+    "activityRecording": "Diktálás folyamatban",
+    "activityRecordingDetail": "Koppints a Kész gombra a szöveg átnézéséhez",
+    "copied": "Kimásolva",
+    "copy": "Másolás",
+    "documentName": "Diktálás {when}",
+    "none": "Nincs váró diktálás. Indíts egyet a Művelet gombbal, a Sirivel vagy a Vezérlőközpontból.",
+    "noneTitle": "Nincs mit átnézni",
+    "saveFailed": "A szöveget nem sikerült előkészíteni a mentéshez. Próbáld újra.",
+    "sendToChat": "Küldés csevegésbe",
+    "text": "Diktált szöveg"
+  },
   "role": {
     "readFailed": "Nem sikerült betölteni a jogosultságait, ezért a módosítások egyelőre rejtve vannak.",
     "retry": "Újra"

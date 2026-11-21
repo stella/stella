@@ -610,6 +610,20 @@
     "hideList": "Skrýt seznam",
     "showList": "Zobrazit seznam"
   },
+  "quickDictation": {
+    "activityReady": "Diktát je připraven",
+    "activityReadyDetail": "Klepnutím zkontrolujete text v aplikaci stella",
+    "activityRecording": "Diktujete",
+    "activityRecordingDetail": "Klepněte na Hotovo a zkontrolujte text",
+    "copied": "Zkopírováno",
+    "copy": "Kopírovat",
+    "documentName": "Diktát {when}",
+    "none": "Žádný diktát nečeká. Začněte tlačítkem Akce, Siri nebo v Ovládacím centru.",
+    "noneTitle": "Není co zkontrolovat",
+    "saveFailed": "Text se nepodařilo připravit k uložení. Zkuste to znovu.",
+    "sendToChat": "Poslat do chatu",
+    "text": "Nadiktovaný text"
+  },
   "role": {
     "readFailed": "Vaše oprávnění se nepodařilo načíst, proto jsou úpravy zatím skryté.",
     "retry": "Zkusit znovu"

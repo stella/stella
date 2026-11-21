@@ -610,6 +610,20 @@
     "hideList": "Slėpti sąrašą",
     "showList": "Rodyti sąrašą"
   },
+  "quickDictation": {
+    "activityReady": "Diktavimas paruoštas",
+    "activityReadyDetail": "Bakstelėkite, kad peržiūrėtumėte tekstą stella",
+    "activityRecording": "Diktuojama",
+    "activityRecordingDetail": "Bakstelėkite Baigta, kad peržiūrėtumėte tekstą",
+    "copied": "Nukopijuota",
+    "copy": "Kopijuoti",
+    "documentName": "Diktavimas {when}",
+    "none": "Nėra laukiančio diktavimo. Pradėkite veiksmo mygtuku, Siri arba valdymo centre.",
+    "noneTitle": "Nėra ką peržiūrėti",
+    "saveFailed": "Teksto nepavyko paruošti išsaugoti. Bandykite dar kartą.",
+    "sendToChat": "Siųsti į pokalbį",
+    "text": "Padiktuotas tekstas"
+  },
   "role": {
     "readFailed": "Nepavyko įkelti jūsų teisių, todėl pakeitimai kol kas paslėpti.",
     "retry": "Bandyti dar kartą"

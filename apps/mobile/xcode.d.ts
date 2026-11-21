@@ -12,6 +12,8 @@ declare module "xcode" {
   export type PBXNativeTarget = {
     name: string;
     buildConfigurationList: UUID;
+    /** Each phase by its uuid, commented with its name (`Sources`, `Resources`). */
+    buildPhases: readonly { value: UUID; comment: string }[];
   };
 
   export type PBXFile = Record<string, unknown>;

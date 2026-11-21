@@ -2006,6 +2006,8 @@ export const TOOLING_ENV_KEYS = new Set([
   "STELLA_QUERY_PLAN_SCALE_PROFILE",
   // Development render census: verify React Refresh with isolated temporary modules.
   "STELLA_RENDER_CENSUS_HMR",
+  // Opt-in conversion tests against a running document converter.
+  "STELLA_RUN_CONVERTER_TESTS",
   "STELLA_RUN_CORPUS_ENGINE_TESTS",
   "STELLA_RUN_POSTGRES_TESTS",
   "STELLA_RUN_QUERY_PERF_TESTS",
