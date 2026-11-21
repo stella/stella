@@ -25,6 +25,20 @@
   "dependencies": {
     "@stll/docx-core": "catalog:",
     "@stll/folio-core": "catalog:",
-    "better-result": "catalog:"
+    "better-result": "catalog:",
+    "prosemirror-commands": "catalog:",
+    "prosemirror-dropcursor": "catalog:",
+    "prosemirror-gapcursor": "catalog:",
+    "prosemirror-history": "catalog:",
+    "prosemirror-inputrules": "catalog:",
+    "prosemirror-keymap": "catalog:",
+    "prosemirror-model": "catalog:",
+    "prosemirror-state": "catalog:",
+    "prosemirror-tables": "catalog:",
+    "prosemirror-transform": "catalog:",
+    "prosemirror-view": "catalog:",
+    "y-prosemirror": "catalog:",
+    "y-protocols": "catalog:",
+    "yjs": "catalog:"
   }
 }
