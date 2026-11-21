@@ -172,6 +172,35 @@ describe("the case-law identity canary", () => {
     expect(outcome?.detail).toContain(`${SUPREME}: sampled ${CONSTITUTIONAL}`);
   });
 
+  test("a court its facet names by another spelling of the same court passes", async () => {
+    const storedSpelling = "Nejvyšší soud České republiky";
+    const respelled: CallCaseLawTool = async (name, args) => {
+      if (name !== "search_case_law") {
+        return await deployment(exact)(name, args);
+      }
+      if (args["court"] === undefined) {
+        return {
+          type: "ok",
+          payload: {
+            facets: { court: [{ courts: [{ value: storedSpelling }] }] },
+            results: [],
+          },
+        };
+      }
+      return {
+        type: "ok",
+        payload: {
+          facets: null,
+          results: args["court"] === storedSpelling ? [hits[SUPREME]] : [],
+        },
+      };
+    };
+    const outcome = (await sampleCaseLawIdentities(respelled)).find(
+      (entry) => entry.country === "CZE",
+    )?.outcome;
+    expect(outcome?.status).toBe("passed");
+  });
+
   test("a court sampled without an ECLI is named as docket only", async () => {
     const withoutEcli: CallCaseLawTool = async (name, args) =>
       name === "search_case_law" && args["court"] === SUPREME
