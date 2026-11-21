@@ -10,10 +10,8 @@ import collectionMessages from "./i18n/langs/en.json";
 
 GlobalRegistrator.register({ url: "https://app.example.test" });
 const { cleanup, render, screen } = await import("@testing-library/react");
-const { Suspense } = await import("react");
+const { lazy, Suspense } = await import("react");
 const { IntlProvider } = await import("use-intl");
-const { useReaderPresentation } =
-  await import("@stll/decision-reader/reader-adapters");
 const { WebReaderPresentationProvider } =
   await import("@/components/legal-reader/web-reader-presentation");
 const { FormattingProvider } = await import("@/i18n/formatting-context");
@@ -56,15 +54,15 @@ const bodySource: CollectionBodySource = {
   },
 };
 
-/** The reader's own path: the slot from the web adapters, in its boundary. */
-const ReaderSlot = () => {
-  const { CollectionAttribution } = useReaderPresentation();
-  return (
-    <Suspense fallback={<span data-testid="attribution-pending" />}>
-      <CollectionAttribution bodySource={bodySource} />
-    </Suspense>
-  );
-};
+// As the web reader declares it: a lazy component in the reader's boundary.
+const CollectionAttribution = lazy(
+  async () => await import("./web-collection-attribution"),
+);
+const ReaderSlot = () => (
+  <Suspense fallback={<span data-testid="attribution-pending" />}>
+    <CollectionAttribution bodySource={bodySource} />
+  </Suspense>
+);
 
 test("collection attribution loads its strings with its own chunk", async () => {
   render(

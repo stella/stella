@@ -9,12 +9,8 @@ import {
 import { UI_LOCALES } from "@stll/locales";
 
 import catalogues from "../shared/generated/reader-messages.json";
-import {
-  READER_COLLECTION_KEYS,
-  READER_MESSAGE_KEYS,
-  READER_TEMPLATE_KEYS,
-} from "./message-keys";
-import { collectionAttributionFor, readerMessages } from "./messages";
+import { READER_MESSAGE_KEYS, READER_TEMPLATE_KEYS } from "./message-keys";
+import { readerMessages } from "./messages";
 
 const PROVISION_LABEL = "§ 5 odst. 2";
 const DATE = "2026-10-09";
@@ -40,7 +36,6 @@ for (const locale of UI_LOCALES) {
       [
         ...Object.values(READER_MESSAGE_KEYS),
         ...READER_TEMPLATE_KEYS,
-        ...READER_COLLECTION_KEYS,
       ].toSorted(),
     );
     for (const key of Object.values(READER_MESSAGE_KEYS)) {
@@ -48,12 +43,7 @@ for (const locale of UI_LOCALES) {
       expect(messages[key].length).toBeGreaterThan(0);
     }
     const html = renderToStaticMarkup(
-      <ReaderPresentationProvider
-        adapters={{
-          messages,
-          CollectionAttribution: collectionAttributionFor(locale),
-        }}
-      >
+      <ReaderPresentationProvider adapters={{ messages }}>
         <MessageSample />
       </ReaderPresentationProvider>,
     );
@@ -87,10 +77,7 @@ for (const { locale, dateText, unavailableText } of [
   test(`MCP reader interpolates the date and missing part in ${locale}`, () => {
     const html = renderToStaticMarkup(
       <ReaderPresentationProvider
-        adapters={{
-          messages: readerMessages(locale),
-          CollectionAttribution: collectionAttributionFor(locale),
-        }}
+        adapters={{ messages: readerMessages(locale) }}
       >
         <MessageSample />
       </ReaderPresentationProvider>,

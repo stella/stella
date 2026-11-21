@@ -7,7 +7,6 @@ import fc from "fast-check";
 import type { Block, ParagraphBlock } from "@stll/legal-ast/document-ast";
 import { assertProperty } from "@stll/property-testing";
 
-import { FakeCollectionAttribution } from "../tests/reader-adapters";
 import { BlockRenderer } from "./document-ast-text";
 import { ReaderPresentationProvider } from "./reader-adapters";
 import type { ReaderPresentationAdapters } from "./reader-adapters";
@@ -50,9 +49,7 @@ const messages = {
 
 const renderBlocks = (blocks: readonly Block[]): string =>
   renderToStaticMarkup(
-    <ReaderPresentationProvider
-      adapters={{ messages, CollectionAttribution: FakeCollectionAttribution }}
-    >
+    <ReaderPresentationProvider adapters={{ messages }}>
       {blocks.map((block) => (
         <BlockRenderer
           activeMatchIndex={-1}

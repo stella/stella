@@ -1,4 +1,3 @@
-import { lazy } from "react";
 import type { ReactElement, ReactNode } from "react";
 
 import { ReaderPresentationProvider } from "@stll/decision-reader/reader-adapters";
@@ -10,13 +9,6 @@ import type {
 import { useCopyControl } from "@/components/copy-control";
 import { useWebReaderMessages } from "@/components/legal-reader/web-reader-messages";
 import { detached } from "@/lib/detached";
-
-// Collection attribution and its strings stay off the startup path; the
-// reader renders it inside its own Suspense boundary.
-const CollectionAttribution = lazy(
-  async () =>
-    await import("./collection-attribution/web-collection-attribution"),
-);
 
 /**
  * A block's permalink mark: a press writes the block's address into the
@@ -45,7 +37,6 @@ const PermalinkCopy = ({
 export const useWebReaderPresentationAdapters =
   (): ReaderPresentationAdapters => ({
     messages: useWebReaderMessages(),
-    CollectionAttribution,
     renderPermalinkCopy: (props) => <PermalinkCopy {...props} />,
   });
 

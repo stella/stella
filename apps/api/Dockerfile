@@ -56,7 +56,6 @@ COPY --from=install-inputs /app/apps/web/src/fonts.css /app/apps/web/src/fonts.c
 COPY --from=install-inputs /app/apps/web/src/i18n/namespaces/ /app/apps/web/src/i18n/namespaces/
 COPY --from=install-inputs /app/apps/web/src/i18n/namespaces.json /app/apps/web/src/i18n/namespaces.json
 COPY --from=install-inputs /app/packages/scripts/src/i18n-namespaces.ts /app/packages/scripts/src/i18n-namespaces.ts
-COPY --from=install-inputs /app/apps/web/src/components/legal-reader/collection-attribution/i18n/langs/ /app/apps/web/src/components/legal-reader/collection-attribution/i18n/langs/
 COPY --from=install-inputs /app/apps/web/public/fonts/ /app/apps/web/public/fonts/
 COPY --from=install-inputs /app/scripts/generated-artifacts.ts /app/scripts/generated-artifacts.ts
 RUN bun apps/api/scripts/generate-mcp-app-contracts.ts && bun packages/mcp-apps/scripts/build-mcp-apps.ts

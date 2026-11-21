@@ -25,15 +25,6 @@ export const READER_MESSAGE_KEYS = {
   "aiDisclosure.caseLaw": "aiDisclosure.caseLaw",
 } as const satisfies Record<ReaderMessageKey, ReaderMessageKey>;
 
-/** The web reader's collection attribution catalog, read from its own directory. */
-export const READER_COLLECTION_KEYS = [
-  "readerCollection.partialText",
-  "readerCollection.unclassifiedText",
-  "readerCollection.sourceAttribution",
-  "readerCollection.sourceAttributionUnknownDate",
-  "readerCollection.provenanceOmitted",
-] as const;
-
 export const READER_TEMPLATE_KEYS = [
   "caseLaw.viewer.textUnavailable",
   "caseLaw.reader.documentUpdated",

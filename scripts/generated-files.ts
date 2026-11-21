@@ -2015,7 +2015,6 @@ const GENERATOR_DECLARATIONS = [
       "apps/web/src/i18n/namespaces/**/*.json",
       "apps/web/src/i18n/namespaces.json",
       "packages/scripts/src/i18n-namespaces.ts",
-      "apps/web/src/components/legal-reader/collection-attribution/i18n/langs/*.json",
       "packages/decision-reader/**",
       "packages/agent-input/**",
       "packages/legal-atlas/**",

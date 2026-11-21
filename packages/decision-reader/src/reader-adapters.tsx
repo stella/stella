@@ -54,12 +54,6 @@ export type ReaderStatuteLinkProps =
 export type ReaderPresentationAdapters = {
   messages: ReaderMessages;
   /**
-   * A collection body's attribution, usually `CollectionAttributionList`
-   * with the host's strings. It may suspend: a host can load those strings
-   * with the component, off its startup path.
-   */
-  CollectionAttribution: ComponentType<{ bodySource: CollectionBodySource }>;
-  /**
    * Renders a block's permalink mark with the host's Copy of the block's
    * link: `copy` copies it, and `copied` is true while the mark confirms in
    * place, so the host raises no success toast. Omit when the host cannot
@@ -76,6 +70,12 @@ export type ReaderPresentationAdapters = {
 export type PermalinkCopyState = { copied: boolean; copy: () => void };
 
 export type DecisionReaderAdapters = ReaderPresentationAdapters & {
+  /**
+   * A collection body's attribution, usually `CollectionAttributionList`
+   * with the host's strings. It may suspend: a host can load those strings
+   * with the component, off its startup path.
+   */
+  CollectionAttribution: ComponentType<{ bodySource: CollectionBodySource }>;
   renderDecisionLink: (props: ReaderDecisionLinkProps) => ReactElement;
   renderStatuteLink: (props: ReaderStatuteLinkProps) => ReactElement;
   renderBodyUnavailable: (props: {

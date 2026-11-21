@@ -70,11 +70,7 @@ import { locateProvisionAnchors } from "./provision-anchors";
 import { provisionCardsOf } from "./provision-card.logic";
 import type { ProvisionCardCitations } from "./provision-card.logic";
 import type { DecisionReaderAdapters } from "./reader-adapters";
-import {
-  useReaderAdapters,
-  useReaderMessages,
-  useReaderPresentation,
-} from "./reader-adapters";
+import { useReaderAdapters, useReaderMessages } from "./reader-adapters";
 import { ReaderInsetBox } from "./reader-inset-box";
 import type { ReaderSearchMatchRange } from "./reader-search";
 import {
@@ -164,7 +160,8 @@ const DecisionSourceAttribution = ({
 }: {
   decision: ReaderDecision;
 }) => {
-  const { messages, CollectionAttribution } = useReaderPresentation();
+  const messages = useReaderMessages();
+  const { CollectionAttribution } = useReaderAdapters();
   const bodySource = decision.bodySource;
   let attribution: ReactNode;
   switch (bodySource?.textSource) {

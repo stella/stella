@@ -33,8 +33,6 @@ const { FormattingProvider } = await import("@/i18n/formatting-context");
 const { DecisionCitationChip } =
   await import("@/components/references/decision-citation-chip");
 const appMessages = (await import("@/i18n/langs/en.json")).default;
-const { FakeCollectionAttribution } =
-  await import("../../../../../../packages/decision-reader/tests/reader-adapters");
 
 afterEach(() => {
   document.getSelection()?.removeAllRanges();
@@ -159,12 +157,7 @@ const render = (chip: Chip) => {
   root.innerHTML = renderToStaticMarkup(
     <IntlProvider locale="en" messages={appMessages} timeZone="UTC">
       <FormattingProvider locale="en" timeZone="UTC">
-        <ReaderPresentationProvider
-          adapters={{
-            messages,
-            CollectionAttribution: FakeCollectionAttribution,
-          }}
-        >
+        <ReaderPresentationProvider adapters={{ messages }}>
           {blocks.map((block) => (
             <BlockRenderer
               activeMatchIndex={-1}
@@ -347,12 +340,7 @@ const renderParagraph = (
   root.innerHTML = renderToStaticMarkup(
     <IntlProvider locale="en" messages={appMessages} timeZone="UTC">
       <FormattingProvider locale="en" timeZone="UTC">
-        <ReaderPresentationProvider
-          adapters={{
-            messages,
-            CollectionAttribution: FakeCollectionAttribution,
-          }}
-        >
+        <ReaderPresentationProvider adapters={{ messages }}>
           <BlockRenderer
             activeMatchIndex={-1}
             anchorsByPieceId={{
