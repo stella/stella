@@ -26,6 +26,7 @@
 
 import { panic } from "better-result";
 import { and, desc, eq, inArray, isNotNull, or, sql } from "drizzle-orm";
+import type { SQL } from "drizzle-orm";
 import { unionAll } from "drizzle-orm/pg-core";
 
 import {
@@ -601,29 +602,87 @@ export const readDecisionIdentityHits = async (
 const AUTHENTIC_LANGUAGE_KEY =
   "procedureLanguage" satisfies typeof DECISION_AUTHENTIC_LANGUAGE_METADATA_KEY;
 
+/** One jurisdiction a reference is read in, with the locator its grammar gives. */
+export type JurisdictionIdentityRead = {
+  country: string;
+  locator: DecisionIdentityLocator;
+};
+
+type LookupDecisionsByIdentitiesOptions = {
+  caseLawDb: CaseLawPublicReadDb;
+  /** Non-empty: every jurisdiction the reference is read in. */
+  reads: readonly [JurisdictionIdentityRead, ...JurisdictionIdentityRead[]];
+  countries?: readonly string[];
+};
+
+/** One condition, or the disjunction of several, without a lone `OR` wrapper. */
+const anyOf = (conditions: readonly [SQL, ...SQL[]]): SQL => {
+  const [only, ...rest] = conditions;
+  return rest.length === 0 ? only : (or(...conditions) ?? only);
+};
+
 export const lookupDecisionsByIdentity = async ({
   caseLawDb,
   country,
   countries = CASE_LAW_SURFACE_COUNTRIES.pages,
   locator,
-}: LookupDecisionsByIdentityOptions): Promise<DecisionIdentityRow[]> => {
+}: LookupDecisionsByIdentityOptions): Promise<DecisionIdentityRow[]> =>
+  await lookupDecisionsByIdentities({
+    caseLawDb,
+    countries,
+    reads: [{ country, locator }],
+  });
+
+/**
+ * The decisions a reference names across several jurisdictions, in one
+ * read: a reference can be well-formed in more than one jurisdiction's
+ * grammar, each spelling it its own way, and which corpus holds the decision
+ * is the answer. Each jurisdiction's locator is matched only within that
+ * jurisdiction, exactly as the single-jurisdiction lookup does.
+ */
+export const lookupDecisionsByIdentities = async ({
+  caseLawDb,
+  countries = CASE_LAW_SURFACE_COUNTRIES.pages,
+  reads,
+}: LookupDecisionsByIdentitiesOptions): Promise<DecisionIdentityRow[]> => {
   const rows = await caseLawDb(async (tx) => {
-    const familyKey = docketFamilyKeyToRead({ country, locator });
-    const exactDocketIds =
+    const exactDocketSets = reads.flatMap(({ country, locator }) =>
       locator.kind === "docket" && locator.selector.kind === "none"
-        ? identifierRowDecisionIds({
-            tx,
-            rows: identifierRowKeysOf({
-              jurisdiction: country,
-              types: [DECISION_IDENTIFIER_TYPES.CASE_NUMBER],
-              values: decisionDocketFamilySpellings(locator.value, country),
+        ? [
+            identifierRowDecisionIds({
+              tx,
+              rows: identifierRowKeysOf({
+                jurisdiction: country,
+                types: [DECISION_IDENTIFIER_TYPES.CASE_NUMBER],
+                values: decisionDocketFamilySpellings(locator.value, country),
+              }),
             }),
-          })
-        : null;
+          ]
+        : [],
+    );
+    const [firstExactSet, ...otherExactSets] = exactDocketSets.map((ids) =>
+      inArray(publishedCaseLawDecisions.id, ids),
+    );
+    const exactDocketIds = firstExactSet === undefined ? null : exactDocketSets;
     const exactDocketIdentity =
-      exactDocketIds === null
+      firstExactSet === undefined
         ? sql<boolean>`false`
-        : sql<boolean>`${inArray(publishedCaseLawDecisions.id, exactDocketIds)}`;
+        : sql<boolean>`${anyOf([firstExactSet, ...otherExactSets])}`;
+    const [firstRead, ...otherReads] = reads.map(
+      ({ country, locator }) =>
+        and(
+          inArray(
+            publishedCaseLawDecisions.id,
+            decisionIdsNamedBy({
+              country,
+              familyKey: docketFamilyKeyToRead({ country, locator }),
+              locator,
+              tx,
+            }),
+          ),
+          eq(publishedCaseLawDecisions.country, country),
+        ) ?? panic("An identity read has a condition"),
+    );
     const scannedDecisions = await tx
       .select({
         caseNumber: publishedCaseLawDecisions.caseNumber,
@@ -661,11 +720,7 @@ export const lookupDecisionsByIdentity = async ({
       )
       .where(
         and(
-          inArray(
-            publishedCaseLawDecisions.id,
-            decisionIdsNamedBy({ country, familyKey, locator, tx }),
-          ),
-          eq(publishedCaseLawDecisions.country, country),
+          anyOf([firstRead, ...otherReads]),
           redistributableCaseLawSourceFor(caseLawSources.descriptor),
         ),
       )
