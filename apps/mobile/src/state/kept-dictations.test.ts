@@ -110,7 +110,12 @@ const offline = (): RetryOutcome => ({
 describe("kept dictations", () => {
   test("a failed dictation is kept and goes to its open field once transcribed", async () => {
     const { disk, store, time } = setUp({
-      outcomes: [{ type: "transcribed", dictated: { text: "Call the court.", names: [] } }],
+      outcomes: [
+        {
+          type: "transcribed",
+          dictated: { text: "Call the court.", names: [] },
+        },
+      ],
     });
     const delivered: string[] = [];
     store.own("field-1", ({ text }) => {
@@ -140,7 +145,12 @@ describe("kept dictations", () => {
 
   test("a closed field's text is offered for pasting for ten minutes", async () => {
     const { disk, store, time } = setUp({
-      outcomes: [{ type: "transcribed", dictated: { text: "Recovered words.", names: [] } }],
+      outcomes: [
+        {
+          type: "transcribed",
+          dictated: { text: "Recovered words.", names: [] },
+        },
+      ],
     });
     const release = store.own("field-1", () => true);
     store.keep({
@@ -163,7 +173,9 @@ describe("kept dictations", () => {
 
   test("a recovered text is taken once", async () => {
     const { store } = setUp({
-      outcomes: [{ type: "transcribed", dictated: { text: "Once.", names: [] } }],
+      outcomes: [
+        { type: "transcribed", dictated: { text: "Once.", names: [] } },
+      ],
     });
     store.keep({
       owner: "gone",
@@ -255,7 +267,9 @@ describe("kept dictations", () => {
 
   test("discarding deletes the recordings, even while a retry runs", async () => {
     const { disk, store } = setUp({
-      outcomes: [{ type: "transcribed", dictated: { text: "Too late.", names: [] } }],
+      outcomes: [
+        { type: "transcribed", dictated: { text: "Too late.", names: [] } },
+      ],
     });
     const delivered: string[] = [];
     store.own("field-1", ({ text }) => {
@@ -327,7 +341,9 @@ describe("kept dictations", () => {
 
   test("recordings stay while the text that replaces them cannot be written", async () => {
     const { disk, store } = setUp({
-      outcomes: [{ type: "transcribed", dictated: { text: "Unsaved.", names: [] } }],
+      outcomes: [
+        { type: "transcribed", dictated: { text: "Unsaved.", names: [] } },
+      ],
     });
     store.keep({
       owner: "closed",
@@ -361,7 +377,12 @@ describe("kept dictations", () => {
 
   test("a field that takes no text now, as while sending, gets the offer instead", async () => {
     const { store } = setUp({
-      outcomes: [{ type: "transcribed", dictated: { text: "Not into the sent draft.", names: [] } }],
+      outcomes: [
+        {
+          type: "transcribed",
+          dictated: { text: "Not into the sent draft.", names: [] },
+        },
+      ],
     });
     store.own("field-1", () => false);
     store.keep({

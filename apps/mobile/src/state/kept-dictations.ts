@@ -1,6 +1,7 @@
 import { panic } from "better-result";
 import type { Result } from "better-result";
 
+import type { Dictated } from "@/state/dictation";
 import {
   keptFor,
   recordingsToTranscribe,
@@ -9,7 +10,6 @@ import {
   retryDelayMs,
   stillOffered,
 } from "@/state/dictation-kept";
-import type { Dictated } from "@/state/dictation";
 import type {
   DictationField,
   KeptDictation,
