@@ -223,7 +223,7 @@ describe("the activity disclosure", () => {
   test("a stella AI draft sends a document's name, never its folders", () => {
     const part = fc.stringMatching(/^[^\\/\p{Cc}]{1,12}$/u);
     assertProperty(
-      "activity-disclosure.draft-sends-document-names-not-paths",
+      "a stella AI draft sends a document's name, never its folders",
       fc.property(
         fc.array(part, { maxLength: 5, minLength: 1 }),
         fc.constantFrom("/", "\\"),
