@@ -1,5 +1,6 @@
 import { fetchWithTimeout } from "@stll/fetch";
 
+import { toBrowserApiUrl } from "@/lib/api-origins";
 import { APIError } from "@/lib/errors/api";
 import type { StorageFetchPurpose } from "@/lib/files/file-metadata-query.logic";
 
@@ -25,7 +26,7 @@ export const fetchStorageArrayBuffer = async (
 ) => {
   let response: Response;
   try {
-    response = await fetchWithTimeout(presignedUrl, {
+    response = await fetchWithTimeout(toBrowserApiUrl(presignedUrl), {
       signal,
       timeoutMs: 60_000,
     });
