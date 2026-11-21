@@ -16,12 +16,12 @@ import { DueDatePicker } from "@/components/due-date-picker";
 import { screenStyles } from "@/components/empty-state-screen";
 import { MatterPicker } from "@/components/matter-picker";
 import { MemberList } from "@/components/task-assignees";
+import { useDictationField } from "@/components/use-dictation-field";
 import { writeFailure, WriteFailureNotice } from "@/components/write-failure";
 import type { WriteFailure } from "@/components/write-failure";
 import { epochMilliseconds } from "@/connection/clock";
 import type { AccessTokenSource } from "@/connection/session";
 import { useSession } from "@/connection/session-provider";
-import { appendDictation } from "@/state/dictation";
 import { listMatters } from "@/state/matters";
 import { pickerDate } from "@/state/picked-day";
 import {
@@ -58,6 +58,7 @@ const NewTaskForm = ({ source }: { source: AccessTokenSource }) => {
   const params = useLocalSearchParams<{ matterId?: string }>();
   const today = dayAt(epochMilliseconds(), timeZone);
   const [name, setName] = useState("");
+  const field = useDictationField(name, setName);
   const [due, setDue] = useState<DueChoice>("none");
   const [pickedOn, setPickedOn] = useState(() =>
     today.add({ days: 1 }).toString(),
@@ -160,7 +161,7 @@ const NewTaskForm = ({ source }: { source: AccessTokenSource }) => {
         <Input
           accessibilityLabel={t("name")}
           autoFocus
-          onChangeText={setName}
+          {...field.inputProps}
           onSubmitEditing={add}
           placeholder={t("name")}
           returnKeyType="done"
@@ -169,9 +170,7 @@ const NewTaskForm = ({ source }: { source: AccessTokenSource }) => {
         <DictateButton
           matterId={matterId ?? undefined}
           onBusyChange={setDictating}
-          onText={(dictated) => {
-            setName((typed) => appendDictation(typed, dictated));
-          }}
+          onText={field.insert}
         />
         <WriteFailureNotice failure={failure} message={t("addFailed")} />
         <View className="gap-2">
