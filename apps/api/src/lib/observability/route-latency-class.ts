@@ -256,6 +256,8 @@ export const ROUTE_LATENCY_CLASSES = {
     "crud",
   "GET /v1/files/:workspaceId/print-pdf/:fieldId": "crud",
   "GET /v1/files/:workspaceId/scrubbed/:fieldId": "crud",
+  "GET /v1/files/:workspaceId/signed-dossier/:fieldId": "crud",
+  "GET /v1/files/:workspaceId/signed-dossier/:fieldId/content": "crud",
   "GET /v1/files/:workspaceId/stamped/:fieldId": "crud",
   "GET /v1/files/:workspaceId/structured-document/:fieldId": "crud",
   "GET /v1/files/:workspaceId/thumbnail/:fieldId": "crud",

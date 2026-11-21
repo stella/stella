@@ -18,7 +18,10 @@ import {
   PeekSuspenseFallback,
 } from "@/components/pdf/peek/peek-pdf-viewer";
 import { PDF_MIME } from "@/lib/consts";
-import { cadesPdfOptions, cadesPreviewOptions } from "@/lib/files/queries";
+import {
+  cadesPdfOptions,
+  cadesPreviewOptions,
+} from "@/lib/files/legal-file-queries";
 
 export const CadesFileViewer = ({
   onDownload,

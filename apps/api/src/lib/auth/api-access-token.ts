@@ -269,6 +269,18 @@ export const API_OAUTH_ROUTES = {
     exportName: "cadesContentEndpoint",
     uncataloged: "upload_mechanics",
   },
+  "GET /v1/files/:workspaceId/signed-dossier/:fieldId": {
+    scope: "stella:read",
+    handler: "apps/api/src/handlers/files/signed-dossier.ts",
+    exportName: "signedDossierPreviewEndpoint",
+    uncataloged: "upload_mechanics",
+  },
+  "GET /v1/files/:workspaceId/signed-dossier/:fieldId/content": {
+    scope: "stella:read",
+    handler: "apps/api/src/handlers/files/signed-dossier.ts",
+    exportName: "signedDossierContentEndpoint",
+    uncataloged: "upload_mechanics",
+  },
   "GET /v1/files/:workspaceId/data-box/:fieldId": {
     scope: "stella:read",
     handler: "apps/api/src/handlers/files/data-box.ts",

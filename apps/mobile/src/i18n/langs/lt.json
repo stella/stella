@@ -776,6 +776,8 @@
   "signedFile": {
     "layer": "Parašų sluoksnis {number, number}",
     "noReadableContent": "Nėra skaitomo turinio, kurį būtų galima peržiūrėti.",
+    "noSigners": "Pasirašiusiųjų duomenų nerasta.",
+    "signers": "Pasirašiusieji",
     "unknownSigner": "Nežinomas pasirašęs asmuo",
     "unreadable": "Nepavyko perskaityti pasirašyto failo.",
     "unverified": "Parašai nepatikrinti."

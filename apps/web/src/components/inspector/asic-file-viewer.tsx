@@ -10,7 +10,7 @@ import { DOCKED_COMPOSER_CLEARANCE } from "@/components/ai-suggestions/composer-
 import { FileViewerWithAI } from "@/components/ai-suggestions/file-viewer-with-ai";
 import type { FileTab } from "@/components/inspector/file-tab";
 import { LegalFilePreviewText } from "@/components/inspector/legal-file-preview-text";
-import { asicPreviewOptions } from "@/lib/files/queries";
+import { asicPreviewOptions } from "@/lib/files/legal-file-queries";
 
 export const AsicFileViewer = ({
   onDownload,

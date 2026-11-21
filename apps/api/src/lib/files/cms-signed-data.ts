@@ -57,7 +57,8 @@ const octetStringBytes = (value: asn1js.OctetString) => {
   return octetParts(value, parts) ? Buffer.concat(parts) : null;
 };
 
-const nameAttribute = (name: pkijs.RelativeDistinguishedNames) => {
+/** A certificate name's display form: its common name, else its organization. */
+export const nameAttribute = (name: pkijs.RelativeDistinguishedNames) => {
   const value = (oid: string) => {
     const attribute: unknown = name.typesAndValues.find(
       ({ type }) => type === oid,
@@ -71,9 +72,11 @@ const nameAttribute = (name: pkijs.RelativeDistinguishedNames) => {
       : undefined;
   };
   const text = value(COMMON_NAME_OID) ?? value(ORGANIZATION_NAME_OID);
-  if (text === undefined) {
-    return null;
-  }
+  return text === undefined ? null : signerDisplayName(text);
+};
+
+/** A stated signer name as one bounded line of display text. */
+export const signerDisplayName = (text: string) => {
   const head = text.slice(0, 2 * MAX_NAME_LENGTH);
   const singleLine = Array.from(head, (character) => {
     const code = character.codePointAt(0) ?? 0;
@@ -226,9 +229,9 @@ export const hasCmsSignedDataHeader = (bytes: Uint8Array) => {
 /** The id of the outermost SignedData layer; nested layers extend its path. */
 export const OUTER_CMS_LAYER_ID = "layer-0";
 
-const decodeSignedData = (bytes: Uint8Array) => {
+const decodeSignedData = (bytes: Uint8Array) =>
   // asn1js can throw on certain malformed strings, and pkijs throws on schema mismatch.
-  const decoded = Result.try(() => {
+  Result.try(() => {
     const { offset, result } = asn1js.fromBER(bytes, {
       maxContentLength: bytes.byteLength,
     });
@@ -240,7 +243,19 @@ const decodeSignedData = (bytes: Uint8Array) => {
       ? new pkijs.SignedData({ schema: contentInfo.content })
       : null;
   });
-  return decoded.isErr() ? null : decoded.value;
+
+/**
+ * The stated signers of a CMS signature, attached or detached, such as an
+ * external `.p7s` signature beside the document it signs. Not verified.
+ */
+export const readCmsSigners = (
+  bytes: Uint8Array,
+  layerId: string,
+): Result<CmsSigner[], "not_signed_data"> => {
+  const decoded = decodeSignedData(bytes);
+  return decoded.isErr() || decoded.value === null
+    ? Result.err("not_signed_data")
+    : Result.ok(readSigners(decoded.value, layerId));
 };
 
 /**
@@ -250,16 +265,16 @@ const decodeSignedData = (bytes: Uint8Array) => {
 export const readDetachedCmsSigners = (
   bytes: Uint8Array,
 ): Result<CmsSigner[], "not_signed_data" | "not_detached"> => {
-  const signedData = decodeSignedData(bytes);
-  if (signedData === null) {
+  const decoded = decodeSignedData(bytes);
+  if (decoded.isErr() || decoded.value === null) {
     return Result.err("not_signed_data");
   }
   // A SignedData that carries its own content is a signed document, such as
   // an attached .p7m, not a signature over the message beside it.
-  if (signedData.encapContentInfo.eContent !== undefined) {
+  if (decoded.value.encapContentInfo.eContent !== undefined) {
     return Result.err("not_detached");
   }
-  return Result.ok(readSigners(signedData, OUTER_CMS_LAYER_ID));
+  return Result.ok(readSigners(decoded.value, OUTER_CMS_LAYER_ID));
 };
 
 /** Extracts CMS content and stated signer metadata without verifying signatures. */
@@ -267,11 +282,11 @@ export const readCmsSignedData = (
   bytes: Uint8Array,
   layerId: string = OUTER_CMS_LAYER_ID,
 ): Result<CmsSignedData, CmsFailure> => {
-  const signedData = decodeSignedData(bytes);
-  if (signedData === null) {
+  const decoded = decodeSignedData(bytes);
+  if (decoded.isErr() || decoded.value === null) {
     return Result.err("not_signed_data");
   }
-  const { eContent, eContentType } = signedData.encapContentInfo;
+  const { eContent, eContentType } = decoded.value.encapContentInfo;
   if (eContent === undefined) {
     return Result.err("detached");
   }
@@ -286,6 +301,6 @@ export const readCmsSignedData = (
     id: layerId,
     contentType: eContentType,
     content,
-    signers: readSigners(signedData, layerId),
+    signers: readSigners(decoded.value, layerId),
   });
 };
