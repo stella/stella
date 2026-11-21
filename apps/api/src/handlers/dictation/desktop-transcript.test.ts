@@ -107,6 +107,7 @@ const exercise = async ({
   visible = true,
   status = "active",
   refusedFileName,
+  rejectedFileName,
 }: {
   body?: unknown;
   readOnly?: boolean;
@@ -114,6 +115,8 @@ const exercise = async ({
   status?: string;
   /** A document the matter does not take. */
   refusedFileName?: string;
+  /** A document whose create rejects instead of answering. */
+  rejectedFileName?: string;
 } = {}) => {
   const authorizeAccount = await fixtureAccount(readOnly);
   const readMatter = mock(
@@ -129,8 +132,11 @@ const exercise = async ({
       fileName: string;
       buffer: ArrayBuffer | Uint8Array;
       parentId?: string | null;
-    }) =>
-      await Promise.resolve(
+    }) => {
+      if (input.fileName === rejectedFileName) {
+        await Promise.reject(new Error("connection lost while filing"));
+      }
+      return await Promise.resolve(
         input.fileName === refusedFileName
           ? Result.err({ _tag: "EntityLimitError" as const })
           : Result.ok({
@@ -140,7 +146,8 @@ const exercise = async ({
               fileName: input.fileName,
               renamed: false,
             }),
-      ),
+      );
+    },
   );
   const createFolder = mock(
     async (input: { title: string; entityCount: number }) =>
@@ -350,24 +357,32 @@ test("a recording larger than a matter document is left out and the documents ar
   expect(createFolder.mock.calls.at(0)?.[0]).toMatchObject({ entityCount: 2 });
 });
 
-test("cleaned-up text the matter does not take is reported, and the filed transcript and recording upload stand", async () => {
-  const body = { ...BODY, folder: FOLDER, cleaned: CLEANED, audio: AUDIO };
-  const { response, createEntity, reserveAudio } = await exercise({
-    body,
-    refusedFileName: `${FOLDER.cleanedName}.docx`,
-  });
-  expect(response.status).toBe(200);
-  const reply = await response.json();
-  expect(reply).toMatchObject({
-    fileName: `${FOLDER.transcriptName}.docx`,
-    folderName: `${BODY.title} (2)`,
-    files: [{ kind: "transcript", fileName: `${FOLDER.transcriptName}.docx` }],
-    notFiled: [{ kind: "cleaned" }],
-    audio: { status: "upload" },
-  });
-  expect(createEntity).toHaveBeenCalledTimes(2);
-  expect(reserveAudio).toHaveBeenCalledTimes(1);
-});
+test.each([
+  ["refuses", { refusedFileName: `${FOLDER.cleanedName}.docx` }],
+  ["rejects", { rejectedFileName: `${FOLDER.cleanedName}.docx` }],
+])(
+  "cleaned-up text whose create %s is reported, and the filed transcript and recording upload stand",
+  async (_outcome, failing) => {
+    const body = { ...BODY, folder: FOLDER, cleaned: CLEANED, audio: AUDIO };
+    const { response, createEntity, reserveAudio } = await exercise({
+      body,
+      ...failing,
+    });
+    expect(response.status).toBe(200);
+    const reply = await response.json();
+    expect(reply).toMatchObject({
+      fileName: `${FOLDER.transcriptName}.docx`,
+      folderName: `${BODY.title} (2)`,
+      files: [
+        { kind: "transcript", fileName: `${FOLDER.transcriptName}.docx` },
+      ],
+      notFiled: [{ kind: "cleaned" }],
+      audio: { status: "upload" },
+    });
+    expect(createEntity).toHaveBeenCalledTimes(2);
+    expect(reserveAudio).toHaveBeenCalledTimes(1);
+  },
+);
 
 test("an older desktop files the transcript alone at the matter's root, and cleaned text or a recording needs a folder", async () => {
   const older = await exercise();

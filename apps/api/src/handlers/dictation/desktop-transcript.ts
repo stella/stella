@@ -358,21 +358,33 @@ export const createDesktopDictationTranscriptEndpoint = ({
           // Once the transcript is filed the save succeeds: the reply says
           // what the folder holds and what was left out, so the desktop
           // never files the transcript twice by retrying the whole save.
-          const filedCleaned = await fileDocument({
-            buffer: cleaned,
-            name: folder.cleanedName,
-            parentId: created.folderId,
+          // A create that rejects instead of answering is left out the
+          // same way as one that refuses.
+          const attempted = await Result.tryPromise({
+            try: async () =>
+              await fileDocument({
+                buffer: cleaned,
+                name: folder.cleanedName,
+                parentId: created.folderId,
+              }),
+            catch: (cause: unknown) => cause,
           });
-          if (Result.isError(filedCleaned)) {
-            observeFailure(filedCleaned.error, { sink: cleanedFilingFailure });
-            notFiled.push({
-              kind: "cleaned",
-              message: filedCleaned.error.message,
-            });
-          } else {
+          const filedCleaned = Result.isError(attempted)
+            ? attempted
+            : attempted.value;
+          if (Result.isOk(filedCleaned)) {
             files.push({
               kind: "cleaned",
               fileName: filedCleaned.value.fileName,
+            });
+          } else {
+            const failure: unknown = filedCleaned.error;
+            observeFailure(failure, { sink: cleanedFilingFailure });
+            notFiled.push({
+              kind: "cleaned",
+              message: HandlerError.is(failure)
+                ? failure.message
+                : "The cleaned-up text could not be filed.",
             });
           }
         }
