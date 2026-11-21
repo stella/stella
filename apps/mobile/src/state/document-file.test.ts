@@ -383,7 +383,11 @@ describe("reading a document's file", () => {
           signers: [{ id: "layer-0.signer-0", name: "Sample signer" }],
         },
       ],
-      invoice: { ...invoicePreview, syntax: "fatturaPA", version: "FPR12" },
+      invoice: {
+        ...invoicePreview,
+        syntax: "fatturaPA" as const,
+        version: "FPR12",
+      },
     };
     const { fetch } = server((path) =>
       Response.json(
