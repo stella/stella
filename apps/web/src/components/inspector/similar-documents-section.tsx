@@ -131,7 +131,7 @@ export const SimilarDocumentsSection = ({
     <Collapsible onOpenChange={setIsOpen} open={isOpen}>
       {heading(
         <CollapsibleTrigger
-          render={<Button className="flex w-full" variant="plain" />}
+          render={<Button className="w-full" size="sm" variant="muted" />}
         >
           <span className="flex w-full items-center gap-1.5 text-start">
             <DirectionalIcon
