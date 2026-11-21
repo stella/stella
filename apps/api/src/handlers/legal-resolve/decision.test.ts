@@ -102,6 +102,7 @@ const readableDecision: typeof readDecisionReaderSource = async ({
   status: "read",
   decision: {
     extractionWarnings: [],
+    bodySource: { textSource: "host" },
     id: decisionId,
     appealReviews: noDecisionReviewFound(),
     caseNumber: row().caseNumber,
