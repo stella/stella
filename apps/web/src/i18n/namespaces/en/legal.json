@@ -1,0 +1,1457 @@
+{
+  "caseLaw": {
+    "analysis": {
+      "abstract": "Abstract",
+      "aiLayer": "AI {layer}",
+      "backToSection": "Back to the start of this section",
+      "categories": {
+        "facts": "Facts",
+        "holding": "Holding",
+        "procedural-history": "Procedural history",
+        "reasoning": "Reasoning"
+      },
+      "errors": {
+        "analysisDisabled": "AI analysis generation is disabled on this server. Read the decision text or try again later.",
+        "answerIncomplete": "{source, select, organization {Your organization's {provider} key returned an incomplete answer.} other {The AI model returned an incomplete answer.}}",
+        "decisionNotFound": "This decision could not be found. Reopen it from search.",
+        "documentUnparseable": "The decision text is not ready for analysis. Read the original source.",
+        "languageUnsupported": "AI analysis is available only for decisions in {languages}.",
+        "openLanguageVersion": "Open the {language} version",
+        "providerRefused": "{source, select, organization {{provider} refused the request made with your organization's key. Check the key, its quota and billing in organization settings.} other {The AI provider refused the request.}}",
+        "providerUnavailable": "{source, select, organization {{provider} is unavailable for your organization's key right now.} other {The AI provider is unavailable right now.}}",
+        "retryAfter": "You can try again after {time}.",
+        "sourceRestricted": "The source does not permit AI analysis. Read the decision text or original source.",
+        "timedOut": "{source, select, organization {{provider} did not answer in time using your organization's key.} other {The AI model did not answer in time.}}"
+      },
+      "generate": "Generate AI headnotes",
+      "invitation": "With a free account, AI drafts working notes on this decision.",
+      "noCurrentSection": "There is no current section to jump to.",
+      "topics": "Topics",
+      "treatment": "Later treatment"
+    },
+    "analyzing": "Analyzing…",
+    "browse": {
+      "courtDescription": "{court} ({country}): decisions in the stella public legal database, by year and month.",
+      "courts": "Courts",
+      "days": "Days",
+      "jurisdictionDescription": "{country}: court decisions in the stella public legal database, by court, year and month.",
+      "periodDescription": "{court} ({country}), {period}: decisions in the stella public legal database."
+    },
+    "chat": {
+      "prompts": {
+        "facts": {
+          "body": "What are the facts, and what did each party argue?",
+          "name": "Facts and positions"
+        },
+        "holding": {
+          "body": "What did the court decide, and why?",
+          "name": "Holding and reasons"
+        },
+        "precedent": {
+          "body": "Which earlier decisions does it rely on, and does it follow them?",
+          "name": "Earlier decisions"
+        },
+        "provisions": {
+          "body": "Which provisions does the court apply, and how does it read them?",
+          "name": "Provisions applied"
+        }
+      }
+    },
+    "citation": {
+      "citedAtLeast": "Cited at least {count} times",
+      "citedSummary": "{count, plural, =0 {Not cited} one {Cited once} other {Cited # times}}",
+      "dateUnavailable": "Date unavailable",
+      "decisionCount": "{count, plural, =0 {No decisions} one {# decision} other {# decisions}}",
+      "goToMention": "Go to mention {number}",
+      "goToParagraph": "Go to paragraph {paragraph}",
+      "lastNegative": "last negative treatment in {year}",
+      "mentionMark": "mention {number}",
+      "mentionsInDecision": "{count, plural, one {Cited once in this decision} other {Cited # times in this decision}}",
+      "negativeCount": "{count, plural, one {# negative} other {# negative}}",
+      "none": "No citations recorded yet.",
+      "notInStella": "Not in stella yet",
+      "openDecision": "Open decision",
+      "paragraphLabel": "Paragraph {paragraph}",
+      "paragraphMark": "¶ {paragraph}",
+      "paragraphReferenceLabel": "{court}, {caseNumber}, {date}, paragraph {paragraph}",
+      "partialSummary": "Citation totals and timeline are partial.",
+      "passageNotFound": "The citing passage was not located in the text",
+      "positiveCount": "{count, plural, one {# positive} other {# positive}}",
+      "referenceLabel": "{court}, {caseNumber}, {date}",
+      "showAll": "{count, plural, one {Show all # decision} other {Show all # decisions}}",
+      "stripLabel": "Citations by year",
+      "treatment": {
+        "mixed": "Mixed",
+        "negative": "Negative",
+        "neutral": "Mentioned",
+        "positive": "Endorsed",
+        "supportive": "Followed",
+        "unclassified": "Unclassified"
+      },
+      "unresolved": "Not resolved to a decision",
+      "whereCited": "Where it cites this decision",
+      "yearTitle": "{year}: {count, plural, one {# citation} other {# citations}}"
+    },
+    "columns": {
+      "caseNumber": "Case number",
+      "citedBy": "Cited by",
+      "headnote": "Headnote",
+      "summary": "Headnote / match"
+    },
+    "corpusStatus": {
+      "courtCount": "{count, plural, one {# court} other {# courts}}",
+      "newLast24Hours": "{count} in the last 24 h",
+      "newLast7Days": "New in the last 7 days",
+      "otherCourts": "Other courts"
+    },
+    "courtTiers": {
+      "constitutional": "Constitutional courts",
+      "other": "Other courts",
+      "regional": "High and regional courts",
+      "supreme": "Supreme courts"
+    },
+    "coverage": {
+      "allCurrent": "All sources up to date",
+      "censusComparison": "{stored} held / {publisher} published · {withText} with text",
+      "censusComplete": "Complete",
+      "censusIncomplete": "Incomplete",
+      "censusSliceMemberships": "Counts across slices; a decision may appear more than once.",
+      "completeness": "Completeness",
+      "completenessHelp": "Stored decisions compared with the publisher’s own count, its listing or a recorded total. Decisions the publisher lists that reconciliation found missing are not counted.",
+      "countryNavigation": "Browse countries",
+      "courtsHeading": "By court",
+      "decisionYears": "Decision years",
+      "decisionsAcross": "decisions across {count, plural, one {# jurisdiction} other {# jurisdictions}}",
+      "description": "How much case law the corpus holds, per country and per court, and how fresh each source is.",
+      "generatedAt": "Figures from {date}",
+      "healthCurrent": "Up to date",
+      "healthDelayed": "Delayed",
+      "healthDisabled": "Switched off",
+      "healthSnapshot": "Fixed snapshot",
+      "healthStalled": "Stalled",
+      "healthUnknown": "Never run",
+      "inPreparation": "In preparation",
+      "lastSync": "Last sync",
+      "notCountedYet": "Not counted yet",
+      "notMeasuredYet": "Not measured yet",
+      "searchable": "Searchable",
+      "sourceExceptions": "{count, plural, one {# source needs attention} other {# sources need attention}}",
+      "sourcesCurrent": "Sources up to date",
+      "syncedAt": "Synced {time}",
+      "title": "Case-law coverage",
+      "totalFrom": "Total from {date}",
+      "unavailable": "Coverage figures are unavailable right now."
+    },
+    "decisionNotFound": "Decision not found",
+    "decisionTypes": {
+      "administrative_decision": "Administrative decision",
+      "binding_excise_information": "Binding excise information",
+      "binding_rate_information": "Binding VAT rate information",
+      "court_direction": "Procedural direction",
+      "decision": "Decision",
+      "finding": "Finding",
+      "general_tax_ruling": "General tax ruling",
+      "individual_tax_ruling": "Individual tax ruling",
+      "judgment": "Judgment",
+      "leave_refused": "Rejected for lack of a significant point of law",
+      "merits_decision": "Decision on the merits",
+      "ministry_of_justice_decision": "Decision of the Ministry of Justice",
+      "minutes_extract": "Extract from the minutes",
+      "opinion": "Opinion",
+      "order": "Order",
+      "other": "Other",
+      "payment_order": "Payment order",
+      "penal_order": "Penal order",
+      "principle_decision": "Decision of principle",
+      "protective_opinion": "Protective opinion",
+      "resolution": "Resolution",
+      "signalling_decision": "Signalling decision",
+      "statement_of_reasons": "Statement of reasons",
+      "tax_explanations": "Tax explanations",
+      "top_up_tax_opinion": "Top-up tax opinion",
+      "uniformity_decision": "Uniformity decision"
+    },
+    "emptyState": "No decisions found. Configure a source and run a sync to import case law.",
+    "filters": {
+      "countryMismatch": "Filters removed because they do not belong to {country}: {filters}.",
+      "remove": "Remove filter {filter}",
+      "showInCountry": "Show {filter} in {country}"
+    },
+    "languages": {
+      "count": "{count, plural, one {# language} other {# languages}}",
+      "matchedIn": "Matched in {language}"
+    },
+    "linkedPassageGone": "The linked passage is no longer in this text.",
+    "loadingMore": "Loading more…",
+    "marginFilter": {
+      "label": "Cited provisions filter",
+      "paragraph": "{count, plural, one {# provision cited in ¶{paragraph}} other {# provisions cited in ¶{paragraph}}}",
+      "selection": "{count, plural, one {# provision cited in the selection} other {# provisions cited in the selection}}",
+      "unnumberedParagraph": "{count, plural, one {# provision cited in this paragraph} other {# provisions cited in this paragraph}}"
+    },
+    "matterLinks": {
+      "alreadySaved": "{count, plural, one {# decision was already saved here} other {# decisions were already saved here}}",
+      "empty": "No case law is kept in this matter yet.",
+      "emptyAction": "Search case law",
+      "note": "Note",
+      "notePlaceholder": "Why these decisions matter here…",
+      "rejectedLimit": "{count, plural, one {# decision was not saved: the matter is full} other {# decisions were not saved: the matter is full}}",
+      "rejectedMissing": "{count, plural, one {# decision could not be found} other {# decisions could not be found}}",
+      "remove": "Remove from the matter",
+      "save": "Save into a matter",
+      "savePage": "{count, plural, one {# decision on this page} other {# decisions on this page}} will be saved.",
+      "saveSelection": "{count, plural, one {# selected decision} other {# selected decisions}} will be saved.",
+      "saveTitle": "Save into a matter",
+      "saved": "{count, plural, one {# decision} other {# decisions}} saved into {matter}"
+    },
+    "newestDecisions": "Newest decisions",
+    "noResults": {
+      "hint": "Try other words, improve the query with AI, or ask the question in chat."
+    },
+    "notesFilter": {
+      "ai": "AI",
+      "human": "Human",
+      "toggleState": "{label}: {state, select, on {on} other {off}}"
+    },
+    "oldestDecisions": "Oldest decisions",
+    "pagination": {
+      "goToPage": "Go to page {page}",
+      "label": "Result pages",
+      "pageOfCount": "Page {page} of {pageCount}",
+      "pageOfEstimatedCount": "Page {page} of ~{pageCount}",
+      "pageOfEstimatedCountLabel": "Page {page} of about {pageCount}",
+      "pageWithEstimatedMatchCounts": "Page {page} · about {exactCount, plural, one {# exact match} other {# exact matches}} · {relaxedCount, plural, one {# partial match} other {# partial matches}} on this page",
+      "pageWithEstimatedResultCount": "Page {page} · about {count, plural, one {# result} other {# results}}",
+      "pageWithMatchCounts": "Page {page} · {exactCount, plural, one {# exact match} other {# exact matches}} · {relaxedCount, plural, one {# partial match} other {# partial matches}} on this page",
+      "pageWithPartialMatchCount": "Page {page} · {relaxedCount, plural, one {# partial match} other {# partial matches}} on this page",
+      "pageWithResultCount": "Page {page} · {count, plural, one {# result} other {# results}}",
+      "perPage": "Per page",
+      "refineForMore": "Refine your search to see more results"
+    },
+    "paragraphRangeNotFound": "{count, plural, one {Paragraph {range} not found in this text.} other {Paragraphs {range} not found in this text.}}",
+    "paragraphRangeSelected": "{count, plural, one {Paragraph {range} highlighted.} other {Paragraphs {range} highlighted.}}",
+    "provision": {
+      "article": "Art. {value}",
+      "letter": "lit. {value})",
+      "openEnded": "et seq.",
+      "point": "point {value}",
+      "sentence": "sentence {value}",
+      "subsection": "para. {value}"
+    },
+    "reader": {
+      "documentUpdated": "The document was updated.",
+      "expandProvisions": "Expand provisions",
+      "headMatter": "Case information",
+      "sourceAttribution": "The source data is freely available at <link>{source}</link>."
+    },
+    "research": {
+      "answering": "{count, plural, one {Answering # cell…} other {Answering # cells…}}",
+      "answers": {
+        "failureReasons": {
+          "decisionUnavailable": "Decision unavailable",
+          "missingAnswer": "Model gave no answer",
+          "modelError": "Model error",
+          "noText": "No decision text",
+          "runError": "Run interrupted",
+          "wrongType": "Answer in the wrong format"
+        },
+        "no": "No",
+        "notAllowed": "Not allowed by the source's terms",
+        "notRun": "Not run",
+        "notStated": "Not stated in the decision",
+        "pending": "Answering…",
+        "showSource": "Show source",
+        "yes": "Yes"
+      },
+      "deleteColumnConfirm": "This deletes the question and all its answers for your whole organization, from every search and for every member. To take it off this search only, use “Remove from this search”.",
+      "editQuestionHint": "Changing the wording, the answer type or its options discards the current answers; run the column again afterwards.",
+      "emptyPage": "There are no decisions on this page.",
+      "newQuestionColumn": "New",
+      "nothingToRun": "Every cell already has an answer",
+      "questionAdded": "Added “{question}” to the table",
+      "questionPlaceholder": "e.g. Did the court find the termination valid?",
+      "removeFromSearch": "Remove from this search",
+      "runAll": "Answer all",
+      "runConfirm": "Answer now",
+      "runEstimate": "{rows, plural, one {# decision} other {# decisions}} × {columns, plural, one {# question} other {# questions}} on this page: {cells, plural, one {# answer} other {# answers}} will be produced.",
+      "runInProgress": "A research question is already running.",
+      "runPermissionRequired": "You need permission to run research questions.",
+      "runTitle": "Answer this page",
+      "savedQuestions": "Saved questions",
+      "title": "Research tables"
+    },
+    "results": {
+      "excerpt": {
+        "label": "Excerpt",
+        "long": "Long",
+        "medium": "Medium",
+        "short": "Short"
+      }
+    },
+    "rewritten": {
+      "line": "No exact matches for <bdi>{original}</bdi>; showing results for <bdi>{query}</bdi>",
+      "searchOriginal": "Search my original words"
+    },
+    "sameCaseNumber": "{count, plural, one {# decision shares} other {# decisions share}} this case number. Pick the court.",
+    "searchLabel": "Search case law",
+    "searchPlaceholder": "Case number, ECLI or words, e.g. 22 Cdo 2653/2012",
+    "searchStillSearching": "The search service is busy. Still searching…",
+    "searchUnavailable": {
+      "description": "The case-law search could not be reached. Your query is kept in the address bar, so try again in a moment.",
+      "title": "Search is temporarily unavailable"
+    },
+    "searchWarnings": {
+      "collectionCitationUnresolved": {
+        "hint": "Search by the decision’s case number or ECLI, if known.",
+        "message": "No exact decision was found for this collection citation."
+      },
+      "noHits": {
+        "hint": "Try fewer or different words: the terms a judgment would use, not the sentence a question is asked in.",
+        "message": "Nothing matched the words this search required."
+      },
+      "noHitsFiltered": {
+        "hint": "Drop or widen a filter and search again.",
+        "message": "Nothing matched under the filters you narrowed with."
+      },
+      "partialMatch": "Partial match",
+      "partialMatchMissing": "Missing words: {terms}",
+      "partialMatches": "Partial matches for: <bdi>{query}</bdi>",
+      "resultsFor": "Results for: <bdi>{query}</bdi>",
+      "searchEveryWord": "Search every word"
+    },
+    "seo": {
+      "collectionName": "stella case law",
+      "description": "Public case-law database with indexable court decisions and legal source materials.",
+      "homeDescription": "Public legal database: court decisions and consolidated statutes, searchable by identifier or by words.",
+      "scopedDescription": "Public case-law database for {scope}, with indexable court decisions and legal source materials."
+    },
+    "showWholeHeadnote": "Show whole headnote",
+    "sort": {
+      "newest": "Newest",
+      "oldest": "Oldest",
+      "oldestUnavailable": "A search is ordered by relevance or newest first. Clear the search to list the oldest decisions first.",
+      "relevance": "Most relevant"
+    },
+    "viewer": {
+      "abstract": "Abstract",
+      "appealReviews": {
+        "conflict": "The review evidence is incomplete or conflicting. The review outcome requires verification.",
+        "corpusOnly": "No decision reviewing this decision was found in the available corpus. This does not establish that no appeal exists.",
+        "noneFound": "No reviewing decision found",
+        "overturned": "Overturned",
+        "partly": "Partly overturned",
+        "reviewedBy": "Reviewing decisions",
+        "reviews": "Reviewed decisions",
+        "sourceHistory": "Case history",
+        "sourceMetadata": "Publisher metadata",
+        "sourceOpening": "Opening paragraph",
+        "title": "Appeal review",
+        "truncated": "Only part of the review history is shown.",
+        "underReview": "Under review",
+        "unknown": "Outcome unknown",
+        "upheld": "Left standing"
+      },
+      "appliedVersionNotStated": "Applied version not stated",
+      "appliedVersionNotStatedCompact": "Version not stated",
+      "appliedVersionStatedAmendment": "Wording as amended by <reference>{amendment}</reference>",
+      "appliedVersionStatedAmendmentCompact": "Stated: <reference>{amendment}</reference>",
+      "appliedVersionStatedDate": "{relation, select, on {Wording effective on {date}} until {Wording effective through {date}} from {Wording effective from {date}} other {Wording effective on {date}}}",
+      "appliedVersionStatedDateCompact": "{relation, select, on {Stated: {date}} until {Stated: until {date}} from {Stated: from {date}} other {Stated: {date}}}",
+      "caseFileDocuments": "Documents in this case file",
+      "caseFileMayHoldOthers": "This case file may contain other decisions as well.",
+      "citedBy": "Cited by",
+      "citedDecisionPassage": "Passage in the decision",
+      "cites": "Cites",
+      "dissentByline": "Dissenting: <bdi>{names}</bdi>",
+      "goToParagraph": "{count, plural, one {Go to paragraph} other {Go to paragraphs}}",
+      "judgeRole": {
+        "advocateGeneral": "Advocate General",
+        "dissenting": "Dissenting opinion",
+        "panelMember": "Panel member",
+        "presiding": "Presiding judge",
+        "rapporteur": "Judge rapporteur"
+      },
+      "judges": "Judges",
+      "legalArea": "Legal area",
+      "legalSentence": "Legal sentence",
+      "paragraphReference": "Paragraph {number}",
+      "popularName": "Popular name",
+      "portraitCredit": "Portrait source: {source}",
+      "provisionMentions": "{count, number}×",
+      "provisionMentionsLabel": "{count, plural, one {# mention} other {# mentions}}",
+      "provisionsCited": "Provisions cited",
+      "provisionsFailed": "Citation processing failed",
+      "provisionsNoneFound": "No cited provisions found",
+      "provisionsProcessing": "Citations are being processed",
+      "provisionsUnavailable": "Citations are unavailable",
+      "provisionsUnplaceable": "Citations cannot be placed in the decision text",
+      "provisionsUnsupported": "Citation processing is not supported for this decision",
+      "provisionsWithheld": "Citations are withheld",
+      "sourceFields": {
+        "decisionCategory": "Decision category",
+        "publishedOnWeb": "Published on web"
+      },
+      "statutes": "Applicable statutes",
+      "textNotYetAvailable": "The court has not published the decision text, or it is not available here yet.",
+      "textPending": "The decision text is still being retrieved",
+      "textReadFailed": "The decision text could not be loaded",
+      "textUnavailable": "No text is available for this decision",
+      "versionAtDecisionDateInferred": "Version at decision date (inferred)",
+      "versionBasisInferredCompact": "Decision date · inferred",
+      "versionBasisInferredExplanation": "The version is inferred from the decision date. The decision does not state which wording applies."
+    },
+    "withdrawnByPublisher": "Withdrawn by publisher"
+  },
+  "catalogue": {
+    "addCustom": "Add custom",
+    "addCustomMcp": "Add integration",
+    "addCustomSkill": "Add skill",
+    "by": "By {author}",
+    "configuration": "Configuration",
+    "cost": {
+      "free": "Free",
+      "paid": "Paid"
+    },
+    "detailAuthMethod": "Authentication",
+    "empty": "No entries match the current filter.",
+    "filter": {
+      "mcps": "Integrations",
+      "nativeTools": "Built-in tools",
+      "skills": "Skills"
+    },
+    "filterHint": "Filtered to {codes}",
+    "firstParty": "stella",
+    "firstPartyTooltip": "Built by the stella team",
+    "installFailed": "Install failed",
+    "installPack": "Install {count, plural, one {# tool} other {# tools}}",
+    "installed": "Installed {name}",
+    "installedShort": "Installed",
+    "onboarding": {
+      "packTitle": "Recommended for your jurisdiction"
+    },
+    "openHomepage": "Open homepage",
+    "packDescription": "{count, plural, one {# tool} other {# tools}} curated for your practice. One-click install or pick individually below.",
+    "packInstalled": "{count, plural, one {# tool installed} other {# tools installed}}",
+    "packPartial": "Installed {installed}, {failed} failed",
+    "removed": "This tool is no longer available.",
+    "sectionOthers": "Others",
+    "settings": {
+      "packTitle": "Recommended pack"
+    },
+    "setup": {
+      "account": "Account",
+      "apiKey": "API key",
+      "none": "No setup"
+    },
+    "skillNeedsUnavailableTools": "Not offered in chat. It needs a tool that isn't available there: {tools}",
+    "toolDescriptions": {
+      "anonymize": "Mask client names, account numbers, addresses, and other PII before sharing matter content with AI providers. Reversible on the client side; cleartext never leaves your workspace.",
+      "ares": "Czech business registry lookup by IČO or company name from the public ARES register (administrative register of economic subjects, Czech equivalent of a commercial registry).",
+      "boe": "Spanish consolidated legislation, daily gazette, and BORME (commercial registry gazette) from the official Boletín Oficial del Estado open-data API.",
+      "brreg": "Norwegian company lookup by organisasjonsnummer or company name from the public Brreg Enhetsregisteret open API.",
+      "companiesHouse": "UK company lookup by Companies House registration number or company name from the Companies House public data API. Requires a free API key.",
+      "createDocx": "Generate Word documents from chat with formatting, tables, headers, and embedded styling. Output is downloadable and editable in Word, LibreOffice, and Pages.",
+      "denue": "Mexican establishment and economic-unit lookup by DENUE establishment Id, name, or legal name from INEGI's official DENUE API. DENUE is an establishment directory, not the Registro Público de Comercio corporate-law register. Requires a free INEGI API token.",
+      "edgar": "US public-company lookup by Central Index Key (CIK) from the SEC's EDGAR submissions API.",
+      "gcis": "Taiwanese company lookup by 統一編號 (tongbian / tax ID) or company name from the Ministry of Economic Affairs (MoEA) Commerce Industrial Services Portal open data API.",
+      "infosoud": "Czech court case lookup and hearing calendar from infosoud.gov.cz. Search by case reference number, court, or party to pull hearing dates and case status.",
+      "krs": "Polish company lookup by KRS number from the Ministry of Justice's Krajowy Rejestr Sądowy (KRS) open API. Covers both Rejestr Przedsiębiorców (commercial companies) and Rejestr Stowarzyszeń (associations / foundations).",
+      "orsr": "Slovak company lookup by IČO or company name from the Obchodný register Slovenskej republiky JSON API operated by the Ministry of Justice.",
+      "prh": "Finnish company lookup by Y-tunnus or company name from the Patentti- ja rekisterihallitus (PRH) AvoinData v3 open API.",
+      "rechercheEntreprises": "French company lookup by SIREN, SIRET, or company name from the recherche-entreprises.api.gouv.fr open API (data.gouv.fr / Etalab, Licence Ouverte 2.0).",
+      "rpo": "Slovak lookup by IČO or name in the Register právnických osôb, podnikateľov a orgánov verejnej moci (RPO) operated by the Statistical Office of the Slovak Republic. Covers every legal person and entrepreneur, including sole traders, associations, foundations, and public bodies outside the commercial register.",
+      "vies": "EU-wide VAT identification number validation via the European Commission's VAT Information Exchange System (VIES) REST API. Confirms whether a VAT number is registered in the supplier's member state and returns the registered trader name and address where the member state discloses them.",
+      "webSearch": "Search the public web and read individual pages. Queries hit primary sources first (courts, legislation portals) when a jurisdiction is set; falls back to the open web otherwise. Per-thread opt-in."
+    },
+    "toolNames": {
+      "anonymize": "Anonymise",
+      "createDocx": "Create DOCX",
+      "gcis": "GCIS Company Registry",
+      "vies": "EU VIES VAT validation",
+      "webSearch": "Web Search"
+    },
+    "unavailable": "Not available yet"
+  },
+  "guides": {
+    "action": {
+      "replay": "Start again",
+      "skip": "Skip"
+    },
+    "checklist": {
+      "activeTour": "Finish or exit the current guide first.",
+      "progress": "{completed} of {total} complete"
+    },
+    "community": {
+      "personalSupport": "Personal support"
+    },
+    "help": {
+      "buttonLabel": "Help and feedback",
+      "title": "Help and feedback"
+    },
+    "leave": "Leave guide",
+    "minutes": "{count} min",
+    "nudge": {
+      "action": "Open guides",
+      "body": "New here? A few short tours show you around."
+    },
+    "status": {
+      "skipped": "Skipped"
+    },
+    "tours": {
+      "chat": {
+        "description": "Add context for AI and send your request securely",
+        "examplePrompt": "Summarize the key obligations in this contract",
+        "steps": {
+          "anonymize": {
+            "body": "Hides personal data before sending, then restores it in the answer.",
+            "title": "Send anonymized",
+            "when": "Turn it on when the text carries personal data and the question does not turn on who the parties are. Leave it off when identity is the point, such as a conflict check, because placeholders take away exactly what you are asking about."
+          },
+          "attach": {
+            "body": "Uploads a file from this device into the conversation. It is read for this thread only and is not filed into a matter.",
+            "title": "Attach a file",
+            "when": "Best for a one-off document you do not need to keep: a draft that just arrived by email, a scan, a spreadsheet you only want summarized."
+          },
+          "composer": {
+            "body": "Write what you want in plain language: the task, what it concerns, and the shape of answer you expect. Everything else here only sharpens a request you have already written.",
+            "title": "Start with the request"
+          },
+          "context": {
+            "body": "Adds an existing matter or file as context. Nothing is uploaded or copied.",
+            "title": "Reference a matter or a file",
+            "when": "Use this instead of attaching whenever the document is already filed. Reference the matter to let the assistant look across it; reference one file when you know exactly which one to read. Typing @ in an empty composer opens this list directly."
+          },
+          "plusMenu": {
+            "body": "Use + to attach a file or reference a matter.",
+            "title": "Add context with +",
+            "when": "When the context you need is not yet in the chat."
+          },
+          "send": {
+            "body": "Sends the message together with everything you attached, referenced, or switched on above. The composer stays put, so a follow-up can add whatever the first answer showed was missing.",
+            "title": "Send it",
+            "when": "The first answer shows what is still missing."
+          }
+        },
+        "title": "Start with chat"
+      },
+      "chatPower": {
+        "description": "Use skills or connect other useful tools",
+        "steps": {
+          "mcp": {
+            "body": "Turns a connected server's tools on or off for your chats: business registries, internal systems, anything your team has connected.",
+            "title": "Connected tool servers",
+            "when": "Turn one on when the answer needs live data from outside the workspace. Leave the rest off: the fewer tools in play, the narrower and more predictable the answer."
+          },
+          "models": {
+            "body": "Switches the model for this conversation only. Every other thread keeps the default set for your workspace.",
+            "title": "Which model"
+          },
+          "plusMenu": {
+            "body": "The same menu also holds the model switch, skills, and connected tool servers. The next steps open it and take each in turn.",
+            "title": "More behind the + button"
+          },
+          "skills": {
+            "body": "Inserts a saved prompt or a skill your team has written: a reviewed set of instructions that handles the same task the same way every time.",
+            "title": "Skills and saved prompts",
+            "when": "Use one when the task repeats and the wording matters, such as a standard contract review or an intake summary. Typing / in an empty composer opens this list directly."
+          }
+        },
+        "title": "Do more in chat"
+      },
+      "documents": {
+        "description": "File a document, then find it again",
+        "steps": {
+          "browse": {
+            "body": "This table is the matter's document list. Uploaded files land here as rows. To return later, open the matter from the sidebar, choose its table view, then select the document row.",
+            "title": "Find the document again"
+          },
+          "upload": {
+            "body": "Upload opens the file picker; you can also drag files onto the matter. Each file becomes a document in this matter, where your team can find it and stella can use it in review.",
+            "title": "File a document in the matter",
+            "when": "Upload here when the file belongs to the matter and should remain available. Attach it directly in chat only when it is temporary context for one conversation."
+          }
+        },
+        "title": "Work with documents"
+      },
+      "playbooks": {
+        "description": "Save a document review process for next time",
+        "steps": {
+          "basics": {
+            "body": "Add a name and description. Limit it to a document type if needed.",
+            "title": "Name the playbook"
+          },
+          "create": {
+            "body": "Start with a blank playbook.",
+            "title": "Create a playbook"
+          },
+          "overview": {
+            "body": "A playbook keeps questions and rules for other documents.",
+            "title": "Save the review process"
+          },
+          "positions": {
+            "body": "For each rule, choose whether to assess the text or extract a detail.",
+            "title": "Add review rules"
+          }
+        },
+        "title": "Create a playbook"
+      },
+      "tabularReview": {
+        "description": "Extract answers across many files at once",
+        "steps": {
+          "addColumn": {
+            "body": "New column opens the column composer. Give the column a clear question-shaped name and tell stella exactly what to read for; the same instruction runs against every document row.",
+            "title": "Ask one question of every document",
+            "when": "Create a separate column for each answer you need to compare, filter, sort, or export. Keep related context in the prompt instead of combining several answers in one cell."
+          },
+          "answerType": {
+            "body": "Returns controls the shape of every answer. Choose a number, date, single select, or multi-select when the result has structure; stella will keep the column consistent instead of returning arbitrary prose.",
+            "title": "Choose the answer type",
+            "when": "Use select for a fixed set of outcomes, number or date for sorting and calculations, and text only when the answer genuinely needs narrative detail."
+          },
+          "table": {
+            "body": "Each row is a document; each custom column is one question asked of every document at once. That turns a folder of files into comparable answers without opening them one by one.",
+            "title": "Review the set, not one file",
+            "when": "Use the table when you need the same facts or decisions across several documents. Open a document directly when layout, wording, or surrounding context matters more than comparison."
+          }
+        },
+        "title": "Review in a table"
+      },
+      "workflows": {
+        "description": "Chain steps into a repeatable workflow",
+        "steps": {
+          "create": {
+            "body": "Create opens an unsaved workflow draft. The next steps define when it starts, what it does, and where a person must decide whether it continues.",
+            "title": "Start a workflow draft"
+          },
+          "overview": {
+            "body": "A workflow connects a trigger to a sequence of actions, so a routine process runs the same way each time. It can prepare work automatically while keeping judgment with a reviewer where needed.",
+            "title": "Automate a repeatable process",
+            "when": "Automate work that has a stable trigger, repeatable steps, and a clear owner for exceptions. Keep changing or judgment-heavy work manual until the process itself is settled."
+          },
+          "reviewGate": {
+            "body": "A review gate pauses the run until a person approves or rejects it. Put the gate before the first action that should not happen solely on an automated result.",
+            "title": "Keep judgment with a reviewer",
+            "when": "Use a gate before sending, filing, escalating, or otherwise committing a consequential result. Skip it only when the next step is safely reversible and needs no human judgment."
+          },
+          "steps": {
+            "body": "Steps run in this order and pass their work forward. Keep each step responsible for one clear action so failures are understandable and the sequence is easy to change.",
+            "title": "Build the sequence"
+          },
+          "trigger": {
+            "body": "The trigger decides when a run begins: manually, on a schedule, or when matching files are uploaded. Narrow its matter and file conditions so unrelated work never starts the workflow.",
+            "title": "Choose what starts the workflow",
+            "when": "Use manual while the process is new, a schedule for time-based routines, and file upload only when an arriving document is the reliable signal to begin."
+          }
+        },
+        "title": "Automate a workflow"
+      }
+    },
+    "unavailable": "This guide is not available right now",
+    "whenLabel": "When to use it:"
+  },
+  "knowledge": {
+    "agentSkills": {
+      "availabilityClient": "One client",
+      "availabilityClientBadgeHelp": "Available only in one client's matters.",
+      "availabilityClientHelp": "Usable only in this client's matters. This can't be changed later.",
+      "availabilityFixedHelp": "Set when the skill was created. It can't be changed.",
+      "availabilityLabel": "Available in",
+      "availabilityMatter": "One matter",
+      "availabilityMatterBadgeHelp": "Available only in one matter.",
+      "availabilityMatterHelp": "Usable only in this matter. This can't be changed later.",
+      "availabilityOrganization": "Whole organization",
+      "availabilityTeamNeedsMatter": "To share a skill with the team, choose the matter it is for. This can't be changed later.",
+      "builtIn": {
+        "playbookBuilder": {
+          "description": "Build a contract review playbook position by position, drawing on your past signed contracts, a short interview, and market-standard defaults.",
+          "name": "Build a playbook",
+          "openingPrompts": {
+            "extendExisting": {
+              "body": "Add positions to one of my existing playbooks.",
+              "name": "Extend a playbook"
+            },
+            "fromContracts": {
+              "body": "Build a non-disclosure agreement playbook from my past signed agreements.",
+              "name": "Start from past contracts"
+            },
+            "fromMarketStandards": {
+              "body": "Build a playbook for supplier agreements, starting from market-standard positions.",
+              "name": "Start from market standards"
+            }
+          }
+        }
+      },
+      "builtInSection": "Built-in skills",
+      "deleteFile": "Delete file",
+      "deleteFileConfirm": "Delete file? This cannot be undone.",
+      "disableSkill": "Disable skill",
+      "discoverSkills": "Find skills",
+      "discoveredSkills": "{count, plural, one {# skill found} other {# skills found}}",
+      "discoveryEmpty": "No skills were found at this repository or folder.",
+      "discoverySkippedInvalid": "{count, plural, one {# invalid skill was skipped} other {# invalid skills were skipped}}",
+      "dropPack": "Drop a .zip/.skill or SKILL.md to import the skill",
+      "editSkill": "Edit skill",
+      "enableSkill": "Enable skill",
+      "enterFileName": "Enter a file name.",
+      "exportAsSkill": "Export as .skill",
+      "exportAsZip": "Export as .zip",
+      "exportFailed": "Couldn't export the skill",
+      "exportSkill": "Export skill",
+      "fileExists": "A file with this path already exists",
+      "howItRuns": "How it runs",
+      "importFailureFetch": "The skill source could not be loaded.",
+      "importFailureIntegrity": "The skill source changed after discovery. Review it again.",
+      "importFailureLimit": "The skill limit has been reached.",
+      "importFailureNameConflict": "A skill with this name already exists.",
+      "importHelp": "Paste a public GitHub repository, folder, or SKILL.md URL. Review the discovered skills before installing them.",
+      "importPartial": "{installedCount, plural, one {{installed} imported} other {{installed} imported}}; {failedCount, plural, one {{failed} failed} other {{failed} failed}}.",
+      "importSelected": "Import selected ({count})",
+      "importSkill": "Import from URL",
+      "importTitle": "Import skill",
+      "importedSkills": "{count, plural, one {Imported # skill} other {Imported # skills}}",
+      "invalidPath": "Use a relative path. File and folder names can't be . or .., start or end with a space, end with a dot, or contain \\ : * ? \" |, angle brackets or control characters.",
+      "invocationAuto": "Automatically",
+      "invocationAutoHelp": "The AI can use this skill on its own when it fits the request.",
+      "invocationManual": "Only when invoked",
+      "invocationManualHelp": "Used only when you run it with / or add it to your message.",
+      "license": "License: {license}",
+      "newFile": "New file",
+      "newFileFilenamePlaceholder": "notes.md",
+      "newFilePathPlaceholder": "folder/notes.md",
+      "newFolder": "New folder",
+      "pdfPreviewSoon": "PDF preview will be available once binary skill resources are supported.",
+      "renameFile": "Rename",
+      "scopePrivate": "Only me",
+      "scopeTeam": "Everyone in the team",
+      "selectSkillToImport": "Select at least one skill.",
+      "selectionLimit": "Select up to {count} skills at once.",
+      "skippedFiles": "{count, plural, one {# file was not imported} other {# files were not imported}}",
+      "skippedReasonNotUtf8Text": "Not UTF-8 text",
+      "skippedReasonOutsideSkillFolder": "Outside the skill folder",
+      "skippedReasonUnsupportedExtension": "File type not supported",
+      "skippedReasonUnsupportedFolder": "Not in a resource folder",
+      "starter": {
+        "compare": {
+          "body": "Compare two versions of this document and list every material change with its location.",
+          "description": "List every material change between two versions",
+          "name": "Compare versions"
+        },
+        "draft": {
+          "body": "Draft a measured response to this letter. Keep the tone professional, address each point raised, and flag any open questions for me to confirm.",
+          "description": "Draft a professional reply to a letter",
+          "name": "Draft a response"
+        },
+        "risks": {
+          "body": "Review this document for legal risks, missing protections, and ambiguous clauses. Cite the specific clause for each finding.",
+          "description": "Spot legal risks and ambiguous clauses",
+          "name": "Find risks"
+        },
+        "summarize": {
+          "body": "Summarise this document. Cover parties, key obligations, dates, financial terms, and any termination or liability provisions.",
+          "description": "Get a structured summary of the key terms",
+          "name": "Summarise a document"
+        }
+      },
+      "uploadHelp": "Use a SKILL.md file or a .zip/.skill folder containing SKILL.md and optional read-only resources.",
+      "uploadPack": "Upload .zip/.skill or SKILL.md",
+      "urlPlaceholder": "https://github.com/org/repo/tree/main/path/to/skill",
+      "version": "Version: {version}"
+    },
+    "catalogue": {
+      "addToLibrary": "Add to library",
+      "added": "{name} is in your library",
+      "confirmAddTitle": "Add {name} to {organization}?",
+      "confirmDescription": "A copy of this template goes into the {organization} library.",
+      "confirmDownloadTitle": "Download {name} for {organization}?",
+      "confirmStarterDescription": "A copy of this playbook goes into the {organization} library.",
+      "confirmUseTitle": "Use {name} in {organization}?",
+      "installFailed": "The template could not be added",
+      "noPreview": "No preview is available for this template.",
+      "notFound": "This template is not in the catalogue.",
+      "unavailable": "The catalogue is not available right now."
+    },
+    "landing": {
+      "accountLine": "Keep your organization's own templates, clauses and playbooks with a free account.",
+      "withAccount": "With a free account"
+    },
+    "mcp": {
+      "addAndConnect": "Add and connect",
+      "addServer": "Add server",
+      "addServerCardTitle": "Add new integration",
+      "auth": {
+        "bearer": "Bearer token",
+        "none": "No auth",
+        "oauth2": "OAuth 2.0"
+      },
+      "authorizationReviewDescription": "Review the authorization server and endpoint origins before approving.",
+      "authorizationServer": "Authorization server",
+      "bearerTokenDescription": "This server uses a bearer token. Paste the token from the provider to finish connecting.",
+      "callbackConnectedDescription": "Its tools are ready to use in chat.",
+      "callbackConnectedTitle": "Integration connected",
+      "callbackFailedDescription": "The sign-in did not finish, so nothing was connected.",
+      "callbackFailedTitle": "Integration not connected",
+      "connectedToast": "MCP connected",
+      "connectedWithLastUsed": "Connected · last used {time}",
+      "description": "Manage the integrations that can add tools to chat. Tokens are stored per user.",
+      "detected": "Detected {authType}",
+      "disable": "Disable",
+      "disabled": "Connected · disabled",
+      "emptyDescription": "Curated legal integrations will appear here as they are enabled for your workspace.",
+      "emptyTitle": "No integrations yet",
+      "enable": "Enable",
+      "endpointOrigins": "Endpoint origins",
+      "enterToken": "Enter an access token.",
+      "errorDescription": "The integration could not be updated.",
+      "errorTitle": "MCP failed",
+      "mcpExplainer": "Integrations connect external services to the chat that the AI can work with.",
+      "needsReapproval": "Needs re-approval",
+      "needsReauth": "Needs reconnect",
+      "off": "Off",
+      "on": "On",
+      "openTools": "Open Tools",
+      "otherTitle": "Other integrations",
+      "probe": "Probe",
+      "recommendedFor": "Recommended for {jurisdictions}",
+      "saveToken": "Save token",
+      "tokenHelp": "How to get a token",
+      "tokenLabel": "Bearer token",
+      "tokenPlaceholder": "Paste token",
+      "urlLabel": "MCP server URL",
+      "urlPlaceholder": "https://example.com/mcp",
+      "useInChat": "Use in chat",
+      "whatIsAnMcpServer": "What is an MCP server?"
+    },
+    "playbooks": {
+      "addCheck": "Add exact rule",
+      "addExtractPosition": "Extract only",
+      "addExtractPositionHint": "Capture a value, no grading",
+      "addGradedPosition": "Graded position",
+      "addGradedPositionHint": "Tiered rules with a verdict",
+      "addOption": "Add option",
+      "addPosition": "Add position",
+      "addRule": "Rule",
+      "adoptAsIdeal": "Adopt as ideal language",
+      "all": "All playbooks",
+      "approval": {
+        "approve": "Approve",
+        "approveFailed": "Failed to approve playbook",
+        "approvedOn": "Approved {date}",
+        "approvedToast": "Playbook approved",
+        "saveBeforeApprove": "Save changes before approving this playbook.",
+        "sourcesNotice": "Before approving, check that no position names a document, a matter, or a counterparty: the whole organization can read this playbook.",
+        "statusApproved": "Approved",
+        "statusDraft": "Draft"
+      },
+      "askContentLabel": "Answer type",
+      "askQuestionLabel": "Question",
+      "askQuestionPlaceholder": "What should we read from each document? Leave empty for manual input.",
+      "autosave": {
+        "failed": "Could not save",
+        "nameMissing": "Not saved: add a name",
+        "positionsNeedAttention": "Not saved: {count, plural, one {# position needs} other {# positions need}} attention"
+      },
+      "buildWithAi": {
+        "description": "Answer a few questions in a chat and the playbook is saved as you go.",
+        "title": "Build with AI"
+      },
+      "check": "Use an exact rule instead of AI",
+      "checkHint": "For measurable conditions, such as payment term ≤ 30 days.",
+      "checkKind": {
+        "constraint": "Test the answer against a condition",
+        "presence": "Require or forbid an answer"
+      },
+      "clausePlaceholder": "Search clauses…",
+      "clauseSearchEmpty": "No clauses found",
+      "collapsePosition": "Collapse position",
+      "confirmDelete": "This will permanently delete the playbook.",
+      "contentType": {
+        "int": "Number",
+        "singleSelect": "Single select",
+        "text": "Text"
+      },
+      "convertToExtract": "Only extract an answer",
+      "convertToExtractDescription": "This removes the tier ladder and grading for this position. This can't be undone.",
+      "convertToExtractTitle": "Convert to extract only?",
+      "convertToGraded": "Add grading rules",
+      "convertToRules": "Convert to rules",
+      "createPlaybook": "New playbook",
+      "created": "Playbook created",
+      "creatingFromStarter": "Creating a playbook from the selected starter…",
+      "customizeAnswer": "Change extracted answer",
+      "customizeAnswerHint": "Edit the question or answer format.",
+      "decisionLine": "{runs, plural, one {accepted {accepted, number} · dismissed {dismissed, number} · across # review} other {accepted {accepted, number} · dismissed {dismissed, number} · across # reviews}}",
+      "deleteFailed": "Failed to delete playbook",
+      "deletePlaybook": "Delete playbook",
+      "deletePosition": "Delete position",
+      "deleted": "Playbook deleted",
+      "deletedElsewhere": "This playbook has been deleted.",
+      "derivedAutomatically": "The extraction question and answer format are generated from this position. No setup is needed.",
+      "derivedQuestion": "Extraction question",
+      "derivedType": "Answer format",
+      "descriptionPlaceholder": "What does this playbook check?",
+      "disabledBadge": "Off: skipped in runs",
+      "discardChanges": "Discard changes",
+      "duplicatePosition": "Duplicate position",
+      "empty": "No playbooks yet",
+      "emptyDescription": "Create a playbook to review documents against your standards.",
+      "enablePosition": "Enable position",
+      "entryLabelPlaceholder": "Label (optional)",
+      "entryPlaceholder": "Acceptable fallback wording",
+      "entryRank": "#{index}",
+      "expandPosition": "Expand position",
+      "expectation": {
+        "required": "Answer must be present",
+        "restricted": "Answer must be absent"
+      },
+      "extractOnlyBadge": "Extract only",
+      "extractOnlyDescription": "No grading; captures the value into the table.",
+      "extraction": "Extraction",
+      "extractionAuto": "Auto",
+      "extractionManual": "Manual",
+      "fixErrorsBeforeSaving": "Fix the highlighted fields before saving.",
+      "gradedNeedsContent": "Add at least one rule, fallback entry, or ideal language.",
+      "guidanceLabel": "Add review instructions",
+      "guidancePlaceholder": "Add an exception or instruction not covered by the rules above.",
+      "homeDescription": "Set your review standards once, then apply them consistently to every document.",
+      "idealFromClause": "From clause library",
+      "idealInline": "Inline text",
+      "idealInlinePlaceholder": "Paste the ideal wording…",
+      "idealLanguage": "Ideal language",
+      "issueLabel": "Issue",
+      "issuePlaceholder": "e.g. Limitation of liability",
+      "lastUsed": "Last used {date}",
+      "loadFailed": "Failed to load playbooks",
+      "loading": "Loading playbooks…",
+      "manageTypes": "Manage types…",
+      "namePlaceholder": "e.g. NDA review",
+      "nameRequired": "Add a name.",
+      "negotiation": {
+        "addTalkingPoint": "Add talking point",
+        "escalationLabel": "Escalation",
+        "escalationPlaceholder": "When/to whom to escalate (optional)",
+        "rationaleLabel": "Rationale",
+        "rationalePlaceholder": "Why we want this (optional)",
+        "talkingPointPlaceholder": "What to say",
+        "talkingPointsLabel": "Talking points",
+        "title": "Negotiation"
+      },
+      "noPositions": "No positions yet. Add the first one.",
+      "noSettledPosition": "No settled position",
+      "openInPane": "Open playbook",
+      "optionPlaceholder": "Option value",
+      "optionsLabel": "Options",
+      "outline": "Outline",
+      "pendingPane": {
+        "description": "Answer the questions in the chat. After you approve the first save, the playbook opens here and you can edit it next to the conversation.",
+        "title": "Your playbook will appear here"
+      },
+      "positionOfTotal": "Position {index} of {total}",
+      "positionRemoved": "Position removed",
+      "positions": "Positions",
+      "recent": "Recently used",
+      "recommended": "Recommended starters",
+      "redLinePlaceholder": "Wording that is never acceptable",
+      "referenceStandard": "From the reference",
+      "removeCheck": "Remove check",
+      "removeIdeal": "Remove ideal language",
+      "removeSource": "Remove source {documentName}",
+      "reorderPosition": "Reorder position",
+      "review": {
+        "changePlaybook": "Choose another playbook",
+        "extractedLabel": "Found:",
+        "facetTitle": "Review with playbook",
+        "failed": "Failed to review document",
+        "fixAccepted": "Accepted",
+        "insertFailed": "Couldn't insert the preferred clause",
+        "insertPreferred": "Insert preferred clause",
+        "launcherDescription": "Check this document against an organization playbook and get findings inline.",
+        "matchedFallback": "Matched fallback:",
+        "noFindings": "No issues found",
+        "playbookLabel": "Playbook",
+        "playbookPlaceholder": "Choose a playbook",
+        "reject": "Reject",
+        "reviewAgain": "Review again",
+        "reviewedAgainst": "Reviewed against {name}",
+        "reviewing": "Reviewing…",
+        "reviewingHint": "This can take up to a couple of minutes for large playbooks.",
+        "run": "Review",
+        "scrollToChange": "Go to change",
+        "viewClause": "View clause",
+        "violatedRedLine": "Violates red line:"
+      },
+      "ruleNumber": "Rule {index}",
+      "rulePlaceholder": "e.g. Payment terms must not exceed 30 days",
+      "saveFailed": "Failed to save playbook",
+      "severity": {
+        "blocker": "Blocker"
+      },
+      "severityLabel": "Severity",
+      "staleCopy": {
+        "loaded": "A newer version of this playbook has loaded. Reload before editing.",
+        "unavailable": "The latest version of this playbook could not be loaded. This is the last loaded copy and may be out of date."
+      },
+      "starters": {
+        "addedToast": "Playbook added",
+        "browseButton": "Browse starter playbooks",
+        "positionCount": "{count, plural, one {# position} other {# positions}}",
+        "title": "Starter playbooks",
+        "useStarter": "Use this starter"
+      },
+      "switchToAuto": "Generate question and format automatically",
+      "switchToManual": "Customize question and answer format",
+      "termKind": {
+        "enumeration": "Enumeration",
+        "language": "Wording",
+        "parameter": "Parameter",
+        "presence": "Presence"
+      },
+      "tier": {
+        "acceptable": "Acceptable",
+        "fallback": "Fallback",
+        "notAcceptable": "Not acceptable"
+      },
+      "untitledPosition": "Untitled position",
+      "updated": "Playbook updated",
+      "updatedAt": "Updated {date}",
+      "verdict": {
+        "additional": "Additional",
+        "compliant": "Compliant",
+        "deviation": "Deviation",
+        "fallback": "Fallback",
+        "missing": "Missing",
+        "notApplicable": "Not applicable"
+      },
+      "versions": {
+        "confirmRestore": "Your current draft will be replaced with this version's content.",
+        "restoreFailed": "Failed to restore version",
+        "restoredToast": "Version restored",
+        "versionHistory": "Version history"
+      }
+    },
+    "sections": {
+      "caseLaw": {
+        "description": "Court decisions and case law database"
+      },
+      "clauses": {
+        "description": "Reusable clause library"
+      },
+      "mcp": {
+        "description": "Connect stella to external tools",
+        "title": "MCP"
+      },
+      "playbooks": {
+        "description": "Graded checklists that review documents against your standards"
+      },
+      "skills": {
+        "title": "Skills"
+      },
+      "templates": {
+        "description": "Document templates with placeholders",
+        "title": "Templates"
+      },
+      "tools": {
+        "description": "Skills, integrations, and always-available tools the AI can use in chat",
+        "title": "Tools"
+      },
+      "workflows": {
+        "description": "Automate document work with reusable, multi-step workflows."
+      }
+    },
+    "skills": {
+      "blueprintGallery": {
+        "cards": {
+          "answerFromSources": {
+            "blurb": "Answer a question grounded in authoritative sources.",
+            "inside": "a source hierarchy · a research prompt",
+            "title": "Answer from sources"
+          },
+          "checkAgainstRules": {
+            "blurb": "Review a document and flag what fails, with citations.",
+            "inside": "references by jurisdiction · a checklist · a review prompt",
+            "title": "Check against rules"
+          },
+          "intakeToDraft": {
+            "blurb": "Ask for the facts, then draft a document.",
+            "inside": "an interview · model documents · a draft prompt",
+            "title": "Intake to draft"
+          }
+        },
+        "insideLabel": "Inside",
+        "startBlank": "Start from blank",
+        "startBlankHint": "An empty skill, for when you know exactly what you want.",
+        "subtitle": "Pick a starting shape. We set up the folders and walk you through filling them in.",
+        "title": "How should your skill work?"
+      },
+      "commandConflict": "A skill with this / command already exists",
+      "commandHelp": "Type it in chat to run this skill.",
+      "commandLabel": "Chat command (optional)",
+      "commandPlaceholder": "e.g. summarize",
+      "errors": {
+        "commandInvalid": "Use only lowercase letters, digits, hyphens and underscores"
+      },
+      "form": {
+        "scope": "Visibility",
+        "scopePrivate": "Only me",
+        "scopeTeam": "Everyone in the team"
+      }
+    }
+  },
+  "lawHome": {
+    "clearRecent": "Clear recent",
+    "clearRecentConfirmation": "Delete all your recent searches, decisions and statutes in this organization? This cannot be undone.",
+    "importFailed": "Local history could not be imported. It is still saved on this device.",
+    "inForceFrom": "In force from {date}",
+    "noRecent": "No recent activity",
+    "noSignals": "No signals yet",
+    "prompt": "What are you looking for?",
+    "recent": "Recent",
+    "recentCasesFilter": "Cases",
+    "recentLoadFailed": "Recent activity could not be loaded.",
+    "recentSearchFilter": "Searches",
+    "recentUpdateFailed": "Recent activity could not be updated.",
+    "searchLabel": "Search the legal database",
+    "searchPlaceholder": "Case number, act number, ECLI or keywords",
+    "signals": "Signals",
+    "topCourts": "From the top courts"
+  },
+  "legalReader": {
+    "annotations": {
+      "askPassagePrompt": "About this passage of {citation}:\n\n“{quote}”\n\n",
+      "colorGreen": "Green",
+      "colorRed": "Red",
+      "colorSky": "Blue",
+      "colorViolet": "Violet",
+      "colorYellow": "Yellow",
+      "commentPlaceholder": "Write a comment…",
+      "commentText": "Comment text",
+      "commentedPassage": "Commented passage",
+      "editComment": "Edit comment",
+      "editedAt": "Edited {time}",
+      "guestAuthor": "You",
+      "guestLimitReached": "This tab can hold up to {count} highlights and notes. Create an account to save more.",
+      "guestMigrationComplete": "Highlights and notes saved.",
+      "guestMigrationFailed": "Some highlights and notes could not be saved. They will stay in this tab for another attempt.",
+      "guestSavePrompt": "Your highlights and notes will be saved when you create a free account.",
+      "guestStorageUnavailable": "Highlights and notes could not be saved in this tab.",
+      "highlight": "Highlight",
+      "highlightedPassage": "Highlighted passage",
+      "history": {
+        "colorRestored": "Color restored",
+        "commentRemoved": "Comment removed",
+        "commentRestored": "Comment restored",
+        "highlightRemoved": "Highlight removed",
+        "highlightRestored": "Highlight restored",
+        "markChanged": "This highlight or comment was changed elsewhere, so it was left as it is.",
+        "markGone": "This highlight or comment no longer exists.",
+        "nothingToRedo": "Nothing to redo",
+        "nothingToUndo": "Nothing to undo",
+        "redoShortcut": "Redo highlight or comment change",
+        "styleRestored": "Style restored",
+        "textRestored": "Comment text restored",
+        "undoShortcut": "Undo highlight or comment change",
+        "visibilityRestored": "Sharing restored"
+      },
+      "orphaned": {
+        "description": "The text of this document was updated since these were made: their passages could no longer be found in it, or now appear in more than one place. They are not shown in the text.",
+        "summary": "{count, plural, one {# highlight or comment no longer matches the text} other {# highlights and comments no longer match the text}}"
+      },
+      "removeHighlight": "Remove highlight",
+      "styleHighlight": "Highlight",
+      "styleSquiggly": "Squiggly",
+      "styleStrikethrough": "Strikethrough",
+      "visibilityShared": "Shared with organization",
+      "visibilitySharedWithMatter": "Shared with the matter"
+    },
+    "contents": {
+      "aiSection": "{section} (AI-generated section)",
+      "headingWithAiSection": "{heading} (AI-generated section: {section})"
+    },
+    "copyMenu": {
+      "blockQuoteWithCitation": "Block quote with citation",
+      "citationOnly": "Citation only",
+      "citationWithQuote": "Citation with quote",
+      "quoteWithCitation": "Quote with citation",
+      "textOnly": "Text only"
+    }
+  },
+  "publicTools": {
+    "addSkill": "Add a skill",
+    "addToStella": "Add to stella",
+    "alreadyInstalled": "This tool is already installed.",
+    "content": "Content",
+    "contentUnavailable": "This skill's content could not be loaded. View it on GitHub instead.",
+    "contribute": {
+      "contributingLink": "Read the contributing guide",
+      "cta": "Contribute",
+      "form": {
+        "authorLabel": "Author name",
+        "authorUrlLabel": "Author URL (optional)",
+        "commitError": "Could not fetch the latest commit. Paste the 40-character SHA below.",
+        "costLabel": "Cost",
+        "directoryLabel": "Path in repository (optional)",
+        "directoryPlaceholder": "skills/my-skill",
+        "inTreeReminder": "Add SKILL.md next to the manifest in the same pull request.",
+        "intro": "Fill in the details to generate a manifest, then open a pull request. No account needed.",
+        "invalidHint": "Complete the required fields to enable the pull request.",
+        "jurisdictionPlaceholder": "CZ",
+        "jurisdictionsHint": "Add ISO country codes. Leave empty for jurisdiction-agnostic skills.",
+        "jurisdictionsLabel": "Jurisdictions",
+        "licenseLabel": "License",
+        "manifestPreview": "Generated manifest.json",
+        "name": "Skill name",
+        "openPr": "Open a GitHub pull request",
+        "practiceAreasLabel": "Practice areas",
+        "repoLabel": "Repository",
+        "repoPlaceholder": "owner/name or GitHub URL",
+        "resolvingCommit": "Resolving…",
+        "revLabel": "Pinned commit",
+        "revPlaceholder": "40-character commit SHA",
+        "setupLabel": "Setup",
+        "slugHint": "Lowercase identifier used in the URL and folder name.",
+        "slugLabel": "Slug",
+        "sourceGithub": "GitHub repository",
+        "sourceGithubHint": "For larger or independently maintained skills, pinned to a commit.",
+        "sourceInTree": "In this repository",
+        "sourceInTreeHint": "For small skills whose content lives here.",
+        "sourceLabel": "Where does the skill live?",
+        "title": "Add a skill",
+        "useLatestCommit": "Use latest commit"
+      },
+      "githubBody": "Large or independently maintained skills stay in their own GitHub repository, pinned to a commit. A scheduled check opens a pull request when the upstream repository changes, so the pinned version stays current after review.",
+      "githubTitle": "GitHub-pinned skill:",
+      "inTreeBody": "Small skills live in this repository next to their manifest, up to 10 MB per entry. Their content is served and packaged directly from the catalogue.",
+      "inTreeTitle": "In-repository folder:",
+      "intro": "The catalogue lists skills, integrations, and built-in tools for legal work. Anyone can propose an entry through a pull request.",
+      "licenseBody": "Every entry declares a license from the permissive allowlist below. Copyleft licenses are not accepted so that self-hosters can redistribute freely.",
+      "licenseTitle": "License allowlist",
+      "mcpBody": "Integrations are described by a manifest with the server URL, authentication type, and requested scopes. No credentials are stored in the catalogue; users provide their own in their client.",
+      "mcpTitle": "MCP integrations",
+      "recommendedBody": "The \"Recommended\" badge is curated by maintainers in a version-controlled file. There is no way to set it from the public site or from a pull request alone.",
+      "recommendedTitle": "Recommended status",
+      "repoLink": "Browse catalogue entries",
+      "title": "Contribute a tool"
+    },
+    "discovery": {
+      "allBody": "Explore reusable workflows, trusted public data sources, and capabilities included with stella.",
+      "allTitle": "All tools",
+      "aresBody": "Look up a Czech organization by name or IČO in the official ARES register.",
+      "contractReviewBody": "Review commercial agreements clause by clause against a negotiation playbook, with deviations and suggested redlines surfaced clearly.",
+      "editorsPick": "Editor's picks",
+      "exampleReview": "Example review",
+      "featuredTitle": "Start with a workflow",
+      "fromCommunity": "From the community",
+      "groups": {
+        "dataSources": "Data sources and integrations",
+        "dataSourcesBody": "Connect authoritative registries and specialist services when a matter needs external information.",
+        "included": "Included with stella",
+        "includedBody": "Core capabilities that are ready to use without adding a separate skill or account.",
+        "skillsBody": "Reusable legal workflows with instructions you can inspect before adding them."
+      },
+      "heroBody": "Search by task, jurisdiction, or source. You can inspect every tool before adding it to your workspace.",
+      "heroTitle": "What are you working on?",
+      "howBody": "A skill packages a legal method as inspectable instructions. Add it once, then reuse the same approach whenever the task comes up.",
+      "howTitle": "What is a skill?",
+      "includedBadge": "Included",
+      "jurisRankBody": "Assess the authority of Argentine Supreme Court precedents through citation influence and doctrinal evolution.",
+      "noResults": "No tools match this search yet.",
+      "openSkill": "See how it works",
+      "review": {
+        "aligned": "Aligned",
+        "governingLaw": "Governing law",
+        "liabilityCap": "Liability cap",
+        "missing": "Not provided",
+        "outsidePlaybook": "Outside playbook",
+        "termination": "Termination"
+      },
+      "searchPlaceholder": "What do you need to do?",
+      "tasks": {
+        "prepareDocuments": "Prepare documents",
+        "protectClientData": "Protect client data",
+        "researchPrecedents": "Research precedents",
+        "reviewAgreements": "Review agreements",
+        "verifyOrganizations": "Verify an organization"
+      },
+      "tasksTitle": "Or choose a task"
+    },
+    "documentation": "Documentation",
+    "downloadUpstream": "Download upstream archive",
+    "installConfirm": {
+      "mcpBody": "The MCP connector \"{name}\" will be added for your workspace. You provide your own credentials afterwards from the MCP settings.",
+      "nativeToolBody": "The built-in tool \"{name}\" will be enabled for your workspace.",
+      "skillBody": "The skill \"{name}\" will be installed for your workspace.",
+      "title": "Add {name} to your workspace?"
+    },
+    "installUnavailable": "This tool cannot be installed in your organization.",
+    "mcpConfigHint": "Client-agnostic connection details. Paste into any MCP-compatible client and add your own credentials.",
+    "metaDescription": "Browse the open catalogue of skills, integrations, and built-in tools for legal work.",
+    "missingFromCatalogue": "This tool is not in your organization’s catalogue.",
+    "nativeToolInfo": "This is a built-in stella capability. Enable it from your workspace to use it in chat.",
+    "notFound": "Tool not found.",
+    "practiceArea": "Practice area",
+    "practiceAreas": {
+      "bankingFinance": "Banking and finance",
+      "capitalMarkets": "Capital markets",
+      "commercial": "Commercial",
+      "competition": "Competition",
+      "corporate": "Corporate",
+      "criminal": "Criminal",
+      "dataProtection": "Data protection",
+      "disputeResolution": "Dispute resolution",
+      "employment": "Employment",
+      "energy": "Energy",
+      "environmental": "Environmental",
+      "family": "Family",
+      "immigration": "Immigration",
+      "insolvency": "Insolvency",
+      "intellectualProperty": "Intellectual property",
+      "litigation": "Litigation",
+      "mergersAcquisitions": "Mergers and acquisitions",
+      "privateClient": "Private client",
+      "publicAdministrative": "Public and administrative",
+      "realEstate": "Real estate",
+      "regulatory": "Regulatory",
+      "tax": "Tax",
+      "technology": "Technology",
+      "whiteCollarCrime": "White-collar crime"
+    },
+    "tokenHelp": "How to get a token",
+    "viewOnGithub": "View on GitHub"
+  },
+  "readerAnswers": {
+    "answerLanguage": "Answer language",
+    "budgetError": "The answer budget is exhausted.",
+    "documentLanguage": "Document language ({language})",
+    "expand": "Expand answer",
+    "explain": "Explain",
+    "followUp": "Ask a follow-up",
+    "followUpRequired": "Type a follow-up question to send it.",
+    "invalidCitations": "{count, plural, one {# citation could not be verified.} other {# citations could not be verified.}}",
+    "loading": "Generating answer…",
+    "minimise": "Minimise answer",
+    "modelError": "The model could not finish this answer.",
+    "networkError": "The connection was interrupted. Try again.",
+    "regenerate": "Regenerate answer",
+    "selectionError": "Select text from the decision itself.",
+    "send": "Send follow-up",
+    "share": "Share with team",
+    "timeoutError": "The answer timed out. Try again.",
+    "title": "Answer about selected text",
+    "waitForCurrentAction": "Wait for the current action on this answer to finish."
+  },
+  "statutes": {
+    "amendedTimes": "{count, plural, =0 {Not amended} one {Amended once} other {Amended # times}}",
+    "asOf": "Text in force on",
+    "backToList": "All statutes",
+    "citingDecisionHideSnippet": "Collapse passage",
+    "citingDecisionMentionCount": "cited {count}×",
+    "citingDecisionOlderVersion": "Older version",
+    "citingDecisionShowSnippet": "Show full passage",
+    "citingDecisionsCourtPlaceholder": "All courts",
+    "citingDecisionsFilterPlaceholder": "Filter loaded decisions",
+    "citingDecisionsSnapshotCapped": "{count} decisions shown (the top {limit} by mentions of this provision).",
+    "citingDecisionsSortCitations": "Mentions of this provision",
+    "citingDecisionsSortDate": "Decision date",
+    "citingDecisionsYear": "Decision year",
+    "citingDecisionsYearOutOfRange": "Enter a year from {min} to {max}.",
+    "citingDecisionsYearPlaceholder": "All years",
+    "columns": {
+      "act": "Act",
+      "amendments": "Amendments",
+      "firstVersion": "First version",
+      "lastAmended": "Last amended"
+    },
+    "compareAbsent": "Not in this version",
+    "compareAddedLater": "This provision did not exist in this version yet.",
+    "compareClose": "Close comparison",
+    "compareMoved": "Moved:",
+    "compareMovedFrom": "Moved here from {provision}",
+    "compareMovedFromElsewhere": "Moved here from elsewhere",
+    "compareMovedTo": "Moved to {provision}",
+    "compareMovedToElsewhere": "Moved elsewhere",
+    "compareNoChanges": "The wording is the same in both versions.",
+    "compareNoLongerPresent": "This provision is no longer in this version. It was repealed or renumbered.",
+    "compareProvisionNeither": "Neither version contains this provision.",
+    "compareProvisionTitle": "Changes to {provision} between versions",
+    "compareSameVersion": "This is the version on screen. Pick another one to compare with.",
+    "compareShowUnchanged": "Show unchanged provisions",
+    "compareSideBySide": "Compare side by side",
+    "compareTitle": "Changes between versions",
+    "compareUnavailable": "The comparison could not be prepared.",
+    "compareUnstructured": "One of these versions is available only as plain text, so the two cannot be compared.",
+    "compareVersionMissing": "The version to compare with is not in this act's history.",
+    "compareWholeAct": "Compare the whole act",
+    "compareWithPreviousWording": "Compare with the previous wording",
+    "compareWithVersion": "Compare with {version}",
+    "currentWording": "Current wording",
+    "description": "Public database of consolidated statutes, indexable by act and version.",
+    "diffInserted": "Inserted:",
+    "diffRemoved": "Deleted:",
+    "emptyDocument": "This version has no text available.",
+    "emptyState": "No statutes found.",
+    "expression": {
+      "invalidWindow": "Publisher dates inconsistent",
+      "promulgated": "Text as promulgated",
+      "withdrawn": "No longer listed by the publisher"
+    },
+    "inForceSince": "In force since {date}",
+    "inForceSinceAtLeast": "In force since {date} or earlier",
+    "ineligibleVersion": "{range} ({label})",
+    "leadingDecision": "Leading decision",
+    "leadingDecisionsExplanation": "The first mention in each decision, ranked by citation authority: weighted incoming citations, adjusted for court rank, citation polarity and age.",
+    "noVersionInForce": "No version of this act was in force on the selected date.",
+    "openEnded": "present",
+    "outline": "Contents",
+    "outlineJumpLabel": "Jump to a provision",
+    "outlineJumpPlaceholder": "§ 10 or a heading",
+    "pendingChanges": "Upcoming amendments",
+    "pendingChangesIncomplete": "The publisher data may not include every upcoming amendment.",
+    "provisionAbsentVersions": "{count, plural, one {Not in this version of the act} other {Not in these # versions of the act}}",
+    "provisionAskContextPrompt": "\n\nPassages applying it in the most authoritative decisions:\n{passages}\n\nUse the case-law tools to read any of these decisions in full or to find further decisions citing the provision.",
+    "provisionAskSummarize": "Summarize how courts apply this provision",
+    "provisionAskSummarizePrompt": "Summarize how courts apply {subject}, citing the decisions you rely on.",
+    "provisionDetailsFor": "Details of {provision}",
+    "provisionEffectiveFrom": "in force since {date}",
+    "provisionHistoryEmpty": "No wording of this provision is on record.",
+    "provisionHistoryUnavailable": "This provision's history could not be loaded.",
+    "provisionPartTextUnavailable": "Text of {provisionLabel} is not available",
+    "provisionPromptSubject": "{provision} of {statute} ({eli}), in the wording in force since {date}",
+    "provisionPromptSubjectUndated": "{provision} of {statute} ({eli})",
+    "provisionRunAlsoFrom": "also from {date}",
+    "provisionRunShowVersions": "Show the versions of the act for {range}",
+    "provisionRunUnchanged": "{count, plural, one {unchanged in # version of the act} other {unchanged through # versions of the act}}",
+    "provisionTextUnavailable": "Text not available for this version",
+    "provisionVersionsAll": "All versions of the act",
+    "provisionWordingAdded": "New provision",
+    "provisionWordingChanged": "Changed",
+    "provisionWordingEarliest": "Earliest on record",
+    "publisherWindowInconsistent": "No in-force reading for this date: the publisher's data is inconsistent.",
+    "resolvedAlias": "Recognized as {label}",
+    "searchLabel": "Search statutes",
+    "searchPlaceholder": "Number, name or title, e.g. 89/2012 Sb.",
+    "showCitedPartOnly": "Show cited part only",
+    "showFullProvision": "Show full provision",
+    "showInText": "Show in the text",
+    "sortNeedsYear": "Choose a year in Filters to sort by this column.",
+    "statedWindow": "Dates stated by the publisher: {range}",
+    "status": {
+      "current": "In force",
+      "draft": "Proposed",
+      "ended": "No longer in force",
+      "future": "Future",
+      "historical": "Superseded",
+      "neverInForce": "Never in force",
+      "repealed": "Repealed",
+      "unknown": "Status unclear"
+    },
+    "title": "Statutes",
+    "validity": "Valid from {from} to {to}",
+    "versionAlreadySelected": "You are already viewing this version.",
+    "versionAppliedInDecision": "Version applied in <bdi>{court}</bdi> <bdi>{caseNumber}</bdi> (<bdi>{range}</bdi>) · {status}",
+    "versionChangesAdded": "{count, plural, one {# provision added} other {# provisions added}}",
+    "versionChangesChanged": "{count, plural, one {# provision changed} other {# provisions changed}}",
+    "versionChangesNone": "Wording unchanged",
+    "versionChangesRemoved": "{count, plural, one {# provision removed} other {# provisions removed}}",
+    "versionChangesWords": "{inserted, plural, one {# word inserted} other {# words inserted}}, {deleted, plural, one {# word deleted} other {# words deleted}}",
+    "wordingVersionUnknown": "Wording version date unavailable"
+  }
+}

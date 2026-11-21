@@ -4844,7 +4844,7 @@ test("shipped web source plans production shards on a fast PR", () => {
   for (const file of [
     "apps/web/src/routes/index.tsx",
     "apps/web/src/components/breadcrumbs/chat-switcher.tsx",
-    "apps/web/src/i18n/langs/en.json",
+    "apps/web/src/i18n/namespaces/en/core.json",
     // Workspace packages the web build bundles.
     "packages/ui/src/button.tsx",
     "packages/html/src/load.ts",

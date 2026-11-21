@@ -34,11 +34,11 @@ const git = (cwd: string, ...args: string[]): string => {
   return result.stdout.toString();
 };
 
-const LANGS = "apps/web/src/i18n/langs";
+const NAMESPACES = "apps/web/src/i18n/namespaces";
 const FILES = {
-  en: `${LANGS}/en.json`,
-  cs: `${LANGS}/cs.json`,
-  types: `${LANGS}/messages.gen.ts`,
+  en: `${NAMESPACES}/en/core.json`,
+  cs: `${NAMESPACES}/cs/core.json`,
+  types: "apps/web/src/i18n/langs/messages.gen.ts",
   terminology: "apps/web/src/i18n/TERMINOLOGY.md",
   sourceLock: "apps/web/src/i18n/i18n-source-lock.json",
   prepaint: "apps/web/public/prepaint-init.js",
@@ -127,7 +127,7 @@ describe("pre-commit i18n sync", () => {
 
   test("an untracked target refuses too", () => {
     withRepo((repo) => {
-      const draft = `${LANGS}/fr.json`;
+      const draft = `${NAMESPACES}/fr/core.json`;
       writeFileSync(path.join(repo, draft), "{}\n");
       const result = runPrecommitI18n(repo, () => 0);
       expect(result).toEqual({ kind: "refused", dirty: [draft] });

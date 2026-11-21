@@ -1,0 +1,1457 @@
+{
+  "caseLaw": {
+    "analysis": {
+      "abstract": "Kopsavilkums",
+      "aiLayer": "{layer} (AI)",
+      "backToSection": "Atgriezties šīs sadaļas sākumā",
+      "categories": {
+        "facts": "Fakti",
+        "holding": "Nolēmums",
+        "procedural-history": "Procesa gaita",
+        "reasoning": "Argumentācija"
+      },
+      "errors": {
+        "analysisDisabled": "AI analīzes veidošana šajā serverī ir izslēgta. Lasiet nolēmuma tekstu vai mēģiniet vēlāk.",
+        "answerIncomplete": "{source, select, organization {Jūsu organizācijas {provider} atslēga atgrieza nepilnīgu atbildi.} other {AI modelis atgrieza nepilnīgu atbildi.}}",
+        "decisionNotFound": "Šis tiesas nolēmums netika atrasts. Atveriet to vēlreiz meklēšanā.",
+        "documentUnparseable": "Nolēmuma teksts vēl nav gatavs analīzei. Lasiet sākotnējo avotu.",
+        "languageUnsupported": "AI analīze ir pieejama tikai nolēmumiem šajās valodās: {languages}.",
+        "openLanguageVersion": "Atvērt valodas versiju: {language}",
+        "providerRefused": "{source, select, organization {{provider} noraidīja pieprasījumu, kas veikts ar jūsu organizācijas atslēgu. Pārbaudiet atslēgu, tās kvotu un norēķinus organizācijas iestatījumos.} other {AI pakalpojumu sniedzējs noraidīja pieprasījumu.}}",
+        "providerUnavailable": "{source, select, organization {{provider} pašlaik nav pieejams ar jūsu organizācijas atslēgu.} other {AI pakalpojumu sniedzējs pašlaik nav pieejams.}}",
+        "retryAfter": "Vēlreiz mēģināt varēsiet pēc {time}.",
+        "sourceRestricted": "Avots neatļauj AI analīzi. Lasiet nolēmuma tekstu vai sākotnējo avotu.",
+        "timedOut": "{source, select, organization {{provider} neatbildēja laikā, izmantojot jūsu organizācijas atslēgu.} other {AI modelis neatbildēja laikā.}}"
+      },
+      "generate": "Sagatavot AI kopsavilkumus",
+      "invitation": "Ar bezmaksas kontu AI sagatavo darba piezīmes par šo nolēmumu.",
+      "noCurrentSection": "Pašlaik nav sadaļas, uz kuru pāriet.",
+      "topics": "Tēmas",
+      "treatment": "Vēlākā judikatūra"
+    },
+    "analyzing": "Analizē…",
+    "browse": {
+      "courtDescription": "{court} ({country}): nolēmumi stella publiskajā tiesību datubāzē pa gadiem un mēnešiem.",
+      "courts": "Tiesas",
+      "days": "Dienas",
+      "jurisdictionDescription": "{country}: tiesu nolēmumi stella publiskajā tiesību datubāzē pa tiesām, gadiem un mēnešiem.",
+      "periodDescription": "{court} ({country}), {period}: nolēmumi stella publiskajā tiesību datubāzē."
+    },
+    "chat": {
+      "prompts": {
+        "facts": {
+          "body": "Kādi bija fakti un ko apgalvoja katra puse?",
+          "name": "Fakti un pušu argumenti"
+        },
+        "holding": {
+          "body": "Ko tiesa nosprieda un kāpēc?",
+          "name": "Rezolutīvā daļa un motīvi"
+        },
+        "precedent": {
+          "body": "Uz kuriem agrākiem nolēmumiem tā balstās un vai tiem seko?",
+          "name": "Agrākie nolēmumi"
+        },
+        "provisions": {
+          "body": "Kuras normas tiesa piemēro un kā tās iztulko?",
+          "name": "Piemērotās normas"
+        }
+      }
+    },
+    "citation": {
+      "citedAtLeast": "Citēts vismaz {count} reizes",
+      "citedSummary": "{count, plural, =0 {Nav citēts} zero {Citēts # reižu} one {Citēts vienu reizi} other {Citēts # reizes}}",
+      "dateUnavailable": "Datums nav norādīts",
+      "decisionCount": "{count, plural, =0 {Nav nolēmumu} zero {# nolēmumu} one {# nolēmums} other {# nolēmumi}}",
+      "goToMention": "Pāriet uz {number}. pieminējumu",
+      "goToParagraph": "Pāriet uz {paragraph}. punktu",
+      "lastNegative": "pēdējā negatīvā atsauce {year}. gadā",
+      "mentionMark": "{number}. pieminējums",
+      "mentionsInDecision": "{count, plural, zero {Šajā nolēmumā citēts # reižu} one {Šajā nolēmumā citēts # reizi} other {Šajā nolēmumā citēts # reizes}}",
+      "negativeCount": "{count, plural, zero {# negatīvu} one {# negatīva} other {# negatīvas}}",
+      "none": "Citējumi vēl nav reģistrēti.",
+      "notInStella": "Lietotnē stella vēl nav",
+      "openDecision": "Atvērt nolēmumu",
+      "paragraphLabel": "{paragraph}. punkts",
+      "paragraphMark": "¶ {paragraph}",
+      "paragraphReferenceLabel": "{court}, {caseNumber}, {date}, {paragraph}. punkts",
+      "partialSummary": "Citējumu kopsummas un laika skala ir nepilnīgas.",
+      "passageNotFound": "Citējošais fragments tekstā netika atrasts",
+      "positiveCount": "{count, plural, zero {# pozitīvu} one {# pozitīvs} other {# pozitīvi}}",
+      "referenceLabel": "{court}, {caseNumber}, {date}",
+      "showAll": "{count, plural, zero {Rādīt visus # nolēmumus} one {Rādīt # nolēmumu} other {Rādīt visus # nolēmumus}}",
+      "stripLabel": "Atsauces pa gadiem",
+      "treatment": {
+        "mixed": "Pretrunīgs",
+        "negative": "Negatīvs",
+        "neutral": "Pieminēts",
+        "positive": "Apstiprināts",
+        "supportive": "Sekots",
+        "unclassified": "Neklasificēts"
+      },
+      "unresolved": "Nav piesaistīts nolēmumam",
+      "whereCited": "Kur tiek citēts šis nolēmums",
+      "yearTitle": "{year}: {count, plural, zero {# atsauču} one {# atsauce} other {# atsauces}}"
+    },
+    "columns": {
+      "caseNumber": "Lietas numurs",
+      "citedBy": "Citēts",
+      "headnote": "Kopsavilkums",
+      "summary": "Tiesību atziņa / atbilsme"
+    },
+    "corpusStatus": {
+      "courtCount": "{count, plural, zero {# tiesu} one {# tiesa} other {# tiesas}}",
+      "newLast24Hours": "{count} pēdējās 24 h",
+      "newLast7Days": "Jaunie pēdējās 7 dienās",
+      "otherCourts": "Citas tiesas"
+    },
+    "courtTiers": {
+      "constitutional": "Konstitucionālās tiesas",
+      "other": "Citas tiesas",
+      "regional": "Apgabaltiesas",
+      "supreme": "Augstākās tiesas"
+    },
+    "coverage": {
+      "allCurrent": "Visi avoti ir aktuāli",
+      "censusComparison": "{stored} saglabāti / {publisher} publicēti · {withText} ar tekstu",
+      "censusComplete": "Pilnīgs",
+      "censusIncomplete": "Nepilnīgs",
+      "censusSliceMemberships": "Skaits summēts pa daļām; viens nolēmums var būt ieskaitīts vairākas reizes.",
+      "completeness": "Pilnīgums",
+      "completenessHelp": "Saglabāto nolēmumu skaits attiecībā pret izdevēja norādīto kopskaitu, tā sarakstu vai reģistrētu kopskaitu. Izdevēja sarakstā iekļautie nolēmumi, kuru trūkumu atklāja salīdzināšana, netiek ieskaitīti.",
+      "countryNavigation": "Pāriet uz valsti",
+      "courtsHeading": "Pēc tiesas",
+      "decisionYears": "Nolēmumu gadi",
+      "decisionsAcross": "nolēmumi no {count, plural, zero {# jurisdikcijām} one {# jurisdikcijas} other {# jurisdikcijām}}",
+      "description": "Cik daudz tiesu prakses ir korpusā pa valstīm un tiesām un cik aktuāls ir katrs avots.",
+      "generatedAt": "Dati uz {date}",
+      "healthCurrent": "Aktuāls",
+      "healthDelayed": "Aizkavējas",
+      "healthDisabled": "Izslēgts",
+      "healthSnapshot": "Fiksēts momentuzņēmums",
+      "healthStalled": "Apstājies",
+      "healthUnknown": "Nekad nav palaists",
+      "inPreparation": "Sagatavošanā",
+      "lastSync": "Pēdējā sinhronizācija",
+      "notCountedYet": "Vēl nav saskaitīts",
+      "notMeasuredYet": "Vēl nav izmērīts",
+      "searchable": "Meklējami",
+      "sourceExceptions": "{count, plural, zero {# avotiem jāpievērš uzmanība} one {# avotam jāpievērš uzmanība} other {# avotiem jāpievērš uzmanība}}",
+      "sourcesCurrent": "Aktuālie avoti",
+      "syncedAt": "Sinhronizēts {time}",
+      "title": "Tiesu prakses aptvērums",
+      "totalFrom": "Kopskaits uz {date}",
+      "unavailable": "Aptvēruma dati pašlaik nav pieejami."
+    },
+    "decisionNotFound": "Lēmums nav atrasts",
+    "decisionTypes": {
+      "administrative_decision": "Administratīvais akts",
+      "binding_excise_information": "Saistoša informācija par akcīzes nodokli",
+      "binding_rate_information": "Saistoša informācija par PVN likmi",
+      "court_direction": "Rīkojums",
+      "decision": "Nolēmums",
+      "finding": "Spriedums pēc būtības",
+      "general_tax_ruling": "Vispārējs nodokļu skaidrojums",
+      "individual_tax_ruling": "Individuāls nodokļu skaidrojums",
+      "judgment": "Spriedums",
+      "leave_refused": "Noraidīts būtiska tiesību jautājuma trūkuma dēļ",
+      "merits_decision": "Nolēmums pēc būtības",
+      "ministry_of_justice_decision": "Tieslietu ministrijas lēmums",
+      "minutes_extract": "Protokola izraksts",
+      "opinion": "Atzinums",
+      "order": "Lēmums",
+      "other": "Citi",
+      "payment_order": "Maksājuma rīkojums",
+      "penal_order": "Sodu rīkojums",
+      "principle_decision": "Principiāls nolēmums",
+      "protective_opinion": "Aizsargājošs atzinums",
+      "resolution": "Rezolūcija",
+      "signalling_decision": "Signalizācijas lēmums",
+      "statement_of_reasons": "Motivācija",
+      "tax_explanations": "Nodokļu paskaidrojumi",
+      "top_up_tax_opinion": "Atzinums par papildu nodokli",
+      "uniformity_decision": "Judikatūras vienveidošanas lēmums"
+    },
+    "emptyState": "Lēmumi nav atrasti. Konfigurējiet avotu un palaidiet sinhronizāciju, lai importētu tiesu praksi.",
+    "filters": {
+      "countryMismatch": "Noņemti filtri, kas neattiecas uz izvēlēto valsti ({country}): {filters}.",
+      "remove": "Noņemt filtru {filter}",
+      "showInCountry": "Rādīt {filter} valstī {country}"
+    },
+    "languages": {
+      "count": "{count, plural, zero {# valodu} one {# valoda} other {# valodas}}",
+      "matchedIn": "Atbilstība valodā: {language}"
+    },
+    "linkedPassageGone": "Saistītā fragmenta šajā tekstā vairs nav.",
+    "loadingMore": "Ielādē vairāk…",
+    "marginFilter": {
+      "label": "Citēto normu filtrs",
+      "paragraph": "{count, plural, one {¶{paragraph} citēta # norma} zero {¶{paragraph} citētas # normu} other {¶{paragraph} citētas # normas}}",
+      "selection": "{count, plural, one {Atlasē citēta # norma} zero {Atlasē citētas # normu} other {Atlasē citētas # normas}}",
+      "unnumberedParagraph": "{count, plural, one {Šajā rindkopā citēta # norma} zero {Šajā rindkopā citētas # normu} other {Šajā rindkopā citētas # normas}}"
+    },
+    "matterLinks": {
+      "alreadySaved": "{count, plural, zero {# nolēmumu jau bija saglabāti šeit} one {# nolēmums jau bija saglabāts šeit} other {# nolēmumi jau bija saglabāti šeit}}",
+      "empty": "Šajā lietā vēl nav saglabāta tiesu prakse.",
+      "emptyAction": "Meklēt tiesu praksē",
+      "note": "Piezīme",
+      "notePlaceholder": "Kāpēc šie nolēmumi šeit ir svarīgi…",
+      "rejectedLimit": "{count, plural, zero {# nolēmumu netika saglabāti: lieta ir pilna} one {# nolēmums netika saglabāts: lieta ir pilna} other {# nolēmumi netika saglabāti: lieta ir pilna}}",
+      "rejectedMissing": "{count, plural, zero {# nolēmumu netika atrasti} one {# nolēmums netika atrasts} other {# nolēmumi netika atrasti}}",
+      "remove": "Noņemt no lietas",
+      "save": "Saglabāt lietā",
+      "savePage": "No šīs lapas {count, plural, zero {tiks saglabāti # nolēmumu} one {tiks saglabāts # nolēmums} other {tiks saglabāti # nolēmumi}}.",
+      "saveSelection": "{count, plural, zero {Tiks saglabāti # atlasītu nolēmumu} one {Tiks saglabāts # atlasīts nolēmums} other {Tiks saglabāti # atlasīti nolēmumi}}.",
+      "saveTitle": "Saglabāt lietā",
+      "saved": "{count, plural, zero {Saglabāti # nolēmumu} one {Saglabāts # nolēmums} other {Saglabāti # nolēmumi}} lietā {matter}"
+    },
+    "newestDecisions": "Jaunākie nolēmumi",
+    "noResults": {
+      "hint": "Izmēģiniet citus vārdus, uzlabojiet vaicājumu ar AI vai uzdodiet jautājumu tērzēšanā."
+    },
+    "notesFilter": {
+      "ai": "AI",
+      "human": "Cilvēku",
+      "toggleState": "{label}: {state, select, on {ieslēgts} other {izslēgts}}"
+    },
+    "oldestDecisions": "Vecākie nolēmumi",
+    "pagination": {
+      "goToPage": "Pāriet uz {page}. lapu",
+      "label": "Rezultātu lapas",
+      "pageOfCount": "{page}. lapa no {pageCount}",
+      "pageOfEstimatedCount": "{page}. lapa no ~{pageCount}",
+      "pageOfEstimatedCountLabel": "{page}. lapa no aptuveni {pageCount}",
+      "pageWithEstimatedMatchCounts": "{page}. lapa · aptuveni {exactCount, plural, zero {# precīzu atbilstību} one {# precīza atbilstība} other {# precīzas atbilstības}} · {relaxedCount, plural, zero {# daļēju atbilstību} one {# daļēja atbilstība} other {# daļējas atbilstības}} šajā lapā",
+      "pageWithEstimatedResultCount": "{page}. lapa · aptuveni {count, plural, zero {# rezultātu} one {# rezultāts} other {# rezultāti}}",
+      "pageWithMatchCounts": "{page}. lapa · {exactCount, plural, zero {# precīzu atbilstību} one {# precīza atbilstība} other {# precīzas atbilstības}} · {relaxedCount, plural, zero {# daļēju atbilstību} one {# daļēja atbilstība} other {# daļējas atbilstības}} šajā lapā",
+      "pageWithPartialMatchCount": "{page}. lapa · {relaxedCount, plural, zero {# daļēju atbilstību} one {# daļēja atbilstība} other {# daļējas atbilstības}} šajā lapā",
+      "pageWithResultCount": "{page}. lapa · {count, plural, zero {# rezultātu} one {# rezultāts} other {# rezultāti}}",
+      "perPage": "Vienā lapā",
+      "refineForMore": "Precizējiet meklēšanu, lai redzētu vairāk rezultātu"
+    },
+    "paragraphRangeNotFound": "{count, plural, zero {Rindkopas {range} šajā tekstā netika atrastas.} one {Rindkopa {range} šajā tekstā netika atrasta.} other {Rindkopas {range} šajā tekstā netika atrastas.}}",
+    "paragraphRangeSelected": "{count, plural, zero {Rindkopas {range} ir izceltas.} one {Rindkopa {range} ir izcelta.} other {Rindkopas {range} ir izceltas.}}",
+    "provision": {
+      "article": "{value}. pants",
+      "letter": "{value}. apakšpunkts",
+      "openEnded": "un turpmāk",
+      "point": "{value}. punkts",
+      "sentence": "{value}. teikums",
+      "subsection": "{value}. daļa"
+    },
+    "reader": {
+      "documentUpdated": "Dokuments ir atjaunināts.",
+      "expandProvisions": "Izvērst noteikumus",
+      "headMatter": "Informācija par lietu",
+      "sourceAttribution": "Avota dati ir brīvi pieejami vietnē <link>{source}</link>."
+    },
+    "research": {
+      "answering": "{count, plural, zero {Atbild uz # šūnām…} one {Atbild uz # šūnu…} other {Atbild uz # šūnām…}}",
+      "answers": {
+        "failureReasons": {
+          "decisionUnavailable": "Nolēmums nav pieejams",
+          "missingAnswer": "Modelis neatbildēja",
+          "modelError": "Modeļa kļūda",
+          "noText": "Nav nolēmuma teksta",
+          "runError": "Izpilde pārtrūka",
+          "wrongType": "Atbilde nepareizā formātā"
+        },
+        "no": "Nē",
+        "notAllowed": "Avota noteikumi to neatļauj",
+        "notRun": "Nav palaists",
+        "notStated": "Nolēmumā nav norādīts",
+        "pending": "Atbild…",
+        "showSource": "Rādīt avotu",
+        "yes": "Jā"
+      },
+      "deleteColumnConfirm": "Jautājums un visas tā atbildes tiks dzēstas visai jūsu organizācijai – no katras meklēšanas un visiem dalībniekiem. Lai to noņemtu tikai no šīs meklēšanas, izvēlieties “Noņemt no šīs meklēšanas”.",
+      "editQuestionHint": "Formulējuma, atbildes veida vai tā iespēju maiņa atmet esošās atbildes; pēc tam palaidiet kolonnu vēlreiz.",
+      "emptyPage": "Šajā lapā nav tiesu nolēmumu.",
+      "newQuestionColumn": "Jauns",
+      "nothingToRun": "Katrai šūnai jau ir atbilde",
+      "questionAdded": "“{question}” pievienots tabulai",
+      "questionPlaceholder": "piem. Vai tiesa atzina uzteikumu par spēkā esošu?",
+      "removeFromSearch": "Noņemt no šīs meklēšanas",
+      "runAll": "Atbildēt uz visiem",
+      "runConfirm": "Atbildēt tagad",
+      "runEstimate": "{rows, plural, zero {# nolēmumu} one {# nolēmums} other {# nolēmumi}} × {columns, plural, zero {# jautājumu} one {# jautājums} other {# jautājumi}} šajā lapā: {cells, plural, zero {tiks izveidotas # atbilžu} one {tiks izveidota # atbilde} other {tiks izveidotas # atbildes}}.",
+      "runInProgress": "Jau tiek apstrādāts viens izpētes jautājums.",
+      "runPermissionRequired": "Lai apstrādātu izpētes jautājumus, jums nepieciešama atļauja.",
+      "runTitle": "Atbildēt šajā lapā",
+      "savedQuestions": "Saglabātie jautājumi",
+      "title": "Pētījumu tabulas"
+    },
+    "results": {
+      "excerpt": {
+        "label": "Izvilkums",
+        "long": "Garš",
+        "medium": "Vidējs",
+        "short": "Īss"
+      }
+    },
+    "rewritten": {
+      "line": "Nav precīzu atbilstību vaicājumam <bdi>{original}</bdi>; rādīti rezultāti vaicājumam <bdi>{query}</bdi>",
+      "searchOriginal": "Meklēt manus sākotnējos vārdus"
+    },
+    "sameCaseNumber": "{count, plural, zero {# nolēmumu ir} one {# nolēmumam ir} other {# nolēmumiem ir}} šis lietas numurs. Izvēlieties tiesu.",
+    "searchLabel": "Meklēt judikatūrā",
+    "searchPlaceholder": "Lietas numurs, ECLI vai vārdi, piem. 22 Cdo 2653/2012",
+    "searchStillSearching": "Meklēšanas pakalpojums ir noslogots. Joprojām meklējam…",
+    "searchUnavailable": {
+      "description": "Neizdevās sazināties ar tiesu prakses meklēšanu. Jūsu vaicājums saglabājas adreses joslā, mēģiniet vēlreiz pēc brīža.",
+      "title": "Meklēšana īslaicīgi nav pieejama"
+    },
+    "searchWarnings": {
+      "collectionCitationUnresolved": {
+        "hint": "Meklējiet pēc lietas numura vai nolēmuma ECLI, ja tas ir zināms.",
+        "message": "Šai krājuma atsaucei precīzi atbilstošs nolēmums netika atrasts."
+      },
+      "noHits": {
+        "hint": "Mēģiniet mazāk vai citus vārdus: jēdzienus, ko lietotu nolēmums, nevis teikumu, kādā tiek uzdots jautājums.",
+        "message": "Nekas neatbilst vārdiem, ko pieprasīja šī meklēšana."
+      },
+      "noHitsFiltered": {
+        "hint": "Noņemiet vai paplašiniet filtru un meklējiet vēlreiz.",
+        "message": "Nekas neatbilst izvēlētajiem filtriem."
+      },
+      "partialMatch": "Daļēja atbilstība",
+      "partialMatchMissing": "Trūkstošie vārdi: {terms}",
+      "partialMatches": "Daļējas atbilstības vaicājumam: <bdi>{query}</bdi>",
+      "resultsFor": "Rezultāti vaicājumam: <bdi>{query}</bdi>",
+      "searchEveryWord": "Meklēt visus vārdus"
+    },
+    "seo": {
+      "collectionName": "stella tiesu prakse",
+      "description": "Publiska tiesu prakses datubāze ar indeksējamiem tiesu nolēmumiem un tiesību avotiem.",
+      "homeDescription": "Publiska juridiskā datubāze: tiesu nolēmumi un konsolidēti tiesību akti, meklējami pēc identifikatora vai vārdiem.",
+      "scopedDescription": "Publiska tiesu prakses datubāze ({scope}) ar indeksējamiem tiesu nolēmumiem un tiesību avotiem."
+    },
+    "showWholeHeadnote": "Rādīt visu kopsavilkumu",
+    "sort": {
+      "newest": "Jaunākie",
+      "oldest": "Vecākie",
+      "oldestUnavailable": "Meklēšanas rezultāti tiek kārtoti pēc atbilstības vai no jaunākajiem. Lai vispirms redzētu vecākos nolēmumus, notīriet meklēšanu.",
+      "relevance": "Atbilstošākie"
+    },
+    "viewer": {
+      "abstract": "Kopsavilkums",
+      "appealReviews": {
+        "conflict": "Dati par pārskatīšanu ir nepilnīgi vai pretrunīgi. Pārskatīšanas rezultāts ir jāpārbauda.",
+        "corpusOnly": "Pieejamajā korpusā nav atrasts nolēmums, ar kuru pārskatīts šis nolēmums. Tas nepierāda, ka sūdzība nav iesniegta.",
+        "noneFound": "Pārskatīšanas nolēmums nav atrasts",
+        "overturned": "Atcelts vai grozīts",
+        "partly": "Daļēji atcelts",
+        "reviewedBy": "Pārskatīšanas nolēmumi",
+        "reviews": "Pārskatītie nolēmumi",
+        "sourceHistory": "Procesa vēsture",
+        "sourceMetadata": "Izdevēja metadati",
+        "sourceOpening": "Ievada rindkopa",
+        "title": "Pārskatīšana pēc pārsūdzības",
+        "truncated": "Tiek rādīta tikai daļa pārskatīšanas vēstures.",
+        "underReview": "Notiek pārskatīšana",
+        "unknown": "Iznākums nav zināms",
+        "upheld": "Atstāts spēkā"
+      },
+      "appliedVersionNotStated": "Piemērotā redakcija nav norādīta",
+      "appliedVersionNotStatedCompact": "Redakcija nav norādīta",
+      "appliedVersionStatedAmendment": "Redakcija ar <reference>{amendment}</reference> grozījumiem",
+      "appliedVersionStatedAmendmentCompact": "Norādīts: <reference>{amendment}</reference>",
+      "appliedVersionStatedDate": "{relation, select, on {{date} spēkā esošā redakcija} until {Līdz {date} spēkā esošā redakcija} from {No {date} spēkā esošā redakcija} other {{date} spēkā esošā redakcija}}",
+      "appliedVersionStatedDateCompact": "{relation, select, on {Norādīts: {date}} until {Norādīts: līdz {date}} from {Norādīts: no {date}} other {Norādīts: {date}}}",
+      "caseFileDocuments": "Šīs lietas dokumenti",
+      "caseFileMayHoldOthers": "Šajā lietā var būt arī citi nolēmumi.",
+      "citedBy": "Atsaucas uz",
+      "citedDecisionPassage": "Fragments nolēmumā",
+      "cites": "Citē",
+      "dissentByline": "Atsevišķās domas: <bdi>{names}</bdi>",
+      "goToParagraph": "{count, plural, zero {Pāriet uz rindkopām} one {Pāriet uz rindkopu} other {Pāriet uz rindkopām}}",
+      "judgeRole": {
+        "advocateGeneral": "Ģenerāladvokāts",
+        "dissenting": "Atsevišķās domas",
+        "panelMember": "Tiesas sastāva loceklis",
+        "presiding": "Tiesas sastāva priekšsēdētājs",
+        "rapporteur": "Tiesnesis referents"
+      },
+      "judges": "Tiesneši",
+      "legalArea": "Tiesību joma",
+      "legalSentence": "Tiesību tēze",
+      "paragraphReference": "{number}. rindkopa",
+      "popularName": "Populārais nosaukums",
+      "portraitCredit": "Portretu avots: {source}",
+      "provisionMentions": "{count, number}×",
+      "provisionMentionsLabel": "{count, plural, zero {# pieminējumu} one {# pieminējums} other {# pieminējumi}}",
+      "provisionsCited": "Citētās normas",
+      "provisionsFailed": "Citātu apstrāde neizdevās",
+      "provisionsNoneFound": "Citētas normas nav atrastas",
+      "provisionsProcessing": "Citāti tiek apstrādāti",
+      "provisionsUnavailable": "Citāti nav pieejami",
+      "provisionsUnplaceable": "Citātus nevar atrast nolēmuma tekstā",
+      "provisionsUnsupported": "Šī nolēmuma citātu apstrāde netiek atbalstīta",
+      "provisionsWithheld": "Citāti netiek izpausti",
+      "sourceFields": {
+        "decisionCategory": "Nolēmuma kategorija",
+        "publishedOnWeb": "Publicēts tīmeklī"
+      },
+      "statutes": "Piemērojamie tiesību akti",
+      "textNotYetAvailable": "Tiesa nav publicējusi nolēmuma tekstu, vai tas šeit vēl nav pieejams.",
+      "textPending": "Nolēmuma teksts vēl tiek saņemts",
+      "textReadFailed": "Nolēmuma tekstu neizdevās ielādēt",
+      "textUnavailable": "Šim nolēmumam teksts nav pieejams",
+      "versionAtDecisionDateInferred": "Redakcija lēmuma datumā (izsecināta)",
+      "versionBasisInferredCompact": "Nolēmuma datums · izsecināts",
+      "versionBasisInferredExplanation": "Redakcija ir izsecināta no nolēmuma datuma. Nolēmumā nav norādīts, kura redakcija ir piemērojama."
+    },
+    "withdrawnByPublisher": "Izdevējs atsaucis"
+  },
+  "catalogue": {
+    "addCustom": "Pievienot pielāgotu",
+    "addCustomMcp": "Pievienot integrāciju",
+    "addCustomSkill": "Pievienot prasmi",
+    "by": "Autors: {author}",
+    "configuration": "Konfigurācija",
+    "cost": {
+      "free": "Bezmaksas",
+      "paid": "Maksas"
+    },
+    "detailAuthMethod": "Autentifikācija",
+    "empty": "Nav neviena ieraksta, kas atbilstu pašreizējam filtram.",
+    "filter": {
+      "mcps": "Integrācijas",
+      "nativeTools": "Iebūvētie rīki",
+      "skills": "Prasmes"
+    },
+    "filterHint": "Filtrēts: {codes}",
+    "firstParty": "stella",
+    "firstPartyTooltip": "Veidojusi stella komanda",
+    "installFailed": "Instalēšana neizdevās",
+    "installPack": "{count, plural, zero {Instalēt # rīku} one {Instalēt # rīku} other {Instalēt # rīkus}}",
+    "installed": "{name} instalēts",
+    "installedShort": "Instalēts",
+    "onboarding": {
+      "packTitle": "Ieteikts jūsu jurisdikcijai"
+    },
+    "openHomepage": "Atvērt sākumlapu",
+    "packDescription": "{count, plural, zero {# rīku} one {# rīks} other {# rīki}} jūsu praksei. Instalējiet ar vienu klikšķi vai izvēlieties zemāk individuāli.",
+    "packInstalled": "{count, plural, zero {# rīku instalēts} one {# rīks instalēts} other {# rīki instalēti}}",
+    "packPartial": "{installed} instalēti, {failed} neizdevās",
+    "removed": "Šis rīks vairs nav pieejams.",
+    "sectionOthers": "Citi",
+    "settings": {
+      "packTitle": "Ieteicamā paka"
+    },
+    "setup": {
+      "account": "Konts",
+      "apiKey": "API atslēga",
+      "none": "Nav jāiestata"
+    },
+    "skillNeedsUnavailableTools": "Tērzēšanā netiek piedāvāta. Nepieciešams rīks, kas tur nav pieejams: {tools}",
+    "toolDescriptions": {
+      "anonymize": "Paslēpj klientu vārdus, kontu numurus, adreses un citus personas datus pirms lietas satura kopīgošanas ar AI pakalpojumu sniedzējiem. Atgriezeniski klienta pusē; sākotnējais teksts nekad neatstāj jūsu darbvietu.",
+      "ares": "Čehijas uzņēmumu meklēšana pēc IČO vai nosaukuma publiskajā ARES reģistrā (ekonomikas dalībnieku administratīvais reģistrs, Čehijas komercreģistra analogs).",
+      "boe": "Spānijas konsolidētie tiesību akti, ikdienas oficiālais izdevums un BORME (komercreģistra biļetens) no Boletín Oficial del Estado oficiālās atvērto datu API.",
+      "brreg": "Norvēģijas uzņēmumu meklēšana pēc organisasjonsnummer vai nosaukuma Brreg Enhetsregisteret publiskajā atvērtajā API.",
+      "companiesHouse": "Apvienotās Karalistes uzņēmumu meklēšana pēc Companies House reģistrācijas numura vai nosaukuma Companies House publisko datu API. Nepieciešama bezmaksas API atslēga.",
+      "createDocx": "Izveido Word dokumentus no tērzēšanas ar formatējumu, tabulām, galvenēm un iegultiem stiliem. Rezultātu var lejupielādēt un rediģēt programmās Word, LibreOffice un Pages.",
+      "denue": "Meksikas uzņēmējdarbības vietu un saimniecisko vienību meklēšana pēc DENUE vietas identifikatora, nosaukuma vai juridiskā nosaukuma INEGI oficiālajā DENUE API. DENUE ir uzņēmējdarbības vietu katalogs, nevis uzņēmumu tiesību reģistrs Registro Público de Comercio. Nepieciešama bezmaksas INEGI API pilnvara.",
+      "edgar": "ASV biržā kotētu uzņēmumu meklēšana pēc Central Index Key (CIK) SEC EDGAR iesniegumu API.",
+      "gcis": "Taivānas uzņēmumu meklēšana pēc 統一編號 (tongbian, nodokļu identifikators) vai nosaukuma Ekonomikas lietu ministrijas (MoEA) portāla Commerce Industrial Services atvērto datu API.",
+      "infosoud": "Čehijas tiesas lietu meklēšana un tiesas sēžu kalendārs no infosoud.gov.cz. Meklējiet pēc lietas numura, tiesas vai puses, lai iegūtu sēžu datumus un lietas statusu.",
+      "krs": "Polijas uzņēmumu meklēšana pēc KRS numura Tieslietu ministrijas Krajowy Rejestr Sądowy (KRS) atvērtajā API. Aptver Rejestr Przedsiębiorców (komercsabiedrības) un Rejestr Stowarzyszeń (biedrības un nodibinājumi).",
+      "orsr": "Slovākijas uzņēmumu meklēšana pēc IČO vai nosaukuma Tieslietu ministrijas uzturētā Obchodný register Slovenskej republiky JSON API.",
+      "prh": "Somijas uzņēmumu meklēšana pēc Y-tunnus vai nosaukuma Patentti- ja rekisterihallitus (PRH) atvērtajā API AvoinData v3.",
+      "rechercheEntreprises": "Francijas uzņēmumu meklēšana pēc SIREN, SIRET vai nosaukuma atvērtajā API recherche-entreprises.api.gouv.fr (data.gouv.fr / Etalab, Licence Ouverte 2.0).",
+      "rpo": "Slovākijas meklēšana pēc IČO vai nosaukuma reģistrā Register právnických osôb, podnikateľov a orgánov verejnej moci (RPO), ko uztur Slovākijas Republikas Statistikas birojs. Aptver visas juridiskās personas un uzņēmējus, arī individuālos komersantus, biedrības, nodibinājumus un publiskās iestādes ārpus komercreģistra.",
+      "vies": "PVN reģistrācijas numuru pārbaude visā ES, izmantojot Eiropas Komisijas PVN informācijas apmaiņas sistēmas (VIES) REST API. Apstiprina, vai numurs ir reģistrēts piegādātāja dalībvalstī, un atgriež reģistrētā komersanta nosaukumu un adresi, ja dalībvalsts tos izpauž.",
+      "webSearch": "Meklē publiskajā tīmeklī un lasa atsevišķas lapas. Ja ir iestatīta jurisdikcija, vaicājumi vispirms tiek virzīti uz primārajiem avotiem (tiesām, tiesību aktu portāliem), pretējā gadījumā uz atvērto tīmekli. Iespējo katrai sarunai atsevišķi."
+    },
+    "toolNames": {
+      "anonymize": "Anonimizēt",
+      "createDocx": "Izveidot DOCX",
+      "gcis": "GCIS uzņēmumu reģistrs",
+      "vies": "ES PVN numura pārbaude (VIES)",
+      "webSearch": "Tīmekļa meklēšana"
+    },
+    "unavailable": "Vēl nav pieejams"
+  },
+  "guides": {
+    "action": {
+      "replay": "Sākt no jauna",
+      "skip": "Izlaist"
+    },
+    "checklist": {
+      "activeTour": "Vispirms pabeidziet pašreizējo ceļvedi vai izejiet no tā.",
+      "progress": "Pabeigti {completed} no {total}"
+    },
+    "community": {
+      "personalSupport": "Personīgs atbalsts"
+    },
+    "help": {
+      "buttonLabel": "Palīdzība un atsauksmes",
+      "title": "Palīdzība un atsauksmes"
+    },
+    "leave": "Iziet no ceļveža",
+    "minutes": "{count} min.",
+    "nudge": {
+      "action": "Atvērt ceļvežus",
+      "body": "Jauns šeit? Dažas īsas ekskursijas jums visu parādīs."
+    },
+    "status": {
+      "skipped": "Izlaists"
+    },
+    "tours": {
+      "chat": {
+        "description": "Sniedziet AI kontekstu un droši nosūtiet pieprasījumu",
+        "examplePrompt": "Apkopojiet šī līguma galvenās saistības",
+        "steps": {
+          "anonymize": {
+            "body": "Pirms nosūtīšanas paslēpj personas datus un pēc tam tos atjauno atbildē.",
+            "title": "Sūtīt anonimizēti",
+            "when": "Ieslēdziet, kad tekstā ir personas dati un atbilde nav atkarīga no tā, kas ir puses. Atstājiet izslēgtu, kad svarīga ir tieši identitāte, piemēram, interešu konflikta pārbaudē: vietturi aizvāc tieši to, par ko jautājat."
+          },
+          "attach": {
+            "body": "Augšupielādē failu no šīs ierīces sarunā. To izlasa tikai šai sarakstei, un tas netiek iekļauts lietā.",
+            "title": "Pievienot failu",
+            "when": "Der vienreizējam dokumentam, kas nav jāsaglabā: tikko pa e-pastu saņemtam projektam, skenējumam vai izklājlapai, no kuras vēlaties tikai kopsavilkumu."
+          },
+          "composer": {
+            "body": "Vienkāršā valodā uzrakstiet, ko vēlaties: uzdevumu, uz ko tas attiecas un kādā formā gaidāt atbildi. Viss pārējais šeit tikai precizē jau uzrakstīto pieprasījumu.",
+            "title": "Sāciet ar pieprasījumu"
+          },
+          "context": {
+            "body": "Pievieno esošu lietu vai failu kā kontekstu. Nekas netiek augšupielādēts vai kopēts.",
+            "title": "Atsaukties uz lietu vai failu",
+            "when": "Izmantojiet to pievienošanas vietā vienmēr, kad dokuments jau ir reģistrēts. Atsaucieties uz lietu, ja asistentam tā jāpārskata visa; uz vienu failu, ja precīzi zināt, kurš jāizlasa. Ierakstot @ tukšā redaktorā, šis saraksts atveras uzreiz."
+          },
+          "plusMenu": {
+            "body": "Izmantojiet +, lai pievienotu failu vai atsauktos uz lietu.",
+            "title": "Pievienojiet kontekstu ar +",
+            "when": "Kad vajadzīgā konteksta vēl nav tērzēšanā."
+          },
+          "send": {
+            "body": "Nosūta ziņu kopā ar visu, ko iepriekš pievienojāt, uz ko atsaucāties vai ko ieslēdzāt. Redaktors paliek vietā, tāpēc ar nākamo jautājumu varat papildināt to, kā trūka pirmajā atbildē.",
+            "title": "Nosūtiet ziņu",
+            "when": "Pirmā atbilde parāda, kas vēl trūkst."
+          }
+        },
+        "title": "Sāciet ar tērzēšanu"
+      },
+      "chatPower": {
+        "description": "Izmantojiet prasmes vai pievienojiet citus noderīgus rīkus",
+        "steps": {
+          "mcp": {
+            "body": "Ieslēdziet vai izslēdziet pievienota servera rīkus jūsu tērzēšanās: uzņēmumu reģistrus, iekšējās sistēmas, visu, ko jūsu komanda ir pievienojusi.",
+            "title": "Pievienotie rīku serveri",
+            "when": "Ieslēdziet, kad atbildei vajadzīgi aktuāli dati no ārpuses. Pārējos atstājiet izslēgtus: jo mazāk rīku spēlē, jo šaurāka un paredzamāka atbilde."
+          },
+          "models": {
+            "body": "Maina modeli tikai šajā sarunā. Visas pārējās sarakstes paliek pie jūsu darbvietas noklusējuma modeļa.",
+            "title": "Kurš modelis"
+          },
+          "plusMenu": {
+            "body": "Tajā pašā izvēlnē ir arī modeļa maiņa, prasmes un pievienotie rīku serveri. Nākamie soļi to atvērs un aplūkos katru iespēju.",
+            "title": "Vēl vairāk aiz pogas +"
+          },
+          "skills": {
+            "body": "Ievieto saglabātu uzvedni vai jūsu komandas uzrakstītu prasmi: pārbaudītu norādījumu kopumu, kas vienu un to pašu uzdevumu katru reizi izpilda vienādi.",
+            "title": "Prasmes un saglabātās uzvednes",
+            "when": "Izmantojiet, kad uzdevums atkārtojas un formulējums ir svarīgs, piemēram, tipveida līguma pārbaudē vai uzņemšanas kopsavilkumā. Ierakstot / tukšā redaktorā, šis saraksts atveras uzreiz."
+          }
+        },
+        "title": "Paveiciet vairāk tērzēšanā"
+      },
+      "documents": {
+        "description": "Pievienojiet dokumentu lietai un vēlāk atrodiet to",
+        "steps": {
+          "browse": {
+            "body": "Šī tabula ir lietas dokumentu saraksts. Augšupielādētie faili šeit tiek parādīti kā rindas. Lai vēlāk atgrieztos, sānjoslā atveriet lietu, izvēlieties tās tabulas skatu un pēc tam atlasiet dokumenta rindu.",
+            "title": "Vēlreiz atrast dokumentu"
+          },
+          "upload": {
+            "body": "Nospiežot Augšupielādēt, tiek atvērts failu atlasītājs; failus varat arī ievilkt lietā. Katrs fails kļūst par šīs lietas dokumentu, ko jūsu komanda var atrast un stella var izmantot pārskatīšanā.",
+            "title": "Pievienot dokumentu lietai",
+            "when": "Augšupielādējiet šeit, ja fails pieder pie lietas un tam jāpaliek pieejamam. Pievienojiet to tieši tērzēšanā tikai tad, ja tas ir pagaidu konteksts vienai sarunai."
+          }
+        },
+        "title": "Darbs ar dokumentiem"
+      },
+      "playbooks": {
+        "description": "Saglabājiet dokumentu pārskatīšanas procesu nākamajai reizei",
+        "steps": {
+          "basics": {
+            "body": "Pievienojiet nosaukumu un aprakstu. Ja vajadzīgs, attieciniet to tikai uz vienu dokumenta veidu.",
+            "title": "Piešķiriet pārbaudes ceļvedim nosaukumu"
+          },
+          "create": {
+            "body": "Sāciet ar tukšu pārbaudes ceļvedi.",
+            "title": "Izveidojiet pārbaudes ceļvedi"
+          },
+          "overview": {
+            "body": "Pārbaudes ceļvedī tiek saglabāti jautājumi un noteikumi citiem dokumentiem.",
+            "title": "Saglabājiet pārskatīšanas procesu"
+          },
+          "positions": {
+            "body": "Katram noteikumam izvēlieties, vai novērtēt tekstu vai izgūt detaļu.",
+            "title": "Pievienojiet pārskatīšanas noteikumus"
+          }
+        },
+        "title": "Izveidojiet pārbaudes ceļvedi"
+      },
+      "tabularReview": {
+        "description": "Iegūstiet atbildes no daudziem failiem vienlaikus",
+        "steps": {
+          "addColumn": {
+            "body": "Jauna kolonna atver kolonnas redaktoru. Piešķiriet kolonnai skaidru, jautājuma formā izteiktu nosaukumu un precīzi norādiet lietotnei stella, ko meklēt; viens un tas pats norādījums tiek izpildīts katrai dokumenta rindai.",
+            "title": "Uzdot vienu jautājumu par katru dokumentu",
+            "when": "Katram atbildes veidam, ko vēlaties salīdzināt, filtrēt, kārtot vai eksportēt, izveidojiet atsevišķu kolonnu. Saistīto kontekstu iekļaujiet uzvednē, nevis apvienojiet vairākas atbildes vienā šūnā."
+          },
+          "answerType": {
+            "body": "Lauks Atgriež nosaka katras atbildes formu. Ja rezultāts ir strukturēts, izvēlieties skaitli, datumu, vienu atlasi vai vairākas atlases; stella saglabās kolonnas vienveidību, nevis atgriezīs patvaļīgu tekstu.",
+            "title": "Izvēlēties atbildes veidu",
+            "when": "Fiksētai rezultātu kopai izmantojiet atlasi, kārtošanai un aprēķiniem – skaitli vai datumu, bet tekstu tikai tad, ja atbildei patiešām nepieciešams detalizēts izklāsts."
+          },
+          "table": {
+            "body": "Katra rinda ir dokuments, bet katra pielāgotā kolonna ir viens jautājums, kas vienlaikus tiek uzdots par visiem dokumentiem. Tādējādi failu mape kļūst par salīdzināmām atbildēm, neatverot katru failu atsevišķi.",
+            "title": "Pārskatīt visu kopu, nevis vienu failu",
+            "when": "Izmantojiet tabulu, ja vairākiem dokumentiem vajadzīgi vieni un tie paši fakti vai lēmumi. Atveriet dokumentu tieši, ja izkārtojums, formulējums vai apkārtējais konteksts ir svarīgāks par salīdzināšanu."
+          }
+        },
+        "title": "Pārskatīšana tabulā"
+      },
+      "workflows": {
+        "description": "Sasaistiet soļus atkārtojamā darbplūsmā",
+        "steps": {
+          "create": {
+            "body": "Izveidot atver nesaglabātu darbplūsmas melnrakstu. Nākamajās darbībās noteiksiet, kad tā sākas, ko tā dara un kur cilvēkam jāizlemj, vai tā drīkst turpināties.",
+            "title": "Sākt darbplūsmas melnrakstu"
+          },
+          "overview": {
+            "body": "Darbplūsma savieno aktivizētāju ar darbību secību, lai ierasts process katru reizi noritētu vienādi. Tā var automātiski sagatavot darbu, vajadzības gadījumā atstājot lēmumu pārskatītāja ziņā.",
+            "title": "Automatizēt atkārtojamu procesu",
+            "when": "Automatizējiet darbu, kam ir stabils aktivizētājs, atkārtojami soļi un skaidrs atbildīgais par izņēmumiem. Mainīgu vai uz spriedumiem balstītu darbu veiciet manuāli, līdz pats process ir nostabilizējies."
+          },
+          "reviewGate": {
+            "body": "Pārskatīšanas apstiprinājums aptur izpildi, līdz cilvēks to apstiprina vai noraida. Novietojiet apstiprinājumu pirms pirmās darbības, kuru nedrīkst veikt, pamatojoties tikai uz automatizētu rezultātu.",
+            "title": "Atstāt lēmumu pārskatītāja ziņā",
+            "when": "Izmantojiet apstiprinājumu pirms nosūtīšanas, reģistrēšanas, tālākas izskatīšanas vai citādas būtisku seku rezultāta galīgas apstiprināšanas. Izlaidiet to tikai tad, ja nākamā darbība ir droši atgriezeniska un tai nav vajadzīgs cilvēka vērtējums."
+          },
+          "steps": {
+            "body": "Soļi tiek izpildīti šādā secībā un nodod darba rezultātu tālāk. Katram solim piešķiriet vienu skaidru darbību, lai kļūmes būtu saprotamas un secību varētu viegli mainīt.",
+            "title": "Izveidot soļu secību"
+          },
+          "trigger": {
+            "body": "Aktivizētājs nosaka, kad sākas izpilde: manuāli, pēc grafika vai augšupielādējot atbilstošus failus. Sašauriniet lietas un failu nosacījumus, lai nesaistīts darbs nekad neaktivizētu darbplūsmu.",
+            "title": "Izvēlēties, kas sāk darbplūsmu",
+            "when": "Kamēr process ir jauns, izmantojiet manuālu palaišanu; laika noteiktām rutīnas darbībām izmantojiet grafiku, bet faila augšupielādi tikai tad, ja saņemts dokuments ir uzticams signāls sākt."
+          }
+        },
+        "title": "Automatizēt darbplūsmu"
+      }
+    },
+    "unavailable": "Šis ceļvedis pašlaik nav pieejams",
+    "whenLabel": "Kad to izmantot:"
+  },
+  "knowledge": {
+    "agentSkills": {
+      "availabilityClient": "Viens klients",
+      "availabilityClientBadgeHelp": "Pieejama tikai viena klienta lietās.",
+      "availabilityClientHelp": "Izmantojama tikai šī klienta lietās. Vēlāk to nevarēs mainīt.",
+      "availabilityFixedHelp": "Iestatīts, veidojot prasmi. To nevar mainīt.",
+      "availabilityLabel": "Pieejama",
+      "availabilityMatter": "Viena lieta",
+      "availabilityMatterBadgeHelp": "Pieejama tikai vienā lietā.",
+      "availabilityMatterHelp": "Izmantojama tikai šajā lietā. Vēlāk to nevarēs mainīt.",
+      "availabilityOrganization": "Visa organizācija",
+      "availabilityTeamNeedsMatter": "Lai kopīgotu prasmi ar komandu, izvēlieties lietu, kurai tā paredzēta. Vēlāk to nevarēs mainīt.",
+      "builtIn": {
+        "playbookBuilder": {
+          "description": "Izveidojiet līgumu pārbaudes ceļvedi pozīciju pa pozīcijai, balstoties uz iepriekš parakstītajiem līgumiem, īsu interviju un tirgū ierastajiem standartiem.",
+          "name": "Izveidot pārbaudes ceļvedi",
+          "openingPrompts": {
+            "extendExisting": {
+              "body": "Pievieno pozīcijas vienam no maniem esošajiem pārbaudes ceļvežiem.",
+              "name": "Papildināt pārbaudes ceļvedi"
+            },
+            "fromContracts": {
+              "body": "Izveido konfidencialitātes līgumu pārbaudes ceļvedi, balstoties uz maniem iepriekš parakstītajiem līgumiem.",
+              "name": "Sākt ar iepriekšējiem līgumiem"
+            },
+            "fromMarketStandards": {
+              "body": "Izveido piegādes līgumu pārbaudes ceļvedi, sākot ar tirgū ierastajām pozīcijām.",
+              "name": "Sākt ar tirgus standartiem"
+            }
+          }
+        }
+      },
+      "builtInSection": "Iebūvētās prasmes",
+      "deleteFile": "Dzēst failu",
+      "deleteFileConfirm": "Dzēst failu? Šo darbību nevar atsaukt.",
+      "disableSkill": "Atspējot prasmi",
+      "discoverSkills": "Meklēt prasmes",
+      "discoveredSkills": "{count, plural, zero {Atrastas # prasmes} one {Atrasta # prasme} other {Atrastas # prasmes}}",
+      "discoveryEmpty": "Šajā repozitorijā vai mapē prasmes netika atrastas.",
+      "discoverySkippedInvalid": "{count, plural, zero {Izlaistas # nederīgas prasmes} one {Izlaista # nederīga prasme} other {Izlaistas # nederīgas prasmes}}",
+      "dropPack": "Nometiet .zip/.skill vai SKILL.md failu, lai importētu prasmi",
+      "editSkill": "Rediģēt prasmi",
+      "enableSkill": "Iespējot prasmi",
+      "enterFileName": "Ievadiet faila nosaukumu.",
+      "exportAsSkill": "Eksportēt kā .skill",
+      "exportAsZip": "Eksportēt kā .zip",
+      "exportFailed": "Prasmi neizdevās eksportēt",
+      "exportSkill": "Eksportēt prasmi",
+      "fileExists": "Fails ar šādu ceļu jau pastāv",
+      "howItRuns": "Kā tā darbojas",
+      "importFailureFetch": "Prasmes avotu neizdevās ielādēt.",
+      "importFailureIntegrity": "Prasmes avots pēc atrašanas ir mainījies. Pārskatiet to vēlreiz.",
+      "importFailureLimit": "Ir sasniegts prasmju ierobežojums.",
+      "importFailureNameConflict": "Prasme ar šādu nosaukumu jau pastāv.",
+      "importHelp": "Ielīmējiet publiska GitHub repozitorija, mapes vai SKILL.md faila URL. Pirms instalēšanas pārskatiet atrastās prasmes.",
+      "importPartial": "{installedCount, plural, zero {Importētas: {installed}} one {Importēta: {installed}} other {Importētas: {installed}}}; {failedCount, plural, zero {neizdevās: {failed}} one {neizdevās: {failed}} other {neizdevās: {failed}}}.",
+      "importSelected": "Importēt atlasītās ({count})",
+      "importSkill": "Importēt no URL",
+      "importTitle": "Importēt prasmi",
+      "importedSkills": "{count, plural, zero {Importētas # prasmes} one {Importēta # prasme} other {Importētas # prasmes}}",
+      "invalidPath": "Izmantojiet relatīvu ceļu. Failu un mapju nosaukumi nedrīkst būt . vai .., sākties vai beigties ar atstarpi, beigties ar punktu, kā arī saturēt \\ : * ? \" |, leņķiekavas vai vadības rakstzīmes.",
+      "invocationAuto": "Automātiski",
+      "invocationAutoHelp": "AI var pats izmantot šo prasmi, ja tā atbilst pieprasījumam.",
+      "invocationManual": "Tikai pēc izsaukuma",
+      "invocationManualHelp": "Tiek izmantota tikai tad, kad to izsaucat ar / vai pievienojat savai ziņai.",
+      "license": "Licence: {license}",
+      "newFile": "Jauns fails",
+      "newFileFilenamePlaceholder": "notes.md",
+      "newFilePathPlaceholder": "folder/notes.md",
+      "newFolder": "Jauna mape",
+      "pdfPreviewSoon": "PDF priekšskatījums būs pieejams, tiklīdz tiks atbalstīti binārie prasmju resursi.",
+      "renameFile": "Pārdēvēt",
+      "scopePrivate": "Tikai es",
+      "scopeTeam": "Visi komandā",
+      "selectSkillToImport": "Atlasiet vismaz vienu prasmi.",
+      "selectionLimit": "Vienlaikus atlasiet ne vairāk kā {count} prasmes.",
+      "skippedFiles": "{count, plural, zero {# faili netika importēti} one {# fails netika importēts} other {# faili netika importēti}}",
+      "skippedReasonNotUtf8Text": "Nav UTF-8 teksts",
+      "skippedReasonOutsideSkillFolder": "Ārpus prasmes mapes",
+      "skippedReasonUnsupportedExtension": "Neatbalstīts faila tips",
+      "skippedReasonUnsupportedFolder": "Nav resursu mapē",
+      "starter": {
+        "compare": {
+          "body": "Salīdziniet divas šī dokumenta versijas un uzskaitiet visas būtiskās izmaiņas, norādot to atrašanās vietu.",
+          "description": "Uzskaitiet visas būtiskās izmaiņas starp divām versijām",
+          "name": "Salīdzināt versijas"
+        },
+        "draft": {
+          "body": "Sagatavojiet izsvērtu atbildi uz šo vēstuli. Saglabājiet profesionālu toni, aplūkojiet katru minēto punktu un norādiet atklātos jautājumus, kas man jāapstiprina.",
+          "description": "Sagatavojiet profesionālu atbildi uz vēstuli",
+          "name": "Sagatavot atbildi"
+        },
+        "risks": {
+          "body": "Pārbaudiet šo dokumentu, meklējot juridiskos riskus, trūkstošus aizsardzības noteikumus un neskaidras klauzulas. Pie katra konstatējuma norādiet konkrēto klauzulu.",
+          "description": "Atrodiet juridiskos riskus un neskaidras klauzulas",
+          "name": "Atrast riskus"
+        },
+        "summarize": {
+          "body": "Apkopojiet šo dokumentu. Ietveriet puses, galvenās saistības, datumus, finanšu noteikumus un visas klauzulas par izbeigšanu vai atbildību.",
+          "description": "Iegūstiet strukturētu galveno noteikumu kopsavilkumu",
+          "name": "Apkopot dokumentu"
+        }
+      },
+      "uploadHelp": "Izmantojiet SKILL.md failu vai .zip/.skill mapi ar SKILL.md un izvēles tikai lasāmiem resursiem.",
+      "uploadPack": "Augšupielādēt .zip/.skill vai SKILL.md",
+      "urlPlaceholder": "https://github.com/org/repo/tree/main/cels/uz/prasmi",
+      "version": "Versija: {version}"
+    },
+    "catalogue": {
+      "addToLibrary": "Pievienot bibliotēkai",
+      "added": "{name} ir jūsu bibliotēkā",
+      "confirmAddTitle": "Pievienot {name} organizācijai {organization}?",
+      "confirmDescription": "Šīs veidnes kopija tiks saglabāta organizācijas {organization} bibliotēkā.",
+      "confirmDownloadTitle": "Lejupielādēt {name} organizācijai {organization}?",
+      "confirmStarterDescription": "Šīs rokasgrāmatas kopija tiks saglabāta organizācijas {organization} bibliotēkā.",
+      "confirmUseTitle": "Izmantot {name} organizācijā {organization}?",
+      "installFailed": "Veidni neizdevās pievienot",
+      "noPreview": "Šai veidnei priekšskatījums nav pieejams.",
+      "notFound": "Šīs veidnes katalogā nav.",
+      "unavailable": "Katalogs pašlaik nav pieejams."
+    },
+    "landing": {
+      "accountLine": "Ar bezmaksas kontu glabājiet savas organizācijas veidnes, klauzulas un rokasgrāmatas.",
+      "withAccount": "Ar bezmaksas kontu"
+    },
+    "mcp": {
+      "addAndConnect": "Pievienot un savienot",
+      "addServer": "Pievienot serveri",
+      "addServerCardTitle": "Pievienot jaunu integrāciju",
+      "auth": {
+        "bearer": "Bearer tokens",
+        "none": "Bez autentifikācijas",
+        "oauth2": "OAuth 2.0"
+      },
+      "authorizationReviewDescription": "Pirms apstiprināšanas pārbaudiet autorizācijas serveri un galapunktu izcelsmi.",
+      "authorizationServer": "Autorizācijas serveris",
+      "bearerTokenDescription": "Šis serveris izmanto Bearer tokenu. Ielīmējiet pakalpojuma sniedzēja tokenu, lai pabeigtu savienošanu.",
+      "callbackConnectedDescription": "Tās rīki ir gatavi lietošanai tērzēšanā.",
+      "callbackConnectedTitle": "Integrācija savienota",
+      "callbackFailedDescription": "Pierakstīšanās netika pabeigta, tāpēc nekas netika savienots.",
+      "callbackFailedTitle": "Integrācija netika savienota",
+      "connectedToast": "MCP pievienots",
+      "connectedWithLastUsed": "Pievienots · pēdoreiz izmantots {time}",
+      "description": "Pārvaldiet integrācijas, kas var pievienot rīkus tērzēšanai. Tokeni tiek glabāti katram lietotājam atsevišķi.",
+      "detected": "Noteikts: {authType}",
+      "disable": "Izslēgt",
+      "disabled": "Pievienots · izslēgts",
+      "emptyDescription": "Atlasītās juridiskās integrācijas parādīsies šeit, kad tās būs iespējotas jūsu darbvietai.",
+      "emptyTitle": "Integrāciju vēl nav",
+      "enable": "Ieslēgt",
+      "endpointOrigins": "Galapunktu izcelsme",
+      "enterToken": "Ievadiet piekļuves marķieri.",
+      "errorDescription": "Integrāciju neizdevās atjaunināt.",
+      "errorTitle": "MCP neizdevās",
+      "mcpExplainer": "Integrācijas pievieno tērzēšanai ārējus pakalpojumus, ar kuriem var strādāt AI.",
+      "needsReapproval": "Nepieciešams atkārtots apstiprinājums",
+      "needsReauth": "Nepieciešama atkārtota pievienošana",
+      "off": "Izslēgts",
+      "on": "Ieslēgts",
+      "openTools": "Atvērt Rīkus",
+      "otherTitle": "Citas integrācijas",
+      "probe": "Pārbaudīt",
+      "recommendedFor": "Ieteicams: {jurisdictions}",
+      "saveToken": "Saglabāt tokenu",
+      "tokenHelp": "Kā iegūt tokenu",
+      "tokenLabel": "Bearer tokens",
+      "tokenPlaceholder": "Ielīmējiet tokenu",
+      "urlLabel": "MCP servera URL",
+      "urlPlaceholder": "https://example.com/mcp",
+      "useInChat": "Izmantot tērzēšanā",
+      "whatIsAnMcpServer": "Kas ir MCP serveris?"
+    },
+    "playbooks": {
+      "addCheck": "Pievienot precīzu kārtulu",
+      "addExtractPosition": "Tikai izvilkt",
+      "addExtractPositionHint": "Nofiksē vērtību, bez vērtējuma",
+      "addGradedPosition": "Novērtēta pozīcija",
+      "addGradedPositionHint": "Pakāpju noteikumi ar vērtējumu",
+      "addOption": "Pievienot iespēju",
+      "addPosition": "Pievienot pozīciju",
+      "addRule": "Noteikums",
+      "adoptAsIdeal": "Pieņemt kā ideālu formulējumu",
+      "all": "Visi pārbaudes ceļveži",
+      "approval": {
+        "approve": "Apstiprināt",
+        "approveFailed": "Neizdevās apstiprināt pārbaudes ceļvedi",
+        "approvedOn": "Apstiprināts {date}",
+        "approvedToast": "Pārbaudes ceļvedis apstiprināts",
+        "saveBeforeApprove": "Pirms šī pārbaudes ceļveža apstiprināšanas saglabājiet izmaiņas.",
+        "sourcesNotice": "Pirms apstiprināšanas pārbaudiet, vai nevienā pozīcijā nav nosaukts dokuments, lieta vai pretpuse: šo pārbaudes ceļvedi var lasīt visa organizācija.",
+        "statusApproved": "Apstiprināts",
+        "statusDraft": "Melnraksts"
+      },
+      "askContentLabel": "Atbildes tips",
+      "askQuestionLabel": "Jautājums",
+      "askQuestionPlaceholder": "Kas mums jānolasa no katra dokumenta? Atstājiet tukšu manuālai ievadei.",
+      "autosave": {
+        "failed": "Neizdevās saglabāt",
+        "nameMissing": "Nav saglabāts: pievienojiet nosaukumu",
+        "positionsNeedAttention": "Nav saglabāts: {count, plural, zero {# pozīcijām} one {# pozīcijai} other {# pozīcijām}} jāpievērš uzmanība"
+      },
+      "buildWithAi": {
+        "description": "Atbildiet uz dažiem jautājumiem tērzēšanā, un pārbaudes ceļvedis tiks saglabāts sarunas gaitā.",
+        "title": "Izveidot ar AI"
+      },
+      "check": "Izmantot precīzu noteikumu AI vietā",
+      "checkHint": "Izmērāmiem nosacījumiem, piemēram: maksājuma termiņš ≤ 30 dienas.",
+      "checkKind": {
+        "constraint": "Pārbaudīt atbildi pēc nosacījuma",
+        "presence": "Pieprasīt vai aizliegt atbildi"
+      },
+      "clausePlaceholder": "Meklēt klauzulas…",
+      "clauseSearchEmpty": "Klauzulas nav atrastas",
+      "collapsePosition": "Sakļaut pozīciju",
+      "confirmDelete": "Tas neatgriezeniski izdzēsīs pārbaudes ceļvedi.",
+      "contentType": {
+        "int": "Skaitlis",
+        "singleSelect": "Viena izvēle",
+        "text": "Teksts"
+      },
+      "convertToExtract": "Tikai izgūt atbildi",
+      "convertToExtractDescription": "Tas noņems šīs pozīcijas pakāpju sistēmu un vērtējumu. To nevar atsaukt.",
+      "convertToExtractTitle": "Pārveidot par tikai izvilkšanu?",
+      "convertToGraded": "Pievienot vērtēšanas noteikumus",
+      "convertToRules": "Pārveidot par noteikumiem",
+      "createPlaybook": "Jauns pārbaudes ceļvedis",
+      "created": "Pārbaudes ceļvedis izveidots",
+      "creatingFromStarter": "No izvēlētās veidnes veido pārbaudes ceļvedi…",
+      "customizeAnswer": "Mainīt izgūto atbildi",
+      "customizeAnswerHint": "Rediģēt jautājumu vai atbildes formātu.",
+      "decisionLine": "{runs, plural, zero {pieņemts {accepted, number} · noraidīts {dismissed, number} · # pārbaudēs} one {pieņemts {accepted, number} · noraidīts {dismissed, number} · # pārbaudē} other {pieņemts {accepted, number} · noraidīts {dismissed, number} · # pārbaudēs}}",
+      "deleteFailed": "Neizdevās izdzēst pārbaudes ceļvedi",
+      "deletePlaybook": "Dzēst pārbaudes ceļvedi",
+      "deletePosition": "Dzēst pozīciju",
+      "deleted": "Pārbaudes ceļvedis izdzēsts",
+      "deletedElsewhere": "Šis pārbaudes ceļvedis ir izdzēsts.",
+      "derivedAutomatically": "Izgūšanas jautājums un atbildes formāts tiek izveidoti no šīs pozīcijas. Nekas nav jāiestata.",
+      "derivedQuestion": "Izgūšanas jautājums",
+      "derivedType": "Atbildes formāts",
+      "descriptionPlaceholder": "Ko šis pārbaudes ceļvedis pārbauda?",
+      "disabledBadge": "Izslēgts: tiek izlaista pārbaudēs",
+      "discardChanges": "Atmest izmaiņas",
+      "duplicatePosition": "Dublēt pozīciju",
+      "empty": "Vēl nav pārbaudes ceļvežu",
+      "emptyDescription": "Izveidojiet pārbaudes ceļvedi, lai pārbaudītu dokumentus atbilstoši saviem standartiem.",
+      "enablePosition": "Iespējot pozīciju",
+      "entryLabelPlaceholder": "Apzīmējums (neobligāti)",
+      "entryPlaceholder": "Pieņemams alternatīvs formulējums",
+      "entryRank": "#{index}",
+      "expandPosition": "Izvērst pozīciju",
+      "expectation": {
+        "required": "Atbildei jābūt norādītai",
+        "restricted": "Atbilde nedrīkst būt norādīta"
+      },
+      "extractOnlyBadge": "Tikai izvilkt",
+      "extractOnlyDescription": "Bez vērtējuma; vērtība tiek saglabāta tabulā.",
+      "extraction": "Izvilkšana",
+      "extractionAuto": "Automātiski",
+      "extractionManual": "Manuāli",
+      "fixErrorsBeforeSaving": "Pirms saglabāšanas izlabojiet iezīmētos laukus.",
+      "gradedNeedsContent": "Pievienojiet vismaz vienu noteikumu, alternatīvu ierakstu vai ideālu formulējumu.",
+      "guidanceLabel": "Pievienot pārskatīšanas norādījumus",
+      "guidancePlaceholder": "Pievienojiet izņēmumu vai norādījumu, ko neaptver iepriekš minētie noteikumi.",
+      "homeDescription": "Vienreiz nosakiet pārbaudes standartus un pēc tam konsekventi piemērojiet tos katram dokumentam.",
+      "idealFromClause": "No klauzulu bibliotēkas",
+      "idealInline": "Ievadīts teksts",
+      "idealInlinePlaceholder": "Ielīmējiet ideālo formulējumu…",
+      "idealLanguage": "Ideāls formulējums",
+      "issueLabel": "Tēma",
+      "issuePlaceholder": "piem., Atbildības ierobežojums",
+      "lastUsed": "Pēdējoreiz izmantots {date}",
+      "loadFailed": "Neizdevās ielādēt pārbaudes ceļvežus",
+      "loading": "Ielādē pārbaudes ceļvežus…",
+      "manageTypes": "Pārvaldīt tipus…",
+      "namePlaceholder": "piem., NDA pārbaude",
+      "nameRequired": "Pievienojiet nosaukumu.",
+      "negotiation": {
+        "addTalkingPoint": "Pievienot sarunu argumentu",
+        "escalationLabel": "Eskalācija",
+        "escalationPlaceholder": "Kad un kam nodot izskatīšanai (neobligāti)",
+        "rationaleLabel": "Pamatojums",
+        "rationalePlaceholder": "Kāpēc mēs to vēlamies (neobligāti)",
+        "talkingPointPlaceholder": "Ko teikt",
+        "talkingPointsLabel": "Sarunu argumenti",
+        "title": "Sarunas"
+      },
+      "noPositions": "Vēl nav pozīciju. Pievienojiet pirmo.",
+      "noSettledPosition": "Nav noteiktas pozīcijas",
+      "openInPane": "Atvērt pārbaudes ceļvedi",
+      "optionPlaceholder": "Iespējas vērtība",
+      "optionsLabel": "Iespējas",
+      "outline": "Struktūra",
+      "pendingPane": {
+        "description": "Atbildiet uz jautājumiem tērzēšanā. Kad apstiprināsiet pirmo saglabāšanu, pārbaudes ceļvedis tiks atvērts šeit, un to varēsiet rediģēt līdzās sarunai.",
+        "title": "Jūsu pārbaudes ceļvedis parādīsies šeit"
+      },
+      "positionOfTotal": "Pozīcija {index} no {total}",
+      "positionRemoved": "Pozīcija noņemta",
+      "positions": "Pozīcijas",
+      "recent": "Nesen izmantotie",
+      "recommended": "Ieteicamie sākuma ceļveži",
+      "redLinePlaceholder": "Formulējums, kas nekad nav pieņemams",
+      "referenceStandard": "No atsauces",
+      "removeCheck": "Noņemt pārbaudi",
+      "removeIdeal": "Noņemt ideālo formulējumu",
+      "removeSource": "Noņemt avotu {documentName}",
+      "reorderPosition": "Pārkārtot pozīciju",
+      "review": {
+        "changePlaybook": "Izvēlēties citu pārbaudes ceļvedi",
+        "extractedLabel": "Atrasts:",
+        "facetTitle": "Pārbaude ar pārbaudes ceļvedi",
+        "failed": "Neizdevās pārbaudīt dokumentu",
+        "fixAccepted": "Pieņemts",
+        "insertFailed": "Neizdevās ievietot vēlamo klauzulu",
+        "insertPreferred": "Ievietot vēlamo klauzulu",
+        "launcherDescription": "Pārbaudiet šo dokumentu atbilstoši organizācijas pārbaudes ceļvedim un saņemiet secinājumus tieši tekstā.",
+        "matchedFallback": "Atbilstošā alternatīva:",
+        "noFindings": "Problēmas nav atrastas",
+        "playbookLabel": "Pārbaudes ceļvedis",
+        "playbookPlaceholder": "Izvēlieties pārbaudes ceļvedi",
+        "reject": "Noraidīt",
+        "reviewAgain": "Pārbaudīt vēlreiz",
+        "reviewedAgainst": "Pārbaudīts pēc {name}",
+        "reviewing": "Pārbauda…",
+        "reviewingHint": "Lieliem pārbaudes ceļvežiem tas var aizņemt dažas minūtes.",
+        "run": "Pārbaudīt",
+        "scrollToChange": "Pāriet uz izmaiņu",
+        "viewClause": "Skatīt klauzulu",
+        "violatedRedLine": "Pārkāptā sarkanā līnija:"
+      },
+      "ruleNumber": "Noteikums {index}",
+      "rulePlaceholder": "piem. Samaksas termiņš nedrīkst pārsniegt 30 dienas",
+      "saveFailed": "Neizdevās saglabāt pārbaudes ceļvedi",
+      "severity": {
+        "blocker": "Bloķējoša"
+      },
+      "severityLabel": "Nopietnība",
+      "staleCopy": {
+        "loaded": "Ir ielādēta jaunāka šī pārbaudes ceļveža versija. Pirms rediģēšanas pārlādējiet.",
+        "unavailable": "Neizdevās ielādēt šī pārbaudes ceļveža jaunāko versiju. Šī ir pēdējā ielādētā kopija, un tā var būt novecojusi."
+      },
+      "starters": {
+        "addedToast": "Pārbaudes ceļvedis pievienots",
+        "browseButton": "Pārlūkot sākuma pārbaudes ceļvežus",
+        "positionCount": "{count, plural, zero {# pozīciju} one {# pozīcija} other {# pozīcijas}}",
+        "title": "Sākuma pārbaudes ceļveži",
+        "useStarter": "Izmantot šo ceļvedi"
+      },
+      "switchToAuto": "Automātiski izveidot jautājumu un formātu",
+      "switchToManual": "Pielāgot jautājumu un atbildes formātu",
+      "termKind": {
+        "enumeration": "Uzskaitījums",
+        "language": "Formulējums",
+        "parameter": "Parametrs",
+        "presence": "Klātbūtne"
+      },
+      "tier": {
+        "acceptable": "Pieņemams",
+        "fallback": "Alternatīva",
+        "notAcceptable": "Nav pieņemams"
+      },
+      "untitledPosition": "Nenosaukta pozīcija",
+      "updated": "Pārbaudes ceļvedis atjaunināts",
+      "updatedAt": "Atjaunināts {date}",
+      "verdict": {
+        "additional": "Papildu",
+        "compliant": "Atbilst",
+        "deviation": "Novirze",
+        "fallback": "Alternatīva",
+        "missing": "Trūkst",
+        "notApplicable": "Nav piemērojams"
+      },
+      "versions": {
+        "confirmRestore": "Pašreizējais melnraksts tiks aizstāts ar šīs versijas saturu.",
+        "restoreFailed": "Neizdevās atjaunot versiju",
+        "restoredToast": "Versija atjaunota",
+        "versionHistory": "Versiju vēsture"
+      }
+    },
+    "sections": {
+      "caseLaw": {
+        "description": "Tiesas lēmumi no dažādām jurisdikcijām"
+      },
+      "clauses": {
+        "description": "Atkārtoti izmantojamu klauzulu bibliotēka"
+      },
+      "mcp": {
+        "description": "Savienojiet stella ar ārējiem rīkiem",
+        "title": "MCP"
+      },
+      "playbooks": {
+        "description": "Novērtēti kontrolsaraksti, kas pārbauda dokumentus atbilstoši jūsu standartiem"
+      },
+      "skills": {
+        "title": "Prasmes"
+      },
+      "templates": {
+        "description": "Dokumentu veidnes ar vietturiem",
+        "title": "Veidnes"
+      },
+      "tools": {
+        "description": "Prasmes, integrācijas un vienmēr pieejami rīki, ko AI var izmantot tērzēšanā",
+        "title": "Rīki"
+      },
+      "workflows": {
+        "description": "Automatizējiet darbu ar dokumentiem, izmantojot atkārtoti lietojamas, vairāku soļu darbplūsmas."
+      }
+    },
+    "skills": {
+      "blueprintGallery": {
+        "cards": {
+          "answerFromSources": {
+            "blurb": "Atbildiet uz jautājumu, balstoties uz autoritatīviem avotiem.",
+            "inside": "avotu hierarhija · izpētes uzvedne",
+            "title": "Atbildēt, izmantojot avotus"
+          },
+          "checkAgainstRules": {
+            "blurb": "Pārbaudiet dokumentu un ar atsaucēm atzīmējiet neatbilstības.",
+            "inside": "atsauces pēc jurisdikcijas · kontrolsaraksts · pārbaudes uzvedne",
+            "title": "Pārbaudīt atbilstību noteikumiem"
+          },
+          "intakeToDraft": {
+            "blurb": "Apkopojiet faktus un pēc tam sagatavojiet dokumenta projektu.",
+            "inside": "intervija · paraugdokumenti · projekta uzvedne",
+            "title": "No faktu apkopošanas līdz projektam"
+          }
+        },
+        "insideLabel": "Saturs",
+        "startBlank": "Sākt no jauna",
+        "startBlankHint": "Tukša prasme gadījumiem, kad precīzi zināt, ko vēlaties.",
+        "subtitle": "Izvēlieties sākuma struktūru. Mēs izveidosim mapes un soli pa solim palīdzēsim tās aizpildīt.",
+        "title": "Kā jādarbojas jūsu prasmei?"
+      },
+      "commandConflict": "Prasme ar šo / komandu jau pastāv",
+      "commandHelp": "Ierakstiet to tērzēšanā, lai palaistu šo prasmi.",
+      "commandLabel": "Tērzēšanas komanda (nav obligāta)",
+      "commandPlaceholder": "piem. apkopot",
+      "errors": {
+        "commandInvalid": "Izmantojiet tikai mazos burtus, ciparus, defises un pasvītras"
+      },
+      "form": {
+        "scope": "Redzamība",
+        "scopePrivate": "Tikai es",
+        "scopeTeam": "Visi komandā"
+      }
+    }
+  },
+  "lawHome": {
+    "clearRecent": "Notīrīt nesenos",
+    "clearRecentConfirmation": "Vai dzēst visus jūsu nesenos meklējumus, tiesu nolēmumus un tiesību aktus šajā organizācijā? Šo darbību nevar atsaukt.",
+    "importFailed": "Neizdevās importēt vietējo vēsturi. Tā joprojām ir saglabāta šajā ierīcē.",
+    "inForceFrom": "Stājas spēkā {date}",
+    "noRecent": "Vēl nav nesenu darbību",
+    "noSignals": "Signālu vēl nav",
+    "prompt": "Ko jūs meklējat?",
+    "recent": "Nesenie",
+    "recentCasesFilter": "Nolēmumi",
+    "recentLoadFailed": "Neizdevās ielādēt nesenās darbības.",
+    "recentSearchFilter": "Meklējumi",
+    "recentUpdateFailed": "Neizdevās atjaunināt nesenās darbības.",
+    "searchLabel": "Meklēt tiesību datubāzē",
+    "searchPlaceholder": "Lietas numurs, akta numurs, ECLI vai atslēgvārdi",
+    "signals": "Signāli",
+    "topCourts": "No augstākajām tiesām"
+  },
+  "legalReader": {
+    "annotations": {
+      "askPassagePrompt": "Par šo {citation} fragmentu:\n\n„{quote}”\n\n",
+      "colorGreen": "Zaļš",
+      "colorRed": "Sarkans",
+      "colorSky": "Zils",
+      "colorViolet": "Violets",
+      "colorYellow": "Dzeltens",
+      "commentPlaceholder": "Rakstiet komentāru…",
+      "commentText": "Komentāra teksts",
+      "commentedPassage": "Komentētais fragments",
+      "editComment": "Rediģēt komentāru",
+      "editedAt": "Rediģēts {time}",
+      "guestAuthor": "Jūs",
+      "guestLimitReached": "Šajā cilnē var saglabāt līdz {count} izcēlumiem un piezīmēm. Lai saglabātu vairāk, izveidojiet kontu.",
+      "guestMigrationComplete": "Izcēlumi un piezīmes saglabāti.",
+      "guestMigrationFailed": "Dažus izcēlumus un piezīmes neizdevās saglabāt. Tie paliks šajā cilnē nākamajam mēģinājumam.",
+      "guestSavePrompt": "Jūsu izcēlumi un piezīmes tiks saglabāti, kad izveidosiet bezmaksas kontu.",
+      "guestStorageUnavailable": "Izcēlumus un piezīmes šajā cilnē neizdevās saglabāt.",
+      "highlight": "Izcelt",
+      "highlightedPassage": "Izceltais fragments",
+      "history": {
+        "colorRestored": "Krāsa atjaunota",
+        "commentRemoved": "Komentārs noņemts",
+        "commentRestored": "Komentārs atjaunots",
+        "highlightRemoved": "Izcēlums noņemts",
+        "highlightRestored": "Izcēlums atjaunots",
+        "markChanged": "Šis izcēlums vai komentārs pa to laiku tika mainīts citur, tāpēc tas atstāts nemainīts.",
+        "markGone": "Šis izcēlums vai komentārs vairs nepastāv.",
+        "nothingToRedo": "Nav ko atkārtot",
+        "nothingToUndo": "Nav ko atsaukt",
+        "redoShortcut": "Atkārtot izcēluma vai komentāra izmaiņu",
+        "styleRestored": "Stils atjaunots",
+        "textRestored": "Komentāra teksts atjaunots",
+        "undoShortcut": "Atsaukt izcēluma vai komentāra izmaiņu",
+        "visibilityRestored": "Kopīgošana atjaunota"
+      },
+      "orphaned": {
+        "description": "Šī dokumenta teksts kopš to izveides ir atjaunināts: atzīmētos fragmentus tajā vairs neizdevās atrast, vai tie tagad parādās vairākās vietās. Tie tekstā netiek rādīti.",
+        "summary": "{count, plural, zero {# izcēlumi un komentāri vairs neatbilst tekstam} one {# izcēlums vai komentārs vairs neatbilst tekstam} other {# izcēlumi un komentāri vairs neatbilst tekstam}}"
+      },
+      "removeHighlight": "Noņemt izcēlumu",
+      "styleHighlight": "Izcēlums",
+      "styleSquiggly": "Viļņota līnija",
+      "styleStrikethrough": "Pārsvītrojums",
+      "visibilityShared": "Kopīgots ar organizāciju",
+      "visibilitySharedWithMatter": "Kopīgots ar lietu"
+    },
+    "contents": {
+      "aiSection": "{section} (AI ģenerēta sadaļa)",
+      "headingWithAiSection": "{heading} (AI ģenerēta sadaļa: {section})"
+    },
+    "copyMenu": {
+      "blockQuoteWithCitation": "Bloka citāts ar atsauci",
+      "citationOnly": "Tikai atsauce",
+      "citationWithQuote": "Atsauce ar citātu",
+      "quoteWithCitation": "Citāts ar atsauci",
+      "textOnly": "Tikai teksts"
+    }
+  },
+  "publicTools": {
+    "addSkill": "Pievienot prasmi",
+    "addToStella": "Pievienot stella",
+    "alreadyInstalled": "Šis rīks jau ir instalēts.",
+    "content": "Saturs",
+    "contentUnavailable": "Neizdevās ielādēt šīs prasmes saturu. Skatiet to vietnē GitHub.",
+    "contribute": {
+      "contributingLink": "Lasīt līdzdalības rokasgrāmatu",
+      "cta": "Piedalīties",
+      "form": {
+        "authorLabel": "Autora vārds",
+        "authorUrlLabel": "Autora URL (neobligāts)",
+        "commitError": "Neizdevās iegūt jaunāko komitu. Tālāk ielīmējiet 40 rakstzīmju SHA.",
+        "costLabel": "Izmaksas",
+        "directoryLabel": "Ceļš repozitorijā (neobligāts)",
+        "directoryPlaceholder": "skills/my-skill",
+        "inTreeReminder": "Tajā pašā izmaiņu pieprasījumā blakus manifestam pievienojiet SKILL.md.",
+        "intro": "Aizpildiet informāciju, lai ģenerētu manifestu, un pēc tam atveriet izmaiņu pieprasījumu. Konts nav nepieciešams.",
+        "invalidHint": "Aizpildiet obligātos laukus, lai varētu atvērt izmaiņu pieprasījumu.",
+        "jurisdictionPlaceholder": "CZ",
+        "jurisdictionsHint": "Pievienojiet ISO valstu kodus. Prasmēm, kas nav piesaistītas jurisdikcijai, atstājiet tukšu.",
+        "jurisdictionsLabel": "Jurisdikcijas",
+        "licenseLabel": "Licence",
+        "manifestPreview": "Ģenerētais manifest.json",
+        "name": "Prasmes nosaukums",
+        "openPr": "Atvērt GitHub izmaiņu pieprasījumu",
+        "practiceAreasLabel": "Tiesību jomas",
+        "repoLabel": "Repozitorijs",
+        "repoPlaceholder": "owner/name vai GitHub URL",
+        "resolvingCommit": "Nosaka…",
+        "revLabel": "Fiksētais komits",
+        "revPlaceholder": "40 rakstzīmju komita SHA",
+        "setupLabel": "Iestatīšana",
+        "slugHint": "Mazo burtu identifikators, ko izmanto URL un mapes nosaukumā.",
+        "slugLabel": "Saīsinājums",
+        "sourceGithub": "GitHub repozitorijs",
+        "sourceGithubHint": "Lielākām vai neatkarīgi uzturētām prasmēm, fiksējot konkrētu komitu.",
+        "sourceInTree": "Šajā repozitorijā",
+        "sourceInTreeHint": "Nelielām prasmēm, kuru saturs glabājas šeit.",
+        "sourceLabel": "Kur atrodas prasme?",
+        "title": "Pievienot prasmi",
+        "useLatestCommit": "Izmantot jaunāko komitu"
+      },
+      "githubBody": "Lielas vai neatkarīgi uzturētas prasmes glabājas atsevišķā GitHub repozitorijā un ir fiksētas pie konkrēta komita. Kad avota repozitorijs mainās, ieplānota pārbaude atver izmaiņu pieprasījumu, lai pēc pārskatīšanas fiksētā versija būtu aktuāla.",
+      "githubTitle": "Pie GitHub komita fiksēta prasme:",
+      "inTreeBody": "Nelielas prasmes glabājas šajā repozitorijā blakus to manifestam; viens ieraksts drīkst būt līdz 10 MB liels. To saturs tiek piegādāts un pakots tieši no kataloga.",
+      "inTreeTitle": "Mape repozitorijā:",
+      "intro": "Katalogā ir uzskaitītas prasmes, integrācijas un iebūvētie rīki juridiskam darbam. Ikviens var ierosināt ierakstu, iesniedzot izmaiņu pieprasījumu.",
+      "licenseBody": "Katram ierakstam ir norādīta licence no tālāk redzamā atļauto brīvo licenču saraksta. Copyleft licences netiek pieņemtas, lai pašmitinātāji varētu saturu brīvi izplatīt.",
+      "licenseTitle": "Atļauto licenču saraksts",
+      "mcpBody": "Integrācijas apraksta manifests ar servera URL, autentifikācijas veidu un pieprasītajām piekļuves jomām. Akreditācijas dati katalogā netiek glabāti; lietotāji tos norāda savā klientā.",
+      "mcpTitle": "MCP integrācijas",
+      "recommendedBody": "Emblēmu \"Ieteikts\" uzturētāji piešķir versiju kontrolētā failā. To nevar iestatīt publiskajā vietnē vai tikai ar izmaiņu pieprasījumu.",
+      "recommendedTitle": "Ieteikuma statuss",
+      "repoLink": "Pārlūkot kataloga ierakstus",
+      "title": "Pievienot rīku"
+    },
+    "discovery": {
+      "allBody": "Izpētiet atkārtoti izmantojamas darbplūsmas, uzticamus publiskos datu avotus un stella iekļautās iespējas.",
+      "allTitle": "Visi rīki",
+      "aresBody": "Meklējiet Čehijas organizāciju pēc nosaukuma vai IČO oficiālajā ARES reģistrā.",
+      "contractReviewBody": "Pārbaudiet komerclīgumus klauzulu pa klauzulai atbilstoši sarunu vadlīnijām, skaidri izceļot novirzes un ieteiktos labojumus.",
+      "editorsPick": "Redaktora izvēle",
+      "exampleReview": "Pārbaudes piemērs",
+      "featuredTitle": "Sāciet ar darbplūsmu",
+      "fromCommunity": "No kopienas",
+      "groups": {
+        "dataSources": "Datu avoti un integrācijas",
+        "dataSourcesBody": "Pievienojiet autoritatīvus reģistrus un specializētus pakalpojumus, kad lietai vajadzīga ārēja informācija.",
+        "included": "Iekļauts stella",
+        "includedBody": "Pamatiespējas, kas ir gatavas lietošanai bez atsevišķas prasmes vai konta pievienošanas.",
+        "skillsBody": "Atkārtoti izmantojamas juridiskās darbplūsmas ar norādījumiem, kurus varat pārskatīt pirms pievienošanas."
+      },
+      "heroBody": "Meklējiet pēc uzdevuma, jurisdikcijas vai avota. Katru rīku varat pārskatīt, pirms pievienojat to savai darbvietai.",
+      "heroTitle": "Pie kā jūs strādājat?",
+      "howBody": "Prasme pārvērš juridisku metodi pārskatāmos norādījumos. Pievienojiet to vienreiz un izmantojiet to pašu pieeju ikreiz, kad rodas attiecīgais uzdevums.",
+      "howTitle": "Kas ir prasme?",
+      "includedBadge": "Iekļauts",
+      "jurisRankBody": "Novērtējiet Argentīnas Augstākās tiesas precedentu autoritāti pēc citēšanas ietekmes un doktrīnas attīstības.",
+      "noResults": "Šim meklējumam pagaidām neatbilst neviens rīks.",
+      "openSkill": "Skatīt, kā tas darbojas",
+      "review": {
+        "aligned": "Atbilst",
+        "governingLaw": "Piemērojamās tiesības",
+        "liabilityCap": "Atbildības ierobežojums",
+        "missing": "Nav norādīts",
+        "outsidePlaybook": "Neatbilst pārbaudes ceļvedim",
+        "termination": "Līguma izbeigšana"
+      },
+      "searchPlaceholder": "Kas jums jāpaveic?",
+      "tasks": {
+        "prepareDocuments": "Sagatavot dokumentus",
+        "protectClientData": "Aizsargāt klientu datus",
+        "researchPrecedents": "Izpētīt precedentus",
+        "reviewAgreements": "Pārbaudīt līgumus",
+        "verifyOrganizations": "Pārbaudīt organizāciju"
+      },
+      "tasksTitle": "Vai izvēlieties uzdevumu"
+    },
+    "documentation": "Dokumentācija",
+    "downloadUpstream": "Lejupielādēt avota arhīvu",
+    "installConfirm": {
+      "mcpBody": "MCP savienotājs \"{name}\" tiks pievienots jūsu darbvietai. Pēc tam MCP iestatījumos norādiet savus akreditācijas datus.",
+      "nativeToolBody": "Iebūvētais rīks \"{name}\" tiks iespējots jūsu darbvietā.",
+      "skillBody": "Prasme \"{name}\" tiks instalēta jūsu darbvietā.",
+      "title": "Vai pievienot {name} jūsu darbvietai?"
+    },
+    "installUnavailable": "Šo rīku nevar instalēt jūsu organizācijā.",
+    "mcpConfigHint": "No klienta neatkarīga savienojuma informācija. Ielīmējiet to jebkurā ar MCP saderīgā klientā un pievienojiet savus akreditācijas datus.",
+    "metaDescription": "Pārlūkojiet atvērto juridiskā darba prasmju, integrāciju un iebūvēto rīku katalogu.",
+    "missingFromCatalogue": "Šis rīks nav iekļauts jūsu organizācijas katalogā.",
+    "nativeToolInfo": "Šī ir stella iebūvēta iespēja. Iespējojiet to savā darbvietā, lai izmantotu tērzēšanā.",
+    "notFound": "Rīks nav atrasts.",
+    "practiceArea": "Tiesību joma",
+    "practiceAreas": {
+      "bankingFinance": "Banku un finanšu tiesības",
+      "capitalMarkets": "Kapitāla tirgi",
+      "commercial": "Komerctiesības",
+      "competition": "Konkurences tiesības",
+      "corporate": "Korporatīvās tiesības",
+      "criminal": "Krimināltiesības",
+      "dataProtection": "Datu aizsardzība",
+      "disputeResolution": "Strīdu izšķiršana",
+      "employment": "Darba tiesības",
+      "energy": "Enerģētikas tiesības",
+      "environmental": "Vides tiesības",
+      "family": "Ģimenes tiesības",
+      "immigration": "Imigrācijas tiesības",
+      "insolvency": "Maksātnespējas tiesības",
+      "intellectualProperty": "Intelektuālais īpašums",
+      "litigation": "Tiesvedība",
+      "mergersAcquisitions": "Apvienošanās un iegādes",
+      "privateClient": "Privātpersonu apkalpošana",
+      "publicAdministrative": "Publiskās un administratīvās tiesības",
+      "realEstate": "Nekustamais īpašums",
+      "regulatory": "Regulatīvās tiesības",
+      "tax": "Nodokļu tiesības",
+      "technology": "Tehnoloģiju tiesības",
+      "whiteCollarCrime": "Ekonomiskie noziegumi"
+    },
+    "tokenHelp": "Kā iegūt tokenu",
+    "viewOnGithub": "Skatīt vietnē GitHub"
+  },
+  "readerAnswers": {
+    "answerLanguage": "Atbildes valoda",
+    "budgetError": "Atbilžu budžets ir izsmelts.",
+    "documentLanguage": "Dokumenta valoda ({language})",
+    "expand": "Izvērst atbildi",
+    "explain": "Izskaidrot",
+    "followUp": "Uzdot papildjautājumu",
+    "followUpRequired": "Ierakstiet papildjautājumu, lai to nosūtītu.",
+    "invalidCitations": "{count, plural, zero {Neizdevās pārbaudīt # atsauču.} one {Neizdevās pārbaudīt # atsauci.} other {Neizdevās pārbaudīt # atsauces.}}",
+    "loading": "Tiek ģenerēta atbilde…",
+    "minimise": "Sakļaut atbildi",
+    "modelError": "Modelis nevarēja pabeigt šo atbildi.",
+    "networkError": "Savienojums tika pārtraukts. Mēģiniet vēlreiz.",
+    "regenerate": "Ģenerēt atbildi atkārtoti",
+    "selectionError": "Atlasiet tekstu no paša nolēmuma.",
+    "send": "Nosūtīt papildjautājumu",
+    "share": "Kopīgot ar komandu",
+    "timeoutError": "Atbildes saņemšanas laiks ir beidzies. Mēģiniet vēlreiz.",
+    "title": "Atbilde par atlasīto tekstu",
+    "waitForCurrentAction": "Uzgaidiet, līdz tiek pabeigta ar šo atbildi saistītā darbība."
+  },
+  "statutes": {
+    "amendedTimes": "{count, plural, =0 {Nav grozīts} zero {Grozīts # reižu} one {Grozīts # reizi} other {Grozīts # reizes}}",
+    "asOf": "Teksts, kas bija spēkā",
+    "backToList": "Visi tiesību akti",
+    "citingDecisionHideSnippet": "Sakļaut fragmentu",
+    "citingDecisionMentionCount": "citēts {count}×",
+    "citingDecisionOlderVersion": "Iepriekšējā redakcija",
+    "citingDecisionShowSnippet": "Rādīt pilnu fragmentu",
+    "citingDecisionsCourtPlaceholder": "Visas tiesas",
+    "citingDecisionsFilterPlaceholder": "Filtrēt ielādētos nolēmumus",
+    "citingDecisionsSnapshotCapped": "Parādīti {count} nolēmumi (līdz {limit} nolēmumiem, kuros šī norma pieminēta visbiežāk).",
+    "citingDecisionsSortCitations": "Šīs normas pieminējumi",
+    "citingDecisionsSortDate": "Nolēmuma datums",
+    "citingDecisionsYear": "Nolēmuma gads",
+    "citingDecisionsYearOutOfRange": "Ievadiet gadu no {min} līdz {max}.",
+    "citingDecisionsYearPlaceholder": "Visi gadi",
+    "columns": {
+      "act": "Tiesību akts",
+      "amendments": "Grozījumi",
+      "firstVersion": "Pirmā redakcija",
+      "lastAmended": "Pēdējoreiz grozīts"
+    },
+    "compareAbsent": "Šajā redakcijā nav",
+    "compareAddedLater": "Šajā redakcijā šīs tiesību normas vēl nebija.",
+    "compareClose": "Aizvērt salīdzinājumu",
+    "compareMoved": "Pārvietots:",
+    "compareMovedFrom": "Pārvietots šeit no {provision}",
+    "compareMovedFromElsewhere": "Pārvietots šeit no citas vietas",
+    "compareMovedTo": "Pārvietots uz {provision}",
+    "compareMovedToElsewhere": "Pārvietots citur",
+    "compareNoChanges": "Formulējums abās redakcijās ir vienāds.",
+    "compareNoLongerPresent": "Šajā redakcijā šīs tiesību normas vairs nav. Tā ir atcelta vai pārnumurēta.",
+    "compareProvisionNeither": "Neviena redakcija nesatur šo tiesību normu.",
+    "compareProvisionTitle": "{provision} izmaiņas starp redakcijām",
+    "compareSameVersion": "Šī ir attēlotā redakcija. Salīdzināšanai izvēlieties citu.",
+    "compareShowUnchanged": "Rādīt nemainītās tiesību normas",
+    "compareSideBySide": "Salīdzināt blakus",
+    "compareTitle": "Izmaiņas starp redakcijām",
+    "compareUnavailable": "Redakcijas neizdevās salīdzināt.",
+    "compareUnstructured": "Viena no redakcijām ir pieejama tikai kā vienkāršs teksts, tāpēc tās nevar salīdzināt.",
+    "compareVersionMissing": "Salīdzināmās redakcijas šī akta vēsturē nav.",
+    "compareWholeAct": "Salīdzināt visu aktu",
+    "compareWithPreviousWording": "Salīdzināt ar iepriekšējo redakciju",
+    "compareWithVersion": "Salīdzināt ar redakciju {version}",
+    "currentWording": "Pašreizējā redakcija",
+    "description": "Publiska konsolidētu tiesību aktu datubāze, indeksējama pēc akta un tā redakcijas.",
+    "diffInserted": "Pievienots:",
+    "diffRemoved": "Svītrots:",
+    "emptyDocument": "Šai redakcijai nav pieejams teksts.",
+    "emptyState": "Tiesību akti nav atrasti.",
+    "expression": {
+      "invalidWindow": "Izdevēja datumi ir pretrunīgi",
+      "promulgated": "Izsludinātais teksts",
+      "withdrawn": "Izdevējs to vairs nepublicē"
+    },
+    "inForceSince": "Spēkā no {date}",
+    "inForceSinceAtLeast": "Spēkā vēlākais no {date}",
+    "ineligibleVersion": "{range} ({label})",
+    "leadingDecision": "Vadošais nolēmums",
+    "leadingDecisionsExplanation": "Pirmā pieminēšana katrā nolēmumā, sarindota pēc citēšanas autoritātes: svērti ienākošie citējumi, ņemot vērā tiesas līmeni, citējuma polaritāti un vecumu.",
+    "noVersionInForce": "Izvēlētajā dienā neviena šā akta redakcija nebija spēkā.",
+    "openEnded": "šobrīd",
+    "outline": "Saturs",
+    "outlineJumpLabel": "Pāriet uz normu",
+    "outlineJumpPlaceholder": "§ 10 vai virsraksts",
+    "pendingChanges": "Gaidāmie grozījumi",
+    "pendingChangesIncomplete": "Izdevēja datos var nebūt iekļauti visi gaidāmie grozījumi.",
+    "provisionAbsentVersions": "{count, plural, =1 {Nav šajā likuma redakcijā} zero {Nav šajās # likuma redakcijās} one {Nav šajā # likuma redakcijā} other {Nav šajās # likuma redakcijās}}",
+    "provisionAskContextPrompt": "\n\nFragmenti, kuros norma piemērota autoritatīvākajos nolēmumos:\n{passages}\n\nIzmanto judikatūras rīkus, lai izlasītu jebkuru no šiem nolēmumiem pilnībā vai atrastu citus nolēmumus, kas atsaucas uz normu.",
+    "provisionAskSummarize": "Apkopot, kā tiesas piemēro šo normu",
+    "provisionAskSummarizePrompt": "Apkopo, kā tiesas piemēro {subject}, un atsaucies uz nolēmumiem, uz kuriem balsties.",
+    "provisionDetailsFor": "{provision} informācija",
+    "provisionEffectiveFrom": "spēkā no {date}",
+    "provisionHistoryEmpty": "Šai normai nav nevienas redakcijas.",
+    "provisionHistoryUnavailable": "Neizdevās ielādēt šīs normas vēsturi.",
+    "provisionPartTextUnavailable": "{provisionLabel} teksts nav pieejams",
+    "provisionPromptSubject": "{statute} ({eli}) {provision} redakcijā, kas ir spēkā kopš {date}",
+    "provisionPromptSubjectUndated": "{statute} ({eli}) {provision}",
+    "provisionRunAlsoFrom": "arī no {date}",
+    "provisionRunShowVersions": "Rādīt likuma redakcijas periodā {range}",
+    "provisionRunUnchanged": "{count, plural, zero {nemainīta # likuma redakcijās} one {nemainīta # likuma redakcijā} other {nemainīta # likuma redakcijās}}",
+    "provisionTextUnavailable": "Šīs redakcijas teksts nav pieejams",
+    "provisionVersionsAll": "Visas likuma redakcijas",
+    "provisionWordingAdded": "Jauna norma",
+    "provisionWordingChanged": "Grozīta",
+    "provisionWordingEarliest": "Vecākā pieejamā redakcija",
+    "publisherWindowInconsistent": "Šai dienai spēkā esošo redakciju nevar noteikt: izdevēja dati ir pretrunīgi.",
+    "resolvedAlias": "Atpazīts kā {label}",
+    "searchLabel": "Meklēt tiesību aktos",
+    "searchPlaceholder": "Numurs, nosaukums vai virsraksts, piem. 89/2012 Sb.",
+    "showCitedPartOnly": "Rādīt tikai citēto daļu",
+    "showFullProvision": "Rādīt visu normu",
+    "showInText": "Rādīt tekstā",
+    "sortNeedsYear": "Lai kārtotu pēc šīs kolonnas, filtros izvēlieties gadu.",
+    "statedWindow": "Izdevēja norādītie datumi: {range}",
+    "status": {
+      "current": "Spēkā",
+      "draft": "Projektā",
+      "ended": "Vairs nav spēkā",
+      "future": "Nākotnes",
+      "historical": "Aizstāts",
+      "neverInForce": "Nekad nav stājies spēkā",
+      "repealed": "Zaudējis spēku",
+      "unknown": "Statuss neskaidrs"
+    },
+    "title": "Tiesību akti",
+    "validity": "Spēkā no {from} līdz {to}",
+    "versionAlreadySelected": "Jūs jau skatāt šo versiju.",
+    "versionAppliedInDecision": "Nolēmumā <bdi>{court}</bdi> <bdi>{caseNumber}</bdi> piemērotā redakcija (<bdi>{range}</bdi>) · {status}",
+    "versionChangesAdded": "{count, plural, zero {# pievienotu noteikumu} one {# pievienots noteikums} other {# pievienoti noteikumi}}",
+    "versionChangesChanged": "{count, plural, zero {# grozītu noteikumu} one {# grozīts noteikums} other {# grozīti noteikumi}}",
+    "versionChangesNone": "Formulējums nav mainīts",
+    "versionChangesRemoved": "{count, plural, zero {# svītrotu noteikumu} one {# svītrots noteikums} other {# svītroti noteikumi}}",
+    "versionChangesWords": "{inserted, plural, zero {# ievietotu vārdu} one {# ievietots vārds} other {# ievietoti vārdi}}, {deleted, plural, zero {# svītrotu vārdu} one {# svītrots vārds} other {# svītroti vārdi}}",
+    "wordingVersionUnknown": "Redakcijas versijas datums nav pieejams"
+  }
+}
