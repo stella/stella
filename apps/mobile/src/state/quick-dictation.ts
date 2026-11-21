@@ -1,11 +1,16 @@
+import { applyLearnedFixes } from "@stll/transcript/corrections";
+import type { LearnedFix } from "@stll/transcript/corrections";
+
 import type { Fetch } from "@/connection/http";
 import type { AccessTokenSource } from "@/connection/session";
-import { cleanUpDictation, transcribeRecording } from "@/state/dictation";
+import { cleanUpDictation, transcribeWithinClass } from "@/state/dictation";
 import {
   DICTATION_CHUNK_RULES,
   DICTATION_TOTAL_MAX_MS,
   joinChunks,
 } from "@/state/dictation-chunks";
+import { refusalOf, retriesByItself } from "@/state/dictation-kept";
+import type { KeptRefusal } from "@/state/dictation-kept";
 import { chosenModelId } from "@/state/dictation-preferences";
 import type { DictationPreferences } from "@/state/dictation-preferences";
 import type { FormPart } from "@/state/form-part";
@@ -105,74 +110,88 @@ export const quickDictationConfiguration = ({
   };
 };
 
+/** One piece of a finished dictation: its text, or, not transcribed, its place among the recordings. */
+export type QuickPiece =
+  | { readonly type: "text"; readonly text: string }
+  | { readonly type: "audio"; readonly index: number };
+
 /** What a finished dictation came to. */
 export type QuickDictationText =
   | { readonly type: "text"; readonly text: string }
   | { readonly type: "silent" }
-  /** A piece could not be transcribed; the recording is kept for a retry. */
-  | { readonly type: "failed"; readonly signedOut: boolean };
+  /**
+   * A piece could not be transcribed: the pieces in spoken order, to keep
+   * with the composer's dictations (`state/kept-dictations`), which retry
+   * by themselves unless every failure was `refused`.
+   */
+  | {
+      readonly type: "failed";
+      readonly signedOut: boolean;
+      readonly pieces: readonly QuickPiece[];
+      readonly refused: boolean;
+      readonly refusedFor: KeptRefusal | null;
+    };
 
 /**
  * The dictation's text: each piece transcribed with the model the person
- * picked (the server's default once it no longer offers that one), joined
- * in spoken order, and tidied by stella AI when the person turned cleanup
- * on, keeping the words as heard when cleanup fails.
+ * picked, or only one of its provider, region side and retention when the
+ * server cannot serve it (`transcribeWithinClass`), joined in spoken order,
+ * tidied by stella AI when the person turned cleanup on (the words as heard
+ * when cleanup fails), with the fixes learned from their corrections.
  */
 export const transcribeQuickDictation = async ({
   fetch,
+  learned,
   locale,
   pieces,
   preferences,
   source,
 }: {
   readonly fetch: Fetch;
+  readonly learned: readonly LearnedFix[];
   readonly locale: string;
   readonly pieces: readonly FormPart[];
   readonly preferences: DictationPreferences;
   readonly source: AccessTokenSource;
 }): Promise<QuickDictationText> => {
-  const modelId = chosenModelId(preferences, null);
+  const choice = {
+    modelId: chosenModelId(preferences),
+    modelClass: preferences.modelClass,
+  };
   const texts = await Promise.all(
-    pieces.map(async (audio) => {
-      const first = await transcribeRecording({
-        fetch,
-        source,
-        audio,
-        choice: { modelId },
-      });
-      const gone =
-        first.isErr() &&
-        modelId !== undefined &&
-        first.error._tag === "ApiRequestError" &&
-        first.error.status === 503;
-      return gone ? await transcribeRecording({ fetch, source, audio }) : first;
-    }),
+    pieces.map(
+      async (audio) =>
+        await transcribeWithinClass({ fetch, source, audio, choice }),
+    ),
   );
-  for (const text of texts) {
-    if (text.isErr()) {
-      return {
-        type: "failed",
-        signedOut: text.error._tag === "SignedOutError",
-      };
-    }
+  const failures = texts.flatMap((text) => (text.isErr() ? [text.error] : []));
+  if (failures.length > 0) {
+    const refused = !failures.some(retriesByItself);
+    return {
+      type: "failed",
+      signedOut: failures.some(({ _tag }) => _tag === "SignedOutError"),
+      pieces: texts.map((text, index): QuickPiece =>
+        text.isOk()
+          ? { type: "text", text: text.value }
+          : { type: "audio", index },
+      ),
+      refused,
+      refusedFor:
+        refused && failures.some((failure) => refusalOf(failure) === "model")
+          ? "model"
+          : null,
+    };
   }
   const joined = joinChunks(texts.map((text) => text.unwrapOr("")));
   if (joined === "") {
     return { type: "silent" };
   }
-  if (!preferences.cleanup) {
-    return { type: "text", text: joined };
-  }
-  const cleaned = await cleanUpDictation({
-    fetch,
-    source,
-    transcript: joined,
-    locale,
-  });
-  return {
-    type: "text",
-    text: cleaned.isOk() && cleaned.value !== "" ? cleaned.value : joined,
-  };
+  const cleaned = preferences.cleanup
+    ? await cleanUpDictation({ fetch, source, transcript: joined, locale })
+    : null;
+  const text =
+    cleaned?.isOk() === true && cleaned.value !== "" ? cleaned.value : joined;
+  return { type: "text", text: applyLearnedFixes(text, learned) };
 };
 
 /** The document a dictation saved to a matter becomes: plain text, named for when it was spoken. */

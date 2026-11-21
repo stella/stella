@@ -20,6 +20,7 @@ import { Text } from "@stll/ui/text";
 import { Textarea } from "@stll/ui/textarea";
 
 import { EmptyCard, screenStyles } from "@/components/empty-state-screen";
+import { useKeptDictations } from "@/components/kept-dictations";
 import { RetryButton } from "@/components/retry-button";
 import { epochMilliseconds } from "@/connection/clock";
 import type { AccessTokenSource } from "@/connection/session";
@@ -30,11 +31,15 @@ import {
   discardQuickDictation,
   takeQuickDictation,
 } from "@/native/quick-dictation";
+import type { KeptRefusal } from "@/state/dictation-kept";
+import { readLearnedFixes } from "@/state/dictation-learned";
 import {
+  chosenModelId,
   DEFAULT_DICTATION_PREFERENCES,
   readDictationPreferences,
 } from "@/state/dictation-preferences";
 import { UPLOAD_ORIGIN } from "@/state/document-upload";
+import type { FinishedPiece, KeptDictations } from "@/state/kept-dictations";
 import { readLocalFile } from "@/state/local-file";
 import {
   dictationDocument,
@@ -47,7 +52,7 @@ import type { QuickDictationText } from "@/state/quick-dictation";
  * Control Center), transcribed as the sheet opens: the text to read over and
  * correct, then save to a matter as a document, start a conversation with,
  * or copy. The recording is deleted once it is transcribed; one that could
- * not be is kept for another try until the sheet closes.
+ * not be is kept with the composer's dictations until it is.
  */
 const DictationScreen = () => {
   const { state } = useSession();
@@ -63,8 +68,20 @@ const DictationScreen = () => {
   ) : null;
 };
 
-/** What the sheet found: a dictation's text, or none waiting. */
-type Reading = QuickDictationText | { readonly type: "none" };
+/**
+ * What the sheet found: a dictation's text, or none waiting; or, as a piece
+ * could not be transcribed, the dictation kept with the composer's, or,
+ * when the phone could not keep it, failed for a retry here.
+ */
+type Reading =
+  | Exclude<QuickDictationText, { type: "failed" }>
+  | { readonly type: "none" }
+  | {
+      readonly type: "kept";
+      readonly refused: boolean;
+      readonly refusedFor: KeptRefusal | null;
+    }
+  | { readonly type: "failed"; readonly signedOut: boolean };
 
 const DictationLoader = ({
   onRetry,
@@ -74,7 +91,10 @@ const DictationLoader = ({
   source: AccessTokenSource;
 }) => {
   const locale = useLocale();
-  const [reading] = useState(async () => await readDictation(source, locale));
+  const kept = useKeptDictations();
+  const [reading] = useState(
+    async () => await readDictation({ source, locale, kept }),
+  );
   return (
     <Suspense fallback={<Transcribing />}>
       <LoadedDictation onRetry={onRetry} reading={reading} source={source} />
@@ -174,6 +194,13 @@ const NoText = ({
           title={t("noneTitle")}
         />
       );
+    case "kept":
+      return (
+        <EmptyCard
+          description={chat(keptMessage(read))}
+          title={settings("dictationTitle")}
+        />
+      );
     case "failed":
       return (
         <EmptyCard
@@ -187,6 +214,17 @@ const NoText = ({
       read satisfies never;
       return panic("Unknown dictation reading");
   }
+};
+
+/** What a kept dictation waits for, as the composer says it. */
+const keptMessage = ({
+  refused,
+  refusedFor,
+}: Extract<Reading, { type: "kept" }>) => {
+  if (refusedFor === "model") {
+    return "dictationKeptModelWithdrawn";
+  }
+  return refused ? "dictationKeptRefused" : "dictationKept";
 };
 
 /** The text to read over, and where it can go. */
@@ -319,27 +357,40 @@ const DictationText = ({ initial }: { initial: string }) => {
 /**
  * Takes the finished dictation from the native side and transcribes it with
  * the person's choices on this phone. Its recording is deleted once it is
- * transcribed, or heard to be silent; one that failed stays for a retry.
+ * transcribed, or heard to be silent. One with a piece not transcribed goes
+ * to the composer's kept dictations, retried as the phone comes online and
+ * offered for pasting into a conversation once transcribed; when the phone
+ * cannot keep it, it stays here for a retry.
  */
-const readDictation = async (
-  source: AccessTokenSource,
-  locale: string,
-): Promise<Reading> => {
+const readDictation = async ({
+  source,
+  locale,
+  kept,
+}: {
+  source: AccessTokenSource;
+  locale: string;
+  kept: KeptDictations | null;
+}): Promise<Reading> => {
   const outcome = await Result.tryPromise(async (): Promise<Reading> => {
     const pieces = await takeQuickDictation();
     if (pieces === null) {
       return { type: "none" };
     }
     const session = source.session();
-    // A choice the phone cannot read is no choice: the server's default.
-    const preferences =
+    // A choice the phone cannot read is no choice: the server's default;
+    // fixes it cannot read are not applied.
+    const [preferences, learned] =
       session === undefined
-        ? DEFAULT_DICTATION_PREFERENCES
-        : await readDictationPreferences(deviceAccountStore, session).catch(
-            () => DEFAULT_DICTATION_PREFERENCES,
-          );
+        ? [DEFAULT_DICTATION_PREFERENCES, []]
+        : await Promise.all([
+            readDictationPreferences(deviceAccountStore, session).catch(
+              () => DEFAULT_DICTATION_PREFERENCES,
+            ),
+            readLearnedFixes(deviceAccountStore, session).catch(() => []),
+          ]);
     const text = await transcribeQuickDictation({
       fetch,
+      learned,
       locale,
       pieces: pieces.map((uri) => new File(uri)),
       preferences,
@@ -347,8 +398,39 @@ const readDictation = async (
     });
     if (text.type !== "failed") {
       await discardQuickDictation();
+      return text;
     }
-    return text;
+    const isKept =
+      !text.signedOut &&
+      (kept?.keep({
+        owner: randomUUID(),
+        setup: {
+          field: "chat",
+          matterId: null,
+          modelId: chosenModelId(preferences) ?? null,
+          modelClass: preferences.modelClass,
+          locale,
+          cleanup: preferences.cleanup,
+        },
+        pieces: text.pieces.map((piece): FinishedPiece => {
+          if (piece.type === "text") {
+            return piece;
+          }
+          const uri = pieces.at(piece.index);
+          return uri === undefined
+            ? panic("A dictation piece has no recording")
+            : { type: "audio", uri };
+        }),
+        refused: text.refused,
+        refusedFor: text.refusedFor,
+      }) ??
+        false);
+    if (!isKept) {
+      return { type: "failed", signedOut: text.signedOut };
+    }
+    // Its recordings are kept elsewhere now.
+    await discardQuickDictation();
+    return { type: "kept", refused: text.refused, refusedFor: text.refusedFor };
   });
   return Result.isOk(outcome)
     ? outcome.value

@@ -74,9 +74,11 @@ type Sent = { readonly path: string; readonly form: FormData | undefined };
  */
 const server = ({
   cleaned = "Cleaned.",
+  models = [],
   transcribe,
 }: {
   cleaned?: string;
+  models?: readonly { id: string; provider: string }[];
   transcribe: (name: string, modelId: string | null) => Response;
 }) => {
   const sent: Sent[] = [];
@@ -84,6 +86,13 @@ const server = ({
     const { pathname } = new URL(url);
     const form = init?.body instanceof ExpoFormData ? init.body : undefined;
     sent.push({ path: pathname, form });
+    if (pathname === "/v1/dictation/models") {
+      return Response.json({
+        models: models.map((model) => ({ ...model, displayName: model.id })),
+        defaultModelId: null,
+        unavailable: null,
+      });
+    }
     if (pathname === "/v1/dictation/cleanup") {
       return Response.json({
         segments: [{ type: "text", text: cleaned, bold: false }],
@@ -114,6 +123,7 @@ describe("a dictation started outside the app", () => {
     });
     const result = await transcribeQuickDictation({
       fetch,
+      learned: [],
       locale: "cs",
       pieces: [piece(0), piece(1)],
       preferences: DEFAULT_DICTATION_PREFERENCES,
@@ -125,7 +135,7 @@ describe("a dictation started outside the app", () => {
     });
   });
 
-  test("a piece that fails fails the dictation, so its recording stays for a retry", async () => {
+  test("a piece that fails leaves its recording to keep, the others' texts kept with it", async () => {
     const { fetch } = server({
       transcribe: (name) =>
         name === "piece-1.m4a"
@@ -134,18 +144,29 @@ describe("a dictation started outside the app", () => {
     });
     const result = await transcribeQuickDictation({
       fetch,
+      learned: [],
       locale: "cs",
       pieces: [piece(0), piece(1)],
       preferences: DEFAULT_DICTATION_PREFERENCES,
       source: sourceFor(fetch),
     });
-    expect(result).toEqual({ type: "failed", signedOut: false });
+    expect(result).toEqual({
+      type: "failed",
+      signedOut: false,
+      pieces: [
+        { type: "text", text: "Prosím" },
+        { type: "audio", index: 1 },
+      ],
+      refused: false,
+      refusedFor: null,
+    });
   });
 
   test("nothing heard in any piece is silence, not an empty text", async () => {
     const { fetch, sent } = server({ transcribe: () => text("  ") });
     const result = await transcribeQuickDictation({
       fetch,
+      learned: [],
       locale: "cs",
       pieces: [piece(0)],
       preferences: { ...DEFAULT_DICTATION_PREFERENCES, cleanup: true },
@@ -155,8 +176,12 @@ describe("a dictation started outside the app", () => {
     expect(sent.map(({ path }) => path)).toEqual(["/v1/dictation/transcribe"]);
   });
 
-  test("a model the server no longer offers gives way to its default", async () => {
+  test("a model the server cannot serve gives way only to one of its provider, region and retention", async () => {
     const { fetch, sent } = server({
+      models: [
+        { id: "other/model", provider: "Provider B" },
+        { id: "sibling/model", provider: "Provider A" },
+      ],
       transcribe: (_name, model) =>
         model === "gone/model"
           ? Response.json({ message: "Unavailable" }, { status: 503 })
@@ -164,19 +189,79 @@ describe("a dictation started outside the app", () => {
     });
     const result = await transcribeQuickDictation({
       fetch,
+      learned: [],
       locale: "cs",
       pieces: [piece(0)],
       preferences: {
         ...DEFAULT_DICTATION_PREFERENCES,
         modelId: "gone/model",
+        modelClass: {
+          provider: "Provider A",
+          outsideRegion: false,
+          retainsData: false,
+        },
       },
       source: sourceFor(fetch),
     });
     expect(result).toEqual({ type: "text", text: "Prosím" });
-    expect(sent.map(({ form }) => form?.get("modelId") ?? null)).toEqual([
-      "gone/model",
-      null,
-    ]);
+    expect(
+      sent
+        .filter(({ path }) => path === "/v1/dictation/transcribe")
+        .map(({ form }) => form?.get("modelId") ?? null),
+    ).toEqual(["gone/model", "sibling/model"]);
+  });
+
+  test("a model the server cannot serve, of no class known, sends the recording nowhere else", async () => {
+    const { fetch, sent } = server({
+      models: [{ id: "default/model", provider: "Provider A" }],
+      transcribe: (_name, model) =>
+        model === "gone/model"
+          ? Response.json({ message: "Unavailable" }, { status: 503 })
+          : text("Prosím"),
+    });
+    const result = await transcribeQuickDictation({
+      fetch,
+      learned: [],
+      locale: "cs",
+      pieces: [piece(0)],
+      preferences: { ...DEFAULT_DICTATION_PREFERENCES, modelId: "gone/model" },
+      source: sourceFor(fetch),
+    });
+    expect(result).toMatchObject({
+      type: "failed",
+      pieces: [{ type: "audio", index: 0 }],
+    });
+    expect(
+      sent
+        .filter(({ path }) => path === "/v1/dictation/transcribe")
+        .map(({ form }) => form?.get("modelId") ?? null),
+    ).toEqual(["gone/model"]);
+  });
+
+  test("a model refused as unserved waits for the person to pick another", async () => {
+    const { fetch } = server({
+      transcribe: () =>
+        Response.json(
+          {
+            message: "Unavailable",
+            code: "transcription_model_unavailable",
+          },
+          { status: 400 },
+        ),
+    });
+    const result = await transcribeQuickDictation({
+      fetch,
+      learned: [],
+      locale: "cs",
+      pieces: [piece(0)],
+      preferences: { ...DEFAULT_DICTATION_PREFERENCES, modelId: "gone/model" },
+      source: sourceFor(fetch),
+    });
+    expect(result).toMatchObject({
+      type: "failed",
+      refused: true,
+      refusedFor: "model",
+    });
   });
 
   test("cleanup tidies the joined text when the person turned it on", async () => {
@@ -186,6 +271,7 @@ describe("a dictation started outside the app", () => {
     });
     const result = await transcribeQuickDictation({
       fetch,
+      learned: [],
       locale: "cs",
       pieces: [piece(0)],
       preferences: { ...DEFAULT_DICTATION_PREFERENCES, cleanup: true },
