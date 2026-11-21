@@ -611,7 +611,6 @@
       "title": "Atajo para corregir un dictado"
     },
     "fixPanel": {
-      "cancel": "Cancelar",
       "dictatedAs": "Dictado como",
       "hint": "stella escribirá estas palabras así en tus próximos dictados, en todos tus dispositivos.",
       "notSaved": "No se pudo guardar la corrección. Comprueba que stella esté conectada a tu cuenta.",
@@ -624,8 +623,8 @@
         "tooLong": "Es demasiado largo para una corrección.",
         "tooManyWords": "Una corrección admite como máximo tres palabras."
       },
-      "save": "Guardar",
-      "saving": "Guardando…",
+      "save": "Guardar corrección",
+      "saving": "Guardando la corrección…",
       "title": "Corregir una palabra dictada",
       "writtenAs": "Se escribe"
     },
@@ -654,13 +653,12 @@
       "delete": "Borrar lo que aprendió stella",
       "description": "Cuando corriges una palabra dictada dos veces de la misma forma, o la corriges con {shortcut}, stella la escribe así en los siguientes dictados. Se sincroniza con tus otros dispositivos; solo tú puedes verlas.",
       "empty": "Aún no se ha aprendido ninguna corrección.",
-      "failed": "No se pudo guardar el cambio.",
+      "failed": "No se pudo cambiar la corrección.",
       "fix": "{from} → {to}",
       "group": "Correcciones aprendidas",
-      "retry": "Reintentar",
       "title": "Correcciones aprendidas de tus cambios",
       "unreadable": "No se pudo leer lo que aprendió stella.",
-      "working": "Guardando…"
+      "working": "Guardando el cambio…"
     },
     "lede": "Mantén pulsado <key>{shortcut}</key> y habla. El texto aparece donde estás escribiendo.",
     "microphone": {

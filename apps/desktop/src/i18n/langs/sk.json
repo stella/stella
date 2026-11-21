@@ -611,7 +611,6 @@
       "title": "Skratka na opravu diktátu"
     },
     "fixPanel": {
-      "cancel": "Zrušiť",
       "dictatedAs": "Nadiktované ako",
       "hint": "stella tieto slová v ďalších diktátoch napíše takto, na všetkých vašich zariadeniach.",
       "notSaved": "Opravu sa nepodarilo uložiť. Skontrolujte, či je stella pripojená k vášmu účtu.",
@@ -624,8 +623,8 @@
         "tooLong": "Na jednu opravu je to príliš dlhé.",
         "tooManyWords": "Oprava môže mať najviac tri slová."
       },
-      "save": "Uložiť",
-      "saving": "Ukladá sa…",
+      "save": "Uložiť opravu",
+      "saving": "Ukladá sa oprava…",
       "title": "Opraviť nadiktované slovo",
       "writtenAs": "Správne"
     },
@@ -654,13 +653,12 @@
       "delete": "Vymazať, čo sa stella naučila",
       "description": "Keď nadiktované slovo opravíte dvakrát rovnako alebo ho opravíte skratkou {shortcut}, stella ho v ďalších diktátoch napíše takto. Synchronizuje sa do vašich ďalších zariadení; vidíte ich len vy.",
       "empty": "Zatiaľ žiadne naučené opravy.",
-      "failed": "Zmenu sa nepodarilo uložiť.",
+      "failed": "Opravu sa nepodarilo zmeniť.",
       "fix": "{from} → {to}",
       "group": "Naučené opravy",
-      "retry": "Skúsiť znova",
       "title": "Opravy naučené z vašich úprav",
       "unreadable": "To, čo sa stella naučila, sa nedá načítať.",
-      "working": "Ukladá sa…"
+      "working": "Ukladá sa zmena…"
     },
     "lede": "Podržte <key>{shortcut}</key> a hovorte. Text sa zobrazí tam, kde píšete.",
     "microphone": {

@@ -611,7 +611,6 @@
       "title": "Atalho para corrigir um ditado"
     },
     "fixPanel": {
-      "cancel": "Cancelar",
       "dictatedAs": "Ditado como",
       "hint": "A stella vai escrever essas palavras assim nos seus próximos ditados, em todos os seus dispositivos.",
       "notSaved": "Não foi possível salvar a correção. Verifique se a stella está conectada à sua conta.",
@@ -624,8 +623,8 @@
         "tooLong": "É longo demais para uma correção.",
         "tooManyWords": "Uma correção tem no máximo três palavras."
       },
-      "save": "Salvar",
-      "saving": "Salvando…",
+      "save": "Salvar correção",
+      "saving": "Salvando a correção…",
       "title": "Corrigir uma palavra ditada",
       "writtenAs": "Grafia correta"
     },
@@ -654,13 +653,12 @@
       "delete": "Apagar o que a stella aprendeu",
       "description": "Quando você corrige uma palavra ditada duas vezes do mesmo jeito, ou a corrige com {shortcut}, a stella passa a escrevê-la assim nos próximos ditados. Sincronizado com seus outros dispositivos; só você as vê.",
       "empty": "Nenhuma correção aprendida ainda.",
-      "failed": "Não foi possível salvar a alteração.",
+      "failed": "Não foi possível alterar a correção.",
       "fix": "{from} → {to}",
       "group": "Correções aprendidas",
-      "retry": "Tentar novamente",
       "title": "Correções aprendidas com suas edições",
       "unreadable": "Não foi possível ler o que a stella aprendeu.",
-      "working": "Salvando…"
+      "working": "Salvando a alteração…"
     },
     "lede": "Segure <key>{shortcut}</key> e fale. O texto aparece onde você está digitando.",
     "microphone": {

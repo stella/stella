@@ -611,7 +611,6 @@
       "title": "Kiirklahv dikteerimise parandamiseks"
     },
     "fixPanel": {
-      "cancel": "Tühista",
       "dictatedAs": "Dikteeritud kujul",
       "hint": "stella kirjutab need sõnad järgmistes dikteerimistes nii, kõigis teie seadmetes.",
       "notSaved": "Parandust ei saanud salvestada. Kontrollige, kas stella on teie kontoga ühendatud.",
@@ -624,8 +623,8 @@
         "tooLong": "See on ühe paranduse jaoks liiga pikk.",
         "tooManyWords": "Paranduses võib olla kõige rohkem kolm sõna."
       },
-      "save": "Salvesta",
-      "saving": "Salvestamine…",
+      "save": "Salvesta parandus",
+      "saving": "Paranduse salvestamine…",
       "title": "Paranda dikteeritud sõna",
       "writtenAs": "Õige kuju"
     },
@@ -654,13 +653,12 @@
       "delete": "Kustuta, mida stella õppis",
       "description": "Kui parandate dikteeritud sõna kaks korda ühtmoodi või parandate selle kiirklahviga {shortcut}, kirjutab stella selle järgmistes dikteerimistes nii. Sünkroonitakse teie teiste seadmetega; neid näete ainult teie.",
       "empty": "Veel pole midagi õpitud.",
-      "failed": "Muudatust ei saanud salvestada.",
+      "failed": "Parandust ei õnnestunud muuta.",
       "fix": "{from} → {to}",
       "group": "Õpitud parandused",
-      "retry": "Proovi uuesti",
       "title": "Teie parandustest õpitud parandused",
       "unreadable": "Seda, mida stella õppis, ei saanud lugeda.",
-      "working": "Salvestamine…"
+      "working": "Muudatuse salvestamine…"
     },
     "lede": "Hoidke all klahve <key>{shortcut}</key> ja rääkige. Tekst ilmub sinna, kuhu kirjutate.",
     "microphone": {

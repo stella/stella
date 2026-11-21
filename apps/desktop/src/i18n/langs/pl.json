@@ -611,7 +611,6 @@
       "title": "Skrót do poprawiania dyktowania"
     },
     "fixPanel": {
-      "cancel": "Anuluj",
       "dictatedAs": "Podyktowano jako",
       "hint": "stella zapisze te słowa tak w kolejnych dyktowaniach, na wszystkich Twoich urządzeniach.",
       "notSaved": "Nie udało się zapisać poprawki. Sprawdź, czy stella jest połączona z Twoim kontem.",
@@ -624,8 +623,8 @@
         "tooLong": "To za długie na jedną poprawkę.",
         "tooManyWords": "Poprawka może mieć najwyżej trzy słowa."
       },
-      "save": "Zapisz",
-      "saving": "Zapisywanie…",
+      "save": "Zapisz poprawkę",
+      "saving": "Zapisywanie poprawki…",
       "title": "Popraw podyktowane słowo",
       "writtenAs": "Poprawna pisownia"
     },
@@ -654,13 +653,12 @@
       "delete": "Usuń to, czego nauczyła się stella",
       "description": "Gdy poprawisz podyktowane słowo dwa razy tak samo lub poprawisz je skrótem {shortcut}, stella zapisze je tak w kolejnych dyktowaniach. Synchronizowane z Twoimi innymi urządzeniami; widzisz je tylko Ty.",
       "empty": "Brak wyuczonych poprawek.",
-      "failed": "Nie udało się zapisać zmiany.",
+      "failed": "Nie udało się zmienić poprawki.",
       "fix": "{from} → {to}",
       "group": "Wyuczone poprawki",
-      "retry": "Spróbuj ponownie",
       "title": "Poprawki wyuczone z Twoich zmian",
       "unreadable": "Nie udało się odczytać tego, czego nauczyła się stella.",
-      "working": "Zapisywanie…"
+      "working": "Zapisywanie zmiany…"
     },
     "lede": "Przytrzymaj <key>{shortcut}</key> i mów. Tekst pojawi się tam, gdzie piszesz.",
     "microphone": {

@@ -611,7 +611,6 @@
       "title": "Spartusis klavišas diktavimui taisyti"
     },
     "fixPanel": {
-      "cancel": "Atšaukti",
       "dictatedAs": "Padiktuota kaip",
       "hint": "stella šiuos žodžius kituose diktavimuose rašys taip, visuose jūsų įrenginiuose.",
       "notSaved": "Pataisymo išsaugoti nepavyko. Patikrinkite, ar stella prijungta prie jūsų paskyros.",
@@ -624,8 +623,8 @@
         "tooLong": "Vienam pataisymui tai per ilga.",
         "tooManyWords": "Pataisymą gali sudaryti ne daugiau kaip trys žodžiai."
       },
-      "save": "Išsaugoti",
-      "saving": "Išsaugoma…",
+      "save": "Išsaugoti pataisymą",
+      "saving": "Saugomas pataisymas…",
       "title": "Taisyti padiktuotą žodį",
       "writtenAs": "Teisinga rašyba"
     },
@@ -654,13 +653,12 @@
       "delete": "Ištrinti, ką išmoko stella",
       "description": "Kai padiktuotą žodį du kartus pataisote vienodai arba pataisote jį su {shortcut}, stella vėlesniuose diktavimuose jį rašo taip. Sinchronizuojama su kitais jūsų įrenginiais; juos matote tik jūs.",
       "empty": "Kol kas nieko neišmokta.",
-      "failed": "Pakeitimo išsaugoti nepavyko.",
+      "failed": "Pataisymo pakeisti nepavyko.",
       "fix": "{from} → {to}",
       "group": "Išmokti pataisymai",
-      "retry": "Bandyti dar kartą",
       "title": "Iš jūsų pataisymų išmokti pataisymai",
       "unreadable": "Nepavyko nuskaityti to, ką išmoko stella.",
-      "working": "Išsaugoma…"
+      "working": "Saugomas pakeitimas…"
     },
     "lede": "Laikykite <key>{shortcut}</key> ir kalbėkite. Tekstas atsiras ten, kur rašote.",
     "microphone": {

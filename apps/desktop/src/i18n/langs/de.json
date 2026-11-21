@@ -611,7 +611,6 @@
       "title": "Tastenkürzel zum Korrigieren eines Diktats"
     },
     "fixPanel": {
-      "cancel": "Abbrechen",
       "dictatedAs": "Diktiert als",
       "hint": "stella schreibt diese Wörter in Ihren nächsten Diktaten so, auf allen Ihren Geräten.",
       "notSaved": "Die Korrektur konnte nicht gespeichert werden. Prüfen Sie, ob stella mit Ihrem Konto verbunden ist.",
@@ -624,8 +623,8 @@
         "tooLong": "Das ist für eine Korrektur zu lang.",
         "tooManyWords": "Eine Korrektur umfasst höchstens drei Wörter."
       },
-      "save": "Speichern",
-      "saving": "Wird gespeichert…",
+      "save": "Korrektur speichern",
+      "saving": "Korrektur wird gespeichert…",
       "title": "Diktiertes Wort korrigieren",
       "writtenAs": "Richtig geschrieben"
     },
@@ -654,13 +653,12 @@
       "delete": "Gelerntes löschen",
       "description": "Wenn Sie ein diktiertes Wort zweimal gleich korrigieren oder mit {shortcut} korrigieren, schreibt stella es in späteren Diktaten so. Wird mit Ihren anderen Geräten synchronisiert; nur Sie sehen es.",
       "empty": "Noch nichts gelernt.",
-      "failed": "Die Änderung konnte nicht gespeichert werden.",
+      "failed": "Die Korrektur konnte nicht geändert werden.",
       "fix": "{from} → {to}",
       "group": "Gelernte Korrekturen",
-      "retry": "Erneut versuchen",
       "title": "Aus Ihren Korrekturen gelernt",
       "unreadable": "Was stella gelernt hat, konnte nicht gelesen werden.",
-      "working": "Wird gespeichert…"
+      "working": "Änderung wird gespeichert…"
     },
     "lede": "Halten Sie <key>{shortcut}</key> gedrückt und sprechen Sie. Der Text erscheint dort, wo Sie gerade schreiben.",
     "microphone": {

@@ -611,7 +611,6 @@
       "title": "Billentyűparancs diktálás javításához"
     },
     "fixPanel": {
-      "cancel": "Mégse",
       "dictatedAs": "Diktálva",
       "hint": "A stella a következő diktálásokban így írja ezeket a szavakat, minden eszközén.",
       "notSaved": "A javítást nem sikerült menteni. Ellenőrizze, hogy a stella csatlakozik-e a fiókjához.",
@@ -624,8 +623,8 @@
         "tooLong": "Ez túl hosszú egy javításhoz.",
         "tooManyWords": "Egy javítás legfeljebb három szó lehet."
       },
-      "save": "Mentés",
-      "saving": "Mentés…",
+      "save": "Javítás mentése",
+      "saving": "A javítás mentése…",
       "title": "Diktált szó javítása",
       "writtenAs": "Helyesen"
     },
@@ -654,13 +653,12 @@
       "delete": "A stella által tanultak törlése",
       "description": "Ha egy diktált szót kétszer ugyanúgy javít, vagy a(z) {shortcut} billentyűkkel javítja, a stella a későbbi diktálásokban így írja. Szinkronizálódik a többi eszközére; csak Ön látja.",
       "empty": "Még nincs tanult javítás.",
-      "failed": "A módosítást nem sikerült menteni.",
+      "failed": "A javítást nem sikerült módosítani.",
       "fix": "{from} → {to}",
       "group": "Tanult javítások",
-      "retry": "Újra",
       "title": "A javításaiból tanult javítások",
       "unreadable": "A stella által tanultakat nem sikerült beolvasni.",
-      "working": "Mentés…"
+      "working": "A módosítás mentése…"
     },
     "lede": "Tartsa lenyomva a(z) <key>{shortcut}</key> billentyűt, és beszéljen. A szöveg ott jelenik meg, ahol éppen ír.",
     "microphone": {

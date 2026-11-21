@@ -611,7 +611,6 @@
       "title": "Shortcut to fix a dictation"
     },
     "fixPanel": {
-      "cancel": "Cancel",
       "dictatedAs": "Dictated as",
       "hint": "stella will write these words this way in your next dictations, on all your devices.",
       "notSaved": "The fix could not be saved. Check that stella is connected to your account.",
@@ -624,8 +623,8 @@
         "tooLong": "That is too long for one fix.",
         "tooManyWords": "A fix takes at most three words."
       },
-      "save": "Save",
-      "saving": "Saving…",
+      "save": "Save fix",
+      "saving": "Saving the fix…",
       "title": "Fix a dictated word",
       "writtenAs": "Written as"
     },
@@ -654,13 +653,12 @@
       "delete": "Delete what stella learned",
       "description": "When you correct a dictated word the same way twice, or fix it with {shortcut}, stella writes it that way in later dictations. Synced to your other devices; only you can see them.",
       "empty": "No fixes learned yet.",
-      "failed": "The change could not be saved.",
+      "failed": "The fix could not be changed.",
       "fix": "{from} → {to}",
       "group": "Learned fixes",
-      "retry": "Try again",
       "title": "Fixes learned from your corrections",
       "unreadable": "What stella learned could not be read.",
-      "working": "Saving…"
+      "working": "Saving the change…"
     },
     "lede": "Hold <key>{shortcut}</key> and speak. The text appears where you are typing.",
     "microphone": {

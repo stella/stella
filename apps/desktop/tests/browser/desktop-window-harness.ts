@@ -433,10 +433,10 @@ export const openSettingsWindow = async (
     const pane = page.locator("[data-slot=settings-page]");
     await expect(pane.getByRole("alert")).toBeVisible();
     // Sounds, only through speakers, typing the last dictation again,
-    // cleanup and both of its context switches, all switchable.
+    // fixing it, cleanup and both of its context switches, all switchable.
     await expect(
       pane.locator("[data-slot=settings-row] [role=switch]"),
-    ).toHaveCount(6);
+    ).toHaveCount(7);
     await expect(
       pane.locator("[data-slot=settings-row][data-disabled]"),
     ).toHaveCount(0);

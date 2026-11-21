@@ -611,7 +611,6 @@
       "title": "Īsinājumtaustiņš diktāta labošanai"
     },
     "fixPanel": {
-      "cancel": "Atcelt",
       "dictatedAs": "Diktēts kā",
       "hint": "stella turpmākajos diktātos šos vārdus rakstīs tā visās jūsu ierīcēs.",
       "notSaved": "Labojumu neizdevās saglabāt. Pārbaudiet, vai stella ir savienota ar jūsu kontu.",
@@ -624,8 +623,8 @@
         "tooLong": "Vienam labojumam tas ir par garu.",
         "tooManyWords": "Labojumā var būt ne vairāk kā trīs vārdi."
       },
-      "save": "Saglabāt",
-      "saving": "Saglabā…",
+      "save": "Saglabāt labojumu",
+      "saving": "Saglabā labojumu…",
       "title": "Labot diktētu vārdu",
       "writtenAs": "Pareizā rakstība"
     },
@@ -654,13 +653,12 @@
       "delete": "Dzēst stella apgūto",
       "description": "Ja diktētu vārdu divreiz izlabojat vienādi vai izlabojat to ar {shortcut}, stella turpmākajos diktātos to raksta tā. Tiek sinhronizēts ar citām jūsu ierīcēm; tos redzat tikai jūs.",
       "empty": "Vēl nekas nav apgūts.",
-      "failed": "Izmaiņas neizdevās saglabāt.",
+      "failed": "Labojumu neizdevās mainīt.",
       "fix": "{from} → {to}",
       "group": "Apgūtie labojumi",
-      "retry": "Mēģināt vēlreiz",
       "title": "No jūsu labojumiem apgūtie labojumi",
       "unreadable": "stella apgūto neizdevās nolasīt.",
-      "working": "Saglabā…"
+      "working": "Saglabā izmaiņas…"
     },
     "lede": "Turiet <key>{shortcut}</key> un runājiet. Teksts parādās tur, kur rakstāt.",
     "microphone": {

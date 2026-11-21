@@ -37,6 +37,7 @@ const FIX_CHANGED_EVENT = "dictation-fix-changed";
  */
 const DictationFixApp = () => {
   const t = useTranslations("dictation.fixPanel");
+  const tDialog = useTranslations("dialog");
   const [request, setRequest] = useState<FixRequest | null>(null);
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
@@ -175,7 +176,7 @@ const DictationFixApp = () => {
         <p className="text-muted-foreground text-xs">{t("hint")}</p>
         <div className="mt-auto flex justify-end gap-2">
           <Button onClick={close} size="sm" type="button" variant="outline">
-            {t("cancel")}
+            {tDialog("cancel")}
           </Button>
           <Button
             disabled={outcome.status === "saving"}

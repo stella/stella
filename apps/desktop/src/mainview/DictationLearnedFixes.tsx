@@ -35,6 +35,7 @@ const ROW_ID = "dictation-learned";
  */
 export const DictationLearnedFixes = ({ shortcut }: { shortcut: string }) => {
   const t = useTranslations("dictation.learned");
+  const tSettings = useTranslations("settings");
   const [stored, setStored] = useState<Stored>({ status: "reading" });
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState(false);
@@ -100,7 +101,7 @@ export const DictationLearnedFixes = ({ shortcut }: { shortcut: string }) => {
             }}
             variant="ghost"
           >
-            {t("retry")}
+            {tSettings("tryAgain")}
           </Button>
         ) : null}
       </SettingsRow>
