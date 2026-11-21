@@ -18,6 +18,8 @@ import type {
 import { File } from "expo-file-system";
 import { useLocale } from "use-intl";
 
+import { respell } from "@stll/transcript/spelling";
+
 import type { AccessTokenSource } from "@/connection/session";
 import { useSession } from "@/connection/session-provider";
 import { deviceAccountStore } from "@/native/account-store";
@@ -517,8 +519,9 @@ const nextStop = (current: Run, { durationMillis, metering }: Reading) => {
 };
 
 /**
- * The finished dictation's text: its pieces joined in order and cleaned up
- * when the person turned that on, or null when nothing was heard. A piece
+ * The finished dictation's text: its pieces joined in order, cleaned up
+ * when the person turned that on, and the matter's names spelled as written
+ * where the model came close; null when nothing was heard. A piece
  * that failed leaves a gap the person should know about.
  */
 const gatherText = async (
@@ -537,7 +540,10 @@ const gatherText = async (
   const setup = await current.setup;
   const text = await finalText({ setup, joined, locale: current.locale });
   return {
-    dictated: { text, names: setup.vocabulary },
+    dictated: {
+      text: respell(text, setup.vocabulary),
+      names: setup.vocabulary,
+    },
     notice: failed ? "failed" : undefined,
   };
 };
