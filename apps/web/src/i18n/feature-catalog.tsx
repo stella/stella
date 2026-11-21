@@ -20,7 +20,7 @@ import { createTranslator } from "use-intl/core";
 
 import { useI18nStore } from "@/i18n/i18n-store";
 import type { SupportedLanguage } from "@/i18n/i18n-store";
-import { useRenderedMessageLocale } from "@/i18n/provider";
+import { useRenderedMessageLocale } from "@/i18n/rendered-message-locale";
 import { detached } from "@/lib/detached";
 
 type CatalogMessages = Record<string, Record<string, unknown>>;
