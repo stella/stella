@@ -1,4 +1,7 @@
-import type { TranslationKey } from "../i18n/utils";
+import { panic } from "better-result";
+
+import type { Locale } from "../i18n/config";
+import { localizePath, type TranslationKey } from "../i18n/utils";
 import { pillars, type ProductSlug } from "./products/pillars";
 
 type NavLabelKey = Extract<
@@ -40,7 +43,12 @@ export type NavLabel =
   | { kind: "translated"; labelKey: NavLabelKey }
   | { kind: "literal"; label: string };
 
-export type NavLink = NavLabel & { href: string };
+// A page the site renders per locale is linked in the reader's locale; any
+// other target (an unlocalized page, an external site, a mailto) as written.
+type NavTarget =
+  { route: "localized"; path: string } | { route: "fixed"; href: string };
+
+export type NavLink = NavLabel & NavTarget;
 
 // The app's entry point; a new visitor signs up there and picks a plan in
 // the app, so every "Start free" and plan call to action links here.
@@ -54,22 +62,62 @@ export const contactHref = "mailto:contact@stll.app";
 export const selfHostingUrl = `${githubUrl}/blob/main/docs/self-hosting.md`;
 
 export const resourceLinks = [
-  { kind: "translated", labelKey: "nav.pricing", href: "/pricing/" },
-  { kind: "translated", labelKey: "footer.documentation", href: "/docs/" },
-  { kind: "translated", labelKey: "nav.security", href: "/security/" },
-  { kind: "translated", labelKey: "nav.blog", href: "/blog/" },
-  { kind: "translated", labelKey: "nav.aiFactSheet", href: "/ai-info/" },
-  { kind: "translated", labelKey: "hero.selfHost", href: selfHostingUrl },
-  { kind: "translated", labelKey: "footer.press", href: "/press/" },
-  { kind: "translated", labelKey: "footer.status", href: statusUrl },
+  {
+    kind: "translated",
+    labelKey: "nav.pricing",
+    route: "localized",
+    path: "/pricing/",
+  },
+  {
+    kind: "translated",
+    labelKey: "footer.documentation",
+    route: "fixed",
+    href: "/docs/",
+  },
+  {
+    kind: "translated",
+    labelKey: "nav.security",
+    route: "fixed",
+    href: "/security/",
+  },
+  { kind: "translated", labelKey: "nav.blog", route: "fixed", href: "/blog/" },
+  {
+    kind: "translated",
+    labelKey: "nav.aiFactSheet",
+    route: "fixed",
+    href: "/ai-info/",
+  },
+  {
+    kind: "translated",
+    labelKey: "hero.selfHost",
+    route: "fixed",
+    href: selfHostingUrl,
+  },
+  {
+    kind: "translated",
+    labelKey: "footer.press",
+    route: "fixed",
+    href: "/press/",
+  },
+  {
+    kind: "translated",
+    labelKey: "footer.status",
+    route: "fixed",
+    href: statusUrl,
+  },
 ] as const satisfies readonly NavLink[];
 
 export const connectLinks = [
-  { kind: "translated", labelKey: "footer.contact", href: contactHref },
-  { kind: "literal", label: "Discord", href: discordUrl },
-  { kind: "literal", label: "GitHub", href: githubUrl },
-  { kind: "literal", label: "X", href: xUrl },
-  { kind: "literal", label: "LinkedIn", href: linkedinUrl },
+  {
+    kind: "translated",
+    labelKey: "footer.contact",
+    route: "fixed",
+    href: contactHref,
+  },
+  { kind: "literal", label: "Discord", route: "fixed", href: discordUrl },
+  { kind: "literal", label: "GitHub", route: "fixed", href: githubUrl },
+  { kind: "literal", label: "X", route: "fixed", href: xUrl },
+  { kind: "literal", label: "LinkedIn", route: "fixed", href: linkedinUrl },
 ] as const satisfies readonly NavLink[];
 
 export const isExternal = (href: string) => href.startsWith("http");
@@ -79,11 +127,27 @@ export const resolveNavLabel = (
   t: (key: NavLabelKey) => string,
 ): string => (label.kind === "translated" ? t(label.labelKey) : label.label);
 
+const navHref = (link: NavTarget, locale: Locale): string => {
+  switch (link.route) {
+    case "localized":
+      return localizePath(link.path, locale);
+    case "fixed":
+      return link.href;
+    default:
+      link satisfies never;
+      return panic("Unhandled nav link route");
+  }
+};
+
 export const resolveNavLinks = (
   links: readonly NavLink[],
   t: (key: NavLabelKey) => string,
+  locale: Locale,
 ) =>
-  links.map((link) => ({ label: resolveNavLabel(link, t), href: link.href }));
+  links.map((link) => ({
+    label: resolveNavLabel(link, t),
+    href: navHref(link, locale),
+  }));
 
 // The footer names products with its own translated descriptors, keyed on the
 // literal slugs, so a new pillar slug without an entry fails typecheck rather

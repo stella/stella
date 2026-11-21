@@ -61,12 +61,12 @@ const compactMenus = [
     label: t("footer.resources"),
     isCurrent:
       current === "security" || current === "blog" || current === "pricing",
-    links: resolveNavLinks(resourceLinks, t),
+    links: resolveNavLinks(resourceLinks, t, locale),
   },
   {
     label: t("footer.connect"),
     isCurrent: false,
-    links: resolveNavLinks(connectLinks, t),
+    links: resolveNavLinks(connectLinks, t, locale),
   },
 ] as const;
 ---
