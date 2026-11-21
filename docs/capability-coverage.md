@@ -844,7 +844,7 @@ mechanics, and similar), not gaps in coverage.
 | provider_secret | 35 |
 | public_indexing | 13 |
 | realtime_stream | 10 |
-| search_ui | 22 |
+| search_ui | 23 |
 | session_token_exchange | 23 |
 | ui_navigation_state | 14 |
 | upload_mechanics | 30 |
