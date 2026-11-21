@@ -2,7 +2,7 @@ import { requireOptionalNativeModule } from "expo";
 import type { EventEmitter, EventSubscription } from "expo";
 
 /** The system took the microphone (a call, Siri, an alarm), or gave it back. */
-export type DictationInterruption = { readonly phase: "began" | "ended" };
+type DictationInterruption = { readonly phase: "began" | "ended" };
 
 type DictationDeviceEvents = {
   onInterruption: (event: DictationInterruption) => void;

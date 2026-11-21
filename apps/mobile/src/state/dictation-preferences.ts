@@ -21,7 +21,7 @@ export type DictationPreferences = {
  * or a car keep playing in full quality instead of switching to call audio,
  * or whichever the system routes to, a headset's included.
  */
-export const DICTATION_MICROPHONES = ["built-in", "system"] as const;
+const DICTATION_MICROPHONES = ["built-in", "system"] as const;
 
 export type DictationMicrophone = (typeof DICTATION_MICROPHONES)[number];
 
