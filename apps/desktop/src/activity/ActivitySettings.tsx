@@ -37,7 +37,6 @@ import {
   SelectValue,
 } from "@stll/ui/select";
 import {
-  SettingsPanel,
   SettingsRow,
   settingsRowIds,
   SettingsSection,

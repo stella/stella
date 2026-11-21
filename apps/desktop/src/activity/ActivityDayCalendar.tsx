@@ -636,15 +636,7 @@ export const ActivityDayCalendar = ({
         </p>
       ) : null}
       {candidates.type === "failed" ? (
-        <div
-          role="alert"
-          className="text-destructive flex items-center gap-2 text-sm"
-        >
-          {t("candidatesFailed")}
-          <Button size="sm" variant="ghost" onClick={refreshCandidates}>
-            {t("retry")}
-          </Button>
-        </div>
+        <CandidatesFailedAlert onRetry={refreshCandidates} />
       ) : null}
       <SubmissionFeedback
         submission={submission}
@@ -699,6 +691,21 @@ export const ActivityDayCalendar = ({
         timeZone={timeZone}
       />
       <p className="text-muted-foreground text-xs">{t("calendarHint")}</p>
+    </div>
+  );
+};
+
+const CandidatesFailedAlert = ({ onRetry }: { onRetry: () => void }) => {
+  const t = useTranslations("activity");
+  return (
+    <div
+      role="alert"
+      className="text-destructive flex items-center gap-2 text-sm"
+    >
+      {t("candidatesFailed")}
+      <Button size="sm" variant="ghost" onClick={onRetry}>
+        {t("retry")}
+      </Button>
     </div>
   );
 };
@@ -1293,18 +1300,14 @@ function useSuggestionDrafts({
     if (suggestion.matter === null) {
       return "";
     }
-    const titles = matterTitles(suggestion, suggestion.matter.id);
+    // Quoted: titles mix file names, meetings and subjects with their own commas.
+    const titles = [
+      ...new Set(matterTitles(suggestion, suggestion.matter.id)),
+    ].map((title) => t("narrativeTitle", { title }));
     const text =
       titles.length > 0
         ? t("narrativeEvidence", {
-            // Each title in the locale's quotation marks: titles mix file
-            // names, meetings and subjects, and may hold commas or colons.
-            evidence: format.list(
-              [...new Set(titles)].map((title) =>
-                t("narrativeTitle", { title }),
-              ),
-              { type: "conjunction" },
-            ),
+            evidence: format.list(titles, { type: "conjunction" }),
           })
         : t("narrativeApps", {
             apps: format.list(
