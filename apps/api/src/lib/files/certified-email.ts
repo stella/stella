@@ -166,8 +166,9 @@ const readCertifiedAt = (dati: Element, limits: CertifiedEmailLimits) => {
   if (!day || !time || !zone) {
     return null;
   }
-  const [, dd, mm, yyyy] = day;
-  const [, sign, zoneHours, zoneMinutes] = zone;
+  // Every group matched, so none of these is empty.
+  const [, dd = "", mm = "", yyyy = ""] = day;
+  const [, sign = "", zoneHours = "", zoneMinutes = ""] = zone;
   const date = `${yyyy}-${mm}-${dd}`;
   const stated = `${date}T${time[0]}${sign}${zoneHours}:${zoneMinutes}`;
   // Date alone would roll an impossible calendar day into the next month.

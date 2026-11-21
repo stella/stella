@@ -1198,11 +1198,10 @@ describe("certified email text preview", () => {
       },
       attachments: [{ fileName: PEC_FIXTURE.attachmentName }],
     });
-    expect(
-      typeof read === "object" && read !== null && "text" in read
-        ? read.text
-        : "",
-    ).toContain(PEC_FIXTURE.body);
+    if (read instanceof HttpStatusResponse) {
+      panic("Expected the certified email reading");
+    }
+    expect(read.text).toContain(PEC_FIXTURE.body);
     await expectOneContentRow(entityId, {
       action: "access",
       metadata: {
