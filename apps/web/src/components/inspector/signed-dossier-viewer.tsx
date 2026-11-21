@@ -16,7 +16,7 @@ import { PeekSuspenseFallback } from "@/components/pdf/peek/peek-pdf-viewer";
 import {
   signedDossierPdfOptions,
   signedDossierPreviewOptions,
-} from "@/lib/files/queries";
+} from "@/lib/files/legal-file-queries";
 import { PDFProvider } from "@/lib/pdf/pdf-context";
 import { PDFPage } from "@/lib/pdf/pdf-page";
 import { PDFViewport } from "@/lib/pdf/pdf-viewport";

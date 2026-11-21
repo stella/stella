@@ -8,7 +8,7 @@ import { ScrollArea } from "@stll/ui/scroll-area";
 import { DOCKED_COMPOSER_CLEARANCE } from "@/components/ai-suggestions/composer-geometry";
 import { FileViewerWithAI } from "@/components/ai-suggestions/file-viewer-with-ai";
 import type { FileTab } from "@/components/inspector/inspector-tabs-store";
-import { structuredDocumentPreviewOptions } from "@/lib/files/queries";
+import { structuredDocumentPreviewOptions } from "@/lib/files/legal-file-queries";
 
 export const StructuredDocumentViewer = ({
   onDownload,

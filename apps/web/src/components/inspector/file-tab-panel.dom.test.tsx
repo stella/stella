@@ -134,13 +134,10 @@ const { AuthenticatedUserProvider } =
 const { useDocxEditorHostStore } =
   await import("@/components/docx/docx-editor-host-store");
 const { FileTabPanel } = await import("./file-tab-panel");
-const {
-  asicPreviewOptions,
-  cadesPreviewOptions,
-  dataBoxPreviewOptions,
-  fileOptions,
-  signedDossierPreviewOptions,
-} = await import("@/lib/files/queries");
+const { dataBoxPreviewOptions, fileOptions } =
+  await import("@/lib/files/queries");
+const { asicPreviewOptions, cadesPreviewOptions, signedDossierPreviewOptions } =
+  await import("@/lib/files/legal-file-queries");
 const { fileChatThreadOptions } = await import("@/features/chat/queries");
 const { mcpConnectorsOptions } = await import("@/lib/knowledge/queries");
 const { entityOptions } = await import("@/lib/workspaces/queries/entities");
