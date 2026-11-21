@@ -69,6 +69,15 @@ describe("XAdES signature files", () => {
     expect(parsed.documentText).not.toContain("AAAA");
   });
 
+  test("keeps mixed text in document order", async () => {
+    const parsed = parseXadesFile(
+      await envelopedXades(
+        "<podani><odstavec>Zaplaťte <b>100</b> EUR do <i>15. 3.</i></odstavec><podpis>Jan</podpis></podani>",
+      ),
+    ).unwrap();
+    expect(parsed.documentText).toBe("Zaplaťte 100 EUR do 15. 3.\nJan");
+  });
+
   test.each([
     ["a plain XML document", "<invoice><total>100</total></invoice>"],
     [

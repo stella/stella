@@ -512,6 +512,40 @@ test("a detached signature lists its signers and links the signed document", asy
   expect(pdfEngineRenderCount).toBe(0);
 });
 
+test("an .xml signature stored as plain text opens as the signature", async () => {
+  const tab = {
+    ...pdfTab,
+    id: toSafeId<"field">("field-enveloped-xml"),
+    fileName: "wniosek.xml",
+    mimeType: "text/plain",
+  };
+  const key = { fieldId: tab.id, workspaceId: tab.workspaceId };
+  const preview: SignaturePreviewData = {
+    type: "signature",
+    standard: "xades",
+    packaging: "enveloped",
+    signers: [
+      {
+        id: "signature-0.signer-0",
+        name: "Example court registry",
+        signedAt: null,
+      },
+    ],
+    statedFileNames: [],
+    signedFiles: [],
+    document: {
+      fileName: "wniosek.xml",
+      mimeType: "application/xml",
+      text: "Wniosek o wpis do rejestru",
+    },
+  };
+  const mounted = renderFileTab(tab, (client) => {
+    client.setQueryData(signaturePreviewOptions(key).queryKey, preview);
+  });
+  expect(await mounted.findByText("Wniosek o wpis do rejestru")).toBeTruthy();
+  expect(mounted.getByText("Example court registry")).toBeTruthy();
+});
+
 test("an .xml file the server finds no signature in keeps its own viewer", async () => {
   const tab = {
     ...pdfTab,

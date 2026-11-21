@@ -73,19 +73,43 @@ const attribute = (node: DocumentXmlNode, name: string) =>
 const nodeId = (node: DocumentXmlNode) =>
   attribute(node, "Id") ?? attribute(node, "ID") ?? attribute(node, "id");
 
-/** The readable text of a subtree, one line per text-bearing element. */
+const singleLine = (text: string) => text.replace(/\s+/gu, " ").trim();
+
+/** A node's text with its children's, in document order. */
+const inlineText = (
+  node: DocumentXmlNode,
+  stop: (node: DocumentXmlNode) => boolean,
+): string => {
+  let text = "";
+  let offset = 0;
+  for (const [index, child] of node.children.entries()) {
+    const start = node.childTextOffsets[index] ?? node.text.length;
+    text += node.text.slice(offset, start);
+    offset = start;
+    if (!stop(child)) {
+      text += ` ${inlineText(child, stop)} `;
+    }
+  }
+  return text + node.text.slice(offset);
+};
+
+/**
+ * The readable text of a subtree: an element holding text beside its
+ * children reads as one line in document order; an element holding only
+ * elements reads as one line per child.
+ */
 const subtreeText = (
   node: DocumentXmlNode,
   stop: (node: DocumentXmlNode) => boolean = () => false,
-) => {
-  const lines: string[] = [];
-  for (const found of walk(node, stop)) {
-    const line = found.text.replace(/\s+/gu, " ").trim();
-    if (line) {
-      lines.push(line);
-    }
+): string => {
+  if (node.text.trim() !== "" || node.children.length === 0) {
+    return singleLine(inlineText(node, stop));
   }
-  return lines.join("\n");
+  return node.children
+    .filter((child) => !stop(child))
+    .map((child) => subtreeText(child, stop))
+    .filter((line) => line !== "")
+    .join("\n");
 };
 
 const isSignature = (node: DocumentXmlNode) => isXmlDsig(node, "Signature");

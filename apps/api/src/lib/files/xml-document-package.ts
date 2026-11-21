@@ -12,7 +12,13 @@ export type DocumentXmlNode = {
   namespaceURI: string;
   attributes: ReadonlyMap<string, string>;
   children: DocumentXmlNode[];
+  /** The node's own text, without its children's. */
   text: string;
+  /**
+   * Where each child starts in `text`: mixed content such as
+   * `<p>Pay <b>100</b> EUR</p>` reads back in document order.
+   */
+  childTextOffsets: number[];
 };
 
 export type DocumentXmlReader = (
@@ -139,10 +145,12 @@ const parseXmlPart = (
       ),
       children: [],
       text: "",
+      childTextOffsets: [],
     };
     const parent = stack.at(-1);
     if (parent) {
       parent.children.push(node);
+      parent.childTextOffsets.push(parent.text.length);
     } else {
       read.root = node;
     }

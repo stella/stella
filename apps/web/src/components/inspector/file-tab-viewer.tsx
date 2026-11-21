@@ -1,4 +1,10 @@
-import { type ComponentType, lazy, memo, Suspense } from "react";
+import {
+  type ComponentType,
+  lazy,
+  memo,
+  type ReactNode,
+  Suspense,
+} from "react";
 
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
@@ -243,6 +249,30 @@ const FileTabViewerComponent = ({
     );
   };
 
+  // A `.sig` or `.xml` file is a signature only if the server reads one in
+  // its bytes; any other file keeps the viewer it always had.
+  const probeSignature = (fallback: ReactNode) =>
+    signatureFormatCandidate(tab.mimeType, tab.fileName) === undefined ? (
+      fallback
+    ) : (
+      <RecoverableViewerBoundary
+        finalFallback={(error) =>
+          isPreviewUnavailableError(error) ? fallback : undefined
+        }
+        key={tab.id}
+        onDownload={handleDownload}
+        surface="inspector-signature"
+      >
+        <Suspense fallback={<PeekSuspenseFallback />}>
+          <SignatureFileViewer
+            notSignature={fallback}
+            onDownload={handleDownload}
+            tab={tab}
+          />
+        </Suspense>
+      </RecoverableViewerBoundary>
+    );
+
   const fileViewer = (() => {
     switch (nativePreviewKind) {
       case "asicE":
@@ -315,7 +345,7 @@ const FileTabViewerComponent = ({
           />
         );
       case "text":
-        return <PlainTextFileViewer tab={tab} />;
+        return probeSignature(<PlainTextFileViewer tab={tab} />);
       case "xlsx":
       case "pptx":
         return (
@@ -395,32 +425,9 @@ const FileTabViewerComponent = ({
           ) : (
             <ConversionRefusalFallback refusal={entity.conversionRefusal} />
           );
-        // A `.sig` or `.xml` file is a signature only if the server reads one
-        // in its bytes; any other file keeps the viewer it always had.
-        if (
-          nativePreviewKind === null &&
-          signatureFormatCandidate(tab.mimeType, tab.fileName) !== undefined
-        ) {
-          return (
-            <RecoverableViewerBoundary
-              finalFallback={(error) =>
-                isPreviewUnavailableError(error) ? pdfViewer : undefined
-              }
-              key={tab.id}
-              onDownload={handleDownload}
-              surface="inspector-signature"
-            >
-              <Suspense fallback={<PeekSuspenseFallback />}>
-                <SignatureFileViewer
-                  notSignature={pdfViewer}
-                  onDownload={handleDownload}
-                  tab={tab}
-                />
-              </Suspense>
-            </RecoverableViewerBoundary>
-          );
-        }
-        return pdfViewer;
+        return nativePreviewKind === null
+          ? probeSignature(pdfViewer)
+          : pdfViewer;
       }
       default:
         nativePreviewKind satisfies never;
