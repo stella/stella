@@ -247,7 +247,15 @@ export default eslintCompatPlugin({
         };
         return {
           before() {
-            return !filenameForContext(context).endsWith(HELPER_FILE);
+            if (filenameForContext(context).endsWith(HELPER_FILE)) {
+              return false;
+            }
+            const text = context.sourceCode.text;
+            return (
+              text.includes("altKey") ||
+              text.includes("AltGraph") ||
+              text.includes("\\u")
+            );
           },
           ArrowFunctionExpression: check,
           FunctionDeclaration: check,

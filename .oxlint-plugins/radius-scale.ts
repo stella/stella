@@ -97,6 +97,14 @@ export default eslintCompatPlugin({
       },
       createOnce(context) {
         return {
+          before() {
+            const text = context.sourceCode.text;
+            return (
+              text.includes("rounded") ||
+              text.includes("\\u") ||
+              text.includes("\\x")
+            );
+          },
           Literal(node) {
             if (typeof node.value !== "string") {
               return;
