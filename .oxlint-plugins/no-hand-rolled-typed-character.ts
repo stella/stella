@@ -254,7 +254,7 @@ export default eslintCompatPlugin({
             return (
               text.includes("altKey") ||
               text.includes("AltGraph") ||
-              text.includes("\\u")
+              text.includes("\\")
             );
           },
           ArrowFunctionExpression: check,

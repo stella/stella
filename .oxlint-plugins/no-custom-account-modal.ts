@@ -244,7 +244,7 @@ export default eslintCompatPlugin({
             return (
               text.includes("dialog") ||
               text.includes("sheet") ||
-              text.includes("\\u")
+              text.includes("\\")
             );
           },
           ImportDeclaration(node) {

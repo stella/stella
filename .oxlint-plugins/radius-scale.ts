@@ -99,11 +99,7 @@ export default eslintCompatPlugin({
         return {
           before() {
             const text = context.sourceCode.text;
-            return (
-              text.includes("rounded") ||
-              text.includes("\\u") ||
-              text.includes("\\x")
-            );
+            return text.includes("rounded") || text.includes("\\");
           },
           Literal(node) {
             if (typeof node.value !== "string") {
