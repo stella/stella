@@ -2452,7 +2452,9 @@ for (const language of ["en", "ar"] as const) {
       language,
     });
     await expect(
-      page.getByText(messages.activity.welcomeDetails, { exact: true }),
+      page.getByText(messages.activity.disclosure.sent.aiDrafts, {
+        exact: true,
+      }),
     ).toBeHidden();
     await expect(page.locator("html")).toHaveAttribute(
       "dir",
@@ -2475,7 +2477,7 @@ for (const language of ["en", "ar"] as const) {
     await disclosure.press("Enter");
     await expect(disclosure).toBeFocused();
     await expect(disclosure).toHaveAttribute("aria-expanded", "true");
-    const details = page.getByText(messages.activity.welcomeDetails, {
+    const details = page.getByText(messages.activity.disclosure.sent.aiDrafts, {
       exact: true,
     });
     await expect(details).toBeVisible();
