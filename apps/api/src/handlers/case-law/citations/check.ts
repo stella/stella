@@ -21,6 +21,7 @@
 import { panic, Result } from "better-result";
 import * as v from "valibot";
 
+import { AI_FAILURE_CODES } from "@stll/api-contract";
 import { exactDecisionMatches } from "@stll/api-contract/decision-query-intent";
 
 import { checkCitationDecision } from "@/api/handlers/case-law/citations/check-decision";
@@ -99,10 +100,16 @@ const unavailable = (
 ): Result<CitationCheckResponse, never> =>
   Result.ok({ status: "unavailable", decision, reason });
 
+// Answered like every other AI feature without a configured model: the
+// organization (or the deployment) has to configure one, so it is the
+// caller's to fix, not a server failure.
 const decisionModelMissing = () =>
   new HandlerError({
-    status: 503,
-    message: "Citation checking has no decision model on this deployment",
+    code: AI_FAILURE_CODES.role_not_configured,
+    status: 403,
+    message:
+      "Citation checks need a decision model, and none is configured " +
+      "for this caller.",
   });
 
 /**
@@ -344,6 +351,8 @@ export const createCheckCitation = ({
             checked.result.reason === "no_model"
               ? decisionModelMissing()
               : new HandlerError({
+                  // The decision layer already reported the provider failure.
+                  code: "upstream_unavailable",
                   status: 502,
                   message: "The citation check did not complete",
                 }),
