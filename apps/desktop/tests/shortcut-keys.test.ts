@@ -127,7 +127,9 @@ describe("native shortcut contract", () => {
     expect(rustEnumVariants(NATIVE_SHORTCUT, "ReservedAction")).toEqual([
       ...RESERVED_ACTIONS,
     ]);
-    expect(Object.keys(en.shortcut.action)).toEqual([...RESERVED_ACTIONS]);
+    expect(Object.keys(en.shortcut.action).toSorted()).toEqual(
+      [...RESERVED_ACTIONS].toSorted(),
+    );
   });
 
   test("modifier names match the native enum", () => {

@@ -541,6 +541,124 @@ export const hasEmDash = (value: string): boolean =>
 export const EM_DASH_GUIDANCE =
   "no em dash: rewrite the break with a period, comma, colon or parentheses";
 
+// Prefer the single Unicode horizontal ellipsis (…) over three ASCII dots (...).
+// Extract only literal text from an ICU message so placeholder names (e.g.
+// `{dir}` in German) and select branch keys are excluded from prose checks.
+const collectLiteralText = (
+  elements: readonly MessageFormatElement[],
+): string =>
+  elements
+    .map((el) => {
+      if (el.type === TYPE.literal) {
+        return el.value;
+      }
+      if (el.type === TYPE.plural || el.type === TYPE.select) {
+        return Object.values(el.options)
+          .map((opt) => collectLiteralText(opt.value))
+          .join(" ");
+      }
+      if (el.type === TYPE.tag) {
+        return collectLiteralText(el.children);
+      }
+      return " ";
+    })
+    .join("");
+
+const literalMessageText = (value: string): string => {
+  const ast = safeParse(value);
+  return ast === null ? value : collectLiteralText(ast);
+};
+
+export const hasAsciiEllipsis = (value: string): boolean =>
+  value.includes("...");
+
+export const ASCII_ELLIPSIS_GUIDANCE =
+  "use the single-character ellipsis (…) instead of three dots (...)";
+
+// Keep the product name uninflected in inflected locales (cs, sk, pl, hu, et,
+// lt, lv): declining a female first name (e.g. cs "do stelly", hu "stellába",
+// et "stellasse") sounds overly personal and inconsistent with B2B legal copy.
+// Decline an appositive noun in front of it instead (e.g. "do aplikace stella",
+// "w aplikacji stella", "a stella alkalmazásba"), and never leave a bare
+// ungrammatical preposition/verb before nominative "stella" either.
+const INFLECTED_STELLA_LOCALES = new Set([
+  "cs",
+  "sk",
+  "pl",
+  "hu",
+  "et",
+  "lt",
+  "lv",
+]);
+const INFLECTED_STELLA_PATTERN =
+  /(?<!\p{L})(?:stell(?:y|u|e|ou|i|ę|ą|át|ába|ából|ában|ához|ának|án|ával|asse|ast|as|at|aga|ale|al|alt|ai|os|oje|ā)|stella-(?:st|sse|s|ga|le|l|lt))(?!\p{L})/iu;
+
+const BARE_STELLA_LOCALES = new Set(["cs", "sk"]);
+const BARE_STELLA_PATTERN =
+  /(?<!\p{L})(?:do|od|ze|zo|k|ke|ku|pro|pre|otevřít|otevřete|otvoriť|otvorte|připojit|připojte|pripojiť|pripojte)\s+stella(?!\p{L}|\s+(?:desktop|web|CLI|MCP|Style|AI|Legal|Editor)\b)/iu;
+
+export const hasInflectedStella = (value: string, locale: string): boolean =>
+  INFLECTED_STELLA_LOCALES.has(locale) && INFLECTED_STELLA_PATTERN.test(value);
+
+export const hasBareUngrammaticalStella = (
+  value: string,
+  locale: string,
+): boolean =>
+  BARE_STELLA_LOCALES.has(locale) && BARE_STELLA_PATTERN.test(value);
+
+export const INFLECTED_STELLA_GUIDANCE =
+  "keep stella uninflected; decline a noun in front of it (e.g. cs 'do aplikace stella', pl 'w aplikacji stella', hu 'a stella alkalmazásba', et 'rakenduses stella')";
+
+// Avoid anthropomorphic 1st-person UI voice ("I am preparing/loading/working…"):
+// stella is a legal tool, not a persona. Prefer impersonal or verbal-noun forms.
+const FIRST_PERSON_APP_VOICE_PATTERNS = new Map<string, RegExp>([
+  [
+    "cs",
+    /(?<!\p{L})(?:připravuji|načítám|hledám|pracuji|zpracovávám|odesílám|ukládám|stahuji|kontroluji|analyzuji|vytvářím|ověřuji)(?!\p{L})/iu,
+  ],
+  [
+    "sk",
+    /(?<!\p{L})(?:pripravujem|načítavam|hľadám|pracujem|spracúvam|odosielam|ukladám|sťahujem|kontrolujem|analyzujem|vytváram|overujem)(?!\p{L})/iu,
+  ],
+  [
+    "de",
+    /(?<!\p{L})ich\s+(?:bereite|lade|suche|arbeite|prüfe|erstelle|speichere)(?!\p{L})/iu,
+  ],
+]);
+
+export const hasFirstPersonAppVoice = (
+  value: string,
+  locale: string,
+): boolean =>
+  FIRST_PERSON_APP_VOICE_PATTERNS.get(locale)?.test(
+    literalMessageText(value),
+  ) ?? false;
+
+export const FIRST_PERSON_APP_VOICE_GUIDANCE =
+  "avoid 1st-person app voice (e.g. cs 'Analyzuji…', sk 'Pracujem…'); use impersonal forms ('Analyzuje se…', 'Probíhá…') so the app does not speak as a persona";
+
+// Enforce the established T-V register per locale (de Sie, cs/sk vykání,
+// hu Ön, es tú) on unambiguous pronouns so informal/formal drift does not creep in.
+const REGISTER_DRIFT_PATTERNS = new Map<string, RegExp>([
+  [
+    "de",
+    /(?<!\p{L})(?:du|dich|dir|dein|deine|deinem|deinen|deiner|deines)(?!\p{L})/iu,
+  ],
+  ["cs", /(?<!\p{L})(?:tvůj|tvá|tvé|tvoje|tvého|tvému|tvým|tvých)(?!\p{L})/iu],
+  [
+    "sk",
+    /(?<!\p{L})(?:tvoj|tvoja|tvoje|tvojho|tvojmu|tvojím|tvojich)(?!\p{L})/iu,
+  ],
+  ["hu", /(?<!\p{L})(?:tied|neked|téged|veled)(?!\p{L})/iu],
+  ["es", /(?<!\p{L})(?:usted|ustedes)(?!\p{L})/iu],
+]);
+
+export const hasRegisterDrift = (value: string, locale: string): boolean =>
+  REGISTER_DRIFT_PATTERNS.get(locale)?.test(literalMessageText(value)) ?? false;
+
+export const REGISTER_DRIFT_GUIDANCE =
+  "keep the locale's established register (de Sie, cs/sk vykání, hu Ön, es tú)";
+
 export type ForbiddenRule = {
   concept: string;
   guidance?: string;
@@ -858,7 +976,8 @@ const findViolations = (
           key,
         }).length > 0 ||
           hasInvalidCapitalizedStella(targetValue) ||
-          hasEmDash(targetValue))
+          hasEmDash(targetValue) ||
+          hasAsciiEllipsis(targetValue))
       ) {
         result.terminology.push(key);
       }
@@ -887,7 +1006,12 @@ const findViolations = (
         key,
       }).length > 0 ||
       hasInvalidCapitalizedStella(targetValue) ||
-      hasEmDash(targetValue)
+      hasEmDash(targetValue) ||
+      hasAsciiEllipsis(targetValue) ||
+      hasInflectedStella(targetValue, locale) ||
+      hasBareUngrammaticalStella(targetValue, locale) ||
+      hasFirstPersonAppVoice(targetValue, locale) ||
+      hasRegisterDrift(targetValue, locale)
     ) {
       result.terminology.push(key);
     }
@@ -1029,6 +1153,19 @@ if (import.meta.main) {
                       key,
                     }),
                     ...(hasEmDash(entry.target) ? [EM_DASH_GUIDANCE] : []),
+                    ...(hasAsciiEllipsis(entry.target)
+                      ? [ASCII_ELLIPSIS_GUIDANCE]
+                      : []),
+                    ...(hasInflectedStella(entry.target, locale) ||
+                    hasBareUngrammaticalStella(entry.target, locale)
+                      ? [INFLECTED_STELLA_GUIDANCE]
+                      : []),
+                    ...(hasFirstPersonAppVoice(entry.target, locale)
+                      ? [FIRST_PERSON_APP_VOICE_GUIDANCE]
+                      : []),
+                    ...(hasRegisterDrift(entry.target, locale)
+                      ? [REGISTER_DRIFT_GUIDANCE]
+                      : []),
                   ]
                 : [];
             const suffix =

@@ -834,7 +834,7 @@
         "travel": "Kelionė"
       },
       "dateIncurred": "Patirimo data",
-      "descriptionPlaceholder": "Apibūdinkite išlaidą...",
+      "descriptionPlaceholder": "Apibūdinkite išlaidą…",
       "invoiceDescription": "Sąskaitos aprašymas",
       "markup": "Antkainodaras (%)",
       "noExpenses": "Nėra išlaidų šiam laikotarpiui"
@@ -1035,14 +1035,14 @@
       "totalEntries": "{count, plural, one {# įrašas} few {# įrašai} many {# įrašo} other {# įrašų}}",
       "void": "Panaikinti"
     },
-    "loading": "Kraunama...",
+    "loading": "Kraunama…",
     "markBillableSelected": "Pažymėti kaip apmokestinamus",
     "markNonBillableSelected": "Pažymėti kaip neapmokestinamus",
     "matterRequired": "Pasirinkite bylą",
     "minutes": "Minutės",
     "moveEntryHint": "Išsaugojus įrašas perkeliamas į šią bylą ir įkainojamas pagal jos tarifus.",
     "narrative": "Aprašas",
-    "narrativePlaceholder": "Aprašykite atliktą darbą...",
+    "narrativePlaceholder": "Aprašykite atliktą darbą…",
     "noActiveTimer": "Nėra aktyvaus laikmačio",
     "noEntries": "Šiam laikotarpiui laiko įrašų nėra",
     "nonBillable": "Neapmokamas",
@@ -1123,7 +1123,7 @@
       "save": "Išsaugoti aprašymą",
       "title": "Išsaugoti aprašymai"
     },
-    "selectMatter": "Pasirinkite bylą...",
+    "selectMatter": "Pasirinkite bylą…",
     "selectMatterToStart": "Pasirinkite bylą, kad pradėtumėte fiksuoti laiką",
     "sellerProfiles": {
       "add": "Pridėti pardavėjo profilį",
@@ -1271,7 +1271,7 @@
       "topics": "Temos",
       "treatment": "Vėlesnis vertinimas"
     },
-    "analyzing": "Analizuojama...",
+    "analyzing": "Analizuojama…",
     "browse": {
       "courtDescription": "{court} ({country}): sprendimai viešoje stella teisės duomenų bazėje pagal metus ir mėnesį.",
       "courts": "Teismai",
@@ -1424,7 +1424,7 @@
       "matchedIn": "Atitikmuo {language} kalba"
     },
     "linkedPassageGone": "Susietos ištraukos šiame tekste nebėra.",
-    "loadingMore": "Kraunama daugiau...",
+    "loadingMore": "Kraunama daugiau…",
     "marginFilter": {
       "label": "Cituojamų nuostatų filtras",
       "paragraph": "{count, plural, one {¶{paragraph} cituojama # nuostata} few {¶{paragraph} cituojamos # nuostatos} many {¶{paragraph} cituojama # nuostatos} other {¶{paragraph} cituojama # nuostatų}}",
@@ -1892,7 +1892,7 @@
       "referenceMatter": "Nurodyti šią bylą",
       "searchFiles": "Ieškoti failų",
       "searchMatters": "Ieškoti bylų",
-      "searchMcpServers": "Ieškoti MCP serverių...",
+      "searchMcpServers": "Ieškoti MCP serverių…",
       "searchSkills": "Ieškoti įgūdžių",
       "skillNeeds": {
         "browserExtension": "Norėdami naudoti šį įgūdį, prijunkite naršyklės plėtinį",
@@ -1978,7 +1978,7 @@
     "emptyThreadDescription": "Paklauskite apie šią bylą, parenkite tekstą arba paprašykite trumpos tyrimo pastabos.",
     "emptyThreadTitle": "Pradėti pokalbį",
     "enterAuthorName": "Įveskite vardą, kuris bus naudojamas sekant keitimus.",
-    "extractingContent": "Turinio ištraukimas...",
+    "extractingContent": "Turinio ištraukimas…",
     "fileThreadRebound": "Šio failo pokalbis jau pradėtas kitoje sesijoje. Jūsų žinutė išsaugota; išsiųskite ją dar kartą.",
     "fileTooLarge": "Failas viršija {maxSize} limitą",
     "focusSuggestion": "Fokusuoti pasiūlymą: {topic}",
@@ -2607,10 +2607,10 @@
       "viewImage": "Peržiūrimas paveikslėlis"
     },
     "turnNotification": {
-      "failedBody": "stellos pokalbio atsakymas nebuvo baigtas.",
+      "failedBody": "Programos stella pokalbio atsakymas nebuvo baigtas.",
       "failedTitle": "Atsakymas nepavyko",
       "needsInputBody": "Pokalbis laukia jūsų patvirtinimo ar atsakymo.",
-      "needsInputTitle": "stellai reikia jūsų",
+      "needsInputTitle": "Programai stella reikia jūsų",
       "replyReadyBody": "stella baigė atsakyti jūsų pokalbyje.",
       "replyReadyTitle": "Atsakymas paruoštas"
     },
@@ -2708,8 +2708,8 @@
     "saveFailed": "Nepavyko išsaugoti",
     "saveFailedLeaveDescription": "Nepavyko išsaugoti pakeitimų. Galite tęsti redagavimą arba išeiti ir juos atmesti.",
     "saveVersionAndLeave": "Išsaugoti versiją ir išeiti",
-    "searchClauses": "Ieškoti sąlygų...",
-    "searchPlaceholder": "Ieškoti sąlygų...",
+    "searchClauses": "Ieškoti sąlygų…",
+    "searchPlaceholder": "Ieškoti sąlygų…",
     "selectClauseToLink": "Pasirinkite sąlygą, kurią norite susieti.",
     "selectVersionToCompare": "Pasirinkite versiją, kurią norite palyginti su dabartine",
     "slotCustom": "Pasirinktinis nišos pavadinimas…",
@@ -3091,7 +3091,7 @@
     "scopeThisPage": "(šis puslapis)",
     "scrollToBottom": "Slinkti į apačią",
     "scrollToTop": "Slinkti į viršų",
-    "search": "Ieškoti...",
+    "search": "Ieškoti…",
     "searchIn": "Ieškoti",
     "searchMembers": "Ieškoti narių…",
     "selectAMatter": "Pasirinkite bylą",
@@ -3280,7 +3280,7 @@
       "emails": "El. paštai",
       "invalidDataBox": "Duomenų dėžutės ID turi būti 7 raidės arba skaitmenys.",
       "invalidEmail": "Įveskite galiojantį el. pašto adresą.",
-      "phonePlaceholder": "+370...",
+      "phonePlaceholder": "+370…",
       "phones": "Telefonai",
       "title": "Komunikacija"
     },
@@ -3481,7 +3481,7 @@
       "year": "Tik metai"
     },
     "saved": "Kontaktiniai duomenys išsaugoti.",
-    "search": "Ieškoti kontaktų...",
+    "search": "Ieškoti kontaktų…",
     "searchCountries": "Ieškoti šalių",
     "selectContact": "Pasirinkti {name}",
     "title": "Klientai",
@@ -3868,7 +3868,7 @@
     "confirmDeleteVersion": "Tai visam laikui ištrins versiją {version}. Šio veiksmo atšaukti negalima.",
     "current": "Dabartinė",
     "deleteVersion": "Ištrinti versiją",
-    "descriptionPlaceholder": "Pridėti pastabą apie šią versiją...",
+    "descriptionPlaceholder": "Pridėti pastabą apie šią versiją…",
     "displayFailed": "Šio failo nepavyko parodyti.",
     "downloadRedline": "Atsisiųsti redline",
     "dropToUploadVersion": "Vilkite, kad įkeltumėte kaip naują versiją",
@@ -4187,7 +4187,7 @@
     "listFormatting": "Sąrašo formatavimas",
     "listsGroup": "Sąrašai",
     "loadingDocument": "Įkeliamas dokumentas…",
-    "loadingEditor": "Įkeliamas redaktorius...",
+    "loadingEditor": "Įkeliamas redaktorius…",
     "lockFile": "Užrakinti failą",
     "markupView": {
       "allMarkup": "Visi keitimai",
@@ -4214,7 +4214,7 @@
     "saveEditorUnavailableTitle": "Redaktorius nepasiruošęs",
     "saveSerializeFailedDescription": "Folio nepavyko sukurti saugaus DOCX failo iš dabartinio keitimo. Jūsų sesija vis dar atidaryta.",
     "saveSerializeFailedTitle": "Nepavyko sukurti DOCX",
-    "savingDocument": "Įrašoma...",
+    "savingDocument": "Įrašoma…",
     "showDetails": "Rodyti detales",
     "somethingWentWrong": "Kažkas nepavyko. Bandykite dar kartą arba, jei tai kartojasi, iš naujo įkelkite puslapį.",
     "synced": "Sinchronizuota",
@@ -4375,7 +4375,7 @@
         "description": "Išgaukite atsakymus iš daugelio failų vienu metu",
         "steps": {
           "addColumn": {
-            "body": "Naujas stulpelis atidaro stulpelio rengyklę. Suteikite stulpeliui aiškų klausimo formos pavadinimą ir tiksliai nurodykite stellai, ko ieškoti; ta pati instrukcija taikoma kiekvienai dokumento eilutei.",
+            "body": "Naujas stulpelis atidaro stulpelio rengyklę. Suteikite stulpeliui aiškų klausimo formos pavadinimą ir tiksliai nurodykite programai stella, ko ieškoti; ta pati instrukcija taikoma kiekvienai dokumento eilutei.",
             "title": "Užduoti vieną klausimą apie kiekvieną dokumentą",
             "when": "Kiekvienam atsakymui, kurį reikia palyginti, filtruoti, rikiuoti ar eksportuoti, sukurkite atskirą stulpelį. Susijusį kontekstą pateikite užklausoje, užuot jungę kelis atsakymus viename langelyje."
           },
@@ -4608,7 +4608,7 @@
       "lastUpdatedBy": "Paskutinį kartą atnaujino",
       "matterColumnsHeading": "Bylos duomenys",
       "noMatterColumns": "Apie šį dokumentą dar nieko neįrašyta",
-      "stellaHeading": "Saugoma Stelloje",
+      "stellaHeading": "Saugoma programoje stella",
       "versionCurrent": "v{version} (dabartinė)"
     },
     "moveToMain": "Perkelti į pagrindinį rodinį",
@@ -5922,7 +5922,7 @@
     "noResults": "Nerasta rezultatų pagal \"{query}\".",
     "noUpcomingDeadlines": "Nėra artėjančių terminų",
     "openMatter": "Atidaryti bylą <bdi>{name}</bdi>",
-    "placeholder": "Ieškoti visose bylose...",
+    "placeholder": "Ieškoti visose bylose…",
     "previewUnavailable": "Peržiūra nepasiekiama",
     "recentDocuments": "Naujausi dokumentai",
     "recentSearches": "Naujausios paieškos",
@@ -5965,7 +5965,7 @@
     "searchRegistries": "Ieškoti registruose",
     "summaryAction": "Apibendrinti geriausius rezultatus",
     "summaryError": "Santrauka nepasiekiama",
-    "summaryLoading": "Apibendrinami rezultatai...",
+    "summaryLoading": "Apibendrinami rezultatai…",
     "summaryPrompt": "Naudoja geriausius rezultatus ir jų turinį trumpam atsakymui parengti.",
     "summaryRetry": "Spustelėkite bandyti dar kartą.",
     "timeFilterCustom": "Pasirinktinis intervalas",
@@ -5994,7 +5994,7 @@
       "betaLocalAgentsDescription": "Vykdyti pokalbius su Codex arba Claude Code jūsų kompiuteryje per stella desktop",
       "betaTimeBillingDescription": "Rodyti laiko stebėjimą, sąskaitas ir išlaidas",
       "chatNotifications": "Pokalbių pranešimai",
-      "chatNotificationsBlocked": "stellos pranešimai šioje naršyklėje užblokuoti. Leiskite juos naršyklės svetainės nustatymuose.",
+      "chatNotificationsBlocked": "Programos stella pranešimai šioje naršyklėje užblokuoti. Leiskite juos naršyklės svetainės nustatymuose.",
       "chatNotificationsDescription": "Gaukite pranešimą iš šios naršyklės, kai pokalbio atsakymas baigiamas, kol stella veikia fone.",
       "chatNotificationsUnsupported": "Ši naršyklė nepalaiko pranešimų.",
       "chatTechnicalDetails": "Techninė informacija pokalbyje",
@@ -6009,9 +6009,9 @@
       "deleteAccountConfirmationPhrase": "Ištrynimas yra negrįžtamas.",
       "deleteAccountOtpDescription": "Išsiuntėme 6 skaitmenų patvirtinimo kodą į jūsų el. paštą. Įveskite jį žemiau, kad patvirtintumėte ištrynimą.",
       "deleteAccountSuccess": "Jūsų paskyra sėkmingai ištrinta.",
-      "deleteAccountTaskBulkReassign": "Perleisti visas aktyvias šios darbo srities užduotis...",
+      "deleteAccountTaskBulkReassign": "Perleisti visas aktyvias šios darbo srities užduotis…",
       "deleteAccountTaskReassignNone": "Šioje darbo srityje nėra kitų narių",
-      "deleteAccountTaskReassignPlaceholder": "Pasirinkite narį...",
+      "deleteAccountTaskReassignPlaceholder": "Pasirinkite narį…",
       "deleteAccountTasksDescription": "Jums priskirtos aktyvios užduotys. Perleiskite jas kitiems darbo srities nariams, kad darbas tęstųsi.",
       "deleteAccountTasksTitle": "Perleisti aktyvias užduotis",
       "deleteAccountTasksUnassignedNotice": "Užduotys be pasirinkto nario liks darbo srityje be atsakingo asmens.",
@@ -6028,7 +6028,7 @@
       "desktopCardMissingDetail": "Įdiekite ją arba prijunkite, jei ji jau įdiegta šiame kompiuteryje.",
       "desktopCardMissingTitle": "stella desktop dar nesusieta",
       "desktopCardOpeningDetail": "Šis kompiuteris susiejamas su <bdi>{identity}</bdi> serveryje {host}. Jei naršyklė paklaus, leiskite jai atidaryti stella desktop.",
-      "desktopCardOpeningTitle": "Atidaroma stella desktop...",
+      "desktopCardOpeningTitle": "Atidaroma stella desktop…",
       "desktopCardOutdatedDetail": "Versija {version} susieta su <bdi>{identity}</bdi>. Įdiekite naujausią versiją, kad dokumentai ir veikla toliau veiktų.",
       "desktopCardOutdatedTitle": "stella desktop reikia atnaujinti",
       "desktopClipboardDescription": "Atidarykite, ieškokite, tvarkykite ir pakartotinai naudokite tekstą, nukopijuotą iš bet kurios programos.",
@@ -6203,9 +6203,9 @@
       "auditLogsExport": "Eksportuoti žurnalus",
       "auditLogsExportFailed": "Nepavyko eksportuoti veiklos žurnalo.",
       "auditLogsExportTooLarge": "Eksporte yra per daug eilučių. Susiaurinkite filtrus ir bandykite dar kartą.",
-      "auditLogsExporting": "Eksportuojama...",
+      "auditLogsExporting": "Eksportuojama…",
       "auditLogsFrom": "Data nuo",
-      "auditLogsLoading": "Įkeliami žurnalai...",
+      "auditLogsLoading": "Įkeliami žurnalai…",
       "auditLogsMoreChanges": "+{count, plural, one {# kitas} few {# kiti} many {# kito} other {# kitų}}",
       "auditLogsNoChanges": "Laukų pakeitimų neužfiksuota.",
       "auditLogsPerformer": "Atliko",
@@ -7011,7 +7011,7 @@
     "fillFailed": "Nepavyko sugeneruoti dokumento",
     "fillForm": "Užpildyti šabloną",
     "generate": "Generuoti dokumentą",
-    "generating": "Generuojama...",
+    "generating": "Generuojama…",
     "inputTypes": {
       "boolean": "Taip / Ne",
       "company": "Įmonės ID",
@@ -7052,7 +7052,7 @@
     "prefillTitle": "Iš anksto užpildyti iš dokumentų",
     "previewEmpty": "Nėra turinio peržiūrai",
     "previewFailed": "Nepavyko sugeneruoti peržiūros",
-    "previewFillLoading": "Generuojama peržiūra...",
+    "previewFillLoading": "Generuojama peržiūra…",
     "previewFillTitle": "Pildymo peržiūra",
     "previewSectionBody": "Turinys",
     "previewSectionFooter": "Poraštė",
@@ -7419,7 +7419,7 @@
     },
     "entitiesCount": "{count, plural, one {# elementas} few {# elementai} many {# elemento} other {# elementų}}",
     "fields": {
-      "calculating": "Skaičiuojama...",
+      "calculating": "Skaičiuojama…",
       "errored": "Klaida",
       "formatNotSupported": "Formatas nepalaikomas",
       "recordChoose": "{count, plural, one {Patvirtinkite # atitikmenį} few {Pasirinkite iš # atitikmenų} many {Pasirinkite iš # atitikmens} other {Pasirinkite iš # atitikmenų}}",
@@ -7458,7 +7458,7 @@
         "sentDescription": "Laukiama, kol <bdi>{application}</bdi> atidarys vietinę kopiją.",
         "sentTitle": "Išsiųsta į stella desktop",
         "takeoverWaiting": "Laukiama atsakymo",
-        "takeoverWaitingDescription": "Prašoma {name} atlaisvinti užraktą...",
+        "takeoverWaitingDescription": "Prašoma {name} atlaisvinti užraktą…",
         "unavailableDescription": "Prieš redaguodami darbalaukyje paleiskite stella desktop ir palikite ją veikti.",
         "unavailableTitle": "stella desktop nepasiekiama.",
         "updateRequiredDescription": "stella desktop reikia atnaujinimo. Ji atsinaujins automatiškai, kai bus baigti aktyvūs darbalaukio redagavimai; bandykite dar kartą po paleidimo iš naujo.",
@@ -7580,7 +7580,7 @@
       "versionOrNewFile": {
         "addAsVersion": "Pridėti kaip {version, number} versiją",
         "addAsVersionThere": "Pridėti ten kaip {version, number} versiją",
-        "checkingReference": "Tikrinamas failo nuorodos numeris...",
+        "checkingReference": "Tikrinamas failo nuorodos numeris…",
         "createNewOption": "Sukurti naują failą",
         "description": "Numetėte \"{fileName}\" ant esamo dokumento.",
         "extensionMismatch": "Plėtinys nesutampa: tikėtasi {expected}, gauta {actual}",
@@ -7653,7 +7653,7 @@
       },
       "to": "Iki"
     },
-    "generatingCitations": "Generuojamos citatos...",
+    "generatingCitations": "Generuojamos citatos…",
     "importOrganizer": {
       "action": "Tvarkyti failus",
       "actionSelected": "Tvarkyti pasirinktus ({count, number})",
@@ -7667,7 +7667,7 @@
       "expandFolder": "Išskleisti aplanką",
       "failed": "Sutvarkyti nepavyko",
       "generateAi": "Generuoti DI pasiūlymus",
-      "generating": "Generuojami DI pasiūlymai...",
+      "generating": "Generuojami DI pasiūlymai…",
       "instructionsEmpty": "Nėra individualių nurodymų",
       "instructionsPlaceholder": "pvz. Naudok lietuviškus aplankų pavadinimus, grupuok pagal priešingą šalį, datas pradėk nuo metų.",
       "instructionsTitle": "DI nurodymai",
@@ -7873,7 +7873,7 @@
       "recentClients": "Naujausi klientai",
       "removeClient": "Pašalinti klientą",
       "removeParty": "Pašalinti šalį",
-      "searchContacts": "Ieškoti kontaktų..."
+      "searchContacts": "Ieškoti kontaktų…"
     },
     "pdf": {
       "adjustForDarkMode": "Pritaikyti puslapius tamsiam režimui",

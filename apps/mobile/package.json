@@ -22,7 +22,11 @@
     "test": "bun test",
     "test:property": "bun test --preload @stll/property-testing/preload $(grep -rlE 'fc\\.assert|assertProperty' src --include='*.test.ts')",
     "typecheck": "bun check --no-pretty --all --project=tsconfig.json && bun check --no-pretty --all --project=tsconfig.scripts.json",
-    "web": "bun --bun expo start --web"
+    "web": "bun --bun expo start --web",
+    "i18n:accept": "bun ../../packages/scripts/src/i18n-check.ts src/i18n/langs --accept",
+    "i18n:brief": "bun ../../packages/scripts/src/i18n-brief.ts src/i18n/langs --glossary=../web/src/i18n/glossary.json --usage-in=src --memory=../web/src/i18n/langs",
+    "i18n:check": "bun ../../packages/scripts/src/i18n-check.ts src/i18n/langs && bun ../../packages/scripts/src/i18n-lint.ts src/i18n/langs --glossary=../web/src/i18n/glossary.json",
+    "i18n:sync": "bun ../../packages/scripts/src/i18n-check.ts src/i18n/langs --sync"
   },
   "dependencies": {
     "@expo-google-fonts/dm-sans": "0.4.2",
