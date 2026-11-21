@@ -1137,7 +1137,7 @@ export default eslintCompatPlugin({
             if (isExempt()) {
               return false;
             }
-            return /crypto|sha|hash|subtle|hmac|\bbun\b/iu.test(
+            return /crypto|sha[-_]?256|createhash|hasher|subtle|hmac|\bbun\b|\\/iu.test(
               context.sourceCode.text,
             );
           },
