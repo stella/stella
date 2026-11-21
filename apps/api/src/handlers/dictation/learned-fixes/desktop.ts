@@ -72,7 +72,7 @@ const response = safePublicHandlerResponseSchemasWithStatusText(
 );
 
 /** The linked member's learned fixes, as `GET /v1/dictation/learned-fixes` answers. */
-export const createDesktopLearnedFixesListEndpoint = (
+const createDesktopLearnedFixesListEndpoint = (
   options: DesktopLearnedFixesOptions = {},
 ) =>
   createSafeBoundedPublicHandler(
@@ -100,7 +100,7 @@ export const createDesktopLearnedFixesListEndpoint = (
   );
 
 /** Applies the desktop's changes, as `POST /v1/dictation/learned-fixes` does. */
-export const createDesktopLearnedFixesChangeEndpoint = (
+const createDesktopLearnedFixesChangeEndpoint = (
   options: DesktopLearnedFixesOptions = {},
 ) =>
   declareAggregateMutation(
@@ -132,7 +132,7 @@ export const createDesktopLearnedFixesChangeEndpoint = (
   );
 
 /** Deletes everything learned, as `DELETE /v1/dictation/learned-fixes` does. */
-export const createDesktopLearnedFixesClearEndpoint = (
+const createDesktopLearnedFixesClearEndpoint = (
   options: DesktopLearnedFixesOptions = {},
 ) =>
   declareAggregateMutation(
