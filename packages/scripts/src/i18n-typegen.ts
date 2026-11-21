@@ -120,7 +120,11 @@ let keyCount = 0;
 
 const toLiteral = (value: JsonValue, depth: number): string => {
   if (typeof value === "string") {
-    return JSON.stringify(compact ? compactMessage(value) : value);
+    if (!compact) {
+      return JSON.stringify(value);
+    }
+    const compacted = compactMessage(value);
+    return compacted === "" ? "string" : JSON.stringify(compacted);
   }
 
   if (typeof value === "object" && !Array.isArray(value)) {
