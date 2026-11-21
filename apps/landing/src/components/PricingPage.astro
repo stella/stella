@@ -23,7 +23,8 @@ const t = getTranslations(locale);
 const copy = catalogs[locale].pricing;
 const { hreflang } = locales[locale];
 
-const DEFAULT_INTERVAL: BillingInterval = "monthly";
+// The page opens on the yearly price.
+const DEFAULT_INTERVAL: BillingInterval = "yearly";
 
 const intervalLabels = {
   monthly: t("pricing.interval.monthly"),
@@ -410,14 +411,9 @@ const faqJsonLd = {
   </div>
 
   <style>
-    /* Monthly is the server-rendered default; the radio group switches the
-       visible price with CSS alone, so the page needs no script. */
-    .pricing [data-interval="yearly"] {
-      display: none;
-    }
-    .pricing:has(input[value="yearly"]:checked) [data-interval="yearly"] {
-      display: block;
-    }
+    /* The server renders DEFAULT_INTERVAL checked; the radio group switches
+       the visible price with CSS alone, so the page needs no script. */
+    .pricing:has(input[value="monthly"]:checked) [data-interval="yearly"],
     .pricing:has(input[value="yearly"]:checked) [data-interval="monthly"] {
       display: none;
     }
