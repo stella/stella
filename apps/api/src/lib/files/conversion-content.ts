@@ -197,6 +197,26 @@ const IWORK_INDEX_ENTRIES = [
   "index.apxl.gz",
 ] as const;
 
+/**
+ * An XML part's text in its encoding, detected as XML specifies: a byte
+ * order mark, else UTF-16 by the zero byte beside its first `<`, else UTF-8.
+ */
+const decodeXml = (bytes: Uint8Array): string => {
+  if (
+    startsWithBytes(bytes, [0xff, 0xfe]) ||
+    startsWithBytes(bytes, [0x3c, 0x00])
+  ) {
+    return new TextDecoder("utf-16le").decode(bytes);
+  }
+  if (
+    startsWithBytes(bytes, [0xfe, 0xff]) ||
+    startsWithBytes(bytes, [0x00, 0x3c])
+  ) {
+    return new TextDecoder("utf-16be").decode(bytes);
+  }
+  return new TextDecoder().decode(bytes);
+};
+
 const zipContent = async (bytes: Uint8Array): Promise<ConversionContent> => {
   const archive = await Result.tryPromise(
     async () => await loadDocxArchive(bytes),
@@ -211,7 +231,7 @@ const zipContent = async (bytes: Uint8Array): Promise<ConversionContent> => {
     if (entry === undefined || entry.size > DOCUMENT_METADATA_ENTRY_MAX_BYTES) {
       return null;
     }
-    return new TextDecoder().decode(await entry.bytes());
+    return decodeXml(await entry.bytes());
   };
 
   const found = new Set<ConversionContent>();

@@ -1,6 +1,10 @@
 import { panic, Result, TaggedError } from "better-result";
 
 import { parseIntegerToken } from "@stll/agent-input/numeric-token";
+import {
+  convertedDocumentFormatOfMimeType,
+  type ConvertedDocumentMimeType,
+} from "@stll/api-contract/converted-document-formats";
 import { declareFingerprintFields } from "@stll/errors";
 import { fetchWithTimeout } from "@stll/fetch";
 import { readCappedBytes } from "@stll/skills/streaming";
@@ -142,16 +146,13 @@ const IN_PROCESS_ONLY_IMAGE_MIME_TYPES = {
 const isInProcessOnlyImageMimeType = (mimeType: string): boolean =>
   Object.hasOwn(IN_PROCESS_ONLY_IMAGE_MIME_TYPES, mimeType);
 
-const WORDPERFECT_EXTENSIONS = ["wpd"] as const;
-const PAGES_EXTENSIONS = ["pages"] as const;
-const NUMBERS_EXTENSIONS = ["numbers"] as const;
-
 /**
  * Extensions the converter's LibreOffice route accepts for each convertible
  * type, canonical first. The route picks its import filter by the uploaded
  * filename's extension and refuses one it does not list, so a file named
  * without one, or with one the route does not take (a WordPerfect `.wp5`),
- * would fail to convert. WebP never reaches the route.
+ * would fail to convert. WebP never reaches the route. A converted document
+ * format names its one extension in its registry entry.
  */
 const CONVERTER_EXTENSIONS = {
   "application/msword": ["doc", "dot"],
@@ -177,19 +178,10 @@ const CONVERTER_EXTENSIONS = {
   ],
   "application/vnd.ms-excel": ["xls", "xlt"],
   "application/vnd.ms-powerpoint": ["ppt", "pot", "pps"],
-  "application/vnd.ms-works": ["wps"],
   "application/vnd.oasis.opendocument.presentation": ["odp", "otp"],
   "application/vnd.oasis.opendocument.spreadsheet": ["ods", "ots"],
   "application/vnd.oasis.opendocument.text": ["odt", "ott"],
   "application/rtf": ["rtf"],
-  "application/vnd.apple.numbers": NUMBERS_EXTENSIONS,
-  "application/vnd.apple.pages": PAGES_EXTENSIONS,
-  "application/vnd.wordperfect": WORDPERFECT_EXTENSIONS,
-  "application/wordperfect": WORDPERFECT_EXTENSIONS,
-  "application/wordperfect5.1": WORDPERFECT_EXTENSIONS,
-  "application/x-iwork-numbers-sffnumbers": NUMBERS_EXTENSIONS,
-  "application/x-iwork-pages-sffpages": PAGES_EXTENSIONS,
-  "application/x-wordperfect": WORDPERFECT_EXTENSIONS,
   "application/xhtml+xml": ["xhtml", "html", "htm"],
   "image/bmp": ["bmp"],
   "image/gif": ["gif"],
@@ -200,7 +192,20 @@ const CONVERTER_EXTENSIONS = {
   "text/csv": ["csv"],
   "text/html": ["html", "htm"],
   "text/plain": ["txt"],
-} as const satisfies Record<ConvertibleMime, readonly [string, ...string[]]>;
+} as const satisfies Record<
+  Exclude<ConvertibleMime, ConvertedDocumentMimeType>,
+  readonly [string, ...string[]]
+>;
+
+/** The extensions the converter accepts for `mimeType`, canonical first. */
+const converterExtensions = (
+  mimeType: ConvertibleMime,
+): readonly [string, ...string[]] => {
+  const converted = convertedDocumentFormatOfMimeType(mimeType);
+  return converted === undefined
+    ? CONVERTER_EXTENSIONS[mimeType]
+    : [converted.converterExtension.slice(1)];
+};
 
 /**
  * The (unsanitized) name to upload a file to the converter under. A file
@@ -211,7 +216,7 @@ const withConverterExtension = (
   fileName: string,
   mimeType: ConvertibleMime,
 ): string => {
-  const accepted: readonly string[] = CONVERTER_EXTENSIONS[mimeType];
+  const accepted: readonly string[] = converterExtensions(mimeType);
   // A dot only starts an extension inside the last path segment, and not as
   // its first character (a dotfile name has no extension).
   const segmentStart =
@@ -225,7 +230,7 @@ const withConverterExtension = (
     return fileName;
   }
   const stem = hasExtension ? fileName.slice(0, lastDot) : fileName;
-  const [canonical] = CONVERTER_EXTENSIONS[mimeType];
+  const [canonical] = converterExtensions(mimeType);
   return `${stem}.${canonical}`;
 };
 

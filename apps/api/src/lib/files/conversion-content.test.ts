@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
+import { ZipArchive } from "@stll/docx-core/zip";
+
 import {
   contentMatchesConvertibleMime,
   type ConversionContent,
@@ -288,6 +290,25 @@ describe("conversion content", () => {
       "unrecognised",
     );
   });
+
+  test.each([
+    ["UTF-16LE with a byte order mark", "utf16le", true],
+    ["UTF-16LE without one", "utf16le", false],
+    ["UTF-16BE with a byte order mark", "utf16be", true],
+  ] as const)(
+    "reads OOXML content types stored as %s",
+    async (_name, encoding, bom) => {
+      const xml = `<?xml version="1.0" encoding="UTF-16"?><Types><Override PartName="/word/document.xml" ContentType="${WORD_MAIN}"/></Types>`;
+      const little = Buffer.from(`${bom ? "﻿" : ""}${xml}`, "utf16le");
+      const archive = new ZipArchive();
+      archive.set(
+        "[Content_Types].xml",
+        new Uint8Array(encoding === "utf16le" ? little : little.swap16()),
+      );
+      const bytes = await archive.generate({ compression: "store" });
+      expect(await conversionContent(bytes)).toBe("word-ooxml");
+    },
+  );
 
   test("reads WordPerfect by its signature", async () => {
     expect(await conversionContent(wordPerfectFile(["x"]))).toBe("wordperfect");
