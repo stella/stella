@@ -111,7 +111,7 @@ export const quickDictationConfiguration = ({
 };
 
 /** One piece of a finished dictation: its text, or, not transcribed, its place among the recordings. */
-export type QuickPiece =
+type QuickPiece =
   | { readonly type: "text"; readonly text: string }
   | { readonly type: "audio"; readonly index: number };
 
