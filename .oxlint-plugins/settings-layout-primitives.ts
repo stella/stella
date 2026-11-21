@@ -15,7 +15,11 @@ export default eslintCompatPlugin({
     "settings-layout-primitives": {
       meta: restrictedImportMeta("settings-layout-primitives"),
       createOnce(context) {
-        return restrictedImportVisitors(context, "settings-layout-primitives");
+        // First-week rollout: only lines a change touched
+        // (scripts/guard-rollouts/settings-layout-primitives.json).
+        return restrictedImportVisitors(context, "settings-layout-primitives", {
+          rollout: "settings-layout-primitives",
+        });
       },
     },
   },

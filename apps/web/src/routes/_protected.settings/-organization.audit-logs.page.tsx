@@ -19,7 +19,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@stll/ui/select";
-// oxlint-disable-next-line settings-layout-primitives/settings-layout-primitives -- the audit log compares time, actor, action and target across columns
 import { TableCell, TableRow } from "@stll/ui/table";
 import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";

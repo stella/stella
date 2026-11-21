@@ -9,7 +9,6 @@ import { compareByLocale } from "@stll/collation";
 import { Button } from "@stll/ui/button";
 import { EllipsisVerticalIcon } from "@stll/ui/icons";
 import { Menu, MenuItem, MenuPopup, MenuTrigger } from "@stll/ui/menu";
-// oxlint-disable-next-line settings-layout-primitives/settings-layout-primitives -- members sort and compare by name, role and joining date
 import { SortableHead, TableCell, TableRow } from "@stll/ui/table";
 import { stellaToast } from "@stll/ui/toast";
 

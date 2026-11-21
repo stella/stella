@@ -18,7 +18,6 @@ import { Button } from "@stll/ui/button";
 import { EllipsisVerticalIcon } from "@stll/ui/icons";
 import { ListGroupCount } from "@stll/ui/list";
 import { Menu, MenuItem, MenuPopup, MenuTrigger } from "@stll/ui/menu";
-// oxlint-disable-next-line settings-layout-primitives/settings-layout-primitives -- invitations compare role, status and the invited and expiry dates beside the members table
 import { TableCell, TableRow } from "@stll/ui/table";
 
 import Tooltip from "@/components/tooltip";

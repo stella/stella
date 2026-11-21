@@ -6,7 +6,6 @@ import { InputFace } from "@stll/ui/control-face";
 import { SearchIcon } from "@stll/ui/icons";
 import { SettingsPanel, SettingsSection } from "@stll/ui/settings";
 import { Skeleton } from "@stll/ui/skeleton";
-// oxlint-disable-next-line settings-layout-primitives/settings-layout-primitives -- members sort and compare by name, role and joining date
 import {
   SortableHeadFace,
   Table,

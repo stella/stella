@@ -8,7 +8,6 @@ import {
   AccordionPanel,
   AccordionTrigger,
 } from "@stll/ui/accordion";
-// oxlint-disable-next-line settings-layout-primitives/settings-layout-primitives -- a change compares each field's value before and after
 import {
   Table,
   TableBody,

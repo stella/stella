@@ -4,7 +4,6 @@ import { ButtonFace, InputFace } from "@stll/ui/control-face";
 import { FIELD_TRIGGER_CLASS_NAME } from "@stll/ui/field-trigger";
 import { CalendarIcon, ChevronsUpDownIcon, SearchIcon } from "@stll/ui/icons";
 import { SettingsPanel, SettingsSection } from "@stll/ui/settings";
-// oxlint-disable-next-line settings-layout-primitives/settings-layout-primitives -- the audit log compares time, actor, action and target across columns
 import {
   Table,
   TableBody,

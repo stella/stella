@@ -1,7 +1,6 @@
 import type { ReactNode } from "react";
 
 import { SettingsPanel, SettingsSection } from "@stll/ui/settings";
-// oxlint-disable-next-line settings-layout-primitives/settings-layout-primitives -- VAT rates, number series and seller profiles compare rates, dates and patterns across columns
 import {
   Table,
   TableBody,

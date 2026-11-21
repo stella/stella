@@ -1,7 +1,6 @@
 import type { ReactNode } from "react";
 
 import { SettingsPanel, SettingsSection } from "@stll/ui/settings";
-// oxlint-disable-next-line settings-layout-primitives/settings-layout-primitives -- invitations compare role, status and the invited and expiry dates beside the members table
 import {
   Table,
   TableBody,
