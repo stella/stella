@@ -422,7 +422,7 @@ export const AnonymizationDenyListCard = () => {
         onSuccess: () => {
           stellaToast.add({
             title: t("settings.organization.anonymization.importSuccessToast", {
-              count: String(parsed.length),
+              count: parsed.length,
             }),
             type: "success",
           });

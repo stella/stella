@@ -25,7 +25,7 @@ export const AnonymizationMatchStatus = ({
       return (
         <div className="bg-muted/40 text-foreground rounded-md px-3 py-2 text-xs">
           {t("inspector.anonymization.matchCount", {
-            count: String(matchCount),
+            count: matchCount,
           })}
         </div>
       );
