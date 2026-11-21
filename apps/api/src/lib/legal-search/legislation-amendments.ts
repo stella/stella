@@ -1,11 +1,11 @@
 import { panic, Result, TaggedError } from "better-result";
 import { and, asc, eq, gt, inArray, or, sql } from "drizzle-orm";
-import { brand, custom, parse, pipe } from "valibot";
+import { brand, custom, parse, pipe, safeParse } from "valibot";
 import type { Brand } from "valibot";
 
 import { compareCodeUnit } from "@stll/collation";
 import { declareFingerprintFields } from "@stll/errors";
-import { parsePlainDate, Temporal } from "@stll/time";
+import { Temporal } from "@stll/time";
 
 import type { Transaction } from "@/api/db/root";
 import {
@@ -17,9 +17,12 @@ import { withAggregateLock } from "@/api/lib/db/aggregate-lock";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import { stripDangerousChars } from "@/api/lib/legal-search/corpus-sanitize";
 import type {
+  LegislationAmendmentChannelObservation,
+  LegislationAmendmentChannelSnapshot,
   LegislationAmendmentCoverage,
   LegislationAmendmentRelation,
   LegislationAmendmentSnapshot,
+  LegislationAmendmentStoredCoverage,
 } from "@/api/lib/legal-search/legislation-ingestion-types";
 import { redistributableLegislationSourceFor } from "@/api/lib/legal-search/legislation-redistribution-sql";
 import type { LegislationWorkRef } from "@/api/lib/legal-search/legislation-work-names";
@@ -30,6 +33,15 @@ import {
   encodePaginationCursor,
 } from "@/api/lib/pagination";
 import { isRecord } from "@/api/lib/type-guards";
+
+import { legislationAmendmentEffectSchema } from "./legislation-amendment-effect";
+import {
+  LEGISLATION_AMENDMENT_CHANNEL_LIMIT,
+  LEGISLATION_AMENDMENT_CHANNEL_MAX_BYTES,
+  LEGISLATION_AMENDMENT_LEGACY_CHANNEL,
+  resolveLegislationAmendmentEffect,
+  retainLegislationAmendmentCondition,
+} from "./legislation-amendment-observations";
 
 export const LEGISLATION_AMENDMENT_PAGE_MAX = 500;
 /**
@@ -68,6 +80,8 @@ export type LegislationAmendmentObservationErrorReason =
   | "empty_publisher_id"
   | "incomplete_coverage_without_reason"
   | "invalid_effective_date"
+  | "invalid_effective_condition"
+  | "invalid_channel"
   | "invalid_observed_at"
   | "invalid_partial_unlocated_relations"
   | "publisher_id_too_long"
@@ -156,6 +170,15 @@ export const sanitizeLegislationAmendments = (
   const observedAt = Result.try(() =>
     Temporal.Instant.from(snapshot.observedAt),
   );
+  const channel = snapshot.channel ?? LEGISLATION_AMENDMENT_LEGACY_CHANNEL;
+  if (
+    channel.trim() !== channel ||
+    channel.length === 0 ||
+    stripDangerousChars(channel) !== channel ||
+    exceedsBytes(channel, LEGISLATION_AMENDMENT_CHANNEL_MAX_BYTES)
+  ) {
+    return rejected("invalid_channel", "Invalid amendment publisher channel");
+  }
   if (Result.isError(observedAt)) {
     return rejected(
       "invalid_observed_at",
@@ -213,13 +236,16 @@ export const sanitizeLegislationAmendments = (
       );
     }
     seen.add(publisherId);
-    if (
-      relation.effective.type === "date" &&
-      parsePlainDate(relation.effective.on) === null
-    ) {
+    const effective = safeParse(
+      legislationAmendmentEffectSchema,
+      relation.effective,
+    );
+    if (!effective.success) {
       return rejected(
-        "invalid_effective_date",
-        "Legislation amendment has an invalid effective date",
+        relation.effective.type === "conditional"
+          ? "invalid_effective_condition"
+          : "invalid_effective_date",
+        "Legislation amendment has an invalid publisher effect",
       );
     }
     relations.push({
@@ -229,13 +255,7 @@ export const sanitizeLegislationAmendments = (
       amendingAnchor: nullableText(relation.amendingAnchor),
       affectedAnchor,
       changeKind: relation.changeKind,
-      effective:
-        relation.effective.type === "date"
-          ? { type: "date", on: relation.effective.on }
-          : {
-              type: "not-stated",
-              text: nullableText(relation.effective.text),
-            },
+      effective: effective.output,
       publisherInstruction: nullableText(relation.publisherInstruction),
     });
   }
@@ -270,6 +290,7 @@ export const sanitizeLegislationAmendments = (
   }
   return Result.ok(
     parse(sanitizedLegislationAmendmentSnapshotSchema, {
+      channel,
       observedAt: observedAt.value.toString(),
       relations,
       coverage: sanitizedCoverage(coverage),
@@ -287,6 +308,271 @@ const snapshotWork = (work: LegislationWorkRef) =>
 type SyncLegislationAmendmentsOptions = {
   work: LegislationWorkRef;
   snapshot: SanitizedLegislationAmendmentSnapshot | undefined;
+};
+
+export const storedLegislationAmendmentRelation = (
+  row: typeof legislationAmendments.$inferSelect,
+): LegislationAmendmentRelation => ({
+  publisherId: row.publisherId,
+  amendingEli: row.amendingEli,
+  amendingTitle: row.amendingTitle,
+  amendingAnchor: row.amendingAnchor,
+  affectedAnchor: row.affectedAnchor,
+  changeKind: row.changeKind,
+  publisherInstruction: row.publisherInstruction,
+  effective:
+    row.effectiveType === "date"
+      ? {
+          type: "date",
+          on: row.effectiveDate ?? panic("Dated amendment has no date"),
+        }
+      : { type: "not-stated", text: row.effectiveText },
+});
+
+const combinedCoverage = (
+  channels: readonly LegislationAmendmentChannelSnapshot[],
+): LegislationAmendmentStoredCoverage => {
+  const active = channels.filter((item) => item.status === "active");
+  const partial = active.find(({ coverage }) => coverage.type === "partial");
+  const representative =
+    partial ??
+    active.find(({ coverage }) => coverage.type === "complete") ??
+    active.at(0) ??
+    panic("A coverage projection needs a channel observation");
+  const coverage = representative.coverage;
+  if (active.length === 1) {
+    return coverage;
+  }
+  const models = active.filter((item) => item.coverage.type !== "not-stated");
+  let distinctUnlocatedTotal: NonNullable<
+    LegislationAmendmentStoredCoverage["aggregation"]
+  >["distinctUnlocatedTotal"];
+  if (partial !== undefined && models.length > 1) {
+    distinctUnlocatedTotal = { type: "unknown" };
+  } else if (coverage.type === "partial") {
+    distinctUnlocatedTotal = {
+      type: "exact",
+      count: coverage.unlocatedRelations,
+    };
+  } else if (coverage.type === "complete") {
+    distinctUnlocatedTotal = { type: "exact", count: 0 };
+  } else {
+    distinctUnlocatedTotal = { type: "unknown" };
+  }
+  return {
+    ...coverage,
+    ...(coverage.type === "partial"
+      ? { reason: `[${representative.channel}] ${coverage.reason}` }
+      : {}),
+    aggregation: {
+      representativeChannel: representative.channel,
+      channels: active.map(({ channel, coverage: report }) => ({
+        channel,
+        coverage: report,
+      })),
+      distinctUnlocatedTotal,
+    },
+  };
+};
+
+type TransitionAmendmentContributionOptions = {
+  snapshot: SanitizedLegislationAmendmentSnapshot;
+  incomingIds: ReadonlySet<string>;
+  publisherId: string;
+};
+
+const transitionAmendmentContribution = (
+  item: LegislationAmendmentChannelObservation,
+  {
+    snapshot,
+    incomingIds,
+    publisherId,
+  }: TransitionAmendmentContributionOptions,
+): LegislationAmendmentChannelObservation[] => {
+  const channel = snapshot.channel ?? LEGISLATION_AMENDMENT_LEGACY_CHANNEL;
+  const retiresLegacy =
+    channel !== LEGISLATION_AMENDMENT_LEGACY_CHANNEL &&
+    snapshot.coverage.type === "complete";
+  if (item.channel === channel && incomingIds.has(publisherId)) {
+    return [];
+  }
+  if (retiresLegacy && item.channel === LEGISLATION_AMENDMENT_LEGACY_CHANNEL) {
+    if (item.status === "absent") {
+      return [];
+    }
+    return [
+      {
+        status: "historical",
+        channel: item.channel,
+        observedAt: item.observedAt,
+        relation: item.relation,
+        ...(item.retainedConditional === undefined
+          ? {}
+          : { retainedConditional: item.retainedConditional }),
+      },
+    ];
+  } else if (
+    item.channel === channel &&
+    snapshot.coverage.type === "complete"
+  ) {
+    return [
+      {
+        status: "absent",
+        channel,
+        observedAt: snapshot.observedAt,
+        lastPositive:
+          item.status === "absent"
+            ? item.lastPositive
+            : {
+                observedAt: item.observedAt,
+                relation: item.relation,
+                ...(item.retainedConditional === undefined
+                  ? {}
+                  : { retainedConditional: item.retainedConditional }),
+              },
+      },
+    ];
+  }
+  return [item];
+};
+
+type RetainAmendmentContributionsOptions = {
+  previous: readonly (typeof legislationAmendments.$inferSelect)[];
+  observedAt: Date | undefined;
+  snapshot: SanitizedLegislationAmendmentSnapshot;
+  channels: readonly LegislationAmendmentChannelSnapshot[];
+};
+
+const retainAmendmentContributions = ({
+  previous,
+  observedAt,
+  snapshot,
+  channels,
+}: RetainAmendmentContributionsOptions) => {
+  const channel = snapshot.channel ?? LEGISLATION_AMENDMENT_LEGACY_CHANNEL;
+  const status =
+    channels.find((item) => item.channel === channel)?.status ??
+    panic("Incoming amendment channel has no snapshot");
+  const previousById = new Map(previous.map((row) => [row.publisherId, row]));
+  const retained = new Map<string, LegislationAmendmentChannelObservation[]>();
+  const incomingIds = new Set(
+    snapshot.relations.map(({ publisherId }) => publisherId),
+  );
+  for (const row of previous) {
+    const observations: LegislationAmendmentChannelObservation[] =
+      row.observations ?? [
+        {
+          status: "present",
+          channel: LEGISLATION_AMENDMENT_LEGACY_CHANNEL,
+          observedAt:
+            observedAt?.toISOString() ??
+            panic("An amendment row has no observation watermark"),
+          relation: storedLegislationAmendmentRelation(row),
+        },
+      ];
+    const next = observations.flatMap((item) =>
+      transitionAmendmentContribution(item, {
+        snapshot,
+        incomingIds,
+        publisherId: row.publisherId,
+      }),
+    );
+    retained.set(row.publisherId, next);
+  }
+  for (const relation of snapshot.relations) {
+    const old = previousById
+      .get(relation.publisherId)
+      ?.observations?.find((item) => item.channel === channel);
+    const priorEvidence =
+      old?.status === "absent" ? (old.lastPositive ?? undefined) : old;
+    const retainedConditional = retainLegislationAmendmentCondition(
+      priorEvidence,
+      relation,
+    );
+    const observation = {
+      status: status === "historical" ? "historical" : "present",
+      channel,
+      observedAt: snapshot.observedAt,
+      relation,
+      ...(retainedConditional === undefined ? {} : { retainedConditional }),
+    } satisfies LegislationAmendmentChannelObservation;
+    const existing = retained.get(relation.publisherId);
+    if (existing === undefined) {
+      retained.set(relation.publisherId, [observation]);
+    } else {
+      existing.push(observation);
+    }
+  }
+  for (const observations of retained.values()) {
+    for (const report of channels) {
+      if (
+        report.status === "active" &&
+        report.channel !== LEGISLATION_AMENDMENT_LEGACY_CHANNEL &&
+        report.coverage.type === "complete" &&
+        !observations.some((item) => item.channel === report.channel)
+      ) {
+        observations.push({
+          status: "absent",
+          channel: report.channel,
+          observedAt: report.observedAt,
+          lastPositive: null,
+        });
+      }
+    }
+  }
+  return retained;
+};
+
+const amendmentRowFromContributions = (
+  observations: readonly LegislationAmendmentChannelObservation[],
+  work: LegislationWorkRef,
+) => {
+  const ordered = observations.toSorted((left, right) =>
+    compareCodeUnit(left.channel, right.channel),
+  );
+  const active = ordered.find((item) => item.status === "present");
+  if (active?.status !== "present") {
+    return panic("Retained amendment has no active contribution");
+  }
+  const relation = active.relation;
+  const effectDetails = resolveLegislationAmendmentEffect(ordered);
+  let effectiveDate: string | null = null;
+  let effectiveText: string | null = null;
+  switch (effectDetails.type) {
+    case "date":
+      effectiveDate = effectDetails.on;
+      break;
+    case "conditional":
+      effectiveDate = effectDetails.actualDate;
+      effectiveText =
+        effectiveDate === null ? effectDetails.condition.text : null;
+      break;
+    case "not-stated":
+      effectiveText = effectDetails.text;
+      break;
+    case "conflicting":
+      break;
+    default:
+      effectDetails satisfies never;
+      return panic("Unhandled resolved amendment effect");
+  }
+  return {
+    sourceId: work.sourceId,
+    targetEli: work.eli,
+    language: work.language,
+    publisherId: relation.publisherId,
+    amendingEli: relation.amendingEli,
+    amendingTitle: relation.amendingTitle,
+    amendingAnchor: relation.amendingAnchor,
+    affectedAnchor: relation.affectedAnchor,
+    changeKind: relation.changeKind,
+    publisherInstruction: relation.publisherInstruction,
+    effectiveType: effectiveDate === null ? "not-stated" : "date",
+    effectiveDate,
+    effectiveText,
+    effectDetails,
+    observations: ordered,
+  } satisfies typeof legislationAmendments.$inferInsert;
 };
 
 /** Work-level lock precedes expression locks in the ingestion transaction. */
@@ -307,33 +593,99 @@ export const syncLegislationAmendmentsTx = async (
       .select({
         observedAt: legislationAmendmentSnapshots.observedAt,
         coverage: legislationAmendmentSnapshots.coverage,
+        channelSnapshots: legislationAmendmentSnapshots.channelSnapshots,
       })
       .from(legislationAmendmentSnapshots)
       .where(snapshotWork(work))
       .limit(1)
   ).at(0);
-  // A channel with no relation model cannot retract a richer observation
-  // fetched through the publisher's relation-bearing channel.
+  const channel = snapshot.channel ?? LEGISLATION_AMENDMENT_LEGACY_CHANNEL;
+  const channels: LegislationAmendmentChannelSnapshot[] =
+    stored?.channelSnapshots ??
+    (stored === undefined
+      ? []
+      : [
+          {
+            channel: LEGISLATION_AMENDMENT_LEGACY_CHANNEL,
+            status: "active",
+            observedAt: stored.observedAt.toISOString(),
+            coverage: stored.coverage,
+          },
+        ]);
+  const prior = channels.find((item) => item.channel === channel);
   if (
-    stored !== undefined &&
-    stored.coverage.type !== "not-stated" &&
+    prior !== undefined &&
+    prior.coverage.type !== "not-stated" &&
     snapshot.coverage.type === "not-stated"
   ) {
     return "not-observed";
   }
-  const observedAt = new Date(
-    Temporal.Instant.from(snapshot.observedAt).epochMilliseconds,
-  );
-  // Absence in a channel without a relation model is not a relation snapshot;
-  // the first relation-bearing observation replaces it even if fetched earlier.
   if (
-    stored !== undefined &&
-    stored.observedAt >= observedAt &&
-    (stored.coverage.type !== "not-stated" ||
-      snapshot.coverage.type === "not-stated")
+    prior !== undefined &&
+    Temporal.Instant.compare(prior.observedAt, snapshot.observedAt) >= 0 &&
+    !(
+      channel === LEGISLATION_AMENDMENT_LEGACY_CHANNEL &&
+      prior.coverage.type === "not-stated" &&
+      snapshot.coverage.type !== "not-stated"
+    )
   ) {
     return "superseded";
   }
+  // Channel identifiers belong to adapter integrations, never publisher input.
+  if (
+    prior === undefined &&
+    channels.length >= LEGISLATION_AMENDMENT_CHANNEL_LIMIT
+  ) {
+    return panic("An amendment source exceeded its publisher-channel contract");
+  }
+  const retiresLegacy =
+    channel !== LEGISLATION_AMENDMENT_LEGACY_CHANNEL &&
+    snapshot.coverage.type === "complete";
+  const status = prior?.status ?? "active";
+  const nextChannels: LegislationAmendmentChannelSnapshot[] = [
+    ...channels
+      .filter((item) => item.channel !== channel)
+      .map((item) =>
+        retiresLegacy && item.channel === LEGISLATION_AMENDMENT_LEGACY_CHANNEL
+          ? {
+              channel: item.channel,
+              status: "historical" as const,
+              observedAt: item.observedAt,
+              coverage: item.coverage,
+            }
+          : item,
+      ),
+    {
+      channel,
+      status,
+      observedAt: snapshot.observedAt,
+      coverage: snapshot.coverage,
+    },
+  ].toSorted((left, right) => compareCodeUnit(left.channel, right.channel));
+  const previous = await tx
+    .select()
+    .from(legislationAmendments)
+    .where(
+      and(
+        eq(legislationAmendments.sourceId, work.sourceId),
+        eq(legislationAmendments.targetEli, work.eli),
+        eq(legislationAmendments.language, work.language),
+      ),
+    );
+  const retained = retainAmendmentContributions({
+    previous,
+    observedAt: stored?.observedAt,
+    snapshot,
+    channels: nextChannels,
+  });
+  const rows = [...retained.entries()]
+    .filter(([, observations]) =>
+      observations.some((item) => item.status === "present"),
+    )
+    .toSorted(([left], [right]) => compareCodeUnit(left, right))
+    .map(([, observations]) =>
+      amendmentRowFromContributions(observations, work),
+    );
   // audit: skip — publisher corpus snapshot, committed with its observed document
   await tx
     .delete(legislationAmendments)
@@ -346,35 +698,23 @@ export const syncLegislationAmendmentsTx = async (
     );
   for (
     let start = 0;
-    start < snapshot.relations.length;
+    start < rows.length;
     start += AMENDMENT_INSERT_BATCH_SIZE
   ) {
     // audit: skip — publisher corpus snapshot, committed with its observed document
-    await tx.insert(legislationAmendments).values(
-      snapshot.relations
-        .slice(start, start + AMENDMENT_INSERT_BATCH_SIZE)
-        .map((relation) => ({
-          sourceId: work.sourceId,
-          targetEli: work.eli,
-          language: work.language,
-          publisherId: relation.publisherId,
-          amendingEli: relation.amendingEli,
-          amendingTitle: relation.amendingTitle,
-          amendingAnchor: relation.amendingAnchor,
-          affectedAnchor: relation.affectedAnchor,
-          changeKind: relation.changeKind,
-          effectiveType: relation.effective.type,
-          effectiveDate:
-            relation.effective.type === "date" ? relation.effective.on : null,
-          effectiveText:
-            relation.effective.type === "not-stated"
-              ? relation.effective.text
-              : null,
-          publisherInstruction: relation.publisherInstruction,
-        })),
-    );
+    await tx
+      .insert(legislationAmendments)
+      .values(rows.slice(start, start + AMENDMENT_INSERT_BATCH_SIZE));
   }
-  // audit: skip — publisher corpus snapshot observation watermark
+  const observedAt = new Date(
+    Math.max(
+      ...nextChannels.map(
+        (item) => Temporal.Instant.from(item.observedAt).epochMilliseconds,
+      ),
+    ),
+  );
+  const coverage = combinedCoverage(nextChannels);
+  // audit: skip — publisher corpus snapshot observation watermarks
   await tx
     .insert(legislationAmendmentSnapshots)
     .values({
@@ -382,7 +722,8 @@ export const syncLegislationAmendmentsTx = async (
       targetEli: work.eli,
       language: work.language,
       observedAt,
-      coverage: snapshot.coverage,
+      coverage,
+      channelSnapshots: nextChannels,
     })
     .onConflictDoUpdate({
       target: [
@@ -390,7 +731,7 @@ export const syncLegislationAmendmentsTx = async (
         legislationAmendmentSnapshots.targetEli,
         legislationAmendmentSnapshots.language,
       ],
-      set: { observedAt, coverage: snapshot.coverage },
+      set: { observedAt, coverage, channelSnapshots: nextChannels },
     });
   return "applied";
 };

@@ -36,26 +36,21 @@ test.each([
   ).toThrow("Required public-law fixture column is absent: fixture.reviewed");
 });
 
-test("amendment evidence grants follow the installed expansion stage", () => {
+test("amendment evidence requires installed columns without granting private fields", () => {
   const relation = getTableName(legislationAmendments);
   const declared = PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION.legislation_amendments;
-  const before = new Set(
+  const installed = new Set(
     Object.values(getColumns(legislationAmendments)).map(({ name }) => name),
   );
-  expect(before.has("effect_details")).toBe(false);
-  expect(before.has("observations")).toBe(false);
-  const beforeGrants = grantedPublicLawColumns(relation, declared, before);
-  expect(beforeGrants).not.toContain("effect_details");
-  expect(beforeGrants).not.toContain("observations");
-
-  const after = new Set([
-    ...before,
-    "effect_details",
-    "observations",
-    "private_fixture",
-  ]);
-  const afterGrants = grantedPublicLawColumns(relation, declared, after);
-  expect(afterGrants).toContain("effect_details");
-  expect(afterGrants).toContain("observations");
-  expect(afterGrants).not.toContain("private_fixture");
+  expect(installed.has("effect_details")).toBe(true);
+  expect(installed.has("observations")).toBe(true);
+  installed.add("private_fixture");
+  const grants = grantedPublicLawColumns(relation, declared, installed);
+  expect(grants).toContain("effect_details");
+  expect(grants).toContain("observations");
+  expect(grants).not.toContain("private_fixture");
+  installed.delete("effect_details");
+  expect(() => grantedPublicLawColumns(relation, declared, installed)).toThrow(
+    "Required public-law fixture column is absent: legislation_amendments.effect_details",
+  );
 });

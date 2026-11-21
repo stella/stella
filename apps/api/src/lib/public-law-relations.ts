@@ -773,8 +773,8 @@ export const PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION = {
     effective_date: "permitted",
     effective_text: "permitted",
     publisher_instruction: "permitted",
-    effect_details: "permitted",
-    observations: "permitted",
+    effect_details: "required",
+    observations: "required",
   },
   legislation_sources: {
     id: "required",
