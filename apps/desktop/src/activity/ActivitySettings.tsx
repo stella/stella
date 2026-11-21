@@ -79,6 +79,7 @@ import {
   isBrowserApp,
 } from "./capture-modes";
 import type { CaptureMode, CaptureModeCommand } from "./capture-modes";
+import { DraftConsent } from "./DraftConsent";
 
 type ActivitySettingsView =
   | { type: "loading" }
@@ -1046,6 +1047,7 @@ export const ActivitySettingsPane = () => {
  * Consent to stella AI drafts, kept on the server. Withdrawing stays possible
  * whenever consent exists, even where the firm has drafting off; it applies
  * in this window at once and is sent again until the server confirms it.
+ * Without consent, Settings asks as a time entry card does.
  */
 const BillingDraftConsentSettings = () => {
   const t = useTranslations("activity");
@@ -1055,61 +1057,77 @@ const BillingDraftConsentSettings = () => {
   }
   if (settings.type === "failed") {
     return (
-      <SettingsPanel>
-        <p className="text-muted-foreground text-xs">
-          {t("billingDraftsUnavailable")}
-        </p>
-      </SettingsPanel>
+      <SettingsRow
+        description={t("billingDraftsUnavailable")}
+        title={t("billingDraftsTitle")}
+      />
     );
   }
   const { consent } = settings;
-  const withdrawable =
-    consent === "granted" || consent === "pending-withdrawal";
-  if (!withdrawable && settings.mode === "off") {
-    return null;
-  }
-  return (
-    <SettingsPanel>
-      <div className="flex flex-col gap-2">
-        <span className="text-sm">{t("billingDraftsTitle")}</span>
-        <p className="text-muted-foreground text-xs">
-          {withdrawable ? t("billingDraftsGranted") : t("billingDraftsRevoked")}
-        </p>
-        {consent === "pending-withdrawal" ? (
-          <p className="text-muted-foreground text-xs" role="status">
-            {t("billingDraftsWithdrawPending")}
-          </p>
-        ) : null}
-        {settings.preference === null ? null : (
-          <div className="flex flex-col gap-1">
-            <span className="text-muted-foreground text-xs">
-              {t("billingDraftsPreference")}
-            </span>
-            <bdi className="text-sm text-pretty">{settings.preference}</bdi>
-            <Button
-              className="self-start"
-              onClick={() => {
-                void setPreference(null);
-              }}
-              size="xs"
-              variant="ghost"
-            >
-              {t("billingDraftsForgetPreference")}
-            </Button>
-          </div>
-        )}
-        {consent === "granted" ? (
-          <Button
-            className="self-start"
-            onClick={() => {
-              void setConsent("revoked");
-            }}
-            variant="outline"
+  switch (consent) {
+    case "granted":
+    case "pending-withdrawal":
+      return (
+        <>
+          <SettingsRow
+            description={
+              consent === "granted"
+                ? t("billingDraftsGranted")
+                : t("billingDraftsWithdrawPending")
+            }
+            title={t("billingDraftsTitle")}
           >
-            {t("billingDraftsWithdraw")}
-          </Button>
-        ) : null}
-      </div>
-    </SettingsPanel>
-  );
+            {consent === "granted" ? (
+              <Button
+                onClick={() => {
+                  void setConsent("revoked");
+                }}
+                size="sm"
+                variant="outline"
+              >
+                {t("billingDraftsWithdraw")}
+              </Button>
+            ) : null}
+          </SettingsRow>
+          {settings.preference === null ? null : (
+            <SettingsRow
+              depth="nested"
+              description={<bdi>{settings.preference}</bdi>}
+              title={t("billingDraftsPreference")}
+            >
+              <Button
+                onClick={() => {
+                  void setPreference(null);
+                }}
+                size="sm"
+                variant="outline"
+              >
+                {t("billingDraftsForgetPreference")}
+              </Button>
+            </SettingsRow>
+          )}
+        </>
+      );
+    case "unavailable":
+    case "revoked":
+    case "pending-grant":
+      // Where the firm has drafting off there is nothing to allow.
+      return settings.mode === "off" ? null : (
+        <SettingsRow
+          description={t("billingDraftsRevoked")}
+          footer={
+            <DraftConsent
+              onAllow={() => {
+                void setConsent("granted");
+              }}
+              pending={consent === "pending-grant"}
+            />
+          }
+          title={t("billingDraftsTitle")}
+        />
+      );
+    default:
+      consent satisfies never;
+      return panic("Unhandled stella AI draft consent");
+  }
 };

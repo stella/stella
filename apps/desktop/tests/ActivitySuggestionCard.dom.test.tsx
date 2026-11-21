@@ -58,6 +58,7 @@ const SelectedRangeCard = ({
       assist={{ type: "hidden" }}
       candidates={[]}
       earlierEntries={[]}
+      codeNames={[]}
       edit={{
         billable: true,
         classification: null,
@@ -188,6 +189,7 @@ describe("the stella AI consent on a card", () => {
         <ActivitySuggestionCard
           assist={{ pending: false, type: "consent" }}
           candidates={[]}
+          codeNames={[]}
           earlierEntries={[]}
           edit={{
             billable: true,
@@ -260,5 +262,169 @@ describe("the stella AI consent on a card", () => {
       testing.fireEvent.click(allow);
     });
     expect(allowed).toEqual([true]);
+  });
+});
+
+const { DRAFT_FAILURE_KINDS, DRAFT_FAILURE_RECOVERY } =
+  await import("../src/activity/billing-draft-logic");
+
+type CardProps = React.ComponentProps<typeof ActivitySuggestionCard>;
+
+/** A recorded card for MATTER showing `assist`, recording what it calls. */
+const renderAssist = (assist: CardProps["assist"]) => {
+  const calls: string[] = [];
+  const record = (name: string) => () => {
+    calls.push(name);
+  };
+  testing.render(
+    <DesktopIntlProvider language="en" messages={defaultMessages}>
+      <ActivitySuggestionCard
+        assist={assist}
+        candidates={[]}
+        codeNames={[]}
+        earlierEntries={[]}
+        edit={{
+          billable: true,
+          classification: null,
+          matter: MATTER,
+          narrative: "Call with the landlord's counsel",
+          undo: null,
+          written: 0,
+        }}
+        flags={[]}
+        onAccept={record("accept")}
+        onAcceptProposal={record("acceptProposal")}
+        onAcceptStructure={noop}
+        onAllow={record("allow")}
+        onClose={noop}
+        onCopy={async () => true}
+        onDismissProposal={noop}
+        onDraft={record("draft")}
+        onEdit={noop}
+        onRefine={noop}
+        onReject={noop}
+        onRestoreTemplate={noop}
+        onUndo={noop}
+        sourceAppVisuals={[]}
+        titlesNotice={null}
+        structure={null}
+        suggestion={manualSuggestion({
+          drafted: [],
+          id: "manual:assist",
+          range: { startMs: wall("10:00"), endMs: wall("10:30") },
+          segments: [],
+        })}
+        timeLabel=""
+        times={{ type: "recorded" }}
+      />
+    </DesktopIntlProvider>,
+  );
+  return { calls };
+};
+
+/** What the one offered action calls back, per recovery. */
+const RECOVERY_CALL = {
+  allow: "allow",
+  retry: "draft",
+  none: null,
+} as const;
+
+describe("a failed draft", () => {
+  test("every kind says why in one layout and offers only the action that can work", async () => {
+    for (const kind of DRAFT_FAILURE_KINDS) {
+      const { calls } = renderAssist({ kind, type: "failed" });
+      const failure = document.querySelector(
+        `[data-activity-draft-failure="${kind}"]`,
+      );
+      expect(failure).not.toBeNull();
+      const buttons = [...(failure?.querySelectorAll("button") ?? [])];
+      const expected = RECOVERY_CALL[DRAFT_FAILURE_RECOVERY[kind]];
+      expect(buttons).toHaveLength(expected === null ? 0 : 1);
+      for (const button of buttons) {
+        await testing.act(async () => {
+          testing.fireEvent.click(button);
+        });
+      }
+      expect(calls).toEqual(expected === null ? [] : [expected]);
+      testing.cleanup();
+    }
+  });
+
+  test("consent that is missing is asked for again, not retried", () => {
+    renderAssist({ kind: "consentRequired", type: "failed" });
+    expect(
+      testing.screen.getByRole("button", { name: messages.aiDraftAllow }),
+    ).toBeDefined();
+    expect(
+      testing.screen.queryByRole("button", { name: messages.aiDraftRetry }),
+    ).toBeNull();
+  });
+
+  test("a matter drafting refused cannot get an entry from the card either", async () => {
+    const { calls } = renderAssist({ kind: "refused", type: "failed" });
+    const accept = testing.screen.getByRole("button", {
+      name: new RegExp(messages.accept, "u"),
+    });
+    expect(accept.getAttribute("aria-disabled")).toBe("true");
+    await testing.act(async () => {
+      testing.fireEvent.click(accept);
+    });
+    expect(calls).toEqual([]);
+  });
+
+  test("a firm that switched drafting off is said quietly, with nothing to draft", () => {
+    renderAssist({ kind: "off", type: "failed" });
+    expect(testing.screen.getByText(messages.aiDraftOff)).toBeDefined();
+    expect(
+      testing.screen.queryByRole("button", { name: messages.aiDraftWrite }),
+    ).toBeNull();
+  });
+});
+
+describe("a draft in place", () => {
+  const ready = (narrativeLanguage: string): CardProps["assist"] => ({
+    canRestoreTemplate: true,
+    canUndo: false,
+    draft: { narrativeLanguage },
+    refineFailure: null,
+    type: "ready",
+  });
+
+  test("offers to write in the window's language only when the draft is in another", () => {
+    const languageChip = { name: messages.aiSteerWriteInLanguage };
+    renderAssist(ready("en-GB"));
+    expect(testing.screen.queryByRole("button", languageChip)).toBeNull();
+    testing.cleanup();
+
+    renderAssist(ready("cs"));
+    expect(testing.screen.getByRole("button", languageChip)).toBeDefined();
+  });
+
+  test("keeps the description above every stella AI control", () => {
+    renderAssist(ready("en"));
+    const narrative = testing.screen.getByRole("textbox", {
+      name: messages.entryNarrative,
+    });
+    const draftAgain = testing.screen.getByRole("button", {
+      name: messages.aiDraftAgain,
+    });
+    expect(narrative.compareDocumentPosition(draftAgain)).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING,
+    );
+  });
+
+  test("a proposal applies the change under its own name, not the card's Accept", () => {
+    renderAssist({
+      after: "Shorter.",
+      before: "Longer text.",
+      type: "proposal",
+    });
+    const proposal = testing.screen.getByRole("region", {
+      name: messages.aiProposal,
+    });
+    const apply = testing.within(proposal).getByRole("button", {
+      name: messages.aiApplyChange,
+    });
+    expect(apply.textContent).not.toContain(messages.accept);
   });
 });

@@ -73,6 +73,8 @@ import type {
 import {
   cardDraftEntry,
   cardDraftFrom,
+  restoredEdit,
+  revertActions,
   structureItems,
 } from "./billing-draft-logic";
 import type { CardDraft, DraftFailureKind } from "./billing-draft-logic";
@@ -548,6 +550,7 @@ export const ActivityDayCalendar = ({
         assist={narratives.view(openSuggestion)}
         earlierEntries={narratives.earlierEntries(openSuggestion)}
         flags={narratives.flags(openSuggestion)}
+        codeNames={narratives.codeNames(openSuggestion)}
         structure={narratives.structure(openSuggestion)}
         onAcceptStructure={() => acceptStructure(openSuggestion)}
         onDraft={() => narratives.draft(openSuggestion)}
@@ -1047,6 +1050,8 @@ type SuggestionDraftsOptions = {
 
 /** What a written draft leaves on a card. */
 type Drafted = {
+  narrativeLanguage: CardDraft["narrativeLanguage"];
+  codeNames: CardDraft["codeNames"];
   earlierEntries: CardDraft["earlierEntries"];
   flags: CardDraft["flags"];
   /** The server's result, which a refinement sends back unchanged. */
@@ -1074,7 +1079,8 @@ type DraftStatus =
       proposal: CardDraft;
       type: "proposed";
     }
-  | { kind: DraftFailureKind; type: "failed" };
+  /** Drafting for `matterId` failed; another matter starts afresh. */
+  | { kind: DraftFailureKind; matterId: string; type: "failed" };
 
 type DraftAnswer =
   | { draft: CardDraft; type: "drafted" }
@@ -1083,6 +1089,8 @@ type DraftAnswer =
   | { type: "quiet" };
 
 const draftedFrom = (draft: CardDraft, matterId: string): Drafted => ({
+  narrativeLanguage: draft.narrativeLanguage,
+  codeNames: draft.codeNames,
   earlierEntries: draft.earlierEntries,
   flags: draft.flags,
   structure: draft.structure,
@@ -1113,6 +1121,12 @@ const withAiText = (
   },
 });
 
+/** The card's draft while the card keeps the matter it was drafted for. */
+const draftForMatter = (status: DraftStatus, edit: SuggestionEdit) =>
+  status.type === "drafted" && edit.matter?.id === status.matterId
+    ? status
+    : null;
+
 /** What a card's stella AI area shows. */
 const draftAssistView = ({
   settings,
@@ -1125,8 +1139,11 @@ const draftAssistView = ({
   edit: SuggestionEdit;
   template: string;
 }): DraftAssistView => {
-  if (settings.type !== "ready" || settings.mode === "off") {
+  if (settings.type !== "ready") {
     return { type: "hidden" };
+  }
+  if (settings.mode === "off") {
+    return { kind: "off", type: "failed" };
   }
   switch (status.type) {
     case "writing":
@@ -1156,14 +1173,22 @@ const draftAssistView = ({
       type: "consent",
     };
   }
-  if (status.type === "failed") {
+  if (status.type === "failed" && status.matterId === edit.matter.id) {
     return { kind: status.kind, type: "failed" };
   }
+  const reverts = revertActions(edit, template);
   return {
-    canUndo: edit.undo !== null,
-    canRestoreTemplate: edit.narrative !== template,
-    drafted: status.type === "drafted",
-    refineFailure: status.type === "drafted" ? status.refineFailure : null,
+    canUndo: reverts.undo,
+    canRestoreTemplate: reverts.restoreTemplate,
+    draft:
+      status.type === "drafted"
+        ? { narrativeLanguage: status.narrativeLanguage }
+        : null,
+    // A refusal names the matter it was refining for.
+    refineFailure:
+      status.type === "drafted" && status.matterId === edit.matter.id
+        ? status.refineFailure
+        : null,
     type: "ready",
   };
 };
@@ -1311,7 +1336,11 @@ function useSuggestionDrafts({
           settle(id, request, { type: "template" });
           return undefined;
         case "failed":
-          settle(id, request, { kind: answer.kind, type: "failed" });
+          settle(id, request, {
+            kind: answer.kind,
+            matterId: matter.id,
+            type: "failed",
+          });
           return undefined;
         case "drafted":
           break;
@@ -1462,8 +1491,7 @@ function useSuggestionDrafts({
           ...current,
           [suggestion.id]: {
             ...edit,
-            narrative: template(suggestion),
-            classification: null,
+            ...restoredEdit(edit, template(suggestion)),
             undo: {
               narrative: edit.narrative,
               classification: edit.classification,
@@ -1480,15 +1508,14 @@ function useSuggestionDrafts({
       const status = statusFor(suggestion);
       return status.type === "drafted" ? status.flags : [];
     },
-    /** The split or move on offer, while the card keeps the matter it was
-     * drafted for. */
-    structure: (suggestion: ActivitySuggestion) => {
-      const status = statusFor(suggestion);
-      return status.type === "drafted" &&
-        editFor(suggestion).matter?.id === status.matterId
-        ? status.structure
-        : null;
-    },
+    /** The names of the codes the draft gave, for the matter it was for. */
+    codeNames: (suggestion: ActivitySuggestion) =>
+      draftForMatter(statusFor(suggestion), editFor(suggestion))?.codeNames ??
+      [],
+    /** The split or move on offer, for the matter it was drafted for. */
+    structure: (suggestion: ActivitySuggestion) =>
+      draftForMatter(statusFor(suggestion), editFor(suggestion))?.structure ??
+      null,
     view: (suggestion: ActivitySuggestion) =>
       draftAssistView({
         settings,
