@@ -77,6 +77,18 @@ describe("kept dictations", () => {
     expect(retriesByItself(failure(502))).toBe(true);
     expect(retriesByItself(failure(400))).toBe(false);
     expect(retriesByItself(failure(413))).toBe(false);
+    const unserved = new ApiRequestError({
+      message: "synthetic",
+      status: 503,
+      code: "transcription_model_unavailable",
+    });
+    expect(retriesByItself(unserved)).toBe(false);
+    const timedOut = new ApiRequestError({
+      message: "synthetic",
+      status: 503,
+      code: "ai_deadline_exceeded",
+    });
+    expect(retriesByItself(timedOut)).toBe(true);
     expect(retriesByItself(new TokenError({ message: "synthetic" }))).toBe(
       true,
     );
