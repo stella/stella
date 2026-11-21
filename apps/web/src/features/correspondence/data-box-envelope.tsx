@@ -15,6 +15,7 @@ import { useFormatter } from "@/i18n/formatting-context";
 import type { TranslationKey } from "@/i18n/types";
 import { MEDIUM_DATE_SHORT_TIME_FORMAT } from "@/lib/relative-time";
 
+import { DATA_BOX_DIRECTION_LABEL_KEYS } from "./data-box-direction";
 import { EnvelopeField as Field } from "./envelope-field";
 
 const ACCEPTANCE_LABEL_KEYS = {
@@ -88,6 +89,7 @@ export const DataBoxEnvelope = ({
     envelope.status === "accepted_by_login"
       ? ACCEPTANCE_LABEL_KEYS[envelope.status]
       : null;
+  const direction = DATA_BOX_DIRECTION_LABEL_KEYS[envelope.directionBasis];
   const senderReferences = references(envelope.sender);
   const recipientReferences = references(envelope.recipient);
 
@@ -95,14 +97,8 @@ export const DataBoxEnvelope = ({
     <section className="grid gap-4 rounded-lg border p-4 sm:grid-cols-2">
       <div className="space-y-1 sm:col-span-2">
         <h2 className="text-sm font-medium">{t(titleKey)}</h2>
-        {envelope.directionBasis !== "organization_recipient" && (
-          <p className="text-muted-foreground text-xs">
-            {t(
-              envelope.directionBasis === "organization_sender"
-                ? "correspondence.dataBox.sent"
-                : "correspondence.dataBox.directionUnknown",
-            )}
-          </p>
+        {direction !== null && (
+          <p className="text-muted-foreground text-xs">{t(direction)}</p>
         )}
       </div>
       <Field label={t("emailViewer.from")}>

@@ -632,7 +632,14 @@ type PDFProviderProps = PropsWithChildren<{
   /** Names the viewer in telemetry; see {@link RecoverableViewerBoundary}. */
   surface: ViewerSurface;
   initialScaleOffset?: number | undefined;
-  fitToWidth?: number | undefined;
+  /**
+   * The width the pages first fit, measured from the viewer's box; the
+   * pages then follow that box as it resizes. Only a viewer that sets its own
+   * scale passes `null` (the full-screen page). Required so that no preview
+   * draws its pages at the document's own size by leaving it out: preview
+   * surfaces mount `MeasuredPdfProvider`, which measures it.
+   */
+  fitToWidth: number | null;
   /** `error` replaces the generic failed state for a final failure only. */
   fallback?: PDFPageFallback | undefined;
   onDownload?: (() => void) | undefined;
@@ -643,7 +650,7 @@ type PDFStoreProviderProps = PropsWithChildren<{
   fieldId: string;
   startPage: number;
   initialScaleOffset?: number | undefined;
-  fitToWidth?: number | undefined;
+  fitToWidth: number | null;
   suspense: ReactNode;
 }>;
 
@@ -660,7 +667,7 @@ const PDFStoreProvider = ({
       fieldId,
       startPage,
       scaleOffset: initialScaleOffset,
-      fitToWidth,
+      fitToWidth: fitToWidth ?? undefined,
     }),
   );
 

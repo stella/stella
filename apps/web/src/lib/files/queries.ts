@@ -332,10 +332,12 @@ export const cadesPreviewOptions = (props: FileOptionsProps) =>
     },
   );
 
+// Cached like a file's own bytes (`fileOptions`): reopening the tab reuses
+// them, and with them the parsed document, instead of extracting the PDF
+// from the signed container again behind a loading state.
 export const cadesPdfOptions = ({ fieldId, workspaceId }: FileOptionsProps) =>
   resourceQueryOptions(
     queryOptions({
-      gcTime: 0,
       retry: false,
       queryKey: [...filesKeys.cadesByFieldId({ fieldId, workspaceId }), "pdf"],
       queryFn: async ({ signal }) => {
@@ -456,11 +458,11 @@ export const emailAttachmentPreviewOptions = ({
   fieldId,
   workspaceId,
 }: FileOptionsProps & { attachmentId: string }) =>
+  // Cached like a file's own bytes, so going back to an attachment shows it
+  // at once instead of downloading it again.
   queryOptions({
     enabled: attachmentId.length > 0,
-    gcTime: 0,
     retry: false,
-    staleTime: 0,
     queryKey: [
       ...filesKeys.emailHtmlByFieldId({ fieldId, workspaceId }),
       "attachment-preview",
