@@ -1,5 +1,6 @@
 import * as v from "valibot";
 
+import { decisionBodySourceSchema } from "@stll/api-contract/case-law-body-source";
 import { COURT_TIER_LABELS } from "@stll/api-contract/case-law-court-tiers";
 import { DECISION_READ_RESOLUTION } from "@stll/api-contract/case-law-decision-resolution";
 import { extractionWarningsSchema } from "@stll/api-contract/case-law-extraction-warnings";
@@ -221,6 +222,7 @@ export const readDecisionSuccessResponseSchema = v.object({
   appealReviews: decisionReviewsSchema,
   extractionWarnings: extractionWarningsSchema,
   documentAst: v.unknown(),
+  bodySource: decisionBodySourceSchema,
   fulltext: v.nullable(v.string()),
   projectionDigest: nullableBoundedString(
     DECISION_READER_TEXT_BYTES.projectionDigest,

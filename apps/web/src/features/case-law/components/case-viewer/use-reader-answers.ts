@@ -662,6 +662,7 @@ export const useReaderAnswers = ({
     userId: user?.id ?? "",
   });
   const scope = `${user?.activeOrganizationId ?? "guest"}:${user?.id ?? "guest"}:${decisionId}:${generationMode}`;
+  const [prevScope, setPrevScope] = useState(scope);
   const [runtime, setRuntime] = useState(() =>
     createReaderAnswerRuntime(scope),
   );
@@ -691,7 +692,8 @@ export const useReaderAnswers = ({
     }),
     enabled: user !== null && !isCreating && busyAnswerIds.size === 0,
   });
-  if (runtime.scope !== scope) {
+  if (prevScope !== scope) {
+    setPrevScope(scope);
     runtime.cancel();
     setRuntime(createReaderAnswerRuntime(scope));
     setActivation({ id: null, revision: 0 });

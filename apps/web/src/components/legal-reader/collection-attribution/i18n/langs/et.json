@@ -1,0 +1,9 @@
+{
+  "readerCollection": {
+    "partialText": "Kuvatud on avaldatud osad; täielikkust pole kindlaks tehtud.",
+    "provenanceOmitted": "Välja jäetud avaldamiskirjed: {omittedCount, number} / {totalCount, number}.",
+    "sourceAttribution": "Kogumiku väljaanne: <link>{source}</link>. Hangitud {date}.",
+    "sourceAttributionUnknownDate": "Kogumiku väljaanne: <link>{source}</link>. Hankimise kuupäev pole teada.",
+    "unclassifiedText": "Selle kogumiku teksti ulatus pole teada."
+  }
+}

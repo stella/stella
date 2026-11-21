@@ -1090,12 +1090,16 @@ export const SearchDialog = ({
     string | null
   >(null);
   const [lastRecentsOwner, setLastRecentsOwner] = useState(owner);
-  if (
-    recentsSnapshotKey !== lastRecentsSnapshotKey ||
-    owner !== lastRecentsOwner
-  ) {
-    setLastRecentsOwner(owner);
+  if (recentsSnapshotKey !== lastRecentsSnapshotKey) {
     setLastRecentsSnapshotKey(recentsSnapshotKey);
+    setLastRecentsOwner(owner);
+    setRegistryExpanded(false);
+    setCaseLawExpansion(null);
+    setSupplementalPreview({ type: "internal" });
+    setRecentPreviewFile(null);
+  }
+  if (owner !== lastRecentsOwner) {
+    setLastRecentsOwner(owner);
     setRegistryExpanded(false);
     setCaseLawExpansion(null);
     setSupplementalPreview({ type: "internal" });
