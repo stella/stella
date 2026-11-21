@@ -20,6 +20,7 @@ import type { CapabilityLeafSpec } from "./route-types.js";
 import {
   composeInputFromFlags,
   confirmDestructive,
+  loadValidatedInput,
   maybeConfirmAndRetry,
   parsePayload,
   readOutputFormat,
@@ -27,7 +28,6 @@ import {
   renderCommandResult,
   RESERVED_FLAG_KEYS,
   reservedFlagUsageError,
-  resolveInputObject,
   setExit,
   setPath,
   streamOrRenderAllPages,
@@ -119,14 +119,15 @@ export const runCapabilityCommand = async ({
   // (e.g. --workspace) advertised on the usage line therefore stays usable
   // alongside a body passed through --input, instead of forcing the caller to
   // hand-relocate it into `params.workspaceId` in the JSON.
-  const inputRaw = flags[RESERVED_FLAG_KEYS.input];
-  const parsedInput = await resolveInputObject({ inputRaw, writers });
+  const parsedInput = await loadValidatedInput({ context, flags, writers });
   if (Result.isError(parsedInput)) {
-    setExit(context, EXIT_CODES.validation);
     return;
   }
-  const inputBase = parsedInput.value;
-  const built = await composeCapabilityFlags({ base: inputBase, flags, spec });
+  const built = await composeCapabilityFlags({
+    base: parsedInput.value,
+    flags,
+    spec,
+  });
   if (!built.ok) {
     writers.stderr(`${built.message}\n`);
     setExit(context, EXIT_CODES.validation);

@@ -436,16 +436,25 @@ export const parseInputObject = async ({
   return Result.ok(parsed.value);
 };
 
-export const resolveInputObject = async ({
-  inputRaw,
+export const loadValidatedInput = async ({
+  context,
+  flags,
   writers,
 }: {
-  inputRaw: unknown;
+  context: Context;
+  flags: Record<string, unknown>;
   writers: Writers;
-}): Promise<Result<Record<string, unknown>, "invalid-input">> =>
-  typeof inputRaw === "string"
-    ? await parseInputObject({ inputRaw, writers })
-    : Result.ok<Record<string, unknown>>({});
+}): Promise<Result<Record<string, unknown>, "invalid-input">> => {
+  const inputRaw = flags[RESERVED_FLAG_KEYS.input];
+  const parsed =
+    typeof inputRaw === "string"
+      ? await parseInputObject({ inputRaw, writers })
+      : Result.ok<Record<string, unknown>>({});
+  if (Result.isError(parsed)) {
+    setExit(context, EXIT_CODES.validation);
+  }
+  return parsed;
+};
 
 export const confirmDestructive = async ({
   context,
@@ -1323,18 +1332,15 @@ export const runLeafCommand = async ({
   // flag (e.g. --matter-id, advertised on the usage line) coexist with a body
   // passed through --input, instead of forcing the caller to hand-relocate it
   // into the JSON under a different key.
-  const inputRaw = flags[RESERVED_FLAG_KEYS.input];
-  const parsedInput = await resolveInputObject({ inputRaw, writers });
+  const parsedInput = await loadValidatedInput({ context, flags, writers });
   if (Result.isError(parsedInput)) {
-    setExit(context, EXIT_CODES.validation);
     return;
   }
-  const argsBase = parsedInput.value;
 
   // Responses are camelCase and inputs snake_case; a payload handed back from
   // a list (the natural scripting loop) is accepted under either casing.
   const cased = normalizeInputKeyCasing({
-    args: argsBase,
+    args: parsedInput.value,
     inputSchema: spec.inputSchema,
   });
   if (cased.status === "conflict") {
