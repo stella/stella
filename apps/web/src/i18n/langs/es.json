@@ -6099,7 +6099,7 @@
         "reviewReject": "No, cerrar la sesión en este dispositivo",
         "reviewSignedOutBody": "Revise también cómo inicia sesión. Si alguien inició sesión con Google o Microsoft, cambie su contraseña directamente con ellos.",
         "reviewSignedOutTitle": "Se cerró la sesión en {device}",
-        "reviewTitle": "¿Fue usted?",
+        "reviewTitle": "¿Fuiste tú?",
         "signedInAt": "sesión iniciada el {date}",
         "summaryLabel": "Resumen de seguridad",
         "summaryMethods": "{count, plural, =0 {Ningún método de inicio de sesión} one {# método de inicio de sesión} many {# métodos de inicio de sesión} other {# métodos de inicio de sesión}}",
