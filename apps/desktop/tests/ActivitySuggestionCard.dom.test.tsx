@@ -12,11 +12,19 @@ const { manualSuggestion } =
 const { ActivitySuggestionCard } =
   await import("../src/activity/ActivitySuggestionCard");
 
-afterEach(() => {
+/** One macrotask, for React's scheduler and the scroll area's updates. */
+const nextMacrotask = async () =>
+  await new Promise<void>((resolve) => {
+    setImmediate(resolve);
+  });
+
+afterEach(async () => {
+  await testing.act(nextMacrotask);
   testing.cleanup();
 });
 
 afterAll(async () => {
+  await nextMacrotask();
   await GlobalRegistrator.unregister();
 });
 
@@ -271,7 +279,7 @@ const { DRAFT_FAILURE_KINDS, DRAFT_FAILURE_RECOVERY } =
 type CardProps = React.ComponentProps<typeof ActivitySuggestionCard>;
 
 /** A recorded card for MATTER showing `assist`, recording what it calls. */
-const renderAssist = (assist: CardProps["assist"]) => {
+const renderAssist = async (assist: CardProps["assist"]) => {
   const calls: string[] = [];
   const record = (name: string) => () => {
     calls.push(name);
@@ -319,6 +327,8 @@ const renderAssist = (assist: CardProps["assist"]) => {
       />
     </DesktopIntlProvider>,
   );
+  // Let the scroll area settle inside act, so no update outlives the test.
+  await testing.act(nextMacrotask);
   return { calls };
 };
 
@@ -332,7 +342,7 @@ const RECOVERY_CALL = {
 describe("a failed draft", () => {
   test("every kind says why in one layout and offers only the action that can work", async () => {
     for (const kind of DRAFT_FAILURE_KINDS) {
-      const { calls } = renderAssist({ kind, type: "failed" });
+      const { calls } = await renderAssist({ kind, type: "failed" });
       const failure = document.querySelector(
         `[data-activity-draft-failure="${kind}"]`,
       );
@@ -346,12 +356,13 @@ describe("a failed draft", () => {
         });
       }
       expect(calls).toEqual(expected === null ? [] : [expected]);
+      await testing.act(nextMacrotask);
       testing.cleanup();
     }
   });
 
-  test("consent that is missing is asked for again, not retried", () => {
-    renderAssist({ kind: "consentRequired", type: "failed" });
+  test("consent that is missing is asked for again, not retried", async () => {
+    await renderAssist({ kind: "consentRequired", type: "failed" });
     expect(
       testing.screen.getByRole("button", { name: messages.aiDraftAllow }),
     ).toBeDefined();
@@ -361,7 +372,7 @@ describe("a failed draft", () => {
   });
 
   test("a matter drafting refused cannot get an entry from the card either", async () => {
-    const { calls } = renderAssist({ kind: "refused", type: "failed" });
+    const { calls } = await renderAssist({ kind: "refused", type: "failed" });
     const accept = testing.screen.getByRole("button", {
       name: new RegExp(messages.accept, "u"),
     });
@@ -372,8 +383,8 @@ describe("a failed draft", () => {
     expect(calls).toEqual([]);
   });
 
-  test("a firm that switched drafting off is said quietly, with nothing to draft", () => {
-    renderAssist({ kind: "off", type: "failed" });
+  test("a firm that switched drafting off is said quietly, with nothing to draft", async () => {
+    await renderAssist({ kind: "off", type: "failed" });
     expect(testing.screen.getByText(messages.aiDraftOff)).toBeDefined();
     expect(
       testing.screen.queryByRole("button", { name: messages.aiDraftWrite }),
@@ -390,18 +401,19 @@ describe("a draft in place", () => {
     type: "ready",
   });
 
-  test("offers to write in the window's language only when the draft is in another", () => {
+  test("offers to write in the window's language only when the draft is in another", async () => {
     const languageChip = { name: messages.aiSteerWriteInLanguage };
-    renderAssist(ready("en-GB"));
+    await renderAssist(ready("en-GB"));
     expect(testing.screen.queryByRole("button", languageChip)).toBeNull();
+    await testing.act(nextMacrotask);
     testing.cleanup();
 
-    renderAssist(ready("cs"));
+    await renderAssist(ready("cs"));
     expect(testing.screen.getByRole("button", languageChip)).toBeDefined();
   });
 
-  test("keeps the description above every stella AI control", () => {
-    renderAssist(ready("en"));
+  test("keeps the description above every stella AI control", async () => {
+    await renderAssist(ready("en"));
     const narrative = testing.screen.getByRole("textbox", {
       name: messages.entryNarrative,
     });
@@ -413,8 +425,8 @@ describe("a draft in place", () => {
     );
   });
 
-  test("a proposal applies the change under its own name, not the card's Accept", () => {
-    renderAssist({
+  test("a proposal applies the change under its own name, not the card's Accept", async () => {
+    await renderAssist({
       after: "Shorter.",
       before: "Longer text.",
       type: "proposal",
