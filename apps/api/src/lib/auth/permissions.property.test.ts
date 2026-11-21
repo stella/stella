@@ -51,7 +51,7 @@ describe("organization permissions properties", () => {
     );
   });
 
-  test("billingAccess is monotonic and never leaks non-billing permissions", () => {
+  test("billingAccess is monotonic", () => {
     assertProperty(
       "billingAccess is monotonic",
       fc.property(roleArb, permissionInputArb(), (role, permissions) => {
@@ -70,7 +70,9 @@ describe("organization permissions properties", () => {
         }
       }),
     );
+  });
 
+  test("billingAccess never leaks non-billing permissions", () => {
     assertProperty(
       "billingAccess never leaks non-billing permissions",
       fc.property(
@@ -89,7 +91,7 @@ describe("organization permissions properties", () => {
 
   test("role hierarchy: owner >= admin >= member for every permission set", () => {
     assertProperty(
-      "role hierarchy owner >= admin >= member",
+      "role hierarchy: owner >= admin >= member for every permission set",
       fc.property(
         fc.boolean(),
         permissionInputArb(),
@@ -122,7 +124,7 @@ describe("organization permissions properties", () => {
 
   test("withBillingRead always requires billing read and deduplicated workspace read", () => {
     assertProperty(
-      "withBillingRead requires billing read and deduplicated workspace read",
+      "withBillingRead always requires billing read and deduplicated workspace read",
       fc.property(
         fc.subarray([...statements.workspace]),
         (workspaceActions) => {
@@ -144,7 +146,7 @@ describe("organization permissions properties", () => {
 
   test("assignableRoles prevents privilege escalation for every role", () => {
     assertProperty(
-      "assignableRoles prevents privilege escalation",
+      "assignableRoles prevents privilege escalation for every role",
       fc.property(roleArb, (role) => {
         const assignable = assignableRoles(role);
         if (!isOrganizationManagementRole(role)) {
