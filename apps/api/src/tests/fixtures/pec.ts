@@ -124,7 +124,11 @@ type PecMessageOptions = {
   original?: string | null;
   originalDisposition?: "inline" | "attachment";
   signed?: boolean;
-  extraParts?: readonly { name: string; mimeType: string; content: string }[];
+  extraParts?: readonly {
+    name: string;
+    mimeType: string;
+    content: string | Uint8Array;
+  }[];
 };
 
 /** A provider message as the recipient's mailbox stores it. */

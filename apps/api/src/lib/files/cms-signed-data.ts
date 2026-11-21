@@ -249,11 +249,17 @@ const decodeSignedData = (bytes: Uint8Array) => {
  */
 export const readDetachedCmsSigners = (
   bytes: Uint8Array,
-): Result<CmsSigner[], "not_signed_data"> => {
+): Result<CmsSigner[], "not_signed_data" | "not_detached"> => {
   const signedData = decodeSignedData(bytes);
-  return signedData === null
-    ? Result.err("not_signed_data")
-    : Result.ok(readSigners(signedData, OUTER_CMS_LAYER_ID));
+  if (signedData === null) {
+    return Result.err("not_signed_data");
+  }
+  // A SignedData that carries its own content is a signed document, such as
+  // an attached .p7m, not a signature over the message beside it.
+  if (signedData.encapContentInfo.eContent !== undefined) {
+    return Result.err("not_detached");
+  }
+  return Result.ok(readSigners(signedData, OUTER_CMS_LAYER_ID));
 };
 
 /** Extracts CMS content and stated signer metadata without verifying signatures. */

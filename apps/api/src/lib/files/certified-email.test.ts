@@ -1,8 +1,10 @@
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
+import PostalMime from "postal-mime";
 
 import { assertProperty } from "@stll/property-testing";
 
+import { wrapP7m } from "@/api/tests/fixtures/p7m";
 import {
   PEC_FIXTURE,
   PEC_SIGNER_NAME,
@@ -101,6 +103,29 @@ describe("a PEC transport envelope", () => {
       });
     },
   );
+
+  test("reads an original that the inline parse of the whole file refuses", async () => {
+    // More addresses than PostalMime reads from one forwarded message.
+    const recipients = Array.from(
+      { length: 10_001 },
+      (_, index) => `r${String(index)}@example.com`,
+    ).join(", ");
+    const original = pecOriginalMessage().replace(
+      `To: ${PEC_FIXTURE.certifiedRecipient}`,
+      () => `To: ${recipients}`,
+    );
+    const bytes = await pecMessage({ original });
+    // Without the certified reading the file does not parse at all.
+    const inline = await new PostalMime().parse(bytes.slice().buffer).then(
+      () => "parsed",
+      () => "refused",
+    );
+    expect(inline).toBe("refused");
+    const parsed = await parse(bytes);
+    expect(parsed.certified?.includesOriginal).toBe(true);
+    expect(parsed.subject).toBe(PEC_FIXTURE.subject);
+    expect(parsed.to).toHaveLength(10_001);
+  });
 
   test("is recognised by its content, whatever its parts are named", async () => {
     const parsed = await parse(
@@ -237,6 +262,38 @@ describe("what is not a PEC message", () => {
       expect(parsed.certified).toBeNull();
     },
   );
+
+  test("a second part that only looks like certification data is ambiguous too", async () => {
+    const parsed = await parse(
+      await pecMessage({
+        extraParts: [
+          {
+            name: "altro.xml",
+            mimeType: "application/xml",
+            content: pecDaticert({ type: "inventato" }),
+          },
+        ],
+      }),
+    );
+    expect(parsed.certified).toBeNull();
+  });
+
+  test("a signed document beside the message is not the provider's signature", async () => {
+    const parsed = await parse(
+      await pecMessage({
+        signed: false,
+        extraParts: [
+          {
+            name: "relazione.pdf.p7m",
+            mimeType: "application/pkcs7-mime",
+            content: await wrapP7m(new TextEncoder().encode("relazione")),
+          },
+        ],
+      }),
+    );
+    expect(parsed.certified).toBeNull();
+    expect(attachmentNames(parsed)).toContain("relazione.pdf.p7m");
+  });
 
   test("two certification data parts are ambiguous and read as an ordinary email", async () => {
     const parsed = await parse(

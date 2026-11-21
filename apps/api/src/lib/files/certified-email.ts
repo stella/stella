@@ -325,16 +325,25 @@ export const readCertifiedEmailParts = (
   if (!headerNames.some((name) => PROVIDER_HEADERS.has(name.toLowerCase()))) {
     return null;
   }
-  const data = parts.flatMap((part, index) => {
-    const read = mayBeCertificationData(part.bytes)
-      ? readCertificationData(part.bytes, limits)
-      : null;
-    return read === null ? [] : [{ read, index }];
-  });
-  const [certification] = data;
-  if (certification === undefined || data.length !== 1) {
+  // Two parts that look like certification data are ambiguous even when
+  // only one of them reads: neither is taken for the provider's.
+  const candidates = parts.flatMap((part, index) =>
+    mayBeCertificationData(part.bytes) ? [index] : [],
+  );
+  const [candidate] = candidates;
+  const candidatePart = candidate === undefined ? undefined : parts[candidate];
+  if (
+    candidate === undefined ||
+    candidatePart === undefined ||
+    candidates.length !== 1
+  ) {
     return null;
   }
+  const read = readCertificationData(candidatePart.bytes, limits);
+  if (read === null) {
+    return null;
+  }
+  const certification = { read, index: candidate };
   const certificationParts = new Set([certification.index]);
   const signatures = parts.flatMap((part, index) => {
     const signature = readSignature(part.bytes);

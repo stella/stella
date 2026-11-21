@@ -657,27 +657,27 @@ const parseEml = async (
   fileBuffer: ArrayBuffer,
 ): Promise<Result<ParsedEmail, EmailParseError>> => {
   const parsed = await parseEmlMessage(fileBuffer);
-  if (parsed.isErr()) {
-    return parsed;
-  }
-  const plain = { ...withoutHeaderNames(parsed.value), certified: null };
   if (
+    parsed.isOk() &&
     !parsed.value.attachments.some(({ bytes }) => mayBeCertificationData(bytes))
   ) {
-    return Result.ok(plain);
+    return Result.ok({ ...withoutHeaderNames(parsed.value), certified: null });
   }
+  // The provider's parts are read without parsing the original inline, so an
+  // original the inline parse refuses still leaves the provider's notice.
   const provider = await parseEmlMessage(fileBuffer, {
     keepMessageParts: true,
   });
-  if (provider.isErr()) {
-    return Result.ok(plain);
-  }
-  const certified = readCertifiedEmailParts({
-    headerNames: provider.value.headerNames,
-    parts: provider.value.attachments,
-  });
-  if (certified === null) {
-    return Result.ok(plain);
+  const certified = provider.isOk()
+    ? readCertifiedEmailParts({
+        headerNames: provider.value.headerNames,
+        parts: provider.value.attachments,
+      })
+    : null;
+  if (!provider.isOk() || certified === null) {
+    return parsed.isOk()
+      ? Result.ok({ ...withoutHeaderNames(parsed.value), certified: null })
+      : parsed;
   }
   if (certified.original !== null) {
     const original = await parseEmlMessage(
