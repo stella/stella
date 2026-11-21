@@ -65,6 +65,13 @@ export const DICTATION_READY = {
  *  provider keeps the audio, cleanup with both context switches, custom
  *  words, and the speech model still on this computer. */
 export const SETTINGS_DICTATION = {
+  appSettings: [
+    {
+      cleanup: "off",
+      language: null,
+      target: { kind: "code", type: "kind" },
+    },
+  ],
   available: true,
   cleanup: true,
   cloudAvailable: true,
@@ -87,6 +94,9 @@ export const SETTINGS_DICTATION = {
   model: { status: "ready" },
   modelBytes: 740_363_168,
   phase: "idle",
+  recentApps: [
+    { identifier: "com.apple.mail", kind: "email", name: "Mail" },
+  ],
   retypeKeys: { code: "KeyV", modifiers: ["alt", "shift"] },
   retypeShortcut: true,
   retypeShortcutTaken: false,

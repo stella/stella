@@ -662,6 +662,35 @@
       "openSoundPc": "Ava heliseaded",
       "title": "stella ei kuule teie mikrofoni"
     },
+    "perApp": {
+      "add": "Lisa…",
+      "cleanup": {
+        "default": "Korrigeerimine seadete järgi",
+        "label": "Korrigeerimine: {name}",
+        "off": "Ilma korrigeerimiseta",
+        "on": "Korrigeerimisega"
+      },
+      "description": "Lülitage AI-korrigeerimine sisse või välja ja valige keel ühe rakenduse või rakenduseliigi jaoks. Otsustab rakendus, mis on dikteerimise alustamisel esiplaanil.",
+      "failed": "Seadeid ei õnnestunud salvestada. Proovige uuesti.",
+      "group": "Rakenduse kaupa",
+      "kinds": {
+        "browser": "Brauserid",
+        "chat": "Vestlusrakendused",
+        "code": "Koodiredaktorid",
+        "document": "Dokumendid",
+        "email": "E-posti rakendused",
+        "other": "Muud rakendused",
+        "terminal": "Terminalid"
+      },
+      "kindsOfApp": "Rakenduseliigid",
+      "language": {
+        "default": "Keel seadete järgi",
+        "label": "Keel: {name}"
+      },
+      "recentApps": "Hiljutised rakendused",
+      "remove": "Eemalda {name}",
+      "title": "Rakenduse seaded"
+    },
     "preview": {
       "finishing": "Lõpetan…",
       "label": "Seni dikteeritud tekst",

@@ -662,6 +662,35 @@
       "openSoundPc": "Otwórz ustawienia dźwięku",
       "title": "stella nie słyszy mikrofonu"
     },
+    "perApp": {
+      "add": "Dodaj…",
+      "cleanup": {
+        "default": "Poprawianie jak w ustawieniach",
+        "label": "Poprawianie dla {name}",
+        "off": "Bez poprawiania",
+        "on": "Z poprawianiem"
+      },
+      "description": "Włącz lub wyłącz poprawianie przez AI i wybierz język dla jednej aplikacji lub rodzaju aplikacji. Decyduje aplikacja na pierwszym planie w chwili rozpoczęcia dyktowania.",
+      "failed": "Nie udało się zapisać ustawień. Spróbuj ponownie.",
+      "group": "Według aplikacji",
+      "kinds": {
+        "browser": "Przeglądarki",
+        "chat": "Komunikatory",
+        "code": "Edytory kodu",
+        "document": "Dokumenty",
+        "email": "Aplikacje pocztowe",
+        "other": "Inne aplikacje",
+        "terminal": "Terminale"
+      },
+      "kindsOfApp": "Rodzaje aplikacji",
+      "language": {
+        "default": "Język jak w ustawieniach",
+        "label": "Język dla {name}"
+      },
+      "recentApps": "Ostatnie aplikacje",
+      "remove": "Usuń {name}",
+      "title": "Ustawienia dla aplikacji"
+    },
     "preview": {
       "finishing": "Kończenie…",
       "label": "Dotychczas podyktowany tekst",
