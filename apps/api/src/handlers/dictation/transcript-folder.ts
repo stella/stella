@@ -1,6 +1,7 @@
 import { Result } from "better-result";
 
 import { RESOURCE_TYPE, resourceRef } from "@stll/api-contract";
+import { workspaceAcceptsWrites } from "@stll/api-contract/workspace-status";
 
 import { resultTx, safeDbFromScoped } from "@/api/db/safe-db";
 import type { ScopedDb } from "@/api/db/safe-db";
@@ -10,7 +11,12 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { lockTree } from "@/api/lib/db/tree-parent-guard";
+import {
+  documentWriteRefusal,
+  documentWriteRefusalHandlerError,
+} from "@/api/lib/entities/authorize-document-write";
 import { resolveSiblingNameForInsert } from "@/api/lib/entities/sibling-name-insert";
+import { lockWorkspaceForEntityCreate } from "@/api/lib/entity-cap-lock";
 import { insertEntityBatch } from "@/api/lib/entity-versions/insert-entity-batch";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { broadcastWorkspaceResourceUpdated } from "@/api/lib/resource-realtime";
@@ -42,6 +48,21 @@ export const createTranscriptFolder = async ({
   const created = await resultTx(safeDbFromScoped(scopedDb), async (tx) => {
     // The tree lock comes first, as in every folder create.
     await lockTree(tx, { tree: "entities", scopeId: workspaceId });
+    // The caller authorized the matter before this transaction; its status
+    // is read again under the matter's lock, so a matter archived or
+    // scheduled for deletion in between receives no folder.
+    const workspaceStatus = await lockWorkspaceForEntityCreate(tx, workspaceId);
+    if (!workspaceAcceptsWrites(workspaceStatus)) {
+      return Result.err(
+        documentWriteRefusalHandlerError(
+          documentWriteRefusal(
+            workspaceStatus === undefined
+              ? "workspace-not-found"
+              : "workspace-not-active",
+          ),
+        ),
+      );
+    }
     const capacity = await checkEntityCreateCapacityForInsert({
       tx,
       workspaceId,
