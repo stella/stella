@@ -279,3 +279,25 @@ test.each(["Client: Smith", "Question?", "a*.docx", ".hidden"])(
     );
   },
 );
+
+test("parenthesized numbering names a taken name as a file manager names a copy", () => {
+  const numbered = (
+    name: string,
+    siblings: readonly string[],
+    kind: "document" | "folder" = "folder",
+  ): string =>
+    resolveSiblingName({
+      name,
+      kind,
+      siblingNames: new Set(siblings),
+      numbering: "parenthesized",
+    });
+  const title = "Diktát – odpověď na mail";
+  expect(numbered(title, [])).toBe(title);
+  expect(numbered(title, [title, `${title} (2)`])).toBe(`${title} (3)`);
+  const long = "a".repeat(255);
+  expect(numbered(long, [long])).toBe(`${"a".repeat(251)} (2)`);
+  expect(numbered("Memo.docx", ["Memo.docx"], "document")).toBe(
+    "Memo (2).docx",
+  );
+});

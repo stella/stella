@@ -184,7 +184,7 @@
     "unreadableEraseNotice": "Daļu saglabātās darbības nevar nolasīt. Varat dzēst nenolasāmo saglabāto darbību un tās melnrakstu atkopšanas datus.",
     "unrecoverableOtherHistoryConfirmation": "Citu kontu saglabātā vēsture tiks dzēsta, tostarp gaidošo melnrakstu atkopšanas dati ar trūkstošām atslēgām vai nenolasāmiem failiem. Izveidotie melnraksti jau var pastāvēt. Šo darbību nevar atsaukt.",
     "welcomeControlFact": "Dīkstāves laiks netiek skaitīts. Jebkurā laikā apturiet vai dzēsiet.",
-    "welcomeDetails": "Lietotņu darbība tiek reģistrēta ik pēc dažām sekundēm un nekad netiek automātiski augšupielādēta. Tiek reģistrēti arī logu nosaukumi un atvērto dokumentu ceļi, ja vien neizslēdzat detalizēto informāciju. Kopsavilkumi nonāk starpliktuvē tikai pēc pieprasījuma. Varat izslēgt lietotnes no uzskaites un izvēlēties vēstures glabāšanas ilgumu. Izslēdzot detalizēto informāciju, jauna informācija vairs netiek reģistrēta; iepriekšējā paliek līdz glabāšanas termiņa beigām vai dzēšanai. Ieteikuma logu nosaukumi atstāj šo ierīci tikai tad, ja apstiprināt stella AI aprakstu, vienreiz vai vienmēr; tie netiek saglabāti.",
+    "welcomeDetails": "Lietotņu darbība tiek reģistrēta ik pēc dažām sekundēm un nekad netiek automātiski augšupielādēta. Tiek reģistrēti arī logu nosaukumi un atvērto dokumentu ceļi, ja vien neizslēdzat detalizēto informāciju. Kopsavilkumi nonāk starpliktuvē tikai pēc pieprasījuma. Varat izslēgt lietotnes no uzskaites un izvēlēties vēstures glabāšanas ilgumu. Izslēdzot detalizēto informāciju, jauna informācija vairs netiek reģistrēta; iepriekšējā paliek līdz glabāšanas termiņa beigām vai dzēšanai. Ieteikuma logu nosaukumi atstāj šo ierīci tikai tad, kad pēc piekrišanas došanas pieprasāt stella AI melnrakstu, vienreiz vai vienmēr; tie netiek saglabāti.",
     "welcomeLearnMore": "Uzzināt vairāk",
     "welcomeLocalFact": "Šifrēts šajā ierīcē.",
     "welcomePreviewMatter": "Riverside nomas līguma pagarināšana",
@@ -662,6 +662,35 @@
       "openSoundPc": "Atvērt skaņas iestatījumus",
       "title": "stella nedzird jūsu mikrofonu"
     },
+    "perApp": {
+      "add": "Pievienot…",
+      "cleanup": {
+        "default": "Labošana pēc iestatījuma",
+        "label": "Labošana: {name}",
+        "off": "Bez labošanas",
+        "on": "Ar labošanu"
+      },
+      "description": "Ieslēdziet vai izslēdziet AI labošanu un izvēlieties valodu vienai lietotnei vai lietotņu veidam. Izšķir lietotne, kas ir priekšplānā, kad sākat diktēt.",
+      "failed": "Iestatījumus neizdevās saglabāt. Mēģiniet vēlreiz.",
+      "group": "Pa lietotnēm",
+      "kinds": {
+        "browser": "Pārlūki",
+        "chat": "Tērzēšanas lietotnes",
+        "code": "Koda redaktori",
+        "document": "Dokumenti",
+        "email": "E-pasta lietotnes",
+        "other": "Citas lietotnes",
+        "terminal": "Termināļi"
+      },
+      "kindsOfApp": "Lietotņu veidi",
+      "language": {
+        "default": "Valoda pēc iestatījuma",
+        "label": "Valoda: {name}"
+      },
+      "recentApps": "Nesen lietotās lietotnes",
+      "remove": "Noņemt {name}",
+      "title": "Lietotnes iestatījumi"
+    },
     "preview": {
       "finishing": "Tiek pabeigts…",
       "label": "Līdz šim diktētais teksts",
@@ -669,6 +698,11 @@
     },
     "removeFailed": "Runas modeli neizdevās noņemt. Mēģiniet vēlreiz.",
     "removeModel": "Noņemt",
+    "retype": {
+      "description": "Nospiediet {shortcut}, lai pēdējo diktātu vēlreiz ievadītu kursora vietā. Tas tiek glabāts tikai atmiņā, kamēr tas ir starpliktuves vēsturē.",
+      "taken": "Cita lietotne izmanto {shortcut}. stella ikonas izvēlne Diktēšana piedāvā to pašu.",
+      "title": "Pēdējā diktāta īsinājumtaustiņš"
+    },
     "shortcutTaken": "{shortcut} izmanto cita lietotne.",
     "sounds": {
       "description": "Atskaņot īsu, klusu skaņu, kad ieraksts sākas un kad tas beidzas.",
@@ -681,6 +715,19 @@
       "failed": "Neizdevās atvērt logu. Mēģiniet vēlreiz.",
       "open": "Atvērt",
       "title": "Ieraksta transkribēšana"
+    },
+    "whileDictating": {
+      "choices": {
+        "lower": "Klusināt citas skaņas",
+        "nothing": "Neko nedarīt",
+        "pause": "Pauzēt Mūziku un Spotify"
+      },
+      "description": "Kas notiek ar citām skaņām, kamēr stella ieraksta, lai tās nenonāktu tekstā. Pēc ieraksta viss atgriežas.",
+      "speakersOnly": {
+        "description": "Austiņas paliek kā ir: mikrofons tās nedzird.",
+        "title": "Tikai caur skaļruņiem"
+      },
+      "title": "Diktējot"
     }
   },
   "keepAwake": {
@@ -763,7 +810,7 @@
     "takenOverTitle": "Rediģēšana pārvietota uz citu ierīci"
   },
   "onboarding": {
-    "activityAiNote": "Ieteikuma logu nosaukumi atstāj šo ierīci tikai tad, ja apstiprināt stella AI aprakstu, vienreiz vai vienmēr. Tie netiek saglabāti.",
+    "activityAiNote": "Ieteikuma logu nosaukumi atstāj šo ierīci tikai tad, kad pēc piekrišanas došanas pieprasāt stella AI melnrakstu, vienreiz vai vienmēr. Tie netiek saglabāti.",
     "activityBody": "Redziet, kur pagāja jūsu darba diena, un pārvērtiet to laika ierakstu melnrakstos. Jūs izlemjat, kas tiek ierakstīts un kas tiek nosūtīts.",
     "activityConsentNote": "Nekas netiek ierakstīts, kamēr sadaļā Aktivitāte nenospiežat Sākt ierakstīšanu. Jebkurā laikā varat pauzēt, izslēgt lietotnes vai dzēst jebkuru dienu.",
     "activityNeverKeys": "Taustiņu nospiešana vai ievadītais teksts",
@@ -1140,6 +1187,21 @@
       "searching": "Meklē…",
       "title": "Lieta"
     },
+    "matterFolder": {
+      "audioFailed": "Ierakstu neizdevās saglabāt lietā.",
+      "audioMissing": "Ieraksts šajā logā vairs nav atvērts, tāpēc tas netika saglabāts lietā.",
+      "audioTooLarge": "Ieraksts ir lielāks par {size}, tāpēc tas netika saglabāts lietā.",
+      "cleanedDocxFileName": "{title} – rediģēts teksts.docx",
+      "cleanedTitle": "{title} – rediģēts teksts",
+      "documents": "Saglabā Word dokumentus…",
+      "docxFileName": "{title} – transkripcija.docx",
+      "finishing": "Pārbauda ierakstu…",
+      "instructionsLabel": "Diktāta norādījumi:",
+      "preparing": "Sagatavo ierakstu…",
+      "saveDocx": "Word dokuments (.docx)",
+      "saved": "Saglabāts lietā {matter}, mapē {folder}.",
+      "uploading": "Augšupielādē ierakstu: {percent, number}%"
+    },
     "note": "Philips vai Olympus diktofonu DSS un DS2 failus vispirms saglabājiet WAV formātā programmā SpeechExec vai ODMS.",
     "progress": {
       "another": "Transkribēt citu ierakstu",
@@ -1195,6 +1257,7 @@
     "checkForUpdates": "Pārbaudīt atjauninājumus",
     "dictation": "Diktēšana",
     "dictationHint": "Lai diktētu, turiet {key}",
+    "dictationRetype": "Ievadīt pēdējo diktātu vēlreiz",
     "dictationSettings": "Diktēšanas iestatījumi…",
     "dictationTurnOn": "Ieslēgt diktēšanu…",
     "documentsSyncing": "{count, plural, zero {{count} dokumentu tiek sinhronizēts} one {{count} dokuments tiek sinhronizēts} other {{count} dokumenti tiek sinhronizēti}}",

@@ -184,7 +184,7 @@
     "unreadableEraseNotice": "Egyes mentett tevékenységek nem olvashatók. Törölheti az olvashatatlan mentett tevékenységet és a hozzá tartozó piszkozat-helyreállítási adatokat.",
     "unrecoverableOtherHistoryConfirmation": "A más fiókokhoz tartozó mentett előzmények törlődnek, beleértve a hiányzó kulcsokkal vagy olvashatatlan fájlokkal rendelkező függőben lévő piszkozatok helyreállítási adatait. A létrehozott piszkozatok már létezhetnek. Ez a művelet nem vonható vissza.",
     "welcomeControlFact": "Az inaktív idő nem számít. Bármikor szüneteltetheti vagy törölheti.",
-    "welcomeDetails": "Az alkalmazások tevékenységét néhány másodpercenként rögzíti a rendszer, és soha nem tölti fel automatikusan. Az ablakcímeket és a megnyitott dokumentumok elérési útjait is rögzíti, hacsak ki nem kapcsolja a részleteket. Az összefoglalók csak kérésre kerülnek a vágólapra. Kizárhat alkalmazásokat, és megadhatja az előzmények megőrzési idejét. A részletek kikapcsolása leállítja az új részletek rögzítését; a korábbiak a megőrzési idő végéig vagy törlésig megmaradnak. Egy javaslat ablakcímei csak akkor hagyják el ezt az eszközt, ha jóváhagyja a stella AI által írt leírást, egyszer vagy mindig; nem tárolódnak.",
+    "welcomeDetails": "Az alkalmazások tevékenységét néhány másodpercenként rögzíti a rendszer, és soha nem tölti fel automatikusan. Az ablakcímeket és a megnyitott dokumentumok elérési útjait is rögzíti, hacsak ki nem kapcsolja a részleteket. Az összefoglalók csak kérésre kerülnek a vágólapra. Kizárhat alkalmazásokat, és megadhatja az előzmények megőrzési idejét. A részletek kikapcsolása leállítja az új részletek rögzítését; a korábbiak a megőrzési idő végéig vagy törlésig megmaradnak. Egy javaslat ablakcímei csak akkor hagyják el ezt az eszközt, ha a hozzájárulás megadása után stella AI vázlatot kér, egyszer vagy mindig; nem tárolódnak.",
     "welcomeLearnMore": "További információ",
     "welcomeLocalFact": "Titkosítva ezen az eszközön.",
     "welcomePreviewMatter": "A Riverside bérleti szerződésének meghosszabbítása",
@@ -662,6 +662,35 @@
       "openSoundPc": "Hangbeállítások megnyitása",
       "title": "A stella nem hallja a mikrofont"
     },
+    "perApp": {
+      "add": "Hozzáadás…",
+      "cleanup": {
+        "default": "Javítás a beállítás szerint",
+        "label": "Javítás: {name}",
+        "off": "Nincs javítás",
+        "on": "Javítással"
+      },
+      "description": "Kapcsolja be vagy ki az AI-javítást, és válasszon nyelvet egy alkalmazáshoz vagy alkalmazásfajtához. Az az alkalmazás dönt, amely a diktálás kezdetekor előtérben van.",
+      "failed": "A beállításokat nem sikerült menteni. Próbálja újra.",
+      "group": "Alkalmazásonként",
+      "kinds": {
+        "browser": "Böngészők",
+        "chat": "Csevegőalkalmazások",
+        "code": "Kódszerkesztők",
+        "document": "Dokumentumok",
+        "email": "Levelezőalkalmazások",
+        "other": "Egyéb alkalmazások",
+        "terminal": "Terminálok"
+      },
+      "kindsOfApp": "Alkalmazásfajták",
+      "language": {
+        "default": "Nyelv a beállítás szerint",
+        "label": "Nyelv: {name}"
+      },
+      "recentApps": "Legutóbbi alkalmazások",
+      "remove": "{name} eltávolítása",
+      "title": "Beállítások egy alkalmazáshoz"
+    },
     "preview": {
       "finishing": "Befejezés…",
       "label": "Az eddig diktált szöveg",
@@ -669,6 +698,11 @@
     },
     "removeFailed": "A beszédmodellt nem sikerült eltávolítani. Próbálja újra.",
     "removeModel": "Eltávolítás",
+    "retype": {
+      "description": "Nyomja meg a(z) {shortcut} billentyűparancsot, hogy az utolsó diktálását újra beírja a kurzorhoz. Csak a memóriában marad, amíg a vágólapelőzményekben van.",
+      "taken": "Egy másik alkalmazás használja ezt: {shortcut}. A stella ikon Diktálás menüje ugyanezt kínálja.",
+      "title": "Billentyűparancs az utolsó diktáláshoz"
+    },
     "shortcutTaken": "Egy másik alkalmazás használja ezt: {shortcut}.",
     "sounds": {
       "description": "Rövid, halk hang lejátszása, amikor a felvétel elindul, és amikor véget ér.",
@@ -681,6 +715,19 @@
       "failed": "Az ablakot nem sikerült megnyitni. Próbálja újra.",
       "open": "Megnyitás",
       "title": "Felvétel átírása"
+    },
+    "whileDictating": {
+      "choices": {
+        "lower": "Más hangok halkítása",
+        "nothing": "Semmi",
+        "pause": "A Zene és a Spotify szüneteltetése"
+      },
+      "description": "Mi történjen a többi hanggal, amíg a stella rögzít, hogy ne kerüljön a szövegbe. A rögzítés végén minden visszaáll.",
+      "speakersOnly": {
+        "description": "A fejhallgató marad, ahogy van: a mikrofon nem hallja.",
+        "title": "Csak hangszórón"
+      },
+      "title": "Diktálás közben"
     }
   },
   "keepAwake": {
@@ -763,7 +810,7 @@
     "takenOverTitle": "Szerkesztés másik eszközre áthelyezve"
   },
   "onboarding": {
-    "activityAiNote": "Egy javaslat ablakcímei csak akkor hagyják el ezt az eszközt, ha jóváhagyja a stella AI által írt leírást, egyszer vagy mindig. Nem tárolódnak.",
+    "activityAiNote": "Egy javaslat ablakcímei csak akkor hagyják el ezt az eszközt, ha a hozzájárulás megadása után stella AI vázlatot kér, egyszer vagy mindig. Nem tárolódnak.",
     "activityBody": "Lássa, mire ment el a munkanapja, és alakítsa időbejegyzés-piszkozatokká. Ön dönti el, mi kerül rögzítésre és mi kerül elküldésre.",
     "activityConsentNote": "Semmi sem kerül rögzítésre, amíg a Tevékenységben nem kattint a Rögzítés indítása gombra. Bármikor szüneteltethet, kizárhat alkalmazásokat vagy törölhet bármely napot.",
     "activityNeverKeys": "Billentyűleütéseket vagy begépelt szöveget",
@@ -1140,6 +1187,21 @@
       "searching": "Keresés…",
       "title": "Ügy"
     },
+    "matterFolder": {
+      "audioFailed": "A felvételt nem sikerült az ügybe menteni.",
+      "audioMissing": "A felvétel már nincs megnyitva ebben az ablakban, ezért nem került az ügybe.",
+      "audioTooLarge": "A felvétel nagyobb, mint {size}, ezért nem került az ügybe.",
+      "cleanedDocxFileName": "{title} – szerkesztett szöveg.docx",
+      "cleanedTitle": "{title} – szerkesztett szöveg",
+      "documents": "A Word-dokumentumok mentése…",
+      "docxFileName": "{title} – átirat.docx",
+      "finishing": "A felvétel ellenőrzése…",
+      "instructionsLabel": "Utasítások a diktálásban:",
+      "preparing": "A felvétel előkészítése…",
+      "saveDocx": "Word-dokumentum (.docx)",
+      "saved": "Elmentve ide: {matter}, a(z) {folder} mappába.",
+      "uploading": "A felvétel feltöltése: {percent, number}%"
+    },
     "note": "Philips vagy Olympus diktafonok DSS és DS2 fájljai: előbb mentse őket WAV formátumba a SpeechExec vagy az ODMS programban.",
     "progress": {
       "another": "Másik felvétel átírása",
@@ -1195,6 +1257,7 @@
     "checkForUpdates": "Frissítések keresése",
     "dictation": "Diktálás",
     "dictationHint": "A diktáláshoz tartsa lenyomva a(z) {key} billentyűt",
+    "dictationRetype": "Utolsó diktálás újbóli beírása",
     "dictationSettings": "Diktálási beállítások…",
     "dictationTurnOn": "Diktálás bekapcsolása…",
     "documentsSyncing": "{count, plural, one {1 dokumentum szinkronizálódik} other {{count} dokumentum szinkronizálódik}}",

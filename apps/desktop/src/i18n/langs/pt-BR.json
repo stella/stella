@@ -184,7 +184,7 @@
     "unreadableEraseNotice": "Não é possível ler parte da atividade salva. Você pode apagar a atividade salva ilegível e os dados de recuperação dos rascunhos dela.",
     "unrecoverableOtherHistoryConfirmation": "O histórico salvo de outras contas será excluído, incluindo dados de recuperação de rascunhos pendentes com chaves ausentes ou arquivos ilegíveis. Os rascunhos criados podem já existir. Esta ação não pode ser desfeita.",
     "welcomeControlFact": "Tempo ocioso excluído. Pause ou exclua quando quiser.",
-    "welcomeDetails": "A atividade dos aplicativos é registrada a cada poucos segundos e nunca é enviada automaticamente. Os títulos de janelas e os caminhos dos documentos abertos também são registrados, a menos que você desative os detalhes. Os resumos só vão para a área de transferência quando você solicita. Você pode excluir aplicativos do registro e escolher por quanto tempo o histórico é mantido. Desativar os detalhes interrompe o registro de novos detalhes; os anteriores permanecem até o fim do prazo de retenção ou a exclusão. Os títulos de janela de uma sugestão só saem deste dispositivo quando você aprova uma descrição de stella IA, uma vez ou sempre; eles não são armazenados.",
+    "welcomeDetails": "A atividade dos aplicativos é registrada a cada poucos segundos e nunca é enviada automaticamente. Os títulos de janelas e os caminhos dos documentos abertos também são registrados, a menos que você desative os detalhes. Os resumos só vão para a área de transferência quando você solicita. Você pode excluir aplicativos do registro e escolher por quanto tempo o histórico é mantido. Desativar os detalhes interrompe o registro de novos detalhes; os anteriores permanecem até o fim do prazo de retenção ou a exclusão. Os títulos de janela de uma sugestão só saem deste dispositivo quando você solicita um rascunho da stella IA após conceder consentimento, uma vez ou sempre; eles não são armazenados.",
     "welcomeLearnMore": "Saiba mais",
     "welcomeLocalFact": "Criptografado neste dispositivo.",
     "welcomePreviewMatter": "Renovação do contrato de locação Riverside",
@@ -662,6 +662,35 @@
       "openSoundPc": "Abrir configurações de som",
       "title": "A stella não consegue ouvir seu microfone"
     },
+    "perApp": {
+      "add": "Adicionar…",
+      "cleanup": {
+        "default": "Correção conforme o ajuste",
+        "label": "Correção para {name}",
+        "off": "Sem correção",
+        "on": "Com correção"
+      },
+      "description": "Ative ou desative a correção com IA e escolha o idioma para um app ou um tipo de app. Vale o app em primeiro plano quando você começa a ditar.",
+      "failed": "Não foi possível salvar os ajustes. Tente de novo.",
+      "group": "Por app",
+      "kinds": {
+        "browser": "Navegadores",
+        "chat": "Apps de chat",
+        "code": "Editores de código",
+        "document": "Documentos",
+        "email": "Apps de e-mail",
+        "other": "Outros apps",
+        "terminal": "Terminais"
+      },
+      "kindsOfApp": "Tipos de app",
+      "language": {
+        "default": "Idioma conforme o ajuste",
+        "label": "Idioma para {name}"
+      },
+      "recentApps": "Apps recentes",
+      "remove": "Remover {name}",
+      "title": "Ajustes para um app"
+    },
     "preview": {
       "finishing": "Finalizando…",
       "label": "O que você ditou até agora",
@@ -669,6 +698,11 @@
     },
     "removeFailed": "Não foi possível remover o modelo de fala. Tente novamente.",
     "removeModel": "Remover",
+    "retype": {
+      "description": "Pressione {shortcut} para digitar seu último ditado de novo no cursor. Ele fica só na memória, enquanto estiver no histórico da área de transferência.",
+      "taken": "Outro app está usando {shortcut}. O menu Ditado do ícone do stella oferece o mesmo.",
+      "title": "Atalho para o último ditado"
+    },
     "shortcutTaken": "Outro aplicativo está usando {shortcut}.",
     "sounds": {
       "description": "Tocar um som curto e discreto quando a gravação começa e quando termina.",
@@ -681,6 +715,19 @@
       "failed": "Não foi possível abrir a janela. Tente novamente.",
       "open": "Abrir",
       "title": "Transcrever uma gravação"
+    },
+    "whileDictating": {
+      "choices": {
+        "lower": "Abaixar os outros sons",
+        "nothing": "Não fazer nada",
+        "pause": "Pausar Música e Spotify"
+      },
+      "description": "O que acontece com os outros sons enquanto o stella grava, para que não entrem no texto. Tudo volta quando a gravação termina.",
+      "speakersOnly": {
+        "description": "Os fones ficam como estão: o microfone não os ouve.",
+        "title": "Só nos alto-falantes"
+      },
+      "title": "Ao ditar"
     }
   },
   "keepAwake": {
@@ -763,7 +810,7 @@
     "takenOverTitle": "A edição foi movida para outro dispositivo"
   },
   "onboarding": {
-    "activityAiNote": "Os títulos de janela de uma sugestão só saem deste dispositivo quando você aprova uma descrição de stella IA, uma vez ou sempre. Eles não são armazenados.",
+    "activityAiNote": "Os títulos de janela de uma sugestão só saem deste dispositivo quando você solicita um rascunho da stella IA após conceder consentimento, uma vez ou sempre. Eles não são armazenados.",
     "activityBody": "Veja para onde foi o seu dia de trabalho e transforme-o em rascunhos de lançamentos de horas. Você decide o que é registrado e o que é enviado.",
     "activityConsentNote": "Nada é registrado até você clicar em Começar a registrar na Atividade. Pause, exclua apps ou apague qualquer dia quando quiser.",
     "activityNeverKeys": "Teclas digitadas ou texto",
@@ -1140,6 +1187,21 @@
       "searching": "Buscando…",
       "title": "Caso"
     },
+    "matterFolder": {
+      "audioFailed": "Não foi possível salvar a gravação no caso.",
+      "audioMissing": "A gravação não está mais aberta nesta janela, por isso não foi salva no caso.",
+      "audioTooLarge": "A gravação é maior que {size}, por isso não foi salva no caso.",
+      "cleanedDocxFileName": "{title} - texto revisado.docx",
+      "cleanedTitle": "{title} - texto revisado",
+      "documents": "Salvando os documentos do Word…",
+      "docxFileName": "{title} - transcrição.docx",
+      "finishing": "Verificando a gravação…",
+      "instructionsLabel": "Instruções do ditado:",
+      "preparing": "Preparando a gravação…",
+      "saveDocx": "Documento do Word (.docx)",
+      "saved": "Salvo em {matter}, na pasta {folder}.",
+      "uploading": "Enviando a gravação: {percent, number}%"
+    },
     "note": "Arquivos DSS e DS2 de gravadores Philips ou Olympus: salve-os primeiro como WAV no SpeechExec ou no ODMS.",
     "progress": {
       "another": "Transcrever outra gravação",
@@ -1195,6 +1257,7 @@
     "checkForUpdates": "Verificar atualizações",
     "dictation": "Ditado",
     "dictationHint": "Segure {key} para ditar",
+    "dictationRetype": "Digitar o último ditado de novo",
     "dictationSettings": "Configurações de ditado…",
     "dictationTurnOn": "Ativar o ditado…",
     "documentsSyncing": "{count, plural, one {{count} documento sincronizando} other {{count} documentos sincronizando}}",

@@ -1,0 +1,826 @@
+{
+  "aiColumns": {
+    "countSummary": "{columns} Spalten × {rows} Zeilen = {answers, plural, one {# Antwort} other {# Antworten}}. Antworten verbrauchen Budget.",
+    "modelRefused": "Das Modell hat die Antwort verweigert",
+    "noRowsToRun": "In dieser Auswahl gibt es keine geeigneten Zeilen.",
+    "nothingFound": "Nichts gefunden",
+    "nothingFoundInCutDocument": "Im gelesenen Teil nichts gefunden",
+    "refusedBudget": "Nicht ausgeführt: Antwortbudget nicht verfügbar",
+    "rerunAllPage": "Alle erneut ausführen (diese Seite)",
+    "rerunColumnPage": "Spalte erneut ausführen (diese Seite)",
+    "runColumnPage": "Spalte ausführen (diese Seite)",
+    "runPageRows": "Ausführen für {count, plural, one {# Zeile auf dieser Seite} other {# Zeilen auf dieser Seite}}",
+    "runRemainingPage": "Verbleibende ausführen (diese Seite)",
+    "runSelectedRows": "Ausführen für {count, plural, one {# ausgewählte Zeile} other {# ausgewählte Zeilen}}",
+    "selectedRun": "KI-Spalten ausführen für {count, plural, one {# Zeile} other {# Zeilen}}",
+    "waitToRun": "Warten Sie, bis der laufende Durchgang abgeschlossen ist."
+  },
+  "avt": {
+    "anchorFacts": {
+      "about": "Über den Ankerfaktenbestand",
+      "addFact": "Tatsache hinzufügen",
+      "addFactPlaceholder": "Tatsache so angeben, wie sie aus den Belegen hervorgeht",
+      "addInterpretationNote": "Notiz zur Auslegung hinzufügen",
+      "busyLine": "Angenommene Tatsachen erscheinen hier.",
+      "confidenceLevels": {
+        "high": "Hohe Sicherheit",
+        "low": "Geringe Sicherheit",
+        "medium": "Mittlere Sicherheit"
+      },
+      "description": "Harte Belege – E-Mails, Nachrichten, Bankunterlagen, unstreitige Tatsachen – werden in einem Ankerfaktenbestand erfasst, mit dem Behauptungen abgeglichen werden. Prüfen, bearbeiten oder ergänzen Sie Fakten von Hand.",
+      "editInterpretationNote": "Notiz zur Auslegung bearbeiten",
+      "emptyLine": "Tatsachen aus den Dokumenten der Akte extrahieren oder eine von Hand hinzufügen.",
+      "emptyTitle": "Noch keine Ankerfakten",
+      "heldDescription": "Diese Extraktionen sind <strong>inhaltlich tatsächlich unsicher</strong> – ihr Inhalt ist vorläufig oder unbestätigt, nicht lediglich handschriftlich. Sie fließen erst in die Bewertung ein, wenn ein Prüfer sie bestätigt, bearbeitet oder neu eingibt. Eine lesbare Quelle wird nie allein wegen ihres Mediums zurückgestellt.",
+      "heldFilter": "{count, plural, one {# zur Prüfung zurückgestellt} other {# zur Prüfung zurückgestellt}}",
+      "heldForReview": "Zur Prüfung zurückgestellt",
+      "hideSources": "Quellen ausblenden",
+      "holdOutOfScoring": "Aus der Bewertung ausschließen",
+      "inScoring": "In der Bewertung",
+      "includeInScoring": "In die Bewertung einbeziehen",
+      "interpretationNote": "Notiz zur Auslegung",
+      "interpretationNotePlaceholder": "Ist die Bedeutung dieses Belegs strittig, beschreiben Sie, wie. Andernfalls lassen Sie das Feld leer.",
+      "interpretiveConfidence": "Auslegungssicherheit",
+      "openList": "Liste öffnen",
+      "record": "Ankerfaktenbestand",
+      "showSources": "Quellen anzeigen",
+      "title": "Ankerfakten"
+    },
+    "chronology": {
+      "claims": "{count, plural, one {# Behauptung beruht auf diesem Fakt} other {# Behauptungen beruhen auf diesem Fakt}}",
+      "empty": "Diese Liste enthält noch keine Fakten.",
+      "moreClaims": "{count, plural, one {# weitere Behauptung} other {# weitere Behauptungen}}",
+      "undated": "Ohne Datum"
+    },
+    "claimDetail": {
+      "basis": {
+        "anchorFactsDisagree": "Ankerfakten widersprechen sich",
+        "conflictCount": "{count, plural, one {# Widerspruch} other {# Widersprüche}}",
+        "gap": "<strong>Kein Ankerfakt deckt diese Behauptung ab.</strong> Das ist eine Lücke im Bestand, kein schwaches Ergebnis: Es gibt bislang nichts, womit sich die Behauptung abgleichen ließe.",
+        "notVerifiable": "<strong>Keine überprüfbare Aussage.</strong> Eine solche Aussage könnte durch kein Dokument abschließend geklärt werden – etwa eine kontrafaktische Annahme, Prognose, Absichtsbekundung, rechtliche Schlussfolgerung oder eine zu unbestimmte Behauptung. Sie wird zurückgestellt statt bewertet.",
+        "supportCount": "{count, plural, one {# Stützung} other {# Stützungen}}",
+        "verdictWithheld": "Ergebnis zurückgehalten"
+      },
+      "escalatedReview": "An das Belegteam eskaliert – hier kann kein Ergebnis bestätigt oder beanstandet werden, bis der zugrunde liegende Widerspruch geklärt ist.",
+      "flagDispute": "Beanstandung markieren",
+      "humanReview": "Menschliche Prüfung",
+      "interpretationCaveat": "Ein beitragender Fakt ist mit einem wesentlichen Auslegungsvorbehalt versehen – unsicher ist die Bedeutung des Belegs, nicht das Medium, aus dem er stammt.",
+      "notVerifiable": {
+        "reopen": "Erneut öffnen → mit Bestand abgleichen",
+        "reopenExplanation": "<strong>Als nicht überprüfbar zurückgestellt.</strong> Falls diese Behauptung doch überprüfbar ist, öffnen Sie sie erneut: AVT behält Ihre Neuklassifizierung bei und führt nur den zuvor übersprungenen Bestandsabgleich aus.",
+        "reopenedPending": "Als überprüfbare Behauptung erneut geöffnet. Sie wird als <strong>Keine Abdeckung</strong> angezeigt, bis das Dokument erneut geprüft wird."
+      },
+      "note": {
+        "add": "Notiz / Korrektur hinzufügen",
+        "heading": "Ihre Notiz · {savedAt}",
+        "headingUndated": "Ihre Notiz",
+        "placeholder": "Erfassen Sie eine Korrektur oder Erklärung. Beim Speichern wird die Notiz nur dieser Behauptung zugeordnet – das Ergebnis und der Ankerfaktenbestand bleiben unverändert.",
+        "saveCorrection": "Korrektur speichern"
+      },
+      "overridden": "Geändert",
+      "overrideNotice": "Geändert in <strong>{verdict}</strong> – die nachstehende Analyse ist die unveränderte Beurteilung des Tools.",
+      "overrideTooltip": "Ein Prüfer hat ein abweichendes Ergebnis erfasst. Die nachstehende Analyse ist die unveränderte Beurteilung des Tools.",
+      "overrideVerdict": "Ergebnis ändern",
+      "recordConflict": {
+        "confirmGoverningRecord": "Als maßgeblich bestätigen",
+        "description": "Zwei Ankerfakten betreffen denselben Punkt – <strong>{subject}</strong> –, widersprechen sich jedoch. Beide stammen aus Quellen mit <strong>hoher Sicherheit</strong>; es handelt sich daher nicht um ein Zuverlässigkeitsproblem, sondern der Bestand selbst ist widersprüchlich. AVT hält ein Ergebnis zurück, statt die Behauptung zu bewerten, denn die Entscheidung, welcher Eintrag maßgeblich ist, müssen Sie treffen und dokumentieren – das Tool darf sie nicht stillschweigend treffen.",
+        "escalatedNotice": "Für das Belegteam markiert. Der Bestandswiderspruch bleibt offen und wird weiter gezählt, bis ein maßgeblicher Eintrag ausgewählt ist.",
+        "flagForEvidenceTeam": "Für das Belegteam markieren",
+        "governed": "<strong>{value}</strong> ist maßgeblich: Die Behauptung wird anhand dieses Eintrags beurteilt. Der andere Eintrag bleibt erhalten.",
+        "reconcile": "Bestand abgleichen",
+        "suggestedNotice": "Die Aufzeichnung eines Dokuments wird der Schilderung eines Zeugen vorgezogen. Bestätigen Sie sie oder wählen Sie die andere Aufzeichnung.",
+        "title": "Widersprüchliche Belege im Bestand",
+        "treatAsGoverningRecord": "Als maßgeblich behandeln"
+      },
+      "relation": {
+        "conflicts": "Widerspricht",
+        "supports": "Stützt"
+      },
+      "reopened": "Erneut geöffnet, Prüfung ausstehend",
+      "reopenedTooltip": "Ein Prüfer hat dies als überprüfbaren Fakt neu klassifiziert; der Live-Abgleich mit dem Bestand steht noch aus.",
+      "sourceCount": "{count, plural, one {# Quelle} other {# Quellen}}",
+      "verdictBy": "Ergebnis von {model}",
+      "verdictByGenerativeModel": "Ergebnis vom generativen Modell; das Entscheidungsmodell hat es nicht bestimmt",
+      "whyVerdict": "Begründung des Ergebnisses – Ankerfakten"
+    },
+    "claimTypes": {
+      "fact": {
+        "hint": "Objektive, überprüfbare Aussage – wird mit dem Bestand abgeglichen. Umfasst auch als Eingeständnis oder Bestreiten formulierte Behauptungen: Bewertet wird die zugrunde liegende Aussage, nicht der bloße Wortlaut."
+      },
+      "opinion": {
+        "hint": "Werturteil oder Charakterisierung – kein Dokument kann dies bestätigen oder widerlegen; daher wird es zurückgestellt und nicht bewertet.",
+        "label": "Meinung"
+      },
+      "setAside": "zurückgestellt",
+      "unverifiable": {
+        "hint": "Eine Aussage, die kein Dokument abschließend klären könnte – etwa eine kontrafaktische Annahme, Prognose, Absichts- oder Glaubensbekundung, rechtliche Schlussfolgerung oder eine zu unbestimmte Behauptung. Sie wird zurückgestellt und nicht bewertet. Davon zu unterscheiden ist „Keine Abdeckung“: ein überprüfbarer Fakt, zu dem der Bestand lediglich nichts enthält.",
+        "label": "Nicht überprüfbar"
+      }
+    },
+    "confidence": {
+      "interpretation": "Auslegung",
+      "tooltip": "Auslegungssicherheit – wie eindeutig die Bedeutung dieses Belegs ist. Unabhängig vom Quellenmedium (Handschrift, Scan usw.)."
+    },
+    "confirm": {
+      "acknowledge": "Zur Kenntnis nehmen",
+      "recordConflict": "Lösung bestätigen",
+      "supported": "Bestätigen – bereit",
+      "verdict": "Ergebnis bestätigen"
+    },
+    "disposition": {
+      "contested": "Das Ergebnis ist eindeutig, doch die Auslegung eines beitragenden Fakts ist strittig – vor der Freigabe sollten Sie dies prüfen.",
+      "contradicted": "Der Bestand weicht von dieser Behauptung ab. Bevor dieses Ergebnis Bestand hat, ist eine menschliche Entscheidung erforderlich.",
+      "nocover": "Noch deckt keine Tatsache der Liste diese Behauptung ab.",
+      "notverifiable": "Als nicht überprüfbar zurückgestellt – die Freigabe ist optional. Öffnen Sie die Behauptung unten erneut, falls sie doch überprüfbar ist.",
+      "recordconflict": "Zwei Anlagen im Bestand widersprechen sich. Klären Sie oben, welche maßgeblich ist, oder markieren Sie den Fall für das Belegteam – das Tool entscheidet nicht für Sie.",
+      "restsOnHeld": "Ein Fakt, auf dem dieses Ergebnis beruht, ist zur Prüfung zurückgestellt; bestätigen Sie, dass das Ergebnis auch ohne ihn trägt, oder prüfen Sie die Behauptung erneut, sobald der Fakt geklärt ist.",
+      "scopeMismatch": "Ein zitierter Fakt hat einen anderen Umfang als die Behauptung. Wägen Sie ab, ob er die Behauptung in ihrem Wortlaut klärt, bevor das Ergebnis steht.",
+      "supported": "Der Bestand bestätigt dies. Mit Ihrer Freigabe bestätigen Sie, dass das Tool ihn richtig gelesen hat – eine Ermessensentscheidung ist nicht erforderlich.",
+      "tension": "Der Bestand stützt dies nur teilweise. Wägen Sie die oben aufgeführten stützenden und widersprechenden Fakten ab, bevor das Ergebnis Bestand hat.",
+      "testimonyOnly": "Der Bestand bestätigt dies, doch keine Aufzeichnung eines Dokuments belegt es: Es beruht auf Zeugenaussagen. Mit Ihrer Freigabe bestätigen Sie, dass das Tool sie richtig gelesen hat; das Ergebnis bleibt als auf Zeugenaussagen beruhend markiert.",
+      "unsourcedOnly": "Der Bestand bestätigt dies, jedoch nur über Fakten ohne Quelle. Mit Ihrer Freigabe bestätigen Sie, dass das Tool sie richtig gelesen hat; die Fakten bleiben als ohne Quelle markiert."
+    },
+    "documents": {
+      "claimSummary": "Widersprochen: {contradicted} · Teilweise widersprochen: {tension} · Bestandswiderspruch: {conflicts}",
+      "empty": "Laden Sie ein Dokument in diese Akte hoch, um es zu prüfen.",
+      "kindsLoadFailed": "Ob diese Dokumente Zeugenaussagen sind, konnte nicht geladen werden.",
+      "notVerified": "Noch nicht geprüft",
+      "otherList": "Gegen eine andere Liste geprüft",
+      "permissionRequired": "Sie benötigen die Berechtigung zum Bearbeiten dieser Liste, um Dokumente zu prüfen.",
+      "sizeConfirmTitle": "Dieses Dokument prüfen?",
+      "starting": "Die Prüfung wird gestartet…",
+      "statusLoadFailed": "Der Prüfstatus dieser Dokumente konnte nicht geladen werden.",
+      "testimony": "Zeugenaussage",
+      "testimonyAbout": "Über Zeugenaussagen",
+      "testimonyLine": "Markieren Sie Zeugenaussagen, Gesprächsnotizen und Transkripte als Zeugenaussage. Daraus entnommene Fakten gelten als Schilderung einer Person, nicht als Aufzeichnung.",
+      "verifyAgain": "Erneut prüfen"
+    },
+    "extraction": {
+      "busy": "Schließen Sie zuerst die laufende Extraktion und ihre Prüfung ab.",
+      "confirmStart": "{units, plural, one {Starten, # Einheit} other {Starten, # Einheiten}}",
+      "dialogDescription": "Sie nehmen jede Tatsache an oder lehnen sie ab, bevor sie in den Bestand aufgenommen wird.",
+      "dialogTitle": "Tatsachen aus Dokumenten extrahieren",
+      "documentsChosen": "{count, plural, one {# ausgewählt, höchstens {max}} other {# ausgewählt, höchstens {max}}}",
+      "documentsLabel": "Zu lesende Dokumente",
+      "errors": {
+        "accessRevoked": "Die Extraktion der Tatsachen wurde beendet, weil kein Zugriff besteht.",
+        "aiUnavailable": "Zum Lesen der Dokumente ist kein KI-Modell verfügbar. Prüfen Sie die KI-Einstellungen der Organisation.",
+        "documentMissing": "Ein ausgewähltes Dokument oder die Liste existiert nicht mehr. Laden Sie die Seite neu und wählen Sie erneut aus.",
+        "enqueueFailed": "Die Extraktion der Tatsachen konnte nicht gestartet werden. Versuchen Sie es erneut.",
+        "extractionFailed": "Die Tatsachen in diesen Dokumenten konnten nicht extrahiert werden.",
+        "internal": "Die Extraktion der Tatsachen ist unerwartet fehlgeschlagen.",
+        "noText": "Aus den ausgewählten Dokumenten konnte kein Text gelesen werden.",
+        "sourceUnavailable": "Ein Dokument wurde nach dem Start der Extraktion geändert oder entfernt. Wählen Sie die Dokumente erneut aus.",
+        "unsupportedFormat": "Tatsachen können nur aus DOCX-Dateien, PDFs und Dateien mit einer PDF-Fassung gelesen werden."
+      },
+      "extractFromDocuments": "Aus Dokumenten extrahieren",
+      "failedTitle": "Extraktion der Tatsachen fehlgeschlagen",
+      "instructionLabel": "Worauf achten (optional)",
+      "instructionPlaceholder": "Zum Beispiel: Zahlungen zwischen den Parteien und wann sie erfolgten",
+      "nothingFound": "In den ausgewählten Dokumenten wurden keine Tatsachen gefunden.",
+      "proposedTitle": "Vorgeschlagene Tatsachen",
+      "queued": "Wartet auf den Start.",
+      "reviewed": "{accepted} von {proposed, plural, one {# vorgeschlagenen Tatsache} other {# vorgeschlagenen Tatsachen}} angenommen.",
+      "runSize": "{available, plural, one {Dieser Lauf verbraucht etwa {estimated} Ihrer # verfügbaren Einheit.} other {Dieser Lauf verbraucht etwa {estimated} Ihrer # verfügbaren Einheiten.}}",
+      "running": "Die Dokumente werden gelesen. Vorgeschlagene Tatsachen erscheinen hier zur Prüfung.",
+      "selectDocument": "Wählen Sie mindestens ein Dokument aus.",
+      "startFailed": "Die Extraktion der Tatsachen konnte nicht gestartet werden",
+      "starting": "Die Extraktion von Tatsachen wird gestartet…",
+      "submit": "{count, plural, =0 {Tatsachen extrahieren} one {Tatsachen aus # Dokument extrahieren} other {Tatsachen aus # Dokumenten extrahieren}}"
+    },
+    "factTier": {
+      "testimony": {
+        "hint": "Jede nicht abgelehnte Quelle dieses Fakts ist eine Zeugenaussage: eine Aussage, eine Gesprächsnotiz oder ein Transkript.",
+        "label": "Zeugenaussage"
+      },
+      "unsourced": {
+        "hint": "Mit diesem Fakt ist kein Quelldokument verknüpft, das nicht abgelehnt wurde; Medium und Datum beschreiben den Beleg, sind aber keine Quelle.",
+        "label": "Ohne Quelle"
+      }
+    },
+    "gap": {
+      "addFact": "Tatsache aus einem Dokument hinzufügen",
+      "addFactFailed": "Die Tatsache konnte nicht hinzugefügt werden",
+      "factOffList": "Eine Tatsache, die nicht mehr in der Liste steht",
+      "linkFact": "Tatsache verknüpfen",
+      "linkFailed": "Die Tatsache konnte nicht verknüpft werden",
+      "linked": "Verknüpfte Tatsachen",
+      "linkedMark": "Verknüpft",
+      "linksChanged": "Die Verknüpfungen haben sich seit der letzten Prüfung geändert.",
+      "noFacts": "Keine Tatsache in der Liste passt.",
+      "recheck": "Erneut prüfen",
+      "recheckFailed": "Die Behauptung konnte nicht erneut geprüft werden",
+      "searchFacts": "Tatsachen der Liste durchsuchen",
+      "sheet": {
+        "passage": "Textstelle",
+        "passageHint": "Der Wortlaut im Dokument, der die Tatsache belegt.",
+        "statementRequired": "Geben Sie die Tatsache ein.",
+        "statementTooLong": "Eine Tatsache darf höchstens {limit} Zeichen enthalten.",
+        "submit": "Hinzufügen und erneut prüfen",
+        "title": "Tatsache aus einem Dokument hinzufügen"
+      },
+      "showNextSteps": "Nächste Schritte anzeigen",
+      "unlink": "Verknüpfung mit {fact} aufheben"
+    },
+    "graph": {
+      "claimCount": "{count, plural, one {# Behauptung} other {# Behauptungen}}",
+      "claimTitle": "Behauptung",
+      "columns": {
+        "claims": "Behauptungen",
+        "sources": "Quelldokumente",
+        "statements": "Erklärungen"
+      },
+      "empty": "Diese Liste enthält noch keine Fakten oder geprüften Dokumente.",
+      "factCount": "{count, plural, one {# Fakt} other {# Fakten}}",
+      "factOverflow": "{count, plural, one {Der erste Fakt (#) dieser Liste wird angezeigt.} other {Die ersten # Fakten dieser Liste werden angezeigt.}}",
+      "filters": {
+        "allSources": "Alle Quellen",
+        "allVerdicts": "Alle Ergebnisse",
+        "conflicts": "Widersprüche",
+        "heldFacts": "Zurückgestellte Fakten",
+        "source": "Nach Quelle filtern",
+        "verdict": "Nach Ergebnis filtern"
+      },
+      "held": "Zurückgestellt",
+      "linkedFacts": "{count, plural, one {# verknüpfter Fakt} other {# verknüpfte Fakten}}",
+      "listLabel": "Graph als Liste",
+      "loadMore": "Weitere Dokumente laden",
+      "noMatch": "Nichts entspricht diesen Filtern.",
+      "noStatements": "Bisher wurde kein Dokument anhand dieser Liste geprüft.",
+      "offList": "Nicht mehr auf der Liste",
+      "relation": {
+        "conflicts": "Widerspricht",
+        "governs": "Maßgeblich",
+        "record": "Im Bestand",
+        "recordConflict": "Widersprüchlicher Eintrag",
+        "supports": "Stützt"
+      },
+      "unlinked": "Fakten, auf denen keine Behauptung beruht",
+      "verifyInReview": "Dokument prüfen"
+    },
+    "guidance": {
+      "escalate": "Eskalieren",
+      "manualJudgement": "Manuelle Entscheidung",
+      "optional": "Fakultativ",
+      "readyToConfirm": "Bestätigungsbereit"
+    },
+    "history": {
+      "actions": {
+        "acceptedRoutine": "Als routinemäßig übernommen",
+        "conflictReopened": "Auflösung des Widerspruchs zurückgenommen",
+        "escalated": "Für das Belegteam markiert",
+        "factLinked": "Tatsache verknüpft",
+        "factUnlinked": "Verknüpfung mit Tatsache aufgehoben",
+        "governed": "Maßgeblichen Eintrag gewählt",
+        "noteCleared": "Notiz entfernt",
+        "noteSaved": "Notiz gespeichert",
+        "overridden": "Ergebnis geändert",
+        "overrideWithdrawn": "Änderung des Ergebnisses zurückgenommen",
+        "rechecked": "Behauptung erneut geprüft",
+        "reopened": "Als überprüfbare Behauptung erneut geöffnet",
+        "statusCleared": "Prüfstatus entfernt",
+        "statusDisputed": "Als beanstandet markiert",
+        "statusNeedsEvidence": "Als belegbedürftig markiert",
+        "statusReviewed": "Als geprüft markiert"
+      },
+      "carriedFrom": "Aus der Prüfung vom {date}",
+      "carriedFromEarlier": "Aus einer früheren Prüfung",
+      "empty": "Noch keine Prüfaktionen.",
+      "filters": {
+        "allKinds": "Jede Aktion",
+        "allReviewers": "Jeder Prüfer",
+        "kind": "Nach Aktion filtern",
+        "reviewer": "Nach Prüfer filtern"
+      },
+      "formerMember": "Ehemaliges Mitglied",
+      "kinds": {
+        "factLink": "Faktenverknüpfungen",
+        "override": "Geänderte Ergebnisse",
+        "recheck": "Erneute Prüfungen",
+        "recordConflict": "Auflösungen von Widersprüchen",
+        "reopen": "Erneute Öffnungen",
+        "status": "Statusänderungen"
+      },
+      "noMatches": "Keine Aktionen entsprechen diesen Filtern.",
+      "noStatus": "Kein Status",
+      "none": "Noch keine Aktionen",
+      "reasonUnrecorded": "Keine Begründung erfasst: Dies geschah, bevor Begründungen erforderlich waren.",
+      "runButton": "Prüfverlauf",
+      "runTitle": "Prüfverlauf"
+    },
+    "matches": {
+      "count": "{count, plural, one {# Treffer} other {# Treffer}}",
+      "noNext": "Dies ist der letzte Treffer.",
+      "noPrevious": "Dies ist der erste Treffer.",
+      "position": "{current}/{total}"
+    },
+    "mode": {
+      "chronology": "Chronologie",
+      "graph": "Graph",
+      "label": "Liste anzeigen als",
+      "review": "Prüfung"
+    },
+    "qualifiers": {
+      "heading": "Vorbehalte",
+      "recordSilent": {
+        "hint": "Vom Bestand ist zu diesem Punkt keine Aussage zu erwarten; die fehlende Abdeckung ist daher keine Lücke.",
+        "label": "Bestand schweigt"
+      },
+      "restsOnHeld": {
+        "hint": "Ein Fakt, auf dem dieses Ergebnis beruht, ist jetzt aus der Bewertung ausgeschlossen.",
+        "label": "Beruht auf ausgeschlossenem Fakt"
+      },
+      "scopeMismatch": {
+        "hint": "Ein zitierter Fakt betrifft einen anderen Zeitraum, Personenkreis, Ort oder eine andere Messgröße als die Behauptung.",
+        "label": "Abweichender Umfang"
+      },
+      "testimonyOnly": {
+        "hint": "Keine Aufzeichnung eines Dokuments belegt die Fakten, auf denen dieses Ergebnis beruht, und mindestens einer davon ist eine Zeugenaussage.",
+        "label": "Nur Zeugenaussagen"
+      },
+      "unsourcedOnly": {
+        "hint": "Kein Fakt, auf dem dieses Ergebnis beruht, hat bisher eine Quelle.",
+        "label": "Nur ohne Quelle"
+      }
+    },
+    "reason": {
+      "escalate": "Warum braucht das Belegteam dies?",
+      "govern": "Warum ist dieser Eintrag maßgeblich?",
+      "override": "Warum lautet das Ergebnis „{verdict}“?",
+      "placeholder": "Begründung; sie bleibt im Verlauf der Behauptung",
+      "reopen": "Warum ist diese Behauptung überprüfbar?",
+      "required": "Geben Sie eine Begründung an, um dies festzuhalten.",
+      "unresolveConflict": "Warum diese Auflösung zurücknehmen?",
+      "withdrawOverride": "Warum zum Ergebnis des Werkzeugs zurückkehren?"
+    },
+    "recheck": {
+      "currentVerdict": "Ergebnis nach der erneuten Prüfung",
+      "runVerdict": "Ergebnis des Prüflaufs",
+      "summary": "Erneut geprüft {checkedAt} anhand von {count, plural, one {# Tatsache} other {# Tatsachen}}."
+    },
+    "review": {
+      "alreadyReopened": "Diese Behauptung wurde bereits erneut geöffnet.",
+      "decided": "{status, select, disputed {Beanstandet} needsEvidence {Belege fehlen} other {{origin, select, bulk {Als routinemäßig übernommen} other {Geprüft}}}} · {decidedAt}",
+      "escalated": "Klären Sie die Eskalation, bevor Sie die Prüfentscheidung ändern.",
+      "permissionRequired": "Sie benötigen die Berechtigung zum Bearbeiten dieser Liste, um Behauptungen zu prüfen.",
+      "status": {
+        "disputed": "Beanstandet",
+        "needsEvidence": "Belege fehlen",
+        "reviewed": "Geprüft"
+      },
+      "undo": "Entscheidung rückgängig machen"
+    },
+    "runs": {
+      "back": "Alle Dokumente",
+      "carryOver": {
+        "openSource": "Prüfung vom {date} öffnen",
+        "outcomes": {
+          "ambiguous": "Mehrere mögliche Treffer",
+          "textChanged": "Wortlaut geändert",
+          "unmatched": "Keine passende Behauptung",
+          "verdictChanged": "Ergebnis hat sich geändert"
+        },
+        "summary": {
+          "carried": "{count, number} übernommen",
+          "carriedAndMissed": "{carried, number} übernommen · {missed, number} nicht",
+          "label": "Prüfungen aus der Prüfung vom {date}: {carried, number} übernommen, {missed, number} nicht übernommen",
+          "missed": "{count, number} nicht übernommen"
+        }
+      },
+      "errors": {
+        "accessRevoked": "Die Überprüfung wurde beendet, da kein Zugriff verfügbar ist.",
+        "aiUnavailable": "Für die Dokumentenprüfung ist kein KI-Modell verfügbar. Prüfen Sie die KI-Einstellungen der Organisation.",
+        "enqueueFailed": "Die Prüfung konnte nicht gestartet werden. Versuchen Sie es erneut.",
+        "extractionFailed": "Die Behauptungen in diesem Dokument konnten nicht extrahiert werden.",
+        "gradingFailed": "Die Behauptungen konnten nicht mit den Fakten der Liste abgeglichen werden.",
+        "internal": "Die Prüfung ist unerwartet fehlgeschlagen.",
+        "noText": "Aus diesem Dokument konnte kein Text gelesen werden.",
+        "pinContentChanged": "Das Dokument hat sich nach Beginn der Prüfung geändert. Prüfen Sie es erneut.",
+        "pinUnresolved": "Die Dokumentversion, für die diese Prüfung gestartet wurde, ist nicht mehr auffindbar.",
+        "unsupportedFormat": "Es können nur DOCX-Dateien, PDFs und Dateien mit einer PDF-Fassung geprüft werden."
+      },
+      "evidencePinned": "Geprüft anhand von {count, plural, one {# Fakt} other {# Fakten}}, wie sie am {checkedAt} vorlagen. Spätere Änderungen an der Liste wirken sich nicht auf diese Prüfung aus.",
+      "failedTitle": "Prüfung fehlgeschlagen",
+      "history": {
+        "label": "Prüfverlauf",
+        "loadFailed": "Frühere Prüfungen dieses Dokuments konnten nicht geladen werden."
+      },
+      "inProgress": "Die Behauptungen des Dokuments werden mit den Fakten der Liste abgeglichen …",
+      "loadFailed": "Diese Prüfung konnte nicht geladen werden.",
+      "noClaims": "In diesem Dokument wurden keine Behauptungen gefunden.",
+      "startFailed": "Die Prüfung konnte nicht gestartet werden",
+      "status": {
+        "running": "Wird geprüft"
+      },
+      "unreadParts": "{count, plural, one {# Teil des Dokuments konnte nicht gelesen werden, seine Behauptungen wurden daher nicht geprüft.} other {# Teile des Dokuments konnten nicht gelesen werden, ihre Behauptungen wurden daher nicht geprüft.}}"
+    },
+    "save": {
+      "failed": "Nicht gespeichert",
+      "failedTitle": "Ihre Änderung wurde nicht gespeichert"
+    },
+    "scope": {
+      "checkedDocument": "Nur die Absätze <num>{range}</num> geprüft.",
+      "checkedOrdinal": "Nur die Absätze <num>{range}</num> geprüft, nach ihrer Reihenfolge gezählt: Dieses Dokument nummeriert seine Absätze nicht.",
+      "errors": {
+        "empty": "Diese Absätze enthalten keinen Text zum Prüfen.",
+        "garbage": "Geben Sie Absatznummern ein, etwa 82–136.",
+        "notFound": "Diese Absätze sind nicht in diesem Dokument.",
+        "numberingUnclear": "Die Absatznummern dieses Dokuments lassen sich nicht lesen. Prüfen Sie das ganze Dokument.",
+        "required": "Geben Sie die zu prüfenden Absätze ein.",
+        "reversed": "Der Bereich endet, bevor er beginnt.",
+        "tooWide": "Prüfen Sie höchstens 500 Absätze auf einmal."
+      },
+      "example": "82–136",
+      "mark": "¶ <num>{range}</num>",
+      "noClaims": "In diesen Absätzen wurden keine Behauptungen gefunden.",
+      "showBefore": "Text vor ¶ {from} anzeigen",
+      "verifyParagraphs": "Absätze prüfen"
+    },
+    "staleness": {
+      "failed": "Die Behauptungen konnten nicht erneut geprüft werden",
+      "finished": "{count, plural, one {# Behauptung erneut geprüft} other {# Behauptungen erneut geprüft}}",
+      "partial": "{rechecked, number} erneut geprüft, {failed, plural, one {# fehlgeschlagen} other {# fehlgeschlagen}}",
+      "reasons": {
+        "factChanged": "Fakt geändert",
+        "factHeld": "Fakt ausgeschlossen",
+        "factRemoved": "Fakt entfernt",
+        "newFactRelated": "Neuer zugehöriger Fakt"
+      },
+      "recheckAll": "Alle erneut prüfen",
+      "recheckLocked": "Wird mit den anderen veralteten Behauptungen erneut geprüft",
+      "runLine": "{count, plural, one {# Behauptung ist möglicherweise veraltet} other {# Behauptungen sind möglicherweise veraltet}}",
+      "running": "{count, plural, one {# Behauptung wird erneut geprüft…} other {# Behauptungen werden erneut geprüft…}}"
+    },
+    "states": {
+      "contradicted": {
+        "chip": "Widersprochen",
+        "label": "Durch den Bestand widerlegt"
+      },
+      "nocover": {
+        "chip": "Keine Abdeckung",
+        "label": "Kein Ankerfakt deckt diese Behauptung ab",
+        "silentChip": "Keine Abdeckung · Bestand schweigt"
+      },
+      "notverifiable": {
+        "chip": "Nicht überprüfbar",
+        "label": "Keine überprüfbare Tatsachenbehauptung"
+      },
+      "recordconflict": {
+        "chip": "Bestandswiderspruch",
+        "label": "Ankerfakten widersprechen einander"
+      },
+      "supported": {
+        "chip": "Gestützt",
+        "label": "Durch den Bestand gestützt"
+      },
+      "tension": {
+        "chip": "Teilweise widersprochen",
+        "label": "Steht teilweise im Widerspruch zum Bestand"
+      }
+    },
+    "verification": {
+      "acceptRoutine": "{count, plural, one {# routinemäßige Behauptung} other {# routinemäßige Behauptungen}} übernehmen",
+      "attentionComplete": "<strong>Alle Behauptungen, die eine Entscheidung erfordern, wurden bearbeitet.</strong> {count, plural, one {Die # routinemäßige Feststellung muss nicht einzeln geprüft werden.} other {Die # routinemäßigen Feststellungen müssen nicht einzeln geprüft werden.}}",
+      "attentionOpen": "<strong>{count, plural, one {# Behauptung erfordert} other {# Behauptungen erfordern}} Ihre Entscheidung</strong> – Widersprüche und strittige Auslegungen. {routineCount, plural, one {Die andere # ist routinemäßig und muss nicht einzeln freigegeben werden.} other {Die anderen # sind routinemäßig und müssen nicht einzeln freigegeben werden.}}",
+      "claimAnnouncement": " ({state}{contested, select, true {, strittig} other {}}{reviewStatus, select, reviewed {, geprüft} disputed {, beanstandet} needsEvidence {, Belege fehlen} other {}})",
+      "documentView": {
+        "label": "Dokumentansicht",
+        "original": "Original",
+        "reading": "Leseansicht"
+      },
+      "notLocated": "{count, plural, one {# Behauptung wurde im Original nicht gefunden} other {# Behauptungen wurden im Original nicht gefunden}}",
+      "pdfTextFailed": "Der Text der PDF konnte nicht gelesen werden, daher sind die Behauptungen auf den Seiten nicht markiert.",
+      "selectClaim": "Wählen Sie eine Behauptung aus, um den Bestand zu prüfen.",
+      "showQueue": "Warteschlange anzeigen",
+      "stats": {
+        "claims": "Behauptungen",
+        "needsJudgement": "Entscheidung erforderlich",
+        "progress": "{settled}/{total}"
+      }
+    },
+    "view": {
+      "chooseList": "Liste auswählen",
+      "createList": "Liste erstellen",
+      "evidenceList": "Fakten aus",
+      "loadSample": "Beispielfall laden",
+      "loadSampleFailed": "Der Beispielfall konnte nicht geladen werden",
+      "loadingSample": "Beispielfall wird geladen…",
+      "noLists": "Diese Akte hat keine Listen.",
+      "pickList": "Wählen Sie die Liste, mit deren Fakten die Dokumente dieser Akte abgeglichen werden."
+    }
+  },
+  "inspector": {
+    "anonymization": {
+      "addPlaceholder": "Zu anonymisierender Begriff",
+      "contextMenuAddAction": "Auswahl anonymisieren",
+      "deleteAction": "Begriff löschen",
+      "detectedHeading": "In diesem Dokument erkannt ({count})",
+      "detectingMatches": "Treffer in diesem Dokument werden erkannt…",
+      "downloadAction": "Anonymisierte PDF herunterladen",
+      "downloadHint": "Exportiert die gespeicherte Version als PDF mit nicht auswählbarem Text.",
+      "emptyState": "Noch keine kanzleispezifischen Begriffe. Fügen Sie oben einen hinzu.",
+      "enterTerm": "Geben Sie einen Begriff zur Anonymisierung ein.",
+      "ignoreAction": "In diesem Dokument ignorieren",
+      "ignoreScopeAlways": "Immer ignorieren",
+      "ignoreScopeDocument": "In dieser Akte ignorieren",
+      "ignoreScopeMenuAriaLabel": "Geltungsbereich",
+      "labelPickerAriaLabel": "Trefferbezeichnung",
+      "labelPickerEmpty": "Keine passende Bezeichnung.",
+      "labelPickerPlaceholder": "Bezeichnung",
+      "matchCount": "{count, plural, one {# Treffer} other {# Treffer}} in diesem Dokument hervorgehoben.",
+      "matchedWorkspaceTermsHeading": "Übereinstimmende Kanzleibegriffe ({count})",
+      "noMatchesInDocument": "Keiner Ihrer Kanzleibegriffe kommt in diesem Dokument vor.",
+      "openFullViewHint": "Öffnen Sie die Datei in der Vollansicht, um die Anonymisierungs-Markierungen und die Trefferzahlen pro Dokument zu sehen.",
+      "restoreAction": "In diesem Dokument wiederherstellen",
+      "scanFailed": "Die Prüfung ist fehlgeschlagen. Starten Sie sie erneut, um Treffer zu erkennen.",
+      "termAddedToast": "„{value}“ zu den Anonymisierungsbegriffen der Kanzlei hinzugefügt.",
+      "termMatchCountAriaLabel": "{count, plural, one {#-mal} other {#-mal}} in diesem Dokument gefunden.",
+      "title": "Anonymisierungs-Vokabular",
+      "unsupportedVisualContent": "Diese Datei enthält Bilder oder Vektorgrafiken, die nicht auf vertraulichen Text geprüft werden können. Der Export ist nicht verfügbar.",
+      "waitForMatches": "Warten Sie, bis die Prüfung zur Anonymisierung abgeschlossen ist.",
+      "workspaceTermsHeading": "Kanzleibegriffe ({count})"
+    },
+    "attachmentNotPreviewable": "Laden Sie den Anhang herunter, um ihn zu öffnen.",
+    "closeAllTabs": "{count, plural, one {# Tab} other {Alle # Tabs}} schließen",
+    "closeOtherTabs": "{count, plural, one {# anderen Tab} other {# andere Tabs}} schließen",
+    "closeTab": "<bdi>{name}</bdi> schließen",
+    "conversionRefusal": {
+      "legacyFormat": "Dies ist eine ältere {format}-Datei. Speichern Sie sie als {replacementExtension}, um sie zu konvertieren.",
+      "unsupportedEncoding": "Dieses Dokument verwendet die nicht unterstützte Zeichenkodierung {encoding} und kann daher nicht konvertiert werden.",
+      "unsupportedField": "Dieses Dokument enthält ein {fieldType}-Feld, das nicht konvertiert werden kann.",
+      "unsupportedReference": "Dieses Dokument verweist in {element} {attribute} auf eine externe Ressource und kann daher nicht konvertiert werden."
+    },
+    "enterGroupName": "Geben Sie einen Namen für die Gruppe ein.",
+    "external": {
+      "confirmDescription": "Sie sind dabei, eine externe Website zu besuchen.",
+      "confirmTitle": "Externen Link öffnen?",
+      "openLink": "Link öffnen",
+      "openOriginal": "Original öffnen",
+      "unavailable": "Die verlinkte Website erlaubt keine sichere Vorschau. Wenn das Tool Dokumenttext zurückgegeben hat, erscheint er hier; andernfalls öffnen Sie das Original."
+    },
+    "facet": {
+      "anonymization": "Anonymisierung"
+    },
+    "firstSourceReached": "Dies ist die erste Quelle.",
+    "groups": {
+      "addContext": "Kontext hinzufügen",
+      "chatMoveDescription": "<bdi>{chatName}</bdi> wird unter <bdi>{matterName}</bdi> gruppiert. Fügen Sie die Akte zum Kontext des Chats hinzu, damit er ihre Dateien und Informationen verwenden kann.",
+      "chatMoveTitle": "Diese Akte zum Chat hinzufügen?",
+      "collapse": "{groupName} einklappen",
+      "color": "Gruppenfarbe",
+      "colorOption": "Farbe {number}",
+      "copyIntoMatter": "In die Akte kopieren",
+      "expand": "{groupName} ausklappen",
+      "fileMoveDescription": "<bdi>{fileName}</bdi> gehört zu <bdi>{sourceMatterName}</bdi>. Kopieren Sie die Datei nach <bdi>{matterName}</bdi>, oder gruppieren Sie den vorhandenen Tab dort, ohne die Datei zu kopieren.",
+      "fileMoveTitle": "Diese Datei in die Akte kopieren?",
+      "groupOnly": "Nur gruppieren",
+      "moveToGroup": "In Gruppe verschieben",
+      "name": "Gruppenname",
+      "newGroup": "Neue Gruppe",
+      "remove": "Tabgruppierung aufheben",
+      "rename": "Gruppe umbenennen",
+      "saveFailed": "Die Tabgruppen konnten in diesem Browser nicht gespeichert werden.",
+      "tabCount": "{count, plural, one {# Tab} other {# Tabs}}",
+      "ungroup": "Aus Gruppe entfernen"
+    },
+    "hidePane": "Bereich ausblenden",
+    "lastSourceReached": "Dies ist die letzte Quelle.",
+    "matterPicker": {
+      "allMatters": "Alle Akten",
+      "description": "Wählen Sie die Akten aus, auf die dieser Chat zurückgreifen kann.",
+      "empty": "Keine Akten verfügbar.",
+      "noMatter": "Keine Akte",
+      "noResults": "Keine Akte stimmt mit „{query}“ überein.",
+      "searchPlaceholder": "Akten oder Mandanten suchen…",
+      "title": "Aktenkontext"
+    },
+    "metadata": {
+      "aiExtractedHeading": "Von KI extrahiert",
+      "documentProperties": {
+        "empty": "Diese Datei enthält keine eigenen Eigenschaften",
+        "heading": "Dateieigenschaften",
+        "keys": {
+          "application": "Anwendung",
+          "applicationVersion": "Anwendungsversion",
+          "characters": "Zeichen",
+          "company": "Firma",
+          "contentStatus": "Inhaltsstatus",
+          "createdAt": "Erstellt",
+          "description": "Kommentare",
+          "editingMinutes": "Gesamtbearbeitungszeit",
+          "keywords": "Stichwörter",
+          "lastModifiedBy": "Zuletzt gespeichert von",
+          "lastPrintedAt": "Gedruckt",
+          "manager": "Manager",
+          "modifiedAt": "Geändert",
+          "pages": "Seiten",
+          "paragraphs": "Absätze",
+          "producer": "PDF-Produzent",
+          "revision": "Revisionsnummer",
+          "slides": "Folien",
+          "subject": "Thema",
+          "template": "Vorlage",
+          "title": "Titel",
+          "words": "Wörter"
+        },
+        "passwordProtected": "Die Datei ist passwortgeschützt, ihre Eigenschaften lassen sich daher nicht lesen",
+        "saveFailed": "Die Eigenschaft konnte nicht gespeichert werden.",
+        "tooLarge": "Die Datei ist zu groß, um ihre Eigenschaften zu lesen",
+        "unreadable": "Die Eigenschaften der Datei konnten nicht gelesen werden",
+        "unsupportedFormat": "Dieser Dateityp enthält keine Dokumenteigenschaften"
+      },
+      "lastUpdatedBy": "Zuletzt aktualisiert von",
+      "matterColumnsHeading": "Angaben in der Akte",
+      "noMatterColumns": "Zu diesem Dokument ist noch nichts erfasst",
+      "similarDocuments": {
+        "heading": "Ähnliche Dokumente",
+        "similarity": "{percent} ähnlich"
+      },
+      "stellaHeading": "In stella gespeichert",
+      "versionCurrent": "v{version} (aktuell)"
+    },
+    "moveToMain": "In Hauptansicht verschieben",
+    "moveToSide": "In Seitenleiste verschieben",
+    "openChat": "Chat öffnen",
+    "openTabs": "Geöffnete Tabs ({count, number})",
+    "reopenTab": "{name} erneut öffnen",
+    "resizePane": "Bereich in der Größe ändern",
+    "review": {
+      "acceptChange": "Änderung annehmen",
+      "acceptFinding": "Ergebnis annehmen",
+      "addNote": "Kommentar für die Gegenpartei hinzufügen",
+      "addNotePlaceholder": "Was die Gegenpartei sehen soll",
+      "addNoteSubmit": "Kommentar hinzufügen",
+      "addReference": "{name} als Referenz hinzufügen",
+      "allDecided": "Alle Ergebnisse hier sind entschieden.",
+      "basisCombined": "{count, plural, one {Prüfung anhand von {name}, Vergleich mit # Referenzdokument} other {Prüfung anhand von {name}, Vergleich mit # Referenzdokumenten}}",
+      "basisDivider": "und / oder",
+      "basisPlaybook": "Prüfung anhand von {name}",
+      "basisReferences": "{count, plural, one {Vergleich mit # Referenzdokument} other {Vergleich mit # Referenzdokumenten}}",
+      "basisToggle": "Was verglichen wurde",
+      "changeBasis": "Prüfgrundlage ändern",
+      "chatDraft": {
+        "finding": "Ergebnis:",
+        "impact": "Auswirkung:",
+        "issue": "Thema:",
+        "question": "Wie soll ich das Zieldokument an dieser Stelle neu formulieren?",
+        "rationale": "Begründung:"
+      },
+      "checks": "Geprüft wird:",
+      "commentFailed": "Kommentar konnte nicht hinzugefügt werden",
+      "completePositionIssues": "Geben Sie für jede ausgewählte Position eine Prüffrage ein.",
+      "decidedCount": "{count, number} entschieden",
+      "decision": "Entscheidung",
+      "decisionFailed": "Entscheidung konnte nicht gespeichert werden",
+      "decisions": {
+        "accepted": "Angenommen",
+        "dismissed": "Verworfen"
+      },
+      "dismissFinding": "Ergebnis verwerfen",
+      "documentChanged": "Dieses Dokument hat sich seit dieser Prüfung geändert.",
+      "documentCutNotice": "<strong>{documentName} wurde nicht vollständig gelesen.</strong> Das Dokument ist für dieses Modell zu lang, daher wurden etwa {percent} des Textes ausgelassen. Eine Position ohne Antwort wird zur Prüfung markiert, weil die Antwort im ausgelassenen Teil stehen kann.",
+      "documentTooLarge": "Dieses Dokument ist zu lang, als dass dieses Modell genug davon lesen könnte. Versuchen Sie ein Modell mit einem größeren Kontextfenster.",
+      "documentsTooLarge": "Diese Dokumente sind zu lang, als dass dieses Modell sie zusammen lesen könnte. Verwenden Sie weniger oder kürzere Dokumente oder versuchen Sie ein Modell mit einem größeren Kontextfenster.",
+      "enterNote": "Schreiben Sie zuerst einen Kommentar.",
+      "export": {
+        "counterparty": "Für die Gegenpartei herunterladen",
+        "counterpartyFailed": "Das Dokument konnte nicht exportiert werden",
+        "counterpartyHint": "Das gespeicherte Dokument mit nachverfolgten Änderungen, ohne die internen Prüfnotizen",
+        "counterpartyUnavailable": "Öffnen Sie das Dokument, um es zu exportieren",
+        "csv": "CSV",
+        "docx": "Word-Datei (.docx)",
+        "exporting": "Exportieren",
+        "internal": "Interner Vermerk",
+        "internalHint": "Ergebnisse, Begründung und Referenzen",
+        "xlsx": "Excel-Datei (.xlsx)"
+      },
+      "failed": "Dokumentenprüfung fehlgeschlagen",
+      "filterCoverage": "Abdeckung",
+      "filterDeviations": "Abweichungen",
+      "fixesWithheldNotice": "Für diese Prüfung wurden keine vorgeschlagenen Änderungen erstellt, weil sie ein Referenzdokument aus einer Akte verwendet hat, die der Person, die sie gestartet hat, nicht zur Verfügung steht. Die Ergebnisse sind davon nicht betroffen.",
+      "flag": "Kennzeichnen",
+      "flaggedPositions": "{total, plural, one {{flagged, number} von # Standpunkt gekennzeichnet} other {{flagged, number} von # Standpunkten gekennzeichnet}}",
+      "fromChat": "Aus dem Chat",
+      "fromThisMatter": "Aus dieser Akte",
+      "history": {
+        "backToLatest": "Zurück zur neuesten Version",
+        "decided": "{decided, number} von {total, number} entschieden",
+        "fromTable": "Aus der Tabelle",
+        "references": "{count, plural, one {# Referenz} other {# Referenzen}}"
+      },
+      "impact": {
+        "favourable": "Günstig",
+        "neutral": "Kein Effekt",
+        "unfavourable": "Ungünstig"
+      },
+      "impactForSide": {
+        "favourable": "Besser für {role}",
+        "neutral": "Kein Effekt für {role}",
+        "unfavourable": "Schlechter für {role}"
+      },
+      "insufficientEvidence": "Die bereitgestellten Dokumente enthalten für dieses Thema keine ausreichenden Belege.",
+      "marginNotes": {
+        "above": "{count, number} weiter oben",
+        "below": "{count, number} weiter unten",
+        "documentNotRead": "Öffnen Sie das Dokument im Hauptbereich, um die Ergebnisse daneben anzuheften.",
+        "label": "Ergebnisse neben den betreffenden Klauseln",
+        "unanchored": "Nicht an eine Klausel gebunden"
+      },
+      "noEditor": "Öffnen Sie das Dokument, um Änderungen anzunehmen",
+      "noMaterialDifferences": "Keine wesentlichen Unterschiede gefunden",
+      "noPassage": "Keine Textstelle",
+      "noPlaybooksMatch": "Keine passenden Playbooks.",
+      "notCompared": "Nicht verglichen",
+      "notComparedCount": "Nicht verglichen: {count, number}",
+      "noteAdded": "Kommentar für die Gegenpartei hinzugefügt",
+      "noteBlockedChecking": "stella prüft noch, ob dieses Dokument sicher bearbeitet werden kann. Ihr Kommentar bleibt erhalten; versuchen Sie es gleich noch einmal.",
+      "noteBlockedCollaboration": "Die gemeinsame Bearbeitungssitzung wird noch geöffnet. Ihr Kommentar bleibt erhalten; versuchen Sie es gleich noch einmal.",
+      "noteBlockedOpening": "Das Dokument wird noch geöffnet. Ihr Kommentar bleibt erhalten; versuchen Sie es gleich noch einmal.",
+      "noteBlockedReadOnly": "Dieses geteilte Dokument ist nur zum Lesen geöffnet. Ihr Kommentar bleibt erhalten; versuchen Sie es erneut, sobald Sie es bearbeiten können.",
+      "noteNotAdded": "Kommentar nicht hinzugefügt",
+      "openPlaybooks": "Playbooks öffnen",
+      "pane": {
+        "document": "Panel: Ergebnisse neben dem Dokument",
+        "margin": "Rand: Ergebnisse neben ihren Klauseln",
+        "review": "Haupt: Ergebnisse im breiten Panel"
+      },
+      "passageUnavailable": "Referenztext nicht verfügbar",
+      "passagesCount": "{count, plural, one {# Passage} other {# Passagen}}",
+      "passagesToggle": "Passagen",
+      "pendingCount": "{count, plural, one {# ausstehend} other {# ausstehend}}",
+      "perspective": {
+        "neutral": "Nicht angegeben",
+        "other": "Andere…",
+        "otherPlaceholder": "Rolle, wie im Dokument bezeichnet",
+        "title": "Wir vertreten"
+      },
+      "playbookDeleted": "Dieses Playbook existiert nicht mehr; die Prüfung bleibt als Nachweis erhalten.",
+      "playbookOutdated": "Es gibt eine neuere genehmigte Version dieses Playbooks.",
+      "playbookSection": "Playbook-Auswahl",
+      "presence": {
+        "absent": "Nein",
+        "present": "Ja"
+      },
+      "progressPositions": "{total, plural, one {{completed, number} von # Standpunkt} other {{completed, number} von # Standpunkten}}",
+      "proposedChange": "Vorgeschlagene Änderung",
+      "proposing": "Standpunkte werden vorgeschlagen… {count, number}",
+      "readOnlyRun": "In dieser Prüfung entschieden",
+      "recommendation": "Empfehlung:",
+      "referenceDocument": "Referenzdokument",
+      "referenceLimitReached": "Referenzlimit erreicht",
+      "referencePlaceholder": "Referenzdokumente suchen",
+      "referencesCount": "{count, number}/{max, number}",
+      "referencesDisagree": "Referenzen weichen voneinander ab",
+      "referencesSection": "Referenzdokumente",
+      "removeReference": "Referenz {name} entfernen",
+      "reopen": "Erneut öffnen",
+      "results": "Prüfergebnisse",
+      "reviewAgain": "Weitere Prüfung starten",
+      "reviewPositionsFirst": "Standpunkte zuerst prüfen",
+      "reviewing": "Prüfung läuft…",
+      "reviewingHint": "Bei großen Dokumenten kann dies einige Minuten dauern.",
+      "run": "Prüfung starten",
+      "saveAsPlaybook": "Als Playbook speichern",
+      "saveAsPlaybookFailed": "Diese Prüfung konnte nicht als Playbook gespeichert werden",
+      "savedAsPlaybook": "Als Playbook gespeichert",
+      "searchPlaybooks": "Playbooks suchen",
+      "selectPositionFirst": "Wählen Sie mindestens eine Position aus.",
+      "selectReviewBasis": "Wählen Sie ein Playbook aus oder fügen Sie ein Referenzdokument hinzu.",
+      "selectReviewPositionOrReference": "Wählen Sie ein Playbook mit aktiven Positionen aus oder fügen Sie ein Referenzdokument hinzu.",
+      "showInDocument": "Im Dokument anzeigen",
+      "sizeConfirmStart": "Prüfung starten",
+      "sizeConfirmTitle": "Umfangreiche Prüfung",
+      "skipReason": {
+        "dealSpecificValue": "Transaktionsspezifischer Wert",
+        "lowerWeight": "Geringeres wirtschaftliches Gewicht",
+        "structural": "Struktureller Unterschied"
+      },
+      "standardColumn": "Der Standard",
+      "standardColumnFrom": "Der Standard ({name})",
+      "suggestionSkipped": "Stimmt nicht mehr mit dem Dokument überein",
+      "suggestionStaged": "Als nachverfolgte Änderung im Dokument eingefügt",
+      "summary": {
+        "forParty": "für {role}",
+        "noSide": "keine Partei",
+        "proposedFromReferences": "aus den Referenzen vorgeschlagene Standpunkte",
+        "unnamedReferences": "{count, plural, one {# Referenzdokument} other {# Referenzdokumente}}"
+      },
+      "tableRunNotice": {
+        "openFullReview": "<link>Eine vollständige Prüfung dieser Version</link> mit Verweisen und vorgeschlagenen Änderungen finden Sie im Prüfverlauf.",
+        "origin": "<strong>Aus der Tabelle gestartet.</strong> Diese Ergebnisse wurden anhand der für die Tabelle extrahierten Werte bewertet. Sie verweisen daher nicht auf das Dokument und enthalten keine vorgeschlagenen Änderungen.",
+        "runAnotherReview": "Verweise und vorgeschlagene Änderungen erhalten Sie über die Schaltfläche <action>{label}</action>."
+      },
+      "targetAsReference": "Das geprüfte Dokument kann nicht seine eigene Referenz sein.",
+      "targetColumn": "Dieses Dokument",
+      "targetDocument": "Zieldokument",
+      "title": "Dokumentenprüfung",
+      "topicsTitle": "Was soll diese Prüfung abdecken?",
+      "why": "Warum",
+      "whyItMatters": "Warum es wichtig ist:"
+    },
+    "selectAttachmentToSave": "Wählen Sie einen Anhang zum Speichern aus.",
+    "showPane": "Bereich anzeigen",
+    "swapViews": "Hauptansicht und Seitenleiste tauschen",
+    "title": "Inspektor"
+  }
+}

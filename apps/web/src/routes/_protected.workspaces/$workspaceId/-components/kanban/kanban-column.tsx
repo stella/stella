@@ -584,7 +584,7 @@ export const KanbanColumnActions = ({
               </AlertDialogTitle>
               <AlertDialogDescription>
                 {t("workspaces.kanban.deleteAllConfirm", {
-                  count: String(entityCount),
+                  count: entityCount,
                   column: title,
                 })}
               </AlertDialogDescription>

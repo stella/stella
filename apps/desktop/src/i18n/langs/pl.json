@@ -184,7 +184,7 @@
     "unreadableEraseNotice": "Nie można odczytać części zapisanej aktywności. Możesz usunąć nieczytelną zapisaną aktywność i dane odzyskiwania jej wersji roboczych.",
     "unrecoverableOtherHistoryConfirmation": "Zapisana historia innych kont zostanie usunięta, w tym dane odzyskiwania oczekujących wersji roboczych z brakującymi kluczami lub nieczytelnymi plikami. Utworzone wersje robocze mogą już istnieć. Tej operacji nie można cofnąć.",
     "welcomeControlFact": "Czas bezczynności nie jest liczony. Wstrzymaj lub usuń w każdej chwili.",
-    "welcomeDetails": "Aktywność aplikacji jest rejestrowana co kilka sekund i nigdy nie jest automatycznie przesyłana. Rejestrowane są też tytuły okien i ścieżki otwartych dokumentów, chyba że wyłączysz szczegóły. Podsumowania trafiają do schowka wyłącznie na żądanie. Możesz wykluczyć aplikacje i wybrać czas przechowywania historii. Wyłączenie szczegółów zatrzymuje rejestrowanie nowych szczegółów; wcześniejsze pozostają do upływu okresu przechowywania lub usunięcia. Tytuły okien propozycji opuszczają to urządzenie tylko wtedy, gdy zatwierdzisz opis od stella AI, jednorazowo lub zawsze; nie są przechowywane.",
+    "welcomeDetails": "Aktywność aplikacji jest rejestrowana co kilka sekund i nigdy nie jest automatycznie przesyłana. Rejestrowane są też tytuły okien i ścieżki otwartych dokumentów, chyba że wyłączysz szczegóły. Podsumowania trafiają do schowka wyłącznie na żądanie. Możesz wykluczyć aplikacje i wybrać czas przechowywania historii. Wyłączenie szczegółów zatrzymuje rejestrowanie nowych szczegółów; wcześniejsze pozostają do upływu okresu przechowywania lub usunięcia. Tytuły okien propozycji opuszczają to urządzenie tylko wtedy, gdy po udzieleniu zgody poprosisz o projekt od stella AI, jednorazowo lub zawsze; nie są przechowywane.",
     "welcomeLearnMore": "Dowiedz się więcej",
     "welcomeLocalFact": "Szyfrowane na tym urządzeniu.",
     "welcomePreviewMatter": "Przedłużenie najmu Riverside",
@@ -662,6 +662,35 @@
       "openSoundPc": "Otwórz ustawienia dźwięku",
       "title": "stella nie słyszy mikrofonu"
     },
+    "perApp": {
+      "add": "Dodaj…",
+      "cleanup": {
+        "default": "Poprawianie jak w ustawieniach",
+        "label": "Poprawianie dla {name}",
+        "off": "Bez poprawiania",
+        "on": "Z poprawianiem"
+      },
+      "description": "Włącz lub wyłącz poprawianie przez AI i wybierz język dla jednej aplikacji lub rodzaju aplikacji. Decyduje aplikacja na pierwszym planie w chwili rozpoczęcia dyktowania.",
+      "failed": "Nie udało się zapisać ustawień. Spróbuj ponownie.",
+      "group": "Według aplikacji",
+      "kinds": {
+        "browser": "Przeglądarki",
+        "chat": "Komunikatory",
+        "code": "Edytory kodu",
+        "document": "Dokumenty",
+        "email": "Aplikacje pocztowe",
+        "other": "Inne aplikacje",
+        "terminal": "Terminale"
+      },
+      "kindsOfApp": "Rodzaje aplikacji",
+      "language": {
+        "default": "Język jak w ustawieniach",
+        "label": "Język dla {name}"
+      },
+      "recentApps": "Ostatnie aplikacje",
+      "remove": "Usuń {name}",
+      "title": "Ustawienia dla aplikacji"
+    },
     "preview": {
       "finishing": "Kończenie…",
       "label": "Dotychczas podyktowany tekst",
@@ -669,6 +698,11 @@
     },
     "removeFailed": "Nie udało się usunąć modelu mowy. Spróbuj ponownie.",
     "removeModel": "Usuń",
+    "retype": {
+      "description": "Naciśnij {shortcut}, aby ponownie wpisać ostatnie dyktowanie w miejscu kursora. Jest przechowywane tylko w pamięci, dopóki jest w historii schowka.",
+      "taken": "Inna aplikacja używa skrótu {shortcut}. To samo oferuje menu Dyktowanie przy ikonie aplikacji stella.",
+      "title": "Skrót do ostatniego dyktowania"
+    },
     "shortcutTaken": "Skrótu {shortcut} używa inna aplikacja.",
     "sounds": {
       "description": "Odtwarzaj krótki, cichy dźwięk, gdy nagrywanie się zaczyna i gdy się kończy.",
@@ -681,6 +715,19 @@
       "failed": "Nie udało się otworzyć okna. Spróbuj ponownie.",
       "open": "Otwórz",
       "title": "Transkrypcja nagrania"
+    },
+    "whileDictating": {
+      "choices": {
+        "lower": "Ścisz inne dźwięki",
+        "nothing": "Nic nie rób",
+        "pause": "Wstrzymaj Muzykę i Spotify"
+      },
+      "description": "Co dzieje się z innymi dźwiękami, gdy stella nagrywa, aby nie trafiły do tekstu. Wracają po zakończeniu nagrywania.",
+      "speakersOnly": {
+        "description": "Słuchawki zostają bez zmian: mikrofon ich nie słyszy.",
+        "title": "Tylko przez głośniki"
+      },
+      "title": "Podczas dyktowania"
     }
   },
   "keepAwake": {
@@ -763,7 +810,7 @@
     "takenOverTitle": "Edycja przeniesiona na inne urządzenie"
   },
   "onboarding": {
-    "activityAiNote": "Tytuły okien propozycji opuszczają to urządzenie tylko wtedy, gdy zatwierdzisz opis od stella AI, jednorazowo lub zawsze. Nie są przechowywane.",
+    "activityAiNote": "Tytuły okien propozycji opuszczają to urządzenie tylko wtedy, gdy po udzieleniu zgody poprosisz o projekt od stella AI, jednorazowo lub zawsze. Nie są przechowywane.",
     "activityBody": "Zobacz, na co poszedł dzień pracy, i zamień go na robocze wpisy czasu. To Ty decydujesz, co jest zapisywane i co jest wysyłane.",
     "activityConsentNote": "Nic nie jest zapisywane, dopóki nie klikniesz Rozpocznij zapis w Aktywności. W każdej chwili możesz wstrzymać zapis, wykluczyć aplikacje lub usunąć dowolny dzień.",
     "activityNeverKeys": "Naciśnięcia klawiszy ani wpisywany tekst",
@@ -1140,6 +1187,21 @@
       "searching": "Wyszukiwanie…",
       "title": "Sprawa"
     },
+    "matterFolder": {
+      "audioFailed": "Nie udało się zapisać nagrania w sprawie.",
+      "audioMissing": "Nagranie nie jest już otwarte w tym oknie, więc nie zapisano go w sprawie.",
+      "audioTooLarge": "Nagranie jest większe niż {size}, więc nie zapisano go w sprawie.",
+      "cleanedDocxFileName": "{title} – tekst poprawiony.docx",
+      "cleanedTitle": "{title} – tekst poprawiony",
+      "documents": "Zapisywanie dokumentów Word…",
+      "docxFileName": "{title} – transkrypcja.docx",
+      "finishing": "Sprawdzanie nagrania…",
+      "instructionsLabel": "Polecenia w dyktacie:",
+      "preparing": "Przygotowywanie nagrania…",
+      "saveDocx": "Dokument Word (.docx)",
+      "saved": "Zapisano w sprawie {matter}, w folderze {folder}.",
+      "uploading": "Wysyłanie nagrania: {percent, number}%"
+    },
     "note": "Pliki DSS i DS2 z dyktafonów Philips lub Olympus najpierw zapisz jako WAV w programie SpeechExec lub ODMS.",
     "progress": {
       "another": "Transkrybuj kolejne nagranie",
@@ -1195,6 +1257,7 @@
     "checkForUpdates": "Sprawdź aktualizacje",
     "dictation": "Dyktowanie",
     "dictationHint": "Przytrzymaj {key}, aby dyktować",
+    "dictationRetype": "Wpisz ponownie ostatnie dyktowanie",
     "dictationSettings": "Ustawienia dyktowania…",
     "dictationTurnOn": "Włącz dyktowanie…",
     "documentsSyncing": "{count, plural, one {1 dokument synchronizowany} few {{count} dokumenty synchronizowane} many {{count} dokumentów synchronizowanych} other {{count} dokumentów synchronizowanych}}",

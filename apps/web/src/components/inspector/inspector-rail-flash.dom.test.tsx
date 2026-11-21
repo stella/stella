@@ -34,6 +34,7 @@ const { createRouteErrorLifecycleController } =
 const { RouteErrorLifecycleProvider } =
   await import("@/lib/analytics/route-error-lifecycle-context");
 const { InspectorRail } = await import("./inspector-rail");
+const { useInspectorGroups } = await import("./inspector-group-controls");
 const { useInspectorTabsStore } = await import("./inspector-tabs-store");
 
 afterEach(async () => {
@@ -75,6 +76,7 @@ const ConnectedRail = () => {
   return (
     <InspectorRail
       activeId={activeId}
+      groups={useInspectorGroups()}
       minimized={minimized}
       onActivateTab={activateTab}
       onCloseTab={closeTab}

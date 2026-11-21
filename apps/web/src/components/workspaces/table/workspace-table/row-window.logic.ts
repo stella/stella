@@ -82,3 +82,40 @@ export const tableRowWindow = ({
     paddingBottom: totalSize - last.end + scrollMargin,
   };
 };
+
+/** What `measureFlowRow` needs of the virtualizer. */
+type RowSizeSource<TElement extends Element> = {
+  indexFromElement: (element: TElement) => number;
+  itemSizeCache: ReadonlyMap<unknown, number>;
+  options: {
+    getItemKey: (index: number) => unknown;
+    estimateSize: (index: number) => number;
+  };
+};
+
+/**
+ * A row's height for the virtualizer, read from its ResizeObserver entry.
+ *
+ * The rows sit in normal flow, so a height only sizes the filler below the
+ * window and never moves a drawn row. The virtualizer also measures each row
+ * as React attaches it (no entry); reading the DOM there forces the browser to
+ * lay the whole table out once per row while the mount commits. That path
+ * answers with what is already known, the row's last measured height or the
+ * estimate, and the observer's first entry, delivered after layout and before
+ * paint, gives the real one.
+ */
+export const measureFlowRow = <TElement extends Element>(
+  element: TElement,
+  entry: ResizeObserverEntry | undefined,
+  virtualizer: RowSizeSource<TElement>,
+) => {
+  const box = entry?.borderBoxSize.at(0);
+  if (box !== undefined) {
+    return box.blockSize;
+  }
+  const index = virtualizer.indexFromElement(element);
+  return (
+    virtualizer.itemSizeCache.get(virtualizer.options.getItemKey(index)) ??
+    virtualizer.options.estimateSize(index)
+  );
+};

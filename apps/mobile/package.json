@@ -44,6 +44,7 @@
     "@stll/locales": "workspace:*",
     "@stll/permissions": "workspace:*",
     "@stll/text-normalize": "workspace:*",
+    "@stll/transcript": "workspace:*",
     "@stll/ui": "workspace:*",
     "better-result": "catalog:",
     "expo": "~58.0.25",

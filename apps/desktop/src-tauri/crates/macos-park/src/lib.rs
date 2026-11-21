@@ -65,6 +65,21 @@ pub use microphone::{
 };
 
 #[cfg(target_os = "macos")]
+mod output_audio;
+#[cfg(target_os = "macos")]
+pub use output_audio::{
+  default_output_device_id, output_plays_on_headphones, output_volume,
+  set_output_volume,
+};
+
+#[cfg(target_os = "windows")]
+mod windows_output_audio;
+#[cfg(target_os = "windows")]
+pub use windows_output_audio::{
+  default_output_device_id, output_volume, set_output_volume,
+};
+
+#[cfg(target_os = "macos")]
 mod system_permissions;
 #[cfg(target_os = "macos")]
 pub use system_permissions::{

@@ -22,6 +22,8 @@
     "allow-transcribe-save-text",
     "allow-transcribe-search-matters",
     "allow-transcribe-save-to-matter",
+    "allow-transcribe-save-to-matter-folder",
+    "allow-transcribe-save-docx",
     "allow-transcribe-history-list",
     "allow-transcribe-history-get",
     "allow-transcribe-history-put",

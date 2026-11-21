@@ -1,5 +1,6 @@
 import presignUpload from "@/api/handlers/uploads/create";
 import abortUpload from "@/api/handlers/uploads/delete";
+import { saveDesktopDictationTranscriptAudio } from "@/api/handlers/uploads/desktop-transcript-audio";
 import entityCreateTree from "@/api/handlers/uploads/entity-create-tree";
 import preflightEntityCreate from "@/api/handlers/uploads/preflight-entity-create";
 import finalizeUpload from "@/api/handlers/uploads/update";
@@ -7,6 +8,7 @@ import { routes } from "@/api/http/route";
 import { API_RATE_LIMITS } from "@/api/lib/limits";
 import { rateLimit } from "@/api/lib/rate-limit/rate-limit";
 import { createRedisRateLimit } from "@/api/lib/rate-limit/redis-context";
+import { createStandardApiRateLimitOptions } from "@/api/lib/rate-limit/standard-api";
 
 /**
  * Workspace-scoped presigned-upload coordination:
@@ -55,5 +57,19 @@ export const uploadsRoute = routes(
         }),
       }),
     ],
+  },
+);
+
+/** A linked desktop finalizes the recording it uploaded into a transcript's
+ *  folder. It authenticates with its account key and device proof, so the
+ *  route sits beside the other desktop dictation routes, under the same
+ *  standard rate limit, not under a session. */
+export const desktopDictationTranscriptAudioRoute = routes(
+  {
+    "/transcripts/audio": { POST: saveDesktopDictationTranscriptAudio },
+  },
+  {
+    prefix: "/v1/desktop/dictation",
+    middleware: [rateLimit(createStandardApiRateLimitOptions())],
   },
 );

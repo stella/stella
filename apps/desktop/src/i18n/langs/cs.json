@@ -184,7 +184,7 @@
     "unreadableEraseNotice": "Některou uloženou aktivitu nelze přečíst. Nečitelnou uloženou aktivitu a údaje pro obnovení jejích konceptů můžete smazat.",
     "unrecoverableOtherHistoryConfirmation": "Uložená historie jiných účtů bude smazána, včetně údajů pro obnovení čekajících konceptů s chybějícími klíči nebo nečitelnými soubory. Vytvořené koncepty již mohou existovat. Tuto akci nelze vrátit zpět.",
     "welcomeControlFact": "Nečinnost se nepočítá. Kdykoli pozastavte nebo smažte.",
-    "welcomeDetails": "Aktivita aplikací se zaznamenává každých několik sekund a nikdy se automaticky neodesílá. Zaznamenávají se i názvy oken a cesty k otevřeným dokumentům, dokud podrobnosti nevypnete. Souhrny se do schránky kopírují jen na vyžádání. Můžete vyloučit aplikace a zvolit dobu uchovávání historie. Vypnutí podrobností zastaví zaznamenávání nových; dřívější zůstávají do uplynutí doby uchovávání nebo smazání. Názvy oken návrhu opustí toto zařízení jen tehdy, když schválíte popis od stella AI, jednou nebo vždy; neukládají se.",
+    "welcomeDetails": "Aktivita aplikací se zaznamenává každých několik sekund a nikdy se automaticky neodesílá. Zaznamenávají se i názvy oken a cesty k otevřeným dokumentům, dokud podrobnosti nevypnete. Souhrny se do schránky kopírují jen na vyžádání. Můžete vyloučit aplikace a zvolit dobu uchovávání historie. Vypnutí podrobností zastaví zaznamenávání nových; dřívější zůstávají do uplynutí doby uchovávání nebo smazání. Názvy oken návrhu opustí toto zařízení jen tehdy, když po udělení souhlasu s navrhováním požádáte o návrh od stella AI, jednou nebo vždy; neukládají se.",
     "welcomeLearnMore": "Více informací",
     "welcomeLocalFact": "Šifrováno v tomto zařízení.",
     "welcomePreviewMatter": "Prodloužení nájmu Riverside",
@@ -662,6 +662,35 @@
       "openSoundPc": "Otevřít nastavení zvuku",
       "title": "stella neslyší váš mikrofon"
     },
+    "perApp": {
+      "add": "Přidat…",
+      "cleanup": {
+        "default": "Úprava podle nastavení",
+        "label": "Úprava pro {name}",
+        "off": "Bez úpravy",
+        "on": "S úpravou"
+      },
+      "description": "Zapněte nebo vypněte úpravu pomocí AI a zvolte jazyk pro jednu aplikaci nebo druh aplikací. Rozhoduje aplikace, která je v popředí, když začnete diktovat.",
+      "failed": "Nastavení se nepodařilo uložit. Zkuste to znovu.",
+      "group": "Podle aplikace",
+      "kinds": {
+        "browser": "Prohlížeče",
+        "chat": "Chatovací aplikace",
+        "code": "Editory kódu",
+        "document": "Dokumenty",
+        "email": "E-mailové aplikace",
+        "other": "Ostatní aplikace",
+        "terminal": "Terminály"
+      },
+      "kindsOfApp": "Druhy aplikací",
+      "language": {
+        "default": "Jazyk podle nastavení",
+        "label": "Jazyk pro {name}"
+      },
+      "recentApps": "Nedávné aplikace",
+      "remove": "Odebrat {name}",
+      "title": "Nastavení pro aplikaci"
+    },
     "preview": {
       "finishing": "Dokončuji…",
       "label": "Co jste zatím nadiktovali",
@@ -669,6 +698,11 @@
     },
     "removeFailed": "Model řeči se nepodařilo odstranit. Zkuste to znovu.",
     "removeModel": "Odebrat",
+    "retype": {
+      "description": "Stiskem {shortcut} napíšete poslední diktát znovu na místo kurzoru. Drží se jen v paměti, dokud je v historii schránky.",
+      "taken": "Zkratku {shortcut} používá jiná aplikace. Totéž nabízí nabídka Diktování u ikony aplikace stella.",
+      "title": "Zkratka pro poslední diktát"
+    },
     "shortcutTaken": "Zkratku {shortcut} používá jiná aplikace.",
     "sounds": {
       "description": "Přehrát krátký tichý zvuk, když nahrávání začne a když skončí.",
@@ -681,6 +715,19 @@
       "failed": "Okno se nepodařilo otevřít. Zkuste to znovu.",
       "open": "Otevřít",
       "title": "Přepsat nahrávku"
+    },
+    "whileDictating": {
+      "choices": {
+        "lower": "Ztlumit ostatní zvuk",
+        "nothing": "Nic nedělat",
+        "pause": "Pozastavit Hudbu a Spotify"
+      },
+      "description": "Co se stane s ostatním zvukem, když stella nahrává, aby se nedostal do textu. Po skončení nahrávání se vrátí.",
+      "speakersOnly": {
+        "description": "Sluchátka nechat být: mikrofon je neslyší.",
+        "title": "Jen přes reproduktory"
+      },
+      "title": "Během diktování"
     }
   },
   "keepAwake": {
@@ -763,7 +810,7 @@
     "takenOverTitle": "Úpravy přesunuty na jiné zařízení"
   },
   "onboarding": {
-    "activityAiNote": "Názvy oken návrhu opustí toto zařízení jen tehdy, když schválíte popis od stella AI, jednou nebo vždy. Neukládají se.",
+    "activityAiNote": "Názvy oken návrhu opustí toto zařízení jen tehdy, když po udělení souhlasu s navrhováním požádáte o návrh od stella AI, jednou nebo vždy. Neukládají se.",
     "activityBody": "Uvidíte, kam se poděl váš pracovní den, a proměníte ho v koncepty časových záznamů. O tom, co se zaznamená a co se odešle, rozhodujete vy.",
     "activityConsentNote": "Nic se nezaznamenává, dokud v Aktivitě nestisknete Začít zaznamenávat. Kdykoli můžete pozastavit, vyloučit aplikace nebo smazat kterýkoli den.",
     "activityNeverKeys": "Stisky kláves ani psaný text",
@@ -1140,6 +1187,21 @@
       "searching": "Hledání…",
       "title": "Spis"
     },
+    "matterFolder": {
+      "audioFailed": "Nahrávku se nepodařilo uložit do spisu.",
+      "audioMissing": "Nahrávka už v tomto okně není otevřená, proto se do spisu neuložila.",
+      "audioTooLarge": "Nahrávka je větší než {size}, proto se do spisu neuložila.",
+      "cleanedDocxFileName": "{title} – upravený text.docx",
+      "cleanedTitle": "{title} – upravený text",
+      "documents": "Ukládají se dokumenty Word…",
+      "docxFileName": "{title} – přepis.docx",
+      "finishing": "Kontroluje se nahrávka…",
+      "instructionsLabel": "Pokyny k diktátu:",
+      "preparing": "Připravuje se nahrávka…",
+      "saveDocx": "Dokument Word (.docx)",
+      "saved": "Uloženo do spisu {matter} ve složce {folder}.",
+      "uploading": "Odesílá se nahrávka: {percent, number} %"
+    },
     "note": "Soubory DSS a DS2 z diktafonů Philips nebo Olympus nejprve uložte jako WAV v SpeechExec nebo ODMS.",
     "progress": {
       "another": "Přepsat další nahrávku",
@@ -1195,6 +1257,7 @@
     "checkForUpdates": "Zkontrolovat aktualizace",
     "dictation": "Diktování",
     "dictationHint": "Pro diktování podržte {key}",
+    "dictationRetype": "Napsat poslední diktát znovu",
     "dictationSettings": "Nastavení diktování…",
     "dictationTurnOn": "Zapnout diktování…",
     "documentsSyncing": "{count, plural, one {1 dokument se synchronizuje} few {{count} dokumenty se synchronizují} other {{count} dokumentů se synchronizuje}}",

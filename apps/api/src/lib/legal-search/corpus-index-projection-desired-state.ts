@@ -1,4 +1,4 @@
-import { panic, TaggedError } from "better-result";
+import { panic, Result, TaggedError } from "better-result";
 import { and, asc, eq, inArray, or, sql } from "drizzle-orm";
 
 import { DECISION_IDENTIFIER_MAX_COUNT } from "@stll/legal-ast/decision-identifier";
@@ -9,6 +9,7 @@ import {
   caseLawDecisions,
   caseLawSources,
   corpusIndexGenerations,
+  corpusIndexProjectionIntents,
   corpusIndexProjectionStates,
   legislationDocuments,
   legislationSources,
@@ -50,7 +51,11 @@ import {
 } from "@/api/lib/legal-search/corpus-index-projection-publish-fence";
 import { readCaseLawRankingSignals } from "@/api/lib/legal-search/corpus-index-projection-ranking-signals";
 import { lockCorpusIndexProjectionWriterTx } from "@/api/lib/legal-search/corpus-index-projection-revision";
-import { corpusIndexProjectionNamedCopyTrailsTwoChanges } from "@/api/lib/legal-search/corpus-index-projection-sql";
+import {
+  corpusIndexProjectionIsBlocked,
+  corpusIndexProjectionNamedCopyTrailsTwoChanges,
+  corpusIndexProjectionRevisionIsRestorable,
+} from "@/api/lib/legal-search/corpus-index-projection-sql";
 import { isRedistributable } from "@/api/lib/legal-search/corpus-source";
 import { partialObservationFromMetadata } from "@/api/lib/legal-search/ingestion-normalization";
 import type { LegislationExpressionClassification } from "@/api/lib/legal-search/legislation-expression-classification";
@@ -524,7 +529,7 @@ const lockProjectionInput = async (
   }
 };
 
-type CanonicalProjectionEpochUpdate =
+export type CanonicalProjectionEpochUpdate =
   | {
       family: "case_law";
       epochs: readonly { id: SafeId<"caseLawDecision">; epoch: bigint }[];
@@ -887,7 +892,7 @@ const readUndoneErasuresTx = async (
     );
 };
 
-export const SERVED_COPY_RETIREMENT_REASONS = {
+const SERVED_COPY_RETIREMENT_REASONS = {
   undoneErasure: "projection revision retired by an undone erasure",
   legacyUnproven: "projection revision retired as not provably current",
 } as const;
@@ -899,8 +904,12 @@ export const SERVED_COPY_RETIREMENT_REASONS = {
  * the revisions are locked after them, in the projection lock order. Each
  * state is then queued for the append walk at the instant its retired copy
  * can have settled.
+ *
+ * Private to this module on purpose: a copy leaves readers only through a
+ * canonical change written here (an undone erasure) or through the one-off
+ * legacy pass (`retireLegacyErasedServedCopiesTx`). Repairs never reach it.
  */
-export const retireServedCopiesTx = async (
+const retireServedCopiesTx = async (
   tx: Transaction,
   retired: readonly DesiredStateKey[],
   reason: (typeof SERVED_COPY_RETIREMENT_REASONS)[keyof typeof SERVED_COPY_RETIREMENT_REASONS],
@@ -999,14 +1008,51 @@ export const retireServedCopiesTx = async (
   }
 };
 
-export const writeDesiredStates = async (
+/**
+ * The one-off pass over copies an earlier release left served through a
+ * recorded erasure and its undo (`retireLegacyUnprovenServedCopiesTx`). It is
+ * the only caller outside this module that may retire a named copy, and the
+ * ownership registry confines this import to it.
+ */
+export const retireLegacyErasedServedCopiesTx = async (
   tx: Transaction,
-  values: (typeof corpusIndexProjectionStates.$inferInsert)[],
+  retired: readonly DesiredStateKey[],
+): Promise<void> => {
+  await retireServedCopiesTx(
+    tx,
+    retired,
+    SERVED_COPY_RETIREMENT_REASONS.legacyUnproven,
+  );
+};
+
+/**
+ * Why a write of desired state is a canonical change or a repair.
+ *
+ * - `canonical`: the caller changed the canonical row in this transaction (or
+ *   moved its serving generation), so the desired state must follow at once.
+ *   An erasure it undoes retires the copy the erasure hid, so the entity is
+ *   appended anew and never served the pre-erasure copy again.
+ * - `repair`: no canonical change stands behind the write; it only brings
+ *   desired state back in line with the canonical rows. A repair never takes
+ *   a copy away from readers: the owner holds it first
+ *   (`readServedCopiesAtRiskTx`), so it never reaches the retirement.
+ */
+type DesiredStateWriteCause = "canonical" | "repair";
+
+const writeDesiredStates = async (
+  tx: Transaction,
+  values: readonly (typeof corpusIndexProjectionStates.$inferInsert)[],
+  cause: DesiredStateWriteCause,
 ): Promise<void> => {
   if (values.length === 0) {
     return;
   }
   const undone = await readUndoneErasuresTx(tx, values);
+  if (cause === "repair" && undone.length > 0) {
+    return panic(
+      "A held repair reached the desired writer with an undone erasure",
+    );
+  }
   const states = corpusIndexProjectionStates;
   // Judged on the row before this write: once its named copy trails by two
   // changes with other content, an upsert write keeps `desired_at` at the
@@ -1040,7 +1086,7 @@ export const writeDesiredStates = async (
   )`;
   await tx
     .insert(corpusIndexProjectionStates)
-    .values(values)
+    .values([...values])
     .onConflictDoUpdate({
       target: [
         corpusIndexProjectionStates.family,
@@ -1077,6 +1123,201 @@ export const writeDesiredStates = async (
     undone,
     SERVED_COPY_RETIREMENT_REASONS.undoneErasure,
   );
+};
+
+/** How a repair would take a named copy away from readers. */
+const CORPUS_PROJECTION_SERVED_COPY_RISKS = [
+  /** The desired action flips while the state names an upsert copy. */
+  "desired_action_change",
+  /**
+   * A copy queued for cleanup that the cleanup claim would still restore
+   * would lose that proof, so the claim would delete it while it is named.
+   */
+  "restorable_cleanup",
+  /**
+   * A copy two changes behind that the legacy pass keeps only because its
+   * work is blocked or its epoch is not canonical would lose that protection.
+   */
+  "legacy_retirement",
+] as const;
+export type CorpusProjectionServedCopyRisk =
+  (typeof CORPUS_PROJECTION_SERVED_COPY_RISKS)[number];
+
+const MAX_HELD_COPIES = 16;
+
+/**
+ * A repair was held before it wrote anything: no desired state and no
+ * canonical epoch moved. It goes through once the copy no longer needs the
+ * protection, for example once the outstanding erasure or replacement
+ * settles; until then the subject keeps its current desired state.
+ */
+export class CorpusProjectionServedCopyHold extends TaggedError(
+  "CorpusProjectionServedCopyHold",
+)<{
+  message: string;
+  copies: {
+    generation: string;
+    entityId: string;
+    risk: CorpusProjectionServedCopyRisk;
+  }[];
+  omittedCopies: number;
+}> {}
+
+type DesiredStateValues =
+  readonly (typeof corpusIndexProjectionStates.$inferInsert)[];
+
+/**
+ * The named copies this write would take away from readers, judged on each
+ * state before the write (`current`) and as the write leaves it (`next`).
+ * The caller holds the canonical rows and the states it writes, as every
+ * desired writer does, so neither can move before the write.
+ */
+const readServedCopiesAtRiskTx = async (
+  tx: Transaction,
+  values: DesiredStateValues,
+) => {
+  if (values.length === 0) {
+    return [];
+  }
+  const states = corpusIndexProjectionStates;
+  const intents = corpusIndexProjectionIntents;
+  const proposals = JSON.stringify(
+    values.map((value) => ({
+      family: value.family,
+      generation: value.generation,
+      entity_id: value.entityId,
+      desired_action: value.desiredAction,
+      desired_epoch: value.desiredEpoch.toString(),
+      desired_fingerprint: value.desiredFingerprint ?? null,
+      desired_index_id: value.desiredIndexId ?? null,
+    })),
+  );
+  const current = {
+    desiredAction: states.desiredAction,
+    desiredEpoch: states.desiredEpoch,
+    desiredFingerprint: states.desiredFingerprint,
+    desiredIndexId: states.desiredIndexId,
+  };
+  const next = {
+    desiredAction: sql`proposal.desired_action`,
+    desiredEpoch: sql`proposal.desired_epoch`,
+    desiredFingerprint: sql`proposal.desired_fingerprint`,
+    desiredIndexId: sql`proposal.desired_index_id`,
+  };
+  const restoreCopy = {
+    revisionId: intents.id,
+    appliedRevision: states.appliedRevision,
+    appliedAction: states.appliedAction,
+    appliedEpoch: states.appliedEpoch,
+    revisionEpoch: intents.epoch,
+    revisionFingerprint: intents.fingerprint,
+    revisionIndexId: intents.indexId,
+    cleanupAttempts: intents.cleanupAttempts,
+    revisionAppliedAt: intents.appliedAt,
+    lastError: intents.lastError,
+  };
+  const namedCopy = {
+    appliedRevision: states.appliedRevision,
+    appliedAction: states.appliedAction,
+    appliedEpoch: states.appliedEpoch,
+    appliedFingerprint: states.appliedFingerprint,
+    appliedIndexId: states.appliedIndexId,
+  };
+  const actionChanges = sql`${states.desiredAction} IS DISTINCT FROM ${next.desiredAction}`;
+  const restoreProofLost = sql`(
+    ${intents.status} = 'cleanup_pending'
+    AND ${corpusIndexProjectionRevisionIsRestorable({ ...restoreCopy, ...current })}
+    AND ${corpusIndexProjectionRevisionIsRestorable({ ...restoreCopy, ...next })} IS NOT TRUE
+  )`;
+  // The legacy pass keeps a copy two changes behind while its work is
+  // blocked or its desired epoch is not canonical; a write that resets the
+  // work or makes the epoch canonical would hand the copy to it.
+  const legacyProtectionLost = sql`(
+    ${intents.status} = 'applied'
+    AND ${corpusIndexProjectionNamedCopyTrailsTwoChanges({ ...namedCopy, ...current })}
+    AND ${corpusIndexProjectionNamedCopyTrailsTwoChanges({ ...namedCopy, ...next })}
+    AND (
+      ${corpusIndexProjectionIsBlocked(states.workStatus)}
+      OR ${states.desiredEpoch} <> ${next.desiredEpoch} - 1
+    )
+  )`;
+  const rows = await tx
+    .select({
+      generation: states.generation,
+      entityId: states.entityId,
+      risk: sql<CorpusProjectionServedCopyRisk>`CASE
+        WHEN ${actionChanges}
+          THEN ${"desired_action_change" satisfies CorpusProjectionServedCopyRisk}
+        WHEN ${restoreProofLost}
+          THEN ${"restorable_cleanup" satisfies CorpusProjectionServedCopyRisk}
+        ELSE ${"legacy_retirement" satisfies CorpusProjectionServedCopyRisk}
+      END`,
+    })
+    .from(states)
+    .innerJoin(intents, eq(intents.id, states.appliedRevision))
+    .innerJoin(
+      sql`jsonb_to_recordset(${proposals}::text::jsonb) AS proposal(
+        family text, generation text, entity_id uuid, desired_action text,
+        desired_epoch bigint, desired_fingerprint text, desired_index_id text
+      )`,
+      sql`proposal.family = ${states.family}::text
+        AND proposal.generation = ${states.generation}
+        AND proposal.entity_id = ${states.entityId}`,
+    )
+    .where(
+      and(
+        eq(states.appliedAction, "upsert"),
+        or(actionChanges, restoreProofLost, legacyProtectionLost),
+      ),
+    )
+    .orderBy(asc(states.entityId), asc(states.generation))
+    .limit(values.length);
+  return rows.map(({ generation, entityId, risk }) => ({
+    generation,
+    entityId,
+    risk: requireServedCopyRisk(risk),
+  }));
+};
+
+const requireServedCopyRisk = (value: string): CorpusProjectionServedCopyRisk =>
+  CORPUS_PROJECTION_SERVED_COPY_RISKS.find((risk) => risk === value) ??
+  panic(`Unknown served-copy risk: ${value}`);
+
+/**
+ * The desired writer for a repair: a write no canonical change stands behind.
+ * It holds the whole write, canonical epochs included, when any of it would
+ * take a named copy away from readers (`CORPUS_PROJECTION_SERVED_COPY_RISKS`),
+ * so a repair that runs first can never retire or expose a copy that a later
+ * one would have protected, and none skips another's protection. Every
+ * repair, in this repository or outside it, writes through this function or
+ * through `reconcileCorpusProjectionDesiredStateTx`. The caller holds the
+ * canonical rows and the states it writes.
+ */
+export const writeRepairedCorpusProjectionDesiredStatesTx = async (
+  tx: Transaction,
+  {
+    epochs,
+    values,
+  }: {
+    epochs: CanonicalProjectionEpochUpdate | null;
+    values: DesiredStateValues;
+  },
+): Promise<Result<void, CorpusProjectionServedCopyHold>> => {
+  const atRisk = await readServedCopiesAtRiskTx(tx, values);
+  if (atRisk.length > 0) {
+    return Result.err(
+      new CorpusProjectionServedCopyHold({
+        message: `Corpus projection repair held: ${atRisk.length} named copies would leave readers`,
+        copies: atRisk.slice(0, MAX_HELD_COPIES),
+        omittedCopies: Math.max(0, atRisk.length - MAX_HELD_COPIES),
+      }),
+    );
+  }
+  if (epochs !== null) {
+    await setCanonicalProjectionEpoch(tx, epochs);
+  }
+  await writeDesiredStates(tx, values, "repair");
+  return Result.ok(undefined);
 };
 
 type DesiredStateSnapshot = {
@@ -1145,6 +1386,7 @@ export const advanceCorpusProjectionDesiredStateTx = async (
         descriptor,
       }),
     ),
+    "canonical",
   );
   return { epoch, generationCount: projections.length };
 };
@@ -1201,15 +1443,20 @@ const reconcileProjectionPlan = ({
   return { epoch, values };
 };
 
+type ReconcileOutcome = {
+  epoch: bigint;
+  changed: boolean;
+  generationCount: number;
+};
+
 /**
- * Repair or seed desired state from authoritative corpus rows. Plane may call
- * this from bounded sweeps after a projector or source-policy change; exact
- * matches are a fixed point and therefore do not manufacture new epochs.
+ * One subject's reconciliation plan, read under its canonical and state
+ * locks: the epoch every owed generation moves to and the values that move.
  */
-export const reconcileCorpusProjectionDesiredStateTx = async (
+const planSubjectReconciliationTx = async (
   tx: Transaction,
   subject: CorpusIndexProjectionSubject,
-): Promise<{ epoch: bigint; changed: boolean; generationCount: number }> => {
+) => {
   const locked = await lockProjectionInput(tx, subject);
   const projections = await projectionsFor(
     tx,
@@ -1218,11 +1465,8 @@ export const reconcileCorpusProjectionDesiredStateTx = async (
     locked.input,
   );
   if (projections.length === 0) {
-    return {
-      epoch: locked.epoch,
-      changed: false,
-      generationCount: 0,
-    };
+    const values: DesiredStateValues = [];
+    return { locked, generationCount: 0, epoch: locked.epoch, values };
   }
 
   const existing = await tx
@@ -1247,18 +1491,53 @@ export const reconcileCorpusProjectionDesiredStateTx = async (
     existing,
     projections,
   });
+  return { locked, generationCount: projections.length, epoch, values };
+};
+
+/**
+ * Repair or seed desired state from authoritative corpus rows, with no
+ * canonical change behind it. Plane may call this from bounded sweeps after a
+ * projector or source-policy change; exact matches are a fixed point and
+ * therefore do not manufacture new epochs. A repair that would take a named
+ * copy away from readers is held whole, canonical epoch included
+ * (`writeRepairedCorpusProjectionDesiredStatesTx`).
+ */
+export const reconcileCorpusProjectionDesiredStateTx = async (
+  tx: Transaction,
+  subject: CorpusIndexProjectionSubject,
+): Promise<Result<ReconcileOutcome, CorpusProjectionServedCopyHold>> => {
+  const { locked, generationCount, epoch, values } =
+    await planSubjectReconciliationTx(tx, subject);
+  const written = await writeRepairedCorpusProjectionDesiredStatesTx(tx, {
+    epochs:
+      epoch === locked.epoch ? null : projectionEpochUpdate(subject, epoch),
+    values,
+  });
+  if (written.isErr()) {
+    return Result.err(written.error);
+  }
+  return Result.ok({ epoch, changed: values.length > 0, generationCount });
+};
+
+/**
+ * Reconcile in the transaction that changed the canonical row: the desired
+ * state follows the change at once, an undone erasure included.
+ */
+const synchronizeCorpusProjectionDesiredStateTx = async (
+  tx: Transaction,
+  subject: CorpusIndexProjectionSubject,
+): Promise<void> => {
+  const { locked, epoch, values } = await planSubjectReconciliationTx(
+    tx,
+    subject,
+  );
   if (epoch !== locked.epoch) {
     await setCanonicalProjectionEpoch(
       tx,
       projectionEpochUpdate(subject, epoch),
     );
   }
-  await writeDesiredStates(tx, values);
-  return {
-    epoch,
-    changed: values.length > 0,
-    generationCount: projections.length,
-  };
+  await writeDesiredStates(tx, values, "canonical");
 };
 
 /** Reconcile after a canonical mutation while retaining its source-lock proof. */
@@ -1277,7 +1556,7 @@ export const synchronizeLockedCorpusProjectionDesiredStateTx = async (
       `Corpus projection source lock family ${lock.family} cannot synchronize ${subject.family}`,
     );
   }
-  await reconcileCorpusProjectionDesiredStateTx(tx, subject);
+  await synchronizeCorpusProjectionDesiredStateTx(tx, subject);
 };
 
 /**
@@ -1317,6 +1596,7 @@ export const synchronizeRetiredCaseLawProjectionDesiredStateTx = async (
         descriptor: { action: "erase" },
       }),
     ),
+    "canonical",
   );
 };
 
@@ -1393,14 +1673,18 @@ export const ensureCorpusProjectionDesiredStateTx = async (
       projectionEpochUpdate(subject, epoch),
     );
   }
-  await writeDesiredStates(tx, [
-    buildCorpusIndexProjectionDesiredStateValues({
-      subject,
-      generation,
-      epoch,
-      descriptor,
-    }),
-  ]);
+  await writeDesiredStates(
+    tx,
+    [
+      buildCorpusIndexProjectionDesiredStateValues({
+        subject,
+        generation,
+        epoch,
+        descriptor,
+      }),
+    ],
+    "canonical",
+  );
   return { epoch, created: true };
 };
 
@@ -1451,14 +1735,18 @@ export const eraseServedElsewhereDesiredStateTx = async (
   if (state === undefined || state.desiredAction === "erase") {
     return { changed: false };
   }
-  await writeDesiredStates(tx, [
-    buildCorpusIndexProjectionDesiredStateValues({
-      subject,
-      generation,
-      epoch: state.desiredEpoch,
-      descriptor,
-    }),
-  ]);
+  await writeDesiredStates(
+    tx,
+    [
+      buildCorpusIndexProjectionDesiredStateValues({
+        subject,
+        generation,
+        epoch: state.desiredEpoch,
+        descriptor,
+      }),
+    ],
+    "canonical",
+  );
   return { changed: true };
 };
 
@@ -1582,5 +1870,5 @@ export const synchronizeLockedCaseLawProjectionBatchTx = async (
     family: "case_law",
     epochs: advanced,
   });
-  await writeDesiredStates(tx, values);
+  await writeDesiredStates(tx, values, "canonical");
 };

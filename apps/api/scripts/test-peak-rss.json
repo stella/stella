@@ -16840,14 +16840,6 @@
         "job": "measure-2"
       }
     },
-    "src/lib/docx-authoring/from-markdown.test.ts": {
-      "peakMb": 196,
-      "baselineMb": 196,
-      "source": {
-        "runId": "43667897818",
-        "job": "measure-3"
-      }
-    },
     "src/lib/docx-review-markup.test.ts": {
       "peakMb": 182,
       "baselineMb": 182,

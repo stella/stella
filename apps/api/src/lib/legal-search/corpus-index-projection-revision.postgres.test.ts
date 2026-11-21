@@ -629,10 +629,12 @@ if (!databaseUrl || !runPostgresTests) {
           targetGenerationCreated = true;
           expect(activationResult).toEqual({ epoch: 1n, created: true });
           expect(
-            await writerDb.transaction(
-              async (tx) =>
-                await reconcileCorpusProjectionDesiredStateTx(tx, subject),
-            ),
+            (
+              await writerDb.transaction(
+                async (tx) =>
+                  await reconcileCorpusProjectionDesiredStateTx(tx, subject),
+              )
+            ).unwrap(),
           ).toEqual({ epoch: 1n, changed: false, generationCount: 1 });
         } finally {
           releaseWriter.resolve(undefined);

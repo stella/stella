@@ -119,7 +119,10 @@ import { memberTimeTargetsRoute } from "@/api/handlers/time-entries/members/rout
 import { timeEntryReportRoute } from "@/api/handlers/time-entries/report/routes";
 import { timeEntriesRoute } from "@/api/handlers/time-entries/routes";
 import { timeTimersRoute } from "@/api/handlers/time-timers/routes";
-import { uploadsRoute } from "@/api/handlers/uploads/routes";
+import {
+  desktopDictationTranscriptAudioRoute,
+  uploadsRoute,
+} from "@/api/handlers/uploads/routes";
 import { usageRoute } from "@/api/handlers/usage/routes";
 import { userFilesRoute } from "@/api/handlers/user-files/routes";
 import { vatRateRoute } from "@/api/handlers/vat-rates/routes";
@@ -327,5 +330,6 @@ export const apiRoutes = mount([
   desktopFeatureAccessRoute,
   desktopTimeEntriesRoute,
   desktopDictationRoute,
+  desktopDictationTranscriptAudioRoute,
   desktopRunnerRoute,
 ]);

@@ -389,7 +389,10 @@ return { id: document.entityId, name: document.name };`;
   /** What the web app's Continue sends, in the recording's language. */
   const continueText = async (): Promise<string> => {
     const catalog: unknown = await import(
-      new URL("../../../../web/src/i18n/langs/en.json", import.meta.url).href
+      new URL(
+        "../../../../web/src/i18n/namespaces/en/chat.json",
+        import.meta.url,
+      ).href
     );
     return asTestRaw<{
       default: { chat: { turnPaused: { continue: string } } };

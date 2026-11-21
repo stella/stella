@@ -25,7 +25,7 @@ import { childExitStatus } from "../packages/scripts/src/child-exit-status";
 
 /** Every file `apps/web`'s `i18n:sync` can write, as git pathspecs. */
 export const SYNC_TARGETS = [
-  ":(glob)apps/web/src/i18n/langs/*.json",
+  ":(glob)apps/web/src/i18n/namespaces/**/*.json",
   ":(literal)apps/web/src/i18n/langs/messages.gen.ts",
   ":(literal)apps/web/src/i18n/TERMINOLOGY.md",
   ":(literal)apps/web/src/i18n/i18n-source-lock.json",

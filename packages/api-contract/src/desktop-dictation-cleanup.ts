@@ -37,6 +37,43 @@ export const DESKTOP_DICTATION_APP_KINDS = [
 export type DesktopDictationAppKind =
   (typeof DESKTOP_DICTATION_APP_KINDS)[number];
 
+/** How cleanup writes a dictation: `polished` fixes recognition mistakes
+ *  and keeps the wording (the form when a request names none), `casual`
+ *  keeps a relaxed tone, `notes` writes terse points, and `verbatim`
+ *  changes no word, only casing, punctuation and spoken commands. `styles`
+ *  in the JSON file lists the same values. */
+export const DESKTOP_DICTATION_CLEANUP_STYLES = [
+  "polished",
+  "casual",
+  "notes",
+  "verbatim",
+] as const;
+export type DesktopDictationCleanupStyle =
+  (typeof DESKTOP_DICTATION_CLEANUP_STYLES)[number];
+export const DESKTOP_DICTATION_DEFAULT_CLEANUP_STYLE =
+  "polished" satisfies DesktopDictationCleanupStyle;
+
+/** The languages cleanup can write a dictation in when asked to translate
+ *  it: the languages the apps come in. `translationLanguages` in the JSON
+ *  file lists the same values. */
+export const DESKTOP_DICTATION_TRANSLATION_LANGUAGES = [
+  "ar",
+  "cs",
+  "de",
+  "en",
+  "es",
+  "et",
+  "fr",
+  "hu",
+  "lt",
+  "lv",
+  "pl",
+  "pt-BR",
+  "sk",
+] as const;
+export type DesktopDictationTranslationLanguage =
+  (typeof DESKTOP_DICTATION_TRANSLATION_LANGUAGES)[number];
+
 /** Code points, the way the desktop counts them (Rust `chars().count()`),
  *  so both sides hold a text to the same bound. */
 export const countDictationCodePoints = (text: string): number => {
@@ -61,17 +98,30 @@ const maxCodePoints = (limit: number) =>
  *  character or a command), a marker with dictated words on both sides may
  *  drop itself and as much of the words before it as the correction after
  *  it holds. An answer that keeps less than `minAnswerTextPercent` of the
- *  rest, or breaks a line far more often than the dictation could have asked
- *  for, lost content and is replaced by the raw transcript. Only a dictation
- *  of formatting commands alone may be answered by breaks alone. */
+ *  rest (`condensedMinAnswerTextPercent` for notes or a translation, which
+ *  word the dictation anew), or breaks a line far more often than the
+ *  dictation could have asked for, lost content and is replaced by the raw
+ *  transcript. Only a dictation of formatting commands alone may be answered
+ *  by breaks alone. */
 export const DESKTOP_DICTATION_CLEANUP_PLAUSIBILITY = {
   minAnswerTextPercent: contract.minAnswerTextPercent,
+  condensedMinAnswerTextPercent: contract.condensedMinAnswerTextPercent,
   minBreakAllowance: contract.minBreakAllowance,
   transcriptCharactersPerBreak: contract.transcriptCharactersPerBreak,
   sentenceEndMarks: contract.sentenceEndMarks,
   formattingCommands: contract.formattingCommands,
   correctionMarkers: contract.correctionMarkers,
 } as const;
+
+/** The share of the dictated letters and digits a cleaned answer must
+ *  keep, by how it was asked to write them. */
+export const dictationCleanupMinAnswerTextPercent = ({
+  style,
+  translateTo,
+}: Pick<DesktopDictationCleanupRequest, "style" | "translateTo">): number =>
+  style === "notes" || translateTo !== undefined
+    ? DESKTOP_DICTATION_CLEANUP_PLAUSIBILITY.condensedMinAnswerTextPercent
+    : DESKTOP_DICTATION_CLEANUP_PLAUSIBILITY.minAnswerTextPercent;
 
 /** Characters the desktop never types: controls, the Unicode line and
  *  paragraph separators, and the bidirectional embedding, override and
@@ -158,6 +208,11 @@ export const desktopDictationCleanupRequestSchema = v.strictObject({
    *  neither logged nor stored. */
   context: v.optional(desktopDictationCleanupContextSchema),
   vocabulary: vocabularySchema,
+  /** How to write the text; `polished` when absent. */
+  style: v.optional(v.picklist(DESKTOP_DICTATION_CLEANUP_STYLES)),
+  /** The language to write the cleaned text in, whatever language it was
+   *  dictated in. Absent, every word stays in its spoken language. */
+  translateTo: v.optional(v.picklist(DESKTOP_DICTATION_TRANSLATION_LANGUAGES)),
 });
 export type DesktopDictationCleanupRequest = v.InferOutput<
   typeof desktopDictationCleanupRequestSchema

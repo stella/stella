@@ -82,12 +82,16 @@ struct Contract {
   transcribe_path: String,
   /// Where a recording's transcript is filed in a matter.
   transcripts_path: String,
+  /// Where the recording uploaded into a transcript's folder is finalized.
+  transcript_audio_path: String,
   max_audio_bytes: usize,
   max_audio_seconds: usize,
   /// How many custom words one chunk may carry, and how long each may be in
   /// UTF-16 code units.
   max_vocabulary_terms: usize,
   max_vocabulary_term_length: usize,
+  /// The largest recording a transcript's folder takes.
+  max_transcript_audio_bytes: u64,
 }
 
 const CONTRACT: &str = include_str!(
@@ -105,6 +109,11 @@ pub(crate) fn vocabulary_limits() -> crate::dictation_words::Limits {
 /// Where a recording's transcript is filed in a matter.
 pub(crate) fn transcripts_path() -> &'static str {
   &contract().transcripts_path
+}
+
+/// The largest recording a transcript's folder takes.
+pub(crate) fn max_transcript_audio_bytes() -> u64 {
+  contract().max_transcript_audio_bytes
 }
 
 fn contract() -> &'static Contract {
@@ -917,6 +926,10 @@ pub(crate) enum PieceFailure {
 /// The longest reply a saved transcript sends back.
 const MAX_SAVED_REPLY_BYTES: usize = 64 * 1024;
 
+/// How long the API may take to check, scan and file an uploaded recording:
+/// it reads the whole file, up to the largest matter document.
+const AUDIO_FINALIZE_TIMEOUT: Duration = Duration::from_secs(5 * 60);
+
 /// Saves a transcribed recording to a matter for the dictation account,
 /// whose lease is held until the reply has been read. Returns the reply.
 pub(crate) async fn save_transcript(
@@ -924,13 +937,47 @@ pub(crate) async fn save_transcript(
   body: &impl Serialize,
   failure: &'static str,
 ) -> Result<Vec<u8>, String> {
+  post_for_account(
+    app,
+    transcripts_path(),
+    body,
+    Duration::from_secs(60),
+    failure,
+  )
+  .await
+}
+
+/// Finalizes the recording uploaded into a transcript's folder, for the
+/// dictation account. Returns the reply.
+pub(crate) async fn finalize_transcript_audio(
+  app: &AppHandle,
+  body: &impl Serialize,
+  failure: &'static str,
+) -> Result<Vec<u8>, String> {
+  post_for_account(
+    app,
+    &contract().transcript_audio_path,
+    body,
+    AUDIO_FINALIZE_TIMEOUT,
+    failure,
+  )
+  .await
+}
+
+async fn post_for_account(
+  app: &AppHandle,
+  path: &str,
+  body: &impl Serialize,
+  timeout: Duration,
+  failure: &'static str,
+) -> Result<Vec<u8>, String> {
   let account = dictation_account(app).await?;
   let client = DesktopHttpClient::new(HttpClientOptions {
     redirect: reqwest::redirect::Policy::none(),
-    timeout: Some(Duration::from_secs(60)),
+    timeout: Some(timeout),
   })
   .map_err(request_cause_logged(failure))?;
-  let response = save_request(&account, &client, body)?
+  let response = save_request(&account, &client, path, body)?
     .send()
     .await
     .map_err(request_cause_logged(failure))?;
@@ -951,11 +998,12 @@ pub(crate) async fn save_transcript(
 fn save_request(
   account: &AccountRequest,
   client: &DesktopHttpClient,
+  path: &str,
   body: &impl Serialize,
 ) -> Result<crate::http_client::DeviceProofRequest, String> {
   crate::http_client::device_proof_request(
     client
-      .post(format!("{}{}", account.api_base_url, transcripts_path()))
+      .post(format!("{}{}", account.api_base_url, path))
       .json(body),
     &account.device_key,
     Some(&account.credential.key),

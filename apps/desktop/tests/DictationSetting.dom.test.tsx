@@ -20,6 +20,7 @@ afterAll(async () => {
 });
 
 const ENABLED_SNAPSHOT = {
+  appSettings: [],
   available: true,
   cleanup: true,
   cloudAvailable: false,
@@ -36,6 +37,7 @@ const ENABLED_SNAPSHOT = {
   shareWindowTitle: false,
   shareTextBeforeCursor: false,
   sounds: true,
+  speakersOnly: true,
   textBeforeCursorAvailable: true,
   failure: null,
   failureKeptInHistory: false,
@@ -46,7 +48,13 @@ const ENABLED_SNAPSHOT = {
   model: { status: "ready" },
   modelBytes: 740_363_168,
   phase: "idle",
+  recentApps: [],
+  retypeKeys: { code: "KeyV", modifiers: ["control", "alt", "shift"] },
+  retypeShortcut: true,
+  retypeShortcutTaken: false,
   shortcutTaken: false,
+  whileDictating: "nothing",
+  whileDictatingOffered: ["nothing", "lower", "pause"],
 };
 
 /** Renders the setting over a native side that answers with `snapshot`. */
@@ -414,6 +422,110 @@ test("turning the sounds off asks the native side and shows its answer", async (
     expect(toggle.getAttribute("aria-checked")).toBe("false");
   });
   expect(calls).toEqual([{ enabled: false }]);
+});
+
+test("turning the retype shortcut off asks the native side and shows its answer", async () => {
+  const calls: unknown[] = [];
+  const { getByRole } = await renderSetting(
+    ENABLED_SNAPSHOT,
+    (called, payload) => {
+      if (called !== "dictation_set_retype_shortcut") {
+        return undefined;
+      }
+      calls.push(payload);
+      return { ...ENABLED_SNAPSHOT, retypeShortcut: false };
+    },
+  );
+  const toggle = getByRole("switch", {
+    name: defaultMessages.dictation.retype.title,
+  });
+  expect(toggle.getAttribute("aria-checked")).toBe("true");
+
+  fireEvent.click(toggle);
+
+  await waitFor(() => {
+    expect(toggle.getAttribute("aria-checked")).toBe("false");
+  });
+  expect(calls).toEqual([{ enabled: false }]);
+});
+
+test("a retype shortcut another app holds says so", async () => {
+  const { findByText } = await renderSetting({
+    ...ENABLED_SNAPSHOT,
+    retypeShortcutTaken: true,
+  });
+  expect(await findByText(/^Another app is using /u)).toBeTruthy();
+});
+
+test("removing an app's own settings stores the rest", async () => {
+  const calls: unknown[] = [];
+  const code = {
+    cleanup: "off",
+    language: null,
+    target: { kind: "code", type: "kind" },
+  };
+  const mail = {
+    cleanup: null,
+    language: "cs",
+    target: { identifier: "com.apple.mail", name: "Mail", type: "app" },
+  };
+  const { getByRole } = await renderSetting(
+    { ...ENABLED_SNAPSHOT, appSettings: [code, mail] },
+    (called, payload) => {
+      if (called !== "dictation_set_app_settings") {
+        return undefined;
+      }
+      calls.push(payload);
+      return { ...ENABLED_SNAPSHOT, appSettings: [mail] };
+    },
+  );
+
+  fireEvent.click(
+    getByRole("button", {
+      name: `Remove ${defaultMessages.dictation.perApp.kinds.code}`,
+    }),
+  );
+
+  await waitFor(() => {
+    expect(calls).toEqual([{ settings: [mail] }]);
+  });
+});
+
+test("speakers only is offered once dictation changes other sound", async () => {
+  const calls: unknown[] = [];
+  const { getByRole, queryByRole } = await renderSetting(
+    { ...ENABLED_SNAPSHOT, whileDictating: "lower" },
+    (called, payload) => {
+      if (called !== "dictation_set_speakers_only") {
+        return undefined;
+      }
+      calls.push(payload);
+      return {
+        ...ENABLED_SNAPSHOT,
+        speakersOnly: false,
+        whileDictating: "lower",
+      };
+    },
+  );
+  const toggle = getByRole("switch", {
+    name: defaultMessages.dictation.whileDictating.speakersOnly.title,
+  });
+  expect(toggle.getAttribute("aria-checked")).toBe("true");
+
+  fireEvent.click(toggle);
+
+  await waitFor(() => {
+    expect(toggle.getAttribute("aria-checked")).toBe("false");
+  });
+  expect(calls).toEqual([{ enabled: false }]);
+  cleanup();
+
+  await renderSetting(ENABLED_SNAPSHOT);
+  expect(
+    queryByRole("switch", {
+      name: defaultMessages.dictation.whileDictating.speakersOnly.title,
+    }),
+  ).toBeNull();
 });
 
 test("an unread focus is not reported as switching apps", () => {

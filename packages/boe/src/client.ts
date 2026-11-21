@@ -78,9 +78,15 @@ const isBoeSearchHit = (value: unknown): value is BoeSearchHit =>
   hasOptionalString(value, "url_eli") &&
   hasOptionalString(value, "url_html_consolidada");
 
-const isBoeSearchResponse = (value: unknown): value is BoeSearchResponse =>
+// The search endpoint answers an empty result set with `data: ""`.
+type BoeSearchWireResponse = Omit<BoeSearchResponse, "data"> & {
+  data?: BoeSearchHit[] | "";
+};
+
+const isBoeSearchResponse = (value: unknown): value is BoeSearchWireResponse =>
   isRecord(value) &&
   (value["data"] === undefined ||
+    value["data"] === "" ||
     (Array.isArray(value["data"]) && value["data"].every(isBoeSearchHit))) &&
   (value["status"] === undefined || isBoeStatus(value["status"]));
 
@@ -322,7 +328,11 @@ export const searchConsolidatedLegislation = async (
     `${LEGISLATION_PATH}?${params.toString()}`,
     isBoeSearchResponse,
   );
-  return data ?? { data: [], status: { code: "200", text: "ok" } };
+  if (data === null) {
+    return { data: [], status: { code: "200", text: "ok" } };
+  }
+  const hits = data.data === "" ? [] : (data.data ?? []);
+  return { ...data, data: hits };
 };
 
 // ---------------------------------------------------------------------------

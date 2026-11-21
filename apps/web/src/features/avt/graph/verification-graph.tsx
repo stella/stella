@@ -57,7 +57,6 @@ import { useScrollViewport } from "@/features/avt/graph/use-scroll-viewport";
 import { verificationGraphOptions } from "@/features/avt/queries";
 import type { ClaimState } from "@/features/avt/types";
 import { STATE_META } from "@/features/avt/types";
-import { useFormatter } from "@/i18n/formatting-context";
 import { detached } from "@/lib/detached";
 import { notifyUserError } from "@/lib/errors/user-toast";
 
@@ -345,16 +344,13 @@ export const GraphPages = ({
   factsShown,
 }: GraphPagesProps) => {
   const t = useTranslations();
-  const format = useFormatter();
   if (!query.hasNextPage && !factOverflow) {
     return null;
   }
   return (
     <div className="text-muted-foreground flex flex-wrap items-center gap-3 text-xs">
       {factOverflow && (
-        <span>
-          {t("avt.graph.factOverflow", { count: format.number(factsShown) })}
-        </span>
+        <span>{t("avt.graph.factOverflow", { count: factsShown })}</span>
       )}
       {query.hasNextPage && (
         <Button

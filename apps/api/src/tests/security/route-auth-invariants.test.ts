@@ -41,6 +41,7 @@ import { myTimeEntriesRoute } from "@/api/handlers/time-entries/me/routes";
 import { memberTimeTargetsRoute } from "@/api/handlers/time-entries/members/routes";
 import { timeEntryReportRoute } from "@/api/handlers/time-entries/report/routes";
 import { timeTimersRoute } from "@/api/handlers/time-timers/routes";
+import { desktopDictationTranscriptAudioRoute } from "@/api/handlers/uploads/routes";
 import { visualSandboxRoute } from "@/api/handlers/visual-sandbox/routes";
 import { wellKnownRoute } from "@/api/handlers/well-known/routes";
 import { workspacesRoute } from "@/api/handlers/workspaces/routes";
@@ -130,6 +131,7 @@ const ROOT_ROUTE_TABLES: Readonly<Record<string, readonly RouteEntry[]>> = {
   authUiRoute,
   conflictChecksRoute,
   desktopDictationRoute,
+  desktopDictationTranscriptAudioRoute,
   desktopFeatureAccessRoute,
   desktopPresenceRoute,
   desktopRunnerRoute,

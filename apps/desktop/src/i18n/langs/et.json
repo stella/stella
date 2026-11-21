@@ -184,7 +184,7 @@
     "unreadableEraseNotice": "Mõnda salvestatud tegevust ei saa lugeda. Saate kustutada loetamatu salvestatud tegevuse ja selle mustandite taastamisandmed.",
     "unrecoverableOtherHistoryConfirmation": "Teiste kontode salvestatud ajalugu kustutatakse, sealhulgas puuduvate võtmete või loetamatute failidega pooleliolevate mustandite taastamisandmed. Loodud mustandid võivad juba olemas olla. Seda ei saa tagasi võtta.",
     "welcomeControlFact": "Jõudeaega ei arvestata. Peatage või kustutage igal ajal.",
-    "welcomeDetails": "Rakenduste tegevust salvestatakse iga paari sekundi järel ja seda ei laadita kunagi automaatselt üles. Salvestatakse ka akende pealkirjad ja avatud dokumentide teed, kui te üksikasju välja ei lülita. Kokkuvõtted jõuavad lõikelauale ainult teie soovil. Saate rakendusi välistada ja valida ajaloo säilitamise aja. Üksikasjade väljalülitamine peatab uute üksikasjade salvestamise; varasemad säilivad säilitusaja lõpuni või kustutamiseni. Soovituse akende pealkirjad lahkuvad sellest seadmest ainult siis, kui kinnitate stella AI selgituse, üks kord või alati; neid ei salvestata.",
+    "welcomeDetails": "Rakenduste tegevust salvestatakse iga paari sekundi järel ja seda ei laadita kunagi automaatselt üles. Salvestatakse ka akende pealkirjad ja avatud dokumentide teed, kui te üksikasju välja ei lülita. Kokkuvõtted jõuavad lõikelauale ainult teie soovil. Saate rakendusi välistada ja valida ajaloo säilitamise aja. Üksikasjade väljalülitamine peatab uute üksikasjade salvestamise; varasemad säilivad säilitusaja lõpuni või kustutamiseni. Soovituse akende pealkirjad lahkuvad sellest seadmest ainult siis, kui taotlete pärast nõusoleku andmist stella AI mustandit, üks kord või alati; neid ei salvestata.",
     "welcomeLearnMore": "Lisateave",
     "welcomeLocalFact": "Selles seadmes krüptitud.",
     "welcomePreviewMatter": "Riverside’i üürilepingu pikendamine",
@@ -662,6 +662,35 @@
       "openSoundPc": "Ava heliseaded",
       "title": "stella ei kuule teie mikrofoni"
     },
+    "perApp": {
+      "add": "Lisa…",
+      "cleanup": {
+        "default": "Korrigeerimine seadete järgi",
+        "label": "Korrigeerimine: {name}",
+        "off": "Ilma korrigeerimiseta",
+        "on": "Korrigeerimisega"
+      },
+      "description": "Lülitage AI-korrigeerimine sisse või välja ja valige keel ühe rakenduse või rakenduseliigi jaoks. Otsustab rakendus, mis on dikteerimise alustamisel esiplaanil.",
+      "failed": "Seadeid ei õnnestunud salvestada. Proovige uuesti.",
+      "group": "Rakenduse kaupa",
+      "kinds": {
+        "browser": "Brauserid",
+        "chat": "Vestlusrakendused",
+        "code": "Koodiredaktorid",
+        "document": "Dokumendid",
+        "email": "E-posti rakendused",
+        "other": "Muud rakendused",
+        "terminal": "Terminalid"
+      },
+      "kindsOfApp": "Rakenduseliigid",
+      "language": {
+        "default": "Keel seadete järgi",
+        "label": "Keel: {name}"
+      },
+      "recentApps": "Hiljutised rakendused",
+      "remove": "Eemalda {name}",
+      "title": "Rakenduse seaded"
+    },
     "preview": {
       "finishing": "Lõpetan…",
       "label": "Seni dikteeritud tekst",
@@ -669,6 +698,11 @@
     },
     "removeFailed": "Kõnemudelit ei õnnestunud eemaldada. Proovige uuesti.",
     "removeModel": "Eemalda",
+    "retype": {
+      "description": "Vajutage {shortcut}, et sisestada viimane dikteering uuesti kursori kohale. Seda hoitakse ainult mälus, kuni see on lõikelaua ajaloos.",
+      "taken": "Teine rakendus kasutab kiirklahvi {shortcut}. stella ikooni menüü Dikteerimine pakub sama.",
+      "title": "Viimase dikteeringu kiirklahv"
+    },
     "shortcutTaken": "{shortcut} on teise rakenduse kasutuses.",
     "sounds": {
       "description": "Esita lühike vaikne heli, kui salvestamine algab ja kui see lõpeb.",
@@ -681,6 +715,19 @@
       "failed": "Akent ei õnnestunud avada. Proovige uuesti.",
       "open": "Ava",
       "title": "Salvestise transkribeerimine"
+    },
+    "whileDictating": {
+      "choices": {
+        "lower": "Vaigista muid helisid",
+        "nothing": "Ära tee midagi",
+        "pause": "Peata Muusika ja Spotify"
+      },
+      "description": "Mis juhtub muude helidega, kui stella salvestab, et need teksti ei satuks. Salvestuse lõppedes taastub kõik.",
+      "speakersOnly": {
+        "description": "Kõrvaklapid jäävad puutumata: mikrofon neid ei kuule.",
+        "title": "Ainult kõlarite kaudu"
+      },
+      "title": "Dikteerimise ajal"
     }
   },
   "keepAwake": {
@@ -763,7 +810,7 @@
     "takenOverTitle": "Muutmine teisaldatud teise seadmesse"
   },
   "onboarding": {
-    "activityAiNote": "Soovituse akende pealkirjad lahkuvad sellest seadmest ainult siis, kui kinnitate stella AI selgituse, üks kord või alati. Neid ei salvestata.",
+    "activityAiNote": "Soovituse akende pealkirjad lahkuvad sellest seadmest ainult siis, kui taotlete pärast nõusoleku andmist stella AI mustandit, üks kord või alati. Neid ei salvestata.",
     "activityBody": "Vaadake, kuhu tööpäev kulus, ja tehke sellest ajakannete mustandid. Teie otsustate, mida salvestatakse ja mida saadetakse.",
     "activityConsentNote": "Midagi ei salvestata enne, kui vajutate Tegevustes nuppu Alusta salvestamist. Peatage, välistage rakendusi või kustutage mis tahes päev, millal soovite.",
     "activityNeverKeys": "Klahvivajutused või sisestatud tekst",
@@ -1140,6 +1187,21 @@
       "searching": "Otsimine…",
       "title": "Toimik"
     },
+    "matterFolder": {
+      "audioFailed": "Salvestist ei õnnestunud toimikusse salvestada.",
+      "audioMissing": "Salvestis pole selles aknas enam avatud, seega seda toimikusse ei salvestatud.",
+      "audioTooLarge": "Salvestis on suurem kui {size}, seega seda toimikusse ei salvestatud.",
+      "cleanedDocxFileName": "{title} – toimetatud tekst.docx",
+      "cleanedTitle": "{title} – toimetatud tekst",
+      "documents": "Wordi dokumentide salvestamine…",
+      "docxFileName": "{title} – transkriptsioon.docx",
+      "finishing": "Salvestise kontrollimine…",
+      "instructionsLabel": "Dikteeritud juhised:",
+      "preparing": "Salvestise ettevalmistamine…",
+      "saveDocx": "Wordi dokument (.docx)",
+      "saved": "Salvestatud toimikusse {matter}, kausta {folder}.",
+      "uploading": "Salvestise üleslaadimine: {percent, number}%"
+    },
     "note": "Philipsi või Olympuse diktofonide DSS- ja DS2-failid salvestage esmalt SpeechExecis või ODMS-is WAV-vormingusse.",
     "progress": {
       "another": "Transkribeeri järgmine salvestis",
@@ -1195,6 +1257,7 @@
     "checkForUpdates": "Kontrolli värskendusi",
     "dictation": "Dikteerimine",
     "dictationHint": "Dikteerimiseks hoidke all {key}",
+    "dictationRetype": "Sisesta viimane dikteering uuesti",
     "dictationSettings": "Dikteerimise seaded…",
     "dictationTurnOn": "Lülita dikteerimine sisse…",
     "documentsSyncing": "{count, plural, one {1 dokument sünkroniseerub} other {{count} dokumenti sünkroniseerub}}",
