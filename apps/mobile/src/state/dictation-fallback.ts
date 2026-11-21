@@ -17,16 +17,17 @@ export const sameClassFallback = (
   offered: DesktopDictationModels,
 ): string | undefined => {
   const picked = offered.models.find(({ id }) => id === pickedId);
-  if (picked === undefined || picked.provider === undefined) {
-    return undefined;
+  // A model of no named provider, or none at all, goes nowhere else.
+  if (picked?.provider !== undefined) {
+    const sameClass = (model: OfferedModel) =>
+      model.id !== picked.id &&
+      model.provider === picked.provider &&
+      (model.outsideRegion === true) === (picked.outsideRegion === true) &&
+      (model.retainsData === true) === (picked.retainsData === true);
+    const fallbackDefault = offered.models.find(
+      (model) => model.id === offered.defaultModelId && sameClass(model),
+    );
+    return (fallbackDefault ?? offered.models.find(sameClass))?.id;
   }
-  const sameClass = (model: OfferedModel) =>
-    model.id !== picked.id &&
-    model.provider === picked.provider &&
-    (model.outsideRegion === true) === (picked.outsideRegion === true) &&
-    (model.retainsData === true) === (picked.retainsData === true);
-  const fallbackDefault = offered.models.find(
-    (model) => model.id === offered.defaultModelId && sameClass(model),
-  );
-  return (fallbackDefault ?? offered.models.find(sameClass))?.id;
+  return undefined;
 };
