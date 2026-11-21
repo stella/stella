@@ -1,23 +1,16 @@
 import { describe, expect, test } from "bun:test";
-import * as v from "valibot";
 
 import {
   type BuiltChunk,
-  checkInitialBudget,
+  checkRatchet,
   coldLoadHops,
-  convertedRouteCount,
   evaluateStartup,
   INITIAL_GROWTH_LIMIT_BYTES,
   initialGzipBytes,
   PENDING_MODULE_LIMIT_BYTES,
-  PENDING_ROUTE_ALLOWANCE_BYTES,
   PENDING_SLACK_BYTES,
-  type PendingBudget,
   pendingLayer,
   type StartupGraph,
-  type StartupLedger,
-  startupLedgerKeys,
-  StartupLedgerSchema,
   startupPageCode,
   startupSummary,
 } from "./bundle-startup-gates";
@@ -51,15 +44,6 @@ const graphOf = (
   ...rest,
 });
 
-const EMPTY_LEDGER: StartupLedger = { startupPageCode: [], coldLoadHops: [] };
-
-/** A build with no pending views, measured against a total of zero. */
-const NO_PENDING: PendingBudget = {
-  committed: 0,
-  base: null,
-  convertedRoutes: null,
-};
-
 describe("initial JS ratchet", () => {
   test("sums the gzip of the initial chunks only", () => {
     const graph = graphOf(
@@ -75,34 +59,25 @@ describe("initial JS ratchet", () => {
 
   test("fails only past the growth limit and prompts past the same shrink", () => {
     const budget = 1_000_000;
+    const status = (measured: number) =>
+      checkRatchet({ measured, budget, slack: INITIAL_GROWTH_LIMIT_BYTES })
+        .status;
 
-    expect(
-      checkInitialBudget(budget + INITIAL_GROWTH_LIMIT_BYTES, budget).status,
-    ).toBe("ok");
-    expect(
-      checkInitialBudget(budget + INITIAL_GROWTH_LIMIT_BYTES + 1, budget)
-        .status,
-    ).toBe("over");
-    expect(
-      checkInitialBudget(budget - INITIAL_GROWTH_LIMIT_BYTES, budget).status,
-    ).toBe("ok");
-    expect(
-      checkInitialBudget(budget - INITIAL_GROWTH_LIMIT_BYTES - 1, budget)
-        .status,
-    ).toBe("shrunk");
+    expect(status(budget + INITIAL_GROWTH_LIMIT_BYTES)).toBe("ok");
+    expect(status(budget + INITIAL_GROWTH_LIMIT_BYTES + 1)).toBe("over");
+    expect(status(budget - INITIAL_GROWTH_LIMIT_BYTES)).toBe("ok");
+    expect(status(budget - INITIAL_GROWTH_LIMIT_BYTES - 1)).toBe("shrunk");
   });
 
   test("an over-budget build fails the run; a shrunk one only notices", () => {
     const over = evaluateStartup(
       graphOf([chunk("index-a.js", {}, { gzipBytes: 20_000 })]),
-      { initial: 10_000, pending: NO_PENDING },
-      EMPTY_LEDGER,
+      { initial: 10_000, pending: 0 },
       "rebaseline",
     );
     const shrunk = evaluateStartup(
       graphOf([chunk("index-a.js", {}, { gzipBytes: 1000 })]),
-      { initial: 10_000, pending: NO_PENDING },
-      EMPTY_LEDGER,
+      { initial: 10_000, pending: 0 },
       "rebaseline",
     );
 
@@ -130,13 +105,6 @@ describe("pending layer", () => {
     expect(layer.totalBytes).toBe(2 * PENDING_MODULE_LIMIT_BYTES + 1);
   });
 
-  test("counts the routes a change took off the exceptions list", () => {
-    const base = ["routes/a.tsx", "routes/b.tsx", "routes/c.tsx"];
-
-    expect(convertedRouteCount(base, ["routes/c.tsx"])).toBe(2);
-    // A route the change adds back, or one the base never listed, earns nothing.
-    expect(convertedRouteCount(base, [...base, "routes/d.tsx"])).toBe(0);
-  });
   test("a pending view in a lazy chunk costs the startup nothing", () => {
     const graph = graphOf(
       [chunk("vendor-a.js", { "src/shell.tsx": 1000 })],
@@ -489,7 +457,7 @@ describe("cold-load hops", () => {
   });
 });
 
-describe("shrink-only ledger", () => {
+describe("page code and hops", () => {
   const offending = graphOf(
     [
       chunk(
@@ -501,195 +469,66 @@ describe("shrink-only ledger", () => {
         {
           dynamicImports: [
             { target: "cases-page-b.js", importer: "src/routes/cases.tsx" },
+            { target: "cases-help-c.js", importer: "src/routes/cases.tsx" },
           ],
         },
       ),
     ],
-    [chunk("cases-page-b.js", { "src/routes/cases/-cases-page.tsx": 60_000 })],
+    [
+      chunk("cases-page-b.js", { "src/routes/cases/-cases-page.tsx": 60_000 }),
+      chunk("cases-help-c.js", { "src/routes/cases/help.page.tsx": 9000 }),
+    ],
     {
       routes: [
         { id: "/cases", filePath: "src/routes/cases.tsx", preloads: [] },
       ],
     },
   );
-  const ledger: StartupLedger = {
-    startupPageCode: [
-      {
-        kind: "page-module",
-        module: "src/routes/law/coverage.page.tsx",
-        reason: "pending view imports it",
-      },
-    ],
-    coldLoadHops: [
-      {
-        route: "/cases",
-        module: "src/routes/cases/-cases-page.tsx",
-        reason: "hand-written lazy page",
-      },
-    ],
-  };
 
-  test("an exception covers one late page of its route, not a second one", () => {
-    const second = graphOf(
-      [
-        chunk(
-          "vendor-a.js",
-          {
-            "src/routes/cases.tsx": 900,
-            "src/routes/law/coverage.page.tsx": 2000,
-          },
-          {
-            dynamicImports: [
-              { target: "cases-page-b.js", importer: "src/routes/cases.tsx" },
-              { target: "cases-help-c.js", importer: "src/routes/cases.tsx" },
-            ],
-          },
-        ),
-      ],
-      [
-        chunk("cases-page-b.js", {
-          "src/routes/cases/-cases-page.tsx": 60_000,
-        }),
-        chunk("cases-help-c.js", { "src/routes/cases/help.page.tsx": 9000 }),
-      ],
-      {
-        routes: [
-          { id: "/cases", filePath: "src/routes/cases.tsx", preloads: [] },
-        ],
-      },
-    );
+  test("every offender fails, each late page of a route on its own", () => {
     const result = evaluateStartup(
-      second,
-      { initial: 0, pending: NO_PENDING },
-      ledger,
+      offending,
+      { initial: 0, pending: 0 },
       "rebaseline",
     );
 
-    expect(result.hops.listed.map((hop) => hop.module)).toEqual([
-      "src/routes/cases/-cases-page.tsx",
-    ]);
     expect(result.failures.map((f) => f.title)).toEqual([
+      "Page code at startup: src/routes/law/coverage.page.tsx",
+      "Extra cold-load hop: /cases",
       "Extra cold-load hop: /cases",
     ]);
-    expect(result.hops.unlisted.map((hop) => hop.module)).toEqual([
+    expect(result.hops.map((hop) => hop.module)).toEqual([
+      "src/routes/cases/-cases-page.tsx",
       "src/routes/cases/help.page.tsx",
     ]);
   });
 
-  test("the ledger's exceptions keep the identities the gates match on", () => {
-    expect(startupLedgerKeys(ledger)).toEqual([
-      "page-code page-module src/routes/law/coverage.page.tsx",
-      "cold-load-hop /cases src/routes/cases/-cases-page.tsx",
-    ]);
-    expect(startupLedgerKeys(EMPTY_LEDGER)).toEqual([]);
-  });
-
-  test("a listed offender passes and a new one fails", () => {
-    const listed = evaluateStartup(
-      offending,
-      { initial: 0, pending: NO_PENDING },
-      ledger,
-      "rebaseline",
-    );
-    const unlisted = evaluateStartup(
-      offending,
-      { initial: 0, pending: NO_PENDING },
-      EMPTY_LEDGER,
-      "rebaseline",
-    );
-
-    expect(listed.failures).toEqual([]);
-    expect(listed.pageCode.listed.map((o) => o.module)).toEqual([
-      "src/routes/law/coverage.page.tsx",
-    ]);
-    expect(unlisted.failures.map((f) => f.title)).toEqual([
-      "Page code at startup: src/routes/law/coverage.page.tsx",
-      "Extra cold-load hop: /cases",
-    ]);
-  });
-
-  test("a listed offender that stopped offending fails until its line is deleted", () => {
-    const fixed = graphOf([chunk("vendor-a.js", { "src/shell.tsx": 900 })]);
-    const result = evaluateStartup(
-      fixed,
-      { initial: 0, pending: NO_PENDING },
-      ledger,
-      "rebaseline",
-    );
-
-    expect(result.failures.map((f) => f.message)).toEqual([
-      expect.stringContaining(
-        "page-module src/routes/law/coverage.page.tsx no longer",
-      ),
-      expect.stringContaining(
-        "/cases src/routes/cases/-cases-page.tsx: the route no longer",
-      ),
-    ]);
-  });
-
-  test("an entry without a reason or with an unknown kind is rejected", () => {
-    const parse = (entry: unknown) =>
-      v.safeParse(StartupLedgerSchema, {
-        startupPageCode: [entry],
-        coldLoadHops: [],
-      }).success;
+  test("a build without offenders passes", () => {
+    const clean = graphOf([chunk("vendor-a.js", { "src/shell.tsx": 900 })]);
 
     expect(
-      parse({
-        kind: "page-module",
-        module: "src/routes/a.page.tsx",
-        reason: "why",
-      }),
-    ).toBe(true);
-    expect(
-      parse({
-        kind: "page-module",
-        module: "src/routes/a.page.tsx",
-        reason: " ",
-      }),
-    ).toBe(false);
-    expect(
-      parse({
-        kind: "route-tree",
-        module: "src/routes/a.page.tsx",
-        reason: "why",
-      }),
-    ).toBe(false);
+      evaluateStartup(clean, { initial: 0, pending: 0 }, "rebaseline").failures,
+    ).toEqual([]);
   });
 
   test("the job summary shows the totals and each offender", () => {
     const summary = startupSummary(
-      evaluateStartup(
-        offending,
-        { initial: 0, pending: NO_PENDING },
-        EMPTY_LEDGER,
-        "rebaseline",
-      ),
+      evaluateStartup(offending, { initial: 0, pending: 0 }, "rebaseline"),
     );
 
+    expect(summary).toContain("| Page code at startup | 1 | 0 | **fail** |");
+    expect(summary).toContain("| Cold-load hops | 2 | 0 | **fail** |");
     expect(summary).toContain(
-      "| Page code at startup | 1 new, 0 listed | 0 new | **fail** |",
+      "| `src/routes/law/coverage.page.tsx` | page-module | 2.0 KiB |",
     );
     expect(summary).toContain(
-      "| `src/routes/law/coverage.page.tsx` | page-module | 2.0 KiB | new |",
-    );
-    expect(summary).toContain(
-      "| `/cases` loads `src/routes/cases/-cases-page.tsx` | cold-load hop | 58.6 KiB | new |",
+      "| `/cases` loads `src/routes/cases/-cases-page.tsx` | cold-load hop | 58.6 KiB |",
     );
   });
 });
 
 describe("pending layer ratchet", () => {
-  // Real exception lists: the base branch's, and the change's after it
-  // converted `converted` of them.
-  const BASE_EXCEPTIONS = [
-    "apps/web/src/routes/knowledge/clauses.tsx",
-    "apps/web/src/routes/knowledge/index.tsx",
-    "apps/web/src/routes/knowledge/route.tsx",
-    "apps/web/src/routes/knowledge/styles.tsx",
-    "apps/web/src/routes/knowledge/workflows.tsx",
-  ];
-  const BASE_TOTAL = 200_000;
+  const COMMITTED = 200_000;
 
   /** A startup build whose pending views add up to `total` bytes. */
   const buildWith = (total: number): StartupGraph =>
@@ -701,65 +540,38 @@ describe("pending layer ratchet", () => {
       }),
     ]);
 
-  const evaluate = (total: number, converted: number, committed = total) =>
+  const evaluate = (total: number, committed = COMMITTED) =>
     evaluateStartup(
       buildWith(total),
-      {
-        initial: 0,
-        pending: {
-          committed,
-          base: BASE_TOTAL,
-          convertedRoutes: convertedRouteCount(
-            BASE_EXCEPTIONS,
-            BASE_EXCEPTIONS.slice(converted),
-          ),
-        },
-      },
-      EMPTY_LEDGER,
+      { initial: 0, pending: committed },
       "rebaseline",
     );
 
   const pendingFailures = (result: ReturnType<typeof evaluateStartup>) =>
     result.failures.filter((f) => f.title.startsWith("Pending layer"));
 
-  test("a change that converts N routes may add N times the route allowance and the slack", () => {
-    const allowed =
-      BASE_TOTAL + 3 * PENDING_ROUTE_ALLOWANCE_BYTES + PENDING_SLACK_BYTES;
-    const result = evaluate(allowed, 3);
+  test("growth within the slack passes", () => {
+    const result = evaluate(COMMITTED + PENDING_SLACK_BYTES);
 
-    expect(result.pendingBudget.convertedRoutes).toBe(3);
-    expect(result.pendingBudget.limit).toBe(allowed);
+    expect(result.pendingBudget.status).toBe("ok");
     expect(pendingFailures(result)).toEqual([]);
   });
 
-  test("growth past the allowance fails and names it", () => {
-    const limit =
-      BASE_TOTAL + 2 * PENDING_ROUTE_ALLOWANCE_BYTES + PENDING_SLACK_BYTES;
-    const result = evaluate(limit + 1, 2, BASE_TOTAL);
-
-    expect(pendingFailures(result)).toEqual([
+  test("growth past the slack fails and asks for a justified re-anchor", () => {
+    expect(
+      pendingFailures(evaluate(COMMITTED + PENDING_SLACK_BYTES + 1)),
+    ).toEqual([
       {
-        title: "Pending layer grew past its allowance",
+        title: "Pending layer over budget",
         message: expect.stringContaining(
-          "may add 5.0 KiB (2 routes removed from the pending-component exceptions × 2.0 KiB + 1.0 KiB)",
+          "re-anchor `pending` with `rebaseline` and state why",
         ),
       },
     ]);
   });
 
-  test("growth with no route converted gets the slack only", () => {
-    expect(
-      pendingFailures(evaluate(BASE_TOTAL + PENDING_SLACK_BYTES, 0)),
-    ).toEqual([]);
-    expect(
-      pendingFailures(
-        evaluate(BASE_TOTAL + PENDING_SLACK_BYTES + 1, 0, BASE_TOTAL),
-      ).map((f) => f.title),
-    ).toEqual(["Pending layer grew past its allowance"]);
-  });
-
-  test("a pure shrink passes and asks for the lower total", () => {
-    const result = evaluate(BASE_TOTAL - 10_000, 0, BASE_TOTAL);
+  test("a shrink past the slack passes and asks for the lower total", () => {
+    const result = evaluate(COMMITTED - 10_000);
 
     expect(result.pendingBudget.status).toBe("shrunk");
     expect(pendingFailures(result)).toEqual([]);
@@ -768,50 +580,13 @@ describe("pending layer ratchet", () => {
     ]);
   });
 
-  test("growth within the allowance the tree does not record fails until it is committed", () => {
-    const grown = BASE_TOTAL + PENDING_ROUTE_ALLOWANCE_BYTES;
-    const result = evaluate(grown, 1, BASE_TOTAL);
-
-    expect(pendingFailures(result).map((f) => f.title)).toEqual([
-      "Pending layer total not recorded",
-    ]);
-  });
-
-  test("a total the change commits above its base is a re-anchor it has to justify", () => {
-    const reanchored = BASE_TOTAL + 50_000;
-    const result = evaluate(reanchored, 0, reanchored);
+  test("a re-anchored total is the budget the summary names", () => {
+    const reanchored = COMMITTED + 50_000;
+    const result = evaluate(reanchored, reanchored);
 
     expect(pendingFailures(result)).toEqual([]);
-    expect(result.pendingBudget.reanchored).toBe(true);
-    expect(result.notices).toEqual([expect.stringContaining("re-anchored")]);
     expect(startupSummary(result)).toContain(
-      "| 245.1 KiB (re-anchored from 195.3 KiB), ",
+      "| 244.1 KiB + 1.0 KiB, 6.0 KiB each |",
     );
-  });
-
-  test("with no base to read, growth counts from the tree's total with the slack only", () => {
-    const missingBase = (total: number) =>
-      evaluateStartup(
-        buildWith(total),
-        {
-          initial: 0,
-          pending: {
-            committed: BASE_TOTAL,
-            base: null,
-            convertedRoutes: null,
-          },
-        },
-        EMPTY_LEDGER,
-        "rebaseline",
-      );
-
-    expect(missingBase(BASE_TOTAL + 900).pendingBudget).toMatchObject({
-      anchor: BASE_TOTAL,
-      allowance: PENDING_SLACK_BYTES,
-      status: "ok",
-    });
-    expect(
-      pendingFailures(missingBase(BASE_TOTAL + 5000)).map((f) => f.title),
-    ).toEqual(["Pending layer grew past its allowance"]);
   });
 });
