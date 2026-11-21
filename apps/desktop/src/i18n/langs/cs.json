@@ -1146,14 +1146,14 @@
       "audioTooLarge": "Nahrávka je větší než {size}, proto se do spisu neuložila. Dokumenty Word jsou uložené.",
       "cleanedDocxFileName": "{title} – upravený text.docx",
       "cleanedTitle": "{title} – upravený text",
-      "documents": "Ukládám dokumenty Word…",
+      "documents": "Ukládají se dokumenty Word…",
       "docxFileName": "{title} – přepis.docx",
-      "finishing": "Kontroluji nahrávku…",
+      "finishing": "Kontroluje se nahrávka…",
       "instructionsLabel": "Pokyny k diktátu:",
-      "preparing": "Připravuji nahrávku…",
+      "preparing": "Připravuje se nahrávka…",
       "saveDocx": "Dokument Word (.docx)",
       "saved": "Uloženo do spisu {matter} ve složce {folder}.",
-      "uploading": "Odesílám nahrávku: {percent, number} %"
+      "uploading": "Odesílá se nahrávka: {percent, number} %"
     },
     "note": "Soubory DSS a DS2 z diktafonů Philips nebo Olympus nejprve uložte jako WAV v SpeechExec nebo ODMS.",
     "progress": {
