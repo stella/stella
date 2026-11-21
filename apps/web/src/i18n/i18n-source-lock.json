@@ -3833,6 +3833,7 @@
   "inspector.moveToMain": "Move to main view",
   "inspector.moveToSide": "Move to side panel",
   "inspector.openChat": "Open chat",
+  "inspector.openTabs": "Open tabs ({count, number})",
   "inspector.reopenTab": "Reopen {name}",
   "inspector.resizePane": "Resize pane",
   "inspector.review.acceptChange": "Accept change",

@@ -4610,6 +4610,7 @@
     "moveToMain": "Przenieś do widoku głównego",
     "moveToSide": "Przenieś do panelu bocznego",
     "openChat": "Otwórz czat",
+    "openTabs": "Otwarte karty ({count, number})",
     "reopenTab": "Otwórz ponownie {name}",
     "resizePane": "Zmień rozmiar panelu",
     "review": {

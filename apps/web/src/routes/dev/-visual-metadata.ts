@@ -125,6 +125,10 @@ export const visualRegistry = {
   ui: { label: "UI components", layout: "plain" },
   "control-sizes": { label: "Control sizes", layout: "control-sizes" },
   "inspector-pane": { label: "Inspector pane", layout: "inspector-pane" },
+  "inspector-phone-header": {
+    label: "Inspector phone header",
+    layout: "plain",
+  },
   "playbook-editor": { label: "Playbook editor lifecycle", layout: "plain" },
   "provision-header": { label: "Provision header", layout: "provision-header" },
   "shell-pending": { label: "Shell pending", layout: "plain" },

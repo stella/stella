@@ -4610,6 +4610,7 @@
     "moveToMain": "Pārvietot uz galveno skatu",
     "moveToSide": "Pārvietot uz sānu paneli",
     "openChat": "Atvērt tērzēšanu",
+    "openTabs": "Atvērtās cilnes ({count, number})",
     "reopenTab": "Atkārtoti atvērt {name}",
     "resizePane": "Mainīt paneļa izmēru",
     "review": {
