@@ -6,23 +6,39 @@ import { keyPart } from "@/state/recent-searches";
 
 /**
  * How this account dictates on this phone: the model it picked, absent for
- * the one the server offers by default, and whether stella AI tidies the
- * text before it lands in the box. Kept per server and person, like recent
- * searches, and forgotten at sign-out.
+ * the one the server offers by default, whether stella AI tidies the text
+ * before it lands in the box, and which microphone records. Kept per server
+ * and person, like recent searches, and forgotten at sign-out.
  */
 export type DictationPreferences = {
   readonly modelId: string | null;
   readonly cleanup: boolean;
+  readonly microphone: DictationMicrophone;
 };
+
+/**
+ * Which microphone a dictation records from: the iPhone's own, so AirPods
+ * or a car keep playing in full quality instead of switching to call audio,
+ * or whichever the system routes to, a headset's included.
+ */
+export const DICTATION_MICROPHONES = ["built-in", "system"] as const;
+
+export type DictationMicrophone = (typeof DICTATION_MICROPHONES)[number];
 
 export const DEFAULT_DICTATION_PREFERENCES: DictationPreferences = {
   modelId: null,
   cleanup: false,
+  microphone: "built-in",
 };
 
 const preferencesSchema = v.object({
   modelId: v.nullable(v.pipe(v.string(), v.minLength(1), v.maxLength(128))),
   cleanup: v.boolean(),
+  // Kept before the microphone was a choice: the default.
+  microphone: v.optional(
+    v.picklist(DICTATION_MICROPHONES),
+    DEFAULT_DICTATION_PREFERENCES.microphone,
+  ),
 });
 
 type AccountKeys = { readonly serverUrl: string; readonly userId: string };

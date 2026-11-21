@@ -660,6 +660,8 @@
     "accountTitle": "Konts",
     "deleteAccount": "Dzēst kontu",
     "deleteAccountHint": "Atver jūsu kontu tīmeklī, kur varat to dzēst kopā ar visu, kas ir jūsu.",
+    "dictationBuiltInMicrophone": "Vienmēr izmantot iPhone mikrofonu",
+    "dictationBuiltInMicrophoneHint": "Ieraksta ar iPhone mikrofonu arī tad, ja ir pievienotas AirPods austiņas vai automašīna, lai tās turpinātu skanēt pilnā kvalitātē, nevis pārslēgtos uz zvana režīmu.",
     "dictationCleanup": "Labot ar AI",
     "dictationCleanupHint": "Izlabo atpazīšanas kļūdas un diktēto formatējumu, piemēram, “jauna rinda”. Tikai teksts, nevis audio, caur stella nonāk pie jūsu organizācijas AI pakalpojumu sniedzēja; stella to neglabā.",
     "dictationModelDefault": "Noklusējuma",

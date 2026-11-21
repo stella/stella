@@ -660,6 +660,8 @@
     "accountTitle": "Paskyra",
     "deleteAccount": "Ištrinti paskyrą",
     "deleteAccountHint": "Atveria jūsų paskyrą žiniatinklyje, kur galite ją ištrinti kartu su viskuo, kas jūsų.",
+    "dictationBuiltInMicrophone": "Visada naudoti iPhone mikrofoną",
+    "dictationBuiltInMicrophoneHint": "Įrašo iPhone mikrofonu, net kai prijungtos AirPods ausinės ar automobilis, todėl jie toliau groja visa kokybe ir neperjungia į skambučio režimą.",
     "dictationCleanup": "Taisyti su DI",
     "dictationCleanupHint": "Ištaiso atpažinimo klaidas ir padiktuotą formatavimą, pavyzdžiui, „nauja eilutė“. Tik tekstas, ne garsas, per stella siunčiamas jūsų organizacijos DI paslaugų teikėjui; stella jo nesaugo.",
     "dictationModelDefault": "Numatytasis",
