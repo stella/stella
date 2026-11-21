@@ -350,6 +350,8 @@ describe("new-device-login location", () => {
 
       Review signed-in devices https://app.stella.test/account/sessions
 
+      The button opens Settings › Security at this sign-in.
+
       ----------------------------------------
 
       stella | open source legal workspace"
@@ -385,6 +387,8 @@ describe("new-device-login location", () => {
       If this was you, you don't need to do anything. If you don't recognize this sign-in, sign this device out.
 
       Review signed-in devices https://app.stella.test/account/sessions
+
+      The button opens Settings › Security at this sign-in.
 
       ----------------------------------------
 

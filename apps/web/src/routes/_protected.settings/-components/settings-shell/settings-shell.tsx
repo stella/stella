@@ -4,6 +4,8 @@ import { useQuery } from "@tanstack/react-query";
 import { Link, useRouterState } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
+import { SESSION_SIGN_IN_REVIEW } from "@stll/api-contract/session-sign-ins";
+import { Badge } from "@stll/ui/badge";
 import { Button } from "@stll/ui/button";
 import { ChevronDownIcon, KeyboardIcon } from "@stll/ui/icons";
 import {
@@ -20,8 +22,11 @@ import { TruncatedText } from "@stll/ui/truncated-text";
 import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { env } from "@/env";
 import { useTimeBillingChromeEnabled } from "@/hooks/use-time-billing-preview";
+import { useFormatter } from "@/i18n/formatting-context";
+import { sessionSignInsOptions } from "@/lib/account/session-sign-ins";
 import { authClient } from "@/lib/auth-client";
 import { roleOptions } from "@/lib/auth-queries";
+import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { betaFeaturesAvailable } from "@/lib/beta-features";
 import { useKeyboardShortcutsDialogStore } from "@/lib/keyboard-shortcuts-dialog-store";
 import { useCallerFeatureEnabled } from "@/lib/organization/feature-access/access";
@@ -64,6 +69,7 @@ export const SettingsShell = ({ children }: SettingsShellProps) => {
     select: (state) => state.location.pathname,
   });
   const openShortcuts = useKeyboardShortcutsDialogStore((store) => store.open);
+  const reviewCount = usePendingSignInReviewCount();
   const sections = settingsNavSections({
     role,
     memory:
@@ -153,6 +159,9 @@ export const SettingsShell = ({ children }: SettingsShellProps) => {
                     >
                       <Icon className="size-4" />
                       <span>{t(item.labelKey)}</span>
+                      {item.to === SECURITY_PATH && reviewCount > 0 && (
+                        <SignInReviewBadge count={reviewCount} />
+                      )}
                     </Link>
                   );
                 })}
@@ -183,5 +192,36 @@ export const SettingsShell = ({ children }: SettingsShellProps) => {
         </SettingsContent>
       </ScrollArea>
     </SettingsShellLayout>
+  );
+};
+
+const SECURITY_PATH = "/settings/account/security";
+
+/** How many sign-ins wait for the account holder's review. */
+const usePendingSignInReviewCount = (): number => {
+  const { id } = useAuthenticatedUser();
+  // A failed read shows no badge; the security page offers the retry.
+  const signIns = queryView(useQuery(sessionSignInsOptions(id)), {
+    isEmpty: () => false,
+  });
+  useQueryViewError(signIns, "SettingsShell:signInReviews");
+  return signIns.type === "items"
+    ? signIns.items.filter(
+        ({ review }) => review === SESSION_SIGN_IN_REVIEW.pending,
+      ).length
+    : 0;
+};
+
+const SignInReviewBadge = ({ count }: { count: number }) => {
+  const t = useTranslations();
+  const format = useFormatter();
+  return (
+    <Badge
+      aria-label={t("settings.account.security.navReviewCount", { count })}
+      className="ms-auto"
+      tone="warning"
+    >
+      {format.number(count)}
+    </Badge>
   );
 };

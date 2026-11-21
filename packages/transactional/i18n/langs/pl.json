@@ -22,6 +22,7 @@
   },
   "newDeviceLogin": {
     "action": "Sprawdź zalogowane urządzenia",
+    "actionNote": "Przycisk otwiera Ustawienia › Bezpieczeństwo przy tym logowaniu.",
     "body": "Na Twoje konto właśnie zalogowano się z nowego urządzenia lub nowej lokalizacji.",
     "device": "Urządzenie",
     "deviceName": {

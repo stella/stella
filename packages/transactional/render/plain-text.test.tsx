@@ -136,6 +136,8 @@ describe("plain text of the real templates", () => {
         "",
         "Review signed-in devices https://app.stella.test/account/sessions",
         "",
+        "The button opens Settings › Security at this sign-in.",
+        "",
         DIVIDER,
       ].join("\n"),
     );

@@ -22,6 +22,7 @@
   },
   "newDeviceLogin": {
     "action": "Peržiūrėti prisijungusius įrenginius",
+    "actionNote": "Mygtukas atidaro Nustatymai › Sauga ties šiuo prisijungimu.",
     "body": "Prie jūsų paskyros ką tik prisijungta iš naujo įrenginio arba naujos vietos.",
     "device": "Įrenginys",
     "deviceName": {

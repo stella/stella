@@ -1,10 +1,12 @@
 import type { ReactNode } from "react";
 
 import { ButtonFace, FaceLabelPending } from "@stll/ui/control-face";
-import { SettingsPanel } from "@stll/ui/settings";
+import { LockIcon } from "@stll/ui/icons";
+import { ListItemMedia } from "@stll/ui/list-shell";
+import { SettingsRow, SettingsSection } from "@stll/ui/settings";
 import { cn } from "@stll/ui/utils";
 
-import { SettingsSectionPending } from "@/routes/_protected.settings/-components/settings-section.pending";
+import { PendingText } from "@/components/pending-text";
 
 /** The status chip's box; the page adds its tone (on, off). */
 export const TWO_FACTOR_STATUS_CLASS =
@@ -19,26 +21,42 @@ type TwoFactorCardFrameProps = {
   children?: ReactNode;
 };
 
+/** The two-factor section's anchor; the security summary links it. */
+export const TWO_FACTOR_SECTION_ID = "two-factor";
+
 /** The two-factor section (`TwoFactorCard`): header, status and actions. */
 export const TwoFactorCardFrame = ({
   actions,
   children,
   status,
 }: TwoFactorCardFrameProps) => (
-  <>
-    <SettingsSectionPending
-      description="settings.account.twoFactor.description"
-      title="settings.account.twoFactor.title"
-    >
-      <SettingsPanel>
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          {status}
-          <div className="flex gap-2">{actions}</div>
-        </div>
-      </SettingsPanel>
-    </SettingsSectionPending>
+  <div className="scroll-mt-6" id={TWO_FACTOR_SECTION_ID}>
+    <SettingsSection>
+      <SettingsRow
+        description={
+          <PendingText
+            barClassName="w-72 max-w-full"
+            id="settings.account.twoFactor.description"
+          />
+        }
+        media={
+          <ListItemMedia>
+            <LockIcon />
+          </ListItemMedia>
+        }
+        title={
+          <PendingText
+            barClassName="w-36"
+            id="settings.account.twoFactor.title"
+          />
+        }
+      >
+        {status}
+        {actions}
+      </SettingsRow>
+    </SettingsSection>
     {children}
-  </>
+  </div>
 );
 
 /** The section while the session loads: the chip and the action as faces. */

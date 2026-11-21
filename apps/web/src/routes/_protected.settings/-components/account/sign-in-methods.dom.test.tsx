@@ -150,7 +150,7 @@ test("shows linked methods and prevents disconnecting the last one", () => {
   ).toBeDefined();
   expect(
     screen.getByText(messages.settings.account.signInMethods.lastMethod, {
-      selector: '[data-slot="list-item-description"]',
+      selector: '[data-slot="settings-row-description"] span',
     }),
   ).toBeDefined();
   expect(

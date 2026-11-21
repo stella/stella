@@ -22,6 +22,7 @@
   },
   "newDeviceLogin": {
     "action": "Revisar dispositivos con sesión iniciada",
+    "actionNote": "El botón abre Configuración › Seguridad en este inicio de sesión.",
     "body": "Se ha iniciado sesión en tu cuenta desde un nuevo dispositivo o ubicación.",
     "device": "Dispositivo",
     "deviceName": {
