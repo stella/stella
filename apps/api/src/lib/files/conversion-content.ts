@@ -1,4 +1,5 @@
 import { panic, Result } from "better-result";
+import * as slimdom from "slimdom";
 
 import { loadDocxArchive } from "@/api/lib/docx-archive";
 import {
@@ -153,11 +154,97 @@ const compoundFileContent = (bytes: Uint8Array): ConversionContent => {
 };
 
 /**
- * The main part content types of OOXML packages, lower-cased: the strict and
- * transitional document, template and macro-enabled variants of each family.
+ * The main part content types of OOXML packages, lower-cased: the document,
+ * template and macro-enabled variants of each family.
  */
 const OOXML_MAIN_CONTENT_TYPE =
-  /application\/vnd\.(?:openxmlformats-officedocument\.(wordprocessingml|spreadsheetml|presentationml)\.[a-z]+|ms-(word|excel|powerpoint)\.[a-z]+\.macroenabled(?:template)?)\.main\+xml/gu;
+  /^application\/vnd\.(?:openxmlformats-officedocument\.(wordprocessingml|spreadsheetml|presentationml)\.[a-z]+|ms-(word|excel|powerpoint)\.[a-z]+\.macroenabled(?:template)?)\.main\+xml$/u;
+
+const OPC_CONTENT_TYPES_NAMESPACE =
+  "http://schemas.openxmlformats.org/package/2006/content-types";
+const OPC_RELATIONSHIPS_NAMESPACE =
+  "http://schemas.openxmlformats.org/package/2006/relationships";
+
+const childElements = (
+  document: slimdom.Document,
+  namespace: string,
+  localName: string,
+): slimdom.Element[] =>
+  document.documentElement?.namespaceURI === namespace
+    ? document.documentElement.children.filter(
+        (child) =>
+          child.namespaceURI === namespace && child.localName === localName,
+      )
+    : [];
+
+/**
+ * The content type of an OOXML package's main part, as the converter reads
+ * it: the target of the package's office-document relationship, typed by its
+ * `Override` in `[Content_Types].xml`, else by the `Default` for its
+ * extension. Part names compare case-insensitively.
+ */
+const ooxmlMainContentType = (
+  contentTypesXml: string,
+  relationshipsXml: string,
+): string | null => {
+  const relationship = childElements(
+    slimdom.parseXmlDocument(relationshipsXml),
+    OPC_RELATIONSHIPS_NAMESPACE,
+    "Relationship",
+  ).find(
+    (element) =>
+      (element.getAttribute("Type") ?? "").endsWith("/officeDocument") &&
+      element.getAttribute("TargetMode") !== "External",
+  );
+  const target = relationship?.getAttribute("Target");
+  if (target === undefined || target === null || target === "") {
+    return null;
+  }
+  const partName = `/${target.replace(/^\/+/u, "")}`.toLowerCase();
+  const contentTypes = slimdom.parseXmlDocument(contentTypesXml);
+  const override = childElements(
+    contentTypes,
+    OPC_CONTENT_TYPES_NAMESPACE,
+    "Override",
+  ).find(
+    (element) => element.getAttribute("PartName")?.toLowerCase() === partName,
+  );
+  if (override !== undefined) {
+    return override.getAttribute("ContentType");
+  }
+  const extension = partName.slice(partName.lastIndexOf(".") + 1);
+  const fallback = childElements(
+    contentTypes,
+    OPC_CONTENT_TYPES_NAMESPACE,
+    "Default",
+  ).find(
+    (element) => element.getAttribute("Extension")?.toLowerCase() === extension,
+  );
+  return fallback?.getAttribute("ContentType") ?? null;
+};
+
+const ooxmlContent = (
+  contentTypesXml: string | null,
+  relationshipsXml: string | null,
+): ConversionContent => {
+  if (contentTypesXml === null || relationshipsXml === null) {
+    return "unrecognised";
+  }
+  const mainContentType = Result.try(() =>
+    ooxmlMainContentType(contentTypesXml, relationshipsXml),
+  );
+  if (Result.isError(mainContentType)) {
+    return "unrecognised";
+  }
+  const [, openXmlFamily, macroFamily] =
+    OOXML_MAIN_CONTENT_TYPE.exec(
+      mainContentType.value?.trim().toLowerCase() ?? "",
+    ) ?? [];
+  return (
+    OOXML_FAMILY_CONTENT.get(openXmlFamily ?? macroFamily ?? "") ??
+    "unrecognised"
+  );
+};
 
 const OOXML_FAMILY_CONTENT: ReadonlyMap<string, ConversionContent> = new Map([
   ["wordprocessingml", "word-ooxml"],
@@ -236,21 +323,14 @@ const zipContent = async (bytes: Uint8Array): Promise<ConversionContent> => {
 
   const found = new Set<ConversionContent>();
   if (paths.has("[Content_Types].xml")) {
-    // A package without a document main part (a drawing, an XPS file) is
-    // still a package, of no format that converts.
-    const contentTypes = await readSmallText("[Content_Types].xml");
-    const mainParts = [
-      ...(contentTypes ?? "").toLowerCase().matchAll(OOXML_MAIN_CONTENT_TYPE),
-    ];
-    if (mainParts.length === 0) {
-      found.add("unrecognised");
-    }
-    for (const [, openXmlFamily, macroFamily] of mainParts) {
-      found.add(
-        OOXML_FAMILY_CONTENT.get(openXmlFamily ?? macroFamily ?? "") ??
-          "unrecognised",
-      );
-    }
+    // A package whose main part is no office document (a drawing, an XPS
+    // file) is still a package, of no format that converts.
+    found.add(
+      ooxmlContent(
+        await readSmallText("[Content_Types].xml"),
+        await readSmallText("_rels/.rels"),
+      ),
+    );
   }
   if (paths.has("mimetype")) {
     const mimetype = (await readSmallText("mimetype"))?.trim() ?? "";

@@ -643,7 +643,6 @@
     "apps/api/src/lib/files/image-header.ts": 1,
     "apps/api/src/lib/files/image-pdf.ts": 1,
     "apps/api/src/lib/files/pdf-color.ts": 1,
-    "apps/api/src/lib/files/pdf-derivative-policy.ts": 1,
     "apps/api/src/lib/files/text-pdf.ts": 1,
     "apps/api/src/lib/files/windowed-read-surface.ts": 1,
     "apps/api/src/lib/hosted-usage-provider/dispatch-outcome.ts": 1,

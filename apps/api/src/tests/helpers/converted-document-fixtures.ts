@@ -34,22 +34,27 @@ export const compoundFileWithStreams = (names: readonly string[]): Uint8Array =>
 
 /** A ZIP package with the given entries. */
 export const packageOf = async (
-  entries: Readonly<Record<string, string>>,
+  entries: Readonly<Record<string, string | Uint8Array>>,
 ): Promise<Uint8Array> => {
   const archive = new ZipArchive();
   for (const [path, value] of Object.entries(entries)) {
-    archive.set(path, encode(value));
+    archive.set(path, typeof value === "string" ? encode(value) : value);
   }
   return await archive.generate({ compression: "store" });
 };
 
+/** The package relationships naming `target` as the office document. */
+export const ooxmlRelationships = (target: string): string =>
+  `<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="${target}"/></Relationships>`;
+
 /** An OOXML package whose main part has `mainContentType`. */
 export const ooxmlPackage = async (
   mainContentType: string,
-  extra: Readonly<Record<string, string>> = {},
+  extra: Readonly<Record<string, string | Uint8Array>> = {},
 ): Promise<Uint8Array> =>
   await packageOf({
-    "[Content_Types].xml": `<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="xlsx" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"/><Override PartName="/main.xml" ContentType="${mainContentType}"/></Types>`,
+    "[Content_Types].xml": `<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="xlsx" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/main.xml" ContentType="${mainContentType}"/></Types>`,
+    "_rels/.rels": ooxmlRelationships("main.xml"),
     "main.xml": "<main/>",
     ...extra,
   });

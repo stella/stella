@@ -93,6 +93,22 @@ describe("resolveUploadMime", () => {
     }
   });
 
+  test("recovers Pages and Numbers declared as plain ZIP archives, and only those", () => {
+    for (const [declaredMime, fileName, mimeType] of [
+      ["application/zip", "nabidka.pages", "application/vnd.apple.pages"],
+      [
+        "application/x-zip-compressed",
+        "rozpocet.numbers",
+        "application/vnd.apple.numbers",
+      ],
+      ["application/zip", "smlouva.wpd", "application/zip"],
+      ["application/zip", "archiv.zip", "application/zip"],
+      ["application/pdf", "nabidka.pages", "application/pdf"],
+    ] as const) {
+      expect(resolveUploadMime({ declaredMime, fileName })).toBe(mimeType);
+    }
+  });
+
   test("recovers previewable images without a mirrored extension map", () => {
     for (const [fileName, mimeType] of [
       ["photo.PNG", "image/png"],

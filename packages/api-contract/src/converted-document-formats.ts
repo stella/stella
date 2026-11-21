@@ -7,7 +7,9 @@
  * `mimeAliases` are the other types clients declare for the same files (a
  * Mac names a Pages file `application/x-iwork-pages-sffpages`).
  * `converterExtension` is the name the converter must receive the file under:
- * it picks its importer by extension and accepts only that one.
+ * it picks its importer by extension and accepts only that one. `zipPackage`
+ * marks a format stored as a ZIP package, which clients may declare as a
+ * plain ZIP archive.
  */
 export const CONVERTED_DOCUMENT_FORMATS = [
   {
@@ -20,6 +22,7 @@ export const CONVERTED_DOCUMENT_FORMATS = [
     ],
     extensions: [".wpd", ".wp", ".wp5", ".wp6"],
     converterExtension: ".wpd",
+    zipPackage: false,
   },
   {
     label: "WPS",
@@ -27,6 +30,7 @@ export const CONVERTED_DOCUMENT_FORMATS = [
     mimeAliases: [],
     extensions: [".wps"],
     converterExtension: ".wps",
+    zipPackage: false,
   },
   {
     label: "PAGES",
@@ -34,6 +38,7 @@ export const CONVERTED_DOCUMENT_FORMATS = [
     mimeAliases: ["application/x-iwork-pages-sffpages"],
     extensions: [".pages"],
     converterExtension: ".pages",
+    zipPackage: true,
   },
   {
     label: "NUMBERS",
@@ -41,6 +46,7 @@ export const CONVERTED_DOCUMENT_FORMATS = [
     mimeAliases: ["application/x-iwork-numbers-sffnumbers"],
     extensions: [".numbers"],
     converterExtension: ".numbers",
+    zipPackage: true,
   },
 ] as const;
 

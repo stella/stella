@@ -13,6 +13,7 @@ import {
   iworkPackage,
   odfPackage,
   ooxmlPackage,
+  ooxmlRelationships,
   packageOf,
   wordPerfectFile,
 } from "@/api/tests/helpers/converted-document-fixtures";
@@ -98,36 +99,33 @@ describe("conversion content", () => {
   );
 
   test.each([
-    ["a binary spreadsheet", spreadsheetBinary],
+    ["a binary spreadsheet", spreadsheetBinary, "application/vnd.ms-excel"],
     [
       "an OpenDocument spreadsheet",
       async () =>
         await odfPackage("application/vnd.oasis.opendocument.spreadsheet"),
+      "application/vnd.oasis.opendocument.spreadsheet",
     ],
-    ["an OOXML workbook", async () => await ooxmlPackage(SHEET_MAIN)],
-    ["a flat OpenDocument spreadsheet", flatSpreadsheet],
+    [
+      "an OOXML workbook",
+      async () => await ooxmlPackage(SHEET_MAIN),
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    ],
+    ["a flat OpenDocument spreadsheet", flatSpreadsheet, null],
   ] as const)(
-    "%s converts under no other format's type",
-    async (_name, build) => {
+    "%s converts under its own type only",
+    async (_name, build, ownType: ConvertibleMime | null) => {
       const bytes = await build();
-      const own = await conversionContent(bytes);
       for (const [mime] of Object.entries(SAMPLES)) {
         const declared = mime as keyof typeof SAMPLES;
+        // Plain text and CSV convert any content; tested below.
         if (declared === "text/plain" || declared === "text/csv") {
           continue;
         }
-        const sameFormat =
-          (own === "spreadsheet-binary" &&
-            declared === "application/vnd.ms-excel") ||
-          (own === "spreadsheet-odf" &&
-            declared === "application/vnd.oasis.opendocument.spreadsheet") ||
-          (own === "spreadsheet-ooxml" &&
-            declared ===
-              "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
         expect({
           declared,
           matches: await contentMatchesConvertibleMime(declared, bytes),
-        }).toEqual({ declared, matches: sameFormat });
+        }).toEqual({ declared, matches: declared === ownType });
       }
     },
   );
@@ -168,8 +166,37 @@ describe("conversion content", () => {
     ],
     [
       "a Word document embedding a workbook",
-      async () => await ooxmlPackage(WORD_MAIN),
+      async () =>
+        await ooxmlPackage(WORD_MAIN, {
+          "_rels/main.xml.rels":
+            '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/package" Target="embeddings/sheet.xlsx"/></Relationships>',
+          "embeddings/sheet.xlsx": await ooxmlPackage(SHEET_MAIN),
+        }),
       "word-ooxml",
+    ],
+    [
+      "a Word document whose content types mention another main part",
+      async () =>
+        await ooxmlPackage(WORD_MAIN, {
+          "[Content_Types].xml": `<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><!-- ${SHEET_MAIN} --><Override PartName="/MAIN.xml" ContentType="${WORD_MAIN}"/><Override PartName="/other.xml" ContentType="${PRESENTATION_MAIN}"/></Types>`,
+        }),
+      "word-ooxml",
+    ],
+    [
+      "a main part typed by its extension's default",
+      async () =>
+        await ooxmlPackage(WORD_MAIN, {
+          "[Content_Types].xml": `<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="xml" ContentType="${SHEET_MAIN}"/></Types>`,
+        }),
+      "spreadsheet-ooxml",
+    ],
+    [
+      "an OOXML package without package relationships",
+      async () =>
+        await packageOf({
+          "[Content_Types].xml": `<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Override PartName="/main.xml" ContentType="${WORD_MAIN}"/></Types>`,
+        }),
+      "unrecognised",
     ],
     [
       "an OPC package with no document part",
@@ -298,12 +325,16 @@ describe("conversion content", () => {
   ] as const)(
     "reads OOXML content types stored as %s",
     async (_name, encoding, bom) => {
-      const xml = `<?xml version="1.0" encoding="UTF-16"?><Types><Override PartName="/word/document.xml" ContentType="${WORD_MAIN}"/></Types>`;
+      const xml = `<?xml version="1.0" encoding="UTF-16"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Override PartName="/word/document.xml" ContentType="${WORD_MAIN}"/></Types>`;
       const little = Buffer.from(`${bom ? "﻿" : ""}${xml}`, "utf16le");
       const archive = new ZipArchive();
       archive.set(
         "[Content_Types].xml",
         new Uint8Array(encoding === "utf16le" ? little : little.swap16()),
+      );
+      archive.set(
+        "_rels/.rels",
+        new TextEncoder().encode(ooxmlRelationships("word/document.xml")),
       );
       const bytes = await archive.generate({ compression: "store" });
       expect(await conversionContent(bytes)).toBe("word-ooxml");
