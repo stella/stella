@@ -1187,9 +1187,7 @@ const readServedCopiesAtRiskTx = async (
       generation: value.generation,
       entity_id: value.entityId,
       desired_action: value.desiredAction,
-      desired_epoch: (
-        value.desiredEpoch ?? panic("Desired epoch missing")
-      ).toString(),
+      desired_epoch: value.desiredEpoch.toString(),
       desired_fingerprint: value.desiredFingerprint ?? null,
       desired_index_id: value.desiredIndexId ?? null,
     })),

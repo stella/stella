@@ -105,10 +105,11 @@ const continuousReconciles = async (entityId: string) =>
  * A bounded repair's call, the shape a source-wide refresh makes: the
  * canonical epoch advances by one and every generation is written at it.
  */
-const boundedRepairWrites = async (entityId: string) =>
-  await db.transaction(async (transaction) => {
+const boundedRepairWrites = async (entityId: string) => {
+  // Read before the transaction: the test database has one connection.
+  const epoch = (await canonicalEpochOf(entityId)) + 1n;
+  return await db.transaction(async (transaction) => {
     const tx = asTestRaw<Transaction>(transaction);
-    const epoch = (await canonicalEpochOf(entityId)) + 1n;
     const subject = {
       family: "case_law",
       entityId: toSafeId<"caseLawDecision">(entityId),
@@ -134,6 +135,7 @@ const boundedRepairWrites = async (entityId: string) =>
       ),
     });
   });
+};
 
 /** A served copy whose state desires an erasure no claim has reached yet. */
 const pendingErasure = async () => {

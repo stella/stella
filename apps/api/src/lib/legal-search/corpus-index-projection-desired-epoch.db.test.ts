@@ -641,10 +641,12 @@ test(
 
             // Reconciling again is a fixed point.
             expect(
-              await runInTransaction(
-                async (tx) =>
-                  await reconcileCorpusProjectionDesiredStateTx(tx, subject),
-              ),
+              (
+                await runInTransaction(
+                  async (tx) =>
+                    await reconcileCorpusProjectionDesiredStateTx(tx, subject),
+                )
+              ).unwrap(),
             ).toMatchObject({ epoch: after.epoch, changed: false });
             expect(await statesOf()).toEqual(states);
             expect(await decisionRow()).toEqual(after);
