@@ -211,7 +211,6 @@ A compound action is a nested resource: `clauses.categories.create`, not
 | `entities.ocr.create` | write | stella:matters_write | — | generic invoke → `stella capability entities ocr-create` |
 | `entities.placements.suggest` | write | stella:matters_write | — | generic invoke → `stella capability entities placements-suggest` |
 | `entities.rename` | write | stella:documents_write | — | covered by `save_document` |
-| `entities.similar.list` | read | stella:read | — | covered by `read_document` |
 | `entities.stamps.check` | read | stella:read | — | not runnable over the generic transport: requires a file in `file`, which JSON cannot carry. No JSON-transport alternative: the lookup reads a reference out of the supplied document's bytes; no capability accepts the reference on its own |
 | `entities.summaries.count` | read | stella:read | — | covered by `list_documents` |
 | `entities.summaries.list` | read | stella:read | — | covered by `list_documents` |

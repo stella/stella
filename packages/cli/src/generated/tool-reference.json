@@ -1247,13 +1247,6 @@
   },
   {
     "access": "read",
-    "command": ["capability", "entities", "similar-list"],
-    "description": "List the other documents in the matter whose current text is nearly the same as this document's current text, most similar first, each with an estimated similarity between 0 and 1. Other versions of the same document are not listed.",
-    "name": "capability:entities.similar.list",
-    "title": "entities.similar.list"
-  },
-  {
-    "access": "read",
     "command": ["capability", "entities", "summaries-count"],
     "description": "Count all documents, folders, and tasks in a matter. The companion total for entities.summaries.list, whose pages carry no count of their own.",
     "name": "capability:entities.summaries.count",

@@ -18,7 +18,7 @@ const config = {
     "document are not listed.",
   permissions: { workspace: ["read"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
-  mcp: { type: "covered", by: "read_document" },
+  mcp: { type: "internal", reason: "document_processing" },
   access: "read",
   params: readSimilarDocumentsParamsSchema,
 } satisfies WorkspaceHandlerConfig;
