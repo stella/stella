@@ -22,7 +22,7 @@
   },
   "newDeviceLogin": {
     "action": "Revisar dispositivos con sesión iniciada",
-    "body": "Un nuevo dispositivo acaba de iniciar sesión en su cuenta.",
+    "body": "Alguien acaba de iniciar sesión en su cuenta desde un dispositivo o una ubicación nuevos.",
     "device": "Dispositivo",
     "deviceName": {
       "browserOnOs": "{browser} en {os}",

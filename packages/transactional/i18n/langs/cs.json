@@ -22,7 +22,7 @@
   },
   "newDeviceLogin": {
     "action": "Zkontrolovat přihlášená zařízení",
-    "body": "K vašemu účtu se právě přihlásilo nové zařízení.",
+    "body": "K vašemu účtu se právě někdo přihlásil z nového zařízení nebo místa.",
     "device": "Zařízení",
     "deviceName": {
       "browserOnOs": "{browser} v systému {os}",

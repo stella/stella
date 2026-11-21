@@ -22,7 +22,7 @@
   },
   "newDeviceLogin": {
     "action": "Pārskatīt pieslēgtās ierīces",
-    "body": "Jūsu kontam tikko pieslēdzās jauna ierīce.",
+    "body": "Jūsu kontam tikko kāds pieslēdzās no jaunas ierīces vai atrašanās vietas.",
     "device": "Ierīce",
     "deviceName": {
       "browserOnOs": "{browser} operētājsistēmā {os}",

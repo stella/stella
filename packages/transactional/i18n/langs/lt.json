@@ -22,7 +22,7 @@
   },
   "newDeviceLogin": {
     "action": "Peržiūrėti prisijungusius įrenginius",
-    "body": "Prie jūsų paskyros ką tik prisijungė naujas įrenginys.",
+    "body": "Prie jūsų paskyros ką tik prisijungta iš naujo įrenginio arba naujos vietos.",
     "device": "Įrenginys",
     "deviceName": {
       "browserOnOs": "{browser}, {os} sistemoje",

@@ -25,7 +25,7 @@ type Messages = {
   };
   "newDeviceLogin": {
     "action": "Review signed-in devices";
-    "body": "A new device just signed in to your account.";
+    "body": "Someone just signed in to your account from a new device or location.";
     "device": "Device";
     "deviceName": {
       "browserOnOs": "{browser} on {os}";

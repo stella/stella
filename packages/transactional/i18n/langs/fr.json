@@ -22,7 +22,7 @@
   },
   "newDeviceLogin": {
     "action": "Vérifier les appareils connectés",
-    "body": "Un nouvel appareil vient de se connecter à votre compte.",
+    "body": "Quelqu'un vient de se connecter à votre compte depuis un nouvel appareil ou un nouvel emplacement.",
     "device": "Appareil",
     "deviceName": {
       "browserOnOs": "{browser} sous {os}",

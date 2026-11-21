@@ -22,7 +22,7 @@
   },
   "newDeviceLogin": {
     "action": "Revisar dispositivos conectados",
-    "body": "Um novo dispositivo acabou de entrar na sua conta.",
+    "body": "Alguém acabou de entrar na sua conta a partir de um novo dispositivo ou local.",
     "device": "Dispositivo",
     "deviceName": {
       "browserOnOs": "{browser} no {os}",

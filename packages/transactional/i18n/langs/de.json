@@ -22,7 +22,7 @@
   },
   "newDeviceLogin": {
     "action": "Angemeldete Geräte prüfen",
-    "body": "Bei Ihrem Konto hat sich gerade ein neues Gerät angemeldet.",
+    "body": "Bei Ihrem Konto hat sich gerade jemand von einem neuen Gerät oder Standort angemeldet.",
     "device": "Gerät",
     "deviceName": {
       "browserOnOs": "{browser} unter {os}",

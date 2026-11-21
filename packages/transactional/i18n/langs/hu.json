@@ -22,7 +22,7 @@
   },
   "newDeviceLogin": {
     "action": "Bejelentkezett eszközök áttekintése",
-    "body": "Fiókjába az imént egy új eszközről jelentkeztek be.",
+    "body": "Fiókjába az imént új eszközről vagy új helyről jelentkeztek be.",
     "device": "Eszköz",
     "deviceName": {
       "browserOnOs": "{browser}, {os} rendszeren",
