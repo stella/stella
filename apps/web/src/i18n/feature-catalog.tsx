@@ -90,7 +90,7 @@ export const defineFeatureCatalog = <TMessages extends CatalogMessages>(
         <IntlProvider
           locale={locale}
           messages={mergeFeatureMessages(appMessages, messages)}
-          timeZone={timeZone}
+          {...(timeZone === undefined ? {} : { timeZone })}
         >
           {children}
         </IntlProvider>
@@ -115,7 +115,11 @@ export const defineFeatureCatalog = <TMessages extends CatalogMessages>(
       panic("A feature catalog was read outside its provider");
     const locale = useRenderedMessageLocale();
     const timeZone = useTimeZone();
-    return createTranslator({ locale, messages, timeZone });
+    return createTranslator({
+      locale,
+      messages,
+      ...(timeZone === undefined ? {} : { timeZone }),
+    });
   };
 
   return { Provider, useTranslations: useCatalogTranslations, load };
