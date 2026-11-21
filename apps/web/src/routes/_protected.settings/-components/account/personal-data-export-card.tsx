@@ -7,9 +7,9 @@ import { Temporal } from "@stll/time";
 import { Button } from "@stll/ui/button";
 import { DownloadIcon } from "@stll/ui/icons";
 import { Loader } from "@stll/ui/loader";
+import { cn } from "@stll/ui/utils";
 
 import { QueryViewFeedback } from "@/components/query-view-feedback";
-import { RecoverableErrorStatus } from "@/components/recoverable-error-status";
 import { useFormatter } from "@/i18n/formatting-context";
 import { accountDataExportLatestOptions } from "@/lib/account/account-data-export-queries";
 import type { AccountDataExportStatus as AccountDataExportStatusData } from "@/lib/account/account-data-export-queries";
@@ -25,6 +25,7 @@ import { MEDIUM_DATE_SHORT_TIME_FORMAT } from "@/lib/relative-time";
 import { useQueryViewError } from "@/lib/use-query-view";
 import {
   PersonalDataExportCardFrame,
+  PersonalDataExportDescription,
   PersonalDataExportStatusPending,
 } from "@/routes/_protected.settings/-components/account/personal-data-export-card.pending";
 
@@ -77,137 +78,158 @@ export const PersonalDataExportCard = () => {
     </Button>
   );
 
-  return (
-    <PersonalDataExportCardFrame>
-      {latestView.type === "pending" && <PersonalDataExportStatusPending />}
-      {latestView.type === "error" && <QueryViewFeedback view={latestView} />}
-      {latestView.type === "empty" &&
-        requestButton(t("settings.account.personalDataExportRequest"))}
-      {latestView.type === "items" && latestView.items !== null && (
-        <>
-          <QueryViewFeedback view={latestView} />
-          <PersonalDataExportStatus
-            onRequest={() => requestExport.mutate()}
-            requestPending={requestExport.isPending}
-            status={latestView.items}
-            formatExpiresAt={(instant) =>
-              format.dateTime(
-                new Date(Temporal.Instant.from(instant).epochMilliseconds),
-                MEDIUM_DATE_SHORT_TIME_FORMAT,
-              )
-            }
-          />
-        </>
-      )}
-    </PersonalDataExportCardFrame>
-  );
-};
+  const exportState = (status: AccountDataExportStatusData): ExportState => {
+    switch (status.status) {
+      case "requested":
+      case "processing":
+        return {
+          action: "preparing",
+          line: t("settings.account.personalDataExportWorking"),
+          tone: "normal",
+        };
+      case "ready":
+        return {
+          action: "download",
+          id: status.id,
+          line: t("settings.account.personalDataExportReady", {
+            expiresAt: format.dateTime(
+              new Date(
+                Temporal.Instant.from(status.expiresAt).epochMilliseconds,
+              ),
+              MEDIUM_DATE_SHORT_TIME_FORMAT,
+            ),
+          }),
+          tone: "normal",
+        };
+      case "failed":
+        return {
+          action: "prepareAgain",
+          line: t("settings.account.personalDataExportFailed"),
+          tone: "failed",
+        };
+      case "expired":
+        return {
+          action: "prepareAgain",
+          line: t("settings.account.personalDataExportExpired"),
+          tone: "normal",
+        };
+      default:
+        status satisfies never;
+        return panic("Unhandled personal data export status");
+    }
+  };
 
-type PersonalDataExportStatusProps = {
-  status: AccountDataExportStatusData;
-  requestPending: boolean;
-  onRequest: () => void;
-  formatExpiresAt: (
-    instant: Extract<
-      AccountDataExportStatusData,
-      { status: "ready" }
-    >["expiresAt"],
-  ) => string;
-};
-
-const PersonalDataExportStatus = ({
-  status,
-  requestPending,
-  onRequest,
-  formatExpiresAt,
-}: PersonalDataExportStatusProps) => {
-  const t = useTranslations();
-
-  switch (status.status) {
-    case "requested":
-    case "processing":
-      return (
-        <div
-          role="status"
-          className="text-muted-foreground flex items-center gap-2 text-sm"
-        >
-          <Loader size="sm" variant="decorative" />
-          {t("settings.account.personalDataExportWorking")}
-        </div>
-      );
-    case "ready":
-      return (
-        <div className="flex flex-col items-start gap-3">
-          <div className="space-y-1">
-            <p role="status" className="text-sm">
-              {t("settings.account.personalDataExportReady")}
-            </p>
-            <p className="text-muted-foreground text-sm">
-              {t("settings.account.personalDataExportExpiresAt", {
-                expiresAt: formatExpiresAt(status.expiresAt),
-              })}
-            </p>
-          </div>
+  const exportAction = (state: ExportState) => {
+    switch (state.action) {
+      case "download":
+        return (
           <Button
             render={
               <a
                 download
                 href={sanitizeHref(
                   apiUrl(
-                    `/me/data-exports/${encodeURIComponent(status.id)}/download`,
+                    `/me/data-exports/${encodeURIComponent(state.id)}/download`,
                   ),
                 )}
               />
             }
             size="sm"
-            variant="outline"
           >
             <DownloadIcon className="size-3.5" />
             {t("common.download")}
           </Button>
-        </div>
-      );
-    case "failed":
-      return (
-        <RecoverableErrorStatus
-          className="flex flex-col items-start gap-3"
-          messageClassName="text-destructive text-sm"
-          message={t("settings.account.personalDataExportFailed")}
-          actions={
-            <Button
-              disabled={requestPending}
-              disabledReason={t("common.preparing")}
-              loading={requestPending}
-              onClick={onRequest}
-              size="sm"
-              variant="outline"
-            >
-              {t("settings.account.personalDataExportRequestNew")}
-            </Button>
-          }
-        />
-      );
-    case "expired":
-      return (
-        <div className="flex flex-col items-start gap-3">
-          <p className="text-muted-foreground text-sm">
-            {t("settings.account.personalDataExportExpired")}
-          </p>
+        );
+      case "preparing":
+        return (
           <Button
-            disabled={requestPending}
+            disabled
             disabledReason={t("common.preparing")}
-            loading={requestPending}
-            onClick={onRequest}
             size="sm"
             variant="outline"
           >
-            {t("settings.account.personalDataExportRequestNew")}
+            <Loader size="sm" variant="decorative" />
+            {t("settings.account.personalDataExportPreparing")}
           </Button>
-        </div>
-      );
-    default: {
-      status satisfies never;
-      return panic("Unhandled personal data export status");
+        );
+      case "prepareAgain":
+        return requestButton(
+          t("settings.account.personalDataExportRequestNew"),
+        );
+      default:
+        state satisfies never;
+        return panic("Unhandled personal data export action");
     }
+  };
+
+  const noExport = (
+    <PersonalDataExportCardFrame
+      action={requestButton(t("settings.account.personalDataExportRequest"))}
+      description={<PersonalDataExportDescription />}
+    />
+  );
+
+  switch (latestView.type) {
+    case "pending":
+      return (
+        <PersonalDataExportCardFrame
+          action={<PersonalDataExportStatusPending />}
+          description={<PersonalDataExportDescription />}
+        />
+      );
+    case "error":
+      return (
+        <PersonalDataExportCardFrame
+          action={null}
+          description={<PersonalDataExportDescription />}
+          footer={<QueryViewFeedback view={latestView} />}
+        />
+      );
+    case "empty":
+      return noExport;
+    case "items": {
+      if (latestView.items === null) {
+        // A failed refresh of "no export yet" keeps its retry.
+        return (
+          <PersonalDataExportCardFrame
+            action={requestButton(
+              t("settings.account.personalDataExportRequest"),
+            )}
+            description={<PersonalDataExportDescription />}
+            footer={<QueryViewFeedback view={latestView} />}
+          />
+        );
+      }
+      const state = exportState(latestView.items);
+      return (
+        <PersonalDataExportCardFrame
+          action={exportAction(state)}
+          description={
+            <span
+              className={cn(
+                state.tone === "failed" && "text-destructive-foreground",
+              )}
+              role={state.tone === "failed" ? "alert" : "status"}
+            >
+              {state.line}
+            </span>
+          }
+          footer={<QueryViewFeedback view={latestView} />}
+        />
+      );
+    }
+    default:
+      latestView satisfies never;
+      return panic("Unhandled personal data export view");
   }
 };
+
+/** What an export's state says, and the one step it offers next. */
+type ExportState = {
+  line: string;
+  tone: "normal" | "failed";
+} & (
+  | { action: "download"; id: string }
+  | { action: "preparing" }
+  | { action: "prepareAgain" }
+);

@@ -123,33 +123,33 @@ export const TwoFactorCard = () => {
 
   return (
     <TwoFactorCardFrame
-      actions={
-        <>
-          {enabled && (
-            <Button
-              onClick={() => setIsRegenerateOpen(true)}
-              size="sm"
-              variant="outline"
-            >
-              {t("settings.account.twoFactor.regenerateBackupCodes")}
-            </Button>
-          )}
+      action={
+        <Button
+          onClick={() => {
+            if (enabled) {
+              setIsDisableOpen(true);
+              return;
+            }
+            setIsEnableOpen(true);
+          }}
+          size="sm"
+          variant={enabled ? "destructive" : "default"}
+        >
+          {enabled
+            ? t("settings.account.twoFactor.disable")
+            : t("settings.account.twoFactor.enable")}
+        </Button>
+      }
+      footer={
+        enabled && (
           <Button
-            onClick={() => {
-              if (enabled) {
-                setIsDisableOpen(true);
-                return;
-              }
-              setIsEnableOpen(true);
-            }}
+            onClick={() => setIsRegenerateOpen(true)}
             size="sm"
-            variant={enabled ? "destructive" : "default"}
+            variant="outline"
           >
-            {enabled
-              ? t("settings.account.twoFactor.disable")
-              : t("settings.account.twoFactor.enable")}
+            {t("settings.account.twoFactor.regenerateBackupCodes")}
           </Button>
-        </>
+        )
       }
       status={
         <span

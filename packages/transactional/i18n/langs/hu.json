@@ -22,6 +22,7 @@
   },
   "newDeviceLogin": {
     "action": "Bejelentkezett eszközök áttekintése",
+    "actionNote": "A gomb a Beállítások › Biztonság oldalt nyitja meg ennél a bejelentkezésnél.",
     "body": "Fiókjába az imént új eszközről vagy új helyről jelentkeztek be.",
     "device": "Eszköz",
     "deviceName": {

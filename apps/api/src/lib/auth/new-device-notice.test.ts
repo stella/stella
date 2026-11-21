@@ -172,7 +172,10 @@ describe("new-device notices", () => {
     });
 
     expect(reported.reviews).toEqual(["user-1/session-2"]);
-    expect(reported.notices).toHaveLength(1);
+    // The email links to the review of exactly this session.
+    expect(reported.notices).toEqual([
+      expect.objectContaining({ sessionId: "session-2" }),
+    ]);
     expect(known.reviews).toEqual([]);
     expect(known.notices).toHaveLength(0);
   });

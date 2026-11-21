@@ -51,8 +51,6 @@
     "workspaces.views.filter"
   ],
   "duplicateValues": [
-    "account.sessions.activeNow",
-    "account.sessions.currentSession",
     "agentClaim.error",
     "appearance.calendar",
     "auth.continueWithEmail",
@@ -120,7 +118,6 @@
     "docxReview.reject",
     "errors.failedToDeleteTemplate",
     "errors.failedToSaveTemplate",
-    "fileDetail.current",
     "fileDetail.label",
     "fileDetail.redlinePreview",
     "fileDetail.versionHistory",
@@ -144,7 +141,6 @@
     "folio.loadingEditor",
     "folio.markupView.original",
     "guides.status.skipped",
-    "inbox.evidence.current",
     "inbox.view.new",
     "inspector.anonymization.deleteAction",
     "inspector.anonymization.labelPickerAriaLabel",
@@ -212,6 +208,7 @@
     "search.updatedWithin",
     "search.updatedWithinOptions.month",
     "search.updatedWithinOptions.week",
+    "settings.account.security.reviewPlace",
     "settings.account.title",
     "settings.account.twoFactor.enabledStatus",
     "settings.connections.cliLoginLabel",
@@ -257,6 +254,7 @@
     "translate.settings.apiKeyLabel",
     "translate.settings.tierFree",
     "workspaces.deleteWorkspace",
+    "workspaces.files.pdfSigning.stampLocation",
     "workspaces.filters.date.last30d",
     "workspaces.filters.date.last7d",
     "workspaces.filters.from",
@@ -472,9 +470,6 @@
     ],
     "common.role": [
       "cs"
-    ],
-    "common.sessions": [
-      "fr"
     ],
     "common.source": [
       "fr"
@@ -793,6 +788,20 @@
     ],
     "settings.account.desktop": [
       "de"
+    ],
+    "settings.account.security.desktopApp": [
+      "ar",
+      "cs",
+      "de",
+      "es",
+      "et",
+      "fr",
+      "hu",
+      "lt",
+      "lv",
+      "pl",
+      "pt-BR",
+      "sk"
     ],
     "settings.organization.auditResourceKinds.playbook": [
       "cs",

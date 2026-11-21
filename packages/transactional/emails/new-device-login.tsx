@@ -114,6 +114,9 @@ export const Email = ({
               {t("newDeviceLogin.action")}
             </Button>
           </Section>
+          <Text style={styles.actionNote}>
+            {t("newDeviceLogin.actionNote")}
+          </Text>
           <Hr style={sharedStyles.hr} />
           <Text style={sharedStyles.brandFooter}>{BRAND_FOOTER_TEXT}</Text>
         </Container>
@@ -219,6 +222,12 @@ const styles = {
     height: "auto",
     borderRadius: "10px",
     border: `1px solid ${brand.border}`,
+  },
+  actionNote: {
+    margin: "-8px 0 24px",
+    color: brand.textMuted,
+    fontSize: "13px",
+    lineHeight: "20px",
   },
   buttonSection: {
     margin: "24px 0",
