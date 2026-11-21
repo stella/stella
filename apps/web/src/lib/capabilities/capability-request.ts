@@ -31,6 +31,7 @@ export const invokeCapability = async <TResult>(
 export type AppOnlyWriteId =
   | "account.delete.send-otp"
   | "account.delete.verify"
+  | "case-law.citations.check"
   | "chat.browser-site-grants.create"
   | "chat.browser-site-grants.delete"
   | "chat.local-runners.folder-approval.update"

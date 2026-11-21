@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import * as v from "valibot";
 
@@ -23,13 +23,20 @@ import type { MobileMessages } from "./catalogs";
 const REPO_ROOT = path.resolve(import.meta.dir, "../../../..");
 
 /** The web's catalogue for a locale, read as the web ships it. */
-const webCatalog = (locale: string): unknown =>
-  JSON.parse(
-    readFileSync(
-      path.join(REPO_ROOT, "apps/web/src/i18n/langs", `${locale}.json`),
-      "utf-8",
-    ),
-  );
+const webCatalog = (locale: string): unknown => {
+  const dir = path.join(REPO_ROOT, "apps/web/src/i18n/namespaces", locale);
+  const entries: [string, unknown][] = [];
+  for (const file of readdirSync(dir)
+    .filter((name) => name.endsWith(".json"))
+    .toSorted()) {
+    const parsed = v.parse(
+      nodeSchema,
+      JSON.parse(readFileSync(path.join(dir, file), "utf-8")),
+    );
+    entries.push(...Object.entries(parsed));
+  }
+  return Object.fromEntries(entries);
+};
 
 const nodeSchema = v.record(v.string(), v.unknown());
 

@@ -112,6 +112,7 @@ export const listClausesHandler = async function* ({
   const isSearching = !!query.q;
 
   if (isSearching && query.q) {
+    // sql-perf-allow: bounded by one organization's clause library via clauses_organization_id_idx (and clauses_org_category_idx when categoryId is set)
     const titleMatch = ilike(clauses.title, `%${escapeLike(query.q)}%`);
     const ftsMatch =
       tsQuery.length > 0

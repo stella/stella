@@ -1,0 +1,21 @@
+{
+  "docxCitationCheck": {
+    "action": "Zitat prüfen",
+    "alternatives": "{count, plural, one {# weitere Entscheidung trägt dieses Aktenzeichen} other {# weitere Entscheidungen tragen dieses Aktenzeichen}}",
+    "checking": "{citation} wird geprüft …",
+    "contradicts": "Widerspricht",
+    "doesNotAddress": "Behandelt nicht",
+    "earlier": "Frühere Prüfungen",
+    "failed": "Die Zitatprüfung wurde nicht abgeschlossen. Bitte erneut versuchen.",
+    "goToParagraph": "Zum Absatz springen",
+    "noPassage": "Keine einzelne Textstelle der Entscheidung trägt diesen Befund.",
+    "notFound": "Keine Entscheidung zu {citation} in der Rechtsprechungsdatenbank",
+    "probability": "{probability, number, percent} wahrscheinlich",
+    "showPassage": "Textstelle anzeigen",
+    "supports": "Stützt",
+    "title": "Zitatprüfung",
+    "unavailableDerivedAi": "Der Herausgeber dieser Entscheidung erlaubt keine KI-Auswertung ihres Textes.",
+    "unavailableNoText": "Die Entscheidung wurde gefunden, ihr Text steht zur Prüfung aber nicht zur Verfügung.",
+    "uncertain": "Unsicher"
+  }
+}

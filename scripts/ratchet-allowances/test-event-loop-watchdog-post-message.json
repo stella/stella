@@ -1,5 +1,0 @@
-{
-  "metric": "lint-suppression-directives",
-  "delta": 2,
-  "reason": "The test event-loop watchdog pings between a Bun test process and its worker thread with Worker.postMessage and the worker's self.postMessage, which take no targetOrigin; unicorn/require-post-message-target-origin is written for window.postMessage."
-}

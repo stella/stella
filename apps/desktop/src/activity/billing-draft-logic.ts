@@ -7,6 +7,7 @@ import {
   desktopBillingDraftSettingsResponseSchema,
 } from "@stll/api-contract/desktop-billing-drafts";
 import type {
+  DESKTOP_BILLING_DRAFT_REFUSAL_CODE,
   DesktopBillingDraft,
   DesktopBillingDraftOperation,
   DesktopBillingDraftRequest,
@@ -106,17 +107,112 @@ export const cardDraftEntry = ({
   return { ...entry, evidence: { documentNames, windowTitles } };
 };
 
-/** Why a draft could not be written, as the native boundary names it. */
-export const DRAFT_FAILURE_KINDS = [
-  "off",
-  "consentRequired",
-  "refused",
-  "modeChanged",
-  "tooLarge",
-  "failed",
-] as const;
+/** The failure each server refusal code becomes at the native boundary
+ * (`DraftError` in billing_draft_submit.rs); a new code must name one. */
+const REFUSAL_FAILURE_KINDS = {
+  organizationOff: "off",
+  consentRequired: "consentRequired",
+  modeChanged: "modeChanged",
+  contextTooLarge: "tooLarge",
+  // The entry itself is refused: no time entry on that matter can be made.
+  timeEntryNotPermitted: "refused",
+  matterUnavailable: "refused",
+} as const satisfies Record<
+  keyof typeof DESKTOP_BILLING_DRAFT_REFUSAL_CODE,
+  string
+>;
 
-export type DraftFailureKind = (typeof DRAFT_FAILURE_KINDS)[number];
+/** Why a draft could not be written, as the native boundary names it: a
+ * refusal code's failure, any other refusal (`aiUnavailable`: the user's AI
+ * access does not cover drafting), or any other failure. */
+export type DraftFailureKind =
+  | (typeof REFUSAL_FAILURE_KINDS)[keyof typeof REFUSAL_FAILURE_KINDS]
+  | "aiUnavailable"
+  | "failed";
+
+/** What a card offers after a failure: Allow when consent is missing, Try
+ * again when another attempt can succeed, nothing when only a change
+ * outside the draft (another matter, less detail, the firm's switch) can. */
+export type DraftFailureRecovery = "allow" | "retry" | "none";
+
+export const DRAFT_FAILURE_RECOVERY = {
+  off: "none",
+  consentRequired: "allow",
+  refused: "none",
+  modeChanged: "retry",
+  tooLarge: "none",
+  aiUnavailable: "none",
+  failed: "retry",
+} as const satisfies Record<DraftFailureKind, DraftFailureRecovery>;
+
+/** Every failure kind, one per recovery entry. */
+export const DRAFT_FAILURE_KINDS = Object.keys(DRAFT_FAILURE_RECOVERY).filter(
+  (kind): kind is DraftFailureKind => kind in DRAFT_FAILURE_RECOVERY,
+);
+
+/** The fields stella AI writes on a card, and what its last change replaced. */
+type RevertibleFields = {
+  narrative: string;
+  classification: DesktopTimeEntryClassification | null;
+  billable: boolean;
+};
+
+type RevertibleEdit = RevertibleFields & { undo: RevertibleFields | null };
+
+/** The card's fields after Use original: the template back, codes dropped. */
+export const restoredEdit = (
+  edit: RevertibleEdit,
+  template: string,
+): RevertibleFields => ({
+  narrative: template,
+  classification: null,
+  billable: edit.billable,
+});
+
+const sameClassification = (
+  left: DesktopTimeEntryClassification | null,
+  right: DesktopTimeEntryClassification | null,
+) => {
+  if (left === null || right === null) {
+    return left === right;
+  }
+  switch (left.type) {
+    case "ledes":
+      return (
+        right.type === "ledes" &&
+        left.taskCode === right.taskCode &&
+        left.activityCode === right.activityCode
+      );
+    case "activity_group":
+      return (
+        right.type === "activity_group" &&
+        left.activityGroup === right.activityGroup
+      );
+    default:
+      left satisfies never;
+      return panic("Unknown time entry classification");
+  }
+};
+
+const sameFields = (left: RevertibleFields, right: RevertibleFields) =>
+  left.narrative === right.narrative &&
+  left.billable === right.billable &&
+  sameClassification(left.classification, right.classification);
+
+/** Undo and Use original, each only when it would change the card, and Undo
+ * only when it does something Use original does not. */
+export const revertActions = (edit: RevertibleEdit, template: string) => {
+  const restored = restoredEdit(edit, template);
+  const undone = edit.undo;
+  const restoreTemplate = !sameFields(edit, restored);
+  return {
+    restoreTemplate,
+    undo:
+      undone !== null &&
+      !sameFields(edit, undone) &&
+      !(restoreTemplate && sameFields(undone, restored)),
+  };
+};
 
 const isDraftFailureKind = (type: unknown): type is DraftFailureKind =>
   DRAFT_FAILURE_KINDS.some((kind) => kind === type);
@@ -153,7 +249,11 @@ export type CardStructure = Extract<
  * billable choice, the guideline notes and a structural proposal. */
 export type CardDraft = {
   narrative: string;
+  /** The language the narrative is written in, as the draft names it. */
+  narrativeLanguage: string;
   earlierEntries: DesktopBillingDraftReview["earlierEntries"];
+  /** The names the card's matter gives the codes the draft uses. */
+  codeNames: DesktopBillingDraftReview["codeNames"];
   classification: DesktopTimeEntryClassification | null;
   /** The billable choice the draft proposes, or `null` to keep the card's. */
   billable: boolean | null;
@@ -245,6 +345,9 @@ export const cardDraftFrom = (
     return null;
   }
   const { result, earlierEntries } = parsed.output;
+  const codeNames = parsed.output.codeNames.filter(
+    ({ matterId }) => matterId === target.matterId,
+  );
   const followed = (matched: readonly string[]) => {
     const cited = new Set(matched);
     return earlierEntries.filter(({ id }) => cited.has(id));
@@ -257,7 +360,9 @@ export const cardDraftFrom = (
       ? null
       : {
           narrative: draft.narrative,
+          narrativeLanguage: draft.narrativeLanguage,
           earlierEntries: followed(draft.matchedEarlierEntryIds),
+          codeNames,
           classification: null,
           billable: null,
           flags: [],
@@ -273,7 +378,9 @@ export const cardDraftFrom = (
   }
   return {
     ...draftScalars(draft),
+    narrativeLanguage: draft.narrativeLanguage,
     earlierEntries: followed(draft.matchedEarlierEntryIds),
+    codeNames,
     flags: draft.flags.map(({ text, ruleRef, fix }) => ({
       text,
       fileName: ruleRef.fileName,

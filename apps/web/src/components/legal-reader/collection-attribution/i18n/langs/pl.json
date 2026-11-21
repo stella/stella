@@ -1,0 +1,9 @@
+{
+  "readerCollection": {
+    "partialText": "Wyświetlono opublikowane części; kompletność nie została ustalona.",
+    "provenanceOmitted": "Pominięte rekordy publikacji: {omittedCount, number} z {totalCount, number}.",
+    "sourceAttribution": "Publikacja w zbiorze: <link>{source}</link>. Pobrano {date}.",
+    "sourceAttributionUnknownDate": "Publikacja w zbiorze: <link>{source}</link>. Data pobrania nieznana.",
+    "unclassifiedText": "Zakres tego tekstu ze zbioru jest nieznany."
+  }
+}

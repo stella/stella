@@ -166,6 +166,12 @@ describe("register drift", () => {
     expect(hasRegisterDrift("Si fuiste tú, ignora esto", "es")).toBe(false);
     expect(hasRegisterDrift("Neked küldtük", "hu")).toBe(true);
     expect(hasRegisterDrift("Önnek küldtük", "hu")).toBe(false);
+    expect(hasRegisterDrift("Sinu konto on valmis", "et")).toBe(true);
+    expect(hasRegisterDrift("Millega sa tegeled?", "et")).toBe(true);
+    expect(hasRegisterDrift("Sul pole õigust", "et")).toBe(true);
+    expect(hasRegisterDrift("Teie konto on valmis", "et")).toBe(false);
+    expect(hasRegisterDrift("Kasuta {sa} väärtust", "et")).toBe(false);
+    expect(hasRegisterDrift("Saada see uuesti", "et")).toBe(false);
   });
 });
 
@@ -954,7 +960,10 @@ describe("terminology: Matter stays canonical in search", () => {
     expect(matter).toBeDefined();
 
     const englishCatalogue = await Bun.file(
-      path.resolve(import.meta.dir, "../../../apps/web/src/i18n/langs/en.json"),
+      path.resolve(
+        import.meta.dir,
+        "../../../apps/web/src/i18n/namespaces/en/core.json",
+      ),
     ).json();
     expect(englishCatalogue.search.kinds.matter).toBe(matter?.en);
 
@@ -962,7 +971,7 @@ describe("terminology: Matter stays canonical in search", () => {
       const catalogue = await Bun.file(
         path.resolve(
           import.meta.dir,
-          `../../../apps/web/src/i18n/langs/${locale}.json`,
+          `../../../apps/web/src/i18n/namespaces/${locale}/core.json`,
         ),
       ).json();
       expect(catalogue.search.kinds.matter).toBe(matter?.translations[locale]);

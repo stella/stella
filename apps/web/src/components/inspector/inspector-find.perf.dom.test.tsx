@@ -246,6 +246,7 @@ const decisionOf = (blocks: DocumentAst["blocks"]) => {
     judges: [],
     language: "cs",
     sourceAttributionUrl: null,
+    bodySource: { textSource: "host" },
     textFields: {
       abstract: absent,
       headnote: absent,

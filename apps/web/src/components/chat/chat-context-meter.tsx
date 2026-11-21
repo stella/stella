@@ -117,7 +117,7 @@ export const ChatContextMeter = (props: ChatContextMeterProps) => {
     100,
     Math.round((usage.estimatedTokens / usage.triggerTokens) * 100),
   );
-  const parts = buildContextParts({ t, format, usage });
+  const parts = buildContextParts({ t, usage });
 
   return (
     <ContextPopover
@@ -227,22 +227,19 @@ const ReportedContextMeter = ({
 };
 
 type TranslateFn = ReturnType<typeof useTranslations<"chat.contextMeter">>;
-type FormatFn = ReturnType<typeof useFormatter>;
 
 const buildContextParts = ({
   t,
-  format,
   usage,
 }: {
   t: TranslateFn;
-  format: FormatFn;
   usage: ChatContextUsage;
 }): ContextPart[] => {
   const { breakdown, summarizedMessageCount } = usage;
   const summaryLabel =
     summarizedMessageCount > 0
       ? t("summaryWithCount", {
-          count: format.number(summarizedMessageCount),
+          count: summarizedMessageCount,
         })
       : t("summary");
 

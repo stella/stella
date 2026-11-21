@@ -54,6 +54,7 @@ const readOf = () =>
     sections: null,
     sourceUrl: "https://example.test/decision",
     sourceAttributionUrl: "https://example.test/decision",
+    bodySource: { textSource: "host" },
     documentUrl: "https://example.test/decision.pdf",
     ...readDecisionTextMetadata({}),
     headnote: readDecisionTextMetadata({}).textFields.headnote,

@@ -1,4 +1,3 @@
-import { Fragment } from "react";
 import type { ReactNode } from "react";
 
 import { useFormatter, useTranslations } from "use-intl";
@@ -8,12 +7,13 @@ import {
   CheckIcon,
   LockKeyholeIcon,
   SendIcon,
-  XIcon,
 } from "@stll/ui/icons";
 import { ScrollArea } from "@stll/ui/scroll-area";
-import { TruncatedText } from "@stll/ui/truncated-text";
-import { cn } from "@stll/ui/utils";
 
+import {
+  ActivityDisclosure,
+  useStoredFact,
+} from "../activity/ActivityDisclosure";
 import { PermissionsSection } from "../mainview/PermissionsSection";
 import type { Permission } from "../shared/permissions";
 import { DESKTOP_PLATFORM } from "../shared/use-clipboard-shortcut";
@@ -32,13 +32,6 @@ const STORY_MATTER_COLOR = "var(--option-emerald)";
 /** Story length in hours, as the draft entry rounds it. */
 const STORY_HOURS = 0.9;
 
-/** Side by side: what is recorded, and what never is. */
-const CLAIM_ROWS = [
-  { never: "activityNeverScreen", recorded: "activityRecordsApp" },
-  { never: "activityNeverKeys", recorded: "activityRecordsDetails" },
-  { never: "activityNeverWeb", recorded: "activityRecordsActive" },
-] as const;
-
 type ActivityExplainerProps = {
   permissions: readonly Permission[];
 };
@@ -52,6 +45,7 @@ export const ActivityExplainer = ({ permissions }: ActivityExplainerProps) => {
   const t = useTranslations("onboarding");
   const activity = useTranslations("activity");
   const format = useFormatter();
+  const stored = useStoredFact();
   const askForDetails = DESKTOP_PLATFORM === "mac" && permissions.length > 0;
 
   return (
@@ -64,11 +58,7 @@ export const ActivityExplainer = ({ permissions }: ActivityExplainerProps) => {
           data-activity-story=""
         >
           <StoryStage
-            caption={
-              DESKTOP_PLATFORM === "mac"
-                ? t("activityStoryRecordMac")
-                : t("activityStoryRecordPc")
-            }
+            caption={stored}
             icon={<LockKeyholeIcon className="size-3" />}
             title={t("activityStoryRecordTitle")}
           >
@@ -89,23 +79,25 @@ export const ActivityExplainer = ({ permissions }: ActivityExplainerProps) => {
             icon={<CheckIcon className="size-3" />}
             title={t("activityStoryReviewTitle")}
           >
+            {/* The sample matter wraps rather than truncates: a cut name
+                reads as a fault in the illustration. */}
             <div
-              className="bg-background flex items-center gap-1.5 rounded-lg border px-2 py-1.5"
+              className="bg-background flex items-start gap-1.5 rounded-lg border px-2 py-1.5"
               data-activity-story-matter=""
             >
               <span
                 aria-hidden="true"
-                className="size-2 shrink-0 rounded-full"
+                className="mt-1 size-2 shrink-0 rounded-full"
                 style={{ backgroundColor: STORY_MATTER_COLOR }}
               />
-              <TruncatedText className="text-xs font-medium">
+              <span className="min-w-0 text-xs leading-snug font-medium text-pretty wrap-break-word">
                 {activity("welcomePreviewMatter")}
-              </TruncatedText>
+              </span>
             </div>
           </StoryStage>
           <StoryArrow />
           <StoryStage
-            caption={activity("batchPrivacy")}
+            caption={t("activityStorySendCaption")}
             icon={<SendIcon className="size-3" />}
             title={t("activityStorySendTitle")}
           >
@@ -132,20 +124,7 @@ export const ActivityExplainer = ({ permissions }: ActivityExplainerProps) => {
           </StoryStage>
         </ol>
 
-        <div className="grid grid-cols-2 gap-x-6 gap-y-1.5 text-xs">
-          <p className="text-foreground font-medium">
-            {t("activityRecordsTitle")}
-          </p>
-          <p className="text-foreground font-medium">
-            {t("activityNeverTitle")}
-          </p>
-          {CLAIM_ROWS.map(({ never, recorded }) => (
-            <Fragment key={recorded}>
-              <Claim kind="recorded" text={t(recorded)} />
-              <Claim kind="never" text={t(never)} />
-            </Fragment>
-          ))}
-        </div>
+        <ActivityDisclosure />
 
         {askForDetails ? (
           <div className="bg-card rounded-xl border">
@@ -157,7 +136,7 @@ export const ActivityExplainer = ({ permissions }: ActivityExplainerProps) => {
         ) : null}
 
         <p className="text-muted-foreground text-xs leading-relaxed text-pretty">
-          {t("activityConsentNote")} {t("activityAiNote")}
+          {activity("disclosure.control")}
         </p>
       </div>
     </ScrollArea>
@@ -202,31 +181,4 @@ const StoryArrow = () => (
   >
     <ArrowRightIcon className="size-3.5 rtl:-scale-x-100" />
   </li>
-);
-
-const Claim = ({
-  kind,
-  text,
-}: {
-  kind: "recorded" | "never";
-  text: string;
-}) => (
-  <p className="text-muted-foreground flex items-start gap-1.5 leading-snug">
-    <span
-      aria-hidden="true"
-      className={cn(
-        "mt-px grid size-3.5 shrink-0 place-items-center rounded-full",
-        kind === "recorded"
-          ? "bg-success/15 text-success-foreground"
-          : "bg-muted text-muted-foreground",
-      )}
-    >
-      {kind === "recorded" ? (
-        <CheckIcon className="size-2.5" />
-      ) : (
-        <XIcon className="size-2.5" />
-      )}
-    </span>
-    {text}
-  </p>
 );

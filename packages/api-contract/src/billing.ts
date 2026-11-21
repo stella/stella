@@ -1,6 +1,9 @@
 /** Maximum stored task or activity code length. */
 export const BILLING_CODE_MAX_LENGTH = 20;
 
+/** What a firm's billing code classifies: the task or the activity. */
+export const BILLING_CODE_TYPES = ["task", "activity"] as const;
+
 export const TIME_ENTRY_ACTIVITY_GROUPS = ["client", "internal"] as const;
 export type TimeEntryActivityGroup =
   (typeof TIME_ENTRY_ACTIVITY_GROUPS)[number];
