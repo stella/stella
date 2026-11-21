@@ -81,6 +81,7 @@ export type ChatComposerHandle = {
 export const ChatComposer = ({
   busy,
   canStop,
+  dictated,
   handle,
   onQueue,
   onSend,
@@ -92,6 +93,8 @@ export const ChatComposer = ({
 }: {
   busy: boolean;
   canStop: boolean;
+  /** Dictated text the box starts with, to read over before sending. */
+  dictated: string | undefined;
   /** What the thread may do to the box from outside it. */
   handle?: Ref<ChatComposerHandle> | undefined;
   /**
@@ -120,7 +123,7 @@ export const ChatComposer = ({
   shareId: string | undefined;
 }) => {
   const t = useTranslations("chat");
-  const [draft, setDraft] = useState("");
+  const [draft, setDraft] = useState(dictated ?? "");
   useImperativeHandle(handle, () => ({
     handBack: (text: string) => {
       setDraft((typed) => (typed === "" ? text : `${text}\n\n${typed}`));

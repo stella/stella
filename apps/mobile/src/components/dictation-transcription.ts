@@ -2,12 +2,7 @@ import { Result } from "better-result";
 import { File } from "expo-file-system";
 
 import type { AccessTokenSource } from "@/connection/session";
-import {
-  cleanUpDictation,
-  readDictationModels,
-  transcribeRecording,
-} from "@/state/dictation";
-import { sameClassFallback } from "@/state/dictation-fallback";
+import { cleanUpDictation, transcribeWithinClass } from "@/state/dictation";
 import type { ModelClass } from "@/state/dictation-fallback";
 import { RecordingReadError } from "@/state/dictation-kept";
 import type { PieceFailure } from "@/state/dictation-kept";
@@ -22,12 +17,11 @@ type PieceChoice = {
 };
 
 /**
- * One recording's text, with the model the person picked. When the server
- * cannot serve it (503), the recording goes once more only to a model of
- * the same provider, region side and retention (`sameClassFallback`);
- * with none, it goes nowhere else and the failure stands, so the dictation
- * is kept and a retry uses the picked model. The recording stays where it
- * is: the caller deletes it once it no longer needs it.
+ * One recording's text, with the model the person picked, or one of its
+ * class when the server cannot serve it (`transcribeWithinClass`); with
+ * none, the failure stands, so the dictation is kept and a retry uses the
+ * picked model. The recording stays where it is: the caller deletes it
+ * once it no longer needs it.
  */
 export const transcribePiece = async ({
   source,
@@ -57,28 +51,7 @@ export const transcribePiece = async ({
       new RecordingReadError({ message: `No recording at ${uri}` }),
     );
   }
-  const first = await transcribeRecording({ fetch, source, audio, choice });
-  const picked = choice.modelId;
-  if (
-    picked === undefined ||
-    !first.isErr() ||
-    first.error._tag !== "ApiRequestError" ||
-    first.error.status !== 503
-  ) {
-    return first;
-  }
-  const offered = await readDictationModels({ fetch, source });
-  const fallback = offered.isOk()
-    ? sameClassFallback(picked, choice.modelClass, offered.value)
-    : undefined;
-  return fallback === undefined
-    ? first
-    : await transcribeRecording({
-        fetch,
-        source,
-        audio,
-        choice: { ...choice, modelId: fallback },
-      });
+  return await transcribeWithinClass({ fetch, source, audio, choice });
 };
 
 /** The joined text, tidied by stella AI when the person turned that on; the words as heard when cleanup fails. */
