@@ -107,9 +107,7 @@ type InspectorTabSwitcherButtonProps = Omit<
  * The live switcher renders it as its menu trigger; the pending header
  * renders it disabled, so both have one size and one name.
  */
-export const InspectorTabSwitcherButton = (
-  props: InspectorTabSwitcherButtonProps,
-) => {
+const InspectorTabSwitcherButton = (props: InspectorTabSwitcherButtonProps) => {
   const t = useTranslations("inspector");
   const format = useFormatter();
   const count = useInspectorTabsStore((s) => s.tabs.length);
