@@ -388,7 +388,8 @@ type RecordVersionSignatureOptions = {
 /**
  * Store the MinHash signature near-duplicate detection compares, for every
  * file version that gets text, from the same single hook as the language
- * stamp. Telemetry-only on failure: the document stays fully indexed.
+ * stamp. Telemetry-only on failure, including a deployment without a
+ * content key, which records none: the document stays fully indexed.
  */
 const recordVersionSignature = async ({
   database,
@@ -409,7 +410,7 @@ const recordVersionSignature = async ({
         text,
       }),
     catch: (cause) => cause,
-  });
+  }).then((result) => result.andThen((written) => written));
   if (Result.isError(recorded)) {
     observeFailure(recorded.error, {
       sink: NEAR_DUPLICATE_SIGNATURE_SINK,

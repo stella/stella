@@ -73,16 +73,18 @@ const seedDocument = async (
     entityId,
     workspaceId: tenant.workspaceId,
   });
-  await recordNearDuplicateSignature(
-    asTestRaw<Parameters<typeof recordNearDuplicateSignature>[0]>(db),
-    {
-      entityId,
-      entityVersionId,
-      organizationId: tenant.organizationId,
-      workspaceId: tenant.workspaceId,
-      text,
-    },
-  );
+  (
+    await recordNearDuplicateSignature(
+      asTestRaw<Parameters<typeof recordNearDuplicateSignature>[0]>(db),
+      {
+        entityId,
+        entityVersionId,
+        organizationId: tenant.organizationId,
+        workspaceId: tenant.workspaceId,
+        text,
+      },
+    )
+  ).unwrap();
   await db
     .update(entities)
     .set({ currentVersionId: entityVersionId })

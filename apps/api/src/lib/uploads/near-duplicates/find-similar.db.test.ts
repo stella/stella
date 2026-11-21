@@ -77,16 +77,18 @@ const seedDocument = async (
     })),
   );
   for (const [index, text] of texts.entries()) {
-    await recordNearDuplicateSignature(
-      asTestRaw<Parameters<typeof recordNearDuplicateSignature>[0]>(db),
-      {
-        entityId,
-        entityVersionId: versionIds[index] ?? createSafeId<"entityVersion">(),
-        organizationId,
-        workspaceId,
-        text,
-      },
-    );
+    (
+      await recordNearDuplicateSignature(
+        asTestRaw<Parameters<typeof recordNearDuplicateSignature>[0]>(db),
+        {
+          entityId,
+          entityVersionId: versionIds[index] ?? createSafeId<"entityVersion">(),
+          organizationId,
+          workspaceId,
+          text,
+        },
+      )
+    ).unwrap();
   }
   await db
     .update(entities)
@@ -188,16 +190,18 @@ test("a redelivered extraction leaves one signature and its band keys", async ()
     .from(entities)
     .where(eq(entities.id, contractId));
   const entityVersionId = version?.id ?? createSafeId<"entityVersion">();
-  await recordNearDuplicateSignature(
-    asTestRaw<Parameters<typeof recordNearDuplicateSignature>[0]>(db),
-    {
-      entityId: contractId,
-      entityVersionId,
-      organizationId,
-      workspaceId: matterId,
-      text: CONTRACT,
-    },
-  );
+  (
+    await recordNearDuplicateSignature(
+      asTestRaw<Parameters<typeof recordNearDuplicateSignature>[0]>(db),
+      {
+        entityId: contractId,
+        entityVersionId,
+        organizationId,
+        workspaceId: matterId,
+        text: CONTRACT,
+      },
+    )
+  ).unwrap();
   const bands = await db
     .select()
     .from(entityVersionMinhashBands)
@@ -260,16 +264,18 @@ test("new text for a version replaces its signature and band keys", async () => 
   ]);
   const freshId = await seedDocument(matterId, "Fresh.docx", [CONTRACT]);
   const rewrittenVersionId = await currentVersionOf(rewrittenId);
-  await recordNearDuplicateSignature(
-    asTestRaw<Parameters<typeof recordNearDuplicateSignature>[0]>(db),
-    {
-      entityId: rewrittenId,
-      entityVersionId: rewrittenVersionId,
-      organizationId,
-      workspaceId: matterId,
-      text: CONTRACT,
-    },
-  );
+  (
+    await recordNearDuplicateSignature(
+      asTestRaw<Parameters<typeof recordNearDuplicateSignature>[0]>(db),
+      {
+        entityId: rewrittenId,
+        entityVersionId: rewrittenVersionId,
+        organizationId,
+        workspaceId: matterId,
+        text: CONTRACT,
+      },
+    )
+  ).unwrap();
   const rewritten = await storedSignatureOf(rewrittenVersionId);
   expect(rewritten.bandKeys).toHaveLength(LSH_BANDS);
   expect(rewritten).toEqual(

@@ -159,7 +159,7 @@ const recordLanguageMock = mock(
 const recordSignatureMock = mock(
   async (
     ..._args: Parameters<ExecuteNativeExtractionDependencies["recordSignature"]>
-  ) => undefined,
+  ) => Result.ok(undefined),
 );
 
 const persistNativeExtractionProjection = async (

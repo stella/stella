@@ -7,9 +7,10 @@
  * the smallest hash over that set; the share of equal slots between two
  * signatures estimates the Jaccard similarity of the shingle sets.
  *
- * The hash functions are seeded from a per-organization key, so the same
- * text gives unrelated signatures in two organizations and signatures are
- * never comparable across them.
+ * Everything is keyed from the organization's keyed lookup key: each shingle
+ * is hashed with 64 bits of key material before the 128 per-slot
+ * permutations, so the same text gives unrelated signatures in two
+ * organizations and signatures are never comparable across them.
  *
  * Candidates are found with 21 bands of 6 rows (126 of the 128 slots): two
  * documents share a band key with probability 1 - (1 - s^6)^21, which is
@@ -53,13 +54,21 @@ const mix = (value: number): number => {
   return (hash ^ (hash >>> 16)) >>> 0;
 };
 
-/** `key` is the organization's lookup key (`contentLookupKey`). */
-export const minHashSeeds = (key: string): Uint32Array =>
-  Uint32Array.from({ length: SIGNATURE_LENGTH }, (_, index) =>
-    mix(fnv1a(`${key}\u0000${index}`)),
-  );
+export type MinHashSeeds = {
+  /** Keys the shingle hash, so shingle values are unknown without the key. */
+  shingleKey: bigint;
+  slots: Uint32Array;
+};
 
-export const shingleHashes = (text: string): Set<number> | null => {
+/** `key` is the organization's keyed lookup key (`keyedContentLookupKey`). */
+export const minHashSeeds = (key: string): MinHashSeeds => ({
+  shingleKey: Bun.hash.xxHash64(`${key}\u0000shingle`),
+  slots: Uint32Array.from({ length: SIGNATURE_LENGTH }, (_, index) =>
+    mix(fnv1a(`${key}\u0000${index}`)),
+  ),
+});
+
+const shingleTexts = (text: string): Set<string> | null => {
   const words = Array.from(
     foldSearchMatchText(text).matchAll(WORD_RE),
     ([word]) => word,
@@ -67,26 +76,38 @@ export const shingleHashes = (text: string): Set<number> | null => {
   if (words.length < MIN_WORDS) {
     return null;
   }
-  const hashes = new Set<number>();
+  const shingles = new Set<string>();
   for (let index = 0; index + SHINGLE_WORDS <= words.length; index++) {
-    hashes.add(fnv1a(words.slice(index, index + SHINGLE_WORDS).join(" ")));
+    shingles.add(words.slice(index, index + SHINGLE_WORDS).join(" "));
   }
-  return hashes;
+  return shingles;
+};
+
+/** Unkeyed shingle hashes, for measuring exact Jaccard similarity. */
+export const shingleHashes = (text: string): Set<number> | null => {
+  const shingles = shingleTexts(text);
+  return shingles && new Set(Array.from(shingles, fnv1a));
+};
+
+const keyedShingleHash = (shingle: string, key: bigint): number => {
+  const hash = Bun.hash.xxHash64(shingle, key);
+  return Number(BigInt.asUintN(32, hash ^ (hash >> 32n)));
 };
 
 /** `null` when the text is too short to compare. */
 export const minHashSignature = (
   text: string,
-  seeds: Uint32Array,
+  seeds: MinHashSeeds,
 ): Uint32Array | null => {
-  const shingles = shingleHashes(text);
+  const shingles = shingleTexts(text);
   if (!shingles) {
     return null;
   }
   const signature = new Uint32Array(SIGNATURE_LENGTH).fill(0xff_ff_ff_ff);
   for (const shingle of shingles) {
+    const keyed = keyedShingleHash(shingle, seeds.shingleKey);
     for (let slot = 0; slot < SIGNATURE_LENGTH; slot++) {
-      const hash = mix(shingle ^ (seeds[slot] ?? 0));
+      const hash = mix(keyed ^ (seeds.slots[slot] ?? 0));
       if (hash < (signature[slot] ?? 0)) {
         signature[slot] = hash;
       }

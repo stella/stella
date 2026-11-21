@@ -52,6 +52,17 @@ describe("minHashSignature", () => {
     ).toBe(false);
   });
 
+  test("the shingle key alone changes every slot's hash", () => {
+    const rekeyed = minHashSignature(contract, {
+      shingleKey: SEEDS.shingleKey + 1n,
+      slots: SEEDS.slots,
+    });
+    if (!rekeyed) {
+      throw new Error("expected a signature");
+    }
+    expect(estimateSimilarity(signature(contract), rekeyed)).toBeLessThan(0.1);
+  });
+
   test("a PDF-style re-flow of the same text is a full match", () => {
     const reflowed = contract.replaceAll(" ", "\n").replaceAll(",", " ,");
     expect(estimateSimilarity(signature(contract), signature(reflowed))).toBe(

@@ -1395,7 +1395,7 @@ export const processDocumentProcessingRun = async (
               text: result.value.text,
             }),
           catch: (cause) => cause,
-        });
+        }).then((attempt) => attempt.andThen((written) => written));
         if (Result.isError(recorded)) {
           observeFailure(recorded.error, {
             sink: OCR_NEAR_DUPLICATE_SIGNATURE_SINK,

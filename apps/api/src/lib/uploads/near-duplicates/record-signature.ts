@@ -1,5 +1,6 @@
 /** The per-version MinHash signature written by native extraction. */
 
+import { Result } from "better-result";
 import { and, eq, notInArray, sql } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
@@ -8,7 +9,8 @@ import {
   entityVersionMinhashSignatures,
 } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
-import { contentLookupKey } from "@/api/lib/content-encryption";
+import { keyedContentLookupKey } from "@/api/lib/content-encryption";
+import type { ConfigurationError } from "@/api/lib/errors/tagged-errors";
 import {
   lshBandKeys,
   minHashSeeds,
@@ -30,7 +32,9 @@ type RecordNearDuplicateSignatureOptions = {
  * Store the version's signature and band keys, or nothing when the text is
  * too short to compare. New text for the version replaces the signature and
  * its band keys. Every step converges, so a redelivery, or a run that stopped
- * partway, ends with exactly the latest text's signature and keys.
+ * partway, ends with exactly the latest text's signature and keys. Refuses,
+ * recording nothing, where no content key is configured: the hash seeds come
+ * only from the organization's keyed lookup key.
  */
 export const recordNearDuplicateSignature = async (
   db: Pick<Transaction, "delete" | "insert">,
@@ -41,13 +45,14 @@ export const recordNearDuplicateSignature = async (
     workspaceId,
     text,
   }: RecordNearDuplicateSignatureOptions,
-): Promise<void> => {
-  const seeds = minHashSeeds(
-    await contentLookupKey(organizationId, SEED_LOOKUP_VALUE),
-  );
-  const signature = minHashSignature(text, seeds);
+): Promise<Result<void, ConfigurationError>> => {
+  const key = await keyedContentLookupKey(organizationId, SEED_LOOKUP_VALUE);
+  if (Result.isError(key)) {
+    return Result.err(key.error);
+  }
+  const signature = minHashSignature(text, minHashSeeds(key.value));
   if (!signature) {
-    return;
+    return Result.ok(undefined);
   }
   const scope = { entityId, entityVersionId, organizationId, workspaceId };
   const bytes = signatureToBytes(signature);
@@ -74,4 +79,5 @@ export const recordNearDuplicateSignature = async (
     .insert(entityVersionMinhashBands)
     .values(bandKeys.map((bandKey) => ({ ...scope, bandKey })))
     .onConflictDoNothing();
+  return Result.ok(undefined);
 };
