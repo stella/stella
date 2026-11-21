@@ -21,13 +21,13 @@ import {
   composeInputFromFlags,
   confirmDestructive,
   maybeConfirmAndRetry,
-  parseInputObject,
   parsePayload,
   readOutputFormat,
   renderClientError,
   renderCommandResult,
   RESERVED_FLAG_KEYS,
   reservedFlagUsageError,
+  resolveInputObject,
   setExit,
   setPath,
   streamOrRenderAllPages,
@@ -120,10 +120,7 @@ export const runCapabilityCommand = async ({
   // alongside a body passed through --input, instead of forcing the caller to
   // hand-relocate it into `params.workspaceId` in the JSON.
   const inputRaw = flags[RESERVED_FLAG_KEYS.input];
-  const parsedInput =
-    typeof inputRaw === "string"
-      ? await parseInputObject({ inputRaw, writers })
-      : Result.ok<Record<string, unknown>>({});
+  const parsedInput = await resolveInputObject({ inputRaw, writers });
   if (Result.isError(parsedInput)) {
     setExit(context, EXIT_CODES.validation);
     return;

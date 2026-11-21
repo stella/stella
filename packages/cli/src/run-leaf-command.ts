@@ -436,6 +436,17 @@ export const parseInputObject = async ({
   return Result.ok(parsed.value);
 };
 
+export const resolveInputObject = async ({
+  inputRaw,
+  writers,
+}: {
+  inputRaw: unknown;
+  writers: Writers;
+}): Promise<Result<Record<string, unknown>, "invalid-input">> =>
+  typeof inputRaw === "string"
+    ? await parseInputObject({ inputRaw, writers })
+    : Result.ok<Record<string, unknown>>({});
+
 export const confirmDestructive = async ({
   context,
   flags,
@@ -1313,10 +1324,7 @@ export const runLeafCommand = async ({
   // passed through --input, instead of forcing the caller to hand-relocate it
   // into the JSON under a different key.
   const inputRaw = flags[RESERVED_FLAG_KEYS.input];
-  const parsedInput =
-    typeof inputRaw === "string"
-      ? await parseInputObject({ inputRaw, writers })
-      : Result.ok<Record<string, unknown>>({});
+  const parsedInput = await resolveInputObject({ inputRaw, writers });
   if (Result.isError(parsedInput)) {
     setExit(context, EXIT_CODES.validation);
     return;
