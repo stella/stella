@@ -9,12 +9,11 @@
 import { useRef, useState } from "react";
 import type { RefObject } from "react";
 
-import { useTranslations } from "use-intl";
-
 import { FileSearchIcon } from "@stll/ui/icons";
 
 import type { DocxEditorRef } from "@/components/docx/app-docx-editor";
 import { CitationCheckCard } from "@/components/docx/citation-check/citation-check-card";
+import { citationCheckCatalog } from "@/components/docx/citation-check/citation-check-catalog";
 import { findDecisionReference } from "@/components/docx/citation-check/citation-check.logic";
 import {
   blockContaining,
@@ -39,12 +38,12 @@ type CitationCheckHostProps = {
   onMenuChange: (menu: CitationCheckMenu | null) => void;
 };
 
-export const CitationCheckHost = ({
+const CitationCheckHostContents = ({
   editorRef,
   onMenuChange,
   selectionRef,
 }: CitationCheckHostProps) => {
-  const t = useTranslations();
+  const t = citationCheckCatalog.useTranslations();
   // The decision reference the current selection names, if any: what decides
   // whether the context menu offers a citation check.
   const [citedReference, setCitedReference] = useState<string | null>(null);
@@ -135,3 +134,13 @@ export const CitationCheckHost = ({
     />
   );
 };
+
+/**
+ * The host with the check's strings: mounted beside the editor and showing
+ * nothing until a check runs, so nothing renders while the strings load.
+ */
+export const CitationCheckHost = (props: CitationCheckHostProps) => (
+  <citationCheckCatalog.Provider fallback={null}>
+    <CitationCheckHostContents {...props} />
+  </citationCheckCatalog.Provider>
+);

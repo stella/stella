@@ -9,6 +9,7 @@ import { Popover, PopoverPanel, PopoverTrigger } from "@stll/ui/popover";
 import { ReviewStatusBadge } from "@stll/ui/review-status-badge";
 import { cn } from "@stll/ui/utils";
 
+import { citationCheckCatalog } from "@/components/docx/citation-check/citation-check-catalog";
 import { CITATION_RELATION_DISPLAY } from "@/components/docx/citation-check/citation-check.logic";
 import type {
   CitationCheckResult,
@@ -39,7 +40,8 @@ export const CitationCheckCard = ({
   onRevealParagraph,
   state,
 }: CitationCheckCardProps) => {
-  const t = useTranslations();
+  const tApp = useTranslations();
+  const t = citationCheckCatalog.useTranslations();
   const [latest, ...earlier] = state.results;
   if (latest === undefined && state.pending === null) {
     return null;
@@ -68,7 +70,7 @@ export const CitationCheckCard = ({
             </Button>
           )}
           <Button
-            aria-label={t("common.close")}
+            aria-label={tApp("common.close")}
             onClick={onDismiss}
             size="icon-xs"
             variant="ghost"
@@ -94,7 +96,7 @@ export const CitationCheckCard = ({
 };
 
 const CitationCheckBody = ({ result }: { result: CitationCheckResult }) => {
-  const t = useTranslations();
+  const t = citationCheckCatalog.useTranslations();
   switch (result.status) {
     case "failed":
       return (
@@ -122,7 +124,7 @@ const CitationCheckBody = ({ result }: { result: CitationCheckResult }) => {
 
 /** One answer from earlier in the session: how it read, and what it read. */
 const EarlierResult = ({ result }: { result: CitationCheckResult }) => {
-  const t = useTranslations();
+  const t = citationCheckCatalog.useTranslations();
   switch (result.status) {
     case "not_found":
       return <NotFound citation={result.citation} className="text-xs" />;
@@ -164,7 +166,7 @@ const NotFound = ({
   citation: string;
   className?: string;
 }) => {
-  const t = useTranslations();
+  const t = citationCheckCatalog.useTranslations();
 
   return (
     <BidiText as="p" className={cn("text-destructive", className)}>
@@ -174,7 +176,7 @@ const NotFound = ({
 };
 
 const Checking = ({ citation }: { citation: string }) => {
-  const t = useTranslations();
+  const t = citationCheckCatalog.useTranslations();
   const label = t("docxCitationCheck.checking", { citation });
 
   return (
@@ -190,7 +192,7 @@ const CheckedReading = ({
 }: {
   result: Extract<CitationCheckResult, { status: "checked" }>;
 }) => {
-  const t = useTranslations();
+  const t = citationCheckCatalog.useTranslations();
   const display = CITATION_RELATION_DISPLAY[result.relation];
 
   return (

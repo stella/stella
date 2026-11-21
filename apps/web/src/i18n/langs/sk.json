@@ -3565,25 +3565,6 @@
     "uploadedBy": "Nahral(a) {name}",
     "uploadedFile": "Nahraný súbor e-mailu"
   },
-  "docxCitationCheck": {
-    "action": "Overiť citáciu",
-    "alternatives": "{count, plural, one {Tomuto označeniu zodpovedá ešte # rozhodnutie} few {Tomuto označeniu zodpovedajú ešte # rozhodnutia} many {Tomuto označeniu zodpovedá ešte # rozhodnutia} other {Tomuto označeniu zodpovedá ešte # rozhodnutí}}",
-    "checking": "Overujem {citation} …",
-    "contradicts": "Odporuje",
-    "doesNotAddress": "Nerieši",
-    "earlier": "Skoršie kontroly",
-    "failed": "Overenie citácie sa nepodarilo. Skúste to znova.",
-    "goToParagraph": "Prejsť na odsek",
-    "noPassage": "Žiadna jednotlivá pasáž rozhodnutia tento záver nenesie.",
-    "notFound": "Rozhodnutie zodpovedajúce {citation} nie je v databáze judikatúry",
-    "probability": "pravdepodobnosť {probability, number, percent}",
-    "showPassage": "Zobraziť pasáž",
-    "supports": "Podporuje",
-    "title": "Overenie citácie",
-    "unavailableDerivedAi": "Vydavateľ tohto rozhodnutia nepovoľuje analýzu jeho textu umelou inteligenciou.",
-    "unavailableNoText": "Rozhodnutie sa našlo, ale jeho text nie je k dispozícii na overenie.",
-    "uncertain": "Neisté"
-  },
   "docxReview": {
     "acceptAll": "Prijať všetky",
     "acceptAllConfirmDescription": "Tým sa na dokument naraz použije {count} návrhov.",

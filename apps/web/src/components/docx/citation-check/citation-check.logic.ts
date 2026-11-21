@@ -18,7 +18,7 @@ import {
 } from "@stll/api-contract/decision-query-intent";
 import type { ReviewStatusTone } from "@stll/ui/review-status-badge";
 
-import type { TranslationKey } from "@/i18n/types";
+import type { CitationCheckTranslationKey } from "@/components/docx/citation-check/citation-check-catalog";
 
 /**
  * Words a docket can span: `I. ÚS 1234/20` and `8 Afs 75/2005-130` are three,
@@ -207,5 +207,5 @@ export const CITATION_RELATION_DISPLAY = {
   uncertain: { tone: "warning", label: "docxCitationCheck.uncertain" },
 } as const satisfies Record<
   CitationRelationReading,
-  { tone: ReviewStatusTone; label: TranslationKey }
+  { tone: ReviewStatusTone; label: CitationCheckTranslationKey }
 >;

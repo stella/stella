@@ -3565,25 +3565,6 @@
     "uploadedBy": "Importé par {name}",
     "uploadedFile": "Fichier e-mail importé"
   },
-  "docxCitationCheck": {
-    "action": "Vérifier la citation",
-    "alternatives": "{count, plural, one {# autre décision porte cette référence} many {# autres décisions portent cette référence} other {# autres décisions portent cette référence}}",
-    "checking": "Vérification de {citation} …",
-    "contradicts": "Contredit",
-    "doesNotAddress": "Ne traite pas",
-    "earlier": "Vérifications précédentes",
-    "failed": "La vérification de la citation n’a pas abouti. Réessayez.",
-    "goToParagraph": "Aller au paragraphe",
-    "noPassage": "Aucun passage isolé de la décision ne porte cette lecture.",
-    "notFound": "Aucune décision correspondant à {citation} dans la base de jurisprudence",
-    "probability": "probabilité de {probability, number, percent}",
-    "showPassage": "Afficher le passage",
-    "supports": "Confirme",
-    "title": "Vérification de la citation",
-    "unavailableDerivedAi": "L’éditeur de cette décision n’autorise pas l’analyse de son texte par l’IA.",
-    "unavailableNoText": "La décision a été trouvée, mais son texte n’est pas disponible pour la vérification.",
-    "uncertain": "Incertain"
-  },
   "docxReview": {
     "acceptAll": "Tout accepter",
     "acceptAllConfirmDescription": "Cela applique {count} suggestions au document en une seule fois.",

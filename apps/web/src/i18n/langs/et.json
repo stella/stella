@@ -3565,25 +3565,6 @@
     "uploadedBy": "Üles laadinud {name}",
     "uploadedFile": "Üles laaditud e-kirja fail"
   },
-  "docxCitationCheck": {
-    "action": "Kontrolli viidet",
-    "alternatives": "{count, plural, one {Sellele viitele vastab veel # lahend} other {Sellele viitele vastab veel # lahendit}}",
-    "checking": "Kontrollin viidet {citation} …",
-    "contradicts": "Räägib vastu",
-    "doesNotAddress": "Ei käsitle",
-    "earlier": "Varasemad kontrollid",
-    "failed": "Viite kontroll ei lõppenud. Proovige uuesti.",
-    "goToParagraph": "Mine lõigu juurde",
-    "noPassage": "Ükski lahendi üksik lõik seda järeldust ei kanna.",
-    "notFound": "Kohtupraktika andmebaasis ei ole lahendit {citation}",
-    "probability": "{probability, number, percent} tõenäosus",
-    "showPassage": "Näita lõiku",
-    "supports": "Toetab",
-    "title": "Viite kontroll",
-    "unavailableDerivedAi": "Selle lahendi väljaandja ei luba teksti tehisintellektiga analüüsida.",
-    "unavailableNoText": "Lahend leiti, kuid selle tekst ei ole kontrollimiseks kättesaadav.",
-    "uncertain": "Ebakindel"
-  },
   "docxReview": {
     "acceptAll": "Nõustu kõigiga",
     "acceptAllConfirmDescription": "See rakendab dokumendile korraga {count} soovitust.",
