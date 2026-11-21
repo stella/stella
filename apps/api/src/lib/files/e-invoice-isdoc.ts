@@ -23,6 +23,9 @@ import type { DocumentXmlNode } from "@/api/lib/files/xml-document-package";
 // invoice, 5 tax document for a received advance, 6 credit note to it,
 // 7 simplified invoice.
 const documentTypeOf = (code: string | null): EInvoice["documentType"] => {
+  if (code === null) {
+    return "other";
+  }
   switch (code) {
     case "1":
     case "7":

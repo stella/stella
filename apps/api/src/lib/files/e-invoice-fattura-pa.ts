@@ -22,6 +22,9 @@ import type { DocumentXmlNode } from "@/api/lib/files/xml-document-package";
 // note, TD05 debit note, TD06 fee note, TD24 to TD27 deferred and
 // self-issued invoices. Other codes are shown as their own code.
 const documentTypeOf = (code: string | null): EInvoice["documentType"] => {
+  if (code === null) {
+    return "other";
+  }
   switch (code) {
     case "TD01":
     case "TD06":

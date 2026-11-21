@@ -29,9 +29,13 @@ const dateOf = (node: DocumentXmlNode | undefined): string | null => {
   if (text === null) {
     return null;
   }
-  const match =
-    attributeOf(value, "format") === "102" ? CALENDAR_DATE.exec(text) : null;
-  return match ? `${match[1]}-${match[2]}-${match[3]}` : text;
+  const [, year, month, day] =
+    attributeOf(value, "format") === "102"
+      ? (CALENDAR_DATE.exec(text) ?? [])
+      : [];
+  return year !== undefined && month !== undefined && day !== undefined
+    ? `${year}-${month}-${day}`
+    : text;
 };
 
 // UNTDID 1153 scheme ids on a tax registration: VA is a VAT id, FC a tax number.

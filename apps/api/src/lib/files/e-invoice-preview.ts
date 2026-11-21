@@ -79,7 +79,20 @@ const runEInvoiceWorker = async (
   if (result.isOk()) {
     return Result.ok(result.value);
   }
-  switch (result.error.exitCode) {
+  const unavailableReader = () =>
+    Result.err(
+      new HandlerError({
+        status: 503,
+        code: "upstream_unavailable",
+        message: "The invoice reader is unavailable",
+        cause: result.error,
+      }),
+    );
+  const { exitCode } = result.error;
+  if (exitCode === null) {
+    return unavailableReader();
+  }
+  switch (exitCode) {
     case E_INVOICE_WORKER_EXIT.unreadable:
       return Result.err(unavailable("The invoice file could not be read"));
     case E_INVOICE_WORKER_EXIT.notInvoice:
@@ -99,14 +112,7 @@ const runEInvoiceWorker = async (
         }),
       );
     default:
-      return Result.err(
-        new HandlerError({
-          status: 503,
-          code: "upstream_unavailable",
-          message: "The invoice reader is unavailable",
-          cause: result.error,
-        }),
-      );
+      return unavailableReader();
   }
 };
 

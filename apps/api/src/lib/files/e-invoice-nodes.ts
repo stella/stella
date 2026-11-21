@@ -79,6 +79,10 @@ export const capLines = (lines: EInvoice["lines"]) =>
 export const documentTypeFromUnCode = (
   code: string | null,
 ): EInvoice["documentType"] => {
+  // The code is optional in UBL, where the document is then an invoice.
+  if (code === null) {
+    return "invoice";
+  }
   switch (code) {
     case "380":
     case "384":
@@ -94,7 +98,7 @@ export const documentTypeFromUnCode = (
     case "386":
       return "advance";
     default:
-      return code === null ? "invoice" : "other";
+      return "other";
   }
 };
 

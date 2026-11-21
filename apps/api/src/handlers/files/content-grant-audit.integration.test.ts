@@ -1247,7 +1247,7 @@ describe.each(eInvoiceFixtures)(
         legalFileContext(fieldId, scopedDbA()),
       );
       if (preview instanceof HttpStatusResponse) {
-        return panic("Expected a structured invoice preview");
+        panic("Expected a structured invoice preview");
       }
       expect(preview.invoices.length).toBeGreaterThan(0);
       await expectOneContentRow(entityId, {
@@ -1336,7 +1336,7 @@ describe.each(eInvoiceFixtures)(
           eInvoiceAttachmentContext(fieldId, 0, scopedDbA()),
         );
         if (!(response instanceof Response)) {
-          return panic("Expected the attachment download");
+          panic("Expected the attachment download");
         }
         expect(response.headers.get("content-disposition")).toContain(
           "attachment",
