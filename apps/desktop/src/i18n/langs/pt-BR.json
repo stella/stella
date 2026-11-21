@@ -662,6 +662,35 @@
       "openSoundPc": "Abrir configurações de som",
       "title": "A stella não consegue ouvir seu microfone"
     },
+    "perApp": {
+      "add": "Adicionar…",
+      "cleanup": {
+        "default": "Correção conforme o ajuste",
+        "label": "Correção para {name}",
+        "off": "Sem correção",
+        "on": "Com correção"
+      },
+      "description": "Ative ou desative a correção com IA e escolha o idioma para um app ou um tipo de app. Vale o app em primeiro plano quando você começa a ditar.",
+      "failed": "Não foi possível salvar os ajustes. Tente de novo.",
+      "group": "Por app",
+      "kinds": {
+        "browser": "Navegadores",
+        "chat": "Apps de chat",
+        "code": "Editores de código",
+        "document": "Documentos",
+        "email": "Apps de e-mail",
+        "other": "Outros apps",
+        "terminal": "Terminais"
+      },
+      "kindsOfApp": "Tipos de app",
+      "language": {
+        "default": "Idioma conforme o ajuste",
+        "label": "Idioma para {name}"
+      },
+      "recentApps": "Apps recentes",
+      "remove": "Remover {name}",
+      "title": "Ajustes para um app"
+    },
     "preview": {
       "finishing": "Finalizando…",
       "label": "O que você ditou até agora",
@@ -686,6 +715,19 @@
       "failed": "Não foi possível abrir a janela. Tente novamente.",
       "open": "Abrir",
       "title": "Transcrever uma gravação"
+    },
+    "whileDictating": {
+      "choices": {
+        "lower": "Abaixar os outros sons",
+        "nothing": "Não fazer nada",
+        "pause": "Pausar Música e Spotify"
+      },
+      "description": "O que acontece com os outros sons enquanto o stella grava, para que não entrem no texto. Tudo volta quando a gravação termina.",
+      "speakersOnly": {
+        "description": "Os fones ficam como estão: o microfone não os ouve.",
+        "title": "Só nos alto-falantes"
+      },
+      "title": "Ao ditar"
     }
   },
   "keepAwake": {

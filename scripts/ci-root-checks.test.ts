@@ -930,8 +930,8 @@ test("derived capability runtime inputs retain API readers and shell bodies reta
 test("i18n sync follows locale catalogs and its source lock on pull requests", () => {
   const check = "ci-checks-rest/Check i18n sync";
   for (const changed of [
-    "apps/web/src/i18n/langs/en.json",
-    "apps/web/src/i18n/langs/fr.json",
+    "apps/web/src/i18n/namespaces/en/core.json",
+    "apps/web/src/i18n/namespaces/fr/core.json",
     "apps/web/src/i18n/i18n-source-lock.json",
     "packages/transactional/i18n/langs/de.json",
     "TERMINOLOGY.md",

@@ -662,6 +662,35 @@
       "openSoundPc": "Ava heliseaded",
       "title": "stella ei kuule teie mikrofoni"
     },
+    "perApp": {
+      "add": "Lisa…",
+      "cleanup": {
+        "default": "Korrigeerimine seadete järgi",
+        "label": "Korrigeerimine: {name}",
+        "off": "Ilma korrigeerimiseta",
+        "on": "Korrigeerimisega"
+      },
+      "description": "Lülitage AI-korrigeerimine sisse või välja ja valige keel ühe rakenduse või rakenduseliigi jaoks. Otsustab rakendus, mis on dikteerimise alustamisel esiplaanil.",
+      "failed": "Seadeid ei õnnestunud salvestada. Proovige uuesti.",
+      "group": "Rakenduse kaupa",
+      "kinds": {
+        "browser": "Brauserid",
+        "chat": "Vestlusrakendused",
+        "code": "Koodiredaktorid",
+        "document": "Dokumendid",
+        "email": "E-posti rakendused",
+        "other": "Muud rakendused",
+        "terminal": "Terminalid"
+      },
+      "kindsOfApp": "Rakenduseliigid",
+      "language": {
+        "default": "Keel seadete järgi",
+        "label": "Keel: {name}"
+      },
+      "recentApps": "Hiljutised rakendused",
+      "remove": "Eemalda {name}",
+      "title": "Rakenduse seaded"
+    },
     "preview": {
       "finishing": "Lõpetan…",
       "label": "Seni dikteeritud tekst",
@@ -686,6 +715,19 @@
       "failed": "Akent ei õnnestunud avada. Proovige uuesti.",
       "open": "Ava",
       "title": "Salvestise transkribeerimine"
+    },
+    "whileDictating": {
+      "choices": {
+        "lower": "Vaigista muid helisid",
+        "nothing": "Ära tee midagi",
+        "pause": "Peata Muusika ja Spotify"
+      },
+      "description": "Mis juhtub muude helidega, kui stella salvestab, et need teksti ei satuks. Salvestuse lõppedes taastub kõik.",
+      "speakersOnly": {
+        "description": "Kõrvaklapid jäävad puutumata: mikrofon neid ei kuule.",
+        "title": "Ainult kõlarite kaudu"
+      },
+      "title": "Dikteerimise ajal"
     }
   },
   "keepAwake": {

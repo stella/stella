@@ -1,0 +1,1457 @@
+{
+  "caseLaw": {
+    "analysis": {
+      "abstract": "Abstrakt",
+      "aiLayer": "{layer} (AI)",
+      "backToSection": "Späť na začiatok tejto časti",
+      "categories": {
+        "facts": "Skutkový stav",
+        "holding": "Právna veta",
+        "procedural-history": "Procesná história",
+        "reasoning": "Uvažovanie"
+      },
+      "errors": {
+        "analysisDisabled": "Generovanie AI analýzy je na tomto serveri vypnuté. Prečítajte si text rozhodnutia alebo to skúste neskôr.",
+        "answerIncomplete": "{source, select, organization {Kľúč vašej organizácie pre {provider} vrátil neúplnú odpoveď.} other {AI model vrátil neúplnú odpoveď.}}",
+        "decisionNotFound": "Rozhodnutie sa nenašlo. Otvorte ho znova z vyhľadávania.",
+        "documentUnparseable": "Text rozhodnutia nie je pripravený na analýzu. Prečítajte si pôvodný zdroj.",
+        "languageUnsupported": "AI analýza je dostupná len pre rozhodnutia v týchto jazykoch: {languages}.",
+        "openLanguageVersion": "Otvoriť jazykovú verziu: {language}",
+        "providerRefused": "{source, select, organization {{provider} odmietol požiadavku s kľúčom vašej organizácie. Skontrolujte kľúč, jeho kvótu a fakturáciu v nastaveniach organizácie.} other {Poskytovateľ AI požiadavku odmietol.}}",
+        "providerUnavailable": "{source, select, organization {{provider} je pre kľúč vašej organizácie momentálne nedostupný.} other {Poskytovateľ AI je momentálne nedostupný.}}",
+        "retryAfter": "Znova to môžete skúsiť po {time}.",
+        "sourceRestricted": "Zdroj nepovoľuje AI analýzu. Prečítajte si text rozhodnutia alebo pôvodný zdroj.",
+        "timedOut": "{source, select, organization {{provider} s kľúčom vašej organizácie neodpovedal včas.} other {AI model neodpovedal včas.}}"
+      },
+      "generate": "Zostaviť právne vety pomocou AI",
+      "invitation": "S bezplatným účtom vám AI k rozhodnutiu pripraví pracovné poznámky.",
+      "noCurrentSection": "Nie je k dispozícii žiadna aktuálna sekcia, na ktorú možno prejsť.",
+      "topics": "Témy",
+      "treatment": "Neskoršia judikatúra"
+    },
+    "analyzing": "Analyzuje sa…",
+    "browse": {
+      "courtDescription": "{court} ({country}): rozhodnutia vo verejnej právnej databáze aplikácie stella podľa roka a mesiaca.",
+      "courts": "Súdy",
+      "days": "Dni",
+      "jurisdictionDescription": "{country}: súdne rozhodnutia vo verejnej právnej databáze aplikácie stella podľa súdu, roka a mesiaca.",
+      "periodDescription": "{court} ({country}), {period}: rozhodnutia vo verejnej právnej databáze aplikácie stella."
+    },
+    "chat": {
+      "prompts": {
+        "facts": {
+          "body": "Aký bol skutkový stav a čo tvrdila každá zo strán?",
+          "name": "Skutkový stav a tvrdenia strán"
+        },
+        "holding": {
+          "body": "Ako súd rozhodol a prečo?",
+          "name": "Výrok a odôvodnenie"
+        },
+        "precedent": {
+          "body": "O ktoré skoršie rozhodnutia sa opiera a nasleduje ich?",
+          "name": "Skoršie rozhodnutia"
+        },
+        "provisions": {
+          "body": "Ktoré ustanovenia súd použil a ako ich vyložil?",
+          "name": "Použité ustanovenia"
+        }
+      }
+    },
+    "citation": {
+      "citedAtLeast": "Citované najmenej {count, plural, one {#-krát} few {#-krát} many {#-krát} other {#-krát}}",
+      "citedSummary": "{count, plural, =0 {Necitované} one {Citované raz} few {Citované #-krát} other {Citované #-krát} many {Citované #-krát}}",
+      "dateUnavailable": "Dátum neuvedený",
+      "decisionCount": "{count, plural, =0 {Žiadne rozhodnutia} one {# rozhodnutie} few {# rozhodnutia} other {# rozhodnutí} many {# rozhodnutia}}",
+      "goToMention": "Prejsť na {number}. zmienku",
+      "goToParagraph": "Prejsť na bod {paragraph}",
+      "lastNegative": "posledná negatívna citácia v roku {year}",
+      "mentionMark": "{number}. zmienka",
+      "mentionsInDecision": "{count, plural, one {V tomto rozhodnutí citované raz} few {V tomto rozhodnutí citované #-krát} other {V tomto rozhodnutí citované #-krát} many {V tomto rozhodnutí citované #-krát}}",
+      "negativeCount": "{count, plural, one {# negatívna} few {# negatívne} many {# negatívnej} other {# negatívnych}}",
+      "none": "Zatiaľ nie sú zaznamenané žiadne citácie.",
+      "notInStella": "Zatiaľ nie je v aplikácii stella",
+      "openDecision": "Otvoriť rozhodnutie",
+      "paragraphLabel": "Bod {paragraph}",
+      "paragraphMark": "¶ {paragraph}",
+      "paragraphReferenceLabel": "{court}, {caseNumber}, {date}, bod {paragraph}",
+      "partialSummary": "Súčty citácií a časová os sú neúplné.",
+      "passageNotFound": "Citujúcu pasáž sa v texte nepodarilo nájsť",
+      "positiveCount": "{count, plural, one {# pozitívna} few {# pozitívne} many {# pozitívnej} other {# pozitívnych}}",
+      "referenceLabel": "{court}, {caseNumber}, {date}",
+      "showAll": "{count, plural, one {Zobraziť # rozhodnutie} few {Zobraziť všetky # rozhodnutia} many {Zobraziť všetky # rozhodnutia} other {Zobraziť všetkých # rozhodnutí}}",
+      "stripLabel": "Citácie podľa rokov",
+      "treatment": {
+        "mixed": "Zmiešané",
+        "negative": "Negatívne",
+        "neutral": "Spomenuté",
+        "positive": "Potvrdené",
+        "supportive": "Nasledované",
+        "unclassified": "Neklasifikované"
+      },
+      "unresolved": "Nepriradené k rozhodnutiu",
+      "whereCited": "Kde cituje toto rozhodnutie",
+      "yearTitle": "{year}: {count, plural, one {# citácia} few {# citácie} other {# citácií} many {# citácie}}"
+    },
+    "columns": {
+      "caseNumber": "Spisová značka",
+      "citedBy": "Citované",
+      "headnote": "Právna veta",
+      "summary": "Právna veta / zhoda"
+    },
+    "corpusStatus": {
+      "courtCount": "{count, plural, one {# súd} few {# súdy} many {# súdu} other {# súdov}}",
+      "newLast24Hours": "{count} za posledných 24 h",
+      "newLast7Days": "Nové za posledných 7 dní",
+      "otherCourts": "Ostatné súdy"
+    },
+    "courtTiers": {
+      "constitutional": "Ústavné súdy",
+      "other": "Ostatné súdy",
+      "regional": "Krajské súdy",
+      "supreme": "Najvyššie súdy"
+    },
+    "coverage": {
+      "allCurrent": "Všetky zdroje sú aktuálne",
+      "censusComparison": "{stored} uložených / {publisher} zverejnených · {withText} s textom",
+      "censusComplete": "Úplné",
+      "censusIncomplete": "Neúplné",
+      "censusSliceMemberships": "Súčty za jednotlivé časti; jedno rozhodnutie môže byť započítané viackrát.",
+      "completeness": "Úplnosť",
+      "completenessHelp": "Počet uložených rozhodnutí voči počtu uvedenému vydavateľom, jeho zoznamu alebo ručne zaznamenanému údaju. Rozhodnutia zo zoznamu vydavateľa, ktorých chýbanie zistilo porovnanie, sa nezapočítavajú.",
+      "countryNavigation": "Prejsť na krajinu",
+      "courtsHeading": "Podľa súdu",
+      "decisionYears": "Roky rozhodnutí",
+      "decisionsAcross": "rozhodnutí z {count, plural, one {# jurisdikcie} few {# jurisdikcií} other {# jurisdikcií} many {# jurisdikcie}}",
+      "description": "Koľko judikatúry korpus obsahuje podľa krajín a súdov a aký aktuálny je každý zdroj.",
+      "generatedAt": "Údaje k {date}",
+      "healthCurrent": "Aktuálne",
+      "healthDelayed": "S oneskorením",
+      "healthDisabled": "Vypnuté",
+      "healthSnapshot": "Pevný snímok",
+      "healthStalled": "Bez postupu",
+      "healthUnknown": "Zatiaľ nespustené",
+      "inPreparation": "Pripravuje sa",
+      "lastSync": "Posledná synchronizácia",
+      "notCountedYet": "Zatiaľ nespočítané",
+      "notMeasuredYet": "Zatiaľ nemerané",
+      "searchable": "Dostupné na vyhľadanie",
+      "sourceExceptions": "{count, plural, one {# zdroj vyžaduje pozornosť} few {# zdroje vyžadujú pozornosť} other {# zdrojov vyžaduje pozornosť} many {# zdroja vyžaduje pozornosť}}",
+      "sourcesCurrent": "Aktuálne zdroje",
+      "syncedAt": "Synchronizované {time}",
+      "title": "Pokrytie judikatúry",
+      "totalFrom": "Celkom k {date}",
+      "unavailable": "Údaje o pokrytí momentálne nie sú k dispozícii."
+    },
+    "decisionNotFound": "Rozhodnutie sa nenašlo",
+    "decisionTypes": {
+      "administrative_decision": "Správne rozhodnutie",
+      "binding_excise_information": "Záväzná informácia o spotrebnej dani",
+      "binding_rate_information": "Záväzná informácia o sadzbe DPH",
+      "court_direction": "Opatrenie",
+      "decision": "Rozhodnutie",
+      "finding": "Nález",
+      "general_tax_ruling": "Všeobecná daňová interpretácia",
+      "individual_tax_ruling": "Individuálna daňová interpretácia",
+      "judgment": "Rozsudok",
+      "leave_refused": "Odmietnuté pre nedostatok zásadnej právnej otázky",
+      "merits_decision": "Rozhodnutie vo veci samej",
+      "ministry_of_justice_decision": "Rozhodnutie ministerstva spravodlivosti",
+      "minutes_extract": "Výpis zo zápisnice",
+      "opinion": "Stanovisko",
+      "order": "Uznesenie",
+      "other": "Ostatné",
+      "payment_order": "Platobný rozkaz",
+      "penal_order": "Trestný rozkaz",
+      "principle_decision": "Zásadné rozhodnutie",
+      "protective_opinion": "Zabezpečovacie stanovisko",
+      "resolution": "Uznesenie (uchwała)",
+      "signalling_decision": "Signalizačné uznesenie",
+      "statement_of_reasons": "Odôvodnenie",
+      "tax_explanations": "Daňové vysvetlenia",
+      "top_up_tax_opinion": "Stanovisko k dorovnávacej dani",
+      "uniformity_decision": "Rozhodnutie o zjednotení judikatúry"
+    },
+    "emptyState": "Žiadne rozhodnutia. Nakonfigurujte zdroj a spustite synchronizáciu na import judikatúry.",
+    "filters": {
+      "countryMismatch": "Filtre boli odstránené, pretože nepatria do krajiny {country}: {filters}.",
+      "remove": "Odstrániť filter {filter}",
+      "showInCountry": "Zobraziť {filter} pre krajinu {country}"
+    },
+    "languages": {
+      "count": "{count, plural, one {# jazyk} few {# jazyky} other {# jazykov} many {# jazyka}}",
+      "matchedIn": "Zhoda v jazyku {language}"
+    },
+    "linkedPassageGone": "Odkazovaná pasáž sa už v tomto texte nenachádza.",
+    "loadingMore": "Načítavajú sa ďalšie…",
+    "marginFilter": {
+      "label": "Filter citovaných ustanovení",
+      "paragraph": "{count, plural, one {# ustanovenie citované v ¶{paragraph}} few {# ustanovenia citované v ¶{paragraph}} many {# ustanovenia citovaného v ¶{paragraph}} other {# ustanovení citovaných v ¶{paragraph}}}",
+      "selection": "{count, plural, one {# ustanovenie citované vo výbere} few {# ustanovenia citované vo výbere} many {# ustanovenia citovaného vo výbere} other {# ustanovení citovaných vo výbere}}",
+      "unnumberedParagraph": "{count, plural, one {# ustanovenie citované v tomto odseku} few {# ustanovenia citované v tomto odseku} many {# ustanovenia citovaného v tomto odseku} other {# ustanovení citovaných v tomto odseku}}"
+    },
+    "matterLinks": {
+      "alreadySaved": "{count, plural, one {# rozhodnutie tu už bolo uložené} few {# rozhodnutia tu už boli uložené} other {# rozhodnutí tu už bolo uložených} many {# rozhodnutia tu už bolo uložené}}",
+      "empty": "V tomto spise zatiaľ nie je uložená žiadna judikatúra.",
+      "emptyAction": "Hľadať v judikatúre",
+      "note": "Poznámka",
+      "notePlaceholder": "Prečo sú tieto rozhodnutia dôležité práve tu…",
+      "rejectedLimit": "{count, plural, one {# rozhodnutie sa neuložilo: spis je plný} few {# rozhodnutia sa neuložili: spis je plný} other {# rozhodnutí sa neuložilo: spis je plný} many {# rozhodnutia sa neuložilo: spis je plný}}",
+      "rejectedMissing": "{count, plural, one {# rozhodnutie sa nepodarilo nájsť} few {# rozhodnutia sa nepodarilo nájsť} other {# rozhodnutí sa nepodarilo nájsť} many {# rozhodnutia sa nepodarilo nájsť}}",
+      "remove": "Odstrániť zo spisu",
+      "save": "Uložiť do spisu",
+      "savePage": "Z tejto stránky {count, plural, one {sa uloží # rozhodnutie} few {sa uložia # rozhodnutia} other {sa uloží # rozhodnutí} many {sa uloží # rozhodnutia}}.",
+      "saveSelection": "{count, plural, one {Uloží sa # vybrané rozhodnutie} few {Uložia sa # vybrané rozhodnutia} other {Uloží sa # vybraných rozhodnutí} many {Uloží sa # vybraného rozhodnutia}}.",
+      "saveTitle": "Uložiť do spisu",
+      "saved": "Do spisu {matter} {count, plural, one {bolo uložené # rozhodnutie} few {boli uložené # rozhodnutia} other {bolo uložených # rozhodnutí} many {bolo uložené # rozhodnutia}}"
+    },
+    "newestDecisions": "Najnovšie rozhodnutia",
+    "noResults": {
+      "hint": "Skúste iné slová, vylepšite dopyt pomocou AI alebo sa opýtajte v chate."
+    },
+    "notesFilter": {
+      "ai": "AI",
+      "human": "Ľudské",
+      "toggleState": "{label}: {state, select, on {zapnuté} other {vypnuté}}"
+    },
+    "oldestDecisions": "Najstaršie rozhodnutia",
+    "pagination": {
+      "goToPage": "Prejsť na stránku {page}",
+      "label": "Stránky výsledkov",
+      "pageOfCount": "Stránka {page} z {pageCount}",
+      "pageOfEstimatedCount": "Stránka {page} z ~{pageCount}",
+      "pageOfEstimatedCountLabel": "Stránka {page} z približne {pageCount}",
+      "pageWithEstimatedMatchCounts": "Stránka {page} · približne {exactCount, plural, one {# presná zhoda} few {# presné zhody} other {# presných zhôd} many {# presnej zhody}} · {relaxedCount, plural, one {# čiastočná zhoda} few {# čiastočné zhody} other {# čiastočných zhôd} many {# čiastočnej zhody}} na tejto stránke",
+      "pageWithEstimatedResultCount": "Stránka {page} · približne {count, plural, one {# výsledok} few {# výsledky} other {# výsledkov} many {# výsledku}}",
+      "pageWithMatchCounts": "Stránka {page} · {exactCount, plural, one {# presná zhoda} few {# presné zhody} other {# presných zhôd} many {# presnej zhody}} · {relaxedCount, plural, one {# čiastočná zhoda} few {# čiastočné zhody} other {# čiastočných zhôd} many {# čiastočnej zhody}} na tejto stránke",
+      "pageWithPartialMatchCount": "Stránka {page} · {relaxedCount, plural, one {# čiastočná zhoda} few {# čiastočné zhody} other {# čiastočných zhôd} many {# čiastočnej zhody}} na tejto stránke",
+      "pageWithResultCount": "Stránka {page} · {count, plural, one {# výsledok} few {# výsledky} other {# výsledkov} many {# výsledku}}",
+      "perPage": "Na stránku",
+      "refineForMore": "Spresnite vyhľadávanie, aby ste videli ďalšie výsledky"
+    },
+    "paragraphRangeNotFound": "{count, plural, one {Odsek {range} sa v tomto texte nenašiel.} few {Odseky {range} sa v tomto texte nenašli.} other {Odseky {range} sa v tomto texte nenašli.} many {Odseky {range} sa v tomto texte nenašli.}}",
+    "paragraphRangeSelected": "{count, plural, one {Odsek {range} je zvýraznený.} few {Odseky {range} sú zvýraznené.} other {Odseky {range} sú zvýraznené.} many {Odseky {range} sú zvýraznené.}}",
+    "provision": {
+      "article": "čl. {value}",
+      "letter": "písm. {value})",
+      "openEnded": "a nasl.",
+      "point": "bod {value}",
+      "sentence": "veta {value}",
+      "subsection": "ods. {value}"
+    },
+    "reader": {
+      "documentUpdated": "Dokument bol aktualizovaný.",
+      "expandProvisions": "Rozbaliť ustanovenia",
+      "headMatter": "Informácie o veci",
+      "sourceAttribution": "Zdroj údajov je voľne dostupný na <link>{source}</link>."
+    },
+    "research": {
+      "answering": "{count, plural, one {Odpovedám na # bunku…} few {Odpovedám na # bunky…} many {Odpovedám na # bunky…} other {Odpovedám na # buniek…}}",
+      "answers": {
+        "failureReasons": {
+          "decisionUnavailable": "Rozhodnutie nie je dostupné",
+          "missingAnswer": "Model neodpovedal",
+          "modelError": "Chyba modelu",
+          "noText": "Rozhodnutie nemá text",
+          "runError": "Spracovanie sa prerušilo",
+          "wrongType": "Odpoveď v nesprávnom formáte"
+        },
+        "no": "Nie",
+        "notAllowed": "Podmienky zdroja to nedovoľujú",
+        "notRun": "Nespustené",
+        "notStated": "Rozhodnutie neuvádza",
+        "pending": "Odpovedám…",
+        "showSource": "Zobraziť zdroj",
+        "yes": "Áno"
+      },
+      "deleteColumnConfirm": "Otázka aj všetky jej odpovede sa odstránia pre celú organizáciu, zo všetkých vyhľadávaní a všetkým členom. Ak ju chcete skryť len v tomto vyhľadávaní, zvoľte „Odstrániť z tohto vyhľadávania“.",
+      "editQuestionHint": "Zmena znenia, typu odpovede alebo jeho možností zahodí existujúce odpovede; stĺpec potom spustite znova.",
+      "emptyPage": "Na tejto stránke nie sú žiadne rozhodnutia.",
+      "newQuestionColumn": "Nové",
+      "nothingToRun": "Každá bunka už má odpoveď",
+      "questionAdded": "„{question}“ pridané do tabuľky",
+      "questionPlaceholder": "napr. Považoval súd výpoveď za platnú?",
+      "removeFromSearch": "Odstrániť z tohto vyhľadávania",
+      "runAll": "Odpovedať na všetko",
+      "runConfirm": "Odpovedať teraz",
+      "runEstimate": "{rows, plural, one {# rozhodnutie} few {# rozhodnutia} other {# rozhodnutí} many {# rozhodnutia}} × {columns, plural, one {# otázka} few {# otázky} other {# otázok} many {# otázky}} na tejto stránke: {cells, plural, one {vznikne # odpoveď} few {vzniknú # odpovede} other {vznikne # odpovedí} many {vznikne # odpovede}}.",
+      "runInProgress": "Výskumná otázka sa už spracúva.",
+      "runPermissionRequired": "Na spracovanie výskumných otázok potrebujete oprávnenie.",
+      "runTitle": "Odpovedať na tejto stránke",
+      "savedQuestions": "Uložené otázky",
+      "title": "Rešeršné tabuľky"
+    },
+    "results": {
+      "excerpt": {
+        "label": "Úryvok",
+        "long": "Dlhý",
+        "medium": "Stredný",
+        "short": "Krátky"
+      }
+    },
+    "rewritten": {
+      "line": "Pre <bdi>{original}</bdi> nič presne nezodpovedá; zobrazujeme výsledky pre <bdi>{query}</bdi>",
+      "searchOriginal": "Hľadať moje pôvodné slová"
+    },
+    "sameCaseNumber": "{count, plural, one {# rozhodnutie nesie} few {# rozhodnutia nesú} other {# rozhodnutí nesie} many {# rozhodnutia nesie}} túto spisovú značku. Vyberte súd.",
+    "searchLabel": "Hľadať v judikatúre",
+    "searchPlaceholder": "Spisová značka, ECLI alebo slová, napr. 1Cdo/12/2020",
+    "searchStillSearching": "Vyhľadávanie je preťažené. Stále hľadáme…",
+    "searchUnavailable": {
+      "description": "Vyhľadávanie v judikatúre sa nepodarilo kontaktovať. Váš dotaz zostáva v adresnom riadku, skúste to prosím o chvíľu znova.",
+      "title": "Vyhľadávanie je dočasne nedostupné"
+    },
+    "searchWarnings": {
+      "collectionCitationUnresolved": {
+        "hint": "Ak poznáte spisovú značku alebo ECLI rozhodnutia, vyhľadajte ho podľa nich.",
+        "message": "Pre túto citáciu zbierky sa nenašlo presne zodpovedajúce rozhodnutie."
+      },
+      "noHits": {
+        "hint": "Skúste menej slov alebo iné: výrazy, ktoré by použilo rozhodnutie, nie vetu, ktorou sa otázka kladie.",
+        "message": "Slovám, ktoré hľadanie vyžadovalo, nič nezodpovedá."
+      },
+      "noHitsFiltered": {
+        "hint": "Zrušte alebo rozšírte filter a hľadajte znova.",
+        "message": "Zvoleným filtrom nič nezodpovedá."
+      },
+      "partialMatch": "Čiastočná zhoda",
+      "partialMatchMissing": "Chýbajúce slová: {terms}",
+      "partialMatches": "Čiastočné zhody pre: <bdi>{query}</bdi>",
+      "resultsFor": "Výsledky pre: <bdi>{query}</bdi>",
+      "searchEveryWord": "Hľadať všetky slová"
+    },
+    "seo": {
+      "collectionName": "Judikatúra stella",
+      "description": "Verejná databáza judikatúry s indexovateľnými súdnymi rozhodnutiami a právnymi prameňmi.",
+      "homeDescription": "Verejná právna databáza súdnych rozhodnutí a konsolidovaných právnych predpisov; vyhľadávanie podľa identifikátora alebo slov.",
+      "scopedDescription": "Verejná databáza judikatúry ({scope}) s indexovateľnými súdnymi rozhodnutiami a právnymi prameňmi."
+    },
+    "showWholeHeadnote": "Zobraziť celú právnu vetu",
+    "sort": {
+      "newest": "Najnovšie",
+      "oldest": "Najstaršie",
+      "oldestUnavailable": "Vyhľadávanie radí výsledky podľa relevantnosti alebo od najnovších. Ak chcete zobraziť najskôr najstaršie rozhodnutia, vymažte vyhľadávanie.",
+      "relevance": "Najrelevantnejšie"
+    },
+    "viewer": {
+      "abstract": "Abstrakt",
+      "appealReviews": {
+        "conflict": "Podklady k preskúmaniu sú neúplné alebo rozporné. Výsledok preskúmania treba overiť.",
+        "corpusOnly": "V dostupnom korpuse sa nenašlo rozhodnutie preskúmavajúce toto rozhodnutie. To neznamená, že opravný prostriedok neexistuje.",
+        "noneFound": "Preskúmavajúce rozhodnutie nenájdené",
+        "overturned": "Zrušené alebo zmenené",
+        "partly": "Čiastočne zrušené",
+        "reviewedBy": "Preskúmavajúce rozhodnutia",
+        "reviews": "Preskúmavané rozhodnutia",
+        "sourceHistory": "Procesná história",
+        "sourceMetadata": "Metadáta vydavateľa",
+        "sourceOpening": "Úvodný odsek",
+        "title": "Preskúmanie rozhodnutia",
+        "truncated": "Zobrazuje sa iba časť histórie preskúmania.",
+        "underReview": "Prebieha preskúmanie",
+        "unknown": "Výsledok neznámy",
+        "upheld": "Ponechané v platnosti"
+      },
+      "appliedVersionNotStated": "Použité znenie neuvedené",
+      "appliedVersionNotStatedCompact": "Znenie neuvedené",
+      "appliedVersionStatedAmendment": "Znenie podľa novely <reference>{amendment}</reference>",
+      "appliedVersionStatedAmendmentCompact": "Uvedené: <reference>{amendment}</reference>",
+      "appliedVersionStatedDate": "{relation, select, on {Znenie účinné k {date}} until {Znenie účinné do {date}} from {Znenie účinné od {date}} other {Znenie účinné k {date}}}",
+      "appliedVersionStatedDateCompact": "{relation, select, on {Uvedené: {date}} until {Uvedené: do {date}} from {Uvedené: od {date}} other {Uvedené: {date}}}",
+      "caseFileDocuments": "Dokumenty v tomto spise",
+      "caseFileMayHoldOthers": "Tento spis môže obsahovať aj ďalšie rozhodnutia.",
+      "citedBy": "Citované v",
+      "citedDecisionPassage": "Pasáž v rozhodnutí",
+      "cites": "Cituje",
+      "dissentByline": "Odlišné stanovisko: <bdi>{names}</bdi>",
+      "goToParagraph": "{count, plural, one {Prejsť na odsek} few {Prejsť na odseky} other {Prejsť na odseky} many {Prejsť na odseky}}",
+      "judgeRole": {
+        "advocateGeneral": "Generálny advokát",
+        "dissenting": "Odlišné stanovisko",
+        "panelMember": "Člen senátu",
+        "presiding": "Predseda senátu",
+        "rapporteur": "Sudca spravodajca"
+      },
+      "judges": "Sudcovia",
+      "legalArea": "Oblasť práva",
+      "legalSentence": "Právna veta",
+      "paragraphReference": "Odsek {number}",
+      "popularName": "Populárny názov",
+      "portraitCredit": "Zdroj portrétov: {source}",
+      "provisionMentions": "{count, number}×",
+      "provisionMentionsLabel": "{count, plural, one {# zmienka} few {# zmienky} other {# zmienok} many {# zmienky}}",
+      "provisionsCited": "Dotknuté ustanovenia",
+      "provisionsFailed": "Spracovanie citácií zlyhalo",
+      "provisionsNoneFound": "Nenašli sa žiadne citované ustanovenia",
+      "provisionsProcessing": "Citácie sa spracúvajú",
+      "provisionsUnavailable": "Citácie nie sú dostupné",
+      "provisionsUnplaceable": "Citácie nemožno umiestniť do textu rozhodnutia",
+      "provisionsUnsupported": "Spracovanie citácií nie je pre toto rozhodnutie podporované",
+      "provisionsWithheld": "Citácie nie sú sprístupnené",
+      "sourceFields": {
+        "decisionCategory": "Kategória rozhodnutia",
+        "publishedOnWeb": "Zverejnené na webe"
+      },
+      "statutes": "Aplikované predpisy",
+      "textNotYetAvailable": "Súd text rozhodnutia nezverejnil alebo tu zatiaľ nie je dostupný.",
+      "textPending": "Text rozhodnutia sa stále načítava",
+      "textReadFailed": "Text rozhodnutia sa nepodarilo načítať",
+      "textUnavailable": "K tomuto rozhodnutiu nie je k dispozícii text",
+      "versionAtDecisionDateInferred": "Znenie k dátumu rozhodnutia (odvodené)",
+      "versionBasisInferredCompact": "Dátum rozhodnutia · odvodené",
+      "versionBasisInferredExplanation": "Znenie je odvodené z dátumu rozhodnutia. Rozhodnutie neuvádza, ktoré znenie sa použije."
+    },
+    "withdrawnByPublisher": "Stiahnuté vydavateľom"
+  },
+  "catalogue": {
+    "addCustom": "Pridať vlastné",
+    "addCustomMcp": "Pridať integráciu",
+    "addCustomSkill": "Pridať zručnosť",
+    "by": "Od {author}",
+    "configuration": "Konfigurácia",
+    "cost": {
+      "free": "Zadarmo",
+      "paid": "Platené"
+    },
+    "detailAuthMethod": "Autentifikácia",
+    "empty": "Žiadne položky nezodpovedajú aktuálnemu filtru.",
+    "filter": {
+      "mcps": "Integrácie",
+      "nativeTools": "Vstavané nástroje",
+      "skills": "Zručnosti"
+    },
+    "filterHint": "Filtrované: {codes}",
+    "firstParty": "stella",
+    "firstPartyTooltip": "Vytvorené tímom stella",
+    "installFailed": "Inštalácia zlyhala",
+    "installPack": "Nainštalovať {count, plural, one {# nástroj} few {# nástroje} other {# nástrojov} many {# nástroja}}",
+    "installed": "Nainštalované: {name}",
+    "installedShort": "Nainštalované",
+    "onboarding": {
+      "packTitle": "Odporúčané pre vašu jurisdikciu"
+    },
+    "openHomepage": "Otvoriť domovskú stránku",
+    "packDescription": "{count, plural, one {# nástroj} few {# nástroje} other {# nástrojov} many {# nástroja}} vybraných pre vašu prax. Nainštalujte jedným kliknutím alebo vyberte nižšie.",
+    "packInstalled": "{count, plural, one {# nástroj nainštalovaný} few {# nástroje nainštalované} other {# nástrojov nainštalovaných} many {# nástroja nainštalované}}",
+    "packPartial": "Nainštalované {installed}, {failed} zlyhalo",
+    "removed": "Tento nástroj už nie je dostupný.",
+    "sectionOthers": "Ostatné",
+    "settings": {
+      "packTitle": "Odporúčaný balík"
+    },
+    "setup": {
+      "account": "Účet",
+      "apiKey": "API kľúč",
+      "none": "Bez nastavenia"
+    },
+    "skillNeedsUnavailableTools": "V chate sa neponúka. Potrebuje nástroj, ktorý tam nie je k dispozícii: {tools}",
+    "toolDescriptions": {
+      "anonymize": "Skryje mená klientov, čísla účtov, adresy a ďalšie osobné údaje ešte pred zdieľaním obsahu spisu s poskytovateľmi AI. Anonymizáciu možno na strane klienta vrátiť späť a pôvodný text nikdy neopustí váš pracovný priestor.",
+      "ares": "Vyhľadávanie českých firiem podľa IČO alebo názvu vo verejnom registri ARES (administratívny register ekonomických subjektov, české obdobie obchodného registra).",
+      "boe": "Španielske konsolidované právne predpisy, denný úradný vestník a BORME (vestník obchodného registra) z oficiálneho otvoreného dátového rozhrania Boletín Oficial del Estado.",
+      "brreg": "Vyhľadávanie nórskych firiem podľa organisasjonsnummer alebo názvu vo verejnom otvorenom rozhraní Enhetsregisteret (Brreg).",
+      "companiesHouse": "Vyhľadávanie britských firiem podľa registračného čísla Companies House alebo názvu cez verejné dátové rozhranie Companies House. Vyžaduje bezplatný kľúč API.",
+      "createDocx": "Vytváranie dokumentov Word priamo z chatu vrátane formátovania, tabuliek, hlavičiek a vložených štýlov. Výsledok možno stiahnuť a ďalej upravovať vo Worde, LibreOffice a Pages.",
+      "denue": "Vyhľadávanie mexických prevádzok a ekonomických jednotiek podľa identifikátora prevádzky DENUE, názvu alebo obchodného mena v oficiálnom rozhraní DENUE inštitútu INEGI. DENUE je adresár prevádzok, nie obchodný register Registro Público de Comercio. Vyžaduje bezplatný token INEGI API.",
+      "edgar": "Vyhľadávanie amerických verejne obchodovaných spoločností podľa Central Index Key (CIK) v rozhraní EDGAR americkej komisie SEC.",
+      "gcis": "Vyhľadávanie taiwanských firiem podľa 統一編號 (tongbian, daňové identifikačné číslo) alebo názvu v otvorenom dátovom rozhraní portálu Commerce Industrial Services ministerstva hospodárstva (MoEA).",
+      "infosoud": "Vyhľadávanie českých súdnych konaní a kalendár pojednávaní z infosoud.gov.cz. Podľa spisovej značky, súdu alebo účastníka zistíte termíny pojednávaní a stav konania.",
+      "krs": "Vyhľadávanie poľských firiem podľa čísla KRS v otvorenom rozhraní Krajowy Rejestr Sądowy (KRS) ministerstva spravodlivosti. Zahŕňa Rejestr Przedsiębiorców (podnikatelia) aj Rejestr Stowarzyszeń (združenia a nadácie).",
+      "orsr": "Vyhľadávanie slovenských firiem podľa IČO alebo názvu v rozhraní JSON Obchodného registra Slovenskej republiky, ktoré prevádzkuje ministerstvo spravodlivosti.",
+      "prh": "Vyhľadávanie fínskych firiem podľa Y-tunnus alebo názvu v otvorenom rozhraní AvoinData v3 úradu Patentti- ja rekisterihallitus (PRH).",
+      "rechercheEntreprises": "Vyhľadávanie francúzskych firiem podľa SIREN, SIRET alebo názvu v otvorenom rozhraní recherche-entreprises.api.gouv.fr (data.gouv.fr / Etalab, Licence Ouverte 2.0).",
+      "rpo": "Vyhľadávanie podľa IČO alebo názvu v Registri právnických osôb, podnikateľov a orgánov verejnej moci (RPO), ktorý vedie Štatistický úrad Slovenskej republiky. Zahŕňa všetky právnické osoby a podnikateľov vrátane živnostníkov, združení, nadácií a verejných orgánov mimo obchodného registra.",
+      "vies": "Overenie IČ DPH v celej EÚ cez rozhranie REST systému VAT Information Exchange System (VIES) Európskej komisie. Potvrdí, či je IČ DPH registrované v členskom štáte dodávateľa, a vráti názov a adresu registrovaného obchodníka, ak ich členský štát zverejňuje.",
+      "webSearch": "Vyhľadávanie na verejnom webe a čítanie jednotlivých stránok. Ak je nastavená jurisdikcia, dopyty smerujú najprv na primárne zdroje (súdy, portály s právnymi predpismi), inak na otvorený web. Zapína sa pre každú konverzáciu zvlášť."
+    },
+    "toolNames": {
+      "anonymize": "Anonymizovať",
+      "createDocx": "Vytvoriť DOCX",
+      "gcis": "Register spoločností GCIS",
+      "vies": "Overenie IČ DPH v EÚ (VIES)",
+      "webSearch": "Webové vyhľadávanie"
+    },
+    "unavailable": "Zatiaľ nedostupné"
+  },
+  "guides": {
+    "action": {
+      "replay": "Spustiť znova",
+      "skip": "Preskočiť"
+    },
+    "checklist": {
+      "activeTour": "Najprv dokončite alebo ukončite aktuálneho sprievodcu.",
+      "progress": "{completed} z {total} dokončených"
+    },
+    "community": {
+      "personalSupport": "Osobná podpora"
+    },
+    "help": {
+      "buttonLabel": "Pomoc a spätná väzba",
+      "title": "Pomoc a spätná väzba"
+    },
+    "leave": "Ukončiť sprievodcu",
+    "minutes": "{count} min.",
+    "nudge": {
+      "action": "Otvoriť sprievodcov",
+      "body": "Ste tu nový? Niekoľko krátkych prehliadok vás prevedie."
+    },
+    "status": {
+      "skipped": "Preskočené"
+    },
+    "tours": {
+      "chat": {
+        "description": "Pridajte kontext pre AI a otázku bezpečne odošlite",
+        "examplePrompt": "Zhrňte kľúčové povinnosti v tejto zmluve",
+        "steps": {
+          "anonymize": {
+            "body": "Pred odoslaním skryje osobné údaje a v odpovedi ich zasa doplní.",
+            "title": "Odoslať anonymizovane",
+            "when": "Zapnite, keď text obsahuje osobné údaje a otázka nestojí na tom, kto sú strany. Nechajte vypnuté, keď ide práve o totožnosť, napríklad pri kontrole konfliktu záujmov: zástupné hodnoty odoberú presne to, na čo sa pýtate."
+          },
+          "attach": {
+            "body": "Nahrá súbor z tohto zariadenia do konverzácie. Prečíta sa len pre toto vlákno a nezaloží sa do spisu.",
+            "title": "Priložiť súbor",
+            "when": "Hodí sa pre jednorazový dokument, ktorý nepotrebujete uchovať: návrh, ktorý práve prišiel e-mailom, sken alebo tabuľku, ktorú chcete len zhrnúť."
+          },
+          "composer": {
+            "body": "Napíšte bežnou rečou, čo chcete: akú úlohu, čoho sa týka a akú podobu odpovede čakáte. Všetko ostatné tu už len spresňuje zadanie, ktoré ste napísali.",
+            "title": "Začnite zadaním"
+          },
+          "context": {
+            "body": "Použije ako kontext už uložený spis alebo súbor. Nič sa znova nenahráva ani nekopíruje.",
+            "title": "Odkázať na spis alebo súbor",
+            "when": "Použite namiesto priloženia súboru vždy, keď je dokument už založený. Odkážte na spis, ak sa má asistent pozrieť naprieč ním; na jeden súbor, keď presne viete, ktorý má čítať. Napísaním @ v prázdnom editore otvoríte tento zoznam priamo."
+          },
+          "plusMenu": {
+            "body": "Cez + priložíte súbor alebo odkážete na spis.",
+            "title": "Pridajte podklady cez +",
+            "when": "Keď potrebné podklady ešte nie sú súčasťou chatu."
+          },
+          "send": {
+            "body": "Odošle správu so všetkým, čo ste vyššie priložili, na čo ste odkázali alebo čo ste zapli. Editor zostane na mieste, takže nadväzujúcim dopytom doplníte to, čo v prvej odpovedi chýbalo.",
+            "title": "Odošlite správu",
+            "when": "Prvá odpoveď ukáže, čo ešte chýba."
+          }
+        },
+        "title": "Začnite v chate"
+      },
+      "chatPower": {
+        "description": "Použite zručnosti alebo pripojte ďalšie užitočné nástroje",
+        "steps": {
+          "mcp": {
+            "body": "Zapína a vypína nástroje pripojeného servera pre vaše chaty: obchodné registre, interné systémy, čokoľvek, čo váš tím pripojil.",
+            "title": "Pripojené servery nástrojov",
+            "when": "Zapnite, keď odpoveď potrebuje živé dáta zvonku. Ostatné nechajte vypnuté: čím menej nástrojov je v hre, tým užšia a predvídateľnejšia odpoveď."
+          },
+          "models": {
+            "body": "Prepne model len pre túto konverzáciu. Ostatné vlákna si ponechajú predvolený model nastavený pre váš pracovný priestor.",
+            "title": "Ktorý model"
+          },
+          "plusMenu": {
+            "body": "Rovnaká ponuka obsahuje aj prepínanie modelu, zručnosti a pripojené servery nástrojov. Ďalšie kroky ju otvoria a preberú každú možnosť zvlášť.",
+            "title": "Čo ďalšie skrýva tlačidlo +"
+          },
+          "skills": {
+            "body": "Vloží uložené zadanie alebo zručnosť, ktorú napísal váš tím: schválený súbor pokynov, vďaka ktorému sa tá istá úloha zakaždým spracuje rovnako.",
+            "title": "Zručnosti a uložené zadania",
+            "when": "Použite ich, keď sa úloha opakuje a záleží na formulácii, napríklad pri štandardnej revízii zmluvy alebo zhrnutí zadania zákazky. Napísaním / v prázdnom editore otvoríte tento zoznam priamo."
+          }
+        },
+        "title": "Využite chat naplno"
+      },
+      "documents": {
+        "description": "Zaraďte dokument do spisu a neskôr ho znova nájdite",
+        "steps": {
+          "browse": {
+            "body": "Táto tabuľka je zoznamom dokumentov v spise. Nahrané súbory sa tu zobrazujú ako riadky. Ak sa sem chcete vrátiť neskôr, otvorte spis z bočného panela, vyberte jeho tabuľkové zobrazenie a potom riadok dokumentu.",
+            "title": "Znova nájsť dokument"
+          },
+          "upload": {
+            "body": "Možnosť Nahrať otvorí výber súborov; súbory môžete tiež presunúť myšou do spisu. Každý súbor sa stane dokumentom v tomto spise, takže ho váš tím môže nájsť a stella ho môže použiť pri revízii.",
+            "title": "Zaradiť dokument do spisu",
+            "when": "Súbor nahrajte sem, keď patrí do spisu a má zostať k dispozícii. Priamo v chate ho priložte iba vtedy, keď slúži ako dočasný kontext pre jednu konverzáciu."
+          }
+        },
+        "title": "Práca s dokumentmi"
+      },
+      "playbooks": {
+        "description": "Uložte si postup kontroly dokumentov na nabudúce",
+        "steps": {
+          "basics": {
+            "body": "Pridajte názov a opis. Podľa potreby ho obmedzte na určitý typ dokumentu.",
+            "title": "Pomenujte playbook"
+          },
+          "create": {
+            "body": "Začnite s prázdnym playbookom.",
+            "title": "Vytvorte playbook"
+          },
+          "overview": {
+            "body": "Playbook uchová otázky a pravidlá pre ďalšie dokumenty.",
+            "title": "Uložte postup kontroly"
+          },
+          "positions": {
+            "body": "Pri každom pravidle vyberte, či má stella text posúdiť, alebo z neho získať údaj.",
+            "title": "Pridajte pravidlá kontroly"
+          }
+        },
+        "title": "Vytvorte playbook"
+      },
+      "tabularReview": {
+        "description": "Získajte odpovede naprieč mnohými súbormi naraz",
+        "steps": {
+          "addColumn": {
+            "body": "Nový stĺpec otvorí editor stĺpca. Stĺpec pomenujte jasnou otázkou a presne povedzte aplikácii stella, čo má hľadať; rovnaký pokyn sa spustí pre každý riadok dokumentu.",
+            "title": "Položiť jednu otázku ku každému dokumentu",
+            "when": "Pre každú odpoveď, ktorú potrebujete porovnať, filtrovať, zoradiť alebo exportovať, vytvorte samostatný stĺpec. Súvisiaci kontext uveďte v zadaní namiesto spájania viacerých odpovedí do jednej bunky."
+          },
+          "answerType": {
+            "body": "Pole Vráti určuje formát každej odpovede. Ak má výsledok štruktúru, vyberte číslo, dátum, jeden výber alebo viacnásobný výber; stella zachová konzistentnosť stĺpca namiesto toho, aby vracala ľubovoľný text.",
+            "title": "Vybrať typ odpovede",
+            "when": "Pre pevnú množinu výsledkov použite výber, na zoraďovanie a výpočty číslo alebo dátum a text iba vtedy, keď si odpoveď skutočne vyžaduje podrobný opis."
+          },
+          "table": {
+            "body": "Každý riadok je dokument a každý vlastný stĺpec je jedna otázka položená naraz ku všetkým dokumentom. Priečinok súborov sa tak zmení na porovnateľné odpovede bez toho, aby ste ich museli otvárať po jednom.",
+            "title": "Revidovať všetky dokumenty, nie iba jeden",
+            "when": "Tabuľku použite, keď potrebujete rovnaké fakty alebo rozhodnutia z viacerých dokumentov. Dokument otvorte priamo, keď sú rozloženie, formulácia alebo okolitý kontext dôležitejšie než porovnanie."
+          }
+        },
+        "title": "Revízia v tabuľke"
+      },
+      "workflows": {
+        "description": "Zreťazte kroky do opakovateľného pracovného postupu",
+        "steps": {
+          "create": {
+            "body": "Možnosť Vytvoriť otvorí neuložený koncept pracovného postupu. Ďalšie kroky určia, kedy sa spustí, čo vykoná a kde musí človek rozhodnúť, či môže pokračovať.",
+            "title": "Začať s konceptom pracovného postupu"
+          },
+          "overview": {
+            "body": "Pracovný postup spája spúšťač so sledom úkonov, takže rutinný proces zakaždým prebehne rovnako. Môže automaticky pripraviť prácu, pričom v prípade potreby ponechá rozhodnutie na revízorovi.",
+            "title": "Automatizovať opakovateľný proces",
+            "when": "Automatizujte prácu, ktorá má stabilný spúšťač, opakovateľné kroky a jasne určeného zodpovedného za výnimky. Meniacu sa prácu alebo prácu náročnú na úsudok vykonávajte manuálne, kým sa samotný proces neustáli."
+          },
+          "reviewGate": {
+            "body": "Kontrolný bod revízie pozastaví vykonávanie, kým ho človek neschváli alebo nezamietne. Umiestnite ho pred prvý úkon, ktorý sa nemá vykonať iba na základe automatizovaného výsledku.",
+            "title": "Ponechať rozhodnutie na revízorovi",
+            "when": "Kontrolný bod použite pred odoslaním, zaradením do spisu, eskaláciou alebo iným konečným potvrdením výsledku so závažnými dôsledkami. Vynechajte ho iba vtedy, keď je ďalší krok bezpečne vratný a nevyžaduje ľudský úsudok."
+          },
+          "steps": {
+            "body": "Kroky sa vykonávajú v tomto poradí a odovzdávajú výsledky práce ďalej. Každý krok nech zodpovedá za jeden jasný úkon, aby boli zlyhania zrozumiteľné a poradie sa dalo ľahko meniť.",
+            "title": "Zostaviť poradie krokov"
+          },
+          "trigger": {
+            "body": "Spúšťač určuje, kedy sa začne vykonávanie: manuálne, podľa harmonogramu alebo po nahraní zodpovedajúcich súborov. Zúžte podmienky spisu a súborov, aby nesúvisiaca práca nikdy nespustila pracovný postup.",
+            "title": "Vybrať, čo spustí pracovný postup",
+            "when": "Kým je proces nový, používajte manuálne spustenie; pre časovo určené rutinné úlohy použite harmonogram a nahranie súboru iba vtedy, keď je prijatý dokument spoľahlivým signálom na začatie."
+          }
+        },
+        "title": "Automatizovať pracovný postup"
+      }
+    },
+    "unavailable": "Tento sprievodca momentálne nie je k dispozícii",
+    "whenLabel": "Kedy to použiť:"
+  },
+  "knowledge": {
+    "agentSkills": {
+      "availabilityClient": "Jeden klient",
+      "availabilityClientBadgeHelp": "Dostupná iba v spisoch jedného klienta.",
+      "availabilityClientHelp": "Použiteľná iba v spisoch tohto klienta. Neskôr to nemožno zmeniť.",
+      "availabilityFixedHelp": "Nastavené pri vytvorení zručnosti. Nemožno to zmeniť.",
+      "availabilityLabel": "Dostupné v",
+      "availabilityMatter": "Jeden spis",
+      "availabilityMatterBadgeHelp": "Dostupná iba v jednom spise.",
+      "availabilityMatterHelp": "Použiteľná iba v tomto spise. Neskôr to nemožno zmeniť.",
+      "availabilityOrganization": "Celá organizácia",
+      "availabilityTeamNeedsMatter": "Ak chcete zručnosť zdieľať s tímom, vyberte spis, pre ktorý je určená. Neskôr to nemožno zmeniť.",
+      "builtIn": {
+        "playbookBuilder": {
+          "description": "Vytvorte playbook na kontrolu zmlúv pozíciu po pozícii na základe vašich predtým podpísaných zmlúv, krátkeho rozhovoru a bežných trhových štandardov.",
+          "name": "Vytvoriť playbook",
+          "openingPrompts": {
+            "extendExisting": {
+              "body": "Pridaj pozície do jedného z mojich existujúcich playbookov.",
+              "name": "Rozšíriť playbook"
+            },
+            "fromContracts": {
+              "body": "Vytvor playbook pre dohody o mlčanlivosti z mojich predtým podpísaných dohôd.",
+              "name": "Začať z predošlých zmlúv"
+            },
+            "fromMarketStandards": {
+              "body": "Vytvor playbook pre dodávateľské zmluvy a vychádzaj z bežných trhových pozícií.",
+              "name": "Začať z trhových štandardov"
+            }
+          }
+        }
+      },
+      "builtInSection": "Vstavané zručnosti",
+      "deleteFile": "Vymazať súbor",
+      "deleteFileConfirm": "Vymazať súbor? Túto akciu nie je možné vrátiť späť.",
+      "disableSkill": "Vypnúť zručnosť",
+      "discoverSkills": "Nájsť zručnosti",
+      "discoveredSkills": "{count, plural, one {Nájdená # zručnosť} few {Nájdené # zručnosti} other {Nájdených # zručností} many {Nájdené # zručnosti}}",
+      "discoveryEmpty": "V tomto repozitári ani priečinku sa nenašli žiadne zručnosti.",
+      "discoverySkippedInvalid": "{count, plural, one {# neplatná zručnosť bola preskočená} few {# neplatné zručnosti boli preskočené} other {# neplatných zručností bolo preskočených} many {# neplatnej zručnosti bolo preskočené}}",
+      "dropPack": "Presuňte sem .zip/.skill alebo SKILL.md a zručnosť sa naimportuje",
+      "editSkill": "Upraviť zručnosť",
+      "enableSkill": "Zapnúť zručnosť",
+      "enterFileName": "Zadajte názov súboru.",
+      "exportAsSkill": "Exportovať ako .skill",
+      "exportAsZip": "Exportovať ako .zip",
+      "exportFailed": "Zručnosť sa nepodarilo exportovať",
+      "exportSkill": "Exportovať zručnosť",
+      "fileExists": "Súbor s touto cestou už existuje",
+      "howItRuns": "Ako sa spúšťa",
+      "importFailureFetch": "Zdroj zručnosti sa nepodarilo načítať.",
+      "importFailureIntegrity": "Zdroj zručnosti sa po nájdení zmenil. Skontrolujte ho znova.",
+      "importFailureLimit": "Bol dosiahnutý limit zručností.",
+      "importFailureNameConflict": "Zručnosť s týmto názvom už existuje.",
+      "importHelp": "Vložte URL verejného repozitára či priečinka na GitHube alebo súboru SKILL.md. Nájdené zručnosti pred inštaláciou skontrolujte.",
+      "importPartial": "{installedCount, plural, one {{installed} importovaná} few {{installed} importované} many {{installed} importovaných} other {{installed} importovaných}}; {failedCount, plural, one {{failed} zlyhala} few {{failed} zlyhali} many {{failed} zlyhalo} other {{failed} zlyhalo}}.",
+      "importSelected": "Importovať vybrané ({count})",
+      "importSkill": "Importovať z URL",
+      "importTitle": "Importovať zručnosť",
+      "importedSkills": "{count, plural, one {Importovaná # zručnosť} few {Importované # zručnosti} other {Importovaných # zručností} many {Importované # zručnosti}}",
+      "invalidPath": "Použite relatívnu cestu. Názvy súborov a priečinkov nesmú byť . ani .., začínať ani končiť medzerou, končiť bodkou ani obsahovať \\ : * ? \" |, lomené zátvorky alebo riadiace znaky.",
+      "invocationAuto": "Automaticky",
+      "invocationAutoHelp": "AI môže túto zručnosť použiť sama, keď sa hodí k požiadavke.",
+      "invocationManual": "Iba na vyžiadanie",
+      "invocationManualHelp": "Použije sa iba vtedy, keď ju spustíte cez / alebo ju pridáte do správy.",
+      "license": "Licencia: {license}",
+      "newFile": "Nový súbor",
+      "newFileFilenamePlaceholder": "notes.md",
+      "newFilePathPlaceholder": "folder/notes.md",
+      "newFolder": "Nový priečinok",
+      "pdfPreviewSoon": "Náhľad PDF bude dostupný, keď budú podporované binárne zdroje zručností.",
+      "renameFile": "Premenovať",
+      "scopePrivate": "Iba ja",
+      "scopeTeam": "Všetci v tíme",
+      "selectSkillToImport": "Vyberte aspoň jednu zručnosť.",
+      "selectionLimit": "Naraz môžete vybrať najviac {count, plural, one {# zručnosť} few {# zručnosti} many {# zručností} other {# zručností}}.",
+      "skippedFiles": "{count, plural, one {# súbor nebol importovaný} few {# súbory neboli importované} other {# súborov nebolo importovaných} many {# súboru nebolo importované}}",
+      "skippedReasonNotUtf8Text": "Nie je text v kódovaní UTF-8",
+      "skippedReasonOutsideSkillFolder": "Mimo priečinka zručnosti",
+      "skippedReasonUnsupportedExtension": "Nepodporovaný typ súboru",
+      "skippedReasonUnsupportedFolder": "Nie je v priečinku so zdrojmi",
+      "starter": {
+        "compare": {
+          "body": "Porovnajte dve verzie tohto dokumentu a vypíšte všetky podstatné zmeny vrátane toho, kde sa nachádzajú.",
+          "description": "Vypíšte všetky podstatné zmeny medzi dvoma verziami",
+          "name": "Porovnať verzie"
+        },
+        "draft": {
+          "body": "Navrhnite vecnú odpoveď na tento list. Zachovajte profesionálny tón, vyjadrite sa ku každému uvedenému bodu a označte otvorené otázky, ktoré mám potvrdiť.",
+          "description": "Pripravte profesionálnu odpoveď na list",
+          "name": "Navrhnúť odpoveď"
+        },
+        "risks": {
+          "body": "Skontrolujte, či tento dokument neobsahuje právne riziká a nejednoznačné ustanovenia a či v ňom nechýbajú ochranné dojednania. Pri každom zistení uveďte konkrétne ustanovenie.",
+          "description": "Nájdite právne riziká a nejednoznačné ustanovenia",
+          "name": "Nájsť riziká"
+        },
+        "summarize": {
+          "body": "Zhrňte tento dokument. Uveďte strany, hlavné povinnosti, termíny, finančné podmienky a prípadné ustanovenia o ukončení alebo zodpovednosti.",
+          "description": "Získajte prehľadné zhrnutie hlavných podmienok",
+          "name": "Zhrnúť dokument"
+        }
+      },
+      "uploadHelp": "Použite súbor SKILL.md alebo priečinok .zip/.skill obsahujúci SKILL.md a voliteľné zdroje iba na čítanie.",
+      "uploadPack": "Nahrať .zip/.skill alebo SKILL.md",
+      "urlPlaceholder": "https://github.com/org/repo/tree/main/cesta/k/zrucnosti",
+      "version": "Verzia: {version}"
+    },
+    "catalogue": {
+      "addToLibrary": "Pridať do knižnice",
+      "added": "{name} je vo vašej knižnici",
+      "confirmAddTitle": "Pridať {name} do {organization}?",
+      "confirmDescription": "Kópia tohto vzoru sa uloží do knižnice {organization}.",
+      "confirmDownloadTitle": "Stiahnuť {name} pre {organization}?",
+      "confirmStarterDescription": "Kópia tohto playbooku sa uloží do knižnice {organization}.",
+      "confirmUseTitle": "Použiť {name} v {organization}?",
+      "installFailed": "Vzor sa nepodarilo pridať",
+      "noPreview": "Náhľad tohto vzoru nie je k dispozícii.",
+      "notFound": "Tento vzor v katalógu nie je.",
+      "unavailable": "Katalóg teraz nie je k dispozícii."
+    },
+    "landing": {
+      "accountLine": "S bezplatným účtom si uchováte vlastné vzory, ustanovenia a playbooky svojej organizácie.",
+      "withAccount": "S bezplatným účtom"
+    },
+    "mcp": {
+      "addAndConnect": "Pridať a pripojiť",
+      "addServer": "Pridať server",
+      "addServerCardTitle": "Pridať novú integráciu",
+      "auth": {
+        "bearer": "Bearer token",
+        "none": "Bez prihlásenia",
+        "oauth2": "OAuth 2.0"
+      },
+      "authorizationReviewDescription": "Pred schválením skontrolujte autorizačný server a domény koncových bodov.",
+      "authorizationServer": "Autorizačný server",
+      "bearerTokenDescription": "Tento server používa bearer token. Na dokončenie pripojenia vložte token od poskytovateľa.",
+      "callbackConnectedDescription": "Jej nástroje sú pripravené na použitie v chate.",
+      "callbackConnectedTitle": "Integrácia pripojená",
+      "callbackFailedDescription": "Prihlásenie sa nedokončilo, takže sa nič nepripojilo.",
+      "callbackFailedTitle": "Integrácia sa nepripojila",
+      "connectedToast": "MCP pripojené",
+      "connectedWithLastUsed": "Pripojené · naposledy použité {time}",
+      "description": "Spravujte integrácie, ktoré môžu pridať nástroje do chatu. Tokeny sa ukladajú pre každého používateľa zvlášť.",
+      "detected": "Rozpoznané: {authType}",
+      "disable": "Vypnúť",
+      "disabled": "Pripojené · vypnuté",
+      "emptyDescription": "Overené právne integrácie sa tu zobrazia po zapnutí pre váš pracovný priestor.",
+      "emptyTitle": "Zatiaľ žiadne integrácie",
+      "enable": "Zapnúť",
+      "endpointOrigins": "Domény koncových bodov",
+      "enterToken": "Zadajte prístupový token.",
+      "errorDescription": "Integráciu sa nepodarilo upraviť.",
+      "errorTitle": "MCP zlyhalo",
+      "mcpExplainer": "Integrácie pripájajú do chatu externé služby, s ktorými môže AI pracovať.",
+      "needsReapproval": "Vyžaduje sa nové schválenie",
+      "needsReauth": "Vyžaduje opätovné pripojenie",
+      "off": "Vypnuté",
+      "on": "Zapnuté",
+      "openTools": "Otvoriť Nástroje",
+      "otherTitle": "Ostatné integrácie",
+      "probe": "Overiť",
+      "recommendedFor": "Odporúčané pre {jurisdictions}",
+      "saveToken": "Uložiť token",
+      "tokenHelp": "Ako získať token",
+      "tokenLabel": "Bearer token",
+      "tokenPlaceholder": "Vložte token",
+      "urlLabel": "URL MCP servera",
+      "urlPlaceholder": "https://example.com/mcp",
+      "useInChat": "Používať v chate",
+      "whatIsAnMcpServer": "Čo je MCP server?"
+    },
+    "playbooks": {
+      "addCheck": "Pridať presné pravidlo",
+      "addExtractPosition": "Iba extrakcia",
+      "addExtractPositionHint": "Zachytí hodnotu, bez hodnotenia",
+      "addGradedPosition": "Hodnotená pozícia",
+      "addGradedPositionHint": "Odstupňované pravidlá s výsledkom",
+      "addOption": "Pridať možnosť",
+      "addPosition": "Pridať pozíciu",
+      "addRule": "Pravidlo",
+      "adoptAsIdeal": "Prijať ako ideálne znenie",
+      "all": "Všetky playbooky",
+      "approval": {
+        "approve": "Schváliť",
+        "approveFailed": "Playbook sa nepodarilo schváliť",
+        "approvedOn": "Schválené {date}",
+        "approvedToast": "Playbook schválený",
+        "saveBeforeApprove": "Pred schválením playbooku uložte zmeny.",
+        "sourcesNotice": "Pred schválením skontrolujte, že žiadna pozícia nemenuje dokument, spis ani protistranu: tento playbook môže čítať celá organizácia.",
+        "statusApproved": "Schválené",
+        "statusDraft": "Koncept"
+      },
+      "askContentLabel": "Typ odpovede",
+      "askQuestionLabel": "Znenie otázky",
+      "askQuestionPlaceholder": "Čo sa má z každého dokumentu vyčítať? Ponechajte prázdne pre ručné zadanie.",
+      "autosave": {
+        "failed": "Nepodarilo sa uložiť",
+        "nameMissing": "Neuložené: zadajte názov",
+        "positionsNeedAttention": "Neuložené: {count, plural, one {# pozícia vyžaduje} few {# pozície vyžadujú} other {# pozícií vyžaduje} many {# pozície vyžaduje}} pozornosť"
+      },
+      "buildWithAi": {
+        "description": "Odpovedzte v chate na niekoľko otázok a playbook sa bude priebežne ukladať.",
+        "title": "Vytvoriť pomocou AI"
+      },
+      "check": "Použiť presné pravidlo namiesto AI",
+      "checkHint": "Pre merateľné podmienky, napríklad: splatnosť ≤ 30 dní.",
+      "checkKind": {
+        "constraint": "Overiť odpoveď podľa podmienky",
+        "presence": "Vyžadovať alebo zakázať odpoveď"
+      },
+      "clausePlaceholder": "Hľadať ustanovenia…",
+      "clauseSearchEmpty": "Nenašli sa žiadne ustanovenia",
+      "collapsePosition": "Zbaliť pozíciu",
+      "confirmDelete": "Týmto natrvalo odstránite playbook.",
+      "contentType": {
+        "int": "Číslo",
+        "singleSelect": "Jednoduchý výber",
+        "text": "Voľný text"
+      },
+      "convertToExtract": "Iba získavať odpoveď",
+      "convertToExtractDescription": "Týmto sa odstránia úrovne hodnotenia aj samotné hodnotenie tejto pozície. Túto akciu nemožno vrátiť späť.",
+      "convertToExtractTitle": "Previesť iba na extrakciu?",
+      "convertToGraded": "Pridať pravidlá hodnotenia",
+      "convertToRules": "Previesť na pravidlá",
+      "createPlaybook": "Nový playbook",
+      "created": "Playbook vytvorený",
+      "creatingFromStarter": "Vytvára sa playbook z vybranej predlohy…",
+      "customizeAnswer": "Zmeniť získavanú odpoveď",
+      "customizeAnswerHint": "Upraviť otázku alebo formát odpovede.",
+      "decisionLine": "{runs, plural, one {prijaté {accepted, number} · zamietnuté {dismissed, number} · naprieč # kontrolou} few {prijaté {accepted, number} · zamietnuté {dismissed, number} · naprieč # kontrolami} other {prijaté {accepted, number} · zamietnuté {dismissed, number} · naprieč # kontrolami} many {prijaté {accepted, number} · zamietnuté {dismissed, number} · naprieč # kontroly}}",
+      "deleteFailed": "Playbook sa nepodarilo odstrániť",
+      "deletePlaybook": "Odstrániť playbook",
+      "deletePosition": "Odstrániť pozíciu",
+      "deleted": "Playbook odstránený",
+      "deletedElsewhere": "Tento playbook bol odstránený.",
+      "derivedAutomatically": "Otázka a formát odpovede sa vygenerujú z tejto pozície. Netreba nič nastavovať.",
+      "derivedQuestion": "Otázka na získanie odpovede",
+      "derivedType": "Formát odpovede",
+      "descriptionPlaceholder": "Čo tento playbook kontroluje?",
+      "disabledBadge": "Vypnuté: pri spustení sa preskočí",
+      "discardChanges": "Zahodiť zmeny",
+      "duplicatePosition": "Duplikovať pozíciu",
+      "empty": "Zatiaľ žiadne playbooky",
+      "emptyDescription": "Vytvorte playbook a kontrolujte dokumenty podľa svojich štandardov.",
+      "enablePosition": "Zapnúť pozíciu",
+      "entryLabelPlaceholder": "Popis (voliteľné)",
+      "entryPlaceholder": "Prijateľné náhradné znenie",
+      "entryRank": "#{index}",
+      "expandPosition": "Rozbaliť pozíciu",
+      "expectation": {
+        "required": "Odpoveď musí byť uvedená",
+        "restricted": "Odpoveď nesmie byť uvedená"
+      },
+      "extractOnlyBadge": "Iba extrakcia",
+      "extractOnlyDescription": "Bez hodnotenia; hodnota sa zapíše do tabuľky.",
+      "extraction": "Extrakcia",
+      "extractionAuto": "Automatická",
+      "extractionManual": "Ručná",
+      "fixErrorsBeforeSaving": "Pred uložením opravte zvýraznené polia.",
+      "gradedNeedsContent": "Pridajte aspoň jedno pravidlo, náhradný záznam alebo ideálne znenie.",
+      "guidanceLabel": "Pridať pokyny ku kontrole",
+      "guidancePlaceholder": "Pridajte výnimku alebo pokyn, ktorý pravidlá vyššie nepokrývajú.",
+      "homeDescription": "Nastavte štandardy kontroly raz a potom ich konzistentne používajte pri každom dokumente.",
+      "idealFromClause": "Z knižnice ustanovení",
+      "idealInline": "Vlastný text",
+      "idealInlinePlaceholder": "Vložte ideálne znenie…",
+      "idealLanguage": "Ideálne znenie",
+      "issueLabel": "Téma",
+      "issuePlaceholder": "napr. Obmedzenie zodpovednosti",
+      "lastUsed": "Naposledy použité {date}",
+      "loadFailed": "Playbooky sa nepodarilo načítať",
+      "loading": "Načítavajú sa playbooky…",
+      "manageTypes": "Spravovať typy…",
+      "namePlaceholder": "napr. revízia NDA",
+      "nameRequired": "Zadajte názov.",
+      "negotiation": {
+        "addTalkingPoint": "Pridať argument",
+        "escalationLabel": "Eskalácia",
+        "escalationPlaceholder": "Kedy a komu eskalovať (voliteľné)",
+        "rationaleLabel": "Odôvodnenie",
+        "rationalePlaceholder": "Prečo túto pozíciu požadujeme (voliteľné)",
+        "talkingPointPlaceholder": "Čo povedať",
+        "talkingPointsLabel": "Argumenty",
+        "title": "Vyjednávanie"
+      },
+      "noPositions": "Zatiaľ žiadne pozície. Pridajte prvú.",
+      "noSettledPosition": "Žiadna ustálená pozícia",
+      "openInPane": "Otvoriť playbook",
+      "optionPlaceholder": "Hodnota možnosti",
+      "optionsLabel": "Možnosti",
+      "outline": "Osnova",
+      "pendingPane": {
+        "description": "Odpovedzte na otázky v chate. Keď schválite prvé uloženie, playbook sa otvorí tu a môžete ho upravovať popri konverzácii.",
+        "title": "Váš playbook sa zobrazí tu"
+      },
+      "positionOfTotal": "Pozícia {index} z {total}",
+      "positionRemoved": "Pozícia odstránená",
+      "positions": "Pozície",
+      "recent": "Nedávno použité",
+      "recommended": "Odporúčané úvodné playbooky",
+      "redLinePlaceholder": "Znenie, ktoré nie je nikdy prijateľné",
+      "referenceStandard": "Z referencie",
+      "removeCheck": "Odstrániť kontrolu",
+      "removeIdeal": "Odstrániť ideálne znenie",
+      "removeSource": "Odstrániť zdroj {documentName}",
+      "reorderPosition": "Zmeniť poradie pozície",
+      "review": {
+        "changePlaybook": "Vybrať iný playbook",
+        "extractedLabel": "Nájdené:",
+        "facetTitle": "Kontrola podľa playbooku",
+        "failed": "Dokument sa nepodarilo skontrolovať",
+        "fixAccepted": "Prijaté",
+        "insertFailed": "Preferované ustanovenie sa nepodarilo vložiť",
+        "insertPreferred": "Vložiť preferované ustanovenie",
+        "launcherDescription": "Skontrolujte tento dokument podľa playbooku organizácie a získajte zistenia priamo v texte.",
+        "matchedFallback": "Zhoda s náhradným znením:",
+        "noFindings": "Nenašli sa žiadne problémy",
+        "playbookLabel": "Playbook",
+        "playbookPlaceholder": "Vyberte playbook",
+        "reject": "Odmietnuť",
+        "reviewAgain": "Skontrolovať znova",
+        "reviewedAgainst": "Skontrolované podľa {name}",
+        "reviewing": "Prebieha kontrola…",
+        "reviewingHint": "Pri rozsiahlych playbookoch to môže trvať až niekoľko minút.",
+        "run": "Skontrolovať",
+        "scrollToChange": "Prejsť na zmenu",
+        "viewClause": "Zobraziť ustanovenie",
+        "violatedRedLine": "Porušuje neprijateľné pravidlo:"
+      },
+      "ruleNumber": "Pravidlo {index}",
+      "rulePlaceholder": "napr. Splatnosť faktúr nesmie presiahnuť 30 dní",
+      "saveFailed": "Playbook sa nepodarilo uložiť",
+      "severity": {
+        "blocker": "Blokujúca"
+      },
+      "severityLabel": "Závažnosť",
+      "staleCopy": {
+        "loaded": "Bola načítaná novšia verzia tohto playbooku. Pred úpravami ju načítajte znova.",
+        "unavailable": "Najnovšiu verziu tohto playbooku sa nepodarilo načítať. Zobrazuje sa posledná načítaná kópia, ktorá môže byť zastaraná."
+      },
+      "starters": {
+        "addedToast": "Playbook pridaný",
+        "browseButton": "Prehľadávať úvodné playbooky",
+        "positionCount": "{count, plural, one {# pozícia} few {# pozície} other {# pozícií} many {# pozície}}",
+        "title": "Úvodné playbooky",
+        "useStarter": "Použiť tento playbook"
+      },
+      "switchToAuto": "Generovať otázku a formát automaticky",
+      "switchToManual": "Upraviť otázku a formát odpovede",
+      "termKind": {
+        "enumeration": "Výčet",
+        "language": "Znenie",
+        "parameter": "Premenná",
+        "presence": "Prítomnosť"
+      },
+      "tier": {
+        "acceptable": "Prijateľné",
+        "fallback": "Náhradné",
+        "notAcceptable": "Neprijateľné"
+      },
+      "untitledPosition": "Pozícia bez názvu",
+      "updated": "Playbook aktualizovaný",
+      "updatedAt": "Aktualizované {date}",
+      "verdict": {
+        "additional": "Navyše",
+        "compliant": "Vyhovuje",
+        "deviation": "Odchýlka",
+        "fallback": "Náhradné znenie",
+        "missing": "Chýba",
+        "notApplicable": "Neaplikovateľné"
+      },
+      "versions": {
+        "confirmRestore": "Obsah aktuálneho konceptu bude nahradený obsahom tejto verzie.",
+        "restoreFailed": "Verziu sa nepodarilo obnoviť",
+        "restoredToast": "Verzia obnovená",
+        "versionHistory": "História verzií"
+      }
+    },
+    "sections": {
+      "caseLaw": {
+        "description": "Rozhodnutia súdov a databáza judikatúry"
+      },
+      "clauses": {
+        "description": "Knižnica vzorových ustanovení"
+      },
+      "mcp": {
+        "description": "Pripojte aplikáciu stella k externým nástrojom",
+        "title": "MCP"
+      },
+      "playbooks": {
+        "description": "Hodnotené kontrolné zoznamy, ktoré porovnávajú dokumenty s vašimi štandardmi"
+      },
+      "skills": {
+        "title": "Zručnosti"
+      },
+      "templates": {
+        "description": "Vzory dokumentov so zástupnými znakmi",
+        "title": "Vzory"
+      },
+      "tools": {
+        "description": "Zručnosti, integrácie a vždy dostupné nástroje, ktoré AI môže použiť v chate",
+        "title": "Nástroje"
+      },
+      "workflows": {
+        "description": "Automatizujte prácu s dokumentmi pomocou opakovane použiteľných viackrokových pracovných postupov."
+      }
+    },
+    "skills": {
+      "blueprintGallery": {
+        "cards": {
+          "answerFromSources": {
+            "blurb": "Odpovedzte na otázku na základe dôveryhodných zdrojov.",
+            "inside": "hierarchia zdrojov · výskumný prompt",
+            "title": "Odpoveď zo zdrojov"
+          },
+          "checkAgainstRules": {
+            "blurb": "Skontrolujte dokument, označte nesúlad a doložte ho citáciami.",
+            "inside": "zdroje podľa jurisdikcie · kontrolný zoznam · prompt na kontrolu",
+            "title": "Kontrola podľa pravidiel"
+          },
+          "intakeToDraft": {
+            "blurb": "Získajte potrebné fakty a potom vypracujte návrh dokumentu.",
+            "inside": "rozhovor · vzorové dokumenty · prompt na vypracovanie návrhu",
+            "title": "Od zistenia údajov k návrhu"
+          }
+        },
+        "insideLabel": "Obsah",
+        "startBlank": "Začať s prázdnou zručnosťou",
+        "startBlankHint": "Prázdna zručnosť pre prípad, že presne viete, čo potrebujete.",
+        "subtitle": "Vyberte si východiskovú štruktúru. Pripravíme priečinky a prevedieme vás ich vyplnením.",
+        "title": "Ako má vaša zručnosť fungovať?"
+      },
+      "commandConflict": "Zručnosť s týmto / príkazom už existuje",
+      "commandHelp": "Napíšte tento príkaz do chatu a spustite zručnosť.",
+      "commandLabel": "Príkaz v chate (voliteľné)",
+      "commandPlaceholder": "napr. zhrnúť",
+      "errors": {
+        "commandInvalid": "Používajte iba malé písmená, číslice, spojovníky a podčiarkovníky"
+      },
+      "form": {
+        "scope": "Viditeľnosť",
+        "scopePrivate": "Iba ja",
+        "scopeTeam": "Všetci v tíme"
+      }
+    }
+  },
+  "lawHome": {
+    "clearRecent": "Vymazať nedávne",
+    "clearRecentConfirmation": "Vymazať všetky vaše nedávne vyhľadávania, rozhodnutia a predpisy v tejto organizácii? Túto akciu nemožno vrátiť späť.",
+    "importFailed": "Miestnu históriu sa nepodarilo importovať. Stále je uložená v tomto zariadení.",
+    "inForceFrom": "Účinné od {date}",
+    "noRecent": "Zatiaľ žiadna nedávna aktivita",
+    "noSignals": "Zatiaľ žiadne signály",
+    "prompt": "Čo hľadáte?",
+    "recent": "Nedávne",
+    "recentCasesFilter": "Rozhodnutia",
+    "recentLoadFailed": "Nedávnu aktivitu sa nepodarilo načítať.",
+    "recentSearchFilter": "Vyhľadávania",
+    "recentUpdateFailed": "Nedávnu aktivitu sa nepodarilo aktualizovať.",
+    "searchLabel": "Hľadať v právnej databáze",
+    "searchPlaceholder": "Spisová značka, číslo predpisu, ECLI alebo kľúčové slová",
+    "signals": "Signály",
+    "topCourts": "Z najvyšších súdov"
+  },
+  "legalReader": {
+    "annotations": {
+      "askPassagePrompt": "K tejto pasáži z {citation}:\n\n„{quote}“\n\n",
+      "colorGreen": "Zelená",
+      "colorRed": "Červená",
+      "colorSky": "Modrá",
+      "colorViolet": "Fialová",
+      "colorYellow": "Žltá",
+      "commentPlaceholder": "Napíšte komentár…",
+      "commentText": "Text komentára",
+      "commentedPassage": "Komentovaná pasáž",
+      "editComment": "Upraviť komentár",
+      "editedAt": "Upravené {time}",
+      "guestAuthor": "Vy",
+      "guestLimitReached": "Táto karta môže obsahovať najviac {count, plural, one {# zvýraznenie alebo poznámku} few {# zvýraznenia a poznámky} many {# zvýraznení a poznámok} other {# zvýraznení a poznámok}}. Ak chcete uložiť viac, vytvorte si účet.",
+      "guestMigrationComplete": "Zvýraznenia a poznámky boli uložené.",
+      "guestMigrationFailed": "Niektoré zvýraznenia a poznámky sa nepodarilo uložiť. Zostanú na tejto karte na ďalší pokus.",
+      "guestSavePrompt": "Vaše zvýraznenia a poznámky sa uložia, keď si vytvoríte bezplatný účet.",
+      "guestStorageUnavailable": "Zvýraznenia a poznámky sa na tejto karte nepodarilo uložiť.",
+      "highlight": "Zvýrazniť",
+      "highlightedPassage": "Zvýraznená pasáž",
+      "history": {
+        "colorRestored": "Farba obnovená",
+        "commentRemoved": "Komentár odstránený",
+        "commentRestored": "Komentár obnovený",
+        "highlightRemoved": "Zvýraznenie odstránené",
+        "highlightRestored": "Zvýraznenie obnovené",
+        "markChanged": "Zvýraznenie alebo komentár sa medzitým zmenili inde, preto zostávajú bez zmeny.",
+        "markGone": "Toto zvýraznenie alebo komentár už neexistuje.",
+        "nothingToRedo": "Nie je čo zopakovať",
+        "nothingToUndo": "Nie je čo vrátiť",
+        "redoShortcut": "Znova vykonať zmenu zvýraznenia alebo komentára",
+        "styleRestored": "Štýl obnovený",
+        "textRestored": "Text komentára obnovený",
+        "undoShortcut": "Vrátiť zmenu zvýraznenia alebo komentára",
+        "visibilityRestored": "Zdieľanie obnovené"
+      },
+      "orphaned": {
+        "description": "Text tohto dokumentu sa od ich vytvorenia zmenil: označené pasáže sa v ňom už nepodarilo nájsť, alebo sa v ňom teraz vyskytujú na viacerých miestach. V texte sa preto nezobrazujú.",
+        "summary": "{count, plural, one {# zvýraznenie alebo komentár už nezodpovedá textu} few {# zvýraznenia alebo komentáre už nezodpovedajú textu} many {# zvýraznenia alebo komentára už nezodpovedá textu} other {# zvýraznení a komentárov už nezodpovedá textu}}"
+      },
+      "removeHighlight": "Odstrániť zvýraznenie",
+      "styleHighlight": "Zvýraznenie",
+      "styleSquiggly": "Vlnovka",
+      "styleStrikethrough": "Prečiarknutie",
+      "visibilityShared": "Zdieľané s organizáciou",
+      "visibilitySharedWithMatter": "Zdieľané so spisom"
+    },
+    "contents": {
+      "aiSection": "{section} (časť vygenerovaná AI)",
+      "headingWithAiSection": "{heading} (časť vygenerovaná AI: {section})"
+    },
+    "copyMenu": {
+      "blockQuoteWithCitation": "Blokový citát s citáciou",
+      "citationOnly": "Iba citácia",
+      "citationWithQuote": "Citácia s citátom",
+      "quoteWithCitation": "Citát s citáciou",
+      "textOnly": "Iba text"
+    }
+  },
+  "publicTools": {
+    "addSkill": "Pridať zručnosť",
+    "addToStella": "Pridať do aplikácie stella",
+    "alreadyInstalled": "Tento nástroj už je nainštalovaný.",
+    "content": "Obsah",
+    "contentUnavailable": "Obsah tejto zručnosti sa nepodarilo načítať. Pozrite si ho na GitHube.",
+    "contribute": {
+      "contributingLink": "Prečítať príručku pre prispievateľov",
+      "cta": "Prispieť",
+      "form": {
+        "authorLabel": "Meno autora",
+        "authorUrlLabel": "URL autora (voliteľné)",
+        "commitError": "Nepodarilo sa načítať najnovší commit. Nižšie vložte 40-znakový SHA.",
+        "costLabel": "Cena",
+        "directoryLabel": "Cesta v repozitári (voliteľné)",
+        "directoryPlaceholder": "skills/my-skill",
+        "inTreeReminder": "V tom istom pull requeste pridajte súbor SKILL.md vedľa manifestu.",
+        "intro": "Vyplňte údaje, vygenerujte manifest a potom otvorte pull request. Účet nie je potrebný.",
+        "invalidHint": "Vyplňte povinné polia, aby ste mohli otvoriť pull request.",
+        "jurisdictionPlaceholder": "CZ",
+        "jurisdictionsHint": "Pridajte kódy krajín podľa ISO. Pri zručnostiach nezávislých od jurisdikcie nechajte pole prázdne.",
+        "jurisdictionsLabel": "Jurisdikcie",
+        "licenseLabel": "Licencia",
+        "manifestPreview": "Vygenerovaný manifest.json",
+        "name": "Názov zručnosti",
+        "openPr": "Otvoriť pull request na GitHube",
+        "practiceAreasLabel": "Právne oblasti",
+        "repoLabel": "Repozitár",
+        "repoPlaceholder": "owner/name alebo URL GitHubu",
+        "resolvingCommit": "Zisťuje sa…",
+        "revLabel": "Pripnutý commit",
+        "revPlaceholder": "40-znakový SHA commitu",
+        "setupLabel": "Nastavenie",
+        "slugHint": "Identifikátor malými písmenami používaný v URL a názve priečinka.",
+        "slugLabel": "Identifikátor slug",
+        "sourceGithub": "Repozitár GitHub",
+        "sourceGithubHint": "Pre väčšie alebo nezávisle spravované zručnosti pripnuté ku konkrétnemu commitu.",
+        "sourceInTree": "V tomto repozitári",
+        "sourceInTreeHint": "Pre malé zručnosti, ktorých obsah sa nachádza tu.",
+        "sourceLabel": "Kde sa zručnosť nachádza?",
+        "title": "Pridať zručnosť",
+        "useLatestCommit": "Použiť najnovší commit"
+      },
+      "githubBody": "Veľké alebo nezávisle spravované zručnosti zostávajú vo vlastnom repozitári GitHub a sú pripnuté ku konkrétnemu commitu. Keď sa zdrojový repozitár zmení, plánovaná kontrola otvorí pull request, aby pripnutá verzia po kontrole zostala aktuálna.",
+      "githubTitle": "Zručnosť pripnutá ku commitu na GitHube:",
+      "inTreeBody": "Malé zručnosti sa nachádzajú v tomto repozitári vedľa svojho manifestu; každý záznam môže mať najviac 10 MB. Ich obsah sa poskytuje a balí priamo z katalógu.",
+      "inTreeTitle": "Priečinok v repozitári:",
+      "intro": "Katalóg obsahuje zručnosti, integrácie a vstavané nástroje na právnu prácu. Ktokoľvek môže navrhnúť záznam prostredníctvom pull requestu.",
+      "licenseBody": "Každý záznam uvádza licenciu z nižšie uvedeného zoznamu povolených permisívnych licencií. Copyleft licencie sa neprijímajú, aby mohli prevádzkovatelia vlastných inštancií obsah voľne ďalej šíriť.",
+      "licenseTitle": "Zoznam povolených licencií",
+      "mcpBody": "Integrácie opisuje manifest s URL servera, typom overenia a požadovanými rozsahmi prístupu. Prihlasovacie údaje sa v katalógu neukladajú; používatelia zadajú vlastné údaje vo svojom klientovi.",
+      "mcpTitle": "Integrácie MCP",
+      "recommendedBody": "Odznak \"Odporúčané\" prideľujú správcovia v súbore pod správou verzií. Nedá sa nastaviť na verejnej stránke ani iba prostredníctvom pull requestu.",
+      "recommendedTitle": "Stav odporúčania",
+      "repoLink": "Prehliadať záznamy v katalógu",
+      "title": "Pridať nástroj"
+    },
+    "discovery": {
+      "allBody": "Preskúmajte opakovane použiteľné pracovné postupy, dôveryhodné verejné zdroje údajov a funkcie zahrnuté v stella.",
+      "allTitle": "Všetky nástroje",
+      "aresBody": "Vyhľadajte českú organizáciu podľa názvu alebo IČO v oficiálnom registri ARES.",
+      "contractReviewBody": "Kontrolujte obchodné zmluvy ustanovenie po ustanovení podľa rokovacích usmernení s jasne vyznačenými odchýlkami a navrhovanými úpravami.",
+      "editorsPick": "Výber redakcie",
+      "exampleReview": "Ukážka kontroly",
+      "featuredTitle": "Začnite pracovným postupom",
+      "fromCommunity": "Od komunity",
+      "groups": {
+        "dataSources": "Zdroje údajov a integrácie",
+        "dataSourcesBody": "Pripojte dôveryhodné registre a špecializované služby, keď spis vyžaduje externé informácie.",
+        "included": "Súčasť stella",
+        "includedBody": "Základné funkcie pripravené na použitie bez pridania samostatnej zručnosti alebo účtu.",
+        "skillsBody": "Opakovane použiteľné právne pracovné postupy s pokynmi, ktoré si môžete pred pridaním skontrolovať."
+      },
+      "heroBody": "Vyhľadávajte podľa úlohy, jurisdikcie alebo zdroja. Každý nástroj si môžete pozrieť skôr, ako ho pridáte do svojho pracovného priestoru.",
+      "heroTitle": "Na čom pracujete?",
+      "howBody": "Zručnosť spracúva právnu metódu do podoby pokynov, ktoré si môžete prezrieť. Pridajte ju raz a rovnaký postup opakovane použite vždy, keď sa daná úloha objaví.",
+      "howTitle": "Čo je zručnosť?",
+      "includedBadge": "Zahrnuté",
+      "jurisRankBody": "Posúďte autoritu precedensov argentínskeho Najvyššieho súdu podľa vplyvu citácií a vývoja právnej doktríny.",
+      "noResults": "Tomuto vyhľadávaniu zatiaľ nezodpovedá žiadny nástroj.",
+      "openSkill": "Ako to funguje",
+      "review": {
+        "aligned": "V súlade",
+        "governingLaw": "Rozhodné právo",
+        "liabilityCap": "Obmedzenie zodpovednosti",
+        "missing": "Neuvedené",
+        "outsidePlaybook": "Mimo usmernení",
+        "termination": "Ukončenie zmluvy"
+      },
+      "searchPlaceholder": "Čo potrebujete urobiť?",
+      "tasks": {
+        "prepareDocuments": "Pripraviť dokumenty",
+        "protectClientData": "Chrániť údaje klientov",
+        "researchPrecedents": "Preskúmať precedensy",
+        "reviewAgreements": "Skontrolovať zmluvy",
+        "verifyOrganizations": "Overiť organizáciu"
+      },
+      "tasksTitle": "Alebo si vyberte úlohu"
+    },
+    "documentation": "Dokumentácia",
+    "downloadUpstream": "Stiahnuť zdrojový archív",
+    "installConfirm": {
+      "mcpBody": "Konektor MCP \"{name}\" sa pridá do vášho pracovného priestoru. Potom v nastaveniach MCP zadajte vlastné prihlasovacie údaje.",
+      "nativeToolBody": "Vstavaný nástroj \"{name}\" sa povolí vo vašom pracovnom priestore.",
+      "skillBody": "Zručnosť \"{name}\" sa nainštaluje do vášho pracovného priestoru.",
+      "title": "Pridať {name} do vášho pracovného priestoru?"
+    },
+    "installUnavailable": "Tento nástroj sa vo vašej organizácii nedá nainštalovať.",
+    "mcpConfigHint": "Údaje o pripojení nezávislé od klienta. Vložte ich do ľubovoľného klienta kompatibilného s MCP a pridajte vlastné prihlasovacie údaje.",
+    "metaDescription": "Prehliadajte otvorený katalóg zručností, integrácií a vstavaných nástrojov na právnu prácu.",
+    "missingFromCatalogue": "Tento nástroj nie je v katalógu vašej organizácie.",
+    "nativeToolInfo": "Toto je vstavaná funkcia stella. Ak ju chcete používať v chate, povoľte ju vo svojom pracovnom priestore.",
+    "notFound": "Nástroj sa nenašiel.",
+    "practiceArea": "Právna oblasť",
+    "practiceAreas": {
+      "bankingFinance": "Bankové a finančné právo",
+      "capitalMarkets": "Kapitálové trhy",
+      "commercial": "Obchodné právo",
+      "competition": "Súťažné právo",
+      "corporate": "Korporátne právo",
+      "criminal": "Trestné právo",
+      "dataProtection": "Ochrana údajov",
+      "disputeResolution": "Riešenie sporov",
+      "employment": "Pracovné právo",
+      "energy": "Energetické právo",
+      "environmental": "Environmentálne právo",
+      "family": "Rodinné právo",
+      "immigration": "Imigračné právo",
+      "insolvency": "Insolvenčné právo",
+      "intellectualProperty": "Duševné vlastníctvo",
+      "litigation": "Súdne spory",
+      "mergersAcquisitions": "Fúzie a akvizície",
+      "privateClient": "Súkromní klienti",
+      "publicAdministrative": "Verejné a správne právo",
+      "realEstate": "Nehnuteľnosti",
+      "regulatory": "Regulačné právo",
+      "tax": "Daňové právo",
+      "technology": "Technologické právo",
+      "whiteCollarCrime": "Hospodárska kriminalita"
+    },
+    "tokenHelp": "Ako získať token",
+    "viewOnGithub": "Zobraziť na GitHube"
+  },
+  "readerAnswers": {
+    "answerLanguage": "Jazyk odpovede",
+    "budgetError": "Rozpočet na odpovede je vyčerpaný.",
+    "documentLanguage": "Jazyk dokumentu ({language})",
+    "expand": "Rozbaliť odpoveď",
+    "explain": "Vysvetliť",
+    "followUp": "Položiť doplňujúcu otázku",
+    "followUpRequired": "Napíšte doplňujúcu otázku, ktorú chcete odoslať.",
+    "invalidCitations": "{count, plural, one {# citáciu sa nepodarilo overiť.} few {# citácie sa nepodarilo overiť.} other {# citácií sa nepodarilo overiť.} many {# citácie sa nepodarilo overiť.}}",
+    "loading": "Generovanie odpovede…",
+    "minimise": "Zbaliť odpoveď",
+    "modelError": "Model nedokázal túto odpoveď dokončiť.",
+    "networkError": "Spojenie bolo prerušené. Skúste to znova.",
+    "regenerate": "Vygenerovať odpoveď znova",
+    "selectionError": "Vyberte text zo samotného rozhodnutia.",
+    "send": "Odoslať doplňujúcu otázku",
+    "share": "Zdieľať s tímom",
+    "timeoutError": "Vypršal časový limit na odpoveď. Skúste to znova.",
+    "title": "Odpoveď k vybranému textu",
+    "waitForCurrentAction": "Počkajte na dokončenie prebiehajúceho úkonu s touto odpoveďou."
+  },
+  "statutes": {
+    "amendedTimes": "{count, plural, =0 {Nenovelizované} one {Novelizované #×} few {Novelizované #×} many {Novelizované #×} other {Novelizované #×}}",
+    "asOf": "Znenie účinné k",
+    "backToList": "Všetky predpisy",
+    "citingDecisionHideSnippet": "Zbaliť úryvok",
+    "citingDecisionMentionCount": "citované {count}×",
+    "citingDecisionOlderVersion": "Staršia verzia",
+    "citingDecisionShowSnippet": "Zobraziť celý úryvok",
+    "citingDecisionsCourtPlaceholder": "Všetky súdy",
+    "citingDecisionsFilterPlaceholder": "Filtrovať načítané rozhodnutia",
+    "citingDecisionsSnapshotCapped": "{count, plural, one {Zobrazené # rozhodnutie} few {Zobrazené # rozhodnutia} many {Zobrazených # rozhodnutí} other {Zobrazených # rozhodnutí}} (najviac {limit} s najväčším počtom zmienok o tomto ustanovení).",
+    "citingDecisionsSortCitations": "Zmienky o tomto ustanovení",
+    "citingDecisionsSortDate": "Dátum rozhodnutia",
+    "citingDecisionsYear": "Rok rozhodnutia",
+    "citingDecisionsYearOutOfRange": "Zadajte rok od {min} do {max}.",
+    "citingDecisionsYearPlaceholder": "Všetky roky",
+    "columns": {
+      "act": "Predpis",
+      "amendments": "Novely",
+      "firstVersion": "Prvé znenie",
+      "lastAmended": "Naposledy novelizované"
+    },
+    "compareAbsent": "V tomto znení chýba",
+    "compareAddedLater": "V tomto znení ustanovenie ešte neexistovalo.",
+    "compareClose": "Zavrieť porovnanie",
+    "compareMoved": "Presunuté:",
+    "compareMovedFrom": "Presunuté sem z {provision}",
+    "compareMovedFromElsewhere": "Presunuté sem odinakiaľ",
+    "compareMovedTo": "Presunuté do {provision}",
+    "compareMovedToElsewhere": "Presunuté inam",
+    "compareNoChanges": "Znenie je v oboch verziách rovnaké.",
+    "compareNoLongerPresent": "V tomto znení ustanovenie už nie je. Bolo zrušené alebo prečíslované.",
+    "compareProvisionNeither": "Ani jedna verzia toto ustanovenie neobsahuje.",
+    "compareProvisionTitle": "Zmeny {provision} medzi verziami",
+    "compareSameVersion": "Toto je zobrazená verzia. Vyberte na porovnanie inú.",
+    "compareShowUnchanged": "Zobraziť nezmenené ustanovenia",
+    "compareSideBySide": "Porovnať vedľa seba",
+    "compareTitle": "Zmeny medzi verziami",
+    "compareUnavailable": "Verzie sa nepodarilo porovnať.",
+    "compareUnstructured": "Jedna z verzií je dostupná len ako obyčajný text, preto ich nemožno porovnať.",
+    "compareVersionMissing": "Verzia na porovnanie v histórii tohto predpisu nie je.",
+    "compareWholeAct": "Porovnať celý predpis",
+    "compareWithPreviousWording": "Porovnať s predchádzajúcim znením",
+    "compareWithVersion": "Porovnať so znením {version}",
+    "currentWording": "Aktuálne znenie",
+    "description": "Verejná databáza konsolidovaných právnych predpisov, indexovateľných podľa predpisu a jeho znenia.",
+    "diffInserted": "Vložené:",
+    "diffRemoved": "Vypustené:",
+    "emptyDocument": "Toto znenie nemá dostupný text.",
+    "emptyState": "Nenašli sa žiadne predpisy.",
+    "expression": {
+      "invalidWindow": "Vydavateľ uvádza rozporné dátumy",
+      "promulgated": "Vyhlásené znenie",
+      "withdrawn": "Vydavateľ už neuvádza"
+    },
+    "inForceSince": "Účinné od {date}",
+    "inForceSinceAtLeast": "Účinné najneskôr od {date}",
+    "ineligibleVersion": "{range} ({label})",
+    "leadingDecision": "Kľúčové rozhodnutie",
+    "leadingDecisionsExplanation": "Prvá zmienka v každom rozhodnutí, zoradená podľa citačnej autority: vážené prichádzajúce citácie so zohľadnením úrovne súdu, polarity citácie a jej veku.",
+    "noVersionInForce": "K vybranému dňu nebolo účinné žiadne znenie tohto predpisu.",
+    "openEnded": "súčasnosť",
+    "outline": "Obsah",
+    "outlineJumpLabel": "Prejsť na ustanovenie",
+    "outlineJumpPlaceholder": "§ 10 alebo názov",
+    "pendingChanges": "Nadchádzajúce novely",
+    "pendingChangesIncomplete": "Údaje vydavateľa nemusia zahŕňať všetky nadchádzajúce novely.",
+    "provisionAbsentVersions": "{count, plural, one {V tomto znení zákona nie je} few {Nie je v týchto # zneniach zákona} many {Nie je v týchto # zneniach zákona} other {Nie je v týchto # zneniach zákona}}",
+    "provisionAskContextPrompt": "\n\nPasáže, ktoré toto ustanovenie aplikujú v najvplyvnejších rozhodnutiach:\n{passages}\n\nPomocou nástrojov pre judikatúru si môžeš prečítať ktorékoľvek z týchto rozhodnutí celé alebo vyhľadať ďalšie rozhodnutia, ktoré ustanovenie citujú.",
+    "provisionAskSummarize": "Zhrnúť, ako súdy toto ustanovenie používajú",
+    "provisionAskSummarizePrompt": "Zhrň, ako súdy používajú {subject}, a cituj rozhodnutia, z ktorých vychádzaš.",
+    "provisionDetailsFor": "Podrobnosti k {provision}",
+    "provisionEffectiveFrom": "účinné od {date}",
+    "provisionHistoryEmpty": "K tomuto ustanoveniu nie je zachované žiadne znenie.",
+    "provisionHistoryUnavailable": "Históriu tohto ustanovenia sa nepodarilo načítať.",
+    "provisionPartTextUnavailable": "Znenie {provisionLabel} nie je k dispozícii",
+    "provisionPromptSubject": "{provision} predpisu {statute} ({eli}) v znení účinnom od {date}",
+    "provisionPromptSubjectUndated": "{provision} predpisu {statute} ({eli})",
+    "provisionRunAlsoFrom": "aj od {date}",
+    "provisionRunShowVersions": "Zobraziť znenia zákona za obdobie {range}",
+    "provisionRunUnchanged": "{count, plural, one {# znenie zákona bez zmeny} few {# znenia zákona bez zmeny} many {# znenia zákona bez zmeny} other {# znení zákona bez zmeny}}",
+    "provisionTextUnavailable": "Text nie je pre toto znenie k dispozícii",
+    "provisionVersionsAll": "Všetky znenia zákona",
+    "provisionWordingAdded": "Nové ustanovenie",
+    "provisionWordingChanged": "Zmenené",
+    "provisionWordingEarliest": "Najstaršie dostupné znenie",
+    "publisherWindowInconsistent": "K tomuto dňu nemožno určiť účinné znenie: údaje vydavateľa si odporujú.",
+    "resolvedAlias": "Rozpoznané ako {label}",
+    "searchLabel": "Hľadať v právnych predpisoch",
+    "searchPlaceholder": "Číslo, skratka alebo názov, napr. 40/1964 Zb.",
+    "showCitedPartOnly": "Zobraziť len citovanú časť",
+    "showFullProvision": "Zobraziť celé ustanovenie",
+    "showInText": "Zobraziť v texte",
+    "sortNeedsYear": "Na zoradenie podľa tohto stĺpca vyberte vo filtroch rok.",
+    "statedWindow": "Dátumy uvedené vydavateľom: {range}",
+    "status": {
+      "current": "Účinné",
+      "draft": "Navrhované",
+      "ended": "Neúčinné",
+      "future": "Budúce",
+      "historical": "Nahradené",
+      "neverInForce": "Nenadobudlo účinnosť",
+      "repealed": "Zrušené",
+      "unknown": "Stav nejasný"
+    },
+    "title": "Právne predpisy",
+    "validity": "Platné od {from} do {to}",
+    "versionAlreadySelected": "Táto verzia sa už zobrazuje.",
+    "versionAppliedInDecision": "Znenie použité v rozhodnutí <bdi>{court}</bdi> <bdi>{caseNumber}</bdi> (<bdi>{range}</bdi>) · {status}",
+    "versionChangesAdded": "{count, plural, one {# vložené ustanovenie} few {# vložené ustanovenia} many {# vloženého ustanovenia} other {# vložených ustanovení}}",
+    "versionChangesChanged": "{count, plural, one {# zmenené ustanovenie} few {# zmenené ustanovenia} many {# zmeneného ustanovenia} other {# zmenených ustanovení}}",
+    "versionChangesNone": "Znenie bez zmeny",
+    "versionChangesRemoved": "{count, plural, one {# vypustené ustanovenie} few {# vypustené ustanovenia} many {# vypusteného ustanovenia} other {# vypustených ustanovení}}",
+    "versionChangesWords": "{inserted, plural, one {# vložené slovo} few {# vložené slová} many {# vloženého slova} other {# vložených slov}}, {deleted, plural, one {# vypustené slovo} few {# vypustené slová} many {# vypusteného slova} other {# vypustených slov}}",
+    "wordingVersionUnknown": "Dátum verzie znenia nie je k dispozícii"
+  }
+}

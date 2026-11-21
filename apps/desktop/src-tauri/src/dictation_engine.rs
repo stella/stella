@@ -28,12 +28,13 @@ use crate::{
   dictation_audio::to_mono,
   dictation_cleanup,
   dictation_cloud::{self, CloudSession, Destination},
-  dictation_context::{self, CleanupContext},
+  dictation_context::{self, CleanupContext, Sharing},
   dictation_focus::{self, FocusTarget, Insertion},
   dictation_format::{AppClass, Segment},
   dictation_hold_key::{HoldChoice, MINIMUM_HOLD},
   dictation_input,
   dictation_live::{Ended, Live, Transcribe, Transcription},
+  dictation_media::{self, MediaGuard},
   dictation_microphone::{self, Choice, InputDevice},
   dictation_pauses::Segmenter,
   dictation_preview,
@@ -85,16 +86,23 @@ struct Active {
 }
 
 impl Active {
-  /// Sounds the start once the hold is long enough to be a dictation, not
-  /// a tap, when the speaker wants sounds.
-  fn sound_start(&mut self, app: &AppHandle) {
-    if !self.capture.sounded
-      && self.trace.since_press() >= MINIMUM_HOLD
-      && dictation::sounds_enabled(app)
-    {
+  /// Once the hold is long enough to be a dictation, not a tap: the start
+  /// sound when the speaker wants sounds, then whatever the speaker chose
+  /// for other sound, after the start sound so it is heard in full.
+  fn reach_hold(&mut self, app: &AppHandle) {
+    if self.capture.held || self.trace.since_press() < MINIMUM_HOLD {
+      return;
+    }
+    self.capture.held = true;
+    let delay = if dictation::sounds_enabled(app) {
       self.capture.sounded = true;
       dictation_sounds::play(Cue::Start);
-    }
+      dictation_sounds::CUE_LENGTH
+    } else {
+      Duration::ZERO
+    };
+    let (choice, speakers_only) = dictation::while_dictating(app);
+    self.capture.media = dictation_media::begin(choice, speakers_only, delay);
   }
 }
 
@@ -142,10 +150,7 @@ fn run(app: &AppHandle, commands: &Receiver<Command>) {
             Ok(capture) => {
               // Read once recording runs, so it never delays capture; the
               // context is where the speaker pressed the shortcut.
-              let context = dictation_context::read(
-                focus.as_ref(),
-                dictation::context_sharing(app),
-              );
+              let context = dictation_context::read(focus.as_ref(), capture.sharing);
               active = Some(Active {
                 capture,
                 focus,
@@ -168,7 +173,7 @@ fn run(app: &AppHandle, commands: &Receiver<Command>) {
       Ok(Command::Press) => {
         if let Some(active) = active.as_mut() {
           active.capture.listen();
-          active.sound_start(app);
+          active.reach_hold(app);
         }
       }
       Ok(Command::Retype(focus)) => {
@@ -226,7 +231,7 @@ fn run(app: &AppHandle, commands: &Receiver<Command>) {
       Err(RecvTimeoutError::Timeout) => match active.as_mut() {
         Some(active) => {
           active.capture.listen();
-          active.sound_start(app);
+          active.reach_hold(app);
           // Between transcription results too: a password field that takes
           // focus while the panel shows hides it at once.
           if active.password_watch.due(dictation_preview::showing(app))
@@ -308,10 +313,18 @@ struct Capture {
   segmenter: Segmenter,
   live: Live<Engines>,
   language: SpeakerLanguage,
+  /// Whether the text goes through AI cleanup, and what cleanup may read
+  /// besides the kind of app.
+  cleanup: bool,
+  sharing: Sharing,
   /// Mono samples taken so far, for the local log.
   recorded: usize,
-  /// Whether the start sound played, so the stop sound plays too.
+  /// Whether the hold became a dictation, and whether the start sound
+  /// played then, so the stop sound plays too.
+  held: bool,
   sounded: bool,
+  /// What was done to other sound; dropping it puts that back.
+  media: Option<MediaGuard>,
 }
 
 impl Capture {
@@ -350,7 +363,12 @@ fn begin(
   if let Some(chosen) = &recorder.missing {
     dictation::report_missing_microphone(app, chosen, recorder.device.clone());
   }
-  let language = dictation::language(app);
+  // The app in front at the press decides cleanup and the language.
+  let dictation::ForApp {
+    cleanup,
+    language,
+    sharing,
+  } = dictation::for_app(app, focus);
   let local_installed = model.is_some();
   let mut cloud = CloudSession::new(
     app.clone(),
@@ -384,8 +402,12 @@ fn begin(
     recorder,
     live,
     language,
+    cleanup,
+    sharing,
     recorded: 0,
+    held: false,
     sounded: false,
+    media: None,
   })
 }
 
@@ -413,8 +435,11 @@ fn finish(
     mut segmenter,
     mut live,
     language,
+    cleanup: cleanup_enabled,
     recorded,
     sounded,
+    media,
+    ..
   } = capture;
   let channels = recorder.channels;
   let rate = recorder.rate;
@@ -423,6 +448,8 @@ fn finish(
   // A microphone that stopped midway leaves what it already delivered: the
   // stretches sent while the key was down still count.
   let Finished { last, lost } = recorder.finish();
+  // Recording stopped: other sound comes back, before the stop sound.
+  drop(media);
   // Counted once the stream stopped, so the last frames it delivered count.
   log_hold(
     app,
@@ -475,7 +502,6 @@ fn finish(
     // A hold that heard nothing is told unless it was a tap.
     return heard_nothing(held).map(|()| Delivered::Empty);
   }
-  let cleanup_enabled = dictation::cleanup_enabled(app);
   // Cleanup spells the custom words itself; without it, the words the speech
   // model here missed are spelled on this computer.
   let respelled;

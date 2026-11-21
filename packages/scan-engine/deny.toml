@@ -1,4 +1,5 @@
 [advisories]
+unused-ignored-advisory = "deny"
 ignore = []
 
 # Only the licenses the graph uses; a dependency under any other license is a

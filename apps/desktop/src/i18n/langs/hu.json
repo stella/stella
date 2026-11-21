@@ -662,6 +662,35 @@
       "openSoundPc": "Hangbeállítások megnyitása",
       "title": "A stella nem hallja a mikrofont"
     },
+    "perApp": {
+      "add": "Hozzáadás…",
+      "cleanup": {
+        "default": "Javítás a beállítás szerint",
+        "label": "Javítás: {name}",
+        "off": "Nincs javítás",
+        "on": "Javítással"
+      },
+      "description": "Kapcsolja be vagy ki az AI-javítást, és válasszon nyelvet egy alkalmazáshoz vagy alkalmazásfajtához. Az az alkalmazás dönt, amely a diktálás kezdetekor előtérben van.",
+      "failed": "A beállításokat nem sikerült menteni. Próbálja újra.",
+      "group": "Alkalmazásonként",
+      "kinds": {
+        "browser": "Böngészők",
+        "chat": "Csevegőalkalmazások",
+        "code": "Kódszerkesztők",
+        "document": "Dokumentumok",
+        "email": "Levelezőalkalmazások",
+        "other": "Egyéb alkalmazások",
+        "terminal": "Terminálok"
+      },
+      "kindsOfApp": "Alkalmazásfajták",
+      "language": {
+        "default": "Nyelv a beállítás szerint",
+        "label": "Nyelv: {name}"
+      },
+      "recentApps": "Legutóbbi alkalmazások",
+      "remove": "{name} eltávolítása",
+      "title": "Beállítások egy alkalmazáshoz"
+    },
     "preview": {
       "finishing": "Befejezés…",
       "label": "Az eddig diktált szöveg",
@@ -686,6 +715,19 @@
       "failed": "Az ablakot nem sikerült megnyitni. Próbálja újra.",
       "open": "Megnyitás",
       "title": "Felvétel átírása"
+    },
+    "whileDictating": {
+      "choices": {
+        "lower": "Más hangok halkítása",
+        "nothing": "Semmi",
+        "pause": "A Zene és a Spotify szüneteltetése"
+      },
+      "description": "Mi történjen a többi hanggal, amíg a stella rögzít, hogy ne kerüljön a szövegbe. A rögzítés végén minden visszaáll.",
+      "speakersOnly": {
+        "description": "A fejhallgató marad, ahogy van: a mikrofon nem hallja.",
+        "title": "Csak hangszórón"
+      },
+      "title": "Diktálás közben"
     }
   },
   "keepAwake": {

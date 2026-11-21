@@ -65,11 +65,28 @@
     // Outputs are ignored by Git, but restored by Turbo on a cache hit.
     "@stll/web#generate:messages": {
       "inputs": [
-        "src/i18n/langs/*.json",
+        "src/i18n/namespaces/**/*.json",
+        "src/i18n/namespaces.json",
+        "$TURBO_ROOT$/packages/scripts/src/i18n-namespaces.ts",
         "$TURBO_ROOT$/packages/scripts/src/i18n-typegen.ts",
         "package.json"
       ],
-      "outputs": ["src/i18n/langs/messages.gen.ts"]
+      "outputs": [
+        "src/i18n/langs/messages.gen.ts",
+        "src/i18n/langs/ar.json",
+        "src/i18n/langs/cs.json",
+        "src/i18n/langs/de.json",
+        "src/i18n/langs/en.json",
+        "src/i18n/langs/es.json",
+        "src/i18n/langs/et.json",
+        "src/i18n/langs/fr.json",
+        "src/i18n/langs/hu.json",
+        "src/i18n/langs/lt.json",
+        "src/i18n/langs/lv.json",
+        "src/i18n/langs/pl.json",
+        "src/i18n/langs/pt-BR.json",
+        "src/i18n/langs/sk.json"
+      ]
     },
     "@stll/web#generate:route-tree": {
       "inputs": [
@@ -1112,7 +1129,8 @@
         "!$TURBO_ROOT$/packages/**/*.tsbuildinfo",
         "!$TURBO_ROOT$/packages/mcp-apps/src/*/generated/**",
         "!$TURBO_ROOT$/packages/mcp-apps/src/generated/**",
-        "$TURBO_ROOT$/apps/web/src/i18n/langs/*.json",
+        "$TURBO_ROOT$/apps/web/src/i18n/namespaces/**/*.json",
+        "$TURBO_ROOT$/apps/web/src/i18n/namespaces.json",
         "$TURBO_ROOT$/apps/web/src/fonts.css",
         "$TURBO_ROOT$/apps/web/public/fonts/**",
         "$TURBO_ROOT$/scripts/generated-files.ts",
@@ -1145,7 +1163,8 @@
         "!**/*.tsbuildinfo",
         "$TURBO_ROOT$/apps/api/src/**",
         "$TURBO_ROOT$/apps/api/scripts/generate-mcp-app-contracts.ts",
-        "$TURBO_ROOT$/apps/web/src/i18n/langs/*.json",
+        "$TURBO_ROOT$/apps/web/src/i18n/namespaces/**/*.json",
+        "$TURBO_ROOT$/apps/web/src/i18n/namespaces.json",
         "$TURBO_ROOT$/apps/web/src/fonts.css",
         "$TURBO_ROOT$/apps/web/public/fonts/**",
         "$TURBO_ROOT$/packages/**",
@@ -1252,7 +1271,8 @@
         "!**/*.tsbuildinfo",
         "$TURBO_ROOT$/apps/api/src/**",
         "$TURBO_ROOT$/apps/api/scripts/generate-mcp-app-contracts.ts",
-        "$TURBO_ROOT$/apps/web/src/i18n/langs/*.json",
+        "$TURBO_ROOT$/apps/web/src/i18n/namespaces/**/*.json",
+        "$TURBO_ROOT$/apps/web/src/i18n/namespaces.json",
         "$TURBO_ROOT$/apps/web/src/fonts.css",
         "$TURBO_ROOT$/apps/web/public/fonts/**",
         "$TURBO_ROOT$/packages/**",
@@ -1294,7 +1314,8 @@
       "dependsOn": ["^build", "generate:capability-runtime"],
       "inputs": [
         "$TURBO_DEFAULT$",
-        "$TURBO_ROOT$/apps/web/src/i18n/langs/*.json",
+        "$TURBO_ROOT$/apps/web/src/i18n/namespaces/**/*.json",
+        "$TURBO_ROOT$/apps/web/src/i18n/namespaces.json",
         "$TURBO_ROOT$/apps/web/src/fonts.css",
         "$TURBO_ROOT$/apps/web/public/fonts/**",
         "$TURBO_ROOT$/packages/decision-reader/**",
@@ -1912,7 +1933,7 @@
         "$TURBO_ROOT$/.oxlint-plugins/**",
         "$TURBO_ROOT$/apps/web/src/components/chat/**",
         "$TURBO_ROOT$/apps/web/src/features/chat/chat-runtime.ts",
-        "$TURBO_ROOT$/apps/web/src/i18n/langs/en.json",
+        "$TURBO_ROOT$/apps/web/src/i18n/namespaces/en/chat.json",
         "$TURBO_ROOT$/apps/web/src/fonts.css",
         "$TURBO_ROOT$/apps/web/public/fonts/**",
         "$TURBO_ROOT$/docs/data-export/**",
@@ -1958,7 +1979,7 @@
         "$TURBO_ROOT$/apps/web/src/components/sidebar-user-menu.tsx",
         // The phone draws the web's recorded chats and its step titles.
         "$TURBO_ROOT$/apps/web/src/components/chat/__fixtures__/recorded-conversations/**",
-        "$TURBO_ROOT$/apps/web/src/i18n/langs/**",
+        "$TURBO_ROOT$/apps/web/src/i18n/namespaces/**",
         // And gives each failed turn the reason the web's map names.
         "$TURBO_ROOT$/apps/web/src/lib/errors/ai-failure.ts",
         "$TURBO_ROOT$/packages/ui/src/**"
