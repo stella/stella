@@ -6,7 +6,7 @@ import { cn } from "../lib/utils";
 
 type Glyph = { char: string; enters: boolean; key: string };
 
-type GlyphState = { generation: number; glyphs: Glyph[]; value: string };
+type GlyphState = { generation: number; glyphs: Glyph[] };
 
 /**
  * Aligns characters from the end, where digits keep their place value, so
@@ -43,16 +43,17 @@ const AnimatedCount = ({
   className?: string;
   value: string;
 }) => {
+  const [prevValue, setPrevValue] = useState(value);
   const [state, setState] = useState<GlyphState>(() => ({
     generation: 0,
     glyphs: toGlyphs(value, null, 0),
-    value,
   }));
   let { glyphs } = state;
-  if (state.value !== value) {
+  if (prevValue !== value) {
     const generation = state.generation + 1;
     glyphs = toGlyphs(value, state.glyphs, generation);
-    setState({ generation, glyphs, value });
+    setPrevValue(value);
+    setState({ generation, glyphs });
   }
 
   return (
