@@ -152,7 +152,7 @@ describe("a repair that would take a served copy away is held", () => {
     const outcome = await continuousReconciles(entityId);
 
     if (outcome.isOk()) {
-      return panic("Expected the repair to be held");
+      panic("Expected the repair to be held");
     }
     expect(outcome.error.copies).toEqual([
       { generation: SERVED, entityId, risk: "desired_action_change" },
@@ -178,7 +178,7 @@ describe("a repair that would take a served copy away is held", () => {
     const second = await boundedRepairWrites(entityId);
 
     if (second.isOk()) {
-      return panic("Expected the second repair to be held");
+      panic("Expected the second repair to be held");
     }
     expect(second.error.copies).toEqual([
       { generation: SERVED, entityId, risk: "desired_action_change" },
@@ -231,7 +231,7 @@ describe("a repair that would take a served copy away is held", () => {
     const outcome = await continuousReconciles(entityId);
 
     if (outcome.isOk()) {
-      return panic("Expected the repair to be held");
+      panic("Expected the repair to be held");
     }
     expect(outcome.error.copies).toEqual([
       { generation: SERVED, entityId, risk: "restorable_cleanup" },
@@ -261,7 +261,7 @@ describe("a repair that would take a served copy away is held", () => {
     const outcome = await continuousReconciles(entityId);
 
     if (outcome.isOk()) {
-      return panic("Expected the repair to be held");
+      panic("Expected the repair to be held");
     }
     expect(outcome.error.copies).toEqual([
       { generation: SERVED, entityId, risk: "legacy_retirement" },
