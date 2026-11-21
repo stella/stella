@@ -2,10 +2,16 @@ import { useEffect, useState } from "react";
 
 import { resolveInlineOverflow } from "../lib/inline-overflow";
 
-/** Marks one item's natural-width copy inside the measuring row. */
+/**
+ * Marks one item's natural-width copy inside the measuring row; its value is
+ * the item's key.
+ */
 export const INLINE_OVERFLOW_ITEM_ATTRIBUTE = "data-inline-overflow-item";
 /** Marks the overflow trigger's copy inside the measuring row. */
 export const INLINE_OVERFLOW_TRIGGER_ATTRIBUTE = "data-inline-overflow-trigger";
+
+/** Joins item keys into one value the effect can depend on. */
+const KEY_SEPARATOR = "\u0000";
 
 /**
  * The space between two neighbouring copies, read off their boxes in either
@@ -22,13 +28,11 @@ const itemGap = (items: readonly DOMRect[]): number => {
 type UseInlineOverflowOptions = {
   /** The active item's index; the policy keeps it on screen. */
   activeIndex: number;
-  /** How many items the row holds. */
-  itemCount: number;
   /**
-   * Names the items in their order, so a reorder recounts them: swapping
-   * two items keeps the measuring row's size, which no observer reports.
+   * Each item's key, in display order; the measuring copy of an item carries
+   * its key in `INLINE_OVERFLOW_ITEM_ATTRIBUTE`.
    */
-  itemOrder: string;
+  itemKeys: readonly string[];
 };
 
 /**
@@ -39,22 +43,25 @@ type UseInlineOverflowOptions = {
  *   the overflow trigger share, independent of how many items it shows;
  * - an invisible, inert copy of every item at its natural width plus the
  *   trigger (`measureRef`), each marked with `INLINE_OVERFLOW_ITEM_ATTRIBUTE`
- *   or `INLINE_OVERFLOW_TRIGGER_ATTRIBUTE`, inside one flex row whose gap is
- *   the gap between items.
+ *   (set to the item's key) or `INLINE_OVERFLOW_TRIGGER_ATTRIBUTE`, inside
+ *   one flex row whose gap is the gap between items.
  *
  * Measuring the copy keeps the widths stable however many items the row is
  * currently showing, so collapsing an item never changes the measurement
- * that collapsed it. The count is recomputed whenever either element resizes
- * (a docked pane narrows the row, an added view or a rename widens the copy)
- * and when the active item or the items' order changes. The first count arrives with the
- * observer's first report, before the row paints; until then every item
- * shows.
+ * that collapsed it. Widths are read by key in the order `itemKeys` gives,
+ * and the count is recomputed whenever either element resizes (a docked
+ * pane narrows the row, an added view or a rename widens the copy), the
+ * active item changes, or the items change order: swapping two items keeps
+ * the measuring row's size, which no observer reports. The first count
+ * arrives with the observer's first report, before the row paints; until
+ * then every item shows.
  */
 export const useInlineOverflow = ({
   activeIndex,
-  itemCount,
-  itemOrder,
+  itemKeys,
 }: UseInlineOverflowOptions) => {
+  const itemCount = itemKeys.length;
+  const order = itemKeys.join(KEY_SEPARATOR);
   const [container, setContainer] = useState<HTMLElement | null>(null);
   const [measure, setMeasure] = useState<HTMLElement | null>(null);
   const [visibleCount, setVisibleCount] = useState(itemCount);
@@ -65,16 +72,21 @@ export const useInlineOverflow = ({
       return undefined;
     }
 
+    const keys = order === "" ? [] : order.split(KEY_SEPARATOR);
     // The row's content box as its observer reports it: the room inside its
     // padding. Observing reports every element once, so it is known before
     // the first count.
     let availableWidth = 0;
 
     const recompute = () => {
-      const items = Array.from(
+      const copies = Array.from(
         measure.querySelectorAll(`[${INLINE_OVERFLOW_ITEM_ATTRIBUTE}]`),
-        (item) => item.getBoundingClientRect(),
+        (copy) => ({
+          key: copy.getAttribute(INLINE_OVERFLOW_ITEM_ATTRIBUTE),
+          box: copy.getBoundingClientRect(),
+        }),
       );
+      const boxByKey = new Map(copies.map(({ key, box }) => [key, box]));
       const trigger = measure.querySelector(
         `[${INLINE_OVERFLOW_TRIGGER_ATTRIBUTE}]`,
       );
@@ -83,8 +95,8 @@ export const useInlineOverflow = ({
         resolveInlineOverflow({
           activeIndex,
           availableWidth,
-          gap: itemGap(items),
-          itemWidths: items.map(({ width }) => width),
+          gap: itemGap(copies.map(({ box }) => box)),
+          itemWidths: keys.map((key) => boxByKey.get(key)?.width ?? 0),
           triggerWidth: trigger?.getBoundingClientRect().width ?? 0,
         }).visibleCount,
       );
@@ -102,10 +114,7 @@ export const useInlineOverflow = ({
     observer.observe(container);
     observer.observe(measure);
     return () => observer.disconnect();
-    // `itemOrder` is read by the observer's report, through the copies'
-    // order in the measuring row; the effect re-observes when it changes.
-    // oxlint-disable-next-line react/exhaustive-effect-dependencies -- the order lives in the DOM the observer measures
-  }, [activeIndex, container, itemOrder, measure]);
+  }, [activeIndex, container, measure, order]);
 
   return {
     /** The measured row, once mounted. */

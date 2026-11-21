@@ -75,8 +75,7 @@ export const InspectorFacetBar = <F extends string>({
   const { container, containerRef, measureRef, visibleCount } =
     useInlineOverflow({
       activeIndex,
-      itemCount: facets.length,
-      itemOrder: facets.join("\n"),
+      itemKeys: facets,
     });
   const { visible: visibleFacets, overflow: overflowFacets } =
     splitInlineOverflow(facets, visibleCount, activeIndex);
@@ -168,7 +167,7 @@ export const InspectorFacetBar = <F extends string>({
               disabledFacets?.has(value) ? "" : undefined
             }
             key={value}
-            {...{ [INLINE_OVERFLOW_ITEM_ATTRIBUTE]: "" }}
+            {...{ [INLINE_OVERFLOW_ITEM_ATTRIBUTE]: value }}
           >
             {labels[value]}
           </span>

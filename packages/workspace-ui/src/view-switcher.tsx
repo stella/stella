@@ -158,8 +158,7 @@ export const WorkspaceViewSwitcher = <View extends WorkspaceViewSwitcherItem>({
     visibleCount,
   } = useInlineOverflow({
     activeIndex: pinnedIndex,
-    itemCount: views.length,
-    itemOrder: views.map((view) => view.id).join("\n"),
+    itemKeys: views.map((view) => view.id),
   });
   const { visible: visibleTabs, overflow: overflowTabs } = splitInlineOverflow(
     viewTabs,
@@ -326,7 +325,7 @@ const WorkspaceViewTabsMeasure = <View extends WorkspaceViewSwitcherItem>({
             <div
               className="relative flex h-full items-center"
               key={view.id}
-              {...{ [INLINE_OVERFLOW_ITEM_ATTRIBUTE]: "" }}
+              {...{ [INLINE_OVERFLOW_ITEM_ATTRIBUTE]: view.id }}
             >
               <WorkspaceViewTabFace
                 reserveActionSpace={reserveActionSpace}
