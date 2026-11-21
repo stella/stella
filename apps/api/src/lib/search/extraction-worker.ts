@@ -648,9 +648,14 @@ const extractEmbeddedPayloadText = async (
   return Result.err(content.error);
 };
 
+// Payloads whose signature identifies them as something other than XML.
+const NON_XML_PAYLOAD_MIME_TYPES = new Set([PDF_MIME_TYPE, RTF_MIME_TYPE]);
+
 /**
  * A signed payload's content: a structured invoice when the payload is one,
- * otherwise the embedded file's own text.
+ * otherwise the embedded file's own text. The bounded XML reader decides, not
+ * the payload sniff, so a signed invoice opens exactly as an unsigned upload
+ * of the same XML does (a leading comment, UTF-16).
  */
 const readCadesPayloadContent = async (
   file: ScannedFile,
@@ -658,7 +663,7 @@ const readCadesPayloadContent = async (
 ): Promise<
   Result<{ invoice: EInvoicePreview | null; text: string }, UnhandledException>
 > => {
-  if (normalizeMimeType(file.mimeType) === XML_EMBEDDED_MIME_TYPE) {
+  if (!NON_XML_PAYLOAD_MIME_TYPES.has(normalizeMimeType(file.mimeType))) {
     const invoice = readEInvoiceXml(new Uint8Array(file.bytes));
     if (invoice.isOk() && invoice.value !== null) {
       const { preview } = invoice.value;

@@ -12,8 +12,9 @@ const BINARY_PAYLOAD = {
 const TEXT_PAYLOAD = { mimeType: "text/plain", extension: "txt" };
 export const XML_EMBEDDED_MIME_TYPE = "application/xml";
 const XML_PAYLOAD = { mimeType: XML_EMBEDDED_MIME_TYPE, extension: "xml" };
-// Text that opens with an XML declaration or element, after any BOM.
-const XML_START = /^\uFEFF?\s*<(?:\?xml\s|[A-Za-z_])/u;
+// Text that opens with an XML declaration, comment, processing instruction
+// or element, after any BOM.
+const XML_START = /^\uFEFF?\s*<[?!A-Za-z_]/u;
 const isTextByte = (byte: number) =>
   byte === 0x09 ||
   byte === 0x0a ||

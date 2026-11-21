@@ -159,6 +159,42 @@ describe("structured invoice files", () => {
     );
   });
 
+  test.each([
+    [
+      "opens with a comment",
+      xmlBytes(
+        fatturaPaXml().replace("?>", "?><!-- issued by a test system -->"),
+      ),
+    ],
+    [
+      "is UTF-16",
+      new Uint8Array(
+        Buffer.concat([
+          Buffer.from([0xff, 0xfe]),
+          Buffer.from(
+            fatturaPaXml().replace('encoding="UTF-8"', 'encoding="UTF-16"'),
+            "utf16le",
+          ),
+        ]),
+      ),
+    ],
+  ])("a signed invoice that %s opens as it does unsigned", async (_, bytes) => {
+    const name = "IT00000000001_00003.xml.p7m";
+    const file = storedFile(
+      await wrapP7m(bytes),
+      CADES_FILE_FORMAT.mimeType,
+      name,
+    );
+    const preview = (await readCadesPreview(file, name)).unwrap();
+    expect(preview.invoice?.invoices[0]?.number).toBe("2026/1");
+    const unsigned = (
+      await readEInvoicePreview(
+        storedFile(bytes, XML_FILE_FORMAT.mimeType, "IT00000000001_00003.xml"),
+      )
+    ).unwrap();
+    expect(preview.invoice).toEqual(unsigned);
+  });
+
   test("a signed file holding plain text keeps its text and no invoice", async () => {
     const name = "note.txt.p7m";
     const file = storedFile(
