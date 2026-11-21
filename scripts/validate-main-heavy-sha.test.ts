@@ -244,9 +244,10 @@ const trustedCheckouts = (
       return true;
     }
     expect(step.with["ref"]).toBe(`\${{ github.workflow_sha }}`);
-    expect(["scripts/retry.sh", "package.json\nscripts/retry.sh\n"]).toContain(
-      step.with["sparse-checkout"],
-    );
+    expect(step.with["sparse-checkout"]).toBeOneOf([
+      "scripts/retry.sh",
+      "package.json\nscripts/retry.sh\n",
+    ]);
     expect(step.with["persist-credentials"]).toBe(false);
     return false;
   });
