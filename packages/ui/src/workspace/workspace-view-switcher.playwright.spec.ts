@@ -97,48 +97,72 @@ test.describe("workspace view switcher chrome", () => {
   });
 
   for (const direction of ["ltr", "rtl"] as const) {
-    test(`keeps the add action fixed beside overflowing ${direction.toUpperCase()} tabs`, async ({
+    test(`moves ${direction.toUpperCase()} tabs with no room into the overflow menu`, async ({
       page,
     }) => {
       await openFixture(page, { direction, overflow: true });
+      const isRTL = direction === "rtl";
+      const strip = page.locator("[data-workspace-switcher]");
       const tabList = page.getByRole("tablist");
+      const tabs = page.getByRole("tab");
       const addView = page.getByRole("button", {
-        name: direction === "rtl" ? "إضافة عرض" : "Add view",
+        name: isRTL ? "إضافة عرض" : "Add view",
       });
-      const actionArea = addView.locator("..");
+      const more = page.getByRole("button", {
+        name: isRTL ? "عرض المزيد" : "Show more",
+      });
 
-      const overflow = await tabList.evaluate(
-        (element) => element.scrollWidth - element.clientWidth,
-      );
-      expect(overflow).toBeGreaterThan(0);
+      await expect(more).toBeVisible();
       await expect(addView).toBeVisible();
-      await expect
-        .poll(
-          async () =>
-            await actionArea.evaluate(
-              (element) => getComputedStyle(element).borderInlineStartWidth,
-            ),
-        )
-        .toBe("1px");
+      const shownCount = await tabs.count();
+      expect(shownCount).toBeGreaterThan(0);
+      expect(shownCount).toBeLessThan(4);
 
-      const before = await addView.boundingBox();
-      const scrolled = await tabList.evaluate((element, isRTL) => {
-        element.scrollLeft = isRTL ? -element.scrollWidth : element.scrollWidth;
-        return element.scrollLeft;
-      }, direction === "rtl");
-      // The add action sits outside the scroll container, so its position
-      // would hold even if the assignment never moved the strip. Chromium
-      // counts RTL offsets down from zero, so the far end is -overflow there
-      // and +overflow in LTR; scrollWidth and clientWidth round to integers
-      // while scrollLeft does not, hence the tolerance.
-      const scrollEnd = direction === "rtl" ? -overflow : overflow;
-      expect(Math.abs(scrolled - scrollEnd)).toBeLessThanOrEqual(TOLERANCE_PX);
+      // Nothing hides behind a scroll: the strip holds exactly the tabs it
+      // shows, and they, the menu and the add action stay inside the strip.
+      expect(
+        await tabList.evaluate(
+          (element) => element.scrollWidth - element.clientWidth,
+        ),
+      ).toBeLessThanOrEqual(TOLERANCE_PX);
+      const stripBox = await strip.boundingBox();
+      for (const control of [more, addView, tabs.last()]) {
+        const box = await control.boundingBox();
+        expect(box).not.toBeNull();
+        expect(stripBox).not.toBeNull();
+        expect(box?.x ?? 0).toBeGreaterThanOrEqual(
+          (stripBox?.x ?? 0) - TOLERANCE_PX,
+        );
+        expect((box?.x ?? 0) + (box?.width ?? 0)).toBeLessThanOrEqual(
+          (stripBox?.x ?? 0) + (stripBox?.width ?? 0) + TOLERANCE_PX,
+        );
+      }
+      // The add action no longer sits after a scrolling strip, so it draws
+      // no divider of its own.
+      expect(
+        await addView
+          .locator("..")
+          .evaluate(
+            (element) => getComputedStyle(element).borderInlineStartWidth,
+          ),
+      ).toBe("0px");
 
-      const after = await addView.boundingBox();
+      // Every view is a tab or a menu item, once.
+      await more.click();
+      const items = page.getByRole("menuitem");
+      expect((await items.count()) + shownCount).toBe(4);
+      const lastName = isRTL ? "المراسلات" : "Correspondence";
+      await page.getByRole("menuitem", { name: lastName }).click();
 
-      expect(before).not.toBeNull();
-      expect(after).not.toBeNull();
-      expect(after?.x).toBeCloseTo(before?.x ?? 0, 0);
+      // The chosen view becomes the active tab and stays on screen.
+      const active = page.getByRole("tab", { name: lastName });
+      await expect(active).toBeVisible();
+      await expect(active).toHaveAttribute("aria-selected", "true");
+      expect(
+        await tabList.evaluate(
+          (element) => element.scrollWidth - element.clientWidth,
+        ),
+      ).toBeLessThanOrEqual(TOLERANCE_PX);
     });
   }
 });

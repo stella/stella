@@ -275,6 +275,7 @@ export const ViewSwitcher = ({
         addControl={addControl}
         ariaLabel={t("workspaces.views.switcherLabel")}
         direction={direction}
+        overflowLabel={t("common.showMore")}
         editing={
           renamingViewId
             ? {

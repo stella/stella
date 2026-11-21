@@ -1,0 +1,186 @@
+import { GlobalRegistrator } from "@happy-dom/global-registrator";
+import { afterAll, afterEach, describe, expect, test } from "bun:test";
+
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
+
+GlobalRegistrator.register();
+const previousActEnvironment: unknown = Reflect.get(
+  globalThis,
+  "IS_REACT_ACT_ENVIRONMENT",
+);
+Reflect.set(globalThis, "IS_REACT_ACT_ENVIRONMENT", true);
+const { act, cleanup, fireEvent, render, waitFor } =
+  await import("@testing-library/react");
+const { useState } = await import("react");
+const { INLINE_OVERFLOW_ITEM_ATTRIBUTE, INLINE_OVERFLOW_TRIGGER_ATTRIBUTE } =
+  await import("../hooks/use-inline-overflow");
+const { WorkspaceViewSwitcher } =
+  await import("../../../workspace-ui/src/view-switcher");
+
+// happy-dom lays nothing out. Each measured tab is 100px wide, the overflow
+// trigger 24px, and the row the tabs share is `ROW_WIDTH` wide, so the
+// policy has real numbers to split on.
+const TAB_WIDTH = 100;
+const TRIGGER_WIDTH = 24;
+let rowWidth = 250;
+
+const originalRect = HTMLElement.prototype.getBoundingClientRect;
+const originalClientWidth = Object.getOwnPropertyDescriptor(
+  HTMLElement.prototype,
+  "clientWidth",
+);
+const rect = (width: number) => new DOMRect(0, 0, width, 32);
+HTMLElement.prototype.getBoundingClientRect = function getBoundingClientRect(
+  this: HTMLElement,
+) {
+  if (this.hasAttribute(INLINE_OVERFLOW_ITEM_ATTRIBUTE)) {
+    return rect(TAB_WIDTH);
+  }
+  if (this.hasAttribute(INLINE_OVERFLOW_TRIGGER_ATTRIBUTE)) {
+    return rect(TRIGGER_WIDTH);
+  }
+  return originalRect.call(this);
+};
+Object.defineProperty(HTMLElement.prototype, "clientWidth", {
+  configurable: true,
+  get(this: HTMLElement) {
+    return this.parentElement?.dataset["slot"] === "workspace-view-switcher"
+      ? rowWidth
+      : 0;
+  },
+});
+
+const observers = new Set<() => void>();
+class ResizeObserverStub implements ResizeObserver {
+  private readonly notify: () => void;
+  constructor(callback: ResizeObserverCallback) {
+    this.notify = () => callback([], this);
+  }
+  observe() {
+    observers.add(this.notify);
+  }
+  unobserve() {}
+  disconnect() {
+    observers.delete(this.notify);
+  }
+}
+const previousResizeObserver = globalThis.ResizeObserver;
+globalThis.ResizeObserver = ResizeObserverStub;
+
+afterEach(() => {
+  cleanup();
+  observers.clear();
+  rowWidth = 250;
+});
+
+afterAll(async () => {
+  HTMLElement.prototype.getBoundingClientRect = originalRect;
+  if (originalClientWidth) {
+    Object.defineProperty(
+      HTMLElement.prototype,
+      "clientWidth",
+      originalClientWidth,
+    );
+  } else {
+    Reflect.deleteProperty(HTMLElement.prototype, "clientWidth");
+  }
+  globalThis.ResizeObserver = previousResizeObserver;
+  Reflect.set(globalThis, "IS_REACT_ACT_ENVIRONMENT", previousActEnvironment);
+  await unregisterDomEnvironment();
+});
+
+const VIEWS = [
+  { id: "table", name: "All matters" },
+  { id: "calendar", name: "Deadlines" },
+  { id: "filesystem", name: "Lists" },
+  { id: "correspondence", name: "Correspondence" },
+];
+
+const Harness = () => {
+  const [activeViewId, setActiveViewId] = useState("table");
+  return (
+    <WorkspaceViewSwitcher
+      activeViewId={activeViewId}
+      addControl={<button type="button">Add view</button>}
+      ariaLabel="Saved views"
+      direction="ltr"
+      onViewChange={setActiveViewId}
+      overflowLabel="Show more"
+      renderIcon={() => null}
+      reorder={null}
+      views={VIEWS}
+    />
+  );
+};
+
+const tabNames = (container: HTMLElement) =>
+  Array.from(
+    container.querySelectorAll(
+      '[role="tablist"][aria-label="Saved views"] [role="tab"]',
+    ),
+    (tab) => tab.textContent,
+  );
+
+describe("WorkspaceViewSwitcher overflow", () => {
+  test("views with no room move into the overflow menu, and the chosen one shows", async () => {
+    const mounted = render(<Harness />);
+
+    // 250px holds two 100px tabs beside the 24px trigger, not three.
+    await waitFor(() => {
+      expect(tabNames(mounted.container)).toEqual(["All matters", "Deadlines"]);
+    });
+    const addView = mounted.getByRole("button", { name: "Add view" });
+    expect(addView.parentElement?.className).not.toContain("border-s");
+
+    const more = mounted.getByRole("button", { name: "Show more" });
+    await act(async () => {
+      fireEvent.click(more);
+    });
+    const items = await waitFor(() => {
+      const found = mounted.getAllByRole("menuitem");
+      expect(found.length).toBe(2);
+      return found;
+    });
+    expect(items.map((item) => item.textContent)).toEqual([
+      "Lists",
+      "Correspondence",
+    ]);
+
+    await act(async () => {
+      fireEvent.click(
+        mounted.getByRole("menuitem", { name: "Correspondence" }),
+      );
+    });
+
+    // The active view takes the last visible slot; the others keep their
+    // order and the one it displaced joins the menu.
+    await waitFor(() => {
+      expect(tabNames(mounted.container)).toEqual([
+        "All matters",
+        "Correspondence",
+      ]);
+    });
+    expect(
+      mounted
+        .getByRole("tab", { name: "Correspondence" })
+        .getAttribute("aria-selected"),
+    ).toBe("true");
+  });
+
+  test("every view is a tab again once the row has room", async () => {
+    const mounted = render(<Harness />);
+    await waitFor(() => {
+      expect(tabNames(mounted.container)).toHaveLength(2);
+    });
+
+    rowWidth = 600;
+    await act(async () => {
+      for (const notify of observers) {
+        notify();
+      }
+    });
+
+    expect(tabNames(mounted.container)).toEqual(VIEWS.map(({ name }) => name));
+    expect(mounted.queryByRole("button", { name: "Show more" })).toBeNull();
+  });
+});

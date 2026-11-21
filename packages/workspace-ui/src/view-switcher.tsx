@@ -10,17 +10,27 @@ import {
 } from "@atlaskit/pragmatic-drag-and-drop/adapter/element-adapter";
 import { combine } from "@atlaskit/pragmatic-drag-and-drop/utils/combine";
 
+import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
-import { EllipsisVerticalIcon } from "@stll/ui/icons";
+import { buttonFaceClassName } from "@stll/ui/control-face";
+import { ChevronDownIcon, EllipsisVerticalIcon } from "@stll/ui/icons";
 import { InlineDropIndicator } from "@stll/ui/inline-drop-indicator";
+import { splitInlineOverflow } from "@stll/ui/inline-overflow";
 import {
   type InlineDirection,
   type InlineDropPosition,
   reorderInlineIds,
   toInlineDropPosition,
 } from "@stll/ui/inline-reorder";
-import { Menu, MenuPopup, MenuTrigger } from "@stll/ui/menu";
+import { Menu, MenuItem, MenuPopup, MenuTrigger } from "@stll/ui/menu";
+import { Tabs, TabsList } from "@stll/ui/tabs";
+import {
+  INLINE_OVERFLOW_ITEM_ATTRIBUTE,
+  INLINE_OVERFLOW_TRIGGER_ATTRIBUTE,
+  useInlineOverflow,
+} from "@stll/ui/use-inline-overflow";
 
+import { WorkspaceViewTabNameFace } from "./view-strip";
 import {
   WorkspaceViewStrip,
   type WorkspaceViewSwitcherItem,
@@ -63,6 +73,8 @@ export type WorkspaceViewSwitcherProps<View extends WorkspaceViewSwitcherItem> =
     activeViewId: string;
     ariaLabel: string;
     direction: InlineDirection;
+    /** Accessible name of the menu that holds the views with no room. */
+    overflowLabel: string;
     reorder: WorkspaceViewSwitcherReorder<View> | null;
     views: readonly View[];
     addControl?: React.ReactNode;
@@ -88,6 +100,7 @@ export const WorkspaceViewSwitcher = <View extends WorkspaceViewSwitcherItem>({
   activeViewId,
   ariaLabel,
   direction,
+  overflowLabel,
   reorder,
   views,
   addControl,
@@ -134,8 +147,19 @@ export const WorkspaceViewSwitcher = <View extends WorkspaceViewSwitcherItem>({
   });
   const reserveActionSpace = viewTabs.some(({ actions }) => actions !== null);
   const [instanceId] = useState(Symbol);
-  const [stripContainer, setStripContainer] = useState<HTMLDivElement | null>(
-    null,
+  // The view being renamed stays on screen like the active one.
+  const pinnedViewId = editing?.viewId ?? activeViewId;
+  const pinnedIndex = views.findIndex((view) => view.id === pinnedViewId);
+  const {
+    container: stripContainer,
+    containerRef,
+    measureRef,
+    visibleCount,
+  } = useInlineOverflow({ activeIndex: pinnedIndex, itemCount: views.length });
+  const { visible: visibleTabs, overflow: overflowTabs } = splitInlineOverflow(
+    viewTabs,
+    visibleCount,
+    pinnedIndex,
   );
 
   useEffect(() => {
@@ -175,9 +199,45 @@ export const WorkspaceViewSwitcher = <View extends WorkspaceViewSwitcherItem>({
       ariaLabel={ariaLabel}
       direction={direction}
       onViewChange={onViewChange}
-      stripRef={setStripContainer}
+      overflowControl={
+        <>
+          {overflowTabs.length > 0 && (
+            <div className="flex shrink-0 translate-y-1 items-center">
+              <Menu>
+                <MenuTrigger
+                  aria-label={overflowLabel}
+                  data-slot="workspace-view-overflow-trigger"
+                  render={<Button size="icon-xs" variant="ghost" />}
+                >
+                  <ChevronDownIcon />
+                </MenuTrigger>
+                <MenuPopup align="end">
+                  {overflowTabs.map(({ view }) => (
+                    <MenuItem
+                      data-view-overflow-item={view.id}
+                      key={view.id}
+                      onClick={() => onViewChange(view.id)}
+                    >
+                      {renderIcon(view)}
+                      <BidiText as="span">{view.name}</BidiText>
+                    </MenuItem>
+                  ))}
+                </MenuPopup>
+              </Menu>
+            </div>
+          )}
+          <WorkspaceViewTabsMeasure
+            activeViewId={activeViewId}
+            measureRef={measureRef}
+            renderIcon={renderIcon}
+            reserveActionSpace={reserveActionSpace}
+            views={views}
+          />
+        </>
+      }
+      stripRef={containerRef}
     >
-      {viewTabs.map(({ view, actions }) => {
+      {visibleTabs.map(({ view, actions }) => {
         if (editing?.viewId === view.id) {
           return (
             <WorkspaceViewTabFace
@@ -215,6 +275,66 @@ export const WorkspaceViewSwitcher = <View extends WorkspaceViewSwitcherItem>({
     </WorkspaceViewStrip>
   );
 };
+
+/**
+ * Every view's tab at its natural width, plus the overflow trigger, drawn
+ * invisibly and out of reach for `useInlineOverflow` to measure. The tabs are
+ * the strip's own tab faces in a tab list of their own, so a copy is as wide
+ * as the tab it stands for. The clipping box keeps the copy from widening
+ * anything that scrolls around the strip.
+ */
+const WorkspaceViewTabsMeasure = <View extends WorkspaceViewSwitcherItem>({
+  activeViewId,
+  measureRef,
+  renderIcon,
+  reserveActionSpace,
+  views,
+}: {
+  activeViewId: string;
+  measureRef: (element: HTMLElement | null) => void;
+  renderIcon: (view: View) => React.ReactNode;
+  reserveActionSpace: boolean;
+  views: readonly View[];
+}) => (
+  <div
+    aria-hidden="true"
+    className="pointer-events-none invisible absolute start-0 top-0 size-0 overflow-hidden"
+    data-slot="workspace-view-measure"
+    inert
+  >
+    <div className="flex w-max items-center gap-0.5" ref={measureRef}>
+      <Tabs className="h-full gap-0" value={activeViewId}>
+        <TabsList
+          className="h-full data-[orientation=horizontal]:py-0"
+          variant="underline"
+        >
+          {views.map((view) => (
+            <div
+              className="relative flex h-full items-center"
+              key={view.id}
+              {...{ [INLINE_OVERFLOW_ITEM_ATTRIBUTE]: "" }}
+            >
+              <WorkspaceViewTabFace
+                reserveActionSpace={reserveActionSpace}
+                value={view.id}
+              >
+                {renderIcon(view)}
+                <WorkspaceViewTabNameFace name={view.name} />
+              </WorkspaceViewTabFace>
+            </div>
+          ))}
+        </TabsList>
+      </Tabs>
+      {/* The trigger's face: the same box as its `icon-xs` ghost button. */}
+      <span
+        className={buttonFaceClassName({ size: "icon-xs", variant: "ghost" })}
+        {...{ [INLINE_OVERFLOW_TRIGGER_ATTRIBUTE]: "" }}
+      >
+        <ChevronDownIcon />
+      </span>
+    </div>
+  </div>
+);
 
 type WorkspaceViewTabProps<View extends WorkspaceViewSwitcherItem> = {
   actions: React.ReactNode | undefined;
