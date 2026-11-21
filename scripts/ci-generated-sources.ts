@@ -44,13 +44,13 @@ const isParallelCompilerStage = (command: readonly string[]): boolean =>
   command.includes("generate:typecheck-declarations");
 
 const generate = async () => {
-  const prereqs = CI_GENERATION_COMMANDS.filter(
-    (command) => !isParallelCompilerStage(command),
-  );
-  const parallelStages = CI_GENERATION_COMMANDS.filter(isParallelCompilerStage);
-
-  for (const command of prereqs) {
-    runSync(command);
+  const parallelStages: (readonly string[])[] = [];
+  for (const command of CI_GENERATION_COMMANDS) {
+    if (isParallelCompilerStage(command)) {
+      parallelStages.push(command);
+    } else {
+      runSync(command);
+    }
   }
   if (parallelStages.length <= 1) {
     for (const command of parallelStages) {
@@ -70,11 +70,11 @@ const generate = async () => {
 // Only the producer fills generated directories: a consumer restores them, and
 // a local `prepare` leaves them to the checks that need them.
 const generateDirectories = async () => {
-  const codes = await Promise.all(
-    CI_GENERATED_DIRECTORIES.map(
-      async ({ command }) => await runAsync(command),
-    ),
-  );
+  const running: Promise<number>[] = [];
+  for (const { command } of CI_GENERATED_DIRECTORIES) {
+    running.push(runAsync(command));
+  }
+  const codes = await Promise.all(running);
   const failed = codes.find((code) => code !== 0);
   if (failed !== undefined) {
     process.exit(failed);
