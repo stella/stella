@@ -28,9 +28,16 @@ const DocumentFormatIcon = ({
   format: DocumentFormat;
   size: number;
 }) => {
-  const { kind } = format;
+  const { kind, mark } = format;
+  // A profile's own mark (BDOC within ASiC-E), else its family's.
   if (isDocumentMarkKind(kind)) {
-    return <DocumentMark color={color} kind={kind} size={size} />;
+    return (
+      <DocumentMark
+        color={color}
+        kind={isDocumentMarkKind(mark) ? mark : kind}
+        size={size}
+      />
+    );
   }
   switch (kind) {
     case "image":

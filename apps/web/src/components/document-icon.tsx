@@ -51,7 +51,7 @@ export const DocumentIcon = ({
   className,
   thumbnail,
 }: DocumentIconProps) => {
-  const { kind } = documentFormat(mimeType, fileName);
+  const { kind, mark } = documentFormat(mimeType, fileName);
 
   if (kind === "image" && thumbnail?.hasThumbnail) {
     return (
@@ -65,8 +65,14 @@ export const DocumentIcon = ({
     );
   }
 
+  // A profile's own mark (BDOC within ASiC-E), else its family's.
   if (isDocumentMarkKind(kind)) {
-    return <DocumentMark className={className} kind={kind} />;
+    return (
+      <DocumentMark
+        className={className}
+        kind={isDocumentMarkKind(mark) ? mark : kind}
+      />
+    );
   }
 
   switch (kind) {
