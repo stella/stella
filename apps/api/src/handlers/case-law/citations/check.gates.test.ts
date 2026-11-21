@@ -16,17 +16,11 @@ import { caseLawRoute } from "@/api/handlers/case-law/routes";
 import { HttpStatusResponse } from "@/api/http/status";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import type { CaseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
-import {
-  createFeatureAccessSnapshot,
-  decideFeatureAccess,
-} from "@/api/lib/feature-access/policy";
-import {
-  CITATION_CHECK_FEATURE_ID,
-  FEATURE_REGISTRY,
-} from "@/api/lib/feature-access/registry";
+import { CITATION_CHECK_FEATURE_ID } from "@/api/lib/feature-access/registry";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { classifyRouteGate } from "@/api/lib/route-gates";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
+import { grantedCitationCheckSnapshot } from "@/api/tests/helpers/citation-check-access";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 const testState = createTestState({ file: import.meta.path, config: env });
@@ -93,29 +87,7 @@ test("the handler refuses an unconfigured deployment without reading the corpus"
   };
   // A member of a granted organization, so only the missing decision model
   // stands between the request and the corpus.
-  const featureAccessSnapshot = createFeatureAccessSnapshot({
-    ...principal,
-    decisions: new Map([
-      [
-        CITATION_CHECK_FEATURE_ID,
-        decideFeatureAccess({
-          ...principal,
-          registry: FEATURE_REGISTRY,
-          featureId: CITATION_CHECK_FEATURE_ID,
-          grants: {
-            [CITATION_CHECK_FEATURE_ID]: [
-              {
-                type: "organization",
-                organizationId: principal.organizationId,
-              },
-            ],
-          },
-          user: { email: "member@example.test", emailVerified: true },
-          membership: true,
-        }),
-      ],
-    ]),
-  });
+  const featureAccessSnapshot = grantedCitationCheckSnapshot(principal);
   const handler = createCheckCitation({
     caseLawDb: untouchedCorpus,
     hasDecisionModel: () => false,

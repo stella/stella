@@ -413,6 +413,10 @@ const ROOT_MUTATION_DISPOSITIONS = {
     type: "non-replay",
     reason: "credential",
   },
+  "POST /v1/case/citations/check": {
+    type: "non-replay",
+    reason: "read",
+  },
   "POST /v1/case/decisions/search/expand": {
     type: "non-replay",
     reason: "current-state",

@@ -37,7 +37,7 @@ import type {
 } from "@/api/handlers/case-law/citations/check.logic";
 import {
   decisionIdentityLocatorOf,
-  lookupDecisionsByIdentity,
+  lookupDecisionsByIdentities,
 } from "@/api/handlers/case-law/decisions/lookup-by-identity";
 import type { DecisionIdentityRow } from "@/api/handlers/case-law/decisions/lookup-by-identity";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
@@ -64,6 +64,7 @@ import { logger } from "@/api/lib/observability/logger";
 import { SYSTEM_ONE_SOURCE_BUDGET_CHARS } from "@/api/lib/workflow/decisions/answer-questions";
 import type { AnswerSource } from "@/api/lib/workflow/decisions/answer-questions";
 import { hasCustomerDecisionModel } from "@/api/lib/workflow/decisions/decision-model";
+import type { DecisionModel } from "@/api/lib/workflow/decisions/decision-model";
 
 /**
  * Why a resolved decision could not be checked. Both are properties of the
@@ -137,30 +138,34 @@ export const citationCheckAdmission = ({
 
 /**
  * The decisions that answer to the reference, across every jurisdiction whose
- * grammar claims it. A row counts only when the reference is one of the
- * names the decision answers to itself.
+ * grammar claims it, in one read. A row counts only when the reference is one
+ * of the names the decision answers to itself, under the reading of the
+ * decision's own jurisdiction.
  */
 const resolveCitedDecisions = async (
   caseLawDb: CaseLawPublicReadDb,
-  reads: readonly CitedDecisionRead[],
+  [first, ...rest]: readonly [CitedDecisionRead, ...CitedDecisionRead[]],
 ): Promise<DecisionIdentityRow[]> => {
-  const perCountry = await Promise.all(
-    reads.map(async ({ country, intent }) =>
-      exactDecisionMatches(
-        intent,
-        await lookupDecisionsByIdentity({
-          caseLawDb,
-          country,
-          locator: decisionIdentityLocatorOf(intent),
-        }),
-      ),
+  const reads = [first, ...rest];
+  const rows = await lookupDecisionsByIdentities({
+    caseLawDb,
+    reads: [
+      {
+        country: first.country,
+        locator: decisionIdentityLocatorOf(first.intent),
+      },
+      ...rest.map(({ country, intent }) => ({
+        country,
+        locator: decisionIdentityLocatorOf(intent),
+      })),
+    ],
+  });
+  return reads.flatMap(({ country, intent }) =>
+    exactDecisionMatches(
+      intent,
+      rows.filter((row) => row.country === country),
     ),
   );
-  const byId = new Map<string, DecisionIdentityRow>();
-  for (const row of perCountry.flat()) {
-    byId.set(row.id, row);
-  }
-  return [...byId.values()];
 };
 
 const config = {
@@ -195,8 +200,6 @@ const config = {
       v.minLength(1),
       v.maxLength(LIMITS.caseLawCitationCheckClaimChars),
     ),
-    /** The claim's language, when the caller knows it. */
-    language: v.optional(v.pipe(v.string(), v.minLength(2), v.maxLength(8))),
   }),
   requiresUsage: { actionType: "case_law", serviceTier: "standard" },
 } satisfies HandlerConfig;
@@ -205,16 +208,19 @@ type CheckCitationDependencies = {
   /** Test seam; the public corpus reader otherwise. */
   caseLawDb?: CaseLawPublicReadDb;
   hasDecisionModel?: typeof hasCustomerDecisionModel;
+  /** Test seam; the organization's resolved decision model otherwise. */
+  decisionModel?: DecisionModel;
 };
 
 export const createCheckCitation = ({
   caseLawDb = caseLawPublicReadDb,
   hasDecisionModel = hasCustomerDecisionModel,
+  decisionModel,
 }: CheckCitationDependencies = {}) =>
   createSafeRootHandler(
     config,
     async function* ({
-      body: { citation, claim, language },
+      body: { citation, claim },
       orgAIConfig,
       orgAIConfigStatus,
       safeDb,
@@ -236,12 +242,14 @@ export const createCheckCitation = ({
         recognized: reads.length > 0,
         countries: reads.map((read) => read.country).join(","),
       });
-      if (reads.length === 0) {
+      const [firstRead, ...otherReads] = reads;
+      if (firstRead === undefined) {
         return notFound();
       }
       const matches = yield* Result.await(
         Result.tryPromise(
-          async () => await resolveCitedDecisions(caseLawDb, reads),
+          async () =>
+            await resolveCitedDecisions(caseLawDb, [firstRead, ...otherReads]),
         ),
       );
       const cited = chooseCitedDecision(matches);
@@ -304,7 +312,9 @@ export const createCheckCitation = ({
       const checked = await checkCitationDecision({
         orgAIConfig,
         claim,
-        claimLanguage: language ?? row.language,
+        // The editor knows the reader's locale, not the language of the
+        // document, so the claim is read in the decision's language.
+        claimLanguage: row.language,
         decision: {
           caseNumber: row.caseNumber,
           country: row.country,
@@ -313,6 +323,7 @@ export const createCheckCitation = ({
           language: row.language,
         },
         sources,
+        client: decisionModel,
         usageMetering: {
           actionType: "case_law",
           serviceTier: "standard",
