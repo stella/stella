@@ -21,6 +21,7 @@ import { createTranslator } from "use-intl/core";
 import { useI18nStore } from "@/i18n/i18n-store";
 import type { SupportedLanguage } from "@/i18n/i18n-store";
 import { useRenderedMessageLocale } from "@/i18n/provider";
+import { detached } from "@/lib/detached";
 
 type CatalogMessages = Record<string, Record<string, unknown>>;
 
@@ -72,12 +73,19 @@ export const defineFeatureCatalog = <TMessages extends CatalogMessages>(
     if (loading.has(lang)) {
       return;
     }
-    loading.set(
-      lang,
-      loaders[lang]().catch((error: unknown) => {
-        loading.delete(lang);
-        throw error;
-      }),
+    const started = loaders[lang]();
+    loading.set(lang, started);
+    // `use()` hands the rejection to the error boundary; this only forgets
+    // the failed load, and its own promise never rejects.
+    detached(
+      started.then(
+        () => undefined,
+        (_error: unknown) => {
+          // The error reaches the error boundary through `use()`.
+          loading.delete(lang);
+        },
+      ),
+      "i18n.feature-catalog-retry",
     );
   };
 
