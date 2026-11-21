@@ -220,7 +220,11 @@ test("native DOCX keeps the host registry and editor inside the render budget", 
   const mounted = renderFileTab(docxTab);
   const engine = await waitFor(() => mounted.getByTestId("docx-engine"));
   expect(engine.isConnected).toBeTrue();
-  expect(docxEngineRenderCount).toBe(1);
+  // Mounting renders the engine once with a cold editor chunk and twice with
+  // a loaded one, which is what a randomized or repeated run sees. The budget
+  // below then bounds every later render.
+  expect(docxEngineRenderCount).toBeGreaterThanOrEqual(1);
+  expect(docxEngineRenderCount).toBeLessThanOrEqual(2);
 
   const registryAfterMount = useDocxEditorHostStore.getState().registry;
   const claim = Object.values(registryAfterMount).at(0)?.lastClaim;
