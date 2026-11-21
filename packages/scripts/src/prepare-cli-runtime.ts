@@ -5,41 +5,55 @@ import { hasPreparedGeneratedSources } from "./prepared-generated-sources";
 
 const root = fileURLToPath(new URL("../../../", import.meta.url));
 const prepared = hasPreparedGeneratedSources(root);
-if (!prepared) {
-  const apps = Bun.spawnSync(["bun", "scripts/prepare-mcp-apps.ts"], {
+
+const runCommand = async (command: readonly string[]): Promise<number> => {
+  const child = Bun.spawn([...command], {
     cwd: root,
     stdout: "inherit",
     stderr: "inherit",
   });
-  if (childExitStatus(apps) !== 0) {
-    process.exit(childExitStatus(apps));
+  await child.exited;
+  return childExitStatus(child);
+};
+
+if (!prepared) {
+  const appsStatus = await runCommand(["bun", "scripts/prepare-mcp-apps.ts"]);
+  if (appsStatus !== 0) {
+    process.exit(appsStatus);
   }
 }
+
 // Prepared artifacts contain runtime modules, not the npm catalog that CLI
-// codegen and contract tests read. Generate those shards in either mode.
-const catalog = Bun.spawnSync(
-  ["bun", "apps/api/scripts/export-capability-catalog.ts", "--catalog-only"],
-  { cwd: root, stdout: "inherit", stderr: "inherit" },
-);
-if (childExitStatus(catalog) !== 0) {
-  process.exit(childExitStatus(catalog));
-}
+// codegen and contract tests read. Generate those shards in either mode; when
+// runtime modules also need generation, run both independent generators in
+// parallel.
 if (prepared) {
-  process.exit(0);
+  const catalogStatus = await runCommand([
+    "bun",
+    "apps/api/scripts/export-capability-catalog.ts",
+    "--catalog-only",
+  ]);
+  process.exit(catalogStatus);
 }
-const runtime = Bun.spawnSync(
-  ["bun", "apps/api/scripts/generate-capability-runtime.ts"],
-  { cwd: root, stdout: "inherit", stderr: "inherit" },
-);
-if (childExitStatus(runtime) !== 0) {
-  process.exit(childExitStatus(runtime));
+
+const [catalogStatus, runtimeStatus] = await Promise.all([
+  runCommand([
+    "bun",
+    "apps/api/scripts/export-capability-catalog.ts",
+    "--catalog-only",
+  ]),
+  runCommand(["bun", "apps/api/scripts/generate-capability-runtime.ts"]),
+]);
+if (catalogStatus !== 0) {
+  process.exit(catalogStatus);
 }
-const result = Bun.spawnSync(
-  ["bun", "packages/cli/scripts/codegen.ts", "--runtime-only"],
-  {
-    cwd: root,
-    stdout: "inherit",
-    stderr: "inherit",
-  },
-);
-process.exit(childExitStatus(result));
+if (runtimeStatus !== 0) {
+  process.exit(runtimeStatus);
+}
+
+const codegenStatus = await runCommand([
+  "bun",
+  "packages/cli/scripts/codegen.ts",
+  "--runtime-only",
+]);
+process.exit(codegenStatus);
