@@ -2,6 +2,11 @@ import type { Page } from "@playwright/test";
 import { randomUUID } from "node:crypto";
 
 import { apiDelete, apiPut, apiStatus } from "../helpers/api";
+import {
+  expectSavedView,
+  openSavedView,
+  savedViewNames,
+} from "../helpers/saved-views";
 import { expect, test } from "../helpers/test";
 import {
   PLAYWRIGHT_EXPECT_TIMEOUT_10_SECONDS_MS,
@@ -109,18 +114,10 @@ test.describe("per-view table state", () => {
     const viewUrl = `/workspaces/${testWorkspace.id}/${firstView.id}`;
     await page.goto(viewUrl, { waitUntil: "domcontentloaded" });
 
-    const firstTab = page.getByRole("tab", {
-      exact: true,
-      name: firstView.name,
-    });
-    const secondTab = page.getByRole("tab", {
-      exact: true,
-      name: secondView.name,
-    });
-    await expect(firstTab).toBeVisible({
+    await expectSavedView(page, firstView.name, {
       timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS,
     });
-    await expect(secondTab).toBeVisible();
+    await expectSavedView(page, secondView.name);
 
     // Content mode is persisted alongside column widths and is one click to
     // set, so it stands in for a resize. Set it on both views.
@@ -130,7 +127,7 @@ test.describe("per-view table state", () => {
     });
     await wrapContent.click();
     await expect(wrapContent).toHaveAttribute("aria-pressed", "true");
-    await secondTab.click();
+    await openSavedView(page, secondView.name);
     await expect(wrapContent).toHaveAttribute("aria-pressed", "false");
     await wrapContent.click();
     await expect(wrapContent).toHaveAttribute("aria-pressed", "true");
@@ -149,10 +146,11 @@ test.describe("per-view table state", () => {
     );
 
     await page.goto(viewUrl, { waitUntil: "domcontentloaded" });
-    await expect(firstTab).toBeVisible({
+    // Gone from the strip altogether: neither a tab nor in the menu.
+    await expectSavedView(page, firstView.name, {
       timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS,
     });
-    await expect(secondTab).toBeHidden();
+    expect(await savedViewNames(page)).not.toContain(secondView.name);
     await expect
       .poll(async () => (await readContentModes(page))?.[testWorkspace.id], {
         message: "the deleted view's state is gone and the other's kept",

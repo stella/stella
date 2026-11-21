@@ -1887,6 +1887,15 @@
       "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/packages/mcp-kit/src/**"],
       "cache": false
     },
+    // The view switcher's overflow test renders workspace-ui's switcher on the
+    // measuring hook it shares with the inspector facet bar.
+    "@stll/ui#test": {
+      "dependsOn": ["transit"],
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "$TURBO_ROOT$/packages/workspace-ui/src/view-switcher.tsx"
+      ]
+    },
     "@stll/html#test": {
       "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/apps/api/src/**"]
     },
