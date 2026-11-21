@@ -74,6 +74,7 @@ const loadBillingDraftMatters = async ({
       return Result.err(
         new HandlerError({
           status: 403,
+          code: DESKTOP_BILLING_DRAFT_REFUSAL_CODE.matterUnavailable,
           message: "Selected matter is unavailable",
         }),
       );

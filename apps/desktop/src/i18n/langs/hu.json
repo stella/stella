@@ -25,6 +25,7 @@
     "aiDraftRefused": "Ehhez az ügyhöz már nem hozhat létre időbejegyzést. Válasszon másik ügyet.",
     "aiDraftRetry": "Újra",
     "aiDraftTooLarge": "Ez a bejegyzés több részletet tartalmaz, mint amennyit egy javaslat felhasználhat. Jelöljön ki rövidebb időszakot, vagy írja meg a leírást saját maga.",
+    "aiDraftUnavailable": "A stella AI javaslatai nem érhetők el az Ön számára. Írja meg a leírást saját maga.",
     "aiDraftWhatIsSent": "Mi kerül elküldésre?",
     "aiDraftWrite": "Javaslat stella AI-jal",
     "aiDraftWriting": "A stella AI megírja a leírás javaslatát…",

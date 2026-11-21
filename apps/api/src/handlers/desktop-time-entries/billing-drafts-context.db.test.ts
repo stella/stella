@@ -427,7 +427,11 @@ test("an inaccessible selected matter is refused by scoped queries before any AI
     const result = await load(matterId, [ids.wsA1]);
     expect(result.isErr()).toBe(true);
     if (result.isErr()) {
-      expect(result.error.message).toBe("Selected matter is unavailable");
+      expect(result.error).toMatchObject({
+        status: 403,
+        code: DESKTOP_BILLING_DRAFT_REFUSAL_CODE.matterUnavailable,
+        message: "Selected matter is unavailable",
+      });
     }
   }
 });

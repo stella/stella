@@ -25,6 +25,7 @@
     "aiDraftRefused": "K tomuto spisu už nemôžete vytvárať časové záznamy. Vyberte iný spis.",
     "aiDraftRetry": "Skúsiť znova",
     "aiDraftTooLarge": "Tento záznam obsahuje viac podrobností, než jeden návrh zvládne. Vyberte kratší úsek času alebo napíšte popis sami.",
+    "aiDraftUnavailable": "Návrhy stella AI pre vás nie sú dostupné. Popis napíšte sami.",
     "aiDraftWhatIsSent": "Čo sa odošle?",
     "aiDraftWrite": "Navrhnúť pomocou stella AI",
     "aiDraftWriting": "stella AI navrhuje popis…",

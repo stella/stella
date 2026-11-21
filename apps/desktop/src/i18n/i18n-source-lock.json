@@ -24,6 +24,7 @@
   "activity.aiDraftRefused": "You can no longer create time entries on this matter. Choose another matter.",
   "activity.aiDraftRetry": "Try again",
   "activity.aiDraftTooLarge": "This entry has more detail than one draft can use. Select a shorter stretch of time, or write the description yourself.",
+  "activity.aiDraftUnavailable": "stella AI is not available to you for drafts. Write the description yourself.",
   "activity.aiDraftWhatIsSent": "What is sent?",
   "activity.aiDraftWrite": "Draft with stella AI",
   "activity.aiDraftWriting": "stella AI is drafting the description…",

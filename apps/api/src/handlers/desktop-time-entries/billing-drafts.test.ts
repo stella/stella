@@ -202,6 +202,8 @@ type ExerciseOptions = {
   gates?: readonly GateRead[];
   /** The drafting mode the firm binding gives; the context's by default. */
   bindingMode?: BillingDraftGate["draftingMode"];
+  /** The caller's organization role; a member by default. */
+  role?: Parameters<typeof sessionMemberRole>[0];
 };
 type GateRead = Omit<BillingDraftGate, "draftingMode">;
 const consenting: GateRead = {
@@ -220,6 +222,7 @@ const exercise = async ({
   draftContext = context,
   gates = [consenting],
   bindingMode = draftContext.mode,
+  role = "member",
 }: ExerciseOptions = {}) => {
   const calls: {
     prompt: string;
@@ -344,7 +347,7 @@ const exercise = async ({
         organizationId: ORGANIZATION_ID,
         userId: USER_ID,
         keyId: "linked-desktop",
-        memberRole: sessionMemberRole("member"),
+        memberRole: sessionMemberRole(role),
         scopedDb,
       });
     },
@@ -639,6 +642,18 @@ test("mixed-case duplicate matters reach context loading with one canonical iden
   expect(response.status).toBe(200);
   expect(canonicalMatterIds).toEqual([MATTER_ID, MATTER_ID]);
   expect(new Set(canonicalMatterIds).size).toBe(1);
+});
+
+test("a caller who may not create time entries is refused with the entry's own code", async () => {
+  const { response, calls, receivedBodies } = await exercise({
+    role: "external",
+  });
+  expect(response.status).toBe(403);
+  expect(await response.json()).toMatchObject({
+    code: DESKTOP_BILLING_DRAFT_REFUSAL_CODE.timeEntryNotPermitted,
+  });
+  expect(receivedBodies).toHaveLength(0);
+  expect(calls).toHaveLength(0);
 });
 
 test("refused context and hidden feature never dispatch the model", async () => {

@@ -383,6 +383,22 @@ describe("a failed draft", () => {
     expect(calls).toEqual([]);
   });
 
+  test("a refusal of AI access says so and leaves the entry to be written by hand", async () => {
+    const { calls } = await renderAssist({
+      kind: "aiUnavailable",
+      type: "failed",
+    });
+    expect(testing.screen.getByText(messages.aiDraftUnavailable)).toBeDefined();
+    const accept = testing.screen.getByRole("button", {
+      name: new RegExp(messages.accept, "u"),
+    });
+    expect(accept.getAttribute("aria-disabled")).not.toBe("true");
+    await testing.act(async () => {
+      testing.fireEvent.click(accept);
+    });
+    expect(calls).toEqual(["accept"]);
+  });
+
   test("a firm that switched drafting off is said quietly, with nothing to draft", async () => {
     await renderAssist({ kind: "off", type: "failed" });
     expect(testing.screen.getByText(messages.aiDraftOff)).toBeDefined();

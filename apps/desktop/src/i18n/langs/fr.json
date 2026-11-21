@@ -25,6 +25,7 @@
     "aiDraftRefused": "Vous ne pouvez plus créer d’entrées de temps sur ce dossier. Choisissez un autre dossier.",
     "aiDraftRetry": "Réessayer",
     "aiDraftTooLarge": "Cette entrée contient plus de détails qu’une proposition ne peut en utiliser. Sélectionnez une plage de temps plus courte ou rédigez la description vous-même.",
+    "aiDraftUnavailable": "Les propositions de stella AI ne vous sont pas accessibles. Rédigez la description vous-même.",
     "aiDraftWhatIsSent": "Qu'est-ce qui est envoyé ?",
     "aiDraftWrite": "Rédiger avec stella AI",
     "aiDraftWriting": "stella AI rédige la description…",

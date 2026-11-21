@@ -25,6 +25,7 @@
     "aiDraftRefused": "Sie können zu dieser Akte keine Zeiteinträge mehr anlegen. Wählen Sie eine andere Akte.",
     "aiDraftRetry": "Erneut versuchen",
     "aiDraftTooLarge": "Dieser Eintrag enthält mehr Details, als ein Entwurf verwenden kann. Wählen Sie einen kürzeren Zeitraum oder schreiben Sie die Beschreibung selbst.",
+    "aiDraftUnavailable": "Entwürfe von stella KI stehen Ihnen nicht zur Verfügung. Schreiben Sie die Beschreibung selbst.",
     "aiDraftWhatIsSent": "Was wird gesendet?",
     "aiDraftWrite": "Mit stella KI entwerfen",
     "aiDraftWriting": "stella KI entwirft die Beschreibung …",

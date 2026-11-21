@@ -25,6 +25,7 @@
     "aiDraftRefused": "Te ei saa selles toimikus enam ajakandeid luua. Valige mõni teine toimik.",
     "aiDraftRetry": "Proovi uuesti",
     "aiDraftTooLarge": "Selles kandes on rohkem üksikasju, kui üks kavand kasutada saab. Valige lühem ajavahemik või kirjutage selgitus ise.",
+    "aiDraftUnavailable": "stella AI kavandid ei ole teile saadaval. Kirjutage selgitus ise.",
     "aiDraftWhatIsSent": "Mida saadetakse?",
     "aiDraftWrite": "Koosta stella AI-ga",
     "aiDraftWriting": "stella AI koostab selgitust…",

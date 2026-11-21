@@ -25,6 +25,7 @@
     "aiDraftRefused": "Šioje byloje nebegalite kurti laiko įrašų. Pasirinkite kitą bylą.",
     "aiDraftRetry": "Bandyti dar kartą",
     "aiDraftTooLarge": "Šiame įraše yra daugiau informacijos, nei gali panaudoti vienas juodraštis. Pasirinkite trumpesnį laiko tarpą arba aprašą parašykite patys.",
+    "aiDraftUnavailable": "stella DI juodraščiai jums neprieinami. Aprašą parašykite patys.",
     "aiDraftWhatIsSent": "Kas siunčiama?",
     "aiDraftWrite": "Parengti su stella DI",
     "aiDraftWriting": "stella DI rengia aprašą…",

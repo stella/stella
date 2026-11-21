@@ -114,21 +114,21 @@ const REFUSAL_FAILURE_KINDS = {
   consentRequired: "consentRequired",
   modeChanged: "modeChanged",
   contextTooLarge: "tooLarge",
+  // The entry itself is refused: no time entry on that matter can be made.
+  timeEntryNotPermitted: "refused",
+  matterUnavailable: "refused",
 } as const satisfies Record<
   keyof typeof DESKTOP_BILLING_DRAFT_REFUSAL_CODE,
   string
 >;
 
 /** Why a draft could not be written, as the native boundary names it: a
- * refusal code's failure, a refusal without a code (`refused`: time entry
- * creation or the matter is no longer available), or any other failure. */
-export const DRAFT_FAILURE_KINDS = [
-  ...Object.values(REFUSAL_FAILURE_KINDS),
-  "refused",
-  "failed",
-] as const;
-
-export type DraftFailureKind = (typeof DRAFT_FAILURE_KINDS)[number];
+ * refusal code's failure, any other refusal (`aiUnavailable`: the user's AI
+ * access does not cover drafting), or any other failure. */
+export type DraftFailureKind =
+  | (typeof REFUSAL_FAILURE_KINDS)[keyof typeof REFUSAL_FAILURE_KINDS]
+  | "aiUnavailable"
+  | "failed";
 
 /** What a card offers after a failure: Allow when consent is missing, Try
  * again when another attempt can succeed, nothing when only a change
@@ -141,8 +141,14 @@ export const DRAFT_FAILURE_RECOVERY = {
   refused: "none",
   modeChanged: "retry",
   tooLarge: "none",
+  aiUnavailable: "none",
   failed: "retry",
 } as const satisfies Record<DraftFailureKind, DraftFailureRecovery>;
+
+/** Every failure kind, one per recovery entry. */
+export const DRAFT_FAILURE_KINDS = Object.keys(DRAFT_FAILURE_RECOVERY).filter(
+  (kind): kind is DraftFailureKind => kind in DRAFT_FAILURE_RECOVERY,
+);
 
 /** The fields stella AI writes on a card, and what its last change replaced. */
 type RevertibleFields = {

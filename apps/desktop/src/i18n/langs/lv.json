@@ -25,6 +25,7 @@
     "aiDraftRefused": "Šajā lietā vairs nevarat izveidot laika ierakstus. Izvēlieties citu lietu.",
     "aiDraftRetry": "Mēģināt vēlreiz",
     "aiDraftTooLarge": "Šajā ierakstā ir vairāk detaļu, nekā viens melnraksts var izmantot. Atlasiet īsāku laika posmu vai uzrakstiet aprakstu paši.",
+    "aiDraftUnavailable": "stella AI melnraksti jums nav pieejami. Uzrakstiet aprakstu paši.",
     "aiDraftWhatIsSent": "Kas tiek nosūtīts?",
     "aiDraftWrite": "Sagatavot ar stella AI",
     "aiDraftWriting": "stella AI sagatavo aprakstu…",

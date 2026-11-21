@@ -25,6 +25,7 @@
     "aiDraftRefused": "Você não pode mais criar lançamentos de horas neste caso. Escolha outro caso.",
     "aiDraftRetry": "Tentar de novo",
     "aiDraftTooLarge": "Este lançamento tem mais detalhes do que uma sugestão consegue usar. Selecione um intervalo de tempo menor ou escreva a descrição você mesmo.",
+    "aiDraftUnavailable": "As sugestões da stella IA não estão disponíveis para você. Escreva a descrição você mesmo.",
     "aiDraftWhatIsSent": "O que é enviado?",
     "aiDraftWrite": "Redigir com stella IA",
     "aiDraftWriting": "stella IA está redigindo a descrição…",

@@ -25,6 +25,7 @@
     "aiDraftRefused": "Ya no puedes crear registros de tiempo en este asunto. Elige otro asunto.",
     "aiDraftRetry": "Reintentar",
     "aiDraftTooLarge": "Este registro tiene más detalle del que puede usar una propuesta. Selecciona un tramo de tiempo más corto o escribe tú la descripción.",
+    "aiDraftUnavailable": "Las propuestas de stella IA no están disponibles para ti. Escribe tú la descripción.",
     "aiDraftWhatIsSent": "¿Qué se envía?",
     "aiDraftWrite": "Redactar con stella IA",
     "aiDraftWriting": "stella IA está redactando la descripción…",

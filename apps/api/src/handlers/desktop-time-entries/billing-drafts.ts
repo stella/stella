@@ -4,6 +4,7 @@ import * as v from "valibot";
 import { TIME_ENTRY_ACTIVITY_GROUP } from "@stll/api-contract";
 import {
   DESKTOP_BILLING_DRAFT_LIMITS,
+  DESKTOP_BILLING_DRAFT_REFUSAL_CODE,
   desktopBillingDraftModelResponseSchema,
   desktopBillingDraftRequestSchema,
   desktopBillingDraftResponseSchema,
@@ -686,6 +687,7 @@ export const createDesktopBillingDraftEndpoint = ({
           return Result.err(
             new HandlerError({
               status: 403,
+              code: DESKTOP_BILLING_DRAFT_REFUSAL_CODE.timeEntryNotPermitted,
               message: "Time entry creation is not permitted",
             }),
           );

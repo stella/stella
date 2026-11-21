@@ -414,6 +414,10 @@ export const DESKTOP_BILLING_DRAFT_REFUSAL_CODE = {
   modeChanged: "billing_draft_mode_changed",
   /** A bound guideline file is past what the drafting prompt may carry. */
   contextTooLarge: "billing_draft_context_too_large",
+  /** The caller may not create time entries, so no draft can become one. */
+  timeEntryNotPermitted: "billing_draft_time_entry_not_permitted",
+  /** A selected matter is not one the caller can record time on. */
+  matterUnavailable: "billing_draft_matter_unavailable",
 } as const;
 
 export const desktopBillingDraftSettingsResponseSchema = v.strictObject({

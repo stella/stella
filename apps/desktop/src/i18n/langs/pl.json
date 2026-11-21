@@ -25,6 +25,7 @@
     "aiDraftRefused": "Nie możesz już tworzyć wpisów czasu w tej sprawie. Wybierz inną sprawę.",
     "aiDraftRetry": "Spróbuj ponownie",
     "aiDraftTooLarge": "Ten wpis ma więcej szczegółów, niż może wykorzystać jedna propozycja. Zaznacz krótszy odcinek czasu albo napisz opis samodzielnie.",
+    "aiDraftUnavailable": "Propozycje stella AI nie są dla Ciebie dostępne. Napisz opis samodzielnie.",
     "aiDraftWhatIsSent": "Co zostanie wysłane?",
     "aiDraftWrite": "Zaproponuj z stella AI",
     "aiDraftWriting": "stella AI przygotowuje opis…",

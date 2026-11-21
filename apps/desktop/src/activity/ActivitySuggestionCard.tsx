@@ -584,6 +584,7 @@ const DRAFT_FAILURE_MESSAGES = {
   refused: "aiDraftRefused",
   modeChanged: "aiDraftModeChanged",
   tooLarge: "aiDraftTooLarge",
+  aiUnavailable: "aiDraftUnavailable",
   failed: "aiDraftFailed",
 } as const satisfies Record<DraftFailureKind, string>;
 
