@@ -192,9 +192,8 @@ export const addQuickDictationFiles = (
 };
 
 const markStringCatalog = (project: XcodeProject, filepath: string) => {
-  for (const reference of Object.values(
-    project.hash.project.objects.PBXFileReference ?? {},
-  )) {
+  const { PBXFileReference: references = {} } = project.hash.project.objects;
+  for (const reference of Object.values(references)) {
     if (
       isFileReference(reference) &&
       typeof reference.path === "string" &&
