@@ -475,6 +475,12 @@ const LEGAL_REFERENCE_RULE =
 const USER_FACING_LANGUAGE_RULE =
   "USER-FACING LANGUAGE: Speak in legal-work terms; never expose internal names, tool names, or schema identifiers — refer to documents, matters, and folders by their human names. Reply in the user's UI language (see user context); switch only if the user themselves writes a natural-language message in another language. Copy `mention` strings from tool outputs verbatim instead of rewriting refs.";
 
+// The sentence the chat shows above the turn's steps (`narratedIntentIndex`
+// in `@stll/api-contract/chat-tool-activity`), so a person sees what is
+// being looked up in their own language rather than a reasoning trace.
+const PLAN_LINE_RULE =
+  "PLAN LINE: When you will use tools to answer, first write one short sentence in the user's language saying what you will look up or do (which provisions, courts, documents or matters), then make your first tool call. Write it once per turn, before the first call only, as plain prose without headings or lists. Skip it when you answer without tools. It is shown above your steps, so do not repeat it in the answer.";
+
 const DOCX_REVIEW_TAGS_RULE = `DOCX REVIEW TAGS: DOCX text from read tools may contain insertion/deletion/comment tags (${DOCX_REVIEW_MARKUP_EXAMPLES.insertion}, ${DOCX_REVIEW_MARKUP_EXAMPLES.deletion}, ${DOCX_REVIEW_MARKUP_EXAMPLES.comment}) with optional author/initials/date/status/thread attributes. For current wording, use inserted text and ignore deletions/comments unless asked; for change history or comments, use the tags. Never show tag syntax unless explicitly asked.`;
 
 const CITATIONS_RULE =
@@ -544,6 +550,7 @@ const buildCoreRuleSections = ({
   LEGAL_REFERENCE_RULE,
   CORPUS_ONLY_CASE_LAW_SECTION,
   USER_FACING_LANGUAGE_RULE,
+  PLAN_LINE_RULE,
   ...(subagents ? [SUBAGENT_DELEGATION_SECTION] : []),
 ];
 
@@ -614,6 +621,7 @@ const buildLocalRunCoreRuleSections = (
   LEGAL_REFERENCE_RULE,
   CORPUS_ONLY_CASE_LAW_SECTION,
   USER_FACING_LANGUAGE_RULE,
+  PLAN_LINE_RULE,
 ];
 
 /**
@@ -912,6 +920,7 @@ type BuildChatSystemPromptProps = {
   browserExtension?: TurnBrowserExtension | undefined;
   caseLawDb?: CaseLawPublicReadDb;
   featureAccessContext?: McpFeatureAccessContext | undefined;
+  legislationDb?: LegislationPublicReadDb;
   activeDecision: IncomingActiveDecision | undefined;
   activeDraft?: IncomingActiveDraft | undefined;
   activeExternal: IncomingActiveExternal | undefined;
@@ -1196,10 +1205,25 @@ const requireActiveSkillInBindingScope = ({
         }),
       );
 
+/** The sections for the decision and the act the user has open. */
+const buildActiveCorpusSections = async (
+  props: ActiveDecisionSectionProps & ActiveStatuteSectionProps,
+) =>
+  await Result.gen(async function* () {
+    const decisionSection = yield* Result.await(
+      buildActiveDecisionSection(props),
+    );
+    const statuteSection = yield* Result.await(
+      buildActiveStatuteSection(props),
+    );
+    return Result.ok({ decisionSection, statuteSection });
+  });
+
 export const buildChatSystemPromptParts = async ({
   browserExtension = DEFAULT_BROWSER_EXTENSION,
   caseLawDb = caseLawPublicReadDb,
   featureAccessContext,
+  legislationDb = legislationPublicReadDb,
   activeDecision,
   activeDraft,
   activeExternal,
@@ -1282,19 +1306,12 @@ export const buildChatSystemPromptParts = async ({
             }),
           );
 
-    const decisionSection = yield* Result.await(
-      buildActiveDecisionSection({
+    const { decisionSection, statuteSection } = yield* Result.await(
+      buildActiveCorpusSections({
         activeDecision,
-        caseLawDb,
-        organizationId,
-        safeDb,
-        userId,
-      }),
-    );
-    const statuteSection = yield* Result.await(
-      buildActiveStatuteSection({
         activeStatute,
-        legislationDb: legislationPublicReadDb,
+        caseLawDb,
+        legislationDb,
         organizationId,
         safeDb,
         userId,
@@ -1872,7 +1889,7 @@ const buildActiveFilePrompt = ({
 
   return [
     `ACTIVE FILE: The user is viewing "${safeName}" (entity ref ${entityRef}) in the inspector sidebar.`,
-    `DEFAULT SCOPE: While an active file is set, treat it as the sole subject of any open-ended question ("what's going on", "summarize this", "what does it say", "explain", and similar). Read its contents by calling \`execute_typescript\` with \`external_read_content_across_matters({ entity_id: "${entityRef}" })\`, and answer ONLY from that file.`,
+    `DEFAULT SCOPE: While an active file is set, treat it as the sole subject of any open-ended question ("what's going on", "summarize this", "what does it say", "explain", and similar). For an envelope, its attachment list is part of this scope. When the answer depends on an attachment, read its returned entity reference and cite that document for its contents. Read the active file by calling \`execute_typescript\` with \`external_read_content_across_matters({ entity_id: "${entityRef}" })\`, and answer ONLY from that file.`,
     `LONG-DOCUMENT LOOKUPS: \`external_read_content_across_matters\` returns the document as Markdown (headings, tables, and lists preserved) for DOCX files, or plain text otherwise, one truncated window at a time starting from the beginning. If the answer is not in the first window, call it again with \`cursor\` set to the previous response's \`nextCursor\` to keep reading further into the document — page through until you find it or \`nextCursor\` comes back null.`,
     "DIRECT FILE FALLBACK: If the latest user message includes the active file as a direct attachment, that attachment is the exact version displayed to the user and is authoritative for this turn. Inspect it directly instead of calling entity-level retrieval. Do not claim the file has no extracted text when a direct attachment is available.",
     emailCitationSection,

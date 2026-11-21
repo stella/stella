@@ -220,6 +220,11 @@ describe("schema-only dependency validation", () => {
       ),
     ).toEqual([]);
     expect(
+      await validate(
+        `${FULL_IMPORT}\nimport { createCipheriv, createDecipheriv } from "node:crypto"; const cipher = createCipheriv("aes-256-gcm", key, iv); cipher.update("a"); const decipher = createDecipheriv("aes-256-gcm", key, iv); decipher.update(sealed);`,
+      ),
+    ).toEqual([]);
+    expect(
       await validate(`${FULL_IMPORT}\nconst keys = new Map(); keys.select();`),
     ).toContain(
       "apps/api/src/inventory.ts: database operation in apps/api/src/inventory.ts: select",

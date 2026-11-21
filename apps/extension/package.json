@@ -5,19 +5,19 @@
   "license": "Apache-2.0",
   "type": "module",
   "scripts": {
-    "build": "wxt build -b chrome && bun scripts/assert-manifest.ts",
-    "build:dev": "wxt build -b chrome --mode development",
-    "build:staging": "wxt build -b chrome --mode staging && bun scripts/assert-manifest.ts staging",
+    "build": "bun --bun wxt build -b chrome && bun scripts/assert-manifest.ts",
+    "build:dev": "bun --bun wxt build -b chrome --mode development",
+    "build:staging": "bun --bun wxt build -b chrome --mode staging && bun scripts/assert-manifest.ts staging",
     "clean": "git clean -xdf .output .wxt .cache .turbo node_modules",
-    "dev": "wxt -b chrome",
+    "dev": "bun --bun wxt -b chrome",
     "lint": "cd ../.. && bun scripts/lint.ts --deny-warnings apps/extension",
     "lint:fix": "cd ../.. && bun scripts/lint.ts --fix apps/extension",
-    "postinstall": "wxt prepare",
+    "postinstall": "bun --bun wxt prepare",
     "test": "bun run test:unit",
-    "test:e2e": "bun run build && wxt build -b chrome --mode e2e && bun scripts/assert-manifest.ts e2e && playwright test -c playwright.config.ts",
+    "test:e2e": "bun run build && bun --bun wxt build -b chrome --mode e2e && bun scripts/assert-manifest.ts e2e && bun --bun playwright test -c playwright.config.ts",
     "test:unit": "bun test src scripts",
-    "typecheck": "wxt prepare && bun check --no-pretty --all --project=tsconfig.json",
-    "zip": "wxt zip -b chrome && bun scripts/assert-manifest.ts"
+    "typecheck": "bun --bun wxt prepare && bun check --no-pretty --all --project=tsconfig.json",
+    "zip": "bun --bun wxt zip -b chrome && bun scripts/assert-manifest.ts"
   },
   "dependencies": {
     "@stll/api-contract": "workspace:*",
@@ -27,7 +27,7 @@
     "valibot": "catalog:"
   },
   "devDependencies": {
-    "@playwright/test": "^1.65.0",
+    "@playwright/test": "^1.65.1",
     "@stll/property-testing": "workspace:*",
     "@stll/typescript-config": "workspace:*",
     "@types/chrome": "0.3.7",

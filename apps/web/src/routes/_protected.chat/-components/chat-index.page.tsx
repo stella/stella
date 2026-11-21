@@ -1,0 +1,899 @@
+import { useMemo, useRef, useState } from "react";
+import type { MouseEvent } from "react";
+
+import {
+  useInfiniteQuery,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
+import { getRouteApi, Link, useNavigate } from "@tanstack/react-router";
+import { Result } from "better-result";
+import { useTranslations } from "use-intl";
+
+import { WORKSPACE_STATUS } from "@stll/api-contract/workspace-status";
+import { BidiText } from "@stll/ui/bidi-text";
+import { Button } from "@stll/ui/button";
+import { NewChatIcon, PinIcon, PlusIcon } from "@stll/ui/icons";
+import {
+  LANDING_ROW_CLASS,
+  LANDING_SECTION_HEADING_CLASS,
+  LandingEmpty,
+  LandingItemText,
+  LandingSectionHeadingPending,
+} from "@stll/ui/landing";
+import { resolveMatterColor } from "@stll/ui/matter-colors";
+import { MatterIcon } from "@stll/ui/matter-icon";
+import { stellaToast } from "@stll/ui/toast";
+import { cn } from "@stll/ui/utils";
+
+import {
+  CHAT_SEND_KEPT,
+  CHAT_SEND_SENT,
+  useChatEditor,
+  useChatEditorManager,
+} from "@/components/chat-editor-provider";
+import type {
+  ChatInputDraft,
+  ChatSendOutcome,
+} from "@/components/chat-editor-provider";
+import {
+  composerStoredMarkdown,
+  composerText,
+} from "@/components/chat-editor-source";
+import { ChatInputSurface } from "@/components/chat-input-surface";
+import { ChatComposerDock } from "@/components/chat/chat-composer-dock";
+import { ChatMatterPicker } from "@/components/chat/chat-matter-picker";
+import {
+  ChatThreadDecisionLabel,
+  drawableChatThreadDecision,
+  useOpenChatThreadDecision,
+} from "@/components/chat/chat-thread-decision";
+import { ChatThreadOriginPrefix } from "@/components/chat/chat-thread-origin-prefix";
+import { McpReconnectNotice } from "@/components/chat/mcp-reconnect-notice";
+import { useChatComposerModels } from "@/components/chat/use-chat-composer-models";
+import { useAIKeyGate } from "@/components/require-ai-key";
+import Tooltip from "@/components/tooltip";
+import { MatterContextMenu } from "@/components/workspaces/matter-context-menu";
+import { chatKeys } from "@/features/chat/chat-query-contract";
+import { acquireChatRuntime } from "@/features/chat/chat-runtime-registry";
+import { useChatDraftMeta } from "@/features/chat/hooks/use-chat-draft-meta";
+import { useChatUserContext } from "@/features/chat/hooks/use-chat-user-context";
+import { buildChatRequestMessage } from "@/features/chat/lib/build-chat-request-message";
+import {
+  readHandoffThread,
+  startNewThreadCommandHandoff,
+} from "@/features/chat/lib/start-new-thread-command-handoff";
+import {
+  groupedChatThreadsOptions,
+  invalidateGroupedChatThreads,
+  listChatHistoryItems,
+  mergeGroupedChatThreadPages,
+} from "@/features/chat/queries";
+import type { ChatHistoryItem } from "@/features/chat/queries";
+import { TeamAvatars } from "@/features/workspaces/team-avatars";
+import { useExternalSyncEffect } from "@/hooks/use-effect";
+import { useLatestCallback } from "@/hooks/use-latest-callback";
+import { usePermissions } from "@/hooks/use-permissions";
+import { useAnalytics } from "@/lib/analytics/provider";
+import { ChatAnonymizationLayer } from "@/lib/anonymize/use-chat-anonymization-layer";
+import { api } from "@/lib/api";
+import { invokeCapability } from "@/lib/capabilities/capability-request";
+import {
+  getChatSendMode,
+  useChatAnonymized,
+} from "@/lib/chat-anonymized-store";
+import type { ChatThreadRef } from "@/lib/chat-thread-ref";
+import { createChatThreadId, getChatThreadKey } from "@/lib/chat-thread-ref";
+import { isPlaceholderThreadTitle } from "@/lib/chat-thread-title";
+import { useChatWebSearchPreferenceStore } from "@/lib/chat-web-search-store";
+import { detached } from "@/lib/detached";
+import { unwrapApiResponse } from "@/lib/errors/api";
+import { notifyUserError } from "@/lib/errors/user-toast";
+import type { fetchWorkspaceNavigationPage } from "@/lib/memory-api";
+import { usePinnedStore } from "@/lib/pinned-store";
+import type { ChatPrompt } from "@/lib/prompts/types";
+import { useSuggestedSkills } from "@/lib/prompts/use-suggested-skills";
+import { queryView } from "@/lib/query-view.logic";
+import { formatRelativeTime } from "@/lib/relative-time";
+import { runReservedChatCommand } from "@/lib/reserved-chat-commands";
+import { toSafeId } from "@/lib/safe-id";
+import { useQueryViewError } from "@/lib/use-query-view";
+import { useCreateMatterStore } from "@/lib/workspaces/create-matter-store";
+import { workspacesNavigationOptions } from "@/lib/workspaces/queries";
+import type { WorkspaceMemberPreview } from "@/lib/workspaces/queries/workspace-member-previews";
+import { workspaceMemberPreviewsOptions } from "@/lib/workspaces/queries/workspace-member-previews";
+import { ChatFileStack } from "@/routes/_protected.chat/-components/chat-file-stack";
+import {
+  ChatIndexShell,
+  ChatLandingRecentChatsLabel,
+  ChatLandingSkillsLabel,
+} from "@/routes/_protected.chat/-components/chat-index.pending";
+import { ChatLandingSkillRows } from "@/routes/_protected.chat/-components/chat-landing-skill-rows";
+import { LandingQueryFeedback } from "@/routes/_protected.chat/-components/landing-query-feedback";
+
+const protectedRouteApi = getRouteApi("/_protected");
+
+/** The skills column's heading, as the pending phase shows it, opening the
+ *  skills library. */
+const ChatLandingSkillsHeading = () => {
+  const t = useTranslations();
+  return (
+    <Tooltip
+      content={t("chat.landing.openSkillsLibrary")}
+      render={
+        <Link
+          className={LANDING_SECTION_HEADING_CLASS}
+          search={{ kind: "skill" }}
+          to="/knowledge/tools"
+        />
+      }
+    >
+      <ChatLandingSkillsLabel />
+    </Tooltip>
+  );
+};
+
+/** The recent chats column's heading, opening the chat history. */
+const ChatLandingRecentChatsHeading = () => {
+  const t = useTranslations();
+  return (
+    <Tooltip
+      content={t("chat.landing.openChatHistory")}
+      render={
+        <Link className={LANDING_SECTION_HEADING_CLASS} to="/chat/history" />
+      }
+    >
+      <ChatLandingRecentChatsLabel />
+    </Tooltip>
+  );
+};
+
+/** Who else works on a matter, as a compact avatar stack on its row. */
+const MatterColleagues = ({
+  currentUserId,
+  preview,
+}: {
+  currentUserId: string;
+  preview: WorkspaceMemberPreview | undefined;
+}) => {
+  if (!preview) {
+    return null;
+  }
+  const colleagues = preview.members.flatMap(
+    ({ email, userId, image, name }) =>
+      userId === currentUserId
+        ? []
+        : [
+            {
+              userEmail: email,
+              userId,
+              userImage: image,
+              userName: name,
+            },
+          ],
+  );
+  const viewerCount = preview.members.some(
+    (member) => member.userId === currentUserId,
+  )
+    ? 1
+    : 0;
+  return (
+    <TeamAvatars
+      emptyFallback={null}
+      leadUserId={null}
+      members={colleagues}
+      totalCount={preview.total - viewerCount}
+      size="size-6"
+    />
+  );
+};
+
+export function ChatIndexPage() {
+  const t = useTranslations();
+  const { focusThread } = useChatEditorManager();
+  const { availability, ensureAIAvailable } = useAIKeyGate();
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const userContext = useChatUserContext();
+  const getUserContext = useLatestCallback(() => userContext);
+  const threadIdRef = useRef<ChatThreadRef["threadId"] | null>(null);
+  threadIdRef.current ??= createChatThreadId();
+  // `/new` rotates the ref above; bump a render so `threadRef` (and the
+  // composer bound to it via `useChatEditor`) rebind to the fresh id instead
+  // of staying on the abandoned draft.
+  const [, rotateDraftThread] = useState(0);
+  // oxlint-disable-next-line react/refs -- draft-thread identity held in a ref and rotated imperatively (each rotation is paired with rotateDraftThread to force the dependent render); reading the current id here to derive this render's threadRef and query key is intentional
+  const draftThreadId = threadIdRef.current;
+  const threadRef: ChatThreadRef = {
+    scope: "global",
+    threadId: draftThreadId,
+  };
+  const controller = useChatEditor({
+    threadRef,
+  });
+  const suggestedSkills = useSuggestedSkills();
+  const pinnedOrder = usePinnedStore((s) => s.pinnedOrder);
+  const canCreateMatter = usePermissions({ workspace: ["create"] });
+  const openCreateMatter = useCreateMatterStore((s) => s.openDialog);
+  const activeOrganizationId = protectedRouteApi.useRouteContext({
+    select: (ctx) => ctx.user.activeOrganizationId,
+  });
+  const userId = protectedRouteApi.useRouteContext({
+    select: (ctx) => ctx.user.id,
+  });
+  const workspacesDataQuery = useQuery(
+    workspacesNavigationOptions({
+      organizationId: activeOrganizationId,
+      userId,
+    }),
+  );
+  const workspacesDataView = queryView(workspacesDataQuery);
+  const workspacesData =
+    workspacesDataView.type === "items" ? workspacesDataView.items : undefined;
+  const workspaces = workspacesData?.workspaces;
+  const groupedThreadPagesQuery = useInfiniteQuery(
+    groupedChatThreadsOptions({ activeOrganizationId, userId }),
+  );
+  const groupedThreadPagesView = queryView(groupedThreadPagesQuery);
+  const groupedThreadPages =
+    groupedThreadPagesView.type === "items"
+      ? groupedThreadPagesView.items
+      : undefined;
+  const groupedThreads = useMemo(
+    () => mergeGroupedChatThreadPages(groupedThreadPages?.pages),
+    [groupedThreadPages?.pages],
+  );
+  const anonymized = useChatAnonymized(threadRef);
+  const [composerFocused, setComposerFocused] = useState(false);
+  const getSendMode = useLatestCallback(() => getChatSendMode(threadRef));
+  const [contextMatterIds, setContextMatterIds] = useState<string[]>([]);
+  const getContextMatterIds = useLatestCallback(() => contextMatterIds);
+  const { draftMeta: chatDraftMeta, draftMetaQueryKey } = useChatDraftMeta({
+    activeOrganizationId,
+    threadRef,
+  });
+
+  // The draft's model and where its turns run. A choice is stored on the
+  // draft's row, the first send carries it, and the route-handoff send below
+  // waits for it to land (see `onSubmit`). Same owner `ChatThreadPage` uses,
+  // so the new chat offers Run on as an open thread does.
+  const composerModels = useChatComposerModels({
+    activeOrganizationId,
+    threadRef,
+    stored: chatDraftMeta,
+    queryKey: draftMetaQueryKey,
+    opensNewChats: true,
+  });
+  const { getRunTarget } = composerModels;
+  // The capability set `ChatThreadPage` passes, so the runtime the first
+  // send registers is the one the thread page reattaches to.
+  const chatThreadContext = {
+    allowMissingThread: true,
+    getUserContext,
+    getContextMatterIds,
+    getSendMode,
+    getRunTarget,
+  };
+
+  // Mirror the per-thread seeding from ChatThreadPage: if the user
+  // previously enabled web search and the draft thread doesn't have
+  // it on, PATCH it on. Marks seeded only on success; a failed seed is
+  // not retried on its own (mutations never retry silently): the
+  // composer's web search control keeps showing the draft's real "off"
+  // state, and the member switches it on there.
+  const enabledPreference = useChatWebSearchPreferenceStore(
+    (state) => state.enabledPreference,
+  );
+  const analytics = useAnalytics();
+  const { mutate: seedDraftWebSearch } = useMutation({
+    mutationFn: async () =>
+      await invokeCapability("chat.threads.update", async (request) =>
+        unwrapApiResponse(
+          await api.chat
+            .threads({
+              threadId: toSafeId<"chatThread">(
+                threadIdRef.current ?? createChatThreadId(),
+              ),
+            })
+            .patch({ webSearchEnabled: true }, { ...request, query: {} }),
+        ),
+      ),
+    onError: (error) => {
+      analytics.captureError(error, {
+        fingerprintKey: "ChatIndex:failure",
+        scope: { type: "handler", handlerId: "ChatIndex:failure" },
+      });
+    },
+  });
+  const seededDraftRef = useRef<string | null>(null);
+  const seedingDraftRef = useRef<string | null>(null);
+  useExternalSyncEffect(() => {
+    const threadId = threadIdRef.current;
+    if (
+      threadId === null ||
+      seededDraftRef.current === threadId ||
+      seedingDraftRef.current === threadId
+    ) {
+      return;
+    }
+    if (
+      enabledPreference &&
+      chatDraftMeta?.webSearchAvailable &&
+      !chatDraftMeta.webSearchEnabled
+    ) {
+      seedingDraftRef.current = threadId;
+      seedDraftWebSearch(undefined, {
+        onSuccess: () => {
+          if (seedingDraftRef.current === threadId) {
+            seedingDraftRef.current = null;
+          }
+          seededDraftRef.current = threadId;
+          detached(
+            queryClient.invalidateQueries({
+              queryKey: chatKeys.draftMeta(activeOrganizationId, {
+                scope: "global",
+                threadId,
+              }),
+            }),
+            "chat.invalidate",
+          );
+        },
+        onError: () => {
+          if (seedingDraftRef.current === threadId) {
+            seedingDraftRef.current = null;
+          }
+        },
+      });
+    }
+  }, [
+    activeOrganizationId,
+    chatDraftMeta?.webSearchAvailable,
+    chatDraftMeta?.webSearchEnabled,
+    enabledPreference,
+    queryClient,
+    seedDraftWebSearch,
+  ]);
+
+  const pinnedMatters = useMemo(() => {
+    const workspaceById = new Map<string, PinnedMatter>();
+    if (workspaces) {
+      for (const workspace of workspaces) {
+        workspaceById.set(workspace.id, {
+          status: workspace.status,
+          color: workspace.color,
+          id: workspace.id,
+          lastActivityAt: workspace.lastActivityAt,
+          name: workspace.name,
+          client: workspace.client,
+        });
+      }
+    }
+    const matters: PinnedMatter[] = [];
+    for (const workspaceId of pinnedOrder) {
+      const workspace = workspaceById.get(workspaceId);
+      if (workspace) {
+        matters.push(workspace);
+      }
+    }
+    return matters.slice(0, 5);
+  }, [pinnedOrder, workspaces]);
+
+  const lastAccessedMatters = useMemo(() => {
+    if (!workspaces) {
+      return [];
+    }
+    return workspaces
+      .toSorted(
+        (left, right) =>
+          new Date(right.lastActivityAt).getTime() -
+          new Date(left.lastActivityAt).getTime(),
+      )
+      .slice(0, 5)
+      .map((workspace) => ({
+        status: workspace.status,
+        color: workspace.color,
+        id: workspace.id,
+        lastActivityAt: workspace.lastActivityAt,
+        name: workspace.name,
+        client: workspace.client,
+      }));
+  }, [workspaces]);
+
+  const visibleMatters =
+    pinnedMatters.length > 0 ? pinnedMatters : lastAccessedMatters;
+  const memberPreviewsQuery = useQuery(
+    workspaceMemberPreviewsOptions({
+      organizationId: activeOrganizationId,
+      userId,
+      workspaceIds: visibleMatters.map((matter) => matter.id),
+    }),
+  );
+  const memberPreviewsView = queryView(memberPreviewsQuery);
+  useQueryViewError(memberPreviewsView, "ChatIndex:query");
+  const memberPreviews =
+    memberPreviewsView.type === "items" ? memberPreviewsView.items : undefined;
+  const mattersHeading =
+    pinnedMatters.length > 0
+      ? t("chat.landing.pinnedMatters")
+      : t("chat.landing.lastAccessedMatters");
+
+  const recentChats = useMemo(
+    () => listChatHistoryItems(groupedThreads).slice(0, 5),
+    [groupedThreads],
+  );
+  const openChatThreadDecision = useOpenChatThreadDecision();
+  const openDecisionChatOnClick =
+    (chat: ChatHistoryItem) => (event: MouseEvent<HTMLAnchorElement>) => {
+      openChatThreadDecision(event, chat);
+    };
+  const storedMatterColor = (workspaceId: string) =>
+    workspaces?.find(({ id }) => id === workspaceId)?.color ?? null;
+
+  const selectPrompt = (prompt: ChatPrompt) => {
+    controller.setContent(composerStoredMarkdown(prompt.body));
+    controller.focus();
+  };
+
+  const handleSubmit = async (
+    draft: ChatInputDraft,
+  ): Promise<ChatSendOutcome> => {
+    const newThreadMessages: string[] = [];
+    const handledReserved = runReservedChatCommand(draft.html, {
+      new: (args) => {
+        if (args.length > 0) {
+          newThreadMessages.push(args);
+          return;
+        }
+        controller.setContent(composerText(""));
+        threadIdRef.current = createChatThreadId();
+        rotateDraftThread((value) => value + 1);
+      },
+      "rename-chat": () => {
+        // Nothing persisted to rename yet: this composer only ever holds an
+        // unsent draft thread. Explain instead of silently no-oping.
+        controller.setContent(composerText(""));
+        stellaToast.add({
+          title: t("chat.renameUnavailableEmptyThread"),
+          type: "info",
+        });
+      },
+      "make-skill": () => {
+        // Like `/rename-chat`: an unsent draft has nothing to learn from.
+        controller.setContent(composerText(""));
+        stellaToast.add({
+          title: t("chat.makeSkill.emptyThread"),
+          type: "info",
+        });
+      },
+    });
+    // Inside the member's send gesture, before any await: a turn for
+    // their computer opens stella desktop when none is connected.
+    if (!handledReserved || newThreadMessages.length > 0) {
+      composerModels.openDesktopForSend();
+    }
+    if (handledReserved) {
+      const newThreadMessage = newThreadMessages.at(0);
+      if (newThreadMessage === undefined) {
+        return CHAT_SEND_SENT;
+      }
+      if (!(await ensureAIAvailable())) {
+        return CHAT_SEND_KEPT;
+      }
+      if (Result.isError(await composerModels.awaitPendingSelection())) {
+        return CHAT_SEND_KEPT;
+      }
+      const handoff = await startNewThreadCommandHandoff({
+        activeOrganizationId,
+        context: chatThreadContext,
+        files: draft.files,
+        html: newThreadMessage,
+        queryClient,
+        threadRef,
+      });
+      if (handoff.isErr()) {
+        notifyUserError(handoff.error, t("chat.sendErrorMessageEmpty"));
+        return CHAT_SEND_KEPT;
+      }
+      await navigate({
+        to: "/chat/$threadId",
+        params: { threadId: threadRef.threadId },
+      });
+      detached(
+        invalidateGroupedChatThreads(queryClient),
+        "chat.invalidate-grouped-chat-threads",
+      );
+      return CHAT_SEND_SENT;
+    }
+    if (!(await ensureAIAvailable())) {
+      return CHAT_SEND_KEPT;
+    }
+    // A model just picked in the (+) menu may still be
+    // mid-PATCH: wait for it to settle so the route-handoff
+    // send below can never race onto the thread's previous
+    // model, which is worst here since a brand-new draft
+    // thread has no persisted model until this PATCH lands. On
+    // failure the hook has already toasted; abort instead of
+    // sending with a model that may not match what the server
+    // has persisted.
+    if (Result.isError(await composerModels.awaitPendingSelection())) {
+      return CHAT_SEND_KEPT;
+    }
+    // Build the request payload and fetch the pure thread data
+    // in parallel, then resolve (and register) the Chat<>
+    // runtime from this component's own live getters; the
+    // thread route resolves the *same* registered runtime (see
+    // `acquireChatRuntime` — this context carries the exact
+    // capability set ChatThreadPage passes, so both map to
+    // the same registry fingerprint), and kicking off the
+    // send here lets the thread page observe the in-flight
+    // stream as soon as it mounts. The stream started below
+    // also makes the runtime BUSY before the destination
+    // page's acquire runs, so its idle-reconcile can never
+    // rebuild the handoff runtime out from under the live
+    // stream — it always takes the mid-stream reattach
+    // branch. The runtime keeps THIS page's getters until the
+    // turn's onFinish invalidation refetches the thread
+    // query; the destination page's post-refetch acquire then
+    // sees the diverged seed signal and rebuilds with its own
+    // getters.
+    // The thread's data carries where this first send runs, so the thread
+    // page shows it until the server's read of the thread reflects the turn.
+    const [message, threadData] = await Promise.all([
+      buildChatRequestMessage(draft),
+      readHandoffThread({
+        activeOrganizationId,
+        context: chatThreadContext,
+        queryClient,
+        threadRef,
+      }),
+    ]);
+    if (message.isErr()) {
+      notifyUserError(message.error, t("chat.sendErrorMessageEmpty"));
+      return CHAT_SEND_KEPT;
+    }
+    const chat = acquireChatRuntime({
+      activeOrganizationId,
+      context: chatThreadContext,
+      data: threadData,
+      key: threadRef,
+      queryClient,
+    });
+
+    // Start the stream before navigation and require
+    // the user message to be locally visible. If the
+    // TanStack boundary fails before appending, this
+    // throws here so the composer restores the draft
+    // instead of navigating to an empty thread.
+    await chat.startRouteHandoffMessage(message.value, {
+      timingSurface: "chat-thread",
+    });
+
+    await navigate({
+      to: "/chat/$threadId",
+      params: {
+        // The thread this send started on: a `/new` typed meanwhile rotates
+        // the draft, and the member follows the message they sent.
+        threadId: threadRef.threadId,
+      },
+    });
+    detached(
+      invalidateGroupedChatThreads(queryClient),
+      "chat.invalidate-grouped-chat-threads",
+    );
+    return CHAT_SEND_SENT;
+  };
+
+  const matterPicker = (
+    <ChatMatterPicker
+      matterIds={contextMatterIds}
+      onChange={setContextMatterIds}
+    />
+  );
+
+  return (
+    <ChatIndexShell
+      composer={
+        <>
+          <ChatAnonymizationLayer
+            editor={controller.editor}
+            enabled={anonymized}
+            focused={composerFocused}
+            ownerKey={getChatThreadKey(threadRef)}
+            workspaceId={draftThreadId}
+          />
+          <McpReconnectNotice editor={controller.editor} />
+          <ChatInputSurface
+            sendDisabled={availability !== "available"}
+            anonymized={anonymized}
+            autoFocus
+            context={{ activeOrganizationId, threadRef }}
+            controller={controller}
+            guideAnchorsEnabled
+            variant="large"
+            mcpOrganizationId={activeOrganizationId}
+            models={composerModels.models}
+            reservedCommands={{ hasPersistedThread: false }}
+            skillChat={{
+              contextMatterIds,
+              document: null,
+              runTarget: composerModels.runTarget,
+              threadRef,
+              webSearch:
+                chatDraftMeta === undefined
+                  ? null
+                  : {
+                      available: chatDraftMeta.webSearchAvailable,
+                      enabled: chatDraftMeta.webSearchEnabled,
+                    },
+            }}
+            skillsOrganizationId={activeOrganizationId}
+            dock={
+              chatDraftMeta === undefined ? (
+                <ChatComposerDock
+                  guideAnchorsEnabled
+                  leadingContext={matterPicker}
+                  models={composerModels.models}
+                  status="pending"
+                  threadRef={threadRef}
+                />
+              ) : (
+                <ChatComposerDock
+                  data={{
+                    webSearchAvailable: chatDraftMeta.webSearchAvailable,
+                    webSearchEnabled: chatDraftMeta.webSearchEnabled,
+                    // The draft carries the same cache-stable floor its first
+                    // send will pay, so the meter shows the honest baseline
+                    // (~system prompt + tools) rather than 0% until send.
+                    context: chatDraftMeta.context,
+                  }}
+                  guideAnchorsEnabled
+                  leadingContext={matterPicker}
+                  models={composerModels.models}
+                  // The hero already IS a fresh thread; a new-chat
+                  // affordance here would be a no-op, so opt out.
+                  onNewThread={null}
+                  status="ready"
+                  threadRef={threadRef}
+                />
+              )
+            }
+            onSubmit={handleSubmit}
+            onFocusChange={setComposerFocused}
+          />
+        </>
+      }
+      matters={{
+        // Pinned or last accessed is known only once the matters arrive:
+        // until then the heading waits, as in the pending phase, rather than
+        // naming one and switching to the other.
+        heading:
+          workspacesDataView.type === "pending" ? (
+            <LandingSectionHeadingPending />
+          ) : (
+            <Tooltip
+              content={t("chat.landing.openAllMatters")}
+              render={
+                <Link
+                  className={LANDING_SECTION_HEADING_CLASS}
+                  to="/workspaces"
+                />
+              }
+            >
+              {pinnedMatters.length > 0 ? (
+                <PinIcon className="size-4" />
+              ) : (
+                <MatterIcon className="size-4" variant="all" />
+              )}
+              {mattersHeading}
+            </Tooltip>
+          ),
+        rows: (
+          <>
+            <LandingQueryFeedback view={workspacesDataView} />
+            {(workspacesDataView.type === "items" ||
+              workspacesDataView.type === "empty") &&
+              (visibleMatters.length > 0 ? (
+                visibleMatters.map((matter) => (
+                  <MatterContextMenu
+                    className="contents"
+                    key={matter.id}
+                    target={{
+                      id: matter.id,
+                      name: matter.name,
+                      color: matter.color,
+                      client: matter.client,
+                      isArchived: matter.status === WORKSPACE_STATUS.archived,
+                    }}
+                  >
+                    <Link
+                      className={cn(
+                        LANDING_ROW_CLASS,
+                        "flex items-center gap-3",
+                      )}
+                      params={{ workspaceId: matter.id }}
+                      to="/workspaces/$workspaceId"
+                    >
+                      <span className="min-w-0 flex-1">
+                        <LandingItemText
+                          icon={
+                            <MatterIcon
+                              className="size-4"
+                              matter={{ id: matter.id, color: matter.color }}
+                            />
+                          }
+                          iconTone="matter"
+                          meta={formatRelativeTime(matter.lastActivityAt)}
+                          title={matter.name}
+                        />
+                      </span>
+                      <MatterColleagues
+                        currentUserId={userId}
+                        preview={memberPreviews?.previews.find(
+                          (preview) => preview.workspaceId === matter.id,
+                        )}
+                      />
+                    </Link>
+                  </MatterContextMenu>
+                ))
+              ) : (
+                <LandingEmpty>
+                  <div className="flex flex-col items-start gap-2.5">
+                    {t("chat.landing.noMatters")}
+                    {canCreateMatter && (
+                      <Button
+                        onClick={(event) =>
+                          openCreateMatter({ opener: event.currentTarget })
+                        }
+                        size="sm"
+                        variant="outline"
+                      >
+                        <PlusIcon className="size-4" />
+                        {t("workspaces.createNewWorkspace")}
+                      </Button>
+                    )}
+                  </div>
+                </LandingEmpty>
+              ))}
+          </>
+        ),
+      }}
+      skills={{
+        heading: <ChatLandingSkillsHeading />,
+        rows: (
+          <ChatLandingSkillRows
+            onSelect={selectPrompt}
+            suggestions={suggestedSkills}
+          />
+        ),
+      }}
+      recentChats={{
+        heading: <ChatLandingRecentChatsHeading />,
+        rows: (
+          <>
+            <LandingQueryFeedback view={groupedThreadPagesView} />
+            {(groupedThreadPagesView.type === "items" ||
+              groupedThreadPagesView.type === "empty") &&
+              (recentChats.length > 0 ? (
+                recentChats.map((chat) =>
+                  chat.scope === "workspace" ? (
+                    <Link
+                      className={cn(
+                        LANDING_ROW_CLASS,
+                        "flex items-center gap-3",
+                      )}
+                      key={chat.id}
+                      onClick={openDecisionChatOnClick(chat)}
+                      params={{
+                        workspaceId: chat.workspaceId,
+                        threadId: chat.id,
+                      }}
+                      to="/chat/workspaces/$workspaceId/$threadId"
+                    >
+                      <span className="min-w-0 flex-1">
+                        <LandingItemText
+                          meta={
+                            <>
+                              <ChatThreadOriginPrefix origin={chat.origin} />
+                              <span
+                                aria-hidden="true"
+                                // Centred on the cap height, not the x-height:
+                                // `align-middle` reads low beside capitals.
+                                className="me-1.5 inline-block size-1.5 rounded-full align-[0.1em]"
+                                style={{
+                                  backgroundColor: resolveMatterColor(
+                                    chat.workspaceId,
+                                    storedMatterColor(chat.workspaceId),
+                                  ),
+                                }}
+                              />
+                              <BidiText>{chat.workspaceName}</BidiText>
+                              {" · "}
+                              <ChatDecisionMetaPrefix chat={chat} />
+                              {formatRelativeTime(chat.updatedAt)}
+                            </>
+                          }
+                          title={
+                            isPlaceholderThreadTitle(chat.title)
+                              ? t("chat.newChat")
+                              : chat.title
+                          }
+                        />
+                      </span>
+                      <ChatFileStack attachedFiles={chat.context} />
+                    </Link>
+                  ) : (
+                    <Link
+                      className={cn(
+                        LANDING_ROW_CLASS,
+                        "flex items-center gap-3",
+                      )}
+                      key={chat.id}
+                      onClick={openDecisionChatOnClick(chat)}
+                      params={{ threadId: chat.id }}
+                      to="/chat/$threadId"
+                    >
+                      <span className="min-w-0 flex-1">
+                        <LandingItemText
+                          meta={
+                            <>
+                              <ChatThreadOriginPrefix origin={chat.origin} />
+                              <ChatDecisionMetaPrefix chat={chat} />
+                              {formatRelativeTime(chat.updatedAt)}
+                            </>
+                          }
+                          title={
+                            isPlaceholderThreadTitle(chat.title)
+                              ? t("chat.newChat")
+                              : chat.title
+                          }
+                        />
+                      </span>
+                      <ChatFileStack attachedFiles={chat.context} />
+                    </Link>
+                  ),
+                )
+              ) : (
+                <LandingEmpty>
+                  <div className="flex flex-col items-start gap-2.5">
+                    {t("chat.landing.noRecentChats")}
+                    <Button
+                      onClick={() => focusThread(threadRef)}
+                      size="sm"
+                      variant="outline"
+                    >
+                      <NewChatIcon className="size-4" />
+                      {t("chat.newChat")}
+                    </Button>
+                  </div>
+                </LandingEmpty>
+              ))}
+          </>
+        ),
+      }}
+    />
+  );
+}
+
+/** A decision chat's decision, leading its row's time; nothing for others. */
+const ChatDecisionMetaPrefix = ({ chat }: { chat: ChatHistoryItem }) => {
+  const decision = drawableChatThreadDecision(chat);
+  return decision === null ? null : (
+    <>
+      <ChatThreadDecisionLabel decision={decision} />
+      {" · "}
+    </>
+  );
+};
+
+type PinnedMatter = {
+  status: Awaited<
+    ReturnType<typeof fetchWorkspaceNavigationPage>
+  >["workspaces"][number]["status"];
+  color: string | null;
+  id: string;
+  lastActivityAt: Date;
+  name: string;
+  /** Drives the right-click menu's add-member affordance and header. */
+  client: { displayName: string } | null;
+};

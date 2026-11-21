@@ -26,9 +26,9 @@ import {
   TableHeader,
   TableRow,
 } from "@stll/ui/table";
+import { TableSkeletonRows } from "@stll/workspace-ui/table-skeleton-rows";
 
 import { ContactReadError } from "@/components/contact-read-error";
-import { TableSkeletonRows } from "@/components/table-skeleton-rows";
 import { useFormatter } from "@/i18n/formatting-context";
 import { detached } from "@/lib/detached";
 import { MEDIUM_DATE_SHORT_TIME_FORMAT } from "@/lib/relative-time";
@@ -131,6 +131,7 @@ const CorrespondenceDropsTable = ({ workspaceId }: { workspaceId: string }) => {
         <Button
           className="min-h-11"
           disabled={isFetching}
+          disabledReason={t("common.loading")}
           onClick={() => detached(refetch(), "correspondence.refresh-drops")}
           size="sm"
           variant="ghost"
@@ -200,6 +201,7 @@ const CorrespondenceDropsTable = ({ workspaceId }: { workspaceId: string }) => {
           size="sm"
           className="min-h-11"
           disabled={isFetching}
+          disabledReason={t("common.loading")}
           onClick={() =>
             detached(fetchNextPage(), "correspondence.fetch-next-drops")
           }

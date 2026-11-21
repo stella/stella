@@ -29,11 +29,11 @@ import { AnnotationToolbar } from "@/components/legal-reader/annotations/annotat
 import { GuestAnnotationPrompt } from "@/components/legal-reader/annotations/guest-annotation-prompt";
 import { OrphanedAnnotationsNotice } from "@/components/legal-reader/annotations/orphaned-annotations-notice";
 import { LegalReaderAIChat } from "@/components/legal-reader/legal-reader-ai-chat";
+import { LegalReaderControls } from "@/components/legal-reader/legal-reader-controls";
 import {
   LEGAL_READER_CONTENT_CLEARANCE_CLASS_NAME,
   LEGAL_READER_LAYOUT_CLASS_NAME,
-  LegalReaderControls,
-} from "@/components/legal-reader/legal-reader-controls";
+} from "@/components/legal-reader/legal-reader-controls.pending";
 import { MarginNotes } from "@/components/legal-reader/margin-notes";
 import type { MarginItem } from "@/components/legal-reader/margin-notes";
 import { OpenOriginalButton } from "@/components/legal-reader/open-original-button";
@@ -88,7 +88,7 @@ export const CaseDecisionInspectorView = ({
 }: InspectorViewRenderProps<CaseDecisionViewPayload>) => {
   const t = useTranslations();
   const { payload } = tab;
-  const textScale = useReaderTextScale("decision");
+  const textScale = useReaderTextScale();
   const decisionId = toSafeId<"caseLawDecision">(payload.decisionId);
   const { citationAnchors, unresolvedCitationAnchors } =
     useDecisionCitationAnchors(decisionId);

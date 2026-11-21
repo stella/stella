@@ -1,3 +1,4 @@
+// parser-output-unchanged: the cz-ns-sbirka adapter entry is new; existing adapters read only their own keys, so their parsed output is unchanged.
 // parser-output-unchanged: the br-tjdft adapter entry is new; existing adapters read only their own keys, so their parsed output is unchanged.
 import type { Result } from "better-result";
 
@@ -15,7 +16,9 @@ import { atVfghAdapter } from "@/api/handlers/case-law/ingestion/adapters/at-vfg
 import { atVwghAdapter } from "@/api/handlers/case-law/ingestion/adapters/at-vwgh";
 import { brTjdftAdapter } from "@/api/handlers/case-law/ingestion/adapters/br-tjdft";
 import { brTstAdapter } from "@/api/handlers/case-law/ingestion/adapters/br-tst";
+import { czIsirAdapter } from "@/api/handlers/case-law/ingestion/adapters/cz-isir";
 import { czNsAdapter } from "@/api/handlers/case-law/ingestion/adapters/cz-ns";
+import { czNsSbirkaAdapter } from "@/api/handlers/case-law/ingestion/adapters/cz-ns-sbirka";
 import { czNssAdapter } from "@/api/handlers/case-law/ingestion/adapters/cz-nss";
 import { czRegionalAdapter } from "@/api/handlers/case-law/ingestion/adapters/cz-regional";
 import { czUohsAdapter } from "@/api/handlers/case-law/ingestion/adapters/cz-uohs";
@@ -99,6 +102,8 @@ const ADAPTER_REGISTRY = {
   [ADAPTER_KEYS.PL_UODO]: plUodoAdapter,
   [ADAPTER_KEYS.PL_UOKIK]: plUokikAdapter,
   [ADAPTER_KEYS.BR_TJDFT]: brTjdftAdapter,
+  [ADAPTER_KEYS.CZ_NS_SBIRKA]: czNsSbirkaAdapter,
+  [ADAPTER_KEYS.CZ_ISIR]: czIsirAdapter,
 } as const satisfies AdapterRegistry;
 
 type SourceImport = Pick<

@@ -31,9 +31,15 @@ use crate::{
   dictation_context::{self, CleanupContext},
   dictation_focus::{self, FocusTarget, Insertion},
   dictation_format::{AppClass, Segment},
+  dictation_hold_key::{HoldChoice, MINIMUM_HOLD},
   dictation_input,
   dictation_live::{Ended, Live, Transcribe, Transcription},
+  dictation_microphone::{self, Choice, InputDevice},
   dictation_pauses::Segmenter,
+  dictation_preview,
+  dictation_sounds::{self, Cue},
+  dictation_spelling,
+  dictation_trace::{self, Cleanup, GlobeKey, Line, Outcome, Trace},
   dictation_worker::{self, Response},
 };
 
@@ -42,6 +48,11 @@ const WORKER_IDLE: Duration = Duration::from_secs(300);
 /// How often captured audio is checked for a pause while the key is down.
 const LISTEN: Duration = Duration::from_millis(100);
 const MAX_RECORDING_SECONDS: usize = 600;
+/// A shorter hold that heard nothing is a tap, not a dictation that failed.
+const MIN_NOTICED_HOLD: Duration = Duration::from_millis(500);
+/// Recording goes on this long after the key comes up: speakers often let go
+/// while still saying the last word.
+const RELEASE_TAIL: Duration = Duration::from_millis(200);
 #[cfg(target_os = "windows")]
 const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 /// The speaker waits on every request, so a busy machine must not starve it.
@@ -62,9 +73,44 @@ pub fn spawn(app: AppHandle) -> Option<Sender<Command>> {
   }
 }
 
+/// A dictation while its key is down.
+struct Active {
+  capture: Capture,
+  focus: Option<FocusTarget>,
+  context: CleanupContext,
+  trace: Trace,
+  /// How often the panel checks for a password field between results.
+  password_watch: dictation_preview::PasswordWatch,
+}
+
+impl Active {
+  /// Sounds the start once the hold is long enough to be a dictation, not
+  /// a tap, when the speaker wants sounds.
+  fn sound_start(&mut self, app: &AppHandle) {
+    if !self.capture.sounded
+      && self.trace.since_press() >= MINIMUM_HOLD
+      && dictation::sounds_enabled(app)
+    {
+      self.capture.sounded = true;
+      dictation_sounds::play(Cue::Start);
+    }
+  }
+}
+
+/// What a dictation that did not fail came to.
+enum Delivered {
+  Typed,
+  /// The microphone stopped while the key was down: what it heard before
+  /// was typed, and the speaker is still told it stopped.
+  CutShort(Failed),
+  /// No words to type.
+  Empty,
+  Cancelled,
+}
+
 fn run(app: &AppHandle, commands: &Receiver<Command>) {
   let mut worker = None;
-  let mut active: Option<(Capture, Option<FocusTarget>, CleanupContext)> = None;
+  let mut active: Option<Active> = None;
   loop {
     let wait = if active.is_some() {
       LISTEN
@@ -73,51 +119,179 @@ fn run(app: &AppHandle, commands: &Receiver<Command>) {
     };
     match commands.recv_timeout(wait) {
       Ok(Command::Press) if active.is_none() => {
+        let trace = Trace::pressed();
         dictation::clear_failure(app);
-        let model = dictation::start_recording(app);
-        match begin(app, model, &mut worker) {
-          Ok(started) => {
-            // Read once recording runs, so the lookups never delay capture;
-            // the context is where the speaker pressed the shortcut.
-            let focus = dictation_focus::current(app);
-            let context =
-              dictation_context::read(focus.as_ref(), dictation::context_sharing(app));
-            active = Some((started, focus, context));
-          }
-          Err(failure) => {
-            dictation::report_failure(app, failure);
-            dictation::set_phase(app, Phase::Idle);
+        // The microphone belongs to the dictation, not to a test of it.
+        dictation_microphone::stop_test(app);
+        // Read before capture starts: the microphone never opens for a
+        // password field that already has focus.
+        let focus = dictation_focus::current(app);
+        if dictation_focus::in_password_field(focus.as_ref()) {
+          dictation::report_failure(app, Failure::PasswordField);
+          end(
+            app,
+            &trace,
+            Outcome::Failed(Failure::PasswordField.into()),
+            None,
+          );
+        } else {
+          let model = dictation::start_recording(app);
+          dictation_preview::start(app);
+          match begin(app, model, focus.as_ref(), &mut worker) {
+            Ok(capture) => {
+              // Read once recording runs, so it never delays capture; the
+              // context is where the speaker pressed the shortcut.
+              let context = dictation_context::read(
+                focus.as_ref(),
+                dictation::context_sharing(app),
+              );
+              active = Some(Active {
+                capture,
+                focus,
+                context,
+                trace,
+                password_watch: dictation_preview::PasswordWatch::default(),
+              });
+            }
+            Err(failure) => {
+              let device = (failure == Failure::Microphone)
+                .then(|| default_input().map(|device| device.name))
+                .flatten();
+              dictation::report_input_failure(app, failure, device);
+              dictation::set_phase(app, Phase::Idle);
+              end(app, &trace, Outcome::Failed(failure.into()), None);
+            }
           }
         }
       }
       Ok(Command::Press) => {
-        if let Some((capture, ..)) = active.as_mut() {
-          capture.listen();
+        if let Some(active) = active.as_mut() {
+          active.capture.listen();
+          active.sound_start(app);
+        }
+      }
+      Ok(Command::Cancel) => {
+        // A tap or a shortcut on the hold key: nothing is transcribed.
+        if let Some(active) = active.take() {
+          cancel(app, active, &mut worker);
         }
       }
       Ok(Command::Release) => {
-        if let Some((capture, focus, context)) = active.take() {
+        if let Some(Active {
+          capture,
+          focus,
+          context,
+          mut trace,
+          ..
+        }) = active.take()
+        {
           dictation::set_phase(app, Phase::Transcribing);
-          if let Err(failed) =
-            finish(app, capture, focus.as_ref(), &context, &mut worker)
-          {
-            dictation::report_failure(app, failed);
-          }
+          trace.release();
+          dictation_preview::release(app);
+          thread::sleep(release_tail(trace.held()));
+          let device = capture.recorder.device.clone();
+          let mut moved = None;
+          let outcome = match finish(
+            app,
+            capture,
+            focus.as_ref(),
+            &context,
+            &mut worker,
+            &trace,
+            &mut moved,
+          ) {
+            Ok(Delivered::Typed) => Outcome::Typed,
+            Ok(Delivered::CutShort(failed)) => {
+              dictation::report_input_failure(app, failed, device);
+              Outcome::Typed
+            }
+            Ok(Delivered::Empty) => Outcome::Empty,
+            Ok(Delivered::Cancelled) => Outcome::Cancelled,
+            Err(failed) => {
+              dictation::report_input_failure(app, failed, device);
+              Outcome::Failed(failed)
+            }
+          };
           dictation::set_phase(app, Phase::Idle);
+          end(app, &trace, outcome, moved);
         }
       }
       Err(RecvTimeoutError::Timeout) => match active.as_mut() {
-        Some((capture, ..)) => capture.listen(),
+        Some(active) => {
+          active.capture.listen();
+          active.sound_start(app);
+          // Between transcription results too: a password field that takes
+          // focus while the panel shows hides it at once.
+          if active.password_watch.due(dictation_preview::showing(app))
+            && focused_on_password(app, active.focus.as_ref())
+          {
+            dictation_preview::block(app);
+          }
+        }
         None => worker = None,
       },
       Err(RecvTimeoutError::Disconnected) => break,
     }
   }
   // Dictation was turned off with the key still down: nothing is kept.
-  if let Some((capture, ..)) = active {
-    capture.cancel(&mut worker);
-    dictation::set_phase(app, Phase::Idle);
+  if let Some(active) = active {
+    cancel(app, active, &mut worker);
   }
+}
+
+/// Logs the hold: how long, how much audio, how many stretches were cut
+/// while the key was down, and on fn what the system itself does with that
+/// key.
+fn log_hold(
+  app: &AppHandle,
+  held: Duration,
+  frames: usize,
+  rate: u32,
+  stretches: usize,
+) {
+  let globe_key = (dictation::hold_key(app) == HoldChoice::Fn).then(globe_key);
+  Line::Hold {
+    duration: held,
+    audio: Duration::from_secs_f64(frames as f64 / f64::from(rate.max(1))),
+    stretches,
+    globe_key,
+  }
+  .log();
+}
+
+/// Discards a dictation in progress and logs it as cancelled.
+fn cancel(app: &AppHandle, active: Active, worker: &mut Option<Worker>) {
+  let Active {
+    capture, mut trace, ..
+  } = active;
+  let held = trace.release();
+  let frames = capture.recorded + capture.recorder.waiting_frames();
+  log_hold(
+    app,
+    held,
+    frames,
+    capture.recorder.rate,
+    capture.live.sent(),
+  );
+  capture.cancel(worker);
+  dictation::set_phase(app, Phase::Idle);
+  end(app, &trace, Outcome::Cancelled, None);
+}
+
+/// Logs how the dictation ended; whatever the end, the preview goes.
+fn end(
+  app: &AppHandle,
+  trace: &Trace,
+  outcome: Outcome,
+  moved: Option<dictation_focus::Moved>,
+) {
+  dictation_preview::end(app);
+  Line::End {
+    duration: trace.since_press(),
+    outcome,
+    moved,
+  }
+  .log();
 }
 
 /// A dictation while the key is down: audio arrives, and every stretch of
@@ -127,11 +301,16 @@ struct Capture {
   segmenter: Segmenter,
   live: Live<Engines>,
   language: SpeakerLanguage,
+  /// Mono samples taken so far, for the local log.
+  recorded: usize,
+  /// Whether the start sound played, so the stop sound plays too.
+  sounded: bool,
 }
 
 impl Capture {
   fn listen(&mut self) {
     let mono = to_mono(&self.recorder.take(), self.recorder.channels);
+    self.recorded += mono.len();
     for stretch in self.segmenter.push(&mono) {
       self.live.send(stretch);
     }
@@ -148,6 +327,7 @@ impl Capture {
 fn begin(
   app: &AppHandle,
   model: Option<PathBuf>,
+  focus: Option<&FocusTarget>,
   worker: &mut Option<Worker>,
 ) -> Result<Capture, Failure> {
   // stella AI transcribes without the speech model on this computer.
@@ -158,14 +338,33 @@ fn begin(
   if !dictation_input::request_access() {
     return Err(Failure::Accessibility);
   }
-  let recorder = Recorder::start().ok_or(Failure::Microphone)?;
+  let recorder =
+    Recorder::start(dictation::microphone_choice()).ok_or(Failure::Microphone)?;
+  if let Some(chosen) = &recorder.missing {
+    dictation::report_missing_microphone(app, chosen, recorder.device.clone());
+  }
   let language = dictation::language(app);
   let local_installed = model.is_some();
+  let mut cloud = CloudSession::new(
+    app.clone(),
+    cloud_model,
+    language.hint,
+    crate::dictation_words::words(app),
+  );
+  if destination == Destination::Cloud {
+    // Beside recording, so no request waits for the list after the release.
+    cloud.look_up_models();
+  }
   let engines = Engines {
-    cloud: CloudSession::new(app.clone(), cloud_model, language.hint),
+    cloud,
     worker: worker.take(),
     model,
     language: language.hint,
+    destination,
+    preview: PreviewFeed {
+      app: app.clone(),
+      focus: focus.cloned(),
+    },
   };
   let transcription = Transcription::new(engines, destination, local_installed);
   let live =
@@ -178,7 +377,19 @@ fn begin(
     recorder,
     live,
     language,
+    recorded: 0,
+    sounded: false,
   })
+}
+
+#[cfg(target_os = "macos")]
+fn globe_key() -> GlobeKey {
+  stella_desktop_macos::globe_key_usage().map_or(GlobeKey::Unset, GlobeKey::Value)
+}
+
+#[cfg(not(target_os = "macos"))]
+const fn globe_key() -> GlobeKey {
+  GlobeKey::Unset
 }
 
 fn finish(
@@ -187,18 +398,36 @@ fn finish(
   focus: Option<&FocusTarget>,
   context: &CleanupContext,
   worker: &mut Option<Worker>,
-) -> Result<(), Failed> {
+  trace: &Trace,
+  moved: &mut Option<dictation_focus::Moved>,
+) -> Result<Delivered, Failed> {
   let Capture {
     recorder,
     mut segmenter,
     mut live,
     language,
+    recorded,
+    sounded,
   } = capture;
   let channels = recorder.channels;
-  let Some(last) = recorder.finish() else {
-    discard(live, worker);
-    return Err(Failure::Microphone.into());
-  };
+  let rate = recorder.rate;
+  let stretches = live.sent();
+  let held = trace.held();
+  // A microphone that stopped midway leaves what it already delivered: the
+  // stretches sent while the key was down still count.
+  let Finished { last, lost } = recorder.finish();
+  // Counted once the stream stopped, so the last frames it delivered count.
+  log_hold(
+    app,
+    held,
+    recorded + last.len() / channels.max(1),
+    rate,
+    stretches,
+  );
+  // Only once the microphone is closed, so the transcript cannot hear it.
+  if sounded {
+    dictation_sounds::play(Cue::Stop);
+  }
   for stretch in segmenter.push(&to_mono(&last, channels)) {
     live.send(stretch);
   }
@@ -209,31 +438,131 @@ fn finish(
     return Err(Failure::Microphone.into());
   }
   live.send(rest.samples);
-  let (ended, engines) = live.finish().ok_or(Failure::Transcription)?;
+  let (ended, engines, tally) = live.finish_tallied().ok_or(Failure::Transcription)?;
+  // Some stretches went to the speech model on this computer, which takes
+  // no custom words.
+  let transcribed_here = engines.destination == Destination::Local || tally.fell_back;
+  Line::Transcribe {
+    duration: trace.since_release(),
+    destination: engines.destination,
+    model: if engines.destination == Destination::Cloud && !tally.fell_back {
+      engines.cloud.model_id().map(str::to_string)
+    } else {
+      Some(dictation::local_model_id().to_string())
+    },
+    model_list: engines.cloud.list_read(),
+    tally,
+  }
+  .log();
   *worker = engines.worker;
   let text = match ended {
     Ended::Text(text) => text,
     Ended::Failed(failure) => return Err(failure.into()),
-    Ended::Cancelled => return Ok(()),
+    Ended::Cancelled => return Ok(Delivered::Cancelled),
   };
   let text = text.trim();
   if text.is_empty() {
-    return Ok(());
+    if lost {
+      return Err(Failure::Microphone.into());
+    }
+    // A hold that heard nothing is told unless it was a tap.
+    return heard_nothing(held).map(|()| Delivered::Empty);
   }
-  let cleaned = dictation::cleanup_enabled(app)
-    .then(|| dictation_cleanup::clean_up(app, text, &language.speaker, context))
-    .flatten();
+  let cleanup_enabled = dictation::cleanup_enabled(app);
+  // Cleanup spells the custom words itself; without it, the words the speech
+  // model here missed are spelled on this computer.
+  let respelled;
+  let text = if transcribed_here && !cleanup_enabled {
+    respelled = dictation_spelling::respell(text, &crate::dictation_words::words(app));
+    respelled.as_str()
+  } else {
+    text
+  };
+  let ((cleaned, cleanup), cleanup_took) = dictation_trace::timed(|| {
+    if cleanup_enabled {
+      let words = crate::dictation_words::words(app);
+      dictation_cleanup::clean_up(app, text, &language.speaker, &words, context)
+    } else {
+      (None, Cleanup::Off)
+    }
+  });
+  Line::Cleanup {
+    duration: cleanup_took,
+    cleanup,
+  }
+  .log();
+  let (delivered, insert_took) =
+    dictation_trace::timed(|| deliver(app, text, cleaned.as_deref(), focus, moved));
+  let (result, focus_read, kept_in_history) = delivered;
+  Line::Insert {
+    duration: insert_took,
+    focus_read,
+    kept_in_history,
+  }
+  .log();
+  result.map(|()| typed(lost, kept_in_history))
+}
+
+/// What typing came to: a microphone that stopped midway is still told.
+const fn typed(lost: bool, kept_in_history: bool) -> Delivered {
+  if lost {
+    Delivered::CutShort(Failed {
+      failure: Failure::Microphone,
+      kept_in_history,
+    })
+  } else {
+    Delivered::Typed
+  }
+}
+
+/// Keeps the text and types it: what came of it, how long the focus read
+/// before typing took, and whether the text is in clipboard history.
+fn deliver(
+  app: &AppHandle,
+  text: &str,
+  cleaned: Option<&[Segment]>,
+  focus: Option<&FocusTarget>,
+  moved: &mut Option<dictation_focus::Moved>,
+) -> (Result<(), Failed>, Option<Duration>, bool) {
+  // Focus may have moved to a password field meanwhile: such text is
+  // neither kept nor typed.
+  if dictation_focus::in_password_field(dictation_focus::current(app).as_ref()) {
+    return (Err(Failure::PasswordField.into()), None, false);
+  }
   let identifier = focus.and_then(|target| target.identifier.as_deref());
   // Kept before typing, so a dictation that cannot be typed is not lost.
   let kept_in_history = clipboard::keep_dictation(
     app,
-    &dictation_cleanup::typed_text(text, cleaned.as_deref()),
+    &dictation_cleanup::typed_text(text, cleaned),
     identifier,
   );
-  type_into_focus(app, text, cleaned.as_deref(), focus).map_err(|failure| Failed {
+  let mut focus_read = None;
+  let typed = type_into_focus(app, text, cleaned, focus, &mut focus_read, moved);
+  let result = typed.map_err(|failure| Failed {
     failure,
     kept_in_history,
-  })
+  });
+  (result, focus_read, kept_in_history)
+}
+
+/// A dictation that recorded sound and produced no words: a failure the
+/// speaker is told about, unless the hold was a tap.
+fn heard_nothing(held: Duration) -> Result<(), Failed> {
+  if held < MIN_NOTICED_HOLD {
+    Ok(())
+  } else {
+    Err(Failure::NothingHeard.into())
+  }
+}
+
+/// How long recording goes on after a hold of `held`. A tap gets none: it
+/// is not a dictation, and its sound is better not heard.
+fn release_tail(held: Duration) -> Duration {
+  if held < MIN_NOTICED_HOLD {
+    Duration::ZERO
+  } else {
+    RELEASE_TAIL
+  }
 }
 
 /// Drops a dictation's transcription and keeps its worker.
@@ -248,14 +577,26 @@ fn type_into_focus(
   text: &str,
   cleaned: Option<&[Segment]>,
   focus: Option<&FocusTarget>,
+  focus_read: &mut Option<Duration>,
+  moved: &mut Option<dictation_focus::Moved>,
 ) -> Result<(), Failure> {
   // A modifier still held down would turn typed text into shortcuts.
   if !dictation_input::wait_for_released_modifiers() {
     return Err(Failure::ShortcutHeld);
   }
+  // The wait above can let a password field take focus in the same window,
+  // so the field is checked again just before anything is typed.
+  let (current, read) = dictation_trace::timed(|| dictation_focus::current(app));
+  *focus_read = Some(read);
+  if dictation_focus::in_password_field(current.as_ref()) {
+    return Err(Failure::PasswordField);
+  }
+  if let (Some(pressed), Some(now)) = (focus, current.as_ref()) {
+    *moved = dictation_focus::moved(pressed, now);
+  }
   // Transcription and cleanup take a moment; text goes only to the app the
   // speaker pressed the shortcut in.
-  match dictation_focus::insertion(focus, dictation_focus::current(app).as_ref()) {
+  match dictation_focus::insertion(focus, current.as_ref()) {
     Insertion::Allowed => {}
     Insertion::FocusMoved => return Err(Failure::FocusChanged),
     Insertion::FocusUnconfirmed => return Err(Failure::FocusUnconfirmed),
@@ -273,6 +614,17 @@ struct Engines {
   worker: Option<Worker>,
   model: Option<PathBuf>,
   language: Option<&'static str>,
+  /// Where the speaker chose to transcribe, for the local log.
+  destination: Destination,
+  preview: PreviewFeed,
+}
+
+/// Where the text so far goes while the key is down.
+struct PreviewFeed {
+  app: AppHandle,
+  /// The app the speaker pressed in: while its focused field is a password
+  /// field, nothing is shown.
+  focus: Option<FocusTarget>,
 }
 
 impl Transcribe for Engines {
@@ -290,6 +642,24 @@ impl Transcribe for Engines {
     let model = self.model.as_deref()?;
     transcribe(&mut self.worker, model, samples, self.language)
   }
+
+  fn preview(&mut self, text: &str) {
+    let PreviewFeed { app, focus } = &self.preview;
+    if !text.is_empty() && focused_on_password(app, focus.as_ref()) {
+      dictation_preview::block(app);
+    } else {
+      dictation_preview::text(app, text);
+    }
+  }
+}
+
+/// Whether a password field has focus now, wherever focus went since the
+/// press. When focus cannot be read now, the app pressed in is asked
+/// instead: the panel is hidden whenever either says so, and shown only
+/// when neither can tell, as typing is.
+fn focused_on_password(app: &AppHandle, pressed: Option<&FocusTarget>) -> bool {
+  let now = dictation_focus::current(app);
+  dictation_focus::in_password_field(now.as_ref().or(pressed))
 }
 
 fn transcribe(
@@ -390,6 +760,9 @@ impl Drop for Worker {
 struct Tape {
   samples: Vec<f32>,
   taken: usize,
+  /// The device went away or the stream stopped for good: nothing more
+  /// arrives, though what arrived before still counts.
+  lost: bool,
 }
 
 type Shared = Arc<Mutex<Tape>>;
@@ -409,40 +782,60 @@ fn take_frames(tape: &mut Tape, channels: usize) -> Vec<f32> {
 /// The audio stream is tied to the thread that built it, so a thread holds it
 /// for exactly as long as the key is down, while the dictation thread takes
 /// its audio as it arrives.
-struct Recorder {
+pub(crate) struct Recorder {
   stop: Sender<()>,
   thread: JoinHandle<()>,
   tape: Shared,
-  channels: usize,
+  pub(crate) channels: usize,
   rate: u32,
+  /// The input device's name, as the OS shows it.
+  pub(crate) device: Option<String>,
+  /// The chosen microphone's name when it was not connected and the system
+  /// default records instead.
+  missing: Option<String>,
 }
 
 impl Recorder {
-  fn start() -> Option<Self> {
+  /// Opens `choice`, or the system default without one or while it is not
+  /// connected.
+  pub(crate) fn start(choice: Option<Choice>) -> Option<Self> {
     let (stop, stopped) = mpsc::channel();
     let (ready, started) = mpsc::channel();
     let thread = thread::Builder::new()
       .name("dictation-capture".to_string())
-      .spawn(move || capture(&ready, &stopped))
+      .spawn(move || capture(choice.as_ref(), &ready, &stopped))
       .ok()?;
-    let (tape, channels, rate) = started.recv().ok().flatten()?;
+    let Opened {
+      tape,
+      channels,
+      rate,
+      device,
+      missing,
+    } = started.recv().ok().flatten()?;
     Some(Self {
       stop,
       thread,
       tape,
       channels,
       rate,
+      device,
+      missing,
     })
   }
 
   /// The audio captured since the last take, in whole frames.
-  fn take(&self) -> Vec<f32> {
+  pub(crate) fn take(&self) -> Vec<f32> {
     take_frames(&mut lock(&self.tape), self.channels)
   }
 
-  /// Stops the stream and takes the last of its audio; `None` when capture
-  /// did not survive.
-  fn finish(self) -> Option<Vec<f32>> {
+  /// Whole frames captured and not taken yet, left on the tape.
+  fn waiting_frames(&self) -> usize {
+    lock(&self.tape).samples.len() / self.channels.max(1)
+  }
+
+  /// Stops the stream and takes the last of its audio, and whether capture
+  /// stopped on its own before.
+  fn finish(self) -> Finished {
     let Self {
       stop,
       thread,
@@ -451,25 +844,52 @@ impl Recorder {
       ..
     } = self;
     drop(stop);
-    if thread.join().is_err() {
-      return None;
+    let survived = thread.join().is_ok();
+    let (last, lost) = {
+      let mut tape = lock(&tape);
+      (take_frames(&mut tape, channels), tape.lost)
+    };
+    Finished {
+      last,
+      lost: lost || !survived,
     }
-    Some(take_frames(&mut lock(&tape), channels))
   }
 }
 
-/// What the capture thread hands over once its stream plays.
-type Opened = (Shared, usize, u32);
+/// The end of a recording.
+struct Finished {
+  /// The audio captured since the last take.
+  last: Vec<f32>,
+  /// The device went away or capture failed before the key came up.
+  lost: bool,
+}
 
-fn capture(ready: &Sender<Option<Opened>>, stopped: &Receiver<()>) {
-  let opened = open_stream().filter(|(stream, ..)| stream.play().is_ok());
-  let handed = opened
-    .as_ref()
-    .map(|(_, tape, channels, rate)| (Arc::clone(tape), *channels, *rate));
+/// What the capture thread hands over once its stream plays.
+struct Opened {
+  tape: Shared,
+  channels: usize,
+  rate: u32,
+  device: Option<String>,
+  missing: Option<String>,
+}
+
+fn capture(
+  choice: Option<&Choice>,
+  ready: &Sender<Option<Opened>>,
+  stopped: &Receiver<()>,
+) {
+  let opened = open_stream(choice).filter(|(stream, _)| stream.play().is_ok());
+  let handed = opened.as_ref().map(|(_, opened)| Opened {
+    tape: Arc::clone(&opened.tape),
+    channels: opened.channels,
+    rate: opened.rate,
+    device: opened.device.clone(),
+    missing: opened.missing.clone(),
+  });
   if ready.send(handed).is_err() {
     return;
   }
-  let Some((stream, ..)) = opened else {
+  let Some((stream, _)) = opened else {
     return;
   };
   // Ends when `Recorder::finish` drops the sender, or the recorder is gone.
@@ -477,8 +897,124 @@ fn capture(ready: &Sender<Option<Opened>>, stopped: &Receiver<()>) {
   drop(stream);
 }
 
-fn open_stream() -> Option<(cpal::Stream, Shared, usize, u32)> {
-  let device = cpal::default_host().default_input_device()?;
+/// An input device as Settings lists it; `None` without a stable id.
+fn listed(device: &cpal::Device) -> Option<InputDevice> {
+  let device_id = device.id().ok()?;
+  let id = device_id.to_string();
+  let description = device.description().ok();
+  let connection = connection(&device_id, description.as_ref());
+  Some(InputDevice {
+    name: description
+      .as_ref()
+      .map_or_else(|| id.clone(), |description| description.name().to_string()),
+    bluetooth: connection == Some(Connection::Bluetooth),
+    built_in: connection == Some(Connection::BuiltIn),
+    id,
+  })
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Connection {
+  BuiltIn,
+  Bluetooth,
+}
+
+/// How a device is connected, when that matters to dictation. CoreAudio
+/// tells it by the device's UID; elsewhere the audio library reads it.
+#[cfg(target_os = "macos")]
+fn connection(
+  id: &cpal::DeviceId,
+  _description: Option<&cpal::DeviceDescription>,
+) -> Option<Connection> {
+  use stella_desktop_macos::AudioTransport;
+  match stella_desktop_macos::audio_device_transport(id.id())? {
+    AudioTransport::BuiltIn => Some(Connection::BuiltIn),
+    AudioTransport::Bluetooth => Some(Connection::Bluetooth),
+    AudioTransport::Other => None,
+  }
+}
+
+#[cfg(not(target_os = "macos"))]
+fn connection(
+  _id: &cpal::DeviceId,
+  description: Option<&cpal::DeviceDescription>,
+) -> Option<Connection> {
+  match description?.interface_type() {
+    cpal::InterfaceType::BuiltIn => Some(Connection::BuiltIn),
+    cpal::InterfaceType::Bluetooth => Some(Connection::Bluetooth),
+    _ => None,
+  }
+}
+
+/// Every input device, in the order the OS lists them.
+pub(crate) fn input_devices() -> Vec<InputDevice> {
+  let Ok(devices) = cpal::default_host().input_devices() else {
+    return Vec::new();
+  };
+  let mut listed_devices: Vec<InputDevice> = Vec::new();
+  for device in devices.filter_map(|device| listed(&device)) {
+    if !listed_devices.iter().any(|known| known.id == device.id) {
+      listed_devices.push(device);
+    }
+  }
+  listed_devices
+}
+
+/// The input device dictation records from without a choice.
+pub(crate) fn default_input() -> Option<InputDevice> {
+  listed(&default_device(&cpal::default_host())?)
+}
+
+/// The system default input device, or the built-in microphone in place of
+/// a Bluetooth default.
+fn default_device(host: &cpal::Host) -> Option<cpal::Device> {
+  let system_default = host.default_input_device()?;
+  let Some(listed_default) = listed(&system_default).filter(|device| device.bluetooth)
+  else {
+    return Some(system_default);
+  };
+  let devices = host
+    .input_devices()
+    .into_iter()
+    .flatten()
+    .filter_map(|device| listed(&device).map(|listed_device| (device, listed_device)))
+    .collect::<Vec<_>>();
+  let listed_devices = devices
+    .iter()
+    .map(|(_, listed_device)| listed_device.clone())
+    .collect::<Vec<_>>();
+  let preferred =
+    dictation_microphone::without_choice(&listed_default, &listed_devices)
+      .id
+      .clone();
+  Some(
+    devices
+      .into_iter()
+      .find(|(_, listed_device)| listed_device.id == preferred)
+      .map_or(system_default, |(device, _)| device),
+  )
+}
+
+/// The device `choice` names when it is connected, otherwise the device
+/// recorded without a choice, with the chosen name it stands in for.
+fn pick_device(choice: Option<&Choice>) -> Option<(cpal::Device, Option<String>)> {
+  let host = cpal::default_host();
+  if let Some(choice) = choice {
+    let chosen = choice
+      .id
+      .parse::<cpal::DeviceId>()
+      .ok()
+      .and_then(|id| host.device_by_id(&id));
+    if let Some(device) = chosen {
+      return Some((device, None));
+    }
+    return Some((default_device(&host)?, Some(choice.name.clone())));
+  }
+  Some((default_device(&host)?, None))
+}
+
+fn open_stream(choice: Option<&Choice>) -> Option<(cpal::Stream, Opened)> {
+  let (device, missing) = pick_device(choice)?;
   let config = device.default_input_config().ok()?;
   let channels = usize::from(config.channels());
   let rate = config.sample_rate();
@@ -492,7 +1028,28 @@ fn open_stream() -> Option<(cpal::Stream, Shared, usize, u32)> {
     SampleFormat::U16 => build::<u16>(&device, &stream_config, &tape, limit),
     _ => None,
   }?;
-  Some((stream, tape, channels, rate))
+  let name = listed(&device).map(|device| device.name);
+  Some((
+    stream,
+    Opened {
+      tape,
+      channels,
+      rate,
+      device: name,
+      missing,
+    },
+  ))
+}
+
+/// Whether a stream error means no more audio comes, rather than a glitch
+/// or a reroute the stream survives.
+const fn ends_capture(kind: cpal::ErrorKind) -> bool {
+  matches!(
+    kind,
+    cpal::ErrorKind::DeviceNotAvailable
+      | cpal::ErrorKind::HostUnavailable
+      | cpal::ErrorKind::StreamInvalidated
+  )
 }
 
 fn build<T>(
@@ -506,6 +1063,7 @@ where
   f32: FromSample<T>,
 {
   let sink = Arc::clone(tape);
+  let failed = Arc::clone(tape);
   device
     .build_input_stream(
       *config,
@@ -520,7 +1078,12 @@ where
             .map(|sample| sample.to_sample::<f32>()),
         );
       },
-      |error| tracing::warn!(%error, "dictation audio stream failed"),
+      move |error: cpal::Error| {
+        tracing::warn!(%error, "dictation audio stream failed");
+        if ends_capture(error.kind()) {
+          lock(&failed).lost = true;
+        }
+      },
       None,
     )
     .ok()
@@ -531,10 +1094,40 @@ mod tests {
   use super::*;
 
   #[test]
+  fn a_hold_that_heard_nothing_is_reported_unless_it_was_a_tap() {
+    assert_eq!(heard_nothing(Duration::from_millis(200)), Ok(()));
+    assert_eq!(
+      heard_nothing(MIN_NOTICED_HOLD - Duration::from_millis(1)),
+      Ok(())
+    );
+    assert_eq!(
+      heard_nothing(MIN_NOTICED_HOLD),
+      Err(Failure::NothingHeard.into())
+    );
+    // A headset still switching profile sends silence for a second or so.
+    assert_eq!(
+      heard_nothing(Duration::from_millis(1_500)),
+      Err(Failure::NothingHeard.into())
+    );
+  }
+
+  #[test]
+  fn recording_goes_on_after_a_hold_but_not_after_a_tap() {
+    assert_eq!(release_tail(Duration::from_millis(200)), Duration::ZERO);
+    assert_eq!(
+      release_tail(MIN_NOTICED_HOLD - Duration::from_millis(1)),
+      Duration::ZERO
+    );
+    assert_eq!(release_tail(MIN_NOTICED_HOLD), RELEASE_TAIL);
+    assert_eq!(release_tail(Duration::from_secs(90)), RELEASE_TAIL);
+  }
+
+  #[test]
   fn only_whole_frames_are_taken_and_the_rest_waits() {
     let mut tape = Tape {
       samples: vec![0.1, 0.2, 0.3, 0.4, 0.5],
       taken: 0,
+      lost: false,
     };
     assert_eq!(take_frames(&mut tape, 2), vec![0.1, 0.2, 0.3, 0.4]);
     assert_eq!(tape.samples, vec![0.5]);
@@ -543,5 +1136,25 @@ mod tests {
     assert!(tape.samples.is_empty());
     // Taken audio still counts toward the recording limit.
     assert_eq!(tape.taken, 6);
+  }
+
+  #[test]
+  fn a_microphone_that_stopped_is_told_even_when_its_words_were_typed() {
+    assert!(matches!(typed(false, true), Delivered::Typed));
+    assert!(matches!(
+      typed(true, true),
+      Delivered::CutShort(Failed {
+        failure: Failure::Microphone,
+        kept_in_history: true,
+      })
+    ));
+  }
+
+  #[test]
+  fn only_a_stream_that_cannot_go_on_ends_capture() {
+    assert!(ends_capture(cpal::ErrorKind::DeviceNotAvailable));
+    assert!(ends_capture(cpal::ErrorKind::StreamInvalidated));
+    assert!(!ends_capture(cpal::ErrorKind::Xrun));
+    assert!(!ends_capture(cpal::ErrorKind::DeviceChanged));
   }
 }

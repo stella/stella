@@ -1034,6 +1034,11 @@ const ArrayFieldRenderer = ({
           )}
           <Button
             disabled={atMax}
+            disabledReason={
+              maxItems === undefined
+                ? undefined
+                : t("templates.upToNItems", { max: String(maxItems) })
+            }
             onClick={addItem}
             size="sm"
             variant="outline"
@@ -1340,6 +1345,9 @@ const RegistryAutofillControl = ({
       />
       <Button
         disabled={loading || companyId.trim() === ""}
+        disabledReason={
+          loading ? t("common.loading") : t("templates.enterRegistryId")
+        }
         onClick={() => detached(handleLookup(), "template-form.lookup")}
         type="button"
         variant="outline"
@@ -1407,6 +1415,33 @@ const StructureWarnings = ({ errors }: { errors: StructureError[] }) => {
       </Collapsible>
     </div>
   );
+};
+
+type TemplateDisabledReasonsOptions = {
+  loading: boolean;
+  t: (
+    key:
+      | "templates.generating"
+      | "templates.correctFormErrors"
+      | "common.selectAMatter",
+  ) => string;
+};
+
+const templateDisabledReasons = ({
+  loading,
+  t,
+}: TemplateDisabledReasonsOptions) => {
+  if (loading) {
+    const reason = t("templates.generating");
+    return {
+      generationDisabledReason: reason,
+      chooseMatterDisabledReason: reason,
+    };
+  }
+  return {
+    generationDisabledReason: t("templates.correctFormErrors"),
+    chooseMatterDisabledReason: t("common.selectAMatter"),
+  };
 };
 
 export const TemplateForm = ({
@@ -1868,6 +1903,8 @@ export const TemplateForm = ({
     [fields, conditions],
   );
 
+  const { generationDisabledReason, chooseMatterDisabledReason } =
+    templateDisabledReasons({ loading, t });
   // Only count errors for currently visible fields;
   // hidden fields may retain stale errors in state.
   const hasErrors = Object.entries(errors).some(([path, msg]) => {
@@ -2522,6 +2559,7 @@ export const TemplateForm = ({
             </Button>
             <Button
               disabled={loading}
+              disabledReason={t("templates.generating")}
               onClick={confirmEmptyWarning}
               size="xs"
               type="button"
@@ -2547,6 +2585,7 @@ export const TemplateForm = ({
             render={
               <Button
                 disabled={loading || hasErrors}
+                disabledReason={generationDisabledReason}
                 type="button"
                 variant={saveTarget === undefined ? "default" : "outline"}
               />
@@ -2578,6 +2617,7 @@ export const TemplateForm = ({
         {saveTarget?.kind === "chooseMatter" && (
           <Button
             disabled={loading || hasErrors}
+            disabledReason={generationDisabledReason}
             onClick={handleChooseMatter}
             type="button"
           >
@@ -2585,7 +2625,11 @@ export const TemplateForm = ({
           </Button>
         )}
         {saveTarget?.kind === "matter" && (
-          <Button disabled={loading || hasErrors} type="submit">
+          <Button
+            disabled={loading || hasErrors}
+            disabledReason={generationDisabledReason}
+            type="submit"
+          >
             {actionButtonLabel(submitAction)}
           </Button>
         )}
@@ -2614,6 +2658,7 @@ export const TemplateForm = ({
             </Button>
             <Button
               disabled={matterTarget === null || loading}
+              disabledReason={chooseMatterDisabledReason}
               onClick={() => {
                 if (matterTarget !== null) {
                   detached(

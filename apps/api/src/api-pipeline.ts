@@ -4,6 +4,7 @@ import {
 } from "@stll/api-contract";
 import { CAPABILITY_REQUEST_HEADER } from "@stll/api-contract/capability-request";
 import { CHAT_COMMAND_ID_HEADER } from "@stll/api-contract/chat-command";
+import { SIGN_IN_ATTEMPT_HEADER } from "@stll/api-contract/email-delivery";
 
 import { env } from "@/api/env";
 import { mcpTransportMethodRefusal } from "@/api/handlers/mcp/routes-core";
@@ -204,6 +205,8 @@ export const apiPipeline: readonly Middleware[] = [
       RESOURCE_MUTATION_ID_HEADER,
       // A chat send or answer names the member's command for its retries.
       CHAT_COMMAND_ID_HEADER,
+      // A sign-in code request names its attempt for the bounce follow-up.
+      SIGN_IN_ATTEMPT_HEADER,
     ],
     exposedHeaders: CORS_EXPOSED_HEADERS,
     maxAgeSeconds: CORS_PREFLIGHT_MAX_AGE_SECONDS,

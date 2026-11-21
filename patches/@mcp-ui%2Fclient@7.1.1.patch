@@ -4,6 +4,9 @@ null-prototype objects, arrays) and binary buffers, without cycles, within
 structural and total size limits; every occurrence of a shared value counts.
 Remove when upstream enforces equivalent limits before validation.
 
+Send a host context change only while the bridge is connected. A context set
+before connecting is kept and reaches the app in the initialize reply.
+
 diff --git a/dist/index.mjs b/dist/index.mjs
 --- a/dist/index.mjs
 +++ b/dist/index.mjs
@@ -75,3 +78,12 @@ diff --git a/dist/index.mjs b/dist/index.mjs
        let t = Uc.safeParse(a.data);
        t.success ? (console.debug("Parsed message", t.data), (r = this.onmessage) == null || r.call(this, t.data)) : ((o = a.data) == null ? void 0 : o.jsonrpc) !== "2.0" ? console.debug("Ignoring non-JSON-RPC message", t.error.message, a) : (console.error("Failed to parse message", t.error.message, a), (u = this.onerror) == null || u.call(this, Error("Invalid JSON-RPC message received: " + t.error.message)));
      };
+@@ -5554,7 +5608,7 @@
+       let o = this._hostContext[r], u = n[r];
+       Av(o, u) || (a[r] = u, t = !0);
+     }
+-    t && (this._hostContext = n, this.sendHostContextChange(a));
++    t && (this._hostContext = n, this.transport && this.sendHostContextChange(a));
+   }
+   sendHostContextChange(n) {
+     return this.notification({ method: "ui/notifications/host-context-changed", params: n });

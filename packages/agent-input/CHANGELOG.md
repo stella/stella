@@ -1,5 +1,17 @@
 # @stll/agent-input
 
+## 0.5.1
+
+### Patch Changes
+
+- [#8562](https://github.com/stella/stella/pull/8562) [`33ec58c`](https://github.com/stella/stella/commit/33ec58c4131a9fbca812b32dac502913684e6d63) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Update the shared time dependency to 0.4.3 with Temporal polyfill 1.0.8.
+
+## 0.5.0
+
+### Minor Changes
+
+- [#8898](https://github.com/stella/stella/pull/8898) [`f1d0195`](https://github.com/stella/stella/commit/f1d019508fa4bdcd2160b4f90d555ce0ed99cc10) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `normalizeEli` takes `urnPrefixes`: a work named by a URN under one of them (a publisher without ELIs) is read as that URN, in any case and with surrounding space trimmed, and a citation the caller reads as such a URN is accepted.
+
 ## 0.4.5
 
 ### Patch Changes

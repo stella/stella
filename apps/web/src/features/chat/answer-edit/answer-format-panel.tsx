@@ -164,6 +164,7 @@ export const AnswerFormattingControls = ({
           size="icon-sm"
           variant="ghost"
           disabled={disabled}
+          disabledReason={t("chat.answerEdit.waitForAnswer")}
           aria-label={t(ANSWER_FORMAT_LABEL_KEYS[entry])}
           onMouseDown={(event) => event.preventDefault()}
           onClick={() => onSelect(entry)}

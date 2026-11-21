@@ -157,7 +157,12 @@ export const TemplateUpload = ({
 
         {/* Primary: author the template directly in the Studio. */}
         <div className="flex w-full flex-col items-center gap-2">
-          <Button className="w-full" disabled={loading} onClick={onCreateBlank}>
+          <Button
+            className="w-full"
+            disabled={loading}
+            disabledReason={t("common.loading")}
+            onClick={onCreateBlank}
+          >
             {t("templates.createInStudio")}
           </Button>
           <p className="text-muted-foreground text-center text-xs">
@@ -177,6 +182,7 @@ export const TemplateUpload = ({
           <div className="flex items-center gap-2">
             <Button
               disabled={loading}
+              disabledReason={t("common.loading")}
               onClick={() =>
                 openFilePicker({
                   accept: ".docx",
@@ -191,6 +197,7 @@ export const TemplateUpload = ({
             </Button>
             <Button
               disabled={loading}
+              disabledReason={t("common.loading")}
               onClick={() =>
                 openFilePicker({
                   accept: ".docx",

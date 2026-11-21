@@ -126,6 +126,7 @@ const mount = ({ isDirty, saved }: MountOptions) => {
               events.push("close editor");
             }}
             disabled={false}
+            disabledReason={undefined}
             isDirty={isDirty}
             operation={operationOwner.operation}
             saveVersion={async (request) => {

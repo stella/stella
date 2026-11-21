@@ -1,14 +1,13 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useTranslations } from "use-intl";
 
 import { prefetchSharepointAccess } from "@/features/sharepoint/sharepoint-queries";
 import { mcpConnectorsOptions } from "@/lib/knowledge/queries";
 import { pageTitle } from "@/lib/page-title";
 import { ensureRouteQueryData } from "@/lib/react-query";
 import { routePresentation } from "@/routes/-route-presentation";
-import { SettingsPageHeader } from "@/routes/_protected.settings/-components/settings-page-header";
-import { NativeToolsList } from "@/routes/_protected.settings/organization/-components/native-tools-list";
-import { SharepointCard } from "@/routes/_protected.settings/organization/-components/organization/sharepoint-card";
+
+import { OrganizationToolsPage } from "./-organization.tools.page";
+import { ToolsPending } from "./-organization.tools.pending";
 
 export const Route = createFileRoute("/_protected/settings/organization/tools")(
   {
@@ -37,19 +36,6 @@ export const Route = createFileRoute("/_protected/settings/organization/tools")(
       meta: [{ title: pageTitle("knowledge.sections.tools.title") }],
     }),
     component: OrganizationToolsPage,
+    pendingComponent: ToolsPending,
   },
 );
-
-function OrganizationToolsPage() {
-  const t = useTranslations();
-  return (
-    <>
-      <SettingsPageHeader
-        title={t("knowledge.sections.tools.title")}
-        description={t("admin.toolsDescription")}
-      />
-      <NativeToolsList />
-      <SharepointCard />
-    </>
-  );
-}

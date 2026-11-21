@@ -358,6 +358,11 @@
       "p99Seconds": 0,
       "peakRssMiB": 47
     },
+    "MCP released surface compatibility": {
+      "minutes": 15,
+      "samples": 0,
+      "peakRssMiB": 4096
+    },
     "SQL performance suppression summary": {
       "minutes": 5,
       "samples": 19,
@@ -710,6 +715,16 @@
       "p95Seconds": 0,
       "p99Seconds": 0,
       "peakRssMiB": 61
+    },
+    "Bun runtime guard": {
+      "minutes": 5,
+      "samples": 0,
+      "peakRssMiB": 128
+    },
+    "Patched dependencies apply": {
+      "minutes": 5,
+      "samples": 0,
+      "peakRssMiB": 128
     },
     "Test release-channel script": {
       "minutes": 5,
@@ -1116,6 +1131,13 @@
       "p95Seconds": 0,
       "p99Seconds": 0,
       "peakRssMiB": 58
+    },
+    "Check grant release order against the production release": {
+      "minutes": 5,
+      "samples": 0,
+      "p95Seconds": 0,
+      "p99Seconds": 0,
+      "peakRssMiB": 512
     },
     "Test dead-columns reference matching": {
       "minutes": 5,

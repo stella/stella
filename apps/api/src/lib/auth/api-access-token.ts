@@ -59,6 +59,22 @@ export const API_OAUTH_ROUTES = {
     scope: "stella:chat",
     handler: "apps/api/src/handlers/dictation/transcribe.ts",
   },
+  // The phone app's dictation: the models its picker offers, labelled where
+  // they leave the region or keep the audio, and the cleanup of a dictated
+  // transcript. Each sends only the request's own text to a model and
+  // stores nothing; they are app plumbing, not agent capabilities.
+  "GET /v1/dictation/models": {
+    scope: "stella:chat",
+    handler: "apps/api/src/handlers/dictation/models.ts",
+    uncataloged: "native_tool_ui",
+    client: "mobile",
+  },
+  "POST /v1/dictation/cleanup": {
+    scope: "stella:chat",
+    handler: "apps/api/src/handlers/dictation/member-cleanup.ts",
+    uncataloged: "native_tool_ui",
+    client: "mobile",
+  },
   // The Outlook add-in's email helpers: a summary of the open email and a
   // reply draft. Each sends only the email text in its body to the model and
   // stores nothing; they are add-in buttons, not agent capabilities.
@@ -228,6 +244,28 @@ export const API_OAUTH_ROUTES = {
     scope: "stella:read",
     handler: "apps/api/src/handlers/files/routes.ts",
     exportName: "readFileEndpoint",
+    uncataloged: "upload_mechanics",
+  },
+  "GET /v1/files/:workspaceId/asic/:fieldId": {
+    scope: "stella:read",
+    handler: "apps/api/src/handlers/files/asic.ts",
+    uncataloged: "upload_mechanics",
+  },
+  "GET /v1/files/:workspaceId/cades/:fieldId": {
+    scope: "stella:read",
+    handler: "apps/api/src/handlers/files/cades.ts",
+    exportName: "cadesPreviewEndpoint",
+    uncataloged: "upload_mechanics",
+  },
+  "GET /v1/files/:workspaceId/cades/:fieldId/content": {
+    scope: "stella:read",
+    handler: "apps/api/src/handlers/files/cades.ts",
+    exportName: "cadesContentEndpoint",
+    uncataloged: "upload_mechanics",
+  },
+  "GET /v1/files/:workspaceId/data-box/:fieldId": {
+    scope: "stella:read",
+    handler: "apps/api/src/handlers/files/data-box.ts",
     uncataloged: "upload_mechanics",
   },
   "POST /v1/entities/:workspaceId/upload-version": {

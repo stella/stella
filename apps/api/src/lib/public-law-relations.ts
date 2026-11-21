@@ -70,7 +70,8 @@ export const PUBLIC_LAW_RELATION_BY_SCHEMA_IMPORT = {
 } as const;
 
 export type PublicLawRelation =
-  (typeof PUBLIC_LAW_RELATION_BY_SCHEMA_IMPORT)[keyof typeof PUBLIC_LAW_RELATION_BY_SCHEMA_IMPORT];
+  | (typeof PUBLIC_LAW_RELATION_BY_SCHEMA_IMPORT)[keyof typeof PUBLIC_LAW_RELATION_BY_SCHEMA_IMPORT]
+  | keyof typeof COLLECTION_BODY_COLUMN_GRANTS_BY_RELATION;
 
 /** How this release relates to a column's grant. */
 export type PublicLawColumnGrant = "required" | "permitted";
@@ -78,6 +79,41 @@ export type PublicLawColumnGrant = "required" | "permitted";
 export type PublicLawColumnGrantsByRelation = Readonly<
   Record<string, Readonly<Record<string, PublicLawColumnGrant>>>
 >;
+
+/**
+ * Expansion release for collection-backed decision bodies. Deploy before
+ * granting the narrow attachment view or reading normalized host sections.
+ * This release neither grants these columns nor reads them.
+ */
+export const COLLECTION_BODY_COLUMN_GRANTS_BY_RELATION = {
+  case_law_collection_bodies: {
+    host_decision_id: "permitted",
+    collection_source_id: "permitted",
+    collection_document_id: "permitted",
+    source_url: "permitted",
+    retrieved_at: "permitted",
+    detail_raw_s3_key: "permitted",
+    detail_raw_content_type: "permitted",
+  },
+  case_law_published_decisions: {
+    normalized_s3_key: "permitted",
+  },
+} as const satisfies PublicLawColumnGrantsByRelation;
+
+/** Permit typed collection-part projections before their grants and reader land. */
+export const COLLECTION_PART_COLUMN_GRANTS_BY_RELATION = {
+  case_law_collection_bodies: {
+    document_part: "permitted",
+    document_body_s3_key: "permitted",
+    document_body_sha256: "permitted",
+    origin: "permitted",
+  },
+} as const satisfies PublicLawColumnGrantsByRelation;
+
+/** Permit genuine source observation time before the reader starts selecting it. */
+export const COLLECTION_OBSERVATION_COLUMN_GRANTS_BY_RELATION = {
+  case_law_published_decisions: { source_observed_at: "permitted" },
+} as const satisfies PublicLawColumnGrantsByRelation;
 
 /**
  * Expansion release: tolerate these future public census grants without
@@ -421,8 +457,16 @@ export const PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION = {
     role: "required",
     position: "required",
   },
-  [CASE_LAW_DECISION_VIEWS[0]]: CASE_LAW_DECISION_VIEW_COLUMN_GRANTS,
+  [CASE_LAW_DECISION_VIEWS[0]]: {
+    ...CASE_LAW_DECISION_VIEW_COLUMN_GRANTS,
+    ...COLLECTION_BODY_COLUMN_GRANTS_BY_RELATION.case_law_published_decisions,
+    ...COLLECTION_OBSERVATION_COLUMN_GRANTS_BY_RELATION.case_law_published_decisions,
+  },
   [CASE_LAW_DECISION_VIEWS[1]]: CASE_LAW_DECISION_VIEW_COLUMN_GRANTS,
+  case_law_collection_bodies: {
+    ...COLLECTION_BODY_COLUMN_GRANTS_BY_RELATION.case_law_collection_bodies,
+    ...COLLECTION_PART_COLUMN_GRANTS_BY_RELATION.case_law_collection_bodies,
+  },
   case_law_decision_citation_stats: {
     decision_id: "required",
     direction: "required",
@@ -506,14 +550,19 @@ export const PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION = {
     tsv: "required",
     searchable_text: "required",
   },
-  // The shards the public sitemap index lists. The count is how the refresh
-  // splits a month, not what the index states.
+  // The shards the public sitemap index lists. A file's read looks up its
+  // range and refuses one whose count outgrew what a read may serve.
   case_law_sitemap_shards: {
     country: "required",
     year: "required",
     month: "required",
     bucket: "required",
     last_modified_at: "required",
+    total: "required",
+    range_start_date: "required",
+    range_start_id: "required",
+    range_end_date: "required",
+    range_end_id: "required",
   },
   case_law_source_arrivals: {
     source_id: "required",
@@ -724,6 +773,8 @@ export const PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION = {
     effective_date: "permitted",
     effective_text: "permitted",
     publisher_instruction: "permitted",
+    effect_details: "permitted",
+    observations: "permitted",
   },
   legislation_sources: {
     id: "required",

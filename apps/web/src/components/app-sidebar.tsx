@@ -166,7 +166,7 @@ import { formatHotkeyForPlatform, NAV_KEY } from "@/lib/hotkeys";
 import { inboxCountOptions } from "@/lib/inbox/queries";
 import { knowledgeSections } from "@/lib/knowledge/navigation";
 import { isPublicKnowledgeEnabled } from "@/lib/knowledge/public-knowledge-launch";
-import { publicToolsBasePath } from "@/lib/knowledge/public-tools-path";
+import { publicToolsCataloguePath } from "@/lib/knowledge/public-tools-path";
 import { localISODate } from "@/lib/local-iso-date";
 import type { fetchWorkspaceNavigationPage } from "@/lib/memory-api";
 import { useMatterNumberingEnabled } from "@/lib/organization/use-matter-numbering";
@@ -649,7 +649,7 @@ export const AppSidebar = ({ surface }: AppSidebarProps) => {
     tools: {
       action: () => {
         detached(
-          navigate({ to: publicToolsBasePath() }),
+          navigate({ to: publicToolsCataloguePath() }),
           "app-sidebar.navigate",
         );
       },
@@ -1567,9 +1567,7 @@ export const MatterItem = ({
                       : t("workspaces.parties.personalLabel")}
                   </TruncatedText>
                   {relTime ? (
-                    <span className="shrink-0 whitespace-pre">
-                      {` · ${relTime}`}
-                    </span>
+                    <span className="shrink-0 whitespace-pre">{` · ${relTime}`}</span>
                   ) : null}
                 </Tooltip>
                 <span className="ms-auto">
@@ -1933,6 +1931,7 @@ export const MatterActivityList = ({
             <MatterActivityRow className="text-muted-foreground justify-start">
               <Button
                 disabled={isFetchingNextPage}
+                disabledReason={t("caseLaw.loadingMore")}
                 onClick={() => {
                   detached(fetchNextPage(), "app-sidebar.fetch-next-page");
                 }}

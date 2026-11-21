@@ -32,6 +32,7 @@ import {
   pendingDeletionTasksOptions,
   sessionsOptions,
 } from "@/lib/account/queries";
+import { sessionSignInsOptions } from "@/lib/account/session-sign-ins";
 import { professionalUseOptions } from "@/lib/auth-queries";
 import { toChatThreadId } from "@/lib/chat-thread-ref";
 import { inboxCountOptions } from "@/lib/inbox/queries";
@@ -664,10 +665,7 @@ const PER_USER_READS: Record<string, PerUserRead> = {
   "reports/exports/get.ts": {
     kind: "keyed",
     calls: ["api.workspaces().reports().get"],
-    files: [
-      "lib/workspaces/queries/report-exports.ts",
-      "routes/_protected.workspaces/$workspaceId/reports/$exportId.tsx",
-    ],
+    files: ["lib/workspaces/queries/report-exports.ts"],
     keys: () => [
       reportExportsKeys.detail({
         exportId: "export",
@@ -1022,6 +1020,12 @@ const AUTH_CLIENT_READS: Record<string, PerUserRead> = {
       "routes/auth/-components/dev-quick-start-button.tsx",
     ],
     keys: () => [organizationListOptions(USER).queryKey],
+  },
+  "authClient.sessionSignIns.list": {
+    kind: "keyed",
+    calls: ["authClient.sessionSignIns.list"],
+    files: ["lib/account/session-sign-ins.ts"],
+    keys: () => [sessionSignInsOptions(USER).queryKey],
   },
 };
 

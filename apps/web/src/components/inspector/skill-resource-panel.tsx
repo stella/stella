@@ -320,6 +320,7 @@ const InstalledSkillResourcePanel = ({
                           <Button
                             aria-label={t("common.cancel")}
                             disabled={saving}
+                            disabledReason={t("common.saving")}
                             onClick={cancelEdit}
                             size="xs"
                             variant="ghost"
@@ -330,6 +331,11 @@ const InstalledSkillResourcePanel = ({
                           <Button
                             aria-label={t("common.save")}
                             disabled={saving || draft === tab.content}
+                            disabledReason={
+                              saving
+                                ? t("common.saving")
+                                : t("common.noChangesToSave")
+                            }
                             onClick={() => {
                               detached(save(), "skill-resource-panel.save");
                             }}

@@ -31,6 +31,11 @@ import {
 } from "@stll/legal-ast/decision-identifier";
 import type { DecisionIdentifierType } from "@stll/legal-ast/decision-identifier";
 import { EU_PRIMARY_WORKS } from "@stll/legal-atlas/eu-provision-citations";
+import {
+  CYCLE_OUTCOME,
+  CYCLE_OUTCOMES,
+  INGESTION_PAUSE_REASON,
+} from "@stll/legal-atlas/ingestion-cycle";
 
 import {
   SITEMAP_LANGUAGE_GROUP_INDEX,
@@ -76,6 +81,8 @@ import type {
   ReviewablePolarity,
   RuleSource,
 } from "@/api/handlers/case-law/polarity/consts";
+import type { SafeId } from "@/api/lib/branded-types";
+import { caseNumberMatchKeySql } from "@/api/lib/case-law/case-number-match-key";
 import { citationEvidenceWindowsValidSql } from "@/api/lib/case-law/citation-evidence";
 import type { CitationEvidenceWindows } from "@/api/lib/case-law/citation-evidence";
 import {
@@ -94,8 +101,14 @@ import {
   DECISION_COURT_ID_MAX_LENGTH,
   decisionCourtIdByCountrySql,
 } from "@/api/lib/case-law/decision-court-id-sql";
+import {
+  DECISION_IDENTIFIER_CLAIM,
+  DECISION_IDENTIFIER_CLAIMS,
+  type DecisionIdentifierClaim,
+} from "@/api/lib/case-law/decision-identifier-claims";
 import { DOCTRINAL_TREATMENTS } from "@/api/lib/case-law/doctrine";
 import { fallbackDecisionIdentityIndexes } from "@/api/lib/case-law/fallback-decision-identity-index";
+import { INGESTION_FAILURE_IDENTITY_KINDS } from "@/api/lib/case-law/ingestion-failure-identity";
 import { CASE_LAW_PROVISION_SEARCH_INDEX } from "@/api/lib/case-law/provision-search-index";
 import {
   publishedCaseLawDecisionFor,
@@ -117,8 +130,17 @@ import {
   decisionDateWithinBoundsSql,
 } from "@/api/lib/decision-date-bounds-sql";
 import { liveCaseLawLegacyReferenceSql } from "@/api/lib/legal-search/case-law-legacy-reference-sql";
+import type { CollectionDocumentPart } from "@/api/lib/legal-search/collection-document-part";
 import { PACK_MEMBER_KINDS } from "@/api/lib/legal-search/corpus-pack";
 import { DECISION_SUPPLEMENT_KINDS } from "@/api/lib/legal-search/decision-supplement-kind";
+import {
+  HELD_DECISION_MATCH_BASES,
+  HELD_DECISION_MATCH_BASIS,
+} from "@/api/lib/legal-search/held-decision-attachment-values";
+import type {
+  HeldDecisionDeclaredIdentifier,
+  HeldDecisionMatchEvidence,
+} from "@/api/lib/legal-search/held-decision-attachment-values";
 import {
   storedObservationHasDetail,
   storedObservationIsListingOnly,
@@ -733,6 +755,55 @@ const publishedLanguageDateIndex = (
     .where(publishedCaseLawDecisionFor(t));
 
 /**
+ * The resolver's candidate lookup, answered entirely from the index. The key
+ * alone finds the candidates; jurisdiction and date are what decide between
+ * them, and the target id is what gets written. Carrying all four keeps the
+ * per-citation cost to one index probe instead of a probe plus a heap fetch
+ * per candidate, which on a corpus of this size is the difference between a
+ * resolution pass that fits in cache and one that reads the decisions table
+ * at random.
+ *
+ * `id` is a fourth key column rather than an INCLUDE payload only because the
+ * Drizzle version in use cannot express INCLUDE; the two are the same
+ * index-only scan here, since nothing ever ranges on `id` in this order.
+ *
+ * The resolver reads candidate holders before its caller applies a
+ * publication gate, so keep the existing all-row lookup. The public identity
+ * read has a separate publication-partial index.
+ *
+ * Every comparison of a key reads its match key (`case-number-match-key.ts`),
+ * so a citation printed with a four-digit year finds the holder stored with
+ * two, and the reverse; the match-key pair serves those reads. It does not
+ * carry the raw key, so a raw-key read is never answered from it. The
+ * raw-key pair stays until no running release reads it.
+ */
+const citationCandidateIndexes = (
+  t: PublishedCourtDateColumns & { citationKey: PgColumn },
+) => [
+  p
+    .index("case_law_decisions_citation_candidate_idx")
+    .on(t.citationKey, t.country, t.decisionDate, t.id)
+    .where(isNotNull(t.citationKey)),
+  p
+    .index("case_law_decisions_citation_candidate_published_idx")
+    .on(t.citationKey, t.country, t.decisionDate, t.id)
+    .where(
+      sql`${isNotNull(t.citationKey)} AND ${publishedCaseLawDecisionFor(t)}`,
+    ),
+  p
+    // Full, not partial: the match-key expression's statistics come only
+    // from a non-partial index.
+    .index("case_law_decisions_citation_match_key_all_idx")
+    .on(caseNumberMatchKeySql(t.citationKey), t.country, t.decisionDate, t.id),
+  p
+    .index("case_law_decisions_citation_match_key_published_idx")
+    .on(caseNumberMatchKeySql(t.citationKey), t.country, t.decisionDate, t.id)
+    .where(
+      sql`${isNotNull(t.citationKey)} AND ${publishedCaseLawDecisionFor(t)}`,
+    ),
+];
+
+/**
  * A source's decisions in the order their content changed. A row unchanged
  * since the column was added holds NULL and is never read through it, so the
  * index starts small.
@@ -1037,7 +1108,7 @@ export const caseLawDecisions = p.pgTable(
     ),
     p.check(
       "case_law_decisions_redacted_payload_erased",
-      sql`${t.redactedAt} IS NULL OR (${t.fulltext} IS NULL AND ${t.sections} IS NULL AND ${t.documentAst} IS NULL AND ${t.contentHash} IS NULL)`,
+      sql`${t.redactedAt} IS NULL OR (${t.fulltext} IS NULL AND ${t.sections} IS NULL AND ${t.documentAst} IS NULL AND ${t.contentHash} IS NULL AND ${t.sourceRaw} IS NULL)`,
     ),
     // The bounds `canonicalDecisionDate` enforces on the write path,
     // enforced at the table as well; both derive from `DECISION_DATE_BOUNDS`,
@@ -1066,16 +1137,12 @@ export const caseLawDecisions = p.pgTable(
       }),
     ),
     // Publisher ids identify documents; fallback keys include court and decision
-    // evidence. The obsolete docket-only index is removed by the contract migration.
+    // evidence; weak cohort members are distinguished by published content.
     p
       .uniqueIndex("case_law_decisions_source_document_idx")
       .on(t.sourceId, t.sourceDocumentId)
       .where(isNotNull(t.sourceDocumentId)),
     ...fallbackDecisionIdentityIndexes(t),
-    p
-      .uniqueIndex("case_law_decisions_source_case_lang_null_idx")
-      .on(t.sourceId, t.caseNumber, t.language)
-      .where(isNull(t.sourceDocumentId)),
     p
       .uniqueIndex("case_law_decisions_slug_uidx")
       .on(t.slug)
@@ -1226,31 +1293,7 @@ export const caseLawDecisions = p.pgTable(
     p
       .index("case_law_decisions_authority_due_idx")
       .on(t.citationAuthorityComputedAt.asc().nullsFirst(), t.id),
-    // The resolver's candidate lookup, answered entirely from the index. The
-    // key alone finds the candidates; jurisdiction and date are what decide
-    // between them, and the target id is what gets written. Carrying all four
-    // keeps the per-citation cost to one index probe instead of a probe plus a
-    // heap fetch per candidate, which on a corpus of this size is the
-    // difference between a resolution pass that fits in cache and one that
-    // reads the decisions table at random.
-    //
-    // `id` is a fourth key column rather than an INCLUDE payload only because
-    // the Drizzle version in use cannot express INCLUDE; the two are the same
-    // index-only scan here, since nothing ever ranges on `id` in this order.
-    //
-    // The resolver reads candidate holders before its caller applies a
-    // publication gate, so keep the existing all-row lookup. The public
-    // identity read has a separate publication-partial index below.
-    p
-      .index("case_law_decisions_citation_candidate_idx")
-      .on(t.citationKey, t.country, t.decisionDate, t.id)
-      .where(isNotNull(t.citationKey)),
-    p
-      .index("case_law_decisions_citation_candidate_published_idx")
-      .on(t.citationKey, t.country, t.decisionDate, t.id)
-      .where(
-        sql`${isNotNull(t.citationKey)} AND ${publishedCaseLawDecisionFor(t)}`,
-      ),
+    ...citationCandidateIndexes(t),
     // The search's candidate read, answered entirely from the index. A page of
     // ten is blended from a few hundred candidates the engine proposed, and
     // each one was a random fetch into a heap far too large to cache: the ids
@@ -1380,6 +1423,13 @@ export const caseLawDecisionIdentifiers = p.pgTable(
      * A refresh re-derives observed identifiers and keeps declared ones.
      */
     declaredAt: timestamptz("declared_at"),
+    /** Ingestion-only independent support; attachment claims live on their publisher posts. */
+    independentClaims: p
+      .varchar("independent_claims", { length: 32 })
+      .array()
+      .$type<DecisionIdentifierClaim>()
+      .notNull()
+      .default([DECISION_IDENTIFIER_CLAIM.UNVERIFIED]),
     createdAt: timestamptz("created_at").defaultNow().notNull(),
   },
   (t) => [
@@ -1397,9 +1447,21 @@ export const caseLawDecisionIdentifiers = p.pgTable(
     p
       .index("case_law_decision_identifiers_lookup_idx")
       .on(t.type, t.normalizedValue, t.decisionId),
+    // Every lookup and join by an identifier's value compares match keys
+    // (`case-number-match-key.ts`), whichever year form each side printed.
+    p
+      .index("case_law_decision_identifiers_match_key_idx")
+      .on(t.type, caseNumberMatchKeySql(t.normalizedValue), t.decisionId),
     p.check(
       "case_law_decision_identifiers_type_values",
       sql`${t.type} IN (${sql.join(DECISION_IDENTIFIER_TYPE_SQL_VALUES, sql`, `)})`,
+    ),
+    p.check(
+      "case_law_decision_identifiers_independent_claims",
+      sql`${t.independentClaims} <@ ARRAY[${sql.join(
+        DECISION_IDENTIFIER_CLAIMS.map((value) => sql`${value}`),
+        sql`, `,
+      )}]::varchar[] AND cardinality(${t.independentClaims}) <= ${DECISION_IDENTIFIER_CLAIMS.length}`,
     ),
     p.check(
       "case_law_decision_identifiers_value_non_empty",
@@ -1889,6 +1951,141 @@ export const caseLawDecisionSupplements = p.pgTable(
     p.check(
       "case_law_decision_supplements_merged_has_hash",
       sql`${t.decisionId} IS NULL OR ${t.mergedSourceHash} IS NOT NULL`,
+    ),
+    ...caseLawIngestionOnlyPolicies(),
+  ],
+);
+
+/**
+ * A source's record that enriches a decision another source holds, instead
+ * of becoming a second row of the same decision. See
+ * `HeldDecisionAttachment`.
+ *
+ * Keyed by the record's own publisher identity, so a re-observation finds
+ * it, and naming the host decision by id. `host_decision_id` has no foreign
+ * key: a host retired into another decision keeps resolving through
+ * `case_law_decision_aliases`, and a host erased or deleted leaves the record
+ * parked rather than cleared, so the census can name it. The host decision's
+ * own row is never written by an attachment; the record's reporter citations
+ * reach it only as declared identifier rows.
+ */
+export const caseLawHeldDecisionAttachments = p.pgTable(
+  "case_law_held_decision_attachments",
+  {
+    sourceId: safeUuid<"caseLawSource">("source_id").notNull(),
+    sourceDocumentId: p
+      .varchar("source_document_id", { length: 256 })
+      .notNull(),
+    /**
+     * What named the host: the stated ECLI, or court, docket and date; or,
+     * for a record parked for review, court and docket under another date.
+     */
+    matchBasis: p
+      .varchar("match_basis", { length: 32, enum: HELD_DECISION_MATCH_BASES })
+      .notNull(),
+    /**
+     * The decision the record enriches. Null while it is ambiguous: several
+     * held decisions matched, they are listed in `candidate_decision_ids`,
+     * and the record is parked with no row of its own.
+     */
+    hostDecisionId: safeUuid<"caseLawDecision">("host_decision_id"),
+    /**
+     * When the host was found erased or redacted. A takedown covers every
+     * publisher's copy of the decision, so the record stays parked and is
+     * never written as a decision of its own.
+     */
+    hostWithdrawnAt: timestamptz("host_withdrawn_at"),
+    /**
+     * The held decisions an ambiguous record matched, for its operator: up
+     * to `HELD_DECISION_AMBIGUOUS_CANDIDATES_MAX`, none when more matched.
+     */
+    candidateDecisionIds: p
+      .uuid("candidate_decision_ids")
+      .array()
+      .$type<SafeId<"caseLawDecision">>()
+      .notNull()
+      .default(sql`'{}'::uuid[]`),
+    /**
+     * The adapter's typed metadata, as its declared schema validated it.
+     * Null once the host is withdrawn: the takedown covers it.
+     */
+    metadata: jsonb().$type<Record<string, unknown>>(),
+    /** The identity check that admitted this association, independently of document contents. */
+    matchEvidence: jsonb("match_evidence").$type<HeldDecisionMatchEvidence>(),
+    /** The publisher's printed part boundaries and actual headnote or subject tags. */
+    documentPart: jsonb("document_part").$type<CollectionDocumentPart>(),
+    /** Immutable complete corpus payload retained under the exact host's erasure prefix. */
+    documentBodyS3Key: p.varchar("document_body_s3_key", { length: 512 }),
+    documentBodySha256: p.varchar("document_body_sha256", { length: 64 }),
+    /** The identifier rows this record declared on its host. */
+    declaredIdentifiers: jsonb("declared_identifiers")
+      .$type<HeldDecisionDeclaredIdentifier[]>()
+      .notNull()
+      .default(sql`'[]'::jsonb`),
+    sourceUrl: p.varchar("source_url", { length: 2048 }),
+    sourceHash: p.varchar("source_hash", { length: 64 }).notNull(),
+    /** The record's raw payload, kept under its host decision's raw prefix. */
+    sourceRawS3Key: p.varchar("source_raw_s3_key", { length: 512 }),
+    sourceRawContentType: p.varchar("source_raw_content_type", {
+      length: 128,
+    }),
+    observedAt: timestamptz("observed_at").notNull(),
+    /** The source's observation order of this state; only a later one replaces it. */
+    observationOrder: p
+      .bigint("observation_order", { mode: "bigint" })
+      .notNull(),
+    createdAt: timestamptz("created_at").defaultNow().notNull(),
+    updatedAt: timestamptz("updated_at").defaultNow().notNull(),
+  },
+  (t) => [
+    p.primaryKey({
+      columns: [t.sourceId, t.sourceDocumentId],
+      name: "case_law_held_decision_attachments_pk",
+    }),
+    p
+      .foreignKey({
+        name: "case_law_held_decision_attachments_source_fk",
+        columns: [t.sourceId],
+        foreignColumns: [caseLawSources.id],
+      })
+      .onDelete("cascade"),
+    p
+      .index("case_law_held_decision_attachments_host_idx")
+      .on(t.hostDecisionId)
+      .where(isNotNull(t.hostDecisionId)),
+    p.check(
+      "case_law_held_decision_attachments_basis_values",
+      sql`${t.matchBasis} IN (${sql.join(
+        HELD_DECISION_MATCH_BASES.map((basis) => sql`${basis}`),
+        sql`, `,
+      )})`,
+    ),
+    // An ambiguous record names no host and lists its candidates (none when
+    // more matched than are listed); an attached or withdrawn one names its
+    // host and no candidates.
+    p.check(
+      "case_law_held_decision_attachments_host_shape",
+      sql`${t.hostDecisionId} IS NULL OR cardinality(${t.candidateDecisionIds}) = 0`,
+    ),
+    // A docket held only under another date never names a host: the record
+    // waits for review with its candidates listed.
+    p.check(
+      "case_law_held_decision_attachments_review_shape",
+      sql`${t.matchBasis} NOT IN (${HELD_DECISION_MATCH_BASIS.COURT_DOCKET_OTHER_DATE}, ${HELD_DECISION_MATCH_BASIS.SOURCE_POLICY}) OR ${t.hostDecisionId} IS NULL`,
+    ),
+    // A withdrawn host's takedown leaves nothing of the record but its key.
+    p.check(
+      "case_law_held_decision_attachments_withdrawn_shape",
+      sql`${t.hostWithdrawnAt} IS NULL OR (${t.hostDecisionId} IS NOT NULL AND ${t.metadata} IS NULL AND ${t.sourceRawS3Key} IS NULL)`,
+    ),
+    p.check(
+      "case_law_held_decision_attachments_document_shape",
+      sql`(${t.documentBodyS3Key} IS NULL) = (${t.documentBodySha256} IS NULL)
+        AND (${t.documentBodyS3Key} IS NULL OR (${t.documentPart} IS NOT NULL
+          AND ${t.hostDecisionId} IS NOT NULL AND ${t.hostWithdrawnAt} IS NULL
+          AND (${t.matchEvidence}->>'status') IS NOT DISTINCT FROM 'matched'))
+        AND (${t.hostWithdrawnAt} IS NULL OR (${t.documentPart} IS NULL
+          AND ${t.documentBodyS3Key} IS NULL AND ${t.documentBodySha256} IS NULL))`,
     ),
     ...caseLawIngestionOnlyPolicies(),
   ],
@@ -2682,6 +2879,38 @@ export const caseLawCitations = p.pgTable(
         ),
       )
       .where(settledCitationSql(t.resolutionStatus)),
+    // The reverse direction by match key (`case-number-match-key.ts`): the
+    // citations an arriving key or identifier can answer, printed in either
+    // year form. The identifier arms key the citation's effective identity,
+    // as the reopen and backfill statements read it.
+    p
+      .index("case_law_citations_reopenable_match_key_idx")
+      .on(caseNumberMatchKeySql(t.citationKey))
+      .where(citationReopenableByKeySql(t.resolutionStatus)),
+    p
+      .index("case_law_citations_reopenable_identifier_match_key_idx")
+      .on(
+        effectiveCitationIdentifierTypeSql(t.identifierType),
+        caseNumberMatchKeySql(
+          effectiveCitationIdentifierValueSql(
+            t.normalizedIdentifierValue,
+            t.citationKey,
+          ),
+        ),
+      )
+      .where(citationReopenableByKeySql(t.resolutionStatus)),
+    p
+      .index("case_law_citations_identifier_backfill_match_key_idx")
+      .on(
+        effectiveCitationIdentifierTypeSql(t.identifierType),
+        caseNumberMatchKeySql(
+          effectiveCitationIdentifierValueSql(
+            t.normalizedIdentifierValue,
+            t.citationKey,
+          ),
+        ),
+      )
+      .where(settledCitationSql(t.resolutionStatus)),
     p.check(
       "citations_doctrinal_treatment_values",
       sql`${t.doctrinalTreatment} IN (${sql.join(DOCTRINAL_TREATMENT_SQL_VALUES, sql.raw(","))})`,
@@ -3146,7 +3375,9 @@ export const caseLawStatuteCitationCountState = p.pgTable(
  * whole by a background refresh, so a public read lists the shards without
  * counting the corpus. `year`/`month` are the shard's path segments
  * (`undated`/`00` for decisions without a date) and `bucket` is `all` for an
- * unsplit month or the two-digit bucket of a split one.
+ * unsplit month or the four-digit position of one range of a split one. A
+ * range is one contiguous key range of the decisions' date index, so serving
+ * it reads its own decisions and nothing else of the month.
  *
  * Row security is forced (migration `20260927230000_case_law_sitemap_shards`)
  * so the owner-run refresh needs a policy; table privileges decide access.
@@ -3188,9 +3419,19 @@ export const caseLawSitemapShards = p.pgTable(
     country: p.varchar({ length: 3 }).notNull(),
     year: p.varchar({ length: 7 }).notNull(),
     month: p.varchar({ length: 2 }).notNull(),
-    bucket: p.varchar({ length: 3 }).notNull(),
+    bucket: p.varchar({ length: 4 }).notNull(),
     total: p.integer().notNull(),
     lastModifiedAt: timestamptz("last_modified_at").notNull(),
+    /**
+     * Where a split month's range starts, inclusive, on the key of
+     * `case_law_decisions_country_date_published_idx` (the decision date,
+     * `-infinity` when undated, then the id); null from the month's start.
+     */
+    rangeStartDate: p.date("range_start_date"),
+    rangeStartId: p.uuid("range_start_id"),
+    /** Where the range ends, exclusive, on the same key; null to the month's end. */
+    rangeEndDate: p.date("range_end_date"),
+    rangeEndId: p.uuid("range_end_id"),
   },
   (t) => [
     p.primaryKey({
@@ -4399,6 +4640,10 @@ export const caseLawSearchDocumentPreviewPassages = p.pgTable(
 // Case Law — Ingestion observability
 // ---------------------------------------------------------------------------
 
+const INGESTION_CYCLE_OUTCOME_SQL_VALUES = CYCLE_OUTCOMES.map((outcome) =>
+  sql.raw(`'${outcome}'`),
+);
+
 export const caseLawIngestionEvents = p.pgTable(
   "case_law_ingestion_events",
   {
@@ -4406,7 +4651,11 @@ export const caseLawIngestionEvents = p.pgTable(
     sourceId: safeUuid<"caseLawSource">("source_id")
       .notNull()
       .references(() => caseLawSources.id, { onDelete: "cascade" }),
-    status: p.varchar({ length: 16 }).notNull().$type<"completed" | "failed">(),
+    status: p.varchar({ length: 16, enum: CYCLE_OUTCOMES }).notNull(),
+    pauseReason: p.varchar("pause_reason", {
+      length: 64,
+      enum: [INGESTION_PAUSE_REASON.DECISION_ALLOWANCE_EXHAUSTED],
+    }),
     inserted: p.integer().notNull().default(0),
     skipped: p.integer().notNull().default(0),
     searchVectorFailures: p
@@ -4422,12 +4671,69 @@ export const caseLawIngestionEvents = p.pgTable(
     finishedAt: timestamptz("finished_at").defaultNow().notNull(),
   },
   (t) => [
+    p.check(
+      "case_law_ingestion_events_status_valid",
+      sql`${t.status} IN (${sql.join(INGESTION_CYCLE_OUTCOME_SQL_VALUES, sql`, `)})`,
+    ),
+    p.check(
+      "case_law_ingestion_events_pause_reason_valid",
+      sql`(${t.status} = '${sql.raw(CYCLE_OUTCOME.PAUSED)}' AND ${t.pauseReason} IS NOT NULL AND ${t.pauseReason} = '${sql.raw(INGESTION_PAUSE_REASON.DECISION_ALLOWANCE_EXHAUSTED)}') OR (${t.status} <> '${sql.raw(CYCLE_OUTCOME.PAUSED)}' AND ${t.pauseReason} IS NULL)`,
+    ),
     p.index("case_law_ingestion_events_source_idx").on(t.sourceId),
     p.index("case_law_ingestion_events_finished_idx").on(t.finishedAt),
     p
       .index("case_law_ingestion_events_source_finished_idx")
       .on(t.sourceId, t.finishedAt.desc(), t.id.desc()),
     ...globalCaseLawPolicies(),
+  ],
+);
+
+/** Replay inputs for rejected records; never exposed through public failure summaries. */
+export const caseLawIngestionFailureEvidence = p.pgTable(
+  "case_law_ingestion_failure_evidence",
+  {
+    sourceId: safeUuid<"caseLawSource">("source_id").notNull(),
+    recordIdentity: p.varchar("record_identity", { length: 256 }).notNull(),
+    identityKind: p
+      .varchar("identity_kind", {
+        length: 32,
+        enum: INGESTION_FAILURE_IDENTITY_KINDS,
+      })
+      .notNull(),
+    sourceDocumentId: p.varchar("source_document_id", { length: 256 }),
+    payloadHash: p.varchar("payload_hash", { length: 64 }).notNull(),
+    observationOrder: p
+      .bigint("observation_order", { mode: "bigint" })
+      .notNull(),
+    observedAt: timestamptz("observed_at").notNull(),
+    /** Versioned JSON text with explicit base64 binary fields; retained verbatim. */
+    payload: p.text().notNull(),
+    errorType: p.varchar("error_type", { length: 128 }).notNull(),
+    createdAt: timestamptz("created_at").defaultNow().notNull(),
+  },
+  (t) => [
+    p
+      .foreignKey({
+        name: "case_law_ingestion_failure_evidence_source_fk",
+        columns: [t.sourceId],
+        foreignColumns: [caseLawSources.id],
+      })
+      .onDelete("cascade"),
+    p.primaryKey({
+      columns: [t.sourceId, t.recordIdentity, t.payloadHash, t.errorType],
+      name: "case_law_ingestion_failure_evidence_pk",
+    }),
+    p.check(
+      "case_law_ingestion_failure_evidence_identity_kind",
+      sql`${t.identityKind} IN (${sql.join(
+        INGESTION_FAILURE_IDENTITY_KINDS.map((kind) => sql`${kind}`),
+        sql`, `,
+      )})`,
+    ),
+    p
+      .index("case_law_ingestion_failure_evidence_document_idx")
+      .on(t.sourceId, t.sourceDocumentId),
+    ...caseLawIngestionOnlyPolicies(),
   ],
 );
 

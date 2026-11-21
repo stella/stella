@@ -10,6 +10,8 @@ import { normalizeEmail } from "@/api/lib/email/normalized-email";
 import { isRecord } from "@/api/lib/type-guards";
 
 export const EMAIL_OTP_ALLOWED_ATTEMPTS = 3;
+/** How long an emailed sign-in code stays valid. */
+export const EMAIL_OTP_LIFETIME_SECONDS = 5 * 60;
 const EMAIL_OTP_SIGN_IN_PATH = "/sign-in/email-otp";
 
 type EmailOtpResetConfirmationOptions = {

@@ -280,6 +280,7 @@ export const MatchStepper = ({ stepper }: { stepper: MatchStepperState }) => {
       <Button
         aria-label={t("common.previousMatch")}
         disabled={stepper.onPrev === null}
+        disabledReason={t("avt.matches.noPrevious")}
         onClick={stepper.onPrev ?? undefined}
         size="icon-xs"
         variant="ghost"
@@ -289,6 +290,7 @@ export const MatchStepper = ({ stepper }: { stepper: MatchStepperState }) => {
       <Button
         aria-label={t("common.nextMatch")}
         disabled={stepper.onNext === null}
+        disabledReason={t("avt.matches.noNext")}
         onClick={stepper.onNext ?? undefined}
         size="icon-xs"
         variant="ghost"

@@ -14,14 +14,7 @@ import {
 import { Button } from "@stll/ui/button";
 import { PlusIcon, Trash2Icon } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
-import {
-  List,
-  ListGroup,
-  ListGroupDescription,
-  ListGroupHeader,
-  ListGroupTitle,
-  ListItem,
-} from "@stll/ui/list";
+import { ListEmpty, ListItem } from "@stll/ui/list";
 import {
   Select,
   SelectItem,
@@ -41,85 +34,115 @@ import {
 import type {
   ProviderCredentialDraft,
   ProviderValue,
+  RoleModelSelections,
+  RoleValue,
 } from "@/components/ai-config-role-models.logic";
 import { SecretInput } from "@/components/secret-input";
+import { useFormatter } from "@/i18n/formatting-context";
 import { providerSetupGuidance } from "@/lib/errors/provider-setup-guidance";
+
+import { providerModes } from "./ai-config-form.logic";
+import type { ProviderKeyNeed } from "./ai-config-form.logic";
+import {
+  AI_PROVIDER_ROW_LINE_CLASS,
+  AIProviderRowsFrame,
+} from "./ai-provider-rows.pending";
 
 export const AIProviderRows = ({
   providers,
   disabled,
+  keyNeed,
+  roleSelections,
   onChange,
   onRemove,
   storedProviders = EMPTY_PROVIDERS,
   setupErrorCode,
 }: AIProviderRowsProps) => {
   const t = useTranslations("organization.aiConfig");
+  const common = useTranslations("common");
   return (
-    <ListGroup>
-      <ListGroupHeader>
-        <div className="grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-0.5">
-          <ListGroupTitle>{t("providersPanel")}</ListGroupTitle>
-          <Button
-            variant="ghost"
-            size="sm"
-            disabled={disabled || getNextAvailableProvider(providers) === null}
-            onClick={() => {
-              const provider = getNextAvailableProvider(providers);
-              if (provider) {
-                onChange([
-                  ...providers,
-                  createProviderCredentialDraft(provider),
-                ]);
-              }
-            }}
-          >
-            <PlusIcon />
-            {t("addProvider")}
-          </Button>
-          <ListGroupDescription className="col-start-1">
-            {t("providersDescription")}
-          </ListGroupDescription>
-        </div>
-      </ListGroupHeader>
-      <List>
-        {providers.map((draft) => (
-          <AIProviderRow
-            key={draft.provider}
-            draft={draft}
-            disabled={disabled}
-            setupErrorCode={setupErrorCode}
-            removalImpact={
-              storedProviders.filter((provider) => provider.apiKeyMasked)
-                .length === 1
-                ? "configuration"
-                : "provider"
+    <AIProviderRowsFrame
+      description={
+        keyNeed === "unknown"
+          ? t("providersDescription")
+          : t(`keyNeed.${keyNeed}`)
+      }
+      addAction={
+        <Button
+          variant="ghost"
+          size="sm"
+          disabled={disabled || getNextAvailableProvider(providers) === null}
+          disabledReason={disabled ? common("saving") : t("allProvidersAdded")}
+          onClick={() => {
+            const provider = getNextAvailableProvider(providers);
+            if (provider) {
+              onChange([...providers, createProviderCredentialDraft(provider)]);
             }
-            dirty={hasProviderCredentialChanges({
-              draft,
-              stored: storedProviders.find(
-                (saved) => saved.provider === draft.provider,
+          }}
+        >
+          <PlusIcon />
+          {t("addProvider")}
+        </Button>
+      }
+    >
+      {providers.length === 0 && <ListEmpty>{t("noProviders")}</ListEmpty>}
+      {providers.map((draft) => (
+        <AIProviderRow
+          key={draft.provider}
+          draft={draft}
+          disabled={disabled}
+          modes={
+            roleSelections === null
+              ? null
+              : providerModes(roleSelections, draft.provider)
+          }
+          setupErrorCode={setupErrorCode}
+          removalImpact={
+            storedProviders.filter((provider) => provider.apiKeyMasked)
+              .length === 1
+              ? "configuration"
+              : "provider"
+          }
+          dirty={hasProviderCredentialChanges({
+            draft,
+            stored: storedProviders.find(
+              (saved) => saved.provider === draft.provider,
+            ),
+          })}
+          options={getAvailableProviderKeys({
+            currentProvider: draft.provider,
+            providers,
+          })}
+          onChange={(next) =>
+            onChange(
+              providers.map((candidate) =>
+                candidate.provider === draft.provider ? next : candidate,
               ),
-            })}
-            options={getAvailableProviderKeys({
-              currentProvider: draft.provider,
-              providers,
-            })}
-            onChange={(next) =>
-              onChange(
-                providers.map((candidate) =>
-                  candidate.provider === draft.provider ? next : candidate,
-                ),
-              )
-            }
-            onRemove={onRemove}
-          />
-        ))}
-      </List>
-    </ListGroup>
+            )
+          }
+          onRemove={onRemove}
+        />
+      ))}
+    </AIProviderRowsFrame>
   );
 };
 
 const EMPTY_PROVIDERS = [] as const;
+
+/** Which modes a saved key serves, so each key's purpose is visible. */
+const ProviderModes = ({ modes }: { modes: readonly RoleValue[] }) => {
+  const t = useTranslations("organization.aiConfig");
+  const format = useFormatter();
+  return (
+    <p className="text-muted-foreground text-xs">
+      {modes.length === 0
+        ? t("providerModesNone")
+        : t("providerModes", {
+            modes: format.list(modes.map((role) => t(`roles.${role}`))),
+          })}
+    </p>
+  );
+};
 
 const KEY_FORMATS = {
   google: /^AIza[A-Za-z0-9_-]{35}$/u,
@@ -134,6 +157,9 @@ type AIProviderRowsProps = {
   providers: ProviderCredentialDraft[];
   storedProviders?: readonly ProviderCredentialDraft[];
   disabled: boolean;
+  keyNeed: ProviderKeyNeed;
+  /** The effective model per mode; null while that cannot be told. */
+  roleSelections: RoleModelSelections | null;
   setupErrorCode?: string | undefined;
   onChange: (providers: ProviderCredentialDraft[]) => void;
   onRemove: (provider: ProviderCredentialDraft) => void;
@@ -144,6 +170,7 @@ type AIProviderRowProps = {
   removalImpact: "provider" | "configuration";
   dirty: boolean;
   disabled: boolean;
+  modes: readonly RoleValue[] | null;
   options: ProviderValue[];
   setupErrorCode?: string | undefined;
   onChange: (draft: ProviderCredentialDraft) => void;
@@ -155,6 +182,7 @@ function AIProviderRow({
   removalImpact,
   dirty,
   disabled,
+  modes,
   options,
   setupErrorCode,
   onChange,
@@ -177,7 +205,7 @@ function AIProviderRow({
   };
   return (
     <ListItem className="flex-col items-stretch">
-      <div className="flex min-w-0 flex-wrap items-center gap-2">
+      <div className={AI_PROVIDER_ROW_LINE_CLASS}>
         {editable ? (
           <Select
             value={draft.provider}
@@ -210,6 +238,7 @@ function AIProviderRow({
               aria-label={t("apiKey")}
               autoComplete="off"
               disabled={disabled}
+              disabledReason={common("saving")}
               value={draft.apiKey}
               onChange={(event) =>
                 onChange({
@@ -231,6 +260,7 @@ function AIProviderRow({
             variant="ghost"
             size="sm"
             disabled={disabled}
+            disabledReason={common("saving")}
             onClick={() =>
               onChange({ ...draft, apiKey: "", replacingKey: true })
             }
@@ -244,6 +274,7 @@ function AIProviderRow({
           variant="ghost"
           aria-label={t("removeProvider")}
           disabled={disabled}
+          disabledReason={common("saving")}
           onClick={() => {
             if (draft.apiKeyMasked) {
               setRemovalState("confirming");
@@ -280,6 +311,7 @@ function AIProviderRow({
           {common("unsavedChanges")}
         </p>
       )}
+      {!editable && modes !== null && <ProviderModes modes={modes} />}
       <AlertDialog
         open={removalState === "confirming"}
         onOpenChange={(open) => setRemovalState(open ? "confirming" : "idle")}
@@ -300,7 +332,12 @@ function AIProviderRow({
             <AlertDialogClose render={<Button variant="ghost" />}>
               {common("cancel")}
             </AlertDialogClose>
-            <Button variant="destructive" disabled={disabled} onClick={remove}>
+            <Button
+              variant="destructive"
+              disabled={disabled}
+              disabledReason={common("saving")}
+              onClick={remove}
+            >
               {common("confirm")}
             </Button>
           </AlertDialogFooter>

@@ -10,6 +10,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 
 import {
+  actionPinBase,
   changedActionPins,
   verifyActionPins,
 } from "./check-action-commit-pins";
@@ -227,4 +228,11 @@ test("changed action pins validate edited renamed workflow files", () => {
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
+});
+
+test("an empty or missing base argument falls back to the merge base", () => {
+  const mergeBase = () => sha;
+  expect(actionPinBase(undefined, mergeBase)).toBe(sha);
+  expect(actionPinBase("", mergeBase)).toBe(sha);
+  expect(actionPinBase(tagObjectSha, mergeBase)).toBe(tagObjectSha);
 });

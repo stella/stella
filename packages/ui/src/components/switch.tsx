@@ -6,17 +6,11 @@ import type * as React from "react";
 import { Switch as SwitchPrimitive } from "@base-ui/react/switch";
 
 import { cn } from "../lib/utils";
-
-/**
- * `default` is a setting's own control; `sm` sits in a dense row or a menu
- * beside small type.
- */
-type SwitchSize = "sm" | "default";
-
-const SWITCH_ROOT_SIZE_CLASS_NAME = {
-  default: "h-5 w-9",
-  sm: "h-4 w-7",
-} as const satisfies Record<SwitchSize, string>;
+import {
+  SWITCH_ROOT_CLASS_NAME,
+  SWITCH_ROOT_SIZE_CLASS_NAME,
+  type SwitchSize,
+} from "./toggle-classes";
 
 const SWITCH_THUMB_SIZE_CLASS_NAME = {
   default:
@@ -31,7 +25,7 @@ type SwitchProps = SwitchPrimitive.Root.Props & {
 const Switch = ({ className, size = "default", ...props }: SwitchProps) => (
   <SwitchPrimitive.Root
     className={cn(
-      "focus-visible:ring-ring focus-visible:ring-offset-background data-checked:bg-primary data-unchecked:bg-input relative inline-flex shrink-0 items-center rounded-full outline-none focus-visible:ring-2 focus-visible:ring-offset-1 data-disabled:opacity-64",
+      SWITCH_ROOT_CLASS_NAME,
       SWITCH_ROOT_SIZE_CLASS_NAME[size],
       className,
     )}

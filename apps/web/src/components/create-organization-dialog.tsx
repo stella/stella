@@ -256,9 +256,12 @@ export const CreateOrganizationDialog = ({
                   />
                 </Field>
                 {view.organization !== null && (
-                  <BidiText as="p" direction="ltr">
-                    {view.organization.slug}
-                  </BidiText>
+                  <p className="text-muted-foreground text-sm" role="status">
+                    {t.rich("organization.createdSwitchPrompt", {
+                      bdi: (chunks) => <BidiText>{chunks}</BidiText>,
+                      name: view.organization.name,
+                    })}
+                  </p>
                 )}
                 {view.message !== null && (
                   <RecoverableErrorStatus
@@ -285,6 +288,7 @@ export const CreateOrganizationDialog = ({
                   variant="outline"
                   type="button"
                   disabled={view.pending}
+                  disabledReason={t("common.creating")}
                   onClick={() => {
                     if (
                       !organizationCreationView(owner.state.getState()).pending
@@ -299,6 +303,11 @@ export const CreateOrganizationDialog = ({
                   type="submit"
                   loading={view.pending}
                   disabled={view.pending || !view.name.trim()}
+                  disabledReason={
+                    view.pending
+                      ? t("common.creating")
+                      : t("validation.organizationNameRequired")
+                  }
                 >
                   {view.organization === null
                     ? t("auth.createOrganizationButton")

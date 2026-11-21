@@ -4,124 +4,22 @@ import type { ReactElement, ReactNode } from "react";
 
 import { cn } from "../lib/utils";
 import { BidiText } from "./bidi-text";
-import { ScrollArea } from "./scroll-area";
+import { LANDING_ROW_CLASS } from "./landing-shell";
 import { TruncatedText } from "./truncated-text";
 
-/**
- * A home screen's one shape: a greeting and a box in the upper fold, three
- * columns of what the reader reaches from it below. The chat home and the
- * law home render from these, so a reader who has learned one has learned
- * the other, and the two cannot drift apart.
- */
-
-type LandingLayoutProps = {
-  /** Header-slot actions that belong to the page rather than the fold. */
-  actions?: ReactNode | undefined;
-  /** The greeting and the box; centred in the upper fold. */
-  hero: ReactNode;
-  /** The columns; take the rest of the height, each scrolling on its own. */
-  children: ReactNode;
-  /** Below the columns, in its own bounded scroll: crawlable navigation. */
-  footer?: ReactNode | undefined;
-};
-
-export const LandingLayout = ({
-  actions,
-  hero,
-  children,
-  footer,
-}: LandingLayoutProps) => (
-  <div className="mx-auto flex h-full w-full max-w-5xl flex-1 flex-col overflow-hidden">
-    {actions}
-    {/* The landing folds against its own width, not the viewport's: a side
-        pane can leave this column far narrower than a viewport breakpoint
-        would suggest. */}
-    <div className="@container flex min-h-0 flex-1 flex-col overflow-hidden">
-      {/* In one column the page scrolls: the fold leaves a phone too little
-          height to split three ways, and each column got a sliver too short
-          for one row under its scroll fade. Side by side, the page fills
-          the viewport exactly and never scrolls; the columns do. */}
-      <ScrollArea className="min-h-0 flex-1">
-        <div className="flex min-h-full w-full flex-col items-center px-4 @2xl:h-full">
-          {/* The box may grow past the preferred fold height; keep every one
-              of its controls reachable without making the whole page
-              scroll. The viewport clips, so the inline padding leaves room
-              at the sides for the box's outer halo (the shield ring, focus
-              rings). */}
-          <ScrollArea
-            className="min-h-72 w-full max-w-2xl shrink-0 basis-[22rem] @2xl:shrink"
-            scrollFade
-          >
-            <div className="flex min-h-full w-full flex-col items-center justify-center gap-8 px-1">
-              {hero}
-            </div>
-          </ScrollArea>
-          {/* Side by side, the columns share the remaining height; each
-              `LandingSection` keeps its heading in place and scrolls its own
-              rows, so a long list in one column never pushes another's
-              heading out of view. */}
-          <div className="grid w-full shrink-0 gap-8 pb-6 @2xl:min-h-0 @2xl:flex-1 @2xl:auto-rows-fr @2xl:grid-cols-3">
-            {children}
-          </div>
-          {footer !== undefined && (
-            <ScrollArea
-              className="h-auto max-h-[40dvh] w-full shrink-0"
-              scrollFade
-            >
-              {footer}
-            </ScrollArea>
-          )}
-        </div>
-      </ScrollArea>
-    </div>
-  </div>
-);
-
-type LandingGreetingProps = {
-  /** The mark in the tile: the product mark, or the section's icon. */
-  icon: ReactNode;
-  /** The one line under the tile, as the page's heading. */
-  children: ReactNode;
-};
-
-export const LandingGreeting = ({ icon, children }: LandingGreetingProps) => (
-  <div className="flex w-full flex-col items-center gap-4 text-center">
-    <div className="border-border bg-background text-foreground flex size-12 items-center justify-center rounded-lg border shadow-sm">
-      {icon}
-    </div>
-    <h1 className="text-foreground max-w-md text-center text-lg font-medium">
-      {children}
-    </h1>
-  </div>
-);
-
-/** A column's heading: an icon and a sentence-case label, as a link or a trigger. */
-export const LANDING_SECTION_HEADING_CLASS =
-  "text-foreground hover:bg-accent/50 focus-visible:ring-ring [&>svg]:text-muted-foreground flex items-center gap-2 rounded-md px-2 py-0.5 text-sm font-semibold outline-none focus-visible:ring-2";
-
-/** A row of a column, as a link or a button. Its text lines up with the
- *  heading's label; the icon slot under the heading icon stays empty unless
- *  the icon identifies the row (a matter's colour). */
-export const LANDING_ROW_CLASS =
-  "group hover:bg-accent/50 focus-visible:ring-ring rounded-md px-2 py-1.5 text-start outline-none focus-visible:ring-2";
-
-type LandingSectionProps = {
-  children: ReactNode;
-  heading: ReactNode;
-};
-
-/** A column: its heading stays put, its rows scroll beneath it. The rows get
- *  the same ring room as the hero box, since the viewport clips a flush row's
- *  focus ring; the heading takes the same inset so the labels stay aligned. */
-export const LandingSection = ({ children, heading }: LandingSectionProps) => (
-  <section className="flex min-h-0 min-w-0 flex-col">
-    <div className="mb-3 shrink-0 px-1">{heading}</div>
-    <ScrollArea className="@2xl:min-h-0 @2xl:flex-1" scrollFade>
-      <div className="flex flex-col gap-1 px-1 pt-1 pb-4">{children}</div>
-    </ScrollArea>
-  </section>
-);
-
+// The landing's layout, section and pending pieces live in `landing-shell`,
+// which a route's pending half can import without the row text below (its
+// truncation tooltip is too heavy for the entry chunk).
+export {
+  LANDING_ROW_CLASS,
+  LANDING_SECTION_HEADING_CLASS,
+  LandingBoxPending,
+  LandingGreeting,
+  LandingLayout,
+  LandingRowsPending,
+  LandingSection,
+  LandingSectionHeadingPending,
+} from "./landing-shell";
 type LandingButtonProps = {
   icon?: ReactElement;
   meta?: ReactNode | undefined;

@@ -523,7 +523,13 @@ const RichTextArea = memo(
   forwardRef<HTMLDivElement, RichTextAreaProps>(
     ({ item, label, onInput }, ref) => {
       const plainTextLines = item.plainText.split("\n");
-      let lineStart = 0;
+      // Each line's offset in the text keys it; computed before render so no
+      // counter is mutated while the lines render.
+      const lineStarts = plainTextLines.map((_, index) =>
+        plainTextLines
+          .slice(0, index)
+          .reduce((offset, previous) => offset + previous.length + 1, 0),
+      );
       const content =
         item.type === "formattedText"
           ? {
@@ -531,10 +537,9 @@ const RichTextArea = memo(
               dangerouslySetInnerHTML: { __html: item.html },
             }
           : {
-              children: plainTextLines.map((line) => {
-                const key = lineStart;
-                const needsLineBreak = lineStart > 0;
-                lineStart += line.length + 1;
+              children: plainTextLines.map((line, index) => {
+                const key = lineStarts[index] ?? 0;
+                const needsLineBreak = key > 0;
                 return (
                   <Fragment key={key}>
                     {needsLineBreak ? <br /> : null}
@@ -1186,6 +1191,7 @@ const ClipboardEditor = ({ onIdle }: ClipboardEditorProps) => {
           </div>
           <Button
             disabled={groupCreationPending}
+            disabledReason={t("creatingGroup")}
             onClick={requestClose}
             type="button"
             variant="ghost"
@@ -1194,6 +1200,7 @@ const ClipboardEditor = ({ onIdle }: ClipboardEditorProps) => {
           </Button>
           <Button
             disabled={state.save.type === "saving"}
+            disabledReason={t("savingChanges")}
             onClick={save}
             type="button"
           >
@@ -1217,6 +1224,7 @@ const ClipboardEditor = ({ onIdle }: ClipboardEditorProps) => {
             <div className="mt-4 flex items-center justify-end gap-3">
               <Button
                 disabled={groupCreationPending}
+                disabledReason={t("creatingGroup")}
                 onClick={() => setGroupDraft({ type: "closed" })}
                 type="button"
                 variant="ghost"
@@ -1225,6 +1233,11 @@ const ClipboardEditor = ({ onIdle }: ClipboardEditorProps) => {
               </Button>
               <Button
                 disabled={!state.groupDraft.name.trim() || groupCreationPending}
+                disabledReason={
+                  groupCreationPending
+                    ? t("creatingGroup")
+                    : t("enterGroupName")
+                }
                 onClick={createGroup}
                 type="button"
               >

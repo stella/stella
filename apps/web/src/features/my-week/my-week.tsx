@@ -1,9 +1,6 @@
 import { useId, useState } from "react";
 
-import {
-  useSuspenseInfiniteQuery,
-  useSuspenseQuery,
-} from "@tanstack/react-query";
+import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { panic, Result } from "better-result";
 import { useTranslations } from "use-intl";
@@ -20,12 +17,14 @@ import {
 } from "@/components/billing/manual-time-entry-form";
 import { isTimeEntryRateRequired } from "@/components/billing/time-entry-rate-error.logic";
 import { weekOf } from "@/components/billing/work-week.logic";
+import { QueryViewFeedback } from "@/components/query-view-feedback";
 import {
   MatterCombobox,
   type MatterOption,
 } from "@/components/workspaces/matter-combobox";
 import { MoveEntryField } from "@/features/my-week/move-entry-field";
 import { type MyTimeEntry, MyWeekDay } from "@/features/my-week/my-week-day";
+import { MyWeekDaySkeleton } from "@/features/my-week/my-week-day.pending";
 import { MyWeekHeader } from "@/features/my-week/my-week-header";
 import {
   pendingCountByDay,
@@ -45,6 +44,7 @@ import { usePermissions } from "@/hooks/use-permissions";
 import { useSingleFlight } from "@/hooks/use-single-flight";
 import { detached } from "@/lib/detached";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { queryView, queryViewError } from "@/lib/query-view.logic";
 import { myTimeEntriesInfiniteOptions } from "@/lib/workspaces/queries/my-time-entries";
 import { myTimeSuggestionsOptions } from "@/lib/workspaces/queries/my-time-suggestions";
 
@@ -68,25 +68,6 @@ type WeekDialog =
       matter: MatterOption | null;
     }
   | { type: "accept"; target: SuggestionTarget; narrative: string };
-
-/** The queries behind one week, shared by the route loader and the page. */
-export const myWeekQueries = ({
-  organizationId,
-  userId,
-  timezoneId,
-  date,
-}: Pick<MyWeekProps, "organizationId" | "userId" | "timezoneId" | "date">) => {
-  const week = weekOf(date);
-  const range = { startDate: week.start, endDate: week.end };
-  return {
-    week,
-    entries: myTimeEntriesInfiniteOptions(organizationId, userId, range),
-    suggestions: myTimeSuggestionsOptions(organizationId, userId, {
-      ...range,
-      timezoneId,
-    }),
-  };
-};
 
 const dialogDefaults = (dialog: WeekDialog): ManualTimeEntryValues => {
   switch (dialog.type) {
@@ -149,6 +130,100 @@ const dialogMatterId = (dialog: WeekDialog) => {
   }
 };
 
+const useWeekData = ({
+  organizationId,
+  userId,
+  timezoneId,
+  date,
+}: Omit<MyWeekProps, "onSelectDate" | "onToday">) => {
+  const week = weekOf(date);
+  const range = { startDate: week.start, endDate: week.end };
+  const entriesQuery = useInfiniteQuery(
+    myTimeEntriesInfiniteOptions(organizationId, userId, range),
+  );
+  const entriesView = queryView(entriesQuery);
+  const suggestionsQuery = useQuery(
+    myTimeSuggestionsOptions(organizationId, userId, {
+      ...range,
+      timezoneId,
+    }),
+  );
+  const suggestionsView = queryView(suggestionsQuery);
+  const failed =
+    entriesView.type === "error" || suggestionsView.type === "error";
+  let feedback = null;
+  if (entriesView.type === "error") {
+    feedback = <QueryViewFeedback view={entriesView} />;
+  } else if (queryViewError(suggestionsView) !== undefined) {
+    feedback = <QueryViewFeedback view={suggestionsView} />;
+  } else if (
+    queryViewError(entriesView) !== undefined &&
+    !entriesQuery.isFetchNextPageError
+  ) {
+    feedback = <QueryViewFeedback view={entriesView} />;
+  }
+  const suggestionRange =
+    suggestionsView.type === "items" ? suggestionsView.items : undefined;
+  const pages = entriesView.type === "items" ? entriesView.items.pages : [];
+  const ready = entriesView.type === "items" && suggestionRange !== undefined;
+  // Every page carries the totals for the whole week; the first is enough.
+  const firstPage = pages.at(0);
+  const totals =
+    firstPage === undefined ? undefined : weekTotals(firstPage.days);
+  const entries = pages
+    .flatMap((page) => page.items)
+    .filter((entry) => entry.dateWorked === date);
+  const loggedMinutes = totals?.byDay.get(date) ?? 0;
+  // The week's entries are paged, and any page may hold the day's entries
+  // (running timers count zero minutes), so no day is empty until all load.
+  const entriesComplete = !entriesQuery.hasNextPage;
+  const suggestionDay = suggestionRange?.days.find((day) => day.date === date);
+  const suggestions = suggestionDay === undefined ? [] : suggestionDay.matters;
+  // Submission covers the whole week, so drafts on pages not loaded yet count:
+  // with a page left, the week may still hold some.
+  const canSubmitWeek =
+    entriesQuery.hasNextPage ||
+    pages
+      .flatMap((page) => page.items)
+      .some((entry) => entry.status === "draft");
+  return {
+    canSubmitWeek,
+    entries,
+    entriesComplete,
+    entriesQuery,
+    failed,
+    feedback,
+    loggedMinutes,
+    pendingByDay:
+      suggestionRange === undefined
+        ? undefined
+        : pendingCountByDay(suggestionRange.days),
+    ready,
+    suggestions,
+    totals,
+    week,
+  };
+};
+
+type WeekSubmitDisabledReasonOptions = {
+  ready: boolean;
+  failed: boolean;
+  t: (key: "timesheets.week.noDraftEntries") => string;
+  tCommon: (key: "loadFailed" | "loading") => string;
+};
+
+const weekSubmitDisabledReason = ({
+  ready,
+  failed,
+  t,
+  tCommon,
+}: WeekSubmitDisabledReasonOptions) => {
+  if (ready) {
+    return t("timesheets.week.noDraftEntries");
+  }
+  return failed ? tCommon("loadFailed") : tCommon("loading");
+};
+
 export const MyWeek = ({
   organizationId,
   userId,
@@ -159,13 +234,23 @@ export const MyWeek = ({
 }: MyWeekProps) => {
   const matterFieldId = useId();
   const t = useTranslations();
-  const tBilling = useTranslations("billing");
   const tCommon = useTranslations("common");
+  const tBilling = useTranslations("billing");
   const tErrors = useTranslations("errors");
-  const queries = myWeekQueries({ organizationId, userId, timezoneId, date });
-  const { week } = queries;
-  const entriesQuery = useSuspenseInfiniteQuery(queries.entries);
-  const { data: suggestionRange } = useSuspenseQuery(queries.suggestions);
+  const {
+    canSubmitWeek,
+    entries,
+    entriesComplete,
+    entriesQuery,
+    failed,
+    feedback,
+    loggedMinutes,
+    pendingByDay,
+    ready,
+    suggestions,
+    totals,
+    week,
+  } = useWeekData({ organizationId, userId, timezoneId, date });
   const tReport = useTranslations("billing.timeReport");
   const canReadTime = usePermissions({ timeEntry: ["read"] });
   const canDecide = usePermissions({ timeEntry: ["create"] });
@@ -178,27 +263,13 @@ export const MyWeek = ({
     ReadonlyMap<string, TimeSubmitRefusal>
   >(() => new Map());
 
-  const pages = entriesQuery.data.pages;
-  // Every page carries the totals for the whole week; the first is enough.
-  const firstPage = pages.at(0);
-  const totals = weekTotals(firstPage === undefined ? [] : firstPage.days);
-  const entries = pages
-    .flatMap((page) => page.items)
-    .filter((entry) => entry.dateWorked === date);
-  const loggedMinutes = totals.byDay.get(date) ?? 0;
-  // The week's entries are paged, and any page may hold the day's entries
-  // (running timers count zero minutes), so no day is empty until all load.
-  const entriesComplete = !entriesQuery.hasNextPage;
-  const suggestionDay = suggestionRange.days.find((day) => day.date === date);
-  const suggestions = suggestionDay === undefined ? [] : suggestionDay.matters;
   const matterId = dialogMatterId(dialog);
-  // Submission covers the whole week, so drafts on pages not loaded yet count:
-  // with a page left, the week may still hold some.
-  const canSubmitWeek =
-    entriesQuery.hasNextPage ||
-    pages
-      .flatMap((page) => page.items)
-      .some((entry) => entry.status === "draft");
+  const submitDisabledReason = weekSubmitDisabledReason({
+    ready,
+    failed,
+    t,
+    tCommon,
+  });
   const refusalNotes = new Map(
     [...refusals].map(([id, reason]) => [id, t(SUBMIT_REFUSAL_KEYS[reason])]),
   );
@@ -245,7 +316,7 @@ export const MyWeek = ({
     });
 
   return (
-    <div className="flex h-full flex-col">
+    <>
       <MyWeekHeader
         actions={
           <>
@@ -268,7 +339,8 @@ export const MyWeek = ({
             />
             <SubmitWeekActions
               canApproveOwn={canApprove}
-              canSubmit={canSubmitWeek}
+              canSubmit={ready && canSubmitWeek}
+              disabledReason={submitDisabledReason}
               onRefusals={setRefusals}
               submit={actions.submitWeek}
               submitting={actions.submitting}
@@ -283,60 +355,68 @@ export const MyWeek = ({
       />
       <WeekStrip
         onSelectDate={onSelectDate}
-        pendingByDay={pendingCountByDay(suggestionRange.days)}
+        pendingByDay={pendingByDay}
         selectedDate={date}
         totals={totals}
         week={week}
       />
       <ScrollArea className="min-h-0 flex-1">
-        <MyWeekDay
-          busyFingerprints={actions.busyFingerprints}
-          canDecide={canDecide}
-          canEdit={canEdit}
-          notes={refusalNotes}
-          date={date}
-          entries={entries}
-          entriesComplete={entriesComplete}
-          loggedMinutes={loggedMinutes}
-          onAccept={(matter, suggestion, narrative) =>
-            detached(
-              actions.fromRow(
-                actions.accept(
-                  { matter, date, suggestion },
-                  {
-                    durationMinutes: suggestion.durationMinutes,
-                    narrative,
-                    narrativeLanguage: null,
-                    billable: suggestion.billableByDefault,
-                  },
+        {feedback !== null && (
+          <div className="mx-auto w-full max-w-4xl p-4">{feedback}</div>
+        )}
+        {ready ? (
+          <MyWeekDay
+            busyFingerprints={actions.busyFingerprints}
+            canDecide={canDecide}
+            canEdit={canEdit}
+            notes={refusalNotes}
+            date={date}
+            entries={entries}
+            entriesComplete={entriesComplete}
+            loggedMinutes={loggedMinutes}
+            onAccept={(matter, suggestion, narrative) =>
+              detached(
+                actions.fromRow(
+                  actions.accept(
+                    { matter, date, suggestion },
+                    {
+                      durationMinutes: suggestion.durationMinutes,
+                      narrative,
+                      narrativeLanguage: null,
+                      billable: suggestion.billableByDefault,
+                    },
+                  ),
                 ),
-              ),
-              "my-week.accept-suggestion",
-            )
-          }
-          onDismiss={(matter, suggestion) =>
-            detached(
-              actions.fromRow(actions.dismiss({ matter, date, suggestion })),
-              "my-week.dismiss-suggestion",
-            )
-          }
-          onEdit={(matter, suggestion, narrative) =>
-            setDialog({
-              type: "accept",
-              target: { matter, date, suggestion },
-              narrative,
-            })
-          }
-          onCreate={() => setDialog({ type: "create", date, matter: null })}
-          onEditEntry={(entry) =>
-            setDialog({ type: "edit", entry, matter: movableMatterOf(entry) })
-          }
-          suggestions={suggestions}
-        />
+                "my-week.accept-suggestion",
+              )
+            }
+            onDismiss={(matter, suggestion) =>
+              detached(
+                actions.fromRow(actions.dismiss({ matter, date, suggestion })),
+                "my-week.dismiss-suggestion",
+              )
+            }
+            onEdit={(matter, suggestion, narrative) =>
+              setDialog({
+                type: "accept",
+                target: { matter, date, suggestion },
+                narrative,
+              })
+            }
+            onCreate={() => setDialog({ type: "create", date, matter: null })}
+            onEditEntry={(entry) =>
+              setDialog({ type: "edit", entry, matter: movableMatterOf(entry) })
+            }
+            suggestions={suggestions}
+          />
+        ) : (
+          !failed && <MyWeekDaySkeleton date={date} />
+        )}
         {entriesQuery.hasNextPage && (
           <div className="flex justify-center pb-4">
             <Button
               disabled={entriesQuery.isFetchingNextPage}
+              disabledReason={t("common.loading")}
               onClick={() =>
                 detached(
                   (async () => {
@@ -443,6 +523,6 @@ export const MyWeek = ({
           </DialogPanel>
         </DialogPopup>
       </Dialog>
-    </div>
+    </>
   );
 };

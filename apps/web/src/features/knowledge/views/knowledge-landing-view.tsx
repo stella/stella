@@ -1,12 +1,16 @@
 import type { ComponentType, ReactNode, SVGProps } from "react";
 
 import { Link } from "@tanstack/react-router";
-import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
 import { cn } from "@stll/ui/utils";
 
-import { knowledgeSections } from "@/lib/knowledge/navigation";
+import {
+  KNOWLEDGE_CARD_CLASS,
+  KnowledgeCardBody,
+  KnowledgeLandingFrame,
+} from "@/features/knowledge/views/knowledge-landing.pending";
+import type { KnowledgeCataloguePath } from "@/lib/knowledge/knowledge-catalogues";
 import type { KnowledgeSection } from "@/lib/knowledge/navigation";
 
 type LandingCardContent = {
@@ -21,7 +25,10 @@ type LandingCardContent = {
 /** A Knowledge section card: a link to the section, or a button when the
  *  section needs something first. */
 export type KnowledgeLandingCard = LandingCardContent &
-  ({ to: KnowledgeSection["to"] } | { onOpen: () => void });
+  (
+    | { to: KnowledgeSection["to"] | KnowledgeCataloguePath }
+    | { onOpen: () => void }
+  );
 
 type KnowledgeLandingViewProps = {
   cards: readonly KnowledgeLandingCard[];
@@ -29,104 +36,40 @@ type KnowledgeLandingViewProps = {
   footer?: ReactNode;
 };
 
-const LANDING_CLASS = "flex flex-1 flex-col p-6";
-const GRID_CLASS = "grid items-stretch gap-4 sm:grid-cols-2 lg:grid-cols-3";
-
-const CARD_CLASS = cn(
-  "bg-card flex h-full flex-col rounded-xl border p-5",
-  "hover:border-foreground/15 hover:shadow-sm",
+const CardBody = ({ card }: { card: LandingCardContent }) => (
+  <KnowledgeCardBody
+    description={card.description}
+    icon={card.icon}
+    note={card.note}
+    title={card.title}
+  />
 );
-
-const CardBody = ({ card }: { card: LandingCardContent }) => {
-  const Icon = card.icon;
-  return (
-    <>
-      <div
-        className={cn(
-          "flex size-10 items-center justify-center",
-          "bg-muted rounded-lg",
-        )}
-      >
-        <Icon className="size-5" />
-      </div>
-      <div className="mt-3">
-        <h2 className="text-sm font-semibold">{card.title}</h2>
-        <p className="text-muted-foreground mt-1 text-sm">{card.description}</p>
-        {card.note !== undefined && (
-          <p className="text-muted-foreground mt-2 text-xs font-medium">
-            {card.note}
-          </p>
-        )}
-      </div>
-    </>
-  );
-};
 
 /** The Knowledge landing: one card per section the visitor can reach. */
 export const KnowledgeLandingView = ({
   cards,
   footer,
 }: KnowledgeLandingViewProps) => (
-  <div className={LANDING_CLASS}>
-    <div className={GRID_CLASS}>
-      {cards.map((card) =>
-        "to" in card ? (
-          <Link className={CARD_CLASS} key={card.key} to={card.to}>
+  <KnowledgeLandingFrame footer={footer}>
+    {cards.map((card) =>
+      "to" in card ? (
+        <Link className={KNOWLEDGE_CARD_CLASS} key={card.key} to={card.to}>
+          <CardBody card={card} />
+        </Link>
+      ) : (
+        // A section that needs something first is a button; it draws the
+        // same card as the linked sections beside it.
+        <Button
+          className="flex h-full"
+          key={card.key}
+          onClick={card.onOpen}
+          variant="plain"
+        >
+          <div className={cn(KNOWLEDGE_CARD_CLASS, "w-full")}>
             <CardBody card={card} />
-          </Link>
-        ) : (
-          // A section that needs something first is a button; it draws the
-          // same card as the linked sections beside it.
-          <Button
-            className="flex h-full"
-            key={card.key}
-            onClick={card.onOpen}
-            variant="plain"
-          >
-            <div className={cn(CARD_CLASS, "w-full")}>
-              <CardBody card={card} />
-            </div>
-          </Button>
-        ),
-      )}
-    </div>
-    {footer}
-  </div>
-);
-
-/** The section copy is already known; reserve its wrapping and card geometry. */
-export const KnowledgeLandingSkeleton = ({
-  audience,
-}: {
-  audience: "public" | "member";
-}) => {
-  const t = useTranslations();
-  const sections = knowledgeSections.filter(
-    (section) =>
-      audience === "member" || section.publicAccess !== "unavailable",
-  );
-  return (
-    <div aria-hidden="true" className={LANDING_CLASS}>
-      <div className={GRID_CLASS}>
-        {sections.map((section) => (
-          <div className={CARD_CLASS} key={section.key}>
-            <CardBody
-              card={{
-                key: section.key,
-                icon: section.icon,
-                title: t(section.titleKey),
-                description:
-                  section.key === "styles"
-                    ? t("styleSets.description")
-                    : t(`knowledge.sections.${section.key}.description`),
-                ...(audience === "public" && section.publicAccess === "account"
-                  ? { note: t("knowledge.landing.withAccount") }
-                  : {}),
-              }}
-            />
           </div>
-        ))}
-      </div>
-    </div>
-  );
-};
+        </Button>
+      ),
+    )}
+  </KnowledgeLandingFrame>
+);

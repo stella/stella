@@ -14,16 +14,7 @@ import {
   DialogPopup,
   DialogTitle,
 } from "@stll/ui/dialog";
-import { Frame, FramePanel } from "@stll/ui/frame";
 import { Label } from "@stll/ui/label";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@stll/ui/table";
 
 import { DatePickerPopover } from "@/components/date-picker-popover";
 import { usePermissions } from "@/hooks/use-permissions";
@@ -41,6 +32,10 @@ import type {
   NumberSeriesCommand,
   NumberSeriesInput,
 } from "@/lib/organization/number-series";
+import {
+  NUMBER_SERIES_COLUMNS,
+  NumberSeriesCardShell,
+} from "@/routes/_protected.settings/-organization.number-series.pending";
 import { NumberSeriesForm } from "@/routes/_protected.settings/organization/-components/organization/number-series-form";
 import { numberSeriesPatch } from "@/routes/_protected.settings/organization/-components/organization/number-series-form.logic";
 import {
@@ -48,6 +43,11 @@ import {
   NumberSeriesRefusal,
 } from "@/routes/_protected.settings/organization/-components/organization/number-series-preview";
 import { useSettingsMutation } from "@/routes/_protected.settings/organization/-hooks/use-settings-mutation";
+
+import {
+  BillingSettingsRow,
+  BillingSettingsTable,
+} from "./billing-settings-table.pending";
 
 type SeriesDialog =
   | { type: "closed" }
@@ -140,20 +140,18 @@ const NumberSeriesCardBody = ({
   };
 
   return (
-    <Frame>
-      <FramePanel className="flex flex-col gap-4">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <p className="text-muted-foreground text-sm">
-            {t("billing.numberSeries.description")}
-          </p>
-          <Button
-            onClick={() => open({ type: "create" })}
-            disabled={mutation.isPending}
-          >
-            {t("billing.numberSeries.add")}
-          </Button>
-        </div>
-        <div className="flex flex-col gap-1.5">
+    <NumberSeriesCardShell
+      action={
+        <Button
+          onClick={() => open({ type: "create" })}
+          disabled={mutation.isPending}
+          disabledReason={t("common.saving")}
+        >
+          {t("billing.numberSeries.add")}
+        </Button>
+      }
+      dateField={
+        <>
           <Label htmlFor="number-series-issue-date">
             {t("billing.numberSeries.issueDate")}
           </Label>
@@ -166,195 +164,197 @@ const NumberSeriesCardBody = ({
               }
             }}
           />
-        </div>
-        <p className="text-muted-foreground text-sm">
-          {t("billing.numberSeries.previewHelp")}
-        </p>
-        {query.isPending && (
-          <p className="text-muted-foreground text-sm">{t("common.loading")}</p>
-        )}
-        {query.error !== null && (
-          <div className="flex items-center justify-between gap-2">
-            <NumberSeriesRefusal error={query.error} />
-            <Button
-              variant="outline"
-              onClick={() => detached(query.refetch(), "number-series.retry")}
-            >
-              {t("common.retry")}
-            </Button>
-          </div>
-        )}
-        {mutation.error !== null && dialog.type === "closed" && (
-          <NumberSeriesRefusal error={mutation.error} />
-        )}
-        {query.isSuccess && seriesList.length === 0 && (
-          <p className="text-muted-foreground text-sm">
-            {t("billing.numberSeries.empty")}
-          </p>
-        )}
-        {seriesList.length > 0 && (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>{t("billing.numberSeries.name")}</TableHead>
-                <TableHead>{t("billing.numberSeries.documentType")}</TableHead>
-                <TableHead>{t("billing.numberSeries.pattern")}</TableHead>
-                <TableHead>{t("billing.numberSeries.preview")}</TableHead>
-                <TableHead>{t("common.actions")}</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {seriesList.map((series) => (
-                <TableRow key={series.id}>
-                  <TableCell>
-                    <BidiText>{series.name}</BidiText>
-                    {series.isDefault && (
-                      <p className="text-muted-foreground text-xs">
-                        {t("billing.numberSeries.default")}
-                      </p>
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    {t(DOCUMENT_TYPE_LABELS[series.documentType])}
-                  </TableCell>
-                  <TableCell>
-                    <BidiText>{series.pattern}</BidiText>
-                  </TableCell>
-                  <TableCell>
-                    {preview.type === "open" && preview.id === series.id ? (
-                      <NumberSeriesPreview
-                        organizationId={organizationId}
-                        id={series.id}
-                        date={date}
-                      />
-                    ) : (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() =>
-                          setPreview({ type: "open", id: series.id })
-                        }
-                      >
-                        {t("billing.numberSeries.preview")}
-                      </Button>
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex flex-wrap gap-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        disabled={mutation.isPending}
-                        onClick={() => open({ type: "edit", series })}
-                      >
-                        {t("common.edit")}
-                      </Button>
-                      {!series.isDefault && (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          disabled={mutation.isPending}
-                          onClick={() =>
-                            detached(
-                              run({ type: "default", id: series.id }),
-                              "number-series.default",
-                            )
-                          }
-                        >
-                          {t("billing.numberSeries.setDefault")}
-                        </Button>
-                      )}
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        disabled={mutation.isPending}
-                        onClick={() => open({ type: "archive", series })}
-                      >
-                        {t("common.archive")}
-                      </Button>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        )}
-        {query.hasNextPage && (
+        </>
+      }
+    >
+      {query.error !== null && (
+        <div className="flex items-center justify-between gap-2">
+          <NumberSeriesRefusal error={query.error} />
           <Button
             variant="outline"
-            disabled={query.isFetchingNextPage}
-            onClick={() =>
-              detached(query.fetchNextPage(), "number-series.load-more")
-            }
+            onClick={() => detached(query.refetch(), "number-series.retry")}
           >
-            {t("common.loadMore")}
+            {t("common.retry")}
           </Button>
-        )}
-        <Dialog
-          open={dialog.type !== "closed"}
-          onOpenChange={(isOpen) => {
-            if (!isOpen) {
-              close();
-            }
-          }}
+        </div>
+      )}
+      {mutation.error !== null && dialog.type === "closed" && (
+        <NumberSeriesRefusal error={mutation.error} />
+      )}
+      {query.isSuccess && seriesList.length === 0 && (
+        <p className="text-muted-foreground text-sm">
+          {t("billing.numberSeries.empty")}
+        </p>
+      )}
+      {(query.isPending || seriesList.length > 0) && (
+        <BillingSettingsTable
+          columns={NUMBER_SERIES_COLUMNS}
+          rows={
+            query.isPending
+              ? { type: "pending" }
+              : {
+                  type: "loaded",
+                  children: seriesList.map((series) => (
+                    <BillingSettingsRow
+                      key={series.id}
+                      columns={NUMBER_SERIES_COLUMNS}
+                      cells={{
+                        name: (
+                          <>
+                            <BidiText>{series.name}</BidiText>
+                            {series.isDefault && (
+                              <p className="text-muted-foreground text-xs">
+                                {t("billing.numberSeries.default")}
+                              </p>
+                            )}
+                          </>
+                        ),
+                        documentType: t(
+                          DOCUMENT_TYPE_LABELS[series.documentType],
+                        ),
+                        pattern: <BidiText>{series.pattern}</BidiText>,
+                        preview:
+                          preview.type === "open" &&
+                          preview.id === series.id ? (
+                            <NumberSeriesPreview
+                              organizationId={organizationId}
+                              id={series.id}
+                              date={date}
+                            />
+                          ) : (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() =>
+                                setPreview({ type: "open", id: series.id })
+                              }
+                            >
+                              {t("billing.numberSeries.preview")}
+                            </Button>
+                          ),
+                        actions: (
+                          <div className="flex flex-wrap gap-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              disabled={mutation.isPending}
+                              disabledReason={t("common.saving")}
+                              onClick={() => open({ type: "edit", series })}
+                            >
+                              {t("common.edit")}
+                            </Button>
+                            {!series.isDefault && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                disabled={mutation.isPending}
+                                disabledReason={t("common.saving")}
+                                onClick={() =>
+                                  detached(
+                                    run({ type: "default", id: series.id }),
+                                    "number-series.default",
+                                  )
+                                }
+                              >
+                                {t("billing.numberSeries.setDefault")}
+                              </Button>
+                            )}
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              disabled={mutation.isPending}
+                              disabledReason={t("common.archiving")}
+                              onClick={() => open({ type: "archive", series })}
+                            >
+                              {t("common.archive")}
+                            </Button>
+                          </div>
+                        ),
+                      }}
+                    />
+                  )),
+                }
+          }
+        />
+      )}
+      {query.hasNextPage && (
+        <Button
+          variant="outline"
+          disabled={query.isFetchingNextPage}
+          disabledReason={t("common.loading")}
+          onClick={() =>
+            detached(query.fetchNextPage(), "number-series.load-more")
+          }
         >
-          {dialog.type !== "closed" && (
-            <DialogPopup className="max-w-xl">
-              <DialogHeader>
-                <DialogTitle>
-                  {dialog.type === "create" && t("billing.numberSeries.add")}
-                  {dialog.type === "edit" && t("billing.numberSeries.edit")}
-                  {dialog.type === "archive" && t("common.archive")}
-                </DialogTitle>
-              </DialogHeader>
-              {mutation.error !== null && (
-                <DialogPanel>
-                  <NumberSeriesRefusal error={mutation.error} />
+          {t("common.loadMore")}
+        </Button>
+      )}
+      <Dialog
+        open={dialog.type !== "closed"}
+        onOpenChange={(isOpen) => {
+          if (!isOpen) {
+            close();
+          }
+        }}
+      >
+        {dialog.type !== "closed" && (
+          <DialogPopup className="max-w-xl">
+            <DialogHeader>
+              <DialogTitle>
+                {dialog.type === "create" && t("billing.numberSeries.add")}
+                {dialog.type === "edit" && t("billing.numberSeries.edit")}
+                {dialog.type === "archive" && t("common.archive")}
+              </DialogTitle>
+            </DialogHeader>
+            {mutation.error !== null && (
+              <DialogPanel>
+                <NumberSeriesRefusal error={mutation.error} />
+              </DialogPanel>
+            )}
+            {dialog.type === "archive" ? (
+              <>
+                <DialogPanel className="flex flex-col gap-4">
+                  <p className="text-sm">
+                    {t("billing.numberSeries.archiveConfirm")}
+                  </p>
+                  <BidiText>{dialog.series.name}</BidiText>
                 </DialogPanel>
-              )}
-              {dialog.type === "archive" ? (
-                <>
-                  <DialogPanel className="flex flex-col gap-4">
-                    <p className="text-sm">
-                      {t("billing.numberSeries.archiveConfirm")}
-                    </p>
-                    <BidiText>{dialog.series.name}</BidiText>
-                  </DialogPanel>
-                  <DialogFooter>
-                    <Button
-                      variant="outline"
-                      disabled={mutation.isPending}
-                      onClick={close}
-                    >
-                      {t("common.cancel")}
-                    </Button>
-                    <Button
-                      variant="destructive"
-                      disabled={mutation.isPending}
-                      onClick={() =>
-                        detached(
-                          run({ type: "archive", id: dialog.series.id }),
-                          "number-series.archive",
-                        )
-                      }
-                    >
-                      {t("common.archive")}
-                    </Button>
-                  </DialogFooter>
-                </>
-              ) : (
-                <NumberSeriesForm
-                  key={dialog.type === "edit" ? dialog.series.id : "new"}
-                  {...(dialog.type === "edit" ? { series: dialog.series } : {})}
-                  pending={mutation.isPending}
-                  onCancel={close}
-                  onSubmit={save}
-                />
-              )}
-            </DialogPopup>
-          )}
-        </Dialog>
-      </FramePanel>
-    </Frame>
+                <DialogFooter>
+                  <Button
+                    variant="outline"
+                    disabled={mutation.isPending}
+                    disabledReason={t("common.archiving")}
+                    onClick={close}
+                  >
+                    {t("common.cancel")}
+                  </Button>
+                  <Button
+                    variant="destructive"
+                    disabled={mutation.isPending}
+                    disabledReason={t("common.saving")}
+                    onClick={() =>
+                      detached(
+                        run({ type: "archive", id: dialog.series.id }),
+                        "number-series.archive",
+                      )
+                    }
+                  >
+                    {t("common.archive")}
+                  </Button>
+                </DialogFooter>
+              </>
+            ) : (
+              <NumberSeriesForm
+                key={dialog.type === "edit" ? dialog.series.id : "new"}
+                {...(dialog.type === "edit" ? { series: dialog.series } : {})}
+                pending={mutation.isPending}
+                onCancel={close}
+                onSubmit={save}
+              />
+            )}
+          </DialogPopup>
+        )}
+      </Dialog>
+    </NumberSeriesCardShell>
   );
 };

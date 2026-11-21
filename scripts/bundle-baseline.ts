@@ -1,28 +1,33 @@
-// Web bundle-size baseline guard.
+// Web bundle-size guard.
 //
-// The web app is a TanStack Start build: the client entry is a tiny bootstrap
-// that preloads a handful of shared vendor chunks (react, tanstack, editor),
-// and everything else is a lazy route/locale/worker chunk. What silently rots
-// is the SIZE of those chunks — a heavy dependency that escapes its
-// manualChunks bucket and lands in the entry (paid on every cold visit), or a
-// route chunk that quietly doubles. Typecheck and lint see none of it.
+// The web app is a TanStack Start build. The client entry is a tiny bootstrap;
+// what a cold visit really pays for is the Start manifest's `__root__`
+// preloads: the entry and the chunks it imports statically, the largest of
+// which (`vendor-tanstack`) carries the route tree and every route file. What
+// silently rots is that initial graph: a page or a dependency that lands in
+// it is paid on every cold visit, whichever page the visitor opened.
+// Typecheck and lint see none of it.
 //
-// This measures the gzipped size of every client JS asset, groups them the way
-// the build's manualChunks names them (apps/web/vite.config.ts), and guards a
-// committed baseline. Growth past the headroom is reported, never blocking: CI
-// annotates the grown groups and writes them to the job summary, and a nightly
-// run lists every group over budget. An improvement prompts a ratchet down.
+// --check blocks on the startup gates (scripts/bundle-startup-gates.ts): the
+// gzip of the initial chunks against the committed `initial` budget, the size
+// of the eager pending views against the committed `pending` total, page
+// code in the initial chunks, and pages a route loads outside its manifest
+// preloads. Worker-only groups appearing in
+// the main bundle block too, because their budget is exactly zero. The
+// duplicate-content guard (--check-duplicates) is a separate, blocking check:
+// a chunk that carries the same large block twice is a build defect, not
+// growth to weigh against a budget.
 //
-// Policy: ordinary size growth under --check is warning-only. Worker-only
-// groups appearing in the main bundle are blocking because their budget is
-// exactly zero. The duplicate-content guard (--check-duplicates) is a separate,
-// blocking check: a chunk that carries the same large block twice is a build
-// defect with a known fix, not growth to weigh against a budget.
+// The per-group gzip sizes, grouped the way apps/web/vite.config.ts's
+// manualChunks names them, are a report: the default mode prints them against
+// the committed numbers and scripts/perf-hotspots.ts ranks them. They do not
+// gate; the initial graph is the number that does.
 //
 // Modes:
 //   bun scripts/bundle-baseline.ts                    report groups + gzip sizes
-//   bun scripts/bundle-baseline.ts --write-baseline    regenerate the baseline
-//   bun scripts/bundle-baseline.ts --check             size budget (warns on growth; fails only when it cannot measure)
+//   bun scripts/bundle-baseline.ts --write-baseline    regenerate the groups, `initial` and `pending`
+//   bun --preload ./scripts/offline-network-preload.ts scripts/bundle-baseline.ts --check
+//                                                     startup gates + worker-only groups (blocking)
 //   bun scripts/bundle-baseline.ts --check-duplicates  duplicate-content guard (blocking)
 //   bun scripts/bundle-baseline.ts --self-test         prove the comparison logic fires
 //
@@ -34,24 +39,30 @@ import { panic } from "better-result";
 import {
   appendFileSync,
   existsSync,
-  mkdtempSync,
   readFileSync,
-  rmSync,
   writeFileSync,
 } from "node:fs";
-import { tmpdir } from "node:os";
 import path from "node:path";
 import * as v from "valibot";
 
 import { MCP_APPS } from "../packages/mcp-apps/src/manifest";
 import { BASELINE_PATHS } from "./baseline-paths";
+import { readStartupGraph } from "./bundle-startup-build";
+import {
+  evaluateStartup,
+  initialGzipBytes,
+  pendingLayer,
+  startupSummary,
+} from "./bundle-startup-gates";
 import { assertOfflineCheckPreload } from "./offline-check-startup";
 
 const SCRIPTS_DIR = import.meta.dir;
 const REPO_ROOT = path.resolve(SCRIPTS_DIR, "..");
 const BASELINE_REL = BASELINE_PATHS.bundle;
 const BASELINE_PATH = path.resolve(REPO_ROOT, BASELINE_REL);
-const ASSETS_REL = "apps/web/dist/client/assets";
+const DIST_REL = "apps/web/dist";
+const DIST_DIR = path.resolve(REPO_ROOT, DIST_REL);
+const ASSETS_REL = `${DIST_REL}/client/assets`;
 const ASSETS_DIR = path.resolve(REPO_ROOT, ASSETS_REL);
 const SCAN_ENGINE_WASM = path.resolve(
   REPO_ROOT,
@@ -59,16 +70,10 @@ const SCAN_ENGINE_WASM = path.resolve(
 );
 const WRITE_HINT = "bun scripts/bundle-baseline.ts --write-baseline";
 
-// A chunk may grow by up to this factor over its baseline before CI fails.
-// Content hashes churn, minifier output drifts release to release, and CI's
-// build inlines a slightly different `import.meta.env` than a developer's local
-// build (CI copies apps/web/.env.example; a dev .env may carry extra VITE_*
-// values). 3% absorbs that noise while still catching a real dependency leak.
+// The MCP app budgets (--mcp-apps) may grow by up to this factor over their
+// baseline before the check fails, or by HEADROOM_FLOOR_BYTES for a small
+// one. The report mode uses the same tolerance to mark a group as grown.
 const HEADROOM = 1.03;
-// For small chunks a percentage is too twitchy: the 1.2 KiB entry bootstrap
-// would fail on a single extra preload line (~30 bytes). Allow at least this
-// many bytes of absolute growth; a real dependency leak adds tens of KiB and
-// still trips the guard.
 const HEADROOM_FLOOR_BYTES = 1024;
 // Below this factor the win is worth locking in: prompt (do not fail) to
 // re-baseline so the lower size can never silently regress back up.
@@ -99,9 +104,9 @@ const VENDOR_GROUPS = [
   "vendor-base-ui",
 ] as const;
 
-// The full, fixed set of baseline keys. Keeping it fixed (rather than "whatever
+// The full, fixed set of group keys. Keeping it fixed (rather than "whatever
 // chunks happened to exist") gives the baseline a stable schema and makes a
-// newly-appearing vendor chunk a visible, guarded event.
+// newly-appearing vendor chunk a visible event in the report.
 const GROUP_KEYS = [
   "entry",
   "scan-engine-wasm",
@@ -126,7 +131,7 @@ const WORKER_ENTRY = "apps/web/src/workers/anonymize-chat-worker.ts";
 // Entry = the client bootstrap (`index-<hash>.js`, the __root__ script that
 // calls hydrateRoot) plus the Rolldown module runtime (`rolldown-runtime-<hash>
 // .js`) it imports. Both are loaded on every cold visit and are neither a
-// vendor chunk nor a route chunk. A heavy dep escaping manualChunks lands here.
+// vendor chunk nor a route chunk.
 const INDEX_RE = new RegExp(`^index-${HASH}\\.js$`, "u");
 const RUNTIME_RE = new RegExp(`^rolldown-runtime-${HASH}\\.js$`, "u");
 
@@ -277,6 +282,31 @@ const measure = (assetsDir: string): MeasureResult => {
 
 // --- Baseline IO ------------------------------------------------------------
 
+// Each field is read only by the modes that consume it, so a mode that
+// replaces one field never refuses to run over a damaged value of another.
+const readBaselineJson = (): unknown =>
+  existsSync(BASELINE_PATH)
+    ? JSON.parse(readFileSync(BASELINE_PATH, "utf-8"))
+    : {};
+
+const readMcpAppsBudgets = (): Record<string, number> | undefined =>
+  v.parse(
+    v.object({ mcpApps: v.optional(v.record(v.string(), v.number())) }),
+    readBaselineJson(),
+  ).mcpApps;
+
+const readInitialBudget = (): number | undefined =>
+  v.parse(
+    v.object({ initial: v.optional(v.pipe(v.number(), v.integer())) }),
+    readBaselineJson(),
+  ).initial;
+
+const readPendingTotal = (): number | undefined =>
+  v.parse(
+    v.object({ pending: v.optional(v.pipe(v.number(), v.integer())) }),
+    readBaselineJson(),
+  ).pending;
+
 // Copies every GROUP_KEYS value onto emptySizes' (alphabetical) literal, so
 // the written file's key set and order come from the one compiler-guarded
 // copy. A second spelled-out literal here once silently dropped keys the
@@ -289,10 +319,24 @@ const sortedSizes = (sizes: Sizes): Sizes => {
   return sorted;
 };
 
-const writeBaseline = (sizes: Sizes): void => {
+const writeBaseline = (
+  sizes: Sizes,
+  initial: number,
+  pending: number,
+): void => {
+  const mcpApps = readMcpAppsBudgets();
   writeFileSync(
     BASELINE_PATH,
-    `${JSON.stringify({ ...sortedSizes(sizes), ...readMcpBaselineField() }, null, 2)}\n`,
+    `${JSON.stringify(
+      {
+        initial,
+        pending,
+        ...sortedSizes(sizes),
+        ...(mcpApps === undefined ? {} : { mcpApps }),
+      },
+      null,
+      2,
+    )}\n`,
   );
 };
 
@@ -307,16 +351,7 @@ const readBaseline = (): Sizes => {
   return sizes;
 };
 
-const baselineExists = (): boolean => {
-  try {
-    readFileSync(BASELINE_PATH, "utf-8");
-    return true;
-  } catch {
-    return false;
-  }
-};
-
-// --- Comparison (the guarded logic the self-test exercises) -----------------
+// --- Comparison -------------------------------------------------------------
 
 type GroupStatus = "ok" | "regressed" | "dropped";
 
@@ -337,21 +372,6 @@ const compareGroup = (current: number, baseline: number): GroupStatus => {
   return "ok";
 };
 
-type GroupDiff = {
-  key: GroupKey;
-  status: GroupStatus;
-  current: number;
-  baseline: number;
-};
-
-const diffAll = (current: Sizes, baseline: Sizes): GroupDiff[] =>
-  GROUP_KEYS.map((key) => ({
-    key,
-    status: compareGroup(current[key], baseline[key]),
-    current: current[key],
-    baseline: baseline[key],
-  }));
-
 // --- Formatting -------------------------------------------------------------
 
 const kib = (bytes: number): string => `${(bytes / 1024).toFixed(1)} KiB`;
@@ -365,22 +385,6 @@ const pct = (current: number, baseline: number): string => {
   return `${sign}${delta.toFixed(1)}%`;
 };
 
-const perfMeaning = (key: GroupKey): string => {
-  if (key === "entry") {
-    return "the entry chunk is paid on every cold visit; a heavy dep leaking out of manualChunks into the entry is the classic cause";
-  }
-  if (key === "total") {
-    return "total client JS shipped across the app";
-  }
-  if (key === "vendor-tanstack-server-fn") {
-    return "the TanStack Start client runtime, loaded only by routes that call server functions";
-  }
-  if (key === "routes" || key === "largest-route") {
-    return "lazy route/locale/worker chunk weight, loaded on navigation";
-  }
-  return "a shared vendor chunk preloaded alongside the entry";
-};
-
 // --- Modes ------------------------------------------------------------------
 
 const runReport = (): number => {
@@ -389,7 +393,7 @@ const runReport = (): number => {
     console.error(measured.error);
     return 1;
   }
-  const hasBaseline = baselineExists();
+  const hasBaseline = existsSync(BASELINE_PATH);
   const baseline = hasBaseline ? readBaseline() : emptySizes();
 
   console.log(`bundle sizes (gzipped) — ${ASSETS_REL}\n`);
@@ -399,6 +403,18 @@ const runReport = (): number => {
       ? `  (baseline ${kib(baseline[key])}, ${pct(size, baseline[key])})`
       : "";
     console.log(`  ${key.padEnd(20)} ${kib(size).padStart(12)}${suffix}`);
+  }
+  // The group report reads no sourcemap; a build the startup graph cannot be
+  // read from still gets it, with the reason the initial line is missing.
+  const startup = readStartupGraph(DIST_DIR);
+  if (startup.ok) {
+    const budget = readInitialBudget();
+    const initial = initialGzipBytes(startup.graph);
+    console.log(
+      `  ${"initial".padEnd(20)} ${kib(initial).padStart(12)}${budget === undefined ? "" : `  (budget ${kib(budget)}, ${pct(initial, budget)})`}`,
+    );
+  } else {
+    console.log(`  ${"initial".padEnd(20)} unavailable: ${startup.error}`);
   }
   if (!hasBaseline) {
     console.log(`\nNo baseline yet. Seed one with \`${WRITE_HINT}\`.`);
@@ -412,8 +428,17 @@ const runWrite = (): number => {
     console.error(measured.error);
     return 1;
   }
-  writeBaseline(measured.sizes);
+  const startup = readStartupGraph(DIST_DIR);
+  if (!startup.ok) {
+    console.error(startup.error);
+    return 1;
+  }
+  const initial = initialGzipBytes(startup.graph);
+  const pending = pendingLayer(startup.graph).totalBytes;
+  writeBaseline(measured.sizes, initial, pending);
   console.log(`Wrote bundle baseline to ${BASELINE_REL}:`);
+  console.log(`  ${"initial".padEnd(20)} ${kib(initial).padStart(12)}`);
+  console.log(`  ${"pending".padEnd(20)} ${kib(pending).padStart(12)}`);
   for (const key of GROUP_KEYS) {
     console.log(`  ${key.padEnd(20)} ${kib(measured.sizes[key]).padStart(12)}`);
   }
@@ -426,52 +451,50 @@ const runCheck = (): number => {
     console.error(measured.error);
     return 1;
   }
-  if (!baselineExists()) {
+  const budget = readInitialBudget();
+  if (budget === undefined) {
     console.error(
-      `Missing ${BASELINE_REL}. Seed it with \`${WRITE_HINT}\` and commit it\n` +
-        "before enabling the check.",
+      `${BASELINE_REL} has no initial budget. Seed it with \`${WRITE_HINT}\` and commit it.`,
     );
     return 1;
   }
-  return checkSizeBudget(
-    measured.sizes,
-    readBaseline(),
-    process.env["GITHUB_STEP_SUMMARY"],
-    console.log,
+  const pending = readPendingTotal();
+  if (pending === undefined) {
+    console.error(
+      `${BASELINE_REL} has no pending total. Seed it with \`${WRITE_HINT}\` and commit it.`,
+    );
+    return 1;
+  }
+  const startup = readStartupGraph(DIST_DIR);
+  if (!startup.ok) {
+    console.error(startup.error);
+    return 1;
+  }
+  const workerOnly = checkWorkerOnlyGroups(measured.sizes, console.log);
+  const evaluation = evaluateStartup(
+    startup.graph,
+    { initial: budget, pending },
+    WRITE_HINT,
   );
-};
-
-// The size budget warns on ordinary growth, but enforces the worker boundary.
-const checkSizeBudget = (
-  sizes: Sizes,
-  baseline: Sizes,
-  summaryPath: string | undefined,
-  log: (line: string) => void,
-): number => {
-  if (checkWorkerOnlyGroups(sizes, log) !== 0) {
+  const summary = startupSummary(evaluation);
+  console.log(summary);
+  const summaryPath = process.env["GITHUB_STEP_SUMMARY"];
+  if (summaryPath !== undefined && summaryPath !== "") {
+    appendFileSync(summaryPath, summary);
+  }
+  for (const notice of evaluation.notices) {
+    console.log(`::notice title=Startup bundle::${notice}`);
+  }
+  for (const { title, message } of evaluation.failures) {
+    console.log(`::error title=${title}::${message}`);
+  }
+  if (workerOnly !== 0 || evaluation.failures.length > 0) {
     return 1;
   }
-  const diffs = diffAll(sizes, baseline);
-  const regressions = diffs.filter((d) => d.status === "regressed");
-  const drops = diffs.filter((d) => d.status === "dropped");
-
-  for (const d of drops) {
-    log(
-      `bundle: ${d.key} shrank ${kib(d.baseline)} -> ${kib(d.current)} ` +
-        `(${pct(d.current, d.baseline)}). Nice — run \`${WRITE_HINT}\` and ` +
-        `commit ${BASELINE_REL} to ratchet it down.`,
-    );
-  }
-
-  if (regressions.length === 0) {
-    log(
-      `bundle --check: OK. ${GROUP_KEYS.length} group(s) within ` +
-        `${Math.round((HEADROOM - 1) * 100)}% of baseline.`,
-    );
-    return 0;
-  }
-
-  return reportRegressions(regressions, summaryPath, log);
+  console.log(
+    `bundle --check: OK. Initial JS ${kib(evaluation.initial.measured)} gzip against a ${kib(budget)} budget; no new page code at startup.`,
+  );
+  return 0;
 };
 
 export const checkWorkerOnlyGroups = (
@@ -530,68 +553,11 @@ const checkDuplicates = (
   return 1;
 };
 
-// Growth past the headroom is reported, never blocking: an annotation per
-// group, the console detail, and a job-summary table when a path is given.
-const reportRegressions = (
-  regressions: readonly GroupDiff[],
-  summaryPath: string | undefined,
-  log: (line: string) => void,
-): number => {
-  const headroom = `${Math.round((HEADROOM - 1) * 100)}%`;
-  log(
-    `\nbundle --check: chunk group(s) grew past the ${headroom} headroom ` +
-      "(warning only):\n",
-  );
-  for (const d of regressions) {
-    const growth = `${kib(d.baseline)} -> ${kib(d.current)} (+${kib(d.current - d.baseline)}, ${pct(d.current, d.baseline)})`;
-    log(`  ${d.key}: ${growth}`);
-    log(`      ${perfMeaning(d.key)}.`);
-    log(
-      `::warning title=Bundle size: ${d.key}::${d.key} grew ${growth} over the ${headroom} headroom.`,
-    );
-  }
-  log(
-    "\nFind what grew (run `ANALYZE=1 bun --filter @stll/web build` for the\n" +
-      "visualizer treemap) and trim it, or re-measure with\n" +
-      `\`${WRITE_HINT}\` and commit ${BASELINE_REL} with a rationale.`,
-  );
-  writeSummary(regressions, headroom, summaryPath);
-  return 0;
-};
-
-// The job summary lists the grown groups so the run page shows them without
-// reading the log.
-const writeSummary = (
-  regressions: readonly GroupDiff[],
-  headroom: string,
-  summaryPath: string | undefined,
-): void => {
-  if (summaryPath === undefined || summaryPath === "") {
-    return;
-  }
-  const rows = regressions.map(
-    (d) =>
-      `| ${d.key} | ${kib(d.baseline)} | ${kib(d.current)} | +${kib(d.current - d.baseline)} | ${pct(d.current, d.baseline)} |`,
-  );
-  appendFileSync(
-    summaryPath,
-    [
-      `### Bundle groups over the ${headroom} headroom`,
-      "",
-      "| Group | Baseline | Current | Growth | Change |",
-      "| --- | ---: | ---: | ---: | ---: |",
-      ...rows,
-      "",
-      `Re-measure with \`${WRITE_HINT}\` once the growth is understood.`,
-      "",
-    ].join("\n"),
-  );
-};
-
 // --- Self-test --------------------------------------------------------------
-// Prove the two load-bearing pieces: filenames classify into the right group,
-// and the comparison fires on an over-budget group while ignoring hash-churn
-// noise within the headroom. No build required — pure synthetic inputs.
+// Prove the load-bearing pieces without a build: filenames classify into the
+// right group, the MCP app comparison fires on an over-budget app while
+// ignoring hash-churn noise within the headroom, and the duplicate guard
+// fires. The startup gates have their own tests (bundle-startup-*.test.ts).
 
 const runSelfTest = (): number => {
   const failures: string[] = [];
@@ -643,56 +609,15 @@ const runSelfTest = (): number => {
   expectStatus("over-budget", 110_000, 100_000, "regressed");
   // Within the 3% headroom (hash/minor churn) must pass.
   expectStatus("within-headroom", 102_000, 100_000, "ok");
-  // Tiny chunks get an absolute byte floor: +30 bytes on a 1.2 KiB entry is
-  // churn, not a leak; a KiB-scale jump past the floor still fails.
+  // Tiny budgets get an absolute byte floor: +30 bytes on 1.2 KiB is churn;
+  // a KiB-scale jump past the floor still fails.
   expectStatus("tiny-within-floor", 1276, 1246, "ok");
   expectStatus("tiny-past-floor", 2400, 1246, "regressed");
   // A real shrink is a ratchet-down prompt, not a failure.
   expectStatus("shrank", 90_000, 100_000, "dropped");
-  // A tracked group that was 0 (worker-only) leaking bytes into the client
-  // graph must be flagged.
+  // A budget that was 0 gaining bytes must be flagged.
   expectStatus("new-chunk", 5000, 0, "regressed");
   expectStatus("still-absent", 0, 0, "ok");
-
-  // The whole-report diff must surface exactly the over-budget group.
-  const baseline: Sizes = { ...emptySizes(), entry: 100_000, total: 500_000 };
-  const current: Sizes = { ...baseline, entry: 120_000 };
-  const regressed = diffAll(current, baseline).filter(
-    (d) => d.status === "regressed",
-  );
-  if (regressed.length !== 1 || regressed[0]?.key !== "entry") {
-    failures.push(
-      `diffAll did not isolate the over-budget group (got ${regressed
-        .map((d) => d.key)
-        .join(", ")})`,
-    );
-  }
-
-  // Over-budget growth is reported without failing, and the summary names it.
-  const summaryDir = mkdtempSync(path.join(tmpdir(), "bundle-summary-"));
-  const summaryFile = path.join(summaryDir, "summary.md");
-  writeFileSync(summaryFile, "");
-  const reported: string[] = [];
-  const exitCode = reportRegressions(regressed, summaryFile, (line) => {
-    reported.push(line);
-  });
-  const summary = readFileSync(summaryFile, "utf-8");
-  rmSync(summaryDir, { recursive: true, force: true });
-  if (exitCode !== 0) {
-    failures.push(`reportRegressions exited ${exitCode}, want 0`);
-  }
-  if (
-    !reported.some((line) =>
-      line.startsWith("::warning title=Bundle size: entry::"),
-    )
-  ) {
-    failures.push("reportRegressions did not annotate the grown group");
-  }
-  if (!summary.includes("| entry |") || !summary.includes("headroom")) {
-    failures.push(
-      "reportRegressions did not write the grown group to the summary",
-    );
-  }
 
   // A chunk carrying one large block twice must be flagged; distinct content
   // of the same size must not be.
@@ -734,31 +659,6 @@ const runSelfTest = (): number => {
     failures.push("checkDuplicates failed without a repeated block");
   }
 
-  // Size overage alone only warns: the size budget exits 0 however far a
-  // group is over, and says so as a warning, never an error.
-  const overSizes: Sizes = { ...emptySizes(), entry: 100_000, total: 500_000 };
-  const overCurrent: Sizes = { ...overSizes, entry: 300_000, total: 900_000 };
-  const budgetLines: string[] = [];
-  const budgetExit = checkSizeBudget(
-    overCurrent,
-    overSizes,
-    undefined,
-    (line) => {
-      budgetLines.push(line);
-    },
-  );
-  if (budgetExit !== 0) {
-    failures.push(`checkSizeBudget exited ${budgetExit} on overage, want 0`);
-  }
-  if (
-    !budgetLines.some((line) =>
-      line.startsWith("::warning title=Bundle size: total::"),
-    ) ||
-    budgetLines.some((line) => line.startsWith("::error"))
-  ) {
-    failures.push("checkSizeBudget did not report overage as a warning only");
-  }
-
   if (failures.length > 0) {
     console.error("bundle --self-test: FAIL");
     for (const f of failures) {
@@ -772,17 +672,6 @@ const runSelfTest = (): number => {
 
 // MCP resources are complete HTML documents, so their budgets include fonts,
 // styles, catalogues and JavaScript rather than only JavaScript chunk weight.
-const readMcpBaselineField = () => {
-  if (!existsSync(BASELINE_PATH)) {
-    return {};
-  }
-  const baseline = v.parse(
-    v.object({ mcpApps: v.optional(v.record(v.string(), v.number())) }),
-    JSON.parse(readFileSync(BASELINE_PATH, "utf-8")),
-  );
-  return baseline.mcpApps === undefined ? {} : { mcpApps: baseline.mcpApps };
-};
-
 const runMcpApps = (): number => {
   const measured = new Map(
     MCP_APPS.map(({ directory }) => {
@@ -798,7 +687,7 @@ const runMcpApps = (): number => {
       return [directory, gzipSize(file)] as const;
     }),
   );
-  const field = readMcpBaselineField();
+  const budgets = readMcpAppsBudgets();
   if (process.argv.includes("--write-baseline")) {
     const baseline = v.parse(
       v.record(v.string(), v.unknown()),
@@ -811,7 +700,7 @@ const runMcpApps = (): number => {
     console.log(`Wrote ${measured.size} MCP app budgets to ${BASELINE_REL}`);
     return 0;
   }
-  const baseline = new Map(Object.entries(field.mcpApps ?? {}));
+  const baseline = new Map(Object.entries(budgets ?? {}));
   let regressions = 0;
   for (const [directory, size] of measured) {
     const previous = baseline.get(directory);

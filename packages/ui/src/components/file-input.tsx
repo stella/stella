@@ -13,6 +13,7 @@ type FileInputProps = {
   "aria-labelledby"?: string | undefined;
   className?: string | undefined;
   disabled?: boolean | undefined;
+  disabledReason?: string | undefined;
   file: File | null;
   onFileChange: (file: File) => void;
   chooseLabel: string;
@@ -29,6 +30,7 @@ const FileInput = ({
   "aria-labelledby": labelledBy,
   className,
   disabled,
+  disabledReason,
   file,
   onFileChange,
   chooseLabel,
@@ -45,6 +47,7 @@ const FileInput = ({
         aria-labelledby={labelledBy ? `${labelledBy} ${triggerId}` : undefined}
         data-slot="file-input-trigger"
         disabled={disabled}
+        disabledReason={disabledReason}
         id={triggerId}
         onClick={() =>
           openFilePicker({

@@ -27,6 +27,28 @@ const fixture = () => {
   };
   write("README.md");
   write(
+    "package.json",
+    JSON.stringify({ workspaces: ["apps/*", "packages/*"] }),
+  );
+  write(
+    "apps/web/package.json",
+    JSON.stringify({
+      name: "@stll/web",
+      dependencies: { "@stll/bundled": "workspace:*" },
+      devDependencies: { "@stll/test-kit": "workspace:*" },
+    }),
+  );
+  for (const name of ["bundled", "test-kit"]) {
+    write(
+      `packages/${name}/package.json`,
+      JSON.stringify({
+        name: `@stll/${name}`,
+        exports: { ".": "./src/index.ts" },
+      }),
+    );
+    write(`packages/${name}/src/index.ts`, "export const value = 1;\n");
+  }
+  write(
     "apps/web/e2e/playwright.config.ts",
     'export default { testDir: "./specs" };\n',
   );
@@ -196,6 +218,23 @@ test.each([
       specs: [],
       suiteSpecs: [],
     });
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("a bundled workspace package selects every shard; a dev-only one none", () => {
+  const { root } = fixture();
+  try {
+    expect(selectedE2ePlan(["packages/bundled/src/index.ts"], root)).toEqual({
+      status: "full",
+      matrix: allE2eMatrix(),
+      specs: [],
+      suiteSpecs: [],
+    });
+    expect(selectE2eSpecs(["packages/test-kit/src/index.ts"], root)).toEqual(
+      [],
+    );
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
@@ -412,6 +451,25 @@ test("a route-smoke-only PR runs only the dedicated network leg", () => {
       specs: [],
       suiteSpecs: [],
     });
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("shipped web source selects every production leg; its unit tests none", () => {
+  const { root, write } = fixture();
+  try {
+    const component = "apps/web/src/components/chat/rename.tsx";
+    const unitTest = "apps/web/src/components/chat/rename.dom.test.tsx";
+    write(component, "export const Rename = () => null;\n");
+    write(unitTest, 'import "./rename";\n');
+    expect(selectedE2ePlan([component], root)).toEqual({
+      status: "full",
+      matrix: allE2eMatrix(),
+      specs: [],
+      suiteSpecs: [],
+    });
+    expect(selectedE2ePlan([unitTest], root).matrix.shard).not.toContain(1);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

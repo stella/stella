@@ -148,18 +148,23 @@ A release is proved on the release branch before production changes. Its RC and
 final tags point at the same commit; the final release promotes the images built
 by the RC run.
 
-1. Start with a clean checkout of `main`, green CI, and reviewed migrations.
-   Run `bun run marketing:stale`; `bun run marketing:reshoot` re-records stale
-   captures (see `apps/landing/public/media/products/README.md`).
+1. Start with a clean checkout of a commit on `main`, green CI, and reviewed
+   migrations. Run `bun run marketing:stale`; `bun run marketing:reshoot`
+   re-records stale captures (see
+   `apps/landing/public/media/products/README.md`).
 2. Run `bun run release:maintenance`. It derives the next patch version from
    the newest final `vX.Y.Z` tag, applies pending changesets, writes `VERSION`
    and `docs/changelog/vX.Y.Z.md`, moves the desktop support floor (see
    [Desktop Support](#desktop-support)), creates one release commit on
    `release/vX.Y.Z`, and opens `chore: release vX.Y.Z` into `main`. An earlier
-   open release pull request blocks another cut. The command runs the existing
-   pre-cut heavy, dependency-audit, npm-publish-lag, deploy-env-contract and
-   desktop-support-floor gates before writing. The heavy gate passes when
-   `main/heavy` and `main/pr-depth` are green on the base commit. When neither
+   open release pull request blocks another cut. The cut runs on any commit on
+   the fetched `main`'s first-parent history, not only its tip: check out the
+   newest one with green `main/heavy` and `main/pr-depth`, and later merges
+   wait for the next release. Any other commit is refused. The command runs
+   the existing pre-cut heavy, dependency-audit, npm-publish-lag,
+   deploy-env-contract and desktop-support-floor gates before writing. The
+   heavy gate passes when `main/heavy` and `main/pr-depth` are green on the
+   base commit. When neither
    has failed there, it also accepts the proof the release health check applies
    to `main` commits that carry no release-candidate tag: a merge-group receipt
    that `scripts/check-release-receipt-coverage.sh` reports as covering them.
@@ -245,15 +250,19 @@ range from that merge base.
 A pull request that changes `VERSION` or migrations also runs
 `migration-upgrade-rehearsal`: it starts with the schema of the release
 production currently serves, fills registered high-volume tables with
-scale-shaped rows, runs this commit's migration entrypoint under a budget,
-reruns it, and checks schema parity. It then boots that served release's own
-API image against the upgraded database and requires readiness within 120
-seconds: production keeps serving it, and keeps replacing its tasks, until the
-candidate rolls out, so a release's migrations must stay compatible with the
-previous release's startup checks (expand first, contract in a later release).
-A refusal fails the job naming the startup check that refused and the
-migrations this commit applied. Its summary records the base release and
-timings. `scripts/rehearse-migration-upgrade.sh` runs the rehearsal locally
+scale-shaped rows, and follows a deploy's order under a budget. It runs this
+commit's `migrate --online=finalized` (schema migrations and finalized online
+entries), then boots that served release's own API image against the upgraded
+database and requires readiness within 120 seconds: production keeps serving
+it, and keeps replacing its tasks, until the candidate rolls out, so what a
+deploy runs before its rollout must stay compatible with the previous
+release's startup checks (expand first; contract in a later release, or in a
+pending online entry). A refusal fails the job naming the startup check that
+refused and the migrations this commit applied. It then runs the pending
+online drain (`db:drain-pending-online`), which a deploy starts only after its
+rollout, reruns the full migration entrypoint to prove a fixed point with
+every online repair checked, and checks schema parity. Its summary records the
+base release and timings. `scripts/rehearse-migration-upgrade.sh` runs the rehearsal locally
 against an empty database.
 
 The CLI coupling gate refuses a pending changeset naming `@stll/cli`, a CLI

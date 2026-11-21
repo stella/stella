@@ -21,14 +21,29 @@
     "subject": "{documentType, select, credit_note {Kredītrēķins} advance {Avansa rēķins} other {Rēķins}} {invoiceNumber}, sūtītājs {firmName}"
   },
   "newDeviceLogin": {
-    "action": "Pārskatīt sesijas",
-    "body": "Jūsu kontā tika pieteicies no jaunas ierīces vai atrašanās vietas.",
+    "action": "Pārskatīt pieslēgtās ierīces",
+    "actionNote": "Poga atver Iestatījumi › Drošība tieši pie šīs pieslēgšanās.",
+    "body": "Jūsu kontam tikko kāds pieslēdzās no jaunas ierīces vai atrašanās vietas.",
     "device": "Ierīce",
-    "heading": "Konstatēta jauna pieteikšanās",
-    "ignore": "Ja tas bijāt jūs, nekāda darbība nav nepieciešama. Ja neatpazīstat šo darbību, pārskatiet savas aktīvās sesijas un atsauciet tās, kuras neatpazīstat.",
+    "deviceName": {
+      "browserOnOs": "{browser} operētājsistēmā {os}",
+      "unknown": "Nezināma ierīce"
+    },
+    "heading": "Jauna pieslēgšanās jūsu kontam",
+    "ignore": "Ja tas bijāt jūs, nekas nav jādara. Ja neatpazīstat šo pieslēgšanos, atslēdziet šo ierīci.",
     "ipAddress": "IP adrese",
-    "preview": "Jauna pieteikšanās no {device}",
-    "subject": "Jauna pieteikšanās jūsu stella kontā",
+    "ipAddressUnknown": "Nezināma",
+    "location": "Atrašanās vieta",
+    "mapAlt": "Karte ar aptuveno pieteikšanās vietu: {location}",
+    "place": {
+      "cityCountry": "{city}, {country}",
+      "cityRegionCountry": "{city}, {region}, {country}",
+      "regionCountry": "{region}, {country}"
+    },
+    "placeApproximate": "{place} (aptuveni)",
+    "preview": "Jauna pieslēgšanās no {device}",
+    "previewUnknownDevice": "Jauna pieslēgšanās no nezināmas ierīces",
+    "subject": "Jauna pieslēgšanās jūsu stella kontam",
     "time": "Laiks"
   },
   "otp": {

@@ -10,6 +10,7 @@ import {
 } from "bun:test";
 import { eq } from "drizzle-orm";
 
+import { markdownToStellaDocx } from "@stll/docx-authoring/markdown";
 import {
   FolioDocxReviewer,
   isFolioAIContentBlock,
@@ -23,7 +24,6 @@ import { createAutoApplySuggestChangesTools } from "@/api/handlers/chat/tools/au
 import { SUGGEST_CHANGES_TOOL_NAME } from "@/api/handlers/chat/tools/folio-agent-tools";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
-import { markdownToStellaDocx } from "@/api/lib/docx-authoring/from-markdown";
 import type { createEntityVersionFromBuffer } from "@/api/lib/entity-versions/create-entity-version-from-buffer";
 import type { ScanResult } from "@/api/lib/file-scan/types";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";

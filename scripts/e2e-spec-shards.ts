@@ -20,6 +20,7 @@ import {
   isPlaywrightTestFile,
   listE2eSpecs,
 } from "./e2e-spec-shards-core";
+import { productionWebSource } from "./production-e2e-inputs.mjs";
 
 export { E2E_SHARD_COUNT, listE2eSpecs } from "./e2e-spec-shards-core";
 // Runner configuration and global setup load every spec without being imported.
@@ -50,7 +51,16 @@ const selectE2eSpecPlan = (
 ): E2eSpecSelection => {
   const specs = listE2eSpecs(root);
   // Missing inputs and graph uncertainty cannot prove a shard is unaffected.
-  if (changedFiles.some((file) => !existsSync(path.join(root, file)))) {
+  // Shipped web source, the app's own or a bundled workspace package's,
+  // reaches the specs through the built app, outside their import graphs.
+  const shipped = Result.try(() =>
+    changedFiles.some(
+      (file) =>
+        !existsSync(path.join(root, file)) ||
+        productionWebSource(file, path.resolve(root)),
+    ),
+  );
+  if (shipped.isErr() || shipped.value) {
     return { status: "all" };
   }
   const runnerInputs = Result.try(() => e2eRunnerInputs(root));

@@ -239,13 +239,18 @@ export const NumberSeriesForm = ({
       <DialogFooter>
         <Button
           disabled={disabled}
+          disabledReason={t("common.saving")}
           type="button"
           variant="outline"
           onClick={onCancel}
         >
           {t("common.cancel")}
         </Button>
-        <Button disabled={disabled} type="submit">
+        <Button
+          disabled={disabled}
+          disabledReason={t("common.saving")}
+          type="submit"
+        >
           {t("common.save")}
         </Button>
       </DialogFooter>

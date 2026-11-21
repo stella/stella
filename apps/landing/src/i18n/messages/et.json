@@ -777,6 +777,7 @@
       }
     },
     "ui": {
+      "browseLaw": "Sirvi avalikku õigusandmebaasi",
       "capabilities": "Võimalused",
       "exploreMore": "Avasta veel",
       "faq": "KKK",

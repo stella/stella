@@ -1,3 +1,4 @@
+// parser-output-unchanged: the cz-ns-sbirka adapter entry is new; existing adapters read only their own keys, so their parsed output is unchanged.
 // parser-output-unchanged: the br-tjdft adapter entry is new; existing adapters read only their own keys, so their parsed output is unchanged.
 // parser-output-unchanged: the TST adapter entry is new; existing adapters read only their own keys, so their parsed output is unchanged.
 // parser-output-unchanged: Registers the NSS publisher-reference URL schema; other adapters retain their own schemas.
@@ -12,6 +13,7 @@ import { PL_NSA_METADATA_URL_SCHEMA } from "@/api/handlers/case-law/ingestion/ad
 import { PL_TK_METADATA_URL_SCHEMA } from "@/api/handlers/case-law/ingestion/adapters/pl-tk.metadata-urls";
 import { PL_UOKIK_METADATA_URL_SCHEMA } from "@/api/handlers/case-law/ingestion/adapters/pl-uokik.metadata-urls";
 import { SK_COURTS_METADATA_URL_SCHEMA } from "@/api/handlers/case-law/ingestion/adapters/sk-courts.metadata-urls";
+import { CZ_NS_COLLECTION_METADATA_URL_SCHEMA } from "@/api/lib/legal-search/cz-ns-collection-entry";
 import {
   ADAPTER_KEYS,
   type AdapterKey,
@@ -59,6 +61,8 @@ export const METADATA_URL_SCHEMAS = {
   [ADAPTER_KEYS.PL_UODO]: undefined,
   [ADAPTER_KEYS.PL_UOKIK]: PL_UOKIK_METADATA_URL_SCHEMA,
   [ADAPTER_KEYS.BR_TJDFT]: undefined,
+  [ADAPTER_KEYS.CZ_NS_SBIRKA]: CZ_NS_COLLECTION_METADATA_URL_SCHEMA,
+  [ADAPTER_KEYS.CZ_ISIR]: undefined,
   [ADAPTER_KEYS.CZ_UOHS]: CZ_UOHS_METADATA_URL_SCHEMA,
   [ADAPTER_KEYS.BR_TST]: undefined,
   [IMPORT_SOURCE_KEYS.COURTLISTENER]: undefined,

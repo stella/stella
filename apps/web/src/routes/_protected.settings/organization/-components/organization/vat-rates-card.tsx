@@ -15,15 +15,6 @@ import {
   DialogPopup,
   DialogTitle,
 } from "@stll/ui/dialog";
-import { Frame, FramePanel } from "@stll/ui/frame";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@stll/ui/table";
 
 import { usePermissions } from "@/hooks/use-permissions";
 import { useTimeBillingPreviewEnabled } from "@/hooks/use-time-billing-preview";
@@ -41,6 +32,10 @@ import type {
   VatRateInput,
 } from "@/lib/organization/vat-rates";
 import {
+  VAT_RATE_COLUMNS,
+  VatRatesCardShell,
+} from "@/routes/_protected.settings/-organization.vat-rates.pending";
+import {
   VatRateDate,
   VatRatePercentage,
   VatRateRefusal,
@@ -49,6 +44,11 @@ import {
 import { VatRateForm } from "@/routes/_protected.settings/organization/-components/organization/vat-rate-form";
 import { presetResultWhenCommandStarts } from "@/routes/_protected.settings/organization/-components/organization/vat-rates-card.logic";
 import { useSettingsMutation } from "@/routes/_protected.settings/organization/-hooks/use-settings-mutation";
+
+import {
+  BillingSettingsRow,
+  BillingSettingsTable,
+} from "./billing-settings-table.pending";
 
 type RateDialog =
   | { type: "closed" }
@@ -140,230 +140,223 @@ const VatRatesCardBody = ({ organizationId }: { organizationId: string }) => {
   };
 
   return (
-    <Frame>
-      <FramePanel className="flex flex-col gap-4">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <p className="text-muted-foreground text-sm">
-              {t("billing.vatRates.description")}
-            </p>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <Button
-              variant="outline"
-              disabled={mutation.isPending}
-              onClick={() =>
-                detached(
-                  run({ type: "applyPreset", country: "SK" }),
-                  "vat-rates.preset-sk",
-                )
-              }
-            >
-              {t("billing.vatRates.addSlovakia")}
-            </Button>
-            <Button
-              variant="outline"
-              disabled={mutation.isPending}
-              onClick={() =>
-                detached(
-                  run({ type: "applyPreset", country: "CZ" }),
-                  "vat-rates.preset-cz",
-                )
-              }
-            >
-              {t("billing.vatRates.addCzechia")}
-            </Button>
-            <Button
-              onClick={() => open({ type: "create" })}
-              disabled={mutation.isPending}
-            >
-              {t("billing.vatRates.add")}
-            </Button>
-          </div>
-        </div>
-        {presetResult !== null && (
-          <p className="text-muted-foreground text-sm" role="status">
-            {t("billing.vatRates.presetResult", {
-              added: String(presetResult.added),
-              skipped: String(presetResult.skipped),
-            })}
-          </p>
-        )}
-        {query.isPending && (
-          <p className="text-muted-foreground text-sm">{t("common.loading")}</p>
-        )}
-        {query.error !== null && (
-          <div className="flex items-center justify-between gap-2">
-            <VatRateRefusal error={query.error} />
-            <Button
-              variant="outline"
-              onClick={() => detached(query.refetch(), "vat-rates.retry")}
-            >
-              {t("common.retry")}
-            </Button>
-          </div>
-        )}
-        {mutation.error !== null && dialog.type === "closed" && (
-          <VatRateRefusal error={mutation.error} />
-        )}
-        {query.isSuccess && rates.length === 0 && (
-          <p className="text-muted-foreground text-sm">
-            {t("billing.vatRates.empty")}
-          </p>
-        )}
-        {rates.length > 0 && (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="max-sm:hidden">
-                  {t("billing.vatRates.code")}
-                </TableHead>
-                <TableHead>{t("billing.vatRates.name")}</TableHead>
-                <TableHead>{t("billing.vatRates.rate")}</TableHead>
-                <TableHead className="max-sm:hidden">
-                  {t("billing.vatRates.validFrom")}
-                </TableHead>
-                <TableHead className="max-sm:hidden">
-                  {t("billing.vatRates.validTo")}
-                </TableHead>
-                <TableHead>{t("common.actions")}</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {rates.map((rate) => (
-                <TableRow key={rate.id}>
-                  <TableCell className="max-sm:hidden">
-                    <BidiText>{rate.code}</BidiText>
-                  </TableCell>
-                  <TableCell>
-                    <BidiText>{rate.name}</BidiText>
-                    <p className="text-muted-foreground text-xs">
-                      {t(statusLabels[vatRateStatus({ rate, date: today })])}
-                    </p>
-                    {/* Narrow screens hide the secondary columns; their values
-                    stay readable here so the actions column fits on screen. */}
-                    <DetailsGrid className="mt-1 sm:hidden">
-                      <DetailsItem label={t("billing.vatRates.code")}>
-                        <BidiText>{rate.code}</BidiText>
-                      </DetailsItem>
-                      <DetailsItem label={t("billing.vatRates.validFrom")}>
-                        <VatRateDate date={rate.validFrom} />
-                      </DetailsItem>
-                      <DetailsItem label={t("billing.vatRates.validTo")}>
-                        <VatRateDate date={rate.validTo} />
-                      </DetailsItem>
-                    </DetailsGrid>
-                  </TableCell>
-                  <TableCell>
-                    <VatRatePercentage rateBps={rate.rateBps} />
-                  </TableCell>
-                  <TableCell className="max-sm:hidden">
-                    <VatRateDate date={rate.validFrom} />
-                  </TableCell>
-                  <TableCell className="max-sm:hidden">
-                    <VatRateDate date={rate.validTo} />
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex flex-wrap gap-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        disabled={mutation.isPending}
-                        onClick={() => open({ type: "edit", rate })}
-                      >
-                        {t("common.edit")}
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        disabled={mutation.isPending}
-                        onClick={() => open({ type: "archive", rate })}
-                      >
-                        {t("common.archive")}
-                      </Button>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        )}
-        {query.hasNextPage && (
+    <VatRatesCardShell
+      actions={
+        <>
           <Button
             variant="outline"
-            disabled={query.isFetchingNextPage}
+            disabled={mutation.isPending}
+            disabledReason={t("common.saving")}
             onClick={() =>
-              detached(query.fetchNextPage(), "vat-rates.load-more")
+              detached(
+                run({ type: "applyPreset", country: "SK" }),
+                "vat-rates.preset-sk",
+              )
             }
           >
-            {t("common.loadMore")}
+            {t("billing.vatRates.addSlovakia")}
           </Button>
-        )}
-        <Dialog
-          open={dialog.type !== "closed"}
-          onOpenChange={(isOpen) => {
-            if (!isOpen) {
-              close();
+          <Button
+            variant="outline"
+            disabled={mutation.isPending}
+            disabledReason={t("common.saving")}
+            onClick={() =>
+              detached(
+                run({ type: "applyPreset", country: "CZ" }),
+                "vat-rates.preset-cz",
+              )
             }
-          }}
+          >
+            {t("billing.vatRates.addCzechia")}
+          </Button>
+          <Button
+            onClick={() => open({ type: "create" })}
+            disabled={mutation.isPending}
+            disabledReason={t("common.saving")}
+          >
+            {t("billing.vatRates.add")}
+          </Button>
+        </>
+      }
+    >
+      {presetResult !== null && (
+        <p className="text-muted-foreground text-sm" role="status">
+          {t("billing.vatRates.presetResult", {
+            added: String(presetResult.added),
+            skipped: String(presetResult.skipped),
+          })}
+        </p>
+      )}
+      {query.error !== null && (
+        <div className="flex items-center justify-between gap-2">
+          <VatRateRefusal error={query.error} />
+          <Button
+            variant="outline"
+            onClick={() => detached(query.refetch(), "vat-rates.retry")}
+          >
+            {t("common.retry")}
+          </Button>
+        </div>
+      )}
+      {mutation.error !== null && dialog.type === "closed" && (
+        <VatRateRefusal error={mutation.error} />
+      )}
+      {query.isSuccess && rates.length === 0 && (
+        <p className="text-muted-foreground text-sm">
+          {t("billing.vatRates.empty")}
+        </p>
+      )}
+      {(query.isPending || rates.length > 0) && (
+        <BillingSettingsTable
+          columns={VAT_RATE_COLUMNS}
+          rows={
+            query.isPending
+              ? { type: "pending", rowClassName: "max-sm:h-30" }
+              : {
+                  type: "loaded",
+                  children: rates.map((rate) => (
+                    <BillingSettingsRow
+                      key={rate.id}
+                      columns={VAT_RATE_COLUMNS}
+                      cells={{
+                        code: <BidiText>{rate.code}</BidiText>,
+                        name: (
+                          <>
+                            <BidiText>{rate.name}</BidiText>
+                            <p className="text-muted-foreground text-xs">
+                              {t(
+                                statusLabels[
+                                  vatRateStatus({ rate, date: today })
+                                ],
+                              )}
+                            </p>
+                            {/* Narrow screens show the secondary columns' values
+                              here so the actions column fits on screen. */}
+                            <DetailsGrid className="mt-1 sm:hidden">
+                              <DetailsItem label={t("billing.vatRates.code")}>
+                                <BidiText>{rate.code}</BidiText>
+                              </DetailsItem>
+                              <DetailsItem
+                                label={t("billing.vatRates.validFrom")}
+                              >
+                                <VatRateDate date={rate.validFrom} />
+                              </DetailsItem>
+                              <DetailsItem
+                                label={t("billing.vatRates.validTo")}
+                              >
+                                <VatRateDate date={rate.validTo} />
+                              </DetailsItem>
+                            </DetailsGrid>
+                          </>
+                        ),
+                        rate: <VatRatePercentage rateBps={rate.rateBps} />,
+                        from: <VatRateDate date={rate.validFrom} />,
+                        to: <VatRateDate date={rate.validTo} />,
+                        actions: (
+                          <div className="flex flex-wrap gap-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              disabled={mutation.isPending}
+                              disabledReason={t("common.saving")}
+                              onClick={() => open({ type: "edit", rate })}
+                            >
+                              {t("common.edit")}
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              disabled={mutation.isPending}
+                              disabledReason={t("common.archiving")}
+                              onClick={() => open({ type: "archive", rate })}
+                            >
+                              {t("common.archive")}
+                            </Button>
+                          </div>
+                        ),
+                      }}
+                    />
+                  )),
+                }
+          }
+        />
+      )}
+      {query.hasNextPage && (
+        <Button
+          variant="outline"
+          disabled={query.isFetchingNextPage}
+          disabledReason={t("common.loading")}
+          onClick={() => detached(query.fetchNextPage(), "vat-rates.load-more")}
         >
-          {dialog.type !== "closed" && (
-            <DialogPopup className="max-w-xl">
-              <DialogHeader>
-                <DialogTitle>
-                  {dialog.type === "create" && t("billing.vatRates.add")}
-                  {dialog.type === "archive" && t("common.archive")}
-                  {dialog.type === "edit" && t("billing.vatRates.edit")}
-                </DialogTitle>
-              </DialogHeader>
-              {mutation.error !== null && (
-                <DialogPanel>
-                  <VatRateRefusal error={mutation.error} />
+          {t("common.loadMore")}
+        </Button>
+      )}
+      <Dialog
+        open={dialog.type !== "closed"}
+        onOpenChange={(isOpen) => {
+          if (!isOpen) {
+            close();
+          }
+        }}
+      >
+        {dialog.type !== "closed" && (
+          <DialogPopup className="max-w-xl">
+            <DialogHeader>
+              <DialogTitle>
+                {dialog.type === "create" && t("billing.vatRates.add")}
+                {dialog.type === "archive" && t("common.archive")}
+                {dialog.type === "edit" && t("billing.vatRates.edit")}
+              </DialogTitle>
+            </DialogHeader>
+            {mutation.error !== null && (
+              <DialogPanel>
+                <VatRateRefusal error={mutation.error} />
+              </DialogPanel>
+            )}
+            {dialog.type === "archive" ? (
+              <>
+                <DialogPanel className="flex flex-col gap-4">
+                  <p className="text-sm">
+                    {t("billing.vatRates.archiveConfirm")}
+                  </p>
+                  <BidiText>{dialog.rate.name}</BidiText>
                 </DialogPanel>
-              )}
-              {dialog.type === "archive" ? (
-                <>
-                  <DialogPanel className="flex flex-col gap-4">
-                    <p className="text-sm">
-                      {t("billing.vatRates.archiveConfirm")}
-                    </p>
-                    <BidiText>{dialog.rate.name}</BidiText>
-                  </DialogPanel>
-                  <DialogFooter>
-                    <Button
-                      variant="outline"
-                      disabled={mutation.isPending}
-                      onClick={close}
-                    >
-                      {t("common.cancel")}
-                    </Button>
-                    <Button
-                      variant="destructive"
-                      disabled={mutation.isPending}
-                      onClick={() =>
-                        detached(
-                          run({ type: "archive", id: dialog.rate.id }),
-                          "vat-rates.archive",
-                        )
-                      }
-                    >
-                      {t("common.archive")}
-                    </Button>
-                  </DialogFooter>
-                </>
-              ) : (
-                <VatRateForm
-                  key={dialog.type === "edit" ? dialog.rate.id : "new"}
-                  {...(dialog.type === "edit" ? { rate: dialog.rate } : {})}
-                  pending={mutation.isPending}
-                  onCancel={close}
-                  onSubmit={save}
-                />
-              )}
-            </DialogPopup>
-          )}
-        </Dialog>
-      </FramePanel>
-    </Frame>
+                <DialogFooter>
+                  <Button
+                    variant="outline"
+                    disabled={mutation.isPending}
+                    disabledReason={t("common.archiving")}
+                    onClick={close}
+                  >
+                    {t("common.cancel")}
+                  </Button>
+                  <Button
+                    variant="destructive"
+                    disabled={mutation.isPending}
+                    disabledReason={t("common.saving")}
+                    onClick={() =>
+                      detached(
+                        run({ type: "archive", id: dialog.rate.id }),
+                        "vat-rates.archive",
+                      )
+                    }
+                  >
+                    {t("common.archive")}
+                  </Button>
+                </DialogFooter>
+              </>
+            ) : (
+              <VatRateForm
+                key={dialog.type === "edit" ? dialog.rate.id : "new"}
+                {...(dialog.type === "edit" ? { rate: dialog.rate } : {})}
+                pending={mutation.isPending}
+                onCancel={close}
+                onSubmit={save}
+              />
+            )}
+          </DialogPopup>
+        )}
+      </Dialog>
+    </VatRatesCardShell>
   );
 };

@@ -371,6 +371,21 @@ type UserMessageEditFormProps = {
  * paragraphs, line breaks, bold text and chips load as the composer holds
  * them, and sending writes the markup a new message would carry.
  */
+const sendDisabledKey = ({
+  sending,
+  isGenerating,
+}: {
+  sending: boolean;
+  isGenerating: boolean;
+}) => {
+  if (sending) {
+    return "common.sending";
+  }
+  return isGenerating
+    ? "chat.answerEdit.waitForAnswer"
+    : "chat.sendPromptEmpty";
+};
+
 const UserMessageEditForm = ({
   draft,
   isGenerating,
@@ -692,6 +707,7 @@ const UserMessageEditForm = ({
         </Button>
         <Button
           disabled={!canSend}
+          disabledReason={t(sendDisabledKey({ sending, isGenerating }))}
           onClick={() => {
             submitFrom(editor);
           }}
@@ -780,11 +796,12 @@ export const useUserMessageEdit = ({
     editor: (
       // Shown on hover of the message (the `group` of `Message`), on focus and
       // on touch; hidden while the sticky layout pins the message as a
-      // compact header. With a fine pointer it only appears on hover, so it
-      // floats over the bubble's bottom corner instead of reserving an empty
-      // row in every message; the caller's text box is its `relative` anchor.
-      // A touch screen keeps it in flow, since it is always visible there.
-      <div className="pointer-fine:bg-secondary flex justify-end opacity-0 transition-opacity group-hover:opacity-100 group-data-[stuck=true]/sticky:hidden focus-within:opacity-100 pointer-coarse:opacity-100 pointer-fine:absolute pointer-fine:-right-1.5 pointer-fine:-bottom-1 pointer-fine:rounded-md">
+      // compact header. It sits just outside the bubble's start edge, level
+      // with its last line, so it never adds a row under the text or covers
+      // it: the bubble (`MessageContent`) is its anchor, and a bubble never
+      // spans the whole column, so the space beside it is free. A touch
+      // screen always shows it there.
+      <div className="absolute end-full bottom-0.5 me-1 opacity-0 transition-opacity group-hover:opacity-100 group-data-[stuck=true]/sticky:hidden focus-within:opacity-100 pointer-coarse:opacity-100">
         <Button
           aria-label={t("chat.editMessage")}
           onClick={() => {
@@ -804,7 +821,7 @@ export const useUserMessageEdit = ({
   };
 };
 
-/** A sent user message body with its edit action in its bottom corner. */
+/** A sent user message body with its edit action beside the bubble. */
 export const EditableUserMessage = ({
   children,
   ...options
@@ -814,7 +831,7 @@ export const EditableUserMessage = ({
     return editor;
   }
   return (
-    <div className="relative flex min-w-0 flex-col">
+    <div className="flex min-w-0 flex-col">
       {children}
       {editor}
     </div>

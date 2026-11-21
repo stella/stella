@@ -2,7 +2,6 @@ import { useQuery } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
-import { Frame, FramePanel } from "@stll/ui/frame";
 import { Trash2Icon } from "@stll/ui/icons";
 import { Label } from "@stll/ui/label";
 
@@ -12,10 +11,16 @@ import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { queryView } from "@/lib/query-view.logic";
 import { webSearchConfigOptions } from "@/lib/web-search/queries";
 
+import {
+  AIKeyFieldFrame,
+  AIKeySectionHeading,
+  WEB_SEARCH_KEY_FIELDS,
+  WEB_SEARCH_KEYS_SECTION,
+  WebSearchKeyFieldTitle,
+  WebSearchKeysCardPending,
+} from "./ai-key-card.pending";
 import { AISettingsSectionFeedback } from "./ai-settings-section";
 import type { KeySettingsSectionProps } from "./ai-settings-section";
-
-type WebSearchKeyKind = "search" | "fetch";
 
 type WebSearchKeyState =
   | { configured: false; platformFallback: boolean }
@@ -30,7 +35,6 @@ export const WebSearchKeysCard = ({
   search,
   fetch,
 }: WebSearchKeysCardProps) => {
-  const t = useTranslations();
   const { activeOrganizationId } = useAuthenticatedUser();
 
   const settingsQuery = useQuery(
@@ -39,6 +43,9 @@ export const WebSearchKeysCard = ({
   const settingsView = queryView(settingsQuery);
   const config = settingsView.type === "items" ? settingsView.items : undefined;
 
+  if (settingsView.type === "pending") {
+    return <WebSearchKeysCardPending />;
+  }
   if (settingsView.type !== "items") {
     return <QueryViewFeedback view={settingsView} />;
   }
@@ -46,53 +53,42 @@ export const WebSearchKeysCard = ({
   return (
     <div className="flex flex-col gap-6">
       <QueryViewFeedback view={settingsView} />
-      <div>
-        <h3 className="text-base font-medium">
-          {t("webSearch.settings.title")}
-        </h3>
-        <p className="text-muted-foreground text-sm">
-          {t("webSearch.settings.description")}
-        </p>
-      </div>
+      <AIKeySectionHeading
+        description={WEB_SEARCH_KEYS_SECTION.description}
+        title={WEB_SEARCH_KEYS_SECTION.title}
+      />
 
-      <WebSearchKeyField
-        kind="search"
-        state={config?.search}
-        controller={search}
-      />
-      <WebSearchKeyField
-        kind="fetch"
-        state={config?.fetch}
-        controller={fetch}
-      />
+      {WEB_SEARCH_KEY_FIELDS.map((field) => (
+        <WebSearchKeyField
+          key={field.kind}
+          field={field}
+          state={config?.[field.kind]}
+          controller={field.kind === "search" ? search : fetch}
+        />
+      ))}
     </div>
   );
 };
 
 type WebSearchKeyFieldProps = {
-  kind: WebSearchKeyKind;
+  field: (typeof WEB_SEARCH_KEY_FIELDS)[number];
   state: WebSearchKeyState | undefined;
   controller: KeySettingsSectionProps;
 };
 
 const WebSearchKeyField = ({
-  kind,
+  field: { kind, title },
   state,
   controller: { draft, onChange, onRemove, feedback, disabled },
 }: WebSearchKeyFieldProps) => {
   const t = useTranslations();
-
-  const title =
-    kind === "search"
-      ? t("webSearch.settings.searchTitle")
-      : t("webSearch.settings.fetchTitle");
 
   const isConfigured = state?.configured === true;
   const fieldId = `web-search-key-${kind}`;
 
   return (
     <div className="flex flex-col gap-3">
-      <h4 className="text-sm font-medium">{title}</h4>
+      <WebSearchKeyFieldTitle title={title} />
 
       {!isConfigured && state?.platformFallback === true && (
         <p className="text-muted-foreground text-xs">
@@ -111,6 +107,7 @@ const WebSearchKeyField = ({
           <Button
             aria-label={t("common.remove")}
             disabled={disabled}
+            disabledReason={t("common.saving")}
             onClick={onRemove}
             size="sm"
             tooltip={t("common.remove")}
@@ -121,21 +118,22 @@ const WebSearchKeyField = ({
         </div>
       )}
 
-      <Frame>
-        <FramePanel>
-          <div className="flex flex-col gap-3 p-1">
-            <Label htmlFor={fieldId}>{t("organization.aiConfig.apiKey")}</Label>
-            <SecretInput
-              autoComplete="off"
-              disabled={disabled}
-              id={fieldId}
-              onChange={(e) => onChange(e.target.value)}
-              placeholder={t("organization.aiConfig.apiKeyPlaceholder")}
-              value={draft.action === "set" ? draft.apiKey : ""}
-            />
-          </div>
-        </FramePanel>
-      </Frame>
+      <AIKeyFieldFrame
+        input={
+          <SecretInput
+            autoComplete="off"
+            disabled={disabled}
+            disabledReason={t("common.saving")}
+            id={fieldId}
+            onChange={(e) => onChange(e.target.value)}
+            placeholder={t(WEB_SEARCH_KEYS_SECTION.placeholder)}
+            value={draft.action === "set" ? draft.apiKey : ""}
+          />
+        }
+        label={
+          <Label htmlFor={fieldId}>{t(WEB_SEARCH_KEYS_SECTION.label)}</Label>
+        }
+      />
 
       {draft.action === "cleared" && (
         <p className="text-muted-foreground text-sm">

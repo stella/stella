@@ -36,7 +36,6 @@ export const CI_GENERATED_OUTPUTS = {
     "packages/cli/src/generated/tool-annotations.ts",
   ],
   webMessages: ["apps/web/src/i18n/langs/messages.gen.ts"],
-  prepaintLocale: ["apps/web/public/prepaint-init.js"],
   routeTree: [
     "apps/web/src/routeTree.gen.ts",
     "apps/web/src/route-templates.gen.ts",
@@ -113,6 +112,7 @@ export const CAPABILITY_RUNTIME_INPUTS = [
   "packages/transactional/components/**",
   "packages/transactional/emails/**",
   "packages/transactional/i18n/**",
+  "packages/transactional/map/**",
   "packages/transactional/render/**",
   "bunfig.toml",
   "bun.lock",

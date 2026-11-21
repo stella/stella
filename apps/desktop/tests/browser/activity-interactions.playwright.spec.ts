@@ -682,21 +682,23 @@ const installNativeBoundary = async ({
     },
   });
   const messages = language === "ar" ? arMessages : enMessages;
-  const deletionOnlyNotice = page.getByText(
-    {
-      keyMissing: messages.activity.deletionOnly,
-      unreadable: messages.activity.unreadableEraseNotice,
-      available: messages.activity.errorRead,
-      pending: messages.activity.errorRead,
-      unavailable: messages.activity.errorRead,
-      incompatible: messages.activity.incompatibleActivity,
-    }[snapshot.deletionStatus],
-  );
+  const deletionOnlyNotice = page
+    .getByText(
+      {
+        keyMissing: messages.activity.deletionOnly,
+        unreadable: messages.activity.unreadableEraseNotice,
+        available: messages.activity.errorRead,
+        pending: messages.activity.errorRead,
+        unavailable: messages.activity.errorRead,
+        incompatible: messages.activity.incompatibleActivity,
+      }[snapshot.deletionStatus],
+    )
+    .filter({ visible: true });
   if (view === "settings") {
     await page.setViewportSize(DESKTOP_WINDOW_SIZES.settings);
     await page.goto("/#activity");
     if (!activityEnabled) {
-      await expect(page.getByRole("tabpanel")).toBeVisible();
+      await expect(page.locator("[data-slot=settings-page]")).toBeVisible();
       return;
     }
     await expect(
@@ -1159,9 +1161,9 @@ test("pending drafts protect every deletion in the activity settings", async ({
     captureMode(page, "Example Editor", "captureModeNothing"),
   ).toBeDisabled();
   await expect(
-    page.getByText(enMessages.activity.pendingActivityProtected, {
-      exact: true,
-    }),
+    page
+      .getByText(enMessages.activity.pendingActivityProtected, { exact: true })
+      .filter({ visible: true }),
   ).toBeVisible();
   for (const command of [
     "activity_delete_day",
@@ -1254,7 +1256,9 @@ test("unreadable saved activity explains why deletion is unavailable", async ({
     },
   });
   await expect(
-    page.getByText(enMessages.activity.errorRead, { exact: true }),
+    page
+      .getByText(enMessages.activity.errorRead, { exact: true })
+      .filter({ visible: true }),
   ).toBeVisible();
   await expect(
     page.getByRole("button", {
@@ -1316,7 +1320,7 @@ test("the activity window opens its settings in the Settings window", async ({
   });
 });
 
-test("the Activity tab is absent while the activity feature is off", async ({
+test("the Activity page is absent while the activity feature is off", async ({
   page,
 }) => {
   await installNativeBoundary({
@@ -1324,11 +1328,18 @@ test("the Activity tab is absent while the activity feature is off", async ({
     view: "settings",
     activityEnabled: false,
   });
+  const pages = page.getByRole("navigation");
   await expect(
-    page.getByRole("tab", { name: enMessages.settings.general, exact: true }),
-  ).toHaveAttribute("aria-selected", "true");
+    pages.getByRole("button", {
+      name: enMessages.settings.pages.general,
+      exact: true,
+    }),
+  ).toHaveAttribute("aria-current", "page");
   await expect(
-    page.getByRole("tab", { name: enMessages.activity.title, exact: true }),
+    pages.getByRole("button", {
+      name: enMessages.settings.pages.activity,
+      exact: true,
+    }),
   ).toHaveCount(0);
   await expect(
     page.getByRole("heading", {
@@ -1345,13 +1356,16 @@ test("the Activity tab is absent while the activity feature is off", async ({
   );
 });
 
-test("the Activity tab reads settings, never the day timeline", async ({
+test("the Activity page reads settings, never the day timeline", async ({
   page,
 }) => {
   await installNativeBoundary({ page, view: "settings" });
   await expect(
-    page.getByRole("tab", { name: enMessages.activity.title, exact: true }),
-  ).toHaveAttribute("aria-selected", "true");
+    page.getByRole("navigation").getByRole("button", {
+      name: enMessages.settings.pages.activity,
+      exact: true,
+    }),
+  ).toHaveAttribute("aria-current", "page");
   const commands = (await tauriInvocations(page)).map(({ command }) => command);
   expect(commands).toContain("activity_get_settings");
   expect(commands).not.toContain("activity_get_day");
@@ -1769,9 +1783,9 @@ test("healthy current activity shows incompatible history guidance and protects 
       otherAccountHistoryDays: 3,
     },
   });
-  await expect(
-    page.getByText(enMessages.activity.incompatibleActivity, { exact: true }),
-  ).toBeVisible();
+  await expect(page.getByRole("alert")).toHaveText(
+    enMessages.activity.incompatibleActivity,
+  );
   for (const name of [
     enMessages.activity.deleteDay,
     enMessages.activity.deleteAll,
@@ -1813,9 +1827,9 @@ test("an open erase dialog disappears safely when saved history becomes incompat
     { ...SNAPSHOT, deletionStatus: "incompatible" },
   );
   await expect(page.getByRole("dialog")).toHaveCount(0);
-  await expect(
-    page.getByText(enMessages.activity.incompatibleActivity, { exact: true }),
-  ).toBeVisible();
+  await expect(page.getByRole("alert")).toHaveText(
+    enMessages.activity.incompatibleActivity,
+  );
   expect(pageErrors).toEqual([]);
   expect(await tauriInvocations(page)).not.toContainEqual(
     expect.objectContaining({ command: "activity_delete_day" }),

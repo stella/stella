@@ -5,8 +5,8 @@ import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
-import { Frame, FramePanel } from "@stll/ui/frame";
 import { Label } from "@stll/ui/label";
+import { SettingsPanel, SettingsSection } from "@stll/ui/settings";
 
 import { usePermissions } from "@/hooks/use-permissions";
 import { api } from "@/lib/api";
@@ -24,6 +24,10 @@ import {
   timeZonePickerValue,
   timeZoneToSave,
 } from "@/routes/_protected.settings/organization/-components/organization/time-zone-card.logic";
+import {
+  OrganizationTimeZoneCardFrame,
+  OrganizationTimeZoneCardPending,
+} from "@/routes/_protected.settings/organization/-components/organization/time-zone-card.pending";
 import { useSettingsMutation } from "@/routes/_protected.settings/organization/-hooks/use-settings-mutation";
 
 export const OrganizationTimeZoneCard = () => {
@@ -54,12 +58,13 @@ export const OrganizationTimeZoneCard = () => {
 
   switch (view.type) {
     case "pending":
+      return <OrganizationTimeZoneCardPending />;
     case "empty":
       return null;
     case "error":
       return (
-        <Frame>
-          <FramePanel>
+        <SettingsSection>
+          <SettingsPanel>
             <p className="text-muted-foreground text-sm">
               {t("errors.actionFailed")}
             </p>
@@ -72,8 +77,8 @@ export const OrganizationTimeZoneCard = () => {
             >
               {t("common.retry")}
             </Button>
-          </FramePanel>
-        </Frame>
+          </SettingsPanel>
+        </SettingsSection>
       );
     case "items":
       break;
@@ -85,41 +90,31 @@ export const OrganizationTimeZoneCard = () => {
   const selected = timeZonePickerValue(settings);
 
   return (
-    <Frame>
-      <FramePanel>
-        <div className="flex flex-col gap-3 p-1">
-          <p className="text-muted-foreground text-sm">
-            {t("settings.organization.timeZone.description")}
-          </p>
-          <Label className="sr-only" htmlFor={selectId}>
-            {t("settings.organization.timeZone.title")}
-          </Label>
-          <TimeZonePicker
-            id={selectId}
-            label={t("settings.organization.timeZone.title")}
-            disabled={!canEdit || mutation.isPending}
-            jurisdictionCountries={settings.practiceJurisdictions.map(
-              ({ countryCode }) => countryCode,
-            )}
-            follow={{
-              value: FOLLOW_JURISDICTION,
-              zone: settings.primaryJurisdictionTimeZone,
-              label: t("settings.organization.timeZone.followingJurisdiction", {
-                timeZone: settings.primaryJurisdictionTimeZone.replace(
-                  /_/gu,
-                  " ",
-                ),
-              }),
-            }}
-            onValueChange={(next) => {
-              if (next !== selected) {
-                mutation.mutate(timeZoneToSave(next));
-              }
-            }}
-            value={selected}
-          />
-        </div>
-      </FramePanel>
-    </Frame>
+    <OrganizationTimeZoneCardFrame>
+      <Label className="sr-only" htmlFor={selectId}>
+        {t("settings.organization.timeZone.title")}
+      </Label>
+      <TimeZonePicker
+        id={selectId}
+        label={t("settings.organization.timeZone.title")}
+        disabled={!canEdit || mutation.isPending}
+        jurisdictionCountries={settings.practiceJurisdictions.map(
+          ({ countryCode }) => countryCode,
+        )}
+        follow={{
+          value: FOLLOW_JURISDICTION,
+          zone: settings.primaryJurisdictionTimeZone,
+          label: t("settings.organization.timeZone.followingJurisdiction", {
+            timeZone: settings.primaryJurisdictionTimeZone.replace(/_/gu, " "),
+          }),
+        }}
+        onValueChange={(next) => {
+          if (next !== selected) {
+            mutation.mutate(timeZoneToSave(next));
+          }
+        }}
+        value={selected}
+      />
+    </OrganizationTimeZoneCardFrame>
   );
 };

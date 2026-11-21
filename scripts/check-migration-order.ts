@@ -25,6 +25,7 @@ import {
 import {
   findMigrationTimestampViolations,
   MIGRATION_FILE,
+  MIGRATION_RESTAMP_COMMAND,
   MIGRATION_TIMESTAMP,
   type MigrationIdentityChanges,
   readMigrationBaseSnapshot,
@@ -409,6 +410,7 @@ if (import.meta.main) {
           ({ directory, newestBaseDirectory }) =>
             `New migration ${directory} must be stamped later than the newest base migration ${newestBaseDirectory}. Re-stamp the unmerged migration later than that one; never re-stamp a merged migration.`,
         )
+        .concat(`Fix on the branch: ${MIGRATION_RESTAMP_COMMAND}`)
         .join("\n"),
     );
   }

@@ -1,7 +1,9 @@
-import { lazy, memo, Suspense } from "react";
+import { type ComponentType, lazy, memo, Suspense } from "react";
 
+import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
+import type { LegalFileFormatKind } from "@stll/api-contract/legal-file-formats";
 import { cn } from "@stll/ui/utils";
 
 import { FileChatWarmup } from "@/components/ai-suggestions/file-chat-warmup";
@@ -17,6 +19,7 @@ import { downloadTabFile } from "@/components/inspector/file-download-service";
 import type { FileTabDisplayState } from "@/components/inspector/file-tab-panel.logic";
 import {
   ConversionRefusalFallback,
+  FilePreviewUnavailable,
   InspectorPdfErrorFallback,
 } from "@/components/inspector/inspector-pdf-error-fallback";
 import { InspectorRestoreHold } from "@/components/inspector/inspector-restore-hold";
@@ -35,10 +38,76 @@ import {
   PeekSuspenseFallback,
 } from "@/components/pdf/peek/peek-pdf-viewer";
 import { QuerySuspenseBoundary } from "@/components/query-suspense-boundary";
+import {
+  RecoverableViewerBoundary,
+  type ViewerSurface,
+} from "@/components/viewer/recoverable-viewer-boundary";
+import type { TranslationKey } from "@/i18n/types";
 import { PDF_MIME, TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { detached } from "@/lib/detached";
+import { isPreviewUnavailableError } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import type { PDFColorMode } from "@/lib/pdf/pdf-color-mode";
+
+const AsicFileViewer = lazy(async () => {
+  const m = await import("@/components/inspector/asic-file-viewer");
+  return { default: m.AsicFileViewer };
+});
+
+const CadesFileViewer = lazy(async () => {
+  const m = await import("@/components/inspector/cades-file-viewer");
+  return { default: m.CadesFileViewer };
+});
+
+const DataBoxFileViewer = lazy(async () => {
+  const m = await import("@/features/correspondence/data-box-file-viewer");
+  return { default: m.DataBoxFileViewer };
+});
+
+const StructuredDocumentViewer = lazy(async () => {
+  const m = await import("@/components/inspector/structured-document-viewer");
+  return { default: m.StructuredDocumentViewer };
+});
+
+type LegalFileViewer = {
+  Viewer: ComponentType<{ onDownload: () => void; tab: FileTab }>;
+  unreadable: TranslationKey;
+  download: TranslationKey;
+  surface: ViewerSurface;
+};
+
+const asicFileViewer = {
+  Viewer: AsicFileViewer,
+  unreadable: "signedFile.unreadable",
+  download: "common.downloadOriginal",
+  surface: "inspector-asic",
+} as const satisfies LegalFileViewer;
+
+const structuredDocumentViewer = {
+  Viewer: StructuredDocumentViewer,
+  unreadable: "structuredDocument.noReadableContent",
+  download: "common.downloadOriginal",
+  surface: "inspector-structured-document",
+} as const satisfies LegalFileViewer;
+
+const legalFileViewers = {
+  asicE: asicFileViewer,
+  asicS: asicFileViewer,
+  cades: {
+    Viewer: CadesFileViewer,
+    unreadable: "signedFile.unreadable",
+    download: "common.downloadOriginal",
+    surface: "inspector-cades",
+  },
+  ofd: structuredDocumentViewer,
+  uyap: structuredDocumentViewer,
+  dataBox: {
+    Viewer: DataBoxFileViewer,
+    unreadable: "correspondence.dataBox.unreadable",
+    download: "common.download",
+    surface: "inspector-data-box",
+  },
+} as const satisfies Record<LegalFileFormatKind, LegalFileViewer>;
 
 const OfficeFileViewer = lazy(async () => {
   const m = await import("@/components/office/office-file-viewer");
@@ -100,10 +169,7 @@ const FileTabViewerComponent = ({
     isActive,
     isEmailDisplay,
     isMarkdownDisplay,
-    isNativeDocxDisplay,
-    isOfficeDisplay,
-    isPlainTextDisplay,
-    officeViewerFormat,
+    nativePreviewKind,
     scaleOffset,
   },
   docxEditor,
@@ -163,127 +229,161 @@ const FileTabViewerComponent = ({
   };
 
   const fileViewer = (() => {
-    if (isEmailDisplay) {
-      if (entity.shouldSurfaceEmailResolutionError) {
+    switch (nativePreviewKind) {
+      case "asicE":
+      case "asicS":
+      case "cades":
+      case "dataBox":
+      case "ofd":
+      case "uyap": {
+        const { Viewer, unreadable, download, surface } =
+          legalFileViewers[nativePreviewKind];
+        return (
+          <RecoverableViewerBoundary
+            finalFallback={(error) =>
+              isPreviewUnavailableError(error) ? (
+                <FilePreviewUnavailable
+                  downloadLabel={t(download)}
+                  message={t(unreadable)}
+                  onDownload={handleDownload}
+                />
+              ) : undefined
+            }
+            key={tab.id}
+            onDownload={handleDownload}
+            surface={surface}
+          >
+            <Suspense fallback={<PeekSuspenseFallback />}>
+              <Viewer onDownload={handleDownload} tab={tab} />
+            </Suspense>
+          </RecoverableViewerBoundary>
+        );
+      }
+      case "email":
+        if (entity.shouldSurfaceEmailResolutionError) {
+          return (
+            <EmailFileViewer
+              chatMode={EMAIL_CHAT_MODE.resolutionError}
+              entityId={tab.entityId}
+              fieldId={tab.id}
+              fileName={tab.fileName}
+              onOpenAttachment={openEmailAttachment}
+              overlayActivation={emailPreviewOverlayActivation}
+              onRetryChatResolution={() => {
+                detached(entity.query.refetch(), "file-tab-panel.refetch");
+              }}
+              chatHost={EMAIL_CHAT_HOST.parent}
+              workspaceId={tab.workspaceId}
+            />
+          );
+        }
         return (
           <EmailFileViewer
-            chatMode={EMAIL_CHAT_MODE.resolutionError}
+            chatMode={entity.resolvedEmailChatMode}
             entityId={tab.entityId}
             fieldId={tab.id}
             fileName={tab.fileName}
             onOpenAttachment={openEmailAttachment}
             overlayActivation={emailPreviewOverlayActivation}
-            onRetryChatResolution={() => {
-              detached(entity.query.refetch(), "file-tab-panel.refetch");
-            }}
             chatHost={EMAIL_CHAT_HOST.parent}
             workspaceId={tab.workspaceId}
           />
         );
-      }
-      return (
-        <EmailFileViewer
-          chatMode={entity.resolvedEmailChatMode}
-          entityId={tab.entityId}
-          fieldId={tab.id}
-          fileName={tab.fileName}
-          onOpenAttachment={openEmailAttachment}
-          overlayActivation={emailPreviewOverlayActivation}
-          chatHost={EMAIL_CHAT_HOST.parent}
-          workspaceId={tab.workspaceId}
-        />
-      );
-    }
-    if (isMarkdownDisplay) {
-      return (
-        <MarkdownFileViewer
-          draft={markdown}
-          readOnly={!canUpdateEntity}
-          tabId={tab.id}
-        />
-      );
-    }
-    if (isPlainTextDisplay) {
-      return <PlainTextFileViewer tab={tab} />;
-    }
-    if (isOfficeDisplay && officeViewerFormat !== null) {
-      return (
-        <QuerySuspenseBoundary
-          area="office-file-viewer"
-          errorFallback={viewerErrorFallback}
-          resetKeys={officeResetKeys}
-          suspenseFallback={officeSuspenseFallback}
-        >
-          <OfficeFileViewer
-            desktopEditTarget={desktopEditTarget}
-            entityId={tab.entityId}
-            fieldId={tab.id}
-            fileName={tab.fileName}
-            format={officeViewerFormat}
-            key={tab.id}
-            workspaceId={tab.workspaceId}
+      case "markdown":
+        return (
+          <MarkdownFileViewer
+            draft={markdown}
+            readOnly={!canUpdateEntity}
+            tabId={tab.id}
           />
-        </QuerySuspenseBoundary>
-      );
-    }
-    if (isNativeDocxDisplay) {
-      if (entity.filePropertyId === undefined) {
-        // Still resolving the field's property, or the entity no longer
-        // holds this field: never fall through to the PDF viewer, which has
-        // nothing to draw for a DOCX.
-        return entity.query.data === undefined && !entity.query.isError ? (
-          <PeekSuspenseFallback />
-        ) : (
-          <InspectorPdfErrorFallback />
         );
-      }
-      return (
-        <>
-          {/* Beside the slot, not inside the editor: the chat overlay travels
-              with the editor's chunk, and its two reads would otherwise queue
-              behind that fetch instead of running alongside it. */}
-          <FileChatWarmup
+      case "text":
+        return <PlainTextFileViewer tab={tab} />;
+      case "xlsx":
+      case "pptx":
+        return (
+          <QuerySuspenseBoundary
+            area="office-file-viewer"
+            errorFallback={viewerErrorFallback}
+            resetKeys={officeResetKeys}
+            suspenseFallback={officeSuspenseFallback}
+          >
+            <OfficeFileViewer
+              desktopEditTarget={desktopEditTarget}
+              entityId={tab.entityId}
+              fieldId={tab.id}
+              fileName={tab.fileName}
+              format={nativePreviewKind}
+              key={tab.id}
+              workspaceId={tab.workspaceId}
+            />
+          </QuerySuspenseBoundary>
+        );
+      case "docx":
+        if (entity.filePropertyId === undefined) {
+          // Still resolving the field's property, or the entity no longer
+          // holds this field: never fall through to the PDF viewer, which has
+          // nothing to draw for a DOCX.
+          return entity.query.data === undefined && !entity.query.isError ? (
+            <PeekSuspenseFallback />
+          ) : (
+            <InspectorPdfErrorFallback />
+          );
+        }
+        return (
+          <>
+            {/* Beside the slot, not inside the editor: the chat overlay travels
+                with the editor's chunk, and its two reads would otherwise queue
+                behind that fetch instead of running alongside it. */}
+            <FileChatWarmup
+              entityId={tab.entityId}
+              fileFieldId={tab.id}
+              workspaceId={tab.workspaceId}
+            />
+            <InspectorRestoreHold ready={docxEditor.isDocumentReady} />
+            <DocxEditorSlot
+              bindings={docxEditor.bindings}
+              canUnlock={canUpdateEntity}
+              document={docxDocument}
+              fallback={docxFallback}
+              initialScrollTop={docxInitialScrollTop}
+              isEditing={isEditingNativeDocx}
+              scaleOffset={scaleOffset}
+              slot={DOCX_EDITOR_SLOT.inspector}
+            />
+          </>
+        );
+      case "pdf":
+      case null:
+        if (entity.conversionRefusal !== undefined) {
+          return (
+            <ConversionRefusalFallback refusal={entity.conversionRefusal} />
+          );
+        }
+        return (
+          <PeekPdfViewer
+            pdfPageSource="portfolio"
+            activePropertyId={entity.filePropertyId ?? ""}
             entityId={tab.entityId}
-            fileFieldId={tab.id}
+            errorFallback={viewerErrorFallback}
+            fieldId={tab.id}
+            filePurpose="display"
+            colorMode={pdfColorMode}
+            mimeType={tab.mimeType ?? undefined}
+            onDocxScrollTopChange={docxEditor.handleScrollTopChange}
+            onDownload={handleDownload}
+            onError={onViewerError}
+            onPeekNavigate={closeAll}
+            onWheelZoom={handlePdfWheelZoom}
+            scaleOffset={scaleOffset}
+            viewId={peekPdfViewId}
             workspaceId={tab.workspaceId}
           />
-          <InspectorRestoreHold ready={docxEditor.isDocumentReady} />
-          <DocxEditorSlot
-            bindings={docxEditor.bindings}
-            canUnlock={canUpdateEntity}
-            document={docxDocument}
-            fallback={docxFallback}
-            initialScrollTop={docxInitialScrollTop}
-            isEditing={isEditingNativeDocx}
-            scaleOffset={scaleOffset}
-            slot={DOCX_EDITOR_SLOT.inspector}
-          />
-        </>
-      );
+        );
+      default:
+        nativePreviewKind satisfies never;
+        return panic("Unhandled native file preview");
     }
-    if (entity.conversionRefusal !== undefined) {
-      return <ConversionRefusalFallback refusal={entity.conversionRefusal} />;
-    }
-    return (
-      <PeekPdfViewer
-        pdfPageSource="portfolio"
-        activePropertyId={entity.filePropertyId ?? ""}
-        entityId={tab.entityId}
-        errorFallback={viewerErrorFallback}
-        fieldId={tab.id}
-        filePurpose="display"
-        colorMode={pdfColorMode}
-        mimeType={tab.mimeType ?? undefined}
-        onDocxScrollTopChange={docxEditor.handleScrollTopChange}
-        onDownload={handleDownload}
-        onError={onViewerError}
-        onPeekNavigate={closeAll}
-        onWheelZoom={handlePdfWheelZoom}
-        scaleOffset={scaleOffset}
-        viewId={peekPdfViewId}
-        workspaceId={tab.workspaceId}
-      />
-    );
   })();
 
   return (

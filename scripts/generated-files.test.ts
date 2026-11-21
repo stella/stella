@@ -11,7 +11,7 @@ import {
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import nodePath from "node:path";
-import { pathToFileURL } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import * as ts from "tsrs/ast";
 import * as v from "valibot";
 
@@ -392,7 +392,7 @@ test("derived runtime outputs have one owner and stay ignored when regenerated",
     const ignored = Bun.spawnSync(
       ["git", "check-ignore", "--no-index", "--stdin"],
       {
-        cwd: new URL("..", import.meta.url).pathname,
+        cwd: fileURLToPath(new URL("..", import.meta.url)),
         stdin: new TextEncoder().encode(`${outputs.join("\n")}\n`),
         stdout: "pipe",
         stderr: "pipe",
@@ -1204,7 +1204,7 @@ test("web messages have one derived owner and are generated wherever the route t
 // checkout's declarations: other test files read them concurrently.
 // timeout: measured p95 is 19.8 s; runs the real web catalog checker in that copy.
 test("web catalog checks pass without the derived message declarations", async () => {
-  const repo = new URL("..", import.meta.url).pathname;
+  const repo = fileURLToPath(new URL("..", import.meta.url));
   const tracked = Bun.spawnSync(
     [
       "git",

@@ -16,20 +16,13 @@ import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
 import type { LegislationListValidity } from "@stll/api-contract/legislation-status";
+import { STATUTE_COLUMN_IDS } from "@stll/api-contract/public-law-table";
+import type { StatuteColumnId } from "@stll/api-contract/public-law-table";
 import { statuteDisplayLabel } from "@stll/api-contract/statute-display-label";
 import { STATUTE_LIST_SORT_KEY_KINDS } from "@stll/api-contract/statute-list-sort";
 import type { StatuteListSortKey } from "@stll/api-contract/statute-list-sort";
 import { BidiText } from "@stll/ui/bidi-text";
 import { DocumentIdentityBadge } from "@stll/ui/document-identity-badge";
-import {
-  CalendarClockIcon,
-  CalendarIcon,
-  CircleDotIcon,
-  HashIcon,
-  HistoryIcon,
-  ScrollTextIcon,
-  ShapesIcon,
-} from "@stll/ui/icons";
 import type { LucideIcon } from "@stll/ui/icons";
 import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
@@ -37,6 +30,7 @@ import { cn } from "@stll/ui/utils";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { PublicLawRow } from "@/components/public-law-table/public-law-row";
 import { PublicLawTable } from "@/components/public-law-table/public-law-table";
+import type { PublicLawTableLayoutUpdate } from "@/components/public-law-table/public-law-table-layout.logic";
 import { UNORDERED_COLUMN } from "@/components/workspaces/properties/sort-property.logic";
 import type { SortDirectionOffers } from "@/components/workspaces/properties/sort-property.logic";
 import type { ColumnToggleGroup } from "@/components/workspaces/table/column-toggle";
@@ -54,39 +48,28 @@ import type {
 } from "@/components/workspaces/table/types";
 import { selectColId } from "@/components/workspaces/table/workspace-table/internals-helpers";
 import {
+  STATUTE_COLUMN_ICONS,
+  StatuteColumnIcon,
+} from "@/features/statutes/components/statute-table.pending";
+import {
   statuteListLinkTarget,
   useOpenStatuteTab,
 } from "@/features/statutes/open-statute-tab";
 import type { StatuteListItem } from "@/features/statutes/queries/statutes";
 import {
-  STATUTE_COLUMN_IDS,
   STATUTE_COLUMN_LABEL_KEYS,
   STATUTE_COLUMN_MIN_SIZE,
   STATUTE_COLUMN_MODEL,
   STATUTE_COLUMN_SORT_KEYS,
   STATUTE_VALIDITY_LABEL_KEYS,
 } from "@/features/statutes/statute-columns.logic";
-import type {
-  StatuteColumnId,
-  StatuteTableLayout,
-} from "@/features/statutes/statute-columns.logic";
 import { statuteTabId } from "@/features/statutes/statute-inspector.logic";
 import { statuteTableSorting } from "@/features/statutes/statute-order.logic";
 import type { StatuteColumnOrder } from "@/features/statutes/statute-order.logic";
+import type { StatuteTableLayout } from "@/features/statutes/statute-table-layout.logic";
 import { useFormatter } from "@/i18n/formatting-context";
 import { statuteDocumentIdentity } from "@/lib/legal/statute-act-number";
 import { EM_DASH, formatValidityDate } from "@/lib/statutes/statute-format";
-
-/** The icon each statute column wears in its header menu and the chooser. */
-const STATUTE_COLUMN_ICONS = {
-  act: ScrollTextIcon,
-  type: ShapesIcon,
-  validity: CircleDotIcon,
-  firstVersion: CalendarIcon,
-  amendments: HistoryIcon,
-  lastAmended: CalendarClockIcon,
-  citedBy: HashIcon,
-} as const satisfies Record<StatuteColumnId, LucideIcon>;
 
 const statuteRowId = (row: StatuteRowData): string => row.statute.id;
 
@@ -103,7 +86,9 @@ type StatuteTableProps = {
   /** See `PublicLawTable`. */
   isRefreshing?: boolean | undefined;
   layout: StatuteTableLayout;
-  onLayoutChange: (layout: StatuteTableLayout) => void;
+  onLayoutChange: (
+    update: PublicLawTableLayoutUpdate<StatuteTableLayout>,
+  ) => void;
   /** The order the rows were read in, as the headers state and change it. */
   order: StatuteColumnOrder;
   statutes: readonly StatuteListItem[];
@@ -206,17 +191,6 @@ export const useStatuteColumnGroups = (): ColumnToggleGroup[] => {
       })),
     },
   ];
-};
-
-export const StatuteColumnIcon = ({
-  className = "size-3.5",
-  column,
-}: {
-  className?: string;
-  column: StatuteColumnId;
-}) => {
-  const Icon = STATUTE_COLUMN_ICONS[column];
-  return <Icon className={className} />;
 };
 
 /**

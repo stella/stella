@@ -135,6 +135,7 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "apps/api/src/lib/clauses/**/*.ts",
   "apps/api/src/lib/conditions/**/*.ts",
   "apps/api/src/lib/data-export/**/*.ts",
+  "apps/api/src/lib/dictation/**/*.ts",
   "apps/api/src/lib/document-review/**/*.ts",
   "apps/api/src/lib/document-translation/**/*.ts",
   "apps/api/src/lib/document-types/**/*.ts",
@@ -177,8 +178,10 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "apps/api/src/lib/work-obligations/**/*.ts",
   "apps/api/src/lib/workspaces/**/*.ts",
   "apps/api/src/lib/write-contract/**/*.ts",
+  "apps/desktop/src/dictation/**/*.{ts,tsx}",
   "apps/desktop/src/onboarding/**/*.{ts,tsx}",
   "apps/desktop/src/registry/**/*.{ts,tsx}",
+  "apps/desktop/src/transcribe/**/*.{ts,tsx}",
   "apps/web/src/components/ai-elements/**/*.{ts,tsx}",
   "apps/web/src/components/ai-prompt-input/**/*.{ts,tsx}",
   "apps/web/src/components/billing/**/*.{ts,tsx}",
@@ -201,6 +204,7 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "apps/web/src/components/viewer/**/*.{ts,tsx}",
   "apps/web/src/features/avt/**/*.{ts,tsx}",
   "apps/web/src/features/command-palette/**/*.{ts,tsx}",
+  "apps/web/src/features/correspondence/**/*.{ts,tsx}",
   "apps/web/src/features/organization/**/*.{ts,tsx}",
   "apps/web/src/features/desktop/**/*.{ts,tsx}",
   "apps/web/src/features/guides/**/*.{ts,tsx}",
@@ -251,6 +255,7 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "packages/country-codes/src/**/*.ts",
   "packages/db-load-gate/src/**/*.ts",
   "packages/decision-reader/src/**/*.{ts,tsx}",
+  "packages/docx-authoring/src/**/*.ts",
   "packages/docx-utils/src/**/*.ts",
   "packages/errors/src/**/*.ts",
   "packages/fetch/src/**/*.ts",
@@ -324,6 +329,13 @@ export const RESULT_BOUNDARY_GLOBS = [
   // Better Auth maps a rejected code exchange to its callback error, so the
   // retry wrapper hands the provider's rejection back unchanged.
   "apps/api/src/lib/auth/social-token-exchange.ts",
+  // Better Auth consumes an SSO endpoint gate's and the session provenance
+  // hook's refusals as rejected APIError values.
+  "apps/api/src/lib/auth/sso-sign-in.ts",
+  // Better Auth consumes the organization endpoints' SSO refusal as a
+  // rejected APIError value.
+  "apps/api/src/lib/auth/sso-organization-guard.ts",
+  "apps/api/src/lib/auth/sso-organization-guard.ts",
 
   "apps/api/src/lib/api-handlers.ts",
   "apps/api/src/handlers/**/routes.ts",
@@ -427,6 +439,9 @@ export const RESULT_BOUNDARY_GLOBS = [
   "packages/scripts/src/offline-check-startup.ts",
   "packages/start-runtime/src/runtime.ts",
   "packages/ssr-testkit/src/assert-document.ts",
+  // The TanStack Start request boundary turns callback throws into responses;
+  // test assertions rethrow their original value for Bun to report.
+  "packages/start-runtime/src/test-request.ts",
   "packages/property-testing/src/index.ts",
   // wasm-bindgen reports initialization failures and traps through rejection;
   // this adapter converts that runtime contract to a typed Result.

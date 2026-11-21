@@ -198,6 +198,7 @@ for (const mode of Object.values(SIGN_IN_MODE)) {
         email: "reader@example.test",
         redirectTo: "/account",
         mode: SIGN_IN_MODE.reauthenticate,
+        signInAttempt: expect.stringMatching(/^[\w-]{43}$/u),
       });
     }
   });

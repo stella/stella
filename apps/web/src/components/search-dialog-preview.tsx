@@ -415,6 +415,7 @@ const SearchTextPreview = ({
           </p>
           <Button
             disabled={isFetching}
+            disabledReason={t("common.loading")}
             onClick={() => {
               detached(refetch(), "search-dialog.refetch");
             }}

@@ -379,6 +379,9 @@ const DayHeader = ({
           disabled={
             navigationDisabled || snapshot.date <= snapshot.earliestDate
           }
+          disabledReason={
+            navigationDisabled ? t("creatingDrafts") : t("earliestDayReached")
+          }
           onClick={() => onNavigate(shiftDate(snapshot.date, -1))}
           size="icon"
           variant="ghost"
@@ -395,6 +398,9 @@ const DayHeader = ({
         <Button
           aria-label={t("nextDay")}
           disabled={navigationDisabled || snapshot.date >= snapshot.latestDate}
+          disabledReason={
+            navigationDisabled ? t("creatingDrafts") : t("latestDayReached")
+          }
           onClick={() => onNavigate(shiftDate(snapshot.date, 1))}
           size="icon"
           variant="ghost"
@@ -404,6 +410,7 @@ const DayHeader = ({
         {snapshot.date === snapshot.today ? null : (
           <Button
             disabled={navigationDisabled}
+            disabledReason={t("creatingDrafts")}
             onClick={() => onNavigate(snapshot.today)}
             variant="ghost"
           >

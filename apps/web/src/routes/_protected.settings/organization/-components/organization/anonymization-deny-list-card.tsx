@@ -18,14 +18,13 @@ import {
 } from "@stll/ui/combobox";
 import { openFilePicker } from "@stll/ui/file-picker";
 import { Form } from "@stll/ui/form";
-import { Frame, FramePanel } from "@stll/ui/frame";
 import { Trash2Icon as Trash2, UploadIcon } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
 import { stellaToast } from "@stll/ui/toast";
 import { TruncatedText } from "@stll/ui/truncated-text";
 
 import { matchesComboboxItem } from "@/components/combobox-filter.logic";
-import { QueryViewFeedback } from "@/components/query-view-feedback";
+import { SettledQueryViewFeedback } from "@/components/query-view-feedback";
 import type { TranslationKey } from "@/i18n/types";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
@@ -34,6 +33,14 @@ import { detached } from "@/lib/detached";
 import { unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError, notifyUserProblem } from "@/lib/errors/user-toast";
 import { queryView } from "@/lib/query-view.logic";
+import {
+  ANONYMIZATION_FORM_ROW_CLASS,
+  ANONYMIZATION_IMPORT_HINT_CLASS,
+  AnonymizationDenyListFrame,
+  AnonymizationEntriesHeading,
+  AnonymizationEntriesPending,
+  AnonymizationEntryRow,
+} from "@/routes/_protected.settings/organization/-components/organization/anonymization-deny-list-card.pending";
 import { useSettingsMutation } from "@/routes/_protected.settings/organization/-hooks/use-settings-mutation";
 import {
   organizationAnonymizationBlacklistKeys,
@@ -427,165 +434,184 @@ export const AnonymizationDenyListCard = () => {
     );
   };
 
-  if (blacklistView.type !== "items") {
-    return <QueryViewFeedback view={blacklistView} />;
+  if (blacklistView.type === "error") {
+    return <SettledQueryViewFeedback view={blacklistView} />;
   }
 
-  return (
-    <Frame>
-      <FramePanel>
-        <div className="flex flex-col gap-3 p-1">
-          <QueryViewFeedback view={blacklistView} />
-          <div className="rounded-md border p-3">
-            <Form action={submitTerm} density="compact">
-              <Input
-                autoComplete="off"
-                disabled={updateMutation.isPending}
-                onChange={(event) => setPendingCanonical(event.target.value)}
-                placeholder={t(
-                  "settings.organization.anonymization.addPlaceholder",
-                )}
-                value={pendingCanonical}
-              />
-              <div className="flex items-center gap-2">
-                <Combobox<LabelOption>
-                  autoHighlight
-                  disabled={updateMutation.isPending}
-                  filter={matchesComboboxItem}
-                  items={[...LABEL_OPTIONS]}
-                  itemToStringLabel={(option) =>
-                    t(LABEL_TRANSLATION_KEY[option])
-                  }
-                  onValueChange={(next) => {
-                    if (next) {
-                      setPendingLabel(next);
-                    }
-                  }}
-                  value={pendingLabel}
-                >
-                  <ComboboxInput
-                    aria-label={t(
-                      "settings.organization.anonymization.labelPickerAriaLabel",
-                    )}
-                    className="h-9 min-w-0 flex-1 text-xs"
-                    placeholder={t(
-                      "settings.organization.anonymization.labelPickerPlaceholder",
-                    )}
-                  />
-                  <ComboboxPopup>
-                    <ComboboxList>
-                      {(option: LabelOption) => (
-                        <ComboboxItem key={option} value={option}>
-                          {t(LABEL_TRANSLATION_KEY[option])}
-                        </ComboboxItem>
-                      )}
-                    </ComboboxList>
-                    <ComboboxEmpty>
-                      {t(
-                        "settings.organization.anonymization.labelPickerEmpty",
-                      )}
-                    </ComboboxEmpty>
-                  </ComboboxPopup>
-                </Combobox>
-                <AddTermSubmitButton
-                  disabled={
-                    pendingCanonical.trim().length === 0 ||
-                    entries === undefined ||
-                    updateMutation.isPending
-                  }
-                  label={t("common.add")}
-                />
-              </div>
-              <div className="flex items-center gap-2">
-                <Button
-                  disabled={entries === undefined || updateMutation.isPending}
-                  onClick={() => {
-                    openFilePicker({
-                      accept:
-                        ".csv,.txt,.json,text/csv,text/plain,application/json",
-                      onPick: ([file]) => {
-                        detached(
-                          handleImportFile(file),
-                          "anonymization-deny-list-card.import-file",
-                        );
-                      },
-                    });
-                  }}
-                  size="sm"
-                  type="button"
-                  variant="outline"
-                >
-                  <UploadIcon className="size-3.5" />
-                  {t("common.import")}
-                </Button>
-                <span className="text-muted-foreground text-xs">
-                  {t("settings.organization.anonymization.importHint")}
-                </span>
-              </div>
-            </Form>
-          </div>
+  // While the list loads, the form stands ready (its writes wait on the
+  // list) and placeholder rows hold the list's place.
+  const resolveAddDenyListTermDisabledReason = () => {
+    if (updateMutation.isPending) {
+      return t("common.saving");
+    }
+    if (entries === undefined) {
+      return t("common.loading");
+    }
+    return t("common.enterTerm");
+  };
 
-          <div className="flex flex-col gap-1">
-            <div className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
+  return (
+    <AnonymizationDenyListFrame
+      feedback={<SettledQueryViewFeedback view={blacklistView} />}
+      addTerm={
+        <Form action={submitTerm} density="compact">
+          <Input
+            autoComplete="off"
+            disabled={updateMutation.isPending}
+            onChange={(event) => setPendingCanonical(event.target.value)}
+            placeholder={t(
+              "settings.organization.anonymization.addPlaceholder",
+            )}
+            value={pendingCanonical}
+          />
+          <div className={ANONYMIZATION_FORM_ROW_CLASS}>
+            <Combobox<LabelOption>
+              autoHighlight
+              disabled={updateMutation.isPending}
+              filter={matchesComboboxItem}
+              items={[...LABEL_OPTIONS]}
+              itemToStringLabel={(option) => t(LABEL_TRANSLATION_KEY[option])}
+              onValueChange={(next) => {
+                if (next) {
+                  setPendingLabel(next);
+                }
+              }}
+              value={pendingLabel}
+            >
+              <ComboboxInput
+                aria-label={t(
+                  "settings.organization.anonymization.labelPickerAriaLabel",
+                )}
+                className="h-9 min-w-0 flex-1 text-xs"
+                placeholder={t(
+                  "settings.organization.anonymization.labelPickerPlaceholder",
+                )}
+              />
+              <ComboboxPopup>
+                <ComboboxList>
+                  {(option: LabelOption) => (
+                    <ComboboxItem key={option} value={option}>
+                      {t(LABEL_TRANSLATION_KEY[option])}
+                    </ComboboxItem>
+                  )}
+                </ComboboxList>
+                <ComboboxEmpty>
+                  {t("settings.organization.anonymization.labelPickerEmpty")}
+                </ComboboxEmpty>
+              </ComboboxPopup>
+            </Combobox>
+            <AddTermSubmitButton
+              disabled={
+                pendingCanonical.trim().length === 0 ||
+                entries === undefined ||
+                updateMutation.isPending
+              }
+              disabledReason={resolveAddDenyListTermDisabledReason()}
+              label={t("common.add")}
+            />
+          </div>
+          <div className={ANONYMIZATION_FORM_ROW_CLASS}>
+            <Button
+              disabled={entries === undefined || updateMutation.isPending}
+              disabledReason={
+                updateMutation.isPending
+                  ? t("common.saving")
+                  : t("common.loading")
+              }
+              onClick={() => {
+                openFilePicker({
+                  accept:
+                    ".csv,.txt,.json,text/csv,text/plain,application/json",
+                  onPick: ([file]) => {
+                    detached(
+                      handleImportFile(file),
+                      "anonymization-deny-list-card.import-file",
+                    );
+                  },
+                });
+              }}
+              size="sm"
+              type="button"
+              variant="outline"
+            >
+              <UploadIcon className="size-3.5" />
+              {t("common.import")}
+            </Button>
+            <span className={ANONYMIZATION_IMPORT_HINT_CLASS}>
+              {t("settings.organization.anonymization.importHint")}
+            </span>
+          </div>
+        </Form>
+      }
+      entries={
+        blacklistView.type === "pending" ? (
+          <AnonymizationEntriesPending />
+        ) : (
+          <>
+            <AnonymizationEntriesHeading>
               {t("settings.organization.anonymization.entriesHeading", {
                 count: String(renderedEntries.length),
               })}
-            </div>
-            {blacklistQuery.isLoading && (
-              <div className="text-muted-foreground py-6 text-center text-xs">
-                {t("common.loading")}
-              </div>
-            )}
-            {!blacklistQuery.isLoading && renderedEntries.length === 0 && (
+            </AnonymizationEntriesHeading>
+            {renderedEntries.length === 0 && (
               <div className="text-muted-foreground rounded-md border border-dashed py-6 text-center text-xs">
                 {t("settings.organization.anonymization.emptyState")}
               </div>
             )}
             {renderedEntries.map((entry) => (
-              <div
-                className="hover:bg-muted/50 flex items-center justify-between gap-2 rounded-md border px-3 py-2"
-                key={entry.id}
-              >
-                <div className="flex min-w-0 flex-col">
+              <AnonymizationEntryRow
+                action={
+                  <Button
+                    disabled={updateMutation.isPending}
+                    disabledReason={t("common.saving")}
+                    onClick={() => removeEntry(entry.canonical)}
+                    size="icon"
+                    variant="ghost"
+                  >
+                    <Trash2 className="size-4" />
+                    <span className="sr-only">
+                      {t("settings.organization.anonymization.deleteAction")}
+                    </span>
+                  </Button>
+                }
+                canonical={
                   <TruncatedText className="text-sm font-medium">
                     {entry.canonical}
                   </TruncatedText>
-                  <span className="text-muted-foreground text-xs">
-                    {isKnownLabel(entry.label)
-                      ? t(LABEL_TRANSLATION_KEY[entry.label])
-                      : entry.label}
-                  </span>
-                </div>
-                <Button
-                  disabled={updateMutation.isPending}
-                  onClick={() => removeEntry(entry.canonical)}
-                  size="icon"
-                  variant="ghost"
-                >
-                  <Trash2 className="size-4" />
-                  <span className="sr-only">
-                    {t("settings.organization.anonymization.deleteAction")}
-                  </span>
-                </Button>
-              </div>
+                }
+                key={entry.id}
+                label={
+                  isKnownLabel(entry.label)
+                    ? t(LABEL_TRANSLATION_KEY[entry.label])
+                    : entry.label
+                }
+              />
             ))}
-          </div>
-        </div>
-      </FramePanel>
-    </Frame>
+          </>
+        )
+      }
+    />
   );
 };
 
 const AddTermSubmitButton = ({
   disabled,
+  disabledReason,
   label,
 }: {
   disabled: boolean;
+  disabledReason: string;
   label: string;
 }) => {
+  const t = useTranslations();
   const { pending } = useFormStatus();
   return (
-    <Button disabled={disabled || pending} size="sm" type="submit">
+    <Button
+      disabled={disabled || pending}
+      disabledReason={pending ? t("common.saving") : disabledReason}
+      size="sm"
+      type="submit"
+    >
       {label}
     </Button>
   );

@@ -42,6 +42,22 @@ const server = serveForTest(
             ),
         },
       },
+      "/challenge": {
+        GET: {
+          access: "public",
+          config: {},
+          run: async () =>
+            await Promise.resolve(
+              new Response(null, {
+                status: 401,
+                headers: {
+                  "WWW-Authenticate": 'Bearer error="invalid_token"',
+                  "Access-Control-Expose-Headers": "WWW-Authenticate",
+                },
+              }),
+            ),
+        },
+      },
     }),
   }),
 );
@@ -87,4 +103,19 @@ test("cross-origin downloads expose undecided AI conditions", () => {
   expect(CORS_EXPOSED_HEADERS).toContain(UNDECIDED_CONDITIONS_HEADER);
   expect(CORS_EXPOSED_HEADERS).toContain("X-Ai-Field-Errors");
   expect(CORS_EXPOSED_HEADERS).toContain("Idempotency-Replayed");
+});
+
+test("a cross-origin answer keeps the headers its handler already exposed", async () => {
+  const response = await server.fetch(
+    new Request("http://localhost/challenge", {
+      headers: { Origin: ALLOWED_ORIGIN },
+    }),
+  );
+  expect(response.status).toBe(401);
+  const exposed = exposedHeaders(response);
+  expect(exposed).toContain("www-authenticate");
+  expect(exposed).toContain(REQUEST_ID_HEADER);
+  expect(
+    exposed?.filter((header) => header === "www-authenticate"),
+  ).toHaveLength(1);
 });

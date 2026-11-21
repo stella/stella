@@ -80,7 +80,7 @@ jobs:
           done
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@41fbea3b521bfc57b791003918de97f153d790a7
+        uses: stella/.github/actions/setup-bun-cached@2664e46f02aea7164ba71bcdd485a686166993a4
         with:
           save: ${{ github.ref == 'refs/heads/main' }}
 
@@ -155,7 +155,7 @@ jobs:
           done
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@41fbea3b521bfc57b791003918de97f153d790a7
+        uses: stella/.github/actions/setup-bun-cached@2664e46f02aea7164ba71bcdd485a686166993a4
         with:
           save: ${{ github.ref == 'refs/heads/main' }}
 
@@ -242,7 +242,7 @@ jobs:
           done
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@41fbea3b521bfc57b791003918de97f153d790a7
+        uses: stella/.github/actions/setup-bun-cached@2664e46f02aea7164ba71bcdd485a686166993a4
         with:
           save: ${{ github.ref == 'refs/heads/main' }}
 

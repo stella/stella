@@ -38,6 +38,9 @@ export const REVIEW_RESET_KEPT_TABLES = {
   account_exports:
     "Account-owned export ledger: an organization audit archive belongs to the requesting account and keeps no reference to the organization.",
   organization_settings: "Organization settings, not reviewer content.",
+  sso_provider: "Sign-in configuration set by operators, not reviewer content.",
+  organization_sso_policy:
+    "Sign-in policy set by operators, not reviewer content.",
   billing_draft_user_settings:
     "Per-user billing draft consent and preferences, not reviewer content.",
   conflict_checks:
@@ -70,6 +73,8 @@ export const REVIEW_RESET_KEPT_TABLES = {
   buffer_object_cleanup_intents:
     "Storage tombstones: they must outlive the rows they erase.",
   entity_deletion_cleanup_requests:
+    "Storage tombstones: they must outlive the rows they erase.",
+  agent_skill_original_cleanup_requests:
     "Storage tombstones: they must outlive the rows they erase.",
   template_deletion_cleanup_requests:
     "Storage tombstones: they must outlive the rows they erase.",

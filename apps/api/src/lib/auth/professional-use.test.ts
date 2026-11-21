@@ -32,6 +32,8 @@ describe("account creation origin", () => {
     ["/callback/:id", "social_registration"],
     ["/sign-up/email", "bootstrap_registration"],
     ["/sign-in/social", "social_registration"],
+    ["/sso/callback/sso_acme", "sso_registration"],
+    ["/sso/callback/:providerId", "sso_registration"],
     [AGENT_IDENTITY_CREATE_USER_PATH, "agent_provisioning"],
     [REVIEW_ACCOUNT_CREATE_USER_PATH, "operator_command"],
   ] as const)("an account created through %s has origin %s", (path, origin) => {
@@ -44,6 +46,7 @@ describe("account creation origin", () => {
     ["/admin/create-user"],
     ["/sign-in/anonymous"],
     ["/callback"],
+    ["/sso/callback"],
     ["virtual:"],
     [undefined],
   ] as const)("refuses an account created through %p", (path) => {

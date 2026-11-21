@@ -2,7 +2,6 @@ import { useQuery } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
-import { Frame, FramePanel } from "@stll/ui/frame";
 import { Trash2Icon } from "@stll/ui/icons";
 import { Label } from "@stll/ui/label";
 
@@ -12,6 +11,12 @@ import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { deepLConfigOptions } from "@/lib/deepl/queries";
 import { queryView } from "@/lib/query-view.logic";
 
+import {
+  AIKeyFieldFrame,
+  AIKeySectionHeading,
+  DEEPL_KEY_SECTION,
+  DeepLKeyCardPending,
+} from "./ai-key-card.pending";
 import { AISettingsSectionFeedback } from "./ai-settings-section";
 import type { KeySettingsSectionProps } from "./ai-settings-section";
 
@@ -35,6 +40,9 @@ export const DeepLKeyCard = ({
 
   const removeLabel = tCommon("remove");
 
+  if (settingsView.type === "pending") {
+    return <DeepLKeyCardPending />;
+  }
   if (settingsView.type !== "items") {
     return <QueryViewFeedback view={settingsView} />;
   }
@@ -42,10 +50,10 @@ export const DeepLKeyCard = ({
   return (
     <div className="flex flex-col gap-4">
       <QueryViewFeedback view={settingsView} />
-      <div>
-        <h3 className="text-base font-medium">{t("title")}</h3>
-        <p className="text-muted-foreground text-sm">{t("description")}</p>
-      </div>
+      <AIKeySectionHeading
+        description={DEEPL_KEY_SECTION.description}
+        title={DEEPL_KEY_SECTION.title}
+      />
 
       {draft.action !== "cleared" && deeplConfig?.configured === true && (
         <div className="flex items-center justify-between gap-2">
@@ -63,6 +71,7 @@ export const DeepLKeyCard = ({
           <Button
             aria-label={removeLabel}
             disabled={disabled}
+            disabledReason={tCommon("saving")}
             onClick={onRemove}
             size="sm"
             tooltip={removeLabel}
@@ -73,21 +82,20 @@ export const DeepLKeyCard = ({
         </div>
       )}
 
-      <Frame>
-        <FramePanel>
-          <div className="flex flex-col gap-3 p-1">
-            <Label htmlFor="deepl-api-key">{t("apiKeyLabel")}</Label>
-            <SecretInput
-              autoComplete="off"
-              disabled={disabled}
-              id="deepl-api-key"
-              onChange={(e) => onChange(e.target.value)}
-              placeholder={t("apiKeyPlaceholder")}
-              value={draft.action === "set" ? draft.apiKey : ""}
-            />
-          </div>
-        </FramePanel>
-      </Frame>
+      <AIKeyFieldFrame
+        input={
+          <SecretInput
+            autoComplete="off"
+            disabled={disabled}
+            disabledReason={tCommon("saving")}
+            id="deepl-api-key"
+            onChange={(e) => onChange(e.target.value)}
+            placeholder={t("apiKeyPlaceholder")}
+            value={draft.action === "set" ? draft.apiKey : ""}
+          />
+        }
+        label={<Label htmlFor="deepl-api-key">{t("apiKeyLabel")}</Label>}
+      />
 
       {draft.action === "cleared" && (
         <p className="text-muted-foreground text-sm">

@@ -89,6 +89,7 @@ export const ClaimHistory = ({
         aria-expanded={open}
         className="flex w-full items-center justify-between"
         disabled={count === 0}
+        disabledReason={t("avt.history.none")}
         onClick={() => setOpen(!open)}
         variant="plain"
       >

@@ -50,6 +50,7 @@ import { fieldIssueOrToast, notifyUserError } from "@/lib/errors/user-toast";
 import { useIdempotentMutation } from "@/lib/idempotency/use-idempotent-mutation";
 import { localISODate } from "@/lib/local-iso-date";
 import type { NonEmptyPatch } from "@/lib/mutation-command";
+import { roleTranslationKeys } from "@/lib/organization/consts";
 import { organizationOptions } from "@/lib/organization/queries";
 import { queryView } from "@/lib/query-view.logic";
 import { toSafeId } from "@/lib/safe-id";
@@ -522,6 +523,7 @@ const RateEntriesView = ({
       }: {
         workspaceId: string;
         rateTableId: string;
+        currency: string;
         userId?: string | null;
         role?: (typeof ORGANIZATION_ROLE_NAMES)[number] | null;
         activityCodeId?: string | null;
@@ -629,6 +631,8 @@ const RateEntriesView = ({
 
       <Button
         className="self-end"
+        disabled={!table}
+        disabledReason={t("billing.rates.rateTableNoLongerAvailable")}
         onClick={() => setShowForm(!showForm)}
         size="sm"
         variant="outline"
@@ -637,15 +641,20 @@ const RateEntriesView = ({
         {t("billing.rates.addRate")}
       </Button>
 
-      {showForm && (
+      {showForm && table && (
         <CreateRateEntryForm
-          currency={table?.currency ?? "USD"}
+          currency={table.currency}
           workspaceId={workspaceId}
           members={members}
           onCancel={() => setShowForm(false)}
           onSubmit={(values) => {
             createEntry.mutate(
-              { workspaceId, rateTableId, ...values },
+              {
+                workspaceId,
+                rateTableId,
+                currency: table.currency,
+                ...values,
+              },
               {
                 onSuccess: () => setShowForm(false),
                 onError: (error) => {
@@ -658,17 +667,14 @@ const RateEntriesView = ({
         />
       )}
 
-      {entries && entries.length > 0 ? (
+      {entries && table && entries.length > 0 ? (
         <div className="flex flex-col gap-1.5">
           {entries.map((entry) => (
             <div
               className="group flex items-center gap-3 rounded-md border px-3 py-2"
               key={entry.id}
             >
-              <RateEntryDetails
-                entry={entry}
-                currency={table?.currency ?? "USD"}
-              />
+              <RateEntryDetails entry={entry} currency={table.currency} />
 
               <Button
                 aria-label={t("common.delete")}
@@ -940,7 +946,7 @@ const RateRoleSelect = ({
           <SelectItem value="none">{t("common.none")}</SelectItem>
           {ORGANIZATION_ROLE_NAMES.map((role) => (
             <SelectItem key={role} value={role}>
-              {t(`organization.roles.${role}`)}
+              {t(roleTranslationKeys[role].labelKey)}
             </SelectItem>
           ))}
         </SelectPopup>
@@ -1021,7 +1027,7 @@ const RateEntryDetails = ({
         <div className="flex items-center gap-2">
           <span className="text-sm font-medium">
             {entry.role
-              ? t(`organization.roles.${entry.role}`)
+              ? t(roleTranslationKeys[entry.role].labelKey)
               : t("billing.rates.defaultRate")}
           </span>
           <span className="text-sm tabular-nums">

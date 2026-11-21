@@ -13,6 +13,7 @@ import {
   PUBLIC_COUNTRY_SURFACE_OPEN,
 } from "@stll/api-contract/public-country-capability";
 import { compareByLocale, compareCodeUnit } from "@stll/collation";
+import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 
 import type { DecisionIdentityRow } from "@/api/handlers/case-law/decisions/lookup-by-identity";
 import {
@@ -116,13 +117,27 @@ const decisionText = (
 };
 
 /**
- * A candidate's label: court, kind of decision and date. One docket can
- * hold a judgment and the Advocate General's opinion on it, decided by the
- * same court, so without the kind two candidates differ only by date.
+ * Publisher identity evidence distinguishes siblings of a docket even when
+ * the court, kind and date coincide. Reporter references remain typed: a
+ * cited docket or a parallel case number is not a publication label.
  */
 const candidateLabel = (row: DecisionIdentityRow): string =>
-  [row.court, row.decisionType, row.decisionDate ?? row.caseNumber]
-    .filter((part) => part !== null && part !== "")
+  [
+    row.court,
+    row.decisionType,
+    row.senate,
+    row.decisionDate ?? row.caseNumber,
+    row.publishedCaseNumber,
+    ...new Set(
+      row.identifiers
+        .filter(
+          ({ type }) => type === DECISION_IDENTIFIER_TYPES.REPORTER_CITATION,
+        )
+        .map(({ value }) => value)
+        .toSorted(compareCodeUnit),
+    ),
+  ]
+    .filter((part) => typeof part === "string" && part !== "")
     .join(", ");
 
 /**
@@ -230,6 +245,19 @@ const decisionDocument = async ({
           ),
   };
 };
+
+const ambiguousDecisionCandidates = (
+  rows: readonly DecisionIdentityRow[],
+  completeness: "complete" | "truncated",
+) =>
+  ({
+    status: "ambiguous",
+    ...(completeness === "truncated" ||
+    rows.length > LIMITS.caseLawLookupCandidatesMax
+      ? { candidateSet: "truncated" as const }
+      : {}),
+    candidates: rows.slice(0, LIMITS.caseLawLookupCandidatesMax).map(candidate),
+  }) as const satisfies DecisionResolveResponse;
 
 const otherCourtCandidate = (row: DecisionIdentityRow) => ({
   ...candidate(row),
@@ -341,6 +369,14 @@ const resolveConstrainedDecision = async ({
       .toSorted(byCourtThenDate(family[0]?.language ?? "en"))
       .slice(0, LIMITS.caseLawLookupCandidatesMax)
       .map(otherCourtCandidate);
+  if (rows.some((row) => row.exactIdentityRead === "truncated")) {
+    return ambiguousDecisionCandidates(
+      family.filter(
+        (row) => !namesCourt(constraints) || atNamedCourt(constraints, row),
+      ),
+      "truncated",
+    );
+  }
   if (namesUnrecognizedCourt(constraints) && family.length > 0) {
     return {
       status: "not_found",
@@ -381,6 +417,7 @@ const resolveConstrainedDecision = async ({
       : { ...response, otherCourtCandidates };
   const resolution = resolveDecisionIdentity(intent, scopedRows, {
     reporters,
+    exactIdentityRead: rows.at(0)?.exactIdentityRead,
   });
   const answer = async (): Promise<DecisionResolveResponse> => {
     switch (resolution.status) {
@@ -406,12 +443,9 @@ const resolveConstrainedDecision = async ({
                 reason: "no_exact_identity",
               });
         }
-        return withOtherCourts({
-          status: "ambiguous",
-          candidates: resolution.candidates
-            .slice(0, LIMITS.caseLawLookupCandidatesMax)
-            .map(candidate),
-        });
+        return withOtherCourts(
+          ambiguousDecisionCandidates(resolution.candidates, "complete"),
+        );
       }
       case "unique":
         return await admit(resolution.decision);

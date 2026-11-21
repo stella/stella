@@ -3,6 +3,7 @@ import { writeFileSync } from "node:fs";
 import { createServer } from "node:net";
 import path from "node:path";
 import { json } from "node:stream/consumers";
+import { fileURLToPath } from "node:url";
 import * as v from "valibot";
 
 import { spawnDevProcess } from "../dev-process-groups";
@@ -36,7 +37,7 @@ const child = spawnDevProcess({
   rootDir,
   cmd: [
     process.execPath,
-    new URL("dev-process-tree.ts", import.meta.url).pathname,
+    fileURLToPath(new URL("dev-process-tree.ts", import.meta.url)),
     "leader",
     readyPath,
     termMode,

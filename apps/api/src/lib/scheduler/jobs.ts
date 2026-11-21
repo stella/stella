@@ -14,6 +14,10 @@ import { SOURCE_ARRIVALS_REFRESH_INTERVAL_MS } from "@/api/lib/case-law/source-a
 import type { AggregateIdentities } from "@/api/lib/db/aggregate-lock-entries/identities.gen";
 import type { ScheduledJobReads } from "@/api/lib/db/read-budgets";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
+import {
+  elevenLabsKeepsTranscripts,
+  readElevenLabsDeployment,
+} from "@/api/lib/dictation/elevenlabs-deployment";
 import { resolveEmailEvents } from "@/api/lib/email/deliverability-config";
 import { resolveInboundMailReceiving } from "@/api/lib/email/inbound/receiving-config";
 import { isFeatureDeployed } from "@/api/lib/feature-access/deployment";
@@ -36,6 +40,7 @@ import {
 import { computeNextRunAt } from "@/api/lib/scheduler/schedule";
 import { SWEEP_ACTION_COSTS_TASK } from "@/api/lib/scheduler/tasks/action-cost-retention";
 import { BACKFILL_AGENT_CLIENT_STORAGE_TASK } from "@/api/lib/scheduler/tasks/agent-client-storage-backfill";
+import { CLEAN_AGENT_SKILL_ORIGINAL_OBJECTS_TASK } from "@/api/lib/scheduler/tasks/agent-skill-original-cleanup";
 import { BACKFILL_HEARTBEAT_TASK } from "@/api/lib/scheduler/tasks/backfill-heartbeat";
 import { RECONCILE_BILINGUAL_RUNS_TASK } from "@/api/lib/scheduler/tasks/bilingual-run-reconcile";
 import { RECONCILE_BUFFER_INTENTS_TASK } from "@/api/lib/scheduler/tasks/buffer-intent-reconciliation";
@@ -47,12 +52,16 @@ import { BACKFILL_CASE_LAW_PARSED_INPUT_STATE_TASK } from "@/api/lib/scheduler/t
 import { FOLD_CASE_LAW_POPULATION_COUNTS_TASK } from "@/api/lib/scheduler/tasks/case-law-population-fold";
 import { SEED_CASE_LAW_POPULATION_COUNTS_TASK } from "@/api/lib/scheduler/tasks/case-law-population-seed";
 import { BACKFILL_CASE_LAW_PROVISION_STATE_TASK } from "@/api/lib/scheduler/tasks/case-law-provision-state-backfill";
+import { RECONCILE_CLAIMED_ERASURES_TASK } from "@/api/lib/scheduler/tasks/case-law-publisher-removals";
 import {
   CENSUS_CASE_LAW_RAW_OBJECTS_TASK,
   RECONCILE_CASE_LAW_RAW_ROWS_TASK,
   RECONCILE_CASE_LAW_RAW_SWEEPS_TASK,
 } from "@/api/lib/scheduler/tasks/case-law-raw-storage";
-import { BACKFILL_CASE_LAW_REDACTION_TOMBSTONES_TASK } from "@/api/lib/scheduler/tasks/case-law-redaction-tombstone-backfill";
+import {
+  BACKFILL_CASE_LAW_REDACTION_TOMBSTONES_TASK,
+  REDACTION_TOMBSTONE_BACKFILL_JOB_ID,
+} from "@/api/lib/scheduler/tasks/case-law-redaction-tombstone-backfill";
 import { REFRESH_CASE_LAW_SITEMAP_SHARDS_TASK } from "@/api/lib/scheduler/tasks/case-law-sitemap-shard-refresh";
 import { FOLD_CASE_LAW_SITEMAP_TOUCHES_TASK } from "@/api/lib/scheduler/tasks/case-law-sitemap-touch-fold";
 import { REFRESH_CASE_LAW_SOURCE_ARRIVALS_TASK } from "@/api/lib/scheduler/tasks/case-law-source-arrivals-refresh";
@@ -78,6 +87,7 @@ import { ERASE_HOSTED_CUSTOMERS_TASK } from "@/api/lib/scheduler/tasks/hosted-cu
 import { REDACT_HOSTED_USAGE_WEBHOOK_EVENTS_TASK } from "@/api/lib/scheduler/tasks/hosted-usage-webhook-retention";
 import { RECEIVE_INBOUND_MAIL_TASK } from "@/api/lib/scheduler/tasks/inbound-mail-receive";
 import { INFO_SOUD_SYNC_TRACKED_CASES_TASK } from "@/api/lib/scheduler/tasks/infosoud";
+import { DELETE_KEPT_TRANSCRIPTS_TASK } from "@/api/lib/scheduler/tasks/kept-transcript-deletion";
 import { BACKFILL_LEGISLATION_EXPRESSION_IDS_TASK } from "@/api/lib/scheduler/tasks/legislation-expression-id-backfill";
 import { REFRESH_LEGISLATION_FACETS_TASK } from "@/api/lib/scheduler/tasks/legislation-facet-refresh";
 import { RECONCILE_LIST_VERIFICATION_RUNS_TASK } from "@/api/lib/scheduler/tasks/list-verification-run-reconcile";
@@ -96,6 +106,7 @@ import { AUDIT_SCHEDULER_PAUSES_TASK } from "@/api/lib/scheduler/tasks/scheduler
 import { REPAIR_CHAT_SEARCH_INDEX_TASK } from "@/api/lib/scheduler/tasks/search-chat-index";
 import { REPAIR_SEARCH_PROJECTIONS_TASK } from "@/api/lib/scheduler/tasks/search-projection-repair";
 import { REPAIR_SEARCH_SEMANTIC_TIMESTAMPS_TASK } from "@/api/lib/scheduler/tasks/search-semantic-timestamps";
+import { SYNC_SOFT_LAW_TASK } from "@/api/lib/scheduler/tasks/soft-law-sync";
 import { REFRESH_STATUTE_SITEMAP_SHARDS_TASK } from "@/api/lib/scheduler/tasks/statute-sitemap-shard-refresh";
 import { RECONCILE_STYLE_SET_PACKAGE_CLEANUPS_TASK } from "@/api/lib/scheduler/tasks/style-set-package-cleanup-reconcile";
 import { PURGE_SYSTEM_AUDIT_RUNS_TASK } from "@/api/lib/scheduler/tasks/system-audit-retention";
@@ -529,6 +540,16 @@ export const DECLARED_SCHEDULER_JOBS = [
     reads: "unmeasured",
   },
   {
+    description: "Complete accepted case-law erasures",
+    id: SCHEDULER_BACKFILL_IDS.claimedErasures,
+    mode: "recurring",
+    payloadUpdate: "preserve",
+    payload: { cursor: null },
+    schedule: { type: "interval", everyMs: 60 * 1000 },
+    task: RECONCILE_CLAIMED_ERASURES_TASK,
+    reads: "load-governed",
+  },
+  {
     description: "Delete raw objects of erased or never-written decisions",
     id: "caseLaw.reconcileRawSweeps.minutely",
     mode: "recurring",
@@ -567,11 +588,11 @@ export const DECLARED_SCHEDULER_JOBS = [
   {
     description:
       "Backfill durable case-law redaction tombstones and search cleanup",
-    id: "caseLaw.backfillRedactionTombstones.v2",
+    id: REDACTION_TOMBSTONE_BACKFILL_JOB_ID,
     mode: "oneShot",
     schedule: { type: "interval", everyMs: 60 * 1000 },
     task: BACKFILL_CASE_LAW_REDACTION_TOMBSTONES_TASK,
-    reads: "unmeasured",
+    reads: { budget: "scheduled.caseLaw.redactionTombstones.v3" },
   },
   {
     description: "Move stored agent client values to the shared envelope",
@@ -750,6 +771,16 @@ export const DECLARED_SCHEDULER_JOBS = [
     enabled: env.HOSTED_USAGE_PROVIDER === "polar",
   },
   {
+    description:
+      "Delete transcripts ElevenLabs kept for dictation without zero retention",
+    id: "dictation.deleteKeptTranscripts.minute",
+    mode: "recurring",
+    schedule: { type: "interval", everyMs: 60 * 1000 },
+    task: DELETE_KEPT_TRANSCRIPTS_TASK,
+    reads: { budget: "scheduled.dictation.deleteKeptTranscripts" },
+    enabled: elevenLabsKeepsTranscripts(readElevenLabsDeployment()),
+  },
+  {
     description: "Delete expired action cost observations",
     id: "actions.sweepCosts.minute",
     mode: "recurring",
@@ -830,7 +861,8 @@ export const DECLARED_SCHEDULER_JOBS = [
     reads: { budget: "scheduled.dataExports.maintain" },
   },
   {
-    description: "Delete style set packages a replacement left behind",
+    description:
+      "Delete packages recorded by style set replacements and deletions",
     id: "styleSets.reconcilePackageCleanups.fiveMinute",
     mode: "recurring",
     schedule: { type: "interval", everyMs: 5 * 60 * 1000 },
@@ -844,6 +876,14 @@ export const DECLARED_SCHEDULER_JOBS = [
     schedule: { type: "interval", everyMs: 60 * 1000 },
     task: CLEAN_TEMPLATE_DELETION_OBJECTS_TASK,
     reads: "unmeasured",
+  },
+  {
+    description: "Erase skill file originals recorded by committed deletions",
+    id: "agentSkills.cleanOriginalObjects.oneMinute",
+    mode: "recurring",
+    schedule: { type: "interval", everyMs: 60 * 1000 },
+    task: CLEAN_AGENT_SKILL_ORIGINAL_OBJECTS_TASK,
+    reads: { budget: "scheduled.agentSkills.cleanOriginalObjects" },
   },
   {
     description:
@@ -882,6 +922,15 @@ export const DECLARED_SCHEDULER_JOBS = [
     schedule: { type: "interval", everyMs: 60_000 },
     task: DRAIN_SANCTIONS_MONITORING_TASK,
     reads: "unmeasured",
+  },
+  {
+    description: "Sync regulator guidance from served sources",
+    enabled: env.SOFT_LAW_SYNC_ENABLED,
+    id: "softLaw.sync.daily",
+    mode: "recurring",
+    schedule: { type: "interval", everyMs: DAY_IN_MS },
+    task: SYNC_SOFT_LAW_TASK,
+    reads: { budget: "scheduled.softLaw.sync" },
   },
   {
     description: "Refresh global reference lists",

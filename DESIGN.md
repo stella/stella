@@ -289,30 +289,31 @@ an `overflow-hidden` container where an outside ring would be clipped.
 When a screen needs a look the components lack, add it once here and in
 `packages/ui`, under these names:
 
-| Concept                                                            | API                                                                                    |
-| ------------------------------------------------------------------ | -------------------------------------------------------------------------------------- |
-| Box-less click target (card, cell, image)                          | `Button variant="plain"` (+ `shape`, `focusRing`)                                      |
-| Action inside running text                                         | `Button size="inline"` (`variant="link"` underlined by default)                        |
-| Long reference that wraps with running text                        | `ButtonTextRun`                                                                        |
-| Current choice in a set                                            | `Button selected`, or a `ToggleGroup` for exclusive options                            |
-| Filter tabs, view modes, density                                   | `ToggleGroup` + `ToggleGroupItem` (a segmented tray)                                   |
-| Full-width inspector action row                                    | `Button size="inspector-row" variant="ghost"`                                          |
-| Quiet caption that opens a menu or popover                         | `MenuTrigger` / `PopoverTrigger` `appearance="caption"`                                |
-| A button that stays pressed                                        | `Toggle`                                                                               |
-| Setting row with a switch                                          | `SwitchField` (`label`, `description`); `Switch size="sm"`                             |
-| Keyboard shortcut                                                  | `Kbd keys={["mod", "K"]}` (platform spelling); `MenuShortcut`, `TooltipPopup shortcut` |
-| Menu row that navigates                                            | `MenuLinkItem` (an `<a>`)                                                              |
-| Fact with no value                                                 | `DetailsItem` with empty children (draws a dash)                                       |
-| Quiet disclosure line                                              | `AccordionTrigger variant="muted"`                                                     |
-| Disclosure inside a dialog or card                                 | `AccordionTrigger`/`AccordionPanel` `size="sm"`                                        |
-| Choice row or card around a radio                                  | `Label variant="choice"` / `"choice-card"`                                             |
-| Short label and value record                                       | `DetailsGrid variant="list"` (+ `orientation`)                                         |
-| Small muted caption in a filter bar or dense form                  | `Label variant="muted"`                                                                |
-| One-line or compact form                                           | `Form layout="inline"`, `density="snug" \| "compact"`                                  |
-| Borderless field in a line of text                                 | `Input inline`, `Textarea inline` (one class: `INLINE_FIELD_CLASS_NAME`)               |
-| Fixed-height text area in a row or cell                            | `Textarea fieldSizing="fixed"`                                                         |
-| Number with a unit; stepping number                                | `NumberInput suffix`; it reads as a spin button with its bounds                        |
-| Screen a finished flow ends on (connected, signed in, declined)    | `OutcomeScreen` (`tone`, `counterpart`, `details`); never a hand-built page            |
+| Concept                                                            | API                                                                                                |
+| ------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------- |
+| Box-less click target (card, cell, image)                          | `Button variant="plain"` (+ `shape`, `focusRing`)                                                  |
+| Action inside running text                                         | `Button size="inline"` (`variant="link"` underlined by default)                                    |
+| Long reference that wraps with running text                        | `ButtonTextRun`                                                                                    |
+| Current choice in a set                                            | `Button selected`, or a `ToggleGroup` for exclusive options                                        |
+| Filter tabs, view modes, density                                   | `ToggleGroup` + `ToggleGroupItem` (a segmented tray)                                               |
+| Full-width inspector action row                                    | `Button size="inspector-row" variant="ghost"`                                                      |
+| Quiet caption that opens a menu or popover                         | `MenuTrigger` / `PopoverTrigger` `appearance="caption"`                                            |
+| A button that stays pressed                                        | `Toggle`                                                                                           |
+| Settings page: sections of option rows                             | `SettingsSection` + `SettingsRow` (`interaction="label"` for a switch), `SettingsPanel` for a form |
+| Switch row inside a menu or popover                                | `SwitchField` (`label`, `description`); `Switch size="sm"`                                         |
+| Keyboard shortcut                                                  | `Kbd keys={["mod", "K"]}` (platform spelling); `MenuShortcut`, `TooltipPopup shortcut`             |
+| Menu row that navigates                                            | `MenuLinkItem` (an `<a>`)                                                                          |
+| Fact with no value                                                 | `DetailsItem` with empty children (draws a dash)                                                   |
+| Quiet disclosure line                                              | `AccordionTrigger variant="muted"`                                                                 |
+| Disclosure inside a dialog or card                                 | `AccordionTrigger`/`AccordionPanel` `size="sm"`                                                    |
+| Choice row or card around a radio                                  | `Label variant="choice"` / `"choice-card"`                                                         |
+| Short label and value record                                       | `DetailsGrid variant="list"` (+ `orientation`), or `DetailsListFace` for fixed horizontal rows     |
+| Small muted caption in a filter bar or dense form                  | `Label variant="muted"`                                                                            |
+| One-line or compact form                                           | `Form layout="inline"`, `density="snug" \| "compact"`                                              |
+| Borderless field in a line of text                                 | `Input inline`, `Textarea inline` (one class: `INLINE_FIELD_CLASS_NAME`)                           |
+| Fixed-height text area in a row or cell                            | `Textarea fieldSizing="fixed"`                                                                     |
+| Number with a unit; stepping number                                | `NumberInput suffix`; it reads as a spin button with its bounds                                    |
+| Screen a finished flow ends on (connected, signed in, declined)    | `OutcomeScreen` (`tone`, `counterpart`, `details`), with `OutcomeScreenFace` while loading         |
 | A small control renders small type itself; do not add `text-xs` to |
 | a `sm` button, select, or input.                                   |
 
@@ -341,35 +342,41 @@ it, and add it here in the same change that adds it to `packages/ui`.
 - `BidiText`, `UserText` `as`: `bdi`, `div`, `p`, `span`
 - `BidiText`, `UserText` `direction`: `auto`, `ltr`, `rtl`
 - `Button` `focusRing`: `inside`, `outside`
-- `Button`, `ButtonTextRun` `layout`: `wrap`
+- `Button`, `ButtonFace`, `ButtonTextRun` `layout`: `wrap`
 - `Button` `shape`: `box`, `round`
 - `Button`, `Toggle`, `ToggleGroup`, `ToggleGroupItem` `size`: `chip`, `default`, `icon`, `icon-2xs`, `icon-lg`, `icon-round`, `icon-sm`, `icon-xl`, `icon-xs`, `inline`, `inspector-row`, `lg`, `row`, `sm`, `touch`, `xl`, `xs`
 - `Button` `variant`: `composer`, `default`, `destructive`, `destructive-ghost`, `destructive-outline`, `ghost`, `link`, `muted`, `muted-destructive`, `outline`, `plain`, `secondary`
+- `ButtonFace` `size`: `chip`, `default`, `icon`, `icon-2xs`, `icon-lg`, `icon-round`, `icon-sm`, `icon-xl`, `icon-xs`, `inline`, `inspector-row`, `lg`, `row`, `sm`, `touch`, `xl`, `xs`
+- `ButtonFace` `variant`: `composer`, `default`, `destructive`, `destructive-ghost`, `destructive-outline`, `ghost`, `link`, `muted`, `muted-destructive`, `outline`, `secondary`
 - `ButtonTextRun` `variant`: `link`, `plain`
 - `Checkbox` `appearance`: `cell`, `default`
 - `Checkbox` `firstLine`: `control`, `text`
-- `ColorPicker`, `EntityActionsButton`, `SortableHead`, `TableCell`, `TableHead` `align`: `center`, `end`, `start`
+- `ColorPicker`, `EntityActionsButton`, `SortableHead`, `SortableHeadFace`, `TableCell`, `TableCellFace`, `TableHead` `align`: `center`, `end`, `start`
 - `ColorPicker`, `EntityActionsButton` `side`: `bottom`, `left`, `right`, `top`
 - `ColorPickerContent` `presentation`: `inline`, `popover`
 - `ComboboxTrigger` `variant`: `field`, `plain`
 - `CommandItem` `size`: `default`, `row`
 - `ComposerPlaceholder` `stature`: `compact`, `large`
-- `CourtBadge`, `DocumentIdentityBadge` `size`: `default`, `inline`
+- `CourtBadge`, `DocumentIdentityBadge` `size`: `default`, `inline`, `prose`
 - `CourtBadge` `weight`: `dashed`, `outline`, `solid`, `tinted`
-- `DatePickerPopover`, `DateRangeFilter`, `SegmentedIconToggle` `size`: `compact`, `touch`
+- `DatePickerPopover`, `DateRangeFilter`, `SegmentedIconToggle`, `SegmentedIconToggleFace` `size`: `compact`, `touch`
 - `DatePickerPopover`, `DateRangeFilter` `variant`: `field`, `inline`
+- `DetailsGrid` `density`: `compact`, `default`
 - `DetailsGrid` `labelWidth`: `auto`, `lg`, `md`, `sm`
 - `DetailsGrid` `orientation`: `auto`, `horizontal`, `vertical`
 - `DetailsGrid` `variant`: `list`, `sheet`
 - `DetailsItem` `span`: `wide`
 - `DialogContent`, `DialogPopup` `size`: `default`, `lg`, `sm`, `xl`
-- `DocumentMark` `kind`: `csv`, `excel`, `markdown`, `openDocumentSheet`, `openDocumentText`, `pdf`, `powerpoint`, `rtf`, `word`
+- `DocumentMark` `kind`: `asicE`, `asicS`, `cades`, `csv`, `dataBox`, `excel`, `markdown`, `ofd`, `openDocumentSheet`, `openDocumentText`, `pdf`, `powerpoint`, `rtf`, `uyap`, `word`
 - `DropdownMenuCheckboxItem`, `MenuCheckboxItem` `variant`: `default`, `switch`
 - `DropdownMenuItem`, `MenuItem` `variant`: `default`, `destructive`
 - `DropdownMenuRadioItem`, `MenuRadioItem` `indicator`: `check`, `none`
 - `DropdownMenuTrigger`, `MenuTrigger`, `PopoverTrigger` `appearance`: `caption`, `default`
+- `FieldFace` `density`: `default`, `snug`
+- `FieldFace` `layout`: `inline`, `stack`
 - `Form` `density`: `compact`, `default`, `snug`
 - `Form` `layout`: `inline`, `stack`
+- `FrameTitle`, `ListGroupTitle`, `SettingsSection` `tone`: `default`, `destructive`
 - `HighlightedTextarea` `dir`: `ltr`, `rtl`
 - `InlineDropIndicator` `position`: `after`, `before`
 - `InputGroupAddon` `align`: `block-end`, `block-start`, `inline-end`, `inline-start`
@@ -382,10 +389,12 @@ it, and add it here in the same change that adds it to `packages/ui`.
 - `KanbanVirtualCell` `footerPlacement`: `end`, `sticky-start`
 - `Kbd` `variant`: `cap`, `plain`
 - `Label` `variant`: `choice`, `choice-card`, `default`, `muted`
+- `LandingBoxPending` `box`: `composer`, `search`
 - `LandingItemText` `iconTone`: `matter`, `muted`
 - `LandingRowIcon` `tone`: `matter`, `muted`
 - `ListItemDescription` `variant`: `code`, `paragraph`, `text`
 - `ListItemMedia` `variant`: `icon`, `initial`
+- `ListItemSkeleton` `trailing`: `text`
 - `ListItemStatus` `tone`: `destructive`, `neutral`, `success`, `warning`
 - `ListItemTitle` `variant`: `name`, `statement`
 - `Loader` `animation`: `none`, `spin`
@@ -400,7 +409,7 @@ it, and add it here in the same change that adds it to `packages/ui`.
 - `PreviewPane` `overflow`: `clip`, `scroll`
 - `PreviewPane` `size`: `default`, `thumbnail`
 - `Prose` `size`: `default`, `lede`, `sm`
-- `Prose`, `TableCell`, `TableRow` `tone`: `default`, `muted`
+- `Prose`, `TableCell`, `TableCellFace`, `TableRow` `tone`: `default`, `muted`
 - `ReviewDecisionActions` `emphasis`: `primary`, `quiet`
 - `ReviewDecisionActions` `state`: `accepted`, `applying`, `dismissed`, `pending`, `rejected`
 - `ReviewOutOfDateNotice` `tone`: `muted`, `warning`
@@ -411,20 +420,25 @@ it, and add it here in the same change that adds it to `packages/ui`.
 - `RunStateMark` `state`: `needs-you`, `working`
 - `ScrollArea` `axis`: `both`, `vertical`
 - `SelectTrigger` `align`: `center`, `start`
+- `SettingsPanel` `inset`: `flush`, `padded`
+- `SettingsRow` `depth`: `nested`, `top`
+- `SettingsRow` `interaction`: `label`, `none`
 - `SheetContent`, `SheetPopup` `side`: `block-end`, `block-start`, `inline-end`, `inline-start`
 - `SheetContent`, `SheetPopup` `variant`: `default`, `inset`
 - `Sidebar` `collapsible`: `icon`, `none`, `offcanvas`
 - `Sidebar` `variant`: `floating`, `inset`, `sidebar`
 - `SidebarMenuButton` `size`: `default`, `lg`, `rail`, `sm`
 - `SidebarMenuButton` `variant`: `default`, `outline`
-- `SidebarMenuSubButton`, `SplitButton` `size`: `md`, `sm`
-- `SortableHead` `sortDirection`: `asc`, `desc`
+- `SidebarMenuSubButton`, `SplitButton`, `SplitButtonFace` `size`: `md`, `sm`
+- `SortDirectionIcon` `direction`: `asc`, `desc`
+- `SortableHead`, `SortableHeadFace` `sortDirection`: `asc`, `desc`
 - `SplitButton` `surface`: `menu`, `popover`
 - `StatusMark` `status`: `done`, `failed`, `pending`, `running`
 - `Step` `status`: `completed`, `current`, `upcoming`
 - `Steps` `variant`: `compact`, `default`, `progress`
-- `Switch`, `SwitchField` `size`: `default`, `sm`
-- `Table` `density`: `compact`, `default`
+- `Switch`, `SwitchFace`, `SwitchField` `size`: `default`, `sm`
+- `Table` `cellText`: `single-line`, `wrap`
+- `Table` `density`: `compact`, `default`, `prose`
 - `Table` `inset`: `card`, `default`
 - `Table` `scroll`: `parent`, `self`
 - `TableChart` `kind`: `bar`, `line`, `pie`, `scatter`
@@ -448,6 +462,10 @@ row content, readonly row labels, struts, and Checkbox's cell appearance.
 slot and content minimum; `control` uses 28px for a line inside an editable
 field. Consumers use the same entry's `slot` and `content` values rather
 than maintaining parallel geometry maps.
+
+`TableSkeletonRows` from `@stll/ui/table-shell` follows the table's column
+specification, including responsive cell classes. Each loading cell draws
+the column's bar or a custom placeholder for its content.
 
 ### Disclosure Panels
 

@@ -11,6 +11,7 @@ import {
 import { inArray } from "drizzle-orm";
 
 import { RUNTIME_MODE } from "@stll/runtime-mode";
+import { createTestClock } from "@stll/test-kit";
 import { createTestState } from "@stll/test-state";
 
 import { member, organization, session, user } from "@/api/db/auth-schema";
@@ -47,15 +48,18 @@ import {
   withStellaTwoFactorSignInGate,
 } from "@/api/lib/auth";
 import { getAuthEndpointUrl } from "@/api/lib/auth/auth-paths";
-import { SESSION_ABSOLUTE_AGE_MS } from "@/api/lib/auth/session-liveness";
 import { toSafeId } from "@/api/lib/branded-types";
+import { SESSION_ABSOLUTE_AGE_MS } from "@/api/lib/db/session-liveness";
 import { AUTH_RATE_LIMITS } from "@/api/lib/limits";
 import { OAUTH_CLIENT_REGISTRATION_PATH } from "@/api/lib/oauth-loopback-registration";
 import { recordNewOrganizationAccessState } from "@/api/lib/usage/organization-access-state";
 import { setRuntimeModeForTesting } from "@/api/runtime-mode";
+import { CREDENTIAL_AUTHENTICATION } from "@/api/tests/helpers/member-authorization";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
+
+const testClock = createTestClock();
 
 const testState = createTestState({ file: import.meta.path, config: env });
 
@@ -232,7 +236,11 @@ afterAll(async () => {
 describe("resolveMemberAuthorization", () => {
   test("resolves an owner without loading workspaces", async () => {
     const authorization = await resolveMemberAuthorization(
-      { organizationId: orgFull, userId: ownerInFull },
+      {
+        authentication: CREDENTIAL_AUTHENTICATION,
+        organizationId: orgFull,
+        userId: ownerInFull,
+      },
       testDb,
     );
 
@@ -246,12 +254,17 @@ describe("resolveMemberAuthorization", () => {
       userDeleted: false,
       enrolledFeatureIds: [],
       professionalUse: { status: "required" },
+      ssoAccess: { status: "not_required" },
     });
   });
 
   test("a member belonging to the org but to no workspace still resolves", async () => {
     const authorization = await resolveMemberAuthorization(
-      { organizationId: orgFull, userId: loneMemberInFull },
+      {
+        authentication: CREDENTIAL_AUTHENTICATION,
+        organizationId: orgFull,
+        userId: loneMemberInFull,
+      },
       testDb,
     );
     expect(authorization).toEqual({
@@ -264,6 +277,7 @@ describe("resolveMemberAuthorization", () => {
       userDeleted: false,
       enrolledFeatureIds: [],
       professionalUse: { status: "required" },
+      ssoAccess: { status: "not_required" },
     });
   });
 
@@ -286,11 +300,16 @@ describe("resolveMemberAuthorization", () => {
       for (const deployed of [false, true]) {
         testState.setConfig("FEATURE_TIME_BILLING", deployed);
         const enrolled = await resolveMemberAuthorization(
-          { organizationId: orgFull, userId: memberInFull },
+          {
+            authentication: CREDENTIAL_AUTHENTICATION,
+            organizationId: orgFull,
+            userId: memberInFull,
+          },
           testDb,
         );
         const enrolledWithWorkspace = await resolveMemberAuthorization(
           {
+            authentication: CREDENTIAL_AUTHENTICATION,
             organizationId: orgFull,
             userId: memberInFull,
             workspaceId: memberPersonalWorkspaceId,
@@ -298,7 +317,11 @@ describe("resolveMemberAuthorization", () => {
           testDb,
         );
         const other = await resolveMemberAuthorization(
-          { organizationId: orgFull, userId: ownerInFull },
+          {
+            authentication: CREDENTIAL_AUTHENTICATION,
+            organizationId: orgFull,
+            userId: ownerInFull,
+          },
           testDb,
         );
         expect(enrolled?.enrolledFeatureIds).toEqual(
@@ -309,7 +332,11 @@ describe("resolveMemberAuthorization", () => {
         );
         expect(other?.enrolledFeatureIds).toEqual([]);
         const otherOrganization = await resolveMemberAuthorization(
-          { organizationId: orgFull, userId: loneMemberInFull },
+          {
+            authentication: CREDENTIAL_AUTHENTICATION,
+            organizationId: orgFull,
+            userId: loneMemberInFull,
+          },
           testDb,
         );
         expect(otherOrganization?.enrolledFeatureIds).toEqual([]);
@@ -327,6 +354,7 @@ describe("resolveMemberAuthorization", () => {
   test("optionally resolves one target workspace without expanding the access set", async () => {
     const ownerClient = await resolveMemberAuthorization(
       {
+        authentication: CREDENTIAL_AUTHENTICATION,
         organizationId: orgFull,
         userId: ownerInFull,
         workspaceId: clientWorkspaceId,
@@ -335,6 +363,7 @@ describe("resolveMemberAuthorization", () => {
     );
     const ownerPersonal = await resolveMemberAuthorization(
       {
+        authentication: CREDENTIAL_AUTHENTICATION,
         organizationId: orgFull,
         userId: ownerInFull,
         workspaceId: memberPersonalWorkspaceId,
@@ -343,6 +372,7 @@ describe("resolveMemberAuthorization", () => {
     );
     const memberPersonal = await resolveMemberAuthorization(
       {
+        authentication: CREDENTIAL_AUTHENTICATION,
         organizationId: orgFull,
         userId: memberInFull,
         workspaceId: memberPersonalWorkspaceId,
@@ -351,6 +381,7 @@ describe("resolveMemberAuthorization", () => {
     );
     const memberClient = await resolveMemberAuthorization(
       {
+        authentication: CREDENTIAL_AUTHENTICATION,
         organizationId: orgFull,
         userId: memberInFull,
         workspaceId: clientWorkspaceId,
@@ -385,7 +416,10 @@ describe("resolveMemberAuthorization", () => {
         userId: actor,
         workspaceId: target,
       };
-      const authorization = await resolveMemberAuthorization(lookup, testDb);
+      const authorization = await resolveMemberAuthorization(
+        { ...lookup, authentication: CREDENTIAL_AUTHENTICATION },
+        testDb,
+      );
       const workspace = await createScopedDb(
         testDb,
         [target],
@@ -399,11 +433,19 @@ describe("resolveMemberAuthorization", () => {
 
   test("organization members with zero workspaces keep their roles", async () => {
     const ownerAuthorization = await resolveMemberAuthorization(
-      { organizationId: orgEmpty, userId: ownerInEmpty },
+      {
+        authentication: CREDENTIAL_AUTHENTICATION,
+        organizationId: orgEmpty,
+        userId: ownerInEmpty,
+      },
       testDb,
     );
     const memberAuthorization = await resolveMemberAuthorization(
-      { organizationId: orgEmpty, userId: memberInEmpty },
+      {
+        authentication: CREDENTIAL_AUTHENTICATION,
+        organizationId: orgEmpty,
+        userId: memberInEmpty,
+      },
       testDb,
     );
     expect(ownerAuthorization?.role).toBe("owner");
@@ -412,7 +454,11 @@ describe("resolveMemberAuthorization", () => {
 
   test("a user with no membership row in the organization resolves to null", async () => {
     const result = await resolveMemberAuthorization(
-      { organizationId: orgFull, userId: strangerUser },
+      {
+        authentication: CREDENTIAL_AUTHENTICATION,
+        organizationId: orgFull,
+        userId: strangerUser,
+      },
       testDb,
     );
 
@@ -421,7 +467,11 @@ describe("resolveMemberAuthorization", () => {
 
   test("membership in one organization does not leak workspace access when queried against another organization", async () => {
     const result = await resolveMemberAuthorization(
-      { organizationId: orgEmpty, userId: ownerInFull },
+      {
+        authentication: CREDENTIAL_AUTHENTICATION,
+        organizationId: orgEmpty,
+        userId: ownerInFull,
+      },
       testDb,
     );
 
@@ -887,7 +937,10 @@ describe("new-account email policy", () => {
         ),
       ),
     );
-    expect(actions).toEqual([{ type: "continue" }, { type: "continue" }]);
+    expect(actions).toEqual([
+      { type: "continue", audience: "any_address" },
+      { type: "continue", audience: "any_address" },
+    ]);
   });
 
   test("rejects a disposable address when creating its account", async () => {
@@ -940,6 +993,34 @@ describe("new-account email policy", () => {
     expect(action).toEqual({ type: "suppress_otp" });
   });
 
+  test("marks a code for an account sent while new addresses get none", async () => {
+    const limited = async (accountExists: boolean) =>
+      await getNewAccountEmailOtpAction(
+        {
+          body: { email: "member@example.com", type: "sign-in" },
+          path: "/email-otp/send-verification-otp",
+        },
+        {
+          accountExists: async () => accountExists,
+          rateLimitContext: {
+            increment: async () => ({
+              count: 4,
+              nextReset: new Date(testClock.now() + 60_000),
+              start: testClock.now(),
+            }),
+          },
+        },
+      );
+
+    // Only the account's code goes out, so whatever becomes of that mail must
+    // not be reported back: its audience is accounts only.
+    expect(await limited(true)).toEqual({
+      type: "continue",
+      audience: "accounts_only",
+    });
+    expect(await limited(false)).toEqual({ type: "suppress_otp" });
+  });
+
   test("bypasses the signup limiter with the E2E auth-rate-limit mode", async () => {
     let accountLookupCount = 0;
     let incrementCount = 0;
@@ -967,7 +1048,7 @@ describe("new-account email policy", () => {
       },
     );
 
-    expect(action).toEqual({ type: "continue" });
+    expect(action).toEqual({ type: "continue", audience: "any_address" });
     expect(accountLookupCount).toBe(0);
     expect(incrementCount).toBe(0);
   });

@@ -11,7 +11,7 @@ import {
 import { authorizeDesktopAccount } from "@/api/lib/business-registries/desktop/auth";
 import { readWorkspaceListRows } from "@/api/lib/workspaces/list-query";
 
-import { authorizeDesktopTimeEntries } from "./authorize";
+import { authorizeDesktopMatterSearch } from "./authorize";
 
 export const createDesktopMattersEndpoint = (
   authorizeAccount: typeof authorizeDesktopAccount = authorizeDesktopAccount,
@@ -31,7 +31,7 @@ export const createDesktopMattersEndpoint = (
     },
     async function* ({ request, query }) {
       const account = yield* Result.await(
-        authorizeDesktopTimeEntries(request, authorizeAccount),
+        authorizeDesktopMatterSearch(request, authorizeAccount),
       );
       const rows = yield* Result.await(
         account.safeDb((tx) =>

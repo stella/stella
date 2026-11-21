@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { type ReactElement, useState } from "react";
 
 import { useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
@@ -20,6 +20,8 @@ import { useCapabilityMutation } from "@/lib/capabilities/use-capability-mutatio
 import { detached } from "@/lib/detached";
 import { unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { useCallerFeatureEnabled } from "@/lib/organization/feature-access/access";
+import { CALLER_FEATURE } from "@/lib/organization/feature-access/surfaces";
 import { formatRelativeTime } from "@/lib/relative-time";
 import { toSafeId } from "@/lib/safe-id";
 import type {
@@ -33,12 +35,14 @@ type CellOverride = NonNullable<WorkspaceCellMetadata["override"]>;
 
 const OVERRIDE_REASON_MAX_LENGTH = 500;
 
-type CellOverrideCardProps = React.PropsWithChildren<{
+type CellOverrideCardProps = {
   entity: WorkspaceEntity;
   property: WorkspaceProperty;
   metadata: WorkspaceCellMetadata;
   override: CellOverride;
-}>;
+  /** The cell the card is shown for. */
+  children: ReactElement;
+};
 
 /**
  * A cell whose AI value a person replaced: a small corner mark on the cell,
@@ -46,7 +50,14 @@ type CellOverrideCardProps = React.PropsWithChildren<{
  * edit itself stays one step (type over the value); the reason is optional
  * and added here afterwards.
  */
-export const CellOverrideCard = ({
+export const CellOverrideCard = (props: CellOverrideCardProps) => {
+  // Only a cell that holds an override asks for the beta decision, so the
+  // cells without one mount no settings query.
+  const enabled = useCallerFeatureEnabled(CALLER_FEATURE.tableAnalysis);
+  return enabled ? <EnabledCellOverrideCard {...props} /> : props.children;
+};
+
+const EnabledCellOverrideCard = ({
   entity,
   property,
   metadata,

@@ -28,6 +28,23 @@ type TimerFormProps = {
   onDone: () => void;
 };
 
+type TimerSubmitDisabledReasonOptions = {
+  isPending: boolean;
+  policyFailed: boolean;
+  t: (key: "common.saving" | "common.loadFailed" | "common.loading") => string;
+};
+
+const timerSubmitDisabledReason = ({
+  isPending,
+  policyFailed,
+  t,
+}: TimerSubmitDisabledReasonOptions) => {
+  if (isPending) {
+    return t("common.saving");
+  }
+  return policyFailed ? t("common.loadFailed") : t("common.loading");
+};
+
 export const TimerForm = ({ timer, initialMatter, onDone }: TimerFormProps) => {
   const t = useTranslations();
   const user = useAuthenticatedUser();
@@ -97,6 +114,12 @@ export const TimerForm = ({ timer, initialMatter, onDone }: TimerFormProps) => {
       },
     }),
   );
+
+  const submitDisabledReason = timerSubmitDisabledReason({
+    isPending: mutation.isPending,
+    policyFailed: policy.isError,
+    t,
+  });
 
   return (
     <Form
@@ -187,6 +210,7 @@ export const TimerForm = ({ timer, initialMatter, onDone }: TimerFormProps) => {
       <div className="flex justify-end gap-2">
         <Button
           disabled={mutation.isPending}
+          disabledReason={t("common.saving")}
           onClick={onDone}
           type="button"
           variant="ghost"
@@ -195,6 +219,7 @@ export const TimerForm = ({ timer, initialMatter, onDone }: TimerFormProps) => {
         </Button>
         <Button
           disabled={mutation.isPending || (timer !== null && !policy.data)}
+          disabledReason={submitDisabledReason}
           type="submit"
         >
           {t(

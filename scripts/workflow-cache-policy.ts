@@ -25,7 +25,7 @@ const triggers = (on: unknown): string[] => {
 // call must be one reviewed for that.
 const DEFAULT_SCOPE_EVENTS = ["workflow_run"];
 const REVIEWED_REUSABLE_WORKFLOWS: Record<string, string> = {
-  "stella/.github/.github/workflows/npm-independent-release.yml@41fbea3b521bfc57b791003918de97f153d790a7":
+  "stella/.github/.github/workflows/npm-independent-release.yml@2664e46f02aea7164ba71bcdd485a686166993a4":
     "checkout, artifact download, setup-node without a cache input, hardened publish action from the pinned release-tooling checkout; no cache",
 };
 const DESKTOP_WINDOWS_BUILD_CACHE_USE =
@@ -65,6 +65,8 @@ const CACHE_FREE_BUN_JOBS: Record<string, string> = {
     "validates and publishes the immutable main network recording",
   ".github/workflows/release-mobile-ios.yml#testflight":
     "builds the iOS app shipped to TestFlight",
+  ".github/workflows/release-proof.yml#dispatch":
+    "runs main's release candidate verifier and dispatches the release tag with an actions: write token",
   ".github/workflows/release-rehearsal.yml#rehearse":
     "rehearses the release from the release revision",
 };
@@ -79,10 +81,16 @@ const UNSTORED_BUN_JOBS: Record<string, string> = {
     "its filtered API/CLI install (8-13 s in run 38089283216) is cheaper than a store restore",
   ".github/workflows/fetch-public-documents.yml#fetch": "installs nothing",
   ".github/workflows/journey-canary.yml#journeys": "installs nothing",
+  ".github/workflows/merge-group-hold.yml#dequeue-held-pull-request":
+    "runs one dependency-free script from the default branch; installs nothing",
+  ".github/workflows/merge-group-hold.yml#merge-group-hold":
+    "runs one dependency-free script from the target branch; installs nothing",
   ".github/workflows/mobile-fingerprint-check.yml#fingerprint":
     "installs the mobile closure of both the merge result and its base",
   ".github/workflows/mobile-fingerprint-check.yml#fingerprint-macos":
     "installs the mobile closure of the merge result on macOS",
+  ".github/workflows/pr-lint.yml#pr-body-log-lines":
+    "checks the pull request body with one dependency-free script; installs nothing",
 };
 
 const setsBunNoCache = (step: unknown) =>

@@ -25,7 +25,12 @@ type SignInDialogProps = {
 
 type SignInDialogStep =
   | { status: "sign-in" }
-  | { status: "otp"; email: string; devOtp: string | null };
+  | {
+      status: "otp";
+      email: string;
+      devOtp: string | null;
+      signInAttempt: string;
+    };
 
 export const SignInDialog = ({
   onOpenChange,
@@ -46,15 +51,20 @@ export const SignInDialog = ({
     }
   };
 
-  const showOtpStep = async (email: string) => {
+  const showOtpStep = async (email: string, signInAttempt: string) => {
     // Transition immediately; the dev OTP fills in once it arrives so a slow or
     // unreachable dev API never blocks the OTP screen. The panel is keyed by the
     // code, so it remounts and picks up the prefill when it lands.
-    setStep({ status: "otp", email, devOtp: null });
+    setStep({ status: "otp", email, devOtp: null, signInAttempt });
     const devOtp = await fetchDevOtp(email);
     setStep((prev) =>
       prev.status === "otp" && prev.email === email
-        ? { status: "otp", email, devOtp }
+        ? {
+            status: "otp",
+            email,
+            devOtp,
+            signInAttempt: prev.signInAttempt,
+          }
         : prev,
     );
   };
@@ -74,13 +84,29 @@ export const SignInDialog = ({
             <SignInPanel
               redirectTo={redirectTo}
               showHeading={false}
-              onOtpSent={({ email }) => {
-                detached(showOtpStep(email), "sign-in-dialog.show-otp-step");
+              onOtpSent={({ email, signInAttempt }) => {
+                detached(
+                  showOtpStep(email, signInAttempt),
+                  "sign-in-dialog.show-otp-step",
+                );
               }}
             />
           ) : (
             <OTPPanel
               key={step.devOtp ?? "empty"}
+              signInAttempt={step.signInAttempt}
+              onSignInAttemptChange={(signInAttempt) => {
+                setStep((prev) =>
+                  prev.status === "otp"
+                    ? {
+                        status: "otp",
+                        email: prev.email,
+                        devOtp: prev.devOtp,
+                        signInAttempt,
+                      }
+                    : prev,
+                );
+              }}
               email={step.email}
               initialOtp={step.devOtp ?? undefined}
               redirectTo={redirectTo}

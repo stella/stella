@@ -194,9 +194,16 @@ const cloudPlace = (page: Page) => radioNamed(page, "Cloud\\b");
 const agentPlace = (page: Page, agent: Agent) =>
   radioNamed(page, `${escapeRegExp(AGENTS[agent].name)}$`);
 
-/** A model of the chosen agent; its recommended one is listed as the default. */
+/** A model row of the model chip's menu, by the name its place gives it. */
 const modelChoice = (page: Page, model: string) =>
-  radioNamed(page, `(?:Default \\(recommended\\)\\s*)?${escapeRegExp(model)}$`);
+  radioNamed(page, `${escapeRegExp(model)}$`);
+
+/**
+ * The model chip's search, which lists every model of the place, including
+ * the ones folded under All models.
+ */
+const modelSearch = (page: Page) =>
+  page.getByRole("menu").getByPlaceholder("Search models");
 
 /**
  * Open a chip's menu. A click that lands while the menu that just closed is
@@ -252,7 +259,7 @@ export const expectRunOn = async (page: Page, runOn: RunOn) => {
 /** Why the where chip says the computer cannot take a turn now. */
 export const COMPUTER_STATES = {
   offline: "Computer offline",
-  openingDesktop: "Opening stella desktop...",
+  openingDesktop: "Opening stella desktop…",
 } as const;
 
 /** The where chip names the computer `agent` runs on as in `state`. */
@@ -280,9 +287,9 @@ export const chooseRunOn = async (page: Page, runOn: RunOn) => {
   await agentPlace(page, runOn.agent).click();
   await closeMenus(page);
   await expect(whereChip(page)).toHaveAccessibleName(WHERE_NAMES[runOn.agent]);
-  const model = modelChoice(page, runOn.model);
-  await openChipMenu(modelChip(page), model);
-  await model.click();
+  await openChipMenu(modelChip(page), modelSearch(page));
+  await modelSearch(page).fill(runOn.model);
+  await modelChoice(page, runOn.model).click();
   await closeMenus(page);
   await expectRunOn(page, runOn);
 };
@@ -296,14 +303,13 @@ export const modelsOffered = async (
   agent: Agent,
   models: readonly string[],
 ) => {
-  // The list is headed by its agent once the computer's models are read.
-  const heading = page
-    .getByRole("menu")
-    .getByText(`${AGENTS[agent].name} models`, { exact: true });
-  await openChipMenu(modelChip(page), heading);
+  // The models are the agent's while the where chip names it.
+  await expect(whereChip(page)).toHaveAccessibleName(WHERE_NAMES[agent]);
+  await openChipMenu(modelChip(page), modelSearch(page));
   const offered: boolean[] = [];
   for (const model of models) {
-    // await-in-loop: the rows of one open menu, read in order.
+    // await-in-loop: one search field, read for each model in order.
+    await modelSearch(page).fill(model);
     offered.push((await modelChoice(page, model).count()) > 0);
   }
   await closeMenus(page);

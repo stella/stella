@@ -15,8 +15,9 @@ import {
 import { InviteMemberDialog } from "@/components/organization/invite-member-dialog";
 import { detached } from "@/lib/detached";
 import { optionalSearchStringSchema } from "@/lib/schema";
+import { MembersToolbarFace } from "@/routes/_protected.settings/-organization.members.pending";
 
-const adminParentRoute = getRouteApi("/_protected/settings/organization");
+const organizationRoute = getRouteApi("/_protected/settings/organization");
 const membersRoute = getRouteApi("/_protected/settings/organization/members");
 
 /**
@@ -42,7 +43,7 @@ export const OrganizationListToolbar = () => {
   const t = useTranslations();
   // Search lives on the parent route so it survives sub-tab swaps;
   // Navigate to the members page so editing search stays on the list.
-  const q = adminParentRoute.useSearch({ select: (s) => s.q ?? "" });
+  const q = organizationRoute.useSearch({ select: (s) => s.q ?? "" });
   const navigate = membersRoute.useNavigate();
   // Local controlled-input value keeps IME composition snappy and
   // prevents flicker between keystrokes; the URL is the source of
@@ -83,22 +84,24 @@ export const OrganizationListToolbar = () => {
   }
 
   return (
-    <div className="border-border/60 flex items-center gap-2 border-b px-2 py-2">
-      <InputGroup className="max-w-sm flex-1">
-        <InputGroupInput
-          onChange={(e) => {
-            const val = e.target.value;
-            setLocalQuery(val);
-            updateSearch(val);
-          }}
-          placeholder={t("common.search")}
-          value={localQuery}
-        />
-        <InputGroupAddon>
-          <SearchIcon />
-        </InputGroupAddon>
-      </InputGroup>
-      <InviteMemberDialog />
-    </div>
+    <MembersToolbarFace
+      invite={<InviteMemberDialog suggestedEmail={localQuery} />}
+      search={
+        <InputGroup>
+          <InputGroupInput
+            onChange={(e) => {
+              const val = e.target.value;
+              setLocalQuery(val);
+              updateSearch(val);
+            }}
+            placeholder={t("common.search")}
+            value={localQuery}
+          />
+          <InputGroupAddon>
+            <SearchIcon />
+          </InputGroupAddon>
+        </InputGroup>
+      }
+    />
   );
 };

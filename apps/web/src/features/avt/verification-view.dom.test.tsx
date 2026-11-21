@@ -867,8 +867,8 @@ test("a governing record changes the verdict and escalation keeps the conflict o
   expect(
     screen
       .getByRole("button", { name: messages.avt.confirm.recordConflict })
-      .hasAttribute("disabled"),
-  ).toBe(true);
+      .getAttribute("aria-disabled"),
+  ).toBe("true");
   expect(runText(claimButton(5))).toContain("Record conflict");
   // Escalating reads the run again, and the conflict needs attention again.
   serveAttention(true);

@@ -1,0 +1,14 @@
+[
+  {
+    "file": "apps/api/src/lib/legal-search/corpus-index-projection-bootstrap.ts",
+    "from": "a8fdcbb49ebf048380f683cbc48c7f10d964f34bea0853cfbd6ee5b1e732860e",
+    "to": "e7063e7452fcafa11f8d75a08ac9463b97a9198583e4da12a9baa9ac0213f261",
+    "reason": "The case-law bootstrap page reads the same rows in the same order; its source row lock is key share instead of share, so it no longer waits on plain updates of a source row."
+  },
+  {
+    "file": "apps/api/src/lib/legal-search/corpus-index-projection-bootstrap.ts",
+    "from": "8e1a540ef8067fc290af7147295d63cce2d7e8d13bc54e3b8f77c0da715a8c33",
+    "to": "407e4d501ce68a61e6bf3f0ac68790ebd670d562be8c84c7a05e00f799315756",
+    "reason": "The legislation bootstrap page reads the same rows in the same order; its source row lock is key share instead of share, so it no longer waits on plain updates of a source row."
+  }
+]

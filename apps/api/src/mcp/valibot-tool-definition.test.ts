@@ -117,7 +117,6 @@ describe("Valibot-backed MCP tool definitions", () => {
         count: { type: "integer" },
       },
       required: ["id", "count"],
-      additionalProperties: false,
     });
     expect(contract.outputSchema).not.toHaveProperty("$schema");
   });
@@ -133,7 +132,6 @@ describe("Valibot-backed MCP tool definitions", () => {
       type: "object",
       properties: { result: {} },
       required: ["result"],
-      additionalProperties: false,
     });
   });
 
@@ -150,7 +148,6 @@ describe("Valibot-backed MCP tool definitions", () => {
       type: "object",
       properties: { matterId: { type: "string" } },
       required: ["matterId"],
-      additionalProperties: false,
     });
 
     expect(() =>
@@ -171,12 +168,11 @@ describe("Valibot-backed MCP tool definitions", () => {
     expect(contract.outputSchema).toEqual({
       type: "object",
       properties: {
-        type: { enum: ["left", "right"], type: "string" },
+        type: { examples: ["left", "right"], type: "string" },
         left: { type: "string" },
         right: { type: "number" },
       },
       required: ["type"],
-      additionalProperties: false,
     });
   });
 
@@ -202,13 +198,13 @@ describe("Valibot-backed MCP tool definitions", () => {
       properties: {
         status: {
           anyOf: [
-            { enum: ["found", "pending", "missing"], type: "string" },
-            { enum: [1, 2], type: "number" },
+            { examples: ["found", "pending", "missing"], type: "string" },
+            { examples: [1, 2], type: "number" },
           ],
         },
         mixed: {
           anyOf: [
-            { enum: ["none", "all"], type: "string" },
+            { examples: ["none", "all"], type: "string" },
             { type: "string", minLength: 3 },
           ],
         },
@@ -232,7 +228,10 @@ describe("Valibot-backed MCP tool definitions", () => {
         tags: { type: ["array", "null"], items: { type: "string" } },
         // `enum` would reject null beside a type array: the anyOf stays.
         color: {
-          anyOf: [{ enum: ["red", "green"], type: "string" }, { type: "null" }],
+          anyOf: [
+            { examples: ["red", "green"], type: "string" },
+            { type: "null" },
+          ],
         },
         either: {
           anyOf: [
@@ -299,12 +298,10 @@ describe("Valibot-backed MCP tool definitions", () => {
               details: { type: "object", additionalProperties: true },
             },
             required: ["id", "details"],
-            additionalProperties: false,
           },
         },
       },
       required: ["items"],
-      additionalProperties: false,
     });
   });
 

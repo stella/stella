@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { fileURLToPath } from "node:url";
 
 import {
   BASELINE_REASON,
@@ -358,8 +359,9 @@ describe("baseline", () => {
   });
 
   test("an empty or missing --base value fails", () => {
-    const script = new URL("deployment-feature-guard.ts", import.meta.url)
-      .pathname;
+    const script = fileURLToPath(
+      new URL("deployment-feature-guard.ts", import.meta.url),
+    );
     for (const args of [["--base", ""], ["--base"], ["--base", "--report"]]) {
       const run = Bun.spawnSync(["bun", script, ...args], { stderr: "pipe" });
       expect(run.exitCode).not.toBe(0);

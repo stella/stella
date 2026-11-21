@@ -39,8 +39,8 @@ test("comparison labels both files and enables the handoff only when ready", () 
   expect(
     screen
       .getByRole("button", { name: "Nahrát pro porovnání redline" })
-      .hasAttribute("disabled"),
-  ).toBe(true);
+      .getAttribute("aria-disabled"),
+  ).toBe("true");
   snapshot = {
     ...snapshot,
     base: new File(["original"], "původní.docx"),

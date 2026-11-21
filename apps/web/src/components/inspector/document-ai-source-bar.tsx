@@ -452,6 +452,7 @@ export const DocumentAiSourceBar = ({
         <Button
           aria-label={t("common.previous")}
           disabled={!prevSlot}
+          disabledReason={t("inspector.firstSourceReached")}
           onClick={() => {
             if (!prevSlot) {
               return;
@@ -479,6 +480,7 @@ export const DocumentAiSourceBar = ({
         <Button
           aria-label={t("common.next")}
           disabled={!nextSlot}
+          disabledReason={t("inspector.lastSourceReached")}
           onClick={() => {
             if (!nextSlot) {
               return;

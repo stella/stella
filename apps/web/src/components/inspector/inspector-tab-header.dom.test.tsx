@@ -21,6 +21,7 @@ window.BroadcastChannel = NativeBroadcastChannel;
 const { QueryClient, QueryClientProvider } =
   await import("@tanstack/react-query");
 const { IntlProvider } = await import("use-intl");
+const { FormattingProvider } = await import("@/i18n/formatting-context");
 const { act, cleanup, fireEvent, render, screen, waitFor } =
   await import("@testing-library/react");
 const { InspectorTabHeader } = await import("./inspector-tab-header");
@@ -116,7 +117,9 @@ const mount = () => {
             wordEditShortcut: null,
           }}
         >
-          <FileHeader />
+          <FormattingProvider locale="en" timeZone="UTC">
+            <FileHeader />
+          </FormattingProvider>
         </AuthenticatedUserProvider>
       </IntlProvider>
     </QueryClientProvider>,
@@ -166,12 +169,15 @@ describe("renaming a file from the inspector header", () => {
     expect(field.selectionStart).toBe(0);
     expect(field.selectionEnd).toBe(BASE_NAME.length);
     expect(screen.queryByText(".docx")).not.toBeNull();
-    // Only the mobile back button stays: no actions, close or Done button.
+    // Only the phone navigation stays: no actions, close or Done button.
     expect(
       screen
         .getAllByRole("button")
         .map((button) => button.getAttribute("aria-label")),
-    ).toEqual([englishMessages.common.back]);
+    ).toEqual([
+      englishMessages.common.back,
+      englishMessages.inspector.openTabs.replace("{count, number}", () => "1"),
+    ]);
   });
 
   test("Enter commits the base name with the extension re-attached", async () => {
@@ -230,7 +236,9 @@ test("a long statute title stays on one row with its full accessible tooltip", a
     "Zákon č. 165/2012 Sb., o podporovaných zdrojích energie a o změně některých zákonů";
   render(
     <IntlProvider locale="en" messages={englishMessages} timeZone="UTC">
-      <InspectorTabHeader label={title} onClose={() => undefined} />
+      <FormattingProvider locale="en" timeZone="UTC">
+        <InspectorTabHeader label={title} onClose={() => undefined} />
+      </FormattingProvider>
     </IntlProvider>,
   );
   const titleElement = screen.getByLabelText(title);

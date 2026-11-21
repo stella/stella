@@ -3,6 +3,7 @@ import * as v from "valibot";
 
 export const BROWSER_CONTROL_PROTOCOL_VERSION = 8 as const;
 export const BROWSER_CONTROL_TOOL_NAME = "use-browser" as const;
+export const BROWSE_WEB_TOOL_NAME = "browse_web" as const;
 
 /**
  * The hosted stella origins the store build bridges: every extension build
@@ -738,6 +739,37 @@ export type BrowserControlRetainedResult = v.InferOutput<
 >;
 
 /**
+ * The page a kept `use-browser` output read, whole or as its projection, as
+ * the extension reported it (never a URL the model wrote), or `null` for an
+ * output that read no page.
+ */
+export const browserControlResultPage = (
+  output: unknown,
+): { title: string; url: string } | null => {
+  const result = v.safeParse(browserControlRetainedResultSchema, output);
+  if (!result.success) {
+    return null;
+  }
+  switch (result.output.status) {
+    case "success":
+      return {
+        title: result.output.snapshot.title,
+        url: result.output.snapshot.url,
+      };
+    case "superseded":
+      return { title: result.output.page.title, url: result.output.page.url };
+    // A search within a page read that page.
+    case "found":
+      return { title: result.output.found.title, url: result.output.found.url };
+    case "error":
+      return null;
+    default:
+      result.output satisfies never;
+      return panic("Unhandled browser control result");
+  }
+};
+
+/**
  * The projection of a result a later page read replaced, or `null` for one
  * that carries no page (an error, or a result already projected).
  */
@@ -975,6 +1007,21 @@ export const parseBrowserExtensionPeerVersion = (
   input: unknown,
 ): number | null => {
   const result = v.safeParse(browserExtensionPeerSchema, input);
+  return result.success ? result.output.protocolVersion : null;
+};
+
+const browserWebPeerSchema = v.object({
+  protocolVersion: v.pipe(v.number(), v.integer(), v.minValue(1)),
+  source: v.literal(BROWSER_EXTENSION_MESSAGE_SOURCE.web),
+});
+
+/**
+ * The protocol version a stella web message names, whatever its shape: the
+ * extension answers a tab on another version with its own, so the tab can
+ * tell an outdated side from a missing extension.
+ */
+export const parseBrowserWebPeerVersion = (input: unknown): number | null => {
+  const result = v.safeParse(browserWebPeerSchema, input);
   return result.success ? result.output.protocolVersion : null;
 };
 

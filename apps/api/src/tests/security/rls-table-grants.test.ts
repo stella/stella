@@ -235,6 +235,9 @@ const POST_BOOTSTRAP_SCOPED_HANDOFF_TABLES = new Set([
 // apply. Their migration must REVOKE ALL from stella instead.
 const POST_BOOTSTRAP_DENY_STELLA_TABLES = new Set([
   "organization_creation_requests",
+  // Sign-in locations and review state: auth data read and written only by
+  // the owner connection, scoped to the authenticated user in each query.
+  "session_sign_ins",
   // Work-identifier aliases are served through the public-law reader; the
   // request role has no direct access to this ingestion-owned relation.
   "legislation_work_identifiers",
@@ -252,6 +255,10 @@ const POST_BOOTSTRAP_DENY_STELLA_TABLES = new Set([
   // Ranking-signal changes: owner-run triggers enqueue, the ingestion role's
   // projection drain consumes; request code never reads them.
   "case_law_ranking_signal_changes",
+  // The settlement queue: owner-run triggers enqueue delete tasks, the
+  // ingestion role's settlement leases and drops them; request code never
+  // reads them.
+  "corpus_index_projection_delete_tasks",
   "case_law_sitemap_refresh_cursor",
   "case_law_sitemap_shard_counts",
   "case_law_sitemap_touches",
@@ -275,6 +282,15 @@ const POST_BOOTSTRAP_DENY_STELLA_TABLES = new Set([
   "action_cost_calls",
   // Provider erasure intents belong to the scheduler, never request roles.
   "hosted_customer_erasures",
+  // Skill original erasure queue: an owner-run trigger records keys and the
+  // scheduler erases them; request roles never see it.
+  "agent_skill_original_cleanup_requests",
+  // Kept provider transcript ids: the dictation door records them on the
+  // owner connection and the scheduler deletes them; request roles never.
+  "kept_transcript_deletions",
+  // Delivery failures per address: the provider event consumer and the
+  // sign-in door use the owner connection; request roles never.
+  "email_delivery_failures",
   // Chat content repair receipts: forced owner-only RLS; the owner-run
   // backfill and deploy repair write them, request roles never see them.
   "chat_content_v3_backfill_receipts",
@@ -309,6 +325,10 @@ const POST_BOOTSTRAP_DENY_STELLA_TABLES = new Set([
   "oauth_grant_revocations",
   "mcp_web_handoff",
   "service_oauth_clients",
+  // Organization SSO providers (sealed client secrets) and policies: read
+  // only by the auth layer on the owner connection.
+  "sso_provider",
+  "organization_sso_policy",
   // Machine API keys: credential digests plus the permission set each key
   // carries. A tenant-scoped connection must be able to neither read a digest
   // nor widen a key's permissions, so every access goes through better-auth on
@@ -338,6 +358,11 @@ const POST_BOOTSTRAP_DENY_STELLA_TABLES = new Set([
   // The same: reasons and other supplements waiting for, or composed into,
   // their judgment; only the ingestion role reads or writes them.
   "case_law_decision_supplements",
+  // A source's record held as an attachment to another source's decision:
+  // ingestion state only, never read through the request role.
+  "case_law_held_decision_attachments",
+  // Replay inputs contain publisher bodies and remain ingestion-only.
+  "case_law_ingestion_failure_evidence",
   // Reviewed citation labels: read by ingestion, written by the operator
   // script on the owner connection, never read through the request role.
   "case_law_citation_reviews",

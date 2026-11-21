@@ -168,6 +168,20 @@ checks:
     # each install.
     run: bun run lint:ws
 
+  - name: Bun runtime guard
+    env:
+      CI_CHECK_KIND: CONTEXTUAL
+      CI_CHECK_CONTEXT: "Enforces the changed lines of package scripts against the merge base with origin/main."
+    id: bun_runtime_guard
+    if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
+    # Package scripts, shell scripts, workflow steps, spawned commands and
+    # Playwright web servers start JavaScript on Bun. Changed lines are
+    # compared with the merge base, so this stays out of the install
+    # lifecycle that runs `lint:ws`.
+    run: |
+      bun test scripts/check-bun-runtime.test.ts
+      bun run check:bun-runtime
+
   - name: Lockfile workspace-version guard
     id: static_check_017
     env:
@@ -305,6 +319,15 @@ checks:
       CHECK_BASE_REF: ${{ format('origin/{0}', github.base_ref || 'main') }}
       BASE_REF: ${{ github.base_ref || 'main' }}
     run: bun scripts/check-cli-contract-changeset.ts --base "$CHECK_BASE_REF"
+
+  - name: MCP released surface compatibility
+    if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true' && (github.event_name == 'pull_request' || github.event_name == 'merge_group')) }}
+    timeout-minutes: 15
+    env:
+      CI_CHECK_KIND: CONTEXTUAL
+      CI_CHECK_CONTEXT: "Reads the latest stable GitHub release and compares its advertised MCP schemas against the current tree."
+      GH_TOKEN: ${{ github.token }}
+    run: bun run check:mcp-surface-compat
 
   - name: SQL performance suppression summary
     if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true' && (github.event_name == 'pull_request' || github.event_name == 'merge_group')) }}
@@ -967,6 +990,19 @@ checks:
       bun test scripts/check-workflow-shells.test.ts
       bun scripts/check-workflow-shells.ts
 
+  # Bun keys each root patch to an exact name@version. When the package moves,
+  # bun.lock drops the patch and a frozen install puts the new version in
+  # unpatched, with a warning at most. Needs no dependency install.
+  - name: Patched dependencies apply
+    env:
+      CI_CHECK_KIND: STATIC
+      CI_CHECK_INPUTS: tracked-tree+generated-inputs
+    id: static_check_131
+    if: ${{ !cancelled() && steps.checkout.outcome == 'success' && steps.install.outcome != 'failure' && steps.standalone_lockfiles.outcome != 'failure' && steps.lockfile_ages.outcome != 'failure' && (needs.ci-plan.outputs.root_checks == '' || contains(fromJSON(needs.ci-plan.outputs.root_checks || '[]'), 'ci-checks-rest/Patched dependencies apply')) && (github.event_name == 'merge_group' || steps.static_receipts.outputs.reuse_static_check_131 != 'true') }}
+    run: |
+      bun test scripts/check-patched-dependencies.test.ts
+      bun scripts/check-patched-dependencies.ts
+
   # Self-test the release-channel script. The desktop release
   # pipeline relies on three independent steps deriving the
   # same channel from a tag (updater endpoint baked into the
@@ -1509,6 +1545,18 @@ checks:
       CI_CHECK_CONTEXT: "Uses event target or Git base/merge-base rather than only the current input tree."
       BASE_REF: ${{ github.base_ref || 'main' }}
     run: bun scripts/check-migration-order.ts "origin/$BASE_REF"
+
+  # A public-law column grant is required only after a production release
+  # has permitted it. The checkout's full history carries the release tags;
+  # without them the script fails rather than passes.
+  - name: Check grant release order against the production release
+    if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') && (needs.ci-plan.outputs.root_checks == '' || contains(fromJSON(needs.ci-plan.outputs.root_checks || '[]'), 'ci-checks-rest/Check grant release order against the production release')) }}
+    env:
+      CI_CHECK_KIND: CONTEXTUAL
+      CI_CHECK_CONTEXT: "Compares the grant map with the newest production release tag."
+    run: |
+      bun test scripts/check-grant-release-order.test.ts
+      bun scripts/check-grant-release-order.ts
 
   # Self-test the dead-columns reference matcher: a regression here
   # would either silently stop flagging genuinely unreferenced columns

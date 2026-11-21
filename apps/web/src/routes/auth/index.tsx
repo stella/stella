@@ -1,29 +1,16 @@
-import * as React from "react";
-
-import { createFileRoute, redirect, useLocation } from "@tanstack/react-router";
+import { createFileRoute, redirect } from "@tanstack/react-router";
 import * as v from "valibot";
 
-import { SignInPanel } from "@/components/auth/sign-in-panel";
 import { SIGN_IN_ENTRY_METHOD } from "@/components/auth/sign-in-panel.logic";
-import {
-  getOauthHashFragment,
-  getSignedOauthQuery,
-  getSignedOauthQueryFromHash,
-  hasOauthPrompt,
-  hasSignedOauthQuery,
-} from "@/lib/oauth-provider";
+import { getSignedOauthQuery, hasOauthPrompt } from "@/lib/oauth-provider";
 import { pageTitle } from "@/lib/page-title";
 import { normalizeRedirectTo } from "@/lib/redirect";
 import { routeSearchSchema } from "@/route-search-params";
 import { routePresentation } from "@/routes/-route-presentation";
+import { getOauthPostLoginRedirectTo } from "@/routes/auth/-index.logic";
 
-const DevQuickStartButton = import.meta.env.DEV
-  ? React.lazy(async () => {
-      const module =
-        await import("@/routes/auth/-components/dev-quick-start-button");
-      return { default: module.DevQuickStartButton };
-    })
-  : null;
+import { SignInPage } from "./-index.page";
+import { SignInPending } from "./-index.pending";
 
 const searchSchema = routeSearchSchema({
   redirectTo: v.optional(v.pipe(v.string(), v.transform(normalizeRedirectTo))),
@@ -71,46 +58,6 @@ export const Route = createFileRoute("/auth/")({
   head: () => ({
     meta: [{ title: pageTitle("auth.signIn") }],
   }),
-  component: LoginOrSignup,
+  component: SignInPage,
+  pendingComponent: SignInPending,
 });
-
-function LoginOrSignup() {
-  const defaultRedirectTo = Route.useSearch({
-    select: (s) => s.redirectTo ?? "/",
-  });
-  const entryMethod = Route.useSearch({ select: (s) => s.method });
-  const location = useLocation({
-    select: ({ hash, searchStr }) => ({ hash, searchStr }),
-  });
-  const redirectTo = getOauthPostLoginRedirectTo(location) ?? defaultRedirectTo;
-
-  return (
-    <div className="flex w-full max-w-md flex-col gap-4">
-      <SignInPanel entryMethod={entryMethod} redirectTo={redirectTo} />
-      {DevQuickStartButton === null ? null : (
-        <React.Suspense fallback={null}>
-          <DevQuickStartButton redirectTo={redirectTo} />
-        </React.Suspense>
-      )}
-    </div>
-  );
-}
-
-const getOauthPostLoginRedirectTo = ({
-  hash,
-  searchStr,
-}: {
-  hash: string;
-  searchStr: string;
-}) => {
-  const bridgedQuery = getSignedOauthQueryFromHash(hash);
-  if (bridgedQuery) {
-    return `/auth/organization#${getOauthHashFragment(bridgedQuery)}`;
-  }
-
-  if (!hasSignedOauthQuery(searchStr)) {
-    return null;
-  }
-
-  return `/auth/organization${searchStr}`;
-};

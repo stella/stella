@@ -98,7 +98,9 @@
         // Passed to Bun by the API test command builder.
         "src/tests/publisher-gate-preload.ts",
         "src/**/*.test.ts",
-        "scripts/**/*.test.ts"
+        "src/**/*.test.tsx",
+        "scripts/**/*.test.ts",
+        "evals/**/*.test.ts"
       ]
     },
     "apps/web": {
@@ -187,6 +189,9 @@
     "packages/decision-reader": {
       "entry": ["src/**/*.test.{ts,tsx}"]
     },
+    "packages/docx-authoring": {
+      "entry": ["src/**/*.test.ts"]
+    },
     "packages/html": {
       "entry": ["src/load.ts", "src/**/*.test.ts"]
     },
@@ -267,7 +272,7 @@
       "entry": ["*.json", "**/*.test.ts"]
     },
     "packages/transactional": {
-      "entry": ["emails/*.tsx", "render/*.test.tsx"]
+      "entry": ["emails/*.tsx", "map/*.test.ts", "render/*.test.tsx"]
     },
     "packages/ui": {
       // Browser fixture CSS imports Tailwind; the Vite plugin consumes its peer.

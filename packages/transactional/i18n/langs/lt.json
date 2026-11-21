@@ -21,13 +21,28 @@
     "subject": "{documentType, select, credit_note {Kreditinė sąskaita faktūra} advance {Išankstinė sąskaita faktūra} other {Sąskaita faktūra}} {invoiceNumber}, siuntėjas {firmName}"
   },
   "newDeviceLogin": {
-    "action": "Peržiūrėti sesijas",
-    "body": "Prie jūsų paskyros buvo prisijungta iš naujo įrenginio ar vietos.",
+    "action": "Peržiūrėti prisijungusius įrenginius",
+    "actionNote": "Mygtukas atidaro Nustatymai › Sauga ties šiuo prisijungimu.",
+    "body": "Prie jūsų paskyros ką tik prisijungta iš naujo įrenginio arba naujos vietos.",
     "device": "Įrenginys",
-    "heading": "Aptiktas naujas prisijungimas",
-    "ignore": "Jei tai buvote jūs, jokių veiksmų nereikia. Jei neatpažįstate šios veiklos, peržiūrėkite aktyvias sesijas ir atšaukite tas, kurių neatpažįstate.",
+    "deviceName": {
+      "browserOnOs": "{browser}, {os} sistemoje",
+      "unknown": "Nežinomas įrenginys"
+    },
+    "heading": "Naujas prisijungimas prie jūsų paskyros",
+    "ignore": "Jei tai buvote jūs, nieko daryti nereikia. Jei neatpažįstate šio prisijungimo, atjunkite šį įrenginį.",
     "ipAddress": "IP adresas",
+    "ipAddressUnknown": "Nežinomas",
+    "location": "Vieta",
+    "mapAlt": "Žemėlapis su apytiksle prisijungimo vieta: {location}",
+    "place": {
+      "cityCountry": "{city}, {country}",
+      "cityRegionCountry": "{city}, {region}, {country}",
+      "regionCountry": "{region}, {country}"
+    },
+    "placeApproximate": "{place} (apytiksliai)",
     "preview": "Naujas prisijungimas iš {device}",
+    "previewUnknownDevice": "Naujas prisijungimas iš nežinomo įrenginio",
     "subject": "Naujas prisijungimas prie jūsų stella paskyros",
     "time": "Laikas"
   },

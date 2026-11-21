@@ -4,6 +4,7 @@ import { afterAll, afterEach, expect, test } from "bun:test";
 
 import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
+import { INSPECTOR_FOCUS_INTENT } from "@/components/inspector/inspector-store-types";
 import messages from "@/i18n/langs/en.json";
 import { toSafeId } from "@/lib/safe-id";
 
@@ -65,6 +66,7 @@ for (const { destination, expectedScope } of [
       workspaceId: "matter-A",
       contextMatterIds: ["matter-A"],
       label: "Existing matter A conversation",
+      focus: INSPECTOR_FOCUS_INTENT.claim,
     });
     store.setMinimized(true);
     const existingTab = useInspectorTabsStore.getState().tabs.at(0);

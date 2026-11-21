@@ -12,6 +12,7 @@ on:
       - Nightly Full Test
       - Nightly Full Typecheck
       - Nightly Property Tests
+      - Route matter scale
       - AI provider canary
       - MCP canary
       - Agent sandbox canary
@@ -87,7 +88,7 @@ jobs:
       || (github.event.workflow_run.conclusion == 'cancelled'
       && contains(fromJSON('[".github/workflows/publish-npm.yml", ".github/workflows/release-tag.yml", ".github/workflows/release.yml", ".github/workflows/release-health.yml", ".github/workflows/release-desktop.yml"]'), github.event.workflow_run.path)))
       && github.event.workflow_run.head_repository.full_name == github.repository
-      && contains(fromJSON('[".github/workflows/nightly-test.yml", ".github/workflows/nightly-typecheck.yml", ".github/workflows/nightly-property-test.yml", ".github/workflows/ai-provider-canary.yml", ".github/workflows/mcp-canary.yml", ".github/workflows/agent-sandbox-canary.yml", ".github/workflows/desktop-release-canary.yml", ".github/workflows/landing-canary.yml", ".github/workflows/journey-canary.yml", ".github/workflows/playbook-journey.yml", ".github/workflows/case-law-search-probe.yml", ".github/workflows/user-journeys.yml", ".github/workflows/model-catalog-check.yml", ".github/workflows/deploy-landing.yml", ".github/workflows/deploy-outlook-addin.yml", ".github/workflows/dependency-audit.yml", ".github/workflows/mirror-ci-service-images.yml", ".github/workflows/publish-npm.yml", ".github/workflows/release-tag.yml", ".github/workflows/release.yml", ".github/workflows/release-rehearsal.yml", ".github/workflows/release-health.yml", ".github/workflows/release-desktop.yml", ".github/workflows/deploy-staging.yml", ".github/workflows/api-test-memory.yml", ".github/workflows/audit-branch-protection.yml", ".github/workflows/audit-image.yml", ".github/workflows/auth-md-spec-check.yml", ".github/workflows/autofix-generated-conflicts.yml", ".github/workflows/bundle-size-nightly.yml", ".github/workflows/cancel-stale-merge-groups.yml", ".github/workflows/catalogue-upstream.yml", ".github/workflows/codeql.yml", ".github/workflows/dated-waiver-healing.yml", ".github/workflows/dependency-malware-nightly.yml", ".github/workflows/local-run-e2e.yml", ".github/workflows/main-heavy.yml", ".github/workflows/main-pr-depth.yml", ".github/workflows/mobile-release-plan.yml", ".github/workflows/network-baseline-record.yml", ".github/workflows/provenance-nightly.yml", ".github/workflows/provider-request-schemas-check.yml", ".github/workflows/quarantine-prune.yml", ".github/workflows/railway-smoke.yml", ".github/workflows/railway-template-source.yml", ".github/workflows/release-pr.yml", ".github/workflows/safe-chain-cache.yml", ".github/workflows/scorecard.yml", ".github/workflows/security-txt-guard.yml", ".github/workflows/sync-branch-protection.yml", ".github/workflows/typecheck-base.yml", ".github/workflows/flaky-test-quarantine.yml"]'), github.event.workflow_run.path)
+      && contains(fromJSON('[".github/workflows/nightly-test.yml", ".github/workflows/nightly-typecheck.yml", ".github/workflows/nightly-property-test.yml", ".github/workflows/ai-provider-canary.yml", ".github/workflows/mcp-canary.yml", ".github/workflows/agent-sandbox-canary.yml", ".github/workflows/desktop-release-canary.yml", ".github/workflows/landing-canary.yml", ".github/workflows/journey-canary.yml", ".github/workflows/playbook-journey.yml", ".github/workflows/case-law-search-probe.yml", ".github/workflows/user-journeys.yml", ".github/workflows/model-catalog-check.yml", ".github/workflows/deploy-landing.yml", ".github/workflows/deploy-outlook-addin.yml", ".github/workflows/dependency-audit.yml", ".github/workflows/mirror-ci-service-images.yml", ".github/workflows/publish-npm.yml", ".github/workflows/release-tag.yml", ".github/workflows/release.yml", ".github/workflows/release-rehearsal.yml", ".github/workflows/release-health.yml", ".github/workflows/release-desktop.yml", ".github/workflows/deploy-staging.yml", ".github/workflows/api-test-memory.yml", ".github/workflows/audit-branch-protection.yml", ".github/workflows/audit-image.yml", ".github/workflows/auth-md-spec-check.yml", ".github/workflows/autofix-generated-conflicts.yml", ".github/workflows/bundle-size-nightly.yml", ".github/workflows/cancel-stale-merge-groups.yml", ".github/workflows/catalogue-upstream.yml", ".github/workflows/codeql.yml", ".github/workflows/dated-waiver-healing.yml", ".github/workflows/dependency-malware-nightly.yml", ".github/workflows/local-run-e2e.yml", ".github/workflows/main-heavy.yml", ".github/workflows/main-pr-depth.yml", ".github/workflows/mobile-release-plan.yml", ".github/workflows/network-baseline-record.yml", ".github/workflows/provenance-nightly.yml", ".github/workflows/route-scale-nightly.yml", ".github/workflows/provider-request-schemas-check.yml", ".github/workflows/quarantine-prune.yml", ".github/workflows/railway-smoke.yml", ".github/workflows/railway-template-source.yml", ".github/workflows/release-pr.yml", ".github/workflows/safe-chain-cache.yml", ".github/workflows/scorecard.yml", ".github/workflows/security-txt-guard.yml", ".github/workflows/sync-branch-protection.yml", ".github/workflows/typecheck-base.yml", ".github/workflows/flaky-test-quarantine.yml"]'), github.event.workflow_run.path)
       && contains(fromJSON('["push", "schedule", "workflow_dispatch", "workflow_run", "deployment_status", "delete", "status"]'), github.event.workflow_run.event))
     runs-on: ubuntu-24.04
     timeout-minutes: 5
@@ -103,6 +104,7 @@ jobs:
           path: .gh-retry
           persist-credentials: false
           sparse-checkout: |
+            package.json
             scripts/gh-retry.sh
             scripts/main-heavy-alert-kind.mjs
           sparse-checkout-cone-mode: false
@@ -225,6 +227,17 @@ jobs:
             *) echo "send=true" >> "$GITHUB_OUTPUT" ;;
           esac
 
+      - name: Setup Bun for the failure classification
+        continue-on-error: true
+        if: >-
+          github.event_name == 'workflow_run'
+          && github.event.workflow_run.path == '.github/workflows/main-heavy.yml'
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        timeout-minutes: 2
+        with:
+          bun-version-file: .gh-retry/package.json
+          no-cache: true
+
       - name: Classify main-heavy infrastructure failures
         id: classification
         continue-on-error: true
@@ -239,7 +252,7 @@ jobs:
         run: |
           kind=$(bash "$GH_RETRY_SCRIPT" api --paginate --slurp \
             "repos/$GITHUB_REPOSITORY/commits/$HEAD_SHA/statuses?per_page=100" |
-            node .gh-retry/scripts/main-heavy-alert-kind.mjs "$RUN_URL" "$RUN_ID")
+            bun .gh-retry/scripts/main-heavy-alert-kind.mjs "$RUN_URL" "$RUN_ID")
           echo "kind=$kind" >> "$GITHUB_OUTPUT"
 
       - name: Send failure alert

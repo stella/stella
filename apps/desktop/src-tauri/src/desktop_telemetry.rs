@@ -30,6 +30,7 @@ pub enum DesktopTelemetryWindow {
   SelfHostConnectDialog,
   Activity,
   Onboarding,
+  Transcribe,
 }
 
 impl DesktopTelemetryWindow {
@@ -42,6 +43,7 @@ impl DesktopTelemetryWindow {
       Self::SelfHostConnectDialog => "selfHostConnectDialog",
       Self::Activity => "activity",
       Self::Onboarding => "onboarding",
+      Self::Transcribe => "transcribe",
     }
   }
 }
@@ -662,11 +664,21 @@ impl DesktopTelemetry {
         report.window = DesktopTelemetryWindow::Activity;
         report.detail = None;
       }
+      // The panel shows the transcript, so its reports carry codes only.
+      crate::dictation_preview::PREVIEW_WINDOW_LABEL => {
+        report.window = DesktopTelemetryWindow::Main;
+        report.detail = None;
+      }
       crate::onboarding::ONBOARDING_WINDOW_LABEL => {
         report.window = DesktopTelemetryWindow::Onboarding;
       }
       crate::accessibility_guide::GUIDE_WINDOW_LABEL => {
         report.window = DesktopTelemetryWindow::Onboarding;
+      }
+      // A transcript is a client's words; a report never carries them.
+      crate::transcribe_recording::TRANSCRIBE_WINDOW_LABEL => {
+        report.window = DesktopTelemetryWindow::Transcribe;
+        report.detail = None;
       }
       _ => {}
     }
@@ -991,7 +1003,8 @@ pub fn desktop_report_timing(
       | DesktopTelemetryWindow::TakeoverDialog
       | DesktopTelemetryWindow::SelfHostConnectDialog
       | DesktopTelemetryWindow::Activity
-      | DesktopTelemetryWindow::Onboarding,
+      | DesktopTelemetryWindow::Onboarding
+      | DesktopTelemetryWindow::Transcribe,
       _,
     ) => None,
   };
@@ -1507,6 +1520,7 @@ mod tests {
       ("clipboard", DesktopTelemetryWindow::Clipboard),
       ("clipboard-editor", DesktopTelemetryWindow::ClipboardEditor),
       ("activity", DesktopTelemetryWindow::Activity),
+      ("dictation-preview", DesktopTelemetryWindow::Main),
     ] {
       for error_name in ["TypeError", "Error", "secret_identifier"] {
         let (sender, mut receiver) = mpsc::channel(1);

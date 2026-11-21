@@ -1,6 +1,7 @@
 import { Panic, Result } from "better-result";
 import type { ReservedSQL } from "bun";
 import { describe, expect, test } from "bun:test";
+import { fileURLToPath } from "node:url";
 
 import { defaultConfig, type Signal } from "@stll/db-load-gate/health";
 import { waitForExternalState } from "@stll/property-testing/external-state";
@@ -976,7 +977,7 @@ describe.skipIf(!enabled)("online index runner PostgreSQL 18 faults", () => {
           "./src/tests/setup-env.ts",
           "./src/db/online-index-gate-process.fixture.test.ts",
         ],
-        cwd: new URL("../../", import.meta.url).pathname,
+        cwd: fileURLToPath(new URL("../../", import.meta.url)),
         env: {
           ...process.env,
           ONLINE_INDEX_TEST_TABLE: fixture.table,

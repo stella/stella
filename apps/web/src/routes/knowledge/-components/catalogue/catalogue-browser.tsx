@@ -174,8 +174,8 @@ const CatalogueBrowser = ({
     onSkillSheetChanged();
     detached(
       navigate({
-        to: "/knowledge/tools/$entry",
-        params: { entry: skill.id },
+        to: "/knowledge/tools/skills/$skillId",
+        params: { skillId: skill.id },
       }),
       "catalogue-browser.navigate",
     );
@@ -187,8 +187,8 @@ const CatalogueBrowser = ({
     }
     detached(
       navigate({
-        to: "/knowledge/tools/$entry",
-        params: { entry: entry.installedSkillId },
+        to: "/knowledge/tools/skills/$skillId",
+        params: { skillId: entry.installedSkillId },
       }),
       "catalogue-browser.navigate",
     );
@@ -410,6 +410,7 @@ const CatalogueEntryRow = ({
     actions = (
       <Button
         disabled={install.isPending}
+        disabledReason={t("common.installing")}
         onClick={(e) => {
           e.stopPropagation();
           onInstall();
@@ -428,6 +429,7 @@ const CatalogueEntryRow = ({
     actions = (
       <Button
         disabled={uninstall.isPending}
+        disabledReason={t("common.removing")}
         onClick={(e) => {
           e.stopPropagation();
           requestRemoval();

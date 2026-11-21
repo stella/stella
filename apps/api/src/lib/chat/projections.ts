@@ -310,6 +310,15 @@ export const SEARCH_ACROSS_MATTERS_PROJECTION = v.strictObject({
  * the numeric char-offset window cursor the egress pipeline writes back.
  */
 export const READ_CONTENT_ACROSS_MATTERS_PROJECTION = v.strictObject({
+  /** One-based positions in the envelope's attachment list. */
+  attachments: v.optional(
+    v.array(
+      v.strictObject({
+        position: v.number(),
+        entityId: chatEntityRef({ from: "outputPath", path: "workspaceId" }),
+      }),
+    ),
+  ),
   charCount: v.number(),
   // The output entity is the request's own `entity_id` input, so hydration
   // reuses the dehydrated ref; the sibling source (the hand entry's
@@ -1935,6 +1944,7 @@ const STATUTE_AMENDMENT_PAGE_PROJECTION = v.nullable(
     items: v.array(
       v.strictObject({
         publisherId: v.string(),
+        duplicatePublisherIds: v.array(v.string()),
         amendingEli: v.string(),
         amendingTitle: v.nullable(v.string()),
         affectedAnchor: v.string(),

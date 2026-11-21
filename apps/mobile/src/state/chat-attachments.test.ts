@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
+import { chatFileMimeType } from "@stll/api-contract/chat-file-types";
 import { CHAT_LOCAL_RUN_ANONYMIZED_REFUSAL_CODE } from "@stll/api-contract/chat-run-target";
 
 import { ApiRequestError } from "./api-request";
@@ -11,7 +12,6 @@ import {
   base64Bytes,
   CHAT_FILE_MAX_BYTES,
   CHAT_FILES_PER_MESSAGE,
-  chatFileMimeType,
   readAttachment,
   readyFiles,
   sendRefusal,

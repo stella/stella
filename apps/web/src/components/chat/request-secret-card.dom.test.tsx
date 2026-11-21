@@ -373,7 +373,7 @@ describe("request secret card", () => {
     const provideButton = screen.getByRole("button", {
       name: messages.chat.requestSecret.provideAction,
     });
-    expect(provideButton.hasAttribute("disabled")).toBe(true);
+    expect(provideButton.getAttribute("aria-disabled")).toBe("true");
     await act(async () =>
       fireEvent.click(
         screen.getByRole("checkbox", {

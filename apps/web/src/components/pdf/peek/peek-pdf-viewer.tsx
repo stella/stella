@@ -8,12 +8,7 @@ import { useTranslations } from "use-intl";
 import { resolveFindMatchRange } from "@stll/folio-core/prosemirror/findReplaceSelection";
 import type { DocxEditorRef } from "@stll/folio-react";
 import { Button } from "@stll/ui/button";
-import {
-  AlertTriangleIcon,
-  MonitorIcon,
-  MoonIcon,
-  SunIcon,
-} from "@stll/ui/icons";
+import { AlertTriangleIcon } from "@stll/ui/icons";
 import {
   Menu,
   MenuPopup,
@@ -47,6 +42,10 @@ import { PageAnonymization } from "@/components/pdf/page-anonymization";
 import { PageCitation } from "@/components/pdf/page-citation";
 import { PdfSelectionActions } from "@/components/pdf/pdf-selection-actions";
 import { PDF_SELECTION_CHAT } from "@/components/pdf/pdf-selection-toolbar";
+import {
+  PDF_COLOR_MODE_ICONS,
+  PdfColorModeIcon,
+} from "@/components/pdf/pdf-viewer.pending";
 import { resolvePendingPdfCitationPageId } from "@/components/pdf/peek/pdf-citation-navigation.logic";
 import {
   fetchPrintPdf,
@@ -380,12 +379,6 @@ const PeekViewerErrorFallback = ({ onRetry }: { onRetry: () => void }) => {
   );
 };
 
-const PDF_COLOR_MODE_ICONS = {
-  light: SunIcon,
-  dark: MoonIcon,
-  system: MonitorIcon,
-} as const satisfies Record<PDFColorMode, typeof SunIcon>;
-
 type PeekPdfColorControl = {
   colorMode: PDFColorMode;
   onColorModeChange: (colorMode: PDFColorMode) => void;
@@ -405,7 +398,6 @@ const PDFColorModeControl = ({
   onColorModeChange,
 }: PeekPdfColorControl) => {
   const t = useTranslations();
-  const PDFColorModeIcon = PDF_COLOR_MODE_ICONS[colorMode];
 
   return (
     <Menu>
@@ -414,7 +406,7 @@ const PDFColorModeControl = ({
         render={<Button size="icon-xs" variant="ghost" />}
         title={t("workspaces.pdf.adjustForDarkMode")}
       >
-        <PDFColorModeIcon className="size-3.5" />
+        <PdfColorModeIcon colorMode={colorMode} />
       </MenuTrigger>
       <MenuPopup className="w-auto" align="end">
         <MenuRadioGroup className="flex" value={colorMode}>
@@ -502,11 +494,11 @@ const PeekDocxViewer = ({
   const searchHighlightFrameRef = useRef<number | null>(null);
   const searchResultCacheRef = useRef<DocxSearchResultCache | null>(null);
   const { containerRef: fitZoomRef, fitZoom: targetZoom } = useDocxFitZoom({
+    fit:
+      fitMode === "page"
+        ? { type: "width", fitWidth: DOCX_PAGE_FIT_WIDTH, maxAutoZoom: 1 }
+        : { type: "width" },
     scaleOffset,
-    ...(fitMode === "page" && {
-      fitWidth: DOCX_PAGE_FIT_WIDTH,
-      maxAutoZoom: 1,
-    }),
   });
   // Stable ref callback so React doesn't detach/re-attach the fit-zoom
   // ResizeObserver every render.

@@ -52,7 +52,16 @@ const rolesOf = (blocks: readonly Block[], expected: Expected) =>
     return [prefix, block.role] as const;
   });
 
-const RIS_CASES = [
+type RisCase = {
+  name: string;
+  fixture: string;
+  caseNumber: string;
+  expected: Expected;
+};
+
+// Annotated rather than `as const`: iterating a deep literal table makes a
+// union of every case's tuple types, which the type checker cannot represent.
+const RIS_CASES: readonly RisCase[] = [
   {
     name: "BVwG: docket, abridgement, formula and bench filed under Spruch",
     fixture: "at-ris-bvwg-beschluss.xml",
@@ -164,12 +173,7 @@ const RIS_CASES = [
       ["Gründe", "argumentation"],
     ],
   },
-] as const satisfies readonly {
-  name: string;
-  fixture: string;
-  caseNumber: string;
-  expected: Expected;
-}[];
+];
 
 describe("Austrian decision regions", () => {
   for (const { name, fixture, caseNumber, expected } of RIS_CASES) {

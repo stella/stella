@@ -21,13 +21,28 @@
     "subject": "{documentType, select, credit_note {Avoir} advance {Facture d'acompte} other {Facture}} {invoiceNumber} de {firmName}"
   },
   "newDeviceLogin": {
-    "action": "Vérifier les sessions",
-    "body": "Votre compte a été connecté depuis un nouvel appareil ou emplacement.",
+    "action": "Vérifier les appareils connectés",
+    "actionNote": "Le bouton ouvre Paramètres › Sécurité sur cette connexion.",
+    "body": "Quelqu'un vient de se connecter à votre compte depuis un nouvel appareil ou un nouvel emplacement.",
     "device": "Appareil",
-    "heading": "Nouvelle connexion détectée",
-    "ignore": "Si c'était vous, aucune action n'est nécessaire. Si vous ne reconnaissez pas cette activité, vérifiez vos sessions actives et révoquez celles que vous ne reconnaissez pas.",
+    "deviceName": {
+      "browserOnOs": "{browser} sous {os}",
+      "unknown": "Appareil inconnu"
+    },
+    "heading": "Nouvelle connexion à votre compte",
+    "ignore": "Si c'était vous, vous n'avez rien à faire. Si vous ne reconnaissez pas cette connexion, déconnectez cet appareil.",
     "ipAddress": "Adresse IP",
+    "ipAddressUnknown": "Inconnue",
+    "location": "Emplacement",
+    "mapAlt": "Carte indiquant l’emplacement approximatif de la connexion : {location}",
+    "place": {
+      "cityCountry": "{city}, {country}",
+      "cityRegionCountry": "{city}, {region}, {country}",
+      "regionCountry": "{region}, {country}"
+    },
+    "placeApproximate": "{place} (approximatif)",
     "preview": "Nouvelle connexion depuis {device}",
+    "previewUnknownDevice": "Nouvelle connexion depuis un appareil inconnu",
     "subject": "Nouvelle connexion à votre compte stella",
     "time": "Heure"
   },

@@ -114,6 +114,7 @@ export const McpReconnectButton = ({
         <Button
           className="min-h-11"
           disabled={reconnect.isPending}
+          disabledReason={t("common.connecting")}
           onClick={() => reconnect.mutate()}
           size="xs"
           type="button"

@@ -275,8 +275,8 @@ test("restore refresh retry never resubmits a committed restore", async () => {
     expect(
       view
         .getByRole("button", { name: messages.clauses.restoreVersion })
-        .hasAttribute("disabled"),
-    ).toBe(true),
+        .getAttribute("aria-disabled"),
+    ).toBe("true"),
   );
   expect(writes).toEqual([{ baseRevision: 3 }]);
 });
@@ -290,8 +290,8 @@ test("streaming preserves history browsing and disables restore", async () => {
   expect(
     view
       .getByRole("button", { name: messages.clauses.restoreVersion })
-      .hasAttribute("disabled"),
-  ).toBe(true);
+      .getAttribute("aria-disabled"),
+  ).toBe("true");
 });
 
 test("loading four history pages preserves the newest revisions when reopened", async () => {

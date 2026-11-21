@@ -30,7 +30,11 @@
   // default changes and a cached pass could replay over the edit. Hashing the
   // patches globally is the honest scope: the blast radius is every dependent
   // package, not one task's declared inputs.
-  "globalDependencies": ["patches/**", "scripts/bun-toolchain.gen.json"],
+  "globalDependencies": [
+    "patches/**",
+    "scripts/bun-toolchain.gen.json",
+    "packages/scripts/src/test-event-loop-watchdog*.ts"
+  ],
   "tasks": {
     "@stll/desktop#test:browser": {
       "inputs": ["$TURBO_DEFAULT$"]
@@ -1351,6 +1355,7 @@
         "$TURBO_ROOT$/packages/country-codes/**",
         "$TURBO_ROOT$/packages/db-load-gate/**",
         "$TURBO_ROOT$/packages/decision-reader/**",
+        "$TURBO_ROOT$/packages/docx-authoring/**",
         "$TURBO_ROOT$/packages/docx-utils/**",
         "$TURBO_ROOT$/packages/errors/**",
         "$TURBO_ROOT$/packages/fetch/**",
@@ -1431,6 +1436,7 @@
         "$TURBO_ROOT$/packages/conditions/**",
         "$TURBO_ROOT$/packages/country-codes/**",
         "$TURBO_ROOT$/packages/db-load-gate/**",
+        "$TURBO_ROOT$/packages/docx-authoring/**",
         "$TURBO_ROOT$/packages/docx-utils/**",
         "$TURBO_ROOT$/packages/errors/**",
         "$TURBO_ROOT$/packages/fetch/**",
@@ -1500,12 +1506,14 @@
         "$TURBO_ROOT$/packages/auth-model/**",
         "$TURBO_ROOT$/packages/boe/**",
         "$TURBO_ROOT$/packages/cli/**",
+        "$TURBO_ROOT$/packages/collation/**",
         "$TURBO_ROOT$/packages/concurrency/**",
         "$TURBO_ROOT$/packages/conditions/**",
         "$TURBO_ROOT$/packages/country-codes/**",
         "$TURBO_ROOT$/packages/db-load-gate/**",
         "$TURBO_ROOT$/packages/docx-utils/**",
         "$TURBO_ROOT$/packages/errors/**",
+        "$TURBO_ROOT$/packages/fetch/**",
         "$TURBO_ROOT$/packages/html/**",
         "$TURBO_ROOT$/packages/infosoud/**",
         "$TURBO_ROOT$/packages/legal-ast/**",
@@ -1520,11 +1528,13 @@
         "$TURBO_ROOT$/packages/runtime-mode/**",
         "$TURBO_ROOT$/packages/scripts/**",
         "$TURBO_ROOT$/packages/sha256/**",
+        "$TURBO_ROOT$/packages/skills/**",
         "$TURBO_ROOT$/packages/stable-stringify/**",
         "$TURBO_ROOT$/packages/template-conditions/**",
         "$TURBO_ROOT$/packages/template-packs/**",
         "$TURBO_ROOT$/packages/test-state/**",
         "$TURBO_ROOT$/packages/text-normalize/**",
+        "$TURBO_ROOT$/packages/transactional/**",
         "$TURBO_ROOT$/packages/uuid-codec/**",
         "$TURBO_ROOT$/scripts/**",
         "$TURBO_ROOT$/types/**",
@@ -1581,6 +1591,7 @@
         "$TURBO_ROOT$/packages/country-codes/**",
         "$TURBO_ROOT$/packages/db-load-gate/**",
         "$TURBO_ROOT$/packages/decision-reader/**",
+        "$TURBO_ROOT$/packages/docx-authoring/**",
         "$TURBO_ROOT$/packages/docx-utils/**",
         "$TURBO_ROOT$/packages/errors/**",
         "$TURBO_ROOT$/packages/fetch/**",
@@ -1668,6 +1679,7 @@
         "$TURBO_ROOT$/packages/country-codes/**",
         "$TURBO_ROOT$/packages/db-load-gate/**",
         "$TURBO_ROOT$/packages/decision-reader/**",
+        "$TURBO_ROOT$/packages/docx-authoring/**",
         "$TURBO_ROOT$/packages/docx-utils/**",
         "$TURBO_ROOT$/packages/errors/**",
         "$TURBO_ROOT$/packages/fetch/**",
@@ -1857,6 +1869,14 @@
     "@stll/html#test": {
       "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/apps/api/src/**"]
     },
+    // The path-grammar test pins api-contract's browser copy of the pattern.
+    "@stll/skills#test": {
+      "dependsOn": ["transit"],
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "$TURBO_ROOT$/packages/api-contract/src/agent-skills.ts"
+      ]
+    },
     "@stll/api#test": {
       "dependsOn": [
         "transit",
@@ -1933,7 +1953,7 @@
       "dependsOn": ["transit"],
       "inputs": [
         "$TURBO_DEFAULT$",
-        "$TURBO_ROOT$/apps/web/src/routes/auth/route.tsx",
+        "$TURBO_ROOT$/apps/web/src/styles/app.css",
         "$TURBO_ROOT$/apps/web/src/components/workspace-primary-nav.ts",
         "$TURBO_ROOT$/apps/web/src/components/sidebar-user-menu.tsx",
         // The phone draws the web's recorded chats and its step titles.
@@ -1989,7 +2009,7 @@
         "src/i18n/langs/**",
         "$TURBO_ROOT$/apps/desktop/src/activity/preview-apps.json",
         "src/clipboard/clipboard-types.ts",
-        "src/mainview/App.tsx",
+        "src/mainview/settings-pages.ts",
         "$TURBO_ROOT$/packages/agent-engine/src/sidecar/protocol.fixtures.json",
         "$TURBO_ROOT$/packages/api-contract/src/desktop-account-link.fixtures.json",
         "$TURBO_ROOT$/packages/api-contract/src/desktop-account-policy.json",

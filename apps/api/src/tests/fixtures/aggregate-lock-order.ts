@@ -59,11 +59,20 @@ export const aggregateFences = () => {
       id: organizationId,
       mode: "update",
     },
+    sharepointConnection: {
+      aggregate: "sharepointConnection",
+      id: { id: createSafeId<"sharepointConnection">(), organizationId },
+      mode: "share",
+    },
     organizationDataBoxes: {
       aggregate: "organizationDataBoxes",
       id: { organizationId },
     },
-    organizationSettings: { aggregate: "organizationSettings", id: organizationId, mode: "update" },
+    organizationSettings: {
+      aggregate: "organizationSettings",
+      id: organizationId,
+      mode: "update",
+    },
     organizationObjectIntent: {
       aggregate: "organizationObjectIntent",
       id: organizationId,
@@ -220,6 +229,11 @@ export const aggregateFences = () => {
       aggregate: "memory",
       id: { id: createSafeId<"aiMemory">(), organizationId },
       mode: "update",
+    },
+    contact: {
+      aggregate: "contact",
+      id: { id: createSafeId<"contact">(), organizationId },
+      mode: "key share",
     },
     searchProjectionRepair: {
       aggregate: "searchProjectionRepair",

@@ -43,6 +43,7 @@ import { propertiesOptions } from "@/lib/workspaces/queries/properties";
 import { viewsOptions } from "@/lib/workspaces/queries/views";
 import { workflowOptions } from "@/lib/workspaces/queries/workspace";
 import { useWorkspaceStore } from "@/lib/workspaces/store";
+import { LeafPendingView } from "@/routes/-route-pending-view";
 import { routePresentation } from "@/routes/-route-presentation";
 import { MatterUploadAction } from "@/routes/_protected.workspaces/$workspaceId/-components/matter-upload-action";
 import { ReportExportTracker } from "@/routes/_protected.workspaces/$workspaceId/-components/view/report-export-tracker";
@@ -59,6 +60,9 @@ export const Route = createFileRoute("/_protected/workspaces/$workspaceId")({
     presentation: routePresentation({ type: "entity", entity: "matter" }),
   },
   component: RouteComponent,
+  // A layout: while the matter loads, its pending view is the page it leads
+  // to (the view's tabs and body), not a block over the whole matter.
+  pendingComponent: LeafPendingView,
   loader: async ({ context, params }) => {
     const wsId = params.workspaceId;
     const qc = context.queryClient;
@@ -202,6 +206,7 @@ const ArchivedMatterView = ({ workspaceId }: { workspaceId: string }) => {
         <Button
           className="self-start"
           disabled={unarchive.isPending}
+          disabledReason={t("common.restoring")}
           onClick={() =>
             unarchive.mutate(
               { workspaceId: workspace.id },

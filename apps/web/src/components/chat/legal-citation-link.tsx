@@ -14,6 +14,7 @@ import { cn } from "@stll/ui/utils";
 
 import { openCaseLawDecision } from "@/components/chat/case-law-open";
 import { classifyChatHttpLink } from "@/components/chat/chat-app-link.logic";
+import type { StatuteLink } from "@/components/chat/chat-app-link.logic";
 import { chatAppOrigins } from "@/components/chat/chat-app-origins";
 import {
   ChatDecisionCitation,
@@ -21,7 +22,7 @@ import {
 } from "@/components/chat/chat-decision-citation";
 import type { ExternalSourceReference } from "@/components/chat/external-source-store";
 import { useOpenStatuteLink } from "@/components/chat/statute-open";
-import { InlinePill } from "@/components/inline-pill";
+import { UNDERLINED_CITATION_CLASS_NAME } from "@/components/references/underlined-citation";
 import { useOpenDecisionTab } from "@/features/case-law/open-decision-tab";
 import { ProxyChatLink } from "@/features/chat/components/proxy-chat-link";
 import type { LinkIconSource } from "@/features/chat/components/proxy-chat-link";
@@ -42,11 +43,15 @@ type LegalCitationLinkProps = {
   anchorId?: string | undefined;
   fallback?: ReactElement;
   fullTrayLabel?: boolean | undefined;
+  /** The answer's prose just before an inline citation (`rehypeCitationLeadIn`). */
+  leadIn?: string | undefined;
 };
 
-// One chip per citation and no glyph: the citation's own text names the
-// provision, so the chip only has to read as clickable. The reader opens the
-// publisher source, so the chip never trails a second link.
+// One link per citation and no glyph: the citation's own text names the
+// provision, so inline it is the answer's words, quietly underlined, rather
+// than a box with padding that pushes away the brackets around it. The tray
+// keeps its chip. The reader opens the publisher source, so the citation
+// never trails a second link.
 const LegalCitationView = ({
   appearance,
   children,
@@ -61,7 +66,7 @@ const LegalCitationView = ({
       "focus-visible:outline-ring cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2",
       appearance === "tray"
         ? "bg-muted/50 hover:bg-muted inline-flex max-w-full shrink-0 items-center rounded-md border px-1.5 py-0.5 text-xs"
-        : "group rounded-sm",
+        : UNDERLINED_CITATION_CLASS_NAME,
     )}
     href={sanitizeHref(citation.url)}
     onClick={onClick}
@@ -71,9 +76,7 @@ const LegalCitationView = ({
         {children}
       </TruncatedText>
     ) : (
-      <InlinePill className="group-hover:bg-accent/80" truncate>
-        {children}
-      </InlinePill>
+      children
     )}
   </a>
 );
@@ -96,7 +99,14 @@ const InteractiveLegalCitation = ({
     const link = classifyChatHttpLink(url, appOrigins);
     switch (link.type) {
       case "statute":
-        detached(openStatute(link.link), "legal-citation.open-statute");
+        detached(
+          openLabelledStatute({
+            label: event.currentTarget.textContent,
+            link: link.link,
+            openStatute,
+          }),
+          "legal-citation.open-statute",
+        );
         return undefined;
       case "decision":
         return panic("A statute citation must resolve to a statute route");
@@ -110,6 +120,35 @@ const InteractiveLegalCitation = ({
     }
   };
   return <LegalCitationView {...props} citation={citation} onClick={onClick} />;
+};
+
+type OpenLabelledStatuteOptions = {
+  /** The words the reader clicked: `§ 240 odst. 3` on a link to § 240. */
+  label: string;
+  link: StatuteLink;
+  openStatute: ReturnType<typeof useOpenStatuteLink>;
+};
+
+/**
+ * Opens the act, marking the subdivisions the citation's own words name
+ * inside the provision its address lands on. The grammars that read them load
+ * on click, not with every answer that renders a citation.
+ */
+const openLabelledStatute = async ({
+  label,
+  link,
+  openStatute,
+}: OpenLabelledStatuteOptions) => {
+  const { labelledStatuteAnchorIds } =
+    await import("@/components/chat/statute-link-label.logic");
+  await openStatute({
+    ...link,
+    citedAnchorIds: labelledStatuteAnchorIds({
+      anchor: link.anchor,
+      country: link.params.country,
+      label,
+    }),
+  });
 };
 
 /** A source-tray row for a decision with a known id: it keeps its full label,
@@ -231,6 +270,7 @@ export const LegalCitationLink = (props: LegalCitationLinkProps) => {
     return (
       <ChatDecisionCitation
         decisionId={props.source.caseLawDecision.decisionId}
+        leadIn={props.leadIn}
         passage={passage}
         {...(props.anchorId === undefined
           ? {}
@@ -259,6 +299,7 @@ export const LegalCitationLink = (props: LegalCitationLinkProps) => {
       extractCaseLawDecisionIdFromIdRouteParam(citation.params.slug);
     const anchorId = props.anchorId ?? readUrlAnchor(citation.url);
     const decisionProps = {
+      leadIn: props.leadIn,
       passage,
       ...(anchorId === undefined
         ? {}

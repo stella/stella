@@ -51,7 +51,7 @@
   {
     "access": "read",
     "command": ["case-law", "search"],
-    "description": "Search case law. `queries` merges phrasings; matchedQueries names each hit's phrasings. `limit` is split evenly. Facets are opt-in, first phrasing, page one. total needs facets and one phrasing; not_counted means unknown, never zero. strict requires every word; otherwise function words are optional. Pages may append some_terms hits; terms says which words each hit holds. searches[] has queryUsed/warnings; on time_budget or partial_matches_budget nextCursor reruns it. source_id uses facets.source values. Under load it may answer status \"running\": not a failure. After retryAfterMs, repeat the call with continuation_token; \"partial\" is never the full answer. Reader: `url`; publisher: `source_url`.",
+    "description": "Search case law. `queries` merges phrasings; matchedQueries names each hit's phrasings. `limit` is split evenly. Facets are opt-in, first phrasing, page one. total needs facets and one phrasing; not_counted means unknown, never zero. strict needs every word, not necessarily adjacent (quote a phrase for that); otherwise function words are optional and some_terms hits may appear; terms names each hit's words. searches[] has queryUsed/warnings; on time_budget or partial_matches_budget nextCursor reruns it. source_id uses facets.source values. Under load it may answer status \"running\": not a failure. After retryAfterMs, repeat the call with continuation_token; \"partial\" is never the full answer. Reader: `url`; publisher: `source_url`.",
     "name": "search_case_law",
     "title": "Search case law"
   },
@@ -247,14 +247,14 @@
   {
     "access": "read",
     "command": ["legislation", "provisions"],
-    "description": "Read statute provisions: items[] entries are { eli, anchor } with optional as_of and language, or document_id from read_provision_history for an exact consolidation. document_id and as_of are mutually exclusive. Use publisher anchors from read_statute's outline (par_1729, par_1729-odst_1). Entries return in input order: found carries text; invalid, not_found, uncovered_date (no applicable consolidation, including inconsistent publisher dates), provision_not_found and text_withheld (AI use barred) carry messages. Continue long text with nextTextCursor as text_cursor on the same entry until null. url opens the stella reader when served, otherwise the publisher; source_url is the publisher source.",
+    "description": "Read statute provisions: items[] entries are { eli, anchor } with optional as_of and language, or document_id from read_provision_history for an exact consolidation. document_id and as_of are mutually exclusive. Use publisher anchors from read_statute's outline (par_1729, par_1729-odst_1). Entries return in input order: found carries text and governingText (enclosing units' lead-in and closing wording; governingTextTruncated if cut); invalid, not_found, uncovered_date (no applicable consolidation, including inconsistent publisher dates), provision_not_found and text_withheld (AI use barred) carry messages. Continue long text with nextTextCursor as text_cursor on the same entry until null. url opens the stella reader when served, otherwise the publisher; source_url is the publisher source.",
     "name": "read_statute_provisions",
     "title": "Read statute provisions"
   },
   {
     "access": "read",
     "command": ["legislation", "history"],
-    "description": "Read one provision's wording in each consolidation of the work, newest validity window first, so two wordings can be compared without downloading whole statutes. Takes the work's `eli` and an `anchor` from read_statute's outline. A consolidation that does not carry the anchor is left out of `items`. Pass the returned nextCursor back as cursor for older versions. Long wording returns nextTextCursor on its item; pass it back as text_cursor with the same eli, anchor, and version-page cursor until it is null. Use `url` for the stella reader when served, otherwise the publisher; `source_url` is the publisher source.",
+    "description": "Read one provision's wording in each consolidation of the work, newest validity window first, so two wordings can be compared without downloading whole statutes. Takes the work's `eli` and an `anchor` from read_statute's outline. A consolidation that does not carry the anchor is left out of `items`. Pass the returned nextCursor back as cursor for older versions. Long wording returns nextTextCursor on its item; pass it back as text_cursor with the same eli, anchor, and version-page cursor until it is null. Items carry governingText as read_statute_provisions does. Use `url` for the stella reader when served, otherwise the publisher; `source_url` is the publisher source.",
     "name": "read_provision_history",
     "title": "Read provision history"
   },
@@ -275,14 +275,14 @@
   {
     "access": "read",
     "command": ["guidance", "search"],
-    "description": "Search regulator guidance (soft law): methodologies, opinions, guidelines, recommendations, FAQs and similar documents issued by data-protection and labour regulators. Results are guidance, never court decisions: for case law use search_case_law. Each result carries documentClass, issuer, kind, reference, issuedOn, validity, source_url and the attribution to show with it. Filter by authority, jurisdiction, kind, date_from and date_to. A source served as metadata only is matched on its title and has a null snippet. Totals are not counted; page with cursor. Read a hit with read_guidance.",
+    "description": "Search regulator guidance (soft law): methodologies, opinions, guidelines, recommendations and FAQs from data-protection, labour, tax and administrative authorities, e.g. Czech GFŘ and MF pokyny or MV závěry on administrative procedure. Results are guidance, never court decisions: for case law use search_case_law. Each result carries documentClass, issuer, kind, reference, issuedOn, validity, source_url and the attribution to show with it. Filter by authority, jurisdiction, kind, date_from and date_to. A source served as metadata only is matched on its title and has a null snippet. Totals are not counted; page with cursor. Read a hit with read_guidance.",
     "name": "search_guidance",
     "title": "Search regulator guidance"
   },
   {
     "access": "read",
     "command": ["guidance", "read"],
-    "description": "Read one regulator guidance document by document_id. It is guidance, not a court decision. Returns the issuer, kind, reference, issue date, validity as the publisher states it, source_url, the attribution and any conditions to show with it, and its text. When you summarize this text, show attribution.text and any attribution.summaryDisclaimer with the summary. textState says why text is null: withheld_by_source_setting or not_extracted; use source_url then. Pass nextCursor back as cursor to read more.",
+    "description": "Read one regulator guidance document (data-protection, labour, tax or administrative) by document_id. It is guidance, not a court decision. Returns the issuer, kind, reference, issue date, validity as the publisher states it, source_url, the attribution and any conditions to show with it, and its text. When you summarize this text, show attribution.text and any attribution.summaryDisclaimer with the summary. textState says why text is null: withheld_by_source_setting or not_extracted; use source_url then. Pass nextCursor back as cursor to read more.",
     "name": "read_guidance",
     "title": "Read regulator guidance"
   },
@@ -590,7 +590,7 @@
   {
     "access": "read",
     "command": ["capability", "case-law", "ingestion-get"],
-    "description": "Report case-law corpus ingestion health for operators. Per source: adapter key and whether an adapter is still registered for it, enabled flag, sync cursor, decisions held against the total the publisher reports, decisions inserted in the last hour and last day, failures and the top error types in the last day, the last ingestion event, and standing reconciliation counts (slices surveyed, short slices, parked and terminal items, pending removals and unprobeable identities). The fleet event total is an estimate from database statistics and may lag recent writes. Requires organization audit-log access.",
+    "description": "Report case-law corpus ingestion health for operators. Per source: adapter key and whether an adapter is still registered for it, enabled flag, sync cursor, decisions held against the total the publisher reports, decisions inserted in the last hour and last day, failures and the top error types in the last day, the last ingestion event, and standing reconciliation counts (slices surveyed, short slices, parked and terminal items, pending removals and unprobeable identities), and whether the source is parked: failing the same way for so long that it asks its publisher once a day, since when, and its next attempt. The fleet event total is an estimate from database statistics and may lag recent writes. Requires organization audit-log access.",
     "name": "capability:case-law.ingestion.get",
     "title": "case-law.ingestion.get"
   },
@@ -2780,7 +2780,7 @@
   {
     "access": "write",
     "command": ["capability", "rates", "entries-create"],
-    "description": "Add one rate line to a rate table: an hourly rate in integer minor currency units, effective from a date and optionally until another. Pass userId for a person-specific rate, role for an organization-role rate, or omit both for the table fallback. Set at most one person or role; optionally pass activityCodeId for an activity-only or person/role plus activity rate. Refused when dates overlap a line for the same selector or userId is not an organization member, or when the table is at its line limit.",
+    "description": "Add one rate line to a rate table: an hourly rate in integer minor currency units, naming the table currency those units use, effective from a date and optionally until another. Pass userId for a person-specific rate, role for an organization-role rate, or omit both for the table fallback. Set at most one person or role; optionally pass activityCodeId for an activity-only or person/role plus activity rate. Refused when dates overlap a line for the same selector or userId is not an organization member, or when the table is at its line limit. A stale currency is refused; call rates.list and retry with the table's current currency.",
     "name": "capability:rates.entries.create",
     "title": "rates.entries.create"
   },
@@ -2801,7 +2801,7 @@
   {
     "access": "write",
     "command": ["capability", "rates", "entries-update"],
-    "description": "Change one rate line's hourly rate or effective dates in a rate table. Changing the dates re-checks for overlap against the other lines for the same person, role, or table default and is refused on a conflict; the selector a line applies to cannot be changed here.",
+    "description": "Change one rate line's hourly rate or effective dates in a rate table, naming the table currency its minor units use. Changing the dates re-checks for overlap against the other lines for the same person, role, or table default and is refused on a conflict; the selector a line applies to cannot be changed here. A stale currency is refused; call rates.list and retry with the table's current currency.",
     "name": "capability:rates.entries.update",
     "title": "rates.entries.update"
   },
@@ -3098,6 +3098,13 @@
     "description": "Draft a skill bundle with the model: returns SKILL.md markdown plus up to eight companion files under assets/, references/, scripts/. Pass intent, optionally examples, and, to revise an existing draft, previousDraft with previousResources and feedback. Nothing is stored: pass the result to skills.create and the resource endpoints to keep it. Consumes AI usage.",
     "name": "capability:skills.drafts.generate",
     "title": "skills.drafts.generate"
+  },
+  {
+    "access": "write",
+    "command": ["capability", "skills", "export"],
+    "description": "Export one agent skill the caller can read as a portable skill package: a folder named after the skill's slug holding SKILL.md (frontmatter with its settings, then the instructions), every file of the skill (an uploaded or imported file byte for byte as it was stored, text kept from a PDF or DOCX without its original as .md), and .stella/manifest.json (format version, display name, slash command, and a SHA-256 per file). `format` is `zip` or `skill`: the same archive under a .zip or .skill file name, which skills.upload imports again. A skill bound to a matter or client exports without that binding. Returns a short-lived downloadUrl, fileName and expiresAt; hand the URL to the user without reading the archive bytes.",
+    "name": "capability:skills.export",
+    "title": "skills.export"
   },
   {
     "access": "write",

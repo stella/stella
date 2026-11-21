@@ -50,7 +50,9 @@ const renderHeader = ({ reveal, disabled }: RenderHeaderOptions) =>
           <div className="group/table-head" role="columnheader">
             <button type="button">{HEADER_NAME}</button>
             <AiColumnRunButton
-              disabled={disabled}
+              disabledReason={
+                disabled ? englishMessages.aiColumns.waitToRun : undefined
+              }
               onRun={() => undefined}
               reveal={reveal}
               scope={aiColumnRunScope({
@@ -82,6 +84,9 @@ describe("the column header Play", () => {
       const slot = revealSlot(button);
 
       expect(button.tabIndex).toBe(0);
+      expect(button.getAttribute("aria-disabled")).toBe(
+        disabled ? "true" : null,
+      );
       expect(button.closest("[inert], [aria-hidden='true']")).toBeNull();
       button.focus();
       expect(document.activeElement).toBe(button);

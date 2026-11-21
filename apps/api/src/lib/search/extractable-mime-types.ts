@@ -11,8 +11,8 @@
  * module at startup, so it must stay free of side effects.
  */
 
-import { DATA_BOX_MESSAGE_MIME_TYPE } from "@stll/api-contract/data-box";
 import { EMAIL_MIME_TYPES } from "@stll/api-contract/email-mime-types";
+import { LEGAL_FILE_FORMATS } from "@stll/api-contract/legal-file-formats";
 
 import {
   DOC_MIME_TYPE,
@@ -95,7 +95,7 @@ export const EXTRACTABLE_MIME_TYPES: ReadonlySet<string> = new Set([
   ...OFFICE_DOCUMENT_MIME_TYPES,
   ...DIRECT_TEXT_MIME_TYPES,
   ...Object.keys(EMAIL_MIME_TYPES),
-  DATA_BOX_MESSAGE_MIME_TYPE,
+  ...LEGAL_FILE_FORMATS.map((format) => format.mimeType),
 ]);
 
 export const canExtractMimeType = (mimeType: string): boolean =>

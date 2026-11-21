@@ -33,6 +33,7 @@ import {
 // close the tab.
 const OUTCOME_OWNERS = [
   "packages/ui/src/components/outcome-screen.tsx",
+  "packages/ui/src/components/outcome-screen-core.tsx",
   "packages/ui/src/components/outcome-screen-view.tsx",
   "packages/ui/scripts/generate-outcome-page.ts",
   "packages/cli/src/auth/outcome-page.gen.ts",

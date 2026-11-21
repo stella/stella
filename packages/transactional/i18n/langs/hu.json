@@ -21,13 +21,28 @@
     "subject": "{documentType, select, credit_note {Jóváíró számla} advance {Előlegszámla} other {Számla}} {invoiceNumber}, feladó: {firmName}"
   },
   "newDeviceLogin": {
-    "action": "Munkamenetek áttekintése",
-    "body": "Fiókjába új eszközről vagy helyről jelentkeztek be.",
+    "action": "Bejelentkezett eszközök áttekintése",
+    "actionNote": "A gomb a Beállítások › Biztonság oldalt nyitja meg ennél a bejelentkezésnél.",
+    "body": "Fiókjába az imént új eszközről vagy új helyről jelentkeztek be.",
     "device": "Eszköz",
-    "heading": "Új bejelentkezés észlelve",
-    "ignore": "Ha Ön volt az, nincs teendő. Ha nem ismeri fel ezt a tevékenységet, tekintse át aktív munkameneteit, és vonja vissza azokat, amelyeket nem ismer fel.",
+    "deviceName": {
+      "browserOnOs": "{browser}, {os} rendszeren",
+      "unknown": "Ismeretlen eszköz"
+    },
+    "heading": "Új bejelentkezés a fiókjába",
+    "ignore": "Ha Ön volt az, nincs teendője. Ha nem ismeri fel ezt a bejelentkezést, jelentkeztesse ki ezt az eszközt.",
     "ipAddress": "IP-cím",
+    "ipAddressUnknown": "Ismeretlen",
+    "location": "Hely",
+    "mapAlt": "Térkép a bejelentkezés hozzávetőleges helyével: {location}",
+    "place": {
+      "cityCountry": "{city}, {country}",
+      "cityRegionCountry": "{city}, {region}, {country}",
+      "regionCountry": "{region}, {country}"
+    },
+    "placeApproximate": "{place} (hozzávetőleg)",
     "preview": "Új bejelentkezés innen: {device}",
+    "previewUnknownDevice": "Új bejelentkezés ismeretlen eszközről",
     "subject": "Új bejelentkezés a stella fiókjába",
     "time": "Időpont"
   },
@@ -55,11 +70,11 @@
   },
   "reportExportStatus": {
     "action": "stella megnyitása",
-    "completedBody": "A jelentés exportálása elkészült. Nyissa meg a stellát a megtekintéshez vagy letöltéshez.",
+    "completedBody": "A jelentés exportálása elkészült. Nyissa meg a stella alkalmazást a megtekintéshez vagy letöltéshez.",
     "completedHeading": "A jelentésexport elkészült",
     "completedPreview": "A jelentés exportálása elkészült",
     "completedSubject": "A jelentés exportálása elkészült",
-    "failedBody": "A jelentés exportálását nem sikerült befejezni. Nyissa meg a stellát, és próbálja újra.",
+    "failedBody": "A jelentés exportálását nem sikerült befejezni. Nyissa meg a stella alkalmazást, és próbálja újra.",
     "failedHeading": "A jelentésexport sikertelen",
     "failedPreview": "A jelentés exportálását nem sikerült befejezni",
     "failedSubject": "A jelentés exportálását nem sikerült befejezni",

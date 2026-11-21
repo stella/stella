@@ -97,6 +97,14 @@ export const DDL_FORMS = {
     lockMode: "SHARE ROW EXCLUSIVE",
     pattern: /^CREATE (?:OR REPLACE )?(?:CONSTRAINT )?TRIGGER\b/u,
   },
+  // PG18 LOCK, SHARE ROW EXCLUSIVE taken with NOWAIT: a migration that holds
+  // the projection mutation fence takes the tables its DDL locks without
+  // waiting, so it never queues behind a writer that waits for the fence.
+  "lock-table-nowait": {
+    scope: "statement",
+    lockMode: "SHARE ROW EXCLUSIVE",
+    pattern: /^LOCK TABLE .+ IN SHARE ROW EXCLUSIVE MODE NOWAIT$/u,
+  },
   // PG18 DROP TRIGGER Description: https://www.postgresql.org/docs/18/sql-droptrigger.html
   "drop-trigger": {
     scope: "statement",

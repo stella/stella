@@ -1,7 +1,12 @@
 import * as v from "valibot";
 
+import {
+  getBrowserPresentationPrefs,
+  writeBrowserPresentationPrefs,
+} from "@/lib/account/presentation-prefs/provider";
 import { userStorageKey } from "@/lib/account/user-scoped-storage";
 import { getAnalytics } from "@/lib/analytics/provider";
+import { detached } from "@/lib/detached";
 import {
   definePersistedState,
   readPersistedState,
@@ -30,7 +35,10 @@ const timeBillingAccessState = definePersistedState({
 /**
  * The server's last decision, kept so a reload draws the same chrome before
  * the decision arrives. It only shapes that first paint: route admission and
- * every API call still answer to the server.
+ * every API call still answer to the server. The organization's answer stays
+ * in this browser for the sidebar; the answer alone also goes to the
+ * presentation cookie, which the server's paint of the app frame reads
+ * before any session or organization is known.
  */
 export const rememberTimeBillingAccess = (
   organizationId: string,
@@ -48,6 +56,15 @@ export const rememberTimeBillingAccess = (
       fingerprintKey: "rememberTimeBillingAccess:write",
       scope: { type: "handler", handlerId: "rememberTimeBillingAccess:write" },
     });
+  }
+  if (
+    typeof window !== "undefined" &&
+    getBrowserPresentationPrefs().timeBillingHint !== enabled
+  ) {
+    detached(
+      writeBrowserPresentationPrefs({ timeBillingHint: enabled }),
+      "time-billing-access.write-cookie-hint",
+    );
   }
 };
 

@@ -7,7 +7,12 @@ import {
   parseSource,
   walk,
 } from "../packages/scripts/src/syntax-tree";
-import { readCiCheckCommandText } from "./ci-check-pool-registry";
+import {
+  CHECK_POOL_JOBS,
+  type PoolCheck,
+  readCheckPool,
+  readCiCheckCommandText,
+} from "./ci-check-pool-registry";
 import depthTests from "./depth-script-tests.json" with { type: "json" };
 import { unlistedTests } from "./run-unlisted-script-tests";
 
@@ -174,9 +179,111 @@ const bunTestApi = (
   return api;
 };
 
+/**
+ * A timeout a suite declares in source: a default setter's argument, or a
+ * test or hook's own timeout. `value` is undefined when it is not a literal.
+ */
+type DeclaredTimeout = {
+  readonly line: number;
+  readonly name: string;
+  readonly setter: boolean;
+  readonly value: number | undefined;
+};
+
+/** Module-level `const NAME = <number>` bindings, the usual named budgets. */
+const numericConstants = (program: Node): ReadonlyMap<string, number> => {
+  const constants = new Map<string, number>();
+  if (program.type !== "Program") {
+    return constants;
+  }
+  for (const statement of program.body) {
+    if (
+      statement.type !== "VariableDeclaration" ||
+      statement.kind !== "const"
+    ) {
+      continue;
+    }
+    for (const declarator of statement.declarations) {
+      const value = numericValue(declarator.init ?? undefined);
+      if (declarator.id.type === "Identifier" && value !== undefined) {
+        constants.set(declarator.id.name, value);
+      }
+    }
+  }
+  return constants;
+};
+
+const declaredTimeouts = (
+  parsed: ReturnType<typeof parseSource>,
+): DeclaredTimeout[] => {
+  const bindings = bunTestBindings(parsed.program);
+  const constants = numericConstants(parsed.program);
+  const timeoutOf = (node: Node | Argument | undefined): number | undefined => {
+    if (node?.type === "Identifier") {
+      return constants.get(node.name);
+    }
+    if (
+      node?.type === "BinaryExpression" &&
+      (node.operator === "+" || node.operator === "*")
+    ) {
+      const left = timeoutOf(node.left);
+      const right = timeoutOf(node.right);
+      if (left === undefined || right === undefined) {
+        return undefined;
+      }
+      return node.operator === "+" ? left + right : left * right;
+    }
+    return numericValue(node);
+  };
+  const declared: DeclaredTimeout[] = [];
+  walk(parsed.program, (node) => {
+    if (node.type !== "CallExpression") {
+      return;
+    }
+    const name = bunTestApi(node.callee, bindings);
+    if (name === undefined) {
+      return;
+    }
+    const line = parsed.locate(node.start).line;
+    const args = node.arguments;
+    if (name === "setDefaultTimeout" || name === "jest.setTimeout") {
+      declared.push({
+        line,
+        name,
+        setter: true,
+        value: timeoutOf(args.at(0)),
+      });
+      return;
+    }
+    if (!TEST_CALLS.has(name)) {
+      return;
+    }
+    const timeout = args.at(HOOK_CALLS.has(name) ? 1 : 2);
+    let timeoutValue: Node | Argument | undefined = timeout;
+    if (timeout?.type === "ObjectExpression") {
+      const timeoutProperty = timeout.properties.find(
+        (property) =>
+          property.type === "Property" && propertyName(property) === "timeout",
+      );
+      timeoutValue =
+        timeoutProperty?.type === "Property"
+          ? timeoutProperty.value
+          : undefined;
+    }
+    if (timeoutValue !== undefined) {
+      declared.push({
+        line,
+        name,
+        setter: false,
+        value: timeoutOf(timeoutValue),
+      });
+    }
+  });
+  return declared;
+};
+
 const raisedTimeoutViolations = (file: string, source: string): Violation[] => {
   const parsed = parseSource(file, source);
-  const bindings = bunTestBindings(parsed.program);
   const violations: Violation[] = parsed.comments.flatMap((comment) =>
     /^\s*timeout:/u.test(comment.value)
       ? [
@@ -187,53 +294,78 @@ const raisedTimeoutViolations = (file: string, source: string): Violation[] => {
         ]
       : [],
   );
-  walk(parsed.program, (node) => {
-    if (node.type !== "CallExpression") {
-      return;
-    }
-    const name = bunTestApi(node.callee, bindings);
-    if (name === undefined) {
-      return;
-    }
-    const args = node.arguments;
-    let raised: number | undefined;
-    if (name === "setDefaultTimeout" || name === "jest.setTimeout") {
-      raised = numericValue(args.at(0));
-    } else if (TEST_CALLS.has(name)) {
-      const timeout = args.at(HOOK_CALLS.has(name) ? 1 : 2);
-      let timeoutValue: Node | Argument | undefined = timeout;
-      if (timeout?.type === "ObjectExpression") {
-        const timeoutProperty = timeout.properties.find(
-          (property) =>
-            property.type === "Property" &&
-            propertyName(property) === "timeout",
-        );
-        timeoutValue =
-          timeoutProperty?.type === "Property"
-            ? timeoutProperty.value
-            : undefined;
-      }
-      if (timeoutValue !== undefined) {
-        const literal = numericValue(timeoutValue);
-        if (literal === undefined || literal === 0) {
-          violations.push({
-            line: parsed.locate(node.start).line,
-            kind: `${name} timeout ${literal === 0 ? "0" : "non-literal"}`,
-          });
-          return;
-        }
-        raised = literal;
-      }
-    }
-    if (raised !== undefined && raised > DEFAULT_TIMEOUT_MS) {
+  for (const { line, name, setter, value } of declaredTimeouts(parsed)) {
+    if (!setter && (value === undefined || value === 0)) {
       violations.push({
-        line: parsed.locate(node.start).line,
-        kind: `${name} timeout ${raised}`,
+        line,
+        kind: `${name} timeout ${value === 0 ? "0" : "non-literal"}`,
       });
+    } else if (value !== undefined && value > DEFAULT_TIMEOUT_MS) {
+      violations.push({ line, kind: `${name} timeout ${value}` });
     }
-  });
+  }
   return violations;
 };
+
+/** A suite a pooled CI check runs under `bun test --timeout <budgetMs>`. */
+type BudgetedSuite = {
+  readonly check: string;
+  readonly budgetMs: number;
+  readonly file: string;
+};
+
+const budgetedSuites = (
+  checks: readonly Pick<PoolCheck, "name" | "run">[],
+  expand: (pattern: string) => readonly string[],
+): BudgetedSuite[] =>
+  checks.flatMap(({ name, run }) =>
+    run
+      .replaceAll("\\\n", " ")
+      .split(/\n|&&|;/u)
+      .flatMap((command) => {
+        const words = command.trim().split(/\s+/u);
+        const start = words.findIndex(
+          (word, index) => word === "bun" && words[index + 1] === "test",
+        );
+        if (start === -1) {
+          return [];
+        }
+        const args = words.slice(start + 2);
+        let budgetMs: number | undefined;
+        const files: string[] = [];
+        for (const [index, arg] of args.entries()) {
+          const inline = /^--timeout=(\d+)$/u.exec(arg);
+          if (inline !== null) {
+            budgetMs = Number(inline[1]);
+          } else if (arg === "--timeout") {
+            budgetMs = Number(args[index + 1]);
+          } else if (/\.test\.tsx?$/u.test(arg)) {
+            files.push(...expand(arg));
+          }
+        }
+        return budgetMs === undefined
+          ? []
+          : files.map((file) => ({ check: name, budgetMs, file }));
+      }),
+  );
+
+// A suite's own timeout replaces the runner's `--timeout` for that test, so a
+// lower literal silently shrinks the budget the check measured for it.
+const shadowedBudgetViolations = (
+  file: string,
+  source: string,
+  budgetMs: number,
+): Violation[] =>
+  declaredTimeouts(parseSource(file, source)).flatMap(
+    ({ line, name, value }) => {
+      if (value === undefined) {
+        return [{ line, kind: `${name} timeout non-literal` }];
+      }
+      return value !== 0 && value < budgetMs
+        ? [{ line, kind: `${name} timeout ${value} below ${budgetMs}` }]
+        : [];
+    },
+  );
 
 const repoRoot = path.resolve(import.meta.dirname, "..");
 const invalidDepthTestEntries = (
@@ -400,6 +532,84 @@ test("fast suites keep Bun's default per-test timeout", async () => {
     const source = await Bun.file(path.join(repoRoot, file)).text();
     for (const violation of raisedTimeoutViolations(file, source)) {
       failures.push(`${file}:${violation.line}: ${violation.kind}`);
+    }
+  }
+  expect(failures).toEqual([]);
+});
+
+describe("budgeted suite detector", () => {
+  test("reads every bun test budget a check runs", () => {
+    const checks = [
+      {
+        name: "folded",
+        // YAML folds a `>-` block into one line.
+        run: "bun test --timeout 12000 --preload ./setup.ts apps/api/scripts/*.test.ts",
+      },
+      {
+        name: "chained",
+        run: "bun test --timeout=5000 a.test.ts && bun run check:a\nbun test --timeout 400000 b.test.ts \\\n  c.test.tsx",
+      },
+      { name: "unbudgeted", run: "bun test d.test.ts" },
+    ];
+    expect(
+      budgetedSuites(checks, (pattern) =>
+        pattern.includes("*") ? ["apps/api/scripts/x.test.ts"] : [pattern],
+      ),
+    ).toEqual([
+      { check: "folded", budgetMs: 12_000, file: "apps/api/scripts/x.test.ts" },
+      { check: "chained", budgetMs: 5000, file: "a.test.ts" },
+      { check: "chained", budgetMs: 400_000, file: "b.test.ts" },
+      { check: "chained", budgetMs: 400_000, file: "c.test.tsx" },
+    ]);
+  });
+
+  test("reports a suite timeout below its check's budget", () => {
+    const source = `
+      import { beforeAll, setDefaultTimeout, test } from "bun:test";
+      const BASE = 10_000;
+      setDefaultTimeout(60_000);
+      beforeAll(() => {}, 400_000);
+      test("lower", () => {}, 180_000);
+      test("object", () => {}, { timeout: 90_000 });
+      test("higher", () => {}, 600_000);
+      test("dynamic", () => {}, budget);
+      test("sum", () => {}, BASE + 2_000);
+      test("disabled", () => {}, 0);
+      test("runner budget", () => {});
+    `;
+    expect(
+      shadowedBudgetViolations("fixture.test.ts", source, 400_000).map(
+        (violation) => violation.kind,
+      ),
+    ).toEqual([
+      "setDefaultTimeout timeout 60000 below 400000",
+      "test timeout 180000 below 400000",
+      "test timeout 90000 below 400000",
+      "test timeout non-literal",
+      "test timeout 12000 below 400000",
+    ]);
+  });
+});
+
+test("budgeted suites never shrink their check's budget", async () => {
+  const expand = (pattern: string) =>
+    pattern.includes("*")
+      ? [...new Bun.Glob(pattern).scanSync({ cwd: repoRoot })]
+      : [pattern];
+  const suites = budgetedSuites(
+    CHECK_POOL_JOBS.flatMap((job) => readCheckPool(job)),
+    expand,
+  );
+  expect(
+    suites.some(
+      (suite) => suite.file === "scripts/capability-shard-merge.test.ts",
+    ),
+  ).toBe(true);
+  const failures: string[] = [];
+  for (const { check, budgetMs, file } of suites) {
+    const source = await Bun.file(path.join(repoRoot, file)).text();
+    for (const violation of shadowedBudgetViolations(file, source, budgetMs)) {
+      failures.push(`${file}:${violation.line}: ${violation.kind} (${check})`);
     }
   }
   expect(failures).toEqual([]);

@@ -7,6 +7,8 @@
 
 import { normalizeMimeType } from "@/api/lib/search/extractable-mime-types";
 
+export const STANDALONE_ATTACHMENT_MODE = "standalone-attachment";
+
 export const ATTACHMENT_EXTRACTION_OUTCOME = {
   /** The attachment is in a form the parsers do not read (encrypted, scanned, unknown format). */
   skipped: "skipped",

@@ -61,12 +61,14 @@ const TooltipFactTrigger = ({ children }: { children: ReactNode }) => (
 );
 
 const TooltipPopup = ({
+  anchor,
   className,
   align = "center",
   sideOffset = 4,
   side = "top",
   children,
   shortcut,
+  descriptionId,
   ...props
 }: TooltipPrimitive.Popup.Props & {
   /**
@@ -74,12 +76,21 @@ const TooltipPopup = ({
    * spelled for the reader's platform (`["mod", "K"]`).
    */
   shortcut?: KbdKeys | undefined;
+  /** Keep the popup as a single accessible description target when closed. */
+  descriptionId?: string | undefined;
+  /**
+   * The element the popup sits beside, when that is a part of the trigger
+   * rather than all of it (a wide row whose tooltip explains one detail).
+   */
+  anchor?: TooltipPrimitive.Positioner.Props["anchor"] | undefined;
   align?: TooltipPrimitive.Positioner.Props["align"];
   side?: TooltipPrimitive.Positioner.Props["side"];
   sideOffset?: TooltipPrimitive.Positioner.Props["sideOffset"];
 }) => (
-  <TooltipPrimitive.Portal>
+  <TooltipPrimitive.Portal keepMounted={descriptionId !== undefined}>
     <TooltipPrimitive.Positioner
+      id={descriptionId}
+      {...(anchor === undefined ? {} : { anchor })}
       align={align}
       className={cn(
         CONTENT_SIZED_POSITIONER_CLASS_NAME,
@@ -98,6 +109,7 @@ const TooltipPopup = ({
           className,
         )}
         data-slot="tooltip-popup"
+        role={descriptionId === undefined ? undefined : "tooltip"}
         {...props}
       >
         <TooltipPrimitive.Viewport

@@ -9,12 +9,14 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 const repository = "stella/stella";
 const version = "1.2.4";
 const releaseTag = `v${version}`;
 const rcTag = `${releaseTag}-rc.1`;
-const scriptPath = (name: string) => new URL(name, import.meta.url).pathname;
+const scriptPath = (name: string) =>
+  fileURLToPath(new URL(name, import.meta.url));
 
 type SelectOptions = {
   requestedSha?: string;

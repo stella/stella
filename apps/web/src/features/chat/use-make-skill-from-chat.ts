@@ -55,7 +55,10 @@ export const useOpenSavedSkill = () => {
   return (skillId: string) => {
     stellaToast.add({ title: t("chat.makeSkill.drafted"), type: "success" });
     detached(
-      navigate({ to: "/knowledge/tools/$entry", params: { entry: skillId } }),
+      navigate({
+        to: "/knowledge/tools/skills/$skillId",
+        params: { skillId },
+      }),
       "make-skill.open-saved",
     );
   };

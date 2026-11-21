@@ -61,14 +61,38 @@ const EXTERNAL_REF_COLUMNS =
   "external_source, external_id, external_change_key, imported_at";
 const EXTERNAL_REF_VALUES = "'fixture', 'external-1', 'change-1', now()";
 const SITEMAP_ENROLLMENT = "case-law-sitemap-packing-enrollment";
+const SITEMAP_RANGE_ENROLLMENT = "case-law-sitemap-range-enrollment";
+/** One listed whole month, as the refresh writes it. */
+const SITEMAP_SHARD_INSERT =
+  "INSERT INTO case_law_sitemap_shards (country, year, month, bucket, total, last_modified_at) VALUES ('CZE', '2026', '09', 'all', 1, now())";
 /** A Czech VAT number in the legacy tax_id column; synthetic. */
 const VAT_ID = "CZ12345678";
 /** An offline revision committed with the fault its record stores. */
 const OFFLINE_COMMITTED_INTENT_INSERT = `INSERT INTO corpus_index_projection_intents (id, family, generation, entity_id, epoch, fingerprint, index_id, status, append_started_at, append_committed_at, append_publish_barrier_at, append_delivery, append_request_id, append_request_revision_count, expected_document_count, append_fault) VALUES ('${ID}', 'case_law', 'case_law_v1', '${ID_2}', 1, repeat('a', 64), 'i', 'append_committed', now(), now(), now(), 'offline_indexer', '${ID_3}', 1, 1, 'none')`;
+/** A projection state blocked under the failure kind the replaced check admits. */
+const BLOCKED_PROJECTION_STATE_INSERT = `INSERT INTO corpus_index_projection_states (family, generation, entity_id, desired_action, desired_epoch, desired_fingerprint, desired_index_id, work_status, failure_attempts, last_failure_kind, last_failure_message) VALUES ('case_law', 'case_law_v1', '${ID_2}', 'upsert', 1, repeat('a', 64), 'i', 'blocked', 1, 'document_language_undeclared', 'fixture')`;
 /** A citation-form rule already holding its typed kind and neutral polarity. */
 const POLARITY_FORM_RULE_INSERT = `INSERT INTO case_law_polarity_rules (id, pattern, polarity, language, kind) VALUES ('${ID}', 'fixture', 'neutral', 'cs', 'form')`;
 /** A citation carrying every classifier provenance column at a valid value. */
 const CLASSIFIED_CITATION_INSERT = `INSERT INTO case_law_citations (id, citing_decision_id, citation_text, polarity_source, polarity_evidence_windows, polarity_confidence, cited_part) VALUES ('${ID}', '${ID_2}', '1 Test 1/2026', 'rule', '[{"start":0,"end":5}]'::jsonb, 0.5, 'majority')`;
+/** A pending comparison input: no claim, its declared checksum present. */
+const FILE_COMPARISON_UPLOAD_INSERT = `INSERT INTO file_comparison_uploads (id, organization_id, user_id, kind, declared_name, declared_size, declared_sha256, expires_at) VALUES ('${ID}', 'org', 'user', 'input', 'smlouva.docx', 1, repeat('a', 64), now() + interval '1 hour')`;
+/** An ephemeral-playbook review basis with no positions or references. */
+const DOCUMENT_REVIEW_BASIS = JSON.stringify({
+  playbook: {
+    definitionId: null,
+    versionId: null,
+    provenance: "ephemeral",
+    definitionSnapshot: {
+      name: "Writer fixture",
+      positions: { version: 3, items: [] },
+    },
+  },
+  perspective: { type: "neutral" },
+  references: [],
+});
+/** The organization file object the contending writer holds. */
+const FILE_OBJECT_WRITER_KEY = "org/pending/writer";
 const READER_ANNOTATION_INSERT = `INSERT INTO legal_reader_annotations (id, organization_id, user_id, target_type, target_id, kind, visibility, color, style, block_anchor_id, start_offset, end_offset, quote) VALUES ('${ID}', 'org', 'user', 'statute', '${ID_2}', 'highlight', 'private', 'yellow', 'highlight', 'p-1', 0, 5, 'words')`;
 
 if (enabled && templateDatabase === undefined) {
@@ -507,6 +531,62 @@ const SEEDS = {
     },
     writerLock: { id: ID, table: "corpus_index_projection_intents" },
   },
+  "corpus-projection-delete-tasks": {
+    kind: "row-work",
+    assertPending: async (client, id) => {
+      const rows = await client<{ repaired: boolean }[]>`
+        SELECT EXISTS (
+          SELECT 1
+          FROM corpus_index_projection_delete_tasks task
+          JOIN corpus_index_projection_intents revision
+            ON revision.family = task.family
+           AND revision.generation = task.generation
+           AND revision.index_id = task.index_id
+           AND revision.delete_opstamp = task.delete_opstamp
+          WHERE revision.id = ${id}
+        ) AS repaired`;
+      expect(
+        rows.at(0)?.repaired,
+        "corpus-projection-delete-tasks",
+      ).toBeFalse();
+    },
+    assertRepaired: async (client, id) => {
+      const rows = await client<{ repaired: boolean }[]>`
+        SELECT EXISTS (
+          SELECT 1
+          FROM corpus_index_projection_delete_tasks task
+          JOIN corpus_index_projection_intents revision
+            ON revision.family = task.family
+           AND revision.generation = task.generation
+           AND revision.index_id = task.index_id
+           AND revision.delete_opstamp = task.delete_opstamp
+          WHERE revision.id = ${id}
+            AND task.task_created_at = revision.delete_task_created_at
+            AND task.cleanup_started_at = revision.cleanup_started_at
+        ) AS repaired`;
+      expect(rows.at(0)?.repaired, "corpus-projection-delete-tasks").toBeTrue();
+    },
+    seed: async (client) => {
+      // Receipts recorded before the queue's triggers existed: the triggers
+      // pause while the rows are written, so no task row exists yet.
+      await withoutFixtureGuards(
+        client,
+        ["corpus_index_generations", "corpus_index_projection_intents"],
+        async () => {
+          await client.unsafe(
+            "INSERT INTO corpus_index_generations (family, generation, cluster, manifest_digest, status) VALUES ('case_law', 'case_law_v1', 'q09', repeat('c', 64), 'serving')",
+          );
+          await client.unsafe(
+            `INSERT INTO corpus_index_projection_intents (id, family, generation, entity_id, epoch, fingerprint, index_id, status, append_started_at, append_publish_barrier_at, cleanup_not_before, cleanup_started_at, delete_opstamp, delete_task_created_at) VALUES ('${ID}', 'case_law', 'case_law_v1', '${ID_2}', 1, repeat('a', 64), 'i', 'cleanup_committed', now(), now(), now(), now(), 1, now())`,
+          );
+          await client.unsafe(
+            `INSERT INTO corpus_index_projection_intents (id, family, generation, entity_id, epoch, fingerprint, index_id, status, append_started_at, append_publish_barrier_at, cleanup_not_before, cleanup_started_at, delete_opstamp, delete_task_created_at) VALUES ('${ID_3}', 'case_law', 'case_law_v1', '${ID_2}', 2, repeat('b', 64), 'i2', 'cleanup_committed', now(), now(), now(), now(), 2, now())`,
+          );
+        },
+      );
+    },
+    writerLock: { id: ID, table: "corpus_index_projection_intents" },
+  },
   corpus_index_projection_intents_append_fault_values: noRowSeed(
     "corpus_index_projection_intents",
     "corpus_index_projection_intents_append_fault_values",
@@ -516,6 +596,11 @@ const SEEDS = {
     "corpus_index_projection_intents",
     "corpus_index_projection_intents_append_fault_shape",
     OFFLINE_COMMITTED_INTENT_INSERT,
+  ),
+  corpus_index_projection_states_failure_kind_values: noRowSeed(
+    "corpus_index_projection_states",
+    "corpus_index_projection_states_failure_kind_values",
+    BLOCKED_PROJECTION_STATE_INSERT,
   ),
   "entity-feature-row-gates": {
     kind: "row-work",
@@ -746,6 +831,19 @@ const SEEDS = {
     `INSERT INTO account_audit_logs (id, user_id, event_type, resource_id, group_id) VALUES ('${ID}', 'user', 'organization.created', 'org', '${ID_2}')`,
     { scoped: true },
   ),
+  session_sign_ins_location_check: noRowSeed(
+    "session_sign_ins",
+    "session_sign_ins_location_check",
+    `INSERT INTO session_sign_ins (session_id, location_kind) VALUES ('session', 'unknown')`,
+    {
+      parents: async (client) => {
+        await exec(client, [
+          FIXTURE_USER,
+          `INSERT INTO "session" (id, token, user_id, expires_at, updated_at) VALUES ('session', 'session-token', 'user', now() + interval '1 day', now())`,
+        ]);
+      },
+    },
+  ),
   "client-invoice-tenant-key": {
     kind: "no-row-work",
     tables: ["invoices"],
@@ -898,6 +996,11 @@ const SEEDS = {
     "user_email_undeliverable_check",
     `INSERT INTO "user" (id, name, email, email_undeliverable_address, email_undeliverable_reason, email_undeliverable_at) VALUES ('user', 'User', 'user@example.invalid', 'user@example.invalid', 'hard_bounce', now())`,
   ),
+  user_locale_supported_check: noRowSeed(
+    "user",
+    "user_locale_supported_check",
+    `INSERT INTO "user" (id, name, email, locale) VALUES ('user', 'User', 'user@example.invalid', 'cs')`,
+  ),
   time_entries_internal_shape_check: noRowSeed(
     "time_entries",
     "time_entries_internal_shape_check",
@@ -1030,7 +1133,7 @@ const SEEDS = {
     ),
     seed: async (client) => {
       await exec(client, [
-        "INSERT INTO case_law_sitemap_shards (country, year, month, bucket, total, last_modified_at) VALUES ('CZE', '2026', '09', '000', 1, now())",
+        SITEMAP_SHARD_INSERT,
         `UPDATE database_backfill_states SET cursor = NULL WHERE name = '${SITEMAP_ENROLLMENT}'`,
       ]);
     },
@@ -1038,6 +1141,25 @@ const SEEDS = {
     writerLock: {
       column: "name",
       id: SITEMAP_ENROLLMENT,
+      table: "database_backfill_states",
+    },
+  },
+  "case-law-sitemap-range-enrollment": {
+    kind: "row-work",
+    ...repairedWhen(
+      SITEMAP_RANGE_ENROLLMENT,
+      "SELECT cursor IS NOT DISTINCT FROM 'complete' AND EXISTS (SELECT 1 FROM case_law_sitemap_changes WHERE country = 'CZE' AND year = '*' AND month = '*') AS repaired FROM database_backfill_states WHERE name = $1",
+    ),
+    seed: async (client) => {
+      await exec(client, [
+        SITEMAP_SHARD_INSERT,
+        `UPDATE database_backfill_states SET cursor = NULL WHERE name = '${SITEMAP_RANGE_ENROLLMENT}'`,
+      ]);
+    },
+    // The repair serializes its batches on this checkpoint.
+    writerLock: {
+      column: "name",
+      id: SITEMAP_RANGE_ENROLLMENT,
       table: "database_backfill_states",
     },
   },
@@ -1098,6 +1220,82 @@ const SEEDS = {
     CORRESPONDENCE_DATA_BOX,
     { parents: withFixtureEntity, scoped: true },
   ),
+  style_sets_deletion_cleanup_attempt_count_nonnegative_check: noRowSeed(
+    "style_sets",
+    "style_sets_deletion_cleanup_attempt_count_nonnegative_check",
+    `INSERT INTO style_sets (id, organization_id, name, file_name, s3_key, size_bytes, created_by) VALUES ('${ID}', 'org', 'House style', 'house.dotx', 'org/style-sets/house.dotx', 1, 'user')`,
+  ),
+  file_comparison_uploads_status_check: noRowSeed(
+    "file_comparison_uploads",
+    "file_comparison_uploads_status_check",
+    FILE_COMPARISON_UPLOAD_INSERT,
+  ),
+  file_comparison_uploads_claim_check: noRowSeed(
+    "file_comparison_uploads",
+    "file_comparison_uploads_claim_check",
+    FILE_COMPARISON_UPLOAD_INSERT,
+  ),
+  bilingual_translation_runs_entity_workspace_fk: noRowSeed(
+    "bilingual_translation_runs",
+    "bilingual_translation_runs_entity_workspace_fk",
+    `INSERT INTO bilingual_translation_runs (id, organization_id, workspace_id, entity_id, file_field_id, entity_version_id, source_lang, target_lang, glossary) VALUES ('${ID}', 'org', '${WORKSPACE_ID}', '${ENTITY_ID}', '${ID_2}', '${ID_3}', 'en', 'cs', '[]')`,
+    { parents: withFixtureEntity },
+  ),
+  document_review_runs_entity_workspace_fk: noRowSeed(
+    "document_review_runs",
+    "document_review_runs_entity_workspace_fk",
+    `INSERT INTO document_review_runs (id, organization_id, workspace_id, entity_id, file_field_id, entity_version_id, content_sha256, basis, total) VALUES ('${ID}', 'org', '${WORKSPACE_ID}', '${ENTITY_ID}', '${ID_2}', '${ID_3}', repeat('b', 64), '${DOCUMENT_REVIEW_BASIS}', 1)`,
+    { parents: withFixtureEntity },
+  ),
+  "file-object-reconciliation": {
+    kind: "row-work",
+    ...repairedWhen(
+      "file-object-reconciliation",
+      "SELECT reconcile_after IS NOT NULL AS repaired FROM organization_file_objects WHERE object_key = $1",
+    ),
+    seed: async (client) => {
+      await client.unsafe(FIXTURE_ORGANIZATION);
+      // Write rows recorded before the reconciliation columns: a write
+      // identity and no schedule, under the checks the migration adds NOT
+      // VALID. The fill trigger, a user trigger, pauses while they are written.
+      const writeUnscheduledRows = async () => {
+        await withoutFixtureGuards(
+          client,
+          ["organization_file_objects"],
+          async () => {
+            await client.unsafe(
+              `INSERT INTO organization_file_objects (organization_id, object_key, size_bytes, status, write_id, reservation_started_at, updated_at) VALUES ('org', '${FILE_OBJECT_WRITER_KEY}', 0, 'reserved', 'write-1', now(), now() - interval '1 hour'), ('org', 'org/pending/repair', 0, 'reserved', 'write-2', now(), now() - interval '1 hour')`,
+            );
+          },
+        );
+      };
+      await invalidateConstraint(
+        client,
+        "organization_file_objects",
+        "organization_file_objects_reconciliation_lifecycle",
+        async () => {
+          await invalidateConstraint(
+            client,
+            "organization_file_objects",
+            "organization_file_objects_reconciliation_state_domain",
+            async () => {
+              await invalidateConstraint(
+                client,
+                "organization_file_objects",
+                "organization_file_objects_reconciliation_attempt_nonnegative",
+                writeUnscheduledRows,
+              );
+            },
+          );
+        },
+      );
+    },
+    writerLock: {
+      column: "object_key",
+      id: FILE_OBJECT_WRITER_KEY,
+      table: "organization_file_objects",
+    },
+  },
   desktop_runner_commands_kind_check: noRowSeed(
     "desktop_runner_commands",
     "desktop_runner_commands_kind_check",

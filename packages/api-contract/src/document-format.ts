@@ -1,5 +1,9 @@
 import { DESKTOP_EDIT_FILE_TYPE_CONFIG } from "./desktop-edit-file-types";
 import { EML_MIME_TYPE, MSG_MIME_TYPE } from "./email-mime-types";
+import {
+  LEGAL_FILE_FORMATS,
+  type LegalFileFormatKind,
+} from "./legal-file-formats";
 
 /** The family a file's mark stands for; each has its own mark. */
 export type DocumentFormatKind =
@@ -13,6 +17,7 @@ export type DocumentFormatKind =
   | "csv"
   | "image"
   | "email"
+  | LegalFileFormatKind
   | "markdown"
   | "text"
   | "file";
@@ -126,6 +131,14 @@ const DOCUMENT_FORMATS: readonly FormatEntry[] = [
     mimeTypes: ["image/webp"],
     extensions: [".webp"],
   },
+  ...LEGAL_FILE_FORMATS.map(
+    ({ kind, label, mimeType, mimeAliases, extensions }) => ({
+      kind,
+      label,
+      mimeTypes: [mimeType, ...mimeAliases],
+      extensions,
+    }),
+  ),
   {
     kind: "email",
     label: "EML",
@@ -219,4 +232,12 @@ export const documentFormat = (
     return { kind: "text", label };
   }
   return { kind: "file", label };
+};
+
+export const legalFileFormat = (
+  mimeType?: string | null,
+  fileName?: string | null,
+) => {
+  const { kind } = documentFormat(mimeType, fileName);
+  return LEGAL_FILE_FORMATS.find((format) => format.kind === kind);
 };

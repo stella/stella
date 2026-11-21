@@ -1,6 +1,8 @@
 import { Result } from "better-result";
+import * as v from "valibot";
 
 import { CHAT_TOOL_POLICY_REQUIRES_APPROVAL } from "@stll/api-contract";
+import { microsoft365CalendarRangeEntries } from "@stll/api-contract/microsoft365";
 import { Temporal } from "@stll/time";
 
 import type { SafeDb } from "@/api/db/safe-db";
@@ -99,6 +101,7 @@ type RecordExecutionInput = {
   policyKind: ChatToolPolicyKind;
   toolCallId: string | null;
   toolName: string;
+  input: unknown;
 };
 
 /**
@@ -115,7 +118,12 @@ const recordExecution = async ({
   policyKind,
   toolCallId,
   toolName,
+  input,
 }: RecordExecutionInput) => {
+  const calendarRange =
+    toolName === "calendar_list_events" || toolName === "calendar_free_busy"
+      ? v.safeParse(v.object(microsoft365CalendarRangeEntries), input)
+      : null;
   const result = await audit.safeDb(async (tx) => {
     await audit.recordAuditEvent(tx, {
       action: AUDIT_ACTION.EXECUTE,
@@ -136,6 +144,13 @@ const recordExecution = async ({
         threadId: audit.threadId,
         toolCallId,
         toolName,
+        ...(calendarRange?.success
+          ? {
+              capability: "calendar.read",
+              rangeStart: calendarRange.output.start,
+              rangeEnd: calendarRange.output.end,
+            }
+          : {}),
         ...(externalMcp === undefined
           ? {}
           : {
@@ -179,6 +194,7 @@ const auditedTool = ({
         policyKind,
         toolCallId: toolCallIdOf(args[1]),
         toolName: tool.name,
+        input: args[0],
       });
     // Without a durable record of the dispatch the call does not run.
     const dispatched = await record("dispatched");

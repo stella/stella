@@ -110,7 +110,7 @@ Project: desktop-tauri
 - crypto-common 0.2.2 — Apache-2.0 OR MIT
 - cryptoki 0.12.1 — Apache-2.0
 - cryptoki-sys 0.5.0 — Apache-2.0
-- csscolorparser 0.9.0 — Apache-2.0 OR MIT
+- csscolorparser 0.9.1 — Apache-2.0 OR MIT
 - cssparser 0.37.0 — MPL-2.0
 - cssparser 0.38.0 — MPL-2.0
 - cssparser-macros 0.7.1 — MPL-2.0
@@ -158,6 +158,7 @@ Project: desktop-tauri
 - error-code 3.4.0 — BSL-1.0
 - event-listener 5.4.2 — Apache-2.0 OR MIT
 - event-listener-strategy 0.5.4 — Apache-2.0 OR MIT
+- extended 0.1.0 — MIT
 - fastrand 2.5.0 — Apache-2.0 OR MIT
 - fax 0.2.7 — MIT
 - fdeflate 0.3.7 — Apache-2.0 OR MIT
@@ -367,6 +368,7 @@ Project: desktop-tauri
 - opener 0.9.0 — Apache-2.0 OR MIT
 - openssl-probe 0.2.2 — Apache-2.0 OR MIT
 - option-ext 0.2.0 — MPL-2.0
+- opus-decoder 0.1.1 — Apache-2.0 OR MIT
 - ordered-multimap 0.7.3 — MIT
 - ordered-stream 0.2.0 — Apache-2.0 OR MIT
 - os_info 3.15.0 — MIT
@@ -429,6 +431,7 @@ Project: desktop-tauri
 - ref-cast-impl 1.0.27 — Apache-2.0 OR MIT
 - regex 1.13.1 — Apache-2.0 OR MIT
 - regex-automata 0.4.18 — Apache-2.0 OR MIT
+- regex-lite 0.1.9 — Apache-2.0 OR MIT
 - regex-syntax 0.8.11 — Apache-2.0 OR MIT
 - reqwest 0.13.5 — Apache-2.0 OR MIT
 - rfd 0.17.2 — MIT
@@ -504,6 +507,22 @@ Project: desktop-tauri
 - strsim 0.11.1 — MIT
 - subtle 2.6.1 — BSD-3-Clause
 - swift-rs 1.0.9 — Apache-2.0 OR MIT
+- symphonia 0.6.1 — MPL-2.0
+- symphonia-bundle-flac 0.6.1 — MPL-2.0
+- symphonia-bundle-mp3 0.6.1 — MPL-2.0
+- symphonia-codec-aac 0.6.1 — MPL-2.0
+- symphonia-codec-adpcm 0.6.1 — MPL-2.0
+- symphonia-codec-alac 0.6.1 — MPL-2.0
+- symphonia-codec-pcm 0.6.1 — MPL-2.0
+- symphonia-codec-vorbis 0.6.1 — MPL-2.0
+- symphonia-common 0.6.1 — MPL-2.0
+- symphonia-core 0.6.1 — MPL-2.0
+- symphonia-format-caf 0.6.1 — MPL-2.0
+- symphonia-format-isomp4 0.6.1 — MPL-2.0
+- symphonia-format-mkv 0.6.1 — MPL-2.0
+- symphonia-format-ogg 0.6.1 — MPL-2.0
+- symphonia-format-riff 0.6.1 — MPL-2.0
+- symphonia-metadata 0.6.1 — MPL-2.0
 - syn 1.0.109 — Apache-2.0 OR MIT
 - syn 2.0.119 — Apache-2.0 OR MIT
 - syn 3.0.10 — Apache-2.0 OR MIT
@@ -577,8 +596,8 @@ Project: desktop-tauri
 - tracing-core 0.1.36 — MIT
 - tracing-log 0.2.0 — MIT
 - tracing-subscriber 0.3.23 — MIT
-- transcribe-cpp 0.4.1 — MIT
-- transcribe-cpp-sys 0.4.1 — MIT
+- transcribe-cpp 0.4.2 — MIT
+- transcribe-cpp-sys 0.4.2 — MIT
 - tray-icon 0.25.1 — Apache-2.0 OR MIT
 - tree_magic_mini 3.2.2 — MIT
 - try-lock 0.2.5 — MIT
@@ -726,7 +745,7 @@ Project: desktop-tauri
 - zerotrie 0.2.5 — Unicode-3.0
 - zerovec 0.11.9 — Unicode-3.0
 - zerovec-derive 0.11.7 — Unicode-3.0
-- zip 9.5.0 — MIT
+- zip 9.5.1 — MIT
 - zlib-rs 0.6.8 — Zlib
 - zmij 1.0.23 — MIT
 - zruntime 0.2.2 — MIT

@@ -18,10 +18,12 @@ import {
 } from "@stll/api-contract/case-law-text-field";
 import { parseDecisionQuery } from "@stll/api-contract/decision-query-intent";
 import { decisionReporterGrammarForJurisdiction } from "@stll/api-contract/decision-reporter-grammar";
+import { legalFileFormat } from "@stll/api-contract/document-format";
 import { publicCountryUnavailable } from "@stll/api-contract/public-country-capability";
 import {
   caseLawHitGroup,
   type CaseLawHitOrder,
+  type CaseLawSearchWarningCode,
   SEARCH_PAGE_END,
   SEARCH_PAGINATION_COMPLETE,
   SEARCH_PAGINATION_TRUNCATED_EXCLUSION_BUDGET,
@@ -97,8 +99,8 @@ import {
 import {
   type AgentCaseLawSearchWarning,
   manyRequiredTermsWarning,
-  partialMatchesAppendedWarning,
   partialMatchesUnreadWarning,
+  partialMatchesWarning,
   phrasingTimedOutWarning,
   provisionCitedWidelyWarning,
   provisionScopeUnreadWarning,
@@ -126,6 +128,7 @@ import {
 } from "@/api/lib/document-content-provenance";
 import { scannedDocxToMarkdown } from "@/api/lib/file-scan/document-parsers";
 import { readStoredFile } from "@/api/lib/file-scan/stored-file";
+import { LEGAL_FILE_READERS } from "@/api/lib/files/read-legal-file";
 import { createFileKey } from "@/api/lib/files/utils";
 import { externalRefFromColumns } from "@/api/lib/imports/external-ref";
 import { decisionDocketGrammarForCountry } from "@/api/lib/legal-search/adapter-manifest";
@@ -209,6 +212,7 @@ import {
   nullAsAbsent,
   uuidInputSchema,
 } from "@/api/mcp/input-schemas";
+import { legalFileReadError } from "@/api/mcp/legal-file-read-error";
 import {
   defaultListCaseLawProvisionDecisions,
   defaultReadCaseLawCoverageHandler,
@@ -242,6 +246,7 @@ import type {
 } from "@/api/mcp/tool-types";
 import { defineMcpToolSet } from "@/api/mcp/tool-types";
 import {
+  bindWorkspaceRecorder,
   buildCaseLawDecisionAppUrl,
   caseLawSearchTimeoutResult,
   DEFAULT_LIST_LIMIT,
@@ -1594,6 +1599,7 @@ const isDocxFileContent = (
 type LoadCurrentVersionDocxMarkdownProps = {
   context: AuthorizedMcpRequestContext;
   document: CurrentDocument;
+  fileField: CurrentDocument["currentVersion"]["fields"][number] | null;
 };
 
 /**
@@ -1632,12 +1638,8 @@ type DocxMarkdownOutcome =
 const loadCurrentVersionDocxMarkdown = async ({
   context,
   document,
+  fileField,
 }: LoadCurrentVersionDocxMarkdownProps): Promise<DocxMarkdownOutcome> => {
-  const fileField = resolveCurrentFileSourceField({
-    currentVersionId: document.currentVersion.id,
-    extracted: document.extractedContent,
-    fields: document.currentVersion.fields,
-  });
   const file = fileField?.content?.type === "file" ? fileField.content : null;
   if (!isDocxFileContent(file)) {
     return { kind: "not-docx" };
@@ -1723,6 +1725,116 @@ const readCachedExtractedWindow = async ({
   return latest?.id === document.currentVersion.id ? cached : undefined;
 };
 
+type ReadContentProjection = v.InferInput<
+  typeof READ_CONTENT_ACROSS_MATTERS_PROJECTION
+>;
+
+const documentContentWindow = ({
+  attachments,
+  cursor,
+  entityId,
+  kind,
+  name,
+  text,
+  workspaceId,
+}: Pick<
+  ReadContentProjection,
+  "attachments" | "entityId" | "kind" | "name" | "text" | "workspaceId"
+> & {
+  cursor: string | undefined;
+}) => {
+  // Carry the FULL text and window it in the egress pipeline, so an
+  // anonymized read redacts the whole document before slicing (slicing raw text
+  // first could split an entity name across the window boundary and leak its
+  // prefix). Default mode leaves name/text as-is and windows the same way.
+  const initialNextCursor = (): string | null => null;
+  const payload = {
+    ...(attachments === undefined ? {} : { attachments }),
+    charCount: text.length,
+    entityId,
+    kind,
+    name,
+    text,
+    truncated: false,
+    nextCursor: initialNextCursor(),
+    workspaceId,
+  };
+  // The egress window's `apply` below mutates this object in place, so the tie
+  // cannot ride on the literal: a `satisfies` clause would contextually pin
+  // `truncated` to `false`, which the mutation must be able to overwrite. Tie
+  // the literal's own inferred type instead.
+  return structuredEgressPlan<ReadContentProjection, typeof payload>({
+    payload: projectionPayload(READ_CONTENT_ACROSS_MATTERS_PROJECTION, payload),
+    textFields: runTextFieldSpecs(
+      READ_CONTENT_ACROSS_MATTERS_TEXT_FIELD_SPECS,
+      payload,
+    ),
+    window: {
+      surface: "mcp-content",
+      cursor,
+      maxChars: MCP_CONTENT_MAX_CHARS,
+      read: () => payload.text,
+      apply: (textWindow) => {
+        payload.text = textWindow.text;
+        payload.charCount = textWindow.charCount;
+        payload.truncated = textWindow.truncated;
+        payload.nextCursor = textWindow.nextCursor;
+      },
+    },
+  });
+};
+
+type LegalContentWindowOptions = {
+  context: AuthorizedMcpRequestContext;
+  currentDocument: Omit<CurrentDocument, "kind"> &
+    Pick<ReadContentProjection, "kind">;
+  cursor: string | undefined;
+  entityId: SafeId<"entity">;
+  fileField: CurrentDocument["currentVersion"]["fields"][number] | null;
+};
+
+/** A registered legal format is read from its live file; null for any other file. */
+const readLegalContentWindow = async ({
+  context,
+  currentDocument,
+  cursor,
+  entityId,
+  fileField,
+}: LegalContentWindowOptions) => {
+  const format =
+    fileField?.content?.type === "file"
+      ? legalFileFormat(fileField.content.mimeType, fileField.content.fileName)
+      : undefined;
+  if (fileField === null || format === undefined) {
+    return null;
+  }
+  const workspaceId = brandPersistedWorkspaceId(currentDocument.workspaceId);
+  const readers =
+    context.testDependencies?.legalFileReaders ?? LEGAL_FILE_READERS;
+  const preview = await readers[format.kind]({
+    purpose: "agent",
+    scopedDb: context.scopedDb,
+    organizationId: context.organizationId,
+    workspaceId,
+    fieldId: fileField.id,
+    recordAuditEvent: bindWorkspaceRecorder(context, workspaceId),
+  });
+  if (preview.isErr()) {
+    return legalFileReadError(
+      preview.error,
+      "mcp.readContentAcrossMatters.legal_file",
+    );
+  }
+  return documentContentWindow({
+    cursor,
+    entityId,
+    kind: currentDocument.kind,
+    name: currentDocument.name,
+    workspaceId,
+    ...preview.value,
+  });
+};
+
 const handleReadContentAcrossMattersTool: TypedMcpToolHandler<
   v.InferInput<typeof READ_CONTENT_ACROSS_MATTERS_PROJECTION>
 > = async ({ args, context }) => {
@@ -1782,9 +1894,25 @@ const handleReadContentAcrossMattersTool: TypedMcpToolHandler<
     workspaceId: document.workspaceId,
   };
 
+  const fileField = resolveCurrentFileSourceField({
+    currentVersionId: currentDocument.currentVersion.id,
+    extracted: currentDocument.extractedContent,
+    fields: currentDocument.currentVersion.fields,
+  });
+  const legal = await readLegalContentWindow({
+    context,
+    currentDocument,
+    cursor,
+    entityId,
+    fileField,
+  });
+  if (legal !== null) {
+    return legal;
+  }
   const docxOutcome = await loadCurrentVersionDocxMarkdown({
     context,
     document: currentDocument,
+    fileField,
   });
 
   if (docxOutcome.kind === "unavailable" && cursor !== undefined) {
@@ -1874,55 +2002,15 @@ const handleReadContentAcrossMattersTool: TypedMcpToolHandler<
   // switching to plaintext (or vice versa) would slice a different text than
   // the cursor was computed against, producing skipped or duplicated
   // content. Surface a retryable error instead of guessing.
-  let text: string;
-  if (docxOutcome.kind === "markdown") {
-    text = docxOutcome.text;
-  } else if (docxOutcome.kind === "not-docx") {
-    text = plaintext;
-  } else if (cursor === undefined) {
-    text = plaintext;
-  } else {
-    // The cursor-specific unavailable branch returned above.
-    return panic("DOCX conversion unavailable without a readable fallback");
-  }
+  const text = docxOutcome.kind === "markdown" ? docxOutcome.text : plaintext;
 
-  // Carry the FULL text and window it in the egress pipeline, so an
-  // anonymized read redacts the whole document before slicing (slicing raw text
-  // first could split an entity name across the window boundary and leak its
-  // prefix). Default mode leaves name/text as-is and windows the same way.
-  const initialNextCursor = (): string | null => null;
-  const payload = {
-    charCount: text.length,
+  return documentContentWindow({
+    cursor,
     entityId,
     kind: currentDocument.kind,
     name: currentDocument.name,
     text,
-    truncated: false,
-    nextCursor: initialNextCursor(),
     workspaceId: brandPersistedWorkspaceId(currentDocument.workspaceId),
-  };
-  // The egress window's `apply` below mutates this object in place, so the tie
-  // cannot ride on the literal: a `satisfies` clause would contextually pin
-  // `truncated` to `false`, which the mutation must be able to overwrite. Tie
-  // the literal's own inferred type instead.
-  return structuredEgressPlan({
-    payload: projectionPayload(READ_CONTENT_ACROSS_MATTERS_PROJECTION, payload),
-    textFields: runTextFieldSpecs(
-      READ_CONTENT_ACROSS_MATTERS_TEXT_FIELD_SPECS,
-      payload,
-    ),
-    window: {
-      surface: "mcp-content",
-      cursor,
-      maxChars: MCP_CONTENT_MAX_CHARS,
-      read: () => payload.text,
-      apply: (textWindow) => {
-        payload.text = textWindow.text;
-        payload.charCount = textWindow.charCount;
-        payload.truncated = textWindow.truncated;
-        payload.nextCursor = textWindow.nextCursor;
-      },
-    },
   });
 };
 
@@ -1997,9 +2085,10 @@ const mergeCaseLawSearchHits = (
   // is an opaque key, and all the order has to be is total and stable.
   return [...merged.values()].toSorted(
     (left, right) =>
-      // Partial matches follow every full match: within one query they are
-      // appended after it, and ranks of different queries are not comparable
-      // across that line.
+      // Under `all_words_first` partial matches follow every full match:
+      // within one query they are appended after it, and ranks of different
+      // queries are not comparable across that line. Under `score` both
+      // matches share one group and rank decides.
       caseLawHitGroup(left.match, order) -
         caseLawHitGroup(right.match, order) ||
       left.rank - right.rank ||
@@ -2456,19 +2545,30 @@ const manyRequiredTermsWarnings = ({
       ];
 };
 
+/** The codes a phrasing's partial matches are told under, in either order. */
+const PARTIAL_MATCH_WARNING_CODES: ReadonlySet<string> = new Set([
+  "partial_matches_appended",
+  "partial_matches_ranked",
+] satisfies readonly CaseLawSearchWarningCode[]);
+
 type PartialMatchWarningOptions = {
   merged: readonly MergedCaseLawHit[];
+  /** The order the merged page is in, which decides the warning's wording. */
+  order: CaseLawHitOrder;
   queryIndex: number;
   countsStrictSet: boolean;
 };
 
 /**
- * `partial_matches_appended` for a phrasing, counted on the merged response
+ * The partial-match warning for a phrasing, counted on the merged response
  * the caller reads: a hit another phrasing matched in full is returned as
- * `all_terms`, so it is not counted here.
+ * `all_terms`, so it is not counted here. Worded from the merged page's own
+ * order, so it never says partial hits follow the full ones on a page that
+ * ranks them together.
  */
 const partialMatchWarnings = ({
   merged,
+  order,
   queryIndex,
   countsStrictSet,
 }: PartialMatchWarningOptions): AgentCaseLawSearchWarning[] => {
@@ -2479,7 +2579,7 @@ const partialMatchWarnings = ({
   ).length;
   return partial === 0
     ? []
-    : [partialMatchesAppendedWarning({ partial, countsStrictSet })];
+    : [partialMatchesWarning({ partial, countsStrictSet, order })];
 };
 
 const preferredLanguageOf = ({
@@ -3090,6 +3190,7 @@ const answeredPhrasingWarnings = ({
   page,
   slots,
   merged,
+  order,
   queryIndex,
   countsStrictSet,
 }: AnsweredPhrasingWarningsOptions): AgentCaseLawSearchWarning[] => [
@@ -3097,7 +3198,7 @@ const answeredPhrasingWarnings = ({
     ? [partialMatchesUnreadWarning({ query })]
     : []),
   ...manyRequiredTermsWarnings({ subCursor, page, slots }),
-  ...partialMatchWarnings({ merged, queryIndex, countsStrictSet }),
+  ...partialMatchWarnings({ merged, order, queryIndex, countsStrictSet }),
 ];
 
 type SearchCaseLawArgs = v.InferOutput<typeof searchCaseLawArgs>;
@@ -3459,9 +3560,10 @@ const searchCaseLawWork = async ({
   }
   const { pages } = read;
 
+  const mergedOrder = mergedCaseLawHitOrder(pages);
   const merged = mergeCaseLawSearchHits(
     pages.map((outcome) => (outcome.type === "page" ? outcome.page.hits : [])),
-    mergedCaseLawHitOrder(pages),
+    mergedOrder,
   );
 
   // Facets describe the first phrasing, without double-counting overlapping
@@ -3515,7 +3617,7 @@ const searchCaseLawWork = async ({
           // Recount partial matches after deduplication: another phrasing
           // may have promoted a partial hit to a full match.
           ...outcome.page.warnings
-            .filter(({ code }) => code !== "partial_matches_appended")
+            .filter(({ code }) => !PARTIAL_MATCH_WARNING_CODES.has(code))
             .map((warning) => withFacetValues(warning, values)),
           ...answeredPhrasingWarnings({
             query,
@@ -3523,6 +3625,7 @@ const searchCaseLawWork = async ({
             page: outcome.page,
             slots: perQueryLimit,
             merged,
+            order: mergedOrder,
             queryIndex: index,
             countsStrictSet: single !== undefined,
           }),

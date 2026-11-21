@@ -1,3 +1,4 @@
+// parser-output-unchanged: the cz-ns-sbirka adapter entry is new; existing adapters read only their own keys, so their parsed output is unchanged.
 // parser-output-unchanged: the br-tjdft adapter entry is new; existing adapters read only their own keys, so their parsed output is unchanged.
 // parser-output-unchanged: the TST adapter entry is new; existing adapters read only their own keys, so their parsed output is unchanged.
 // parser-output-unchanged: Completeness observations replace manifest gap declarations; parsed output is unchanged.
@@ -760,6 +761,52 @@ export const ADAPTER_MANIFESTS = {
       through: OPEN_RANGE,
     },
   },
+  [ADAPTER_KEYS.CZ_NS_SBIRKA]: {
+    key: ADAPTER_KEYS.CZ_NS_SBIRKA,
+    documentStage: "inline",
+    name: "Czech Supreme Court collection (Sbírka soudních rozhodnutí a stanovisek)",
+    publisher: "Nejvyšší soud",
+    publicHomeUrl: "https://sbirka.nsoud.cz",
+    ...ADAPTER_JURISDICTIONS.CZE,
+    ecliCourtCodes: CZ_ECLI_COURTS,
+    // The collection states the ECLI in its own spelling, which for many
+    // entries differs from the court database's (a four-digit docket year,
+    // `NSČR`), so it does not name the decision across sources.
+    statedEcliIdentity: STATED_ECLI_IDENTITY.NONE,
+    placeholderPatterns: NO_PLACEHOLDER_PATTERNS,
+    edition: LIVE_EDITION,
+    dateRange: {
+      // The earliest decision date the collection states, in its Vážný
+      // volumes of the interwar Supreme Court (measured over all 9,832
+      // detail pages on 2026-11-18; that entry's heading dates it
+      // 30. 1. 1919, its row 30.09.1918, and the row is what is stored).
+      type: "decision-date",
+      fromInclusive: "1918-09-30",
+      through: OPEN_RANGE,
+    },
+  },
+  [ADAPTER_KEYS.CZ_ISIR]: {
+    key: ADAPTER_KEYS.CZ_ISIR,
+    documentStage: "inline",
+    name: "Czech insolvency register (insolvenční rejstřík)",
+    publisher: "Ministerstvo spravedlnosti",
+    publicHomeUrl: "https://isir.justice.cz",
+    ...ADAPTER_JURISDICTIONS.CZE,
+    ecliCourtCodes: CZ_ECLI_COURTS,
+    // The register's documents state no ECLI.
+    statedEcliIdentity: STATED_ECLI_IDENTITY.NONE,
+    placeholderPatterns: NO_PLACEHOLDER_PATTERNS,
+    edition: LIVE_EDITION,
+    dateRange: {
+      // The register opened on 1 January 2008 (insolvenční zákon in force).
+      // It strikes a debtor's file off five years after the proceeding
+      // ended, so it never holds every decision from that date on: a
+      // decision absent here may have been published and struck off.
+      type: "decision-date",
+      fromInclusive: "2008-01-01",
+      through: OPEN_RANGE,
+    },
+  },
   [ADAPTER_KEYS.BR_TJDFT]: {
     key: ADAPTER_KEYS.BR_TJDFT,
     documentStage: "inline",
@@ -908,6 +955,8 @@ export const SOURCE_APP_READER_TEXT = {
   [ADAPTER_KEYS.PL_UOKIK]: APP_READER_TEXT.FULL,
   [ADAPTER_KEYS.CZ_UOHS]: APP_READER_TEXT.FULL,
   [ADAPTER_KEYS.BR_TJDFT]: APP_READER_TEXT.FULL,
+  [ADAPTER_KEYS.CZ_NS_SBIRKA]: APP_READER_TEXT.FULL,
+  [ADAPTER_KEYS.CZ_ISIR]: APP_READER_TEXT.FULL,
   [ADAPTER_KEYS.BR_TST]: APP_READER_TEXT.FULL,
   [IMPORT_SOURCE_KEYS.COURTLISTENER]: APP_READER_TEXT.FULL,
   ...FIXTURE_SOURCE_APP_READER_TEXT,

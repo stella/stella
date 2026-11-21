@@ -136,6 +136,7 @@ import { decisionTextVersion } from "@/api/mcp/case-law-decision-read";
 import { CASE_LAW_SEARCH_CURSOR_MAX_LENGTH } from "@/api/mcp/case-law-search-input";
 import { createCompatCorpusContinuation } from "@/api/mcp/compat-corpus";
 import { COMPAT_SEARCH_CURSOR_MAX_LENGTH } from "@/api/mcp/compat-shared";
+import { MCP_MODES } from "@/api/mcp/constants";
 import { resolveMcpToolOutputContract } from "@/api/mcp/gateway/list-tools";
 import {
   deriveContactDisplayName,
@@ -148,6 +149,7 @@ import {
 } from "@/api/mcp/public-read-continuation";
 import { getMcpResourceModeConfig } from "@/api/mcp/resource-policy-contract";
 import { DEFAULT_MCP_CLI_ANNOTATIONS } from "@/api/mcp/static-cli-metadata";
+import { listStaticMcpToolDefinitions } from "@/api/mcp/static-tool-definitions";
 import {
   createCaseLawContinuation,
   READ_DECISION_BATCH_MAX_TEXT_CHARS,
@@ -245,6 +247,9 @@ beforeEach(() => {
 
 const wireSchemaValidator = createWireSchemaValidator();
 
+/** Tools a success of which this file read against its advertised schema. */
+const outputCheckedTools = new Set<string>();
+
 /**
  * Every call here runs the real dispatcher, which parses a result through the
  * tool's executable output source. The schema a client is shown is a
@@ -276,6 +281,7 @@ const handleMcpToolCall = async (
       validate(result.structuredContent),
       `${call.toolName} result against its advertised output schema: ${wireSchemaValidator.errorsText(validate.errors)}`,
     ).toBe(true);
+    outputCheckedTools.add(call.toolName);
   }
   return result;
 };
@@ -376,6 +382,7 @@ const CITING_DECISION_ID = "00000000-0000-4000-8000-0000000d0002";
 /** A consolidated statute and an older consolidation of the same work. */
 const STATUTE_ID = "00000000-0000-4000-8000-000000021001";
 const STATUTE_PRIOR_ID = "00000000-0000-4000-8000-000000021002";
+const STATUTE_UNREADABLE_ID = "00000000-0000-4000-8000-000000021009";
 const STATUTE_ELI = "https://www.e-sbirka.cz/eli/cz/sb/2012/89";
 const STATUTE_TITLE = "89/2012 Sb., obcansky zakonik";
 const PROVISION_ANCHOR = "par_1729";
@@ -936,6 +943,7 @@ type MockMcpTransaction = {
   selectDistinct: () => ReturnType<typeof createSelectBuilder>;
   query: {
     entities: {
+      findMany: () => Promise<unknown[]>;
       findFirst: (input?: MockEntityFindFirstInput) => Promise<{
         createdAt: Date;
         kind: string;
@@ -1083,6 +1091,7 @@ const createScopedDb = (
         await callback({
           query: {
             entities: {
+              findMany: async () => [],
               findFirst: async ({ where }: MockEntityFindFirstInput = {}) => {
                 if (!currentDocument) {
                   return null;
@@ -5860,7 +5869,7 @@ describe("OpenAI-compatible MCP tools", () => {
                 minLength: 1,
                 maxLength: 256,
                 description:
-                  "Publisher provision anchor; confirm it in read_statute's outline for the chosen consolidation. Czech e-Sbírka commonly uses par_<section>, -odst_<paragraph>, and -pism_<letter> (par_1729, par_1729-odst_1, par_1729-odst_2-pism_a). Subdivision anchors narrow the answer to that subdivision. Other publishers may use different schemes.",
+                  "Publisher provision anchor; confirm it in read_statute's outline for the chosen consolidation. Czech e-Sbírka commonly uses par_<section>, -odst_<paragraph>, and -pism_<letter> (par_1729, par_1729-odst_1, par_1729-odst_2-pism_a). Subdivision anchors narrow the answer to that subdivision. An annex also reads by number (priloha_3). Other publishers may use different schemes.",
               },
               as_of: {
                 type: "string",
@@ -6171,6 +6180,103 @@ describe("OpenAI-compatible MCP tools", () => {
     });
   });
 
+  test("read_statute keeps every annex in a bounded outline, and an annex reads by its number", async () => {
+    // A long act: more section headings than the outline holds, then the
+    // annexes, as 134/2016 Sb. stores them.
+    const sections = Array.from(
+      { length: LIMITS.legislationOutlineHeadingsMax + 40 },
+      (_, index) => ({
+        id: `s${String(index)}`,
+        anchorId: `par_${String(index + 1)}`,
+        type: "heading" as const,
+        level: 3 as const,
+        inlines: [{ type: "text" as const, text: `§ ${String(index + 1)}` }],
+        plainText: `§ ${String(index + 1)}`,
+      }),
+    );
+    const annexes = [1, 2, 3].map((number) => ({
+      id: `a${String(number)}`,
+      anchorId: `pril_${String(number)}`,
+      type: "heading" as const,
+      level: 1 as const,
+      inlines: [
+        { type: "text" as const, text: `Příloha č. ${String(number)}` },
+      ],
+      plainText: `Příloha č. ${String(number)}`,
+    }));
+    const annexBody = {
+      id: "a3-body",
+      anchorId: "pril_3-frag_8775881",
+      type: "paragraph" as const,
+      inlines: [{ type: "text" as const, text: "Trestné činy" }],
+      plainText: "Trestné činy",
+    };
+    const documentAst = {
+      ...createStatuteAst(),
+      blocks: [...sections, ...annexes, annexBody],
+    };
+    resolveStatuteExpressionMock.mockResolvedValue({
+      type: "expression",
+      id: STATUTE_ID,
+    });
+    readPublicLegislationHandlerMock.mockResolvedValue({
+      ...createStatuteReadResult(),
+      documentAst,
+    });
+    listStatuteVersionsHandlerMock.mockResolvedValue(
+      createStatuteVersionsPage(),
+    );
+
+    const payload = parseToolPayload(
+      await handleMcpToolCall({
+        args: { eli: STATUTE_ELI },
+        context: createContext(),
+        toolName: "read_statute",
+      }),
+    );
+    const statute = isRecord(payload) ? payload["statute"] : undefined;
+    const outline =
+      isRecord(statute) && Array.isArray(statute["outline"])
+        ? statute["outline"].flatMap((entry) =>
+            isRecord(entry) && typeof entry["anchorId"] === "string"
+              ? [entry["anchorId"]]
+              : [],
+          )
+        : [];
+    expect(isRecord(statute) && statute["outlineTruncated"]).toBe(true);
+    expect(outline).toHaveLength(LIMITS.legislationOutlineHeadingsMax);
+    expect(outline.slice(-3)).toEqual(["pril_1", "pril_2", "pril_3"]);
+    expect(outline.at(0)).toBe("par_1");
+
+    readLegislationProvisionVersionsMock.mockResolvedValue([
+      createProvisionVersionRow(),
+    ]);
+    readVersionBlocksMock.mockResolvedValue(documentAst.blocks);
+    const provisions = parseToolPayload(
+      await handleMcpToolCall({
+        args: {
+          items: [
+            { eli: STATUTE_ELI, anchor: "priloha_3" },
+            { eli: STATUTE_ELI, anchor: "příloha č. 9" },
+          ],
+        },
+        context: createContext(),
+        toolName: "read_statute_provisions",
+      }),
+    );
+    expect(provisions).toMatchObject({
+      items: [
+        { status: "found", text: "Příloha č. 3\nTrestné činy" },
+        {
+          status: "provision_not_found",
+          message: expect.stringContaining(
+            "Its annex anchors: pril_1, pril_2, pril_3.",
+          ),
+        },
+      ],
+    });
+  });
+
   test("read_statute emits navigation once and reassembles every text window", async () => {
     resolveStatuteExpressionMock.mockResolvedValue({
       type: "expression",
@@ -6313,6 +6419,54 @@ describe("OpenAI-compatible MCP tools", () => {
           "The source licence does not permit AI use of the full text.",
         truncated: false,
       },
+    });
+  });
+
+  test("read_statute and read_statute_provisions read a Work held only as promulgated and say so", async () => {
+    resolveStatuteExpressionMock.mockResolvedValue({
+      type: "promulgated-only",
+      id: STATUTE_ID,
+    });
+    readPublicLegislationHandlerMock.mockResolvedValue({
+      ...createStatuteReadResult(),
+      expressionKind: "promulgated",
+    });
+    listStatuteVersionsHandlerMock.mockResolvedValue(
+      createStatuteVersionsPage(),
+    );
+    readLegislationProvisionVersionsMock.mockResolvedValue([
+      { ...createProvisionVersionRow(), expressionKind: "promulgated" },
+    ]);
+    readVersionBlocksMock.mockResolvedValue(createStatuteBlocks());
+
+    expect(
+      parseToolPayload(
+        await handleMcpToolCall({
+          args: { eli: STATUTE_ELI },
+          context: createContext(),
+          toolName: "read_statute",
+        }),
+      ),
+    ).toMatchObject({
+      statute: { documentId: STATUTE_ID, expressionKind: "promulgated" },
+    });
+    expect(
+      parseToolPayload(
+        await handleMcpToolCall({
+          args: { items: [{ anchor: PROVISION_ANCHOR, eli: STATUTE_ELI }] },
+          context: createContext(),
+          toolName: "read_statute_provisions",
+        }),
+      ),
+    ).toMatchObject({
+      items: [
+        {
+          documentId: STATUTE_ID,
+          expressionKind: "promulgated",
+          status: "found",
+          windowDisposition: "effective",
+        },
+      ],
     });
   });
 
@@ -6801,6 +6955,8 @@ describe("OpenAI-compatible MCP tools", () => {
           slug: "89-2012-sb-obcansky-zakonik",
           sourceUrl: "https://www.e-sbirka.cz/sb/2012/89",
           allowsDerivedAi: true,
+          status: "found",
+          wordingChange: "changed",
           documentId: STATUTE_ID,
           text: "\u00a7 1729 as amended",
           governingText: [],
@@ -6813,11 +6969,26 @@ describe("OpenAI-compatible MCP tools", () => {
           slug: "89-2012-sb-obcansky-zakonik",
           sourceUrl: "https://www.e-sbirka.cz/sb/2012/89",
           allowsDerivedAi: true,
+          status: "found",
+          wordingChange: "changed",
           documentId: STATUTE_PRIOR_ID,
           text: "\u00a7 1729 as enacted",
           governingText: [],
           versionValidFrom: "2012-03-22",
           versionValidTo: "2013-12-31",
+          ...EFFECTIVE_LABEL,
+        },
+        {
+          // A consolidation whose structure could not be read: the reader
+          // lists it without text, the agent-facing history leaves it out.
+          country: "CZE",
+          slug: "89-2012-sb-obcansky-zakonik",
+          sourceUrl: "https://www.e-sbirka.cz/sb/2012/89",
+          allowsDerivedAi: true,
+          status: "unavailable",
+          documentId: STATUTE_UNREADABLE_ID,
+          versionValidFrom: "2010-01-01",
+          versionValidTo: "2012-03-21",
           ...EFFECTIVE_LABEL,
         },
       ],
@@ -6895,6 +7066,8 @@ describe("OpenAI-compatible MCP tools", () => {
           slug: "89-2012-sb-obcansky-zakonik",
           sourceUrl: "https://www.e-sbirka.cz/sb/2012/89",
           allowsDerivedAi: true,
+          status: "found",
+          wordingChange: "changed",
           documentId: STATUTE_ID,
           text: "\u00a7 1729 as amended",
           governingText: [],
@@ -6909,6 +7082,8 @@ describe("OpenAI-compatible MCP tools", () => {
           slug: "89-2012-sb-obcansky-zakonik",
           sourceUrl: "https://www.e-sbirka.cz/sb/2012/89",
           allowsDerivedAi: false,
+          status: "found",
+          wordingChange: "changed",
           documentId: STATUTE_PRIOR_ID,
           text: "\u00a7 1729 as enacted",
           governingText: [],
@@ -6979,6 +7154,8 @@ describe("OpenAI-compatible MCP tools", () => {
           slug: "89-2012-sb-obcansky-zakonik",
           sourceUrl: "https://www.e-sbirka.cz/sb/2012/89",
           allowsDerivedAi: true,
+          status: "found",
+          wordingChange: "changed",
           documentId: STATUTE_PRIOR_ID,
           text,
           governingText: [],
@@ -7191,6 +7368,44 @@ describe("OpenAI-compatible MCP tools", () => {
         await resultIds(["loajalita jednatel", "jednatel loajalita"]),
       ).toEqual(http);
     });
+
+    test.each([
+      ["score", "partial_matches_ranked", "partial_matches_appended"],
+      ["all_words_first", "partial_matches_appended", "partial_matches_ranked"],
+    ] as const)(
+      "a %s page tells its partial matches by where it put them",
+      async (hitOrder, told, never) => {
+        searchDecisionsHandlerMock.mockResolvedValue(
+          pageIn(hitOrder, [
+            { id: "partial-high", match: "some_terms" },
+            { id: "full", match: "all_terms" },
+          ]),
+        );
+        const payload = parseToolPayload(
+          await handleMcpToolCall({
+            args: {
+              country: "CZE",
+              queries: ["loajalita jednatel", "jednatel loajalita"],
+              limit: 10,
+            },
+            context: createContext(),
+            toolName: "search_case_law",
+          }),
+        );
+        const codes =
+          isRecord(payload) && Array.isArray(payload["searches"])
+            ? payload["searches"].flatMap((search: unknown) =>
+                isRecord(search) && Array.isArray(search["warnings"])
+                  ? search["warnings"].flatMap((warning: unknown) =>
+                      isRecord(warning) ? [warning["code"]] : [],
+                    )
+                  : [],
+              )
+            : [];
+        expect(codes).toContain(told);
+        expect(codes).not.toContain(never);
+      },
+    );
   });
 
   describe("search_case_law warns about a long phrasing that came back short", () => {
@@ -8039,6 +8254,38 @@ describe("OpenAI-compatible MCP tools", () => {
       eli: "https://www.e-sbirka.cz/eli/cz/sb/2012/89",
     });
   });
+
+  test.each([
+    ["/eli/sk/zz/2005/300", "https://www.slov-lex.sk/eli/sk/zz/2005/300"],
+    [
+      "urn:hu:magyar-kozlony:2013-evi-v-torveny",
+      "urn:hu:magyar-kozlony:2013-evi-v-torveny",
+    ],
+    [
+      "URN:HU:MAGYAR-KOZLONY:2013-EVI-V-TORVENY",
+      "urn:hu:magyar-kozlony:2013-evi-v-torveny",
+    ],
+    ["2013. évi V. törvény", "urn:hu:magyar-kozlony:2013-evi-v-torveny"],
+    [
+      "123/2020. (IV. 30.) Korm. rendelet",
+      "urn:hu:magyar-kozlony:123-2020-iv-30-korm-rendelet",
+    ],
+  ])(
+    "read_statute reads the work identifier %p in its publisher's form",
+    async (eli, canonical) => {
+      resolveStatuteExpressionMock.mockResolvedValue({ type: "unknown-work" });
+
+      await handleMcpToolCall({
+        args: { eli },
+        context: createContext(),
+        toolName: "read_statute",
+      });
+
+      expect(
+        resolveStatuteExpressionMock.mock.calls.at(0)?.at(0),
+      ).toMatchObject({ eli: canonical });
+    },
+  );
 
   describe("case_law_coverage", () => {
     const readCoverage = mock(async () => CASE_LAW_COVERAGE_FIXTURE);
@@ -13566,4 +13813,119 @@ describe("undeclared-argument backstop", () => {
       },
     ]);
   });
+});
+
+/**
+ * Tools with an output schema that no test in this file has yet called to a
+ * success through `handleMcpToolCall`, so no real result of theirs is read
+ * against the schema a client validates it with. The list only shrinks: a
+ * test that reaches one of them removes it here.
+ */
+const OUTPUT_CHECK_PENDING: readonly string[] = [
+  "add_matter_member",
+  "compare_documents",
+  "configure_template_fields",
+  "create_organization",
+  "create_reader_annotation",
+  "create_template",
+  "delete_clause",
+  "delete_contact",
+  "delete_document",
+  "delete_matter",
+  "delete_reader_annotation",
+  "delete_task",
+  "delete_time_entry",
+  "describe_capability",
+  "fill_template",
+  "get_usage",
+  "link_matter_contact",
+  "list_audit_log",
+  "list_capabilities",
+  "list_case_law_courts",
+  "list_clauses",
+  "list_documents",
+  "list_invoices",
+  "list_matters",
+  "list_playbooks",
+  "list_reader_annotations",
+  "list_templates",
+  "mint_web_handoff",
+  "open_case_law_decision",
+  "open_document_version_upload",
+  "open_file_comparison",
+  "prepare_feedback",
+  "prepare_file_comparison",
+  "prepare_file_comparison_from_links",
+  "preview_cited_provision",
+  "preview_template_conditions",
+  "read_capability",
+  "read_case_law_decision_blocks",
+  "read_contact",
+  "read_guidance",
+  "remove_matter_member",
+  "resolve_case_law_decision",
+  "resolve_law_citation",
+  "resolve_rate",
+  "run_playbook",
+  "save_clause",
+  "save_contact",
+  "save_document",
+  "save_filled_template",
+  "save_playbook",
+  "save_time_entry",
+  "search_boe_legislation",
+  "search_guidance",
+  "set_field_value",
+  "set_practice_jurisdictions",
+  "submit_feedback",
+  "update_organization_settings",
+  "update_reader_annotation",
+  "upload_document_version",
+  "verify_quote",
+  "write_capability",
+];
+
+/**
+ * Set when the census test below runs, so a name filter that leaves it out
+ * leaves the census out too.
+ */
+let outputCensusRequested = false;
+
+// Tests may run in any order (a seeded shuffle runs them out of order), so
+// the census test only asks for the census, which is read once every test of
+// the file has run.
+test("every tool with an output schema has a success read against it here", () => {
+  outputCensusRequested = true;
+});
+
+afterAll(() => {
+  if (!outputCensusRequested) {
+    return;
+  }
+  const advertised = new Set(
+    MCP_MODES.flatMap((mode) =>
+      listStaticMcpToolDefinitions(mode)
+        .filter(
+          ({ name }) =>
+            resolveMcpToolOutputContract(name, mode)?.outputSchema !==
+            undefined,
+        )
+        .map(({ name }) => name),
+    ),
+  );
+  const pending = new Set(OUTPUT_CHECK_PENDING);
+  expect(
+    [...advertised]
+      .filter((name) => !outputCheckedTools.has(name) && !pending.has(name))
+      .toSorted(),
+    "Call each of these tools to a success through handleMcpToolCall (run the whole file; a name filter skips the calls)",
+  ).toEqual([]);
+  expect(
+    [...pending].filter((name) => outputCheckedTools.has(name)).toSorted(),
+    "These tools now have a checked success: remove them from OUTPUT_CHECK_PENDING",
+  ).toEqual([]);
+  expect(
+    [...pending].filter((name) => !advertised.has(name)).toSorted(),
+    "These names advertise no output schema: remove them from OUTPUT_CHECK_PENDING",
+  ).toEqual([]);
 });

@@ -218,6 +218,25 @@ test("allows content skeletons, document canvas and page toolbars without traver
   );
 });
 
+test("a page identity tile does not grant shell ownership to its props or its siblings", async () => {
+  const module = "@/components/oauth-consent/consent-card-shell.pending";
+  await withSources(
+    {
+      "routes/index.tsx": `import { ConsentClientTilePair, Sibling } from '${module}'; export const Route = createFileRoute('/')({pendingComponent: () => <><ConsentClientTilePair/><Sibling/></>});`,
+      "components/oauth-consent/consent-card-shell.pending.tsx":
+        "import {StellaMark} from '@stll/ui/stella-mark'; import {Sidebar} from '@/components/sidebar'; export const ConsentClientTilePair=()=> <StellaMark icon={<Sidebar/>}/>; export const Sibling=()=> <StellaMark/>;",
+    },
+    (directory) => {
+      const { violations } = checkRouteFallbacks(directory);
+      expect(violations).toHaveLength(1);
+      expect(violations.at(0)?.chrome.toSorted()).toEqual([
+        "@/components/sidebar#Sidebar",
+        "@stll/ui/stella-mark#StellaMark",
+      ]);
+    },
+  );
+});
+
 test("a missing generated census fails rather than silently validating no routes", async () => {
   await withSources(
     { "routes/index.tsx": "export const Route={};", "routeTree.gen.ts": "" },

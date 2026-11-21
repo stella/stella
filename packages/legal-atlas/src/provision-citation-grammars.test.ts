@@ -102,6 +102,7 @@ const ARTICLE_ANCHORS = {
   segmentSeparator: "-",
   unnumberedAnchor: null,
   unnumberedSegment: /^frag_\d+$/u,
+  annexAnchors: [],
 } as const satisfies StatuteAnchorScheme;
 
 const articleGrammar = createProvisionCitationGrammar({
@@ -590,5 +591,31 @@ describe("Slovak reader citations", () => {
     ["40/1964 Zb.", "40/1964 Zb.", "https://www.slov-lex.sk/eli/sk/zz/1964/40"],
   ])("preserves the printed collection in %s", (text, identifier, eli) => {
     expect(slovak.gazette.parse(text)).toEqual({ identifier, eli });
+  });
+});
+
+describe("a citation label's provisions", () => {
+  const anchorsOf = (jurisdiction: "CZE" | "SVK", label: string) => {
+    const grammar = PROVISION_CITATION_GRAMMARS[jurisdiction];
+    return grammar.readLabelProvisions(label).map(grammar.anchor);
+  };
+
+  test("reads the path and its coordination whatever names the act", () => {
+    // An abbreviation the grammar does not list still ends the label.
+    expect(anchorsOf("CZE", "§ 240 odst. 3 OSŘ")).toEqual(["par_240-odst_3"]);
+    expect(anchorsOf("CZE", "§ 240 odst. 1 a 2 OSŘ")).toEqual([
+      "par_240-odst_1",
+      "par_240-odst_2",
+    ]);
+    expect(anchorsOf("CZE", "§ 240 odst. 1 věta druhá OSŘ")).toEqual([
+      "par_240-odst_1",
+    ]);
+    expect(anchorsOf("SVK", "§ 18 ods. 2 písm. a) SSP")).toEqual([
+      "paragraf-18.odsek-2.pismeno-a",
+    ]);
+  });
+
+  test("a label with no designator names nothing", () => {
+    expect(anchorsOf("CZE", "občanský soudní řád")).toEqual([]);
   });
 });

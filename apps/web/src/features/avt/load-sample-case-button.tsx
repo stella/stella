@@ -25,6 +25,7 @@ export const LoadSampleCaseButton = ({
   return (
     <Button
       disabled={loadSampleCase.isPending}
+      disabledReason={t("avt.view.loadingSample")}
       onClick={() => loadSampleCase.mutate()}
       variant="outline"
     >
