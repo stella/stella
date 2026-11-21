@@ -676,15 +676,19 @@ const resolveDecisionBody = async ({
       case "present": {
         bodySource = collection.bodySource;
         fulltext = collection.fulltext;
-        astIsUsable = hasUsableAst(collection.documentAst);
+        const usableAst = hasUsableAst(collection.documentAst)
+          ? collection.documentAst
+          : null;
+        astIsUsable = usableAst !== null;
         documentAst =
-          astIsUsable && astProjection === "wire"
-            ? omitDerivablePlainText(collection.documentAst)
+          usableAst !== null && astProjection === "wire"
+            ? omitDerivablePlainText(usableAst)
             : collection.documentAst;
         sections = null;
-        collectionDigest = astIsUsable
-          ? await digestAst(collection.documentAst)
-          : sha256Hex(collection.fulltext);
+        collectionDigest =
+          usableAst === null
+            ? sha256Hex(collection.fulltext)
+            : await digestAst(usableAst);
         break;
       }
       default:
