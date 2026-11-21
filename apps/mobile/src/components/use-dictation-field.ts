@@ -1,9 +1,6 @@
 import { useEffect, useRef } from "react";
 
-import type {
-  NativeSyntheticEvent,
-  TextInputSelectionChangeEventData,
-} from "react-native";
+import type { TextInputSelectionChangeEvent } from "react-native";
 import { useLocale } from "use-intl";
 
 import { insertDictation } from "@/state/dictation";
@@ -38,7 +35,7 @@ export const useDictationField = (
       },
       onSelectionChange: ({
         nativeEvent: { selection },
-      }: NativeSyntheticEvent<TextInputSelectionChangeEventData>) => {
+      }: TextInputSelectionChangeEvent) => {
         cursor.current = { ...cursor.current, selection };
       },
     },
