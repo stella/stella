@@ -1,5 +1,11 @@
 # @stll/ui
 
+## 0.80.1
+
+### Patch Changes
+
+- [#9117](https://github.com/stella/stella/pull/9117) [`ecc187e`](https://github.com/stella/stella/commit/ecc187e85fe3cd60d2ba579af7ecbbfa41185102) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Export the smartphone and tablet icons, which name a signed-in device's kind.
+
 ## 0.80.0
 
 ### Minor Changes
