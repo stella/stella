@@ -575,6 +575,25 @@
       "descriptionCloud": "A stella IA também corrige erros de reconhecimento e a formatação ditada, como “nova linha” ou “negrito”, e adapta o texto ao aplicativo, como e-mail.",
       "title": "Revisar com IA"
     },
+    "cleanupStyle": {
+      "casual": {
+        "description": "Mantém um tom descontraído, com pontuação leve.",
+        "title": "Informal"
+      },
+      "notes": {
+        "description": "Pontos curtos, um por linha, sem palavras de preenchimento.",
+        "title": "Notas"
+      },
+      "polished": {
+        "description": "Corrige erros de reconhecimento e mantém a sua redação.",
+        "title": "Refinado"
+      },
+      "title": "Estilo",
+      "verbatim": {
+        "description": "Cada palavra como foi dita; só pontuação e maiúsculas são acrescentadas.",
+        "title": "Literal"
+      }
+    },
     "context": {
       "textBeforeCursor": {
         "description": "Até {limit, number} caracteres do documento em que você está, para que o ditado combine com o que você escreve.",
@@ -746,6 +765,11 @@
       "failed": "Não foi possível abrir a janela. Tente novamente.",
       "open": "Abrir",
       "title": "Transcrever uma gravação"
+    },
+    "translateTo": {
+      "description": "Escreve o texto revisado neste idioma, seja qual for o idioma em que você fala.",
+      "off": "Idioma em que você fala",
+      "title": "Escrever em"
     },
     "whileDictating": {
       "choices": {

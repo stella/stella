@@ -39,6 +39,7 @@ use crate::{
   config::APP_DATA_DIR_NAME,
   device_preference::DevicePreference,
   dictation_app_settings::{self, AppSetting, RecentApp},
+  dictation_cleanup::{self, CleanupForm, CleanupStyle},
   dictation_cloud::{self, CloudModels, Destination, ModelClass},
   dictation_context::{self, Sharing},
   dictation_focus::{self, FocusTarget},
@@ -54,6 +55,11 @@ use crate::{
 const PREFERENCE_FILE_NAME: &str = "dictation-enabled";
 /// On unless the user turned it off.
 const CLEANUP_PREFERENCE_FILE_NAME: &str = "dictation-cleanup";
+/// The cleanup style; absent or unknown: polished.
+const CLEANUP_STYLE_PREFERENCE_FILE_NAME: &str = "dictation-cleanup-style";
+/// A language the cleanup contract lists to write the text in, or `off`
+/// (and absent): the spoken language.
+const TRANSLATE_TO_PREFERENCE_FILE_NAME: &str = "dictation-translate-to";
 /// `auto` or a language code the speech model lists.
 const LANGUAGE_PREFERENCE_FILE_NAME: &str = "dictation-language";
 /// `local` (this computer, the default) or `cloud` (stella AI).
@@ -194,6 +200,10 @@ pub struct DictationSnapshot {
   available: bool,
   enabled: bool,
   cleanup: bool,
+  /// How cleanup writes the text.
+  cleanup_style: CleanupStyle,
+  /// The language cleanup writes the text in; `None` for the spoken one.
+  translate_to: Option<&'static str>,
   /// Whether a short sound marks the start and the end of listening.
   sounds: bool,
   /// What happens to other sound while recording, what this computer
@@ -271,6 +281,8 @@ enum Listening {
 struct Inner {
   enabled: bool,
   cleanup: bool,
+  cleanup_style: CleanupStyle,
+  translate_to: Option<&'static str>,
   app_settings: Vec<AppSetting>,
   /// Only in memory.
   recent_apps: Vec<RecentApp>,
@@ -311,6 +323,14 @@ impl DictationState {
       .read()
       .as_deref()
       != Some(DISABLED_VALUE);
+    let cleanup_style = CleanupStyle::parse(
+      DevicePreference::in_app_data(CLEANUP_STYLE_PREFERENCE_FILE_NAME)
+        .read()
+        .as_deref(),
+    );
+    let translate_to = DevicePreference::in_app_data(TRANSLATE_TO_PREFERENCE_FILE_NAME)
+      .read()
+      .and_then(|stored| dictation_cleanup::translation_language(&stored));
     let sounds = DevicePreference::in_app_data(SOUNDS_PREFERENCE_FILE_NAME)
       .read()
       .as_deref()
@@ -367,6 +387,8 @@ impl DictationState {
     Self(Mutex::new(Inner {
       enabled,
       cleanup,
+      cleanup_style,
+      translate_to,
       app_settings,
       recent_apps: Vec::new(),
       sounds,
@@ -410,6 +432,8 @@ impl DictationState {
       available,
       enabled: inner.enabled,
       cleanup: inner.cleanup,
+      cleanup_style: inner.cleanup_style,
+      translate_to: inner.translate_to,
       sounds: inner.sounds,
       while_dictating: inner.while_dictating,
       while_dictating_offered: WhileDictating::OFFERED,
@@ -562,19 +586,26 @@ pub fn recording(app: &AppHandle) -> bool {
 
 /// What the tray offers for dictation: `None` wherever the Settings window
 /// shows no Dictation page.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TrayDictation {
   pub enabled: bool,
   pub hold_key: HoldChoice,
+  /// The dictation language choice and this computer's languages, for the
+  /// quick switch.
+  pub language: Choice,
+  pub inferred: Vec<&'static str>,
   /// Whether there is a last dictation to type again.
   pub can_retype: bool,
 }
 
 pub fn tray_state(app: &AppHandle) -> Option<TrayDictation> {
   available(app).then(|| {
+    let inferred = dictation_language::inferred(app);
     app.state::<DictationState>().update(|inner| TrayDictation {
       enabled: inner.enabled,
       hold_key: inner.hold_key,
+      language: inner.language.clone(),
+      inferred,
       can_retype: inner.last.is_some(),
     })
   })
@@ -767,6 +798,14 @@ pub fn for_app(app: &AppHandle, focus: Option<&FocusTarget>) -> ForApp {
 /// Whether a finished dictation goes through AI cleanup before it is typed.
 pub fn cleanup_enabled(app: &AppHandle) -> bool {
   app.state::<DictationState>().update(|inner| inner.cleanup)
+}
+
+/// How cleanup is asked to write a dictation.
+pub fn cleanup_form(app: &AppHandle) -> CleanupForm {
+  app.state::<DictationState>().update(|inner| CleanupForm {
+    style: inner.cleanup_style,
+    translate_to: inner.translate_to,
+  })
 }
 
 /// Whether a short sound marks the start and the end of listening.
@@ -1237,6 +1276,55 @@ pub fn dictation_set_cleanup(
   Ok(read_snapshot(&app, &state))
 }
 
+/// How cleanup writes the text: one of the contract's styles.
+#[tauri::command]
+pub fn dictation_set_cleanup_style(
+  app: AppHandle,
+  state: State<'_, DictationState>,
+  style: String,
+) -> Result<DictationSnapshot, String> {
+  if !available(&app) {
+    return Err("dictation is not available on this computer".to_string());
+  }
+  let chosen = CleanupStyle::parse(Some(&style));
+  if chosen.stored() != style {
+    return Err("this cleanup style is not available".to_string());
+  }
+  change_preference(
+    &app,
+    CLEANUP_STYLE_PREFERENCE_FILE_NAME,
+    chosen.stored(),
+    |inner| inner.cleanup_style = chosen,
+  )?;
+  Ok(read_snapshot(&app, &state))
+}
+
+/// The language cleanup writes the text in, or `None` for the spoken one.
+#[tauri::command]
+pub fn dictation_set_translate_to(
+  app: AppHandle,
+  state: State<'_, DictationState>,
+  language: Option<String>,
+) -> Result<DictationSnapshot, String> {
+  if !available(&app) {
+    return Err("dictation is not available on this computer".to_string());
+  }
+  let translate_to = match language.as_deref() {
+    None => None,
+    Some(tag) => Some(
+      dictation_cleanup::translation_language(tag)
+        .ok_or_else(|| "cleanup cannot write in this language".to_string())?,
+    ),
+  };
+  change_preference(
+    &app,
+    TRANSLATE_TO_PREFERENCE_FILE_NAME,
+    translate_to.unwrap_or(DISABLED_VALUE),
+    |inner| inner.translate_to = translate_to,
+  )?;
+  Ok(read_snapshot(&app, &state))
+}
+
 /// Whether a short sound marks the start and the end of listening.
 #[tauri::command]
 pub fn dictation_set_sounds(
@@ -1375,20 +1463,32 @@ pub fn dictation_set_language(
   state: State<'_, DictationState>,
   language: String,
 ) -> Result<DictationSnapshot, String> {
-  if !available(&app) {
-    return Err("dictation is not available on this computer".to_string());
-  }
-  let choice = Choice::parse(Some(&language));
-  if choice.stored() != language {
-    return Err("this language is not available for dictation".to_string());
-  }
-  change_preference(
-    &app,
-    LANGUAGE_PREFERENCE_FILE_NAME,
-    choice.stored(),
-    |inner| inner.language = choice,
-  )?;
+  store_language(&app, &language)?;
   Ok(read_snapshot(&app, &state))
+}
+
+/// Stores the dictation language, `auto` or a model language, from Settings
+/// or the tray's quick switch, and redraws that switch, also when nothing
+/// was stored: a clicked item keeps its native check until the menu is
+/// rebuilt from the stored choice.
+pub fn store_language(app: &AppHandle, language: &str) -> Result<(), String> {
+  let stored = if available(app) {
+    let choice = Choice::parse(Some(language));
+    if choice.stored() == language {
+      change_preference(
+        app,
+        LANGUAGE_PREFERENCE_FILE_NAME,
+        choice.stored(),
+        |inner| inner.language = choice,
+      )
+    } else {
+      Err("this language is not available for dictation".to_string())
+    }
+  } else {
+    Err("dictation is not available on this computer".to_string())
+  };
+  crate::activity::refresh_tray(app);
+  stored
 }
 
 /// Settings for apps and kinds of app over the global ones, replacing the
@@ -1733,6 +1833,8 @@ mod tests {
     DictationState(Mutex::new(Inner {
       enabled: true,
       cleanup,
+      cleanup_style: CleanupStyle::Polished,
+      translate_to: None,
       app_settings: Vec::new(),
       recent_apps: Vec::new(),
       sounds: true,
@@ -1792,6 +1894,23 @@ mod tests {
       Some(HoldChoice::OFFERED.len())
     );
     assert_eq!(snapshot["holdKeyWaiting"], serde_json::json!(false));
+  }
+
+  #[test]
+  fn the_snapshot_names_the_cleanup_style_and_the_language_to_write_in() {
+    let state = state(true);
+    let polished =
+      serde_json::to_value(state.snapshot(true, false, Vec::new(), false)).unwrap();
+    assert_eq!(polished["cleanupStyle"], serde_json::json!("polished"));
+    assert_eq!(polished["translateTo"], serde_json::Value::Null);
+    state.update(|inner| {
+      inner.cleanup_style = CleanupStyle::Notes;
+      inner.translate_to = Some("en");
+    });
+    let notes =
+      serde_json::to_value(state.snapshot(true, false, Vec::new(), false)).unwrap();
+    assert_eq!(notes["cleanupStyle"], serde_json::json!("notes"));
+    assert_eq!(notes["translateTo"], serde_json::json!("en"));
   }
 
   #[test]
