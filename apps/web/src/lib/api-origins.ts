@@ -23,16 +23,25 @@ export const browserApiRootUrl = (path: `/${string}`): string => {
 // A same-origin build reaches the API only through the /api path (and its CSP
 // allows only that), so map those URLs onto the browser API base. URLs on any
 // other origin (storage presigned URLs) are returned unchanged.
-export const toBrowserApiUrl = (url: string): string => {
-  if (env.VITE_BROWSER_API_URL === undefined) {
+export const mapApiUrlToBrowserBase = (
+  url: string,
+  {
+    apiOrigin,
+    browserApiBase,
+  }: { apiOrigin: string; browserApiBase: string | undefined },
+): string => {
+  if (browserApiBase === undefined) {
     return url;
   }
   const parsed = URL.parse(url);
-  if (
-    parsed === null ||
-    parsed.origin !== new URL(externalApiOrigin()).origin
-  ) {
+  if (parsed === null || parsed.origin !== new URL(apiOrigin).origin) {
     return url;
   }
-  return `${env.VITE_BROWSER_API_URL}${parsed.pathname}${parsed.search}${parsed.hash}`;
+  return `${browserApiBase}${parsed.pathname}${parsed.search}${parsed.hash}`;
 };
+
+export const toBrowserApiUrl = (url: string): string =>
+  mapApiUrlToBrowserBase(url, {
+    apiOrigin: externalApiOrigin(),
+    browserApiBase: env.VITE_BROWSER_API_URL,
+  });
