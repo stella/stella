@@ -200,7 +200,15 @@ const ooxmlMainContentType = (
   if (target === undefined || target === null || target === "") {
     return null;
   }
-  const partName = `/${target.replace(/^\/+/u, "")}`.toLowerCase();
+  // A target is a URI reference relative to the package root ("./word/…",
+  // "%20" escapes); its part name is the resolved path.
+  const resolved = Result.try(() =>
+    decodeURIComponent(new URL(target, "http://package/").pathname),
+  );
+  if (Result.isError(resolved)) {
+    return null;
+  }
+  const partName = resolved.value.toLowerCase();
   const contentTypes = slimdom.parseXmlDocument(contentTypesXml);
   const override = childElements(
     contentTypes,

@@ -190,6 +190,15 @@ describe("conversion content", () => {
       "word-ooxml",
     ],
     [
+      "a main part named by a relative, escaped reference",
+      async () =>
+        await ooxmlPackage(WORD_MAIN, {
+          "[Content_Types].xml": `<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/main doc.xml" ContentType="${WORD_MAIN}"/></Types>`,
+          "_rels/.rels": ooxmlRelationships("./word/main%20doc.xml"),
+        }),
+      "word-ooxml",
+    ],
+    [
       "a main part typed by its extension's default",
       async () =>
         await ooxmlPackage(WORD_MAIN, {
