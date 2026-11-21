@@ -497,7 +497,7 @@ test("learned fixes that are on or off are listed with a switch, and all can be 
     ],
   };
   const calls: [string, unknown][] = [];
-  const { findByRole, getByRole, queryByRole } = await renderSetting(
+  const { findByLabelText, getByText, queryByLabelText } = await renderSetting(
     ENABLED_SNAPSHOT,
     (called, payload) => {
       if (called === "dictation_learned_get") {
@@ -514,20 +514,24 @@ test("learned fixes that are on or off are listed with a switch, and all can be 
       return undefined;
     },
   );
-  const toggle = await findByRole("switch", { name: "novak → Novák" });
+  const toggle = await findByLabelText("novak → Novák");
+  expect(toggle.getAttribute("role")).toBe("switch");
   // A fix still being learned is not listed.
-  expect(queryByRole("switch", { name: "smith → Smyth" })).toBeNull();
+  expect(queryByLabelText("smith → Smyth")).toBeNull();
 
-  fireEvent.click(toggle);
+  // Each change answers with the list it leaves; act waits for that answer.
+  await act(async () => {
+    fireEvent.click(toggle);
+  });
   await waitFor(() => {
     expect(toggle.getAttribute("aria-checked")).toBe("false");
   });
 
-  fireEvent.click(
-    getByRole("button", { name: defaultMessages.dictation.learned.delete }),
-  );
+  await act(async () => {
+    fireEvent.click(getByText(defaultMessages.dictation.learned.delete));
+  });
   await waitFor(() => {
-    expect(queryByRole("switch", { name: "novak → Novák" })).toBeNull();
+    expect(queryByLabelText("novak → Novák")).toBeNull();
   });
   expect(calls).toEqual([
     ["dictation_learned_switch", { from: "novak", status: "off" }],

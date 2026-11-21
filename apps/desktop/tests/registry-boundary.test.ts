@@ -100,6 +100,9 @@ const accountBearerOwners = {
   "billing_draft_submit.rs": "account: &AccountRequest",
   "dictation_cleanup.rs": "account: &AccountRequest",
   "dictation_cloud.rs": "account: &AccountRequest",
+  // Holds the dictation account request until the reply is read.
+  "dictation_learned.rs":
+    "let account = crate::dictation_cleanup::dictation_account(app)",
   // Holds the runner's authorization, whose lease is the account request's.
   "desktop_runner/awaited_steps.rs": "authorized: Authorized,",
   // The development stand-in computer proves the device key it linked itself.
