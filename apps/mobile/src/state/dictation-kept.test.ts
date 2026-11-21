@@ -53,6 +53,22 @@ describe("kept dictations", () => {
     expect(read).toMatchObject({ success: true, output: KEPT });
   });
 
+  test("one kept with a style and language reads them back; one kept before them reads the defaults", () => {
+    const read = (kept: object) =>
+      v.safeParse(
+        v.pipe(v.string(), v.parseJson(), keptDictationSchema),
+        JSON.stringify(kept),
+      );
+    const styled: KeptDictation = {
+      ...KEPT,
+      style: "notes",
+      translateTo: "de",
+    };
+    expect(read(styled)).toMatchObject({ success: true, output: styled });
+    const { style: _style, translateTo: _translateTo, ...before } = styled;
+    expect(read(before)).toMatchObject({ success: true, output: KEPT });
+  });
+
   test("a recording outside the dictation's folder does not read", () => {
     const outside = {
       ...KEPT,
