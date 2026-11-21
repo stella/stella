@@ -669,6 +669,11 @@
     },
     "removeFailed": "No se pudo eliminar el modelo de voz. Inténtalo de nuevo.",
     "removeModel": "Eliminar",
+    "retype": {
+      "description": "Pulsa {shortcut} para volver a escribir tu último dictado en el cursor. Solo se guarda en memoria mientras está en el historial del portapapeles.",
+      "taken": "Otra app está usando {shortcut}. El menú Dictado del icono de stella ofrece lo mismo.",
+      "title": "Atajo para el último dictado"
+    },
     "shortcutTaken": "Otra aplicación está usando {shortcut}.",
     "sounds": {
       "description": "Reproducir un sonido breve y suave cuando empieza la grabación y cuando termina.",
@@ -1210,6 +1215,7 @@
     "checkForUpdates": "Buscar actualizaciones",
     "dictation": "Dictado",
     "dictationHint": "Mantenga pulsado {key} para dictar",
+    "dictationRetype": "Volver a escribir el último dictado",
     "dictationSettings": "Ajustes de dictado…",
     "dictationTurnOn": "Activar el dictado…",
     "documentsSyncing": "{count, plural, one {1 documento sincronizándose} other {{count} documentos sincronizándose}}",

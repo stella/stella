@@ -669,6 +669,11 @@
     },
     "removeFailed": "A beszédmodellt nem sikerült eltávolítani. Próbálja újra.",
     "removeModel": "Eltávolítás",
+    "retype": {
+      "description": "Nyomja meg a(z) {shortcut} billentyűparancsot, hogy az utolsó diktálását újra beírja a kurzorhoz. Csak a memóriában marad, amíg a vágólapelőzményekben van.",
+      "taken": "Egy másik alkalmazás használja ezt: {shortcut}. A stella ikon Diktálás menüje ugyanezt kínálja.",
+      "title": "Billentyűparancs az utolsó diktáláshoz"
+    },
     "shortcutTaken": "Egy másik alkalmazás használja ezt: {shortcut}.",
     "sounds": {
       "description": "Rövid, halk hang lejátszása, amikor a felvétel elindul, és amikor véget ér.",
@@ -1210,6 +1215,7 @@
     "checkForUpdates": "Frissítések keresése",
     "dictation": "Diktálás",
     "dictationHint": "A diktáláshoz tartsa lenyomva a(z) {key} billentyűt",
+    "dictationRetype": "Utolsó diktálás újbóli beírása",
     "dictationSettings": "Diktálási beállítások…",
     "dictationTurnOn": "Diktálás bekapcsolása…",
     "documentsSyncing": "{count, plural, one {1 dokumentum szinkronizálódik} other {{count} dokumentum szinkronizálódik}}",

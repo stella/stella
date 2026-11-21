@@ -669,6 +669,11 @@
     },
     "removeFailed": "The speech model could not be removed. Try again.",
     "removeModel": "Remove",
+    "retype": {
+      "description": "Press {shortcut} to type your last dictation again at the cursor. It is kept only in memory, while it is in clipboard history.",
+      "taken": "Another app is using {shortcut}. The Dictation menu of the stella icon offers the same.",
+      "title": "Shortcut for the last dictation"
+    },
     "shortcutTaken": "Another app is using {shortcut}.",
     "sounds": {
       "description": "Play a short, quiet sound when recording starts and when it stops.",
@@ -1210,6 +1215,7 @@
     "checkForUpdates": "Check for updates",
     "dictation": "Dictation",
     "dictationHint": "Hold {key} to dictate",
+    "dictationRetype": "Type last dictation again",
     "dictationSettings": "Dictation settings…",
     "dictationTurnOn": "Turn on dictation…",
     "documentsSyncing": "{count, plural, one {1 document syncing} other {{count} documents syncing}}",

@@ -669,6 +669,11 @@
     },
     "removeFailed": "Das Sprachmodell konnte nicht entfernt werden. Versuchen Sie es erneut.",
     "removeModel": "Entfernen",
+    "retype": {
+      "description": "Drücken Sie {shortcut}, um Ihr letztes Diktat erneut an der Cursorposition einzugeben. Es bleibt nur im Arbeitsspeicher, solange es im Zwischenablageverlauf ist.",
+      "taken": "Eine andere App verwendet {shortcut}. Das Menü Diktieren am stella-Symbol bietet dasselbe.",
+      "title": "Tastenkürzel für das letzte Diktat"
+    },
     "shortcutTaken": "Eine andere App verwendet {shortcut}.",
     "sounds": {
       "description": "Einen kurzen, leisen Ton abspielen, wenn die Aufnahme beginnt und wenn sie endet.",
@@ -1210,6 +1215,7 @@
     "checkForUpdates": "Nach Aktualisierungen suchen",
     "dictation": "Diktieren",
     "dictationHint": "Zum Diktieren {key} gedrückt halten",
+    "dictationRetype": "Letztes Diktat erneut eingeben",
     "dictationSettings": "Diktiereinstellungen…",
     "dictationTurnOn": "Diktieren einschalten…",
     "documentsSyncing": "{count, plural, one {1 Dokument wird synchronisiert} other {{count} Dokumente werden synchronisiert}}",

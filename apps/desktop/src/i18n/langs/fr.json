@@ -669,6 +669,11 @@
     },
     "removeFailed": "Le modèle vocal n’a pas pu être supprimé. Réessayez.",
     "removeModel": "Supprimer",
+    "retype": {
+      "description": "Appuyez sur {shortcut} pour retaper votre dernière dictée au curseur. Elle reste seulement en mémoire, tant qu’elle figure dans l’historique du presse-papiers.",
+      "taken": "Une autre app utilise {shortcut}. Le menu Dictée de l’icône stella propose la même chose.",
+      "title": "Raccourci pour la dernière dictée"
+    },
     "shortcutTaken": "Une autre application utilise {shortcut}.",
     "sounds": {
       "description": "Émettre un son bref et discret au début et à la fin de l’enregistrement.",
@@ -1210,6 +1215,7 @@
     "checkForUpdates": "Vérifier les mises à jour",
     "dictation": "Dictée",
     "dictationHint": "Maintenez {key} pour dicter",
+    "dictationRetype": "Retaper la dernière dictée",
     "dictationSettings": "Réglages de la dictée…",
     "dictationTurnOn": "Activer la dictée…",
     "documentsSyncing": "{count, plural, one {{count} document en synchronisation} other {{count} documents en synchronisation}}",

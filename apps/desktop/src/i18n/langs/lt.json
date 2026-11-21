@@ -669,6 +669,11 @@
     },
     "removeFailed": "Kalbos modelio pašalinti nepavyko. Bandykite dar kartą.",
     "removeModel": "Pašalinti",
+    "retype": {
+      "description": "Paspauskite {shortcut}, kad paskutinis diktavimas būtų įvestas dar kartą žymeklio vietoje. Jis laikomas tik atmintyje, kol yra iškarpinės istorijoje.",
+      "taken": "Kita programa naudoja {shortcut}. stella piktogramos meniu Diktavimas siūlo tą patį.",
+      "title": "Paskutinio diktavimo spartusis klavišas"
+    },
     "shortcutTaken": "{shortcut} naudoja kita programa.",
     "sounds": {
       "description": "Groti trumpą tylų garsą, kai įrašymas prasideda ir kai baigiasi.",
@@ -1210,6 +1215,7 @@
     "checkForUpdates": "Tikrinti naujinimus",
     "dictation": "Diktavimas",
     "dictationHint": "Norėdami diktuoti, laikykite {key}",
+    "dictationRetype": "Įvesti paskutinį diktavimą dar kartą",
     "dictationSettings": "Diktavimo nustatymai…",
     "dictationTurnOn": "Įjungti diktavimą…",
     "documentsSyncing": "{count, plural, one {{count} dokumentas sinchronizuojamas} few {{count} dokumentai sinchronizuojami} other {{count} dokumentų sinchronizuojama}}",

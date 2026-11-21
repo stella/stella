@@ -669,6 +669,11 @@
     },
     "removeFailed": "Runas modeli neizdevās noņemt. Mēģiniet vēlreiz.",
     "removeModel": "Noņemt",
+    "retype": {
+      "description": "Nospiediet {shortcut}, lai pēdējo diktātu vēlreiz ievadītu kursora vietā. Tas tiek glabāts tikai atmiņā, kamēr tas ir starpliktuves vēsturē.",
+      "taken": "Cita lietotne izmanto {shortcut}. stella ikonas izvēlne Diktēšana piedāvā to pašu.",
+      "title": "Pēdējā diktāta īsinājumtaustiņš"
+    },
     "shortcutTaken": "{shortcut} izmanto cita lietotne.",
     "sounds": {
       "description": "Atskaņot īsu, klusu skaņu, kad ieraksts sākas un kad tas beidzas.",
@@ -1210,6 +1215,7 @@
     "checkForUpdates": "Pārbaudīt atjauninājumus",
     "dictation": "Diktēšana",
     "dictationHint": "Lai diktētu, turiet {key}",
+    "dictationRetype": "Ievadīt pēdējo diktātu vēlreiz",
     "dictationSettings": "Diktēšanas iestatījumi…",
     "dictationTurnOn": "Ieslēgt diktēšanu…",
     "documentsSyncing": "{count, plural, zero {{count} dokumentu tiek sinhronizēts} one {{count} dokuments tiek sinhronizēts} other {{count} dokumenti tiek sinhronizēti}}",

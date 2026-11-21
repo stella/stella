@@ -58,6 +58,7 @@ mod dictation_models;
 mod dictation_notice;
 mod dictation_pauses;
 mod dictation_preview;
+mod dictation_retype;
 #[cfg(dictation)]
 mod dictation_sounds;
 mod dictation_spelling;
@@ -433,6 +434,9 @@ pub fn run() {
               }
               tray::MenuAction::OpenTranscribe => {
                 transcribe_window::show(&handle);
+              }
+              tray::MenuAction::RetypeDictation => {
+                dictation::retype_from_tray(&handle);
               }
               tray::MenuAction::SetActivityRecording(status) => {
                 if activity::set_recording_from_tray(&handle, status).is_err() {
