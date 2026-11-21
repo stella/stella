@@ -1681,7 +1681,7 @@ describe("detached signature delivery", () => {
       legalFileContext(file.fieldId, scopedDbA()),
     );
     if (!(response instanceof Response)) {
-      return panic("Expected a PDF response");
+      panic("Expected a PDF response");
     }
     expect(response.headers.get("content-type")).toBe(PDF_MIME_TYPE);
     expect(response.headers.get("cache-control")).toBe("private, no-store");
