@@ -1,5 +1,7 @@
 import { Result, TaggedError } from "better-result";
 
+import { convertedDocumentFormatOfFileName } from "@stll/api-contract/converted-document-formats";
+
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   createFileKey,
@@ -58,6 +60,12 @@ export const resolveUploadMime = ({
   const dotIndex = fileName.lastIndexOf(".");
   if (dotIndex === -1) {
     return canonicalDeclaredMime;
+  }
+  // Some converted formats go by extensions no media type table lists
+  // (WordPerfect's `.wp5`).
+  const converted = convertedDocumentFormatOfFileName(fileName);
+  if (converted !== undefined) {
+    return converted.mimeType;
   }
   const extension = fileName
     .slice(dotIndex + 1, dotIndex + 1 + MAX_MIME_EXTENSION_LENGTH)

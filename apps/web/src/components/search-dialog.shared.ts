@@ -2,6 +2,7 @@ import {
   GLOBAL_SEARCH_RESULT_TYPES,
   type GlobalSearchResultType,
 } from "@stll/api-contract";
+import { documentFormat } from "@stll/api-contract/document-format";
 import { Temporal } from "@stll/time";
 import { SEARCH_HIT_DESCENDANT_MARK_CLASS } from "@stll/ui/text-mark";
 import { cn } from "@stll/ui/utils";
@@ -94,7 +95,8 @@ const MIME_TYPE_LABELS: ReadonlyMap<string, string> = new Map([
 
 /** File-format names read the same in every locale, so none is translated. */
 export const formatMimeTypeLabel = (mimeType: string): string => {
-  const known = MIME_TYPE_LABELS.get(mimeType);
+  const known =
+    MIME_TYPE_LABELS.get(mimeType) ?? documentFormat(mimeType).label;
   if (known !== undefined) {
     return known;
   }

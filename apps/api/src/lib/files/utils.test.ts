@@ -81,6 +81,18 @@ describe("resolveUploadMime", () => {
     );
   });
 
+  test("recovers converted document formats, extensions no type table lists included", () => {
+    for (const [fileName, mimeType] of [
+      ["smlouva.wpd", "application/vnd.wordperfect"],
+      ["SMLOUVA.WP5", "application/vnd.wordperfect"],
+      ["dopis.wps", "application/vnd.ms-works"],
+      ["nabidka.pages", "application/vnd.apple.pages"],
+      ["rozpocet.numbers", "application/vnd.apple.numbers"],
+    ] as const) {
+      expect(resolveUploadMime({ declaredMime: "", fileName })).toBe(mimeType);
+    }
+  });
+
   test("recovers previewable images without a mirrored extension map", () => {
     for (const [fileName, mimeType] of [
       ["photo.PNG", "image/png"],

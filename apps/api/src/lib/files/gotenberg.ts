@@ -8,6 +8,7 @@ import { readCappedBytes } from "@stll/skills/streaming";
 import { envConverter } from "@/api/env-converter";
 import { basicAuthorizationHeader } from "@/api/lib/auth/http-basic-auth";
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
+import { contentMatchesConvertibleMime } from "@/api/lib/files/conversion-content";
 import {
   checkConversionInput,
   type ConversionInputRefusal,
@@ -24,7 +25,10 @@ import {
   isEmbeddableImageMimeType,
 } from "@/api/lib/files/image-pdf";
 import { streamMultipartForm } from "@/api/lib/files/multipart-stream";
-import { isConvertibleMimeType } from "@/api/lib/files/pdf-derivative-policy";
+import {
+  type ConvertibleMime,
+  isConvertibleMimeType,
+} from "@/api/lib/files/pdf-derivative-policy";
 import { applyFitToPage } from "@/api/lib/files/xlsx-preprocess";
 import { LIMITS } from "@/api/lib/limits";
 import { failureSink } from "@/api/lib/observability/failure";
@@ -138,34 +142,76 @@ const IN_PROCESS_ONLY_IMAGE_MIME_TYPES = {
 const isInProcessOnlyImageMimeType = (mimeType: string): boolean =>
   Object.hasOwn(IN_PROCESS_ONLY_IMAGE_MIME_TYPES, mimeType);
 
-/**
- * Extensions the converter's LibreOffice route accepts for each image type
- * it renders, canonical first. The route picks its import filter by the
- * uploaded filename's extension, so an image named without one (or with the
- * wrong one) would fail to convert.
- */
-const CONVERTER_IMAGE_EXTENSIONS: ReadonlyMap<
-  string,
-  readonly [string, ...string[]]
-> = new Map([
-  ["image/bmp", ["bmp"]],
-  ["image/gif", ["gif"]],
-  ["image/jpeg", ["jpg", "jpeg"]],
-  ["image/png", ["png"]],
-  ["image/tiff", ["tiff", "tif"]],
-]);
+const WORDPERFECT_EXTENSIONS = ["wpd"] as const;
+const PAGES_EXTENSIONS = ["pages"] as const;
+const NUMBERS_EXTENSIONS = ["numbers"] as const;
 
 /**
- * The (unsanitized) name to upload a file to the converter under. An image
- * keeps its extension when it is one the converter accepts for the image's
- * type; a missing or wrong extension is replaced by the type's canonical
- * one. Other types keep the uploaded name.
+ * Extensions the converter's LibreOffice route accepts for each convertible
+ * type, canonical first. The route picks its import filter by the uploaded
+ * filename's extension and refuses one it does not list, so a file named
+ * without one, or with one the route does not take (a WordPerfect `.wp5`),
+ * would fail to convert. WebP never reaches the route.
  */
-const withConverterExtension = (fileName: string, mimeType: string): string => {
-  const accepted = CONVERTER_IMAGE_EXTENSIONS.get(mimeType);
-  if (accepted === undefined) {
-    return fileName;
-  }
+const CONVERTER_EXTENSIONS = {
+  "application/msword": ["doc", "dot"],
+  "application/vnd.openxmlformats-officedocument.presentationml.presentation": [
+    "pptx",
+    "pptm",
+    "potx",
+    "potm",
+    "ppsx",
+    "ppsm",
+  ],
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": [
+    "xlsx",
+    "xlsm",
+    "xltx",
+    "xltm",
+  ],
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document": [
+    "docx",
+    "docm",
+    "dotx",
+    "dotm",
+  ],
+  "application/vnd.ms-excel": ["xls", "xlt"],
+  "application/vnd.ms-powerpoint": ["ppt", "pot", "pps"],
+  "application/vnd.ms-works": ["wps"],
+  "application/vnd.oasis.opendocument.presentation": ["odp", "otp"],
+  "application/vnd.oasis.opendocument.spreadsheet": ["ods", "ots"],
+  "application/vnd.oasis.opendocument.text": ["odt", "ott"],
+  "application/rtf": ["rtf"],
+  "application/vnd.apple.numbers": NUMBERS_EXTENSIONS,
+  "application/vnd.apple.pages": PAGES_EXTENSIONS,
+  "application/vnd.wordperfect": WORDPERFECT_EXTENSIONS,
+  "application/wordperfect": WORDPERFECT_EXTENSIONS,
+  "application/wordperfect5.1": WORDPERFECT_EXTENSIONS,
+  "application/x-iwork-numbers-sffnumbers": NUMBERS_EXTENSIONS,
+  "application/x-iwork-pages-sffpages": PAGES_EXTENSIONS,
+  "application/x-wordperfect": WORDPERFECT_EXTENSIONS,
+  "application/xhtml+xml": ["xhtml", "html", "htm"],
+  "image/bmp": ["bmp"],
+  "image/gif": ["gif"],
+  "image/jpeg": ["jpg", "jpeg"],
+  "image/png": ["png"],
+  "image/tiff": ["tiff", "tif"],
+  "image/webp": ["webp"],
+  "text/csv": ["csv"],
+  "text/html": ["html", "htm"],
+  "text/plain": ["txt"],
+} as const satisfies Record<ConvertibleMime, readonly [string, ...string[]]>;
+
+/**
+ * The (unsanitized) name to upload a file to the converter under. A file
+ * keeps its extension when it is one the converter accepts for the file's
+ * type; a missing or other extension is replaced by the type's canonical one.
+ */
+const withConverterExtension = (
+  fileName: string,
+  mimeType: ConvertibleMime,
+): string => {
+  const accepted: readonly string[] = CONVERTER_EXTENSIONS[mimeType];
   // A dot only starts an extension inside the last path segment, and not as
   // its first character (a dotfile name has no extension).
   const segmentStart =
@@ -179,7 +225,7 @@ const withConverterExtension = (fileName: string, mimeType: string): string => {
     return fileName;
   }
   const stem = hasExtension ? fileName.slice(0, lastDot) : fileName;
-  const [canonical] = accepted;
+  const [canonical] = CONVERTER_EXTENSIONS[mimeType];
   return `${stem}.${canonical}`;
 };
 
@@ -296,8 +342,10 @@ const transcodeImageToPdf = async (
  * re-encoded as PNG in-process and embedded; a failure there is observed
  * and returned as an `ImageTranscodeError`, never sent to the converter.
  * Every other image (BMP, GIF, TIFF, and JPEG/PNG encodings the embedder
- * does not handle), an embed that fails anyway, and every other type go to
- * Gotenberg's LibreOffice route.
+ * does not handle), an embed that fails anyway, and every other convertible
+ * type go to Gotenberg's LibreOffice route, once the input checks have read
+ * it and its content is the format it is declared as. A type that is not
+ * convertible never reaches the converter.
  */
 export const convertToPdf = async (
   file: ScannedFile,
@@ -341,27 +389,55 @@ export const convertToPdf = async (
     });
   }
 
-  if (isConvertibleMimeType(mimeType)) {
-    const inspection = await Result.tryPromise({
-      try: async () => await checkConversionInput(mimeType, bytes),
-      catch: (cause) =>
-        new ConversionInputError({
-          message: "The document could not be inspected for conversion.",
-          reason: { kind: "inspection_failed" },
-          cause,
-        }),
-    });
-    if (Result.isError(inspection)) {
-      return inspection;
-    }
-    if (inspection.value.kind === "refuse") {
-      return Result.err(
-        new ConversionInputError({
-          message: conversionInputRefusalMessage(inspection.value.reason),
-          reason: inspection.value.reason,
-        }),
-      );
-    }
+  if (!isConvertibleMimeType(mimeType)) {
+    return Result.err(
+      new ConversionInputError({
+        message: `Files of type ${mimeType} cannot be converted.`,
+        reason: { kind: "inspection_failed" },
+      }),
+    );
+  }
+  const inspection = await Result.tryPromise({
+    try: async () => await checkConversionInput(mimeType, bytes),
+    catch: (cause) =>
+      new ConversionInputError({
+        message: "The document could not be inspected for conversion.",
+        reason: { kind: "inspection_failed" },
+        cause,
+      }),
+  });
+  if (Result.isError(inspection)) {
+    return inspection;
+  }
+  if (inspection.value.kind === "refuse") {
+    return Result.err(
+      new ConversionInputError({
+        message: conversionInputRefusalMessage(inspection.value.reason),
+        reason: inspection.value.reason,
+      }),
+    );
+  }
+  // The converter opens a file by its content: the inspection above holds
+  // only for a file that is the format it was inspected as.
+  const contentMatches = await Result.tryPromise({
+    try: async () => await contentMatchesConvertibleMime(mimeType, bytes),
+    catch: (cause) =>
+      new ConversionInputError({
+        message: "The document could not be inspected for conversion.",
+        reason: { kind: "inspection_failed" },
+        cause,
+      }),
+  });
+  if (Result.isError(contentMatches)) {
+    return contentMatches;
+  }
+  if (!contentMatches.value) {
+    return Result.err(
+      new ConversionInputError({
+        message: `The document's content is not the ${mimeType} format it is declared as.`,
+        reason: { kind: "inspection_failed" },
+      }),
+    );
   }
 
   const converted = await Result.tryPromise(

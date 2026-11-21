@@ -1,3 +1,4 @@
+import { CONVERTED_DOCUMENT_FORMATS } from "./converted-document-formats";
 import { DESKTOP_EDIT_FILE_TYPE_CONFIG } from "./desktop-edit-file-types";
 import { EML_MIME_TYPE, MSG_MIME_TYPE } from "./email-mime-types";
 import {
@@ -29,7 +30,8 @@ export type DocumentFormat = {
 };
 
 type FormatEntry = {
-  readonly kind: Exclude<DocumentFormatKind, "file">;
+  /** "file" for a format known by its tag that has no mark of its own. */
+  readonly kind: DocumentFormatKind;
   /** The format's short tag. Formats are not translated. */
   readonly label: string;
   readonly mimeTypes: readonly string[];
@@ -131,6 +133,14 @@ const DOCUMENT_FORMATS: readonly FormatEntry[] = [
     mimeTypes: ["image/webp"],
     extensions: [".webp"],
   },
+  ...CONVERTED_DOCUMENT_FORMATS.map(
+    ({ label, mimeType, mimeAliases, extensions }) => ({
+      kind: "file" as const,
+      label,
+      mimeTypes: [mimeType, ...mimeAliases],
+      extensions,
+    }),
+  ),
   ...LEGAL_FILE_FORMATS.map(
     ({ kind, label, mimeType, mimeAliases, extensions }) => ({
       kind,
