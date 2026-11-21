@@ -196,7 +196,7 @@
     "members": "{count, plural, one {# Mitglied} other {# Mitglieder}}",
     "membersPerSeat": "So viele Mitglieder wie nötig, abgerechnet pro Platz",
     "metaDescription": "Preise von stella: kostenlos starten ohne Kreditkarte, solo zum festen Monatspreis, team pro Platz. Rechtsprechung und eigene KI-Schlüssel in jedem Tarif.",
-    "metaTitle": "Preise: Tarife free, solo und team | stella",
+    "metaTitle": "Preise: Tarife free, solo, team und enterprise | stella",
     "onRequest": "Auf Anfrage",
     "perMonth": "pro Monat",
     "perSeatPerMonth": "pro Platz und Monat",

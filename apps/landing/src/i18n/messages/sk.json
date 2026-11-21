@@ -196,7 +196,7 @@
     "members": "{count, plural, one {# člen} few {# členovia} many {# člena} other {# členov}}",
     "membersPerSeat": "Toľko členov, koľko potrebujete, s platbou za miesto",
     "metaDescription": "Cenník aplikácie stella: začnite zadarmo bez karty, solo za pevnú mesačnú cenu, team za miesto. AI právny asistent a vlastné kľúče k AI v každom tarife.",
-    "metaTitle": "Cenník: tarify free, solo a team | stella",
+    "metaTitle": "Cenník: tarify free, solo, team a enterprise | stella",
     "onRequest": "Na požiadanie",
     "perMonth": "mesačne",
     "perSeatPerMonth": "za miesto mesačne",

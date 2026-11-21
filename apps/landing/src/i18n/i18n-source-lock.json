@@ -125,7 +125,7 @@
   "pricing.members": "{count, plural, one {# member} other {# members}}",
   "pricing.membersPerSeat": "As many members as you need, billed per seat",
   "pricing.metaDescription": "stella pricing: start free with no card, solo at a flat monthly price, team per seat. Case-law search and your own AI model keys on every plan.",
-  "pricing.metaTitle": "Pricing: free, solo and team plans | stella",
+  "pricing.metaTitle": "Pricing: free, solo, team and enterprise plans | stella",
   "pricing.onRequest": "On request",
   "pricing.perMonth": "per month",
   "pricing.perSeatPerMonth": "per seat per month",

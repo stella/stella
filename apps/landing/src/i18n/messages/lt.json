@@ -196,7 +196,7 @@
     "members": "{count, plural, one {# narys} few {# nariai} many {# nario} other {# narių}}",
     "membersPerSeat": "Tiek narių, kiek reikia, apmokestinama už vietą",
     "metaDescription": "stella kainos: pradėkite nemokamai be kortelės, solo – fiksuota mėnesio kaina, team – už vietą. Teismų praktikos paieška ir savi DI raktai kiekviename plane.",
-    "metaTitle": "Kainos: free, solo ir team planai | stella",
+    "metaTitle": "Kainos: free, solo, team ir enterprise planai | stella",
     "onRequest": "Pagal užklausą",
     "perMonth": "per mėnesį",
     "perSeatPerMonth": "vietai per mėnesį",

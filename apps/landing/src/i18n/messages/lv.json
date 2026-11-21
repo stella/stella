@@ -196,7 +196,7 @@
     "members": "{count, plural, zero {# dalībnieku} one {# dalībnieks} other {# dalībnieki}}",
     "membersPerSeat": "Tik daudz dalībnieku, cik nepieciešams, maksa par katru vietu",
     "metaDescription": "stella cenas: sāciet bez maksas un bez kartes, solo par fiksētu mēneša cenu, team par katru vietu. Tiesu prakses meklēšana un savas AI atslēgas katrā plānā.",
-    "metaTitle": "Cenas: plāni free, solo un team | stella",
+    "metaTitle": "Cenas: plāni free, solo, team un enterprise | stella",
     "onRequest": "Pēc pieprasījuma",
     "perMonth": "mēnesī",
     "perSeatPerMonth": "par vietu mēnesī",

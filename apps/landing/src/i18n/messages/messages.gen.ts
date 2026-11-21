@@ -199,7 +199,7 @@ type Messages = {
     "members": "{count, plural, one {# member} other {# members}}";
     "membersPerSeat": "As many members as you need, billed per seat";
     "metaDescription": "stella pricing: start free with no card, solo at a flat monthly price, team per seat. Case-law search and your own AI model keys on every plan.";
-    "metaTitle": "Pricing: free, solo and team plans | stella";
+    "metaTitle": "Pricing: free, solo, team and enterprise plans | stella";
     "onRequest": "On request";
     "perMonth": "per month";
     "perSeatPerMonth": "per seat per month";

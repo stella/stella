@@ -196,7 +196,7 @@
     "members": "{count, plural, one {# membre} many {# membres} other {# membres}}",
     "membersPerSeat": "Autant de membres que nécessaire, facturés par siège",
     "metaDescription": "Tarifs de stella : démarrez gratuitement sans carte, solo à prix mensuel fixe, team par siège. Jurisprudence et vos clés d’IA dans tous les forfaits.",
-    "metaTitle": "Tarifs : forfaits free, solo et team | stella",
+    "metaTitle": "Tarifs : forfaits free, solo, team et enterprise | stella",
     "onRequest": "Sur demande",
     "perMonth": "par mois",
     "perSeatPerMonth": "par siège et par mois",

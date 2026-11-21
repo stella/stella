@@ -196,7 +196,7 @@
     "members": "{count, plural, one {# członek} few {# członkowie} many {# członków} other {# członka}}",
     "membersPerSeat": "Tylu członków, ilu potrzebujesz, z rozliczeniem za miejsce",
     "metaDescription": "Cennik aplikacji stella: zacznij za darmo bez karty, solo w stałej cenie miesięcznej, team za miejsce. Orzecznictwo i własne klucze AI w każdym planie.",
-    "metaTitle": "Cennik: plany free, solo i team | stella",
+    "metaTitle": "Cennik: plany free, solo, team i enterprise | stella",
     "onRequest": "Na zapytanie",
     "perMonth": "miesięcznie",
     "perSeatPerMonth": "za miejsce miesięcznie",

@@ -196,7 +196,7 @@
     "members": "{count, plural, one {# tag} other {# tag}}",
     "membersPerSeat": "Annyi tag, amennyire szüksége van, helyenkénti számlázással",
     "metaDescription": "A stella alkalmazás árai: kezdje ingyen, kártya nélkül; solo fix havidíjjal, team helyenként. Ítélkezési gyakorlat és saját AI-kulcsok minden díjcsomagban.",
-    "metaTitle": "Árak: free, solo és team díjcsomagok | stella",
+    "metaTitle": "Árak: free, solo, team és enterprise díjcsomagok | stella",
     "onRequest": "Egyedi ajánlat",
     "perMonth": "havonta",
     "perSeatPerMonth": "helyenként havonta",

@@ -196,7 +196,7 @@
     "members": "{count, plural, one {# liige} other {# liiget}}",
     "membersPerSeat": "Nii palju liikmeid, kui vajad, arveldus koha kohta",
     "metaDescription": "stella hinnad: alusta tasuta ilma kaardita, solo kindla kuuhinnaga, team koha kohta. Kohtupraktika otsing ja oma tehisintellekti võtmed igas plaanis.",
-    "metaTitle": "Hinnad: plaanid free, solo ja team | stella",
+    "metaTitle": "Hinnad: plaanid free, solo, team ja enterprise | stella",
     "onRequest": "Päringu alusel",
     "perMonth": "kuus",
     "perSeatPerMonth": "koha kohta kuus",
