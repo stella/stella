@@ -4,7 +4,16 @@ import type { Result } from "better-result";
 import { View } from "react-native";
 import { useTranslations } from "use-intl";
 
+import {
+  DESKTOP_DICTATION_CLEANUP_STYLES,
+  DESKTOP_DICTATION_TRANSLATION_LANGUAGES,
+} from "@stll/api-contract/desktop-dictation-cleanup";
+import type {
+  DesktopDictationCleanupStyle,
+  DesktopDictationTranslationLanguage,
+} from "@stll/api-contract/desktop-dictation-cleanup";
 import type { DesktopDictationModels } from "@stll/api-contract/desktop-dictation-transcription";
+import { displayLanguageName } from "@stll/locales";
 import { Button } from "@stll/ui/button";
 import { Switch } from "@stll/ui/switch";
 import { Text } from "@stll/ui/text";
@@ -25,9 +34,10 @@ import { useUiColors } from "@/theme";
 
 /**
  * How this account dictates on this phone: the model, with where it runs and
- * whether its provider keeps the audio said beside it, and whether stella AI
- * tidies the text. Both are kept on the phone, so the choice shows what was
- * written, not what was tapped.
+ * whether its provider keeps the audio said beside it, whether stella AI
+ * tidies the text, and while it does, in which style and language. All are
+ * kept on the phone, so the choice shows what was written, not what was
+ * tapped.
  */
 export const DictationSetting = ({
   session,
@@ -80,9 +90,87 @@ export const DictationSetting = ({
           onModel={(modelId) => {
             save((current) => ({ ...current, modelId }));
           }}
+          onStyle={(style) => {
+            save((current) => ({ ...current, style }));
+          }}
+          onTranslateTo={(translateTo) => {
+            save((current) => ({ ...current, translateTo }));
+          }}
           stored={stored}
         />
       </Suspense>
+    </View>
+  );
+};
+
+const STYLE_KEYS = {
+  polished: {
+    title: "dictationStylePolished",
+    hint: "dictationStylePolishedHint",
+  },
+  casual: { title: "dictationStyleCasual", hint: "dictationStyleCasualHint" },
+  notes: { title: "dictationStyleNotes", hint: "dictationStyleNotesHint" },
+  verbatim: {
+    title: "dictationStyleVerbatim",
+    hint: "dictationStyleVerbatimHint",
+  },
+} as const satisfies Record<
+  DesktopDictationCleanupStyle,
+  { title: string; hint: string }
+>;
+
+type ChoiceRow<T> = {
+  readonly id: T;
+  readonly title: string;
+  readonly notes: readonly string[];
+};
+
+/** A card of rows of which one is picked, the way the model is picked. */
+const ChoiceRows = <T extends string | null>({
+  disabled,
+  onPick,
+  rows,
+  selected,
+}: {
+  disabled: boolean;
+  onPick: (id: T) => void;
+  rows: readonly ChoiceRow<T>[];
+  selected: T;
+}) => {
+  const ui = useUiColors();
+  return (
+    <View className="border-border bg-card rounded-xl border px-3">
+      {rows.map((row, index) => (
+        <Button
+          accessibilityRole="radio"
+          accessibilityState={{ selected: row.id === selected, disabled }}
+          disabled={disabled}
+          key={row.id ?? "none"}
+          onPress={() => {
+            onPick(row.id);
+          }}
+          size="row"
+          variant="ghost"
+        >
+          <View
+            className={`flex-1 flex-row items-center gap-3 ${
+              index === rows.length - 1 ? "" : "border-border border-b"
+            }`}
+          >
+            <View className="flex-1 gap-0.5">
+              <Text numberOfLines={1} variant="rowTitle">
+                {row.title}
+              </Text>
+              {row.notes.length === 0 ? null : (
+                <Text variant="caption">{row.notes.join(" · ")}</Text>
+              )}
+            </View>
+            {row.id === selected ? (
+              <CheckIcon color={ui.foreground} size={18} />
+            ) : null}
+          </View>
+        </Button>
+      ))}
     </View>
   );
 };
@@ -92,12 +180,18 @@ const DictationChoices = ({
   models,
   onCleanup,
   onModel,
+  onStyle,
+  onTranslateTo,
   stored,
 }: {
   disabled: boolean;
   models: Promise<Result<DesktopDictationModels, ApiError>>;
   onCleanup: (cleanup: boolean) => void;
   onModel: (modelId: string | null) => void;
+  onStyle: (style: DesktopDictationCleanupStyle) => void;
+  onTranslateTo: (
+    translateTo: DesktopDictationTranslationLanguage | null,
+  ) => void;
   stored: Promise<DictationPreferences>;
 }) => {
   const t = useTranslations("settings");
@@ -202,6 +296,44 @@ const DictationChoices = ({
       <View className="px-1">
         <Text variant="caption">{t("dictationCleanupHint")}</Text>
       </View>
+      {preferences.cleanup ? (
+        <>
+          <View className="px-1 pt-2">
+            <Text variant="rowTitle">{t("dictationStyle")}</Text>
+          </View>
+          <ChoiceRows
+            disabled={disabled}
+            onPick={onStyle}
+            rows={DESKTOP_DICTATION_CLEANUP_STYLES.map((style) => ({
+              id: style,
+              title: t(STYLE_KEYS[style].title),
+              notes: [t(STYLE_KEYS[style].hint)],
+            }))}
+            selected={preferences.style}
+          />
+          <View className="px-1 pt-2">
+            <Text variant="rowTitle">{t("dictationTranslate")}</Text>
+          </View>
+          <ChoiceRows
+            disabled={disabled}
+            onPick={onTranslateTo}
+            rows={[
+              { id: null, title: t("dictationTranslateOff"), notes: [] },
+              // Each language by its own name, as language pickers show
+              // them, so the speaker finds theirs whatever the app's language.
+              ...DESKTOP_DICTATION_TRANSLATION_LANGUAGES.map((language) => ({
+                id: language,
+                title: displayLanguageName(language),
+                notes: [],
+              })),
+            ]}
+            selected={preferences.translateTo}
+          />
+          <View className="px-1">
+            <Text variant="caption">{t("dictationTranslateHint")}</Text>
+          </View>
+        </>
+      ) : null}
     </>
   );
 };

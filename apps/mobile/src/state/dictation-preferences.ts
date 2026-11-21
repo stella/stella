@@ -1,28 +1,53 @@
 import * as v from "valibot";
 
+import {
+  DESKTOP_DICTATION_CLEANUP_STYLES,
+  DESKTOP_DICTATION_DEFAULT_CLEANUP_STYLE,
+  DESKTOP_DICTATION_TRANSLATION_LANGUAGES,
+} from "@stll/api-contract/desktop-dictation-cleanup";
+import type {
+  DesktopDictationCleanupStyle,
+  DesktopDictationTranslationLanguage,
+} from "@stll/api-contract/desktop-dictation-cleanup";
+
 import type { BeforeSessionEnd } from "@/connection/session-end";
 import type { AccountStore } from "@/state/recent-searches";
 import { keyPart } from "@/state/recent-searches";
 
 /**
  * How this account dictates on this phone: the model it picked, absent for
- * the one the server offers by default, and whether stella AI tidies the
- * text before it lands in the box. Kept per server and person, like recent
- * searches, and forgotten at sign-out.
+ * the one the server offers by default, whether stella AI tidies the text
+ * before it lands in the box, how it writes it and the language it writes
+ * it in (null keeps the spoken one). Kept per server and person, like
+ * recent searches, and forgotten at sign-out.
  */
 export type DictationPreferences = {
   readonly modelId: string | null;
   readonly cleanup: boolean;
+  readonly style: DesktopDictationCleanupStyle;
+  readonly translateTo: DesktopDictationTranslationLanguage | null;
 };
 
 export const DEFAULT_DICTATION_PREFERENCES: DictationPreferences = {
   modelId: null,
   cleanup: false,
+  style: DESKTOP_DICTATION_DEFAULT_CLEANUP_STYLE,
+  translateTo: null,
 };
 
+// The style and language came later: a choice kept before them, or one a
+// newer build kept, reads with the default in their place.
 const preferencesSchema = v.object({
   modelId: v.nullable(v.pipe(v.string(), v.minLength(1), v.maxLength(128))),
   cleanup: v.boolean(),
+  style: v.fallback(
+    v.picklist(DESKTOP_DICTATION_CLEANUP_STYLES),
+    DEFAULT_DICTATION_PREFERENCES.style,
+  ),
+  translateTo: v.fallback(
+    v.nullable(v.picklist(DESKTOP_DICTATION_TRANSLATION_LANGUAGES)),
+    DEFAULT_DICTATION_PREFERENCES.translateTo,
+  ),
 });
 
 type AccountKeys = { readonly serverUrl: string; readonly userId: string };

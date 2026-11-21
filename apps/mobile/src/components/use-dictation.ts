@@ -557,6 +557,8 @@ const finalText = async ({
     source: setup.source,
     transcript: joined,
     locale,
+    style: setup.preferences.style,
+    translateTo: setup.preferences.translateTo,
   });
   return cleaned.isOk() && cleaned.value !== "" ? cleaned.value : joined;
 };
