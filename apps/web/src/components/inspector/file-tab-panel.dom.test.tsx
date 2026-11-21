@@ -480,25 +480,34 @@ const seedSignedPdf = (client: QueryClientInstance) => {
 // The panel stub measures every box at 800 px; the pages fit that width.
 const PANEL_WIDTH = "800";
 
+/** How the stubbed PDF engine was asked to draw. */
+const drawing = (engine: HTMLElement) => {
+  const { fitWidth, scaleOffset, wheelZoom } = engine.dataset;
+  return { fitWidth, scaleOffset, wheelZoom };
+};
+
 test("draws a signed file's PDF as a PDF tab draws its own", async () => {
   const plain = renderFileTab(pdfTab);
-  const plainEngine = await plain.findByTestId("pdf-engine");
-  expect(plainEngine.dataset.fitWidth).toBe(PANEL_WIDTH);
-  expect(plainEngine.dataset.wheelZoom).toBe("true");
+  expect(drawing(await plain.findByTestId("pdf-engine"))).toEqual({
+    fitWidth: PANEL_WIDTH,
+    scaleOffset: "0",
+    wheelZoom: "true",
+  });
   await act(async () => {
     cleanup();
   });
 
   const signed = renderFileTab(signedPdfTab, seedSignedPdf);
-  const engine = await signed.findByTestId("pdf-engine");
   // Fits the panel, zooms with the wheel, and follows the same controls.
-  expect(engine.dataset.fitWidth).toBe(PANEL_WIDTH);
-  expect(engine.dataset.wheelZoom).toBe("true");
-  expect(engine.dataset.scaleOffset).toBe("0");
+  expect(drawing(await signed.findByTestId("pdf-engine"))).toEqual({
+    fitWidth: PANEL_WIDTH,
+    scaleOffset: "0",
+    wheelZoom: "true",
+  });
   await act(async () => {
     fireEvent.click(signed.getByRole("button", { name: "Zoom in" }));
   });
-  expect(signed.getByTestId("pdf-engine").dataset.scaleOffset).toBe("0.25");
+  expect(drawing(signed.getByTestId("pdf-engine")).scaleOffset).toBe("0.25");
 });
 
 test("reopens a signed file's PDF from the cache without fetching it again", async () => {
