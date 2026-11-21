@@ -1,11 +1,1 @@
-{
-  "apps/web/src/components/inspector/skill-resource-panel.tsx": 4,
-  "apps/web/src/components/inspector/use-markdown-file-draft.ts": 4,
-  "apps/web/src/components/inspector/versions-facet.tsx": 5,
-  "apps/web/src/components/require-ai-key.tsx": 12,
-  "apps/web/src/components/search-dialog.tsx": 6,
-  "apps/web/src/features/case-law/components/case-viewer/use-reader-answers.ts": 5,
-  "apps/web/src/routes/_protected.settings/organization/-components/organization/use-ai-config-drafts.ts": 10,
-  "apps/web/src/routes/knowledge/-components/link-clause-dialog.tsx": 2,
-  "apps/web/src/routes/knowledge/-components/skill-editor.tsx": 6
-}
+{}
