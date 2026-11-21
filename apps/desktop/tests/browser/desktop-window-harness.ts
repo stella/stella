@@ -127,15 +127,6 @@ export const ONBOARDING_SCREENS = [
   },
 ] as const satisfies readonly { name: string; snapshot: OnboardingSnapshot }[];
 
-/** Activity as setup reads it before recording starts: the defaults, with
- *  window titles waiting for Accessibility. */
-const ACTIVITY_SETUP = {
-  captureDetails: true,
-  detailsAccess: "accessibilityRequired",
-  detectCalls: true,
-  recordingStatus: "off",
-} as const satisfies ActivitySetupSnapshot;
-
 type WindowFixture = {
   /** The activity settings, or null while the feature is off. */
   activity: ActivitySettingsSnapshot | null;
@@ -274,7 +265,16 @@ const openWindow = async (
       },
       is_activity_enabled: () => data.activity !== null,
       activity_get_settings: () => data.activity,
-      activity_get_setup: () => ACTIVITY_SETUP,
+      // Activity as setup reads it before recording starts: the defaults,
+      // with window titles waiting for Accessibility. Written out here, as
+      // the handlers run in the page.
+      activity_get_setup: () =>
+        ({
+          captureDetails: true,
+          detailsAccess: "accessibilityRequired",
+          detectCalls: true,
+          recordingStatus: "off",
+        }) satisfies ActivitySetupSnapshot,
       // The native defaults: awake while agents work, not on battery.
       keep_awake_get_settings: () => ({ enabled: true, onBattery: false }),
       // Consent given, so Settings lays out its stella AI drafting rows too.
