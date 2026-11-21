@@ -94,17 +94,25 @@ export const openSavedView = async (
     selected: true,
   });
   const anyTab = viewStrip(page).getByRole("tab");
+  const measuredCopy = viewStrip(page).locator(
+    '[data-slot="workspace-view-measure"][data-measured]',
+  );
+  // While the view switches, its strip may not be drawn yet; only a measured
+  // strip with no tab and a menu is the narrowest layout.
+  const onlyTheMenu = async () =>
+    (await measuredCopy.count()) === 1 &&
+    (await anyTab.count()) === 0 &&
+    (await moreViews(page).count()) === 1;
   await expect
     .poll(
-      async () =>
-        (await selectedTab.count()) > 0 || (await anyTab.count()) === 0,
+      async () => (await selectedTab.count()) > 0 || (await onlyTheMenu()),
       {
         message: `"${name}" is the open view`,
         ...within(options.timeout),
       },
     )
     .toBe(true);
-  if ((await anyTab.count()) === 0) {
+  if ((await selectedTab.count()) === 0) {
     await moreViews(page).click();
     await expect(
       page.getByRole("menuitem", { exact: true, name }),
