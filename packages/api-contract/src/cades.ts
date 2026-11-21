@@ -1,6 +1,7 @@
 import * as v from "valibot";
 
 import { eInvoicePreviewSchema } from "./e-invoice";
+import { previewTextFormatSchema } from "./preview-text";
 
 /**
  * Outer envelope first. Names are claims from unverified signer certificates.
@@ -11,6 +12,7 @@ export const cadesPreviewSchema = v.object({
   fileName: v.string(),
   mimeType: v.string(),
   text: v.string(),
+  textFormat: previewTextFormatSchema,
   layers: v.array(
     v.object({
       id: v.string(),

@@ -35,6 +35,10 @@ import {
   type LegalFileFormatKind,
   XML_FILE_FORMAT,
 } from "@stll/api-contract/legal-file-formats";
+import type {
+  PreviewText,
+  PreviewTextFormat,
+} from "@stll/api-contract/preview-text";
 import { sanitizeErrorForOutput, sanitizeQueryErrorText } from "@stll/errors";
 import { extractDocxText, FolioDocxReviewer } from "@stll/folio-core/server";
 import { load } from "@stll/html";
@@ -603,30 +607,51 @@ const readMaxCharsArgument = (value: string | undefined): number => {
   return parsed;
 };
 
+/**
+ * A contained document's text with its markup, named by the reader that
+ * produced it: the converters write Markdown, a text file is read as the
+ * text it holds. A preview renders each as what it is and never guesses.
+ */
+const readEmbeddedPayload = async (
+  bytes: Uint8Array,
+  mimeType: string,
+): Promise<{ text: string | null; format: PreviewTextFormat } | null> => {
+  if (mimeType === PDF_MIME_TYPE) {
+    return { text: await extractPdfMarkdown(bytes), format: "markdown" };
+  }
+  if (mimeType === DOCX_MIME_TYPE || isOfficeDocumentMimeType(mimeType)) {
+    return {
+      text: await extractOfficeDocumentMarkdown(bytes),
+      format: "markdown",
+    };
+  }
+  // An embedded XML file's text is its markup, as it was before XML had a
+  // type of its own here.
+  if (isDirectTextMimeType(mimeType) || mimeType === XML_EMBEDDED_MIME_TYPE) {
+    return {
+      text: extractDirectText(bytes, mimeType),
+      format: mimeType === "text/markdown" ? "markdown" : "plain",
+    };
+  }
+  return null;
+};
+
 const extractEmbeddedPayloadText = async (
   file: ScannedFile,
   maxChars: number,
-) => {
+): Promise<Result<PreviewText | null, UnhandledException>> => {
   // Embedded data is dispatched only to leaf readers, even if an archive
   // member is itself a signed container or a message.
   const bytes = new Uint8Array(file.bytes);
   const mimeType = normalizeMimeType(file.mimeType);
-  const content = await Result.tryPromise(async () => {
-    if (mimeType === PDF_MIME_TYPE) {
-      return await extractPdfMarkdown(bytes);
-    }
-    if (mimeType === DOCX_MIME_TYPE || isOfficeDocumentMimeType(mimeType)) {
-      return await extractOfficeDocumentMarkdown(bytes);
-    }
-    // An embedded XML file's text is its markup, as it was before XML had
-    // a type of its own here.
-    if (isDirectTextMimeType(mimeType) || mimeType === XML_EMBEDDED_MIME_TYPE) {
-      return extractDirectText(bytes, mimeType);
-    }
-    return null;
-  });
+  const content = await Result.tryPromise(
+    async () => await readEmbeddedPayload(bytes, mimeType),
+  );
   if (content.isOk()) {
-    return Result.ok(content.value?.slice(0, maxChars) || null);
+    const text = content.value?.text?.slice(0, maxChars);
+    return Result.ok(
+      content.value && text ? { text, format: content.value.format } : null,
+    );
   }
 
   const error = content.error.cause;
@@ -664,7 +689,7 @@ const readCadesPayloadContent = async (
   file: ScannedFile,
   maxChars: number,
 ): Promise<
-  Result<{ invoice: EInvoicePreview | null; text: string }, UnhandledException>
+  Result<PreviewText & { invoice: EInvoicePreview | null }, UnhandledException>
 > => {
   if (!NON_XML_PAYLOAD_MIME_TYPES.has(normalizeMimeType(file.mimeType))) {
     const invoice = readEInvoiceXml(new Uint8Array(file.bytes));
@@ -673,6 +698,7 @@ const readCadesPayloadContent = async (
       return Result.ok({
         invoice: preview,
         text: eInvoiceDocumentText(preview).slice(0, maxChars),
+        format: "plain",
       });
     }
   }
@@ -680,7 +706,11 @@ const readCadesPayloadContent = async (
   if (text.isErr()) {
     return Result.err(text.error);
   }
-  return Result.ok({ invoice: null, text: text.value ?? "" });
+  return Result.ok({
+    invoice: null,
+    text: text.value?.text ?? "",
+    format: text.value?.format ?? "plain",
+  });
 };
 
 type CadesWorkerOptions = {
@@ -726,6 +756,7 @@ const writeCadesPreview = async ({
     mimeType: file.mimeType,
     layers,
     text: content.value.text,
+    textFormat: content.value.format,
     invoice: content.value.invoice,
   } satisfies v.InferOutput<typeof cadesPreviewSchema>;
   await writeWorkerStdout(JSON.stringify(preview));

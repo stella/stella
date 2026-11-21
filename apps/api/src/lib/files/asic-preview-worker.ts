@@ -3,6 +3,7 @@ import type { InferOutput } from "valibot";
 
 import type { asicPreviewSchema } from "@stll/api-contract/asic";
 import { ASIC_FILE_FORMATS } from "@stll/api-contract/asic-file-formats";
+import type { PreviewText } from "@stll/api-contract/preview-text";
 
 import type {
   FileScanFailedError,
@@ -71,6 +72,17 @@ const readOfficeMimeType = (bytes: Uint8Array): string | null => {
 };
 
 type Preview = InferOutput<typeof asicPreviewSchema>;
+
+const memberWithoutText = (
+  fileName: string,
+  status: "truncated" | "unavailable",
+): Preview["members"][number] => ({
+  fileName,
+  status,
+  text: "",
+  textFormat: "plain",
+});
+
 type AsicPreviewReadError =
   | AsicParseError
   | FileScanFailedError
@@ -84,7 +96,7 @@ type ExtractAsicPreviewOptions = {
   readText: (
     file: ScannedFile,
     maxChars: number,
-  ) => Promise<Result<string | null, UnhandledException>>;
+  ) => Promise<Result<PreviewText | null, UnhandledException>>;
 };
 
 export const extractAsicPreview = async ({
@@ -121,6 +133,7 @@ export const extractAsicPreview = async ({
         fileName,
         status: "truncated",
         text: "",
+        textFormat: "plain",
       })),
     }).length + parsed.value.members.length;
   let remainingChars = Math.max(0, maxChars - layoutChars);
@@ -145,25 +158,25 @@ export const extractAsicPreview = async ({
       return Result.err(scanned.error);
     }
     if (declaredMimeType === OPAQUE_EMBEDDED_MIME_TYPE) {
-      members.push({ fileName, status: "unavailable", text: "" });
+      members.push(memberWithoutText(fileName, "unavailable"));
       continue;
     }
     if (remainingChars === 0) {
-      members.push({ fileName, status: "truncated", text: "" });
+      members.push(memberWithoutText(fileName, "truncated"));
       continue;
     }
     const content = await readText(scanned.value, remainingChars + 1);
     if (content.isErr()) {
       return Result.err(content.error);
     }
-    const text = content.value;
-    if (!text) {
-      members.push({ fileName, status: "unavailable", text: "" });
+    if (content.value === null) {
+      members.push(memberWithoutText(fileName, "unavailable"));
       continue;
     }
+    const { text, format: textFormat } = content.value;
     const status = text.length > remainingChars ? "truncated" : "readable";
     const visibleText = text.slice(0, remainingChars);
-    members.push({ fileName, status, text: visibleText });
+    members.push({ fileName, status, text: visibleText, textFormat });
     remainingChars -= visibleText.length;
   }
   return Result.ok({ members });

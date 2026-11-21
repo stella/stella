@@ -331,13 +331,15 @@ describe("reading a document's file", () => {
       fileName: "Verbale.pdf",
       mimeType: "application/pdf",
       text: "Il testo del verbale",
+      textFormat: "markdown",
     },
     {
       fileName: "Allegato.bin",
       mimeType: "application/octet-stream",
       text: "",
+      textFormat: "plain",
     },
-  ])(
+  ] as const)(
     "keeps $mimeType signed-file metadata without requesting the original",
     async (embedded) => {
       const fileName = `${embedded.fileName}.P7M`;
@@ -377,6 +379,7 @@ describe("reading a document's file", () => {
       fileName: "IT00000000000_TEST1.xml",
       mimeType: "application/xml",
       text: "<FatturaElettronica/>",
+      textFormat: "plain" as const,
       layers: [
         {
           id: "layer-0",
@@ -454,12 +457,19 @@ describe("reading a document's file", () => {
             fileName: "submission.pdf",
             status: "readable",
             text: "The enclosed submission",
+            textFormat: "markdown",
           },
-          { fileName: "attachment.bin", status: "unavailable", text: "" },
+          {
+            fileName: "attachment.bin",
+            status: "unavailable",
+            text: "",
+            textFormat: "plain",
+          },
           {
             fileName: "notes.txt",
             status: "truncated",
             text: "The first page",
+            textFormat: "plain",
           },
         ],
       } satisfies InferOutput<typeof asicPreviewSchema>;
