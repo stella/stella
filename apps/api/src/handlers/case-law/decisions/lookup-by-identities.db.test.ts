@@ -109,6 +109,13 @@ afterAll(async () => {
 test(
   "a docket read in two jurisdictions resolves in each, in the statements one jurisdiction takes",
   async () => {
+    // Warm the per-process caches (the court registry) so both counts below
+    // measure the identity read alone.
+    await lookupDecisionsByIdentity({
+      caseLawDb,
+      country: "CZE",
+      locator: locatorIn("CZE"),
+    });
     queryLog.length = 0;
     await lookupDecisionsByIdentity({
       caseLawDb,

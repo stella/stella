@@ -232,6 +232,11 @@ type LookupDecisionsByIdentityOptions = {
   country: string;
   countries?: readonly string[];
   locator: DecisionIdentityLocator;
+  /**
+   * Further jurisdictions the same reference is read in, matched in the
+   * same statement (`lookupDecisionsByIdentities`).
+   */
+  otherReads?: readonly JurisdictionIdentityRead[];
 };
 
 /**
@@ -603,7 +608,7 @@ const AUTHENTIC_LANGUAGE_KEY =
   "procedureLanguage" satisfies typeof DECISION_AUTHENTIC_LANGUAGE_METADATA_KEY;
 
 /** One jurisdiction a reference is read in, with the locator its grammar gives. */
-export type JurisdictionIdentityRead = {
+type JurisdictionIdentityRead = {
   country: string;
   locator: DecisionIdentityLocator;
 };
@@ -621,30 +626,36 @@ const anyOf = (conditions: readonly [SQL, ...SQL[]]): SQL => {
   return rest.length === 0 ? only : (or(...conditions) ?? only);
 };
 
-export const lookupDecisionsByIdentity = async ({
-  caseLawDb,
-  country,
-  countries = CASE_LAW_SURFACE_COUNTRIES.pages,
-  locator,
-}: LookupDecisionsByIdentityOptions): Promise<DecisionIdentityRow[]> =>
-  await lookupDecisionsByIdentities({
-    caseLawDb,
-    countries,
-    reads: [{ country, locator }],
-  });
-
 /**
  * The decisions a reference names across several jurisdictions, in one
  * read: a reference can be well-formed in more than one jurisdiction's
  * grammar, each spelling it its own way, and which corpus holds the decision
  * is the answer. Each jurisdiction's locator is matched only within that
- * jurisdiction, exactly as the single-jurisdiction lookup does.
+ * jurisdiction, exactly as a single-jurisdiction lookup is.
  */
 export const lookupDecisionsByIdentities = async ({
   caseLawDb,
+  countries,
+  reads: [first, ...otherReads],
+}: LookupDecisionsByIdentitiesOptions): Promise<DecisionIdentityRow[]> =>
+  await lookupDecisionsByIdentity({
+    caseLawDb,
+    country: first.country,
+    locator: first.locator,
+    ...(countries === undefined ? {} : { countries }),
+    otherReads,
+  });
+
+export const lookupDecisionsByIdentity = async ({
+  caseLawDb,
   countries = CASE_LAW_SURFACE_COUNTRIES.pages,
-  reads,
-}: LookupDecisionsByIdentitiesOptions): Promise<DecisionIdentityRow[]> => {
+  otherReads = [],
+  ...first
+}: LookupDecisionsByIdentityOptions): Promise<DecisionIdentityRow[]> => {
+  const reads: readonly [
+    JurisdictionIdentityRead,
+    ...JurisdictionIdentityRead[],
+  ] = [first, ...otherReads];
   const rows = await caseLawDb(async (tx) => {
     const exactDocketSets = reads.flatMap(({ country, locator }) =>
       locator.kind === "docket" && locator.selector.kind === "none"
@@ -668,21 +679,20 @@ export const lookupDecisionsByIdentities = async ({
       firstExactSet === undefined
         ? sql<boolean>`false`
         : sql<boolean>`${anyOf([firstExactSet, ...otherExactSets])}`;
-    const [firstRead, ...otherReads] = reads.map(
-      ({ country, locator }) =>
-        and(
-          inArray(
-            publishedCaseLawDecisions.id,
-            decisionIdsNamedBy({
-              country,
-              familyKey: docketFamilyKeyToRead({ country, locator }),
-              locator,
-              tx,
-            }),
-          ),
-          eq(publishedCaseLawDecisions.country, country),
-        ) ?? panic("An identity read has a condition"),
-    );
+    const readCondition = ({ country, locator }: JurisdictionIdentityRead) =>
+      and(
+        inArray(
+          publishedCaseLawDecisions.id,
+          decisionIdsNamedBy({
+            country,
+            familyKey: docketFamilyKeyToRead({ country, locator }),
+            locator,
+            tx,
+          }),
+        ),
+        eq(publishedCaseLawDecisions.country, country),
+      ) ?? panic("An identity read has a condition");
+    const [firstRead, ...laterReads] = reads;
     const scannedDecisions = await tx
       .select({
         caseNumber: publishedCaseLawDecisions.caseNumber,
@@ -720,7 +730,7 @@ export const lookupDecisionsByIdentities = async ({
       )
       .where(
         and(
-          anyOf([firstRead, ...otherReads]),
+          anyOf([readCondition(firstRead), ...laterReads.map(readCondition)]),
           redistributableCaseLawSourceFor(caseLawSources.descriptor),
         ),
       )

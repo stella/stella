@@ -6,7 +6,7 @@ import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
 import checkCitation, {
   type createCheckCitation,
 } from "@/api/handlers/case-law/citations/check";
-import { citationKeyOf } from "@/api/handlers/case-law/ingestion/citation-extractor";
+import { decisionDocketColumns } from "@/api/handlers/case-law/ingestion/pipeline/decision-docket-columns";
 import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { HttpStatusResponse } from "@/api/http/status";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
@@ -71,7 +71,7 @@ const unmeteredDb = asTestRaw<SafeDb>(
  * A citation check against N stored decisions: one names the cited docket,
  * the rest are unrelated. The decision model answers in process.
  */
-export const measureCitationCheck = async (
+const measureCitationCheck = async (
   {
     db,
     organizationId,
@@ -92,21 +92,22 @@ export const measureCitationCheck = async (
     }),
   );
   await db.insert(caseLawDecisions).values(
-    ids.map((decisionId, index) => {
-      const caseNumber = index === 0 ? CITED_DOCKET : `1 Test ${index}/2026`;
-      return {
-        id: decisionId,
-        sourceId,
+    ids.map((decisionId, index) => ({
+      id: decisionId,
+      sourceId,
+      country: "CZE",
+      court: "Nejvyšší soud",
+      language: "cs",
+      // The docket columns as ingestion writes them, one decision citable.
+      ...decisionDocketColumns({
+        caseNumber: index === 0 ? CITED_DOCKET : `1 Test ${index}/2026`,
+        caseNumberType: "case-number",
         country: "CZE",
-        court: "Nejvyšší soud",
-        language: "cs",
-        caseNumber,
-        citationKey: citationKeyOf(caseNumber),
-        languageGroupKey: `citation-check-scaling-${String(index)}`,
-        fulltext: "Soud dovolání zamítl, neboť lhůta běží znovu.",
-        metadata: {},
-      };
-    }),
+      }),
+      languageGroupKey: `citation-check-scaling-${String(index)}`,
+      fulltext: "Soud dovolání zamítl, neboť lhůta běží znovu.",
+      metadata: {},
+    })),
   );
   const caseLawDb = asTestRaw<CaseLawPublicReadDb>(
     async <T>(work: (tx: CaseLawPublicReadTransaction) => Promise<T>) =>
