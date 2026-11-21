@@ -892,6 +892,74 @@ const resolveImportSymbols = async (
   };
 };
 
+const collectDynamicImportCandidates = (
+  source: ts.SourceFile,
+): ts.VariableDeclaration[] => {
+  const candidates: ts.VariableDeclaration[] = [];
+  const visit = (node: ts.Node): void => {
+    if (
+      ts.isVariableDeclaration(node) &&
+      ts.isObjectBindingPattern(node.name) &&
+      node.initializer !== undefined
+    ) {
+      candidates.push(node);
+    }
+    for (const child of node.childrenIter()) {
+      visit(child);
+    }
+  };
+  visit(source);
+  return candidates;
+};
+
+const recordDynamicImportReachability = async ({
+  repoRoot,
+  file,
+  source,
+  checker,
+  usedSymbols,
+  invokedSymbols,
+  patchedPackages,
+  siblingStem,
+  supportSubjects,
+  importedRuntimeBindings,
+  patchedDependencyBindings,
+  reachedSiblingExports,
+}: ImportReachabilityOptions & {
+  siblingStem: string;
+  supportSubjects: SupportSubject[];
+  importedRuntimeBindings: Set<CompilerSymbol>;
+  patchedDependencyBindings: Set<CompilerSymbol>;
+  reachedSiblingExports: Set<string>;
+}): Promise<void> => {
+  for (const candidate of collectDynamicImportCandidates(source)) {
+    const dynamic = await dynamicImport(candidate, checker);
+    if (!dynamic) {
+      continue;
+    }
+    const resolved = existingSource(repoRoot, file, dynamic.specifier);
+    const support =
+      resolved === undefined
+        ? existingSource(repoRoot, file, dynamic.specifier, true)
+        : undefined;
+    for (const { symbol, imported } of dynamic.bindings) {
+      if (patchedPackages.has(packageNameOf(dynamic.specifier))) {
+        patchedDependencyBindings.add(symbol);
+      } else if (support && invokedSymbols.has(symbol)) {
+        supportSubjects.push({ file: support, imported });
+      } else if (resolved) {
+        importedRuntimeBindings.add(symbol);
+        if (
+          usedSymbols.has(symbol) &&
+          resolved.replace(/\.[cm]?[jt]sx?$/u, "") === siblingStem
+        ) {
+          reachedSiblingExports.add(imported);
+        }
+      }
+    }
+  }
+};
+
 const importReachability = async ({
   repoRoot,
   file,
@@ -911,37 +979,20 @@ const importReachability = async ({
   );
   let hasFactory = false;
   let reachesSourceFileIndex = false;
-  const visitImports = async (node: ts.Node): Promise<void> => {
-    if (ts.isVariableDeclaration(node)) {
-      const dynamic = await dynamicImport(node, checker);
-      if (dynamic) {
-        const resolved = existingSource(repoRoot, file, dynamic.specifier);
-        const support =
-          resolved === undefined
-            ? existingSource(repoRoot, file, dynamic.specifier, true)
-            : undefined;
-        for (const { symbol, imported } of dynamic.bindings) {
-          if (patchedPackages.has(packageNameOf(dynamic.specifier))) {
-            patchedDependencyBindings.add(symbol);
-          } else if (support && invokedSymbols.has(symbol)) {
-            supportSubjects.push({ file: support, imported });
-          } else if (resolved) {
-            importedRuntimeBindings.add(symbol);
-            if (
-              usedSymbols.has(symbol) &&
-              resolved.replace(/\.[cm]?[jt]sx?$/u, "") === siblingStem
-            ) {
-              reachedSiblingExports.add(imported);
-            }
-          }
-        }
-      }
-    }
-    await visitChildren(node, visitImports);
-  };
-  if (source.text.includes("import(") || source.text.includes("import (")) {
-    await visitImports(source);
-  }
+  await recordDynamicImportReachability({
+    repoRoot,
+    file,
+    source,
+    checker,
+    usedSymbols,
+    invokedSymbols,
+    patchedPackages,
+    siblingStem,
+    supportSubjects,
+    importedRuntimeBindings,
+    patchedDependencyBindings,
+    reachedSiblingExports,
+  });
   const importStatements = source.statements.filter(
     (
       statement,
