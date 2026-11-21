@@ -3565,6 +3565,25 @@
     "uploadedBy": "Įkėlė {name}",
     "uploadedFile": "Įkeltas el. laiško failas"
   },
+  "docxCitationCheck": {
+    "action": "Patikrinti citatą",
+    "alternatives": "{count, plural, one {Šią nuorodą atitinka dar # sprendimas} few {Šią nuorodą atitinka dar # sprendimai} other {Šią nuorodą atitinka dar # sprendimų}}",
+    "checking": "Tikrinama {citation} …",
+    "contradicts": "Prieštarauja",
+    "doesNotAddress": "Nenagrinėja",
+    "earlier": "Ankstesni patikrinimai",
+    "failed": "Citatos patikra nebaigta. Bandykite dar kartą.",
+    "goToParagraph": "Eiti į pastraipą",
+    "noPassage": "Nė viena atskira sprendimo ištrauka šios išvados neparemia.",
+    "notFound": "Teismų praktikos duomenų bazėje nėra sprendimo, atitinkančio {citation}",
+    "probability": "{probability, number, percent} tikimybė",
+    "showPassage": "Rodyti ištrauką",
+    "supports": "Patvirtina",
+    "title": "Citatos patikra",
+    "unavailableDerivedAi": "Šio sprendimo leidėjas neleidžia jo teksto analizuoti dirbtiniu intelektu.",
+    "unavailableNoText": "Sprendimas rastas, tačiau jo tekstas patikrai neprieinamas.",
+    "uncertain": "Neaišku"
+  },
   "docxReview": {
     "acceptAll": "Priimti visus",
     "acceptAllConfirmDescription": "Taip dokumentui iškart pritaikoma {count} pasiūlymų.",
