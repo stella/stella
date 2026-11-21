@@ -42,4 +42,23 @@ export const LEGAL_FILE_FORMATS = [
   ...E_INVOICE_FILE_FORMATS,
 ] as const;
 
-export type LegalFileFormatKind = (typeof LEGAL_FILE_FORMATS)[number]["kind"];
+export type LegalFileFormat = (typeof LEGAL_FILE_FORMATS)[number];
+
+export type LegalFileFormatKind = LegalFileFormat["kind"];
+
+/**
+ * A named variant of a legal format, such as BDOC within ASiC-E: read by the
+ * format's own reader, tagged and marked as itself. Its extensions are some
+ * of the format's.
+ */
+export type LegalFileFormatProfile = {
+  readonly label: string;
+  readonly extensions: readonly string[];
+  /** The profile's mark, distinct from the format's. */
+  readonly mark: string;
+};
+
+export const legalFileFormatProfiles = (
+  format: LegalFileFormat,
+): readonly LegalFileFormatProfile[] =>
+  "profiles" in format ? format.profiles : [];

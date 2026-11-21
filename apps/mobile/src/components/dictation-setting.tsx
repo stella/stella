@@ -16,6 +16,8 @@ import { deviceAccountStore } from "@/native/account-store";
 import { DICTATION_ROUTE_AVAILABLE } from "@/native/dictation-device";
 import type { ApiError } from "@/state/api-request";
 import { readDictationModels } from "@/state/dictation";
+import { classOf } from "@/state/dictation-fallback";
+import type { ModelClass } from "@/state/dictation-fallback";
 import {
   DEFAULT_DICTATION_PREFERENCES,
   readDictationPreferences,
@@ -86,8 +88,8 @@ export const DictationSetting = ({
           onMicrophone={(microphone) => {
             save((current) => ({ ...current, microphone }));
           }}
-          onModel={(modelId) => {
-            save((current) => ({ ...current, modelId }));
+          onModel={(modelId, modelClass) => {
+            save((current) => ({ ...current, modelId, modelClass }));
           }}
           stored={stored}
         />
@@ -109,7 +111,7 @@ const DictationChoices = ({
   models: Promise<Result<DesktopDictationModels, ApiError>>;
   onCleanup: (cleanup: boolean) => void;
   onMicrophone: (microphone: DictationMicrophone) => void;
-  onModel: (modelId: string | null) => void;
+  onModel: (modelId: string | null, modelClass: ModelClass | null) => void;
   stored: Promise<DictationPreferences>;
 }) => {
   const t = useTranslations("settings");
@@ -117,10 +119,10 @@ const DictationChoices = ({
   const preferences = use(stored);
   const offered = use(models);
   const list = offered.isOk() ? offered.value.models : [];
-  // A picked model the server stopped offering counts as the default, as a
-  // dictation then uses it. While the list cannot be read, the picked model
-  // is still what a dictation sends, so it keeps its row, named by its id.
-  const { selected, unlisted } = shownModel(
+  // A picked model with no row, the list unreadable or the model withdrawn,
+  // is still what a dictation names, so it keeps a row of its own, named by
+  // its id; a withdrawn one says so until another is picked.
+  const { selected, standing } = shownModel(
     preferences,
     offered.isOk() ? list : null,
   );
@@ -129,12 +131,16 @@ const DictationChoices = ({
   const retaining = list.find(
     ({ id, retainsData }) => id === selected && retainsData === true,
   );
-  const modelNote =
-    retaining === undefined
-      ? t(offered.isOk() ? "dictationModelHint" : "dictationModelsUnavailable")
-      : t("dictationModelRetainsWarning", {
-          provider: retaining.provider ?? retaining.displayName,
-        });
+  let modelNote = t(
+    offered.isOk() ? "dictationModelHint" : "dictationModelsUnavailable",
+  );
+  if (standing === "withdrawn") {
+    modelNote = t("dictationModelWithdrawnHint");
+  } else if (retaining !== undefined) {
+    modelNote = t("dictationModelRetainsWarning", {
+      provider: retaining.provider ?? retaining.displayName,
+    });
+  }
   const defaultName =
     offered.isOk() && offered.value.defaultModelId !== null
       ? list.find(({ id }) => id === offered.value.defaultModelId)?.displayName
@@ -147,10 +153,12 @@ const DictationChoices = ({
           ? t("dictationModelDefault")
           : t("dictationModelDefaultNamed", { model: defaultName }),
       notes: [],
+      modelClass: null,
     },
     ...list.map((model) => ({
       id: model.id,
       title: model.displayName,
+      modelClass: classOf(model),
       notes: [
         ...(model.provider === undefined ? [] : [model.provider]),
         ...(model.outsideRegion === true
@@ -159,8 +167,16 @@ const DictationChoices = ({
         ...(model.retainsData === true ? [t("dictationModelRetainsData")] : []),
       ],
     })),
-    ...(unlisted && selected !== null
-      ? [{ id: selected, title: selected, notes: [] }]
+    ...(standing !== "listed" && selected !== null
+      ? [
+          {
+            id: selected,
+            title: selected,
+            notes:
+              standing === "withdrawn" ? [t("dictationModelWithdrawn")] : [],
+            modelClass: preferences.modelClass,
+          },
+        ]
       : []),
   ];
 
@@ -174,7 +190,7 @@ const DictationChoices = ({
             disabled={disabled}
             key={row.id ?? "default"}
             onPress={() => {
-              onModel(row.id);
+              onModel(row.id, row.modelClass);
             }}
             size="row"
             variant="ghost"
