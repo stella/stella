@@ -1463,36 +1463,32 @@ pub fn dictation_set_language(
   state: State<'_, DictationState>,
   language: String,
 ) -> Result<DictationSnapshot, String> {
-  if !available(&app) {
-    return Err("dictation is not available on this computer".to_string());
-  }
   store_language(&app, &language)?;
   Ok(read_snapshot(&app, &state))
 }
 
-/// Stores the dictation language, `auto` or a model language, and shows it
-/// in the tray's quick switch.
-fn store_language(app: &AppHandle, language: &str) -> Result<(), String> {
-  let choice = Choice::parse(Some(language));
-  if choice.stored() != language {
-    return Err("this language is not available for dictation".to_string());
-  }
-  change_preference(
-    app,
-    LANGUAGE_PREFERENCE_FILE_NAME,
-    choice.stored(),
-    |inner| inner.language = choice,
-  )?;
+/// Stores the dictation language, `auto` or a model language, from Settings
+/// or the tray's quick switch, and redraws that switch, also when nothing
+/// was stored: a clicked item keeps its native check until the menu is
+/// rebuilt from the stored choice.
+pub fn store_language(app: &AppHandle, language: &str) -> Result<(), String> {
+  let stored = if available(app) {
+    let choice = Choice::parse(Some(language));
+    if choice.stored() == language {
+      change_preference(
+        app,
+        LANGUAGE_PREFERENCE_FILE_NAME,
+        choice.stored(),
+        |inner| inner.language = choice,
+      )
+    } else {
+      Err("this language is not available for dictation".to_string())
+    }
+  } else {
+    Err("dictation is not available on this computer".to_string())
+  };
   crate::activity::refresh_tray(app);
-  Ok(())
-}
-
-/// The tray's quick language switch.
-pub fn set_language_from_tray(app: &AppHandle, language: &str) -> Result<(), String> {
-  if !available(app) {
-    return Err("dictation is not available on this computer".to_string());
-  }
-  store_language(app, language)
+  stored
 }
 
 /// Settings for apps and kinds of app over the global ones, replacing the

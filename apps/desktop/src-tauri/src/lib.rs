@@ -455,7 +455,7 @@ pub fn run() {
                 }
               }
               tray::MenuAction::SetDictationLanguage(language) => {
-                if let Err(error) = dictation::set_language_from_tray(&handle, &language) {
+                if let Err(error) = dictation::store_language(&handle, &language) {
                   tracing::warn!(%error, "dictation language from the tray was not stored");
                 }
               }
