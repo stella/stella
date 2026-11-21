@@ -1082,7 +1082,6 @@ const BillingDraftConsentSettings = () => {
                 onClick={() => {
                   void setConsent("revoked");
                 }}
-                size="sm"
                 variant="outline"
               >
                 {t("billingDraftsWithdraw")}
@@ -1099,7 +1098,6 @@ const BillingDraftConsentSettings = () => {
                 onClick={() => {
                   void setPreference(null);
                 }}
-                size="sm"
                 variant="outline"
               >
                 {t("billingDraftsForgetPreference")}
