@@ -9112,6 +9112,37 @@
         }
       ]
     },
+    "./inline-overflow": {
+      "type": "module",
+      "file": "./src/lib/inline-overflow.d.ts",
+      "exports": [
+        {
+          "name": "InlineOverflowInput",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "InlineOverflowPolicy",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "InlineOverflowSplit",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "resolveInlineOverflow",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "splitInlineOverflow",
+          "kind": "variable",
+          "space": "value"
+        }
+      ]
+    },
     "./inline-rename": {
       "type": "module",
       "file": "./src/components/inline-rename.d.ts",
@@ -13128,6 +13159,27 @@
         }
       ]
     },
+    "./use-inline-overflow": {
+      "type": "module",
+      "file": "./src/hooks/use-inline-overflow.d.ts",
+      "exports": [
+        {
+          "name": "INLINE_OVERFLOW_ITEM_ATTRIBUTE",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "INLINE_OVERFLOW_TRIGGER_ATTRIBUTE",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "useInlineOverflow",
+          "kind": "variable",
+          "space": "value"
+        }
+      ]
+    },
     "./use-latest": {
       "type": "module",
       "file": "./src/hooks/use-latest.d.ts",
@@ -13459,6 +13511,7 @@
     "./src/data-table/table.d.ts": "import type { HTMLAttributes, ReactNode } from \"react\";\nexport declare const DataTable: <TItem>({ columns, emptyLabel, getRowProps, isLoading, loadingLabel, loadingRowCount, rowAction, rowKey, rows, }: DataTableProps<TItem>) => import(\"react\").JSX.Element;\ntype RowProps = Omit<HTMLAttributes<HTMLTableRowElement>, \"children\">;\nexport declare const DATA_TABLE_INTERACTIVE_DESCENDANT_SELECTORS: readonly [\n    \"a[href]\",\n    \"audio[controls]\",\n    \"button\",\n    \"input\",\n    \"select\",\n    \"textarea\",\n    \"video[controls]\",\n    \"summary\",\n    \"label\",\n    \"[contenteditable]:not([contenteditable='false'])\",\n    \"[role='button']\",\n    \"[role='checkbox']\",\n    \"[role='combobox']\",\n    \"[role='link']\",\n    \"[role='listbox']\",\n    \"[role='menuitem']\",\n    \"[role='menuitemcheckbox']\",\n    \"[role='menuitemradio']\",\n    \"[role='option']\",\n    \"[role='radio']\",\n    \"[role='searchbox']\",\n    \"[role='slider']\",\n    \"[role='spinbutton']\",\n    \"[role='switch']\",\n    \"[role='tab']\",\n    \"[role='textbox']\",\n    \"[role='treeitem']\",\n    \"[tabindex]:not([tabindex='-1'])\",\n    \"[data-data-table-stop-row-action]\"\n];\nexport type DataTableAriaSort = \"ascending\" | \"descending\" | \"none\";\nexport type DataTableColumn<TItem> = {\n    ariaSort?: DataTableAriaSort;\n    cellClassName?: ((item: TItem) => string | undefined) | string;\n    headClassName?: string;\n    header: ReactNode;\n    id: string;\n    render: (item: TItem) => ReactNode;\n};\nexport type DataTableRowAction<TItem> = {\n    getAriaLabel: (item: TItem) => string;\n    getClassName?: (item: TItem) => string | undefined;\n    onSelect: (item: TItem) => void;\n};\nexport type DataTableProps<TItem> = {\n    columns: readonly [\n        DataTableColumn<TItem>,\n        ...DataTableColumn<TItem>[]\n    ];\n    emptyLabel: string;\n    getRowProps?: (item: TItem) => RowProps;\n    isLoading?: boolean;\n    loadingLabel: string;\n    loadingRowCount?: number;\n    rowAction?: DataTableRowAction<TItem>;\n    rowKey: (item: TItem) => number | string;\n    rows: readonly TItem[];\n};\nexport declare const isDataTableRowActionTarget: (row: EventTarget, target: EventTarget | null) => boolean;\nexport {};\n",
     "./src/hooks/use-contained-handler.d.ts": "import type * as React from \"react\";\ntype ContainmentRoot = {\n    contains: (target: Node) => boolean;\n};\nexport declare const containedHandler: <E extends {\n    target: unknown;\n}>(ref: React.RefObject<ContainmentRoot | null> | null | undefined, handler: ((event: E) => void) | undefined) => (event: E) => void;\nexport declare const containedEventHandler: <E extends {\n    currentTarget: unknown;\n    target: unknown;\n}>(handler: (event: E) => void) => (event: E) => void;\nexport {};\n",
     "./src/hooks/use-content-dir.d.ts": "type FieldValue = number | readonly string[] | string | undefined;\ntype UseContentDirArgs = {\n    defaultValue: FieldValue;\n    dir: string | undefined;\n    value: FieldValue;\n};\ntype UseContentDirResult = {\n    dir: \"auto\" | \"ltr\" | \"rtl\" | undefined;\n    trackValue: (text: string) => void;\n};\nexport declare const isStructuredInputType: (type: string | undefined) => boolean;\nexport declare const contentDir: (value: FieldValue) => \"auto\" | undefined;\nexport declare const useContentDir: ({ dir, value, defaultValue, }: UseContentDirArgs) => UseContentDirResult;\nexport {};\n",
+    "./src/hooks/use-inline-overflow.d.ts": "export declare const INLINE_OVERFLOW_ITEM_ATTRIBUTE = \"data-inline-overflow-item\";\nexport declare const INLINE_OVERFLOW_TRIGGER_ATTRIBUTE = \"data-inline-overflow-trigger\";\ntype UseInlineOverflowOptions = {\n    activeIndex: number;\n    itemCount: number;\n};\nexport declare const useInlineOverflow: ({ activeIndex, itemCount, }: UseInlineOverflowOptions) => {\n    container: HTMLElement | null;\n    containerRef: import(\"react\").Dispatch<import(\"react\").SetStateAction<HTMLElement | null>>;\n    measureRef: import(\"react\").Dispatch<import(\"react\").SetStateAction<HTMLElement | null>>;\n    visibleCount: number;\n};\nexport {};\n",
     "./src/hooks/use-latest.d.ts": "import type { RefObject } from \"react\";\nexport declare const useLatest: <T>(value: T) => RefObject<T>;\n",
     "./src/hooks/use-mobile.d.ts": "export declare function useIsMobile(): boolean;\n",
     "./src/hooks/use-prefers-reduced-motion.d.ts": "export declare const usePrefersReducedMotion: () => boolean;\n",
@@ -13497,6 +13550,7 @@
     "./src/lib/file-picker.d.ts": "type PickedFiles = [\n    File,\n    ...File[]\n];\ntype OpenFilePickerOptions = {\n    accept?: string | undefined;\n    multiple?: boolean | undefined;\n    onPick: (files: PickedFiles) => void;\n};\ndeclare const openFilePicker: ({ accept, multiple, onPick, }: OpenFilePickerOptions) => void;\nexport { openFilePicker, type OpenFilePickerOptions };\n",
     "./src/lib/file-size.d.ts": "export declare const getFileSizeDisplay: (sizeBytes: number) => {\n    unit: string;\n    value: number;\n};\ntype NumberFormatter = {\n    readonly number: (value: number, options: {\n        maximumFractionDigits: number;\n        style: \"unit\";\n        unit: string;\n        unitDisplay: \"short\";\n    }) => string;\n};\nexport declare const formatFileSize: (sizeBytes: number, format: NumberFormatter) => string;\nexport {};\n",
     "./src/lib/initials.d.ts": "export declare const getInitials: (name: null | string) => string;\n",
+    "./src/lib/inline-overflow.d.ts": "export type InlineOverflowInput = {\n    activeIndex: number;\n    availableWidth: number;\n    gap?: number;\n    itemWidths: readonly number[];\n    triggerWidth: number;\n};\nexport type InlineOverflowPolicy = {\n    showOverflowTrigger: boolean;\n    visibleCount: number;\n};\nexport declare const resolveInlineOverflow: ({ availableWidth, itemWidths, activeIndex, triggerWidth, gap, }: InlineOverflowInput) => InlineOverflowPolicy;\nexport type InlineOverflowSplit<T> = {\n    overflow: T[];\n    visible: T[];\n};\nexport declare const splitInlineOverflow: <T>(items: readonly T[], visibleCount: number, activeIndex: number) => InlineOverflowSplit<T>;\n",
     "./src/lib/inline-reorder.d.ts": "type InlineDropEdge = \"bottom\" | \"left\" | \"right\" | \"top\";\nexport type InlineDirection = \"ltr\" | \"rtl\";\nexport type InlineDropPosition = \"after\" | \"before\";\nexport declare const toInlineDropPosition: (edge: InlineDropEdge | null, direction: InlineDirection) => InlineDropPosition | null;\ntype ReorderInlineIdsParams = {\n    draggedId: string;\n    ids: readonly string[];\n    position: InlineDropPosition;\n    targetId: string;\n};\nexport declare const reorderInlineIds: ({ ids, draggedId, targetId, position, }: ReorderInlineIdsParams) => null | string[];\nexport {};\n",
     "./src/lib/matter-colors.d.ts": "import type { CSSProperties } from \"react\";\nexport declare const MATTER_SWATCHES: readonly [\n    \"--option-blue\",\n    \"--option-emerald\",\n    \"--option-amber\",\n    \"--option-violet\",\n    \"--option-cyan\",\n    \"--option-orange\",\n    \"--option-teal\"\n];\nexport declare const getMatterSwatch: (id: string) => \"--option-amber\" | \"--option-blue\" | \"--option-cyan\" | \"--option-emerald\" | \"--option-orange\" | \"--option-teal\" | \"--option-violet\";\nexport declare const getMatterColor: (id: string) => string;\nexport declare const getMatterPickerColor: (id: string, color: null | string) => string;\nexport declare const toStoredMatterColor: (color: string) => string;\nexport declare const resolveMatterColor: (id: string, color: null | string) => string;\nexport declare const MATTER_TINT_GROUND: {\n    readonly chrome: \"var(--untinted-sidebar)\";\n    readonly content: \"var(--untinted-background)\";\n};\ntype MatterTintGround = (typeof MATTER_TINT_GROUND)[keyof typeof MATTER_TINT_GROUND];\nexport declare const matterTint: (color: null | string, ground: MatterTintGround) => string;\nexport type MatterChromeStyle = CSSProperties & {\n    \"--matter-background-tint\": string;\n    \"--matter-sidebar-tint\": string;\n};\nexport declare const matterChromeStyle: (color: null | string) => MatterChromeStyle;\nexport {};\n",
     "./src/lib/native-context-menu.d.ts": "export type NativeContextMenuReason = \"editable\" | \"link\" | \"selection\" | \"shift\";\ntype ContextMenuEventLike = {\n    readonly shiftKey: boolean;\n    readonly target: EventTarget | null;\n};\nexport declare const isEditableContextMenuTarget: (element: Element) => boolean;\nexport declare const isLinkContextMenuTarget: (element: Element) => boolean;\nexport declare const isSelectedTextContextMenuTarget: (element: Element) => boolean;\nexport declare const nativeContextMenuReason: (event: ContextMenuEventLike) => NativeContextMenuReason | null;\nexport declare const nativeTextContextMenuReason: (event: Pick<ContextMenuEventLike, \"target\">) => Extract<NativeContextMenuReason, \"editable\" | \"selection\"> | null;\nexport {};\n",
