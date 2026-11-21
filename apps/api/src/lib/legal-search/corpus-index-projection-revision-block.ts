@@ -300,7 +300,10 @@ export const settleRejectedCorpusProjectionMaterials = async ({
   testNow,
 }: SettleRejectedCorpusProjectionMaterialsOptions): Promise<CorpusProjectionMaterialRejectionCounts> => {
   const staleLeases = rejected
-    .filter(({ status }) => status === "stale")
+    .filter(
+      ({ status }) =>
+        status === "stale" || status === "canonical_input_mismatch",
+    )
     .map(({ lease }) => lease);
   const unreadable = rejected.filter(({ status }) => status === "unreadable");
   const cancellation = await cancelCorpusProjectionReservations({

@@ -101,6 +101,6 @@ describe("the section held above the notes", () => {
       first: READER_BREADCRUMB_CLEARANCE + 100,
       second: READER_BREADCRUMB_CLEARANCE + 500,
     });
-    expect(control.hasAttribute("disabled")).toBe(true);
+    expect(control.closest("[inert]")).not.toBeNull();
   });
 });

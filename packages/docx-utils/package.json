@@ -37,7 +37,7 @@
   },
   "scripts": {
     "clean": "git clean -xdf dist .cache .turbo node_modules",
-    "build": "tsdown",
+    "build": "bun --bun tsdown",
     "pack:dry-run": "bun pm pack --dry-run",
     "test": "bun test src",
     "check:office-fixture-metadata": "bun scripts/check-office-fixture-metadata.ts",

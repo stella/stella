@@ -155,6 +155,7 @@ export const TemplateVersionsTab = ({
           <Button
             className="w-full"
             disabled={isFetchingNextPage}
+            disabledReason={t("common.loading")}
             onClick={() => {
               detached(
                 fetchNextPage(),

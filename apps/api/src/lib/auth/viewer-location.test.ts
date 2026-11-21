@@ -18,9 +18,37 @@ const VIEWER_LOCATION_HEADERS = {
   longitude: "cloudfront-viewer-longitude",
 } as const;
 
-const readThroughCloudFront = (headers: Headers) =>
+// CloudFront's list of the header names the viewer itself sent.
+const VIEWER_HEADER_LIST_HEADERS = {
+  order: "cloudfront-viewer-header-order",
+  count: "cloudfront-viewer-header-count",
+} as const;
+
+const ORDINARY_VIEWER_HEADERS = ["Host", "User-Agent", "Accept"] as const;
+
+type ViewerHeaderList = { order: string; count: string };
+
+const viewerHeaderList = (names: readonly string[]): ViewerHeaderList => ({
+  order: names.join(":"),
+  count: String(names.length),
+});
+
+/** Adds CloudFront's list of the viewer's own header names. */
+const withViewerHeaderList = (
+  headers: Headers,
+  { order, count }: ViewerHeaderList = viewerHeaderList(
+    ORDINARY_VIEWER_HEADERS,
+  ),
+): Headers => {
+  const listed = new Headers(headers);
+  listed.set(VIEWER_HEADER_LIST_HEADERS.order, order);
+  listed.set(VIEWER_HEADER_LIST_HEADERS.count, count);
+  return listed;
+};
+
+const readThroughCloudFront = (headers: Headers, list?: ViewerHeaderList) =>
   readViewerLocation({
-    headers,
+    headers: withViewerHeaderList(headers, list),
     clientAddress: {
       address: "198.51.100.7",
       source: CLIENT_ADDRESS_SOURCE.edgeHeader,
@@ -159,9 +187,87 @@ describe("reading the headers CloudFront sends", () => {
   });
 });
 
+describe("viewer-sent location headers", () => {
+  const VIEWER_HEADER_NAMES = [
+    ...Object.values(VIEWER_LOCATION_HEADERS),
+    "cloudfront-viewer-address",
+    "cloudfront-viewer-asn",
+  ];
+
+  test("keeps the location when the viewer sent only ordinary headers", () => {
+    expect(readThroughCloudFront(new Headers(PRAGUE_HEADERS))).toMatchObject({
+      type: "known",
+      city: "Prague",
+    });
+  });
+
+  test("a city the viewer sent itself makes the whole location unknown", () => {
+    expect(
+      readThroughCloudFront(
+        new Headers(PRAGUE_HEADERS),
+        viewerHeaderList(["Host", "CloudFront-Viewer-City", "Accept"]),
+      ),
+    ).toEqual({ type: "unknown" });
+  });
+
+  test("a viewer-sent cloudfront-viewer header in any case and position makes the location unknown", () => {
+    assertProperty(
+      "a viewer-sent cloudfront-viewer header in any case and position makes the location unknown",
+      fc.property(
+        fc.constantFrom(...VIEWER_HEADER_NAMES),
+        fc.array(fc.boolean(), { minLength: 40, maxLength: 40 }),
+        fc.nat({ max: ORDINARY_VIEWER_HEADERS.length }),
+        (name, upper, position) => {
+          // Header names are ASCII: one character per letter.
+          const cased = Array.from(name, (char, index) =>
+            upper[index] ? char.toUpperCase() : char,
+          ).join("");
+          const names: string[] = [...ORDINARY_VIEWER_HEADERS];
+          names.splice(position, 0, cased);
+          return (
+            readThroughCloudFront(
+              new Headers(PRAGUE_HEADERS),
+              viewerHeaderList(names),
+            ).type === "unknown"
+          );
+        },
+      ),
+    );
+  });
+
+  test.each([
+    ["the count exceeds the listed names", "Host:Accept", "5"],
+    ["the count is below the listed names", "Host:Accept:User-Agent", "2"],
+    ["the count is not a number", "Host:Accept", "two"],
+    ["the count is negative", "Host:Accept", "-2"],
+  ])("is unknown when %s", (_, order, count) => {
+    expect(
+      readThroughCloudFront(new Headers(PRAGUE_HEADERS), { order, count }),
+    ).toEqual({ type: "unknown" });
+  });
+
+  test.each([
+    ["header list", VIEWER_HEADER_LIST_HEADERS.order],
+    ["header count", VIEWER_HEADER_LIST_HEADERS.count],
+  ])("is unknown when CloudFront sent no viewer %s", (_, missing) => {
+    const headers = withViewerHeaderList(new Headers(PRAGUE_HEADERS));
+    headers.delete(missing);
+    expect(
+      readViewerLocation({
+        headers,
+        clientAddress: {
+          address: "198.51.100.7",
+          source: CLIENT_ADDRESS_SOURCE.edgeHeader,
+        },
+        edgeHeader: CLOUDFRONT_ADDRESS_HEADER,
+      }),
+    ).toEqual({ type: "unknown" });
+  });
+});
+
 describe("readViewerLocation", () => {
   const request = new Request("https://api.example.test/api/auth/sign-in", {
-    headers: PRAGUE_HEADERS,
+    headers: withViewerHeaderList(new Headers(PRAGUE_HEADERS)),
   });
   const address = (source: ClientAddress["source"]): ClientAddress => ({
     address: "198.51.100.7",

@@ -23,8 +23,8 @@
  * **Re-projection.** The court name is projected text, so a renamed row is
  * written in its own transaction under the corpus projection source lock and
  * its desired projection state is reconciled in the same transaction, as the
- * ingestion pipeline does. An id-only write changes no projected text and is
- * applied set-based, a page at a time.
+ * ingestion pipeline does. Court ids also affect ranking fingerprints, so
+ * id-only writes reconcile bounded source batches in the same transaction.
  *
  * **Idempotence.** Every write is guarded on the court name the walk read and
  * on the row still lacking an id, so a repaired row is held on the next run
@@ -48,21 +48,22 @@
 import { panic } from "better-result";
 import { appendFileSync, readFileSync } from "node:fs";
 
+import { chunk } from "@stll/concurrency/chunk";
 import { runScriptWithErrorOutput } from "@stll/errors/script-error";
 
 import type { SafeId } from "@/api/lib/branded-types";
+import {
+  assignDecisionCourtIdsTx,
+  writeDecisionCourtIdentityTx,
+} from "@/api/lib/case-law/decision-court-assignment";
 import {
   enterCaseLawMaintenanceLane,
   openCaseLawReadOnlySession,
 } from "@/api/lib/case-law/maintenance-lane";
 import { executedRows } from "@/api/lib/db/executed-rows";
-import {
-  lockActiveCorpusProjectionSourceTx,
-  synchronizeLockedCorpusProjectionDesiredStateTx,
-} from "@/api/lib/legal-search/corpus-index-projection-desired-state";
+import { CASE_LAW_PROJECTION_REPAIR_BATCH_SIZE } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
 import { brandPersistedCaseLawDecisionId } from "@/api/lib/safe-id-boundaries";
 import {
-  assignCourtIdsStatement,
   COURT_IDENTITY_REPAIR_ADAPTERS,
   COURT_IDENTITY_REPAIR_OUTCOMES,
   courtIdentitySourcesStatement,
@@ -167,28 +168,15 @@ const logWrite = (write: CourtIdentityWrite): void => {
   appendFileSync(logTarget, `${line}\n`);
 };
 
-/**
- * Write one row under its corpus projection source lock, reconciling its projection in the
- * same transaction when the change is projected text.
- */
 const writeWithProjection = async (
   decisionId: SafeId<"caseLawDecision">,
   write: (
     tx: Parameters<Parameters<typeof ingestionDb>[0]>[0],
   ) => Promise<boolean>,
 ): Promise<boolean> =>
-  await ingestionDb(async (tx) => {
-    const subject = { family: "case_law", entityId: decisionId } as const;
-    const lock = await lockActiveCorpusProjectionSourceTx(tx, subject);
-    const written = await write(tx);
-    if (written && lock !== null) {
-      await synchronizeLockedCorpusProjectionDesiredStateTx(tx, {
-        lock,
-        subject,
-      });
-    }
-    return written;
-  });
+  await ingestionDb(
+    async (tx) => await writeDecisionCourtIdentityTx(tx, { decisionId, write }),
+  );
 
 const rollback = async (file: string): Promise<void> => {
   const lines = readFileSync(file, "utf-8")
@@ -206,12 +194,8 @@ const rollback = async (file: string): Promise<void> => {
       // audit: skip — operator revert of a derived court identity
       executedRows(await tx.execute(revertCourtIdentityStatement(write)))
         .length > 0;
-    const revertRow =
-      write.from === write.to
-        ? async () => await ingestionDb(revert)
-        : async () => await writeWithProjection(id, revert);
     // db-await-in-loop: one transaction per row, each with its projection lock
-    const written = await revertRow();
+    const written = await writeWithProjection(id, revert);
     if (written) {
       reverted += 1;
     } else {
@@ -305,38 +289,39 @@ const assignIds = async (
   if (assignments.length === 0) {
     return;
   }
-  const ids = new Set(
-    executedRows(
-      await ingestionDb(
-        async (tx) =>
-          // audit: skip — operator repair of a derived court identity
-          await tx.execute(assignCourtIdsStatement(assignments)),
-      ),
-    ).flatMap((row) =>
-      typeof row === "object" &&
-      row !== null &&
-      "id" in row &&
-      typeof row.id === "string"
-        ? [row.id]
-        : [],
-    ),
-  );
-  for (const assignment of assignments) {
-    if (!ids.has(assignment.row.id)) {
-      tally.superseded += 1;
-      continue;
+  for (const batch of chunk(
+    assignments,
+    CASE_LAW_PROJECTION_REPAIR_BATCH_SIZE,
+  )) {
+    const changed = await ingestionDb(
+      async (tx) =>
+        await assignDecisionCourtIdsTx(tx, {
+          sourceId: source.id,
+          assignments: batch.map(({ row, to, courtId }) => ({
+            decisionId: row.id,
+            court: to,
+            courtId,
+          })),
+        }),
+    );
+    const ids = new Set(changed);
+    for (const assignment of batch) {
+      if (!ids.has(assignment.row.id)) {
+        tally.superseded += 1;
+        continue;
+      }
+      written += 1;
+      tally.assignIdWritten += 1;
+      logWrite({
+        id: assignment.row.id,
+        adapter: source.adapterKey,
+        from: assignment.from,
+        to: assignment.to,
+        courtId: assignment.courtId,
+        previousCourtId: assignment.row.courtId,
+        addedMetadataCourt: false,
+      });
     }
-    written += 1;
-    tally.assignIdWritten += 1;
-    logWrite({
-      id: assignment.row.id,
-      adapter: source.adapterKey,
-      from: assignment.from,
-      to: assignment.to,
-      courtId: assignment.courtId,
-      previousCourtId: assignment.row.courtId,
-      addedMetadataCourt: false,
-    });
   }
 };
 
@@ -402,7 +387,7 @@ const walkSource = async (source: CourtIdentitySource): Promise<Tally> => {
         }
       }
     }
-    // db-await-in-loop: one set-based statement per page
+    // db-await-in-loop: bounded source batches per page preserve canonical lock order
     await assignIds(source, idOnly, tally);
   }
   return tally;

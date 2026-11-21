@@ -204,6 +204,7 @@ const VersionRow = ({
               </AlertDialogClose>
               <Button
                 disabled={restoring}
+                disabledReason={t("common.restoring")}
                 loading={restoring}
                 onClick={() => {
                   setConfirmOpen(false);

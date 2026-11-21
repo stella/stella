@@ -9,13 +9,12 @@ import {
   caseLawSitemapTouches,
   caseLawSources,
 } from "@/api/db/schema";
+import { decisionDateSortKeySql } from "@/api/lib/case-law/decision-date-order";
 import { publishedCaseLawDecisionFor } from "@/api/lib/case-law/published-decisions-sql";
 import { redistributableCaseLawSource } from "@/api/lib/case-law/redistribution";
 import {
-  decisionBucketSqlFor,
   decisionMonthSqlFor,
   decisionYearSqlFor,
-  SITEMAP_ALL_BUCKET,
   sitemapDocumentRepresentativeFor,
   sitemapLastModifiedSqlFor,
 } from "@/api/lib/case-law/sitemap-shard-sql";
@@ -82,8 +81,10 @@ const arrayLiteral = (values: readonly string[]) => `{${values.join(",")}}`;
  * shard to the newest representative's `updated_at`, exactly as a recount
  * would. A decision that has since moved or left is the subject of a logged
  * month, whose recount writes its shards whole; a shard not listed yet waits
- * for that recount too. Raising is idempotent, so a touch a recount already
- * saw changes nothing, and the fold never counts a month.
+ * for that recount too. A decision's range is fixed by its date and id, which
+ * a touch does not change, so the range listing it is the one whose bounds
+ * hold its key. Raising is idempotent, so a touch a recount already saw
+ * changes nothing, and the fold never counts a month.
  */
 export const sitemapTouchFoldSql = ({
   touchIds,
@@ -97,7 +98,8 @@ export const sitemapTouchFoldSql = ({
       ${caseLawDecisions.country} AS country,
       ${decisionYearSqlFor(caseLawDecisions)} AS year,
       ${decisionMonthSqlFor(caseLawDecisions)} AS month,
-      ${decisionBucketSqlFor(caseLawDecisions)} AS bucket,
+      ${decisionDateSortKeySql(caseLawDecisions.decisionDate)} AS key_date,
+      ${caseLawDecisions.id} AS key_id,
       ${sitemapLastModifiedSqlFor(caseLawDecisions)} AS last_modified_at
     FROM ${caseLawDecisions}
     INNER JOIN ${caseLawSources} ON ${caseLawSources.id} = ${caseLawDecisions.sourceId}
@@ -105,10 +107,11 @@ export const sitemapTouchFoldSql = ({
       AND ${publishedCaseLawDecisionFor(caseLawDecisions)}
       AND ${redistributableCaseLawSource}
       AND ${sitemapDocumentRepresentativeFor(caseLawDecisions)}
-    GROUP BY 1, 2, 3, 4
+    GROUP BY 1, 2, 3, 4, 5
   ), targets AS MATERIALIZED (
-    -- A month lists either its "all" row or its bucket rows. The limit keeps
-    -- each probe a primary-key descent rather than a join over every shard.
+    -- A month lists either its "all" row or ranges that partition it, so at
+    -- most one row holds the key. The probe walks one month's rows of the
+    -- primary key, a handful of pages however large the month.
     SELECT listed.row_id, max(touched.last_modified_at) AS last_modified_at
     FROM touched
     CROSS JOIN LATERAL (
@@ -117,9 +120,12 @@ export const sitemapTouchFoldSql = ({
       WHERE shard.country = touched.country
         AND shard.year = touched.year
         AND shard.month = touched.month
-        AND shard.bucket IN (touched.bucket, ${SITEMAP_ALL_BUCKET})
+        AND (shard.range_start_date IS NULL
+          OR (shard.range_start_date, shard.range_start_id) <= (touched.key_date, touched.key_id))
+        AND (shard.range_end_date IS NULL
+          OR (touched.key_date, touched.key_id) < (shard.range_end_date, shard.range_end_id))
         AND shard.last_modified_at < touched.last_modified_at
-      LIMIT 2
+      LIMIT 1
     ) AS listed
     GROUP BY 1
   ), raised AS (

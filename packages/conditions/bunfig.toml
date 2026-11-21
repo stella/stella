@@ -1,0 +1,7 @@
+[install]
+# Fail on a missing import instead of installing it at run time.
+auto = "disable"
+
+[test]
+# Kills a test process whose event loop stops turning.
+preload = ["../../packages/scripts/src/test-event-loop-watchdog.ts"]

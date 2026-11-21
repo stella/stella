@@ -11,8 +11,13 @@ const route = getRouteApi("/auth/otp");
 
 export function OTPPage() {
   const navigate = useNavigate();
-  const { redirectTo, mode } = route.useSearch({
-    select: (s) => ({ redirectTo: s.redirectTo, mode: s.mode }),
+  const navigateOtp = route.useNavigate();
+  const { redirectTo, mode, signInAttempt } = route.useSearch({
+    select: (s) => ({
+      redirectTo: s.redirectTo,
+      mode: s.mode,
+      signInAttempt: s.signInAttempt,
+    }),
   });
   const email = route.useRouteContext({ select: (c) => c.otpEmail });
   const devOtp = route.useLoaderData({ select: (d) => d.devOtp });
@@ -32,10 +37,20 @@ export function OTPPage() {
   return (
     <OTPRouteShell>
       <OTPPanelBody
+        signInAttempt={signInAttempt}
         email={email}
         initialOtp={devOtp ?? undefined}
         onUseDifferentEmail={() =>
           detached(handleUseDifferentEmail(), "otp.use-different-email")
+        }
+        onSignInAttemptChange={(nextAttempt) =>
+          detached(
+            navigateOtp({
+              search: (prev) => ({ ...prev, signInAttempt: nextAttempt }),
+              replace: true,
+            }),
+            "otp.sign-in-attempt",
+          )
         }
         onVerified={handleVerified}
         redirectTo={redirectTo}

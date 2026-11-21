@@ -84,7 +84,7 @@ const SURFACES = [
       messages.settings.organization.auditLogsResourceTypePlaceholder,
     landmarks: {
       heading: "h1",
-      filters: "[data-slot=frame-panel] .grid.items-end",
+      filters: "[data-slot=settings-panel] .grid.items-end",
       table: "table",
       firstRow: "tbody tr",
     },
@@ -292,10 +292,13 @@ export const measureLoadingGeometry = async ({
           try {
             for (const surface of surfaces) {
               await serverPage.goto(surface.path);
-              // Protected routes render a shared cold shell before locale hydration.
+              // The server paints every page in the presentation the cookie
+              // names, a member page's cold shell (whose root does not load
+              // there) included, so hydration never flips its language.
               const serverDocumentLanguage = await serverPage
                 .locator("html")
                 .getAttribute("lang");
+              expect(serverDocumentLanguage).toBe(locale);
               await expect(
                 serverPage.locator(surface.landmarks.heading),
               ).toBeVisible();

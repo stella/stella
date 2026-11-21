@@ -523,6 +523,7 @@ const RateEntriesView = ({
       }: {
         workspaceId: string;
         rateTableId: string;
+        currency: string;
         userId?: string | null;
         role?: (typeof ORGANIZATION_ROLE_NAMES)[number] | null;
         activityCodeId?: string | null;
@@ -630,6 +631,8 @@ const RateEntriesView = ({
 
       <Button
         className="self-end"
+        disabled={!table}
+        disabledReason={t("billing.rates.rateTableNoLongerAvailable")}
         onClick={() => setShowForm(!showForm)}
         size="sm"
         variant="outline"
@@ -638,15 +641,20 @@ const RateEntriesView = ({
         {t("billing.rates.addRate")}
       </Button>
 
-      {showForm && (
+      {showForm && table && (
         <CreateRateEntryForm
-          currency={table?.currency ?? "USD"}
+          currency={table.currency}
           workspaceId={workspaceId}
           members={members}
           onCancel={() => setShowForm(false)}
           onSubmit={(values) => {
             createEntry.mutate(
-              { workspaceId, rateTableId, ...values },
+              {
+                workspaceId,
+                rateTableId,
+                currency: table.currency,
+                ...values,
+              },
               {
                 onSuccess: () => setShowForm(false),
                 onError: (error) => {
@@ -659,17 +667,14 @@ const RateEntriesView = ({
         />
       )}
 
-      {entries && entries.length > 0 ? (
+      {entries && table && entries.length > 0 ? (
         <div className="flex flex-col gap-1.5">
           {entries.map((entry) => (
             <div
               className="group flex items-center gap-3 rounded-md border px-3 py-2"
               key={entry.id}
             >
-              <RateEntryDetails
-                entry={entry}
-                currency={table?.currency ?? "USD"}
-              />
+              <RateEntryDetails entry={entry} currency={table.currency} />
 
               <Button
                 aria-label={t("common.delete")}

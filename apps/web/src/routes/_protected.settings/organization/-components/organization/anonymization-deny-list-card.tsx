@@ -440,6 +440,16 @@ export const AnonymizationDenyListCard = () => {
 
   // While the list loads, the form stands ready (its writes wait on the
   // list) and placeholder rows hold the list's place.
+  const resolveAddDenyListTermDisabledReason = () => {
+    if (updateMutation.isPending) {
+      return t("common.saving");
+    }
+    if (entries === undefined) {
+      return t("common.loading");
+    }
+    return t("common.enterTerm");
+  };
+
   return (
     <AnonymizationDenyListFrame
       feedback={<SettledQueryViewFeedback view={blacklistView} />}
@@ -496,12 +506,18 @@ export const AnonymizationDenyListCard = () => {
                 entries === undefined ||
                 updateMutation.isPending
               }
+              disabledReason={resolveAddDenyListTermDisabledReason()}
               label={t("common.add")}
             />
           </div>
           <div className={ANONYMIZATION_FORM_ROW_CLASS}>
             <Button
               disabled={entries === undefined || updateMutation.isPending}
+              disabledReason={
+                updateMutation.isPending
+                  ? t("common.saving")
+                  : t("common.loading")
+              }
               onClick={() => {
                 openFilePicker({
                   accept:
@@ -547,6 +563,7 @@ export const AnonymizationDenyListCard = () => {
                 action={
                   <Button
                     disabled={updateMutation.isPending}
+                    disabledReason={t("common.saving")}
                     onClick={() => removeEntry(entry.canonical)}
                     size="icon"
                     variant="ghost"
@@ -579,14 +596,22 @@ export const AnonymizationDenyListCard = () => {
 
 const AddTermSubmitButton = ({
   disabled,
+  disabledReason,
   label,
 }: {
   disabled: boolean;
+  disabledReason: string;
   label: string;
 }) => {
+  const t = useTranslations();
   const { pending } = useFormStatus();
   return (
-    <Button disabled={disabled || pending} size="sm" type="submit">
+    <Button
+      disabled={disabled || pending}
+      disabledReason={pending ? t("common.saving") : disabledReason}
+      size="sm"
+      type="submit"
+    >
       {label}
     </Button>
   );

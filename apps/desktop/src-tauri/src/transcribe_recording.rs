@@ -7,9 +7,13 @@
 //! before it are done. Stopping cancels what is still outstanding and keeps
 //! the text so far.
 //!
-//! The file is only read, never copied, and no audio or text is written to
-//! disk here: the text exists in the window until the user copies it, saves
-//! it as a file or saves it to a matter. A file is only ever chosen through
+//! The file is only read, never copied, and no audio is ever written to
+//! disk. The text is written nowhere here either: the window keeps each
+//! finished or stopped transcript in the account's encrypted history on
+//! this computer (`transcribe_history`, 30 days unless the user chose
+//! otherwise, or nothing at all), and the user may copy it, save it as a
+//! file or save it to a matter. The history holds the recording's name,
+//! format and length, never its audio. A file is only ever chosen through
 //! the native picker or dropped on the window, so the webview never names a
 //! path this code reads.
 
@@ -150,6 +154,11 @@ pub struct Started {
   job: u64,
   /// The stella AI model, when the recording goes there.
   model: Option<RecordingModel>,
+  /// Whether the window cleans the text up with AI on its own: when the
+  /// audio already goes to stella AI, or the speaker turned AI cleanup on.
+  /// A recording kept on this computer with cleanup off waits for the
+  /// speaker to ask.
+  auto_cleanup: bool,
 }
 
 /// One transcribed piece, in the order spoken.
@@ -165,7 +174,7 @@ struct PieceText {
   text: String,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum Failure {
   /// The speech model is not on this computer.
@@ -227,6 +236,9 @@ struct Inner {
   holds_result: bool,
   /// The stella AI model the window was last shown, under its ticket.
   shown_model: Option<(u64, RecordingModel)>,
+  /// The job the window shows, with the dictation account it started for:
+  /// its text is cleaned up only for that account.
+  result_account: Option<(u64, String)>,
 }
 
 impl Inner {
@@ -285,6 +297,7 @@ impl Inner {
     self.selection += 1;
     self.file = None;
     self.holds_result = false;
+    self.result_account = None;
   }
 
   /// The file a start names, if it is still the chosen one.
@@ -316,12 +329,23 @@ impl TranscribeState {
   }
 }
 
+/// The recording the window holds, while no transcription of it runs: the
+/// file the user chose, never a path the webview names.
+pub(crate) fn chosen_recording(app: &AppHandle) -> Option<PathBuf> {
+  app.state::<TranscribeState>().update(|inner| {
+    if inner.job.is_some() {
+      return None;
+    }
+    inner.file.as_ref().map(|chosen| chosen.path.clone())
+  })
+}
+
 /// Whether this computer offers the window: dictation is on its way here.
 pub(crate) fn available(app: &AppHandle) -> bool {
   dictation::available(app)
 }
 
-fn require_window(window: &Window) -> Result<(), String> {
+pub(crate) fn require_window(window: &Window) -> Result<(), String> {
   if window.label() == TRANSCRIBE_WINDOW_LABEL {
     Ok(())
   } else {
@@ -329,7 +353,7 @@ fn require_window(window: &Window) -> Result<(), String> {
   }
 }
 
-fn require_available(app: &AppHandle) -> Result<(), String> {
+pub(crate) fn require_available(app: &AppHandle) -> Result<(), String> {
   if available(app) {
     Ok(())
   } else {
@@ -337,7 +361,7 @@ fn require_available(app: &AppHandle) -> Result<(), String> {
   }
 }
 
-fn file_name(path: &Path) -> String {
+pub(crate) fn file_name(path: &Path) -> String {
   path
     .file_name()
     .map(|name| {
@@ -350,7 +374,7 @@ fn file_name(path: &Path) -> String {
     .unwrap_or_default()
 }
 
-fn extension(path: &Path) -> Option<String> {
+pub(crate) fn extension(path: &Path) -> Option<String> {
   path
     .extension()
     .and_then(|extension| extension.to_str())
@@ -631,6 +655,10 @@ pub async fn transcribe_start(
     }
     Destination::Local => None,
   };
+  let account = crate::dictation_words::dictation_namespace(&app)
+    .ok_or_else(|| "recording transcription has no linked account".to_string())?;
+  let auto_cleanup =
+    request.destination == Destination::Cloud || dictation::cleanup_enabled(&app);
   let state = app.state::<TranscribeState>();
   let job = state.next_job.fetch_add(1, Ordering::SeqCst) + 1;
   let stop = Arc::new(AtomicBool::new(false));
@@ -659,9 +687,14 @@ pub async fn transcribe_start(
       task,
     });
     inner.holds_result = true;
+    inner.result_account = Some((job, account));
     Ok::<(), String>(())
   })?;
-  Ok(Started { job, model })
+  Ok(Started {
+    job,
+    model,
+    auto_cleanup,
+  })
 }
 
 /// Stops a transcription; the text so far stays in the window.
@@ -687,7 +720,7 @@ pub fn transcribe_stop(
   Ok(())
 }
 
-fn valid_id(id: &str) -> Result<(), String> {
+pub(crate) fn valid_id(id: &str) -> Result<(), String> {
   if id.len() <= 200
     && id.chars().all(|character| {
       character.is_ascii_alphanumeric() || character == '-' || character == '_'
@@ -1169,11 +1202,83 @@ pub fn transcribe_copy_text(window: Window, text: String) -> Result<(), String> 
   crate::clipboard::write_plain_text(text)
 }
 
+/// Copies text with its formatting: the plain text and the same text as
+/// HTML, which word processors and mail clients paste with headings, bold
+/// and lists.
+#[tauri::command]
+pub fn transcribe_copy_rich(
+  window: Window,
+  text: String,
+  html: String,
+) -> Result<(), String> {
+  require_window(&window)?;
+  if text.trim().is_empty()
+    || text.len() > MAX_SAVED_TEXT_BYTES
+    || html.len() > 2 * MAX_SAVED_TEXT_BYTES
+  {
+    return Err("the text is empty or too large to copy".to_string());
+  }
+  crate::clipboard::write_text_and_html(text, html)
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CleanUpRequest {
+  job: u64,
+  transcript: String,
+  previous_text: Option<String>,
+}
+
+/// Cleans up one part of the transcript with the organization's AI model,
+/// only for the account the recording started for.
+#[tauri::command]
+pub async fn transcribe_clean_up(
+  app: AppHandle,
+  window: Window,
+  state: State<'_, TranscribeState>,
+  request: CleanUpRequest,
+) -> Result<crate::recording_cleanup::CleanedPart, String> {
+  require_window(&window)?;
+  require_available(&app)?;
+  let account = state
+    .update(|inner| inner.result_account.clone())
+    .filter(|(job, _)| *job == request.job)
+    .map(|(_, account)| account)
+    .ok_or_else(|| "this transcript is no longer shown".to_string())?;
+  crate::recording_cleanup::clean_up(
+    &app,
+    &account,
+    &request.transcript,
+    request.previous_text.as_deref(),
+  )
+  .await
+}
+
+/// The kind of text file a transcript is saved as.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum SavedFormat {
+  #[default]
+  Text,
+  Markdown,
+}
+
+impl SavedFormat {
+  fn filter(self) -> (&'static str, &'static [&'static str]) {
+    match self {
+      Self::Text => ("Text", &["txt"]),
+      Self::Markdown => ("Markdown", &["md"]),
+    }
+  }
+}
+
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SaveTextRequest {
   text: String,
   file_name: String,
+  #[serde(default)]
+  format: SavedFormat,
 }
 
 /// Saves the transcript where the user picks; `false` when they cancel.
@@ -1193,7 +1298,7 @@ pub async fn transcribe_save_text(
     .dialog()
     .file()
     .set_file_name(&suggested)
-    .add_filter("Text", &["txt"]);
+    .add_filter(request.format.filter().0, request.format.filter().1);
   if let Some(parent) = app.get_webview_window(TRANSCRIBE_WINDOW_LABEL) {
     dialog = dialog.set_parent(&parent);
   }

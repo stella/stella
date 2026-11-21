@@ -1,6 +1,7 @@
 import { Result } from "better-result";
 import * as v from "valibot";
 
+import { SITEMAP_FILE_FETCH_TIMEOUT_MS } from "@stll/api-contract/public-sitemap-budget";
 import {
   createStatutePath,
   normalizeStatuteStoredSlug,
@@ -164,7 +165,7 @@ const readSitemapPage = async <TSchema extends v.GenericSchema>({
 
 export const fetchPublicStatuteSitemapShards = async ({
   fetchImpl = fetch,
-  signal = AbortSignal.timeout(10_000),
+  signal = AbortSignal.timeout(SITEMAP_FILE_FETCH_TIMEOUT_MS),
 }: FetchStatuteSitemapShardsOptions = {}): SitemapPageResult<StatuteSitemapShard> => {
   const page = await readSitemapPage({
     action: "fetchPublicStatuteSitemapShards",
@@ -185,7 +186,7 @@ export const fetchPublicStatuteSitemapShards = async ({
 export const fetchPublicStatuteSitemapWorks = async ({
   fetchImpl = fetch,
   shard,
-  signal = AbortSignal.timeout(10_000),
+  signal = AbortSignal.timeout(SITEMAP_FILE_FETCH_TIMEOUT_MS),
 }: FetchStatuteSitemapWorksOptions): SitemapPageResult<StatuteSitemapWork> => {
   if (!isPublicStatutePageCountry(shard.country)) {
     return Result.err(

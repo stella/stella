@@ -1,7 +1,12 @@
 import { describe, expect, test } from "bun:test";
 
 import { LOCALES, parseGlossary } from "./glossary-gen";
-import { buildBriefItems, renderBrief, selectBriefKeys } from "./i18n-brief";
+import {
+  buildBriefItems,
+  buildTranslationMemory,
+  renderBrief,
+  selectBriefKeys,
+} from "./i18n-brief";
 import { emptyBaseline } from "./i18n-check";
 import type { NestedMessages } from "./i18n-check";
 
@@ -138,5 +143,38 @@ describe("translation brief", () => {
         conventions,
       }),
     ).toBe("# Nothing to translate into cs (Czech)\n");
+  });
+
+  test("surfaces reference catalog translations when English matches", () => {
+    const memory = buildTranslationMemory({
+      source: {
+        common: { details: "Details", save: "Save" },
+        nav: { intelligence: "Intelligence", untouched: "Matters" },
+      },
+      target: {
+        common: { details: "Podrobnosti", save: "Uložit" },
+        nav: { intelligence: "Znalosti", untouched: "Matters" },
+      },
+    });
+    expect(memory.get("Matters")).toBeUndefined();
+    const items = buildBriefItems({
+      keys: ["nav.knowledge", "matters.title"],
+      source,
+      target,
+      locale: "cs",
+      lock,
+      glossary,
+      files: [],
+      memory,
+    });
+    expect(items[0]?.memoryTranslations).toEqual(["Znalosti"]);
+    expect(items[1]?.memoryTranslations).toEqual([]);
+    const brief = renderBrief({
+      locale: "cs",
+      localeFile: "langs/cs.json",
+      items,
+      conventions: ["SKILL.md"],
+    });
+    expect(brief).toContain(`- Reference catalog (cs): "Znalosti"`);
   });
 });

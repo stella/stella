@@ -4979,6 +4979,9 @@ const SELF_TEST_NULLISH = `${NULLISH_FIXTURE_LINES.join("\n")}\n`;
 // string/template false positives (e, f, g) are excluded.
 const EXPECTED_NULLISH = 5;
 
+// Two disabled Buttons that say nothing (the bare flag, and one with only a
+// tooltip); a reasoned one, a never-disabled one, another control, and the
+// same text in a comment and a string do not count.
 const LEGACY_REALTIME_INVALIDATION_FIXTURE_LINES = [
   'const direct = { type: "invalidate-query", data: ["entities"] };',
   "const named = { type: REALTIME_EVENT_TYPE.INVALIDATE_QUERY, data: key };",

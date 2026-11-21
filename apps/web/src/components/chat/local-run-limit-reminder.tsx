@@ -86,6 +86,11 @@ export const LocalRunLimitReminder = ({
       <>
         <Button
           disabled={busy}
+          disabledReason={
+            change.isPending
+              ? t("common.saving")
+              : t("chat.answerEdit.waitForAnswer")
+          }
           onClick={() => {
             change.mutate({
               type: "set",
@@ -99,6 +104,11 @@ export const LocalRunLimitReminder = ({
         </Button>
         <Button
           disabled={busy}
+          disabledReason={
+            change.isPending
+              ? t("common.saving")
+              : t("chat.answerEdit.waitForAnswer")
+          }
           onClick={() => {
             change.mutate({
               type: "set",
@@ -122,6 +132,11 @@ export const LocalRunLimitReminder = ({
       <p className="text-sm">{t(SCHEDULED_KEYS[asked.onReset], { time })}</p>
       <Button
         disabled={busy}
+        disabledReason={
+          change.isPending
+            ? t("common.saving")
+            : t("chat.answerEdit.waitForAnswer")
+        }
         onClick={() => {
           change.mutate({ type: "cancel" });
         }}

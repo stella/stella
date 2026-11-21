@@ -414,7 +414,11 @@ export function UiPlayground() {
                     </Button>
                   ))}
                   <Button loading>Saving</Button>
-                  <Button disabled variant="outline">
+                  <Button
+                    disabled
+                    disabledReason={t("common.disabledButtonExample")}
+                    variant="outline"
+                  >
                     Disabled
                   </Button>
                   <Button aria-label="Settings" size="icon" variant="ghost">
@@ -839,6 +843,9 @@ export function UiPlayground() {
                           render={
                             <Button
                               disabled={!destructiveConfirmation.confirmed}
+                              disabledReason={t(
+                                "common.enterConfirmationPhrase",
+                              )}
                               variant="destructive"
                             />
                           }

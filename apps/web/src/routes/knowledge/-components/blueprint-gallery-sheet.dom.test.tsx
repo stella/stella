@@ -201,7 +201,7 @@ test("a member sharing with the team must bind the skill to a matter", async () 
       "u",
     ),
   });
-  expect(blank.hasAttribute("disabled")).toBe(true);
+  expect(blank.getAttribute("aria-disabled")).toBe("true");
 });
 
 test("a skill created for one matter carries the matter's id", async () => {
@@ -224,7 +224,7 @@ test("a skill created for one matter carries the matter's id", async () => {
       "u",
     ),
   });
-  await waitFor(() => expect(blank.hasAttribute("disabled")).toBe(false));
+  await waitFor(() => expect(blank.getAttribute("aria-disabled")).toBeNull());
   await act(async () => {
     fireEvent.click(blank);
   });

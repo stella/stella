@@ -120,6 +120,7 @@ export const RunStalenessLine = ({
         {retryIds.length > 0 && (
           <Button
             disabled={!canReview}
+            disabledReason={t("avt.review.permissionRequired")}
             onClick={() => onRecheck(retryIds)}
             size="sm"
             variant="ghost"
@@ -160,6 +161,7 @@ export const RunStalenessLine = ({
           stays the triage's one accent. */}
       <Button
         disabled={!canReview}
+        disabledReason={t("avt.review.permissionRequired")}
         onClick={() => onRecheck(outOfDateIds)}
         size="sm"
         variant="ghost"

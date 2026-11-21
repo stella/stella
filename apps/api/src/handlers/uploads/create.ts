@@ -10,13 +10,7 @@ import { Result } from "better-result";
  */
 import * as v from "valibot";
 
-import { sha256HexToBase64 } from "@stll/sha256";
-
-import {
-  AGENT_SKILL_SCOPES,
-  type PendingUploadPurposeData,
-  pendingUploads,
-} from "@/api/db/schema";
+import { AGENT_SKILL_SCOPES } from "@/api/db/schema";
 import { validateAgentSkill } from "@/api/handlers/uploads/agent-skill";
 import { validateEntityVersion } from "@/api/handlers/uploads/entity-version";
 import {
@@ -26,20 +20,9 @@ import {
 } from "@/api/handlers/uploads/permissions";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
-import { createSafeId, type SafeId } from "@/api/lib/branded-types";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
-import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { resolveUploadMime } from "@/api/lib/files/utils";
 import { FILE_SIZE_LIMIT_BYTES } from "@/api/lib/limits";
-import { presignUploadUrl } from "@/api/lib/s3-presign";
-import { sanitizeFilenamePreservingExtension } from "@/api/lib/sanitize-filename";
-import {
-  checkEntityCreateCapacityForInsert,
-  checkEntityCreateTargetForInsert,
-  entityCreateWriteErrorMessage,
-  type EntityCreateWriteFailureStatus,
-  validateEntityCreate,
-} from "@/api/lib/uploads/entity-create";
+import { validateEntityCreate } from "@/api/lib/uploads/entity-create";
 import {
   documentUploadFileFields,
   uploadFileSizeSchema,
@@ -49,10 +32,9 @@ import {
   importOriginSchema,
 } from "@/api/lib/uploads/import-origin";
 import {
-  PRESIGN_URL_EXPIRY_SECONDS,
-  tmpUploadKey,
-  uploadTimeline,
-} from "@/api/lib/uploads/runtime";
+  type PresignPurposeData,
+  reservePresignedUpload,
+} from "@/api/lib/uploads/reserve-presigned-upload";
 
 const skillPackFileMetadataSchema = {
   ...documentUploadFileFields,
@@ -87,18 +69,9 @@ const presignBodySchema = v.union([
 
 type PresignBody = v.InferOutput<typeof presignBodySchema>;
 
-type EntityCreatePurposeDataWithParent = Extract<
-  PendingUploadPurposeData,
-  { type: "entity_create" }
-> & { parentId: SafeId<"entity"> | null };
-
-type PresignPurposeData =
-  | EntityCreatePurposeDataWithParent
-  | Exclude<PendingUploadPurposeData, { type: "entity_create" }>;
-
 const toPurposeData = (purposeBody: PresignBody): PresignPurposeData => {
   if (purposeBody.purpose === "entity_create") {
-    const purposeData: EntityCreatePurposeDataWithParent = {
+    const purposeData: PresignPurposeData = {
       type: "entity_create",
       propertyId: purposeBody.propertyId,
       parentId: purposeBody.parentId ?? null,
@@ -211,113 +184,13 @@ const presignUpload = createSafeHandler(
       }
     }
 
-    // Recover a usable MIME type for extensions browsers mistype
-    // (e.g. .msg → octet-stream). The frontend PUTs with the exact
-    // headers we sign below, so the resolved type is what reaches S3
-    // and the pending-upload row — no client-side normalization.
-    const resolvedMime = resolveUploadMime({
-      declaredMime: purposeBody.mimeType,
-      fileName: sanitizeFilenamePreservingExtension(purposeBody.name),
-    });
-
-    const uploadId = createSafeId<"pendingUpload">();
-    const tmpKey = tmpUploadKey({
+    return yield* reservePresignedUpload({
+      safeDb,
       organizationId: session.activeOrganizationId,
-      uploadId,
       workspaceId,
-    });
-    const now = new Date();
-    const { urlExpiresAt, finalizeDeadline } = uploadTimeline(now);
-    const purposeData = toPurposeData(purposeBody);
-
-    const presign = await presignUploadUrl({
       userId: user.id,
-      key: tmpKey,
-      expiresIn: PRESIGN_URL_EXPIRY_SECONDS,
-      contentType: resolvedMime,
-      contentLength: purposeBody.size,
-      sha256Base64: sha256HexToBase64(purposeBody.sha256Hex),
-      scope: {
-        organizationId: session.activeOrganizationId,
-        workspaceId,
-      },
-      tagAsTemporaryUpload: true,
-    });
-    if (Result.isError(presign)) {
-      return Result.err(
-        new HandlerError({
-          status: 500,
-          message: "Failed to issue upload URL",
-          cause: presign.error,
-        }),
-      );
-    }
-
-    type PresignWriteResult =
-      { status: "ok" } | { status: EntityCreateWriteFailureStatus };
-
-    // Persist intent. RLS pins the row to this workspace, so even
-    // a stolen URL can only be finalized by a request that
-    // resolves to the same workspace_ids on the API role.
-    const writeResult = yield* Result.await(
-      safeDb(async (tx): Promise<PresignWriteResult> => {
-        if (purposeData.type === "entity_create") {
-          const capacityResult = await checkEntityCreateCapacityForInsert({
-            tx,
-            workspaceId,
-            entityCount: 1,
-          });
-          if (Result.isError(capacityResult)) {
-            return { status: capacityResult.error };
-          }
-
-          const targetResult = await checkEntityCreateTargetForInsert({
-            tx,
-            workspaceId,
-            propertyId: purposeData.propertyId,
-            parentId: purposeData.parentId ?? null,
-          });
-          if (Result.isError(targetResult)) {
-            return { status: targetResult.error };
-          }
-        }
-
-        // audit: skip — presigned URL bookkeeping; the audit row is
-        // emitted by the per-purpose finalize once the upload
-        // becomes a durable entity.
-        await tx.insert(pendingUploads).values({
-          id: uploadId,
-          organizationId: session.activeOrganizationId,
-          workspaceId,
-          userId: user.id,
-          purpose: purposeBody.purpose,
-          purposeData,
-          declaredName: purposeBody.name,
-          declaredMime: resolvedMime,
-          declaredSize: purposeBody.size,
-          declaredSha256: purposeBody.sha256Hex,
-          status: "pending",
-          expiresAt: finalizeDeadline,
-          createdAt: now,
-        });
-
-        return { status: "ok" };
-      }),
-    );
-    if (writeResult.status !== "ok") {
-      return Result.err(
-        new HandlerError({
-          status: 400,
-          message: entityCreateWriteErrorMessage(writeResult.status),
-        }),
-      );
-    }
-
-    return Result.ok({
-      uploadId,
-      url: presign.value.url,
-      expiresAt: urlExpiresAt.toISOString(),
-      headers: presign.value.headers,
+      purposeData: toPurposeData(purposeBody),
+      file: purposeBody,
     });
   },
 );

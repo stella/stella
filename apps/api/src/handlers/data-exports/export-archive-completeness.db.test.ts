@@ -392,6 +392,7 @@ const TABLE_CLASSIFICATIONS = {
   numberSeriesAllocations: FORMAT_SCOPE_EXCLUSION,
   numberSeriesCounters: FORMAT_SCOPE_EXCLUSION,
   oauthGrantRevocations: FORMAT_SCOPE_EXCLUSION,
+  sessionSignIns: FORMAT_SCOPE_EXCLUSION,
   officeFileEvidence: FORMAT_SCOPE_EXCLUSION,
   organizationAccessStates: FORMAT_SCOPE_EXCLUSION,
   organizationConfiguredAccess: FORMAT_SCOPE_EXCLUSION,

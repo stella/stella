@@ -80,6 +80,7 @@ export const OAuthAccountRow = ({
           size="xs"
           className="-ms-2 min-h-11 self-start"
           disabled={disabled}
+          disabledReason={t("savingDecision")}
           onClick={onAccountSwitch}
         >
           {t("useAnotherAccount")}

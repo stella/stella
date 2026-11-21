@@ -31,6 +31,8 @@ type PreviousSession = {
 
 type NewDeviceNotice = {
   email: string;
+  /** The reported session, which the email's review link opens. */
+  sessionId: string;
   device: SignInDevice;
   ipAddress: SignInAddress;
   createdAt: Date;
@@ -41,6 +43,11 @@ type NewDeviceNoticeDependencies = {
     userId: SafeId<"user">,
     sessionId: string,
   ) => Promise<PreviousSession[]>;
+  /** Marks the reported sign-in as waiting for its account holder's review. */
+  requestReview: (signIn: {
+    userId: SafeId<"user">;
+    sessionId: string;
+  }) => Promise<void>;
   sendNotice: (notice: NewDeviceNotice) => void;
   isTransactionalEmailConfigured: () => boolean;
   isLocalDev: () => boolean;
@@ -125,8 +132,24 @@ export const sendNewDeviceNotice = async ({
         return;
       }
 
+      // The notice matters more than the review state: a failed mark is
+      // reported and the email is sent regardless.
+      const reviewRequested = await Result.tryPromise({
+        try: async () => {
+          await dependencies.requestReview({
+            userId: user.id,
+            sessionId: session.id,
+          });
+        },
+        catch: (cause) => cause,
+      });
+      if (Result.isError(reviewRequested)) {
+        dependencies.onError(reviewRequested.error);
+      }
+
       dependencies.sendNotice({
         email: user.email,
+        sessionId: session.id,
         device: signInDevice(currentDevice),
         ipAddress:
           typeof currentIpAddress === "string" && currentIpAddress !== ""

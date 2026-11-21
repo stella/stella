@@ -89,6 +89,29 @@ type ChatSelectionToolbarProps = {
   answerRewriteAvailability: "available" | "anonymized" | "unknown";
 };
 
+type AnswerRewriteDisabledReasonOptions = {
+  answerRewriteAvailability: ChatSelectionToolbarProps["answerRewriteAvailability"];
+  t: (
+    key:
+      | "chat.answerEdit.rewriteUnavailableAnonymized"
+      | "common.loading"
+      | "chat.answerEdit.waitForAnswer",
+  ) => string;
+};
+
+const answerRewriteDisabledReason = ({
+  answerRewriteAvailability,
+  t,
+}: AnswerRewriteDisabledReasonOptions) => {
+  if (answerRewriteAvailability === "anonymized") {
+    return t("chat.answerEdit.rewriteUnavailableAnonymized");
+  }
+  if (answerRewriteAvailability === "unknown") {
+    return t("common.loading");
+  }
+  return t("chat.answerEdit.waitForAnswer");
+};
+
 /**
  * Floats over words selected in a chat message: ask about them in a new chat
  * in the inspector (the primary action), quote them into this chat's reply,
@@ -198,6 +221,10 @@ export const ChatSelectionToolbar = ({
   const announcer = <SidePanelChatAnnouncer status={sidePanelChat.status} />;
 
   if (editing !== null) {
+    const cancelEditing = () => {
+      setEditing(null);
+      setSelected(null);
+    };
     return (
       <>
         <SelectionToolbar
@@ -213,10 +240,7 @@ export const ChatSelectionToolbar = ({
               anchor={editing.anchor}
               threadId={source.threadRef.threadId}
               disabled={editsDisabled}
-              onCancel={() => {
-                setEditing(null);
-                setSelected(null);
-              }}
+              onCancel={cancelEditing}
               onAnswerEdited={refreshEditedAnswer}
             />
           ) : (
@@ -227,10 +251,11 @@ export const ChatSelectionToolbar = ({
               disabled={
                 editsDisabled || answerRewriteAvailability !== "available"
               }
-              onCancel={() => {
-                setEditing(null);
-                setSelected(null);
-              }}
+              disabledReason={answerRewriteDisabledReason({
+                answerRewriteAvailability,
+                t,
+              })}
+              onCancel={cancelEditing}
               onAnswerEdited={refreshEditedAnswer}
             />
           )}
@@ -384,6 +409,7 @@ export const ChatSelectionToolbar = ({
                           size="sm"
                           variant="ghost"
                           disabled={editsDisabled}
+                          disabledReason={t("chat.answerEdit.waitForAnswer")}
                           {...capabilityProps}
                         >
                           <AiActionIcon className="size-3.5" />
@@ -397,6 +423,7 @@ export const ChatSelectionToolbar = ({
                   <Button
                     aria-label={t("chat.answerEdit.formatKind")}
                     disabled={editsDisabled}
+                    disabledReason={t("chat.answerEdit.waitForAnswer")}
                     onClick={() => setFormatOpen(true)}
                     onMouseDown={(event) => event.preventDefault()}
                     size="icon-sm"

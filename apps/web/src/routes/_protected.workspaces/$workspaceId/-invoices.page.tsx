@@ -154,6 +154,7 @@ const InvoicesList = ({ workspaceId }: { workspaceId: string }) => {
         <div className="flex justify-center">
           <Button
             disabled={isFetchingNextPage}
+            disabledReason={t("common.loading")}
             onClick={() => {
               detached(fetchNextPage(), "invoices.fetch-next-page");
             }}

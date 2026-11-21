@@ -44,6 +44,7 @@ export { default as constraints_reader_annotation_constraints } from "./online-m
 export { default as constraints_reader_answer_constraints } from "./online-migration-entries/constraints-reader-answer-constraints";
 export { default as constraints_sanctions_monitoring_constraints } from "./online-migration-entries/constraints-sanctions-monitoring-constraints";
 export { default as constraints_search_history_country_constraints } from "./online-migration-entries/constraints-search-history-country-constraints";
+export { default as constraints_session_sign_in_location_constraint } from "./online-migration-entries/constraints-session-sign-in-location-constraint";
 export { default as constraints_time_entry_submitted_constraints } from "./online-migration-entries/constraints-time-entry-submitted-constraints";
 export { default as constraints_usage_action_type_constraints } from "./online-migration-entries/constraints-usage-action-type-constraints";
 export { default as constraints_user_locale_constraints } from "./online-migration-entries/constraints-user-locale-constraints";
@@ -179,6 +180,7 @@ export { default as repairs_case_law_identifier_retry_constraint_validation } fr
 export { default as repairs_case_law_parsed_source_validation } from "./online-migration-entries/repairs-case-law-parsed-source-validation";
 export { default as repairs_case_law_population_repair } from "./online-migration-entries/repairs-case-law-population-repair";
 export { default as repairs_case_law_sitemap_packing_enrollment } from "./online-migration-entries/repairs-case-law-sitemap-packing-enrollment";
+export { default as repairs_case_law_sitemap_range_enrollment } from "./online-migration-entries/repairs-case-law-sitemap-range-enrollment";
 export { default as repairs_case_law_source_config_object_repair } from "./online-migration-entries/repairs-case-law-source-config-object-repair";
 export { default as repairs_chat_content_v3_repair } from "./online-migration-entries/repairs-chat-content-v3-repair";
 export { default as repairs_chat_limit_reminder_on_reset_constraint_validations } from "./online-migration-entries/repairs-chat-limit-reminder-on-reset-constraint-validations";
@@ -235,6 +237,7 @@ export { default as repairs_reader_answer_constraint_validation } from "./online
 export { default as repairs_sanctions_monitoring_constraint_validations } from "./online-migration-entries/repairs-sanctions-monitoring-constraint-validations";
 export { default as repairs_search_history_country_constraint_validation } from "./online-migration-entries/repairs-search-history-country-constraint-validation";
 export { default as repairs_search_history_country_repair } from "./online-migration-entries/repairs-search-history-country-repair";
+export { default as repairs_session_sign_in_location_constraint_validation } from "./online-migration-entries/repairs-session-sign-in-location-constraint-validation";
 export { default as repairs_time_entry_submitted_constraint_validation } from "./online-migration-entries/repairs-time-entry-submitted-constraint-validation";
 export { default as repairs_usage_action_type_constraint_validation } from "./online-migration-entries/repairs-usage-action-type-constraint-validation";
 export { default as repairs_user_locale_constraint_validation } from "./online-migration-entries/repairs-user-locale-constraint-validation";
@@ -256,3 +259,4 @@ export { default as replacements_legislation_documents_eli_current_lang_idx } fr
 export { default as replacements_legislation_documents_eli_version_lang_idx } from "./online-migration-entries/replacements-legislation-documents-eli-version-lang-idx";
 export { default as replacements_organization_file_objects_org_pending_reconcile_idx } from "./online-migration-entries/replacements-organization-file-objects-org-pending-reconcile-idx";
 export { default as replacements_organization_file_objects_pending_reconcile_idx } from "./online-migration-entries/replacements-organization-file-objects-pending-reconcile-idx";
+export { default as replacements_previous_fallback_decision_index } from "./online-migration-entries/replacements-previous-fallback-decision-index";

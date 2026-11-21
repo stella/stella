@@ -111,12 +111,12 @@ const emailFieldOf = (submit: HTMLElement) => {
   return field;
 };
 
-const describesField = (field: HTMLElement, badge: HTMLElement) => {
+const isDescribedByBadge = (element: HTMLElement, badge: HTMLElement) => {
   const description = badge.closest('[data-slot="field-description"]');
   return (
     description !== null &&
     description.id !== "" &&
-    (field.getAttribute("aria-describedby") ?? "")
+    (element.getAttribute("aria-describedby") ?? "")
       .split(" ")
       .includes(description.id)
   );
@@ -128,11 +128,11 @@ test("the last-used method is the only filled action and its email field carries
 
   expect(isFilled(passwordButton)).toBe(true);
   const badge = ui.getByText(messages.auth.lastUsed);
-  expect(describesField(emailFieldOf(passwordButton), badge)).toBe(true);
-  expect(describesField(emailFieldOf(emailButton), badge)).toBe(false);
-  expect(passwordButton.hasAttribute("aria-describedby")).toBe(false);
+  expect(isDescribedByBadge(emailFieldOf(passwordButton), badge)).toBe(true);
+  expect(isDescribedByBadge(emailFieldOf(emailButton), badge)).toBe(false);
+  expect(isDescribedByBadge(passwordButton, badge)).toBe(false);
   expect(isFilled(emailButton)).toBe(false);
-  expect(emailButton.hasAttribute("aria-describedby")).toBe(false);
+  expect(isDescribedByBadge(emailButton, badge)).toBe(false);
 });
 
 test("an email-code sign-in marks the email-code field, not its button", async () => {
@@ -141,9 +141,9 @@ test("an email-code sign-in marks the email-code field, not its button", async (
 
   expect(isFilled(emailButton)).toBe(true);
   const badge = ui.getByText(messages.auth.lastUsed);
-  expect(describesField(emailFieldOf(emailButton), badge)).toBe(true);
-  expect(describesField(emailFieldOf(passwordButton), badge)).toBe(false);
-  expect(emailButton.hasAttribute("aria-describedby")).toBe(false);
+  expect(isDescribedByBadge(emailFieldOf(emailButton), badge)).toBe(true);
+  expect(isDescribedByBadge(emailFieldOf(passwordButton), badge)).toBe(false);
+  expect(isDescribedByBadge(emailButton, badge)).toBe(false);
   expect(isFilled(passwordButton)).toBe(false);
 });
 

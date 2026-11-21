@@ -4,15 +4,23 @@ import { isDeepStrictEqual } from "node:util";
 export const CANCEL_AFTER_JOB_WORKFLOW = "cancel-failed-run.yml";
 
 // A run cancelled while the failing job is still running marks that job
-// cancelled too, so the failure would read as a cancellation. A job whose own
-// step failed therefore hands the cancellation to a dispatched run, which waits
-// for this job to end and then cancels the rest; the job keeps its failure
-// conclusion. A helper job (the failed job has already ended), a job whose
-// record is not found, or a refused dispatch cancels the run here at once.
+// cancelled too, so the failure would read as a cancellation. A job that failed
+// itself (its job.status, passed in as JOB_STATUS, is "failure") therefore hands
+// the cancellation to a dispatched run, which waits for this job to end and
+// then cancels the rest; the job keeps its failure conclusion. A runner runs one
+// job at a time, so its name identifies this job's record. The jobs API can lag
+// behind the step that failed this job, so the job's own status decides, and
+// the annotation names the job while its failed step is not listed yet. A
+// helper job (the failed job has already ended), a job whose record is not
+// found, or a refused dispatch cancels the run here at once. A lost runner
+// leaves a failed job whose step ended cancelled (or that never ran a step);
+// when no step failed and this job did not fail itself, the run continues.
 export const CANCEL_FAILURE_SCRIPT = `let diagnostic;
 let failureSummary = "failed-step lookup unavailable";
 let evidenceTimer;
 let ownJob;
+const failedHere = process.env.JOB_STATUS === "failure";
+const failed = (step) => step.conclusion === "failure";
 try {
   const jobs = await Promise.race([
     github.paginate(
@@ -29,21 +37,19 @@ try {
       evidenceTimer = setTimeout(() => reject(new Error("Failed-step lookup timed out")), 10000);
     }),
   ]);
+  ownJob = jobs.find((job) => job.status === "in_progress" && job.runner_name === process.env.RUNNER_NAME);
   const failures = jobs.flatMap((job) => (job.steps || [])
-    .filter((step) => step.conclusion === "failure")
+    .filter(failed)
     .map((step) => \`\${job.name} / \${step.number}: \${step.name} (\${job.html_url})\`));
-  // A lost runner leaves a failed job whose step ended cancelled (or that never ran a step); with no failed
-  // step and no such evidence the jobs API may still be catching up, so cancel as before.
+  if (failedHere && !ownJob?.steps?.some(failed)) failures.push(\`\${ownJob?.name || context.job}: failed step not yet listed\`);
   const lost = jobs.filter((job) => job.conclusion === "failure"
-    && !(job.steps || []).some((step) => step.conclusion === "failure")
+    && !(job.steps || []).some(failed)
     && (job.steps || []).every((step) => !step.status || step.status === "completed")
     && (!(job.steps || []).length || job.steps.some((step) => step.conclusion === "cancelled")));
   if (!failures.length && lost.length) {
     core.notice(\`\${lost.map((job) => job.name).join(", ")}: the runner was lost before any step failed; the run continues.\`);
     return;
   }
-  // A runner runs one job at a time, so its name identifies this job.
-  ownJob = jobs.find((job) => job.status === "in_progress" && job.runner_name === process.env.RUNNER_NAME);
   failureSummary = failures.length ? failures.join("; ") : "failed steps not yet available from the jobs API";
   diagnostic = \`\${context.job}: cancelling failed merge group; failed steps: \${failures.length ? failures.join("; ") : "not yet available from the jobs API"}\`;
 } catch {
@@ -58,7 +64,7 @@ try {
 } catch {
   core.error(\`\${context.job}: cancellation step summary could not be written\`);
 }
-if (ownJob && (ownJob.steps || []).some((step) => step.conclusion === "failure")) {
+if (ownJob && (failedHere || ownJob.steps?.some(failed))) {
   try {
     await github.rest.actions.createWorkflowDispatch({
       ...context.repo,
@@ -81,6 +87,8 @@ await github.rest.actions.cancelWorkflowRun({
 export const CANONICAL_CANCEL_STEP = {
   name: "Cancel merge group after failure in this job",
   uses: "actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3",
+  // The job's own status: "failure" once one of its steps has failed.
+  env: { JOB_STATUS: `\${{ job.status }}` },
   with: {
     retries: 0,
     script: CANCEL_FAILURE_SCRIPT,

@@ -316,6 +316,19 @@ export function ContactImportStudio() {
 
   const step = currentStep(state, review.results !== null);
 
+  const resolveContactImportDisabledReason = () => {
+    if (review.isImporting) {
+      return t("clauses.importing");
+    }
+    if (review.validation.status === "pending") {
+      return t("common.verifying");
+    }
+    if (review.validation.status === "failed") {
+      return review.validation.message;
+    }
+    return t("contacts.importStudio.noReadyContacts");
+  };
+
   return (
     <ContactImportShell
       busy={busy !== "idle"}
@@ -326,6 +339,11 @@ export function ContactImportStudio() {
             <div className="mx-auto flex max-w-6xl items-center justify-between gap-3">
               <Button
                 disabled={busy !== "idle"}
+                disabledReason={
+                  busy === "inspecting"
+                    ? t("common.verifying")
+                    : t("common.preparing")
+                }
                 onClick={goBack}
                 variant="ghost"
               >
@@ -346,6 +364,7 @@ export function ContactImportStudio() {
               {state.status === "review" && (
                 <Button
                   disabled={!review.canImport}
+                  disabledReason={resolveContactImportDisabledReason()}
                   loading={review.isImporting}
                   onClick={() =>
                     detached(review.commit(), "contact-import-studio.commit")

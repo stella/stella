@@ -83,7 +83,7 @@ import {
   getHeadingDisplayAnchorId,
 } from "@/features/case-law/components/case-viewer/analysis/types";
 import { useLazyDecisionAnalysis } from "@/features/case-law/components/case-viewer/analysis/use-lazy-decision-analysis";
-import type { DECISION_AI_MODE } from "@/features/case-law/components/case-viewer/decision-ai-mode";
+import { DECISION_AI_MODE } from "@/features/case-law/components/case-viewer/decision-ai-mode";
 import type { ReaderMarksFilter } from "@/features/case-law/components/case-viewer/decision-annotation-surface.logic";
 import { annotationsForMarksFilter } from "@/features/case-law/components/case-viewer/decision-annotation-surface.logic";
 import { judgePortraitSrc } from "@/features/case-law/components/case-viewer/decision-judges";
@@ -473,8 +473,31 @@ const provisionMarginItems = (
       }))
     : [];
 
+type AnswerLanguageBlockerOptions = {
+  mode: DecisionWorkspaceProps["aiMode"];
+  signedIn: boolean;
+  savingLanguage: boolean;
+  busy: boolean;
+};
+
+const answerLanguageBlockerKey = ({
+  mode,
+  signedIn,
+  savingLanguage,
+  busy,
+}: AnswerLanguageBlockerOptions) => {
+  if (mode === DECISION_AI_MODE.gated) {
+    return signedIn ? "common.loading" : "chat.toolCall.signInToContinue";
+  }
+  if (savingLanguage) {
+    return "common.saving";
+  }
+  return busy ? "readerAnswers.waitForCurrentAction" : undefined;
+};
+
 const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
   const { decision, decisionId, initialAnchorId, landingSessionId } = props;
+  const signedIn = useMaybeAuthenticatedUser() !== null;
   // The citation strip's own summary, already cached for this decision: a
   // later-treatment note is drawn only once it shows a later citing decision.
   // The strip reports a failed read; here it only keeps the note hidden.
@@ -628,86 +651,95 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
       })),
     source: decisionId,
   });
-  const answerNotes: AnswerMarginItem[] = visibleAnswers.map((answer) => ({
-    kind: "answer",
-    id: answer.id,
-    startAnchorId: heldAnchors.answerStartAnchor(
-      answer.anchor.spans[0].paragraphId,
-    ),
-    answer,
-    languagePicker: answer.mine ? (
-      <ReaderAnswerLanguagePicker
-        documentLanguage={decision.language}
-        value={answers.languagePreference}
-        disabled={
-          props.aiMode !== "enabled" ||
-          answers.isSavingLanguage ||
-          answers.busyAnswerIds.has(answer.id)
-        }
-        onChange={(language) =>
-          detachedUserAction(answers.setAnswerLanguage(language, answer.id), {
-            context: "reader-answer.regenerate",
-            failureMessage: t("errors.actionFailed"),
-          })
-        }
-      />
-    ) : undefined,
-    generationMode: props.aiMode,
-    active: answers.activeAnswerId === answer.id,
-    openRevision: answers.openRevision,
-    busy:
-      answers.busyAnswerIds.has(answer.id) ||
-      answer.messages.some((message) => message.status === "streaming"),
-    onOpen: () => openAnswer(answer.id),
-    onFollowUp: (question) =>
-      detached(
-        answers.followUp(answer.id, question),
-        "reader-answer.follow-up",
+  const answerNotes: AnswerMarginItem[] = visibleAnswers.map((answer) => {
+    const busy = answers.busyAnswerIds.has(answer.id);
+    const languageBlockerKey = answerLanguageBlockerKey({
+      mode: props.aiMode,
+      signedIn,
+      savingLanguage: answers.isSavingLanguage,
+      busy,
+    });
+    return {
+      kind: "answer",
+      id: answer.id,
+      startAnchorId: heldAnchors.answerStartAnchor(
+        answer.anchor.spans[0].paragraphId,
       ),
-    onRegenerate: () =>
-      detached(answers.regenerate(answer.id), "reader-answer.regenerate"),
-    onDelete: () => detached(answers.remove(answer.id), "reader-answer.delete"),
-    onVisibility: (visibility) =>
-      detached(
-        answers.setVisibility(answer.id, visibility),
-        "reader-answer.visibility",
-      ),
-    citationTarget: (citation) =>
-      resolveReaderAnswerCitation({
-        citation,
-        decisionId,
-        blocks: astBlocks,
-        formatNumber: format.number,
-        readCitedDecision: (id) =>
-          citedDecisionReads.get(id) ??
-          panic("Every cited decision must have a read"),
-      }),
-    language: decision.language,
-    onCitation: (citation) =>
-      detachedUserAction(
-        jumpReaderAnswerCitation({
+      answer,
+      languagePicker: answer.mine ? (
+        <ReaderAnswerLanguagePicker
+          documentLanguage={decision.language}
+          value={answers.languagePreference}
+          disabled={languageBlockerKey !== undefined}
+          disabledReason={
+            languageBlockerKey === undefined ? undefined : t(languageBlockerKey)
+          }
+          onChange={(language) =>
+            detachedUserAction(answers.setAnswerLanguage(language, answer.id), {
+              context: "reader-answer.regenerate",
+              failureMessage: t("errors.actionFailed"),
+            })
+          }
+        />
+      ) : undefined,
+      generationMode: props.aiMode,
+      active: answers.activeAnswerId === answer.id,
+      openRevision: answers.openRevision,
+      busy:
+        busy ||
+        answer.messages.some((message) => message.status === "streaming"),
+      onOpen: () => openAnswer(answer.id),
+      onFollowUp: (question) =>
+        detached(
+          answers.followUp(answer.id, question),
+          "reader-answer.follow-up",
+        ),
+      onRegenerate: () =>
+        detached(answers.regenerate(answer.id), "reader-answer.regenerate"),
+      onDelete: () =>
+        detached(answers.remove(answer.id), "reader-answer.delete"),
+      onVisibility: (visibility) =>
+        detached(
+          answers.setVisibility(answer.id, visibility),
+          "reader-answer.visibility",
+        ),
+      citationTarget: (citation) =>
+        resolveReaderAnswerCitation({
           citation,
           decisionId,
-          root: mainRef.current,
-          openDecision: async (id, paragraphId) => {
-            const cited = await queryClient.query({
-              ...decisionOptions(id),
-              staleTime: "static",
-            });
-            const tab = createCaseDecisionViewTab({
-              ...cited,
-              decisionId: id,
-              anchorId: paragraphId,
-            });
-            await navigateToCaseDecisionMain(navigate, tab.payload);
-          },
+          blocks: astBlocks,
+          formatNumber: format.number,
+          readCitedDecision: (id) =>
+            citedDecisionReads.get(id) ??
+            panic("Every cited decision must have a read"),
         }),
-        {
-          context: "reader-answer.citation",
-          failureMessage: t("errors.actionFailed"),
-        },
-      ),
-  }));
+      language: decision.language,
+      onCitation: (citation) =>
+        detachedUserAction(
+          jumpReaderAnswerCitation({
+            citation,
+            decisionId,
+            root: mainRef.current,
+            openDecision: async (id, paragraphId) => {
+              const cited = await queryClient.query({
+                ...decisionOptions(id),
+                staleTime: "static",
+              });
+              const tab = createCaseDecisionViewTab({
+                ...cited,
+                decisionId: id,
+                anchorId: paragraphId,
+              });
+              await navigateToCaseDecisionMain(navigate, tab.payload);
+            },
+          }),
+          {
+            context: "reader-answer.citation",
+            failureMessage: t("errors.actionFailed"),
+          },
+        ),
+    };
+  });
   // A selection over any number of paragraphs is explained as a whole. The
   // server checks it against the same visible pieces, so Explain is offered
   // exactly where the server accepts it.

@@ -296,6 +296,13 @@ const visualLoaders = {
       return { default: InspectorPanePlayground };
     },
   },
+  "inspector-phone-header": {
+    load: async () => {
+      const { InspectorPhoneHeaderPlayground } =
+        await import("./-components/inspector-phone-header-playground");
+      return { default: InspectorPhoneHeaderPlayground };
+    },
+  },
   "playbook-editor": {
     load: async () => {
       const { PlaybookEditorPlayground } =

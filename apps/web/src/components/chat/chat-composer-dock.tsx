@@ -196,6 +196,7 @@ export const ChatComposerDock = (props: ChatComposerDockProps) => {
                     <Button
                       aria-label={t("chat.newChat")}
                       disabled={onNewThread === null}
+                      disabledReason={t("chat.alreadyInNewChat")}
                       onClick={onNewThread ?? undefined}
                       size="icon-xs"
                       tooltip={t("chat.newChat")}

@@ -20,6 +20,12 @@ import { TOOLBAR_ROW_HEIGHT_PX } from "@/lib/consts";
 
 export const TABLE_ROW_ESTIMATE_PX = TOOLBAR_ROW_HEIGHT_PX;
 export const TABLE_ROW_OVERSCAN = 16;
+/**
+ * Rows below the window on a table's first paint. Every row mounts a full
+ * row of cells, so the scroll buffer (`TABLE_ROW_OVERSCAN`) follows in a
+ * background render after that paint instead of delaying it.
+ */
+export const TABLE_ROW_FIRST_PAINT_OVERSCAN = 2;
 export const ADD_PROPERTY_RAIL_ACTIVE_CLASS_NAME =
   "[&:has([data-add-property-trigger]:hover)_[data-add-property-surface]]:bg-[color-mix(in_srgb,var(--color-foreground)_4%,var(--color-background))] [&:has([data-add-property-trigger]:focus-visible)_[data-add-property-surface]]:bg-[color-mix(in_srgb,var(--color-foreground)_4%,var(--color-background))]";
 

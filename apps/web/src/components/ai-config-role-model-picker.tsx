@@ -237,6 +237,7 @@ export const AIConfigRoleModelPicker = ({
                       size="sm"
                       variant="ghost"
                       disabled={disabled}
+                      disabledReason={translate("common.saving")}
                       onClick={() => customization.onReset(row.role)}
                     >
                       {translate("common.resetToDefault")}

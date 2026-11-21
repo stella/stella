@@ -5,7 +5,7 @@ import {
   QueryObserver,
   queryOptions,
 } from "@tanstack/react-query";
-import { updateUser } from "better-auth/api";
+import { revokeOtherSessions, updateUser } from "better-auth/api";
 import { organization } from "better-auth/plugins";
 import { panic } from "better-result";
 import { expect, spyOn, test } from "bun:test";
@@ -19,6 +19,11 @@ import {
   RESOURCE_TYPE,
   type ResourceType,
 } from "@stll/api-contract";
+import {
+  SESSION_SIGN_IN_MAP_PATH,
+  SESSION_SIGN_IN_REVIEW_PATH,
+  SESSION_SIGN_INS_PATH,
+} from "@stll/api-contract/session-sign-ins";
 import { SIGNAL_VIEW } from "@stll/api-contract/signals";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
@@ -737,6 +742,53 @@ const imports = (source: ts.SourceFile) => {
   return bindings;
 };
 
+type AuthEndpointRoutesOptions = {
+  sources: readonly ts.SourceFile[];
+  /** The contract constants a path may name instead of a literal. */
+  constants: ReadonlyMap<string, string>;
+};
+
+/**
+ * The route and method of every `createAuthEndpoint(path, { method })` the
+ * sources declare; the path is a literal or a named contract constant.
+ */
+const authEndpointRoutes = ({
+  sources,
+  constants,
+}: AuthEndpointRoutesOptions) => {
+  const routes = new Map<string, string>();
+  const visit = (node: ts.Node) => {
+    if (
+      ts.isCallExpression(node) &&
+      node.expression.getText() === "createAuthEndpoint"
+    ) {
+      const pathNode = node.arguments.at(0);
+      const options = node.arguments.at(1);
+      let route: string | undefined;
+      if (pathNode && ts.isStringLiteral(pathNode)) {
+        route = pathNode.text;
+      } else if (pathNode && ts.isIdentifier(pathNode)) {
+        route = constants.get(pathNode.text);
+      }
+      if (route === undefined || !options) {
+        throw new TypeError(
+          `Auth endpoint path must be a literal or a contract constant: ${node.getText()}`,
+        );
+      }
+      const method = propertyValue(options, "method");
+      if (!ts.isStringLiteral(method)) {
+        throw new TypeError(`Auth endpoint ${route} must name its method`);
+      }
+      routes.set(route, method.text);
+    }
+    ts.forEachChild(node, visit);
+  };
+  for (const source of sources) {
+    visit(source);
+  }
+  return routes;
+};
+
 const exportedSafeHandlerConstructors = (source: ts.SourceFile) => {
   const names = new Set<string>();
   for (const statement of source.statements) {
@@ -1227,11 +1279,34 @@ test("every mutation resource declaration agrees with its registered backend rou
   );
   const organizationEndpoints = organization().endpoints;
   expect(organizationPluginIsRegistered(readSource("lib/auth.ts"))).toBe(true);
+  // The API's own account session endpoints (`sessionSignInsClient`).
+  const sessionSignInsEndpoints = authEndpointRoutes({
+    sources: [
+      readSource("lib/auth/session-lifetime.ts"),
+      readSource("lib/auth/session-sign-ins-plugin.ts"),
+    ],
+    constants: new Map([
+      ["SESSION_SIGN_IN_MAP_PATH", SESSION_SIGN_IN_MAP_PATH],
+      ["SESSION_SIGN_IN_REVIEW_PATH", SESSION_SIGN_IN_REVIEW_PATH],
+      ["SESSION_SIGN_INS_PATH", SESSION_SIGN_INS_PATH],
+    ]),
+  });
   for (const contract of Object.values(RESOURCE_MUTATION_CONTRACTS)) {
     expect(contract.writes.length).toBeGreaterThan(0);
     const observedResources = new Set<ResourceType>();
     let registeredWriteCount = 0;
     for (const write of contract.writes) {
+      if (
+        write.type === "auth-core-endpoint" &&
+        write.endpoint === "revokeOtherSessions"
+      ) {
+        expect(write.method).toBe(revokeOtherSessions.options.method);
+        expect(write.route).toBe(revokeOtherSessions.path);
+        expect(contract.resources).toEqual([RESOURCE_TYPE.USER]);
+        observedResources.add(RESOURCE_TYPE.USER);
+        registeredWriteCount += 1;
+        continue;
+      }
       if (write.type === "auth-core-endpoint") {
         const endpoint = updateUser();
         expect(write.endpoint).toBe("updateUser");
@@ -1276,6 +1351,16 @@ test("every mutation resource declaration agrees with its registered backend rou
         expect(registrations.at(0)?.expression.getText()).toBe(
           "createUserProjectionUpdateHook",
         );
+        observedResources.add(RESOURCE_TYPE.USER);
+        registeredWriteCount += 1;
+        continue;
+      }
+      if (
+        write.type === "auth-plugin-endpoint" &&
+        write.plugin === "session-sign-ins"
+      ) {
+        expect(sessionSignInsEndpoints.get(write.route)).toBe(write.method);
+        expect(contract.resources).toEqual([RESOURCE_TYPE.USER]);
         observedResources.add(RESOURCE_TYPE.USER);
         registeredWriteCount += 1;
         continue;

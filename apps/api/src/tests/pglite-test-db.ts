@@ -22,7 +22,6 @@ import type { ScopedDb } from "@/api/db/safe-db";
 import * as schema from "@/api/db/schema";
 import type { AnyDrizzle } from "@/api/db/scoped";
 import {
-  CASE_LAW_SITEMAP_RANGE_COLUMN_GRANTS_BY_RELATION,
   caseLawDecisionViewGrantStatement,
   CITATION_POLARITY_EVIDENCE_COLUMN_GRANTS_BY_RELATION,
   COLLECTION_BODY_COLUMN_GRANTS_BY_RELATION,
@@ -92,6 +91,7 @@ import {
   installPgliteSearchHistoryClearFence,
   installPgliteServiceClientCredentialCascade,
   installPgliteSharepointPolicyFence,
+  installPgliteSsoProviderIdentityGuard,
   installPgliteStatuteCitationCounts,
   installPgliteSyntheticMembershipTrigger,
   installPgliteTimeEntryTimerSignals,
@@ -371,7 +371,6 @@ const PUBLIC_LAW_COLUMNS_GRANTED_IN_A_LATER_RELEASE: ReadonlySet<string> =
   new Set(
     [
       CITATION_POLARITY_EVIDENCE_COLUMN_GRANTS_BY_RELATION,
-      CASE_LAW_SITEMAP_RANGE_COLUMN_GRANTS_BY_RELATION,
       COLLECTION_BODY_COLUMN_GRANTS_BY_RELATION,
       COLLECTION_OBSERVATION_COLUMN_GRANTS_BY_RELATION,
       COLLECTION_PART_COLUMN_GRANTS_BY_RELATION,
@@ -1023,6 +1022,7 @@ export const buildFullTestPglite = async (): Promise<PGlite> => {
   await installPgliteSchedulerJobPauseLog(db);
   await installPgliteTreeParentGuards(db);
   await installPgliteOrganizationDeleteOwnerGuard(db);
+  await installPgliteSsoProviderIdentityGuard(db);
 
   await applyStellaTablePrivileges(client);
   for (const statement of ROLE_GRANT_STATEMENTS) {

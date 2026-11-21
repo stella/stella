@@ -43,7 +43,6 @@ export const AnswerLinkForm = ({
   const t = useTranslations();
   const id = useId();
   const errorId = useId();
-  const removalReasonId = useId();
   const form = useForm(
     schemaFormOptions({
       schema: v.strictObject({
@@ -117,7 +116,12 @@ export const AnswerLinkForm = ({
           )}
         </form.Field>
         <div className="flex gap-2">
-          <Button type="submit" size="sm" disabled={disabled}>
+          <Button
+            type="submit"
+            size="sm"
+            disabled={disabled}
+            disabledReason={t("chat.answerEdit.waitForAnswer")}
+          >
             {t("common.confirm")}
           </Button>
           {existingUrl !== undefined && (
@@ -126,8 +130,10 @@ export const AnswerLinkForm = ({
               size="sm"
               variant="ghost"
               disabled={disabled || removal.status === "unavailable"}
-              aria-describedby={
-                removal.status === "unavailable" ? removalReasonId : undefined
+              disabledReason={
+                removal.status === "unavailable"
+                  ? t(removal.reason)
+                  : t("chat.answerEdit.waitForAnswer")
               }
               onClick={() =>
                 onAction({
@@ -144,7 +150,7 @@ export const AnswerLinkForm = ({
           </Button>
         </div>
         {existingUrl !== undefined && removal.status === "unavailable" && (
-          <p id={removalReasonId}>{t(removal.reason)}</p>
+          <p>{t(removal.reason)}</p>
         )}
       </Form>
     </div>

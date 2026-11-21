@@ -295,40 +295,6 @@ export const decideCourtIdentityRepair = (
 };
 
 /**
- * Give rows already stored under the official name their court id, in one
- * statement per page. Guarded on the name the walk read and on the row still
- * lacking an id, so a row the crawl re-ingested under the run is left as it
- * wrote it. Not a projection change: the id is not part of the projected
- * text, so nothing is re-enqueued.
- */
-export const assignCourtIdsStatement = (
-  assignments: readonly Pick<
-    CourtIdentityAssignment,
-    "row" | "to" | "courtId"
-  >[],
-): SQL => {
-  if (assignments.length === 0) {
-    return panic("assignCourtIdsStatement needs at least one row");
-  }
-  const values = sql.join(
-    assignments.map(
-      ({ row, to, courtId }) =>
-        sql`(${row.id}::uuid, ${courtId}::text, ${to}::text)`,
-    ),
-    sql`, `,
-  );
-  return sql`
-    UPDATE case_law_decisions AS d
-       SET court_id = v.court_id
-      FROM (VALUES ${values}) AS v(id, court_id, court)
-     WHERE d.id = v.id
-       AND d.court_id IS NULL
-       AND d.court = v.court
-    RETURNING d.id
-  `;
-};
-
-/**
  * Store one row under its directory court: the id, the official name, and
  * the printed name in the metadata where the metadata does not state one
  * already (an adapter's own statement of the court is never overwritten).

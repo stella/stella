@@ -582,7 +582,15 @@ describe("public corpus fleet request budgets", () => {
             method: requestMethod,
           })),
       );
-    });
+    })
+    .concat(
+      ["GET", "HEAD"].flatMap((method) =>
+        [
+          "/law/statutes?query=constitution",
+          "/law/statutes/?query=constitution",
+        ].map((path) => ({ path, method })),
+      ),
+    );
   for (const { path, method } of searchRoutes) {
     test(`search address refusals preserve fleet capacity without double charging: ${method} ${path}`, async () => {
       const bindings = createBindings();

@@ -368,16 +368,30 @@ const PDFPasswordPrompt = ({
             </FieldError>
           )}
         </Field>
-        <PDFPasswordSubmitButton label={t("workspaces.pdf.unlock")} />
+        <PDFPasswordSubmitButton
+          label={t("workspaces.pdf.unlock")}
+          pendingLabel={t("common.loading")}
+        />
       </Form>
     </div>
   );
 };
 
-const PDFPasswordSubmitButton = ({ label }: { label: string }) => {
+const PDFPasswordSubmitButton = ({
+  label,
+  pendingLabel,
+}: {
+  label: string;
+  pendingLabel: string;
+}) => {
   const { pending } = useFormStatus();
   return (
-    <Button className="w-full" disabled={pending} type="submit">
+    <Button
+      className="w-full"
+      disabled={pending}
+      disabledReason={pendingLabel}
+      type="submit"
+    >
       {label}
     </Button>
   );

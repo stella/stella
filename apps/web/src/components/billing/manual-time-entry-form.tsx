@@ -112,6 +112,54 @@ const useTimeEntryRate = ({
   return { rateQuery, missingRate, rateReady, recordRefusal };
 };
 
+type TimeEntrySaveDisabledReasonOptions = {
+  pending: boolean;
+  rateReady: boolean;
+  rateReadFailed: boolean;
+  missingRate: boolean;
+  dateAllowed: boolean;
+  durationMinutes: number;
+  tCommon: (key: "saving" | "loading") => string;
+  tBilling: (
+    key:
+      | "quickEntry.rateReadFailed"
+      | "rates.effectiveRateRequired"
+      | "quickEntry.invalidDate"
+      | "quickEntry.positiveDurationRequired"
+      | "quickEntry.narrativeRequired",
+  ) => string;
+};
+
+const timeEntrySaveDisabledReason = ({
+  pending,
+  rateReady,
+  rateReadFailed,
+  missingRate,
+  dateAllowed,
+  durationMinutes,
+  tCommon,
+  tBilling,
+}: TimeEntrySaveDisabledReasonOptions) => {
+  if (pending) {
+    return tCommon("saving");
+  }
+  if (!rateReady) {
+    if (rateReadFailed) {
+      return tBilling("quickEntry.rateReadFailed");
+    }
+    return missingRate
+      ? tBilling("rates.effectiveRateRequired")
+      : tCommon("loading");
+  }
+  if (!dateAllowed) {
+    return tBilling("quickEntry.invalidDate");
+  }
+  if (!Number.isInteger(durationMinutes) || durationMinutes <= 0) {
+    return tBilling("quickEntry.positiveDurationRequired");
+  }
+  return tBilling("quickEntry.narrativeRequired");
+};
+
 export const ManualTimeEntryForm = ({
   defaultValues,
   dateLocked = false,
@@ -155,6 +203,18 @@ export const ManualTimeEntryForm = ({
     Number.isInteger(durationMinutes) &&
     durationMinutes > 0 &&
     (!narrativeRequired || narrative.trim().length > 0);
+
+  const saveDisabledReason = timeEntrySaveDisabledReason({
+    pending,
+    rateReady,
+    rateReadFailed: rateQuery.isError,
+    missingRate,
+    dateAllowed:
+      dateWorked.length > 0 && isTimeEntryDateAllowed(dateWorked, dateBounds),
+    durationMinutes,
+    tCommon,
+    tBilling,
+  });
 
   const submit = (action: ManualTimeEntryFormProps["onSubmit"]) => {
     if (!valid || pending) {
@@ -321,6 +381,7 @@ export const ManualTimeEntryForm = ({
       <div className="flex flex-wrap justify-end gap-2">
         <Button
           disabled={pending}
+          disabledReason={tCommon("saving")}
           onClick={onCancel}
           type="button"
           variant="ghost"
@@ -330,6 +391,7 @@ export const ManualTimeEntryForm = ({
         {onSaveAndNew && (
           <Button
             disabled={!valid || pending}
+            disabledReason={saveDisabledReason}
             onClick={() => submit(onSaveAndNew)}
             type="button"
             variant="outline"
@@ -340,6 +402,7 @@ export const ManualTimeEntryForm = ({
         {onSaveAndAddExpense && (
           <Button
             disabled={!valid || pending}
+            disabledReason={saveDisabledReason}
             onClick={() => submit(onSaveAndAddExpense)}
             type="button"
             variant="outline"
@@ -347,7 +410,11 @@ export const ManualTimeEntryForm = ({
             {tBilling("quickEntry.saveAndAddExpense")}
           </Button>
         )}
-        <Button disabled={!valid || pending} type="submit">
+        <Button
+          disabled={!valid || pending}
+          disabledReason={saveDisabledReason}
+          type="submit"
+        >
           {tCommon("save")}
         </Button>
       </div>

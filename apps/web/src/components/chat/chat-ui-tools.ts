@@ -20,6 +20,7 @@ import {
   chatToolLabel,
   isKnownChatToolName,
   isUserInputChatToolName,
+  UNKNOWN_CHAT_TOOL_LABEL,
 } from "@stll/api-contract/chat-tool-activity";
 import type {
   ChatToolLabel,
@@ -279,6 +280,11 @@ type ChatToolTitleLabel = Exclude<
 /** `chat.tool.<label>`, which the catalogue must hold for every other label. */
 const toolTitleKey = (label: ChatToolTitleLabel) =>
   `chat.tool.${label}` as const satisfies TranslationKey;
+
+/** The generic title ("Using tool") of a tool the chat keeps no title for. */
+export const UNKNOWN_CHAT_TOOL_TITLE_KEY = toolTitleKey(
+  UNKNOWN_CHAT_TOOL_LABEL,
+);
 
 const EXTERNAL_INPUT_CHAT_TOOL_NAMES = {
   boe_find_related_laws: true,

@@ -616,6 +616,11 @@ export const RegistrySearch = ({
                 variant="ghost"
                 className="h-11 max-w-48 min-w-0 text-xs"
                 disabled={!connected}
+                disabledReason={
+                  connection?.status === "unavailable"
+                    ? t("registryErrorState")
+                    : emptyText
+                }
               />
             }
             aria-label={t("registrySelect")}
@@ -679,6 +684,7 @@ export const RegistrySearch = ({
               <Button
                 data-registry-card
                 disabled={card.status === "formatting"}
+                disabledReason={t("registryFormatting")}
                 onKeyDown={(event) => {
                   if (
                     event.nativeEvent.isComposing ||
@@ -768,6 +774,7 @@ export const RegistrySearch = ({
                         className="h-11 w-full justify-between text-xs"
                         variant="ghost"
                         disabled={card.status === "formatting"}
+                        disabledReason={t("registryFormatting")}
                       />
                     }
                     aria-label={t("registryFormat")}

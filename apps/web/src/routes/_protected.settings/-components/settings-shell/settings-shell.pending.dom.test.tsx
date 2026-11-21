@@ -152,7 +152,7 @@ describe("the account pages' pending views", () => {
     });
   }
 
-  test("profile: the cards' titles in the page's order", () => {
+  test("profile: the sections' titles in the page's order, chat as rows", () => {
     const view = testing.render(
       withIntl(
         <SettingsChromeScope>
@@ -161,17 +161,21 @@ describe("the account pages' pending views", () => {
       ),
     );
     const titles = [
-      ...view.container.querySelectorAll('[data-slot="frame-panel-title"]'),
+      ...view.container.querySelectorAll('[data-slot="list-group-title"]'),
     ].map((title) => title.textContent);
     expect(titles).toEqual([
       messages.common.displayName,
       messages.settings.account.timezone,
+      messages.navigation.chat,
+      messages.settings.account.dangerZone,
+    ]);
+    const chat = view.getByRole("region", { name: messages.navigation.chat });
+    const chatRows = [
+      ...chat.querySelectorAll('[data-slot="settings-row-title"]'),
+    ].map((title) => title.textContent);
+    expect(chatRows).toEqual([
       messages.settings.account.chatNotifications,
       messages.settings.account.chatTechnicalDetails,
-      messages.settings.account.twoFactor.title,
-      messages.common.sessions,
-      messages.settings.account.personalDataExportTitle,
-      messages.settings.account.dangerZone,
     ]);
   });
 });

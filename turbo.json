@@ -30,7 +30,11 @@
   // default changes and a cached pass could replay over the edit. Hashing the
   // patches globally is the honest scope: the blast radius is every dependent
   // package, not one task's declared inputs.
-  "globalDependencies": ["patches/**", "scripts/bun-toolchain.gen.json"],
+  "globalDependencies": [
+    "patches/**",
+    "scripts/bun-toolchain.gen.json",
+    "packages/scripts/src/test-event-loop-watchdog*.ts"
+  ],
   "tasks": {
     "@stll/desktop#test:browser": {
       "inputs": ["$TURBO_DEFAULT$"]
@@ -1351,6 +1355,7 @@
         "$TURBO_ROOT$/packages/country-codes/**",
         "$TURBO_ROOT$/packages/db-load-gate/**",
         "$TURBO_ROOT$/packages/decision-reader/**",
+        "$TURBO_ROOT$/packages/docx-authoring/**",
         "$TURBO_ROOT$/packages/docx-utils/**",
         "$TURBO_ROOT$/packages/errors/**",
         "$TURBO_ROOT$/packages/fetch/**",
@@ -1431,6 +1436,7 @@
         "$TURBO_ROOT$/packages/conditions/**",
         "$TURBO_ROOT$/packages/country-codes/**",
         "$TURBO_ROOT$/packages/db-load-gate/**",
+        "$TURBO_ROOT$/packages/docx-authoring/**",
         "$TURBO_ROOT$/packages/docx-utils/**",
         "$TURBO_ROOT$/packages/errors/**",
         "$TURBO_ROOT$/packages/fetch/**",
@@ -1507,6 +1513,7 @@
         "$TURBO_ROOT$/packages/db-load-gate/**",
         "$TURBO_ROOT$/packages/docx-utils/**",
         "$TURBO_ROOT$/packages/errors/**",
+        "$TURBO_ROOT$/packages/fetch/**",
         "$TURBO_ROOT$/packages/html/**",
         "$TURBO_ROOT$/packages/infosoud/**",
         "$TURBO_ROOT$/packages/legal-ast/**",
@@ -1584,6 +1591,7 @@
         "$TURBO_ROOT$/packages/country-codes/**",
         "$TURBO_ROOT$/packages/db-load-gate/**",
         "$TURBO_ROOT$/packages/decision-reader/**",
+        "$TURBO_ROOT$/packages/docx-authoring/**",
         "$TURBO_ROOT$/packages/docx-utils/**",
         "$TURBO_ROOT$/packages/errors/**",
         "$TURBO_ROOT$/packages/fetch/**",
@@ -1671,6 +1679,7 @@
         "$TURBO_ROOT$/packages/country-codes/**",
         "$TURBO_ROOT$/packages/db-load-gate/**",
         "$TURBO_ROOT$/packages/decision-reader/**",
+        "$TURBO_ROOT$/packages/docx-authoring/**",
         "$TURBO_ROOT$/packages/docx-utils/**",
         "$TURBO_ROOT$/packages/errors/**",
         "$TURBO_ROOT$/packages/fetch/**",

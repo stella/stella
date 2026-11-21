@@ -107,6 +107,7 @@ const WebSearchKeyField = ({
           <Button
             aria-label={t("common.remove")}
             disabled={disabled}
+            disabledReason={t("common.saving")}
             onClick={onRemove}
             size="sm"
             tooltip={t("common.remove")}
@@ -122,6 +123,7 @@ const WebSearchKeyField = ({
           <SecretInput
             autoComplete="off"
             disabled={disabled}
+            disabledReason={t("common.saving")}
             id={fieldId}
             onChange={(e) => onChange(e.target.value)}
             placeholder={t(WEB_SEARCH_KEYS_SECTION.placeholder)}

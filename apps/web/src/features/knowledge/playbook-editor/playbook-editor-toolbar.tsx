@@ -126,7 +126,13 @@ const PaneSaveStatusContent = ({
 
 /** The save control: a Save button, or the pane's autosave status. */
 type ToolbarSave =
-  | { type: "button"; disabled: boolean; loading: boolean; onSave: () => void }
+  | {
+      type: "button";
+      disabled: boolean;
+      disabledReason: string;
+      loading: boolean;
+      onSave: () => void;
+    }
   | ({ type: "autosave" } & PaneSaveStatusProps);
 
 type PlaybookEditorToolbarProps = {
@@ -147,6 +153,7 @@ type PlaybookEditorToolbarProps = {
   onDeleteOpenChange: (open: boolean) => void;
   /** A save or delete request is running. */
   busy: boolean;
+  busyReason: string;
   onDelete: () => void;
   save: ToolbarSave;
 };
@@ -167,6 +174,7 @@ export const PlaybookEditorToolbar = ({
   deleteOpen,
   onDeleteOpenChange,
   busy,
+  busyReason,
   onDelete,
   save,
 }: PlaybookEditorToolbarProps) => {
@@ -216,14 +224,14 @@ export const PlaybookEditorToolbar = ({
         {isEdit && canApprove && (
           <Button
             disabled={isDirty || approving}
+            disabledReason={
+              approving
+                ? t("common.approving")
+                : t("knowledge.playbooks.approval.saveBeforeApprove")
+            }
             loading={approving}
             onClick={onApprove}
             size="sm"
-            tooltip={
-              isDirty
-                ? t("knowledge.playbooks.approval.saveBeforeApprove")
-                : undefined
-            }
             type="button"
             variant="outline"
           >
@@ -257,6 +265,7 @@ export const PlaybookEditorToolbar = ({
                 </AlertDialogClose>
                 <Button
                   disabled={busy}
+                  disabledReason={busyReason}
                   onClick={onDelete}
                   variant="destructive"
                 >
@@ -277,6 +286,7 @@ export const PlaybookEditorToolbar = ({
         ) : (
           <Button
             disabled={save.disabled}
+            disabledReason={save.disabledReason}
             loading={save.loading}
             onClick={save.onSave}
             type="button"

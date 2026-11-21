@@ -398,6 +398,7 @@ const StudioSaveAction = () => {
   return (
     <Button
       disabled={ui.isSaving}
+      disabledReason={t("common.saving")}
       onClick={() => {
         detached(actions.save(), "template-studio-inspector.save");
       }}

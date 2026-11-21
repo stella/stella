@@ -464,6 +464,11 @@ export const CompareVersionsPanel = ({
           <Button
             className="w-full"
             disabled={isRequestPending}
+            disabledReason={
+              requestState.status === "saving"
+                ? t("fileDetail.savingComparison")
+                : t("fileDetail.generatingRedline")
+            }
             onClick={() => {
               detached(previewComparison(), "compare-versions-panel.preview");
             }}
@@ -752,7 +757,11 @@ const CompareResultView = ({
 
       <div className="mt-5 flex flex-col gap-2">
         {onSave !== undefined && (
-          <Button disabled={isSaving} onClick={onSave}>
+          <Button
+            disabled={isSaving}
+            disabledReason={t("fileDetail.savingComparison")}
+            onClick={onSave}
+          >
             {isSaving && (
               <Loader label={t("fileDetail.savingComparison")} size="sm" />
             )}
@@ -763,6 +772,7 @@ const CompareResultView = ({
         )}
         <Button
           disabled={isSaving}
+          disabledReason={t("fileDetail.savingComparison")}
           onClick={onCompareAnother}
           variant="outline"
         >

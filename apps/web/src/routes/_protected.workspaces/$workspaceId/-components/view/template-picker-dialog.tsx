@@ -372,6 +372,7 @@ const TemplateRow = ({
           <Button
             className="flex min-w-0 flex-1"
             disabled={isPending}
+            disabledReason={t("common.preparing")}
             onClick={onUse}
             variant="plain"
             {...capabilityProps}
@@ -391,6 +392,7 @@ const TemplateRow = ({
         {(capabilityProps) => (
           <Button
             disabled={isPending}
+            disabledReason={t("common.preparing")}
             onClick={onUse}
             size="xs"
             variant="secondary"
@@ -431,6 +433,7 @@ const BuiltInTemplateRow = ({
           <Button
             className="flex min-w-0 flex-1"
             disabled={isPending}
+            disabledReason={t("common.preparing")}
             onClick={onUse}
             onFocus={onPreview}
             onMouseEnter={onPreview}
@@ -445,6 +448,7 @@ const BuiltInTemplateRow = ({
         {(capabilityProps) => (
           <Button
             disabled={isPending}
+            disabledReason={t("common.preparing")}
             onClick={onUse}
             size="xs"
             variant="secondary"
@@ -480,6 +484,7 @@ const DeleteTemplateConfirm = ({
           <Button
             aria-label={t("workspaces.views.templates.delete")}
             disabled={pending}
+            disabledReason={t("common.deleting")}
             size="icon-xs"
             variant="ghost"
           />

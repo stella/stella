@@ -53,7 +53,7 @@ const listGeometry = (args: string[]) => {
   );
   const result = Bun.spawnSync(
     [
-      "node",
+      process.execPath,
       path.join(root, "node_modules/@playwright/test/cli.js"),
       "test",
       "--config=apps/web/e2e/playwright.config.ts",
@@ -303,7 +303,7 @@ test.describe("explicit suite overrides", () => {
     // These cases request only option fixtures: no browser or app is needed.
     const result = Bun.spawnSync(
       [
-        "node",
+        process.execPath,
         path.join(root, "node_modules/@playwright/test/cli.js"),
         "test",
         `--config=${config}`,

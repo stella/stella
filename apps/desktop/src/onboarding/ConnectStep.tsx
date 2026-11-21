@@ -115,7 +115,11 @@ export const ConnectStep = ({ onBack, onContinue, snapshot }: StepProps) => {
       <StepFooter
         onBack={onBack}
         primary={
-          <Button disabled={!snapshot.linked} onClick={onContinue}>
+          <Button
+            disabled={!snapshot.linked}
+            disabledReason={t(waiting ? "connectWaiting" : "connectTitle")}
+            onClick={onContinue}
+          >
             {t("continue")}
           </Button>
         }

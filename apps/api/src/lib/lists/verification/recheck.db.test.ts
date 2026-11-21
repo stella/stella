@@ -645,7 +645,11 @@ test("a grade whose access was withdrawn while grading records nothing", async (
 test("an organization at its daily limit is refused before any model call", async () => {
   await testDb
     .update(modelRunBudgets)
-    .set({ startsToday: sql`${modelRunBudgets.dailyLimit}` })
+    // Stamped for today, so a run across midnight in Prague still counts it.
+    .set({
+      startsDay: sql`stella_model_run_day(clock_timestamp())`,
+      startsToday: sql`${modelRunBudgets.dailyLimit}`,
+    })
     .where(eq(modelRunBudgets.organizationId, organizationId));
   const grader = fakeGrader();
   const count = (await recheckEvents(gapClaim)).length;
@@ -761,7 +765,11 @@ test("each claim reports its own refusal and the rest are still graded", async (
 test("an organization at its daily limit is refused before any of several claims is graded", async () => {
   await testDb
     .update(modelRunBudgets)
-    .set({ startsToday: sql`${modelRunBudgets.dailyLimit}` })
+    // Stamped for today, so a run across midnight in Prague still counts it.
+    .set({
+      startsDay: sql`stella_model_run_day(clock_timestamp())`,
+      startsToday: sql`${modelRunBudgets.dailyLimit}`,
+    })
     .where(eq(modelRunBudgets.organizationId, organizationId));
   const grader = graderAnswering(["C1", "C2"]);
   try {

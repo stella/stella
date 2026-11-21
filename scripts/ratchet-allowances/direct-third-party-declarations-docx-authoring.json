@@ -1,0 +1,5 @@
+{
+  "metric": "direct-third-party-declarations",
+  "delta": 18,
+  "reason": "new docx-authoring package shared by the API and desktop declares its own dependencies (existing stella packages plus the shared Result library), plus the editor and collaboration peers every Folio host declares, so one shared resolution is loaded"
+}

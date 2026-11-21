@@ -206,6 +206,7 @@ const ArchivedMatterView = ({ workspaceId }: { workspaceId: string }) => {
         <Button
           className="self-start"
           disabled={unarchive.isPending}
+          disabledReason={t("common.restoring")}
           onClick={() =>
             unarchive.mutate(
               { workspaceId: workspace.id },

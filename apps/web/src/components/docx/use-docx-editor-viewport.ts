@@ -31,9 +31,10 @@ export const useDocxEditorViewport = ({
   scaleOffset,
   surface,
 }: UseDocxEditorViewportOptions) => {
+  // A nudge from the fit starts at the zoom the editor's own fit-width shows.
   const { containerRef: fitZoomRef, fitZoom: targetZoom } = useDocxFitZoom({
+    fit: { type: "editor" },
     scaleOffset,
-    maxAutoZoom: 0.85,
   });
   const zoomMode = scaleOffset === 0 ? "fit-width" : "manual-offset";
   // Switching initialZoom back to fit-width reattaches Folio's inner-viewport

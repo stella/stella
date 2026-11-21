@@ -169,6 +169,7 @@ export const MemoryRow = ({
           <div className="flex justify-end gap-2">
             <Button
               disabled={updateMemory.isPending}
+              disabledReason={commonT("saving")}
               onClick={() => setIsEditing(false)}
               size="sm"
               variant="ghost"
@@ -177,6 +178,9 @@ export const MemoryRow = ({
             </Button>
             <Button
               disabled={draft.trim().length === 0 || updateMemory.isPending}
+              disabledReason={
+                updateMemory.isPending ? commonT("saving") : t("enterMemory")
+              }
               loading={updateMemory.isPending}
               onClick={saveEdit}
               size="sm"
@@ -231,6 +235,7 @@ const MemoryActions = ({
     <Button
       aria-label={commonT("delete")}
       disabled={isPending}
+      disabledReason={commonT("deleting")}
       onClick={onDelete}
       size="icon-sm"
       variant="ghost"
@@ -243,6 +248,7 @@ const MemoryActions = ({
       <div className="flex shrink-0 items-center gap-0.5">
         <Button
           disabled={isPending}
+          disabledReason={commonT("restoring")}
           onClick={onRestore}
           size="sm"
           variant="ghost"
@@ -261,6 +267,7 @@ const MemoryActions = ({
         aria-label={memory.pinned ? commonT("unpin") : commonT("pin")}
         aria-pressed={memory.pinned}
         disabled={isPending}
+        disabledReason={commonT("saving")}
         onClick={onPin}
         size="icon-sm"
         variant="ghost"
@@ -270,6 +277,7 @@ const MemoryActions = ({
       <Button
         aria-label={commonT("edit")}
         disabled={isPending}
+        disabledReason={commonT("saving")}
         onClick={onEdit}
         size="icon-sm"
         variant="ghost"
@@ -279,6 +287,7 @@ const MemoryActions = ({
       <Button
         aria-label={commonT("archive")}
         disabled={isPending}
+        disabledReason={commonT("saving")}
         onClick={onArchive}
         size="icon-sm"
         variant="ghost"

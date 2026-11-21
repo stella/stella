@@ -117,11 +117,11 @@ export const VerificationDecisionModelControl = ({
         </Label>
       }
       notice={
-        view.unavailable && (
+        view.unavailable ? (
           <p className="text-muted-foreground text-2xs text-pretty">
             {t("settings.organization.verificationDecisionModel.unavailable")}
           </p>
-        )
+        ) : undefined
       }
     />
   );

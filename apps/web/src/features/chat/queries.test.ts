@@ -16,6 +16,7 @@ import {
   CHAT_CONTINUATION_REJECTED_ERROR_CODE,
   CHAT_TURN_ID_HEADER,
   CHAT_TURN_INTENT,
+  RESOURCE_TYPE,
 } from "@stll/api-contract";
 import {
   ACTION_ADMISSION_CODES,
@@ -306,6 +307,24 @@ describe("chat thread fetch failures", () => {
     const persisted = { ...draft, threadExists: true };
     expect(titleOptions(persisted).enabled).toBe(true);
     expect(titleOptions(persisted, false).enabled).toBe(false);
+  });
+
+  test("the title read follows the thread in its matter or organization", () => {
+    const resourceReads = (workspaceId: string | undefined) =>
+      chatThreadTitleOptions({
+        activeOrganizationId: "org_test",
+        key: { threadId: "thread-title", workspaceId },
+        persistedThread: undefined,
+      }).meta.resourceReads;
+
+    expect(resourceReads(undefined)).toEqual({
+      resources: [RESOURCE_TYPE.CHAT_THREAD],
+      scope: { type: "organization", organizationId: "org_test" },
+    });
+    expect(resourceReads("ws_test")).toEqual({
+      resources: [RESOURCE_TYPE.CHAT_THREAD],
+      scope: { type: "workspace", workspaceId: "ws_test" },
+    });
   });
 
   test("returns an empty draft for an allowed missing thread", async () => {

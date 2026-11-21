@@ -9,7 +9,7 @@ export type ReplayWriterOwner = {
 export const REPLAY_WRITER_REGISTRY = [
   {
     file: "apps/api/src/db/root.ts",
-    line: 787,
+    line: 812,
     kind: "pending",
   },
   {
@@ -50,21 +50,6 @@ export const REPLAY_WRITER_REGISTRY = [
   {
     file: "apps/api/src/handlers/case-law/citation-resolution.ts",
     line: 1732,
-    kind: "pending",
-  },
-  {
-    file: "apps/api/src/handlers/case-law/erasure.ts",
-    line: 444,
-    kind: "pending",
-  },
-  {
-    file: "apps/api/src/handlers/case-law/erasure.ts",
-    line: 757,
-    kind: "pending",
-  },
-  {
-    file: "apps/api/src/handlers/case-law/erasure.ts",
-    line: 767,
     kind: "pending",
   },
   {
@@ -209,12 +194,12 @@ export const REPLAY_WRITER_REGISTRY = [
   },
   {
     file: "apps/api/src/handlers/case-law/ingestion/pipeline/decision-row.ts",
-    line: 400,
+    line: 401,
     kind: "pending",
   },
   {
     file: "apps/api/src/handlers/case-law/ingestion/pipeline/decision-row.ts",
-    line: 466,
+    line: 467,
     kind: "pending",
   },
   {
@@ -229,11 +214,6 @@ export const REPLAY_WRITER_REGISTRY = [
   {
     file: "apps/api/src/handlers/case-law/ingestion/pipeline/unread-items.ts",
     line: 235,
-    kind: "pending",
-  },
-  {
-    file: "apps/api/src/handlers/case-law/ingestion/supplement-erasure.ts",
-    line: 156,
     kind: "pending",
   },
   {
@@ -390,6 +370,24 @@ export const REPLAY_WRITER_REGISTRY = [
     invariant: {
       file: "apps/api/src/lib/legal-search/corpus-index-generation-retire.db.test.ts",
       test: "retire moves a building generation to retired with its receipt, and from that commit no writer projects it",
+    },
+  },
+  {
+    file: "apps/api/src/lib/legal-search/removal-reconciliation-store.ts",
+    line: 170,
+    kind: "transition",
+    invariant: {
+      file: "apps/api/src/handlers/case-law/ingestion/removal-retry-lane.postgres.test.ts",
+      test: "a claimed retry classifies a restored decision without a publisher probe",
+    },
+  },
+  {
+    file: "apps/api/src/lib/legal-search/removal-reconciliation-store.ts",
+    line: 367,
+    kind: "transition",
+    invariant: {
+      file: "apps/api/src/handlers/case-law/ingestion/removal-retry-lane.postgres.test.ts",
+      test: "bounded retries leave the remainder due for the next run",
     },
   },
 ] as const satisfies readonly ReplayWriterOwner[];

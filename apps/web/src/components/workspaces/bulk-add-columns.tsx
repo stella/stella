@@ -369,6 +369,7 @@ const useColumnDrafts = (defaultFileIds: string[], seed?: Draft) => {
 
 type BulkColumnsFormProps = React.PropsWithChildren<{
   canSubmit: boolean;
+  submitDisabledReason: string | undefined;
   capability: Capability | null;
   mode: ColumnDialogMode;
   /** The matter's document-type gate; the organization's columns have none. */
@@ -383,6 +384,7 @@ type BulkColumnsFormProps = React.PropsWithChildren<{
 /** The dialog's chrome: the title, the drafts, the gate and the two buttons. */
 const BulkColumnsForm = ({
   canSubmit,
+  submitDisabledReason,
   capability,
   dirty,
   children,
@@ -430,6 +432,7 @@ const BulkColumnsForm = ({
             {(capabilityProps) => (
               <Button
                 disabled={!canSubmit}
+                disabledReason={submitDisabledReason}
                 loading={isPending}
                 onClick={onSubmit}
                 size="sm"
@@ -485,6 +488,31 @@ const useColumnsSubmit = (onClose: () => void) => {
 
 type ColumnsBodyProps = {
   onClose: () => void;
+};
+
+type BulkColumnSubmitDisabledReasonOptions = {
+  isPending: boolean;
+  withinDependencyCap: boolean;
+  t: (
+    key:
+      | "common.creating"
+      | "workspaces.properties.reduceDependencies"
+      | "workspaces.properties.completeColumn",
+  ) => string;
+};
+
+const bulkColumnSubmitDisabledReason = ({
+  isPending,
+  withinDependencyCap,
+  t,
+}: BulkColumnSubmitDisabledReasonOptions) => {
+  if (isPending) {
+    return t("common.creating");
+  }
+  if (!withinDependencyCap) {
+    return t("workspaces.properties.reduceDependencies");
+  }
+  return t("workspaces.properties.completeColumn");
 };
 
 const PropertyColumnsBody = ({
@@ -600,6 +628,11 @@ const PropertyColumnsBody = ({
       }
       dirty={isDirty || scopeDocType !== null}
       canSubmit={canSubmit}
+      submitDisabledReason={bulkColumnSubmitDisabledReason({
+        isPending: batch.isPending,
+        withinDependencyCap,
+        t,
+      })}
       footerExtra={
         classifier && docTypeOptions.length > 0 ? (
           <div className="flex min-w-0 items-center gap-2">
@@ -741,6 +774,11 @@ const QuestionColumnsBody = ({
       capability="ai"
       dirty={isDirty}
       canSubmit={canSubmit}
+      submitDisabledReason={
+        save.isPending
+          ? t("common.saving")
+          : t("workspaces.properties.enterQuestion")
+      }
       {...(discardsAnswers
         ? {
             footerExtra: (
@@ -942,6 +980,7 @@ const DraftCard = ({
           <AiRewriteControl
             className="text-muted-foreground hover:text-foreground shrink-0"
             disabled={suggestDisabled}
+            disabledReason={t("workspaces.properties.enterQuestion")}
             isPending={suggestPrompt.isPending}
             label={t("workspaces.properties.suggestWithAI")}
             onRewrite={handleAutoPrompt}
@@ -990,6 +1029,7 @@ const DraftCard = ({
           <PropertyPromptInput
             aiEditAction={{
               disabled: autoPromptDisabled,
+              disabledReason: t("workspaces.properties.enterColumnName"),
               isPending: suggestPrompt.isPending,
               label: t("workspaces.properties.suggestWithAI"),
               onClick: handleAutoPrompt,

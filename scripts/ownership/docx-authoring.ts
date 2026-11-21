@@ -5,6 +5,7 @@ export default {
   capability:
     "Producing DOCX bytes from Markdown, legal source, or a document model, and applying AI edits to a DOCX",
   owner: [
+    "packages/docx-authoring/src/",
     "apps/api/src/lib/docx-authoring/",
     "apps/web/src/components/chat/create-document-compiler.ts",
   ],

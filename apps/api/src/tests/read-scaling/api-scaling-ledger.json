@@ -1936,7 +1936,11 @@
     },
     {
       "id": "POST /v1/desktop/dictation/transcripts",
-      "reason": "Creates one document through the shared document create that the entity upload routes measure; a desktop-credential write fixture for it is pending."
+      "reason": "Creates a folder and up to two documents through the shared folder and document creates that the entity routes measure, and reserves one upload through the shared presign; a desktop-credential write fixture for it is pending."
+    },
+    {
+      "id": "POST /v1/desktop/dictation/transcripts/audio",
+      "reason": "Finalizes one upload through the shared upload finalize that the entity upload routes measure; a desktop-credential write fixture for it is pending."
     },
     {
       "id": "POST /v1/desktop/presence",

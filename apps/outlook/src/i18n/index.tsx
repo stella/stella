@@ -68,6 +68,8 @@ const messages = {
     draftReply: "Draft reply",
     earlierDraftInserted:
       "An earlier version is already in your draft. Remove it there before you insert this one.",
+    enterDraftText: "Enter the reply text first.",
+    enterQuestion: "Type a question about this email.",
     emailTooLarge: "This email is too large to save to stella.",
     externalRecipients: "External recipients",
     fileEmail: "File email",
@@ -86,6 +88,7 @@ const messages = {
     matterLoadError: "Could not load matters",
     matterSearch: "Search matters",
     moreActions: "More actions",
+    noBodyToSummarize: "This email has no text to summarize.",
     noFileColumn:
       "This matter has no file column. Add one in stella, then try again.",
     noMatterResults: "No matters matched.",
@@ -93,8 +96,10 @@ const messages = {
     openSource: "Open {title} in stella",
     openStella: "Open stella",
     openedReplyDraft: "Opened a reply draft.",
+    placingDraft: "Placing the reply text…",
     refresh: "Refresh",
     saveErrorFallback: "Could not save email",
+    savingEmail: "Saving the email…",
     saveFailed: "Save failed",
     saveNotFinalized:
       "The email was uploaded but stella has not confirmed it yet. Try again to finish saving.",

@@ -27,6 +27,7 @@ export const SigningDriverSection = ({
   renderGroup: (content: React.JSX.Element) => React.JSX.Element;
 }) => {
   const t = useTranslations("signingDriver");
+  const tDialog = useTranslations("dialog");
   const [driver, refresh] = useNativeStatus({
     read: readSigningDriver,
     event: SIGNING_DRIVER_CHANGED_EVENT,
@@ -58,6 +59,7 @@ export const SigningDriverSection = ({
         </p>
         <Button
           disabled={picking}
+          disabledReason={tDialog("waitingForFolderSelection")}
           onClick={() => {
             setPicking(true);
             void send(async () => invoke("signing_driver_pick")).then(() => {

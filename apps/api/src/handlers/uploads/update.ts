@@ -17,6 +17,7 @@ import { finalizeEntityVersion } from "@/api/handlers/uploads/entity-version";
 import {
   authorizeUploadConsent,
   authorizeUploadPurpose,
+  type UploadPurpose,
   uploadRoutePermission,
 } from "@/api/handlers/uploads/permissions";
 import { captureError } from "@/api/lib/analytics/capture";
@@ -104,6 +105,9 @@ type ClaimedRow = typeof pendingUploads.$inferSelect;
 
 const UPLOAD_FINALIZE_DEADLINE_PASSED = "Upload finalize deadline passed";
 
+/** No upload with this id was reserved by this member in this matter. */
+export const UPLOAD_NOT_FOUND_CODE = "upload_not_found";
+
 const fileSecurityRejectionDetails = (
   error: UploadFinalizeError,
 ): ApiFileSecurityRejectionDetails | null => {
@@ -162,89 +166,133 @@ const finalizeUpload = createSafeHandler(
     params,
     recordAuditEvent,
   }) {
-    const uploadId = params.uploadId;
-
-    const pending = yield* Result.await(
-      safeDb((tx) =>
-        tx.query.pendingUploads.findFirst({
-          where: {
-            id: { eq: uploadId },
-            userId: { eq: user.id },
-            workspaceId: { eq: workspaceId },
-          },
-          columns: {
-            purpose: true,
-            declaredSize: true,
-            status: true,
-            finalizedResult: true,
-            rejectReason: true,
-            rejectionDetails: true,
-          },
-        }),
-      ),
-    );
-    if (!pending) {
-      return Result.err(
-        new HandlerError({ status: 404, message: "Upload not found" }),
-      );
-    }
-    const authorization = authorizeUploadPurpose({
+    return yield* finalizeOwnPendingUpload({
+      safeDb,
+      organizationId: session.activeOrganizationId,
+      workspaceId,
+      userId: user.id,
       memberRole,
-      purpose: pending.purpose,
-    });
-    if (Result.isError(authorization)) {
-      return Result.err(authorization.error);
-    }
-    const consent = authorizeUploadConsent({
-      grantedScopes: session.grantedScopes,
-      purpose: pending.purpose,
-    });
-    if (Result.isError(consent)) {
-      return Result.err(consent.error);
-    }
-    // A finished upload answers with its stored result at once; only work
-    // that still has to read the file waits for capacity.
-    const replay = replayTerminalUpload(pending);
-    if (replay !== null) {
-      return replay;
-    }
-
-    // The staged file is read, scanned and may be rewritten in memory, so
-    // concurrent finalizations share one byte budget per process. Admission
-    // comes before the claim: waiting for capacity never runs the reclaim
-    // clock, and a request that is not admitted in time leaves the row as it
-    // was, so the retry can claim it at once.
-    const release = await DOCUMENT_BYTES_ADMISSION.acquire(
-      pending.declaredSize,
-      LIMITS.documentBytesAdmissionWaitMs,
-    );
-    if (release === null) {
-      return Result.err(
-        new HandlerError({
-          status: 500,
-          message: "Upload processing is busy; retry shortly",
+      uploadId: params.uploadId,
+      recordAuditEvent,
+      authorizeConsent: (purpose) =>
+        authorizeUploadConsent({
+          grantedScopes: session.grantedScopes,
+          purpose,
         }),
-      );
-    }
-    try {
-      logger.info("uploads.finalize_admitted", {
-        declaredBytes: pending.declaredSize,
-        inFlightBytes: DOCUMENT_BYTES_ADMISSION.inUseBytes(),
-      });
-      return yield* claimAndFinalize({
-        organizationId: session.activeOrganizationId,
-        workspaceId,
-        userId: user.id,
-        memberRole,
-        uploadId,
-        safeDb,
-        recordAuditEvent,
-      });
-    } finally {
-      release();
-    }
+    });
   },
 );
+
+type FinalizeOwnPendingUploadProps = ClaimAndFinalizeProps & {
+  /** Whether the caller's credential consented to what this upload
+   *  produces; checked before anything is read or claimed. */
+  authorizeConsent: (purpose: UploadPurpose) => Result<void, HandlerError>;
+};
+
+/**
+ * Finalizes an upload the caller reserved in this workspace: authorizes its
+ * purpose for the member's role and the credential's consent, replays a
+ * finished one, and otherwise claims and finalizes it under the shared
+ * document byte budget. Shared by the upload route and the desktop, which
+ * finalizes the recording it uploaded into a transcript's folder.
+ *
+ * @yields SafeDb errors out to the safe-handler runner.
+ */
+export const finalizeOwnPendingUpload = async function* ({
+  safeDb,
+  organizationId,
+  workspaceId,
+  userId,
+  memberRole,
+  uploadId,
+  recordAuditEvent,
+  authorizeConsent,
+}: FinalizeOwnPendingUploadProps): AsyncGenerator<
+  Err<never, SafeDbError>,
+  Result<{ finalizedResult: PendingUploadFinalizedResult }, HandlerError>,
+  unknown
+> {
+  const pending = yield* Result.await(
+    safeDb((tx) =>
+      tx.query.pendingUploads.findFirst({
+        where: {
+          id: { eq: uploadId },
+          userId: { eq: userId },
+          workspaceId: { eq: workspaceId },
+        },
+        columns: {
+          purpose: true,
+          declaredSize: true,
+          status: true,
+          finalizedResult: true,
+          rejectReason: true,
+          rejectionDetails: true,
+        },
+      }),
+    ),
+  );
+  if (!pending) {
+    return Result.err(
+      new HandlerError({
+        code: UPLOAD_NOT_FOUND_CODE,
+        status: 404,
+        message: "Upload not found",
+      }),
+    );
+  }
+  const authorization = authorizeUploadPurpose({
+    memberRole,
+    purpose: pending.purpose,
+  });
+  if (Result.isError(authorization)) {
+    return Result.err(authorization.error);
+  }
+  const consent = authorizeConsent(pending.purpose);
+  if (Result.isError(consent)) {
+    return Result.err(consent.error);
+  }
+  // A finished upload answers with its stored result at once; only work
+  // that still has to read the file waits for capacity.
+  const replay = replayTerminalUpload(pending);
+  if (replay !== null) {
+    return replay;
+  }
+
+  // The staged file is read, scanned and may be rewritten in memory, so
+  // concurrent finalizations share one byte budget per process. Admission
+  // comes before the claim: waiting for capacity never runs the reclaim
+  // clock, and a request that is not admitted in time leaves the row as it
+  // was, so the retry can claim it at once.
+  const release = await DOCUMENT_BYTES_ADMISSION.acquire(
+    pending.declaredSize,
+    LIMITS.documentBytesAdmissionWaitMs,
+  );
+  if (release === null) {
+    return Result.err(
+      new HandlerError({
+        status: 500,
+        message: "Upload processing is busy; retry shortly",
+      }),
+    );
+  }
+  try {
+    logger.info("uploads.finalize_admitted", {
+      declaredBytes: pending.declaredSize,
+      inFlightBytes: DOCUMENT_BYTES_ADMISSION.inUseBytes(),
+    });
+    return yield* claimAndFinalize({
+      organizationId,
+      workspaceId,
+      userId,
+      memberRole,
+      uploadId,
+      safeDb,
+      recordAuditEvent,
+    });
+  } finally {
+    release();
+  }
+};
 
 type ClaimAndFinalizeProps = {
   organizationId: SafeId<"organization">;

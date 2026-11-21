@@ -17,6 +17,7 @@
 import { panic, Result } from "better-result";
 
 import { compareByLocale } from "@stll/collation";
+import { documentToDocx, stellaDocument } from "@stll/docx-authoring/document";
 import {
   createTableOfContentsField,
   endnote,
@@ -52,10 +53,6 @@ import type {
   ReportSpec,
 } from "@/api/handlers/reports/spec/report-spec";
 import { interpolate } from "@/api/handlers/reports/spec/report-spec";
-import {
-  documentToDocx,
-  stellaDocument,
-} from "@/api/lib/docx-authoring/document";
 import type { AiFieldGenerator } from "@/api/lib/docx/resolve-ai-fields";
 import { ConfigurationError } from "@/api/lib/errors/tagged-errors";
 import type { PositionSeverity } from "@/api/lib/workflow/playbook-position-facets";
