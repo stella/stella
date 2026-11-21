@@ -404,22 +404,9 @@ export const emailHtmlPreviewOptions = (props: FileOptionsProps) =>
         fieldId: props.fieldId,
       }).get({ fetch: { signal } });
 
-      const data = unwrapApiResponse(response);
-
-      return {
-        subject: data.subject,
-        from: data.from,
-        to: data.to,
-        cc: data.cc,
-        bcc: data.bcc,
-        date: data.date,
-        attachments: data.attachments,
-        bodyFolds: data.bodyFolds,
-        bodyHtml: data.bodyHtml,
-        citationBlocks: data.citationBlocks,
-        certified: data.certified,
-        source: data.source,
-      } satisfies EmailHtmlPreviewData;
+      // The answer is the preview and its source, field for field.
+      const data: EmailHtmlPreviewData = unwrapApiResponse(response);
+      return data;
     },
   });
 
