@@ -89,9 +89,12 @@ export const shingleHashes = (text: string): Set<number> | null => {
   return shingles && new Set(Array.from(shingles, fnv1a));
 };
 
+const keyedHashWords = new DataView(new ArrayBuffer(8));
+
+// Folds the 64-bit hash to 32 bits (low word XOR high word).
 const keyedShingleHash = (shingle: string, key: bigint): number => {
-  const hash = Bun.hash.xxHash64(shingle, key);
-  return Number(BigInt.asUintN(32, hash ^ (hash >> 32n)));
+  keyedHashWords.setBigUint64(0, Bun.hash.xxHash64(shingle, key));
+  return (keyedHashWords.getUint32(0) ^ keyedHashWords.getUint32(4)) >>> 0;
 };
 
 /** `null` when the text is too short to compare. */
