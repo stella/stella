@@ -48,6 +48,7 @@ const searchContacts = createSafeRootHandler(
     }
     const pattern = `%${escapeLike(normalized)}%`;
 
+    // sql-perf-allow: index contacts_display_name_arabic_norm_trgm_idx, contacts_first_name_arabic_norm_trgm_idx, contacts_last_name_arabic_norm_trgm_idx, contacts_organization_name_arabic_norm_trgm_idx
     const conditions = [
       eq(contacts.organizationId, session.activeOrganizationId),
       or(
