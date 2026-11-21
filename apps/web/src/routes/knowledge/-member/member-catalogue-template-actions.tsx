@@ -153,11 +153,17 @@ export const MemberCatalogueTemplateActions = ({
 
   return (
     <>
-      <Button disabled={running} onClick={() => setConfirming("use")} size="sm">
+      <Button
+        disabled={running}
+        disabledReason={t("common.installing")}
+        onClick={() => setConfirming("use")}
+        size="sm"
+      >
         {t("templates.useTemplate")}
       </Button>
       <Button
         disabled={running}
+        disabledReason={t("common.installing")}
         onClick={() => setConfirming("add")}
         size="sm"
         variant="outline"
@@ -166,6 +172,7 @@ export const MemberCatalogueTemplateActions = ({
       </Button>
       <Button
         disabled={running}
+        disabledReason={t("common.installing")}
         onClick={() => setConfirming("download")}
         size="sm"
         variant="outline"
@@ -203,6 +210,7 @@ export const MemberCatalogueTemplateActions = ({
             </DialogClose>
             <Button
               disabled={confirming === null}
+              disabledReason={t("common.chooseAction")}
               onClick={() => {
                 const act = confirming;
                 settle();

@@ -180,6 +180,7 @@ export const SocialRecoveryPanel = ({
               className="w-full"
               loading={connect.isPending}
               disabled={connect.isPending}
+              disabledReason={t("common.connecting")}
               onClick={() => connect.mutate(step.provider)}
             >
               {t.rich("auth.socialLink.connectButton", {
@@ -190,6 +191,7 @@ export const SocialRecoveryPanel = ({
             <Button
               variant="ghost"
               disabled={connect.isPending}
+              disabledReason={t("common.connecting")}
               onClick={() => detached(finish(), "social-link.skip")}
             >
               {t("auth.socialLink.skip")}
@@ -252,6 +254,11 @@ export const SocialRecoveryPanel = ({
                       emailSchema(t("validation.invalidEmail")),
                       email,
                     ).success
+                  }
+                  disabledReason={
+                    sendCode.isPending
+                      ? t("common.sending")
+                      : t("validation.invalidEmail")
                   }
                 >
                   {t("auth.continueWithEmail")}

@@ -267,6 +267,11 @@ const RebindableBinding = ({
           </kbd>
           <Button
             disabled={!pending || isBusy}
+            disabledReason={
+              isBusy
+                ? t("common.saving")
+                : t("navigation.shortcutsDialog.pressKeys")
+            }
             onClick={() => {
               detached(save(), "keyboard-shortcuts-dialog.save");
             }}
@@ -291,6 +296,7 @@ const RebindableBinding = ({
       {isOverridden ? (
         <Button
           disabled={isBusy}
+          disabledReason={t("common.saving")}
           onClick={() => {
             detached(resetToDefault(), "keyboard-shortcuts-dialog.reset");
           }}
@@ -315,6 +321,7 @@ const RebindableBinding = ({
           "focus-visible:opacity-100",
         )}
         disabled={isBusy}
+        disabledReason={t("common.saving")}
         onClick={startEdit}
         size="icon-sm"
         variant="ghost"

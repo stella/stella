@@ -183,7 +183,8 @@
     "handoffServerMismatch": "Stella Desktop متصل بالخادم {linkedServer}، لكن هذا المستند يتطلب الخادم {requestedServer}. افصل الحساب الحالي في الإعدادات، ثم اتصل بالخادم {requestedServer} لفتح المستند.",
     "handoffAccountChanged": "تغيّر حساب stella desktop أثناء فتح المستند. ابدأ من جديد من stella.",
     "handoffAlreadyOpen": "توجد نافذة توقيع أخرى مفتوحة بالفعل. أكملها أو أغلقها، ثم حاول مرة أخرى.",
-    "handoffExpired": "انتهت صلاحية رابط المستند قبل ربط stella desktop. ابدأ من جديد من stella."
+    "handoffExpired": "انتهت صلاحية رابط المستند قبل ربط stella desktop. ابدأ من جديد من stella.",
+    "waitingForFolderSelection": "اختر مجلدًا أو أغلق نافذة اختيار الملفات."
   },
   "settings": {
     "accountLinked": "مرتبط",
@@ -242,6 +243,7 @@
       "available": "الإصدار {version} متاح.",
       "install": "التثبيت وإعادة التشغيل",
       "installing": "جارٍ تثبيت الإصدار {version}. سيُعاد تشغيل stella desktop عند الانتهاء.",
+      "installInProgress": "جارٍ تثبيت تحديث.",
       "deferred": "ينتظر الإصدار {version} ما دامت المستندات المفتوحة قيد التحرير. عند الانتهاء، تحقّق مجددًا لتثبيته، وإلا فسيُثبَّت عند التحقق التلقائي التالي.",
       "checkFailed": "تعذّر على stella desktop التحقق من التحديثات.",
       "installFailed": "تعذّر على stella desktop تثبيت التحديث.",
@@ -290,7 +292,10 @@
     "recoveryOpenFolder": "فتح مجلد الاسترداد",
     "recoveryOpenUnassigned": "فتح التعديلات غير المرتبطة بحساب",
     "recoveryFilePending": "بانتظار وضعها جانبًا",
-    "recoveryError": "تعذر فتح مجلد الاسترداد. أعد المحاولة."
+    "recoveryError": "تعذر فتح مجلد الاسترداد. أعد المحاولة.",
+    "openingRecoveryFolder": "جارٍ فتح مجلد الاسترداد…",
+    "refreshingRecovery": "جارٍ التحقق من التعديلات قيد الاسترداد…",
+    "loadingAccount": "جارٍ التحقق من اتصال حسابك…"
   },
   "clipboard": {
     "registryUnavailable": "لا توجد سجلات مفعّلة لجهات اختصاص ممارستك.",
@@ -435,7 +440,14 @@
     "welcomeShortcutTitle": "افتحها من أي مكان.",
     "welcomeStart": "ابدأ النسخ",
     "welcomeTitle": "تعرّف على حافظتك",
-    "registryIdentifierSearchHint": "أدخل {identifiers}."
+    "registryIdentifierSearchHint": "أدخل {identifiers}.",
+    "enterGroupName": "أدخل اسم المجموعة.",
+    "savingChanges": "جارٍ حفظ التغييرات…",
+    "creatingGroup": "جارٍ إنشاء المجموعة…",
+    "groupLimitReached": "يمكنك إنشاء ما يصل إلى {max} من المجموعات.",
+    "loadingAutostart": "جارٍ التحقق من تشغيل الحافظة عند تسجيل الدخول…",
+    "savingAutostart": "جارٍ حفظ تفضيل التشغيل عند تسجيل الدخول…",
+    "registryFormatting": "جارٍ تنسيق نتيجة السجل…"
   },
   "activity": {
     "title": "النشاط",
@@ -621,7 +633,15 @@
     "aiStructureMove": "يقترح stella AI نقل {duration} إلى {matter}",
     "aiStructureCreate": "{count, plural, zero {إنشاء # إدخالات} one {إنشاء إدخال واحد} two {إنشاء إدخالين} few {إنشاء # إدخالات} many {إنشاء # إدخالًا} other {إنشاء # إدخال}}",
     "aiStructureMoveAccept": "نقل",
-    "aiFlagSplit": "تقسيم الإدخال"
+    "aiFlagSplit": "تقسيم الإدخال",
+    "creatingDrafts": "جارٍ إنشاء المسودات…",
+    "earliestDayReached": "أنت تعرض أقدم يوم متاح.",
+    "latestDayReached": "أنت تعرض أحدث يوم متاح.",
+    "savingCapturePreference": "جارٍ حفظ تفضيل التسجيل…",
+    "writeDescription": "أدخل وصفًا لهذا الإدخال.",
+    "chooseMatterForEntry": "اختر ملفًا قانونيًا لهذا الإدخال.",
+    "entryNeedsDuration": "اختر نطاقًا زمنيًا بمدة قابلة للفوترة.",
+    "enterRefinement": "أدخل تعليمات لمراجعة الوصف."
   },
   "dictation": {
     "title": "الإملاء",
@@ -761,7 +781,8 @@
       "label": "ما أمليته حتى الآن",
       "listening": "جارٍ الاستماع…",
       "finishing": "جارٍ الإنهاء…"
-    }
+    },
+    "dictationInProgress": "أكمل الإملاء الحالي قبل إزالة النموذج."
   },
   "shortcut": {
     "title": "اختصار الحافظة",
@@ -802,7 +823,8 @@
       "windowMenu": "قائمة النافذة",
       "start": "ابدأ",
       "taskManager": "إدارة المهام"
-    }
+    },
+    "saving": "جارٍ حفظ الاختصار…"
   },
   "onboarding": {
     "back": "رجوع",
@@ -946,7 +968,8 @@
       "keystrokesWithoutHoldKey": "ضغطات المفاتيح، إلا إذا اخترت مفتاحًا تضغط عليه باستمرار",
       "fullDiskAccess": "الوصول الكامل إلى القرص",
       "administrator": "صلاحيات المسؤول"
-    }
+    },
+    "enablingDictation": "جارٍ تشغيل الإملاء…"
   },
   "agentSubscriptions": {
     "title": "اشتراكات الذكاء الاصطناعي",
@@ -1022,7 +1045,9 @@
         "verification": "تعذّر التحقق من {name}، لذا لم يُثبَّت.",
         "storage": "تعذّر حفظ {name} على هذا الكمبيوتر. تحقق من وجود مساحة فارغة على القرص."
       }
-    }
+    },
+    "finishingSignIn": "جارٍ إكمال تسجيل الدخول…",
+    "enterCallbackAddress": "ألصق العنوان الكامل من علامة تبويب تسجيل الدخول في المتصفح."
   },
   "localSkills": {
     "title": "المهارات المحلية",
@@ -1111,7 +1136,9 @@
       "localMissing": "نزّل نموذج الكلام من الإعدادات، ضمن الإملاء، للتحويل على هذا الكمبيوتر.",
       "localMissingCloud": "نزّل نموذج الكلام من الإعدادات، ضمن الإملاء، أو حوّل باستخدام stella AI.",
       "retainsData": "يُرجى الاطلاع على شروط المعالجة لدى {provider}.",
-      "modelFailed": "تعذّرت قراءة نموذج stella AI، لذا لا يستطيع stella AI النسخ الآن. حاول مرة أخرى، أو انسخ على هذا الكمبيوتر."
+      "modelFailed": "تعذّرت قراءة نموذج stella AI، لذا لا يستطيع stella AI النسخ الآن. حاول مرة أخرى، أو انسخ على هذا الكمبيوتر.",
+      "loadingModel": "جارٍ التحقق من نموذج النسخ في stella AI…",
+      "useLocal": "اختر هذا الكمبيوتر لنسخ التسجيل."
     },
     "matter": {
       "title": "الملف",
@@ -1160,7 +1187,8 @@
       "noSpeech": "لم يُعثر على كلام في هذا التسجيل.",
       "fileName": "{title} - نص.txt",
       "documentTitle": "{title} - نص",
-      "transcriptTitle": "النص المفرّغ"
+      "transcriptTitle": "النص المفرّغ",
+      "alreadySaved": "حُفظ النص المنسوخ في الملف القانوني بالفعل."
     },
     "progress": {
       "running": "جارٍ التحويل: {done, number} من {total, number} د",
@@ -1168,7 +1196,9 @@
       "stop": "إيقاف",
       "stopped": "توقف بعد {done, number} د. يبقى النص الذي تم الحصول عليه حتى الآن.",
       "done": "تم تحويل {total, number} د.",
-      "another": "تحويل تسجيل آخر"
+      "another": "تحويل تسجيل آخر",
+      "transcribing": "جارٍ نسخ التسجيل…",
+      "stopping": "جارٍ إيقاف النسخ…"
     },
     "cleaned": {
       "title": "النص المنقّح",
@@ -1191,6 +1221,7 @@
       "formatted": "مع التنسيق",
       "plain": "كنص عادي",
       "hint": "مع التنسيق تُلصق العناوين والخط العريض والقوائم في Word أو Outlook. يُحفظ اختيارك."
-    }
+    },
+    "waitingForFileSelection": "اختر تسجيلاً أو أغلق نافذة اختيار الملفات."
   }
 }

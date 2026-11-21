@@ -174,6 +174,9 @@ export const ClauseImportDialog = ({
           {!result && (
             <Button
               disabled={!file || importing}
+              disabledReason={
+                importing ? t("clauses.importing") : t("common.selectFile")
+              }
               onClick={() => {
                 detached(handleImport(), "clause-import-dialog.import");
               }}

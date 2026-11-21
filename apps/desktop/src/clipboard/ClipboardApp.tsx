@@ -984,6 +984,7 @@ const DialogShell = ({
             </DialogClose>
             <Button
               disabled={submitDisabled}
+              disabledReason={t("enterGroupName")}
               type="submit"
               variant={destructive ? "destructive" : "default"}
             >
@@ -1741,6 +1742,11 @@ const ClipboardWelcomeDialog = ({
           <Button
             className="min-h-11 rounded-xl"
             disabled={autostartChoice.status !== "ready"}
+            disabledReason={
+              autostartChoice.status === "saving"
+                ? t("savingAutostart")
+                : t("loadingAutostart")
+            }
             onClick={completeWelcome}
             type="button"
             variant={
@@ -3448,6 +3454,9 @@ const ClipboardApp = () => {
                     aria-label={t("createGroup")}
                     className="size-11 shrink-0 rounded-full"
                     disabled={snapshot.groups.length >= snapshot.groupLimit}
+                    disabledReason={t("groupLimitReached", {
+                      max: snapshot.groupLimit,
+                    })}
                     onClick={() =>
                       setDialog({
                         color: nextGroupColor,

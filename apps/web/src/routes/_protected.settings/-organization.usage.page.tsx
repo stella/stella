@@ -32,6 +32,7 @@ import {
 const usageRoute = getRouteApi("/_protected/settings/organization/usage");
 
 export function UsageSettingsPage() {
+  const t = useTranslations();
   const activeOrganizationId = usageRoute.useRouteContext({
     select: (ctx) => ctx.user.activeOrganizationId,
   });
@@ -44,22 +45,29 @@ export function UsageSettingsPage() {
     entitlementView,
   );
   let content: ReactNode;
-  let packsPurchasable = false;
+  let packCheckoutDisabledReason: string | undefined;
   switch (availability.status) {
     case "disabled":
       return null;
     case "pending":
       content = <EntitlementPending />;
+      packCheckoutDisabledReason = t("common.loading");
       break;
     case "error":
       content = <QueryViewFeedback view={entitlementView} />;
+      packCheckoutDisabledReason = t("common.loadFailed");
       break;
     case "ready": {
       const data = availability.value;
       const entitlement = data?.entitlement;
-      packsPurchasable =
+      const packsPurchasable =
         entitlement?.source === "hosted" &&
         (entitlement.status === "active" || entitlement.status === "trialing");
+      if (!packsPurchasable) {
+        packCheckoutDisabledReason = t(
+          "settings.organization.usagePacksRequireActivePlan",
+        );
+      }
       content = (
         <>
           <QueryViewFeedback view={entitlementView} />
@@ -78,7 +86,13 @@ export function UsageSettingsPage() {
   }
 
   return (
-    <UsageShell plans={<UsagePlansCard packsPurchasable={packsPurchasable} />}>
+    <UsageShell
+      plans={
+        <UsagePlansCard
+          packCheckoutDisabledReason={packCheckoutDisabledReason}
+        />
+      }
+    >
       {content}
     </UsageShell>
   );
@@ -166,6 +180,7 @@ function ManageUsageButton() {
   return (
     <Button
       disabled={pending}
+      disabledReason={t("common.preparing")}
       onClick={() => mutation.mutate()}
       variant="ghost"
     >

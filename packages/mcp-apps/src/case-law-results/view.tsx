@@ -178,6 +178,7 @@ const ResultTableRow = ({
                     (row.type === "resolve" || !bridge.supportsTools()) &&
                     url === null
                   }
+                  disabledReason={t("decisionLinkUnavailable")}
                   onClick={(event) => onOpen(row, event.currentTarget)}
                 />
               }
@@ -337,6 +338,7 @@ const ResultTableRow = ({
               (row.type === "resolve" || !bridge.supportsTools()) &&
               url === null
             }
+            disabledReason={t("decisionLinkUnavailable")}
             onClick={(event) => onOpen(row, event.currentTarget)}
           >
             <ChevronRightIcon />
@@ -592,6 +594,7 @@ const SearchControls = ({
           variant="outline"
           className="h-auto shrink-0 max-sm:h-11 sm:h-auto"
           disabled={submission.type !== "search"}
+          disabledReason={t("searchQueryRequired")}
         >
           {t("search")}
         </Button>
@@ -701,6 +704,7 @@ const SearchControls = ({
           variant="outline"
           className="max-sm:col-span-2"
           disabled={submission.type !== "search"}
+          disabledReason={t("searchQueryRequired")}
         >
           {t("filter")}
         </Button>
@@ -802,6 +806,7 @@ const SearchResults = ({
                       variant="outline"
                       size="sm"
                       disabled={page.nextCursor === null}
+                      disabledReason={t("lastSearchResultsPage")}
                       onClick={() =>
                         bridge.detached(
                           bridge.call({
@@ -986,6 +991,7 @@ const ResolveResults = ({
                 <Button
                   variant="link"
                   disabled={candidate.url === null}
+                  disabledReason={t("decisionLinkUnavailable")}
                   onClick={(event) => onOpen(candidate, event.currentTarget)}
                 >
                   <bdi>{candidate.identifier}</bdi>

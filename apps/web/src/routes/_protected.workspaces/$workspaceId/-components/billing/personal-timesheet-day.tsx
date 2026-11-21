@@ -257,6 +257,7 @@ export const PersonalTimesheetDay = ({
         canCreate && (
           <Button
             disabled={!canCreateTimeEntry}
+            disabledReason={tBilling("time.selectEligibleWorkDate")}
             onClick={() => setDialog({ type: "create" })}
             size="sm"
           >
@@ -334,6 +335,7 @@ export const PersonalTimesheetDay = ({
                         )}
                         className="size-11"
                         disabled={deleteEntry.isPending}
+                        disabledReason={tCommon("deleting")}
                         onClick={() => setDeletingId(entry.id)}
                         size="icon"
                         variant="destructive-ghost"
@@ -375,6 +377,7 @@ export const PersonalTimesheetDay = ({
           {entriesQuery.hasNextPage && (
             <Button
               disabled={entriesQuery.isFetchingNextPage}
+              disabledReason={tCommon("loading")}
               onClick={() => {
                 detached(
                   entriesQuery.fetchNextPage(),
@@ -393,6 +396,7 @@ export const PersonalTimesheetDay = ({
           {canCreate && (
             <Button
               disabled={!canCreateTimeEntry}
+              disabledReason={tBilling("time.selectEligibleWorkDate")}
               onClick={() => setDialog({ type: "create" })}
               variant="outline"
             >
@@ -450,6 +454,11 @@ export const PersonalTimesheetDay = ({
             </AlertDialogClose>
             <Button
               disabled={!deletingId || deleteEntry.isPending}
+              disabledReason={
+                deleteEntry.isPending
+                  ? tCommon("deleting")
+                  : tCommon("selectTimeEntry")
+              }
               onClick={() => {
                 if (!deletingId) {
                   return;

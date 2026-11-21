@@ -378,6 +378,7 @@ const SlotSyncButton = ({
   return (
     <Button
       disabled={syncing}
+      disabledReason={t("common.loading")}
       onClick={() => {
         detached(handleSync(), "template-studio-fields.sync");
       }}
@@ -1155,17 +1156,13 @@ const FieldConditionSection = ({
       <Button
         className="self-start"
         disabled={!condition.canRemove}
+        disabledReason={t("templates.studio.removeConditionBlocked")}
         onClick={() => {
           if (actions?.unwrapFieldCondition(field.path) !== true) {
             notifyUserProblem(t("errors.actionFailed"));
           }
         }}
         size="sm"
-        tooltip={
-          condition.canRemove
-            ? undefined
-            : t("templates.studio.removeConditionBlocked")
-        }
         variant="muted"
       >
         <Trash2Icon className="size-3.5" />
@@ -1279,6 +1276,7 @@ export const FieldFace = ({
               <Button
                 aria-label={t("common.previous")}
                 disabled={fieldCount < 2}
+                disabledReason={t("templates.studio.addFieldsToNavigate")}
                 onClick={() => actions?.focusAdjacentField(-1)}
                 size="icon-sm"
                 variant="ghost"
@@ -1288,6 +1286,7 @@ export const FieldFace = ({
               <Button
                 aria-label={t("common.next")}
                 disabled={fieldCount < 2}
+                disabledReason={t("templates.studio.addFieldsToNavigate")}
                 onClick={() => actions?.focusAdjacentField(1)}
                 size="icon-sm"
                 variant="ghost"
@@ -1385,11 +1384,10 @@ export const FieldFace = ({
               <AiActionIcon className="size-3.5" />
               {t("templates.studio.draftedByAi")}
             </Button>
-            {/* With a tooltip, a disabled Button stays focusable and hoverable
-                (aria-disabled), so the "why disabled" hint still shows. */}
             <Button
               className="w-full justify-start"
               disabled={!canUseFormula}
+              disabledReason={t("templates.studio.formulaNoFields")}
               onClick={() =>
                 onUpdate({
                   formula: field.formula ?? "",
@@ -1400,11 +1398,6 @@ export const FieldFace = ({
                 })
               }
               size="sm"
-              tooltip={
-                canUseFormula
-                  ? undefined
-                  : t("templates.studio.formulaNoFields")
-              }
               variant={valueSource === "formula" ? "default" : "outline"}
             >
               <SigmaIcon className="size-3.5" />
@@ -1529,11 +1522,11 @@ export const FieldFace = ({
               aria-pressed={repeat.kind === "on"}
               className="self-start"
               disabled={repeat.disabledKey !== null}
-              onClick={() => toggleRepeatable(repeat.kind !== "on")}
-              size="sm"
-              tooltip={
+              disabledReason={
                 repeat.disabledKey === null ? undefined : t(repeat.disabledKey)
               }
+              onClick={() => toggleRepeatable(repeat.kind !== "on")}
+              size="sm"
               variant={repeat.kind === "on" ? "secondary" : "outline"}
             >
               <RepeatIcon className="size-3.5" />
@@ -1671,6 +1664,7 @@ const SaveRecipeDialog = ({
           </DialogClose>
           <Button
             disabled={name.trim() === "" || saving}
+            disabledReason={saving ? t("common.saving") : t("common.enterName")}
             onClick={() => detached(save(), "template-studio-fields.save")}
           >
             {saving ? (

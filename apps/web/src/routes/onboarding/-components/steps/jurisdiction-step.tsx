@@ -66,7 +66,11 @@ export const JurisdictionStep = ({
           <Button onClick={onSkip} type="button" variant="ghost">
             {t("onboarding.skipStep")}
           </Button>
-          <Button disabled={selected.length === 0} type="submit">
+          <Button
+            disabled={selected.length === 0}
+            disabledReason={t("onboarding.selectJurisdictionToContinue")}
+            type="submit"
+          >
             {t("common.next")}
           </Button>
         </div>

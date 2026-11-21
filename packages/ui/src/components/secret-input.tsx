@@ -10,6 +10,7 @@ import type { InputProps } from "./input";
 
 type SecretInputProps = Omit<InputProps, "type"> & {
   hideValueLabel: string;
+  disabledReason?: string | undefined;
   showValueLabel: string;
 };
 
@@ -18,6 +19,7 @@ const SecretInput = ({
   dir,
   disabled,
   hideValueLabel,
+  disabledReason,
   showValueLabel,
   ...props
 }: SecretInputProps) => {
@@ -46,6 +48,7 @@ const SecretInput = ({
         className="text-muted-foreground hover:text-foreground absolute end-1 top-1/2 z-1 -translate-y-1/2"
         data-slot="secret-input-visibility-toggle"
         disabled={disabled}
+        disabledReason={disabledReason}
         onClick={() => setVisibility(isRevealed ? "concealed" : "revealed")}
         size="icon-xs"
         type="button"

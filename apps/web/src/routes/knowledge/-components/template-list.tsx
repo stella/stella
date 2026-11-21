@@ -244,7 +244,12 @@ export const TemplateList = ({
       source={source}
       toolbar={
         canCreateTemplate && (
-          <Button disabled={discovering} onClick={onCreateBlank} size="sm">
+          <Button
+            disabled={discovering}
+            disabledReason={t("common.loading")}
+            onClick={onCreateBlank}
+            size="sm"
+          >
             <PlusIcon />
             {discovering ? t("common.loading") : t("templates.newTemplate")}
           </Button>
@@ -459,6 +464,7 @@ const MemberTemplateRow = ({
             </AlertDialogClose>
             <Button
               disabled={deleting}
+              disabledReason={t("common.deleting")}
               onClick={() => {
                 detached(handleDelete(), "template-list.delete");
               }}
@@ -659,6 +665,7 @@ const TemplateTagsDialogBody = ({
         </DialogClose>
         <Button
           disabled={saving}
+          disabledReason={t("common.saving")}
           onClick={() => {
             detached(handleSave(), "template-list.save");
           }}
@@ -780,6 +787,7 @@ const TemplateGuidanceDialogBody = ({
         </DialogClose>
         <Button
           disabled={saving}
+          disabledReason={t("common.saving")}
           onClick={() => {
             detached(handleSave(), "template-list.save");
           }}

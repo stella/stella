@@ -890,7 +890,12 @@ const DictationModelAction = ({
   switch (model.status) {
     case "ready":
       return (
-        <Button disabled={busy} onClick={onRemove} variant="ghost">
+        <Button
+          disabled={busy}
+          disabledReason={t("dictationInProgress")}
+          onClick={onRemove}
+          variant="ghost"
+        >
           {t("removeModel")}
         </Button>
       );

@@ -146,6 +146,7 @@ const VatRatesCardBody = ({ organizationId }: { organizationId: string }) => {
           <Button
             variant="outline"
             disabled={mutation.isPending}
+            disabledReason={t("common.saving")}
             onClick={() =>
               detached(
                 run({ type: "applyPreset", country: "SK" }),
@@ -158,6 +159,7 @@ const VatRatesCardBody = ({ organizationId }: { organizationId: string }) => {
           <Button
             variant="outline"
             disabled={mutation.isPending}
+            disabledReason={t("common.saving")}
             onClick={() =>
               detached(
                 run({ type: "applyPreset", country: "CZ" }),
@@ -170,6 +172,7 @@ const VatRatesCardBody = ({ organizationId }: { organizationId: string }) => {
           <Button
             onClick={() => open({ type: "create" })}
             disabled={mutation.isPending}
+            disabledReason={t("common.saving")}
           >
             {t("billing.vatRates.add")}
           </Button>
@@ -255,6 +258,7 @@ const VatRatesCardBody = ({ organizationId }: { organizationId: string }) => {
                               variant="outline"
                               size="sm"
                               disabled={mutation.isPending}
+                              disabledReason={t("common.saving")}
                               onClick={() => open({ type: "edit", rate })}
                             >
                               {t("common.edit")}
@@ -263,6 +267,7 @@ const VatRatesCardBody = ({ organizationId }: { organizationId: string }) => {
                               variant="ghost"
                               size="sm"
                               disabled={mutation.isPending}
+                              disabledReason={t("common.archiving")}
                               onClick={() => open({ type: "archive", rate })}
                             >
                               {t("common.archive")}
@@ -280,6 +285,7 @@ const VatRatesCardBody = ({ organizationId }: { organizationId: string }) => {
         <Button
           variant="outline"
           disabled={query.isFetchingNextPage}
+          disabledReason={t("common.loading")}
           onClick={() => detached(query.fetchNextPage(), "vat-rates.load-more")}
         >
           {t("common.loadMore")}
@@ -319,6 +325,7 @@ const VatRatesCardBody = ({ organizationId }: { organizationId: string }) => {
                   <Button
                     variant="outline"
                     disabled={mutation.isPending}
+                    disabledReason={t("common.archiving")}
                     onClick={close}
                   >
                     {t("common.cancel")}
@@ -326,6 +333,7 @@ const VatRatesCardBody = ({ organizationId }: { organizationId: string }) => {
                   <Button
                     variant="destructive"
                     disabled={mutation.isPending}
+                    disabledReason={t("common.saving")}
                     onClick={() =>
                       detached(
                         run({ type: "archive", id: dialog.rate.id }),

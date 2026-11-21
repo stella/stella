@@ -1931,6 +1931,7 @@ export const MatterActivityList = ({
             <MatterActivityRow className="text-muted-foreground justify-start">
               <Button
                 disabled={isFetchingNextPage}
+                disabledReason={t("caseLaw.loadingMore")}
                 onClick={() => {
                   detached(fetchNextPage(), "app-sidebar.fetch-next-page");
                 }}

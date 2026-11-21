@@ -511,6 +511,22 @@ const ChooseScreen = ({
     };
   }, []);
   const usable = usableFor({ snapshot, destination, model });
+  const destinationDisabledReason = (() => {
+    if (usable) {
+      return undefined;
+    }
+    if (destination === "local") {
+      return snapshot.cloudAvailable
+        ? t("destination.localMissingCloud")
+        : t("destination.localMissing");
+    }
+    if (!snapshot.cloudAvailable) {
+      return t("destination.useLocal");
+    }
+    return model.status === "failed"
+      ? t("destination.modelFailed")
+      : t("destination.loadingModel");
+  })();
   const choose = async () => {
     setChoosing(true);
     setChooseFailed(false);
@@ -542,6 +558,11 @@ const ChooseScreen = ({
           </p>
           <Button
             disabled={!usable || choosing}
+            disabledReason={
+              choosing
+                ? t("waitingForFileSelection")
+                : destinationDisabledReason
+            }
             onClick={() => {
               void choose();
             }}
@@ -567,6 +588,7 @@ const ChooseScreen = ({
               </p>
               <Button
                 disabled={!usable}
+                disabledReason={destinationDisabledReason}
                 onClick={() => {
                   onStartKept(kept);
                 }}
@@ -712,6 +734,62 @@ const FAILURE_MESSAGES = {
   tooLong: "failure.tooLong",
 } as const satisfies Record<TranscribeFailure, string>;
 
+type TranscriptActionReasonOptions = {
+  hasText: boolean;
+  running: boolean;
+  saving: Saving;
+  cleanup: Pick<
+    ReturnType<typeof useRecordingCleanup>,
+    "busy" | "parts" | "running" | "started"
+  >;
+};
+
+const transcriptActionReasons = (
+  { hasText, running, saving, cleanup }: TranscriptActionReasonOptions,
+  t: (
+    key:
+      | "progress.transcribing"
+      | "result.noSpeech"
+      | "result.savingToMatter"
+      | "result.alreadySaved"
+      | "cleaned.running"
+      | "cleaned.offerTitle",
+  ) => string,
+) => {
+  const noTranscriptReason = t(
+    running ? "progress.transcribing" : "result.noSpeech",
+  );
+  const raw = hasText ? undefined : noTranscriptReason;
+  const save = (() => {
+    if (running) {
+      return t("progress.transcribing");
+    }
+    if (saving.status === "saving") {
+      return t("result.savingToMatter");
+    }
+    if (saving.status === "saved") {
+      return t("result.alreadySaved");
+    }
+    return raw;
+  })();
+  const cleaned = (() => {
+    if (!cleanup.running && cleanup.parts.length > 0) {
+      return undefined;
+    }
+    if (cleanup.busy) {
+      return t("cleaned.running");
+    }
+    if (!hasText) {
+      return raw;
+    }
+    if (!cleanup.started) {
+      return t("cleaned.offerTitle");
+    }
+    return t(running ? "progress.transcribing" : "cleaned.running");
+  })();
+  return { raw, save, cleaned };
+};
+
 const ResultScreen = ({
   session,
   pieces,
@@ -754,7 +832,10 @@ const ResultScreen = ({
   });
   const [copyFormat, setCopyFormat] = useCopyFormat();
   const cleanedBlocks = cleanup.blocks;
-  const cleanedReady = !cleanup.running && cleanup.parts.length > 0;
+  const reasons = transcriptActionReasons(
+    { hasText, running, saving, cleanup },
+    t,
+  );
   const save = async (
     text: string,
     fileName: string,
@@ -837,12 +918,8 @@ const ResultScreen = ({
         </div>
         {session.matter === null ? null : (
           <Button
-            disabled={
-              !hasText ||
-              running ||
-              saving.status === "saving" ||
-              saving.status === "saved"
-            }
+            disabled={reasons.save !== undefined}
+            disabledReason={reasons.save}
             onClick={() => {
               void saveToMatter();
             }}
@@ -868,7 +945,7 @@ const ResultScreen = ({
             </h2>
             <PaneActions
               copyFormat={copyFormat}
-              disabled={!hasText}
+              disabledReason={reasons.raw}
               onCopy={async (format) =>
                 await copy(
                   transcriptText(paragraphs, { timestamps: true }),
@@ -946,7 +1023,7 @@ const ResultScreen = ({
             </div>
             <PaneActions
               copyFormat={copyFormat}
-              disabled={!cleanedReady}
+              disabledReason={reasons.cleaned}
               onCopy={async (format) =>
                 await copy(
                   cleanedPlain,
@@ -1059,6 +1136,7 @@ const StatusRow = ({
         </div>
         <Button
           disabled={stopping}
+          disabledReason={t("progress.stopping")}
           onClick={() => {
             setStopping(true);
             void invoke("transcribe_stop", { job }).catch(() => {

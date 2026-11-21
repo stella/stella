@@ -32,7 +32,9 @@
     "leaveDescription": "Perderás el acceso a los asuntos y datos de esta organización.",
     "leaveOrganization": "Salir de la organización",
     "leaveRefusedOnlyOwner": "Eres el único propietario. Haz propietario a otro miembro antes de salir.",
+    "leavingOrganization": "Saliendo de la organización…",
     "modelsAndProviders": "Modelos y proveedores",
+    "organizationChangeCompleted": "Su acceso a la organización ya ha cambiado.",
     "organizationDeleted": "La organización se ha eliminado.",
     "organizationId": "ID de la organización",
     "organizationLeft": "Has salido de la organización.",
@@ -68,6 +70,7 @@
   "ai": {
     "chooseRewriteInstruction": "Opciones de reescritura",
     "editWithAI": "Editar con IA",
+    "enterRewriteInstruction": "Introduzca las instrucciones para reformular el texto.",
     "keyRequired": {
       "accountFeaturesUnavailable": "Las funciones de IA no están disponibles para esta cuenta.",
       "accountRestricted": "La configuración del proveedor de IA no está disponible para esta cuenta.",
@@ -79,17 +82,20 @@
       "title": "Conectar proveedor de IA"
     },
     "refinePlaceholder": "¿Cómo debe la IA ajustar la redacción?",
+    "rewriteDisabled": "Espere a que se pueda editar el texto.",
     "rewriteDraftChanged": "El borrador cambió, por lo que no se aplicó la reescritura.",
     "rewritePresets": {
       "clarify": "Mejorar la claridad",
       "concise": "Hacer más conciso",
       "formal": "Usar un tono más formal",
       "polish": "Mejorar la redacción"
-    }
+    },
+    "rewriting": "Reformulando el texto…"
   },
   "aiColumns": {
     "countSummary": "{columns} columnas × {rows} filas = {answers, plural, one {# respuesta} other {# respuestas} many {# respuestas}}. Las respuestas consumen presupuesto.",
     "modelRefused": "El modelo se negó a responder",
+    "noRowsToRun": "No hay filas aptas en esta selección.",
     "nothingFound": "No se encontró nada",
     "nothingFoundInCutDocument": "No se encontró nada en la parte leída",
     "refusedBudget": "No ejecutado: presupuesto de respuestas no disponible",
@@ -99,7 +105,8 @@
     "runPageRows": "Ejecutar para {count, plural, one {# fila de esta página} other {# filas de esta página} many {# filas de esta página}}",
     "runRemainingPage": "Ejecutar lo restante (esta página)",
     "runSelectedRows": "Ejecutar para {count, plural, one {# fila seleccionada} other {# filas seleccionadas} many {# filas seleccionadas}}",
-    "selectedRun": "Ejecutar columnas de IA para {count, plural, one {# fila} other {# filas} many {# filas}}"
+    "selectedRun": "Ejecutar columnas de IA para {count, plural, one {# fila} other {# filas} many {# filas}}",
+    "waitToRun": "Espere a que termine la ejecución actual."
   },
   "aiDisclosure": {
     "caseLaw": "Los resúmenes, notas y análisis de resoluciones judiciales elaborados con IA los genera stella; no están avalados por los tribunales ni reflejan su propio razonamiento. Son herramientas de apoyo para profesionales del derecho, y solo el texto de la resolución tiene valor fehaciente."
@@ -140,6 +147,7 @@
     "checkSpamHint": "Si no lo ve, revise su carpeta de spam.",
     "chooseOrganization": "Seleccione en qué organización desea trabajar",
     "codeSentAgain": "Hemos enviado un código nuevo.",
+    "confirmingHandoff": "Confirmando el inicio de sesión…",
     "continueWithApple": "Continuar con Apple",
     "continueWithEmail": "Continuar",
     "continueWithGoogle": "Continuar con Google",
@@ -156,6 +164,8 @@
       "tlsRequired": "No podemos entregar correos electrónicos a <domain>{domainName}</domain>: su servidor de correo no acepta correo cifrado. Pida a su departamento de TI que active TLS (STARTTLS) en el servidor de correo o use otra dirección de correo electrónico."
     },
     "emailPlaceholder": "usted@example.com",
+    "enterBootstrapCredentials": "Introduzca una dirección de correo válida, su contraseña y el token de configuración.",
+    "enterEmailAndPassword": "Introduzca una dirección de correo válida y su contraseña.",
     "error": {
       "generic": "Algo salió mal al iniciar tu sesión. Inténtalo de nuevo.",
       "providerUnavailable": "El proveedor de inicio de sesión no responde en este momento. Inténtalo de nuevo en un minuto.",
@@ -188,6 +198,7 @@
     "reauthenticationRequired": "Vuelva a iniciar sesión para continuar con esta acción.",
     "resendCode": "Enviar código de nuevo a <email>{emailAddress}</email>",
     "selectOrganization": "Seleccione una organización",
+    "sendingCode": "Enviando un código de inicio de sesión…",
     "sessionExpired": "Su sesión ha caducado",
     "sessionExpiredDescription": "Inicie sesión en una pestaña nueva. Lo que ha escrito se mantiene en esta página.",
     "signIn": "Iniciar sesión",
@@ -348,7 +359,9 @@
       "kindsLoadFailed": "No se pudo cargar si estos documentos son testimonios.",
       "notVerified": "Aún no verificado",
       "otherList": "Verificado con otra lista",
+      "permissionRequired": "Necesita permiso para editar esta lista y verificar los documentos.",
       "sizeConfirmTitle": "¿Verificar este documento?",
+      "starting": "Iniciando la verificación…",
       "statusLoadFailed": "No se pudo cargar el estado de verificación de estos documentos.",
       "testimony": "Testimonio",
       "testimonyAbout": "Acerca de los testimonios",
@@ -383,7 +396,9 @@
       "reviewed": "Aceptados {accepted} de {proposed, plural, one {# hecho propuesto} many {# hechos propuestos} other {# hechos propuestos}}.",
       "runSize": "{available, plural, one {Esta ejecución usa unas {estimated} de su # unidad disponible.} many {Esta ejecución usa unas {estimated} de sus # unidades disponibles.} other {Esta ejecución usa unas {estimated} de sus # unidades disponibles.}}",
       "running": "Leyendo los documentos. Los hechos propuestos aparecerán aquí para su revisión.",
+      "selectDocument": "Seleccione al menos un documento.",
       "startFailed": "No se pudo iniciar la extracción de hechos",
+      "starting": "Iniciando la extracción de hechos…",
       "submit": "{count, plural, =0 {Extraer hechos} one {Extraer hechos de # documento} many {Extraer hechos de # documentos} other {Extraer hechos de # documentos}}"
     },
     "factTier": {
@@ -508,6 +523,8 @@
     },
     "matches": {
       "count": "{count, plural, one {# coincidencia} other {# coincidencias} many {# coincidencias}}",
+      "noNext": "Esta es la última coincidencia.",
+      "noPrevious": "Esta es la primera coincidencia.",
       "position": "{current}/{total}"
     },
     "mode": {
@@ -555,7 +572,10 @@
       "summary": "Comprobada de nuevo el {checkedAt} con {count, plural, one {# hecho} other {# hechos} many {# hechos}}."
     },
     "review": {
+      "alreadyReopened": "Esta afirmación ya se ha reabierto.",
       "decided": "{status, select, disputed {Impugnada} needsEvidence {Faltan pruebas} other {{origin, select, bulk {Aceptada como rutinaria} other {Revisada}}}} · {decidedAt}",
+      "escalated": "Resuelva la escalación antes de cambiar la decisión de revisión.",
+      "permissionRequired": "Necesita permiso para editar esta lista y revisar las afirmaciones.",
       "status": {
         "disputed": "Impugnada",
         "needsEvidence": "Faltan pruebas",
@@ -697,6 +717,7 @@
       "evidenceList": "Hechos de",
       "loadSample": "Cargar caso de ejemplo",
       "loadSampleFailed": "No se pudo cargar el caso de ejemplo",
+      "loadingSample": "Cargando el caso de ejemplo…",
       "noLists": "Este asunto no tiene listas.",
       "pickList": "Elija la lista con cuyos hechos se contrastan los documentos de este asunto."
     }
@@ -742,6 +763,7 @@
         "wrongStatus": "Este registro ya no es un borrador. Actualice la lista."
       },
       "returnComment": "Motivo de devolución",
+      "returnCommentRequired": "Indique el motivo de la devolución del registro de tiempo.",
       "returnRefusals": {
         "invalidEntry": "Revise la fecha de trabajo del registro y después devuélvalo.",
         "notApprover": "Solo el aprobador asignado o un administrador puede devolver este registro.",
@@ -769,6 +791,7 @@
     "batchActions": "Acciones en lote",
     "billable": "Facturable",
     "billedAmount": "Importe facturado",
+    "chooseNarrativeToRemove": "Seleccione una descripción guardada para eliminarla.",
     "clientComposer": {
       "flatFeeNote": "Facture los asuntos con tarifa fija desde la página de facturas del asunto.",
       "includeMatter": "Incluir {matterName}",
@@ -799,6 +822,8 @@
     "duration": "Duración",
     "editEntry": "Editar entrada",
     "elapsed": "Transcurrido",
+    "enterNarrative": "Introduzca primero una descripción.",
+    "enterNarrativeName": "Introduzca un nombre para esta descripción.",
     "expenses": {
       "categories": {
         "courier": "Mensajería",
@@ -836,6 +861,7 @@
     "hours": "Horas",
     "invalidNumberFormat": "Compruebe el formato del número",
     "invoiceComposer": {
+      "addItemsFirst": "Añada al menos un concepto a la factura.",
       "addSellerProfile": "Añada un perfil de vendedor en la configuración de facturación",
       "billedHours": "Horas facturadas",
       "buyer": "Cliente (comprador)",
@@ -1057,6 +1083,8 @@
       "narrativeRequired": "Añade una descripción antes de guardar el tiempo.",
       "outsideEditWindow": "Esta fecha queda fuera del plazo de edición.",
       "periodLocked": "Este mes está bloqueado.",
+      "positiveDurationRequired": "Introduzca una duración mayor que cero.",
+      "rateReadFailed": "Vuelva a intentar cargar la tarifa antes de guardar.",
       "saveAndAddExpense": "Guardar y añadir gasto",
       "saveAndNew": "Guardar y añadir otra entrada",
       "viewDay": "Ver día"
@@ -1083,6 +1111,7 @@
       "rateCount": "{count, plural, one {# tarifa} other {# tarifas} many {# tarifas}}",
       "rateEntries": "Entradas de tarifa",
       "rateResolved": "Tarifa resuelta",
+      "rateTableNoLongerAvailable": "Esta tabla de tarifas ya no está disponible. Vuelva atrás y elija otra tabla.",
       "rateTables": "Tablas de tarifas",
       "rates": "Tarifas",
       "setAsDefault": "Establecer como predeterminada",
@@ -1147,6 +1176,12 @@
       "privacyNote": "Solo tú puedes ver estas sugerencias. No se registra nada hasta que la aceptas.",
       "title": "Sugerencias a partir de tu actividad",
       "unnamedRecord": "Registro del asunto"
+    },
+    "time": {
+      "selectEligibleWorkDate": "Elija una fecha de trabajo que admita nuevos registros de tiempo."
+    },
+    "timeEntry": {
+      "checkRate": "Compruebe la tarifa por hora y la moneda."
     },
     "timeReport": {
       "billableHours": "Horas facturables",
@@ -1232,6 +1267,7 @@
       },
       "generate": "Generar sumarios con IA",
       "invitation": "Con una cuenta gratuita, la IA prepara notas de trabajo sobre esta resolución.",
+      "noCurrentSection": "No hay ninguna sección actual a la que pueda ir.",
       "topics": "Temas",
       "treatment": "Tratamiento posterior"
     },
@@ -1471,6 +1507,7 @@
       },
       "deleteColumnConfirm": "Se eliminarán la pregunta y todas sus respuestas para toda su organización, en todas las búsquedas y para todos los miembros. Para quitarla solo de esta búsqueda, use «Quitar de esta búsqueda».",
       "editQuestionHint": "Cambiar la redacción, el tipo de respuesta o sus opciones descarta las respuestas actuales; vuelva a ejecutar la columna después.",
+      "emptyPage": "No hay resoluciones judiciales en esta página.",
       "newQuestionColumn": "Nueva",
       "nothingToRun": "Todas las celdas ya tienen respuesta",
       "questionAdded": "«{question}» añadida a la tabla",
@@ -1479,6 +1516,8 @@
       "runAll": "Responder todo",
       "runConfirm": "Responder ahora",
       "runEstimate": "{rows, plural, one {# resolución} other {# resoluciones} many {# resoluciones}} × {columns, plural, one {# pregunta} other {# preguntas} many {# preguntas}} en esta página: {cells, plural, one {se generará # respuesta} other {se generarán # respuestas} many {se generarán # respuestas}}.",
+      "runInProgress": "Ya se está procesando una pregunta de investigación.",
+      "runPermissionRequired": "Necesita permiso para procesar preguntas de investigación.",
       "runTitle": "Responder esta página",
       "savedQuestions": "Preguntas guardadas",
       "title": "Tablas de investigación"
@@ -1687,6 +1726,7 @@
     },
     "aiPrompt": "Campo de mensaje de IA",
     "aiThread": "Conversación de IA",
+    "alreadyInNewChat": "Ya está en un chat nuevo.",
     "analyzingSources": "Analizando fuentes",
     "anonymizationPreview": {
       "answer": "<person1>María José Núñez</person1> puede reclamar a <person2>Íñigo Ibáñez</person2> la deuda más los intereses de demora.",
@@ -1728,11 +1768,14 @@
       "proposal": "Cambio propuesto",
       "requesting": "Preparando cambios…",
       "restoreRefreshFailed": "La respuesta se restauró, pero no se pudo actualizar. Actualízala para cargar la respuesta restaurada.",
+      "restoringUnavailable": "No tiene permiso para restaurar esta respuesta.",
       "revertKind": "Versión restaurada",
+      "rewriteUnavailableAnonymized": "No se pueden reformular respuestas en el modo anonimizado.",
       "stale": "Esta respuesta ha cambiado. Vuelva a seleccionar el texto.",
       "submit": "Solicitar cambio",
       "textStyle": "Estilo de texto",
       "unorderedList": "Lista con viñetas",
+      "waitForAnswer": "Espere a que termine la respuesta.",
       "wholeBlockRequired": "Seleccione un párrafo o una lista completos para cambiar su estilo."
     },
     "answerNotFinished": "stella no pudo terminar esta respuesta.",
@@ -1799,10 +1842,13 @@
       "uploadedDocumentPlaceholder": "(documento subido)"
     },
     "askUser": {
+      "allOptionsSelected": "Todas las opciones ya están seleccionadas.",
+      "answerRequired": "Complete las respuestas obligatorias.",
       "custom": "Escribir propia",
       "edit": "Editar respuestas",
       "editWarning": "Reejecutar descartará las respuestas posteriores de esta conversación.",
       "noAnswer": "Sin respuesta",
+      "noOptionsSelected": "No hay opciones seleccionadas que se puedan desmarcar.",
       "placeholder": "Su respuesta",
       "rerun": "Reejecutar desde aquí",
       "submit": "Enviar respuestas"
@@ -1828,6 +1874,9 @@
     "chatAbout": "Insertar en chat de IA",
     "choosePromptImprovementStrategy": "Opciones para mejorar el prompt",
     "commandsSection": "Comandos",
+    "composer": {
+      "waitForChat": "Espere a que el chat esté listo para enviar mensajes."
+    },
     "composerMenu": {
       "context": "Contexto",
       "editMode": "Modo de edición",
@@ -1856,6 +1905,7 @@
     },
     "connectConnector": {
       "checkAction": "Comprobar conexión",
+      "continuing": "Reanudando el chat…",
       "description": "El asistente solicita conectar {connector} para usar sus herramientas en esta conversación.",
       "error": "No se pudo iniciar la conexión. Inténtalo de nuevo.",
       "notConnected": "Aún no está conectado. Termina de iniciar sesión y vuelve a comprobarlo.",
@@ -1927,6 +1977,7 @@
     "editorLoading": "Cargando el editor…",
     "emptyThreadDescription": "Pregunta sobre este asunto, redacta texto o pide una breve nota de investigación.",
     "emptyThreadTitle": "Iniciar conversación",
+    "enterAuthorName": "Introduzca el nombre que se usará en el control de cambios.",
     "extractingContent": "Extrayendo contenido...",
     "fileThreadRebound": "El chat de este archivo ya se inició en otra sesión. Tu mensaje se ha conservado; envíalo de nuevo.",
     "fileTooLarge": "El archivo supera el límite de {maxSize}",
@@ -2147,12 +2198,14 @@
     },
     "newChat": "Nuevo chat",
     "newChatInSidePanel": "El chat nuevo está disponible en el panel lateral",
+    "newChatRequiresMessage": "Envíe primero un mensaje en este chat.",
     "nextSteps": "Próximos pasos",
     "noPromptPresetOnly": "Sin mensaje, solo preajuste",
     "noThreads": "Aún no hay conversaciones",
     "officeCitationUnavailable": "Esta cita ya no está disponible.",
     "openCitation": "Abrir cita {label}",
     "openThread": "Abrir conversación",
+    "openingChat": "Abriendo el chat…",
     "overlayLoadFailed": "No se pudo cargar el chat del documento.",
     "overlayUpdated": "stella se ha actualizado. Recarga la página para usar el chat del documento.",
     "pastedChars": "Pegado · {count} caracteres",
@@ -2229,10 +2282,12 @@
     "renameUnavailableEmptyThread": "Envía un mensaje primero; después podrás cambiar el nombre de la conversación.",
     "requestSecret": {
       "checkingTarget": "Comprobando los datos del conector…",
+      "confirmReceiptOnly": "Confirme que el conector solo debe recibir un comprobante.",
       "connectionDisposition": "Conexión: {disposition}",
       "continuationError": "Tu respuesta se ha guardado, pero el chat no ha podido continuar.",
       "declined": "Rechazada",
       "description": "El asistente la necesita para continuar",
+      "enterValue": "Introduzca la credencial solicitada.",
       "error": "No se pudo enviar la credencial. Inténtalo de nuevo.",
       "kind": {
         "token": "Token de acceso"
@@ -2282,6 +2337,7 @@
       "yourComputer": "Tu ordenador",
       "yourComputerDescription": "Usa Codex o Claude Code en tu ordenador con tu propia suscripción. Puede leer y cambiar archivos de la carpeta de este chat; sus permisos deciden qué puede hacer sin preguntar."
     },
+    "selectExportContent": "Seleccione qué quiere incluir en la exportación.",
     "selection": {
       "askInNewChat": "Preguntar en un chat nuevo",
       "quoteInReply": "Citar en la respuesta",
@@ -2593,6 +2649,7 @@
     "body": "Cuerpo",
     "categoryDeleteConfirm": "Las cláusulas de esta categoría pasarán a estar sin categorizar.",
     "categoryNamePlaceholder": "p. ej. Confidencialidad",
+    "chooseUnusedSlot": "Elija un espacio que aún no tenga una cláusula vinculada.",
     "clauseCount": "{count, plural, one {# cláusula} other {# cláusulas} many {# cláusulas}}",
     "clauseCreated": "Cláusula creada",
     "clauseDeleted": "Cláusula eliminada",
@@ -2630,6 +2687,7 @@
     "linkFailed": "Error al vincular la cláusula",
     "linked": "Cláusula vinculada",
     "linkedClauses": "Cláusulas vinculadas",
+    "linking": "Vinculando la cláusula…",
     "loadFailed": "Error al cargar las cláusulas",
     "loading": "Cargando cláusulas…",
     "needUpdate": "{count, plural, one {# necesita actualización} other {# necesitan actualización} many {# necesitan actualización}}",
@@ -2652,6 +2710,7 @@
     "saveVersionAndLeave": "Guardar versión y salir",
     "searchClauses": "Buscar cláusulas...",
     "searchPlaceholder": "Buscar cláusulas...",
+    "selectClauseToLink": "Seleccione una cláusula para vincularla.",
     "selectVersionToCompare": "Seleccione una versión para comparar con la actual",
     "slotCustom": "Nombre de espacio personalizado…",
     "slotHelp": "Un espacio es una posición con nombre en el documento ('{{'@clause:name'}}') donde se inserta la cláusula vinculada al rellenar la plantilla.",
@@ -2694,6 +2753,7 @@
   },
   "common": {
     "accept": "Aceptar",
+    "accepting": "Aceptando…",
     "access": "Acceso",
     "action": "Acción",
     "actions": "Acciones",
@@ -2701,6 +2761,8 @@
     "add": "Añadir",
     "advanced": "Avanzado",
     "all": "Todos",
+    "alreadyFirst": "Ya está al principio de la lista.",
+    "alreadyLast": "Ya está al final de la lista.",
     "and": "Y",
     "anonymizationLabels": {
       "address": "Dirección",
@@ -2725,8 +2787,11 @@
       "socialSecurityNumber": "Número de la seguridad social",
       "taxIdentificationNumber": "NIF / CIF"
     },
+    "applying": "Aplicando los cambios…",
     "approve": "Aprobar",
+    "approving": "Aprobando…",
     "archive": "Archivar",
+    "archiving": "Archivando…",
     "ask": "Preguntar",
     "askAI": "Preguntar a la IA",
     "askInChat": "Preguntar en el chat",
@@ -2734,11 +2799,13 @@
     "author": "Autor",
     "back": "Volver",
     "cancel": "Cancelar",
+    "cancelling": "Cancelando…",
     "caseLaw": "Jurisprudencia",
     "catalogue": "Catálogo",
     "category": "Categoría",
     "categoryName": "Nombre de categoría",
     "changeColor": "Cambiar color",
+    "chooseAction": "Seleccione la acción que desea confirmar.",
     "chooseFile": "Elegir archivo",
     "citations": "Citas",
     "clauses": "Cláusulas",
@@ -2756,6 +2823,7 @@
     "confirmAction": "¿Está seguro?",
     "connect": "Conectar",
     "connected": "Conectado",
+    "connecting": "Conectando…",
     "connectionLost": "Conexión perdida",
     "connectionLostDescription": "Se perdió la conexión con el servidor. Reintentando automáticamente.",
     "convertTo": "Convertir a",
@@ -2763,10 +2831,12 @@
     "copy": "Copiar",
     "copyDocumentReference": "Copiar la referencia del documento",
     "copyLink": "Copiar enlace",
+    "copying": "Copiando…",
     "country": "País",
     "court": "Tribunal",
     "createCategory": "Nueva categoría",
     "createdAt": "Creado el {date}",
+    "creating": "Creando…",
     "currency": "Moneda",
     "currentPage": "Página actual",
     "custom": "Personalizado",
@@ -2784,16 +2854,21 @@
     },
     "decisions": "Resoluciones",
     "decline": "Rechazar",
+    "declining": "Rechazando…",
+    "defaultZoomReached": "Ya se usa el zoom predeterminado.",
     "delete": "Eliminar",
     "deleteCategory": "Eliminar categoría",
     "deleteConfirmDescription": "¿Está seguro de que desea eliminar \"{name}\"? Esta acción no se puede deshacer.",
     "deletedCount": "{count, plural, one {# elemento eliminado} other {# elementos eliminados} many {# elementos eliminados}}",
+    "deleting": "Eliminando…",
     "description": "Descripción",
     "details": "Detalles",
     "detailsHiddenFeatureUnavailable": "Detalles ocultos: función no activada",
     "detailsHiddenUnrecognizedResource": "Se registraron cambios para un tipo de recurso que esta versión no reconoce.",
     "detailsUnavailable": "Detalles no disponibles",
+    "disabledButtonExample": "Este ejemplo muestra un botón desactivado.",
     "disconnect": "Desconectar",
+    "disconnecting": "Desconectando…",
     "dismiss": "Descartar",
     "displayName": "Nombre para mostrar",
     "document": "Documento",
@@ -2807,6 +2882,7 @@
     "doubleClickToRename": "Haz doble clic para renombrar",
     "download": "Descargar",
     "downloadOriginal": "Descargar el original",
+    "downloading": "Descargando…",
     "dragAndDrop": {
       "cancelled": "{count, plural, one {Movimiento cancelado. {itemName} no se movió.} other {Movimiento cancelado. {itemName} no se movieron.} many {Movimiento cancelado. {itemName} no se movieron.}}",
       "droppedOn": "{count, plural, one {Se soltó {itemName} sobre {destinationName}.} other {Se soltaron {itemName} sobre {destinationName}.} many {Se soltaron {itemName} sobre {destinationName}.}}",
@@ -2832,6 +2908,16 @@
       "orLetUsKnowAt": "o escríbanos a",
       "viewDocumentation": "Ver documentación"
     },
+    "enterConfirmationPhrase": "Escriba la frase de confirmación.",
+    "enterContactMethod": "Introduzca los datos de contacto.",
+    "enterInstruction": "Introduzca una instrucción.",
+    "enterName": "Introduzca un nombre.",
+    "enterPassword": "Introduzca su contraseña.",
+    "enterSearchQuery": "Introduzca un término de búsqueda.",
+    "enterTerm": "Introduzca un término.",
+    "enterTitle": "Introduzca un título.",
+    "enterUrl": "Introduzca una URL.",
+    "enterVerificationCode": "Introduzca el código de verificación.",
     "expenses": "Gastos",
     "export": {
       "citations": "Citas",
@@ -2847,6 +2933,8 @@
     "filter": "Filtro",
     "filters": "Filtros",
     "find": "Buscar",
+    "finishReview": "Termine de revisar los cambios sugeridos.",
+    "firstPageReached": "Está en la primera página.",
     "folder": "Carpeta",
     "formula": "Fórmula",
     "goBack": "Volver",
@@ -2856,6 +2944,7 @@
     "high": "Alta",
     "history": "Historial",
     "import": "Importar",
+    "installing": "Instalando…",
     "invite": "Invitar",
     "invoices": "Facturas",
     "itemTypeValues": {
@@ -2903,6 +2992,7 @@
       "ZH-HANS": "Chino (simplificado)",
       "ZH-HANT": "Chino (tradicional)"
     },
+    "lastPageReached": "Está en la última página.",
     "lastUpdated": "Última actualización",
     "layoutResetAfterProblem": "Se ha restablecido la disposición tras un problema.",
     "legalDatabase": "Base de datos jurídica",
@@ -2915,9 +3005,11 @@
     "markAsUnread": "Marcar como no leído",
     "matter": "Asunto",
     "matters": "Asuntos",
+    "maxZoomReached": "Ya se alcanzó el zoom máximo.",
     "medium": "Media",
     "members": "Miembros",
     "metadata": "Metadatos",
+    "minZoomReached": "Ya se alcanzó el zoom mínimo.",
     "moveDown": "Mover abajo",
     "moveUp": "Mover arriba",
     "name": "Nombre",
@@ -2926,8 +3018,12 @@
     "newRow": "Nueva fila",
     "next": "Siguiente",
     "nextMatch": "Siguiente coincidencia",
+    "noChangesToSave": "No hay cambios que guardar.",
+    "noDateToClear": "No hay ninguna fecha que borrar.",
     "noFileChosen": "Ningún archivo seleccionado",
+    "noFiltersToClear": "No hay filtros que borrar.",
     "noResults": "Sin resultados",
+    "noTextToRemove": "No hay texto que eliminar.",
     "noVersions": "Sin historial de versiones",
     "none": "Ninguno",
     "notConnected": "No conectado",
@@ -2956,6 +3052,7 @@
     "previous": "Anterior",
     "previousMatch": "Coincidencia anterior",
     "print": "Imprimir",
+    "printing": "Imprimiendo…",
     "profile": "Perfil",
     "properties": "Propiedades",
     "queued": "En cola",
@@ -2971,13 +3068,16 @@
     "removalComplete": "Eliminación completada",
     "remove": "Eliminar",
     "removeMember": "Eliminar miembro",
+    "removing": "Quitando…",
     "rename": "Renombrar",
     "required": "Obligatorio",
     "reset": "Restablecer",
     "resetToDefault": "Restablecer valores predeterminados",
     "resetZoom": "Restablecer zoom",
     "restore": "Restaurar",
+    "restoring": "Restaurando…",
     "retry": "Reintentar",
+    "retrying": "Reintentando…",
     "role": "Rol",
     "run": "Ejecutar",
     "runSizeConfirmDescription": "Esta ejecución se estima en {estimated, plural, one {# unidad de uso} other {# unidades de uso} many {# unidades de uso}}; hay {available, plural, one {# disponible} other {# disponibles} many {# disponibles}}. ¿Iniciarla de todos modos?",
@@ -2998,10 +3098,15 @@
     "selectARole": "Seleccione un rol",
     "selectAll": "Seleccionar todo",
     "selectAllRows": "Seleccionar todas las filas",
+    "selectAtLeastOneFile": "Seleccione al menos un archivo.",
     "selectDate": "Seleccionar fecha…",
+    "selectExportOptions": "Seleccione las opciones de exportación del informe.",
+    "selectFile": "Seleccione un archivo.",
     "selectRow": "Seleccionar {label}",
+    "selectTimeEntry": "Seleccione un registro de tiempo.",
     "selected": "Seleccionado",
     "selectedCount": "{count, plural, one {# seleccionado} other {# seleccionados} many {# seleccionados}}",
+    "sending": "Enviando…",
     "sessions": "Sesiones",
     "settings": "Configuración",
     "showAll": "Mostrar todo",
@@ -3010,6 +3115,7 @@
     "showMore": "Mostrar más",
     "showSecretValue": "Mostrar valor secreto",
     "signOut": "Cerrar sesión",
+    "signingOut": "Cerrando sesión…",
     "skipToContent": "Saltar al contenido",
     "somethingWentWrong": "Algo salió mal. Inténtalo de nuevo o recarga la página si vuelve a ocurrir.",
     "sort": "Ordenar",
@@ -3021,10 +3127,12 @@
     "stepProgress": "{current} de {total}",
     "suggested": "Sugerencia",
     "summarizeChanges": "Resumir cambios",
+    "switchingOrganization": "Abriendo la organización…",
     "target": "Destino",
     "taxId": "Identificación fiscal",
     "timeBilling": "Tiempo y facturación",
     "today": "Hoy",
+    "todayReached": "Ya está viendo el día de hoy.",
     "translate": "Traducir",
     "tryAgain": "Reintentar",
     "type": "Tipo",
@@ -3044,6 +3152,7 @@
     "unverified": "Sin verificar",
     "unverifiedCitationHint": "No se pudo asociar esta cita con el documento de origen.",
     "uploadFiles": "Subir archivos",
+    "uploading": "Subiendo…",
     "urlIdentifier": "Identificador de URL",
     "user": "Usuario",
     "value": "Valor",
@@ -3051,6 +3160,7 @@
     "vatPayer": "Sujeto pasivo de IVA",
     "verified": "Verificado",
     "verify": "Verificar",
+    "verifying": "Verificando…",
     "version": "Versión",
     "versionLabel": "Versión {version}",
     "viewSource": "Ver fuente",
@@ -3066,6 +3176,7 @@
     "allow": "Permitir",
     "canChange": "Puede modificar",
     "canRead": "Puede leer",
+    "clientDetailsRequired": "Espere a que se carguen los datos de la aplicación y de la cuenta. Si no se cargan, recargue la página.",
     "completeSetup": "Completar configuración",
     "connectTitle": "Conectar {clientName} a stella",
     "connectedTitle": "Conectado a {clientName}",
@@ -3079,6 +3190,7 @@
     "returningToClient": "Te llevamos de vuelta a {clientName}.",
     "returnsLocally": "Volverás a {clientName} en este ordenador",
     "returnsTo": "Volverás a {clientName}",
+    "savingDecision": "Guardando su decisión sobre el consentimiento…",
     "scopeAccountExportRead": "Leer tus exportaciones de datos personales",
     "scopeAccountExportWrite": "Solicitar exportaciones de tus datos personales",
     "scopeAdminRead": "Leer el registro de auditoría de su organización",
@@ -3319,6 +3431,7 @@
         "too_many_tags": "Hay demasiadas etiquetas o alguna es demasiado larga."
       },
       "mapDescription": "Comprueba la asociación sugerida. Cada campo de stella solo se puede usar una vez.",
+      "noReadyContacts": "Corrija los errores de al menos un contacto antes de importar.",
       "openContacts": "Abrir contactos",
       "preview": "Revisar importación",
       "previewFailed": "No se pudo crear la vista previa de la importación.",
@@ -3378,6 +3491,7 @@
     }
   },
   "correspondence": {
+    "addressNotConfigured": "Configure la correspondencia entrante antes de crear una dirección.",
     "addressTitle": "Dirección de correo del asunto",
     "assertedOriginal": "Cabeceras originales (según quien reenvía)",
     "authResults": {
@@ -3459,9 +3573,11 @@
     "acceptAll": "Aceptar todo",
     "acceptAllConfirmDescription": "Esto aplica {count} sugerencias al documento de una sola vez.",
     "acceptAllConfirmTitle": "¿Aceptar todas las sugerencias?",
+    "acceptingChanges": "Aceptando los cambios…",
     "applyAs": "como",
     "applyDirect": "Directo",
     "applyTracked": "Control de cambios",
+    "applyingReviewDecision": "Guardando la decisión de revisión…",
     "barLabel": "Revisión de sugerencias",
     "blockedCollaboration": "La sesión de edición compartida aún se está abriendo. Inténtalo de nuevo en un momento.",
     "blockedOpening": "El documento aún se está abriendo. Inténtalo de nuevo en un momento.",
@@ -3474,9 +3590,13 @@
     "countLow": "{count, plural, one {# baja} other {# bajas} many {# bajas}}",
     "countMedium": "{count, plural, one {# media} other {# medias} many {# medias}}",
     "countUnspecified": "{count, plural, one {# sin especificar} other {# sin especificar} many {# sin especificar}}",
+    "dismissingChanges": "Descartando las sugerencias…",
     "finalizePendingNote": "{count, plural, one {# sugerencia sigue pendiente de revisión.} other {# sugerencias siguen pendientes de revisión.} many {# sugerencias siguen pendientes de revisión.}}",
+    "firstChangeReached": "Este es el primer cambio.",
     "hideAccepted": "Ocultar sugerencias aceptadas",
     "keepInReview": "Mantener en revisión",
+    "lastChangeReached": "Este es el último cambio.",
+    "noChangesToAccept": "No hay cambios pendientes de aceptar.",
     "notApplied": "Cambio no aplicado",
     "pendingLimitReached": "Este documento tiene demasiadas sugerencias pendientes de revisión. Resuelva algunas antes de pedir más.",
     "persistFailed": "No se pudo guardar tu cambio de revisión",
@@ -3487,6 +3607,7 @@
     "severityUnspecified": "Sin especificar",
     "skipped": "No se pudo aplicar: {reason}",
     "staleResolution": "Esta sugerencia ya se resolvió en otro lugar.",
+    "suggestionOutOfDate": "El texto cambió después de que se hiciera esta sugerencia.",
     "summary": {
       "commentOnParagraph": "{label, select, none {Comentar un párrafo} other {Comentar el párrafo {label}}}",
       "commentOnSelection": "Comentar el texto seleccionado",
@@ -3873,6 +3994,7 @@
     "loading": "Cargando flujo de trabajo…",
     "namePlaceholder": "p. ej. Revisión de recepción de NDA",
     "nameRequired": "Introduce un nombre para el flujo de trabajo.",
+    "reloadToSave": "Vuelva a cargar el flujo de trabajo para guardar los cambios.",
     "runs": {
       "activeSublabel": "activo",
       "cancel": "Cancelar ejecución",
@@ -3903,6 +4025,7 @@
       "sizeConfirmTitle": "Ejecución de flujo extensa",
       "startFailed": "No se pudo iniciar el flujo de trabajo.",
       "started": "Flujo de trabajo iniciado",
+      "starting": "Iniciando el flujo de trabajo…",
       "stepProgress": "Paso {current} de {total}",
       "tooManyInputDocuments": "Selecciona hasta {max} documentos para ejecutar este flujo de trabajo."
     },
@@ -3957,7 +4080,10 @@
       "title": "Activador",
       "typeLabel": "Tipo de activador"
     },
-    "updated": "Flujo de trabajo actualizado"
+    "updated": "Flujo de trabajo actualizado",
+    "validation": {
+      "tooManySteps": "Este flujo de trabajo admite hasta {max} pasos."
+    }
   },
   "folio": {
     "acceptChange": "Aceptar cambio",
@@ -4022,6 +4148,7 @@
       "outlineDepthThree": "1–3",
       "outlineDepthTwo": "1–2"
     },
+    "evidenceInDifferentMatter": "Esta referencia pertenece a otro asunto.",
     "evidenceReferences": "Referencias de prueba",
     "evidenceUnavailable": "Esta referencia de prueba no se puede abrir en este asunto.",
     "findReplace": {
@@ -4053,6 +4180,7 @@
     "insertRowAbove": "Insertar fila encima",
     "insertRowBelow": "Insertar fila debajo",
     "inserted": "Insertado",
+    "insertingEvidence": "Insertando la referencia…",
     "italic": "Cursiva",
     "italicShortcut": "Cursiva (Ctrl+I)",
     "justify": "Justificar",
@@ -4126,6 +4254,7 @@
       "skip": "Omitir"
     },
     "checklist": {
+      "activeTour": "Termine o cierre primero la guía actual.",
       "progress": "{completed} de {total} completado"
     },
     "community": {
@@ -4366,6 +4495,7 @@
       "downloadAction": "Descargar PDF anonimizado",
       "downloadHint": "Exporta la versión guardada como PDF con texto no seleccionable.",
       "emptyState": "Todavía no hay términos específicos del espacio de trabajo. Añade uno arriba.",
+      "enterTerm": "Introduzca un término para anonimizar.",
       "ignoreAction": "Ignorar en este documento",
       "ignoreScopeAlways": "Ignorar siempre",
       "ignoreScopeDocument": "Ignorar en este asunto",
@@ -4383,8 +4513,10 @@
       "termMatchCountAriaLabel": "Coincidió {count} veces en este documento.",
       "title": "Vocabulario de anonimización",
       "unsupportedVisualContent": "Este archivo contiene imágenes o gráficos vectoriales que no se pueden comprobar para detectar texto sensible. La exportación no está disponible.",
+      "waitForMatches": "Espere a que termine el análisis de anonimización.",
       "workspaceTermsHeading": "Términos del espacio de trabajo ({count})"
     },
+    "attachmentNotPreviewable": "Descargue este adjunto para abrirlo.",
     "closeAllTabs": "Cerrar {count, plural, one {# pestaña} many {las # pestañas} other {las # pestañas}}",
     "closeOtherTabs": "Cerrar {count, plural, one {la otra pestaña} many {las otras # pestañas} other {las otras # pestañas}}",
     "closeTab": "Cerrar <bdi>{name}</bdi>",
@@ -4394,6 +4526,7 @@
       "unsupportedField": "Este documento contiene un campo {fieldType} que no se puede convertir.",
       "unsupportedReference": "Este documento hace referencia a un recurso externo en {element} {attribute}, por lo que no se puede convertir."
     },
+    "enterGroupName": "Introduzca un nombre para el grupo.",
     "external": {
       "confirmDescription": "Estás a punto de visitar un sitio web externo.",
       "confirmTitle": "¿Abrir enlace externo?",
@@ -4404,6 +4537,7 @@
     "facet": {
       "anonymization": "Anonimización"
     },
+    "firstSourceReached": "Esta es la primera fuente.",
     "groups": {
       "addContext": "Añadir contexto",
       "chatMoveDescription": "<bdi>{chatName}</bdi> se agrupará bajo <bdi>{matterName}</bdi>. Añade el asunto al contexto del chat para que pueda usar sus archivos e información.",
@@ -4426,6 +4560,7 @@
       "ungroup": "Quitar del grupo"
     },
     "hidePane": "Ocultar panel",
+    "lastSourceReached": "Esta es la última fuente.",
     "matterPicker": {
       "allMatters": "Todos los asuntos",
       "description": "Elige los asuntos en los que puede basarse este chat.",
@@ -4504,6 +4639,7 @@
       },
       "checks": "Se comprueba:",
       "commentFailed": "No se pudo añadir el comentario",
+      "completePositionIssues": "Introduzca una cuestión para cada posición seleccionada.",
       "decidedCount": "{count, number} decidido",
       "decision": "Decisión",
       "decisionFailed": "No se pudo registrar tu decisión",
@@ -4516,6 +4652,7 @@
       "documentCutNotice": "<strong>{documentName} no se leyó por completo.</strong> Es demasiado largo para este modelo, por lo que se omitió aproximadamente el {percent} del texto. Una posición sin respuesta se marca para revisión, porque la respuesta puede estar en la parte omitida.",
       "documentTooLarge": "Este documento es demasiado largo para que este modelo lea una parte suficiente. Pruebe con un modelo con una ventana de contexto mayor.",
       "documentsTooLarge": "Estos documentos son demasiado largos para que este modelo los lea juntos. Use menos documentos o documentos más cortos, o pruebe con un modelo con una ventana de contexto mayor.",
+      "enterNote": "Escriba primero un comentario.",
       "export": {
         "counterparty": "Descargar para la contraparte",
         "counterpartyFailed": "No se pudo exportar el documento",
@@ -4618,6 +4755,9 @@
       "saveAsPlaybookFailed": "No se pudo guardar esta revisión como playbook",
       "savedAsPlaybook": "Guardado como playbook",
       "searchPlaybooks": "Buscar playbooks",
+      "selectPositionFirst": "Seleccione al menos una posición.",
+      "selectReviewBasis": "Seleccione un playbook o añada un documento de referencia.",
+      "selectReviewPositionOrReference": "Seleccione un playbook con posiciones activas o añada un documento de referencia.",
       "showInDocument": "Mostrar en el documento",
       "sizeConfirmStart": "Iniciar revisión",
       "sizeConfirmTitle": "Revisión extensa",
@@ -4649,6 +4789,7 @@
       "why": "Por qué",
       "whyItMatters": "Por qué importa:"
     },
+    "selectAttachmentToSave": "Seleccione un adjunto para guardarlo.",
     "showPane": "Mostrar panel",
     "swapViews": "Intercambiar la vista principal y el panel lateral",
     "title": "Panel de inspección"
@@ -4723,6 +4864,7 @@
       "dropPack": "Suelte un .zip/.skill o SKILL.md para importar la habilidad",
       "editSkill": "Editar habilidad",
       "enableSkill": "Activar habilidad",
+      "enterFileName": "Introduzca un nombre de archivo.",
       "exportAsSkill": "Exportar como .skill",
       "exportAsZip": "Exportar como .zip",
       "exportFailed": "No se pudo exportar la habilidad",
@@ -4753,6 +4895,7 @@
       "renameFile": "Cambiar nombre",
       "scopePrivate": "Solo yo",
       "scopeTeam": "Todos en el equipo",
+      "selectSkillToImport": "Seleccione al menos una habilidad.",
       "selectionLimit": "Selecciona hasta {count} habilidades a la vez.",
       "skippedFiles": "{count, plural, one {# archivo no se importó} other {# archivos no se importaron} many {# archivos no se importaron}}",
       "skippedReasonNotUtf8Text": "No es texto UTF-8",
@@ -4829,6 +4972,7 @@
       "emptyTitle": "Aún no hay integraciones",
       "enable": "Activar",
       "endpointOrigins": "Orígenes de los endpoints",
+      "enterToken": "Introduzca un token de acceso.",
       "errorDescription": "No se pudo actualizar la integración.",
       "errorTitle": "MCP falló",
       "mcpExplainer": "Las integraciones conectan servicios externos al chat con los que la IA puede trabajar.",
@@ -4904,6 +5048,7 @@
       "convertToRules": "Convertir en reglas",
       "createPlaybook": "Nuevo playbook",
       "created": "Playbook creado",
+      "creatingFromStarter": "Creando un playbook a partir de la plantilla seleccionada…",
       "customizeAnswer": "Cambiar la respuesta extraída",
       "customizeAnswerHint": "Editar la pregunta o el formato de respuesta.",
       "decisionLine": "{runs, plural, one {aceptado {accepted, number} · descartado {dismissed, number} · en # revisión} other {aceptado {accepted, number} · descartado {dismissed, number} · en # revisiones} many {aceptado {accepted, number} · descartado {dismissed, number} · en # revisiones}}",
@@ -5228,6 +5373,7 @@
     "deleteTitle": "¿Eliminar el recuerdo?",
     "deletedToast": "Recuerdo eliminado",
     "empty": "Aún no hay nada en la memoria.",
+    "enterMemory": "Introduzca el texto que desea guardar en la memoria.",
     "kinds": {
       "decision": "Decisión",
       "instruction": "Instrucción",
@@ -5245,6 +5391,9 @@
       "extracted": "Extraído",
       "tool": "Herramienta",
       "user": "Añadido por usted"
+    },
+    "suggestions": {
+      "reviewing": "Registrando su decisión…"
     },
     "suggestionsDescription": "El asistente propuso recordar esto. Acéptelo para conservarlo o recháicelo para descartarlo.",
     "suggestionsTitle": "Sugerencias",
@@ -5356,6 +5505,7 @@
     "orgNamePlaceholder": "García y Asociados",
     "orgSubtitle": "Si va a unirse a un equipo existente, pida a uno de sus miembros un enlace de invitación.",
     "orgTitle": "Nombre de su equipo",
+    "selectJurisdictionToContinue": "Seleccione al menos una jurisdicción.",
     "skipStep": "Omitir",
     "someInvitesFailed": "{count, plural, one {# invitación falló} many {# invitaciones fallaron} other {# invitaciones fallaron}}",
     "stepAi": "IA",
@@ -5369,6 +5519,7 @@
     "aiConfig": {
       "addProvider": "Añadir proveedor",
       "addProviderFirst": "Añade primero un proveedor",
+      "allProvidersAdded": "Ya se han añadido todos los proveedores disponibles.",
       "anthropicKeyDisabled": "Crea una clave de API activa en la consola de Anthropic y sustituye esta clave.",
       "anthropicNoCredits": "Añade saldo para la API en la sección de facturación de la consola de Anthropic y vuelve a intentarlo.",
       "anthropicOrganizationRestricted": "Pide acceso al administrador de tu organización de Anthropic o usa una clave de una organización permitida.",
@@ -5463,6 +5614,8 @@
       "removeProvider": "Quitar proveedor",
       "removeProviderConfirm": "¿Eliminar {provider} y sus credenciales guardadas?",
       "replaceKey": "Sustituir clave",
+      "requireProvider": "Mantenga configurado al menos un proveedor.",
+      "resolveErrorsBeforeSaving": "Corrija los errores de configuración resaltados antes de guardar.",
       "roleUnavailable": "{provider} no admite esta función.",
       "roles": {
         "browse": "Navegación",
@@ -5565,6 +5718,7 @@
   "publicTools": {
     "addSkill": "Añadir una habilidad",
     "addToStella": "Añadir a stella",
+    "alreadyInstalled": "Esta herramienta ya está instalada.",
     "content": "Contenido",
     "contentUnavailable": "No se ha podido cargar el contenido de esta habilidad. Consúltalo en GitHub.",
     "contribute": {
@@ -5668,8 +5822,10 @@
       "skillBody": "La habilidad «{name}» se instalará en tu espacio de trabajo.",
       "title": "¿Añadir {name} a tu espacio de trabajo?"
     },
+    "installUnavailable": "No se puede instalar esta herramienta en su organización.",
     "mcpConfigHint": "Datos de conexión independientes del cliente. Pégalos en cualquier cliente compatible con MCP y añade tus propias credenciales.",
     "metaDescription": "Explora el catálogo abierto de habilidades, integraciones y herramientas incorporadas para el trabajo jurídico.",
+    "missingFromCatalogue": "Esta herramienta no figura en el catálogo de su organización.",
     "nativeToolInfo": "Esta es una función incorporada de stella. Habilítala desde tu espacio de trabajo para usarla en el chat.",
     "notFound": "No se ha encontrado la herramienta.",
     "practiceArea": "Área de práctica",
@@ -5709,6 +5865,7 @@
     "expand": "Expandir respuesta",
     "explain": "Explicar",
     "followUp": "Hacer una pregunta de seguimiento",
+    "followUpRequired": "Escriba una pregunta de seguimiento para enviarla.",
     "invalidCitations": "{count, plural, one {No se pudo verificar # cita.} many {No se pudieron verificar # citas.} other {No se pudieron verificar # citas.}}",
     "loading": "Generando respuesta…",
     "minimise": "Contraer respuesta",
@@ -5719,7 +5876,8 @@
     "send": "Enviar pregunta de seguimiento",
     "share": "Compartir con el equipo",
     "timeoutError": "Se agotó el tiempo de espera de la respuesta. Inténtalo de nuevo.",
-    "title": "Respuesta sobre el texto seleccionado"
+    "title": "Respuesta sobre el texto seleccionado",
+    "waitForCurrentAction": "Espere a que termine la acción en curso sobre esta respuesta."
   },
   "routeError": {
     "backToMatters": "Volver a los asuntos",
@@ -5727,6 +5885,7 @@
     "descriptionAdministrator": "Inténtalo de nuevo. Si el problema continúa, vuelve a tus asuntos o contacta con tu administrador usando la referencia de abajo.",
     "descriptionNone": "Inténtalo de nuevo. Si el problema continúa, vuelve a tus asuntos.",
     "descriptionReport": "Inténtalo de nuevo. Si el problema continúa, vuelve a tus asuntos o repórtalo con la referencia de abajo.",
+    "errorReferencePending": "Espere a que aparezca la referencia del error.",
     "reference": "Referencia del error",
     "reportProblem": "Reportar problema",
     "title": "No se pudo abrir esta página"
@@ -5742,6 +5901,8 @@
     "deleteSearchTitle": "Eliminar búsqueda guardada",
     "editedBy": "Editado por",
     "emptyState": "Empiece a escribir para buscar en todos los asuntos.",
+    "enterQueryToRefine": "Introduzca una consulta para afinar la búsqueda.",
+    "enterRegistryCredential": "Introduzca la credencial del registro.",
     "estimatedResultCount": "{count, plural, one {Aproximadamente # resultado} other {Aproximadamente # resultados} many {Aproximadamente # resultados}}",
     "hintAskAI": "<kbd>Tab</kbd> preguntar a la IA",
     "hintClear": "<kbd>Esc</kbd> borrar",
@@ -5766,6 +5927,7 @@
     "recentDocuments": "Documentos recientes",
     "recentSearches": "Búsquedas recientes",
     "recentlyOpenedFiles": "Archivos abiertos recientemente",
+    "refiningQuery": "Afinando la consulta de búsqueda…",
     "registryCandidateNameMismatch": "El nombre oficial es «{officialName}» y no coincide",
     "registryCandidateNoOfficialRecord": "El registro oficial no contiene ninguna inscripción para este número",
     "registryChoose": "Elegir un registro mercantil",
@@ -5788,6 +5950,10 @@
     "saveSearch": "Guardar búsqueda",
     "saveSearchNamePlaceholder": "p. ej., PDF recientes",
     "saveSearchTitle": "Guardar búsqueda",
+    "savedSearchAddCriteria": "Añada primero un término de búsqueda o un filtro.",
+    "savedSearchEnterName": "Introduzca un nombre para la búsqueda.",
+    "savedSearchNameConflict": "Vuelva a cargar la búsqueda antes de cambiarle el nombre.",
+    "savedSearchUpdating": "Actualizando las búsquedas guardadas…",
     "savedSearches": "Búsquedas guardadas",
     "savedSearchesEmpty": "Guarda una búsqueda para volver a usarla.",
     "scopeFilter": "Ámbito de búsqueda",
@@ -5833,6 +5999,7 @@
       "chatNotificationsUnsupported": "Este navegador no admite notificaciones.",
       "chatTechnicalDetails": "Detalles técnicos en el chat",
       "chatTechnicalDetailsDescription": "Cada paso del chat muestra qué consultó y qué encontró. Si lo activas, también verás el código y los resultados sin procesar.",
+      "checkTaskReassignments": "Compruebe los miembros seleccionados para recibir las tareas.",
       "confirmDelete": "Confirmar eliminación de cuenta",
       "dangerZone": "Zona de peligro",
       "dangerZoneDescription": "Eliminar permanentemente el acceso a su cuenta y los datos privados de la cuenta.",
@@ -5907,6 +6074,7 @@
       "preferredNameDescription": "Se usa como autor en los cambios registrados y comentarios de DOCX.",
       "preferredNamePlaceholder": "Tu nombre",
       "profileDescription": "Gestiona tus preferencias personales",
+      "revokingSessions": "Cerrando las demás sesiones…",
       "sendOtpCode": "Enviar código de verificación",
       "signInMethods": {
         "confirmDescription": "Introduce un código nuevo enviado a tu correo electrónico para desconectar este método de inicio de sesión.",
@@ -6183,6 +6351,7 @@
         "reorder": "Reordenar tipo de documento",
         "title": "Tipos de documentos"
       },
+      "enterSlug": "Introduzca el identificador de la organización para la URL.",
       "localRuns": {
         "description": "Lo máximo que puede hacer un agente de programación sin preguntar cuando ejecuta un chat en el ordenador de un miembro. Un límite más bajo se aplica a partir del siguiente mensaje de cada miembro; una ejecución ya en curso conserva sus permisos.",
         "title": "Agentes de programación en los ordenadores de los miembros",
@@ -6239,6 +6408,7 @@
       },
       "uploadLogo": "Subir logotipo",
       "usage": "Uso",
+      "usageCheckoutProviderUnavailable": "El proveedor de pagos no está disponible para el pago en línea.",
       "usageDescription": "Límites de uso y estado de la autorización de esta organización",
       "usageEmptyDescription": "Configura una autorización de uso para habilitar funciones de IA medidas en esta organización.",
       "usageEmptyTitle": "Sin autorización de uso",
@@ -6255,9 +6425,11 @@
       "usageManageError": "No se pudo abrir la gestión de uso alojado",
       "usageManuallyManaged": "Gestionado manualmente",
       "usagePacksDescription": "Paquetes de unidades de pago único añadidos a tu periodo actual.",
+      "usagePacksRequireActivePlan": "Active o reanude un plan alojado para comprar paquetes de unidades.",
       "usagePacksTitle": "Paquetes de unidades",
       "usagePlanCheckout": "Continuar al pago",
       "usagePlanCheckoutError": "No se pudo iniciar el pago",
+      "usagePlanCheckoutUnavailable": "El pago en línea no está disponible para este plan.",
       "usagePlanPriceMonthTemplate": "{price} / mes",
       "usagePlanPriceOneTimeTemplate": "{price}",
       "usagePlanPriceSeatMonthTemplate": "{price} / puesto / mes",
@@ -6480,6 +6652,7 @@
     },
     "title": "Legislación",
     "validity": "Vigente del {from} al {to}",
+    "versionAlreadySelected": "Ya está viendo esta versión.",
     "versionAppliedInDecision": "Versión aplicada en la resolución <bdi>{court}</bdi> <bdi>{caseNumber}</bdi> (<bdi>{range}</bdi>) · {status}",
     "versionChangesAdded": "{count, plural, one {# disposición añadida} other {# disposiciones añadidas} many {# disposiciones añadidas}}",
     "versionChangesChanged": "{count, plural, one {# disposición modificada} other {# disposiciones modificadas} many {# disposiciones modificadas}}",
@@ -6729,6 +6902,7 @@
     "checkResultsTitle": "Comprobación de la plantilla",
     "checkTemplate": "Comprobar plantilla",
     "checkWarnings": "{count, plural, one {# advertencia} other {# advertencias} many {# advertencias}}",
+    "choosePrefillSource": "Seleccione un documento, suba un archivo o pegue texto.",
     "clearMyLookupFormatDefault": "Quitar mi predeterminado",
     "conditionAddGroup": "Añadir grupo",
     "conditionAddRule": "Añadir regla",
@@ -6740,8 +6914,10 @@
     "conditionForcedNo": "No · definido por ti",
     "conditionForcedYes": "Sí · definido por ti",
     "conditionFormulaPlaceholder": "Introduce una fórmula…",
+    "conditionGroupFull": "El grupo ya contiene el número máximo de condiciones.",
     "conditionMatch": "Coincidencia",
     "conditionNamePlaceholder": "Nombre de la condición (p. ej. NPF)",
+    "conditionNeedsField": "No hay campos disponibles para esta condición.",
     "conditionNotSettled": "Los datos introducidos no lo resuelven, se decidirá al generar",
     "conditionOpAfter": "después de",
     "conditionOpAtLeast": "al menos",
@@ -6768,6 +6944,7 @@
     "confirmDelete": "Esto eliminará la plantilla permanentemente.",
     "copyCompanySpecification": "Copiar la identificación de la empresa",
     "copyRegistryResult": "Copiar resultado del registro",
+    "correctFormErrors": "Corrija primero los campos resaltados.",
     "createDocument": "Crear documento",
     "createDocumentAnyway": "Crear de todos modos",
     "createFromStyles": "Empezar con estilos de documento",
@@ -6796,6 +6973,8 @@
     "dropToCreate": "Suelte un archivo .docx para crear una plantilla",
     "editFields": "Editar campos",
     "emptyFieldsWarning": "{count, plural, one {# campo sigue vacío} other {# campos siguen vacíos} many {# campos siguen vacíos}}: {names}",
+    "enterLookupFormatDetails": "Introduzca un nombre y un valor para el formato.",
+    "enterRegistryId": "Introduzca primero el identificador de la empresa.",
     "fieldCount": "{count, plural, one {# campo} other {# campos} many {# campos}}",
     "fieldFormat": "Formato de salida",
     "fieldFormatHint": "Utilice '{{key}}' para insertar una parte.",
@@ -6844,8 +7023,11 @@
     "lastUsedAgo": "Último uso {time}",
     "loadFailed": "No se pudieron cargar las plantillas",
     "lookupFieldHint": "Introduzca un número KRS; los datos de la empresa se rellenan desde el registro.",
+    "lookupFormatLimit": "Puede añadir hasta {max} formatos de salida.",
     "lookupFormatSaved": "Formato de salida guardado",
     "lookupFormatsSharedHint": "Los formatos guardados están disponibles para los compañeros de esta organización. Tu formato predeterminado solo se aplica a ti.",
+    "lookupOrganizationDefaultUnchanged": "Este ya es el formato predeterminado de la organización.",
+    "lookupPersonalDefaultUnchanged": "Esta opción coincide con su configuración predeterminada actual.",
     "moveToCategory": "Mover a categoría",
     "moveToMatter": "Guardar en asunto",
     "moveToMatterAnyway": "Guardar de todos modos",
@@ -6888,6 +7070,7 @@
     "structureWarningParagraph": "Párrafo {paragraph, number}",
     "structureWarnings": "{count, plural, one {# advertencia de estructura} other {# advertencias de estructura} many {# advertencias de estructura}}",
     "studio": {
+      "addFieldsToNavigate": "Añada otro campo para desplazarse entre los campos.",
       "aiAdaptInstructionPlaceholder": "Opcional: cómo debe la IA adaptar la redacción (p. ej., ajustarse a la gramática del entorno)",
       "aiDrafted": "Redactado por IA",
       "aiNoFields": "La IA no sugirió ningún campo",
@@ -6901,6 +7084,7 @@
       "aiSeesDocument": "Permitir que la IA lea el documento",
       "aiSuggest": "Sugerir campos",
       "clauseSlotHelp": "La cláusula vinculada se inserta aquí al rellenar la plantilla. Vincúlala o cámbiala en este panel o desde el menú de inserción.",
+      "completeCondition": "Complete la condición antes de guardar.",
       "conceptClause": "Inserta una cláusula reutilizable de tu biblioteca.",
       "conceptCondition": "Muestra este texto solo cuando se cumple una condición.",
       "conceptField": "Un valor que rellenas al usar la plantilla.",
@@ -6927,6 +7111,7 @@
       "conditionsSectionHelp": "Selecciona texto en el documento → clic derecho → Mostrar solo si…",
       "draftedByAi": "Solo IA",
       "emptyClauseSlot": "Hueco de cláusula vacío",
+      "enterConditionNameAndPrompt": "Introduzca un nombre y una instrucción.",
       "existingCondition": "Condición existente…",
       "existingField": "Campo existente…",
       "expressionPlaceholder": "expresión",
@@ -7056,6 +7241,7 @@
       "entriesTitle": "Tiempo registrado",
       "nextWeek": "Semana siguiente",
       "noActivity": "Aún no hay nada que registrar. Trabaja en un asunto y tu actividad aparecerá aquí para aceptarla.",
+      "noDraftEntries": "No hay borradores de registros de tiempo para enviar esta semana.",
       "pendingCount": "{count, plural, one {# sugerencia} other {# sugerencias} many {# sugerencias}}",
       "previousWeek": "Semana anterior",
       "range": "{start} – {end}",
@@ -7101,7 +7287,8 @@
       "title": "Traducir documento",
       "translatedDocument": "Documento traducido · DeepL",
       "translatedDocumentAi": "Documento traducido · stella AI",
-      "translating": "Traduciendo…"
+      "translating": "Traduciendo…",
+      "waitForDocument": "Espere a que el documento esté listo para traducirse."
     },
     "error": {
       "title": "Error de traducción"
@@ -7143,6 +7330,7 @@
     }
   },
   "workspaces": {
+    "alreadyVerified": "Esta fuente ya se ha verificado.",
     "archivedReadOnly": "Este asunto está archivado y es de solo lectura.",
     "calculations": {
       "choose": "Calcular",
@@ -7208,6 +7396,7 @@
     "deletingWorkspace": "Eliminando asunto",
     "documentSwitcher": {
       "download": "Descargar este archivo",
+      "renditionsFailed": "Vuelva a cargar el documento e intente descargarlo de nuevo.",
       "searchPlaceholder": "Buscar un documento…",
       "trigger": "Cambiar de documento"
     },
@@ -7217,11 +7406,13 @@
     "duplicateMatterDescription": "Duplicarás el asunto, su nombre, cliente, miembros del equipo, partes y vistas.",
     "duplicateMatterWithContentDescription": "Duplicarás el asunto, su nombre, cliente, miembros del equipo, partes, vistas y contenido.",
     "duplicateWithContent": "Duplicar con contenido",
+    "duplicatingRow": "Duplicando la fila…",
     "duplicatingWorkspace": "Duplicando asunto",
     "emptyDocuments": {
       "description": "Suba documentos para habilitar la extracción de tablas, la organización de documentos, la edición en el navegador y la búsqueda en este asunto.",
       "title": "Suba sus primeros documentos"
     },
+    "emptyGroup": "Este grupo no tiene filas.",
     "emptyMatters": {
       "description": "Cree un asunto para organizar documentos, contactos, tareas y actividad del equipo en un solo lugar.",
       "title": "Cree su primer asunto"
@@ -7312,6 +7503,7 @@
       "ocrQueueFailed": "No se pudo poner en cola el reconocimiento de texto",
       "ocrQueued": "Reconocimiento de texto puesto en cola",
       "ocrQueuedForBatch": "Reconocimiento de texto añadido al próximo lote de OCR",
+      "pdfSelectToPrint": "Abra un PDF para imprimirlo.",
       "pdfSigning": {
         "alreadySigningTitle": "Ya hay una firma en curso en stella desktop",
         "cancelledBaseVersionDescription": "El documento cambió mientras se firmaba. Abre la versión más reciente y fírmalo de nuevo.",
@@ -7379,6 +7571,7 @@
       "renamedToAvoidConflicts": "{count, plural, one {# archivo renombrado para evitar conflictos} other {# archivos renombrados para evitar conflictos} many {# archivos renombrados para evitar conflictos}}",
       "retryFailed": "Reintentar {count, plural, one {# archivo} other {# archivos} many {# archivos}}",
       "scrubFailed": "No se pudieron eliminar los metadatos de este archivo, por lo que no se descargó nada",
+      "uploadBlockedByWorkflow": "Espere a que termine el flujo de trabajo antes de cargar archivos.",
       "uploadedPartially": "{failed, plural, one {# archivo falló} other {# archivos fallaron} many {# archivos fallaron}} de {total, number}",
       "uploadedSuccessfully": "Archivos subidos correctamente",
       "uploading": "Subiendo archivos",
@@ -7392,6 +7585,7 @@
         "description": "Soltaste \"{fileName}\" sobre un documento existente.",
         "extensionMismatch": "Extensión no coincide: esperado {expected}, recibido {actual}",
         "extensionMismatchError": "La extensión del archivo no coincide con el documento existente",
+        "incompatibleFileType": "Elija un archivo del mismo tipo para sustituir esta versión.",
         "newDocumentDropsReference": "La referencia anterior se eliminará del archivo.",
         "noExtension": "sin extensión",
         "referenceElsewhere": "Este archivo es la versión {version, number} de <bdi>{documentName}</bdi> (<bdi>{reference}</bdi>) en el asunto <bdi>{matterName}</bdi>.",
@@ -7477,6 +7671,8 @@
       "instructionsEmpty": "Sin instrucciones personalizadas",
       "instructionsPlaceholder": "p. ej. Usar nombres de carpetas en español, agrupar por contraparte, anteponer el año a las fechas.",
       "instructionsTitle": "Instrucciones de IA",
+      "noChangesToApply": "No hay archivos ni carpetas que organizar.",
+      "noFilesToOrganize": "Añada archivos para organizarlos.",
       "organized": "Archivos organizados",
       "selectedOfTotal": "{selected, number} / {total, number}",
       "summaryToMove": "para mover",
@@ -7505,14 +7701,20 @@
     "leadPicker": {
       "noMatchingMembers": "No hay miembros coincidentes"
     },
+    "lists": {
+      "alreadyVerified": "Este elemento ya está verificado.",
+      "selectColumnToAdd": "Seleccione una columna para añadirla."
+    },
     "matterInfo": "Información del asunto",
     "mattersCount": "{count, plural, one {# asunto} other {# asuntos} many {# asuntos}}",
     "members": {
       "addMember": "Añadir al asunto",
       "addMemberDescription": "Añadir un miembro del equipo a este asunto",
+      "addingMember": "Añadiendo al miembro…",
       "alreadyOnMatter": "Ya está en este asunto",
       "noMembersFound": "No se encontraron miembros",
-      "removeMemberConfirm": "¿Eliminar a este miembro del asunto?"
+      "removeMemberConfirm": "¿Eliminar a este miembro del asunto?",
+      "selectMemberToAdd": "Seleccione un miembro para añadirlo."
     },
     "newDocument": "Nuevo documento",
     "newFolder": "Nueva carpeta",
@@ -7646,6 +7848,7 @@
     "parties": {
       "addParty": "Añadir parte",
       "changeClient": "Cambiar cliente",
+      "chooseContact": "Seleccione primero un contacto.",
       "client": "Cliente",
       "movedToClient": "Asunto <bdi>{matterName}</bdi> movido a <bdi>{clientName}</bdi>",
       "noClientOptional": "Sin cliente (opcional)",
@@ -7691,12 +7894,14 @@
       "nextPage": "Página siguiente",
       "pageEditor": {
         "addPDF": "Añadir PDF",
+        "addingPdf": "Añadiendo páginas PDF…",
         "applyCrop": "Aplicar recorte",
         "cleanScan": {
           "applied": "Versión limpia aplicada",
           "apply": "Aplicar",
           "applyAll": "Aplicar todas",
           "applyPage": "Aplicar la página limpia {number}",
+          "applyPageFirst": "Aplique primero al menos una página limpiada.",
           "cleaned": "Limpia",
           "cleaning": "Limpiando la página",
           "contentCrop": "Recortar al contenido",
@@ -7706,6 +7911,7 @@
           "failedRender": "No se pudo preparar la página para limpiarla. Queda como está.",
           "failedTimeout": "La limpieza tardó demasiado. La página queda como está.",
           "heading": "Limpiar escaneo",
+          "noPreviewToApply": "No hay páginas limpiadas listas para aplicar.",
           "output": "Modo de color",
           "outputBinary": "Blanco y negro",
           "outputGrayscale": "Escala de grises",
@@ -7722,10 +7928,12 @@
           "unrecognizedTooLarge": "La página es demasiado grande para limpiarla. Queda como está.",
           "use": "{count, plural, =0 {Usar páginas limpias} one {Usar # página limpia} other {Usar # páginas limpias} many {Usar # páginas limpias}}"
         },
+        "connectingToDesktop": "Conectando con stella para escritorio…",
         "crop": "Recortar",
         "cropAdvanced": "Opciones avanzadas",
         "cropBottom": "Abajo (mm)",
         "cropDescription": "{count, plural, one {Configura los márgenes de recorte para la página seleccionada en milímetros.} other {Configura los márgenes de recorte para las # páginas seleccionadas en milímetros.} many {Configura los márgenes de recorte para las # páginas seleccionadas en milímetros.}}",
+        "cropFirstSelectedPage": "Esta es la primera página seleccionada.",
         "cropHandle": "Cambiar el tamaño del recorte: {position}",
         "cropHandleBottom": "abajo",
         "cropHandleBottomLeft": "abajo a la izquierda",
@@ -7736,6 +7944,7 @@
         "cropHandleTopLeft": "arriba a la izquierda",
         "cropHandleTopRight": "arriba a la derecha",
         "cropHint": "Arrastra el área o sus tiradores. Las flechas ajustan el recorte en 1 mm; con Mayús, en 10 mm. Los mismos márgenes se aplican a todas las páginas seleccionadas.",
+        "cropLastSelectedPage": "Esta es la última página seleccionada.",
         "cropLeft": "Izquierda (mm)",
         "cropMove": "Mover el área de recorte",
         "cropNextPage": "Página seleccionada siguiente",
@@ -7757,6 +7966,7 @@
         "downloadSelectedPages": "Descargar las páginas seleccionadas",
         "duplicate": "Duplicar",
         "editPages": "Editar páginas",
+        "keepOnePage": "Conserve al menos una página en el PDF.",
         "multiSelectHint": "Mantén pulsado {modifier} para seleccionar más páginas",
         "pageNumber": "Página {number}",
         "pages": "Páginas",
@@ -7768,18 +7978,22 @@
         "saveVersion": "Guardar versión",
         "selectAll": "Seleccionar todo",
         "selectPage": "Seleccionar página {number}",
+        "selectPagesFirst": "Seleccione al menos una página.",
         "signAfterSave": "Guarda las ediciones de páginas como una nueva versión y luego la firma",
         "signSavedVersionMissing": "La nueva versión se guardó, pero no se pudo abrir para firmarla. Fírmela desde el visor del documento.",
         "signatureWarning": "Al editar este PDF, las firmas digitales dejarán de ser válidas.",
         "signatureWarningWithSign": "Al editar, las firmas digitales existentes dejarán de ser válidas. Al firmar desde aquí, primero se guardan sus ediciones y se firma la nueva versión.",
         "sourceLimit": "El tamaño combinado de los archivos PDF no puede superar los 100 MB.",
+        "transforming": "Preparando el PDF editado…",
         "undo": "Deshacer edición de página",
         "unsupportedDescription": "Este PDF no se puede editar en el navegador.",
         "unsupportedPDF": "PDF no compatible",
         "unsupportedTitle": "Edición de PDF no disponible",
+        "versionPermissionRequired": "Necesita permiso para guardar una versión nueva.",
         "versionSaved": "Versión guardada"
       },
       "passwordLabel": "Introduzca la contraseña del PDF",
+      "placeSignatureFirst": "Coloque primero la firma en la página.",
       "previousPage": "Página anterior",
       "selection": {
         "explainPassagePrompt": "Explica este pasaje de {citation}:\n\n«{quote}»",
@@ -7803,6 +8017,7 @@
     "possibleDuplicates": "Posibles duplicados",
     "properties": {
       "addOption": "Añadir opción",
+      "addPromptAndDependencies": "Introduzca una instrucción y seleccione al menos una columna de entrada.",
       "addPromptForBetterResults": "Añada una instrucción para mejores resultados",
       "addReadingSource": "añadir",
       "autoPromptFailed": "No se pudo generar un prompt.",
@@ -7818,6 +8033,8 @@
       "chipNumber": "Número",
       "chipSingle": "Etiqueta",
       "chipText": "Texto",
+      "completeColumn": "Complete los campos obligatorios de al menos una columna.",
+      "completeColumnOptions": "Complete las opciones de la columna.",
       "composerTitle": "Indique a stella qué debe buscar",
       "conditionSeparator": "Y",
       "conditions": "Condiciones ({count})",
@@ -7832,8 +8049,11 @@
       "editConditionsDescription": "Establezca las condiciones para generar esta propiedad.",
       "editConditionsWhen": "Ejecutar la extracción solo cuando…",
       "enterAValue": "Introduzca un valor",
+      "enterColumnName": "Introduzca un nombre para la columna.",
+      "enterQuestion": "Introduzca primero una pregunta.",
       "extractEntityType": "Extraer información",
       "extractionPlaceholder": "Describa qué debe buscar. Escriba @ para hacer referencia a otra columna.",
+      "fileColumnCannotBeDeleted": "La columna de archivos es obligatoria y no se puede eliminar.",
       "ifNoMatchFound": "Si no se encuentra coincidencia",
       "keepEmpty": "Dejar vacío",
       "markAllAsLocked": "Bloquear todas las celdas",
@@ -7846,9 +8066,12 @@
       "newColumn": "Nueva columna",
       "newColumnName": "Nombre de columna",
       "noPropertiesFound": "No se encontraron propiedades",
+      "noRowsToProcess": "No hay filas que procesar.",
       "optionsLabel": "Opciones",
       "person": "Persona",
       "readingFrom": "La IA lee de",
+      "reduceDependencies": "Seleccione menos columnas de entrada.",
+      "retryReadOnlyRecord": "Este registro es de solo lectura.",
       "returnsLabel": "Formato",
       "selectColor": "Seleccionar color",
       "setPromptPlaceholder": "Defina una instrucción para extraer la información",
@@ -7858,10 +8081,13 @@
       "sortDescendingDate": "Más recientes primero",
       "sortDescendingNumber": "Mayor primero",
       "sortDescendingText": "Z → A",
+      "sortPermissionRequired": "Necesita permiso para cambiar el orden.",
       "splitOptions": "{count, plural, one {Dividir en # opción} other {Dividir en # opciones} many {Dividir en # opciones}}",
       "suggestWithAI": "Sugerir con IA",
       "typeChangeWarning": "Los datos existentes se borrarán y se reconstruirán al guardar.",
-      "untitledColumn": "Nombre de columna, p. ej. Fecha de vigencia"
+      "unlockFieldToRetry": "Desbloquee este campo para volver a intentarlo.",
+      "untitledColumn": "Nombre de columna, p. ej. Fecha de vigencia",
+      "waitForWorkflow": "Espere a que termine el flujo de trabajo."
     },
     "reference": "Número de referencia",
     "referenceChangeConfirmDescription": "{count, plural, one {# versión de documento lleva} other {# versiones de documentos llevan} many {# versiones de documentos llevan}} la referencia <bdi>{oldReference}</bdi>. Las copias impresas la conservan y se siguen abriendo con su código de verificación. Las versiones nuevas se numerarán con <bdi>{newReference}</bdi>. <bdi>{oldReference}</bdi> queda reservada para este asunto y no puede asignarse a otro.",
@@ -7873,6 +8099,7 @@
     "referencePlaceholder": "p. ej. 2024/001",
     "referenceRetired": "Ya hay documentos registrados con {reference} en otro asunto, por lo que no se puede reutilizar.",
     "referenceTaken": "Este número de referencia ya está en uso",
+    "reviewDecisionPermissionRequired": "Necesita permiso para tomar una decisión sobre estas sugerencias.",
     "sections": {
       "parties": "Partes"
     },

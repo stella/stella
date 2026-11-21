@@ -124,6 +124,7 @@ export const MatterDocumentPicker = ({
         placeholder={t("common.search")}
         clearLabel={t("common.cancel")}
         disabled={disabled}
+        disabledReason={t("common.saving")}
         value={search}
         onValueChange={setSearch}
       />

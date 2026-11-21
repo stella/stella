@@ -206,6 +206,7 @@ export const ReportExportHistory = ({
         <Button
           className="mt-2 w-full"
           disabled={isFetchingNextPage}
+          disabledReason={t("common.loading")}
           onClick={() => {
             fetchNextPage().catch((error: unknown) =>
               analytics.captureError(error, {
@@ -270,6 +271,7 @@ const ReportExportHistoryAction = ({
     return (
       <Button
         disabled={activeActionId === reportExport.id}
+        disabledReason={t("common.preparing")}
         onClick={() => {
           onDownload(reportExport.id);
         }}
@@ -288,6 +290,7 @@ const ReportExportHistoryAction = ({
   return (
     <Button
       disabled={activeActionId === reportExport.id}
+      disabledReason={t("common.loading")}
       onClick={() => {
         onOpen(reportExport.id);
       }}

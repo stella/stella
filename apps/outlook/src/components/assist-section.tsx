@@ -126,6 +126,7 @@ export const AssistSection = ({
           <div className={cn(COMPOSER_LEADING_GROUP_CLASS, "me-auto")}>
             <Button
               disabled={!hasBody}
+              disabledReason={t("noBodyToSummarize")}
               onClick={() => submit("summary")}
               size="xs"
               variant="ghost"
@@ -140,6 +141,7 @@ export const AssistSection = ({
           <Button
             aria-label={t("ask")}
             disabled={typed.length === 0}
+            disabledReason={t("enterQuestion")}
             onClick={() => submit("answer")}
             size="icon-round"
             variant="composer"

@@ -748,6 +748,11 @@ export const AnonymizationFacet = ({
             aria-label={t("inspector.anonymization.downloadAction")}
             className="w-full justify-start"
             disabled={!canDownloadAnonymized}
+            disabledReason={
+              downloadStatus === "running"
+                ? t("common.preparing")
+                : t("inspector.anonymization.waitForMatches")
+            }
             onClick={() => {
               detached(
                 handleDownloadAnonymized(),
@@ -951,6 +956,7 @@ export const AnonymizationFacet = ({
                 )}
                 <Button
                   disabled={deleteMutation.isPending}
+                  disabledReason={t("common.deleting")}
                   onClick={(event) => {
                     event.stopPropagation();
                     deleteMutation.mutate({ workspaceId, entryId: entry.id });
@@ -1058,6 +1064,7 @@ export const AnonymizationFacet = ({
                                 "inspector.anonymization.restoreAction",
                               )}
                               disabled={deleteAllowlistMutation.isPending}
+                              disabledReason={t("common.deleting")}
                               onClick={() => {
                                 const matches = allowlistByCanonical.get(
                                   row.canonical.toLocaleLowerCase(),
@@ -1093,8 +1100,10 @@ export const AnonymizationFacet = ({
                                   scope: "document",
                                 });
                               }}
-                              primaryDisabled={
+                              primaryDisabledReason={
                                 createAllowlistMutation.isPending
+                                  ? t("common.saving")
+                                  : undefined
                               }
                               primaryContent="icon"
                               primaryLabel={t(
@@ -1168,9 +1177,17 @@ const AddTermSubmitButton = ({
   disabled: boolean;
   label: string;
 }) => {
+  const t = useTranslations();
   const { pending } = useFormStatus();
   return (
-    <Button disabled={disabled || pending} size="sm" type="submit">
+    <Button
+      disabled={disabled || pending}
+      disabledReason={
+        pending ? t("common.saving") : t("inspector.anonymization.enterTerm")
+      }
+      size="sm"
+      type="submit"
+    >
       {label}
     </Button>
   );

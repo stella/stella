@@ -183,7 +183,8 @@
     "handoffServerMismatch": "Stella Desktop on ühendatud serveriga {linkedServer}, kuid see dokument vajab serverit {requestedServer}. Ühendage praegune konto seadetes lahti ja seejärel looge ühendus serveriga {requestedServer}, et dokument avada.",
     "handoffAccountChanged": "stella desktopi konto muutus dokumendi avamise ajal. Alustage uuesti stellast.",
     "handoffAlreadyOpen": "Teine allkirjastamise aken on juba avatud. Lõpetage või sulgege see ja proovige uuesti.",
-    "handoffExpired": "Dokumendilink aegus enne, kui stella desktop ühendati. Alustage uuesti stellast."
+    "handoffExpired": "Dokumendilink aegus enne, kui stella desktop ühendati. Alustage uuesti stellast.",
+    "waitingForFolderSelection": "Valige kaust või sulgege failivalija."
   },
   "settings": {
     "accountLinked": "Lingitud",
@@ -242,6 +243,7 @@
       "available": "Saadaval on versioon {version}.",
       "install": "Installi ja taaskäivita",
       "installing": "Installitakse versiooni {version}. Seejärel taaskäivitub stella desktop.",
+      "installInProgress": "Värskendust installitakse.",
       "deferred": "Versioon {version} ootab, kuni avatud dokumente muudetakse. Kui olete lõpetanud, kontrollige uuesti, et see installida, muidu installitakse see järgmisel automaatsel kontrollil.",
       "checkFailed": "stella desktop ei saanud värskendusi kontrollida.",
       "installFailed": "stella desktop ei saanud värskendust installida.",
@@ -290,7 +292,10 @@
     "recoveryOpenFolder": "Ava taastekaust",
     "recoveryOpenUnassigned": "Ava määramata muudatused",
     "recoveryFilePending": "Ootab kõrvale panemist",
-    "recoveryError": "Taastekausta avamine ebaõnnestus. Proovi uuesti."
+    "recoveryError": "Taastekausta avamine ebaõnnestus. Proovi uuesti.",
+    "openingRecoveryFolder": "Taastekausta avamine…",
+    "refreshingRecovery": "Taastatavate muudatuste kontrollimine…",
+    "loadingAccount": "Teie konto ühenduse kontrollimine…"
   },
   "clipboard": {
     "registryUnavailable": "Teie tegevusjurisdiktsioonide jaoks pole registreid lubatud.",
@@ -435,7 +440,14 @@
     "welcomeShortcutTitle": "Ava see kõikjal.",
     "welcomeStart": "Alusta kopeerimist",
     "welcomeTitle": "Sinu uus lõikelaud",
-    "registryIdentifierSearchHint": "Sisestage {identifiers}."
+    "registryIdentifierSearchHint": "Sisestage {identifiers}.",
+    "enterGroupName": "Sisestage rühma nimi.",
+    "savingChanges": "Muudatuste salvestamine…",
+    "creatingGroup": "Rühma loomine…",
+    "groupLimitReached": "Saate luua kuni {max} rühma.",
+    "loadingAutostart": "Kontrollitakse, kas lõikelaud käivitub sisselogimisel…",
+    "savingAutostart": "Sisselogimisel käivitamise eelistuse salvestamine…",
+    "registryFormatting": "Registritulemuse vormindamine…"
   },
   "activity": {
     "title": "Tegevus",
@@ -621,7 +633,15 @@
     "aiStructureMove": "stella AI soovitab viia {duration} toimikusse {matter}",
     "aiStructureCreate": "{count, plural, one {Loo # kanne} other {Loo # kannet}}",
     "aiStructureMoveAccept": "Vii üle",
-    "aiFlagSplit": "Jaga kanne"
+    "aiFlagSplit": "Jaga kanne",
+    "creatingDrafts": "Mustandite loomine…",
+    "earliestDayReached": "Vaatate varaseimat saadaolevat päeva.",
+    "latestDayReached": "Vaatate viimast saadaolevat päeva.",
+    "savingCapturePreference": "Salvestamiseelistuse talletamine…",
+    "writeDescription": "Sisestage selle kande kirjeldus.",
+    "chooseMatterForEntry": "Valige selle kande jaoks toimik.",
+    "entryNeedsDuration": "Valige tasustatava kestusega ajavahemik.",
+    "enterRefinement": "Sisestage juhis kirjelduse muutmiseks."
   },
   "dictation": {
     "title": "Dikteerimine",
@@ -761,7 +781,8 @@
       "label": "Seni dikteeritud tekst",
       "listening": "Kuulan…",
       "finishing": "Lõpetan…"
-    }
+    },
+    "dictationInProgress": "Lõpetage käimasolev dikteerimine enne mudeli eemaldamist."
   },
   "shortcut": {
     "title": "Lõikelaua otsetee",
@@ -802,7 +823,8 @@
       "windowMenu": "Aknamenüü",
       "start": "Start",
       "taskManager": "Tegumihaldur"
-    }
+    },
+    "saving": "Kiirklahvi salvestamine…"
   },
   "onboarding": {
     "back": "Tagasi",
@@ -946,7 +968,8 @@
       "keystrokesWithoutHoldKey": "Klahvivajutused, kui te ei vali allhoitavat klahvi",
       "fullDiskAccess": "Täielik kettale juurdepääs",
       "administrator": "Administraatori õigused"
-    }
+    },
+    "enablingDictation": "Dikteerimise sisselülitamine…"
   },
   "agentSubscriptions": {
     "title": "AI-tellimused",
@@ -1022,7 +1045,9 @@
         "verification": "{name} kontrollimine ebaõnnestus, seega seda ei installitud.",
         "storage": "{name} salvestamine sellesse arvutisse ebaõnnestus. Kontrollige, kas kettal on vaba ruumi."
       }
-    }
+    },
+    "finishingSignIn": "Sisselogimise lõpetamine…",
+    "enterCallbackAddress": "Kleepige täielik aadress brauseri sisselogimiskaardilt."
   },
   "localSkills": {
     "title": "Kohalikud oskused",
@@ -1111,7 +1136,9 @@
       "localMissing": "Selles arvutis transkribeerimiseks laadige seadetes jaotises Dikteerimine alla kõnemudel.",
       "localMissingCloud": "Laadige seadetes jaotises Dikteerimine alla kõnemudel või transkribeerige stella AI abil.",
       "retainsData": "Palun arvestage {provider} töötlemistingimustega.",
-      "modelFailed": "stella AI mudelit ei õnnestunud lugeda, seega ei saa stella AI praegu transkribeerida. Proovige uuesti või transkribeerige selles arvutis."
+      "modelFailed": "stella AI mudelit ei õnnestunud lugeda, seega ei saa stella AI praegu transkribeerida. Proovige uuesti või transkribeerige selles arvutis.",
+      "loadingModel": "stella AI transkribeerimismudeli kontrollimine…",
+      "useLocal": "Salvestise transkribeerimiseks valige see arvuti."
     },
     "matter": {
       "title": "Toimik",
@@ -1160,7 +1187,8 @@
       "noSpeech": "Selles salvestises kõnet ei leitud.",
       "fileName": "{title} – transkriptsioon.txt",
       "documentTitle": "{title} – transkriptsioon",
-      "transcriptTitle": "Transkriptsioon"
+      "transcriptTitle": "Transkriptsioon",
+      "alreadySaved": "Transkript on juba toimikusse salvestatud."
     },
     "progress": {
       "running": "Transkribeerimine: {done, number} / {total, number} min",
@@ -1168,7 +1196,9 @@
       "stop": "Peata",
       "stopped": "Peatatud {done, number} min järel. Seni saadud tekst jääb alles.",
       "done": "Transkribeeritud {total, number} min.",
-      "another": "Transkribeeri järgmine salvestis"
+      "another": "Transkribeeri järgmine salvestis",
+      "transcribing": "Salvestise transkribeerimine…",
+      "stopping": "Transkribeerimise peatamine…"
     },
     "cleaned": {
       "title": "Puhastatud tekst",
@@ -1191,6 +1221,7 @@
       "formatted": "Vormindusega",
       "plain": "Lihttekstina",
       "hint": "Vormindusega kleebitakse Wordi või Outlooki ka pealkirjad, paks kiri ja loendid. Teie valik jäetakse meelde."
-    }
+    },
+    "waitingForFileSelection": "Valige salvestis või sulgege failivalija."
   }
 }

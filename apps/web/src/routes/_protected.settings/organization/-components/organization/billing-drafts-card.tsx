@@ -281,6 +281,7 @@ export const BillingDraftsCard = () => {
             <Button
               variant="ghost"
               disabled={save.isPending}
+              disabledReason={t("common.saving")}
               onClick={() => {
                 setEditing(file);
                 setContent(undefined);
@@ -307,6 +308,7 @@ export const BillingDraftsCard = () => {
           />
           <Button
             disabled={save.isPending}
+            disabledReason={t("common.saving")}
             onClick={() => {
               if (!editorHandle.current) {
                 panic("Knowledge editor save requires a mounted editor");

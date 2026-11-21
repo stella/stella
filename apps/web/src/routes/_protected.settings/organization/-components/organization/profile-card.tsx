@@ -187,6 +187,7 @@ export const OrganizationProfileCard = () => {
                 {data.logo ? (
                   <Button
                     disabled={updateMutation.isPending}
+                    disabledReason={t("common.saving")}
                     onClick={() => {
                       updateMutation.mutate({
                         organizationId: data.id,
@@ -225,16 +226,28 @@ export const OrganizationProfileCard = () => {
               canSubmit: s.canSubmit,
             })}
           >
-            {({ isSubmitting, isDirty, canSubmit }) => (
-              <Button
-                className="self-start"
-                disabled={!isDirty || !canSubmit}
-                loading={isSubmitting}
-                type="submit"
-              >
-                {t("common.saveChanges")}
-              </Button>
-            )}
+            {({ isSubmitting, isDirty, canSubmit }) => {
+              const resolveProfileSaveDisabledReason = () => {
+                if (isSubmitting) {
+                  return t("common.saving");
+                }
+                if (!isDirty) {
+                  return t("common.noChangesToSave");
+                }
+                return t("templates.validationErrors");
+              };
+              return (
+                <Button
+                  className="self-start"
+                  disabled={!isDirty || !canSubmit}
+                  disabledReason={resolveProfileSaveDisabledReason()}
+                  loading={isSubmitting}
+                  type="submit"
+                >
+                  {t("common.saveChanges")}
+                </Button>
+              );
+            }}
           </form.Subscribe>
         </Form>
       </OrganizationProfileCardFrame>

@@ -32,7 +32,9 @@
     "leaveDescription": "ستفقد الوصول إلى الملفات القانونية والبيانات الخاصة بهذه المؤسسة.",
     "leaveOrganization": "مغادرة المؤسسة",
     "leaveRefusedOnlyOwner": "أنت المالك الوحيد. اجعل عضوًا آخر مالكًا قبل المغادرة.",
+    "leavingOrganization": "جارٍ مغادرة المؤسسة…",
     "modelsAndProviders": "النماذج ومقدمو الخدمات",
+    "organizationChangeCompleted": "تغيّر وصولك إلى المؤسسة بالفعل.",
     "organizationDeleted": "تم حذف المؤسسة.",
     "organizationId": "معرّف المؤسسة",
     "organizationLeft": "لقد غادرت المؤسسة.",
@@ -68,6 +70,7 @@
   "ai": {
     "chooseRewriteInstruction": "خيارات إعادة الصياغة",
     "editWithAI": "التعديل بالذكاء الاصطناعي",
+    "enterRewriteInstruction": "أدخل تعليمات إعادة الصياغة.",
     "keyRequired": {
       "accountFeaturesUnavailable": "ميزات الذكاء الاصطناعي غير متاحة لهذا الحساب.",
       "accountRestricted": "إعدادات موفر الذكاء الاصطناعي غير متاحة لهذا الحساب.",
@@ -79,17 +82,20 @@
       "title": "ربط مزوّد الذكاء الاصطناعي"
     },
     "refinePlaceholder": "كيف ينبغي أن يُعدّل الذكاء الاصطناعي الصياغة؟",
+    "rewriteDisabled": "انتظر حتى يصبح النص جاهزًا للتحرير.",
     "rewriteDraftChanged": "تغيّرت المسودة، لذلك لم تُطبّق إعادة الصياغة.",
     "rewritePresets": {
       "clarify": "تحسين الوضوح",
       "concise": "صياغة أكثر إيجازًا",
       "formal": "استخدام أسلوب أكثر رسمية",
       "polish": "تحسين الصياغة"
-    }
+    },
+    "rewriting": "جارٍ إعادة صياغة النص…"
   },
   "aiColumns": {
     "countSummary": "{columns} أعمدة × {rows} صفوف = {answers, plural, zero {# إجابة} one {# إجابة} two {# إجابتين} few {# إجابات} many {# إجابة} other {# إجابة}}. الإجابات تستهلك الميزانية.",
     "modelRefused": "رفض النموذج الإجابة",
+    "noRowsToRun": "لا توجد صفوف مؤهلة في هذا التحديد.",
     "nothingFound": "لم يتم العثور على شيء",
     "nothingFoundInCutDocument": "لم يُعثر على شيء في الجزء الذي تمت قراءته",
     "refusedBudget": "لم يُشغّل: ميزانية الإجابات غير متاحة",
@@ -99,7 +105,8 @@
     "runPageRows": "تشغيل لـ {count, plural, zero {# صف في هذه الصفحة} one {# صف في هذه الصفحة} two {# صفين في هذه الصفحة} few {# صفوف في هذه الصفحة} many {# صفًا في هذه الصفحة} other {# صف في هذه الصفحة}}",
     "runRemainingPage": "تشغيل المتبقي (هذه الصفحة)",
     "runSelectedRows": "تشغيل لـ {count, plural, zero {# صف محدد} one {# صف محدد} two {# صفين محددين} few {# صفوف محددة} many {# صفًا محددًا} other {# صف محدد}}",
-    "selectedRun": "تشغيل أعمدة الذكاء الاصطناعي لـ {count, plural, zero {# صف} one {# صف} two {# صفين} few {# صفوف} many {# صفًا} other {# صف}}"
+    "selectedRun": "تشغيل أعمدة الذكاء الاصطناعي لـ {count, plural, zero {# صف} one {# صف} two {# صفين} few {# صفوف} many {# صفًا} other {# صف}}",
+    "waitToRun": "انتظر انتهاء التشغيل الحالي."
   },
   "aiDisclosure": {
     "caseLaw": "تُنشئ stella الملخصات والملاحظات والتحليلات المولَّدة بالذكاء الاصطناعي للأحكام القضائية، وهي غير معتمدة من المحاكم ولا تمثّل تعليل المحاكم ذاتها؛ فهي أدوات مساعدة للمهنيين القانونيين، ويظل نص الحكم هو المرجع الأصيل."
@@ -140,6 +147,7 @@
     "checkSpamHint": "إذا لم تجده، فتحقّق من مجلد البريد غير المرغوب فيه.",
     "chooseOrganization": "اختر المؤسسة التي تريد العمل فيها",
     "codeSentAgain": "أرسلنا رمزًا جديدًا.",
+    "confirmingHandoff": "جارٍ تأكيد تسجيل الدخول…",
     "continueWithApple": "المتابعة باستخدام Apple",
     "continueWithEmail": "متابعة",
     "continueWithGoogle": "المتابعة باستخدام Google",
@@ -156,6 +164,8 @@
       "tlsRequired": "لا يمكننا تسليم البريد الإلكتروني إلى النطاق <domain>{domainName}</domain>: خادم البريد الخاص به لا يقبل البريد المشفّر. اطلب من قسم تقنية المعلومات لديك تفعيل TLS (STARTTLS) على خادم البريد، أو استخدم عنوان بريد إلكتروني آخر."
     },
     "emailPlaceholder": "you@example.com",
+    "enterBootstrapCredentials": "أدخل عنوان بريد إلكتروني صالحًا وكلمة المرور ورمز الإعداد.",
+    "enterEmailAndPassword": "أدخل عنوان بريد إلكتروني صالحًا وكلمة مرورك.",
     "error": {
       "generic": "حدث خطأ ما أثناء تسجيل دخولك. يُرجى المحاولة مرة أخرى.",
       "providerUnavailable": "مزوّد تسجيل الدخول لا يستجيب حاليًا. يُرجى المحاولة مرة أخرى بعد دقيقة.",
@@ -188,6 +198,7 @@
     "reauthenticationRequired": "سجّل الدخول مرة أخرى للمتابعة بهذا الإجراء.",
     "resendCode": "إرسال الرمز مرة أخرى إلى <email>{emailAddress}</email>",
     "selectOrganization": "اختر مؤسسة",
+    "sendingCode": "جارٍ إرسال رمز تسجيل الدخول…",
     "sessionExpired": "انتهت جلستك",
     "sessionExpiredDescription": "سجّل الدخول من علامة تبويب جديدة. يبقى ما كتبته في هذه الصفحة.",
     "signIn": "تسجيل الدخول",
@@ -348,7 +359,9 @@
       "kindsLoadFailed": "تعذّر تحميل ما إذا كانت هذه المستندات شهادات.",
       "notVerified": "لم يُتحقق منه بعد",
       "otherList": "جرى التحقق منه بالرجوع إلى قائمة أخرى",
+      "permissionRequired": "تحتاج إلى إذن بتعديل هذه القائمة للتحقق من المستندات.",
       "sizeConfirmTitle": "هل تريد التحقق من هذا المستند؟",
+      "starting": "جارٍ بدء التحقق…",
       "statusLoadFailed": "تعذّر تحميل حالة التحقق من هذه المستندات.",
       "testimony": "شهادة",
       "testimonyAbout": "حول الشهادات",
@@ -383,7 +396,9 @@
       "reviewed": "قُبلت {accepted} من {proposed, plural, zero {# واقعة مقترحة} one {واقعة مقترحة واحدة} two {واقعتين مقترحتين} few {# وقائع مقترحة} many {# واقعة مقترحة} other {# واقعة مقترحة}}.",
       "runSize": "{available, plural, zero {يستهلك هذا التشغيل نحو {estimated} من وحداتك المتاحة البالغة #.} one {يستهلك هذا التشغيل نحو {estimated} من وحدتك المتاحة.} two {يستهلك هذا التشغيل نحو {estimated} من وحدتيك المتاحتين.} few {يستهلك هذا التشغيل نحو {estimated} من وحداتك المتاحة البالغة #.} many {يستهلك هذا التشغيل نحو {estimated} من وحداتك المتاحة البالغة #.} other {يستهلك هذا التشغيل نحو {estimated} من وحداتك المتاحة البالغة #.}}",
       "running": "جارٍ قراءة المستندات. ستظهر الوقائع المقترحة هنا للمراجعة.",
+      "selectDocument": "اختر مستندًا واحدًا على الأقل.",
       "startFailed": "تعذّر بدء استخراج الوقائع",
+      "starting": "جارٍ بدء استخراج الحقائق…",
       "submit": "{count, plural, =0 {استخراج الوقائع} zero {استخراج الوقائع} one {استخراج الوقائع من مستند واحد} two {استخراج الوقائع من مستندين} few {استخراج الوقائع من # مستندات} many {استخراج الوقائع من # مستندًا} other {استخراج الوقائع من # مستند}}"
     },
     "factTier": {
@@ -508,6 +523,8 @@
     },
     "matches": {
       "count": "{count, plural, zero {لا مطابقات} one {مطابقة واحدة} two {مطابقتان} few {# مطابقات} many {# مطابقة} other {# مطابقة}}",
+      "noNext": "هذه آخر مطابقة.",
+      "noPrevious": "هذه أول مطابقة.",
       "position": "{current}/{total}"
     },
     "mode": {
@@ -555,7 +572,10 @@
       "summary": "أُعيد الفحص في {checkedAt} بالرجوع إلى {count, plural, zero {لا وقائع} one {واقعة واحدة} two {واقعتين} few {# وقائع} many {# واقعة} other {# واقعة}}."
     },
     "review": {
+      "alreadyReopened": "أُعيد فتح هذا الادعاء بالفعل.",
       "decided": "{status, select, disputed {متنازع عليه} needsEvidence {يحتاج إلى أدلة} other {{origin, select, bulk {قُبل باعتباره روتينيًا} other {روجع}}}} · {decidedAt}",
+      "escalated": "عالج التصعيد قبل تغيير قرار المراجعة.",
+      "permissionRequired": "تحتاج إلى إذن بتعديل هذه القائمة لمراجعة الادعاءات.",
       "status": {
         "disputed": "متنازع عليه",
         "needsEvidence": "يحتاج إلى أدلة",
@@ -697,6 +717,7 @@
       "evidenceList": "الوقائع من",
       "loadSample": "تحميل قضية نموذجية",
       "loadSampleFailed": "تعذّر تحميل القضية النموذجية",
+      "loadingSample": "جارٍ تحميل القضية النموذجية…",
       "noLists": "لا توجد قوائم في هذا الملف القانوني.",
       "pickList": "اختر القائمة التي تُفحص مستندات هذا الملف القانوني في ضوء وقائعها."
     }
@@ -742,6 +763,7 @@
         "wrongStatus": "هذا القيد لم يعد مسودة. حدّث القائمة."
       },
       "returnComment": "سبب الإرجاع",
+      "returnCommentRequired": "أدخل سبب إعادة قيد الوقت.",
       "returnRefusals": {
         "invalidEntry": "تحقق من تاريخ العمل في القيد، ثم أرجعه.",
         "notApprover": "لا يُرجع هذا القيد إلا المعتمِد المعيّن له أو مسؤول.",
@@ -769,6 +791,7 @@
     "batchActions": "إجراءات جماعية",
     "billable": "قابل للفوترة",
     "billedAmount": "المبلغ المُفوتر",
+    "chooseNarrativeToRemove": "اختر وصفًا محفوظًا لإزالته.",
     "clientComposer": {
       "flatFeeNote": "أصدر فواتير الملفات القانونية ذات الأتعاب الثابتة من صفحة فواتير الملف القانوني.",
       "includeMatter": "تضمين {matterName}",
@@ -799,6 +822,8 @@
     "duration": "المدة",
     "editEntry": "تعديل الإدخال",
     "elapsed": "المنقضي",
+    "enterNarrative": "أدخل وصفًا أولًا.",
+    "enterNarrativeName": "أدخل اسمًا لهذا الوصف.",
     "expenses": {
       "categories": {
         "courier": "خدمة توصيل",
@@ -836,6 +861,7 @@
     "hours": "الساعات",
     "invalidNumberFormat": "تحقق من تنسيق الرقم",
     "invoiceComposer": {
+      "addItemsFirst": "أضف بندًا واحدًا على الأقل إلى الفاتورة.",
       "addSellerProfile": "أضف ملف بائع في إعدادات الفوترة",
       "billedHours": "الساعات المفوترة",
       "buyer": "العميل (المشتري)",
@@ -1057,6 +1083,8 @@
       "narrativeRequired": "أضف وصفًا قبل حفظ الوقت.",
       "outsideEditWindow": "هذا التاريخ خارج مهلة التعديل.",
       "periodLocked": "هذا الشهر مقفل.",
+      "positiveDurationRequired": "أدخل مدة أكبر من صفر.",
+      "rateReadFailed": "أعد محاولة تحميل سعر الفوترة قبل الحفظ.",
       "saveAndAddExpense": "حفظ وإضافة مصروف",
       "saveAndNew": "حفظ وإضافة إدخال آخر",
       "viewDay": "عرض اليوم"
@@ -1083,6 +1111,7 @@
       "rateCount": "{count, plural, zero {لا أسعار} one {سعر واحد} two {سعران} few {# أسعار} many {# سعرًا} other {# سعر}}",
       "rateEntries": "إدخالات الأسعار",
       "rateResolved": "السعر المُحدَّد",
+      "rateTableNoLongerAvailable": "جدول الأسعار هذا لم يعد متاحًا. ارجع واختر جدولًا آخر.",
       "rateTables": "جداول الأسعار",
       "rates": "الأسعار",
       "setAsDefault": "تعيين كافتراضي",
@@ -1147,6 +1176,12 @@
       "privacyNote": "أنت وحدك من يرى هذه المقترحات. لا يُسجَّل أي شيء حتى تقبله.",
       "title": "مقترحات من نشاطك",
       "unnamedRecord": "سجل في الملف القانوني"
+    },
+    "time": {
+      "selectEligibleWorkDate": "اختر تاريخ عمل يسمح بإضافة إدخالات وقت جديدة."
+    },
+    "timeEntry": {
+      "checkRate": "تحقق من سعر الساعة والعملة."
     },
     "timeReport": {
       "billableHours": "الساعات القابلة للفوترة",
@@ -1232,6 +1267,7 @@
       },
       "generate": "توليد خلاصات الحكم بالذكاء الاصطناعي",
       "invitation": "مع حساب مجاني، يُعِدّ الذكاء الاصطناعي ملاحظات عمل حول هذا الحكم.",
+      "noCurrentSection": "لا يوجد قسم حالي للانتقال إليه.",
       "topics": "الموضوعات",
       "treatment": "المعالجة اللاحقة"
     },
@@ -1471,6 +1507,7 @@
       },
       "deleteColumnConfirm": "يحذف هذا السؤال وكل إجاباته لمؤسستك بأكملها، من كل بحث ولدى كل عضو. لإخفائه من هذا البحث فقط، استخدم «إزالة من هذا البحث».",
       "editQuestionHint": "يؤدي تغيير الصياغة أو نوع الإجابة أو خياراته إلى حذف الإجابات الحالية؛ شغّل العمود مجددًا بعد ذلك.",
+      "emptyPage": "لا توجد قرارات قضائية في هذه الصفحة.",
       "newQuestionColumn": "جديد",
       "nothingToRun": "كل خلية لديها إجابة بالفعل",
       "questionAdded": "أُضيف «{question}» إلى الجدول",
@@ -1479,6 +1516,8 @@
       "runAll": "الإجابة عن الكل",
       "runConfirm": "الإجابة الآن",
       "runEstimate": "{rows, plural, zero {لا أحكام} one {حكم واحد} two {حكمان} few {# أحكام} many {# حكمًا} other {# حكم}} × {columns, plural, zero {لا أسئلة} one {سؤال واحد} two {سؤالان} few {# أسئلة} many {# سؤالًا} other {# سؤال}} في هذه الصفحة: ستُنتَج {cells, plural, zero {لا إجابات} one {إجابة واحدة} two {إجابتان} few {# إجابات} many {# إجابة} other {# إجابة}}.",
+      "runInProgress": "تجري بالفعل معالجة سؤال بحثي.",
+      "runPermissionRequired": "تحتاج إلى إذن لتشغيل أسئلة البحث.",
       "runTitle": "الإجابة عن هذه الصفحة",
       "savedQuestions": "الأسئلة المحفوظة",
       "title": "جداول البحث"
@@ -1687,6 +1726,7 @@
     },
     "aiPrompt": "أداة تحرير رسائل الذكاء الاصطناعي",
     "aiThread": "محادثة مع الذكاء الاصطناعي",
+    "alreadyInNewChat": "أنت في دردشة جديدة بالفعل.",
     "analyzingSources": "جارٍ تحليل المصادر",
     "anonymizationPreview": {
       "answer": "يحق لـ<person1>سلمى الحدّاد</person1> مطالبة <person2>يوسف النجّار</person2> بالدين مع فوائد التأخير.",
@@ -1728,11 +1768,14 @@
       "proposal": "التعديل المقترح",
       "requesting": "جارٍ إعداد التعديلات…",
       "restoreRefreshFailed": "تمت استعادة الإجابة، لكن تعذّر تحديثها. حدّثها لتحميل الإجابة المستعادة.",
+      "restoringUnavailable": "ليس لديك إذن باستعادة هذه الإجابة.",
       "revertKind": "نسخة مستعادة",
+      "rewriteUnavailableAnonymized": "إعادة صياغة الإجابات غير متاحة في وضع إخفاء الهوية.",
       "stale": "تغيّرت هذه الإجابة. حدد النص مرة أخرى.",
       "submit": "طلب تعديل",
       "textStyle": "نمط النص",
       "unorderedList": "قائمة نقطية",
+      "waitForAnswer": "انتظر حتى تكتمل الإجابة.",
       "wholeBlockRequired": "حدد فقرة أو قائمة بالكامل لتغيير نمطها."
     },
     "answerNotFinished": "لم تتمكن stella من إكمال هذه الإجابة.",
@@ -1799,10 +1842,13 @@
       "uploadedDocumentPlaceholder": "(مستند مرفوع)"
     },
     "askUser": {
+      "allOptionsSelected": "جميع الخيارات محددة بالفعل.",
+      "answerRequired": "أكمل الإجابات المطلوبة.",
       "custom": "اكتب إجابتك الخاصة",
       "edit": "تعديل الإجابات",
       "editWarning": "ستؤدي إعادة التشغيل إلى تجاهل الردود اللاحقة في هذه المحادثة.",
       "noAnswer": "لا إجابة",
+      "noOptionsSelected": "لا توجد خيارات محددة لإلغاء تحديدها.",
       "placeholder": "إجابتك",
       "rerun": "إعادة التشغيل من هنا",
       "submit": "إرسال الإجابات"
@@ -1828,6 +1874,9 @@
     "chatAbout": "تحدّث عن هذا",
     "choosePromptImprovementStrategy": "خيارات تحسين الطلب",
     "commandsSection": "الأوامر",
+    "composer": {
+      "waitForChat": "انتظر حتى تصبح الدردشة جاهزة للإرسال."
+    },
     "composerMenu": {
       "context": "السياق",
       "editMode": "وضع التحرير",
@@ -1856,6 +1905,7 @@
     },
     "connectConnector": {
       "checkAction": "التحقق من الاتصال",
+      "continuing": "جارٍ استئناف الدردشة…",
       "description": "يطلب المساعد ربط {connector} لاستخدام أدواته في هذه المحادثة.",
       "error": "تعذر بدء الربط. حاول مرة أخرى.",
       "notConnected": "لم يتم الربط بعد. أكمل تسجيل الدخول، ثم تحقق مرة أخرى.",
@@ -1927,6 +1977,7 @@
     "editorLoading": "جارٍ تحميل المحرّر…",
     "emptyThreadDescription": "اسأل عن هذا الملف القانوني، أو صُغ نصاً، أو اطلب مذكّرة بحثية موجزة.",
     "emptyThreadTitle": "ابدأ محادثة",
+    "enterAuthorName": "أدخل الاسم الذي سيظهر في التغييرات المتعقبة.",
     "extractingContent": "جارٍ استخراج المحتوى...",
     "fileThreadRebound": "بدأت دردشة هذا الملف في جلسة أخرى. تم الاحتفاظ برسالتك؛ أرسلها مرة أخرى للمتابعة هناك.",
     "fileTooLarge": "يتجاوز الملف الحدّ المسموح به {maxSize}",
@@ -2147,12 +2198,14 @@
     },
     "newChat": "دردشة جديدة",
     "newChatInSidePanel": "الدردشة الجديدة متاحة في اللوحة الجانبية",
+    "newChatRequiresMessage": "أرسل رسالة في هذه الدردشة أولاً.",
     "nextSteps": "الخطوات التالية",
     "noPromptPresetOnly": "لا توجد رسالة، الإعداد المُسبق فقط",
     "noThreads": "لا توجد محادثات بعد",
     "officeCitationUnavailable": "لم يعد هذا الاستشهاد متاحًا.",
     "openCitation": "فتح الاستشهاد {label}",
     "openThread": "فتح المحادثة",
+    "openingChat": "جارٍ فتح الدردشة…",
     "overlayLoadFailed": "تعذّر تحميل دردشة المستند.",
     "overlayUpdated": "تم تحديث stella. أعد تحميل الصفحة لاستخدام دردشة المستند.",
     "pastedChars": "تم اللصق · {count} حرف",
@@ -2229,10 +2282,12 @@
     "renameUnavailableEmptyThread": "أرسل رسالة أولاً، ثم يمكن إعادة تسمية المحادثة.",
     "requestSecret": {
       "checkingTarget": "جارٍ التحقق من تفاصيل الموصل…",
+      "confirmReceiptOnly": "أكّد أن الموصل يجب أن يتلقى إيصالًا فقط.",
       "connectionDisposition": "نوع الاتصال: {disposition}",
       "continuationError": "تم حفظ إجابتك، لكن تعذّرت متابعة الدردشة.",
       "declined": "تم الرفض",
       "description": "يحتاج المساعد إليها للمتابعة",
+      "enterValue": "أدخل بيانات الاعتماد المطلوبة.",
       "error": "تعذر إرسال بيانات الاعتماد. حاول مرة أخرى.",
       "kind": {
         "token": "رمز وصول"
@@ -2282,6 +2337,7 @@
       "yourComputer": "حاسوبك",
       "yourComputerDescription": "يستخدم Codex أو Claude Code على حاسوبك باشتراكك الخاص. يمكنه قراءة الملفات وتغييرها في مجلد هذه الدردشة، وتحدد الأذونات ما يمكنه فعله دون أن يسألك."
     },
+    "selectExportContent": "حدد ما تريد تضمينه في التصدير.",
     "selection": {
       "askInNewChat": "اسأل في دردشة جديدة",
       "quoteInReply": "اقتبس في الرد",
@@ -2593,6 +2649,7 @@
     "body": "النص",
     "categoryDeleteConfirm": "ستصبح البنود في هذه الفئة غير مصنّفة.",
     "categoryNamePlaceholder": "مثال: السرّية",
+    "chooseUnusedSlot": "اختر موضعًا غير مرتبط ببند بعد.",
     "clauseCount": "{count, plural, zero {لا توجد بنود} one {بند واحد} two {بندان} few {# بنود} many {# بندًا} other {# بند}}",
     "clauseCreated": "تم إنشاء البند",
     "clauseDeleted": "تم حذف البند",
@@ -2630,6 +2687,7 @@
     "linkFailed": "تعذّر ربط البند",
     "linked": "تم ربط البند",
     "linkedClauses": "البنود المرتبطة",
+    "linking": "جارٍ ربط البند…",
     "loadFailed": "تعذّر تحميل البنود",
     "loading": "جارٍ تحميل البنود…",
     "needUpdate": "{count, plural, zero {# يحتاج إلى تحديث} one {# يحتاج إلى تحديث} two {# يحتاجان إلى تحديث} few {# تحتاج إلى تحديث} many {# تحتاج إلى تحديث} other {# يحتاج إلى تحديث}}",
@@ -2652,6 +2710,7 @@
     "saveVersionAndLeave": "حفظ الإصدار والمغادرة",
     "searchClauses": "البحث في البنود...",
     "searchPlaceholder": "البحث في البنود...",
+    "selectClauseToLink": "اختر بندًا لربطه.",
     "selectVersionToCompare": "اختر إصدارًا للمقارنة بالإصدار الحالي",
     "slotCustom": "اسم خانة مخصّص…",
     "slotHelp": "الخانة هي موضع مُسمّى في المستند ('{{'@clause:name'}}') يُدرَج فيه البند المرتبط عند تعبئة القالب.",
@@ -2694,6 +2753,7 @@
   },
   "common": {
     "accept": "قبول",
+    "accepting": "جارٍ القبول…",
     "access": "الوصول",
     "action": "الإجراء",
     "actions": "الإجراءات",
@@ -2701,6 +2761,8 @@
     "add": "إضافة",
     "advanced": "خيارات متقدمة",
     "all": "الكل",
+    "alreadyFirst": "هذا الإدخال في أول القائمة بالفعل.",
+    "alreadyLast": "هذا الإدخال في آخر القائمة بالفعل.",
     "and": "و",
     "anonymizationLabels": {
       "address": "العنوان",
@@ -2725,8 +2787,11 @@
       "socialSecurityNumber": "رقم الضمان الاجتماعي",
       "taxIdentificationNumber": "الرقم الضريبي"
     },
+    "applying": "جارٍ تطبيق التغييرات…",
     "approve": "موافقة",
+    "approving": "جارٍ الاعتماد…",
     "archive": "أرشفة",
+    "archiving": "جارٍ النقل إلى الأرشيف…",
     "ask": "اسأل",
     "askAI": "اسأل الذكاء الاصطناعي",
     "askInChat": "السؤال في الدردشة",
@@ -2734,11 +2799,13 @@
     "author": "الكاتب",
     "back": "رجوع",
     "cancel": "إلغاء",
+    "cancelling": "جارٍ الإلغاء…",
     "caseLaw": "الاجتهاد القضائي",
     "catalogue": "الكتالوج",
     "category": "الفئة",
     "categoryName": "اسم الفئة",
     "changeColor": "تغيير اللون",
+    "chooseAction": "يرجى اختيار الإجراء المراد تأكيده.",
     "chooseFile": "اختيار ملف",
     "citations": "الاستشهادات",
     "clauses": "البنود",
@@ -2756,6 +2823,7 @@
     "confirmAction": "هل أنت متأكد؟",
     "connect": "ربط",
     "connected": "متصل",
+    "connecting": "جارٍ الاتصال…",
     "connectionLost": "انقطع الاتصال",
     "connectionLostDescription": "فقدنا الاتصال بالخادم. جارٍ إعادة المحاولة تلقائيًا.",
     "convertTo": "تحويل إلى",
@@ -2763,10 +2831,12 @@
     "copy": "نسخ",
     "copyDocumentReference": "نسخ مرجع المستند",
     "copyLink": "نسخ الرابط",
+    "copying": "جارٍ النسخ…",
     "country": "الدولة",
     "court": "محكمة",
     "createCategory": "فئة جديدة",
     "createdAt": "أُنشئ في {date}",
+    "creating": "جارٍ الإنشاء…",
     "currency": "العملة",
     "currentPage": "الصفحة الحالية",
     "custom": "مخصص",
@@ -2784,16 +2854,21 @@
     },
     "decisions": "الأحكام",
     "decline": "رفض",
+    "declining": "جارٍ الرفض…",
+    "defaultZoomReached": "مستوى التكبير الافتراضي مُطبّق بالفعل.",
     "delete": "حذف",
     "deleteCategory": "حذف الفئة",
     "deleteConfirmDescription": "هل أنت متأكد من رغبتك في حذف «{name}»؟ لا يمكن التراجع عن هذا الإجراء.",
     "deletedCount": "{count, plural, zero {تم حذف أي عنصر} one {تم حذف عنصر واحد} two {تم حذف عنصرين} few {تم حذف # عناصر} many {تم حذف # عنصرًا} other {تم حذف # عنصر}}",
+    "deleting": "جارٍ الحذف…",
     "description": "الوصف",
     "details": "التفاصيل",
     "detailsHiddenFeatureUnavailable": "التفاصيل مخفية: الميزة غير مفعّلة",
     "detailsHiddenUnrecognizedResource": "تم تسجيل تغييرات لنوع مورد لا يتعرّف عليه هذا الإصدار.",
     "detailsUnavailable": "التفاصيل غير متاحة",
+    "disabledButtonExample": "يعرض هذا المثال زرًا معطّلًا.",
     "disconnect": "قطع الاتصال",
+    "disconnecting": "جارٍ قطع الاتصال…",
     "dismiss": "تجاهل",
     "displayName": "الاسم المعروض",
     "document": "مستند",
@@ -2807,6 +2882,7 @@
     "doubleClickToRename": "انقر نقرًا مزدوجًا لإعادة التسمية",
     "download": "تنزيل",
     "downloadOriginal": "تنزيل الملف الأصلي",
+    "downloading": "جارٍ التنزيل…",
     "dragAndDrop": {
       "cancelled": "{count, plural, zero {أُلغي النقل. لم تُنقل {itemName}.} one {أُلغي النقل. لم يُنقل {itemName}.} two {أُلغي النقل. لم يُنقل {itemName}.} few {أُلغي النقل. لم تُنقل {itemName}.} many {أُلغي النقل. لم تُنقل {itemName}.} other {أُلغي النقل. لم تُنقل {itemName}.}}",
       "droppedOn": "{count, plural, zero {تم إفلات {itemName} على {destinationName}.} one {تم إفلات {itemName} على {destinationName}.} two {تم إفلات {itemName} على {destinationName}.} few {تم إفلات {itemName} على {destinationName}.} many {تم إفلات {itemName} على {destinationName}.} other {تم إفلات {itemName} على {destinationName}.}}",
@@ -2832,6 +2908,16 @@
       "orLetUsKnowAt": "أو أخبرنا عبر",
       "viewDocumentation": "عرض التوثيق"
     },
+    "enterConfirmationPhrase": "يرجى إدخال عبارة التأكيد.",
+    "enterContactMethod": "يرجى إدخال بيانات الاتصال.",
+    "enterInstruction": "يرجى إدخال تعليمات.",
+    "enterName": "يرجى إدخال اسم.",
+    "enterPassword": "يرجى إدخال كلمة المرور.",
+    "enterSearchQuery": "يرجى إدخال عبارة بحث.",
+    "enterTerm": "يرجى إدخال مصطلح.",
+    "enterTitle": "يرجى إدخال عنوان.",
+    "enterUrl": "يرجى إدخال عنوان URL.",
+    "enterVerificationCode": "يرجى إدخال رمز التحقق.",
     "expenses": "المصروفات",
     "export": {
       "citations": "الاستشهادات",
@@ -2847,6 +2933,8 @@
     "filter": "تصفية",
     "filters": "عوامل التصفية",
     "find": "بحث",
+    "finishReview": "يرجى إكمال مراجعة التغييرات المقترحة.",
+    "firstPageReached": "أنت في الصفحة الأولى.",
     "folder": "مجلد",
     "formula": "صيغة حسابية",
     "goBack": "رجوع",
@@ -2856,6 +2944,7 @@
     "high": "عالية",
     "history": "السجل",
     "import": "استيراد",
+    "installing": "جارٍ التثبيت…",
     "invite": "دعوة",
     "invoices": "الفواتير",
     "itemTypeValues": {
@@ -2903,6 +2992,7 @@
       "ZH-HANS": "الصينية (المبسطة)",
       "ZH-HANT": "الصينية (التقليدية)"
     },
+    "lastPageReached": "أنت في الصفحة الأخيرة.",
     "lastUpdated": "آخر تحديث",
     "layoutResetAfterProblem": "تمت إعادة ضبط التخطيط بعد حدوث مشكلة.",
     "legalDatabase": "قاعدة البيانات القانونية",
@@ -2915,9 +3005,11 @@
     "markAsUnread": "تعليم كغير مقروء",
     "matter": "ملف قانوني",
     "matters": "الملفات القانونية",
+    "maxZoomReached": "تم بلوغ أقصى مستوى للتكبير.",
     "medium": "متوسطة",
     "members": "الأعضاء",
     "metadata": "البيانات الوصفية",
+    "minZoomReached": "تم بلوغ أدنى مستوى للتكبير.",
     "moveDown": "نقل لأسفل",
     "moveUp": "نقل لأعلى",
     "name": "الاسم",
@@ -2926,8 +3018,12 @@
     "newRow": "صف جديد",
     "next": "التالي",
     "nextMatch": "النتيجة التالية",
+    "noChangesToSave": "لا توجد تغييرات لحفظها.",
+    "noDateToClear": "لا يوجد تاريخ لمسحه.",
     "noFileChosen": "لم يتم اختيار أي ملف",
+    "noFiltersToClear": "لا توجد عوامل تصفية لمسحها.",
     "noResults": "لا توجد نتائج",
+    "noTextToRemove": "لا يوجد نص لإزالته.",
     "noVersions": "لا يوجد سجل إصدارات",
     "none": "لا شيء",
     "notConnected": "غير متصل",
@@ -2956,6 +3052,7 @@
     "previous": "السابق",
     "previousMatch": "النتيجة السابقة",
     "print": "طباعة",
+    "printing": "تجري الطباعة…",
     "profile": "الملف الشخصي",
     "properties": "الخصائص",
     "queued": "قيد الانتظار",
@@ -2971,13 +3068,16 @@
     "removalComplete": "اكتملت الإزالة",
     "remove": "إزالة",
     "removeMember": "إزالة العضو",
+    "removing": "تجري الإزالة…",
     "rename": "إعادة تسمية",
     "required": "مطلوب",
     "reset": "إعادة تعيين",
     "resetToDefault": "إعادة التعيين إلى الوضع الافتراضي",
     "resetZoom": "إعادة تعيين التكبير",
     "restore": "استعادة",
+    "restoring": "تجري الاستعادة…",
     "retry": "إعادة المحاولة",
+    "retrying": "تجري إعادة المحاولة…",
     "role": "الدور",
     "run": "تشغيل",
     "runSizeConfirmDescription": "يُقدَّر هذا التشغيل بـ {estimated, plural, zero {# من وحدات الاستخدام} one {وحدة استخدام واحدة} two {وحدتَي استخدام} few {# وحدات استخدام} many {# وحدة استخدام} other {# وحدة استخدام}}؛ المتاح {available, plural, zero {# من الوحدات} one {وحدة واحدة} two {وحدتان} few {# وحدات} many {# وحدة} other {# وحدة}}. هل تريد بدءه على أي حال؟",
@@ -2998,10 +3098,15 @@
     "selectARole": "اختر دورًا",
     "selectAll": "تحديد الكل",
     "selectAllRows": "تحديد كل الصفوف",
+    "selectAtLeastOneFile": "يرجى اختيار ملف واحد على الأقل.",
     "selectDate": "اختر تاريخًا…",
+    "selectExportOptions": "يرجى اختيار خيارات تصدير التقرير.",
+    "selectFile": "يرجى اختيار ملف.",
     "selectRow": "تحديد {label}",
+    "selectTimeEntry": "يرجى اختيار قيد زمني.",
     "selected": "محدد",
     "selectedCount": "{count, plural, zero {لا شيء محدد} one {محدد واحد} two {محددان} few {# محددة} many {# محددًا} other {# محدد}}",
+    "sending": "جارٍ الإرسال…",
     "sessions": "الجلسات",
     "settings": "الإعدادات",
     "showAll": "عرض الكل",
@@ -3010,6 +3115,7 @@
     "showMore": "عرض المزيد",
     "showSecretValue": "إظهار القيمة السرية",
     "signOut": "تسجيل الخروج",
+    "signingOut": "جارٍ تسجيل الخروج…",
     "skipToContent": "تخطَّ إلى المحتوى",
     "somethingWentWrong": "حدث خطأ ما. حاول مرة أخرى، أو أعد تحميل الصفحة إذا تكرر ذلك.",
     "sort": "فرز",
@@ -3021,10 +3127,12 @@
     "stepProgress": "{current} من {total}",
     "suggested": "اقتراح",
     "summarizeChanges": "تلخيص التغييرات",
+    "switchingOrganization": "جارٍ فتح المؤسسة…",
     "target": "الهدف",
     "taxId": "الرقم الضريبي",
     "timeBilling": "الوقت والفوترة",
     "today": "اليوم",
+    "todayReached": "أنت تعرض اليوم الحالي.",
     "translate": "ترجمة",
     "tryAgain": "حاول مرة أخرى",
     "type": "النوع",
@@ -3044,6 +3152,7 @@
     "unverified": "غير مُتحقَّق منه",
     "unverifiedCitationHint": "تعذّر مطابقة هذا الاقتباس مع المستند المصدر.",
     "uploadFiles": "رفع الملفات",
+    "uploading": "جارٍ الرفع…",
     "urlIdentifier": "المعرّف",
     "user": "المستخدم",
     "value": "القيمة",
@@ -3051,6 +3160,7 @@
     "vatPayer": "مكلف بضريبة القيمة المضافة",
     "verified": "تم التحقق منه",
     "verify": "تحقّق",
+    "verifying": "جارٍ التحقق…",
     "version": "الإصدار",
     "versionLabel": "الإصدار {version}",
     "viewSource": "عرض المصدر",
@@ -3066,6 +3176,7 @@
     "allow": "السماح",
     "canChange": "يمكنه التغيير",
     "canRead": "يمكنه القراءة",
+    "clientDetailsRequired": "انتظر تحميل تفاصيل التطبيق والحساب. أعد تحميل الصفحة إذا تعذّر تحميلها.",
     "completeSetup": "إكمال الإعداد",
     "connectTitle": "ربط {clientName} بـ stella",
     "connectedTitle": "متصل بـ {clientName}",
@@ -3079,6 +3190,7 @@
     "returningToClient": "جارٍ إعادتك إلى {clientName}.",
     "returnsLocally": "ستعود إلى {clientName} على هذا الكمبيوتر",
     "returnsTo": "ستعود إلى {clientName}",
+    "savingDecision": "جارٍ حفظ قرار الموافقة…",
     "scopeAccountExportRead": "قراءة صادرات بياناتك الشخصية",
     "scopeAccountExportWrite": "طلب صادرات بياناتك الشخصية",
     "scopeAdminRead": "قراءة سجل تدقيق مؤسستك",
@@ -3319,6 +3431,7 @@
         "too_many_tags": "عدد الوسوم كبير جدًا أو أحدها طويل جدًا."
       },
       "mapDescription": "راجع التعيين المقترح. لا يمكن استخدام أي حقل في stella أكثر من مرة.",
+      "noReadyContacts": "صحّح الأخطاء في جهة اتصال واحدة على الأقل قبل الاستيراد.",
       "openContacts": "فتح جهات الاتصال",
       "preview": "مراجعة الاستيراد",
       "previewFailed": "تعذّر إنشاء معاينة الاستيراد.",
@@ -3378,6 +3491,7 @@
     }
   },
   "correspondence": {
+    "addressNotConfigured": "اضبط المراسلات الواردة قبل إنشاء عنوان.",
     "addressTitle": "عنوان البريد الإلكتروني للملف",
     "assertedOriginal": "الترويسات الأصلية (كما أوردها مُعيد التوجيه)",
     "authResults": {
@@ -3459,9 +3573,11 @@
     "acceptAll": "قبول الكل",
     "acceptAllConfirmDescription": "يطبّق ذلك {count} اقتراحًا على المستند دفعة واحدة.",
     "acceptAllConfirmTitle": "قبول جميع الاقتراحات؟",
+    "acceptingChanges": "جارٍ قبول التغييرات…",
     "applyAs": "بصيغة",
     "applyDirect": "مباشر",
     "applyTracked": "تعقّب التغييرات",
+    "applyingReviewDecision": "جارٍ حفظ قرار المراجعة…",
     "barLabel": "مراجعة الاقتراحات",
     "blockedCollaboration": "لا تزال جلسة التعديل المشترك قيد الفتح. أعد المحاولة بعد لحظات.",
     "blockedOpening": "لا يزال المستند قيد الفتح. أعد المحاولة بعد لحظات.",
@@ -3474,9 +3590,13 @@
     "countLow": "{count, plural, zero {# منخفضة} one {# منخفضة} two {# منخفضتان} few {# منخفضة} many {# منخفضة} other {# منخفضة}}",
     "countMedium": "{count, plural, zero {# متوسطة} one {# متوسطة} two {# متوسطتان} few {# متوسطة} many {# متوسطة} other {# متوسطة}}",
     "countUnspecified": "{count, plural, zero {# غير محدّدة} one {# غير محدّدة} two {# غير محدّدتان} few {# غير محدّدة} many {# غير محدّدة} other {# غير محدّدة}}",
+    "dismissingChanges": "جارٍ تجاهل الاقتراحات…",
     "finalizePendingNote": "{count, plural, zero {لا توجد اقتراحات قيد المراجعة.} one {لا يزال اقتراح واحد قيد المراجعة.} two {لا يزال اقتراحان قيد المراجعة.} few {لا تزال # اقتراحات قيد المراجعة.} many {لا يزال # اقتراحًا قيد المراجعة.} other {لا يزال # اقتراح قيد المراجعة.}}",
+    "firstChangeReached": "هذا هو التغيير الأول.",
     "hideAccepted": "إخفاء الاقتراحات المقبولة",
     "keepInReview": "إبقاؤها قيد المراجعة",
+    "lastChangeReached": "هذا هو التغيير الأخير.",
+    "noChangesToAccept": "لا توجد تغييرات بانتظار القبول.",
     "notApplied": "لم يتم تطبيق التغيير",
     "pendingLimitReached": "يحتوي هذا المستند على عدد كبير جدًا من الاقتراحات قيد المراجعة. عالج بعضها قبل طلب المزيد.",
     "persistFailed": "تعذّر حفظ تغيير المراجعة",
@@ -3487,6 +3607,7 @@
     "severityUnspecified": "غير محدّدة",
     "skipped": "تعذّر التطبيق: {reason}",
     "staleResolution": "تمت معالجة هذا الاقتراح بالفعل في مكان آخر.",
+    "suggestionOutOfDate": "تغيّر النص بعد تقديم هذا الاقتراح.",
     "summary": {
       "commentOnParagraph": "{label, select, none {إضافة تعليق إلى فقرة} other {إضافة تعليق إلى الفقرة {label}}}",
       "commentOnSelection": "إضافة تعليق إلى النص المحدد",
@@ -3873,6 +3994,7 @@
     "loading": "جارٍ تحميل مسار العمل…",
     "namePlaceholder": "مثال: مراجعة استلام اتفاقية عدم إفصاح",
     "nameRequired": "أدخل اسم مسار العمل.",
+    "reloadToSave": "أعد تحميل سير العمل لحفظ التغييرات.",
     "runs": {
       "activeSublabel": "نشط",
       "cancel": "إلغاء التشغيل",
@@ -3903,6 +4025,7 @@
       "sizeConfirmTitle": "تشغيل سير عمل كبير",
       "startFailed": "تعذّر بدء مسار العمل.",
       "started": "تم بدء مسار العمل",
+      "starting": "جارٍ بدء سير العمل…",
       "stepProgress": "الخطوة {current} من {total}",
       "tooManyInputDocuments": "اختر حتى {max} مستند لتشغيل مسار العمل هذا."
     },
@@ -3957,7 +4080,10 @@
       "title": "المُشغّل",
       "typeLabel": "نوع المُشغّل"
     },
-    "updated": "تم تحديث مسار العمل"
+    "updated": "تم تحديث مسار العمل",
+    "validation": {
+      "tooManySteps": "يمكن أن يتضمّن سير العمل هذا ما يصل إلى {max} من الخطوات."
+    }
   },
   "folio": {
     "acceptChange": "قبول التغيير",
@@ -4022,6 +4148,7 @@
       "outlineDepthThree": "1–3",
       "outlineDepthTwo": "1–2"
     },
+    "evidenceInDifferentMatter": "ينتمي هذا المرجع إلى ملف قانوني آخر.",
     "evidenceReferences": "مراجع الأدلة",
     "evidenceUnavailable": "لا يمكن فتح مرجع الدليل هذا في هذا الملف القانوني.",
     "findReplace": {
@@ -4053,6 +4180,7 @@
     "insertRowAbove": "إدراج صف أعلى",
     "insertRowBelow": "إدراج صف أسفل",
     "inserted": "مُدرَج",
+    "insertingEvidence": "جارٍ إدراج المرجع…",
     "italic": "مائل",
     "italicShortcut": "مائل (Ctrl+I)",
     "justify": "ضبط",
@@ -4126,6 +4254,7 @@
       "skip": "تخطي"
     },
     "checklist": {
+      "activeTour": "أكمل الدليل الحالي أو اخرج منه أولًا.",
       "progress": "اكتمل {completed} من {total}"
     },
     "community": {
@@ -4366,6 +4495,7 @@
       "downloadAction": "تنزيل ملف PDF مجهّل الهوية",
       "downloadHint": "يُصدّر النسخة المحفوظة كملف PDF بنص غير قابل للتحديد.",
       "emptyState": "لا توجد مصطلحات خاصة بمساحة العمل بعد. أضف واحدًا أعلاه.",
+      "enterTerm": "أدخل مصطلحًا لإخفاء هويته.",
       "ignoreAction": "تجاهُل في هذا المستند",
       "ignoreScopeAlways": "تجاهُل دائمًا",
       "ignoreScopeDocument": "تجاهُل في هذا الملف القانوني",
@@ -4383,8 +4513,10 @@
       "termMatchCountAriaLabel": "طُوبق {count} مرة في هذا المستند.",
       "title": "مفردات إخفاء الهوية",
       "unsupportedVisualContent": "يحتوي هذا الملف على صور أو رسومات متجهة يتعذر فحصها بحثًا عن نص حساس. التصدير غير متاح.",
+      "waitForMatches": "انتظر انتهاء فحص إخفاء الهوية.",
       "workspaceTermsHeading": "مصطلحات مساحة العمل ({count})"
     },
+    "attachmentNotPreviewable": "نزّل هذا المرفق لفتحه.",
     "closeAllTabs": "{count, plural, zero {إغلاق # علامة تبويب} one {إغلاق علامة تبويب واحدة} two {إغلاق علامتَي التبويب} few {إغلاق جميع علامات التبويب (#)} many {إغلاق جميع علامات التبويب (#)} other {إغلاق جميع علامات التبويب (#)}}",
     "closeOtherTabs": "{count, plural, zero {إغلاق # علامة تبويب أخرى} one {إغلاق علامة تبويب أخرى} two {إغلاق علامتَي تبويب أخريين} few {إغلاق # علامات تبويب أخرى} many {إغلاق # علامة تبويب أخرى} other {إغلاق # علامة تبويب أخرى}}",
     "closeTab": "إغلاق <bdi>{name}</bdi>",
@@ -4394,6 +4526,7 @@
       "unsupportedField": "يحتوي هذا المستند على حقل {fieldType} لا يمكن تحويله.",
       "unsupportedReference": "يشير هذا المستند إلى مورد خارجي في {element} {attribute}، لذا لا يمكن تحويله."
     },
+    "enterGroupName": "أدخل اسمًا للمجموعة.",
     "external": {
       "confirmDescription": "أنت على وشك زيارة موقع إلكتروني خارجي.",
       "confirmTitle": "فتح الرابط الخارجي؟",
@@ -4404,6 +4537,7 @@
     "facet": {
       "anonymization": "إخفاء الهوية"
     },
+    "firstSourceReached": "هذا هو المصدر الأول.",
     "groups": {
       "addContext": "إضافة سياق",
       "chatMoveDescription": "سيتم تجميع <bdi>{chatName}</bdi> ضمن <bdi>{matterName}</bdi>. أضف الملف القانوني إلى سياق الدردشة لتتمكن من استخدام ملفاته ومعلوماته.",
@@ -4426,6 +4560,7 @@
       "ungroup": "إزالة من المجموعة"
     },
     "hidePane": "إخفاء اللوحة",
+    "lastSourceReached": "هذا هو المصدر الأخير.",
     "matterPicker": {
       "allMatters": "جميع الملفات القانونية",
       "description": "اختر الملفات القانونية التي يمكن لهذه الدردشة الاستناد إليها.",
@@ -4504,6 +4639,7 @@
       },
       "checks": "ما يتم فحصه:",
       "commentFailed": "تعذرت إضافة التعليق",
+      "completePositionIssues": "أدخل مسألة لكل موقف محدد.",
       "decidedCount": "{count, number} مقرَّرة",
       "decision": "القرار",
       "decisionFailed": "تعذر تسجيل قرارك",
@@ -4516,6 +4652,7 @@
       "documentCutNotice": "<strong>لم تتم قراءة {documentName} بالكامل.</strong> المستند طويل جدًا بالنسبة إلى هذا النموذج، لذا استُبعد نحو {percent} من نصه. وتُحال كل نقطة لا جواب لها إلى المراجعة، لأن الجواب قد يكون في الجزء المستبعد.",
       "documentTooLarge": "هذا المستند طويل جدًا بحيث لا يستطيع هذا النموذج قراءة قدر كافٍ منه. جرّب نموذجًا ذا نافذة سياق أكبر.",
       "documentsTooLarge": "هذه المستندات طويلة جدًا بحيث لا يستطيع هذا النموذج قراءتها معًا. استخدم عددًا أقل من المستندات أو مستندات أقصر، أو جرّب نموذجًا ذا نافذة سياق أكبر.",
+      "enterNote": "اكتب تعليقًا أولًا.",
       "export": {
         "counterparty": "تنزيل للطرف المقابل",
         "counterpartyFailed": "تعذّر تصدير المستند",
@@ -4618,6 +4755,9 @@
       "saveAsPlaybookFailed": "تعذّر حفظ هذه المراجعة كدليل مراجعة",
       "savedAsPlaybook": "تم الحفظ كدليل مراجعة",
       "searchPlaybooks": "البحث في أدلة المراجعة",
+      "selectPositionFirst": "اختر موقفًا واحدًا على الأقل.",
+      "selectReviewBasis": "اختر دليل مراجعة أو أضف مستندًا مرجعيًا.",
+      "selectReviewPositionOrReference": "اختر دليل مراجعة يحتوي على مواقف مفعّلة أو أضف مستندًا مرجعيًا.",
       "showInDocument": "إظهار في المستند",
       "sizeConfirmStart": "بدء المراجعة",
       "sizeConfirmTitle": "مراجعة كبيرة",
@@ -4649,6 +4789,7 @@
       "why": "لماذا",
       "whyItMatters": "لماذا يهم:"
     },
+    "selectAttachmentToSave": "اختر مرفقًا لحفظه.",
     "showPane": "إظهار اللوحة",
     "swapViews": "تبديل العرض الرئيسي واللوحة الجانبية",
     "title": "لوحة الفحص"
@@ -4723,6 +4864,7 @@
       "dropPack": "أفلِت ملف .zip/.skill أو SKILL.md هنا لاستيراد المهارة",
       "editSkill": "تعديل المهارة",
       "enableSkill": "تفعيل المهارة",
+      "enterFileName": "أدخل اسم الملف.",
       "exportAsSkill": "تصدير كملف .skill",
       "exportAsZip": "تصدير كملف .zip",
       "exportFailed": "تعذّر تصدير المهارة",
@@ -4753,6 +4895,7 @@
       "renameFile": "إعادة تسمية",
       "scopePrivate": "أنا فقط",
       "scopeTeam": "الجميع في الفريق",
+      "selectSkillToImport": "اختر مهارة واحدة على الأقل.",
       "selectionLimit": "يمكنك تحديد ما يصل إلى {count} مهارة في المرة الواحدة.",
       "skippedFiles": "{count, plural, zero {لم يُستبعد أي ملف من الاستيراد} one {لم يُستورد ملف واحد} two {لم يُستورد ملفان} few {لم تُستورد # ملفات} many {لم يُستورد # ملفًا} other {لم يُستورد # ملف}}",
       "skippedReasonNotUtf8Text": "ليس نصًا بترميز UTF-8",
@@ -4829,6 +4972,7 @@
       "emptyTitle": "لا توجد تكاملات بعد",
       "enable": "تفعيل",
       "endpointOrigins": "أصول نقاط النهاية",
+      "enterToken": "أدخل رمز وصول.",
       "errorDescription": "تعذّر تحديث التكامل.",
       "errorTitle": "فشل MCP",
       "mcpExplainer": "تربط التكاملات بالدردشة خدماتٍ خارجية يمكن للذكاء الاصطناعي العمل معها.",
@@ -4904,6 +5048,7 @@
       "convertToRules": "التحويل إلى قواعد",
       "createPlaybook": "دليل مراجعة جديد",
       "created": "تم إنشاء دليل المراجعة",
+      "creatingFromStarter": "جارٍ إنشاء دليل مراجعة من القالب الأولي المختار…",
       "customizeAnswer": "تغيير الإجابة المستخرجة",
       "customizeAnswerHint": "تعديل السؤال أو تنسيق الإجابة.",
       "decisionLine": "{runs, plural, zero {مقبول {accepted, number} · مستبعد {dismissed, number} · عبر لا مراجعات} one {مقبول {accepted, number} · مستبعد {dismissed, number} · عبر مراجعة واحدة} two {مقبول {accepted, number} · مستبعد {dismissed, number} · عبر مراجعتين} few {مقبول {accepted, number} · مستبعد {dismissed, number} · عبر # مراجعات} many {مقبول {accepted, number} · مستبعد {dismissed, number} · عبر # مراجعةً} other {مقبول {accepted, number} · مستبعد {dismissed, number} · عبر # مراجعة}}",
@@ -5228,6 +5373,7 @@
     "deleteTitle": "حذف الذاكرة؟",
     "deletedToast": "تم حذف الذاكرة",
     "empty": "لا توجد ذاكرة بعد.",
+    "enterMemory": "أدخل النص الذي تريد حفظه في الذاكرة.",
     "kinds": {
       "decision": "قرار",
       "instruction": "تعليمات",
@@ -5245,6 +5391,9 @@
       "extracted": "مُستخرَج",
       "tool": "أداة",
       "user": "أضفته أنت"
+    },
+    "suggestions": {
+      "reviewing": "جارٍ تسجيل قرارك…"
     },
     "suggestionsDescription": "اقترح المساعد تذكُّر هذه العناصر. اقبلها للاحتفاظ بها أو ارفضها لتجاهلها.",
     "suggestionsTitle": "اقتراحات",
@@ -5356,6 +5505,7 @@
     "orgNamePlaceholder": "السالم وشركاه",
     "orgSubtitle": "إذا كنت تنضم إلى فريق موجود، فاطلب من أحد أعضائه رابط دعوة بدلاً من ذلك.",
     "orgTitle": "سمِّ فريقك",
+    "selectJurisdictionToContinue": "اختر ولاية قضائية واحدة على الأقل.",
     "skipStep": "تخطّي هذه الخطوة",
     "someInvitesFailed": "{count, plural, zero {فشلت # دعوة} one {فشلت دعوة واحدة} two {فشلت دعوتان} few {فشلت # دعوات} many {فشلت # دعوة} other {فشلت # دعوة}}",
     "stepAi": "الذكاء الاصطناعي",
@@ -5369,6 +5519,7 @@
     "aiConfig": {
       "addProvider": "إضافة مزوّد",
       "addProviderFirst": "أضف مزوّدًا أولًا",
+      "allProvidersAdded": "أُضيف جميع المزوّدين المتاحين بالفعل.",
       "anthropicKeyDisabled": "أنشئ مفتاح API نشطًا في وحدة تحكم Anthropic واستبدل هذا المفتاح به.",
       "anthropicNoCredits": "أضف رصيدًا لاستخدام API في قسم الفوترة بوحدة تحكم Anthropic، ثم حاول مرة أخرى.",
       "anthropicOrganizationRestricted": "اطلب من مسؤول مؤسستك في Anthropic منحك صلاحية الوصول، أو استخدم مفتاحًا من مؤسسة مسموح بها.",
@@ -5463,6 +5614,8 @@
       "removeProvider": "إزالة المزوّد",
       "removeProviderConfirm": "هل تريد إزالة {provider} وبيانات الاعتماد المحفوظة؟",
       "replaceKey": "استبدال المفتاح",
+      "requireProvider": "أبقِ مزوّد خدمة واحدًا على الأقل ضمن الإعدادات.",
+      "resolveErrorsBeforeSaving": "عالج أخطاء الإعدادات المميّزة قبل الحفظ.",
       "roleUnavailable": "لا يدعم {provider} هذا الدور.",
       "roles": {
         "browse": "التصفح",
@@ -5565,6 +5718,7 @@
   "publicTools": {
     "addSkill": "إضافة مهارة",
     "addToStella": "إضافة إلى stella",
+    "alreadyInstalled": "هذه الأداة مثبّتة بالفعل.",
     "content": "المحتوى",
     "contentUnavailable": "تعذّر تحميل محتوى هذه المهارة. يمكنك عرضه على GitHub بدلاً من ذلك.",
     "contribute": {
@@ -5668,8 +5822,10 @@
       "skillBody": "سيتم تثبيت المهارة «{name}» في مساحة عملك.",
       "title": "هل تريد إضافة {name} إلى مساحة عملك؟"
     },
+    "installUnavailable": "لا يمكن تثبيت هذه الأداة في مؤسستك.",
     "mcpConfigHint": "تفاصيل اتصال مستقلة عن برنامج العميل. ألصقها في أي برنامج عميل متوافق مع MCP وأضف بيانات اعتمادك.",
     "metaDescription": "تصفح الكتالوج المفتوح للمهارات وعمليات التكامل والأدوات المدمجة للعمل القانوني.",
+    "missingFromCatalogue": "هذه الأداة غير مدرجة في كتالوج مؤسستك.",
     "nativeToolInfo": "هذه إمكانية مدمجة في stella. فعّلها من مساحة عملك لاستخدامها في الدردشة.",
     "notFound": "لم يتم العثور على الأداة.",
     "practiceArea": "مجال الممارسة",
@@ -5709,6 +5865,7 @@
     "expand": "توسيع الإجابة",
     "explain": "شرح",
     "followUp": "طرح سؤال متابعة",
+    "followUpRequired": "اكتب سؤال متابعة لإرساله.",
     "invalidCitations": "{count, plural, zero {تعذر التحقق من # إحالات.} one {تعذر التحقق من إحالة واحدة.} two {تعذر التحقق من إحالتين.} few {تعذر التحقق من # إحالات.} many {تعذر التحقق من # إحالة.} other {تعذر التحقق من # إحالة.}}",
     "loading": "جارٍ توليد الإجابة…",
     "minimise": "طي الإجابة",
@@ -5719,7 +5876,8 @@
     "send": "إرسال سؤال المتابعة",
     "share": "مشاركة مع الفريق",
     "timeoutError": "انتهت مهلة توليد الإجابة. حاول مرة أخرى.",
-    "title": "إجابة عن النص المحدد"
+    "title": "إجابة عن النص المحدد",
+    "waitForCurrentAction": "انتظر حتى يكتمل الإجراء الجاري على هذه الإجابة."
   },
   "routeError": {
     "backToMatters": "العودة إلى الملفات القانونية",
@@ -5727,6 +5885,7 @@
     "descriptionAdministrator": "حاول مرة أخرى. إذا استمرت المشكلة، فارجع إلى ملفاتك القانونية أو تواصل مع مسؤولك باستخدام المرجع أدناه.",
     "descriptionNone": "حاول مرة أخرى. إذا استمرت المشكلة، فارجع إلى ملفاتك القانونية.",
     "descriptionReport": "حاول مرة أخرى. إذا استمرت المشكلة، فارجع إلى ملفاتك القانونية أو أبلغ عنها باستخدام المرجع أدناه.",
+    "errorReferencePending": "انتظر حتى يظهر مرجع الخطأ.",
     "reference": "مرجع الخطأ",
     "reportProblem": "الإبلاغ عن مشكلة",
     "title": "تعذر فتح هذه الصفحة"
@@ -5742,6 +5901,8 @@
     "deleteSearchTitle": "حذف البحث المحفوظ",
     "editedBy": "عُدِّل بواسطة",
     "emptyState": "ابدأ الكتابة للبحث عبر جميع الملفات القانونية.",
+    "enterQueryToRefine": "أدخل عبارة بحث لتحسينها.",
+    "enterRegistryCredential": "أدخل بيانات اعتماد السجل.",
     "estimatedResultCount": "{count, plural, zero {نحو صفر نتيجة} one {نحو نتيجة واحدة} two {نحو نتيجتين} few {نحو # نتائج} many {نحو # نتيجة} other {نحو # نتيجة}}",
     "hintAskAI": "<kbd>Tab</kbd> لسؤال الذكاء الاصطناعي",
     "hintClear": "<kbd>Esc</kbd> للمسح",
@@ -5766,6 +5927,7 @@
     "recentDocuments": "المستندات الحديثة",
     "recentSearches": "عمليات البحث الأخيرة",
     "recentlyOpenedFiles": "الملفات المفتوحة مؤخراً",
+    "refiningQuery": "جارٍ تحسين عبارة البحث…",
     "registryCandidateNameMismatch": "الاسم الرسمي هو «{officialName}» ولا يتطابق",
     "registryCandidateNoOfficialRecord": "لا يحتوي السجل الرسمي على قيد لهذا الرقم",
     "registryChoose": "اختر سجل شركات",
@@ -5788,6 +5950,10 @@
     "saveSearch": "حفظ البحث",
     "saveSearchNamePlaceholder": "مثال: ملفات PDF الحديثة",
     "saveSearchTitle": "حفظ البحث",
+    "savedSearchAddCriteria": "أضف عبارة بحث أو عامل تصفية أولًا.",
+    "savedSearchEnterName": "أدخل اسمًا للبحث.",
+    "savedSearchNameConflict": "أعد تحميل هذا البحث قبل تغيير اسمه.",
+    "savedSearchUpdating": "جارٍ تحديث عمليات البحث المحفوظة…",
     "savedSearches": "عمليات البحث المحفوظة",
     "savedSearchesEmpty": "احفظ بحثاً لإعادة استخدامه.",
     "scopeFilter": "نطاق البحث",
@@ -5833,6 +5999,7 @@
       "chatNotificationsUnsupported": "لا يدعم هذا المتصفح الإشعارات.",
       "chatTechnicalDetails": "التفاصيل التقنية في الدردشة",
       "chatTechnicalDetailsDescription": "تعرض كل خطوة في الدردشة ما بحثت عنه وما وجدته. فعّل هذا الخيار لترى أيضًا الشيفرة والنتائج الخام وراءها.",
+      "checkTaskReassignments": "راجع الأعضاء المحددين لنقل المهام إليهم.",
       "confirmDelete": "تأكيد حذف الحساب",
       "dangerZone": "منطقة الخطر",
       "dangerZoneDescription": "احذف الوصول إلى حسابك وبيانات الحساب الخاصة نهائيًا.",
@@ -5907,6 +6074,7 @@
       "preferredNameDescription": "يُستخدَم كمؤلِّف للتغييرات المتعقَّبة والتعليقات في DOCX.",
       "preferredNamePlaceholder": "اسمك",
       "profileDescription": "إدارة تفضيلاتك الشخصية",
+      "revokingSessions": "جارٍ تسجيل الخروج من الجلسات الأخرى…",
       "sendOtpCode": "إرسال رمز التحقق",
       "signInMethods": {
         "confirmDescription": "أدخل رمزًا جديدًا أُرسل إلى بريدك الإلكتروني لإلغاء ربط طريقة تسجيل الدخول هذه.",
@@ -6183,6 +6351,7 @@
         "reorder": "إعادة ترتيب نوع المستند",
         "title": "أنواع المستندات"
       },
+      "enterSlug": "أدخل المعرّف المختصر لعنوان المؤسسة.",
       "localRuns": {
         "description": "أقصى ما يمكن لوكيل البرمجة فعله دون أن يسأل عندما يشغّل دردشة على حاسوب أحد الأعضاء. إذا خُفِّض الحد، يسري بدءًا من الرسالة التالية لكل عضو، ويحتفظ التشغيل الجاري بأذوناته.",
         "title": "وكلاء البرمجة على حواسيب الأعضاء",
@@ -6239,6 +6408,7 @@
       },
       "uploadLogo": "رفع الشعار",
       "usage": "الاستخدام",
+      "usageCheckoutProviderUnavailable": "مزود الدفع غير متاح لإتمام الدفع عبر الإنترنت.",
       "usageDescription": "حدود الاستخدام وحالة الاستحقاق لهذه المؤسسة",
       "usageEmptyDescription": "اضبط استحقاق استخدام لتفعيل ميزات الذكاء الاصطناعي المُقاسة لهذه المؤسسة.",
       "usageEmptyTitle": "لا يوجد استحقاق استخدام",
@@ -6255,9 +6425,11 @@
       "usageManageError": "تعذّر فتح إدارة الاستخدام المُستضافة",
       "usageManuallyManaged": "مُدار يدويًا",
       "usagePacksDescription": "باقات وحدات لمرة واحدة تُضاف إلى فترتك الحالية.",
+      "usagePacksRequireActivePlan": "ابدأ خطة مستضافة أو استأنفها لشراء حزم الوحدات.",
       "usagePacksTitle": "باقات الوحدات",
       "usagePlanCheckout": "المتابعة إلى الدفع",
       "usagePlanCheckoutError": "تعذّر بدء عملية الدفع",
+      "usagePlanCheckoutUnavailable": "الدفع عبر الإنترنت غير متاح لهذه الخطة.",
       "usagePlanPriceMonthTemplate": "{price} / شهريًا",
       "usagePlanPriceOneTimeTemplate": "{price}",
       "usagePlanPriceSeatMonthTemplate": "{price} / لكل مقعد شهريًا",
@@ -6480,6 +6652,7 @@
     },
     "title": "التشريعات",
     "validity": "نافذ من {from} إلى {to}",
+    "versionAlreadySelected": "أنت تعرض هذا الإصدار بالفعل.",
     "versionAppliedInDecision": "الصيغة المطبقة في قرار <bdi>{court}</bdi> <bdi>{caseNumber}</bdi> (<bdi>{range}</bdi>) · {status}",
     "versionChangesAdded": "{count, plural, zero {لا مواد مضافة} one {مادة واحدة مضافة} two {مادتان مضافتان} few {# مواد مضافة} many {# مادةً مضافة} other {# مادة مضافة}}",
     "versionChangesChanged": "{count, plural, zero {لا مواد معدلة} one {مادة واحدة معدلة} two {مادتان معدلتان} few {# مواد معدلة} many {# مادةً معدلة} other {# مادة معدلة}}",
@@ -6729,6 +6902,7 @@
     "checkResultsTitle": "فحص القالب",
     "checkTemplate": "فحص القالب",
     "checkWarnings": "{count, plural, zero {# تحذير} one {تحذير واحد} two {تحذيران} few {# تحذيرات} many {# تحذيرًا} other {# تحذير}}",
+    "choosePrefillSource": "اختر مستندًا أو ارفع ملفًا أو الصق نصًا.",
     "clearMyLookupFormatDefault": "إزالة تنسيقي الافتراضي",
     "conditionAddGroup": "إضافة مجموعة",
     "conditionAddRule": "إضافة قاعدة",
@@ -6740,8 +6914,10 @@
     "conditionForcedNo": "لا · حدّدته بنفسك",
     "conditionForcedYes": "نعم · حدّدته بنفسك",
     "conditionFormulaPlaceholder": "أدخل صيغة…",
+    "conditionGroupFull": "بلغت هذه المجموعة الحد الأقصى لعدد الشروط.",
     "conditionMatch": "المطابقة",
     "conditionNamePlaceholder": "اسم الشرط (مثل NPF)",
+    "conditionNeedsField": "لا تتوفر حقول لهذا الشرط.",
     "conditionNotSettled": "البيانات المُدخلة لا تحسم ذلك، وسيُحسم عند إنشاء المستند",
     "conditionOpAfter": "بعد",
     "conditionOpAtLeast": "على الأقل",
@@ -6768,6 +6944,7 @@
     "confirmDelete": "سيؤدي هذا إلى حذف القالب نهائياً.",
     "copyCompanySpecification": "نسخ بيانات الشركة",
     "copyRegistryResult": "نسخ نتيجة السجل",
+    "correctFormErrors": "صحّح الحقول المميّزة أولًا.",
     "createDocument": "إنشاء مستند",
     "createDocumentAnyway": "الإنشاء على أي حال",
     "createFromStyles": "البدء بأنماط مستند",
@@ -6796,6 +6973,8 @@
     "dropToCreate": "أفلِت ملف ‎.docx لإنشاء قالب",
     "editFields": "تعديل الحقول",
     "emptyFieldsWarning": "{count, plural, zero {لا يزال # حقل فارغًا} one {لا يزال حقل واحد فارغًا} two {لا يزال حقلان فارغين} few {لا تزال # حقول فارغة} many {لا يزال # حقلًا فارغًا} other {لا يزال # حقل فارغًا}}: {names}",
+    "enterLookupFormatDetails": "أدخل اسمًا وقيمة للتنسيق.",
+    "enterRegistryId": "أدخل معرّف الشركة أولًا.",
     "fieldCount": "{count, plural, zero {# حقل} one {حقل واحد} two {حقلان} few {# حقول} many {# حقلاً} other {# حقل}}",
     "fieldFormat": "تنسيق الإخراج",
     "fieldFormatHint": "استخدم '{{key}}' لإدراج جزء.",
@@ -6844,8 +7023,11 @@
     "lastUsedAgo": "آخر استخدام {time}",
     "loadFailed": "تعذّر تحميل القوالب",
     "lookupFieldHint": "أدخِل رقم KRS؛ وتُعبّأ تفاصيل الشركة من السجل.",
+    "lookupFormatLimit": "يمكنك إضافة ما يصل إلى {max} من تنسيقات الإخراج.",
     "lookupFormatSaved": "تم حفظ تنسيق الإخراج",
     "lookupFormatsSharedHint": "التنسيقات المحفوظة متاحة للزملاء في هذه المؤسسة. أما التنسيق الافتراضي الخاص بك فينطبق عليك وحدك.",
+    "lookupOrganizationDefaultUnchanged": "هذا هو التنسيق الافتراضي للمؤسسة بالفعل.",
+    "lookupPersonalDefaultUnchanged": "هذا الاختيار يطابق إعدادك الافتراضي الحالي.",
     "moveToCategory": "النقل إلى فئة",
     "moveToMatter": "حفظ في الملف القانوني",
     "moveToMatterAnyway": "حفظ على أي حال",
@@ -6888,6 +7070,7 @@
     "structureWarningParagraph": "الفقرة {paragraph, number}",
     "structureWarnings": "{count, plural, zero {# تحذير بنيوي} one {تحذير بنيوي واحد} two {تحذيران بنيويان} few {# تحذيرات بنيوية} many {# تحذيراً بنيوياً} other {# تحذير بنيوي}}",
     "studio": {
+      "addFieldsToNavigate": "أضف حقلاً آخر للتنقل بين الحقول.",
       "aiAdaptInstructionPlaceholder": "اختياري: كيف ينبغي للذكاء الاصطناعي تكييف الصياغة (مثل مطابقة القواعد النحوية المحيطة)",
       "aiDrafted": "مُصاغ بالذكاء الاصطناعي",
       "aiNoFields": "لم يقترح الذكاء الاصطناعي أي حقول",
@@ -6901,6 +7084,7 @@
       "aiSeesDocument": "السماح للذكاء الاصطناعي بقراءة المستند",
       "aiSuggest": "اقتراح حقول",
       "clauseSlotHelp": "يُدرَج البند المرتبط هنا عند تعبئة القالب. اربطه أو غيّره من هذه اللوحة أو من قائمة الإدراج.",
+      "completeCondition": "أكمل الشرط قبل الحفظ.",
       "conceptClause": "يُدرِج بندًا قابلًا لإعادة الاستخدام من مكتبتك.",
       "conceptCondition": "يُظهر هذا النص فقط عند تحقّق شرط.",
       "conceptField": "قيمة تعبّئها عند الاستخدام.",
@@ -6927,6 +7111,7 @@
       "conditionsSectionHelp": "حدِّد نصًا في المستند ← انقر بزر الفأرة الأيمن ← أظهِر فقط إذا…",
       "draftedByAi": "الذكاء الاصطناعي فقط",
       "emptyClauseSlot": "خانة بند فارغة",
+      "enterConditionNameAndPrompt": "أدخل اسمًا وتعليمات.",
       "existingCondition": "شرط موجود…",
       "existingField": "حقل موجود…",
       "expressionPlaceholder": "التعبير",
@@ -7056,6 +7241,7 @@
       "entriesTitle": "الوقت المُسجَّل",
       "nextWeek": "الأسبوع التالي",
       "noActivity": "لا شيء لتسجيله بعد. اعمل في ملف قانوني وسيظهر نشاطك هنا لقبوله.",
+      "noDraftEntries": "لا توجد مسودات لقيود الوقت لإرسالها هذا الأسبوع.",
       "pendingCount": "{count, plural, zero {لا مقترحات} one {مقترح واحد} two {مقترحان} few {# مقترحات} many {# مقترحًا} other {# مقترح}}",
       "previousWeek": "الأسبوع السابق",
       "range": "{start} – {end}",
@@ -7101,7 +7287,8 @@
       "title": "ترجمة المستند",
       "translatedDocument": "مستند مترجم · DeepL",
       "translatedDocumentAi": "مستند مترجم · stella AI",
-      "translating": "جارٍ الترجمة…"
+      "translating": "جارٍ الترجمة…",
+      "waitForDocument": "انتظر حتى يصبح المستند جاهزًا للترجمة."
     },
     "error": {
       "title": "فشلت الترجمة"
@@ -7143,6 +7330,7 @@
     }
   },
   "workspaces": {
+    "alreadyVerified": "تم التحقق من هذا المصدر بالفعل.",
     "archivedReadOnly": "هذا الملف مؤرشف ومتاح للقراءة فقط.",
     "calculations": {
       "choose": "حساب",
@@ -7208,6 +7396,7 @@
     "deletingWorkspace": "جارٍ حذف الملف القانوني",
     "documentSwitcher": {
       "download": "تنزيل هذا الملف",
+      "renditionsFailed": "افتح المستند مجددًا ثم أعد محاولة التنزيل.",
       "searchPlaceholder": "ابحث عن مستند…",
       "trigger": "تبديل المستند"
     },
@@ -7217,11 +7406,13 @@
     "duplicateMatterDescription": "ستقوم بتكرار الملف القانوني واسمه وعميله وأعضاء فريقه وأطرافه وطرق عرضه.",
     "duplicateMatterWithContentDescription": "ستقوم بتكرار الملف القانوني واسمه وعميله وأعضاء فريقه وأطرافه وطرق عرضه ومحتواه.",
     "duplicateWithContent": "تكرار مع المحتوى",
+    "duplicatingRow": "جارٍ إنشاء نسخة من الصف…",
     "duplicatingWorkspace": "جارٍ تكرار الملف القانوني",
     "emptyDocuments": {
       "description": "ارفع المستندات لتمكين استخراج الجداول وتنظيم المستندات والتحرير داخل المتصفح والبحث عبر هذا الملف القانوني.",
       "title": "ارفع أول مستنداتك"
     },
+    "emptyGroup": "لا تحتوي هذه المجموعة على أي صفوف.",
     "emptyMatters": {
       "description": "أنشئ ملفًا قانونيًا لتنظيم المستندات وجهات الاتصال والمهام ونشاط الفريق في مكان واحد.",
       "title": "أنشئ أول ملف قانوني لك"
@@ -7312,6 +7503,7 @@
       "ocrQueueFailed": "تعذّرت جدولة التعرّف على النص",
       "ocrQueued": "تمت إضافة التعرّف على النص إلى قائمة الانتظار",
       "ocrQueuedForBatch": "تمت إضافة التعرّف على النص إلى دفعة OCR التالية",
+      "pdfSelectToPrint": "افتح ملف PDF لطباعته.",
       "pdfSigning": {
         "alreadySigningTitle": "التوقيع جارٍ بالفعل في stella desktop",
         "cancelledBaseVersionDescription": "تغيّر المستند أثناء التوقيع. افتح أحدث إصدار ووقّعه من جديد.",
@@ -7379,6 +7571,7 @@
       "renamedToAvoidConflicts": "{count, plural, zero {لم تتم إعادة تسمية أي ملف لتجنب التعارضات} one {تمت إعادة تسمية ملف واحد لتجنب التعارضات} two {تمت إعادة تسمية ملفين لتجنب التعارضات} few {تمت إعادة تسمية # ملفات لتجنب التعارضات} many {تمت إعادة تسمية # ملفًا لتجنب التعارضات} other {تمت إعادة تسمية # ملف لتجنب التعارضات}}",
       "retryFailed": "إعادة محاولة {count, plural, zero {لا ملفات} one {ملف واحد} two {ملفين} few {# ملفات} many {# ملفًا} other {# ملف}}",
       "scrubFailed": "تعذّرت إزالة البيانات الوصفية لهذا الملف، لذا لم يتم تنزيل أي شيء",
+      "uploadBlockedByWorkflow": "انتظر حتى يكتمل سير العمل قبل تحميل الملفات.",
       "uploadedPartially": "فشل {failed, plural, zero {لا ملفات} one {ملف واحد} two {ملفين} few {# ملفات} many {# ملفًا} other {# ملف}} من أصل {total, number}",
       "uploadedSuccessfully": "تم رفع الملفات بنجاح",
       "uploading": "جارٍ رفع الملفات",
@@ -7392,6 +7585,7 @@
         "description": "لقد أفلتّ «{fileName}» فوق مستند موجود.",
         "extensionMismatch": "عدم تطابق الامتداد: المتوقع {expected}، والمستلَم {actual}",
         "extensionMismatchError": "امتداد الملف لا يطابق المستند الموجود",
+        "incompatibleFileType": "اختر ملفًا من النوع نفسه لاستبدال هذا الإصدار.",
         "newDocumentDropsReference": "سيُزال المرجع القديم من الملف.",
         "noExtension": "بدون امتداد",
         "referenceElsewhere": "هذا الملف هو الإصدار {version, number} من <bdi>{documentName}</bdi> (<bdi>{reference}</bdi>) في الملف القانوني <bdi>{matterName}</bdi>.",
@@ -7477,6 +7671,8 @@
       "instructionsEmpty": "لا توجد تعليمات مخصصة",
       "instructionsPlaceholder": "مثل: استخدم أسماء مجلدات بالإنجليزية، وجمّع حسب الطرف المقابل، وضع السنة قبل التواريخ.",
       "instructionsTitle": "تعليمات الذكاء الاصطناعي",
+      "noChangesToApply": "لا توجد ملفات أو مجلدات لتنظيمها.",
+      "noFilesToOrganize": "أضف الملفات التي تريد تنظيمها.",
       "organized": "تم تنظيم الملفات",
       "selectedOfTotal": "{selected, number} / {total, number}",
       "summaryToMove": "للنقل",
@@ -7505,14 +7701,20 @@
     "leadPicker": {
       "noMatchingMembers": "لا يوجد أعضاء مطابقون"
     },
+    "lists": {
+      "alreadyVerified": "تم التحقق من هذا العنصر بالفعل.",
+      "selectColumnToAdd": "اختر عمودًا لإضافته."
+    },
     "matterInfo": "معلومات الملف القانوني",
     "mattersCount": "{count, plural, zero {لا ملفات قانونية} one {ملف قانوني واحد} two {ملفان قانونيان} few {# ملفات قانونية} many {# ملفًا قانونيًا} other {# ملف قانوني}}",
     "members": {
       "addMember": "إضافة إلى الملف القانوني",
       "addMemberDescription": "اختر عضو فريق موجودًا لإضافته إلى هذا الملف القانوني",
+      "addingMember": "جارٍ إضافة العضو…",
       "alreadyOnMatter": "مُضاف بالفعل إلى هذا الملف القانوني",
       "noMembersFound": "لم يُعثر على أعضاء",
-      "removeMemberConfirm": "هل تريد إزالة هذا العضو من الملف القانوني؟"
+      "removeMemberConfirm": "هل تريد إزالة هذا العضو من الملف القانوني؟",
+      "selectMemberToAdd": "اختر عضوًا لإضافته."
     },
     "newDocument": "مستند جديد",
     "newFolder": "مجلد جديد",
@@ -7646,6 +7848,7 @@
     "parties": {
       "addParty": "إضافة طرف",
       "changeClient": "تغيير العميل",
+      "chooseContact": "اختر جهة اتصال أولًا.",
       "client": "عميل",
       "movedToClient": "تم نقل <bdi>{matterName}</bdi> إلى <bdi>{clientName}</bdi>",
       "noClientOptional": "بلا عميل (اختياري)",
@@ -7691,12 +7894,14 @@
       "nextPage": "الصفحة التالية",
       "pageEditor": {
         "addPDF": "إضافة PDF",
+        "addingPdf": "جارٍ إضافة صفحات PDF…",
         "applyCrop": "تطبيق الاقتصاص",
         "cleanScan": {
           "applied": "تم تطبيق النسخة المنظّفة",
           "apply": "تطبيق",
           "applyAll": "تطبيق الكل",
           "applyPage": "تطبيق الصفحة المنظّفة {number}",
+          "applyPageFirst": "طبّق صفحة منظّفة واحدة على الأقل أولًا.",
           "cleaned": "منظّفة",
           "cleaning": "جارٍ تنظيف الصفحة",
           "contentCrop": "اقتصاص إلى المحتوى",
@@ -7706,6 +7911,7 @@
           "failedRender": "تعذّر تجهيز الصفحة للتنظيف. تبقى كما هي.",
           "failedTimeout": "استغرق التنظيف وقتًا طويلًا. تبقى الصفحة كما هي.",
           "heading": "تنظيف المسح الضوئي",
+          "noPreviewToApply": "لا توجد صفحات منظّفة جاهزة للتطبيق.",
           "output": "وضع الألوان",
           "outputBinary": "أبيض وأسود",
           "outputGrayscale": "تدرّج رمادي",
@@ -7722,10 +7928,12 @@
           "unrecognizedTooLarge": "الصفحة كبيرة جدًا على التنظيف. تبقى كما هي.",
           "use": "{count, plural, =0 {استخدام الصفحات المنظّفة} zero {استخدام الصفحات المنظّفة} one {استخدام صفحة منظّفة واحدة} two {استخدام صفحتين منظّفتين} few {استخدام # صفحات منظّفة} many {استخدام # صفحة منظّفة} other {استخدام # صفحة منظّفة}}"
         },
+        "connectingToDesktop": "جارٍ الاتصال بتطبيق stella لسطح المكتب…",
         "crop": "اقتصاص",
         "cropAdvanced": "إعدادات متقدمة",
         "cropBottom": "أسفل (mm)",
         "cropDescription": "{count, plural, zero {حدد هوامش الاقتصاص بالملليمتر.} one {حدد هوامش الاقتصاص للصفحة المحددة بالملليمتر.} two {حدد هوامش الاقتصاص للصفحتين المحددتين بالملليمتر.} few {حدد هوامش الاقتصاص لـ # صفحات محددة بالملليمتر.} many {حدد هوامش الاقتصاص لـ # صفحة محددة بالملليمتر.} other {حدد هوامش الاقتصاص لـ # صفحة محددة بالملليمتر.}}",
+        "cropFirstSelectedPage": "هذه هي الصفحة الأولى المحددة.",
         "cropHandle": "تغيير حجم الاقتصاص: {position}",
         "cropHandleBottom": "أسفل",
         "cropHandleBottomLeft": "أسفل اليسار",
@@ -7736,6 +7944,7 @@
         "cropHandleTopLeft": "أعلى اليسار",
         "cropHandleTopRight": "أعلى اليمين",
         "cropHint": "اسحب المنطقة أو مقابضها. تضبط مفاتيح الأسهم الاقتصاص بمقدار 1 مم، ومع Shift بمقدار 10 مم. تُطبَّق الهوامش نفسها على كل الصفحات المحددة.",
+        "cropLastSelectedPage": "هذه هي الصفحة الأخيرة المحددة.",
         "cropLeft": "يسار (mm)",
         "cropMove": "تحريك منطقة الاقتصاص",
         "cropNextPage": "الصفحة المحددة التالية",
@@ -7757,6 +7966,7 @@
         "downloadSelectedPages": "تنزيل الصفحات المحددة",
         "duplicate": "تكرار",
         "editPages": "تحرير الصفحات",
+        "keepOnePage": "أبقِ صفحة واحدة على الأقل في ملف PDF.",
         "multiSelectHint": "اضغط باستمرار على {modifier} لتحديد المزيد من الصفحات",
         "pageNumber": "الصفحة {number}",
         "pages": "الصفحات",
@@ -7768,18 +7978,22 @@
         "saveVersion": "حفظ الإصدار",
         "selectAll": "تحديد الكل",
         "selectPage": "تحديد الصفحة {number}",
+        "selectPagesFirst": "اختر صفحة واحدة على الأقل.",
         "signAfterSave": "يحفظ تعديلات الصفحات كإصدار جديد ثم يوقّعه",
         "signSavedVersionMissing": "تم حفظ الإصدار الجديد، لكن تعذّر فتحه للتوقيع. وقّعه من عارض المستند.",
         "signatureWarning": "سيؤدي تحرير ملف PDF هذا إلى إبطال التوقيعات الرقمية.",
         "signatureWarningWithSign": "يؤدي التحرير إلى إبطال التوقيعات الرقمية الحالية. التوقيع من هنا يحفظ تعديلاتك أولًا ثم يوقّع الإصدار الجديد.",
         "sourceLimit": "يجب ألا يتجاوز الحجم الإجمالي لملفات PDF مقدار 100 ميغابايت.",
+        "transforming": "جارٍ تجهيز ملف PDF المعدّل…",
         "undo": "التراجع عن تعديل الصفحة",
         "unsupportedDescription": "لا يمكن تحرير ملف PDF هذا في المتصفح.",
         "unsupportedPDF": "ملف PDF غير مدعوم",
         "unsupportedTitle": "تحرير PDF غير متاح",
+        "versionPermissionRequired": "تحتاج إلى إذن لحفظ إصدار جديد.",
         "versionSaved": "تم حفظ الإصدار"
       },
       "passwordLabel": "أدخل كلمة مرور ملف PDF",
+      "placeSignatureFirst": "ضع التوقيع على الصفحة أولًا.",
       "previousPage": "الصفحة السابقة",
       "selection": {
         "explainPassagePrompt": "اشرح هذا المقطع من {citation}:\n\n«{quote}»",
@@ -7803,6 +8017,7 @@
     "possibleDuplicates": "نسخ مكررة محتملة",
     "properties": {
       "addOption": "إضافة خيار",
+      "addPromptAndDependencies": "أدخل مطالبة واختر عمود إدخال واحدًا على الأقل.",
       "addPromptForBetterResults": "أضف موجِّهًا للحصول على نتائج أفضل",
       "addReadingSource": "إضافة",
       "autoPromptFailed": "تعذّر إنشاء موجِّه.",
@@ -7818,6 +8033,8 @@
       "chipNumber": "رقم",
       "chipSingle": "وسم",
       "chipText": "نص",
+      "completeColumn": "أكمل الحقول المطلوبة لعمود واحد على الأقل.",
+      "completeColumnOptions": "أكمل خيارات العمود.",
       "composerTitle": "أخبر stella بما تريد العثور عليه",
       "conditionSeparator": "و",
       "conditions": "الشروط ({count})",
@@ -7832,8 +8049,11 @@
       "editConditionsDescription": "حدِّد الشروط التي يتم عندها إنشاء هذه الخاصية.",
       "editConditionsWhen": "تشغيل الاستخراج فقط عندما …",
       "enterAValue": "أدخل قيمة",
+      "enterColumnName": "أدخل اسمًا للعمود.",
+      "enterQuestion": "أدخل سؤالًا أولًا.",
       "extractEntityType": "استخراج معلومات",
       "extractionPlaceholder": "صِف ما تريد العثور عليه. اكتب @ للإشارة إلى عمود آخر.",
+      "fileColumnCannotBeDeleted": "عمود الملفات مطلوب ولا يمكن حذفه.",
       "ifNoMatchFound": "إذا لم يُعثر على تطابق",
       "keepEmpty": "إبقاؤه فارغًا",
       "markAllAsLocked": "قفل جميع الخلايا",
@@ -7846,9 +8066,12 @@
       "newColumn": "عمود جديد",
       "newColumnName": "اسم العمود",
       "noPropertiesFound": "لم يُعثر على خصائص",
+      "noRowsToProcess": "لا توجد صفوف لمعالجتها.",
       "optionsLabel": "الخيارات",
       "person": "شخص",
       "readingFrom": "يقرأ الذكاء الاصطناعي من",
+      "reduceDependencies": "اختر عددًا أقل من أعمدة الإدخال.",
+      "retryReadOnlyRecord": "هذا السجل للقراءة فقط.",
       "returnsLabel": "التنسيق",
       "selectColor": "اختر اللون",
       "setPromptPlaceholder": "اضبط موجِّهًا لاستخراج المعلومات",
@@ -7858,10 +8081,13 @@
       "sortDescendingDate": "الأحدث أولًا",
       "sortDescendingNumber": "الأعلى أولًا",
       "sortDescendingText": "من ي إلى أ",
+      "sortPermissionRequired": "تحتاج إلى إذن لتغيير ترتيب الفرز.",
       "splitOptions": "{count, plural, zero {التقسيم إلى خيارات} one {التقسيم إلى خيار واحد} two {التقسيم إلى خيارين} few {التقسيم إلى # خيارات} many {التقسيم إلى # خيارًا} other {التقسيم إلى # خيار}}",
       "suggestWithAI": "اقترح بالذكاء الاصطناعي",
       "typeChangeWarning": "سيتم مسح البيانات الحالية وإعادة بنائها عند الحفظ.",
-      "untitledColumn": "اسم العمود، مثل تاريخ السريان"
+      "unlockFieldToRetry": "افتح قفل هذا الحقل لإعادة المحاولة.",
+      "untitledColumn": "اسم العمود، مثل تاريخ السريان",
+      "waitForWorkflow": "انتظر انتهاء سير العمل."
     },
     "reference": "الرقم المرجعي",
     "referenceChangeConfirmDescription": "{count, plural, zero {لا توجد إصدارات مستندات تحمل} one {إصدار مستند واحد يحمل} two {إصداران من المستندات يحملان} few {# إصدارات مستندات تحمل} many {# إصدارًا من المستندات تحمل} other {# إصدار مستند يحمل}} الرقم المرجعي <bdi>{oldReference}</bdi>. تحتفظ النسخ المطبوعة به ولا تزال تُفتح عبر رمز التحقق الخاص بها. أما الإصدارات الجديدة فسترقَّم ضمن <bdi>{newReference}</bdi>. ويبقى <bdi>{oldReference}</bdi> محجوزًا لهذا الملف القانوني ولا يمكن منحه لملف آخر.",
@@ -7873,6 +8099,7 @@
     "referencePlaceholder": "مثال: 2024/001",
     "referenceRetired": "توجد مستندات مسجَّلة تحت {reference} في ملف قانوني آخر، لذا لا يمكن إعادة استخدامه.",
     "referenceTaken": "هذا الرقم المرجعي مستخدَم بالفعل",
+    "reviewDecisionPermissionRequired": "تحتاج إلى إذن لاتخاذ قرار بشأن هذه الاقتراحات.",
     "sections": {
       "parties": "الأطراف"
     },

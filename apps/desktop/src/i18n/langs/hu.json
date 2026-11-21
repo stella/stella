@@ -183,7 +183,8 @@
     "handoffServerMismatch": "A Stella Desktop a(z) {linkedServer} szerverhez csatlakozik, de ehhez a dokumentumhoz a(z) {requestedServer} szerver szükséges. Válassza le a jelenlegi fiókot a beállításokban, majd csatlakozzon a(z) {requestedServer} szerverhez a dokumentum megnyitásához.",
     "handoffAccountChanged": "A stella desktop fiókja megváltozott a dokumentum megnyitása közben. Kezdje újra a stellában.",
     "handoffAlreadyOpen": "Már nyitva van egy másik aláírási ablak. Fejezze be vagy zárja be, majd próbálja újra.",
-    "handoffExpired": "A dokumentumhivatkozás lejárt, mielőtt a stella desktop csatlakozott. Kezdje újra a stellában."
+    "handoffExpired": "A dokumentumhivatkozás lejárt, mielőtt a stella desktop csatlakozott. Kezdje újra a stellában.",
+    "waitingForFolderSelection": "Válasszon mappát, vagy zárja be a fájlválasztót."
   },
   "settings": {
     "accountLinked": "Összekapcsolva",
@@ -242,6 +243,7 @@
       "available": "Elérhető a(z) {version} verzió.",
       "install": "Telepítés és újraindítás",
       "installing": "A(z) {version} verzió telepítése folyamatban. A stella desktop ezután újraindul.",
+      "installInProgress": "Egy frissítés telepítése folyamatban van.",
       "deferred": "A(z) {version} verzió vár, amíg megnyitott dokumentumokat szerkeszt. Ha végzett, ellenőrizze újra a telepítéshez, különben a következő automatikus ellenőrzéskor települ.",
       "checkFailed": "A stella desktop nem tudta ellenőrizni a frissítéseket.",
       "installFailed": "A stella desktop nem tudta telepíteni a frissítést.",
@@ -290,7 +292,10 @@
     "recoveryOpenFolder": "Helyreállítási mappa megnyitása",
     "recoveryOpenUnassigned": "Nem hozzárendelt szerkesztések megnyitása",
     "recoveryFilePending": "Félretételre vár",
-    "recoveryError": "Nem sikerült megnyitni a helyreállítási mappát. Próbálja újra."
+    "recoveryError": "Nem sikerült megnyitni a helyreállítási mappát. Próbálja újra.",
+    "openingRecoveryFolder": "A helyreállítási mappa megnyitása…",
+    "refreshingRecovery": "A helyreállításra váró módosítások ellenőrzése…",
+    "loadingAccount": "A fiókkapcsolat ellenőrzése…"
   },
   "clipboard": {
     "registryUnavailable": "Az Ön működési joghatóságaihoz nincs engedélyezett nyilvántartás.",
@@ -435,7 +440,14 @@
     "welcomeShortcutTitle": "Bárhonnan megnyitható.",
     "welcomeStart": "Másolás megkezdése",
     "welcomeTitle": "Ismerje meg a vágólapot",
-    "registryIdentifierSearchHint": "Adja meg a következőt: {identifiers}."
+    "registryIdentifierSearchHint": "Adja meg a következőt: {identifiers}.",
+    "enterGroupName": "Adjon meg egy csoportnevet.",
+    "savingChanges": "A módosítások mentése…",
+    "creatingGroup": "A csoport létrehozása…",
+    "groupLimitReached": "Legfeljebb {max} csoportot hozhat létre.",
+    "loadingAutostart": "A vágólap bejelentkezéskori indításának ellenőrzése…",
+    "savingAutostart": "A bejelentkezéskori indítás beállításának mentése…",
+    "registryFormatting": "A nyilvántartási találat formázása…"
   },
   "activity": {
     "title": "Tevékenység",
@@ -621,7 +633,15 @@
     "aiStructureMove": "A stella AI {duration} áthelyezését javasolja ide: {matter}",
     "aiStructureCreate": "{count, plural, one {# bejegyzés létrehozása} other {# bejegyzés létrehozása}}",
     "aiStructureMoveAccept": "Áthelyezés",
-    "aiFlagSplit": "Bejegyzés felosztása"
+    "aiFlagSplit": "Bejegyzés felosztása",
+    "creatingDrafts": "Piszkozatok létrehozása…",
+    "earliestDayReached": "A legkorábbi elérhető napot nézi.",
+    "latestDayReached": "A legkésőbbi elérhető napot nézi.",
+    "savingCapturePreference": "A rögzítési beállítás mentése…",
+    "writeDescription": "Adjon meg leírást ehhez a bejegyzéshez.",
+    "chooseMatterForEntry": "Válasszon ügyet ehhez a bejegyzéshez.",
+    "entryNeedsDuration": "Válasszon számlázható időtartamú időszakot.",
+    "enterRefinement": "Adjon meg utasítást a leírás átdolgozásához."
   },
   "dictation": {
     "title": "Diktálás",
@@ -761,7 +781,8 @@
       "label": "Az eddig diktált szöveg",
       "listening": "Figyelés…",
       "finishing": "Befejezés…"
-    }
+    },
+    "dictationInProgress": "A modell eltávolítása előtt fejezze be a folyamatban lévő diktálást."
   },
   "shortcut": {
     "title": "Vágólap-billentyűparancs",
@@ -802,7 +823,8 @@
       "windowMenu": "Ablakmenü",
       "start": "Start",
       "taskManager": "Feladatkezelő"
-    }
+    },
+    "saving": "A billentyűparancs mentése…"
   },
   "onboarding": {
     "back": "Vissza",
@@ -946,7 +968,8 @@
       "keystrokesWithoutHoldKey": "Billentyűleütések, hacsak nem választ lenyomva tartandó billentyűt",
       "fullDiskAccess": "Teljes lemezhozzáférés",
       "administrator": "Rendszergazdai jogok"
-    }
+    },
+    "enablingDictation": "A diktálás bekapcsolása…"
   },
   "agentSubscriptions": {
     "title": "AI-előfizetések",
@@ -1022,7 +1045,9 @@
         "verification": "A {name} ellenőrzése nem sikerült, ezért nem lett telepítve.",
         "storage": "A {name} mentése nem sikerült ezen a számítógépen. Ellenőrizze, hogy van-e szabad hely a lemezen."
       }
-    }
+    },
+    "finishingSignIn": "A bejelentkezés befejezése…",
+    "enterCallbackAddress": "Illessze be a teljes címet a bejelentkezéshez megnyitott böngészőlapról."
   },
   "localSkills": {
     "title": "Helyi készségek",
@@ -1111,7 +1136,9 @@
       "localMissing": "Ha ezen a számítógépen szeretne átírni, töltse le a beszédmodellt a Beállítások Diktálás részében.",
       "localMissingCloud": "Töltse le a beszédmodellt a Beállítások Diktálás részében, vagy írjon át a stella AI-jal.",
       "retainsData": "Kérjük, vegye figyelembe a(z) {provider} adatkezelési feltételeit.",
-      "modelFailed": "A stella AI modelljét nem sikerült beolvasni, ezért a stella AI most nem tud átírni. Próbálja újra, vagy írja át ezen a számítógépen."
+      "modelFailed": "A stella AI modelljét nem sikerült beolvasni, ezért a stella AI most nem tud átírni. Próbálja újra, vagy írja át ezen a számítógépen.",
+      "loadingModel": "A stella AI átírási modelljének ellenőrzése…",
+      "useLocal": "A felvétel átírásához válassza ezt a számítógépet."
     },
     "matter": {
       "title": "Ügy",
@@ -1160,7 +1187,8 @@
       "noSpeech": "Ebben a felvételben nem található beszéd.",
       "fileName": "{title} – átirat.txt",
       "documentTitle": "{title} – átirat",
-      "transcriptTitle": "Átirat"
+      "transcriptTitle": "Átirat",
+      "alreadySaved": "Az átiratot már mentette az ügybe."
     },
     "progress": {
       "running": "Átírás: {done, number} / {total, number} perc",
@@ -1168,7 +1196,9 @@
       "stop": "Leállítás",
       "stopped": "Leállítva {done, number} perc után. Az eddigi szöveg megmarad.",
       "done": "{total, number} perc átírva.",
-      "another": "Másik felvétel átírása"
+      "another": "Másik felvétel átírása",
+      "transcribing": "A felvétel átírása…",
+      "stopping": "Az átírás leállítása…"
     },
     "cleaned": {
       "title": "Javított szöveg",
@@ -1191,6 +1221,7 @@
       "formatted": "Formázással",
       "plain": "Egyszerű szövegként",
       "hint": "Formázással a címsorok, a félkövér és a listák is bekerülnek a Wordbe vagy az Outlookba. A választását megjegyezzük."
-    }
+    },
+    "waitingForFileSelection": "Válasszon felvételt, vagy zárja be a fájlválasztót."
   }
 }

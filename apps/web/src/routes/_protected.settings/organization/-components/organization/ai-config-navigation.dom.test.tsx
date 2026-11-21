@@ -651,10 +651,10 @@ test("instruction refetches preserve drafts and compare edits with the latest sa
   expect(context.text).toBe(draft);
   replace(original);
   await waitFor(() => expect(hasUnsavedWork()).toBe(true));
-  expect(save).toHaveProperty("disabled", false);
+  expect(save.getAttribute("aria-disabled")).toBeNull();
   replace(updated);
   expect(hasUnsavedWork()).toBe(false);
-  expect(save).toHaveProperty("disabled", true);
+  expect(save.getAttribute("aria-disabled")).toBe("true");
   expect(writes()).toEqual([]);
 });
 
@@ -1454,7 +1454,7 @@ test("one page header save writes credential, model and decision changes togethe
     overrideModels: { chat: { provider: "google", modelId } },
     decision: { provider, modelId: decisionModelId, apiKeyMasked: "****key" },
   };
-  expect(save).toHaveProperty("disabled", false);
+  expect(save.getAttribute("aria-disabled")).toBeNull();
   fireEvent.click(save);
   await waitFor(() => expect(hasUnsavedWork()).toBe(false));
   const postWrites = requests.filter(({ method }) => method === "POST");
@@ -1646,8 +1646,10 @@ test("one page Save commits both provider drafts and all auxiliary sections", as
   }
   expect(writes()).toEqual([]);
   expect(
-    screen.getByRole("button", { name: messages.common.save }),
-  ).toHaveProperty("disabled", true);
+    screen
+      .getByRole("button", { name: messages.common.save })
+      .getAttribute("aria-disabled"),
+  ).toBe("true");
   expect(
     screen.getAllByRole("button", { name: messages.common.saveChanges }),
   ).toHaveLength(1);
@@ -1752,9 +1754,7 @@ test("a failed auxiliary section retains its draft while successful sections cle
     const save = screen.getByRole("button", {
       name: messages.common.saveChanges,
     });
-    expect(save instanceof HTMLButtonElement ? save.disabled : null).toBe(
-      false,
-    );
+    expect(save.getAttribute("aria-disabled")).toBeNull();
   });
   expect(deepl).toHaveProperty("value", "fixture-deepl-key");
   const failedSection = settingsSectionQueries(
@@ -1929,9 +1929,7 @@ test("page Save refuses writes after the session organization changes and retain
     const save = screen.getByRole("button", {
       name: messages.common.saveChanges,
     });
-    expect(save instanceof HTMLButtonElement ? save.disabled : null).toBe(
-      false,
-    );
+    expect(save.getAttribute("aria-disabled")).toBeNull();
   });
   expect(writes()).toEqual([]);
   expect(deepl).toHaveProperty("value", "fixture-deepl-key");
@@ -1973,8 +1971,8 @@ test.each([false, true])(
       const save = screen.getByRole("button", {
         name: messages.common.saveChanges,
       });
-      expect(save instanceof HTMLButtonElement ? save.disabled : null).toBe(
-        !deleteFails,
+      expect(save.getAttribute("aria-disabled")).toBe(
+        deleteFails ? null : "true",
       );
     });
     expect(writes()).toHaveLength(2);

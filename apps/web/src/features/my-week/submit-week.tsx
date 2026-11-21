@@ -34,6 +34,7 @@ type SubmitWeekActionsProps = {
   week: Week;
   /** True while the week may hold drafts, including on unloaded pages. */
   canSubmit: boolean;
+  disabledReason: string;
   /** Offer "Submit and approve" to someone who approves their own time. */
   canApproveOwn: boolean;
   submitting: boolean;
@@ -99,6 +100,7 @@ const submitWeekInParts = async ({
 export const SubmitWeekActions = ({
   week,
   canSubmit,
+  disabledReason,
   canApproveOwn,
   submitting,
   submit,
@@ -147,6 +149,7 @@ export const SubmitWeekActions = ({
       {canApproveOwn && (
         <Button
           disabled={!canSubmit}
+          disabledReason={disabledReason}
           loading={submitting || flight.pending}
           onClick={() =>
             detached(
@@ -162,6 +165,7 @@ export const SubmitWeekActions = ({
       )}
       <Button
         disabled={!canSubmit}
+        disabledReason={disabledReason}
         loading={submitting || flight.pending}
         onClick={() =>
           detached(

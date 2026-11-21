@@ -289,6 +289,7 @@ export const ListSourceForm = ({
           size="sm"
           variant="ghost"
           disabled={create.isPending}
+          disabledReason={t("common.creating")}
           onClick={onClose}
         >
           {t("common.cancel")}

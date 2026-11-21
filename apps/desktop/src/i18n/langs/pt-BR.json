@@ -183,7 +183,8 @@
     "handoffServerMismatch": "O Stella Desktop está conectado a {linkedServer}, mas este documento requer {requestedServer}. Desconecte a conta atual nas Configurações e conecte-se a {requestedServer} para abrir o documento.",
     "handoffAccountChanged": "A conta do stella desktop mudou enquanto o documento era aberto. Comece de novo pelo stella.",
     "handoffAlreadyOpen": "Outra janela de assinatura já está aberta. Conclua ou feche-a e tente novamente.",
-    "handoffExpired": "O link do documento expirou antes de o stella desktop ser conectado. Comece de novo pelo stella."
+    "handoffExpired": "O link do documento expirou antes de o stella desktop ser conectado. Comece de novo pelo stella.",
+    "waitingForFolderSelection": "Selecione uma pasta ou feche o seletor de arquivos."
   },
   "settings": {
     "accountLinked": "Vinculada",
@@ -242,6 +243,7 @@
       "available": "A versão {version} está disponível.",
       "install": "Instalar e reiniciar",
       "installing": "Instalando a versão {version}. O stella desktop será reiniciado ao terminar.",
+      "installInProgress": "Uma atualização está sendo instalada.",
       "deferred": "A versão {version} aguarda enquanto documentos abertos estão sendo editados. Ao terminar, verifique novamente para instalá-la, ou ela será instalada na próxima verificação automática.",
       "checkFailed": "O stella desktop não conseguiu verificar se há atualizações.",
       "installFailed": "O stella desktop não conseguiu instalar a atualização.",
@@ -290,7 +292,10 @@
     "recoveryOpenFolder": "Abrir pasta de recuperação",
     "recoveryOpenUnassigned": "Abrir edições sem conta atribuída",
     "recoveryFilePending": "Aguardando para serem deixadas de lado",
-    "recoveryError": "Não foi possível abrir a pasta de recuperação. Tente novamente."
+    "recoveryError": "Não foi possível abrir a pasta de recuperação. Tente novamente.",
+    "openingRecoveryFolder": "Abrindo a pasta de recuperação…",
+    "refreshingRecovery": "Verificando as edições pendentes de recuperação…",
+    "loadingAccount": "Verificando a conexão da sua conta…"
   },
   "clipboard": {
     "registryUnavailable": "Nenhum registro está habilitado para as jurisdições em que você atua.",
@@ -435,7 +440,14 @@
     "welcomeShortcutTitle": "Abra em qualquer lugar.",
     "welcomeStart": "Começar a copiar",
     "welcomeTitle": "Conheça sua área de transferência",
-    "registryIdentifierSearchHint": "Insira {identifiers}."
+    "registryIdentifierSearchHint": "Insira {identifiers}.",
+    "enterGroupName": "Insira um nome para o grupo.",
+    "savingChanges": "Salvando as alterações…",
+    "creatingGroup": "Criando o grupo…",
+    "groupLimitReached": "Você pode criar até {max} grupos.",
+    "loadingAutostart": "Verificando se a área de transferência inicia ao entrar…",
+    "savingAutostart": "Salvando a preferência de inicialização ao entrar…",
+    "registryFormatting": "Formatando o resultado do registro…"
   },
   "activity": {
     "title": "Atividade",
@@ -621,7 +633,15 @@
     "aiStructureMove": "stella AI sugere mover {duration} para {matter}",
     "aiStructureCreate": "{count, plural, one {Criar # lançamento} other {Criar # lançamentos}}",
     "aiStructureMoveAccept": "Mover",
-    "aiFlagSplit": "Dividir lançamento"
+    "aiFlagSplit": "Dividir lançamento",
+    "creatingDrafts": "Criando rascunhos…",
+    "earliestDayReached": "Você está visualizando o dia mais antigo disponível.",
+    "latestDayReached": "Você está visualizando o dia mais recente disponível.",
+    "savingCapturePreference": "Salvando sua preferência de registro…",
+    "writeDescription": "Insira uma descrição para este registro.",
+    "chooseMatterForEntry": "Escolha um caso para este registro.",
+    "entryNeedsDuration": "Escolha um intervalo de tempo com duração faturável.",
+    "enterRefinement": "Insira uma instrução para revisar a descrição."
   },
   "dictation": {
     "title": "Ditado",
@@ -761,7 +781,8 @@
       "label": "O que você ditou até agora",
       "listening": "Ouvindo…",
       "finishing": "Finalizando…"
-    }
+    },
+    "dictationInProgress": "Conclua o ditado atual antes de remover o modelo."
   },
   "shortcut": {
     "title": "Atalho da área de transferência",
@@ -802,7 +823,8 @@
       "windowMenu": "Menu da janela",
       "start": "Iniciar",
       "taskManager": "Gerenciador de tarefas"
-    }
+    },
+    "saving": "Salvando o atalho…"
   },
   "onboarding": {
     "back": "Voltar",
@@ -946,7 +968,8 @@
       "keystrokesWithoutHoldKey": "Pressionamentos de teclas, a menos que você escolha uma tecla para segurar",
       "fullDiskAccess": "Acesso total ao disco",
       "administrator": "Direitos de administrador"
-    }
+    },
+    "enablingDictation": "Ativando o ditado…"
   },
   "agentSubscriptions": {
     "title": "Assinaturas de IA",
@@ -1022,7 +1045,9 @@
         "verification": "Não foi possível verificar o {name}, por isso ele não foi instalado.",
         "storage": "Não foi possível salvar o {name} neste computador. Verifique se há espaço livre no disco."
       }
-    }
+    },
+    "finishingSignIn": "Concluindo o acesso…",
+    "enterCallbackAddress": "Cole o endereço completo da aba de login do navegador."
   },
   "localSkills": {
     "title": "Habilidades locais",
@@ -1111,7 +1136,9 @@
       "localMissing": "Baixe o modelo de voz em Configurações, em Ditado, para transcrever neste computador.",
       "localMissingCloud": "Baixe o modelo de voz em Configurações, em Ditado, ou transcreva com a stella AI.",
       "retainsData": "Observe os termos de processamento da {provider}.",
-      "modelFailed": "Não foi possível ler o modelo do stella AI, então o stella AI não pode transcrever agora. Tente novamente ou transcreva neste computador."
+      "modelFailed": "Não foi possível ler o modelo do stella AI, então o stella AI não pode transcrever agora. Tente novamente ou transcreva neste computador.",
+      "loadingModel": "Verificando o modelo de transcrição do stella AI…",
+      "useLocal": "Escolha este computador para transcrever a gravação."
     },
     "matter": {
       "title": "Caso",
@@ -1160,7 +1187,8 @@
       "noSpeech": "Nenhuma fala foi encontrada nesta gravação.",
       "fileName": "{title} - transcrição.txt",
       "documentTitle": "{title} - transcrição",
-      "transcriptTitle": "Transcrição"
+      "transcriptTitle": "Transcrição",
+      "alreadySaved": "A transcrição já foi salva no caso."
     },
     "progress": {
       "running": "Transcrevendo {done, number} de {total, number} min",
@@ -1168,7 +1196,9 @@
       "stop": "Parar",
       "stopped": "Parado após {done, number} min. O texto obtido até agora foi mantido.",
       "done": "{total, number} min transcritos.",
-      "another": "Transcrever outra gravação"
+      "another": "Transcrever outra gravação",
+      "transcribing": "Transcrevendo a gravação…",
+      "stopping": "Interrompendo a transcrição…"
     },
     "cleaned": {
       "title": "Texto revisado",
@@ -1191,6 +1221,7 @@
       "formatted": "Com formatação",
       "plain": "Como texto simples",
       "hint": "Com formatação, títulos, negrito e listas são colados no Word ou no Outlook. Sua escolha fica salva."
-    }
+    },
+    "waitingForFileSelection": "Selecione uma gravação ou feche o seletor de arquivos."
   }
 }

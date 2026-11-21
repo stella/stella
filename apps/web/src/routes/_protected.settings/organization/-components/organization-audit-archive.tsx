@@ -35,6 +35,7 @@ export const OrganizationAuditArchive = ({
   const requestButton = (label: string) => (
     <Button
       disabled={requestPending}
+      disabledReason={t("common.preparing")}
       loading={requestPending}
       onClick={onRequest}
       size="sm"

@@ -386,7 +386,12 @@ export const PdfSignPlacementControls = ({
           >
             {t("workspaces.files.pdfSigning.placementSignInvisible")}
           </Button>
-          <Button disabled={draft === null} onClick={signWithStamp} size="sm">
+          <Button
+            disabled={draft === null}
+            disabledReason={t("workspaces.pdf.placeSignatureFirst")}
+            onClick={signWithStamp}
+            size="sm"
+          >
             {t("workspaces.files.pdfSigning.placementSignVisible")}
           </Button>
         </div>

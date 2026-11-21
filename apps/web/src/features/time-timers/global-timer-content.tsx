@@ -186,6 +186,7 @@ export const GlobalTimerContent = ({
                           <Button
                             className="min-h-11"
                             disabled={mutation.isPending}
+                            disabledReason={t("common.saving")}
                             onClick={() =>
                               mutation.mutate({
                                 type:
@@ -208,6 +209,11 @@ export const GlobalTimerContent = ({
                           <Button
                             className="min-h-11"
                             disabled={mutation.isPending || matters.isPending}
+                            disabledReason={
+                              mutation.isPending
+                                ? t("common.saving")
+                                : t("common.loading")
+                            }
                             onClick={() => {
                               mutation.reset();
                               setPanel({ type: "confirm", timer });
@@ -221,6 +227,7 @@ export const GlobalTimerContent = ({
                           <Button
                             className="min-h-11"
                             disabled={mutation.isPending}
+                            disabledReason={t("common.saving")}
                             onClick={() =>
                               mutation.mutate({ type: "discard", id: timer.id })
                             }
@@ -237,6 +244,7 @@ export const GlobalTimerContent = ({
               {timers.hasNextPage && (
                 <Button
                   disabled={timers.isFetchingNextPage}
+                  disabledReason={t("common.loading")}
                   onClick={() =>
                     detached(timers.fetchNextPage(), "global-timer.load-more")
                   }
@@ -255,6 +263,11 @@ export const GlobalTimerContent = ({
                   disabled={
                     mutation.isPending ||
                     (workspaceId !== undefined && matters.isPending)
+                  }
+                  disabledReason={
+                    mutation.isPending
+                      ? t("common.saving")
+                      : t("common.loading")
                   }
                   onClick={() => setPanel({ type: "start" })}
                 >
@@ -276,6 +289,7 @@ export const GlobalTimerContent = ({
         <Button
           className="min-h-11"
           disabled={mutation.isPending}
+          disabledReason={t("common.saving")}
           onClick={() => {
             setOpen(true);
             mutation.mutate({ type: "pause", id: active.id });

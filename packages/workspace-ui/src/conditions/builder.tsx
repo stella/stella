@@ -51,6 +51,8 @@ export type ConditionBuilderLabels = {
   addCondition: string;
   /** "+ Add group". */
   addGroup: string;
+  noFields: string;
+  groupFull: string;
   /** Leads the first row: "When". */
   when: string;
   /** Accessible name of the and/or select. */
@@ -203,7 +205,12 @@ const ConditionBuilderTree = ({
   const firstField = fields.at(0);
   const atChildCap =
     maxChildren !== undefined && group.children.length >= maxChildren;
-  const canAdd = firstField !== undefined && !atChildCap;
+  const addDisabledReason = (() => {
+    if (firstField === undefined) {
+      return labels.noFields;
+    }
+    return atChildCap ? labels.groupFull : undefined;
+  })();
 
   return (
     <div className="flex flex-col gap-2">
@@ -247,7 +254,8 @@ const ConditionBuilderTree = ({
       <div className="ms-[5.375rem] flex flex-wrap gap-1">
         <Button
           className="w-fit justify-start"
-          disabled={!canAdd}
+          disabled={addDisabledReason !== undefined}
+          disabledReason={addDisabledReason}
           onClick={() => {
             if (firstField && !atChildCap) {
               onChange(appendChild(group, leafFromField(firstField)));
@@ -263,7 +271,8 @@ const ConditionBuilderTree = ({
         {allowNesting && (
           <Button
             className="w-fit justify-start"
-            disabled={!canAdd}
+            disabled={addDisabledReason !== undefined}
+            disabledReason={addDisabledReason}
             onClick={() => {
               if (firstField && !atChildCap) {
                 onChange(

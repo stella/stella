@@ -24,14 +24,14 @@ const RUN_REVEAL_CLASS = {
 type AiColumnRunButtonProps = {
   scope: ReturnType<typeof aiColumnRunScope>;
   reveal: AiColumnRunReveal;
-  disabled: boolean;
+  disabledReason: string | undefined;
   onRun: () => void;
 };
 
 export const AiColumnRunButton = ({
   scope,
   reveal,
-  disabled,
+  disabledReason,
   onRun,
 }: AiColumnRunButtonProps) => {
   const t = useTranslations();
@@ -51,7 +51,8 @@ export const AiColumnRunButton = ({
           <Button
             aria-label={label}
             tooltip={label}
-            disabled={disabled}
+            disabled={disabledReason !== undefined}
+            disabledReason={disabledReason}
             onClick={onRun}
             size="icon-xs"
             variant="ghost"
@@ -86,6 +87,9 @@ export const AiColumnSelectionAction = ({
         {(capabilityProps) => (
           <Button
             disabled={disabled}
+            disabledReason={
+              rows === 0 ? t("aiColumns.noRowsToRun") : t("aiColumns.waitToRun")
+            }
             onClick={onRun}
             size="sm"
             variant="outline"

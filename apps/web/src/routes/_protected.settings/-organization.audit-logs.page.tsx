@@ -350,6 +350,7 @@ export function AuditLogsPage() {
       exportAction={
         <Button
           disabled={exporting}
+          disabledReason={t("settings.organization.auditLogsExporting")}
           onClick={handleExportClick}
           variant="outline"
         >
@@ -448,6 +449,9 @@ export function AuditLogsPage() {
       next={
         <Button
           disabled={!data?.nextCursor || pagingDisabled}
+          disabledReason={
+            pagingDisabled ? t("common.loading") : t("common.lastPageReached")
+          }
           onClick={handleNextPage}
           variant="outline"
         >
@@ -458,6 +462,9 @@ export function AuditLogsPage() {
       previous={
         <Button
           disabled={cursors.length === 0 || pagingDisabled}
+          disabledReason={
+            pagingDisabled ? t("common.loading") : t("common.firstPageReached")
+          }
           onClick={handlePrevPage}
           variant="outline"
         >
