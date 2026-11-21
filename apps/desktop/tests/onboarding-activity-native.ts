@@ -21,7 +21,7 @@ export const ACTIVITY_OFF = {
   recordingStatus: "off",
 } as const satisfies ActivitySetupSnapshot;
 
-export const ACTIVITY_STEP = {
+const ACTIVITY_STEP = {
   activityAvailable: true,
   activityPermissions: ["accessibility"],
   dictationAvailable: false,

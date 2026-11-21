@@ -24,10 +24,10 @@ export type ActivitySetupSnapshot = {
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
-const isOneOf = <T extends string>(values: readonly T[], value: unknown) =>
+const isOneOf = (values: readonly string[], value: unknown) =>
   values.some((candidate) => candidate === value);
 
-export const isActivitySetupSnapshot = (
+const isActivitySetupSnapshot = (
   value: unknown,
 ): value is ActivitySetupSnapshot =>
   isRecord(value) &&
