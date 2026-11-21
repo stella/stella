@@ -13,6 +13,11 @@ import { eq, inArray, sql } from "drizzle-orm";
 
 import { PREVIEW_UNAVAILABLE_ERROR_CODE } from "@stll/api-contract";
 import { DATA_BOX_MESSAGE_MIME_TYPE } from "@stll/api-contract/data-box";
+import {
+  ISDOC_FILE_FORMAT,
+  ISDOCX_FILE_FORMAT,
+  XML_FILE_FORMAT,
+} from "@stll/api-contract/e-invoice-formats";
 import { EML_MIME_TYPE } from "@stll/api-contract/email-mime-types";
 import {
   ASIC_E_FILE_FORMAT,
@@ -48,6 +53,10 @@ import {
   cadesPreviewEndpoint,
 } from "@/api/handlers/files/cades";
 import { readDocumentProperties } from "@/api/handlers/files/document-properties";
+import {
+  eInvoiceAttachmentEndpoint,
+  eInvoicePreviewEndpoint,
+} from "@/api/handlers/files/e-invoice";
 import emailAttachmentEndpoint from "@/api/handlers/files/email-attachment";
 import {
   printPdfHandler,
@@ -68,6 +77,7 @@ import { dataBoxPayloadIdentity } from "@/api/lib/email/correspondence/data-box/
 import { parseDataBoxMessage } from "@/api/lib/email/correspondence/data-box/zfo";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { DOCUMENT_ARCHIVE_MAX_BYTES } from "@/api/lib/files/archive-preview-protocol";
+import { eInvoiceDocumentText } from "@/api/lib/files/e-invoice-text";
 import { createEmailAttachmentDescriptor } from "@/api/lib/files/email-attachment-token";
 import {
   checkFileContentGrant,
@@ -94,6 +104,14 @@ import { readSyntheticSessionAuthority } from "@/api/lib/synthetic-principal/ses
 import { createSyntheticSessionStore } from "@/api/lib/synthetic-principal/store";
 import { DOCX_MIME_TYPE, PDF_MIME_TYPE } from "@/api/mime-types";
 import { makeAsicFixture } from "@/api/tests/fixtures/asic";
+import {
+  fatturaPaXml,
+  isdocXml,
+  isdocxPackage,
+  plainXml,
+  SAMPLE_ATTACHMENT_TEXT,
+  xmlBytes,
+} from "@/api/tests/fixtures/e-invoice";
 import { wrapP7m } from "@/api/tests/fixtures/p7m";
 import { FIXTURE_MESSAGE, zfoFile } from "@/api/tests/fixtures/zfo";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
@@ -107,6 +125,10 @@ import {
   cadesPreviewScalingScenario,
 } from "@/api/tests/read-scaling/cades-preview";
 import { dataBoxPreviewScalingScenario } from "@/api/tests/read-scaling/data-box-preview";
+import {
+  eInvoiceAttachmentScalingScenario,
+  eInvoicePreviewScalingScenario,
+} from "@/api/tests/read-scaling/e-invoice";
 import { readScalingViolations } from "@/api/tests/read-scaling/measurement";
 import { structuredDocumentScalingScenario } from "@/api/tests/read-scaling/structured-document";
 import {
@@ -1167,6 +1189,241 @@ describe.each(STRUCTURED_DOCUMENT_FORMATS)(
   },
 );
 
+const eInvoiceFixtures = [
+  {
+    format: ISDOC_FILE_FORMAT,
+    // Browsers declare no type for an ISDOC file; its extension names it.
+    stored: { fileName: "faktura.ISDOC", mimeType: "application/octet-stream" },
+    bytes: async () => xmlBytes(isdocXml()),
+    attachment: null,
+  },
+  {
+    format: ISDOCX_FILE_FORMAT,
+    stored: {
+      fileName: "faktura.isdocx",
+      mimeType: "application/octet-stream",
+    },
+    bytes: isdocxPackage,
+    attachment: "delivery-note.txt",
+  },
+  {
+    format: XML_FILE_FORMAT,
+    stored: { fileName: "IT00000000001_00001.xml", mimeType: "text/xml" },
+    bytes: async () => xmlBytes(fatturaPaXml()),
+    attachment: "bolla.txt",
+  },
+] as const;
+
+const eInvoiceAttachmentContext = (
+  fieldId: SafeId<"field">,
+  index: number,
+  scopedDb: ScopedDb,
+  audit = recorderA(),
+) =>
+  createTestHandlerContext<
+    Parameters<typeof eInvoiceAttachmentEndpoint.handler>[0]
+  >({
+    workspaceId: ids.wsA1,
+    session: { activeOrganizationId: ids.orgA },
+    user: { id: ids.userA1 },
+    audit,
+    scopedDb,
+    safeDb: createSafeDb(testDb, [ids.wsA1], ids.orgA, ids.userA1),
+    params: { workspaceId: ids.wsA1, fieldId, index },
+  });
+
+describe.each(eInvoiceFixtures)(
+  "$format.label invoice delivery",
+  ({ format, stored: file, bytes, attachment }) => {
+    const stored = { ...file, pdfFileId: null };
+    const seed = async () => await seedStored(stored, await bytes());
+
+    test("Files and the agent receive the same invoice text and each read is audited", async () => {
+      const { fieldId, entityId, entityVersionId } = await seed();
+      await testDb
+        .update(entities)
+        .set({ currentVersionId: entityVersionId })
+        .where(eq(entities.id, entityId));
+
+      const preview = await eInvoicePreviewEndpoint.handler(
+        legalFileContext(fieldId, scopedDbA()),
+      );
+      if (preview instanceof HttpStatusResponse) {
+        return panic("Expected a structured invoice preview");
+      }
+      expect(preview.invoices.length).toBeGreaterThan(0);
+      await expectOneContentRow(entityId, {
+        action: "access",
+        metadata: {
+          fieldId,
+          format: format.auditFormat,
+          disposition: "inline",
+        },
+      });
+      const agent = await LEGAL_FILE_READERS[format.kind]({
+        fieldId,
+        scopedDb: scopedDbA(),
+        workspaceId: ids.wsA1,
+        organizationId: ids.orgA,
+        recordAuditEvent: recorderA(),
+        purpose: "agent",
+      });
+      expect(agent.unwrap()).toEqual({
+        text: eInvoiceDocumentText(preview),
+        attachments: [],
+      });
+      const rows = await auditRowsFor(entityId);
+      expect(rows).toHaveLength(2);
+      expect(rows.at(1)).toEqual(rows.at(0));
+    });
+
+    test("preview, attachment and agent reads cannot access another matter", async () => {
+      const { fieldId, entityId } = await seedFile(stored, "b");
+      expectStatus(
+        await eInvoicePreviewEndpoint.handler(
+          legalFileContext(fieldId, scopedDbA()),
+        ),
+        404,
+      );
+      expectStatus(
+        await eInvoiceAttachmentEndpoint.handler(
+          eInvoiceAttachmentContext(fieldId, 0, scopedDbA()),
+        ),
+        404,
+      );
+      const agent = await LEGAL_FILE_READERS[format.kind]({
+        fieldId,
+        scopedDb: scopedDbA(),
+        workspaceId: ids.wsA1,
+        organizationId: ids.orgA,
+        recordAuditEvent: recorderA(),
+        purpose: "agent",
+      });
+      expect(agent.isErr() && agent.error.status).toBe(404);
+      expect(await auditRowsFor(entityId)).toEqual([]);
+    });
+
+    test("returns no invoice when its audit record fails", async () => {
+      const { fieldId, entityId } = await seed();
+      let auditAttempted = false;
+      const rejectAudit: AuditRecorder = async (tx, event) => {
+        auditAttempted = true;
+        return await failingRecorder(tx, event);
+      };
+      expectStatus(
+        await eInvoicePreviewEndpoint.handler(
+          legalFileContext(fieldId, scopedDbA(), rejectAudit),
+        ),
+        500,
+      );
+      expect(auditAttempted).toBe(true);
+      expect(await auditRowsFor(entityId)).toEqual([]);
+    });
+
+    test("discards the parsed invoice when the source version is withdrawn", async () => {
+      const { fieldId, entityId, entityVersionId } = await seed();
+      expectStatus(
+        await eInvoicePreviewEndpoint.handler(
+          legalFileContext(fieldId, withdrawnAfterLookup(entityVersionId)),
+        ),
+        404,
+      );
+      expect(await auditRowsFor(entityId)).toEqual([]);
+    });
+
+    if (attachment !== null) {
+      test("delivers an attachment as an audited download", async () => {
+        const { fieldId, entityId } = await seed();
+        const response = await eInvoiceAttachmentEndpoint.handler(
+          eInvoiceAttachmentContext(fieldId, 0, scopedDbA()),
+        );
+        if (!(response instanceof Response)) {
+          return panic("Expected the attachment download");
+        }
+        expect(response.headers.get("content-disposition")).toContain(
+          "attachment",
+        );
+        expect(response.headers.get("content-disposition")).toContain(
+          attachment,
+        );
+        expect(await response.text()).toBe(SAMPLE_ATTACHMENT_TEXT);
+        await expectOneContentRow(entityId, {
+          action: "download",
+          metadata: {
+            fieldId,
+            format: format.auditFormat,
+            disposition: "attachment",
+            attachmentIndex: 0,
+          },
+        });
+        expectStatus(
+          await eInvoiceAttachmentEndpoint.handler(
+            eInvoiceAttachmentContext(fieldId, 1, scopedDbA()),
+          ),
+          404,
+        );
+        expect(await auditRowsFor(entityId)).toHaveLength(1);
+      });
+
+      test(`${format.label} attachment query cost stays bounded as the matter grows`, async () => {
+        const { fieldId } = await seed();
+        const context = eInvoiceAttachmentContext(fieldId, 0, scopedDbA());
+        const measureWithAddedDocuments = async (count: number) => {
+          const unrelated = Array.from({ length: count }, () => ({
+            id: createSafeId<"entity">(),
+            workspaceId: ids.wsA1,
+            kind: "document" as const,
+            name: "Ledger entry",
+          }));
+          seededEntityIds.push(...unrelated.map(({ id }) => id));
+          await testDb.insert(entities).values(unrelated);
+          return await eInvoiceAttachmentScalingScenario.measure(context);
+        };
+        const small = await measureWithAddedDocuments(10);
+        const large = await measureWithAddedDocuments(190);
+        expect(small.statements).toBeGreaterThan(0);
+        expect(readScalingViolations({ small, large })).toEqual([]);
+      });
+    }
+
+    test(`${format.label} preview query cost stays bounded as the matter grows`, async () => {
+      const { fieldId } = await seed();
+      const context = legalFileContext(fieldId, scopedDbA());
+      const measureWithAddedDocuments = async (count: number) => {
+        const unrelated = Array.from({ length: count }, () => ({
+          id: createSafeId<"entity">(),
+          workspaceId: ids.wsA1,
+          kind: "document" as const,
+          name: "Ledger entry",
+        }));
+        seededEntityIds.push(...unrelated.map(({ id }) => id));
+        await testDb.insert(entities).values(unrelated);
+        return await eInvoicePreviewScalingScenario.measure(context);
+      };
+      const small = await measureWithAddedDocuments(10);
+      const large = await measureWithAddedDocuments(190);
+      expect(small.statements).toBeGreaterThan(0);
+      expect(readScalingViolations({ small, large })).toEqual([]);
+    });
+  },
+);
+
+test("plain XML is never read as an invoice and nothing is delivered", async () => {
+  const { fieldId, entityId } = await seedStored(
+    { fileName: "catalog.xml", mimeType: "application/xml", pdfFileId: null },
+    xmlBytes(plainXml()),
+  );
+  expect(
+    await eInvoicePreviewEndpoint.handler(
+      legalFileContext(fieldId, scopedDbA()),
+    ),
+  ).toMatchObject({
+    code: 422,
+    response: { code: PREVIEW_UNAVAILABLE_ERROR_CODE },
+  });
+  expect(await auditRowsFor(entityId)).toEqual([]);
+});
+
 describe("archive preview byte limits", () => {
   const oversized = DOCUMENT_ARCHIVE_MAX_BYTES + 1;
   const previews = [
@@ -1176,6 +1433,7 @@ describe("archive preview byte limits", () => {
       format,
       endpoint: structuredDocumentEndpoint,
     })),
+    { format: ISDOCX_FILE_FORMAT, endpoint: eInvoicePreviewEndpoint },
   ];
 
   const expectArchiveLimit = (response: unknown) =>

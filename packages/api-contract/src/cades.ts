@@ -1,5 +1,7 @@
 import * as v from "valibot";
 
+import { eInvoicePreviewSchema } from "./e-invoice";
+
 /**
  * Outer envelope first. Names are claims from unverified signer certificates.
  * Layer and signer ids are assigned when the envelope is parsed and are stable
@@ -17,4 +19,6 @@ export const cadesPreviewSchema = v.object({
       ),
     }),
   ),
+  /** The signed file read as a structured invoice, when it is one. */
+  invoice: v.nullable(eInvoicePreviewSchema),
 });

@@ -174,6 +174,14 @@ const parseXmlPart = (
   return Result.ok(read.root);
 };
 
+/** One standalone XML document under the same parser limits as a package part. */
+export const parseXmlDocument = (
+  bytes: Uint8Array,
+): Result<DocumentXmlNode, DocumentPackageError> =>
+  bytes.byteLength > MAX_XML_TOTAL_BYTES
+    ? Result.err(limitError())
+    : parseXmlPart(bytes, { remaining: MAX_XML_NODES });
+
 export const openXmlDocumentPackage = async (
   bytes: Uint8Array,
 ): Promise<Result<DocumentXmlReader, DocumentPackageError>> => {

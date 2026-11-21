@@ -10,6 +10,10 @@ const BINARY_PAYLOAD = {
   extension: null,
 };
 const TEXT_PAYLOAD = { mimeType: "text/plain", extension: "txt" };
+export const XML_EMBEDDED_MIME_TYPE = "application/xml";
+const XML_PAYLOAD = { mimeType: XML_EMBEDDED_MIME_TYPE, extension: "xml" };
+// Text that opens with an XML declaration or element, after any BOM.
+const XML_START = /^\uFEFF?\s*<(?:\?xml\s|[A-Za-z_])/u;
 const isTextByte = (byte: number) =>
   byte === 0x09 ||
   byte === 0x0a ||
@@ -26,7 +30,9 @@ export const detectEmbeddedPayload = (bytes: Uint8Array) => {
   }
 
   if (bytes.length > 0 && isUtf8(bytes) && bytes.every(isTextByte)) {
-    return TEXT_PAYLOAD;
+    return XML_START.test(new TextDecoder().decode(bytes.subarray(0, 256)))
+      ? XML_PAYLOAD
+      : TEXT_PAYLOAD;
   }
 
   return BINARY_PAYLOAD;

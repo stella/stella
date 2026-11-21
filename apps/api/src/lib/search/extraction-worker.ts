@@ -24,6 +24,8 @@ import type * as v from "valibot";
 import { parseIntegerToken } from "@stll/agent-input/numeric-token";
 import type { cadesPreviewSchema } from "@stll/api-contract/cades";
 import { legalFileFormat } from "@stll/api-contract/document-format";
+import type { EInvoicePreview } from "@stll/api-contract/e-invoice";
+import { XML_FILE_FORMAT } from "@stll/api-contract/e-invoice-formats";
 import {
   EMAIL_MIME_TYPES,
   EML_MIME_TYPE,
@@ -62,12 +64,24 @@ import {
 } from "@/api/lib/files/cades-preview-protocol";
 import { scanCadesPayload } from "@/api/lib/files/cades-preview-worker";
 import type { DocumentPackageError } from "@/api/lib/files/document-archive";
+import { readEInvoiceXml } from "@/api/lib/files/e-invoice-document";
+import {
+  E_INVOICE_ATTACHMENT_HEADER_END,
+  E_INVOICE_WORKER_EXIT,
+  E_INVOICE_WORKER_MODE,
+} from "@/api/lib/files/e-invoice-protocol";
+import { eInvoiceDocumentText } from "@/api/lib/files/e-invoice-text";
+import {
+  extractEInvoiceAttachment,
+  extractEInvoicePreview,
+} from "@/api/lib/files/e-invoice-worker";
 import {
   type EmailAttachment,
   type EmailParseError,
   parsedEmailToText,
   parseEmail,
 } from "@/api/lib/files/email-to-html";
+import { XML_EMBEDDED_MIME_TYPE } from "@/api/lib/files/embedded-payload-format";
 import type { P7mParseError } from "@/api/lib/files/p7m";
 import { extractStructuredDocument } from "@/api/lib/files/structured-document-worker";
 import { LIMITS } from "@/api/lib/limits";
@@ -390,11 +404,11 @@ const extractCadesText = async ({
     return Result.err(scanned.error);
   }
   const { file, layers } = scanned.value;
-  const content = await extractEmbeddedPayloadText(file, maxChars);
+  const content = await readCadesPayloadContent(file, maxChars);
   if (content.isErr()) {
-    return content;
+    return Result.err(content.error);
   }
-  return Result.ok(cadesDocumentText({ layers, text: content.value ?? "" }));
+  return Result.ok(cadesDocumentText({ layers, text: content.value.text }));
 };
 
 const extractAsicText = async ({
@@ -416,6 +430,27 @@ const extractAsicText = async ({
   return Result.ok(asicDocumentText(preview.value));
 };
 
+// Only an invoice is read from an XML file; any other XML, readable or not,
+// keeps having no extracted text, as before it had a reader.
+const extractEInvoiceText = async ({
+  fileBytes,
+  mimeType,
+}: LegalTextReadOptions): Promise<
+  Result<string | null, LegalTextReadError | EmailParseError>
+> => {
+  const preview = await extractEInvoicePreview({ fileBytes, mimeType });
+  if (
+    preview.isErr() &&
+    preview.error._tag === "DocumentPackageError" &&
+    mimeType === XML_FILE_FORMAT.mimeType
+  ) {
+    return Result.ok(null);
+  }
+  return preview.map((value) =>
+    value === null ? null : eInvoiceDocumentText(value),
+  );
+};
+
 const extractStructuredText = async (options: LegalTextReadOptions) => {
   const read = await extractStructuredDocument(options);
   return read.map(({ text }) => text);
@@ -428,6 +463,9 @@ const LEGAL_TEXT_READERS = {
   asicS: extractAsicText,
   cades: extractCadesText,
   dataBox: extractDataBoxText,
+  isdoc: extractEInvoiceText,
+  isdocx: extractEInvoiceText,
+  xml: extractEInvoiceText,
 } satisfies Record<
   LegalFileFormatKind,
   (
@@ -580,7 +618,9 @@ const extractEmbeddedPayloadText = async (
     if (mimeType === DOCX_MIME_TYPE || isOfficeDocumentMimeType(mimeType)) {
       return await extractOfficeDocumentMarkdown(bytes);
     }
-    if (isDirectTextMimeType(mimeType)) {
+    // An embedded XML file's text is its markup, as it was before XML had
+    // a type of its own here.
+    if (isDirectTextMimeType(mimeType) || mimeType === XML_EMBEDDED_MIME_TYPE) {
       return extractDirectText(bytes, mimeType);
     }
     return null;
@@ -606,6 +646,30 @@ const extractEmbeddedPayloadText = async (
     }
   }
   return Result.err(content.error);
+};
+
+/**
+ * A signed payload's content: a structured invoice when the payload is one,
+ * otherwise the embedded file's own text.
+ */
+const readCadesPayloadContent = async (
+  file: ScannedFile,
+  maxChars: number,
+): Promise<
+  Result<{ invoice: EInvoicePreview | null; text: string }, UnhandledException>
+> => {
+  if (normalizeMimeType(file.mimeType) === XML_EMBEDDED_MIME_TYPE) {
+    const invoice = readEInvoiceXml(new Uint8Array(file.bytes));
+    if (invoice.isOk() && invoice.value !== null) {
+      const { preview } = invoice.value;
+      return Result.ok({
+        invoice: preview,
+        text: eInvoiceDocumentText(preview).slice(0, maxChars),
+      });
+    }
+  }
+  const text = await extractEmbeddedPayloadText(file, maxChars);
+  return text.map((value) => ({ invoice: null, text: value ?? "" }));
 };
 
 type CadesWorkerOptions = {
@@ -642,15 +706,16 @@ const writeCadesPreview = async ({
     return Result.ok(0);
   }
 
-  const content = await extractEmbeddedPayloadText(file, maxChars);
+  const content = await readCadesPayloadContent(file, maxChars);
   if (content.isErr()) {
-    return content;
+    return Result.err(content.error);
   }
   const preview = {
     fileName: sanitizeFilename(file.fileName),
     mimeType: file.mimeType,
     layers,
-    text: content.value ?? "",
+    text: content.value.text,
+    invoice: content.value.invoice,
   } satisfies v.InferOutput<typeof cadesPreviewSchema>;
   await writeWorkerStdout(JSON.stringify(preview));
   return Result.ok(0);
@@ -677,6 +742,61 @@ const writeAsicPreview = async (options: {
     }
   }
   await writeWorkerStdout(JSON.stringify(preview.value));
+  return Result.ok(0);
+};
+
+const writeEInvoicePreview = async (options: {
+  fileBytes: Uint8Array;
+  mimeType: string;
+}) => {
+  const preview = await extractEInvoicePreview(options);
+  if (preview.isErr()) {
+    switch (preview.error._tag) {
+      case "DocumentPackageError":
+      case "P7mParseError":
+        return Result.ok(E_INVOICE_WORKER_EXIT.unreadable);
+      case "FileScanRejectedError":
+        return Result.ok(E_INVOICE_WORKER_EXIT.rejected);
+      case "FileScanFailedError":
+        return Result.err(preview.error);
+    }
+  }
+  if (preview.value === null) {
+    return Result.ok(E_INVOICE_WORKER_EXIT.notInvoice);
+  }
+  await writeWorkerStdout(JSON.stringify(preview.value));
+  return Result.ok(0);
+};
+
+const writeEInvoiceAttachment = async (options: {
+  fileBytes: Uint8Array;
+  mimeType: string;
+  index: number;
+}) => {
+  const attachment = await extractEInvoiceAttachment(options);
+  if (attachment.isErr()) {
+    switch (attachment.error._tag) {
+      case "DocumentPackageError":
+      case "P7mParseError":
+        return Result.ok(E_INVOICE_WORKER_EXIT.unreadable);
+      case "FileScanRejectedError":
+        return Result.ok(E_INVOICE_WORKER_EXIT.rejected);
+      case "FileScanFailedError":
+        return Result.err(attachment.error);
+    }
+  }
+  if (attachment.value === null) {
+    return Result.ok(E_INVOICE_WORKER_EXIT.noAttachment);
+  }
+  const { fileName, mimeType, bytes } = attachment.value;
+  const header = new TextEncoder().encode(
+    JSON.stringify({ fileName, mimeType }),
+  );
+  const reply = new Uint8Array(header.byteLength + 1 + bytes.byteLength);
+  reply.set(header);
+  reply[header.byteLength] = E_INVOICE_ATTACHMENT_HEADER_END;
+  reply.set(bytes, header.byteLength + 1);
+  await writeWorkerStdout(reply);
   return Result.ok(0);
 };
 
@@ -725,6 +845,25 @@ try {
     }
     await writeWorkerStdout(JSON.stringify(preview.value));
     process.exit(0);
+  }
+  if (
+    mimeType === E_INVOICE_WORKER_MODE.preview ||
+    mimeType === E_INVOICE_WORKER_MODE.attachment
+  ) {
+    const options = { fileBytes, mimeType: process.argv[4] ?? "" };
+    const written =
+      mimeType === E_INVOICE_WORKER_MODE.preview
+        ? await writeEInvoicePreview(options)
+        : await writeEInvoiceAttachment({
+            ...options,
+            index: parseIntegerToken(process.argv[5] ?? "", {
+              sign: "unsigned",
+            }).unwrapOr(-1),
+          });
+    if (written.isErr()) {
+      exitWithWorkerError(written.error);
+    }
+    process.exit(written.value);
   }
   if (mimeType === ASIC_PREVIEW_WORKER_MODE) {
     const preview = await writeAsicPreview({

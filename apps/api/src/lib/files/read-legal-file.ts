@@ -3,6 +3,7 @@ import { Result } from "better-result";
 import type { LegalFileFormatKind } from "@stll/api-contract/legal-file-formats";
 import {
   ASIC_FILE_KINDS,
+  E_INVOICE_KINDS,
   STRUCTURED_DOCUMENT_KINDS,
 } from "@stll/api-contract/legal-file-formats";
 
@@ -15,6 +16,8 @@ import {
 import { asicDocumentText } from "@/api/lib/files/asic-document-text";
 import { cadesDocumentText } from "@/api/lib/files/cades-document-text";
 import { readCadesPreview } from "@/api/lib/files/cades-preview";
+import { readEInvoicePreview } from "@/api/lib/files/e-invoice-preview";
+import { eInvoiceDocumentText } from "@/api/lib/files/e-invoice-text";
 import type { LegalFileReadOptions } from "@/api/lib/files/legal-file-source";
 import { readDataBoxFile } from "@/api/lib/files/read-data-box-file";
 import { readLegalFilePreview } from "@/api/lib/files/read-legal-file-preview";
@@ -57,7 +60,22 @@ const readStructuredDocumentContent: LegalContentReader = async (options) => {
   });
 };
 
+const readEInvoiceContent: LegalContentReader = async (options) => {
+  const read = await readLegalFilePreview(
+    options,
+    E_INVOICE_KINDS,
+    readEInvoicePreview,
+  );
+  if (read.isErr()) {
+    return Result.err(read.error);
+  }
+  return Result.ok({ text: eInvoiceDocumentText(read.value), attachments: [] });
+};
+
 export const LEGAL_FILE_READERS = {
+  isdoc: readEInvoiceContent,
+  isdocx: readEInvoiceContent,
+  xml: readEInvoiceContent,
   ofd: readStructuredDocumentContent,
   uyap: readStructuredDocumentContent,
   asicE: readAsicContent,

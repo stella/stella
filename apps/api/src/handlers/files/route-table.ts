@@ -4,6 +4,10 @@ import {
   cadesPreviewEndpoint,
 } from "@/api/handlers/files/cades";
 import dataBoxEndpoint from "@/api/handlers/files/data-box";
+import {
+  eInvoiceAttachmentEndpoint,
+  eInvoicePreviewEndpoint,
+} from "@/api/handlers/files/e-invoice";
 import emailAttachmentEndpoint from "@/api/handlers/files/email-attachment";
 import saveEmailAttachmentEndpoint from "@/api/handlers/files/email-attachment/create";
 import officeCitationEndpoint from "@/api/handlers/files/office-citation";
@@ -27,6 +31,10 @@ export const filesRoute = routes(
   {
     "/url/:fieldId": { GET: readFileEndpoint },
     "/structured-document/:fieldId": { GET: structuredDocumentPreviewEndpoint },
+    "/e-invoice/:fieldId": { GET: eInvoicePreviewEndpoint },
+    "/e-invoice/:fieldId/attachments/:index": {
+      GET: eInvoiceAttachmentEndpoint,
+    },
     "/asic/:fieldId": { GET: asicPreviewEndpoint },
     "/cades/:fieldId": { GET: cadesPreviewEndpoint },
     "/cades/:fieldId/content": { GET: cadesContentEndpoint },
