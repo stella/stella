@@ -263,6 +263,11 @@ const recordingContract = contract.recordingCleanup;
 export const DESKTOP_DICTATION_RECORDING_CLEANUP_PATH =
   `${STELLA_API_VERSION_PREFIX}/desktop/dictation/recording-cleanup` as const;
 
+/** The same cleanup for a signed-in member's session (web and phone apps),
+ *  with the same request and answer. */
+export const DICTATION_RECORDING_CLEANUP_PATH =
+  `${STELLA_API_VERSION_PREFIX}/dictation/recording-cleanup` as const;
+
 /** Lengths in code points, the way the desktop counts them. A recording is
  *  cleaned part by part: the desktop splits the transcript into parts of at
  *  most `transcriptLength` and sends the end of the text cleaned so far as
