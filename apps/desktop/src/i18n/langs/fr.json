@@ -1140,6 +1140,21 @@
       "searching": "Recherche…",
       "title": "Dossier"
     },
+    "matterFolder": {
+      "audioFailed": "Impossible d’enregistrer l’enregistrement dans le dossier.",
+      "audioMissing": "L’enregistrement n’est plus ouvert dans cette fenêtre et n’a donc pas été enregistré dans le dossier.",
+      "audioTooLarge": "L’enregistrement dépasse {size} et n’a donc pas été enregistré dans le dossier.",
+      "cleanedDocxFileName": "{title} - texte révisé.docx",
+      "cleanedTitle": "{title} - texte révisé",
+      "documents": "Enregistrement des documents Word…",
+      "docxFileName": "{title} - transcription.docx",
+      "finishing": "Vérification de l’enregistrement…",
+      "instructionsLabel": "Instructions de la dictée :",
+      "preparing": "Préparation de l’enregistrement…",
+      "saveDocx": "Document Word (.docx)",
+      "saved": "Enregistré dans {matter}, dans le sous-dossier {folder}.",
+      "uploading": "Envoi de l’enregistrement : {percent, number} %"
+    },
     "note": "Fichiers DSS et DS2 des dictaphones Philips ou Olympus : enregistrez-les d’abord en WAV dans SpeechExec ou ODMS.",
     "progress": {
       "another": "Transcrire un autre enregistrement",

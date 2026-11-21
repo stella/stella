@@ -284,6 +284,10 @@ const ALWAYS_ON_ROUTE_PREFIXES: ReadonlyMap<string, string> = new Map([
     "Filing a transcribed recording enforces the caller's dictation feature decision, matter access and document create permission on every deployment",
   ],
   [
+    "/v1/desktop/dictation/transcripts/audio",
+    "Finalizing a transcribed recording's audio enforces the caller's dictation feature decision, matter access, document create permission and the caller's own upload on every deployment",
+  ],
+  [
     "/v1/files/:workspaceId/marked",
     "A PDF downloads with the reader's highlights on every deployment, as the uploaded bytes do",
   ],

@@ -113,6 +113,7 @@ mod time_entry_commands;
 mod time_entry_submit;
 mod transcribe_history;
 mod transcribe_recording;
+mod transcribe_save;
 mod transcribe_window;
 mod tray;
 mod types;

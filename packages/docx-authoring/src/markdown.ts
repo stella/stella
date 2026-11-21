@@ -4,11 +4,7 @@ import { mergeDocumentContent } from "@stll/folio-core";
 import type { Document } from "@stll/folio-core";
 import { fromMarkdown } from "@stll/folio-core/markdown";
 
-import {
-  documentToDocx,
-  DocxAuthoringError,
-  stellaDocument,
-} from "@/api/lib/docx-authoring/document";
+import { documentToDocx, DocxAuthoringError, stellaDocument } from "./document";
 
 /**
  * Compose Markdown into a stella-styled document model.

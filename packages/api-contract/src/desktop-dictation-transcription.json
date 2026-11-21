@@ -4,8 +4,10 @@
   "modelsRetentionQuery": "retention",
   "transcribePath": "/v1/desktop/dictation/transcribe",
   "transcriptsPath": "/v1/desktop/dictation/transcripts",
+  "transcriptAudioPath": "/v1/desktop/dictation/transcripts/audio",
   "maxAudioBytes": 19614813,
   "maxAudioSeconds": 60,
   "maxVocabularyTerms": 100,
-  "maxVocabularyTermLength": 100
+  "maxVocabularyTermLength": 100,
+  "maxTranscriptAudioBytes": 209715200
 }

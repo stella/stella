@@ -32,6 +32,7 @@
     "@stll/api-contract": "workspace:*",
     "@stll/business-registries": "workspace:*",
     "@stll/concurrency": "workspace:*",
+    "@stll/docx-authoring": "workspace:*",
     "@stll/locales": "workspace:*",
     "@stll/text-normalize": "workspace:*",
     "@stll/time": "0.4.3",

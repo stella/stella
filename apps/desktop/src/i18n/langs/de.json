@@ -1140,6 +1140,21 @@
       "searching": "Suche läuft…",
       "title": "Akte"
     },
+    "matterFolder": {
+      "audioFailed": "Die Aufnahme konnte nicht in der Akte gespeichert werden.",
+      "audioMissing": "Die Aufnahme ist in diesem Fenster nicht mehr geöffnet und wurde daher nicht in der Akte gespeichert.",
+      "audioTooLarge": "Die Aufnahme ist größer als {size} und wurde daher nicht in der Akte gespeichert.",
+      "cleanedDocxFileName": "{title} – überarbeitet.docx",
+      "cleanedTitle": "{title} – überarbeitet",
+      "documents": "Word-Dokumente werden gespeichert…",
+      "docxFileName": "{title} – Transkript.docx",
+      "finishing": "Aufnahme wird geprüft…",
+      "instructionsLabel": "Anweisungen im Diktat:",
+      "preparing": "Aufnahme wird vorbereitet…",
+      "saveDocx": "Word-Dokument (.docx)",
+      "saved": "In der Akte {matter} im Ordner {folder} gespeichert.",
+      "uploading": "Aufnahme wird hochgeladen: {percent, number} %"
+    },
     "note": "DSS- und DS2-Dateien von Philips- oder Olympus-Diktiergeräten: Speichern Sie sie zuerst in SpeechExec oder ODMS als WAV.",
     "progress": {
       "another": "Weitere Aufnahme transkribieren",

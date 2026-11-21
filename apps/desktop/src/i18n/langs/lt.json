@@ -1140,6 +1140,21 @@
       "searching": "Ieškoma…",
       "title": "Byla"
     },
+    "matterFolder": {
+      "audioFailed": "Nepavyko išsaugoti įrašo byloje.",
+      "audioMissing": "Įrašas šiame lange nebeatidarytas, todėl jis neišsaugotas byloje.",
+      "audioTooLarge": "Įrašas didesnis nei {size}, todėl jis neišsaugotas byloje.",
+      "cleanedDocxFileName": "{title} – sutvarkytas tekstas.docx",
+      "cleanedTitle": "{title} – sutvarkytas tekstas",
+      "documents": "Išsaugomi Word dokumentai…",
+      "docxFileName": "{title} – transkripcija.docx",
+      "finishing": "Tikrinamas įrašas…",
+      "instructionsLabel": "Diktavimo nurodymai:",
+      "preparing": "Ruošiamas įrašas…",
+      "saveDocx": "Word dokumentas (.docx)",
+      "saved": "Išsaugota byloje {matter}, aplanke {folder}.",
+      "uploading": "Įkeliamas įrašas: {percent, number} %"
+    },
     "note": "Philips arba Olympus diktofonų DSS ir DS2 failus pirmiausia išsaugokite WAV formatu programoje SpeechExec arba ODMS.",
     "progress": {
       "another": "Transkribuoti kitą įrašą",

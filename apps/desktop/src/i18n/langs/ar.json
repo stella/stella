@@ -1140,6 +1140,21 @@
       "searching": "جارٍ البحث…",
       "title": "الملف"
     },
+    "matterFolder": {
+      "audioFailed": "تعذّر حفظ التسجيل في الملف.",
+      "audioMissing": "لم يعد التسجيل مفتوحًا في هذه النافذة، لذا لم يُحفظ في الملف.",
+      "audioTooLarge": "التسجيل أكبر من {size}، لذا لم يُحفظ في الملف.",
+      "cleanedDocxFileName": "{title} - النص المنقح.docx",
+      "cleanedTitle": "{title} - النص المنقح",
+      "documents": "جارٍ حفظ مستندات Word…",
+      "docxFileName": "{title} - نص.docx",
+      "finishing": "جارٍ التحقق من التسجيل…",
+      "instructionsLabel": "التعليمات في الإملاء:",
+      "preparing": "جارٍ تجهيز التسجيل…",
+      "saveDocx": "مستند Word (.docx)",
+      "saved": "تم الحفظ في {matter} داخل المجلد {folder}.",
+      "uploading": "جارٍ رفع التسجيل: {percent, number}%"
+    },
     "note": "ملفات DSS وDS2 من أجهزة تسجيل Philips أو Olympus: احفظها أولاً بصيغة WAV في SpeechExec أو ODMS.",
     "progress": {
       "another": "تحويل تسجيل آخر",

@@ -1140,6 +1140,21 @@
       "searching": "Meklē…",
       "title": "Lieta"
     },
+    "matterFolder": {
+      "audioFailed": "Ierakstu neizdevās saglabāt lietā.",
+      "audioMissing": "Ieraksts šajā logā vairs nav atvērts, tāpēc tas netika saglabāts lietā.",
+      "audioTooLarge": "Ieraksts ir lielāks par {size}, tāpēc tas netika saglabāts lietā.",
+      "cleanedDocxFileName": "{title} – rediģēts teksts.docx",
+      "cleanedTitle": "{title} – rediģēts teksts",
+      "documents": "Saglabā Word dokumentus…",
+      "docxFileName": "{title} – transkripcija.docx",
+      "finishing": "Pārbauda ierakstu…",
+      "instructionsLabel": "Diktāta norādījumi:",
+      "preparing": "Sagatavo ierakstu…",
+      "saveDocx": "Word dokuments (.docx)",
+      "saved": "Saglabāts lietā {matter}, mapē {folder}.",
+      "uploading": "Augšupielādē ierakstu: {percent, number}%"
+    },
     "note": "Philips vai Olympus diktofonu DSS un DS2 failus vispirms saglabājiet WAV formātā programmā SpeechExec vai ODMS.",
     "progress": {
       "another": "Transkribēt citu ierakstu",

@@ -1140,6 +1140,21 @@
       "searching": "Wyszukiwanie…",
       "title": "Sprawa"
     },
+    "matterFolder": {
+      "audioFailed": "Nie udało się zapisać nagrania w sprawie.",
+      "audioMissing": "Nagranie nie jest już otwarte w tym oknie, więc nie zapisano go w sprawie.",
+      "audioTooLarge": "Nagranie jest większe niż {size}, więc nie zapisano go w sprawie.",
+      "cleanedDocxFileName": "{title} – tekst poprawiony.docx",
+      "cleanedTitle": "{title} – tekst poprawiony",
+      "documents": "Zapisywanie dokumentów Word…",
+      "docxFileName": "{title} – transkrypcja.docx",
+      "finishing": "Sprawdzanie nagrania…",
+      "instructionsLabel": "Polecenia w dyktacie:",
+      "preparing": "Przygotowywanie nagrania…",
+      "saveDocx": "Dokument Word (.docx)",
+      "saved": "Zapisano w sprawie {matter}, w folderze {folder}.",
+      "uploading": "Wysyłanie nagrania: {percent, number}%"
+    },
     "note": "Pliki DSS i DS2 z dyktafonów Philips lub Olympus najpierw zapisz jako WAV w programie SpeechExec lub ODMS.",
     "progress": {
       "another": "Transkrybuj kolejne nagranie",

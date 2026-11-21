@@ -913,7 +913,7 @@ describe("presigned upload finalize lifecycle", () => {
 
     expect(result).toEqual({
       code: 404,
-      response: { message: "Upload not found" },
+      response: { code: "upload_not_found", message: "Upload not found" },
     });
     expect(
       await testDb.query.pendingUploads.findFirst({

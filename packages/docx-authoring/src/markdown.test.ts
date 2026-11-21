@@ -3,7 +3,7 @@ import { describe, expect, test } from "bun:test";
 
 import { docxToMarkdown, inspectDocxPackage } from "@stll/folio-core/server";
 
-import { markdownToStellaDocx } from "@/api/lib/docx-authoring/from-markdown";
+import { markdownToStellaDocx } from "./markdown";
 
 const markdown = `# Title Heading
 

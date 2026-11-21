@@ -1140,6 +1140,21 @@
       "searching": "Otsimine…",
       "title": "Toimik"
     },
+    "matterFolder": {
+      "audioFailed": "Salvestist ei õnnestunud toimikusse salvestada.",
+      "audioMissing": "Salvestis pole selles aknas enam avatud, seega seda toimikusse ei salvestatud.",
+      "audioTooLarge": "Salvestis on suurem kui {size}, seega seda toimikusse ei salvestatud.",
+      "cleanedDocxFileName": "{title} – toimetatud tekst.docx",
+      "cleanedTitle": "{title} – toimetatud tekst",
+      "documents": "Wordi dokumentide salvestamine…",
+      "docxFileName": "{title} – transkriptsioon.docx",
+      "finishing": "Salvestise kontrollimine…",
+      "instructionsLabel": "Dikteeritud juhised:",
+      "preparing": "Salvestise ettevalmistamine…",
+      "saveDocx": "Wordi dokument (.docx)",
+      "saved": "Salvestatud toimikusse {matter}, kausta {folder}.",
+      "uploading": "Salvestise üleslaadimine: {percent, number}%"
+    },
     "note": "Philipsi või Olympuse diktofonide DSS- ja DS2-failid salvestage esmalt SpeechExecis või ODMS-is WAV-vormingusse.",
     "progress": {
       "another": "Transkribeeri järgmine salvestis",

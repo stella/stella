@@ -1140,6 +1140,21 @@
       "searching": "Hľadá sa…",
       "title": "Spis"
     },
+    "matterFolder": {
+      "audioFailed": "Nahrávku sa nepodarilo uložiť do spisu.",
+      "audioMissing": "Nahrávka už v tomto okne nie je otvorená, preto sa do spisu neuložila.",
+      "audioTooLarge": "Nahrávka je väčšia ako {size}, preto sa do spisu neuložila.",
+      "cleanedDocxFileName": "{title} – upravený text.docx",
+      "cleanedTitle": "{title} – upravený text",
+      "documents": "Ukladajú sa dokumenty Word…",
+      "docxFileName": "{title} – prepis.docx",
+      "finishing": "Kontroluje sa nahrávka…",
+      "instructionsLabel": "Pokyny k diktátu:",
+      "preparing": "Pripravuje sa nahrávka…",
+      "saveDocx": "Dokument Word (.docx)",
+      "saved": "Uložené do spisu {matter} v priečinku {folder}.",
+      "uploading": "Odosiela sa nahrávka: {percent, number} %"
+    },
     "note": "Súbory DSS a DS2 z diktafónov Philips alebo Olympus najprv uložte ako WAV v SpeechExec alebo ODMS.",
     "progress": {
       "another": "Prepísať ďalšiu nahrávku",

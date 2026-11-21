@@ -19,6 +19,7 @@ import {
   resourceRef,
   resourceUpdatedRealtimeEvent,
 } from "@stll/api-contract";
+import { markdownToStellaDocx } from "@stll/docx-authoring/markdown";
 import { rejectionOf } from "@stll/property-testing/rejection";
 import { sha256Hex } from "@stll/sha256/node";
 import { createTestClock, settledWithin } from "@stll/test-kit";
@@ -46,7 +47,6 @@ import { createBullMqJobId } from "@/api/lib/bullmq-job-id";
 import * as auditInsertionOwner from "@/api/lib/db/audit-recording";
 import { hashDesktopEditSessionToken } from "@/api/lib/desktop-edit-sessions";
 import * as enqueueOwner from "@/api/lib/document-processing-enqueue";
-import { markdownToStellaDocx } from "@/api/lib/docx-authoring/from-markdown";
 import * as diffOwner from "@/api/lib/entity-versions/compute-version-diff";
 import * as derivativeOwner from "@/api/lib/file-derivative-queue";
 import { createFileKey } from "@/api/lib/files/utils";

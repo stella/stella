@@ -150,6 +150,7 @@
     "@stll/country-codes": "workspace:*",
     "@stll/db-load-gate": "workspace:*",
     "@stll/decision-reader": "workspace:*",
+    "@stll/docx-authoring": "workspace:*",
     "@stll/docx-core": "catalog:",
     "@stll/docx-utils": "workspace:*",
     "@stll/errors": "workspace:*",

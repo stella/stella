@@ -1140,6 +1140,21 @@
       "searching": "Buscando…",
       "title": "Asunto"
     },
+    "matterFolder": {
+      "audioFailed": "No se pudo guardar la grabación en el asunto.",
+      "audioMissing": "La grabación ya no está abierta en esta ventana, así que no se guardó en el asunto.",
+      "audioTooLarge": "La grabación supera {size}, así que no se guardó en el asunto.",
+      "cleanedDocxFileName": "{title} - texto revisado.docx",
+      "cleanedTitle": "{title} - texto revisado",
+      "documents": "Guardando los documentos de Word…",
+      "docxFileName": "{title} - transcripción.docx",
+      "finishing": "Comprobando la grabación…",
+      "instructionsLabel": "Instrucciones del dictado:",
+      "preparing": "Preparando la grabación…",
+      "saveDocx": "Documento de Word (.docx)",
+      "saved": "Guardado en {matter}, en la carpeta {folder}.",
+      "uploading": "Subiendo la grabación: {percent, number} %"
+    },
     "note": "Archivos DSS y DS2 de grabadoras Philips u Olympus: guárdalos primero como WAV en SpeechExec u ODMS.",
     "progress": {
       "another": "Transcribir otra grabación",

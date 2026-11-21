@@ -2,6 +2,8 @@ import { toolDefinition } from "@tanstack/ai";
 import { Result } from "better-result";
 import * as v from "valibot";
 
+import { markdownToStellaDocx } from "@stll/docx-authoring/markdown";
+
 import { safeDbFromScoped } from "@/api/db/safe-db";
 import type { SafeDbError, ScopedDb } from "@/api/db/safe-db";
 import { CREATE_MATTER_DOCUMENT_TOOL_NAME } from "@/api/handlers/chat/tools/native-chat-tool-names";
@@ -12,7 +14,6 @@ import { captureError } from "@/api/lib/analytics/capture";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { ChatRefRegistry } from "@/api/lib/chat/ref-registry";
-import { markdownToStellaDocx } from "@/api/lib/docx-authoring/from-markdown";
 import {
   authorizeDocumentWrite,
   documentWriteRefusalChatToolError,

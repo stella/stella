@@ -1140,6 +1140,21 @@
       "searching": "Searching…",
       "title": "Matter"
     },
+    "matterFolder": {
+      "audioFailed": "The recording could not be saved to the matter.",
+      "audioMissing": "The recording is no longer open in this window, so it was not saved to the matter.",
+      "audioTooLarge": "The recording is larger than {size}, so it was not saved to the matter.",
+      "cleanedDocxFileName": "{title} cleaned up.docx",
+      "cleanedTitle": "{title} cleaned up",
+      "documents": "Saving the Word documents…",
+      "docxFileName": "{title} transcript.docx",
+      "finishing": "Checking the recording…",
+      "instructionsLabel": "Instructions in the dictation:",
+      "preparing": "Preparing the recording…",
+      "saveDocx": "Word document (.docx)",
+      "saved": "Saved to {matter} in the folder {folder}.",
+      "uploading": "Uploading the recording: {percent, number}%"
+    },
     "note": "DSS and DS2 files from Philips or Olympus recorders: save them as WAV in SpeechExec or ODMS first.",
     "progress": {
       "another": "Transcribe another recording",

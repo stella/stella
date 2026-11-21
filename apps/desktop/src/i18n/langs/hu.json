@@ -1140,6 +1140,21 @@
       "searching": "Keresés…",
       "title": "Ügy"
     },
+    "matterFolder": {
+      "audioFailed": "A felvételt nem sikerült az ügybe menteni.",
+      "audioMissing": "A felvétel már nincs megnyitva ebben az ablakban, ezért nem került az ügybe.",
+      "audioTooLarge": "A felvétel nagyobb, mint {size}, ezért nem került az ügybe.",
+      "cleanedDocxFileName": "{title} – szerkesztett szöveg.docx",
+      "cleanedTitle": "{title} – szerkesztett szöveg",
+      "documents": "A Word-dokumentumok mentése…",
+      "docxFileName": "{title} – átirat.docx",
+      "finishing": "A felvétel ellenőrzése…",
+      "instructionsLabel": "Utasítások a diktálásban:",
+      "preparing": "A felvétel előkészítése…",
+      "saveDocx": "Word-dokumentum (.docx)",
+      "saved": "Elmentve ide: {matter}, a(z) {folder} mappába.",
+      "uploading": "A felvétel feltöltése: {percent, number}%"
+    },
     "note": "Philips vagy Olympus diktafonok DSS és DS2 fájljai: előbb mentse őket WAV formátumba a SpeechExec vagy az ODMS programban.",
     "progress": {
       "another": "Másik felvétel átírása",
