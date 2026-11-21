@@ -1099,7 +1099,7 @@
       "cloud": "stella AI",
       "cloudDescription": "Garsas transkribuoti siunčiamas programai stella ir diktavimo nustatymuose pasirinkto modelio teikėjui. stella jo nesaugo.",
       "cloudDescriptionModel": "Garsas transkribuoti siunčiamas programai stella ir modelio {model} teikėjui. stella jo nesaugo.",
-      "loadingModel": "Tikrinamas stella AI transkribavimo modelis…",
+      "loadingModel": "Tikrinamas stella DI transkribavimo modelis…",
       "localDescription": "Įrašas lieka šiame kompiuteryje.",
       "localMissing": "Norėdami transkribuoti šiame kompiuteryje, atsisiųskite kalbos modelį skiltyje Nustatymai, Diktavimas.",
       "localMissingCloud": "Atsisiųskite kalbos modelį skiltyje Nustatymai, Diktavimas, arba transkribuokite naudodami stella DI.",

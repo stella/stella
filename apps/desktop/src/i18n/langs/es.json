@@ -1099,7 +1099,7 @@
       "cloud": "stella AI",
       "cloudDescription": "El audio se envía a stella y al proveedor del modelo elegido en la configuración de Dictado para transcribirlo. stella no lo guarda.",
       "cloudDescriptionModel": "El audio se envía a stella y al proveedor de {model} para transcribirlo. stella no lo guarda.",
-      "loadingModel": "Comprobando el modelo de transcripción de stella AI…",
+      "loadingModel": "Comprobando el modelo de transcripción de stella IA…",
       "localDescription": "La grabación se queda en este ordenador.",
       "localMissing": "Descarga el modelo de voz en Configuración, en Dictado, para transcribir en este ordenador.",
       "localMissingCloud": "Descarga el modelo de voz en Configuración, en Dictado, o transcribe con stella IA.",

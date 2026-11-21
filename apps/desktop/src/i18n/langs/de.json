@@ -1099,7 +1099,7 @@
       "cloud": "stella AI",
       "cloudDescription": "Der Ton wird zur Transkription an stella und an den Anbieter des in den Diktiereinstellungen gewählten Modells gesendet. stella speichert ihn nicht.",
       "cloudDescriptionModel": "Der Ton wird zur Transkription an stella und an den Anbieter von {model} gesendet. stella speichert ihn nicht.",
-      "loadingModel": "Das Transkriptionsmodell von stella AI wird geprüft…",
+      "loadingModel": "Das Transkriptionsmodell von stella KI wird geprüft…",
       "localDescription": "Die Aufnahme bleibt auf diesem Computer.",
       "localMissing": "Laden Sie das Sprachmodell in den Einstellungen unter Diktieren herunter, um auf diesem Computer zu transkribieren.",
       "localMissingCloud": "Laden Sie das Sprachmodell in den Einstellungen unter Diktieren herunter, oder transkribieren Sie mit stella KI.",
@@ -1157,7 +1157,7 @@
       "unsupported": "stella kann {name} nicht lesen. Wählen Sie eine Aufnahme in einem der oben genannten Formate."
     },
     "result": {
-      "alreadySaved": "Das Transkript wurde bereits im Mandat gespeichert.",
+      "alreadySaved": "Das Transkript wurde bereits in der Akte gespeichert.",
       "cloud": "stella AI, {model}",
       "copied": "Kopiert",
       "copy": "Kopieren",
