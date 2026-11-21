@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
+import { readFileSync } from "node:fs";
 
 import { assertProperty } from "@stll/property-testing";
 
@@ -42,6 +43,38 @@ describe("CMS signature files", () => {
           },
         ],
       });
+    },
+  );
+
+  test.each([
+    ["signed.txt.p7s", "SHA-256"],
+    ["signed.txt.pem.sig", "SHA-384"],
+    ["signed.txt.smime.p7s", "SHA-1"],
+  ] as const)(
+    "reads OpenSSL's %s and its stated %s digest",
+    async (fileName, algorithm) => {
+      const fixture = (name: string) =>
+        new Uint8Array(
+          readFileSync(
+            new URL(`fixtures/openssl-detached/${name}`, import.meta.url),
+          ),
+        );
+      const signedBytes = fixture("signed.txt");
+      const parsed = parseCmsSignatureFile(fixture(fileName)).unwrap();
+      expect(parsed.packaging).toBe("detached");
+      expect(parsed.signers.map(({ name }) => name)).toEqual([
+        "Example interoperability signer",
+      ]);
+      expect(parsed.signers.at(0)?.signedAt).not.toBeNull();
+      expect(parsed.references).toEqual([
+        {
+          fileName: null,
+          digest: {
+            algorithm,
+            hex: hex(await digestOf(algorithm, signedBytes)),
+          },
+        },
+      ]);
     },
   );
 
