@@ -785,12 +785,14 @@ impl CloudSession {
     choice: &ModelChoice,
     offered: &CloudModels,
   ) -> Result<ChosenModel, String> {
+    // Also for the stored model itself: its class is kept, as for one
+    // stored before classes were; nothing is written when it is.
+    dictation::adopt_cloud_model(
+      &self.app,
+      &choice.model_id,
+      offered.class_of(&choice.model_id),
+    )?;
     if choice.replaces_stored {
-      dictation::adopt_cloud_model(
-        &self.app,
-        &choice.model_id,
-        offered.class_of(&choice.model_id),
-      )?;
       self.stored_model = Some(choice.model_id.clone());
     }
     let model = ChosenModel {

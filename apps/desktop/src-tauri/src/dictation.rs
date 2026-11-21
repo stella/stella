@@ -26,7 +26,7 @@ use std::{
   sync::{Mutex, mpsc::Sender},
 };
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use tauri::{AppHandle, Emitter, EventId, Listener, Manager, State};
 use tauri_plugin_global_shortcut::{
@@ -62,9 +62,18 @@ const DESTINATION_PREFERENCE_FILE_NAME: &str = "dictation-destination";
 /// A recording transcribed with stella AI uses it too.
 const CLOUD_MODEL_PREFERENCE_FILE_NAME: &str = "dictation-cloud-model";
 /// Who runs the stored model, on which side of the region and whether its
-/// provider keeps the audio, as the list said when it was stored; empty
-/// where the list named no provider.
+/// provider keeps the audio, as the list said when it was stored, with the
+/// id it was stored for; empty where the list named no provider.
 const CLOUD_MODEL_CLASS_PREFERENCE_FILE_NAME: &str = "dictation-cloud-model-class";
+
+/// A model's class as kept, with the model it belongs to: a class written
+/// beside an id that was not (a write cut short) belongs to no model.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct StoredClass {
+  model_id: String,
+  class: ModelClass,
+}
 /// Off unless the user turned it on: cleanup also gets the window title.
 const SHARE_WINDOW_TITLE_PREFERENCE_FILE_NAME: &str = "dictation-share-window-title";
 /// Off unless the user turned it on: cleanup also gets the text before the
@@ -273,7 +282,7 @@ struct Inner {
   language: Choice,
   destination: Destination,
   cloud_model: Option<String>,
-  cloud_model_class: Option<ModelClass>,
+  cloud_model_class: Option<StoredClass>,
   model: ModelState,
   phase: Phase,
   failure: Option<Failed>,
@@ -647,9 +656,13 @@ pub fn destination(app: &AppHandle) -> (Destination, Option<String>) {
 
 /// The stored model's class, as the list gave it when the model was stored.
 pub fn cloud_model_class(app: &AppHandle) -> Option<ModelClass> {
-  app
-    .state::<DictationState>()
-    .update(|inner| inner.cloud_model_class.clone())
+  app.state::<DictationState>().update(|inner| {
+    inner
+      .cloud_model_class
+      .clone()
+      .filter(|kept| inner.cloud_model.as_deref() == Some(kept.model_id.as_str()))
+      .map(|kept| kept.class)
+  })
 }
 
 /// Read before every chunk sent to stella AI: dictation is still on and
@@ -661,8 +674,9 @@ pub fn cloud_chosen(app: &AppHandle) -> bool {
   })
 }
 
-/// Replaces a stored model the region no longer offers, or none, with the
-/// one dictation now uses, so the window shows and keeps what is used.
+/// Stores the model dictation now uses with its class, so the window shows
+/// and keeps what is used and a withdrawn model can later give way only to
+/// one of its class; nothing is written when both are already stored.
 pub fn adopt_cloud_model(
   app: &AppHandle,
   model_id: &str,
@@ -671,14 +685,19 @@ pub fn adopt_cloud_model(
   if !valid_model_id(model_id) {
     return Err("this transcription model is not offered".to_string());
   }
-  let (stored, stored_class) = app
+  let stored_class = class.map(|class| StoredClass {
+    model_id: model_id.to_string(),
+    class,
+  });
+  let (stored, kept_class) = app
     .state::<DictationState>()
     .update(|inner| (inner.cloud_model.clone(), inner.cloud_model_class.clone()));
-  if stored.as_deref() == Some(model_id) && stored_class == class {
+  if stored.as_deref() == Some(model_id) && kept_class == stored_class {
     return Ok(());
   }
-  // The class first: a model is never stored with another one's class.
-  let encoded = class
+  // The class names its model, so a write cut short between the two files
+  // never gives one model another's class.
+  let encoded = stored_class
     .as_ref()
     .and_then(|class| serde_json::to_string(class).ok())
     .unwrap_or_default();
@@ -687,7 +706,7 @@ pub fn adopt_cloud_model(
     CLOUD_MODEL_CLASS_PREFERENCE_FILE_NAME,
     &encoded,
     |inner| {
-      inner.cloud_model_class = class;
+      inner.cloud_model_class = stored_class;
     },
   )?;
   change_preference(app, CLOUD_MODEL_PREFERENCE_FILE_NAME, model_id, |inner| {
@@ -1481,14 +1500,16 @@ pub async fn dictation_get_cloud_models(app: AppHandle) -> Result<CloudModels, S
     return Err("stella AI transcription is not available".to_string());
   }
   let offered = dictation_cloud::models(&app).await?;
-  let (stored, stored_class) = app
+  let stored = app
     .state::<DictationState>()
-    .update(|inner| (inner.cloud_model.clone(), inner.cloud_model_class.clone()));
+    .update(|inner| inner.cloud_model.clone());
+  let stored_class = cloud_model_class(&app);
   // A withdrawn model with no same-class successor stays stored, and the
-  // window shows it as no longer offered until another is picked.
+  // window shows it as no longer offered until another is picked. A model
+  // still offered gets its class kept, as one stored before classes were.
   if let Ok(choice) =
     dictation_cloud::choose_model(stored.as_deref(), stored_class.as_ref(), &offered)
-    && choice.replaces_stored
+    && (choice.replaces_stored || stored_class.is_none())
   {
     adopt_cloud_model(&app, &choice.model_id, offered.class_of(&choice.model_id))?;
   }
