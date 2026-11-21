@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 
 import { invoke } from "@tauri-apps/api/core";
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 
 import {
   ACTIVITY_CHANGED_EVENT,
@@ -61,8 +61,13 @@ export const useActivitySetup = (): ActivitySetupControls => {
   const [unread, setUnread] = useState(false);
   // Event reads land in any order; only the most recent may set the state.
   const latest = useRef(0);
-  // The read the effect below owns; set before any change can be made.
+  // The read the effect below owns; it is set on mount, before any change
+  // can be made, so a missing one is a bug.
   const reread = useRef<(() => Promise<void>) | null>(null);
+  const readAgain = async () => {
+    const read = reread.current ?? panic("Activity setup read before mount.");
+    await read();
+  };
 
   useEffect(() => {
     let disposed = false;
@@ -107,14 +112,14 @@ export const useActivitySetup = (): ActivitySetupControls => {
       return false;
     }
     setFailed(false);
-    await reread.current?.();
+    await readAgain();
     return true;
   };
 
   return {
     failed,
     reload: () => {
-      void reread.current?.();
+      void readAgain();
     },
     setCaptureDetails: async (enabled) => {
       await run(async () =>
