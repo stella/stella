@@ -31,6 +31,15 @@ describe("getMatterSwatch", () => {
     }
   });
 
+  test("a matter with no stored colour is never drawn in the error red", () => {
+    assertProperty(
+      "a matter with no stored colour is never drawn in the error red",
+      fc.property(fc.string(), (id) => {
+        expect(resolveMatterColor(id, null)).not.toBe("var(--option-red)");
+      }),
+    );
+  });
+
   test("different ids spread across multiple swatches", () => {
     const seen = new Set(
       ["a", "b", "c", "d", "e", "f", "g", "h", "i", "j"].map(getMatterSwatch),

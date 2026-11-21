@@ -2083,15 +2083,17 @@ test("accessibility hint opens system settings only after a user request", async
       detailsAccess: "accessibilityRequired",
     },
   });
-  await expect(
-    page.getByText(enMessages.activity.accessibilityRequired, { exact: true }),
-  ).toBeVisible();
+  // Settings show the Activity window's own strip under the titles row.
+  const strip = page.getByRole("region", {
+    name: enMessages.activity.titlesNotRecorded,
+  });
+  await expect(strip).toBeVisible();
   expect(await tauriInvocations(page)).not.toContainEqual(
     expect.objectContaining({
       command: "activity_open_accessibility_settings",
     }),
   );
-  await page
+  await strip
     .getByRole("button", {
       name: enMessages.activity.openAccessibilitySettings,
     })
@@ -3019,7 +3021,7 @@ test("suggestions render as dashed blocks and the day is triaged from the keyboa
           entry: expect.objectContaining({
             matterId: "matter-1",
             durationMinutes: 30,
-            narrative: "Work on Lease draft.docx",
+            narrative: "Work on “Lease draft.docx”",
             billable: true,
           }),
           ranges: [
@@ -3812,7 +3814,7 @@ test("dismissing a proposal keeps the draft, and Use original brings back the te
   await card
     .getByRole("button", { name: enMessages.activity.aiUseOriginal })
     .click();
-  await expect(narrative).toHaveValue("Work on Lease draft.docx");
+  await expect(narrative).toHaveValue("Work on “Lease draft.docx”");
 });
 
 test("an instruction remembered while refining becomes the drafting preference", async ({
@@ -3898,7 +3900,7 @@ test("a failed draft keeps the template and offers to try again", async ({
   await expect(card.getByText(enMessages.activity.aiDraftFailed)).toBeVisible();
   await expect(
     card.getByRole("textbox", { name: enMessages.activity.entryNarrative }),
-  ).toHaveValue("Work on Lease draft.docx");
+  ).toHaveValue("Work on “Lease draft.docx”");
   await expect(
     card.getByRole("button", { name: enMessages.activity.aiDraftRetry }),
   ).toBeVisible();
