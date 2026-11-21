@@ -1,5 +1,9 @@
 import * as v from "valibot";
 
+import {
+  boundedRetrievedAtSchema,
+  caseLawBodySourceSchemasOf,
+} from "@stll/api-contract/case-law-body-source-shape";
 import { COURT_TIER_LABELS } from "@stll/api-contract/case-law-court-tiers";
 import { extractionWarningsSchema } from "@stll/api-contract/case-law-extraction-warnings";
 import {
@@ -11,8 +15,16 @@ import { PROVISION_LINK_STATUS_TYPES } from "@stll/api-contract/provision-link-s
 import { DECISION_PRIMARY_REFERENCE_TYPES } from "@stll/legal-ast/decision-identifier";
 import { blockSchema } from "@stll/legal-ast/document-ast";
 
+// Bundled into browser apps: the plain retrieval time keeps the API's
+// instant check (and its time library) out of them.
+const { linklessDecisionBodySourceSchema } = caseLawBodySourceSchemasOf(
+  boundedRetrievedAtSchema,
+);
+
 const readerMetadataSchema = v.strictObject({
   extractionWarnings: extractionWarningsSchema,
+  // The decision's own link is the one publisher link (`url`).
+  bodySource: v.optional(linklessDecisionBodySourceSchema),
   decisionId: v.string(),
   caseNumber: v.string(),
   caseNumberType: v.picklist(DECISION_PRIMARY_REFERENCE_TYPES),

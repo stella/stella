@@ -1,6 +1,7 @@
 import { useEffect, useEffectEvent } from "react";
 
 import { panic } from "better-result";
+import { useRouter } from "expo-router";
 import { Alert, View } from "react-native";
 import { useTranslations } from "use-intl";
 
@@ -134,6 +135,7 @@ export const KeptDictationBar = ({
 }) => {
   const t = useTranslations("chat");
   const ui = useUiColors();
+  const router = useRouter();
   const { offered, phase, waiting } = dictation;
   const waitingText = useWaitingText(waiting);
   const confirmDiscard = useConfirmDiscard(dictation.discardWaiting);
@@ -146,7 +148,12 @@ export const KeptDictationBar = ({
         <Text
           accessibilityLiveRegion="polite"
           className="flex-1"
-          variant={waiting?.status === "needs-person" ? "error" : "caption"}
+          variant={
+            waiting?.status === "needs-person" ||
+            waiting?.status === "needs-model"
+              ? "error"
+              : "caption"
+          }
         >
           {waitingText}
         </Text>
@@ -159,6 +166,17 @@ export const KeptDictationBar = ({
           variant="outline"
         >
           {t("dictationPaste")}
+        </Button>
+      ) : null}
+      {waiting?.status === "needs-model" ? (
+        <Button
+          onPress={() => {
+            router.push("/settings");
+          }}
+          size="sm"
+          variant="outline"
+        >
+          {t("dictationOpenSettings")}
         </Button>
       ) : null}
       {waiting === undefined ? null : (
@@ -266,6 +284,8 @@ const useWaitingText = (
       return t(waiting.earlier ? "dictationKeptEarlier" : "dictationKept");
     case "needs-person":
       return t("dictationKeptRefused");
+    case "needs-model":
+      return t("dictationKeptModelWithdrawn");
     default:
       waiting.status satisfies never;
       return panic("A kept dictation has no known status");

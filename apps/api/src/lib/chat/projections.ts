@@ -79,6 +79,7 @@ import {
   caseNumberTypeProjection,
   searchTotalProjection,
 } from "./case-law-result-projections";
+import { decisionBodySourceProjection } from "./decision-body-source-projection";
 import { DECISION_REVIEWS_PROJECTION } from "./decision-review-projection";
 import { statuteExpressionLabel } from "./legislation-result-projections";
 import {
@@ -1785,6 +1786,7 @@ const caseLawDecisionProjection = v.strictObject({
   page: v.optional(v.number()),
   pageCount: v.optional(v.number()),
   charCount: v.optional(v.number()),
+  bodySource: v.optional(decisionBodySourceProjection),
   textSource: v.optional(
     v.pipe(
       v.picklist(Object.values(DECISION_TEXT_SOURCE)),

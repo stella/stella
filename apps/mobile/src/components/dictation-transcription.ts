@@ -2,21 +2,32 @@ import { Result } from "better-result";
 import { File } from "expo-file-system";
 
 import type { AccessTokenSource } from "@/connection/session";
-import { cleanUpDictation, transcribeRecording } from "@/state/dictation";
+import {
+  cleanUpDictation,
+  readDictationModels,
+  transcribeRecording,
+} from "@/state/dictation";
+import { sameClassFallback } from "@/state/dictation-fallback";
+import type { ModelClass } from "@/state/dictation-fallback";
 import { RecordingReadError } from "@/state/dictation-kept";
 import type { PieceFailure } from "@/state/dictation-kept";
 
 /** What a recording is transcribed with: the model, the matter and its names. */
 type PieceChoice = {
   readonly modelId: string | undefined;
+  /** Where the picked model's audio goes, as kept when it was picked. */
+  readonly modelClass: ModelClass | null;
   readonly matterId: string | undefined;
   readonly vocabulary: readonly string[];
 };
 
 /**
- * One recording's text, with the model the person picked, or the server's
- * default when the server no longer offers it. The recording stays where
- * it is: the caller deletes it once it no longer needs it.
+ * One recording's text, with the model the person picked. When the server
+ * cannot serve it (503), the recording goes once more only to a model of
+ * the same provider, region side and retention (`sameClassFallback`);
+ * with none, it goes nowhere else and the failure stands, so the dictation
+ * is kept and a retry uses the picked model. The recording stays where it
+ * is: the caller deletes it once it no longer needs it.
  */
 export const transcribePiece = async ({
   source,
@@ -47,21 +58,27 @@ export const transcribePiece = async ({
     );
   }
   const first = await transcribeRecording({ fetch, source, audio, choice });
-  // A model the server no longer offers: the recording still counts, with
-  // the model the server offers by default.
-  const retry =
-    first.isErr() &&
-    choice.modelId !== undefined &&
-    first.error._tag === "ApiRequestError" &&
-    first.error.status === 503;
-  return retry
-    ? await transcribeRecording({
+  const picked = choice.modelId;
+  if (
+    picked === undefined ||
+    !first.isErr() ||
+    first.error._tag !== "ApiRequestError" ||
+    first.error.status !== 503
+  ) {
+    return first;
+  }
+  const offered = await readDictationModels({ fetch, source });
+  const fallback = offered.isOk()
+    ? sameClassFallback(picked, choice.modelClass, offered.value)
+    : undefined;
+  return fallback === undefined
+    ? first
+    : await transcribeRecording({
         fetch,
         source,
         audio,
-        choice: { ...choice, modelId: undefined },
-      })
-    : first;
+        choice: { ...choice, modelId: fallback },
+      });
 };
 
 /** The joined text, tidied by stella AI when the person turned that on; the words as heard when cleanup fails. */

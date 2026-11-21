@@ -2,10 +2,12 @@ import { panic } from "better-result";
 import type { Result } from "better-result";
 
 import type { Dictated } from "@/state/dictation";
+import type { ModelClass } from "@/state/dictation-fallback";
 import {
   keptFor,
   recordingsToTranscribe,
   RECOVERED_OFFER_MS,
+  refusalOf,
   retriesByItself,
   retryDelayMs,
   stillOffered,
@@ -14,6 +16,7 @@ import type {
   DictationField,
   KeptDictation,
   KeptPiece,
+  KeptRefusal,
   PieceFailure,
 } from "@/state/dictation-kept";
 
@@ -48,6 +51,7 @@ export type WaitingDictation = KeptDictation & {
     readonly type: "waiting";
     readonly pieces: readonly KeptPiece[];
     readonly refused: boolean;
+    readonly refusedFor: KeptRefusal | null;
   };
 };
 
@@ -58,6 +62,8 @@ type KeptStatus =
   | "retrying"
   /** Refused, or unreadable: only the person's retry or discard moves it. */
   | "needs-person"
+  /** Refused as its model is no longer offered: the person picks another. */
+  | "needs-model"
   /** Transcribed after its field closed: offered for pasting. */
   | "recovered";
 
@@ -79,6 +85,7 @@ export type KeptSetup = {
   readonly field: DictationField;
   readonly matterId: string | null;
   readonly modelId: string | null;
+  readonly modelClass: ModelClass | null;
   readonly locale: string;
   readonly cleanup: boolean;
 };
@@ -300,11 +307,12 @@ type KeepArgs = {
   readonly setup: KeptSetup;
   readonly pieces: readonly FinishedPiece[];
   readonly refused: boolean;
+  readonly refusedFor: KeptRefusal | null;
 };
 
 const keepFinished = (
   store: Store,
-  { owner, setup, pieces, refused }: KeepArgs,
+  { owner, setup, pieces, refused, refusedFor }: KeepArgs,
 ): boolean => {
   const { deps } = store;
   // Signed out meanwhile: nothing of the account stays on the phone.
@@ -321,6 +329,7 @@ const keepFinished = (
     state: {
       type: "waiting",
       refused,
+      refusedFor,
       pieces: pieces.map((piece, index) => {
         if (piece.type === "text") {
           return piece;
@@ -420,6 +429,7 @@ const settle = (store: Store, entry: Entry, dictated: Dictated) => {
     field: previous.field,
     matterId: previous.matterId,
     modelId: previous.modelId,
+    modelClass: previous.modelClass,
     locale: previous.locale,
     cleanup: previous.cleanup,
     keptAt: previous.keptAt,
@@ -493,7 +503,12 @@ const runRetry = async (store: Store, entry: Entry) => {
       const refused = !retriesByItself(outcome.error);
       const moved: KeptDictation = {
         ...kept,
-        state: { type: "waiting", pieces: outcome.pieces, refused },
+        state: {
+          type: "waiting",
+          pieces: outcome.pieces,
+          refused,
+          refusedFor: refused ? refusalOf(outcome.error) : null,
+        },
       };
       entry.kept = moved;
       if (store.deps.files.update(moved)) {
@@ -524,5 +539,8 @@ const statusOf = (
   if (retrying) {
     return "retrying";
   }
-  return needsPerson ? "needs-person" : "waiting";
+  if (!needsPerson) {
+    return "waiting";
+  }
+  return kept.state.refusedFor === "model" ? "needs-model" : "needs-person";
 };
