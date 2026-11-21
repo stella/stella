@@ -46,8 +46,10 @@ longer matches it, and `i18n:sync` never updates an existing entry.
    change leaves every translation correct (casing, punctuation).
    [check: i18n:check]
 
-The product name is lowercase `stella` in every locale and grammatical form,
-sentence starts included (`stellu`, `stelle`).
+The product name is lowercase `stella` in every locale and position,
+sentence starts included. Keep `stella` uninflected in inflected locales and
+decline an appositive noun in front of it instead (e.g. cs `do aplikace stella`,
+pl `w aplikacji stella`, hu `a stella alkalmazásba`).
 
 ## Key Naming
 

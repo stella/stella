@@ -1,35 +1,35 @@
 {
   "invitation": {
     "accept": "Aceptar invitación",
-    "body": "{invitedByUsername} le ha invitado a unirse a {organizationName}. Pulse a continuación para aceptar.",
+    "body": "{invitedByUsername} te ha invitado a unirte a {organizationName}. Haz clic abajo para aceptar.",
     "expires": "Esta invitación caduca en 48 horas.",
     "heading": "Invitación a la organización",
-    "ignore": "Si no esperaba esta invitación, puede ignorar este correo electrónico.",
-    "subject": "Ha sido invitado a unirse a {organizationName}"
+    "ignore": "Si no esperabas esta invitación, puedes ignorar este correo electrónico.",
+    "subject": "Te han invitado a unirte a {organizationName}"
   },
   "invoiceLink": {
     "action": "{documentType, select, credit_note {Ver factura rectificativa} advance {Ver factura de anticipo} other {Ver factura}}",
     "amountDue": "Importe pendiente: {amount}",
-    "body": "{firmName} le ha enviado {documentType, select, credit_note {una factura rectificativa} advance {una factura de anticipo} other {una factura}}. Abra el enlace para ver los detalles y descargar el PDF.",
+    "body": "{firmName} te ha enviado {documentType, select, credit_note {una factura rectificativa} advance {una factura de anticipo} other {una factura}}. Abre el enlace para ver los detalles y descargar el PDF.",
     "dueDate": "Fecha de vencimiento: {date}",
     "expires": "El enlace es válido hasta el {date}.",
     "heading": "{documentType, select, credit_note {Factura rectificativa} advance {Factura de anticipo} other {Factura}} {invoiceNumber}",
-    "ignore": "stella ha entregado este correo en nombre de {firmName}. Si no lo esperaba, puede ignorarlo.",
+    "ignore": "stella ha entregado este correo en nombre de {firmName}. Si no lo esperabas, puedes ignorarlo.",
     "messageFrom": "Mensaje de {firmName}",
-    "preview": "{firmName} le ha enviado {documentType, select, credit_note {la factura rectificativa} advance {la factura de anticipo} other {la factura}} {invoiceNumber}",
-    "reply": "Responda a este correo para contactar con {firmName}.",
+    "preview": "{firmName} te ha enviado {documentType, select, credit_note {la factura rectificativa} advance {la factura de anticipo} other {la factura}} {invoiceNumber}",
+    "reply": "Responde a este correo para contactar con {firmName}.",
     "subject": "{documentType, select, credit_note {Factura rectificativa} advance {Factura de anticipo} other {Factura}} {invoiceNumber} de {firmName}"
   },
   "newDeviceLogin": {
     "action": "Revisar dispositivos con sesión iniciada",
-    "body": "Alguien acaba de iniciar sesión en su cuenta desde un dispositivo o una ubicación nuevos.",
+    "body": "Se ha iniciado sesión en tu cuenta desde un nuevo dispositivo o ubicación.",
     "device": "Dispositivo",
     "deviceName": {
       "browserOnOs": "{browser} en {os}",
       "unknown": "Dispositivo desconocido"
     },
     "heading": "Nuevo inicio de sesión en su cuenta",
-    "ignore": "Si fue usted, no tiene que hacer nada. Si no reconoce este inicio de sesión, cierre la sesión de este dispositivo.",
+    "ignore": "Si fuiste tú, no hace falta hacer nada. Si no reconoces esta actividad, revisa tus sesiones activas y cierra las que no reconozcas.",
     "ipAddress": "Dirección IP",
     "ipAddressUnknown": "Desconocida",
     "location": "Ubicación",
@@ -42,21 +42,21 @@
     "placeApproximate": "{place} (aproximada)",
     "preview": "Nuevo inicio de sesión desde {device}",
     "previewUnknownDevice": "Nuevo inicio de sesión desde un dispositivo desconocido",
-    "subject": "Nuevo inicio de sesión en su cuenta stella",
+    "subject": "Nuevo inicio de sesión en tu cuenta de stella",
     "time": "Hora"
   },
   "otp": {
-    "changeEmail": "Utilice este código para verificar su nueva dirección de correo electrónico.",
-    "deleteAccount": "Utilice este código para verificar la eliminación de su cuenta.",
-    "emailVerification": "Utilice este código para verificar su dirección de correo electrónico.",
+    "changeEmail": "Usa este código para verificar tu nueva dirección de correo electrónico.",
+    "deleteAccount": "Usa este código para confirmar la eliminación de tu cuenta.",
+    "emailVerification": "Usa este código para verificar tu dirección de correo electrónico.",
     "expires": "Este código caduca en 5 minutos.",
-    "forgetPassword": "Utilice este código para restablecer su contraseña.",
-    "heading": "Su código de un solo uso de stella",
-    "ignore": "Si no ha solicitado este código, puede ignorar este correo electrónico.",
-    "preview": "Use este código para verificar su identidad",
-    "signIn": "Utilice este código para iniciar sesión en su cuenta de stella.",
-    "subject": "Su código de verificación de stella",
-    "twoFactorManage": "Utilice este código para confirmar los cambios en la configuración de la autenticación de dos factores."
+    "forgetPassword": "Usa este código para restablecer tu contraseña.",
+    "heading": "Tu código de un solo uso de stella",
+    "ignore": "Si no solicitaste este código, puedes ignorar este correo electrónico.",
+    "preview": "Usa este código para verificar tu identidad",
+    "signIn": "Usa este código para iniciar sesión en tu cuenta de stella.",
+    "subject": "Tu código de verificación de stella",
+    "twoFactorManage": "Usa este código para confirmar los cambios en la configuración de la autenticación en dos pasos."
   },
   "pushAlert": {
     "announcement": "Tu organización ha publicado un anuncio",
@@ -69,14 +69,14 @@
   },
   "reportExportStatus": {
     "action": "Abrir stella",
-    "completedBody": "La exportación de su informe está lista. Abra stella para verla o descargarla.",
+    "completedBody": "La exportación de tu informe está lista. Abre stella para verla o descargarla.",
     "completedHeading": "Exportación del informe lista",
-    "completedPreview": "La exportación de su informe está lista",
-    "completedSubject": "La exportación de su informe está lista",
-    "failedBody": "No se pudo completar la exportación de su informe. Abra stella para intentarlo de nuevo.",
+    "completedPreview": "La exportación de tu informe está lista",
+    "completedSubject": "La exportación de tu informe está lista",
+    "failedBody": "No se pudo completar la exportación de tu informe. Abre stella para intentarlo de nuevo.",
     "failedHeading": "Error al exportar el informe",
-    "failedPreview": "No se pudo completar la exportación de su informe",
-    "failedSubject": "No se pudo completar la exportación de su informe",
+    "failedPreview": "No se pudo completar la exportación de tu informe",
+    "failedSubject": "No se pudo completar la exportación de tu informe",
     "privacy": "Este correo no contiene contenido del informe ni nombres de archivos."
   }
 }
