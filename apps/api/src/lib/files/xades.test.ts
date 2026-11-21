@@ -96,6 +96,23 @@ describe("XAdES signature files", () => {
     expect(parsed.isErr() && parsed.error.reason).toBe("not_signature");
   });
 
+  test("a signed-properties reference without its type stays metadata", async () => {
+    const typed = new TextDecoder().decode(
+      await detachedXades("smlouva.pdf", pdfLike),
+    );
+    const untyped = typed.replace(
+      ' Type="http://uri.etsi.org/01903#SignedProperties"',
+      "",
+    );
+    expect(untyped).not.toBe(typed);
+    const container = `<asic:XAdESSignatures xmlns:asic="http://uri.etsi.org/02918/v1.2.1#">${untyped.replace(/^<\?xml[^>]*>\n/u, "")}</asic:XAdESSignatures>`;
+    const parsed = parseXadesFile(encode(container)).unwrap();
+    expect(parsed.packaging).toBe("detached");
+    expect(parsed.references.map(({ fileName }) => fileName)).toEqual([
+      "smlouva.pdf",
+    ]);
+  });
+
   test("counts a countersignature as part of its signature", async () => {
     const outer = new TextDecoder().decode(await envelopingXades(pdfLike));
     const counter = new TextDecoder()

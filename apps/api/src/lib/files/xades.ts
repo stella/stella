@@ -155,10 +155,22 @@ const readSignature = (
   signature: DocumentXmlNode,
   index: number,
 ): SignatureRead => {
+  // An object holding the signature's qualifying properties is metadata,
+  // never the signed document.
   const objects = new Map(
     dsChildren(signature, "Object").flatMap((object) => {
       const id = nodeId(object);
-      return id === undefined ? [] : [[id, object] as const];
+      return id === undefined ||
+        findDescendant(object, (node) => isXades(node, "QualifyingProperties"))
+        ? []
+        : [[id, object] as const];
+    }),
+  );
+  // Ids inside the signature itself (its signed properties, its key info).
+  const ownIds = new Set(
+    [...walk(signature)].flatMap((node) => {
+      const id = nodeId(node);
+      return id === undefined ? [] : [id];
     }),
   );
   const signedInfo = dsChildren(signature, "SignedInfo").at(0);
@@ -186,10 +198,11 @@ const readSignature = (
     }
     const sameDocument = SAME_DOCUMENT_REFERENCE.exec(uri);
     if (sameDocument) {
-      const object = objects.get(sameDocument[1] ?? sameDocument[2] ?? "");
+      const id = sameDocument[1] ?? sameDocument[2] ?? "";
+      const object = objects.get(id);
       if (object) {
         read.objects.push(object);
-      } else {
+      } else if (!ownIds.has(id)) {
         read.coversEnclosingDocument = true;
       }
       continue;
