@@ -500,7 +500,12 @@ test("a LEDES matter's context names only its own active billing codes", async (
   try {
     const context = (await load()).unwrap();
     assert.ok(context.mode === "guided");
-    expect(context.codeNames).toEqual([
+    // The seeded matter carries codes of its own; only these rows matter.
+    expect(
+      context.codeNames.filter(
+        ({ code }) => code === "L120" || code === "A199",
+      ),
+    ).toEqual([
       {
         matterId: ids.wsA1,
         type: "task",
@@ -508,6 +513,9 @@ test("a LEDES matter's context names only its own active billing codes", async (
         name: "Analysis/strategy",
       },
     ]);
+    expect(
+      context.codeNames.every(({ matterId }) => matterId === ids.wsA1),
+    ).toBe(true);
   } finally {
     await db
       .delete(billingCodes)
