@@ -897,6 +897,9 @@ async fn deliver(
     match step {
       Step::Text(mut text) => {
         text.job = job;
+        // The speaker's learned fixes, as dictation applies them, so a
+        // recording spells their words the way they write them.
+        text.text = crate::dictation_learned::apply(app, &text.text);
         crate::logging::best_effort(
           app.emit_to(TRANSCRIBE_WINDOW_LABEL, PIECE_EVENT, &text),
           "transcribed piece was not delivered",
