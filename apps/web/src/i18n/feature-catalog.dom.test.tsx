@@ -69,11 +69,11 @@ test("the provider shows its fallback, then the feature's and the app's strings"
   expect(screen.queryByTestId("feature-pending")).toBeNull();
 });
 
-test("a locale's catalog is loaded once", async () => {
+test("a locale's catalog is loaded once", () => {
   loads.length = 0;
-  await fixtureCatalog.load("en");
-  await fixtureCatalog.load("en");
-  expect(loads).toEqual([]);
+  fixtureCatalog.preload("de");
+  fixtureCatalog.preload("de");
+  expect(loads).toEqual(["de"]);
 });
 
 test("a feature namespace may not shadow an app namespace", () => {
