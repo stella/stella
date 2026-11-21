@@ -1223,6 +1223,7 @@ test("web catalog checks pass without the derived message declarations", async (
       "apps/web/public/prepaint-init.js",
       "apps/api/src/lib/case-law/withdrawn-decision-labels.gen.json",
       "packages/ai-catalog/src",
+      "packages/workspace-ui/src",
     ],
     { cwd: repo, stdout: "pipe", stderr: "pipe" },
   );

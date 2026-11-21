@@ -128,6 +128,7 @@ describe("pre-commit i18n sync", () => {
   test("an untracked target refuses too", () => {
     withRepo((repo) => {
       const draft = `${NAMESPACES}/fr/core.json`;
+      mkdirSync(path.dirname(path.join(repo, draft)), { recursive: true });
       writeFileSync(path.join(repo, draft), "{}\n");
       const result = runPrecommitI18n(repo, () => 0);
       expect(result).toEqual({ kind: "refused", dirty: [draft] });
