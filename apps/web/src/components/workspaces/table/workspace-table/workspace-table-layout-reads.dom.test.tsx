@@ -99,13 +99,13 @@ const countGetter = (
   name: string,
 ) => {
   const descriptor = Object.getOwnPropertyDescriptor(owner, name);
-  const get = descriptor?.get;
+  const get: (() => unknown) | undefined = descriptor?.get;
   if (descriptor === undefined || get === undefined) {
     return () => undefined;
   }
   Object.defineProperty(owner, name, {
     ...descriptor,
-    get() {
+    get(): unknown {
       counter.reads += 1;
       return get.call(this);
     },
